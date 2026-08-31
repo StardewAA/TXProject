@@ -9,7 +9,7 @@ COPY txgy-ui-admin-vben/ ./
 RUN pnpm install --frozen-lockfile
 
 ENV NODE_OPTIONS=--max-old-space-size=2048
-ENV VITE_BASE_URL=http://10.212.174.234:48080
+ENV VITE_BASE_URL=
 ENV VITE_GLOB_API_URL=/admin-api
 ENV VITE_APP_CAPTCHA_ENABLE=false
 ENV VITE_APP_DOCALERT_ENABLE=false
