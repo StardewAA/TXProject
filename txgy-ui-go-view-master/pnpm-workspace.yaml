@@ -1,0 +1,8 @@
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  protobufjs: true
+  vue-demi: true
+  vue-echarts: true
+  vue3-sketch-ruler: true
+  yarn: true

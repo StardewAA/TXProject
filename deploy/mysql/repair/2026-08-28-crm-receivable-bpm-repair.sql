@@ -1,0 +1,90 @@
+-- =====================================================================
+-- 回款管理（crm_receivable）审批流程数据修复记录
+-- 日期：2026-08-28
+-- 现象：admin 登录后，CRM -> 回款管理 列表点击“查看审批”报
+--       “获取审批详情失败！” / “流程实例不存在”（错误码 1009004000）。
+-- 根因：crm_receivable 表中 audit_status=10/20 的行，其 process_instance_id
+--       指向的 Flowable 流程实例（ACT_HI_PROCINST 等）不存在，
+--       且 crm-receivable-audit 流程定义未部署。
+-- 修复：通过系统 API 完成（本文件不重放，仅记录变更与回滚）：
+--   1) 部署流程定义 crm-receivable-audit（回款审批，SIMPLE 模型，
+--      发起人 -> 审批人(管理员) -> 结束）；
+--   2) 按行状态创建真实流程实例：
+--      - audit_status=10（审批中）：运行中实例，当前待办为“审批人”；
+--      - audit_status=20（审批通过）：实例已审批通过（含历史任务/评论）；
+--   3) 回写 crm_receivable.process_instance_id。
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 修复后的关联关系（audit_status 保持原状）
+-- ---------------------------------------------------------------------
+-- id  no                 audit_status  process_instance_id（新）
+-- 10  Q233               20            f6c7c9f3-a2b3-11f1-b961-dad6077f050d
+-- 13  HK20240225000001   10            f46bff27-a2b3-11f1-b961-dad6077f050d
+-- 19  HK20240225000007   20            fae826c8-a2b3-11f1-b961-dad6077f050d
+-- 21  HK20240225000009   10            f4ea08e6-a2b3-11f1-b961-dad6077f050d
+-- 22  HK20240225000010   10            f55eeae5-a2b3-11f1-b961-dad6077f050d
+-- 23  HK20240225000011   20            fd0895ed-a2b3-11f1-b961-dad6077f050d
+-- 24  HK20240225000012   20            ff0354a2-a2b3-11f1-b961-dad6077f050d
+-- 25  HK20240225000013   10            f6089884-a2b3-11f1-b961-dad6077f050d
+-- 28  HK20240225000016   20            00a7dd07-a2b4-11f1-b961-dad6077f050d
+-- 29  HK20240225000017   20            0260629c-a2b4-11f1-b961-dad6077f050d
+--
+-- 流程定义：crm-receivable-audit:1:c3688a97-a2b3-11f1-b961-dad6077f050d
+-- 流程模型：940558a1-a2b3-11f1-b961-dad6077f050d（回款审批）
+
+-- ---------------------------------------------------------------------
+-- 回滚脚本（如需恢复到修复前的状态）
+-- ---------------------------------------------------------------------
+-- 1) 恢复 crm_receivable 的 process_instance_id / audit_status：
+-- UPDATE crm_receivable
+-- SET process_instance_id = CASE id
+--     WHEN 10 THEN NULL
+--     WHEN 13 THEN '9084ad68-6d2f-11f0-8f64-ca5778fb00b9'
+--     WHEN 19 THEN 'e50a6752-6d2f-11f0-8f64-ca5778fb00b9'
+--     WHEN 21 THEN 'd5ab93e3-6d2e-11f0-8f64-ca5778fb00b9'
+--     WHEN 22 THEN '1d14f04b-6d2e-11f0-bb29-ca5778fb00b9'
+--     WHEN 23 THEN '8886586f-d3d3-11ee-aa2f-26aa5e0b65cc'
+--     WHEN 24 THEN '11435b77-6d30-11f0-8f64-ca5778fb00b9'
+--     WHEN 25 THEN '9bc4b09e-6d2d-11f0-b888-ca5778fb00b9'
+--     WHEN 28 THEN '59503b13-d3dc-11ee-853e-2ea58da017f0'
+--     WHEN 29 THEN 'a213f8bb-d3f5-11ee-853e-2ea58da017f0'
+--     ELSE process_instance_id END,
+--     audit_status = CASE id
+--     WHEN 10 THEN 20
+--     WHEN 13 THEN 10
+--     WHEN 19 THEN 20
+--     WHEN 21 THEN 10
+--     WHEN 22 THEN 10
+--     WHEN 23 THEN 20
+--     WHEN 24 THEN 20
+--     WHEN 25 THEN 10
+--     WHEN 28 THEN 20
+--     WHEN 29 THEN 20
+--     ELSE audit_status END
+-- WHERE id IN (10, 13, 19, 21, 22, 23, 24, 25, 28, 29);
+--
+-- 2) 删除本次创建的流程实例（历史/运行数据，含外键，先关闭外键检查）：
+-- SET FOREIGN_KEY_CHECKS = 0;
+-- DELETE FROM ACT_RU_EXECUTION    WHERE PROC_INST_ID_ IN ('f6c7c9f3-a2b3-11f1-b961-dad6077f050d','f46bff27-a2b3-11f1-b961-dad6077f050d','fae826c8-a2b3-11f1-b961-dad6077f050d','f4ea08e6-a2b3-11f1-b961-dad6077f050d','f55eeae5-a2b3-11f1-b961-dad6077f050d','fd0895ed-a2b3-11f1-b961-dad6077f050d','ff0354a2-a2b3-11f1-b961-dad6077f050d','f6089884-a2b3-11f1-b961-dad6077f050d','00a7dd07-a2b4-11f1-b961-dad6077f050d','0260629c-a2b4-11f1-b961-dad6077f050d');
+-- DELETE FROM ACT_RU_TASK         WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_RU_IDENTITYLINK WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_RU_VARIABLE     WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_RU_ACTINST      WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_RU_ENTITYLINK   WHERE SCOPE_ID_ IN (...) OR REF_SCOPE_ID_ IN (...);
+-- DELETE FROM ACT_HI_PROCINST     WHERE ID_ IN (...);
+-- DELETE FROM ACT_HI_ACTINST      WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_TASKINST     WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_VARINST      WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_IDENTITYLINK WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_COMMENT      WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_DETAIL       WHERE PROC_INST_ID_ IN (...);
+-- DELETE FROM ACT_HI_ENTITYLINK   WHERE SCOPE_ID_ IN (...) OR REF_SCOPE_ID_ IN (...);
+-- SET FOREIGN_KEY_CHECKS = 1;
+--
+-- 3) （可选）下线本次创建的流程定义/模型：
+-- DELETE FROM bpm_process_definition_info WHERE process_definition_id = 'crm-receivable-audit:1:c3688a97-a2b3-11f1-b961-dad6077f050d';
+-- DELETE FROM ACT_RE_PROCDEF    WHERE ID_ = 'crm-receivable-audit:1:c3688a97-a2b3-11f1-b961-dad6077f050d';
+-- DELETE FROM ACT_RE_DEPLOYMENT WHERE ID_ = 'c3301574-a2b3-11f1-b961-dad6077f050d';
+-- DELETE FROM ACT_GE_BYTEARRAY  WHERE DEPLOYMENT_ID_ = 'c3301574-a2b3-11f1-b961-dad6077f050d';
+-- DELETE FROM ACT_RE_MODEL      WHERE ID_ = '940558a1-a2b3-11f1-b961-dad6077f050d';

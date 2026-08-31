@@ -1,0 +1,289 @@
+x-backend-service: &backend-service
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    nacos:
+      condition: service_healthy
+  environment:
+    SERVER_PORT: 48080
+    SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+    SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    SPRING_DATA_REDIS_HOST: redis
+  healthcheck:
+    test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 20
+    start_period: 90s
+  networks:
+    - txgy-dev
+  restart: unless-stopped
+
+services:
+  mysql:
+    image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - txgy-dev
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+
+  nacos:
+    image: nacos/nacos-server:v3.0.3
+    environment:
+      MODE: standalone
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      TZ: ${TZ}
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/ > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - txgy-dev
+
+  gateway:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-gateway
+    ports:
+      - "48080:48080"
+
+  system:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-system/txgy-module-system-server
+
+  infra:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-infra/txgy-module-infra-server
+
+  member:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-member/txgy-module-member-server
+
+  bpm:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-bpm/txgy-module-bpm-server
+
+  pay:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-pay/txgy-module-pay-server
+
+  report:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-report/txgy-module-report-server
+
+  mp:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mp/txgy-module-mp-server
+
+  product:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-product-server
+
+  trade:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-trade-server
+
+  promotion:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+
+  statistics:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
+
+  crm:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-crm/txgy-module-crm-server
+
+  erp:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-erp/txgy-module-erp-server
+
+  iot:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-iot/txgy-module-iot-server
+
+  iot-gateway:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-iot/txgy-module-iot-gateway
+
+  mes:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mes/txgy-module-mes-server
+
+  wms:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-wms/txgy-module-wms-server
+
+  im:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-im/txgy-module-im-server
+
+  ai:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-ai/txgy-module-ai-server
+
+  hrm:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
+
+  fms:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-fms/txgy-module-fms-server
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend/Dockerfile.runtime
+    depends_on:
+      gateway:
+        condition: service_started
+    ports:
+      - "5173:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
+  nacos-data:
+
+networks:
+  txgy-dev:
+    name: txgy-dev
