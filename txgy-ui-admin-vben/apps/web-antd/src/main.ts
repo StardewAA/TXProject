@@ -1,3 +1,4 @@
+import './offline-icons';
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
