@@ -46,6 +46,49 @@ function TxgyUiResolver(): ComponentResolver {
   }
 }
 
+/** Wot UI 组件解析器：@wot-ui/ui 的 wd-* 组件 */
+function WotUiResolver(): ComponentResolver {
+  return {
+    type: 'component',
+    resolve: (name: string) => {
+      if (name.match(/^Wd[A-Z]/)) {
+        const compName = kebabCase(name)
+        return {
+          name,
+          from: `@wot-ui/ui/components/${compName}/${compName}.vue`,
+        }
+      }
+    },
+  }
+}
+
+/** z-paging 组件解析器 */
+function ZPagingResolver(): ComponentResolver {
+  return {
+    type: 'component',
+    resolve: (name: string) => {
+      if (name === 'ZPagingRefresh') {
+        return {
+          name,
+          from: 'z-paging/components/z-paging/components/z-paging-refresh.vue',
+        }
+      }
+      if (name === 'ZPagingLoadMore') {
+        return {
+          name,
+          from: 'z-paging/components/z-paging/components/z-paging-load-more.vue',
+        }
+      }
+      if (name === 'ZPaging') {
+        return {
+          name,
+          from: 'z-paging/components/z-paging/z-paging.vue',
+        }
+      }
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   // @see https://unocss.dev/
@@ -90,8 +133,8 @@ export default defineConfig(({ command, mode }) => {
       UniLayouts(),
       UniPlatform(),
       UniManifest(),
-      UniComponents({ // 仅自动导入本地组件；Wot UI 与 z-paging 由 pages.config.ts 的 easycom 解析
-        resolvers: [TxgyUiResolver()],
+      UniComponents({ // 自动导入本地 txgy-ui/yd 组件、Wot UI 的 wd-* 组件与 z-paging（编译期解析，避免 easycom 时序问题）
+        resolvers: [TxgyUiResolver(), WotUiResolver(), ZPagingResolver()],
         extensions: ['vue'],
         deep: true, // 是否递归扫描子目录，
         directoryAsNamespace: false, // 是否把目录名作为命名空间前缀，true 时组件名为 目录名+组件名，
@@ -176,7 +219,7 @@ export default defineConfig(({ command, mode }) => {
       && mode === 'production'
       && visualizer({
         filename: './node_modules/.cache/visualizer/stats.html',
-        open: true,
+        open: process.env.OPEN_VISUALIZER === 'true',
         gzipSize: true,
         brotliSize: true,
       }),

@@ -2,7 +2,7 @@ import { useToast } from '@wot-ui/ui/components/wd-toast'
 import { ref } from 'vue'
 import { getEnvBaseUrl } from '@/utils/index'
 
-const VITE_UPLOAD_BASEURL = `${getEnvBaseUrl()}/upload`
+const VITE_UPLOAD_BASEURL = import.meta.env.VITE_UPLOAD_BASEURL || `${getEnvBaseUrl()}/upload`
 
 type TfileType = 'image' | 'file'
 type TImage = 'png' | 'jpg' | 'jpeg' | 'webp' | '*'

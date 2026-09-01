@@ -3,6 +3,8 @@ import {
   definePreferencesExtension,
 } from '@vben/preferences';
 
+import logo from './assets/imgs/logo.png';
+
 interface WebAntdPreferencesExtension {
   defaultTableSize: number;
   enableFormFullscreen: boolean;
@@ -20,8 +22,12 @@ export const overridesPreferences = defineOverridesPreferences({
   app: {
     /** 后端路由模式 */
     accessMode: 'backend',
-    name: import.meta.env.VITE_APP_TITLE,
+    name: '防腐保温智慧平台',
     enableRefreshToken: true,
+  },
+  logo: {
+    /** 登录页 / 首页 LOGO */
+    source: logo,
   },
   footer: {
     /** 默认关闭 footer 页脚，因为有一定遮挡 */
@@ -29,7 +35,7 @@ export const overridesPreferences = defineOverridesPreferences({
     fixed: false,
   },
   copyright: {
-    companyName: import.meta.env.VITE_APP_TITLE,
+    companyName: '防腐保温智慧平台',
     companySiteLink: 'https://gitee.com/txgycode/txgy-ui-admin-vben',
   },
 });

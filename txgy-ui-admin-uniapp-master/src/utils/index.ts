@@ -168,6 +168,10 @@ export function getEnvBaseUrl() {
  */
 export function getEnvBaseUrlRoot() {
   const baseUrl = getEnvBaseUrl()
+  // 相对路径（如 /admin-api）时，H5 部署在网关反向代理之后，使用当前页面来源作为根路径
+  if (typeof window !== 'undefined' && !/^https?:\/\//i.test(baseUrl)) {
+    return window.location.origin
+  }
   // 提取根路径
   const urlObj = new URL(baseUrl)
   return urlObj.origin
