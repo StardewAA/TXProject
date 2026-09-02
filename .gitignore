@@ -1,0 +1,44 @@
+# 千问中间脚本和文件存放位置（用户要求忽略）
+千问中间脚本和文件存放位置/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+*.prefs
+
+# VS Code
+.vscode/
+
+# Maven / Java 构建产物
+target/
+*.class
+*.jar
+*.war
+*.ear
+!**/src/main/**/*.jar
+!**/src/test/**/*.jar
+
+# LibreOffice 文档锁文件
+.~lock.*#
+~$*
+
+# 日志与临时文件
+*.log
+logs/
+*.tmp
+*.temp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# 编译/生成目录
+out/
+gen/
