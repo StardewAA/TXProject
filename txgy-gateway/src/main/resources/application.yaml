@@ -222,6 +222,13 @@ spring:
                 - Path=/admin-api/fms/**
               filters:
                 - RewritePath=/admin-api/fms/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            ## training-server 云培训学院服务
+            - id: training-admin-api
+              uri: grayLb://training-server
+              predicates:
+                - Path=/admin-api/training/**
+              filters:
+                - RewritePath=/admin-api/training/v3/api-docs, /v3/api-docs
           x-forwarded:
             prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
           default-filters:
@@ -296,6 +303,9 @@ knife4j:
       - name: fms-server
         service-name: fms-server
         url: /admin-api/fms/v3/api-docs
+      - name: training-server
+        service-name: training-server
+        url: /admin-api/training/v3/api-docs
 
 --- #################### OPENLAB BS相关配置 ####################
 
