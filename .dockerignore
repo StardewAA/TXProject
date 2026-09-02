@@ -1,0 +1,22 @@
+# Git / 工具缓存
+.git
+.codegraph
+.superpowers
+docs/superpowers
+_debug
+
+# 依赖与构建产物
+node_modules
+**/node_modules
+target
+**/target
+*.log
+
+# 本地数据库备份
+sql/mysql
+
+# 环境变量
+.env
+**/.env
+!txgy-mall-uniapp-master/.env
+!txgy-ui-admin-uniapp-master/env/.env

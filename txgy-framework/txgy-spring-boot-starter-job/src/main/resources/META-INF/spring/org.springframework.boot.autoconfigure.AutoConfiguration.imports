@@ -1,0 +1,2 @@
+cn.iocoder.txgy.framework.quartz.config.TxgyXxlJobAutoConfiguration
+cn.iocoder.txgy.framework.quartz.config.TxgyAsyncAutoConfiguration
