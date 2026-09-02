@@ -1,0 +1,23 @@
+FROM node:22-bookworm-slim AS builder
+
+WORKDIR /workspace/txgy-ui-admin-uniapp
+
+RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
+
+COPY txgy-ui-admin-uniapp-master/ ./
+
+ENV NODE_OPTIONS=--max-old-space-size=6144
+ENV SKIP_OPEN_DEVTOOLS=true
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm --config.node-options=--max-old-space-size=6144 build:h5
+
+FROM nginx:1.27-alpine
+
+COPY deploy/uniapp/nginx-admin.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /workspace/txgy-ui-admin-uniapp/dist/build/h5 /usr/share/nginx/html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

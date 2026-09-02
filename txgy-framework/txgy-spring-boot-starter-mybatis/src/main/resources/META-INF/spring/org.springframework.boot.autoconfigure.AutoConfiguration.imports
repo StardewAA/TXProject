@@ -1,0 +1,3 @@
+cn.iocoder.txgy.framework.datasource.config.TxgyDataSourceAutoConfiguration
+cn.iocoder.txgy.framework.mybatis.config.TxgyMybatisAutoConfiguration
+cn.iocoder.txgy.framework.translate.config.TxgyTranslateAutoConfiguration

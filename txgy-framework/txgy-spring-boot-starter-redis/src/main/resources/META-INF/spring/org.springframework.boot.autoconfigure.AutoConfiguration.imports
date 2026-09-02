@@ -1,0 +1,2 @@
+cn.iocoder.txgy.framework.redis.config.TxgyRedisAutoConfiguration
+cn.iocoder.txgy.framework.redis.config.TxgyCacheAutoConfiguration
