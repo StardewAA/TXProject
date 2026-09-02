@@ -1,0 +1,5 @@
+$root = Join-Path $env:TEMP 'jmr-x'
+Write-Host '=== JmReportUtil a/c/setHttpSession overloads ==='
+javap -p (Join-Path $root 'org\jeecg\modules\jmreport\desreport\util\JmReportUtil.class') 2>&1 | Select-String 'a\(\)|a\(jakarta|a\(org.springframework.http.HttpHeaders|c\(java.lang.String|setHttpSession'
+Write-Host '=== HttpClientErrorException.NotFound.getStatusCode ==='
+javap -p (Join-Path $env:TEMP 'swx' 'org\springframework\web\client\HttpClientErrorException$NotFound.class') 2>&1 | Select-String 'getStatusCode|class'
