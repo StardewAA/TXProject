@@ -1,0 +1,2 @@
+cn.iocoder.txgy.framework.env.config.TxgyEnvWebAutoConfiguration
+cn.iocoder.txgy.framework.env.config.TxgyEnvRpcAutoConfiguration

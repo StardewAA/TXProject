@@ -1,0 +1,3 @@
+cn.iocoder.txgy.framework.datapermission.config.TxgyDataPermissionAutoConfiguration
+cn.iocoder.txgy.framework.datapermission.config.TxgyDeptDataPermissionAutoConfiguration
+cn.iocoder.txgy.framework.datapermission.config.TxgyDataPermissionRpcAutoConfiguration

@@ -1,0 +1,39 @@
+name: txgy-uniapp
+
+services:
+  mall-h5:
+    build:
+      context: ../..
+      dockerfile: deploy/uniapp/Dockerfile.mall
+    container_name: deploy-mall-h5-1
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+  admin-uniapp:
+    build:
+      context: ../..
+      dockerfile: deploy/uniapp/Dockerfile.admin
+    container_name: deploy-admin-uniapp-1
+    ports:
+      - "9000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+
+networks:
+  txgy-dev:
+    external: true
+    name: txgy-dev
