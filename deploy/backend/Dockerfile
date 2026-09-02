@@ -4,9 +4,10 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN mvn -Dmaven.test.skip=true package
-
 ARG MODULE_PATH
+
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -pl "${MODULE_PATH}" -am -Dmaven.test.skip=true package
 
 RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
     && test -f /app.jar
