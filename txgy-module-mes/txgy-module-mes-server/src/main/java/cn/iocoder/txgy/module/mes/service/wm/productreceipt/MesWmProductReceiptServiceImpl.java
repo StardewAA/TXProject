@@ -19,6 +19,7 @@ import cn.iocoder.txgy.module.mes.dal.mysql.wm.productreceipt.MesWmProductReceip
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmProductReceiptStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmTransactionTypeEnum;
+import cn.iocoder.txgy.module.mes.service.pollution.MesPollutionControlService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.MesWmTransactionService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.dto.MesWmTransactionSaveReqDTO;
@@ -60,6 +61,8 @@ public class MesWmProductReceiptServiceImpl implements MesWmProductReceiptServic
     private MesWmWarehouseLocationService locationService;
     @Resource
     private MesWmWarehouseAreaService areaService;
+    @Resource
+    private MesPollutionControlService pollutionControlService;
 
     @Override
     public Long createProductReceipt(MesWmProductReceiptSaveReqVO createReqVO) {
@@ -95,13 +98,15 @@ public class MesWmProductReceiptServiceImpl implements MesWmProductReceiptServic
     @Transactional(rollbackFor = Exception.class)
     public void deleteProductReceipt(Long id) {
         // 校验存在 + 草稿状态
-        validateProductReceiptExistsAndDraft(id);
+        MesWmProductReceiptDO receipt = validateProductReceiptExistsAndDraft(id);
 
         // 级联删除明细和行
         productReceiptDetailService.deleteProductReceiptDetailByRecptId(id);
         productReceiptLineService.deleteProductReceiptLineByRecptId(id);
         // 删除
         productReceiptMapper.deleteById(id);
+        // P2 环保级联(A4)：清该成品入库单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_FINISHED_PRODUCT, receipt.getCode());
     }
 
     @Override
@@ -224,6 +229,8 @@ public class MesWmProductReceiptServiceImpl implements MesWmProductReceiptServic
         // 取消
         productReceiptMapper.updateById(new MesWmProductReceiptDO()
                 .setId(id).setStatus(MesWmProductReceiptStatusEnum.CANCELED.getStatus()));
+        // P2 环保级联(A4)：作废清该成品入库单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_FINISHED_PRODUCT, receipt.getCode());
     }
 
     @Override
