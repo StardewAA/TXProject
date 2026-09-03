@@ -71,4 +71,21 @@ RENAME TABLE `act_ru_task` TO `ACT_RU_TASK`;
 RENAME TABLE `act_ru_timer_job` TO `ACT_RU_TIMER_JOB`;
 RENAME TABLE `act_ru_variable` TO `ACT_RU_VARIABLE`;
 
+-- 0069 also contains the Flowable event/batch tables in lowercase.  MySQL
+-- keeps table names case-sensitive in the container, while Flowable 8 uses
+-- uppercase names and globally-scoped foreign-key names.  Normalize these
+-- tables as well so a fresh database does not contain two colliding sets.
+DROP TABLE IF EXISTS `FLW_CHANNEL_DEFINITION`;
+DROP TABLE IF EXISTS `FLW_EVENT_DEFINITION`;
+DROP TABLE IF EXISTS `FLW_EVENT_DEPLOYMENT`;
+DROP TABLE IF EXISTS `FLW_EVENT_RESOURCE`;
+DROP TABLE IF EXISTS `FLW_RU_BATCH`;
+DROP TABLE IF EXISTS `FLW_RU_BATCH_PART`;
+RENAME TABLE `flw_channel_definition` TO `FLW_CHANNEL_DEFINITION`;
+RENAME TABLE `flw_event_definition` TO `FLW_EVENT_DEFINITION`;
+RENAME TABLE `flw_event_deployment` TO `FLW_EVENT_DEPLOYMENT`;
+RENAME TABLE `flw_event_resource` TO `FLW_EVENT_RESOURCE`;
+RENAME TABLE `flw_ru_batch` TO `FLW_RU_BATCH`;
+RENAME TABLE `flw_ru_batch_part` TO `FLW_RU_BATCH_PART`;
+
 
