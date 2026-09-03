@@ -26,6 +26,16 @@ DEALLOCATE PREPARE stmt;
 UPDATE erp_purchase_order SET status = 0 WHERE status = 10 AND process_instance_id IS NULL;
 UPDATE erp_sale_order SET status = 0 WHERE status = 10 AND process_instance_id IS NULL;
 
+-- 西北恒泰租户的 ERP 审批流程分类，供 SIMPLE 设计器保存采购/销售审批模板。
+INSERT INTO bpm_category
+    (name, code, description, status, sort, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT 'ERP审批', 'ERP_APPROVAL', 'ERP 采购、销售等订单审批流程', 0, 10,
+       '1', NOW(), '1', NOW(), b'0', 2001
+WHERE NOT EXISTS (
+    SELECT 1 FROM bpm_category
+    WHERE code = 'ERP_APPROVAL' AND tenant_id = 2001 AND deleted = b'0'
+);
+
 UPDATE system_dict_data
 SET label = '审批中', color_type = 'processing', update_time = NOW()
 WHERE dict_type = 'erp_audit_status' AND value = '10' AND deleted = b'0';
