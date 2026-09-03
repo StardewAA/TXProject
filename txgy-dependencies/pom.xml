@@ -295,6 +295,23 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- 法规 CMS 与公共 Redis 检索组件 -->
+            <dependency>
+                <groupId>cn.iocoder.cloud</groupId>
+                <artifactId>txgy-spring-boot-starter-search</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iocoder.cloud</groupId>
+                <artifactId>txgy-module-cms-api</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.iocoder.cloud</groupId>
+                <artifactId>txgy-module-cms-server</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <dependency>
                 <groupId>org.redisson</groupId>
                 <artifactId>redisson-spring-boot-starter</artifactId>
