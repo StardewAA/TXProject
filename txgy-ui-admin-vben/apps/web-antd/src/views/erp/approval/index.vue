@@ -119,7 +119,7 @@ function normalizePurchase(item: any): ApprovalOrder {
     id: item.id,
     key: `PURCHASE-${item.id}`,
     orderType: 'PURCHASE',
-    partnerName: item.supplierName,
+    partnerName: item.supplierName ?? item.partnerName,
   };
 }
 
@@ -129,7 +129,7 @@ function normalizeSale(item: any): ApprovalOrder {
     id: item.id,
     key: `SALE-${item.id}`,
     orderType: 'SALE',
-    partnerName: item.customerName,
+    partnerName: item.customerName ?? item.partnerName,
   };
 }
 
@@ -159,9 +159,18 @@ async function selectOrder(order: ApprovalOrder | Record<string, any>) {
     const detail = approvalOrder.orderType === 'PURCHASE'
       ? await getPurchaseOrder(approvalOrder.id)
       : await getSaleOrder(approvalOrder.id);
+    // 详情接口主要返回业务字段和明细；保留列表接口已经补齐的名称字段，
+    // 避免点击订单后供应商/客户、产品和发起人显示为“-”。
+    const mergedDetail = {
+      ...approvalOrder,
+      ...detail,
+      creatorName: detail.creatorName ?? approvalOrder.creatorName,
+      partnerName: detail.supplierName ?? detail.customerName ?? approvalOrder.partnerName,
+      productNames: detail.productNames ?? approvalOrder.productNames,
+    };
     selectedOrder.value = approvalOrder.orderType === 'PURCHASE'
-      ? normalizePurchase(detail)
-      : normalizeSale(detail);
+      ? normalizePurchase(mergedDetail)
+      : normalizeSale(mergedDetail);
   } finally {
     detailLoading.value = false;
   }
