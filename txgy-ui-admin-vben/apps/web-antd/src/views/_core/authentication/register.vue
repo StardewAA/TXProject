@@ -4,6 +4,7 @@ import type { VbenFormSchema } from '@vben/common-ui';
 import type { AuthApi } from '#/api/core/auth';
 
 import { computed, h, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { AuthenticationRegister, Verification, z } from '@vben/common-ui';
 import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
@@ -20,86 +21,85 @@ import { useAuthStore } from '#/store';
 
 defineOptions({ name: 'Register' });
 
-const loading = ref(false);
+type RegisterType = 'enterprise' | 'personal';
 
+const router = useRouter();
 const accessStore = useAccessStore();
 const authStore = useAuthStore();
 const tenantEnable = isTenantEnable();
 const captchaEnable = isCaptchaEnable();
 
+const registerType = ref<RegisterType>('personal');
 const registerRef = ref();
 const verifyRef = ref();
+const captchaType = 'blockPuzzle';
+const tenantList = ref<AuthApi.TenantResult[]>([]);
 
-const captchaType = 'blockPuzzle'; // 验证码类型：'blockPuzzle' | 'clickWord'
-
-/** 获取租户列表，并默认选中 */
-const tenantList = ref<AuthApi.TenantResult[]>([]); // 租户列表
 async function fetchTenantList() {
   if (!tenantEnable) {
     return;
   }
   try {
-    // 获取租户列表、域名对应租户
     const websiteTenantPromise = getTenantByWebsite(window.location.hostname);
     tenantList.value = await getTenantSimpleList();
-
-    // 选中租户：域名 > store 中的租户 > 首个租户
     let tenantId: null | number = null;
     const websiteTenant = await websiteTenantPromise;
     if (websiteTenant?.id) {
       tenantId = websiteTenant.id;
     }
-    // 如果没有从域名获取到租户，尝试从 store 中获取
     if (!tenantId && accessStore.tenantId) {
       tenantId = accessStore.tenantId;
     }
-    // 如果还是没有租户，使用列表中的第一个
     if (!tenantId && tenantList.value?.[0]?.id) {
       tenantId = tenantList.value[0].id;
     }
-
-    // 设置选中的租户编号
     accessStore.setTenantId(tenantId);
     registerRef.value
-      .getFormApi()
+      ?.getFormApi()
       .setFieldValue('tenantId', tenantId?.toString());
   } catch (error) {
     console.error('获取租户列表失败:', error);
   }
 }
 
-/** 执行注册 */
 async function handleRegister(values: any) {
-  // 如果开启验证码，则先验证验证码
   if (captchaEnable) {
     verifyRef.value.show();
     return;
   }
-
-  // 无验证码，直接登录
-  await authStore.authLogin('register', values);
+  await authStore.authLogin(
+    'register',
+    { ...values, registerType: registerType.value },
+    async () => {
+      await router.replace('/portal/home');
+    },
+  );
 }
 
-/** 验证码通过，执行注册 */
-const handleVerifySuccess = async ({ captchaVerification }: any) => {
+async function handleVerifySuccess({ captchaVerification }: any) {
   try {
-    await authStore.authLogin('register', {
-      ...(await registerRef.value.getFormApi().getValues()),
-      captchaVerification,
-    });
+    await authStore.authLogin(
+      'register',
+      {
+        ...(await registerRef.value.getFormApi().getValues()),
+        captchaVerification,
+        registerType: registerType.value,
+      },
+      async () => {
+        await router.replace('/portal/home');
+      },
+    );
   } catch (error) {
-    console.error('Error in handleRegister:', error);
+    console.error('注册验证失败:', error);
   }
-};
+}
 
-/** 组件挂载时获取租户信息 */
-onMounted(() => {
-  fetchTenantList();
-});
+onMounted(fetchTenantList);
 
 const formSchema = computed((): VbenFormSchema[] => {
-  return [
-    {
+  const schema: VbenFormSchema[] = [];
+  if (registerType.value === 'enterprise') {
+    schema.push({
       component: 'VbenSelect',
       componentProps: {
         options: tenantList.value.map((item) => ({
@@ -120,21 +120,20 @@ const formSchema = computed((): VbenFormSchema[] => {
           }
         },
       },
-    },
+    });
+  }
+
+  schema.push(
     {
       component: 'VbenInput',
-      componentProps: {
-        placeholder: $t('authentication.usernameTip'),
-      },
+      componentProps: { placeholder: $t('authentication.usernameTip') },
       fieldName: 'username',
       label: $t('authentication.username'),
       rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
     },
     {
       component: 'VbenInput',
-      componentProps: {
-        placeholder: $t('authentication.nicknameTip'),
-      },
+      componentProps: { placeholder: $t('authentication.nicknameTip') },
       fieldName: 'nickname',
       label: $t('authentication.nickname'),
       rules: z.string().min(1, { message: $t('authentication.nicknameTip') }),
@@ -184,8 +183,9 @@ const formSchema = computed((): VbenFormSchema[] => {
             h(
               'a',
               {
-                class: 'vben-link ml-1 ',
+                class: 'vben-link ml-1',
                 href: '',
+                onClick: (event: Event) => event.preventDefault(),
               },
               `${$t('authentication.privacyPolicy')} & ${$t('authentication.terms')}`,
             ),
@@ -195,21 +195,41 @@ const formSchema = computed((): VbenFormSchema[] => {
         message: $t('authentication.agreeTip'),
       }),
     },
-  ];
+  );
+
+  return schema;
 });
 </script>
 
 <template>
-  <div>
+  <div class="register-container">
+    <div class="register-type-tabs" role="tablist" aria-label="注册类型">
+      <button
+        v-for="item in [
+          { key: 'personal', label: '个人注册' },
+          { key: 'enterprise', label: '企业注册' },
+        ]"
+        :key="item.key"
+        :aria-selected="registerType === item.key"
+        class="register-type-tab"
+        role="tab"
+        type="button"
+        @click="registerType = item.key as RegisterType"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
     <AuthenticationRegister
       ref="registerRef"
       :form-schema="formSchema"
-      :loading="loading"
+      :loading="authStore.loginLoading"
       @submit="handleRegister"
     />
+
     <Verification
-      ref="verifyRef"
       v-if="captchaEnable"
+      ref="verifyRef"
       :captcha-type="captchaType"
       :check-captcha-api="checkCaptcha"
       :get-captcha-api="getCaptcha"
@@ -219,3 +239,42 @@ const formSchema = computed((): VbenFormSchema[] => {
     />
   </div>
 </template>
+
+<style scoped>
+.register-container {
+  width: 100%;
+}
+.register-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 1.5rem;
+  padding: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--muted) / 40%);
+}
+.register-type-tab {
+  min-height: 40px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+.register-type-tab[aria-selected='true'] {
+  background: hsl(var(--background));
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 12%);
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+.register-type-tab:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+</style>
