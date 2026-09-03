@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.bpm.framework.rpc.config;
 
 import cn.iocoder.txgy.module.bpm.api.event.CrmContractStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.CrmReceivableStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
 import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
@@ -31,6 +33,18 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "crmContractStatusListener")
     public CrmContractStatusListener crmContractStatusListener() {
         return new CrmContractStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "erpPurchaseOrderStatusListener")
+    public ErpPurchaseOrderStatusListener erpPurchaseOrderStatusListener() {
+        return new ErpPurchaseOrderStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "erpSaleOrderStatusListener")
+    public ErpSaleOrderStatusListener erpSaleOrderStatusListener() {
+        return new ErpSaleOrderStatusListener();
     }
 
 }
