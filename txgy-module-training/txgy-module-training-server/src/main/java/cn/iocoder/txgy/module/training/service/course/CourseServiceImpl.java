@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.training.dal.dataobject.course.*;
 import cn.iocoder.txgy.module.training.dal.mysql.course.*;
 import cn.iocoder.txgy.module.training.enums.course.CourseMediaTypeEnum;
 import cn.iocoder.txgy.module.training.enums.course.CourseStatusEnum;
+import cn.iocoder.txgy.module.training.service.course.external.CourseExternalApiService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,8 @@ public class CourseServiceImpl implements CourseService {
     private CourseAuditLogMapper courseAuditLogMapper;
     @Resource
     private CourseCommentMapper courseCommentMapper;
+    @Resource
+    private CourseExternalApiService externalApiService;
 
     // ========== 课程 CRUD ==========
 
@@ -79,6 +82,10 @@ public class CourseServiceImpl implements CourseService {
         CourseDO course = validateCourseExists(id);
         if (!CourseStatusEnum.DRAFT.getStatus().equals(course.getStatus())) {
             throw exception(COURSE_STATUS_NOT_ALLOW_DELETE, getStatusName(course.getStatus()));
+        }
+        // 生命周期保护：已被学员学习引用的课程禁止删除（占位对接模块五，返回 409）
+        if (externalApiService.hasLearningRef(id)) {
+            throw exception(COURSE_DELETE_HAS_LEARNING_REF);
         }
         // 若同版本族内存在历史上架/审核记录，仅删除当前草稿；否则整族删除
         List<CourseDO> family = courseMapper.selectList(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<CourseDO>()
@@ -148,6 +155,9 @@ public class CourseServiceImpl implements CourseService {
         update.setStatus(CourseStatusEnum.APPROVED.getStatus());
         update.setLastAuditTime(LocalDateTime.now());
         update.setAuditCount((course.getAuditCount() == null ? 0 : course.getAuditCount()) + 1);
+        // 审核完成人/时间留痕（24 审核流细化）
+        update.setReviewerId(SecurityFrameworkUtils.getLoginUserId());
+        update.setReviewedAt(LocalDateTime.now());
         // 审核通过后课程编码锁定：自动生成一次
         if (StrUtil.isBlank(course.getCode())) {
             update.setCode("TC" + course.getId());
@@ -172,6 +182,8 @@ public class CourseServiceImpl implements CourseService {
         update.setStatus(CourseStatusEnum.DRAFT.getStatus());
         update.setRejectReason(reason);
         update.setAuditCount((course.getAuditCount() == null ? 0 : course.getAuditCount()) + 1);
+        update.setReviewerId(SecurityFrameworkUtils.getLoginUserId());
+        update.setReviewedAt(LocalDateTime.now());
         courseMapper.updateById(update);
         insertAuditLog(course.getId(), "REJECT", course.getStatus(),
                 CourseStatusEnum.DRAFT.getStatus(), reason);
@@ -279,12 +291,17 @@ public class CourseServiceImpl implements CourseService {
     public Long createMedia(CourseMediaSaveReqVO createReqVO) {
         validateCourseEditable(createReqVO.getCourseId());
         validateMediaType(createReqVO.getMediaType());
-        // 同一课程下 URL 不允许重复绑定
-        if (courseMediaMapper.selectByUrl(createReqVO.getCourseId(), createReqVO.getUrl()) != null) {
+        // 外部资源引用校验（占位：VR 项目编号 / URL 规则，对接资源中心后增强）
+        externalApiService.validateMediaReference(
+                createReqVO.getMediaType(), createReqVO.getUrl(), createReqVO.getMediaRefId());
+        // 自含媒资同 URL 不允许重复绑定（仅 URL 媒资参与去重）
+        if (StrUtil.isNotBlank(createReqVO.getUrl())
+                && courseMediaMapper.selectByUrl(createReqVO.getCourseId(), createReqVO.getUrl()) != null) {
             throw exception(COURSE_MEDIA_URL_DUPLICATE);
         }
         CourseMediaDO media = BeanUtils.toBean(createReqVO, CourseMediaDO.class);
         media.setSort(media.getSort() == null ? 0 : media.getSort());
+        normalizeMediaUrl(media);
         courseMediaMapper.insert(media);
         refreshCourseMediaStat(createReqVO.getCourseId());
         return media.getId();
@@ -296,12 +313,18 @@ public class CourseServiceImpl implements CourseService {
         CourseMediaDO media = validateMediaExists(updateReqVO.getId());
         validateCourseEditable(media.getCourseId());
         validateMediaType(updateReqVO.getMediaType());
-        // 排除自身后的 URL 去重
-        CourseMediaDO same = courseMediaMapper.selectByUrl(media.getCourseId(), updateReqVO.getUrl());
-        if (same != null && !same.getId().equals(updateReqVO.getId())) {
-            throw exception(COURSE_MEDIA_URL_DUPLICATE);
+        // 外部资源引用校验（占位）
+        externalApiService.validateMediaReference(
+                updateReqVO.getMediaType(), updateReqVO.getUrl(), updateReqVO.getMediaRefId());
+        // 排除自身后的 URL 去重（仅 URL 媒资参与去重）
+        if (StrUtil.isNotBlank(updateReqVO.getUrl())) {
+            CourseMediaDO same = courseMediaMapper.selectByUrl(media.getCourseId(), updateReqVO.getUrl());
+            if (same != null && !same.getId().equals(updateReqVO.getId())) {
+                throw exception(COURSE_MEDIA_URL_DUPLICATE);
+            }
         }
         CourseMediaDO updateObj = BeanUtils.toBean(updateReqVO, CourseMediaDO.class);
+        normalizeMediaUrl(updateObj);
         courseMediaMapper.updateById(updateObj);
         refreshCourseMediaStat(media.getCourseId());
     }
@@ -349,17 +372,106 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void deleteComment(Long id) {
-        CourseCommentDO comment = courseCommentMapper.selectById(id);
-        if (comment == null) {
-            throw exception(COURSE_COMMENT_NOT_EXISTS);
-        }
-        // 学员仅能删除自己的评论（管理端评论治理另行扩展权限）
+    public void deleteComment(Long id, String reason) {
+        CourseCommentDO comment = validateCommentDeletable(id);
+        softDeleteComment(comment, reason);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteMyComment(Long id) {
+        CourseCommentDO comment = validateCommentDeletable(id);
+        // 学员仅能删除自己的评论
         if (comment.getUserId() != null
                 && !comment.getUserId().equals(SecurityFrameworkUtils.getLoginUserId())) {
             throw exception(COURSE_COMMENT_DELETE_NOT_ALLOW);
         }
-        courseCommentMapper.deleteById(id);
+        softDeleteComment(comment, "学员删除");
+    }
+
+    // ========== 业务属性配置（23 课程业务属性配置） ==========
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBusinessAttributes(Long id, CourseAttributesReqVO attrReqVO) {
+        CourseDO course = validateCourseExists(id);
+        // 业务属性仅允许在草稿态（当前生效版本）配置，与课程编辑约束一致
+        if (!Boolean.TRUE.equals(course.getIsCurrent())
+                || !CourseStatusEnum.DRAFT.getStatus().equals(course.getStatus())) {
+            throw exception(COURSE_STATUS_NOT_ALLOW_UPDATE, getStatusName(course.getStatus()));
+        }
+        CourseDO update = new CourseDO();
+        update.setId(id);
+        // 成长等级/学分/时长/行业/岗位/归属/标签/必修/复合/结课考试（考试占位模块三）
+        update.setCourseLevel(attrReqVO.getCourseLevel());
+        update.setCredit(attrReqVO.getCredit());
+        update.setDurationMinutes(attrReqVO.getDurationMinutes());
+        update.setIndustry(attrReqVO.getIndustry());
+        update.setApplicablePosts(attrReqVO.getApplicablePosts());
+        update.setOwnerFlag(attrReqVO.getOwnerFlag());
+        update.setBizTags(attrReqVO.getBizTags());
+        update.setIsRequired(attrReqVO.getIsRequired());
+        update.setIsComposite(attrReqVO.getIsComposite());
+        update.setCompositeTags(attrReqVO.getCompositeTags());
+        update.setExamId(attrReqVO.getExamId());
+        courseMapper.updateById(update);
+        insertAuditLog(course.getId(), "UPDATE_ATTR", course.getStatus(), course.getStatus(), "业务属性配置");
+    }
+
+    /**
+     * VR/3D 仿真媒资无访问地址，统一落库为空串（DB 列 NOT NULL）
+     */
+    private void normalizeMediaUrl(CourseMediaDO media) {
+        if (CourseMediaTypeEnum.VR.getType().equals(media.getMediaType()) && media.getUrl() == null) {
+            media.setUrl("");
+        }
+    }
+
+    // ========== 媒资排序（22 媒资绑定） ==========
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void sortMedia(Long courseId, List<Long> mediaIds) {
+        validateCourseEditable(courseId);
+        if (mediaIds == null || mediaIds.isEmpty()) {
+            return;
+        }
+        int sort = 0;
+        for (Long mediaId : mediaIds) {
+            if (mediaId == null) {
+                continue;
+            }
+            CourseMediaDO update = new CourseMediaDO();
+            update.setId(mediaId);
+            update.setSort(sort++);
+            courseMediaMapper.updateById(update);
+        }
+    }
+
+    // ========== 评论治理（26 课程评论管理） ==========
+
+    private CourseCommentDO validateCommentDeletable(Long id) {
+        CourseCommentDO comment = courseCommentMapper.selectById(id);
+        if (comment == null) {
+            throw exception(COURSE_COMMENT_NOT_EXISTS);
+        }
+        if (Integer.valueOf(2).equals(comment.getStatus())) {
+            throw exception(COURSE_COMMENT_ALREADY_DELETED);
+        }
+        return comment;
+    }
+
+    /**
+     * 软删除评论：原文保留（status=2）+ 删除人/时间/原因留痕，可见评论数 -1
+     */
+    private void softDeleteComment(CourseCommentDO comment, String reason) {
+        CourseCommentDO update = new CourseCommentDO();
+        update.setId(comment.getId());
+        update.setStatus(2);
+        update.setDeletedBy(SecurityFrameworkUtils.getLoginUserId());
+        update.setDeletedAt(LocalDateTime.now());
+        update.setDeleteReason(reason);
+        courseCommentMapper.updateById(update);
         CourseDO course = courseMapper.selectById(comment.getCourseId());
         incrCommentCount(comment.getCourseId(),
                 course == null || course.getCommentCount() == null ? 0 : course.getCommentCount(), -1);

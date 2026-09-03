@@ -1,7 +1,6 @@
 package cn.iocoder.txgy.module.training.controller.admin.course;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
-import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseMediaSaveReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseMediaDO;
 import cn.iocoder.txgy.module.training.service.course.CourseService;
@@ -57,6 +56,16 @@ public class CourseMediaController {
     @PreAuthorize("@ss.hasPermission('training:course:query')")
     public CommonResult<List<CourseMediaDO>> getMediaList(@RequestParam("courseId") Long courseId) {
         return success(courseService.getMediaList(courseId));
+    }
+
+    @PutMapping("/sort")
+    @Operation(summary = "媒资排序（按传入顺序重排，仅草稿可调整）")
+    @Parameter(name = "courseId", description = "课程 ID", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('training:course:update')")
+    public CommonResult<Boolean> sortMedia(@RequestParam("courseId") Long courseId,
+                                           @RequestBody List<Long> mediaIds) {
+        courseService.sortMedia(courseId, mediaIds);
+        return success(true);
     }
 
 }

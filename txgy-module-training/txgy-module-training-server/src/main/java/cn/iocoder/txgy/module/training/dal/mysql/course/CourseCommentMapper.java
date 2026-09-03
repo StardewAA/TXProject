@@ -12,8 +12,9 @@ public interface CourseCommentMapper extends BaseMapperX<CourseCommentDO> {
 
     default PageResult<CourseCommentDO> selectPage(CourseCommentPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<CourseCommentDO>()
-                .eq(CourseCommentDO::getCourseId, reqVO.getCourseId())
+                .eqIfPresent(CourseCommentDO::getCourseId, reqVO.getCourseId())
                 .eqIfPresent(CourseCommentDO::getParentId, reqVO.getParentId())
+                .eqIfPresent(CourseCommentDO::getStatus, reqVO.getStatus())
                 .orderByDesc(CourseCommentDO::getId));
     }
 

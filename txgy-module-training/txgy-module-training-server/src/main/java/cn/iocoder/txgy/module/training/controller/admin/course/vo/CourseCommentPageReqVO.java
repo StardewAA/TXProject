@@ -16,4 +16,7 @@ public class CourseCommentPageReqVO extends PageParam {
     @Schema(description = "父评论 ID（0 = 一级评论）", example = "0")
     private Long parentId;
 
+    @Schema(description = "评论状态：1 正常 2 已删除（管理端不传=全部，学员端传 1）", example = "1")
+    private Integer status;
+
 }
