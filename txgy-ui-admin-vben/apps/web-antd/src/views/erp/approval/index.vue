@@ -263,29 +263,32 @@ onMounted(loadOrders);
       </Card>
 
       <Card title="全部订单">
-        <Space class="mb-4" wrap>
-          <Input v-model:value="keyword" allow-clear placeholder="订单号、供应商、客户、产品或发起人" style="width: 320px" />
-          <Select
-            v-model:value="orderType"
-            allow-clear
-            placeholder="订单类型"
-            style="width: 140px"
-            :options="[
-              { label: '采购订单', value: 'PURCHASE' },
-              { label: '销售订单', value: 'SALE' },
-            ]"
-          />
-          <Select
-            v-model:value="status"
-            allow-clear
-            placeholder="审批状态"
-            style="width: 140px"
-            :options="Object.entries(statusMeta).map(([value, item]) => ({ label: item.text, value: Number(value) }))"
-          />
-          <Button @click="loadOrders">刷新</Button>
-        </Space>
+        <div class="approval-filter-bar">
+          <Space wrap>
+            <Input v-model:value="keyword" allow-clear placeholder="订单号、供应商、客户、产品或发起人" style="width: 320px" />
+            <Select
+              v-model:value="orderType"
+              allow-clear
+              placeholder="订单类型"
+              style="width: 140px"
+              :options="[
+                { label: '采购订单', value: 'PURCHASE' },
+                { label: '销售订单', value: 'SALE' },
+              ]"
+            />
+            <Select
+              v-model:value="status"
+              allow-clear
+              placeholder="审批状态"
+              style="width: 140px"
+              :options="Object.entries(statusMeta).map(([value, item]) => ({ label: item.text, value: Number(value) }))"
+            />
+            <Button @click="loadOrders">刷新</Button>
+          </Space>
+        </div>
 
         <Table
+          class="approval-orders-table"
           :columns="columns"
           :data-source="pagedOrders"
           :loading="loading"
@@ -336,3 +339,13 @@ onMounted(loadOrders);
     </div>
   </Page>
 </template>
+
+<style scoped>
+.approval-filter-bar {
+  margin-bottom: 20px;
+}
+
+.approval-orders-table :deep(.ant-table-thead > tr > th) {
+  background-color: transparent !important;
+}
+</style>
