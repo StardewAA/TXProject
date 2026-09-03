@@ -313,6 +313,15 @@ public interface ErrorCodeConstants {
     ErrorCode WORK_RECORD_NOT_CLOCK_IN = new ErrorCode(1_040_508_001, "当前用户未上工，无法下工");
     ErrorCode WORK_RECORD_ALREADY_CLOCK_IN = new ErrorCode(1_040_508_002, "当前用户已上工，请先下工再操作");
 
+    // ========== MES 生产管理-项目管理（1-040-509-000） ==========
+    ErrorCode PRO_PROJECT_NOT_EXISTS = new ErrorCode(1_040_509_000, "项目不存在");
+    ErrorCode PRO_PROJECT_CODE_DUPLICATE = new ErrorCode(1_040_509_001, "项目编码已存在");
+    ErrorCode PRO_PROJECT_HAS_WORK_ORDERS = new ErrorCode(1_040_509_002, "项目下已关联生产工单，无法删除");
+    ErrorCode PRO_PROJECT_WORK_ORDER_NOT_EXISTS = new ErrorCode(1_040_509_100, "关联的生产工单不存在");
+    ErrorCode PRO_PROJECT_WORK_ORDER_CANCELED = new ErrorCode(1_040_509_101, "已取消的工单不允许挂接项目");
+    ErrorCode PRO_PROJECT_STATUS_CLOSED = new ErrorCode(1_040_509_102, "项目已完成或已取消，不允许挂接生产工单");
+    ErrorCode PRO_PROJECT_STATUS_FORBIDDEN = new ErrorCode(1_040_509_103, "项目状态不允许该操作，请刷新后重试");
+
     // ========== MES 质量管理-质检方案（1-040-600-000） ==========
     ErrorCode QC_TEMPLATE_NOT_EXISTS = new ErrorCode(1_040_600_000, "质检方案不存在");
     ErrorCode QC_TEMPLATE_CODE_DUPLICATE = new ErrorCode(1_040_600_001, "质检方案编号已存在");
