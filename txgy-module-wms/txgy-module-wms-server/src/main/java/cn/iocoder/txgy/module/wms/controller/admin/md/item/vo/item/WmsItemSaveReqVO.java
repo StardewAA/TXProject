@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item;
 
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.sku.WmsItemSkuSaveReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.quality.WmsItemQualityReportSaveReqVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -47,5 +48,9 @@ public class WmsItemSaveReqVO {
     @Valid
     @NotEmpty(message = "至少包含一个商品规格")
     private List<WmsItemSkuSaveReqVO> skus;
+
+    @Schema(description = "首份质检报告，仅创建商品时生效")
+    @Valid
+    private WmsItemQualityReportSaveReqVO initialQualityReport;
 
 }
