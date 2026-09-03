@@ -1,0 +1,55 @@
+package cn.iocoder.txgy.module.bidding.enums;
+
+import cn.iocoder.txgy.module.bidding.api.vo.TenderChangeNoticeVO;
+import cn.iocoder.txgy.module.bidding.api.vo.TenderNoticeVO;
+import cn.iocoder.txgy.module.bidding.api.vo.WinCandidatePublicityVO;
+import cn.iocoder.txgy.module.bidding.api.vo.WinResultPublicityVO;
+
+/**
+ * 公告/公示类型（本模块内部登记码，对应权威数据集）。
+ *
+ * <p>类型 → 权威数据集 VO 一一对应：详情/新建的 payload 必须按对应数据集的字段全集
+ * 规整（"该有的字段一个不能少"，见 {@code NoticePayloadUtils}），字段名照录规范英文名称。
+ */
+public enum NoticeTypeEnum {
+
+    /** 招标公告与资格预审公告数据集 */
+    TENDER_NOTICE("招标公告", TenderNoticeVO.class),
+    /** 变更公告（工程） */
+    CHANGE_NOTICE("变更公告", TenderChangeNoticeVO.class),
+    /** 中标候选人公示数据集 */
+    WIN_CANDIDATE_PUBLICITY("中标候选人公示", WinCandidatePublicityVO.class),
+    /** 中标结果公示数据集 */
+    WIN_RESULT_PUBLICITY("中标结果公示", WinResultPublicityVO.class);
+
+    /** 展示名（内部页面用；对外报送名以数据集名称为准） */
+    private final String label;
+    /** 权威数据集 VO（api/vo，record，字段名照录规范） */
+    private final Class<?> datasetClass;
+
+    NoticeTypeEnum(String label, Class<?> datasetClass) {
+        this.label = label;
+        this.datasetClass = datasetClass;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public Class<?> getDatasetClass() {
+        return datasetClass;
+    }
+
+    /** 按 code 查找；找不到返回 null（由调用方决定兜底或报错）。 */
+    public static NoticeTypeEnum of(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (NoticeTypeEnum type : values()) {
+            if (type.name().equals(code)) {
+                return type;
+            }
+        }
+        return null;
+    }
+}
