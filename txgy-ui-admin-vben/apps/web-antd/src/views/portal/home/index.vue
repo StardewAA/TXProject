@@ -13,6 +13,11 @@ const services = [
     path: '/portal/recruit',
   },
   {
+    title: '内容管理',
+    description: '浏览标准、材料、工艺、定额与政策内容。',
+    path: '/portal/content',
+  },
+  {
     title: '云培训学院',
     description: '浏览企业课程、学习计划和培训记录。',
     path: '/portal/training',
@@ -131,7 +136,7 @@ h1 {
 
 .service-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -192,6 +197,12 @@ h1 {
 
   .service-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
