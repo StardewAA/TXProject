@@ -1,0 +1,121 @@
+x-backend-service: &backend-service
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    nacos:
+      condition: service_healthy
+  environment:
+    SERVER_PORT: 48080
+    SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+    SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    SPRING_DATA_REDIS_HOST: redis
+  healthcheck:
+    test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 20
+    start_period: 90s
+  networks:
+    - txgy-dev
+  restart: unless-stopped
+
+services:
+  mysql:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - txgy-dev
+
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+
+  nacos:
+    build:
+      context: ..
+      dockerfile: deploy/backend/nacos.Dockerfile
+    environment:
+      MODE: standalone
+      CUSTOM_NACOS_MEMORY: -Xms512m -Xmx512m -Xmn256m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+      TZ: ${TZ}
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/ > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+    networks:
+      - txgy-dev
+
+  gateway:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-gateway
+    ports:
+      - "48080:48080"
+
+  system:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-system/txgy-module-system-server
+
+  mes:
+    <<: *backend-service
+    build:
+      context: ..
+      # Dockerfile.local：使用本机已编译好的 jar + 本地已有的 deploy-mes:latest 作为基础镜像，
+      # 不走容器内的全量 mvn 编译，也不依赖 Docker Hub 网络，构建秒级完成。
+      dockerfile: deploy/backend/Dockerfile.local
+      args:
+        MODULE_PATH: txgy-module-mes/txgy-module-mes-server
+
+volumes:
+  mysql-data:
+  redis-data:
+  nacos-data:
+
+networks:
+  txgy-dev:
+    name: txgy-dev
