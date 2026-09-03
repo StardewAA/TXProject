@@ -261,6 +261,14 @@ services:
       args:
         MODULE_PATH: txgy-module-fms/txgy-module-fms-server
 
+  training:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-training/txgy-module-training-server
+
   frontend:
     build:
       context: ..
