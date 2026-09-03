@@ -24,6 +24,7 @@ import {
   MdProductBomSelect,
 } from '#/views/mes/md/item/components';
 import { MdVendorSelect } from '#/views/mes/md/vendor/components';
+import { ProjectSelect } from '#/views/mes/pro/project/components';
 
 /** 表单类型 */
 export type FormType = 'confirm' | 'create' | 'detail' | 'finish' | 'update';
@@ -141,6 +142,15 @@ export function useFormSchema(
         triggerFields: ['orderSourceType'],
         show: (values) =>
           values.orderSourceType === MesProWorkOrderSourceTypeEnum.ORDER,
+      },
+    },
+    {
+      fieldName: 'projectId',
+      label: '所属项目',
+      component: markRaw(ProjectSelect),
+      componentProps: {
+        disabled: headerReadonly,
+        placeholder: '请选择所属项目',
       },
     },
     {

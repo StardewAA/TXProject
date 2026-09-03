@@ -29,6 +29,12 @@ public class MesProWorkOrderPageReqVO extends PageParam {
     @Schema(description = "来源单据编号", example = "SO-001")
     private String orderSourceCode;
 
+    @Schema(description = "所属项目编号", example = "1024")
+    private Long projectId;
+
+    @Schema(description = "是否只查未挂接项目的工单", example = "true")
+    private Boolean noProject;
+
     @Schema(description = "产品编号", example = "100")
     private Long productId;
 
