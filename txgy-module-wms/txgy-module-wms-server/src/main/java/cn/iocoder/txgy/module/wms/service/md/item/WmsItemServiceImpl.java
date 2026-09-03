@@ -41,6 +41,8 @@ public class WmsItemServiceImpl implements WmsItemService {
     private WmsItemBrandService brandService;
     @Resource
     private WmsItemSkuService itemSkuService;
+    @Resource
+    private WmsItemQualityReportService qualityReportService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -53,6 +55,10 @@ public class WmsItemServiceImpl implements WmsItemService {
         itemMapper.insert(item);
         // 插入 SKU
         itemSkuService.createItemSkuList(item.getId(), createReqVO.getSkus());
+        if (createReqVO.getInitialQualityReport() != null) {
+            createReqVO.getInitialQualityReport().setItemId(item.getId());
+            qualityReportService.createQualityReport(createReqVO.getInitialQualityReport());
+        }
         return item.getId();
     }
 

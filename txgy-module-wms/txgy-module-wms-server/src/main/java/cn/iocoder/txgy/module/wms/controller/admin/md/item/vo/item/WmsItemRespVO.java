@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.sku.WmsItemSkuRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.quality.WmsItemQualityReportRespVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -50,6 +51,12 @@ public class WmsItemRespVO {
 
     @Schema(description = "规格列表")
     private List<WmsItemSkuRespVO> skus;
+
+    @Schema(description = "当前有效质检报告")
+    private WmsItemQualityReportRespVO currentQualityReport;
+
+    @Schema(description = "质检报告数量")
+    private Long qualityReportCount;
 
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")

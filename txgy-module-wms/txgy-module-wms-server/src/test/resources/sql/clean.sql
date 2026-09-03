@@ -9,6 +9,7 @@ DELETE FROM "wms_receipt_order";
 DELETE FROM "wms_inventory_history";
 DELETE FROM "wms_inventory";
 DELETE FROM "wms_item_sku";
+DELETE FROM "wms_item_quality_report";
 DELETE FROM "wms_item";
 DELETE FROM "wms_item_category";
 DELETE FROM "wms_item_brand";
