@@ -50,7 +50,7 @@ public record ProjectVO(
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String OTHER_OWNED_FUND,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
-        String OTHER_OWNED_FUND_RATIO // 规范原文字段名中间带空格，去掉空格照录,
+        String OTHER_OWNED_FUND_RATIO, // 规范原文字段名中间带空格，去掉空格照录,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String PRIVATE_FUND,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)

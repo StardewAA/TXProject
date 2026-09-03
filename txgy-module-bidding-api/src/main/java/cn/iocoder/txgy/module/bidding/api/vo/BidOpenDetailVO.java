@@ -52,7 +52,7 @@ public record BidOpenDetailVO(
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String MAC_ADDRESS_OF_BIDDER,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
-        String BIDDER_S_IP_ADDRESS // 规范原文带单引号，Java 不认，换成下划线,
+        String BIDDER_S_IP_ADDRESS, // 规范原文带单引号，Java 不认，换成下划线,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String macaddress,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)

@@ -53,7 +53,7 @@
 | 2 | 公告标段（包）数量 | NOTICE_BID_NUM | N..2 | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 相关标段（包）编号 | BID_SECTION_CODES | C..600 | 是 | 社会公开 | 参考附录B标段（包）编号，由多个标段（包）编号组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 相关统一交易标识码 | UNIFIED_DEAL_CODES | C..2000 | 是 | 政务公开 | 参考附录B统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 5 | 是否不见面开标项目 | IS_NOMEET_BIDDING | C1 | 否 |  | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
+| 5 | 是否不见面开标项目 | IS_NOMEET_BIDDING | C1 | 否 | 政务公开 | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
 | 6 | 公告标题 | NOTICE_NAME | C..600 | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 7 | 公告内容 | NOTICE_CONTENT | C..ul | 是 | 社会公开 | 自由文本，应包括标段名称、标段编号及投标资格等信息；国家2.0数据规范 | 国家V2.0沿用 |
 | 8 | 公告发布时间 | NOTICE_SEND_TIME | yyyyMMddHHmmss | 否 | 社会公开 | 省公共服务平台与国家平台对接时必填；交易平台与公共服务平台对接时不填；国家2.0数据规范 | 国家V2.0沿用 |
@@ -61,25 +61,25 @@
 | 10 | 公告源URL | URL | C..500 | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 11 | 公告性质 | NOTICE_NATURE | C1 | 是 | 社会公开 | 参考1.10.7公告性质；国家2.0数据规范 | 国家V2.0沿用 |
 | 12 | 公告类型 | BULLETIN_TYPE | C1 | 是 | 社会公开 | 参考1.10.8公告类型；国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 纸质招标文件/资审文件售价 | NOMINAL_FEE | N..20,6 | 是 |  | 业务需要 | 陕西扩展 |
-| 14 | 招标文件/资审文件领取地点 | FILE_RECEIVE_ADDRESS | C..200 | 是 |  | 业务需要 | 陕西扩展 |
+| 13 | 纸质招标文件/资审文件售价 | NOMINAL_FEE | N..20,6 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 14 | 招标文件/资审文件领取地点 | FILE_RECEIVE_ADDRESS | C..200 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
 | 15 | 招标文件/资格预审文件获取开始时间 | DOC_GET_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 16 | 招标文件/资格预审文件获取截至时间 | DOC_GET_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 17 | 招标文件/资格预审文件获取方法 | TENDER_DOC_GET_METHOD | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 18 | 投标文件/资格预审申请文件递交截止时间 | BID_DOC_REFER_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 19 | 开标时间/开启时间 | BID_OPEN_TIME | yyyyMMddHHmmss | 否 | 社会公开 | 当为招标公告时必填；当为资格预审公告时非必填；国家2.0数据规范 | 国家V2.0沿用 |
 | 20 | 投标文件/资格预审申请文件递交方法 | BID_DOC_REFER_METHOD | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 21 | 投标文件/资格预审申请文件递交地址 | BID_URL | C..500 | 否 |  | 自由文本；电子投标时，填写投标的url地址；纸质投标时，填写物理场所地址；根据20号令管理办法第二十五条为便于投标人递交投标文件 | 陕西扩展 |
+| 21 | 投标文件/资格预审申请文件递交地址 | BID_URL | C..500 | 否 | 社会公开 | 自由文本；电子投标时，填写投标的url地址；纸质投标时，填写物理场所地址；根据20号令管理办法第二十五条为便于投标人递交投标文件 | 陕西扩展 |
 | 22 | 是否允许联合体投标 | SYNDICATED_FLAG | C1 | 是 | 社会公开 | 参考1.10.2是否代码，国家2.0数据规范 | 国家V2.0沿用 |
-| 23 | 联合体要求 | CONSORTIUM_REQUIREMENT | C..1000 | 否 |  | 业务需要 | 陕西扩展 |
+| 23 | 联合体要求 | CONSORTIUM_REQUIREMENT | C..1000 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
 | 24 | 公告发布责任人 | BULLETIN_DUTY | C..50 | 是 | 政务公开 | 自由文本；招标代理或招标人项目负责人；国家2.0数据规范 | 国家V2.0沿用 |
-| 25 | 投标人资格要求 | COMPANY_QUALI_DEMAND | C..200 | 否 |  | 业务需要 | 陕西扩展 |
-| 26 | 项目负责人资格要求 | PM_QUALI_DEMAND | C..200 | 否 |  | 业务需要 | 陕西扩展 |
-| 27 | 投标其它条件 | BID_OTHER_CONDITION | C..200 | 否 |  | 业务需要 | 陕西扩展 |
-| 28 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
-| 29 | 附件关联标识号 | ATTACHMENT_CODE | C36 | 是 |  | 参考附录B附件关联标识号；20号令A.1.2，但长度调整 | 陕西扩展 |
-| 30 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 |  | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
-| 31 | 备注 | REMARK | C..200 | 否 |  | 业务需要 | 陕西扩展 |
+| 25 | 投标人资格要求 | COMPANY_QUALI_DEMAND | C..200 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 26 | 项目负责人资格要求 | PM_QUALI_DEMAND | C..200 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 27 | 投标其它条件 | BID_OTHER_CONDITION | C..200 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 28 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 29 | 附件关联标识号 | ATTACHMENT_CODE | C36 | 是 | 政务公开 | 参考附录B附件关联标识号；20号令A.1.2，但长度调整 | 陕西扩展 |
+| 30 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
+| 31 | 备注 | REMARK | C..200 | 否 | 政务公开 | 业务需要 | 陕西扩展 |
 | 32 | 是否延期开标 | IS_POSTPONE | C1 | 否 | 社会公开 | 参考6.2 是否代码，填入对应代码；变更时使用 | 国家V2.0沿用 |
 | 33 | 开标方式/文件开启方式 | BID_OPEN_METHOD | C..ul | 否 | 社会公开 | 自由文本；为招标公告时必填；为资格预审公告时非必填 | 国家V2.0沿用 |
 | 34 | 评审办法 | QUAL_TYPE | C..ul | 否 | 社会公开 | 自由文本；为资格预审公告时填写 | 国家V2.0沿用 |
@@ -101,33 +101,33 @@
 | 5 | 公示内容 | PUBLICITY_CONTENT | C..ul | 是 | 社会公开 | 多个中标候选人一并显示；国家2.0数据规范 | 国家V2.0沿用 |
 | 6 | 公示发布媒介 | NOTICE_MEDIA | C..1000 | 是 | 社会公开 | 按照公布的发布媒介填写，多个以半角分号分隔；国家2.0数据规范 | 国家V2.0沿用 |
 | 7 | 公示类型 | PUBLICITY_TYPE | C1 | 是 | 社会公开 | 参考1.10.10公示类型；国家2.0数据规范 | 国家V2.0沿用 |
-| 8 | 其他内容 | OTHER_CONTENT | C..ul | 否 |  | 招标文件规定公示的其他内容；10号令第六条要求 | 陕西扩展 |
+| 8 | 其他内容 | OTHER_CONTENT | C..ul | 否 | 政务公开 | 招标文件规定公示的其他内容；10号令第六条要求 | 陕西扩展 |
 | 9 | 公示开始时间 | PUBLICITY_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 10 | 公示结束时间 | PUBLICITY_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
-| 11 | 是否变更 | IS_CHANGE | C1 | 是 |  | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
-| 12 | 推荐单位一 | RECOMMEND_RANKING_FIRST | C..50 | 是 |  | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
-| 13 | 推荐单位一社会统一信用代码 | RECOMMEND_RANKING_FIRST_LEGAL_CODE | C..18 | 是 |  | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
-| 14 | 推荐单位一项目负责人姓名 | RECOMMEND_RANKING_FIRST_LEGAL_PM_NAME | C..50 | 是 |  | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
-| 15 | 推荐单位一项目负责人相关证书和编号 | RECOMMEND_RANKING_FIRST_LEGAL_PM_CERTIFICATES | C..ul | 否 |  | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
-| 16 | 推荐单位一中标价 | RECOMMEND_RANKING_FIRST_WIN_PRICE | N..20,6 | 是 |  | 业务需要 | 陕西扩展 |
-| 17 | 推荐单位一获奖情况 | RECOMMEND_RANKING_FIRST_AWARD | C..ul | 否 |  | 业务需要 | 陕西扩展 |
-| 18 | 推荐单位二 | RECOMMEND_RANKING_SECOND | C..50 | 否 |  | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
-| 19 | 推荐单位二社会统一信用代码 | RECOMMEND_RANKING_SECOND_LEGAL_CODE | C..18 | 否 |  | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
-| 20 | 推荐单位二项目负责人姓名 | RECOMMEND_RANKING_SECOND_LEGAL_PM_NAME | C..50 | 是 |  | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
-| 21 | 推荐单位二项目负责人相关证书和编号 | RECOMMEND_RANKING_SECOND_LEGAL_PM_CERTIFICATES | C..ul | 否 |  | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
-| 22 | 推荐单位二中标价 | RECOMMEND_RANKING_SECOND_WIN_PRICE | N..20,6 | 是 |  | 业务需要 | 陕西扩展 |
-| 23 | 推荐单位二获奖情况 | RECOMMEND_RANKING_SECOND_AWARD | C..ul | 否 |  | 业务需要 | 陕西扩展 |
-| 24 | 推荐单位三 | RECOMMEND_RANKING_THIRED | C..50 | 否 |  | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
-| 25 | 推荐单位三社会统一信用代码 | RECOMMEND_RANKING_THIRED_EGAL_CODE | C..18 | 否 |  | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
-| 26 | 推荐单位三项目负责人姓名 | RECOMMEND_RANKING_THIRED_EGAL_PM_NAME | C..50 | 是 |  | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
-| 27 | 推荐单位三项目负责人相关证书和编号 | RECOMMEND_RANKING_THIRED_EGAL_PM_CERTIFICATES | C..ul | 否 |  | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
-| 28 | 推荐单位三中标价 | RECOMMEND_RANKING_THIRED_WIN_PRICE | N..20,6 | 是 |  | 业务需要 | 陕西扩展 |
-| 29 | 推荐单位三获奖情况 | RECOMMEND_RANKING_THIRED_AWARD | C..ul | 否 |  | 业务需要 | 陕西扩展 |
-| 30 | 提出异议的渠道和方式 | OBJECTION_METHOD | C..ul | 否 |  | 10号令第六条要求；业务需要 | 陕西扩展 |
+| 11 | 是否变更 | IS_CHANGE | C1 | 是 | 政务公开 | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
+| 12 | 推荐单位一 | RECOMMEND_RANKING_FIRST | C..50 | 是 | 社会公开 | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
+| 13 | 推荐单位一社会统一信用代码 | RECOMMEND_RANKING_FIRST_LEGAL_CODE | C..18 | 是 | 社会公开 | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
+| 14 | 推荐单位一项目负责人姓名 | RECOMMEND_RANKING_FIRST_LEGAL_PM_NAME | C..50 | 是 | 社会公开 | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
+| 15 | 推荐单位一项目负责人相关证书和编号 | RECOMMEND_RANKING_FIRST_LEGAL_PM_CERTIFICATES | C..ul | 否 | 社会公开 | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
+| 16 | 推荐单位一中标价 | RECOMMEND_RANKING_FIRST_WIN_PRICE | N..20,6 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 17 | 推荐单位一获奖情况 | RECOMMEND_RANKING_FIRST_AWARD | C..ul | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 18 | 推荐单位二 | RECOMMEND_RANKING_SECOND | C..50 | 否 | 社会公开 | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
+| 19 | 推荐单位二社会统一信用代码 | RECOMMEND_RANKING_SECOND_LEGAL_CODE | C..18 | 否 | 社会公开 | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
+| 20 | 推荐单位二项目负责人姓名 | RECOMMEND_RANKING_SECOND_LEGAL_PM_NAME | C..50 | 是 | 社会公开 | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
+| 21 | 推荐单位二项目负责人相关证书和编号 | RECOMMEND_RANKING_SECOND_LEGAL_PM_CERTIFICATES | C..ul | 否 | 社会公开 | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
+| 22 | 推荐单位二中标价 | RECOMMEND_RANKING_SECOND_WIN_PRICE | N..20,6 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 23 | 推荐单位二获奖情况 | RECOMMEND_RANKING_SECOND_AWARD | C..ul | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 24 | 推荐单位三 | RECOMMEND_RANKING_THIRED | C..50 | 否 | 社会公开 | 业务需要；如是联合体则填联合体名称 | 陕西扩展 |
+| 25 | 推荐单位三社会统一信用代码 | RECOMMEND_RANKING_THIRED_EGAL_CODE | C..18 | 否 | 社会公开 | 参考附录B统一社会信用代码；如是联合体时填入多家代码，以半角分号隔开；业务需要 | 陕西扩展 |
+| 26 | 推荐单位三项目负责人姓名 | RECOMMEND_RANKING_THIRED_EGAL_PM_NAME | C..50 | 是 | 社会公开 | 中标候选人按照招标文件要求承诺的项目负责人；20号令A.1.12“投标文件”数据集 | **陕V2.0更新** |
+| 27 | 推荐单位三项目负责人相关证书和编号 | RECOMMEND_RANKING_THIRED_EGAL_PM_CERTIFICATES | C..ul | 否 | 社会公开 | 中标候选人按招标文件要求承诺的项目负责人相关证书名称和编号；20号令5.8.1 和B.3.1，交易平台需向公共服务平台同步信息。 | **陕V2.0更新** |
+| 28 | 推荐单位三中标价 | RECOMMEND_RANKING_THIRED_WIN_PRICE | N..20,6 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 29 | 推荐单位三获奖情况 | RECOMMEND_RANKING_THIRED_AWARD | C..ul | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 30 | 提出异议的渠道和方式 | OBJECTION_METHOD | C..ul | 否 | 社会公开 | 10号令第六条要求；业务需要 | 陕西扩展 |
 | 31 | 公示发布责任人 | BULLETIN_DUTY | C..50 | 是 | 政务公开 | 招标人/代理机构发布公示责任人 | 陕西扩展 |
-| 32 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
-| 33 | 附件关联标识号 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 | 陕西扩展 |
-| 34 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 |  | 根据10号令第十一条对发布媒介和交易平台的及时性要求 | 陕西扩展 |
+| 32 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 33 | 附件关联标识号 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 | 陕西扩展 |
+| 34 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 | 35 | 交易系统标识码 | PLATFORM_CODE | C18 | 是 | 政务公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》；国家V2.0表21 | 国家V2.0沿用 |
 | 36 | 交易服务系统标识码 | PUB_SERVICE_PLAT_CODE | C18 | 是 | 政务公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》；国家V2.0表21 | 国家V2.0沿用 |
 | 37 | 交易平台或发布工具标识码 | TRADE_PLAT | C11 | 是 | 政务公开 | 参见附录B“平台或发布工具标识码的编码规则”；可在中国招标投标公共服务平台获得标识码；国家V2.0表21 | 国家V2.0沿用 |
@@ -156,17 +156,17 @@
 | 15 | 价格单位 | PRICE_UNIT | C1 | 否 | 政务公开 | 参考1.10.3金额单位代码，此处填写代码0，以元为单位；国家2.0数据规范 | 国家V2.0沿用 |
 | 16 | 费率或其它类型结果 | OTHER_BID_PRICE | C..2000 | 否 | 社会公开 | 百分比、下浮率、比率、单价或文字描述类型的报价，如： 50%、-30%；“中标价格”、“中标费率”与“其他类型中标价”不能全为空或全填写，三选一填写；国家2.0数据规范 | 国家V2.0沿用 |
 | 17 | 中标工期 | TIME_LIMIT | C..ul | 否 | 社会公开 | 业务需要 | 陕西扩展 |
-| 18 | 中标质量等级 | QUALITY | C1 | 否 |  | 参考1.10.17质量等级代码；业务需要 | 陕西扩展 |
-| 19 | 中标说明 | WIN_INSTRUCTION | C..1000 | 否 |  | 业务需要 | 陕西扩展 |
-| 20 | 是否变更 | IS_CHANGE | C1 | 是 |  | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
-| 21 | 变更内容 | CHANGE_CONTENT | C..50 | 否 |  | 若“是否变更”选择“是”，则此项为必填项 | 陕西扩展 |
-| 22 | 其他内容 | OTHER_CONTENT | C..ul | 否 |  | 招标文件规定公示的其他内容；10号令第六条要求 | 陕西扩展 |
-| 23 | 联合体代码 | UNION_CODE | C..18 | 否 |  | 参考附录B主体代码，联合体多成员之间用半角分号隔开，非联合体的情况下为空；联合体无中标价；根据10号令第六条，为便于社会公众查看中标人信息 | 陕西扩展 |
-| 24 | 联合体名称 | UNION_NAME | C..1000 | 否 |  | 支持多个联合体；联合体无中标价；根据10号令第六条，为便于社会公众查看中标人信息 | 陕西扩展 |
+| 18 | 中标质量等级 | QUALITY | C1 | 否 | 社会公开 | 参考1.10.17质量等级代码；业务需要 | 陕西扩展 |
+| 19 | 中标说明 | WIN_INSTRUCTION | C..1000 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 20 | 是否变更 | IS_CHANGE | C1 | 是 | 政务公开 | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
+| 21 | 变更内容 | CHANGE_CONTENT | C..50 | 否 | 社会公开 | 若“是否变更”选择“是”，则此项为必填项 | 陕西扩展 |
+| 22 | 其他内容 | OTHER_CONTENT | C..ul | 否 | 政务公开 | 招标文件规定公示的其他内容；10号令第六条要求 | 陕西扩展 |
+| 23 | 联合体代码 | UNION_CODE | C..18 | 否 | 社会公开 | 参考附录B主体代码，联合体多成员之间用半角分号隔开，非联合体的情况下为空；联合体无中标价；根据10号令第六条，为便于社会公众查看中标人信息 | 陕西扩展 |
+| 24 | 联合体名称 | UNION_NAME | C..1000 | 否 | 社会公开 | 支持多个联合体；联合体无中标价；根据10号令第六条，为便于社会公众查看中标人信息 | 陕西扩展 |
 | 25 | 公示发布责任人 | BULLETIN_DUTY | C..50 | 是 | 政务公开 | 招标人/代理机构发布公示责任人 | 陕西扩展 |
-| 26 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
-| 27 | 附件关联标识号 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联识别号，多个附件关联标识号以半角分号隔开；20号令 | 陕西扩展 |
-| 28 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 |  | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
+| 26 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 27 | 附件关联标识号 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联识别号，多个附件关联标识号以半角分号隔开；20号令 | 陕西扩展 |
+| 28 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 | 29 | 交易系统标识码 | PLATFORM_CODE | C18 | 是 | 政务公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》；国家V2.0表22 | 国家V2.0沿用 |
 | 30 | 交易服务系统标识码 | PUB_SERVICE_PLAT_CODE | C18 | 是 | 政务公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》；国家V2.0表22 | 国家V2.0沿用 |
 | 31 | 交易平台或发布工具标识码 | TRADE_PLAT | C11 | 是 | 政务公开 | 参见附录B“平台或发布工具标识码的编码规则”；可在中国招标投标公共服务平台获得标识码；国家V2.0表22 | 国家V2.0沿用 |
@@ -188,13 +188,13 @@
 | 9 | 公告源URL | URL | C..500 | 是 | 社会公开 | 发布媒介发布招标公告的url地址；国家2.0数据规范 | 国家V2.0沿用 |
 | 10 | 公告类型 | BULLETIN_TYPE | C1 | 是 | 社会公开 | 参考1.10.8公告类型；国家2.0数据规范 | 国家V2.0沿用 |
 | 11 | 是否延期开标 | IS_POSTPONE | C1 | 否 | 社会公开 | 当变更时使用；参考1.10.2是否代码；国家2.0数据规范 | 国家V2.0沿用 |
-| 12 | 是否不见面开标项目 | IS_NOMEET_BIDDING | C1 | 否 |  | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
-| 13 | 投标截止时间/申请截止时间 | BID_END_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 14 | 变更内容 | CHANGE_CONTENT | C..ul | 是 |  | 业务需要 | 陕西扩展 |
+| 12 | 是否不见面开标项目 | IS_NOMEET_BIDDING | C1 | 否 | 政务公开 | 参考1.10.2是否代码；业务需要 | 陕西扩展 |
+| 13 | 投标截止时间/申请截止时间 | BID_END_TIME | yyyyMMddHHmmss | 是 | 政务公开 | 业务需要 | 陕西扩展 |
+| 14 | 变更内容 | CHANGE_CONTENT | C..ul | 是 | 政务公开 | 业务需要 | 陕西扩展 |
 | 15 | 公告发布责任人 | BULLETIN_DUTY | C..50 | 是 | 政务公开 | 招标人/代理机构发布公告责任人；国家2.0数据规范 | 国家V2.0沿用 |
-| 16 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
-| 17 | 附件关联标识号 | ATTACHMENT_CODE | C36 | 是 |  | 参考附录B附件关联标识号；20号令A.1.2，但长度调整 | 陕西扩展 |
-| 18 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 |  | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
+| 16 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 17 | 附件关联标识号 | ATTACHMENT_CODE | C36 | 是 | 政务公开 | 参考附录B附件关联标识号；20号令A.1.2，但长度调整 | 陕西扩展 |
+| 18 | 数据时间戳 | SUBMIT_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ## 三、政府采购数据集
 
@@ -210,14 +210,14 @@
 | 6 | 公告标题 | BULLETIN_TITLE | C..200 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 7 | 公告内容 | BULLETIN_CONTENT | C..ul | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 8 | 公告发布媒体 | BULLETIN_MEDIA | C..1000 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 9 | 纸质采购文件售价 | NOMINAL_FEE | N..20,6 | 是 |  | 单位：元；业务需要 | 陕西扩展 |
-| 10 | 采购文件获取开始时间 | TRADEFILE_GET_START_DATE | yyyyMMdd | 是 |  | 业务需要 | 陕西扩展 |
-| 11 | 采购文件获取截止时间 | TRADEFILE_GET_END_DATE | yyyyMMdd | 是 |  | 业务需要 | 陕西扩展 |
+| 9 | 纸质采购文件售价 | NOMINAL_FEE | N..20,6 | 是 | 社会公开 | 单位：元；业务需要 | 陕西扩展 |
+| 10 | 采购文件获取开始时间 | TRADEFILE_GET_START_DATE | yyyyMMdd | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 11 | 采购文件获取截止时间 | TRADEFILE_GET_END_DATE | yyyyMMdd | 是 | 社会公开 | 业务需要 | 陕西扩展 |
 | 12 | 投标（响应）文件提交截止时间 | BID_CLOSING_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需求；国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 评审办法 | QUAL_METHOD | C..2000 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 13 | 评审办法 | QUAL_METHOD | C..2000 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 15 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
-| 16 | 附件关联标识码 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
+| 16 | 附件关联标识码 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
 
 ### 资格预审公告（政采）　GpPqNoticeVO
 
@@ -234,9 +234,9 @@
 | 9 | 资审公告发布媒体 | BULLETIN_MEDIA | C..1000 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
 | 10 | 资审公告源URL | URL | C..500 | 是 | 社会公开 | 交易平台中该公告的url | 陕西扩展 |
 | 11 | 资审申请文件提交截止时间 | BID_CLOSING_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要；国家2.0数据规范 | 国家V2.0沿用 |
-| 12 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 12 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 13 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
-| 14 | 附件关联标识码 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
+| 14 | 附件关联标识码 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
 
 ### 更正公告数据集　PurchaseChangeNoticeVO
 
@@ -248,11 +248,11 @@
 | 4 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 考附录B统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
 | 5 | 公告标题 | TERMINATION_BULLETIN_TITLE | C..200 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 6 | 公告内容 | TERMINATION_BULLETIN_CONTENT | C..ul | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 7 | 投标截止时间 | BID_END_DATE | yyyyMMddHHMM | 是 |  | 业务需要 | 陕西扩展 |
+| 7 | 投标截止时间 | BID_END_DATE | yyyyMMddHHMM | 是 | 政务公开 | 业务需要 | 陕西扩展 |
 | 8 | 公告类型 | BULLETIN_TYPE | C1 | 是 | 社会公开 | 参考2.8.4公告类型；业务需要 | 陕西扩展 |
-| 9 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 9 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 10 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
-| 11 | 附件关联标识 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
+| 11 | 附件关联标识 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
 | 12 | 发布时间 | MODIFICATION_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 |  | 国家V2.0沿用 |
 | 13 | 公告源URL | URL | C..500 | 是 | 社会公开 | 自由文本；交易平台中该公告的url | 国家V2.0沿用 |
 | 14 | 交易系统标识码 | PLATFORM_CODE | C18 | 是 | 政务公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》；发生交易的公共资源交易系统（含社会主体依法建设的电子交易系统）运营机构的统一社会信用代码 | 国家V2.0沿用 |
@@ -278,19 +278,19 @@
 | 14 | 价格币种代码 | CURRENCY_CODE | C3 | 否 | 政务公开 | 采用GB/T 12406-2008《表示货币和资金的代码》的数字码，例如，人民币是156，国家2.0数据规范 | 国家V2.0沿用 |
 | 15 | 价格单位 | PRICE_UNIT | C1 | 否 | 社会公开 | 参考2.8.15金额单位代码，填入对应代码，国家2.0数据规范 | 国家V2.0沿用 |
 | 16 | 中标优惠率或其它类型价格 | WIN_BID_RATE | C..2000 | 否 | 社会公开 | 自由文本，国家2.0数据规范 | 国家V2.0沿用 |
-| 17 | 是否多成交单位 | IS_SEVERAL_DEAL_BIDDERS | C1 | 是 |  | 参考2.8.20是否代码 | 陕西扩展 |
-| 18 | 成交说明 | DEAL_INSTRUCTION | C..1000 | 否 |  | 自由文本，业务需要 | 陕西扩展 |
-| 19 | 发布媒介 | PUBLISH_MEDIA | C..1000 | 是 |  | 自由文本，业务需要 | 陕西扩展 |
-| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 17 | 是否多成交单位 | IS_SEVERAL_DEAL_BIDDERS | C1 | 是 | 社会公开 | 参考2.8.20是否代码 | 陕西扩展 |
+| 18 | 成交说明 | DEAL_INSTRUCTION | C..1000 | 否 | 社会公开 | 自由文本，业务需要 | 陕西扩展 |
+| 19 | 发布媒介 | PUBLISH_MEDIA | C..1000 | 是 | 社会公开 | 自由文本，业务需要 | 陕西扩展 |
+| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 21 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
-| 22 | 附件关联标识 | ATTACHMENT_CODE | C..ul | 是 |  | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
+| 22 | 附件关联标识 | ATTACHMENT_CODE | C..ul | 是 | 政务公开 | 参考附录B附件关联标识号，多个附件关联标识号以半角分号隔开；20号令 A.1.4 | 陕西扩展 |
 | 23 | 采购项目标段名称 | PURCHASE_SECTION_NAME | C..ul | 是 | 社会公开 | 自由文本 | 陕西扩展 |
-| 24 | 成交单位名称 | DEAL_BIDDER_NAME | C..500 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
+| 24 | 成交单位名称 | DEAL_BIDDER_NAME | C..500 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 25 | 成交单位代码 | LEGAL_CODE | C..50 | 是 | 政务公开 | 单成交人时显示的字段，业务需要 | 陕西扩展 |
 | 26 | 成交价格 | DEAL_PRICE | N..18,2 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
-| 27 | 成交价格单位 | DEAL_PRICE_UNIT | C1 | 是 |  | 参考2.8.15金额单位代码，填入对应代码；业务需要 | 陕西扩展 |
-| 28 | 公告开始时间 | NOTICE_START_DATE | yyyyMMdd | 是 |  | 业务需要 | 陕西扩展 |
-| 29 | 其他说明 | OTHER_INSTRUCTION | C..500 | 否 |  | 自由文本 | 陕西扩展 |
+| 27 | 成交价格单位 | DEAL_PRICE_UNIT | C1 | 是 | 社会公开 | 参考2.8.15金额单位代码，填入对应代码；业务需要 | 陕西扩展 |
+| 28 | 公告开始时间 | NOTICE_START_DATE | yyyyMMdd | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 29 | 其他说明 | OTHER_INSTRUCTION | C..500 | 否 | 政务公开 | 自由文本 | 陕西扩展 |
 | 30 | 创建人 | CREATOR | C..50 | 否 | 政务公开 | 自由文本；不校验 | 国家V2.0沿用 |
 | 31 | 交易系统标识码 | PLATFORM_CODE | C18 | 是 | 政务公开 | 采用GB32100-2015 《法人和其他组织统一社会信用代码编码规则》 | 国家V2.0沿用 |
 | 32 | 交易服务系统标识码 | PUB_SERVICE_PLAT_CODE | C18 | 是 | 政务公开 | 采用GB32100-2015 《法人和其他组织统一社会信用代码编码规则》；该标识码为首次采集交易信息的公共资源交易服务系统运营机构的统一社会信用代码 | 国家V2.0沿用 |
@@ -302,16 +302,16 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..50 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..200 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..200 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 公告编号 | ANNOUNCEMENT_CODE | C..100 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 5 | 公告标题 | ANNOUNCEMENT_TITLE | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 6 | 公告开始日期 | ANNOUNCEMENT_START_TIME | yyyyMMdd | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 7 | 公告截止日期 | ANNOUNCEMENT_DEADLINE | yyyyMMdd | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 8 | 创建时间 | CREATE_TIME | yyyyMMdd | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
-| 9 | 是否同时竞价 | IS_MEANWHILE | C..50 | 是 |  | 参考3.3.5是否代码；业务需要 | 陕西扩展 |
+| 9 | 是否同时竞价 | IS_MEANWHILE | C..50 | 是 | 政务公开 | 参考3.3.5是否代码；业务需要 | 陕西扩展 |
 | 10 | 公告内容 | ANNOUNCEMENT_CONNECT | C..ul | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 11 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 11 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 12 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 | 13 | 项目所在行政区划代码 | LAND_DISTRICT | C..9 | 是 | 社会公开 | 采用GB/T 2260-2007《中华人民共和国行政区划代码》的市级代码 | 国家V2.0沿用 |
 | 14 | 公告源URL | URL | C..500 | 否 | 社会公开 | 自由文本；交易平台中该公告的url | 国家V2.0沿用 |
@@ -342,14 +342,14 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 成交宗地标示 | DEAL_LAND_CODE | C..100 | 是 | 政务公开 | 参考附录B5附件关联标识号（GUID/UUID）；对应V1.0的成交公示GUID；国家2.0数据规范 | 国家V2.0沿用 |
 | 2 | 地块编号 | LAND_CODE | C..50 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合；业务需要 | 陕西扩展 |
-| 3 | 地块名称 | LAND_NAME | C..200 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
+| 3 | 地块名称 | LAND_NAME | C..200 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 4 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
 | 5 | 成交公示标题 | ANNOUNCEMENT_TITLE | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 6 | 公示开始时间 | PUBLISHING_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要；国家2.0数据规范 | 国家V2.0沿用 |
 | 7 | 成交公示内容 | ANNOUNCEMENT_CONNECT | C..ul | 是 | 社会公开 | 业务需要；国家2.0数据规范 | 国家V2.0沿用 |
-| 8 | 成交单位 | CHENGJIA_UNIT | C..50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 9 | 中标价格 | ZHONGBIAO_PRICE | N..18,2 | 否 |  | 单位：万元；业务需要 | 陕西扩展 |
-| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 8 | 成交单位 | CHENGJIA_UNIT | C..50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 9 | 中标价格 | ZHONGBIAO_PRICE | N..18,2 | 否 | 社会公开 | 单位：万元；业务需要 | 陕西扩展 |
+| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 11 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 | 12 | 项目编号ID | DEAL_ANNOUNCEMENT_GUID | C..100 | 是 | 政务公开 | 参考通用编码6.8GUID标识符；对应V1.0的成交公示GUID | 国家V2.0沿用 |
 | 13 | 项目类别关联代码 | RELATE_CODE | C1 | 是 | 社会公开 | 参考6.5项目类别关联代码,如是固定资产类项目填1，否则填0；该代码填1时，投资项目统一代码为必填项 | 国家V2.0沿用 |
@@ -374,13 +374,13 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..50 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..200 | 是 |  | 自由文本，地块名称必填 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..200 | 是 | 社会公开 | 自由文本，地块名称必填 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 网站显示公告标题 | CHANGE_NOTICE_NAME | C..500 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 5 | 公告发布开始时间 | CHANGE_NOTICE_PUBLISH_START_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告发布截止时间 | CHANGE_NOTICE_PUBLISH_END_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | CHANGE_NOTICE_CONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 网站显示公告标题 | CHANGE_NOTICE_NAME | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 5 | 公告发布开始时间 | CHANGE_NOTICE_PUBLISH_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告发布截止时间 | CHANGE_NOTICE_PUBLISH_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | CHANGE_NOTICE_CONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 9 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 中止公告（土地）　LandSuspendVO
@@ -388,13 +388,13 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..500 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..500 | 是 |  | 自由文本，地块名称必填 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..500 | 是 | 社会公开 | 自由文本，地块名称必填 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | LAND_ZZGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | LAND_ZZGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | LAND_ZZGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | LAND_ZZGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 9 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 恢复公告（土地）　LandResumeVO
@@ -402,29 +402,29 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..500 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..500 | 是 |  | 自由文本，地块名称必填 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..500 | 是 | 社会公开 | 自由文本，地块名称必填 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..ul | 是 |  | 自由文本；业务需要业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | LAND_HFGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | LAND_HFGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要业务需要 | 陕西扩展 |
-| 8 | 原公告开始时间 | FORMERLAND_HFGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 9 | 原公告截止时间 | FORMERLAND_HFGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 10 | 原报名开始时间 | FORMERLAND_BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 11 | 原报名截止时间 | FORMERLAND_BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 12 | 原挂牌开始时间 | FORMERLAND_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 13 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 14 | 原保证金截止时间 | FORMERLAND_BZJEND | yyyyMMddHHmmss | 是 |  | 单位为秒 | 陕西扩展 |
-| 15 | 原延时竞价时段 | FORMERYANSHI | N | 是 |  | 整数；业务需要 | 陕西扩展 |
-| 16 | 原询问期时长 | FORMERXUNWEN | N | 是 |  | 整数；业务需要 | 陕西扩展 |
-| 17 | 报名开始时间 | LAND_BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 18 | 报名截止时间 | LAND_BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 19 | 挂牌开始时间 | LAND_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 20 | 挂牌截止时间 | LAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 21 | 保证金截止时间 | LAND_BZJEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 22 | 延时竞价时段 | YANSHI | N | 是 |  | 整数；单位为秒 | 陕西扩展 |
-| 23 | 询问期时长 | XUNWEN | N | 是 |  | 整数；单位为分钟 | 陕西扩展 |
-| 24 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..ul | 是 | 社会公开 | 自由文本；业务需要业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | LAND_HFGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | LAND_HFGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要业务需要 | 陕西扩展 |
+| 8 | 原公告开始时间 | FORMERLAND_HFGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 原公告截止时间 | FORMERLAND_HFGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 原报名开始时间 | FORMERLAND_BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 11 | 原报名截止时间 | FORMERLAND_BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 12 | 原挂牌开始时间 | FORMERLAND_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 13 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 14 | 原保证金截止时间 | FORMERLAND_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 单位为秒 | 陕西扩展 |
+| 15 | 原延时竞价时段 | FORMERYANSHI | N | 是 | 社会公开 | 整数；业务需要 | 陕西扩展 |
+| 16 | 原询问期时长 | FORMERXUNWEN | N | 是 | 社会公开 | 整数；业务需要 | 陕西扩展 |
+| 17 | 报名开始时间 | LAND_BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 18 | 报名截止时间 | LAND_BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 19 | 挂牌开始时间 | LAND_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 20 | 挂牌截止时间 | LAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 21 | 保证金截止时间 | LAND_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 22 | 延时竞价时段 | YANSHI | N | 是 | 社会公开 | 整数；单位为秒 | 陕西扩展 |
+| 23 | 询问期时长 | XUNWEN | N | 是 | 社会公开 | 整数；单位为分钟 | 陕西扩展 |
+| 24 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 25 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 终止公告（土地）　LandTerminateVO
@@ -432,13 +432,13 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..500 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..500 | 是 |  | 自由文本，地块名称必填 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..500 | 是 | 社会公开 | 自由文本，地块名称必填 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | LAND_ZZGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | LAND_ZZGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | LAND_ZZGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | LAND_ZZGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 9 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 流拍流挂公告（土地）　LandFailVO
@@ -446,13 +446,13 @@
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 地块编号 | LAND_CODE | C..500 | 是 | 社会公开 | 自由文本，可以是数字和字母的组合；业务需要 | 陕西扩展 |
-| 2 | 地块名称 | LAND_NAME | C..500 | 是 |  | 自由文本，地块名称必填；业务需要 | 陕西扩展 |
+| 2 | 地块名称 | LAND_NAME | C..500 | 是 | 社会公开 | 自由文本，地块名称必填；业务需要 | 陕西扩展 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | LAND_NOTICE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | LAND_GGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | LAND_GGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | LAND_NOTICE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | LAND_GGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | LAND_GGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 9 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 
@@ -462,21 +462,21 @@
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 项目名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 项目名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 公告标题 | NOTICE_NAME | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | NOTICE_START_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 保证金递交截止时间 | MARGIN_PAY_END_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 7 | 公告截止日期 | NOTICE_END_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 8 | 报名开始时间 | BAOMINGSTARTDATE | yyyyMMddHHmmss | 否 |  | 业务需要 | 陕西扩展 |
-| 9 | 报名截止时间 | BAOMINGENDDATE | yyyyMMddHHmmss | 否 |  | 业务需要 | 陕西扩展 |
-| 10 | 与转让相关的其他条件 | OTHER_CONDITION | C..50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 11 | 受让方资格条件 | ZIGE_CONDTION | C..50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 12 | 重要信息及其他披露内容 | IMPPRMANT_CONTENT | C..50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | NOTICE_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 保证金递交截止时间 | MARGIN_PAY_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 7 | 公告截止日期 | NOTICE_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 8 | 报名开始时间 | BAOMINGSTARTDATE | yyyyMMddHHmmss | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 报名截止时间 | BAOMINGENDDATE | yyyyMMddHHmmss | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 与转让相关的其他条件 | OTHER_CONDITION | C..50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 11 | 受让方资格条件 | ZIGE_CONDTION | C..50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 12 | 重要信息及其他披露内容 | IMPPRMANT_CONTENT | C..50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 13 | 公告内容 | NOTICE_CONTENT | C..2000 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 14 | 公告源URL | URL | C..500 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 15 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 15 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 16 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 | 17 | 项目名称 | NA_APP_NAME | C..500 | 是 | 社会公开 | 自由文本 | 国家V2.0沿用 |
 | 18 | 发布时间 | PUBLISHING_TIME | yyyyMMddHHmmss | 是 | 社会公开 |  | 国家V2.0沿用 |
@@ -494,16 +494,16 @@
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 项目名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 项目名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | WIN_NOTICE_NAME | C..500 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | WIN_NOTICE_START_TIME | yyyyMMdd | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告结束时间 | WIN_NOTICE_END_TIME | yyyyMMdd | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 竞得单位 | WIN_BIDDER | C..200 | 是 |  | 业务需要 | 陕西扩展 |
-| 8 | 成交价格 | CHENGJIA_PRICE | N..18,2 | 是 |  | 单位：万元；业务需要 | 陕西扩展 |
-| 9 | 公告内容 | WIN_NOTICE_CONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | WIN_NOTICE_NAME | C..500 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | WIN_NOTICE_START_TIME | yyyyMMdd | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告结束时间 | WIN_NOTICE_END_TIME | yyyyMMdd | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 竞得单位 | WIN_BIDDER | C..200 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 8 | 成交价格 | CHENGJIA_PRICE | N..18,2 | 是 | 社会公开 | 单位：万元；业务需要 | 陕西扩展 |
+| 9 | 公告内容 | WIN_NOTICE_CONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 11 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳 | 陕西扩展 |
 | 12 | 项目名称 | NA_APP_NAME | C..500 | 是 | 社会公开 | 自由文本 | 国家V2.0沿用 |
 | 13 | 发布时间 | PUBLISHING_TIME | yyyyMMddHHmmss | 是 | 社会公开 |  | 国家V2.0沿用 |
@@ -631,104 +631,104 @@
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 网站显示公告标题 | CHANGE_NOTICE_NAME | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 原公告发布时间 | OLD_GONGGAO_REALFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0更新** |
-| 6 | 原公告结束时间 | OLD_GONGGAO_REALTO | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0更新** |
-| 7 | 原报名开始时间 | OLD_BAOMING_FROM | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 8 | 原报名截止时间 | OLD_BAOMING_TO | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 9 | 原保证金缴纳截止时间 | OLD_BZJENDDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 10 | 原挂牌开始时间 | OLD_GUAPAIDATEFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 11 | 原挂牌截止时间 | OLD_GUAPAIDATETO | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 12 | 新公告发布开始时间 | CHANGE_NOTICE_START_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 13 | 新公告发布截止时间 | CHANGE_NOTICE_END_TIME | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 14 | 新报名开始时间 | NEW_BAOMING_FROM | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 15 | 新报名截止时间 | NEW_BAOMING_TO | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 16 | 新保证金缴纳截止时间 | NEW_BZJENDDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 17 | 新挂牌开始时间 | NEW_GUAPAIDATEFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 18 | 新挂牌截止时间 | NEW_GUAPAIDATETO | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 19 | 公告内容 | CHANGE_NOTICE_CONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 网站显示公告标题 | CHANGE_NOTICE_NAME | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 原公告发布时间 | OLD_GONGGAO_REALFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0更新** |
+| 6 | 原公告结束时间 | OLD_GONGGAO_REALTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0更新** |
+| 7 | 原报名开始时间 | OLD_BAOMING_FROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 8 | 原报名截止时间 | OLD_BAOMING_TO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 9 | 原保证金缴纳截止时间 | OLD_BZJENDDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 10 | 原挂牌开始时间 | OLD_GUAPAIDATEFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 11 | 原挂牌截止时间 | OLD_GUAPAIDATETO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 12 | 新公告发布开始时间 | CHANGE_NOTICE_START_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 13 | 新公告发布截止时间 | CHANGE_NOTICE_END_TIME | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 14 | 新报名开始时间 | NEW_BAOMING_FROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 15 | 新报名截止时间 | NEW_BAOMING_TO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 16 | 新保证金缴纳截止时间 | NEW_BZJENDDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 17 | 新挂牌开始时间 | NEW_GUAPAIDATEFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 18 | 新挂牌截止时间 | NEW_GUAPAIDATETO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 19 | 公告内容 | CHANGE_NOTICE_CONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 21 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 
 ### 中止公告（矿权）　MiningSuspendNoticeVO
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 中止公告标题 | GONGGAOTITLE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 原公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 原公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 8 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 9 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 10 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 11 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 |  | 业务需要 | **陕V2.0新增** |
-| 12 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 13 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 中止公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 原公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 原公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 8 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 9 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 10 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 11 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | **陕V2.0新增** |
+| 12 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 13 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 14 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 
 ### 流拍流挂公告（矿权）　MiningFailVO
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 3统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 8来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 8来源交易系统编码规则 | 陕西扩展 |
 | 9 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 
 ### 恢复公告（矿权）　MiningResumeVO
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 3统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 5 | 公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 6 | 公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 原公告开始时间 | FORMER_HFGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 9 | 原公告截止时间 | FORMER_HFGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 10 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 11 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 12 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 13 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 14 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 15 | 报名开始时间 | BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 16 | 报名截止时间 | BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 17 | 挂牌开始时间 | LAND_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 18 | 挂牌截止时间 | LAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 19 | 保证金截止时间 | LAND_BZJEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 5 | 公告开始时间 | GONGGAOFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 6 | 公告截止时间 | GONGGAOTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 原公告开始时间 | FORMER_HFGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 原公告截止时间 | FORMER_HFGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 11 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 12 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 13 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 14 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 15 | 报名开始时间 | BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 16 | 报名截止时间 | BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 17 | 挂牌开始时间 | LAND_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 18 | 挂牌截止时间 | LAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 19 | 保证金截止时间 | LAND_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 20 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 21 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 
 ### 终止公告（矿权）　MiningTerminateVO
 
 | 序号 | 字段名称 | 英文名称 | 数据类型及格式 | 必填 | 公开范围 | 值域/备注 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 |  | 自由文本 | 陕西扩展 |
-| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 |  | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
+| 1 | 矿区编号 | MINING_AREA_NO | C..50 | 是 | 社会公开 | 自由文本 | 陕西扩展 |
+| 2 | 矿区名称 | MINING_AREA_NAME | C..50 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
-| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 |  | 业务需要 | 陕西扩展 |
-| 5 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 6 | 原公告开始时间 | FORMER_HFGGFROM | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 7 | 原公告截止时间 | FORMER_HFGGTO | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 8 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 9 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 10 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 11 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 12 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 13 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 4 | 公告标题 | GONGGAOTITLE | C..50 | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 5 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 6 | 原公告开始时间 | FORMER_HFGGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 7 | 原公告截止时间 | FORMER_HFGGTO | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 8 | 原报名开始时间 | FORMER_BAOMINGSTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 原报名截止时间 | FORMER_BAOMINGEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 原挂牌开始时间 | FORMER_GUAPAISTART | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 11 | 原挂牌截止时间 | FORMERLAND_GUAPAIEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 12 | 原保证金截止时间 | FORMER_BZJEND | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 13 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 14 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国标2.0 | 国家V2.0沿用 |
 
 
@@ -742,27 +742,27 @@
 | 2 | 项目编号 | PROJECT_CODE | C..20 | 是 | 社会公开 | 自由文本；一个项目可能会包括多个标的；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODE | C40 | 是 | 政务公开 | 参考附录B 统一交易标识码编码规则；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 项目交易分类 | PROJECT_CLASSIFY_CODE | C..20 | 否 | 政务公开 | 默认为实物交易；业务需要 | 陕西扩展 |
-| 5 | 业务类别 | YEWU_TYPE | C..50 | 否 |  | 取值为国有资产、民营资产、金融资产、涉诉资产、行政事业资产；业务需要 | 陕西扩展 |
+| 5 | 业务类别 | YEWU_TYPE | C..50 | 否 | 社会公开 | 取值为国有资产、民营资产、金融资产、涉诉资产、行政事业资产；业务需要 | 陕西扩展 |
 | 6 | 交易方式 | PRE_EXCHANGE_TYPE | C1 | 是 | 社会公开 | 参考5.6.9实物资产类交易方式，填入对应代码；国家2.0数据规范 | 国家V2.0沿用 |
-| 7 | 指定代理机构 | DESIGNATED_AGENCEY | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 项目基本情况描述 | PROJECTDETAIL | C..200 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 9 | 转让批准单位 | ZHUANRANGDANWEI | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 10 | 批准文（件）号 | PIZHUNWENJIANNO | C..50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 11 | 项目监管单位 | JIANGUANDANWEINAME | C..50 | 否 |  | 业务需要 | 陕西扩展 |
+| 7 | 指定代理机构 | DESIGNATED_AGENCEY | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 项目基本情况描述 | PROJECTDETAIL | C..200 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 9 | 转让批准单位 | ZHUANRANGDANWEI | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 10 | 批准文（件）号 | PIZHUNWENJIANNO | C..50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 11 | 项目监管单位 | JIANGUANDANWEINAME | C..50 | 否 | 社会公开 | 业务需要 | 陕西扩展 |
 | 12 | 转让方名称 | SELLER_NAME | C..300 | 是 | 社会公开 | 自由文本；存在多个转让方捆绑转让情况，多个转让方时，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 转让方联系人 | ZHUANRANGFANGLIANREN | C.50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 转让人联系电话 | ZHUANRANGFANGTEL | C.50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 15 | 代理机构联系人 | BUYER_CONTACTOR | C..50 | 否 |  | 自由文本；业务需要 | **陕V2.0新增** |
-| 16 | 代理机构联系方式 | CONTACT_TEL | C11 | 否 |  | 业务需要 | **陕V2.0新增** |
-| 17 | 经济类型 | JINJITYPE | C..50 | 是 |  | 参考5.6.6经济类型，填入对应代码；业务需要 | 陕西扩展 |
-| 18 | 单位类型 | DANWEI_TYPE | C..50 | 否 |  | 自由文本；业务需要 | **陕V2.0新增** |
-| 19 | 注册资本 | ZIBEN | N20,6 | 否 |  | 单位万元；业务需要 | 陕西扩展 |
-| 20 | 经营规模 | JINGYINGGUIMO | C1 | 否 |  | 参考5.6.7经营规模，填入对应代码；业务需要 | 陕西扩展 |
-| 21 | 法定代表人 | FAREN | C.50 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 22 | 社会统一信用代码 | ZHUANRANGFANGORGNUM | C..50 | 是 |  | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》以及境外证件规则；多个转让方时，半角分号隔开；存在多个转让方捆绑转让；业务需要 | 陕西扩展 |
-| 23 | 内部决策情况 | JUECEQINGKUANG | C1 | 否 |  | 参考5.6.10内部决策情况，填入对应代码；业务需要 | 陕西扩展 |
+| 13 | 转让方联系人 | ZHUANRANGFANGLIANREN | C.50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 转让人联系电话 | ZHUANRANGFANGTEL | C.50 | 否 | 政务公开 | 自由文本；业务需要 | 陕西扩展 |
+| 15 | 代理机构联系人 | BUYER_CONTACTOR | C..50 | 否 | 社会公开 | 自由文本；业务需要 | **陕V2.0新增** |
+| 16 | 代理机构联系方式 | CONTACT_TEL | C11 | 否 | 政务公开 | 业务需要 | **陕V2.0新增** |
+| 17 | 经济类型 | JINJITYPE | C..50 | 是 | 社会公开 | 参考5.6.6经济类型，填入对应代码；业务需要 | 陕西扩展 |
+| 18 | 单位类型 | DANWEI_TYPE | C..50 | 否 | 社会公开 | 自由文本；业务需要 | **陕V2.0新增** |
+| 19 | 注册资本 | ZIBEN | N20,6 | 否 | 社会公开 | 单位万元；业务需要 | 陕西扩展 |
+| 20 | 经营规模 | JINGYINGGUIMO | C1 | 否 | 社会公开 | 参考5.6.7经营规模，填入对应代码；业务需要 | 陕西扩展 |
+| 21 | 法定代表人 | FAREN | C.50 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 22 | 社会统一信用代码 | ZHUANRANGFANGORGNUM | C..50 | 是 | 社会公开 | 采用GB 32100-2015 《法人和其他组织统一社会信用代码编码规则》以及境外证件规则；多个转让方时，半角分号隔开；存在多个转让方捆绑转让；业务需要 | 陕西扩展 |
+| 23 | 内部决策情况 | JUECEQINGKUANG | C1 | 否 | 社会公开 | 参考5.6.10内部决策情况，填入对应代码；业务需要 | 陕西扩展 |
 | 24 | 项目所在地区 | ZONE | C..10 | 是 | 社会公开 | 采用GB/T 2260-2007《中华人民共和国行政区划代码》的市级代码；国家2.0数据规范 | 国家V2.0沿用 |
-| 25 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 25 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 26 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 | 27 | 标的编号 | BID_CODE | C..20 | 否 | 社会公开 |  | 国家V2.0沿用 |
 | 28 | 标的名称 | BID_NAME | C..300 | 否 | 社会公开 | 自由文本 | 国家V2.0沿用 |
@@ -841,14 +841,14 @@
 | 4 | 项目编号 | PROJECT_CODE | C..20 |  | 社会公开 | 自由文本；一个项目可能会包括多个标的；国家2.0数据规范 | **陕V2.0新增** |
 | 5 | 项目名称 | PROJECT_NAME | C..300 |  | 社会公开 | 自由文本；国家2.0数据规范 | **陕V2.0新增** |
 | 6 | 交易方式 | PRE_EXCHANGE_TYPE | C1 |  | 社会公开 | 参考5.6.9实物资产类交易方式，填入对应代码；国家2.0数据规范 | **陕V2.0新增** |
-| 7 | 产权类型 | CHANQUAN_TYPE | C..50 |  |  | 业务需要，取值为:实物交易、非实物交易。 | **陕V2.0新增** |
+| 7 | 产权类型 | CHANQUAN_TYPE | C..50 |  | 社会公开 | 业务需要，取值为:实物交易、非实物交易。 | **陕V2.0新增** |
 | 8 | 挂牌价（元） | PROJECT_PRICE | N..20,6 |  | 社会公开 | 单位：元；国家2.0数据规范 | **陕V2.0新增** |
 | 9 | 评估价（元） | OBJECT_EVALUATE_VALUE | N22,6 |  | 社会公开 | 单位：元；国家2.0数据规范 | **陕V2.0新增** |
-| 10 | 公告标题 | NOTICE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 11 | 公告开始时间 | GGFROM | yyyyMMddHHmmss | 是 |  | 单位：天；国家2.0数据规范 | 国家V2.0沿用 |
-| 12 | 公告截止时间 | GGTO | yyyyMMddHHmmss | 是 |  | 国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 10 | 公告标题 | NOTICE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 11 | 公告开始时间 | GGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 单位：天；国家2.0数据规范 | 国家V2.0沿用 |
+| 12 | 公告截止时间 | GGTO | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
+| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 15 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 终止公告（产权）　PropertyTerminateNoticeVO
@@ -861,14 +861,14 @@
 | 4 | 项目编号 | PROJECT_CODE | C..20 |  | 社会公开 | 自由文本；一个项目可能会包括多个标的；国家2.0数据规范 | **陕V2.0新增** |
 | 5 | 项目名称 | PROJECT_NAME | C..300 |  | 社会公开 | 自由文本；国家2.0数据规范 | **陕V2.0新增** |
 | 6 | 交易方式 | PRE_EXCHANGE_TYPE | C1 |  | 社会公开 | 参考5.6.9实物资产类交易方式，填入对应代码；国家2.0数据规范 | **陕V2.0新增** |
-| 7 | 产权类型 | CHANQUAN_TYPE | C..50 |  |  | 业务需要 | **陕V2.0新增** |
+| 7 | 产权类型 | CHANQUAN_TYPE | C..50 |  | 社会公开 | 业务需要 | **陕V2.0新增** |
 | 8 | 挂牌价（元） | PROJECT_PRICE | N..20,6 |  | 社会公开 | 单位：元；国家2.0数据规范 | **陕V2.0新增** |
 | 9 | 评估价（元） | OBJECT_EVALUATE_VALUE | N22,6 |  | 社会公开 | 单位：元；国家2.0数据规范 | **陕V2.0新增** |
-| 10 | 公告标题 | NOTICE | C..50 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 11 | 公告开始时间 | GGFROM | yyyyMMddHHmmss | 是 |  | 单位：天；国家2.0数据规范 | 国家V2.0沿用 |
-| 12 | 公告截止时间 | GGTO | yyyyMMddHHmmss | 是 |  | 国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 10 | 公告标题 | NOTICE | C..50 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 11 | 公告开始时间 | GGFROM | yyyyMMddHHmmss | 是 | 社会公开 | 单位：天；国家2.0数据规范 | 国家V2.0沿用 |
+| 12 | 公告截止时间 | GGTO | yyyyMMddHHmmss | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
+| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 15 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 ### 交易公告（产权）　PropertyTradeNoticeVO
@@ -879,19 +879,19 @@
 | 2 | 项目编号 | PROJECT_CODE | C..20 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODES | C..40 | 是 | 政务公开 | 参考附录B统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 相关标的编号 | BID_SECTION_CODES | C..ul | 否 | 社会公开 | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
-| 5 | 相关标的名称 | BID_SECTION_NAMES | C..ul | 否 |  | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
-| 6 | 公告标题 | NOTICE_TITLE | C..200 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 7 | 公告开始时间 | GONGGAOFROMDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 8 | 公告截止时间 | GONGGAOENDDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 9 | 报名开始时间 | BAOMINGSTARTDATE | yyyyMMddHHmmss | 否 |  | 业务需要 | 陕西扩展 |
-| 10 | 报名截止时间 | BAOMINGENDDATE | yyyyMMddHHmmss | 否 |  | 业务需要 | 陕西扩展 |
-| 11 | 价款支付方式 | ZHIFUTYPE | C..40 | 否 |  | 指“一次性支付”或“分期支付”；业务需要 | 陕西扩展 |
+| 5 | 相关标的名称 | BID_SECTION_NAMES | C..ul | 否 | 社会公开 | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
+| 6 | 公告标题 | NOTICE_TITLE | C..200 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 7 | 公告开始时间 | GONGGAOFROMDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 8 | 公告截止时间 | GONGGAOENDDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 报名开始时间 | BAOMINGSTARTDATE | yyyyMMddHHmmss | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 报名截止时间 | BAOMINGENDDATE | yyyyMMddHHmmss | 否 | 社会公开 | 业务需要 | 陕西扩展 |
+| 11 | 价款支付方式 | ZHIFUTYPE | C..40 | 否 | 社会公开 | 指“一次性支付”或“分期支付”；业务需要 | 陕西扩展 |
 | 12 | 与转让相关的其他条件 | TRANSFER_NOTES | C..4000 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 13 | 受让方资格条件 | SHOURANG_ZIGE | C..200 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 重要信息及其他披露内容 | IMPORTANT_CONTENT | C..200 | 否 |  | 自由文本；业务需要 | 陕西扩展 |
+| 13 | 受让方资格条件 | SHOURANG_ZIGE | C..200 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 重要信息及其他披露内容 | IMPORTANT_CONTENT | C..200 | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 15 | 公告内容 | NOTICE_CONTENT | C..ul | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
 | 16 | 在交易机构网站进行挂牌信息披露的链接 | PROJECT_URL | C..200 | 是 | 社会公开 | 自由文本；国家2.0数据规范 | 国家V2.0沿用 |
-| 17 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 17 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 18 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国家2.0数据规范 | 国家V2.0沿用 |
 
 ### 变更公告（产权）　PropertyChangeVO
@@ -902,12 +902,12 @@
 | 2 | 项目编号 | PROJECT_CODE | C..20 | 是 | 社会公开 | 自由文本，国家2.0数据规范 | 国家V2.0沿用 |
 | 3 | 统一交易标识码 | UNIFIED_DEAL_CODES | C..40 | 是 | 政务公开 | 参考附录B统一交易标识码编码规则，由多个统一交易标识码组成，半角分号隔开；国家2.0数据规范 | 国家V2.0沿用 |
 | 4 | 相关标的编号 | BID_SECTION_CODES | C..ul | 是 | 社会公开 | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
-| 5 | 相关标的名称 | BID_SECTION_NAMES | C..ul | 是 |  | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
-| 6 | 公告标题 | NOTICE_TITLE | C..200 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 7 | 公告开始时间 | GONGGAOSTARTDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 8 | 公告截止时间 | GONGGAOENDDATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
+| 5 | 相关标的名称 | BID_SECTION_NAMES | C..ul | 是 | 社会公开 | 自由文本；多个则以半角分号隔开；业务需要 | 陕西扩展 |
+| 6 | 公告标题 | NOTICE_TITLE | C..200 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 7 | 公告开始时间 | GONGGAOSTARTDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 8 | 公告截止时间 | GONGGAOENDDATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
 | 9 | 公告内容 | NOTICE_CONTENT | C..ul | 否 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
-| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 10 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 11 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 采用组合码，编码长度为14位数时间戳；国家2.0数据规范 | 国家V2.0沿用 |
 
 ### 成交公告　PropertyDealAnnounceVO
@@ -920,14 +920,14 @@
 | 4 | 标的编号 | BID_CODE | C..20 | 否 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
 | 5 | 标的名称 | BID_NAME | C..300 | 否 | 社会公开 | 有标段时为必填，每个标端对应该表的一条记录；自由文本；国家2.0数据规范 | 国家V2.0沿用 |
 | 6 | 在交易机构网站进行挂牌信息披露的链接 | PROJECT_URL | C..200 | 是 | 社会公开 | 国家2.0数据规范 | 国家V2.0沿用 |
-| 7 | 公告标题 | WIN_NOTICE_NAME | C..500 | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 8 | 公告发布开始时间 | WIN_NOTICE_START_DATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 9 | 公告发布结束时间 | WEN_NOTICE_END_DATE | yyyyMMddHHmmss | 是 |  | 业务需要 | 陕西扩展 |
-| 10 | 交易方式 | JIOAYIFANGSHI | C1 | 否 |  | 参考5.4.2交易方式；业务需要 | 陕西扩展 |
-| 11 | 挂牌价 | GUAPAIPRICE | N..20,2 | 否 |  | 单位：元；业务需要 | 陕西扩展 |
-| 12 | 评估价 | PINGGUJIA | N..20,2 | 否 |  | 单位：元；业务需要 | 陕西扩展 |
-| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 |  | 自由文本；业务需要 | 陕西扩展 |
-| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 |  | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
+| 7 | 公告标题 | WIN_NOTICE_NAME | C..500 | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 8 | 公告发布开始时间 | WIN_NOTICE_START_DATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 9 | 公告发布结束时间 | WEN_NOTICE_END_DATE | yyyyMMddHHmmss | 是 | 社会公开 | 业务需要 | 陕西扩展 |
+| 10 | 交易方式 | JIOAYIFANGSHI | C1 | 否 | 社会公开 | 参考5.4.2交易方式；业务需要 | 陕西扩展 |
+| 11 | 挂牌价 | GUAPAIPRICE | N..20,2 | 否 | 社会公开 | 单位：元；业务需要 | 陕西扩展 |
+| 12 | 评估价 | PINGGUJIA | N..20,2 | 否 | 社会公开 | 单位：元；业务需要 | 陕西扩展 |
+| 13 | 公告内容 | GONGGAOCONTENT | C..ul | 是 | 社会公开 | 自由文本；业务需要 | 陕西扩展 |
+| 14 | 来源交易系统 | FROM_TRADE_PLAT_CODE | C8 | 是 | 政务公开 | 参考附录B 来源交易系统编码规则 | 陕西扩展 |
 | 15 | 数据时间戳 | DATA_TIMESTAMP | yyyyMMddHHmmss | 是 | 政务公开 | 根据10号令第十一条中对发布媒介和交易平台的及时性要求 | 陕西扩展 |
 
 

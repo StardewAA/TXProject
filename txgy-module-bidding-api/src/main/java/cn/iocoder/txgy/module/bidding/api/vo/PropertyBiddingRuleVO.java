@@ -40,7 +40,7 @@ public record PropertyBiddingRuleVO(
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String IS_ALLOWING_STARTING_PRICE_BIDDING,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
-        String IS_ALLOWING_HIGHEST_LOWEST_PRICE_BIDDING // 规范原文带斜杠，Java 不认，换成下划线,
+        String IS_ALLOWING_HIGHEST_LOWEST_PRICE_BIDDING, // 规范原文带斜杠，Java 不认，换成下划线,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
         String BUCHANG_TYPE_17,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)

@@ -30,7 +30,7 @@ public record PurchaseBidOpenDetailVO(
         @PublicLevel(PublicLevelEnum.SOCIAL)
         String OTHER_BID_PRICE,
         @PublicLevel(PublicLevelEnum.GOVERNMENT)
-        String BIDDER_S_IP_ADDRESS // 规范原文带单引号，Java 不认，换成下划线,
+        String BIDDER_S_IP_ADDRESS, // 规范原文带单引号，Java 不认，换成下划线,
         @PublicLevel(PublicLevelEnum.SOCIAL)
         String CHECKIN_TIME,
         @PublicLevel(PublicLevelEnum.SOCIAL)
