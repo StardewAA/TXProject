@@ -17,7 +17,7 @@ public class CourseMediaSaveReqVO {
     @NotNull(message = "课程 ID 不能为空")
     private Long courseId;
 
-    @Schema(description = "媒资类型：1 文档 2 视频 3 图片", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @Schema(description = "媒资类型：1 文档 2 视频 3 图片 4 VR/3D仿真", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "媒资类型不能为空")
     private Integer mediaType;
 
@@ -26,10 +26,13 @@ public class CourseMediaSaveReqVO {
     @Size(max = 200, message = "媒资名称长度不能超过 200 个字符")
     private String name;
 
-    @Schema(description = "访问地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://file.example.com/xxx.pdf")
-    @NotEmpty(message = "访问地址不能为空")
+    @Schema(description = "访问地址（VR 类型可空，其余必填）", example = "https://file.example.com/xxx.pdf")
     @Size(max = 500, message = "访问地址长度不能超过 500 个字符")
     private String url;
+
+    @Schema(description = "外部资源引用 ID（对接资源中心媒资 ID / VR 项目编号，占位）", example = "VR-P-2026-001")
+    @Size(max = 255, message = "外部资源引用 ID 长度不能超过 255 个字符")
+    private String mediaRefId;
 
     @Schema(description = "文件大小（字节）", example = "1024000")
     private Long sizeBytes;

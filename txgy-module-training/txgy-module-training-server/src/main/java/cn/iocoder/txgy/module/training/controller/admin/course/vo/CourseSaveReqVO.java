@@ -36,8 +36,11 @@ public class CourseSaveReqVO {
     @Size(max = 500, message = "封面地址长度不能超过 500 个字符")
     private String coverUrl;
 
-    @Schema(description = "课程级别：1 初级 2 中级 3 高级", example = "1")
+    @Schema(description = "课程级别：1 初级 2 中级 3 高级（兼容旧字段）", example = "1")
     private Integer level;
+
+    @Schema(description = "成长等级：APPRENTICE/JUNIOR/MIDDLE/SENIOR", example = "JUNIOR")
+    private String courseLevel;
 
     @Schema(description = "课程学分", example = "2.00")
     private BigDecimal credit;
@@ -48,11 +51,23 @@ public class CourseSaveReqVO {
     @Schema(description = "面向行业", example = "防腐保温")
     private String industry;
 
+    @Schema(description = "适用岗位/工种（JSON 数组）", example = "[\"管道工\",\"防腐工\"]")
+    private String applicablePosts;
+
+    @Schema(description = "资源归属标识（资源中心 owner_flag 快照）", example = "DEPT_AI_FACTORY")
+    private String ownerFlag;
+
     @Schema(description = "业务标签（JSON 数组）", example = "[\"岗前培训\"]")
     private String bizTags;
 
     @Schema(description = "是否必修", example = "false")
     private Boolean isRequired;
+
+    @Schema(description = "是否复合课程", example = "false")
+    private Boolean isComposite;
+
+    @Schema(description = "复合课程子模块标签（JSON 数组）", example = "[\"管道安装\",\"防腐保温\"]")
+    private String compositeTags;
 
     @Schema(description = "关联结课考试试卷 ID（模块三预留）", example = "1")
     private Long examId;

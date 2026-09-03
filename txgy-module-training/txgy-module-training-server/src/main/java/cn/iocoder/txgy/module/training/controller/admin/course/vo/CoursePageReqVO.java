@@ -25,6 +25,15 @@ public class CoursePageReqVO extends PageParam {
     @Schema(description = "主讲教师", example = "张工")
     private String lecturer;
 
+    @Schema(description = "成长等级：APPRENTICE/JUNIOR/MIDDLE/SENIOR", example = "JUNIOR")
+    private String courseLevel;
+
+    @Schema(description = "是否必修", example = "true")
+    private Boolean isRequired;
+
+    @Schema(description = "是否复合课程", example = "true")
+    private Boolean isComposite;
+
     @Schema(description = "是否当前生效版本", example = "true")
     private Boolean isCurrent;
 
