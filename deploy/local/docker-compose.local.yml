@@ -179,6 +179,19 @@ services:
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     mem_limit: 850m
 
+  ai:
+    <<: *txgy-service
+    container_name: txgy-ai
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/ai.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 850m
+
 volumes:
   mysql-data:
   nacos-data:
