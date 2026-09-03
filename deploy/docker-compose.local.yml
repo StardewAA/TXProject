@@ -18,6 +18,10 @@ services:
       dockerfile: deploy/backend/Dockerfile.local
     ports: !override
       - "58080:48080"
+    networks:
+      txgy-dev:
+        aliases:
+          - txgycloud-gateway
 
   system:
     build:
