@@ -5,6 +5,10 @@ import { baseRequestClient, requestClient } from '#/api/request';
 export namespace AuthApi {
   /** 登录接口参数 */
   export interface LoginParams {
+    /** 企业登录时使用的租户编号 */
+    tenantId?: number | string;
+    /** 登录入口类型，后端可据此区分企业/个人账号 */
+    loginType?: 'enterprise' | 'personal';
     password?: string;
     username?: string;
     captchaVerification?: string;
@@ -45,6 +49,8 @@ export namespace AuthApi {
     username: string;
     password: string;
     captchaVerification: string;
+    /** 注册入口类型，后端可据此区分企业/个人账号 */
+    registerType?: 'enterprise' | 'personal';
   }
 
   /** 重置密码接口参数 */
