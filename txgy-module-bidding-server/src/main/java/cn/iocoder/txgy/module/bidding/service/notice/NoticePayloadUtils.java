@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
 
+import cn.iocoder.txgy.module.bidding.api.enums.PublicLevel;
+import cn.iocoder.txgy.module.bidding.api.enums.PublicLevelEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeTypeEnum;
 
 import java.lang.reflect.RecordComponent;
@@ -40,6 +42,31 @@ public final class NoticePayloadUtils {
                 result.put(name, string);
             } else {
                 result.put(name, String.valueOf(value));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 社会公开子集（权威规则：出参按调用方公开级别裁剪，见 05 接口设计文档规则 1）。
+     *
+     * <p>只保留数据集 VO 中标为 {@code @PublicLevel(SOCIAL)} 的组件；未标或政务公开一律不对外。
+     *
+     * @param type      公告类型（决定权威数据集）
+     * @param canonical 规整后的字段全集（见 {@link #canonicalize}）
+     * @return 社会公开字段子集（顺序照数据集声明）
+     */
+    public static LinkedHashMap<String, Object> socialSubset(NoticeTypeEnum type,
+                                                             LinkedHashMap<String, Object> canonical) {
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        if (type == null || canonical == null) {
+            return result;
+        }
+        for (RecordComponent component : type.getDatasetClass().getRecordComponents()) {
+            PublicLevel publicLevel = component.getAnnotation(PublicLevel.class);
+            if (publicLevel != null && publicLevel.value() == PublicLevelEnum.SOCIAL
+                    && canonical.containsKey(component.getName())) {
+                result.put(component.getName(), canonical.get(component.getName()));
             }
         }
         return result;

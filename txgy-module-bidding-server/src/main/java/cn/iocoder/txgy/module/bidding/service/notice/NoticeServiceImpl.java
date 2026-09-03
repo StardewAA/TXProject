@@ -197,7 +197,11 @@ public class NoticeServiceImpl implements NoticeService {
         }
         NoticeDetailRespVO vo = new NoticeDetailRespVO();
         fillCommon(vo, notice, latestContent(notice.getId()));
-        vo.setPayload(readPayload(notice.getFieldsJson()));
+        LinkedHashMap<String, Object> full = readPayload(notice.getFieldsJson());
+        // 公开边界裁剪：大厅只吐社会公开子集（权威规则，见 05 接口设计文档规则 1 / 红线 2）
+        vo.setPayload(publicOnly
+                ? NoticePayloadUtils.socialSubset(NoticeTypeEnum.of(notice.getNoticeType()), full)
+                : full);
         return vo;
     }
 

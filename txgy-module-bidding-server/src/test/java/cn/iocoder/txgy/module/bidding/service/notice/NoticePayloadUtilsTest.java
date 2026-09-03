@@ -69,4 +69,32 @@ class NoticePayloadUtilsTest {
         assertNotNull(result);
         assertEquals(TenderNoticeVO.class.getRecordComponents().length, result.size());
     }
+
+    @Test
+    void socialSubset_onlyKeepsSocialPublicFields() {
+        LinkedHashMap<String, Object> canonical = NoticePayloadUtils.canonicalize(
+                NoticeTypeEnum.TENDER_NOTICE, new HashMap<>());
+
+        LinkedHashMap<String, Object> subset = NoticePayloadUtils.socialSubset(
+                NoticeTypeEnum.TENDER_NOTICE, canonical);
+
+        // 社会公开字段必须全部保留、政务公开/未标字段一个都不能出边界
+        int socialCount = 0;
+        for (java.lang.reflect.RecordComponent component
+                : NoticeTypeEnum.TENDER_NOTICE.getDatasetClass().getRecordComponents()) {
+            cn.iocoder.txgy.module.bidding.api.enums.PublicLevel level =
+                    component.getAnnotation(cn.iocoder.txgy.module.bidding.api.enums.PublicLevel.class);
+            if (level != null && level.value()
+                    == cn.iocoder.txgy.module.bidding.api.enums.PublicLevelEnum.SOCIAL) {
+                socialCount++;
+                assertTrue(subset.containsKey(component.getName()),
+                        "社会公开字段必须保留：" + component.getName());
+            } else {
+                assertFalse(subset.containsKey(component.getName()),
+                        "政务公开/未标字段不得出边界：" + component.getName());
+            }
+        }
+        assertEquals(socialCount, subset.size());
+        assertFalse(subset.containsKey("NOT_A_SPEC_FIELD"));
+    }
 }

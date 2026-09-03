@@ -32,6 +32,13 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
  * <p>管理端：分页/详情/新建/修改/发布/撤下/删除（本租户隔离）；
  * 大厅公开只读（列表/详情）：跨租户、仅已发布且非内部的社会公开公告，
  * 关键词全文命中走检索组件（见 NoticePageReqVO 说明）。
+ *
+ * <p>权威接口编号对齐（见 05-接口设计文档 §3）：
+ * BID-ENT-NOTICE-01 公告查询≈ GET /get（管理端全集）与 /public/detail（社会公开子集）；
+ * BID-ENT-WIN-01 公示/结果推送≈ POST /publish（幂等，对外推送口径后续接 GATHER-02）；
+ * BID-HALL-INFO-01 公开公告/公示查询≈ GET /public/list；
+ * BID-HALL-SEARCH-01 全文检索≈ GET /public/list?keyword=（高亮片段待检索组件增强后补）。
+ * 公开边界只外发社会公开字段（01/05 规则 1 + 红线 2）。
  */
 @Tag(name = "管理后台 - bidding 公告/公示")
 @RestController
