@@ -5,6 +5,8 @@
 -- 说明：权威数据集字段全集不入列，统一存 bidding_notice.fields_json（key=规范英文名称，
 --       由 NoticePayloadUtils 按数据集 VO 规整，"该有的字段一个不能少"）。
 -- 对应接口数据集：招标公告与资格预审公告 / 变更公告（工程） / 中标候选人公示 / 中标结果公示
+-- 已验证：2026-09-03 已在开发库 MySQL 8.4（ruoyi-vue-pro）执行成功；
+--       插入/回读、uk_notice_code 与 uk_notice_version 唯一键拦截均通过（见 NoticeDbSmoke）
 -- =====================================================================
 
 -- 公告/公示主档（T 轨：继承 TenantBaseDO -> tenant_id bigint）
