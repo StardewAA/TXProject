@@ -34,16 +34,18 @@ public class CourseCommentController {
     }
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除课程评论（学员删除自己的评论）")
+    @Operation(summary = "评论治理删除（软删留痕：保留原文 + 记录删除人/时间/原因；不传 reason 即管理员清理）")
     @Parameter(name = "id", description = "评论 ID", required = true, example = "1")
+    @Parameter(name = "reason", description = "删除原因（可选）", example = "违规广告")
     @PreAuthorize("@ss.hasPermission('training:course:delete')")
-    public CommonResult<Boolean> deleteComment(@RequestParam("id") Long id) {
-        courseService.deleteComment(id);
+    public CommonResult<Boolean> deleteComment(@RequestParam("id") Long id,
+                                               @RequestParam(value = "reason", required = false) String reason) {
+        courseService.deleteComment(id, reason);
         return success(true);
     }
 
     @GetMapping("/page")
-    @Operation(summary = "课程评论分页")
+    @Operation(summary = "课程评论分页（管理端：不传 status 展示全部含已删除留痕）")
     @PreAuthorize("@ss.hasPermission('training:course:query')")
     public CommonResult<PageResult<CourseCommentDO>> getCommentPage(@Validated CourseCommentPageReqVO pageReqVO) {
         return success(courseService.getCommentPage(pageReqVO));

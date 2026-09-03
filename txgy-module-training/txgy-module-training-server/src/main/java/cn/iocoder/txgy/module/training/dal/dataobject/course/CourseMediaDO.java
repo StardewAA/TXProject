@@ -41,6 +41,10 @@ public class CourseMediaDO extends TenantBaseDO {
      */
     private String url;
     /**
+     * 外部资源引用 ID（对接资源中心媒资 ID / VR 项目编号；自含媒资时为 NULL，占位）
+     */
+    private String mediaRefId;
+    /**
      * 文件大小（字节）
      */
     private Long sizeBytes;

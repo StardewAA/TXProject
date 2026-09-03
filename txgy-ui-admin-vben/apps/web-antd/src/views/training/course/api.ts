@@ -16,11 +16,21 @@ export namespace TrainingCourseApi {
     summary?: string;
     coverUrl?: string;
     level?: number;
+    /** 成长等级：APPRENTICE/JUNIOR/MIDDLE/SENIOR（四级成长体系） */
+    courseLevel?: string;
     credit?: number;
     durationMinutes?: number;
     industry?: string;
+    /** 适用岗位/工种（JSON 数组） */
+    applicablePosts?: string;
+    /** 资源归属标识 */
+    ownerFlag?: string;
     bizTags?: string;
     isRequired?: boolean;
+    /** 是否复合课程 */
+    isComposite?: boolean;
+    /** 复合课程子模块标签（JSON 数组） */
+    compositeTags?: string;
     examId?: number;
     lecturer?: string;
     lecturerBrief?: string;
@@ -30,6 +40,8 @@ export namespace TrainingCourseApi {
     auditCount?: number;
     status?: number;
     rejectReason?: string;
+    reviewerId?: number;
+    reviewedAt?: string;
     sort?: number;
     remark?: string;
     submitterId?: number;
@@ -44,6 +56,8 @@ export namespace TrainingCourseApi {
     mediaType?: number;
     name?: string;
     url?: string;
+    /** 外部资源引用 ID（资源中心媒资 ID / VR 项目编号） */
+    mediaRefId?: string;
     sizeBytes?: number;
     durationSeconds?: number;
     sort?: number;
@@ -57,7 +71,21 @@ export namespace TrainingCourseApi {
     content?: string;
     userId?: number;
     userName?: string;
+    /** 状态：1 正常 2 已删除（治理软删留痕） */
+    status?: number;
+    deletedBy?: number;
+    deletedAt?: string;
+    deleteReason?: string;
     createTime?: string;
+  }
+
+  /** 课程分类 */
+  export interface CourseCategory {
+    id?: number;
+    name?: string;
+    code?: string;
+    sort?: number;
+    remark?: string;
   }
 }
 
@@ -165,4 +193,42 @@ export function getCourseCommentPage(params: PageParam & Record<string, any>) {
     '/training/course-comment/page',
     { params },
   );
+}
+
+/** 评论治理删除（软删留痕，可选原因） */
+export function deleteCourseComment(id: number, reason?: string) {
+  const query = reason
+    ? `id=${id}&reason=${encodeURIComponent(reason)}`
+    : `id=${id}`;
+  return requestClient.delete(`/training/course-comment/delete?${query}`);
+}
+
+/** 课程媒资排序（按传入顺序重排） */
+export function sortCourseMedia(courseId: number, ids: number[]) {
+  return requestClient.put(`/training/course-media/sort?courseId=${courseId}`, ids);
+}
+
+/** 课程分类全量列表（下拉） */
+export function getCourseCategoryList() {
+  return requestClient.get<TrainingCourseApi.CourseCategory[]>(
+    '/training/course-category/list',
+  );
+}
+
+/** 新增课程分类 */
+export function createCourseCategory(data: Partial<TrainingCourseApi.CourseCategory>) {
+  return requestClient.post('/training/course-category/create', data);
+}
+
+/** 配置课程业务属性（成长等级/岗位/必修/复合/结课考试等） */
+export function updateCourseBusinessAttributes(
+  id: number,
+  data: Partial<TrainingCourseApi.Course>,
+) {
+  return requestClient.put(`/training/course/business-attributes?id=${id}`, data);
+}
+
+/** 结课考试试卷下拉（占位） */
+export function getExamOptions() {
+  return requestClient.get<any[]>('/training/course/exam-options');
 }

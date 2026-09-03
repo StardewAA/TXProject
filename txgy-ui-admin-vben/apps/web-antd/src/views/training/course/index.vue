@@ -34,6 +34,7 @@ import {
   COURSE_LEVEL_TEXT,
   COURSE_MEDIA_TYPE_TEXT,
   COURSE_STATUS_OPTIONS,
+  GROWTH_LEVEL_TEXT,
   useGridColumns,
   useGridFormSchema,
 } from './data';
@@ -410,6 +411,20 @@ function buildActions(row: TrainingCourseApi.Course) {
 
       <template #level="{ row }">
         <span>{{ COURSE_LEVEL_TEXT[row.level] || '-' }}</span>
+      </template>
+      <template #courseLevel="{ row }">
+        <Tag v-if="row.courseLevel" color="processing">
+          {{ GROWTH_LEVEL_TEXT[row.courseLevel] || row.courseLevel }}
+        </Tag>
+        <span v-else class="text-gray-400">-</span>
+      </template>
+      <template #isRequired="{ row }">
+        <Tag v-if="row.isRequired" color="orange">必修</Tag>
+        <span v-else class="text-gray-400">选修</span>
+      </template>
+      <template #isComposite="{ row }">
+        <Tag v-if="row.isComposite" color="purple">复合</Tag>
+        <span v-else class="text-gray-400">-</span>
       </template>
       <template #status="{ row }">
         <Tag :color="statusColorMap[row.status] || 'default'">

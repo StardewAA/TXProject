@@ -5,7 +5,11 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseAuditLogPageReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseAuditReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.course.vo.CoursePageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseRespVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseAuditLogDO;
+import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseDO;
+import cn.iocoder.txgy.module.training.enums.course.CourseStatusEnum;
 import cn.iocoder.txgy.module.training.service.course.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -84,6 +88,16 @@ public class CourseAuditController {
     @PreAuthorize("@ss.hasPermission('training:course:query')")
     public CommonResult<PageResult<CourseAuditLogDO>> getAuditLogPage(@Validated CourseAuditLogPageReqVO pageReqVO) {
         return success(courseService.getAuditLogPage(pageReqVO));
+    }
+
+    @GetMapping("/queue")
+    @Operation(summary = "审核队列（待审核课程分页，供审核员轮询处理）")
+    @PreAuthorize("@ss.hasPermission('training:course:audit')")
+    public CommonResult<PageResult<CourseRespVO>> getAuditQueue(@Validated CoursePageReqVO pageReqVO) {
+        pageReqVO.setStatus(CourseStatusEnum.PENDING_REVIEW.getStatus());
+        pageReqVO.setIsCurrent(Boolean.TRUE);
+        PageResult<CourseDO> pageResult = courseService.getCoursePage(pageReqVO);
+        return success(BeanUtils.toBean(pageResult, CourseRespVO.class));
     }
 
 }
