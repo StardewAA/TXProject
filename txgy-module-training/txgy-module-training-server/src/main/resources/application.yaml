@@ -10,6 +10,11 @@ spring:
     import:
       - optional:classpath:application-${spring.profiles.active}.yaml
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml
+  # 资源中心大文件上传（视频 ≤500MB）
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
 
 server:
   port: 48094
@@ -46,5 +51,10 @@ txgy:
   tenant:
     enable: true
     ignore-urls:
+      - /training/document/preview
+      - /training/video/play
+  # 资源中心本地文件存储根目录（容器内通过 RESOURCE_UPLOAD_DIR=/app/uploads 覆盖）
+  resource:
+    upload-dir: ${RESOURCE_UPLOAD_DIR:./uploads}
 
 debug: false

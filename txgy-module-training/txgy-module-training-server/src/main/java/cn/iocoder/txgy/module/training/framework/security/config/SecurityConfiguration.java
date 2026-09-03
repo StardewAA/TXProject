@@ -32,6 +32,9 @@ public class SecurityConfiguration {
                 registry.requestMatchers("/druid/**").permitAll();
                 // RPC 服务
                 registry.requestMatchers(ApiConstants.PREFIX + "/**").permitAll();
+                // 资源中心：文档预览 / 视频播放直出（携带 @PermitAll 双保险，供 <iframe>/<video> 匿名访问）
+                registry.requestMatchers("/training/document/preview").permitAll()
+                        .requestMatchers("/training/video/play").permitAll();
             }
 
         };
