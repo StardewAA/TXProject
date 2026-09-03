@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bidding.service.notice;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDeadlineRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
@@ -178,6 +179,49 @@ public class NoticeServiceImpl implements NoticeService {
         respVO.setTaskNo("G" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
         respVO.setStatus("SUCCESS");
         return respVO;
+    }
+
+    @Override
+    public NoticeDeadlineRespVO getBidDeadline(String bidSectionCode) {
+        List<NoticeDO> candidates = noticeMapper.selectList(new LambdaQueryWrapper<NoticeDO>()
+                .in(NoticeDO::getNoticeType, NoticeTypeEnum.TENDER_NOTICE.name(),
+                        NoticeTypeEnum.CHANGE_NOTICE.name())
+                .eq(NoticeDO::getStatus, NoticeStatusEnum.PUBLISHED.name())
+                .orderByDesc(NoticeDO::getPublishTime)
+                .last("LIMIT 100"));
+        for (NoticeDO notice : candidates) {
+            LinkedHashMap<String, Object> payload = readPayload(notice.getFieldsJson());
+            Object sectionCodes = payload.get("BID_SECTION_CODES");
+            if (sectionCodes != null && matchesSection(sectionCodes.toString(), bidSectionCode)) {
+                NoticeDeadlineRespVO vo = new NoticeDeadlineRespVO();
+                vo.setBidSectionCode(bidSectionCode);
+                vo.setNoticeCode(notice.getNoticeCode());
+                vo.setNoticeType(notice.getNoticeType());
+                vo.setFileIssueTime(strOrNull(payload.get("NOTICE_SEND_TIME")));
+                vo.setClarifyDeadline(strOrNull(payload.get("BID_DOC_REFER_END_TIME")));
+                // 变更公告以 BID_END_TIME 覆盖递交截止
+                String submit = NoticeTypeEnum.CHANGE_NOTICE.name().equals(notice.getNoticeType())
+                        ? strOrNull(payload.get("BID_END_TIME"))
+                        : strOrNull(payload.get("SUBMIT_TIMESTAMP"));
+                vo.setSubmitDeadline(submit);
+                vo.setBidOpenTime(strOrNull(payload.get("BID_OPEN_TIME")));
+                return vo;
+            }
+        }
+        throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_DEADLINE_NOT_FOUND);
+    }
+
+    private boolean matchesSection(String sectionCodes, String bidSectionCode) {
+        for (String code : sectionCodes.split("[,，、;；\\s]+")) {
+            if (code.trim().equals(bidSectionCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String strOrNull(Object value) {
+        return value == null ? null : value.toString();
     }
 
     // ========== 内部实现 ==========

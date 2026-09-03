@@ -23,6 +23,7 @@ public interface ErrorCodeConstants {
     ErrorCode NOTICE_SEARCH_UNAVAILABLE = new ErrorCode(1_060_101_005, "关键词检索不可用：请启用检索组件（bidding.es.enabled=true）");
     ErrorCode NOTICE_PDF_REQUIRED = new ErrorCode(1_060_101_006, "发布前必须保存公告 PDF 原文件（pdfFileId）");
     ErrorCode NOTICE_GATHER_ONLY_PUBLIC = new ErrorCode(1_060_101_007, "公开同步只允许已发布的面向公众（SOCIAL）公告");
+    ErrorCode NOTICE_DEADLINE_NOT_FOUND = new ErrorCode(1_060_101_008, "标段未找到对应的已发布公告截止时间");
 
     // ========== 开标/评标 1-060-102-000 ==========
     ErrorCode BID_OPEN_RECORD_NOT_EXISTS = new ErrorCode(1_060_102_000, "开标记录不存在");

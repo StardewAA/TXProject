@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bidding.controller.admin.notice;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDeadlineRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
@@ -129,6 +130,13 @@ public class NoticeController {
     public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
         noticeService.deleteNotice(id);
         return success(true);
+    }
+
+    @GetMapping("/exchange/deadline")
+    @Operation(summary = "截止时间查询（BID-ENT-NOTICE-02，模块内部只读）")
+    @PreAuthorize("@ss.hasPermission('bidding:notice:query')")
+    public CommonResult<NoticeDeadlineRespVO> deadline(@RequestParam("bidSectionCode") String bidSectionCode) {
+        return success(noticeService.getBidDeadline(bidSectionCode));
     }
 
     @PostMapping("/exchange/gather-sync")

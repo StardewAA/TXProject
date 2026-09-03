@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDeadlineRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
@@ -45,4 +46,10 @@ public interface NoticeService {
      * 触发检索文档同步，返回任务编号。幂等键=公告编号+dataTimestamp（由调用方框架幂等保证）。
      */
     NoticePublicSyncRespVO syncPublicDocument(NoticePublicSyncReqVO reqVO);
+
+    /**
+     * 截止时间查询（05 §3.1 BID-ENT-NOTICE-02，模块内部只读）：
+     * 按标段编号在已发布的招标/变更公告中定位，返回文件发出/澄清/递交截止时间。
+     */
+    NoticeDeadlineRespVO getBidDeadline(String bidSectionCode);
 }

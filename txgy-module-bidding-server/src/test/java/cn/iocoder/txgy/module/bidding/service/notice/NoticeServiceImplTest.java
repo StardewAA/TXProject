@@ -18,6 +18,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -252,6 +253,54 @@ class NoticeServiceImplTest {
         reqVO.setDataTimestamp(LocalDateTime.now());
         ServiceException e = assertThrows(ServiceException.class, () -> service.syncPublicDocument(reqVO));
         assertEquals(Integer.valueOf(1_060_101_000), e.getCode(), "应报 NOTICE_NOT_EXISTS");
+    }
+
+    // ========== 截止时间查询（BID-ENT-NOTICE-02） ==========
+
+    @Test
+    void deadline_mapsTenderNoticeTimes() throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("BID_SECTION_CODES", "S1,S2");
+        payload.put("NOTICE_SEND_TIME", "20260901090000");
+        payload.put("BID_DOC_REFER_END_TIME", "20260915170000");
+        payload.put("SUBMIT_TIMESTAMP", "20260930090000");
+        payload.put("BID_OPEN_TIME", "20260930090001");
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, null);
+        notice.setNoticeCode("BN-A");
+        notice.setNoticeType(NoticeTypeEnum.TENDER_NOTICE.name());
+        notice.setFieldsJson(MAPPER.writeValueAsString(payload));
+        when(noticeMapper.selectList(any())).thenReturn(List.of(notice));
+
+        var resp = service.getBidDeadline("S2");
+
+        assertEquals("S2", resp.getBidSectionCode());
+        assertEquals("20260901090000", resp.getFileIssueTime());
+        assertEquals("20260915170000", resp.getClarifyDeadline());
+        assertEquals("20260930090000", resp.getSubmitDeadline());
+        assertEquals("20260930090001", resp.getBidOpenTime());
+    }
+
+    @Test
+    void deadline_changeNoticeOverridesSubmitTime() throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("BID_SECTION_CODES", "S1");
+        payload.put("BID_END_TIME", "20261010100000");
+        NoticeDO notice = noticeOf(2L, NoticeStatusEnum.PUBLISHED, null);
+        notice.setNoticeCode("BN-C");
+        notice.setNoticeType(NoticeTypeEnum.CHANGE_NOTICE.name());
+        notice.setFieldsJson(MAPPER.writeValueAsString(payload));
+        when(noticeMapper.selectList(any())).thenReturn(List.of(notice));
+
+        var resp = service.getBidDeadline("S1");
+
+        assertEquals("20261010100000", resp.getSubmitDeadline(), "变更公告 BID_END_TIME 应覆盖递交截止");
+    }
+
+    @Test
+    void deadline_notFoundThrows() {
+        when(noticeMapper.selectList(any())).thenReturn(List.of());
+        ServiceException e = assertThrows(ServiceException.class, () -> service.getBidDeadline("S-不存在"));
+        assertEquals(Integer.valueOf(1_060_101_008), e.getCode(), "应报 NOTICE_DEADLINE_NOT_FOUND");
     }
 
     // ========== 工具 ==========
