@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8
+  redis:
+    image: redis:6-alpine
+  nacos:
+    image: nacos-registry.cn-hangzhou.cr.aliyuncs.com/nacos/nacos-server:v3.0.3
+  frontend:
+    build:
+      dockerfile: deploy/frontend/Dockerfile.local
+    depends_on:
+      gateway:
+        condition: service_healthy
+  system:
+    build:
+      dockerfile: deploy/backend/Dockerfile.local
+  infra:
+    build:
+      dockerfile: deploy/backend/Dockerfile.local
+  hrm:
+    build:
+      dockerfile: deploy/backend/Dockerfile.local
+  bpm:
+    build:
+      dockerfile: deploy/backend/Dockerfile.local
+  gateway:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      system:
+        condition: service_healthy
+      infra:
+        condition: service_healthy
+      hrm:
+        condition: service_healthy
+      bpm:
+        condition: service_healthy
