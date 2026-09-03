@@ -72,6 +72,7 @@ public class NoticeServiceImpl implements NoticeService {
         NoticeTypeEnum type = requireType(reqVO.getNoticeType());
         NoticeDO notice = new NoticeDO();
         notice.setNoticeCode(StringUtils.hasText(reqVO.getNoticeCode()) ? reqVO.getNoticeCode() : generateNoticeCode());
+        notice.setNoticeType(type.name());
         applyBase(notice, reqVO);
         notice.setStatus(NoticeStatusEnum.DRAFT.name());
         notice.setFieldsJson(writePayload(NoticePayloadUtils.canonicalize(type, reqVO.getPayload())));
