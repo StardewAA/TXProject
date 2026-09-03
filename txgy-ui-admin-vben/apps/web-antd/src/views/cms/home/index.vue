@@ -80,11 +80,6 @@ function handleQuery() {
   message.success(`查询到 ${filteredRecords.value.length} 条内容`);
 }
 
-function handleAudit() {
-  keyword.value = '待审核';
-  message.success('已筛选出待审核内容');
-}
-
 function handleCreate() {
   message.info('新增接口已预留，等待后端联调后开放');
 }
@@ -128,8 +123,6 @@ function handleSubmitAudit(record: Record<string, any>) {
         </div>
 
         <div class="cms-search-actions">
-          <Button type="primary" @click="handleQuery">查询</Button>
-          <Button @click="handleAudit">审核</Button>
           <Button type="primary" ghost @click="handleCreate">新增</Button>
           <Button danger @click="message.info('请先在下方结果中选择要删除的内容')">
             删除
@@ -224,15 +217,16 @@ function handleSubmitAudit(record: Record<string, any>) {
 .cms-search-heading p {
   margin: 0 0 6px;
   color: #1d4ed8;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .cms-search-heading h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 26px;
-  line-height: 1.3;
+  color: #334155;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .cms-big-search {
