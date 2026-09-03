@@ -28,6 +28,8 @@ public interface DictTypeConstants {
     String MES_PRO_FEEDBACK_TYPE = "mes_pro_feedback_type"; // MES 生产报工类型
     String MES_PRO_FEEDBACK_CHANNEL = "mes_pro_feedback_channel"; // MES 生产报工途径
     String MES_PRO_TASK_STATUS = "mes_pro_task_status"; // MES 任务状态
+    String MES_PRO_PROJECT_STATUS = "mes_pro_project_status"; // MES 项目状态
+    String MES_PRO_PROJECT_SOURCE_TYPE = "mes_pro_project_source_type"; // MES 项目来源类型（销售订单/库存备库/其他）
 
     // ========== 仓储条码与管理 (WM) ==========
     String MES_BARCODE_FORMAT = "mes_barcode_format"; // MES 条码格式
