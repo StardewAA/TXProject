@@ -30,6 +30,8 @@ public class SecurityConfiguration {
                         .requestMatchers("/actuator/**").permitAll();
                 // Druid 监控页面
                 registry.requestMatchers("/druid/**").permitAll();
+                // 公共服务大厅：公告/公示公开只读接口（跨租户读 + 公开级别白名单在 Service 层执行）
+                registry.requestMatchers("/bidding/notice/public/**").permitAll();
                 // 给其他模块调的 RPC 接口
                 registry.requestMatchers(ApiConstants.PREFIX + "/**").permitAll();
             }

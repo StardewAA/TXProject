@@ -46,6 +46,12 @@
             <artifactId>txgy-spring-boot-starter-biz-tenant</artifactId>
         </dependency>
 
+        <!-- 幂等/并发保护（@Idempotent 等，规范 4.5） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-protection</artifactId>
+        </dependency>
+
         <!-- Web 相关 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

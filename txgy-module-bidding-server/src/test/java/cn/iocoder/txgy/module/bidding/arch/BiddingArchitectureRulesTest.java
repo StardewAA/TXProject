@@ -175,7 +175,8 @@ public class BiddingArchitectureRulesTest {
                         if (!mapping) {
                             continue;
                         }
-                        if (!hasAnnotation(method, "PreAuthorize")) {
+                        boolean permitAll = hasAnnotation(method, "PermitAll");
+                        if (!permitAll && !hasAnnotation(method, "PreAuthorize")) {
                             fail(events, method, method.getFullName() + " 缺 @PreAuthorize（权限码 bidding:xxx:query/update）");
                         }
                         boolean write = method.getAnnotations().stream().anyMatch(
