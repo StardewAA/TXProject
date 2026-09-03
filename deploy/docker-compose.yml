@@ -21,6 +21,8 @@ x-backend-service: &backend-service
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     SPRING_DATA_REDIS_HOST: redis
+    # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
+    RESOURCE_UPLOAD_DIR: /app/uploads
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
     interval: 15s
@@ -275,6 +277,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-training/txgy-module-training-server
+    # 资源中心上传文件持久化（工作目录 /app，upload-dir 默认 ./uploads）
+    volumes:
+      - training-uploads:/app/uploads
 
   frontend:
     build:
@@ -298,6 +303,7 @@ volumes:
   mysql-data:
   redis-data:
   nacos-data:
+  training-uploads:
 
 networks:
   txgy-dev:
