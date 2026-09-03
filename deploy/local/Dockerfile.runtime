@@ -1,0 +1,21 @@
+# Runtime image for a single service, built from an already compiled Spring Boot fat jar.
+# Build context is deploy/local, and the jar is passed via JAR_FILE (e.g. jars/gateway.jar).
+# A dedicated context is used because the repository .dockerignore excludes **/target,
+# so jars left in target/ cannot be copied during build.
+FROM eclipse-temurin:25-jre
+
+WORKDIR /app
+
+ARG JAR_FILE
+
+COPY ${JAR_FILE} /app/app.jar
+
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+
+EXPOSE 48080
+
+# no curl in this image; probe the port with bash /dev/tcp
+HEALTHCHECK --interval=20s --timeout=5s --retries=15 --start-period=90s \
+  CMD bash -c 'echo > /dev/tcp/127.0.0.1/${SERVER_PORT:-48080}' || exit 1
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
