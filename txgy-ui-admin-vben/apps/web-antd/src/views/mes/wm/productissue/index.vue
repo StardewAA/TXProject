@@ -16,13 +16,20 @@ import {
   getProductIssuePage,
   submitProductIssue,
 } from '#/api/mes/wm/productissue';
+import { getProductIssueLinePage } from '#/api/mes/wm/productissue/line';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import JudgeModal from '../_pollution/judge-modal.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [PollutionJudgeModal, pollutionJudgeApi] = useVbenModal({
+  connectedComponent: JudgeModal,
   destroyOnClose: true,
 });
 
@@ -54,6 +61,28 @@ function handleStock(row: MesWmProductIssueApi.ProductIssue) {
 /** 完成领料出库 */
 function handleFinish(row: MesWmProductIssueApi.ProductIssue) {
   formModalApi.setData({ formType: 'finish', id: row.id }).open();
+}
+
+/** 环保判定：按该单真实物料行逐行 AI 初筛→人工复核 */
+async function handleJudge(row: MesWmProductIssueApi.ProductIssue) {
+  const { list } = await getProductIssueLinePage({
+    issueId: row.id!,
+    pageNo: 1,
+    pageSize: 200,
+  });
+  pollutionJudgeApi
+    .setData({
+      title: '生产领料环保判定',
+      stage: 'MATERIAL_ISSUE',
+      bizNo: row.code ?? '',
+      lines: (list ?? []).map((line) => ({
+        lineId: line.id,
+        itemCode: line.itemCode,
+        itemName: line.itemName,
+        itemSpec: line.specification,
+      })),
+    })
+    .open();
 }
 
 /** 提交领料出库单 */
@@ -133,6 +162,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <FormModal @success="handleRefresh" />
 
+    <PollutionJudgeModal />
+
     <Grid table-title="领料出库单列表">
       <template #toolbar-tools>
         <TableAction
@@ -205,6 +236,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['mes:wm-product-issue:finish'],
               ifShow: row.status === MesWmProductIssueStatusEnum.APPROVED,
               onClick: handleFinish.bind(null, row),
+            },
+            {
+              label: '环保判定',
+              type: 'link',
+              auth: ['mes:set-pollution-check:create'],
+              onClick: handleJudge.bind(null, row),
             },
             {
               label: '取消',

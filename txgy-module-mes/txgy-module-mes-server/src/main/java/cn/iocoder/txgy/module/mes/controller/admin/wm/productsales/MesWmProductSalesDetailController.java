@@ -1,14 +1,18 @@
 package cn.iocoder.txgy.module.mes.controller.admin.wm.productsales;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.detail.MesWmProductSalesDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.detail.MesWmProductSalesDetailSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.unitmeasure.MesMdUnitMeasureDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.wm.batch.MesWmBatchDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productsales.MesWmProductSalesDetailDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.wm.batch.MesWmBatchMapper;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.warehouse.MesWmWarehouseAreaDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.warehouse.MesWmWarehouseDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.warehouse.MesWmWarehouseLocationDO;
@@ -57,6 +61,9 @@ public class MesWmProductSalesDetailController {
 
     @Resource
     private MesWmWarehouseAreaService areaService;
+
+    @Resource
+    private MesWmBatchMapper batchMapper;
 
     @PostMapping("/create")
     @Operation(summary = "创建销售出库明细")
@@ -122,7 +129,7 @@ public class MesWmProductSalesDetailController {
         Map<Long, MesWmWarehouseAreaDO> areaMap = areaService.getWarehouseAreaMap(
                 convertSet(list, MesWmProductSalesDetailDO::getAreaId));
         // 2. 构建结果
-        return BeanUtils.toBean(list, MesWmProductSalesDetailRespVO.class, vo -> {
+        List<MesWmProductSalesDetailRespVO> respList = BeanUtils.toBean(list, MesWmProductSalesDetailRespVO.class, vo -> {
             MapUtils.findAndThen(itemMap, vo.getItemId(), item -> {
                 vo.setItemCode(item.getCode()).setItemName(item.getName()).setSpecification(item.getSpecification());
                 MapUtils.findAndThen(unitMeasureMap, item.getUnitMeasureId(),
@@ -135,6 +142,18 @@ public class MesWmProductSalesDetailController {
             MapUtils.findAndThen(areaMap, vo.getAreaId(),
                     area -> vo.setAreaName(area.getName()));
         });
+        // 3. P2 环保戳回填：按批次把污染状态/去向/标记带回明细行
+        Map<Long, MesWmBatchDO> batchMap = CollectionUtils.convertMap(
+                batchMapper.selectByIds(convertSet(list, MesWmProductSalesDetailDO::getBatchId)), MesWmBatchDO::getId);
+        respList.forEach(vo -> MapUtils.findAndThen(batchMap, vo.getBatchId(), batch -> {
+            vo.setPollutionStatus(batch.getPollutionStatus());
+            vo.setPollutionLocation(batch.getPollutionLocation());
+            vo.setPollutionMarked(batch.getPollutionMarked());
+            if (StrUtil.isBlank(vo.getBatchCode())) {
+                vo.setBatchCode(batch.getCode());
+            }
+        }));
+        return respList;
     }
 
 }
