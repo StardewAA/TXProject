@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.bidding.service.notice;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeSaveReqVO;
 
@@ -37,4 +39,10 @@ public interface NoticeService {
 
     /** 大厅公开详情（同上可见性规则） */
     NoticeDetailRespVO getPublicNoticeDetail(Long id);
+
+    /**
+     * 公开同步（05 §2.2 BID-SUP-GATHER-02）：白名单校验（PUBLISHED+非内部+SOCIAL）后
+     * 触发检索文档同步，返回任务编号。幂等键=公告编号+dataTimestamp（由调用方框架幂等保证）。
+     */
+    NoticePublicSyncRespVO syncPublicDocument(NoticePublicSyncReqVO reqVO);
 }

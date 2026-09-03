@@ -5,6 +5,8 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeSaveReqVO;
 import cn.iocoder.txgy.module.bidding.service.notice.NoticeService;
@@ -127,6 +129,14 @@ public class NoticeController {
     public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
         noticeService.deleteNotice(id);
         return success(true);
+    }
+
+    @PostMapping("/exchange/gather-sync")
+    @Operation(summary = "公开同步（BID-SUP-GATHER-02）：公告 → 归集 → 检索文档")
+    @PreAuthorize("@ss.hasPermission('bidding:notice:update')")
+    @Idempotent
+    public CommonResult<NoticePublicSyncRespVO> gatherSync(@Valid @RequestBody NoticePublicSyncReqVO reqVO) {
+        return success(noticeService.syncPublicDocument(reqVO));
     }
 
 }

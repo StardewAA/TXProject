@@ -5,6 +5,8 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeSaveReqVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeContentDO;
@@ -154,6 +156,28 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     public NoticeDetailRespVO getPublicNoticeDetail(Long id) {
         return TenantUtils.executeIgnore(() -> toDetail(getNotice(id), true));
+    }
+
+    @Override
+    public NoticePublicSyncRespVO syncPublicDocument(NoticePublicSyncReqVO reqVO) {
+        NoticeDO notice = noticeMapper.selectOne(new LambdaQueryWrapper<NoticeDO>()
+                .eq(NoticeDO::getNoticeCode, reqVO.getBizNo())
+                .orderByDesc(NoticeDO::getId)
+                .last("LIMIT 1"));
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_NOT_EXISTS);
+        }
+        // 白名单校验（BID-SUP-GATHER-02 规则：仅社会公开字段，更正/撤销走发布-撤下）
+        if (!NoticeStatusEnum.PUBLISHED.name().equals(notice.getStatus())
+                || !Boolean.FALSE.equals(notice.getInternalFlag())
+                || !"SOCIAL".equals(notice.getPublicLevel())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_GATHER_ONLY_PUBLIC);
+        }
+        indexDoc(notice.getId());
+        NoticePublicSyncRespVO respVO = new NoticePublicSyncRespVO();
+        respVO.setTaskNo("G" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
+        respVO.setStatus("SUCCESS");
+        return respVO;
     }
 
     // ========== 内部实现 ==========

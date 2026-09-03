@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
+import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticePublicSyncReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeSaveReqVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeContentDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -197,6 +199,59 @@ class NoticeServiceImplTest {
 
         verify(noticeMapper).deleteById(1L);
         verify(searchEngine).remove(1L);
+    }
+
+    // ========== 公开同步（BID-SUP-GATHER-02） ==========
+
+    @Test
+    void gatherSync_success_onlyForPublishedSocialPublic() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        when(noticeMapper.selectOne(any())).thenReturn(notice);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("正文已就绪"));
+
+        NoticePublicSyncReqVO reqVO = new NoticePublicSyncReqVO();
+        reqVO.setBizNo("BN123456789012");
+        reqVO.setDataTimestamp(LocalDateTime.now());
+        var resp = service.syncPublicDocument(reqVO);
+
+        assertEquals("SUCCESS", resp.getStatus());
+        assertTrue(resp.getTaskNo().startsWith("G"), "应生成同步任务编号");
+        verify(searchEngine).index(any());
+    }
+
+    @Test
+    void gatherSync_rejectsDraftInternalOrGovernmentNotice() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        NoticePublicSyncReqVO reqVO = new NoticePublicSyncReqVO();
+        reqVO.setBizNo("BN123456789012");
+        reqVO.setDataTimestamp(LocalDateTime.now());
+        // 草稿不可同步
+        notice.setStatus(NoticeStatusEnum.DRAFT.name());
+        when(noticeMapper.selectOne(any())).thenReturn(notice);
+        ServiceException e1 = assertThrows(ServiceException.class, () -> service.syncPublicDocument(reqVO));
+        assertEquals(Integer.valueOf(1_060_101_007), e1.getCode());
+        // 企业内部公告不可同步
+        notice.setStatus(NoticeStatusEnum.PUBLISHED.name());
+        notice.setInternalFlag(true);
+        ServiceException e2 = assertThrows(ServiceException.class, () -> service.syncPublicDocument(reqVO));
+        assertEquals(Integer.valueOf(1_060_101_007), e2.getCode());
+        // 政务公开不可对外同步
+        notice.setInternalFlag(false);
+        notice.setPublicLevel("GOVERNMENT");
+        ServiceException e3 = assertThrows(ServiceException.class, () -> service.syncPublicDocument(reqVO));
+        assertEquals(Integer.valueOf(1_060_101_007), e3.getCode());
+        verifyNoInteractions(searchEngine);
+    }
+
+    @Test
+    void gatherSync_notFound() {
+        when(noticeMapper.selectOne(any())).thenReturn(null);
+        NoticePublicSyncReqVO reqVO = new NoticePublicSyncReqVO();
+        reqVO.setBizNo("BN-不存在");
+        reqVO.setDataTimestamp(LocalDateTime.now());
+        ServiceException e = assertThrows(ServiceException.class, () -> service.syncPublicDocument(reqVO));
+        assertEquals(Integer.valueOf(1_060_101_000), e.getCode(), "应报 NOTICE_NOT_EXISTS");
     }
 
     // ========== 工具 ==========
