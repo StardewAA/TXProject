@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "default": {
+          "type": "custom",
+          "tokenizer": "ik_max_word"
+        },
+        "default_search": {
+          "type": "custom",
+          "tokenizer": "ik_smart"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id": { "type": "long" },
+      "materialName": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "materialCategory": { "type": "keyword" },
+      "tempMin": { "type": "integer" },
+      "tempMax": { "type": "integer" },
+      "thermalConductivity": { "type": "float" },
+      "combustionGrade": { "type": "keyword" },
+      "industryField": { "type": "keyword" },
+      "protectObject": { "type": "keyword" },
+      "summary": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "status": { "type": "byte" },
+      "publishStatus": { "type": "byte" },
+      "publishDate": { "type": "date", "format": "yyyy-MM-dd" },
+      "viewCount": { "type": "integer" }
+    }
+  }
+}
