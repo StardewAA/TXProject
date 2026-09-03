@@ -74,6 +74,21 @@ public interface WmsItemCategoryService {
     List<WmsItemCategoryDO> getItemCategoryList(Collection<Long> ids);
 
     /**
+     * 获得可用于创建商品的商品分类列表。
+     *
+     * @return 自身及所有上级分类均开启的商品分类列表
+     */
+    List<WmsItemCategoryDO> getEnabledItemCategoryList();
+
+    /**
+     * 校验商品分类已开启。
+     *
+     * @param id 编号
+     * @return 商品分类
+     */
+    WmsItemCategoryDO validateItemCategoryEnabled(Long id);
+
+    /**
      * 获得指定商品分类及其所有子分类编号集合
      *
      * @param id 商品分类编号
