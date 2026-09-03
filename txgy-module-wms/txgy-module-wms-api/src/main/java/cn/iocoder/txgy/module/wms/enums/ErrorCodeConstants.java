@@ -41,6 +41,10 @@ public interface ErrorCodeConstants {
     ErrorCode ITEM_SKU_NOT_EXISTS = new ErrorCode(1_060_104_004, "商品规格不存在");
     ErrorCode ITEM_SKU_HAS_INVENTORY = new ErrorCode(1_060_104_005, "删除失败！商品规格【{}】已被库存业务使用！");
     ErrorCode ITEM_SKU_HAS_ORDER = new ErrorCode(1_060_104_006, "删除失败！商品规格【{}】已被{}使用！");
+    ErrorCode ITEM_QUALITY_REPORT_STATUS_INVALID = new ErrorCode(1_060_104_008, "质检状态无效");
+    ErrorCode ITEM_QUALITY_REPORT_IMAGES_INVALID = new ErrorCode(1_060_104_009, "合格或异常质检报告必须上传 1 至 9 张图片");
+    ErrorCode ITEM_QUALITY_REPORT_REMARK_REQUIRED = new ErrorCode(1_060_104_010, "异常质检报告必须填写异常说明");
+    ErrorCode ITEM_QUALITY_REPORT_IMAGE_URL_INVALID = new ErrorCode(1_060_104_011, "质检报告包含无效图片地址");
 
     // ========== WMS 基础数据-往来企业 1-060-105-000 ==========
     ErrorCode MERCHANT_NOT_EXISTS = new ErrorCode(1_060_105_000, "往来企业不存在");
@@ -57,6 +61,8 @@ public interface ErrorCodeConstants {
     ErrorCode RECEIPT_ORDER_DETAIL_REQUIRED = new ErrorCode(1_060_200_003, "入库单至少包含一条明细");
     ErrorCode RECEIPT_ORDER_STATUS_NOT_DELETABLE = new ErrorCode(1_060_200_005, "入库单状态不是草稿或已作废，不能删除");
     ErrorCode RECEIPT_ORDER_DETAIL_NOT_EXISTS = new ErrorCode(1_060_200_007, "入库单明细不存在");
+    ErrorCode RECEIPT_ORDER_ITEM_QUALITY_NOT_QUALIFIED = new ErrorCode(1_060_200_008,
+            "以下商品质检未合格，不可完成入库：{}");
 
     // ========== WMS 出库单 1-060-201-000 ==========
     ErrorCode SHIPMENT_ORDER_NOT_EXISTS = new ErrorCode(1_060_201_000, "出库单不存在");

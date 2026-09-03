@@ -5,6 +5,7 @@ import type { VxeTableInstance } from '#/adapter/vxe-table';
 import type { WmsItemSkuApi } from '#/api/wms/md/item/sku';
 import type { WmsReceiptOrderApi } from '#/api/wms/order/receipt';
 import type { WmsReceiptOrderDetailApi } from '#/api/wms/order/receipt/detail';
+import type { QualityReport } from '#/api/wms/md/item/quality-report';
 
 import { computed, nextTick, ref } from 'vue';
 
@@ -12,7 +13,7 @@ import { confirm, useVbenModal } from '@vben/common-ui';
 import { OrderStatusEnum, OrderUpdateStatusList } from '@vben/constants';
 import { isEqual } from '@vben/utils';
 
-import { ElInputNumber, ElMessage } from 'element-plus';
+import { ElAlert, ElButton, ElInputNumber, ElMessage, ElTag } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
 import { TableAction, VxeColumn, VxeTable } from '#/adapter/vxe-table';
@@ -26,6 +27,7 @@ import {
 } from '#/api/wms/order/receipt';
 import { $t } from '#/locales';
 import { WmsItemSkuSelect } from '#/views/wms/md/item/sku/components';
+import { getCurrentQualityReports, QualityStatus } from '#/api/wms/md/item/quality-report';
 import {
   dividePrice,
   multiplyPrice,
@@ -33,10 +35,12 @@ import {
   QUANTITY_PRECISION,
 } from '#/views/wms/utils/format';
 import { generateOrderNo } from '#/views/wms/utils/order';
+import QualityReportViewer from './quality-report-viewer.vue';
 
 import { getDetailFooter, useFormSchema } from '../data';
 
 interface DetailRow extends WmsReceiptOrderDetailApi.ReceiptOrderDetail {
+  qualityReport?: QualityReport;
   seq: number;
 }
 
@@ -52,6 +56,7 @@ const originalSubmitData = ref<WmsReceiptOrderApi.ReceiptOrder>();
 const details = ref<DetailRow[]>([]);
 const detailTableRef = ref<VxeTableInstance>();
 const skuSelectRef = ref<InstanceType<typeof WmsItemSkuSelect>>();
+const qualityViewerRef = ref<InstanceType<typeof QualityReportViewer>>();
 let detailSeq = 0; // 明细行可能还没有后端 id，使用本地序号作为 VXE 行操作的稳定标识
 
 const getTitle = computed(() => {
@@ -74,6 +79,16 @@ const isSavedPrepareOrder = computed(() => {
     OrderUpdateStatusList.includes(formData.value.status)
   );
 });
+const invalidQualityDetails = computed(() =>
+  details.value.filter(
+    (detail) => detail.qualityReport?.status !== QualityStatus.QUALIFIED,
+  ),
+);
+const qualityBlockMessage = computed(() =>
+  invalidQualityDetails.value
+    .map((detail) => `商品【${detail.itemName || detail.itemId}】质检状态为【${getQualityLabel(detail.qualityReport?.status)}】`)
+    .join('；'),
+);
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -123,6 +138,29 @@ function setDetails(list?: WmsReceiptOrderDetailApi.ReceiptOrderDetail[]) {
   detailSeq = 0;
   details.value = (list || []).map((detail) => normalizeDetail(detail));
   void refreshDetailFooter();
+  void loadDetailQualityReports();
+}
+
+async function loadDetailQualityReports() {
+  const itemIds = [...new Set(details.value.map((item) => item.itemId).filter((id): id is number => !!id))];
+  if (itemIds.length === 0) return;
+  const reports = await getCurrentQualityReports(itemIds);
+  const reportMap = new Map(reports.map((report) => [report.itemId, report]));
+  details.value.forEach((detail) => {
+    detail.qualityReport = detail.itemId ? reportMap.get(detail.itemId) : undefined;
+  });
+}
+
+function getQualityLabel(status?: number) {
+  if (status === QualityStatus.QUALIFIED) return '合格';
+  if (status === QualityStatus.ABNORMAL) return '异常';
+  return '待质检';
+}
+
+function getQualityTagType(status?: number) {
+  if (status === QualityStatus.QUALIFIED) return 'success' as const;
+  if (status === QualityStatus.ABNORMAL) return 'danger' as const;
+  return 'info' as const;
 }
 
 /** 刷新明细合计行 */
@@ -165,6 +203,7 @@ function handleSelectSku(skus: WmsItemSkuApi.ItemSku[]) {
   }
   if (changed) {
     void refreshDetailFooter();
+    void loadDetailQualityReports();
   }
 }
 
@@ -226,7 +265,7 @@ function validateDetails(required = false) {
 /** 构建提交用的明细数据 */
 function buildSubmitDetails() {
   return details.value.map((row) => {
-    const { seq: _seq, ...detail } = row;
+    const { qualityReport: _qualityReport, seq: _seq, ...detail } = row;
     return detail;
   });
 }
@@ -251,6 +290,11 @@ async function buildSubmitData(): Promise<WmsReceiptOrderApi.ReceiptOrder> {
 async function handleFormComplete() {
   const { valid } = await formApi.validate();
   if (!valid || !validateDetails(true) || !formData.value?.id) {
+    return;
+  }
+  await loadDetailQualityReports();
+  if (invalidQualityDetails.value.length > 0) {
+    ElMessage.error(`${qualityBlockMessage.value}，不可完成入库`);
     return;
   }
   await confirm('确认完成入库？完成后将更新库存。');
@@ -391,6 +435,25 @@ const [Modal, modalApi] = useVbenModal({
               </div>
             </template>
           </VxeColumn>
+          <VxeColumn title="质检信息" width="190">
+            <template #default="{ row }">
+              <div class="flex items-center gap-2">
+                <ElTag :type="getQualityTagType(row.qualityReport?.status)" size="small">
+                  {{ getQualityLabel(row.qualityReport?.status) }}
+                </ElTag>
+                <ElButton
+                  v-if="row.qualityReport"
+                  link
+                  type="primary"
+                  @click="qualityViewerRef?.open(row.itemId, row.itemName, row.qualityReport)"
+                >查看报告</ElButton>
+                <span v-else class="text-xs text-gray-400">暂无报告</span>
+              </div>
+              <div v-if="row.qualityReport?.remark" class="mt-1 truncate text-xs text-gray-500">
+                {{ row.qualityReport.remark }}
+              </div>
+            </template>
+          </VxeColumn>
           <VxeColumn field="quantity" title="入库数量" width="150">
             <template #default="{ row }">
               <ElInputNumber
@@ -445,6 +508,14 @@ const [Modal, modalApi] = useVbenModal({
             </template>
           </VxeColumn>
         </VxeTable>
+        <ElAlert
+          v-if="details.length && invalidQualityDetails.length"
+          class="mt-3"
+          :closable="false"
+          :title="`${qualityBlockMessage}，可保存草稿但不可完成入库`"
+          type="error"
+          show-icon
+        />
       </div>
     </div>
     <template #prepend-footer>
@@ -455,6 +526,7 @@ const [Modal, modalApi] = useVbenModal({
               label: '完成入库',
               type: 'primary',
               auth: ['wms:receipt-order:complete'],
+              disabled: invalidQualityDetails.length > 0,
               onClick: handleFormComplete,
             },
             {
@@ -468,5 +540,6 @@ const [Modal, modalApi] = useVbenModal({
       </div>
     </template>
     <WmsItemSkuSelect ref="skuSelectRef" @change="handleSelectSku" />
+    <QualityReportViewer ref="qualityViewerRef" />
   </Modal>
 </template>
