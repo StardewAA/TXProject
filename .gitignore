@@ -42,3 +42,9 @@ Thumbs.db
 # 编译/生成目录
 out/
 gen/
+
+# Maven flatten 插件产物（IDE/Maven 构建生成，不入库）
+.flattened-pom.xml
+
+# 本地调试临时产物（截图/OCR/日志等）
+.tmp_debug/
