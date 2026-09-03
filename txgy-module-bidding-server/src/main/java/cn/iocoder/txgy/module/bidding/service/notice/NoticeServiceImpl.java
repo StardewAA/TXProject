@@ -239,8 +239,14 @@ public class NoticeServiceImpl implements NoticeService {
         if (!NoticeStatusEnum.canTransit(current, target)) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_STATUS_TRANSITION_INVALID);
         }
-        if (target == NoticeStatusEnum.PUBLISHED && latestContent(notice.getId()) == null) {
-            throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_CONTENT_REQUIRED);
+        if (target == NoticeStatusEnum.PUBLISHED) {
+            // 发布前提：正文存在 + PDF 原文件必须已保存（两种前端展示形态都基于它）
+            if (latestContent(notice.getId()) == null) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_CONTENT_REQUIRED);
+            }
+            if (notice.getPdfFileId() == null) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_PDF_REQUIRED);
+            }
         }
         notice.setStatus(target.name());
     }

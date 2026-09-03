@@ -60,7 +60,7 @@ public class NoticeSaveReqVO {
     @Schema(description = "正文全文（文本形态；发布前必填）")
     private String content;
 
-    @Schema(description = "版式文件（PDF）file_id（可选）")
+    @Schema(description = "公告 PDF 原文件 file_id（必须保存；发布前必填，见 NoticeDetailRespVO 说明）")
     private Long pdfFileId;
 
 }

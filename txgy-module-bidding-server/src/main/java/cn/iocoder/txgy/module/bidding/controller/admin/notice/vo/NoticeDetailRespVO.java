@@ -8,11 +8,12 @@ import java.util.LinkedHashMap;
 
 /**
  * 公告/公示详情（结构化 + 版式文件两种形态）：
+ * <p>两种前端展示形态说明（同一公告，展示方式差异，底层数据同一份）：
  * <ul>
- *   <li>结构化形态：{@link #payload}——权威数据集字段全集（key=规范英文名称，缺失为 null，
- *       字段序与数据集声明一致），配合 {@code noticeType} 可完整映射到对应全量 VO；</li>
- *   <li>版式文件形态：{@link #pdfFileId}——FileApi 文件对象主键，前端据此下载 PDF/版式原件；</li>
- *   <li>正文：{@link #content}（当前生效版本）+ {@link #contentVersion}。</li>
+ *   <li>PDF 形态：前端内嵌查看器渲染 {@link #pdfFileId} 对应的 <b>PDF 原文件</b>
+ *       （原文件必须保存并在发布前落库，发布校验强制 pdfFileId 非空）；</li>
+ *   <li>结构化 HTML 形态：前端按 {@link #payload}（权威字段全集）+ {@link #content} 渲染成 HTML
+ *       （后端不生成 HTML，只给结构化数据）。</li>
  * </ul>
  */
 @Schema(description = "管理后台 - 公告/公示详情")

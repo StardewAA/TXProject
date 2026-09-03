@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `bidding_notice` (
     `internal_flag` bit(1) NOT NULL DEFAULT b'0' COMMENT '1=企业内部公告（仅本租户可见）；0=面向公众（经公开白名单外发）',
     `public_level` varchar(16) NOT NULL DEFAULT 'SOCIAL' COMMENT '公开级别：SOCIAL/GOVERNMENT（对齐 PublicLevelEnum）',
     `fields_json` json DEFAULT NULL COMMENT '权威数据集字段全集快照（key=规范英文名称，缺失补 null）',
-    `pdf_file_id` bigint DEFAULT NULL COMMENT '版式文件（PDF）file_id（FileApi 对象主键，规范五章三第5款口径）',
+    `pdf_file_id` bigint DEFAULT NULL COMMENT '公告 PDF 原文件 file_id（FileApi 对象主键；PDF 原文件必须保存，发布前必填——两种前端展示形态都基于该原件）',
     `version` int NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_notice_code` (`notice_code`, `deleted`, `tenant_id`),
