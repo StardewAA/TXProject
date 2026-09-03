@@ -22,14 +22,6 @@ const moduleOptions = [
   { label: '政策资讯', value: 'policy' },
 ];
 
-const modulePathMap: Record<string, string> = {
-  material: '/cms/content/material',
-  policy: '/cms/content/policy',
-  process: '/cms/content/process',
-  quota: '/cms/content/quota',
-  standard: '/cms/content/standard',
-};
-
 const allRecords = computed(() =>
   moduleOptions.flatMap((option) => {
     const config = cmsContentConfigs[option.value];
@@ -89,11 +81,12 @@ function handleQuery() {
 }
 
 function handleAudit() {
-  router.push('/cms/audit/pending');
+  keyword.value = '待审核';
+  message.success('已筛选出待审核内容');
 }
 
 function handleCreate() {
-  router.push({ path: modulePathMap[queryType.value] });
+  message.info('新增接口已预留，等待后端联调后开放');
 }
 
 function handleDelete(record: Record<string, any>) {
@@ -101,7 +94,7 @@ function handleDelete(record: Record<string, any>) {
 }
 
 function handleEdit(record: Record<string, any>) {
-  router.push({ path: modulePathMap[record.moduleKey] });
+  message.info(`已选择编辑：${recordTitle(record)}，接口联调后打开`);
 }
 
 function handleSubmitAudit(record: Record<string, any>) {
@@ -195,26 +188,14 @@ function handleSubmitAudit(record: Record<string, any>) {
           <span>左侧菜单快速进入</span>
         </div>
         <div class="cms-entry-grid">
-          <button type="button" @click="router.push('/cms/content/standard')">
-            标准规范库
+          <button type="button" @click="router.push('/cms/expert/review')">
+            专家管理
           </button>
-          <button type="button" @click="router.push('/cms/content/material')">
-            材料参数库
+          <button type="button" @click="router.push('/cms/consulting/knowledge')">
+            咨询服务
           </button>
-          <button type="button" @click="router.push('/cms/content/process')">
-            工艺案例库
-          </button>
-          <button type="button" @click="router.push('/cms/content/quota')">
-            定额资料库
-          </button>
-          <button type="button" @click="router.push('/cms/content/policy')">
-            政策资讯
-          </button>
-          <button type="button" @click="router.push('/cms/audit/pending')">
-            审核管理
-          </button>
-          <button type="button" @click="router.push('/cms/crawler/result')">
-            政策采集
+          <button type="button" @click="router.push('/cms/crawler/source')">
+            政策采集管理
           </button>
           <button type="button" @click="router.push('/cms/statistics/content')">
             统计分析
