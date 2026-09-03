@@ -48,6 +48,8 @@ Authorization: Bearer {{token}}
   "internalFlag": false,
   "publicLevel": "SOCIAL",
   "pdfFileId": 1001,
+  "pdfSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "pdfSize": 1048576,
   "payload": {
     "UNIFIED_DEAL_CODE": "E4400002026GD0001",
     "NOTICE_NAME": "某安置房项目施工招标公告（调试）"

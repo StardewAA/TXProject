@@ -29,5 +29,9 @@ public class NoticeDetailRespVO extends NoticeRespVO {
     private LinkedHashMap<String, Object> payload;
     @Schema(description = "版式文件（PDF）file_id（版式形态；无则 null）")
     private Long pdfFileId;
+    @Schema(description = "版式文件（PDF）原文件哈希（SHA-256）")
+    private String pdfSha256;
+    @Schema(description = "版式文件（PDF）原文件大小（字节）")
+    private Long pdfSize;
 
 }

@@ -63,4 +63,10 @@ public class NoticeSaveReqVO {
     @Schema(description = "公告 PDF 原文件 file_id（必须保存；发布前必填，见 NoticeDetailRespVO 说明）")
     private Long pdfFileId;
 
+    @Schema(description = "公告 PDF 原文件哈希（SHA-256，可选；与 file_id 同源留存，红线 8 口径）")
+    private String pdfSha256;
+
+    @Schema(description = "公告 PDF 原文件大小（字节，可选）")
+    private Long pdfSize;
+
 }

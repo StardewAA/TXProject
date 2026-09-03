@@ -45,6 +45,10 @@ public class NoticeDO extends TenantBaseDO {
     private String fieldsJson;
     /** 版式文件（PDF）file_id（FileApi 对象主键；无则 null） */
     private Long pdfFileId;
+    /** 版式文件（PDF）原文件哈希（SHA-256，红线 8 口径） */
+    private String pdfSha256;
+    /** 版式文件（PDF）原文件大小（字节） */
+    private Long pdfSize;
     /** 乐观锁版本 */
     @Version
     private Integer version;

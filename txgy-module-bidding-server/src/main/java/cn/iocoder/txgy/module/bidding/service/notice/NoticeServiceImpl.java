@@ -223,6 +223,8 @@ public class NoticeServiceImpl implements NoticeService {
         notice.setInternalFlag(Boolean.TRUE.equals(reqVO.getInternalFlag()));
         notice.setPublicLevel(StringUtils.hasText(reqVO.getPublicLevel()) ? reqVO.getPublicLevel() : "SOCIAL");
         notice.setPdfFileId(reqVO.getPdfFileId());
+        notice.setPdfSha256(reqVO.getPdfSha256());
+        notice.setPdfSize(reqVO.getPdfSize());
     }
 
     private NoticeDO getNotice(Long id) {
@@ -324,6 +326,8 @@ public class NoticeServiceImpl implements NoticeService {
         vo.setContent(latest == null ? null : latest.getContent());
         vo.setContentVersion(latest == null ? null : latest.getVersion());
         vo.setPdfFileId(notice.getPdfFileId());
+        vo.setPdfSha256(notice.getPdfSha256());
+        vo.setPdfSize(notice.getPdfSize());
     }
 
     private Map<Long, String> latestContentsByNoticeIds(List<Long> noticeIds) {

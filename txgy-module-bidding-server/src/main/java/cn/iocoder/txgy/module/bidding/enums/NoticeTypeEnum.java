@@ -10,6 +10,11 @@ import cn.iocoder.txgy.module.bidding.api.vo.WinResultPublicityVO;
  *
  * <p>类型 → 权威数据集 VO 一一对应：详情/新建的 payload 必须按对应数据集的字段全集
  * 规整（"该有的字段一个不能少"，见 {@code NoticePayloadUtils}），字段名照录规范英文名称。
+ *
+ * <p><b>本期支持范围</b>（已登记类型仅以下 4 个工程域数据集）：招标公告与资格预审公告、
+ * 变更公告（工程）、中标候选人公示、中标结果公示。
+ * 政府采购/土地/矿权/产权等其余"公告公示类"数据集（见 VO数据规范·公告公示类）未在本期登记，
+ * 扩展方式：在本枚举登记新类型并给出对应 api/vo 数据集类 → 同步 NoticeTypeEnumTest/载荷用例。
  */
 public enum NoticeTypeEnum {
 
