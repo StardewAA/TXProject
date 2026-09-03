@@ -94,12 +94,26 @@
             <artifactId>txgy-spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- 规约自动化校验：架构/命名/注解约束（《招投标模块开发规范》对应章节），凡违规即令 mvn test 失败 -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.5.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <!-- 设置构建的 jar 包名 -->
         <finalName>${project.artifactId}</finalName>
         <plugins>
+            <!-- 规约测试执行器（JUnit Platform；ArchUnit 自定义引擎自动发现） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <!-- 打包 -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
