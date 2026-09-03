@@ -7,6 +7,7 @@ import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
+const PortalLayout = () => import('#/layouts/portal.vue');
 /** 全局404页面 */
 const fallbackNotFoundRoute: RouteRecordRaw = {
   component: () => import('#/views/_core/fallback/not-found.vue'),
@@ -106,6 +107,50 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: {
           title: $t('page.auth.login'),
         },
+      },
+    ],
+  },
+  {
+    component: PortalLayout,
+    meta: {
+      hideInBreadcrumb: true,
+      hideInMenu: true,
+      hideInTab: true,
+      title: '员工端',
+    },
+    name: 'Portal',
+    path: '/portal',
+    redirect: '/portal/home',
+    children: [
+      {
+        name: 'PortalHome',
+        path: 'home',
+        component: () => import('#/views/portal/home/index.vue'),
+        meta: { title: '首页', hideInMenu: true },
+      },
+      {
+        name: 'PortalRecruit',
+        path: 'recruit',
+        component: () => import('#/views/portal/recruit/index.vue'),
+        meta: { title: '招聘应聘', hideInMenu: true },
+      },
+      {
+        name: 'PortalTraining',
+        path: 'training',
+        component: () => import('#/views/portal/training/index.vue'),
+        meta: { title: '云培训学院', hideInMenu: true },
+      },
+      {
+        name: 'PortalBidding',
+        path: 'bidding',
+        component: () => import('#/views/portal/bidding/index.vue'),
+        meta: { title: '招标投标', hideInMenu: true },
+      },
+      {
+        name: 'PortalProfile',
+        path: 'profile',
+        component: () => import('#/views/portal/profile/index.vue'),
+        meta: { title: '个人中心', hideInMenu: true },
       },
     ],
   },
