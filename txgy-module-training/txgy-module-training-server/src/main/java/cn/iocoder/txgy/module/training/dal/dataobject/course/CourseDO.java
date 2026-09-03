@@ -65,9 +65,14 @@ public class CourseDO extends TenantBaseDO {
      */
     private String coverUrl;
     /**
-     * 课程级别：1 初级 2 中级 3 高级
+     * 课程级别：1 初级 2 中级 3 高级（保留兼容字段）
      */
     private Integer level;
+    /**
+     * 成长等级：APPRENTICE 新手 / JUNIOR 成长 / MIDDLE 骨干 / SENIOR 资深
+     * （对应资源中心四级成长体系 course_level）
+     */
+    private String courseLevel;
     /**
      * 课程学分
      */
@@ -81,6 +86,14 @@ public class CourseDO extends TenantBaseDO {
      */
     private String industry;
     /**
+     * 适用岗位/工种（JSON 数组字符串，如 ["管道工","防腐工"]）
+     */
+    private String applicablePosts;
+    /**
+     * 资源归属标识（对外部资源中心 owner_flag 的快照）
+     */
+    private String ownerFlag;
+    /**
      * 业务标签（JSON 数组字符串，如 ["岗前培训"]）
      */
     private String bizTags;
@@ -88,6 +101,14 @@ public class CourseDO extends TenantBaseDO {
      * 是否必修
      */
     private Boolean isRequired;
+    /**
+     * 是否复合课程（由多个子模块课程组合）
+     */
+    private Boolean isComposite;
+    /**
+     * 复合课程子模块标签（JSON 数组字符串，如 ["管道安装","防腐保温"]）
+     */
+    private String compositeTags;
     /**
      * 关联结课考试试卷 ID（模块三预留）
      */
@@ -128,6 +149,14 @@ public class CourseDO extends TenantBaseDO {
      * 最近提交时间
      */
     private LocalDateTime submittedAt;
+    /**
+     * 最近审核完成人 ID
+     */
+    private Long reviewerId;
+    /**
+     * 最近审核完成时间
+     */
+    private LocalDateTime reviewedAt;
     /**
      * 最近驳回原因（驳回必填）
      */

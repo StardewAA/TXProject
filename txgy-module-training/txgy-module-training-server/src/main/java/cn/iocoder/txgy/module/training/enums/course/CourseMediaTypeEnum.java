@@ -16,7 +16,8 @@ public enum CourseMediaTypeEnum {
 
     DOCUMENT(1, "文档"),
     VIDEO(2, "视频"),
-    IMAGE(3, "图片");
+    IMAGE(3, "图片"),
+    VR(4, "VR/3D仿真");
 
     private final Integer type;
     private final String name;

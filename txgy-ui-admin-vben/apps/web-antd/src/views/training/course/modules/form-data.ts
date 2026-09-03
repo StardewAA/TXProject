@@ -1,7 +1,7 @@
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { z } from '#/adapter/form';
-import { COURSE_LEVEL_OPTIONS } from '../data';
+import { COURSE_LEVEL_OPTIONS, GROWTH_LEVEL_OPTIONS } from '../data';
 
 /** 新增/修改课程的表单 */
 export function useFormSchema(): VbenFormSchema[] {
@@ -56,7 +56,16 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       componentProps: {
         options: COURSE_LEVEL_OPTIONS,
-        placeholder: '请选择课程级别',
+        placeholder: '请选择课程级别（旧版 1/2/3）',
+      },
+    },
+    {
+      fieldName: 'courseLevel',
+      label: '成长等级',
+      component: 'Select',
+      componentProps: {
+        options: GROWTH_LEVEL_OPTIONS,
+        placeholder: '请选择成长等级（四级成长体系）',
       },
     },
     {
@@ -84,6 +93,22 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Input',
       componentProps: {
         placeholder: '如：防腐保温',
+      },
+    },
+    {
+      fieldName: 'applicablePosts',
+      label: '适用岗位/工种',
+      component: 'Input',
+      componentProps: {
+        placeholder: 'JSON 数组，如 ["管道工","防腐工"]',
+      },
+    },
+    {
+      fieldName: 'ownerFlag',
+      label: '资源归属',
+      component: 'Input',
+      componentProps: {
+        placeholder: '如 DEPT_AI_FACTORY（资源中心 owner_flag 快照）',
       },
     },
     {
@@ -115,6 +140,33 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'isRequired',
       label: '是否必修',
       component: 'Switch',
+    },
+    {
+      fieldName: 'isComposite',
+      label: '复合课程',
+      component: 'Switch',
+    },
+    {
+      fieldName: 'compositeTags',
+      label: '复合子模块标签',
+      component: 'Input',
+      dependencies: {
+        triggerFields: ['isComposite'],
+        show: (values: Record<string, any>) => Boolean(values.isComposite),
+      },
+      componentProps: {
+        placeholder: 'JSON 数组，如 ["管道安装","防腐保温"]',
+      },
+    },
+    {
+      fieldName: 'examId',
+      label: '结课考试',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        placeholder: '暂无（模块三试卷中心接入后可选）',
+        options: [],
+      },
     },
     {
       fieldName: 'sort',

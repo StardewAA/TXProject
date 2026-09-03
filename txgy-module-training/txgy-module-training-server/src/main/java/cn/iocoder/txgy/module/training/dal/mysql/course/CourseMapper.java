@@ -17,6 +17,9 @@ public interface CourseMapper extends BaseMapperX<CourseDO> {
                 .eqIfPresent(CourseDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(CourseDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(CourseDO::getLecturer, reqVO.getLecturer())
+                .eqIfPresent(CourseDO::getCourseLevel, reqVO.getCourseLevel())
+                .eqIfPresent(CourseDO::getIsRequired, reqVO.getIsRequired())
+                .eqIfPresent(CourseDO::getIsComposite, reqVO.getIsComposite())
                 .eqIfPresent(CourseDO::getIsCurrent, reqVO.getIsCurrent())
                 .orderByDesc(CourseDO::getId));
     }
@@ -29,6 +32,14 @@ public interface CourseMapper extends BaseMapperX<CourseDO> {
                 .eq(CourseDO::getRootId, rootId)
                 .eq(CourseDO::getIsCurrent, true)
                 .last("limit 1"));
+    }
+
+    /**
+     * 查询某分类下未被删除的课程数量（分类删除保护校验）
+     */
+    default Long selectCountByCategoryId(Long categoryId) {
+        return selectCount(new LambdaQueryWrapperX<CourseDO>()
+                .eq(CourseDO::getCategoryId, categoryId));
     }
 
 }

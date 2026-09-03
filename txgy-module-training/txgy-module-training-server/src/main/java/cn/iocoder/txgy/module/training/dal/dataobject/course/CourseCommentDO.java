@@ -43,9 +43,25 @@ public class CourseCommentDO extends TenantBaseDO {
      * 评论用户姓名快照
      */
     private String userName;
+    /**
+     * 状态：1 正常 2 已删除（治理删除软删留痕，保留原文展示）
+     */
+    private Integer status;
+    /**
+     * 删除人 ID（治理删除）
+     */
+    private Long deletedBy;
+    /**
+     * 删除时间（治理删除）
+     */
+    private java.time.LocalDateTime deletedAt;
+    /**
+     * 删除原因（管理端治理，如"违规内容"）
+     */
+    private String deleteReason;
 
     /**
-     * 逻辑删除标记（框架逻辑删除）
+     * 逻辑删除标记（框架逻辑删除，治理删除时保持未物理删除）
      */
     @TableLogic
     private Boolean deleted;

@@ -48,6 +48,10 @@ public interface CourseService {
 
     List<CourseDO> getVersionList(Long rootId);
 
+    // ========== 业务属性配置（23 课程业务属性配置） ==========
+
+    void updateBusinessAttributes(Long id, CourseAttributesReqVO attrReqVO);
+
     // ========== 媒资绑定 ==========
 
     Long createMedia(CourseMediaSaveReqVO createReqVO);
@@ -56,13 +60,29 @@ public interface CourseService {
 
     void deleteMedia(Long id);
 
+    /**
+     * 媒资批量排序（按传入顺序重排）
+     */
+    void sortMedia(Long courseId, List<Long> mediaIds);
+
     List<CourseMediaDO> getMediaList(Long courseId);
 
     // ========== 课程评论 ==========
 
     Long createComment(CourseCommentSaveReqVO createReqVO);
 
-    void deleteComment(Long id);
+    /**
+     * 评论治理删除（软删留痕，管理端）
+     *
+     * @param id     评论 ID
+     * @param reason 删除原因（可选）
+     */
+    void deleteComment(Long id, String reason);
+
+    /**
+     * 删除自己的评论（学员端，校验评论归属）
+     */
+    void deleteMyComment(Long id);
 
     PageResult<CourseCommentDO> getCommentPage(CourseCommentPageReqVO pageReqVO);
 
