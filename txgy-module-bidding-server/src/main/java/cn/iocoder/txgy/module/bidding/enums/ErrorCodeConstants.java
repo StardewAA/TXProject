@@ -48,6 +48,9 @@ public interface ErrorCodeConstants {
     ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_106_009, "文件参数不合法");
     ErrorCode CERT_ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_060_106_010, "预警记录不存在");
     ErrorCode CERT_ALERT_RECORD_MODIFIED = new ErrorCode(1_060_106_011, "预警记录已被他人修改，请刷新");
+    ErrorCode CERT_VERIFY_IN_PROGRESS = new ErrorCode(1_060_106_012, "验真进行中，请稍后刷新");
+    ErrorCode CERT_VERIFY_GATEWAY_UNAVAILABLE = new ErrorCode(1_060_106_013, "核验通道未就绪，请联系管理员开通");
+    ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_106_014, "验真渠道不合法");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");

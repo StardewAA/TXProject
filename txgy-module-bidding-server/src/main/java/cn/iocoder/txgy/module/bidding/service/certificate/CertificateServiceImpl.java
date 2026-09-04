@@ -276,9 +276,10 @@ public class CertificateServiceImpl implements CertificateService {
             log.setOpIp(opIp);
             log.setBatchId(batchId);
             log.setPrevHash(prev);
-            String recordHash = sha256(certId + "|" + change.field + "|" + change.oldValue + "|"
-                    + change.newValue + "|" + typeName + "|" + sourceName + "|" + (opIp == null ? "" : opIp)
-                    + "|" + (batchId == null ? "" : batchId) + "|" + prev);
+            // 记录哈希：与验真/其余域共用 CertHashChain 同一公式（v3.3 §13）
+            String recordHash = CertHashChain.recordHash(certId, change.field, change.oldValue, change.newValue,
+                    typeName, sourceName, opIp == null ? "" : opIp,
+                    batchId == null ? "" : batchId, prev);
             log.setRecordHash(recordHash);
             certChangeLogMapper.insert(log);
             prev = recordHash;
