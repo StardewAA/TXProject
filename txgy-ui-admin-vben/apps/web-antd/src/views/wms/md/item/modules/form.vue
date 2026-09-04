@@ -13,12 +13,14 @@ import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
 import SkuForm from './sku-form.vue';
+import QualityReportPanel from './quality-report-panel.vue';
 
 defineOptions({ name: 'WmsItemForm' });
 
 const emit = defineEmits(['success']);
 const formData = ref<WmsItemApi.Item>();
 const skuFormRef = ref<any>();
+const initialQualityReport = ref<any>();
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['商品'])
@@ -59,6 +61,7 @@ const [Modal, modalApi] = useVbenModal({
     // 提交表单
     const data = (await formApi.getValues()) as WmsItemApi.Item;
     data.skus = skuFormRef.value?.getRows() || [];
+    if (!formData.value?.id) data.initialQualityReport = initialQualityReport.value;
     try {
       await (formData.value?.id ? updateItem(data) : createItem(data));
       // 关闭并提示
@@ -72,6 +75,7 @@ const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;
+      initialQualityReport.value = undefined;
       return;
     }
     formApi.setState({ schema: useFormSchema(formApi) });
@@ -97,6 +101,12 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-3/4">
     <Form class="mx-4" />
+    <QualityReportPanel
+      :current="formData?.currentQualityReport"
+      :initial="initialQualityReport"
+      :item-id="formData?.id"
+      @change="initialQualityReport = $event"
+    />
     <SkuForm ref="skuFormRef" class="mx-4 mt-4" />
   </Modal>
 </template>

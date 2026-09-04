@@ -16,11 +16,13 @@ import cn.iocoder.txgy.module.mes.dal.dataobject.md.client.MesMdClientDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.unitmeasure.MesMdUnitMeasureDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.vendor.MesMdVendorDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
 import cn.iocoder.txgy.module.mes.service.md.client.MesMdClientService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.unitmeasure.MesMdUnitMeasureService;
 import cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService;
+import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -55,6 +57,8 @@ public class MesProWorkOrderController {
     private MesMdVendorService vendorService;
     @Resource
     private MesMdUnitMeasureService unitMeasureService;
+    @Resource
+    private MesProProjectService projectService;
 
     @PostMapping("/create")
     @Operation(summary = "创建生产工单")
@@ -157,8 +161,12 @@ public class MesProWorkOrderController {
                 convertSet(itemMap.values(), MesMdItemDO::getUnitMeasureId));
         Map<Long, MesProWorkOrderDO> parentMap = workOrderService.getWorkOrderMap(
                 convertSet(list, MesProWorkOrderDO::getParentId));
+        Map<Long, MesProProjectDO> projectMap = projectService.getProjectMap(
+                convertSet(list, MesProWorkOrderDO::getProjectId));
         // 2. 拼接 VO（单位名称从产品关联的 item 获得）
         return BeanUtils.toBean(list, MesProWorkOrderRespVO.class, vo -> {
+            MapUtils.findAndThen(projectMap, vo.getProjectId(),
+                    project -> vo.setProjectName(project.getName()).setProjectCode(project.getCode()));
             MapUtils.findAndThen(itemMap, vo.getProductId(), item -> {
                 vo.setProductName(item.getName()).setProductCode(item.getCode())
                         .setProductSpecification(item.getSpecification());
