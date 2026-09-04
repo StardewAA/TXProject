@@ -110,10 +110,12 @@ txgy:
     enable: true
     ignore-urls:
 
-  # 检索组件（notice 全文检索，规范 4.6）：默认关闭走数据库兜底查询（带关键词即报 101005）；
-  # 联调/生产开启：bidding.es.enabled=true + bidding.es.uris 指向真实集群（索引 bidding_notice 自动建）
+# 检索组件（notice 全文检索，规范 4.6）：es 开关放根级 bidding: 下，与 EsNoticeSearchEngine 的
+# @ConditionalOnProperty(prefix=bidding.es) / @Value(bidding.es.uris) 读取键一致
+# enabled=true 启用 ES 引擎（原生 HTTP，失败重试 3 次，索引 bidding_notice）；无集群时置 false 走数据库兜底
+bidding:
   es:
-    enabled: false
+    enabled: true
     uris: http://127.0.0.1:9200
 
 debug: false
