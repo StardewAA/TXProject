@@ -119,4 +119,25 @@ public interface ErrorCodeConstants {
     // ========== 上岗资格核查（qualification）1-061-015-000 ==========
     ErrorCode PLAN_QUALIFICATION_USER_NOT_EXISTS = new ErrorCode(1_061_015_000, "人员不存在或已停用");
 
+    // ========== 学员学习中心（learner learning）1-061-016-000 ==========
+    ErrorCode LEARNER_TASK_NOT_EXISTS = new ErrorCode(1_061_016_000, "学习任务不存在");
+    ErrorCode LEARNER_TASK_DUPLICATE = new ErrorCode(1_061_016_001, "该学员已存在该课程学习任务，请勿重复添加");
+    ErrorCode LEARNER_COURSE_NOT_ONLINE = new ErrorCode(1_061_016_002, "仅【已上架】课程可发起学习");
+    ErrorCode LEARNER_COURSE_MEDIA_NOT_SUPPORT = new ErrorCode(1_061_016_003, "该媒资类型暂不支持在线学习");
+    ErrorCode LEARNER_SESSION_NOT_EXISTS = new ErrorCode(1_061_016_004, "学习会话不存在");
+    ErrorCode LEARNER_SESSION_ENDED = new ErrorCode(1_061_016_005, "学习会话已结束");
+    ErrorCode LEARNER_SESSION_ACTIVE_EXISTS = new ErrorCode(1_061_016_006, "存在进行中的学习会话，请先结束后再开始新的学习");
+    ErrorCode LEARNER_VERIFY_ANSWER_WRONG = new ErrorCode(1_061_016_007, "验证答案错误，请重试");
+    ErrorCode LEARNER_VERIFY_FAILED_LIMIT = new ErrorCode(1_061_016_008, "验证失败次数过多，本次会话判定无效");
+    ErrorCode LEARNER_VERIFY_NOT_REQUIRED = new ErrorCode(1_061_016_009, "当前会话无需验证");
+    ErrorCode LEARNER_CHECKIN_NOT_ALLOW = new ErrorCode(1_061_016_010, "本会话累计学习不足 15 秒，暂不支持打卡");
+    ErrorCode LEARNER_LIVE_ROOM_NOT_EXISTS = new ErrorCode(1_061_016_011, "直播房间不存在");
+    ErrorCode LEARNER_LIVE_ROOM_STATUS_INVALID = new ErrorCode(1_061_016_012, "直播房间当前状态不允许该操作");
+    ErrorCode LEARNER_LIVE_NOT_STARTED = new ErrorCode(1_061_016_013, "直播尚未开始，无法进入");
+    ErrorCode LEARNER_LIVE_ENDED = new ErrorCode(1_061_016_014, "直播已结束");
+    ErrorCode LEARNER_DOC_TOTAL_PAGES_INVALID = new ErrorCode(1_061_016_015, "文档总页数不合法");
+    ErrorCode LEARNER_CONFIG_KEY_INVALID = new ErrorCode(1_061_016_016, "学习配置项不合法");
+    ErrorCode LEARNER_SESSION_LOCKED = new ErrorCode(1_061_016_017, "学习会话异常锁定，请结束当前会话后重试");
+    ErrorCode LEARNER_DANMAKU_DISABLED = new ErrorCode(1_061_016_018, "弹幕功能未开启，暂时无法发送");
+
 }
