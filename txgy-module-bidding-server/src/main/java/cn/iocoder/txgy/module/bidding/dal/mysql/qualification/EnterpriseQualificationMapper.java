@@ -5,17 +5,17 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.qualification.EnterpriseQua
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.time.LocalDate;
+import java.util.List;
+
 /**
- * 企业资质主档 Mapper（UK 判重；租户条件平台拦截器自动拼接）。
+ * 企业资质主档 Mapper（UK 判重 + QUAL_EXPIRY 扫描候选）。
  *
- * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 15-1（UK：tenant+serial+category+grade+cert_no）。
+ * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 15-1（UK）＋§十五-到期预警复用（valid_to 并入扫描）。
  */
 @Mapper
 public interface EnterpriseQualificationMapper extends BaseMapperX<EnterpriseQualificationDO> {
 
-    /**
-     * 同企业同序列/类别/等级证书编号判重（建档幂等）。
-     */
     default EnterpriseQualificationDO selectByCertNo(Long entId, String qualSerial, String qualCategory,
                                                     String qualGrade, String certNo) {
         return selectOne(new LambdaQueryWrapper<EnterpriseQualificationDO>()
@@ -25,5 +25,12 @@ public interface EnterpriseQualificationMapper extends BaseMapperX<EnterpriseQua
                 .eq(EnterpriseQualificationDO::getQualGrade, qualGrade)
                 .eq(EnterpriseQualificationDO::getCertNo, certNo)
                 .last("LIMIT 1"));
+    }
+
+    /** 未到期但进入预警窗口（valid_to ∈ (today, today+maxDays]）的资质主档（QUAL_EXPIRY 扫描源一）。 */
+    default List<EnterpriseQualificationDO> selectExpiringCandidates(LocalDate today, int maxDays) {
+        return selectList(new LambdaQueryWrapper<EnterpriseQualificationDO>()
+                .gt(EnterpriseQualificationDO::getValidTo, today)
+                .le(EnterpriseQualificationDO::getValidTo, today.plusDays(maxDays)));
     }
 }

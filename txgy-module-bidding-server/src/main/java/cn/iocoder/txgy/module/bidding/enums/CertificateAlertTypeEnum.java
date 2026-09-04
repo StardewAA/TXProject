@@ -12,5 +12,7 @@ public enum CertificateAlertTypeEnum {
     /** 年检预警（next_review_date） */
     REVIEW,
     /** 续期预警 */
-    RENEWAL
+    RENEWAL,
+    /** 资质类到期（v3.3 §十五：企业资质 valid_to / 安许 valid_to / 人员注册 reg_valid_to；记录行填 ref_* 定位） */
+    QUAL_EXPIRY
 }

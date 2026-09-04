@@ -20,8 +20,14 @@ public class CertAlertRecordDO extends TenantBaseDO {
 
     /** 主键（雪花 ID；=设计 alert_id） */
     private Long id;
-    /** 关联证照 certificate_info.id */
+    /** 关联证照 certificate_info.id（EXPIRY 等证照类填；QUAL_EXPIRY 资质类置 NULL，用 ref_* 定位，DDL 2026-09-10） */
     private Long certId;
+    /** 业务对象大类 code（QUAL_EXPIRY 用）：QUAL 企业资质/SAFETY_PERMIT 安许/STAFF 资质人员 */
+    private String refType;
+    /** 业务对象主键（qual_id/permit_id/staff_id） */
+    private Long refId;
+    /** 业务对象显示名（脱敏） */
+    private String refName;
     /** 预警类型 code：EXPIRY/REVIEW/RENEWAL */
     private String alertType;
     /** 档位 code：INFO/WARNING/CRITICAL */

@@ -28,4 +28,13 @@ public interface QualificationStaffConfigMapper extends BaseMapperX<Qualificatio
                 .and(w -> w.isNull("reg_valid_to").or().ge("reg_valid_to", asOf))
                 .groupBy("staff_role"));
     }
+
+
+    /** 人员注册证进入预警窗口（reg_valid_to ∈ (today, today+maxDays]；NULL 即不满足已单独治理，QUAL_EXPIRY 扫描源三）。 */
+    default List<QualificationStaffConfigDO> selectExpiringStaff(LocalDate today, int maxDays) {
+        return selectList(new QueryWrapper<QualificationStaffConfigDO>()
+                .isNotNull("reg_valid_to")
+                .gt("reg_valid_to", today)
+                .le("reg_valid_to", today.plusDays(maxDays)));
+    }
 }
