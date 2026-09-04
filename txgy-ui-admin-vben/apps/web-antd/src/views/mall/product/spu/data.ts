@@ -5,12 +5,17 @@ import type { MallSpuApi } from '#/api/mall/product/spu';
 import { handleTree, treeToString } from '@vben/utils';
 
 import { getCategoryList } from '#/api/mall/product/category';
+import { getShopList } from '#/api/mall/product/shop';
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 关联数据 */
 let categoryList: any[] = [];
+let shopList: any[] = [];
 getCategoryList({}).then((data) => {
   categoryList = handleTree(data, 'id', 'parentId', 'children');
+});
+getShopList().then((data) => {
+  shopList = data;
 });
 
 /** 列表的搜索表单 */
@@ -34,6 +39,18 @@ export function useGridFormSchema(): VbenFormSchema[] {
         allowClear: true,
         options: categoryList,
         fieldNames: { label: 'name', value: 'id', children: 'children' },
+      },
+    },
+    {
+      fieldName: 'shopId',
+      label: '所属店铺',
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => shopList,
+        labelField: 'name',
+        valueField: 'id',
+        allowClear: true,
+        placeholder: '请选择所属店铺',
       },
     },
     {
@@ -82,6 +99,14 @@ export function useGridColumns(
       minWidth: 150,
       formatter: ({ row }) => {
         return treeToString(categoryList, row.categoryId);
+      },
+    },
+    {
+      field: 'shopId',
+      title: '所属店铺',
+      minWidth: 150,
+      formatter: ({ cellValue }) => {
+        return shopList.find((item) => item.id === cellValue)?.name ?? '平台自营';
       },
     },
     {

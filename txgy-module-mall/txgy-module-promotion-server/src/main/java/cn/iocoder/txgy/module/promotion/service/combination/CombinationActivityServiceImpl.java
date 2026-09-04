@@ -106,7 +106,7 @@ public class CombinationActivityServiceImpl implements CombinationActivityServic
         }
 
         // 2. 校验商品 sku 都存在
-        List<ProductSkuRespDTO> skus = productSkuApi.getSkuListBySpuId(singletonList(spuId)).getCheckedData();
+        List<ProductSkuRespDTO> skus = productSkuApi.getSkuListBySpuId(singletonList(spuId));
         Map<Long, ProductSkuRespDTO> skuMap = convertMap(skus, ProductSkuRespDTO::getId);
         products.forEach(product -> {
             if (!skuMap.containsKey(product.getSkuId())) {
