@@ -20,27 +20,26 @@ defineOptions({ name: 'TrainingCoopArchive' });
 
 const [Grid] = useVbenVxeGrid({
   formOptions: {
-    schema: (): VbenFormSchema[] =>
-      [
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
-          fieldName: 'studentName',
-          label: '学员姓名',
-        },
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入院校名称' },
-          fieldName: 'schoolName',
-          label: '院校名称',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: STUDENT_STAGE_OPTIONS },
-          fieldName: 'stage',
-          label: '学员阶段',
-        },
-      ] satisfies VbenFormSchema[],
+    schema: [
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
+        fieldName: 'studentName',
+        label: '学员姓名',
+      },
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入院校名称' },
+        fieldName: 'schoolName',
+        label: '院校名称',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: STUDENT_STAGE_OPTIONS },
+        fieldName: 'stage',
+        label: '学员阶段',
+      },
+    ] satisfies VbenFormSchema[],
   },
   gridOptions: {
     columns: [

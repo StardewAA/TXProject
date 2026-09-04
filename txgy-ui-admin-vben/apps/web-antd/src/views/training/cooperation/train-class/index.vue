@@ -33,33 +33,32 @@ defineOptions({ name: 'TrainingCoopTrainClass' });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: (): VbenFormSchema[] =>
-      [
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入班级名称' },
-          fieldName: 'name',
-          label: '班级名称',
-        },
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入合作院校' },
-          fieldName: 'schoolName',
-          label: '合作院校',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: TRAIN_CLASS_TYPE_OPTIONS },
-          fieldName: 'type',
-          label: '班级类型',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: TRAIN_CLASS_STATUS_OPTIONS },
-          fieldName: 'status',
-          label: '状态',
-        },
-      ] satisfies VbenFormSchema[],
+    schema: [
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入班级名称' },
+        fieldName: 'name',
+        label: '班级名称',
+      },
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入合作院校' },
+        fieldName: 'schoolName',
+        label: '合作院校',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: TRAIN_CLASS_TYPE_OPTIONS },
+        fieldName: 'type',
+        label: '班级类型',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: TRAIN_CLASS_STATUS_OPTIONS },
+        fieldName: 'status',
+        label: '状态',
+      },
+    ] satisfies VbenFormSchema[],
   },
   gridOptions: {
     columns: [

@@ -24,27 +24,26 @@ defineOptions({ name: 'TrainingCoopSubmit' });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: (): VbenFormSchema[] =>
-      [
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
-          fieldName: 'contestName',
-          label: '大赛名称',
-        },
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
-          fieldName: 'studentName',
-          label: '学员姓名',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: SUBMIT_STATUS_OPTIONS },
-          fieldName: 'status',
-          label: '状态',
-        },
-      ] satisfies VbenFormSchema[],
+    schema: [
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
+        fieldName: 'contestName',
+        label: '大赛名称',
+      },
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
+        fieldName: 'studentName',
+        label: '学员姓名',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: SUBMIT_STATUS_OPTIONS },
+        fieldName: 'status',
+        label: '状态',
+      },
+    ] satisfies VbenFormSchema[],
   },
   gridOptions: {
     columns: [

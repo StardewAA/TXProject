@@ -30,27 +30,26 @@ defineOptions({ name: 'TrainingCoopContest' });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: (): VbenFormSchema[] =>
-      [
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
-          fieldName: 'name',
-          label: '大赛名称',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: CONTEST_TYPE_OPTIONS },
-          fieldName: 'type',
-          label: '大赛类型',
-        },
-        {
-          component: 'Select',
-          componentProps: { allowClear: true, options: CONTEST_STATUS_OPTIONS },
-          fieldName: 'status',
-          label: '状态',
-        },
-      ] satisfies VbenFormSchema[],
+    schema: [
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
+        fieldName: 'name',
+        label: '大赛名称',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: CONTEST_TYPE_OPTIONS },
+        fieldName: 'type',
+        label: '大赛类型',
+      },
+      {
+        component: 'Select',
+        componentProps: { allowClear: true, options: CONTEST_STATUS_OPTIONS },
+        fieldName: 'status',
+        label: '状态',
+      },
+    ] satisfies VbenFormSchema[],
   },
   gridOptions: {
     columns: [

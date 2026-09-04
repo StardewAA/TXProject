@@ -19,33 +19,32 @@ defineOptions({ name: 'TrainingCoopAward' });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: (): VbenFormSchema[] =>
-      [
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
-          fieldName: 'contestName',
-          label: '大赛名称',
+    schema: [
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入大赛名称' },
+        fieldName: 'contestName',
+        label: '大赛名称',
+      },
+      {
+        component: 'Input',
+        componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
+        fieldName: 'studentName',
+        label: '学员姓名',
+      },
+      {
+        component: 'Select',
+        componentProps: {
+          allowClear: true,
+          options: [
+            { label: '未公示', value: 0 },
+            { label: '已公示', value: 1 },
+          ],
         },
-        {
-          component: 'Input',
-          componentProps: { allowClear: true, placeholder: '请输入学员姓名' },
-          fieldName: 'studentName',
-          label: '学员姓名',
-        },
-        {
-          component: 'Select',
-          componentProps: {
-            allowClear: true,
-            options: [
-              { label: '未公示', value: 0 },
-              { label: '已公示', value: 1 },
-            ],
-          },
-          fieldName: 'published',
-          label: '公示状态',
-        },
-      ] satisfies VbenFormSchema[],
+        fieldName: 'published',
+        label: '公示状态',
+      },
+    ] satisfies VbenFormSchema[],
   },
   gridOptions: {
     columns: [
