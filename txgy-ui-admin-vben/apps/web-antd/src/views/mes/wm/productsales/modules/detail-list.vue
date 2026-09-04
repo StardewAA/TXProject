@@ -6,7 +6,7 @@ import type { MesWmProductSalesDetailApi } from '#/api/mes/wm/productsales/detai
 
 import { computed, watch } from 'vue';
 
-import { message } from 'ant-design-vue';
+import { message, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteProductSalesDetail } from '#/api/mes/wm/productsales/detail';
@@ -76,6 +76,15 @@ watch(
 <template>
   <div class="px-4 py-2">
     <Grid>
+      <template #pollution="{ row }">
+        <Tag v-if="row.pollutionStatus === 'POLLUTED'" color="error">
+          有污染{{ row.pollutionLocation ? `·${row.pollutionLocation}` : '' }}
+        </Tag>
+        <Tag v-else-if="row.pollutionStatus === 'CLEAN'" color="success">
+          无污染
+        </Tag>
+        <span v-else>-</span>
+      </template>
       <template #actions="{ row }">
         <TableAction
           :actions="[
