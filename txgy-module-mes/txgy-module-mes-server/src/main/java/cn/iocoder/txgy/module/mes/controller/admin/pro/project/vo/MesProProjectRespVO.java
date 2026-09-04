@@ -41,6 +41,39 @@ public class MesProProjectRespVO {
     @DictFormat(DictTypeConstants.MES_PRO_PROJECT_STATUS)
     private Integer status;
 
+    @Schema(description = "项目优先级", example = "3")
+    @ExcelProperty(value = "项目优先级", converter = DictConvert.class)
+    @DictFormat(DictTypeConstants.MES_PRO_PROJECT_PRIORITY)
+    private Integer priority;
+
+    @Schema(description = "负责人", example = "张三")
+    @ExcelProperty("负责人")
+    private String owner;
+
+    @Schema(description = "责任部门", example = "生产管理部")
+    @ExcelProperty("责任部门")
+    private String dept;
+
+    @Schema(description = "计划开始时间", example = "2026-09-01 00:00:00")
+    @ExcelProperty("计划开始时间")
+    private LocalDateTime planStartTime;
+
+    @Schema(description = "计划结束时间", example = "2026-12-31 00:00:00")
+    @ExcelProperty("计划结束时间")
+    private LocalDateTime planEndTime;
+
+    @Schema(description = "实际开始时间", example = "2026-09-05 00:00:00")
+    @ExcelProperty("实际开始时间")
+    private LocalDateTime actualStartTime;
+
+    @Schema(description = "实际结束时间", example = "2026-12-28 00:00:00")
+    @ExcelProperty("实际结束时间")
+    private LocalDateTime actualEndTime;
+
+    @Schema(description = "工期天数", example = "120")
+    @ExcelProperty("工期(天)")
+    private Integer durationDays;
+
     @Schema(description = "备注", example = "备注")
     @ExcelProperty("备注")
     private String remark;
