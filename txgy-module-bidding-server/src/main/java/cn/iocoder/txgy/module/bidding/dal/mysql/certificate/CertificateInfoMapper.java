@@ -5,6 +5,9 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertificateInfo
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.time.LocalDate;
+import java.util.List;
+
 /**
  * 证照台账 Mapper。
  *
@@ -21,5 +24,18 @@ public interface CertificateInfoMapper extends BaseMapperX<CertificateInfoDO> {
         return selectOne(new LambdaQueryWrapper<CertificateInfoDO>()
                 .eq(CertificateInfoDO::getCertNo, certNo)
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * 到期预警候选证照：台账状态 ACTIVE/EXPIRING_SOON、有效期内且有效至落在
+     * (today, today+maxDays] 窗口（v3.3 §二 valid_to 驱动到期预警扫描；§九 thresholds 上限）。
+     */
+    default List<CertificateInfoDO> selectExpiringCandidates(LocalDate today, int maxDays) {
+        return selectList(new LambdaQueryWrapper<CertificateInfoDO>()
+                .in(CertificateInfoDO::getCertStatus, "ACTIVE", "EXPIRING_SOON")
+                .isNotNull(CertificateInfoDO::getValidTo)
+                .gt(CertificateInfoDO::getValidTo, today)
+                .le(CertificateInfoDO::getValidTo, today.plusDays(maxDays))
+                .orderByAsc(CertificateInfoDO::getValidTo));
     }
 }

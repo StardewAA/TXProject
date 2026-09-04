@@ -46,6 +46,8 @@ public interface ErrorCodeConstants {
     ErrorCode CERT_FILE_HASH_DUPLICATE = new ErrorCode(1_060_106_007, "同证照已存在相同哈希的文件，禁止重复上传");
     ErrorCode CERT_FILE_VERSION_CONFLICT = new ErrorCode(1_060_106_008, "文件版本已存在（并发冲突），请刷新后重试");
     ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_106_009, "文件参数不合法");
+    ErrorCode CERT_ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_060_106_010, "预警记录不存在");
+    ErrorCode CERT_ALERT_RECORD_MODIFIED = new ErrorCode(1_060_106_011, "预警记录已被他人修改，请刷新");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
