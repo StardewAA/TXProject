@@ -916,7 +916,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      */
     private void registerErpTaskCompletedNotification(ProcessInstance instance, Task task, Long userId, String result) {
         if (!ObjectUtils.equalsAny(instance.getProcessDefinitionKey(),
-                "erp-purchase-order-approval", "erp-sale-order-approval")) {
+                "erp-purchase-order-approval", "erp-sale-order-approval")
+                || "StartUserNode".equals(task.getTaskDefinitionKey())) {
             return;
         }
         BpmMessageSendWhenTaskCompletedReqDTO message = new BpmMessageSendWhenTaskCompletedReqDTO()
