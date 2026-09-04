@@ -35,6 +35,10 @@ public class SecurityConfiguration {
                 // 资源中心：文档预览 / 视频播放直出（携带 @PermitAll 双保险，供 <iframe>/<video> 匿名访问）
                 registry.requestMatchers("/training/document/preview").permitAll()
                         .requestMatchers("/training/video/play").permitAll();
+                // 模块九：证书公开验真免登录公共接口（97，H5 独立页面）
+                // 注意：框架对 controller.admin 包统一加了 /admin-api 前缀，匹配需带前缀
+                registry.requestMatchers("/admin-api/training/analytics/cert-verify/public").permitAll()
+                        .requestMatchers("/training/analytics/cert-verify/public").permitAll();
             }
 
         };

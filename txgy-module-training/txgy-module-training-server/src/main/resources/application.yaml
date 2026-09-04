@@ -53,6 +53,9 @@ txgy:
     ignore-urls:
       - /training/document/preview
       - /training/video/play
+      # 模块九：证书公开验真免登录接口（公共 H5 无租户头，两种前缀写法都注册以防框架差异）
+      - /training/analytics/cert-verify/public
+      - /admin-api/training/analytics/cert-verify/public
   # 资源中心本地文件存储根目录（容器内通过 RESOURCE_UPLOAD_DIR=/app/uploads 覆盖）
   resource:
     upload-dir: ${RESOURCE_UPLOAD_DIR:./uploads}
