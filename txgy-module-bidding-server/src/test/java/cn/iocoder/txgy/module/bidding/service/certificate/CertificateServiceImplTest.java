@@ -1,6 +1,9 @@
 package cn.iocoder.txgy.module.bidding.service.certificate;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificatePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateSaveReqVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertChangeLogDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertificateInfoDO;
@@ -9,12 +12,14 @@ import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertificateInfoMappe
 import cn.iocoder.txgy.module.bidding.enums.CertificateChangeSourceEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateChangeTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateStatusEnum;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -215,6 +220,48 @@ class CertificateServiceImplTest {
 
         verify(certificateInfoMapper, never()).updateById(any(CertificateInfoDO.class));
         verify(certChangeLogMapper, never()).insert(any(CertChangeLogDO.class));
+    }
+
+    @Test
+    void get_ok_mapsDetailWithVersion() {
+        CertificateInfoDO db = certOf(7L, "XZ-2026-001", CertificateStatusEnum.ACTIVE);
+        db.setVersion(4);
+        db.setECertIdent("ZZBH1234567890");
+        when(certificateInfoMapper.selectById(7L)).thenReturn(db);
+
+        CertificateRespVO resp = service.getCertificate(7L);
+
+        assertEquals(7L, resp.getId());
+        assertEquals(Integer.valueOf(4), resp.getVersion(), "详情应回传乐观锁版本供更新");
+        assertEquals("ZZBH1234567890", resp.getECertIdent());
+    }
+
+    @Test
+    void get_notExistsThrows() {
+        when(certificateInfoMapper.selectById(7L)).thenReturn(null);
+        ServiceException e = assertThrows(ServiceException.class, () -> service.getCertificate(7L));
+        assertEquals(Integer.valueOf(1_060_106_000), e.getCode());
+    }
+
+    @Test
+    void page_mapsRecordsAndTotal() {
+        CertificateInfoDO a = certOf(1L, "XZ-2026-001", CertificateStatusEnum.ACTIVE);
+        a.setVersion(0);
+        CertificateInfoDO b = certOf(2L, "XZ-2026-002", CertificateStatusEnum.EXPIRED);
+        b.setVersion(1);
+        Page<CertificateInfoDO> dbPage = new Page<>(1, 10, 2);
+        dbPage.setRecords(new ArrayList<>(List.of(a, b)));
+        when(certificateInfoMapper.selectPage(any(Page.class), any())).thenReturn(dbPage);
+
+        CertificatePageReqVO reqVO = new CertificatePageReqVO();
+        reqVO.setPageNo(1);
+        reqVO.setPageSize(10);
+        PageResult<CertificateRespVO> result = service.getCertificatePage(reqVO);
+
+        assertEquals(2L, result.getTotal());
+        assertEquals(2, result.getList().size());
+        assertEquals("XZ-2026-001", result.getList().get(0).getCertNo());
+        assertEquals("EXPIRED", result.getList().get(1).getCertStatus());
     }
 
     // ========== 工具 ==========

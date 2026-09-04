@@ -1,5 +1,8 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 import java.time.LocalDate;
 
 /**
@@ -13,15 +16,29 @@ import java.time.LocalDate;
  */
 public class CertificateSaveReqVO {
 
+    /** 建档校验组（controller create 用） */
+    public interface Create {
+    }
+
+    /** 更新校验组（controller update 用） */
+    public interface Update {
+    }
+
+
     /** 主键 ID（更新必填；建档为空） */
+    @NotNull(groups = Update.class, message = "证照不能为空")
     private Long id;
     /** 乐观锁版本（更新必填，来自最新查询；§4.5 乐观锁） */
+    @NotNull(groups = Update.class, message = "版本不能为空")
     private Integer version;
     /** 证照名称（GB/T 36903 ZZMC；L2） */
+    @NotBlank(groups = {Create.class, Update.class}, message = "证照名称不能为空")
     private String certName;
     /** 证书编号（建办市51号 ZSBH；L3 敏感——日志/列表脱敏，存储不加密） */
+    @NotBlank(groups = Create.class, message = "证书编号不能为空")
     private String certNo;
     /** 证照大类 code：ADMIN_LICENSE/SYSTEM_CERT/PERSON_QUAL/HONOR/OTHER（v3.3 §二） */
+    @NotBlank(groups = Create.class, message = "证照大类不能为空")
     private String certType;
     /** 证照类型代码（GB/T 36902 ZZLXDM 21 位/行标；L2） */
     private String certCategoryCode;
@@ -30,6 +47,7 @@ public class CertificateSaveReqVO {
     /** 许可/业务范围 */
     private String certScope;
     /** 持证主体（GB/T 36903 CZZT；L2） */
+    @NotBlank(groups = Create.class, message = "持证主体不能为空")
     private String holderName;
     /** 持证主体类别 code：ORG/PERSON/EXTERNAL（缺省 ORG） */
     private String holderType;

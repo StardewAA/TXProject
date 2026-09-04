@@ -1,5 +1,8 @@
 package cn.iocoder.txgy.module.bidding.service.certificate;
 
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificatePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateSaveReqVO;
 import cn.iocoder.txgy.module.bidding.enums.CertificateChangeSourceEnum;
 
@@ -29,4 +32,15 @@ public interface CertificateService {
      */
     void changeStatus(Long certificateId, String targetStatus, Integer version, String reason,
                       CertificateChangeSourceEnum opSource, String opIp);
+
+    /**
+     * 证照详情（管理端）：查询不存在抛 CERTIFICATE_NOT_EXISTS。
+     */
+    CertificateRespVO getCertificate(Long id);
+
+    /**
+     * 证照台账分页（管理端）：certNo/certType/certStatus/verificationStatus 精确、certName/holderName 模糊，
+     * 按建档倒序；租户隔离由平台拦截器实施（开发规范 §5 五-1）。
+     */
+    PageResult<CertificateRespVO> getCertificatePage(CertificatePageReqVO reqVO);
 }

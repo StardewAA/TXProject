@@ -1,6 +1,9 @@
 package cn.iocoder.txgy.module.bidding.service.certificate;
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificatePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateSaveReqVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertChangeLogDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertificateInfoDO;
@@ -12,9 +15,12 @@ import cn.iocoder.txgy.module.bidding.enums.CertificateSourceChannelEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateVerificationStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -137,6 +143,63 @@ public class CertificateServiceImpl implements CertificateService {
         }
         appendChangeLog(certificateId, type, opSource == null ? CertificateChangeSourceEnum.MANUAL : opSource,
                 opIp, logs);
+    }
+
+    @Override
+    public CertificateRespVO getCertificate(Long id) {
+        CertificateInfoDO cert = certificateInfoMapper.selectById(id);
+        if (cert == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CERTIFICATE_NOT_EXISTS);
+        }
+        return toRespVO(cert);
+    }
+
+    @Override
+    public PageResult<CertificateRespVO> getCertificatePage(CertificatePageReqVO reqVO) {
+        LambdaQueryWrapper<CertificateInfoDO> query = new LambdaQueryWrapper<>();
+        query.eq(StringUtils.hasText(reqVO.getCertNo()), CertificateInfoDO::getCertNo, reqVO.getCertNo());
+        query.eq(StringUtils.hasText(reqVO.getCertType()), CertificateInfoDO::getCertType, reqVO.getCertType());
+        query.eq(StringUtils.hasText(reqVO.getCertStatus()), CertificateInfoDO::getCertStatus, reqVO.getCertStatus());
+        query.eq(StringUtils.hasText(reqVO.getVerificationStatus()),
+                CertificateInfoDO::getVerificationStatus, reqVO.getVerificationStatus());
+        query.like(StringUtils.hasText(reqVO.getCertName()), CertificateInfoDO::getCertName, reqVO.getCertName());
+        query.like(StringUtils.hasText(reqVO.getHolderName()), CertificateInfoDO::getHolderName, reqVO.getHolderName());
+        query.orderByDesc(CertificateInfoDO::getId);
+        Page<CertificateInfoDO> page = certificateInfoMapper.selectPage(
+                new Page<>(reqVO.getPageNo(), reqVO.getPageSize()), query);
+        return new PageResult<>(page.getRecords().stream().map(this::toRespVO).toList(), page.getTotal());
+    }
+
+    /** DO → 自建响应 VO（转换统一在服务层，开发规范 §3.1/§4.2）。 */
+    private CertificateRespVO toRespVO(CertificateInfoDO cert) {
+        CertificateRespVO resp = new CertificateRespVO();
+        resp.setId(cert.getId());
+        resp.setVersion(cert.getVersion());
+        resp.setCertName(cert.getCertName());
+        resp.setCertNo(cert.getCertNo());
+        resp.setCertType(cert.getCertType());
+        resp.setCertCategoryCode(cert.getCertCategoryCode());
+        resp.setCertLevel(cert.getCertLevel());
+        resp.setCertScope(cert.getCertScope());
+        resp.setHolderName(cert.getHolderName());
+        resp.setHolderType(cert.getHolderType());
+        resp.setHolderId(cert.getHolderId());
+        resp.setIssuingAuthority(cert.getIssuingAuthority());
+        resp.setIssuingAuthorityCode(cert.getIssuingAuthorityCode());
+        resp.setIssueDate(cert.getIssueDate());
+        resp.setValidFrom(cert.getValidFrom());
+        resp.setValidTo(cert.getValidTo());
+        resp.setCertStatus(cert.getCertStatus());
+        resp.setVerificationStatus(cert.getVerificationStatus());
+        resp.setLastVerifiedAt(cert.getLastVerifiedAt());
+        resp.setVerifyApiSource(cert.getVerifyApiSource());
+        resp.setOfficialVerifyUrl(cert.getOfficialVerifyUrl());
+        resp.setSourceChannel(cert.getSourceChannel());
+        resp.setECertIdent(cert.getECertIdent());
+        resp.setRemark(cert.getRemark());
+        resp.setCreateTime(cert.getCreateTime());
+        resp.setUpdateTime(cert.getUpdateTime());
+        return resp;
     }
 
     // ========== 内部工具 ==========
