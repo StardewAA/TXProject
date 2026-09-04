@@ -2,7 +2,7 @@ package cn.iocoder.txgy.module.bidding.enums;
 
 /**
  * bidding 用到的字典类型 key，前缀统一 bidding_。
- * 出处：《VO数据对象规范（国家V2.0模版·陕西适配全量版）》第十章；同一个概念国家、陕西都有时以陕西 V2.0 为准，
+ * 规范出处：《VO数据对象规范（国家V2.0模版·陕西适配全量版）》第十章；同一个概念国家、陕西都有时以陕西 V2.0 为准，
  * 国家那份用 _N<表号> 后缀区分着留档。由生成器维护，别手改。
  */
 public interface DictTypeConstants {

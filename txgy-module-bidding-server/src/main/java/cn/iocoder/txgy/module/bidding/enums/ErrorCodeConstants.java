@@ -5,6 +5,10 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
 /**
  * bidding 的错误码。
  * 段位从 1-060-xxx-xxx 开始，按业务区块往下排，别跨段乱用。
+ *
+ * <p>规范出处：docs/招投标模块开发规范.md §4.7 错误码规范（1-060-xxx-xxx 结构，
+ * 服务异常经 ServiceExceptionUtil 抛出，由框架全局异常处理器回写 HTTP 响应）；
+ * 证书/资质域子段 106（1-060-106-000~026，ErrorCodeFormatTest 门禁校验格式与全半角）。
  */
 public interface ErrorCodeConstants {
 

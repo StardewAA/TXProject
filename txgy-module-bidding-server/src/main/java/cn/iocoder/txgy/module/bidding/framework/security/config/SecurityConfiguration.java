@@ -10,6 +10,9 @@ import org.springframework.security.config.annotation.web.configurers.AuthorizeH
 /**
  * bidding 模块的 Security 配置。
  * 白名单就几类：Swagger、监控、Druid、RPC 接口，其余都要登录鉴权。
+ *
+ * <p>规范出处：docs/招投标模块开发规范.md §4.4 权限控制（管理员后台接口全部走登录态 +
+ * @PreAuthorize 权限码；写接口叠加 @Idempotent，由 BiddingArchitectureRulesTest 门禁）。
  */
 @Configuration("biddingSecurityConfiguration")
 public class SecurityConfiguration {

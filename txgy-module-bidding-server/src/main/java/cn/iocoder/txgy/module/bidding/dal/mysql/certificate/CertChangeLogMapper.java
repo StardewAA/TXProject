@@ -6,7 +6,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 证照变更审计日志 Mapper（只追加）。
+ * 证照变更审计日志 Mapper（只追加；哈希链追加由 CertHashChain 驱动）。
+ *
+ * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §18.2 变更记录只追加审计；
+ * 设计遵循/针对：全量快照存 prev/next 字段 + 链式 batch_id 支撑哈希链回验（GB/T 38540 事件存证思路）。
  */
 @Mapper
 public interface CertChangeLogMapper extends BaseMapperX<CertChangeLogDO> {
