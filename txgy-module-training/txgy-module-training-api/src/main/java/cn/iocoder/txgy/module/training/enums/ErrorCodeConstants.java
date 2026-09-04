@@ -45,4 +45,47 @@ public interface ErrorCodeConstants {
     // ========== 课程生命周期（course lifecycle）1-061-005-000 ==========
     ErrorCode COURSE_DELETE_HAS_LEARNING_REF = new ErrorCode(1_061_005_000, "课程已被学员学习引用，禁止删除（如需下线请走下架流程）");
 
+    // ========== 资源中心-分类（resource category）1-061-006-000 ==========
+    ErrorCode RESOURCE_CATEGORY_TYPE_INVALID = new ErrorCode(1_061_006_000, "分类类型不合法，仅支持 doc 文档/video 视频/question 试题");
+    ErrorCode RESOURCE_CATEGORY_NOT_EXISTS = new ErrorCode(1_061_006_001, "分类不存在");
+    ErrorCode RESOURCE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_006_002, "已存在同类型下同名分类");
+    ErrorCode RESOURCE_CATEGORY_HAS_CHILDREN = new ErrorCode(1_061_006_003, "该分类存在子分类，禁止删除（请先删除子分类）");
+    ErrorCode RESOURCE_CATEGORY_HAS_RESOURCE = new ErrorCode(1_061_006_004, "该分类下仍存在资源，禁止删除（请先转移或删除资源）");
+    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持一级父分类，不支持三级及以上层级");
+
+    // ========== 资源中心-文档（document resource）1-061-007-000 ==========
+    ErrorCode DOCUMENT_NOT_EXISTS = new ErrorCode(1_061_007_000, "文档资源不存在");
+    ErrorCode DOCUMENT_FILE_TYPE_INVALID = new ErrorCode(1_061_007_001, "仅支持上传 PDF/JPG/PNG 文档");
+    ErrorCode DOCUMENT_FILE_SIZE_EXCEED = new ErrorCode(1_061_007_002, "文档大小超出上限（50MB）");
+    ErrorCode DOCUMENT_STATUS_CHANGE_INVALID = new ErrorCode(1_061_007_003, "文档当前状态不允许执行该操作");
+    ErrorCode DOCUMENT_REFERENCED_DELETE_FORBIDDEN = new ErrorCode(1_061_007_004, "该文档已被引用，禁止删除（可下架或归档）");
+
+    // ========== 资源中心-视频（video resource）1-061-008-000 ==========
+    ErrorCode VIDEO_NOT_EXISTS = new ErrorCode(1_061_008_000, "视频资源不存在");
+    ErrorCode VIDEO_FILE_TYPE_INVALID = new ErrorCode(1_061_008_001, "仅支持上传 MP4/MOV 视频（建议 H.264 编码）");
+    ErrorCode VIDEO_FILE_SIZE_EXCEED = new ErrorCode(1_061_008_002, "视频大小超出上限（500MB）");
+    ErrorCode VIDEO_STATUS_CHANGE_INVALID = new ErrorCode(1_061_008_003, "视频当前状态不允许执行该操作");
+    ErrorCode VIDEO_REFERENCED_DELETE_FORBIDDEN = new ErrorCode(1_061_008_004, "该视频已被引用，禁止删除（可下架或归档）");
+    ErrorCode VIDEO_CREDIT_HOURS_INVALID = new ErrorCode(1_061_008_005, "学时值必须大于 0 且最多保留两位小数");
+
+    // ========== 资源中心-试题（question）1-061-009-000 ==========
+    ErrorCode QUESTION_NOT_EXISTS = new ErrorCode(1_061_009_000, "试题不存在");
+    ErrorCode QUESTION_TYPE_INVALID = new ErrorCode(1_061_009_001, "题型不合法：仅支持 single单选/multiple多选/judge判断/qa实操问答/case案例分析");
+    ErrorCode QUESTION_DIFFICULTY_INVALID = new ErrorCode(1_061_009_002, "难度不合法：1易 2中 3难");
+    ErrorCode QUESTION_REFERENCED_DELETE_FORBIDDEN = new ErrorCode(1_061_009_003, "该题已被试卷引用，禁止删除（请改为停用）");
+    ErrorCode QUESTION_STATUS_CHANGE_INVALID = new ErrorCode(1_061_009_004, "试题当前状态不允许执行该操作");
+    ErrorCode QUESTION_IMPORT_EMPTY = new ErrorCode(1_061_009_005, "导入文件为空或不含有效数据行");
+    ErrorCode QUESTION_IMPORT_PARSE_ERROR = new ErrorCode(1_061_009_006, "导入文件解析失败，请使用系统下载的标准 Excel 模板");
+
+    // ========== 资源中心-标签（tag）1-061-010-000 ==========
+    ErrorCode RESOURCE_TAG_NOT_EXISTS = new ErrorCode(1_061_010_000, "标签不存在");
+    ErrorCode RESOURCE_TAG_DIMENSION_INVALID = new ErrorCode(1_061_010_001, "标签维度不合法：work_type工种/course课程/safety安全/process工艺");
+    ErrorCode RESOURCE_TAG_NAME_EXISTS = new ErrorCode(1_061_010_002, "已存在同维度同名标签");
+    ErrorCode RESOURCE_TAG_DELETE_HAS_QUESTION = new ErrorCode(1_061_010_003, "该标签已被试题引用，禁止删除");
+
+    // ========== 资源中心-文件/通用（file & common）1-061-011-000 ==========
+    ErrorCode RESOURCE_FILE_NOT_FOUND = new ErrorCode(1_061_011_000, "资源文件不存在或已被清理");
+    ErrorCode RESOURCE_FILE_EMPTY = new ErrorCode(1_061_011_001, "上传文件不能为空");
+    ErrorCode RESOURCE_REFERENCED_FORBIDDEN = new ErrorCode(1_061_011_002, "该资源已被引用，禁止物理删除");
+
 }

@@ -33,7 +33,7 @@ public class HrmPortalEmployeeTrainingExperienceController {
 
     @GetMapping("/list")
     @Operation(summary = "获得我的培训经历列表")
-    @PreAuthorize("@ss.hasPermission('hrm:portal:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<HrmEmployeeTrainingExperienceRespVO>> getTrainingExperienceList() {
         Long employeeId = employeeService.validateEmployeeBySelf(getLoginUserId()).getId();
         List<HrmEmployeeTrainingExperienceDO> trainingExperiences =
