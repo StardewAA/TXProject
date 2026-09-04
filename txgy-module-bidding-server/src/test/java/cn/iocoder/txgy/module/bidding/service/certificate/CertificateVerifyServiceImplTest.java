@@ -3,12 +3,16 @@ package cn.iocoder.txgy.module.bidding.service.certificate;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertReqHeadVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertRespHeadVO;
+import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyFileReqVO;
+import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyFileRespVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyInfoReqVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyInfoRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertChangeLogDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertFileVersionDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertVerifyHistoryDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertificateInfoDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertChangeLogMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertFileVersionMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertVerifyHistoryMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertificateInfoMapper;
 import cn.iocoder.txgy.module.bidding.enums.CertVerifyResultEnum;
@@ -41,6 +45,7 @@ class CertificateVerifyServiceImplTest {
     private CertVerifyHistoryMapper certVerifyHistoryMapper;
     private CertChangeLogMapper certChangeLogMapper;
     private CertVerifyGateway certVerifyGateway;
+    private CertFileVersionMapper certFileVersionMapper;
     private CertificateVerifyServiceImpl service;
 
     @BeforeEach
@@ -49,11 +54,13 @@ class CertificateVerifyServiceImplTest {
         certVerifyHistoryMapper = mock(CertVerifyHistoryMapper.class);
         certChangeLogMapper = mock(CertChangeLogMapper.class);
         certVerifyGateway = mock(CertVerifyGateway.class);
+        certFileVersionMapper = mock(CertFileVersionMapper.class);
         service = new CertificateVerifyServiceImpl();
         ReflectionTestUtils.setField(service, "certificateInfoMapper", certificateInfoMapper);
         ReflectionTestUtils.setField(service, "certVerifyHistoryMapper", certVerifyHistoryMapper);
         ReflectionTestUtils.setField(service, "certChangeLogMapper", certChangeLogMapper);
         ReflectionTestUtils.setField(service, "certVerifyGateway", certVerifyGateway);
+        ReflectionTestUtils.setField(service, "certFileVersionMapper", certFileVersionMapper);
     }
 
     @Test
@@ -172,6 +179,52 @@ class CertificateVerifyServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.verifyCertificate(9L, "FOUR_PLATFORM", 42L));
         assertEquals(Integer.valueOf(1_060_106_000), e.getCode());
+    }
+
+    @Test
+    void verifyFile_currentFileVerified_marksVerified() {
+        CertificateInfoDO cert = certOf("UNVERIFIED");
+        CertFileVersionDO file = new CertFileVersionDO();
+        file.setId(9L);
+        file.setCertId(1L);
+        file.setFileHash("ab".repeat(32));
+        file.setFileFormat("PDF");
+        file.setIsCurrent(true);
+        when(certificateInfoMapper.selectById(1L)).thenReturn(cert);
+        when(certFileVersionMapper.selectAnyCurrentByCertId(1L)).thenReturn(file);
+        when(certVerifyHistoryMapper.selectByIdempotentKey(any(String.class))).thenReturn(null);
+        when(certVerifyGateway.verifyFile(any(EccertVerifyFileReqVO.class))).thenReturn(
+                new EccertVerifyFileRespVO(new EccertRespHeadVO("0", "调用成功"),
+                        new EccertVerifyFileRespVO.Data("0", "0 文件信息正确且有效")));
+        when(certVerifyHistoryMapper.insert(any(CertVerifyHistoryDO.class))).thenAnswer(inv -> {
+            CertVerifyHistoryDO h = inv.getArgument(0);
+            h.setId(88L);
+            return 1;
+        });
+        when(certificateInfoMapper.updateById(any(CertificateInfoDO.class))).thenReturn(1);
+
+        Long id = service.verifyCertificateFile(1L, "FOUR_PLATFORM", 42L);
+
+        assertEquals(88L, id);
+        assertEquals(CertificateVerificationStatusEnum.VERIFIED.name(), cert.getVerificationStatus());
+        assertEquals(CertVerifyResultEnum.MATCH.name(), historyOf().getVerifyResult());
+        assertTrue(historyOf().getIdempotentKey().contains(":FILE:"), "FILE 段与 verifyinfo 隔离");
+        assertTrue(historyOf().getResultSnapshot().contains("\"method\":\"verifyfile\""));
+        ArgumentCaptor<CertChangeLogDO> logs = ArgumentCaptor.forClass(CertChangeLogDO.class);
+        verify(certChangeLogMapper).insert(logs.capture());
+        assertEquals("VERIFY-FILE:88", logs.getValue().getBatchId());
+    }
+
+    @Test
+    void verifyFile_noCurrentFile_rejects() {
+        CertificateInfoDO cert = certOf("UNVERIFIED");
+        when(certificateInfoMapper.selectById(1L)).thenReturn(cert);
+        when(certFileVersionMapper.selectAnyCurrentByCertId(1L)).thenReturn(null);
+
+        ServiceException e = assertThrows(ServiceException.class,
+                () -> service.verifyCertificateFile(1L, "FOUR_PLATFORM", 42L));
+        assertEquals(Integer.valueOf(1_060_106_005), e.getCode(), "无生效文件应报 CERT_FILE_NOT_EXISTS");
+        verify(certVerifyGateway, never()).verifyFile(any());
     }
 
     // ========== 工具 ==========

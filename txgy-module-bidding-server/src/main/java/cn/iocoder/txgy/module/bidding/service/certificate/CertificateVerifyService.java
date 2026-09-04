@@ -18,4 +18,13 @@ public interface CertificateVerifyService {
      * 返回验真历史主键。
      */
     Long verifyCertificate(Long certId, String verifyChannel, Long verifyBy);
+
+    /**
+     * 对证照“当前生效文件”发起一次文件验真（verifyfile，GB/T 36906 §6.5）：
+     * 取 cert_file_versions 当前生效行，以其 SHA-256 为内容指纹入参调用通道；回执映射与台账回写
+     * 同 verifyCertificate（0→MATCH/VERIFIED；1/2/3→MISMATCH/INVALID；4/5→UNAVAILABLE 保持），
+     * 幂等键 cert_id:channel:FILE:yyyyMMddHHmm（与 verifyinfo 隔离）。无生效文件报文件不存在。
+     * 返回验真历史主键。
+     */
+    Long verifyCertificateFile(Long certId, String verifyChannel, Long verifyBy);
 }

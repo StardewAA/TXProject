@@ -3,11 +3,15 @@ package cn.iocoder.txgy.module.bidding.service.certificate;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertReqHeadVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertRespHeadVO;
+import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyFileReqVO;
+import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyFileRespVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyInfoReqVO;
 import cn.iocoder.txgy.module.bidding.api.cert.vo.EccertVerifyInfoRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertFileVersionDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertVerifyHistoryDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertificateInfoDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertChangeLogMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertFileVersionMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertVerifyHistoryMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.certificate.CertificateInfoMapper;
 import cn.iocoder.txgy.module.bidding.enums.CertVerifyChannelEnum;
@@ -56,6 +60,8 @@ public class CertificateVerifyServiceImpl implements CertificateVerifyService {
     private CertificateInfoMapper certificateInfoMapper;
     @Resource
     private CertVerifyHistoryMapper certVerifyHistoryMapper;
+    @Resource
+    private CertFileVersionMapper certFileVersionMapper;
     @Resource
     private CertChangeLogMapper certChangeLogMapper;
     @Resource
@@ -134,6 +140,87 @@ public class CertificateVerifyServiceImpl implements CertificateVerifyService {
                 CertificateChangeTypeEnum.UPDATE.name(), CertificateChangeSourceEnum.API_SYNC.name(),
                 null, "VERIFY:" + history.getId());
         log.info("[cert-verify][cert={}] 验真完成：result={} message={}", certId, verifyResult, message);
+        return history.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long verifyCertificateFile(Long certId, String verifyChannel, Long verifyBy) {
+        CertificateInfoDO cert = certificateInfoMapper.selectById(certId);
+        if (cert == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CERTIFICATE_NOT_EXISTS);
+        }
+        CertVerifyChannelEnum channel = parseChannel(verifyChannel);
+        if (CertificateVerificationStatusEnum.VERIFYING.name().equals(cert.getVerificationStatus())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CERT_VERIFY_IN_PROGRESS);
+        }
+        // 取当前生效文件（v3.3 §三 is_current）；无文件无法做文件验真
+        CertFileVersionDO file = certFileVersionMapper.selectAnyCurrentByCertId(certId);
+        if (file == null || file.getFileHash() == null || file.getFileHash().isBlank()) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CERT_FILE_NOT_EXISTS);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        // 幂等键带 FILE 段与 verifyinfo 隔离（uk 唯一）；同分钟重试返回既有
+        String idempotentKey = certId + ":" + channel.name() + ":FILE:" + KEY_MINUTE.format(now);
+        CertVerifyHistoryDO existing = certVerifyHistoryMapper.selectByIdempotentKey(idempotentKey);
+        if (existing != null) {
+            return existing.getId();
+        }
+        // 1) 组装 36906 verifyfile 请求：demo 通道以 SHA-256 为内容指纹占位；
+        //    真实通道接入后应改为经 FileApi 回传文件流（GB/T 36905 原件/加注件），并核对 hash 与底账一致
+        String fileFingerprint = file.getFileHash();
+        EccertVerifyFileReqVO request = new EccertVerifyFileReqVO(
+                new EccertReqHeadVO(ACCESS_ID, ACCESS_TOKEN),
+                new EccertVerifyFileReqVO.Data(fileFingerprint));
+        // 2) 调用网关（演示或真实通道，配置切换）
+        EccertVerifyFileRespVO resp = certVerifyGateway.verifyFile(request);
+        String resultCode = resp.data() == null ? null : resp.data().result();
+        String message = resp.data() == null ? null : resp.data().message();
+        EccertRespHeadVO head = resp.head();
+        // 3) 回执映射并落验真历史（先写=防并发重复的串行点；result_snapshot 记录 method=verifyfile）
+        Map<String, String> verdict = mapVerdict(resultCode);
+        String verifyResult = verdict.get("verifyResult");
+        String targetStatus = verdict.get("targetStatus");
+        CertVerifyHistoryDO history = new CertVerifyHistoryDO();
+        history.setCertId(certId);
+        history.setVerifyChannel(channel.name());
+        history.setVerifyResult(verifyResult);
+        history.setRequestSnapshot(fileFingerprint);
+        Map<String, String> snapshot = new LinkedHashMap<>();
+        snapshot.put("method", "verifyfile");
+        snapshot.put("headStatus", head == null ? "" : head.status());
+        snapshot.put("headMessage", head == null ? "" : head.message());
+        snapshot.put("result", resultCode == null ? "" : resultCode);
+        snapshot.put("message", message == null ? "" : message);
+        snapshot.put("fileFormat", file.getFileFormat() == null ? "" : file.getFileFormat());
+        history.setResultSnapshot(writeJson(snapshot));
+        history.setVerifyBy(verifyBy);
+        history.setVerifiedAt(now);
+        history.setIdempotentKey(idempotentKey);
+        try {
+            certVerifyHistoryMapper.insert(history);
+        } catch (DuplicateKeyException e) {
+            CertVerifyHistoryDO dup = certVerifyHistoryMapper.selectByIdempotentKey(idempotentKey);
+            if (dup != null) {
+                return dup.getId();
+            }
+            throw e;
+        }
+        // 4) 台账最近一次验真状态回写（§17.5：主表只承载最近一次）
+        String oldStatus = cert.getVerificationStatus();
+        String newStatus = targetStatus == null ? cert.getVerificationStatus() : targetStatus;
+        cert.setVerificationStatus(newStatus);
+        cert.setLastVerifiedAt(now);
+        cert.setVerifyApiSource(channel.name());
+        if (certificateInfoMapper.updateById(cert) == 0) { // @Version CAS
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CERTIFICATE_DATA_MODIFIED);
+        }
+        // 5) verification_status 变更审计（哈希链；verifyfile 触发同样留痕）
+        CertHashChain.appendRow(certChangeLogMapper, certId, "verification_status", oldStatus, newStatus,
+                CertificateChangeTypeEnum.UPDATE.name(), CertificateChangeSourceEnum.API_SYNC.name(),
+                null, "VERIFY-FILE:" + history.getId());
+        log.info("[cert-verify-file][cert={}] 文件验真完成：result={} sha256={}", certId, verifyResult,
+                fileFingerprint);
         return history.getId();
     }
 

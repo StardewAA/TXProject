@@ -38,6 +38,17 @@ public interface CertFileVersionMapper extends BaseMapperX<CertFileVersionDO> {
     }
 
     /**
+     * 取该证当前生效文件行（任一类别；验真 file 校验用，v3.3 §三 is_current 语义）。
+     */
+    default CertFileVersionDO selectAnyCurrentByCertId(Long certId) {
+        return selectOne(new LambdaQueryWrapper<CertFileVersionDO>()
+                .eq(CertFileVersionDO::getCertId, certId)
+                .eq(CertFileVersionDO::getIsCurrent, true)
+                .orderByDesc(CertFileVersionDO::getVersion)
+                .last("LIMIT 1"));
+    }
+
+    /**
      * 取同证同类别当前生效版本行（自查/详情只取 is_current=TRUE 行，v3.3 §三）。
      */
     default List<CertFileVersionDO> selectCurrentByCategory(Long certId, String fileCategory) {
