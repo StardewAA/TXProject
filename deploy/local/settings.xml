@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  本机直连 repo1.maven.org 不可达，这里把 central 镜像到腾讯云公共仓库。
+  项目 pom.xml 中已声明的 huaweicloud / aliyun 仓库保持原样，不受影响。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>tencent-central</id>
+      <mirrorOf>central</mirrorOf>
+      <name>tencent maven central mirror</name>
+      <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
+    </mirror>
+  </mirrors>
+</settings>

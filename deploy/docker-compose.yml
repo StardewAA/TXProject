@@ -8,13 +8,6 @@ x-backend-service: &backend-service
       condition: service_healthy
   environment:
     SERVER_PORT: 48080
-    JAVA_OPTS: >-
-      -Dspring.datasource.dynamic.datasource.master.url=jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
-      -Dspring.datasource.dynamic.datasource.master.username=root
-      -Dspring.datasource.dynamic.datasource.master.password=${MYSQL_ROOT_PASSWORD}
-      -Dspring.datasource.dynamic.datasource.slave.url=jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
-      -Dspring.datasource.dynamic.datasource.slave.username=root
-      -Dspring.datasource.dynamic.datasource.slave.password=${MYSQL_ROOT_PASSWORD}
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
@@ -42,7 +35,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3307:3306"
+      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
@@ -284,7 +277,7 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: deploy/frontend/Dockerfile
+      dockerfile: deploy/frontend/Dockerfile.runtime
     depends_on:
       gateway:
         condition: service_started
