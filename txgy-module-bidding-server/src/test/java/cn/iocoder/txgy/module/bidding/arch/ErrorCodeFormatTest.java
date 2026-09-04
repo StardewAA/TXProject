@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <ol>
  *   <li>只能定义在 server 的 {@code enums/ErrorCodeConstants}（本测试即锚定该类）；</li>
  *   <li>编号格式 {@code 1-060-YYY-ZZZ}（代码字面量 {@code 1_060_YYY_ZZZ}），数值前缀 1/060 固定；</li>
- *   <li>YYY 段必须在文档登记集合内（当前 100~105、199），新段先改规范 4.7 表再登记到本测试；</li>
+ *   <li>YYY 段必须在文档登记集合内（当前 100~106、199），新段先改规范 4.7 表再登记到本测试；</li>
  *   <li>全文件编号不得重复。</li>
  * </ol>
  *
@@ -29,7 +29,7 @@ class ErrorCodeFormatTest {
     private static final String ERROR_CODE_CLASS = "cn.iocoder.txgy.framework.common.exception.ErrorCode";
 
     /** 与《招投标模块开发规范》4.7 段位表保持一致；新子模块段位先在文档登记，再追加到这里。 */
-    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 199};
+    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 106, 199};
 
     @Test
     void errorCodesFollowDocumentedSegments() throws Exception {

@@ -35,6 +35,15 @@ public interface ErrorCodeConstants {
     ErrorCode ILLEGAL_INFO_NOT_EXISTS = new ErrorCode(1_060_105_001, "违法违规信息不存在");
     ErrorCode BLACKLIST_NOT_EXISTS = new ErrorCode(1_060_105_002, "黑名单信息不存在");
 
+    // ========== 资质证书 1-060-106-000 ==========
+    ErrorCode CERTIFICATE_NOT_EXISTS = new ErrorCode(1_060_106_000, "证照不存在");
+    ErrorCode CERTIFICATE_NO_DUPLICATE = new ErrorCode(1_060_106_001, "证照编号已存在");
+    ErrorCode CERTIFICATE_DATA_MODIFIED = new ErrorCode(1_060_106_002, "数据已被他人修改，请刷新后重试");
+    ErrorCode CERTIFICATE_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_003, "证照当前状态不允许该流转");
+    ErrorCode CERT_CHANGE_LOG_LINK_BROKEN = new ErrorCode(1_060_106_004, "证照变更日志哈希链断裂");
+    ErrorCode CERT_FILE_NOT_EXISTS = new ErrorCode(1_060_106_005, "证照文件不存在");
+    ErrorCode CERT_FILE_VIRUS_NOT_CLEAN = new ErrorCode(1_060_106_006, "证照文件未通过病毒扫描，禁止预览/下载");
+
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
     ErrorCode PUBLIC_LEVEL_FILTER_FAILED = new ErrorCode(1_060_199_001, "公开级别字段裁剪失败");
