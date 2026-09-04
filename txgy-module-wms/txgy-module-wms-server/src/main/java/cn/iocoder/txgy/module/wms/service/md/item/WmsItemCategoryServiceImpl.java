@@ -2,20 +2,26 @@ package cn.iocoder.txgy.module.wms.service.md.item;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.category.WmsItemCategoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.category.WmsItemCategorySaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemCategoryDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemCategoryMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
@@ -40,6 +46,7 @@ public class WmsItemCategoryServiceImpl implements WmsItemCategoryService {
     public Long createItemCategory(WmsItemCategorySaveReqVO createReqVO) {
         // 校验数据
         validateCategorySaveData(createReqVO);
+        normalizeStatusByParent(createReqVO);
 
         // 插入
         WmsItemCategoryDO category = BeanUtils.toBean(createReqVO, WmsItemCategoryDO.class);
@@ -48,15 +55,40 @@ public class WmsItemCategoryServiceImpl implements WmsItemCategoryService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateItemCategory(WmsItemCategorySaveReqVO updateReqVO) {
         // 校验存在
         validateItemCategoryExists(updateReqVO.getId());
         // 校验数据
         validateCategorySaveData(updateReqVO);
+        normalizeStatusByParent(updateReqVO);
 
         // 更新
         WmsItemCategoryDO updateObj = BeanUtils.toBean(updateReqVO, WmsItemCategoryDO.class);
         categoryMapper.updateById(updateObj);
+        // 关闭分类时同步关闭全部下级分类；重新开启时不影响下级分类的独立状态
+        if (CommonStatusEnum.isDisable(updateReqVO.getStatus())) {
+            Set<Long> childIds = getSelfAndChildItemCategoryIdList(updateReqVO.getId());
+            childIds.remove(updateReqVO.getId());
+            if (CollUtil.isNotEmpty(childIds)) {
+                categoryMapper.update(null, new LambdaUpdateWrapper<WmsItemCategoryDO>()
+                        .in(WmsItemCategoryDO::getId, childIds)
+                        .set(WmsItemCategoryDO::getStatus, CommonStatusEnum.DISABLE.getStatus()));
+            }
+        }
+    }
+
+    /**
+     * 关闭的父分类下，子分类不能处于开启状态。
+     */
+    private void normalizeStatusByParent(WmsItemCategorySaveReqVO reqVO) {
+        if (reqVO.getParentId() == null || WmsItemCategoryDO.PARENT_ID_ROOT.equals(reqVO.getParentId())) {
+            return;
+        }
+        WmsItemCategoryDO parentCategory = categoryMapper.selectById(reqVO.getParentId());
+        if (parentCategory != null && !isCategoryEnabled(parentCategory)) {
+            reqVO.setStatus(CommonStatusEnum.DISABLE.getStatus());
+        }
     }
 
     private void validateCategorySaveData(WmsItemCategorySaveReqVO reqVO) {
@@ -154,6 +186,15 @@ public class WmsItemCategoryServiceImpl implements WmsItemCategoryService {
     }
 
     @Override
+    public WmsItemCategoryDO validateItemCategoryEnabled(Long id) {
+        WmsItemCategoryDO category = validateItemCategoryExists(id);
+        if (!isCategoryEnabled(category)) {
+            throw exception(ITEM_CATEGORY_NOT_ENABLED);
+        }
+        return category;
+    }
+
+    @Override
     public WmsItemCategoryDO getItemCategory(Long id) {
         return categoryMapper.selectById(id);
     }
@@ -169,6 +210,49 @@ public class WmsItemCategoryServiceImpl implements WmsItemCategoryService {
             return Collections.emptyList();
         }
         return categoryMapper.selectByIds(ids);
+    }
+
+    @Override
+    public List<WmsItemCategoryDO> getEnabledItemCategoryList() {
+        List<WmsItemCategoryDO> categories = getItemCategoryList(new WmsItemCategoryListReqVO());
+        Map<Long, WmsItemCategoryDO> categoryMap = categories.stream()
+                .collect(Collectors.toMap(WmsItemCategoryDO::getId, Function.identity()));
+        return categories.stream()
+                .filter(category -> isCategoryEnabled(category, categoryMap))
+                .collect(Collectors.toList());
+    }
+
+    private boolean isCategoryEnabled(WmsItemCategoryDO category) {
+        Set<Long> visited = new HashSet<>();
+        WmsItemCategoryDO current = category;
+        while (current != null && visited.add(current.getId())) {
+            if (!CommonStatusEnum.isEnable(current.getStatus())) {
+                return false;
+            }
+            Long parentId = current.getParentId();
+            if (parentId == null || WmsItemCategoryDO.PARENT_ID_ROOT.equals(parentId)) {
+                return true;
+            }
+            current = categoryMapper.selectById(parentId);
+        }
+        return false;
+    }
+
+    private boolean isCategoryEnabled(WmsItemCategoryDO category,
+                                      Map<Long, WmsItemCategoryDO> categoryMap) {
+        Set<Long> visited = new HashSet<>();
+        WmsItemCategoryDO current = category;
+        while (current != null && visited.add(current.getId())) {
+            if (!CommonStatusEnum.isEnable(current.getStatus())) {
+                return false;
+            }
+            Long parentId = current.getParentId();
+            if (parentId == null || WmsItemCategoryDO.PARENT_ID_ROOT.equals(parentId)) {
+                return true;
+            }
+            current = categoryMap.get(parentId);
+        }
+        return false;
     }
 
     @Override

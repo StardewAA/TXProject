@@ -12,7 +12,11 @@ RUN --mount=type=cache,id=txgycloud-maven-cache,target=/root/.m2,sharing=locked 
 RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
     && test -f /app.jar
 
-FROM maven:3.9.16-eclipse-temurin-25
+FROM eclipse-temurin:25-jre
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

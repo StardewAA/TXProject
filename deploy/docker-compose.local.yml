@@ -18,10 +18,23 @@ services:
       dockerfile: deploy/backend/Dockerfile.local
     ports: !override
       - "58080:48080"
-    networks:
-      txgy-dev:
-        aliases:
-          - txgycloud-gateway
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      system:
+        condition: service_healthy
+      infra:
+        condition: service_healthy
+      hrm:
+        condition: service_healthy
+      bpm:
+        condition: service_healthy
+      erp:
+        condition: service_healthy
 
   system:
     build:
@@ -111,3 +124,6 @@ services:
     build:
       context: ..
       dockerfile: deploy/frontend/Dockerfile.local
+    depends_on:
+      gateway:
+        condition: service_healthy

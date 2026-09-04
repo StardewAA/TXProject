@@ -29,6 +29,13 @@ export function getItemCategorySimpleList() {
   );
 }
 
+/** 查询可用于创建商品的商品分类精简列表 */
+export function getEnabledItemCategorySimpleList() {
+  return requestClient.get<WmsItemCategoryApi.ItemCategory[]>(
+    '/wms/item-category/enabled-list',
+  );
+}
+
 /** 查询商品分类详情 */
 export function getItemCategory(id: number) {
   return requestClient.get<WmsItemCategoryApi.ItemCategory>(

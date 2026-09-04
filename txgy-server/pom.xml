@@ -137,11 +137,11 @@
 <!--        </dependency>-->
 
         <!-- HRM 人力资源管理模块。默认注释，按需启用 -->
-<!--        <dependency>-->
-<!--            <groupId>cn.iocoder.cloud</groupId>-->
-<!--            <artifactId>txgy-module-hrm-server</artifactId>-->
-<!--            <version>${revision}</version>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-hrm-server</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- FMS 财务管理模块。默认注释，按需启用 -->
 <!--        <dependency>-->

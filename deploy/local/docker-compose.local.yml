@@ -1,0 +1,201 @@
+# 本地精简编排：中间件（MySQL / Redis / Nacos）+ 核心业务服务。
+# 与原 deploy/docker-compose.yml 的差异：
+#   1. 业务服务直接使用已编译 jar 打包（Dockerfile.runtime），避免每个服务重复全量 mvn package
+#   2. MySQL 不挂载 deploy/mysql/init：该目录下 0068/0069 是 mysqldump --all-databases 全实例导出，
+#      含 DROP TABLE mysql.columns_priv 等系统表重建语句，自动导入会破坏容器系统库。改为受控手动导入
+#      （见 init-db.ps1），只导入业务 SQL 到 ruoyi-vue-pro。
+#   3. 为适配本机 Docker 约 7.4GB 内存上限，各服务设置 mem_limit 与 JVM -Xmx
+#   4. 构建上下文为 deploy/local 本身（jars/ 目录），而不是仓库根目录：
+#      仓库 .dockerignore 排除了 **/target，且项目路径含非 ASCII 字符会让 BuildKit 报错。
+# 启动示例：
+#   docker compose -f deploy/local/docker-compose.local.yml --env-file deploy/.env up -d mysql redis nacos
+#   docker compose -f deploy/local/docker-compose.local.yml --env-file deploy/.env up -d gateway system
+
+x-txgy-service: &txgy-service
+  build:
+    context: .
+    dockerfile: Dockerfile.runtime
+  environment: &txgy-env
+    TZ: ${TZ}
+    SERVER_PORT: 48080
+    SPRING_PROFILES_ACTIVE: local
+    SPRING_CLOUD_NACOS_SERVER_ADDR: nacos:8848
+    # Nacos 3.0.3 runs with auth disabled (no default user), so no credentials are sent.
+    # Nacos 3.0.3 ships with no default user and its v3 admin API cannot create a
+    # namespace, so the "dev" namespace (declared in application-local.yaml) cannot be
+    # provisioned here. Empty value -> built-in public namespace.
+    SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+    SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    SPRING_DATA_REDIS_HOST: redis
+    SPRING_DATA_REDIS_PORT: 6379
+  depends_on:
+    nacos:
+      condition: service_healthy
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - txgy-dev
+  restart: unless-stopped
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: txgy-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max_connections=500
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 1200m
+
+  redis:
+    image: redis:7-alpine
+    container_name: txgy-redis
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 300m
+
+  nacos:
+    image: nacos/nacos-server:v3.0.3
+    container_name: txgy-nacos
+    environment:
+      MODE: standalone
+      # local dev only: Nacos 3.0 ships without a default user and its v3 admin API
+      # rejects the classic nacos/nacos login, so auth is disabled for this stack.
+      # NACOS_AUTH_TOKEN must still be present: the entrypoint exits when it is empty.
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      TZ: ${TZ}
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/ > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 1200m
+
+  gateway:
+    <<: *txgy-service
+    container_name: txgy-gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/gateway.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    ports:
+      - "48080:48080"
+    mem_limit: 800m
+
+  system:
+    <<: *txgy-service
+    container_name: txgy-system
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/system.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms384m -Xmx640m -XX:+UseG1GC
+    mem_limit: 950m
+
+  infra:
+    <<: *txgy-service
+    container_name: txgy-infra
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/infra.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 800m
+
+  member:
+    <<: *txgy-service
+    container_name: txgy-member
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/member.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx448m -XX:+UseG1GC
+    mem_limit: 700m
+
+  crm:
+    <<: *txgy-service
+    container_name: txgy-crm
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/crm.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 850m
+
+  ai:
+    <<: *txgy-service
+    container_name: txgy-ai
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/ai.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 850m
+
+volumes:
+  mysql-data:
+  nacos-data:
+
+networks:
+  txgy-dev:
+    name: txgy-dev

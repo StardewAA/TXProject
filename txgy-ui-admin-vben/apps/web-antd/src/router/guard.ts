@@ -55,6 +55,18 @@ function setupAccessGuard(router: Router) {
     const authStore = useAuthStore();
     const dictStore = useDictStore();
 
+    // 员工端门户是静态路由，但仍必须登录后才能访问。
+    if (to.path === '/portal' || to.path.startsWith('/portal/')) {
+      if (!accessStore.accessToken) {
+        return {
+          path: LOGIN_PATH,
+          query: { redirect: encodeURIComponent(to.fullPath) },
+          replace: true,
+        };
+      }
+      return true;
+    }
+
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
