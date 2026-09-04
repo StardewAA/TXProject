@@ -43,6 +43,9 @@ public interface ErrorCodeConstants {
     ErrorCode CERT_CHANGE_LOG_LINK_BROKEN = new ErrorCode(1_060_106_004, "证照变更日志哈希链断裂");
     ErrorCode CERT_FILE_NOT_EXISTS = new ErrorCode(1_060_106_005, "证照文件不存在");
     ErrorCode CERT_FILE_VIRUS_NOT_CLEAN = new ErrorCode(1_060_106_006, "证照文件未通过病毒扫描，禁止预览/下载");
+    ErrorCode CERT_FILE_HASH_DUPLICATE = new ErrorCode(1_060_106_007, "同证照已存在相同哈希的文件，禁止重复上传");
+    ErrorCode CERT_FILE_VERSION_CONFLICT = new ErrorCode(1_060_106_008, "文件版本已存在（并发冲突），请刷新后重试");
+    ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_106_009, "文件参数不合法");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
