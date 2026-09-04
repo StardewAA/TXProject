@@ -6,5 +6,6 @@ import { requestClient } from '#/api/request';
 export function getEmployeeCertificateList() {
   return requestClient.get<HrmEmployeeCertificateApi.EmployeeCertificate[]>(
     '/hrm/portal/employee/certificate/list',
+    { headers: { 'X-Silent-Error': 'true' } },
   );
 }
