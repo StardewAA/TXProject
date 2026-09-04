@@ -321,6 +321,11 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_PROJECT_WORK_ORDER_CANCELED = new ErrorCode(1_040_509_101, "已取消的工单不允许挂接项目");
     ErrorCode PRO_PROJECT_STATUS_CLOSED = new ErrorCode(1_040_509_102, "项目已完成或已取消，不允许挂接生产工单");
     ErrorCode PRO_PROJECT_STATUS_FORBIDDEN = new ErrorCode(1_040_509_103, "项目状态不允许该操作，请刷新后重试");
+    ErrorCode PRO_PROJECT_STATUS_NOT_PAUSED = new ErrorCode(1_040_509_104, "项目当前状态不允许恢复，仅“已暂停”状态可恢复");
+    ErrorCode PRO_PROJECT_FORCE_CLOSE_FORBIDDEN = new ErrorCode(1_040_509_105, "已取消的项目不允许强制结项");
+    ErrorCode PRO_PROJECT_IMPORT_LIST_EMPTY = new ErrorCode(1_040_509_106, "导入数据为空");
+    ErrorCode PRO_PROJECT_MEMBER_NOT_EXISTS = new ErrorCode(1_040_509_110, "项目成员不存在");
+    ErrorCode PRO_PROJECT_MEMBER_NAME_DUPLICATE = new ErrorCode(1_040_509_111, "该成员已存在于当前项目中");
 
     // ========== MES 质量管理-质检方案（1-040-600-000） ==========
     ErrorCode QC_TEMPLATE_NOT_EXISTS = new ErrorCode(1_040_600_000, "质检方案不存在");
