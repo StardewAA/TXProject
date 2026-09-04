@@ -160,6 +160,7 @@ async function handleGenerateWorkOrder(
     orderSourceCode: current.orderSourceCode,
     orderSourceType: current.orderSourceType,
     parentId: current.id,
+    projectId: current.projectId,
     productId: bomRow.itemId,
     quantity: bomRow.quantity,
     requestDate: current.requestDate,
@@ -217,6 +218,7 @@ const [Modal, modalApi] = useVbenModal({
       formType: FormType;
       id?: number;
       parentRow?: MesProWorkOrderApi.WorkOrder;
+      projectId?: number; // 从项目下达工单时预填所属项目
     }>();
     formType.value = data.formType;
     subTabsName.value = 'bom';
@@ -230,14 +232,18 @@ const [Modal, modalApi] = useVbenModal({
       } finally {
         modalApi.unlock();
       }
+    } else if (data?.projectId) {
+      // 从项目下达工单：预填所属项目
+      await formApi.setValues({ projectId: data.projectId });
     } else if (data?.parentRow) {
-      // 新增子工单时，预填父工单信息
+      // 新增子工单时，预填父工单信息（含所属项目）
       const parent = data.parentRow;
       await formApi.setValues({
         clientId: parent.clientId,
         orderSourceCode: parent.orderSourceCode,
         orderSourceType: parent.orderSourceType,
         parentId: parent.id,
+        projectId: parent.projectId,
         requestDate: parent.requestDate,
         type: parent.type,
         vendorId: parent.vendorId,

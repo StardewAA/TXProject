@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.client.MesMdClientDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.vendor.MesMdVendorDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
@@ -67,6 +68,12 @@ public class MesProWorkOrderDO extends BaseDO {
      * 来源单据编号
      */
     private String orderSourceCode;
+    /**
+     * 所属项目编号
+     *
+     * 关联 {@link MesProProjectDO#getId()}，空值表示未挂接项目
+     */
+    private Long projectId;
     /**
      * 产品编号
      *

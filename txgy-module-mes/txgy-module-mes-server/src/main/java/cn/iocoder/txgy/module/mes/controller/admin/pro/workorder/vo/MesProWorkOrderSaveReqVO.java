@@ -34,6 +34,9 @@ public class MesProWorkOrderSaveReqVO {
     @Schema(description = "来源单据编号", example = "SO-001")
     private String orderSourceCode;
 
+    @Schema(description = "所属项目编号", example = "1024")
+    private Long projectId;
+
     @Schema(description = "产品编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
     @NotNull(message = "产品不能为空")
     private Long productId;

@@ -292,6 +292,8 @@ const MES_DICT = {
   MES_DV_CHECK_RECORD_STATUS: 'mes_dv_check_record_status', // MES 点检记录状态
   MES_DV_CHECK_RESULT: 'mes_dv_check_result', // MES 点检结果
   MES_PRO_LINK_TYPE: 'mes_pro_link_type', // MES 工序关系类型
+  MES_PRO_PROJECT_STATUS: 'mes_pro_project_status', // MES 项目状态
+  MES_PRO_PROJECT_SOURCE_TYPE: 'mes_pro_project_source_type', // MES 项目来源类型
   MES_PRO_WORK_ORDER_STATUS: 'mes_pro_work_order_status', // MES 生产工单状态
   MES_PRO_WORK_ORDER_TYPE: 'mes_pro_work_order_type', // MES 工单类型
   MES_PRO_WORK_ORDER_SOURCE_TYPE: 'mes_pro_work_order_source_type', // MES 工单来源类型
