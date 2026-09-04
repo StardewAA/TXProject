@@ -51,6 +51,13 @@ public interface ErrorCodeConstants {
     ErrorCode CERT_VERIFY_IN_PROGRESS = new ErrorCode(1_060_106_012, "验真进行中，请稍后刷新");
     ErrorCode CERT_VERIFY_GATEWAY_UNAVAILABLE = new ErrorCode(1_060_106_013, "核验通道未就绪，请联系管理员开通");
     ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_106_014, "验真渠道不合法");
+    ErrorCode QUALIFICATION_NOT_EXISTS = new ErrorCode(1_060_106_015, "资质主档不存在");
+    ErrorCode QUALIFICATION_NO_DUPLICATE = new ErrorCode(1_060_106_016, "同序列/类别/等级的资质证书编号已存在");
+    ErrorCode QUALIFICATION_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_017, "资质状态流转非法");
+    ErrorCode QUALIFICATION_DATA_MODIFIED = new ErrorCode(1_060_106_018, "资质主档已被他人修改，请刷新");
+    ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_106_019, "申报记录不存在");
+    ErrorCode QUAL_APPLY_STATUS_INVALID = new ErrorCode(1_060_106_020, "申报状态流转非法");
+    ErrorCode QUAL_APPLY_PARAM_INVALID = new ErrorCode(1_060_106_021, "申报参数不合法（当前版本支持延续 RENEW 申报）");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
