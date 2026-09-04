@@ -41,26 +41,53 @@ public class EsNoticeSearchEngine implements NoticeSearchEngine {
 
     @Override
     public void index(NoticeEsDoc doc) {
-        ensureIndex();
-        try {
-            String json = MAPPER.writeValueAsString(doc);
-            int code = send("PUT", "/" + INDEX + "/_doc/" + doc.getNoticeId(), json);
-            if (code >= 300) {
-                log.error("[index][索引失败 code={} noticeId={}]", code, doc.getNoticeId());
-            }
-        } catch (Exception e) {
-            log.error("[index][索引异常 noticeId={}]", doc.getNoticeId(), e);
-        }
+        executeWithRetry(() -> doIndex(doc), "索引 noticeId=" + doc.getNoticeId());
     }
 
     @Override
     public void remove(Long noticeId) {
+        executeWithRetry(() -> doRemove(noticeId), "删除索引 noticeId=" + noticeId);
+    }
+
+    /** 允许抛出异常的补偿动作（引擎 IO） */
+    @FunctionalInterface
+    private interface EsAction {
+        void run() throws Exception;
+    }
+
+    /**
+     * 同步补偿（规范 4.6 / 05 §2.2 规则）：失败重试 3 次（短退避），仍失败记 ERROR 日志；
+     * 转人工路径 = 公告侧 GATHER-02 公开同步接口手动重投（engine.index 再次触发）。
+     */
+    private void executeWithRetry(EsAction action, String describe) {
         ensureIndex();
-        try {
-            send("DELETE", "/" + INDEX + "/_doc/" + noticeId, null);
-        } catch (Exception e) {
-            log.error("[remove][删除索引异常 noticeId={}]", noticeId, e);
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                action.run();
+                return;
+            } catch (Exception e) {
+                if (attempt < 3) {
+                    try {
+                        Thread.sleep(200L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    log.warn("[同步补偿][第{}次重试] {}", attempt, describe);
+                } else {
+                    log.error("[同步补偿][3次失败，转人工（GATHER-02 手动重同步）] {}", describe, e);
+                }
+            }
         }
+    }
+
+    private void doIndex(NoticeEsDoc doc) throws IOException {
+        String json = MAPPER.writeValueAsString(doc);
+        sendRaw("PUT", "/" + INDEX + "/_doc/" + doc.getNoticeId(), json);
+    }
+
+    private void doRemove(Long noticeId) throws IOException {
+        sendRaw("DELETE", "/" + INDEX + "/_doc/" + noticeId, null);
     }
 
     @Override
@@ -107,7 +134,8 @@ public class EsNoticeSearchEngine implements NoticeSearchEngine {
     }
 
     private int send(String method, String path, String json) throws IOException {
-        return sendRaw(method, path, json) == null ? -1 : 200;
+        sendRaw(method, path, json);
+        return 200;
     }
 
     private String sendRaw(String method, String path, String json) throws IOException {
