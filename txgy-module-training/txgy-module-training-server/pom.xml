@@ -41,6 +41,11 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- Excel 导入导出（学员批量导入 3-2） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-excel</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-rpc</artifactId>

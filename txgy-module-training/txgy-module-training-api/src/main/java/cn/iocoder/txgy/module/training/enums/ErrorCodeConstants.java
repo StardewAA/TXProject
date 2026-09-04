@@ -88,4 +88,35 @@ public interface ErrorCodeConstants {
     ErrorCode RESOURCE_FILE_EMPTY = new ErrorCode(1_061_011_001, "上传文件不能为空");
     ErrorCode RESOURCE_REFERENCED_FORBIDDEN = new ErrorCode(1_061_011_002, "该资源已被引用，禁止物理删除");
 
+    // ========== 培训班（class）1-061-012-000 ==========
+    ErrorCode PLAN_CLASS_NOT_EXISTS = new ErrorCode(1_061_012_000, "培训班不存在");
+    ErrorCode PLAN_CLASS_NAME_DUPLICATE = new ErrorCode(1_061_012_001, "已存在同名培训班");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_UPDATE = new ErrorCode(1_061_012_002, "培训班当前状态【{}】不允许编辑");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_DELETE = new ErrorCode(1_061_012_003, "培训班当前状态【{}】不允许删除，需先取消");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_START = new ErrorCode(1_061_012_004, "培训班当前状态【{}】不允许开班");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_FINISH = new ErrorCode(1_061_012_005, "培训班当前状态【{}】不允许结业");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_CANCEL = new ErrorCode(1_061_012_006, "培训班当前状态【{}】不允许取消");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_STUDENT = new ErrorCode(1_061_012_007, "培训班当前状态【{}】不允许管理学员");
+    ErrorCode PLAN_CLASS_COURSE_REQUIRED_START = new ErrorCode(1_061_012_008, "开班前至少绑定 1 门课程");
+    ErrorCode PLAN_CLASS_DEADLINE_REQUIRED_START = new ErrorCode(1_061_012_009, "开班前必须设置培训截止时间");
+    ErrorCode PLAN_CLASS_COURSE_NOT_EXISTS = new ErrorCode(1_061_012_010, "培训班课程绑定记录不存在");
+    ErrorCode PLAN_CLASS_COURSE_DUPLICATE = new ErrorCode(1_061_012_011, "课程已绑定到该培训班，请勿重复添加");
+    ErrorCode PLAN_CLASS_COURSE_ONLY_ONLINE = new ErrorCode(1_061_012_012, "仅【已上架】课程可绑定到培训班");
+    ErrorCode PLAN_CLASS_COURSE_CLASS_FROZEN = new ErrorCode(1_061_012_013, "培训班已开班，课程清单不可调整");
+
+    // ========== 培训班学员（class student）1-061-013-000 ==========
+    ErrorCode PLAN_STUDENT_NOT_EXISTS = new ErrorCode(1_061_013_000, "培训班学员记录不存在");
+    ErrorCode PLAN_STUDENT_DUPLICATE = new ErrorCode(1_061_013_001, "学员已在该培训班中，请勿重复添加");
+    ErrorCode PLAN_STUDENT_ALREADY_REMOVED = new ErrorCode(1_061_013_002, "学员已移出该培训班");
+    ErrorCode PLAN_STUDENT_COURSE_REQUIRED = new ErrorCode(1_061_013_003, "培训班尚未绑定课程，无法添加学员（学员入班需自动生成学习任务）");
+    ErrorCode PLAN_TASK_NOT_EXISTS = new ErrorCode(1_061_013_004, "学员学习任务不存在");
+
+    // ========== 督促提醒（remind）1-061-014-000 ==========
+    ErrorCode PLAN_REMIND_NO_TARGET = new ErrorCode(1_061_014_000, "没有可督促的未完成学员");
+    ErrorCode PLAN_REMIND_CLASS_FINISHED = new ErrorCode(1_061_014_001, "培训班已结业，无需督促");
+    ErrorCode PLAN_REMIND_CLASS_NOT_ACTIVE = new ErrorCode(1_061_014_002, "培训班已取消或已结业，不支持督促");
+
+    // ========== 上岗资格核查（qualification）1-061-015-000 ==========
+    ErrorCode PLAN_QUALIFICATION_USER_NOT_EXISTS = new ErrorCode(1_061_015_000, "人员不存在或已停用");
+
 }
