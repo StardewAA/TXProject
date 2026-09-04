@@ -24,6 +24,8 @@ import {
 } from '../api';
 import { COURSE_MEDIA_TYPE_OPTIONS, COURSE_MEDIA_TYPE_TEXT } from '../data';
 
+const mediaTypeOptions = [...COURSE_MEDIA_TYPE_OPTIONS];
+
 defineOptions({ name: 'TrainingCourseMedia' });
 
 const emit = defineEmits(['success']);
@@ -64,14 +66,14 @@ const [Modal, modalApi] = useVbenModal({
 });
 
 async function loadList() {
-  const data = modalApi.getData<number>();
+  const data = modalApi.getData<{ id: number }>();
   if (!data) {
     return;
   }
-  courseId.value = data;
+  courseId.value = data.id;
   loading.value = true;
   try {
-    list.value = await getCourseMediaList(data);
+    list.value = await getCourseMediaList(data.id);
   } finally {
     loading.value = false;
   }
@@ -130,7 +132,7 @@ onMounted(() => {
       <Select
         v-model:value="mediaType"
         class="!w-24"
-        :options="COURSE_MEDIA_TYPE_OPTIONS"
+        :options="mediaTypeOptions"
       />
       <Input
         v-model:value="name"

@@ -2,12 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingCourseApi } from './api';
 
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import {
-  Button,
   Input,
   message,
   Modal,
@@ -367,7 +366,7 @@ function buildActions(row: TrainingCourseApi.Course) {
       <Input.TextArea
         v-model:value="rejectState.reason"
         :rows="3"
-        maxlength="500"
+        :maxlength="500"
         placeholder="请填写驳回原因（必填）"
       />
     </Modal>
@@ -410,7 +409,9 @@ function buildActions(row: TrainingCourseApi.Course) {
       </template>
 
       <template #level="{ row }">
-        <span>{{ COURSE_LEVEL_TEXT[row.level] || '-' }}</span>
+        <span>
+          {{ row.level != null ? (COURSE_LEVEL_TEXT[row.level] || '-') : '-' }}
+        </span>
       </template>
       <template #courseLevel="{ row }">
         <Tag v-if="row.courseLevel" color="processing">
@@ -427,12 +428,16 @@ function buildActions(row: TrainingCourseApi.Course) {
         <span v-else class="text-gray-400">-</span>
       </template>
       <template #status="{ row }">
-        <Tag :color="statusColorMap[row.status] || 'default'">
+        <Tag
+          :color="row.status != null ? (statusColorMap[row.status] || 'default') : 'default'"
+        >
           {{ COURSE_STATUS_OPTIONS.find((item) => item.value === row.status)?.label }}
         </Tag>
       </template>
       <template #mediaType="{ row }">
-        <span>{{ COURSE_MEDIA_TYPE_TEXT[row.mediaType] ?? '-' }}</span>
+        <span>
+          {{ row.mediaType != null ? (COURSE_MEDIA_TYPE_TEXT[row.mediaType] ?? '-') : '-' }}
+        </span>
       </template>
       <template #actions="{ row }">
         <TableAction :actions="buildActions(row)" />
