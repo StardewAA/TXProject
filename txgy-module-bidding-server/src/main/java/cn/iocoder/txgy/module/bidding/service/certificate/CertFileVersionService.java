@@ -21,4 +21,9 @@ public interface CertFileVersionService {
      * 病毒扫描结果回写：CLEAN 可预览/下载；INFECTED 自动置 is_current=false 停用（v3.3 §三口径）。
      */
     void markScanResult(Long fileVersionId, String virusScanStatus);
+
+    /**
+     * 证照全部文件版本（只追加历史；页面回查用，按类别+版本降序）。
+     */
+    java.util.List<cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertFileVersionDO> listFiles(Long certId);
 }

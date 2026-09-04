@@ -3,12 +3,17 @@ package cn.iocoder.txgy.module.bidding.controller.admin.certificate;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertFileRegisterReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificatePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateSaveReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertificateStatusChangeReqVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.certificate.CertFileVersionDO;
 import cn.iocoder.txgy.module.bidding.enums.CertificateChangeSourceEnum;
+import cn.iocoder.txgy.module.bidding.service.certificate.CertFileVersionService;
 import cn.iocoder.txgy.module.bidding.service.certificate.CertificateService;
+
+import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -44,6 +49,8 @@ public class CertificateController {
 
     @Resource
     private CertificateService certificateService;
+    @Resource
+    private CertFileVersionService certFileVersionService;
 
     @GetMapping("/page")
     @Operation(summary = "证照台账分页（管理端）")
@@ -76,6 +83,21 @@ public class CertificateController {
                                         @RequestBody CertificateSaveReqVO reqVO) {
         certificateService.updateCertificate(reqVO);
         return success(true);
+    }
+
+    @PostMapping("/file/register")
+    @Operation(summary = "登记证照文件版本（FileApi 上传后只登记元数据；同证同哈希判重）")
+    @PreAuthorize("@ss.hasPermission('bidding:certificate:file')")
+    @Idempotent
+    public CommonResult<Long> registerFile(@Valid @RequestBody CertFileRegisterReqVO reqVO) {
+        return success(certFileVersionService.registerFile(reqVO));
+    }
+
+    @GetMapping("/file/list")
+    @Operation(summary = "证照文件版本列表（只追加版本历史）")
+    @PreAuthorize("@ss.hasPermission('bidding:certificate:query')")
+    public CommonResult<List<CertFileVersionDO>> fileList(@RequestParam("certId") Long certId) {
+        return success(certFileVersionService.listFiles(certId));
     }
 
     @PostMapping("/change-status")

@@ -16,6 +16,16 @@ import java.util.List;
 public interface CertFileVersionMapper extends BaseMapperX<CertFileVersionDO> {
 
     /**
+     * 同证全部文件版本（只追加历史回查；按类别、版本倒序）。
+     */
+    default List<CertFileVersionDO> listAllByCertId(Long certId) {
+        return selectList(new LambdaQueryWrapper<CertFileVersionDO>()
+                .eq(CertFileVersionDO::getCertId, certId)
+                .orderByDesc(CertFileVersionDO::getFileCategory)
+                .orderByDesc(CertFileVersionDO::getVersion));
+    }
+
+    /**
      * 同证同哈希判重（UK uk_cert_file_hash；防重复上传，开发规范 §5 三-5/六-1）。
      */
     default CertFileVersionDO selectByCertIdAndHash(Long certId, String fileHash) {

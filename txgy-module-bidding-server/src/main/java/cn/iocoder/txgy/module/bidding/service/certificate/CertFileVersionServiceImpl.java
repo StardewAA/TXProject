@@ -37,6 +37,11 @@ public class CertFileVersionServiceImpl implements CertFileVersionService {
     private CertificateInfoMapper certificateInfoMapper;
 
     @Override
+    public List<CertFileVersionDO> listFiles(Long certId) {
+        return certFileVersionMapper.listAllByCertId(certId);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long registerFile(CertFileRegisterReqVO reqVO) {
         CertificateInfoDO cert = certificateInfoMapper.selectById(reqVO.getCertId());

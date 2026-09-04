@@ -40,6 +40,16 @@ public class CertificateVerifyController {
                 reqVO.getCertId(), channel, getLoginUserId()));
     }
 
+    @PostMapping("/verify-file")
+    @Idempotent
+    @Operation(summary = "文件验真（GB/T 36906 verifyfile；取当前生效文件指纹，同分钟幂等）")
+    @PreAuthorize("@ss.hasPermission('bidding:certificate:verify')")
+    public CommonResult<Long> verifyFile(@Valid @RequestBody CertificateVerifyReqVO reqVO) {
+        String channel = reqVO.getVerifyChannel() == null ? "FOUR_PLATFORM" : reqVO.getVerifyChannel();
+        return CommonResult.success(certificateVerifyService.verifyCertificateFile(
+                reqVO.getCertId(), channel, getLoginUserId()));
+    }
+
     /** 登录用户：平台 SecurityUtils 兼容（演示走 ss.hasPermission 鉴权）。 */
     private Long getLoginUserId() {
         return cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId();
