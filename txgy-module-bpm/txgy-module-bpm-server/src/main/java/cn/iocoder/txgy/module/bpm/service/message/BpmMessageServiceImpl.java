@@ -115,10 +115,26 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         if (!isErpOrderProcess(processDefinitionKey)) {
             return;
         }
-        templateParams.put("detailPath", "/erp/approval");
+        // system_notify_message.template_params 长度为 255，只传铃铛展示、跳转实际需要的字段。
+        // 原始 templateParams 仍保留完整 detailUrl，继续供现有短信模板使用。
+        Map<String, Object> notifyParams = new HashMap<>();
+        notifyParams.put("orderType", templateParams.get("orderType"));
+        notifyParams.put("orderTypeName", templateParams.get("orderTypeName"));
+        notifyParams.put("orderNo", templateParams.get("orderNo"));
+        notifyParams.put("detailPath", "/erp/approval");
+        if (ERP_TASK_ASSIGNED_TEMPLATE.equals(templateCode)) {
+            notifyParams.put("taskName", templateParams.get("taskName"));
+            notifyParams.put("startUserNickname", templateParams.get("startUserNickname"));
+        } else if (ERP_TASK_COMPLETED_TEMPLATE.equals(templateCode)) {
+            notifyParams.put("taskName", templateParams.get("taskName"));
+            notifyParams.put("result", templateParams.get("result"));
+        } else if (ERP_REJECTED_TEMPLATE.equals(templateCode)) {
+            String reason = String.valueOf(templateParams.get("reason"));
+            notifyParams.put("reason", reason.length() > 80 ? reason.substring(0, 80) : reason);
+        }
         try {
             notifyMessageSendApi.sendSingleMessageToAdmin(new NotifySendSingleToUserReqDTO()
-                    .setUserId(userId).setTemplateCode(templateCode).setTemplateParams(templateParams)).checkError();
+                    .setUserId(userId).setTemplateCode(templateCode).setTemplateParams(notifyParams)).checkError();
         } catch (Exception ex) {
             // 通知属于附属能力，模板漏部署或消息服务短暂不可用时，不能回滚正常的订单审批。
             log.error("[sendErpNotify][ERP 审批站内信发送失败，processDefinitionKey={}, userId={}, templateCode={}]",
