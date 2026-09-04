@@ -58,6 +58,8 @@ public interface ErrorCodeConstants {
     ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_106_019, "申报记录不存在");
     ErrorCode QUAL_APPLY_STATUS_INVALID = new ErrorCode(1_060_106_020, "申报状态流转非法");
     ErrorCode QUAL_APPLY_PARAM_INVALID = new ErrorCode(1_060_106_021, "申报参数不合法（当前版本支持延续 RENEW 申报）");
+    ErrorCode QUAL_STANDARD_NOT_FOUND = new ErrorCode(1_060_106_022, "未找到适用资质标准（按序列/类别/等级与生效区间）");
+    ErrorCode QUAL_STANDARD_VERSION_DUPLICATE = new ErrorCode(1_060_106_023, "同标准版本/适用范围已存在，请换版本号");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
