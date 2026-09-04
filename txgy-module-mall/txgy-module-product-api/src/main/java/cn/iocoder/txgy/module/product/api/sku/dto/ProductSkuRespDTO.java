@@ -1,44 +1,76 @@
 package cn.iocoder.txgy.module.product.api.sku.dto;
 
 import cn.iocoder.txgy.module.product.api.property.dto.ProductPropertyValueDetailRespDTO;
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.util.List;
 
-@Schema(description = "RPC 服务 - 商品 SKU 信息 Response DTO")
+/**
+ * 商品 SKU 信息 Response DTO
+ *
+ * @author LeeYan9
+ * @since 2022-08-26
+ */
 @Data
 public class ProductSkuRespDTO {
 
-    @Schema(description = "商品 SKU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    /**
+     * 商品 SKU 编号，自增
+     */
     private Long id;
-    @Schema(description = "SPU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "2048")
+    /**
+     * SPU 编号
+     */
     private Long spuId;
 
-    @Schema(description = "属性数组", requiredMode = Schema.RequiredMode.REQUIRED)
+    /**
+     * 属性数组
+     */
     private List<ProductPropertyValueDetailRespDTO> properties;
-
-    @Schema(description = "销售价格，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
+    /**
+     * 销售价格，单位：分
+     */
     private Integer price;
-    @Schema(description = "市场价，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "200")
+    /**
+     * 市场价，单位：分
+     */
     private Integer marketPrice;
-    @Schema(description = "成本价，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "300")
+    /**
+     * 成本价，单位：分
+     */
     private Integer costPrice;
-    @Schema(description = "SKU 的条形码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456789")
+    /**
+     * SKU 的条形码
+     */
     private String barCode;
-    @Schema(description = "图片地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.iocoder.cn/xxx.jpg")
+    /**
+     * 图片地址
+     */
     private String picUrl;
-
-    @Schema(description = "库存", requiredMode = Schema.RequiredMode.REQUIRED, example = "100")
+    /**
+     * 库存
+     */
     private Integer stock;
-    @Schema(description = "商品重量，单位：kg 千克", requiredMode = Schema.RequiredMode.REQUIRED, example = "1.5")
+    /** WMS 物料 SKU 编号 */
+    private Long wmsSkuId;
+    /** WMS 仓库编号 */
+    private Long wmsWarehouseId;
+    /**
+     * 商品重量，单位：kg 千克
+     */
     private Double weight;
-    @Schema(description = "商品体积，单位：m^3 平米", requiredMode = Schema.RequiredMode.REQUIRED, example = "3.0")
+    /**
+     * 商品体积，单位：m^3 平米
+     */
     private Double volume;
-
-    @Schema(description = "一级分销的佣金，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "550")
+    /**
+     * 一级分销的佣金，单位：分
+     */
     private Integer firstBrokeragePrice;
-    @Schema(description = "二级分销的佣金，单位：分", requiredMode = Schema.RequiredMode.REQUIRED, example = "250")
+    /**
+     * 二级分销的佣金，单位：分
+     */
     private Integer secondBrokeragePrice;
 
 }
+

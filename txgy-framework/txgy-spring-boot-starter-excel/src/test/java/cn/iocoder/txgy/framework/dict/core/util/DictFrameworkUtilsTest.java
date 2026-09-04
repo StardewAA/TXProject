@@ -34,8 +34,16 @@ public class DictFrameworkUtilsTest extends BaseMockitoUnitTest {
     public void testParseDictDataLabel() {
         // mock 数据
         List<DictDataRespDTO> dictDatas = List.of(
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType("animal").setValue("cat").setLabel("猫")),
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType("animal").setValue("dog").setLabel("狗"))
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType("animal");
+                    o.setValue("cat");
+                    o.setLabel("猫");
+                }),
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType("animal");
+                    o.setValue("dog");
+                    o.setLabel("狗");
+                })
         );
         // mock 方法
         when(dictDataApi.getDictDataList(eq("animal"))).thenReturn(success(dictDatas));
@@ -48,8 +56,16 @@ public class DictFrameworkUtilsTest extends BaseMockitoUnitTest {
     public void testParseDictDataValue() {
         // mock 数据
         List<DictDataRespDTO> dictDatas = List.of(
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType("animal").setValue("cat").setLabel("猫")),
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType("animal").setValue("dog").setLabel("狗"))
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType("animal");
+                    o.setValue("cat");
+                    o.setLabel("猫");
+                }),
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType("animal");
+                    o.setValue("dog");
+                    o.setLabel("狗");
+                })
         );
         // mock 方法
         when(dictDataApi.getDictDataList(eq("animal"))).thenReturn(success(dictDatas));

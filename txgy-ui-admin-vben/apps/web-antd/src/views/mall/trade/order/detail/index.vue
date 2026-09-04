@@ -23,6 +23,7 @@ import { getDeliveryPickUpStore } from '#/api/mall/trade/delivery/pickUpStore';
 import {
   getExpressTrackList,
   getOrder,
+  getOrderShopGroups,
   pickUpOrder,
 } from '#/api/mall/trade/order';
 import { useDescription } from '#/components/description';
@@ -56,6 +57,7 @@ const order = ref<MallOrderApi.Order>({
 });
 const deliveryExpressList = ref<MallDeliveryExpressApi.DeliveryExpress[]>([]);
 const expressTrackList = ref<any[]>([]);
+const shopGroups = ref<Awaited<ReturnType<typeof getOrderShopGroups>>>([]);
 const pickUpStore = ref<
   MallDeliveryPickUpStoreApi.DeliveryPickUpStore | undefined
 >();
@@ -172,6 +174,7 @@ async function getDetail() {
       return;
     }
     order.value = res;
+    shopGroups.value = await getOrderShopGroups(orderId.value);
     productGridApi.setGridOptions({ data: res.items || [] });
     operateLogGridApi.setGridOptions({ data: res.logs || [] });
 
@@ -306,6 +309,18 @@ onMounted(async () => {
       <OrderStatusDescriptions :data="order" />
     </div>
     <!-- 商品信息 -->
+    <div class="mb-4">
+      <a-card title="店铺履约分组" :bordered="false">
+        <a-table :data-source="shopGroups" :pagination="false" row-key="shopId" size="small">
+          <a-table-column title="店铺" key="shopName">
+            <template #default="{ record }">{{ record.shopName || (record.shopId === 0 ? '平台自营' : `店铺 ${record.shopId}`) }}</template>
+          </a-table-column>
+          <a-table-column title="商品数量" data-index="productCount" />
+          <a-table-column title="商品金额（元）" key="totalPrice"><template #default="{ record }">{{ ((record.totalPrice || 0) / 100).toFixed(2) }}</template></a-table-column>
+          <a-table-column title="实付金额（元）" key="payPrice"><template #default="{ record }">{{ ((record.payPrice || 0) / 100).toFixed(2) }}</template></a-table-column>
+        </a-table>
+      </a-card>
+    </div>
     <div class="mb-4">
       <ProductGrid table-title="商品信息">
         <template #spuName="{ row }">

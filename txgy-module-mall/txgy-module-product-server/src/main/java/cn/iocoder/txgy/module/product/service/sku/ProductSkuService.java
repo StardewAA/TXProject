@@ -1,16 +1,20 @@
 package cn.iocoder.txgy.module.product.service.sku;
 
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuUpdateStockReqDTO;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuStockLockReqDTO;
 import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSkuSaveReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
+import cn.iocoder.txgy.module.product.service.sku.dto.ProductWmsStockReconciliationDTO;
+import cn.iocoder.txgy.module.product.service.sku.adapter.ProductWmsInventoryAdapter;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 商品 SKU Service 接口
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 public interface ProductSkuService {
 
@@ -78,6 +82,27 @@ public interface ProductSkuService {
      */
     void updateSkuStock(ProductSkuUpdateStockReqDTO updateStockReqDTO);
 
+    /** 下单时锁定 SKU 库存；已配置 WMS 映射的 SKU 在 WMS 中预占。 */
+    void reserveSkuStock(ProductSkuStockLockReqDTO reqDTO);
+
+    /** 订单取消或售后时释放尚未出库的 SKU 库存。 */
+    void releaseSkuStock(ProductSkuStockLockReqDTO reqDTO);
+
+    /** 发货时将已预占的 WMS 库存确认出库。 */
+    void outboundSkuStock(ProductSkuStockLockReqDTO reqDTO);
+
+    /** 售后退货由仓库确认签收后，回补已出库的 WMS 库存。 */
+    void inboundReturnSkuStock(String returnNo, ProductSkuStockLockReqDTO reqDTO);
+
+    /** 批量查询订单的 WMS 库存履约状态。 */
+    Map<String, ProductWmsInventoryAdapter.ReservationSummary> getWmsStockStatus(Collection<String> orderNos);
+
+    /** 对比商品缓存库存与 WMS 库存；spuIds 为 null 时查询全部。 */
+    List<ProductWmsStockReconciliationDTO> getWmsStockReconciliation(Collection<Long> spuIds);
+
+    /** 将存在差异的 WMS 可售库存同步到商品缓存，返回修复的 SKU 数量。 */
+    int syncWmsStockCache(Collection<Long> spuIds);
+
     /**
      * 获得商品 SKU 集合
      *
@@ -120,3 +145,4 @@ public interface ProductSkuService {
     int updateSkuPropertyValue(Long propertyValueId, String propertyValueName);
 
 }
+
