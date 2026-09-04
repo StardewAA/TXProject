@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.erp.dal.mysql.purchase.ErpPurchaseOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.purchase.ErpPurchaseOrderMapper;
 import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
+import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
@@ -64,6 +65,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private ErpAccountService accountService;
     @Resource
     private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private ErpApprovalNotificationService approvalNotificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -182,6 +185,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         purchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(id)
                 .setStatus(ErpAuditStatus.PROCESS.getStatus())
                 .setProcessInstanceId(processInstanceId));
+        approvalNotificationService.sendOrderSubmittedAfterCommit(userId, "PURCHASE", purchaseOrder.getNo(), id);
     }
 
     @Override
