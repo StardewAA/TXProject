@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderMapper;
 import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
+import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
@@ -65,6 +66,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private ErpAccountService accountService;
     @Resource
     private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private ErpApprovalNotificationService approvalNotificationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -194,6 +197,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id)
                 .setStatus(ErpAuditStatus.PROCESS.getStatus())
                 .setProcessInstanceId(processInstanceId));
+        approvalNotificationService.sendOrderSubmittedAfterCommit(userId, "SALE", saleOrder.getNo(), id);
     }
 
     @Override

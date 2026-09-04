@@ -2,7 +2,7 @@
 import type { TableColumnsType } from 'ant-design-vue';
 
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -59,6 +59,7 @@ interface ApprovalOrder {
 }
 
 const router = useRouter();
+const route = useRoute();
 const loading = ref(false);
 const detailLoading = ref(false);
 const submitting = ref(false);
@@ -145,7 +146,11 @@ async function loadOrders() {
       ...(salePage.list || []).map(normalizeSale),
     ].sort((a, b) => new Date(b.createTime || 0).getTime() - new Date(a.createTime || 0).getTime());
     if (!selectedOrder.value && allOrders.value.length > 0) {
-      await selectOrder(allOrders.value[0]!);
+      const targetOrderNo = String(route.query.orderNo || '');
+      const targetOrderType = String(route.query.orderType || '');
+      const targetOrder = allOrders.value.find((item) => item.no === targetOrderNo
+        && (!targetOrderType || item.orderType === targetOrderType));
+      await selectOrder(targetOrder || allOrders.value[0]!);
     }
   } finally {
     loading.value = false;
@@ -156,7 +161,7 @@ async function selectOrder(order: ApprovalOrder | Record<string, any>) {
   const approvalOrder = order as ApprovalOrder;
   detailLoading.value = true;
   try {
-    const detail = approvalOrder.orderType === 'PURCHASE'
+    const detail: any = approvalOrder.orderType === 'PURCHASE'
       ? await getPurchaseOrder(approvalOrder.id)
       : await getSaleOrder(approvalOrder.id);
     // 详情接口主要返回业务字段和明细；保留列表接口已经补齐的名称字段，
