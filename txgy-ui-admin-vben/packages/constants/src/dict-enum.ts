@@ -116,7 +116,10 @@ const CRM_DICT = {
   CRM_AUDIT_STATUS: 'crm_audit_status', // CRM 审批状态
   CRM_BIZ_TYPE: 'crm_biz_type', // CRM 业务类型
   CRM_BUSINESS_END_STATUS_TYPE: 'crm_business_end_status_type', // CRM 商机结束状态类型
-  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业
+  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业（合并：下游+上游，用于展示）
+  CRM_CUSTOMER_CATEGORY: 'crm_customer_category', // CRM 客户类别（下游客户/上游供应商）
+  CRM_CUSTOMER_INDUSTRY_DOWNSTREAM: 'crm_customer_industry_downstream', // CRM 下游客户行业
+  CRM_CUSTOMER_INDUSTRY_UPSTREAM: 'crm_customer_industry_upstream', // CRM 上游供应商行业
   CRM_CUSTOMER_LEVEL: 'crm_customer_level', // CRM 客户级别
   CRM_CUSTOMER_SOURCE: 'crm_customer_source', // CRM 客户来源
   CRM_FOLLOW_UP_TYPE: 'crm_follow_up_type', // CRM 跟进方式
