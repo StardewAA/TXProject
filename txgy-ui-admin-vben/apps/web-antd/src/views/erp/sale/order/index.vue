@@ -14,7 +14,7 @@ import {
   deleteSaleOrder,
   exportSaleOrder,
   getSaleOrderPage,
-  updateSaleOrderStatus,
+  submitSaleOrder,
 } from '#/api/erp/sale/order';
 import { $t } from '#/locales';
 
@@ -65,18 +65,15 @@ async function handleDelete(ids: number[]) {
   }
 }
 
-/** 审批/反审批操作 */
-async function handleUpdateStatus(
-  row: ErpSaleOrderApi.SaleOrder,
-  status: number,
-) {
+/** 提交到审批流程 */
+async function handleSubmit(row: ErpSaleOrderApi.SaleOrder) {
   const hideLoading = message.loading({
-    content: `确定${status === 20 ? '审批' : '反审批'}该订单吗？`,
+    content: '正在提交审批...',
     duration: 0,
   });
   try {
-    await updateSaleOrderStatus(row.id!, status);
-    message.success(`${status === 20 ? '审批' : '反审批'}成功`);
+    await submitSaleOrder(row.id!);
+    message.success('已提交审批');
     handleRefresh();
   } finally {
     hideLoading();
@@ -190,21 +187,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               icon: ACTION_ICON.EDIT,
               auth: ['erp:sale-order:update'],
-              ifShow: () => row.status !== 20,
+              ifShow: () => ![10, 20].includes(row.status),
               onClick: handleEdit.bind(null, row),
             },
             {
-              label: row.status === 10 ? '审批' : '反审批',
+              label: '提交审批',
               type: 'link',
               icon: ACTION_ICON.AUDIT,
-              auth: ['erp:sale-order:update-status'],
+              auth: ['erp:approval:submit'],
+              ifShow: () => [0, 30, 40].includes(row.status),
               popConfirm: {
-                title: `确认${row.status === 10 ? '审批' : '反审批'}${row.no}吗？`,
-                confirm: handleUpdateStatus.bind(
-                  null,
-                  row,
-                  row.status === 10 ? 20 : 10,
-                ),
+                title: `确认将${row.no}提交到审批管理吗？`,
+                confirm: handleSubmit.bind(null, row),
               },
             },
             {

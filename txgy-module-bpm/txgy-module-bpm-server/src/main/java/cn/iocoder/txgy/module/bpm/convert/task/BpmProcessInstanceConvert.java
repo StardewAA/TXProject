@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.bpm.convert.task;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
@@ -133,13 +134,19 @@ public interface BpmProcessInstanceConvert {
         return new BpmMessageSendWhenProcessInstanceApproveReqDTO()
                 .setStartUserId(NumberUtils.parseLong(instance.getStartUserId()))
                 .setProcessInstanceId(instance.getId())
-                .setProcessInstanceName(instance.getName());
+                .setProcessInstanceName(instance.getName())
+                .setProcessDefinitionKey(instance.getProcessDefinitionKey())
+                .setOrderType(MapUtil.getStr(instance.getProcessVariables(), "orderType"))
+                .setOrderNo(MapUtil.getStr(instance.getProcessVariables(), "orderNo"));
     }
 
     default BpmMessageSendWhenProcessInstanceRejectReqDTO buildProcessInstanceRejectMessage(ProcessInstance instance, String reason) {
         return new BpmMessageSendWhenProcessInstanceRejectReqDTO()
                 .setProcessInstanceName(instance.getName())
                 .setProcessInstanceId(instance.getId())
+                .setProcessDefinitionKey(instance.getProcessDefinitionKey())
+                .setOrderType(MapUtil.getStr(instance.getProcessVariables(), "orderType"))
+                .setOrderNo(MapUtil.getStr(instance.getProcessVariables(), "orderNo"))
                 .setReason(reason)
                 .setStartUserId(NumberUtils.parseLong(instance.getStartUserId()));
     }
