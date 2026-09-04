@@ -115,6 +115,22 @@ public class MesWmBatchDO extends BaseDO {
      */
     private Integer qualityStatus;
     /**
+     * 环保污染状态（环保判定独立于质量判定 R3）：NULL/空=未判定可正常流转，CLEAN=无污染，POLLUTED=有污染受控(触发门禁)
+     */
+    private String pollutionStatus;
+    /**
+     * 环保去向/库位快照（人工复核填写的 location）
+     */
+    private String pollutionLocation;
+    /**
+     * 是否标记（有污染/需管控，复核 marked）
+     */
+    private Boolean pollutionMarked;
+    /**
+     * 源污染判定记录编号（PC-...，可反查 mes_set_pollution_check）
+     */
+    private String pollutionSrcRecord;
+    /**
      * 备注
      */
     private String remark;

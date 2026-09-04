@@ -18,6 +18,9 @@ export namespace MesWmProductIssueDetailApi {
     areaId?: number; // 库位编号
     areaName?: string; // 库位名称
     remark?: string; // 备注
+    pollutionStatus?: string; // 环保判定 CLEAN/POLLUTED
+    pollutionLocation?: string; // 污染去向/库位
+    pollutionMarked?: boolean; // 是否标记
   }
 }
 

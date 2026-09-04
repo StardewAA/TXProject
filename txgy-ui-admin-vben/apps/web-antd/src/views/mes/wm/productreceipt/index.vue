@@ -15,13 +15,20 @@ import {
   exportProductReceipt,
   getProductReceiptPage,
 } from '#/api/mes/wm/productreceipt';
+import { getProductReceiptLinePage } from '#/api/mes/wm/productreceipt/line';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import JudgeModal from '../_pollution/judge-modal.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [PollutionJudgeModal, pollutionJudgeApi] = useVbenModal({
+  connectedComponent: JudgeModal,
   destroyOnClose: true,
 });
 
@@ -53,6 +60,29 @@ function handleStock(row: MesWmProductReceiptApi.ProductReceipt) {
 /** 执行入库 */
 function handleFinish(row: MesWmProductReceiptApi.ProductReceipt) {
   formModalApi.setData({ formType: 'finish', id: row.id }).open();
+}
+
+/** 环保判定：按该单真实物料行逐行 AI 初筛→人工复核 */
+async function handleJudge(row: MesWmProductReceiptApi.ProductReceipt) {
+  const { list } = await getProductReceiptLinePage({
+    receiptId: row.id!,
+    pageNo: 1,
+    pageSize: 200,
+  });
+  pollutionJudgeApi
+    .setData({
+      title: '产品入库环保判定',
+      stage: 'FINISHED_PRODUCT',
+      bizNo: row.code ?? '',
+      lines: (list ?? []).map((line) => ({
+        lineId: line.id,
+        itemCode: line.itemCode,
+        itemName: line.itemName,
+        itemSpec: line.specification,
+        batchNo: line.batchCode,
+      })),
+    })
+    .open();
 }
 
 /** 删除产品入库单 */
@@ -125,6 +155,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <FormModal @success="handleRefresh" />
 
+    <PollutionJudgeModal />
+
     <Grid table-title="产品入库单列表">
       <template #toolbar-tools>
         <TableAction
@@ -187,6 +219,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['mes:wm-product-receipt:finish'],
               ifShow: row.status === MesWmProductReceiptStatusEnum.APPROVED,
               onClick: handleFinish.bind(null, row),
+            },
+            {
+              label: '环保判定',
+              type: 'link',
+              auth: ['mes:set-pollution-check:create'],
+              onClick: handleJudge.bind(null, row),
             },
             {
               label: '取消',

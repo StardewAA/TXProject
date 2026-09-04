@@ -717,4 +717,19 @@ public interface ErrorCodeConstants {
     ErrorCode WM_PACKAGE_HAS_CHILDREN = new ErrorCode(1_040_740_008, "存在子箱，不允许删除");
     ErrorCode WM_PACKAGE_LINE_NOT_EXISTS = new ErrorCode(1_040_740_100, "装箱明细不存在");
 
+    // ========== MES 安全环保检测-污染判定记录（1-040-818-000） ==========
+    ErrorCode SET_POLLUTION_CHECK_NOT_EXISTS = new ErrorCode(1_040_818_000, "污染判定记录不存在");
+    ErrorCode SET_POLLUTION_CHECK_ALREADY_REVIEWED = new ErrorCode(1_040_818_001, "该记录已复核，禁止修改或删除");
+    ErrorCode SET_POLLUTION_CHECK_NOT_REVIEWED = new ErrorCode(1_040_818_002, "该记录尚未复核");
+    ErrorCode SET_POLLUTION_CHECK_REVIEW_RESULT_INVALID = new ErrorCode(1_040_818_003, "人工复核结果不合法（仅支持无污染/有污染）");
+    ErrorCode SET_POLLUTION_CHECK_STAGE_INVALID = new ErrorCode(1_040_818_004, "环节类型不合法");
+    ErrorCode SET_POLLUTION_CHECK_BATCH_REQUIRED = new ErrorCode(1_040_818_005, "有污染判定必须关联真实批次号（中间废弃物环节除外）");
+    ErrorCode SET_POLLUTION_CHECK_LOCATION_REQUIRED = new ErrorCode(1_040_818_006, "有污染判定必须填写去向/库位");
+    ErrorCode SET_POLLUTION_CHECK_BATCH_NOT_FOUND = new ErrorCode(1_040_818_007, "批次 {} 不存在，无法落地有污染管控，请核对批次号后再复核");
+    // ========== MES 安全环保检测-污染管控门禁与台账（1-040-819-000） ==========
+    ErrorCode MES_POLLUTION_ISSUE_BLOCKED = new ErrorCode(1_040_819_000, "批次 {} 存在有污染环保判定（去向：{}），拒绝领用，请先在污染/危废暂存区完成处理");
+    ErrorCode MES_POLLUTION_OUTBOUND_BLOCKED = new ErrorCode(1_040_819_001, "批次 {} 存在有污染/标记环保判定（去向：{}），禁止出库");
+    ErrorCode SET_POLLUTION_LEDGER_NOT_EXISTS = new ErrorCode(1_040_819_002, "污染/危废暂存台账记录不存在");
+    ErrorCode SET_POLLUTION_LEDGER_STATUS_INVALID = new ErrorCode(1_040_819_003, "台账状态不合法（支持：处置中/已回用/已排放/已处置）");
+
 }
