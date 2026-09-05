@@ -3,21 +3,16 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer;
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * ES 索引通知器占位实现：仅记录日志。
- *
- * <p>待接入项（见设计 §7.6 预留）：
- * <ol>
- *   <li>接入 starter-mq（Redis Stream topic：ext-notice.index），本方法改为发布事件；</li>
- *   <li>独立消费者调 txgy elasticsearch 封装建索引（title/标题+正文抽取文本/项目/标段等可检索字段）；</li>
- *   <li>补偿：定时扫描 ACTIVE 且未索引(如按索引标记/时间窗口)的主档重发事件。</li>
- * </ol>
- * 更换实现即可切换，调用方（审核服务）无感知。
+ * ES 索引通知器降级实现（bidding.es.enabled=false / 未配置时装配）：仅记录日志。
+ * <p>与 {@link EsExternalNoticeIndexNotifier} 按 bidding.es.enabled 条件互斥；调用方（审核服务）无感知。
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "bidding.es", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LogOnlyExternalNoticeIndexNotifier implements ExternalNoticeIndexNotifier {
 
     @Override

@@ -117,5 +117,12 @@ bidding:
   es:
     enabled: true
     uris: http://127.0.0.1:9200
+    debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键
+    username: ${ES_USERNAME:elastic} # 账号（本地 dev，勿提交生产凭据）
+    password: ${ES_PASSWORD:} # 密码：本地用环境变量 ES_PASSWORD 注入（不入库）；留空=不带认证
+  ext-notice:
+    pdf:
+      open-data-loader:
+        # OpenDataLoader 本地引擎（PDFBox 实现）：extract(File)→text/tables/pageCount，见 infra.file.PdfBoxOpenDataLoader
+        loader-class: cn.iocoder.txgy.module.bidding.infra.file.PdfBoxOpenDataLoader
 
-debug: false
