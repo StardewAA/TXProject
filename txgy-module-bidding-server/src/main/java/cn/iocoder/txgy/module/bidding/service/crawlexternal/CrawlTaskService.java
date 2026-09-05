@@ -1,0 +1,51 @@
+package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+// 规范依据：设计文档 v0.6 §二/§三/§四/§15.4（采集任务状态机、urlHash 幂等去重、MQ 3 次重试→死信转审核）
+
+import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+
+/**
+ * 采集任务编排服务。
+ *
+ * <p>核心语义（与消息/重试对齐，设计 §三）：
+ * <ul>
+ *   <li>urlHash 幂等去重：同 URL 存在未终态（PENDING/RUNNING）任务直接复用，不重复抓；</li>
+ *   <li>失败重试：attempt 指数退避，attempt &lt; 3 → 回 PENDING+nextRetryTime（等价 crawl.retry 重投）；</li>
+ *   <li>attempt ≥ 3（耗尽）→ FAILED 死信，经 {@code CrawlDeadLetterSink} 转人工审核（crawl.audit）。</li>
+ * </ul>
+ */
+public interface CrawlTaskService {
+
+    /**
+     * 建/取任务：同 urlHash 存在 PENDING/RUNNING 时复用（幂等去重）。
+     *
+     * @return 任务 ID（新建或复用）
+     */
+    Long createTaskIfAbsent(Long jobId, String sourceCode, String url, String urlHash,
+                            String channelCode, String parserCode, Integer priority);
+
+    /**
+     * 标记开始执行（RUNNING + worker 归属）。
+     */
+    void markRunning(Long taskId, String workerId);
+
+    /**
+     * 下载成功：置 SUCCESS 并记录原文引用/内容形态（原文落库/抽取由下游消费驱动，见设计 §四）。
+     */
+    void markDownloadSuccess(Long taskId, String contentRef, String contentType);
+
+    /**
+     * 处理下载/处理失败：3 次内退避重试；耗尽置 FAILED 并转人工审核。
+     *
+     * @return 重试中 或 死信转审核
+     */
+    CrawlAttemptOutcome handleFailure(Long taskId, String cause);
+
+    /** 处理结果分类（对外断言用） */
+    enum CrawlAttemptOutcome {
+        /** 已安排第 N 次重试（PENDING + nextRetryTime） */
+        RETRY_SCHEDULED,
+        /** 重试耗尽（≥3 次）→ FAILED + 转人工审核 */
+        DEAD_LETTER_AUDITED
+    }
+
+}
