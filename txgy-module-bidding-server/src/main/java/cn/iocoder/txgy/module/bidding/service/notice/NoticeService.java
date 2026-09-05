@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
+// 规范依据：《招投标模块开发规范》§3.1/3.2、§4.4/4.5/4.8、五章五；05 §3.1/3.3
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeDeadlineRespVO;

@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.enums;
+// 规范依据：《招投标模块开发规范》§2.1/2.2（全量VO、@PublicLevel）；权威数据集见 VO数据规范·公告公示类
 
 import cn.iocoder.txgy.module.bidding.api.vo.TenderChangeNoticeVO;
 import cn.iocoder.txgy.module.bidding.api.vo.TenderNoticeVO;

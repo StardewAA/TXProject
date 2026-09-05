@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.notice.vo;
+// 规范依据：《招投标模块开发规范》§3.1；VO数据规范 载荷全集/必填
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;

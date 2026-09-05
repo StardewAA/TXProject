@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.notice;
+// 规范依据：《招投标模块开发规范》§4.1~4.5、五章五；01/05（BID-ENT-NOTICE-01/02、GATHER-02、HALL-INFO-01/SEARCH-01）
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;

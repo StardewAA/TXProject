@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.dal.dataobject.filing;
+// 规范依据：《招投标模块开发规范》五章；05 §2.1（备案受理记录）
 
 import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.TableName;

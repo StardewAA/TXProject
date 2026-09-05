@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
+// 规范依据：《招投标模块开发规范》五章三§2（正文版本化）
 
 /**
  * 公告正文版本判定工具：内容是否变化决定是否追加一个新版本（正文走版本化，见规范第五章第三节第 2 款）。

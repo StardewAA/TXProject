@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice.search;
+// 规范依据：《招投标模块开发规范》§4.6；04-公开文档与ES搜索引擎设计
 
 import java.util.List;
 

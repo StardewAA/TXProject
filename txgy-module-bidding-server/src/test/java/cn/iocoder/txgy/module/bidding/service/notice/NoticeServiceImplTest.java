@@ -85,10 +85,12 @@ class NoticeServiceImplTest {
         int componentCount = NoticeTypeEnum.TENDER_NOTICE.getDatasetClass().getRecordComponents().length;
         assertEquals(componentCount, fields.size(), "字段数必须等于权威数据集字段全集");
         assertEquals("某项目招标公告", fields.get("NOTICE_NAME"));
+        // 缺失必填已由 checkRequired 拦截；此处验证“非必填的可选字段”补 null
         String nullableField = java.util.Arrays.stream(
                         NoticeTypeEnum.TENDER_NOTICE.getDatasetClass().getRecordComponents())
                 .map(java.lang.reflect.RecordComponent::getName)
                 .filter(name -> !"NOTICE_NAME".equals(name))
+                .filter(name -> !NoticePayloadUtils.requiredFieldNames(NoticeTypeEnum.TENDER_NOTICE).contains(name))
                 .findFirst().orElseThrow();
         assertTrue(fields.containsKey(nullableField) && fields.get(nullableField) == null,
                 "缺失字段必须补 null（" + nullableField + "）");
@@ -100,6 +102,7 @@ class NoticeServiceImplTest {
     @Test
     void create_withContent_writesVersionOne() {
         NoticeSaveReqVO reqVO = baseReq();
+        reqVO.setPayload(payload("E-CODE", "某项目招标公告"));
         reqVO.setContent("招标公告正文第一版");
         when(noticeMapper.insert(any(NoticeDO.class))).thenAnswer(inv -> {
             NoticeDO notice = inv.getArgument(0);
@@ -316,7 +319,10 @@ class NoticeServiceImplTest {
 
     private Map<String, Object> payload(String dealCode, String noticeName) {
         Map<String, Object> raw = new LinkedHashMap<>();
-        raw.put("UNIFIED_DEAL_CODE", dealCode);
+        // 权威必填字段全部置值（VO数据规范 必填=是），否则新建会被必填校验拦截
+        for (String field : NoticePayloadUtils.requiredFieldNames(NoticeTypeEnum.TENDER_NOTICE)) {
+            raw.put(field, "REQ");
+        }
         raw.put("NOTICE_NAME", noticeName);
         return raw;
     }

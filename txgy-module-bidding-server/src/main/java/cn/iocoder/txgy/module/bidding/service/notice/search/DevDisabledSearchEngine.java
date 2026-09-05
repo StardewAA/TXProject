@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice.search;
+// 规范依据：《招投标模块开发规范》§4.6（检索组件未启用禁止业务表 LIKE）
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;

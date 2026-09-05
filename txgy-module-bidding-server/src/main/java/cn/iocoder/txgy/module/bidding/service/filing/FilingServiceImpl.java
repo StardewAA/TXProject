@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.filing;
+// 规范依据：05 §2.1/§3.1/§3.2；《招投标模块开发规范》§4.5（幂等）
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.module.bidding.controller.admin.filing.vo.FilingResultReqVO;

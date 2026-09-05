@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice.search;
+// 规范依据：《招投标模块开发规范》§4.6、五章三§3；05 §2.2（失败重试3次转人工）；04
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

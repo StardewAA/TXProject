@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.notice.vo;
+// 规范依据：《招投标模块开发规范》§3.1/§4.6（关键词走检索组件）
 
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
 import io.swagger.v3.oas.annotations.media.Schema;

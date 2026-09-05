@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.dal.dataobject.notice;
+// 规范依据：《招投标模块开发规范》五章一~六（T轨、长度、索引、审计列）；07-框架对应
 
 import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.TableName;

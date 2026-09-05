@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.filing;
+// 规范依据：05 §2.1/§3.1（BID-ENT-REG-01）
 
 import cn.iocoder.txgy.module.bidding.controller.admin.filing.vo.FilingResultReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.filing.vo.FilingSubmitReqVO;

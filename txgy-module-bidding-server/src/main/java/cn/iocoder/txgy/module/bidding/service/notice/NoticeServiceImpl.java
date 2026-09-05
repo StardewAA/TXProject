@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.notice;
+// 规范依据：《招投标模块开发规范》§4.4/4.5/4.8、五章三/五；VO数据规范必填；红线2/8；05
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
@@ -75,7 +76,10 @@ public class NoticeServiceImpl implements NoticeService {
         notice.setNoticeType(type.name());
         applyBase(notice, reqVO);
         notice.setStatus(NoticeStatusEnum.DRAFT.name());
-        notice.setFieldsJson(writePayload(NoticePayloadUtils.canonicalize(type, reqVO.getPayload())));
+        // 权威必填校验（VO数据规范 数据集“必填=是”）后规整入库
+        LinkedHashMap<String, Object> canonical = NoticePayloadUtils.canonicalize(type, reqVO.getPayload());
+        checkRequired(type, canonical);
+        notice.setFieldsJson(writePayload(canonical));
         noticeMapper.insert(notice);
         // 正文 v1
         if (StringUtils.hasText(reqVO.getContent())) {
@@ -90,11 +94,16 @@ public class NoticeServiceImpl implements NoticeService {
     @Transactional(rollbackFor = Exception.class)
     public void updateNotice(NoticeSaveReqVO reqVO) {
         NoticeDO notice = getNotice(reqVO.getId());
+        // 载荷：仅在显式提交 payload 时按权威必填重新规整（不提交则保持原快照）
+        if (reqVO.getPayload() != null) {
+            NoticeTypeEnum type = requireType(reqVO.getNoticeType() != null
+                    ? reqVO.getNoticeType() : notice.getNoticeType());
+            LinkedHashMap<String, Object> canonical = NoticePayloadUtils.canonicalize(type, reqVO.getPayload());
+            checkRequired(type, canonical);
+            notice.setFieldsJson(writePayload(canonical));
+        }
         if (reqVO.getNoticeType() != null) {
-            NoticeTypeEnum type = requireType(reqVO.getNoticeType());
-            notice.setFieldsJson(writePayload(NoticePayloadUtils.canonicalize(type, reqVO.getPayload() == null
-                    ? readPayload(notice.getFieldsJson()) : reqVO.getPayload())));
-            notice.setNoticeType(type.name());
+            notice.setNoticeType(requireType(reqVO.getNoticeType()).name());
         }
         applyBase(notice, reqVO);
         noticeMapper.updateById(notice);
@@ -332,6 +341,16 @@ public class NoticeServiceImpl implements NoticeService {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_PAYLOAD_INVALID, "公告类型未登记：" + code);
         }
         return type;
+    }
+
+    private void checkRequired(NoticeTypeEnum type, LinkedHashMap<String, Object> canonical) {
+        java.util.List<String> missing = NoticePayloadUtils.missingRequired(type, canonical);
+        if (!missing.isEmpty()) {
+            throw new cn.iocoder.txgy.framework.common.exception.ServiceException(
+                    new cn.iocoder.txgy.framework.common.exception.ErrorCode(
+                            ErrorCodeConstants.NOTICE_PAYLOAD_INVALID.getCode(),
+                            "公告必填字段缺失（依据VO数据规范 必填=是）：" + String.join("、", missing)));
+        }
     }
 
     // ========== 内容版本 ==========

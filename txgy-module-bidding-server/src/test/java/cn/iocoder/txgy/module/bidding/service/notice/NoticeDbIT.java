@@ -124,8 +124,10 @@ class NoticeDbIT {
         reqVO.setPublishTime(LocalDateTime.now());
         reqVO.setContent(content);
         Map<String, Object> payload = new LinkedHashMap<>();
+        for (String field : NoticePayloadUtils.requiredFieldNames(NoticeTypeEnum.TENDER_NOTICE)) {
+            payload.put(field, "REQ");
+        }
         payload.put("NOTICE_NAME", title);
-        payload.put("BID_SECTION_CODES", "IT-SEC-001");
         reqVO.setPayload(payload);
         return reqVO;
     }

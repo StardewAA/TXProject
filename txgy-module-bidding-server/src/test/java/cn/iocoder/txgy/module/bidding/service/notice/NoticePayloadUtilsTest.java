@@ -97,4 +97,17 @@ class NoticePayloadUtilsTest {
         assertEquals(socialCount, subset.size());
         assertFalse(subset.containsKey("NOT_A_SPEC_FIELD"));
     }
+
+    @Test
+    void missingRequired_countsMatchAuthorityDoc() {
+        // 权威《VO数据规范》各数据集“必填=是”数量：招标公告28 / 变更公告15 / 中标候选人公示28 / 中标结果公示22
+        assertEquals(28, NoticePayloadUtils.missingRequired(NoticeTypeEnum.TENDER_NOTICE,
+                NoticePayloadUtils.canonicalize(NoticeTypeEnum.TENDER_NOTICE, null)).size());
+        assertEquals(15, NoticePayloadUtils.missingRequired(NoticeTypeEnum.CHANGE_NOTICE,
+                NoticePayloadUtils.canonicalize(NoticeTypeEnum.CHANGE_NOTICE, null)).size());
+        assertEquals(28, NoticePayloadUtils.missingRequired(NoticeTypeEnum.WIN_CANDIDATE_PUBLICITY,
+                NoticePayloadUtils.canonicalize(NoticeTypeEnum.WIN_CANDIDATE_PUBLICITY, null)).size());
+        assertEquals(22, NoticePayloadUtils.missingRequired(NoticeTypeEnum.WIN_RESULT_PUBLICITY,
+                NoticePayloadUtils.canonicalize(NoticeTypeEnum.WIN_RESULT_PUBLICITY, null)).size());
+    }
 }

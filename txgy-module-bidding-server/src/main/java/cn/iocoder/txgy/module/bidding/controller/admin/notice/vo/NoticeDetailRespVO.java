@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.notice.vo;
+// 规范依据：《招投标模块开发规范》§2.1、§4.8；01/05（PDF原文件+结构化两形态）
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;

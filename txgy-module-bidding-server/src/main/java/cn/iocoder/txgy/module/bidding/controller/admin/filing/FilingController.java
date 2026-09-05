@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.filing;
+// 规范依据：《招投标模块开发规范》§4.4/4.5；05 §2.1/§3.2
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;

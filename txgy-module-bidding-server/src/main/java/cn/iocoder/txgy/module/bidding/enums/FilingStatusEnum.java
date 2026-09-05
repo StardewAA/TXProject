@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.enums;
+// 规范依据：05-接口设计文档 §3.2（BID-SUP-FILE-01 回推）
 
 /**
  * 备案受理状态（BID-ENT-REG-01 提交 → PENDING；监管 BID-SUP-FILE-01 回推 → ACCEPTED/REJECTED）。

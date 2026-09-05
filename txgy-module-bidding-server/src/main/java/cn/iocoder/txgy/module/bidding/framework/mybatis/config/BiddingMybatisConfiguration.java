@@ -1,4 +1,5 @@
 package cn.iocoder.txgy.module.bidding.framework.mybatis.config;
+// 规范依据：《招投标模块开发规范》§4.5（@Version 乐观锁运行时生效）
 
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
