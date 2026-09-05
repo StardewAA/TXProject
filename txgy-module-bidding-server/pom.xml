@@ -51,6 +51,11 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-protection</artifactId>
         </dependency>
+        <!-- 多节点布隆过滤（Redis 位图）依赖：显式声明（starter-protection 亦传递引入，声明以消除传递歧义） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-redis</artifactId>
+        </dependency>
 
         <!-- Web 相关 -->
         <dependency>

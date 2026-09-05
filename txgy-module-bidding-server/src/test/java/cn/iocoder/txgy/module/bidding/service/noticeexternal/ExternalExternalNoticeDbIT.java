@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.Connection;
@@ -251,6 +252,32 @@ class ExternalExternalNoticeDbIT {
     }
 
     // ========== 工具 ==========
+
+    /** 真实样本：炼化公司 2026 大修消缺公告 HTML（docs 提供） */
+    @Test
+    void realSampleHtml_ingest_approve_detailSafe() throws Exception {
+        String raw;
+        try (InputStream in = getClass().getResourceAsStream("/samples/lianhua-2026-notice.html")) {
+            assertNotNull(in, "真实 HTML 样本应存在于测试资源 samples/");
+            raw = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertTrue(raw.contains("消缺") && raw.contains("装置"), "样本应含招标正文");
+        assertTrue(raw.length() < 8 * 1024 * 1024, "样本应在入库长度上限内");
+
+        ExternalNoticeIngestDTO dto = htmlDto("REAL-SAMPLE");
+        dto.setTitle("炼化公司所属各单位 2026 年装置大修消缺公开招标");
+        dto.setContentHtml(raw);
+        dto.setMetaJson(null);
+        Long id = ingestService.ingest(dto);
+
+        noticeExternalService.approveExternal(id);
+        NoticeExternalDetailRespVO detail = noticeExternalService.getDetail(id);
+
+        assertEquals(raw, detail.getContentHtml(), "留档原样不裁剪");
+        assertNotNull(detail.getContentHtmlSafe());
+        assertTrue(!detail.getContentHtmlSafe().contains("<script"), "净化版不得残留 script（真实页面常有脚本）");
+        assertTrue(detail.getContentHtmlSafe().contains("招标") && detail.getContentHtmlSafe().contains("消缺"), "净化版应保留正文");
+    }
 
     private java.util.List<NoticeExternalRespVO> pageContains(String title) {
         NoticeExternalPageReqVO req = new NoticeExternalPageReqVO();
