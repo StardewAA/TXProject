@@ -32,6 +32,8 @@ public class SecurityConfiguration {
                 registry.requestMatchers("/druid/**").permitAll();
                 // 公共服务大厅：公告/公示公开只读接口（跨租户读 + 公开级别白名单在 Service 层执行）
                 registry.requestMatchers("/bidding/notice/public/**").permitAll();
+                // 外部公告大厅：公开分页/详情/外链中转（净化与域名白名单在 Service 层执行）
+                registry.requestMatchers("/bidding/notice-external/**").permitAll();
                 // 给其他模块调的 RPC 接口
                 registry.requestMatchers(ApiConstants.PREFIX + "/**").permitAll();
             }

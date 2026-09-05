@@ -167,4 +167,51 @@ class ExternalNoticeIngestServiceImplTest {
         assertNull(cap.getValue().getContentHtml(), "非 HTML 形态不存 content_html");
     }
 
+    // ===== 安全评审加固（objective 3：URL 协议白名单 / JSON 合法性 / 长度上限） =====
+
+    @Test
+    void ingest_javascriptUrl_rejectedPayloadInvalid() {
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setOrigUrl("javascript:alert(1)");
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.ingest(dto));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID.getCode(), ex.getCode());
+        verify(noticeExternalMapper, never()).insert(any(NoticeExternalDO.class));
+    }
+
+    @Test
+    void ingest_malformedMetaJson_rejectedPayloadInvalid() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setMetaJson("{not-json");
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.ingest(dto));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void ingest_validJsonMetaJson_passes() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        assignId(321L);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setMetaJson("[{\"raw\":\"快照\"}]");
+
+        Long id = service.ingest(dto);
+
+        assertEquals(321L, id);
+        ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).insert(cap.capture());
+        assertEquals("[{\"raw\":\"快照\"}]", cap.getValue().getMetaJson());
+    }
+
+    @Test
+    void ingest_oversizedMetaJson_rejectedPayloadInvalid() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setMetaJson("{\"big\":\"" + "a".repeat(1024 * 1024 + 10) + "\"}");
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.ingest(dto));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID.getCode(), ex.getCode());
+    }
+
 }

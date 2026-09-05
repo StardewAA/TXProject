@@ -7,6 +7,13 @@
 --       bidding_follow_item、bidding_follow_item_event、bidding_notice_subscription_event。
 --       PDF 抽取：本地 OpenDataLoader（本地模式）只抽文本+表格；扫描件抽空(空结果)→ FAIL_EMPTY 直接报错失败。
 -- =====================================================================
+-- 安全评审备注（2026-09，v0.6 草稿）：
+-- 1) 唯一键含 deleted（如 uk_external_orig_url_hash(orig_url_hash, deleted)）：
+--    冲突仅发生在“对同一 URL 逻辑删除后再次逻辑删除同一条”时（0→1 撞既有 (hash,1)）。
+--    本域当前无删除入口（采集产出幂等复用、无 delete API），不触发；后续若引入删除：
+--    方案 A 物理删除；方案 B 同 URL 复用旧行恢复 deleted=0；方案 C 唯一键改 (hash, deleted_at 时间戳列)。
+-- 2) HTML/JSON/URL 均按“原文留档+展示侧净化/校验”策略：入库不裁剪，展示走 jsoup 白名单与 http(s) 域名白名单（应用层实现）。
+-- =====================================================================
 
 -- 1) 外部公告主档（G 轨聚合；HTML 原样 / PDF / 附件 / 原网址）
 CREATE TABLE IF NOT EXISTS `bidding_notice_external` (

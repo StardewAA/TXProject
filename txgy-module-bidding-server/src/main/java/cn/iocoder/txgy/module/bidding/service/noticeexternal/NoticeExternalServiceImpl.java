@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeExternalAuditStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalContentTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer.ExternalNoticeIndexNotifier;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.sanitize.HtmlSanitizer;
 import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -155,12 +156,16 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         NoticeExternalDetailRespVO resp = new NoticeExternalDetailRespVO();
         copyToDetail(notice, resp);
         // 附件下载列表（FileApi 签名 downloadUrl 待 infra 文件下载能力接入后回填，先给 file_id/溯源链接）
+        // 安全评审意见 1/2：病毒状态=INFECTED 的附件一律不下发链接（扫描闭环由 FileApi 病毒扫描保证）
         List<NoticeExternalAttachmentDO> attachments = noticeExternalAttachmentMapper
                 .selectList(new LambdaQueryWrapper<NoticeExternalAttachmentDO>()
                         .eq(NoticeExternalAttachmentDO::getNoticeId, id)
                         .orderByAsc(NoticeExternalAttachmentDO::getId));
-        if (!attachments.isEmpty()) {
-            resp.setAttachments(attachments.stream().map(this::toAttachmentVO).toList());
+        List<NoticeExternalAttachmentDO> downloadable = attachments.stream()
+                .filter(a -> !"INFECTED".equalsIgnoreCase(a.getVirusStatus()))
+                .toList();
+        if (!downloadable.isEmpty()) {
+            resp.setAttachments(downloadable.stream().map(this::toAttachmentVO).toList());
         }
         return resp;
     }
@@ -189,9 +194,10 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setTitle(notice.getTitle());
         resp.setOrigUrl(notice.getOrigUrl());
         resp.setContentType(notice.getContentType());
-        // HTML 形态：原文原样
-        resp.setContentHtml(NoticeExternalContentTypeEnum.HTML.getType().equals(notice.getContentType())
-                ? notice.getContentHtml() : null);
+        boolean html = NoticeExternalContentTypeEnum.HTML.getType().equals(notice.getContentType());
+        // HTML 形态：留档原样 + 净化版（公开渲染建议用 contentHtmlSafe，安全评审意见 1）
+        resp.setContentHtml(html ? notice.getContentHtml() : null);
+        resp.setContentHtmlSafe(html ? HtmlSanitizer.sanitize(notice.getContentHtml()) : null);
         // PDF 形态：file_id+sha+size（前端 JS 预览），下载地址待 FileApi 签名能力接入后回填
         resp.setPdfFileId(notice.getPdfFileId());
         resp.setPdfSha256(notice.getPdfSha256());

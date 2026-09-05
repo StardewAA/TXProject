@@ -29,8 +29,10 @@ public class NoticeExternalDetailRespVO {
     private String origUrl;
     @Schema(description = "内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER")
     private String contentType;
-    @Schema(description = "HTML 原文（仅 contentType=HTML 时返回，原样）")
+    @Schema(description = "HTML 原文（仅 contentType=HTML 时返回，留档原样；展示请优先用 contentHtmlSafe）")
     private String contentHtml;
+    @Schema(description = "HTML 净化后内容（jsoup 白名单去 script/事件属性/iframe 等，仅 contentType=HTML，建议前端渲染此值）")
+    private String contentHtmlSafe;
     @Schema(description = "PDF 原文件 file_id（仅 PDF）")
     private Long pdfFileId;
     @Schema(description = "PDF 原文件哈希（仅 PDF）")

@@ -7,11 +7,13 @@ import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeE
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticeExternalService;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.url.ExternalRedirectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
 
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -41,12 +45,26 @@ public class NoticeExternalController {
 
     @Resource
     private NoticeExternalService noticeExternalService;
+    @Resource
+    private ExternalRedirectService externalRedirectService;
 
     @GetMapping("/page")
     @PermitAll
     @Operation(summary = "外部公告公开分页（SOCIAL+ACTIVE）")
     public CommonResult<PageResult<NoticeExternalRespVO>> page(@Valid NoticeExternalPageReqVO reqVO) {
         return success(noticeExternalService.getPage(reqVO));
+    }
+
+    @GetMapping("/go")
+    @PermitAll
+    @Operation(summary = "外链中转（仅白名单采集源域名下的 http(s)，防开放重定向；不直达外站请前端改用本端点）")
+    public void go(@RequestParam("url") String url, HttpServletResponse response) throws IOException {
+        String safe = externalRedirectService.resolve(url);
+        response.setStatus(HttpServletResponse.SC_FOUND);
+        response.setHeader("Location", safe);
+        // 中转页不缓存、不携带来源引用（防反向钓鱼/窗口劫持，配合前端 rel 属性）
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
     }
 
     @GetMapping("/detail")

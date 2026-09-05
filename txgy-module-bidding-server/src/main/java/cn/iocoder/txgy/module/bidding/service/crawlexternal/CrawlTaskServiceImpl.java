@@ -4,10 +4,12 @@ package cn.iocoder.txgy.module.bidding.service.crawlexternal;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
+import cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter;
 import cn.iocoder.txgy.module.bidding.service.crawlexternal.sink.CrawlDeadLetterSink;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -29,10 +31,26 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
     private CrawlTaskMapper crawlTaskMapper;
     @Resource
     private CrawlDeadLetterSink crawlDeadLetterSink;
+    /** 布隆判重前置缓存（可选：容器内无该 Bean/未接入时走 DB 全量复核） */
+    @Resource
+    private UrlBloomFilter urlBloomFilter;
 
     @Override
     public Long createTaskIfAbsent(Long jobId, String sourceCode, String url, String urlHash,
                                    String channelCode, String parserCode, Integer priority) {
+        // 布隆判重短路：未见过（假阴性=0）→ 免 DB 查询直插；撞唯一键（重启/多节点竞态）回退复用（DB 兜底，正确性不丢）
+        if (urlBloomFilter != null && !urlBloomFilter.mightContain(urlHash)) {
+            try {
+                CrawlTaskDO task = newTask(jobId, sourceCode, url, urlHash, channelCode, parserCode, priority);
+                crawlTaskMapper.insert(task);
+                urlBloomFilter.mark(urlHash);
+                log.info("[createTaskIfAbsent][urlHash={}] 布隆未命中→直插新任务 taskId={}", urlHash, task.getId());
+                return task.getId();
+            } catch (DuplicateKeyException e) {
+                // 并发/窗口竞态：复用既有任务（见下方 DB 复核分支）
+                log.info("[createTaskIfAbsent][urlHash={}] 直插撞唯一键，回退 DB 复核复用", urlHash);
+            }
+        }
         // urlHash 幂等去重：同 URL 未终态任务直接复用（设计 §二/§三：重复消费靠 urlHash+fetchedAt 幂等）
         CrawlTaskDO existing = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
                 .eq(CrawlTaskDO::getUrlHash, urlHash)
@@ -40,9 +58,22 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
                         CrawlTaskStatusEnum.RUNNING.getStatus())
                 .last("LIMIT 1"));
         if (existing != null) {
+            if (urlBloomFilter != null) {
+                urlBloomFilter.mark(urlHash);
+            }
             log.info("[createTaskIfAbsent][urlHash={}] 命中未终态任务 taskId={}，复用", urlHash, existing.getId());
             return existing.getId();
         }
+        CrawlTaskDO task = newTask(jobId, sourceCode, url, urlHash, channelCode, parserCode, priority);
+        crawlTaskMapper.insert(task);
+        if (urlBloomFilter != null) {
+            urlBloomFilter.mark(urlHash);
+        }
+        return task.getId();
+    }
+
+    private CrawlTaskDO newTask(Long jobId, String sourceCode, String url, String urlHash,
+                                String channelCode, String parserCode, Integer priority) {
         CrawlTaskDO task = new CrawlTaskDO();
         task.setJobId(jobId);
         task.setSourceCode(sourceCode);
@@ -53,8 +84,7 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
         task.setPriority(priority);
         task.setStatus(CrawlTaskStatusEnum.PENDING.getStatus());
         task.setAttempt(0);
-        crawlTaskMapper.insert(task);
-        return task.getId();
+        return task;
     }
 
     @Override

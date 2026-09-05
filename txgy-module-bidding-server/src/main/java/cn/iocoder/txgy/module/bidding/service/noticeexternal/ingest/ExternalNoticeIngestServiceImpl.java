@@ -11,11 +11,14 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeExternalAuditStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -25,10 +28,21 @@ import java.util.List;
 
 /**
  * 采集落库实现（status=NEW + audit=UNREVIEWED 进审核队列；展示等审核通过）。
+ * <p>安全评审加固：入库前校验 URL 协议白名单（http/https）、metaJson 合法性、字段长度上限（防 XSS 载体/污染/DoS），
+ * 详见 objective(3)；HTML 原文仍“原样留档”（权威要求），展示侧由 HtmlSanitizer 净化。
  */
 @Slf4j
 @Service
 public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestService {
+
+    /** 长度上限（字符，对齐 DDL 与防 DoS；超限拒绝入库 106_013） */
+    private static final int MAX_TITLE = 512;
+    private static final int MAX_ORIG_URL = 1024;
+    private static final int MAX_HTML = 8 * 1024 * 1024;
+    private static final int MAX_META_JSON = 1024 * 1024;
+    private static final int MAX_EXTRA_RAW = 4 * 1024 * 1024;
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Resource
     private NoticeExternalMapper noticeExternalMapper;
@@ -41,6 +55,7 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         if (!StringUtils.hasText(dto.getOrigUrl()) || !StringUtils.hasText(dto.getTitle())) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_INVALID);
         }
+        validatePayload(dto);
         String urlHash = StringUtils.hasText(dto.getOrigUrlHash())
                 ? dto.getOrigUrlHash() : sha256Hex(dto.getOrigUrl());
         dto.setOrigUrlHash(urlHash);
@@ -110,6 +125,57 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         }
         log.info("[ingest][noticeId={} urlHash={}] 外部公告落库（NEW 待审核）", notice.getId(), urlHash);
         return notice.getId();
+    }
+
+    /**
+     * 内容安全校验（安全评审意见 1/3/5 + 红线：URL 协议/JSON 合法性/长度上限）。
+     */
+    private void validatePayload(ExternalNoticeIngestDTO dto) {
+        if (!isHttpUrl(dto.getOrigUrl())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+        if (dto.getTitle() != null && dto.getTitle().length() > MAX_TITLE) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+        if (dto.getOrigUrl().length() > MAX_ORIG_URL) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+        if (dto.getContentHtml() != null && dto.getContentHtml().length() > MAX_HTML) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+        if (!isValidJsonOrNull(dto.getMetaJson(), MAX_META_JSON)) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+        if (dto.getExtraRaw() != null && dto.getExtraRaw().length() > MAX_EXTRA_RAW) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID);
+        }
+    }
+
+    /** 协议白名单：仅 http/https（拒绝 javascript:/data: 等伪协议进库，防链接型 XSS） */
+    private static boolean isHttpUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            return scheme != null && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    /** metaJson 必须为合法 JSON 且不超长；空值放行 */
+    private static boolean isValidJsonOrNull(String json, int maxChars) {
+        if (json == null || json.isBlank()) {
+            return true;
+        }
+        if (json.length() > maxChars) {
+            return false;
+        }
+        try {
+            OBJECT_MAPPER.readTree(json);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String buildIdsJson(List<Long> ids) {

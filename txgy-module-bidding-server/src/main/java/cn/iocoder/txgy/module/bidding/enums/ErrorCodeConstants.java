@@ -57,6 +57,8 @@ public interface ErrorCodeConstants {
     ErrorCode EXTERNAL_NOTICE_NOT_EXISTS = new ErrorCode(1_060_106_001, "外部公告不存在");
     ErrorCode EXTERNAL_NOTICE_TAKEN_DOWN = new ErrorCode(1_060_106_002, "外部公告已下线或不可展示");
     ErrorCode EXTERNAL_NOTICE_INGEST_INVALID = new ErrorCode(1_060_106_011, "采集产出落库数据不完整（标题/原网址必填）");
+    ErrorCode EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID = new ErrorCode(1_060_106_013, "采集内容校验失败（URL 协议不支持/JSON 非法/超长），拒绝入库");
     ErrorCode EXTERNAL_NOTICE_STATE_INVALID = new ErrorCode(1_060_106_012, "外部公告当前状态不允许该操作");
+    ErrorCode EXTERNAL_REDIRECT_FORBIDDEN = new ErrorCode(1_060_106_014, "跳转被拒绝：仅允许白名单采集源域名下的 http(s) 链接");
     ErrorCode CRAWL_SOURCE_NOT_EXISTS = new ErrorCode(1_060_106_010, "采集源不存在或未启用");
 }

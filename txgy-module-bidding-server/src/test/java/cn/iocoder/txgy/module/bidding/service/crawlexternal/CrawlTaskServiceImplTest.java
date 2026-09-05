@@ -133,4 +133,58 @@ class CrawlTaskServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> service.handleFailure(5L, "x"));
     }
 
+    // ===== 布隆判重短路（objective 4） =====
+
+    private cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter installBloom() {
+        cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter bloom =
+                mock(cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter.class);
+        ReflectionTestUtils.setField(service, "urlBloomFilter", bloom);
+        return bloom;
+    }
+
+    @Test
+    void createTask_bloomUnseen_skipsDbAndInserts() {
+        cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter bloom = installBloom();
+        when(bloom.mightContain("HASH-NEW")).thenReturn(false);
+        doAnswer(inv -> {
+            CrawlTaskDO t = inv.getArgument(0);
+            t.setId(77L);
+            return 1;
+        }).when(crawlTaskMapper).insert(any(CrawlTaskDO.class));
+
+        Long id = service.createTaskIfAbsent(1L, "S1", "https://example.com/new", "HASH-NEW", "GENERIC", null, 1);
+
+        assertEquals(77L, id);
+        verify(crawlTaskMapper, never()).selectOne(any());
+        verify(bloom).mark("HASH-NEW");
+    }
+
+    @Test
+    void createTask_bloomSeen_goesToDbReuse() {
+        cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter bloom = installBloom();
+        when(bloom.mightContain("HASH-1")).thenReturn(true);
+        when(crawlTaskMapper.selectOne(any())).thenReturn(task(0));
+
+        Long id = service.createTaskIfAbsent(1L, "S1", "https://example.com/1", "HASH-1", "GENERIC", null, 1);
+
+        assertEquals(5L, id);
+        verify(crawlTaskMapper, never()).insert(any(CrawlTaskDO.class));
+        verify(bloom).mark("HASH-1");
+    }
+
+    @Test
+    void createTask_bloomUnseen_duplicateKeyRace_fallsBackToReuse() {
+        cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter bloom = installBloom();
+        when(bloom.mightContain("HASH-1")).thenReturn(false);
+        when(crawlTaskMapper.insert(any(CrawlTaskDO.class)))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("uk_task_url_hash"));
+        when(crawlTaskMapper.selectOne(any())).thenReturn(task(0));
+
+        Long id = service.createTaskIfAbsent(1L, "S1", "https://example.com/1", "HASH-1", "GENERIC", null, 1);
+
+        assertEquals(5L, id, "撞唯一键（重启窗口竞态）回退 DB 复用，正确性由 DB 兜底");
+        verify(crawlTaskMapper, times(1)).insert(any(CrawlTaskDO.class));
+        verify(crawlTaskMapper, times(1)).selectOne(any());
+    }
+
 }
