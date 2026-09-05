@@ -51,4 +51,10 @@ public interface ErrorCodeConstants {
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
     ErrorCode PUBLIC_LEVEL_FILTER_FAILED = new ErrorCode(1_060_199_001, "公开级别字段裁剪失败");
+
+    // ========== 外部公告/采集/关注提醒 1-060-106-000（设计文档 §十五.2 已登记）==========
+    ErrorCode PDF_EXTRACT_EMPTY = new ErrorCode(1_060_106_000, "PDF 抽取结果为空（扫描件或无可提取文本/表格），直接判失败");
+    ErrorCode EXTERNAL_NOTICE_NOT_EXISTS = new ErrorCode(1_060_106_001, "外部公告不存在");
+    ErrorCode EXTERNAL_NOTICE_TAKEN_DOWN = new ErrorCode(1_060_106_002, "外部公告已下线或不可展示");
+    ErrorCode CRAWL_SOURCE_NOT_EXISTS = new ErrorCode(1_060_106_010, "采集源不存在或未启用");
 }

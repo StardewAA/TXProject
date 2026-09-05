@@ -28,8 +28,9 @@ class ErrorCodeFormatTest {
     private static final String CONSTANTS_CLASS = "cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants";
     private static final String ERROR_CODE_CLASS = "cn.iocoder.txgy.framework.common.exception.ErrorCode";
 
-    /** 与《招投标模块开发规范》4.7 段位表保持一致；新子模块段位先在文档登记，再追加到这里。 */
-    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 199};
+    /** 与《招投标模块开发规范》4.7 段位表保持一致；新子模块段位先在文档登记，再追加到这里。
+     *  106 段 = 外部公告/采集/关注提醒（docs/外部公告采集与展示设计方案.md §十五.2 已登记）。 */
+    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 106, 199};
 
     @Test
     void errorCodesFollowDocumentedSegments() throws Exception {
