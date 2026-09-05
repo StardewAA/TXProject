@@ -5,15 +5,21 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowReqVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalAttachmentDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.noticefollow.FollowItemEventDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.noticefollow.SubscriptionEventDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.noticefollow.FollowItemEventMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.noticefollow.SubscriptionEventMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalAuditStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
+import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
@@ -72,6 +78,12 @@ class ExternalExternalNoticeDbIT {
     private NoticeExternalMapper noticeExternalMapper;
     @Autowired
     private NoticeExternalAttachmentMapper attachmentMapper;
+    @Autowired
+    private FollowService followService;
+    @Autowired
+    private FollowItemEventMapper followItemEventMapper;
+    @Autowired
+    private SubscriptionEventMapper subscriptionEventMapper;
 
     private ExternalNoticeIngestDTO htmlDto(String tag) {
         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
@@ -170,6 +182,72 @@ class ExternalExternalNoticeDbIT {
         NoticeExternalDO main = noticeExternalMapper.selectById(id);
         assertTrue(main.getAttachmentIdsJson().contains(String.valueOf(row.getId())),
                 "主档 attachment_ids_json 应回填子表 id");
+    }
+
+    // ========== 关注（T 轨） ==========
+
+    private FollowReqVO sectionFollow(String key) {
+        FollowReqVO req = new FollowReqVO();
+        req.setTargetType("SECTION");
+        req.setTargetKey(key);
+        return req;
+    }
+
+    @Test
+    void follow_activatedNotice_pushesTimelineEventAndInAppDedupe() {
+        // 1) 关注标段（幂等建订阅+关注项目行）
+        followService.follow(7L, sectionFollow("SEC-IT-1"));
+        followService.follow(7L, sectionFollow("SEC-IT-1")); // 幂等不重复
+        assertEquals(0L, subscriptionEventMapper.selectCount(new LambdaQueryWrapper<>()));
+
+        // 2) 该标段外部公告审核通过 → 关注扇出：事件+提醒各写一条
+        ExternalNoticeIngestDTO dto = htmlDto("FOLLOW-1");
+        dto.setBidSectionCodes("SEC-IT-1");
+        dto.setProjectName("关注项目名");
+        dto.setIssuerName("关注发布单位");
+        Long noticeId = ingestService.ingest(dto);
+        noticeExternalService.approveExternal(noticeId);
+
+        java.util.List<FollowItemEventDO> events = followItemEventMapper.selectList(null);
+        assertEquals(1, events.size(), "同用户同公告同源事件只写一条");
+        assertEquals(noticeId, events.get(0).getNoticeId());
+        assertEquals(Boolean.FALSE, events.get(0).getReadFlag());
+        java.util.List<SubscriptionEventDO> se = subscriptionEventMapper.selectList(null);
+        assertEquals(1, se.size(), "IN_APP 提醒留痕一条");
+        assertEquals("IN_APP", se.get(0).getChannel());
+
+        // 3) 重复触发同公告（补偿/重放场景）→ 不重复建事件/提醒（event_key 去重）
+        followService.handleNoticeActivated(noticeExternalMapper.selectById(noticeId), "EXTERNAL");
+        assertEquals(1L, followItemEventMapper.selectCount(new LambdaQueryWrapper<>()));
+        assertEquals(1L, subscriptionEventMapper.selectCount(new LambdaQueryWrapper<>()));
+    }
+
+    @Test
+    void unfollow_clearsList_readFlagMarksItemRead() {
+        followService.follow(8L, sectionFollow("SEC-IT-2"));
+
+        // 标段公告激活产生未读
+        ExternalNoticeIngestDTO dto = htmlDto("FOLLOW-2");
+        dto.setBidSectionCodes("SEC-IT-2");
+        Long noticeId = ingestService.ingest(dto);
+        noticeExternalService.approveExternal(noticeId);
+        java.util.List<FollowItemEventDO> events = followItemEventMapper.selectList(null);
+        assertEquals(1, events.size());
+
+        // 我的关注可见该行
+        var page = followService.pageMyFollow(8L, new cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemPageReqVO());
+        assertEquals(1, page.getList().size());
+
+        // 标已读：事件 read_flag=true
+        followService.markRead(8L, page.getList().get(0).getId());
+        FollowItemEventDO after = followItemEventMapper.selectById(events.get(0).getId());
+        assertEquals(Boolean.TRUE, after.getReadFlag());
+
+        // 退订幂等：取消后不再出现在我的关注列表（保留历史）
+        followService.unfollow(8L, sectionFollow("SEC-IT-2"));
+        var pageAfter = followService.pageMyFollow(8L, new cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemPageReqVO());
+        assertEquals(0, pageAfter.getList().size(), "UNFOLLOWED 不出现于我的关注");
+        followService.unfollow(8L, sectionFollow("SEC-IT-2")); // 幂等不报错
     }
 
     // ========== 工具 ==========
