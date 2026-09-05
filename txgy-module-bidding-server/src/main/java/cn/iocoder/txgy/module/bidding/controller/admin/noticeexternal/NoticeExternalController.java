@@ -8,6 +8,7 @@ import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeE
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticeExternalService;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.url.ExternalRedirectService;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -50,6 +51,7 @@ public class NoticeExternalController {
 
     @GetMapping("/page")
     @PermitAll
+    @TenantIgnore // 大厅公开：G 轨全局数据，无租户概念（免租户头直接可访）
     @Operation(summary = "外部公告公开分页（SOCIAL+ACTIVE）")
     public CommonResult<PageResult<NoticeExternalRespVO>> page(@Valid NoticeExternalPageReqVO reqVO) {
         return success(noticeExternalService.getPage(reqVO));
@@ -57,6 +59,7 @@ public class NoticeExternalController {
 
     @GetMapping("/go")
     @PermitAll
+    @TenantIgnore // 大厅公开：原网址中转白名单校验，无租户概念
     @Operation(summary = "外链中转（仅白名单采集源域名下的 http(s)，防开放重定向；不直达外站请前端改用本端点）")
     public void go(@RequestParam("url") String url, HttpServletResponse response) throws IOException {
         String safe = externalRedirectService.resolve(url);
@@ -69,6 +72,7 @@ public class NoticeExternalController {
 
     @GetMapping("/detail")
     @PermitAll
+    @TenantIgnore // 大厅公开：G 轨全局数据，无租户概念（免租户头直接可访）
     @Operation(summary = "外部公告公开详情（三形态）")
     public CommonResult<NoticeExternalDetailRespVO> detail(@RequestParam("id") Long id) {
         return success(noticeExternalService.getDetail(id));
