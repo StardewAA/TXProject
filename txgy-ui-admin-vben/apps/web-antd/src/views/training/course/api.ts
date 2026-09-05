@@ -232,3 +232,63 @@ export function updateCourseBusinessAttributes(
 export function getExamOptions() {
   return requestClient.get<any[]>('/training/course/exam-options');
 }
+
+/** 修改课程分类 */
+export function updateCourseCategory(
+  data: Partial<TrainingCourseApi.CourseCategory>,
+) {
+  return requestClient.put('/training/course-category/update', data);
+}
+
+/** 删除课程分类（已被课程引用时后端禁止删除） */
+export function deleteCourseCategory(id: number) {
+  return requestClient.delete(`/training/course-category/delete?id=${id}`);
+}
+
+/** 课程分类分页 */
+export function getCourseCategoryPage(
+  params: PageParam & Record<string, any>,
+) {
+  return requestClient.get<PageResult<TrainingCourseApi.CourseCategory>>(
+    '/training/course-category/page',
+    { params },
+  );
+}
+
+/** 待审核课程队列 */
+export function getAuditQueue(params: PageParam & Record<string, any>) {
+  return requestClient.get<PageResult<TrainingCourseApi.Course>>(
+    '/training/course-audit/queue',
+    { params },
+  );
+}
+
+/** 课程审核日志（永久留痕，不可删除） */
+export function getAuditLogPage(params: PageParam & Record<string, any>) {
+  return requestClient.get<PageResult<CourseAuditLog>>(
+    '/training/course-audit/logs/page',
+    { params },
+  );
+}
+
+/** 修改课程媒资 */
+export function updateCourseMedia(
+  data: Partial<TrainingCourseApi.CourseMedia>,
+) {
+  return requestClient.put('/training/course-media/update', data);
+}
+
+/** 课程审核日志 */
+export interface CourseAuditLog {
+  id?: number;
+  courseId?: number;
+  /** 动作：SUBMIT / WITHDRAW / APPROVE / REJECT / ONLINE / OFFLINE / PUBLISH */
+  action?: string;
+  fromStatus?: number;
+  toStatus?: number;
+  operatorId?: number;
+  operatorName?: string;
+  /** 备注 / 驳回原因 */
+  reason?: string;
+  createTime?: string;
+}
