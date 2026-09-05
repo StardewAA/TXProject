@@ -1,5 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer;
-// 规范依据：设计文档 v0.6 §7.6/§15.6（external 审核转 ACTIVE → 事件链建 ES 索引 + 补偿扫描；索引名沿用内部公告 bidding-notice 风格 = bidding-notice-external）
+// 规范依据：设计文档 v0.6 §7.6/§15.6（external 审核转 ACTIVE → 事件链建 ES 索引；§7.6 补偿扫描为 P2 未实现：失败仅记日志、需人工重放；索引名沿用内部公告 bidding-notice 风格 = bidding-notice-external）
 // 说明：本地已启动 ES 8.10（9200，xpack 安全）→ 用 JDK HttpClient 原生 REST 直连（starter-mq 事件链接入后本类改为消费者调用同一 REST 即可，幂等 PUT 天然支持补偿重放）。
 // 安全：凭据不写死，走 ${ES_USERNAME:elastic}/${ES_PASSWORD:}（环境注入）；bidding.es.debug=true 时打印请求/响应摘要（ESDebug 开关）。
 
@@ -30,7 +30,7 @@ import java.util.Map;
  * <code>bidding-notice-external</code> 索引（PUT /_doc/{id}，幂等覆盖）。
  *
  * <p>失败语义：任何异常上抛 IllegalStateException —— 调用方（approveExternal）已 try/catch
- * 旁路不阻断审核并记日志（待补偿扫描兜底，见设计 §7.6）。
+ * 旁路不阻断审核并记日志（注意：§7.6 补偿扫描任务尚未实现，失败仅记日志，需人工复核后重放）。
  * <p>纯文本来源：PDF 形态取 extraction_text（OpenDataLoader 抽取），HTML 形态用 jsoup 去标签取正文；
  * 均截断到 MAX_TEXT_CHARS 防超大文档。
  */
@@ -91,7 +91,7 @@ public class EsExternalNoticeIndexNotifier implements ExternalNoticeIndexNotifie
                 }
                 return;
             }
-            // 401/403（凭据/权限）与 5xx（ES 故障）同样抛错，进入旁路失败 + 补偿扫描
+            // 401/403（凭据/权限）与 5xx（ES 故障）同样抛错：进入旁路失败日志（无自动补偿任务，需人工复核重放）
             throw new IllegalStateException("ES 索引 HTTP " + response.statusCode()
                     + " -> " + truncate(response.body(), 500));
         } catch (InterruptedException e) {

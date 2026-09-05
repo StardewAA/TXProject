@@ -70,16 +70,17 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
         notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
         noticeExternalMapper.updateById(notice);
-        // 扇出关注动态 + ES 索引事件：均为旁路通知，失败不阻断审核；补偿扫描兜底（见设计 §7.6）
+        // 扇出关注动态 + ES 索引事件：均为旁路通知，失败不阻断审核。
+        // 注意：设计 §7.6 的补偿扫描任务尚未实现——以下失败仅记日志，需人工复核后重放（幂等 PUT/扇出语义保证重放安全）
         try {
             followService.handleNoticeActivated(notice, SOURCE_EXTERNAL);
         } catch (Exception e) {
-            log.error("[approveExternal][noticeId={}] 关注扇出失败（不影响审核，待补偿）", id, e);
+            log.error("[approveExternal][noticeId={}] 关注扇出失败（不影响审核；补偿扫描未实现，需人工复核重放，见设计 §7.6）", id, e);
         }
         try {
             externalNoticeIndexNotifier.indexNotice(notice);
         } catch (Exception e) {
-            log.error("[approveExternal][noticeId={}] ES 索引事件失败（不影响审核，待补偿）", id, e);
+            log.error("[approveExternal][noticeId={}] ES 索引事件失败（不影响审核；补偿扫描未实现，需人工复核重放，见设计 §7.6）", id, e);
         }
     }
 

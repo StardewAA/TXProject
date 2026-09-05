@@ -1,5 +1,5 @@
 package cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer;
-// 规范依据：设计文档 v0.6 §7.6/§15.6（external 审核转 ACTIVE → MQ 事件建 ES 索引，预留+补偿扫描兜底）；红线 8（不开放业务 LIKE，关键词走 ES）
+// 规范依据：设计文档 v0.6 §7.6/§15.6（external 审核转 ACTIVE → MQ 事件建 ES 索引，预留；§7.6 补偿扫描为 P2 未实现）；红线 8（不开放业务 LIKE，关键词走 ES）
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 
@@ -7,7 +7,8 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
  * 外部公告 ES 索引通知器（事件预留）。
  *
  * <p>设计：审核转 ACTIVE 后经 MQ（starter-mq Redis Stream，依赖接入后启用）发事件建索引，
- * 失败靠“未索引补偿扫描”（按 id/生效时间窗口回捞）兜底，不阻塞审核主流程。
+ * 失败靠“未索引补偿扫描”（按 id/生效时间窗口回捞）兜底，不阻塞审核主流程——
+ * <b>注意：MQ 事件链与补偿扫描均为 §7.6 P2 目标、尚未实现</b>，当前失败仅记日志，需人工复核后重放。
  * 当前版本以本地同步回调 + 日志占位实现，保证审核→索引链路可替换、可测试。
  */
 public interface ExternalNoticeIndexNotifier {
