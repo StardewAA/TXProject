@@ -119,4 +119,59 @@ class NoticeExternalApproveTest {
         verify(notifier, times(1)).indexNotice(notice);
     }
 
+    @Test
+    void approveExternal_rejectedNotice_throwsStateInvalid() {
+        NoticeExternalDO notice = newNotice();
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.approveExternal(100L));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID.getCode(), ex.getCode());
+        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+    }
+
+    @Test
+    void rejectExternal_newNotice_rejected() {
+        NoticeExternalDO notice = newNotice();
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        service.rejectExternal(100L);
+
+        assertEquals(NoticeExternalAuditStatusEnum.REJECTED.getStatus(), notice.getAuditStatus());
+        verify(noticeExternalMapper).updateById(notice);
+    }
+
+    @Test
+    void rejectExternal_activeNotice_throwsStateInvalid() {
+        NoticeExternalDO notice = newNotice();
+        notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        assertThrows(ServiceException.class, () -> service.rejectExternal(100L));
+        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+    }
+
+    @Test
+    void takeDownExternal_activeNotice_inactiveAndTakenDown() {
+        NoticeExternalDO notice = newNotice();
+        notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        service.takeDownExternal(100L);
+
+        assertEquals(NoticeExternalStatusEnum.INACTIVE.getStatus(), notice.getStatus());
+        assertEquals(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus(), notice.getAuditStatus());
+        verify(noticeExternalMapper).updateById(notice);
+    }
+
+    @Test
+    void takeDownExternal_newNotice_throwsStateInvalid() {
+        NoticeExternalDO notice = newNotice();
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        assertThrows(ServiceException.class, () -> service.takeDownExternal(100L));
+        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+    }
+
 }

@@ -66,4 +66,22 @@ public class NoticeExternalController {
         return success(Boolean.TRUE);
     }
 
+    @PostMapping("/reject")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "驳回外部公告（审核不通过）")
+    public CommonResult<Boolean> reject(@RequestParam("id") Long id) {
+        noticeExternalService.rejectExternal(id);
+        return success(Boolean.TRUE);
+    }
+
+    @PostMapping("/take-down")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "下线外部公告（ACTIVE→INACTIVE，展示随即拒绝）")
+    public CommonResult<Boolean> takeDown(@RequestParam("id") Long id) {
+        noticeExternalService.takeDownExternal(id);
+        return success(Boolean.TRUE);
+    }
+
 }

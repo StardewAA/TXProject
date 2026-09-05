@@ -56,9 +56,15 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (notice == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
         }
-        // 非待审核态：已生效/已下线等不重放（幂等）；由下游入口（如“重上架”）显式处理
-        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())) {
+        // 幂等：已生效（ACTIVE+APPROVED）直接返回；非待审核态不重放（由“重上架”等显式入口处理）
+        if (NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())
+                && NoticeExternalAuditStatusEnum.APPROVED.getStatus().equals(notice.getAuditStatus())) {
             return;
+        }
+        // 仅待审核（NEW+UNREVIEWED）可审核通过；驳回/下线/归档等一律拒绝
+        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())
+                || !NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus().equals(notice.getAuditStatus())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
         }
         notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
         notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
@@ -74,6 +80,33 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         } catch (Exception e) {
             log.error("[approveExternal][noticeId={}] ES 索引事件失败（不影响审核，待补偿）", id, e);
         }
+    }
+
+    @Override
+    public void rejectExternal(Long id) {
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
+        }
+        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
+        }
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        noticeExternalMapper.updateById(notice);
+    }
+
+    @Override
+    public void takeDownExternal(Long id) {
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
+        }
+        if (!NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
+        }
+        notice.setStatus(NoticeExternalStatusEnum.INACTIVE.getStatus());
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus());
+        noticeExternalMapper.updateById(notice);
     }
 
     @Override

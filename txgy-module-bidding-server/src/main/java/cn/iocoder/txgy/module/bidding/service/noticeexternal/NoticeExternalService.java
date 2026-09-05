@@ -39,4 +39,18 @@ public interface NoticeExternalService {
      */
     void approveExternal(Long id);
 
+    /**
+     * 驳回（审核不通过）：audit UNREVIEWED→REJECTED；驳回后不可直接 approve（需重新入库/重抓）。
+     *
+     * @param id 外部公告主档 ID
+     */
+    void rejectExternal(Long id);
+
+    /**
+     * 下线（曾上线被撤下）：ACTIVE→INACTIVE、audit→TAKEN_DOWN；展示接口随即拒绝（TOKEN_DOWN）。
+     *
+     * @param id 外部公告主档 ID
+     */
+    void takeDownExternal(Long id);
+
 }
