@@ -1,9 +1,11 @@
 -- =====================================================================
--- 外部公告采集/跟踪/提醒 DDL 草稿（v0.5）
--- 依据：docs/外部公告采集与展示设计方案.md v0.5；《招投标模块开发规范》第五章（G 轨/审计列/唯一键含 deleted/idx 命名）
--- 说明：本文件为【草稿，未在任何库执行】；全组 G 轨（无 tenant_id 自动列，不依赖租户拦截器），
---       需要租户/用户隔离的表显式携带 tenant_id/user_id 业务列并由服务层校验。
---       待 P0/P1 立项并确认 §十 开放问题后再决定是否执行。
+-- 外部公告采集/跟踪/提醒 DDL 草稿（v0.6，未执行）
+-- 依据：docs/外部公告采集与展示设计方案.md v0.6（§十五 决策修订）；《招投标模块开发规范》第五章
+-- 说明：本文件为【草稿，未在任何库执行】。归属划分（以 v0.6 为准）：
+--       G 轨（BaseDO，无租户语义）：bidding_notice_external(+_meta/_attachment)、bidding_crawl_source/_task/_job；
+--       T 轨（TenantBaseDO，tenant_id 由拦截器自动注入/过滤，业务不手写租户校验）：bidding_notice_subscription、
+--       bidding_follow_item、bidding_follow_item_event、bidding_notice_subscription_event。
+--       PDF 抽取：本地 OpenDataLoader（本地模式）只抽文本+表格；扫描件抽空(空结果)→ FAIL_EMPTY 直接报错失败。
 -- =====================================================================
 
 -- 1) 外部公告主档（G 轨聚合；HTML 原样 / PDF / 附件 / 原网址）
@@ -45,6 +47,10 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external` (
     `public_scope` varchar(16) NOT NULL DEFAULT 'SOCIAL' COMMENT '公开范围（默认 SOCIAL 可展示）',
     `fetch_count` int NOT NULL DEFAULT 0 COMMENT '抓取次数',
     `last_fetch_time` datetime DEFAULT NULL COMMENT '最近抓取时间',
+    `extraction_status` varchar(16) NOT NULL DEFAULT 'NONE' COMMENT 'PDF 抽取状态：NONE/SUCCESS/FAIL_EMPTY/FAIL（OpenDataLoader 空结果=FAIL_EMPTY 直接失败）',
+    `extraction_text` longtext DEFAULT NULL COMMENT 'PDF 抽取的纯文本（OpenDataLoader 本地模式）',
+    `extraction_tables_json` json DEFAULT NULL COMMENT 'PDF 抽取的表格（JSON 数组）',
+    `extraction_at` datetime DEFAULT NULL COMMENT 'PDF 抽取时间',
     `meta_json` json DEFAULT NULL COMMENT '原始页面结构化字段全集（兜底防丢）',
     `extra_raw` longtext DEFAULT NULL COMMENT '整页快照（可追溯/复审）',
     PRIMARY KEY (`id`),
@@ -156,7 +162,7 @@ CREATE TABLE IF NOT EXISTS `bidding_crawl_job` (
     KEY `idx_job_status` (`status`, `create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '采集批次（G 轨）';
 
--- 7) 关注（公告/项目/招标项目/标段）——显式租户+用户隔离（G 轨）
+-- 7) 关注（公告/项目/招标项目/标段）——T 轨（TenantBaseDO，tenant_id 拦截器自动注入；user_id 为普通业务列）
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
     `id` bigint NOT NULL COMMENT '主键',
     `creator` varchar(64) DEFAULT '',
@@ -164,7 +170,7 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
     `updater` varchar(64) DEFAULT '',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted` bit(1) NOT NULL DEFAULT b'0',
-    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（显式列，服务层校验）',
+    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨，拦截器维护）',
     `user_id` bigint NOT NULL COMMENT '用户 ID（投标人）',
     `target_type` varchar(16) NOT NULL COMMENT 'ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION',
     `target_key` varchar(128) NOT NULL COMMENT '目标键：公告 id 或 维度代码',
@@ -173,10 +179,11 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
     `unfollow_time` datetime DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_sub_user_target` (`tenant_id`, `user_id`, `target_type`, `target_key`, `deleted`),
-    KEY `idx_sub_user` (`tenant_id`, `user_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注订阅（G 轨，显式租户隔离）';
+    KEY `idx_sub_user` (`tenant_id`, `user_id`),
+    KEY `idx_sub_tenant_id` (`tenant_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注订阅（T 轨）';
 
--- 8) 关注项目列表主档（界面“关注的项目列表”行：阶段/基础信息/最新动态/未读）
+-- 8) 关注项目列表主档（界面“关注的项目列表”行）——T 轨（TenantBaseDO）
 CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
     `id` bigint NOT NULL COMMENT '主键',
     `creator` varchar(64) DEFAULT '',
@@ -184,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
     `updater` varchar(64) DEFAULT '',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted` bit(1) NOT NULL DEFAULT b'0',
-    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（显式列）',
+    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨，拦截器维护）',
     `user_id` bigint NOT NULL COMMENT '用户 ID',
     `follow_type` varchar(16) NOT NULL COMMENT 'PROJECT/TENDER_PROJECT/SECTION',
     `follow_key` varchar(128) NOT NULL COMMENT '维度代码（project_code/tender_project_code/bid_section_code）',
@@ -200,10 +207,11 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
     `unfollow_time` datetime DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_follow_item_user_key` (`tenant_id`, `user_id`, `follow_type`, `follow_key`, `deleted`),
-    KEY `idx_follow_item_stage` (`tenant_id`, `user_id`, `stage_code`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注项目列表主档（G 轨）';
+    KEY `idx_follow_item_stage` (`tenant_id`, `user_id`, `stage_code`),
+    KEY `idx_follow_item_tenant_id` (`tenant_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注项目列表主档（T 轨）';
 
--- 9) 关注项动态/事件（“有动态才提醒”、未读、时间线数据源）
+-- 9) 关注项动态/事件（“有动态才提醒”、未读、时间线数据源）——T 轨（TenantBaseDO）
 CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
     `id` bigint NOT NULL COMMENT '主键',
     `creator` varchar(64) DEFAULT '',
@@ -211,7 +219,7 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
     `updater` varchar(64) DEFAULT '',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted` bit(1) NOT NULL DEFAULT b'0',
-    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（显式列）',
+    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨，拦截器维护）',
     `user_id` bigint NOT NULL COMMENT '用户 ID',
     `item_id` bigint NOT NULL COMMENT '所属关注行（bidding_follow_item.id）',
     `source` varchar(16) NOT NULL COMMENT 'INTERNAL/EXTERNAL',
@@ -224,10 +232,11 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
     `read_flag` bit(1) NOT NULL DEFAULT b'0' COMMENT '未读=提醒（读后置 1）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_event_key` (`event_key`, `deleted`),
-    KEY `idx_event_item` (`tenant_id`, `user_id`, `item_id`, `read_flag`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注项动态/事件（G 轨）';
+    KEY `idx_event_item` (`tenant_id`, `user_id`, `item_id`, `read_flag`),
+    KEY `idx_event_tenant_id` (`tenant_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注项动态/事件（T 轨）';
 
--- 10) 提醒发送留痕（站内信必发 + EMAIL 可选；真实渠道 API 占位后替换）
+-- 10) 提醒发送留痕（站内信必发 + EMAIL 可选；真实渠道 API 占位后替换）——T 轨（TenantBaseDO）
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
     `id` bigint NOT NULL COMMENT '主键',
     `creator` varchar(64) DEFAULT '',
@@ -235,7 +244,7 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
     `updater` varchar(64) DEFAULT '',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted` bit(1) NOT NULL DEFAULT b'0',
-    `tenant_id` bigint NOT NULL DEFAULT 0,
+    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨，拦截器维护）',
     `user_id` bigint NOT NULL COMMENT '收件用户',
     `follow_event_id` bigint DEFAULT NULL COMMENT '对应关注动态（bidding_follow_item_event.id）',
     `notice_id` bigint DEFAULT NULL,
@@ -245,5 +254,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
     `retry_count` int NOT NULL DEFAULT 0 COMMENT '发送重试（≤3）',
     `message` varchar(512) DEFAULT NULL,
     PRIMARY KEY (`id`),
-    KEY `idx_se_user_status` (`tenant_id`, `user_id`, `channel_status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '提醒发送留痕（G 轨）';
+    KEY `idx_se_user_status` (`tenant_id`, `user_id`, `channel_status`),
+    KEY `idx_se_tenant_id` (`tenant_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '提醒发送留痕（T 轨）';
