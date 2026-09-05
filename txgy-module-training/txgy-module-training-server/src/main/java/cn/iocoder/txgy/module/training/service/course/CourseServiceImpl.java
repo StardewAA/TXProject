@@ -333,6 +333,9 @@ public class CourseServiceImpl implements CourseService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteMedia(Long id) {
         CourseMediaDO media = validateMediaExists(id);
+        // 解绑仅解除课程与素材的关联关系，不删除资源中心原始素材；
+        // 与新增/修改保持一致：仅草稿态且为当前版本的课程允许调整媒资
+        validateCourseEditable(media.getCourseId());
         courseMediaMapper.deleteById(id);
         refreshCourseMediaStat(media.getCourseId());
     }
