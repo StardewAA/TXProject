@@ -12,12 +12,16 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+import cn.iocoder.txgy.module.bidding.enums.NoticeExternalAuditStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalContentTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer.ExternalNoticeIndexNotifier;
+import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -27,16 +31,50 @@ import java.util.Objects;
 /**
  * 外部公告（G 轨聚合主档）服务实现（对外只读展示切片）。
  */
+@Slf4j
 @Service
 public class NoticeExternalServiceImpl implements NoticeExternalService {
 
     /** 公开范围常量：社会公开（01 公开级别对齐 PublicLevelEnum.SOCIAL） */
     private static final String PUBLIC_SCOPE_SOCIAL = "SOCIAL";
 
+    /** 外部公告扇出源标识（关注/提醒侧 source） */
+    private static final String SOURCE_EXTERNAL = "EXTERNAL";
+
     @Resource
     private NoticeExternalMapper noticeExternalMapper;
     @Resource
     private NoticeExternalAttachmentMapper noticeExternalAttachmentMapper;
+    @Resource
+    private FollowService followService;
+    @Resource
+    private ExternalNoticeIndexNotifier externalNoticeIndexNotifier;
+
+    @Override
+    public void approveExternal(Long id) {
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
+        }
+        // 非待审核态：已生效/已下线等不重放（幂等）；由下游入口（如“重上架”）显式处理
+        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())) {
+            return;
+        }
+        notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        noticeExternalMapper.updateById(notice);
+        // 扇出关注动态 + ES 索引事件：均为旁路通知，失败不阻断审核；补偿扫描兜底（见设计 §7.6）
+        try {
+            followService.handleNoticeActivated(notice, SOURCE_EXTERNAL);
+        } catch (Exception e) {
+            log.error("[approveExternal][noticeId={}] 关注扇出失败（不影响审核，待补偿）", id, e);
+        }
+        try {
+            externalNoticeIndexNotifier.indexNotice(notice);
+        } catch (Exception e) {
+            log.error("[approveExternal][noticeId={}] ES 索引事件失败（不影响审核，待补偿）", id, e);
+        }
+    }
 
     @Override
     public PageResult<NoticeExternalRespVO> getPage(NoticeExternalPageReqVO reqVO) {

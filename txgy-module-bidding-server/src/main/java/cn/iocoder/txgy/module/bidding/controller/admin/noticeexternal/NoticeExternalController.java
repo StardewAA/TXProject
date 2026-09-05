@@ -15,10 +15,12 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
 /**
@@ -54,12 +56,13 @@ public class NoticeExternalController {
         return success(noticeExternalService.getDetail(id));
     }
 
-    // 管理端（审核/下线/重抓/白名单审批）接口按设计文档 §6/§五 后续切片补齐，
-    // 权限码统一申请 bidding:notice-external:*（占位，避免与公开只读混权限）
-    @GetMapping("/admin-stub")
-    @PreAuthorize("@ss.hasPermission('bidding:notice-external:query')")
-    @Operation(summary = "外部公告管理端占位（后续切片）", hidden = true)
-    public CommonResult<Boolean> adminStub() {
+    // 管理端：审核通过（NEW→ACTIVE，随后触发关注扇出+ES 索引事件预留）
+    @PostMapping("/approve")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "审核通过外部公告（转 ACTIVE，触发关注提醒+索引事件）")
+    public CommonResult<Boolean> approve(@RequestParam("id") Long id) {
+        noticeExternalService.approveExternal(id);
         return success(Boolean.TRUE);
     }
 

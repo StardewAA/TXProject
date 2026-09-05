@@ -31,4 +31,12 @@ public interface NoticeExternalService {
      */
     NoticeExternalDetailRespVO getDetail(Long id);
 
+    /**
+     * 审核通过：status NEW→ACTIVE、audit UNREVIEWED→APPROVED，随后触发关注扇出与 ES 索引事件（均不阻断审核）。
+     * 已生效/已处理（ACTIVE+APPROVED）调用幂等返回。
+     *
+     * @param id 外部公告主档 ID
+     */
+    void approveExternal(Long id);
+
 }
