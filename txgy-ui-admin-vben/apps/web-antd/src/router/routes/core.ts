@@ -141,6 +141,30 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '云培训学院', hideInMenu: true },
       },
       {
+        name: 'PortalTrainingLearning',
+        path: 'training/learning',
+        component: () => import('#/views/portal/training/learning/index.vue'),
+        meta: { title: '我的学习', hideInMenu: true },
+      },
+      {
+        name: 'PortalTrainingStudy',
+        path: 'training/study',
+        component: () => import('#/views/portal/training/learning/study.vue'),
+        meta: { title: '在线学习', hideInMenu: true },
+      },
+      {
+        name: 'PortalTrainingLive',
+        path: 'training/live',
+        component: () => import('#/views/portal/training/live/index.vue'),
+        meta: { title: '直播大厅', hideInMenu: true },
+      },
+      {
+        name: 'PortalTrainingProfile',
+        path: 'training/profile',
+        component: () => import('#/views/portal/training/profile/index.vue'),
+        meta: { title: '学习档案', hideInMenu: true },
+      },
+      {
         name: 'PortalBidding',
         path: 'bidding',
         component: () => import('#/views/portal/bidding/index.vue'),
