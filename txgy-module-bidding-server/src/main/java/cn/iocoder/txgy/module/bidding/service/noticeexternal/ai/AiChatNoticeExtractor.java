@@ -46,6 +46,13 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
     /** 服务调用 token（ai-server mock-enable 时留空） */
     @Value("${bidding.ai.admin-token:}")
     private String adminToken;
+    /**
+     * AI 调用所属租户上下文：外部公告为 G 轨全局（平台级运营数据），抽取会话固定落在
+     * 平台管理租户 1 下（ai 模块会话/消息/渠道均带 tenant_id，跨租户互不可见）；
+     * 若未来外部公告纳入租户化，再改为透传当前调用方租户。
+     */
+    @Value("${bidding.ai.tenant-id:1}")
+    private Long tenantId;
     @Value("${bidding.ai.timeout-seconds:60}")
     private int timeoutSeconds;
 
@@ -131,6 +138,11 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Content-Type", "application/json;charset=UTF-8");
+        if (tenantId != null) {
+            // AI 模块租户上下文必须显式传递：容器版 ai-server 会话/消息表带 tenant_id 且
+            // 租户拦截器对无租户 header 的请求会 getRequiredTenantId 失败；带错租户则数据落错库
+            builder.header("tenant-id", String.valueOf(tenantId));
+        }
         if (StringUtils.hasText(adminToken)) {
             builder.header("Authorization", "Bearer " + adminToken.trim());
         }
