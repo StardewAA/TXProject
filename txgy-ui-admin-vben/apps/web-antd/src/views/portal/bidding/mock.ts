@@ -7,6 +7,9 @@
  * 注意：Mock 演示数据非后端真实内容（页面有“演示 Mock 数据”标识）。
  */
 import type {
+  FollowEvent,
+  FollowItem,
+  FollowItemPageParams,
   NoticeBodyBlock,
   NoticeExternalDetail,
   NoticeExternalItem,
@@ -258,4 +261,243 @@ export function mockDetail(id: string): NoticeExternalDetail | undefined {
     attachments: (hit.attachments ?? []).map((a) => ({ ...a })),
     bodyBlocks: Array.isArray(hit.bodyBlocks) ? hit.bodyBlocks.map((b) => ({ ...b })) : undefined,
   };
+}
+
+/* ================= 关注/订阅域 Mock（内存态；与真实 notice-follow 语义对齐） =================
+ * - follow/unfollow 幂等：FOLLOWING 行出列表；unfollow 置 UNFOLLOWED 移出；重 follow 恢复并回最新动态；
+ * - 公告级关注：targetType=ANNOUNCEMENT，targetKey=公告 id；行 displayName 按详情快照标题（真实后端
+ *   暂存 targetKey、扇出时才快照 —— 前端在 api 层用 detail 回查补名，N2 见 docs 说明）；
+ * - 时间线：预置关注行的历史事件（EXTERNAL_ACTIVE = 外部公告审核生效提醒）；read 清未读。
+ */
+
+const DAY_M = 24 * 60 * 60 * 1000;
+
+interface MockFollowRec extends FollowItem {
+  followStatus: 'FOLLOWING' | 'UNFOLLOWED';
+}
+
+function followSeedRows(): MockFollowRec[] {
+  const nowM = now;
+  return [
+    {
+      id: 8001,
+      followType: 'TENDER_PROJECT',
+      followKey: 'TP-2026-LH-DYZB',
+      displayName: '炼化公司所属各单位2026年装置大修消缺公开招标',
+      issuerName: '陕西延长石油（集团）有限责任公司炼化公司',
+      stageCode: 'EVAL',
+      stageName: '评标',
+      unreadCount: 2,
+      followStatus: 'FOLLOWING',
+      followTime: nowM - 30 * DAY_M,
+      latestDynamicTime: nowM - 2 * DAY_M,
+    },
+    {
+      id: 8002,
+      followType: 'PROJECT',
+      followKey: 'PRJ-TY-TR-2026',
+      displayName: '太原市热力集团 2026 年度一次网保温管件采购项目',
+      issuerName: '太原市热力集团',
+      stageCode: 'RESULT',
+      stageName: '中标结果',
+      unreadCount: 1,
+      followStatus: 'FOLLOWING',
+      followTime: nowM - 20 * DAY_M,
+      latestDynamicTime: nowM - 6 * DAY_M,
+    },
+    {
+      id: 8003,
+      followType: 'ANNOUNCEMENT',
+      followKey: '1002',
+      displayName: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示',
+      issuerName: '太原市热力集团',
+      stageCode: 'UNKNOWN',
+      stageName: '',
+      unreadCount: 1,
+      followStatus: 'FOLLOWING',
+      followTime: nowM - 4 * DAY_M,
+      latestDynamicTime: nowM - 4 * DAY_M,
+    },
+    {
+      id: 8004,
+      followType: 'SECTION',
+      followKey: 'BYB-001',
+      displayName: '一标段（防腐保温材料采购与施工）',
+      issuerName: '平陆县住房和城乡建设局',
+      stageCode: 'TENDER',
+      stageName: '招标',
+      unreadCount: 0,
+      followStatus: 'FOLLOWING',
+      followTime: nowM - 2 * DAY_M,
+      latestDynamicTime: nowM - 2 * DAY_M,
+    },
+    {
+      id: 8005,
+      followType: 'PROJECT',
+      followKey: 'PRJ-DROPPED',
+      displayName: '已取消关注的示例项目（不应出现在列表）',
+      issuerName: '',
+      stageCode: 'UNKNOWN',
+      stageName: '',
+      unreadCount: 0,
+      followStatus: 'UNFOLLOWED',
+      followTime: nowM - 40 * DAY_M,
+      latestDynamicTime: null,
+    },
+  ];
+}
+
+interface MockTimelineRec extends FollowEvent {
+  itemId: number | string;
+}
+
+function seedTimeline(): MockTimelineRec[] {
+  const nowM = now;
+  return [
+    // 8001 炼化大修招标项目：已读 STAGE_CHANGE + 2 条未读 EXTERNAL_ACTIVE
+    { id: 9001, itemId: 8001, source: 'INTERNAL', eventType: 'STAGE_CHANGE', titleSnapshot: '项目阶段流转：招标 → 评标', occurredAt: nowM - 3 * DAY_M, readFlag: true },
+    { id: 9002, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示（模拟外部平台）', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 2 * DAY_M, readFlag: false },
+    { id: 9003, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示（模拟外部平台）', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 1 * DAY_M, readFlag: false },
+    // 8002 太原项目
+    { id: 9004, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 6 * DAY_M, readFlag: false },
+    { id: 9005, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 6 * DAY_M + 3600_000, readFlag: true },
+    // 8003 公告级关注（太原中标候选人公示）
+    { id: 9006, itemId: 8003, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 4 * DAY_M, readFlag: false },
+    // 8004 标段（平陆一标段招标公告）
+    { id: 9007, itemId: 8004, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1001, titleSnapshot: '平陆县集中供热管网改造工程（一标段）防腐保温材料采购招标公告', origUrl: 'https://example.com/notice/1001', occurredAt: nowM - 2 * DAY_M, readFlag: true },
+  ];
+}
+
+/** 关注存储（模块级单例：跨页面（详情关注 ↔ 我的关注列表）共享状态） */
+const followStore: { rows: MockFollowRec[]; events: MockTimelineRec[] } = (() => {
+  const saved = (globalThis as Record<string, unknown>).__bidding_mock_follow;
+  if (saved) return saved as { rows: MockFollowRec[]; events: MockTimelineRec[] };
+  const store = { rows: followSeedRows(), events: seedTimeline() };
+  (globalThis as Record<string, unknown>).__bidding_mock_follow = store;
+  return store;
+})();
+
+const toFollowVo = (r: MockFollowRec): FollowItem => ({
+  id: r.id,
+  followType: r.followType,
+  followKey: r.followKey,
+  displayName: r.displayName,
+  issuerName: r.issuerName,
+  stageCode: r.stageCode,
+  stageName: r.stageName,
+  latestDynamicTime: r.latestDynamicTime,
+  unreadCount: r.unreadCount,
+  followTime: r.followTime,
+});
+
+/** 关注/取消（幂等）；公告级关注新建行时按 mock 详情快照标题/发布单位 */
+export function mockToggleFollow(
+  action: 'follow' | 'unfollow',
+  targetType: string,
+  targetKey: string,
+): void {
+  const store = followStore;
+  const found = store.rows.find(
+    (r) => r.followType === targetType && r.followKey === targetKey,
+  );
+  if (action === 'unfollow') {
+    if (found) {
+      found.followStatus = 'UNFOLLOWED';
+    }
+    return;
+  }
+  if (found) {
+    if (found.followStatus !== 'FOLLOWING') {
+      found.followStatus = 'FOLLOWING';
+      found.followTime = now;
+    }
+    return; // 已关注：幂等
+  }
+  let displayName = targetKey;
+  let issuerName = '';
+  if (targetType === 'ANNOUNCEMENT') {
+    const det = details[String(targetKey)];
+    if (det) {
+      displayName = det.title || targetKey;
+      issuerName = det.issuerName || '';
+    }
+  } else {
+    const det = list.find((r) =>
+      targetType === 'PROJECT'
+        ? r.title?.includes(targetKey)
+        : String(r.id) === targetKey || r.title?.includes(targetKey),
+    );
+    if (det) {
+      displayName = det.title || targetKey;
+      issuerName = det.issuerName || '';
+    }
+  }
+  const maxId = store.rows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 8000);
+  const row: MockFollowRec = {
+    id: maxId + 1,
+    followType: targetType,
+    followKey: targetKey,
+    displayName,
+    issuerName,
+    stageCode: 'UNKNOWN',
+    stageName: '',
+    unreadCount: 0,
+    followStatus: 'FOLLOWING',
+    followTime: now,
+    latestDynamicTime: null,
+  };
+  store.rows.push(row);
+}
+
+export function mockFollowed(targetType: string, targetKey: string): boolean {
+  return followStore.rows.some(
+    (r) =>
+      r.followType === targetType &&
+      r.followKey === String(targetKey) &&
+      r.followStatus === 'FOLLOWING',
+  );
+}
+
+/** 我的关注分页（只出 FOLLOWING；followType 过滤；按最近动态倒序） */
+export function mockMyFollow(params: FollowItemPageParams): PageResult<FollowItem> {
+  let rows = followStore.rows.filter((r) => r.followStatus === 'FOLLOWING');
+  if (params.followType) {
+    rows = rows.filter((r) => r.followType === params.followType);
+  }
+  rows.sort((a, b) => {
+    const ta = typeof a.latestDynamicTime === 'number' ? a.latestDynamicTime : 0;
+    const tb = typeof b.latestDynamicTime === 'number' ? b.latestDynamicTime : 0;
+    return tb - ta;
+  });
+  const pageNo = Math.max(1, params.pageNo || 1);
+  const pageSize = Math.min(100, params.pageSize || 10);
+  const start = (pageNo - 1) * pageSize;
+  return { total: rows.length, list: rows.slice(start, start + pageSize).map(toFollowVo) };
+}
+
+/** 时间线分页（倒序；itemId 归属校验后返回） */
+export function mockTimeline(
+  itemId: number | string,
+  params: { pageNo: number; pageSize: number },
+): PageResult<FollowEvent> {
+  const rows = followStore.events
+    .filter((e) => String(e.itemId) === String(itemId))
+    .sort((a, b) => Number(b.occurredAt) - Number(a.occurredAt));
+  const pageNo = Math.max(1, params.pageNo || 1);
+  const pageSize = Math.min(100, params.pageSize || 10);
+  const start = (pageNo - 1) * pageSize;
+  return {
+    total: rows.length,
+    list: rows.slice(start, start + pageSize).map((e) => ({ ...e, itemId: undefined }) as FollowEvent),
+  };
+}
+
+/** 标记关注项已读（清未读 + 该行事件 readFlag=true） */
+export function mockReadItem(itemId: number | string): void {
+  const key = String(itemId);
+  const row = followStore.rows.find((r) => String(r.id) === key);
+  if (row) row.unreadCount = 0;
+  followStore.events.forEach((e) => {
+    if (String(e.itemId) === key) e.readFlag = true;
+  });
 }

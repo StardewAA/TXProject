@@ -156,7 +156,7 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'PortalBiddingSubscription',
         path: 'bidding/subscription',
         component: () => import('#/views/portal/bidding/subscription.vue'),
-        meta: { title: '项目订阅', hideInMenu: true },
+        meta: { title: '我的关注', hideInMenu: true },
       },
       {
         name: 'PortalBiddingProfile',

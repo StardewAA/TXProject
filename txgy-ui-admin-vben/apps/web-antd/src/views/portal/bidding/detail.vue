@@ -13,7 +13,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { fetchNoticeDetail, openOrigUrl } from './api';
+import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
 import { blocksToHtml, cleanT, fmtDT, fmtDate, prettyNoticeHtml, toCleanList } from './format';
 import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
 
@@ -23,6 +23,41 @@ const router = useRouter();
 const loading = ref(true);
 const errorMsg = ref('');
 const detail = ref<NoticeExternalDetail | null>(null);
+
+/** 关注状态：idle=探测中 / followed / unfollowed / unavailable（未登录或无权限时不展示按钮并给提示） */
+const followState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const followBusy = ref(false);
+const followHint = ref('');
+
+async function probeFollow(): Promise<void> {
+  try {
+    const followed = await isFollowed('ANNOUNCEMENT', id.value);
+    followState.value = followed ? 'followed' : 'unfollowed';
+  } catch (e) {
+    // 未登录/无权限等：隐藏关注按钮，给一句说明（详情仍可看）
+    followState.value = 'unavailable';
+    followHint.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+async function toggleFollow(): Promise<void> {
+  if (followBusy.value) return;
+  followBusy.value = true;
+  try {
+    if (followState.value === 'followed') {
+      await unfollowTarget({ targetType: 'ANNOUNCEMENT', targetKey: id.value });
+      followState.value = 'unfollowed';
+    } else {
+      await followTarget({ targetType: 'ANNOUNCEMENT', targetKey: id.value });
+      followState.value = 'followed';
+    }
+  } catch (e) {
+    followState.value = 'unavailable';
+    followHint.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    followBusy.value = false;
+  }
+}
 /** 兜底：未捕获的运行时/异步错误显示到页面上，便于定位（开发辅助） */
 const pageError = ref('');
 function onUnhandled(e: PromiseRejectionEvent | ErrorEvent): void {
@@ -123,6 +158,7 @@ async function load(): Promise<void> {
   errorMsg.value = '';
   try {
     detail.value = await fetchNoticeDetail(id.value);
+    if (detail.value) void probeFollow();
   } catch (e) {
     errorMsg.value = e instanceof Error ? e.message : String(e);
     detail.value = null;
@@ -166,17 +202,27 @@ onBeforeUnmount(() => {
         <div class="tags">
           <span v-for="t in tagList" :key="t" class="tag">{{ t }}</span>
         </div>
-        <a
-          v-if="detail.origUrl"
-          class="go-orig"
-          title="经平台白名单中转跳转原站（防止外链绕过管控）"
-          @click.prevent="openOrigUrl(detail.origUrl)"
-        >查看原文 ↗</a>
+        <div class="head-actions">
+          <button
+            v-if="followState === 'followed' || followState === 'unfollowed'"
+            class="go-orig"
+            :class="{ active: followState === 'followed' }"
+            :disabled="followBusy"
+            @click="toggleFollow()"
+          >{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : '＋ 关注' }}</button>
+          <a
+            v-if="detail.origUrl"
+            class="go-orig"
+            title="经平台白名单中转跳转原站（防止外链绕过管控）"
+            @click.prevent="openOrigUrl(detail.origUrl)"
+          >查看原文 ↗</a>
+        </div>
       </div>
       <h1>{{ detail.title }}</h1>
       <div class="meta">
         <span v-for="p in metaPairs" :key="p.k"><b>{{ p.k }}</b>{{ p.v }}</span>
       </div>
+      <p v-if="followState === 'unavailable' && followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
     </div>
 
     <!-- 正文：结构化块 优先 → contentHtmlSafe 回退（统一公文样式渲染） -->
@@ -587,6 +633,29 @@ onBeforeUnmount(() => {
 }
 .go-orig:hover {
   background: #e2ecf8;
+}
+
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: none;
+}
+.go-orig.active {
+  background: #e5f2ea;
+  border-color: #a9d6bd;
+  color: #176b44;
+}
+.go-orig:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.follow-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #8a97a4;
 }
 
 </style>
