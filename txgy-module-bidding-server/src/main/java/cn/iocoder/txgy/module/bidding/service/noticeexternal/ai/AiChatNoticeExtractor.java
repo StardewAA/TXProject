@@ -67,14 +67,24 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
             .connectTimeout(Duration.ofSeconds(5))
             .build();
 
+    /** 行业判定口径（管道防腐保温行业）：与管道/储罐/装置/设备及其附属设施的
+     *  防腐蚀、保温、保冷、隔热 的 施工、维修、材料、检测 相关即 BELONGS */
+    private static final String INDUSTRY_RULE = "行业判定口径（管道防腐保温行业）：招标内容涉及 管道/储罐/装置/设备及附属设施的"
+            + "防腐蚀、保温、保冷、隔热 等的 施工、维修、材料供应、检测/验收 相关 → industryFlag=BELONGS；"
+            + "明显无关 → NOT_BELONGS；信息不足无法判断 → UNCERTAIN。";
+
     /** 系统提示词：只输出 JSON，不输出任何解释文本 */
-    private static final String SYSTEM_PROMPT = "你是招投标公告信息抽取助手。"
+    private static final String SYSTEM_PROMPT = "你是招投标公告信息抽取与行业判定助手。"
             + "只输出一个 JSON 对象（不要 markdown 代码块、不要任何解释文字），字段为："
             + "{\"title\":\"公告标题\",\"projectName\":\"项目名称\",\"tenderNo\":\"招标/采购编号\","
             + "\"budgetAmount\":\"预算金额（纯数字，元）\",\"bidOpenTime\":\"开标/递交截止时间\","
             + "\"issuer\":\"招标人/采购人\",\"contactPerson\":\"联系人\",\"contactPhone\":\"联系电话\","
-            + "\"qualificationSummary\":\"资格要求摘要\",\"industry\":\"所属行业\","
-            + "\"noticeFullText\":\"公告全文逐字转写（若输入为扫描件图片/无文本则必须转写；已有文本输入时可填空串）\"}。"
+            + "\"qualificationSummary\":\"资格要求摘要\","
+            + "\"noticeFullText\":\"公告全文逐字转写（若输入为扫描件图片/无文本则必须转写；已有文本输入时可填空串）\","
+            + "\"industryFlag\":\"BELONGS/NOT_BELONGS/UNCERTAIN 三选一\"," + "\"industryConfidence\":0~1 的判定置信度数字,"
+            + "\"industryReason\":\"判定理由一句话\","
+            + "\"industryHitKeywords\":[\"命中的行业关键词数组，未命中给空数组\"]}。"
+            + INDUSTRY_RULE
             + "缺失字段给 null 或空串，不要编造。";
 
     @Override

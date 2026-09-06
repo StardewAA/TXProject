@@ -122,6 +122,32 @@ class NoticeExternalAiExtractServiceImplTest {
     }
 
     @Test
+    void extract_industryVerdict_writesFlagAndConfidence() throws Exception {
+        NoticeExternalDO notice = noticeWithText();
+        when(noticeExternalMapper.selectById(7L)).thenReturn(notice);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("projectName", "装置大修项目");
+        fields.put("industryFlag", "BELONGS");
+        fields.put("industryConfidence", 0.95);
+        fields.put("industryReason", "涉及装置防腐保温施工");
+        when(aiNoticeExtractor.extract(any(AiNoticeExtractRequest.class)))
+                .thenReturn(new AiNoticeExtractResult(fields, null));
+
+        AiExtractSnapshot snapshot = service.extract(7L);
+
+        assertEquals("SUCCESS", snapshot.getAiExtractionStatus());
+        assertEquals("BELONGS", snapshot.getIndustryFlag());
+        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).updateById(captor.capture());
+        NoticeExternalDO saved = captor.getValue();
+        assertEquals("BELONGS", saved.getIndustryFlag());
+        assertEquals(0, saved.getIndustryConfidence().compareTo(new java.math.BigDecimal("0.95")));
+        assertTrue(saved.getAiMetaJson().contains("industryReason"));
+        // 抽取不涉全文时不覆盖 extraction 状态
+        assertEquals(null, saved.getExtractionStatus());
+    }
+
+    @Test
     void extract_aiException_marksFailedAndThrows106_018() throws Exception {
         when(noticeExternalMapper.selectById(7L)).thenReturn(noticeWithText());
         when(aiNoticeExtractor.extract(any(AiNoticeExtractRequest.class)))

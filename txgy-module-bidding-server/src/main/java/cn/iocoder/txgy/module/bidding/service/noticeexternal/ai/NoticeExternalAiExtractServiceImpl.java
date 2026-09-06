@@ -14,12 +14,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AI 结构化抽取服务实现（人工触发；失败状态化可重试）。
+ *
+ * <p>输出双用途：①结构化字段集落 ai_meta_json（含判定详情/命中词）；②防腐保温行业判定
+ * （industryFlag=BELONGS/NOT_BELONGS/UNCERTAIN + 置信度）回写公告权威字段，列表可按其筛选。
  */
 @Slf4j
 @Service
@@ -29,6 +34,9 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
     private static final String AI_STATUS_SUCCESS = "SUCCESS";
     private static final String AI_STATUS_FAILED = "FAILED";
     private static final String EXTRACTION_SUCCESS = "SUCCESS";
+    /** 防腐保温行业判定的合法取值（与 DO.industryFlag 口径一致） */
+    private static final Set<String> INDUSTRY_FLAGS =
+            Set.of("BELONGS", "NOT_BELONGS", "UNCERTAIN");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -79,6 +87,8 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
             notice.setExtractionStatus(EXTRACTION_SUCCESS);
             notice.setExtractionAt(LocalDateTime.now());
         }
+        // 防腐保温行业判定回写权威字段（AI 未给出合法值时保持原值；判定详情/命中词见 ai_meta_json）
+        applyIndustryVerdict(result.getFields(), notice);
         notice.setAiExtractionStatus(AI_STATUS_SUCCESS);
         notice.setAiMetaJson(writeJson(result.getFields()));
         notice.setAiExtractAt(LocalDateTime.now());
@@ -90,6 +100,8 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
         snapshot.setAiExtractionStatus(AI_STATUS_SUCCESS);
         snapshot.setMetaFieldCount(result.getFields().size());
         snapshot.setFullTextLength(StringUtils.hasText(fullText) ? fullText.length() : 0);
+        snapshot.setIndustryFlag(notice.getIndustryFlag());
+        snapshot.setIndustryConfidence(notice.getIndustryConfidence());
         return snapshot;
     }
 
@@ -102,6 +114,25 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
             return Jsoup.parse(notice.getContentHtml()).text();
         }
         return null;
+    }
+
+    /** 防腐保温行业判定回写：AI 输出合法 flag/置信度 → 更新权威字段；非法或缺失则保持原值 */
+    private void applyIndustryVerdict(Map<String, Object> fields, NoticeExternalDO notice) {
+        Object rawFlag = fields.get("industryFlag");
+        String flag = rawFlag == null ? null : String.valueOf(rawFlag);
+        if (flag != null && INDUSTRY_FLAGS.contains(flag)) {
+            notice.setIndustryFlag(flag);
+            Object rawConf = fields.get("industryConfidence");
+            if (rawConf instanceof Number number) {
+                notice.setIndustryConfidence(BigDecimal.valueOf(number.doubleValue()));
+            } else if (rawConf != null) {
+                try {
+                    notice.setIndustryConfidence(new BigDecimal(String.valueOf(rawConf)));
+                } catch (NumberFormatException ignore) {
+                    // 置信度非法则不回写（flag 仍按 AI 结论更新）
+                }
+            }
+        }
     }
 
     private void markFailed(NoticeExternalDO notice, String reason) {

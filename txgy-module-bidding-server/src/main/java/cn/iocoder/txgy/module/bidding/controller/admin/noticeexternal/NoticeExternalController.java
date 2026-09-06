@@ -131,11 +131,14 @@ public class NoticeExternalController {
         return success(externalNoticeIngestService.ingest(dto));
     }
 
-    /** AI 结构化抽取：人工触发（PDF/HTML → 结构化字段 + 可选全文转写；需 bidding.ai.enabled=true） */
+    /**
+     * AI 结构化抽取 + 防腐保温行业判定：人工触发（PDF/HTML → 结构化字段落 ai_meta_json，
+     * industryFlag/置信度回写权威字段；扫描件全文转写回写后可被关键词检索命中；需 bidding.ai.enabled=true）
+     */
     @PostMapping("/ai-extract")
     @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
     @Idempotent
-    @Operation(summary = "AI 结构化抽取（管理端人工触发；转写全文回写后可被关键词检索命中）")
+    @Operation(summary = "AI 结构化抽取与防腐保温行业判定（管理端人工触发）")
     public CommonResult<NoticeExternalAiExtractRespVO> aiExtract(@RequestParam("id") Long id) {
         AiExtractSnapshot snapshot = noticeExternalAiExtractService.extract(id);
         NoticeExternalAiExtractRespVO respVO = new NoticeExternalAiExtractRespVO();
@@ -143,6 +146,8 @@ public class NoticeExternalController {
         respVO.setAiExtractionStatus(snapshot.getAiExtractionStatus());
         respVO.setMetaFieldCount(snapshot.getMetaFieldCount());
         respVO.setFullTextLength(snapshot.getFullTextLength());
+        respVO.setIndustryFlag(snapshot.getIndustryFlag());
+        respVO.setIndustryConfidence(snapshot.getIndustryConfidence());
         return success(respVO);
     }
 
