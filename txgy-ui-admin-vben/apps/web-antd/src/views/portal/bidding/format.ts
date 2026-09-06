@@ -263,3 +263,53 @@ export function blocksToHtml(blocks: NoticeBodyBlock[] | null | undefined): stri
   if (!blocks || !blocks.length) return '';
   return blocks.map(renderBlock).filter(Boolean).join('\n');
 }
+
+/* ---------- 关注 / 订阅域展示文案（02 §5：targetType / stage / 事件类型标签） ---------- */
+
+const FOLLOW_TYPE_NAME: Record<string, string> = {
+  ANNOUNCEMENT: '公告',
+  PROJECT: '项目',
+  TENDER_PROJECT: '招标项目',
+  SECTION: '标段',
+};
+/** 维度 code → 展示名（未知原文回显自身） */
+export function followTypeName(code?: string | null): string {
+  if (!code) return '';
+  return FOLLOW_TYPE_NAME[code] || code;
+}
+
+const STAGE_NAME: Record<string, string> = {
+  PENDING: '前期',
+  TENDER: '招标',
+  OPEN_BID: '开标',
+  EVAL: '评标',
+  RESULT: '中标结果',
+  CONTRACT: '签约',
+  DONE: '完成',
+  UNKNOWN: '未知',
+};
+/** 阶段展示：后端 stageName 优先（快照可含业务改写），否则按 stageCode 字典 */
+export function stageNameOf(stageCode?: string | null, stageName?: string | null): string {
+  if (stageName) return stageName;
+  if (!stageCode) return '';
+  return STAGE_NAME[stageCode] || stageCode;
+}
+
+/** 事件类型 → 展示名 */
+export function eventTypeText(eventType?: string | null): string {
+  const map: Record<string, string> = {
+    NOTICE_PUBLISHED: '公告发布',
+    NOTICE_UPDATED: '公告更新',
+    EXTERNAL_ACTIVE: '外部公告审核生效',
+    STAGE_CHANGE: '阶段变更',
+  };
+  if (!eventType) return '';
+  return map[eventType] || eventType;
+}
+
+/** 事件来源 → 展示名 */
+export function eventSourceText(source?: string | null): string {
+  const map: Record<string, string> = { INTERNAL: '内部公告', EXTERNAL: '外部平台' };
+  if (!source) return '';
+  return map[source] || source;
+}

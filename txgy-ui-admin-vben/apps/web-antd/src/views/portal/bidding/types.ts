@@ -128,3 +128,62 @@ export interface PageResult<T> {
   list: T[];
   total: number;
 }
+
+/* ================= 关注 / 订阅域（notice-follow，01 §3 / 02 §5） ================= */
+
+/** 关注目标类型：公告/项目/招标项目/标段 */
+export type FollowTargetType = 'ANNOUNCEMENT' | 'PROJECT' | 'TENDER_PROJECT' | 'SECTION';
+
+/** 关注入参（FollowReqVO：targetType+targetKey，幂等） */
+export interface FollowReq {
+  targetType: FollowTargetType | string;
+  /** 目标键：公告=公告 id；项目/招标项目/标段=维度代码 */
+  targetKey: string;
+}
+
+/** 我的关注列表行（FollowItemRespVO；注意后端实际筛选参数名为 followType，非文档 dimensionType） */
+export interface FollowItem {
+  id: number | string;
+  /** 维度：ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION（服务层对公告级关注也建行） */
+  followType?: string | null;
+  followKey?: string | null;
+  /** 项目/标段/公告标题快照（公告级关注未扇出时后端暂存 targetKey，前端可回查 detail 补名） */
+  displayName?: string | null;
+  issuerName?: string | null;
+  /** 进展阶段 code：PENDING/TENDER/OPEN_BID/EVAL/RESULT/CONTRACT/DONE/UNKNOWN */
+  stageCode?: string | null;
+  stageName?: string | null;
+  /** 基础信息快照（JSON 串） */
+  baseJson?: string | null;
+  /** 最近动态时间（epoch 毫秒） */
+  latestDynamicTime?: number | string | null;
+  /** 未读动态数 */
+  unreadCount?: number | null;
+  /** 关注时间（epoch 毫秒） */
+  followTime?: number | string | null;
+}
+
+/** 我的关注列表分页入参（FollowItemPageReqVO） */
+export interface FollowItemPageParams {
+  /** 维度过滤：PROJECT/TENDER_PROJECT/SECTION/ANNOUNCEMENT（空=全部） */
+  followType?: string;
+  pageNo: number;
+  pageSize: number;
+}
+
+/** 关注项动态/事件（FollowEventRespVO，timeline 行） */
+export interface FollowEvent {
+  id: number | string;
+  /** 来源：INTERNAL/EXTERNAL */
+  source?: string | null;
+  /** 事件类型：NOTICE_PUBLISHED/NOTICE_UPDATED/EXTERNAL_ACTIVE/STAGE_CHANGE */
+  eventType?: string | null;
+  /** 关联公告 id（可空；EXTERNAL_ACTIVE 指向外部公告） */
+  noticeId?: number | string | null;
+  titleSnapshot?: string | null;
+  /** 原网址（外部公告） */
+  origUrl?: string | null;
+  /** 动态发生时间（epoch 毫秒） */
+  occurredAt?: number | string | null;
+  readFlag?: boolean | null;
+}

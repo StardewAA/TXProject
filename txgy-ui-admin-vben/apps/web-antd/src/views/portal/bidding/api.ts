@@ -21,8 +21,20 @@
  */
 import { biddingConfig } from './config';
 import { cleanT, toCleanList } from './format';
-import { mockDetail, mockPage } from './mock';
+import {
+  mockDetail,
+  mockFollowed,
+  mockMyFollow,
+  mockPage,
+  mockReadItem,
+  mockTimeline,
+  mockToggleFollow,
+} from './mock';
 import type {
+  FollowEvent,
+  FollowItem,
+  FollowItemPageParams,
+  FollowReq,
   NoticeBodyBlock,
   NoticeExternalDetail,
   NoticeExternalItem,
@@ -310,3 +322,157 @@ export function openOrigUrl(origUrl?: string | null): void {
   const go = `${API}/go?url=${encodeURIComponent(origUrl)}`;
   window.open(go, '_blank', 'noopener,noreferrer');
 }
+
+/* ================= 关注 / 订阅域（notice-follow；需登录 + bidding:notice-external:query/update） =================
+ * 实现口径核对（后端 NoticeFollowController / FollowServiceImpl，01 §3 / 02 §5）：
+ *   - 关注/取消：POST {prefix}/notice-follow/follow | /unfollow  body=FollowReqVO(targetType,targetKey)；
+ *     ANNOUNCEMENT 关注会建“我关注的公告”行（displayName 暂为 targetKey，扇出时快照标题）；
+ *   - 我的关注：GET {prefix}/notice-follow/item/page?followType=&pageNo=&pageSize=
+ *     （注意：实际筛选参数名是 followType —— 01 §3 文档写作 dimensionType 有误，后端 VO 以 followType 为准）；
+ *   - 时间线：GET {prefix}/notice-follow/item/{itemId}/timeline（分页）；
+ *   - 已读：POST {prefix}/notice-follow/item/{itemId}/read（幂等，清未读 + readFlag）。
+ * 鉴权：大厅免登录；关注域需登录态 + 权限码。浏览器联调期（48110 直跑未注册网关 O1）复用
+ *   /bidding-api 代理并附加 Authorization/tenant-id 请求头（from useAccessStore）。
+ */
+
+const FOLLOW_API = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice-follow`;
+
+/** 登录态请求（附加 Authorization/tenant-id；无 token 时报“请先登录”） */
+async function authedFetch<T>(
+  url: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  let token: string | null = null;
+  try {
+    const { useAccessStore } = await import('@vben/stores');
+    const accessStore = useAccessStore();
+    token = accessStore.accessToken;
+    const tenantId = accessStore.tenantId;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (tenantId !== null && tenantId !== undefined) headers['tenant-id'] = String(tenantId);
+  } catch {
+    /* stores 未就绪：按未登录处理，后端返回 code=401 统一提示 */
+  }
+  const res = await fetch(url, {
+    method: init.method || 'GET',
+    headers,
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  let body: { code?: number; data?: T; msg?: string } | null = null;
+  try {
+    body = (await res.json()) as { code?: number; data?: T; msg?: string };
+  } catch {
+    /* 非 JSON 响应 */
+  }
+  if (!res.ok || (body && typeof body.code === 'number' && body.code !== 0)) {
+    const code = body?.code ?? res.status;
+    let msg =
+      body?.msg ||
+      (res.ok ? '' : `请求失败：HTTP ${res.status}`) ||
+      `公告接口错误：code=${code}`;
+    if (code === 401) msg = '请先登录后再使用关注/订阅功能';
+    if (code === 403) msg = '无操作权限（需要 bidding:notice-external:query/update），请联系管理员开通';
+    throw new ApiError(msg, code as number);
+  }
+  return (body ? body.data : undefined) as T;
+}
+
+function followQs(params: Record<string, unknown>): string {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+  });
+  return qs.toString();
+}
+
+/** 关注（幂等） */
+export async function followTarget(req: FollowReq): Promise<void> {
+  if (biddingConfig.useMock) {
+    mockToggleFollow('follow', req.targetType, req.targetKey);
+    return;
+  }
+  await authedFetch<boolean>(`${FOLLOW_API}/follow`, { method: 'POST', body: req });
+}
+
+/** 取消关注（幂等） */
+export async function unfollowTarget(req: FollowReq): Promise<void> {
+  if (biddingConfig.useMock) {
+    mockToggleFollow('unfollow', req.targetType, req.targetKey);
+    return;
+  }
+  await authedFetch<boolean>(`${FOLLOW_API}/unfollow`, { method: 'POST', body: req });
+}
+
+/** 我的关注列表（item/page；followType 空=全部，可 ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION） */
+export async function fetchMyFollowItems(
+  params: FollowItemPageParams,
+): Promise<PageResult<FollowItem>> {
+  const data = biddingConfig.useMock
+    ? await mockMyFollow(params)
+    : await authedFetch<PageResult<FollowItem>>(
+        `${FOLLOW_API}/item/page?${followQs({ ...params })}`,
+      );
+  return {
+    total: data.total,
+    list: (data.list || []).map((r) => ({
+      ...r,
+      displayName: cleanT(r.displayName),
+      issuerName: r.issuerName ? cleanT(r.issuerName) : undefined,
+    })),
+  };
+}
+
+/** 关注项时间线（公告列表+动态） */
+export async function fetchFollowTimeline(
+  itemId: number | string,
+  params: { pageNo: number; pageSize: number },
+): Promise<PageResult<FollowEvent>> {
+  const data = biddingConfig.useMock
+    ? await mockTimeline(itemId, params)
+    : await authedFetch<PageResult<FollowEvent>>(
+        `${FOLLOW_API}/item/${encodeURIComponent(String(itemId))}/timeline?${followQs({ ...params })}`,
+      );
+  return {
+    total: data.total,
+    list: (data.list || []).map((e) => ({
+      ...e,
+      titleSnapshot: cleanT(e.titleSnapshot),
+      origUrl: e.origUrl ? cleanT(e.origUrl) : undefined,
+    })),
+  };
+}
+
+/** 标记关注项已读（清未读 + 事件 readFlag） */
+export async function markFollowItemRead(itemId: number | string): Promise<void> {
+  if (biddingConfig.useMock) {
+    mockReadItem(itemId);
+    return;
+  }
+  await authedFetch<boolean>(
+    `${FOLLOW_API}/item/${encodeURIComponent(String(itemId))}/read`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * 是否已关注某目标（用于详情页“关注”按钮初始态）。
+ * 后端暂无单点查询接口（见 docs 后续说明 N3）：前端以“公告级关注行分页扫描”探测，
+ * 超过 5 页仍未命中视为未关注（v1 够用；后端提供 status 端点后替换）。
+ */
+export async function isFollowed(targetType: string, targetKey: string): Promise<boolean> {
+  if (biddingConfig.useMock) return mockFollowed(targetType, targetKey);
+  if (targetType === 'ANNOUNCEMENT') {
+    for (let p = 1; p <= 5; p += 1) {
+      const res = await fetchMyFollowItems({ followType: 'ANNOUNCEMENT', pageNo: p, pageSize: 100 });
+      if (res.list.some((r) => r.followType === 'ANNOUNCEMENT' && String(r.followKey) === String(targetKey))) {
+        return true;
+      }
+      if (p * 100 >= res.total) break;
+    }
+    return false;
+  }
+  // 项目/标段维度：全量扫描成本高且无 followKey 筛选（N3），v1 直接按未关注处理（关注动作幂等，不会重复建行）
+  return false;
+}
+

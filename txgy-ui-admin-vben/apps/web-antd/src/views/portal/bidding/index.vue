@@ -5,6 +5,7 @@
   口径（docs/外部公告-前端对接 01/02）：
    - 大厅只读：不传状态/审核筛参，仅 ACTIVE+SOCIAL（后端 page 已限定，02 §3.4）；
    - 关键词 → keyword（ES 全文检索，R5；ES 未启用时接口报 1-060-106-015，页面提示检索暂不可用，02 §6）；
+   - 关注：公告详情“＋关注/已关注” → 我的关注页（notice-follow 域，登录态）；本页“我的关注”入口即该列表，
    - 公告性质/来源站筛选项 = 列表数据驱动（外站原文 noticeTypeRaw / 来源字典 sourceCode+sourceName，R1/R3），
      “中标公示”= 候选类+结果类合并快捷口径（R1：后端不发明文聚合，前端按 noticeTypeRaw 组合）；
    - 行业：industryFlag 三态 eq（防腐保温相关/不相关/未知，R10）。
@@ -227,9 +228,9 @@ onMounted(() => {
         <div class="n-sub">查询 · 中标公示 · 详情</div>
       </div>
       <div class="nav-item" @click="goNav('/portal/bidding/subscription')">
-        <span class="flag">二期</span><span class="ic">✦</span>
-        <div class="n-name">项目订阅</div>
-        <div class="n-sub">订阅即跟踪 · 历史公告</div>
+        <span class="ic">✦</span>
+        <div class="n-name">我的关注</div>
+        <div class="n-sub">关注的公告/项目 · 动态提醒</div>
       </div>
       <div class="nav-item" @click="goNav('/portal/bidding/profile')">
         <span class="flag">二期</span><span class="ic">◎</span>
