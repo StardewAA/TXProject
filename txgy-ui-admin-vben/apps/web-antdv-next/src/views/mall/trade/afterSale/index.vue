@@ -147,6 +147,12 @@ onMounted(() => {
               label: '处理退款',
               type: 'link',
               onClick: handleOpenAfterSaleDetail.bind(null, row),
+              ifShow: [10, 30, 40].includes(row.status),
+            },
+            {
+              label: '查看详情',
+              type: 'link',
+              onClick: handleOpenAfterSaleDetail.bind(null, row),
             },
           ]"
         />
