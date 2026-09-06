@@ -122,15 +122,16 @@ bidding:
     password: ${ES_PASSWORD:} # 密码：本地用环境变量 ES_PASSWORD 注入（不入库）；留空=不带认证
   ai:
     # AI 结构化抽取（PDF/HTML 公告 → 结构化字段 + 扫描件全文转写；规范依据：设计 v0.6 §7 增强）
-    # enabled=false（默认）→ /notice-external/ai-extract 报"未配置"；true 需下方 base-url 指向 AI 模块 admin-api
-    enabled: false
+    # enabled=false → /notice-external/ai-extract 报"未配置"；true 走下方 base-url 指向的 AI 模块入口
+    enabled: true
     # AI 模块 admin-api 入口：默认走网关 48080（容器化 ai-server 未映射端口，经网关转发可达且路由已验证）；
     # 本地另起 ai-server(48086) 时可改指 http://127.0.0.1:48086/admin-api
     base-url: http://127.0.0.1:48080/admin-api
     conversation-id: # 固定复用会话 id（空则每次自动 create-my）
     # ai-server 启用真实鉴权时注入真 token；本地 mock-enable 联调默认 test1（mockSecret 前缀）
     admin-token: ${BIDDING_AI_ADMIN_TOKEN:test1}
-    # AI 调用所属租户（见 AiChatNoticeExtractor.tenantId 注释）：外部公告=平台运营数据 → 固定平台租户 1
+    # AI 调用租户兜底值（默认平台租户 1）：正常跟随当前请求/触发者租户（各租户用自己的
+    # AI 渠道与 key，见 AiChatNoticeExtractor.resolveTenantId）；仅离线/无租户上下文时用此兜底
     tenant-id: 1
     timeout-seconds: 60
   ext-notice:

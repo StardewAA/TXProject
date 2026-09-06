@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.bidding.service.noticeexternal.ai;
 // 规范依据：设计文档 v0.6 §7（AI 解析能力由 AI 模块承载）；接入形态=AI 模块 chat 会话 REST（本地 ai-server mock-enable 免鉴权联调）
 
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -47,12 +48,12 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
     @Value("${bidding.ai.admin-token:}")
     private String adminToken;
     /**
-     * AI 调用所属租户上下文：外部公告为 G 轨全局（平台级运营数据），抽取会话固定落在
-     * 平台管理租户 1 下（ai 模块会话/消息/渠道均带 tenant_id，跨租户互不可见）；
-     * 若未来外部公告纳入租户化，再改为透传当前调用方租户。
+     * AI 调用所属租户（兜底）：AI 会话/消息/渠道均按租户隔离（ai 模块表带 tenant_id），
+     * 抽取应发生在"触发者所属租户"——即跟随当前请求租户（TenantContextHolder），
+     * 这样各租户用自己的渠道/key；无租户上下文（如定时/离线任务）时回退本配置（默认平台租户 1）。
      */
     @Value("${bidding.ai.tenant-id:1}")
-    private Long tenantId;
+    private Long fallbackTenantId;
     @Value("${bidding.ai.timeout-seconds:60}")
     private int timeoutSeconds;
 
@@ -98,6 +99,12 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
         }
     }
 
+    /** 触发者租户优先（跟随调用方，保证各租户用自己的 AI 渠道/key），无上下文时用配置兜底 */
+    private Long resolveTenantId() {
+        Long current = TenantContextHolder.getTenantId();
+        return current != null ? current : fallbackTenantId;
+    }
+
     /** 固定会话或自动创建（每次 create-my 会沉淀冗余会话，可配置 conversation-id 复用） */
     private String resolveConversationId() throws IOException {
         if (StringUtils.hasText(conversationId)) {
@@ -138,9 +145,10 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Content-Type", "application/json;charset=UTF-8");
+        Long tenantId = resolveTenantId();
         if (tenantId != null) {
-            // AI 模块租户上下文必须显式传递：容器版 ai-server 会话/消息表带 tenant_id 且
-            // 租户拦截器对无租户 header 的请求会 getRequiredTenantId 失败；带错租户则数据落错库
+            // AI 模块租户上下文必须显式传递：ai 会话/消息/渠道表带 tenant_id 且租户拦截器
+            // 对无租户 header 的请求会 getRequiredTenantId 失败；传错租户则数据落错库、key 用错
             builder.header("tenant-id", String.valueOf(tenantId));
         }
         if (StringUtils.hasText(adminToken)) {
