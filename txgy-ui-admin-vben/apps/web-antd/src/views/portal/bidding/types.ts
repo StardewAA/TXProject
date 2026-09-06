@@ -1,0 +1,130 @@
+/**
+ * 招投标门户（外部公告域 notice-external）接口类型
+ *
+ * 字段定义对齐 docs/外部公告-前端对接/01-接口契约.md + 后端 VO（NoticeExternalRespVO /
+ * NoticeExternalDetailRespVO / NoticeExternalPageReqVO），一个字段都不能少；
+ * 后端联调清单 R1~R12 均已实现：列表行已带 sourceCode/legalFlag（R2）、
+ * noticeTypeRaw 精确筛选已生效（R1）、keyword 走 ES 全文检索（R5）。
+ */
+
+/** 病毒扫描状态（附件） */
+export type VirusStatus = 'PENDING' | 'CLEAN' | 'INFECTED';
+
+/**
+ * 防腐保温行业判定（三态全值域；页面只高亮“相关/未知”，NOT_BELONGS 默认不标）：
+ * BELONGS（防腐保温相关）/ NOT_BELONGS / UNCERTAIN（信息不足）
+ */
+export type IndustryFlag = 'BELONGS' | 'NOT_BELONGS' | 'UNCERTAIN';
+
+/** 公告内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER */
+export type NoticeContentType = 'HTML' | 'PDF' | 'ATTACHMENT' | 'IMAGE' | 'OTHER';
+
+/** 公告附件（下载地址=FileApi 签名；origDownloadUrl 为外站原始链接，仅溯源展示） */
+export interface NoticeAttachment {
+  id: number | string;
+  name: string;
+  ext?: string;
+  fileId?: number | string;
+  sha256?: string;
+  size?: number;
+  downloadUrl?: string;
+  origDownloadUrl?: string;
+  virusStatus?: VirusStatus;
+}
+
+/**
+ * 正文结构化块（detail.bodyBlocksJson 数组元素，schema 见 02-字段枚举与展示约定 §4）。
+ * 后端 @JsonInclude(NON_NULL)：无值字段缺省，按 type 读取对应载荷即可。
+ */
+export type NoticeBodyBlock =
+  | { type: 'heading'; level: number; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'table'; caption?: string; headers?: string[]; rows: string[][] }
+  | { type: 'list'; ordered: boolean; items: string[] };
+
+/** 列表行（page 接口返回元素 = NoticeExternalRespVO） */
+export interface NoticeExternalItem {
+  id: number | string;
+  /** 来源站 code（列表已回传，R2 完成） */
+  sourceCode?: string;
+  sourceName?: string;
+  title: string;
+  /** 原网址（大厅展示必带；外链一律走后端 /go 中转） */
+  origUrl?: string | null;
+  /** 内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER */
+  contentType?: NoticeContentType | string | null;
+  /** 公告性质（外站自述原文）；noticeTypeRaw 精确筛选入参（eq，R1 完成） */
+  noticeTypeRaw?: string | null;
+  /** 依法必招：Y/N（NULL=未知） */
+  legalFlag?: string | null;
+  industryFlag?: IndustryFlag | string | null;
+  issuerName?: string | null;
+  /** 后端出参为 epoch 毫秒；mock 兼容字符串（0/空视为无值） */
+  publishTime?: number | string | null;
+  effectiveFrom?: number | string | null;
+  effectiveTo?: number | string | null;
+  /** 大厅只读口径恒为 ACTIVE（02 §3.4：前端不传状态筛选） */
+  status?: string | null;
+}
+
+/** 详情（= NoticeExternalDetailRespVO：列表字段 + 正文与文件） */
+export interface NoticeExternalDetail extends NoticeExternalItem {
+  /** HTML 原样（留档不下发公众，公开出参恒为 null；渲染一律用 contentHtmlSafe / bodyBlocks） */
+  contentHtml?: string | null;
+  /** HTML 净化后内容（后端 jsoup 白名单结构化净化，仅 contentType=HTML） */
+  contentHtmlSafe?: string | null;
+  pdfFileId?: number | string | null;
+  pdfSha256?: string | null;
+  pdfSize?: number | null;
+  /** PDF 下载地址（FileApi 签名；签名能力接入前为 null，R6） */
+  pdfDownloadUrl?: string | null;
+  extractionStatus?: string | null;
+  /** 正文结构化策略码：HTML_STRUCTURE / AI_FALLBACK（null=未结构化） */
+  bodyParserCode?: string | null;
+  /** 正文结构化状态：NONE（默认）/ SUCCESS / FAILED */
+  bodyBlocksStatus?: string | null;
+  /** 正文结构化块原始 JSON 串（SUCCESS 时非空；解析结果见 bodyBlocks） */
+  bodyBlocksJson?: string | null;
+  /** 正文结构化块（前端已解析为数组；SUCCESS 且非空时按块渲染，优先于 contentHtmlSafe，见 01 §7.1） */
+  bodyBlocks?: NoticeBodyBlock[];
+  projectName?: string | null;
+  /** 关联标段（后端为字符串；前端归一化为 string[]） */
+  bidSectionCodes?: string[];
+  /** 可为 null（演示库即 null），api 层已归一化为数组 */
+  attachments?: NoticeAttachment[] | null;
+}
+
+/** page 请求参数（= NoticeExternalPageReqVO；大厅只读口径不传 status） */
+export interface NoticePageParams {
+  /** 关键词：标题/项目名/编号/正文全文检索，走 ES（bidding-notice-external，R5；需后端 bidding.es.enabled=true） */
+  keyword?: string;
+  /** 标题精确匹配筛选（契约原始口径；前缀/模糊检索一律走 keyword） */
+  title?: string;
+  /** 来源站 code（精确筛选；来源字典为数据驱动 bidding_crawl_source，R3） */
+  sourceCode?: string;
+  /** 内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER */
+  contentType?: string;
+  /** 防腐保温行业判定：BELONGS/NOT_BELONGS/UNCERTAIN */
+  industryFlag?: IndustryFlag | string;
+  /** 公告类型（外站原文，精确匹配 eq；R1 已实现） */
+  noticeTypeRaw?: string;
+  /**
+   * “中标公示”合并视图的原始值组（候选类+结果类，api 层按组抓取合并；仅 fetchNoticePage 内部使用，
+   * 见 api.ts RESULT_TYPE_MERGE / classifyResultRaw，01 §6 R1）
+   */
+  resultRaws?: string[];
+  /** 关联项目编号（跟踪维度，大厅不传） */
+  projectCode?: string;
+  /** 发布时间区间起（毫秒或 'YYYY-MM-DD HH:mm:ss'，由调用方归一） */
+  beginTime?: string | number;
+  /** 发布时间区间止 */
+  endTime?: string | number;
+  pageNo: number;
+  pageSize: number;
+}
+
+/** page 响应（芋道 PageResult 风格：list/total） */
+export interface PageResult<T> {
+  list: T[];
+  total: number;
+}
