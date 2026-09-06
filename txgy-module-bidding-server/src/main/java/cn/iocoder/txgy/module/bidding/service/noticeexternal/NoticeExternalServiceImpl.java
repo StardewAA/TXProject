@@ -128,6 +128,10 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (StringUtils.hasText(reqVO.getIndustryFlag())) {
             wrapper.eq(NoticeExternalDO::getIndustryFlag, reqVO.getIndustryFlag());
         }
+        if (StringUtils.hasText(reqVO.getNoticeTypeRaw())) {
+            // 公告类型（外站原文，如“招标公告/中标候选人公示/成交结果公告”）；权威码维度后续按 notice_type_code 检索
+            wrapper.eq(NoticeExternalDO::getNoticeTypeRaw, reqVO.getNoticeTypeRaw());
+        }
         if (StringUtils.hasText(reqVO.getProjectCode())) {
             wrapper.eq(NoticeExternalDO::getProjectCode, reqVO.getProjectCode());
         }

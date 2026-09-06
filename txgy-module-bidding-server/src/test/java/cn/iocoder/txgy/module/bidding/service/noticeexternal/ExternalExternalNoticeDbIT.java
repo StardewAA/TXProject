@@ -185,6 +185,28 @@ class ExternalExternalNoticeDbIT {
                 "主档 attachment_ids_json 应回填子表 id");
     }
 
+    @Test
+    void getPage_noticeTypeRaw_returnsOnlyMatchingType() {
+        ExternalNoticeIngestDTO zb = htmlDto("NTR1");
+        zb.setNoticeTypeRaw("招标公告");
+        ExternalNoticeIngestDTO hx = htmlDto("NTR2");
+        hx.setNoticeTypeRaw("中标候选人公示");
+        Long zbId = ingestService.ingest(zb);
+        Long hxId = ingestService.ingest(hx);
+        noticeExternalService.approveExternal(zbId);
+        noticeExternalService.approveExternal(hxId);
+
+        NoticeExternalPageReqVO req = new NoticeExternalPageReqVO();
+        req.setPageNo(1);
+        req.setPageSize(50);
+        req.setNoticeTypeRaw("招标公告");
+        PageResult<NoticeExternalRespVO> page = noticeExternalService.getPage(req);
+
+        // 注意：DbIT 上下文未注册分页拦截器，Page.total 恒 0 —— 用 records 断言（list 为全量匹配行）
+        assertEquals(1, page.getList().size(), "公告类型过滤应只命中 招标公告 一条");
+        assertEquals(zbId, page.getList().get(0).getId());
+    }
+
     // ========== 关注（T 轨） ==========
 
     private FollowReqVO sectionFollow(String key) {
