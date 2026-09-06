@@ -1,22 +1,15 @@
 package cn.iocoder.txgy.module.bidding.service.noticeexternal.ai;
 // 规范依据：设计文档 v0.6 §7（AI 解析能力由 AI 模块承载）；接入形态=AI 模块 chat 会话 REST（本地 ai-server mock-enable 免鉴权联调）
 
-import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -30,7 +23,7 @@ import java.util.Map;
  *       扫描件（无文本）走 attachmentUrls 传 PDF 公网 URL 由多模态模型转写；</li>
  *   <li>解析 receive.content：剥 markdown code fence 后按 JSON 解析。</li>
  * </ol>
- * 鉴权：本地 ai-server 配 txgy.security.mock-enable=true 免 token；启用真实鉴权时经 bidding.ai.admin-token 注入 Bearer。
+ * 鉴权/租户跟随/超时统一由 {@link AiHttpSupport} 承担（enabled=true 时注入）。
  * 输出 schema 见 {@link #SYSTEM_PROMPT}，字段约定与 docs 02 展示约定一致。
  */
 @Slf4j
@@ -38,34 +31,16 @@ import java.util.Map;
 @ConditionalOnProperty(prefix = "bidding.ai", name = "enabled", havingValue = "true")
 public class AiChatNoticeExtractor implements AiNoticeExtractor {
 
-    /** AI 服务 admin-api 根地址（如 http://127.0.0.1:48086/admin-api），enabled=true 时必配 */
-    @Value("${bidding.ai.base-url:}")
-    private String baseUrl;
     /** 固定复用会话 id（可选；空则每次 create-my） */
     @Value("${bidding.ai.conversation-id:}")
     private String conversationId;
-    /** 服务调用 token（ai-server mock-enable 时留空） */
-    @Value("${bidding.ai.admin-token:}")
-    private String adminToken;
-    /**
-     * AI 调用所属租户（兜底）：AI 会话/消息/渠道均按租户隔离（ai 模块表带 tenant_id），
-     * 抽取应发生在"触发者所属租户"——即跟随当前请求租户（TenantContextHolder），
-     * 这样各租户用自己的渠道/key；无租户上下文（如定时/离线任务）时回退本配置（默认平台租户 1）。
-     */
-    @Value("${bidding.ai.tenant-id:1}")
-    private Long fallbackTenantId;
-    @Value("${bidding.ai.timeout-seconds:60}")
-    private int timeoutSeconds;
 
     /** 正文内联上限（防超大文本撑爆请求体） */
     private static final int MAX_INLINE_TEXT = 60_000;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_1_1)
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+    /** AI 模块 REST 调用骨架（base-url/租户跟随/鉴权/超时，见 {@link AiHttpSupport}） */
+    @Autowired
+    private AiHttpSupport aiHttpSupport;
 
     /** 行业判定口径（管道防腐保温行业）：与管道/储罐/装置/设备及其附属设施的
      *  防腐蚀、保温、保冷、隔热 的 施工、维修、材料、检测 相关即 BELONGS */
@@ -94,13 +69,10 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
 
     @Override
     public AiNoticeExtractResult extract(AiNoticeExtractRequest request) {
-        if (!StringUtils.hasText(baseUrl)) {
-            throw new IllegalStateException("bidding.ai.base-url 未配置");
-        }
         try {
             String conv = resolveConversationId();
             String userContent = buildUserContent(request);
-            String reply = sendMessage(conv, userContent);
+            String reply = aiHttpSupport.sendMessage(conv, userContent);
             Map<String, Object> fields = parseJsonObject(reply);
             Object fullText = fields.remove("noticeFullText");
             return new AiNoticeExtractResult(fields, fullText instanceof String s && StringUtils.hasText(s) ? s : null);
@@ -109,19 +81,12 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
         }
     }
 
-    /** 触发者租户优先（跟随调用方，保证各租户用自己的 AI 渠道/key），无上下文时用配置兜底 */
-    private Long resolveTenantId() {
-        Long current = TenantContextHolder.getTenantId();
-        return current != null ? current : fallbackTenantId;
-    }
-
     /** 固定会话或自动创建（每次 create-my 会沉淀冗余会话，可配置 conversation-id 复用） */
     private String resolveConversationId() throws IOException {
         if (StringUtils.hasText(conversationId)) {
             return conversationId.trim();
         }
-        JsonNode node = callJson("POST", "/ai/chat/conversation/create-my", "{}");
-        return node.path("data").asText();
+        return aiHttpSupport.createConversation();
     }
 
     private String buildUserContent(AiNoticeExtractRequest req) {
@@ -142,45 +107,6 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
         return sb.toString();
     }
 
-    private String sendMessage(String conversationId, String content) throws IOException {
-        String body = "{\"conversationId\":" + conversationId + ",\"content\":"
-                + MAPPER.writeValueAsString(SYSTEM_PROMPT + "\n" + content) + "}";
-        JsonNode node = callJson("POST", "/ai/chat/message/send", body);
-        JsonNode receive = node.path("data").path("receive");
-        return receive.path("content").asText(null);
-    }
-
-    private JsonNode callJson(String method, String path, String body) throws IOException {
-        String uri = baseUrl.replaceAll("/+$", "") + path;
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .header("Content-Type", "application/json;charset=UTF-8");
-        Long tenantId = resolveTenantId();
-        if (tenantId != null) {
-            // AI 模块租户上下文必须显式传递：ai 会话/消息/渠道表带 tenant_id 且租户拦截器
-            // 对无租户 header 的请求会 getRequiredTenantId 失败；传错租户则数据落错库、key 用错
-            builder.header("tenant-id", String.valueOf(tenantId));
-        }
-        if (StringUtils.hasText(adminToken)) {
-            builder.header("Authorization", "Bearer " + adminToken.trim());
-        }
-        HttpRequest request = method.equals("POST")
-                ? builder.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build()
-                : builder.GET().build();
-        try {
-            HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            JsonNode node = MAPPER.readTree(resp.body());
-            if (node.path("code").asInt() != 0) {
-                throw new IOException("AI 模块返回错误 code=" + node.path("code").asText()
-                        + " msg=" + node.path("msg").asText(""));
-            }
-            return node;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("AI 调用被中断", e);
-        }
-    }
-
     /** 剥 markdown code fence 后解析 JSON 对象（模型偶发包 ```json） */
     private Map<String, Object> parseJsonObject(String raw) {
         if (!StringUtils.hasText(raw)) {
@@ -193,7 +119,7 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
             text = text.substring(start, end + 1);
         }
         try {
-            JsonNode node = MAPPER.readTree(text);
+            JsonNode node = AiHttpSupport.MAPPER.readTree(text);
             if (!node.isObject()) {
                 return new LinkedHashMap<>();
             }

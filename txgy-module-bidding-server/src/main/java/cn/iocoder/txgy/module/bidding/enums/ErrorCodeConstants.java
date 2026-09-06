@@ -65,5 +65,6 @@ public interface ErrorCodeConstants {
     ErrorCode EXTERNAL_NOTICE_AI_OUTPUT_INVALID = new ErrorCode(1_060_106_017, "AI 结构化输出非法（非 JSON 或空），已标记失败，可重试");
     ErrorCode EXTERNAL_NOTICE_AI_FAILED = new ErrorCode(1_060_106_018, "AI 结构化抽取失败（渠道/服务异常），已标记失败，可重试");
     ErrorCode EXTERNAL_NOTICE_AI_NO_MATERIAL = new ErrorCode(1_060_106_019, "AI 抽取无可用素材（本地无抽取文本；扫描件需先接入 PDF 附件访问）");
+    ErrorCode EXTERNAL_NOTICE_BODY_STRUCTURE_FAILED = new ErrorCode(1_060_106_020, "正文结构化失败（AI 兜底排版异常或输出非法），可重试");
     ErrorCode CRAWL_SOURCE_NOT_EXISTS = new ErrorCode(1_060_106_010, "采集源不存在或未启用");
 }

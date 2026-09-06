@@ -484,11 +484,12 @@ class ExternalExternalNoticeDbIT {
             return ds;
         }
 
-        /** 建库 DDL 序列：09-03 基线 + 09-05 审查修复 + 09-06 AI 列（按文件名升序，保证依赖顺序）。 */
+        /** 建库 DDL 序列：09-03 基线 + 09-05 审查修复 + 09-06 AI 列 + 09-07 正文结构化列（按文件名升序，保证依赖顺序）。 */
         private List<File> resolveDdlFiles() {
             List<File> files = new ArrayList<>();
             for (String name : new String[]{"2026-09-03-external-notice.sql",
-                    "2026-09-05-external-notice-review.sql", "2026-09-06-ai-extract.sql"}) {
+                    "2026-09-05-external-notice-review.sql", "2026-09-06-ai-extract.sql",
+                    "2026-09-07-body-blocks.sql"}) {
                 File fromModule = new File("..", "sql/" + name);
                 if (fromModule.exists()) {
                     files.add(fromModule);

@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeBodyStructureRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalAiExtractRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
@@ -10,6 +11,8 @@ import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeE
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticeExternalService;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ai.AiExtractSnapshot;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ai.NoticeExternalAiExtractService;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.body.NoticeBodyStructureService;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.body.NoticeBodyStructureSnapshot;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.url.ExternalRedirectService;
@@ -58,6 +61,8 @@ public class NoticeExternalController {
     private ExternalNoticeIngestService externalNoticeIngestService;
     @Resource
     private NoticeExternalAiExtractService noticeExternalAiExtractService;
+    @Resource
+    private NoticeBodyStructureService noticeBodyStructureService;
 
     @GetMapping("/page")
     @PermitAll
@@ -148,6 +153,27 @@ public class NoticeExternalController {
         respVO.setFullTextLength(snapshot.getFullTextLength());
         respVO.setIndustryFlag(snapshot.getIndustryFlag());
         respVO.setIndustryConfidence(snapshot.getIndustryConfidence());
+        return success(respVO);
+    }
+
+    /**
+     * 正文结构化（策略链，人工触发）：常规 HTML 结构解析（HTML_STRUCTURE）；
+     * useAi=true 时强制 AI 兜底排版（AI_FALLBACK，把拍平/脏正文恢复为结构化块，需 bidding.ai.enabled=true）。
+     */
+    @PostMapping("/body-structure")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "正文结构化（管理端人工触发：常规 HTML 解析 / AI 兜底排版）")
+    public CommonResult<NoticeBodyStructureRespVO> bodyStructure(@RequestParam("id") Long id,
+                                                                 @RequestParam(value = "ai", defaultValue = "false") Boolean ai) {
+        NoticeBodyStructureSnapshot snapshot = noticeBodyStructureService.structure(id, Boolean.TRUE.equals(ai));
+        NoticeBodyStructureRespVO respVO = new NoticeBodyStructureRespVO();
+        respVO.setId(snapshot.getId());
+        respVO.setBodyBlocksStatus(snapshot.getBodyBlocksStatus());
+        respVO.setBodyParserCode(snapshot.getBodyParserCode());
+        respVO.setBlockCount(snapshot.getBlockCount());
+        respVO.setTableCount(snapshot.getTableCount());
+        respVO.setAiRecommended(snapshot.getAiRecommended());
         return success(respVO);
     }
 

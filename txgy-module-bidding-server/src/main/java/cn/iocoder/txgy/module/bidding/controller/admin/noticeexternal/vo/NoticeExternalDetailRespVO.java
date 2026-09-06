@@ -50,6 +50,12 @@ public class NoticeExternalDetailRespVO {
     private String legalFlag;
     @Schema(description = "防腐保温行业判定")
     private String industryFlag;
+    @Schema(description = "正文结构化策略码：HTML_STRUCTURE/AI_FALLBACK（NONE=未结构化，按 contentHtmlSafe 原文渲染）")
+    private String bodyParserCode;
+    @Schema(description = "正文结构化状态：NONE/SUCCESS/FAILED")
+    private String bodyBlocksStatus;
+    @Schema(description = "正文结构化块（JSON 数组：[{type:heading/paragraph/table/list,...}]；SUCCESS 时下发，前端块渲染优先于 contentHtmlSafe）")
+    private String bodyBlocksJson;
     @Schema(description = "项目名称快照")
     private String projectName;
     @Schema(description = "关联标段编号")

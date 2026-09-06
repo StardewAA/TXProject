@@ -250,6 +250,9 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setNoticeTypeRaw(notice.getNoticeTypeRaw());
         resp.setLegalFlag(notice.getLegalFlag());
         resp.setIndustryFlag(notice.getIndustryFlag());
+        resp.setBodyParserCode(notice.getBodyParserCode());
+        resp.setBodyBlocksStatus(notice.getBodyBlocksStatus());
+        resp.setBodyBlocksJson(notice.getBodyBlocksJson());
         resp.setProjectName(notice.getProjectName());
         resp.setBidSectionCodes(notice.getBidSectionCodes());
         resp.setIssuerName(notice.getIssuerName());

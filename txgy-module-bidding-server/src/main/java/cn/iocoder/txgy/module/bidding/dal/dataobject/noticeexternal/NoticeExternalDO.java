@@ -104,6 +104,14 @@ public class NoticeExternalDO extends BaseDO {
     private String aiMetaJson;
     /** 最近一次 AI 抽取时间 */
     private LocalDateTime aiExtractAt;
+    /** 正文结构化策略码：HTML_STRUCTURE=常规 HTML 结构解析 / AI_FALLBACK=AI 兜底排版（见 sql/2026-09-07-body-blocks.sql） */
+    private String bodyParserCode;
+    /** 正文结构化状态：NONE/SUCCESS/FAILED */
+    private String bodyBlocksStatus;
+    /** 正文结构化块（JSON 数组：[{type:heading/paragraph/table/list,...}]；SUCCESS 时下发，前端块渲染优先） */
+    private String bodyBlocksJson;
+    /** 最近一次正文结构化时间 */
+    private LocalDateTime bodyBlocksAt;
     /** 原始页面结构化字段全集（JSON，兜底防丢） */
     private String metaJson;
     /** 整页快照（可追溯/复审） */
