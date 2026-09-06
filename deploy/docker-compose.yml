@@ -8,6 +8,7 @@ x-backend-service: &backend-service
       condition: service_healthy
   environment:
     SERVER_PORT: 48080
+    TZ: ${TZ}
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
