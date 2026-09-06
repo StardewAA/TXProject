@@ -35,6 +35,13 @@ export default defineConfig(async () => {
             target: 'http://localhost:48080/admin-api',
             ws: true,
           },
+          // 招投标门户（外部公告域 notice-external）本地联调：bidding 模块尚在 48110 直跑、未注册网关，
+          // 走本地代理绕开 CORS / 网关 404；bidding 模块接入网关后可改回 /admin-api 直连并删掉此项。
+          '/bidding-api': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/bidding-api/, ''),
+            target: 'http://127.0.0.1:48110/admin-api',
+          },
         },
       },
     },

@@ -147,6 +147,24 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招标投标', hideInMenu: true },
       },
       {
+        name: 'PortalBiddingDetail',
+        path: 'bidding/detail/:id',
+        component: () => import('#/views/portal/bidding/detail.vue'),
+        meta: { title: '公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSubscription',
+        path: 'bidding/subscription',
+        component: () => import('#/views/portal/bidding/subscription.vue'),
+        meta: { title: '项目订阅', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProfile',
+        path: 'bidding/profile',
+        component: () => import('#/views/portal/bidding/profile.vue'),
+        meta: { title: '个人中心（投标人）', hideInMenu: true },
+      },
+      {
         name: 'PortalProfile',
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
