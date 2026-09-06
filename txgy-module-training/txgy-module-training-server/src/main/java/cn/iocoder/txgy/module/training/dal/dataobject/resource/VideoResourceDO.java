@@ -34,6 +34,10 @@ public class VideoResourceDO extends TenantBaseDO {
      */
     private Long categoryId;
     /**
+     * 视频类型：1 短视频 2 录播
+     */
+    private Integer videoType;
+    /**
      * 封面图 URL（可选）
      */
     private String coverUrl;
@@ -57,6 +61,15 @@ public class VideoResourceDO extends TenantBaseDO {
      * 视频时长（秒）
      */
     private Integer durationSeconds;
+    /**
+     * 原始清晰度：2160P / 1080P / 720P / 480P / 360P
+     */
+    private String definition;
+    /**
+     * 可播放清晰度列表（JSON）：[{definition, url, transcoded}]
+     * 弱网时前端可切换到更低清晰度；未转码时 url 复用原始地址并标记 transcoded=false
+     */
+    private String definitionOptions;
     /**
      * 转码状态：0 未转码 1 排队 2 处理中 3 成功 4 失败
      */
