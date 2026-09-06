@@ -4,7 +4,7 @@ import lombok.Data;
 
 /**
  * ES 公告文档内容：公告全文（body）与招标项目基础信息（title/projectCode/projectName…）。
- * 索引名：bidding_notice；id 取 noticeId；publishTime 存毫秒时间戳便于排序。
+ * 索引名：bidding-notice（短横线风格，与外部公告 bidding-notice-external 一致）；id 取 noticeId；publishTime 存毫秒时间戳便于排序。
  */
 @Data
 public class NoticeEsDoc {

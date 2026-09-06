@@ -464,7 +464,7 @@ class ExternalExternalNoticeDbIT {
                             + "?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true",
                     "root", "123456");
                  Statement st = conn.createStatement()) {
-                // 顺序执行 v0.6 DDL + 后续迁移（与业务库演进一致：09-03 基线 → 09-05 审查修复迁移）
+                // 顺序执行 v0.6 DDL + 后续迁移（与业务库演进一致：09-03 基线 → 09-05 审查修复 → 09-06 AI 列）
                 for (File ddl : resolveDdlFiles()) {
                     String sql = Files.readString(ddl.toPath(), StandardCharsets.UTF_8);
                     for (String stmt : sql.split(";")) {
@@ -484,10 +484,11 @@ class ExternalExternalNoticeDbIT {
             return ds;
         }
 
-        /** 建库 DDL 序列：09-03 基线 + 09-05 审查修复迁移（按文件名升序，保证依赖顺序）。 */
+        /** 建库 DDL 序列：09-03 基线 + 09-05 审查修复 + 09-06 AI 列（按文件名升序，保证依赖顺序）。 */
         private List<File> resolveDdlFiles() {
             List<File> files = new ArrayList<>();
-            for (String name : new String[]{"2026-09-03-external-notice.sql", "2026-09-05-external-notice-review.sql"}) {
+            for (String name : new String[]{"2026-09-03-external-notice.sql",
+                    "2026-09-05-external-notice-review.sql", "2026-09-06-ai-extract.sql"}) {
                 File fromModule = new File("..", "sql/" + name);
                 if (fromModule.exists()) {
                     files.add(fromModule);

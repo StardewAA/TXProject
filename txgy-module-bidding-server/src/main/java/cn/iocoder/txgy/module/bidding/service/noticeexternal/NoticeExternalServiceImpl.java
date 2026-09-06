@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeExternalContentTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer.ExternalNoticeIndexNotifier;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.sanitize.HtmlSanitizer;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
 import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -42,6 +43,9 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     /** 外部公告扇出源标识（关注/提醒侧 source） */
     private static final String SOURCE_EXTERNAL = "EXTERNAL";
 
+    /** 关键词全文检索命中上限（列表/详情回主表过滤，命中集不无限放大 IN 条件） */
+    private static final int KEYWORD_MATCH_LIMIT = 200;
+
     @Resource
     private NoticeExternalMapper noticeExternalMapper;
     @Resource
@@ -50,6 +54,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     private FollowService followService;
     @Resource
     private ExternalNoticeIndexNotifier externalNoticeIndexNotifier;
+    @Resource
+    private ExternalNoticeSearchEngine externalNoticeSearchEngine;
 
     @Override
     public void approveExternal(Long id) {
@@ -137,6 +143,15 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         LambdaQueryWrapper<NoticeExternalDO> wrapper = new LambdaQueryWrapper<NoticeExternalDO>()
                 .eq(NoticeExternalDO::getPublicScope, PUBLIC_SCOPE_SOCIAL)
                 .eq(NoticeExternalDO::getStatus, NoticeExternalStatusEnum.ACTIVE.getStatus());
+        // 关键词全文：走 ES 检索引擎（bidding-notice-external），命中集约束 id，再叠结构化过滤与分页
+        List<Long> matchedIds = null;
+        if (StringUtils.hasText(reqVO.getKeyword())) {
+            matchedIds = externalNoticeSearchEngine.matchNoticeIds(reqVO.getKeyword(), KEYWORD_MATCH_LIMIT);
+            if (matchedIds.isEmpty()) {
+                return PageResult.empty();
+            }
+            wrapper.in(NoticeExternalDO::getId, matchedIds);
+        }
         if (StringUtils.hasText(reqVO.getTitle())) {
             wrapper.eq(NoticeExternalDO::getTitle, reqVO.getTitle());
         }

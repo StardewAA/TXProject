@@ -112,7 +112,7 @@ txgy:
 
 # 检索组件（notice 全文检索，规范 4.6）：es 开关放根级 bidding: 下，与 EsNoticeSearchEngine 的
 # @ConditionalOnProperty(prefix=bidding.es) / @Value(bidding.es.uris) 读取键一致
-# enabled=true 启用 ES 引擎（原生 HTTP，失败重试 3 次，索引 bidding_notice）；无集群时置 false 走数据库兜底
+# enabled=true 启用 ES 引擎（原生 HTTP，失败重试 3 次，索引 bidding-notice / bidding-notice-external）；无集群时置 false 走数据库兜底
 bidding:
   es:
     enabled: true
@@ -120,6 +120,14 @@ bidding:
     debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键
     username: ${ES_USERNAME:elastic} # 账号（本地 dev，勿提交生产凭据）
     password: ${ES_PASSWORD:} # 密码：本地用环境变量 ES_PASSWORD 注入（不入库）；留空=不带认证
+  ai:
+    # AI 结构化抽取（PDF/HTML 公告 → 结构化字段 + 扫描件全文转写；规范依据：设计 v0.6 §7 增强）
+    # enabled=false（默认）→ /notice-external/ai-extract 报"未配置"；true 需下方 base-url 指向 AI 模块 admin-api
+    enabled: false
+    base-url: http://127.0.0.1:48086/admin-api # AI 模块服务地址（本地 ai-server 端口以实际为准）
+    conversation-id: # 固定复用会话 id（空则每次自动 create-my）
+    admin-token: # ai-server 启用真实鉴权时填 Bearer token；本地 mock-enable 可留空
+    timeout-seconds: 60
   ext-notice:
     pdf:
       open-data-loader:

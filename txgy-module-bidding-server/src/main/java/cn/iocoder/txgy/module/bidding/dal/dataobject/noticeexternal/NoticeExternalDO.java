@@ -2,7 +2,10 @@ package cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal;
 // 规范依据：设计文档 v0.6 §7/§15.1（G 轨聚合主档）；《招投标模块开发规范》五章（长度/索引/审计列）
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -16,12 +19,14 @@ import java.time.LocalDateTime;
  * 附件三形态 + 原网址；动态字段全集落 meta_json / extra_raw 兜底；PDF 抽取结果落 extraction_* 列。
  * 去重键 origUrlHash；展示过滤：publicScope=SOCIAL 且 status=ACTIVE（01 规则 + 设计文档 §7）。
  */
+@TenantIgnore // G 轨：表无 tenant_id 列，忽略租户拦截器（平台级数据，见 DO 注释）
 @TableName("bidding_notice_external")
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class NoticeExternalDO extends BaseDO {
 
     /** 主键（雪花 ID） */
+    @TableId(type = IdType.ASSIGN_ID) // 雪花主键：表 id 无自增（见 DDL），显式注解压过全局 AUTO 策略
     private Long id;
     /** 来源站配置 code（bidding_crawl_source.source_code） */
     private String sourceCode;
@@ -93,6 +98,12 @@ public class NoticeExternalDO extends BaseDO {
     private String extractionTablesJson;
     /** PDF 抽取时间 */
     private LocalDateTime extractionAt;
+    /** AI 结构化抽取状态：NONE/SUCCESS/FAILED（PDF→AI 结构化输出；见 sql/2026-09-06-ai-extract.sql） */
+    private String aiExtractionStatus;
+    /** AI 结构化字段集（JSON；含 noticeFullText=全文转写，非空回写 extractionText） */
+    private String aiMetaJson;
+    /** 最近一次 AI 抽取时间 */
+    private LocalDateTime aiExtractAt;
     /** 原始页面结构化字段全集（JSON，兜底防丢） */
     private String metaJson;
     /** 整页快照（可追溯/复审） */

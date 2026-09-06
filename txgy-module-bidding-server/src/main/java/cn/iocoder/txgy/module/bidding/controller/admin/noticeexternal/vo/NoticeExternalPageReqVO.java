@@ -14,15 +14,19 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 /**
  * 外部公告分页请求（大厅公开只读）。
  *
- * <p>关键词全文检索不在此查询：外部公告"审核转 ACTIVE"后由 MQ 事件驱动建 ES 索引
- * （见 NoticeExternalIndexProducer 预留，规范 §4.6），keyword 参数走检索组件；本接口只做结构化过滤。
+ * <p>关键词全文检索（keyword）走检索组件：bidding-notice-external 索引（审核转 ACTIVE 时写入，
+ * 见 EsExternalNoticeIndexNotifier，规范 §4.6）；未启用检索组件时传 keyword 直接报错提示，不做业务表 LIKE。
+ * 其余字段为结构化精确过滤。
  */
 @Schema(description = "管理后台 - 外部公告分页 Request")
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class NoticeExternalPageReqVO extends PageParam {
 
-    @Schema(description = "标题（前缀精确匹配，不开放正文 LIKE；全文走 ES 检索组件）")
+    @Schema(description = "关键词（标题/项目名/编号/正文；走 ES 全文检索组件，需 bidding.es.enabled=true）", example = "炼化")
+    private String keyword;
+
+    @Schema(description = "标题（精确匹配筛选，不开放正文 LIKE；全文走 keyword）")
     private String title;
 
     @Schema(description = "来源站 code")

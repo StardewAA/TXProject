@@ -4,6 +4,8 @@ package cn.iocoder.txgy.module.bidding.dal.dataobject.notice;
 import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -21,6 +23,7 @@ import java.time.LocalDateTime;
 public class NoticeDO extends TenantBaseDO {
 
     /** 主键（雪花 ID） */
+    @TableId(type = IdType.ASSIGN_ID) // 雪花主键：表 id 无自增（见 DDL），显式注解压过全局 AUTO 策略
     private Long id;
     /** 公告内部编号（bidding 域内唯一） */
     private String noticeCode;

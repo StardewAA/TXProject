@@ -10,6 +10,8 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,15 +40,18 @@ class NoticeExternalServiceImplTest {
 
     private NoticeExternalMapper noticeExternalMapper;
     private NoticeExternalAttachmentMapper noticeExternalAttachmentMapper;
+    private ExternalNoticeSearchEngine externalNoticeSearchEngine;
     private NoticeExternalServiceImpl service;
 
     @BeforeEach
     void setUp() {
         noticeExternalMapper = mock(NoticeExternalMapper.class);
         noticeExternalAttachmentMapper = mock(NoticeExternalAttachmentMapper.class);
+        externalNoticeSearchEngine = mock(ExternalNoticeSearchEngine.class);
         service = new NoticeExternalServiceImpl();
         ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
         ReflectionTestUtils.setField(service, "noticeExternalAttachmentMapper", noticeExternalAttachmentMapper);
+        ReflectionTestUtils.setField(service, "externalNoticeSearchEngine", externalNoticeSearchEngine);
     }
 
     private NoticeExternalDO doActiveSocial(String contentType) {
@@ -143,6 +149,57 @@ class NoticeExternalServiceImplTest {
         when(noticeExternalMapper.selectById(2L)).thenReturn(internal);
         ServiceException ex = assertThrows(ServiceException.class, () -> service.getDetail(2L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_TAKEN_DOWN.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getPage_withKeyword_hitsEngineThenFiltersByIds() {
+        NoticeExternalDO row1 = doActiveSocial("HTML");
+        row1.setId(11L);
+        NoticeExternalDO row2 = doActiveSocial("HTML");
+        row2.setId(12L);
+        Page<NoticeExternalDO> page = new Page<>(1, 10);
+        page.setRecords(List.of(row1, row2));
+        page.setTotal(2);
+        when(externalNoticeSearchEngine.matchNoticeIds("炼化", 200)).thenReturn(List.of(11L, 12L));
+        when(noticeExternalMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+        NoticeExternalPageReqVO req = new NoticeExternalPageReqVO();
+        req.setKeyword("炼化");
+        PageResult<NoticeExternalRespVO> result = service.getPage(req);
+
+        assertEquals(2, result.getList().size());
+        assertEquals(11L, result.getList().get(0).getId());
+        org.mockito.Mockito.verify(externalNoticeSearchEngine).matchNoticeIds("炼化", 200);
+        org.mockito.Mockito.verify(noticeExternalMapper).selectPage(any(Page.class), any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    void getPage_withKeyword_noHit_returnsEmptyWithoutDbQuery() {
+        when(externalNoticeSearchEngine.matchNoticeIds("不存在词", 200)).thenReturn(new ArrayList<>());
+
+        NoticeExternalPageReqVO req = new NoticeExternalPageReqVO();
+        req.setKeyword("不存在词");
+        PageResult<NoticeExternalRespVO> result = service.getPage(req);
+
+        assertTrue(result.getList().isEmpty());
+        org.mockito.Mockito.verify(noticeExternalMapper, org.mockito.Mockito.never())
+                .selectPage(any(Page.class), any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    void getPage_withoutKeyword_doesNotTouchSearchEngine() {
+        NoticeExternalDO row = doActiveSocial("HTML");
+        Page<NoticeExternalDO> page = new Page<>(1, 10);
+        page.setRecords(List.of(row));
+        page.setTotal(1);
+        when(noticeExternalMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+        NoticeExternalPageReqVO req = new NoticeExternalPageReqVO();
+        PageResult<NoticeExternalRespVO> result = service.getPage(req);
+
+        assertEquals(1, result.getList().size());
+        org.mockito.Mockito.verify(externalNoticeSearchEngine, org.mockito.Mockito.never())
+                .matchNoticeIds(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt());
     }
 
 }

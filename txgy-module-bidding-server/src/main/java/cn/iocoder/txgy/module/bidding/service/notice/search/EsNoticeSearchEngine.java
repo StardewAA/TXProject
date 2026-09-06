@@ -19,7 +19,7 @@ import java.util.List;
 /**
  * ES 检索实现（配置 {@code bidding.es.enabled=true} 时生效；原生 HTTP，无框架 starter 依赖）。
  *
- * <p>索引：{@code bidding_notice}（独立命名空间，不与其他系统共用）；
+ * <p>索引：{@code bidding-notice}（短横线命名空间，与外部公告索引 bidding-notice-external 同风格）；
  * 文档含公告全文 body（仅索引不存储回显）与招标项目基础信息（title/projectCode/projectName）。
  */
 @Slf4j
@@ -27,7 +27,7 @@ import java.util.List;
 @ConditionalOnProperty(prefix = "bidding.es", name = "enabled", havingValue = "true")
 public class EsNoticeSearchEngine implements NoticeSearchEngine {
 
-    private static final String INDEX = "bidding_notice";
+    private static final String INDEX = "bidding-notice";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Value("${bidding.es.uris:http://127.0.0.1:9200}")

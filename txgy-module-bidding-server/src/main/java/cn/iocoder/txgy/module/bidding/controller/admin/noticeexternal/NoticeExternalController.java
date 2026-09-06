@@ -3,10 +3,15 @@ package cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalAiExtractRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticeExternalService;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.ai.AiExtractSnapshot;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.ai.NoticeExternalAiExtractService;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.url.ExternalRedirectService;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +24,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,11 +38,11 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
  * 管理后台 - 外部公告（大厅公开只读）。
  *
  * <p>展示接口（前端由其它人员对接）：
- * GET /bidding/notice-external/page    公开分页（SOCIAL+ACTIVE，只出主列，publishTime 倒序）；
+ * GET /bidding/notice-external/page    公开分页（SOCIAL+ACTIVE，只出主列，publishTime 倒序；keyword 走 ES 全文检索）；
  * GET /bidding/notice-external/detail  公开详情（HTML 原样/PDF JS 预览+origUrl/附件下载列表）。
  *
- * <p>关键词全文检索：走检索组件（MQ 事件建 ES 索引预留，见设计文档 v0.6 §15.3），
- * 不在本接口开放业务表 LIKE。
+ * <p>关键词全文检索：走检索组件（ES 索引 bidding-notice-external，见 EsExternalNoticeIndexNotifier/EsExternalNoticeSearchEngine），
+ * 不在本接口开放业务表 LIKE（规范 4.6）。
  */
 @Tag(name = "管理后台 - bidding 外部公告（大厅公开）")
 @RestController
@@ -48,6 +54,10 @@ public class NoticeExternalController {
     private NoticeExternalService noticeExternalService;
     @Resource
     private ExternalRedirectService externalRedirectService;
+    @Resource
+    private ExternalNoticeIngestService externalNoticeIngestService;
+    @Resource
+    private NoticeExternalAiExtractService noticeExternalAiExtractService;
 
     @GetMapping("/page")
     @PermitAll
@@ -104,6 +114,36 @@ public class NoticeExternalController {
     public CommonResult<Boolean> takeDown(@RequestParam("id") Long id) {
         noticeExternalService.takeDownExternal(id);
         return success(Boolean.TRUE);
+    }
+
+    /**
+     * 采集回传入库（外部采集服务 → 平台）。
+     *
+     * <p>语义对齐设计文档 v0.6 §二/§四/§15.4：采集侧完成下载+解析后回传，落 NEW+UNREVIEWED 待审核；
+     * 同 URL 幂等 / 内容变更重投 / 驳回重采 由 ingest 内部处理。
+     * 鉴权：本期走管理端权限（服务账号 HMAC 接入为 P2，见设计 §六）。
+     */
+    @PostMapping("/ingest")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "采集回传入库（落 NEW 待审核；同 URL 幂等/内容变更覆盖）", description = "返回外部公告 id")
+    public CommonResult<Long> ingest(@Valid @RequestBody ExternalNoticeIngestDTO dto) {
+        return success(externalNoticeIngestService.ingest(dto));
+    }
+
+    /** AI 结构化抽取：人工触发（PDF/HTML → 结构化字段 + 可选全文转写；需 bidding.ai.enabled=true） */
+    @PostMapping("/ai-extract")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "AI 结构化抽取（管理端人工触发；转写全文回写后可被关键词检索命中）")
+    public CommonResult<NoticeExternalAiExtractRespVO> aiExtract(@RequestParam("id") Long id) {
+        AiExtractSnapshot snapshot = noticeExternalAiExtractService.extract(id);
+        NoticeExternalAiExtractRespVO respVO = new NoticeExternalAiExtractRespVO();
+        respVO.setId(snapshot.getId());
+        respVO.setAiExtractionStatus(snapshot.getAiExtractionStatus());
+        respVO.setMetaFieldCount(snapshot.getMetaFieldCount());
+        respVO.setFullTextLength(snapshot.getFullTextLength());
+        return success(respVO);
     }
 
 }
