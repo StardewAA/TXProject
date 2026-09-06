@@ -28,10 +28,35 @@ public final class ResourceConstants {
             Arrays.asList(DIM_WORK_TYPE, DIM_COURSE, DIM_SAFETY, DIM_PROCESS));
 
     // ========== 上传白名单 / 大小上限 ==========
-    public static final Set<String> DOC_ALLOWED_EXTS = new HashSet<>(Arrays.asList("pdf", "jpg", "jpeg", "png"));
+    // 文档：PDF + Word(doc/docx) + WPS(wps/et/dps) + 图片（原有能力保留）
+    public static final Set<String> DOC_ALLOWED_EXTS = new HashSet<>(Arrays.asList(
+            "pdf", "doc", "docx", "wps", "jpg", "jpeg", "png"));
+    // 办公文档扩展名（Word / WPS），用于区分解析方式
+    public static final Set<String> DOC_OFFICE_EXTS = new HashSet<>(Arrays.asList("doc", "docx", "wps"));
+    // 视频：MP4（短视频 / 录播）+ 原有 mov
     public static final Set<String> VIDEO_ALLOWED_EXTS = new HashSet<>(Arrays.asList("mp4", "mov"));
     public static final long MAX_DOC_SIZE = 50L * 1024 * 1024; // 50MB
     public static final long MAX_VIDEO_SIZE = 500L * 1024 * 1024; // 500MB
+    public static final long MAX_AI_DOC_SIZE = 20L * 1024 * 1024; // AI 导入文档 20MB 上限
+
+    // ========== 视频类型（短视频 / 录播）==========
+    public static final Integer VIDEO_TYPE_SHORT = 1;
+    public static final Integer VIDEO_TYPE_RECORD = 2;
+
+    // ========== 清晰度（由高到低，弱网可向下切换）==========
+    public static final String DEFINITION_2160P = "2160P";
+    public static final String DEFINITION_1080P = "1080P";
+    public static final String DEFINITION_720P = "720P";
+    public static final String DEFINITION_480P = "480P";
+    public static final String DEFINITION_360P = "360P";
+    public static final Set<String> DEFINITIONS = new HashSet<>(Arrays.asList(
+            DEFINITION_2160P, DEFINITION_1080P, DEFINITION_720P, DEFINITION_480P, DEFINITION_360P));
+
+    /**
+     * 清晰度由高到低的排序（用于生成降级播放项）
+     */
+    public static final java.util.List<String> DEFINITION_ORDER = Arrays.asList(
+            DEFINITION_2160P, DEFINITION_1080P, DEFINITION_720P, DEFINITION_480P, DEFINITION_360P);
 
     // ========== 对象类型（target_type / resource_type）==========
     public static final String TARGET_DOCUMENT = "document";

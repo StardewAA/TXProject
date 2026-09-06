@@ -79,7 +79,7 @@ async function handleConfirm() {
     return;
   }
   if (!editing.value && !selectedFile.value) {
-    message.warning('请选择要上传的文档（pdf/jpg/jpeg/png）');
+    message.warning('请选择要上传的文档（pdf / doc / docx / wps / jpg / png）');
     return;
   }
   uploading.value = true;
@@ -160,9 +160,11 @@ const [Modal, modalApi] = useVbenModal({
       </div>
 
       <div v-if="!editing">
-        <div class="mb-1 text-sm text-gray-600">上传文件（pdf/jpg/jpeg/png ≤50MB）</div>
+        <div class="mb-1 text-sm text-gray-600">
+          上传文件（PDF / Word(doc,docx) / WPS(wps) / 图片 ≤50MB）
+        </div>
         <Upload
-          accept=".pdf,.jpg,.jpeg,.png"
+          accept=".pdf,.doc,.docx,.wps,.jpg,.jpeg,.png"
           :show-upload-list="false"
           :before-upload="pickFile"
         >

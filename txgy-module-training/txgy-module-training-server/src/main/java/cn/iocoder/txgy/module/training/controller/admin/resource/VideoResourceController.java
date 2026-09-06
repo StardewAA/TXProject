@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoDefinitionRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoPageReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoResourceDO;
 import cn.iocoder.txgy.module.training.enums.ErrorCodeConstants;
@@ -26,6 +27,7 @@ import java.io.File;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.math.BigDecimal;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -41,15 +43,18 @@ public class VideoResourceController {
     private ResourceFileStorageService fileStorage;
 
     @PostMapping("/upload")
-    @Operation(summary = "上传视频（MP4/MOV ≤500MB，成功即上线）")
+    @Operation(summary = "上传视频（短视频/录播，MP4/MOV ≤500MB，成功即上线，记录原始清晰度）")
     @PreAuthorize("@ss.hasPermission('training:resource-video:create')")
     public CommonResult<Long> uploadVideo(@RequestParam("file") MultipartFile file,
                                           @RequestParam("title") String title,
                                           @RequestParam(value = "categoryId", required = false) Long categoryId,
                                           @RequestParam(value = "coverUrl", required = false) String coverUrl,
                                           @RequestParam(value = "tags", required = false) String tags,
-                                          @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds) {
-        return success(videoService.uploadVideo(file, title, categoryId, coverUrl, tags, durationSeconds));
+                                          @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+                                          @RequestParam(value = "videoType", required = false) Integer videoType,
+                                          @RequestParam(value = "definition", required = false) String definition) {
+        return success(videoService.uploadVideo(file, title, categoryId, coverUrl, tags,
+                durationSeconds, videoType, definition));
     }
 
     @GetMapping("/page")
@@ -75,8 +80,28 @@ public class VideoResourceController {
                                              @RequestParam(value = "categoryId", required = false) Long categoryId,
                                              @RequestParam(value = "coverUrl", required = false) String coverUrl,
                                              @RequestParam(value = "tags", required = false) String tags,
-                                             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds) {
-        videoService.updateVideo(id, title, categoryId, coverUrl, tags, durationSeconds);
+                                             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+                                             @RequestParam(value = "videoType", required = false) Integer videoType,
+                                             @RequestParam(value = "definition", required = false) String definition) {
+        videoService.updateVideo(id, title, categoryId, coverUrl, tags, durationSeconds, videoType, definition);
+        return success(true);
+    }
+
+    @GetMapping("/definitions")
+    @Operation(summary = "查询可播放清晰度列表（原始清晰度 + 更低档位，弱网可向下切换）")
+    @Parameter(name = "id", description = "视频资源 ID", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('training:resource-video:query')")
+    public CommonResult<List<VideoDefinitionRespVO>> getDefinitionOptions(@RequestParam("id") Long id) {
+        return success(videoService.getDefinitionOptions(id));
+    }
+
+    @PutMapping("/definitions")
+    @Operation(summary = "保存转码后的多码率清晰度地址（转码完成后写入，供弱网切换）")
+    @PreAuthorize("@ss.hasPermission('training:resource-video:update')")
+    public CommonResult<Boolean> saveDefinitionOptions(
+            @RequestBody List<VideoDefinitionRespVO> options,
+            @RequestParam("id") Long id) {
+        videoService.saveDefinitionOptions(id, options);
         return success(true);
     }
 

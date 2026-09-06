@@ -1,9 +1,11 @@
 package cn.iocoder.txgy.module.training.service.resource;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoDefinitionRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoPageReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoResourceDO;
 import cn.iocoder.txgy.module.training.dal.mysql.resource.ResourceReferenceMapper;
@@ -18,6 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * 视频资源 Service 实现
@@ -55,10 +60,12 @@ public class VideoResourceServiceImpl implements VideoResourceService {
 
     @Override
     public Long uploadVideo(MultipartFile file, String title, Long categoryId, String coverUrl,
-                            String tags, Integer durationSeconds) {
+                            String tags, Integer durationSeconds, Integer videoType, String definition) {
         String ext = validateFile(file);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_VIDEO);
         String filePath = fileStorage.store(file, "video", ext);
+        String finalDefinition = normalizeDefinition(definition);
+        String finalVideoType = videoTypeName(normalizeVideoType(videoType));
         VideoResourceDO video = new VideoResourceDO();
         video.setTitle(StrUtil.trim(title));
         video.setCategoryId(categoryId);
@@ -68,6 +75,8 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         video.setFileType(ext);
         video.setFileSize(file.getSize());
         video.setDurationSeconds(durationSeconds == null ? 0 : Math.max(0, durationSeconds));
+        video.setVideoType(normalizeVideoType(videoType));
+        video.setDefinition(finalDefinition);
         video.setTranscodeStatus(TranscodeStatusEnum.NONE.getStatus());
         video.setTags(tags);
         video.setStatus(ResourceStatusEnum.ONLINE.getStatus());
@@ -75,16 +84,20 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         video.setUploaderId(SecurityFrameworkUtils.getLoginUserId());
         video.setUploaderName(SecurityFrameworkUtils.getLoginUserNickname());
         videoMapper.insert(video);
+        // 生成默认清晰度列表：原始清晰度 + 更低档位（未转码项暂复用原始播放地址）
+        saveDefaultDefinitionOptions(video.getId(), finalDefinition);
         operationLogService.createLog(ResourceConstants.ACTION_UPLOAD, ResourceConstants.TARGET_VIDEO,
-                video.getId(), "上传视频《" + title + "》，大小 " + formatSize(file.getSize()));
+                video.getId(), "上传" + finalVideoType + "《" + title + "》，原始清晰度 " + finalDefinition
+                        + "，大小 " + formatSize(file.getSize()));
         return video.getId();
     }
 
     @Override
     public void updateVideo(Long id, String title, Long categoryId, String coverUrl,
-                            String tags, Integer durationSeconds) {
+                            String tags, Integer durationSeconds, Integer videoType, String definition) {
         VideoResourceDO old = getVideo(id);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_VIDEO);
+        String finalDefinition = normalizeDefinition(definition);
         VideoResourceDO update = new VideoResourceDO();
         update.setId(id);
         update.setTitle(StrUtil.trim(title));
@@ -92,9 +105,16 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         update.setCoverUrl(coverUrl);
         update.setTags(tags);
         update.setDurationSeconds(durationSeconds == null ? old.getDurationSeconds() : Math.max(0, durationSeconds));
+        update.setVideoType(normalizeVideoType(videoType));
+        update.setDefinition(finalDefinition);
         videoMapper.updateById(update);
+        // 原始清晰度变化时重建降级列表
+        if (!Objects.equals(old.getDefinition(), finalDefinition)) {
+            saveDefaultDefinitionOptions(id, finalDefinition);
+        }
         operationLogService.createLog(ResourceConstants.ACTION_UPDATE, ResourceConstants.TARGET_VIDEO,
-                id, "更新视频《" + old.getTitle() + "》元数据");
+                id, "更新视频《" + old.getTitle() + "》元数据（类型：" + videoTypeName(normalizeVideoType(videoType))
+                        + "，原始清晰度：" + finalDefinition + "）");
     }
 
     @Override
@@ -147,7 +167,103 @@ public class VideoResourceServiceImpl implements VideoResourceService {
                 id, "删除视频《" + video.getTitle() + "》");
     }
 
+    @Override
+    public List<VideoDefinitionRespVO> getDefinitionOptions(Long id) {
+        VideoResourceDO video = getVideo(id);
+        if (StrUtil.isNotBlank(video.getDefinitionOptions())) {
+            try {
+                List<VideoDefinitionRespVO> list = JSONUtil.toList(
+                        JSONUtil.parseArray(video.getDefinitionOptions()), VideoDefinitionRespVO.class);
+                if (list != null && !list.isEmpty()) {
+                    return list;
+                }
+            } catch (Exception e) {
+                log.warn("[getDefinitionOptions][视频 {} 清晰度配置解析失败，回退默认列表]", id, e);
+            }
+        }
+        return buildDefaultDefinitionOptions(id,
+                StrUtil.blankToDefault(video.getDefinition(), ResourceConstants.DEFINITION_720P));
+    }
+
+    @Override
+    public void saveDefinitionOptions(Long id, List<VideoDefinitionRespVO> options) {
+        VideoResourceDO video = getVideo(id);
+        if (options == null || options.isEmpty()) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.VIDEO_DEFINITION_INVALID);
+        }
+        List<VideoDefinitionRespVO> valid = new ArrayList<>();
+        for (VideoDefinitionRespVO item : options) {
+            if (item == null || StrUtil.isBlank(item.getDefinition()) || StrUtil.isBlank(item.getUrl())) {
+                continue;
+            }
+            item.setDefinition(normalizeDefinition(item.getDefinition()));
+            item.setTranscoded(item.getTranscoded() != null && item.getTranscoded());
+            item.setOriginal(item.getOriginal() != null && item.getOriginal());
+            valid.add(item);
+        }
+        if (valid.isEmpty()) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.VIDEO_DEFINITION_INVALID);
+        }
+        VideoResourceDO update = new VideoResourceDO();
+        update.setId(id);
+        update.setDefinitionOptions(JSONUtil.toJsonStr(valid));
+        update.setTranscodeStatus(TranscodeStatusEnum.SUCCESS.getStatus());
+        videoMapper.updateById(update);
+        operationLogService.createLog(ResourceConstants.ACTION_TRANSCODE, ResourceConstants.TARGET_VIDEO,
+                id, "更新视频《" + video.getTitle() + "》清晰度列表：" + valid.size() + " 档");
+    }
+
     // ========== 私有方法 ==========
+
+    private Integer normalizeVideoType(Integer videoType) {
+        if (videoType == null) {
+            return ResourceConstants.VIDEO_TYPE_RECORD;
+        }
+        if (!Objects.equals(videoType, ResourceConstants.VIDEO_TYPE_SHORT)
+                && !Objects.equals(videoType, ResourceConstants.VIDEO_TYPE_RECORD)) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.VIDEO_TYPE_INVALID);
+        }
+        return videoType;
+    }
+
+    private String normalizeDefinition(String definition) {
+        if (StrUtil.isBlank(definition)) {
+            return ResourceConstants.DEFINITION_720P;
+        }
+        String upper = definition.trim().toUpperCase();
+        if (!ResourceConstants.DEFINITIONS.contains(upper)) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.VIDEO_DEFINITION_INVALID);
+        }
+        return upper;
+    }
+
+    private String videoTypeName(Integer videoType) {
+        return Objects.equals(videoType, ResourceConstants.VIDEO_TYPE_SHORT) ? "短视频" : "录播";
+    }
+
+    /**
+     * 生成并保存默认清晰度列表：原始清晰度（已转码）+ 更低档位（未转码，暂复用原始播放地址）
+     */
+    private void saveDefaultDefinitionOptions(Long id, String definition) {
+        VideoResourceDO update = new VideoResourceDO();
+        update.setId(id);
+        update.setDefinitionOptions(JSONUtil.toJsonStr(buildDefaultDefinitionOptions(id, definition)));
+        videoMapper.updateById(update);
+    }
+
+    private List<VideoDefinitionRespVO> buildDefaultDefinitionOptions(Long id, String definition) {
+        String playUrl = "/admin-api/training/video/play?id=" + id;
+        List<VideoDefinitionRespVO> list = new ArrayList<>();
+        list.add(new VideoDefinitionRespVO(definition, playUrl, true, true));
+        int idx = ResourceConstants.DEFINITION_ORDER.indexOf(definition);
+        if (idx < 0) {
+            idx = ResourceConstants.DEFINITION_ORDER.indexOf(ResourceConstants.DEFINITION_720P);
+        }
+        for (int i = idx + 1; i < ResourceConstants.DEFINITION_ORDER.size(); i++) {
+            list.add(new VideoDefinitionRespVO(ResourceConstants.DEFINITION_ORDER.get(i), playUrl, false, false));
+        }
+        return list;
+    }
 
     private String validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
