@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +48,24 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /** 联调清单 R11：把 DTO 上整串为 "NULL"（忽略大小写）的可空 String 字段归一为 null；
+     *  常见于采集侧 ORM/拼接把空值写成字串 "NULL"，直接落库会污染展示/筛选与清洗口径。 */
+    private static void normalizeNullStringFields(ExternalNoticeIngestDTO dto) {
+        for (Field field : ExternalNoticeIngestDTO.class.getDeclaredFields()) {
+            if (field.getType() == String.class) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(dto);
+                    if (value != null && "NULL".equalsIgnoreCase((String) value)) {
+                        field.set(dto, null);
+                    }
+                } catch (IllegalAccessException ignore) {
+                    // 不可写字段跳过（不影响主流程）
+                }
+            }
+        }
+    }
+
     @Resource
     private NoticeExternalMapper noticeExternalMapper;
     @Resource
@@ -68,6 +87,8 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long ingest(ExternalNoticeIngestDTO dto) {
+        // 联调清单 R11：采集/历史数据常见 ORM 拼接把 null 写成字串 "NULL"（污染展示/检索/清洗口径）→ 写入前统一归一
+        normalizeNullStringFields(dto);
         // 主列必填校验（采集产出不齐不落库，宁缺毋滥）
         if (!StringUtils.hasText(dto.getOrigUrl()) || !StringUtils.hasText(dto.getTitle())) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_INVALID);

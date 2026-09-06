@@ -10,6 +10,13 @@ import org.jsoup.safety.Safelist;
  * <p>用途：外部公告 content_html 为“原文原样留档”（权威要求，入库不裁剪）；
  * 展示链路（公开详情）必须净化后再交给前端渲染 —— 删除 script/iframe/object/表单/样式
  * 及 on* 事件属性，href/src 仅放行 http/https(/mailto)。
+ * <p>白名单宽度（联调清单 R7/R12① “白名单结构化净化”，前端据此做公文排版）：
+ * <b>保留</b>：p/br/div/h1~h6/table/thead/tbody/tfoot/tr/th/td/caption/col/colgroup/
+ * ul/ol/li/a/img/blockquote/hr/strong/b/em/i/u/sub/sup/small/q/pre/cite/code；
+ * <b>剥除</b>：script/iframe/object/embed/form/input/button/textarea/select/option/
+ * style/link/meta/base/frame/frameset；全部 on* 事件属性与 style 属性；class 不入内联
+ * （样式由前端组件 class 控制，防外站 class 名污染）；href 仅 http/https/mailto，
+ * img src 仅 http/https（data:/javascript: 一律剔除，防盗链/伪协议注入）。
  * <p>注意：净化不是唯一防线 —— 前端仍需按可信内容渲染 + CSP；本组件处理“后端兜底白名单”。
  */
 public final class HtmlSanitizer {

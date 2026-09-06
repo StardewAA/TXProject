@@ -16,6 +16,9 @@ public class NoticeExternalRespVO {
     @Schema(description = "主键 ID")
     private Long id;
 
+    @Schema(description = "来源站 code")
+    private String sourceCode;
+
     @Schema(description = "来源站名称")
     private String sourceName;
 
@@ -27,6 +30,9 @@ public class NoticeExternalRespVO {
 
     @Schema(description = "内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER")
     private String contentType;
+
+    @Schema(description = "依法必招：Y/N（NULL=未知）")
+    private String legalFlag;
 
     @Schema(description = "外站自述类型原文")
     private String noticeTypeRaw;

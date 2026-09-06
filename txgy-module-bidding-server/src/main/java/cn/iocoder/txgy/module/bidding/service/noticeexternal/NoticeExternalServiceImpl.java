@@ -153,6 +153,7 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
             wrapper.in(NoticeExternalDO::getId, matchedIds);
         }
         if (StringUtils.hasText(reqVO.getTitle())) {
+            // 标题精确匹配筛选（01 契约口径；标题/正文模糊全文一律走 keyword=ES——红线 4.6，禁止业务表 LIKE）
             wrapper.eq(NoticeExternalDO::getTitle, reqVO.getTitle());
         }
         if (StringUtils.hasText(reqVO.getSourceCode())) {
@@ -214,10 +215,12 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     private NoticeExternalRespVO toRespVO(NoticeExternalDO notice) {
         NoticeExternalRespVO resp = new NoticeExternalRespVO();
         resp.setId(notice.getId());
+        resp.setSourceCode(notice.getSourceCode());
         resp.setSourceName(notice.getSourceName());
         resp.setTitle(notice.getTitle());
         resp.setOrigUrl(notice.getOrigUrl());
         resp.setContentType(notice.getContentType());
+        resp.setLegalFlag(notice.getLegalFlag());
         resp.setNoticeTypeRaw(notice.getNoticeTypeRaw());
         resp.setIndustryFlag(notice.getIndustryFlag());
         resp.setIssuerName(notice.getIssuerName());
