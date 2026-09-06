@@ -21,7 +21,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
  */
 public interface FollowService {
 
-    /** 关注（幂等）：公告/项目/招标项目/标段；PROJECT/TENDER_PROJECT/SECTION 同步建/恢复关注项目行 */
+    /** 关注（幂等）：公告/项目/招标项目/标段；全类型（含公告级 ANNOUNCEMENT）同步建/恢复关注项目行 */
     void follow(Long userId, FollowReqVO reqVO);
 
     /** 取消关注（幂等）：订阅置 UNFOLLOWED，关注项目行同步置 UNFOLLOWED（保留历史） */

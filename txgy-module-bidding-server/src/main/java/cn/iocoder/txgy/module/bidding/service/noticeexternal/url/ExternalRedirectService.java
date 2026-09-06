@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +46,8 @@ public class ExternalRedirectService {
         try {
             uri = new URI(rawUrl);
         } catch (URISyntaxException e) {
-            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_REDIRECT_FORBIDDEN);
+            // 中文/未编码字符（附件溯源链接常见，如 https://host/公告/文件.pdf）：按 UTF-8 转义后重解析，避免可用性误拒
+            uri = tryParseAsciiEscaped(rawUrl);
         }
         String scheme = uri.getScheme();
         if (scheme == null || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
@@ -60,7 +62,32 @@ public class ExternalRedirectService {
         if (!isAllowed(hostLower)) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_REDIRECT_FORBIDDEN);
         }
-        return rawUrl;
+        // 返回 ASCII 转义后的 URL：Location 头仅允许 ISO-8859-1，未编码中文/空格直接回写会抛 UnmappableCharacterException
+        return asciiEscape(rawUrl);
+    }
+
+    /** 非 ASCII/未编码 URL 的 UTF-8 百分号转义重解析（仅作解析用，跳转仍回原 rawUrl）。 */
+    private URI tryParseAsciiEscaped(String rawUrl) {
+        try {
+            return new URI(asciiEscape(rawUrl));
+        } catch (URISyntaxException e) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_REDIRECT_FORBIDDEN);
+        }
+    }
+
+    private String asciiEscape(String url) {
+        StringBuilder sb = new StringBuilder(url.length());
+        for (int i = 0; i < url.length(); i++) {
+            char c = url.charAt(i);
+            if (c < 0x80 && c != ' ' && c != '\u007f') {
+                sb.append(c);
+            } else {
+                for (byte b : String.valueOf(c).getBytes(StandardCharsets.UTF_8)) {
+                    sb.append('%').append(String.format("%02X", b & 0xFF));
+                }
+            }
+        }
+        return sb.toString();
     }
 
     private boolean isAllowed(String hostLower) {
@@ -79,6 +106,23 @@ public class ExternalRedirectService {
                     }
                 } catch (URISyntaxException ignore) {
                     // 配置脏数据不阻断其它源
+                }
+                // 源配置额外放行域名（附件 CDN 等，半角逗号分隔）
+                if (StringUtils.hasText(source.getAllowedHosts())) {
+                    for (String extra : source.getAllowedHosts().split(",")) {
+                        String trimmed = extra.trim();
+                        if (!StringUtils.hasText(trimmed)) {
+                            continue;
+                        }
+                        try {
+                            String h = new URI(trimmed.contains("://") ? trimmed : "https://" + trimmed).getHost();
+                            if (StringUtils.hasText(h)) {
+                                hosts.add(h.toLowerCase());
+                            }
+                        } catch (URISyntaxException ignore) {
+                            // 脏配置不阻断其它源
+                        }
+                    }
                 }
             }
             return hosts.stream().anyMatch(host -> host.equals(hostLower) || hostLower.endsWith("." + host));

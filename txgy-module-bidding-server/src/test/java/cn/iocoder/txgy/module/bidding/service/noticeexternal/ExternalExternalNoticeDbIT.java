@@ -47,9 +47,12 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -117,7 +120,9 @@ class ExternalExternalNoticeDbIT {
         assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(), active.getStatus());
         assertTrue(pageContains("IT 招标公告 A1").stream().anyMatch(r -> r.getId().equals(id)));
         NoticeExternalDetailRespVO detail = noticeExternalService.getDetail(id);
-        assertEquals("<html><body>原文原样 A1</body></html>", detail.getContentHtml());
+        assertEquals(null, detail.getContentHtml(), "公开详情不下发原样 HTML");
+        assertNotNull(detail.getContentHtmlSafe());
+        assertTrue(detail.getContentHtmlSafe().contains("原文原样 A1"));
         assertEquals(saved.getOrigUrl(), detail.getOrigUrl());
 
         // 下线：展示随即拒绝（TAKEN_DOWN 106_002）
@@ -207,6 +212,89 @@ class ExternalExternalNoticeDbIT {
         assertEquals(zbId, page.getList().get(0).getId());
     }
 
+    /** 驳回后同 URL 重采 = 恢复入口：重置 NEW+UNREVIEWED 重新排队，可再审核（审查修复高1a + 低项恢复入口） */
+    @Test
+    void ingest_rejectedSameUrl_resubmitRequeuedForReaudit() {
+        String fixedUrl = "https://it.example.com/resubmit/rejected-1";
+        ExternalNoticeIngestDTO first = htmlDto("RJT-1");
+        first.setOrigUrl(fixedUrl);
+        Long id = ingestService.ingest(first);
+        noticeExternalService.rejectExternal(id);
+        assertEquals(NoticeExternalAuditStatusEnum.REJECTED.getStatus(),
+                noticeExternalMapper.selectById(id).getAuditStatus());
+
+        // 同 URL 同内容重采：驳回记录不再幂等跳过，重置回 NEW+UNREVIEWED
+        ExternalNoticeIngestDTO resubmit = htmlDto("RJT-1");
+        resubmit.setOrigUrl(fixedUrl);
+        Long again = ingestService.ingest(resubmit);
+        assertEquals(id, again, "同 URL 复用主档 id（不新建行）");
+        NoticeExternalDO reset = noticeExternalMapper.selectById(id);
+        assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), reset.getStatus());
+        assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), reset.getAuditStatus());
+
+        // 可再次审核通过
+        noticeExternalService.approveExternal(id);
+        assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(),
+                noticeExternalMapper.selectById(id).getStatus());
+    }
+
+    /** ACTIVE 展示中同 URL 内容更新：覆盖并打回 NEW+UNREVIEWED 重审（防源站投毒直上；审核通过即恢复，审查修复高1a/§12.2） */
+    @Test
+    void ingest_activeNotice_contentChanged_backToPendingReaudit() {
+        String fixedUrl = "https://it.example.com/resubmit/changed-1";
+        ExternalNoticeIngestDTO first = htmlDto("CHG-1");
+        first.setOrigUrl(fixedUrl);
+        Long id = ingestService.ingest(first);
+        noticeExternalService.approveExternal(id);
+        assertTrue(pageContains("IT 招标公告 CHG-1").stream().anyMatch(r -> r.getId().equals(id)));
+        NoticeExternalDO active = noticeExternalMapper.selectById(id);
+        String hashBefore = active.getContentHash();
+        int fetchAfterFirst = active.getFetchCount();
+
+        // 源站同一 URL 内容更新重采
+        ExternalNoticeIngestDTO second = htmlDto("CHG-1-v2");
+        second.setOrigUrl(fixedUrl);
+        Long again = ingestService.ingest(second);
+        assertEquals(id, again);
+        NoticeExternalDO updated = noticeExternalMapper.selectById(id);
+        assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), updated.getStatus(), "内容变化应打回待审核");
+        assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), updated.getAuditStatus());
+        assertEquals(fetchAfterFirst + 1, updated.getFetchCount());
+        assertFalse(hashBefore.equals(updated.getContentHash()), "内容指纹应变更（新版本）");
+        // 待审期间公开页不可见
+        assertTrue(pageContains("IT 招标公告 CHG-1-v2").isEmpty());
+
+        // 重新审核通过 → 恢复展示
+        noticeExternalService.approveExternal(id);
+        assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(), noticeExternalMapper.selectById(id).getStatus());
+        assertTrue(pageContains("IT 招标公告 CHG-1-v2").stream().anyMatch(r -> r.getId().equals(id)));
+    }
+
+    /** ACTIVE 展示中同 URL 同内容重采：幂等跳过，状态不受打扰（审查修复高1a） */
+    @Test
+    void ingest_activeNotice_sameContent_idempotentKeepsActive() {
+        String fixedUrl = "https://it.example.com/resubmit/same-1";
+        ExternalNoticeIngestDTO first = htmlDto("SAME-1");
+        first.setOrigUrl(fixedUrl);
+        Long id = ingestService.ingest(first);
+        noticeExternalService.approveExternal(id);
+        NoticeExternalDO active = noticeExternalMapper.selectById(id);
+        String hash = active.getContentHash();
+        int fetch = active.getFetchCount();
+
+        ExternalNoticeIngestDTO repeat = htmlDto("SAME-1");
+        repeat.setOrigUrl(fixedUrl);
+        Long again = ingestService.ingest(repeat);
+
+        assertEquals(id, again);
+        NoticeExternalDO after = noticeExternalMapper.selectById(id);
+        assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(), after.getStatus(), "同内容重采不打扰展示中记录");
+        assertEquals(hash, after.getContentHash());
+        assertEquals(fetch, after.getFetchCount());
+        assertEquals(1L, noticeExternalMapper.selectCount(new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getOrigUrlHash, after.getOrigUrlHash())));
+    }
+
     // ========== 关注（T 轨） ==========
 
     private FollowReqVO sectionFollow(String key) {
@@ -273,6 +361,47 @@ class ExternalExternalNoticeDbIT {
         followService.unfollow(8L, sectionFollow("SEC-IT-2")); // 幂等不报错
     }
 
+    /** 公告级关注（ANNOUNCEMENT）：建关注行 + 审核生效扇出提醒（审查修复中3/低项） */
+    @Test
+    void follow_announcement_subscription_pushesTimelineEventAndInApp() {
+        Long noticeId = ingestService.ingest(htmlDto("ANN-1"));
+        // 关注该公告本身（targetType=ANNOUNCEMENT，targetKey=公告 id）
+        FollowReqVO req = new FollowReqVO();
+        req.setTargetType("ANNOUNCEMENT");
+        req.setTargetKey(String.valueOf(noticeId));
+        followService.follow(9L, req);
+        followService.follow(9L, req); // 幂等
+        // 关注后即建关注项目行（公告级关注也有列表行，标题快照激活时刷新）
+        var before = followService.pageMyFollow(9L,
+                new cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemPageReqVO());
+        assertEquals(1, before.getList().size(), "公告级关注应建关注项目行");
+
+        noticeExternalService.approveExternal(noticeId);
+
+        java.util.List<FollowItemEventDO> events = followItemEventMapper.selectList(null);
+        assertEquals(1, events.size(), "公告级关注命中：事件一条");
+        assertEquals("EXTERNAL_ACTIVE", events.get(0).getEventType(), "外部公告生效事件类型 EXTERNAL_ACTIVE（前端 02 约定）");
+        assertEquals(noticeId, events.get(0).getNoticeId());
+        assertEquals(1L, subscriptionEventMapper.selectCount(new LambdaQueryWrapper<>()));
+        // 重复触发（重放）不重复提醒（event_key 幂等）
+        followService.handleNoticeActivated(noticeExternalMapper.selectById(noticeId), "EXTERNAL");
+        assertEquals(1L, followItemEventMapper.selectCount(new LambdaQueryWrapper<>()));
+    }
+
+    /** 维度匹配兼容半角分号标段（落库口径统一；审查修复中7） */
+    @Test
+    void follow_sectionMatch_semicolonSeparatedCodes() {
+        followService.follow(10L, sectionFollow("SEC-S1"));
+        ExternalNoticeIngestDTO dto = htmlDto("SEMI-1");
+        dto.setBidSectionCodes("SEC-S1;SEC-S2");
+        Long noticeId = ingestService.ingest(dto);
+
+        noticeExternalService.approveExternal(noticeId);
+
+        assertEquals(1L, followItemEventMapper.selectCount(new LambdaQueryWrapper<>()),
+                "分号分隔中标段 SEC-S1 应命中订阅");
+    }
+
     // ========== 工具 ==========
 
     /** 真实样本：炼化公司 2026 大修消缺公告 HTML（docs 提供） */
@@ -295,7 +424,7 @@ class ExternalExternalNoticeDbIT {
         noticeExternalService.approveExternal(id);
         NoticeExternalDetailRespVO detail = noticeExternalService.getDetail(id);
 
-        assertEquals(raw, detail.getContentHtml(), "留档原样不裁剪");
+        assertNull(detail.getContentHtml(), "公开详情不下发原样（留档仅存库）");
         assertNotNull(detail.getContentHtmlSafe());
         assertTrue(!detail.getContentHtmlSafe().contains("<script"), "净化版不得残留 script（真实页面常有脚本）");
         assertTrue(detail.getContentHtmlSafe().contains("招标") && detail.getContentHtmlSafe().contains("消缺"), "净化版应保留正文");
@@ -335,12 +464,14 @@ class ExternalExternalNoticeDbIT {
                             + "?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true",
                     "root", "123456");
                  Statement st = conn.createStatement()) {
-                File ddl = resolveDdlFile();
-                String sql = Files.readString(ddl.toPath(), StandardCharsets.UTF_8);
-                for (String stmt : sql.split(";")) {
-                    String s = stripComments(stmt).trim();
-                    if (!s.isEmpty()) {
-                        st.execute(s);
+                // 顺序执行 v0.6 DDL + 后续迁移（与业务库演进一致：09-03 基线 → 09-05 审查修复迁移）
+                for (File ddl : resolveDdlFiles()) {
+                    String sql = Files.readString(ddl.toPath(), StandardCharsets.UTF_8);
+                    for (String stmt : sql.split(";")) {
+                        String s = stripComments(stmt).trim();
+                        if (!s.isEmpty()) {
+                            st.execute(s);
+                        }
                     }
                 }
             }
@@ -353,17 +484,24 @@ class ExternalExternalNoticeDbIT {
             return ds;
         }
 
-        private File resolveDdlFile() {
-            File fromModule = new File("..", "sql/2026-09-03-external-notice.sql");
-            if (fromModule.exists()) {
-                return fromModule;
+        /** 建库 DDL 序列：09-03 基线 + 09-05 审查修复迁移（按文件名升序，保证依赖顺序）。 */
+        private List<File> resolveDdlFiles() {
+            List<File> files = new ArrayList<>();
+            for (String name : new String[]{"2026-09-03-external-notice.sql", "2026-09-05-external-notice-review.sql"}) {
+                File fromModule = new File("..", "sql/" + name);
+                if (fromModule.exists()) {
+                    files.add(fromModule);
+                    continue;
+                }
+                File fromRoot = new File("sql/" + name);
+                if (fromRoot.exists()) {
+                    files.add(fromRoot);
+                    continue;
+                }
+                throw new IllegalStateException("找不到 DDL: sql/" + name + "（cwd="
+                        + new File(".").getAbsolutePath() + "）");
             }
-            File fromRoot = new File("sql/2026-09-03-external-notice.sql");
-            if (fromRoot.exists()) {
-                return fromRoot;
-            }
-            throw new IllegalStateException("找不到 v0.6 DDL: sql/2026-09-03-external-notice.sql（cwd="
-                    + new File(".").getAbsolutePath() + "）");
+            return files;
         }
 
         private String stripComments(String stmt) {

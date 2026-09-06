@@ -11,7 +11,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -35,6 +37,14 @@ class ExternalRedirectServiceTest {
         CrawlSourceDO s = new CrawlSourceDO();
         s.setBaseUrl(baseUrl);
         s.setEnabled(enabled);
+        when(crawlSourceMapper.selectList(any())).thenReturn(List.of(s));
+    }
+
+    private void sourceWithAllowedHosts(String baseUrl, String allowedHosts) {
+        CrawlSourceDO s = new CrawlSourceDO();
+        s.setBaseUrl(baseUrl);
+        s.setAllowedHosts(allowedHosts);
+        s.setEnabled(true);
         when(crawlSourceMapper.selectList(any())).thenReturn(List.of(s));
     }
 
@@ -79,6 +89,32 @@ class ExternalRedirectServiceTest {
     void resolve_blankOrUnparseable_rejected() {
         assertThrows(ServiceException.class, () -> service.resolve(""));
         assertThrows(ServiceException.class, () -> service.resolve("not a url at all"));
+    }
+
+    @Test
+    void resolve_unicodeUrl_passesAfterAsciiEscape() {
+        // 审查修复：附件溯源 URL 常含未编码中文/空格，new URI() 解析失败不应误拒；
+        // 返回值须为 ASCII 转义版（Location 头仅允许 ISO-8859-1，原样回写会抛 UnmappableCharacterException）
+        source("https://ggzy.example.gov.cn", true);
+        String chinese = "https://ggzy.example.gov.cn/trade/公告/采购文件.pdf";
+        String resolved = service.resolve(chinese);
+        assertTrue(resolved.contains("%E5%85%AC%E5%91%8A"), "中文应百分号转义: " + resolved);
+        assertFalse(resolved.chars().anyMatch(c -> c >= 0x4E00 && c <= 0x9FFF), "返回值不含 CJK 字符");
+        assertEquals("https://ggzy.example.gov.cn/trade/",
+                resolved.substring(0, resolved.indexOf('%')), "host/前缀原样保留");
+        String space = "https://ggzy.example.gov.cn/trade/2026 年大修.docx";
+        assertTrue(service.resolve(space).contains("%20"), "空格应转义为 %20");
+    }
+
+    @Test
+    void resolve_cdnInAllowedHosts_passes_othersRejected() {
+        // 审查修复：源配置 allowed_hosts 放行附件 CDN/文件服务器（白名单 = base_url 域 ∪ allowed_hosts）
+        sourceWithAllowedHosts("https://ggzy.example.gov.cn", "cdn.example.cn, files.example.cn");
+        assertEquals("https://files.example.cn/dl/1.pdf",
+                service.resolve("https://files.example.cn/dl/1.pdf"));
+        assertEquals("https://cdn.example.cn/att/2", service.resolve("https://cdn.example.cn/att/2"));
+        assertThrows(ServiceException.class,
+                () -> service.resolve("https://other.example.net/phish"));
     }
 
 }

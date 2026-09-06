@@ -38,38 +38,58 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
     @Override
     public Long createTaskIfAbsent(Long jobId, String sourceCode, String url, String urlHash,
                                    String channelCode, String parserCode, Integer priority) {
-        // 布隆判重短路：未见过（假阴性=0）→ 免 DB 查询直插；撞唯一键（重启/多节点竞态）回退复用（DB 兜底，正确性不丢）
+        // jobId 归一：null（无批次/人工单抓）→ 0L，保证唯一键 uk_task_job_url 全维度覆盖（MySQL 唯一键对 NULL 不生效）
+        Long normalizedJob = jobId == null ? 0L : jobId;
+        // 布隆判重短路：未见过（假阴性=0）→ 免 DB 查询直插；撞唯一键（重启/多节点竞态）回退 DB 复核（正确性不丢）
         if (urlBloomFilter != null && !urlBloomFilter.mightContain(urlHash)) {
             try {
-                CrawlTaskDO task = newTask(jobId, sourceCode, url, urlHash, channelCode, parserCode, priority);
+                CrawlTaskDO task = newTask(normalizedJob, sourceCode, url, urlHash, channelCode, parserCode, priority);
                 crawlTaskMapper.insert(task);
                 urlBloomFilter.mark(urlHash);
                 log.info("[createTaskIfAbsent][urlHash={}] 布隆未命中→直插新任务 taskId={}", urlHash, task.getId());
                 return task.getId();
             } catch (DuplicateKeyException e) {
-                // 并发/窗口竞态：复用既有任务（见下方 DB 复核分支）
+                // 并发/窗口竞态：回退 DB 复核（复用或命中同 job 既有行）
                 log.info("[createTaskIfAbsent][urlHash={}] 直插撞唯一键，回退 DB 复核复用", urlHash);
             }
         }
-        // urlHash 幂等去重：同 URL 未终态任务直接复用（设计 §二/§三：重复消费靠 urlHash+fetchedAt 幂等）
+        // 同 URL 未终态任务直接复用（防并发重复抓同一 URL；设计 §二/§三：urlHash+fetchedAt 幂等）
         CrawlTaskDO existing = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
                 .eq(CrawlTaskDO::getUrlHash, urlHash)
                 .in(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus(),
                         CrawlTaskStatusEnum.RUNNING.getStatus())
                 .last("LIMIT 1"));
         if (existing != null) {
-            if (urlBloomFilter != null) {
-                urlBloomFilter.mark(urlHash);
-            }
+            markBloom(urlHash);
             log.info("[createTaskIfAbsent][urlHash={}] 命中未终态任务 taskId={}，复用", urlHash, existing.getId());
             return existing.getId();
         }
-        CrawlTaskDO task = newTask(jobId, sourceCode, url, urlHash, channelCode, parserCode, priority);
-        crawlTaskMapper.insert(task);
+        // 新任务：唯一键含 job 维度（uk_task_job_url）——同一 URL 跨批次（如二轮调度）落新任务行，不再与历史 SUCCESS/FAILED 行互斥
+        try {
+            CrawlTaskDO task = newTask(normalizedJob, sourceCode, url, urlHash, channelCode, parserCode, priority);
+            crawlTaskMapper.insert(task);
+            markBloom(urlHash);
+            log.info("[createTaskIfAbsent][urlHash={}] 新任务 taskId={}（job={}）", urlHash, task.getId(), normalizedJob);
+            return task.getId();
+        } catch (DuplicateKeyException e) {
+            // 同 job 同 URL 撞唯一键（同轮重复投递）：复用该 job 下既有任务行（DB 兜底，不抛裸异常）
+            CrawlTaskDO sameJob = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
+                    .eq(CrawlTaskDO::getJobId, normalizedJob)
+                    .eq(CrawlTaskDO::getUrlHash, urlHash)
+                    .last("LIMIT 1"));
+            if (sameJob != null) {
+                markBloom(urlHash);
+                log.info("[createTaskIfAbsent][urlHash={}] 同 job 重复投递：复用 taskId={}", urlHash, sameJob.getId());
+                return sameJob.getId();
+            }
+            throw new IllegalStateException("任务唯一键冲突后回查不到既有行 urlHash=" + urlHash, e);
+        }
+    }
+
+    private void markBloom(String urlHash) {
         if (urlBloomFilter != null) {
             urlBloomFilter.mark(urlHash);
         }
-        return task.getId();
     }
 
     private CrawlTaskDO newTask(Long jobId, String sourceCode, String url, String urlHash,

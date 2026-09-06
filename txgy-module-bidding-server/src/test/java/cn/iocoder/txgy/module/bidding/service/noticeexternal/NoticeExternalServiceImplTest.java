@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,8 +89,9 @@ class NoticeExternalServiceImplTest {
 
         NoticeExternalDetailRespVO resp = service.getDetail(1L);
 
-        assertEquals("<html>原文原样</html>", resp.getContentHtml());
+        assertEquals(null, resp.getContentHtml(), "公开详情不下发原样 HTML（留档仅存库）");
         assertEquals("https://example.com/notice/1", resp.getOrigUrl());
+        assertNotNull(resp.getContentHtmlSafe());
         assertNull(resp.getPdfFileId());
         assertTrue(resp.getAttachments() == null || resp.getAttachments().isEmpty());
     }

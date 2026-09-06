@@ -14,7 +14,9 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.net.URI;
@@ -25,6 +27,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 采集落库实现（status=NEW + audit=UNREVIEWED 进审核队列；展示等审核通过）。
@@ -49,7 +52,21 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
     @Resource
     private NoticeExternalAttachmentMapper noticeExternalAttachmentMapper;
 
+    /**
+     * 采集落库（同 URL 幂等 + 内容变更/终态重投语义，设计 §三/§12.2）。
+     *
+     * <p>同 URL 再次产出（urlHash 幂等判定）按“既有记录状态 × 内容是否变化”分支：
+     * <ul>
+     *   <li>NEW 待审 / ACTIVE 展示中 且内容未变 → 幂等返回既有主档（重复消费安全，不打扰）；</li>
+     *   <li>REJECTED（驳回）→ 重新排队进审核（重置 NEW+UNREVIEWED，覆盖为最新内容）；</li>
+     *   <li>ACTIVE 展示中 且内容变化（源站更新）→ 覆盖内容并打回 NEW+UNREVIEWED 重新审核
+     *       （防源站投毒新内容直接公开展示；审核通过即恢复展示）；</li>
+     *   <li>TAKEN_DOWN 已下线 且内容变化 → 同“源站更新”重新排队；内容未变则保持下线不复活。</li>
+     * </ul>
+     * 内容变化以 content_hash 内容指纹判定（采集侧未给 hash 时由本类按正文关键字段计算）。
+     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Long ingest(ExternalNoticeIngestDTO dto) {
         // 主列必填校验（采集产出不齐不落库，宁缺毋滥）
         if (!StringUtils.hasText(dto.getOrigUrl()) || !StringUtils.hasText(dto.getTitle())) {
@@ -59,21 +76,145 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         String urlHash = StringUtils.hasText(dto.getOrigUrlHash())
                 ? dto.getOrigUrlHash() : sha256Hex(dto.getOrigUrl());
         dto.setOrigUrlHash(urlHash);
-        // origUrlHash 唯一去重：同 URL 重复产出幂等返回既有主档（重复消费靠 urlHash 幂等，设计 §三）
-        NoticeExternalDO existing = noticeExternalMapper.selectOne(new LambdaQueryWrapper<NoticeExternalDO>()
-                .eq(NoticeExternalDO::getOrigUrlHash, urlHash).last("LIMIT 1"));
+        String contentHash = StringUtils.hasText(dto.getContentHash())
+                ? dto.getContentHash() : computeContentHash(dto);
+        dto.setContentHash(contentHash);
+        // origUrlHash 唯一去重：同 URL 既有记录按状态×内容变化分支处理（设计 §三/§12.2）
+        NoticeExternalDO existing = selectByUrlHash(urlHash);
         if (existing != null) {
-            log.info("[ingest][urlHash={}] 主档已存在 noticeId={}，幂等跳过", urlHash, existing.getId());
+            return reuseOrResubmit(existing, dto, urlHash);
+        }
+        try {
+            NoticeExternalDO notice = buildNotice(dto, urlHash, contentHash);
+            noticeExternalMapper.insert(notice);
+            String idsJson = insertAttachments(notice.getId(), dto);
+            if (idsJson != null) {
+                notice.setAttachmentIdsJson(idsJson);
+                noticeExternalMapper.updateById(notice);
+            }
+            log.info("[ingest][noticeId={} urlHash={}] 外部公告落库（NEW 待审核）", notice.getId(), urlHash);
+            return notice.getId();
+        } catch (DuplicateKeyException e) {
+            // 并发同 URL 双投：撞 uk_external_orig_url_hash → 回读既有行走幂等/重投分支（不抛裸异常）
+            NoticeExternalDO raced = selectByUrlHash(urlHash);
+            if (raced == null) {
+                throw e;
+            }
+            return reuseOrResubmit(raced, dto, urlHash);
+        }
+    }
+
+    /**
+     * 同 URL 既有记录：幂等返回或覆盖重置为 NEW+UNREVIEWED。
+     */
+    private Long reuseOrResubmit(NoticeExternalDO existing, ExternalNoticeIngestDTO dto, String urlHash) {
+        String newHash = dto.getContentHash();
+        boolean same = Objects.equals(newHash, existing.getContentHash());
+        boolean active = NoticeExternalStatusEnum.ACTIVE.getStatus().equals(existing.getStatus());
+        boolean unReviewed = NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus().equals(existing.getAuditStatus());
+        boolean rejected = NoticeExternalAuditStatusEnum.REJECTED.getStatus().equals(existing.getAuditStatus());
+        if ((active || (NoticeExternalStatusEnum.NEW.getStatus().equals(existing.getStatus()) && unReviewed))
+                && same) {
+            // 展示中/待审中 且内容未变：幂等跳过（重复消费靠 urlHash 幂等，设计 §三）
+            log.info("[ingest][urlHash={}] 主档已存在 noticeId={} 且内容未变，幂等返回", urlHash, existing.getId());
             return existing.getId();
         }
+        if (NoticeExternalStatusEnum.INACTIVE.getStatus().equals(existing.getStatus()) && same && !rejected) {
+            // 已下线（TAKEN_DOWN）且内容未变：不复活（恢复需源站更新内容重新采集）
+            log.info("[ingest][urlHash={}] 主档已下线 noticeId={} 且内容未变，保持下线不复活", urlHash, existing.getId());
+            return existing.getId();
+        }
+        // 变化了（含 ACTIVE 源站更新、TAKEN_DOWN 更新）或 REJECTED 重投 → 覆盖为最新内容并重新排队审核
+        overwriteNotice(existing, dto, urlHash);
+        rebuildAttachments(existing.getId(), dto);
+        log.info("[ingest][urlHash={}] 同 URL 重投：覆盖内容并重置待审核 noticeId={}（status=NEW+UNREVIEWED）",
+                urlHash, existing.getId());
+        return existing.getId();
+    }
 
+    /** 覆盖主档 payload（保留 id/审计痕迹列；状态重置 NEW+UNREVIEWED，内容指纹同步）。 */
+    private void overwriteNotice(NoticeExternalDO existing, ExternalNoticeIngestDTO dto, String urlHash) {
+        NoticeExternalDO fresh = buildNotice(dto, urlHash, dto.getContentHash());
+        existing.setSourceCode(fresh.getSourceCode());
+        existing.setSourceName(fresh.getSourceName());
+        existing.setTitle(fresh.getTitle());
+        existing.setOrigUrl(fresh.getOrigUrl());
+        existing.setContentHash(fresh.getContentHash());
+        existing.setContentType(fresh.getContentType());
+        existing.setContentHtml(fresh.getContentHtml());
+        existing.setPdfFileId(fresh.getPdfFileId());
+        existing.setPdfSha256(fresh.getPdfSha256());
+        existing.setPdfSize(fresh.getPdfSize());
+        existing.setNoticeTypeRaw(fresh.getNoticeTypeRaw());
+        existing.setLegalFlag(fresh.getLegalFlag());
+        existing.setIndustryFlag(fresh.getIndustryFlag());
+        existing.setProjectCode(fresh.getProjectCode());
+        existing.setTenderProjectCode(fresh.getTenderProjectCode());
+        existing.setBidSectionCodes(fresh.getBidSectionCodes());
+        existing.setProjectName(fresh.getProjectName());
+        existing.setIssuerName(fresh.getIssuerName());
+        existing.setPublishTime(fresh.getPublishTime());
+        existing.setEffectiveFrom(fresh.getEffectiveFrom());
+        existing.setEffectiveTo(fresh.getEffectiveTo());
+        existing.setParserCode(fresh.getParserCode());
+        existing.setMetaJson(fresh.getMetaJson());
+        existing.setExtraRaw(fresh.getExtraRaw());
+        existing.setStatus(NoticeExternalStatusEnum.NEW.getStatus());
+        existing.setAuditStatus(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus());
+        existing.setFetchCount((existing.getFetchCount() == null ? 0 : existing.getFetchCount()) + 1);
+        existing.setLastFetchTime(LocalDateTime.now());
+        existing.setExtractionStatus("NONE"); // 新内容待重新抽取（抽取链 P2）
+        noticeExternalMapper.updateById(existing);
+    }
+
+    /** 重建附件子表（先删后插，事务内保证主档/子表一致）并回填主档 ids JSON。 */
+    private void rebuildAttachments(Long noticeId, ExternalNoticeIngestDTO dto) {
+        if (dto.getAttachments() == null || dto.getAttachments().isEmpty()) {
+            // 无附件：保留既有附件与 ids JSON（内容更新通常不改采购文件附件，避免孤儿行/无谓写）
+            return;
+        }
+        noticeExternalAttachmentMapper.delete(new LambdaQueryWrapper<NoticeExternalAttachmentDO>()
+                .eq(NoticeExternalAttachmentDO::getNoticeId, noticeId));
+        NoticeExternalDO main = noticeExternalMapper.selectById(noticeId);
+        String idsJson = insertAttachments(noticeId, dto);
+        main.setAttachmentIdsJson(idsJson);
+        noticeExternalMapper.updateById(main);
+    }
+
+    /** 内容指纹：正文关键字段变化即视为“新版本”（采集侧未提供 content_hash 时兜底计算）。 */
+    private String computeContentHash(ExternalNoticeIngestDTO dto) {
+        StringBuilder sb = new StringBuilder();
+        appendFp(sb, dto.getTitle());
+        appendFp(sb, dto.getContentType());
+        appendFp(sb, "HTML".equals(dto.getContentType()) ? dto.getContentHtml() :
+                dto.getPdfFileId() + ":" + dto.getPdfSha256() + ":" + dto.getPdfSize());
+        appendFp(sb, dto.getIssuerName());
+        appendFp(sb, dto.getNoticeTypeRaw());
+        appendFp(sb, dto.getProjectCode());
+        appendFp(sb, dto.getTenderProjectCode());
+        appendFp(sb, dto.getBidSectionCodes());
+        // 不含 publishTime：采集侧若填抓取快照时间会使同内容重采误判为新版本（无谓重审）；实质内容变化由上述正文字段捕获
+        return sha256Hex(sb.toString());
+    }
+
+    private void appendFp(StringBuilder sb, String part) {
+        sb.append(part == null ? "<null>" : part).append('\u0001');
+    }
+
+    private NoticeExternalDO selectByUrlHash(String urlHash) {
+        return noticeExternalMapper.selectOne(new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getOrigUrlHash, urlHash).last("LIMIT 1"));
+    }
+
+    /** 由 DTO 构建主档（status=NEW + audit=UNREVIEWED 进审核队列）。 */
+    private NoticeExternalDO buildNotice(ExternalNoticeIngestDTO dto, String urlHash, String contentHash) {
         NoticeExternalDO notice = new NoticeExternalDO();
         notice.setSourceCode(dto.getSourceCode());
         notice.setSourceName(dto.getSourceName());
         notice.setTitle(dto.getTitle());
         notice.setOrigUrl(dto.getOrigUrl());
         notice.setOrigUrlHash(urlHash);
-        notice.setContentHash(dto.getContentHash());
+        notice.setContentHash(contentHash);
         notice.setContentType(dto.getContentType());
         notice.setContentHtml("HTML".equals(dto.getContentType()) ? dto.getContentHtml() : null);
         // PDF 红线 8：file_id+sha256+size 三要素齐存（缺 sha256 不入 pdf 展示形态）
@@ -102,29 +243,29 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         notice.setMetaJson(dto.getMetaJson());
         notice.setExtraRaw(dto.getExtraRaw());
         notice.setExtractionStatus("NONE");
-        noticeExternalMapper.insert(notice);
+        return notice;
+    }
 
-        // 附件子表 + 主档 ids JSON（batch 不依赖 MP 批量扩展）
-        if (dto.getAttachments() != null && !dto.getAttachments().isEmpty()) {
-            List<Long> ids = new ArrayList<>();
-            for (ExternalNoticeIngestDTO.Attachment a : dto.getAttachments()) {
-                NoticeExternalAttachmentDO row = new NoticeExternalAttachmentDO();
-                row.setNoticeId(notice.getId());
-                row.setFileId(a.getFileId());
-                row.setSha256(a.getSha256());
-                row.setSize(a.getSize());
-                row.setName(a.getName());
-                row.setExt(a.getExt());
-                row.setOrigDownloadUrl(a.getOrigDownloadUrl());
-                row.setVirusStatus("PENDING");
-                noticeExternalAttachmentMapper.insert(row);
-                ids.add(row.getId());
-            }
-            notice.setAttachmentIdsJson(buildIdsJson(ids));
-            noticeExternalMapper.updateById(notice);
+    /** 附件子表落库，返回 ids JSON（无附件返回 null）；主档 attachment_ids_json 由调用方回填。 */
+    private String insertAttachments(Long noticeId, ExternalNoticeIngestDTO dto) {
+        if (dto.getAttachments() == null || dto.getAttachments().isEmpty()) {
+            return null;
         }
-        log.info("[ingest][noticeId={} urlHash={}] 外部公告落库（NEW 待审核）", notice.getId(), urlHash);
-        return notice.getId();
+        List<Long> ids = new ArrayList<>();
+        for (ExternalNoticeIngestDTO.Attachment a : dto.getAttachments()) {
+            NoticeExternalAttachmentDO row = new NoticeExternalAttachmentDO();
+            row.setNoticeId(noticeId);
+            row.setFileId(a.getFileId());
+            row.setSha256(a.getSha256());
+            row.setSize(a.getSize());
+            row.setName(a.getName());
+            row.setExt(a.getExt());
+            row.setOrigDownloadUrl(a.getOrigDownloadUrl());
+            row.setVirusStatus("PENDING");
+            noticeExternalAttachmentMapper.insert(row);
+            ids.add(row.getId());
+        }
+        return buildIdsJson(ids);
     }
 
     /**

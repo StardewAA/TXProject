@@ -10,8 +10,9 @@ import java.util.List;
 /**
  * 外部公告详情（大厅公开只读，三形态）。
  *
- * <p>HTML：contentHtml 原文原样 + origUrl；PDF：pdfFileId/pdfSha256/pdfSize（前端 JS 预览，
+ * <p>HTML：contentHtmlSafe 净化版（公开展示必用）；PDF：pdfFileId/pdfSha256/pdfSize（前端 JS 预览，
  * origUrl 与下载走 FileApi 签名 downloadUrl）；附件：attachments 逐条下载地址。
+ * 安全评审意见：原样 HTML 留档仅存库（供抽取/审计），不随公开匿名接口下发。
  */
 @Schema(description = "管理后台 - 外部公告详情 Response")
 @Data
@@ -29,7 +30,7 @@ public class NoticeExternalDetailRespVO {
     private String origUrl;
     @Schema(description = "内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER")
     private String contentType;
-    @Schema(description = "HTML 原文（仅 contentType=HTML 时返回，留档原样；展示请优先用 contentHtmlSafe）")
+    @Schema(description = "HTML 原文（预留字段：留档原样不下发公开匿名接口，恒为 null；公开渲染一律用 contentHtmlSafe）")
     private String contentHtml;
     @Schema(description = "HTML 净化后内容（jsoup 白名单去 script/事件属性/iframe 等，仅 contentType=HTML，建议前端渲染此值）")
     private String contentHtmlSafe;

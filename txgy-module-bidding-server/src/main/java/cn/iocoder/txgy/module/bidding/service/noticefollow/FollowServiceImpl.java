@@ -22,12 +22,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 关注/关注项目列表 服务实现。
@@ -38,10 +42,12 @@ public class FollowServiceImpl implements FollowService {
     /** 关注状态 */
     private static final String STATUS_FOLLOWING = "FOLLOWING";
     private static final String STATUS_UNFOLLOWED = "UNFOLLOWED";
-    /** 是否维度类型（对应关注项目列表行）；公告关注只进订阅表 */
+    /** 公告级关注也建关注项目行（展示“我关注的公告”，标题快照在激活扇出时刷新） */
     private static final String TYPE_ANNOUNCEMENT = "ANNOUNCEMENT";
     /** 事件/提醒相关常量 */
     private static final String EVENT_TYPE_NOTICE_PUBLISHED = "NOTICE_PUBLISHED";
+    /** 外部公告审核生效提醒（设计 §12.2/前端 02 文档事件枚举 EXTERNAL_ACTIVE） */
+    private static final String EVENT_TYPE_EXTERNAL_ACTIVE = "EXTERNAL_ACTIVE";
     private static final String EVENT_SOURCE_EXTERNAL = "EXTERNAL";
     private static final String EVENT_SOURCE_INTERNAL = "INTERNAL";
     private static final String CHANNEL_IN_APP = "IN_APP";
@@ -74,24 +80,30 @@ public class FollowServiceImpl implements FollowService {
         subscription.setTargetKey(reqVO.getTargetKey());
         subscription.setFollowStatus(STATUS_FOLLOWING);
         subscription.setFollowTime(LocalDateTime.now());
-        noticeSubscriptionMapper.insert(subscription);
-        // 维度关注 → 关注项目列表行
-        if (!TYPE_ANNOUNCEMENT.equals(reqVO.getTargetType())) {
-            FollowItemDO item = findItem(userId, reqVO.getTargetType(), reqVO.getTargetKey());
-            if (item == null) {
-                item = new FollowItemDO();
-                item.setUserId(userId);
-                item.setFollowType(reqVO.getTargetType());
-                item.setFollowKey(reqVO.getTargetKey());
-                item.setDisplayName(reqVO.getTargetKey());
-                item.setStageCode("UNKNOWN");
-                item.setUnreadCount(0);
-                item.setFollowStatus(STATUS_FOLLOWING);
-                item.setFollowTime(LocalDateTime.now());
+        try {
+            noticeSubscriptionMapper.insert(subscription);
+        } catch (DuplicateKeyException e) {
+            return; // 并发双插：唯一键 uk_sub_user_target 兜底，另一请求已建订阅（幂等）
+        }
+        // 关注项目列表行：全类型建立（含公告级关注，展示“我关注的公告”；标题快照在扇出时刷新）
+        FollowItemDO item = findItem(userId, reqVO.getTargetType(), reqVO.getTargetKey());
+        if (item == null) {
+            item = new FollowItemDO();
+            item.setUserId(userId);
+            item.setFollowType(reqVO.getTargetType());
+            item.setFollowKey(reqVO.getTargetKey());
+            item.setDisplayName(reqVO.getTargetKey());
+            item.setStageCode("UNKNOWN");
+            item.setUnreadCount(0);
+            item.setFollowStatus(STATUS_FOLLOWING);
+            item.setFollowTime(LocalDateTime.now());
+            try {
                 followItemMapper.insert(item);
-            } else if (!STATUS_FOLLOWING.equals(item.getFollowStatus())) {
-                restoreItem(item);
+            } catch (DuplicateKeyException e) {
+                // 并发下唯一键兜底：忽略（另一请求已建行）
             }
+        } else if (!STATUS_FOLLOWING.equals(item.getFollowStatus())) {
+            restoreItem(item);
         }
     }
 
@@ -104,13 +116,11 @@ public class FollowServiceImpl implements FollowService {
         exists.setFollowStatus(STATUS_UNFOLLOWED);
         exists.setUnfollowTime(LocalDateTime.now());
         noticeSubscriptionMapper.updateById(exists);
-        if (!TYPE_ANNOUNCEMENT.equals(reqVO.getTargetType())) {
-            FollowItemDO item = findItem(userId, reqVO.getTargetType(), reqVO.getTargetKey());
-            if (item != null) {
-                item.setFollowStatus(STATUS_UNFOLLOWED);
-                item.setUnfollowTime(LocalDateTime.now());
-                followItemMapper.updateById(item);
-            }
+        FollowItemDO item = findItem(userId, reqVO.getTargetType(), reqVO.getTargetKey());
+        if (item != null) {
+            item.setFollowStatus(STATUS_UNFOLLOWED);
+            item.setUnfollowTime(LocalDateTime.now());
+            followItemMapper.updateById(item);
         }
     }
 
@@ -163,10 +173,25 @@ public class FollowServiceImpl implements FollowService {
         if (notice == null) {
             return;
         }
-        // 平台侧触发（无登录租户）：跨租户读取全部关注（拦截器忽略），再按订阅者租户逐个写入
-        List<NoticeSubscriptionDO> subscriptions = TenantUtils.executeIgnore(() ->
-                noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
-                        .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)));
+        // 平台侧触发（无登录租户）：跨租户读取全部关注（拦截器忽略）
+        // 按公告维度键反查命中订阅（project/tender/section IN + 公告级 targetKey=noticeId），不再全表扫描后内存过滤
+        List<NoticeSubscriptionDO> subscriptions = TenantUtils.executeIgnore(() -> {
+            List<NoticeSubscriptionDO> result = new ArrayList<>();
+            Set<String> keys = collectMatchKeys(notice);
+            if (!keys.isEmpty()) {
+                result.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
+                        .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
+                        .in(NoticeSubscriptionDO::getTargetKey, keys)));
+            }
+            result.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
+                    .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
+                    .eq(NoticeSubscriptionDO::getTargetType, TYPE_ANNOUNCEMENT)
+                    .eq(NoticeSubscriptionDO::getTargetKey, String.valueOf(notice.getId()))));
+            // 去重（同一订阅不可能同时命中维度与公告两查，但保底）
+            Set<Long> seen = new HashSet<>();
+            result.removeIf(s -> !seen.add(s.getId()));
+            return result;
+        });
         for (NoticeSubscriptionDO subscription : subscriptions) {
             if (matches(subscription, notice)) {
                 TenantUtils.execute(subscription.getTenantId(), () -> handleForSubscriber(subscription, notice, source));
@@ -176,16 +201,17 @@ public class FollowServiceImpl implements FollowService {
 
     /** 在订阅者租户上下文中执行：建关注行/事件去重/刷行/提醒留痕 */
     private void handleForSubscriber(NoticeSubscriptionDO subscription, NoticeExternalDO notice, String source) {
-        // 事件去重：同一 (user,item,source,notice) 只写一条（event_key 幂等）
+        // 事件去重：同一 (user,item,source,notice,contentHash) 只写一条（event_key 幂等；内容版本变化会形成新 key → 新版本提醒）
         FollowItemDO item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
         if (item == null) {
-            if (TYPE_ANNOUNCEMENT.equals(subscription.getTargetType())) {
-                return; // 公告级关注：暂无关注项目行，事件不落（后续公告归属维度时再提醒）
-            }
             item = newItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey(), notice);
-            followItemMapper.insert(item);
+            try {
+                followItemMapper.insert(item);
+            } catch (DuplicateKeyException e) {
+                item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
+            }
         }
-        String eventKey = eventKey(subscription.getUserId(), item.getId(), source, notice.getId());
+        String eventKey = eventKey(subscription.getUserId(), item.getId(), source, notice.getId(), notice.getContentHash());
         FollowItemEventDO exists = followItemEventMapper.selectOne(new LambdaQueryWrapper<FollowItemEventDO>()
                 .eq(FollowItemEventDO::getEventKey, eventKey));
         if (exists != null) {
@@ -195,7 +221,7 @@ public class FollowServiceImpl implements FollowService {
         event.setUserId(subscription.getUserId());
         event.setItemId(item.getId());
         event.setSource(source);
-        event.setEventType(EVENT_TYPE_NOTICE_PUBLISHED);
+        event.setEventType(EVENT_SOURCE_EXTERNAL.equals(source) ? EVENT_TYPE_EXTERNAL_ACTIVE : EVENT_TYPE_NOTICE_PUBLISHED);
         event.setNoticeId(notice.getId());
         event.setEventKey(eventKey);
         event.setTitleSnapshot(notice.getTitle());
@@ -204,11 +230,13 @@ public class FollowServiceImpl implements FollowService {
         event.setReadFlag(Boolean.FALSE);
         followItemEventMapper.insert(event);
 
-        // 刷新关注行：最近动态/未读数/名称快照
+        // 刷新关注行：最近动态/未读数/名称快照（公告级关注 displayName 落到公告标题）
         item.setLatestDynamicTime(event.getOccurredAt());
         item.setUnreadCount(item.getUnreadCount() == null ? 1 : item.getUnreadCount() + 1);
         if (StringUtils.hasText(notice.getProjectName())) {
             item.setDisplayName(notice.getProjectName());
+        } else if (StringUtils.hasText(notice.getTitle())) {
+            item.setDisplayName(notice.getTitle());
         }
         if (StringUtils.hasText(notice.getIssuerName())) {
             item.setIssuerName(notice.getIssuerName());
@@ -260,9 +288,6 @@ public class FollowServiceImpl implements FollowService {
     }
 
     private void restoreFollowItem(NoticeSubscriptionDO subscription) {
-        if (TYPE_ANNOUNCEMENT.equals(subscription.getTargetType())) {
-            return;
-        }
         FollowItemDO item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
         if (item != null) {
             restoreItem(item);
@@ -276,21 +301,50 @@ public class FollowServiceImpl implements FollowService {
         followItemMapper.updateById(item);
     }
 
-    /** 订阅目标键与公告的 project/tender/section 任一匹配即命中 */
+    /**
+     * 订阅目标键与公告匹配（区分关注维度）：
+     * <ul>
+     *   <li>ANNOUNCEMENT（公告级关注）：targetKey = 公告主键 id 字符串 → 精确命中该公告（设计 §12.2 关注公告本身）；</li>
+     *   <li>PROJECT/TENDER_PROJECT/SECTION（维度关注）：targetKey 与公告 project/tender/section 任一匹配即命中。</li>
+     * </ul>
+     */
     private boolean matches(NoticeSubscriptionDO subscription, NoticeExternalDO notice) {
         if (subscription.getTargetKey() == null) {
             return false;
+        }
+        if (TYPE_ANNOUNCEMENT.equals(subscription.getTargetType())) {
+            return subscription.getTargetKey().equals(String.valueOf(notice.getId()));
         }
         return subscription.getTargetKey().equals(notice.getProjectCode())
                 || subscription.getTargetKey().equals(notice.getTenderProjectCode())
                 || inSectionCodes(notice.getBidSectionCodes(), subscription.getTargetKey());
     }
 
+    /** 公告维度键集合（project/tender + 标段拆分；分隔符兼容半角分号/逗号，规范落库口径=半角分号） */
+    private Set<String> collectMatchKeys(NoticeExternalDO notice) {
+        Set<String> keys = new HashSet<>();
+        if (StringUtils.hasText(notice.getProjectCode())) {
+            keys.add(notice.getProjectCode());
+        }
+        if (StringUtils.hasText(notice.getTenderProjectCode())) {
+            keys.add(notice.getTenderProjectCode());
+        }
+        if (StringUtils.hasText(notice.getBidSectionCodes())) {
+            for (String section : notice.getBidSectionCodes().split("[,;]")) {
+                String trimmed = section.trim();
+                if (StringUtils.hasText(trimmed)) {
+                    keys.add(trimmed);
+                }
+            }
+        }
+        return keys;
+    }
+
     private boolean inSectionCodes(String bidSectionCodes, String targetKey) {
         if (!StringUtils.hasText(bidSectionCodes)) {
             return false;
         }
-        for (String section : bidSectionCodes.split(",")) {
+        for (String section : bidSectionCodes.split("[,;]")) {
             if (section.trim().equals(targetKey)) {
                 return true;
             }
@@ -298,29 +352,13 @@ public class FollowServiceImpl implements FollowService {
         return false;
     }
 
-    /** 关注行存在才刷新；不存在则由订阅信息补建（displayName 取项目名/标题快照） */
-    private void ensureItem(NoticeSubscriptionDO subscription, NoticeExternalDO notice) {
-        if (TYPE_ANNOUNCEMENT.equals(subscription.getTargetType())) {
-            return;
-        }
-        FollowItemDO item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
-        if (item == null) {
-            item = new FollowItemDO();
-            item.setUserId(subscription.getUserId());
-            item.setFollowType(subscription.getTargetType());
-            item.setFollowKey(subscription.getTargetKey());
-            item.setDisplayName(StringUtils.hasText(notice.getProjectName()) ? notice.getProjectName() : notice.getTitle());
-            item.setIssuerName(notice.getIssuerName());
-            item.setStageCode("UNKNOWN");
-            item.setUnreadCount(0);
-            item.setFollowStatus(STATUS_FOLLOWING);
-            item.setFollowTime(LocalDateTime.now());
-            followItemMapper.insert(item);
-        }
-    }
-
-    private String eventKey(Long userId, Long itemId, String source, Long noticeId) {
-        return userId + "-" + itemId + "-" + source + "-" + (noticeId == null ? "0" : noticeId);
+    /**
+     * 事件幂等键：用户×关注项×来源×公告 × 内容指纹。
+     * 含 contentHash：同一公告源站内容更新重新审核通过后再次提醒（设计 §12.2 新版本提醒）；内容未变的重放（幂等 PUT/重复消费）不重复提醒。
+     */
+    private String eventKey(Long userId, Long itemId, String source, Long noticeId, String contentHash) {
+        return userId + "-" + itemId + "-" + source + "-" + (noticeId == null ? "0" : noticeId)
+                + "-" + (StringUtils.hasText(contentHash) ? contentHash.substring(0, Math.min(12, contentHash.length())) : "nohash");
     }
 
     private FollowItemRespVO toItemResp(FollowItemDO item) {

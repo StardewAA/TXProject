@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 公开详情安全输出测试（安全评审意见 1/2）：
- * contentHtml 留档原样 + contentHtmlSafe 净化版并存；附件 INFECTED 不下发。
+ * 原样 HTML 留档仅存库、公开出参只下发 contentHtmlSafe 净化版；附件 INFECTED 不下发。
  */
 class NoticeExternalDetailSecurityTest {
 
@@ -59,7 +59,8 @@ class NoticeExternalDetailSecurityTest {
 
         NoticeExternalDetailRespVO resp = service.getDetail(100L);
 
-        assertEquals(raw, resp.getContentHtml(), "留档原样不裁剪（权威要求）");
+        // 公开匿名详情不下发原样（安全评审意见 1：存储型 XSS 载荷不主动发公众客户端）——仅净化版
+        assertNull(resp.getContentHtml(), "公开出参不回填原样 HTML");
         assertNotNull(resp.getContentHtmlSafe());
         assertFalse(resp.getContentHtmlSafe().contains("<script"));
         assertFalse(resp.getContentHtmlSafe().contains("javascript:"));

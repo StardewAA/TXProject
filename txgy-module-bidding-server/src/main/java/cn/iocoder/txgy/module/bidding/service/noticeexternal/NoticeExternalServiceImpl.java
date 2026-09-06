@@ -53,23 +53,28 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
 
     @Override
     public void approveExternal(Long id) {
-        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
-        if (notice == null) {
+        // 存在性先查（错误码区分），再条件更新防丢失更新：并发下 reject/approve 谁先提交谁生效（审核操作竞态安全）
+        NoticeExternalDO pre = noticeExternalMapper.selectById(id);
+        if (pre == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
         }
-        // 幂等：已生效（ACTIVE+APPROVED）直接返回；非待审核态不重放（由“重上架”等显式入口处理）
-        if (NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())
-                && NoticeExternalAuditStatusEnum.APPROVED.getStatus().equals(notice.getAuditStatus())) {
+        // 幂等：已生效（ACTIVE+APPROVED）直接返回；非待审核态不重放（恢复入口=同 URL 重新采集进审核，见 ingest 重投语义）
+        if (NoticeExternalStatusEnum.ACTIVE.getStatus().equals(pre.getStatus())
+                && NoticeExternalAuditStatusEnum.APPROVED.getStatus().equals(pre.getAuditStatus())) {
             return;
         }
-        // 仅待审核（NEW+UNREVIEWED）可审核通过；驳回/下线/归档等一律拒绝
-        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())
-                || !NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus().equals(notice.getAuditStatus())) {
+        NoticeExternalDO patch = new NoticeExternalDO();
+        patch.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        patch.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        int rows = noticeExternalMapper.update(patch, new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getId, id)
+                .eq(NoticeExternalDO::getStatus, NoticeExternalStatusEnum.NEW.getStatus())
+                .eq(NoticeExternalDO::getAuditStatus, NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus()));
+        if (rows == 0) {
+            // 条件不满足：已被并发置为其它状态 → 拒绝覆盖（读到的旧快照不参与写回）
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
         }
-        notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
-        notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
-        noticeExternalMapper.updateById(notice);
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
         // 扇出关注动态 + ES 索引事件：均为旁路通知，失败不阻断审核。
         // 注意：设计 §7.6 的补偿扫描任务尚未实现——以下失败仅记日志，需人工复核后重放（幂等 PUT/扇出语义保证重放安全）
         try {
@@ -86,29 +91,45 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
 
     @Override
     public void rejectExternal(Long id) {
-        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
-        if (notice == null) {
+        NoticeExternalDO pre = noticeExternalMapper.selectById(id);
+        if (pre == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
         }
-        if (!NoticeExternalStatusEnum.NEW.getStatus().equals(notice.getStatus())) {
+        if (NoticeExternalAuditStatusEnum.REJECTED.getStatus().equals(pre.getAuditStatus())) {
+            return; // 幂等：已驳回
+        }
+        NoticeExternalDO patch = new NoticeExternalDO();
+        patch.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        int rows = noticeExternalMapper.update(patch, new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getId, id)
+                .eq(NoticeExternalDO::getStatus, NoticeExternalStatusEnum.NEW.getStatus())
+                .eq(NoticeExternalDO::getAuditStatus, NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus()));
+        if (rows == 0) {
+            // 并发竞态：该记录已被 approve/takeDown 等推进 → 拒绝旧快照覆盖
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
         }
-        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
-        noticeExternalMapper.updateById(notice);
     }
 
     @Override
     public void takeDownExternal(Long id) {
-        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
-        if (notice == null) {
+        NoticeExternalDO pre = noticeExternalMapper.selectById(id);
+        if (pre == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
         }
-        if (!NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())) {
+        if (NoticeExternalStatusEnum.INACTIVE.getStatus().equals(pre.getStatus())) {
+            // 已下线（TAKEN_DOWN）：幂等返回；恢复入口=同 URL 内容更新重新采集（见 ingest 重投语义）
+            return;
+        }
+        NoticeExternalDO patch = new NoticeExternalDO();
+        patch.setStatus(NoticeExternalStatusEnum.INACTIVE.getStatus());
+        patch.setAuditStatus(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus());
+        int rows = noticeExternalMapper.update(patch, new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getId, id)
+                .eq(NoticeExternalDO::getStatus, NoticeExternalStatusEnum.ACTIVE.getStatus())
+                .eq(NoticeExternalDO::getAuditStatus, NoticeExternalAuditStatusEnum.APPROVED.getStatus()));
+        if (rows == 0) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
         }
-        notice.setStatus(NoticeExternalStatusEnum.INACTIVE.getStatus());
-        notice.setAuditStatus(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus());
-        noticeExternalMapper.updateById(notice);
     }
 
     @Override
@@ -200,8 +221,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setOrigUrl(notice.getOrigUrl());
         resp.setContentType(notice.getContentType());
         boolean html = NoticeExternalContentTypeEnum.HTML.getType().equals(notice.getContentType());
-        // HTML 形态：留档原样 + 净化版（公开渲染建议用 contentHtmlSafe，安全评审意见 1）
-        resp.setContentHtml(html ? notice.getContentHtml() : null);
+        // HTML 形态：留档原样仅存库（供抽取/审计）——公开匿名详情不下发原样，统一净化版渲染（安全评审意见 1：存储型 XSS 载荷不主动下发公众客户端）
+        resp.setContentHtml(null);
         resp.setContentHtmlSafe(html ? HtmlSanitizer.sanitize(notice.getContentHtml()) : null);
         // PDF 形态：file_id+sha+size（前端 JS 预览），下载地址待 FileApi 签名能力接入后回填
         resp.setPdfFileId(notice.getPdfFileId());

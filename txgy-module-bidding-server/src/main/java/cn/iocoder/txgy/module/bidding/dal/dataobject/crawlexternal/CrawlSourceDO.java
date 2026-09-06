@@ -18,6 +18,7 @@ public class CrawlSourceDO extends BaseDO {
     private String sourceCode;            // 源 code（唯一）
     private String sourceName;            // 源名称
     private String baseUrl;               // 站点域名/入口
+    private String allowedHosts;          // 额外放行域名（半角逗号分隔：附件 CDN/文件服务器等不在 base_url 域下的溯源域名；白名单=base_url 域名 ∪ 本列）
     private String entryUrlsJson;         // 入口/栏目 URL 列表（JSON 数组）
     private String channelCode;           // 下载通道适配器 code（通用或平台专属）
     private String parserCodeDefault;     // 默认解析/策略码（URL 未单独审批时用）

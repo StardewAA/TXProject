@@ -25,7 +25,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 审核通过（NEW→ACTIVE→扇出关注+ES 索引事件预留）单测（Mockito，无 Spring 上下文）。
+ * 审核（NEW→ACTIVE 条件更新防丢失更新）单测（Mockito，无 Spring 上下文）。
+ *
+ * <p>安全评审修复：approve/reject/takeDown 由“check-then-全量 updateById”改为
+ * “WHERE status/audit 条件更新 + 影响行数判定”——旧快照无法覆盖并发已推进的状态
+ * （如 reject 读旧快照覆盖 approve 结果）。幂等/非法状态语义不变。
  */
 class NoticeExternalApproveTest {
 
@@ -45,6 +49,8 @@ class NoticeExternalApproveTest {
                 mock(NoticeExternalAttachmentMapper.class));
         ReflectionTestUtils.setField(service, "followService", followService);
         ReflectionTestUtils.setField(service, "externalNoticeIndexNotifier", notifier);
+        // 条件更新默认命中 1 行；并发已推进场景（应判 STATE_INVALID）由用例改桩为 0
+        when(noticeExternalMapper.update(any(), any())).thenReturn(1);
     }
 
     private NoticeExternalDO newNotice() {
@@ -56,18 +62,23 @@ class NoticeExternalApproveTest {
         return notice;
     }
 
+    private void stubUpdatedActive() {
+        NoticeExternalDO updated = newNotice();
+        updated.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        updated.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(newNotice(), updated);
+    }
+
     @Test
     void approveExternal_newNotice_flipsActiveAndFansOut() {
-        NoticeExternalDO notice = newNotice();
-        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        stubUpdatedActive();
 
         service.approveExternal(100L);
 
-        assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(), notice.getStatus());
-        assertEquals(NoticeExternalAuditStatusEnum.APPROVED.getStatus(), notice.getAuditStatus());
-        verify(noticeExternalMapper).updateById(notice);
-        verify(followService).handleNoticeActivated(notice, "EXTERNAL");
-        verify(notifier).indexNotice(notice);
+        // 条件更新（WHERE id AND status=NEW AND audit=UNREVIEWED），非全量对象覆盖
+        verify(noticeExternalMapper).update(any(NoticeExternalDO.class), any());
+        verify(followService).handleNoticeActivated(any(NoticeExternalDO.class), eq("EXTERNAL"));
+        verify(notifier).indexNotice(any(NoticeExternalDO.class));
     }
 
     @Test
@@ -79,7 +90,7 @@ class NoticeExternalApproveTest {
 
         service.approveExternal(100L);
 
-        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+        verify(noticeExternalMapper, never()).update(any(), any());
         verify(followService, never()).handleNoticeActivated(any(), any());
     }
 
@@ -93,37 +104,39 @@ class NoticeExternalApproveTest {
 
     @Test
     void approveExternal_fanoutFailure_doesNotRollbackAudit() {
-        NoticeExternalDO notice = newNotice();
-        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        stubUpdatedActive();
         doThrow(new IllegalStateException("follow boom")).when(followService)
                 .handleNoticeActivated(any(), eq("EXTERNAL"));
 
-        service.approveExternal(100L); // 不抛
+        service.approveExternal(100L); // 不抛：扇出/索引为旁路通知
 
-        assertEquals(NoticeExternalStatusEnum.ACTIVE.getStatus(), notice.getStatus());
-        verify(noticeExternalMapper).updateById(notice);
-        verify(notifier).indexNotice(notice);
+        verify(noticeExternalMapper).update(any(NoticeExternalDO.class), any());
+        verify(notifier).indexNotice(any(NoticeExternalDO.class));
     }
 
     @Test
     void approveExternal_secondTimeAfterApproved_noDoubleFanout() {
-        NoticeExternalDO notice = newNotice();
-        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        // selectById 序列：① 首调存在性/幂等查（NEW）→ ② 条件更新后回读（ACTIVE，扇出）→ ③ 二次调用幂等短路（ACTIVE）
+        NoticeExternalDO updated = newNotice();
+        updated.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        updated.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(newNotice(), updated, updated);
 
         service.approveExternal(100L);
-        notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
-        notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
         service.approveExternal(100L);
 
+        verify(noticeExternalMapper).update(any(NoticeExternalDO.class), any());
         verify(followService, times(1)).handleNoticeActivated(any(), eq("EXTERNAL"));
-        verify(notifier, times(1)).indexNotice(notice);
+        verify(notifier, times(1)).indexNotice(any());
     }
 
     @Test
-    void approveExternal_rejectedNotice_throwsStateInvalid() {
+    void approveExternal_concurrentStateAdvanced_throwsStateInvalid() {
+        // 并发已把记录推进（如已被 takeDown/reject）：条件更新 0 行 → 拒绝旧快照覆盖
         NoticeExternalDO notice = newNotice();
-        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        notice.setStatus(NoticeExternalStatusEnum.INACTIVE.getStatus());
         when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        when(noticeExternalMapper.update(any(), any())).thenReturn(0);
 
         ServiceException ex = assertThrows(ServiceException.class, () -> service.approveExternal(100L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID.getCode(), ex.getCode());
@@ -131,21 +144,45 @@ class NoticeExternalApproveTest {
     }
 
     @Test
-    void rejectExternal_newNotice_rejected() {
+    void approveExternal_rejectedNotice_throwsStateInvalid() {
+        // 驳回记录不可直接 approve；恢复入口 = 同 URL 重新采集进审核（ingest 重投语义）
         NoticeExternalDO notice = newNotice();
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        when(noticeExternalMapper.update(any(), any())).thenReturn(0);
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.approveExternal(100L));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void rejectExternal_newNotice_rejected() {
+        when(noticeExternalMapper.selectById(100L)).thenReturn(newNotice());
+
+        service.rejectExternal(100L);
+
+        verify(noticeExternalMapper).update(any(NoticeExternalDO.class), any());
+    }
+
+    @Test
+    void rejectExternal_alreadyRejected_isIdempotent() {
+        NoticeExternalDO notice = newNotice();
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
         when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
 
         service.rejectExternal(100L);
 
-        assertEquals(NoticeExternalAuditStatusEnum.REJECTED.getStatus(), notice.getAuditStatus());
-        verify(noticeExternalMapper).updateById(notice);
+        verify(noticeExternalMapper, never()).update(any(), any());
     }
 
     @Test
-    void rejectExternal_activeNotice_throwsStateInvalid() {
+    void rejectExternal_concurrentApproved_throwsStateInvalid() {
+        // 并发已 approve：reject 旧快照条件更新 0 行 → STATE_INVALID，不覆盖 approve 结果（安全评审修复点）
         NoticeExternalDO notice = newNotice();
         notice.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
         when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        when(noticeExternalMapper.update(any(), any())).thenReturn(0);
 
         assertThrows(ServiceException.class, () -> service.rejectExternal(100L));
         verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
@@ -160,18 +197,27 @@ class NoticeExternalApproveTest {
 
         service.takeDownExternal(100L);
 
-        assertEquals(NoticeExternalStatusEnum.INACTIVE.getStatus(), notice.getStatus());
-        assertEquals(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus(), notice.getAuditStatus());
-        verify(noticeExternalMapper).updateById(notice);
+        verify(noticeExternalMapper).update(any(NoticeExternalDO.class), any());
     }
 
     @Test
     void takeDownExternal_newNotice_throwsStateInvalid() {
-        NoticeExternalDO notice = newNotice();
-        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+        when(noticeExternalMapper.selectById(100L)).thenReturn(newNotice());
+        when(noticeExternalMapper.update(any(), any())).thenReturn(0);
 
         assertThrows(ServiceException.class, () -> service.takeDownExternal(100L));
-        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+    }
+
+    @Test
+    void takeDownExternal_alreadyInactive_isIdempotent() {
+        NoticeExternalDO notice = newNotice();
+        notice.setStatus(NoticeExternalStatusEnum.INACTIVE.getStatus());
+        notice.setAuditStatus(NoticeExternalAuditStatusEnum.TAKEN_DOWN.getStatus());
+        when(noticeExternalMapper.selectById(100L)).thenReturn(notice);
+
+        service.takeDownExternal(100L); // 不抛
+
+        verify(noticeExternalMapper, never()).update(any(), any());
     }
 
 }

@@ -83,15 +83,73 @@ class ExternalNoticeIngestServiceImplTest {
     }
 
     @Test
-    void ingest_sameUrlHash_skipsDuplicates() {
+    void ingest_sameUrlHash_sameContent_idempotentSkips() {
+        // 同 URL 同内容（content_hash 一致）幂等跳过（审查修复高1a：幂等判定需状态×内容指纹共同参与）
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setContentHash("H-FIXED-1");
         NoticeExternalDO existing = new NoticeExternalDO();
         existing.setId(100L);
+        existing.setStatus(NoticeExternalStatusEnum.NEW.getStatus());
+        existing.setAuditStatus(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus());
+        existing.setContentHash("H-FIXED-1");
         when(noticeExternalMapper.selectOne(any())).thenReturn(existing);
 
-        Long id = service.ingest(htmlDto());
+        Long id = service.ingest(dto);
 
         assertEquals(100L, id);
         verify(noticeExternalMapper, never()).insert(any(NoticeExternalDO.class));
+        verify(noticeExternalMapper, never()).updateById(any(NoticeExternalDO.class));
+    }
+
+    @Test
+    void ingest_rejectedSameUrl_resetsToUnreviewed() {
+        // 驳回记录同 URL 重采：重置 NEW+UNREVIEWED 重新排队（审查修复高1a：恢复入口）
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setContentHash("H-FIXED-2");
+        NoticeExternalDO existing = new NoticeExternalDO();
+        existing.setId(100L);
+        existing.setStatus(NoticeExternalStatusEnum.NEW.getStatus());
+        existing.setAuditStatus(NoticeExternalAuditStatusEnum.REJECTED.getStatus());
+        existing.setContentHash("H-FIXED-2");
+        existing.setFetchCount(1);
+        when(noticeExternalMapper.selectOne(any())).thenReturn(existing);
+        when(noticeExternalMapper.selectById(100L)).thenReturn(existing); // rebuildAttachments 回读
+
+        Long id = service.ingest(dto);
+
+        assertEquals(100L, id);
+        verify(noticeExternalMapper, never()).insert(any(NoticeExternalDO.class));
+        // 覆盖走 updateById（主档覆盖为 NEW+UNREVIEWED；无附件不触发二次回填）
+        org.mockito.ArgumentCaptor<NoticeExternalDO> cap =
+                org.mockito.ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).updateById(cap.capture());
+        assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), cap.getValue().getStatus());
+        assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), cap.getValue().getAuditStatus());
+        assertEquals(2, cap.getValue().getFetchCount());
+    }
+
+    @Test
+    void ingest_activeContentChanged_requeuesForReaudit() {
+        // 展示中同 URL 内容变化：覆盖内容并打回 NEW+UNREVIEWED 重审（防源站投毒直上）
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setContentHash("H-NEW");
+        NoticeExternalDO existing = new NoticeExternalDO();
+        existing.setId(100L);
+        existing.setStatus(NoticeExternalStatusEnum.ACTIVE.getStatus());
+        existing.setAuditStatus(NoticeExternalAuditStatusEnum.APPROVED.getStatus());
+        existing.setContentHash("H-OLD");
+        existing.setFetchCount(3);
+        when(noticeExternalMapper.selectOne(any())).thenReturn(existing);
+        // overwriteNotice 后 rebuildAttachments 回读主档（mock 返回现有对象即可）
+        when(noticeExternalMapper.selectById(100L)).thenReturn(existing);
+
+        Long id = service.ingest(dto);
+
+        assertEquals(100L, id);
+        verify(noticeExternalMapper, never()).insert(any(NoticeExternalDO.class));
+        assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), existing.getStatus(), "覆盖对象应为 NEW");
+        assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), existing.getAuditStatus());
+        assertEquals(4, existing.getFetchCount());
     }
 
     @Test
