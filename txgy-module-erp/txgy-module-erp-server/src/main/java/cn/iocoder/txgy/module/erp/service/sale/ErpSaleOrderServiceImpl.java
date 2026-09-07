@@ -5,6 +5,8 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.order.ErpSaleOrderPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.order.ErpSaleOrderSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
@@ -14,8 +16,10 @@ import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderMapper;
 import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
+import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
+import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -43,6 +47,9 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
+    /** 销售订单审批流程标识，可在 BPM 中动态配置任意数量的审批节点。 */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "erp-sale-order-approval";
+
     @Resource
     private ErpSaleOrderMapper saleOrderMapper;
     @Resource
@@ -57,6 +64,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private ErpCustomerService customerService;
     @Resource
     private ErpAccountService accountService;
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private ErpApprovalNotificationService approvalNotificationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -84,7 +95,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
         // 2.1 插入订单
         ErpSaleOrderDO saleOrder = BeanUtils.toBean(createReqVO, ErpSaleOrderDO.class, in -> in
-                .setNo(no).setStatus(ErpAuditStatus.PROCESS.getStatus()));
+                .setNo(no).setStatus(ErpAuditStatus.DRAFT.getStatus()));
         calculateTotalPrice(saleOrder, saleOrderItems);
         saleOrderMapper.insert(saleOrder);
         // 2.2 插入订单项
@@ -100,6 +111,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         ErpSaleOrderDO saleOrder = validateSaleOrderExists(updateReqVO.getId());
         if (ErpAuditStatus.APPROVE.getStatus().equals(saleOrder.getStatus())) {
             throw exception(SALE_ORDER_UPDATE_FAIL_APPROVE, saleOrder.getNo());
+        }
+        if (ErpAuditStatus.PROCESS.getStatus().equals(saleOrder.getStatus())) {
+            throw exception(SALE_ORDER_UPDATE_FAIL_PROCESS, saleOrder.getNo());
         }
         // 1.2 校验客户
         customerService.validateCustomer(updateReqVO.getCustomerId());
@@ -160,6 +174,40 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (updateCount == 0) {
             throw exception(approve ? SALE_ORDER_APPROVE_FAIL : SALE_ORDER_PROCESS_FAIL);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void submitSaleOrder(Long id, Long userId) {
+        ErpSaleOrderDO saleOrder = validateSaleOrderExists(id);
+        if (!ObjectUtil.equal(saleOrder.getStatus(), ErpAuditStatus.DRAFT.getStatus())
+                && !ObjectUtil.equal(saleOrder.getStatus(), ErpAuditStatus.REJECT.getStatus())
+                && !ObjectUtil.equal(saleOrder.getStatus(), ErpAuditStatus.CANCEL.getStatus())) {
+            throw exception(SALE_ORDER_SUBMIT_FAIL_STATUS, saleOrder.getNo());
+        }
+        Map<String, Object> variables = Map.of(
+                "orderType", "SALE",
+                "orderNo", saleOrder.getNo(),
+                "totalPrice", saleOrder.getTotalPrice());
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId,
+                new BpmProcessInstanceCreateReqDTO()
+                        .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                        .setBusinessKey(String.valueOf(id))
+                        .setVariables(variables)).getCheckedData();
+        saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id)
+                .setStatus(ErpAuditStatus.PROCESS.getStatus())
+                .setProcessInstanceId(processInstanceId));
+        approvalNotificationService.sendOrderSubmittedAfterCommit(userId, "SALE", saleOrder.getNo(), id);
+    }
+
+    @Override
+    public void updateSaleOrderAuditStatus(Long id, Integer bpmStatus) {
+        ErpSaleOrderDO saleOrder = validateSaleOrderExists(id);
+        if (!ObjectUtil.equal(saleOrder.getStatus(), ErpAuditStatus.PROCESS.getStatus())) {
+            return;
+        }
+        saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id)
+                .setStatus(ErpAuditStatusUtils.convertBpmResultToAuditStatus(bpmStatus)));
     }
 
     private List<ErpSaleOrderItemDO> validateSaleOrderItems(List<ErpSaleOrderSaveReqVO.Item> list) {
@@ -248,7 +296,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             return;
         }
         saleOrders.forEach(saleOrder -> {
-            if (ErpAuditStatus.APPROVE.getStatus().equals(saleOrder.getStatus())) {
+            if (ErpAuditStatus.APPROVE.getStatus().equals(saleOrder.getStatus())
+                    || ErpAuditStatus.PROCESS.getStatus().equals(saleOrder.getStatus())) {
                 throw exception(SALE_ORDER_DELETE_FAIL_APPROVE, saleOrder.getNo());
             }
         });

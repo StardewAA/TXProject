@@ -6,6 +6,7 @@ import { handleTree } from '@vben/utils';
 
 import { getSimpleBrandList } from '#/api/mall/product/brand';
 import { getCategoryList } from '#/api/mall/product/category';
+import { getShopList } from '#/api/mall/product/shop';
 import { getSimpleTemplateList } from '#/api/mall/trade/delivery/expressTemplate';
 
 /** 基础设置的表单 */
@@ -44,6 +45,18 @@ export function useInfoFormSchema(): VbenFormSchema[] {
         placeholder: '请选择商品分类',
       },
       rules: 'required',
+    },
+    {
+      fieldName: 'shopId',
+      label: '所属店铺',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getShopList,
+        labelField: 'name',
+        valueField: 'id',
+        clearable: true,
+        placeholder: '不选择则为平台自营商品',
+      },
     },
     {
       fieldName: 'brandId',

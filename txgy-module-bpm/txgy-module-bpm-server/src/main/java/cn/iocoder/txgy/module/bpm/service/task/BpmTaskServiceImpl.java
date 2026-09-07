@@ -32,6 +32,7 @@ import cn.iocoder.txgy.module.bpm.service.definition.BpmFormService;
 import cn.iocoder.txgy.module.bpm.service.definition.BpmModelService;
 import cn.iocoder.txgy.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.iocoder.txgy.module.bpm.service.message.BpmMessageService;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskCompletedReqDTO;
 import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskTimeoutReqDTO;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
@@ -655,6 +656,9 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         Map<String,Object> taskVariables = MapUtil.emptyIfNull(reqVO.getVariables()); // task local variables. 一般用于任务内嵌流程表单
         taskService.complete(task.getId(), taskVariables, true);
 
+        // 8. 事务成功后给实际审批人发送“本人已审批”站内信回执
+        registerErpTaskCompletedNotification(instance, task, userId, "通过");
+
         // 【加签专属】处理加签任务
         handleParentTaskIfSign(task.getParentTaskId());
     }
@@ -848,6 +852,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 2.2 添加流程评论
         commentService.createComment(task.getId(), task.getProcessInstanceId(), BpmCommentTypeEnum.REJECT,
                 reqVO.getReason());
+        registerErpTaskCompletedNotification(instance, task, userId, "驳回");
         // 2.3 添加附件
         if (CollUtil.isNotEmpty(reqVO.getAttachments())) {
             reqVO.getAttachments().forEach(attachment -> taskService.createAttachment(BpmAttachmentTypeEnum.TASK_ATTACHMENT.getType(),
@@ -903,6 +908,36 @@ public class BpmTaskServiceImpl implements BpmTaskService {
     private void updateTaskStatusAndReason(String id, Integer status, String reason) {
         updateTaskStatus(id, status);
         taskService.setVariableLocal(id, BpmnVariableConstants.TASK_VARIABLE_REASON, reason);
+    }
+
+    /**
+     * 仅为 ERP 采购、销售订单登记审批回执。接收人使用已经通过 validateTask 校验的实际审批账号，
+     * 不根据菜单权限或角色做全员广播。
+     */
+    private void registerErpTaskCompletedNotification(ProcessInstance instance, Task task, Long userId, String result) {
+        if (!ObjectUtils.equalsAny(instance.getProcessDefinitionKey(),
+                "erp-purchase-order-approval", "erp-sale-order-approval")
+                || "StartUserNode".equals(task.getTaskDefinitionKey())) {
+            return;
+        }
+        BpmMessageSendWhenTaskCompletedReqDTO message = new BpmMessageSendWhenTaskCompletedReqDTO()
+                .setProcessInstanceId(instance.getId())
+                .setProcessDefinitionKey(instance.getProcessDefinitionKey())
+                .setTaskName(task.getName())
+                .setAssigneeUserId(userId)
+                .setResult(result)
+                .setOrderType(MapUtil.getStr(instance.getProcessVariables(), "orderType"))
+                .setOrderNo(MapUtil.getStr(instance.getProcessVariables(), "orderNo"));
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int transactionStatus) {
+                if (ObjectUtil.equal(transactionStatus, TransactionSynchronization.STATUS_ROLLED_BACK)) {
+                    return;
+                }
+                FlowableUtils.execute(instance.getTenantId(),
+                        () -> messageService.sendMessageWhenTaskCompleted(message));
+            }
+        });
     }
 
     @Override

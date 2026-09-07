@@ -39,6 +39,8 @@ public class HrmRecruitInterviewDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /** 应聘记录编号，第二组流程的主关联。 */
+    private Long applicationId;
     /**
      * 候选人编号
      *
@@ -55,6 +57,8 @@ public class HrmRecruitInterviewDO extends BaseDO {
      * 面试轮次
      */
     private Integer stageNumber;
+    /** 同一应聘记录内的面试轮次。 */
+    private Integer roundNo;
     /**
      * 主面试官员工编号
      *

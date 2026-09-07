@@ -321,6 +321,15 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_PROJECT_WORK_ORDER_CANCELED = new ErrorCode(1_040_509_101, "已取消的工单不允许挂接项目");
     ErrorCode PRO_PROJECT_STATUS_CLOSED = new ErrorCode(1_040_509_102, "项目已完成或已取消，不允许挂接生产工单");
     ErrorCode PRO_PROJECT_STATUS_FORBIDDEN = new ErrorCode(1_040_509_103, "项目状态不允许该操作，请刷新后重试");
+    ErrorCode PRO_PROJECT_STATUS_NOT_PAUSED = new ErrorCode(1_040_509_104, "项目当前状态不允许恢复，仅“已暂停”状态可恢复");
+    ErrorCode PRO_PROJECT_FORCE_CLOSE_FORBIDDEN = new ErrorCode(1_040_509_105, "已取消的项目不允许强制结项");
+    ErrorCode PRO_PROJECT_IMPORT_LIST_EMPTY = new ErrorCode(1_040_509_106, "导入数据为空");
+    ErrorCode PRO_PROJECT_MEMBER_NOT_EXISTS = new ErrorCode(1_040_509_110, "项目成员不存在");
+    ErrorCode PRO_PROJECT_MEMBER_NAME_DUPLICATE = new ErrorCode(1_040_509_111, "该成员已存在于当前项目中");
+    ErrorCode PRO_PROJECT_MILESTONE_NOT_EXISTS = new ErrorCode(1_040_509_120, "项目里程碑不存在");
+    ErrorCode PRO_PROJECT_MILESTONE_NAME_DUPLICATE = new ErrorCode(1_040_509_121, "该里程碑已存在于当前项目中");
+    ErrorCode PRO_PROJECT_FILE_NOT_EXISTS = new ErrorCode(1_040_509_130, "项目附件不存在");
+    ErrorCode PRO_PROJECT_FILE_NAME_EMPTY = new ErrorCode(1_040_509_131, "文件名称不能为空");
 
     // ========== MES 质量管理-质检方案（1-040-600-000） ==========
     ErrorCode QC_TEMPLATE_NOT_EXISTS = new ErrorCode(1_040_600_000, "质检方案不存在");
@@ -716,5 +725,20 @@ public interface ErrorCodeConstants {
     ErrorCode WM_PACKAGE_CHILD_NOT_FINISHED = new ErrorCode(1_040_740_007, "子箱必须是已完成状态才能添加");
     ErrorCode WM_PACKAGE_HAS_CHILDREN = new ErrorCode(1_040_740_008, "存在子箱，不允许删除");
     ErrorCode WM_PACKAGE_LINE_NOT_EXISTS = new ErrorCode(1_040_740_100, "装箱明细不存在");
+
+    // ========== MES 安全环保检测-污染判定记录（1-040-818-000） ==========
+    ErrorCode SET_POLLUTION_CHECK_NOT_EXISTS = new ErrorCode(1_040_818_000, "污染判定记录不存在");
+    ErrorCode SET_POLLUTION_CHECK_ALREADY_REVIEWED = new ErrorCode(1_040_818_001, "该记录已复核，禁止修改或删除");
+    ErrorCode SET_POLLUTION_CHECK_NOT_REVIEWED = new ErrorCode(1_040_818_002, "该记录尚未复核");
+    ErrorCode SET_POLLUTION_CHECK_REVIEW_RESULT_INVALID = new ErrorCode(1_040_818_003, "人工复核结果不合法（仅支持无污染/有污染）");
+    ErrorCode SET_POLLUTION_CHECK_STAGE_INVALID = new ErrorCode(1_040_818_004, "环节类型不合法");
+    ErrorCode SET_POLLUTION_CHECK_BATCH_REQUIRED = new ErrorCode(1_040_818_005, "有污染判定必须关联真实批次号（中间废弃物环节除外）");
+    ErrorCode SET_POLLUTION_CHECK_LOCATION_REQUIRED = new ErrorCode(1_040_818_006, "有污染判定必须填写去向/库位");
+    ErrorCode SET_POLLUTION_CHECK_BATCH_NOT_FOUND = new ErrorCode(1_040_818_007, "批次 {} 不存在，无法落地有污染管控，请核对批次号后再复核");
+    // ========== MES 安全环保检测-污染管控门禁与台账（1-040-819-000） ==========
+    ErrorCode MES_POLLUTION_ISSUE_BLOCKED = new ErrorCode(1_040_819_000, "批次 {} 存在有污染环保判定（去向：{}），拒绝领用，请先在污染/危废暂存区完成处理");
+    ErrorCode MES_POLLUTION_OUTBOUND_BLOCKED = new ErrorCode(1_040_819_001, "批次 {} 存在有污染/标记环保判定（去向：{}），禁止出库");
+    ErrorCode SET_POLLUTION_LEDGER_NOT_EXISTS = new ErrorCode(1_040_819_002, "污染/危废暂存台账记录不存在");
+    ErrorCode SET_POLLUTION_LEDGER_STATUS_INVALID = new ErrorCode(1_040_819_003, "台账状态不合法（支持：处置中/已回用/已排放/已处置）");
 
 }

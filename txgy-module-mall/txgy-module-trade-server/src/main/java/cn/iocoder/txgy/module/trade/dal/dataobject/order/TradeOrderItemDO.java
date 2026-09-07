@@ -54,6 +54,9 @@ public class TradeOrderItemDO extends BaseDO {
      * 关联 ProductSkuDO 的 spuId 编号
      */
     private Long spuId;
+    /** 履约店铺编号；平台自营为 0 或空 */
+    private Long shopId;
+    private String shopName;
     /**
      * 商品 SPU 名称
      *

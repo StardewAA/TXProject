@@ -42,6 +42,12 @@ public interface ErpSaleOrderService {
      */
     void updateSaleOrderStatus(Long id, Integer status);
 
+    /** 提交销售订单审批 */
+    void submitSaleOrder(Long id, Long userId);
+
+    /** 接收 BPM 回调并更新销售订单审批状态 */
+    void updateSaleOrderAuditStatus(Long id, Integer bpmStatus);
+
     /**
      * 更新销售订单的出库数量
      *

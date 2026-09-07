@@ -13,14 +13,18 @@ import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item.WmsItemPageRe
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item.WmsItemRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item.WmsItemSaveReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.sku.WmsItemSkuRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.quality.WmsItemQualityReportRespVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemBrandDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemCategoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemQualityReportDO;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemBrandService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemCategoryService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemQualityReportService;
+import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +58,8 @@ public class WmsItemController {
     private WmsItemBrandService brandService;
     @Resource
     private WmsItemSkuService itemSkuService;
+    @Resource
+    private WmsItemQualityReportService qualityReportService;
 
     @PostMapping("/create")
     @Operation(summary = "创建商品")
@@ -122,7 +128,9 @@ public class WmsItemController {
         if (item == null) {
             return null;
         }
-        return getFirst(buildItemRespVOList(Collections.singletonList(item)));
+        WmsItemRespVO respVO = getFirst(buildItemRespVOList(Collections.singletonList(item)));
+        respVO.setQualityReportCount(qualityReportService.getQualityReportCount(item.getId()));
+        return respVO;
     }
 
     private List<WmsItemRespVO> buildItemRespVOList(List<WmsItemDO> list) {
@@ -136,6 +144,8 @@ public class WmsItemController {
                 convertSet(list, WmsItemDO::getBrandId));
         Map<Long, List<WmsItemSkuDO>> skuMap = itemSkuService.getItemSkuMultiMap(
                 convertSet(list, WmsItemDO::getId));
+        Map<Long, WmsItemQualityReportDO> qualityReportMap = qualityReportService.getCurrentQualityReportMap(
+                convertSet(list, WmsItemDO::getId));
         // 拼接 VO
         return BeanUtils.toBean(list, WmsItemRespVO.class, vo -> {
             MapUtils.findAndThen(categoryMap, vo.getCategoryId(), category ->
@@ -144,6 +154,13 @@ public class WmsItemController {
                     vo.setBrandName(brand.getName()));
             vo.setSkus(BeanUtils.toBean(skuMap.getOrDefault(vo.getId(), Collections.emptyList()),
                     WmsItemSkuRespVO.class));
+            WmsItemQualityReportDO report = qualityReportMap.get(vo.getId());
+            if (report != null) {
+                WmsItemQualityReportRespVO reportVO = BeanUtils.toBean(report, WmsItemQualityReportRespVO.class);
+                reportVO.setImageUrls(JsonUtils.parseArray(report.getImageUrls(), String.class));
+                reportVO.setCurrent(true);
+                vo.setCurrentQualityReport(reportVO);
+            }
         });
     }
 

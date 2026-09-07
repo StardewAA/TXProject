@@ -143,7 +143,7 @@ public class CartServiceImpl implements CartService {
 
         // 查询 SPU、SKU 列表
         List<ProductSpuRespDTO> spus = productSpuApi.getSpuList(convertSet(carts, CartDO::getSpuId)).getCheckedData();
-        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(convertSet(carts, CartDO::getSkuId)).getCheckedData();
+        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(convertSet(carts, CartDO::getSkuId));
 
         // 如果 SPU 被删除，则删除购物车对应的商品。延迟删除
         // 为什么不是 SKU 被删除呢？因为 SKU 被删除时，还可以通过 SPU 选择其它 SKU
@@ -183,7 +183,7 @@ public class CartServiceImpl implements CartService {
      * @return 商品 SKU
      */
     private ProductSkuRespDTO checkProductSku(Long skuId, Integer count) {
-        ProductSkuRespDTO sku = productSkuApi.getSku(skuId).getCheckedData();
+        ProductSkuRespDTO sku = productSkuApi.getSku(skuId);
         if (sku == null) {
             throw exception(SKU_NOT_EXISTS);
         }

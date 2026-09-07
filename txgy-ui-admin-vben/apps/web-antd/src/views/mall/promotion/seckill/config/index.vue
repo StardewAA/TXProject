@@ -60,7 +60,7 @@ async function handleStatusChange(
   row: MallSeckillConfigApi.SeckillConfig,
 ): Promise<boolean | undefined> {
   // 二次确认
-  const text = row.status === 0 ? '启用' : '停用';
+  const text = row.status === 0 ? '停用' : '启用';
   try {
     await confirm(`确认要${text + row.name}吗?`);
   } catch {
