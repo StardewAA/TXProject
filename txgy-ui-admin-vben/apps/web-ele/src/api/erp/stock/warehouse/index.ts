@@ -6,6 +6,7 @@ export namespace ErpWarehouseApi {
   /** 仓库信息 */
   export interface Warehouse {
     id?: number; // 仓库编号
+    wmsWarehouseCode?: string; // WMS 权威仓库编码
     name: string; // 仓库名称
     address: string; // 仓库地址
     sort: number; // 排序

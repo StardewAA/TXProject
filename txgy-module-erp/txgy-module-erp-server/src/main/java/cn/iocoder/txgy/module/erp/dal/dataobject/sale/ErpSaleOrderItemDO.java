@@ -47,6 +47,8 @@ public class ErpSaleOrderItemDO extends BaseDO {
      * 冗余 {@link ErpProductDO#getUnitId()}
      */
     private Long productUnitId;
+    /** WMS 统一仓库编码 */
+    private String warehouseCode;
 
     /**
      * 产品单位单价，单位：元
@@ -56,6 +58,10 @@ public class ErpSaleOrderItemDO extends BaseDO {
      * 数量
      */
     private BigDecimal count;
+    /** WMS 已预留数量 */
+    private BigDecimal reservedCount;
+    /** WMS 剩余缺口数量 */
+    private BigDecimal shortageCount;
     /**
      * 总价，单位：元
      *

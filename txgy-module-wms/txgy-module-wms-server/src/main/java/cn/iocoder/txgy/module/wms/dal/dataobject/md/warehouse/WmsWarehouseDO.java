@@ -34,6 +34,14 @@ public class WmsWarehouseDO extends BaseDO {
      * 名称
      */
     private String name;
+    /** RAW_MATERIAL / FINISHED_GOODS */
+    private String warehouseType;
+    private String address;
+    private String principal;
+    /** 启用状态 */
+    private Integer status;
+    /** 乐观锁主数据版本 */
+    private Long dataVersion;
     /**
      * 备注
      */
