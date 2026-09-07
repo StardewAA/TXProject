@@ -25,6 +25,8 @@ export default defineConfig(async () => {
       },
       server: {
         allowedHosts: true,
+        // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
+        host: true,
         proxy: {
           '/admin-api': {
             changeOrigin: true,

@@ -1,6 +1,7 @@
 import type { PageParam, PageResult } from '@vben/request';
 
 import type { WmsItemSkuApi } from './sku';
+import type { QualityReport } from './quality-report';
 
 import { requestClient } from '#/api/request';
 
@@ -17,6 +18,9 @@ export namespace WmsItemApi {
     brandName?: string;
     remark?: string;
     skus?: WmsItemSkuApi.ItemSku[];
+    initialQualityReport?: QualityReport;
+    currentQualityReport?: QualityReport;
+    qualityReportCount?: number;
     createTime?: Date;
   }
 }
