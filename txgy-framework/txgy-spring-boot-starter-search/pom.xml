@@ -11,7 +11,7 @@
     <artifactId>txgy-spring-boot-starter-search</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}</name>
-    <description>Redis 检索公共组件骨架：配置、检索及索引操作契约，不包含业务数据</description>
+    <description>Elasticsearch 8.x 精确检索与 Lettuce/Redis 向量检索公共组件</description>
 
     <dependencies>
         <dependency>
@@ -22,9 +22,23 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <!-- Spring Boot 默认使用 Lettuce；不再为 CMS 检索引入 Jedis。 -->
         <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Boot 4.1 BOM 是 9.x，因此版本在 txgy-dependencies 中显式锁定为 8.19.19。 -->
+        <dependency>
+            <groupId>co.elastic.clients</groupId>
+            <artifactId>elasticsearch-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>elasticsearch-rest-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

@@ -20,6 +20,8 @@
         <spring.boot.version>4.1.0</spring.boot.version>
         <spring.cloud.version>2025.1.2</spring.cloud.version>
         <spring.cloud.alibaba.version>2025.1.0.0</spring.cloud.alibaba.version>
+        <!-- Spring Boot 4.1 默认管理 9.x；CMS 指定连接 Elasticsearch 8.19.x。 -->
+        <elasticsearch-java-client.version>8.19.19</elasticsearch-java-client.version>
         <!-- Web 相关 -->
         <springdoc.version>3.0.3</springdoc.version>
         <knife4j.version>4.5.0</knife4j.version>
@@ -295,7 +297,18 @@
                 <version>${revision}</version>
             </dependency>
 
-            <!-- 法规 CMS 与公共 Redis 检索组件 -->
+            <!-- CMS 检索：Elasticsearch 8.x 主检索 + Lettuce Redis 缓存 -->
+            <dependency>
+                <groupId>co.elastic.clients</groupId>
+                <artifactId>elasticsearch-java</artifactId>
+                <version>${elasticsearch-java-client.version}</version>
+            </dependency>
+            <!-- 8.x Java Client 使用 legacy REST transport；防止被 Boot 4.1 的 9.x BOM 覆盖。 -->
+            <dependency>
+                <groupId>org.elasticsearch.client</groupId>
+                <artifactId>elasticsearch-rest-client</artifactId>
+                <version>${elasticsearch-java-client.version}</version>
+            </dependency>
             <dependency>
                 <groupId>cn.iocoder.cloud</groupId>
                 <artifactId>txgy-spring-boot-starter-search</artifactId>

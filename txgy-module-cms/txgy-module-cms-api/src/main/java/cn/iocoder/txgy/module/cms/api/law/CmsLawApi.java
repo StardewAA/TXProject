@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 /**
- * 法规查询 Java 契约；本次尚未暴露 HTTP / Feign 接口。
+ * 法规查询 Java 契约。
  * 实现必须从认证上下文获取租户，并校验条款的可见范围与版本。
  */
 public interface CmsLawApi {

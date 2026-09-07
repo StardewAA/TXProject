@@ -16,4 +16,11 @@ spring:
       host: ${TXGY_CACHE_REDIS_HOST:127.0.0.1}
       port: ${TXGY_CACHE_REDIS_PORT:6379}
       database: ${TXGY_CACHE_REDIS_DATABASE:0}
-      password: ${TXGY_CACHE_REDIS_PASSWORD:}
+      # 无密码 Redis 不声明 password，避免 Redisson 将空字符串作为 AUTH 密码。
+      # 需要密码时通过 Spring 标准环境变量 SPRING_DATA_REDIS_PASSWORD 提供。
+
+# 本地可在 system-server 未注册时独立调试公开检索接口；tenant-id 仍会写入上下文并用于 ES 数据隔离。
+txgy:
+  tenant:
+    ignore-urls:
+      - /app-api/cms/law/**

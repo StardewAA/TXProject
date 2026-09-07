@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * 独立检索 Redis 的配置。骨架阶段仅绑定配置，不建立连接或创建索引。
+ * 独立向量检索 Redis 的配置。
  * 不复用或覆盖 spring.data.redis 的缓存连接。
  */
 @Getter
@@ -19,7 +19,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "txgy.search.redis")
 public class RedisSearchProperties {
 
-    /** 预留开关；实际检索实现完成前保持关闭。 */
+    /** 默认关闭，避免未部署 Redis 8 / Redis Stack 的服务误启用向量搜索。 */
     private boolean enabled = false;
 
     @NotBlank
@@ -40,5 +40,18 @@ public class RedisSearchProperties {
     @Pattern(regexp = "[A-Za-z0-9:_-]+")
     /** 公共根前缀；具体实现再追加 collection 和 tenantId。 */
     private String indexPrefix = "txgy:cms";
+
+    /** 必须与实际文本向量模型的输出维度完全一致。 */
+    @Min(1)
+    private int vectorDimensions = 768;
+
+    /** Redis HNSW 的候选结果上限。 */
+    @Min(1)
+    @Max(1000)
+    private int defaultTopK = 50;
+
+    @NotBlank
+    @Pattern(regexp = "COSINE|L2|IP")
+    private String distanceMetric = "COSINE";
 
 }
