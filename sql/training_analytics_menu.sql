@@ -22,8 +22,9 @@ VALUES
 (41043, '外部系统对接', 'training:analytics:external-api:query', 2, 60, 41010, 'external-api', 'lucide:plug-zap', 'training/analytics/external-api/index', 'TrainingExternalApi', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41044, '证书公开验真', 'training:analytics:cert-verify:query', 2, 70, 41010, 'cert-verify', 'lucide:badge-check', 'training/analytics/cert-verify/index', 'TrainingCertVerify', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
-`parent_id` = VALUES(`parent_id`), `path` = VALUES(`path`), `component` = VALUES(`component`),
-`component_name` = VALUES(`component_name`), `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
+`type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`), `path` = VALUES(`path`),
+`component` = VALUES(`component`), `component_name` = VALUES(`component_name`),
+`updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
 
 -- 3. 按钮权限（type=3）
 INSERT INTO `system_menu`
@@ -40,4 +41,11 @@ VALUES
 (41053, '外部档案获取', 'training:analytics:external-api:archive', 3, 2, 41043, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41054, '证书免登录验真', 'training:analytics:cert-verify:public', 3, 1, 41044, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
-`parent_id` = VALUES(`parent_id`), `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
+`type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`),
+`updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
+
+-- 4. 自愈：早期环境曾把部分按钮权限错建为页面菜单（type=2），
+--    导致侧边栏出现空白菜单项。此语句保证重复执行后按钮类型始终正确。
+UPDATE `system_menu`
+SET `type` = 3, `updater` = 'admin', `update_time` = NOW()
+WHERE `id` BETWEEN 41045 AND 41054 AND `type` <> 3;
