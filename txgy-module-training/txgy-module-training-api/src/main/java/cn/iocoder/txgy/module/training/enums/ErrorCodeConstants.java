@@ -55,7 +55,7 @@ public interface ErrorCodeConstants {
 
     // ========== 资源中心-文档（document resource）1-061-007-000 ==========
     ErrorCode DOCUMENT_NOT_EXISTS = new ErrorCode(1_061_007_000, "文档资源不存在");
-    ErrorCode DOCUMENT_FILE_TYPE_INVALID = new ErrorCode(1_061_007_001, "仅支持上传 PDF/JPG/PNG 文档");
+    ErrorCode DOCUMENT_FILE_TYPE_INVALID = new ErrorCode(1_061_007_001, "仅支持上传 PDF / Word(doc,docx) / WPS(wps) / 图片(jpg,png) 文档");
     ErrorCode DOCUMENT_FILE_SIZE_EXCEED = new ErrorCode(1_061_007_002, "文档大小超出上限（50MB）");
     ErrorCode DOCUMENT_STATUS_CHANGE_INVALID = new ErrorCode(1_061_007_003, "文档当前状态不允许执行该操作");
     ErrorCode DOCUMENT_REFERENCED_DELETE_FORBIDDEN = new ErrorCode(1_061_007_004, "该文档已被引用，禁止删除（可下架或归档）");
@@ -67,6 +67,8 @@ public interface ErrorCodeConstants {
     ErrorCode VIDEO_STATUS_CHANGE_INVALID = new ErrorCode(1_061_008_003, "视频当前状态不允许执行该操作");
     ErrorCode VIDEO_REFERENCED_DELETE_FORBIDDEN = new ErrorCode(1_061_008_004, "该视频已被引用，禁止删除（可下架或归档）");
     ErrorCode VIDEO_CREDIT_HOURS_INVALID = new ErrorCode(1_061_008_005, "学时值必须大于 0 且最多保留两位小数");
+    ErrorCode VIDEO_TYPE_INVALID = new ErrorCode(1_061_008_006, "视频类型不合法：1 短视频 2 录播");
+    ErrorCode VIDEO_DEFINITION_INVALID = new ErrorCode(1_061_008_007, "清晰度不合法：仅支持 2160P/1080P/720P/480P/360P");
 
     // ========== 资源中心-试题（question）1-061-009-000 ==========
     ErrorCode QUESTION_NOT_EXISTS = new ErrorCode(1_061_009_000, "试题不存在");
@@ -76,6 +78,13 @@ public interface ErrorCodeConstants {
     ErrorCode QUESTION_STATUS_CHANGE_INVALID = new ErrorCode(1_061_009_004, "试题当前状态不允许执行该操作");
     ErrorCode QUESTION_IMPORT_EMPTY = new ErrorCode(1_061_009_005, "导入文件为空或不含有效数据行");
     ErrorCode QUESTION_IMPORT_PARSE_ERROR = new ErrorCode(1_061_009_006, "导入文件解析失败，请使用系统下载的标准 Excel 模板");
+    // AI 智能导入（文档 → 试题）
+    ErrorCode QUESTION_AI_NOT_CONFIGURED = new ErrorCode(1_061_009_007, "未配置 AI 大模型（请联系管理员配置模型服务地址与密钥）");
+    ErrorCode QUESTION_AI_DOC_TYPE_INVALID = new ErrorCode(1_061_009_008, "AI 导入仅支持 PDF / Word(doc,docx) / WPS(wps) 文档");
+    ErrorCode QUESTION_AI_DOC_SIZE_EXCEED = new ErrorCode(1_061_009_009, "AI 导入文档大小超出上限（20MB）");
+    ErrorCode QUESTION_AI_DOC_EMPTY = new ErrorCode(1_061_009_010, "未能从文档中提取到有效文本，请确认文档内容可读");
+    ErrorCode QUESTION_AI_EXTRACT_FAILED = new ErrorCode(1_061_009_011, "AI 大模型提取试题失败，请稍后重试或改用模板导入");
+    ErrorCode QUESTION_AI_RESULT_EMPTY = new ErrorCode(1_061_009_012, "AI 未从文档中识别出试题，可补充试题描述后重试");
 
     // ========== 资源中心-标签（tag）1-061-010-000 ==========
     ErrorCode RESOURCE_TAG_NOT_EXISTS = new ErrorCode(1_061_010_000, "标签不存在");

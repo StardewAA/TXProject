@@ -59,12 +59,18 @@ export namespace TrainingResourceApi {
     id?: number;
     title?: string;
     categoryId?: number;
+    /** 视频类型：1 短视频 2 录播 */
+    videoType?: number;
     coverUrl?: string;
     fileName?: string;
     filePath?: string;
     fileType?: string;
     fileSize?: number;
     durationSeconds?: number;
+    /** 原始清晰度：2160P / 1080P / 720P / 480P / 360P */
+    definition?: string;
+    /** 可播放清晰度列表（JSON 字符串） */
+    definitionOptions?: string;
     /** 转码状态：0 未转码 1 排队 2 处理中 3 成功 4 失败 */
     transcodeStatus?: number;
     creditHours?: number;
@@ -105,6 +111,37 @@ export namespace TrainingResourceApi {
     targetId?: number;
     detail?: string;
     createTime?: string;
+  }
+
+  /** 视频清晰度选项（弱网可切换低清晰度） */
+  export interface VideoDefinitionOption {
+    definition?: string;
+    url?: string;
+    /** 是否已完成转码（false 表示暂按原始清晰度播放） */
+    transcoded?: boolean;
+    original?: boolean;
+  }
+
+  /** AI 识别的试题项 */
+  export interface AiQuestionItem {
+    qtype?: number;
+    stem?: string;
+    options?: { key?: string; text?: string; isCorrect?: boolean }[];
+    answer?: string;
+    analysis?: string;
+    difficulty?: number;
+    confidence?: number;
+  }
+
+  /** AI 文档解析结果（预览） */
+  export interface AiQuestionParseResult {
+    items?: AiQuestionItem[];
+    aiEnabled?: boolean;
+    fallback?: boolean;
+    message?: string;
+    textLength?: number;
+    fileName?: string;
+    fileType?: string;
   }
 }
 
@@ -314,6 +351,33 @@ export function importQuestions(file: File) {
   }>('/training/question/import', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+}
+
+// ========== AI 智能导入（文档 → 试题）==========
+
+/** AI 解析文档试题（仅预览，不入库） */
+export function parseQuestionByAi(file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<TrainingResourceApi.AiQuestionParseResult>(
+    '/training/question/ai/parse',
+    data,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+}
+
+/** 确认导入 AI 识别的试题 */
+export function importQuestionsByAi(items: TrainingResourceApi.AiQuestionItem[]) {
+  return requestClient.post<number>('/training/question/ai/import', items);
+}
+
+// ========== 视频清晰度 ==========
+
+/** 查询可播放清晰度列表（弱网可切换低清晰度） */
+export function getVideoDefinitionOptions(id: number) {
+  return requestClient.get<TrainingResourceApi.VideoDefinitionOption[]>(
+    `/training/video/definitions?id=${id}`,
+  );
 }
 
 // ========== 操作日志 ==========
