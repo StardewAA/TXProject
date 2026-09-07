@@ -134,6 +134,69 @@ const id = computed(() => String(route.params.id ?? ''));
 /** 项目跟踪键（BR-1：detail.projectKey 存在 → 详情提供“跟踪该项目”次级关注） */
 const projectKeyVal = computed(() => cleanT(detail.value?.projectKey));
 
+/** 标段跟踪列表（01 §3：bidSectionKeys/bidSectionNames 下发则优先，否则用 bidSectionCodes 原文；逐标段可关注 SECTION） */
+interface SecTrack {
+  key: string;
+  code: string;
+  name: string;
+}
+const sections = computed<SecTrack[]>(() => {
+  const d2 = detail.value;
+  if (!d2) return [];
+  const codes = toCleanList(d2.bidSectionCodes);
+  const keys = Array.isArray(d2.bidSectionKeys)
+    ? d2.bidSectionKeys.map((k) => cleanT(k)).filter(Boolean)
+    : [];
+  const names = Array.isArray(d2.bidSectionNames) ? d2.bidSectionNames : [];
+  if (!codes.length && !keys.length) return [];
+  const base = keys.length ? keys : codes;
+  return base
+    .map((k, i) => ({
+      key: keys[i] || codes[i] || k,
+      code: codes[i] || k,
+      name: cleanT(names[i] ?? ''),
+    }))
+    .filter((s) => !!s.key);
+});
+type SecState = 'idle' | 'followed' | 'unfollowed' | 'unavailable';
+const sectionFollows = ref<Record<string, { state: SecState; busy: boolean; hint: string }>>({});
+function secStateOf(s: SecTrack): { state: SecState; busy: boolean; hint: string } {
+  return sectionFollows.value[s.key] || { state: 'idle', busy: false, hint: '' };
+}
+async function probeSectionFollows(): Promise<void> {
+  const secs = sections.value;
+  await Promise.all(
+    secs.map(async (s) => {
+      try {
+        const followed = await isFollowed('SECTION', s.key);
+        sectionFollows.value[s.key] = { state: followed ? 'followed' : 'unfollowed', busy: false, hint: '' };
+      } catch (e) {
+        sectionFollows.value[s.key] = { state: 'unavailable', busy: false, hint: hintOf(e) };
+      }
+    }),
+  );
+}
+async function toggleSectionFollow(s: SecTrack): Promise<void> {
+  const st = secStateOf(s);
+  if (st.busy) return;
+  if (st.state === 'unavailable') {
+    goLogin();
+    return;
+  }
+  sectionFollows.value[s.key] = { ...st, busy: true };
+  try {
+    if (st.state === 'followed') {
+      await unfollowTarget({ targetType: 'SECTION', targetKey: s.key });
+      sectionFollows.value[s.key] = { state: 'unfollowed', busy: false, hint: '' };
+    } else {
+      await followTarget({ targetType: 'SECTION', targetKey: s.key });
+      sectionFollows.value[s.key] = { state: 'followed', busy: false, hint: '' };
+    }
+  } catch (e) {
+    sectionFollows.value[s.key] = { state: 'unavailable', busy: false, hint: hintOf(e) };
+  }
+}
+
 /** 结构化块：首个与标题完全重复的块级标题（外站正文常整句回显）裁掉，避免标题下再叠一遍 */
 function trimLeadHeading(
   blocks: NoticeBodyBlock[] | undefined,
@@ -176,8 +239,6 @@ const metaPairs = computed(() => {
   const pKey = cleanT(d.projectKey);
   if (proj) pairs.push({ k: '关联项目', v: proj });
   if (pKey) pairs.push(proj ? { k: '项目编号', v: pKey } : { k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
-  const secs = toCleanList(d.bidSectionKeys && d.bidSectionKeys.length ? d.bidSectionKeys : d.bidSectionCodes);
-  if (secs.length) pairs.push({ k: '标段', v: secs.join('、') });
   const srcName = cleanT(d.sourceName);
   const srcCode = cleanT(d.sourceCode);
   if (srcCode || srcName) pairs.push({ k: '来源', v: [srcCode, srcName].filter(Boolean).join(' · ') });
@@ -227,6 +288,7 @@ async function load(): Promise<void> {
     if (detail.value) {
       void probeFollow();
       void probeProjFollow();
+      void probeSectionFollows();
     }
   } catch (e) {
     errorMsg.value = e instanceof Error ? e.message : String(e);
@@ -309,6 +371,25 @@ onBeforeUnmount(() => {
         >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}</button>
         <button v-if="projFollowState === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
         <span v-if="projFollowState === 'unavailable' && projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
+      </div>
+
+      <!-- 标段跟踪（01 §3：bidSectionCodes/Keys 存在 → 逐标段关注；订阅页“标段”维度行 = 这些关注） -->
+      <div v-if="sections.length" class="track-row secs">
+        <span class="track-label">标段跟踪</span>
+        <div class="sec-list">
+          <div v-for="s in sections" :key="s.key" class="sec-item">
+            <span class="track-key" :title="s.code && s.code !== s.key ? s.code : ''">{{ s.name || s.code || s.key }}</span>
+            <button
+              v-if="secStateOf(s).state !== 'idle'"
+              class="go-orig"
+              :class="{ active: secStateOf(s).state === 'followed', need: secStateOf(s).state === 'unavailable' }"
+              :disabled="secStateOf(s).busy"
+              @click="toggleSectionFollow(s)"
+            >{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}</button>
+            <button v-if="secStateOf(s).state === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
+            <span v-if="secStateOf(s).state === 'unavailable' && secStateOf(s).hint" class="follow-note">标段：{{ secStateOf(s).hint }}</span>
+          </div>
+        </div>
       </div>
       <p v-if="followState === 'unavailable' && followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
     </div>
@@ -761,6 +842,22 @@ onBeforeUnmount(() => {
   margin: 8px 0 0;
   font-size: 12px;
   color: #8a97a4;
+}
+.track-row.secs {
+  align-items: flex-start;
+}
+.sec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sec-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 2px 0;
 }
 .track-row {
   display: flex;
