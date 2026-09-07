@@ -58,6 +58,44 @@ async function toggleFollow(): Promise<void> {
     followBusy.value = false;
   }
 }
+/** 项目级次级关注（跟踪该招标项目；targetType=PROJECT + targetKey=projectKey，BR-1/01 §3） */
+const projFollowState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const projFollowBusy = ref(false);
+const projFollowHint = ref('');
+
+async function probeProjFollow(): Promise<void> {
+  const k = projectKeyVal.value;
+  if (!k) return;
+  try {
+    const followed = await isFollowed('PROJECT', k);
+    projFollowState.value = followed ? 'followed' : 'unfollowed';
+  } catch (e) {
+    // 未登录/无权限等：隐藏按钮，给一句说明（浏览与公告级关注不受影响）
+    projFollowState.value = 'unavailable';
+    projFollowHint.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+async function toggleProjFollow(): Promise<void> {
+  const k = projectKeyVal.value;
+  if (!k || projFollowBusy.value) return;
+  projFollowBusy.value = true;
+  try {
+    if (projFollowState.value === 'followed') {
+      await unfollowTarget({ targetType: 'PROJECT', targetKey: k });
+      projFollowState.value = 'unfollowed';
+    } else {
+      await followTarget({ targetType: 'PROJECT', targetKey: k });
+      projFollowState.value = 'followed';
+    }
+  } catch (e) {
+    projFollowState.value = 'unavailable';
+    projFollowHint.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    projFollowBusy.value = false;
+  }
+}
+
 /** 兜底：未捕获的运行时/异步错误显示到页面上，便于定位（开发辅助） */
 const pageError = ref('');
 function onUnhandled(e: PromiseRejectionEvent | ErrorEvent): void {
@@ -69,6 +107,8 @@ function onUnhandled(e: PromiseRejectionEvent | ErrorEvent): void {
 }
 
 const id = computed(() => String(route.params.id ?? ''));
+/** 项目跟踪键（BR-1：detail.projectKey 存在 → 详情提供“跟踪该项目”次级关注） */
+const projectKeyVal = computed(() => cleanT(detail.value?.projectKey));
 
 /** 结构化块：首个与标题完全重复的块级标题（外站正文常整句回显）裁掉，避免标题下再叠一遍 */
 function trimLeadHeading(
@@ -109,8 +149,10 @@ const metaPairs = computed(() => {
   const eff = [fmtDate(d.effectiveFrom), fmtDate(d.effectiveTo)].filter(Boolean).join(' ~ ');
   if (eff) pairs.push({ k: '生效期', v: eff });
   const proj = cleanT(d.projectName);
+  const pKey = cleanT(d.projectKey);
   if (proj) pairs.push({ k: '关联项目', v: proj });
-  const secs = toCleanList(d.bidSectionCodes);
+  if (pKey) pairs.push(proj ? { k: '项目编号', v: pKey } : { k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
+  const secs = toCleanList(d.bidSectionKeys && d.bidSectionKeys.length ? d.bidSectionKeys : d.bidSectionCodes);
   if (secs.length) pairs.push({ k: '标段', v: secs.join('、') });
   const srcName = cleanT(d.sourceName);
   const srcCode = cleanT(d.sourceCode);
@@ -158,7 +200,10 @@ async function load(): Promise<void> {
   errorMsg.value = '';
   try {
     detail.value = await fetchNoticeDetail(id.value);
-    if (detail.value) void probeFollow();
+    if (detail.value) {
+      void probeFollow();
+      void probeProjFollow();
+    }
   } catch (e) {
     errorMsg.value = e instanceof Error ? e.message : String(e);
     detail.value = null;
@@ -221,6 +266,19 @@ onBeforeUnmount(() => {
       <h1>{{ detail.title }}</h1>
       <div class="meta">
         <span v-for="p in metaPairs" :key="p.k"><b>{{ p.k }}</b>{{ p.v }}</span>
+      </div>
+      <!-- BR-1：detail.projectKey 存在 → 项目级次级关注（跟踪该招标项目）；未登录/无权限时不展示按钮只给提示 -->
+      <div v-if="projectKeyVal" class="track-row">
+        <span class="track-label">项目跟踪</span>
+        <span class="track-key">{{ projectKeyVal }}</span>
+        <button
+          v-if="projFollowState === 'followed' || projFollowState === 'unfollowed'"
+          class="go-orig"
+          :class="{ active: projFollowState === 'followed' }"
+          :disabled="projFollowBusy"
+          @click="toggleProjFollow()"
+        >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : '＋ 跟踪该项目' }}</button>
+        <span v-if="projFollowState === 'unavailable' && projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
       </div>
       <p v-if="followState === 'unavailable' && followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
     </div>
@@ -656,6 +714,25 @@ onBeforeUnmount(() => {
   margin: 8px 0 0;
   font-size: 12px;
   color: #8a97a4;
+}
+.track-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e3e8ee;
+  font-size: 12.5px;
+  color: #44505c;
+}
+.track-label {
+  color: #7a8591;
+}
+.track-key {
+  font-weight: 700;
+  color: #17539a;
+  font-family: Consolas, Menlo, monospace;
 }
 
 </style>

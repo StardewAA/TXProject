@@ -10,6 +10,7 @@ import type {
   FollowEvent,
   FollowItem,
   FollowItemPageParams,
+  FollowStatus,
   NoticeBodyBlock,
   NoticeExternalDetail,
   NoticeExternalItem,
@@ -154,6 +155,7 @@ const details: Record<string, NoticeExternalDetail> = {
   1001: {
     ...list[0]!,
     projectName: '平陆县集中供热管网改造工程（一标段）',
+    projectKey: 'PRJ-PL-2026',
     bidSectionCodes: ['BYB-001'],
     contentHtmlSafe: HTML_BODY,
     bodyBlocksStatus: 'NONE',
@@ -166,6 +168,7 @@ const details: Record<string, NoticeExternalDetail> = {
   1002: {
     ...list[1]!,
     projectName: '太原市热力集团 2026 年度一次网保温管件采购项目',
+    projectKey: 'PRJ-TY-TR-2026',
     bidSectionCodes: ['TR-2026-01'],
     contentHtmlSafe: `<h3>一、评标结果</h3><p>本项目评标工作已结束，经评标委员会评审，现将中标候选人予以公示。</p>
       <table><tr><th>名次</th><th>中标候选人名称</th><th>投标报价（元）</th></tr>
@@ -178,6 +181,7 @@ const details: Record<string, NoticeExternalDetail> = {
   1003: {
     ...list[2]!,
     projectName: '太原市热力集团 2026 年度一次网保温管件采购项目',
+    projectKey: 'PRJ-TY-TR-2026',
     contentHtmlSafe: '<h3>中标结果</h3><p>××保温材料有限公司为本项目中标人，中标价 3,268,500.00 元。</p>',
     attachments: [],
   },
@@ -317,6 +321,8 @@ function followSeedRows(): MockFollowRec[] {
       followStatus: 'FOLLOWING',
       followTime: nowM - 4 * DAY_M,
       latestDynamicTime: nowM - 4 * DAY_M,
+      noticeStatus: 'ACTIVE',
+      available: true,
     },
     {
       id: 8004,
@@ -356,15 +362,15 @@ function seedTimeline(): MockTimelineRec[] {
   return [
     // 8001 炼化大修招标项目：已读 STAGE_CHANGE + 2 条未读 EXTERNAL_ACTIVE
     { id: 9001, itemId: 8001, source: 'INTERNAL', eventType: 'STAGE_CHANGE', titleSnapshot: '项目阶段流转：招标 → 评标', occurredAt: nowM - 3 * DAY_M, readFlag: true },
-    { id: 9002, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示（模拟外部平台）', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 2 * DAY_M, readFlag: false },
-    { id: 9003, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示（模拟外部平台）', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 1 * DAY_M, readFlag: false },
+    { id: 9002, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示（模拟外部平台）', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 2 * DAY_M, readFlag: false, noticeStatus: 'ACTIVE', available: true },
+    { id: 9003, itemId: 8001, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示（模拟外部平台）', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 1 * DAY_M, readFlag: false, noticeStatus: 'ACTIVE', available: true },
     // 8002 太原项目
-    { id: 9004, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 6 * DAY_M, readFlag: false },
-    { id: 9005, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 6 * DAY_M + 3600_000, readFlag: true },
+    { id: 9004, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1003, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标结果公示', origUrl: 'https://example.com/notice/1003', occurredAt: nowM - 6 * DAY_M, readFlag: false, noticeStatus: 'ACTIVE', available: true },
+    { id: 9005, itemId: 8002, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 6 * DAY_M + 3600_000, readFlag: true, noticeStatus: 'ACTIVE', available: true },
     // 8003 公告级关注（太原中标候选人公示）
-    { id: 9006, itemId: 8003, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 4 * DAY_M, readFlag: false },
-    // 8004 标段（平陆一标段招标公告）
-    { id: 9007, itemId: 8004, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1001, titleSnapshot: '平陆县集中供热管网改造工程（一标段）防腐保温材料采购招标公告', origUrl: 'https://example.com/notice/1001', occurredAt: nowM - 2 * DAY_M, readFlag: true },
+    { id: 9006, itemId: 8003, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1002, titleSnapshot: '太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示', origUrl: 'https://example.com/notice/1002', occurredAt: nowM - 4 * DAY_M, readFlag: false, noticeStatus: 'ACTIVE', available: true },
+    // 8004 标段（平陆一标段招标公告）→ 关联公告已下线（BR-4 演示：平台详情不可达，仅源站原文）
+    { id: 9007, itemId: 8004, source: 'EXTERNAL', eventType: 'EXTERNAL_ACTIVE', noticeId: 1001, titleSnapshot: '平陆县集中供热管网改造工程（一标段）防腐保温材料采购招标公告', origUrl: 'https://example.com/notice/1001', occurredAt: nowM - 2 * DAY_M, readFlag: true, noticeStatus: 'INACTIVE', available: false },
   ];
 }
 
@@ -388,6 +394,8 @@ const toFollowVo = (r: MockFollowRec): FollowItem => ({
   latestDynamicTime: r.latestDynamicTime,
   unreadCount: r.unreadCount,
   followTime: r.followTime,
+  noticeStatus: r.noticeStatus,
+  available: r.available,
 });
 
 /** 关注/取消（幂等）；公告级关注新建行时按 mock 详情快照标题/发布单位 */
@@ -444,7 +452,10 @@ export function mockToggleFollow(
     unreadCount: 0,
     followStatus: 'FOLLOWING',
     followTime: now,
-    latestDynamicTime: null,
+    // BR-6（mock 对齐）：关注即种已读初始动态 → latestDynamicTime 置关注时刻（真实后端由扇出种行）
+    latestDynamicTime: now,
+    noticeStatus: targetType === 'ANNOUNCEMENT' && details[String(targetKey)] ? 'ACTIVE' : null,
+    available: targetType === 'ANNOUNCEMENT' && details[String(targetKey)] ? true : null,
   };
   store.rows.push(row);
 }
@@ -456,6 +467,24 @@ export function mockFollowed(targetType: string, targetKey: string): boolean {
       r.followKey === String(targetKey) &&
       r.followStatus === 'FOLLOWING',
   );
+}
+
+/** 关注状态单点查询 Mock（BR-2/N2②：与真实 /notice-follow/status 同构出参） */
+export function mockFollowStatus(targetType: string, targetKey: string): FollowStatus {
+  const row = followStore.rows.find(
+    (r) =>
+      r.followType === targetType &&
+      r.followKey === String(targetKey) &&
+      r.followStatus === 'FOLLOWING',
+  );
+  return {
+    followed: !!row,
+    itemId: row?.id ?? null,
+    targetType,
+    targetKey: String(targetKey),
+    displayName: row?.displayName ?? null,
+    issuerName: row?.issuerName ?? null,
+  };
 }
 
 /** 我的关注分页（只出 FOLLOWING；followType 过滤；按最近动态倒序） */

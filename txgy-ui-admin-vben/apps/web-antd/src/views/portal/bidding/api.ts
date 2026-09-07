@@ -5,6 +5,7 @@
  *   GET {prefix}/notice-external/page?keyword=&noticeTypeRaw=&sourceCode=&contentType=&industryFlag=&beginTime=&endTime=&pageNo=&pageSize=
  *   GET {prefix}/notice-external/detail?id=xx
  *   GET {prefix}/notice-external/go?url=…    外链中转（白名单 host 校验，前端不直开外站）
+ *   GET {prefix}/notice-follow/status?targetType=&targetKey=   关注状态单点查询（BR-2/N2②）
  *
  * 联调口径（后端 R1~R12 已实现，前端按此对接）：
  *   - 关键词全文检索 = keyword（ES 索引 bidding-notice-external，命中标题/项目/编号/正文，上限 200；
@@ -24,6 +25,7 @@ import { cleanT, toCleanList } from './format';
 import {
   mockDetail,
   mockFollowed,
+  mockFollowStatus,
   mockMyFollow,
   mockPage,
   mockReadItem,
@@ -34,6 +36,7 @@ import type {
   FollowEvent,
   FollowItem,
   FollowItemPageParams,
+  FollowStatus,
   FollowReq,
   NoticeBodyBlock,
   NoticeExternalDetail,
@@ -281,11 +284,16 @@ function normalizeDetail(d: NoticeExternalDetail): NoticeExternalDetail {
     legalFlag: d.legalFlag ? cleanT(d.legalFlag) : null,
     industryFlag: d.industryFlag ? cleanT(d.industryFlag) : null,
     projectName: d.projectName ? cleanT(d.projectName) : undefined,
+    projectKey: d.projectKey ? cleanT(d.projectKey) : undefined,
+    tenderProjectKey: d.tenderProjectKey ? cleanT(d.tenderProjectKey) : undefined,
+    tenderProjectName: d.tenderProjectName ? cleanT(d.tenderProjectName) : undefined,
     bodyParserCode: d.bodyParserCode ? cleanT(d.bodyParserCode) : null,
     bodyBlocksStatus: d.bodyBlocksStatus ? cleanT(d.bodyBlocksStatus) : null,
     // 结构化块：SUCCESS 且 JSON 数组非空时前端按块渲染（01 §7.1 / 02 §4）；否则回退 contentHtmlSafe
     bodyBlocks: parseBodyBlocks(d.bodyBlocksJson, preset),
     bidSectionCodes: toCleanList(d.bidSectionCodes),
+    bidSectionKeys: toCleanList(d.bidSectionKeys),
+    bidSectionNames: toCleanList(d.bidSectionNames),
   };
 }
 
@@ -327,12 +335,12 @@ export function openOrigUrl(origUrl?: string | null): void {
  * 实现口径核对（后端 NoticeFollowController / FollowServiceImpl，01 §3 / 02 §5）：
  *   - 关注/取消：POST {prefix}/notice-follow/follow | /unfollow  body=FollowReqVO(targetType,targetKey)；
  *     ANNOUNCEMENT 关注会建“我关注的公告”行（displayName 暂为 targetKey，扇出时快照标题）；
- *   - 我的关注：GET {prefix}/notice-follow/item/page?followType=&pageNo=&pageSize=
- *     （注意：实际筛选参数名是 followType —— 01 §3 文档写作 dimensionType 有误，后端 VO 以 followType 为准）；
+ *   - 我的关注：GET {prefix}/notice-follow/item/page?followType=&followKey=&pageNo=&pageSize=
+ *     （筛选参数真名 followType，契约已勘误；可叠加 followKey 做公告级/详情按钮的精确过滤，N2②）；
  *   - 时间线：GET {prefix}/notice-follow/item/{itemId}/timeline（分页）；
  *   - 已读：POST {prefix}/notice-follow/item/{itemId}/read（幂等，清未读 + readFlag）。
- * 鉴权：大厅免登录；关注域需登录态 + 权限码。浏览器联调期（48110 直跑未注册网关 O1）复用
- *   /bidding-api 代理并附加 Authorization/tenant-id 请求头（from useAccessStore）。
+ * 鉴权：大厅免登录；关注域需登录态 + 权限码（读=query / 写=update，见 01 §3）。浏览器联调期（48110
+ *   直跑未注册网关 O1）复用 /bidding-api 代理并附加 Authorization/tenant-id 请求头（from useAccessStore）。
  */
 
 const FOLLOW_API = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice-follow`;
@@ -456,23 +464,29 @@ export async function markFollowItemRead(itemId: number | string): Promise<void>
 }
 
 /**
- * 是否已关注某目标（用于详情页“关注”按钮初始态）。
- * 后端暂无单点查询接口（见 docs 后续说明 N3）：前端以“公告级关注行分页扫描”探测，
- * 超过 5 页仍未命中视为未关注（v1 够用；后端提供 status 端点后替换）。
+ * 关注状态单点查询（BR-2 / N2② 新增：GET /notice-follow/status）。
+ * 返回 FollowStatusRespVO {followed, itemId, targetType, targetKey, displayName, issuerName}；
+ * 公告级目标已关注且行缺快照时，后端即时按公告详情补名返回（不落库）。
  */
+export async function fetchFollowStatus(
+  targetType: string,
+  targetKey: string,
+): Promise<FollowStatus> {
+  if (biddingConfig.useMock) return mockFollowStatus(targetType, targetKey);
+  const data = await authedFetch<FollowStatus>(
+    `${FOLLOW_API}/status?${followQs({ targetType, targetKey })}`,
+  );
+  return {
+    ...data,
+    displayName: cleanT(data.displayName),
+    issuerName: data.issuerName ? cleanT(data.issuerName) : undefined,
+  };
+}
+
+/** 是否已关注某目标（详情页关注按钮初始态；ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION 四维统一走 status 端点） */
 export async function isFollowed(targetType: string, targetKey: string): Promise<boolean> {
   if (biddingConfig.useMock) return mockFollowed(targetType, targetKey);
-  if (targetType === 'ANNOUNCEMENT') {
-    for (let p = 1; p <= 5; p += 1) {
-      const res = await fetchMyFollowItems({ followType: 'ANNOUNCEMENT', pageNo: p, pageSize: 100 });
-      if (res.list.some((r) => r.followType === 'ANNOUNCEMENT' && String(r.followKey) === String(targetKey))) {
-        return true;
-      }
-      if (p * 100 >= res.total) break;
-    }
-    return false;
-  }
-  // 项目/标段维度：全量扫描成本高且无 followKey 筛选（N3），v1 直接按未关注处理（关注动作幂等，不会重复建行）
-  return false;
+  const st = await fetchFollowStatus(targetType, targetKey);
+  return !!st?.followed;
 }
 
