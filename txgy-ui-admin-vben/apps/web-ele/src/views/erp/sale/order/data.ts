@@ -462,6 +462,27 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       },
     },
     {
+      field: 'warehouseStatus',
+      title: '仓储协作状态',
+      minWidth: 140,
+      formatter: ({ cellValue }) => {
+        const labels: Record<string, string> = {
+          NOT_SUBMITTED: '未提交 WMS',
+          DECISION_PENDING: '库存判断中',
+          RESERVED_FULL: '已全部预留',
+          RESERVED_PARTIAL: '部分预留',
+          SHORTAGE: '库存不足',
+          WAITING_PRODUCTION: '等待生产',
+          READY_FOR_SHIPMENT: '待出库',
+          SHIPMENT_APPROVING: '出库审批中',
+          SHIPPED: '已出库',
+          REJECTED: 'WMS 已拒绝',
+          FAILED: '协作异常',
+        };
+        return labels[cellValue] || cellValue || '-';
+      },
+    },
+    {
       title: '操作',
       width: 260,
       fixed: 'right',

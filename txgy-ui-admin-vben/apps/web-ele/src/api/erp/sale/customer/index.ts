@@ -6,6 +6,7 @@ export namespace ErpCustomerApi {
   /** 客户信息 */
   export interface Customer {
     id?: number; // 客户编号
+    partnerCode: string; // 跨模块统一客户编码
     name: string; // 客户名称
     contact: string; // 联系人
     mobile: string; // 手机号码
