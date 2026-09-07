@@ -23,11 +23,13 @@ WHERE t.`deleted` = 0 AND t.`status` = 0
   );
 
 -- 2. 给每个示例应用配 mock 模拟支付渠道
+-- 注意：config 必须携带 @class 多态属性（PayClientConfig 使用 @JsonTypeInfo），否则支付时报"系统异常"
 INSERT INTO `pay_channel`
   (`app_id`, `code`, `status`, `remark`, `config`, `fee_rate`,
    `creator`, `updater`, `deleted`, `tenant_id`)
-SELECT a.`id`, 'mock', 0, '模拟支付', '{}', 0,
-       '1', '1', b'0', a.`tenant_id`
+SELECT a.`id`, 'mock', 0, '模拟支付',
+       '{"@class":"cn.iocoder.txgy.module.pay.framework.pay.core.client.impl.NonePayClientConfig","name":"none-config"}',
+       0, '1', '1', b'0', a.`tenant_id`
 FROM `pay_app` a
 WHERE a.`app_key` = 'demo' AND a.`deleted` = 0
   AND NOT EXISTS (
