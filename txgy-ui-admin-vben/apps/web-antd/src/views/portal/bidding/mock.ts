@@ -157,6 +157,8 @@ const details: Record<string, NoticeExternalDetail> = {
     projectName: '平陆县集中供热管网改造工程（一标段）',
     projectKey: 'PRJ-PL-2026',
     bidSectionCodes: ['BYB-001'],
+    bidSectionKeys: ['BYB-001'],
+    bidSectionNames: ['BYB-001 · 一标段（防腐保温材料采购与施工）'],
     contentHtmlSafe: HTML_BODY,
     bodyBlocksStatus: 'NONE',
     attachments: [
@@ -170,6 +172,8 @@ const details: Record<string, NoticeExternalDetail> = {
     projectName: '太原市热力集团 2026 年度一次网保温管件采购项目',
     projectKey: 'PRJ-TY-TR-2026',
     bidSectionCodes: ['TR-2026-01'],
+    bidSectionKeys: ['TR-2026-01'],
+    bidSectionNames: ['TR-2026-01 · 保温管件采购一标段'],
     contentHtmlSafe: `<h3>一、评标结果</h3><p>本项目评标工作已结束，经评标委员会评审，现将中标候选人予以公示。</p>
       <table><tr><th>名次</th><th>中标候选人名称</th><th>投标报价（元）</th></tr>
       <tr><td>第一</td><td>××保温材料有限公司</td><td>3,268,500.00</td></tr></table>`,
@@ -327,8 +331,8 @@ function followSeedRows(): MockFollowRec[] {
     {
       id: 8004,
       followType: 'SECTION',
-      followKey: 'BYB-001',
-      displayName: '一标段（防腐保温材料采购与施工）',
+      followKey: 'BYB-OLD-001',
+      displayName: 'BYB-OLD-001 · 一标段（示例：关联公告已下线）',
       issuerName: '平陆县住房和城乡建设局',
       stageCode: 'TENDER',
       stageName: '招标',
@@ -429,6 +433,19 @@ export function mockToggleFollow(
       displayName = det.title || targetKey;
       issuerName = det.issuerName || '';
     }
+  } else if (targetType === 'SECTION') {
+    const det = Object.values(details).find(
+      (d) =>
+        (Array.isArray(d.bidSectionCodes) && d.bidSectionCodes.includes(String(targetKey))) ||
+        (Array.isArray(d.bidSectionKeys) && d.bidSectionKeys.includes(String(targetKey))),
+    );
+    if (det) {
+      let idx = Array.isArray(det.bidSectionCodes) ? det.bidSectionCodes.indexOf(String(targetKey)) : -1;
+      if (idx < 0 && Array.isArray(det.bidSectionKeys)) idx = det.bidSectionKeys.indexOf(String(targetKey));
+      const nm = Array.isArray(det.bidSectionNames) && idx >= 0 ? det.bidSectionNames[idx] : '';
+      displayName = (nm ? String(nm).trim() : '') || det.title || targetKey;
+      issuerName = det.issuerName || '';
+    }
   } else {
     const det = list.find((r) =>
       targetType === 'PROJECT'
@@ -458,6 +475,35 @@ export function mockToggleFollow(
     available: targetType === 'ANNOUNCEMENT' && details[String(targetKey)] ? true : null,
   };
   store.rows.push(row);
+  // BR-6（mock 对齐真实后端扇出）：关注公告/标段即种一条已读 EXTERNAL_ACTIVE 初始动态
+  // （timeline 立即有内容、latestDynamicTime=关注时刻；事件带公告关联，订阅页可直接跳详情）
+  const rel = targetType === 'ANNOUNCEMENT'
+    ? details[String(targetKey)]
+    : targetType === 'SECTION'
+      ? Object.values(details).find(
+          (d) =>
+            (Array.isArray(d.bidSectionCodes) && d.bidSectionCodes.includes(String(targetKey))) ||
+            (Array.isArray(d.bidSectionKeys) && d.bidSectionKeys.includes(String(targetKey))),
+        )
+      : undefined;
+  if (rel) {
+    row.noticeStatus = 'ACTIVE';
+    row.available = true;
+    const maxEv = store.events.reduce((mx, e) => Math.max(mx, Number(e.id) || 0), 9000);
+    store.events.push({
+      id: maxEv + 1,
+      itemId: row.id,
+      source: 'EXTERNAL',
+      eventType: 'EXTERNAL_ACTIVE',
+      noticeId: String(rel.id),
+      titleSnapshot: rel.title || displayName,
+      origUrl: rel.origUrl || '',
+      occurredAt: now,
+      readFlag: true,
+      noticeStatus: 'ACTIVE',
+      available: true,
+    });
+  }
 }
 
 export function mockFollowed(targetType: string, targetKey: string): boolean {

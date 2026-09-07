@@ -170,6 +170,22 @@ async function markReadFromList(item: FollowItem): Promise<void> {
   }
 }
 
+/** 公告级关注行直达平台公告详情（available!==false 时） */
+function goDetail(item: FollowItem): void {
+  if (
+    item.followType !== 'ANNOUNCEMENT' ||
+    !item.followKey ||
+    /^\d+$/.test(String(item.followKey)) === false
+  ) {
+    return;
+  }
+  router
+    .push(`/portal/bidding/detail/${item.followKey}`)
+    .catch(() => {
+      /* 重复导航忽略 */
+    });
+}
+
 async function doUnfollow(item: FollowItem): Promise<void> {
   if (!item.followType || !item.followKey) return;
   if (!window.confirm(`确定取消关注「${item.displayName || item.followKey}」吗？`)) return;
@@ -272,7 +288,12 @@ onMounted(() => {
             <span v-else class="none">—</span>
           </div>
           <div class="f-act" @click.stop>
-            <button class="mini primary" @click="openItem(r)">动态</button>
+            <button
+              v-if="r.followType === 'ANNOUNCEMENT' && r.available !== false && r.followKey && /^\d+$/.test(String(r.followKey))"
+              class="mini primary"
+              @click="goDetail(r)"
+            >公告详情</button>
+            <button class="mini" @click="openItem(r)">动态</button>
             <button class="mini" :disabled="!r.unreadCount" @click="markReadFromList(r)">已读</button>
             <button class="mini danger" @click="doUnfollow(r)">取消关注</button>
           </div>
@@ -307,6 +328,11 @@ onMounted(() => {
       <div v-else-if="!timelineState.events.length" class="empty-panel">
         <p>该关注项暂无动态。</p>
         <p class="tip">外部公告审核生效（EXTERNAL_ACTIVE）、公告发布/更新、阶段流转等动态会出现在这里。</p>
+        <button
+          v-if="timelineState.item && timelineState.item.followType === 'ANNOUNCEMENT' && timelineState.item.available !== false && timelineState.item.followKey && /^\d+$/.test(String(timelineState.item.followKey))"
+          class="btn"
+          @click="goDetail(timelineState.item)"
+        >查看公告详情 →</button>
       </div>
 
       <div v-else class="tl-list">
