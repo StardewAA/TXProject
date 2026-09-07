@@ -24,9 +24,11 @@ public class LiveRoomServiceImpl implements LiveRoomService {
 
     @Resource
     private LiveRoomMapper liveRoomMapper;
+    @Resource private cn.iocoder.txgy.module.training.service.live.LiveCenterService liveCenter;
 
     @Override
     public Long createLiveRoom(LiveRoomSaveReqVO createReqVO) {
+        liveCenter.rejectLegacyMutation();
         LiveRoomDO liveRoom = BeanUtils.toBean(createReqVO, LiveRoomDO.class);
         liveRoomMapper.insert(liveRoom);
         return liveRoom.getId();
@@ -34,6 +36,7 @@ public class LiveRoomServiceImpl implements LiveRoomService {
 
     @Override
     public void updateLiveRoom(LiveRoomSaveReqVO updateReqVO) {
+        liveCenter.rejectLegacyMutation();
         validateLiveRoomExists(updateReqVO.getId());
         LiveRoomDO update = BeanUtils.toBean(updateReqVO, LiveRoomDO.class);
         liveRoomMapper.updateById(update);
@@ -41,6 +44,7 @@ public class LiveRoomServiceImpl implements LiveRoomService {
 
     @Override
     public void deleteLiveRoom(Long id) {
+        liveCenter.manage(id);
         validateLiveRoomExists(id);
         liveRoomMapper.deleteById(id);
     }

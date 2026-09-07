@@ -137,6 +137,8 @@ public class LearnerTrackServiceImpl implements LearnerTrackService {
         int totalValidSeconds = sessions.stream()
                 .mapToInt(s -> s.getValidSeconds() == null ? 0 : s.getValidSeconds()).sum();
         summary.setTotalValidSeconds(totalValidSeconds);
+        BigDecimal liveCredit=buildTrackRows(userId,sessions).stream().filter(r -> "live".equals(r.getMediaType())||"replay".equals(r.getMediaType())).map(LearnerTrackRespVO::getCreditEarned).reduce(BigDecimal.ZERO,BigDecimal::add);
+        summary.setTotalCreditEarned(creditEarned.add(liveCredit).setScale(2,RoundingMode.HALF_UP));
         Map<String, List<LearnSessionDO>> byType = sessions.stream()
                 .collect(Collectors.groupingBy(LearnSessionDO::getMediaType));
         List<LearnerTrackSummaryRespVO.TypeRow> typeRows = new ArrayList<>();
@@ -210,7 +212,8 @@ public class LearnerTrackServiceImpl implements LearnerTrackService {
         Map<Long, LearnerProgressCalculator.TaskProgress> progressCache = new HashMap<>();
         Map<Long, Map<Long, BigDecimal>> creditByCourseMedia = new HashMap<>();
         Map<Long, Map<Long, Integer>> validByCourseMedia = new HashMap<>();
-        Map<Long, String> liveRoomTitleCache = new HashMap<>();
+        Map<Long, LiveRoomDO> liveRoomCache = new HashMap<>();
+        Map<Long, Long> liveSeconds = sessions.stream().filter(v -> "live".equals(v.getMediaType()) || "replay".equals(v.getMediaType())).collect(Collectors.groupingBy(LearnSessionDO::getMediaId, Collectors.summingLong(v -> v.getValidSeconds()==null?0:v.getValidSeconds())));
 
         List<Long> courseIds = sessions.stream().map(LearnSessionDO::getCourseId)
                 .filter(Objects::nonNull).distinct().collect(Collectors.toList());
@@ -286,13 +289,14 @@ public class LearnerTrackServiceImpl implements LearnerTrackService {
                 row.setCompleted(completed);
             } else {
                 // 直播/回放独立会话：无课程，名称取直播房间标题
-                String title = liveRoomTitleCache.computeIfAbsent(session.getMediaId(), id -> {
-                    LiveRoomDO room = liveRoomMapper.selectById(id);
-                    return room == null ? null : room.getTitle();
-                });
-                row.setMediaName(title);
-                row.setCreditEarned(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-                row.setCompleted(false);
+                LiveRoomDO room = liveRoomCache.computeIfAbsent(session.getMediaId(), id ->
+                    cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(() -> liveRoomMapper.selectById(id)));
+                row.setMediaName(room==null?"历史直播":room.getTitle());
+                long total=liveSeconds.getOrDefault(session.getMediaId(),0L);
+                BigDecimal cap=room==null||room.getCreditHours()==null?BigDecimal.ZERO:room.getCreditHours();
+                BigDecimal earned=BigDecimal.valueOf(total).divide(BigDecimal.valueOf(3600),8,RoundingMode.DOWN).min(cap);
+                row.setCreditEarned(total==0?BigDecimal.ZERO:earned.multiply(BigDecimal.valueOf(session.getValidSeconds()==null?0:session.getValidSeconds())).divide(BigDecimal.valueOf(total),4,RoundingMode.DOWN));
+                row.setCompleted(cap.signum()>0&&earned.compareTo(cap)>=0);
             }
             rows.add(row);
         }

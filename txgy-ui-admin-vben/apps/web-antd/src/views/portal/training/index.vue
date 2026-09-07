@@ -7,6 +7,8 @@ import { getTenantSimpleList } from '#/api/core/auth';
 import { getEmployeeCertificateList } from '#/api/hrm/portal/employee/certificate';
 import { getEmployeeTrainingExperienceList } from '#/api/hrm/portal/employee/training-experience';
 
+import ExamWorkspace from '#/views/training/components/exam-workspace.vue';
+
 type ModuleKey = `F${number}`;
 
 const modules: Array<{ key: ModuleKey; label: string; short: string }> = [
@@ -23,6 +25,7 @@ const modules: Array<{ key: ModuleKey; label: string; short: string }> = [
 ];
 
 const activeModule = ref<ModuleKey>('F1');
+const examActive = ref(false);
 const accessStore = useAccessStore();
 const userStore = useUserStore();
 const tenantName = ref('当前企业');
@@ -226,6 +229,8 @@ function notify(message: string) {
 }
 
 function selectModule(key: ModuleKey) {
+  if (examActive.value && key !== 'F5' && !window.confirm('考试正在进行，离开后计时不会暂停。确定离开吗？')) return;
+  if (key !== 'F5') examActive.value = false;
   activeModule.value = key;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -395,10 +400,7 @@ onMounted(loadEnterpriseLearningData);
     </template>
 
     <template v-else-if="activeModule === 'F5'">
-      <section class="section-title-row"><div><p class="section-kicker">EXAM & CERTIFICATE</p><h2>考试与证书</h2><p>考试任务、成绩复盘与电子证书集中管理</p></div><button class="outline-button" type="button" @click="notify('证书验真页面已打开')">证书验真</button></section>
-      <div class="tab-bar"><button v-for="item in ['待考试','可考试','已结束']" :key="item" :class="{ active: examTab === item }" type="button" @click="examTab = item">{{ item }}</button><button type="button" @click="notify('错题本已打开')">错题本 <b>36</b></button><button type="button" @click="notify('我的证书已打开')">我的证书 <b>5</b></button></div>
-      <section class="learning-list exam-list"><article v-for="item in visibleExams" :key="item.title"><div class="exam-date"><strong>{{ item.status === '可考试' ? '今日' : item.status === '待考试' ? '09/06' : '86' }}</strong><span>{{ item.score ? '分' : item.type }}</span></div><div class="learning-content"><div><span>{{ item.type }}</span><h3>{{ item.title }}</h3><p>{{ item.start }} · {{ item.duration }} · 剩余 {{ item.attempts }} 次</p></div><div class="learning-action"><button type="button" @click="notify(item.status === '可考试' ? '考试环境检测已启动' : '考试详情已打开')">{{ item.status === '可考试' ? '进入考试' : '查看详情' }}</button></div></div></article></section>
-      <section class="panel"><div class="panel-heading"><div><span>当前企业员工档案</span><h3>我的证书</h3></div><button class="text-button" type="button" @click="loadEnterpriseLearningData">重新同步</button></div><div v-if="employeeCertificates.length" class="certificate-grid"><article v-for="(certificate, index) in employeeCertificates" :key="certificate.no || index"><div :class="['certificate-mark', { gold: index % 2 }]">证</div><div><strong>{{ certificate.name || '未命名证书' }}</strong><p>{{ certificate.no || '暂无证书编号' }} · 有效至 {{ formatDate(certificate.endTime) }}</p><small>{{ certificate.issuingAuthority || tenantName }}</small></div><span class="success">有效</span></article></div><div v-else class="enterprise-empty"><strong>{{ enterpriseLoading ? '正在读取企业证书…' : '当前企业员工档案中暂无证书' }}</strong><p>证书由企业后台维护，保存后会自动同步到此处。</p></div></section>
+      <ExamWorkspace mode="learner" @active="examActive = $event" />
     </template>
 
     <template v-else-if="activeModule === 'F6'">

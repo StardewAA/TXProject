@@ -51,6 +51,10 @@ txgy:
   tenant:
     enable: true
     ignore-urls:
+      - /admin-api/training/live-media/hook
+      - /admin-api/training/live-media/authorize
+      - /training/live-media/hook
+      - /training/live-media/authorize
       - /training/document/preview
       - /training/video/play
       # 模块九：证书公开验真免登录接口（公共 H5 无租户头，两种前缀写法都注册以防框架差异）

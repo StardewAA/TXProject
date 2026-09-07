@@ -79,3 +79,9 @@ deploy/mysql/init/*mysql-all-databases*.sql*
 /txgy-ui-app/unpackage/
 .DS_Store
 **/.DS_Store
+
+# Local exam database and build verification logs
+services/training-exam/data/
+services/training-exam/__pycache__/
+services/training-exam/.pytest_cache/
+txgy-ui-admin-vben/.exam-*.log

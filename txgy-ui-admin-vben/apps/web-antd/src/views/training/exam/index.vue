@@ -1,7 +1,6 @@
 <script lang="ts" setup>
-import ModuleOverview from '../components/module-overview.vue';
-
+import { Page } from '@vben/common-ui';
+import ExamWorkspace from '../components/exam-workspace.vue';
 defineOptions({ name: 'TrainingExam' });
 </script>
-
-<template><ModuleOverview module-key="exam" /></template>
+<template><Page><ExamWorkspace /></Page></template>

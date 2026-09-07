@@ -31,6 +31,7 @@ import static cn.iocoder.txgy.module.training.enums.ErrorCodeConstants.*;
 @Service
 @Slf4j
 public class CourseServiceImpl implements CourseService {
+    @Resource private cn.iocoder.txgy.module.training.service.live.LiveCenterService liveCenter;
 
     @Resource
     private CourseMapper courseMapper;
@@ -48,6 +49,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createCourse(CourseSaveReqVO createReqVO) {
+        liveCenter.checkCourseCreation();
         CourseDO course = BeanUtils.toBean(createReqVO, CourseDO.class);
         course.setStatus(CourseStatusEnum.DRAFT.getStatus());
         course.setVersion(1);
