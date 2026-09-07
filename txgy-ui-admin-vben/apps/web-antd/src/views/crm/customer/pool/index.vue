@@ -14,6 +14,8 @@ import { exportCustomer, getCustomerPage } from '#/api/crm/customer';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import type { ParsedClue } from '#/utils/crm/clue-parse';
 
 const { push } = useRouter();
 
@@ -26,6 +28,26 @@ async function handleExport() {
 /** 查看客户详情 */
 function handleDetail(row: CrmCustomerApi.Customer) {
   push({ name: 'CrmCustomerDetail', params: { id: row.id } });
+}
+
+/** 识别结果回填到公海搜索表单并触发搜索 */
+async function onQuickParse(payload: { fields: ParsedClue }) {
+  const { fields } = payload;
+  const apply: Record<string, any> = {};
+  for (const key of [
+    'name',
+    'mobile',
+    'industryId',
+    'level',
+    'source',
+  ] as const) {
+    const v = fields[key];
+    if (v !== undefined && v !== null && v !== '') {
+      apply[key] = v;
+    }
+  }
+  await gridApi.formApi.setValues(apply);
+  await gridApi.query();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -72,6 +94,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
         url="https://doc.iocoder.cn/crm/permission/"
       />
     </template>
+
+    <ClueQuickParse class="mb-4" @apply="onQuickParse" />
 
     <Grid>
       <template #toolbar-tools>

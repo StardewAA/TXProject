@@ -20,6 +20,8 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import ClueQuickParse from '../clue/modules/ClueQuickParse.vue';
+import type { ParsedClue } from '#/utils/crm/clue-parse';
 
 const { push } = useRouter();
 const sceneType = ref('1');
@@ -85,6 +87,26 @@ function handleCustomerDetail(row: CrmContactApi.Contact) {
   push({ name: 'CrmCustomerDetail', params: { id: row.customerId } });
 }
 
+/** 识别结果回填到联系人搜索表单并触发搜索 */
+async function onQuickParse(payload: { fields: ParsedClue }) {
+  const { fields } = payload;
+  const apply: Record<string, any> = {};
+  for (const key of [
+    'name',
+    'mobile',
+    'telephone',
+    'wechat',
+    'email',
+  ] as const) {
+    const v = fields[key];
+    if (v !== undefined && v !== null && v !== '') {
+      apply[key] = v;
+    }
+  }
+  await gridApi.formApi.setValues(apply);
+  await gridApi.query();
+}
+
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
@@ -131,6 +153,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <ClueQuickParse class="mb-4" @apply="onQuickParse" />
+
     <Grid>
       <template #toolbar-actions>
         <Tabs class="w-full" @change="handleChangeSceneType">
