@@ -11,6 +11,7 @@ spring:
       mode: never # 骨架阶段不初始化或修改数据库
   data:
     redis:
+      client-type: lettuce # CMS 查询缓存统一使用 Lettuce，不引入 Jedis
       repositories:
         enabled: false
   cloud:
@@ -43,6 +44,13 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+    path: /swagger-ui
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
 
 xxl:
   job:
@@ -56,18 +64,34 @@ txgy:
     admin-ui:
       url: ${CMS_ADMIN_UI_URL:http://localhost:5666}
   swagger:
-    title: 行业法律法规及劳动法检索
-    description: CMS 法规检索模块骨架，业务接口待实现
+    title: CMS 行业专业资料检索
+    description: 一期提供 Elasticsearch 8.x 法规关键词检索接口，Redis 语义检索待嵌入模型接入后启用
     version: ${txgy.info.version}
   tenant:
     enable: true
   search:
+    elasticsearch:
+      enabled: ${TXGY_SEARCH_ES_ENABLED:true}
+      uris: ${TXGY_SEARCH_ES_URIS:http://127.0.0.1:9200}
+      username: ${TXGY_SEARCH_ES_USERNAME:}
+      password: ${TXGY_SEARCH_ES_PASSWORD:}
+      index-prefix: txgy-cms
+      connect-timeout: 3s
+      socket-timeout: 10s
+      bulk-size: 500
+    cache:
+      enabled: false # Lettuce 查询缓存实现尚未提供
+      key-prefix: txgy:cms:search
+      ttl: 5m
     redis:
-      enabled: false # 仅配置绑定和接口契约；实现完成前不要开启
+      enabled: ${TXGY_SEARCH_VECTOR_ENABLED:false}
       host: ${TXGY_SEARCH_REDIS_HOST:127.0.0.1}
       port: ${TXGY_SEARCH_REDIS_PORT:6380}
       username: ${TXGY_SEARCH_REDIS_USERNAME:}
       password: ${TXGY_SEARCH_REDIS_PASSWORD:}
       ssl: ${TXGY_SEARCH_REDIS_SSL:false}
       timeout-millis: 3000
-      index-prefix: txgy:cms:law
+      index-prefix: txgy:cms
+      vector-dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
+      default-top-k: 50
+      distance-metric: COSINE
