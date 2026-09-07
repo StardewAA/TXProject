@@ -41,6 +41,10 @@ public class WmsMerchantDO extends BaseDO {
      * 枚举 {@link WmsMerchantTypeEnum}
      */
     private Integer type;
+    /** ERP 主数据版本 */
+    private Long sourceVersion;
+    /** 启用状态 */
+    private Integer status;
     /**
      * 级别
      */

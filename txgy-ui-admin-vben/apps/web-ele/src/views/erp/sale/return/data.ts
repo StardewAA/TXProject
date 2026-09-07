@@ -285,6 +285,13 @@ export function useFormItemColumns(
       slots: { default: 'count' },
     },
     {
+      field: 'wmsActualCount',
+      title: 'WMS实收',
+      minWidth: 105,
+      formatter: 'formatAmount3',
+      visible: disabled,
+    },
+    {
       field: 'productPrice',
       title: '产品单价',
       fixed: 'right',
@@ -517,6 +524,16 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
         name: 'CellDict',
         props: { type: DICT_TYPE.ERP_AUDIT_STATUS },
       },
+    },
+    {
+      field: 'wmsStatus',
+      title: 'WMS处理状态',
+      minWidth: 140,
+    },
+    {
+      field: 'wmsOrderNo',
+      title: 'WMS入库单号',
+      minWidth: 170,
     },
     {
       title: '操作',
