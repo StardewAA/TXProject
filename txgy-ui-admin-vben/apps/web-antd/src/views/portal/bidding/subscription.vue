@@ -181,9 +181,17 @@ async function doUnfollow(item: FollowItem): Promise<void> {
   }
 }
 
-/** EXTERNAL_ACTIVE 事件跳转：有关联外部公告 id → 本平台详情页；否则/兜底走原网址 go 中转 */
+/** 时间线行是否展示“查看公告详情”（BR-3/BR-4：仅 EXTERNAL 且平台详情可达；INTERNAL 公开详情门户未接入，预留） */
+function showEventDetail(event: FollowEvent): boolean {
+  if (!event.noticeId || event.source !== 'EXTERNAL') return false;
+  if (event.available === false) return false; // 公告已下线/归档：隐藏平台详情跳转
+  return true;
+}
+
+/** 事件跳转：EXTERNAL 可达 → 本平台详情；不可达/INTERNAL → 有原网址走 go 中转（源站原文），否则纯文本 */
 function openEvent(event: FollowEvent): void {
-  if (event.noticeId && event.source === 'EXTERNAL') {
+  if (event.source !== 'EXTERNAL') return;
+  if (showEventDetail(event)) {
     router.push(`/portal/bidding/detail/${event.noticeId}`).catch(() => {
       /* 重复导航忽略 */
     });
@@ -249,10 +257,12 @@ onMounted(() => {
             <div class="f-title">
               <span class="chip t">{{ followTypeName(r.followType) }}</span>
               <span class="chip s" v-if="stageNameOf(r.stageCode, r.stageName)">{{ stageNameOf(r.stageCode, r.stageName) }}</span>
+              <span v-if="r.followType === 'ANNOUNCEMENT' && r.available === false" class="chip off" title="该公告已下线/归档，平台详情不可达">公告已下线</span>
               <span class="f-text" :class="{ unread: (r.unreadCount || 0) > 0 }">{{ r.displayName || r.followKey }}</span>
             </div>
             <div class="f-meta">
               <span v-if="r.issuerName">{{ r.issuerName }}</span>
+              <span v-if="fmtDT(r.followTime)">关注于 {{ fmtDT(r.followTime) }}</span>
               <span v-if="fmtDT(r.latestDynamicTime)">最近动态 {{ fmtDT(r.latestDynamicTime) }}</span>
               <span v-else>暂无动态</span>
             </div>
@@ -306,17 +316,18 @@ onMounted(() => {
               <span class="chip">{{ eventSourceText(e.source) }}</span>
               <span class="chip b">{{ eventTypeText(e.eventType) }}</span>
               <span v-if="e.readFlag === false" class="chip unread-chip">未读</span>
+              <span v-if="e.available === false" class="chip off" title="公告已下线/归档，仅可经源站原文查看（BR-4）">公告已下线</span>
               <span class="tl-time">{{ fmtDT(e.occurredAt) }}</span>
             </div>
             <div class="tl-text">{{ e.titleSnapshot || '（无标题快照）' }}</div>
           </div>
           <div class="tl-act">
             <button
-              v-if="e.source === 'EXTERNAL' && e.noticeId"
+              v-if="showEventDetail(e)"
               class="mini primary"
               @click="openEvent(e)"
             >查看公告详情</button>
-            <button v-if="e.origUrl" class="mini" @click="openOrigUrl(e.origUrl)">源站原文 ↗</button>
+            <button v-if="e.origUrl && e.source === 'EXTERNAL'" class="mini" @click="openOrigUrl(e.origUrl)">源站原文 ↗</button>
           </div>
         </div>
       </div>
@@ -508,6 +519,10 @@ onMounted(() => {
 .chip.b {
   background: #fdf0e5;
   color: #9a4508;
+}
+.chip.off {
+  background: #fdf0ef;
+  color: #b42318;
 }
 .f-unread {
   text-align: center;

@@ -59,6 +59,20 @@ export interface NoticeExternalItem {
   legalFlag?: string | null;
   industryFlag?: IndustryFlag | string | null;
   issuerName?: string | null;
+  /** 关联项目跟踪键（BR-1：page/detail 行均下发；采集回传存在 → 详情可“跟踪该项目”次级关注） */
+  projectKey?: string | null;
+  /** 项目名称快照（与 projectKey 并列下发；一期外部采集可为 null） */
+  projectName?: string | null;
+  /** 招标项目跟踪键（一期恒 null：外部采集无招标项目编码数据源） */
+  tenderProjectKey?: string | null;
+  /** 招标项目名称（一期恒 null） */
+  tenderProjectName?: string | null;
+  /** 标段跟踪键列表（bidSectionCodes 按 ,; 拆分；一期恒 []/null） */
+  bidSectionKeys?: string[] | null;
+  /** 标段名称列表（一期恒 []/null） */
+  bidSectionNames?: string[] | null;
+  /** 标段原文（兼容保留；已由 bidSectionKeys 归一拆分） */
+  bidSectionCodes?: string[] | string | null;
   /** 后端出参为 epoch 毫秒；mock 兼容字符串（0/空视为无值） */
   publishTime?: number | string | null;
   effectiveFrom?: number | string | null;
@@ -87,9 +101,6 @@ export interface NoticeExternalDetail extends NoticeExternalItem {
   bodyBlocksJson?: string | null;
   /** 正文结构化块（前端已解析为数组；SUCCESS 且非空时按块渲染，优先于 contentHtmlSafe，见 01 §7.1） */
   bodyBlocks?: NoticeBodyBlock[];
-  projectName?: string | null;
-  /** 关联标段（后端为字符串；前端归一化为 string[]） */
-  bidSectionCodes?: string[];
   /** 可为 null（演示库即 null），api 层已归一化为数组 */
   attachments?: NoticeAttachment[] | null;
 }
@@ -141,7 +152,7 @@ export interface FollowReq {
   targetKey: string;
 }
 
-/** 我的关注列表行（FollowItemRespVO；注意后端实际筛选参数名为 followType，非文档 dimensionType） */
+/** 我的关注列表行（FollowItemRespVO；筛选参数真名 followType，契约已勘误） */
 export interface FollowItem {
   id: number | string;
   /** 维度：ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION（服务层对公告级关注也建行） */
@@ -159,16 +170,38 @@ export interface FollowItem {
   latestDynamicTime?: number | string | null;
   /** 未读动态数 */
   unreadCount?: number | null;
-  /** 关注时间（epoch 毫秒） */
+  /** 关注时间（epoch 毫秒；BR-6 起可显示“关注于 xx”） */
   followTime?: number | string | null;
+  /** 关联公告展示状态（公告级关注=外部公告 ACTIVE/INACTIVE/…；维度行为 null，BR-4） */
+  noticeStatus?: string | null;
+  /** 平台详情可达性（false=公告已下线/归档，隐藏平台详情跳转；维度行/无关联公告为 null，BR-4） */
+  available?: boolean | null;
 }
 
 /** 我的关注列表分页入参（FollowItemPageReqVO） */
 export interface FollowItemPageParams {
   /** 维度过滤：PROJECT/TENDER_PROJECT/SECTION/ANNOUNCEMENT（空=全部） */
   followType?: string;
+  /** 目标键精确过滤（公告 id / 维度代码；配合 followType，item/page 已支持，N2②） */
+  followKey?: string;
   pageNo: number;
   pageSize: number;
+}
+
+/** 关注状态单点查询出参（FollowStatusRespVO：BR-2 / N2② 新增；详情页关注按钮初始态直接查询，无需逐页扫描） */
+export interface FollowStatus {
+  /** 是否已关注 */
+  followed: boolean;
+  /** 已关注时的关注行 id（可跳时间线） */
+  itemId?: number | string | null;
+  /** 目标类型（回显入参） */
+  targetType?: string | null;
+  /** 目标键（回显入参） */
+  targetKey?: string | null;
+  /** 名称快照（公告=公告标题/项目名；未快照为 null） */
+  displayName?: string | null;
+  /** 发布单位快照（可为 null） */
+  issuerName?: string | null;
 }
 
 /** 关注项动态/事件（FollowEventRespVO，timeline 行） */
@@ -186,4 +219,8 @@ export interface FollowEvent {
   /** 动态发生时间（epoch 毫秒） */
   occurredAt?: number | string | null;
   readFlag?: boolean | null;
+  /** 关联公告展示状态（EXTERNAL=外部公告 ACTIVE/INACTIVE…；INTERNAL=内部公告 PUBLISHED/UNPUBLISHED…；无公告为 null，BR-4） */
+  noticeStatus?: string | null;
+  /** 平台详情可达性（false=公告已下线/归档，隐藏详情跳转；EXTERNAL 仍可经 origUrl 看源站原文；无公告为 null，BR-4） */
+  available?: boolean | null;
 }
