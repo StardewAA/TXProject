@@ -105,6 +105,16 @@ public interface ErrorCodeConstants {
     // ========== 招聘职位类型 1-050-200-004 ==========
     ErrorCode RECRUIT_POST_TYPE_NOT_EXISTS = new ErrorCode(1_050_200_004, "招聘职位类型不存在");
 
+    // ========== 招聘应聘流程 1-050-200-020 ==========
+    ErrorCode RECRUIT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_020, "招聘应聘记录不存在");
+    ErrorCode RECRUIT_APPLICATION_DUPLICATE = new ErrorCode(1_050_200_021, "该候选人存在同职位进行中的应聘");
+    ErrorCode RECRUIT_APPLICATION_STATUS_TRANSITION_INVALID =
+            new ErrorCode(1_050_200_022, "应聘当前状态不允许流转到【{}】");
+    ErrorCode RECRUIT_APPLICATION_REASON_REQUIRED = new ErrorCode(1_050_200_023, "该操作必须填写原因");
+    ErrorCode RECRUIT_OFFER_NOT_EXISTS = new ErrorCode(1_050_200_024, "招聘 Offer 不存在");
+    ErrorCode RECRUIT_OFFER_STATE_INVALID = new ErrorCode(1_050_200_025, "招聘 Offer 状态不允许该操作");
+    ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_026, "该应聘已存在有效 Offer");
+
     // ========== 考勤组 1-050-300-002 ==========
     ErrorCode ATTENDANCE_GROUP_NOT_EXISTS = new ErrorCode(1_050_300_002, "考勤组不存在");
     ErrorCode ATTENDANCE_NAME_DUPLICATE = new ErrorCode(1_050_300_007, "考勤名称已存在");

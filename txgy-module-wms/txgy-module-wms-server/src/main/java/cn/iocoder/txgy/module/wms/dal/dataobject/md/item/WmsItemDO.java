@@ -54,5 +54,7 @@ public class WmsItemDO extends BaseDO {
      * 备注
      */
     private String remark;
+    /** 当前有效质检报告编号 */
+    private Long currentQualityReportId;
 
 }

@@ -25,6 +25,8 @@ public interface ErrorCodeConstants {
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_IN = new ErrorCode(1_030_101_008, "反审核失败，已存在对应的采购入库单");
 ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_009, "采购订单项({})超过最大允许退货数量({})");
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_030_101_010, "反审核失败，已存在对应的采购退货单");
+    ErrorCode PURCHASE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_101_011, "采购订单({})当前状态无法提交审批");
+    ErrorCode PURCHASE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_030_101_012, "采购订单({})正在审批，无法修改");
 
     // ========== ERP 采购入库（1-030-102-000） ==========
     ErrorCode PURCHASE_IN_NOT_EXISTS = new ErrorCode(1_030_102_000, "采购入库单不存在");
@@ -64,6 +66,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode SALE_ORDER_PROCESS_FAIL_EXISTS_OUT = new ErrorCode(1_020_201_008, "反审核失败，已存在对应的销售出库单");
     ErrorCode SALE_ORDER_ITEM_RETURN_FAIL_OUT_EXCEED = new ErrorCode(1_020_201_009, "销售订单项({})超过最大允许退货数量({})");
     ErrorCode SALE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_020_201_010, "反审核失败，已存在对应的销售退货单");
+    ErrorCode SALE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_020_201_011, "销售订单({})当前状态无法提交审批");
+    ErrorCode SALE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_020_201_012, "销售订单({})正在审批，无法修改");
 
     // ========== ERP 销售出库（1-030-202-000） ==========
     ErrorCode SALE_OUT_NOT_EXISTS = new ErrorCode(1_020_202_000, "销售出库单不存在");

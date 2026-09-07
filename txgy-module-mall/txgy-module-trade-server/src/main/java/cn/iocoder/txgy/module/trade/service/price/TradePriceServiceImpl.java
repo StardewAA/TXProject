@@ -82,7 +82,7 @@ public class TradePriceServiceImpl implements TradePriceService {
         // 获得商品 SKU 数组
         Map<Long, Integer> skuIdCountMap = convertMap(reqBO.getItems(),
                 TradePriceCalculateReqBO.Item::getSkuId, TradePriceCalculateReqBO.Item::getCount);
-        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(skuIdCountMap.keySet()).getCheckedData();
+        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(skuIdCountMap.keySet());
 
         // 校验商品 SKU
         skus.forEach(sku -> {
@@ -104,7 +104,7 @@ public class TradePriceServiceImpl implements TradePriceService {
     @Override
     public List<AppTradeProductSettlementRespVO> calculateProductPrice(Long userId, List<Long> spuIds) {
         // 1.1 获得 SPU 与 SKU 的映射
-        List<ProductSkuRespDTO> allSkuList = productSkuApi.getSkuListBySpuId(spuIds).getCheckedData();
+        List<ProductSkuRespDTO> allSkuList = productSkuApi.getSkuListBySpuId(spuIds);
         Map<Long, List<ProductSkuRespDTO>> spuIdAndSkuListMap = convertMultiMap(allSkuList, ProductSkuRespDTO::getSpuId);
         // 1.2 获得会员等级
         MemberLevelRespDTO level = discountActivityPriceCalculator.getMemberLevel(userId);

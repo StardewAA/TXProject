@@ -17,11 +17,14 @@ import {
 import {
   deleteProject,
   exportProject,
+  forceCloseProject,
   getProjectPage,
+  resumeProject,
 } from '#/api/mes/pro/project';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import ImportForm from './modules/import-form.vue';
 import ProjectDetail from './modules/project-detail.vue';
 import Form from './modules/project-form.vue';
 
@@ -33,6 +36,11 @@ const [FormModal, formModalApi] = useVbenModal({
 });
 
 const detailRef = ref<InstanceType<typeof ProjectDetail>>(); // 项目详情弹窗
+
+const [ImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportForm,
+  destroyOnClose: true,
+});
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -75,6 +83,25 @@ async function handleExport() {
   downloadFileFromBlobPart({ fileName: '项目管理.xls', source: data });
 }
 
+/** 导入项目 */
+function handleImport() {
+  importModalApi.open();
+}
+
+/** 恢复项目（已暂停 -> 进行中） */
+async function handleResume(row: MesProProjectApi.Project) {
+  await resumeProject(row.id!);
+  message.success('项目已恢复为进行中');
+  handleRefresh();
+}
+
+/** 强制结项 */
+async function handleForceClose(row: MesProProjectApi.Project) {
+  await forceCloseProject(row.id!);
+  message.success('项目已强制结项');
+  handleRefresh();
+}
+
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
@@ -109,6 +136,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
+    <ImportModal @success="handleRefresh" />
     <ProjectDetail ref="detailRef" @success="handleRefresh" />
 
     <Grid table-title="项目列表">
@@ -121,6 +149,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['mes:pro-project:create'],
               onClick: handleCreate,
+            },
+            {
+              label: $t('ui.actionTitle.import', ['项目']),
+              type: 'primary',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['mes:pro-project:import'],
+              onClick: handleImport,
             },
             {
               label: $t('ui.actionTitle.export'),
@@ -152,6 +187,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.EDIT,
               auth: ['mes:pro-project:update'],
               onClick: handleEdit.bind(null, row),
+            },
+            {
+              label: '恢复',
+              type: 'link',
+              auth: ['mes:pro-project:update'],
+              ifShow: row.status === 3,
+              onClick: handleResume.bind(null, row),
+            },
+            {
+              label: '强制结项',
+              type: 'link',
+              danger: true,
+              auth: ['mes:pro-project:update'],
+              ifShow: row.status !== 2 && row.status !== 4,
+              popConfirm: {
+                title: `确认将项目「${row.name}」强制结项为已完成？`,
+                confirm: handleForceClose.bind(null, row),
+              },
             },
             {
               label: $t('common.delete'),

@@ -108,7 +108,9 @@ function paramsToQuery(params) {
   // return new URLSearchParams(Object.entries(params)).toString();
   let query = [];
   for (let key in params) {
-    query.push(key + '=' + params[key]);
+    // Encode query values so Chinese titles (例如“关于我们”“隐私协议”) are
+    // preserved when uni.navigateTo/switchTab serialises the URL on H5.
+    query.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
   }
 
   return query.join('&');

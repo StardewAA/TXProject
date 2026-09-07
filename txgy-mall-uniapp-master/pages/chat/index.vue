@@ -84,6 +84,9 @@
       };
       await KeFuApi.sendKefuMessage(data);
       chat.msg = '';
+      // 文本消息接口只返回发送结果，不会返回可直接渲染的消息对象。
+      // 发送成功后重新拉取列表，确保消息立即出现在当前会话中。
+      await messageListRef.value?.refreshMessageList();
     } finally {
       chat.showTools = false;
     }

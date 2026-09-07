@@ -168,6 +168,8 @@ txgy:
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:
+      - /admin-api/system/tenant/simple-list
+      - /admin-api/system/tenant/get-by-website
     ignore-visit-urls:
       - /admin-api/system/user/profile/**
       - /admin-api/system/auth/**

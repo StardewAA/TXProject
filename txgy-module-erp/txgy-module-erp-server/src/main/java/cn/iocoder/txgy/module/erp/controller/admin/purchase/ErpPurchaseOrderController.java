@@ -40,6 +40,7 @@ import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMultiMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - ERP 采购订单")
 @RestController
@@ -80,6 +81,14 @@ public class ErpPurchaseOrderController {
     public CommonResult<Boolean> updatePurchaseOrderStatus(@RequestParam("id") Long id,
                                                            @RequestParam("status") Integer status) {
         purchaseOrderService.updatePurchaseOrderStatus(id, status);
+        return success(true);
+    }
+
+    @PutMapping("/submit")
+    @Operation(summary = "提交采购订单审批")
+    @PreAuthorize("@ss.hasPermission('erp:approval:submit')")
+    public CommonResult<Boolean> submitPurchaseOrder(@RequestParam("id") Long id) {
+        purchaseOrderService.submitPurchaseOrder(id, getLoginUserId());
         return success(true);
     }
 

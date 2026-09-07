@@ -17,6 +17,13 @@ import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemQualityReportService;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemQualityReportDO;
+import cn.iocoder.txgy.module.wms.enums.md.WmsItemQualityStatusEnum;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +31,9 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -48,6 +58,12 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
     private WmsMerchantService merchantService;
     @Resource
     private WmsInventoryService inventoryService;
+    @Resource
+    private WmsItemSkuService itemSkuService;
+    @Resource
+    private WmsItemService itemService;
+    @Resource
+    private WmsItemQualityReportService qualityReportService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -108,6 +124,8 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
         WmsReceiptOrderDO order = validateReceiptOrderPrepare(id);
         // 1.2 校验入库单明细存在
         List<WmsReceiptOrderDetailDO> details = receiptOrderDetailService.validateReceiptOrderDetailListExists(id);
+        // 1.3 完成入库前以商品当前有效报告为准执行服务端硬校验
+        validateItemQualityQualified(details);
 
         // 2. 完成入库单
         if (receiptOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),
@@ -236,6 +254,27 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
         inventoryService.changeInventory(new WmsInventoryChangeReqDTO()
                 .setOrderId(order.getId()).setOrderNo(order.getNo())
                 .setOrderType(WmsOrderTypeEnum.RECEIPT.getType()).setItems(items));
+    }
+
+    private void validateItemQualityQualified(List<WmsReceiptOrderDetailDO> details) {
+        Map<Long, WmsItemSkuDO> skuMap = itemSkuService.getItemSkuMap(
+                convertList(details, WmsReceiptOrderDetailDO::getSkuId));
+        Set<Long> itemIds = skuMap.values().stream().map(WmsItemSkuDO::getItemId).collect(Collectors.toSet());
+        Map<Long, WmsItemDO> itemMap = itemService.getItemMap(itemIds);
+        Map<Long, WmsItemQualityReportDO> reportMap = qualityReportService.getCurrentQualityReportMap(itemIds);
+        List<String> invalidItems = itemIds.stream().filter(itemId -> {
+            WmsItemQualityReportDO report = reportMap.get(itemId);
+            return report == null || !WmsItemQualityStatusEnum.QUALIFIED.getStatus().equals(report.getStatus());
+        }).map(itemId -> {
+            WmsItemDO item = itemMap.get(itemId);
+            WmsItemQualityReportDO report = reportMap.get(itemId);
+            String statusName = report == null ? WmsItemQualityStatusEnum.PENDING.getName()
+                    : WmsItemQualityStatusEnum.nameOf(report.getStatus());
+            return String.format("【%s】（%s）", item == null ? itemId : item.getName(), statusName);
+        }).toList();
+        if (!invalidItems.isEmpty()) {
+            throw exception(RECEIPT_ORDER_ITEM_QUALITY_NOT_QUALIFIED, String.join("、", invalidItems));
+        }
     }
 
 }

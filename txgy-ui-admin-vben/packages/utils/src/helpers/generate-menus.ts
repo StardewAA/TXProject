@@ -163,7 +163,6 @@ function convertServerMenuToRouteRecordStringComponent(
     let finalName = menu.componentName || menu.name;
     if (nameSet.has(finalName)) {
       finalName = menu.name + menu.id;
-      console.error(`menu name duplicate: ${menu.name}, id: ${menu.id}`, menu);
     }
     nameSet.add(finalName);
 
