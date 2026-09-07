@@ -32,6 +32,7 @@ public interface DictTypeConstants {
     String MES_PRO_PROJECT_SOURCE_TYPE = "mes_pro_project_source_type"; // MES 项目来源类型（销售订单/库存备库/其他）
     String MES_PRO_PROJECT_PRIORITY = "mes_pro_project_priority"; // MES 项目优先级（1紧急 2高 3中 4低）
     String MES_PRO_PROJECT_MEMBER_ROLE = "mes_pro_project_member_role"; // MES 项目成员角色（1项目经理 2生产负责 3技术负责 4质检负责 5其他）
+    String MES_PRO_PROJECT_MILESTONE_STATUS = "mes_pro_project_milestone_status"; // MES 项目里程碑状态（0未开始 1进行中 2已完成）
 
     // ========== 仓储条码与管理 (WM) ==========
     String MES_BARCODE_FORMAT = "mes_barcode_format"; // MES 条码格式

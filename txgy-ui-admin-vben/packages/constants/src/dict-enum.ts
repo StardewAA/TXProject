@@ -299,6 +299,7 @@ const MES_DICT = {
   MES_PRO_PROJECT_SOURCE_TYPE: 'mes_pro_project_source_type', // MES 项目来源类型
   MES_PRO_PROJECT_PRIORITY: 'mes_pro_project_priority', // MES 项目优先级
   MES_PRO_PROJECT_MEMBER_ROLE: 'mes_pro_project_member_role', // MES 项目成员角色
+  MES_PRO_PROJECT_MILESTONE_STATUS: 'mes_pro_project_milestone_status', // MES 项目里程碑状态
   MES_PRO_WORK_ORDER_STATUS: 'mes_pro_work_order_status', // MES 生产工单状态
   MES_PRO_WORK_ORDER_TYPE: 'mes_pro_work_order_type', // MES 工单类型
   MES_PRO_WORK_ORDER_SOURCE_TYPE: 'mes_pro_work_order_source_type', // MES 工单来源类型
