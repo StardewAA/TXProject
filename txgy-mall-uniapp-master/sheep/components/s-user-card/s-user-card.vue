@@ -13,12 +13,12 @@
         </view>
         <view>
           <view class="nickname-box ss-flex ss-col-center">
-            <view class="nick-name ss-m-r-20">{{ userInfo?.nickname || nickname }}</view>
+            <view class="nick-name ss-m-r-20" @tap="handleLogin">{{ userInfo?.nickname || nickname }}</view>
           </view>
         </view>
       </view>
       <view class="right-box ss-m-r-52">
-        <button class="ss-reset-button" @tap="showShareModal">
+        <button class="ss-reset-button" @tap="showSharePoster">
           <text class="sicon-qrcode"></text>
         </button>
       </view>
@@ -56,7 +56,7 @@
   import { computed } from 'vue';
   import sheep from '@/sheep';
   import {
-    showShareModal,
+    showSharePoster,
     showAuthModal,
   } from '@/sheep/hooks/useModal';
 
@@ -116,6 +116,11 @@
   // 绑定手机号
   function onBind() {
     showAuthModal('changeMobile');
+  }
+
+  // 未登录时点击“请先登录”打开登录弹窗
+  function handleLogin() {
+    if (!isLogin.value) showAuthModal('accountLogin');
   }
 </script>
 

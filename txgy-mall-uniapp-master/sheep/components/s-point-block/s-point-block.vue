@@ -173,18 +173,18 @@
     },
   });
 
-  const { layoutType, btnBuy, activityIds } = props.data || {};
+  const { layoutType, btnBuy = {}, activityIds = [] } = props.data || {};
   const { marginLeft, marginRight } = props.styles || {};
 
   // 购买按钮样式
   const buyStyle = computed(() => {
-    if (btnBuy.type === 'text') {
+    if (btnBuy?.type === 'text') {
       // 文字按钮：线性渐变背景颜色
       return {
         background: `linear-gradient(to right, ${btnBuy.bgBeginColor}, ${btnBuy.bgEndColor})`,
       };
     }
-    if (btnBuy.type === 'img') {
+    if (btnBuy?.type === 'img') {
       // 图片按钮
       return {
         width: '54rpx',
@@ -232,8 +232,15 @@
    * @return {Promise<undefined>} 商品列表
    */
   async function getPointActivityDetailList(ids) {
-    const { data } = await PointApi.getPointActivityListByIds(ids);
-    return data;
+    if (!ids) return [];
+    try {
+      const response = await PointApi.getPointActivityListByIds(ids);
+      const data = response?.data;
+      return Array.isArray(data) ? data : Array.isArray(data?.list) ? data.list : [];
+    } catch (error) {
+      console.warn('积分活动加载失败:', error);
+      return [];
+    }
   }
 
   /**
@@ -242,17 +249,25 @@
    * @return {Promise<undefined>} 商品列表
    */
   async function getSpuDetail(ids) {
-    const { data: spu } = await SpuApi.getSpuDetail(ids);
-    return spu;
+    try {
+      const response = await SpuApi.getSpuDetail(ids);
+      return response?.data || null;
+    } catch (error) {
+      console.warn('积分商品加载失败:', error);
+      return null;
+    }
   }
 
   // 初始化
   onMounted(async () => {
     // 加载活动列表
-    const activityList = await getPointActivityDetailList(activityIds.join(','));
+    const activityList = await getPointActivityDetailList(
+      Array.isArray(activityIds) ? activityIds.join(',') : '',
+    );
     // 循环获取活动商品SPU详情并添加到spuList
     for (const activity of activityList) {
-      state.spuList.push(await getSpuDetail(activity.spuId));
+      const spu = await getSpuDetail(activity.spuId);
+      if (spu) state.spuList.push(spu);
     }
 
     // 循环活动列表

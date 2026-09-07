@@ -2,8 +2,11 @@ package cn.iocoder.txgy.module.mes.service.pro.project;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
@@ -19,12 +22,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
@@ -51,6 +58,7 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         validateProjectSaveData(null, createReqVO);
         // 2. 插入项目
         MesProProjectDO project = BeanUtils.toBean(createReqVO, MesProProjectDO.class);
+        project.setDurationDays(calculateDuration(project));
         projectMapper.insert(project);
         return project.getId();
     }
@@ -68,6 +76,7 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         validateProjectSaveData(updateReqVO.getId(), updateReqVO);
         // 2. 更新
         MesProProjectDO updateObj = BeanUtils.toBean(updateReqVO, MesProProjectDO.class);
+        updateObj.setDurationDays(calculateDuration(updateObj));
         projectMapper.updateById(updateObj);
     }
 
@@ -249,6 +258,87 @@ public class MesProProjectServiceImpl implements MesProProjectService {
                     .eq(MesProProjectDO::getId, projectId)
                     .set(MesProProjectDO::getStatus, newStatus));
         }
+    }
+
+    @Override
+    public void resumeProject(Long id) {
+        MesProProjectDO project = validateProjectExists(id);
+        if (!MesProProjectStatusEnum.PAUSED.getStatus().equals(project.getStatus())) {
+            throw exception(PRO_PROJECT_STATUS_NOT_PAUSED);
+        }
+        projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                .eq(MesProProjectDO::getId, id)
+                .set(MesProProjectDO::getStatus, MesProProjectStatusEnum.PROCESSING.getStatus()));
+    }
+
+    @Override
+    public void forceCloseProject(Long id) {
+        MesProProjectDO project = validateProjectExists(id);
+        if (MesProProjectStatusEnum.CANCELED.getStatus().equals(project.getStatus())) {
+            throw exception(PRO_PROJECT_FORCE_CLOSE_FORBIDDEN);
+        }
+        if (MesProProjectStatusEnum.FINISHED.getStatus().equals(project.getStatus())) {
+            return;
+        }
+        projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                .eq(MesProProjectDO::getId, id)
+                .set(MesProProjectDO::getStatus, MesProProjectStatusEnum.FINISHED.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MesProProjectImportRespVO importProjectList(List<MesProProjectImportExcelVO> importList, boolean updateSupport) {
+        if (CollUtil.isEmpty(importList)) {
+            throw exception(PRO_PROJECT_IMPORT_LIST_EMPTY);
+        }
+        MesProProjectImportRespVO respVO = MesProProjectImportRespVO.builder()
+                .createCodes(new ArrayList<>()).updateCodes(new ArrayList<>())
+                .failureCodes(new LinkedHashMap<>()).build();
+        AtomicInteger index = new AtomicInteger(1);
+        importList.forEach(importProject -> {
+            int currentIndex = index.getAndIncrement();
+            String key = StrUtil.blankToDefault(importProject.getCode(), "第 " + currentIndex + " 行");
+            if (StrUtil.isBlank(importProject.getCode())) {
+                respVO.getFailureCodes().put(key, "项目编码不能为空");
+                return;
+            }
+            if (StrUtil.isBlank(importProject.getName())) {
+                respVO.getFailureCodes().put(key, "项目名称不能为空");
+                return;
+            }
+            MesProProjectDO exist = projectMapper.selectByCode(importProject.getCode());
+            if (exist != null) {
+                if (!updateSupport) {
+                    respVO.getFailureCodes().put(key, "项目编码已存在");
+                    return;
+                }
+                MesProProjectDO updateObj = BeanUtils.toBean(importProject, MesProProjectDO.class);
+                updateObj.setId(exist.getId());
+                projectMapper.updateById(updateObj);
+                respVO.getUpdateCodes().add(importProject.getCode());
+                return;
+            }
+            MesProProjectDO createObj = BeanUtils.toBean(importProject, MesProProjectDO.class);
+            createObj.setDurationDays(calculateDuration(createObj));
+            projectMapper.insert(createObj);
+            respVO.getCreateCodes().add(importProject.getCode());
+        });
+        return respVO;
+    }
+
+    /**
+     * 按计划开始 / 结束时间计算工期天数（自然日）
+     *
+     * 任一端缺失时返回 null，不写入工期
+     *
+     * @param project 项目
+     * @return 工期天数
+     */
+    private Integer calculateDuration(MesProProjectDO project) {
+        if (project.getPlanStartTime() == null || project.getPlanEndTime() == null) {
+            return null;
+        }
+        return (int) Duration.between(project.getPlanStartTime(), project.getPlanEndTime()).toDays();
     }
 
     // ==================== 校验方法 ====================

@@ -101,12 +101,50 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'customerCategory',
+      label: '客户类别',
+      component: 'Select',
+      rules: 'required',
+      componentProps: {
+        options: getDictOptions(DICT_TYPE.CRM_CUSTOMER_CATEGORY, 'number'),
+        placeholder: '请选择客户类别（下游客户 / 上游供应商）',
+      },
+    },
+    {
       fieldName: 'industryId',
       label: '客户行业',
       component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.CRM_CUSTOMER_INDUSTRY, 'number'),
-        placeholder: '请选择客户行业',
+      dependencies: {
+        triggerFields: ['customerCategory'],
+        async componentProps(values, form) {
+          const category = values.customerCategory;
+          // 切换类别后，若已选行业不属于当前类别则清空，避免跨类别残留
+          const industry = values.industryId;
+          if (industry != null && category != null) {
+            const industryCategory = Number(industry) >= 200 ? 2 : 1;
+            if (industryCategory !== Number(category)) {
+              Promise.resolve().then(() =>
+                (form as any)?.setFieldValue?.('industryId', undefined),
+              );
+            }
+          }
+          if (!category) {
+            return {
+              options: [],
+              placeholder: '请先选择客户类别',
+              allowClear: true,
+            };
+          }
+          const dictType =
+            Number(category) === 2
+              ? DICT_TYPE.CRM_CUSTOMER_INDUSTRY_UPSTREAM
+              : DICT_TYPE.CRM_CUSTOMER_INDUSTRY_DOWNSTREAM;
+          return {
+            options: getDictOptions(dictType, 'number'),
+            placeholder: '请选择客户行业',
+            allowClear: true,
+          };
+        },
       },
     },
     {
