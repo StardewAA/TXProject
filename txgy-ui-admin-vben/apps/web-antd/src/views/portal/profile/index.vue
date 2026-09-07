@@ -3,6 +3,8 @@ import { computed } from 'vue';
 
 import { useUserStore } from '@vben/stores';
 
+import ExamWorkspace from '#/views/training/components/exam-workspace.vue';
+
 const userStore = useUserStore();
 const userInfo = computed(() => userStore.userInfo);
 </script>
@@ -29,6 +31,7 @@ const userInfo = computed(() => userStore.userInfo);
         ><strong>{{ userInfo?.roles?.join('、') || '普通员工' }}</strong>
       </div>
     </section>
+    <section class="profile-panel"><h2>个人考试与认证档案</h2><ExamWorkspace mode="learner" initial-page="mycerts" /></section>
   </div>
 </template>
 

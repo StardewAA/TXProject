@@ -75,6 +75,7 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
     private LearnerTaskMapper learnerTaskMapper;
     @Resource
     private LiveRoomMapper liveRoomMapper;
+    @Resource private cn.iocoder.txgy.module.training.service.live.LiveCenterService liveCenter;
     @Resource
     private CourseService courseService;
     @Resource
@@ -89,6 +90,7 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
     private static class ActiveSession {
 
         Long sessionId;
+        Long tenantId;
         Long userId;
         Long courseId;
         Long taskId;
@@ -127,7 +129,9 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
         LearnerTaskDO task = null;
         // 直播/回放：校验房间
         if (mediaTypeEnum == LearnMediaTypeEnum.LIVE || mediaTypeEnum == LearnMediaTypeEnum.REPLAY) {
-            LiveRoomDO room = liveRoomMapper.selectById(mediaId);
+            liveCenter.playback(mediaId, mediaTypeEnum == LearnMediaTypeEnum.REPLAY);
+            /* Legacy mapper is tenant-scoped; visibility is checked above for public broadcasts. */
+            LiveRoomDO room = cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(() -> liveRoomMapper.selectById(mediaId));
             if (room == null) {
                 throw exception(ErrorCodeConstants.LEARNER_LIVE_ROOM_NOT_EXISTS);
             }
@@ -169,7 +173,7 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
 
         // 同一学员仅允许一个进行中会话
         ActiveSession exist = activeSessions.values().stream()
-                .filter(as -> Objects.equals(as.userId, userId)).findFirst().orElse(null);
+                .filter(as -> Objects.equals(as.userId, userId) && Objects.equals(as.tenantId, cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getTenantId())).findFirst().orElse(null);
         if (exist != null) {
             throw exception(ErrorCodeConstants.LEARNER_SESSION_ACTIVE_EXISTS);
         }
@@ -194,6 +198,7 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
         ActiveSession as = new ActiveSession();
         as.sessionId = session.getId();
         as.userId = userId;
+        as.tenantId = cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getTenantId();
         as.courseId = courseId;
         as.taskId = session.getTaskId();
         as.mediaType = mediaTypeEnum.getType();
@@ -233,10 +238,16 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
             }
             throw exception(ErrorCodeConstants.LEARNER_SESSION_LOCKED);
         }
-        if (!Objects.equals(as.userId, userId)) {
+        if (!Objects.equals(as.userId, userId) || !Objects.equals(as.tenantId, cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getTenantId())) {
             throw exception(ErrorCodeConstants.LEARNER_SESSION_NOT_EXISTS);
         }
         synchronized (as) {
+            if ("live".equals(as.mediaType) || "replay".equals(as.mediaType)) {
+                try { liveCenter.playback(as.mediaId, "replay".equals(as.mediaType)); }
+                catch (cn.iocoder.txgy.framework.common.exception.ServiceException e) {
+                    doEnd(as, "access_revoked", null); throw e;
+                }
+            }
             LearnerSessionHeartbeatRespVO resp = new LearnerSessionHeartbeatRespVO();
             resp.setSessionId(sessionId);
             long now = System.currentTimeMillis();
@@ -280,6 +291,9 @@ public class LearnerSessionServiceImpl implements LearnerSessionService {
             int inc = (int) delta;
             as.validSeconds += inc;
             as.lastHeartbeatAt = now;
+            LearnSessionDO progress = new LearnSessionDO();
+            progress.setId(as.sessionId); progress.setValidSeconds(as.validSeconds);
+            learnSessionMapper.updateById(progress);
             if (as.mediaType.equals(LearnMediaTypeEnum.DOCUMENT.getType())) {
                 handleDocPage(as, pageNo, totalPages, inc);
             }

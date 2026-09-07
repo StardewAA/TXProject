@@ -36,6 +36,7 @@ public class LearnerLiveServiceImpl implements LearnerLiveService {
 
     @Resource
     private LiveRoomMapper liveRoomMapper;
+    @Resource private cn.iocoder.txgy.module.training.service.live.LiveCenterService liveCenter;
     @Resource
     private LiveDanmakuMapper liveDanmakuMapper;
     @Resource
@@ -46,15 +47,18 @@ public class LearnerLiveServiceImpl implements LearnerLiveService {
     @Override
     public LiveRoomGroupRespVO getRoomGroups() {
         LiveRoomGroupRespVO respVO = new LiveRoomGroupRespVO();
-        respVO.setUpcoming(convert(liveRoomMapper.selectListByStatus(STATUS_UPCOMING)));
-        respVO.setLive(convert(liveRoomMapper.selectListByStatus(STATUS_LIVING)));
-        respVO.setEnded(convert(liveRoomMapper.selectListByStatus(STATUS_ENDED)));
+        var rooms = liveCenter.rooms("browse", null, null, null).stream()
+                .map(r -> cn.iocoder.txgy.framework.common.util.object.BeanUtils.toBean(r, LiveRoomDO.class)).toList();
+        respVO.setUpcoming(convert(rooms.stream().filter(r -> r.getStatus()==0).toList()));
+        respVO.setLive(convert(rooms.stream().filter(r -> r.getStatus()==1).toList()));
+        respVO.setEnded(convert(rooms.stream().filter(r -> r.getStatus()==2).toList()));
         return respVO;
     }
 
     @Override
     public PortalLiveRoomVO getRoomDetail(Long roomId) {
-        LiveRoomDO liveRoom = liveRoomMapper.selectById(roomId);
+        liveCenter.visible(roomId);
+        LiveRoomDO liveRoom = cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(() -> liveRoomMapper.selectById(roomId));
         if (liveRoom == null) {
             throw exception(ErrorCodeConstants.LEARNER_LIVE_ROOM_NOT_EXISTS);
         }
@@ -63,10 +67,12 @@ public class LearnerLiveServiceImpl implements LearnerLiveService {
 
     @Override
     public void sendDanmaku(Long userId, String userName, Long roomId, String content) {
-        LiveRoomDO liveRoom = liveRoomMapper.selectById(roomId);
+        liveCenter.visible(roomId);
+        LiveRoomDO liveRoom = cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(() -> liveRoomMapper.selectById(roomId));
         if (liveRoom == null) {
             throw exception(ErrorCodeConstants.LEARNER_LIVE_ROOM_NOT_EXISTS);
         }
+        liveCenter.danmakuAllowed(roomId);
         if (!learningConfigService.getBoolean(LearningConfigService.KEY_DANMAKU_ENABLED, true)) {
             throw exception(ErrorCodeConstants.LEARNER_DANMAKU_DISABLED);
         }
@@ -82,8 +88,10 @@ public class LearnerLiveServiceImpl implements LearnerLiveService {
 
     @Override
     public List<LiveDanmakuRespVO> getDanmakuList(Long roomId, Long afterId) {
-        List<LiveDanmakuDO> list = liveDanmakuMapper.selectListAfterId(roomId,
-                afterId == null ? 0L : afterId, 100);
+        liveCenter.playback(roomId, false);
+        if (cn.iocoder.txgy.module.training.service.live.LiveCenterService.number(liveCenter.config(), "danmakuEnabled") == 0) return List.of();
+        List<LiveDanmakuDO> list = cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(() -> liveDanmakuMapper.selectListAfterId(roomId,
+                afterId == null ? 0L : afterId, 100));
         List<LiveDanmakuRespVO> result = new ArrayList<>(list.size());
         for (LiveDanmakuDO danmaku : list) {
             LiveDanmakuRespVO respVO = new LiveDanmakuRespVO();
@@ -118,8 +126,8 @@ public class LearnerLiveServiceImpl implements LearnerLiveService {
         respVO.setStatusText(statusText(room.getStatus()));
         respVO.setPlanStartAt(room.getPlanStartAt());
         respVO.setPlanEndAt(room.getPlanEndAt());
-        respVO.setStreamUrl(room.getStreamUrl());
-        respVO.setReplayVideoUrl(room.getReplayVideoUrl());
+        respVO.setStreamUrl(null);
+        respVO.setReplayVideoUrl(null);
         respVO.setCreditHours(room.getCreditHours());
         respVO.setViewerCount(learnerSessionService.countActiveViewers(room.getId()));
         respVO.setCanJoin(room.getStatus() != null && room.getStatus() == STATUS_LIVING);

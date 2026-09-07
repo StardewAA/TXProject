@@ -28,6 +28,7 @@ public class SecurityConfiguration {
                 // Spring Boot Actuator
                 registry.requestMatchers("/actuator").permitAll()
                         .requestMatchers("/actuator/**").permitAll();
+                registry.requestMatchers("/admin-api/training/live-media/hook", "/admin-api/training/live-media/authorize").permitAll();
                 // Druid 监控
                 registry.requestMatchers("/druid/**").permitAll();
                 // RPC 服务

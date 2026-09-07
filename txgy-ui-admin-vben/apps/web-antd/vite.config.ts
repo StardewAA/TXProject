@@ -28,6 +28,10 @@ export default defineConfig(async () => {
         // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
         host: true,
         proxy: {
+          '/training-exam': {
+            target: 'http://localhost:5173',
+            changeOrigin: true,
+          },
           '/admin-api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/admin-api/, ''),
