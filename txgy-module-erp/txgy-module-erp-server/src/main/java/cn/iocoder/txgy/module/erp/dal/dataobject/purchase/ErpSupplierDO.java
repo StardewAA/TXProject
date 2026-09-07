@@ -28,6 +28,10 @@ public class ErpSupplierDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /** 跨模块统一往来企业编码 */
+    private String partnerCode;
+    /** ERP 权威主数据版本 */
+    private Long syncVersion;
     /**
      * 供应商名称
      */

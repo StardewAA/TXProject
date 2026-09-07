@@ -29,4 +29,8 @@ public interface ErpSupplierMapper extends BaseMapperX<ErpSupplierDO> {
         return selectList(ErpSupplierDO::getStatus, status);
     }
 
+    default ErpSupplierDO selectByPartnerCode(String partnerCode) {
+        return selectOne(ErpSupplierDO::getPartnerCode, partnerCode);
+    }
+
 }

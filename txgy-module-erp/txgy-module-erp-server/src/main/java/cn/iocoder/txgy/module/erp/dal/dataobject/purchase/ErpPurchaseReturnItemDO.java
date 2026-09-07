@@ -70,6 +70,7 @@ public class ErpPurchaseReturnItemDO extends BaseDO {
      * 数量
      */
     private BigDecimal count;
+    private BigDecimal wmsActualCount;
     /**
      * 总价，单位：元
      *

@@ -18,6 +18,15 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'partnerCode',
+      label: '供应商编码',
+      component: 'Input',
+      rules: 'required',
+      componentProps: {
+        placeholder: '请输入跨模块统一供应商编码',
+      },
+    },
+    {
       fieldName: 'name',
       label: '供应商名称',
       component: 'Input',
@@ -179,6 +188,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
+    {
+      field: 'partnerCode',
+      title: '供应商编码',
+      minWidth: 140,
+    },
     {
       field: 'name',
       title: '供应商名称',
