@@ -11,6 +11,7 @@ import { Col, Row } from 'ant-design-vue';
 import { getHomeSummary } from '#/api/mes/home';
 
 import { defaultSummary } from './data';
+import AiAssistant from './modules/ai-assistant.vue';
 import AlertPanel from './modules/alert-panel.vue';
 import KpiCards from './modules/kpi-cards.vue';
 import ProductionTrend from './modules/production-trend.vue';
@@ -47,7 +48,10 @@ onMounted(() => {
     <!-- 第一行：核心 KPI 汇总卡片 -->
     <KpiCards :summary="summary" class="mb-4" @navigate="handleNavigate" />
 
-    <!-- 第二行：生产趋势 + 待办异常 -->
+    <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
+    <AiAssistant />
+
+    <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">
       <Col :lg="16" :md="24" :sm="24" :xl="16" :xs="24" class="mb-4">
         <ProductionTrend />
@@ -57,7 +61,7 @@ onMounted(() => {
       </Col>
     </Row>
 
-    <!-- 第三行：工单分布 + 快捷入口 -->
+    <!-- 第四行：工单分布 + 快捷入口 -->
     <Row :gutter="16">
       <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
         <WorkOrderChart />

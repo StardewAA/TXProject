@@ -2,14 +2,15 @@ FROM node:22-bookworm-slim AS builder
 
 WORKDIR /workspace/txgy-ui-admin-vben
 
-ENV CI=true
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY txgy-ui-admin-vben/ ./
 
-RUN --mount=type=cache,id=txgy-pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN git init -q && pnpm install --frozen-lockfile --fetch-retries=10 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000 --network-concurrency=4
 
 ENV NODE_OPTIONS=--max-old-space-size=2048
 ENV VITE_BASE_URL=
