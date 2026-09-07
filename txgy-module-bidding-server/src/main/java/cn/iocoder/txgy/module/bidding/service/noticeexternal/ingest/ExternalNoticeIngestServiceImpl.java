@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMap
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalAuditStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
+import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticePublishTimeResolver;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -252,7 +253,8 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         notice.setBidSectionCodes(dto.getBidSectionCodes());
         notice.setProjectName(dto.getProjectName());
         notice.setIssuerName(dto.getIssuerName());
-        notice.setPublishTime(dto.getPublishTime() != null ? dto.getPublishTime() : LocalDateTime.now());
+        // BR-5 发布时间回填：采集侧未给或给了异常早时间（0/1970 等历史脏值）→ 尽力从原文解析发布日期；仍无命中才取抓取时间
+        notice.setPublishTime(resolvePublishTime(dto));
         notice.setEffectiveFrom(dto.getEffectiveFrom());
         notice.setEffectiveTo(dto.getEffectiveTo());
         notice.setParserCode(dto.getParserCode());
@@ -265,6 +267,15 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         notice.setExtraRaw(dto.getExtraRaw());
         notice.setExtractionStatus("NONE");
         return notice;
+    }
+
+    /** 发布日期兜底（BR-5）：解析器命中取原文发布日期；否则取当前时间（列注释口径“解析失败取抓取时间”，保证列表时间倒序可用）。 */
+    private LocalDateTime resolvePublishTime(ExternalNoticeIngestDTO dto) {
+        LocalDateTime publish = dto.getPublishTime();
+        if (publish == null || publish.getYear() < 2000) {
+            publish = NoticePublishTimeResolver.resolveFromText(dto.getContentHtml(), dto.getTitle());
+        }
+        return publish != null ? publish : LocalDateTime.now();
     }
 
     /** 附件子表落库，返回 ids JSON（无附件返回 null）；主档 attachment_ids_json 由调用方回填。 */

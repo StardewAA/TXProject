@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowEve
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowStatusRespVO;
 import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -58,9 +60,17 @@ public class NoticeFollowController {
 
     @GetMapping("/item/page")
     @PreAuthorize("@ss.hasPermission('bidding:notice-external:query')")
-    @Operation(summary = "我的关注项目列表（阶段/基础信息/最新动态/未读数）")
+    @Operation(summary = "我的关注项目列表（阶段/基础信息/最新动态/未读数；followType/followKey 过滤）")
     public CommonResult<PageResult<FollowItemRespVO>> pageMyFollow(@Valid FollowItemPageReqVO reqVO) {
         return success(followService.pageMyFollow(getLoginUserId(), reqVO));
+    }
+
+    @GetMapping("/status")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:query')")
+    @Operation(summary = "关注状态单点查询（详情页关注按钮初始态；返回 {followed,itemId,快照}）")
+    public CommonResult<FollowStatusRespVO> status(@RequestParam("targetType") String targetType,
+                                                   @RequestParam("targetKey") String targetKey) {
+        return success(followService.getFollowStatus(getLoginUserId(), targetType, targetKey));
     }
 
     @GetMapping("/item/{itemId}/timeline")

@@ -3,6 +3,9 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 
@@ -30,6 +33,24 @@ public interface NoticeExternalService {
      * @return 三形态详情
      */
     NoticeExternalDetailRespVO getDetail(Long id);
+
+    /**
+     * 管理分页（审核/运营列表）：不做 SOCIAL+ACTIVE 硬过滤，可按 status/auditStatus/来源/类型/时间等维度
+     * 查看 NEW/ACTIVE/INACTIVE/ARCHIVED 全量；行内含审核/抽取/AI/结构化状态（供 approve/reject/take-down/ai-extract/body-structure）。
+     *
+     * @param reqVO 管理分页与过滤
+     * @return 管理列表行
+     */
+    PageResult<NoticeExternalManageRespVO> getManagePage(NoticeExternalManagePageReqVO reqVO);
+
+    /**
+     * 管理详情（BR-7，审核预览）：全状态返回（NEW/ACTIVE/INACTIVE/ARCHIVED 均可读），
+     * 供审核页“读完正文再 approve”；字段含净化正文/正文结构化块/PDF/附件病毒状态/抽取摘要。
+     *
+     * @param id 外部公告主档 ID
+     * @return 管理详情（全状态）
+     */
+    NoticeExternalManageDetailRespVO getManageDetail(Long id);
 
     /**
      * 审核通过：status NEW→ACTIVE、audit UNREVIEWED→APPROVED，随后触发关注扇出与 ES 索引事件（均不阻断审核）。

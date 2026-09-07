@@ -1,16 +1,24 @@
 package cn.iocoder.txgy.module.bidding.service.crawlexternal;
 // 规范依据：设计文档 v0.6 §三/§四/§15.4（urlHash 幂等、指数退避 3 次、死信转审核、审计 message）；《招投标模块开发规范》§4.4
 
+import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
+import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter;
 import cn.iocoder.txgy.module.bidding.service.crawlexternal.sink.CrawlDeadLetterSink;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
@@ -84,6 +92,89 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
             }
             throw new IllegalStateException("任务唯一键冲突后回查不到既有行 urlHash=" + urlHash, e);
         }
+    }
+
+    @Override
+    public PageResult<CrawlTaskRespVO> getTaskPage(CrawlTaskPageReqVO reqVO) {
+        LambdaQueryWrapper<CrawlTaskDO> wrapper = new LambdaQueryWrapper<>();
+        if (reqVO.getJobId() != null) {
+            wrapper.eq(CrawlTaskDO::getJobId, reqVO.getJobId());
+        }
+        if (StringUtils.hasText(reqVO.getSourceCode())) {
+            wrapper.eq(CrawlTaskDO::getSourceCode, reqVO.getSourceCode());
+        }
+        if (StringUtils.hasText(reqVO.getStatus())) {
+            wrapper.eq(CrawlTaskDO::getStatus, reqVO.getStatus());
+        }
+        if (StringUtils.hasText(reqVO.getChannelCode())) {
+            wrapper.eq(CrawlTaskDO::getChannelCode, reqVO.getChannelCode());
+        }
+        if (StringUtils.hasText(reqVO.getUrl())) {
+            wrapper.like(CrawlTaskDO::getUrl, reqVO.getUrl());
+        }
+        if (reqVO.getBeginTime() != null) {
+            wrapper.ge(CrawlTaskDO::getCreateTime, reqVO.getBeginTime());
+        }
+        if (reqVO.getEndTime() != null) {
+            wrapper.le(CrawlTaskDO::getCreateTime, reqVO.getEndTime());
+        }
+        wrapper.orderByDesc(CrawlTaskDO::getId);
+        IPage<CrawlTaskDO> page = crawlTaskMapper.selectPage(Page.of(reqVO.getPageNo(), reqVO.getPageSize()), wrapper);
+        return new PageResult<>(page.getRecords().stream().map(this::toRespVO).toList(), page.getTotal());
+    }
+
+    @Override
+    public CrawlTaskRespVO getTask(Long id) {
+        CrawlTaskDO task = crawlTaskMapper.selectById(id);
+        if (task == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_TASK_NOT_EXISTS);
+        }
+        return toRespVO(task);
+    }
+
+    @Override
+    public void retryTask(Long id) {
+        CrawlTaskDO task = crawlTaskMapper.selectById(id);
+        if (task == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_TASK_NOT_EXISTS);
+        }
+        if (!CrawlTaskStatusEnum.FAILED.getStatus().equals(task.getStatus())) {
+            // 仅重试耗尽/死信可人工重试；PENDING 本身在队列、SUCCESS/SKIPPED 终态无需重试（语义防呆）
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_TASK_NOT_RETRYABLE);
+        }
+        String history = task.getMessage();
+        // attempt 归零：人工放行“新一轮 ≤3 次尝试”（历史 message 保留便于追查原失败原因）
+        task.setStatus(CrawlTaskStatusEnum.PENDING.getStatus());
+        task.setAttempt(0);
+        task.setNextRetryTime(null);
+        task.setWorkerId(null);
+        task.setStartedAt(null);
+        task.setFinishedAt(null);
+        task.setMessage("manual-retry（人工复核后放行新一轮）| 原:" + (StringUtils.hasText(history) ? history : "无"));
+        crawlTaskMapper.updateById(task);
+        log.info("[retryTask][taskId={} url={}] 死信任务人工重试 → PENDING（attempt=0）", task.getId(), task.getUrl());
+    }
+
+    private CrawlTaskRespVO toRespVO(CrawlTaskDO task) {
+        CrawlTaskRespVO resp = new CrawlTaskRespVO();
+        resp.setId(task.getId());
+        resp.setJobId(task.getJobId());
+        resp.setSourceCode(task.getSourceCode());
+        resp.setUrl(task.getUrl());
+        resp.setUrlHash(task.getUrlHash());
+        resp.setChannelCode(task.getChannelCode());
+        resp.setParserCode(task.getParserCode());
+        resp.setPriority(task.getPriority());
+        resp.setStatus(task.getStatus());
+        resp.setAttempt(task.getAttempt());
+        resp.setNextRetryTime(task.getNextRetryTime());
+        resp.setWorkerId(task.getWorkerId());
+        resp.setStartedAt(task.getStartedAt());
+        resp.setFinishedAt(task.getFinishedAt());
+        resp.setMessage(task.getMessage());
+        resp.setCreateTime(task.getCreateTime());
+        resp.setUpdateTime(task.getUpdateTime());
+        return resp;
     }
 
     private void markBloom(String urlHash) {

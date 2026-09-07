@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 外部公告列表行（大厅公开只读；分页/列表不携带大字段原文）。
@@ -42,6 +43,21 @@ public class NoticeExternalRespVO {
 
     @Schema(description = "发布单位")
     private String issuerName;
+
+    @Schema(description = "关联项目编号（跟踪维度键，可为 null=未解析到项目）")
+    private String projectKey;
+    @Schema(description = "项目名称快照（可为 null）")
+    private String projectName;
+    @Schema(description = "关联招标项目编号（跟踪维度键，可为 null）")
+    private String tenderProjectKey;
+    @Schema(description = "招标项目名称（一期无数据源可为 null）")
+    private String tenderProjectName;
+    @Schema(description = "关联标段编号列表（跟踪维度键，可为空数组；有键即可发起 SECTION 关注）")
+    private List<String> bidSectionKeys;
+    @Schema(description = "标段名称（一期无数据源可为 null/空）")
+    private List<String> bidSectionNames;
+    @Schema(description = "关联标段编号原文（逗号/分号分隔，兼容旧字段读取）")
+    private String bidSectionCodes;
 
     @Schema(description = "外站公告发布时间")
     private LocalDateTime publishTime;

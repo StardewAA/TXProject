@@ -1,7 +1,13 @@
 package cn.iocoder.txgy.module.bidding.service.crawlexternal;
 
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -107,6 +113,78 @@ class CrawlTaskServiceImplTest {
 
         assertEquals(1L, id);
         verify(crawlTaskMapper, times(1)).insert(any(CrawlTaskDO.class));
+    }
+
+    @Test
+    void retryTask_failedTask_resetsToPendingNewRound() {
+        // 管理面人工重试：FAILED 死信 → PENDING，attempt 归零开启新一轮（历史 message 保留于行文）
+        CrawlTaskDO task = new CrawlTaskDO();
+        task.setId(1L);
+        task.setStatus("FAILED");
+        task.setAttempt(3);
+        task.setMessage("dead-letter: timeout");
+        task.setWorkerId("w1");
+        task.setUrl("https://src.example.gov.cn/trade/x");
+        when(crawlTaskMapper.selectById(1L)).thenReturn(task);
+
+        service.retryTask(1L);
+
+        assertEquals("PENDING", task.getStatus());
+        assertEquals(0, task.getAttempt());
+        assertEquals(null, task.getNextRetryTime());
+        assertEquals(null, task.getWorkerId());
+        org.junit.jupiter.api.Assertions.assertTrue(task.getMessage().startsWith("manual-retry"));
+        verify(crawlTaskMapper).updateById(task);
+    }
+
+    @Test
+    void retryTask_nonFailed_rejected() {
+        CrawlTaskDO task = new CrawlTaskDO();
+        task.setId(2L);
+        task.setStatus("SUCCESS");
+        when(crawlTaskMapper.selectById(2L)).thenReturn(task);
+
+        try {
+            service.retryTask(2L);
+            org.junit.jupiter.api.Assertions.fail("应拒绝非 FAILED 任务");
+        } catch (ServiceException expected) {
+            org.junit.jupiter.api.Assertions.assertTrue(expected.getCode() == 1_060_106_025);
+        }
+        verify(crawlTaskMapper, org.mockito.Mockito.never()).updateById(any(CrawlTaskDO.class));
+    }
+
+    @Test
+    void getTask_notExists_throws() {
+        when(crawlTaskMapper.selectById(99L)).thenReturn(null);
+        try {
+            service.getTask(99L);
+            org.junit.jupiter.api.Assertions.fail("应抛任务不存在");
+        } catch (ServiceException expected) {
+            org.junit.jupiter.api.Assertions.assertTrue(expected.getCode() == 1_060_106_023);
+        }
+    }
+
+    @Test
+    void getTaskPage_mapsRow() {
+        CrawlTaskDO row = new CrawlTaskDO();
+        row.setId(3L);
+        row.setJobId(10L);
+        row.setSourceCode("SRC");
+        row.setUrl("https://src.example.gov.cn/trade/y");
+        row.setStatus("FAILED");
+        row.setAttempt(3);
+        row.setMessage("timeout");
+        Page<CrawlTaskDO> page = new Page<>(1, 10);
+        page.setRecords(java.util.List.of(row));
+        page.setTotal(1);
+        when(crawlTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+        PageResult<CrawlTaskRespVO> result = service.getTaskPage(new CrawlTaskPageReqVO());
+
+        assertEquals(1, result.getList().size());
+        assertEquals("FAILED", result.getList().get(0).getStatus());
+        assertEquals(3, result.getList().get(0).getAttempt().intValue());
+        assertEquals("SRC", result.getList().get(0).getSourceCode());
     }
 
 }

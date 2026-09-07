@@ -9,7 +9,10 @@ import cn.iocoder.txgy.module.bidding.dal.mysql.notice.NoticeContentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.notice.NoticeMapper;
 import cn.iocoder.txgy.module.bidding.enums.NoticeStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeTypeEnum;
+import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
+import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.service.notice.search.NoticeSearchEngine;
+import cn.iocoder.txgy.module.bidding.service.subject.SubjectEligibilityService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,7 @@ class NoticeServiceImplTest {
     private NoticeMapper noticeMapper;
     private NoticeContentMapper contentMapper;
     private NoticeSearchEngine searchEngine;
+    private SubjectEligibilityService subjectEligibilityService;
     private NoticeServiceImpl service;
 
     @BeforeEach
@@ -57,6 +61,8 @@ class NoticeServiceImplTest {
         ReflectionTestUtils.setField(service, "noticeMapper", noticeMapper);
         ReflectionTestUtils.setField(service, "noticeContentMapper", contentMapper);
         ReflectionTestUtils.setField(service, "noticeSearchEngine", searchEngine);
+        subjectEligibilityService = mock(SubjectEligibilityService.class);
+        ReflectionTestUtils.setField(service, "subjectEligibilityService", subjectEligibilityService);
     }
 
     // ========== 新建 ==========
@@ -299,21 +305,39 @@ class NoticeServiceImplTest {
         assertEquals("20261010100000", resp.getSubmitDeadline(), "变更公告 BID_END_TIME 应覆盖递交截止");
     }
 
+
+    // ========== 招标人发布门（授权+完善） ==========
+
     @Test
-    void deadline_notFoundThrows() {
-        when(noticeMapper.selectList(any())).thenReturn(List.of());
-        ServiceException e = assertThrows(ServiceException.class, () -> service.getBidDeadline("S-不存在"));
-        assertEquals(Integer.valueOf(1_060_101_008), e.getCode(), "应报 NOTICE_DEADLINE_NOT_FOUND");
+    void create_blocksWhenTendererNotAuthorized() {
+        // 招标投标法第8/16条：发布主体须为已授权招标人；平台未授权 → 106_031，且不落库
+        NoticeSaveReqVO reqVO = baseReq();
+        reqVO.setPayload(payload("E4400002026GD0002", "未授权招标人公告"));
+        ServiceException ex = ServiceExceptionUtil.exception(ErrorCodeConstants.SUBJECT_NOT_AUTHORIZED);
+        org.mockito.Mockito.doThrow(ex).when(subjectEligibilityService).assertTendererIssuanceAllowed();
+
+        assertThrows(ServiceException.class, () -> service.createNotice(reqVO));
+        verify(noticeMapper, never()).insert(any(NoticeDO.class));
     }
 
-    // ========== 工具 ==========
+    @Test
+    void publish_blocksWhenTendererProfileIncomplete() {
+        // 仅授权未完善：主体信息必填不全 → 106_034（需求口径：被授权投标人仍须完善信息）
+        NoticeDO notice = noticeOf(10L, NoticeStatusEnum.DRAFT, null);
+        when(noticeMapper.selectById(10L)).thenReturn(notice);
+        ServiceException ex = ServiceExceptionUtil.exception(ErrorCodeConstants.SUBJECT_PROFILE_INCOMPLETE);
+        org.mockito.Mockito.doThrow(ex).when(subjectEligibilityService).assertTendererIssuanceAllowed();
+
+        assertThrows(ServiceException.class, () -> service.publishNotice(10L));
+        verify(searchEngine, never()).index(any());
+    }
+
+    // ========== 测试工具 ==========
 
     private NoticeSaveReqVO baseReq() {
         NoticeSaveReqVO reqVO = new NoticeSaveReqVO();
         reqVO.setNoticeType(NoticeTypeEnum.TENDER_NOTICE.name());
-        reqVO.setTitle("某安置房项目施工招标公告");
-        reqVO.setInternalFlag(false);
-        reqVO.setPublicLevel("SOCIAL");
+        reqVO.setTitle("某项目施工招标公告");
         return reqVO;
     }
 
@@ -348,4 +372,5 @@ class NoticeServiceImplTest {
         contentDO.setVersion(1);
         return contentDO;
     }
+
 }

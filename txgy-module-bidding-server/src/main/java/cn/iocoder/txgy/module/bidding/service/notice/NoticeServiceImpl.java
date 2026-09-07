@@ -20,6 +20,7 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeTypeEnum;
 import cn.iocoder.txgy.module.bidding.service.notice.search.NoticeEsDoc;
 import cn.iocoder.txgy.module.bidding.service.notice.search.NoticeSearchEngine;
+import cn.iocoder.txgy.module.bidding.service.subject.SubjectEligibilityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -60,6 +61,9 @@ public class NoticeServiceImpl implements NoticeService {
 
     @Resource
     private NoticeMapper noticeMapper;
+    /** 招标人发布门（授权+完善；招标投标法第8/16条 —— 发布主体须为已授权且信息完善的招标人企业） */
+    @Resource
+    private SubjectEligibilityService subjectEligibilityService;
     @Resource
     private NoticeContentMapper noticeContentMapper;
     @Resource
@@ -70,6 +74,9 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createNotice(NoticeSaveReqVO reqVO) {
+        // [依据] 招标人发布门：发文主体须为已授权且信息完善的招标人（招标投标法第8/16条；实施条例第15条）
+        //       外部采集/平台同步等无租户上下文操作不受影响（见 SubjectEligibilityServiceImpl）
+        subjectEligibilityService.assertTendererIssuanceAllowed();
         NoticeTypeEnum type = requireType(reqVO.getNoticeType());
         NoticeDO notice = new NoticeDO();
         notice.setNoticeCode(StringUtils.hasText(reqVO.getNoticeCode()) ? reqVO.getNoticeCode() : generateNoticeCode());
@@ -93,6 +100,7 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateNotice(NoticeSaveReqVO reqVO) {
+        subjectEligibilityService.assertTendererIssuanceAllowed(); // 招标人发布门（同 createNotice 注释）
         NoticeDO notice = getNotice(reqVO.getId());
         // 载荷：仅在显式提交 payload 时按权威必填重新规整（不提交则保持原快照）
         if (reqVO.getPayload() != null) {
@@ -129,6 +137,7 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishNotice(Long id) {
+        subjectEligibilityService.assertTendererIssuanceAllowed(); // 招标人发布门：DRAFT→PUBLISHED 前复核主体资格
         NoticeDO notice = getNotice(id);
         transit(notice, NoticeStatusEnum.PUBLISHED);
         if (notice.getPublishTime() == null) {

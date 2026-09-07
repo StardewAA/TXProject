@@ -6,6 +6,9 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeBodyStructureRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalAiExtractRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.NoticeExternalService;
@@ -72,6 +75,13 @@ public class NoticeExternalController {
         return success(noticeExternalService.getPage(reqVO));
     }
 
+    @GetMapping("/manage/page")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Operation(summary = "外部公告管理分页（审核/运营列表：全状态/审核态，行内含抽取/AI/结构化状态，供行内操作选中）")
+    public CommonResult<PageResult<NoticeExternalManageRespVO>> managePage(@Valid NoticeExternalManagePageReqVO reqVO) {
+        return success(noticeExternalService.getManagePage(reqVO));
+    }
+
     @GetMapping("/go")
     @PermitAll
     @TenantIgnore // 大厅公开：原网址中转白名单校验，无租户概念
@@ -91,6 +101,13 @@ public class NoticeExternalController {
     @Operation(summary = "外部公告公开详情（三形态）")
     public CommonResult<NoticeExternalDetailRespVO> detail(@RequestParam("id") Long id) {
         return success(noticeExternalService.getDetail(id));
+    }
+
+    @GetMapping("/manage/get")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Operation(summary = "外部公告管理详情（BR-7 审核预览：全状态；含净化正文/结构化块/PDF/附件病毒/抽取摘要）")
+    public CommonResult<NoticeExternalManageDetailRespVO> manageGet(@RequestParam("id") Long id) {
+        return success(noticeExternalService.getManageDetail(id));
     }
 
     // 管理端：审核通过（NEW→ACTIVE，随后触发关注扇出+ES 索引事件预留）

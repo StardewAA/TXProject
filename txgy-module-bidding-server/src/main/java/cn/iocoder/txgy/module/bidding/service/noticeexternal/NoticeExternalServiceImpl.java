@@ -5,6 +5,9 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalAttachmentDO;
@@ -20,6 +23,7 @@ import cn.iocoder.txgy.module.bidding.service.noticeexternal.sanitize.HtmlSaniti
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
 import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
@@ -45,6 +49,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
 
     /** 关键词全文检索命中上限（列表/详情回主表过滤，命中集不无限放大 IN 条件） */
     private static final int KEYWORD_MATCH_LIMIT = 200;
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Resource
     private NoticeExternalMapper noticeExternalMapper;
@@ -185,6 +191,169 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     }
 
     @Override
+    public PageResult<NoticeExternalManageRespVO> getManagePage(NoticeExternalManagePageReqVO reqVO) {
+        // 管理分页：不做 SOCIAL+ACTIVE 硬过滤（N1：公开 page 只出 ACTIVE+SOCIAL 无法支撑审核页；本方法出全状态/审核态行）
+        LambdaQueryWrapper<NoticeExternalDO> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(reqVO.getStatus())) {
+            wrapper.eq(NoticeExternalDO::getStatus, reqVO.getStatus());
+        }
+        if (StringUtils.hasText(reqVO.getAuditStatus())) {
+            wrapper.eq(NoticeExternalDO::getAuditStatus, reqVO.getAuditStatus());
+        }
+        if (StringUtils.hasText(reqVO.getSourceCode())) {
+            wrapper.eq(NoticeExternalDO::getSourceCode, reqVO.getSourceCode());
+        }
+        if (StringUtils.hasText(reqVO.getContentType())) {
+            wrapper.eq(NoticeExternalDO::getContentType, reqVO.getContentType());
+        }
+        if (StringUtils.hasText(reqVO.getNoticeTypeRaw())) {
+            wrapper.eq(NoticeExternalDO::getNoticeTypeRaw, reqVO.getNoticeTypeRaw());
+        }
+        if (StringUtils.hasText(reqVO.getIndustryFlag())) {
+            wrapper.eq(NoticeExternalDO::getIndustryFlag, reqVO.getIndustryFlag());
+        }
+        if (StringUtils.hasText(reqVO.getProjectCode())) {
+            wrapper.eq(NoticeExternalDO::getProjectCode, reqVO.getProjectCode());
+        }
+        if (reqVO.getBeginTime() != null) {
+            wrapper.ge(NoticeExternalDO::getPublishTime, reqVO.getBeginTime());
+        }
+        if (reqVO.getEndTime() != null) {
+            wrapper.le(NoticeExternalDO::getPublishTime, reqVO.getEndTime());
+        }
+        // 管理列表：同发布时间按下线先后排（NEW 在无发布时间的行前按创建时间），保证分页稳定（主键兜底序）
+        wrapper.orderByDesc(NoticeExternalDO::getPublishTime).orderByDesc(NoticeExternalDO::getId);
+        IPage<NoticeExternalDO> page = noticeExternalMapper.selectPage(
+                Page.of(reqVO.getPageNo(), reqVO.getPageSize()), wrapper);
+        return new PageResult<>(page.getRecords().stream().map(this::toManageRespVO).toList(), page.getTotal());
+    }
+
+    @Override
+    public NoticeExternalManageDetailRespVO getManageDetail(Long id) {
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
+        }
+        NoticeExternalManageDetailRespVO resp = new NoticeExternalManageDetailRespVO();
+        resp.setId(notice.getId());
+        resp.setSourceCode(notice.getSourceCode());
+        resp.setSourceName(notice.getSourceName());
+        resp.setTitle(notice.getTitle());
+        resp.setOrigUrl(notice.getOrigUrl());
+        resp.setContentType(notice.getContentType());
+        resp.setNoticeTypeRaw(notice.getNoticeTypeRaw());
+        resp.setLegalFlag(notice.getLegalFlag());
+        resp.setIndustryFlag(notice.getIndustryFlag());
+        resp.setIndustryConfidence(notice.getIndustryConfidence());
+        resp.setStatus(notice.getStatus());
+        resp.setAuditStatus(notice.getAuditStatus());
+        resp.setPublicScope(notice.getPublicScope());
+        boolean html = NoticeExternalContentTypeEnum.HTML.getType().equals(notice.getContentType());
+        resp.setContentHtmlSafe(html ? HtmlSanitizer.sanitize(notice.getContentHtml()) : null);
+        resp.setBodyBlocksStatus(notice.getBodyBlocksStatus());
+        resp.setBodyParserCode(notice.getBodyParserCode());
+        resp.setBodyBlocksJson(notice.getBodyBlocksJson());
+        resp.setPdfFileId(notice.getPdfFileId());
+        resp.setPdfSha256(notice.getPdfSha256());
+        resp.setPdfSize(notice.getPdfSize());
+        resp.setExtractionStatus(notice.getExtractionStatus());
+        resp.setExtractionSummary(summarize(notice.getExtractionText()));
+        resp.setAiExtractionStatus(notice.getAiExtractionStatus());
+        resp.setAiMetaFieldCount(extractMetaFieldCount(notice.getAiMetaJson()));
+        resp.setIssuerName(notice.getIssuerName());
+        resp.setProjectKey(cleanNullable(notice.getProjectCode()));
+        resp.setProjectName(notice.getProjectName());
+        resp.setTenderProjectKey(cleanNullable(notice.getTenderProjectCode()));
+        resp.setBidSectionKeys(NoticeTrackKeyUtils.splitSectionCodes(cleanNullable(notice.getBidSectionCodes())));
+        resp.setBidSectionCodes(cleanNullable(notice.getBidSectionCodes()));
+        resp.setPublishTime(notice.getPublishTime());
+        resp.setEffectiveFrom(notice.getEffectiveFrom());
+        resp.setEffectiveTo(notice.getEffectiveTo());
+        resp.setFetchCount(notice.getFetchCount());
+        resp.setLastFetchTime(notice.getLastFetchTime());
+        resp.setCreateTime(notice.getCreateTime());
+        resp.setUpdateTime(notice.getUpdateTime());
+        // 附件（BR-7）：病毒 INFECTED 不下发下载链接（安全评审意见 1/2 同公开口径），virusStatus 照回供审核识别
+        List<NoticeExternalAttachmentDO> attachments = noticeExternalAttachmentMapper
+                .selectList(new LambdaQueryWrapper<NoticeExternalAttachmentDO>()
+                        .eq(NoticeExternalAttachmentDO::getNoticeId, id)
+                        .orderByAsc(NoticeExternalAttachmentDO::getId));
+        List<NoticeExternalAttachmentDO> downloadable = attachments.stream()
+                .filter(a -> !"INFECTED".equalsIgnoreCase(a.getVirusStatus()))
+                .toList();
+        if (!downloadable.isEmpty()) {
+            resp.setAttachments(downloadable.stream().map(this::toManageAttachmentVO).toList());
+        }
+        return resp;
+    }
+
+    /** 抽取正文摘要：前 200 字符（无文本 null）。 */
+    private String summarize(String extractionText) {
+        if (!StringUtils.hasText(extractionText)) {
+            return null;
+        }
+        String text = extractionText.trim();
+        return text.length() > 200 ? text.substring(0, 200) + "…" : text;
+    }
+
+    /** ai_meta_json 中 metaFieldCount 读取（结构不符/缺失返回 null，不阻断预览）。 */
+    private Integer extractMetaFieldCount(String aiMetaJson) {
+        if (!StringUtils.hasText(aiMetaJson)) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode node = JSON.readTree(aiMetaJson).get("metaFieldCount");
+            return node != null && node.isNumber() ? node.asInt() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private NoticeExternalManageDetailRespVO.Attachment toManageAttachmentVO(NoticeExternalAttachmentDO attachment) {
+        NoticeExternalManageDetailRespVO.Attachment vo = new NoticeExternalManageDetailRespVO.Attachment();
+        vo.setId(attachment.getId());
+        vo.setName(attachment.getName());
+        vo.setExt(attachment.getExt());
+        vo.setFileId(attachment.getFileId());
+        vo.setSha256(attachment.getSha256());
+        vo.setSize(attachment.getSize());
+        vo.setOrigDownloadUrl(attachment.getOrigDownloadUrl());
+        vo.setVirusStatus(attachment.getVirusStatus());
+        return vo;
+    }
+
+    private NoticeExternalManageRespVO toManageRespVO(NoticeExternalDO notice) {
+        NoticeExternalManageRespVO resp = new NoticeExternalManageRespVO();
+        resp.setId(notice.getId());
+        resp.setSourceCode(notice.getSourceCode());
+        resp.setSourceName(notice.getSourceName());
+        resp.setTitle(notice.getTitle());
+        resp.setOrigUrl(notice.getOrigUrl());
+        resp.setContentType(notice.getContentType());
+        resp.setNoticeTypeRaw(notice.getNoticeTypeRaw());
+        resp.setLegalFlag(notice.getLegalFlag());
+        resp.setIndustryFlag(notice.getIndustryFlag());
+        resp.setIndustryConfidence(notice.getIndustryConfidence());
+        resp.setIssuerName(notice.getIssuerName());
+        resp.setProjectName(notice.getProjectName());
+        resp.setBidSectionCodes(notice.getBidSectionCodes());
+        resp.setStatus(notice.getStatus());
+        resp.setAuditStatus(notice.getAuditStatus());
+        resp.setExtractionStatus(notice.getExtractionStatus());
+        resp.setAiExtractionStatus(notice.getAiExtractionStatus());
+        resp.setBodyBlocksStatus(notice.getBodyBlocksStatus());
+        resp.setBodyParserCode(notice.getBodyParserCode());
+        resp.setPublishTime(notice.getPublishTime());
+        resp.setEffectiveFrom(notice.getEffectiveFrom());
+        resp.setEffectiveTo(notice.getEffectiveTo());
+        resp.setFetchCount(notice.getFetchCount());
+        resp.setLastFetchTime(notice.getLastFetchTime());
+        resp.setCreateTime(notice.getCreateTime());
+        resp.setUpdateTime(notice.getUpdateTime());
+        return resp;
+    }
+
+    @Override
     public NoticeExternalDetailRespVO getDetail(Long id) {
         NoticeExternalDO notice = noticeExternalMapper.selectById(id);
         if (notice == null) {
@@ -228,7 +397,29 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setEffectiveFrom(notice.getEffectiveFrom());
         resp.setEffectiveTo(notice.getEffectiveTo());
         resp.setStatus(notice.getStatus());
+        copyTrackKeys(notice, resp);
         return resp;
+    }
+
+    /** 跟踪维度键下发（BR-1）：project/tender 键 + 标段键列表；名称一期仅有 projectName 快照，其余可为 null。
+     *  存量历史脏值字面 "NULL"（采集侧 ORM 拼接产物）一律按 null 下发，避免前端误当可关注键。 */
+    private void copyTrackKeys(NoticeExternalDO notice, NoticeExternalRespVO resp) {
+        resp.setProjectKey(cleanNullable(notice.getProjectCode()));
+        resp.setProjectName(notice.getProjectName());
+        resp.setTenderProjectKey(cleanNullable(notice.getTenderProjectCode()));
+        resp.setTenderProjectName(null);
+        resp.setBidSectionKeys(NoticeTrackKeyUtils.splitSectionCodes(cleanNullable(notice.getBidSectionCodes())));
+        resp.setBidSectionNames(null);
+        resp.setBidSectionCodes(cleanNullable(notice.getBidSectionCodes()));
+    }
+
+    /** 字面 "NULL"/空白 → null（归一采集侧脏值；见 ExternalNoticeIngestServiceImpl.normalizeNullStringFields 的存量场景）。 */
+    private String cleanNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() || "NULL".equalsIgnoreCase(trimmed) ? null : trimmed;
     }
 
     private void copyToDetail(NoticeExternalDO notice, NoticeExternalDetailRespVO resp) {
@@ -253,12 +444,22 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setBodyParserCode(notice.getBodyParserCode());
         resp.setBodyBlocksStatus(notice.getBodyBlocksStatus());
         resp.setBodyBlocksJson(notice.getBodyBlocksJson());
-        resp.setProjectName(notice.getProjectName());
-        resp.setBidSectionCodes(notice.getBidSectionCodes());
+        copyDetailTrackKeys(notice, resp);
         resp.setIssuerName(notice.getIssuerName());
         resp.setPublishTime(notice.getPublishTime());
         resp.setEffectiveFrom(notice.getEffectiveFrom());
         resp.setEffectiveTo(notice.getEffectiveTo());
+    }
+
+    /** 详情 VO 跟踪键（BR-1）：在既有 projectName/bidSectionCodes 快照字段外新增键列表下发（脏值 "NULL" 归一 null）。 */
+    private void copyDetailTrackKeys(NoticeExternalDO notice, NoticeExternalDetailRespVO resp) {
+        resp.setProjectKey(cleanNullable(notice.getProjectCode()));
+        resp.setProjectName(notice.getProjectName());
+        resp.setTenderProjectKey(cleanNullable(notice.getTenderProjectCode()));
+        resp.setTenderProjectName(null);
+        resp.setBidSectionKeys(NoticeTrackKeyUtils.splitSectionCodes(cleanNullable(notice.getBidSectionCodes())));
+        resp.setBidSectionNames(null);
+        resp.setBidSectionCodes(cleanNullable(notice.getBidSectionCodes()));
     }
 
     private NoticeExternalDetailRespVO.Attachment toAttachmentVO(NoticeExternalAttachmentDO attachment) {

@@ -272,4 +272,51 @@ class ExternalNoticeIngestServiceImplTest {
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_PAYLOAD_INVALID.getCode(), ex.getCode());
     }
 
+    // ===== BR-5 发布时间回填 =====
+    @Test
+    void ingest_publishTime_resolvedFromHtmlWhenMissing() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        assignId(400L);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        // 动态“过去”日期（now-5d），避免未来窗口过滤导致解析器跳过
+        java.time.LocalDate past = java.time.LocalDate.now().minusDays(5);
+        dto.setContentHtml("<html><body><p>发布日期：" + past.getYear() + "年" + past.getMonthValue() + "月"
+                + past.getDayOfMonth() + "日</p></body></html>");
+
+        service.ingest(dto);
+
+        ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).insert(cap.capture());
+        assertEquals(past.atStartOfDay(), cap.getValue().getPublishTime());
+    }
+
+    @Test
+    void ingest_publishTime_explicitValueKept() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        assignId(401L);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setContentHtml("<p>发布日期：2026年9月12日</p>"); // 即使正文另有日期也以采集侧显式值为准
+        dto.setPublishTime(java.time.LocalDateTime.of(2026, 9, 10, 8, 0));
+
+        service.ingest(dto);
+
+        ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).insert(cap.capture());
+        assertEquals(java.time.LocalDateTime.of(2026, 9, 10, 8, 0), cap.getValue().getPublishTime());
+    }
+
+    @Test
+    void ingest_publishTime_noDateFallbackToNow() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        assignId(402L);
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setContentHtml("<p>无日期正文</p>");
+
+        service.ingest(dto);
+
+        ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).insert(cap.capture());
+        org.junit.jupiter.api.Assertions.assertNotNull(cap.getValue().getPublishTime()); // 兜底抓取时间，恒非空
+    }
+
 }

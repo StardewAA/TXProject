@@ -1,6 +1,9 @@
 package cn.iocoder.txgy.module.bidding.service.crawlexternal;
 // 规范依据：设计文档 v0.6 §二/§三/§四/§15.4（采集任务状态机、urlHash 幂等去重、MQ 3 次重试→死信转审核）
 
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
 
 /**
@@ -10,7 +13,8 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
  * <ul>
  *   <li>urlHash 幂等去重：同 URL 存在未终态（PENDING/RUNNING）任务直接复用，不重复抓；</li>
  *   <li>失败重试：attempt 指数退避，attempt &lt; 3 → 回 PENDING+nextRetryTime（等价 crawl.retry 重投）；</li>
- *   <li>attempt ≥ 3（耗尽）→ FAILED 死信，经 {@code CrawlDeadLetterSink} 转人工审核（crawl.audit）。</li>
+ *   <li>attempt ≥ 3（耗尽）→ FAILED 死信，经 {@code CrawlDeadLetterSink} 转人工审核（crawl.audit）；</li>
+ *   <li>管理面：FAILED（死信/审核队列）可人工重试 → PENDING 新轮次（attempt 归零，视为人工放行一轮新的 ≤3 次尝试）。</li>
  * </ul>
  */
 public interface CrawlTaskService {
@@ -47,5 +51,14 @@ public interface CrawlTaskService {
         /** 重试耗尽（≥3 次）→ FAILED + 转人工审核 */
         DEAD_LETTER_AUDITED
     }
+
+    /** 采集任务管理分页（管理面：按批次/源/状态/URL 检索，定位死信与重试对象） */
+    PageResult<CrawlTaskRespVO> getTaskPage(CrawlTaskPageReqVO reqVO);
+
+    /** 采集任务详情 */
+    CrawlTaskRespVO getTask(Long id);
+
+    /** 人工重试：仅 FAILED（死信）→ PENDING，attempt 归零开启新一轮 ≤3 次尝试（审核/人工复核后放行） */
+    void retryTask(Long id);
 
 }

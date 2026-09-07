@@ -25,5 +25,9 @@ public class FollowEventRespVO {
     private LocalDateTime occurredAt;
     @Schema(description = "是否已读")
     private Boolean readFlag;
+    @Schema(description = "关联公告展示状态（EXTERNAL=外部公告 ACTIVE/INACTIVE…；INTERNAL=内部公告 PUBLISHED/UNPUBLISHED…；无公告为 null）")
+    private String noticeStatus;
+    @Schema(description = "平台详情是否可达：false=公告已下线/归档，隐藏详情跳转（EXTERNAL 仍可用 origUrl 走 /go 看源站原文）；无公告为 null")
+    private Boolean available;
 
 }

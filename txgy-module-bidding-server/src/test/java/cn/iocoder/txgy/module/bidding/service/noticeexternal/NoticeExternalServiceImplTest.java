@@ -3,6 +3,9 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalAttachmentDO;
@@ -200,6 +203,119 @@ class NoticeExternalServiceImplTest {
         assertEquals(1, result.getList().size());
         org.mockito.Mockito.verify(externalNoticeSearchEngine, org.mockito.Mockito.never())
                 .matchNoticeIds(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void getManagePage_mapsRowAndKeepsStates() {
+        // N1 管理分页：无 SOCIAL+ACTIVE 硬过滤，行映射含审核/抽取/AI/结构化状态
+        NoticeExternalDO row = doActiveSocial("HTML");
+        row.setAuditStatus("UNREVIEWED");
+        row.setExtractionStatus("SUCCESS");
+        row.setAiExtractionStatus("SUCCESS");
+        row.setBodyBlocksStatus("FAILED");
+        row.setBodyParserCode("AI_FALLBACK");
+        row.setIssuerName("某发布单位");
+        row.setProjectName("防腐保温管道工程");
+        row.setFetchCount(3);
+        Page<NoticeExternalDO> page = new Page<>(1, 10);
+        page.setRecords(List.of(row));
+        page.setTotal(1);
+        when(noticeExternalMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+        NoticeExternalManagePageReqVO req = new NoticeExternalManagePageReqVO();
+        req.setAuditStatus("UNREVIEWED");
+        PageResult<NoticeExternalManageRespVO> result = service.getManagePage(req);
+
+        assertEquals(1, result.getList().size());
+        NoticeExternalManageRespVO vo = result.getList().get(0);
+        assertEquals("UNREVIEWED", vo.getAuditStatus());
+        assertEquals("SUCCESS", vo.getExtractionStatus());
+        assertEquals("FAILED", vo.getBodyBlocksStatus());
+        assertEquals("AI_FALLBACK", vo.getBodyParserCode());
+        assertEquals("某发布单位", vo.getIssuerName());
+        assertEquals(3, vo.getFetchCount().intValue());
+        assertEquals("HTML", vo.getContentType());
+    }
+
+    // ===== BR-1 跟踪维度键下发（detail / page 行）=====
+    @Test
+    void getDetail_carriesTrackKeys() {
+        NoticeExternalDO notice = doActiveSocial("HTML");
+        notice.setProjectCode("P-2026-001");
+        notice.setTenderProjectCode("TP-2026-001");
+        notice.setBidSectionCodes("SEC-1,SEC-2;SEC-3");
+        when(noticeExternalMapper.selectById(1L)).thenReturn(notice);
+        when(noticeExternalAttachmentMapper.selectList(any())).thenReturn(List.of());
+
+        NoticeExternalDetailRespVO vo = service.getDetail(1L);
+
+        assertEquals("P-2026-001", vo.getProjectKey());
+        assertEquals("TP-2026-001", vo.getTenderProjectKey());
+        assertNotNull(vo.getBidSectionKeys());
+        assertEquals(3, vo.getBidSectionKeys().size());
+        assertTrue(vo.getBidSectionKeys().contains("SEC-2"));
+    }
+
+    @Test
+    void pageRow_carriesTrackKeys() {
+        NoticeExternalDO row = doActiveSocial("HTML");
+        row.setProjectCode("P-2026-001");
+        row.setTenderProjectCode("TP-2026-001");
+        row.setBidSectionCodes("SEC-1");
+        Page<NoticeExternalDO> page = new Page<>(1, 10);
+        page.setRecords(List.of(row));
+        page.setTotal(1);
+        when(noticeExternalMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+        PageResult<NoticeExternalRespVO> result = service.getPage(new NoticeExternalPageReqVO());
+
+        assertEquals(1, result.getList().size());
+        NoticeExternalRespVO vo = result.getList().get(0);
+        assertEquals("P-2026-001", vo.getProjectKey());
+        assertEquals("SEC-1", vo.getBidSectionKeys().get(0));
+    }
+
+    // ===== BR-7 管理详情（审核预览，全状态）=====
+    @Test
+    void getManageDetail_newStatus_htmlPreviewWithAttachments() {
+        NoticeExternalDO notice = doActiveSocial("HTML");
+        notice.setStatus("NEW");
+        notice.setAuditStatus("UNREVIEWED");
+        notice.setContentHtml("<p>招标公告正文</p><script>alert(1)</script>");
+        notice.setExtractionStatus("SUCCESS");
+        notice.setExtractionText("抽取正文一");
+        when(noticeExternalMapper.selectById(1L)).thenReturn(notice);
+        NoticeExternalAttachmentDO clean = new NoticeExternalAttachmentDO();
+        clean.setId(10L);
+        clean.setName("采购文件.pdf");
+        clean.setVirusStatus("CLEAN");
+        clean.setFileId(900L);
+        NoticeExternalAttachmentDO infected = new NoticeExternalAttachmentDO();
+        infected.setId(11L);
+        infected.setName("可疑.exe");
+        infected.setVirusStatus("INFECTED");
+        when(noticeExternalAttachmentMapper.selectList(any())).thenReturn(List.of(clean, infected));
+
+        NoticeExternalManageDetailRespVO vo = service.getManageDetail(1L);
+
+        assertEquals("NEW", vo.getStatus());
+        assertEquals("UNREVIEWED", vo.getAuditStatus());
+        // 净化正文：script 已去
+        assertNotNull(vo.getContentHtmlSafe());
+        assertTrue(vo.getContentHtmlSafe().contains("招标公告正文"));
+        assertTrue(!vo.getContentHtmlSafe().toLowerCase().contains("<script"));
+        assertEquals("抽取正文一", vo.getExtractionSummary());
+        // 附件：INFECTED 不下发（downloadUrl 空且列表不含），CLEAN 正常
+        assertNotNull(vo.getAttachments());
+        assertEquals(1, vo.getAttachments().size());
+        assertEquals("采购文件.pdf", vo.getAttachments().get(0).getName());
+    }
+
+    @Test
+    void getManageDetail_notExists_throws() {
+        when(noticeExternalMapper.selectById(99L)).thenReturn(null);
+        ServiceException e = assertThrows(ServiceException.class, () -> service.getManageDetail(99L));
+        assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS.getCode(), e.getCode());
     }
 
 }

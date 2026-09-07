@@ -67,4 +67,40 @@ public interface ErrorCodeConstants {
     ErrorCode EXTERNAL_NOTICE_AI_NO_MATERIAL = new ErrorCode(1_060_106_019, "AI 抽取无可用素材（本地无抽取文本；扫描件需先接入 PDF 附件访问）");
     ErrorCode EXTERNAL_NOTICE_BODY_STRUCTURE_FAILED = new ErrorCode(1_060_106_020, "正文结构化失败（AI 兜底排版异常或输出非法），可重试");
     ErrorCode CRAWL_SOURCE_NOT_EXISTS = new ErrorCode(1_060_106_010, "采集源不存在或未启用");
+
+    // ========== 外部公告/采集/关注提醒 追加段（前端配合说明 N1/N2 + 爬虫管理面，106 段内顺延登记）==========
+    ErrorCode CRAWL_SOURCE_CODE_DUPLICATE = new ErrorCode(1_060_106_021, "采集源代码已存在");
+    ErrorCode CRAWL_SOURCE_IN_USE = new ErrorCode(1_060_106_022, "采集源使用中：存在未终态采集任务或展示中外部公告，不能删除，请先停用");
+    ErrorCode CRAWL_TASK_NOT_EXISTS = new ErrorCode(1_060_106_023, "采集任务不存在");
+    ErrorCode CRAWL_JOB_NOT_EXISTS = new ErrorCode(1_060_106_024, "采集批次不存在");
+    ErrorCode CRAWL_TASK_NOT_RETRYABLE = new ErrorCode(1_060_106_025, "仅 FAILED（重试耗尽/死信）任务可人工重试");
+    ErrorCode FOLLOW_TARGET_INVALID = new ErrorCode(1_060_106_026, "关注目标类型不支持：ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION");
+    ErrorCode CRAWL_SOURCE_PAYLOAD_INVALID = new ErrorCode(1_060_106_027, "采集源配置校验失败（URL 协议不支持/通道未注册/入口 JSON 非法）");
+    ErrorCode CRAWL_SOURCE_CODE_IMMUTABLE = new ErrorCode(1_060_106_028, "采集源代码不可修改（唯一身份；如需换码请删除后重建）");
+
+    // ========== 主体信息/授权/投标资格门（106 段内追加；法规依据见 docs/法规依据/00-索引与引用说明.md）==========
+    // [依据] 投标资格门：《招标投标法》第25/26条（投标人资格）；《实施条例》第19条（未通过资格预审的申请人不具有投标资格——平台侧以
+    //       “已授权 + 主体信息完善”作为可投标前提）；《电子招标投标办法》第9/13/14/24条（免费注册登录、身份识别、初始录入信息真实性验证、
+    //       投标人注册登记并如实递交信息）。招标人发布门：《招标投标法》第8/16条 + 《招标公告和公示信息发布管理办法》第5/6条（发布主体为招标人）。
+    ErrorCode SUBJECT_TYPE_INVALID = new ErrorCode(1_060_106_030, "主体类型不支持（仅 BIDDER 投标人/TENDERER 招标人可授权）");
+    ErrorCode SUBJECT_NOT_AUTHORIZED = new ErrorCode(1_060_106_031, "主体未经平台授权或授权已停用，无法执行该操作");
+    ErrorCode SUBJECT_ALREADY_AUTHORIZED = new ErrorCode(1_060_106_032, "该企业主体已授权，请勿重复授权");
+    ErrorCode SUBJECT_AUTH_NOT_EXISTS = new ErrorCode(1_060_106_033, "授权记录不存在");
+    ErrorCode SUBJECT_PROFILE_INCOMPLETE = new ErrorCode(1_060_106_034, "主体信息未完善：投标人完善后方可在本项目投标；招标人完善后方可发布项目公告");
+    ErrorCode SUBJECT_CREDIT_CODE_INVALID = new ErrorCode(1_060_106_035, "统一社会信用代码校验失败（须符合 GB 32100-2015，18 位含校验码）");
+    ErrorCode SUBJECT_USER_NOT_BELONG_TENANT = new ErrorCode(1_060_106_036, "经办用户不属于该主体所属企业租户，无法绑定");
+    ErrorCode SUBJECT_USER_ALREADY_BOUND = new ErrorCode(1_060_106_037, "该用户已绑定为该主体经办用户");
+    ErrorCode SUBJECT_USER_NOT_EXISTS = new ErrorCode(1_060_106_038, "经办用户绑定记录不存在");
+    ErrorCode SUBJECT_PAYLOAD_INVALID = new ErrorCode(1_060_106_039, "主体信息校验失败（行政区划代码/法人机构类别等格式不合法）");
+    ErrorCode SUBJECT_USER_INVALID = new ErrorCode(1_060_106_040, "经办用户不存在或已被禁用，无法绑定");
+
+    // ========== 采集解析器插件（crawl parser SPI；106 段顺延 041~ 登记，2026-09 解析器测试功能）==========
+    // [依据] 爬虫“下载器(channel 插件,占位)→解析器(parser 插件)→ingest 落库”管线分层；解析器插件可插拔，
+    //       管理端测试接口先于真实下载器落地（先解析后下载的开发顺序）。
+    ErrorCode CRAWL_PARSER_NOT_FOUND = new ErrorCode(1_060_106_041, "解析器不存在或未注册：{0}");
+    ErrorCode CRAWL_PARSER_PAYLOAD_MISSING = new ErrorCode(1_060_106_042, "解析器测试内容为空（HTML/JSON 文本与上传文件不能同时为空）");
+    ErrorCode CRAWL_PARSER_INPUT_TYPE_UNSUPPORTED = new ErrorCode(1_060_106_043, "解析器 {0} 不支持该输入类型 {1}");
+    ErrorCode CRAWL_PARSER_FILE_INVALID = new ErrorCode(1_060_106_044, "测试文件无效（仅支持 .html/.htm/.json；读取或编码失败）");
+    ErrorCode CRAWL_PARSER_EXECUTE_FAILED = new ErrorCode(1_060_106_045, "解析器执行异常：{0}");
+    ErrorCode CRAWL_SOURCE_INTERVAL_TOO_FREQUENT = new ErrorCode(1_060_106_046, "爬取间隔不能小于 120 秒（≥2 分钟，防目标站封禁）");
 }

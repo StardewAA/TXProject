@@ -11,9 +11,9 @@ public class FollowItemRespVO {
 
     @Schema(description = "关注行 ID")
     private Long id;
-    @Schema(description = "维度类型：PROJECT/TENDER_PROJECT/SECTION")
+    @Schema(description = "维度类型：ANNOUNCEMENT/PROJECT/TENDER_PROJECT/SECTION（公告级关注同样建行）")
     private String followType;
-    @Schema(description = "维度代码")
+    @Schema(description = "维度代码/目标键：公告 id 或 project/tender/section 维度 code")
     private String followKey;
     @Schema(description = "项目/标段名快照")
     private String displayName;
@@ -31,5 +31,9 @@ public class FollowItemRespVO {
     private Integer unreadCount;
     @Schema(description = "关注时间")
     private LocalDateTime followTime;
+    @Schema(description = "关联公告展示状态（公告级关注=外部公告 ACTIVE/INACTIVE/ARCHIVED…；维度行无单一公告为 null）")
+    private String noticeStatus;
+    @Schema(description = "平台详情是否可达：false=公告已下线/归档，隐藏平台详情跳转（外部公告仍可经 origUrl 看源站原文）；无公告级状态为 null")
+    private Boolean available;
 
 }

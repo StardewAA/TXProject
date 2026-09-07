@@ -35,6 +35,11 @@ public class ChannelRegistry {
         }
     }
 
+    /** 通道是否已注册（源配置保存时校验用，防未知 code 静默入库） */
+    public boolean has(String channelCode) {
+        return channelCode != null && channels.containsKey(channelCode);
+    }
+
     /** 取通道；未知 code 明确报错（防配置错乱静默抓错） */
     public DownloadChannelAdapter get(String channelCode) {
         DownloadChannelAdapter adapter = channels.get(channelCode);

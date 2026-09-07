@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowEve
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowItemRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticefollow.vo.FollowStatusRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 
 /**
@@ -35,6 +36,9 @@ public interface FollowService {
 
     /** 标记关注项已读：清未读数并将该行事件全部置已读 */
     void markRead(Long userId, Long itemId);
+
+    /** 关注状态单点查询（详情页关注按钮初始态；公告级缺快照时即时补名返回，不落库） */
+    FollowStatusRespVO getFollowStatus(Long userId, String targetType, String targetKey);
 
     /** 公告进入 ACTIVE（外部审核通过/内部发布）→ 匹配关注并写动态事件+提醒（同事件去重） */
     void handleNoticeActivated(NoticeExternalDO notice, String source);

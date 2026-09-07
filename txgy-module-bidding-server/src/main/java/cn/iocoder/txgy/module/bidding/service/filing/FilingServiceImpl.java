@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.filing.FilingDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.filing.FilingMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.enums.FilingStatusEnum;
+import cn.iocoder.txgy.module.bidding.service.subject.SubjectEligibilityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
@@ -28,10 +29,16 @@ public class FilingServiceImpl implements FilingService {
 
     @Resource
     private FilingMapper filingMapper;
+    /** 招标人发布门（备案提交=招标人对监督部门的项目备案动作；招标投标法第12条：自行招标应备案；实施条例第15条） */
+    @Resource
+    private SubjectEligibilityService subjectEligibilityService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FilingSubmitRespVO submitFiling(FilingSubmitReqVO reqVO) {
+        // [依据] 招标人发布门：备案由招标人（或委托代理）提出（招标投标法第12条第3款/实施条例第15条），
+        //       主体须已授权且信息完善；无租户上下文（监管/平台同步）不受影响
+        subjectEligibilityService.assertTendererIssuanceAllowed();
         // 幂等命中：同（filingType, projectCode）已存在直接报"已提交"
         FilingDO exists = filingMapper.selectOne(new LambdaQueryWrapper<FilingDO>()
                 .eq(FilingDO::getFilingType, reqVO.getFilingType())
