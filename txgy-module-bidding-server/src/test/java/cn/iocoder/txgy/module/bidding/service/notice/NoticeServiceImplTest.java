@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeTypeEnum;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.service.notice.search.NoticeSearchEngine;
+import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import cn.iocoder.txgy.module.bidding.service.subject.SubjectEligibilityService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -50,6 +52,7 @@ class NoticeServiceImplTest {
     private NoticeContentMapper contentMapper;
     private NoticeSearchEngine searchEngine;
     private SubjectEligibilityService subjectEligibilityService;
+    private FollowService followService;
     private NoticeServiceImpl service;
 
     @BeforeEach
@@ -63,6 +66,8 @@ class NoticeServiceImplTest {
         ReflectionTestUtils.setField(service, "noticeSearchEngine", searchEngine);
         subjectEligibilityService = mock(SubjectEligibilityService.class);
         ReflectionTestUtils.setField(service, "subjectEligibilityService", subjectEligibilityService);
+        followService = mock(FollowService.class);
+        ReflectionTestUtils.setField(service, "followService", followService);
     }
 
     // ========== 新建 ==========
@@ -330,6 +335,127 @@ class NoticeServiceImplTest {
 
         assertThrows(ServiceException.class, () -> service.publishNotice(10L));
         verify(searchEngine, never()).index(any());
+    }
+
+    // ========== 内部公告关注扇出（业务核查补全 2026-09-07：发布/更新触发关注动态；草稿不打扰订阅者） ==========
+
+    @Test
+    void publish_triggersInternalFanoutWithLatestContentVersion() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.DRAFT, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("正文已就绪")); // v1
+
+        service.publishNotice(1L);
+
+        verify(followService).handleInternalNoticeChanged(eq("PUBLISHED"), eq(1L), eq("某项目施工招标公告"),
+                eq((String) null), eq((String) null), eq((String) null), eq(1));
+    }
+
+    @Test
+    void update_contentChangedOnPublishedNotice_fansOutUpdatedWithNewVersion() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("旧版正文")); // v1
+
+        NoticeSaveReqVO changed = baseReq();
+        changed.setId(1L);
+        changed.setContent("新版正文");
+        service.updateNotice(changed);
+
+        // 原状态已发布 + 正文产生新版本 v2 → UPDATED 扇出（publisherName 等展示字段由载荷规整，无载荷时为 null）
+        verify(followService).handleInternalNoticeChanged(eq("UPDATED"), eq(1L), eq("某项目施工招标公告"),
+                eq((String) null), eq((String) null), eq((String) null), eq(2));
+    }
+
+    @Test
+    void update_partialFieldsOnly_preservesUnsubmittedValuesAndFansOutWithProjectCode() {
+        // 部分更新实测修复（2026-09-07）：仅提交标题+正文时，不得翻转 internalFlag / 清空项目归属，
+        // 且 UPDATED 扇出必须携带库中项目 code（否则 PROJECT 维度订阅漏提醒）
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        notice.setProjectCode("P-1");
+        notice.setProjectName("某项目");
+        notice.setPublisherName("某集团");
+        notice.setInternalFlag(true);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("旧版正文")); // v1
+
+        NoticeSaveReqVO changed = baseReq();
+        changed.setId(1L);
+        changed.setContent("新版正文");
+        service.updateNotice(changed);
+
+        ArgumentCaptor<NoticeDO> saved = ArgumentCaptor.forClass(NoticeDO.class);
+        verify(noticeMapper).updateById(saved.capture());
+        assertEquals(Boolean.TRUE, saved.getValue().getInternalFlag(), "未提交 internalFlag 不得翻回 false");
+        assertEquals("P-1", saved.getValue().getProjectCode(), "未提交 projectCode 保留库中原值");
+        assertEquals("某集团", saved.getValue().getPublisherName());
+        verify(followService).handleInternalNoticeChanged(eq("UPDATED"), eq(1L), eq("某项目施工招标公告"),
+                eq("某集团"), eq("某项目"), eq("P-1"), eq(2));
+    }
+
+    @Test
+    void update_withExplicitInternalFlagChange_overridesValue() {
+        // 显式提交 internalFlag=false（如把公告从企业内部改为公开）仍生效
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        notice.setInternalFlag(true);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("旧版正文"));
+
+        NoticeSaveReqVO changed = baseReq();
+        changed.setId(1L);
+        changed.setInternalFlag(false);
+        changed.setContent("与旧版不同的正文");
+        service.updateNotice(changed);
+
+        ArgumentCaptor<NoticeDO> saved = ArgumentCaptor.forClass(NoticeDO.class);
+        verify(noticeMapper).updateById(saved.capture());
+        assertEquals(Boolean.FALSE, saved.getValue().getInternalFlag());
+    }
+
+    @Test
+    void update_contentUnchanged_noInternalFanout() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("旧版正文"));
+
+        NoticeSaveReqVO same = baseReq();
+        same.setId(1L);
+        same.setContent("  旧版正文  "); // 仅空白差异：不产生版本 → 不打扰订阅者
+        service.updateNotice(same);
+
+        verifyNoInteractions(followService);
+    }
+
+    @Test
+    void update_contentChangedOnDraftNotice_noInternalFanout() {
+        // 草稿期编辑虽追加版本（发布前的版本演进），但不扇出（订阅者只会看到最终发布内容）
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.DRAFT, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(contentMapper.selectOne(any())).thenReturn(contentOf("旧版正文"));
+
+        NoticeSaveReqVO changed = baseReq();
+        changed.setId(1L);
+        changed.setContent("新版正文");
+        service.updateNotice(changed);
+
+        verifyNoInteractions(followService);
+    }
+
+    @Test
+    void create_draftNotice_noInternalFanout() {
+        // 新建（DRAFT）不扇出：动态只发生在 PUBLISHED 之后（发布/已发布内容更新）
+        NoticeSaveReqVO reqVO = baseReq();
+        reqVO.setPayload(payload("E-CODE", "某项目招标公告"));
+        reqVO.setContent("招标公告正文第一版");
+        when(noticeMapper.insert(any(NoticeDO.class))).thenAnswer(inv -> {
+            NoticeDO notice = inv.getArgument(0);
+            notice.setId(1L);
+            return 1;
+        });
+
+        service.createNotice(reqVO);
+
+        verifyNoInteractions(followService);
     }
 
     // ========== 测试工具 ==========

@@ -30,6 +30,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
 /**
  * 关注/关注项目列表 服务实现。
  */
+@Slf4j
 @Service
 public class FollowServiceImpl implements FollowService {
 
@@ -59,6 +61,7 @@ public class FollowServiceImpl implements FollowService {
     private static final String TYPE_SECTION = "SECTION";
     /** 事件/提醒相关常量 */
     private static final String EVENT_TYPE_NOTICE_PUBLISHED = "NOTICE_PUBLISHED";
+    private static final String EVENT_TYPE_NOTICE_UPDATED = "NOTICE_UPDATED";
     /** 外部公告审核生效提醒（设计 §12.2/前端 02 文档事件枚举 EXTERNAL_ACTIVE） */
     private static final String EVENT_TYPE_EXTERNAL_ACTIVE = "EXTERNAL_ACTIVE";
     private static final String EVENT_SOURCE_EXTERNAL = "EXTERNAL";
@@ -174,39 +177,41 @@ public class FollowServiceImpl implements FollowService {
         return new PageResult<>(toItemRespList(page.getRecords()), page.getTotal());
     }
 
-    /** 行映射（BR-4）：公告级行携带公告展示状态与平台可达性（available=false → 前端隐藏详情跳转、按源站原文兜底）。 */
+    /** 行映射（BR-4/业务核查）：公告级行双源（外部 G 轨/内部 T 轨）回查——补名+展示状态+可达性。 */
     private List<FollowItemRespVO> toItemRespList(List<FollowItemDO> records) {
         if (records == null || records.isEmpty()) {
             return List.of();
         }
-        Map<Long, NoticeExternalDO> noticeMap = fetchAnnouncementNotices(records);
+        Map<Long, NoticeExternalDO> externalMap = fetchExternalAnnouncementNotices(records);
+        Map<Long, NoticeDO> internalMap = fetchInternalAnnouncementNotices(records, externalMap);
         List<FollowItemRespVO> result = new ArrayList<>(records.size());
         for (FollowItemDO row : records) {
             Long keyId = row == null ? null : parseKeyId(row);
-            NoticeExternalDO notice = keyId == null ? null : noticeMap.get(keyId); // 维度行 keyId=null：不入 map（MapN.get(null) 抛 NPE）
-            if (notice != null) {
-                applyNoticeSnapshot(row, notice);
+            if (keyId == null) {
+                result.add(toItemResp(row, null, null));
+                continue;
             }
-            result.add(toItemResp(row, notice));
+            NoticeExternalDO external = externalMap.get(keyId); // MapN.get(null) 已规避
+            NoticeDO internal = external == null ? internalMap.get(keyId) : null;
+            if (external != null) {
+                applyNoticeSnapshot(row, external);
+            } else if (internal != null) {
+                row.setDisplayName(internal.getTitle());
+                if (StringUtils.hasText(internal.getPublisherName())) {
+                    row.setIssuerName(internal.getPublisherName());
+                }
+            }
+            result.add(toItemResp(row, external, internal));
         }
         return result;
     }
 
-    /** 公告级行批量回查公告主档（读路径内存态：补名+状态；不落库）。 */
-    private Map<Long, NoticeExternalDO> fetchAnnouncementNotices(List<FollowItemDO> rows) {
+    /** 公告级行批量回查外部公告主档（G 轨，读路径内存态：补名+状态；不落库）。 */
+    private Map<Long, NoticeExternalDO> fetchExternalAnnouncementNotices(List<FollowItemDO> rows) {
         if (noticeExternalMapper == null) {
             return Map.of();
         }
-        List<Long> needIds = new ArrayList<>();
-        for (FollowItemDO row : rows) {
-            if (row == null || !TYPE_ANNOUNCEMENT.equals(row.getFollowType()) || !StringUtils.hasText(row.getFollowKey())) {
-                continue;
-            }
-            Long id = parseKeyId(row);
-            if (id != null) {
-                needIds.add(id);
-            }
-        }
+        List<Long> needIds = announcementIds(rows);
         if (needIds.isEmpty()) {
             return Map.of();
         }
@@ -214,8 +219,45 @@ public class FollowServiceImpl implements FollowService {
             return noticeExternalMapper.selectBatchIds(needIds).stream()
                     .collect(Collectors.toMap(NoticeExternalDO::getId, n -> n, (a, b) -> a));
         } catch (Exception e) {
-            return Map.of(); // 公告主档不可读不阻断列表（缺状态时 available=null，前端按无公告级状态处理）
+            return Map.of(); // 外部公告主档不可读不阻断列表
         }
+    }
+
+    /** 公告级行中外部未命中的 id，回查内部公告（T 轨同租户；内部公告级关注同样补名/状态）。 */
+    private Map<Long, NoticeDO> fetchInternalAnnouncementNotices(List<FollowItemDO> rows,
+                                                                 Map<Long, NoticeExternalDO> externalMap) {
+        if (noticeMapper == null) {
+            return Map.of();
+        }
+        List<Long> needIds = new ArrayList<>();
+        for (Long id : announcementIds(rows)) {
+            if (!externalMap.containsKey(id)) {
+                needIds.add(id);
+            }
+        }
+        if (needIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return noticeMapper.selectBatchIds(needIds).stream()
+                    .collect(Collectors.toMap(NoticeDO::getId, n -> n, (a, b) -> a));
+        } catch (Exception e) {
+            return Map.of(); // 内部公告不可读不阻断列表
+        }
+    }
+
+    private List<Long> announcementIds(List<FollowItemDO> rows) {
+        List<Long> ids = new ArrayList<>();
+        for (FollowItemDO row : rows) {
+            if (row == null || !TYPE_ANNOUNCEMENT.equals(row.getFollowType()) || !StringUtils.hasText(row.getFollowKey())) {
+                continue;
+            }
+            Long id = parseKeyId(row);
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        return ids;
     }
 
     /** 公告级行目标 id（仅 ANNOUNCEMENT 且 key 为数字）；维度行为 null。 */
@@ -325,7 +367,8 @@ public class FollowServiceImpl implements FollowService {
             resp.setItemId(item.getId());
             String displayName = item.getDisplayName();
             String issuerName = item.getIssuerName();
-            // 公告级且行快照缺名（雪花 id/空）：单点即时回查公告补名（不落库，避免读路径写放大）
+            // 公告级且行快照缺名（雪花 id/空）：单点即时回查公告补名（不落库，避免读路径写放大）；
+            // 双源：先外部（G 轨），未命中再内部（T 轨同租户）
             if (TYPE_ANNOUNCEMENT.equals(targetType)
                     && (!StringUtils.hasText(displayName) || Objects.equals(displayName, targetKey))) {
                 NoticeExternalDO notice = findNoticeByFollowKey(targetKey);
@@ -337,6 +380,14 @@ public class FollowServiceImpl implements FollowService {
                     }
                     if (StringUtils.hasText(notice.getIssuerName())) {
                         issuerName = notice.getIssuerName();
+                    }
+                } else {
+                    NoticeDO internal = findInternalNoticeByFollowKey(targetKey);
+                    if (internal != null) {
+                        displayName = internal.getTitle();
+                        if (StringUtils.hasText(internal.getPublisherName())) {
+                            issuerName = internal.getPublisherName();
+                        }
                     }
                 }
             }
@@ -375,6 +426,116 @@ public class FollowServiceImpl implements FollowService {
                 TenantUtils.execute(subscription.getTenantId(), () -> handleForSubscriber(subscription, notice, source));
             }
         }
+    }
+
+    /**
+     * 内部公告版本变化扇出（业务核查补全 2026-09-07）：发布首版/已发布内容更新时通知同租户关注者。
+     * 匹配：公告级订阅（ANNOUNCEMENT, targetKey=公告id）+ 项目级订阅（PROJECT, targetKey=notice.projectCode）；
+     * 事件键含动作与版本号：同一版本幂等（重放安全），新版本/重新发布产生新动态。
+     */
+    @Override
+    public void handleInternalNoticeChanged(String action, Long noticeId, String title, String publisherName,
+                                            String projectName, String projectCode, int version) {
+        if (noticeId == null || action == null) {
+            return;
+        }
+        String eventType = "PUBLISHED".equals(action)
+                ? EVENT_TYPE_NOTICE_PUBLISHED : EVENT_TYPE_NOTICE_UPDATED;
+        List<NoticeSubscriptionDO> subscriptions = new ArrayList<>();
+        try {
+            subscriptions.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
+                    .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
+                    .eq(NoticeSubscriptionDO::getTargetType, TYPE_ANNOUNCEMENT)
+                    .eq(NoticeSubscriptionDO::getTargetKey, String.valueOf(noticeId))));
+            if (StringUtils.hasText(projectCode)) {
+                subscriptions.addAll(noticeSubscriptionMapper.selectList(new LambdaQueryWrapper<NoticeSubscriptionDO>()
+                        .eq(NoticeSubscriptionDO::getFollowStatus, STATUS_FOLLOWING)
+                        .eq(NoticeSubscriptionDO::getTargetType, TYPE_PROJECT)
+                        .eq(NoticeSubscriptionDO::getTargetKey, projectCode)));
+            }
+        } catch (Exception e) {
+            log.warn("[follow][internal] 订阅查询失败 noticeId={}", noticeId, e);
+            return;
+        }
+        Set<Long> seen = new HashSet<>();
+        subscriptions.removeIf(s -> !seen.add(s.getId()));
+        for (NoticeSubscriptionDO subscription : subscriptions) {
+            try {
+                fanoutInternal(subscription, eventType, noticeId, title, publisherName, projectName, version);
+            } catch (Exception e) {
+                log.warn("[follow][internal][sub={}] 动态写入失败 noticeId={}", subscription.getId(), noticeId, e);
+            }
+        }
+    }
+
+    /** 单订阅内部事件：建/恢复关注行 → 事件去重(版本) → 刷行 → IN_APP 留痕。 */
+    private void fanoutInternal(NoticeSubscriptionDO subscription, String eventType, Long noticeId, String title,
+                                String publisherName, String projectName, int version) {
+        FollowItemDO item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
+        if (item == null) {
+            item = newInternalItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey(),
+                    title, publisherName, projectName);
+            try {
+                followItemMapper.insert(item);
+            } catch (DuplicateKeyException e) {
+                item = findItem(subscription.getUserId(), subscription.getTargetType(), subscription.getTargetKey());
+            }
+        }
+        if (item == null || item.getId() == null) {
+            return;
+        }
+        String key = subscription.getUserId() + "-" + item.getId() + "-" + EVENT_SOURCE_INTERNAL
+                + "-" + noticeId + "-" + eventType + "-" + version;
+        FollowItemEventDO exists = followItemEventMapper.selectOne(new LambdaQueryWrapper<FollowItemEventDO>()
+                .eq(FollowItemEventDO::getEventKey, key));
+        if (exists != null) {
+            return; // 同一版本已提醒
+        }
+        FollowItemEventDO event = new FollowItemEventDO();
+        event.setUserId(subscription.getUserId());
+        event.setItemId(item.getId());
+        event.setSource(EVENT_SOURCE_INTERNAL);
+        event.setEventType(eventType);
+        event.setNoticeId(noticeId);
+        event.setEventKey(key);
+        event.setTitleSnapshot(title);
+        event.setOccurredAt(LocalDateTime.now());
+        event.setReadFlag(Boolean.FALSE);
+        followItemEventMapper.insert(event);
+        item.setLatestDynamicTime(event.getOccurredAt());
+        item.setUnreadCount(item.getUnreadCount() == null ? 1 : item.getUnreadCount() + 1);
+        if (TYPE_ANNOUNCEMENT.equals(item.getFollowType())) {
+            item.setDisplayName(title);
+        } else if (StringUtils.hasText(projectName)) {
+            item.setDisplayName(projectName);
+        }
+        if (StringUtils.hasText(publisherName)) {
+            item.setIssuerName(publisherName);
+        }
+        followItemMapper.updateById(item);
+        SubscriptionEventDO se = new SubscriptionEventDO();
+        se.setUserId(subscription.getUserId());
+        se.setFollowEventId(event.getId());
+        se.setNoticeId(noticeId);
+        se.setChannel(CHANNEL_IN_APP);
+        se.setChannelStatus("PENDING");
+        se.setRetryCount(0);
+        subscriptionEventMapper.insert(se);
+    }
+
+    /** 内部公告关注行（公告级快照=公告标题；项目级=项目名兜底标题）。 */
+    private FollowItemDO newInternalItem(Long userId, String followType, String followKey, String title,
+                                         String publisherName, String projectName) {
+        FollowItemDO item = new FollowItemDO();
+        item.setUserId(userId);
+        item.setFollowType(followType);
+        item.setFollowKey(followKey);
+        item.setFollowStatus(STATUS_FOLLOWING);
+        item.setFollowTime(LocalDateTime.now());
+        item.setDisplayName(TYPE_ANNOUNCEMENT.equals(followType)
+                ? title : (StringUtils.hasText(projectName) ? projectName : title));
+        item.setIssuerName(publisherName);
+        return item;
     }
 
     /** 在订阅者租户上下文中执行：建关注行/事件去重/刷行/提醒留痕 */
@@ -455,10 +616,35 @@ public class FollowServiceImpl implements FollowService {
             return;
         }
         NoticeExternalDO notice = findNoticeByFollowKey(targetKey);
-        if (notice == null) {
-            return; // 目标不可查：保留 fallback（displayName=targetKey，前端/读路径仍可兜底补名）
+        if (notice != null) {
+            applyNoticeSnapshot(item, notice);
+            return;
         }
-        applyNoticeSnapshot(item, notice);
+        // 内部公告（同租户）：关注建行/恢复时按内部主档填标题/发布单位
+        NoticeDO internal = findInternalNoticeByFollowKey(targetKey);
+        if (internal == null) {
+            return; // 目标不可查：保留 fallback（displayName=targetKey，读路径仍可兜底补名）
+        }
+        item.setDisplayName(internal.getTitle());
+        if (StringUtils.hasText(internal.getPublisherName())) {
+            item.setIssuerName(internal.getPublisherName());
+        }
+    }
+
+    /** targetKey → 内部公告主档（T 轨同租户；仅 ANNOUNCEMENT 数字 id）。 */
+    private NoticeDO findInternalNoticeByFollowKey(String targetKey) {
+        if (noticeMapper == null || !StringUtils.hasText(targetKey)) {
+            return null;
+        }
+        Long noticeId = parseLongKey(targetKey);
+        if (noticeId == null) {
+            return null;
+        }
+        try {
+            return noticeMapper.selectById(noticeId);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -472,9 +658,20 @@ public class FollowServiceImpl implements FollowService {
             return;
         }
         NoticeExternalDO notice = findNoticeByFollowKey(item.getFollowKey());
-        if (notice == null || !NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())) {
-            return; // 未生效/不可查：等审核生效扇出（handleNoticeActivated）再提醒
+        if (notice != null && NoticeExternalStatusEnum.ACTIVE.getStatus().equals(notice.getStatus())) {
+            seedExternalInitial(item, notice);
+            return;
         }
+        // 内部公告（T 轨同租户）：已发布（PUBLISHED）同样种已读初始动态（业务对称：关注即见首版动态）
+        NoticeDO internal = findInternalNoticeByFollowKey(item.getFollowKey());
+        if (internal == null || !NoticeStatusEnum.PUBLISHED.name().equals(internal.getStatus())) {
+            return; // 未生效/不可查：等发布/审核扇出再提醒
+        }
+        seedInternalInitial(item, internal);
+    }
+
+    /** 外部公告初始动态（BR-6，原实现内联拆出）。 */
+    private void seedExternalInitial(FollowItemDO item, NoticeExternalDO notice) {
         String seedKey = item.getUserId() + "-" + item.getId() + "-" + EVENT_SOURCE_EXTERNAL
                 + "-" + notice.getId() + "-seed";
         FollowItemEventDO exists = followItemEventMapper.selectOne(new LambdaQueryWrapper<FollowItemEventDO>()
@@ -497,6 +694,34 @@ public class FollowServiceImpl implements FollowService {
             followItemEventMapper.insert(event);
         } catch (DuplicateKeyException e) {
             return; // 并发双写兜底（event_key 唯一约束）
+        }
+        item.setLatestDynamicTime(event.getOccurredAt());
+        followItemMapper.updateById(item);
+    }
+
+    /** 内部公告初始动态（已读 NOTICE_PUBLISHED，快照=关注时标题；幂等 key：user-item-INTERNAL-noticeId-seed）。 */
+    private void seedInternalInitial(FollowItemDO item, NoticeDO internal) {
+        String seedKey = item.getUserId() + "-" + item.getId() + "-" + EVENT_SOURCE_INTERNAL
+                + "-" + internal.getId() + "-seed";
+        FollowItemEventDO exists = followItemEventMapper.selectOne(new LambdaQueryWrapper<FollowItemEventDO>()
+                .eq(FollowItemEventDO::getEventKey, seedKey));
+        if (exists != null) {
+            return;
+        }
+        FollowItemEventDO event = new FollowItemEventDO();
+        event.setUserId(item.getUserId());
+        event.setItemId(item.getId());
+        event.setSource(EVENT_SOURCE_INTERNAL);
+        event.setEventType(EVENT_TYPE_NOTICE_PUBLISHED);
+        event.setNoticeId(internal.getId());
+        event.setEventKey(seedKey);
+        event.setTitleSnapshot(internal.getTitle());
+        event.setOccurredAt(LocalDateTime.now());
+        event.setReadFlag(Boolean.TRUE);
+        try {
+            followItemEventMapper.insert(event);
+        } catch (DuplicateKeyException e) {
+            return;
         }
         item.setLatestDynamicTime(event.getOccurredAt());
         followItemMapper.updateById(item);
@@ -630,7 +855,7 @@ public class FollowServiceImpl implements FollowService {
                 + "-" + (StringUtils.hasText(contentHash) ? contentHash.substring(0, Math.min(12, contentHash.length())) : "nohash");
     }
 
-    private FollowItemRespVO toItemResp(FollowItemDO item, NoticeExternalDO notice) {
+    private FollowItemRespVO toItemResp(FollowItemDO item, NoticeExternalDO external, NoticeDO internal) {
         FollowItemRespVO vo = new FollowItemRespVO();
         vo.setId(item.getId());
         vo.setFollowType(item.getFollowType());
@@ -643,10 +868,14 @@ public class FollowServiceImpl implements FollowService {
         vo.setLatestDynamicTime(item.getLatestDynamicTime());
         vo.setUnreadCount(item.getUnreadCount());
         vo.setFollowTime(item.getFollowTime());
-        // BR-4 可达性：公告级行携带公告展示状态与平台可达性（公告 ACTIVE 才可达平台详情）
-        String noticeStatus = notice == null ? null : notice.getStatus();
-        vo.setNoticeStatus(noticeStatus);
-        vo.setAvailable(availableOf(EVENT_SOURCE_EXTERNAL, noticeStatus));
+        // BR-4/业务核查 可达性：公告级行双源（外部 ACTIVE / 内部 PUBLISHED）才可达平台详情
+        if (external != null) {
+            vo.setNoticeStatus(external.getStatus());
+            vo.setAvailable(availableOf(EVENT_SOURCE_EXTERNAL, external.getStatus()));
+        } else if (internal != null) {
+            vo.setNoticeStatus(internal.getStatus());
+            vo.setAvailable(availableOf(EVENT_SOURCE_INTERNAL, internal.getStatus()));
+        }
         return vo;
     }
 

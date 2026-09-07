@@ -494,4 +494,199 @@ class FollowServiceImplTest {
         assertEquals(Boolean.TRUE, intVo.getAvailable());
     }
 
+    // ===== 内部公告订阅闭环（业务核查补全 2026-09-07）：发布/更新扇出、版本幂等、双源行可达 =====
+
+    @Test
+    void handleInternalPublished_fansOutToAnnouncementAndProjectSubscribers() {
+        NoticeSubscriptionDO subAnn = subscription(7L, 1L, "ANNOUNCEMENT", "55");
+        NoticeSubscriptionDO subProj = subscription(8L, 1L, "PROJECT", "P-1");
+        subProj.setId(2L); // 订阅 id 需唯一（扇出去重按订阅 id）
+        when(subMapper.selectList(any())).thenReturn(List.of(subAnn), List.of(subProj));
+        when(itemMapper.selectOne(any())).thenReturn(null);
+        when(eventMapper.selectOne(any())).thenReturn(null);
+        doAnswer(inv -> {
+            ((FollowItemDO) inv.getArgument(0)).setId(101L);
+            return 1;
+        }).when(itemMapper).insert(any(FollowItemDO.class));
+
+        service.handleInternalNoticeChanged("PUBLISHED", 55L, "某集团2026年防腐管道招标", "某集团", "防腐管道项目", "P-1", 1);
+
+        // 公告级 + 项目级订阅各收到一条未读动态（IN_APP 提醒留痕）
+        ArgumentCaptor<FollowItemEventDO> event = ArgumentCaptor.forClass(FollowItemEventDO.class);
+        verify(eventMapper, times(2)).insert(event.capture());
+        for (FollowItemEventDO e : event.getAllValues()) {
+            assertEquals("INTERNAL", e.getSource());
+            assertEquals("NOTICE_PUBLISHED", e.getEventType());
+            assertEquals(55L, e.getNoticeId().longValue());
+            assertEquals(Boolean.FALSE, e.getReadFlag());
+            assertTrue(e.getEventKey().endsWith("-55-NOTICE_PUBLISHED-1"), "事件键须含来源+公告+动作+版本");
+            assertEquals("某集团2026年防腐管道招标", e.getTitleSnapshot());
+        }
+        // 行快照：公告级=公告标题，项目级=项目名
+        ArgumentCaptor<FollowItemDO> item = ArgumentCaptor.forClass(FollowItemDO.class);
+        verify(itemMapper, times(2)).insert(item.capture());
+        assertTrue(item.getAllValues().stream().anyMatch(i ->
+                "ANNOUNCEMENT".equals(i.getFollowType()) && "某集团2026年防腐管道招标".equals(i.getDisplayName())));
+        assertTrue(item.getAllValues().stream().anyMatch(i ->
+                "PROJECT".equals(i.getFollowType()) && "防腐管道项目".equals(i.getDisplayName())));
+        // 未读+1、最近动态时间刷新、IN_APP PENDING 留痕
+        ArgumentCaptor<FollowItemDO> updated = ArgumentCaptor.forClass(FollowItemDO.class);
+        verify(itemMapper, times(2)).updateById(updated.capture());
+        assertTrue(updated.getAllValues().stream().allMatch(i -> Integer.valueOf(1).equals(i.getUnreadCount())));
+        assertTrue(updated.getAllValues().stream().allMatch(i -> i.getLatestDynamicTime() != null));
+        ArgumentCaptor<SubscriptionEventDO> se = ArgumentCaptor.forClass(SubscriptionEventDO.class);
+        verify(seMapper, times(2)).insert(se.capture());
+        assertTrue(se.getAllValues().stream().allMatch(s ->
+                "IN_APP".equals(s.getChannel()) && "PENDING".equals(s.getChannelStatus())));
+    }
+
+    @Test
+    void handleInternalUpdated_sameVersionIdempotent_newVersionFansOutAgain() {
+        NoticeSubscriptionDO subAnn = subscription(7L, 1L, "ANNOUNCEMENT", "55");
+        when(subMapper.selectList(any())).thenReturn(List.of(subAnn));
+        FollowItemDO item = new FollowItemDO();
+        item.setId(5L);
+        item.setUserId(7L);
+        item.setFollowType("ANNOUNCEMENT");
+        item.setFollowKey("55");
+        item.setDisplayName("旧标题");
+        item.setUnreadCount(0);
+        item.setFollowStatus("FOLLOWING");
+        when(itemMapper.selectOne(any())).thenReturn(item);
+        // 三次 selectOne：v2 首次(无事件) / v2 重放(已存在) / v3(新版本无事件)
+        FollowItemEventDO exists = new FollowItemEventDO();
+        exists.setId(901L);
+        when(eventMapper.selectOne(any())).thenReturn(null, exists, null);
+
+        service.handleInternalNoticeChanged("UPDATED", 55L, "标题v2", "某集团", null, null, 2);
+        service.handleInternalNoticeChanged("UPDATED", 55L, "标题v2", "某集团", null, null, 2); // 同版本重放：幂等
+        service.handleInternalNoticeChanged("UPDATED", 55L, "标题v3", "某集团", null, null, 3); // 新版本：再提醒
+
+        ArgumentCaptor<FollowItemEventDO> event = ArgumentCaptor.forClass(FollowItemEventDO.class);
+        verify(eventMapper, times(2)).insert(event.capture());
+        assertEquals("NOTICE_UPDATED", event.getAllValues().get(0).getEventType());
+        assertTrue(event.getAllValues().get(0).getEventKey().endsWith("-55-NOTICE_UPDATED-2"));
+        assertTrue(event.getAllValues().get(1).getEventKey().endsWith("-55-NOTICE_UPDATED-3"));
+        verify(seMapper, times(2)).insert(any(SubscriptionEventDO.class));
+        // 未读两次递增（重放不递增），行快照标题随最新版本刷新
+        verify(itemMapper, times(2)).updateById(any(FollowItemDO.class));
+        assertEquals(2, item.getUnreadCount().intValue());
+        assertEquals("标题v3", item.getDisplayName());
+    }
+
+    @Test
+    void follow_internalPublishedAnnouncement_seedsReadInitialEvent() {
+        // 业务对称：内部公告已发布（PUBLISHED）时关注 → 种已读 NOTICE_PUBLISHED 初始动态（timeline 非空、未读不增）
+        when(subMapper.selectOne(any())).thenReturn(null);
+        when(itemMapper.selectOne(any())).thenReturn(null);
+        when(externalMapper.selectById(100L)).thenReturn(null); // G 轨未命中
+        NoticeDO internal = new NoticeDO();
+        internal.setId(100L);
+        internal.setTitle("某集团内部招标公告");
+        internal.setStatus("PUBLISHED");
+        internal.setPublisherName("某集团");
+        when(noticeMapper.selectById(100L)).thenReturn(internal);
+        doAnswer(inv -> {
+            ((FollowItemDO) inv.getArgument(0)).setId(9L);
+            return 1;
+        }).when(itemMapper).insert(any(FollowItemDO.class));
+
+        service.follow(7L, req("ANNOUNCEMENT", "100"));
+
+        // 建行快照：内部主档标题/发布单位
+        ArgumentCaptor<FollowItemDO> inserted = ArgumentCaptor.forClass(FollowItemDO.class);
+        verify(itemMapper).insert(inserted.capture());
+        assertEquals("某集团内部招标公告", inserted.getValue().getDisplayName());
+        assertEquals("某集团", inserted.getValue().getIssuerName());
+        // 已读初始动态
+        ArgumentCaptor<FollowItemEventDO> event = ArgumentCaptor.forClass(FollowItemEventDO.class);
+        verify(eventMapper).insert(event.capture());
+        assertEquals(Boolean.TRUE, event.getValue().getReadFlag());
+        assertEquals("INTERNAL", event.getValue().getSource());
+        assertEquals("NOTICE_PUBLISHED", event.getValue().getEventType());
+        assertEquals(100L, event.getValue().getNoticeId().longValue());
+        assertEquals("某集团内部招标公告", event.getValue().getTitleSnapshot());
+        assertTrue(event.getValue().getEventKey().endsWith("-seed"));
+        ArgumentCaptor<FollowItemDO> updated = ArgumentCaptor.forClass(FollowItemDO.class);
+        verify(itemMapper).updateById(updated.capture());
+        assertEquals(0, updated.getValue().getUnreadCount().intValue()); // 未读角标不增加
+        org.junit.jupiter.api.Assertions.assertNotNull(updated.getValue().getLatestDynamicTime());
+    }
+
+    @Test
+    void follow_notPublishedInternalAnnouncement_noSeedEvent() {
+        // 内部公告未发布（DRAFT/UNPUBLISHED）不种初始动态（等发布扇出再提醒）
+        when(subMapper.selectOne(any())).thenReturn(null);
+        when(itemMapper.selectOne(any())).thenReturn(null);
+        when(externalMapper.selectById(100L)).thenReturn(null);
+        NoticeDO internal = new NoticeDO();
+        internal.setId(100L);
+        internal.setTitle("草稿中的内部公告");
+        internal.setStatus("DRAFT");
+        when(noticeMapper.selectById(100L)).thenReturn(internal);
+
+        service.follow(7L, req("ANNOUNCEMENT", "100"));
+
+        verify(eventMapper, never()).insert(any(FollowItemEventDO.class));
+    }
+
+    @Test
+    void pageMyFollow_internalAnnouncementRow_exposesPublishedStatusAndAvailability() {
+        // 公告级行外部未命中 → 内部主档补名并暴露可达性（INTERNAL=PUBLISHED 可跳详情）
+        FollowItemDO row = new FollowItemDO();
+        row.setId(7L);
+        row.setUserId(9L);
+        row.setFollowType("ANNOUNCEMENT");
+        row.setFollowKey("55");
+        row.setDisplayName("55"); // 存量行缺快照
+        row.setFollowStatus("FOLLOWING");
+        Page<FollowItemDO> page = Page.of(1, 10);
+        page.setRecords(List.of(row));
+        page.setTotal(1);
+        when(itemMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+        when(externalMapper.selectBatchIds(anyList())).thenReturn(List.of());
+        NoticeDO published = new NoticeDO();
+        published.setId(55L);
+        published.setStatus("PUBLISHED");
+        published.setTitle("某集团内部招标公告");
+        published.setPublisherName("某集团");
+        when(noticeMapper.selectBatchIds(anyList())).thenReturn(List.of(published));
+
+        PageResult<FollowItemRespVO> result = service.pageMyFollow(9L, new FollowItemPageReqVO());
+
+        assertEquals(1, result.getList().size());
+        FollowItemRespVO vo = result.getList().get(0);
+        assertEquals("PUBLISHED", vo.getNoticeStatus());
+        assertEquals(Boolean.TRUE, vo.getAvailable());
+        assertEquals("某集团内部招标公告", vo.getDisplayName());
+        assertEquals("某集团", vo.getIssuerName());
+    }
+
+    @Test
+    void getFollowStatus_followingInternalAnnouncement_backfillsNameFromInternalNotice() {
+        // 单点状态：外部公告未命中 → 内部公告主档补名
+        when(subMapper.selectOne(any())).thenReturn(subscription(7L, 1L, "ANNOUNCEMENT", "200"));
+        FollowItemDO item = new FollowItemDO();
+        item.setId(5L);
+        item.setUserId(7L);
+        item.setFollowType("ANNOUNCEMENT");
+        item.setFollowKey("200");
+        item.setDisplayName("200");
+        item.setFollowStatus("FOLLOWING");
+        when(itemMapper.selectOne(any())).thenReturn(item);
+        when(externalMapper.selectById(200L)).thenReturn(null);
+        NoticeDO internal = new NoticeDO();
+        internal.setId(200L);
+        internal.setTitle("某内部公告");
+        internal.setStatus("PUBLISHED");
+        internal.setPublisherName("某集团");
+        when(noticeMapper.selectById(200L)).thenReturn(internal);
+
+        FollowStatusRespVO resp = service.getFollowStatus(7L, "ANNOUNCEMENT", "200");
+
+        assertEquals(Boolean.TRUE, resp.getFollowed());
+        assertEquals("某内部公告", resp.getDisplayName());
+        assertEquals("某集团", resp.getIssuerName());
+    }
+
 }

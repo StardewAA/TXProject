@@ -40,7 +40,15 @@ public interface FollowService {
     /** 关注状态单点查询（详情页关注按钮初始态；公告级缺快照时即时补名返回，不落库） */
     FollowStatusRespVO getFollowStatus(Long userId, String targetType, String targetKey);
 
-    /** 公告进入 ACTIVE（外部审核通过/内部发布）→ 匹配关注并写动态事件+提醒（同事件去重） */
+    /** 公告进入 ACTIVE（外部审核通过）→ 匹配关注并写动态事件+提醒（同事件去重） */
     void handleNoticeActivated(NoticeExternalDO notice, String source);
+
+    /**
+     * 内部公告版本变化（发布首版 NOTICE_PUBLISHED / 已发布内容更新产生新版本 NOTICE_UPDATED）：
+     * 在发布者租户内匹配关注（公告级 targetKey=noticeId；项目级 targetKey=projectCode），
+     * 写 INTERNAL 事件（事件键含版本号：同一版本幂等，新版本再提醒）与 IN_APP 提醒留痕。
+     */
+    void handleInternalNoticeChanged(String action, Long noticeId, String title, String publisherName,
+                                     String projectName, String projectCode, int version);
 
 }

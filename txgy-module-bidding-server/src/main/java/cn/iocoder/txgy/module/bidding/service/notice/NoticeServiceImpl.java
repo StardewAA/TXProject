@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.notice.NoticeContentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.notice.NoticeMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import cn.iocoder.txgy.module.bidding.enums.NoticeStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.NoticeTypeEnum;
 import cn.iocoder.txgy.module.bidding.service.notice.search.NoticeEsDoc;
@@ -68,6 +69,9 @@ public class NoticeServiceImpl implements NoticeService {
     private NoticeContentMapper noticeContentMapper;
     @Resource
     private NoticeSearchEngine noticeSearchEngine;
+    /** 关注扇出（内部公告版本变化 → 同租户关注者 INTERNAL 动态；失败不阻断发布，见 handleInternalNoticeChanged 注释） */
+    @Resource
+    private FollowService followService;
 
     // ========== 后台管理 ==========
 
@@ -81,7 +85,7 @@ public class NoticeServiceImpl implements NoticeService {
         NoticeDO notice = new NoticeDO();
         notice.setNoticeCode(StringUtils.hasText(reqVO.getNoticeCode()) ? reqVO.getNoticeCode() : generateNoticeCode());
         notice.setNoticeType(type.name());
-        applyBase(notice, reqVO);
+        applyBaseCreate(notice, reqVO);
         notice.setStatus(NoticeStatusEnum.DRAFT.name());
         // 权威必填校验（VO数据规范 数据集“必填=是”）后规整入库
         LinkedHashMap<String, Object> canonical = NoticePayloadUtils.canonicalize(type, reqVO.getPayload());
@@ -113,17 +117,23 @@ public class NoticeServiceImpl implements NoticeService {
         if (reqVO.getNoticeType() != null) {
             notice.setNoticeType(requireType(reqVO.getNoticeType()).name());
         }
-        applyBase(notice, reqVO);
+        applyBaseUpdate(notice, reqVO); // 部分更新：未提交字段保留原值（不得翻转 internalFlag/清空项目归属，见 05-业务核查 §2.5 实测修复）
         noticeMapper.updateById(notice);
         // 正文：有实质变化才追加新版本
+        int appendedVersion = -1;
         if (reqVO.getContent() != null) {
             NoticeContentDO latest = latestContent(notice.getId());
             String oldContent = latest == null ? null : latest.getContent();
             if (NoticeContentUtils.shouldAppendVersion(oldContent, reqVO.getContent())) {
-                appendContent(notice.getId(), reqVO.getContent());
+                appendedVersion = appendContent(notice.getId(), reqVO.getContent());
             }
         }
         afterCommit(() -> indexDoc(notice.getId()));
+        // 关注扇出：原状态已发布且正文产生新版本 → 同租户关注者收到 NOTICE_UPDATED（业务口径：草稿期编辑不打扰订阅者）
+        if (appendedVersion > 0 && NoticeStatusEnum.PUBLISHED.name().equals(notice.getStatus())) {
+            fanoutInternalVersionChange("UPDATED", notice.getId(), notice.getTitle(),
+                    notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(), appendedVersion);
+        }
     }
 
     @Override
@@ -145,6 +155,28 @@ public class NoticeServiceImpl implements NoticeService {
         }
         noticeMapper.updateById(notice);
         afterCommit(() -> indexDoc(id));
+        // 关注扇出：发布/重新发布成功 → 同租户关注者收到 NOTICE_PUBLISHED（版本=当前最新正文版本；重发同版本不重复提醒，见事件键含版本号）
+        int version = latestContentVersion(id);
+        fanoutInternalVersionChange("PUBLISHED", id, notice.getTitle(),
+                notice.getPublisherName(), notice.getProjectName(), notice.getProjectCode(), version);
+    }
+
+    /** 内部公告关注扇出（失败仅记日志，不阻断公告本身的结果；见 FollowService.handleInternalNoticeChanged）。 */
+    private void fanoutInternalVersionChange(String action, Long noticeId, String title, String publisherName,
+                                             String projectName, String projectCode, int version) {
+        try {
+            if (followService != null && noticeId != null) {
+                followService.handleInternalNoticeChanged(action, noticeId, title, publisherName,
+                        projectName, projectCode, version);
+            }
+        } catch (Exception e) {
+            log.error("[notice][internalFanout][action={}][noticeId={}] 关注扇出失败（不影响公告结果）", action, noticeId, e);
+        }
+    }
+
+    private int latestContentVersion(Long noticeId) {
+        NoticeContentDO latest = latestContent(noticeId);
+        return latest == null ? 0 : latest.getVersion();
     }
 
     @Override
@@ -301,7 +333,8 @@ public class NoticeServiceImpl implements NoticeService {
         return notice.getPublishTime() == null || !notice.getPublishTime().isAfter(LocalDateTime.now());
     }
 
-    private void applyBase(NoticeDO notice, NoticeSaveReqVO reqVO) {
+    /** 新建（表单全量）：缺省字段落默认值（publicLevel 缺省 SOCIAL；internalFlag 缺省 false）。 */
+    private void applyBaseCreate(NoticeDO notice, NoticeSaveReqVO reqVO) {
         notice.setTitle(reqVO.getTitle());
         notice.setProjectCode(reqVO.getProjectCode());
         notice.setProjectName(reqVO.getProjectName());
@@ -312,6 +345,42 @@ public class NoticeServiceImpl implements NoticeService {
         notice.setPdfFileId(reqVO.getPdfFileId());
         notice.setPdfSha256(reqVO.getPdfSha256());
         notice.setPdfSize(reqVO.getPdfSize());
+    }
+
+    /**
+     * 更新（部分更新语义）：仅覆盖显式提交的字段；未提交字段保留库中原值。
+     * 实测修复（2026-09-07）：此前无条件覆盖会把 internalFlag 翻回 false（企业内部公告泄到 SOCIAL 可见性）、
+     * 清空 projectCode/projectName/publisherName 内存值（关注扇出 PROJECT 维度漏提醒、快照写空）。
+     */
+    private void applyBaseUpdate(NoticeDO notice, NoticeSaveReqVO reqVO) {
+        notice.setTitle(reqVO.getTitle()); // VO @NotBlank：更新必传标题
+        if (reqVO.getProjectCode() != null) {
+            notice.setProjectCode(reqVO.getProjectCode());
+        }
+        if (reqVO.getProjectName() != null) {
+            notice.setProjectName(reqVO.getProjectName());
+        }
+        if (reqVO.getPublisherName() != null) {
+            notice.setPublisherName(reqVO.getPublisherName());
+        }
+        if (reqVO.getPublishTime() != null) {
+            notice.setPublishTime(reqVO.getPublishTime());
+        }
+        if (reqVO.getInternalFlag() != null) {
+            notice.setInternalFlag(Boolean.TRUE.equals(reqVO.getInternalFlag()));
+        }
+        if (StringUtils.hasText(reqVO.getPublicLevel())) {
+            notice.setPublicLevel(reqVO.getPublicLevel());
+        }
+        if (reqVO.getPdfFileId() != null) {
+            notice.setPdfFileId(reqVO.getPdfFileId());
+        }
+        if (reqVO.getPdfSha256() != null) {
+            notice.setPdfSha256(reqVO.getPdfSha256());
+        }
+        if (reqVO.getPdfSize() != null) {
+            notice.setPdfSize(reqVO.getPdfSize());
+        }
     }
 
     private NoticeDO getNotice(Long id) {
@@ -372,7 +441,7 @@ public class NoticeServiceImpl implements NoticeService {
                 .last("LIMIT 1"));
     }
 
-    private void appendContent(Long noticeId, String content) {
+    private int appendContent(Long noticeId, String content) {
         NoticeContentDO latest = latestContent(noticeId);
         int nextVersion = latest == null ? 1 : latest.getVersion() + 1;
         NoticeContentDO contentDO = new NoticeContentDO();
@@ -382,6 +451,7 @@ public class NoticeServiceImpl implements NoticeService {
         contentDO.setSha256(sha256(content));
         contentDO.setVersion(nextVersion);
         noticeContentMapper.insert(contentDO);
+        return nextVersion;
     }
 
     private List<NoticeRespVO> convertList(List<NoticeDO> notices) {
