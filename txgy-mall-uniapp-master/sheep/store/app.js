@@ -181,14 +181,23 @@ const adaptTenant = async () => {
 
 /** 初始化装修模版 */
 const adaptTemplate = async (appTemplate, templateId) => {
-  const { data: diyTemplate } = templateId
-    ? // 查询指定模板，一般是预览时使用
-      await DiyApi.getDiyTemplate(templateId)
-    : await DiyApi.getUsedDiyTemplate();
-  // 模板不存在
+  let response;
+  try {
+    response = templateId
+      ? // 查询指定模板，一般是预览时使用
+        await DiyApi.getDiyTemplate(templateId)
+      : await DiyApi.getUsedDiyTemplate();
+  } catch (error) {
+    console.warn('商城装修模板加载失败，将使用空模板继续运行:', error);
+  }
+
+  const diyTemplate = response?.data;
+  // 模板不存在或接口暂不可用时，使用空模板，避免首页直接跳转错误页。
   if (!diyTemplate) {
-    $router.error('TemplateError');
-    return;
+    console.warn('未找到已启用的商城装修模板');
+    appTemplate.home = { style: {}, data: [], components: [] };
+    appTemplate.user = { style: {}, data: [], components: [] };
+    return false;
   }
 
   const tabBar = diyTemplate?.property?.tabBar;

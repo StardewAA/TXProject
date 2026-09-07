@@ -163,6 +163,21 @@ export function getOrder(id: number) {
   );
 }
 
+export interface OrderShopGroup {
+  shopId?: number;
+  shopName?: string;
+  itemIds?: number[];
+  productCount?: number;
+  totalPrice?: number;
+  deliveryPrice?: number;
+  payPrice?: number;
+}
+
+/** 按店铺读取订单项分组（用于商家履约视图） */
+export function getOrderShopGroups(id: number) {
+  return requestClient.get<OrderShopGroup[]>(`/trade/order/get-shop-orders?id=${id}`);
+}
+
 /** 查询交易订单物流详情 */
 export function getExpressTrackList(id: number) {
   return requestClient.get(`/trade/order/get-express-track-list?id=${id}`);

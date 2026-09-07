@@ -21,6 +21,9 @@ public interface MesProProjectMapper extends BaseMapperX<MesProProjectDO> {
                 .likeIfPresent(MesProProjectDO::getName, reqVO.getName())
                 .eqIfPresent(MesProProjectDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(MesProProjectDO::getSourceType, reqVO.getSourceType())
+                .eqIfPresent(MesProProjectDO::getPriority, reqVO.getPriority())
+                .likeIfPresent(MesProProjectDO::getOwner, reqVO.getOwner())
+                .eqIfPresent(MesProProjectDO::getDept, reqVO.getDept())
                 .orderByDesc(MesProProjectDO::getId));
     }
 

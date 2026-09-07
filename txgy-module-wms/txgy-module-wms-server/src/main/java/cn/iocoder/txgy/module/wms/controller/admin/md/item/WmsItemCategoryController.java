@@ -78,4 +78,12 @@ public class WmsItemCategoryController {
         return success(BeanUtils.toBean(list, WmsItemCategoryRespVO.class));
     }
 
+    @GetMapping("/enabled-list")
+    @Operation(summary = "获得可用商品分类精简列表", description = "主要用于创建商品时选择分类")
+    @PreAuthorize("@ss.hasPermission('wms:item-category:query')")
+    public CommonResult<List<WmsItemCategoryRespVO>> getEnabledItemCategoryList() {
+        List<WmsItemCategoryDO> list = categoryService.getEnabledItemCategoryList();
+        return success(BeanUtils.toBean(list, WmsItemCategoryRespVO.class));
+    }
+
 }

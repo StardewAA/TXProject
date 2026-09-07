@@ -27,6 +27,9 @@ public class ErpSaleOrderRespVO {
     @ExcelProperty("销售状态")
     private Integer status;
 
+    @Schema(description = "BPM 流程实例编号")
+    private String processInstanceId;
+
     @Schema(description = "客户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1724")
     private Long customerId;
     @Schema(description = "客户名称", example = "OPENLAB BS")

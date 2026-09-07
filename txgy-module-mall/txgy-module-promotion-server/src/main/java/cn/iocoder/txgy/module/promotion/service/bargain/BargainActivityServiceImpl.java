@@ -119,7 +119,7 @@ public class BargainActivityServiceImpl implements BargainActivityService {
     }
 
     private void validateSku(Long skuId) {
-        ProductSkuRespDTO sku = productSkuApi.getSku(skuId).getCheckedData();
+        ProductSkuRespDTO sku = productSkuApi.getSku(skuId);
         if (sku == null) {
             throw exception(SKU_NOT_EXISTS);
         }

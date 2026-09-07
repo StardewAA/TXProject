@@ -117,6 +117,11 @@ async function handleNotificationGetList() {
     id: item.id,
     message: item.templateContent,
     title: item.templateNickname,
+    link: item.templateParams?.detailPath,
+    query: {
+      orderNo: item.templateParams?.orderNo,
+      orderType: item.templateParams?.orderType,
+    },
   }));
 }
 

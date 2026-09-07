@@ -1,0 +1,3 @@
+package cn.iocoder.txgy.module.product.service.enterprise;
+import cn.iocoder.txgy.framework.common.pojo.PageResult; import cn.iocoder.txgy.module.product.controller.admin.enterprise.vo.ProductEnterprisePageReqVO; import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpriseDO;
+public interface ProductEnterpriseService { Long create(ProductEnterpriseDO data); void update(ProductEnterpriseDO data); void delete(Long id); ProductEnterpriseDO get(Long id); PageResult<ProductEnterpriseDO> page(ProductEnterprisePageReqVO req); java.util.List<ProductEnterpriseDO> getApproved(); void audit(Long id, Integer status, String remark); ProductEnterpriseDO validateApproved(Long id); }
