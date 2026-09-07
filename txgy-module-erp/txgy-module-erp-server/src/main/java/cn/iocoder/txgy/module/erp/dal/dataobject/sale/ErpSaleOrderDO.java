@@ -41,6 +41,10 @@ public class ErpSaleOrderDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 流程实例编号
+     */
+    private String processInstanceId;
+    /**
      * 客户编号
      *
      * 关联 {@link ErpCustomerDO#getId()}

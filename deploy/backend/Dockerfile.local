@@ -1,22 +1,4 @@
-# 本地快速构建：直接用已有的 deploy-mes:latest（内含 JDK25 运行时 + curl）作为基础镜像，
-# 只替换 jar，无需连接 Docker Hub / 无需容器内编译，构建通常在 10 秒内完成。
-#
-# 使用前提：本机已用 JDK25 + Maven 编译出 jar，并已复制到 deploy/backend/app.jar：
-#   mvn -pl txgy-module-mes/txgy-module-mes-server -am -Dmaven.test.skip=true package
-#   Copy-Item .\txgy-module-mes\txgy-module-mes-server\target\txgy-module-mes-server.jar .\deploy\backend\app.jar
-# 说明：.dockerignore 排除了 **/target，因此不能从 target 目录直接 COPY，需先复制到 deploy/backend/。
-
-ARG BASE_IMAGE=deploy-mes:latest
-FROM ${BASE_IMAGE}
-
-# 接收 compose 传入的参数（保持与 Dockerfile 一致，避免构建告警）
-ARG MODULE_PATH
-ARG JAR_FILE=deploy/backend/app.jar
-
-WORKDIR /app
-
-COPY ${JAR_FILE} /app/app.jar
-FROM maven:3.9-eclipse-temurin-25 AS builder
+FROM maven:3.9.16-eclipse-temurin-25 AS builder
 
 WORKDIR /workspace
 
@@ -24,7 +6,8 @@ COPY . .
 
 ARG MODULE_PATH
 
-RUN mvn -Dmaven.test.skip=true -pl "${MODULE_PATH}" -am package
+RUN --mount=type=cache,id=txgycloud-maven-cache,target=/root/.m2,sharing=locked \
+    mvn -Dmaven.test.skip=true -pl "${MODULE_PATH}" -am package
 
 RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
     && test -f /app.jar

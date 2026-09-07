@@ -5,6 +5,8 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
@@ -14,8 +16,10 @@ import cn.iocoder.txgy.module.erp.dal.mysql.purchase.ErpPurchaseOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.purchase.ErpPurchaseOrderMapper;
 import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
+import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
+import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +46,9 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
+    /** 采购订单审批流程标识，可在 BPM 中动态配置任意数量的审批节点。 */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "erp-purchase-order-approval";
+
     @Resource
     private ErpPurchaseOrderMapper purchaseOrderMapper;
     @Resource
@@ -56,6 +63,10 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private ErpSupplierService supplierService;
     @Resource
     private ErpAccountService accountService;
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private ErpApprovalNotificationService approvalNotificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -76,7 +87,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
         // 2.1 插入订单
         ErpPurchaseOrderDO purchaseOrder = BeanUtils.toBean(createReqVO, ErpPurchaseOrderDO.class, in -> in
-                .setNo(no).setStatus(ErpAuditStatus.PROCESS.getStatus()));
+                .setNo(no).setStatus(ErpAuditStatus.DRAFT.getStatus()));
         calculateTotalPrice(purchaseOrder, purchaseOrderItems);
         purchaseOrderMapper.insert(purchaseOrder);
         // 2.2 插入订单项
@@ -92,6 +103,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         ErpPurchaseOrderDO purchaseOrder = validatePurchaseOrderExists(updateReqVO.getId());
         if (ErpAuditStatus.APPROVE.getStatus().equals(purchaseOrder.getStatus())) {
             throw exception(PURCHASE_ORDER_UPDATE_FAIL_APPROVE, purchaseOrder.getNo());
+        }
+        if (ErpAuditStatus.PROCESS.getStatus().equals(purchaseOrder.getStatus())) {
+            throw exception(PURCHASE_ORDER_UPDATE_FAIL_PROCESS, purchaseOrder.getNo());
         }
         // 1.2 校验供应商
         supplierService.validateSupplier(updateReqVO.getSupplierId());
@@ -148,6 +162,40 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         if (updateCount == 0) {
             throw exception(approve ? PURCHASE_ORDER_APPROVE_FAIL : PURCHASE_ORDER_PROCESS_FAIL);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void submitPurchaseOrder(Long id, Long userId) {
+        ErpPurchaseOrderDO purchaseOrder = validatePurchaseOrderExists(id);
+        if (!ObjectUtil.equal(purchaseOrder.getStatus(), ErpAuditStatus.DRAFT.getStatus())
+                && !ObjectUtil.equal(purchaseOrder.getStatus(), ErpAuditStatus.REJECT.getStatus())
+                && !ObjectUtil.equal(purchaseOrder.getStatus(), ErpAuditStatus.CANCEL.getStatus())) {
+            throw exception(PURCHASE_ORDER_SUBMIT_FAIL_STATUS, purchaseOrder.getNo());
+        }
+        Map<String, Object> variables = Map.of(
+                "orderType", "PURCHASE",
+                "orderNo", purchaseOrder.getNo(),
+                "totalPrice", purchaseOrder.getTotalPrice());
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId,
+                new BpmProcessInstanceCreateReqDTO()
+                        .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                        .setBusinessKey(String.valueOf(id))
+                        .setVariables(variables)).getCheckedData();
+        purchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(id)
+                .setStatus(ErpAuditStatus.PROCESS.getStatus())
+                .setProcessInstanceId(processInstanceId));
+        approvalNotificationService.sendOrderSubmittedAfterCommit(userId, "PURCHASE", purchaseOrder.getNo(), id);
+    }
+
+    @Override
+    public void updatePurchaseOrderAuditStatus(Long id, Integer bpmStatus) {
+        ErpPurchaseOrderDO purchaseOrder = validatePurchaseOrderExists(id);
+        if (!ObjectUtil.equal(purchaseOrder.getStatus(), ErpAuditStatus.PROCESS.getStatus())) {
+            return;
+        }
+        purchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(id)
+                .setStatus(ErpAuditStatusUtils.convertBpmResultToAuditStatus(bpmStatus)));
     }
 
     private List<ErpPurchaseOrderItemDO> validatePurchaseOrderItems(List<ErpPurchaseOrderSaveReqVO.Item> list) {
@@ -236,7 +284,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             return;
         }
         purchaseOrders.forEach(purchaseOrder -> {
-            if (ErpAuditStatus.APPROVE.getStatus().equals(purchaseOrder.getStatus())) {
+            if (ErpAuditStatus.APPROVE.getStatus().equals(purchaseOrder.getStatus())
+                    || ErpAuditStatus.PROCESS.getStatus().equals(purchaseOrder.getStatus())) {
                 throw exception(PURCHASE_ORDER_DELETE_FAIL_APPROVE, purchaseOrder.getNo());
             }
         });

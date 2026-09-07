@@ -29,22 +29,27 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     ...options,
     baseURL,
   });
+  let reAuthing = false;
 
   /**
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
+    if (reAuthing) return;
+    reAuthing = true;
     console.warn('Access token or refresh token is invalid or expired. ');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
+    accessStore.setRefreshToken(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      try { await authStore.logout(); } catch { /* token 已失效，忽略退出请求错误 */ }
+      window.location.href = '/#/auth/login';
     }
   }
 

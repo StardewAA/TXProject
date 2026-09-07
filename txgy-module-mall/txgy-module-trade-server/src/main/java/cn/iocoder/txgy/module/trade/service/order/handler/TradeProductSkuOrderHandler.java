@@ -25,7 +25,7 @@ public class TradeProductSkuOrderHandler implements TradeOrderHandler {
 
     @Override
     public void beforeOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convertNegative(orderItems)).checkError();
+        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convertNegative(orderItems));
     }
 
     @Override
@@ -35,12 +35,12 @@ public class TradeProductSkuOrderHandler implements TradeOrderHandler {
         if (CollUtil.isEmpty(orderItems)) {
             return;
         }
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(orderItems)).checkError();
+        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(orderItems));
     }
 
     @Override
     public void afterCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(singletonList(orderItem))).checkError();
+        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(singletonList(orderItem)));
     }
 
 }

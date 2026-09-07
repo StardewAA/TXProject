@@ -326,6 +326,12 @@ export function useDetailGridColumns(
       minWidth: 120,
     },
     {
+      field: 'pollutionStatus',
+      title: '环保',
+      width: 110,
+      slots: { default: 'pollution' },
+    },
+    {
       field: 'warehouseName',
       title: '仓库名称',
       minWidth: 100,

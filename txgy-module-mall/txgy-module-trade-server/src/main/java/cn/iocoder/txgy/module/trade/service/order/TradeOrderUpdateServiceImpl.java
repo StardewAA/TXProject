@@ -189,6 +189,12 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         // 1.2 构建订单
         TradeOrderDO order = buildTradeOrder(userId, createReqVO, calculateRespBO);
         List<TradeOrderItemDO> orderItems = buildTradeOrderItems(order, calculateRespBO);
+        // 平台自营也参与分组，避免自营和商家混合订单被错误归为单店铺订单。
+        orderItems.forEach(item -> item.setShopId(item.getShopId() == null ? 0L : item.getShopId()));
+        Set<Long> orderShopIds = convertSet(orderItems, TradeOrderItemDO::getShopId);
+        if (orderShopIds.size() == 1) {
+            order.setShopId(orderShopIds.iterator().next());
+        }
 
         // 2. 订单创建前的逻辑
         tradeOrderHandlers.forEach(handler -> handler.beforeOrderCreate(order, orderItems));
