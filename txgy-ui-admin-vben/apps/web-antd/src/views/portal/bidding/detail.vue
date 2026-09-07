@@ -40,8 +40,28 @@ async function probeFollow(): Promise<void> {
   }
 }
 
+function hintOf(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e);
+  return /账号未登录|未登录/.test(m) ? `请先登录后关注：${m}` : m;
+}
+/** 未登录/无权限：去管理端登录页（login.vue 的 resolveRedirectPath 支持 /portal/ 前缀回跳当前详情） */
+function goLogin(): void {
+  router
+    .push({
+      path: '/auth/login',
+      query: { redirect: `/portal/bidding/detail/${id.value}` },
+    })
+    .catch(() => {
+      /* 导航取消忽略 */
+    });
+}
+
 async function toggleFollow(): Promise<void> {
   if (followBusy.value) return;
+  if (followState.value === 'unavailable') {
+    goLogin();
+    return;
+  }
   followBusy.value = true;
   try {
     if (followState.value === 'followed') {
@@ -53,7 +73,7 @@ async function toggleFollow(): Promise<void> {
     }
   } catch (e) {
     followState.value = 'unavailable';
-    followHint.value = e instanceof Error ? e.message : String(e);
+    followHint.value = hintOf(e);
   } finally {
     followBusy.value = false;
   }
@@ -72,13 +92,17 @@ async function probeProjFollow(): Promise<void> {
   } catch (e) {
     // 未登录/无权限等：隐藏按钮，给一句说明（浏览与公告级关注不受影响）
     projFollowState.value = 'unavailable';
-    projFollowHint.value = e instanceof Error ? e.message : String(e);
+    projFollowHint.value = hintOf(e);
   }
 }
 
 async function toggleProjFollow(): Promise<void> {
   const k = projectKeyVal.value;
   if (!k || projFollowBusy.value) return;
+  if (projFollowState.value === 'unavailable') {
+    goLogin();
+    return;
+  }
   projFollowBusy.value = true;
   try {
     if (projFollowState.value === 'followed') {
@@ -90,7 +114,7 @@ async function toggleProjFollow(): Promise<void> {
     }
   } catch (e) {
     projFollowState.value = 'unavailable';
-    projFollowHint.value = e instanceof Error ? e.message : String(e);
+    projFollowHint.value = hintOf(e);
   } finally {
     projFollowBusy.value = false;
   }
@@ -249,12 +273,17 @@ onBeforeUnmount(() => {
         </div>
         <div class="head-actions">
           <button
-            v-if="followState === 'followed' || followState === 'unfollowed'"
+            v-if="followState !== 'idle'"
             class="go-orig"
-            :class="{ active: followState === 'followed' }"
+            :class="{ active: followState === 'followed', need: followState === 'unavailable' }"
             :disabled="followBusy"
             @click="toggleFollow()"
-          >{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : '＋ 关注' }}</button>
+          >{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : followState === 'unavailable' ? '＋ 关注 · 需登录' : '＋ 关注' }}</button>
+          <button
+            v-if="followState === 'unavailable'"
+            class="go-orig ghost"
+            @click="goLogin()"
+          >去登录</button>
           <a
             v-if="detail.origUrl"
             class="go-orig"
@@ -272,12 +301,13 @@ onBeforeUnmount(() => {
         <span class="track-label">项目跟踪</span>
         <span class="track-key">{{ projectKeyVal }}</span>
         <button
-          v-if="projFollowState === 'followed' || projFollowState === 'unfollowed'"
+          v-if="projFollowState !== 'idle'"
           class="go-orig"
-          :class="{ active: projFollowState === 'followed' }"
+          :class="{ active: projFollowState === 'followed', need: projFollowState === 'unavailable' }"
           :disabled="projFollowBusy"
           @click="toggleProjFollow()"
-        >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : '＋ 跟踪该项目' }}</button>
+        >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}</button>
+        <button v-if="projFollowState === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
         <span v-if="projFollowState === 'unavailable' && projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
       </div>
       <p v-if="followState === 'unavailable' && followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
@@ -691,6 +721,23 @@ onBeforeUnmount(() => {
 }
 .go-orig:hover {
   background: #e2ecf8;
+}
+.go-orig.need {
+  border-style: dashed;
+  color: #8a97a4;
+  background: #fafbfc;
+  border-color: #d3dae1;
+}
+.go-orig.need:hover {
+  background: #eef1f4;
+}
+.go-orig.ghost {
+  border: 1px solid #d3dae1;
+  background: #fff;
+  color: #7a8591;
+}
+.go-orig.ghost:hover {
+  background: #f3f5f7;
 }
 
 
