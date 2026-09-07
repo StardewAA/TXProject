@@ -120,3 +120,8 @@ export function deleteCmsPolicy(data: { id: number }) {
 export function auditCmsContent(data: CmsAuditReq) {
   return requestClient.put<boolean>('/cms/content/audit', data);
 }
+
+/** 模拟采集政策草稿 */
+export function simulateCmsPolicyCrawl() {
+  return requestClient.post<number>('/cms/policy/simulate-crawl');
+}
