@@ -6,7 +6,15 @@ import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { InputNumber, message, Modal, Switch, Tag, TreeSelect } from 'ant-design-vue';
+import {
+  Button,
+  InputNumber,
+  message,
+  Modal,
+  Switch,
+  Tag,
+  TreeSelect,
+} from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { $t } from '#/locales';
@@ -16,6 +24,7 @@ import {
   changeVideoStatus,
   deleteVideo,
   getResourceCategoryTree,
+  getVideoDefinitionOptions,
   getVideoPage,
   markVideoTranscodeSuccess,
   setVideoCreditHours,
@@ -159,15 +168,32 @@ function handleEdit(row: TrainingResourceApi.VideoResource) {
   videoFormModal.setData(row).open();
 }
 
-// ========== 播放弹窗 ==========
+// ========== 播放弹窗（支持清晰度切换）==========
 const playVisible = ref(false);
 const playUrl = ref('');
 const playingRow = ref<TrainingResourceApi.VideoResource>();
+const definitionOptions = ref<TrainingResourceApi.VideoDefinitionOption[]>([]);
+const currentDefinition = ref<string>('');
 
-function handlePlay(row: TrainingResourceApi.VideoResource) {
+async function handlePlay(row: TrainingResourceApi.VideoResource) {
   playingRow.value = row;
-  playUrl.value = buildVideoPlayUrl(row.id!);
   playVisible.value = true;
+  definitionOptions.value = [];
+  try {
+    definitionOptions.value = (await getVideoDefinitionOptions(row.id!)) ?? [];
+  } catch {
+    definitionOptions.value = [];
+  }
+  const preferred =
+    definitionOptions.value.find((item) => item.original) ??
+    definitionOptions.value[0];
+  currentDefinition.value = preferred?.definition ?? '';
+  playUrl.value = preferred?.url ?? buildVideoPlayUrl(row.id!);
+}
+
+function switchDefinition(item: TrainingResourceApi.VideoDefinitionOption) {
+  currentDefinition.value = item.definition ?? '';
+  playUrl.value = item.url ?? '';
 }
 
 // ========== 学时配置弹窗 ==========
@@ -350,6 +376,22 @@ loadCategories();
       :footer="null"
       destroy-on-close
     >
+      <div v-if="definitionOptions.length" class="mb-3 flex flex-wrap items-center gap-2">
+        <span class="text-sm text-gray-500">清晰度</span>
+        <Button
+          v-for="item in definitionOptions"
+          :key="item.definition"
+          size="small"
+          :type="currentDefinition === item.definition ? 'primary' : 'default'"
+          @click="switchDefinition(item)"
+        >
+          {{ item.definition }}
+          <span v-if="!item.transcoded" class="text-xs opacity-70">(未转码)</span>
+        </Button>
+        <span class="ml-2 text-xs text-gray-400">
+          网络不稳定时可选择更低清晰度观看（未转码的清晰度暂按原始视频播放）
+        </span>
+      </div>
       <video
         v-if="playUrl"
         :src="playUrl"

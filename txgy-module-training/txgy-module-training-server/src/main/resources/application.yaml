@@ -60,4 +60,19 @@ txgy:
   resource:
     upload-dir: ${RESOURCE_UPLOAD_DIR:./uploads}
 
+# AI 大模型（考试题库：文档导入自动提取试题）
+# 支持任意 OpenAI 兼容接口：DeepSeek / 豆包（火山方舟）/ 通义 / 月之暗面 等
+# 未配置 api-key 时自动降级为本地规则解析，不影响功能可用性
+training:
+  ai:
+    enabled: ${TRAINING_AI_ENABLED:false}
+    provider: ${TRAINING_AI_PROVIDER:deepseek}
+    base-url: ${TRAINING_AI_BASE_URL:https://api.deepseek.com}
+    chat-path: ${TRAINING_AI_CHAT_PATH:/chat/completions}
+    api-key: ${TRAINING_AI_API_KEY:}
+    model: ${TRAINING_AI_MODEL:deepseek-chat}
+    timeout-ms: ${TRAINING_AI_TIMEOUT_MS:60000}
+    max-text-length: ${TRAINING_AI_MAX_TEXT_LENGTH:12000}
+    max-questions: ${TRAINING_AI_MAX_QUESTIONS:30}
+
 debug: false

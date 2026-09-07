@@ -10,6 +10,7 @@ import {
   Input,
   InputNumber,
   message,
+  Select,
   Tag,
   TreeSelect,
   Upload,
@@ -34,6 +35,21 @@ const categoryId = ref<number | undefined>();
 const coverUrl = ref('');
 const tags = ref('');
 const durationSeconds = ref<number | undefined>();
+// 视频类型：1 短视频 2 录播
+const videoType = ref<number>(2);
+// 原始清晰度：2160P / 1080P / 720P / 480P / 360P
+const definition = ref<string>('720P');
+const VIDEO_TYPE_OPTIONS = [
+  { label: '短视频', value: 1 },
+  { label: '录播', value: 2 },
+];
+const DEFINITION_OPTIONS = [
+  { label: '2160P（4K）', value: '2160P' },
+  { label: '1080P（高清）', value: '1080P' },
+  { label: '720P（标清）', value: '720P' },
+  { label: '480P（流畅）', value: '480P' },
+  { label: '360P（极速）', value: '360P' },
+];
 const selectedFile = ref<File | null>(null);
 const uploading = ref(false);
 
@@ -90,6 +106,8 @@ async function handleConfirm() {
       coverUrl: coverUrl.value.trim() || undefined,
       tags: tags.value.trim() || undefined,
       durationSeconds: durationSeconds.value,
+      videoType: videoType.value,
+      definition: definition.value,
     };
     if (editing.value) {
       await updateVideo({ id: editingId.value, ...base });
@@ -125,6 +143,8 @@ const [Modal, modalApi] = useVbenModal({
       coverUrl.value = '';
       tags.value = '';
       durationSeconds.value = undefined;
+      videoType.value = 2;
+      definition.value = '720P';
       selectedFile.value = null;
       return;
     }
@@ -138,6 +158,8 @@ const [Modal, modalApi] = useVbenModal({
       coverUrl.value = data.coverUrl || '';
       tags.value = data.tags || '';
       durationSeconds.value = data.durationSeconds;
+      videoType.value = data.videoType ?? 2;
+      definition.value = data.definition ?? '720P';
     } else {
       editing.value = false;
     }
@@ -159,9 +181,34 @@ const [Modal, modalApi] = useVbenModal({
         />
       </div>
 
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <div class="mb-1 text-sm text-gray-600">视频类型</div>
+          <Select
+            v-model:value="videoType"
+            class="w-full"
+            :options="VIDEO_TYPE_OPTIONS"
+            placeholder="请选择视频类型"
+          />
+        </div>
+        <div>
+          <div class="mb-1 text-sm text-gray-600">原始清晰度</div>
+          <Select
+            v-model:value="definition"
+            class="w-full"
+            :options="DEFINITION_OPTIONS"
+            placeholder="请选择原始清晰度"
+          />
+        </div>
+      </div>
+      <div class="text-xs text-gray-400">
+        系统将按原始清晰度生成可切换的降级清晰度（720P 原始时会提供 480P /
+        360P 选项），转码完成后可在播放时选择更低清晰度以适应弱网环境。
+      </div>
+
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
-          上传视频文件（mp4/mov ≤500MB）
+          上传视频文件（短视频 / 录播，MP4 ≤500MB）
         </div>
         <Upload
           accept=".mp4,.mov"

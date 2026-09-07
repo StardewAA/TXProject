@@ -28,6 +28,7 @@ import {
   QUESTION_TYPE_OPTIONS,
   QUESTION_TYPE_TEXT,
 } from '../constants';
+import AiImportModal from './ai-import.vue';
 import QuestionFormContent from './question-form.vue';
 
 defineOptions({ name: 'TrainingResourceQuestionList' });
@@ -177,6 +178,13 @@ function handleEdit(row: TrainingResourceApi.Question) {
   questionFormModal.setData(row.id).open();
 }
 
+// ========== AI 智能导入（文档 → 试题）==========
+const aiImportVisible = ref(false);
+
+function handleAiImport() {
+  aiImportVisible.value = true;
+}
+
 // ========== 详情弹窗 ==========
 const detailVisible = ref(false);
 const detail = ref<TrainingResourceApi.Question>();
@@ -294,6 +302,7 @@ loadTags();
 <template>
   <Page auto-content-height>
     <QuestionFormModal @success="handleSearch" />
+    <AiImportModal v-model:open="aiImportVisible" @success="handleSearch" />
 
     <!-- 隐藏的导入 input -->
     <input
@@ -322,6 +331,9 @@ loadTags();
           下载导入模板
         </Button>
         <Button class="mr-2" @click="triggerImport">Excel 导入</Button>
+        <Button class="mr-2" type="primary" ghost @click="handleAiImport">
+          AI 智能导入
+        </Button>
         <TableAction
           :actions="[
             {
