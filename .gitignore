@@ -78,3 +78,13 @@ sql/mysql/
 /txgy-ui-app/unpackage/
 .DS_Store
 **/.DS_Store
+
+######################################################################
+# 部署产物与工具缓存（不入库）
+/deploy/jars/
+/deploy/mysql/init.d/
+/.dsh-vision-router/
+/.preview_tmp/
+/design/.preview_tmp/
+lefthook.yml.*备份*
+/txgy-module-bidding/
