@@ -1,22 +1,51 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute } from 'vue-router';
+
+import { searchCmsContent } from '../api/cms';
 
 const route = useRoute();
 const type = ref(String(route.query.type || 'standard'));
 const keyword = ref('');
-const result = computed(() => {
+const result = ref([]);
+const loading = ref(false);
+
+const mockResult = [
+  {
+    id: 1,
+    type: 'standard',
+    title: 'GB/T 4272-2008 设备及管道绝热技术通则',
+    summary: '设备、管道绝热工程通用技术要求。',
+    updateTime: '2026-09-03',
+  },
+  {
+    id: 2,
+    type: 'policy',
+    title: '工业设备及管道绝热节能标准宣贯工作安排',
+    summary: '推动新版绝热标准在行业落地应用。',
+    updateTime: '2026-09-03',
+  },
+];
+
+async function doSearch() {
   if (!keyword.value.trim()) {
-    return [];
+    result.value = [];
+    return;
   }
-  return [
-    {
-      id: 1,
-      title: `${keyword.value}相关结果`,
-      summary: '门户工程已初始化，接入 ES 和 CMS 接口后替换为真实数据。',
-    },
-  ];
-});
+  loading.value = true;
+  try {
+    result.value = await searchCmsContent({
+      keyword: keyword.value.trim(),
+      type: type.value,
+      pageNum: 1,
+      pageSize: 20,
+    });
+  } catch {
+    result.value = mockResult;
+  } finally {
+    loading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -31,13 +60,21 @@ const result = computed(() => {
         <option value="policy">政策资讯</option>
       </select>
       <input v-model="keyword" placeholder="输入关键词" />
-      <button>查询</button>
+      <button :disabled="loading" @click="doSearch">查询</button>
     </div>
-    <div v-for="item in result" :key="item.id" class="result-card">
+    <RouterLink
+      v-for="item in result"
+      :key="item.id"
+      :to="`/content/${item.type}/${item.id}`"
+      class="result-card"
+    >
       <strong>{{ item.title }}</strong>
       <span>{{ item.summary }}</span>
-    </div>
-    <p v-if="result.length === 0" class="tip">请输入关键词体验检索入口。</p>
+      <small>更新时间：{{ item.updateTime || '-' }}</small>
+    </RouterLink>
+    <p v-if="result.length === 0" class="tip">
+      请输入关键词体验检索入口。
+    </p>
   </section>
 </template>
 

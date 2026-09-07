@@ -7,6 +7,7 @@ import { Page } from '@vben/common-ui';
 import { Button, Input, Select, Space, Table, Tag, message } from 'ant-design-vue';
 
 import { cmsContentConfigs } from '../content/config';
+import { simulateCmsPolicyCrawl } from '#/api/cms';
 
 defineOptions({ name: 'CmsHome' });
 
@@ -84,6 +85,15 @@ function handleCreate() {
   message.info('新增接口已预留，等待后端联调后开放');
 }
 
+async function handleSimulateCrawl() {
+  try {
+    const count = await simulateCmsPolicyCrawl();
+    message.success(`模拟采集完成，生成 ${count} 条政策草稿`);
+  } catch {
+    message.info('模拟采集接口待后端联调，已在页面预留');
+  }
+}
+
 function handleDelete(record: Record<string, any>) {
   message.info(`已选择删除：${recordTitle(record)}，接口联调后生效`);
 }
@@ -124,6 +134,7 @@ function handleSubmitAudit(record: Record<string, any>) {
 
         <div class="cms-search-actions">
           <Button type="primary" ghost @click="handleCreate">新增</Button>
+          <Button @click="handleSimulateCrawl">模拟采集</Button>
           <Button danger @click="message.info('请先在下方结果中选择要删除的内容')">
             删除
           </Button>
