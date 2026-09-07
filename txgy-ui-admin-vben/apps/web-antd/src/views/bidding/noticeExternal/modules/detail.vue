@@ -45,7 +45,17 @@ const tag = (map: Record<string, { text: string; color: string }>, v?: string) =
 };
 
 const hasBody = computed(() => !!detail.value?.contentHtmlSafe);
-const fmtT = (v?: string) => (v ? v.replace('T', ' ').slice(0, 19) : '—');
+/** 时间格式化（epoch 毫秒 / ISO 字符串都兼容；空值显示 —） */
+const p2t = (n: number) => String(n).padStart(2, '0');
+const fmtT = (v?: string | number | null): string => {
+  if (v == null || v === '') return '—';
+  let d: Date;
+  if (typeof v === 'number') d = new Date(v);
+  else if (/^\d{13}$/.test(String(v).trim())) d = new Date(Number(v));
+  else d = new Date(String(v).replace(' ', 'T'));
+  if (Number.isNaN(+d)) return String(v).slice(0, 19).replace('T', ' ');
+  return `${d.getFullYear()}-${p2t(d.getMonth() + 1)}-${p2t(d.getDate())} ${p2t(d.getHours())}:${p2t(d.getMinutes())}`;
+};
 const empty = (v?: string) => (v ? v : '—');
 
 function parseBlocks(raw?: string): NoticeBodyBlock[] | null {

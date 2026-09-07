@@ -117,7 +117,24 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-const fmtT = (v?: string) => (v ? v.replace('T', ' ').slice(0, 19) : '');
+/**
+ * 时间格式化（02 §5：publishTime/effectiveFrom/effectiveTo 出参为 epoch 毫秒整数，
+ * 兼容 ISO 字符串 'yyyy-MM-ddTHH:mm:ss' 与数字两种形态）。
+ */
+const p2t = (n: number) => String(n).padStart(2, '0');
+const fmtT = (v?: string | number | null): string => {
+  if (v == null || v === '') return '';
+  let d: Date;
+  if (typeof v === 'number') {
+    d = new Date(v);
+  } else if (/^\d{13}$/.test(String(v).trim())) {
+    d = new Date(Number(v));
+  } else {
+    d = new Date(String(v).replace(' ', 'T'));
+  }
+  if (Number.isNaN(+d)) return String(v).slice(0, 19).replace('T', ' ');
+  return `${d.getFullYear()}-${p2t(d.getMonth() + 1)}-${p2t(d.getDate())} ${p2t(d.getHours())}:${p2t(d.getMinutes())}:${p2t(d.getSeconds())}`;
+};
 const textOf = (m: Record<string, string>, v?: string) => (v && m[v] ? m[v] : (v || ''));
 
 /** 列表列（状态/审核/行业/抽取/正文结构化用 slots 上色，见 index.vue 对应 # 模板） */
