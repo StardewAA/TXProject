@@ -48,12 +48,8 @@ onMounted(() => {
     <!-- 第一行：核心 KPI 汇总卡片 -->
     <KpiCards :summary="summary" class="mb-4" @navigate="handleNavigate" />
 
-    <!-- 第二行：AI 智能助手（MES 首页对话入口） -->
-    <Row :gutter="16" class="mb-4">
-      <Col :span="24">
-        <AiAssistant :height="460" />
-      </Col>
-    </Row>
+    <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
+    <AiAssistant />
 
     <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">
