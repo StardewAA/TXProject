@@ -326,6 +326,10 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_PROJECT_IMPORT_LIST_EMPTY = new ErrorCode(1_040_509_106, "导入数据为空");
     ErrorCode PRO_PROJECT_MEMBER_NOT_EXISTS = new ErrorCode(1_040_509_110, "项目成员不存在");
     ErrorCode PRO_PROJECT_MEMBER_NAME_DUPLICATE = new ErrorCode(1_040_509_111, "该成员已存在于当前项目中");
+    ErrorCode PRO_PROJECT_MILESTONE_NOT_EXISTS = new ErrorCode(1_040_509_120, "项目里程碑不存在");
+    ErrorCode PRO_PROJECT_MILESTONE_NAME_DUPLICATE = new ErrorCode(1_040_509_121, "该里程碑已存在于当前项目中");
+    ErrorCode PRO_PROJECT_FILE_NOT_EXISTS = new ErrorCode(1_040_509_130, "项目附件不存在");
+    ErrorCode PRO_PROJECT_FILE_NAME_EMPTY = new ErrorCode(1_040_509_131, "文件名称不能为空");
 
     // ========== MES 质量管理-质检方案（1-040-600-000） ==========
     ErrorCode QC_TEMPLATE_NOT_EXISTS = new ErrorCode(1_040_600_000, "质检方案不存在");
