@@ -2,6 +2,7 @@ import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
+/** 契约来源：投标流程跟踪-前后端契约-2026-09-07（父仓，后端状态机待实现，v1 本地演示）+ 09-投标流程跟踪前端交付-业务口径说明；Track/TrackEvent/StateCode/EventCode 为前端本地模型，真实接口仅 fetchMyFollowPage（关注域，见 06 对照 §5）。 */
 export namespace ProcessTrackApi {
   /** 流程状态（契约 §1） */
   export type StateCode =
@@ -71,7 +72,7 @@ export namespace ProcessTrackApi {
   }
 }
 
-/** 我的关注列表（真实接口，作为意向建档数据源；失败可降级手填） */
+/** 契约：GET /bidding/notice-follow/item/page —— 我的关注分页（后端按当前登录人隔离，作为意向建档数据源，失败可降级手填）；权限 bidding:notice-external:query；依据 04-全链路 §3.3 / 投标流程跟踪-前后端契约 §4 */
 export function fetchMyFollowPage(params: ProcessTrackApi.FollowPageParams) {
   return requestClient.get<PageResult<ProcessTrackApi.FollowItem>>('/bidding/notice-follow/item/page', { params });
 }

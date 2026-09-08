@@ -5,21 +5,36 @@
  * NoticeExternalDetailRespVO / NoticeExternalPageReqVO），一个字段都不能少；
  * 后端联调清单 R1~R12 均已实现：列表行已带 sourceCode/legalFlag（R2）、
  * noticeTypeRaw 精确筛选已生效（R1）、keyword 走 ES 全文检索（R5）。
+ *
+ * 契约来源速查（各类型逐条契约来源见类型上方注释）：
+ *  - 外部公告域 notice-external（NoticeExternalItem/NoticeExternalDetail/NoticePageParams 及
+ *    附件/枚举/结构化块类型）<= NoticeExternalRespVO / NoticeExternalDetailRespVO / NoticeExternalPageReqVO，
+ *    契约见 docs/外部公告-前端对接/01-接口契约.md §2 与 docs/前端规范-全域接口说明/01 §2；
+ *  - 关注/订阅域 notice-follow（FollowReq/FollowItem/FollowItemPageParams/FollowStatus/FollowEvent）
+ *    <= FollowReqVO / FollowItemRespVO / FollowItemPageReqVO / FollowStatusRespVO / FollowEventRespVO，
+ *    契约见 01-接口契约.md §3；
+ *  - 内部公告域 notice /public（InternalNoticeItem/InternalNoticeDetail/InternalNoticeParams）
+ *    <= NoticeRespVO / NoticeDetailRespVO / NoticePageReqVO（招标人自营公告，见 06 §2、08 公告公示前端交付）。
  */
 
-/** 病毒扫描状态（附件） */
+/** 附件病毒扫描状态（契约来源：公告附件 VO 的 virusStatus 枚举值域，见 01-接口契约.md §2 附件说明） */
 export type VirusStatus = 'PENDING' | 'CLEAN' | 'INFECTED';
 
 /**
  * 防腐保温行业判定（三态全值域；页面只高亮“相关/未知”，NOT_BELONGS 默认不标）：
  * BELONGS（防腐保温相关）/ NOT_BELONGS / UNCERTAIN（信息不足）
+ * 契约来源：NoticeExternalRespVO.industryFlag 字段值域（后端行业判定结果，见 01-接口契约.md §2）。
  */
 export type IndustryFlag = 'BELONGS' | 'NOT_BELONGS' | 'UNCERTAIN';
 
-/** 公告内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER */
+/** 公告内容形态：HTML/PDF/ATTACHMENT/IMAGE/OTHER
+ * 契约来源：NoticeExternalRespVO.contentType 字段值域（01-接口契约.md §2/§4 值域说明）。 */
 export type NoticeContentType = 'HTML' | 'PDF' | 'ATTACHMENT' | 'IMAGE' | 'OTHER';
 
-/** 公告附件（下载地址=FileApi 签名；origDownloadUrl 为外站原始链接，仅溯源展示） */
+/**
+ * 公告附件（契约来源：notice-external 详情 attachments 元素，对应后端 NoticeExternalDetailRespVO 附件列表）：
+ * 下载地址 downloadUrl=FileApi 签名；origDownloadUrl 为外站原始链接，仅溯源展示。
+ */
 export interface NoticeAttachment {
   id: number | string;
   name: string;
@@ -33,7 +48,9 @@ export interface NoticeAttachment {
 }
 
 /**
- * 正文结构化块（detail.bodyBlocksJson 数组元素，schema 见 02-字段枚举与展示约定 §4）。
+ * 契约来源：notice-external 详情出参 bodyBlocksJson 数组元素（NoticeExternalDetailRespVO /
+ * NoticeExternalManageDetailRespVO 的结构化正文块）。
+ * schema 见 docs/外部公告-前端对接/02-字段枚举与展示约定.md §4（heading/paragraph/table/list）。
  * 后端 @JsonInclude(NON_NULL)：无值字段缺省，按 type 读取对应载荷即可。
  */
 export type NoticeBodyBlock =
@@ -134,7 +151,9 @@ export interface NoticePageParams {
   pageSize: number;
 }
 
-/** page 响应（芋道 PageResult 风格：list/total） */
+/**
+ * page 分页响应（契约来源：芋道 PageResult 通用分页结构 list/total，各 /page 端点统一出参）。
+ */
 export interface PageResult<T> {
   list: T[];
   total: number;
@@ -142,7 +161,10 @@ export interface PageResult<T> {
 
 /* ================= 关注 / 订阅域（notice-follow，01 §3 / 02 §5） ================= */
 
-/** 关注目标类型：公告/项目/招标项目/标段 */
+/**
+ * 关注目标类型：公告/项目/招标项目/标段
+ * 契约来源：notice-follow 入参/出参 targetType 值域（FollowReqVO/FollowItemRespVO，01-接口契约.md §3）。
+ */
 export type FollowTargetType = 'ANNOUNCEMENT' | 'PROJECT' | 'TENDER_PROJECT' | 'SECTION';
 
 /** 关注入参（FollowReqVO：targetType+targetKey，幂等） */
@@ -226,6 +248,8 @@ export interface FollowEvent {
 }
 
 /* ============ 内部公告（招标人自营 /bidding/notice public 域） ============ */
+/** 内部公告公开分页行（契约来源：/bidding/notice public/list 出参 NoticeRespVO 大厅公开子集：行字段 +
+ * noticeTypeName/contentPreview；见 06 §2、08 公告公示前端交付-业务口径说明.md）。 */
 export interface InternalNoticeItem {
   id: number | string;
   noticeCode?: string;
@@ -240,6 +264,8 @@ export interface InternalNoticeItem {
   publicLevel?: string;
   contentPreview?: string;
 }
+/** 内部公告公开详情（契约来源：/bidding/notice public/detail 出参 NoticeDetailRespVO = 行字段 +
+ * content 正文（版本号 contentVersion）+ payload 权威字段集 + pdfFileId/pdfSize；公开端已裁剪 SOCIAL 子集）。 */
 export interface InternalNoticeDetail extends InternalNoticeItem {
   content?: string;
   contentVersion?: number;
@@ -247,6 +273,7 @@ export interface InternalNoticeDetail extends InternalNoticeItem {
   pdfFileId?: number | string;
   pdfSize?: number;
 }
+/** 内部公告公开分页入参（契约来源：notice public/list 入参 NoticePageReqVO 大厅口径：pageNo/pageSize/keyword/noticeType）。 */
 export interface InternalNoticeParams {
   pageNo?: number;
   pageSize?: number;

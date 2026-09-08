@@ -1,3 +1,22 @@
+<!--
+  四要素注释
+  对应业务：爬虫任务工作台（菜单 6738）的「采集源配置」抽屉 —— 采集源（bidding_crawl_source）管理：
+    分页查看/新增/编辑（SourceForm 弹窗）/启停/立即爬取/删除；启用后的源进入周期轮询调度，
+    产生 SCHEDULE 定时任务任务条，采集结果落库外部公告 NEW 待审核。
+  实现理由：外部公告采集面向多个公开站点，须由管理端统一维护源（入口 URL/解析器/轮询间隔）方可可控采集；
+    轮询间隔下限 120s 由后端强校验（错误码 1-060-106-046，对应产品"120s 频控"需求，见文件头契约 §0/§2），
+    前端对同一源 120s 内重复"立即爬取"做节流拦截提示，避免对源站请求过频被封；
+    启用的采集源域名进入外链中转 /go 域名白名单（fail-closed），前台"前往原地址"只能跳白名单内站点，防开放重定向。
+  法规依据：
+    招标公告和公示信息发布管理办法（国家发展改革委令第10号，2017）第12条【部门规章/政府文件】：
+      发布媒介允许公众免费查阅公告公示完整信息 —— 采集对象与可跳转范围即限定于该类免费公开信息；
+    同办法第13条【部门规章】：免费提供信息归类与检索服务 —— 采集内容经归类/审核后在大厅免费检索展示。
+  关联契约：/bidding/crawl-source/{page,get,create,update,enabled,delete,run}（enabled=启停并进入/退出调度），
+    见 docs/bidding-notice-external/爬虫任务工作台-前后端契约-2026-09-07.md §0（后端已具备源接口清单）与
+    docs/bidding-notice-external/外部公告-前端对接-后续后端配合说明.md §3（CrawlSourceController 逐项对齐）；
+    前端函数见 apps/web-antd/src/api/bidding/crawlExternal（fetchCrawlSourcePage / setCrawlSourceEnabled /
+    runCrawlSource / deleteCrawlSource 与 SourceForm 用 create/update），权限码 bidding:crawl-source:*。
+-->
 <script lang="ts" setup>
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
@@ -61,6 +80,8 @@ async function toggleEnabled(row: CrawlExternalApi.SourceItem, checked: boolean)
   if (row.id == null) return;
   togglingId.value = row.id;
   try {
+    // 启用=进入周期轮询调度（产生 SCHEDULE 任务条），停用=退出调度；
+    // 后端对 fetch_interval_seconds 有 >=120s 下限校验（1-060-106-046，见文件头四要素注释）
     await setCrawlSourceEnabled(Number(row.id), checked);
     message.success(checked ? '已启用（进入周期轮询调度）' : '已停用');
     row.enabled = checked;
@@ -74,6 +95,8 @@ async function toggleEnabled(row: CrawlExternalApi.SourceItem, checked: boolean)
 
 async function runSource(row: CrawlExternalApi.SourceItem) {
   if (!row.sourceCode) return;
+  // 手动"立即爬取"：后端同步执行一次采集并返回按栏目汇总（fetched/ingested/failed）；
+  // 同一源 120s 内不可重复触发（频控，见文件头四要素注释与工作台契约 §0）
   runCode.value = row.sourceCode;
   try {
     const r = await runCrawlSource(row.sourceCode);

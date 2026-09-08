@@ -1,4 +1,9 @@
 /**
+ * 仅前端 mock 演示数据，联调后移除；字段真源以 NoticeDetailRespVO / ExternalNoticeVO 为准
+ * （内部公告详情=NoticeDetailRespVO；外部公告/关注域=后端 NoticeExternal* / Follow* 系列 VO，
+ * 口径另见 docs/外部公告-前端对接/01-接口契约.md）。
+ */
+/**
  * 内置 Mock（后端 notice-external 未部署到联调环境时使用；VITE_BIDDING_USE_MOCK=1 开启）。
  *
  * 数据结构与 01-接口契约.md / 后端 VO 一致（列表行已带 sourceCode/legalFlag，正文含结构化块演示）；
