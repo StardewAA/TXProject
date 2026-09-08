@@ -119,5 +119,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALE_SHIPMENT_DUPLICATE = new ErrorCode(1_060_900_016, "销售出库单已存在");
     ErrorCode WAREHOUSE_VERSION_CONFLICT = new ErrorCode(1_060_900_017, "仓库版本冲突");
     ErrorCode INTEGRATION_REQUEST_NOT_EXISTS = new ErrorCode(1_060_900_018, "幂等请求不存在");
+    ErrorCode INTEGRATION_MASTER_DATA_MAPPING_CONFLICT = new ErrorCode(1_060_900_019,
+            "主数据存在无法自动确认的存量映射");
 
 }
