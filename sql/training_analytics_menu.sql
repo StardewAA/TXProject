@@ -66,3 +66,26 @@ DELETE FROM `system_menu`
 WHERE `deleted` = b'0'
   AND `id` IN (41037, 41038, 41039, 41048, 41049, 41054)
   AND `permission` LIKE 'training:analytics%';
+
+-- 6. 晋级门槛管理
+INSERT INTO `system_menu`
+(`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+VALUES
+(41609, '晋级门槛管理', 'training:analytics:promotion:query', 2, 25, 41010, 'promotion', 'lucide:chart-no-axes-column-increasing', 'training/analytics/promotion/index', 'TrainingPromotionThreshold', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
+ON DUPLICATE KEY UPDATE
+`name` = VALUES(`name`), `permission` = VALUES(`permission`),
+`type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`),
+`path` = VALUES(`path`), `component` = VALUES(`component`),
+`component_name` = VALUES(`component_name`),
+`updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
+
+INSERT INTO `system_menu`
+(`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+VALUES
+(41621, '晋级档案维护', 'training:analytics:promotion:manage', 3, 1, 41609, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41622, '晋级数据录入', 'training:analytics:promotion:manage', 3, 2, 41609, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41623, '晋级规则调整', 'training:analytics:promotion:manage', 3, 3, 41609, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
+ON DUPLICATE KEY UPDATE
+`name` = VALUES(`name`), `permission` = VALUES(`permission`),
+`type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`),
+`updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
