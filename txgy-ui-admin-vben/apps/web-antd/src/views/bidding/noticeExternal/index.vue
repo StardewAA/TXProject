@@ -144,6 +144,29 @@ function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
 
 /** 勾选行（批量审查通过用） */
 const checkedRows = ref<NoticeExternalApi.ManageItem[]>([]);
+/**
+ * 并发执行器（修复“逐条 await 串行”：批量/一键审核原本 N 条串 N 个请求，后端逐个等；
+ * 改为固定小并发（batch=6）分片跑，既消除排队等待，又避免全量并发打爆审核/扇出/ES 链路）。
+ * 幂等前提：approve 接口幂等（后端按 status=NEW 校验），失败项仍逐条归因上报。
+ */
+async function runConcurrent<T>(
+  items: T[],
+  worker: (item: T) => Promise<void>,
+  onFail: (item: T) => void,
+  batch = 6,
+): Promise<number> {
+  let ok = 0;
+  for (let i = 0; i < items.length; i += batch) {
+    const slice = items.slice(i, i + batch);
+    const results = await Promise.allSettled(slice.map((it) => worker(it)));
+    results.forEach((r, j) => {
+      if (r.status === 'fulfilled') ok += 1;
+      else onFail(slice[j]);
+    });
+  }
+  return ok;
+}
+
 /** 审查类操作进行中（批量/一键共用，防重复触发） */
 const approving = ref(false);
 function handleRowCheckboxChange({
@@ -200,17 +223,13 @@ async function handleApproveBatch() {
     content: '批量审查通过中（' + targets.length + ' 条，逐条幂等提交）…',
     duration: 0,
   });
-  let ok = 0;
   const failed: Array<number | string> = [];
   try {
-    for (const t of targets) {
-      try {
-        await approveNotice(t.id!);
-        ok += 1;
-      } catch {
-        failed.push(t.id!);
-      }
-    }
+    const ok = await runConcurrent(
+      targets,
+      (t) => approveNotice(t.id!),
+      (t) => failed.push(t.id!),
+    );
     message.success(
       '批量审查通过完成：成功 ' +
         ok +
@@ -255,17 +274,13 @@ async function handleApproveAll() {
       content: '一键审查通过中（' + ids.length + ' 条）…',
       duration: 0,
     });
-    let ok = 0;
     const failed: Array<number | string> = [];
     try {
-      for (const id of ids) {
-        try {
-          await approveNotice(id);
-          ok += 1;
-        } catch {
-          failed.push(id);
-        }
-      }
+      const ok = await runConcurrent(
+        ids,
+        (id) => approveNotice(id),
+        (id) => failed.push(id),
+      );
       message.success(
         '一键审查通过完成：成功 ' +
           ok +
