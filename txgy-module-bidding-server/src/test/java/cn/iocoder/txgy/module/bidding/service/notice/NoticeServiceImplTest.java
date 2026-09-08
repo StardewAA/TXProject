@@ -216,6 +216,39 @@ class NoticeServiceImplTest {
         verify(searchEngine).remove(1L);
     }
 
+    // ========== 删除守卫（2026-09-09：仅草稿/已撤下可删；已发布先撤下；已归档留痕禁删） ==========
+
+    @Test
+    void delete_rejectsPublished_mustUnpublishFirst() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.PUBLISHED, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+
+        ServiceException e = assertThrows(ServiceException.class, () -> service.deleteNotice(1L));
+        assertEquals(Integer.valueOf(1_060_101_009), e.getCode(), "已发布直接删除应报 NOTICE_DELETE_STATUS_INVALID");
+        verify(noticeMapper, never()).deleteById(1L);
+    }
+
+    @Test
+    void delete_rejectsArchived_keepReadonlyTrail() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.ARCHIVED, 1001L);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+
+        ServiceException e = assertThrows(ServiceException.class, () -> service.deleteNotice(1L));
+        assertEquals(Integer.valueOf(1_060_101_009), e.getCode(), "归档终态禁止删除（留痕）");
+        verify(noticeMapper, never()).deleteById(1L);
+    }
+
+    @Test
+    void delete_allowsDraft() {
+        NoticeDO notice = noticeOf(1L, NoticeStatusEnum.DRAFT, null);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+
+        service.deleteNotice(1L);
+
+        verify(noticeMapper).deleteById(1L);
+        verify(searchEngine).remove(1L);
+    }
+
     // ========== 公开同步（BID-SUP-GATHER-02） ==========
 
     @Test

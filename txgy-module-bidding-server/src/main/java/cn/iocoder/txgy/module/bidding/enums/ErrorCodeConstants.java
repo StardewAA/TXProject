@@ -24,6 +24,7 @@ public interface ErrorCodeConstants {
     ErrorCode NOTICE_PDF_REQUIRED = new ErrorCode(1_060_101_006, "发布前必须保存公告 PDF 原文件（pdfFileId）");
     ErrorCode NOTICE_GATHER_ONLY_PUBLIC = new ErrorCode(1_060_101_007, "公开同步只允许已发布的面向公众（SOCIAL）公告");
     ErrorCode NOTICE_DEADLINE_NOT_FOUND = new ErrorCode(1_060_101_008, "标段未找到对应的已发布公告截止时间");
+    ErrorCode NOTICE_DELETE_STATUS_INVALID = new ErrorCode(1_060_101_009, "仅草稿/已撤下的公告可删除；已发布请先撤下，已归档为只读留痕禁删");
     // ========== 备案（filing，BID-ENT-REG-01 / BID-SUP-FILE-01）==========
     // 注：备案语义上属 REG 域，但冻结规范 4.7 段位表暂无 REG 段（106~198 预留），
     // 且备案由公告与文件流程发起，故暂挂 101（公告与文件）；待规范登记 REG 段后迁移。

@@ -140,6 +140,14 @@ public class NoticeServiceImpl implements NoticeService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteNotice(Long id) {
         NoticeDO notice = getNotice(id);
+        // 删除守卫（2026-09-09，对应 08-前端交付 §8 待补强项；业务依据）：
+        // ① 已发布（PUBLISHED）对外生效中，直接删除会使大厅历史内容消失、关注订阅引用的公告 id 失效、审计留痕断链 → 必须先撤下再删；
+        // ② 已归档（ARCHIVED）为只读留痕终态（状态机无出口），禁止删除 → 仅 草稿(DRAFT)/已撤下(UNPUBLISHED) 允许删除
+        String status = notice.getStatus();
+        if (!NoticeStatusEnum.DRAFT.name().equals(status)
+                && !NoticeStatusEnum.UNPUBLISHED.name().equals(status)) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.NOTICE_DELETE_STATUS_INVALID);
+        }
         noticeMapper.deleteById(notice.getId());
         afterCommit(() -> noticeSearchEngine.remove(id));
     }
