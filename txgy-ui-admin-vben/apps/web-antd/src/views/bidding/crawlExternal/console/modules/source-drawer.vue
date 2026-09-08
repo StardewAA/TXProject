@@ -82,7 +82,7 @@ async function toggleEnabled(row: CrawlExternalApi.SourceItem, checked: boolean)
   try {
     // 启用=进入周期轮询调度（产生 SCHEDULE 任务条），停用=退出调度；
     // 后端对 fetch_interval_seconds 有 >=120s 下限校验（1-060-106-046，见文件头四要素注释）
-    await setCrawlSourceEnabled(Number(row.id), checked);
+    await setCrawlSourceEnabled(row.id, checked);
     message.success(checked ? '已启用（进入周期轮询调度）' : '已停用');
     row.enabled = checked;
     emit('changed');
@@ -140,7 +140,7 @@ function removeSource(row: CrawlExternalApi.SourceItem) {
     cancelText: '取消',
     onOk: async () => {
       try {
-        await deleteCrawlSource(Number(row.id));
+        await deleteCrawlSource(row.id!); // 行必有主键（后端分页返回）
         message.success('已删除');
         emit('changed');
         await load();

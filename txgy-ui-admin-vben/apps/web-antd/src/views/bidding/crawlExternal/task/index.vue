@@ -51,7 +51,7 @@ function rowActs(row: CrawlExternalApi.TaskItem): any[] {
       auth: ['bidding:crawl-task:update'],
       popConfirm: {
         title: '确认人工重试该死信任务？attempt 将归零开启新一轮。',
-        confirm: () => void runAction('重试', () => retryCrawlTask(Number(row.id))),
+        confirm: () => void runAction('重试', () => retryCrawlTask(row.id!)), // FAILED 行必有主键
       },
     });
   }

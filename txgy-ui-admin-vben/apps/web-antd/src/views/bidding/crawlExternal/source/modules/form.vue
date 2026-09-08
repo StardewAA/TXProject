@@ -41,7 +41,7 @@ const [Modal, modalApi] = useVbenModal({
     try {
       const data = (await formApi.getValues()) as CrawlExternalApi.SourcePayload;
       if (rowData.value?.id) {
-        await updateCrawlSource({ ...data, id: rowData.value.id });
+        await updateCrawlSource({ ...data, id: rowData.value.id! }); // truthy 分支已保证 id 存在
       } else {
         await createCrawlSource(data);
       }

@@ -60,7 +60,7 @@ async function load() {
   }
   loading.value = true;
   try {
-    const got = (await getCrawlTask(Number(row.id))) as unknown as CrawlExternalApi.TaskItem;
+    const got = (await getCrawlTask(row.id)) as unknown as CrawlExternalApi.TaskItem;
     full.value = got || row;
   } catch (e) {
     full.value = row;
@@ -69,7 +69,7 @@ async function load() {
     loading.value = false;
   }
   void loadSource();
-  if (props.showSameBatch && row.jobId != null) void loadSameBatch(Number(row.jobId));
+  if (props.showSameBatch && row.jobId != null) void loadSameBatch(row.jobId);
 }
 
 /** 按 sourceCode 反查源（task 不带 fetch_type；源返回 fetchType/apiConfigJson/channelCode/parserCodeDefault） */
@@ -89,7 +89,7 @@ async function loadSource() {
   }
 }
 
-async function loadSameBatch(jobId: number) {
+async function loadSameBatch(jobId: number | string) {
   sameBatchLoading.value = true;
   try {
     const res = (await fetchCrawlTaskPage({ jobId, pageNo: 1, pageSize: 200 })) as unknown as {
@@ -112,7 +112,7 @@ async function handleRetry() {
   if (id == null) return;
   retryBusy.value = true;
   try {
-    await retryCrawlTask(Number(id));
+    await retryCrawlTask(id);
     message.success('已重新入队（attempt 归零）');
     await load();
   } catch (e) {
