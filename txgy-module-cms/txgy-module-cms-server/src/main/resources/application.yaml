@@ -9,6 +9,10 @@ spring:
   sql:
     init:
       mode: never # 骨架阶段不初始化或修改数据库
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
   data:
     redis:
       client-type: lettuce # CMS 查询缓存统一使用 Lettuce，不引入 Jedis
@@ -71,7 +75,7 @@ txgy:
     enable: true
   search:
     elasticsearch:
-      enabled: ${TXGY_SEARCH_ES_ENABLED:true}
+      enabled: ${TXGY_SEARCH_ES_ENABLED:true} # 检索开关独立；文档审查本身不依赖ES
       uris: ${TXGY_SEARCH_ES_URIS:http://127.0.0.1:9200}
       username: ${TXGY_SEARCH_ES_USERNAME:}
       password: ${TXGY_SEARCH_ES_PASSWORD:}
