@@ -54,4 +54,12 @@ public interface WmsShipmentOrderMapper extends BaseMapperX<WmsShipmentOrderDO> 
                 .eq(WmsShipmentOrderDO::getStatus, status));
     }
 
+    default int updateApprovalResultIfRunning(Long id, String processInstanceId, Integer runningStatus,
+                                               WmsShipmentOrderDO updateObj) {
+        return update(updateObj, new LambdaQueryWrapper<WmsShipmentOrderDO>()
+                .eq(WmsShipmentOrderDO::getId, id)
+                .eq(WmsShipmentOrderDO::getProcessInstanceId, processInstanceId)
+                .eq(WmsShipmentOrderDO::getApprovalStatus, runningStatus));
+    }
+
 }

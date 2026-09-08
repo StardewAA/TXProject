@@ -26,6 +26,14 @@ import java.util.List;
 @Mapper
 public interface WmsInventoryMapper extends BaseMapperX<WmsInventoryDO> {
 
+    default List<WmsInventoryDO> selectListBySkuIds(Collection<Long> skuIds) {
+        if (CollUtil.isEmpty(skuIds)) {
+            return Collections.emptyList();
+        }
+        return selectList(new LambdaQueryWrapperX<WmsInventoryDO>()
+                .in(WmsInventoryDO::getSkuId, skuIds));
+    }
+
     default PageResult<WmsInventoryDO> selectPage(WmsInventoryPageReqVO reqVO) {
         MPJLambdaWrapperX<WmsInventoryDO> query = new MPJLambdaWrapperX<WmsInventoryDO>()
                 .selectAll(WmsInventoryDO.class)

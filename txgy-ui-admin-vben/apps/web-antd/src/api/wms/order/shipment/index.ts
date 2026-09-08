@@ -12,6 +12,10 @@ export namespace WmsShipmentOrderApi {
     type?: number;
     orderTime?: string;
     status?: number;
+    approvalStatus?: number;
+    processInstanceId?: string;
+    approvalTime?: string;
+    approvalReason?: string;
     bizOrderNo?: string;
     merchantId?: number;
     merchantName?: string;
@@ -59,6 +63,12 @@ export function updateShipmentOrder(data: WmsShipmentOrderApi.ShipmentOrder) {
 
 export function completeShipmentOrder(id: number) {
   return requestClient.put(`/wms/shipment-order/complete?id=${id}`);
+}
+
+export function submitShipmentOrderApproval(id: number) {
+  return requestClient.post<string>(
+    `/wms/shipment-order/submit-approval?id=${id}`,
+  );
 }
 
 export function cancelShipmentOrder(id: number) {
