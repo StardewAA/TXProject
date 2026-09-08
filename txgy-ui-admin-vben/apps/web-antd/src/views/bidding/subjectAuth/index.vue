@@ -203,6 +203,61 @@ function doUnbind(u: SubjectApi.UserRow) {
   });
 }
 
+/* ============ 经办人双权限装配视图（只读总览：企业主体 + 经办人，双身份独立判定；不做个人主体/个人授权） ============ */
+interface DualEntPerm { authStatus?: string; eligible?: boolean; profileComplete?: boolean; }
+interface DualRow { userId: number | string; userNickname: string; bidder?: { userRole?: string; enabled?: boolean }; tenderer?: { userRole?: string; enabled?: boolean }; }
+const dualOpen = ref(false);
+const dualLoading = ref(false);
+const dualBase = ref<SubjectApi.AuthRow>();
+const dualEnt = ref<{ bidder?: DualEntPerm; tenderer?: DualEntPerm }>({});
+const dualUsers = ref<DualRow[]>([]);
+const dualColumns = [
+  { title: '经办人（共用基础信息）', key: 'user' },
+  { title: '投标权限 · 经办（BIDDER）', key: 'bidder' },
+  { title: '招标权限 · 经办（TENDERER）', key: 'tenderer' },
+];
+const dualRoleText = (r?: string): string => (r === 'CONTACT' ? '联系人' : r === 'OPERATOR' ? '操作人' : '—');
+const dualPermText = (x?: { userRole?: string; enabled?: boolean }): string =>
+  !x ? '未绑定' : dualRoleText(x.userRole) + ' · ' + (x.enabled === false ? '停用' : '启用');
+const dualEntText = (x?: DualEntPerm): string => {
+  if (!x) return '未授权';
+  const auth = x.authStatus === 'ENABLED' ? '已授权' : x.authStatus === 'DISABLED' ? '已停用' : '未授权';
+  const g = x.eligible ? '具备资格' : x.profileComplete === false ? '档案未完善' : '待核验';
+  return auth + ' · ' + g;
+};
+async function openDual(row: SubjectApi.AuthRow) {
+  dualBase.value = row;
+  dualEnt.value = {};
+  dualUsers.value = [];
+  dualOpen.value = true;
+  dualLoading.value = true;
+  try {
+    const [b, t, eb, et] = await Promise.all([
+      fetchSubjectUserPage({ pageNo: 1, pageSize: 200, tenantId: row.tenantId!, subjectType: 'BIDDER' }),
+      fetchSubjectUserPage({ pageNo: 1, pageSize: 200, tenantId: row.tenantId!, subjectType: 'TENDERER' }),
+      fetchSubjectAuthEligibility(row.tenantId!, 'BIDDER').catch(() => undefined),
+      fetchSubjectAuthEligibility(row.tenantId!, 'TENDERER').catch(() => undefined),
+    ]);
+    const map = new Map<string | number, DualRow>();
+    const put = (list: Array<SubjectApi.UserRow>, key: 'bidder' | 'tenderer') => {
+      for (const u of list) {
+        const id = u.userId as string | number;
+        let r = map.get(id);
+        if (!r) { r = { userId: id, userNickname: u.userNickname || '#' + String(id) }; map.set(id, r); }
+        r[key] = { userRole: u.userRole, enabled: u.enabled };
+      }
+    };
+    put(b.list || [], 'bidder');
+    put(t.list || [], 'tenderer');
+    dualUsers.value = Array.from(map.values());
+    dualEnt.value = { bidder: eb as DualEntPerm | undefined, tenderer: et as DualEntPerm | undefined };
+  } catch (e) {
+    createMessage.error('双权限装配加载失败：' + ((e as Error).message || String(e)));
+  } finally {
+    dualLoading.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -267,6 +322,7 @@ onMounted(load);
             <Space>
               <a class="text-xs text-blue-600" @click="openEligibility(record as SubjectApi.AuthRow)">资格</a>
               <a class="text-xs text-blue-600" @click="openUsers(record as SubjectApi.AuthRow)">经办用户</a>
+              <a class="text-xs text-indigo-600" @click="openDual(record as SubjectApi.AuthRow)">双视角</a>
             </Space>
           </template>
         </template>
@@ -351,6 +407,36 @@ onMounted(load);
           <Button size="small" :disabled="userPageNo <= 1" @click="loadUsers(userPageNo - 1)">上一页</Button>
           <Button size="small" :disabled="userPageNo * userPageSize >= userTotal" @click="loadUsers(userPageNo + 1)">下一页</Button>
         </div>
+      </SpinWrap>
+    </Drawer>
+
+    <!-- 经办人双权限装配视图（只读总览） -->
+    <Drawer v-model:open="dualOpen" :title="(dualBase?.tenantName || '企业') + ' · 经办人双权限装配视图'" :width="780">
+      <SpinWrap :loading="dualLoading">
+        <div class="mb-3 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+          企业身份授权独立且共档：投标权限（BIDDER）与招标权限（TENDERER）各自判定；人员仅为企业主体下经办人（共用企业档案），不构成个人主体。租户 #{{ dualBase?.tenantId }}
+        </div>
+        <div class="mb-3 flex flex-wrap gap-3 text-xs">
+          <span class="rounded bg-white px-2 py-1 border border-gray-200">投标权限(企业)：<b>{{ dualEntText(dualEnt.bidder) }}</b></span>
+          <span class="rounded bg-white px-2 py-1 border border-gray-200">招标权限(企业)：<b>{{ dualEntText(dualEnt.tenderer) }}</b></span>
+        </div>
+        <Table :data-source="dualUsers" :columns="dualColumns" :pagination="false" row-key="userId" size="small">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'user'">
+              <span class="text-gray-800">{{ record.userNickname }}</span>
+              <span class="ml-1 font-mono text-xs text-gray-400">#{{ record.userId }}</span>
+            </template>
+            <template v-else-if="column.key === 'bidder'">
+              <Tag v-if="record.bidder" :color="record.bidder.enabled === false ? 'orange' : 'blue'">{{ dualPermText(record.bidder) }}</Tag>
+              <span v-else class="text-gray-300">{{ dualPermText(record.bidder) }}</span>
+            </template>
+            <template v-else-if="column.key === 'tenderer'">
+              <Tag v-if="record.tenderer" :color="record.tenderer.enabled === false ? 'orange' : 'green'">{{ dualPermText(record.tenderer) }}</Tag>
+              <span v-else class="text-gray-300">{{ dualPermText(record.tenderer) }}</span>
+            </template>
+          </template>
+          <template #emptyText><div class="py-6 text-xs text-gray-300">该企业两类主体均未绑定经办人</div></template>
+        </Table>
       </SpinWrap>
     </Drawer>
 
