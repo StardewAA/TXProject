@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.training.service.course;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCategoryPageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCategoryRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCategorySaveReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseCategoryDO;
 
@@ -23,6 +24,11 @@ public interface CourseCategoryService {
     PageResult<CourseCategoryDO> getCategoryPage(CourseCategoryPageReqVO pageReqVO);
 
     List<CourseCategoryDO> getCategoryList();
+
+    /**
+     * 课程分类树（域-组-课 三级，供分类维护与课程创建时的级联/树选择）
+     */
+    List<CourseCategoryRespVO> getCategoryTree();
 
     CourseCategoryDO getCategory(Long id);
 
