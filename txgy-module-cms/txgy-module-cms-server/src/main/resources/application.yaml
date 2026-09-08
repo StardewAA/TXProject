@@ -1,0 +1,97 @@
+spring:
+  application:
+    name: cms-server
+  profiles:
+    active: local
+  main:
+    allow-circular-references: true
+    allow-bean-definition-overriding: true
+  sql:
+    init:
+      mode: never # 骨架阶段不初始化或修改数据库
+  data:
+    redis:
+      client-type: lettuce # CMS 查询缓存统一使用 Lettuce，不引入 Jedis
+      repositories:
+        enabled: false
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${CMS_NACOS_ENABLED:false}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+      config:
+        enabled: false
+        import-check:
+          enabled: false
+
+server:
+  port: ${CMS_SERVER_PORT:48100}
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: cn.iocoder.txgy.module.cms.dal.dataobject
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+xxl:
+  job:
+    enabled: false # 尚未实现同步任务，不启动执行器
+
+txgy:
+  info:
+    version: 1.0.0
+    base-package: cn.iocoder.txgy.module.cms
+  web:
+    admin-ui:
+      url: ${CMS_ADMIN_UI_URL:http://localhost:5666}
+  swagger:
+    title: CMS 行业专业资料检索
+    description: 一期提供 Elasticsearch 8.x 法规关键词检索接口，Redis 语义检索待嵌入模型接入后启用
+    version: ${txgy.info.version}
+  tenant:
+    enable: true
+  search:
+    elasticsearch:
+      enabled: ${TXGY_SEARCH_ES_ENABLED:true}
+      uris: ${TXGY_SEARCH_ES_URIS:http://127.0.0.1:9200}
+      username: ${TXGY_SEARCH_ES_USERNAME:}
+      password: ${TXGY_SEARCH_ES_PASSWORD:}
+      index-prefix: txgy-cms
+      connect-timeout: 3s
+      socket-timeout: 10s
+      bulk-size: 500
+    cache:
+      enabled: false # Lettuce 查询缓存实现尚未提供
+      key-prefix: txgy:cms:search
+      ttl: 5m
+    redis:
+      enabled: ${TXGY_SEARCH_VECTOR_ENABLED:false}
+      host: ${TXGY_SEARCH_REDIS_HOST:127.0.0.1}
+      port: ${TXGY_SEARCH_REDIS_PORT:6380}
+      username: ${TXGY_SEARCH_REDIS_USERNAME:}
+      password: ${TXGY_SEARCH_REDIS_PASSWORD:}
+      ssl: ${TXGY_SEARCH_REDIS_SSL:false}
+      timeout-millis: 3000
+      index-prefix: txgy:cms
+      vector-dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
+      default-top-k: 50
+      distance-metric: COSINE
