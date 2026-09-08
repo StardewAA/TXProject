@@ -6,6 +6,10 @@ export namespace ErpProductApi {
   /** 产品信息 */
   export interface Product {
     id?: number; // 产品编号
+    materialCode: string; // 跨模块统一物料编码
+    materialType: 'FINISHED_GOODS' | 'RAW_MATERIAL'; // 物料类型
+    qualityRequired: boolean; // 是否需要质检
+    syncVersion?: number; // 主数据同步版本
     name: string; // 产品名称
     barCode: string; // 产品条码
     categoryId: number; // 产品类型编号

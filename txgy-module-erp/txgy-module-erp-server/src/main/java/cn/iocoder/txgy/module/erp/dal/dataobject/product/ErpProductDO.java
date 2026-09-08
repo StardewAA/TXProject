@@ -28,6 +28,14 @@ public class ErpProductDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /** 跨模块统一物料编码 */
+    private String materialCode;
+    /** RAW_MATERIAL / FINISHED_GOODS */
+    private String materialType;
+    /** 是否需要质检 */
+    private Boolean qualityRequired;
+    /** ERP 权威主数据版本 */
+    private Long syncVersion;
     /**
      * 产品名称
      */
