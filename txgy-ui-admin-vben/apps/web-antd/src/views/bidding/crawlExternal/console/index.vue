@@ -25,7 +25,7 @@ import {
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
 
-import { fmtDt, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
+import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 
@@ -69,8 +69,6 @@ const kpis = computed(() => ({
 }));
 const filterSource = ref<string | undefined>(undefined);
 const filterStatus = ref<string | undefined>(undefined);
-/** 批次下钻过滤：从「采集批次」行点“查看该批任务”带入 jobId（crawl-batch 契约 §三.1：页面携 jobId 调 crawl-task/page 即完成下钻，无需新端点） */
-const jobFilter = ref<number | string | undefined>(undefined);
 const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ label: m.text, value }));
 
 const schedTasks = ref<CrawlExternalApi.TaskItem[]>([]);
@@ -124,7 +122,6 @@ async function loadSched(reset = false) {
       pageSize: 20,
       sourceCode: filterSource.value,
       status: filterStatus.value,
-      jobId: typeof jobFilter.value === 'number' ? jobFilter.value : Number(jobFilter.value) || undefined,
       taskType: 'SCHEDULE',
     };
     const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[] };
@@ -152,18 +149,6 @@ async function loadBackendTests() {
   }
 }
 
-/* 批次下钻：点“查看该批任务”→ 切到任务 tab 并按 jobId 过滤（crawl-batch §三.1，无需新端点）。
- * 契约：fetchCrawlTaskPage({ jobId }) —— 任务与批次关联行（runNow 落 RUNNING→SUCCESS/PARTIAL/FAILED 时写 jobId）。 */
-function drillJob(j: CrawlExternalApi.JobItem): void {
-  if (j.id == null) return;
-  jobFilter.value = j.id;
-  activeTab.value = 'tasks';
-  void loadSched(true);
-}
-function clearJobFilter(): void {
-  jobFilter.value = undefined;
-  void loadSched(true);
-}
 async function loadJobs() {
   try {
     const res = (await fetchCrawlJobPage({ pageNo: 1, pageSize: 10 })) as unknown as {
@@ -297,6 +282,159 @@ async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
     } catch {
       processDetail.value = undefined;
     }
+  }
+}
+
+/* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层，不嵌套 Drawer） ----------
+ * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
+ *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批爬虫任务 N 条(KPI+克制行) → 选中任务过程。
+ * 理由：查看过程/重试/批内任务下钻等操作收进详情档，列表不再跳 tab（旧 drillJob 已被批次抽屉取代），
+ *       避免跨 tab 上下文丢失；与 source-detail.vue（两档视图样板）口径一致。
+ * 契约：fetchCrawlTaskPage({ jobId, pageNo, pageSize }) 见 crawl-batch §三.1 / 04-全链路 §5.7；
+ *       getCrawlTask(id) 见 §5.8（失败原因/尝试/worker 回读）。 */
+const detailOpen = ref(false);
+/** 详情抽屉当前档位：task=任务详情 / job=批次详情（标题随档位切换） */
+const detailKind = ref<'task' | 'job'>('task');
+const detailTitle = computed(() => {
+  if (detailKind.value === 'job')
+    return detailJob.value ? '批次 #' + String(detailJob.value.id) + ' · ' + (detailJob.value.sourceCode || '未知源') : '批次详情';
+  return detailTask.value ? '任务 #' + String(detailTask.value.id) + ' 详情' : '任务详情';
+});
+
+/* ---------- 任务详情（tasks 卡进入） ---------- */
+const detailTask = ref<CrawlExternalApi.TaskItem>();
+const detailTaskFull = ref<CrawlExternalApi.TaskItem>();
+const detailTaskLoading = ref(false);
+/** 跳过同批任务层：从同批任务行继续下钻时批次上下文已具备，免重复加载同批列表 */
+const taskSkipSameBatch = ref(false);
+/** 展示用任务对象：优先 getCrawlTask 回读详情，回读前以列表行字段兜底 */
+const dt = computed(() => detailTaskFull.value || detailTask.value);
+/* 层2：同批任务（task.jobId 非空时展示，参照 crawl-batch §三.1 携 jobId 拉取） */
+const sameBatchTasks = ref<CrawlExternalApi.TaskItem[]>([]);
+const sameBatchLoading = ref(false);
+const showSameBatch = computed(
+  () => detailKind.value === 'task' && dt.value?.jobId != null && !taskSkipSameBatch.value,
+);
+
+/* ---------- 批次详情（jobs 行进入） ---------- */
+const detailJob = ref<CrawlExternalApi.JobItem>();
+const jobTasks = ref<CrawlExternalApi.TaskItem[]>([]);
+const jobTasksLoading = ref(false);
+const selJobTask = ref<CrawlExternalApi.TaskItem>();
+const selJobTaskFull = ref<CrawlExternalApi.TaskItem>();
+const selJobTaskLoading = ref(false);
+
+async function openTaskDetail(t: CrawlExternalApi.TaskItem, skipSameBatch = false): Promise<void> {
+  detailKind.value = 'task';
+  detailJob.value = undefined;
+  selJobTask.value = undefined;
+  selJobTaskFull.value = undefined;
+  detailTask.value = t;
+  detailTaskFull.value = undefined;
+  taskSkipSameBatch.value = skipSameBatch;
+  sameBatchTasks.value = [];
+  detailOpen.value = true;
+  detailTaskLoading.value = true;
+  if (t.id != null) {
+    try {
+      detailTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    } catch {
+      detailTaskFull.value = undefined; // 回读失败不阻断抽屉：先以列表行字段呈现概要
+    }
+  }
+  detailTaskLoading.value = false;
+  if (t.jobId != null && !skipSameBatch) void loadSameBatch(t.jobId);
+}
+
+/** 同批任务：同一批次下的爬虫任务（克制行，点击可继续下钻另一条任务） */
+async function loadSameBatch(jobId: number | string): Promise<void> {
+  sameBatchLoading.value = true;
+  try {
+    const res = (await fetchCrawlTaskPage({
+      jobId: Number(jobId),
+      pageNo: 1,
+      pageSize: 200,
+    })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
+    sameBatchTasks.value = res.list || [];
+  } catch {
+    sameBatchTasks.value = [];
+  } finally {
+    sameBatchLoading.value = false;
+  }
+}
+
+/** 详情档内重试：复用列表重试（仅 FAILED 死信归零 attempt 转 PENDING），成功后回读刷新概要 */
+async function retryFromDetail(): Promise<void> {
+  const t = detailTask.value;
+  if (!t || t.id == null) return;
+  await retryTask(t);
+  try {
+    detailTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+  } catch {
+    detailTaskFull.value = undefined;
+  }
+}
+
+async function openJobDetail(j: CrawlExternalApi.JobItem): Promise<void> {
+  detailKind.value = 'job';
+  detailJob.value = j;
+  detailTask.value = undefined;
+  detailTaskFull.value = undefined;
+  sameBatchTasks.value = [];
+  selJobTask.value = undefined;
+  selJobTaskFull.value = undefined;
+  detailOpen.value = true;
+  void loadJobTasks(j);
+}
+
+/** 批次详情层2：该批爬虫任务（pageSize 200；契约见 crawl-batch §三.1） */
+async function loadJobTasks(j: CrawlExternalApi.JobItem): Promise<void> {
+  if (j.id == null) return;
+  jobTasksLoading.value = true;
+  try {
+    const res = (await fetchCrawlTaskPage({
+      jobId: Number(j.id),
+      pageNo: 1,
+      pageSize: 200,
+    })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
+    jobTasks.value = res.list || [];
+  } catch {
+    jobTasks.value = [];
+  } finally {
+    jobTasksLoading.value = false;
+  }
+}
+
+/** 批次详情层3：选中任务 → 就地回读该任务过程明细（同抽屉第二区域展开，不嵌套 Drawer） */
+async function pickJobTask(t: CrawlExternalApi.TaskItem): Promise<void> {
+  if (selJobTask.value && selJobTask.value.id === t.id) {
+    selJobTask.value = undefined; // 再次点击同一条 → 收起
+    selJobTaskFull.value = undefined;
+    return;
+  }
+  selJobTask.value = t;
+  selJobTaskFull.value = undefined;
+  selJobTaskLoading.value = true;
+  if (t.id != null) {
+    try {
+      selJobTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    } catch {
+      selJobTaskFull.value = undefined;
+    }
+  }
+  selJobTaskLoading.value = false;
+}
+
+/** 批次内选中任务重试（操作同样收在详情档内） */
+async function retryJobTask(): Promise<void> {
+  const t = selJobTask.value;
+  if (!t || t.id == null) return;
+  await retryTask(t);
+  if (detailJob.value) void loadJobTasks(detailJob.value);
+  try {
+    selJobTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+  } catch {
+    selJobTaskFull.value = undefined;
   }
 }
 
@@ -449,33 +587,25 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     </div>
 
     <div class="ind-tab-body">
-      <!-- ============ ① 定时任务 ============ -->
+      <!-- ============ ① 定时任务（克制档：状态Tag/标题(URL 截断)/时间 + 一行摘要；整卡或「详情 ▸」进详情档） ============ -->
       <section v-show="activeTab === 'tasks'">
         <div class="mb-3 flex flex-wrap items-center gap-3">
           <Select v-model:value="filterSource" placeholder="全部采集源" allow-clear style="width: 230px" :options="sourceOptions" @change="loadSched(true)" />
           <Select v-model:value="filterStatus" placeholder="全部状态" allow-clear style="width: 150px" :options="statusOptions" @change="loadSched(true)" />
-          <Tag v-if="jobFilter" color="geekblue" closable @close="clearJobFilter">批次 #{{ jobFilter }} 的任务</Tag>
           <span v-if="schedLoading" class="text-xs font-semibold text-orange-600">加载中…</span>
           <a v-if="!schedEnd && schedTasks.length" class="ml-auto text-sm font-semibold text-blue-600" @click="loadSched()">{{ schedLoading ? '加载中…' : '加载更多 ▾' }}</a>
         </div>
         <div v-if="schedTasks.length === 0 && !schedLoading" class="ind-empty">暂无定时任务 —— 在「采集源配置」启用一个源，或点「立即爬取」生成第一条任务条</div>
-        <article v-for="t in schedTasks" :key="String(t.id)" class="ind-card">
+        <article v-for="t in schedTasks" :key="String(t.id)" class="ind-card ind-card-click" @click="openTaskDetail(t)">
           <div class="ind-card-h">
             <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL，见过程）' }}</span>
+            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL，见详情）' }}</span>
             <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+            <a class="cd-link" href="#" @click.prevent.stop="openTaskDetail(t)">详情 ▸</a>
           </div>
           <div class="ind-card-b">
-            <div class="ind-kv">
-              <div class="kv"><span class="k">源</span><span class="v">{{ t.sourceCode || '—' }}</span></div>
-              <div class="kv"><span class="k">通道 / 解析器</span><span class="v">{{ t.channelCode || '—' }} / {{ t.parserCode || '—' }}</span></div>
-              <div class="kv"><span class="k">尝试</span><span class="v">{{ t.attempt ?? '—' }}</span></div>
-              <div class="kv"><span class="k">动作</span><span class="v weak">
-                <a class="text-blue-700 font-bold" @click="openTaskProcess(t)">查看过程</a>
-                <a v-if="t.status === 'FAILED'" class="ml-3 text-red-600 font-bold" :class="{ 'opacity-50': retryBusy === t.id }" @click="retryTask(t)">{{ retryBusy === t.id ? '重试中…' : '重试（归零 attempt）' }}</a>
-              </span></div>
-            </div>
-            <div v-if="t.message" class="mt-2 border-t border-dashed border-gray-200 pt-2 text-xs font-medium text-orange-700">{{ t.message }}</div>
+            <!-- 克制摘要：仅一行 message（无则“无消息”），截断由 title 提示全量 -->
+            <div class="cd-abs truncate" :title="t.message || t.url || ''">{{ t.message || '无消息' }}</div>
           </div>
         </article>
       </section>
@@ -547,19 +677,19 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         </article>
       </section>
 
-      <!-- ============ ④ 采集批次 ============ -->
+      <!-- ============ ④ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；契约：任务批次归属 + summaryJson）</span></div>
+          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
-            <div v-for="j in jobs" :key="String(j.id)" class="ind-row">
-              <a v-if="j.id != null" class="rw text-blue-600 font-semibold" href="#" @click.prevent="drillJob(j)">查看该批任务 ▸</a>
-              <Tag :color="tagOf(TASK_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, j.status)?.text || j.status }}</Tag>
+            <div v-for="j in jobs" :key="String(j.id)" class="ind-row ind-dl-row" @click="openJobDetail(j)">
+              <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
               <span class="rw">源：{{ j.sourceCode || '—' }}</span>
               <span class="rw">触发：{{ j.triggerType || '—' }}</span>
               <span class="rw main" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
               <span class="rw time">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
+              <a class="rw cd-link shrink-0" href="#" @click.prevent.stop="openJobDetail(j)">详情 ▸</a>
             </div>
           </div>
         </div>
@@ -632,6 +762,134 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       <div v-else class="text-sm font-semibold text-gray-500">加载中…</div>
     </Drawer>
 
+    <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染，不嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
+    <Drawer v-model:open="detailOpen" :width="900" :title="detailTitle">
+      <!-- ===== 任务详情：层1 概要 → 层2 同批任务(该行有 jobId 时) → 层3 过程（原 processOpen 占位文案保留） ===== -->
+      <div v-if="detailKind === 'task' && detailTask" class="space-y-3">
+        <div class="ind-panel">
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">任务概要</span>
+            <span class="ind-panel-meta">主键 #{{ String(detailTask.id) }}<template v-if="dt.jobId != null"> · 批次 jobId #{{ String(dt.jobId) }}</template></span>
+            <span class="ml-auto">
+              <Button v-if="(detailTaskFull?.status || detailTask.status) === 'FAILED'" danger size="small" :loading="retryBusy === detailTask.id" @click="retryFromDetail">重试（归零 attempt）</Button>
+            </span>
+          </div>
+          <div class="ind-panel-b">
+            <div v-if="detailTaskLoading" class="mb-2 text-xs font-semibold text-orange-600">详情回读中…</div>
+            <Descriptions :column="2" size="small" bordered>
+              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, dt.status)?.text || dt.status || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="源">{{ dt.sourceCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ dt.url || '—' }}</span></Descriptions.Item>
+              <Descriptions.Item label="通道 / 解析器">{{ dt.channelCode || '—' }} / {{ dt.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="尝试">{{ dt.attempt ?? '—' }}</Descriptions.Item>
+              <Descriptions.Item label="worker">{{ dt.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="开始 / 完成">{{ fmtDt(dt.startedAt) }} / {{ fmtDt(dt.finishedAt) }}</Descriptions.Item>
+              <Descriptions.Item label="消息 / 错误" :span="2">{{ dt.message || '—' }}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        </div>
+
+        <!-- 层2：同批任务（该行有 jobId 且非“批内继续下钻”上下文时展示；crawl-batch §三.1 携 jobId 拉取） -->
+        <div v-if="showSameBatch" class="ind-panel">
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">同批任务</span>
+            <span class="ind-panel-meta">jobId #{{ String(dt.jobId) }} · {{ sameBatchTasks.length }} 条（点击任一行继续下钻该任务）</span>
+          </div>
+          <div class="ind-panel-b">
+            <div v-if="sameBatchLoading" class="text-xs font-semibold text-orange-600">加载中…</div>
+            <div v-else-if="!sameBatchTasks.length" class="text-sm font-medium text-gray-500">该批暂无其它任务行</div>
+            <div v-else class="-my-1">
+              <div v-for="s in sameBatchTasks" :key="String(s.id)" class="ind-row ind-dl-row" :class="{ on: dt.id != null && s.id === dt.id }" @click="openTaskDetail(s, true)">
+                <Tag :color="tagOf(TASK_STATUS_MAP, s.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, s.status)?.text || s.status || '—' }}</Tag>
+                <span class="rw main truncate" :title="s.url || ''">{{ s.url || '（无 URL）' }}</span>
+                <span class="rw">解析器：{{ s.parserCode || '—' }}</span>
+                <span class="rw">attempt {{ s.attempt ?? '—' }}</span>
+                <span class="rw time">{{ fmtDt(s.finishedAt || s.createTime) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 层3：过程 —— 下载器/解析器/时间线占位说明（原 processOpen 抽屉文案，保留不删；TaskRunVO 落库后替换为逐步时间线） -->
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">过程</span><span class="ind-panel-meta">下载器 / 解析器 / 时间线（TaskRunVO 落库前占位）</span></div>
+          <div class="ind-panel-b">
+            <div class="text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 批次详情：层1 批次概要 → 层2 该批爬虫任务 N 条（KPI 卡+克制行） → 层3 选中任务过程（同抽屉第二区域） ===== -->
+      <div v-if="detailKind === 'job' && detailJob" class="space-y-3">
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">批次概要</span><span class="ind-panel-meta">crawl-job 只读参照</span></div>
+          <div class="ind-panel-b">
+            <Descriptions :column="2" size="small" bordered>
+              <Descriptions.Item label="状态"><Tag :color="tagOf(JOB_STATUS_MAP, detailJob.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, detailJob.status)?.text || detailJob.status || '—' }}</Tag></Descriptions.Item>
+              <Descriptions.Item label="源">{{ detailJob.sourceCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="触发">{{ detailJob.triggerType || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="scope">{{ detailJob.scope || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="创建">{{ fmtDt(detailJob.createTime) }}</Descriptions.Item>
+              <Descriptions.Item label="完成">{{ fmtDt(detailJob.finishedAt) }}</Descriptions.Item>
+              <Descriptions.Item label="汇总摘要" :span="2"><span class="break-all" :title="detailJob.summaryJson || ''">{{ jobSummaryText(detailJob.summaryJson) || '—' }}</span></Descriptions.Item>
+            </Descriptions>
+          </div>
+        </div>
+
+        <div class="ind-panel">
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">该批爬虫任务</span>
+            <span class="ind-panel-meta">jobId #{{ String(detailJob.id) }} · 点击行就地展开该任务过程</span>
+          </div>
+          <div class="ind-panel-b">
+            <div class="ind-kpis" style="margin: 0 0 6px; max-width: 340px;">
+              <div class="ind-kpi k-blue">
+                <div class="k-label">该批爬虫任务</div>
+                <div class="k-num">{{ jobTasks.length }}<span class="k-unit"> 条</span></div>
+                <div class="k-note">fetchCrawlTaskPage({ jobId, pageNo: 1, pageSize: 200 })</div>
+              </div>
+            </div>
+            <div v-if="jobTasksLoading" class="text-xs font-semibold text-orange-600">任务加载中…</div>
+            <div v-else-if="!jobTasks.length" class="text-sm font-medium text-gray-500">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
+            <div v-else class="-my-1">
+              <div v-for="t in jobTasks" :key="String(t.id)" class="ind-row ind-dl-row" :class="{ on: selJobTask && selJobTask.id === t.id }" @click="pickJobTask(t)">
+                <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+                <span class="rw main truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+                <span class="rw">解析器：{{ t.parserCode || '—' }}</span>
+                <span class="rw">attempt {{ t.attempt ?? '—' }}</span>
+                <span class="rw time">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 层3：选中任务 → 该任务过程（getCrawlTask 详情 Descriptions，放同抽屉内第二区域，不嵌套 Drawer） -->
+        <div v-if="selJobTask" class="ind-panel">
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">任务过程</span>
+            <span class="ind-panel-meta">任务 #{{ String(selJobTask.id) }} · 回读 getCrawlTask 明细</span>
+            <span class="ml-auto">
+              <Button v-if="(selJobTaskFull?.status || selJobTask.status) === 'FAILED'" danger size="small" :loading="retryBusy === selJobTask.id" @click="retryJobTask">重试（归零 attempt）</Button>
+            </span>
+          </div>
+          <div class="ind-panel-b">
+            <div v-if="selJobTaskLoading" class="mb-2 text-xs font-semibold text-orange-600">详情回读中…</div>
+            <Descriptions :column="2" size="small" bordered>
+              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, selJobTaskFull?.status || selJobTask.status)?.text || selJobTask.status || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="源">{{ selJobTaskFull?.sourceCode || selJobTask.sourceCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ selJobTaskFull?.url || selJobTask.url || '—' }}</span></Descriptions.Item>
+              <Descriptions.Item label="通道 / 解析器">{{ selJobTaskFull?.channelCode || selJobTask.channelCode || '—' }} / {{ selJobTaskFull?.parserCode || selJobTask.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="尝试">{{ selJobTaskFull?.attempt ?? selJobTask.attempt ?? '—' }}</Descriptions.Item>
+              <Descriptions.Item label="worker">{{ selJobTaskFull?.workerId || selJobTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="开始 / 完成">{{ fmtDt(selJobTaskFull?.startedAt || selJobTask.startedAt) }} / {{ fmtDt(selJobTaskFull?.finishedAt || selJobTask.finishedAt) }}</Descriptions.Item>
+              <Descriptions.Item label="消息 / 错误" :span="2">{{ selJobTaskFull?.message || selJobTask.message || '—' }}</Descriptions.Item>
+            </Descriptions>
+            <div class="mt-3 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+          </div>
+        </div>
+      </div>
+    </Drawer>
+
     <ManualModal :source-options="sourceOptions" @parsed="onParsed" />
     <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadSched(true); }" />
   </div>
@@ -654,5 +912,16 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .ind-sec-t span { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
   background: var(--ind-ink); color: var(--ind-orange); border-radius: 2px; font-size: 11.5px; font-weight: 800; letter-spacing: .5px; }
 .ind-doc-extra { max-height: 300px; overflow: auto; }
+
+/* ---------- 两档视图（克制概览 → 详情档）交互反馈：详情入口链接 / 卡片·行 hover 与选中态 ---------- */
+.ind-card-click { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.ind-card-click:hover { border-color: var(--ind-line); box-shadow: 0 3px 10px rgba(20, 28, 38, .09); }
+.cd-link { font-size: 13.5px; font-weight: 800; color: #1d4ed8; white-space: nowrap; }
+.cd-link:hover { text-decoration: underline; }
+.ind-card-b .cd-abs { font-size: 13px; font-weight: 600; color: var(--ind-sub-text); }
+.ind-dl-row { cursor: pointer; transition: background .12s; border-radius: 3px; }
+.ind-dl-row:hover { background: #f6f1e6; }
+.ind-dl-row.on { background: #fdf3dc; }
+.ind-kpi .k-unit { font-size: 15px; font-weight: 800; color: var(--ind-weak-text); }
 </style>
 
