@@ -40,18 +40,18 @@ async function openJob(j: CrawlExternalApi.JobItem) {
   loading.value = true;
   try {
     if (j.id != null) {
-      full.value = (await getCrawlJob(Number(j.id))) as unknown as CrawlExternalApi.JobItem;
+      full.value = (await getCrawlJob(j.id)) as unknown as CrawlExternalApi.JobItem;
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   } finally {
     loading.value = false;
   }
-  if (j.id != null) void loadTasks(Number(j.id));
+  if (j.id != null) void loadTasks(j.id);
 }
 
 /** 该批任务：携 jobId 调 crawl-task/page（crawl-batch §三.1），克制行展示 */
-async function loadTasks(jobId: number) {
+async function loadTasks(jobId: number | string) {
   tasksLoading.value = true;
   tasks.value = [];
   try {
@@ -80,7 +80,7 @@ async function pickTask(t: CrawlExternalApi.TaskItem) {
   if (t.id == null) return;
   selTaskLoading.value = true;
   try {
-    selTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    selTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   } finally {

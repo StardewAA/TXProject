@@ -256,7 +256,7 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
   if (row.id == null) return;
   retryBusy.value = row.id;
   try {
-    await retryCrawlTask(Number(row.id));
+    await retryCrawlTask(row.id);
     message.success('已加入重试队列');
     void loadSched(true);
   } catch (e) {
@@ -279,7 +279,7 @@ async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
   processOpen.value = true;
   if (row.id != null) {
     try {
-      processDetail.value = await getCrawlTask(Number(row.id));
+      processDetail.value = await getCrawlTask(row.id);
     } catch {
       processDetail.value = undefined;
     }
@@ -338,7 +338,7 @@ async function openTaskDetail(t: CrawlExternalApi.TaskItem, skipSameBatch = fals
   detailTaskLoading.value = true;
   if (t.id != null) {
     try {
-      detailTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+      detailTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
     } catch {
       detailTaskFull.value = undefined; // 回读失败不阻断抽屉：先以列表行字段呈现概要
     }
@@ -352,7 +352,7 @@ async function loadSameBatch(jobId: number | string): Promise<void> {
   sameBatchLoading.value = true;
   try {
     const res = (await fetchCrawlTaskPage({
-      jobId: Number(jobId),
+      jobId,
       pageNo: 1,
       pageSize: 200,
     })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
@@ -370,7 +370,7 @@ async function retryFromDetail(): Promise<void> {
   if (!t || t.id == null) return;
   await retryTask(t);
   try {
-    detailTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    detailTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
   } catch {
     detailTaskFull.value = undefined;
   }
@@ -394,7 +394,7 @@ async function loadJobTasks(j: CrawlExternalApi.JobItem): Promise<void> {
   jobTasksLoading.value = true;
   try {
     const res = (await fetchCrawlTaskPage({
-      jobId: Number(j.id),
+      jobId: j.id,
       pageNo: 1,
       pageSize: 200,
     })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
@@ -418,7 +418,7 @@ async function pickJobTask(t: CrawlExternalApi.TaskItem): Promise<void> {
   selJobTaskLoading.value = true;
   if (t.id != null) {
     try {
-      selJobTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+      selJobTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
     } catch {
       selJobTaskFull.value = undefined;
     }
@@ -433,7 +433,7 @@ async function retryJobTask(): Promise<void> {
   await retryTask(t);
   if (detailJob.value) void loadJobTasks(detailJob.value);
   try {
-    selJobTaskFull.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    selJobTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
   } catch {
     selJobTaskFull.value = undefined;
   }

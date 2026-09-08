@@ -55,7 +55,8 @@ export namespace CrawlExternalApi {
 
   /** 采集源（CrawlSourceRespVO，02 §6.1） */
   export interface SourceItem {
-    id?: number;
+    /** 主键（雪花 Long；后端超 2^53 序列化为字符串，兼容两者） */
+    id?: number | string;
     sourceCode?: string;
     sourceName?: string;
     baseUrl?: string;
@@ -76,7 +77,8 @@ export namespace CrawlExternalApi {
   }
   /** 采集源保存入参（sourceCode 仅新建可传） */
   export interface SourcePayload {
-    id?: number;
+    /** 主键（雪花 Long；更新时后端回传字符串） */
+    id?: number | string;
     sourceCode: string;
     sourceName: string;
     baseUrl: string;
@@ -132,7 +134,7 @@ export namespace CrawlExternalApi {
   }
   export interface TaskPageParams extends PageParam {
     taskType?: string;
-    jobId?: number;
+    jobId?: number | string;
     sourceCode?: string;
     status?: string;
     channelCode?: string;
@@ -164,7 +166,7 @@ export function fetchCrawlSourcePage(params: CrawlExternalApi.SourcePageParams) 
   return requestClient.get<PageResult<CrawlExternalApi.SourceItem>>('/bidding/crawl-source/page', { params });
 }
 /** 契约：GET /bidding/crawl-source/get —— 采集源详情（编辑回显）；权限 bidding:crawl-source:query；依据 04-全链路 §5.2 */
-export function getCrawlSource(id: number) {
+export function getCrawlSource(id: number | string) {
   return requestClient.get<CrawlExternalApi.SourceItem>('/bidding/crawl-source/get', { params: { id } });
 }
 /** 契约：POST /bidding/crawl-source/create —— 新建采集源（默认不启用，sourceCode 唯一）；权限 bidding:crawl-source:create；依据 04-全链路 §5.3 */
@@ -176,11 +178,11 @@ export function updateCrawlSource(data: CrawlExternalApi.SourcePayload) {
   return requestClient.put<boolean>('/bidding/crawl-source/update', data);
 }
 /** 契约：POST /bidding/crawl-source/enabled —— 启停采集源（启用进入外链 /go 白名单；停用须先下线其 ACTIVE 公告）；权限 bidding:crawl-source:update；依据 04-全链路 §5.5 */
-export function setCrawlSourceEnabled(id: number, enabled: boolean) {
+export function setCrawlSourceEnabled(id: number | string, enabled: boolean) {
   return requestClient.post('/bidding/crawl-source/enabled', undefined, { params: { id, enabled } });
 }
 /** 契约：DELETE /bidding/crawl-source/delete —— 删除采集源（须无未终态任务且无 ACTIVE 公告引用）；权限 bidding:crawl-source:delete；依据 04-全链路 §5.6 */
-export function deleteCrawlSource(id: number) {
+export function deleteCrawlSource(id: number | string) {
   return requestClient.delete('/bidding/crawl-source/delete', { params: { id } });
 }
 /** 契约：GET /bidding/crawl-parser/list —— 解析器插件清单（code/名称/支持类型，手动录入与解析测试下拉用）；权限 bidding:crawl-source:query；依据 爬虫工作台契约 §0 复用 / 06 对照 §1 */
@@ -214,11 +216,11 @@ export function fetchCrawlTaskPage(params: CrawlExternalApi.TaskPageParams) {
   return requestClient.get<PageResult<CrawlExternalApi.TaskItem>>('/bidding/crawl-task/page', { params });
 }
 /** 契约：GET /bidding/crawl-task/get —— 采集任务详情；权限 bidding:crawl-task:query；依据 04-全链路 §5.8 */
-export function getCrawlTask(id: number) {
+export function getCrawlTask(id: number | string) {
   return requestClient.get<CrawlExternalApi.TaskItem>('/bidding/crawl-task/get', { params: { id } });
 }
 /** 契约：POST /bidding/crawl-task/retry —— 人工重试（仅 FAILED 死信任务转 PENDING，attempt 归零）；权限 bidding:crawl-task:update；依据 04-全链路 §5.9 / 爬虫工作台契约 §2 */
-export function retryCrawlTask(id: number) {
+export function retryCrawlTask(id: number | string) {
   return requestClient.post('/bidding/crawl-task/retry', undefined, { params: { id } });
 }
 
@@ -228,6 +230,6 @@ export function fetchCrawlJobPage(params: CrawlExternalApi.JobPageParams) {
   return requestClient.get<PageResult<CrawlExternalApi.JobItem>>('/bidding/crawl-job/page', { params });
 }
 /** 契约：GET /bidding/crawl-job/get —— 采集批次详情（批次汇总/触发类型/状态）；权限 bidding:crawl-job:query；依据 04-全链路 §5.11 / 06 对照 §附 */
-export function getCrawlJob(id: number) {
+export function getCrawlJob(id: number | string) {
   return requestClient.get<CrawlExternalApi.JobItem>('/bidding/crawl-job/get', { params: { id } });
 }

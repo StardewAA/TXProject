@@ -46,7 +46,7 @@ async function openSource(src: CrawlExternalApi.SourceItem) {
   open.value = true;
   loading.value = true;
   try {
-    const detail = (await getCrawlSource(Number(src.id))) as unknown as CrawlExternalApi.SourceItem;
+    const detail = (await getCrawlSource(src.id!)) as unknown as CrawlExternalApi.SourceItem; // 行必有主键
     if (detail && detail.sourceCode) row.value = detail;
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
@@ -83,7 +83,7 @@ async function pickJob(j: CrawlExternalApi.JobItem) {
   tasks.value = [];
   try {
     const res = (await fetchCrawlTaskPage({
-      jobId: Number(j.id),
+      jobId: j.id,
       pageNo: 1,
       pageSize: 200,
     })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
@@ -101,7 +101,7 @@ async function pickTask(t: CrawlExternalApi.TaskItem) {
   taskDetail.value = null;
   if (t.id == null) return;
   try {
-    taskDetail.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
+    taskDetail.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
   } catch {
     taskDetail.value = null;
   }
