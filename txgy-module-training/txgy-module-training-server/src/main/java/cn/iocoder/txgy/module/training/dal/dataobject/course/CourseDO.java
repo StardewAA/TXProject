@@ -69,8 +69,8 @@ public class CourseDO extends TenantBaseDO {
      */
     private Integer level;
     /**
-     * 成长等级：APPRENTICE 新手 / JUNIOR 成长 / MIDDLE 骨干 / SENIOR 资深
-     * （对应资源中心四级成长体系 course_level）
+     * 成长等级标记：APPRENTICE 学徒 / JUNIOR 初级工 / INTERMEDIATE 中级工 / SENIOR 高级工 / TECHNICIAN 技师 / SENIOR_TECHNICIAN 高级技师
+     * （对应基础字典 training_growth_level 六级成长体系 course_level）
      */
     private String courseLevel;
     /**

@@ -14,7 +14,7 @@
 -- 0.1 课程表字段扩展（版本链字段 root_id/version/is_current 已由 training_course.sql 提供）
 -- ----------------------------------------------------------------------
 ALTER TABLE `training_course`
-  ADD COLUMN `course_level` varchar(20) DEFAULT NULL COMMENT '成长等级：APPRENTICE新手 JUNIOR成长 MIDDLE骨干 SENIOR资深（对应资源中心 course_level 四级）' AFTER `level`,
+  ADD COLUMN `course_level` varchar(20) DEFAULT NULL COMMENT '成长等级标记：APPRENTICE学徒 JUNIOR初级工 INTERMEDIATE中级工 SENIOR高级工 TECHNICIAN技师 SENIOR_TECHNICIAN高级技师（对应 training_growth_level 六级字典）' AFTER `level`,
   ADD COLUMN `applicable_posts` varchar(500) DEFAULT NULL COMMENT '适用岗位/工种（JSON数组）' AFTER `industry`,
   ADD COLUMN `owner_flag` varchar(64) DEFAULT NULL COMMENT '资源归属标识（对外部资源中心 owner_flag 的快照，占位）' AFTER `applicable_posts`,
   ADD COLUMN `is_composite` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否复合课程' AFTER `is_required`,

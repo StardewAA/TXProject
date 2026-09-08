@@ -149,4 +149,11 @@ public interface ErrorCodeConstants {
     ErrorCode LEARNER_SESSION_LOCKED = new ErrorCode(1_061_016_017, "学习会话异常锁定，请结束当前会话后重试");
     ErrorCode LEARNER_DANMAKU_DISABLED = new ErrorCode(1_061_016_018, "弹幕功能未开启，暂时无法发送");
 
+    // ========== 成长等级（growth level）1-061-017-000 ==========
+    ErrorCode GROWTH_LEVEL_NOT_EXISTS = new ErrorCode(1_061_017_000, "成长等级不存在");
+    ErrorCode GROWTH_LEVEL_CODE_EXISTS = new ErrorCode(1_061_017_001, "已存在同编码成长等级");
+    ErrorCode GROWTH_LEVEL_NAME_EXISTS = new ErrorCode(1_061_017_002, "已存在同名称成长等级");
+    ErrorCode GROWTH_LEVEL_NO_EXISTS = new ErrorCode(1_061_017_003, "已存在同序号成长等级");
+    ErrorCode GROWTH_LEVEL_HAS_COURSE = new ErrorCode(1_061_017_004, "该等级已被课程成长等级标记引用，禁止删除（请先调整课程等级）");
+
 }

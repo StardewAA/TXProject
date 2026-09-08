@@ -65,7 +65,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       componentProps: {
         options: GROWTH_LEVEL_OPTIONS,
-        placeholder: '请选择成长等级（四级成长体系）',
+        placeholder: '请选择成长等级（六级成长体系）',
       },
     },
     {
