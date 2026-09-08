@@ -59,7 +59,7 @@ deploy/docker-compose.override.yml
 # 本地缓存与开发工具
 .codegraph/
 .superpowers/
-docs/superpowers/
+**/docs/superpowers/
 _debug/
 
 ######################################################################

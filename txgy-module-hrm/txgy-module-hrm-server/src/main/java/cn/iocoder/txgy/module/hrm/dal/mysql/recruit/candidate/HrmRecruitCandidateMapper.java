@@ -25,6 +25,12 @@ import java.util.Map;
 @Mapper
 public interface HrmRecruitCandidateMapper extends BaseMapperX<HrmRecruitCandidateDO> {
 
+    default HrmRecruitCandidateDO selectByMobile(String mobile) {
+        return selectLastOne(new LambdaQueryWrapperX<HrmRecruitCandidateDO>()
+                .eq(HrmRecruitCandidateDO::getMobile, mobile)
+                .orderByAsc(HrmRecruitCandidateDO::getId));
+    }
+
     default HrmRecruitCandidateDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(HrmRecruitCandidateDO::getId, id);
     }
@@ -39,8 +45,7 @@ public interface HrmRecruitCandidateMapper extends BaseMapperX<HrmRecruitCandida
                 .set(updateObj.getGraduateSchool() == null, HrmRecruitCandidateDO::getGraduateSchool, null)
                 .set(updateObj.getLatestWorkPlace() == null, HrmRecruitCandidateDO::getLatestWorkPlace, null)
                 .set(updateObj.getChannelId() == null, HrmRecruitCandidateDO::getChannelId, null)
-                .set(updateObj.getRemark() == null, HrmRecruitCandidateDO::getRemark, null)
-                .set(updateObj.getResumeUrls() == null, HrmRecruitCandidateDO::getResumeUrls, null));
+                .set(updateObj.getRemark() == null, HrmRecruitCandidateDO::getRemark, null));
     }
 
     default PageResult<HrmRecruitCandidateDO> selectPage(HrmRecruitCandidatePageReqVO reqVO) {

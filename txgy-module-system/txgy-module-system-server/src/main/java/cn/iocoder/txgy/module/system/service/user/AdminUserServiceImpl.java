@@ -12,6 +12,7 @@ import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.validation.ValidationUtils;
 import cn.iocoder.txgy.framework.datapermission.core.util.DataPermissionUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.infra.api.config.ConfigApi;
 import cn.iocoder.txgy.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import cn.iocoder.txgy.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
@@ -129,13 +130,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (ObjUtil.notEqual(configApi.getConfigValueByKey(USER_REGISTER_ENABLED_KEY).getCheckedData(), "true")) {
             throw exception(USER_REGISTER_DISABLED);
         }
-        // 1.2 校验账户配合
-        tenantService.handleTenantInfo(tenant -> {
-            long count = userMapper.selectCount();
-            if (count >= tenant.getAccountCount()) {
-                throw exception(USER_COUNT_MAX, tenant.getAccountCount());
-            }
-        });
+        // 1.2 校验账户配额。个人用户使用保留租户 0，系统没有对应租户配额记录，跳过企业配额校验。
+        if (!Objects.equals(TenantContextHolder.getTenantId(), 0L)) {
+            tenantService.handleTenantInfo(tenant -> {
+                long count = userMapper.selectCount();
+                if (count >= tenant.getAccountCount()) {
+                    throw exception(USER_COUNT_MAX, tenant.getAccountCount());
+                }
+            });
+        }
         // 1.3 校验正确性
         validateUserForCreateOrUpdate(null, registerReqVO.getUsername(), null, null, null, null);
 
