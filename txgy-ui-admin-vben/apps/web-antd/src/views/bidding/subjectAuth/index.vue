@@ -263,12 +263,17 @@ onMounted(load);
 
 <template>
   <div class="bid-ind ind-page">
-    <IndPageHead title="主体信息与授权管理 · 平台侧" mark="SUBJECT" sub="企业主体 = 投标/招标资格单元（招标投标法 25 条；A 方案：企业 + 多经办人）。授权是资格前提，授权后企业仍须完善档案方可投标/发布；每行可查看资格、经办用户与「双视角」人员装配。">
-      <template #actions>
+        <div class="ind-stripes"></div>
+    <div class="ind-head">
+      <div class="min-w-0">
+        <div class="ind-title">主体信息与授权管理 · 平台侧 <span class="ind-mark">SUBJECT</span></div>
+        <div class="ind-sub">企业主体 = 投标/招标资格单元（招标投标法 25 条；A 方案：企业 + 多经办人）。授权是资格前提，授权后企业仍须完善档案方可投标/发布；每行可查看资格、经办用户与「双视角」人员装配。</div>
+      </div>
+      <div class="ind-actions">
         <Button type="primary" size="large" @click="openAuthorize">＋ 授权主体</Button>
         <Button size="large" @click="load">刷新</Button>
-      </template>
-    </IndPageHead>
+      </div>
+    </div>
     <div class="ind-body">
 
     <div class="ind-filterbar">

@@ -179,14 +179,12 @@ export function crawlParserTest(data: {
   url?: string;
   file?: File;
 }) {
-  const fd = new FormData();
-  fd.append('parserCode', data.parserCode);
-  fd.append('payloadType', data.payloadType);
-  if (data.content != null && data.content !== '') fd.append('content', data.content);
-  if (data.fileName) fd.append('fileName', data.fileName);
-  if (data.url) fd.append('url', data.url);
-  if (data.file) fd.append('file', data.file);
-  return requestClient.post<CrawlExternalApi.ParseTestResp>('/bidding/crawl-parser/test', fd);
+  // 走框架官方 upload 通道（与 infra 文件上传同实现）：自动构造 FormData 并强制
+  // multipart/form-data，字段名与后端 CrawlParserController.test 的 @RequestParam/@RequestPart 一一对应
+  return requestClient.upload<CrawlExternalApi.ParseTestResp>(
+    '/bidding/crawl-parser/test',
+    data as unknown as { file: Blob | File },
+  );
 }
 export function runCrawlSource(sourceCode: string) {
   return requestClient.post<CrawlExternalApi.RunResult>('/bidding/crawl-source/run', undefined, { params: { sourceCode } });
