@@ -67,6 +67,12 @@ public class MesProProjectDO extends BaseDO {
      */
     private String owner;
     /**
+     * 负责人用户编号
+     *
+     * 关联系统用户，保存时校验存在并自动回填负责人姓名，避免随意填写
+     */
+    private Long ownerUserId;
+    /**
      * 责任部门
      */
     private String dept;
