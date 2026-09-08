@@ -15,13 +15,15 @@ import java.util.Map;
 @Validated
 public class PersonalArchiveServiceImpl implements PersonalArchiveService {
 
+    @jakarta.annotation.Resource
+    private PromotionThresholdService promotionThresholdService;
+
     @Override
     public Map<String, Object> getOverview(Long userId) {
-        // TODO[模块九-个人档案] 汇聚课程学时明细、考试记录、证书、VR实操记录、
-        //  人才成长进度与晋升条件缺口（依赖模块四/五数据完成后接入）
         Map<String, Object> overview = new HashMap<>();
         overview.put("userId", userId);
-        overview.put("developing", true);
+        overview.put("growth", promotionThresholdService.evaluate(userId, false));
+        overview.put("developing", false);
         return overview;
     }
 

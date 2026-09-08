@@ -1,5 +1,5 @@
 -- 模块九：数据统计与档案归档 - 菜单与按钮权限（幂等脚本）
--- 41010 升级目录；41037~41044 子菜单；41045~41054 按钮。
+-- 41010 升级目录；41037~41044、41055 子菜单；41045~41054、41056~41058 按钮。
 -- 41042 全平台看板为平台级入口：仅系统租户超管可见（租户套餐未勾选即不可见）。
 -- 97 证书公开验真公共接口免登录（@PermitAll），菜单入口保留在登录内。
 
@@ -20,7 +20,8 @@ VALUES
 (41041, '企业培训报表与档案', 'training:analytics:enterprise-report:query', 2, 40, 41010, 'enterprise-report', 'lucide:file-chart-column', 'training/analytics/enterprise-report/index', 'TrainingEnterpriseReport', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41042, '全平台看板与治理', 'training:analytics:platform', 2, 50, 41010, 'platform', 'lucide:layout-dashboard', 'training/analytics/platform/index', 'TrainingPlatformDashboard', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41043, '外部系统对接', 'training:analytics:external-api:query', 2, 60, 41010, 'external-api', 'lucide:plug-zap', 'training/analytics/external-api/index', 'TrainingExternalApi', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
-(41044, '证书公开验真', 'training:analytics:cert-verify:query', 2, 70, 41010, 'cert-verify', 'lucide:badge-check', 'training/analytics/cert-verify/index', 'TrainingCertVerify', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
+(41044, '证书公开验真', 'training:analytics:cert-verify:query', 2, 70, 41010, 'cert-verify', 'lucide:badge-check', 'training/analytics/cert-verify/index', 'TrainingCertVerify', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41055, '晋级门槛管理', 'training:analytics:promotion:query', 2, 25, 41010, 'promotion', 'lucide:chart-no-axes-column-increasing', 'training/analytics/promotion/index', 'TrainingPromotionThreshold', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
 `type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`), `path` = VALUES(`path`),
 `component` = VALUES(`component`), `component_name` = VALUES(`component_name`),
@@ -39,7 +40,10 @@ VALUES
 (41051, '租户隔离配置', 'training:analytics:tenant-isolation:update', 3, 5, 41042, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41052, '外部任务下发', 'training:analytics:external-api:dispatch', 3, 1, 41043, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
 (41053, '外部档案获取', 'training:analytics:external-api:archive', 3, 2, 41043, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
-(41054, '证书免登录验真', 'training:analytics:cert-verify:public', 3, 1, 41044, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
+(41054, '证书免登录验真', 'training:analytics:cert-verify:public', 3, 1, 41044, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41056, '晋级档案维护', 'training:analytics:promotion:manage', 3, 1, 41055, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41057, '晋级指标同步', 'training:analytics:promotion:manage', 3, 2, 41055, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'),
+(41058, '晋级规则调整', 'training:analytics:promotion:manage', 3, 3, 41055, '', '', NULL, NULL, 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
 `type` = VALUES(`type`), `parent_id` = VALUES(`parent_id`),
 `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
@@ -48,4 +52,4 @@ ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permissi
 --    导致侧边栏出现空白菜单项。此语句保证重复执行后按钮类型始终正确。
 UPDATE `system_menu`
 SET `type` = 3, `updater` = 'admin', `update_time` = NOW()
-WHERE `id` BETWEEN 41045 AND 41054 AND `type` <> 3;
+WHERE (`id` BETWEEN 41045 AND 41054 OR `id` BETWEEN 41056 AND 41058) AND `type` <> 3;
