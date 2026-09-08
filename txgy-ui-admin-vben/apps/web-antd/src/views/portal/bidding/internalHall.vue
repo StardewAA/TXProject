@@ -74,6 +74,19 @@ onMounted(() => void load());
 </script>
 
 <template>
+<!--
+  门户 · 本平台发布（内部公告大厅：仅本租户可见）
+  业务：展示本平台企业（当前登录租户）自营发布的 PUBLISHED 公告（internalFlag=false 对外亦含在此，internalFlag=true 仅本租户）；
+        是对“招标人发布→大厅公示”闭环的企业侧展示面。
+  理由：招标公告依法公开；内部公告（internalFlag=true）仅本租户（08 §4）；对外公告走同源公开读接口。
+    依据（法规/政府文件/法律）：
+      · 招标公告和公示信息发布管理办法（发改委令第10号，部门规章/政府文件）第12/13条——免费、及时查阅完整公告公示信息；免费归类与检索、新公告醒目标识；
+      · 电子招标投标办法（八部委令第20号，部门规章/政府文件）第9条——市场主体免费注册登录、获取依法公开的招标投标信息；
+      · 招标投标法 第16条（法律）——公开招标应当发布招标公告（公告公开性的上位依据）。
+    后端契约：08-公告公示前端交付-业务口径说明.md §4（internalFlag=false 对外/true 仅企业内部）；
+      GET /bidding/notice/public/page、/public/detail（跨租户只放行 PUBLISHED+非内部+到发布时间+SOCIAL，08 §8）。
+-->
+
   <div class="bidding-page bid-ind">
     <div class="main-nav">
       <div class="nav-item" @click="goNav('/portal/bidding')">

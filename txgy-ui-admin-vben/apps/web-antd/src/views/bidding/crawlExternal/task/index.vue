@@ -77,6 +77,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
+<!--
+  采集任务管理（平台职能：任务行迹与死信重试）
+  业务：查看一次采集的“源→任务(通道/解析器/尝试)→提取→结果→明细”任务条；FAILED 死信可人工重试（attempt 归零开启新一轮）。
+  理由：平台需要任务留痕以排查采集异常；重试仅限 FAILED（死信），不重复触发未完成批次（契约语义）。
+    业务边界：本页属平台职能（G 轨，无租户语义）——职能角色矩阵（后端执行清单 §7）：爬虫管理/外部公告审核=平台职能，
+        勿授企业租户；企业租户只使用发布/档案/跟踪等 T 轨功能。
+    依据（法规/政府文件）：10号令 第12条（部门规章）；电子办法 第9条（部门规章）——采集公开信息的可追溯性。
+    后端契约：爬虫任务工作台-前后端契约（crawl-task page/get/retry）；retry 仅 FAILED → PENDING。
+-->
+
   <Page auto-content-height class="bid-ind">
     <Grid table-title="采集任务（死信可重试）">
       <template #col_status="{ row }">
