@@ -4,17 +4,22 @@ import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
 import { Page } from '@vben/common-ui';
 
+import { ref } from 'vue';
+
 import { message, Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { fetchCrawlTaskPage, retryCrawlTask } from '#/api/bidding/crawlExternal';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import TaskDetail from './modules/task-detail.vue';
 import { TASK_STATUS_MAP, tagOf } from '../shared';
 
 function refresh() {
   gridApi.query();
 }
+
+const taskDetailRef = ref<{ openTask: (t: CrawlExternalApi.TaskItem) => void } | null>(null);
 
 async function runAction(label: string, fn: () => Promise<unknown>) {
   const hideLoading = message.loading({ content: label + '处理中…', duration: 0 });
@@ -29,9 +34,16 @@ async function runAction(label: string, fn: () => Promise<unknown>) {
   }
 }
 
-/** 行操作：仅 FAILED 死信任务可重试 */
+/** 行操作（克制）：全部行可「详情」（详情档分层铺开过程/同批/重试），FAILED 行另保留行内重试入口 */
 function rowActs(row: CrawlExternalApi.TaskItem): any[] {
-  const acts: Array<Record<string, unknown>> = [];
+  const acts: Array<Record<string, unknown>> = [
+    {
+      label: '详情',
+      type: 'link',
+      auth: ['bidding:crawl-task:query'],
+      onClick: () => taskDetailRef.value?.openTask(row),
+    },
+  ];
   if (row.status === 'FAILED') {
     acts.push({
       label: '重试',
@@ -99,5 +111,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction :actions="rowActs(row)" />
       </template>
     </Grid>
+    <TaskDetail ref="taskDetailRef" />
   </Page>
 </template>

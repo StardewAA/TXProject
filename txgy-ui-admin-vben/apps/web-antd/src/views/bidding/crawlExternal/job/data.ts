@@ -29,5 +29,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'summaryJson', title: '汇总', minWidth: 170, formatter: ({ cellValue }) => jobSummaryText(cellValue as string | undefined) },
     { field: 'finishedAt', title: '结束时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
     { field: 'createTime', title: '创建时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
+    { field: 'operation', title: '操作', width: 90, fixed: 'right', slots: { default: 'operation' } },
   ];
 }
