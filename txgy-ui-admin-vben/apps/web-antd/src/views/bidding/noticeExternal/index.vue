@@ -161,7 +161,10 @@ async function runConcurrent<T>(
     const results = await Promise.allSettled(slice.map((it) => worker(it)));
     results.forEach((r, j) => {
       if (r.status === 'fulfilled') ok += 1;
-      else onFail(slice[j]);
+      else {
+        const item = slice[j];
+        if (item != null) onFail(item);
+      }
     });
   }
   return ok;

@@ -308,7 +308,7 @@ const detailTaskLoading = ref(false);
 /** 跳过同批任务层：从同批任务行继续下钻时批次上下文已具备，免重复加载同批列表 */
 const taskSkipSameBatch = ref(false);
 /** 展示用任务对象：优先 getCrawlTask 回读详情，回读前以列表行字段兜底 */
-const dt = computed(() => detailTaskFull.value || detailTask.value);
+const dt = computed(() => detailTaskFull.value || detailTask.value || ({} as CrawlExternalApi.TaskItem));
 /* 层2：同批任务（task.jobId 非空时展示，参照 crawl-batch §三.1 携 jobId 拉取） */
 const sameBatchTasks = ref<CrawlExternalApi.TaskItem[]>([]);
 const sameBatchLoading = ref(false);
