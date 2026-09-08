@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
 // [依据] 下载器执行器：QYZB 栏目一轮（列表 JSON → 全文直采 ingest）与 seen 去重、配置解析。
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
@@ -195,6 +196,24 @@ class CrawlSourceRunnerTest {
 
         assertEquals(1, summary.getTotalIngested());
         verify(httpFetchClient, times(1)).postJson(any(String.class), any(String.class));
+    }
+
+    @Test
+    void recordTask_attachesRunJobId_whenEntryFails() throws Exception {
+        // 批次化：runner.runSource(code, jobId) 失败任务落库应挂上 jobId（前端任务页可按批次检索）
+        CrawlSourceDO source = source();
+        when(sourceMapper.selectOne(any())).thenReturn(source);
+        when(httpFetchClient.postJson(any(String.class), any(String.class))).thenReturn(ONE_ROW);
+        when(ingestService.ingest(any())).thenThrow(new IllegalStateException("boom"));
+        CrawlTaskMapper taskMapper = mock(CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(runner, "crawlTaskMapper", taskMapper);
+
+        CrawlSourceRunner.RunSummary summary = runner.runSource("QYZB-DEMO", 9001L);
+
+        assertEquals(1, summary.getTotalFailed());
+        ArgumentCaptor<CrawlTaskDO> captor = ArgumentCaptor.forClass(CrawlTaskDO.class);
+        verify(taskMapper, times(1)).insert(captor.capture());
+        assertEquals(Long.valueOf(9001L), captor.getValue().getJobId());
     }
 
     private static String qyzPage(boolean hasNext, String... rows) {

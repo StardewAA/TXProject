@@ -5,7 +5,10 @@ import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlRun
 
 public interface CrawlRunService {
 
-    /** 立即执行一个采集源的一轮采集（人工触发；同步返回汇总 VO） */
+    /** 立即执行一个采集源的一轮采集（人工触发；同步返回汇总 VO，落 MANUAL 批次） */
     CrawlRunRespVO runNow(String sourceCode);
+
+    /** 执行一轮并落批次（调度/人工共用：MANUAL/SCHEDULE；每次执行生成 bidding_crawl_job 记录） */
+    CrawlRunRespVO runNow(String sourceCode, String triggerType);
 
 }

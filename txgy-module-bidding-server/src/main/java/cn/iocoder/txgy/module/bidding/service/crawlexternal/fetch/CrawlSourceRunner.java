@@ -60,8 +60,13 @@ public class CrawlSourceRunner {
     @jakarta.annotation.Resource private CrawlTaskMapper crawlTaskMapper;
     @jakarta.annotation.Resource private PdfTextNoticeParser pdfTextNoticeParser;
 
-    /** 执行一个采集源的一轮采集（同步；人工触发/调度调用）。 */
+    /** 执行一个采集源的一轮采集（同步；人工触发/调度调用；无批次上下文，任务不挂 jobId）。 */
     public RunSummary runSource(String sourceCode) {
+        return runSource(sourceCode, null);
+    }
+
+    /** 执行一个采集源的一轮采集，并把本轮失败任务挂到指定批次（jobId 可为 null，如单测/无批次场景）。 */
+    public RunSummary runSource(String sourceCode, Long jobId) {
         CrawlSourceDO source = crawlSourceMapper.selectOne(new LambdaQueryWrapper<CrawlSourceDO>()
                 .eq(CrawlSourceDO::getSourceCode, sourceCode).last("LIMIT 1"));
         if (source == null) {
@@ -79,9 +84,9 @@ public class CrawlSourceRunner {
             cs.setName(config.getName());
             try {
                 if ("QYZB_JSON".equals(config.getParser())) {
-                    runQyzCategory(source, config, cs, seenUrlHashes);
+                    runQyzCategory(source, config, cs, seenUrlHashes, jobId);
                 } else {
-                    runHtmlCategory(source, config, cs, seenUrlHashes);
+                    runHtmlCategory(source, config, cs, seenUrlHashes, jobId);
                 }
             } catch (Exception e) {
                 cs.setFailed(cs.getFailed() + 1);
@@ -104,7 +109,7 @@ public class CrawlSourceRunner {
      * 启用 lookbackDays 时按发布时间窗口逐页回溯——页内出现早于窗口起点的条目即停（列表倒序，其后页必然更老）；
      * 未启用时保持 v1 单页行为。窗口外条目不采集（视为已被历史轮次覆盖）。
      */
-    private void runQyzCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen) throws Exception {
+    private void runQyzCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen, Long jobId) throws Exception {
         int maxPages = effectiveMaxPages(config);
         LocalDate cutoff = lookbackCutoff(config);
         for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
@@ -132,7 +137,7 @@ public class CrawlSourceRunner {
                     }
                 } catch (Exception e) {
                     cs.setFailed(cs.getFailed() + 1);
-                    recordTask(source, config, entry, "FAILED", e.getMessage());
+                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 条目落库失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(ENTRY_DELAY_MS);
@@ -173,7 +178,7 @@ public class CrawlSourceRunner {
      * 国信（HTML 列表 → 详情 PDF）翻页采集（增量回溯见文档 §11）：
      * 列表 URL 为 page=N 服务端分页，翻页=改写 page 参数；停页/窗口语义同秦源 JSON 驱动。
      */
-    private void runHtmlCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen) throws Exception {
+    private void runHtmlCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen, Long jobId) throws Exception {
         String listUrl = config.getListUrl();
         if (!StringUtils.hasText(listUrl)) {
             throw new IllegalStateException("栏目配置缺 listUrl");
@@ -204,7 +209,7 @@ public class CrawlSourceRunner {
                     }
                 } catch (Exception e) {
                     cs.setFailed(cs.getFailed() + 1);
-                    recordTask(source, config, entry, "FAILED", e.getMessage());
+                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 国信条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(ENTRY_DELAY_MS);
@@ -349,9 +354,12 @@ public class CrawlSourceRunner {
         return input;
     }
 
-    private void recordTask(CrawlSourceDO source, CategoryConfig config, NoticeParseResult.ListEntry entry, String status, String message) {
+    private void recordTask(CrawlSourceDO source, CategoryConfig config, NoticeParseResult.ListEntry entry, String status, String message, Long jobId) {
         try {
             CrawlTaskDO task = new CrawlTaskDO();
+            if (jobId != null) {
+                task.setJobId(jobId);
+            }
             task.setSourceCode(source.getSourceCode());
             task.setUrl(entry.getUrl());
             task.setUrlHash(entry.getUrl() == null ? null : sha256Hex(entry.getUrl()));
