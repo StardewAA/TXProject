@@ -8,6 +8,8 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventorySkuSummaryRespVO;
+import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryReadService;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
@@ -20,11 +22,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.Collections;
 import java.util.List;
@@ -38,6 +42,17 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 @RequestMapping("/wms/inventory")
 @Validated
 public class WmsInventoryController {
+
+    @Resource
+    private WmsInventoryReadService inventoryReadService;
+
+    @GetMapping("/sku-summary")
+    @Operation(summary = "只读查询商品各规格的 WMS 销售价及全部仓库库存合计")
+    @PreAuthorize("@ss.hasPermission('wms:inventory:query')")
+    public CommonResult<List<WmsInventorySkuSummaryRespVO>> getSkuSummary(
+            @RequestParam("itemId") @Positive Long itemId) {
+        return success(inventoryReadService.getItemInventory(itemId));
+    }
 
     @Resource
     private WmsInventoryService inventoryService;
