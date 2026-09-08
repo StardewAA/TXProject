@@ -111,4 +111,37 @@ class ApiFetchDriverTest {
         List<NoticeParseResult.ListEntry> entries = driver.fetchPage(config, 1);
         assertEquals(0, entries.size()); // 无 url 行不产出条目
     }
+
+    @Test
+    void apispaceOfficialApi_configDrivenFetch() throws Exception {
+        // 真实官方 API 形态（APISpace 项目检索，2026-09-09 实测响应）：POST+Token头+bodyTemplate分页+data.data路径
+        // 仅 mock HTTP 验证 driver 组装（不真发请求，保护免费额度）
+        String configJson = """
+                {"method":"POST","url":"https://23330.o.apispace.com/project-info-upgrade/project-list",
+                "headers":{"X-APISpace-Token":"tok-demo","Content-Type":"application/json"},
+                "bodyTemplate":"{\\"pageID\\":{page},\\"pageNumber\\":{size}}",
+                "pageSize":20,"rowsPath":"data.data",
+                "mapping":{"title":"title","date":"publishTime"}}
+                """;
+        ApiFetchConfig config = ApiFetchConfig.parse(configJson);
+        assertNotNull(config);
+        String resp = """
+                {"data":{"total":22812,"pageId":1,"hasNext":true,"data":[
+                {"id":1,"title":"济南某项目公开招标招标公告","publishTime":"2026-09-08 23:58:19","projectMoney":"55万","url":"https://src.example.gov.cn/t/1"},
+                {"id":2,"title":"安多县某改造项目招标公告","publishTime":"2026-09-08 22:10:00","url":"https://src.example.gov.cn/t/2"}]}}
+                """;
+        when(httpFetchClient.postJsonWithHeaders(any(String.class), any(String.class), anyMap())).thenReturn(resp);
+
+        List<NoticeParseResult.ListEntry> entries = driver.fetchPage(config, 1);
+
+        assertEquals(2, entries.size());
+        assertEquals("济南某项目公开招标招标公告", entries.get(0).getTitle());
+        assertEquals("2026-09-08 23:58:19", entries.get(0).getDate()); // publishTime 映射到 date
+        // 验证请求组装：Token 头 + body 中 pageID/pageNumber（占位替换）
+        verify(httpFetchClient).postJsonWithHeaders(
+                org.mockito.ArgumentMatchers.eq("https://23330.o.apispace.com/project-info-upgrade/project-list"),
+                org.mockito.ArgumentMatchers.contains("pageID"),
+                org.mockito.ArgumentMatchers.eq(java.util.Map.of("X-APISpace-Token", "tok-demo", "Content-Type", "application/json")));
+    }
+
 }

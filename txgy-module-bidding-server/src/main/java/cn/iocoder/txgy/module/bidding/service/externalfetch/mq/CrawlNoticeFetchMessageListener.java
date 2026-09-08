@@ -1,7 +1,8 @@
 package cn.iocoder.txgy.module.bidding.service.externalfetch.mq;
 
-// 规范依据：外部信息获取 v1.0 §五/§六（Redis Stream 轻信号消费者：收 taskId → markRunning → processor 执行 → 回写终态；
-//           异常不向上抛（业务自管退避重试，框架 pending 重投仅兜进程崩溃未 ACK）；幂等：task 已终态直接 ACK）。
+// 规范依据：外部信息获取 v1.0 §五/§六 + 2026-09-09 审查 A3/A4 修复：
+//   A4：节流移出 onMessage（消息快速 ACK，不持未 ACK 长睡→杜绝 pending 重投双跑）；5 分钟/条由“执行前节流闸 + 30s 兜底扫描”保证
+//   A3：失败重试只改 DB 后信号丢失→task 永久 PENDING→源停摆；新增 PENDING 到期扫描兜底重投（DB task=唯一真相，消息只是唤醒）
 
 import cn.iocoder.txgy.framework.mq.redis.core.stream.AbstractRedisStreamMessageListener;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
@@ -9,17 +10,20 @@ import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlNoticeProcessor;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 信息获取任务消费者：监听 Redis Stream 轻信号（CrawlNoticeFetchMessage），逐条执行下载/落库。
+ * 信息获取任务消费者：监听 Redis Stream 轻信号（CrawlNoticeFetchMessage）。
  *
- * <p>处理流：收到 taskId → 回查 task（不存在/已终态=幂等 ACK）→ markRunning(workerId) → 
- * CrawlNoticeProcessor.execute（按 payload/rawFileUrl 取原文落库）→ 成功 markDownloadSuccess；
- * 失败 handleFailure（attempt&lt;3 退避重试 / =3 死信转审核）。业务异常不向上抛（避免框架 pending 无限重投）；
- * 进程崩溃未 ACK 的消息由 RedisPendingMessageResendJob 5 分钟超时重投（重启不丢任务）。
+ * <p>处理流（审查 A4 修复，2026-09-09）：收到 taskId → 节流闸放行才执行；执行=markRunning → processor → 回写终态 → tryFinalizeJob。
+ * 消息始终快速 ACK（onMessage 不 sleep 不持锁），未 ACK 长睡导致的 pending 重投双跑被消除；
+ * “每条间隔 consumer-delay-ms（默认 5 分钟）”由 executeIfDue 的节流闸保证——未到点的信号直接 ACK，任务保持 PENDING 等兜底扫描。
+ *
+ * <p>兜底（审查 A3 修复）：@Scheduled 每 30s 扫描 PENDING 且 nextRetryTime 到期任务 → executeIfDue 重投执行；
+ * 进程崩溃/消息丢失后任务仍在 DB（唯一真相），扫描续跑不重排链表；重试退避到期即被捞起，不再永久卡 PENDING。
  */
 @Slf4j
 @Component
@@ -37,6 +41,13 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     /** worker 标识：本机消费节点（日志/分布式归属） */
     private final String workerId = "bidding-consumer-" + System.getProperty("user.name", "local");
 
+    /** 下载器每条任务处理间隔（毫秒）。主控在 application.yaml bidding.crawl.runner.consumer-delay-ms，默认值仅兜底 */
+    @org.springframework.beans.factory.annotation.Value("${bidding.crawl.runner.consumer-delay-ms:300000}")
+    private long consumerDelayMs;
+
+    /** 上次真正执行完成时刻（ms；节流闸依据，进程内；多实例各自节流 + DB RUNNING 守卫防同任务双跑） */
+    private volatile long lastConsumeAtMs = 0L;
+
     public CrawlNoticeFetchMessageListener() {
         super();
     }
@@ -46,16 +57,51 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
         if (message == null || message.getTaskId() == null) {
             return; // 空消息直接 ACK
         }
-        Long taskId = message.getTaskId();
+        executeIfDue(message.getTaskId()); // 未到节流点则本信号直接 ACK，任务留 PENDING 等兜底扫描
+    }
+
+    /**
+     * 兜底扫描（30s tick）：捞到期 PENDING 任务执行（A3：失败重试/信号丢失后不永久卡 PENDING）。
+     * 条件：PENDING 且（nextRetryTime 为空=正常入队 或 nextRetryTime<=now=退避到期），按 id 升序取一条尝试。
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 30_000)
+    public void scanPendingAndConsume() {
+        try {
+            CrawlTaskDO due = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
+                    .eq(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus())
+                    .and(w -> w.isNull(CrawlTaskDO::getNextRetryTime)
+                            .or().le(CrawlTaskDO::getNextRetryTime, java.time.LocalDateTime.now()))
+                    .orderByAsc(CrawlTaskDO::getId)
+                    .last("LIMIT 1"));
+            if (due != null) {
+                executeIfDue(due.getId());
+            }
+        } catch (Exception e) {
+            log.warn("[scanPendingAndConsume] 扫描异常（下轮再试）: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 节流闸 + 执行一条任务。距上次执行不足 consumerDelayMs → 不执行（任务保持 PENDING，等下一信号/扫描）；
+     * 到点才执行，执行完更新 lastConsumeAtMs。幂等：任务不存在/已终态直接跳过。
+     */
+    private void executeIfDue(Long taskId) {
+        long now = System.currentTimeMillis();
+        if (now - lastConsumeAtMs < consumerDelayMs) {
+            return; // 节流未到点：本信号/扫描不作为（不持锁不 sleep，快速返回）
+        }
         CrawlTaskDO task = crawlTaskMapper.selectById(taskId);
         if (task == null) {
-            log.warn("[consume][taskId={}] 任务不存在（已删/回滚？）直接 ACK", taskId);
             return;
         }
         if (isTerminal(task.getStatus())) {
-            log.info("[consume][taskId={} status={}] 已终态，幂等跳过 ACK", taskId, task.getStatus());
+            return; // 已终态：幂等跳过（含 pending 重投到已 SUCCESS 的消息）
+        }
+        // 抢占：仅 PENDING 可执行；RUNNING（他实例/上次未收尾）不动（DB RUNNING 守卫防双跑）
+        if (!CrawlTaskStatusEnum.PENDING.getStatus().equals(task.getStatus())) {
             return;
         }
+        lastConsumeAtMs = now; // 到点，占住节流位
         boolean finalized = false;
         try {
             crawlTaskService.markRunning(taskId, workerId);
@@ -71,9 +117,8 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
                 log.error("[consume][taskId={}] 失败状态回写异常（保留原状待重投）: {}", taskId, ex.getMessage());
                 finalized = true; // 状态未回写：不触发批次收尾（task 仍 RUNNING）
             }
-            // 不向上抛：业务已自管退避/死信；ACK 本消息避免框架无限重投同一失败任务
         }
-        // 消费驱动批次收尾：无论成败，终态后检查 job 是否可收尾（幂等；RUNNING 任务仍在队则不收）
+        // 消费驱动批次收尾：终态后检查 job 是否可收尾（幂等）
         if (!finalized && task.getJobId() != null) {
             try {
                 crawlRunService.tryFinalizeJob(task.getJobId());

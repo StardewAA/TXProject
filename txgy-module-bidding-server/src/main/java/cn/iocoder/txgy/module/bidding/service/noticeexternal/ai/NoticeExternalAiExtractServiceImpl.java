@@ -82,17 +82,32 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
         }
         // SUCCESS：结构化字段 + 可选全文转写（回写 extraction_text，复用 ES contentText 索引源）
         String fullText = result.getFullText();
+        // 审查 C1 修复（2026-09-09）：AI 长调用后不再整实体 updateById（会把审核员并发 approve/reject 的状态静默盖回），
+        // 只定向更新 AI/行业/抽取产物列；审核状态等字段不受影响。
+        java.util.Map<String, Object> aiCols = new java.util.LinkedHashMap<>();
         if (StringUtils.hasText(fullText)) {
-            notice.setExtractionText(fullText);
-            notice.setExtractionStatus(EXTRACTION_SUCCESS);
-            notice.setExtractionAt(LocalDateTime.now());
+            aiCols.put("extraction_text", fullText);
+            aiCols.put("extraction_status", EXTRACTION_SUCCESS);
+            aiCols.put("extraction_at", LocalDateTime.now());
         }
-        // 防腐保温行业判定回写权威字段（AI 未给出合法值时保持原值；判定详情/命中词见 ai_meta_json）
-        applyIndustryVerdict(result.getFields(), notice);
-        notice.setAiExtractionStatus(AI_STATUS_SUCCESS);
-        notice.setAiMetaJson(writeJson(result.getFields()));
-        notice.setAiExtractAt(LocalDateTime.now());
-        noticeExternalMapper.updateById(notice);
+        // 防腐保温行业判定（AI 未给出合法值时保持原值不覆盖，防 flag/confidence 撕裂；判定详情见 ai_meta_json）
+        java.util.Map<String, Object> industryCols = applyIndustryVerdictCols(result.getFields());
+        if (industryCols.get("industry_flag") != null) {
+            aiCols.put("industry_flag", industryCols.get("industry_flag"));
+            notice.setIndustryFlag(String.valueOf(industryCols.get("industry_flag"))); // 同步内存（snapshot 读取）
+        }
+        if (industryCols.get("industry_confidence") != null) {
+            aiCols.put("industry_confidence", industryCols.get("industry_confidence"));
+            notice.setIndustryConfidence((java.math.BigDecimal) industryCols.get("industry_confidence"));
+        }
+        aiCols.put("ai_extraction_status", AI_STATUS_SUCCESS);
+        aiCols.put("ai_meta_json", writeJson(result.getFields()));
+        aiCols.put("ai_extract_at", LocalDateTime.now());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO> uw =
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<>();
+        uw.eq("id", notice.getId());
+        aiCols.forEach((k, v) -> uw.set(k, v));
+        noticeExternalMapper.update(null, uw);
         // 重放 ES 索引：AI 转写/结构化文本入检索（幂等 PUT 覆盖；失败不阻断）
         reindex(notice.getId());
         AiExtractSnapshot snapshot = new AiExtractSnapshot();
@@ -117,32 +132,38 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
     }
 
     /** 防腐保温行业判定回写：AI 输出合法 flag/置信度 → 更新权威字段；非法或缺失则保持原值 */
-    private void applyIndustryVerdict(Map<String, Object> fields, NoticeExternalDO notice) {
+    /** 行业判定列（返回列 Map 供定向更新；未给出合法值保持原列=null 不覆盖，防 flag/confidence 撕裂） */
+    private Map<String, Object> applyIndustryVerdictCols(Map<String, Object> fields) {
+        Map<String, Object> cols = new LinkedHashMap<>();
         Object rawFlag = fields.get("industryFlag");
         String flag = rawFlag == null ? null : String.valueOf(rawFlag);
         if (flag != null && INDUSTRY_FLAGS.contains(flag)) {
-            notice.setIndustryFlag(flag);
+            cols.put("industry_flag", flag);
             Object rawConf = fields.get("industryConfidence");
             if (rawConf instanceof Number number) {
-                notice.setIndustryConfidence(BigDecimal.valueOf(number.doubleValue()));
+                cols.put("industry_confidence", BigDecimal.valueOf(number.doubleValue()));
             } else if (rawConf != null) {
                 try {
-                    notice.setIndustryConfidence(new BigDecimal(String.valueOf(rawConf)));
+                    cols.put("industry_confidence", new BigDecimal(String.valueOf(rawConf)));
                 } catch (NumberFormatException ignore) {
-                    // 置信度非法则不回写（flag 仍按 AI 结论更新）
+                    // 置信度非法：flag 单独更新（flag/confidence 由后续 AI 重跑补齐）
                 }
             }
         }
+        return cols;
     }
 
     private void markFailed(NoticeExternalDO notice, String reason) {
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("error", reason == null ? "" : reason);
-            notice.setAiExtractionStatus(AI_STATUS_FAILED);
-            notice.setAiMetaJson(writeJson(meta));
-            notice.setAiExtractAt(LocalDateTime.now());
-            noticeExternalMapper.updateById(notice);
+            com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO> uw =
+                    new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<>();
+            uw.eq("id", notice.getId())
+              .set("ai_extraction_status", AI_STATUS_FAILED)
+              .set("ai_meta_json", writeJson(meta))
+              .set("ai_extract_at", LocalDateTime.now());
+            noticeExternalMapper.update(null, uw);
         } catch (Exception e) {
             log.error("[markFailed][noticeId={}] 落库失败", notice.getId(), e);
         }

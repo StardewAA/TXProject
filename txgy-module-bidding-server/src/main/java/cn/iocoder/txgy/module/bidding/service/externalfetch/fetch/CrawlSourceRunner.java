@@ -43,11 +43,11 @@ public class CrawlSourceRunner {
 
     /** 秦源栏目 JSON 接口（页面 JS 实测） */
     private static final String QYZB_API = "https://qyzb.shccmg.com/cms/api/dynamicData/queryContentPage";
-    /** 源内条目抓取间隔（毫秒，防封；bidding.crawl.runner.entry-delay-ms 配置，配置文件为准） */
+    /** 页内条目处理间隔（毫秒）。注意：频率主控在 application.yaml bidding.crawl.runner.*，此默认值仅兜底（配置缺失时保守取值） */
     @Value("${bidding.crawl.runner.entry-delay-ms:1500}")
     private long entryDelayMs;
-    /** 页间抓取间隔（毫秒，防封：多页回溯每页之间等一拍；bidding.crawl.runner.page-delay-ms 配置。2026-09-09 用户口径 5s） */
-    @Value("${bidding.crawl.runner.page-delay-ms:5000}")
+    /** 翻页间隔（毫秒）：多页回溯每页之间等一拍再翻下一页。频率主控在 application.yaml（page-delay-ms），此默认值仅兜底 */
+    @Value("${bidding.crawl.runner.page-delay-ms:60000}")
     private long pageDelayMs;
     /** 启用增量回溯（lookbackDays>0）且未显式配置 maxPages 时的页上限（单栏目单轮，防失控） */
     private static final int DEFAULT_LOOKBACK_MAX_PAGES = 10;
@@ -101,6 +101,22 @@ public class CrawlSourceRunner {
         List<CategorySummary> categories = new ArrayList<>();
         summary.setCategories(categories);
         List<CategoryConfig> configs = parseConfigs(source.getEntryUrlsJson());
+        if (configs.isEmpty() && StringUtils.hasText(source.getApiConfigJson())) {
+            // 审查 A2 修复：源级 api_config_json（结构化 API 源/前端表单直填）→ 兜底为一个 API 栏目，避免保存即校验、执行空跑
+            CategoryConfig cfg = new CategoryConfig();
+            cfg.setName(source.getSourceName() == null ? source.getSourceCode() : source.getSourceName());
+            cfg.setParser(source.getParserCodeDefault() == null ? "API" : source.getParserCodeDefault());
+            cfg.setApiConfig(source.getApiConfigJson());
+            configs.add(cfg);
+        }
+        if (configs.isEmpty()) {
+            // 审查 A9：空配置/空跑不能静默 SUCCESS——汇总打 error 标记，runNow 据此置 PARTIAL 前端可提示
+            CrawlSourceRunner.CategorySummary empty = new CrawlSourceRunner.CategorySummary();
+            empty.setName("__empty__");
+            empty.setError("源无有效栏目配置（entryUrlsJson 为空且无源级 apiConfig），本轮无抓取——请检查源配置");
+            categories.add(empty);
+            summary.setTotalFailed(1); // 借 failed 触发 PARTIAL/FAILED，避免“成功 0 条”误导
+        }
         if (full) {
             // 首次全量（无历史断点）：窗口按栏目 fullLookbackDays（缺省回退 lookbackDays，再缺省全局 full-lookback-days=60）；
             // 页上限放开到 full-max-pages（默认 300，覆盖 60 天窗口；真正停页靠 outOfWindow 窗口外即停）
@@ -188,8 +204,9 @@ public class CrawlSourceRunner {
                             cs.setIngested(cs.getIngested() + 1);
                         }
                     } else if (!StringUtils.hasText(entry.getContentHtml())) {
-                        cs.setFailed(cs.getFailed() + 1);
-                        recordTask(source, config, entry, "FAILED", "列表行无全文（详情抓取未接线，API 源需带 contentHtml 映射）", jobId);
+                        // 审查 B7：配置缺陷（缺全文映射）≠ 业务失败——记 SKIPPED 不记 FAILED（避免污染失败率触发调度退避）
+                        cs.setFailed(cs.getFailed() + 0);
+                        recordTask(source, config, entry, "SKIPPED", "列表行无全文映射（API 源配置缺 contentHtml 字段），跳过", jobId);
                         log.warn("[crawl][source={}] API 条目缺全文 url={}", source.getSourceCode(), entry.getUrl());
                     } else {
                         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
@@ -200,7 +217,7 @@ public class CrawlSourceRunner {
                         dto.setContentHtml(entry.getContentHtml());
                         dto.setNoticeTypeRaw(entry.getCategory());
                         LocalDateTime publish = parseDate(entry.getDate());
-                        dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
+                        dto.setPublishTime(publish); // A5：解析失败传 null，日期回填决策交还 ingest（BR-5 原文日期优先）
                         dto.setIssuerName(extractIssuer(entry.getContentHtml()));
                         dto.setParserCode(config.getParser());
                         externalNoticeIngestService.ingest(dto);
@@ -287,7 +304,7 @@ public class CrawlSourceRunner {
         dto.setContentHtml(entry.getContentHtml());
         dto.setNoticeTypeRaw(entry.getCategory());
         LocalDateTime publish = parseDate(entry.getDate());
-        dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
+        dto.setPublishTime(publish); // A5：解析失败传 null，日期回填决策交还 ingest（BR-5 原文日期优先）
         dto.setIssuerName(extractIssuer(entry.getContentHtml()));
         dto.setParserCode("QYZB_JSON");
         externalNoticeIngestService.ingest(dto);

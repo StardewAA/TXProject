@@ -128,8 +128,10 @@ class CrawlSourceRunnerTest {
         source.setEntryUrlsJson("[]");
         when(sourceMapper.selectOne(any())).thenReturn(source);
         CrawlSourceRunner.RunSummary summary = runner.runSource("QYZB-DEMO");
-        assertTrue(summary.getCategories().isEmpty());
-        assertEquals(0, summary.getTotalIngested());
+        // 审查 A9：空配置不再静默 SUCCESS——汇总带 __empty__ 错误类别 + failed=1（前端可提示）
+        assertEquals(1, summary.getCategories().size());
+        assertEquals("__empty__", summary.getCategories().get(0).getName());
+        assertEquals(1, summary.getTotalFailed());
         verify(ingestService, never()).ingest(any());
     }
 
@@ -262,7 +264,9 @@ class CrawlSourceRunnerTest {
 
         CrawlSourceRunner.RunSummary summary = runner.runSource("QYZB-DEMO");
 
-        assertEquals(1, summary.getTotalFailed()); // 无全文 → 记失败留痕（详情抓取未接线）
+        // 审查 B7：无全文映射=配置缺陷 → SKIPPED（不记 FAILED 不污染失败率/不触发调度退避）
+        assertEquals(0, summary.getTotalFailed());
+        assertEquals(0, summary.getTotalIngested());
         verify(ingestService, never()).ingest(any());
     }
 

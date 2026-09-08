@@ -56,5 +56,40 @@ public class CrawlSourceSaveReqVO {
 
     @Schema(description = "备注")
     private String remark;
+    // ========== API 源结构化配置（fetchType=API 时前端逐字段填写；服务端组装为 api_config_json 存储） ==========
+
+    @Schema(description = "API 接口地址（fetchType=API 必填，http/https；如 https://data.xxx.gov.cn/gateway/api/1/xx）")
+    private String apiUrl;
+
+    @Schema(description = "请求方式：GET/POST（默认 GET）")
+    private String apiMethod;
+
+    @Schema(description = "请求头 JSON（可选：鉴权 token 等，如 {\"X-Client-Id\":\"xxx\"}）")
+    private String apiHeadersJson;
+
+    @Schema(description = "POST 请求体模板（可选：{page}/{size}/{siteId}/{categoryId} 占位）")
+    private String apiBodyTemplate;
+
+    @Schema(description = "GET 分页页码参数名（默认 pageNo）")
+    private String apiPageParam;
+
+    @Schema(description = "GET 分页页大小参数名（默认 pageSize）")
+    private String apiSizeParam;
+
+    @Schema(description = "每页条数（默认 10）")
+    private Integer apiPageSize;
+
+    @Schema(description = "列表数据 JSON 路径（默认 rows；如 data.list / res.rows）")
+    private String apiRowsPath;
+
+    @Schema(description = "总数 JSON 路径（可选）")
+    private String apiTotalPath;
+
+    @Schema(description = "字段映射 JSON（可选：对方字段名→本模块 title/url/date/category/contentHtml；缺省同名）")
+    private String apiMappingJson;
+
+    @Schema(description = "相对链接前缀（可选：公告 URL 为相对路径时绝对化用）")
+    private String apiUrlPrefix;
+
 
 }

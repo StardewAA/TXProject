@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -119,13 +120,21 @@ class ExternalNoticeIngestServiceImplTest {
 
         assertEquals(100L, id);
         verify(noticeExternalMapper, never()).insert(any(NoticeExternalDO.class));
-        // 覆盖走 updateById（主档覆盖为 NEW+UNREVIEWED；无附件不触发二次回填）
-        org.mockito.ArgumentCaptor<NoticeExternalDO> cap =
-                org.mockito.ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(cap.capture());
-        assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), cap.getValue().getStatus());
-        assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), cap.getValue().getAuditStatus());
-        assertEquals(2, cap.getValue().getFetchCount());
+        // 覆盖走 update(null, UpdateWrapper)（2026-09-09 审查 A6/S3/C2：显式清场防旧产物残留）
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uw = uwCap.getValue();
+        String sql = uw.getSqlSet();
+        String params = String.valueOf(uw.getParamNameValuePairs());
+        assertTrue(sql.contains("status="), "sql=" + sql); // 覆盖为 NEW
+        assertTrue(params.contains("NEW"), "params=" + params);
+        assertTrue(sql.contains("audit_status="), "sql=" + sql);
+        assertTrue(params.contains("UNREVIEWED"), "params=" + params);
+        assertTrue(sql.contains("fetch_count="), "sql=" + sql);
+        assertTrue(sql.contains("body_blocks_status=") && params.contains("NONE"), "清场 bodyBlocks: sql=" + sql + " params=" + params);
+        assertTrue(sql.contains("ai_extraction_status=") && params.contains("NONE"), "清场 AI: sql=" + sql + " params=" + params);
+        assertTrue(sql.contains("body_blocks_json=") && sql.contains("ai_meta_json="), "清场 JSON 列: sql=" + sql);
     }
 
     @Test
@@ -197,7 +206,7 @@ class ExternalNoticeIngestServiceImplTest {
         assertEquals(300L, rowCap.getValue().getNoticeId());
         assertEquals("PENDING", rowCap.getValue().getVirusStatus());
         ArgumentCaptor<NoticeExternalDO> updateCap = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(updateCap.capture());
+        verify(noticeExternalMapper).updateById(updateCap.capture()); // 新建路径：附件 ids 回填走 updateById
         assertEquals("[501]", updateCap.getValue().getAttachmentIdsJson());
     }
 

@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -292,6 +294,72 @@ class CrawlSourceServiceImplTest {
         ArgumentCaptor<CrawlSourceDO> captor = ArgumentCaptor.forClass(CrawlSourceDO.class);
         verify(sourceMapper).insert(captor.capture());
         assertEquals("CRAWLER", captor.getValue().getFetchType());
+    }
+
+
+    @Test
+    void create_apiStructuredFields_assemblesApiConfig() {
+        // 前端友好模式：填结构化字段（apiUrl/apiMethod/apiRowsPath/apiMappingJson...）→ 服务端组装 api_config_json
+        AtomicLong ids = new AtomicLong();
+        doAnswer(inv -> {
+            CrawlSourceDO s = inv.getArgument(0);
+            s.setId(ids.incrementAndGet());
+            return 1;
+        }).when(sourceMapper).insert(any(CrawlSourceDO.class));
+        CrawlSourceSaveReqVO req = req("SRC-API-S1");
+        req.setFetchType("API");
+        req.setApiUrl("https://data.xxx.gov.cn/gateway/api/1/tenders");
+        req.setApiMethod("GET");
+        req.setApiRowsPath("data.list");
+        req.setApiMappingJson("{\"title\":\"notice_name\",\"url\":\"url\",\"date\":\"publish_time\"}");
+
+        Long id = service.createSource(req);
+
+        assertEquals(1L, id);
+        ArgumentCaptor<CrawlSourceDO> cap = ArgumentCaptor.forClass(CrawlSourceDO.class);
+        verify(sourceMapper).insert(cap.capture());
+        String cfg = cap.getValue().getApiConfigJson();
+        assertNotNull(cfg);
+        assertTrue(cfg.contains("\"url\":\"https://data.xxx.gov.cn/gateway/api/1/tenders\""));
+        assertTrue(cfg.contains("\"method\":\"GET\""));
+        assertTrue(cfg.contains("\"rowsPath\":\"data.list\""));
+        assertTrue(cfg.contains("\"notice_name\""));
+    }
+
+    @Test
+    void create_apiStructuredMissingUrl_rejected() {
+        // API 源结构化模式但缺 apiUrl → 拒绝（防漏配静默空跑）
+        CrawlSourceSaveReqVO req = req("SRC-API-S2");
+        req.setFetchType("API");
+        req.setApiRowsPath("rows");
+        try {
+            service.createSource(req);
+            fail("API 源缺接口地址应拒绝");
+        } catch (ServiceException e) {
+            assertEquals(1_060_106_027, e.getCode());
+        }
+        verify(sourceMapper, never()).insert(any(CrawlSourceDO.class));
+    }
+
+    @Test
+    void getSource_structuredFieldsFilled() {
+        // 回显：api_config_json 拆成结构化字段（前端表单回显）
+        CrawlSourceDO source = sourceDO(9L, "SRC-API-S3");
+        source.setFetchType("API");
+        source.setApiConfigJson("{\"method\":\"POST\",\"url\":\"https://api.example.gov.cn/list\","
+                + "\"headers\":{\"X-Client-Id\":\"tok1\"},\"rowsPath\":\"res.rows\",\"pageSize\":20,"
+                + "\"mapping\":{\"title\":\"title\",\"url\":\"url\",\"date\":\"publishDate\"}}");
+        when(sourceMapper.selectById(9L)).thenReturn(source);
+
+        CrawlSourceRespVO resp = service.getSource(9L);
+
+        assertEquals("https://api.example.gov.cn/list", resp.getApiUrl());
+        assertEquals("POST", resp.getApiMethod());
+        assertEquals("res.rows", resp.getApiRowsPath());
+        assertEquals(Integer.valueOf(20), resp.getApiPageSize());
+        assertEquals("{\"X-Client-Id\":\"tok1\"}", resp.getApiHeadersJson());
+        assertNotNull(resp.getApiMappingJson());
+        assertEquals("{\"title\":\"title\",\"url\":\"url\",\"date\":\"publishDate\"}", resp.getApiMappingJson());
     }
 
 }

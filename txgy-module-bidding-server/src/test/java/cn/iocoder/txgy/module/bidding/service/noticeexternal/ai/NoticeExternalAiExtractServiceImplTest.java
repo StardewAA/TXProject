@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -78,9 +79,11 @@ class NoticeExternalAiExtractServiceImplTest {
         when(noticeExternalMapper.selectById(8L)).thenReturn(empty);
         ServiceException ex = assertThrows(ServiceException.class, () -> service.extract(8L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_AI_NO_MATERIAL.getCode(), ex.getCode());
-        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(captor.capture());
-        assertEquals("FAILED", captor.getValue().getAiExtractionStatus());
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uwX = uwCap.getValue();
+        assertTrue(uwX.getSqlSet().contains("ai_extraction_status=") && String.valueOf(uwX.getParamNameValuePairs()).contains("FAILED"));
     }
 
     @Test
@@ -98,13 +101,16 @@ class NoticeExternalAiExtractServiceImplTest {
         assertEquals("SUCCESS", snapshot.getAiExtractionStatus());
         assertEquals(2, snapshot.getMetaFieldCount());
         assertEquals("AI 转写全文…".length(), snapshot.getFullTextLength());
-        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(captor.capture());
-        NoticeExternalDO saved = captor.getValue();
-        assertEquals("SUCCESS", saved.getAiExtractionStatus());
-        assertEquals("AI 转写全文…", saved.getExtractionText());
-        assertEquals("SUCCESS", saved.getExtractionStatus());
-        assertTrue(saved.getAiMetaJson().contains("装置大修项目"));
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uw = uwCap.getValue();
+        String sqlSet = uw.getSqlSet();
+        String params = String.valueOf(uw.getParamNameValuePairs());
+        assertTrue(sqlSet.contains("ai_extraction_status=") && params.contains("SUCCESS"), params);
+        assertTrue(sqlSet.contains("extraction_text="), sqlSet);
+        assertTrue(sqlSet.contains("extraction_status=") && params.contains("SUCCESS"), params);
+        assertTrue(sqlSet.contains("ai_meta_json="), sqlSet);
         // 全文回写后重放索引（检索可见）
         verify(externalNoticeIndexNotifier).indexNotice(any(NoticeExternalDO.class));
     }
@@ -116,9 +122,11 @@ class NoticeExternalAiExtractServiceImplTest {
                 .thenReturn(new AiNoticeExtractResult(new LinkedHashMap<>(), null));
         ServiceException ex = assertThrows(ServiceException.class, () -> service.extract(7L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_AI_OUTPUT_INVALID.getCode(), ex.getCode());
-        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(captor.capture());
-        assertEquals("FAILED", captor.getValue().getAiExtractionStatus());
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uwX = uwCap.getValue();
+        assertTrue(uwX.getSqlSet().contains("ai_extraction_status=") && String.valueOf(uwX.getParamNameValuePairs()).contains("FAILED"));
     }
 
     @Test
@@ -137,14 +145,19 @@ class NoticeExternalAiExtractServiceImplTest {
 
         assertEquals("SUCCESS", snapshot.getAiExtractionStatus());
         assertEquals("BELONGS", snapshot.getIndustryFlag());
-        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(captor.capture());
-        NoticeExternalDO saved = captor.getValue();
-        assertEquals("BELONGS", saved.getIndustryFlag());
-        assertEquals(0, saved.getIndustryConfidence().compareTo(new java.math.BigDecimal("0.95")));
-        assertTrue(saved.getAiMetaJson().contains("industryReason"));
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uw3 = uwCap.getValue();
+        String sqlSet3 = uw3.getSqlSet();
+        String params3 = String.valueOf(uw3.getParamNameValuePairs());
+        assertTrue(sqlSet3.contains("industry_flag=") && params3.contains("BELONGS"), params3);
+        assertTrue(sqlSet3.contains("industry_confidence=") && params3.contains("0.95"), params3);
+        assertTrue(sqlSet3.contains("ai_meta_json="), sqlSet3);
         // 抽取不涉全文时不覆盖 extraction 状态
-        assertEquals(null, saved.getExtractionStatus());
+        // 注意：ai_extraction_status 含子串 extraction_status，须排除——检查是否有独立 extraction_status 列（=#{ 前缀前无 ai_）
+        String plainExtraction = sqlSet3.replace("ai_extraction_status", "");
+        assertTrue(!plainExtraction.contains("extraction_status="), sqlSet3);
     }
 
     @Test
@@ -154,10 +167,12 @@ class NoticeExternalAiExtractServiceImplTest {
                 .thenThrow(new IllegalStateException("AI 服务调用失败: 连接超时"));
         ServiceException ex = assertThrows(ServiceException.class, () -> service.extract(7L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_AI_FAILED.getCode(), ex.getCode());
-        ArgumentCaptor<NoticeExternalDO> captor = ArgumentCaptor.forClass(NoticeExternalDO.class);
-        verify(noticeExternalMapper).updateById(captor.capture());
-        assertEquals("FAILED", captor.getValue().getAiExtractionStatus());
-        assertTrue(captor.getValue().getAiMetaJson().contains("连接超时"));
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> uwCap =
+                org.mockito.ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(noticeExternalMapper).update(isNull(), uwCap.capture());
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper uwX = uwCap.getValue();
+        assertTrue(uwX.getSqlSet().contains("ai_extraction_status=") && String.valueOf(uwX.getParamNameValuePairs()).contains("FAILED"));
+        assertTrue(String.valueOf(uwX.getParamNameValuePairs()).contains("连接超时")); // 值在 params（ai_meta_json）
     }
 
 }

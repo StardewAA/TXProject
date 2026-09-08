@@ -154,40 +154,66 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         return existing.getId();
     }
 
-    /** 覆盖主档 payload（保留 id/审计痕迹列；状态重置 NEW+UNREVIEWED，内容指纹同步）。 */
+    /** 覆盖主档 payload（保留 id/审计痕迹列；状态重置 NEW+UNREVIEWED，内容指纹同步）。
+     *  2026-09-09 审查 A6/S3/C2 修复：覆盖=新内容，必须统一清场——正文结构化(A6)、AI 产物(C2)、
+     *  行业判定 flag/confidence 配对(C2)、HTML/PDF 形态残留(S3) 全部清空，防前台/ES 渲染旧产物。 */
     private void overwriteNotice(NoticeExternalDO existing, ExternalNoticeIngestDTO dto, String urlHash) {
         NoticeExternalDO fresh = buildNotice(dto, urlHash, dto.getContentHash());
-        existing.setSourceCode(fresh.getSourceCode());
-        existing.setSourceName(fresh.getSourceName());
-        existing.setTitle(fresh.getTitle());
-        existing.setOrigUrl(fresh.getOrigUrl());
-        existing.setContentHash(fresh.getContentHash());
+        // 用 UpdateWrapper 显式更新（含 null 清场列；避免 MP 默认忽略 null 导致旧值残留）
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<NoticeExternalDO> uw =
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<>();
+        uw.eq("id", existing.getId())
+          .set("source_code", fresh.getSourceCode())
+          .set("source_name", fresh.getSourceName())
+          .set("title", fresh.getTitle())
+          .set("orig_url", fresh.getOrigUrl())
+          .set("content_hash", fresh.getContentHash())
+          .set("content_type", fresh.getContentType())
+          .set("content_html", fresh.getContentHtml())
+          .set("pdf_file_id", fresh.getPdfFileId())
+          .set("pdf_sha256", fresh.getPdfSha256())
+          .set("pdf_size", fresh.getPdfSize())
+          .set("pdf_download_url", fresh.getPdfDownloadUrl())
+          .set("notice_type_raw", fresh.getNoticeTypeRaw())
+          .set("legal_flag", fresh.getLegalFlag())
+          .set("industry_flag", fresh.getIndustryFlag())
+          .set("industry_confidence", fresh.getIndustryConfidence())
+          .set("project_code", fresh.getProjectCode())
+          .set("tender_project_code", fresh.getTenderProjectCode())
+          .set("bid_section_codes", fresh.getBidSectionCodes())
+          .set("project_name", fresh.getProjectName())
+          .set("issuer_name", fresh.getIssuerName())
+          .set("publish_time", fresh.getPublishTime())
+          .set("effective_from", fresh.getEffectiveFrom())
+          .set("effective_to", fresh.getEffectiveTo())
+          .set("parser_code", fresh.getParserCode())
+          .set("meta_json", fresh.getMetaJson())
+          .set("extra_raw", fresh.getExtraRaw())
+          .set("status", NoticeExternalStatusEnum.NEW.getStatus())
+          .set("audit_status", NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus())
+          .set("fetch_count", (existing.getFetchCount() == null ? 0 : existing.getFetchCount()) + 1)
+          .set("last_fetch_time", LocalDateTime.now())
+          // ---- 统一清场：新内容待重新结构化/AI/判定/抽取（审查 A6/S3/C2） ----
+          .set("extraction_status", "NONE")
+          .set("extraction_text", null)
+          .set("extraction_tables_json", null)
+          .set("extraction_at", null)
+          .set("ai_extraction_status", "NONE")
+          .set("ai_meta_json", null)
+          .set("ai_extract_at", null)
+          .set("body_parser_code", null)
+          .set("body_blocks_status", "NONE")
+          .set("body_blocks_json", null)
+          .set("body_blocks_at", null);
+        noticeExternalMapper.update(null, uw);
+        // 同步内存对象（供后续附件重建等使用）
         existing.setContentType(fresh.getContentType());
         existing.setContentHtml(fresh.getContentHtml());
-        existing.setPdfFileId(fresh.getPdfFileId());
-        existing.setPdfSha256(fresh.getPdfSha256());
-        existing.setPdfSize(fresh.getPdfSize());
         existing.setPdfDownloadUrl(fresh.getPdfDownloadUrl());
-        existing.setNoticeTypeRaw(fresh.getNoticeTypeRaw());
-        existing.setLegalFlag(fresh.getLegalFlag());
-        existing.setIndustryFlag(fresh.getIndustryFlag());
-        existing.setProjectCode(fresh.getProjectCode());
-        existing.setTenderProjectCode(fresh.getTenderProjectCode());
-        existing.setBidSectionCodes(fresh.getBidSectionCodes());
-        existing.setProjectName(fresh.getProjectName());
-        existing.setIssuerName(fresh.getIssuerName());
-        existing.setPublishTime(fresh.getPublishTime());
-        existing.setEffectiveFrom(fresh.getEffectiveFrom());
-        existing.setEffectiveTo(fresh.getEffectiveTo());
-        existing.setParserCode(fresh.getParserCode());
-        existing.setMetaJson(fresh.getMetaJson());
-        existing.setExtraRaw(fresh.getExtraRaw());
         existing.setStatus(NoticeExternalStatusEnum.NEW.getStatus());
         existing.setAuditStatus(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus());
         existing.setFetchCount((existing.getFetchCount() == null ? 0 : existing.getFetchCount()) + 1);
         existing.setLastFetchTime(LocalDateTime.now());
-        existing.setExtractionStatus("NONE"); // 新内容待重新抽取（抽取链 P2）
-        noticeExternalMapper.updateById(existing);
     }
 
     /** 重建附件子表（先删后插，事务内保证主档/子表一致）并回填主档 ids JSON。 */

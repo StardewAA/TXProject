@@ -31,6 +31,8 @@ import org.springframework.util.StringUtils;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 采集源配置管理实现（G 轨，平台级）。
@@ -162,6 +164,41 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
     /** 获取方式：API 接口直取（JSON 列表，api_config_json 配置请求/分页/字段映射） */
     private static final String FETCH_TYPE_API = "API";
 
+
+    /** 由结构化 API 字段组装 api_config_json（fetchType=API 且给了任一 api* 字段时）；否则返回 null 走直填兼容 */
+    private String assembleApiConfig(CrawlSourceSaveReqVO reqVO) {
+        boolean structured = StringUtils.hasText(reqVO.getApiUrl()) || StringUtils.hasText(reqVO.getApiRowsPath())
+                || StringUtils.hasText(reqVO.getApiMethod()) || StringUtils.hasText(reqVO.getApiHeadersJson())
+                || StringUtils.hasText(reqVO.getApiBodyTemplate()) || StringUtils.hasText(reqVO.getApiMappingJson())
+                || StringUtils.hasText(reqVO.getApiTotalPath()) || StringUtils.hasText(reqVO.getApiUrlPrefix())
+                || StringUtils.hasText(reqVO.getApiPageParam()) || StringUtils.hasText(reqVO.getApiSizeParam())
+                || reqVO.getApiPageSize() != null;
+        if (!structured) {
+            return null;
+        }
+        try {
+            Map<String, Object> cfg = new LinkedHashMap<>();
+            cfg.put("method", StringUtils.hasText(reqVO.getApiMethod()) ? reqVO.getApiMethod().trim().toUpperCase() : "GET");
+            cfg.put("url", reqVO.getApiUrl());
+            if (StringUtils.hasText(reqVO.getApiHeadersJson())) {
+                cfg.put("headers", OBJECT_MAPPER.readValue(reqVO.getApiHeadersJson(), Map.class));
+            }
+            if (StringUtils.hasText(reqVO.getApiBodyTemplate())) { cfg.put("bodyTemplate", reqVO.getApiBodyTemplate()); }
+            if (StringUtils.hasText(reqVO.getApiPageParam())) { cfg.put("pageParam", reqVO.getApiPageParam()); }
+            if (StringUtils.hasText(reqVO.getApiSizeParam())) { cfg.put("sizeParam", reqVO.getApiSizeParam()); }
+            if (reqVO.getApiPageSize() != null) { cfg.put("pageSize", reqVO.getApiPageSize()); }
+            cfg.put("rowsPath", StringUtils.hasText(reqVO.getApiRowsPath()) ? reqVO.getApiRowsPath() : "rows");
+            if (StringUtils.hasText(reqVO.getApiTotalPath())) { cfg.put("totalPath", reqVO.getApiTotalPath()); }
+            if (StringUtils.hasText(reqVO.getApiMappingJson())) {
+                cfg.put("mapping", OBJECT_MAPPER.readValue(reqVO.getApiMappingJson(), Map.class));
+            }
+            if (StringUtils.hasText(reqVO.getApiUrlPrefix())) { cfg.put("urlPrefix", reqVO.getApiUrlPrefix()); }
+            return OBJECT_MAPPER.writeValueAsString(cfg);
+        } catch (Exception e) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+        }
+    }
+
     /** 配置合法性：URL 协议/通道已注册/entryUrls JSON 为 http(s) 数组（保存即校验，防脏配置静默生效）。 */
     private void validatePayload(CrawlSourceSaveReqVO reqVO) {
         String fetchType = StringUtils.hasText(reqVO.getFetchType()) ? reqVO.getFetchType().trim().toUpperCase() : FETCH_TYPE_CRAWLER;
@@ -169,9 +206,16 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
             // 获取方式只允许 CRAWLER/API（外部信息获取模块，见设计 v1.0 §4.2）
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
         }
-        if (FETCH_TYPE_API.equals(fetchType) && !StringUtils.hasText(reqVO.getApiConfigJson())) {
-            // API 源必须声明接口配置（method/url/rowsPath/fieldMapping…），防漏配静默空跑
-            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+        if (FETCH_TYPE_API.equals(fetchType)) {
+            // API 源：结构化字段（apiUrl）或直填 apiConfigJson 二选一必须有（防漏配静默空跑）
+            boolean structured = StringUtils.hasText(reqVO.getApiUrl());
+            if (!structured && !StringUtils.hasText(reqVO.getApiConfigJson())) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+            }
+            if (structured && !isHttpUrl(reqVO.getApiUrl())) {
+                // 接口地址必须是 http/https（结构化必填校验）
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+            }
         }
         if (StringUtils.hasText(reqVO.getApiConfigJson())) {
             try {
@@ -241,7 +285,9 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
         source.setEntryUrlsJson(StringUtils.hasText(reqVO.getEntryUrlsJson()) ? reqVO.getEntryUrlsJson() : null);
         source.setChannelCode(reqVO.getChannelCode());
         source.setFetchType(StringUtils.hasText(reqVO.getFetchType()) ? reqVO.getFetchType().trim().toUpperCase() : FETCH_TYPE_CRAWLER);
-        source.setApiConfigJson(StringUtils.hasText(reqVO.getApiConfigJson()) ? reqVO.getApiConfigJson() : null);
+        // API 配置：结构化字段优先（前端友好表单 → 服务端组装）；直填 apiConfigJson（高级/兼容）兜底
+        String assembled = assembleApiConfig(reqVO);
+        source.setApiConfigJson(assembled != null ? assembled : reqVO.getApiConfigJson());
         source.setParserCodeDefault(reqVO.getParserCodeDefault());
         source.setFetchIntervalSeconds(reqVO.getFetchIntervalSeconds() == null ? 3600 : reqVO.getFetchIntervalSeconds());
         source.setRobotsOk(Boolean.TRUE.equals(reqVO.getRobotsOk()));
@@ -272,6 +318,7 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
         resp.setChannelCode(source.getChannelCode());
         resp.setFetchType(source.getFetchType());
         resp.setApiConfigJson(source.getApiConfigJson());
+        fillStructuredApiFields(resp, source.getApiConfigJson());
         resp.setParserCodeDefault(source.getParserCodeDefault());
         resp.setFetchIntervalSeconds(source.getFetchIntervalSeconds());
         resp.setRobotsOk(source.getRobotsOk());
@@ -280,6 +327,49 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
         resp.setCreateTime(source.getCreateTime());
         resp.setUpdateTime(source.getUpdateTime());
         return resp;
+    }
+
+
+    /** 把 api_config_json 拆成结构化字段（前端表单回显；解析失败静默——直填 JSON 的高级模式仍可从 apiConfigJson 看） */
+    private void fillStructuredApiFields(CrawlSourceRespVO resp, String apiConfigJson) {
+        if (!StringUtils.hasText(apiConfigJson)) {
+            return;
+        }
+        try {
+            JsonNode cfg = OBJECT_MAPPER.readTree(apiConfigJson);
+            if (!cfg.isObject()) {
+                return;
+            }
+            resp.setApiUrl(textNode(cfg, "url"));
+            resp.setApiMethod(textNode(cfg, "method"));
+            JsonNode headers = cfg.get("headers");
+            if (headers != null && headers.isObject() && !headers.isEmpty()) {
+                resp.setApiHeadersJson(headers.toString());
+            }
+            resp.setApiBodyTemplate(textNode(cfg, "bodyTemplate"));
+            resp.setApiPageParam(textNode(cfg, "pageParam"));
+            resp.setApiSizeParam(textNode(cfg, "sizeParam"));
+            JsonNode pageSize = cfg.get("pageSize");
+            if (pageSize != null && pageSize.isNumber()) { resp.setApiPageSize(pageSize.asInt()); }
+            resp.setApiRowsPath(textNode(cfg, "rowsPath"));
+            resp.setApiTotalPath(textNode(cfg, "totalPath"));
+            JsonNode mapping = cfg.get("mapping");
+            if (mapping != null && mapping.isObject() && !mapping.isEmpty()) {
+                resp.setApiMappingJson(mapping.toString());
+            }
+            resp.setApiUrlPrefix(textNode(cfg, "urlPrefix"));
+        } catch (Exception ignore) {
+            // 解析失败保持 apiConfigJson 原样可查
+        }
+    }
+
+    private static String textNode(JsonNode node, String key) {
+        JsonNode v = node.get(key);
+        if (v == null || v.isNull() || v.isMissingNode() || !v.isValueNode()) {
+            return null;
+        }
+        String s = v.asText();
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
 }

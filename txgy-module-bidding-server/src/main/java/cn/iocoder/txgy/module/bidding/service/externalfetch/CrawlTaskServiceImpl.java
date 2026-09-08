@@ -138,8 +138,9 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
         if (task == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_TASK_NOT_EXISTS);
         }
-        if (!CrawlTaskStatusEnum.FAILED.getStatus().equals(task.getStatus())) {
-            // 仅重试耗尽/死信可人工重试；PENDING 本身在队列、SUCCESS/SKIPPED 终态无需重试（语义防呆）
+        if (!CrawlTaskStatusEnum.FAILED.getStatus().equals(task.getStatus())
+                && !CrawlTaskStatusEnum.PENDING.getStatus().equals(task.getStatus())) {
+            // 审查 A3 修复（2026-09-09）：FAILED(死信) 与 PENDING(卡死/退避中) 均可人工重试；SUCCESS/SKIPPED 终态无需重试
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_TASK_NOT_RETRYABLE);
         }
         String history = task.getMessage();

@@ -26,8 +26,30 @@ public class CrawlSourceRespVO {
     private String channelCode;
     @Schema(description = "获取方式：CRAWLER=爬虫(列表HTML)/API=接口直取(JSON)")
     private String fetchType;
-    @Schema(description = "API 源配置 JSON（fetch_type=API 时）")
+    @Schema(description = "API 源配置 JSON（fetch_type=API 时；结构化字段与服务端组装结果同源）")
     private String apiConfigJson;
+    @Schema(description = "API 接口地址（结构化视图；与 apiConfigJson 同源）")
+    private String apiUrl;
+    @Schema(description = "请求方式 GET/POST（结构化视图）")
+    private String apiMethod;
+    @Schema(description = "请求头 JSON（结构化视图）")
+    private String apiHeadersJson;
+    @Schema(description = "POST 请求体模板（结构化视图）")
+    private String apiBodyTemplate;
+    @Schema(description = "GET 分页页码参数名（结构化视图）")
+    private String apiPageParam;
+    @Schema(description = "GET 分页页大小参数名（结构化视图）")
+    private String apiSizeParam;
+    @Schema(description = "每页条数（结构化视图）")
+    private Integer apiPageSize;
+    @Schema(description = "列表数据 JSON 路径（结构化视图）")
+    private String apiRowsPath;
+    @Schema(description = "总数 JSON 路径（结构化视图）")
+    private String apiTotalPath;
+    @Schema(description = "字段映射 JSON（结构化视图）")
+    private String apiMappingJson;
+    @Schema(description = "相对链接前缀（结构化视图）")
+    private String apiUrlPrefix;
     @Schema(description = "默认解析/策略码（API 源=字段映射/AI 策略码）")
     private String parserCodeDefault;
     @Schema(description = "抓取间隔（秒）")

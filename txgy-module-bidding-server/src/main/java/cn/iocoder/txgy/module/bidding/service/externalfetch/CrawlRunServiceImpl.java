@@ -51,11 +51,27 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     @Resource
     private cn.iocoder.txgy.framework.mq.redis.core.RedisMQTemplate redisMQTemplate;
 
-    /** 源级上次执行时间（进程内；v1 简化，多实例见 P2 worker 归属） */
+    /** 源级上次调度尝试时刻（进程内；成功/失败都更新——节流对两者一致生效，失败不会 30s tick 反复重试） */
     private final ConcurrentHashMap<String, Instant> lastRunAt = new ConcurrentHashMap<>();
+
+    /** 源级连续失败次数（进程内；用于失败退避：连续失败后拉长重试间隔，避免对坏源机械轰炸） */
+    private final ConcurrentHashMap<String, Integer> failedStreak = new ConcurrentHashMap<>();
+
+    /** 失败退避基数（秒）：第 n 次连续失败后等待 min(退避基数 * 2^(n-1), 上限) 再重试（job FAILED=死信语义，不机械重打） */
+    private static final long FAIL_BACKOFF_BASE_SECONDS = 600;
+    private static final long FAIL_BACKOFF_MAX_SECONDS = 7200; // 2h 封顶
 
     /** 源级进程内互斥锁：同源并发 runNow（人工 run 撞上调度 tick）第二个直接跳过（DB RUNNING 守卫之外的第二道闸） */
     private final java.util.concurrent.ConcurrentHashMap<String, Object> sourceLocks = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 调度执行池：每源独立并行调度（互不阻塞），各自按源配置 fetch_interval_seconds 节流；
+     *  同源并发由 sourceLocks + DB RUNNING 守卫双保险拦截；跨源（含多实例不同源）并行执行（2026-09-09 用户口径）。 */
+    private final java.util.concurrent.ExecutorService schedulerPool =
+            java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r, "crawl-scheduler");
+                t.setDaemon(true);
+                return t;
+            });
 
     /** 启动自愈：把上次进程崩溃遗留的 RUNNING 批次统一置 FAILED（记 interrupted），否则 RUNNING 守卫会永远跳过该源（2026-09-09 容错）
      *  首次全量判定基于 SUCCESS：清理后该源仍无 SUCCESS → 下次运行自动按 full 重试（幂等补齐，不丢历史）。 */
@@ -176,6 +192,7 @@ public class CrawlRunServiceImpl implements CrawlRunService {
         try {
             CrawlSourceRunner.RunSummary summary = crawlSourceRunner.runSource(sourceCode, job.getId(), firstFull);
             lastRunAt.put(sourceCode, Instant.now());
+            failedStreak.remove(sourceCode); // 成功清零（人工 run 与调度一致）
             if (summary.isAsync()) {
                 // 投递模式：本轮只做列表发现+投递；job 保持 RUNNING，task 全部终态后由消费端 tryFinalizeJob 收尾
                 log.info("[crawl][runNow][{}] 投递完成 enqueued={} failed={}（消费端异步落库，job 保持 RUNNING）", sourceCode,
@@ -200,7 +217,9 @@ public class CrawlRunServiceImpl implements CrawlRunService {
         }
     }
 
-    /** 定时扫描：启用源按各自间隔轮询（tick 30s；触发类型 SCHEDULE） */
+    /** 定时扫描（tick 30s）：发现"到期源"后提交线程池并行执行（每源独立、互不阻塞）。
+     *  每个源按自己的 fetch_interval_seconds（源配置表可调，≥120 下限）节流；到期即投池，源 A 长跑不挡源 B。
+     *  分布式：同源跨实例并发由 DB RUNNING 守卫拦截，不同源可在多实例并行；本池仅加速单实例内多源并行。 */
     @Scheduled(fixedDelay = 30_000)
     public void scheduledScan() {
         if (!schedulerEnabled) {
@@ -210,18 +229,39 @@ public class CrawlRunServiceImpl implements CrawlRunService {
             List<CrawlSourceDO> sources = crawlSourceMapper.selectList(new LambdaQueryWrapper<CrawlSourceDO>()
                     .eq(CrawlSourceDO::getEnabled, Boolean.TRUE));
             for (CrawlSourceDO source : sources) {
+                String code = source.getSourceCode();
                 int interval = source.getFetchIntervalSeconds() == null
                         ? DEFAULT_INTERVAL_SECONDS : Math.max(source.getFetchIntervalSeconds(), 120);
-                Instant last = lastRunAt.get(source.getSourceCode());
-                if (last != null && Duration.between(last, Instant.now()).getSeconds() < interval) {
-                    continue; // 未到期（频控）
+                Instant last = lastRunAt.get(code);
+                long waited = last == null ? Long.MAX_VALUE : Duration.between(last, Instant.now()).getSeconds();
+                // 节流 = 正常间隔（成功/失败一致）；若处于失败退避期则用退避间隔（连续失败指数退避，坏源不死缠）
+                int streak = failedStreak.getOrDefault(code, 0);
+                long effectiveInterval = streak > 0
+                        ? Math.min(FAIL_BACKOFF_BASE_SECONDS * (1L << Math.min(streak - 1, 6)), FAIL_BACKOFF_MAX_SECONDS)
+                        : interval;
+                if (waited < effectiveInterval) {
+                    continue; // 未到期（正常间隔或失败退避期）
                 }
-                lastRunAt.putIfAbsent(source.getSourceCode(), Instant.now());
-                try {
-                    runNow(source.getSourceCode(), "SCHEDULE");
-                } catch (Exception e) {
-                    log.error("[crawl][scheduled][{}] 轮询失败", source.getSourceCode(), e);
+                // 原子抢占（避免并发 tick 双跑）：last 为空 → putIfAbsent；非空 → replace(旧值校验)
+                boolean claimed;
+                if (last == null) {
+                    claimed = lastRunAt.putIfAbsent(code, Instant.now()) == null;
+                } else {
+                    claimed = lastRunAt.replace(code, last, Instant.now());
                 }
+                if (!claimed) {
+                    continue; // 并发 tick 已抢先提交
+                }
+                schedulerPool.submit(() -> {
+                    try {
+                        runNow(code, "SCHEDULE");
+                        failedStreak.remove(code); // 成功清零
+                    } catch (Exception e) {
+                        int n = failedStreak.merge(code, 1, Integer::sum);
+                        log.error("[crawl][scheduled][{}] 轮询失败（连续第 {} 次，退避 {}s 后重试，job FAILED 可人工处理）", code, n,
+                                Math.min(FAIL_BACKOFF_BASE_SECONDS * (1L << Math.min(n - 1, 6)), FAIL_BACKOFF_MAX_SECONDS), e);
+                    }
+                });
             }
         } catch (Exception e) {
             log.error("[crawl][scheduled] 调度扫描异常", e);

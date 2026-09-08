@@ -33,6 +33,9 @@ public final class HtmlSanitizer {
                         "onchange", "onsubmit", "onkeydown", "onkeyup", "style")
                 .addProtocols("a", "href", "http", "https", "mailto")
                 .addProtocols("img", "src", "http", "https")
+                // 审查 S5（2026-09-09）：relaxed 自带 ftp: 等协议，addProtocols 是追加非替换——显式剔除避免外链 ftp 直出
+                .removeProtocols("a", "href", "ftp")
+                .removeProtocols("img", "src", "ftp")
                 .addProtocols("blockquote", "cite", "http", "https");
         DISPLAY_SAFELIST = list;
     }
