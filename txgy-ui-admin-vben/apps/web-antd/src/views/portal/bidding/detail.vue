@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
           <iframe class="pdf-frame" :src="detail.pdfDownloadUrl" title="公告 PDF 预览"></iframe>
         </div>
         <div v-else class="pdf-empty">
-          PDF 文件 —— 文件服务签名地址（pdfDownloadUrl）回填后即可内嵌预览
+          源文件整理中——PDF 归档（pdf_download_url）尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
           <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
         </div>
       </div>

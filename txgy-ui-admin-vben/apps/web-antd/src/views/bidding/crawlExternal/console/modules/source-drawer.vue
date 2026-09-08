@@ -119,7 +119,8 @@ async function runSource(row: CrawlExternalApi.SourceItem) {
       title: '爬取完成：' + (row.sourceName || row.sourceCode),
       content:
         (lines.length ? lines.join('<br/>') : '无栏目产出') +
-        '<br/>（任务条将出现在“定时任务”区；同一源 120s 内不可再次触发）',
+        '<br/>（任务条将出现在“定时任务”区；同一源 120s 内不可再次触发。' +
+        '首跑将按全量窗口回溯历史 fullLookbackDays（缺省 60 天），此后自动转增量 —— 04-契约 §3）',
     });
     emit('changed');
   } catch (e) {
