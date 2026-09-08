@@ -28,7 +28,11 @@ import {
   TimelineItem,
 } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import {
+  ACTION_ICON,
+  TableAction,
+  useVbenVxeGrid,
+} from '#/adapter/vxe-table';
 import {
   getProject,
   getProjectStatistics,
@@ -610,7 +614,24 @@ defineExpose({ open: openModal });
         <Button @click="openBindWorkOrder"> 挂接已有工单 </Button>
       </Space>
     </div>
-    <Grid />
+    <Grid>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: '解除关联',
+              type: 'link',
+              danger: true,
+              icon: ACTION_ICON.DELETE,
+              popConfirm: {
+                title: '确定要解除该工单的项目关联吗？',
+                confirm: handleUnbind.bind(null, row),
+              },
+            },
+          ]"
+        />
+      </template>
+    </Grid>
   </Modal>
 
   <!-- 挂接已有工单弹窗 -->

@@ -221,18 +221,23 @@ function handleDetail(id?: number) {
 }
 
 /** 安排面试 */
-function openInterview(candidateId: number) {
+function openInterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   interviewModalApi
-    .setData({ type: 'create', candidateIdOrIds: candidateId })
+    .setData({
+      type: 'create',
+      candidateIdOrIds: candidate.id!,
+      applicationId: candidate.applicationId,
+    })
     .open();
 }
 
 /** 安排复试 */
-function openReinterview(candidateId: number) {
+function openReinterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   interviewModalApi
     .setData({
       type: 'create',
-      candidateIdOrIds: candidateId,
+      candidateIdOrIds: candidate.id!,
+      applicationId: candidate.applicationId,
       createTitle: '安排复试',
     })
     .open();
@@ -494,7 +499,7 @@ async function handlePrimaryAction(
     return;
   }
   if (command === 'interview' && candidate.id) {
-    openInterview(candidate.id);
+    openInterview(candidate);
   }
 }
 
@@ -524,7 +529,7 @@ async function handleMoreCommand(
     return;
   }
   if (command === 'reinterview' && candidate.id) {
-    openReinterview(candidate.id);
+    openReinterview(candidate);
     return;
   }
   if (command === 'eliminate') {

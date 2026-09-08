@@ -66,6 +66,14 @@ public interface HrmRecruitChannelService {
     HrmRecruitChannelDO validateRecruitChannelExists(Long id);
 
     /**
+     * 校验招聘渠道存在且启用。
+     *
+     * @param id 招聘渠道编号
+     * @return 招聘渠道
+     */
+    HrmRecruitChannelDO validateRecruitChannelUsable(Long id);
+
+    /**
      * 获得招聘渠道列表
      *
      * @param ids 招聘渠道编号集合

@@ -118,6 +118,15 @@ public class HrmRecruitPostController {
                         .setStatus(post.getStatus())));
     }
 
+    @GetMapping("/validate-status")
+    @Operation(summary = "校验招聘职位是否已发布")
+    @Parameter(name = "id", description = "招聘职位编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:post:query')")
+    public CommonResult<Boolean> validateRecruitPostStatus(@RequestParam("id") Long id) {
+        recruitPostService.validateRecruitPostPublished(id);
+        return success(true);
+    }
+
     @GetMapping("/status-count")
     @Operation(summary = "获得招聘职位状态数量")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:post:query')")

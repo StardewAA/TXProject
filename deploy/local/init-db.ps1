@@ -70,6 +70,16 @@ foreach ($featureSql in $promotionScripts) {
     }
 }
 
+# The full database dump predates the portal resume feature and is intentionally
+# not regenerated for every incremental change. Apply the additive migration
+# explicitly so an existing volume receives the table as well as a fresh one.
+$personalResumeSql = Join-Path $rootDir 'sql\2026-09-04-hrm-personal-resume.sql'
+if (Test-Path -LiteralPath $personalResumeSql) {
+    Write-Host "Applying HRM personal resume migration ..." -ForegroundColor Cyan
+    Invoke-Mysql -SqlFile $personalResumeSql
+    Write-Host "HRM personal resume migration applied." -ForegroundColor Green
+}
+
 # verify
 $count = docker exec $MysqlContainer mysql -uroot -p"$env:MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$Database'" 2>$null
 Write-Host "Tables in ${Database}: $count" -ForegroundColor Green
