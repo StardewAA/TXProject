@@ -252,6 +252,20 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         notice.setTenderProjectCode(dto.getTenderProjectCode());
         notice.setBidSectionCodes(dto.getBidSectionCodes());
         notice.setProjectName(dto.getProjectName());
+        // 项目维度兜底增强（2026-09-09，依据：存量 ACTIVE 20 条 project_name 覆盖 0、project_code 仅 4 条，
+        // 无项目维度则“按项目关注/聚合”闭环断链）：采集结构化字段缺失时，从标题+正文推导编号/项目名（只补空、不覆盖源数据）
+        if (!StringUtils.hasText(dto.getProjectCode()) || !StringUtils.hasText(dto.getProjectName())) {
+            NoticeProjectFieldExtractor.ProjectFields pf = NoticeProjectFieldExtractor.extract(dto.getTitle(),
+                    "HTML".equals(dto.getContentType()) ? dto.getContentHtml() : null);
+            if (pf != null) {
+                if (!StringUtils.hasText(dto.getProjectCode()) && pf.projectCode() != null) {
+                    notice.setProjectCode(pf.projectCode());
+                }
+                if (!StringUtils.hasText(dto.getProjectName()) && pf.projectName() != null) {
+                    notice.setProjectName(pf.projectName());
+                }
+            }
+        }
         notice.setIssuerName(dto.getIssuerName());
         // BR-5 发布时间回填：采集侧未给或给了异常早时间（0/1970 等历史脏值）→ 尽力从原文解析发布日期；仍无命中才取抓取时间
         notice.setPublishTime(resolvePublishTime(dto));
@@ -267,6 +281,64 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         notice.setExtraRaw(dto.getExtraRaw());
         notice.setExtractionStatus("NONE");
         return notice;
+    }
+
+
+    /**
+     * 存量回填项目维度（2026-09-09 补，依据同 buildNotice 增强）：只扫 project_name 或 project_code 为空的
+     * HTML 形态主档（PDF 抽取链 P2 未含），从标题+正文推导并回填；幂等（只补空），重复执行安全。
+     *
+     * @return 发生回填的记录数
+     */
+    public int backfillProjectFieldsFromContent() {
+        return backfillProjectFieldsFromContent(false);
+    }
+
+    /**
+     * 存量回填（forceName=true 时项目名即使非空也按新规则重写，用于修复首轮优先级缺陷产生的污染值，
+     * 见 NoticeProjectFieldExtractor 顺序注释；幂等：重复执行结果一致）。扫全量 HTML 形态主档（PDF 抽取链 P2 未含）。
+     *
+     * @return 发生回填/重写的记录数
+     */
+    public int backfillProjectFieldsFromContent(boolean forceName) {
+        List<NoticeExternalDO> rows;
+        if (forceName) {
+            // 强制重写模式：全量扫 HTML 主档，用最新规则重算项目名（幂等修复）
+            rows = noticeExternalMapper.selectList(new LambdaQueryWrapper<NoticeExternalDO>()
+                    .isNotNull(NoticeExternalDO::getContentHtml));
+        } else {
+            rows = noticeExternalMapper.selectList(new LambdaQueryWrapper<NoticeExternalDO>()
+                    .and(w -> w.isNull(NoticeExternalDO::getProjectName).or().eq(NoticeExternalDO::getProjectName, ""))
+                    .or(q -> q.isNull(NoticeExternalDO::getProjectCode).or().eq(NoticeExternalDO::getProjectCode, ""))
+                    .isNotNull(NoticeExternalDO::getContentHtml));
+        }
+        int changed = 0;
+        for (NoticeExternalDO row : rows) {
+            NoticeProjectFieldExtractor.ProjectFields pf = NoticeProjectFieldExtractor.extract(row.getTitle(), row.getContentHtml());
+            if (pf == null || (pf.projectCode() == null && pf.projectName() == null)) {
+                continue;
+            }
+            boolean dirty = false;
+            if (forceName && pf.projectName() != null && !pf.projectName().equals(row.getProjectName())) {
+                row.setProjectName(pf.projectName());
+                dirty = true;
+            } else if (!forceName && !StringUtils.hasText(row.getProjectName()) && pf.projectName() != null) {
+                row.setProjectName(pf.projectName());
+                dirty = true;
+            }
+            if (!StringUtils.hasText(row.getProjectCode()) && pf.projectCode() != null) {
+                row.setProjectCode(pf.projectCode());
+                dirty = true;
+            }
+            if (dirty) {
+                noticeExternalMapper.updateById(row);
+                changed++;
+                log.info("[backfillProject][noticeId={}] 回填 projectCode={} projectName={}",
+                        row.getId(), row.getProjectCode(), row.getProjectName());
+            }
+        }
+        log.info("[backfillProject] 扫描 {} 条，回填 {} 条", rows.size(), changed);
+        return changed;
     }
 
     /** 发布日期兜底（BR-5）：解析器命中取原文发布日期；否则取当前时间（列注释口径“解析失败取抓取时间”，保证列表时间倒序可用）。 */
