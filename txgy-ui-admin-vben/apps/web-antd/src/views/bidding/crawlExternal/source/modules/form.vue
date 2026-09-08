@@ -64,6 +64,7 @@ const [Modal, modalApi] = useVbenModal({
       await formApi.resetForm();
       await formApi.setValues({
         channelCode: 'GENERIC',
+        fetchType: 'CRAWLER',
         fetchIntervalSeconds: 3600,
         robotsOk: false,
         enabled: false,

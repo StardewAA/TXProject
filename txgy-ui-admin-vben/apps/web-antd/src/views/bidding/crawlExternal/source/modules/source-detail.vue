@@ -194,12 +194,16 @@ defineExpose({ openSource });
         <div class="sd-sec-t">配置</div>
         <Descriptions :column="2" size="small" bordered>
           <Descriptions.Item label="入口站点">{{ row.baseUrl || '—' }}</Descriptions.Item>
+          <Descriptions.Item label="获取方式">{{ row.fetchType === 'API' ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}</Descriptions.Item>
           <Descriptions.Item label="抓取间隔">{{ row.fetchIntervalSeconds != null ? row.fetchIntervalSeconds + ' 秒' : '—' }}</Descriptions.Item>
           <Descriptions.Item label="默认解析/策略码">{{ row.parserCodeDefault || '（按 URL 规则自动匹配）' }}</Descriptions.Item>
           <Descriptions.Item label="robots">{{ row.robotsOk ? '允许按 robots 抓取' : '禁止' }}</Descriptions.Item>
           <Descriptions.Item label="额外放行域名" :span="2">{{ row.allowedHosts || '（仅 baseUrl 域）' }}</Descriptions.Item>
           <Descriptions.Item label="备注" :span="2">{{ row.remark || '—' }}</Descriptions.Item>
         </Descriptions>
+        <div v-if="row.fetchType === 'API'" class="sd-sec-t" style="margin-top: 14px">API 接口配置（api_config_json）</div>
+        <pre v-if="row.fetchType === 'API' && row.apiConfigJson" class="sd-json">{{ row.apiConfigJson }}</pre>
+        <div v-else-if="row.fetchType === 'API'" class="sd-hint">（API 源未配置 api_config_json）</div>
         <div class="sd-sec-t" style="margin-top: 14px">入口 / 栏目 URL</div>
         <div v-if="fmtListUrl(row.entryUrlsJson).length" class="sd-urls">
           <div v-for="(u, i) in fmtListUrl(row.entryUrlsJson)" :key="i" class="sd-url">{{ u }}</div>
@@ -275,4 +279,5 @@ defineExpose({ openSource });
 .sd-trig { flex-shrink: 0; font-size: 12px; color: #6b7280; font-weight: 600; }
 .sd-abs, .sd-url2 { flex: 1; min-width: 0; }
 .sd-time { flex-shrink: 0; font-size: 12px; color: #9ca3af; }
+.sd-json { background: #0b1220; color: #d1e4ff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: 4px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
 </style>

@@ -164,10 +164,50 @@ function apiCfgLines(): string[] {
   if (!raw) return [];
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
-    return Object.entries(o).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v : JSON.stringify(v)));
+    const order = ['method', 'url', 'bodyTemplate', 'pageParam', 'sizeParam', 'pageSize', 'rowsPath', 'totalPath', 'urlPrefix'];
+    const lines: string[] = [];
+    for (const k of order) {
+      const v = o[k];
+      if (v == null || v === '') continue;
+      lines.push(k + ': ' + (typeof v === 'object' ? JSON.stringify(v) : String(v)));
+    }
+    for (const [k, v] of Object.entries(o)) {
+      if (order.includes(k) || v == null) continue;
+      lines.push(k + ': ' + (typeof v === 'object' ? JSON.stringify(v) : String(v)));
+    }
+    return lines;
   } catch {
     return [raw];
   }
+}
+
+/** payloadJson → 结构化快照（05 契约：{title,url,date,category,rawFileUrl?,rawSha256?,rawSize?}） */
+const payloadObj = computed<{ title?: string; url?: string; date?: string; category?: string; rawFileUrl?: string; rawSha256?: string; rawSize?: number }>(() => {
+  try {
+    const raw = t.value?.payloadJson;
+    if (!raw) return {};
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      title: typeof o.title === 'string' ? o.title : undefined,
+      url: typeof o.url === 'string' ? o.url : undefined,
+      date: typeof o.date === 'string' ? o.date : undefined,
+      category: typeof o.category === 'string' ? o.category : undefined,
+      rawFileUrl: typeof o.rawFileUrl === 'string' ? o.rawFileUrl : undefined,
+      rawSha256: typeof o.rawSha256 === 'string' ? o.rawSha256 : undefined,
+      rawSize: typeof o.rawSize === 'number' ? o.rawSize : undefined,
+    };
+  } catch { return {}; }
+});
+function openRawFile() {
+  const u = payloadObj.value.rawFileUrl;
+  if (u) window.open(u, '_blank');
+}
+/** 字节数可读化 */
+function fmtBytes(n: number | undefined): string {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
 </script>
 
@@ -214,15 +254,29 @@ function apiCfgLines(): string[] {
       </div>
     </div>
 
-    <!-- 段2：原始载荷黑块（核心调试数据：列表原文/全文） -->
+    <!-- 段2：原始载荷 payload_json（05 契约：{title,url,date,category,rawFileUrl?,rawSha256?,rawSize?}——全文已文件化，payload 只存引用） -->
     <div class="tc-step">
       <div class="tc-step-t">③ 原始载荷（payload_json）
         <a class="tc-act" href="#" @click.prevent="openPreview('payload')">全屏 ▾</a>
         <a class="tc-act" href="#" @click.prevent="copyText(t.payloadJson)">复制</a>
       </div>
       <div class="tc-step-b">
-        <pre v-if="t.payloadJson" class="tc-blob">{{ t.payloadJson }}</pre>
-        <div v-else class="tc-blob-empty">（payload_json 为空——task 当前为空业务，列表阶段快照由后端写入后在此完整呈现）</div>
+        <template v-if="t.payloadJson">
+          <div v-if="payloadObj.title || payloadObj.category || payloadObj.date" class="tc-kv"><span class="tc-k">快照标题</span><span class="tc-v">{{ payloadObj.title || '—' }}<template v-if="payloadObj.category"><span class="tc-sub">栏目 {{ payloadObj.category }}</span></template><template v-if="payloadObj.date"><span class="tc-sub">{{ payloadObj.date }}</span></template></span></div>
+          <div class="tc-kv"><span class="tc-k">原文 URL</span><span class="tc-v mono break-all">{{ payloadObj.url || '—' }}</span></div>
+          <div class="tc-kv">
+            <span class="tc-k">原文文件</span>
+            <span class="tc-v">
+              <template v-if="payloadObj.rawFileUrl">
+                <a href="#" @click.prevent="openRawFile()">查看原文文件（FileApi 归档）</a>
+                <span class="tc-sub">{{ fmtBytes(payloadObj.rawSize) }}<template v-if="payloadObj.rawSha256"> · sha256 {{ String(payloadObj.rawSha256).slice(0, 16) }}…</template></span>
+              </template>
+              <span v-else>（本任务无原文文件引用——归档由后端在列表阶段完成，见 05 契约 §四）</span>
+            </span>
+          </div>
+          <pre class="tc-blob">{{ t.payloadJson }}</pre>
+        </template>
+        <div v-else class="tc-blob-empty">（payload_json 为空——任务快照由后端投递端写入；空任务排查用字段，写入后此处即展示该任务“抓的是哪条公告/哪个文件”）</div>
       </div>
     </div>
 
