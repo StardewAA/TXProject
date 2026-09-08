@@ -116,7 +116,10 @@ const CRM_DICT = {
   CRM_AUDIT_STATUS: 'crm_audit_status', // CRM 审批状态
   CRM_BIZ_TYPE: 'crm_biz_type', // CRM 业务类型
   CRM_BUSINESS_END_STATUS_TYPE: 'crm_business_end_status_type', // CRM 商机结束状态类型
-  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业
+  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业（合并：下游+上游，用于展示）
+  CRM_CUSTOMER_CATEGORY: 'crm_customer_category', // CRM 客户类别（下游客户/上游供应商）
+  CRM_CUSTOMER_INDUSTRY_DOWNSTREAM: 'crm_customer_industry_downstream', // CRM 下游客户行业
+  CRM_CUSTOMER_INDUSTRY_UPSTREAM: 'crm_customer_industry_upstream', // CRM 上游供应商行业
   CRM_CUSTOMER_LEVEL: 'crm_customer_level', // CRM 客户级别
   CRM_CUSTOMER_SOURCE: 'crm_customer_source', // CRM 客户来源
   CRM_FOLLOW_UP_TYPE: 'crm_follow_up_type', // CRM 跟进方式
@@ -294,6 +297,9 @@ const MES_DICT = {
   MES_PRO_LINK_TYPE: 'mes_pro_link_type', // MES 工序关系类型
   MES_PRO_PROJECT_STATUS: 'mes_pro_project_status', // MES 项目状态
   MES_PRO_PROJECT_SOURCE_TYPE: 'mes_pro_project_source_type', // MES 项目来源类型
+  MES_PRO_PROJECT_PRIORITY: 'mes_pro_project_priority', // MES 项目优先级
+  MES_PRO_PROJECT_MEMBER_ROLE: 'mes_pro_project_member_role', // MES 项目成员角色
+  MES_PRO_PROJECT_MILESTONE_STATUS: 'mes_pro_project_milestone_status', // MES 项目里程碑状态
   MES_PRO_WORK_ORDER_STATUS: 'mes_pro_work_order_status', // MES 生产工单状态
   MES_PRO_WORK_ORDER_TYPE: 'mes_pro_work_order_type', // MES 工单类型
   MES_PRO_WORK_ORDER_SOURCE_TYPE: 'mes_pro_work_order_source_type', // MES 工单来源类型

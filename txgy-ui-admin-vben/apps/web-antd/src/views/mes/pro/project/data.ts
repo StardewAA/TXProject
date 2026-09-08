@@ -5,6 +5,8 @@ import type { MesProProjectApi } from '#/api/mes/pro/project';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { getSimpleUserList } from '#/api/system/user';
+
 /** 表单类型 */
 export type FormType = 'create' | 'detail' | 'update';
 
@@ -71,6 +73,81 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       rules: 'selectRequired',
     },
     {
+      fieldName: 'priority',
+      label: '项目优先级',
+      component: 'Select',
+      componentProps: {
+        disabled: headerReadonly,
+        options: getDictOptions(DICT_TYPE.MES_PRO_PROJECT_PRIORITY, 'number'),
+        placeholder: '请选择项目优先级',
+      },
+    },
+    {
+      fieldName: 'ownerUserId',
+      label: '负责人',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getSimpleUserList,
+        labelField: 'nickname',
+        valueField: 'id',
+        disabled: headerReadonly,
+        placeholder: '请选择负责人',
+      },
+    },
+    {
+      fieldName: 'dept',
+      label: '责任部门',
+      component: 'Input',
+      componentProps: {
+        disabled: headerReadonly,
+        placeholder: '请输入责任部门',
+      },
+    },
+    {
+      fieldName: 'planStartTime',
+      label: '计划开始时间',
+      component: 'DatePicker',
+      componentProps: {
+        disabled: headerReadonly,
+        showTime: true,
+        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择计划开始时间',
+      },
+    },
+    {
+      fieldName: 'planEndTime',
+      label: '计划结束时间',
+      component: 'DatePicker',
+      componentProps: {
+        disabled: headerReadonly,
+        showTime: true,
+        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择计划结束时间',
+      },
+    },
+    {
+      fieldName: 'actualStartTime',
+      label: '实际开始时间',
+      component: 'DatePicker',
+      componentProps: {
+        disabled: headerReadonly,
+        showTime: true,
+        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择实际开始时间',
+      },
+    },
+    {
+      fieldName: 'actualEndTime',
+      label: '实际结束时间',
+      component: 'DatePicker',
+      componentProps: {
+        disabled: headerReadonly,
+        showTime: true,
+        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择实际结束时间',
+      },
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -125,6 +202,34 @@ export function useGridFormSchema(): VbenFormSchema[] {
         placeholder: '请选择项目来源',
       },
     },
+    {
+      fieldName: 'priority',
+      label: '项目优先级',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: getDictOptions(DICT_TYPE.MES_PRO_PROJECT_PRIORITY, 'number'),
+        placeholder: '请选择项目优先级',
+      },
+    },
+    {
+      fieldName: 'owner',
+      label: '负责人',
+      component: 'Input',
+      componentProps: {
+        allowClear: true,
+        placeholder: '请输入负责人',
+      },
+    },
+    {
+      fieldName: 'dept',
+      label: '责任部门',
+      component: 'Input',
+      componentProps: {
+        allowClear: true,
+        placeholder: '请输入责任部门',
+      },
+    },
   ];
 }
 
@@ -165,6 +270,30 @@ export function useGridColumns(): VxeTableGridOptions<MesProProjectApi.Project>[
         name: 'CellDict',
         props: { type: DICT_TYPE.MES_PRO_PROJECT_STATUS },
       },
+    },
+    {
+      field: 'priority',
+      title: '优先级',
+      width: 100,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.MES_PRO_PROJECT_PRIORITY },
+      },
+    },
+    {
+      field: 'owner',
+      title: '负责人',
+      width: 120,
+    },
+    {
+      field: 'dept',
+      title: '责任部门',
+      width: 140,
+    },
+    {
+      field: 'durationDays',
+      title: '工期(天)',
+      width: 100,
     },
     {
       field: 'workOrderCount',
@@ -267,6 +396,24 @@ export function useProjectSelectGridColumns(
       width: 130,
       formatter: ({ row, cellValue }) =>
         `${row.finishedWorkOrderCount ?? 0}/${cellValue ?? 0}`,
+    },
+  ];
+}
+
+/** 导入表单 */
+export function useImportFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      fieldName: 'file',
+      label: 'Excel 文件',
+      component: 'Input',
+      rules: 'required',
+    },
+    {
+      fieldName: 'updateSupport',
+      label: '是否覆盖更新',
+      component: 'Switch',
+      componentProps: { defaultChecked: false },
     },
   ];
 }

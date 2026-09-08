@@ -41,6 +41,24 @@ public class ErpSaleOrderDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 流程实例编号
+     */
+    private String processInstanceId;
+    /** 全局业务链编号 */
+    private String businessChainNo;
+    /** WMS 仓储履约状态 */
+    private String warehouseStatus;
+    /** WMS 库存判断编号 */
+    private String inventoryDecisionNo;
+    /** WMS 库存预留编号 */
+    private String reservationNo;
+    /** WMS 销售出库单号 */
+    private String wmsShipmentOrderNo;
+    /** 最后处理的 WMS 事件版本 */
+    private Long wmsEventVersion;
+    /** WMS 失败或驳回原因 */
+    private String wmsFailureReason;
+    /**
      * 客户编号
      *
      * 关联 {@link ErpCustomerDO#getId()}

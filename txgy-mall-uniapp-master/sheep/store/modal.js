@@ -4,6 +4,7 @@ const modal = defineStore('modal', {
   state: () => ({
     auth: '', // 授权弹框 accountLogin|smsLogin|resetPassword|changeMobile|changePassword|changeUsername
     share: false, // 分享弹框
+    sharePoster: false, // 直接打开分享二维码海报
     menu: false, // 快捷菜单弹框
     advHistory: [], // 广告弹框记录
     lastTimer: {

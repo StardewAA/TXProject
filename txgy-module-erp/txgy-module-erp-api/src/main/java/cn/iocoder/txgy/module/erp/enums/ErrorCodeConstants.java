@@ -11,7 +11,9 @@ public interface ErrorCodeConstants {
 
     // ========== ERP 供应商（1-030-100-000） ==========
     ErrorCode SUPPLIER_NOT_EXISTS = new ErrorCode(1_030_100_000, "供应商不存在");
-    ErrorCode SUPPLIER_NOT_ENABLE = new ErrorCode(1_030_100_000, "供应商({})未启用");
+    ErrorCode SUPPLIER_NOT_ENABLE = new ErrorCode(1_030_100_001, "供应商({})未启用");
+    ErrorCode SUPPLIER_PARTNER_CODE_DUPLICATE = new ErrorCode(1_030_100_002, "供应商统一编码({})已存在");
+    ErrorCode SUPPLIER_PARTNER_CODE_IMMUTABLE = new ErrorCode(1_030_100_003, "供应商统一编码创建后不可修改");
 
     // ========== ERP 采购订单（1-030-101-000） ==========
     ErrorCode PURCHASE_ORDER_NOT_EXISTS = new ErrorCode(1_030_101_000, "采购订单不存在");
@@ -25,6 +27,8 @@ public interface ErrorCodeConstants {
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_IN = new ErrorCode(1_030_101_008, "反审核失败，已存在对应的采购入库单");
 ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_009, "采购订单项({})超过最大允许退货数量({})");
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_030_101_010, "反审核失败，已存在对应的采购退货单");
+    ErrorCode PURCHASE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_101_011, "采购订单({})当前状态无法提交审批");
+    ErrorCode PURCHASE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_030_101_012, "采购订单({})正在审批，无法修改");
 
     // ========== ERP 采购入库（1-030-102-000） ==========
     ErrorCode PURCHASE_IN_NOT_EXISTS = new ErrorCode(1_030_102_000, "采购入库单不存在");
@@ -51,6 +55,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     // ========== ERP 客户（1-030-200-000）==========
     ErrorCode CUSTOMER_NOT_EXISTS = new ErrorCode(1_020_200_000, "客户不存在");
     ErrorCode CUSTOMER_NOT_ENABLE = new ErrorCode(1_020_200_001, "客户({})未启用");
+    ErrorCode CUSTOMER_PARTNER_CODE_DUPLICATE = new ErrorCode(1_020_200_002, "客户统一编码({})已存在");
+    ErrorCode CUSTOMER_PARTNER_CODE_IMMUTABLE = new ErrorCode(1_020_200_003, "客户统一编码创建后不可修改");
 
     // ========== ERP 销售订单（1-030-201-000） ==========
     ErrorCode SALE_ORDER_NOT_EXISTS = new ErrorCode(1_020_201_000, "销售订单不存在");
@@ -64,6 +70,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode SALE_ORDER_PROCESS_FAIL_EXISTS_OUT = new ErrorCode(1_020_201_008, "反审核失败，已存在对应的销售出库单");
     ErrorCode SALE_ORDER_ITEM_RETURN_FAIL_OUT_EXCEED = new ErrorCode(1_020_201_009, "销售订单项({})超过最大允许退货数量({})");
     ErrorCode SALE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_020_201_010, "反审核失败，已存在对应的销售退货单");
+    ErrorCode SALE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_020_201_011, "销售订单({})当前状态无法提交审批");
+    ErrorCode SALE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_020_201_012, "销售订单({})正在审批，无法修改");
 
     // ========== ERP 销售出库（1-030-202-000） ==========
     ErrorCode SALE_OUT_NOT_EXISTS = new ErrorCode(1_020_202_000, "销售出库单不存在");
@@ -90,6 +98,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     // ========== ERP 仓库 1-030-400-000 ==========
     ErrorCode WAREHOUSE_NOT_EXISTS = new ErrorCode(1_030_400_000, "仓库不存在");
     ErrorCode WAREHOUSE_NOT_ENABLE = new ErrorCode(1_030_400_001, "仓库({})未启用");
+    ErrorCode WAREHOUSE_WMS_CODE_DUPLICATE = new ErrorCode(1_030_400_002, "WMS 仓库编码({})已绑定其它 ERP 仓库");
 
     // ========== ERP 其它入库单 1-030-401-000 ==========
     ErrorCode STOCK_IN_NOT_EXISTS = new ErrorCode(1_030_401_000, "其它入库单不存在");
@@ -130,6 +139,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     // ========== ERP 产品 1-030-500-000 ==========
     ErrorCode PRODUCT_NOT_EXISTS = new ErrorCode(1_030_500_000, "产品不存在");
     ErrorCode PRODUCT_NOT_ENABLE = new ErrorCode(1_030_500_001, "产品({})未启用");
+    ErrorCode PRODUCT_MATERIAL_CODE_DUPLICATE = new ErrorCode(1_030_500_002, "统一物料编码({})已存在");
+    ErrorCode PRODUCT_MATERIAL_CODE_IMMUTABLE = new ErrorCode(1_030_500_003, "统一物料编码创建后不可修改");
 
     // ========== ERP 产品分类 1-030-501-000 ==========
     ErrorCode PRODUCT_CATEGORY_NOT_EXISTS = new ErrorCode(1_030_501_000, "产品分类不存在");
@@ -144,6 +155,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode PRODUCT_UNIT_NOT_EXISTS = new ErrorCode(1_030_502_000, "产品单位不存在");
     ErrorCode PRODUCT_UNIT_NAME_DUPLICATE = new ErrorCode(1_030_502_001, "已存在该名字的产品单位");
     ErrorCode PRODUCT_UNIT_EXITS_PRODUCT = new ErrorCode(1_030_502_002, "存在产品使用该单位，无法删除");
+    ErrorCode PRODUCT_UNIT_CODE_DUPLICATE = new ErrorCode(1_030_502_003, "统一单位编码({})已存在");
+    ErrorCode PRODUCT_UNIT_CODE_IMMUTABLE = new ErrorCode(1_030_502_004, "统一单位编码创建后不可修改");
 
     // ========== ERP 结算账户 1-030-600-000 ==========
     ErrorCode ACCOUNT_NOT_EXISTS = new ErrorCode(1_030_600_000, "结算账户不存在");
@@ -164,5 +177,15 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode FINANCE_RECEIPT_APPROVE_FAIL = new ErrorCode(1_030_602_003, "审核失败，只有未审核的收款单才能审核");
     ErrorCode FINANCE_RECEIPT_NO_EXISTS = new ErrorCode(1_030_602_004, "生成收款单号失败，请重新提交");
     ErrorCode FINANCE_RECEIPT_UPDATE_FAIL_APPROVE = new ErrorCode(1_030_602_005, "收款单({})已审核，无法修改");
+
+    // ========== ERP/WMS 跨模块集成 1-030-900-000 ==========
+    ErrorCode COLLABORATION_B_DUPLICATE = new ErrorCode(1_030_900_000, "协作单 B 已接收");
+    ErrorCode COLLABORATION_B_STATE_INVALID = new ErrorCode(1_030_900_001, "协作单 B 状态不允许当前操作");
+    ErrorCode WMS_CALLBACK_ORDER_NOT_EXISTS = new ErrorCode(1_030_900_002, "WMS 回调对应的 ERP 单据不存在");
+    ErrorCode WMS_CALLBACK_STATE_STALE = new ErrorCode(1_030_900_003, "WMS 回调版本或状态已过期");
+    ErrorCode COLLABORATION_B_CONFIRM_REQUIRED = new ErrorCode(1_030_900_004, "协作单 B 尚未业务确认");
+    ErrorCode COLLABORATION_B_ALREADY_CONFIRMED = new ErrorCode(1_030_900_005, "协作单 B 已完成业务确认");
+    ErrorCode COLLABORATION_B_NOT_EXISTS = new ErrorCode(1_030_900_006, "协作单 B 不存在");
+    ErrorCode COLLABORATION_B_CONFIRM_ITEM_INVALID = new ErrorCode(1_030_900_007, "协作单 B 确认明细与接收明细不一致");
 
 }

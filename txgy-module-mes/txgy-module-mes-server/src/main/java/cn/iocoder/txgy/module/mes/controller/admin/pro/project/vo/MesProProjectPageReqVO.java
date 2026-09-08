@@ -24,4 +24,13 @@ public class MesProProjectPageReqVO extends PageParam {
     @Schema(description = "项目来源类型", example = "1")
     private Integer sourceType;
 
+    @Schema(description = "项目优先级", example = "3")
+    private Integer priority;
+
+    @Schema(description = "负责人", example = "张三")
+    private String owner;
+
+    @Schema(description = "责任部门", example = "生产管理部")
+    private String dept;
+
 }

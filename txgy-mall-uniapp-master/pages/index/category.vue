@@ -30,14 +30,19 @@
             />
             <first-one v-if="state.style === 'first_one'" :pagination="state.pagination" />
             <first-two v-if="state.style === 'first_two'" :pagination="state.pagination" />
+            <first-one
+              v-if="state.style === 'second_one' && !state.categoryList[state.activeMenu].children?.length"
+              :pagination="state.pagination"
+            />
             <second-one
-              v-if="state.style === 'second_one'"
+              v-if="state.style === 'second_one' && state.categoryList[state.activeMenu].children?.length"
               :data="state.categoryList"
               :activeMenu="state.activeMenu"
             />
             <uni-load-more
               v-if="
-                (state.style === 'first_one' || state.style === 'first_two') &&
+                (state.style === 'first_one' || state.style === 'first_two' ||
+                  (state.style === 'second_one' && !state.categoryList[state.activeMenu].children?.length)) &&
                 state.pagination.total > 0
               "
               :status="state.loadStatus"
@@ -84,6 +89,12 @@
   const pageHeight = computed(() => safeArea.height - 44 - 50);
   const statusBarHeight = sheep.$platform.device.statusBarHeight * 2;
 
+  const resetProductPagination = () => {
+    state.pagination.pageNo = 1;
+    state.pagination.list = [];
+    state.pagination.total = 0;
+  };
+
   // 加载商品分类
   async function getList() {
     const { code, data } = await CategoryApi.getCategoryList();
@@ -96,10 +107,9 @@
   // 选中菜单
   const onMenu = (val) => {
     state.activeMenu = val;
-    if (state.style === 'first_one' || state.style === 'first_two') {
-      state.pagination.pageNo = 1;
-      state.pagination.list = [];
-      state.pagination.total = 0;
+    const category = state.categoryList[val];
+    if (state.style === 'first_one' || state.style === 'first_two' || !category?.children?.length) {
+      resetProductPagination();
       getGoodsList();
     }
   };

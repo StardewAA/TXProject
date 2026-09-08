@@ -13,6 +13,10 @@ export namespace ErpSaleReturnApi {
     totalPrice?: number; // 合计金额，单位：元
     refundPrice?: number; // 已退款金额，单位：元
     status?: number; // 状态
+    businessChainNo?: string;
+    wmsStatus?: string;
+    wmsOrderNo?: string;
+    wmsFailureReason?: string;
     remark?: string; // 备注
     discountPercent?: number; // 折扣百分比
     discountPrice?: number; // 折扣金额
@@ -27,6 +31,7 @@ export namespace ErpSaleReturnApi {
   /** 销售退货项 */
   export interface SaleReturnItem {
     count?: number;
+    wmsActualCount?: number;
     id?: number;
     seq?: number; // 前端行号
     orderItemId?: number;

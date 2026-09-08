@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.infra.api.file;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.infra.api.file.dto.FileCreateReqDTO;
+import cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO;
 import cn.iocoder.txgy.module.infra.enums.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -69,5 +70,10 @@ public interface FileApi {
     @Operation(summary = "生成文件预签名地址，用于读取")
     CommonResult<String> presignGetUrl(@NotEmpty(message = "URL 不能为空") @RequestParam("url") String url,
                                        Integer expirationSeconds);
+
+    @GetMapping(PREFIX + "/metadata-by-url")
+    @Operation(summary = "按访问地址查询文件元数据")
+    CommonResult<FileMetadataRespDTO> getMetadataByUrl(
+            @NotEmpty(message = "URL 不能为空") @RequestParam("url") String url);
 
 }
