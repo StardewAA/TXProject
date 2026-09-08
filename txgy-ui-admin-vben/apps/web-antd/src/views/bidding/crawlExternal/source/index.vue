@@ -167,7 +167,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height class="bid-ind">
     <FormModalWrap @success="refresh" />
     <Grid table-title="采集源管理（外部公告爬虫）">
       <template #toolbar-tools>

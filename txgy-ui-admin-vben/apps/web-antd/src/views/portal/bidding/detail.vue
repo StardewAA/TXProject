@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="detail-page" v-if="detail">
+  <div class="detail-page bid-ind" v-if="detail">
     <div v-if="pageError" class="err-banner">页面异常：{{ pageError }}（可在控制台查看详细堆栈）</div>
     <div class="top-bar">
       <button class="back" @click="goBack()">‹ 返回上一页</button>

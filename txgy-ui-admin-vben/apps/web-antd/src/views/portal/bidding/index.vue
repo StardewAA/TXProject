@@ -219,7 +219,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bidding-page">
+  <div class="bidding-page bid-ind">
     <!-- 本项目主导航（大图标+文字 → 跳转子页；外部平台顶栏不在本项目范围） -->
     <div class="main-nav">
       <div class="nav-item on" @click="goNav('/portal/bidding')">

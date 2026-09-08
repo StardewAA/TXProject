@@ -237,7 +237,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="sub-page">
+  <div class="sub-page bid-ind">
     <div class="top-bar">
       <button class="back" @click="router.push('/portal/bidding').catch(() => {})">‹ 返回公告大厅</button>
       <span class="sep">|</span>

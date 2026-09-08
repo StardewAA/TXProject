@@ -33,7 +33,7 @@ onMounted(() => void load());
 </script>
 
 <template>
-  <div class="bidding-page">
+  <div class="bidding-page bid-ind">
     <button class="back" @click="router.push('/portal/bidding/internal-hall').catch(() => {})">‹ 返回本平台发布</button>
 
     <div v-if="loading" class="hint">加载中…</div>

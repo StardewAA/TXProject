@@ -104,7 +104,7 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal title="手动录入（生成测试任务）" class="w-2/3">
+  <Modal title="手动录入（生成测试任务）" class="w-2/3 bid-ind">
     <div class="mb-2 text-xs text-gray-500">
       粘贴 HTML/JSON 源代码，或上传文件（.html/.htm/.json/.pdf）。提交后走真实下载→解析管线，
       结果即刻生成一条“测试任务”任务条：源（原文）· 提取内容 · 渲染内容 · 过程。

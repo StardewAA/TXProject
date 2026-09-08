@@ -74,7 +74,7 @@ onMounted(() => void load());
 </script>
 
 <template>
-  <div class="bidding-page">
+  <div class="bidding-page bid-ind">
     <div class="main-nav">
       <div class="nav-item" @click="goNav('/portal/bidding')">
         <span class="ic">≡</span>

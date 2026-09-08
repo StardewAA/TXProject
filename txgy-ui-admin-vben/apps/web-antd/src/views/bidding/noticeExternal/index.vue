@@ -294,7 +294,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height class="bid-ind">
     <Detail />
     <Grid table-title="外部公告审核管理（招投标）">
       <template #toolbar-tools>

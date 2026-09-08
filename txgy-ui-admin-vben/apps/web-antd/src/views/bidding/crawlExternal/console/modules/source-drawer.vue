@@ -143,6 +143,7 @@ watch(open, (v) => onOpen(v));
   <Modal
     :open="open"
     title="采集源配置"
+    class="bid-ind"
     :width="960"
     :footer="null"
     @cancel="open = false"
