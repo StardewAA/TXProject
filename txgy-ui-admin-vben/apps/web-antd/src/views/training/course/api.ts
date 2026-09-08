@@ -16,7 +16,7 @@ export namespace TrainingCourseApi {
     summary?: string;
     coverUrl?: string;
     level?: number;
-    /** 成长等级：APPRENTICE/JUNIOR/MIDDLE/SENIOR（四级成长体系） */
+    /** 成长等级标记：APPRENTICE/JUNIOR/INTERMEDIATE/SENIOR/TECHNICIAN/SENIOR_TECHNICIAN（对应 training_growth_level 六级） */
     courseLevel?: string;
     credit?: number;
     durationMinutes?: number;
@@ -86,6 +86,29 @@ export namespace TrainingCourseApi {
     code?: string;
     sort?: number;
     remark?: string;
+  }
+
+  /** 成长等级（六级人才成长体系字典 training_growth_level） */
+  export interface GrowthLevel {
+    id?: number;
+    /** 等级编码：APPRENTICE/JUNIOR/INTERMEDIATE/SENIOR/TECHNICIAN/SENIOR_TECHNICIAN */
+    code?: string;
+    /** 等级序号：1学徒 2初级工 3中级工 4高级工 5技师 6高级技师 */
+    levelNo?: number;
+    name?: string;
+    /** 定位 */
+    positionDesc?: string;
+    /** 独立作业权限 */
+    workPermission?: string;
+    /** 带徒上限（人） */
+    maxApprentice?: number;
+    /** 是否需人工评审 */
+    needReview?: boolean;
+    /** 参考对标 */
+    reference?: string;
+    sort?: number;
+    remark?: string;
+    createTime?: string;
   }
 }
 
@@ -291,4 +314,41 @@ export interface CourseAuditLog {
   /** 备注 / 驳回原因 */
   reason?: string;
   createTime?: string;
+}
+
+/** 成长等级分页 */
+export function getGrowthLevelPage(params: PageParam & Record<string, any>) {
+  return requestClient.get<PageResult<TrainingCourseApi.GrowthLevel>>(
+    '/training/growth-level/page',
+    { params },
+  );
+}
+
+/** 成长等级全量列表（下拉：课程成长等级标记等引用） */
+export function getGrowthLevelList() {
+  return requestClient.get<TrainingCourseApi.GrowthLevel[]>(
+    '/training/growth-level/list',
+  );
+}
+
+/** 新增成长等级 */
+export function createGrowthLevel(data: Partial<TrainingCourseApi.GrowthLevel>) {
+  return requestClient.post('/training/growth-level/create', data);
+}
+
+/** 修改成长等级 */
+export function updateGrowthLevel(data: Partial<TrainingCourseApi.GrowthLevel>) {
+  return requestClient.put('/training/growth-level/update', data);
+}
+
+/** 删除成长等级（已被课程标记引用时后端禁止删除） */
+export function deleteGrowthLevel(id: number) {
+  return requestClient.delete(`/training/growth-level/delete?id=${id}`);
+}
+
+/** 成长等级详情 */
+export function getGrowthLevel(id: number) {
+  return requestClient.get<TrainingCourseApi.GrowthLevel>(
+    `/training/growth-level/get?id=${id}`,
+  );
 }

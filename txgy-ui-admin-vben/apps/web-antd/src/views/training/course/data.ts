@@ -16,19 +16,26 @@ export const COURSE_LEVEL_OPTIONS = [
   { label: '高级', value: 3 },
 ] as const;
 
-/** 成长等级（四级成长体系，二级子模块 23 业务属性配置） */
+/**
+ * 成长等级（六级人才成长体系 training_growth_level 字典，与后台「成长等级维护」保持一致，
+ * 二级子模块 23 课程成长等级标记/模块九人才成长统计引用）
+ */
 export const GROWTH_LEVEL_OPTIONS = [
-  { label: '新手', value: 'APPRENTICE' },
-  { label: '成长', value: 'JUNIOR' },
-  { label: '骨干', value: 'MIDDLE' },
-  { label: '资深', value: 'SENIOR' },
+  { label: '学徒', value: 'APPRENTICE' },
+  { label: '初级工', value: 'JUNIOR' },
+  { label: '中级工', value: 'INTERMEDIATE' },
+  { label: '高级工', value: 'SENIOR' },
+  { label: '技师', value: 'TECHNICIAN' },
+  { label: '高级技师', value: 'SENIOR_TECHNICIAN' },
 ] as const;
 
 export const GROWTH_LEVEL_TEXT: Record<string, string> = {
-  APPRENTICE: '新手',
-  JUNIOR: '成长',
-  MIDDLE: '骨干',
-  SENIOR: '资深',
+  APPRENTICE: '学徒',
+  JUNIOR: '初级工',
+  INTERMEDIATE: '中级工',
+  SENIOR: '高级工',
+  TECHNICIAN: '技师',
+  SENIOR_TECHNICIAN: '高级技师',
 };
 
 export const COURSE_MEDIA_TYPE_OPTIONS = [

@@ -42,4 +42,12 @@ public interface CourseMapper extends BaseMapperX<CourseDO> {
                 .eq(CourseDO::getCategoryId, categoryId));
     }
 
+    /**
+     * 查询标记为某成长等级的课程数量（成长等级删除保护校验）
+     */
+    default Long selectCountByCourseLevel(String courseLevel) {
+        return selectCount(new LambdaQueryWrapperX<CourseDO>()
+                .eq(CourseDO::getCourseLevel, courseLevel));
+    }
+
 }
