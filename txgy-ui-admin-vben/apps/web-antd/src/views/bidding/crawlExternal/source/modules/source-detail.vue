@@ -10,7 +10,7 @@
 <script lang="ts" setup>
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
-import { computed, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 
 import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vue';
 
@@ -26,10 +26,12 @@ const row = ref<CrawlExternalApi.SourceItem | null>(null);
 /* ---------- 层2：该源获取批次 ---------- */
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 const jobsLoading = ref(false);
+const jobsError = ref('');
 /* ---------- 层3：选中批次下的爬虫任务（jobId 过滤） ---------- */
 const selJob = ref<CrawlExternalApi.JobItem | null>(null);
 const tasks = ref<CrawlExternalApi.TaskItem[]>([]);
 const tasksLoading = ref(false);
+const tasksError = ref('');
 /* ---------- 层4：选中任务的过程详情 ---------- */
 const selTask = ref<CrawlExternalApi.TaskItem | null>(null);
 const taskDetail = ref<CrawlExternalApi.TaskItem | null>(null);
@@ -48,8 +50,8 @@ async function openSource(src: CrawlExternalApi.SourceItem) {
   try {
     const detail = (await getCrawlSource(src.id!)) as unknown as CrawlExternalApi.SourceItem; // 行必有主键
     if (detail && detail.sourceCode) row.value = detail;
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     loading.value = false;
   }
@@ -60,6 +62,7 @@ async function openSource(src: CrawlExternalApi.SourceItem) {
 async function loadJobs() {
   if (!row.value?.sourceCode) return;
   jobsLoading.value = true;
+  jobsError.value = '';
   try {
     const res = (await fetchCrawlJobPage({
       sourceCode: row.value.sourceCode,
@@ -67,8 +70,10 @@ async function loadJobs() {
       pageSize: 20,
     })) as unknown as { list?: CrawlExternalApi.JobItem[] };
     jobs.value = res.list || [];
-  } catch {
+  } catch (e) {
     jobs.value = [];
+    // 区分"真的没有"与"加载失败"：静默置空会把 403/网络错误显示成误导性空态
+    jobsError.value = e instanceof Error ? e.message : String(e);
   } finally {
     jobsLoading.value = false;
   }
@@ -80,6 +85,7 @@ async function pickJob(j: CrawlExternalApi.JobItem) {
   selTask.value = null;
   taskDetail.value = null;
   tasksLoading.value = true;
+  tasksError.value = '';
   tasks.value = [];
   try {
     const res = (await fetchCrawlTaskPage({
@@ -88,8 +94,9 @@ async function pickJob(j: CrawlExternalApi.JobItem) {
       pageSize: 200,
     })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
     tasks.value = res.list || [];
-  } catch {
+  } catch (e) {
     tasks.value = [];
+    tasksError.value = e instanceof Error ? e.message : String(e);
   } finally {
     tasksLoading.value = false;
   }
@@ -134,24 +141,28 @@ function toggleEnabled() {
   });
 }
 
-/* 立即获取一轮：同步执行，汇总弹窗；受 120s 频控约束 */
+/* 立即获取一轮：同步执行，汇总弹窗；受 120s 频控约束；running 锁防双击重入 */
+const running = ref(false);
 async function handleRun() {
   const s = row.value;
-  if (!s?.sourceCode) return;
+  if (!s?.sourceCode || running.value) return;
+  running.value = true;
   const hide = message.loading({ content: '正在执行采集：' + (s.sourceName || s.sourceCode) + '…', duration: 0 });
   try {
     const res = (await runCrawlSource(s.sourceCode)) as unknown as {
       categories?: Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>;
     };
-    const lines = ((res.categories || []) as Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>).map(
+    const nodes = ((res.categories || []) as Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>).map(
       (c) => '• ' + (c.name || '') + '：抓取 ' + (c.fetched ?? 0) + '，入库 ' + (c.ingested ?? 0) + '，失败 ' + (c.failed ?? 0) + (c.error ? '（' + c.error + '）' : ''),
     );
-    Modal.info({ title: '本轮采集完成', content: lines.length ? lines.join('<br/>') : '无栏目产出', width: 520 });
+    // antd Modal content 为纯文本渲染，'<br/>'/'\n' 均不换行：改 VNode 逐行
+    Modal.info({ title: '本轮采集完成', content: nodes.length ? h('div', nodes.map((l) => h('div', l))) : '无栏目产出', width: 520 });
     void loadJobs();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hide();
+    running.value = false;
   }
 }
 
@@ -186,7 +197,7 @@ defineExpose({ openSource });
       </div>
       <div class="sd-ops">
         <Button :type="enabled ? 'default' : 'primary'" :loading="busy" @click="toggleEnabled">{{ enabled ? '停用该源' : '启用该源' }}</Button>
-        <Button type="primary" @click="handleRun">立即获取一轮</Button>
+        <Button type="primary" :loading="running" @click="handleRun">立即获取一轮</Button>
       </div>
 
       <!-- 层2：配置明细 -->
@@ -215,6 +226,7 @@ defineExpose({ openSource });
       <div class="sd-sec">
         <div class="sd-sec-t">获取批次 <span class="sd-muted">（最近 {{ jobs.length }} 批；一次采集 = 一个批次）</span></div>
         <div v-if="jobsLoading" class="sd-hint">批次加载中…</div>
+        <div v-else-if="jobsError" class="sd-hint">批次加载失败：{{ jobsError }}（可关闭后重开重试）</div>
         <div v-else-if="!jobs.length" class="sd-hint">暂无批次记录 —— 点上方「立即获取一轮」或等待定时调度</div>
         <div v-else class="sd-jobs">
           <div v-for="j in jobs" :key="String(j.id)" class="sd-job" :class="{ on: selJob && selJob.id === j.id }" @click="pickJob(j)">
@@ -230,6 +242,7 @@ defineExpose({ openSource });
       <div v-if="selJob" class="sd-sec">
         <div class="sd-sec-t">该批爬虫任务 <span class="sd-muted">（jobId={{ selJob.id }} · {{ tasks.length }} 条）</span></div>
         <div v-if="tasksLoading" class="sd-hint">任务加载中…</div>
+        <div v-else-if="tasksError" class="sd-hint">任务加载失败：{{ tasksError }}（可重选批次重试）</div>
         <div v-else-if="!tasks.length" class="sd-hint">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
         <div v-else class="sd-tasks">
           <div v-for="t in tasks" :key="String(t.id)" class="sd-task" :class="{ on: selTask && selTask.id === t.id }" @click="pickTask(t)">

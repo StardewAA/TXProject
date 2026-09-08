@@ -81,7 +81,12 @@ async function enrichAnnouncementRows(rows: FollowItem[]): Promise<void> {
   );
 }
 
+/** 请求序号守卫：快速切筛选/翻页/换关注项时，过期响应不得覆盖最新状态（各自独立计数） */
+let listSeq = 0;
+let timelineSeq = 0;
+
 async function loadList(): Promise<void> {
+  const seq = ++listSeq;
   listState.loading = true;
   listState.errorMsg = '';
   try {
@@ -90,15 +95,17 @@ async function loadList(): Promise<void> {
       pageNo: listState.pageNo,
       pageSize,
     });
+    if (seq !== listSeq) return; // 过期响应：直接丢弃，不赋值
     listState.rows = res.list;
     listState.total = res.total;
     await enrichAnnouncementRows(listState.rows);
   } catch (e) {
+    if (seq !== listSeq) return; // 过期响应：错误也丢弃
     listState.errorMsg = e instanceof Error ? e.message : String(e);
     listState.rows = [];
     listState.total = 0;
   } finally {
-    listState.loading = false;
+    if (seq === listSeq) listState.loading = false;
   }
 }
 
@@ -116,37 +123,45 @@ function goListPage(p: number): void {
 async function loadTimeline(): Promise<void> {
   const item = timelineState.item;
   if (!item) return;
+  const seq = ++timelineSeq;
   timelineState.loading = true;
   timelineState.errorMsg = '';
   try {
     const res = await fetchFollowTimeline(item.id, { pageNo: timelineState.pageNo, pageSize });
+    if (seq !== timelineSeq) return; // 过期响应：直接丢弃，不赋值
     timelineState.events = res.list;
     timelineState.total = res.total;
   } catch (e) {
+    if (seq !== timelineSeq) return; // 过期响应：错误也丢弃
     timelineState.errorMsg = e instanceof Error ? e.message : String(e);
     timelineState.events = [];
     timelineState.total = 0;
   } finally {
-    timelineState.loading = false;
+    if (seq === timelineSeq) timelineState.loading = false;
   }
 }
 
-/** 打开关注项时间线：先标记已读（清未读），再拉事件 */
+/** 打开关注项时间线：先拉事件（时间线加载成功后才视为“已查看”），成功后再标记已读（清未读）；时间线失败则不标读（未读保留） */
 async function openItem(item: FollowItem): Promise<void> {
   timelineState.item = item;
   timelineState.pageNo = 1;
   timelineState.busying = true;
   try {
-    await markFollowItemRead(item.id);
-    // 刷新列表未读数（原行可能已变化）
-    const cur = listState.rows.find((r) => String(r.id) === String(item.id));
-    if (cur) cur.unreadCount = 0;
-  } catch {
-    /* 已读失败不阻塞查看 */
+    await loadTimeline();
+    // 时间线加载成功（errorMsg 为空）才标已读；失败保留未读，错误已由 loadTimeline 按页面现有风格提示
+    if (!timelineState.errorMsg) {
+      try {
+        await markFollowItemRead(item.id);
+        // 刷新列表未读数（原行可能已变化）
+        const cur = listState.rows.find((r) => String(r.id) === String(item.id));
+        if (cur) cur.unreadCount = 0;
+      } catch {
+        /* 已读失败不阻塞查看（未读保留，可稍后手动点“已读”） */
+      }
+    }
   } finally {
     timelineState.busying = false;
   }
-  await loadTimeline();
 }
 
 function goTimelinePage(p: number): void {
@@ -260,8 +275,16 @@ onMounted(() => {
     <!-- ============ 列表视图 ============ -->
     <template v-if="!timelineState.item">
       <div class="filter-row">
-        <span class="opt" v-for="f in FILTERS" :key="f.value" :class="{ on: listState.filter === f.value }"
-          @click="pickFilter(f.value)">{{ f.label }}</span>
+        <span
+          v-for="f in FILTERS"
+          :key="f.value"
+          class="opt kbd-btn"
+          :class="{ on: listState.filter === f.value }"
+          role="button"
+          tabindex="0"
+          @click="pickFilter(f.value)"
+          @keydown.enter="pickFilter(f.value)"
+        >{{ f.label }}</span>
         <span class="sum">共 {{ listState.total }} 项关注</span>
       </div>
 
@@ -280,7 +303,15 @@ onMounted(() => {
           <div class="f-unread">未读</div>
           <div class="f-act">操作</div>
         </div>
-        <div v-for="r in listState.rows" :key="r.id" class="frow" @click="openItem(r)">
+        <div
+          v-for="r in listState.rows"
+          :key="r.id"
+          class="frow kbd-btn"
+          role="button"
+          tabindex="0"
+          @click="openItem(r)"
+          @keydown.enter="openItem(r)"
+        >
           <div class="f-name">
             <div class="f-title">
               <span class="chip t">{{ followTypeName(r.followType) }}</span>
@@ -313,11 +344,16 @@ onMounted(() => {
       </div>
 
       <div class="pager" v-if="listTotalPages > 1">
-        <span class="pg" :class="{ off: listState.pageNo === 1 }" @click="listState.pageNo > 1 && goListPage(listState.pageNo - 1)">‹</span>
-        <span v-for="(p, i) in pagerNums(listState.pageNo, listTotalPages)" :key="i" class="pg"
-          :class="{ on: p === listState.pageNo, dot: p === '…' }" @click="typeof p === 'number' && goListPage(p)">{{ p }}</span>
-        <span class="pg" :class="{ off: listState.pageNo === listTotalPages }"
-          @click="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)">›</span>
+        <span class="pg kbd-btn" :class="{ off: listState.pageNo === 1 }" role="button" tabindex="0"
+          @click="listState.pageNo > 1 && goListPage(listState.pageNo - 1)"
+          @keydown.enter="listState.pageNo > 1 && goListPage(listState.pageNo - 1)">‹</span>
+        <span v-for="(p, i) in pagerNums(listState.pageNo, listTotalPages)" :key="i" class="pg kbd-btn"
+          :class="{ on: p === listState.pageNo, dot: p === '…' }" role="button" tabindex="0"
+          @click="typeof p === 'number' && goListPage(p)"
+          @keydown.enter="typeof p === 'number' && goListPage(p)">{{ p }}</span>
+        <span class="pg kbd-btn" :class="{ off: listState.pageNo === listTotalPages }" role="button" tabindex="0"
+          @click="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)"
+          @keydown.enter="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)">›</span>
       </div>
     </template>
 
@@ -330,7 +366,7 @@ onMounted(() => {
           <span class="tl-name">{{ timelineState.item.displayName || timelineState.item.followKey }}</span>
           <span class="tl-meta" v-if="timelineState.item.issuerName">{{ timelineState.item.issuerName }}</span>
           <span class="tl-meta" v-if="stageNameOf(timelineState.item.stageCode, timelineState.item.stageName)">阶段：{{ stageNameOf(timelineState.item.stageCode, timelineState.item.stageName) }}</span>
-          <span class="tl-meta">已读后未读清零（本页打开即已读）</span>
+          <span class="tl-meta">已读后未读清零（时间线加载成功后标记已读）</span>
         </div>
       </div>
 
@@ -371,11 +407,16 @@ onMounted(() => {
       </div>
 
       <div class="pager" v-if="totalPages > 1">
-        <span class="pg" :class="{ off: timelineState.pageNo === 1 }" @click="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)">‹</span>
-        <span v-for="(p, i) in pagerNums(timelineState.pageNo, totalPages)" :key="i" class="pg"
-          :class="{ on: p === timelineState.pageNo, dot: p === '…' }" @click="typeof p === 'number' && goTimelinePage(p)">{{ p }}</span>
-        <span class="pg" :class="{ off: timelineState.pageNo === totalPages }"
-          @click="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)">›</span>
+        <span class="pg kbd-btn" :class="{ off: timelineState.pageNo === 1 }" role="button" tabindex="0"
+          @click="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)"
+          @keydown.enter="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)">‹</span>
+        <span v-for="(p, i) in pagerNums(timelineState.pageNo, totalPages)" :key="i" class="pg kbd-btn"
+          :class="{ on: p === timelineState.pageNo, dot: p === '…' }" role="button" tabindex="0"
+          @click="typeof p === 'number' && goTimelinePage(p)"
+          @keydown.enter="typeof p === 'number' && goTimelinePage(p)">{{ p }}</span>
+        <span class="pg kbd-btn" :class="{ off: timelineState.pageNo === totalPages }" role="button" tabindex="0"
+          @click="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)"
+          @keydown.enter="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)">›</span>
       </div>
     </template>
   </div>
@@ -413,7 +454,7 @@ onMounted(() => {
 }
 .crumb-sub {
   font-size: 12px;
-  color: #7a8591;
+  color: #5f6b7a;
 }
 .filter-row {
   display: flex;
@@ -440,13 +481,13 @@ onMounted(() => {
 }
 .sum {
   margin-left: auto;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 12px;
 }
 .msg-box {
   padding: 30px 12px;
   text-align: center;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 13px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -467,7 +508,7 @@ onMounted(() => {
   font-size: 14px;
 }
 .empty-panel .tip {
-  color: #8a97a4;
+  color: #5f6b7a;
   font-size: 12.5px;
   line-height: 1.8;
 }
@@ -532,7 +573,7 @@ onMounted(() => {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  color: #8a97a4;
+  color: #5f6b7a;
   font-size: 11.5px;
   margin-top: 3px;
 }
@@ -578,7 +619,7 @@ onMounted(() => {
   font-weight: 700;
 }
 .none {
-  color: #c6cdd5;
+  color: #5f6b7a;
 }
 .f-act {
   display: flex;
@@ -615,7 +656,7 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   padding: 12px 2px 8px;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 12px;
 }
 .pg {
@@ -668,7 +709,7 @@ onMounted(() => {
   word-break: break-all;
 }
 .tl-meta {
-  color: #8a97a4;
+  color: #5f6b7a;
   font-size: 12px;
   margin-left: 4px;
 }
@@ -704,7 +745,7 @@ onMounted(() => {
 }
 .tl-time {
   margin-left: 2px;
-  color: #8a97a4;
+  color: #5f6b7a;
   font-size: 11.5px;
 }
 .tl-text {
@@ -718,5 +759,35 @@ onMounted(() => {
   flex: none;
   display: flex;
   gap: 6px;
+}
+/* 键盘可达性：可点击 span/div（筛选 tab、列表行、分页）聚焦可见 */
+.kbd-btn:focus-visible {
+  outline: 2px solid #17539a;
+  outline-offset: 2px;
+}
+/* 小屏响应式：操作列去掉固定 220px，列表行/时间线纵向堆叠 */
+@media (max-width: 768px) {
+  .frow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .frow.head {
+    display: none;
+  }
+  .f-act {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .tl-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tl-act {
+    flex-wrap: wrap;
+  }
+  .pager {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 }
 </style>

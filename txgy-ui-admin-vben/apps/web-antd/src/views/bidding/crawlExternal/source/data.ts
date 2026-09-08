@@ -98,7 +98,7 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
       fieldName: 'fetchIntervalSeconds',
       label: '抓取间隔（秒）',
       component: 'InputNumber',
-      componentProps: { min: 60, max: 604800, addonAfter: '秒', placeholder: '默认 3600' },
+      componentProps: { min: 120, max: 604800, addonAfter: '秒', placeholder: '默认 3600；下限 120（后端强校验）' },
     },
     {
       fieldName: 'robotsOk',

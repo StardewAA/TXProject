@@ -51,16 +51,25 @@ const extractionTagOf = (row: NoticeExternalApi.ManageItem) =>
   tagOf(EXTRACTION_MAP, row.extractionStatus);
 const bodyTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(BODY_MAP, row.bodyBlocksStatus);
 
+/** 行内操作执行锁（防双击重复提交；批量审核用独立的 approving） */
+const acting = ref(false);
+
 async function runAction(label: string, fn: () => Promise<unknown>) {
+  if (acting.value) return;
+  acting.value = true;
   const hideLoading = message.loading({ content: `${label}处理中…`, duration: 0 });
   try {
     await fn();
     message.success(`${label}成功`);
+    // 行状态已变化：清空勾选，避免工具栏"批量审查通过（N）"计数与实际不符
+    checkedRows.value = [];
+    (gridApi.grid as unknown as { clearCheckboxRow?: () => void } | undefined)?.clearCheckboxRow?.();
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
+    acting.value = false;
   }
 }
 
@@ -85,26 +94,29 @@ function handleTakeDown(row: NoticeExternalApi.ManageItem) {
 
 
 
-/** 行主操作：预览 + 当前状态下的关键动作（审核通过/下线）；次要动作全部收进“更多 ▾”避免按钮挤压 */
+/** 行主操作：预览 + 当前状态下的关键动作（下线/审核通过）；次要动作全部收进“更多 ▾”避免按钮挤压 */
 function rowActions(row: NoticeExternalApi.ManageItem): any[] {
   const acts: Array<Record<string, unknown>> = [
-    { label: '预览', type: 'link', auth: ['bidding:notice-external:update'], onClick: () => handlePreview(row) },
+    { label: '预览', type: 'link', auth: ['bidding:notice-external:update'], disabled: acting.value || approving.value, onClick: () => handlePreview(row) },
   ];
-  if (row.auditStatus === 'UNREVIEWED') {
-    acts.push({
-      label: '审核通过',
-      type: 'link',
-      auth: ['bidding:notice-external:update'],
-      // 需求：点击审查不弹确认框（减少多余点击），直接执行幂等审核通过
-      onClick: () => void handleApprove(row),
-    });
-  } else if (row.status === 'ACTIVE') {
+  if (row.status === 'ACTIVE') {
+    // 主操作按 status 优先：ACTIVE 行给“下线”（防御 ACTIVE+UNREVIEWED 并存时按钮错乱）
     acts.push({
       label: '下线',
       type: 'link',
       danger: true,
       auth: ['bidding:notice-external:update'],
+      disabled: acting.value || approving.value,
       popConfirm: { title: '确认下线？（大厅展示随即消失）', confirm: () => handleTakeDown(row) },
+    });
+  } else if (row.auditStatus === 'UNREVIEWED' && row.status === 'NEW') {
+    acts.push({
+      label: '审核通过',
+      type: 'link',
+      auth: ['bidding:notice-external:update'],
+      disabled: acting.value || approving.value,
+      // 需求：点击审查不弹确认框（减少多余点击），直接执行幂等审核通过
+      onClick: () => void handleApprove(row),
     });
   }
   return acts;
@@ -124,6 +136,7 @@ function moreItems(row: NoticeExternalApi.ManageItem): Array<{ key: string; labe
 
 /** 更多菜单项点击：二次确认后执行 */
 function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
+  if (acting.value || approving.value) return; // 操作进行中：防重复触发
   const title: Record<string, string> = {
     reject: '确认驳回该公告？（将不对外展示）',
     takeDown: '确认下线？（大厅展示随即消失）',
@@ -294,8 +307,8 @@ async function handleApproveAll() {
       hide2();
       refresh();
     }
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     approving.value = false;
     checkedRows.value = [];

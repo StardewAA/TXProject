@@ -95,7 +95,12 @@ async function getJson<T>(url: string): Promise<T> {
 
 function quickToBegin(quick?: string): string | undefined {
   if (!quick || quick === '全部时间') return undefined;
-  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90, 今年以来: 365 };
+  if (quick === '今年以来') {
+    // 自然年口径：当年 1 月 1 日 00:00:00（原 365 天回溯=去年今天起，语义错误）
+    const y = new Date().getFullYear();
+    return `${y}-01-01 00:00:00`;
+  }
+  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90 };
   const days = map[quick];
   if (!days) return undefined;
   const t = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -232,7 +237,12 @@ async function fetchMerged(
     return sa < sb ? 1 : -1; // 字符串时间格式可字典序倒排
   });
   const start = (pageNo - 1) * pageSize;
-  return { total: all.length, list: all.slice(start, start + pageSize) };
+  // truncated：合并视图命中 MAX_ROWS 上限（页脚据此提示"仅展示前 200 条"，避免 total 失真无感知）
+  return {
+    total: all.length,
+    list: all.slice(start, start + pageSize),
+    truncated: all.length >= MAX_ROWS,
+  } as PageResult<NoticeExternalItem> & { truncated?: boolean };
 }
 
 /** 列表（大厅公告目录） */
@@ -356,6 +366,10 @@ async function authedFetch<T>(
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
+  if (init.body !== undefined) {
+    // JSON body 必须显式声明，否则 fetch 默认 text/plain，后端 @RequestBody 直接 415
+    headers['Content-Type'] = 'application/json';
+  }
   let token: string | null = null;
   try {
     const { useAccessStore } = await import('@vben/stores');
