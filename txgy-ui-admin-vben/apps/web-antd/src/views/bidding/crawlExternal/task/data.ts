@@ -27,6 +27,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'finishedAt', title: '结束时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
     { field: 'message', title: '结果/错误说明', minWidth: 200, showOverflow: true },
     { field: 'createTime', title: '创建时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
-    { field: 'operation', title: '操作', width: 110, fixed: 'right', slots: { default: 'operation' } },
+    { field: 'operation', title: '操作', width: 130, fixed: 'right', slots: { default: 'operation' } },
   ];
 }

@@ -4,13 +4,30 @@ import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
 import { Page } from '@vben/common-ui';
 
+import { ref } from 'vue';
+
 import { Tag } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { fetchCrawlJobPage } from '#/api/bidding/crawlExternal';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import JobDetail from './modules/job-detail.vue';
 import { JOB_STATUS_MAP, TRIGGER_MAP, tagOf } from '../shared';
+
+/** 行操作（克制）：批次只读，统一「详情」入口进入详情档分层查看（概要 → 该批 N 条任务 → 任务过程） */
+function rowActs(row: CrawlExternalApi.JobItem): any[] {
+  return [
+    {
+      label: '详情',
+      type: 'link',
+      auth: ['bidding:crawl-job:query'],
+      onClick: () => jobDetailRef.value?.openJob(row),
+    },
+  ];
+}
+
+const jobDetailRef = ref<{ openJob: (j: CrawlExternalApi.JobItem) => void } | null>(null);
 
 const [Grid] = useVbenVxeGrid({
   formOptions: {
@@ -67,6 +84,10 @@ const [Grid] = useVbenVxeGrid({
         </Tag>
         <span v-else>—</span>
       </template>
+      <template #operation="{ row }">
+        <TableAction :actions="rowActs(row)" />
+      </template>
     </Grid>
+    <JobDetail ref="jobDetailRef" />
   </Page>
 </template>
