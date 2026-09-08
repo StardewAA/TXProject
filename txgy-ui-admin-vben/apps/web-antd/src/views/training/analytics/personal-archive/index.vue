@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -16,6 +16,8 @@ import {
   Table,
   Tabs,
 } from 'ant-design-vue';
+
+import { getPersonalArchive, type PromotionApi } from '../api';
 
 defineOptions({ name: 'TrainingPersonalArchive' });
 
@@ -53,12 +55,21 @@ const vrColumns = [
   { title: '完成时间', dataIndex: 'finishTime', width: 110 },
 ];
 
-// TODO[模块九-成长地图] 人才等级晋升条件缺口的真实计算后续实现
-const growthItems = [
-  { name: '学徒技师 → 初级工', percent: 0 },
-  { name: '初级工 → 中级工', percent: 0 },
-  { name: '中级工 → 高级工', percent: 0 },
-];
+const growth = ref<PromotionApi.Evaluation>();
+const growthItems = computed(() => growth.value ? [{
+  gaps: growth.value.rules.filter((item) => !item.passed).map((item) => `${item.ruleName}：${item.gap}`).join('；'),
+  name: `${growth.value.currentLevelName} → ${growth.value.nextLevelName || '最高等级'}`,
+  percent: Number(growth.value.progress),
+}] : []);
+
+onMounted(async () => {
+  try {
+    const data = await getPersonalArchive();
+    growth.value = data.growth;
+  } catch {
+    message.warning('晋级档案尚未初始化，请联系培训管理员执行晋级门槛 SQL');
+  }
+});
 
 function handleCertRemind() {
   // TODO[模块九-证书到期] 调用 POST /training/analytics/personal-archive/cert-expire-remind
@@ -117,8 +128,9 @@ function goVerify() {
                   <span class="text-gray-500">{{ item.percent }}%</span>
                 </div>
                 <Progress :percent="item.percent" status="normal" stroke-color="#16a34a" />
-                <div class="text-xs text-gray-400">晋升条件缺口：待接入模块四/五数据后计算</div>
+                <div class="text-xs text-gray-400">晋升条件缺口：{{ item.gaps || '全部硬性条件已达标' }}</div>
               </div>
+              <div v-if="!growthItems.length" class="py-6 text-center text-gray-400">正在读取晋级档案…</div>
             </div>
           </TabPane>
         </Tabs>

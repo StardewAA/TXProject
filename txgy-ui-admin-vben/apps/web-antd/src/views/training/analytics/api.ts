@@ -67,3 +67,63 @@ export function getAnalyticsDashboard() {
     '/training/analytics/dashboard',
   );
 }
+
+export namespace PromotionApi {
+  export interface Path { fromLevel: string; name: string; toLevel: string }
+  export interface Context {
+    levels: Array<{ label: string; value: string }>;
+    paths: Path[];
+    sources: Record<string, string>;
+  }
+  export interface Employee { id: number; nickname: string; username: string }
+  export interface Profile { currentLevel: string; jobType?: string; levelSince: string; userId: number }
+  export interface Rule {
+    actualValue?: number;
+    available?: boolean;
+    description?: string;
+    gap?: string;
+    id: number;
+    isHard: boolean | number;
+    metricSource?: string;
+    operator: string;
+    passed?: boolean;
+    progress?: number;
+    ruleKey: string;
+    ruleName: string;
+    ruleValue: number;
+    sourceModule: string;
+    status: number;
+    unit?: string;
+  }
+  export interface Evaluation {
+    currentLevel: string;
+    currentLevelName: string;
+    levelSince: string;
+    message?: string;
+    nextLevel?: string;
+    nextLevelName?: string;
+    passedCount: number;
+    progress: number;
+    qualified: boolean;
+    rules: Rule[];
+    totalCount: number;
+    userId: number;
+  }
+}
+
+const promotionBase = '/training/analytics/promotion';
+export const getPromotionContext = () => requestClient.get<PromotionApi.Context>(`${promotionBase}/context`);
+export const getPromotionRules = (params: { fromLevel: string; toLevel: string }) =>
+  requestClient.get<PromotionApi.Rule[]>(`${promotionBase}/rules`, { params });
+export const getPromotionEmployees = (keyword = '') =>
+  requestClient.get<PromotionApi.Employee[]>(`${promotionBase}/employees`, { params: { keyword } });
+export const getPromotionProfile = (userId?: number) =>
+  requestClient.get<PromotionApi.Profile>(`${promotionBase}/profile`, { params: { userId } });
+export const savePromotionProfile = (data: PromotionApi.Profile) => requestClient.post(`${promotionBase}/profile/save`, data);
+export const reportPromotionMetric = (data: Record<string, any>) => requestClient.post(`${promotionBase}/metric/report`, data);
+export const updatePromotionRule = (data: Record<string, any>) => requestClient.post(`${promotionBase}/rule/update`, data);
+export const getPromotionEvaluation = (userId?: number) =>
+  requestClient.get<PromotionApi.Evaluation>(`${promotionBase}/evaluation`, { params: { userId } });
+export const runPromotionEvaluation = (userId?: number) =>
+  requestClient.post<PromotionApi.Evaluation>(`${promotionBase}/evaluate`, undefined, { params: { userId } });
+export const getPersonalArchive = () => requestClient.get<Record<string, any>>('/training/analytics/personal-archive/overview');
