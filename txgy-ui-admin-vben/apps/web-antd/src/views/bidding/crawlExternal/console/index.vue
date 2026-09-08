@@ -60,10 +60,12 @@ const sourceOptions = computed(() =>
     .filter((s) => s.sourceCode)
     .map((s) => ({ label: (s.sourceName || s.sourceCode) + '（' + s.sourceCode + '）', value: s.sourceCode! })),
 );
-/** 顶部选项卡：tasks=定时任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
+/** 顶部选项卡：tasks=任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
 const activeTab = ref<'tasks' | 'tests' | 'manual' | 'jobs'>('tasks');
+/** 全部源任务总数（后端 total；KPI 与 tab 徽标显示真实总数，不再“首 20 条误导”） */
+const taskTotal = ref(0);
 const kpis = computed(() => ({
-  sched: schedTasks.value.length,
+  sched: taskTotal.value,
   tests: backendTests.value.length,
   manual: manualRuns.value.length,
   jobs: jobs.value.length,
@@ -76,6 +78,23 @@ const schedTasks = ref<CrawlExternalApi.TaskItem[]>([]);
 const schedPage = ref(1);
 const schedEnd = ref(false);
 const schedLoading = ref(false);
+
+/* ========== 整页三级导航状态（2026-09-10：任务器=信息源；信息源卡墙→该源任务条(筛选/分页/总数)→任务详情整页 上一条/下一条；任务详情不再用右侧抽屉） ========== */
+/** home=工作台 / taskDetail=任务详情整页 */
+const pageView = ref<'home' | 'taskDetail'>('home');
+/** 当前选中信息源（任务器）；空=任务 tab 显示信息源卡墙 */
+const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
+/** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传） */
+const tFilter = ref<{ status?: string; channelCode?: string; url?: string }>({});
+const tPage = ref(1);
+const tPageSize = ref(20);
+const tTotal = ref(0);
+const tRows = ref<CrawlExternalApi.TaskItem[]>([]);
+const tRowsLoading = ref(false);
+/** 详情当前任务在 tRows 中的游标 */
+const detailCursorIdx = ref(-1);
+/** 源卡墙任务数角标（sourceCode → 条数） */
+const srcCountMap = ref<Record<string, number>>({});
 const backendTests = ref<CrawlExternalApi.TaskItem[]>([]);
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 
@@ -104,6 +123,7 @@ async function loadSources() {
       list?: CrawlExternalApi.SourceItem[];
     };
     sources.value = res.list || [];
+    void fillSourceCounts(sources.value);
   } catch {
     sources.value = [];
   }
@@ -150,6 +170,16 @@ async function loadBackendTests() {
   }
 }
 
+/** 全源任务总数（pageSize=1 只读 total） */
+async function loadTaskTotalGlobal(): Promise<void> {
+  try {
+    const res = (await fetchCrawlTaskPage({ pageNo: 1, pageSize: 1 })) as unknown as { total?: number };
+    taskTotal.value = typeof res.total === 'number' ? res.total : 0;
+  } catch {
+    taskTotal.value = 0;
+  }
+}
+
 async function loadJobs() {
   try {
     const res = (await fetchCrawlJobPage({ pageNo: 1, pageSize: 10 })) as unknown as {
@@ -162,6 +192,7 @@ async function loadJobs() {
 }
 
 function refreshAll() {
+  void loadTaskTotalGlobal();
   void loadSched(true);
   void loadBackendTests();
   void loadJobs();
@@ -169,6 +200,7 @@ function refreshAll() {
 
 onMounted(() => {
   void loadSources();
+  void loadTaskTotalGlobal();
   void loadSched(true);
   void loadBackendTests();
   void loadJobs();
@@ -207,16 +239,16 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
     const wait = Math.ceil(120 - (Date.now() - last) / 1000);
     if (wait > 0) {
       message.warning(
-        (source.sourceName || source.sourceCode) + ' 距上次采集不足 120 秒，还需 ' + wait + ' 秒（防封频控）',
+        (source.sourceName || source.sourceCode) + ' 距上次获取不足 120 秒，还需 ' + wait + ' 秒（防封频控）',
       );
       return;
     }
   }
   Modal.confirm({
-    title: '立即爬取「' + (source.sourceName || source.sourceCode) + '」',
+    title: '立即获取「' + (source.sourceName || source.sourceCode) + '」',
     content:
-      '将对该源各栏目执行一轮采集（受 120s 频控与页上限约束）。接口同步执行，可能耗时数十秒，完成后任务条进入“定时任务”区。',
-    okText: '开始爬取',
+      '将对该信息源各栏目执行一轮获取（受 120s 频控与页上限约束）。接口同步执行，可能耗时数十秒，完成后任务条进入「任务」列表。',
+    okText: '开始获取',
     cancelText: '取消',
     onOk: async () => {
       runCodeBusy.value = source.sourceCode;
@@ -239,7 +271,7 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
             (c.error ? '（' + c.error + '）' : ''),
         );
         Modal.info({
-          title: '本轮爬取完成',
+          title: '本轮获取完成',
           content: lines.length ? lines.join('<br/>') : '无栏目产出（检查源 enabled/栏目 URL）',
         });
         void loadSched(true);
@@ -296,26 +328,14 @@ async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
 const detailOpen = ref(false);
 /** 详情抽屉当前档位：task=任务详情 / job=批次详情（标题随档位切换） */
 const detailKind = ref<'task' | 'job'>('task');
-const detailTitle = computed(() => {
-  if (detailKind.value === 'job')
-    return detailJob.value ? '批次 #' + String(detailJob.value.id) + ' · ' + (detailJob.value.sourceCode || '未知源') : '批次详情';
-  return detailTask.value ? '任务 #' + String(detailTask.value.id) + ' 详情' : '任务详情';
-});
+const detailTitle = computed(() =>
+  detailJob.value ? '批次 #' + String(detailJob.value.id) + ' · ' + (detailJob.value.sourceCode || '未知源') : '批次详情',
+);
 
 /* ---------- 任务详情（tasks 卡进入） ---------- */
 const detailTask = ref<CrawlExternalApi.TaskItem>();
 const detailTaskFull = ref<CrawlExternalApi.TaskItem>();
 const detailTaskLoading = ref(false);
-/** 跳过同批任务层：从同批任务行继续下钻时批次上下文已具备，免重复加载同批列表 */
-const taskSkipSameBatch = ref(false);
-/** 展示用任务对象：优先 getCrawlTask 回读详情，回读前以列表行字段兜底 */
-const dt = computed(() => detailTaskFull.value || detailTask.value || ({} as CrawlExternalApi.TaskItem));
-/* 层2：同批任务（task.jobId 非空时展示，参照 crawl-batch §三.1 携 jobId 拉取） */
-const sameBatchTasks = ref<CrawlExternalApi.TaskItem[]>([]);
-const sameBatchLoading = ref(false);
-const showSameBatch = computed(
-  () => detailKind.value === 'task' && dt.value?.jobId != null && !taskSkipSameBatch.value,
-);
 
 /* ---------- 批次详情（jobs 行进入） ---------- */
 const detailJob = ref<CrawlExternalApi.JobItem>();
@@ -325,63 +345,130 @@ const selJobTask = ref<CrawlExternalApi.TaskItem>();
 const selJobTaskFull = ref<CrawlExternalApi.TaskItem>();
 const selJobTaskLoading = ref(false);
 
-async function openTaskDetail(t: CrawlExternalApi.TaskItem, skipSameBatch = false): Promise<void> {
-  detailKind.value = 'task';
-  detailJob.value = undefined;
-  selJobTask.value = undefined;
-  selJobTaskFull.value = undefined;
-  detailTask.value = t;
-  detailTaskFull.value = undefined;
-  taskSkipSameBatch.value = skipSameBatch;
-  sameBatchTasks.value = [];
-  detailOpen.value = true;
-  detailTaskLoading.value = true;
-  if (t.id != null) {
-    try {
-      detailTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
-    } catch {
-      detailTaskFull.value = undefined; // 回读失败不阻断抽屉：先以列表行字段呈现概要
-    }
+/* ========== 整页三级导航数据函数（任务器=信息源） ========== */
+/** 加载“当前信息源”任务条：筛选(状态/通道/URL) + 分页 + 总数 */
+async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise<void> {
+  if (!curSource.value?.sourceCode) {
+    tRows.value = [];
+    tTotal.value = 0;
+    return;
   }
-  detailTaskLoading.value = false;
-  if (t.jobId != null && !skipSameBatch) void loadSameBatch(t.jobId);
-}
-
-/** 同批任务：同一批次下的爬虫任务（克制行，点击可继续下钻另一条任务） */
-async function loadSameBatch(jobId: number | string): Promise<void> {
-  sameBatchLoading.value = true;
+  tRowsLoading.value = true;
   try {
-    const res = (await fetchCrawlTaskPage({
-      jobId,
-      pageNo: 1,
-      pageSize: 200,
-    })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
-    sameBatchTasks.value = res.list || [];
-  } catch {
-    sameBatchTasks.value = [];
+    const params: CrawlExternalApi.TaskPageParams = {
+      pageNo: page,
+      pageSize: size,
+      sourceCode: curSource.value.sourceCode,
+      status: tFilter.value.status,
+      channelCode: tFilter.value.channelCode,
+      url: tFilter.value.url,
+    };
+    const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[]; total?: number };
+    tRows.value = res.list || [];
+    tTotal.value = typeof res.total === 'number' ? res.total : tRows.value.length;
+    tPage.value = page;
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e));
   } finally {
-    sameBatchLoading.value = false;
+    tRowsLoading.value = false;
   }
 }
 
-/** 详情档内重试：复用列表重试（仅 FAILED 死信归零 attempt 转 PENDING），成功后回读刷新概要 */
-async function retryFromDetail(): Promise<void> {
-  const t = detailTask.value;
-  if (!t || t.id == null) return;
-  await retryTask(t);
+/** 信息源卡（任务器）→ 进入该源任务列表 */
+function enterSourceTasks(src: CrawlExternalApi.SourceItem): void {
+  if (!src?.sourceCode) return;
+  curSource.value = src;
+  tFilter.value = { status: undefined, channelCode: undefined, url: undefined };
+  tPage.value = 1;
+  void loadTaskRows(1);
+}
+/** 返回信息源卡墙 */
+function backToSourceWall(): void {
+  curSource.value = null;
+  tRows.value = [];
+  tTotal.value = 0;
+}
+/** 筛选变化 → 回第 1 页重查 */
+function applyTaskFilter(): void {
+  tPage.value = 1;
+  void loadTaskRows(1);
+}
+
+/** 整页详情：上一条 / 下一条（按当前 tRows 游标） */
+async function stepTask(dir: 1 | -1): Promise<void> {
+  if (!tRows.value.length) return;
+  const next = detailCursorIdx.value + dir;
+  if (next < 0 || next >= tRows.value.length) {
+    message.info(dir === 1 ? '已是本列表最后一条' : '已是本列表第一条');
+    return;
+  }
+  detailCursorIdx.value = next;
+  const row = tRows.value[next];
+  if (!row || row.id == null) return;
+  detailTask.value = row;
+  detailTaskFull.value = undefined;
+  detailTaskLoading.value = true;
   try {
-    detailTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
+    detailTaskFull.value = (await getCrawlTask(row.id)) as unknown as CrawlExternalApi.TaskItem;
   } catch {
     detailTaskFull.value = undefined;
   }
+  detailTaskLoading.value = false;
 }
+/** 从整页详情返回任务条列表（保持筛选/分页上下文） */
+function backFromDetail(): void {
+  pageView.value = 'home';
+  void loadTaskRows(tPage.value);
+}
+
+/** 单个信息源任务总数（卡片墙角标） */
+async function sourceTaskCount(src: CrawlExternalApi.SourceItem): Promise<number> {
+  if (!src.sourceCode) return 0;
+  try {
+    const res = (await fetchCrawlTaskPage({ pageNo: 1, pageSize: 1, sourceCode: src.sourceCode })) as unknown as {
+      total?: number;
+    };
+    return typeof res.total === 'number' ? res.total : 0;
+  } catch {
+    return 0;
+  }
+}
+/** 源卡墙并发补任务数角标（限前 12 源） */
+async function fillSourceCounts(list: CrawlExternalApi.SourceItem[]): Promise<void> {
+  const m: Record<string, number> = {};
+  await Promise.all(
+    list.slice(0, 12).map(async (s) => {
+      if (s.sourceCode) m[s.sourceCode] = await sourceTaskCount(s);
+    }),
+  );
+  srcCountMap.value = m;
+}
+
+/** 点任务条 → 整页详情（不再开右侧抽屉；记录在 tRows 游标供上一条/下一条） */
+async function openTaskDetail(t: CrawlExternalApi.TaskItem): Promise<void> {
+  if (!t || t.id == null) return;
+  pageView.value = 'taskDetail';
+  detailTask.value = t;
+  detailTaskFull.value = undefined;
+  detailCursorIdx.value = tRows.value.findIndex((r) => r.id != null && String(r.id) === String(t.id));
+  detailTaskLoading.value = true;
+  try {
+    detailTaskFull.value = (await getCrawlTask(t.id)) as unknown as CrawlExternalApi.TaskItem;
+  } catch {
+    detailTaskFull.value = undefined; // 回读失败不阻断：先以列表行字段呈现
+  }
+  detailTaskLoading.value = false;
+}
+
+
+
+
 
 async function openJobDetail(j: CrawlExternalApi.JobItem): Promise<void> {
   detailKind.value = 'job';
   detailJob.value = j;
   detailTask.value = undefined;
   detailTaskFull.value = undefined;
-  sameBatchTasks.value = [];
   selJobTask.value = undefined;
   selJobTaskFull.value = undefined;
   detailOpen.value = true;
@@ -525,11 +612,11 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 };
 </script>
 
-<!-- ============ 爬取任务工作台 · 工业风：选项卡 + 数据面板（2026-09-10） ============ -->
+<!-- ============ 外部信息获取工作台 · 工业风：选项卡 + 数据面板（2026-09-10） ============ -->
 <template>
 <!--
-  爬虫工作台 · 平台职能（采集源/任务/测试/批次 总览与执行）
-  业务：平台运营配置采集源、立即爬取/定时轮询、解析器测试、任务死信重试，并查看采集任务与批次行迹；
+  外部信息获取工作台 · 平台职能（信息源/任务/测试/批次 总览与执行）
+  业务：平台运营配置信息源、立即获取/定时轮询、解析器测试、任务死信重试，并查看信息获取任务与批次行迹；
         目标=把依法公开的招标公告及时、完整采回入库，支撑大厅免费查阅。
   理由：采集是平台级聚合（G 轨）能力，仅平台管理职能可用；间隔≥120s 限频防对源站构成压力；采集对象=依法公开信息。
     业务边界：本页属平台职能（G 轨，无租户语义）——职能角色矩阵（后端执行清单 §7）：爬虫管理/外部公告审核=平台职能，
@@ -540,40 +627,57 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 -->
 
   <div class="p-3 bid-ind">
+    <!-- ===== 整页详情视图（pageView=taskDetail：点任务条整页打开，可上一条/下一条 + 返回；不再用右侧抽屉） ===== -->
+    <div v-if="pageView === 'taskDetail'" class="fp-page">
+      <div class="fp-bar">
+        <Button size="small" @click="backFromDetail">‹ 返回任务列表</Button>
+        <span class="fp-title">任务 #{{ detailTask ? String(detailTask.id) : '—' }}</span>
+        <span class="ml-auto fp-nav">
+          <Button size="small" :disabled="detailCursorIdx <= 0" @click="stepTask(-1)">▲ 上一条</Button>
+          <Button size="small" class="ml-2" :disabled="detailCursorIdx < 0 || detailCursorIdx >= tRows.length - 1" @click="stepTask(1)">下一条 ▼</Button>
+          <span v-if="detailCursorIdx >= 0" class="ml-3 text-xs font-semibold text-gray-500">本列表 {{ detailCursorIdx + 1 }} / {{ tTotal }}</span>
+        </span>
+      </div>
+      <div v-if="detailTaskLoading" class="fp-loading">详情回读中…</div>
+      <TaskChainView v-if="detailTask" :task="detailTask" :show-same-batch="false" :allow-retry="true" />
+    </div>
+
+    <!-- ===== home 视图（信息源卡墙 / 任务条 / 测试 / 批次） ===== -->
+    <template v-else>
     <!-- 页头 -->
     <div class="ind-stripes"></div>
     <div class="ind-head">
       <div>
         <div class="ind-title">
-          爬取任务工作台
+          外部信息获取工作台
           <span class="ind-mark">PLATFORM</span>
         </div>
         <div class="ind-sub">
           平台级采集（G 轨，外部公告域）。每次「立即爬取 / 手动录入 / 定时轮询」生成一条任务条：
-          采集源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整爬取的行迹。
+          信息源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整爬取的行迹。
         </div>
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="manualModalApi.open()">＋ 手动录入（测试任务）</Button>
         <Dropdown>
-          <Button size="large" :loading="!!runCodeBusy" :disabled="runBusy || sources.length === 0">立即爬取 ▾</Button>
+          <Button size="large" :loading="!!runCodeBusy" :disabled="runBusy || sources.length === 0">立即获取 ▾</Button>
           <template #overlay>
             <div class="rounded-md border border-gray-300 bg-white py-1 shadow-lg">
-              <div class="px-4 py-2 text-xs font-semibold text-gray-500">选择采集源（受 120s 频控）</div>
+              <div class="px-4 py-2 text-xs font-semibold text-gray-500">选择信息源（受 120s 频控）</div>
               <div v-for="src in sources" :key="src.id" class="cursor-pointer px-4 py-2 text-sm font-medium text-gray-800 hover:bg-orange-50" @click="onRunMenu(src)">
                 {{ src.sourceName || src.sourceCode }}
               </div>
             </div>
           </template>
         </Dropdown>
-        <Button size="large" @click="sourceOpen = true">采集源配置</Button>
+        <Button size="large" @click="sourceOpen = true">信息源配置</Button>
         <Button size="large" @click="refreshAll">刷新</Button>
       </div>
     </div>
 
     <!-- KPI -->
     <div class="ind-kpis">
-      <div class="ind-kpi k-blue"><div class="k-label">定时任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
+      <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
       <div class="ind-kpi k-green"><div class="k-label">后端测试</div><div class="k-num">{{ kpis.tests }}</div><div class="k-note">taskType=TEST 服务端留痕</div></div>
       <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">本次会话手动录入（刷新清空）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
@@ -581,34 +685,73 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
     <!-- 选项卡 + 数据面板 -->
     <div class="ind-tabs">
-      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tasks' }" @click="activeTab = 'tasks'">定时任务<span v-if="kpis.sched" class="cnt">{{ kpis.sched }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tasks' }" @click="activeTab = 'tasks'">任务<span v-if="kpis.sched" class="cnt">{{ kpis.sched }}</span></button>
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'tests' }" @click="activeTab = 'tests'">后端测试任务<span v-if="kpis.tests" class="cnt">{{ kpis.tests }}</span></button>
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">会话测试 · 解析留档<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'jobs' }" @click="activeTab = 'jobs'">采集批次<span v-if="kpis.jobs" class="cnt">{{ kpis.jobs }}</span></button>
     </div>
 
     <div class="ind-tab-body">
-      <!-- ============ ① 定时任务（克制档：状态Tag/标题(URL 截断)/时间 + 一行摘要；整卡或「详情 ▸」进详情档） ============ -->
+      <!-- ============ ① 任务（任务器=信息源：卡墙→该源任务条列表(筛选/分页/总数)→点任务条整页详情；2026-09-10 重构去右侧抽屉） ============ -->
       <section v-show="activeTab === 'tasks'">
-        <div class="mb-3 flex flex-wrap items-center gap-3">
-          <Select v-model:value="filterSource" placeholder="全部采集源" allow-clear style="width: 230px" :options="sourceOptions" @change="loadSched(true)" />
-          <Select v-model:value="filterStatus" placeholder="全部状态" allow-clear style="width: 150px" :options="statusOptions" @change="loadSched(true)" />
-          <span v-if="schedLoading" class="text-xs font-semibold text-orange-600">加载中…</span>
-          <a v-if="!schedEnd && schedTasks.length" class="ml-auto text-sm font-semibold text-blue-600" @click="loadSched()">{{ schedLoading ? '加载中…' : '加载更多 ▾' }}</a>
-        </div>
-        <div v-if="schedTasks.length === 0 && !schedLoading" class="ind-empty">暂无定时任务 —— 在「采集源配置」启用一个源，或点「立即爬取」生成第一条任务条</div>
-        <article v-for="t in schedTasks" :key="String(t.id)" class="ind-card ind-card-click" @click="openTaskDetail(t)">
-          <div class="ind-card-h">
-            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL，见详情）' }}</span>
-            <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-            <a class="cd-link" href="#" @click.prevent.stop="openTaskDetail(t)">详情 ▸</a>
+        <div class="fp-guide">操作路径：① 选信息源（任务器）→ ② 看它的任务条（可筛选/分页）→ ③ 点任务条进整页详情（上一条/下一条）。信息源在「信息源配置」维护。</div>
+
+        <!-- A. 未选源：信息源卡墙（任务器列表） -->
+        <template v-if="!curSource">
+          <div v-if="sources.length === 0" class="ind-empty">暂无信息源 —— 点右上「信息源配置」新增（CRAWLER/API），启用后即可产生任务。</div>
+          <div v-else class="fp-wall">
+            <div v-for="src in sources" :key="String(src.id)" class="fp-src" @click="enterSourceTasks(src)">
+              <div class="fp-src-h">
+                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'">{{ src.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+                <Tag :color="src.enabled ? 'green' : 'default'">{{ src.enabled ? '启用' : '停用' }}</Tag>
+                <span class="fp-src-code">{{ src.sourceCode || '—' }}</span>
+              </div>
+              <div class="fp-src-name" :title="src.sourceName || ''">{{ src.sourceName || '（未命名）' }}</div>
+              <div class="fp-src-meta">任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · {{ src.fetchIntervalSeconds != null ? '间隔 ' + src.fetchIntervalSeconds + 's' : '—' }}</div>
+              <div class="fp-src-go">查看任务条 ▸</div>
+            </div>
           </div>
-          <div class="ind-card-b">
-            <!-- 克制摘要：仅一行 message（无则“无消息”），截断由 title 提示全量 -->
-            <div class="cd-abs truncate" :title="t.message || t.url || ''">{{ t.message || '无消息' }}</div>
+        </template>
+
+        <!-- B. 已选源：该源任务条（筛选 + 共 N 条 + 分页 + 行列表） -->
+        <template v-else>
+          <div class="mb-3 flex flex-wrap items-center gap-2">
+            <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
+            <span class="text-sm font-extrabold text-gray-700">{{ curSource.sourceName || curSource.sourceCode }}</span>
+            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ curSource.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+            <span class="ml-2 text-xs font-semibold text-gray-500">共 {{ tTotal }} 条任务</span>
           </div>
-        </article>
+          <div class="mb-3 flex flex-wrap items-center gap-2">
+            <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
+            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: 'GENERIC · 通用下载', value: 'GENERIC' }]" @change="applyTaskFilter" />
+            <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
+            <Button size="small" @click="applyTaskFilter">查询</Button>
+            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>
+          </div>
+          <div class="mb-2 text-right">
+            <a-pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" show-total :show-size-changer="false" @change="loadTaskRows" />
+          </div>
+          <div v-if="tRowsLoading" class="ind-empty">加载中…</div>
+          <div v-else-if="tRows.length === 0" class="ind-empty">该信息源暂无任务条 —— 在该源「立即获取」或启用后按间隔自动轮询产生。</div>
+          <div v-else class="space-y-2">
+            <article v-for="t in tRows" :key="String(t.id)" class="ind-card ind-card-click fp-row" @click="openTaskDetail(t)">
+              <div class="ind-card-h">
+                <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+                <Tag v-if="t.channelCode" color="geekblue">{{ t.channelCode }}</Tag>
+                <span class="fp-row-id">#{{ String(t.id) }}</span>
+                <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+                <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+                <span class="cd-link">详情 ▸</span>
+              </div>
+              <div class="ind-card-b">
+                <div class="fp-row-sub truncate" :title="t.message || ''">
+                  <template v-if="t.message">{{ t.message }}</template>
+                  <template v-else>解析器：{{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · worker {{ t.workerId }}</template></template>
+                </div>
+              </div>
+            </article>
+          </div>
+        </template>
       </section>
 
       <!-- ============ ② 后端测试任务 ============ -->
@@ -765,64 +908,6 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
     <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染，不嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
     <Drawer v-model:open="detailOpen" :width="900" :title="detailTitle">
-      <!-- ===== 任务详情：层1 概要 → 层2 同批任务(该行有 jobId 时) → 层3 过程（原 processOpen 占位文案保留） ===== -->
-      <div v-if="detailKind === 'task' && detailTask" class="space-y-3">
-        <div class="ind-panel">
-          <div class="ind-panel-h">
-            <span class="ind-panel-t">任务概要</span>
-            <span class="ind-panel-meta">主键 #{{ String(detailTask.id) }}<template v-if="dt.jobId != null"> · 批次 jobId #{{ String(dt.jobId) }}</template></span>
-            <span class="ml-auto">
-              <Button v-if="(detailTaskFull?.status || detailTask.status) === 'FAILED'" danger size="small" :loading="retryBusy === detailTask.id" @click="retryFromDetail">重试（归零 attempt）</Button>
-            </span>
-          </div>
-          <div class="ind-panel-b">
-            <div v-if="detailTaskLoading" class="mb-2 text-xs font-semibold text-orange-600">详情回读中…</div>
-            <Descriptions :column="2" size="small" bordered>
-              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, dt.status)?.text || dt.status || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="源">{{ dt.sourceCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ dt.url || '—' }}</span></Descriptions.Item>
-              <Descriptions.Item label="通道 / 解析器">{{ dt.channelCode || '—' }} / {{ dt.parserCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="尝试">{{ dt.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ dt.workerId || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="开始 / 完成">{{ fmtDt(dt.startedAt) }} / {{ fmtDt(dt.finishedAt) }}</Descriptions.Item>
-              <Descriptions.Item label="消息 / 错误" :span="2">{{ dt.message || '—' }}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </div>
-
-        <!-- 层2：同批任务（该行有 jobId 且非“批内继续下钻”上下文时展示；crawl-batch §三.1 携 jobId 拉取） -->
-        <div v-if="showSameBatch" class="ind-panel">
-          <div class="ind-panel-h">
-            <span class="ind-panel-t">同批任务</span>
-            <span class="ind-panel-meta">jobId #{{ String(dt.jobId) }} · {{ sameBatchTasks.length }} 条（点击任一行继续下钻该任务）</span>
-          </div>
-          <div class="ind-panel-b">
-            <div v-if="sameBatchLoading" class="text-xs font-semibold text-orange-600">加载中…</div>
-            <div v-else-if="!sameBatchTasks.length" class="text-sm font-medium text-gray-500">该批暂无其它任务行</div>
-            <div v-else class="-my-1">
-              <div v-for="s in sameBatchTasks" :key="String(s.id)" class="ind-row ind-dl-row" :class="{ on: dt.id != null && s.id === dt.id }" @click="openTaskDetail(s, true)">
-                <Tag :color="tagOf(TASK_STATUS_MAP, s.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, s.status)?.text || s.status || '—' }}</Tag>
-                <span class="rw main truncate" :title="s.url || ''">{{ s.url || '（无 URL）' }}</span>
-                <span class="rw">解析器：{{ s.parserCode || '—' }}</span>
-                <span class="rw">attempt {{ s.attempt ?? '—' }}</span>
-                <span class="rw time">{{ fmtDt(s.finishedAt || s.createTime) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 层3：纵向数据链（调试视图：①请求 URL → ②获取方式 CRAWLER/API → ③原始载荷 payload_json 黑块 → ④解析 → ⑤执行/结果 → ⑥产出；每段可复制/全屏） -->
-        <div class="ind-panel">
-          <div class="ind-panel-h">
-            <span class="ind-panel-t">纵向数据链</span>
-            <span class="ind-panel-meta">原始载荷含列表原文/接口 JSON；「全屏 ▾」看完整数据</span>
-          </div>
-          <div class="ind-panel-b">
-            <TaskChainView :task="detailTask" :show-same-batch="false" />
-          </div>
-        </div>
-      </div>
-
       <!-- ===== 批次详情：层1 批次概要 → 层2 该批爬虫任务 N 条（KPI 卡+克制行） → 层3 选中任务过程（同抽屉第二区域） ===== -->
       <div v-if="detailKind === 'job' && detailJob" class="space-y-3">
         <div class="ind-panel">
@@ -896,10 +981,33 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
     <ManualModal :source-options="sourceOptions" @parsed="onParsed" />
     <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadSched(true); }" />
+    </template>
   </div>
 </template>
 
 <style scoped>
+/* ========== 整页三级导航（信息源→任务条→整页详情） 2026-09-10 ========== */
+.fp-page { min-height: calc(100vh - 140px); background: var(--ind-paper); border: 2px solid var(--ind-line); border-top: 3px solid var(--ind-ink); padding: 14px; }
+.fp-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 1px solid var(--ind-line); border-radius: 6px; }
+.fp-title { font-size: 16px; font-weight: 800; color: var(--ind-ink-text); }
+.fp-nav { display: flex; align-items: center; }
+.fp-loading { margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #c2571a; }
+.fp-guide { margin-bottom: 12px; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: #5b4a1f; background: #fdf6e3; border: 1px solid #e8d9a8; border-left: 4px solid #c9a227; border-radius: 4px; }
+.fp-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 12px; }
+.fp-src { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: #fff; border: 1.5px solid var(--ind-line); border-radius: 8px; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .12s; }
+.fp-src:hover { border-color: #1d4ed8; box-shadow: 0 4px 12px rgba(29, 78, 216, .12); transform: translateY(-1px); }
+.fp-src-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fp-src-code { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--ind-weak-text); }
+.fp-src-name { font-size: 15px; font-weight: 800; color: var(--ind-ink-text); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-src-meta { font-size: 12.5px; font-weight: 600; color: var(--ind-sub-text); }
+.fp-src-go { margin-top: auto; align-self: flex-end; font-size: 13px; font-weight: 800; color: #1d4ed8; }
+.fp-row { display: block; }
+.fp-row-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: #9aa3ad; margin-right: 2px; }
+.fp-row-sub { font-size: 13px; font-weight: 600; color: var(--ind-sub-text); }
+.fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: #1f2937; background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; outline: none; transition: border-color .15s; }
+.fp-url-input:focus { border-color: #1d4ed8; }
+.fp-url-input::placeholder { color: #9aa3ad; }
+
 /* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
 .ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }
 .ind-tab { appearance: none; background: #eceff2; border: 2px solid var(--ind-line); border-bottom: none; border-radius: 4px 4px 0 0;

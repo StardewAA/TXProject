@@ -109,7 +109,7 @@ function rowActs(row: CrawlExternalApi.SourceItem): any[] {
       danger: true,
       auth: ['bidding:crawl-source:delete'],
       popConfirm: {
-        title: '确认删除采集源「' + (row.sourceName || row.sourceCode) + '」？须无进行中任务且无公告引用。',
+        title: '确认删除信息源「' + (row.sourceName || row.sourceCode) + '」？须无进行中任务且无公告引用。',
         confirm: () => void runAction('删除', () => deleteCrawlSource(row.id!)),
       },
     },
@@ -148,9 +148,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
 <!--
-  采集源管理（平台职能：源配置 → 定时轮询/立即爬取）
-  业务：平台运营维护外部公告采集源（sourceCode 唯一；channel=GENERIC；parserCode 默认解析器；entryUrls 入口 URL 列表；轮询间隔≥120s）；启用后进入外链 /go 白名单。
-  理由：采集源=平台级资产（G 轨）；白名单域名防开放重定向；轮询间隔下限防对源站压力（安全评审+10号令免费查阅合规）。
+  信息源管理（平台职能：源配置 → 定时轮询/立即获取）
+  业务：平台运营维护外部公告信息源（sourceCode 唯一；channel=GENERIC；parserCode 默认解析器；entryUrls 入口 URL 列表；轮询间隔≥120s）；启用后进入外链 /go 白名单。
+  理由：信息源=平台级资产（G 轨）；白名单域名防开放重定向；轮询间隔下限防对源站压力（安全评审+10号令免费查阅合规）。
     业务边界：本页属平台职能（G 轨，无租户语义）——职能角色矩阵（后端执行清单 §7）：爬虫管理/外部公告审核=平台职能，
         勿授企业租户；企业租户只使用发布/档案/跟踪等 T 轨功能。
     依据（法规/政府文件）：10号令 第12条（部门规章）免费查阅——采集公开公告合法性基础；电子办法 第9条（部门规章）。
@@ -160,7 +160,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height class="bid-ind">
     <FormModalWrap @success="refresh" />
     <SourceDetail ref="detailRef" />
-    <Grid table-title="采集源管理（外部公告爬虫）">
+    <Grid table-title="信息源管理（外部公告）">
       <template #toolbar-tools>
         <TableAction
           :actions="[
