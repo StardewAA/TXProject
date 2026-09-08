@@ -13,7 +13,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.HttpFetchClient;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
 import cn.iocoder.txgy.module.infra.api.file.FileApi;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;

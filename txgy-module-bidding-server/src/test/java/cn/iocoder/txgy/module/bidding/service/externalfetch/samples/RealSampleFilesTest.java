@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.samples;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.samples;
 // 规范依据：设计文档 v0.6 §7.3/§15.6（PDF 本地抽取）；真实样本：docs/招投标版块数据提供/炼化公司…2026 装置大修消缺公开招标（HTML+PDF）
 
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.pdf.OpenDataLoaderPdfContentExtractor;

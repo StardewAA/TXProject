@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] JSON_GENERIC 解析器：包装字段定位、键名归一映射、数组取首、时间解析。
 
 import org.junit.jupiter.api.Test;

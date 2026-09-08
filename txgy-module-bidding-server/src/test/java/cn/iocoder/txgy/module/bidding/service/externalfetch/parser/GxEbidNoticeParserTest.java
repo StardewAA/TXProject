@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 国信站点解析 v2：列表 entries + 详情 pdf.js PDF 直链提取。
 
 import org.junit.jupiter.api.Test;

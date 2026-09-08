@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 通用 HTML 公告抽取（启发式、保守）：标题(h1→title)、正文纯文本、发布日期（复用 NoticePublishTimeResolver）、
 //       附件候选（链接扩展名/文案）、发布单位（"招标人/采购人：xxx" 行启发）。
 //       规则类启发一律进 warnings，测试接口供人工核对后再固化为站点专用解析器。

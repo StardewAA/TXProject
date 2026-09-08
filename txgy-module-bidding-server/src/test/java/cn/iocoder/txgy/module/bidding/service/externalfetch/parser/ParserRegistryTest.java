@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 解析器注册表：构造收集/重复 code 启动失败/未知 code 明确报错（与 ChannelRegistry 同构）。
 
 import org.junit.jupiter.api.Test;

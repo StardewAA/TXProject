@@ -1,11 +1,11 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.fetch;
 // [依据] 下载器执行器：QYZB 栏目一轮（列表 JSON → 全文直采 ingest）与 seen 去重、配置解析。
 
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +18,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -49,6 +50,7 @@ class CrawlSourceRunnerTest {
     private ExternalNoticeIngestService ingestService;
     private CrawlSourceMapper sourceMapper;
     private CrawlSourceRunner runner;
+    private ApiFetchDriver apiFetchDriver;
 
     @BeforeEach
     void setUp() {
@@ -61,12 +63,15 @@ class CrawlSourceRunnerTest {
         ReflectionTestUtils.setField(runner, "externalNoticeIngestService", ingestService);
         ReflectionTestUtils.setField(runner, "crawlSourceMapper", sourceMapper);
         ReflectionTestUtils.setField(runner, "crawlTaskMapper", mock(CrawlTaskMapper.class));
+        apiFetchDriver = new ApiFetchDriver();
+        ReflectionTestUtils.setField(apiFetchDriver, "httpFetchClient", httpFetchClient);
+        ReflectionTestUtils.setField(runner, "apiFetchDriver", apiFetchDriver);
     }
 
     private ParserRegistry realRegistry() {
         ParserRegistry registry = new ParserRegistry(List.of(
-                new cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.QyzJsonListParser(),
-                new cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.GxEbidNoticeParser()));
+                new cn.iocoder.txgy.module.bidding.service.externalfetch.parser.QyzJsonListParser(),
+                new cn.iocoder.txgy.module.bidding.service.externalfetch.parser.GxEbidNoticeParser()));
         registry.init();
         return registry;
     }
@@ -214,6 +219,51 @@ class CrawlSourceRunnerTest {
         ArgumentCaptor<CrawlTaskDO> captor = ArgumentCaptor.forClass(CrawlTaskDO.class);
         verify(taskMapper, times(1)).insert(captor.capture());
         assertEquals(Long.valueOf(9001L), captor.getValue().getJobId());
+    }
+
+
+    @Test
+    void apiCategory_entryWithApiConfig_runsDriverAndIngests() throws Exception {
+        // API 源栏目（apiConfig 声明）：走 ApiFetchDriver（postJsonWithHeaders）→ 全文直采 ingest；不触碰 QYZB parser/postJson
+        CrawlSourceDO source = source();
+        source.setEntryUrlsJson("""
+                [{"name":"变更公告","parser":"QYZB_JSON","categoryId":"205","siteId":"725",
+                "apiConfig":{"method":"POST","url":"https://qyzb.shccmg.com/cms/api/dynamicData/queryContentPage",
+                "rowsPath":"res.rows",
+                "mapping":{"title":"title","url":"url","date":"publishDate","category":"categoryName","contentHtml":"text"},
+                "urlPrefix":"https://qyzb.shccmg.com/cms/default/webfile"}}]
+                """);
+        when(sourceMapper.selectOne(any())).thenReturn(source);
+        when(httpFetchClient.postJsonWithHeaders(any(String.class), any(String.class), anyMap())).thenReturn(ONE_ROW);
+        when(ingestService.ingest(any())).thenReturn(100L);
+
+        CrawlSourceRunner.RunSummary summary = runner.runSource("QYZB-DEMO");
+
+        assertEquals(1, summary.getTotalIngested());
+        verify(httpFetchClient, never()).postJson(any(String.class), any(String.class)); // 未走旧 QYZB 常量路径
+        ArgumentCaptor<ExternalNoticeIngestDTO> captor = ArgumentCaptor.forClass(ExternalNoticeIngestDTO.class);
+        verify(ingestService).ingest(captor.capture());
+        assertEquals("https://qyzb.shccmg.com/cms/default/webfile/3ywgg/20260827/1277640981956526080.html", captor.getValue().getOrigUrl());
+    }
+
+    @Test
+    void apiCategory_rowWithoutContentHtml_marksFailed() throws Exception {
+        CrawlSourceDO source = source();
+        source.setEntryUrlsJson("""
+                [{"name":"字段列表无全文","parser":"QYZB_JSON",
+                "apiConfig":{"method":"POST","url":"https://api.example.com/list",
+                "rowsPath":"rows","mapping":{"title":"title","url":"url","date":"date"}}}]
+                """);
+        when(sourceMapper.selectOne(any())).thenReturn(source);
+        when(httpFetchClient.postJsonWithHeaders(any(String.class), any(String.class), anyMap())).thenReturn("""
+                {"rows":[{"title":"某公告","url":"https://api.example.com/x.html","date":"${today}"}]}
+                """.replace("${today}", java.time.LocalDate.now().toString()));
+        when(ingestService.ingest(any())).thenReturn(100L);
+
+        CrawlSourceRunner.RunSummary summary = runner.runSource("QYZB-DEMO");
+
+        assertEquals(1, summary.getTotalFailed()); // 无全文 → 记失败留痕（详情抓取未接线）
+        verify(ingestService, never()).ingest(any());
     }
 
     private static String qyzPage(boolean hasNext, String... rows) {

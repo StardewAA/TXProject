@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 秦源（qyzb.shccmg.com）栏目 JSON 接口解析（2026-09-07 用户提供响应样本校准）：
 //   {code:0,res:{total,rows:[{title,categoryId,url:"/3ywgg/20260827/{id}.html",text(全文HTML),publishDate,categoryName,...}],pageNo,pageCount,pageSize,hasNext}}
 //   rows.url 为栏目相对路径 → 详情 = https://qyzb.shccmg.com/cms/default/webfile + url（下载器按详情 HTML 复用 QYZB_SHCCMG 解析）。

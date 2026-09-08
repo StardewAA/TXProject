@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.bloom;
 // 规范依据：设计文档 v0.6 §二/§四；评审诉求：布隆过滤多节点（Redis 位图，各采集节点共享同一判定空间）
 // 部署注意：
 //   1) 需要 Redis（starter-redis 已由 starter-protection 传递进 classpath，key/value 均 String 序列化，

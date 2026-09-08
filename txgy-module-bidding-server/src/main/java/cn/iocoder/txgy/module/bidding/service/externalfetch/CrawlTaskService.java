@@ -1,10 +1,10 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // 规范依据：设计文档 v0.6 §二/§三/§四/§15.4（采集任务状态机、urlHash 幂等去重、MQ 3 次重试→死信转审核）
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskPageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTaskPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTaskRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 
 /**
  * 采集任务编排服务。

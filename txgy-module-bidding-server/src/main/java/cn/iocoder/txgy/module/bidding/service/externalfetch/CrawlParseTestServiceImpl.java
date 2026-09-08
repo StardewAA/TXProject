@@ -1,17 +1,17 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // [依据] 解析器测试服务实现：路由 ParserRegistry → 校验载荷 → 执行解析 → VO 化；
 //       FILE 按扩展名归一 HTML/JSON（.html/.htm/.json）；错误码 106_041~045。
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParseTestRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParserInfoRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParseTestRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParserInfoRespVO;
 import cn.iocoder.txgy.module.bidding.enums.CrawlParsePayloadTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParseResult;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParser;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParseInput;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParser;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

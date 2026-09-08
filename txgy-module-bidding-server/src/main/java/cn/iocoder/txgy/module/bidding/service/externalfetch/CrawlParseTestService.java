@@ -1,8 +1,8 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // [依据] 解析器测试服务：管理端“先测解析器、后接下载器”开发顺序的接口支撑（2026-09）。
 
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParseTestRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParserInfoRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParseTestRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParserInfoRespVO;
 
 import java.util.List;
 

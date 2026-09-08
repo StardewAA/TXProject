@@ -1,16 +1,16 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // 规范依据：设计文档 v0.6 §三/§四/§15.4（urlHash 幂等、指数退避 3 次、死信转审核、审计 message）；《招投标模块开发规范》§4.4
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskPageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlTaskRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTaskPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTaskRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom.UrlBloomFilter;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.sink.CrawlDeadLetterSink;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.bloom.UrlBloomFilter;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.sink.CrawlDeadLetterSink;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -172,6 +172,7 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
         resp.setStartedAt(task.getStartedAt());
         resp.setFinishedAt(task.getFinishedAt());
         resp.setMessage(task.getMessage());
+        resp.setPayloadJson(task.getPayloadJson());
         resp.setCreateTime(task.getCreateTime());
         resp.setUpdateTime(task.getUpdateTime());
         return resp;

@@ -1,14 +1,14 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
-// [依据] 下载器触发实现：委托 CrawlSourceRunner；每次执行（人工/调度）落一条采集批次 bidding_crawl_job
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
+// [依据] 下载器触发实现：委托 CrawlSourceRunner；每次执行（人工/调度）落一条采集批次 bidding_fetch_job
 // （RUNNING 开头 → SUCCESS/PARTIAL/FAILED 收尾 + summaryJson 汇总），失败任务经 runner 挂到该批次 jobId。
 // 定时调度（30s tick）按源 fetchIntervalSeconds（≥120）节流轮询。
 
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlRunRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlJobDO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlJobMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.CrawlSourceRunner;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlRunRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.CrawlSourceRunner;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;

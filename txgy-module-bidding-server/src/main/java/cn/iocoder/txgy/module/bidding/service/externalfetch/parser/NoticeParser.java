@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 爬虫解析插件 SPI（与下载通道 DownloadChannelAdapter 对称）：采集源 parser_code_default 路由到解析器；
 //       新增站点规则=新增一个 NoticeParser 实现并注册为 Bean（ParserRegistry 自动收集），不改主流程。
 
@@ -12,7 +12,7 @@ import java.util.List;
  */
 public interface NoticeParser {
 
-    /** 解析器 code（与 bidding_crawl_source.parser_code_default / URL 审批 parser_code 对应） */
+    /** 解析器 code（与 bidding_fetch_source.parser_code_default / URL 审批 parser_code 对应） */
     String getParserCode();
 
     /** 解析器名称（管理界面展示） */

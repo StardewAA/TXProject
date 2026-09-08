@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // 规范依据：设计文档 v0.6 §四/§六；《招投标模块开发规范》§3.1（VO 规约）、红线 8/§九（http(s)+IP 校验）
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -35,7 +35,13 @@ public class CrawlSourceSaveReqVO {
     @NotEmpty(message = "下载通道 code 不能为空")
     private String channelCode;
 
-    @Schema(description = "默认解析/策略码（URL 未单独审批时用）")
+    @Schema(description = "获取方式：CRAWLER=爬虫(列表HTML)/API=接口直取(JSON)；默认 CRAWLER（服务层校验合法值）")
+    private String fetchType;
+
+    @Schema(description = "API 源配置 JSON（fetch_type=API 时必填：method/url/headers/params/page/rowsPath/fieldMapping/envelope）")
+    private String apiConfigJson;
+
+    @Schema(description = "默认解析/策略码（URL 未单独审批时用；API 源=字段映射产出/AI 抽取策略码）")
     private String parserCodeDefault;
 
     @Schema(description = "抓取间隔（秒，频控；默认 3600）")

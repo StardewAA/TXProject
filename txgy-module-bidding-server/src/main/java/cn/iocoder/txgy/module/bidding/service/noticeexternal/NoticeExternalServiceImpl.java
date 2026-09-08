@@ -63,7 +63,7 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     @Resource
     private ExternalNoticeSearchEngine externalNoticeSearchEngine;
     @Resource
-    private cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.HttpFetchClient httpFetchClient;
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient httpFetchClient;
     @Resource
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
 

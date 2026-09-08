@@ -7,7 +7,7 @@ import lombok.Getter;
 import java.util.Arrays;
 
 /**
- * 采集任务状态（表 bidding_crawl_task.status）。
+ * 采集任务状态（表 bidding_fetch_task.status）。
  */
 @Getter
 @AllArgsConstructor

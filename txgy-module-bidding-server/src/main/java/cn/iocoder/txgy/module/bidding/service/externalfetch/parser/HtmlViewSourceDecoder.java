@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 秦源等站点样本经浏览器"查看源代码"保存后，源码被行高亮包装（td.line-content + 实体转义）。
 //       解析前自动检测并还原：含 .line-content 结构 → 抽行文本反转义 → 得到原始 HTML。
 

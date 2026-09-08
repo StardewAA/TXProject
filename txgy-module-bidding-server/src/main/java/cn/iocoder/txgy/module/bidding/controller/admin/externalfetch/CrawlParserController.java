@@ -1,13 +1,13 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch;
 // [依据] 爬虫解析器插件测试接口（2026-09，先解析后下载的开发顺序）：
 //       GET /list 解析器插件清单；POST /test 用 HTML/JSON 文本框或文件上传测试指定解析器。
 //       权限复用 bidding:crawl-source:query/update（菜单 60002100~；如需独立按钮后续可注册 60002107）。
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParseTestRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParserInfoRespVO;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.CrawlParseTestService;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParseTestRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParserInfoRespVO;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlParseTestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;

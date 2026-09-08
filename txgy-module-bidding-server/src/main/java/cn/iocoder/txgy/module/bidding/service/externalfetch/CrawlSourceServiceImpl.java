@@ -1,23 +1,23 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // 规范依据：设计文档 v0.6 §四/§六/§九（白名单源配置、fail-closed、外链域名白名单=启用源）；《招投标模块开发规范》§4.2/红线 11
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourcePageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceSaveReqVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourcePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceSaveReqVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.channel.ChannelRegistry;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.channel.ChannelRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -157,8 +157,32 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
     /** 频控下限（秒）：任何采集源轮询间隔不得小于 2 分钟（防目标站封禁；下载器调度同样执行该下限） */
     private static final int MIN_FETCH_INTERVAL_SECONDS = 120;
 
+    /** 获取方式：爬虫（列表 HTML/详情逐条抓） */
+    private static final String FETCH_TYPE_CRAWLER = "CRAWLER";
+    /** 获取方式：API 接口直取（JSON 列表，api_config_json 配置请求/分页/字段映射） */
+    private static final String FETCH_TYPE_API = "API";
+
     /** 配置合法性：URL 协议/通道已注册/entryUrls JSON 为 http(s) 数组（保存即校验，防脏配置静默生效）。 */
     private void validatePayload(CrawlSourceSaveReqVO reqVO) {
+        String fetchType = StringUtils.hasText(reqVO.getFetchType()) ? reqVO.getFetchType().trim().toUpperCase() : FETCH_TYPE_CRAWLER;
+        if (!FETCH_TYPE_CRAWLER.equals(fetchType) && !FETCH_TYPE_API.equals(fetchType)) {
+            // 获取方式只允许 CRAWLER/API（外部信息获取模块，见设计 v1.0 §4.2）
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+        }
+        if (FETCH_TYPE_API.equals(fetchType) && !StringUtils.hasText(reqVO.getApiConfigJson())) {
+            // API 源必须声明接口配置（method/url/rowsPath/fieldMapping…），防漏配静默空跑
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+        }
+        if (StringUtils.hasText(reqVO.getApiConfigJson())) {
+            try {
+                JsonNode node = OBJECT_MAPPER.readTree(reqVO.getApiConfigJson());
+                if (!node.isObject()) {
+                    throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+                }
+            } catch (Exception e) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+            }
+        }
         if (!isHttpUrl(reqVO.getBaseUrl())) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
         }
@@ -216,6 +240,8 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
         source.setAllowedHosts(StringUtils.hasText(reqVO.getAllowedHosts()) ? reqVO.getAllowedHosts().trim() : null);
         source.setEntryUrlsJson(StringUtils.hasText(reqVO.getEntryUrlsJson()) ? reqVO.getEntryUrlsJson() : null);
         source.setChannelCode(reqVO.getChannelCode());
+        source.setFetchType(StringUtils.hasText(reqVO.getFetchType()) ? reqVO.getFetchType().trim().toUpperCase() : FETCH_TYPE_CRAWLER);
+        source.setApiConfigJson(StringUtils.hasText(reqVO.getApiConfigJson()) ? reqVO.getApiConfigJson() : null);
         source.setParserCodeDefault(reqVO.getParserCodeDefault());
         source.setFetchIntervalSeconds(reqVO.getFetchIntervalSeconds() == null ? 3600 : reqVO.getFetchIntervalSeconds());
         source.setRobotsOk(Boolean.TRUE.equals(reqVO.getRobotsOk()));
@@ -244,6 +270,8 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
         resp.setAllowedHosts(source.getAllowedHosts());
         resp.setEntryUrlsJson(source.getEntryUrlsJson());
         resp.setChannelCode(source.getChannelCode());
+        resp.setFetchType(source.getFetchType());
+        resp.setApiConfigJson(source.getApiConfigJson());
         resp.setParserCodeDefault(source.getParserCodeDefault());
         resp.setFetchIntervalSeconds(source.getFetchIntervalSeconds());
         resp.setRobotsOk(source.getRobotsOk());

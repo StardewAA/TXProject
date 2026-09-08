@@ -1,16 +1,16 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch;
 // 规范依据：设计文档 v0.6 §六（源配置/审批：仅授权管理员）；《招投标模块开发规范》§4.4/4.5
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourcePageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlRunRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceSaveReqVO;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.CrawlRunService;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.CrawlSourceService;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.CrawlSourceRunner;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourcePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlRunRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceSaveReqVO;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlRunService;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSourceService;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.CrawlSourceRunner;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;

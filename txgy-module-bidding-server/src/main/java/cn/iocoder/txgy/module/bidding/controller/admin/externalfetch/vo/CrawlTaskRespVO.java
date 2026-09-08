@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // 规范依据：设计文档 v0.6 §三（task 状态机/worker/重试/死信）；《招投标模块开发规范》§3.1（VO 规约）
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -40,6 +40,8 @@ public class CrawlTaskRespVO {
     private LocalDateTime finishedAt;
     @Schema(description = "结果/错误说明（含死信原因）")
     private String message;
+    @Schema(description = "载荷快照 JSON（列表阶段条目，QYZB 含全文 HTML）")
+    private String payloadJson;
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
     @Schema(description = "更新时间")

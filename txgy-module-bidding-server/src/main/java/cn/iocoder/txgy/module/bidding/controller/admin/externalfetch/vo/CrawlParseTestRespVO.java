@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // [依据] 解析器测试结果出参：公告规范化字段（与 ingest/主档列对齐）+ 观测信息（meta/warnings/耗时），
 //       供管理界面校准解析规则（先解析后下载的开发顺序）。
 

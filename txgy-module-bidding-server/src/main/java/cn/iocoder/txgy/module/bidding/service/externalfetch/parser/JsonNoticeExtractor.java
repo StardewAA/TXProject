@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] JSON 公告载荷抽取（站点 JSON API/导出文件）：宽容字段映射（键名小写去分隔符后按别名集命中），
 //       支持 {data:{...}} 等包装与数组取首元素；命中/未命中均进 meta，便于测试时校准键名。
 

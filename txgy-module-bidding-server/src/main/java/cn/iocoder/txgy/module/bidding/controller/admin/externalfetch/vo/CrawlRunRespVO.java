@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // [依据] 下载器人工触发汇总出参（对应 CrawlSourceRunner.RunSummary）。
 
 import io.swagger.v3.oas.annotations.media.Schema;

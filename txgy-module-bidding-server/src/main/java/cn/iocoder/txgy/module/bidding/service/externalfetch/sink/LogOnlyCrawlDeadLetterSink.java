@@ -1,7 +1,7 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.sink;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.sink;
 // 规范依据：设计文档 v0.6 §三/§15.4（crawl.audit 主题占位：接入 starter-mq Redis Stream 后改为生产者投递）
 
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

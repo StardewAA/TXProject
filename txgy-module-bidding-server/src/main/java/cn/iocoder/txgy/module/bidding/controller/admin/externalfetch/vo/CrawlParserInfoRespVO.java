@@ -1,5 +1,5 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
-// [依据] 解析器测试功能：解析器插件清单行（code 与 bidding_crawl_source.parser_code_default 对应）。
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
+// [依据] 解析器测试功能：解析器插件清单行（code 与 bidding_fetch_source.parser_code_default 对应）。
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;

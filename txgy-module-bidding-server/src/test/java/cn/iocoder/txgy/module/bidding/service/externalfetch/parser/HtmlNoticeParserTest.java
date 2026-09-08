@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] HTML_GENERIC 解析器：标题(h1)、发布单位行启发、发布日期、附件候选。
 
 import org.junit.jupiter.api.Test;

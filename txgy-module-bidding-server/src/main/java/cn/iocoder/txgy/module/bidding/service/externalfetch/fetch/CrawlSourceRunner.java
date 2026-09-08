@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.fetch;
 // [依据] 下载器执行器 v1（2026-09-07，两站实测机制落地）：配置驱动（crawl_source.entry_urls_json）→
 //   拉列表（秦源 POST queryContentPage / 国信 GET bulletinListNew）→ 解析器 → 条目 → 全文/详情 → ingest 落库待审。
 //   频控：源轮询间隔 ≥ fetch_interval_seconds（保存校验 ≥120s）；源内条目抓取间隔 ENTRY_DELAY_MS。
@@ -6,16 +6,16 @@ package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
 //   P2 待办：FileApi 回填 PDF fileId（PDF 形态以 sha256+size+metaJson{pdfDownloadUrl} 落库，fileId 留空）。
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParseResult;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParser;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.PdfTextNoticeParser;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParseInput;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParser;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.PdfTextNoticeParser;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -69,6 +69,7 @@ public class CrawlSourceRunner {
     @jakarta.annotation.Resource private CrawlSourceMapper crawlSourceMapper;
     @jakarta.annotation.Resource private CrawlTaskMapper crawlTaskMapper;
     @jakarta.annotation.Resource private PdfTextNoticeParser pdfTextNoticeParser;
+    @jakarta.annotation.Resource private ApiFetchDriver apiFetchDriver;
 
     /** 执行一个采集源的一轮采集（同步；人工触发/调度调用；无批次上下文，任务不挂 jobId）。 */
     public RunSummary runSource(String sourceCode) {
@@ -113,7 +114,9 @@ public class CrawlSourceRunner {
             CategorySummary cs = new CategorySummary();
             cs.setName(config.getName());
             try {
-                if ("QYZB_JSON".equals(config.getParser())) {
+                if (config.getApiConfig() != null) {
+                    runApiCategory(source, config, cs, seenUrlHashes, jobId);
+                } else if ("QYZB_JSON".equals(config.getParser())) {
                     runQyzCategory(source, config, cs, seenUrlHashes, jobId);
                 } else {
                     runHtmlCategory(source, config, cs, seenUrlHashes, jobId);
@@ -133,6 +136,78 @@ public class CrawlSourceRunner {
         return summary;
     }
 
+    // ==================== API 源栏目：配置驱动列表直取（ApiFetchDriver） ====================
+    /**
+     * API 源栏目（entry 栏目对象带 apiConfig）：按 api_config_json 分页直取 JSON 列表，
+     * 窗口/停页/去重/频控语义与 QYZB/HTML 源一致；行自带全文（contentHtml 映射）→ 直采入库，
+     * 不带全文 → 仅统计 fetched 不 ingest（详情抓取由后续异步链路落任务承担）。
+     * 支持公共服务平台通行形态：GET/POST + 静态鉴权头 + 分页参数 + rowsPath/字段映射（设计 v1.0 §四）。
+     */
+    private void runApiCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen, Long jobId) throws Exception {
+        ApiFetchConfig api = ApiFetchConfig.parse(config.getApiConfig());
+        if (api == null || api.getUrl() == null) {
+            throw new IllegalStateException("栏目 apiConfig 非法（缺 url）");
+        }
+        int maxPages = effectiveMaxPages(config);
+        LocalDate cutoff = lookbackCutoff(config);
+        for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
+            List<NoticeParseResult.ListEntry> entries;
+            try {
+                java.util.Map<String, String> vars = new java.util.HashMap<>();
+                if (config.getCategoryId() != null) { vars.put("categoryId", config.getCategoryId()); }
+                if (config.getSiteId() != null) { vars.put("siteId", config.getSiteId()); }
+                entries = apiFetchDriver.fetchPage(api, pageNo, vars);
+            } catch (Exception e) {
+                cs.setError("API 拉取失败 page=" + pageNo + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+                throw e;
+            }
+            if (entries == null || entries.isEmpty()) {
+                break; // 空页：没有更多
+            }
+            boolean stopAfterPage = false;
+            for (NoticeParseResult.ListEntry entry : entries) {
+                if (outOfWindow(cutoff, entry.getDate())) {
+                    stopAfterPage = true;
+                    break;
+                }
+                cs.setFetched(cs.getFetched() + 1);
+                String urlHash = sha256Hex(entry.getUrl());
+                if (!seen.add(urlHash)) {
+                    continue; // 本轮已见
+                }
+                try {
+                    if (!StringUtils.hasText(entry.getContentHtml())) {
+                        cs.setFailed(cs.getFailed() + 1);
+                        recordTask(source, config, entry, "FAILED", "列表行无全文（详情抓取未接线，API 源需带 contentHtml 映射）", jobId);
+                        log.warn("[crawl][source={}] API 条目缺全文 url={}", source.getSourceCode(), entry.getUrl());
+                        continue;
+                    }
+                    ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
+                    dto.setSourceCode(source.getSourceCode());
+                    dto.setOrigUrl(entry.getUrl());
+                    dto.setTitle(entry.getTitle());
+                    dto.setContentType("HTML");
+                    dto.setContentHtml(entry.getContentHtml());
+                    dto.setNoticeTypeRaw(entry.getCategory());
+                    LocalDateTime publish = parseDate(entry.getDate());
+                    dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
+                    dto.setIssuerName(extractIssuer(entry.getContentHtml()));
+                    dto.setParserCode(config.getParser());
+                    externalNoticeIngestService.ingest(dto);
+                    cs.setIngested(cs.getIngested() + 1);
+                } catch (Exception e) {
+                    cs.setFailed(cs.getFailed() + 1);
+                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
+                    log.warn("[crawl][source={}] API 条目落库失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
+                }
+                sleep(entryDelayMs);
+            }
+            if (stopAfterPage || pageNo >= maxPages) {
+                break;
+            }
+            sleep(pageDelayMs); // 页间防封（5s）
+        }
+    }
     // ==================== 秦源：栏目 JSON 接口（全文直采） ====================
     /**
      * 秦源栏目 JSON 翻页采集（增量回溯见文档 §11）：
@@ -363,6 +438,8 @@ public class CrawlSourceRunner {
         private Integer fullLookbackDays;
         /** 本栏目单轮页上限（防封；启用回溯且未配时默认 10，未启用默认 1） */
         private Integer maxPages;
+        /** API 源栏目访问配置（JSON，可选：存在时按 ApiFetchDriver 直取列表，不再走 HTML/JSON parser 路径） */
+        private String apiConfig;
     }
 
     private List<CategoryConfig> parseConfigs(String entryUrlsJson) {
@@ -384,7 +461,9 @@ public class CrawlSourceRunner {
                     config.setLookbackDays(item.path("lookbackDays").isNumber() ? item.path("lookbackDays").asInt() : null);
                     config.setFullLookbackDays(item.path("fullLookbackDays").isNumber() ? item.path("fullLookbackDays").asInt() : null);
                     config.setMaxPages(item.path("maxPages").isNumber() ? item.path("maxPages").asInt() : null);
-                    if (config.getName() != null && (config.getCategoryId() != null || config.getListUrl() != null)) {
+                    JsonNode apiCfg = item.get("apiConfig");
+                    config.setApiConfig(apiCfg != null && !apiCfg.isNull() ? apiCfg.toString() : null);
+                    if (config.getName() != null && (config.getCategoryId() != null || config.getListUrl() != null || config.getApiConfig() != null)) {
                         configs.add(config);
                     }
                 }

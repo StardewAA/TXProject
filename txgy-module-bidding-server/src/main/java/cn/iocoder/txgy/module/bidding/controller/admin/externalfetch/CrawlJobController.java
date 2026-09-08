@@ -1,11 +1,11 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch;
 // 规范依据：设计文档 v0.6 §三（批次）；《招投标模块开发规范》§4.4
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobPageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobRespVO;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.CrawlJobService;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobRespVO;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;

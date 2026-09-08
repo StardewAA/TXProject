@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] QYZB 站点规则单元测试（合成秦源详情页结构：返回列表标题/发布时间/招标编号/招标人/推荐区）
 
 import org.junit.jupiter.api.Test;

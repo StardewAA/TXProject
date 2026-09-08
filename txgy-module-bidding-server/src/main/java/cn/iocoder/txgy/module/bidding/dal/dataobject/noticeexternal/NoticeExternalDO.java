@@ -28,7 +28,7 @@ public class NoticeExternalDO extends BaseDO {
     /** 主键（雪花 ID） */
     @TableId(type = IdType.ASSIGN_ID) // 雪花主键：表 id 无自增（见 DDL），显式注解压过全局 AUTO 策略
     private Long id;
-    /** 来源站配置 code（bidding_crawl_source.source_code） */
+    /** 来源站配置 code（bidding_fetch_source.source_code） */
     private String sourceCode;
     /** 来源站名称快照 */
     private String sourceName;

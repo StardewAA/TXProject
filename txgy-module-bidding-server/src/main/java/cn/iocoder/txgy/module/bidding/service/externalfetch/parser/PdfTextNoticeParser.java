@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] PDF 文本公告解析策略（PDF_TEXT_GENERIC）：文件上传通道（.pdf）→ 本地 PDFBox 抽取文本 → 字段启发；
 //       国信 e 采等以 PDF 为公告载体的站点可复用本抽取并固化为站点专用规则。
 

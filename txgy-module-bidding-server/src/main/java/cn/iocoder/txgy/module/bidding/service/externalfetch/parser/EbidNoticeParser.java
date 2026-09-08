@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 秦源电子招标平台（www.ebidding.com.cn）站点专用解析器（EBIDDING）：下载器阶段将按 source 路由到本解析器。
 //       站点专用规则（列表页/详情页结构、接口字段）待真实样本校准：当前版本基于通用抽取并输出校准提示，
 //       拿到样本后在本类内叠加站点规则（parse 内按 input.url/特征判断页面类型并定向抽取），不影响其它策略。

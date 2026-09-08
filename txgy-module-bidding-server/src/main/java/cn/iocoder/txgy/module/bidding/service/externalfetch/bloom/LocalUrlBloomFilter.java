@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.bloom;
 // 规范依据：设计文档 v0.6 §二/§四；评审诉求：布隆过滤（单节点默认实现）
 // 局限说明：Guava 位图为进程内实现 —— 重启丢失、多节点不共享；多实例部署请配置 bidding.ext-notice.bloom.type=redis（见 RedisUrlBloomFilter）
 

@@ -31,15 +31,15 @@
 ## 2. 源站跳转必须走 /go 中转（防开放重定向）
 
 - 端点：`GET /bidding/notice-external/go?url=<url>`（**公开免登 @PermitAll**，@TenantIgnore）→ 302 Location 到目标。
-- 守卫：目标必须 http(s) 且域名 ∈ **启用采集源**的 base_url 域名（含子域名）。若源在 `bidding_crawl_source` 里 `enabled=0`，或域名未配/换域名，跳转会 400 拒绝。
+- 守卫：目标必须 http(s) 且域名 ∈ **启用采集源**的 base_url 域名（含子域名）。若源在 `bidding_fetch_source` 里 `enabled=0`，或域名未配/换域名，跳转会 400 拒绝。
 - 前端约定：**所有外链（origUrl、附件 origDownloadUrl）一律拼 /go 中转**；不要把原始 URL 直接塞 window.open / a[href]。
-- 域名白名单配在哪：`bidding_crawl_source.base_url`（源启用时生效）。排查"跳不了"先看：a) 源是否 enabled=1；b) base_url 域名与实际公告域名一致（如 gx.e-bidding.org / qyzb.shccmg.com 各是各的源）。
+- 域名白名单配在哪：`bidding_fetch_source.base_url`（源启用时生效）。排查"跳不了"先看：a) 源是否 enabled=1；b) base_url 域名与实际公告域名一致（如 gx.e-bidding.org / qyzb.shccmg.com 各是各的源）。
 
 ## 3. 采集窗口：首跑全量（可配天数）→ 之后增量（同一接口，自动判定）
 
 ### 语义（2026-09-09 用户口径定版）
 - **只有一个入口**：`POST /bidding/crawl-source/run?sourceCode=xxx`（人工）与调度器 tick 走**同一条** `runNow` 逻辑。
-- **自动冷/热判定**：该源在 `bidding_crawl_job` 从未有过 `SUCCESS` 批次（=首次爬取，调度器无"上次爬到哪里"断点）→ 本次按**全量窗口**回溯补历史；一旦有 SUCCESS → 之后每次都按**增量小窗口**跑。
+- **自动冷/热判定**：该源在 `bidding_fetch_job` 从未有过 `SUCCESS` 批次（=首次爬取，调度器无"上次爬到哪里"断点）→ 本次按**全量窗口**回溯补历史；一旦有 SUCCESS → 之后每次都按**增量小窗口**跑。
 - 增量跑完会续写 SUCCESS（每轮都写），所以"跑了一次就转增量"：想再补历史只能等下次该源掉历史（不会自动发生），故首次全量务必让窗口覆盖到位。
 
 ### 窗口天数怎么配（都在 `entry_urls_json` 栏目级或全局配置）

@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.bidding.service.noticeexternal.ai;
-// 规范依据：设计文档 v0.6 §7（AI 解析能力由 AI 模块承载）；接入形态=AI 模块 chat 会话 REST（本地 ai-server mock-enable 免鉴权联调）
+// 规范依据：设计文档 v0.6 §7（AI 解析能力由 AI 模块承载）；外部信息获取 v1.0 §三（平台管理员 AI + 可调温度）；
+//           接入形态=AI 模块 chat 会话 REST（本地 ai-server mock-enable 免鉴权联调）
 
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -27,7 +28,8 @@ import java.time.Duration;
  *   <li>租户跟随：显式传 tenant-id=触发者租户（TenantContextHolder 优先），无上下文（定时/离线）时
  *       回退 bidding.ai.tenant-id 配置 —— 保证各租户的会话/消息落自己的库、用自己租户的渠道/key；</li>
  *   <li>鉴权：admin-token 非空时注入 Bearer（mock-enable 可空）；</li>
- *   <li>统一错误面：AI 模块 code!=0 抛 IOException（上层归类为 AI 调用失败）。</li>
+ *   <li>会话参数：bidding.ai.role-id（可选，平台管理员 AI 角色=模型/提示词）与 bidding.ai.temperature
+ *       （可选，覆盖会话默认；温度影响输出确定性与 md 代码块包裹倾向，联调可多次调参）在 createConversation 下发。</li>
  * </ol>
  */
 @Slf4j
@@ -51,6 +53,18 @@ public class AiHttpSupport {
     @Value("${bidding.ai.timeout-seconds:60}")
     private int timeoutSeconds;
 
+    /** 聊天角色 id（可选：指定平台管理员配置的 AI 角色=模型/提示词模板；空=ai-server 默认角色） */
+    @Value("${bidding.ai.role-id:}")
+    private Long roleId;
+
+    /** 会话温度（可选：空=不覆盖，沿用角色/会话默认；温度与输出确定性/md 包裹倾向相关，可调参调试） */
+    @Value("${bidding.ai.temperature:}")
+    private Double temperature;
+
+    /** 单条回复最大 token（可选；防长回复/失控输出） */
+    @Value("${bidding.ai.max-tokens:}")
+    private Integer maxTokens;
+
     /** 共享 ObjectMapper（AI 场景包复用） */
     public static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -65,10 +79,34 @@ public class AiHttpSupport {
         return current != null ? current : fallbackTenantId;
     }
 
-    /** 建默认会话（会话/消息/渠道按租户隔离；每次调用新建便于场景间不串上下文） */
+    /** 建默认会话（会话/消息/渠道按租户隔离；每次调用新建便于场景间不串上下文）。
+     *  可带 role-id（平台管理员 AI 角色）；创建后按 bidding.ai.temperature/max-tokens 覆盖会话参数。 */
     public String createConversation() throws IOException {
-        JsonNode node = callJson("POST", "/ai/chat/conversation/create-my", "{}");
-        return node.path("data").asText();
+        String createBody = roleId == null ? "{}" : "{\"roleId\":" + roleId + "}";
+        JsonNode node = callJson("POST", "/ai/chat/conversation/create-my", createBody);
+        String conversationId = node.path("data").asText();
+        applyConversationTuning(conversationId);
+        return conversationId;
+    }
+
+    /** 创建后按配置覆盖 temperature/maxTokens（ai-server 会话级参数：PUT /ai/chat/conversation/update-my；失败仅告警不阻断） */
+    private void applyConversationTuning(String conversationId) {
+        if (temperature == null && maxTokens == null) {
+            return;
+        }
+        try {
+            StringBuilder fields = new StringBuilder();
+            fields.append("\"id\":").append(conversationId);
+            if (temperature != null) {
+                fields.append(",\"temperature\":").append(temperature);
+            }
+            if (maxTokens != null) {
+                fields.append(",\"maxTokens\":").append(maxTokens);
+            }
+            callJson("PUT", "/ai/chat/conversation/update-my", "{" + fields + "}");
+        } catch (Exception e) {
+            log.warn("[applyConversationTuning][conv={}] 会话参数下发失败（忽略，沿用默认）: {}", conversationId, e.getMessage());
+        }
     }
 
     /** 发送一条消息（content 由调用方拼 system+user；返回 AI 文本应答） */
@@ -96,9 +134,14 @@ public class AiHttpSupport {
         if (StringUtils.hasText(adminToken)) {
             builder.header("Authorization", "Bearer " + adminToken.trim());
         }
-        HttpRequest request = method.equals("POST")
-                ? builder.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build()
-                : builder.GET().build();
+        HttpRequest request;
+        if ("POST".equals(method)) {
+            request = builder.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+        } else if ("PUT".equals(method)) {
+            request = builder.PUT(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+        } else {
+            request = builder.GET().build();
+        }
         try {
             HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             JsonNode node = MAPPER.readTree(resp.body());

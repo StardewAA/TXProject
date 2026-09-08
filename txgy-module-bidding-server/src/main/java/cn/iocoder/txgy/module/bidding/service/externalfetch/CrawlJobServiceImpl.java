@@ -1,12 +1,12 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // 规范依据：设计文档 v0.6 §三（批次/汇总）；《招投标模块开发规范》§4.2
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobPageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlJobDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlJobMapper;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;

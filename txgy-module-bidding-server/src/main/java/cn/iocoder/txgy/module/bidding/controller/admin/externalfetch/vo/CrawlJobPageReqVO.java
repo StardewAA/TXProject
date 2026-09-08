@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // 规范依据：设计文档 v0.6 §三（批次/汇总）；《招投标模块开发规范》§3.1（VO 规约）
 
 import cn.iocoder.txgy.framework.common.pojo.PageParam;

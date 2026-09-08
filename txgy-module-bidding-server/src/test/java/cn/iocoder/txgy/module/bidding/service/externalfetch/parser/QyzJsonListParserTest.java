@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 秦源栏目 JSON 解析：res.rows → entries（title/url 绝对化/日期/栏目）。
 
 import org.junit.jupiter.api.Test;

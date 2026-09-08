@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 国信e采（山西）gx.e-bidding.org 站点解析器（2026-09-07 真实样本校准）：
 //   列表页 category/iframe.html ul.newslist → entries；详情页 pdf.js iframe → PDF 直链（openFileById，双重 URL 编码）。
 

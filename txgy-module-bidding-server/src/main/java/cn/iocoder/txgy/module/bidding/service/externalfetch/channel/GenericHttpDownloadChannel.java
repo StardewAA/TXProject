@@ -1,12 +1,12 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.channel;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.channel;
 // [依据] 设计文档 v0.6 §四（通用下载器落地）：GENERIC 通道由占位升级为真实 HTTP 下载。
 // 参数以配置文件为准（bidding.crawl.http.*，CrawlHttpProperties）；HttpFetchClient 负责 GET/POST 抓取，
 // 本通道按任务 url 取响应并判定形态：2xx 文本(HTML/JSON) 直存 / 2xx 二进制(PDF) 落临时文件（供 PDFBox 解析）；
 // 非 2xx/网络异常抛错（计入重试），避免“假成功”。
 
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.infra.config.CrawlHttpProperties;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.HttpFetchClient;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

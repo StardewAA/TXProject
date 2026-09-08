@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.fetch;
 // [依据] 下载器 HTTP 抓取客户端（JDK HttpClient）：HTML/JSON(POST)/二进制 三通道；
 //       参数全部来自配置文件 bidding.crawl.http（CrawlHttpProperties），配置文件为准不改代码；
 //       与 DownloadChannelAdapter 的差异：本客户端为“抓取原文”，通道层负责按任务持久化策略。
@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Map;
 /**
  * 下载器 HTTP 客户端（读侧；单例复用连接，懒建）。
  *
@@ -76,6 +77,44 @@ public class HttpFetchClient {
         HttpResponse<String> response = send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (response.statusCode() != 200) {
             throw new IOException("POST " + url + " -> HTTP " + response.statusCode());
+        }
+        return response.body();
+    }
+
+    /** POST JSON + 自定义头（API 源鉴权：X-Client-Id/X-Signature 等静态头；见 ApiFetchDriver） */
+    public String postJsonWithHeaders(String url, String jsonBody, Map<String, String> headers) throws IOException {
+        HttpRequest.Builder builder = base(URI.create(url))
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json");
+        if (headers != null) {
+            headers.forEach((k, v) -> {
+                if (k != null && v != null) {
+                    builder.header(k, v);
+                }
+            });
+        }
+        HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8)).build();
+        HttpResponse<String> response = send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() != 200) {
+            throw new IOException("POST " + url + " -> HTTP " + response.statusCode());
+        }
+        return response.body();
+    }
+
+    /** GET 文本 + 自定义头（API 源鉴权头；见 ApiFetchDriver） */
+    public String getTextWithHeaders(String url, Map<String, String> headers) throws IOException {
+        HttpRequest.Builder builder = base(URI.create(url));
+        if (headers != null) {
+            headers.forEach((k, v) -> {
+                if (k != null && v != null) {
+                    builder.header(k, v);
+                }
+            });
+        }
+        HttpRequest request = builder.GET().build();
+        HttpResponse<String> response = send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() != 200) {
+            throw new IOException("GET " + url + " -> HTTP " + response.statusCode());
         }
         return response.body();
     }

@@ -1,19 +1,20 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourcePageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlSourceSaveReqVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlTaskMapper;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourcePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlSourceSaveReqVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.channel.ChannelRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.channel.ChannelRegistry;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -213,6 +214,84 @@ class CrawlSourceServiceImplTest {
         } catch (ServiceException e) {
             assertEquals(1_060_106_010, e.getCode());
         }
+    }
+
+
+    @Test
+    void create_apiTypeWithoutApiConfig_rejected() {
+        CrawlSourceSaveReqVO bad = req("SRC-API-1");
+        bad.setFetchType("API"); // API 源缺 api_config_json → 拒绝（防漏配静默空跑）
+        try {
+            service.createSource(bad);
+            fail("API 源缺接口配置应拒绝");
+        } catch (ServiceException e) {
+            assertEquals(1_060_106_027, e.getCode());
+        }
+        verify(sourceMapper, never()).insert(any(CrawlSourceDO.class));
+    }
+
+    @Test
+    void create_apiTypeWithInvalidConfigJson_rejected() {
+        CrawlSourceSaveReqVO bad = req("SRC-API-2");
+        bad.setFetchType("API");
+        bad.setApiConfigJson("not-json");
+        try {
+            service.createSource(bad);
+            fail("api_config_json 非 JSON 对象应拒绝");
+        } catch (ServiceException e) {
+            assertEquals(1_060_106_027, e.getCode());
+        }
+        verify(sourceMapper, never()).insert(any(CrawlSourceDO.class));
+    }
+
+    @Test
+    void create_unknownFetchType_rejected() {
+        CrawlSourceSaveReqVO bad = req("SRC-API-3");
+        bad.setFetchType("MQTT");
+        try {
+            service.createSource(bad);
+            fail("未知获取方式应拒绝");
+        } catch (ServiceException e) {
+            assertEquals(1_060_106_027, e.getCode());
+        }
+        verify(sourceMapper, never()).insert(any(CrawlSourceDO.class));
+    }
+
+    @Test
+    void create_apiTypeValid_insertsWithFields() {
+        AtomicLong ids = new AtomicLong();
+        doAnswer(inv -> {
+            CrawlSourceDO s = inv.getArgument(0);
+            s.setId(ids.incrementAndGet());
+            return 1;
+        }).when(sourceMapper).insert(any(CrawlSourceDO.class));
+        CrawlSourceSaveReqVO ok = req("SRC-API-4");
+        ok.setFetchType("API");
+        ok.setApiConfigJson("{\"method\":\"POST\",\"url\":\"https://api.example.gov.cn/list\",\"rowsPath\":\"data\"}");
+
+        Long id = service.createSource(ok);
+
+        assertEquals(1L, id);
+        ArgumentCaptor<CrawlSourceDO> captor = ArgumentCaptor.forClass(CrawlSourceDO.class);
+        verify(sourceMapper).insert(captor.capture());
+        assertEquals("API", captor.getValue().getFetchType());
+        assertEquals("{\"method\":\"POST\",\"url\":\"https://api.example.gov.cn/list\",\"rowsPath\":\"data\"}", captor.getValue().getApiConfigJson());
+    }
+
+    @Test
+    void create_fetchTypeOmitted_defaultsToCrawler() {
+        AtomicLong ids = new AtomicLong();
+        doAnswer(inv -> {
+            CrawlSourceDO s = inv.getArgument(0);
+            s.setId(ids.incrementAndGet());
+            return 1;
+        }).when(sourceMapper).insert(any(CrawlSourceDO.class));
+
+        service.createSource(req("SRC-DEF")); // 未声明 fetchType → 默认 CRAWLER（向后兼容存量配置）
+
+        ArgumentCaptor<CrawlSourceDO> captor = ArgumentCaptor.forClass(CrawlSourceDO.class);
+        verify(sourceMapper).insert(captor.capture());
+        assertEquals("CRAWLER", captor.getValue().getFetchType());
     }
 
 }

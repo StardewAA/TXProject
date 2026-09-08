@@ -1,14 +1,14 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 // [依据] 解析器测试服务：路由/载荷校验/类型归一/错误码 041~045 覆盖（Mockito，无 Spring）。
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParseTestRespVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlParserInfoRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParseTestRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlParserInfoRespVO;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParseResult;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParseInput;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.NoticeParser;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.parser.ParserRegistry;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParser;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;

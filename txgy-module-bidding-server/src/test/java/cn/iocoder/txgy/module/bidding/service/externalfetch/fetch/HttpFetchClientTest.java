@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.fetch;
 // [依据] 下载器 HTTP 客户端：GET/POST JSON/二进制与错误状态。
 
 import com.sun.net.httpserver.HttpServer;

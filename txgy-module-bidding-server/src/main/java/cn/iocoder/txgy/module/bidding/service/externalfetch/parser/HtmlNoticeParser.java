@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 通用 HTML 公告解析策略（HTML_GENERIC）：正文页面/HTML 文件均可；启发式抽取见 HtmlNoticeExtractor。
 
 import org.springframework.stereotype.Component;

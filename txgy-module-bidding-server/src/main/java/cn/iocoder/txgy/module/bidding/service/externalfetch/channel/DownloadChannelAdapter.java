@@ -1,7 +1,7 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.channel;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.channel;
 // 规范依据：设计文档 v0.6 §四/§15.6（下载器多通道、配置化不写死：ChannelAdapter 接口 = 通用实现 + 平台专属实现，均在本仓库 Java 内）
 
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 
 /**
  * 下载通道适配器 SPI。
@@ -11,7 +11,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
  */
 public interface DownloadChannelAdapter {
 
-    /** 通道 code（与 bidding_crawl_source.channel_code 对应） */
+    /** 通道 code（与 bidding_fetch_source.channel_code 对应） */
     String getChannelCode();
 
     /**

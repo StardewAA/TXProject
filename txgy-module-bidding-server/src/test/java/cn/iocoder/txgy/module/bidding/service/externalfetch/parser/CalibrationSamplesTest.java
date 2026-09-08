@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // 真实样本校准（样本位于仓库 docs/爬虫网站和测试数据/；文件缺失时自动跳过，不阻断常规构建）。
 // 依据样本：秦源(qyzb.shccmg.com) 详情 HTML×3 + 国信 e 采 PDF×1。
 

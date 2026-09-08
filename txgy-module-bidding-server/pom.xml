@@ -51,6 +51,11 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-protection</artifactId>
         </dependency>
+        <!-- Redis Stream 消息队列（下载异步化：生产发消息 / 消费 ACK，崩溃 pending 自动重投不丢任务） -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-mq</artifactId>
+        </dependency>
         <!-- 多节点布隆过滤（Redis 位图）依赖：显式声明（starter-protection 亦传递引入，声明以消除传递歧义） -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

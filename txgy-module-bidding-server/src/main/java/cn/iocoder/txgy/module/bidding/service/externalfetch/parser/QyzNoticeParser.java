@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 秦源招标电子招标平台（qyzb.shccmg.com）站点解析器（QYZB_SHCCMG）—— 规则基于 2026-09-07 真实详情页样本校准：
 //       页面 = 导航 + "详情 返回列表 {标题}" + "发布时间：yyyy-MM-dd" + 正文（标题 + （招标编号：xxx） + 一、…段）。
 //       输入可为原始 HTML 或浏览器"查看源代码"保存物（HtmlViewSourceDecoder 自动还原）。

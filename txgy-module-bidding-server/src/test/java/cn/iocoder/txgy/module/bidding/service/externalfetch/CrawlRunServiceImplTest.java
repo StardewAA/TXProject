@@ -1,10 +1,10 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
-// 依据：批次落库：runNow 每次执行生成 bidding_crawl_job（RUNNING→SUCCESS/PARTIAL/FAILED + summaryJson），jobId 透传 runner。
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
+// 依据：批次落库：runNow 每次执行生成 bidding_fetch_job（RUNNING→SUCCESS/PARTIAL/FAILED + summaryJson），jobId 透传 runner。
 
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlRunRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlJobDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlJobMapper;
-import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.CrawlSourceRunner;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlRunRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.CrawlSourceRunner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

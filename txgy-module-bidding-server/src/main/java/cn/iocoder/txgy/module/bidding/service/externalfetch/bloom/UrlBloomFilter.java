@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.bloom;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.bloom;
 // 规范依据：设计文档 v0.6 §二/§四（增量/去重判重）；安全/性能评审诉求：布隆过滤多节点化
 // 说明：本门面是采集 URL 指纹判重的抽象。语义（正确性由 DB 唯一键兜底，本组件只做加速）：
 //   1) mightContain=false ⇒ 一定未见过（布隆无假阴性）→ 调用方可免 DB 查询直插；

@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 文本型公告（PDF 抽取文本/纯文本）字段启发：标题行/编号/日期/招标人；规则类结果进 warnings。
 //       站点版式差异在站点专用解析器内固化（本工具=通用兜底）。
 

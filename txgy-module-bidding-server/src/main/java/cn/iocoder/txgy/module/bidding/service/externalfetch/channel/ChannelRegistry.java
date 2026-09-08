@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.channel;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.channel;
 // 规范依据：设计文档 v0.6 §四（多通道配置化不写死；channelCode 路由；平台专属 Adapter 可插拔）
 
 import jakarta.annotation.PostConstruct;

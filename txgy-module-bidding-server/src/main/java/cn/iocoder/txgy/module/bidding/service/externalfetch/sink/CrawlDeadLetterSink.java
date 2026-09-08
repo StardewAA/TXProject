@@ -1,7 +1,7 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.sink;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.sink;
 // 规范依据：设计文档 v0.6 §三/§15.4（死信转审核：crawl.audit 主题，重试>3 进人工/审核队列）
 
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 
 /**
  * 死信转审核出口（消息通道占位）。

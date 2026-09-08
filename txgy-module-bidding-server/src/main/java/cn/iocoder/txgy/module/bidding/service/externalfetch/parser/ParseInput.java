@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 解析器 SPI 输入：管理端测试（HTML/JSON 文本框或文件）与后续下载器管线共用同一入口；
 //       payloadType=FILE 时 fileName 参与类型推断（服务层先归一为 HTML/JSON 再交给解析器）。
 

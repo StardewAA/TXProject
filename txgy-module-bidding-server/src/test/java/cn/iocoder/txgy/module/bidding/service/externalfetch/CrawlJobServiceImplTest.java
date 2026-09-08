@@ -1,11 +1,11 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal;
+package cn.iocoder.txgy.module.bidding.service.externalfetch;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobPageReqVO;
-import cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo.CrawlJobRespVO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlJobDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlJobMapper;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlJobRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.junit.jupiter.api.BeforeEach;

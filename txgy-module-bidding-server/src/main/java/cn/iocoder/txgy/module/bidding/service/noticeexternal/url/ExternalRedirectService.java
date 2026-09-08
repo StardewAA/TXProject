@@ -2,8 +2,8 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal.url;
 // 规范依据：设计文档 v0.6 §九（开放重定向/外链协议白名单：下载目标 http(s)+IP 校验）；安全评审意见 2（外链中转+域名白名单）
 
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal.CrawlSourceDO;
-import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
+import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;

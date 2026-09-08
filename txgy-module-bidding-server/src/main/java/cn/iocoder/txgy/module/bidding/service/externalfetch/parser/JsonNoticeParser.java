@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 通用 JSON 公告解析策略（JSON_GENERIC）：站点 JSON API/导出数据；宽容键名映射见 JsonNoticeExtractor。
 
 import org.springframework.stereotype.Component;

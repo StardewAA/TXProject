@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.dal.dataobject.crawlexternal;
+package cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch;
 // 规范依据：设计文档 v0.6 §15.1（G 轨：平台级聚合无租户语义）；《招投标模块开发规范》五章
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
@@ -11,10 +11,10 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 采集批次（调度/人工跑批汇总）（G 轨）。表：bidding_crawl_job。
+ * 采集批次（调度/人工跑批汇总）（G 轨）。表：bidding_fetch_job。
  */
 @TenantIgnore // G 轨：表无 tenant_id 列，忽略租户拦截器（平台级数据，见 DO 注释）
-@TableName("bidding_crawl_job")
+@TableName("bidding_fetch_job")
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CrawlJobDO extends BaseDO {

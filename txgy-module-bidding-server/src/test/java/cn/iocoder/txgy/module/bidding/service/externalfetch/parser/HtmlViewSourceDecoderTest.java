@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] view-source 包装还原：line-content 行拼接 + 实体反转义。
 
 import org.junit.jupiter.api.Test;

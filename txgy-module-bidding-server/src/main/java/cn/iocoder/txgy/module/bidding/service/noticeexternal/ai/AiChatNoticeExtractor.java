@@ -42,25 +42,34 @@ public class AiChatNoticeExtractor implements AiNoticeExtractor {
     @Autowired
     private AiHttpSupport aiHttpSupport;
 
-    /** 行业判定口径（管道防腐保温行业）：与管道/储罐/装置/设备及其附属设施的
-     *  防腐蚀、保温、保冷、隔热 的 施工、维修、材料、检测 相关即 BELONGS */
-    private static final String INDUSTRY_RULE = "行业判定口径（管道防腐保温行业）：招标内容涉及 管道/储罐/装置/设备及附属设施的"
-            + "防腐蚀、保温、保冷、隔热 等的 施工、维修、材料供应、检测/验收 相关 → industryFlag=BELONGS；"
-            + "明显无关 → NOT_BELONGS；信息不足无法判断 → UNCERTAIN。";
+    /** 行业判定口径（管道防腐保温行业）——用户口径 2026-09-10：提示词必须显式定义"什么是管道防腐保温行业"。
+     *  界定：本行业指 金属管道/储罐/装置/设备（含其附属设施：支架、法兰、阀门、管件）在石化、化工、
+     *  电力、热力、燃气、给排水等工业场景下的 防腐蚀（涂装/衬里/阴极保护）与 保温/保冷/隔热（绝热层
+     *  施工/维修/材料供应/检测）工程。明确纳入：管道防腐、管道保温、储罐防腐、绝热工程、防腐保温材料、
+     *  阴极保护、涂装防腐。明确排除：建筑外墙保温/屋面保温、通用装修、非管道类设备制造（不含保温工序）、
+     *  单纯货物买卖（非防腐保温材料）。 */
+    private static final String INDUSTRY_RULE = "行业判定口径（管道防腐保温行业）定义："
+            + "本行业指金属管道/储罐/装置/设备及其附属设施（支架、法兰、阀门、管件）在工业场景（石化、化工、电力、热力、燃气、给排水等）"
+            + "下的防腐蚀工程（涂装防腐、衬里、阴极保护）与保温/保冷/隔热绝热工程（绝热层施工、维修、材料供应、检测验收）。"
+            + "→ 招标内容涉及【管道防腐、管道保温、储罐防腐、绝热工程、防腐保温材料、阴极保护、涂装防腐】等即 industryFlag=BELONGS；"
+            + "涉及【建筑外墙保温/屋面保温、通用装修、与管道无关的设备制造、非防腐保温材料的单纯货物买卖】等明确无关 → industryFlag=NOT_BELONGS；"
+            + "信息不足无法判断 → industryFlag=UNCERTAIN。";
 
-    /** 系统提示词：只输出 JSON，不输出任何解释文本 */
+    /** 系统提示词（2026-09-10 用户口径修订）：AI 只校验/输出结构化字段，不取正文——
+     *  不要求转写全文、不回传正文（正文由下载链路 FileApi 源文件保存，勿让模型复制正文）。 */
     private static final String SYSTEM_PROMPT = "你是招投标公告信息抽取与行业判定助手。"
-            + "只输出一个 JSON 对象（不要 markdown 代码块、不要任何解释文字），字段为："
+            + "输入给你【公告类型/标题/正文】，你只抽取并输出一个 JSON 对象（不要 markdown 代码块、不要任何解释文字、"
+            + "不要把正文原文复制回传），字段为："
             + "{\"title\":\"公告标题\",\"projectName\":\"项目名称\",\"tenderNo\":\"招标/采购编号\","
             + "\"budgetAmount\":\"预算金额（纯数字，元）\",\"bidOpenTime\":\"开标/递交截止时间\","
             + "\"issuer\":\"招标人/采购人\",\"contactPerson\":\"联系人\",\"contactPhone\":\"联系电话\","
             + "\"qualificationSummary\":\"资格要求摘要\","
-            + "\"noticeFullText\":\"公告全文逐字转写（若输入为扫描件图片/无文本则必须转写；已有文本输入时可填空串）\","
+            + "\"noticeFullText\":\"恒为空串（本模块不采集正文转写，正文由源文件保存）\","
             + "\"industryFlag\":\"BELONGS/NOT_BELONGS/UNCERTAIN 三选一\"," + "\"industryConfidence\":0~1 的判定置信度数字,"
             + "\"industryReason\":\"判定理由一句话\","
             + "\"industryHitKeywords\":[\"命中的行业关键词数组，未命中给空数组\"]}。"
             + INDUSTRY_RULE
-            + "缺失字段给 null 或空串，不要编造。";
+            + "正文里没有的字段给 null 或空串，不要编造。";
 
     @Override
     public String name() {

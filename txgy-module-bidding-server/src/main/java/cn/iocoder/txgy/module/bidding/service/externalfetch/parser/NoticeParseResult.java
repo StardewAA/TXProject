@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 解析结果=公告字段规范化模型（与 ingest DTO/主档列对齐：title/origUrl/跟踪键/时间/附件），
 //       叠加测试观测信息（status/warnings/meta/耗时）供解析器测试接口展示。
 

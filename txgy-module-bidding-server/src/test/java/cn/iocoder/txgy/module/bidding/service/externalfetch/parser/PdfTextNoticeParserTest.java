@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] PDF_TEXT_GENERIC 单元测试：注入 fake PdfContentExtractor（模拟 PDFBox 抽取文本），验证文本公告字段规则。
 
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.pdf.PdfExtractResult;

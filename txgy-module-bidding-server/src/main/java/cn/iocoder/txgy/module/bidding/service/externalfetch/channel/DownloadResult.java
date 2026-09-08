@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.channel;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.channel;
 // 规范依据：设计文档 v0.6 §四（原文先落存储：FileApi 或本地存储按部署；三形态内容引用）
 
 import lombok.Data;

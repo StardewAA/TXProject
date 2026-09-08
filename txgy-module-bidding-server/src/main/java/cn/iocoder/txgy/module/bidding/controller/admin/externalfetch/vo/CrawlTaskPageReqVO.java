@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.controller.admin.crawlexternal.vo;
+package cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo;
 // 规范依据：设计文档 v0.6 §三（task 状态机/重试）；《招投标模块开发规范》§3.1（VO 规约）
 
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
@@ -16,7 +16,7 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @EqualsAndHashCode(callSuper = true)
 public class CrawlTaskPageReqVO extends PageParam {
 
-    @Schema(description = "所属批次 ID（bidding_crawl_job.id）")
+    @Schema(description = "所属批次 ID（bidding_fetch_job.id）")
     private Long jobId;
 
     @Schema(description = "源代码（精确）")

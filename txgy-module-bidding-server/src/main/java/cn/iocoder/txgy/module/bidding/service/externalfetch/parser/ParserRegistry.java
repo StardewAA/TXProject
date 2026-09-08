@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.bidding.service.crawlexternal.parser;
+package cn.iocoder.txgy.module.bidding.service.externalfetch.parser;
 // [依据] 与 ChannelRegistry 同构：构造注入自动收集全部 NoticeParser Bean，按 parserCode 路由；
 //       重复 code 启动即失败；未知 code 明确报错（防配置错乱静默走错解析器）。
 
