@@ -542,4 +542,35 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         }
     }
 
+
+    @Override
+    public byte[] pdfContent(Long id) {
+        NoticeExternalDO notice = noticeExternalMapper.selectById(id);
+        if (notice == null) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
+        }
+        if (!"PDF".equalsIgnoreCase(notice.getContentType()) || !StringUtils.hasText(notice.getPdfDownloadUrl())) {
+            return null; // 非 PDF 或无归档：调用方按 404 处理
+        }
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                    .build();
+            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(notice.getPdfDownloadUrl()))
+                    .timeout(java.time.Duration.ofSeconds(60))
+                    .GET().build();
+            java.net.http.HttpResponse<byte[]> resp = client.send(req,
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+            if (resp.statusCode() == 200 && resp.body() != null) {
+                return resp.body();
+            }
+            log.warn("[pdfContent][id={}] 文件服务返回 HTTP {}", id, resp.statusCode());
+            return null;
+        } catch (Exception e) {
+            log.warn("[pdfContent][id={}] PDF 获取失败: {}", id, e.getMessage());
+            return null;
+        }
+    }
+
 }

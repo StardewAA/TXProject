@@ -82,4 +82,10 @@ public interface NoticeExternalService {
      */
     String backfillPdfDownloadUrls();
 
+    /**
+     * PDF 预览：按公告 id 取归档 PDF（pdf_download_url），转发文件字节与 Content-Type。
+     * 前端 iframe/embed 直接预览；返回 null=非 PDF 形态或无归档（调用方 404）。
+     */
+    byte[] pdfContent(Long id);
+
 }

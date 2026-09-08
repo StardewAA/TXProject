@@ -35,6 +35,8 @@ public class CrawlTaskDispatchServiceImpl implements CrawlTaskDispatchService {
     private RedisMQTemplate redisMQTemplate;
     @Resource
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper noticeExternalMapper;
 
     @Override
     public Long enqueue(Long jobId, String sourceCode, String parserCode, NoticeParseResult.ListEntry entry) {
@@ -43,6 +45,13 @@ public class CrawlTaskDispatchServiceImpl implements CrawlTaskDispatchService {
         }
         String url = entry.getUrl().trim();
         String urlHash = sha256Hex(url);
+        // 2026-09-09 修复：已入库公告（orig_url_hash 命中）不再重复投递——历史 URL 入队会占满队列拖死调度（幂等跳过也要排队）
+        Long existing = noticeExternalMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO>()
+                .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO::getOrigUrlHash, urlHash));
+        if (existing != null && existing > 0) {
+            log.debug("[enqueue][urlHash={}] 已在公告库（幂等），跳过投递 url={}", urlHash, url);
+            return null; // 不占队列：已抓过的不重投（内容更新检测由增量窗口重扫+contentHash 另议）
+        }
         Long taskId = crawlTaskService.createTaskIfAbsent(jobId, sourceCode, url, urlHash,
                 "GENERIC", parserCode, 0);
         if (taskId == null) {

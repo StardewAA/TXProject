@@ -27,6 +27,7 @@ class CrawlTaskDispatchServiceImplTest {
     private CrawlTaskMapper taskMapper;
     private RedisMQTemplate mq;
     private CrawlTaskDispatchServiceImpl service;
+    private cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper noticeExternalMapper;
 
     @BeforeEach
     void setUp() {
@@ -37,6 +38,9 @@ class CrawlTaskDispatchServiceImplTest {
         ReflectionTestUtils.setField(service, "crawlTaskService", taskService);
         ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
         ReflectionTestUtils.setField(service, "redisMQTemplate", mq);
+        noticeExternalMapper = mock(cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper.class);
+        ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
+        when(noticeExternalMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L); // 默认未入库 → 投递
     }
 
     private NoticeParseResult.ListEntry entry() {
