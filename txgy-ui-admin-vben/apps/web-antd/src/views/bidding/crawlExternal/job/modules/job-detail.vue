@@ -17,6 +17,7 @@ import { Descriptions, Drawer, message, Tag } from 'ant-design-vue';
 import { fetchCrawlTaskPage, getCrawlJob, getCrawlTask } from '#/api/bidding/crawlExternal';
 
 import { JOB_STATUS_MAP, TASK_STATUS_MAP, TRIGGER_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
+import TaskChainView from '../../console/modules/task-chain.vue';
 
 const open = ref(false);
 const loading = ref(false);
@@ -163,27 +164,14 @@ defineExpose({ openJob });
         </div>
       </div>
 
-      <!-- 层3：选中任务过程区域（就地展开，不嵌套 Drawer） -->
+      <!-- 层3：纵向数据链（点选批内任务 → 就地完整链 ①URL→②获取方式→③原始载荷→④解析→⑤执行→⑥产出；复用 TaskChainView，非静态字段陈列） -->
       <div v-if="selTask" class="ind-panel" style="margin-top: 14px">
         <div class="ind-panel-h">
-          <span class="ind-panel-t">任务过程</span>
-          <span class="ind-panel-meta">任务 #{{ String(selTask.id) }} · 回读 getCrawlTask 明细</span>
+          <span class="ind-panel-t">纵向数据链</span>
+          <span class="ind-panel-meta">任务 #{{ String(selTask.id) }} · payload/API配置原始数据可全屏</span>
         </div>
         <div class="ind-panel-b">
-          <div v-if="selTaskLoading" class="jd-hint">明细回读中…</div>
-          <Descriptions v-else :column="2" size="small" bordered>
-            <Descriptions.Item label="状态">
-              <Tag v-if="tagOf(TASK_STATUS_MAP, selTaskFull?.status || selTask.status)" :color="tagOf(TASK_STATUS_MAP, selTaskFull?.status || selTask.status)!.color">{{ tagOf(TASK_STATUS_MAP, selTaskFull?.status || selTask.status)!.text }}</Tag>
-              <span v-else>—</span>
-            </Descriptions.Item>
-            <Descriptions.Item label="源 / 通道">{{ selTaskFull?.sourceCode || selTask.sourceCode || '—' }} / {{ selTaskFull?.channelCode || selTask.channelCode || '—' }}</Descriptions.Item>
-            <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ selTaskFull?.url || selTask.url || '—' }}</span></Descriptions.Item>
-            <Descriptions.Item label="解析器">{{ selTaskFull?.parserCode || selTask.parserCode || '（按 URL 规则自动匹配）' }}</Descriptions.Item>
-            <Descriptions.Item label="尝试">{{ selTaskFull?.attempt ?? selTask.attempt ?? '—' }}</Descriptions.Item>
-            <Descriptions.Item label="worker">{{ selTaskFull?.workerId || selTask.workerId || '—' }}</Descriptions.Item>
-            <Descriptions.Item label="开始 / 完成">{{ fmtDt(selTaskFull?.startedAt || selTask.startedAt) }} / {{ fmtDt(selTaskFull?.finishedAt || selTask.finishedAt) }}</Descriptions.Item>
-            <Descriptions.Item label="消息 / 错误" :span="2"><span class="break-all">{{ selTaskFull?.message || selTask.message || '—' }}</span></Descriptions.Item>
-          </Descriptions>
+          <TaskChainView :task="selTask" :show-same-batch="false" :allow-retry="false" />
         </div>
       </div>
     </template>
