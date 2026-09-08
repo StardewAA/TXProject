@@ -176,6 +176,19 @@ spring:
                 - Path=/admin-api/crm/**
               filters:
                 - RewritePath=/admin-api/crm/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            ## bidding-server 服务（招投标）
+            - id: bidding-admin-api # 路由的编号
+              uri: grayLb://bidding-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/bidding/**
+              filters:
+                - RewritePath=/admin-api/bidding/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            - id: bidding-app-api # 路由的编号（门户/大厅）
+              uri: grayLb://bidding-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/app-api/bidding/**
+              filters:
+                - RewritePath=/app-api/bidding/v3/api-docs, /v3/api-docs
             ## ai-server 服务
             - id: ai-admin-api # 路由的编号
               uri: grayLb://ai-server
@@ -229,6 +242,13 @@ spring:
                 - Path=/admin-api/fms/**
               filters:
                 - RewritePath=/admin-api/fms/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            ## bidding-server 服务（外部公告 notice-external 审核等；txgy_bidding 独立工程）
+            - id: bidding-admin-api # 路由的编号
+              uri: grayLb://bidding-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/bidding/**
+              filters:
+                - RewritePath=/admin-api/bidding/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
           x-forwarded:
             prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
           default-filters:
@@ -306,6 +326,9 @@ knife4j:
       - name: fms-server
         service-name: fms-server
         url: /admin-api/fms/v3/api-docs
+      - name: bidding-server
+        service-name: bidding-server
+        url: /admin-api/bidding/v3/api-docs
 
 --- #################### OPENLAB BS相关配置 ####################
 
