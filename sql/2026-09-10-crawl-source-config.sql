@@ -36,3 +36,12 @@ VALUES (690010002, 'GX', '国信e采（山西）', 'https://gx.e-bidding.org', N
 ON DUPLICATE KEY UPDATE source_name = VALUES(source_name), base_url = VALUES(base_url),
  entry_urls_json = VALUES(entry_urls_json), parser_code_default = VALUES(parser_code_default),
  fetch_interval_seconds = VALUES(fetch_interval_seconds);
+-- ============================================================================
+-- 增量回溯启用（2026-09-08，文档 爬虫解析器插件化架构与测试接口.md §11）
+-- 变更公告栏目放开时间窗口回溯：lookbackDays=1（补齐近 1 天含当天全部公告，翻页直到
+--   出现早于窗口的条目/空页/页上限）；maxPages=5（单轮单栏目页上限，防封兜底）。
+-- 其他栏目放开 = 在该栏目对象上追加 "lookbackDays":1,"maxPages":5。
+-- ============================================================================
+UPDATE bidding_crawl_source
+SET entry_urls_json = '[{"name":"变更公告","parser":"QYZB_JSON","categoryId":"205","siteId":"725","lookbackDays":1,"maxPages":5}]'
+WHERE source_code = 'QYZB' AND deleted = b'0';

@@ -44,8 +44,12 @@ public class CrawlSourceRunner {
     private static final String QYZB_API = "https://qyzb.shccmg.com/cms/api/dynamicData/queryContentPage";
     /** 源内条目抓取间隔（毫秒，防封） */
     private static final long ENTRY_DELAY_MS = 1500L;
-    /** v1：每栏目每轮取第一页（最新 10 条；增量/多页演进见文档 §11） */
-    private static final int MAX_PAGES_PER_CATEGORY = 1;
+    /** 页间抓取间隔（毫秒，防封：多页回溯时每页之间再等一拍，避免突发高频请求） */
+    private static final long PAGE_DELAY_MS = 1500L;
+    /** 启用增量回溯（lookbackDays>0）且未显式配置 maxPages 时的页上限（单栏目单轮，防失控） */
+    private static final int DEFAULT_LOOKBACK_MAX_PAGES = 10;
+    /** 未启用回溯：保持 v1 行为——每栏目每轮仅取第一页（最新 pageSize 条）。增量回溯机制见文档 §11 */
+    private static final int SINGLE_PAGE_LIMIT = 1;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -95,8 +99,15 @@ public class CrawlSourceRunner {
     }
 
     // ==================== 秦源：栏目 JSON 接口（全文直采） ====================
+    /**
+     * 秦源栏目 JSON 翻页采集（增量回溯见文档 §11）：
+     * 启用 lookbackDays 时按发布时间窗口逐页回溯——页内出现早于窗口起点的条目即停（列表倒序，其后页必然更老）；
+     * 未启用时保持 v1 单页行为。窗口外条目不采集（视为已被历史轮次覆盖）。
+     */
     private void runQyzCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen) throws Exception {
-        for (int pageNo = 1; pageNo <= MAX_PAGES_PER_CATEGORY; pageNo++) {
+        int maxPages = effectiveMaxPages(config);
+        LocalDate cutoff = lookbackCutoff(config);
+        for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
             String body = mapper.writeValueAsString(Map.of(
                     "pageNo", pageNo,
                     "pageSize", config.getPageSize() == null ? 10 : config.getPageSize(),
@@ -105,11 +116,16 @@ public class CrawlSourceRunner {
             String json = httpFetchClient.postJson(QYZB_API, body);
             NoticeParseResult result = parserRegistry.get("QYZB_JSON").parse(inputOf("JSON", json, null));
             List<NoticeParseResult.ListEntry> entries = result.getEntries();
-            cs.setFetched(cs.getFetched() + (entries == null ? 0 : entries.size()));
             if (entries == null || entries.isEmpty()) {
-                break;
+                break; // 空页：没有更多
             }
+            boolean stopAfterPage = false;
             for (NoticeParseResult.ListEntry entry : entries) {
+                if (outOfWindow(cutoff, entry.getDate())) {
+                    stopAfterPage = true; // 页内出现早于窗口的条目 → 其后（更老）页无需再翻
+                    break;
+                }
+                cs.setFetched(cs.getFetched() + 1);
                 try {
                     if (ingestQyzEntry(source.getSourceCode(), entry, seen)) {
                         cs.setIngested(cs.getIngested() + 1);
@@ -121,7 +137,10 @@ public class CrawlSourceRunner {
                 }
                 sleep(ENTRY_DELAY_MS);
             }
-            break; // v1 每栏目第一页
+            if (stopAfterPage || pageNo >= maxPages) {
+                break;
+            }
+            sleep(PAGE_DELAY_MS); // 页间防封
         }
     }
 
@@ -150,31 +169,59 @@ public class CrawlSourceRunner {
     }
 
     // ==================== 国信（HTML 列表 → 详情 PDF） ====================
+    /**
+     * 国信（HTML 列表 → 详情 PDF）翻页采集（增量回溯见文档 §11）：
+     * 列表 URL 为 page=N 服务端分页，翻页=改写 page 参数；停页/窗口语义同秦源 JSON 驱动。
+     */
     private void runHtmlCategory(CrawlSourceDO source, CategoryConfig config, CategorySummary cs, Set<String> seen) throws Exception {
         String listUrl = config.getListUrl();
         if (!StringUtils.hasText(listUrl)) {
             throw new IllegalStateException("栏目配置缺 listUrl");
         }
-        String html = httpFetchClient.getText(listUrl);
-        NoticeParseResult result = parserRegistry.get("GX_E_BIDDING").parse(inputOf("HTML", html, listUrl));
-        List<NoticeParseResult.ListEntry> entries = result.getEntries();
-        cs.setFetched(entries == null ? 0 : entries.size());
-        if (entries == null || entries.isEmpty()) {
-            cs.setError("列表无条目（可能为栏目壳页，检查 listUrl）");
-            return;
-        }
-        for (NoticeParseResult.ListEntry entry : entries) {
-            try {
-                if (ingestGxEntry(source.getSourceCode(), entry, seen)) {
-                    cs.setIngested(cs.getIngested() + 1);
+        int maxPages = effectiveMaxPages(config);
+        LocalDate cutoff = lookbackCutoff(config);
+        for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
+            String pageUrl = pageNo == 1 ? listUrl : bumpPageParam(listUrl, pageNo);
+            String html = httpFetchClient.getText(pageUrl);
+            NoticeParseResult result = parserRegistry.get("GX_E_BIDDING").parse(inputOf("HTML", html, pageUrl));
+            List<NoticeParseResult.ListEntry> entries = result.getEntries();
+            if (entries == null || entries.isEmpty()) {
+                if (pageNo == 1) {
+                    cs.setError("列表无条目（可能为栏目壳页，检查 listUrl）");
                 }
-            } catch (Exception e) {
-                cs.setFailed(cs.getFailed() + 1);
-                recordTask(source, config, entry, "FAILED", e.getMessage());
-                log.warn("[crawl][source={}] 国信条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
+                break;
             }
-            sleep(ENTRY_DELAY_MS);
+            boolean stopAfterPage = false;
+            for (NoticeParseResult.ListEntry entry : entries) {
+                if (outOfWindow(cutoff, entry.getDate())) {
+                    stopAfterPage = true;
+                    break;
+                }
+                cs.setFetched(cs.getFetched() + 1);
+                try {
+                    if (ingestGxEntry(source.getSourceCode(), entry, seen)) {
+                        cs.setIngested(cs.getIngested() + 1);
+                    }
+                } catch (Exception e) {
+                    cs.setFailed(cs.getFailed() + 1);
+                    recordTask(source, config, entry, "FAILED", e.getMessage());
+                    log.warn("[crawl][source={}] 国信条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
+                }
+                sleep(ENTRY_DELAY_MS);
+            }
+            if (stopAfterPage || pageNo >= maxPages) {
+                break;
+            }
+            sleep(PAGE_DELAY_MS); // 页间防封
         }
+    }
+
+    /** 翻页：把 listUrl 中 page=N 替换为 page=pageNo（未带 page 参数则原样返回，仅单页）。 */
+    private static String bumpPageParam(String listUrl, int pageNo) {
+        if (pageNo <= 1 || !StringUtils.hasText(listUrl)) {
+            return listUrl;
+        }
+        return listUrl.replaceAll("([?&]page=)\\d+", "$1" + pageNo);
     }
 
     /** 国信条目：详情页 → pdf.js 直链 → 下载 PDF → 文本解析 → 落库（PDF 形态；fileId 待 FileApi P2 回填） */
@@ -250,6 +297,10 @@ public class CrawlSourceRunner {
         private String siteId;
         private Integer pageSize;
         private String listUrl;
+        /** 增量回溯窗口（天）：>0 时按发布时间窗口翻页补齐窗口内公告（文档 §11）；缺省不启用 */
+        private Integer lookbackDays;
+        /** 本栏目单轮页上限（防封；启用回溯且未配时默认 10，未启用默认 1） */
+        private Integer maxPages;
     }
 
     private List<CategoryConfig> parseConfigs(String entryUrlsJson) {
@@ -268,6 +319,8 @@ public class CrawlSourceRunner {
                     config.setSiteId(textOf(item, "siteId"));
                     config.setPageSize(item.path("pageSize").isNumber() ? item.path("pageSize").asInt() : null);
                     config.setListUrl(textOf(item, "listUrl"));
+                    config.setLookbackDays(item.path("lookbackDays").isNumber() ? item.path("lookbackDays").asInt() : null);
+                    config.setMaxPages(item.path("maxPages").isNumber() ? item.path("maxPages").asInt() : null);
                     if (config.getName() != null && (config.getCategoryId() != null || config.getListUrl() != null)) {
                         configs.add(config);
                     }
@@ -332,6 +385,39 @@ public class CrawlSourceRunner {
             return name.substring(0, Math.max(2, cut)).trim();
         }
         return null;
+    }
+
+    /** 单栏目单轮页上限：显式 maxPages 优先；启用回溯且未配 → 默认 10；未启用回溯 → 1（v1 行为） */
+    private int effectiveMaxPages(CategoryConfig config) {
+        if (config.getMaxPages() != null) {
+            return Math.max(1, config.getMaxPages());
+        }
+        boolean lookback = config.getLookbackDays() != null && config.getLookbackDays() > 0;
+        return lookback ? DEFAULT_LOOKBACK_MAX_PAGES : SINGLE_PAGE_LIMIT;
+    }
+
+    /** 窗口起点（含当天向前 lookbackDays 天）；未启用回溯返回 null（不过滤） */
+    private static LocalDate lookbackCutoff(CategoryConfig config) {
+        if (config.getLookbackDays() == null || config.getLookbackDays() <= 0) {
+            return null;
+        }
+        return LocalDate.now().minusDays(config.getLookbackDays());
+    }
+
+    /**
+     * 条目是否早于窗口起点：早于 → 视为已被历史轮次覆盖（不采集，且其后页必然更老 → 停）；
+     * 无日期/日期不可解析 → 保守视为窗口内（宁多采靠 ingest origUrlHash 幂等去重，不丢数据）。
+     */
+    private static boolean outOfWindow(LocalDate cutoff, String date) {
+        if (cutoff == null || !StringUtils.hasText(date)) {
+            return false;
+        }
+        try {
+            LocalDate parsed = LocalDate.parse(date.trim().substring(0, 10));
+            return parsed.isBefore(cutoff);
+        } catch (RuntimeException e) {
+            return false; // 不可解析：不拦截
+        }
     }
 
     private static LocalDateTime parseDate(String date) {
