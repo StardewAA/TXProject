@@ -3,10 +3,42 @@ import { NoticeApi } from '#/api/bidding/notice';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag } from 'ant-design-vue';
+import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
+import { uploadFile } from '#/api/infra/file';
+import NoticeHtmlView from './NoticeHtmlView.vue';
 
 import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 const createMessage = message;
+
+/* PDF 版式上传（infra 文件服务：保存只带 file_id；对外 URL 由业务系统按可见性签发） */
+const pdfUploading = ref(false);
+const pdfFileName = ref('');
+const pdfSize = ref<number>();
+const payloadText = ref('');
+const fmtBytes = (n?: number): string => {
+  if (n === undefined || n === null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+};
+async function onPdfBeforeUpload(file: File): Promise<boolean> {
+  if (!/\.pdf$/i.test(file.name)) { createMessage.warning('仅支持 PDF 文件'); return false; }
+  pdfUploading.value = true;
+  try {
+    const res = await uploadFile({ file, directory: 'bidding/notice' });
+    const id = (res as unknown as { id?: number }).id;
+    if (id === undefined) throw new Error('上传未返回 file_id');
+    form.pdfFileId = id;
+    pdfFileName.value = file.name;
+    pdfSize.value = file.size;
+    createMessage.success('版式文件已上传：file_id=' + id);
+  } catch (e) {
+    createMessage.error('上传失败：' + ((e as Error).message || String(e)));
+  } finally {
+    pdfUploading.value = false;
+  }
+  return false;
+}
 
 const loading = ref(false);
 const rows = ref<NoticeApi.Row[]>([]);
@@ -73,6 +105,9 @@ const openCreate = () => {
   form.internalFlag = false;
   form.content = '';
   form.pdfFileId = undefined;
+  payloadText.value = '';
+  pdfFileName.value = '';
+  pdfSize.value = undefined;
   editorOpen.value = true;
 };
 const openEdit = async (row: NoticeApi.Row) => {
@@ -89,6 +124,9 @@ const openEdit = async (row: NoticeApi.Row) => {
   form.internalFlag = !!d.internalFlag;
   form.content = d.content || '';
   form.pdfFileId = d.pdfFileId;
+  pdfSize.value = typeof d.pdfSize === 'number' ? d.pdfSize : undefined;
+  pdfFileName.value = '';
+  try { payloadText.value = d.payload ? JSON.stringify(d.payload, null, 1) : ''; } catch { payloadText.value = ''; }
   editorOpen.value = true;
 };
 const editorTitle = computed(() => (editId.value === undefined ? '新建公告（草稿入库）' : '编辑公告'));
@@ -96,6 +134,16 @@ function saveEditor() {
   if (!form.title.trim()) { createMessage.warning('请填写公告名称'); return; }
   if (!form.noticeType) { createMessage.warning('请选择公告类型'); return; }
   if (form.internalFlag && form.publicLevel === 'GOVERNMENT') { createMessage.warning('企业内部公告请勿选择政府公开级别'); return; }
+  if (payloadText.value.trim()) {
+    try {
+      form.payload = JSON.parse(payloadText.value) as Record<string, unknown>;
+    } catch {
+      createMessage.warning('权威数据集 payload 不是合法 JSON，请检查后重试');
+      return;
+    }
+  } else {
+    form.payload = undefined;
+  }
   editorSaving.value = true;
   const submit = async () => {
     try {
@@ -169,11 +217,6 @@ async function openDetail(row: NoticeApi.Row) {
   detail.value = undefined;
   try { detail.value = await fetchNoticeDetail(row.id!); } catch (e) { createMessage.error((e as Error).message || String(e)); }
 }
-const payloadEntries = computed(() => {
-  const p = detail.value?.payload;
-  if (!p) return [];
-  return Object.entries(p).map(([k, v]) => ({ k, v: v === null || v === undefined ? '' : String(v) }));
-});
 
 onMounted(load);
 </script>
@@ -291,11 +334,23 @@ onMounted(load);
           <Input.TextArea v-model:value="form.content" :rows="8" placeholder="公告正文全文…" />
         </div>
         <div class="col-span-2">
-          <div class="mb-1 text-xs font-medium text-gray-600">PDF 原文件 file_id（发布前必填；文件服务就绪前可先留空，届时发布将提示）</div>
-          <Input v-model:value="form.pdfFileId" placeholder="infra file 主键（数字）" style="width: 260px" />
+          <div class="mb-1 flex items-center gap-3 text-xs font-medium text-gray-600">
+            <span>公告版式文件（PDF，发布前必填）— 文件服务上传，保存只带 file_id；URL 由业务系统按可见性签发</span>
+            <Upload :show-upload-list="false" accept=".pdf" :before-upload="onPdfBeforeUpload">
+              <Button size="small" :loading="pdfUploading">{{ form.pdfFileId !== undefined ? '重新上传 PDF' : '上传 PDF' }}</Button>
+            </Upload>
+          </div>
+          <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
+            file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
+            <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
+          </div>
         </div>
-        <div class="col-span-2 rounded bg-orange-50 px-3 py-2 text-xs text-orange-600">
-          权威数据集 payload（必填字段全集）暂未在表单展开：草稿阶段无碍，发布前请通过详情核对字段完整性或由后端默认补 null。
+        <div class="col-span-2">
+          <div class="mb-1 flex items-center justify-between text-xs font-medium text-gray-600">
+            <span>权威数据集字段 payload（key=规范英文名，JSON 对象）</span>
+            <span class="font-normal text-orange-500">发布时按数据集规整：缺失补 null、未知键剔除；字典接口落地后改动态表单</span>
+          </div>
+          <Input.TextArea v-model:value="payloadText" :rows="5" placeholder='{"TENDER_PROJECT_CODE":"…","NOTICE_NAME":"…"}' />
         </div>
         <div class="col-span-2 text-right">
           <Space>
@@ -321,18 +376,8 @@ onMounted(load);
           <div>发布时间：{{ fmtT(detail.publishTime) }}</div>
           <div>公开级别：{{ detail.publicLevel || '—' }}<span v-if="detail.internalFlag">（内部）</span></div>
         </div>
-        <div class="mb-2 rounded-md border border-gray-100 p-3">
-          <div class="mb-1 text-xs font-semibold text-gray-500">结构化字段（权威数据集 payload）</div>
-          <div v-if="!payloadEntries.length" class="text-xs text-gray-300">（无）</div>
-          <div v-for="e in payloadEntries.slice(0, 40)" :key="e.k" class="flex gap-2 border-b border-gray-50 py-1 text-xs">
-            <span class="w-44 shrink-0 break-all font-mono text-gray-400">{{ e.k }}</span>
-            <span class="break-all text-gray-700">{{ e.v }}</span>
-          </div>
-          <div v-if="payloadEntries.length > 40" class="mt-1 text-xs text-gray-300">… 共 {{ payloadEntries.length }} 个字段</div>
-        </div>
         <div class="rounded-md border border-gray-100 p-3">
-          <div class="mb-1 text-xs font-semibold text-gray-500">正文（v{{ detail.contentVersion ?? '—' }}）</div>
-          <pre class="whitespace-pre-wrap break-words text-xs text-gray-700" style="font-family: inherit">{{ detail.content || '（无正文）' }}</pre>
+          <NoticeHtmlView :detail="detail" :show-head="false" />
         </div>
       </template>
     </Drawer>
