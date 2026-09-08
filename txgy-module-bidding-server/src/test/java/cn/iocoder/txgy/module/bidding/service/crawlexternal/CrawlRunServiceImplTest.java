@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -46,6 +48,10 @@ class CrawlRunServiceImplTest {
             j.setId(77L);
             return 1;
         });
+        // 守卫按调用顺序返回：doRunNow 先查 RUNNING（第 1 次）再查 SUCCESS（第 2 次）。
+        // 默认：无 RUNNING（0）、有 1 次 SUCCESS（1）→ 非首次 → 增量 full=false
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L, 1L);
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenReturn(summary(0, 0));
     }
 
     private CrawlSourceRunner.RunSummary summary(int ingested, int failed) {
@@ -66,7 +72,7 @@ class CrawlRunServiceImplTest {
 
     @Test
     void runNow_persistsBatch_runningThenPartial_withSummaryAndJobIdPassed() {
-        when(runner.runSource(eq("QYZB"), any())).thenReturn(summary(2, 1));
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenReturn(summary(2, 1));
 
         CrawlRunRespVO vo = service.runNow("QYZB");
 
@@ -81,13 +87,13 @@ class CrawlRunServiceImplTest {
         assertNotNull(updated.getSummaryJson());
         assertTrue(updated.getSummaryJson().contains("\"totalFailed\":1"));
         assertTrue(updated.getSummaryJson().contains("\"categories\""));
-        verify(runner, times(1)).runSource(eq("QYZB"), eq(77L));
+        verify(runner, times(1)).runSource(eq("QYZB"), eq(77L), eq(false));
         assertEquals(2, vo.getTotalIngested());
     }
 
     @Test
     void runNow_triggerSchedule_recordsScheduleBatch() {
-        when(runner.runSource(eq("QYZB"), any())).thenReturn(summary(0, 0));
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenReturn(summary(0, 0));
 
         service.runNow("QYZB", "SCHEDULE");
 
@@ -101,7 +107,7 @@ class CrawlRunServiceImplTest {
 
     @Test
     void runNow_whenRunnerFails_marksJobFailed_andRethrows() {
-        when(runner.runSource(eq("QYZB"), any())).thenThrow(new IllegalStateException("fetch boom"));
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenThrow(new IllegalStateException("fetch boom"));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.runNow("QYZB"));
 
@@ -110,6 +116,57 @@ class CrawlRunServiceImplTest {
         verify(jobMapper).updateById(upd.capture());
         assertEquals("FAILED", upd.getValue().getStatus());
         assertNotNull(upd.getValue().getSummaryJson());
+    }
+
+    // ===== 2026-09-09 首跑全量 / 并发防重 / 崩溃自愈 =====
+
+    @Test
+    void runNow_firstEver_noSuccess_marksFirstFullAndRunsFullWindow() {
+        // 该源从无 SUCCESS → firstFull=true（首次全量，回溯 fullLookbackDays 补历史）；无 RUNNING、无 SUCCESS
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L, 0L);
+        when(runner.runSource(eq("QYZB"), any(), eq(true))).thenReturn(summary(3, 0));
+
+        CrawlRunRespVO vo = service.runNow("QYZB", "SCHEDULE");
+
+        verify(runner, times(1)).runSource(eq("QYZB"), eq(77L), eq(true));
+        assertEquals(3, vo.getTotalIngested());
+        ArgumentCaptor<CrawlJobDO> upd = ArgumentCaptor.forClass(CrawlJobDO.class);
+        verify(jobMapper).updateById(upd.capture());
+        assertEquals("SUCCESS", upd.getValue().getStatus());
+    }
+
+    @Test
+    void runNow_concurrentRunning_sameSource_skipsThisRound() {
+        // 同源已有 RUNNING（其它实例/线程正在跑）→ 本轮跳过，不调用 runner，不落新批次
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(1L);
+
+        CrawlRunRespVO vo = service.runNow("QYZB", "SCHEDULE");
+
+        verify(runner, times(0)).runSource(any(), any(), anyBoolean());
+        verify(jobMapper, times(0)).insert(any(CrawlJobDO.class));
+        assertEquals(0, vo.getTotalIngested() == null ? 0 : vo.getTotalIngested());
+    }
+
+    @Test
+    void runNow_afterCrash_noSuccess_stillFirstFull_retries() {
+        // 模拟崩溃重启后：RUNNING 被启动钩子置 FAILED → 无 SUCCESS → 仍判首次 → full 重试（幂等补齐，不丢远历史）
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L, 0L); // 无 RUNNING、无 SUCCESS → firstFull
+        when(runner.runSource(eq("QYZB"), any(), eq(true))).thenReturn(summary(0, 0));
+
+        service.runNow("QYZB", "SCHEDULE");
+
+        verify(runner, times(1)).runSource(eq("QYZB"), eq(77L), eq(true));
+    }
+
+    @Test
+    void startupRecovery_marksStaleRunning_asFailed() {
+        // 启动钩子：残留 RUNNING 统一置 FAILED（否则 RUNNING 守卫永久跳过该源）
+        when(jobMapper.update(isNull(), any())).thenReturn(2);
+
+        service.recoverInterruptedJobsOnStartup();
+
+        // 校验确实调用了 update 批量置 FAILED（update(entity=null, wrapper)）；null 实体需 isNull() 匹配
+        verify(jobMapper).update(isNull(), any());
     }
 
 }

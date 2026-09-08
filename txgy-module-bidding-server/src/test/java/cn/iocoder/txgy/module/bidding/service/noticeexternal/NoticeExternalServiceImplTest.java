@@ -13,7 +13,9 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExtern
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.HttpFetchClient;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
+import cn.iocoder.txgy.module.infra.api.file.FileApi;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -44,6 +46,8 @@ class NoticeExternalServiceImplTest {
     private NoticeExternalMapper noticeExternalMapper;
     private NoticeExternalAttachmentMapper noticeExternalAttachmentMapper;
     private ExternalNoticeSearchEngine externalNoticeSearchEngine;
+    private HttpFetchClient httpFetchClient;
+    private FileApi fileApi;
     private NoticeExternalServiceImpl service;
 
     @BeforeEach
@@ -51,10 +55,14 @@ class NoticeExternalServiceImplTest {
         noticeExternalMapper = mock(NoticeExternalMapper.class);
         noticeExternalAttachmentMapper = mock(NoticeExternalAttachmentMapper.class);
         externalNoticeSearchEngine = mock(ExternalNoticeSearchEngine.class);
+        httpFetchClient = mock(HttpFetchClient.class);
+        fileApi = mock(FileApi.class);
         service = new NoticeExternalServiceImpl();
         ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
         ReflectionTestUtils.setField(service, "noticeExternalAttachmentMapper", noticeExternalAttachmentMapper);
         ReflectionTestUtils.setField(service, "externalNoticeSearchEngine", externalNoticeSearchEngine);
+        ReflectionTestUtils.setField(service, "httpFetchClient", httpFetchClient);
+        ReflectionTestUtils.setField(service, "fileApi", fileApi);
     }
 
     private NoticeExternalDO doActiveSocial(String contentType) {
@@ -316,6 +324,36 @@ class NoticeExternalServiceImplTest {
         when(noticeExternalMapper.selectById(99L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class, () -> service.getManageDetail(99L));
         assertEquals(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS.getCode(), e.getCode());
+    }
+
+    // ===== 2026-09-10 PDF 归档回填 =====
+
+    @Test
+    void backfillPdfDownloadUrls_downloadsUploadsAndPatches() throws Exception {
+        NoticeExternalDO pdf = doActiveSocial("PDF");
+        pdf.setMetaJson("{\"pdfDownloadUrl\":\"https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf\"}");
+        when(noticeExternalMapper.selectList(any())).thenReturn(List.of(pdf));
+        when(httpFetchClient.getBytes("https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf")).thenReturn("%PDF-1.4 test".getBytes());
+        when(fileApi.createFile(any(), any(), any(), any())).thenReturn("http://127.0.0.1:48080/admin-api/infra/file/4/get/bidding/notice-external/10185.pdf");
+
+        String result = service.backfillPdfDownloadUrls();
+
+        assertEquals("total=1,ok=1,failed=0,skipped=0", result);
+        org.mockito.ArgumentCaptor<NoticeExternalDO> cap = org.mockito.ArgumentCaptor.forClass(NoticeExternalDO.class);
+        org.mockito.Mockito.verify(noticeExternalMapper).updateById(cap.capture());
+        assertEquals("http://127.0.0.1:48080/admin-api/infra/file/4/get/bidding/notice-external/10185.pdf", cap.getValue().getPdfDownloadUrl());
+    }
+
+    @Test
+    void backfillPdfDownloadUrls_metaWithoutUrl_skips() {
+        NoticeExternalDO pdf = doActiveSocial("PDF");
+        pdf.setMetaJson("{}");
+        when(noticeExternalMapper.selectList(any())).thenReturn(List.of(pdf));
+
+        String result = service.backfillPdfDownloadUrls();
+
+        assertEquals("total=1,ok=0,failed=0,skipped=1", result);
+        org.mockito.Mockito.verify(noticeExternalMapper, org.mockito.Mockito.never()).updateById(any(NoticeExternalDO.class));
     }
 
 }

@@ -44,12 +44,14 @@ public class NoticeExternalDO extends BaseDO {
     private String contentType;
     /** HTML 原文（原样保存，不转义不裁剪） */
     private String contentHtml;
-    /** PDF 原文件 file_id（红线 8：file_id+sha256+size） */
+    /** PDF 原文件 file_id（红线 8：file_id+sha256+size；爬虫侧平台 RPC 上传不返回 id，保持 NULL，由 pdfDownloadUrl 承担访问） */
     private Long pdfFileId;
     /** PDF 原文件哈希 */
     private String pdfSha256;
     /** PDF 原文件大小（字节） */
     private Long pdfSize;
+    /** PDF 归档访问地址（平台文件服务返回的 URL；前端预览/下载直接可用，F-2 契约口径） */
+    private String pdfDownloadUrl;
     /** 附件记录 id 列表（bidding_notice_external_attachment，JSON 数组） */
     private String attachmentIdsJson;
     /** 外站自述类型原文（不猜不丢） */

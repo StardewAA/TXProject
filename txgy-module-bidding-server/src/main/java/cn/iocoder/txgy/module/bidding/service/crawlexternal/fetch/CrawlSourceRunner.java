@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -42,18 +43,27 @@ public class CrawlSourceRunner {
 
     /** 秦源栏目 JSON 接口（页面 JS 实测） */
     private static final String QYZB_API = "https://qyzb.shccmg.com/cms/api/dynamicData/queryContentPage";
-    /** 源内条目抓取间隔（毫秒，防封） */
-    private static final long ENTRY_DELAY_MS = 1500L;
-    /** 页间抓取间隔（毫秒，防封：多页回溯时每页之间再等一拍，避免突发高频请求） */
-    private static final long PAGE_DELAY_MS = 1500L;
+    /** 源内条目抓取间隔（毫秒，防封；bidding.crawl.runner.entry-delay-ms 配置，配置文件为准） */
+    @Value("${bidding.crawl.runner.entry-delay-ms:1500}")
+    private long entryDelayMs;
+    /** 页间抓取间隔（毫秒，防封：多页回溯每页之间等一拍；bidding.crawl.runner.page-delay-ms 配置。2026-09-09 用户口径 5s） */
+    @Value("${bidding.crawl.runner.page-delay-ms:5000}")
+    private long pageDelayMs;
     /** 启用增量回溯（lookbackDays>0）且未显式配置 maxPages 时的页上限（单栏目单轮，防失控） */
     private static final int DEFAULT_LOOKBACK_MAX_PAGES = 10;
+    /** 首次全量默认窗口（天）：栏目未配 fullLookbackDays 时使用；配置文件 bidding.crawl.runner.full-lookback-days 可覆盖（2026-09-09 用户口径 60 天） */
+    @Value("${bidding.crawl.runner.full-lookback-days:60}")
+    private int fullLookbackDaysDefault;
+    /** 首次全量单栏目单轮页上限（防失控；bidding.crawl.runner.full-max-pages 配置，默认 300；停页由窗口外判定负责） */
+    @Value("${bidding.crawl.runner.full-max-pages:300}")
+    private int fullMaxPagesDefault;
     /** 未启用回溯：保持 v1 行为——每栏目每轮仅取第一页（最新 pageSize 条）。增量回溯机制见文档 §11 */
     private static final int SINGLE_PAGE_LIMIT = 1;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     @jakarta.annotation.Resource private HttpFetchClient httpFetchClient;
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
     @jakarta.annotation.Resource private ParserRegistry parserRegistry;
     @jakarta.annotation.Resource private ExternalNoticeIngestService externalNoticeIngestService;
     @jakarta.annotation.Resource private CrawlSourceMapper crawlSourceMapper;
@@ -62,11 +72,17 @@ public class CrawlSourceRunner {
 
     /** 执行一个采集源的一轮采集（同步；人工触发/调度调用；无批次上下文，任务不挂 jobId）。 */
     public RunSummary runSource(String sourceCode) {
-        return runSource(sourceCode, null);
+        return runSource(sourceCode, null, false);
     }
 
     /** 执行一个采集源的一轮采集，并把本轮失败任务挂到指定批次（jobId 可为 null，如单测/无批次场景）。 */
     public RunSummary runSource(String sourceCode, Long jobId) {
+        return runSource(sourceCode, jobId, false);
+    }
+
+    /** 执行一个采集源的一轮采集。full=true 时按栏目 fullLookbackDays（可配置首次全量窗口）回溯补历史，
+     * 用于「首次全量爬取」：增量调度/人工 run 用 lookbackDays 小窗口，全量 run-full 用 fullLookbackDays（默认 60 天）。 */
+    public RunSummary runSource(String sourceCode, Long jobId, boolean full) {
         CrawlSourceDO source = crawlSourceMapper.selectOne(new LambdaQueryWrapper<CrawlSourceDO>()
                 .eq(CrawlSourceDO::getSourceCode, sourceCode).last("LIMIT 1"));
         if (source == null) {
@@ -79,6 +95,20 @@ public class CrawlSourceRunner {
         List<CategorySummary> categories = new ArrayList<>();
         summary.setCategories(categories);
         List<CategoryConfig> configs = parseConfigs(source.getEntryUrlsJson());
+        if (full) {
+            // 首次全量（无历史断点）：窗口按栏目 fullLookbackDays（缺省回退 lookbackDays，再缺省全局 full-lookback-days=60）；
+            // 页上限放开到 full-max-pages（默认 300，覆盖 60 天窗口；真正停页靠 outOfWindow 窗口外即停）
+            for (CategoryConfig config : configs) {
+                if (config.getFullLookbackDays() == null || config.getFullLookbackDays() <= 0) {
+                    config.setFullLookbackDays(config.getLookbackDays());
+                }
+                if (config.getFullLookbackDays() == null || config.getFullLookbackDays() <= 0) {
+                    config.setFullLookbackDays(fullLookbackDaysDefault);
+                }
+                config.setLookbackDays(config.getFullLookbackDays());
+                config.setMaxPages(fullMaxPagesDefault);
+            }
+        }
         for (CategoryConfig config : configs) {
             CategorySummary cs = new CategorySummary();
             cs.setName(config.getName());
@@ -140,12 +170,12 @@ public class CrawlSourceRunner {
                     recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 条目落库失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
-                sleep(ENTRY_DELAY_MS);
+                sleep(entryDelayMs);
             }
             if (stopAfterPage || pageNo >= maxPages) {
                 break;
             }
-            sleep(PAGE_DELAY_MS); // 页间防封
+            sleep(pageDelayMs); // 页间防封（5s）
         }
     }
 
@@ -212,16 +242,18 @@ public class CrawlSourceRunner {
                     recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 国信条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
-                sleep(ENTRY_DELAY_MS);
+                sleep(entryDelayMs);
             }
             if (stopAfterPage || pageNo >= maxPages) {
                 break;
             }
-            sleep(PAGE_DELAY_MS); // 页间防封
+            sleep(pageDelayMs); // 页间防封（5s）
         }
     }
 
-    /** 翻页：把 listUrl 中 page=N 替换为 page=pageNo（未带 page 参数则原样返回，仅单页）。 */
+    /** 翻页：把 listUrl 中 page=N 替换为 page=pageNo（未带 page 参数则原样返回，仅单页）。
+     * 注：国信 iframe 实测每页返回最近窗口内全部条目（page 参数不影响内容，仅站点壳 UI），
+     * 其真正全量受 dates= 窗口控制；60 天内最近仅 1 条，单页即覆盖，无需 searchDate 分段（2026-09-09 校准）。 */
     private static String bumpPageParam(String listUrl, int pageNo) {
         if (pageNo <= 1 || !StringUtils.hasText(listUrl)) {
             return listUrl;
@@ -268,9 +300,32 @@ public class CrawlSourceRunner {
         dto.setPublishTime(parsed.getPublishTime() != null ? parsed.getPublishTime() : parseDate(entry.getDate()));
         dto.setMetaJson("{\"pdfDownloadUrl\":\"" + escapeJson(pdfUrl) + "\",\"textChars\":"
                 + (parsed.getContentText() == null ? 0 : parsed.getContentText().length())
-                + ",\"fileStatus\":\"UNREGISTERED_FILE\"}");
+                + ",\"fileStatus\":\"REGISTERED\"}");
+        uploadPdfArchive(dto, pdf, parsed.getTitle() != null ? parsed.getTitle() : entry.getTitle());
         externalNoticeIngestService.ingest(dto);
         return true;
+    }
+
+    /** 把 PDF 归档到平台文件服务（FileApi.createFile → 访问 URL 回填 dto.pdfDownloadUrl）。
+     *  上传失败不阻断入库（metaJson 保留外站 pdfDownloadUrl 直链兜底，可后续补传）。
+     *  2026-09-10：平台 RPC 上传不返回 Long fileId（fileId 仅前端直传登记模式有），文件访问由 pdfDownloadUrl 承担。 */
+    private void uploadPdfArchive(ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
+        if (pdf == null || pdf.length == 0) {
+            return;
+        }
+        try {
+            String safeName = (title == null ? "notice" : title.replaceAll("[\\/:*?\"<>|]", "_")).trim();
+            if (safeName.length() > 80) {
+                safeName = safeName.substring(0, 80);
+            }
+            String url = fileApi.createFile(pdf, safeName + ".pdf", "bidding/notice-external", "application/pdf");
+            if (org.springframework.util.StringUtils.hasText(url)) {
+                dto.setPdfDownloadUrl(url);
+                log.info("[crawl][pdf-archive] 归档成功 file={} url={}", safeName + ".pdf", url);
+            }
+        } catch (Exception e) {
+            log.warn("[crawl][pdf-archive] 归档失败（不阻断入库，meta pdfDownloadUrl 兜底）: {}", e.getMessage());
+        }
     }
 
     // ==================== 配置解析与工具 ====================
@@ -304,6 +359,8 @@ public class CrawlSourceRunner {
         private String listUrl;
         /** 增量回溯窗口（天）：>0 时按发布时间窗口翻页补齐窗口内公告（文档 §11）；缺省不启用 */
         private Integer lookbackDays;
+        /** 首次全量回溯窗口（天）：首次运行（源无历史成功批次）时回溯补历史用；缺省回退 lookbackDays/全局 full-lookback-days */
+        private Integer fullLookbackDays;
         /** 本栏目单轮页上限（防封；启用回溯且未配时默认 10，未启用默认 1） */
         private Integer maxPages;
     }
@@ -325,6 +382,7 @@ public class CrawlSourceRunner {
                     config.setPageSize(item.path("pageSize").isNumber() ? item.path("pageSize").asInt() : null);
                     config.setListUrl(textOf(item, "listUrl"));
                     config.setLookbackDays(item.path("lookbackDays").isNumber() ? item.path("lookbackDays").asInt() : null);
+                    config.setFullLookbackDays(item.path("fullLookbackDays").isNumber() ? item.path("fullLookbackDays").asInt() : null);
                     config.setMaxPages(item.path("maxPages").isNumber() ? item.path("maxPages").asInt() : null);
                     if (config.getName() != null && (config.getCategoryId() != null || config.getListUrl() != null)) {
                         configs.add(config);

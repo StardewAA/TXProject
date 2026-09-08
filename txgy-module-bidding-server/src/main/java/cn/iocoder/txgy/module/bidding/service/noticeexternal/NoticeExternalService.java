@@ -74,4 +74,12 @@ public interface NoticeExternalService {
      */
     void takeDownExternal(Long id);
 
+    /**
+     * 存量 PDF 归档回填：遍历 content_type=PDF 且 pdf_download_url 为空的记录，从 meta_json 外站 pdfDownloadUrl 重下载 →
+     * 上传平台文件服务 → 回填 pdf_download_url（2026-09-10；失败单条记录不阻断，返回处理汇总）。
+     *
+     * @return 处理条数汇总（如 "total=14,ok=12,failed=2"）
+     */
+    String backfillPdfDownloadUrls();
+
 }

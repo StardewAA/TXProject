@@ -125,6 +125,19 @@ bidding:
       user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36
       # 下载目标临时目录（存 PDF 二进制后做 PDFBox 解析；空=java.io.tmpdir）
       download-tmp-dir: ./data/crawl-tmp
+    # 采集执行器限速（配置文件为准；CrawlSourceRunner @Value 读取）
+    # page-delay-ms 翻页间隔（用户口径 5s=5000，防封：多页回溯每页之间等一拍）
+    # entry-delay-ms 条目抓取间隔（详情下载之间防突发）
+    runner:
+      page-delay-ms: 5000
+      entry-delay-ms: 1500
+      # 首次全量窗口（天）：源从无 SUCCESS 历史（首次爬取无断点）时回溯补历史的天数；栏目级 fullLookbackDays 可覆盖。用户口径 60 天
+      full-lookback-days: 60
+      # 首次全量单栏目单轮页上限（防失控；停页由窗口外判定负责）
+      full-max-pages: 300
+    # 定时调度（CrawlRunServiceImpl @Value 读取；默认开：30s tick 按各源 fetch_interval_seconds ≥120 节流触发 SCHEDULE 轮次）
+    scheduler:
+      enabled: true
   es:
     uris: http://127.0.0.1:9200
     debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键

@@ -28,6 +28,8 @@ public class ExternalNoticeIngestDTO {
     private Long pdfFileId;
     private String pdfSha256;
     private Long pdfSize;
+    /** PDF 归档访问地址（平台文件服务 URL；前端预览/下载用，F-2 契约） */
+    private String pdfDownloadUrl;
     private String noticeTypeRaw;
     private String legalFlag;
     /** BELONGS/NOT_BELONGS/UNCERTAIN */

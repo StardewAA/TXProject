@@ -167,6 +167,7 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         existing.setPdfFileId(fresh.getPdfFileId());
         existing.setPdfSha256(fresh.getPdfSha256());
         existing.setPdfSize(fresh.getPdfSize());
+        existing.setPdfDownloadUrl(fresh.getPdfDownloadUrl());
         existing.setNoticeTypeRaw(fresh.getNoticeTypeRaw());
         existing.setLegalFlag(fresh.getLegalFlag());
         existing.setIndustryFlag(fresh.getIndustryFlag());
@@ -244,6 +245,7 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
             notice.setPdfFileId(dto.getPdfFileId());
             notice.setPdfSha256(dto.getPdfSha256());
             notice.setPdfSize(dto.getPdfSize());
+            notice.setPdfDownloadUrl(dto.getPdfDownloadUrl());
         }
         notice.setNoticeTypeRaw(dto.getNoticeTypeRaw());
         notice.setLegalFlag(dto.getLegalFlag());

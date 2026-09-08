@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.bidding.dal.mysql.crawlexternal.CrawlSourceMapper;
 import cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.CrawlSourceRunner;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,23 +50,73 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     /** 源级上次执行时间（进程内；v1 简化，多实例见 P2 worker 归属） */
     private final ConcurrentHashMap<String, Instant> lastRunAt = new ConcurrentHashMap<>();
 
+    /** 源级进程内互斥锁：同源并发 runNow（人工 run 撞上调度 tick）第二个直接跳过（DB RUNNING 守卫之外的第二道闸） */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> sourceLocks = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 启动自愈：把上次进程崩溃遗留的 RUNNING 批次统一置 FAILED（记 interrupted），否则 RUNNING 守卫会永远跳过该源（2026-09-09 容错）
+     *  首次全量判定基于 SUCCESS：清理后该源仍无 SUCCESS → 下次运行自动按 full 重试（幂等补齐，不丢历史）。 */
+    @PostConstruct
+    public void recoverInterruptedJobsOnStartup() {
+        try {
+            // 字符串 UpdateWrapper（避免单测无 mybatis-plus lambda cache 的依赖；列名驼峰→下划线）
+            int n = crawlJobMapper.update(null,
+                    new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<CrawlJobDO>()
+                            .eq("status", "RUNNING")
+                            .set("status", "FAILED")
+                            .set("finished_at", LocalDateTime.now())
+                            .set("summary_json", "{\"error\":\"interrupted by restart\"}"));
+            if (n > 0) {
+                log.warn("[crawl][startup] 清理 {} 条崩溃遗留 RUNNING 批次 → FAILED（幂等自愈，首次全量将重试）", n);
+            }
+        } catch (Exception e) {
+            log.error("[crawl][startup] 恢复 RUNNING 批次失败", e);
+        }
+    }
+
     @Override
     public CrawlRunRespVO runNow(String sourceCode) {
         return runNow(sourceCode, "MANUAL");
     }
 
-    /** 执行一轮并落批次：RUNNING 先行，成功后按汇总转 SUCCESS/PARTIAL/FAILED；异常记 FAILED 后向上抛。 */
+    /** 执行一轮并落批次：RUNNING 先行，成功后按汇总转 SUCCESS/PARTIAL/FAILED；异常记 FAILED 后向上抛。
+     *  2026-09-09 并发防重：同一源已有 RUNNING 批次则跳过本轮（DB 判断，单/多实例均生效，防同源并发重复抓取）；
+     *  首次全量：该源从无 SUCCESS 历史批次（首次爬取，调度器无上次断点）→ full=true 按栏目 fullLookbackDays 回溯补历史
+     *  （缺省 60 天可配）；之后（有断点）→ 增量小窗口 lookbackDays。 */
     @Override
     public CrawlRunRespVO runNow(String sourceCode, String triggerType) {
+        // 源级互斥（进程内）：同一源并发 runNow（人工 run 撞调度 tick）串行化，先到先跑、后到跳过
+        synchronized (sourceLocks.computeIfAbsent(sourceCode, k -> new Object())) {
+            return doRunNow(sourceCode, triggerType);
+        }
+    }
+
+    /** runNow 实际执行体（已持 sourceCode 进程锁）。 */
+    private CrawlRunRespVO doRunNow(String sourceCode, String triggerType) {
+        // ① 并发防重（DB 级，多实例通用）：同源已有 RUNNING（本实例或其它实例），跳过，避免把相同任务重复投给下载器
+        Long running = crawlJobMapper.selectCount(new LambdaQueryWrapper<CrawlJobDO>()
+                .eq(CrawlJobDO::getSourceCode, sourceCode).eq(CrawlJobDO::getStatus, "RUNNING"));
+        if (running != null && running > 0) {
+            log.warn("[crawl][runNow][{}] 已有 RUNNING 批次，本轮跳过（防同源并发重复抓取）", sourceCode);
+            CrawlRunRespVO vo = new CrawlRunRespVO();
+            vo.setSourceCode(sourceCode);
+            vo.setStartedAt(LocalDateTime.now());
+            vo.setFinishedAt(LocalDateTime.now());
+            return vo;
+        }
+        // ② 首次全量判定：源从未有 SUCCESS 批次（无上次爬取断点）→ full=true 回溯全量窗口补历史
+        Long successCount = crawlJobMapper.selectCount(new LambdaQueryWrapper<CrawlJobDO>()
+                .eq(CrawlJobDO::getSourceCode, sourceCode).eq(CrawlJobDO::getStatus, "SUCCESS"));
+        boolean firstFull = successCount == null || successCount == 0;
         CrawlJobDO job = new CrawlJobDO();
         job.setSourceCode(sourceCode);
         job.setTriggerType(triggerType);
         job.setStatus("RUNNING");
         job.setFinishedAt(null);
         crawlJobMapper.insert(job);
-        log.info("[crawl][runNow][{}][trigger={}] 批次 {} 开始", sourceCode, triggerType, job.getId());
+        log.info("[crawl][runNow][{}][trigger={}] 批次 {} 开始{}", sourceCode, triggerType, job.getId(),
+                firstFull ? "（首次全量：无历史断点，回溯 fullLookbackDays）" : "（增量）");
         try {
-            CrawlSourceRunner.RunSummary summary = crawlSourceRunner.runSource(sourceCode, job.getId());
+            CrawlSourceRunner.RunSummary summary = crawlSourceRunner.runSource(sourceCode, job.getId(), firstFull);
             lastRunAt.put(sourceCode, Instant.now());
             log.info("[crawl][runNow][{}] ingested={} failed={}", sourceCode,
                     summary.getTotalIngested(), summary.getTotalFailed());

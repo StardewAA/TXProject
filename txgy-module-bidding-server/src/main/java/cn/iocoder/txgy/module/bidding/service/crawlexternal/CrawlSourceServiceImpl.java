@@ -180,21 +180,24 @@ public class CrawlSourceServiceImpl implements CrawlSourceService {
                     throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
                 }
                 for (JsonNode entry : node) {
-                    // 兼容两种形态（2026-09-09 实测修复）：① 栏目对象 {name,parser,listUrl,...}（Runner parseConfigs 使用的现行格式）；
-                    // ② 纯 URL 字符串数组（旧版契约）。两种都必须校验最终 http(s) 地址合法。
-                    String url = null;
+                    // 兼容三种栏目形态（2026-09-09 实测校准）：
+                    // ① 纯 URL 字符串数组（旧版契约）→ 须为 http(s)
+                    // ② 栏目对象 {name,parser,listUrl,...}（HTML 列表驱动，Runner parseConfigs）→ 校验 listUrl 为 http(s)
+                    // ③ 栏目对象 {name,parser,siteId,categoryId,...}（JSON 接口驱动如 QYZB，无 listUrl）→ 靠 baseUrl，不强制 listUrl
                     if (entry.isTextual()) {
-                        url = entry.asText();
-                    } else if (entry.isObject()) {
-                        JsonNode lu = entry.get("listUrl");
-                        if (lu == null || !lu.isTextual()) {
+                        if (!isHttpUrl(entry.asText())) {
                             throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
                         }
-                        url = lu.asText();
-                    } else {
+                        continue;
+                    }
+                    if (!entry.isObject()) {
                         throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
                     }
-                    if (!isHttpUrl(url)) {
+                    JsonNode lu = entry.get("listUrl");
+                    if (lu != null && lu.isTextual() && !isHttpUrl(lu.asText())) {
+                        throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
+                    }
+                    if (lu != null && !lu.isNull() && !lu.isTextual()) {
                         throw ServiceExceptionUtil.exception(ErrorCodeConstants.CRAWL_SOURCE_PAYLOAD_INVALID);
                     }
                 }

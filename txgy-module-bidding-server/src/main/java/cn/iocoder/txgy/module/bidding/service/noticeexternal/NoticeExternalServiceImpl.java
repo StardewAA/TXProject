@@ -62,6 +62,10 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     private ExternalNoticeIndexNotifier externalNoticeIndexNotifier;
     @Resource
     private ExternalNoticeSearchEngine externalNoticeSearchEngine;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.crawlexternal.fetch.HttpFetchClient httpFetchClient;
+    @Resource
+    private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
 
     @Override
     public void approveExternal(Long id) {
@@ -256,6 +260,7 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         resp.setPdfFileId(notice.getPdfFileId());
         resp.setPdfSha256(notice.getPdfSha256());
         resp.setPdfSize(notice.getPdfSize());
+        resp.setPdfDownloadUrl(notice.getPdfDownloadUrl());
         resp.setExtractionStatus(notice.getExtractionStatus());
         resp.setExtractionSummary(summarize(notice.getExtractionText()));
         resp.setAiExtractionStatus(notice.getAiExtractionStatus());
@@ -433,10 +438,11 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         // HTML 形态：留档原样仅存库（供抽取/审计）——公开匿名详情不下发原样，统一净化版渲染（安全评审意见 1：存储型 XSS 载荷不主动下发公众客户端）
         resp.setContentHtml(null);
         resp.setContentHtmlSafe(html ? HtmlSanitizer.sanitize(notice.getContentHtml()) : null);
-        // PDF 形态：file_id+sha+size（前端 JS 预览），下载地址待 FileApi 签名能力接入后回填
+        // PDF 形态：file_id+sha+size（前端 JS 预览）；pdfDownloadUrl=平台归档 URL（爬取 PDF 已上传文件服务），前端直接预览/下载
         resp.setPdfFileId(notice.getPdfFileId());
         resp.setPdfSha256(notice.getPdfSha256());
         resp.setPdfSize(notice.getPdfSize());
+        resp.setPdfDownloadUrl(notice.getPdfDownloadUrl());
         resp.setExtractionStatus(notice.getExtractionStatus());
         resp.setNoticeTypeRaw(notice.getNoticeTypeRaw());
         resp.setLegalFlag(notice.getLegalFlag());
@@ -474,6 +480,66 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         vo.setVirusStatus(attachment.getVirusStatus());
         // downloadUrl：FileApi 签名下载地址（TODO：接入 infra 文件下载后回填）
         return vo;
+    }
+
+    /** 存量 PDF 归档回填：见接口注释。单条失败记日志继续；meta_json 无外站 pdfDownloadUrl 的计 skipped。 */
+    @Override
+    public String backfillPdfDownloadUrls() {
+        List<NoticeExternalDO> pdfs = noticeExternalMapper.selectList(new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getContentType, "PDF")
+                .and(w -> w.isNull(NoticeExternalDO::getPdfDownloadUrl).or().eq(NoticeExternalDO::getPdfDownloadUrl, "")));
+        int ok = 0;
+        int failed = 0;
+        int skipped = 0;
+        for (NoticeExternalDO pdf : pdfs) {
+            String externalUrl = null;
+            try {
+                externalUrl = pdfMetaPdfDownloadUrl(pdf.getMetaJson());
+                if (!StringUtils.hasText(externalUrl)) {
+                    skipped++;
+                    log.warn("[backfillPdf][id={}] meta_json 无外站 pdfDownloadUrl，跳过", pdf.getId());
+                    continue;
+                }
+                byte[] bytes = httpFetchClient.getBytes(externalUrl);
+                if (bytes == null || bytes.length == 0) {
+                    failed++;
+                    log.warn("[backfillPdf][id={}] 重下载为空 {}", pdf.getId(), externalUrl);
+                    continue;
+                }
+                String safeName = StringUtils.hasText(pdf.getTitle())
+                        ? pdf.getTitle().replaceAll("[\\/:*?\"<>|]", "_") : "notice";
+                if (safeName.length() > 80) {
+                    safeName = safeName.substring(0, 80);
+                }
+                String url = fileApi.createFile(bytes, safeName + ".pdf", "bidding/notice-external", "application/pdf");
+                if (!StringUtils.hasText(url)) {
+                    failed++;
+                    continue;
+                }
+                NoticeExternalDO patch = new NoticeExternalDO();
+                patch.setPdfDownloadUrl(url);
+                noticeExternalMapper.updateById(patch.setId(pdf.getId()));
+                ok++;
+                log.info("[backfillPdf][id={}] 回填 pdf_download_url={}", pdf.getId(), url);
+            } catch (Exception e) {
+                failed++;
+                log.warn("[backfillPdf][id={}] 回填失败 url={} err={}", pdf.getId(), externalUrl, e.getMessage());
+            }
+        }
+        return "total=" + pdfs.size() + ",ok=" + ok + ",failed=" + failed + ",skipped=" + skipped;
+    }
+
+    /** 读 meta_json 中的外站 pdfDownloadUrl（缺失/解析失败返回 null）。 */
+    private String pdfMetaPdfDownloadUrl(String metaJson) {
+        if (!StringUtils.hasText(metaJson)) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode node = JSON.readTree(metaJson).get("pdfDownloadUrl");
+            return node != null && node.isTextual() ? node.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
 }

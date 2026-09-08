@@ -138,6 +138,14 @@ public class NoticeExternalController {
         return success(Boolean.TRUE);
     }
 
+    @PostMapping("/backfill-pdf-urls")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "存量 PDF 归档回填（重下载→上传平台文件服务→回填 pdf_download_url）", description = "2026-09-10：补爬取侧 FileApi RPC 上传不回填 fileId 的缺口，PDF 访问由 pdfDownloadUrl 承担")
+    public CommonResult<String> backfillPdfUrls() {
+        return success(noticeExternalService.backfillPdfDownloadUrls());
+    }
+
     /**
      * 采集回传入库（外部采集服务 → 平台）。
      *
