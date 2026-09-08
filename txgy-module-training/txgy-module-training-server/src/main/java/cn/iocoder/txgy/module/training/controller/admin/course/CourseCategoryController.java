@@ -63,11 +63,18 @@ public class CourseCategoryController {
     }
 
     @GetMapping("/list")
-    @Operation(summary = "课程分类全量列表（下拉选择）")
+    @Operation(summary = "课程分类全量列表（扁平，下拉选择）")
     @PreAuthorize("@ss.hasPermission('training:course:query')")
     public CommonResult<List<CourseCategoryRespVO>> getCategoryList() {
         List<CourseCategoryDO> list = courseCategoryService.getCategoryList();
         return success(BeanUtils.toBean(list, CourseCategoryRespVO.class));
+    }
+
+    @GetMapping("/list-tree")
+    @Operation(summary = "课程分类树（域-组-课 三级，分类维护/课程创建级联选择）")
+    @PreAuthorize("@ss.hasPermission('training:course:query')")
+    public CommonResult<List<CourseCategoryRespVO>> getCategoryTree() {
+        return success(courseCategoryService.getCategoryTree());
     }
 
     @GetMapping("/get")
