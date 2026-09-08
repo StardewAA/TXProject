@@ -170,7 +170,7 @@ function saveEditor() {
 function doPublish(row: NoticeApi.Row) {
   Modal.confirm({
     title: '发布公告',
-    content: '「' + row.title + '」发布后将进入大厅公开可见（或企业内部仅本租户可见），且需已关联正文与 PDF 原文件。确定发布？',
+    content: '「' + row.title + '」发布后将在招投标大厅对外公示（内部公告仅本租户可见）；对外法律文书如需修改需撤下后重新发布（历史版本保留）。发布需已关联正文与 PDF 版式文件。是否发布？',
     okText: '发布',
     cancelText: '取消',
     onOk: async () => {
@@ -188,7 +188,7 @@ function doPublish(row: NoticeApi.Row) {
 function doUnpublish(row: NoticeApi.Row) {
   Modal.confirm({
     title: '撤下公告',
-    content: '「' + row.title + '」撤下后不再对外展示（保留留痕），可再次发布。确定撤下？',
+    content: '「' + row.title + '」撤下后大厅将不再展示（历史版本保留）；如需再次对外请重新发布。确定撤下？',
     okText: '撤下',
     cancelText: '取消',
     onOk: async () => {
