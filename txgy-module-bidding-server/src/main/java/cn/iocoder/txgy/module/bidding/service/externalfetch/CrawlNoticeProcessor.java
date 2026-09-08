@@ -38,6 +38,12 @@ public class CrawlNoticeProcessor {
     private ExternalNoticeIngestService externalNoticeIngestService;
     @Resource
     private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient httpFetchClient;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry parserRegistry;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.parser.PdfTextNoticeParser pdfTextNoticeParser;
+    @Resource
+    private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
 
     /**
      * 执行一条信息获取任务（按 payload 快照落库）。
@@ -65,7 +71,11 @@ public class CrawlNoticeProcessor {
             }
         }
         if (!StringUtils.hasText(contentHtml)) {
-            // 无全文：详情/正文由后续抓取链路承接（本次不落库，交由调用方计失败留痕）
+            // GX 类：task.url=详情页 → 详情→PDF 直链→下载→PDFBox→归档→落库（长任务异步化的核心收益）
+            if (task.getParserCode() != null && task.getParserCode().startsWith("GX")) {
+                return executeGxDetail(task, title, url, date);
+            }
+            // 无全文且非 GX：素材缺失，交由调用方计失败（可重试/死信）
             throw new IllegalStateException("任务无正文素材（全文直采缺失/详情链路未接线），url=" + url);
         }
         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
@@ -80,6 +90,98 @@ public class CrawlNoticeProcessor {
         dto.setIssuerName(extractIssuer(contentHtml));
         dto.setParserCode(task.getParserCode() == null ? task.getChannelCode() : task.getParserCode());
         return externalNoticeIngestService.ingest(dto);
+    }
+
+    /** GX（国信）类任务：task.url=详情页 → 详情 HTML → PDF.js 直链 → 下载 PDF → PDFBox 文本抽取 → FileApi 归档 → 落库（PDF 形态）。
+     *  长下载（详情+PDF）在消费端线程执行，不占生产端/Redis（v1.0 §6.2）。 */
+    private Long executeGxDetail(CrawlTaskDO task, String title, String url, String date) throws Exception {
+        if (!StringUtils.hasText(url)) {
+            throw new IllegalStateException("GX 任务缺详情 URL");
+        }
+        String detailHtml = httpFetchClient.getText(url);
+        NoticeParseResult detail = parserRegistry.get("GX_E_BIDDING")
+                .parse(inputOf("HTML", detailHtml, url));
+        String pdfUrl = detail.getMeta() == null ? null : detail.getMeta().get("pdfDownloadUrl");
+        if (!StringUtils.hasText(pdfUrl)) {
+            throw new IllegalStateException("详情页未解析出 PDF 直链（页面结构变化？）");
+        }
+        byte[] pdf = httpFetchClient.getBytes(pdfUrl);
+        if (pdf == null || pdf.length < 8) {
+            throw new IllegalStateException("PDF 下载为空");
+        }
+        NoticeParseResult parsed = pdfTextNoticeParser.parse(inputOfPdf(pdf));
+        ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
+        dto.setSourceCode(task.getSourceCode());
+        dto.setOrigUrl(url);
+        dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
+        dto.setContentType("PDF");
+        dto.setPdfSha256(sha256Hex(pdf));
+        dto.setPdfSize((long) pdf.length);
+        dto.setParserCode("GX_E_BIDDING");
+        dto.setIssuerName(parsed.getIssuerName());
+        dto.setProjectCode(parsed.getProjectCode());
+        dto.setTenderProjectCode(parsed.getTenderProjectCode());
+        dto.setPublishTime(parsed.getPublishTime() != null ? parsed.getPublishTime() : parseDate(date));
+        dto.setMetaJson("{\"pdfDownloadUrl\":\"" + escapeJson(pdfUrl) + "\",\"textChars\":" + (parsed.getContentText() == null ? 0 : parsed.getContentText().length())
+                + ",\"fileStatus\":\"REGISTERED\"}");
+        uploadPdfArchive(dto, pdf, StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
+        return externalNoticeIngestService.ingest(dto);
+    }
+
+    private static cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput inputOfPdf(byte[] pdf) {
+        cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput in = new cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput();
+        in.setPayloadType("PDF");
+        in.setFileName("notice.pdf");
+        in.setFileBytes(pdf);
+        return in;
+    }
+
+    private static cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput inputOf(String type, String content, String url) {
+        cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput in = new cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput();
+        in.setPayloadType(type);
+        in.setContent(content);
+        in.setUrl(url);
+        return in;
+    }
+
+    /** PDF 归档平台文件服务（失败不阻断落库，metaJson 保留外站直链兜底） */
+    private void uploadPdfArchive(ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
+        if (pdf == null || pdf.length == 0) {
+            return;
+        }
+        try {
+            String safeName = (title == null ? "notice" : title.replaceAll("[/:*?\"<>|]", "_")).trim();
+            if (safeName.length() > 80) {
+                safeName = safeName.substring(0, 80);
+            }
+            String u = fileApi.createFile(pdf, safeName + ".pdf", "bidding/notice-external", "application/pdf");
+            if (StringUtils.hasText(u)) {
+                dto.setPdfDownloadUrl(u);
+            }
+        } catch (Exception e) {
+            log.warn("[processor][pdf-archive] 归档失败（不阻断入库）: {}", e.getMessage());
+        }
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static String sha256Hex(byte[] data) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(data);
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 计算失败", e);
+        }
     }
 
     private JsonNode parsePayload(String payloadJson) {

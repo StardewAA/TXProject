@@ -70,6 +70,10 @@ public class CrawlSourceRunner {
     @jakarta.annotation.Resource private CrawlTaskMapper crawlTaskMapper;
     @jakarta.annotation.Resource private PdfTextNoticeParser pdfTextNoticeParser;
     @jakarta.annotation.Resource private ApiFetchDriver apiFetchDriver;
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskDispatchService crawlTaskDispatchService;
+    /** 异步投递模式（bidding.crawl.runner.async-mode=true 启用：列表发现→落 task+发轻信号，下载/落库由消费者执行）；默认 false=同步直抓（现状） */
+    @Value("${bidding.crawl.runner.async-mode:false}")
+    private boolean asyncMode;
 
     /** 执行一个采集源的一轮采集（同步；人工触发/调度调用；无批次上下文，任务不挂 jobId）。 */
     public RunSummary runSource(String sourceCode) {
@@ -91,6 +95,7 @@ public class CrawlSourceRunner {
         }
         RunSummary summary = new RunSummary();
         summary.setSourceCode(sourceCode);
+        summary.setAsync(this.asyncMode);
         summary.setStartedAt(LocalDateTime.now());
         Set<String> seenUrlHashes = new HashSet<>(); // 本轮去重；跨轮由 ingest origUrlHash 幂等
         List<CategorySummary> categories = new ArrayList<>();
@@ -176,29 +181,35 @@ public class CrawlSourceRunner {
                     continue; // 本轮已见
                 }
                 try {
-                    if (!StringUtils.hasText(entry.getContentHtml())) {
+                    if (asyncMode) {
+                        // 异步投递：全文生产端归档 FileApi + 落 PENDING task + 发轻信号（消费端执行落库）；ingested 语义=已入队
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        if (taskId != null) {
+                            cs.setIngested(cs.getIngested() + 1);
+                        }
+                    } else if (!StringUtils.hasText(entry.getContentHtml())) {
                         cs.setFailed(cs.getFailed() + 1);
                         recordTask(source, config, entry, "FAILED", "列表行无全文（详情抓取未接线，API 源需带 contentHtml 映射）", jobId);
                         log.warn("[crawl][source={}] API 条目缺全文 url={}", source.getSourceCode(), entry.getUrl());
-                        continue;
+                    } else {
+                        ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
+                        dto.setSourceCode(source.getSourceCode());
+                        dto.setOrigUrl(entry.getUrl());
+                        dto.setTitle(entry.getTitle());
+                        dto.setContentType("HTML");
+                        dto.setContentHtml(entry.getContentHtml());
+                        dto.setNoticeTypeRaw(entry.getCategory());
+                        LocalDateTime publish = parseDate(entry.getDate());
+                        dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
+                        dto.setIssuerName(extractIssuer(entry.getContentHtml()));
+                        dto.setParserCode(config.getParser());
+                        externalNoticeIngestService.ingest(dto);
+                        cs.setIngested(cs.getIngested() + 1);
                     }
-                    ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
-                    dto.setSourceCode(source.getSourceCode());
-                    dto.setOrigUrl(entry.getUrl());
-                    dto.setTitle(entry.getTitle());
-                    dto.setContentType("HTML");
-                    dto.setContentHtml(entry.getContentHtml());
-                    dto.setNoticeTypeRaw(entry.getCategory());
-                    LocalDateTime publish = parseDate(entry.getDate());
-                    dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
-                    dto.setIssuerName(extractIssuer(entry.getContentHtml()));
-                    dto.setParserCode(config.getParser());
-                    externalNoticeIngestService.ingest(dto);
-                    cs.setIngested(cs.getIngested() + 1);
                 } catch (Exception e) {
                     cs.setFailed(cs.getFailed() + 1);
                     recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
-                    log.warn("[crawl][source={}] API 条目落库失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
+                    log.warn("[crawl][source={}] API 条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(entryDelayMs);
             }
@@ -237,7 +248,12 @@ public class CrawlSourceRunner {
                 }
                 cs.setFetched(cs.getFetched() + 1);
                 try {
-                    if (ingestQyzEntry(source.getSourceCode(), entry, seen)) {
+                    if (asyncMode) {
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        if (taskId != null) {
+                            cs.setIngested(cs.getIngested() + 1); // 投递模式：ingested=已入队
+                        }
+                    } else if (ingestQyzEntry(source.getSourceCode(), entry, seen)) {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
@@ -309,7 +325,13 @@ public class CrawlSourceRunner {
                 }
                 cs.setFetched(cs.getFetched() + 1);
                 try {
-                    if (ingestGxEntry(source.getSourceCode(), entry, seen)) {
+                    if (asyncMode) {
+                        // GX：enqueue 详情 URL，消费端抓详情→PDF→落库（长下载异步化，生产端不阻塞）
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        if (taskId != null) {
+                            cs.setIngested(cs.getIngested() + 1); // 投递模式：ingested=已入队
+                        }
+                    } else if (ingestGxEntry(source.getSourceCode(), entry, seen)) {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
@@ -412,6 +434,8 @@ public class CrawlSourceRunner {
         private LocalDateTime finishedAt;
         private int totalIngested;
         private int totalFailed;
+        /** 投递模式标志：true=本轮回合并未落库而是投递 task（ingested 语义=入队数），job 由消费端 tryFinalizeJob 收尾 */
+        private boolean async;
         private List<CategorySummary> categories = new ArrayList<>();
     }
 

@@ -46,6 +46,8 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     private CrawlSourceMapper crawlSourceMapper;
     @Resource
     private CrawlJobMapper crawlJobMapper;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper crawlTaskMapper;
 
     /** 源级上次执行时间（进程内；v1 简化，多实例见 P2 worker 归属） */
     private final ConcurrentHashMap<String, Instant> lastRunAt = new ConcurrentHashMap<>();
@@ -118,9 +120,19 @@ public class CrawlRunServiceImpl implements CrawlRunService {
         try {
             CrawlSourceRunner.RunSummary summary = crawlSourceRunner.runSource(sourceCode, job.getId(), firstFull);
             lastRunAt.put(sourceCode, Instant.now());
-            log.info("[crawl][runNow][{}] ingested={} failed={}", sourceCode,
-                    summary.getTotalIngested(), summary.getTotalFailed());
-            finishJob(job, statusOf(summary), summaryToJson(summary));
+            if (summary.isAsync()) {
+                // 投递模式：本轮只做列表发现+投递；job 保持 RUNNING，task 全部终态后由消费端 tryFinalizeJob 收尾
+                log.info("[crawl][runNow][{}] 投递完成 enqueued={} failed={}（消费端异步落库，job 保持 RUNNING）", sourceCode,
+                        summary.getTotalIngested(), summary.getTotalFailed());
+                if (summary.getTotalIngested() == 0 && summary.getTotalFailed() == 0) {
+                    // 空跑（窗口内无新条目/无可投递）：直接收尾 SUCCESS，不留 RUNNING 孤儿
+                    finishJob(job, statusOf(summary), summaryToJson(summary));
+                }
+            } else {
+                log.info("[crawl][runNow][{}] ingested={} failed={}", sourceCode,
+                        summary.getTotalIngested(), summary.getTotalFailed());
+                finishJob(job, statusOf(summary), summaryToJson(summary));
+            }
             return toRespVO(summary);
         } catch (Exception e) {
             log.error("[crawl][runNow][{}] 执行异常，批次 {} 置 FAILED", sourceCode, job.getId(), e);
@@ -158,6 +170,47 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     }
 
     // ========== 私有工具 ==========
+
+    /**
+     * 消费驱动批次收尾：每条 task 终态后调用。该 job 下无 PENDING/RUNNING（未终态）task → 汇总收尾。
+     * 并发安全：仅 RUNNING 状态的 job 可收尾一次（updateById 前校验），重复调用幂等。
+     */
+    @Override
+    public void tryFinalizeJob(Long jobId) {
+        if (jobId == null) {
+            return;
+        }
+        try {
+            Long pending = crawlTaskMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                    .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getJobId, jobId)
+                    .in(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "PENDING", "RUNNING"));
+            if (pending != null && pending > 0) {
+                return; // 仍有未终态任务，批次继续 RUNNING
+            }
+            CrawlJobDO job = crawlJobMapper.selectById(jobId);
+            if (job == null || !"RUNNING".equals(job.getStatus())) {
+                return; // 已收尾/不存在
+            }
+            // 汇总：SUCCESS 数 / FAILED 数（SKIPPED 不计失败）
+            Long ok = crawlTaskMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                    .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getJobId, jobId)
+                    .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "SUCCESS"));
+            Long fail = crawlTaskMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                    .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getJobId, jobId)
+                    .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "FAILED"));
+            long okN = ok == null ? 0 : ok, failN = fail == null ? 0 : fail;
+            String status = failN > 0 ? (okN > 0 ? "PARTIAL" : "FAILED") : "SUCCESS";
+            Map<String, Object> root = new LinkedHashMap<>();
+            root.put("async", Boolean.TRUE);
+            root.put("totalEnqueued", okN + failN);
+            root.put("totalIngested", okN);
+            root.put("totalFailed", failN);
+            finishJob(job, status, mapper.writeValueAsString(root));
+            log.info("[crawl][tryFinalizeJob][job={}] 批次收尾 status={} ok={} fail={}", jobId, status, okN, failN);
+        } catch (Exception e) {
+            log.error("[crawl][tryFinalizeJob][job={}] 批次收尾失败（保留 RUNNING，可人工重跑）", jobId, e);
+        }
+    }
 
     private void finishJob(CrawlJobDO job, String status, String summaryJson) {
         try {

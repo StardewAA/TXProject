@@ -11,4 +11,10 @@ public interface CrawlRunService {
     /** 执行一轮并落批次（调度/人工共用：MANUAL/SCHEDULE；每次执行生成 bidding_fetch_job 记录） */
     CrawlRunRespVO runNow(String sourceCode, String triggerType);
 
+    /**
+     * 消费驱动批次收尾：该 job 下无 PENDING/RUNNING task 时汇总收尾（SUCCESS/PARTIAL/FAILED）。
+     * 异步投递模式下由消费者每完成一条 task 调用；同步模式不使用（runNow 直接收尾）。
+     */
+    void tryFinalizeJob(Long jobId);
+
 }
