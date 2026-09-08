@@ -6,6 +6,21 @@
        复用门户真实渲染语义（portal/bidding/format.ts 的 blocksToHtml/prettyNoticeHtml + 公文 .docx 样式），
        正文优先结构化块(bodyBlocksStatus=SUCCESS → bodyBlocksJson)，回退净化正文；
        头部 tags/meta/关注按钮 均按门户详情布局示意。
+  四要素注释（补充）：
+  对应业务：外部公告管理列表（views/bidding/noticeExternal）行操作「预览」所开管理详情弹窗 —— 审核/运营
+    "读完正文再操作"（对 NEW 行先审阅净化正文再 approve/reject/take-down）；页签1=审核数据与净化原文，
+    页签2=审核通过发布后在招投标大厅前台的观感（与门户详情同渲染语义）。
+  实现理由：BR-7（P4 前置）要求 manage/get 全状态返回净化正文/结构化块/PDF/附件病毒状态，审核页不读完正文
+    不应误操作；正文优先结构化块（bodyBlocksStatus=SUCCESS → bodyBlocksJson），回退 contentHtmlSafe
+    （后端 jsoup 净化），前端文本一律先转义、HTML 走 v-dompurify 二次净化，防存储型 XSS 载荷下发前台。
+  法规依据：招标公告和公示信息发布管理办法（国家发展改革委令第10号，2017）第12条【部门规章/政府文件】
+    （允许公众免费查阅公告公示完整信息）、第13条【部门规章】（免费提供信息归类与检索服务）——
+    外部采集公告审核后即按免费查阅/归类口径对公众公开，审核动作保证公开内容准确可溯。
+  关联契约：GET /bidding/notice-external/manage/get?id=（BR-7 管理详情预览，权限 bidding:notice-external:update，
+    出参 NoticeExternalManageDetailRespVO：管理行字段 + contentHtmlSafe/bodyBlocksJson/pdf*/extraction*/附件病毒状态）与
+    manage/page（管理分页行）；见 docs/前端规范-全域接口说明/01-接口逐一说明与设计依据.md §2（2.2/2.11）与
+    docs/外部公告-前端对接/01-接口契约.md §2；前端函数 getManageDetail 见 apps/web-antd/src/api/bidding/noticeExternal，
+    对账见 06-bidding前端契约接口完全对照.md。
 -->
 <script lang="ts" setup>
 import type { NoticeExternalApi } from '#/api/bidding/noticeExternal';
