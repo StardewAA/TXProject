@@ -28,6 +28,7 @@ import {
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
+import TaskChainView from './modules/task-chain.vue';
 
 /* ---------- 本地模型：手动/测试任务条（本次会话，真实解析回执） ---------- */
 interface ManualRun {
@@ -810,11 +811,14 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           </div>
         </div>
 
-        <!-- 层3：过程 —— 下载器/解析器/时间线占位说明（原 processOpen 抽屉文案，保留不删；TaskRunVO 落库后替换为逐步时间线） -->
+        <!-- 层3：纵向数据链（调试视图：①请求 URL → ②获取方式 CRAWLER/API → ③原始载荷 payload_json 黑块 → ④解析 → ⑤执行/结果 → ⑥产出；每段可复制/全屏） -->
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">过程</span><span class="ind-panel-meta">下载器 / 解析器 / 时间线（TaskRunVO 落库前占位）</span></div>
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">纵向数据链</span>
+            <span class="ind-panel-meta">原始载荷含列表原文/接口 JSON；「全屏 ▾」看完整数据</span>
+          </div>
           <div class="ind-panel-b">
-            <div class="text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+            <TaskChainView :task="detailTask" :show-same-batch="false" />
           </div>
         </div>
       </div>

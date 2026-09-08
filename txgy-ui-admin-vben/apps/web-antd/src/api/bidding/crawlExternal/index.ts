@@ -62,6 +62,10 @@ export namespace CrawlExternalApi {
     allowedHosts?: string;
     entryUrlsJson?: string;
     channelCode?: string;
+    /** 获取方式：CRAWLER=爬虫(列表HTML) / API=接口直取(JSON)（2026-09-10 模块更名 fetch，见后端 CrawlSourceRespVO） */
+    fetchType?: string;
+    /** API 源配置 JSON（fetch_type=API 时：method/url/headers/params/page/rowsPath/fieldMapping/envelope） */
+    apiConfigJson?: string;
     parserCodeDefault?: string;
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
@@ -79,6 +83,9 @@ export namespace CrawlExternalApi {
     allowedHosts?: string;
     entryUrlsJson?: string;
     channelCode: string;
+    /** 获取方式：CRAWLER/API（API 源必填 apiConfigJson） */
+    fetchType?: string;
+    apiConfigJson?: string;
     parserCodeDefault?: string;
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
@@ -118,6 +125,8 @@ export namespace CrawlExternalApi {
     startedAt?: string;
     finishedAt?: string;
     message?: string;
+    /** 载荷快照 JSON（列表阶段条目：QYZB 全文 HTML / GX 标题日期 / API 源=接口原始 JSON？——后端 CrawlTaskRespVO.payloadJson） */
+    payloadJson?: string;
     createTime?: string;
     updateTime?: string;
   }
