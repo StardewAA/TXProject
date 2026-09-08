@@ -51,3 +51,8 @@ gen/
 
 # 用户提供招投标资料目录（大数据/二进制，不入库；测试副本放 samples/）
 docs/招投标版块数据提供/
+
+# 本地一键启动脚本（含本机 JDK 路径/网卡 IP/端口覆盖，成员各自环境不同，不入库；
+# 需要时按 docs/03-本地运行与联调说明.md 自行生成，或参考 deploy-bidding-local.override.yml 注释）
+txgy-module-bidding-server/run-local.cmd
+txgy-module-bidding-server/bidding-dev.cmd
