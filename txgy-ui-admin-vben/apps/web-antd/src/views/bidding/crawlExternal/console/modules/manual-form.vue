@@ -153,7 +153,7 @@ const [Modal, modalApi] = useVbenModal({
         <Select v-model:value="parserCode" :options="parserCodeOptions" placeholder="选择解析器（按口径自动建议）" style="width: 100%" />
       </div>
       <div>
-        <div class="mb-1 text-xs font-medium text-gray-600">归属采集源（可选，MANUAL 直测）</div>
+        <div class="mb-1 text-xs font-medium text-gray-600">归属信息源（可选，MANUAL 直测）</div>
         <Select v-model:value="sourceCode" :options="props.sourceOptions || []" placeholder="不选=手动直测，不入源" allow-clear style="width: 100%" />
       </div>
       <div class="col-span-2">

@@ -1,7 +1,7 @@
 <!--
-  采集源详情档（两档视图之“舒张”层）：
-  业务：从采集源列表点「详情」打开——源配置 / 运行批次 / 批内任务 / 任务过程 逐层铺开；
-        启停开关与立即采集等操作收在本档（列表行只留克制摘要 + 详情入口）。
+  信息源详情档（两档视图之“舒张”层）：
+  业务：从信息源列表点「详情」打开——源配置 / 获取批次 / 批内任务 / 任务过程 逐层铺开；
+        启停开关与立即获取等操作收在本档（列表行只留克制摘要 + 详情入口）。
   实现理由：同源信息做两档视图——概览档克制（行=源 code/名称/状态/间隔/时间），详情档整页分层舒张，
         避免把开关与明细全塞进小行卡片；分层顺序=源配置→批次(job)→任务(crawl-task by jobId)→任务详情。
   后端契约：爬虫任务工作台-前后端契约 + 2026-09-08-crawl-contract-batch.md §三.1（批次下钻任务=携 jobId 调 crawl-task/page，无需新端点）；
@@ -23,7 +23,7 @@ const loading = ref(false);
 const busy = ref(false);
 const row = ref<CrawlExternalApi.SourceItem | null>(null);
 
-/* ---------- 层2：该源运行批次 ---------- */
+/* ---------- 层2：该源获取批次 ---------- */
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 const jobsLoading = ref(false);
 /* ---------- 层3：选中批次下的爬虫任务（jobId 过滤） ---------- */
@@ -113,7 +113,7 @@ function toggleEnabled() {
   if (!s || s.id == null) return;
   const enable = !enabled.value;
   Modal.confirm({
-    title: enable ? '启用该采集源？' : '停用该采集源？',
+    title: enable ? '启用该信息源？' : '停用该信息源？',
     content: enable
       ? '启用后进入外链 /go 白名单，定时调度按抓取间隔执行采集。'
       : '停用后不再参与调度；若有已生效(ACTIVE)公告请先下线再停用。',
@@ -134,7 +134,7 @@ function toggleEnabled() {
   });
 }
 
-/* 立即采集一轮：同步执行，汇总弹窗；受 120s 频控约束 */
+/* 立即获取一轮：同步执行，汇总弹窗；受 120s 频控约束 */
 async function handleRun() {
   const s = row.value;
   if (!s?.sourceCode) return;
@@ -172,10 +172,10 @@ function fmtListUrl(raw?: string): string[] {
 defineExpose({ openSource });
 </script>
 <template>
-  <Drawer v-model:open="open" :width="960" :title="row ? '采集源详情 · ' + (row.sourceName || row.sourceCode) : '采集源详情'">
+  <Drawer v-model:open="open" :width="960" :title="row ? '信息源详情 · ' + (row.sourceName || row.sourceCode) : '信息源详情'">
     <div v-if="loading" class="sd-hint">加载中…</div>
     <template v-else-if="row">
-      <!-- 层1：源概要 + 操作（启停/立即采集收在本档，不进列表行） -->
+      <!-- 层1：源概要 + 操作（启停/立即获取收在本档，不进列表行） -->
       <div class="sd-head">
         <div class="sd-head-l">
           <div class="sd-name">{{ row.sourceName || row.sourceCode }}</div>
@@ -186,7 +186,7 @@ defineExpose({ openSource });
       </div>
       <div class="sd-ops">
         <Button :type="enabled ? 'default' : 'primary'" :loading="busy" @click="toggleEnabled">{{ enabled ? '停用该源' : '启用该源' }}</Button>
-        <Button type="primary" @click="handleRun">立即采集一轮</Button>
+        <Button type="primary" @click="handleRun">立即获取一轮</Button>
       </div>
 
       <!-- 层2：配置明细 -->
@@ -211,11 +211,11 @@ defineExpose({ openSource });
         <div v-else class="sd-hint">（留空=从首页链接发现）</div>
       </div>
 
-      <!-- 层3：运行批次（克制行：状态/触发/时间/摘要） -->
+      <!-- 层3：获取批次（克制行：状态/触发/时间/摘要） -->
       <div class="sd-sec">
-        <div class="sd-sec-t">运行批次 <span class="sd-muted">（最近 {{ jobs.length }} 批；一次采集 = 一个批次）</span></div>
+        <div class="sd-sec-t">获取批次 <span class="sd-muted">（最近 {{ jobs.length }} 批；一次采集 = 一个批次）</span></div>
         <div v-if="jobsLoading" class="sd-hint">批次加载中…</div>
-        <div v-else-if="!jobs.length" class="sd-hint">暂无批次记录 —— 点上方「立即采集一轮」或等待定时调度</div>
+        <div v-else-if="!jobs.length" class="sd-hint">暂无批次记录 —— 点上方「立即获取一轮」或等待定时调度</div>
         <div v-else class="sd-jobs">
           <div v-for="j in jobs" :key="String(j.id)" class="sd-job" :class="{ on: selJob && selJob.id === j.id }" @click="pickJob(j)">
             <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
@@ -255,7 +255,7 @@ defineExpose({ openSource });
         </Descriptions>
       </div>
     </template>
-    <div v-else class="sd-hint">未选择采集源</div>
+    <div v-else class="sd-hint">未选择信息源</div>
   </Drawer>
 </template>
 

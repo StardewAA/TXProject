@@ -18,7 +18,7 @@ import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const rowData = ref<CrawlExternalApi.SourceItem>();
-const getTitle = computed(() => (rowData.value?.id ? '编辑采集源' : '新增采集源'));
+const getTitle = computed(() => (rowData.value?.id ? '编辑信息源' : '新增信息源'));
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {

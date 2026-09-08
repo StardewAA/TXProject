@@ -133,7 +133,7 @@ async function runSource(row: CrawlExternalApi.SourceItem) {
 function removeSource(row: CrawlExternalApi.SourceItem) {
   if (row.id == null) return;
   Modal.confirm({
-    title: '删除采集源「' + (row.sourceName || row.sourceCode) + '」？',
+    title: '删除信息源「' + (row.sourceName || row.sourceCode) + '」？',
     content: '前置条件：无正在运行任务、无 ACTIVE 公告引用（后端校验）。历史任务条保留。',
     okText: '删除',
     okButtonProps: { danger: true },
@@ -166,7 +166,7 @@ watch(open, (v) => onOpen(v));
 <template>
   <Modal
     :open="open"
-    title="采集源配置"
+    title="信息源配置"
     class="bid-ind"
     :width="960"
     :footer="null"
@@ -177,7 +177,7 @@ watch(open, (v) => onOpen(v));
       <div class="text-xs text-gray-500">
         启用后按轮询间隔（≥120s）周期采集，产生“定时任务”任务条；同源 120s 内不可重复触发（防封频控）。
       </div>
-      <a class="text-xs text-blue-600" @click="openCreate">+ 新增采集源</a>
+      <a class="text-xs text-blue-600" @click="openCreate">+ 新增信息源</a>
     </div>
     <Table
       :data-source="rows"
