@@ -1,4 +1,4 @@
-x-backend-service: &backend-service
+﻿x-backend-service: &backend-service
   depends_on:
     mysql:
       condition: service_healthy
@@ -264,7 +264,7 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: deploy/frontend/Dockerfile.runtime
+      dockerfile: deploy/frontend/Dockerfile
     depends_on:
       gateway:
         condition: service_started
