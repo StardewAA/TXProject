@@ -72,6 +72,9 @@ public interface ErrorCodeConstants {
     ErrorCode SHIPMENT_ORDER_DETAIL_REQUIRED = new ErrorCode(1_060_201_003, "出库单至少包含一条明细");
     ErrorCode SHIPMENT_ORDER_STATUS_NOT_DELETABLE = new ErrorCode(1_060_201_005, "出库单状态不是草稿或已作废，不能删除");
     ErrorCode SHIPMENT_ORDER_DETAIL_NOT_EXISTS = new ErrorCode(1_060_201_007, "出库单明细不存在");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_RUNNING = new ErrorCode(1_060_201_008, "出库单正在审批中，请勿重复提交");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_NOT_APPROVED = new ErrorCode(1_060_201_009, "出库单尚未审批通过，不能完成出库");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_NOT_EDITABLE = new ErrorCode(1_060_201_010, "出库单正在审批或已经审批通过，不能修改");
 
     // ========== WMS 移库单 1-060-202-000 ==========
     ErrorCode MOVEMENT_ORDER_NOT_EXISTS = new ErrorCode(1_060_202_000, "移库单不存在");
@@ -116,5 +119,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALE_SHIPMENT_DUPLICATE = new ErrorCode(1_060_900_016, "销售出库单已存在");
     ErrorCode WAREHOUSE_VERSION_CONFLICT = new ErrorCode(1_060_900_017, "仓库版本冲突");
     ErrorCode INTEGRATION_REQUEST_NOT_EXISTS = new ErrorCode(1_060_900_018, "幂等请求不存在");
+    ErrorCode INTEGRATION_MASTER_DATA_MAPPING_CONFLICT = new ErrorCode(1_060_900_019,
+            "主数据存在无法自动确认的存量映射");
 
 }

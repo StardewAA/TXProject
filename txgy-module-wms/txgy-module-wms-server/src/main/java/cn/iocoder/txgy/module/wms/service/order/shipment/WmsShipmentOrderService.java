@@ -43,6 +43,20 @@ public interface WmsShipmentOrderService {
     void completeShipmentOrder(Long id);
 
     /**
+     * 提交出库单审批
+     *
+     * @param userId 发起人用户编号
+     * @param id 出库单编号
+     * @return 流程实例编号
+     */
+    String submitShipmentOrderApproval(Long userId, Long id);
+
+    /**
+     * BPM 流程结束后回写审批结果
+     */
+    void updateShipmentOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason);
+
+    /**
      * 作废出库单
      *
      * @param id 编号
