@@ -3,6 +3,55 @@ import type { PageParam, PageResult } from '@vben/request';
 import { requestClient } from '#/api/request';
 
 export namespace CrawlExternalApi {
+// ===== 解析器（手动录入/测试链路，02 契约 §1.3 / §3.2） =====
+  export interface ParserInfo {
+    code?: string;
+    name?: string;
+    description?: string;
+    supportedTypes?: string[];
+  }
+  export interface ParseAttachment {
+    name?: string;
+    url?: string;
+  }
+  export interface ParseEntry {
+    title?: string;
+    url?: string;
+  }
+  /** 解析测试回执（CrawlParseTestRespVO）——手动录入即真实解析一次 */
+  export interface ParseTestResp {
+    parserCode?: string;
+    parserName?: string;
+    payloadType?: string;
+    fileName?: string;
+    url?: string;
+    contentLength?: number;
+    durationMs?: number;
+    status?: string;
+    error?: string;
+    title?: string;
+    origUrl?: string;
+    contentType?: string;
+    noticeTypeRaw?: string;
+    legalFlag?: string;
+    projectKey?: string;
+    projectName?: string;
+    tenderProjectKey?: string;
+    bidSectionCodes?: string;
+    issuerName?: string;
+    publishTime?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+    contentTextPreview?: string;
+    contentHtmlLength?: number;
+    attachments?: ParseAttachment[];
+    pageType?: string;
+    entries?: ParseEntry[];
+    meta?: Record<string, string>;
+    warnings?: string[];
+  }
+
+
   /** 采集源（CrawlSourceRespVO，02 §6.1） */
   export interface SourceItem {
     id?: number;
@@ -52,8 +101,9 @@ export namespace CrawlExternalApi {
   }
   /** 采集任务（CrawlTaskRespVO，02 §6.2） */
   export interface TaskItem {
-    id?: number;
-    jobId?: number;
+    /** 任务主键（雪花 ID，后端 Long 序列化为字符串时按 string 兼容） */
+    id?: number | string;
+    jobId?: number | string;
     sourceCode?: string;
     url?: string;
     urlHash?: string;
@@ -71,6 +121,7 @@ export namespace CrawlExternalApi {
     updateTime?: string;
   }
   export interface TaskPageParams extends PageParam {
+    taskType?: string;
     jobId?: number;
     sourceCode?: string;
     status?: string;
@@ -79,7 +130,8 @@ export namespace CrawlExternalApi {
   }
   /** 采集批次（CrawlJobRespVO，02 §6.3） */
   export interface JobItem {
-    id?: number;
+    /** 批次主键（雪花 ID） */
+    id?: number | string;
     sourceCode?: string;
     triggerType?: string;
     scope?: string;
@@ -114,6 +166,27 @@ export function setCrawlSourceEnabled(id: number, enabled: boolean) {
 }
 export function deleteCrawlSource(id: number) {
   return requestClient.delete('/bidding/crawl-source/delete', { params: { id } });
+}
+export function fetchCrawlParserList() {
+  return requestClient.get<CrawlExternalApi.ParserInfo[]>('/bidding/crawl-parser/list');
+}
+/** 手动录入：对粘贴的 HTML/JSON 源代码或上传文件（.html/.htm/.json/.pdf）执行一次真实解析测试 */
+export function crawlParserTest(data: {
+  parserCode: string;
+  payloadType: 'HTML' | 'JSON' | 'FILE';
+  content?: string;
+  fileName?: string;
+  url?: string;
+  file?: File;
+}) {
+  const fd = new FormData();
+  fd.append('parserCode', data.parserCode);
+  fd.append('payloadType', data.payloadType);
+  if (data.content != null && data.content !== '') fd.append('content', data.content);
+  if (data.fileName) fd.append('fileName', data.fileName);
+  if (data.url) fd.append('url', data.url);
+  if (data.file) fd.append('file', data.file);
+  return requestClient.post<CrawlExternalApi.ParseTestResp>('/bidding/crawl-parser/test', fd);
 }
 export function runCrawlSource(sourceCode: string) {
   return requestClient.post<CrawlExternalApi.RunResult>('/bidding/crawl-source/run', undefined, { params: { sourceCode } });
