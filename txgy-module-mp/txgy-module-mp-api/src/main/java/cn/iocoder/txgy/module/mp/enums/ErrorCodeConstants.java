@@ -13,6 +13,7 @@ public interface ErrorCodeConstants {
     ErrorCode ACCOUNT_NOT_EXISTS = new ErrorCode(1_006_000_000, "公众号账号不存在");
     ErrorCode ACCOUNT_GENERATE_QR_CODE_FAIL = new ErrorCode(1_006_000_001, "生成公众号二维码失败，原因：{}");
     ErrorCode ACCOUNT_CLEAR_QUOTA_FAIL = new ErrorCode(1_006_000_002, "清空公众号的 API 配额失败，原因：{}");
+    ErrorCode ACCOUNT_APP_ID_EXISTS = new ErrorCode(1_006_000_003, "已经存在该 appId 的公众号账号");
 
     // ========== 公众号统计 1-006-001-000 ============
     ErrorCode STATISTICS_GET_USER_SUMMARY_FAIL = new ErrorCode(1_006_001_000, "获取粉丝增减数据失败，原因：{}");
