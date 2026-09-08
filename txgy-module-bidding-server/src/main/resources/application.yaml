@@ -114,8 +114,18 @@ txgy:
 # @ConditionalOnProperty(prefix=bidding.es) / @Value(bidding.es.uris) 读取键一致
 # enabled=true 启用 ES 引擎（原生 HTTP，失败重试 3 次，索引 bidding-notice / bidding-notice-external）；无集群时置 false 走数据库兜底
 bidding:
+  crawl:
+    # 下载器 HTTP 客户端参数（配置文件为准；HttpFetchClient 启动时 @ConfigurationProperties 读取）
+    # connect/second 连接超时（秒）；read/second 单请求读超时（秒）；followRedirects 是否跟随重定向（默认 NORMAL）
+    # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+    http:
+      connect-timeout-seconds: 10
+      read-timeout-seconds: 20
+      follow-redirects: true
+      user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36
+      # 下载目标临时目录（存 PDF 二进制后做 PDFBox 解析；空=java.io.tmpdir）
+      download-tmp-dir: ./data/crawl-tmp
   es:
-    enabled: true
     uris: http://127.0.0.1:9200
     debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键
     username: ${ES_USERNAME:elastic} # 账号（本地 dev，勿提交生产凭据）

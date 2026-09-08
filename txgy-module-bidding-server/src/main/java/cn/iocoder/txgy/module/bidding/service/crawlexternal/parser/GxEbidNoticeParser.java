@@ -48,7 +48,8 @@ public class GxEbidNoticeParser implements NoticeParser {
             return out;
         }
         List<NoticeParseResult.ListEntry> entries = new ArrayList<>();
-        for (Element li : doc.select("ul.newslist > li")) {
+        // 兼容 ul.newslist > li 与 iframe.html 裸 <li>（2026-09-09 实测：外层页无条目，条目在 iframe.html 的裸 li）
+        for (Element li : doc.select("li:has(> a[href])")) {
             Element a = li.selectFirst("a[href]");
             if (a == null) continue;
             String href = a.absUrl("href");
