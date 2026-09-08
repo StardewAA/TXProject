@@ -1,3 +1,18 @@
+<!-- ============================================================================
+  主体档案 · 企业自维护（投标人 BIDDER / 招标人 TENDERER）
+  业务（07-主体域前端交付-业务口径说明）：档案对象 = 企业（法人/其他组织），不是个人。
+    主档案与投标/招标资格挂企业；人员只是企业下经办自然人（由企业绑在其档案下，人员不单独构成主体）。
+    同一租户可分别维护 投标人/招标人 两套档案（主体类型是企业扮演的角色，非二选一）。
+  理由：资格审查的法定对象是企业（营业执照/统一社会信用代码/资质）；公告/公示/合同署名主体是企业；
+    uscc 是企业档案唯一键（GB 32100，个人无 uscc 无法承担主键）——把档案做成人员粒度会“公告主体对不上”。
+  依据（法规/技术规范，含文件类型）：
+    · 招标投标法 第25/26条（法律）——投标人应为法人/其他组织并具备资格条件；
+    · 电子招标投标办法 第24/14条（部门规章/政府文件，八部委令第20号）——注册登记、如实递交并经验证、初始信息真实性验证；
+    · GB 32100-2015（技术规范）——统一社会信用代码 18 位编码规则与校验位；GB/T 2260（行政区划）等数据规范表89 法人基本信息。
+  后端契约：07-主体域 §3/§4（企业信息卡字段、资格提示话术）；04-全链路 链路A-A1/链路D-D1/D3；
+    GET /bidding/subject/profile/get、POST /save（T 轨本租户隔离）、GET /eligibility（授权∧档案完善=资格门）。
+  权限点：bidding:subject:query / update（企业自维护）。
+============================================================================ -->
 <script lang="ts" setup>
 import { SubjectApi } from '#/api/bidding/subject';
 
@@ -77,6 +92,8 @@ function switchType(t: SubjectApi.SubjectTypeCode) {
   void loadAll();
 }
 
+/* 保存前校验：必填 + uscc 18 位（GB 32100-2015，技术规范）。
+ * 依据：07 §5 易错点「uscc 用 18 位校验，非法格式应拦截」；后端 save 亦强校验（错误码 106_035）。 */
 function validate(): string | null {
   const need: Array<[unknown, string]> = [
     [form.subjectName, '单位名称'], [form.uscc, '统一社会信用代码'], [form.legalPersonName, '法定代表人姓名'],
@@ -89,6 +106,9 @@ function validate(): string | null {
   if (!/^\d{6}$/.test(form.regionCode.trim())) return '行政区划代码须为 6 位数字';
   return null;
 }
+/* 保存档案（新建/更新，一租户一类型一档案）：后端实时核算完善度并校验 uscc。
+ * 业务/理由：企业如实递交并经平台验证（电子办法 24/14 条，部门规章/政府文件）；授权≠完善——保存后档案齐=资格门一半达成。
+ * 契约：04-全链路 D1（save 幂等）；错误码 106_035（USCC 不合法）。 */
 async function doSave() {
   const bad = validate();
   if (bad) { createMessage.warning(bad); return; }

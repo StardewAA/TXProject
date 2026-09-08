@@ -1,3 +1,19 @@
+<!-- ============================================================================
+  投标流程跟踪 v1 = “我的关注/意向”视图（以当前登录人关注条目为数据源，本地阶段演示）
+  业务（09-投标流程跟踪前端交付-业务口径说明）：跟踪对象 = 投标机会公告；登录人“关注”产生意向。
+    按自然人账号 user_id 各自维护（A 方案：资格归企业、操作与跟踪归个人）；不做企业级合并。
+    阶段字典：INTENTION → QUALIFICATION_REVIEW → PENDING_BID → BIDDED / TERMINATED。
+  现状/理由：后端状态机尚未实现（报名/审核/上传标书等写端点不存在，bidding:process-track:* 待上线），
+    v1 阶段保存在 localStorage（键 txgy.bidding.processTrack.v1），真实数据仅 fetchMyFollowPage 拉“我的关注”。
+    页面动作按钮为占位：点击提示“该能力待上线”，不得静默失败或伪造服务端状态（09 §6/§8）。
+  依据（法规，含文件类型）：
+    · 电子招标投标办法 第9条（部门规章/政府文件）——市场主体免费注册登录获取依法公开信息（关注/浏览前置）；
+    · 电子招标投标办法 第13条（部门规章/政府文件）——可靠身份识别与权限控制（按登录人隔离跟踪数据）；
+    · 招标投标法 第26条（法律）——投标资格条件（意向→报名→资格核验的跟进脉络，正式评审在后端状态机/招标方）。
+  后端契约：09-投标流程跟踪前端交付-业务口径说明.md §2-§6/§8；
+    唯一真实接口 fetchMyFollowPage → GET /bidding/notice-follow/item/page（bidding:notice-external:query，user 隔离）；
+    关注/取消在公告详情页 follow/unfollow（bidding:notice-external:update）；Track/TrackEvent 为本地模型无后端端点。
+============================================================================ -->
 <script lang="ts" setup>
 import type { ProcessTrackApi } from '#/api/bidding/processTrack';
 
@@ -101,6 +117,8 @@ function stepState(t: ProcessTrackApi.Track, i: number): 'done' | 'process' | 'w
 const stateTag = (s: string) => ({ text: STATE_TEXT[s] || s, color: STATE_COLOR[s] || 'default' });
 
 /* ============ 状态机推进（轻量守卫，事件留痕） ============ */
+/* 本地阶段推进（报名/审核/上传标书/取消）：仅写 localStorage，无后端写端点。
+ * 契约：09 §4/§6——后端状态机未上线，按钮为占位演示；正式接口上线后以服务端为准。 */
 function advance(
   t: ProcessTrackApi.Track,
   ev: ProcessTrackApi.EventCode,
@@ -149,6 +167,8 @@ const fIssuer = ref('');
 const fFollowKey = ref<string | undefined>(undefined);
 const fRemark = ref('');
 
+/* 拉“我的关注”作下拉候选：真实接口 fetchMyFollowPage（user_id 隔离，勿传他人 userId）。
+ * 契约：09 §2/§8 item/page 后端取 getLoginUserId；关注权限 bidding:notice-external:query。 */
 async function loadFollowOptions() {
   if (followLoaded.value) return;
   try {
@@ -238,6 +258,8 @@ const actTitle = computed(() => {
   };
   return map[actKind.value];
 });
+/* 本地动作执行（审核结果/登记标书/取消）：执行后本地推进并提示“（本地演示…）”口径。
+ * 契约：09 §6/§8 占位动作提示“该能力待上线”，不得伪造服务端状态。 */
 function doAct() {
   const t = tracks.value.find((x) => x.id === actTrackId.value);
   if (!t) return;

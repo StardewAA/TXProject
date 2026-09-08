@@ -1,3 +1,25 @@
+<!-- ============================================================================
+  公告 / 公示管理 · 招标人“发布工作台”（企业自营公告，管理端）
+  业务（08-公告公示前端交付-业务口径说明）：公告/公示是招标人（企业）对外发布的法律文书；
+    本页做 起草→发布→撤下 的全生命周期（发布工作台），不是普通文章 CRUD；大厅只读展示已发布内容。
+  类型（四类，勿自由扩展）：TENDER_NOTICE 招标公告 / CHANGE_NOTICE 变更公告 /
+    WIN_CANDIDATE_PUBLICITY 中标候选人公示（公示期≥3日）/ WIN_RESULT_PUBLICITY 中标结果公示。
+  状态机：DRAFT → PUBLISHED → UNPUBLISHED（可再发布）；ARCHIVED=归档终态。
+    编辑入口仅 草稿/已撤下；PUBLISHED 只“撤下+详情”；删除仅 草稿/已撤下（后端已补状态守卫 1_060_101_009）。
+    已发布如需修订：对外法律文书走“撤下→改→重新发布”（前端管控入口；后端对线上修订走版本追加+订阅通知）。
+  理由：对外已生效文书直接改会造成版本漂移与审计问题（08 §7 FAQ）；撤下重发保历史版本可追溯。
+  依据（法规，含文件类型）：
+    · 招标投标法 第16条（法律）——公开招标应当发布招标公告，载明事项法定；
+    · 实施条例 第15条（行政法规）——公开招标项目应依法发布招标公告、编制招标文件；
+    · 招标公告和公示信息发布管理办法（发改委令第10号）第5/6/12/13条（部门规章/政府文件）——
+      公告/中标候选人公示载明事项、公示期、免费发布与查阅、归类检索；
+    · 电子招标投标办法（八部委令第20号）第9条（部门规章/政府文件）——公众/市场主体免费获取依法公开信息。
+  后端契约（嵌套仓库 docs/ 前端规范-全域接口说明/）：
+    · 08-公告公示前端交付-业务口径说明.md §1-§3/§6/§8（状态机与行操作矩阵、pdf 对外最终件、internalFlag=false 对外）；
+    · 06-bidding前端契约接口完全对照.md §2（notice）+ api/bidding/notice/index.ts；
+    · 主体资格门：notice create/update/publish 均断言 招标人已授权且档案完善（assertTendererIssuanceAllowed，106_031/106_034）。
+  权限点：bidding:notice:create|update|publish|delete|query（菜单 6754）。
+============================================================================ -->
 <script lang="ts" setup>
 import { NoticeApi } from '#/api/bidding/notice';
 
@@ -167,6 +189,10 @@ function saveEditor() {
 }
 
 /* ============ 状态动作 ============ */
+/* 发布公告：DRAFT/UNPUBLISHED → PUBLISHED。
+ * 业务/理由：发布后进大厅对外公示（对外文书）；发布前须已上传对外 PDF 版式并关联正文（对外最终件=pdf）。
+ * 依据：招标投标法 第16条（法律，发布招标公告）；实施条例 第15条（行政法规）。
+ * 契约：08 §6 发布确认文案、§8 状态机 transit + 招标人发布门（106_031/034）；POST /bidding/notice/publish。 */
 function doPublish(row: NoticeApi.Row) {
   Modal.confirm({
     title: '发布公告',
@@ -185,6 +211,9 @@ function doPublish(row: NoticeApi.Row) {
     },
   });
 }
+/* 撤下公告：PUBLISHED → UNPUBLISHED。
+ * 业务/理由：撤下后大厅不再展示，历史版本保留；如需再次对外走“重新发布”。对外文书修订先撤下再改。
+ * 契约：08 §3-4/§6 撤下确认文案；PUT /bidding/notice/unpublish。 */
 function doUnpublish(row: NoticeApi.Row) {
   Modal.confirm({
     title: '撤下公告',
@@ -196,6 +225,10 @@ function doUnpublish(row: NoticeApi.Row) {
     },
   });
 }
+/* 删除公告：仅 草稿/已撤下 可删（PUBLISHED/ARCHIVED 后端守卫拒绝 1_060_101_009）。
+ * 业务/理由：撤下≠删除；对外已发布/归档内容须留痕可追溯（08 §3-4）。
+ * 依据：10号令 第5/12条（部门规章/政府文件，公示信息免费查阅与留痕）。
+ * 契约：DELETE /bidding/notice/delete。 */
 function doDelete(row: NoticeApi.Row) {
   Modal.confirm({
     title: '删除公告',
