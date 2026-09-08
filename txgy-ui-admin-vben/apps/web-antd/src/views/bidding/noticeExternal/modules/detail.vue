@@ -73,6 +73,15 @@ const fmtT = (v?: string | number | null): string => {
 };
 const empty = (v?: string) => (v ? v : '—');
 
+/** 外链一律经 /go 中转打开（04-契约 §2：源站/附件 origDownloadUrl 不得直开 window.open/a[href]，防开放重定向；go 对启用采集源域名白名单校验）。
+ * 实现理由：管理预览与门户同语义——origUrl 为目标站壳页，非 PDF 本身；中转失败(400 拒绝)时浏览器落在 go 错误响应上，不在本页报错。 */
+function openGo(url?: string | null): void {
+  if (!url) return;
+  const base = (import.meta.env.VITE_GLOB_API_URL as string) || '/admin-api';
+  const go = base.replace(/\/$/, '') + '/bidding/notice-external/go?url=' + encodeURIComponent(url);
+  window.open(go, '_blank', 'noopener,noreferrer');
+}
+
 function parseBlocks(raw?: string): NoticeBodyBlock[] | null {
   if (!raw) return null;
   try {
@@ -218,7 +227,7 @@ const [Modal, modalApi] = useVbenModal({
                 <button class="fb-follow-btn" :class="{ disabled: !viewCanFollow }" disabled>
                   {{ viewCanFollow ? '＋ 关注' : '审核通过后开放关注' }}
                 </button>
-                <a v-if="detail.origUrl" class="fb-orig-btn" href="#" @click.prevent>查看原文 ↗</a>
+                <a v-if="detail.origUrl" class="fb-orig-btn" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
               </div>
             </div>
             <div class="fb-preview-title">{{ detail.title }}</div>
@@ -229,12 +238,12 @@ const [Modal, modalApi] = useVbenModal({
           <div class="fb-body-area">
             <div v-if="hasViewBody" class="fb-docx" v-dompurify-html="viewHtml"></div>
             <div v-else-if="viewIsPdf" class="fb-pdf-empty">
-              PDF 文件 —— 文件服务签名地址（pdfDownloadUrl）回填后即可内嵌预览
+              源文件整理中——PDF 归档（pdf_download_url）尚未回填；回填完成后此处提供内嵌预览/下载（04-契约 §1）。
               <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
             </div>
             <div v-else class="fb-slim">
               <p>该公告仅有简略信息（标题、发布单位、发布时间见上方），无正文、无文件。</p>
-              <a v-if="detail.origUrl" class="fb-primary-btn" href="#" @click.prevent>前往原地址查看</a>
+              <a v-if="detail.origUrl" class="fb-primary-btn" href="#" @click.prevent="openGo(detail.origUrl)">前往原地址查看</a>
             </div>
           </div>
           <div class="fb-preview-note">正文渲染优先级（与门户一致）：bodyBlocksStatus=SUCCESS → 结构化块（黑体标题/仿宋缩进段落/带框表格/列表）；否则回退净化正文智能排版；HTML 公告发布后同时提供右上“查看原文”（origUrl 经 /go 白名单中转）。</div>
@@ -250,7 +259,7 @@ const [Modal, modalApi] = useVbenModal({
             <div><b class="text-gray-400">关联项目：</b>{{ empty(detail.projectName) }}<span v-if="detail.projectKey" class="ml-1 text-gray-400">({{ detail.projectKey }})</span></div>
             <div><b class="text-gray-400">标段：</b>{{ empty(detail.bidSectionCodes) }}</div>
             <div><b class="text-gray-400">抓取：</b>{{ detail.fetchCount ?? 0 }} 次<template v-if="detail.lastFetchTime">，最近 {{ fmtT(detail.lastFetchTime) }}</template></div>
-            <div><b class="text-gray-400">原文：</b><a v-if="detail.origUrl" :href="detail.origUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">源站链接 ↗</a><span v-else>—</span></div>
+            <div><b class="text-gray-400">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-blue-600 underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
           </div>
           <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
             PDF 原文件：{{ detail.pdfSize ? Math.round(detail.pdfSize / 1024) + ' KB' : '大小未知' }}

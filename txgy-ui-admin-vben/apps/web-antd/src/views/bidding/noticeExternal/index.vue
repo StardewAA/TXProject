@@ -12,6 +12,7 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   aiExtractNotice,
   approveNotice,
+  backfillPdfUrls,
   bodyStructureNotice,
   getManagePage,
   rejectNotice,
@@ -151,6 +152,35 @@ function handleRowCheckboxChange({
   records: NoticeExternalApi.ManageItem[];
 }) {
   checkedRows.value = records || [];
+}
+
+/* PDF 归档回填（04-契约 §1：存量外部公告 pdf_download_url 回填，重下载外站 PDF → infra-file 归档；一次性人工触发，约几十秒）。
+ * 业务/理由：采集 PDF 经文件服务归档后才回填可访问 URL；旧数据为空需触发本端点补全，此后门户 PDF 内嵌预览/下载才可用。
+ * 权限 bidding:notice-external:update；POST /bidding/notice-external/backfill-pdf-urls 返回 total/ok/failed/skipped。 */
+function handleBackfillPdf() {
+  Modal.confirm({
+    title: 'PDF 归档回填',
+    content:
+      '将重下载外部公告 PDF 并归档回填 pdf_download_url（14 条 GX 数据约几十秒；期间详情 PDF 预览由空变有）。' +
+      '回填期间请勿重复触发。是否开始？',
+    okText: '开始回填',
+    cancelText: '取消',
+    onOk: () =>
+      runAction('PDF 归档回填', async () => {
+        const res = await backfillPdfUrls();
+        const s = res as { total?: number; ok?: number; failed?: number; skipped?: number };
+        message.info(
+          '回填完成：总数 ' +
+            (s?.total ?? '-') +
+            '，成功 ' +
+            (s?.ok ?? '-') +
+            '，失败 ' +
+            (s?.failed ?? '-') +
+            '，跳过 ' +
+            (s?.skipped ?? '-'),
+        );
+      }),
+  });
 }
 
 /**
@@ -325,6 +355,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               disabled: approving,
               auth: ['bidding:notice-external:update'],
               onClick: () => void handleApproveAll(),
+            },
+            {
+              label: 'PDF 归档回填',
+              type: 'link',
+              danger: false,
+              auth: ['bidding:notice-external:update'],
+              onClick: () => handleBackfillPdf(),
             },
           ]"
         />

@@ -69,6 +69,8 @@ const kpis = computed(() => ({
 }));
 const filterSource = ref<string | undefined>(undefined);
 const filterStatus = ref<string | undefined>(undefined);
+/** 批次下钻过滤：从「采集批次」行点“查看该批任务”带入 jobId（crawl-batch 契约 §三.1：页面携 jobId 调 crawl-task/page 即完成下钻，无需新端点） */
+const jobFilter = ref<number | string | undefined>(undefined);
 const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ label: m.text, value }));
 
 const schedTasks = ref<CrawlExternalApi.TaskItem[]>([]);
@@ -122,6 +124,7 @@ async function loadSched(reset = false) {
       pageSize: 20,
       sourceCode: filterSource.value,
       status: filterStatus.value,
+      jobId: typeof jobFilter.value === 'number' ? jobFilter.value : Number(jobFilter.value) || undefined,
       taskType: 'SCHEDULE',
     };
     const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[] };
@@ -149,6 +152,18 @@ async function loadBackendTests() {
   }
 }
 
+/* 批次下钻：点“查看该批任务”→ 切到任务 tab 并按 jobId 过滤（crawl-batch §三.1，无需新端点）。
+ * 契约：fetchCrawlTaskPage({ jobId }) —— 任务与批次关联行（runNow 落 RUNNING→SUCCESS/PARTIAL/FAILED 时写 jobId）。 */
+function drillJob(j: CrawlExternalApi.JobItem): void {
+  if (j.id == null) return;
+  jobFilter.value = j.id;
+  activeTab.value = 'tasks';
+  void loadSched(true);
+}
+function clearJobFilter(): void {
+  jobFilter.value = undefined;
+  void loadSched(true);
+}
 async function loadJobs() {
   try {
     const res = (await fetchCrawlJobPage({ pageNo: 1, pageSize: 10 })) as unknown as {
@@ -439,6 +454,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <div class="mb-3 flex flex-wrap items-center gap-3">
           <Select v-model:value="filterSource" placeholder="全部采集源" allow-clear style="width: 230px" :options="sourceOptions" @change="loadSched(true)" />
           <Select v-model:value="filterStatus" placeholder="全部状态" allow-clear style="width: 150px" :options="statusOptions" @change="loadSched(true)" />
+          <Tag v-if="jobFilter" color="geekblue" closable @close="clearJobFilter">批次 #{{ jobFilter }} 的任务</Tag>
           <span v-if="schedLoading" class="text-xs font-semibold text-orange-600">加载中…</span>
           <a v-if="!schedEnd && schedTasks.length" class="ml-auto text-sm font-semibold text-blue-600" @click="loadSched()">{{ schedLoading ? '加载中…' : '加载更多 ▾' }}</a>
         </div>
@@ -538,6 +554,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
             <div v-for="j in jobs" :key="String(j.id)" class="ind-row">
+              <a v-if="j.id != null" class="rw text-blue-600 font-semibold" href="#" @click.prevent="drillJob(j)">查看该批任务 ▸</a>
               <Tag :color="tagOf(TASK_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, j.status)?.text || j.status }}</Tag>
               <span class="rw">源：{{ j.sourceCode || '—' }}</span>
               <span class="rw">触发：{{ j.triggerType || '—' }}</span>

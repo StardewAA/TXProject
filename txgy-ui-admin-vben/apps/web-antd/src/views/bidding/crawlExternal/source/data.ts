@@ -58,7 +58,7 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
       fieldName: 'entryUrlsJson',
       label: '入口/栏目 URL（JSON 数组）',
       component: 'Textarea',
-      componentProps: { placeholder: '如 ["/zhaobiao/gglist?p=1"]；留空=从首页链接发现', rows: 3, autoSize: { minRows: 3, maxRows: 6 } },
+      componentProps: { placeholder: '如 ["/zhaobiao/gglist?p=1"]；留空=从首页链接发现。\n栏目对象可带窗口字段（04-契约 §3）：[{"url":"/zhaobiao/gglist?p=1","lookbackDays":1,"fullLookbackDays":60,"maxPages":10}] —— lookbackDays=每轮增量回溯天（缺省仅最新页）、fullLookbackDays=首跑全量回溯天（缺省回退全局 60）、maxPages=单轮最大翻页', rows: 3, autoSize: { minRows: 3, maxRows: 8 } },
     },
     {
       fieldName: 'parserCodeDefault',
