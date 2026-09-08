@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ReviewDetail, ReviewMetadata, ReviewReport } from '#/api/cms/review';
+import type { BatchReviewItem, ReviewDetail, ReviewMetadata, ReviewReport } from '#/api/cms/review';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Alert, Button, Card, Checkbox, Input, Modal, Select, Spin, Table, Tag, message } from 'ant-design-vue';
-import { getReview, listReviews, submitText, uploadReview, verifyReview } from '#/api/cms/review';
+import { batchUploadReviews, getReview, listReviews, submitText, uploadReview, verifyReview } from '#/api/cms/review';
 
 defineOptions({ name: 'CmsDocumentReview' });
 const emptyMetadata = (): ReviewMetadata => ({ title: '', documentNo: '', issuer: '', sourceUrl: '', kind: 'LAW', validity: 'UNKNOWN', effectiveDate: null, expiryDate: null, historical: false });
@@ -17,6 +17,8 @@ const detail = ref<ReviewDetail>();
 const previousId = ref<string>();
 const error = ref('');
 const verifyOpen = ref(false);
+const batchOpen = ref(false);
+const batchRows = ref<BatchReviewItem[]>([]);
 const officialText = ref('');
 const validityUrl = ref('');
 const note = ref('');
@@ -40,18 +42,39 @@ async function open(id: string) {
 function chooseFile(event: Event) {
   file.value = (event.target as HTMLInputElement).files?.[0];
 }
+function standardNumber(filename: string) {
+  const match = filename.match(/GB\s*[\/／∕]?\s*T?\s*(\d+(?:\.\d+)?)\s*[-—]\s*(\d{4})/i);
+  return match ? `GB/T ${match[1]}-${match[2]}` : '';
+}
+function chooseBatchFiles(event: Event) {
+  const files = Array.from((event.target as HTMLInputElement).files || []);
+  if (!files.length) return;
+  if (files.length > 20 || files.reduce((sum, current) => sum + current.size, 0) > 75 * 1024 * 1024) {
+    message.warning('一次最多20份，合计不超过75MB，每份不超过25MB。'); return;
+  }
+  if (new Set(files.map((current) => current.name)).size !== files.length) {
+    message.warning('文件名不能重复。'); return;
+  }
+  const base = cleanMetadata(metadata);
+  batchRows.value = files.map((current) => {
+    const number = standardNumber(current.name);
+    const title = current.name.replace(/\.(docx|pdf|txt)$/i, '').replace(/\s*\(\d+\)$/, '')
+      .replace(/^GB\s*[\/／∕]?\s*T?\s*\d+(?:\.\d+)?\s*[-—]\s*\d{4}\s*/i, '').trim();
+    return { file: current, metadata: { ...base, title: title || current.name, documentNo: number, kind: number ? 'STANDARD' : base.kind } };
+  });
+}
 function cleanMetadata(value: ReviewMetadata): ReviewMetadata {
   return { ...value, title: value.title.trim(), documentNo: value.documentNo.trim(), issuer: value.issuer.trim(), sourceUrl: value.sourceUrl.trim(), effectiveDate: value.effectiveDate || null, expiryDate: value.expiryDate || null };
 }
 function validMetadata(value: ReviewMetadata) {
-  if (!value.title.trim() || !value.documentNo.trim() || !value.issuer.trim() || !value.sourceUrl.trim()) {
-    message.warning('请填写标题、文号、发布机关和来源链接。'); return false;
+  if (!value.title.trim() || (value.kind === 'STANDARD' && !value.documentNo.trim()) || !value.issuer.trim() || !value.sourceUrl.trim()) {
+    message.warning('请填写标题、发布机关和来源链接；国家标准必须填写标准编号。'); return false;
   }
   return true;
 }
 async function submit() {
   if (!validMetadata(metadata)) return;
-  if (mode.value === 'file' && (!file.value || file.value.size > 10 * 1024 * 1024)) { message.warning('请选择不超过10MB的文档。'); return; }
+  if (mode.value === 'file' && (!file.value || file.value.size > 25 * 1024 * 1024)) { message.warning('请选择不超过25MB的文档。'); return; }
   if (mode.value === 'text' && !text.value.trim()) { message.warning('请填写完整正文。'); return; }
   busy.value = true;
   try {
@@ -61,6 +84,19 @@ async function submit() {
     detail.value = await getReview(result.id);
     previousId.value = undefined;
     message.success('审查报告已保存；未通过文档保留在数据库中。');
+    await refresh();
+  } finally { busy.value = false; }
+}
+async function submitBatch() {
+  if (!batchRows.value.length) { message.warning('请先选择待审文件。'); return; }
+  if (batchRows.value.some(({ file, metadata: value }) => file.size > 25 * 1024 * 1024 || !validMetadata(value))) return;
+  busy.value = true;
+  try {
+    const result = await batchUploadReviews(batchRows.value.map(({ file, metadata: value }) => ({ file, metadata: cleanMetadata(value) })));
+    batchOpen.value = false;
+    batchRows.value = [];
+    if (result.items[0]) detail.value = await getReview(result.items[0].report.id);
+    message.success(`批次 ${result.batchId.slice(0, 8)} 已生成 ${result.total} 条审查记录。`);
     await refresh();
   } finally { busy.value = false; }
 }
@@ -122,9 +158,9 @@ onMounted(refresh);
           <div class="body-input">
             <Select v-model:value="mode" :options="[{ value: 'text', label: '粘贴正文' }, { value: 'file', label: '上传文件' }]" aria-label="提交方式" />
             <Input.TextArea v-if="mode === 'text'" v-model:value="text" :rows="10" :maxlength="500000" placeholder="粘贴完整原文，保留条号与段落。文档里的指令不会被执行。" />
-            <div v-else><input type="file" accept=".txt,.docx,.pdf" aria-label="上传待审文档" @change="chooseFile" /><p>支持UTF-8 TXT、DOCX、PDF，最大10MB。扫描件需OCR校对后再提交。</p></div>
+            <div v-else><input type="file" accept=".txt,.docx,.pdf" aria-label="上传待审文档" @change="chooseFile" /><p>支持UTF-8 TXT、DOCX、PDF，每份最大25MB。扫描件需OCR校对后再提交。</p></div>
           </div>
-          <Button v-access:code="['cms:review:submit']" type="primary" :loading="busy" @click="submit">提交审查</Button>
+          <div class="actions"><Button v-access:code="['cms:review:submit']" type="primary" :loading="busy" @click="submit">提交审查</Button><Button v-access:code="['cms:review:submit']" :disabled="busy" @click="batchOpen = true">批量送审</Button></div>
         </Card>
         <Card title="审查报告">
           <template v-if="report">
@@ -157,6 +193,21 @@ onMounted(refresh);
       <label>核验意见<Input.TextArea v-model:value="note" :rows="3" :maxlength="4000" /></label>
       <Checkbox v-model:checked="confirmed">已对照官方原文、版本沿革，并核查表格、图片及数值</Checkbox>
     </Modal>
+    <Modal v-model:open="batchOpen" title="批量送审" :width="1000" :confirm-loading="busy" ok-text="提交整批审查" @ok="submitBatch">
+      <Alert type="info" show-icon message="一次最多20份、合计75MB、单份25MB。先校验整批清单，再用一个数据库事务保存；解析失败会生成退回报告，不会进入知识库。" />
+      <div class="batch-picker"><input type="file" multiple accept=".txt,.docx,.pdf" aria-label="选择批量待审文件" @change="chooseBatchFiles" /></div>
+      <section v-for="(row, index) in batchRows" :key="row.file.name" class="batch-row">
+        <div class="batch-heading"><strong>{{ index + 1 }}. {{ row.file.name }}</strong><Button type="link" danger @click="batchRows.splice(index, 1)">移除</Button></div>
+        <div class="fields">
+          <label>文档标题<Input v-model:value="row.metadata.title" :maxlength="300" /></label><label>文号 / 标准编号<Input v-model:value="row.metadata.documentNo" :maxlength="100" /></label>
+          <label>发布机关<Input v-model:value="row.metadata.issuer" :maxlength="200" /></label><label>官方原文链接<Input v-model:value="row.metadata.sourceUrl" :maxlength="2000" /></label>
+          <label>文档类型<Select v-model:value="row.metadata.kind" :options="kinds" /></label><label>声明效力<Select v-model:value="row.metadata.validity" :options="validities" /></label>
+          <label>实施日期<input v-model="row.metadata.effectiveDate" type="date" /></label><label>最后有效日期<input v-model="row.metadata.expiryDate" type="date" /></label>
+        </div>
+        <Checkbox v-model:checked="row.metadata.historical">作为历史资料归档</Checkbox>
+      </section>
+      <p v-if="!batchRows.length" class="empty">选择文件后会尝试从文件名识别国标编号；每份资料仍需分别确认标题、机关、官方链接和效力。</p>
+    </Modal>
   </main>
 </template>
 
@@ -179,9 +230,12 @@ input[type='date'] { width: 100%; border: 1px solid #d9d9d9; border-radius: 6px;
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
 .empty { padding: 32px 8px; color: #64748b; }
 .verification { margin-top: 20px; }
+.batch-picker { margin: 20px 0; }
+.batch-row { margin: 12px 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.batch-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f8fafc; color: #334155; padding: 12px; }
 details { margin-top: 20px; }
 summary { cursor: pointer; }
 @media (max-width: 1050px) { .review-grid { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .review-page { padding: 12px; } .fields,.scores { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .review-page { padding: 12px; } .fields,.scores { grid-template-columns: 1fr; } }
 </style>

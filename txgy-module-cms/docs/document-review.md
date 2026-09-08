@@ -4,7 +4,7 @@
 
 ## 实际流程
 
-1. 提交UTF-8 TXT、DOCX、PDF或粘贴完整正文。原始文件及报告保存在 `cms_document_review`。
+1. 提交UTF-8 TXT、DOCX、PDF或粘贴完整正文；也可一次批量送审最多20份。原始文件及报告保存在 `cms_document_review`。
 2. 乱码、规范性与质量检查自动执行。来源链接仅做HTTPS政府域名初筛，不自动下载用户URL，不将域名视作已核验。
 3. 没有可信依据时返回 `FAIL / SOURCE_UNVERIFIED`，作为数据库中的待核验/退回记录，知识库不接收。
 4. 有 `cms:review:verify` 权限的人员独立对照官方完整原文、标题、文号、机关、日期、效力及图片表格，登记官方正文、版本沿革链接和意见。核验人及日期由服务端记录。系统严格比对正文SHA-256（仅统一换行和首尾空白）以及元数据，重新执行全部检查。
@@ -36,6 +36,7 @@
 | --- | --- | --- | --- |
 | POST | /text | submit | JSON `{metadata,text}`，保存审查报告 |
 | POST | /upload | submit | multipart `file` 与JSON `metadata` |
+| POST | /batch-upload | submit | multipart `files` 与JSON `manifest`，最多20份并在同一事务保存 |
 | GET | /list | query | 最近1至100条，默认50 |
 | GET | /get?id=UUID | query | 正文、报告、核验历史、已入库切片 |
 | GET | /original?id=UUID | query | 原始文件下载，附件方式返回 |
@@ -50,7 +51,8 @@ Verify：`officialMetadata, officialText, validitySourceUrl, note`。需以官�
 
 ## 限制与测试
 
-- 文件10MB、正文50万字符、PDF最多300页；超限请求可能由上传层直接拒绝，不会保存超大文件。
+- 单份文件25MB、批次合计75MB且最多20份、正文50万字符、PDF最多300页；超限请求可能由上传层直接拒绝，不会保存超大文件。
+- 批量入口按文件名将 `manifest.items[].fileName` 与上传文件一一匹配，拒绝缺失、多余或重名文件。解析失败会保存退回报告；任一数据库写入异常会整批回滚。
 - 扫描PDF须外部OCR与人工校对；本版不自动运行OCR、不解析DOCX内嵌附件、不执行文档指令。修订痕迹会阻断。
 - 源文件解析失败会保存失败报告及大小允许的原文件，格式不合法的JSON元数据返回参数错误。
 - 报告列出问题维度、严重程度、位置、修改意见，可从页面下载JSON。
