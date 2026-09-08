@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.cms.service.review;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 import java.util.List;
@@ -14,13 +15,19 @@ public final class ReviewModels {
     public enum Validity { EFFECTIVE, NOT_YET_EFFECTIVE, REPEALED, EXPIRED, UNKNOWN }
     public enum Kind { LAW, STANDARD, POLICY }
     public record Metadata(@NotBlank @Size(max=300) String title,
-                           @NotBlank @Size(max=100) String documentNo,
+                           @NotNull @Size(max=100) String documentNo,
                            @NotBlank @Size(max=200) String issuer,
                            @NotBlank @Size(max=2000) String sourceUrl,
                            @NotNull Kind kind, @NotNull Validity validity,
                            LocalDate effectiveDate, LocalDate expiryDate, boolean historical) { }
     public record Submission(@NotNull @jakarta.validation.Valid Metadata metadata,
                              @NotBlank @Size(max=500000) String text) { }
+    public record BatchItem(@NotBlank @Size(max=255) String fileName,
+                            @NotNull @Valid Metadata metadata) { }
+    public record BatchManifest(@NotEmpty @Size(max=20) List<@Valid BatchItem> items) { }
+    public record BatchDocument(String fileName, Metadata metadata, Parsed parsed, byte[] original) { }
+    public record BatchItemResult(String fileName, Report report) { }
+    public record BatchResult(String batchId, int total, List<BatchItemResult> items) { }
     public record EvidenceRequest(@NotNull @jakarta.validation.Valid Metadata officialMetadata,
                                   @NotBlank @Size(max=500000) String officialText,
                                   @NotBlank @Size(max=2000) String validitySourceUrl,

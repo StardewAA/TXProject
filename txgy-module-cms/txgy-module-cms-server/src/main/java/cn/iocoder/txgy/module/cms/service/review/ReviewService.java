@@ -32,6 +32,18 @@ public class ReviewService {
     public List<Report> list(long tenant,int limit) {return repository.list(tenant,Math.max(1,Math.min(limit,100)));}
     public byte[] original(long tenant,String id) {get(tenant,id);return repository.original(tenant,id);}
 
+    /** 清单已在控制器完整校验；任一数据库写入失败时整批事务回滚。解析失败仍保存为单独退回报告。 */
+    @Transactional(rollbackFor=Exception.class)
+    public BatchResult submitBatch(long tenant,Long user,List<BatchDocument> documents) {
+        String batchId=UUID.randomUUID().toString();
+        List<BatchItemResult> items=new ArrayList<>(documents.size());
+        for(BatchDocument document:documents) {
+            Report report=submit(tenant,user,document.metadata(),document.parsed(),document.fileName(),document.original());
+            items.add(new BatchItemResult(document.fileName(),report));
+        }
+        return new BatchResult(batchId,items.size(),List.copyOf(items));
+    }
+
     /** 独立核验人员对照官方全文后登记依据，再自动重跑全部检查。通过才在同一事务写知识库。 */
     @Transactional(rollbackFor=Exception.class)
     public Report verify(long tenant,Long reviewer,String id,EvidenceRequest request) {

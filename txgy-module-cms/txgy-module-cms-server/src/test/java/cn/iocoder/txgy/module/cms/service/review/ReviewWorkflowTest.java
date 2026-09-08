@@ -77,4 +77,22 @@ class ReviewWorkflowTest {
         assertThat(retry.id()).isNotEqualTo(r.id());
         assertThat(service.get(2005,r.id()).text()).isEqualTo(TEXT);
     }
+    @Test void batchSubmissionCreatesIndependentReports() {
+        List<BatchDocument> documents=List.of(
+                new BatchDocument("一.txt",META,new Parsed(TEXT,List.of()),TEXT.getBytes()),
+                new BatchDocument("二.txt",META,new Parsed(TEXT+"第二份",List.of()),(TEXT+"第二份").getBytes()));
+        BatchResult result=service.submitBatch(2005,1L,documents);
+        assertThat(result.batchId()).matches("[a-f0-9\\-]{36}");
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(BatchItemResult::fileName).containsExactly("一.txt","二.txt");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_document_review",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document",Integer.class)).isZero();
+    }
+    @Test void batchDatabaseFailureRollsBackAllItems() {
+        List<BatchDocument> documents=List.of(
+                new BatchDocument("一.txt",META,new Parsed(TEXT,List.of()),TEXT.getBytes()),
+                new BatchDocument("坏数据.txt",null,new Parsed(TEXT,List.of()),TEXT.getBytes()));
+        assertThatThrownBy(()->service.submitBatch(2005,1L,documents)).isInstanceOf(NullPointerException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_document_review",Integer.class)).isZero();
+    }
 }
