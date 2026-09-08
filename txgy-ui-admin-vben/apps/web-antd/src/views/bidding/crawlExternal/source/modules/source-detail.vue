@@ -16,7 +16,7 @@ import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vu
 
 import { fetchCrawlJobPage, fetchCrawlTaskPage, getCrawlSource, getCrawlTask, runCrawlSource, setCrawlSourceEnabled } from '#/api/bidding/crawlExternal';
 
-import { JOB_STATUS_MAP, TASK_STATUS_MAP, TRIGGER_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
+import { JOB_STATUS_MAP, TASK_STATUS_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
 
 const open = ref(false);
 const loading = ref(false);
@@ -103,7 +103,7 @@ async function pickTask(t: CrawlExternalApi.TaskItem) {
   try {
     taskDetail.value = (await getCrawlTask(Number(t.id))) as unknown as CrawlExternalApi.TaskItem;
   } catch {
-    taskDetail.value = undefined;
+    taskDetail.value = null;
   }
 }
 
