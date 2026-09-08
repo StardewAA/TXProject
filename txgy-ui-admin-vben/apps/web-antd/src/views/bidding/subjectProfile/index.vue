@@ -3,7 +3,7 @@ import { SubjectApi } from '#/api/bidding/subject';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import { Alert, Button, Card, Input, message, Radio, Select, Spin, Tag } from 'ant-design-vue';
+import { Alert, Button, Card, Input, message, Radio, Select, Spin } from 'ant-design-vue';
 
 import { fetchSubjectEligibility, fetchSubjectProfile, saveSubjectProfile } from '#/api/bidding/subject';
 
@@ -134,15 +134,13 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="p-3 bid-ind">
-    <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold">主体档案（企业自维护）</span>
-        <Tag color="blue">{{ SubjectApi.SUBJECT_TYPE_LABEL[subjectType] }}档案</Tag>
-        <span class="text-xs text-gray-400">同一租户可分别维护投标人（BIDDER）/ 招标人（TENDERER）档案；授权后仍须完善信息（资格 = 授权 + 完善）</span>
-      </div>
-      <Radio.Group v-model:value="subjectType" option-type="button" :options="typeOptions" @change="switchType(subjectType)" />
-    </div>
+  <div class="bid-ind ind-page">
+    <IndPageHead :title="'主体档案 · 企业自维护（' + (SubjectApi.SUBJECT_TYPE_LABEL[subjectType] || subjectType) + '）'" mark="PROFILE" sub="同一租户可分别维护投标人（BIDDER）/ 招标人（TENDERER）两套档案——主体类型是企业扮演的角色，非二选一。授权后仍须完善必填信息（资格 = 授权 + 档案完善）。">
+      <template #actions>
+        <Radio.Group v-model:value="subjectType" option-type="button" :options="typeOptions" @change="switchType(subjectType)" />
+      </template>
+    </IndPageHead>
+    <div class="ind-body">
 
     <Spin :spinning="loading">
       <div v-if="loaded" class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -160,24 +158,24 @@ onMounted(loadAll);
         />
       </div>
 
-      <div v-if="loaded" class="rounded-md border border-gray-200 bg-white p-4">
-        <div class="mb-1 text-xs font-semibold text-gray-500">基本档案（表89 法人基本信息）</div>
-        <div class="mb-3 text-xs text-gray-400">USCC 按 GB 32100-2015 校验；行政区划按 GB/T 2260（6 位市级）；必填：单位名称/信用代码/法定代表人/类别/区划/联系人/电话</div>
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div v-if="loaded" class="form-panel">
+        <div class="ind-sect" style="margin-top:0">基本档案 · 法人基本信息 <small>表89 字段口径</small></div>
+        <div class="mb-3 text-sm font-medium text-gray-500">USCC 按 GB 32100-2015 校验；行政区划按 GB/T 2260（6 位市级）；必填：单位名称/信用代码/法定代表人/类别/区划/联系人/电话</div>
+        <div class="grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-3">
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">单位名称 *</div>
+            <div class="form-lbl">单位名称 *</div>
             <Input v-model:value="form.subjectName" placeholder="与营业执照一致" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">统一社会信用代码 *</div>
+            <div class="form-lbl">统一社会信用代码 *</div>
             <Input v-model:value="form.uscc" placeholder="18 位（GB 32100-2015）" :maxlength="18" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">法定代表人 *</div>
+            <div class="form-lbl">法定代表人 *</div>
             <Input v-model:value="form.legalPersonName" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">法人机构类别代码 *（C1）</div>
+            <div class="form-lbl">法人机构类别代码 *（C1）</div>
             <Select v-model:value="form.legalPersonTypeCode" placeholder="1 位字母/数字">
               <Select.Option value="A">A 企业法人</Select.Option>
               <Select.Option value="B">B 事业法人</Select.Option>
@@ -186,35 +184,35 @@ onMounted(loadAll);
             </Select>
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">行政区划代码 *（C6）</div>
+            <div class="form-lbl">行政区划代码 *（C6）</div>
             <Input v-model:value="form.regionCode" placeholder="如 610800 榆林市" :maxlength="6" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">行业代码（C3，GB/T 4754）</div>
+            <div class="form-lbl">行业代码（C3，GB/T 4754）</div>
             <Input v-model:value="form.industryCode" placeholder="可选" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">联系人 *</div>
+            <div class="form-lbl">联系人 *</div>
             <Input v-model:value="form.contactName" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">联系电话 *</div>
+            <div class="form-lbl">联系电话 *</div>
             <Input v-model:value="form.contactPhone" placeholder="手机/座机" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">注册资本（万元）</div>
+            <div class="form-lbl">注册资本（万元）</div>
             <Input v-model:value="form.regCapital" placeholder="可选" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">注册资本币种（默认 156 人民币）</div>
+            <div class="form-lbl">注册资本币种（默认 156 人民币）</div>
             <Input v-model:value="form.regCapCurrency" placeholder="GB/T 12406-2008" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">营业执照影像 file_id</div>
+            <div class="form-lbl">营业执照影像 file_id</div>
             <Input v-model:value="form.licenseFileId" placeholder="infra file 主键（可选）" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">影像附件名</div>
+            <div class="form-lbl">影像附件名</div>
             <Input v-model:value="form.licenseFileName" placeholder="可选" />
           </div>
         </div>
@@ -228,5 +226,7 @@ onMounted(loadAll);
         <div class="text-xs text-gray-400">档案加载失败或无数据？刷新重试；本页为“企业自维护”入口（权限 bidding:subject:query/update）。</div>
       </Card>
     </Spin>
+    </div>
+
   </div>
 </template>

@@ -222,20 +222,16 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="p-3 bid-ind">
-    <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold">公告/公示管理</span>
-        <Tag color="blue">本企业自营公告（T 轨）</Tag>
-        <span class="text-xs text-gray-400">招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态（版本幂等防打扰）</span>
-      </div>
-      <Space>
-        <Button type="primary" @click="openCreate">+ 新建公告</Button>
-        <Button @click="load">刷新</Button>
-      </Space>
-    </div>
+  <div class="bid-ind ind-page">
+    <IndPageHead title="公告 / 公示管理 · 发布工作台" mark="NOTICE" sub="本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。">
+      <template #actions>
+        <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
+        <Button size="large" @click="load">刷新</Button>
+      </template>
+    </IndPageHead>
+    <div class="ind-body">
 
-    <div class="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2">
+    <div class="ind-filterbar">
       <Select v-model:value="filters.status" placeholder="状态" allow-clear style="width: 140px">
         <Select.Option v-for="(t, c) in NoticeApi.NOTICE_STATUS_LABEL" :key="c" :value="c">{{ t }}</Select.Option>
       </Select>
@@ -292,6 +288,8 @@ onMounted(load);
         <span>{{ pageNo }} / {{ pages }}</span>
         <Button size="small" :disabled="pageNo >= pages" @click="goNext">下一页</Button>
       </div>
+    </div>
+
     </div>
 
     <!-- 新建/编辑弹窗 -->

@@ -306,21 +306,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-3 bid-ind">
-    <!-- 顶部 -->
-    <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="flex items-center gap-3">
-        <span class="text-sm font-semibold">投标流程跟踪</span>
-        <Tag color="gold">手动版 · 无招标方接入</Tag>
-        <span class="text-xs text-gray-400">v1=我的关注（服务端 user_id 隔离）+ 本地阶段演示（localStorage）：报名/审核/上传标书等动作仅本地标记，无后端写端点（bidding:process-track:* 待状态机上线，09 业务口径）</span>
-      </div>
-      <Space>
-        <Button type="primary" @click="openCreate">+ 新建意向</Button>
-      </Space>
-    </div>
+  <div class="bid-ind ind-page">
+    <IndPageHead title="投标流程跟踪 · 我的投标工作台" mark="TRACK" sub="v1 = 我的关注（服务端按登录人 user_id 隔离）+ 本地阶段演示（localStorage）。意向投标 → 资质审核 → 待投标 → 已投标 / 流程结束；报名/审核/上传标书等动作仅本地标记，后端状态机（bidding:process-track:*）上线后以服务端为准。">
+      <template #actions>
+        <Button type="primary" size="large" @click="openCreate">＋ 新建意向</Button>
+        <Button size="large" @click="load">刷新</Button>
+      </template>
+    </IndPageHead>
+    <div class="ind-body">
 
-    <!-- 状态 tabs + 搜索 -->
-    <div class="mb-3 flex items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2">
+    <div class="ind-filterbar">
       <Radio.Group
         v-model:value="stateFilter"
         option-type="button"
@@ -344,11 +339,11 @@ onMounted(() => {
     <article
       v-for="t in filtered"
       :key="t.id"
-      class="mb-2 rounded-md border border-gray-200 bg-white px-3 py-2"
+      class="ind-item"
     >
       <div class="flex items-center gap-3">
         <Tag :color="stateTag(t.currentState).color">{{ stateTag(t.currentState).text }}</Tag>
-        <span class="text-sm font-medium text-gray-800">{{ t.projectName }}</span>
+        <span class="it-title">{{ t.projectName }}</span>
         <Tag v-if="t.projectCode" class="font-mono text-xs">{{ t.projectCode }}</Tag>
         <span v-if="t.issuerName" class="text-xs text-gray-400">{{ t.issuerName }}</span>
         <span class="flex-1" />
@@ -368,7 +363,7 @@ onMounted(() => {
         <a class="text-xs text-blue-600" @click="detailId = t.id; detailOpen = true">详情</a>
         <a class="text-xs text-gray-400" @click="removeTrack(t)">删除</a>
       </div>
-      <div class="mt-1 flex items-center gap-4 text-xs text-gray-400">
+      <div class="it-sub mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
         <span>意向：{{ fmtT(t.intentionTime) }}</span>
         <span v-if="t.registerTime">报名：{{ fmtT(t.registerTime) }}</span>
         <span v-if="t.pendingBidTime">待投标：{{ fmtT(t.pendingBidTime) }}</span>
@@ -379,6 +374,8 @@ onMounted(() => {
       <div v-if="t.currentState === 'QUALIFICATION_REVIEW' && t.reviewReason" class="mt-1 text-xs text-amber-600">审核说明：{{ t.reviewReason }}</div>
       <div v-if="t.documentName" class="mt-1 text-xs text-gray-500">标书：{{ t.documentName }}{{ t.documentSize ? '（' + t.documentSize + ' KB）' : '' }}</div>
     </article>
+
+    </div>
 
     <!-- 详情抽屉 -->
     <Drawer v-model:open="detailOpen" :title="detail ? detail.projectName : '流程详情'" :width="560">
@@ -400,8 +397,8 @@ onMounted(() => {
                 >
                   {{ stepState(detail, i) === 'done' ? '✓' : i + 1 }}
                 </div>
-                <div class="mt-1 text-[11px]" :class="stepState(detail, i) === 'wait' ? 'text-gray-300' : 'text-gray-600'">{{ STATE_TEXT[s] }}</div>
-                <div class="text-[10px] text-gray-300">
+                <div class="mt-1 text-xs" :class="stepState(detail, i) === 'wait' ? 'text-gray-300' : 'text-gray-600'">{{ STATE_TEXT[s] }}</div>
+                <div class="mt-0.5 text-[11.5px] text-gray-400">
                   {{ fmtT(i === 0 ? detail.intentionTime : i === 1 ? detail.registerTime : i === 2 ? detail.pendingBidTime : detail.biddedTime) }}
                 </div>
               </div>

@@ -262,20 +262,16 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="p-3 bid-ind">
-    <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold">主体信息与授权管理（平台）</span>
-        <Tag color="geekblue">平台侧</Tag>
-        <span class="text-xs text-gray-400">授权 = 资格前提；授权后企业仍须完善档案方可投标/发布（列表行已含完善度，识别“已授权未完善”）</span>
-      </div>
-      <Space>
-        <Button type="primary" @click="openAuthorize">+ 授权主体</Button>
-        <Button @click="load">刷新</Button>
-      </Space>
-    </div>
+  <div class="bid-ind ind-page">
+    <IndPageHead title="主体信息与授权管理 · 平台侧" mark="SUBJECT" sub="企业主体 = 投标/招标资格单元（招标投标法 25 条；A 方案：企业 + 多经办人）。授权是资格前提，授权后企业仍须完善档案方可投标/发布；每行可查看资格、经办用户与「双视角」人员装配。">
+      <template #actions>
+        <Button type="primary" size="large" @click="openAuthorize">＋ 授权主体</Button>
+        <Button size="large" @click="load">刷新</Button>
+      </template>
+    </IndPageHead>
+    <div class="ind-body">
 
-    <div class="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2">
+    <div class="ind-filterbar">
       <Select v-model:value="filters.subjectType" placeholder="主体类型" allow-clear style="width: 130px">
         <Select.Option value="BIDDER">投标人</Select.Option>
         <Select.Option value="TENDERER">招标人</Select.Option>
@@ -354,6 +350,8 @@ onMounted(load);
         <div class="text-right"><Space><Button @click="authOpen = false">取消</Button><Button type="primary" :loading="authSaving" @click="doAuthorize">授权</Button></Space></div>
       </div>
     </Modal>
+
+    </div>
 
     <!-- 资格抽屉 -->
     <Drawer v-model:open="elOpen" :title="(elRow?.tenantName || '企业') + ' 资格状态'" :width="520">
