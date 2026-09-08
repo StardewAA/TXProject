@@ -81,3 +81,10 @@
 
 ## 6. 里程碑建议
 API 层(3.1) → 管理端 CRUD+发布流(3.2–3.5) → 大厅只读(3.6) → 检索(3.7) → 全量过一遍 §5 与后端对齐。每步以 `/v3/api-docs` 校验字段，接口对不上以文档+后端为准，缺口进 §5。
+## 附：菜单/权限现状（2026-09-09 定版，前端无需再改）
+
+- 页面已就位：`src/views/bidding/notice/index.vue`；前端契约 `src/api/bidding/notice/index.ts`（URL 前缀 /bidding/notice，与后端 NoticeController 完全一致，无需改动）。
+- 菜单节点：招投标(6735) → 公告/公示管理(6753，目录 path=notice) → 公告列表(6754, component bidding/notice/index) + 按钮 6755 新建/6756 修改/6757 发布(bidding:notice:publish)/6758 删除。
+- 公告/公示管理此前误置顶层，已归位招投标内部；主体信息与授权管理(6759) 同批归位招投标内部（目录 path=subject-auth，子页 6760 主体档案/6762 平台授权）。
+- 权限串：bidding:notice:query(列表/详情/截止查询)/create/update(含撤下 unpublish)/publish/delete；公共大厅只读走 /bidding/notice/public/*（PermitAll）。
+- 角色授权：role1(super_admin)、role2(common/成员) 均已授招投标整棵 26 项（sql/2026-09-09-notice-menu-under-bidding.sql，幂等）。改动菜单/授权后需重新登录生效。
