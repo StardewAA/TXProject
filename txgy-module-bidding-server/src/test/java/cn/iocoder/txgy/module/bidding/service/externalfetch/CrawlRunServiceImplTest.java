@@ -41,6 +41,8 @@ class CrawlRunServiceImplTest {
         service = new CrawlRunServiceImpl();
         ReflectionTestUtils.setField(service, "crawlSourceRunner", runner);
         ReflectionTestUtils.setField(service, "crawlJobMapper", jobMapper);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class));
+        ReflectionTestUtils.setField(service, "redisMQTemplate", mock(cn.iocoder.txgy.framework.mq.redis.core.RedisMQTemplate.class));
         insertSnapshot.clear();
         when(jobMapper.insert(any(CrawlJobDO.class))).thenAnswer(inv -> {
             CrawlJobDO j = inv.getArgument(0);
@@ -159,14 +161,128 @@ class CrawlRunServiceImplTest {
     }
 
     @Test
-    void startupRecovery_marksStaleRunning_asFailed() {
-        // 启动钩子：残留 RUNNING 统一置 FAILED（否则 RUNNING 守卫永久跳过该源）
-        when(jobMapper.update(isNull(), any())).thenReturn(2);
+    void startupRecovery_orphanRunningJob_withoutTasks_markedFailed() {
+        // 启动钩子（新语义）：无未终态 task 的孤儿 RUNNING job → FAILED；有 task 的保留（异步续跑）
+        CrawlJobDO orphan = new CrawlJobDO();
+        orphan.setId(99L);
+        orphan.setStatus("RUNNING");
+        cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper taskMapper =
+                mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
+        when(jobMapper.selectList(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(List.of(orphan));
+        when(taskMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L);
 
         service.recoverInterruptedJobsOnStartup();
 
-        // 校验确实调用了 update 批量置 FAILED（update(entity=null, wrapper)）；null 实体需 isNull() 匹配
+        // 孤儿 job（无 task）被置 FAILED（update(entity=null, wrapper)；null 实体需 isNull() 匹配）
         verify(jobMapper).update(isNull(), any());
+    }
+
+    @Test
+    void startupRecovery_jobWithPendingTasks_keptRunning() {
+        // 有未终态 task 的 RUNNING job：保留（task 恢复后消费端续跑并收尾）
+        CrawlJobDO live = new CrawlJobDO();
+        live.setId(98L);
+        live.setStatus("RUNNING");
+        cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper taskMapper =
+                mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
+        when(jobMapper.selectList(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(List.of(live));
+        when(taskMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(3L);
+
+        service.recoverInterruptedJobsOnStartup();
+
+        verify(jobMapper, org.mockito.Mockito.never()).update(isNull(), any());
+    }
+
+
+    @Test
+    void runNow_asyncMode_keepsJobRunning() {
+        // 投递模式：summary.async=true 且有入队 → job 不在此收尾（保持 RUNNING，消费端 tryFinalizeJob）
+        CrawlSourceRunner.RunSummary async = summary(5, 0);
+        async.setAsync(true);
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenReturn(async);
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L, 1L);
+
+        CrawlRunRespVO vo = service.runNow("QYZB", "MANUAL");
+
+        // 投递后只置 produced=true（不 finishJob 收尾——job 保持 RUNNING 等消费端）
+        ArgumentCaptor<CrawlJobDO> producedCap = ArgumentCaptor.forClass(CrawlJobDO.class);
+        verify(jobMapper, org.mockito.Mockito.times(1)).updateById(producedCap.capture());
+        assertEquals(Boolean.TRUE, producedCap.getValue().getProduced());
+        assertEquals("RUNNING", producedCap.getValue().getStatus()); // 未收尾（保持 RUNNING）
+        assertEquals(5, vo.getTotalIngested());
+    }
+
+    @Test
+    void runNow_asyncEmptyRun_finalizesSuccess() {
+        // 空跑：async 且无入队无失败 → 直接收尾 SUCCESS（不留 RUNNING 孤儿）
+        CrawlSourceRunner.RunSummary empty = summary(0, 0);
+        empty.setAsync(true);
+        when(runner.runSource(eq("QYZB"), any(), eq(false))).thenReturn(empty);
+        when(jobMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(0L, 1L);
+
+        service.runNow("QYZB", "MANUAL");
+
+        ArgumentCaptor<CrawlJobDO> cap = ArgumentCaptor.forClass(CrawlJobDO.class);
+        verify(jobMapper, org.mockito.Mockito.times(2)).updateById(cap.capture()); // produced + 收尾
+        List<CrawlJobDO> all = cap.getAllValues();
+        assertEquals(Boolean.TRUE, all.get(0).getProduced()); // 先置 produced
+        assertEquals("SUCCESS", all.get(1).getStatus());      // 空跑直接收尾
+    }
+
+    @Test
+    void tryFinalizeJob_noPendingTasks_finalizesBatch() {
+        cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper taskMapper =
+                mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
+        CrawlJobDO job = new CrawlJobDO();
+        job.setId(77L);
+        job.setStatus("RUNNING");
+        job.setProduced(Boolean.TRUE); // 生产端已投递完成
+        when(jobMapper.selectById(77L)).thenReturn(job);
+        // selectCount 调用序：PENDING/RUNNING 计数(0) → SUCCESS 计数(5) → FAILED 计数(1)
+        when(taskMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(0L, 5L, 1L);
+
+        service.tryFinalizeJob(77L);
+
+        ArgumentCaptor<CrawlJobDO> cap = ArgumentCaptor.forClass(CrawlJobDO.class);
+        verify(jobMapper).updateById(cap.capture());
+        assertEquals("PARTIAL", cap.getValue().getStatus()); // 5 成功 1 失败 → PARTIAL
+        assertTrue(cap.getValue().getSummaryJson().contains("\"totalIngested\":5"));
+    }
+
+    @Test
+    void tryFinalizeJob_stillPending_skips() {
+        cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper taskMapper =
+                mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
+        when(taskMapper.selectCount(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(2L);
+
+        service.tryFinalizeJob(77L);
+
+        verify(jobMapper, org.mockito.Mockito.never()).updateById(any(CrawlJobDO.class));
+    }
+
+
+    @Test
+    void tryFinalizeJob_notProduced_skips() {
+        // 生产端仍在投递（produced=false）→ 不收尾（防提前收尾竞态）
+        cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper taskMapper =
+                mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper.class);
+        ReflectionTestUtils.setField(service, "crawlTaskMapper", taskMapper);
+        CrawlJobDO job = new CrawlJobDO();
+        job.setId(77L);
+        job.setStatus("RUNNING");
+        job.setProduced(Boolean.FALSE);
+        when(jobMapper.selectById(77L)).thenReturn(job);
+
+        service.tryFinalizeJob(77L);
+
+        verify(jobMapper, org.mockito.Mockito.never()).updateById(any(CrawlJobDO.class));
     }
 
 }

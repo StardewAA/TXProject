@@ -48,6 +48,8 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     private CrawlJobMapper crawlJobMapper;
     @Resource
     private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper crawlTaskMapper;
+    @Resource
+    private cn.iocoder.txgy.framework.mq.redis.core.RedisMQTemplate redisMQTemplate;
 
     /** 源级上次执行时间（进程内；v1 简化，多实例见 P2 worker 归属） */
     private final ConcurrentHashMap<String, Instant> lastRunAt = new ConcurrentHashMap<>();
@@ -59,19 +61,73 @@ public class CrawlRunServiceImpl implements CrawlRunService {
      *  首次全量判定基于 SUCCESS：清理后该源仍无 SUCCESS → 下次运行自动按 full 重试（幂等补齐，不丢历史）。 */
     @PostConstruct
     public void recoverInterruptedJobsOnStartup() {
+        // 先恢复 task（异步任务续跑），再清理无任务的孤儿 RUNNING 批次（同步遗留/生产端崩在投递前）
+        recoverInterruptedTasks();
         try {
-            // 字符串 UpdateWrapper（避免单测无 mybatis-plus lambda cache 的依赖；列名驼峰→下划线）
-            int n = crawlJobMapper.update(null,
-                    new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<CrawlJobDO>()
-                            .eq("status", "RUNNING")
-                            .set("status", "FAILED")
-                            .set("finished_at", LocalDateTime.now())
-                            .set("summary_json", "{\"error\":\"interrupted by restart\"}"));
-            if (n > 0) {
-                log.warn("[crawl][startup] 清理 {} 条崩溃遗留 RUNNING 批次 → FAILED（幂等自愈，首次全量将重试）", n);
+            // 有未终态 task 的 RUNNING job 保留（消费端续跑后 tryFinalizeJob 自然收尾）；仅清理无 task 的孤儿
+            List<CrawlJobDO> runningJobs = crawlJobMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CrawlJobDO>()
+                            .eq(CrawlJobDO::getStatus, "RUNNING"));
+            if (runningJobs == null || runningJobs.isEmpty()) {
+                return;
+            }
+            int cleaned = 0;
+            for (CrawlJobDO job : runningJobs) {
+                Long pendingTasks = crawlTaskMapper.selectCount(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                                .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getJobId, job.getId())
+                                .in(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "PENDING", "RUNNING"));
+                if (pendingTasks != null && pendingTasks > 0) {
+                    log.info("[crawl][startup][job={}] 有未终态 task（异步续跑），job 保留 RUNNING", job.getId());
+                    continue;
+                }
+                // 孤儿批次（同步模式遗留/投递前崩溃）：置 FAILED 记 interrupted
+                crawlJobMapper.update(null,
+                        new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<CrawlJobDO>()
+                                .eq("id", job.getId())
+                                .eq("status", "RUNNING")
+                                .set("status", "FAILED")
+                                .set("finished_at", LocalDateTime.now())
+                                .set("summary_json", "{\"error\":\"interrupted by restart\"}"));
+                cleaned++;
+            }
+            if (cleaned > 0) {
+                log.warn("[crawl][startup] 清理 {} 条孤儿 RUNNING 批次 → FAILED（幂等自愈，首次全量将重试）", cleaned);
             }
         } catch (Exception e) {
             log.error("[crawl][startup] 恢复 RUNNING 批次失败", e);
+        }
+    }
+
+    /** 异步任务自愈：上次进程崩溃遗留的 RUNNING task（消费中/worker 死亡）→ 重置 PENDING 并重发轻信号。
+     *  DB task 是唯一真相：即使 Redis 全丢，任务仍在 DB，重发后消费端幂等续跑（不重排任务链表）。 */
+    private void recoverInterruptedTasks() {
+        try {
+            List<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO> stuck = crawlTaskMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                            .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "RUNNING"));
+            if (stuck == null || stuck.isEmpty()) {
+                return;
+            }
+            log.warn("[crawl][startup] 发现 {} 条崩溃遗留 RUNNING task → 重置 PENDING + 重发轻信号", stuck.size());
+            for (cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO t : stuck) {
+                try {
+                    t.setStatus("PENDING");
+                    t.setWorkerId(null);
+                    t.setStartedAt(null);
+                    crawlTaskMapper.updateById(t);
+                    cn.iocoder.txgy.module.bidding.service.externalfetch.mq.CrawlNoticeFetchMessage msg =
+                            new cn.iocoder.txgy.module.bidding.service.externalfetch.mq.CrawlNoticeFetchMessage();
+                    msg.setTaskId(t.getId());
+                    msg.setJobId(t.getJobId());
+                    msg.setSourceCode(t.getSourceCode());
+                    redisMQTemplate.send(msg);
+                } catch (Exception e) {
+                    log.error("[crawl][startup][task={}] 自愈重发失败（保留 PENDING，下轮调度/人工可补）", t.getId(), e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[crawl][startup] 恢复 RUNNING task 失败", e);
         }
     }
 
@@ -124,6 +180,9 @@ public class CrawlRunServiceImpl implements CrawlRunService {
                 // 投递模式：本轮只做列表发现+投递；job 保持 RUNNING，task 全部终态后由消费端 tryFinalizeJob 收尾
                 log.info("[crawl][runNow][{}] 投递完成 enqueued={} failed={}（消费端异步落库，job 保持 RUNNING）", sourceCode,
                         summary.getTotalIngested(), summary.getTotalFailed());
+                // 标记投递完成（produced=true）：消费端 tryFinalizeJob 仅在 produced 且无未终态 task 时收尾，防止投递中提前收尾
+                job.setProduced(Boolean.TRUE);
+                crawlJobMapper.updateById(job);
                 if (summary.getTotalIngested() == 0 && summary.getTotalFailed() == 0) {
                     // 空跑（窗口内无新条目/无可投递）：直接收尾 SUCCESS，不留 RUNNING 孤儿
                     finishJob(job, statusOf(summary), summaryToJson(summary));
@@ -190,6 +249,9 @@ public class CrawlRunServiceImpl implements CrawlRunService {
             CrawlJobDO job = crawlJobMapper.selectById(jobId);
             if (job == null || !"RUNNING".equals(job.getStatus())) {
                 return; // 已收尾/不存在
+            }
+            if (!Boolean.TRUE.equals(job.getProduced())) {
+                return; // 生产端尚未投递完成：此时收尾会漏掉后续投递的 task（竞态防护 2026-09-09）
             }
             // 汇总：SUCCESS 数 / FAILED 数（SKIPPED 不计失败）
             Long ok = crawlTaskMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()

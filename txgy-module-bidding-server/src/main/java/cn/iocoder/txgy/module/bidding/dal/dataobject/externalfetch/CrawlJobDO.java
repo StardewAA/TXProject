@@ -26,6 +26,8 @@ public class CrawlJobDO extends BaseDO {
     private String triggerType;           // SCHEDULE/MANUAL/REPAIR
     private String scope;                 // 范围说明（如按时间窗口）
     private String status;                // RUNNING/SUCCESS/PARTIAL/FAILED
+    /** 生产端是否已投递完成（async：runNow 投递完置 true；tryFinalizeJob 要求 produced 且无未终态 task 才收尾，防提前收尾竞态） */
+    private Boolean produced;
     private String summaryJson;           // 汇总：总数/成功/失败/转人工数（JSON）
     private LocalDateTime finishedAt;     // 结束时间
 }

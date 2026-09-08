@@ -4,6 +4,7 @@ package cn.iocoder.txgy.module.bidding.service.externalfetch;
 //           正文文本/源文件由下载链路 FileApi 承载，AI 结构化复用 noticeexternal.ai（v1.0 §三）。
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
 import com.fasterxml.jackson.databind.JsonNode;

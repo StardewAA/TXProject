@@ -31,6 +31,8 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     private CrawlTaskService crawlTaskService;
     @Resource
     private CrawlNoticeProcessor crawlNoticeProcessor;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlRunService crawlRunService;
 
     /** worker 标识：本机消费节点（日志/分布式归属） */
     private final String workerId = "bidding-consumer-" + System.getProperty("user.name", "local");
@@ -54,6 +56,7 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
             log.info("[consume][taskId={} status={}] 已终态，幂等跳过 ACK", taskId, task.getStatus());
             return;
         }
+        boolean finalized = false;
         try {
             crawlTaskService.markRunning(taskId, workerId);
             Long noticeId = crawlNoticeProcessor.execute(task);
@@ -66,8 +69,17 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
                 crawlTaskService.handleFailure(taskId, cause);
             } catch (Exception ex) {
                 log.error("[consume][taskId={}] 失败状态回写异常（保留原状待重投）: {}", taskId, ex.getMessage());
+                finalized = true; // 状态未回写：不触发批次收尾（task 仍 RUNNING）
             }
             // 不向上抛：业务已自管退避/死信；ACK 本消息避免框架无限重投同一失败任务
+        }
+        // 消费驱动批次收尾：无论成败，终态后检查 job 是否可收尾（幂等；RUNNING 任务仍在队则不收）
+        if (!finalized && task.getJobId() != null) {
+            try {
+                crawlRunService.tryFinalizeJob(task.getJobId());
+            } catch (Exception e) {
+                log.warn("[consume][taskId={}] 批次收尾检查异常（下次终态再试）: {}", taskId, e.getMessage());
+            }
         }
     }
 
