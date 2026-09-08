@@ -5,7 +5,8 @@ import { requestClient } from '#/api/request';
 export namespace NoticeExternalApi {
   /** 管理端行（NoticeExternalManageRespVO，01 §2 manage/page） */
   export interface ManageItem {
-    id?: number;
+    /** 公告主键（雪花 ID，后端 Long 序列化为字符串时前端按 string 兼容） */
+    id?: number | string;
     sourceCode?: string;
     sourceName?: string;
     title?: string;

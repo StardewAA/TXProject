@@ -220,7 +220,9 @@ function renderBlock(b: NoticeBodyBlock): string {
   switch (b.type) {
     case 'heading': {
       const lv = Number.isInteger(b.level) ? Math.min(6, Math.max(1, b.level)) : 2;
-      const text = b.text ?? '';
+      // 首尾空白是原站排版残留（空格缩进等），结构化后由公文 CSS 负责版式 → trim 后判空，
+      // 杜绝“内容开头有空格”产出空白标题/段落占位、正文看起来渲染了实际为空
+      const text = (b.text ?? '').trim();
       return text ? `<h${lv}>${esc(text)}</h${lv}>` : '';
     }
     case 'paragraph': {
@@ -228,24 +230,32 @@ function renderBlock(b: NoticeBodyBlock): string {
       return text ? `<p class="doc-para">${esc(text)}</p>` : '';
     }
     case 'table': {
-      const cap = b.caption ? `<caption>${esc(b.caption)}</caption>` : '';
-      const head = Array.isArray(b.headers) && b.headers.length
-        ? `<thead><tr>${b.headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>`
-        : '';
+      const cap = b.caption ? (b.caption.trim() ? `<caption>${esc(b.caption.trim())}</caption>` : '') : '';
+      const head =
+        Array.isArray(b.headers) && b.headers.length
+          ? `<thead><tr>${b.headers
+              .map((h) => (h == null ? '' : `<th>${esc(String(h).trim())}</th>`))
+              .join('')}</tr></thead>`
+          : '';
       const rows = Array.isArray(b.rows) ? b.rows : [];
       const body = rows.length
         ? `<tbody>${rows
-            .map(
-              (r) =>
-                `<tr>${(Array.isArray(r) ? r : []).map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`,
-            )
+            .map((r) => {
+              const cells = (Array.isArray(r) ? r : [])
+                .filter((c) => c != null && String(c).trim() !== '')
+                .map((c) => `<td>${esc(String(c).trim())}</td>`);
+              return cells.length ? `<tr>${cells.join('')}</tr>` : '';
+            })
+            .filter(Boolean)
             .join('')}</tbody>`
         : '';
       if (!head && !body) return '';
       return `<table>${cap}${head}${body}</table>`;
     }
     case 'list': {
-      const items = Array.isArray(b.items) ? b.items : [];
+      const items = Array.isArray(b.items)
+        ? b.items.map((it) => (it == null ? '' : String(it).trim())).filter(Boolean)
+        : [];
       if (!items.length) return '';
       const tag = b.ordered ? 'ol' : 'ul';
       return `<${tag}>${items.map((it) => `<li>${esc(it)}</li>`).join('')}</${tag}>`;

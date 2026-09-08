@@ -140,6 +140,7 @@ const textOf = (m: Record<string, string>, v?: string) => (v && m[v] ? m[v] : (v
 /** 列表列（状态/审核/行业/抽取/正文结构化用 slots 上色，见 index.vue 对应 # 模板） */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
+    { type: 'checkbox', width: 40 },
     { field: 'id', title: 'ID', width: 90 },
     { field: 'title', title: '公告标题', minWidth: 240, showOverflow: true },
     { field: 'sourceName', title: '来源', width: 130, showOverflow: true },
