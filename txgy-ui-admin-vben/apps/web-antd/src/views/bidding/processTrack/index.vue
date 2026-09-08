@@ -278,7 +278,7 @@ function doAct() {
     }
     save();
     actOpen.value = false;
-    message.success(EVENT_TEXT[ev] + '成功：' + t.projectName);
+    message.success(EVENT_TEXT[ev] + '（本地演示）：' + t.projectName + ' —— 后端状态机上线后以服务端数据为准');
   } finally {
     actSubmitting.value = false;
   }
@@ -295,7 +295,7 @@ function removeTrack(t: ProcessTrackApi.Track) {
     onOk: () => {
       tracks.value = tracks.value.filter((x) => x.id !== t.id);
       save();
-      message.success('已删除');
+      message.success('已删除（本地演示）');
     },
   });
 }
@@ -312,7 +312,7 @@ onMounted(() => {
       <div class="flex items-center gap-3">
         <span class="text-sm font-semibold">投标流程跟踪</span>
         <Tag color="gold">手动版 · 无招标方接入</Tag>
-        <span class="text-xs text-gray-400">后端契约待实现，当前本地持久演示（localStorage）；流程动作全部由本人手动标记</span>
+        <span class="text-xs text-gray-400">v1=我的关注（服务端 user_id 隔离）+ 本地阶段演示（localStorage）：报名/审核/上传标书等动作仅本地标记，无后端写端点（bidding:process-track:* 待状态机上线，09 业务口径）</span>
       </div>
       <Space>
         <Button type="primary" @click="openCreate">+ 新建意向</Button>
