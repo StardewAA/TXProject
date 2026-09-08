@@ -35,6 +35,16 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/** 预置退款原因选项（"其他"时支持自定义输入） */
+export const REFUND_REASON_OPTIONS = [
+  { label: '不想要了', value: '不想要了' },
+  { label: '商品信息填写错误', value: '商品信息填写错误' },
+  { label: '商品质量问题', value: '商品质量问题' },
+  { label: '缺少商品/漏发', value: '缺少商品/漏发' },
+  { label: '协商一致退款', value: '协商一致退款' },
+  { label: '其他', value: '其他' },
+];
+
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
