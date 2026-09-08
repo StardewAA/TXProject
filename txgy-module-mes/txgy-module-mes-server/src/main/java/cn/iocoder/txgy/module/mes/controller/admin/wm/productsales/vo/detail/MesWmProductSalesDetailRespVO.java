@@ -46,6 +46,15 @@ public class MesWmProductSalesDetailRespVO {
     @Schema(description = "批次号", example = "BATCH001")
     private String batchCode;
 
+    @Schema(description = "环保污染状态：CLEAN(无污染)/POLLUTED(有污染受控)，空=未判定")
+    private String pollutionStatus;
+
+    @Schema(description = "环保去向/库位")
+    private String pollutionLocation;
+
+    @Schema(description = "环保标记（有污染/需管控）")
+    private Boolean pollutionMarked;
+
     @Schema(description = "仓库ID", example = "1")
     private Long warehouseId;
 

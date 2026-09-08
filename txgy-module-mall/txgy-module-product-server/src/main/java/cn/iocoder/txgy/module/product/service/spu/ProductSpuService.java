@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * 商品 SPU Service 接口
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 public interface ProductSpuService {
 
@@ -110,6 +110,9 @@ public interface ProductSpuService {
      */
     void updateSpuStock(Map<Long, Integer> stockIncrCounts);
 
+    /** 对账修复时直接同步 SPU 缓存库存，不改变销量。 */
+    void syncSpuStock(Map<Long, Integer> stockCounts);
+
     /**
      * 更新 SPU 状态
      *
@@ -154,3 +157,4 @@ public interface ProductSpuService {
     void updateBrowseCount(Long id, int incrCount);
 
 }
+

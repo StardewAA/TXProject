@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.dal.dataobject.pro.project;
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.txgy.module.mes.enums.DictTypeConstants;
+import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -54,6 +55,49 @@ public class MesProProjectDO extends BaseDO {
      * 字典 {@link DictTypeConstants#MES_PRO_PROJECT_STATUS}
      */
     private Integer status;
+    /**
+     * 项目优先级
+     *
+     * 1 紧急、2 高、3 中、4 低
+     * 字典 {@link DictTypeConstants#MES_PRO_PROJECT_PRIORITY}
+     */
+    private Integer priority;
+    /**
+     * 负责人
+     */
+    private String owner;
+    /**
+     * 负责人用户编号
+     *
+     * 关联系统用户，保存时校验存在并自动回填负责人姓名，避免随意填写
+     */
+    private Long ownerUserId;
+    /**
+     * 责任部门
+     */
+    private String dept;
+    /**
+     * 计划开始时间
+     */
+    private LocalDateTime planStartTime;
+    /**
+     * 计划结束时间
+     */
+    private LocalDateTime planEndTime;
+    /**
+     * 实际开始时间
+     */
+    private LocalDateTime actualStartTime;
+    /**
+     * 实际结束时间
+     */
+    private LocalDateTime actualEndTime;
+    /**
+     * 工期天数
+     *
+     * 由计划开始/结束时间自动计算（自然日），无需人工填写
+     */
+    private Integer durationDays;
     /**
      * 备注
      */

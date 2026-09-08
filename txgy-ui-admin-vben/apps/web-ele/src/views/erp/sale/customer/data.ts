@@ -11,6 +11,15 @@ export function useFormSchema(): VbenFormSchema[] {
   return [
     {
       component: 'Input',
+      fieldName: 'partnerCode',
+      label: '客户编码',
+      rules: 'required',
+      componentProps: {
+        placeholder: '请输入跨模块统一客户编码',
+      },
+    },
+    {
+      component: 'Input',
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
@@ -180,6 +189,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
+    {
+      field: 'partnerCode',
+      title: '客户编码',
+      minWidth: 140,
+    },
     {
       field: 'name',
       title: '客户名称',

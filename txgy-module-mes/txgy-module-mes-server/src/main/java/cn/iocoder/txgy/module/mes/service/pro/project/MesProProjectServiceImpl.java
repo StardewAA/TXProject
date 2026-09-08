@@ -2,8 +2,12 @@ package cn.iocoder.txgy.module.mes.service.pro.project;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.ReUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
@@ -13,18 +17,25 @@ import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
@@ -44,6 +55,8 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     private MesProProjectMapper projectMapper;
     @Resource
     private MesProWorkOrderMapper workOrderMapper;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Override
     public Long createProject(MesProProjectSaveReqVO createReqVO) {
@@ -51,6 +64,7 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         validateProjectSaveData(null, createReqVO);
         // 2. 插入项目
         MesProProjectDO project = BeanUtils.toBean(createReqVO, MesProProjectDO.class);
+        project.setDurationDays(calculateDuration(project));
         projectMapper.insert(project);
         return project.getId();
     }
@@ -59,15 +73,19 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     public void updateProject(MesProProjectSaveReqVO updateReqVO) {
         // 1.1 校验存在
         MesProProjectDO dbProject = validateProjectExists(updateReqVO.getId());
-        // 1.2 校验状态流转：已完成 / 已取消的项目不允许回退为未开始
-        if (MesProProjectStatusEnum.isClosed(dbProject.getStatus())
-                && MesProProjectStatusEnum.NOT_STARTED.getStatus().equals(updateReqVO.getStatus())) {
-            throw exception(PRO_PROJECT_STATUS_FORBIDDEN);
+        // 1.2 校验状态流转：仅允许正向流转，终态（已完成 / 已取消）不允许再变更
+        if (!MesProProjectStatusEnum.canTransferTo(dbProject.getStatus(), updateReqVO.getStatus())) {
+            MesProProjectStatusEnum from = MesProProjectStatusEnum.valueOfStatus(dbProject.getStatus());
+            MesProProjectStatusEnum to = MesProProjectStatusEnum.valueOfStatus(updateReqVO.getStatus());
+            throw exception(PRO_PROJECT_STATUS_TRANSFER_FORBIDDEN,
+                    from == null ? "未知" : from.getName(),
+                    to == null ? "未知" : to.getName());
         }
         // 1.3 校验数据
         validateProjectSaveData(updateReqVO.getId(), updateReqVO);
         // 2. 更新
         MesProProjectDO updateObj = BeanUtils.toBean(updateReqVO, MesProProjectDO.class);
+        updateObj.setDurationDays(calculateDuration(updateObj));
         projectMapper.updateById(updateObj);
     }
 
@@ -251,10 +269,166 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         }
     }
 
+    @Override
+    public void resumeProject(Long id) {
+        MesProProjectDO project = validateProjectExists(id);
+        if (!MesProProjectStatusEnum.PAUSED.getStatus().equals(project.getStatus())) {
+            throw exception(PRO_PROJECT_STATUS_NOT_PAUSED);
+        }
+        projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                .eq(MesProProjectDO::getId, id)
+                .set(MesProProjectDO::getStatus, MesProProjectStatusEnum.PROCESSING.getStatus()));
+    }
+
+    @Override
+    public void forceCloseProject(Long id) {
+        MesProProjectDO project = validateProjectExists(id);
+        if (MesProProjectStatusEnum.CANCELED.getStatus().equals(project.getStatus())) {
+            throw exception(PRO_PROJECT_FORCE_CLOSE_FORBIDDEN);
+        }
+        if (MesProProjectStatusEnum.FINISHED.getStatus().equals(project.getStatus())) {
+            return;
+        }
+        projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                .eq(MesProProjectDO::getId, id)
+                .set(MesProProjectDO::getStatus, MesProProjectStatusEnum.FINISHED.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MesProProjectImportRespVO importProjectList(List<MesProProjectImportExcelVO> importList, boolean updateSupport) {
+        if (CollUtil.isEmpty(importList)) {
+            throw exception(PRO_PROJECT_IMPORT_LIST_EMPTY);
+        }
+        MesProProjectImportRespVO respVO = MesProProjectImportRespVO.builder()
+                .createCodes(new ArrayList<>()).updateCodes(new ArrayList<>())
+                .failureCodes(new LinkedHashMap<>()).build();
+        AtomicInteger index = new AtomicInteger(1);
+        importList.forEach(importProject -> {
+            int currentIndex = index.getAndIncrement();
+            String key = StrUtil.blankToDefault(importProject.getCode(), "第 " + currentIndex + " 行");
+            // 1. 逐行校验：编码格式、名称、状态合法性、时间先后
+            String errorMsg = validateImportRow(importProject);
+            if (errorMsg != null) {
+                respVO.getFailureCodes().put(key, errorMsg);
+                return;
+            }
+            MesProProjectDO exist = projectMapper.selectByCode(importProject.getCode());
+            if (exist != null) {
+                if (!updateSupport) {
+                    respVO.getFailureCodes().put(key, "项目编码已存在");
+                    return;
+                }
+                MesProProjectDO updateObj = BeanUtils.toBean(importProject, MesProProjectDO.class);
+                updateObj.setId(exist.getId());
+                updateObj.setDurationDays(calculateDuration(updateObj));
+                projectMapper.updateById(updateObj);
+                respVO.getUpdateCodes().add(importProject.getCode());
+                return;
+            }
+            MesProProjectDO createObj = BeanUtils.toBean(importProject, MesProProjectDO.class);
+            if (createObj.getStatus() == null) {
+                createObj.setStatus(MesProProjectStatusEnum.NOT_STARTED.getStatus());
+            }
+            createObj.setDurationDays(calculateDuration(createObj));
+            projectMapper.insert(createObj);
+            respVO.getCreateCodes().add(importProject.getCode());
+        });
+        return respVO;
+    }
+
+    /**
+     * 逐行校验导入的项目数据
+     *
+     * @param row 导入行
+     * @return 错误信息；返回 null 表示校验通过
+     */
+    private String validateImportRow(MesProProjectImportExcelVO row) {
+        if (StrUtil.isBlank(row.getCode())) {
+            return "项目编码不能为空";
+        }
+        if (!ReUtil.isMatch("^[A-Za-z0-9_-]{2,32}$", row.getCode())) {
+            return "项目编码需为 2-32 位字母、数字、下划线或短横线";
+        }
+        if (StrUtil.isBlank(row.getName())) {
+            return "项目名称不能为空";
+        }
+        if (row.getName().length() > 100) {
+            return "项目名称不能超过 100 个字符";
+        }
+        if (row.getStatus() != null && MesProProjectStatusEnum.valueOfStatus(row.getStatus()) == null) {
+            return "项目状态不合法";
+        }
+        if (row.getPlanStartTime() != null && row.getPlanEndTime() != null
+                && row.getPlanEndTime().isBefore(row.getPlanStartTime())) {
+            return "计划结束时间不能早于计划开始时间";
+        }
+        if (row.getActualStartTime() != null && row.getActualEndTime() != null
+                && row.getActualEndTime().isBefore(row.getActualStartTime())) {
+            return "实际结束时间不能早于实际开始时间";
+        }
+        return null;
+    }
+
+    /**
+     * 按计划开始 / 结束时间计算工期天数（自然日）
+     *
+     * 任一端缺失时返回 null，不写入工期
+     *
+     * @param project 项目
+     * @return 工期天数
+     */
+    private Integer calculateDuration(MesProProjectDO project) {
+        if (project.getPlanStartTime() == null || project.getPlanEndTime() == null) {
+            return null;
+        }
+        return (int) Duration.between(project.getPlanStartTime(), project.getPlanEndTime()).toDays();
+    }
+
     // ==================== 校验方法 ====================
 
     private void validateProjectSaveData(Long id, MesProProjectSaveReqVO reqVO) {
+        // 1. 编码唯一性
         validateProjectCodeUnique(id, reqVO.getCode());
+        // 2. 时间先后：计划结束不得早于计划开始，实际结束不得早于实际开始
+        validateProjectTime(reqVO.getPlanStartTime(), reqVO.getPlanEndTime(),
+                reqVO.getActualStartTime(), reqVO.getActualEndTime());
+        // 3. 负责人：必须为系统内用户，并自动回填负责人姓名
+        validateProjectOwner(reqVO);
+    }
+
+    /**
+     * 校验计划 / 实际时间的先后关系
+     *
+     * @param planStart   计划开始时间
+     * @param planEnd     计划结束时间
+     * @param actualStart 实际开始时间
+     * @param actualEnd   实际结束时间
+     */
+    private void validateProjectTime(LocalDateTime planStart, LocalDateTime planEnd,
+                                     LocalDateTime actualStart, LocalDateTime actualEnd) {
+        if (planStart != null && planEnd != null && planEnd.isBefore(planStart)) {
+            throw exception(PRO_PROJECT_PLAN_TIME_INVALID);
+        }
+        if (actualStart != null && actualEnd != null && actualEnd.isBefore(actualStart)) {
+            throw exception(PRO_PROJECT_ACTUAL_TIME_INVALID);
+        }
+    }
+
+    /**
+     * 校验负责人用户存在，并按用户昵称回填负责人姓名，避免随意填写
+     *
+     * @param reqVO 保存请求
+     */
+    private void validateProjectOwner(MesProProjectSaveReqVO reqVO) {
+        if (reqVO.getOwnerUserId() == null) {
+            return;
+        }
+        AdminUserRespDTO user = adminUserApi.getUser(reqVO.getOwnerUserId()).getCheckedData();
+        if (user == null) {
+            throw exception(PRO_PROJECT_OWNER_NOT_EXISTS);
+        }
+        reqVO.setOwner(user.getNickname());
     }
 
     private void validateProjectCodeUnique(Long id, String code) {
