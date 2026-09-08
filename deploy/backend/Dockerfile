@@ -2,9 +2,11 @@ FROM maven:3.9-eclipse-temurin-25 AS builder
 
 WORKDIR /workspace
 
+COPY deploy/backend/settings.xml /root/.m2/settings.xml
+
 COPY . .
 
-RUN mvn -Dmaven.test.skip=true package
+RUN mvn -s /root/.m2/settings.xml -Dmaven.test.skip=true package
 
 ARG MODULE_PATH
 
