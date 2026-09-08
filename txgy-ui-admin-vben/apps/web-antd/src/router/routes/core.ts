@@ -165,6 +165,18 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '个人中心（投标人）', hideInMenu: true },
       },
       {
+        name: 'PortalBiddingInternalHall',
+        path: 'bidding/internal-hall',
+        component: () => import('#/views/portal/bidding/internalHall.vue'),
+        meta: { title: '本平台发布', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalDetail',
+        path: 'bidding/internal-detail/:id',
+        component: () => import('#/views/portal/bidding/internalDetail.vue'),
+        meta: { title: '本平台公告详情', hideInMenu: true },
+      },
+      {
         name: 'PortalProfile',
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),

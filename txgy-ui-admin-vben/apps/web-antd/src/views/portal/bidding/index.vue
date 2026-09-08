@@ -227,6 +227,11 @@ onMounted(() => {
         <div class="n-name">公告大厅</div>
         <div class="n-sub">查询 · 中标公示 · 详情</div>
       </div>
+      <div class="nav-item" @click="goNav('/portal/bidding/internal-hall')">
+        <span class="ic">◈</span>
+        <div class="n-name">本平台发布</div>
+        <div class="n-sub">招标人公告 · 大厅公开</div>
+      </div>
       <div class="nav-item" @click="goNav('/portal/bidding/subscription')">
         <span class="ic">✦</span>
         <div class="n-name">我的关注</div>

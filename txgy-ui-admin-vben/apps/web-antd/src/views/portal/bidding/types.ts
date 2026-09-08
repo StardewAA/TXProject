@@ -224,3 +224,32 @@ export interface FollowEvent {
   /** 平台详情可达性（false=公告已下线/归档，隐藏详情跳转；EXTERNAL 仍可经 origUrl 看源站原文；无公告为 null，BR-4） */
   available?: boolean | null;
 }
+
+/* ============ 内部公告（招标人自营 /bidding/notice public 域） ============ */
+export interface InternalNoticeItem {
+  id: number | string;
+  noticeCode?: string;
+  noticeType?: string;
+  noticeTypeName?: string;
+  title: string;
+  projectCode?: string;
+  projectName?: string;
+  publisherName?: string;
+  publishTime?: number | string;
+  status?: string;
+  publicLevel?: string;
+  contentPreview?: string;
+}
+export interface InternalNoticeDetail extends InternalNoticeItem {
+  content?: string;
+  contentVersion?: number;
+  payload?: Record<string, unknown>;
+  pdfFileId?: number | string;
+  pdfSize?: number;
+}
+export interface InternalNoticeParams {
+  pageNo?: number;
+  pageSize?: number;
+  keyword?: string;
+  noticeType?: string;
+}
