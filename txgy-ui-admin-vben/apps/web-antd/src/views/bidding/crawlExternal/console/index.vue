@@ -13,6 +13,7 @@ import {
   Empty,
   message,
   Modal,
+  Pagination,
   Select,
   Tag,
 } from 'ant-design-vue';
@@ -95,6 +96,8 @@ const tRowsLoading = ref(false);
 const detailCursorIdx = ref(-1);
 /** 源卡墙任务数角标（sourceCode → 条数） */
 const srcCountMap = ref<Record<string, number>>({});
+/** 任务条时间排序：desc=最新在前(后端 id 倒序默认) / asc=最早在前(前端对当页升序) */
+const tSort = ref<'desc' | 'asc'>('desc');
 const backendTests = ref<CrawlExternalApi.TaskItem[]>([]);
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 
@@ -433,6 +436,21 @@ async function sourceTaskCount(src: CrawlExternalApi.SourceItem): Promise<number
     return 0;
   }
 }
+/** 时间排序列键：finishedAt || createTime（无则 0） */
+function timeKeyOf(t: CrawlExternalApi.TaskItem): number {
+  const v = t.finishedAt || t.createTime || 0;
+  return typeof v === 'number' ? v : new Date(String(v)).getTime() || 0;
+}
+/** 展示行：按 tSort 排序（desc=后端倒序原样；asc=本页最早在前——后端暂无全量排序参数，仅当页生效） */
+const shownRows = computed(() => {
+  if (tSort.value === 'desc') return tRows.value;
+  return [...tRows.value].sort((a, b) => timeKeyOf(a) - timeKeyOf(b));
+});
+/** 切换时间排序 */
+function toggleSort(): void {
+  tSort.value = tSort.value === 'desc' ? 'asc' : 'desc';
+}
+
 /** 源卡墙并发补任务数角标（限前 12 源） */
 async function fillSourceCounts(list: CrawlExternalApi.SourceItem[]): Promise<void> {
   const m: Record<string, number> = {};
@@ -719,40 +737,51 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
             <span class="text-sm font-extrabold text-gray-700">{{ curSource.sourceName || curSource.sourceCode }}</span>
             <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ curSource.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
-            <span class="ml-2 text-xs font-semibold text-gray-500">共 {{ tTotal }} 条任务</span>
           </div>
+
+          <!-- 筛选行 -->
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
             <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: 'GENERIC · 通用下载', value: 'GENERIC' }]" @change="applyTaskFilter" />
             <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
             <Button size="small" @click="applyTaskFilter">查询</Button>
             <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>
+            <span class="ml-auto text-xs font-semibold text-gray-500">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
           </div>
-          <div class="mb-2 text-right">
-            <a-pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" show-total :show-size-changer="false" @change="loadTaskRows" />
-          </div>
+
           <div v-if="tRowsLoading" class="ind-empty">加载中…</div>
           <div v-else-if="tRows.length === 0" class="ind-empty">该信息源暂无任务条 —— 在该源「立即获取」或启用后按间隔自动轮询产生。</div>
-          <div v-else class="space-y-2">
-            <article v-for="t in tRows" :key="String(t.id)" class="ind-card ind-card-click fp-row" @click="openTaskDetail(t)">
-              <div class="ind-card-h">
-                <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-                <Tag v-if="t.channelCode" color="geekblue">{{ t.channelCode }}</Tag>
-                <span class="fp-row-id">#{{ String(t.id) }}</span>
-                <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
-                <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-                <span class="cd-link">详情 ▸</span>
+          <template v-else>
+            <!-- 表格化查询列表（状态 / 时间(可排序) / 任务# / URL / 消息；行点击 → 整页详情） -->
+            <div class="fp-tbl">
+              <div class="fp-tr fp-th">
+                <span class="fp-td w-status">状态</span>
+                <span class="fp-td w-time fp-sortable" @click="toggleSort" :title="tSort === 'desc' ? '当前：最新在前（点此改最早在前）' : '当前：最早在前（点此改最新在前）'">时间 {{ tSort === 'desc' ? '↓' : '↑' }}</span>
+                <span class="fp-td w-id">任务 #</span>
+                <span class="fp-td flex-1">URL / 来源</span>
+                <span class="fp-td w-msg">消息 / 明细</span>
               </div>
-              <div class="ind-card-b">
-                <div class="fp-row-sub truncate" :title="t.message || ''">
+              <div v-for="t in shownRows" :key="String(t.id)" class="fp-tr fp-row-click" @click="openTaskDetail(t)">
+                <span class="fp-td w-status">
+                  <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+                  <Tag v-if="t.channelCode" color="geekblue">{{ t.channelCode }}</Tag>
+                </span>
+                <span class="fp-td w-time">{{ fmtDt(t.finishedAt || t.createTime) || '—' }}</span>
+                <span class="fp-td w-id">#{{ String(t.id) }}</span>
+                <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL，见详情）' }}</span>
+                <span class="fp-td w-msg fp-msg" :title="t.message || ''">
                   <template v-if="t.message">{{ t.message }}</template>
-                  <template v-else>解析器：{{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · worker {{ t.workerId }}</template></template>
-                </div>
+                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · {{ t.workerId }}</template></template>
+                </span>
               </div>
-            </article>
-          </div>
+            </div>
+            <div class="mt-3 flex justify-end">
+              <Pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" show-total show-size-changer :page-size-options="['20', '50', '100']" @change="loadTaskRows" />
+            </div>
+          </template>
         </template>
       </section>
+
 
       <!-- ============ ② 后端测试任务 ============ -->
       <section v-show="activeTab === 'tests'">
@@ -1007,6 +1036,22 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: #1f2937; background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; outline: none; transition: border-color .15s; }
 .fp-url-input:focus { border-color: #1d4ed8; }
 .fp-url-input::placeholder { color: #9aa3ad; }
+/* 表格化任务条（公告式查询：列分状态/时间/任务#/URL/消息，行点击进详情） */
+.fp-tbl { border: 1.5px solid var(--ind-line); border-radius: 8px; overflow: hidden; background: #fff; }
+.fp-tr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #eceff2; transition: background .12s; }
+.fp-tr:last-child { border-bottom: none; }
+.fp-th { background: #f4f6f8; color: var(--ind-sub-text); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.fp-row-click { cursor: pointer; }
+.fp-row-click:hover { background: #f6f1e6; }
+.fp-td { font-size: 13px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-td.w-status { width: 128px; flex: none; display: flex; gap: 4px; }
+.fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
+.fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
+.fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text); }
+.fp-td.fp-url { color: #1f2937; font-weight: 600; }
+.fp-td.fp-msg { font-size: 12.5px; }
+.fp-sortable { cursor: pointer; user-select: none; }
+.fp-sortable:hover { color: #1d4ed8; }
 
 /* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
 .ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }

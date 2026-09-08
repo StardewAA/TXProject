@@ -39,7 +39,7 @@ const router = useRouter();
   color: #1e2832;
 }
 .ph-card p {
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 13.5px;
   line-height: 1.8;
   margin: 0 0 22px;

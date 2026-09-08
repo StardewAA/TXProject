@@ -2,11 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
-import { ref } from 'vue';
+import { h, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Modal, message } from 'ant-design-vue';
+import { Modal, message, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -36,8 +36,8 @@ async function runAction(label: string, fn: () => Promise<unknown>) {
     await fn();
     message.success(label + '成功');
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
   }
@@ -54,28 +54,36 @@ function handleEdit(row: CrawlExternalApi.SourceItem) {
 }
 
 
-/** 立即采集一轮（同步下载并落库，结果弹窗汇总） */
-function runSummaryText(res?: CrawlExternalApi.RunResult): string {
-  if (!res) return '';
-  const lines: string[] = ['成功落库 ' + (res.totalIngested ?? 0) + ' 条，失败 ' + (res.totalFailed ?? 0) + ' 条'];
+/** 立即采集执行锁（同步长请求，防双击重入撞后端 RUNNING 守卫） */
+const runningSource = ref(false);
+
+/** 立即采集汇总行（Modal.info 纯文本不解析 \n，用 VNode 逐行渲染） */
+function runSummaryNodes(res?: CrawlExternalApi.RunResult) {
+  const lines: string[] = [];
+  if (!res) return lines;
+  lines.push('成功落库 ' + (res.totalIngested ?? 0) + ' 条，失败 ' + (res.totalFailed ?? 0) + ' 条');
   (res.categories || []).forEach((c) => {
     let l = c.name + '：抓到 ' + (c.fetched ?? 0) + '，新增 ' + (c.ingested ?? 0);
     if (c.failed) l += '，失败 ' + c.failed;
     if (c.error) l += '（' + c.error + '）';
     lines.push(l);
   });
-  return lines.join('\n');
+  return lines;
 }
 async function handleRun(row: CrawlExternalApi.SourceItem) {
+  if (runningSource.value) return;
+  runningSource.value = true;
   const hideLoading = message.loading({ content: '正在执行采集，同步下载中…', duration: 0 });
   try {
     const res = await runCrawlSource(row.sourceCode!);
-    Modal.info({ title: '采集执行完成', content: runSummaryText(res), width: 520 });
+    const nodes = runSummaryNodes(res).map((l) => h('div', l));
+    Modal.info({ title: '采集执行完成', content: nodes.length ? h('div', nodes) : '（无汇总）', width: 520 });
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
+    runningSource.value = false;
   }
 }
 
@@ -98,6 +106,7 @@ function rowActs(row: CrawlExternalApi.SourceItem): any[] {
       label: '立即采集',
       type: 'link',
       auth: ['bidding:crawl-source:update'],
+      disabled: runningSource.value,
       popConfirm: {
         title: '立即执行一轮采集「' + (row.sourceName || row.sourceCode) + '」？将同步下载并落库。',
         confirm: () => void handleRun(row),
@@ -109,7 +118,7 @@ function rowActs(row: CrawlExternalApi.SourceItem): any[] {
       danger: true,
       auth: ['bidding:crawl-source:delete'],
       popConfirm: {
-        title: '确认删除信息源「' + (row.sourceName || row.sourceCode) + '」？须无进行中任务且无公告引用。',
+        title: '确认删除信息源「' + (row.sourceName || row.sourceCode) + '」？须无未终态任务且无 ACTIVE 公告引用。',
         confirm: () => void runAction('删除', () => deleteCrawlSource(row.id!)),
       },
     },

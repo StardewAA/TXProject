@@ -64,6 +64,8 @@ const loading = ref(false);
 const errorMsg = ref('');
 const rows = ref<NoticeExternalItem[]>([]);
 const total = ref(0);
+/** 合并视图命中 200 行上限（页脚截断提示用） */
+const totalTruncated = ref(false);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const pageList = computed(() => {
   const p = pageNo.value;
@@ -134,7 +136,11 @@ async function refreshFilterOptions(): Promise<void> {
   }
 }
 
+/** 请求序号守卫：仅最后一次 load() 的结果生效，避免翻页/切筛选时的竞态覆盖 */
+let loadSeq = 0;
+
 async function load(): Promise<void> {
+  const seq = ++loadSeq;
   loading.value = true;
   errorMsg.value = '';
   try {
@@ -153,15 +159,21 @@ async function load(): Promise<void> {
       pageSize,
     };
     const res = await fetchNoticePage(params);
+    if (seq !== loadSeq) return;
     rows.value = res.list;
     total.value = res.total;
+    // 合并视图命中 200 行上限时页脚提示截断（P5，避免 total 失真无感知）
+    totalTruncated.value =
+      mergeMode && (res as { truncated?: boolean }).truncated === true;
     if (isDefaultView()) void refreshFilterOptions();
   } catch (e) {
+    if (seq !== loadSeq) return;
     errorMsg.value = e instanceof Error ? e.message : String(e);
     rows.value = [];
     total.value = 0;
+    totalTruncated.value = false;
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 
@@ -235,22 +247,22 @@ onMounted(() => {
   <div class="bidding-page bid-ind">
     <!-- 本项目主导航（大图标+文字 → 跳转子页；外部平台顶栏不在本项目范围） -->
     <div class="main-nav">
-      <div class="nav-item on" @click="goNav('/portal/bidding')">
+      <div class="nav-item on kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding')" @keydown.enter.prevent="goNav('/portal/bidding')">
         <span class="ic">≡</span>
         <div class="n-name">公告大厅</div>
         <div class="n-sub">查询 · 中标公示 · 详情</div>
       </div>
-      <div class="nav-item" @click="goNav('/portal/bidding/internal-hall')">
+      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/internal-hall')" @keydown.enter.prevent="goNav('/portal/bidding/internal-hall')">
         <span class="ic">◈</span>
         <div class="n-name">本平台发布</div>
         <div class="n-sub">招标人公告 · 大厅公开</div>
       </div>
-      <div class="nav-item" @click="goNav('/portal/bidding/subscription')">
+      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/subscription')" @keydown.enter.prevent="goNav('/portal/bidding/subscription')">
         <span class="ic">✦</span>
         <div class="n-name">我的关注</div>
         <div class="n-sub">关注的公告/项目 · 动态提醒</div>
       </div>
-      <div class="nav-item" @click="goNav('/portal/bidding/profile')">
+      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/profile')" @keydown.enter.prevent="goNav('/portal/bidding/profile')">
         <span class="flag">二期</span><span class="ic">◎</span>
         <div class="n-name">个人中心</div>
         <div class="n-sub">自身信息 · 实名认证</div>
@@ -277,10 +289,13 @@ onMounted(() => {
           <span
             v-for="t in typeOptions"
             :key="t.value"
-            class="opt"
+            class="opt kbd-btn"
+            role="button"
+            tabindex="0"
             :class="{ on: state.noticeType === t.value }"
             :title="t.value === RESULT_TYPE_MERGE ? '中标候选人公示/中标结果公示等合并视图（前端按公告性质原文组合）' : ''"
             @click="pickType(t.value)"
+            @keydown.enter.prevent="pickType(t.value)"
           >{{ t.label }}</span>
         </div>
       </div>
@@ -290,9 +305,12 @@ onMounted(() => {
           <span
             v-for="s in sourceOptions"
             :key="s.value"
-            class="opt"
+            class="opt kbd-btn"
+            role="button"
+            tabindex="0"
             :class="{ on: state.sourceCode === s.value }"
             @click="pickSource(s.value)"
+            @keydown.enter.prevent="pickSource(s.value)"
           >{{ s.label }}</span>
         </div>
       </div>
@@ -302,9 +320,12 @@ onMounted(() => {
           <span
             v-for="c in CONTENT_TYPES"
             :key="c.value"
-            class="opt"
+            class="opt kbd-btn"
+            role="button"
+            tabindex="0"
             :class="{ on: state.contentType === c.value }"
             @click="pickContent(c.value)"
+            @keydown.enter.prevent="pickContent(c.value)"
           >{{ c.label }}</span>
         </div>
       </div>
@@ -314,9 +335,12 @@ onMounted(() => {
           <span
             v-for="i in INDUSTRIES"
             :key="i.value"
-            class="opt"
+            class="opt kbd-btn"
+            role="button"
+            tabindex="0"
             :class="{ on: state.industry === i.value }"
             @click="pickIndustry(i.value)"
+            @keydown.enter.prevent="pickIndustry(i.value)"
           >{{ i.label }}</span>
         </div>
       </div>
@@ -326,11 +350,14 @@ onMounted(() => {
           <span
             v-for="q in QUICK_RANGES"
             :key="q"
-            class="opt"
+            class="opt kbd-btn"
+            role="button"
+            tabindex="0"
             :class="{ on: state.quick === q }"
             @click="pickQuick(q)"
+            @keydown.enter.prevent="pickQuick(q)"
           >{{ q }}</span>
-          <span class="opt custom" @click="turnCustomOn()">＋ 自定义</span>
+          <span class="opt custom kbd-btn" role="button" tabindex="0" @click="turnCustomOn()" @keydown.enter.prevent="turnCustomOn()">＋ 自定义</span>
         </div>
       </div>
       <div v-if="state.customOn" class="cust-line">
@@ -346,7 +373,7 @@ onMounted(() => {
     <div class="catalog">
       <div class="cat-head">
         <span class="t">公告目录</span>
-        <small>仅 ACTIVE + 面向社会 · 按发布时间倒序 · 共 {{ total }} 条
+        <small>仅 ACTIVE + 面向社会 · 按发布时间倒序 · 共 {{ total }} 条<template v-if="totalTruncated">（已达检索上限，仅展示前 200 条）</template>
           <template v-if="biddingConfig.useMock">· 演示 Mock 数据（非后端）</template>
           <template v-else>· 已接入真实接口 notice-external</template>
         </small>
@@ -361,11 +388,20 @@ onMounted(() => {
           <div class="n-right">发布时间</div>
         </div>
 
-        <div v-if="loading" class="loading-line">加载中…</div>
-        <div v-else-if="!rows.length && !errorMsg" class="empty-box">未查询到符合条件的公告</div>
+        <div v-if="loading && rows.length" class="list-loading-bar"></div>
+        <div v-if="loading && !rows.length" class="loading-line">加载中…</div>
+        <div v-else-if="!loading && !rows.length && !errorMsg" class="empty-box">未查询到符合条件的公告</div>
 
-        <template v-else>
-          <div v-for="r in rows" :key="r.id" class="nrow" @click="goDetail(r.id)">
+        <template v-else-if="rows.length">
+          <div
+            v-for="r in rows"
+            :key="r.id"
+            class="nrow kbd-btn"
+            role="button"
+            tabindex="0"
+            @click="goDetail(r.id)"
+            @keydown.enter="goDetail(r.id)"
+          >
             <div class="c-title">
               <div class="n-title">{{ r.title }}</div>
               <div class="n-tags">
@@ -392,15 +428,18 @@ onMounted(() => {
       </div>
 
       <div class="pager">
-        <span class="pg" :class="{ off: pageNo === 1 }" @click="pageNo > 1 && gotoPage(pageNo - 1)">‹</span>
+        <span class="pg kbd-btn" role="button" tabindex="0" :class="{ off: pageNo === 1 }" @click="pageNo > 1 && gotoPage(pageNo - 1)" @keydown.enter.prevent="pageNo > 1 && gotoPage(pageNo - 1)">‹</span>
         <span
           v-for="(p, i) in pageList"
           :key="i"
-          class="pg"
+          class="pg kbd-btn"
+          role="button"
+          tabindex="0"
           :class="{ on: p === pageNo, dot: p === '…' }"
           @click="gotoPage(p)"
+          @keydown.enter.prevent="gotoPage(p)"
         >{{ p }}</span>
-        <span class="pg" :class="{ off: pageNo === totalPages }" @click="pageNo < totalPages && gotoPage(pageNo + 1)">›</span>
+        <span class="pg kbd-btn" role="button" tabindex="0" :class="{ off: pageNo === totalPages }" @click="pageNo < totalPages && gotoPage(pageNo + 1)" @keydown.enter.prevent="pageNo < totalPages && gotoPage(pageNo + 1)">›</span>
         <span class="sum">共 {{ total }} 条</span>
       </div>
     </div>
@@ -411,6 +450,11 @@ onMounted(() => {
 .bidding-page {
   background: #f3f5f7;
   min-height: 100%;
+}
+/* 键盘可达性：可点击 span/div 聚焦时的可见焦点环（不改视觉样式，仅 :focus-visible 生效） */
+.kbd-btn:focus-visible {
+  outline: 2px solid #17539a;
+  outline-offset: 2px;
 }
 .main-nav {
   display: grid;
@@ -451,14 +495,14 @@ onMounted(() => {
 }
 .nav-item .n-sub {
   font-size: 11px;
-  color: #7a8591;
+  color: #5f6b7a;
 }
 .nav-item .flag {
   position: absolute;
   top: 6px;
   right: 10px;
   font-size: 10px;
-  color: #9aa4af;
+  color: #5f6b7a;
   border: 1px solid #d3dae1;
   background: #fff;
   border-radius: 3px;
@@ -578,11 +622,11 @@ onMounted(() => {
   color: #1e2832;
 }
 .tilde {
-  color: #9aa4af;
+  color: #5f6b7a;
 }
 .cust-note {
   font-size: 11.5px;
-  color: #9aa4af;
+  color: #5f6b7a;
 }
 .catalog {
   margin: 10px 20px 4px;
@@ -598,7 +642,7 @@ onMounted(() => {
   font-weight: 800;
 }
 .cat-head small {
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 12px;
 }
 .table-card {
@@ -700,8 +744,23 @@ onMounted(() => {
 .empty-box {
   padding: 42px 12px;
   text-align: center;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 13px;
+}
+/* 翻页/切筛选时的细加载条：旧列表数据保持渲染，不整屏替换 */
+.list-loading-bar {
+  height: 4px;
+  width: 40%;
+  background: #17539a;
+  animation: loadbar-swing 1.1s ease-in-out infinite alternate;
+}
+@keyframes loadbar-swing {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: translateX(190%);
+  }
 }
 .empty-box.error {
   color: #b42318;
@@ -713,7 +772,7 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   padding: 12px 2px 18px;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 12px;
   flex-wrap: wrap;
 }
@@ -749,5 +808,41 @@ onMounted(() => {
 }
 .sum {
   margin-left: 10px;
+}
+/* 窄屏降级：列表行单列堆叠（元信息换行显示）、筛选区换行、分页可换行 */
+@media (max-width: 768px) {
+  .nrow {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+    padding: 10px 12px;
+    min-height: 0;
+  }
+  .nrow .n-main,
+  .nrow .n-right {
+    align-items: flex-start;
+  }
+  .nrow .n-right {
+    flex-direction: column;
+  }
+  .nrow .n-time {
+    white-space: normal;
+  }
+  .qrow {
+    flex-wrap: wrap;
+  }
+  .qlb {
+    width: auto;
+    margin-right: 12px;
+  }
+  .qopts {
+    flex-wrap: wrap;
+  }
+  .cust-line {
+    margin-left: 0;
+  }
+  .pager {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 </style>

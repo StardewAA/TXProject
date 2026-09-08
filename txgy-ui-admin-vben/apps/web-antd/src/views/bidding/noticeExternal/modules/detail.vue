@@ -282,6 +282,7 @@ const [Modal, modalApi] = useVbenModal({
               <Tag v-if="a.virusStatus === 'INFECTED'" color="red" style="font-size: 11px">含病毒已拦截</Tag>
               <Tag v-else-if="a.virusStatus === 'PENDING'" style="font-size: 11px">扫描中</Tag>
               <a v-if="a.downloadUrl && a.virusStatus !== 'INFECTED'" :href="a.downloadUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">下载</a>
+              <span v-else-if="a.virusStatus !== 'INFECTED'" class="text-gray-400">（文件服务签名地址归档回填后可下载）</span>
             </div>
           </div>
         </div>
