@@ -137,3 +137,47 @@
 .bid-ind ::-webkit-scrollbar { width: 10px; height: 10px; }
 .bid-ind ::-webkit-scrollbar-thumb { background: #aeb6c0; border: 2px solid transparent; background-clip: content-box; border-radius: 6px; }
 .bid-ind ::-webkit-scrollbar-track { background: #f1f2f4; }
+/* ---------- 页面框架（列表/工作台页通用） ---------- */
+.bid-ind.ind-page { padding: 14px; }
+.bid-ind .ind-body { padding: 14px 2px 8px; }
+.bid-ind .ind-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  background: var(--ind-paper); border: 1.5px solid var(--ind-line); border-radius: 3px;
+  padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 2px 6px rgba(20,28,38,.05); }
+.bid-ind .ind-table-shell { background: var(--ind-paper); border: 1.5px solid var(--ind-line);
+  border-radius: 3px; overflow: hidden; box-shadow: 0 2px 6px rgba(20,28,38,.05); }
+.bid-ind .ind-table-shell .ant-table, .bid-ind .ind-table-shell .vxe-grid { padding: 2px 2px 0; }
+
+/* 老式白条/白卡整体加“硬”：统一 1.5px 实边 + 浅投影（细灰边小卡自动升级） */
+.bid-ind .border-gray-200 { border-color: #aeb6c0 !important; }
+.bid-ind .rounded-md.border { border-width: 1.5px; }
+.bid-ind .rounded-md.border.bg-white, .bid-ind .rounded-lg.border.bg-white { box-shadow: 0 2px 6px rgba(20,28,38,.06); }
+.bid-ind .rounded-md.border.bg-gray-50 { background: #f6f7f8 !important; }
+
+/* 列表单项卡（流程/公告等） */
+.bid-ind .ind-item { background: var(--ind-paper); border: 1.5px solid var(--ind-line-soft);
+  border-radius: 3px; padding: 13px 16px; margin-bottom: 10px; transition: border-color .15s, box-shadow .15s; }
+.bid-ind .ind-item:hover { border-color: var(--ind-line); box-shadow: 0 3px 10px rgba(20,28,38,.09); }
+.bid-ind .ind-item .it-title { font-size: 15.5px; font-weight: 800; color: var(--ind-ink-text); line-height: 1.4; }
+.bid-ind .ind-item a { font-size: 13.5px; font-weight: 700; margin-right: 10px; }
+.bid-ind .ind-item .it-sub { font-size: 13px; color: var(--ind-weak-text); font-weight: 600; }
+.bid-ind .ind-item .it-meta { font-size: 13px; color: var(--ind-weak-text); font-weight: 500; }
+
+/* 主段落标题 */
+.bid-ind .ind-sect { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 800;
+  color: var(--ind-ink-text); margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 2px solid var(--ind-line); }
+.bid-ind .ind-sect small { font-size: 12.5px; font-weight: 600; color: var(--ind-weak-text); margin-left: 6px; }
+
+/* 表单区（主体档案等）：标签更大更实 */
+.bid-ind .form-lbl { font-size: 13.5px; font-weight: 700; color: #333b44; margin-bottom: 6px; }
+.bid-ind .form-field-wrap { margin-bottom: 2px; }
+.bid-ind .form-panel { background: var(--ind-paper); border: 1.5px solid var(--ind-line);
+  border-radius: 3px; padding: 18px 18px 8px; box-shadow: 0 2px 6px rgba(20,28,38,.05); }
+
+/* ---------- vxe 表格工作台（采集源/任务/批次/外部审核） ---------- */
+.bid-ind .vxe-grid { border: 1.5px solid var(--ind-line); border-radius: 3px; overflow: hidden; box-shadow: 0 2px 6px rgba(20,28,38,.05); }
+.bid-ind .vxe-toolbar { background: #fff !important; border-bottom: 1.5px solid var(--ind-line) !important; padding: 12px 14px !important; }
+.bid-ind .vxe-toolbar .vxe-toolbar--title { font-size: 17px !important; font-weight: 800 !important; color: var(--ind-ink-text) !important; letter-spacing: .3px; }
+.bid-ind .vxe-toolbar .vxe-toolbar--tools .vxe-button { font-size: 13.5px; font-weight: 700; height: 34px; }
+.bid-ind .vxe-grid .vxe-header--column { padding: 12px 10px !important; }
+.bid-ind .vxe-grid .vxe-body--column { padding: 12px 10px !important; }
+.bid-ind .vxe-grid .vxe-table--border-line, .bid-ind .vxe-grid .vxe-table--header-border-line { border-color: #c3cad2; }
