@@ -223,12 +223,17 @@ onMounted(load);
 
 <template>
   <div class="bid-ind ind-page">
-    <IndPageHead title="公告 / 公示管理 · 发布工作台" mark="NOTICE" sub="本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。">
-      <template #actions>
+        <div class="ind-stripes"></div>
+    <div class="ind-head">
+      <div class="min-w-0">
+        <div class="ind-title">公告 / 公示管理 · 发布工作台 <span class="ind-mark">NOTICE</span></div>
+        <div class="ind-sub">本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。</div>
+      </div>
+      <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
         <Button size="large" @click="load">刷新</Button>
-      </template>
-    </IndPageHead>
+      </div>
+    </div>
     <div class="ind-body">
 
     <div class="ind-filterbar">

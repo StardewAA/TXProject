@@ -307,12 +307,17 @@ onMounted(() => {
 
 <template>
   <div class="bid-ind ind-page">
-    <IndPageHead title="投标流程跟踪 · 我的投标工作台" mark="TRACK" sub="v1 = 我的关注（服务端按登录人 user_id 隔离）+ 本地阶段演示（localStorage）。意向投标 → 资质审核 → 待投标 → 已投标 / 流程结束；报名/审核/上传标书等动作仅本地标记，后端状态机（bidding:process-track:*）上线后以服务端为准。">
-      <template #actions>
+        <div class="ind-stripes"></div>
+    <div class="ind-head">
+      <div class="min-w-0">
+        <div class="ind-title">投标流程跟踪 · 我的投标工作台 <span class="ind-mark">TRACK</span></div>
+        <div class="ind-sub">v1 = 我的关注（服务端按登录人 user_id 隔离）+ 本地阶段演示（localStorage）。意向投标 → 资质审核 → 待投标 → 已投标 / 流程结束；报名/审核/上传标书等动作仅本地标记，后端状态机（bidding:process-track:*）上线后以服务端为准。</div>
+      </div>
+      <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建意向</Button>
         <Button size="large" @click="load">刷新</Button>
-      </template>
-    </IndPageHead>
+      </div>
+    </div>
     <div class="ind-body">
 
     <div class="ind-filterbar">

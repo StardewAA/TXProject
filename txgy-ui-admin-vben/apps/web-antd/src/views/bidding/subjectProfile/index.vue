@@ -135,11 +135,16 @@ onMounted(loadAll);
 
 <template>
   <div class="bid-ind ind-page">
-    <IndPageHead :title="'主体档案 · 企业自维护（' + (SubjectApi.SUBJECT_TYPE_LABEL[subjectType] || subjectType) + '）'" mark="PROFILE" sub="同一租户可分别维护投标人（BIDDER）/ 招标人（TENDERER）两套档案——主体类型是企业扮演的角色，非二选一。授权后仍须完善必填信息（资格 = 授权 + 档案完善）。">
-      <template #actions>
+        <div class="ind-stripes"></div>
+    <div class="ind-head">
+      <div class="min-w-0">
+        <div class="ind-title">'主体档案 · 企业自维护（' + (SubjectApi.SUBJECT_TYPE_LABEL[subjectType] || subjectType) + '）' <span class="ind-mark">PROFILE</span></div>
+        <div class="ind-sub">同一租户可分别维护投标人（BIDDER）/ 招标人（TENDERER）两套档案——主体类型是企业扮演的角色，非二选一。授权后仍须完善必填信息（资格 = 授权 + 档案完善）。</div>
+      </div>
+      <div class="ind-actions">
         <Radio.Group v-model:value="subjectType" option-type="button" :options="typeOptions" @change="switchType(subjectType)" />
-      </template>
-    </IndPageHead>
+      </div>
+    </div>
     <div class="ind-body">
 
     <Spin :spinning="loading">
