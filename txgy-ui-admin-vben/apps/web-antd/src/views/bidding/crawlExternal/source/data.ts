@@ -49,6 +49,34 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
       rules: 'required',
     },
     {
+      fieldName: 'fetchType',
+      label: '获取方式',
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: 'CRAWLER · 爬虫（列表 HTML / 逐条下载）', value: 'CRAWLER' },
+          { label: 'API · 接口直取（JSON 列表 + 字段映射）', value: 'API' },
+        ],
+        placeholder: '默认 CRAWLER（存量兼容）',
+      },
+      // 05-外部信息获取改造-前端跟进 §三：fetchType=CRAWLER/API；后端缺省 CRAWLER
+    },
+    {
+      fieldName: 'apiConfigJson',
+      label: 'API 接口配置（JSON）',
+      component: 'Textarea',
+      componentProps: {
+        rows: 8,
+        placeholder:
+          'fetchType=API 时必填：method/url/分页参数/rowsPath 按对方平台接口声明；headers 静态鉴权头；mapping/urlPrefix 可选（后端 05-外部信息获取改造 §三）',
+      },
+      dependencies: {
+        triggerFields: ['fetchType'],
+        if: (v: Record<string, unknown>) => (v.fetchType ?? 'CRAWLER') === 'API',
+        required: (v: Record<string, unknown>) => (v.fetchType ?? 'CRAWLER') === 'API',
+      },
+    },
+    {
       fieldName: 'allowedHosts',
       label: '额外放行域名',
       component: 'Input',
@@ -93,6 +121,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'sourceCode', title: '源 code', width: 120, showOverflow: true },
     { field: 'sourceName', title: '源名称', minWidth: 150, showOverflow: true },
     { field: 'baseUrl', title: '入口站点', minWidth: 200, showOverflow: true },
+    { field: 'fetchType', title: '获取方式', width: 130, formatter: ({ cellValue }) => (cellValue === 'API' ? 'API · 直取' : cellValue === 'CRAWLER' ? 'CRAWLER · 爬虫' : '—') },
     { field: 'channelCode', title: '下载通道', width: 110 },
     { field: 'enabled', title: '启用(/go 白名单)', width: 170, slots: { default: 'col_enabled' } },
     {
