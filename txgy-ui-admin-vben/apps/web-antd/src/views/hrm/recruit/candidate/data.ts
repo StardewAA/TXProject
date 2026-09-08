@@ -171,19 +171,6 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'resumeUrls',
-      label: '简历附件',
-      component: 'FileUpload',
-      formItemClass: 'col-span-2',
-      componentProps: {
-        maxNumber: 5,
-        maxSize: 20,
-        accept: ['doc', 'docx', 'pdf'],
-        directory: 'hrm/recruit/candidate/resume',
-        helpText: '支持 doc/docx/pdf，最多 5 个，单个不超过 20MB',
-      },
-    },
-    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -493,7 +480,12 @@ export function useInterviewFormSchema(): VbenFormSchema[] {
       rules: 'required',
       defaultValue: HrmRecruitInterviewType.VIDEO,
       componentProps: {
-        options: getDictOptions(DICT_TYPE.HRM_RECRUIT_INTERVIEW_TYPE, 'number'),
+        // 保留电话/视频历史值，同时用明确的线上/线下文案满足新流程。
+        options: [
+          { label: '线下现场', value: HrmRecruitInterviewType.ONSITE },
+          { label: '线上面试', value: HrmRecruitInterviewType.VIDEO },
+          { label: '电话面试', value: HrmRecruitInterviewType.PHONE },
+        ],
         placeholder: '请选择面试方式',
         allowClear: true,
       },
@@ -539,7 +531,7 @@ export function useInterviewFormSchema(): VbenFormSchema[] {
       component: 'Input',
       formItemClass: 'col-span-2',
       componentProps: {
-        placeholder: '请输入面试地址',
+        placeholder: '线下填写面试地址，线上填写会议链接',
         maxlength: 255,
         allowClear: true,
       },

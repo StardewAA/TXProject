@@ -338,6 +338,8 @@ txgy:
     enable: true
     ignore-urls:
       - /jmreport/* # 积木报表，无法携带租户编号
+      - /admin-api/system/auth/login # 个人登录允许不携带租户编号
+      - /admin-api/system/auth/register # 个人注册允许不携带租户编号
     ignore-visit-urls:
       - /admin-api/system/user/profile/**
       - /admin-api/system/auth/**

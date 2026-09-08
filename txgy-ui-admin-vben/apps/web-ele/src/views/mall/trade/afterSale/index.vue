@@ -148,6 +148,13 @@ onMounted(() => {
               type: 'primary',
               link: true,
               onClick: handleOpenAfterSaleDetail.bind(null, row),
+              ifShow: [10, 30, 40].includes(row.status),
+            },
+            {
+              label: '查看详情',
+              type: 'primary',
+              link: true,
+              onClick: handleOpenAfterSaleDetail.bind(null, row),
             },
           ]"
         />

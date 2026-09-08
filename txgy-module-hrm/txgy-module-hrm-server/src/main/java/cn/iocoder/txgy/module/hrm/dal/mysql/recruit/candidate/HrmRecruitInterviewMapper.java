@@ -20,6 +20,21 @@ public interface HrmRecruitInterviewMapper extends BaseMapperX<HrmRecruitIntervi
                 .orderByDesc(HrmRecruitInterviewDO::getId));
     }
 
+    default List<HrmRecruitInterviewDO> selectListByApplicationId(Long applicationId) {
+        return selectList(new LambdaQueryWrapperX<HrmRecruitInterviewDO>()
+                .eq(HrmRecruitInterviewDO::getApplicationId, applicationId)
+                .orderByAsc(HrmRecruitInterviewDO::getRoundNo)
+                .orderByDesc(HrmRecruitInterviewDO::getId));
+    }
+
+    default HrmRecruitInterviewDO selectLatestByApplicationId(Long applicationId) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitInterviewDO>()
+                .eq(HrmRecruitInterviewDO::getApplicationId, applicationId)
+                .orderByDesc(HrmRecruitInterviewDO::getRoundNo)
+                .orderByDesc(HrmRecruitInterviewDO::getId)
+                .last("LIMIT 1"));
+    }
+
     default HrmRecruitInterviewDO selectLatestByCandidateId(Long candidateId) {
         return selectOne(new LambdaQueryWrapperX<HrmRecruitInterviewDO>()
                 .eq(HrmRecruitInterviewDO::getCandidateId, candidateId)

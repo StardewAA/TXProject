@@ -1,6 +1,5 @@
 package cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post;
 
-import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.validation.InEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
@@ -24,14 +23,15 @@ public class HrmRecruitPostStatusReqVO {
     @InEnum(value = HrmRecruitPostStatusEnum.class, message = "职位状态必须是 {value}")
     private Integer status;
 
-    @Schema(description = "停止原因", example = "岗位暂停")
-    @Size(max = 255, message = "停止原因不能超过 255 个字符")
+    @Schema(description = "状态变更原因（暂停、关闭时必填）", example = "岗位暂停")
+    @Size(max = 255, message = "状态变更原因不能超过 255 个字符")
     private String stopReason;
 
-    @AssertTrue(message = "停止招聘时，停止原因不能为空")
+    @AssertTrue(message = "暂停或关闭职位时，状态变更原因不能为空")
     @JsonIgnore
     public boolean isStopReasonValid() {
-        return ObjUtil.notEqual(HrmRecruitPostStatusEnum.STOPPED.getStatus(), status)
+        return !HrmRecruitPostStatusEnum.PAUSED.getStatus().equals(status)
+                && !HrmRecruitPostStatusEnum.CLOSED.getStatus().equals(status)
                 || StrUtil.isNotBlank(stopReason);
     }
 

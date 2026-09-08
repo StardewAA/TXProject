@@ -40,6 +40,11 @@ public class ErpSaleReturnDO extends BaseDO {
      * 枚举 {@link cn.iocoder.txgy.module.erp.enums.ErpAuditStatus}
      */
     private Integer status;
+    private String businessChainNo;
+    private String wmsStatus;
+    private String wmsOrderNo;
+    private Long wmsEventVersion;
+    private String wmsFailureReason;
     /**
      * 客户编号
      *

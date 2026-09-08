@@ -1,0 +1,24 @@
+services:
+  training-exam:
+    image: deploy-training-exam
+    build:
+      context: ../../services/training-exam
+      dockerfile: Dockerfile
+    environment:
+      PLATFORM_URL: http://gateway:48080/admin-api
+    volumes:
+      - training-exam-data:/app/data
+    networks:
+      txgy-dev:
+        aliases:
+          - training-exam
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  training-exam-data:
+networks:
+  txgy-dev:
+    external: true

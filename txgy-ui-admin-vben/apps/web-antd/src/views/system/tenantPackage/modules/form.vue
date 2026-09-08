@@ -4,14 +4,10 @@ import type { SystemTenantPackageApi } from '#/api/system/tenant-package';
 
 import { computed, ref } from 'vue';
 
-import { Tree, useVbenModal } from '@vben/common-ui';
-import {
-  getTreeCheckedValues,
-  getTreeValuesWithAncestors,
-  handleTree,
-} from '@vben/utils';
+import { useVbenModal } from '@vben/common-ui';
+import { handleTree } from '@vben/utils';
 
-import { Checkbox, message, Spin } from 'ant-design-vue';
+import { Checkbox, message, Spin, Tree as AntTree } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getSimpleMenusList } from '#/api/system/menu';
@@ -36,6 +32,24 @@ const menuLoading = ref(false); // 加载菜单列表
 const isAllSelected = ref(false); // 全选状态
 const isExpanded = ref(false); // 展开状态
 const expandedKeys = ref<number[]>([]); // 展开的节点
+// 使用 antd Tree（height 开启虚拟滚动），勾选状态单独维护
+const checkedKeys = ref<number[]>([]);
+const halfCheckedKeys = ref<number[]>([]);
+/** 记录所有父节点 id，用于从完整 menuIds 中过滤出叶子节点 */
+const parentIdSet = computed(() => {
+  const ids = new Set<number>();
+  const walk = (nodes: SystemMenuApi.Menu[]) => {
+    nodes.forEach((node) => {
+      if (node.children && node.children.length > 0) {
+        ids.add(node.id);
+        walk(node.children);
+      }
+    });
+  };
+  walk(menuTree.value);
+  return ids;
+});
+const treeFieldNames = { children: 'children', key: 'id', title: 'name' };
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -57,14 +71,10 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    // 提交表单
+    // 提交表单：勾选 + 半选（祖先）合并为完整 menuIds
     const data =
       (await formApi.getValues()) as SystemTenantPackageApi.TenantPackage;
-    data.menuIds = getTreeValuesWithAncestors(
-      menuTree.value,
-      data.menuIds ?? [],
-      (menu) => menu.id,
-    );
+    data.menuIds = [...checkedKeys.value, ...halfCheckedKeys.value];
     try {
       await (formData.value
         ? updateTenantPackage(data)
@@ -93,14 +103,11 @@ const [Modal, modalApi] = useVbenModal({
     try {
       const detail = await getTenantPackage(data.id);
       formData.value = detail;
-      await formApi.setValues({
-        ...detail,
-        menuIds: getTreeCheckedValues(
-          menuTree.value,
-          detail.menuIds ?? [],
-          (menu) => menu.id,
-        ),
-      });
+      // 只勾选叶子节点，antd Tree 会自动联动选中祖先节点
+      const menuIds = detail.menuIds ?? [];
+      checkedKeys.value = menuIds.filter((id) => !parentIdSet.value.has(id));
+      halfCheckedKeys.value = [];
+      await formApi.setValues({ ...detail });
     } finally {
       modalApi.unlock();
     }
@@ -118,14 +125,23 @@ async function loadMenuTree() {
   }
 }
 
+/** 勾选变化：记录全选与半选（祖先）节点 */
+function handleCheck(checked: unknown, info: any) {
+  checkedKeys.value = (checked as number[]) ?? [];
+  halfCheckedKeys.value = (info?.halfCheckedKeys as number[]) ?? [];
+  isAllSelected.value =
+    checkedKeys.value.length === getAllNodeIds(menuTree.value).length;
+}
+
 /** 全选/全不选 */
 function handleSelectAll() {
   isAllSelected.value = !isAllSelected.value;
   if (isAllSelected.value) {
-    const allIds = getAllNodeIds(menuTree.value);
-    formApi.setFieldValue('menuIds', allIds);
+    checkedKeys.value = getAllNodeIds(menuTree.value);
+    halfCheckedKeys.value = [];
   } else {
-    formApi.setFieldValue('menuIds', []);
+    checkedKeys.value = [];
+    halfCheckedKeys.value = [];
   }
 }
 
@@ -146,21 +162,23 @@ function getAllNodeIds(nodes: any[], ids: number[] = []): number[] {
   return ids;
 }
 </script>
-
 <template>
   <Modal :title="getTitle" class="w-2/5">
     <Form class="mx-6">
       <template #menuIds="slotProps">
         <Spin :spinning="menuLoading" wrapper-class-name="w-full">
-          <Tree
+          <!-- antd Tree：设置 height 后启用虚拟滚动，1395+ 节点也流畅 -->
+          <AntTree
             class="max-h-96 overflow-y-auto"
+            checkable
+            :height="380"
             :tree-data="menuTree"
-            multiple
-            bordered
-            :default-expanded-keys="expandedKeys"
-            v-bind="slotProps"
-            value-field="id"
-            label-field="name"
+            :field-names="treeFieldNames"
+            :checked-keys="checkedKeys"
+            :expanded-keys="expandedKeys"
+            :selectable="false"
+            @check="handleCheck"
+            @expand="(keys: any) => (expandedKeys = keys as number[])"
           />
         </Spin>
       </template>

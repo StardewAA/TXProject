@@ -21,6 +21,16 @@ import jakarta.validation.constraints.Pattern;
 @Builder
 public class AuthLoginReqVO extends CaptchaVerificationReqVO {
 
+    /**
+     * 登录入口类型。
+     * <p>未传时按企业登录处理，兼容旧客户端。</p>
+     */
+    public static final String LOGIN_TYPE_ENTERPRISE = "enterprise";
+    public static final String LOGIN_TYPE_PERSONAL = "personal";
+
+    @Schema(description = "登录入口类型：enterprise 企业登录，personal 个人登录", example = "enterprise")
+    private String loginType;
+
     @Schema(description = "账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "txgyyuanma")
     @NotEmpty(message = "登录账号不能为空")
     @Length(min = 4, max = 30, message = "账号长度为 4-30 位")
@@ -43,6 +53,10 @@ public class AuthLoginReqVO extends CaptchaVerificationReqVO {
 
     @Schema(description = "state", requiredMode = Schema.RequiredMode.REQUIRED, example = "9b2ffbc1-7425-4155-9894-9d5c08541d62")
     private String socialState;
+
+    public boolean isPersonalLogin() {
+        return LOGIN_TYPE_PERSONAL.equalsIgnoreCase(loginType);
+    }
 
     @AssertTrue(message = "授权码不能为空")
     public boolean isSocialCodeValid() {

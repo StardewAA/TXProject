@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderLogDO;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderLogService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
+import cn.iocoder.txgy.module.trade.service.order.TradeOrderShopSplitter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -96,6 +97,13 @@ public class TradeOrderController {
                 memberUserApi.getUser(order.getBrokerageUserId()).getCheckedData() : null;
         List<TradeOrderLogDO> orderLogs = tradeOrderLogService.getOrderLogListByOrderId(id);
         return success(TradeOrderConvert.INSTANCE.convert(order, orderItems, orderLogs, user, brokerageUser));
+    }
+
+    @GetMapping("/get-shop-orders")
+    @Operation(summary = "按店铺分组查看订单商品和金额")
+    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    public CommonResult<List<TradeOrderShopRespVO>> getShopOrders(@RequestParam("id") Long id) {
+        return success(TradeOrderShopSplitter.split(tradeOrderQueryService.getOrderItemListByOrderId(id)));
     }
 
     @GetMapping("/get-express-track-list")

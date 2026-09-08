@@ -1,13 +1,16 @@
-FROM node:22-alpine AS builder
-RUN apk add --no-cache git
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /workspace/txgy-ui-admin-vben
+
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY txgy-ui-admin-vben/ ./
 
-RUN git init -q && pnpm install --frozen-lockfile
+RUN git init -q && pnpm install --frozen-lockfile --fetch-retries=10 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000 --network-concurrency=4
 
 ENV NODE_OPTIONS=--max-old-space-size=2048
 ENV VITE_BASE_URL=
@@ -17,11 +20,8 @@ ENV VITE_APP_DOCALERT_ENABLE=false
 
 RUN pnpm run build:antd
 
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
-# 主 nginx.conf (含 tenant-id map 条件默认值)
-COPY deploy/frontend/nginx-main.conf /etc/nginx/nginx.conf
-# default.conf (实际代理配置)
 COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /workspace/txgy-ui-admin-vben/apps/web-antd/dist /usr/share/nginx/html
 

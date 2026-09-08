@@ -8,11 +8,13 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOr
 import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemBatchConfigDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.BarcodeBizTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemBatchConfigService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
+import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.wm.barcode.MesWmBarcodeService;
 import jakarta.annotation.Resource;
@@ -40,6 +42,11 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
 
     @Resource
     private MesProWorkOrderMapper workOrderMapper;
+    @Resource
+    private MesProProjectMapper projectMapper;
+
+    @Resource
+    private MesProProjectService projectService;
 
     @Resource
     private MesProWorkOrderBomService workOrderBomService;
@@ -190,6 +197,11 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
         workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
                 .setStatus(MesProWorkOrderStatusEnum.FINISHED.getStatus())
                 .setFinishDate(LocalDateTime.now()));
+
+        // 4. 回写项目状态：工单完工后重算项目进度
+        if (workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
     }
 
     @Override
@@ -208,6 +220,11 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
         workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
                 .setStatus(MesProWorkOrderStatusEnum.CANCELED.getStatus())
                 .setCancelDate(LocalDateTime.now()));
+
+        // 4. 回写项目状态：工单取消后重算项目进度
+        if (workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
     }
 
     // ==================== 校验方法 ====================
@@ -217,7 +234,11 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
         validateWorkOrderCodeUnique(id, reqVO.getCode());
         // 2. 校验产品存在
         itemService.validateItemExists(reqVO.getProductId());
-        // 3. 校验批次配置（如果产品有 clientFlag=true，则 clientId 必填）
+        // 3. 校验所属项目存在（如果挂接了项目）
+        if (reqVO.getProjectId() != null && projectMapper.selectById(reqVO.getProjectId()) == null) {
+            throw exception(PRO_PROJECT_NOT_EXISTS);
+        }
+        // 4. 校验批次配置（如果产品有 clientFlag=true，则 clientId 必填）
         MesMdItemBatchConfigDO batchConfig = itemBatchConfigService.getItemBatchConfigByItemId(reqVO.getProductId());
         if (batchConfig != null && Boolean.TRUE.equals(batchConfig.getClientFlag()) && reqVO.getClientId() == null) {
             throw exception(MD_CLIENT_NOT_EXISTS);

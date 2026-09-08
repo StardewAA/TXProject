@@ -26,6 +26,8 @@ public class ErpProductUnitDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /** 跨模块统一单位编码 */
+    private String code;
     /**
      * 单位名字
      */

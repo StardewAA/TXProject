@@ -16,6 +16,7 @@ import fa from '@iconify/json/json/fa.json';
 import fa6Solid from '@iconify/json/json/fa6-solid.json';
 import fluentMdl2 from '@iconify/json/json/fluent-mdl2.json';
 import foundation from '@iconify/json/json/foundation.json';
+import lucide from '@iconify/json/json/lucide.json';
 import materialSymbols from '@iconify/json/json/material-symbols.json';
 import mdi from '@iconify/json/json/mdi.json';
 import ri from '@iconify/json/json/ri.json';
@@ -29,6 +30,7 @@ const fullCollections = [
   fa6Solid,
   foundation,
   fluentMdl2,
+  lucide,
   simpleIcons,
 ] as unknown as IconifyJSON[];
 fullCollections.forEach((collection) => addCollection(collection));

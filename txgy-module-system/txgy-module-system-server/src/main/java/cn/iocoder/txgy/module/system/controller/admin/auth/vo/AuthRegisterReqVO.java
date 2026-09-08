@@ -13,6 +13,16 @@ import org.hibernate.validator.constraints.Length;
 @Data
 public class AuthRegisterReqVO extends CaptchaVerificationReqVO {
 
+    /**
+     * 注册入口类型。
+     * <p>未传时按企业注册处理，兼容旧客户端。</p>
+     */
+    public static final String REGISTER_TYPE_ENTERPRISE = "enterprise";
+    public static final String REGISTER_TYPE_PERSONAL = "personal";
+
+    @Schema(description = "注册入口类型：enterprise 企业注册，personal 个人注册", example = "personal")
+    private String registerType;
+
     @Schema(description = "用户账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "txgy")
     @NotBlank(message = "用户账号不能为空")
     @Pattern(regexp = "^[a-zA-Z0-9_]{4,30}$", message = "用户账号由 数字、字母、下划线 组成")
@@ -28,4 +38,8 @@ public class AuthRegisterReqVO extends CaptchaVerificationReqVO {
     @NotEmpty(message = "密码不能为空")
     @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
     private String password;
+
+    public boolean isPersonalRegister() {
+        return REGISTER_TYPE_PERSONAL.equalsIgnoreCase(registerType);
+    }
 }
