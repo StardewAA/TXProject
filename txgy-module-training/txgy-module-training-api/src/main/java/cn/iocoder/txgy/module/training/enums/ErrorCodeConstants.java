@@ -27,8 +27,11 @@ public interface ErrorCodeConstants {
 
     // ========== 课程分类（course category）1-061-004-000 ==========
     ErrorCode COURSE_CATEGORY_NOT_EXISTS = new ErrorCode(1_061_004_000, "课程分类不存在");
-    ErrorCode COURSE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_004_001, "已存在同名课程分类");
+    ErrorCode COURSE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_004_001, "同一父级下已存在同名课程分类");
     ErrorCode COURSE_CATEGORY_HAS_COURSE = new ErrorCode(1_061_004_002, "该分类下存在课程，禁止删除（请先转移课程）");
+    ErrorCode COURSE_CATEGORY_HAS_CHILDREN = new ErrorCode(1_061_004_003, "该分类下存在子分类，禁止删除（请先删除子分类）");
+    ErrorCode COURSE_CATEGORY_PARENT_NOT_EXISTS = new ErrorCode(1_061_004_004, "父级课程分类不存在");
+    ErrorCode COURSE_CATEGORY_LEVEL_MAX = new ErrorCode(1_061_004_005, "课程分类最多支持三级（域/组/课）");
 
     // ========== 课程媒资（course media）1-061-002-000 ==========
     ErrorCode COURSE_MEDIA_NOT_EXISTS = new ErrorCode(1_061_002_000, "课程媒资不存在");

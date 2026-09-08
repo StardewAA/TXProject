@@ -17,10 +17,18 @@ public interface CourseCategoryMapper extends BaseMapperX<CourseCategoryDO> {
 
     default PageResult<CourseCategoryDO> selectPage(CourseCategoryPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<CourseCategoryDO>()
+                .eqIfPresent(CourseCategoryDO::getParentId, reqVO.getParentId())
+                .eqIfPresent(CourseCategoryDO::getLevel, reqVO.getLevel())
+                .eqIfPresent(CourseCategoryDO::getStatus, reqVO.getStatus())
                 .likeIfPresent(CourseCategoryDO::getName, reqVO.getName())
                 .eqIfPresent(CourseCategoryDO::getCode, reqVO.getCode())
                 .orderByAsc(CourseCategoryDO::getSort)
                 .orderByDesc(CourseCategoryDO::getId));
+    }
+
+    default Long selectChildrenCount(Long parentId) {
+        return selectCount(new LambdaQueryWrapperX<CourseCategoryDO>()
+                .eq(CourseCategoryDO::getParentId, parentId));
     }
 
 }

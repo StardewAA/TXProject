@@ -79,13 +79,20 @@ export namespace TrainingCourseApi {
     createTime?: string;
   }
 
-  /** 课程分类 */
+  /** 课程分类（三级树：1 域 / 2 组 / 3 课） */
   export interface CourseCategory {
     id?: number;
+    parentId?: number;
+    level?: number;
     name?: string;
     code?: string;
+    bizCategory?: string;
+    stdHours?: number;
+    isRequired?: boolean;
+    status?: string;
     sort?: number;
     remark?: string;
+    children?: CourseCategory[];
   }
 
   /** 成长等级（六级人才成长体系字典 training_growth_level） */
@@ -231,10 +238,17 @@ export function sortCourseMedia(courseId: number, ids: number[]) {
   return requestClient.put(`/training/course-media/sort?courseId=${courseId}`, ids);
 }
 
-/** 课程分类全量列表（下拉） */
+/** 课程分类全量列表（扁平，下拉） */
 export function getCourseCategoryList() {
   return requestClient.get<TrainingCourseApi.CourseCategory[]>(
     '/training/course-category/list',
+  );
+}
+
+/** 课程分类树（域-组-课 三级） */
+export function getCourseCategoryTree() {
+  return requestClient.get<TrainingCourseApi.CourseCategory[]>(
+    '/training/course-category/list-tree',
   );
 }
 
