@@ -9,7 +9,7 @@ import { message } from 'ant-design-vue';
 
 import {
   createRecruitCandidate,
-  getRecruitCandidate,
+  getRecruitCandidateForUpdate,
   updateRecruitCandidate,
 } from '#/api/hrm/recruit/candidate';
 import { $t } from '#/locales';
@@ -17,7 +17,7 @@ import { $t } from '#/locales';
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
-const formData = ref<HrmRecruitCandidateApi.RecruitCandidate>();
+const formData = ref<HrmRecruitCandidateApi.RecruitCandidateSave>();
 const getTitle = computed(() =>
   formData.value?.id ? '编辑候选人' : '新建候选人',
 );
@@ -44,8 +44,7 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     // 提交表单
     const data =
-      (await formApi.getValues()) as HrmRecruitCandidateApi.RecruitCandidate;
-    data.resumeUrls ??= [];
+      (await formApi.getValues()) as HrmRecruitCandidateApi.RecruitCandidateSave;
     try {
       await (formData.value?.id
         ? updateRecruitCandidate(data)
@@ -64,15 +63,14 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     // 加载数据
-    const data = modalApi.getData<HrmRecruitCandidateApi.RecruitCandidate>();
+    const data = modalApi.getData<HrmRecruitCandidateApi.RecruitCandidateSave>();
     if (!data?.id) {
-      await formApi.setValues({ resumeUrls: [], sex: 1 });
+      await formApi.setValues({ sex: 1 });
       return;
     }
     modalApi.lock();
     try {
-      formData.value = await getRecruitCandidate(data.id);
-      formData.value.resumeUrls ??= [];
+      formData.value = await getRecruitCandidateForUpdate(data.id);
       await formApi.setValues(formData.value);
     } finally {
       modalApi.unlock();

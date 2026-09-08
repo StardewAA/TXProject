@@ -48,6 +48,9 @@ public interface HrmRecruitInterviewService {
      */
     HrmRecruitInterviewDO getRecruitInterview(Long id);
 
+    /** 获得指定应聘记录的最新面试。 */
+    HrmRecruitInterviewDO getLatestRecruitInterviewByApplicationId(Long applicationId);
+
     /**
      * 获得候选人的招聘面试列表
      *

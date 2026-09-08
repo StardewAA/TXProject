@@ -34,6 +34,14 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Parameter(name = "id", description = "用户编号", example = "1", required = true)
     CommonResult<AdminUserRespDTO> getUser(@RequestParam("id") Long id);
 
+    /**
+     * 通过用户 ID 查询跨租户联系人信息。
+     * 仅用于 IM/招聘等需要建立跨租户联系的场景，普通业务仍使用 {@link #getUser(Long)}。
+     */
+    @GetMapping(PREFIX + "/get-ignore-tenant")
+    @Operation(summary = "通过用户 ID 查询跨租户联系人")
+    CommonResult<AdminUserRespDTO> getUserIgnoreTenant(@RequestParam("id") Long id);
+
     @GetMapping(PREFIX + "/get-by-mobile")
     @Operation(summary = "通过手机号查询用户")
     CommonResult<AdminUserRespDTO> getUserByMobile(@RequestParam("mobile") String mobile);
@@ -47,6 +55,10 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Operation(summary = "通过用户 ID 查询用户们")
     @Parameter(name = "ids", description = "部门编号数组", example = "1,2", required = true)
     CommonResult<List<AdminUserRespDTO>> getUserList(@RequestParam("ids") Collection<Long> ids);
+
+    @GetMapping(PREFIX + "/list-ignore-tenant")
+    @Operation(summary = "通过用户 ID 查询跨租户联系人们")
+    CommonResult<List<AdminUserRespDTO>> getUserListIgnoreTenant(@RequestParam("ids") Collection<Long> ids);
 
     @GetMapping(PREFIX + "/list-by-dept-id")
     @Operation(summary = "获得指定部门的用户数组")
@@ -89,6 +101,15 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Operation(summary = "校验用户们是否有效")
     @Parameter(name = "ids", description = "用户编号数组", example = "3,5", required = true)
     CommonResult<Boolean> validateUserList(@RequestParam("ids") Collection<Long> ids);
+
+    @GetMapping(PREFIX + "/valid-ignore-tenant")
+    @Operation(summary = "跨租户校验用户们是否有效")
+    CommonResult<Boolean> validateUserListIgnoreTenant(@RequestParam("ids") Collection<Long> ids);
+
+    default Map<Long, AdminUserRespDTO> getUserMapIgnoreTenant(Collection<Long> ids) {
+        List<AdminUserRespDTO> users = getUserListIgnoreTenant(ids).getCheckedData();
+        return CollectionUtils.convertMap(users, AdminUserRespDTO::getId);
+    }
 
     @Override
     @FeignIgnore

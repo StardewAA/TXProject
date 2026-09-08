@@ -23,6 +23,7 @@ type FormType = 'batch' | 'create' | 'update';
 
 const formType = ref<FormType>('create');
 const candidateIds = ref<number[]>([]);
+const applicationId = ref<number>();
 const dialogTitle = ref('安排面试');
 const interviewId = ref<number>();
 
@@ -52,6 +53,7 @@ const [Modal, modalApi] = useVbenModal({
     const values = await formApi.getValues();
     const payload: HrmRecruitInterviewApi.RecruitInterview = {
       id: interviewId.value,
+      applicationId: applicationId.value,
       type: values.type,
       interviewTime: values.interviewTime
         ? Number(values.interviewTime)
@@ -92,12 +94,14 @@ const [Modal, modalApi] = useVbenModal({
     if (!isOpen) {
       formType.value = 'create';
       candidateIds.value = [];
+      applicationId.value = undefined;
       interviewId.value = undefined;
       return;
     }
     // 加载数据
     const data = modalApi.getData<{
       candidateIdOrIds: number | number[];
+      applicationId?: number;
       createTitle?: string;
       interview?: HrmRecruitInterviewApi.RecruitInterview;
       type: FormType;
@@ -117,6 +121,7 @@ const [Modal, modalApi] = useVbenModal({
       dialogTitle.value = data.createTitle ?? '安排面试';
     }
     interviewId.value = data.interview?.id;
+    applicationId.value = data.applicationId ?? data.interview?.applicationId;
     await formApi.setValues({
       formType: data.type,
       candidateCount: `${candidateIds.value.length} 人`,

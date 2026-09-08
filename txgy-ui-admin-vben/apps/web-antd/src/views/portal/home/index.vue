@@ -9,7 +9,7 @@ const userStore = useUserStore();
 const services = [
   {
     title: '招聘应聘',
-    description: '查看岗位机会、提交应聘信息并跟进招聘进度。',
+    description: '查看已发布岗位、在线投递并跟进招聘进度。',
     path: '/portal/recruit',
   },
   {
