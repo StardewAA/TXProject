@@ -13,6 +13,11 @@ export namespace ErpSaleOrderApi {
     totalCount: number; // 合计数量
     totalPrice: number; // 合计金额，单位：元
     status: number; // 状态
+    processInstanceId?: string; // BPM 流程实例编号
+    customerName?: string; // 客户名称
+    productNames?: string; // 产品名称列表
+    creatorName?: string; // 创建人名称
+    createTime?: Date | string; // 创建时间
     remark: string; // 备注
     outCount: number; // 销售出库数量
     fileUrl?: string; // 附件地址
@@ -83,6 +88,13 @@ export function updateSaleOrder(data: ErpSaleOrderApi.SaleOrder) {
 export function updateSaleOrderStatus(id: number, status: number) {
   return requestClient.put('/erp/sale-order/update-status', null, {
     params: { id, status },
+  });
+}
+
+/** 提交销售订单审批 */
+export function submitSaleOrder(id: number) {
+  return requestClient.put('/erp/sale-order/submit', null, {
+    params: { id },
   });
 }
 

@@ -153,6 +153,9 @@
       messageList.value.unshift(message);
       showNewMessageTip.value = true;
     } else {
+      // 刷新必须从最新消息所在的第一页开始，避免用户加载历史消息后
+      // 仍使用旧页码请求，导致刚发送的消息不在返回结果中。
+      queryParams.no = 1;
       queryParams.createTime = undefined;
       refreshMessage.value = true;
       await getMessageList();

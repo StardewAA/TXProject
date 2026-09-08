@@ -91,6 +91,7 @@ public class HrmRecruitChannelController {
 
     @GetMapping("/simple-list")
     @Operation(summary = "获得招聘渠道精简列表", description = "用于招聘职位、候选人等表单的下拉选项")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:channel:query')")
     public CommonResult<List<HrmRecruitChannelRespVO>> getRecruitChannelSimpleList() {
         return success(convertList(recruitChannelService.getRecruitChannelSimpleList(), channel ->
                 new HrmRecruitChannelRespVO().setId(channel.getId()).setName(channel.getName()).setStatus(channel.getStatus())));

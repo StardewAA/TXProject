@@ -5,7 +5,7 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import org.apache.ibatis.annotations.*;
 
 import java.util.Collection;
@@ -20,7 +20,7 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
      */
     @Select("SELECT * FROM product_sku WHERE id = #{id}")
     @Results({
-            @Result(column = "properties", property = "properties", typeHandler = JacksonTypeHandler.class),
+            @Result(column = "properties", property = "properties", typeHandler = Jackson3TypeHandler.class),
     })
     ProductSkuDO selectByIdIncludeDeleted(@Param("id") Long id);
 
@@ -34,6 +34,24 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
 
     default void deleteBySpuId(Long spuId) {
         delete(new LambdaQueryWrapperX<ProductSkuDO>().eq(ProductSkuDO::getSpuId, spuId));
+    }
+
+    default List<ProductSkuDO> selectListWithWmsMapping(Collection<Long> spuIds) {
+        if (spuIds != null && spuIds.isEmpty()) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapperX<ProductSkuDO>()
+                .inIfPresent(ProductSkuDO::getSpuId, spuIds)
+                .isNotNull(ProductSkuDO::getWmsSkuId)
+                .isNotNull(ProductSkuDO::getWmsWarehouseId)
+                .orderByAsc(ProductSkuDO::getSpuId)
+                .orderByAsc(ProductSkuDO::getId));
+    }
+
+    default void updateStockCache(Long id, Integer stock) {
+        update(null, new LambdaUpdateWrapper<ProductSkuDO>()
+                .set(ProductSkuDO::getStock, stock)
+                .eq(ProductSkuDO::getId, id));
     }
 
     /**
@@ -70,3 +88,4 @@ public interface ProductSkuMapper extends BaseMapperX<ProductSkuDO> {
     }
 
 }
+

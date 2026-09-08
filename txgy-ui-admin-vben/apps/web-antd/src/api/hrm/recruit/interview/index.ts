@@ -4,6 +4,7 @@ export namespace HrmRecruitInterviewApi {
   /** 招聘面试 */
   export interface RecruitInterview {
     id?: number; // 面试编号
+    applicationId?: number; // 应聘记录编号
     candidateId?: number; // 候选人编号
     type?: number; // 面试方式
     stageNumber?: number; // 面试轮次

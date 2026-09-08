@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.enums.stock.ErpStockRecordBizTypeEnum;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpWmsBusinessDocumentService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockRecordService;
 import cn.iocoder.txgy.module.erp.service.stock.bo.ErpStockRecordCreateReqBO;
@@ -24,6 +25,7 @@ import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -48,6 +50,9 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
 
+    @Value("${txgy.integration.wms.mode:mock}")
+    private String wmsMode;
+
     @Resource
     private ErpPurchaseInMapper purchaseInMapper;
     @Resource
@@ -65,6 +70,8 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
     private ErpAccountService accountService;
     @Resource
     private ErpStockRecordService stockRecordService;
+    @Resource
+    private ErpWmsBusinessDocumentService wmsBusinessDocumentService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -179,12 +186,17 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
         List<ErpPurchaseInItemDO> purchaseInItems = purchaseInItemMapper.selectListByInId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.PURCHASE_IN.getType()
                 : ErpStockRecordBizTypeEnum.PURCHASE_IN_CANCEL.getType();
-        purchaseInItems.forEach(purchaseInItem -> {
-            BigDecimal count = approve ? purchaseInItem.getCount() : purchaseInItem.getCount().negate();
-            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
-                    purchaseInItem.getProductId(), purchaseInItem.getWarehouseId(), count,
-                    bizType, purchaseInItem.getInId(), purchaseInItem.getId(), purchaseIn.getNo()));
-        });
+        if (!"remote".equalsIgnoreCase(wmsMode)) {
+            purchaseInItems.forEach(purchaseInItem -> {
+                BigDecimal count = approve ? purchaseInItem.getCount() : purchaseInItem.getCount().negate();
+                stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
+                        purchaseInItem.getProductId(), purchaseInItem.getWarehouseId(), count,
+                        bizType, purchaseInItem.getInId(), purchaseInItem.getId(), purchaseIn.getNo()));
+            });
+        }
+        if (approve) {
+            wmsBusinessDocumentService.preparePurchaseReceiptAfterCommit(id);
+        }
     }
 
     @Override

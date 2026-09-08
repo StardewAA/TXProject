@@ -132,9 +132,9 @@ export function useGridColumns(
         attrs: { beforeChange: onStatusChange },
         name: 'CellSwitch',
         props: {
-          checkedValue: 1,
+          checkedValue: 0,
           checkedChildren: '启用',
-          unCheckedValue: 0,
+          unCheckedValue: 1,
           unCheckedChildren: '禁用',
         },
       },

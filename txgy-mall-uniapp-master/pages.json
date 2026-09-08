@@ -2,8 +2,8 @@
 	"easycom": {
 		"autoscan": true,
 		"custom": {
-			"^s-(.*)": "@/sheep/components/s-$1/s-$1.vue",
-			"^su-(.*)": "@/sheep/ui/su-$1/su-$1.vue"
+			"^s-(.*)": "/sheep/components/s-$1/s-$1.vue",
+			"^su-(.*)": "/sheep/ui/su-$1/su-$1.vue"
 		}
 	},
 	"pages": [{

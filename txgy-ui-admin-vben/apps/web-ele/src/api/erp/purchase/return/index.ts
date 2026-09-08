@@ -15,6 +15,10 @@ export namespace ErpPurchaseReturnApi {
     discountPercent?: number; // 折扣百分比
     discountPrice?: number; // 折扣金额
     status?: number; // 状态
+    businessChainNo?: string;
+    wmsStatus?: string;
+    wmsOrderNo?: string;
+    wmsFailureReason?: string;
     remark?: string; // 备注
     totalTaxPrice?: number; // 合计税额
     otherPrice?: number; // 其他费用
@@ -24,6 +28,7 @@ export namespace ErpPurchaseReturnApi {
   /** 采购退货项 */
   export interface PurchaseReturnItem {
     count?: number;
+    wmsActualCount?: number;
     id?: number;
     seq?: number; // 前端行号
     orderItemId?: number;

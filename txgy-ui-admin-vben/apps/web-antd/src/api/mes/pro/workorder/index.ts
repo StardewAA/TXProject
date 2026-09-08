@@ -11,6 +11,9 @@ export namespace MesProWorkOrderApi {
     type?: number; // 工单类型
     orderSourceType?: number; // 来源类型
     orderSourceCode?: string; // 来源单据编号
+    projectId?: number; // 所属项目编号
+    projectCode?: string; // 项目编码
+    projectName?: string; // 项目名称
     productId?: number; // 产品编号
     productName?: string; // 产品名称
     productCode?: string; // 产品编码
@@ -42,6 +45,8 @@ export namespace MesProWorkOrderApi {
     code?: string;
     name?: string;
     orderSourceCode?: string;
+    projectId?: number;
+    noProject?: boolean;
     productId?: number;
     clientId?: number;
     status?: number;

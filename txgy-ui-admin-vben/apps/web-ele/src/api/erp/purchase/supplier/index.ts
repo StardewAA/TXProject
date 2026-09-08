@@ -6,6 +6,7 @@ export namespace ErpSupplierApi {
   /** 供应商信息 */
   export interface Supplier {
     id?: number; // 供应商编号
+    partnerCode: string; // 跨模块统一供应商编码
     name: string; // 供应商名称
     contact: string; // 联系人
     mobile: string; // 手机号码

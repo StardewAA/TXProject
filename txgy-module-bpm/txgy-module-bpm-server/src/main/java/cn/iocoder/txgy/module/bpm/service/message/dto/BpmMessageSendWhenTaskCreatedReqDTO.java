@@ -20,6 +20,11 @@ public class BpmMessageSendWhenTaskCreatedReqDTO {
      */
     @NotEmpty(message = "流程实例的名字不能为空")
     private String processInstanceName;
+    /**
+     * 流程定义标识，用于区分 ERP 订单审批与其它流程
+     */
+    @NotEmpty(message = "流程定义标识不能为空")
+    private String processDefinitionKey;
     @NotNull(message = "发起人的用户编号")
     private Long startUserId;
     @NotEmpty(message = "发起人的昵称")
@@ -41,5 +46,10 @@ public class BpmMessageSendWhenTaskCreatedReqDTO {
      */
     @NotNull(message = "审批人的用户编号不能为空")
     private Long assigneeUserId;
+
+    /** ERP 订单类型（PURCHASE / SALE） */
+    private String orderType;
+    /** ERP 订单编号 */
+    private String orderNo;
 
 }

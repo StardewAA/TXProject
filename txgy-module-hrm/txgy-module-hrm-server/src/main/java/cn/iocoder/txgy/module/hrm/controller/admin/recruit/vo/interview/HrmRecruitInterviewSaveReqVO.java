@@ -19,8 +19,10 @@ public class HrmRecruitInterviewSaveReqVO {
     @Schema(description = "面试编号", example = "1024")
     private Long id;
 
-    @Schema(description = "候选人编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
-    @NotNull(message = "候选人编号不能为空")
+    @Schema(description = "应聘记录编号；新流程优先使用", example = "1024")
+    private Long applicationId;
+
+    @Schema(description = "候选人编号；兼容旧接口", example = "1024")
     private Long candidateId;
 
     @Schema(description = "面试方式", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
@@ -30,6 +32,9 @@ public class HrmRecruitInterviewSaveReqVO {
 
     @Schema(description = "面试轮次", example = "1")
     private Integer stageNumber;
+
+    @Schema(description = "应聘内面试轮次", example = "1")
+    private Integer roundNo;
 
     @Schema(description = "主面试官员工编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     @NotNull(message = "主面试官不能为空")

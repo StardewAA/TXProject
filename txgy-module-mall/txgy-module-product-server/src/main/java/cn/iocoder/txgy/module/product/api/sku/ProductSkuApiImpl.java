@@ -1,20 +1,20 @@
 package cn.iocoder.txgy.module.product.api.sku;
 
-import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuUpdateStockReqDTO;
-import cn.iocoder.txgy.module.product.convert.sku.ProductSkuConvert;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuStockLockReqDTO;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuStockStatusRespDTO;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.service.sku.ProductSkuService;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.RestController;
-
 import jakarta.annotation.Resource;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
+
 import java.util.Collection;
 import java.util.List;
-
-import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 商品 SKU API 实现类
@@ -22,7 +22,7 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
  * @author LeeYan9
  * @since 2022-09-06
  */
-@RestController // 提供 RESTful API 接口，给 Feign 调用
+@RestController
 @Validated
 public class ProductSkuApiImpl implements ProductSkuApi {
 
@@ -30,27 +30,55 @@ public class ProductSkuApiImpl implements ProductSkuApi {
     private ProductSkuService productSkuService;
 
     @Override
-    public CommonResult<ProductSkuRespDTO> getSku(Long id) {
+    public ProductSkuRespDTO getSku(Long id) {
         ProductSkuDO sku = productSkuService.getSku(id);
-        return success(BeanUtils.toBean(sku, ProductSkuRespDTO.class));
+        return BeanUtils.toBean(sku, ProductSkuRespDTO.class);
     }
 
     @Override
-    public CommonResult<List<ProductSkuRespDTO>> getSkuList(Collection<Long> ids) {
+    public List<ProductSkuRespDTO> getSkuList(Collection<Long> ids) {
         List<ProductSkuDO> skus = productSkuService.getSkuList(ids);
-        return success(BeanUtils.toBean(skus, ProductSkuRespDTO.class));
+        return BeanUtils.toBean(skus, ProductSkuRespDTO.class);
     }
 
     @Override
-    public CommonResult<List<ProductSkuRespDTO>> getSkuListBySpuId(Collection<Long> spuIds) {
+    public List<ProductSkuRespDTO> getSkuListBySpuId(Collection<Long> spuIds) {
         List<ProductSkuDO> skus = productSkuService.getSkuListBySpuId(spuIds);
-        return success(BeanUtils.toBean(skus, ProductSkuRespDTO.class));
+        return BeanUtils.toBean(skus, ProductSkuRespDTO.class);
     }
 
     @Override
-    public CommonResult<Boolean> updateSkuStock(ProductSkuUpdateStockReqDTO updateStockReqDTO) {
+    public void updateSkuStock(ProductSkuUpdateStockReqDTO updateStockReqDTO) {
         productSkuService.updateSkuStock(updateStockReqDTO);
-        return success(true);
+    }
+
+    @Override
+    public void reserveSkuStock(ProductSkuStockLockReqDTO reqDTO) {
+        productSkuService.reserveSkuStock(reqDTO);
+    }
+
+    @Override
+    public void releaseSkuStock(ProductSkuStockLockReqDTO reqDTO) {
+        productSkuService.releaseSkuStock(reqDTO);
+    }
+
+    @Override
+    public void outboundSkuStock(ProductSkuStockLockReqDTO reqDTO) {
+        productSkuService.outboundSkuStock(reqDTO);
+    }
+
+    @Override
+    public void inboundReturnSkuStock(String returnNo, ProductSkuStockLockReqDTO reqDTO) {
+        productSkuService.inboundReturnSkuStock(returnNo, reqDTO);
+    }
+
+    @Override
+    public Map<String, ProductSkuStockStatusRespDTO> getWmsStockStatus(Collection<String> orderNos) {
+        return productSkuService.getWmsStockStatus(orderNos).entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, entry -> new ProductSkuStockStatusRespDTO(entry.getValue().status(),
+                        entry.getValue().totalCount(), entry.getValue().lockedCount(), entry.getValue().releasedCount(),
+                        entry.getValue().outboundCount())));
     }
 
 }
+

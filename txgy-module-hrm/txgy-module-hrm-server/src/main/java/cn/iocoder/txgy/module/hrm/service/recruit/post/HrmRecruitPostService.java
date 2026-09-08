@@ -51,6 +51,14 @@ public interface HrmRecruitPostService {
     HrmRecruitPostDO validateRecruitPostExists(Long id);
 
     /**
+     * 校验招聘职位已发布，可被候选人关联。
+     *
+     * @param id 招聘职位编号
+     * @return 招聘职位
+     */
+    HrmRecruitPostDO validateRecruitPostPublished(Long id);
+
+    /**
      * 获得招聘职位列表
      *
      * @param ids 招聘职位编号集合
@@ -75,6 +83,22 @@ public interface HrmRecruitPostService {
      * @return 招聘职位分页列表
      */
     PageResult<HrmRecruitPostDO> getRecruitPostPage(HrmRecruitPostPageReqVO pageReqVO);
+
+    /**
+     * 获得门户公开的招聘职位分页列表。门户岗位对所有租户可见，查询不受当前租户限制。
+     *
+     * @param pageReqVO 分页查询
+     * @return 所有租户已发布职位
+     */
+    PageResult<HrmRecruitPostDO> getPortalRecruitPostPage(HrmRecruitPostPageReqVO pageReqVO);
+
+    /**
+     * 获得门户公开的已发布职位详情。
+     *
+     * @param id 职位编号
+     * @return 已发布职位
+     */
+    HrmRecruitPostDO getPortalRecruitPostPublished(Long id);
 
     /**
      * 获得招聘职位精简列表
