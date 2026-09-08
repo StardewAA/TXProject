@@ -20,10 +20,9 @@ import {
   socialAuthRedirect,
 } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
+import { hasBackendAccess, type LoginType } from './login-access';
 
 defineOptions({ name: 'Login' });
-
-type LoginType = 'enterprise' | 'personal';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,6 +38,16 @@ const verifyRef = ref();
 const captchaType = 'blockPuzzle';
 
 const tenantList = ref<AuthApi.TenantResult[]>([]);
+
+function handleLoginTypeChange(type: LoginType) {
+  loginType.value = type;
+  if (type === 'personal') {
+    // 个人账号固定使用后端保留的 tenant_id=0，不能沿用登录页初始化的企业租户。
+    accessStore.setTenantId(null);
+    accessStore.clearVisitTenantId();
+    loginRef.value?.getFormApi().setFieldValue('tenantId', undefined);
+  }
+}
 
 /** 获取租户列表，并默认选中当前域名对应的租户。 */
 async function fetchTenantList() {
@@ -61,6 +70,12 @@ async function fetchTenantList() {
       tenantId = tenantList.value[0].id;
     }
 
+    if (loginType.value === 'personal') {
+      accessStore.setTenantId(null);
+      accessStore.clearVisitTenantId();
+      return;
+    }
+
     accessStore.setTenantId(tenantId);
     loginRef.value
       ?.getFormApi()
@@ -70,41 +85,6 @@ async function fetchTenantList() {
   }
 }
 
-/** 管理权限由后端用户信息和角色决定，兼容不同版本的字段命名。 */
-function hasManagementAccess() {
-  const userInfo = userStore.userInfo as Record<string, any> | null;
-  if (!userInfo) {
-    return false;
-  }
-
-  const managementFlags = [
-    userInfo.isAdmin,
-    userInfo.isManagement,
-    userInfo.isManager,
-    userInfo.admin,
-    userInfo.management,
-  ];
-  if (managementFlags.some((value) => value === true || value === 1)) {
-    return true;
-  }
-
-  const roles = [
-    ...(userStore.userRoles ?? []),
-    ...((userInfo.roles as string[] | undefined) ?? []),
-  ];
-  if (
-    roles.some((role) =>
-      /(admin|administrator|manager|manage|super|tenant)/i.test(String(role)),
-    )
-  ) {
-    return true;
-  }
-
-  return (accessStore.accessCodes ?? []).some((code) =>
-    /(^|:)(admin|manage|permission|tenant)(:|$)/i.test(String(code)),
-  );
-}
-
 function resolveRedirectPath() {
   const redirect =
     typeof route.query.redirect === 'string'
@@ -112,7 +92,13 @@ function resolveRedirectPath() {
       : '';
   const userInfo = userStore.userInfo;
 
-  if (loginType.value === 'enterprise' && hasManagementAccess()) {
+  if (
+    hasBackendAccess({
+      loginType: loginType.value,
+      menus: accessStore.accessMenus,
+      permissions: accessStore.accessCodes,
+    })
+  ) {
     const backendRedirect =
       redirect && !redirect.startsWith('/portal/') ? redirect : '';
     return (
@@ -244,7 +230,7 @@ const formSchema = computed((): VbenFormSchema[] => {
         class="login-type-tab"
         role="tab"
         type="button"
-        @click="loginType = item.key as LoginType"
+        @click="handleLoginTypeChange(item.key as LoginType)"
       >
         {{ item.label }}
       </button>

@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 
 import java.util.Collection;
+import java.util.List;
 
 @Mapper
 public interface HrmRecruitApplicationMapper extends BaseMapperX<HrmRecruitApplicationDO> {
@@ -32,6 +33,50 @@ public interface HrmRecruitApplicationMapper extends BaseMapperX<HrmRecruitAppli
                 .eq(HrmRecruitApplicationDO::getCandidateId, candidateId)
                 .eq(HrmRecruitApplicationDO::getPostId, postId)
                 .in(HrmRecruitApplicationDO::getStatus, statuses));
+    }
+
+    default HrmRecruitApplicationDO selectProcessingByApplicantAndPost(Long applicantUserId, Long postId,
+                                                                          Collection<String> statuses) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .eq(HrmRecruitApplicationDO::getApplicantUserId, applicantUserId)
+                .eq(HrmRecruitApplicationDO::getPostId, postId)
+                .in(HrmRecruitApplicationDO::getStatus, statuses));
+    }
+
+    default HrmRecruitApplicationDO selectLatestByCandidateAndPost(Long candidateId, Long postId) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .eq(HrmRecruitApplicationDO::getCandidateId, candidateId)
+                .eq(HrmRecruitApplicationDO::getPostId, postId)
+                .orderByDesc(HrmRecruitApplicationDO::getCreateTime)
+                .orderByDesc(HrmRecruitApplicationDO::getId)
+                .last("LIMIT 1"));
+    }
+
+    /** 查询候选人当前各岗位的应聘记录，结果按最新投递时间倒序。 */
+    default List<HrmRecruitApplicationDO> selectListByCandidateIdsAndPostIds(
+            Collection<Long> candidateIds, Collection<Long> postIds) {
+        if (candidateIds == null || candidateIds.isEmpty() || postIds == null || postIds.isEmpty()) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .in(HrmRecruitApplicationDO::getCandidateId, candidateIds)
+                .in(HrmRecruitApplicationDO::getPostId, postIds)
+                .orderByDesc(HrmRecruitApplicationDO::getCreateTime)
+                .orderByDesc(HrmRecruitApplicationDO::getId));
+    }
+
+    default PageResult<HrmRecruitApplicationDO> selectPageByApplicantUserId(
+            Long applicantUserId, HrmRecruitApplicationPageReqVO reqVO) {
+        return selectPage(reqVO, new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .eq(HrmRecruitApplicationDO::getApplicantUserId, applicantUserId)
+                .eqIfPresent(HrmRecruitApplicationDO::getStatus, reqVO.getStatus())
+                .orderByDesc(HrmRecruitApplicationDO::getCreateTime));
+    }
+
+    default HrmRecruitApplicationDO selectByIdAndApplicantUserId(Long id, Long applicantUserId) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .eq(HrmRecruitApplicationDO::getId, id)
+                .eq(HrmRecruitApplicationDO::getApplicantUserId, applicantUserId));
     }
 
     default int updateStatusWithVersion(Long id, Integer version, HrmRecruitApplicationDO updateObj) {
