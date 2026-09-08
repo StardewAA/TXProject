@@ -77,7 +77,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height class="bid-ind">
     <Grid table-title="采集任务（死信可重试）">
       <template #col_status="{ row }">
         <Tag v-if="tagOf(TASK_STATUS_MAP, row.status)" :color="tagOf(TASK_STATUS_MAP, row.status)!.color">

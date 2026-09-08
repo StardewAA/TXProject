@@ -306,7 +306,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-3">
+  <div class="p-3 bid-ind">
     <!-- 顶部 -->
     <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
       <div class="flex items-center gap-3">

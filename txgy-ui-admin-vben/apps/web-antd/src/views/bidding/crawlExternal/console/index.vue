@@ -13,9 +13,7 @@ import {
   Empty,
   message,
   Modal,
-  Radio,
   Select,
-  Space,
   Tag,
 } from 'ant-design-vue';
 import {
@@ -61,7 +59,14 @@ const sourceOptions = computed(() =>
     .filter((s) => s.sourceCode)
     .map((s) => ({ label: (s.sourceName || s.sourceCode) + '（' + s.sourceCode + '）', value: s.sourceCode! })),
 );
-const filterType = ref<'ALL' | 'TEST' | 'SCHEDULE'>('ALL');
+/** 顶部选项卡：tasks=定时任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
+const activeTab = ref<'tasks' | 'tests' | 'manual' | 'jobs'>('tasks');
+const kpis = computed(() => ({
+  sched: schedTasks.value.length,
+  tests: backendTests.value.length,
+  manual: manualRuns.value.length,
+  jobs: jobs.value.length,
+}));
 const filterSource = ref<string | undefined>(undefined);
 const filterStatus = ref<string | undefined>(undefined);
 const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ label: m.text, value }));
@@ -366,258 +371,236 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 };
 </script>
 
+<!-- ============ 爬取任务工作台 · 工业风：选项卡 + 数据面板（2026-09-10） ============ -->
 <template>
-  <div class="p-3">
-    <!-- 顶部：动作 -->
-    <div class="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="flex items-center gap-4">
-        <span class="text-sm font-semibold">爬取任务工作台</span>
-        <span class="text-xs text-gray-400">
-          每次“爬取 / 手动录入 / 定时轮询”生成一条任务条 · 源 · 提取内容 · 渲染内容 · 过程
-        </span>
+  <div class="p-3 bid-ind">
+    <!-- 页头 -->
+    <div class="ind-stripes"></div>
+    <div class="ind-head">
+      <div>
+        <div class="ind-title">
+          爬取任务工作台
+          <span class="ind-mark">PLATFORM</span>
+        </div>
+        <div class="ind-sub">
+          平台级采集（G 轨，外部公告域）。每次「立即爬取 / 手动录入 / 定时轮询」生成一条任务条：
+          采集源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整爬取的行迹。
+        </div>
       </div>
-      <Space>
-        <Button type="primary" @click="manualModalApi.open()">
-          手动录入（测试任务）
-        </Button>
+      <div class="ind-actions">
+        <Button type="primary" size="large" @click="manualModalApi.open()">＋ 手动录入（测试任务）</Button>
         <Dropdown>
-          <Button :loading="!!runCodeBusy" :disabled="runBusy || sources.length === 0">
-            立即爬取
-          </Button>
+          <Button size="large" :loading="!!runCodeBusy" :disabled="runBusy || sources.length === 0">立即爬取 ▾</Button>
           <template #overlay>
-            <div class="rounded-md border border-gray-200 bg-white py-1 shadow">
-              <div class="px-3 py-1 text-xs text-gray-400">选择采集源（受 120s 频控）</div>
-              <div
-                v-for="s in sources"
-                :key="s.id"
-                class="cursor-pointer px-3 py-1 text-sm hover:bg-blue-50"
-                @click="onRunMenu(s)"
-              >
-                {{ s.sourceName || s.sourceCode }}
+            <div class="rounded-md border border-gray-300 bg-white py-1 shadow-lg">
+              <div class="px-4 py-2 text-xs font-semibold text-gray-500">选择采集源（受 120s 频控）</div>
+              <div v-for="src in sources" :key="src.id" class="cursor-pointer px-4 py-2 text-sm font-medium text-gray-800 hover:bg-orange-50" @click="onRunMenu(src)">
+                {{ src.sourceName || src.sourceCode }}
               </div>
             </div>
           </template>
         </Dropdown>
-        <Button @click="sourceOpen = true">采集源配置</Button>
-        <Button @click="refreshAll">刷新</Button>
-      </Space>
+        <Button size="large" @click="sourceOpen = true">采集源配置</Button>
+        <Button size="large" @click="refreshAll">刷新</Button>
+      </div>
     </div>
 
-    <!-- 筛选 -->
-    <div class="mb-3 flex items-center gap-4 rounded-md border border-gray-200 bg-white px-3 py-2">
-      <Radio.Group v-model:value="filterType" option-type="button" :options="[{ label: '全部', value: 'ALL' }, { label: '定时任务', value: 'SCHEDULE' }, { label: '测试任务', value: 'TEST' }]" />
-      <Select
-        v-model:value="filterSource"
-        placeholder="全部采集源"
-        allow-clear
-        style="width: 220px"
-        :options="sourceOptions"
-        @change="loadSched(true)"
-      />
-      <Select
-        v-model:value="filterStatus"
-        placeholder="全部状态"
-        allow-clear
-        style="width: 140px"
-        :options="statusOptions"
-        @change="loadSched(true)"
-      />
-      <span v-if="schedLoading" class="text-xs text-gray-400">加载中…</span>
+    <!-- KPI -->
+    <div class="ind-kpis">
+      <div class="ind-kpi k-blue"><div class="k-label">定时任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
+      <div class="ind-kpi k-green"><div class="k-label">后端测试</div><div class="k-num">{{ kpis.tests }}</div><div class="k-note">taskType=TEST 服务端留痕</div></div>
+      <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">本次会话手动录入（刷新清空）</div></div>
+      <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
 
-    <!-- 定时任务区 -->
-    <section v-show="filterType !== 'TEST'" class="mb-4">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-sm font-semibold text-gray-700">定时任务</span>
-        <Tag color="blue">后端 crawl-task</Tag>
-        <span class="text-xs text-gray-400">调度轮询/立即爬取产生的真实任务记录</span>
-      </div>
-      <div v-if="schedTasks.length === 0 && !schedLoading" class="rounded-md border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400">
-        暂无定时任务 —— 在“采集源配置”启用一个源，或点“立即爬取”生成第一条任务条
-      </div>
-      <div
-        v-for="t in schedTasks"
-        :key="String(t.id)"
-        class="mb-2 rounded-md border border-gray-200 bg-white px-3 py-2"
-      >
-        <div class="flex items-center gap-3">
-          <Tag v-if="filterType === 'ALL' || filterType === 'SCHEDULE'" color="geekblue">定时</Tag>
-          <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">
-            {{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}
-          </Tag>
-          <span class="flex-1 truncate text-sm text-gray-700" :title="t.url || ''">{{ t.url || '（无 URL，见过程）' }}</span>
-          <span class="text-xs text-gray-400">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-          <Space>
-            <a class="text-xs text-blue-600" @click="openTaskProcess(t)">过程</a>
-            <a v-if="t.status === 'FAILED'" class="text-xs text-red-500" :class="{ 'opacity-50': retryBusy === t.id }" @click="retryTask(t)">
-              {{ retryBusy === t.id ? '重试中…' : '重试' }}
-            </a>
-          </Space>
-        </div>
-        <div v-if="t.message" class="mt-1 truncate text-xs text-gray-400" :title="t.message">{{ t.message }}</div>
-        <div class="mt-1 flex items-center gap-3 text-xs text-gray-400">
-          <span v-if="t.sourceCode">源：{{ t.sourceCode }}</span>
-          <span v-if="t.attempt != null">尝试：{{ t.attempt }}</span>
-          <span v-if="t.channelCode">通道：{{ t.channelCode }}</span>
-          <span v-if="t.parserCode">解析器：{{ t.parserCode }}</span>
-        </div>
-      </div>
-      <div v-if="!schedEnd && schedTasks.length" class="mt-1 text-center">
-        <a class="text-xs text-blue-600" @click="loadSched()">{{ schedLoading ? '加载中…' : '加载更多' }}</a>
-      </div>
-    </section>
+    <!-- 选项卡 + 数据面板 -->
+    <div class="ind-tabs">
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tasks' }" @click="activeTab = 'tasks'">定时任务<span v-if="kpis.sched" class="cnt">{{ kpis.sched }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tests' }" @click="activeTab = 'tests'">后端测试任务<span v-if="kpis.tests" class="cnt">{{ kpis.tests }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">会话测试 · 解析留档<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'jobs' }" @click="activeTab = 'jobs'">采集批次<span v-if="kpis.jobs" class="cnt">{{ kpis.jobs }}</span></button>
+    </div>
 
-    <!-- 后端 TEST 任务区 -->
-    <section v-if="filterType !== 'SCHEDULE' && backendTests.length" class="mb-4">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-sm font-semibold text-gray-700">后端测试任务（TEST）</span>
-        <Tag color="purple">crawl-task · taskType=TEST</Tag>
-      </div>
-      <div v-for="t in backendTests" :key="String(t.id)" class="mb-2 rounded-md border border-gray-200 bg-white px-3 py-2">
-        <div class="flex items-center gap-3">
-          <Tag color="purple">测试</Tag>
-          <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">
-            {{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}
-          </Tag>
-          <span class="flex-1 truncate text-sm text-gray-700" :title="t.url || ''">{{ t.url || '手动录入' }}</span>
-          <span class="text-xs text-gray-400">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-          <a class="text-xs text-blue-600" @click="openTaskProcess(t)">过程</a>
+    <div class="ind-tab-body">
+      <!-- ============ ① 定时任务 ============ -->
+      <section v-show="activeTab === 'tasks'">
+        <div class="mb-3 flex flex-wrap items-center gap-3">
+          <Select v-model:value="filterSource" placeholder="全部采集源" allow-clear style="width: 230px" :options="sourceOptions" @change="loadSched(true)" />
+          <Select v-model:value="filterStatus" placeholder="全部状态" allow-clear style="width: 150px" :options="statusOptions" @change="loadSched(true)" />
+          <span v-if="schedLoading" class="text-xs font-semibold text-orange-600">加载中…</span>
+          <a v-if="!schedEnd && schedTasks.length" class="ml-auto text-sm font-semibold text-blue-600" @click="loadSched()">{{ schedLoading ? '加载中…' : '加载更多 ▾' }}</a>
         </div>
-      </div>
-    </section>
+        <div v-if="schedTasks.length === 0 && !schedLoading" class="ind-empty">暂无定时任务 —— 在「采集源配置」启用一个源，或点「立即爬取」生成第一条任务条</div>
+        <article v-for="t in schedTasks" :key="String(t.id)" class="ind-card">
+          <div class="ind-card-h">
+            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '（无 URL，见过程）' }}</span>
+            <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+          </div>
+          <div class="ind-card-b">
+            <div class="ind-kv">
+              <div class="kv"><span class="k">源</span><span class="v">{{ t.sourceCode || '—' }}</span></div>
+              <div class="kv"><span class="k">通道 / 解析器</span><span class="v">{{ t.channelCode || '—' }} / {{ t.parserCode || '—' }}</span></div>
+              <div class="kv"><span class="k">尝试</span><span class="v">{{ t.attempt ?? '—' }}</span></div>
+              <div class="kv"><span class="k">动作</span><span class="v weak">
+                <a class="text-blue-700 font-bold" @click="openTaskProcess(t)">查看过程</a>
+                <a v-if="t.status === 'FAILED'" class="ml-3 text-red-600 font-bold" :class="{ 'opacity-50': retryBusy === t.id }" @click="retryTask(t)">{{ retryBusy === t.id ? '重试中…' : '重试（归零 attempt）' }}</a>
+              </span></div>
+            </div>
+            <div v-if="t.message" class="mt-2 border-t border-dashed border-gray-200 pt-2 text-xs font-medium text-orange-700">{{ t.message }}</div>
+          </div>
+        </article>
+      </section>
 
-    <!-- 本次会话手动/测试任务条 -->
-    <section v-show="filterType !== 'SCHEDULE'">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-sm font-semibold text-gray-700">测试任务 · 本次会话</span>
-        <Tag color="cyan">手动录入即真实解析一次</Tag>
-        <span v-if="manualRuns.length" class="text-xs text-gray-400">共 {{ manualRuns.length }} 条（会话内存，刷新后清空；后端 manual-run 契约落地后持久化）</span>
-      </div>
-      <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 — 点右上“手动录入”，粘贴 HTML/JSON 源代码或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条">
-        <template #image><div /></template>
-      </Empty>
-      <article
-        v-for="r in manualRuns"
-        :key="r.id"
-        class="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white"
-      >
-        <!-- 卡头 -->
-        <div class="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-3 py-2">
-          <Tag color="purple">测试</Tag>
-          <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
-          <span class="text-sm font-medium text-gray-800">{{ (r.resp?.title || '').trim() || '（无标题产出）' }}</span>
-          <span class="flex-1" />
-          <span class="text-xs text-gray-400">{{ fmtDt(r.occurredAt) }}</span>
-          <a class="text-xs text-blue-600" @click="openManualProcess(r)">过程</a>
-        </div>
-        <div class="grid grid-cols-3 divide-x divide-gray-100">
-          <!-- ① 源：源代码 / PDF 文件 -->
-          <div class="p-3">
-            <div class="mb-1 text-xs font-semibold text-gray-500">① 源 · 源代码 / PDF</div>
-            <div class="space-y-1 text-xs text-gray-600">
-              <div>输入口径：{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}</div>
-              <div v-if="r.contentLength != null">内容长度：{{ r.contentLength }} 字符</div>
-              <div v-if="r.url" class="truncate" :title="r.url">URL：{{ r.url }}</div>
-              <div class="pt-1 text-[11px] text-gray-400">
-                原文 HTML/PDF 完整内容由后端 FileApi 落库后经 fileUrl 提供（契约 TaskRunVO.raw），本会话仅保留解析回执。
-              </div>
+      <!-- ============ ② 后端测试任务 ============ -->
+      <section v-show="activeTab === 'tests'">
+        <div v-if="backendTests.length === 0" class="ind-empty">暂无后端测试任务（taskType=TEST）。手动录入后服务端留痕即出现于此。</div>
+        <article v-for="t in backendTests" :key="String(t.id)" class="ind-card">
+          <div class="ind-card-h">
+            <Tag color="purple">测试</Tag>
+            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '手动录入' }}</span>
+            <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+          </div>
+          <div class="ind-card-b">
+            <div class="ind-kv">
+              <div class="kv"><span class="k">源</span><span class="v">{{ t.sourceCode || '—' }}</span></div>
+              <div class="kv"><span class="k">尝试</span><span class="v">{{ t.attempt ?? '—' }}</span></div>
+              <div class="kv"><span class="k">动作</span><span class="v weak"><a class="text-blue-700 font-bold" @click="openTaskProcess(t)">查看过程</a></span></div>
             </div>
           </div>
-          <!-- ② 提取内容 -->
-          <div class="p-3">
-            <div class="mb-1 text-xs font-semibold text-gray-500">② 提取内容</div>
-            <div v-if="kvOf(r).length" class="space-y-1 text-xs text-gray-700">
-              <div v-for="[k, v] in kvOf(r)" :key="k" class="flex gap-2">
-                <span class="w-16 shrink-0 text-gray-400">{{ k }}</span>
-                <span class="truncate" :title="v">{{ v }}</span>
+        </article>
+      </section>
+
+      <!-- ============ ③ 会话测试 · 手动录入 ============ -->
+      <section v-show="activeTab === 'manual'">
+        <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条" />
+        <article v-for="r in manualRuns" :key="r.id" class="ind-card">
+          <div class="ind-card-h">
+            <Tag color="purple">测试</Tag>
+            <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
+            <span class="cd-title truncate">{{ (r.resp?.title || '').trim() || '（无标题产出）' }}</span>
+            <span class="cd-meta">{{ fmtDt(r.occurredAt) }}</span>
+            <a class="text-sm font-bold text-blue-700" @click="openManualProcess(r)">过程</a>
+          </div>
+          <div class="grid grid-cols-3 max-lg:grid-cols-1">
+            <!-- ① 源 -->
+            <div class="p-4 border-r border-dashed border-gray-300">
+              <div class="ind-sec-t"><span>①</span> 源 · 源代码 / PDF</div>
+              <div class="ind-kv" style="grid-template-columns: 1fr;">
+                <div class="kv"><span class="k">输入口径</span><span class="v">{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}</span></div>
+                <div v-if="r.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ r.contentLength }} 字符</span></div>
+                <div v-if="r.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="r.url">{{ r.url }}</span></div>
+              </div>
+              <div class="mt-2 text-xs font-medium text-gray-500">原文 HTML/PDF 完整内容由后端 FileApi 落库后经 fileUrl 提供（契约 TaskRunVO.raw），本会话仅保留解析回执。</div>
+            </div>
+            <!-- ② 提取内容 -->
+            <div class="p-4 border-r border-dashed border-gray-300">
+              <div class="ind-sec-t"><span>②</span> 提取内容</div>
+              <div class="ind-kv" style="grid-template-columns: 1fr;">
+                <div v-for="[k, v] in kvOf(r)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+              </div>
+              <div v-if="extractedOf(r).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
+                <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
+                <div class="ind-kv" style="grid-template-columns: 1fr;">
+                  <div v-for="[k, v] in extractedOf(r)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+                </div>
+              </div>
+              <div v-if="r.resp?.warnings?.length" class="mt-2">
+                <Tag v-for="(w, i) in r.resp.warnings" :key="i" color="orange" class="mr-1 mt-0.5">{{ w }}</Tag>
               </div>
             </div>
-            <div v-if="extractedOf(r).length" class="mt-2 border-t border-gray-100 pt-1">
-              <div class="mb-1 text-[11px] font-semibold text-gray-400">抽取字段</div>
-              <div v-for="[k, v] in extractedOf(r)" :key="k" class="flex gap-2 text-xs text-gray-700">
-                <span class="w-20 shrink-0 text-gray-400">{{ k }}</span>
-                <span class="truncate" :title="v">{{ v }}</span>
-              </div>
-            </div>
-            <div v-if="r.resp?.warnings?.length" class="mt-2">
-              <Tag v-for="(w, i) in r.resp.warnings" :key="i" color="orange" class="mt-0.5 mr-1">{{ w }}</Tag>
+            <!-- ③ 渲染内容 -->
+            <div class="p-4">
+              <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
+              <div class="ind-doc" v-html="renderHtmlOf(r)"></div>
             </div>
           </div>
-          <!-- ③ 渲染后的内容 -->
-          <div class="p-3">
-            <div class="mb-1 text-xs font-semibold text-gray-500">③ 渲染后的内容</div>
-            <div class="docx-bounded overflow-auto" v-html="renderHtmlOf(r)"></div>
+        </article>
+      </section>
+
+      <!-- ============ ④ 采集批次 ============ -->
+      <section v-show="activeTab === 'jobs'">
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；契约：任务批次归属 + summaryJson）</span></div>
+          <div class="ind-panel-b">
+            <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
+            <div v-for="j in jobs" :key="String(j.id)" class="ind-row">
+              <Tag :color="tagOf(TASK_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, j.status)?.text || j.status }}</Tag>
+              <span class="rw">源：{{ j.sourceCode || '—' }}</span>
+              <span class="rw">触发：{{ j.triggerType || '—' }}</span>
+              <span class="rw main" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
+              <span class="rw time">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
+            </div>
           </div>
         </div>
-      </article>
-    </section>
-
-    <!-- 批次（crawl-job）折叠区 -->
-    <section class="mb-4 rounded-md border border-gray-200 bg-white px-3 py-2">
-      <div class="mb-1 text-sm font-semibold text-gray-700">采集批次（后端 crawl-job，只读参照）</div>
-      <div v-if="!jobs.length" class="text-xs text-gray-400">暂无批次记录（一次完整爬取=一个批次，详情见契约 crawl-job）</div>
-      <div v-for="j in jobs" :key="String(j.id)" class="flex items-center gap-3 border-t border-gray-50 py-1 text-xs text-gray-600">
-        <Tag :color="tagOf(TASK_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, j.status)?.text || j.status }}</Tag>
-        <span>源：{{ j.sourceCode || '—' }}</span>
-        <span>触发：{{ j.triggerType || '—' }}</span>
-        <span class="flex-1 truncate text-gray-400">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '' }}</span>
-        <span class="text-gray-400">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
-      </div>
-    </section>
+      </section>
+    </div>
 
     <!-- 过程抽屉 -->
-    <Drawer
-      v-model:open="processOpen"
-      title="任务过程"
-      :width="640"
-    >
+    <Drawer v-model:open="processOpen" title="任务过程" :width="720">
       <div v-if="processTask" class="space-y-3">
-        <div class="text-xs text-gray-400">
-          任务主键（雪花）：{{ String(processTask.id) }}<br />
-          契约落地说明：下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后于此完整呈现（steps_json + logs + raw/extract/render）。
-        </div>
-        <Descriptions :column="1" size="small" bordered>
-          <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
-          <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
-          <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
-        </Descriptions>
-      </div>
-      <div v-else-if="processManual" class="space-y-3">
-        <Descriptions :column="1" size="small" bordered>
-          <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode }}</Descriptions.Item>
-          <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') }}</Descriptions.Item>
-          <Descriptions.Item label="来源 URL">{{ processManual.url || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? processManual.durationMs + ' ms' : '—' }}</Descriptions.Item>
-          <Descriptions.Item label="解析状态">{{ manualStatusTag(processManual).text }}</Descriptions.Item>
-          <Descriptions.Item v-if="processManual.resp?.error" label="失败原因">{{ processManual.resp.error }}</Descriptions.Item>
-        </Descriptions>
-        <div class="text-xs font-semibold text-gray-500">过程步骤</div>
-        <div class="space-y-1 text-xs text-gray-600">
-          <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
-          <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
-          <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
-        </div>
-        <div v-if="processManual.resp?.meta && Object.keys(processManual.resp.meta).length" class="space-y-1 text-xs text-gray-600">
-          <div class="text-xs font-semibold text-gray-500">解析观测（meta）</div>
-          <div v-for="(mv, mk) in processManual.resp.meta" :key="mk" class="flex gap-2">
-            <span class="w-44 shrink-0 truncate text-gray-400" :title="mk">{{ mk }}</span>
-            <span class="truncate" :title="mv">{{ mv }}</span>
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
+          <div class="ind-panel-b">
+            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+            <Descriptions :column="1" size="small" bordered>
+              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
+              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
+              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
+            </Descriptions>
           </div>
         </div>
-        <div v-if="processManual.resp?.warnings?.length" class="space-y-1 text-xs text-amber-600">
-          <div class="text-xs font-semibold text-gray-500">告警（warnings）</div>
-          <div v-for="(w, i) in processManual.resp.warnings" :key="i">• {{ w }}</div>
-        </div>
-        <div v-if="processManual.resp?.entries?.length" class="space-y-1 text-xs text-gray-600">
-          <div class="text-xs font-semibold text-gray-500">列表条目（列表页输入时）</div>
-          <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
+      </div>
+      <div v-else-if="processManual" class="space-y-3">
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">会话测试过程</span></div>
+          <div class="ind-panel-b">
+            <Descriptions :column="1" size="small" bordered>
+              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode }}</Descriptions.Item>
+              <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') }}</Descriptions.Item>
+              <Descriptions.Item label="来源 URL">{{ processManual.url || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? processManual.durationMs + ' ms' : '—' }}</Descriptions.Item>
+              <Descriptions.Item label="解析状态">{{ manualStatusTag(processManual).text }}</Descriptions.Item>
+              <Descriptions.Item v-if="processManual.resp?.error" label="失败原因">{{ processManual.resp.error }}</Descriptions.Item>
+            </Descriptions>
+            <div class="mt-3">
+              <div class="ind-sec-t"><span>STEP</span> 过程步骤</div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+                <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
+                <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
+                <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
+              </div>
+            </div>
+            <div v-if="processManual.resp?.meta && Object.keys(processManual.resp.meta).length" class="mt-3">
+              <div class="ind-sec-t"><span>OBS</span> 解析观测（meta）</div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+                <div v-for="(mv, mk) in processManual.resp.meta" :key="String(mk)" class="flex gap-2">
+                  <span class="w-48 shrink-0 truncate text-gray-500" :title="String(mk)">{{ mk }}</span>
+                  <span class="truncate">{{ mv }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="processManual.resp?.warnings?.length" class="mt-3">
+              <div class="ind-sec-t"><span>WARN</span> 告警（warnings）</div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-amber-700">
+                <div v-for="(w, i) in processManual.resp.warnings" :key="i">• {{ w }}</div>
+              </div>
+            </div>
+            <div v-if="processManual.resp?.entries?.length" class="mt-3">
+              <div class="ind-sec-t"><span>LIST</span> 列表条目（列表页输入时）</div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+                <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div v-else class="text-sm text-gray-400">加载中…</div>
+      <div v-else class="text-sm font-semibold text-gray-500">加载中…</div>
     </Drawer>
 
     <ManualModal :source-options="sourceOptions" @parsed="onParsed" />
@@ -626,38 +609,21 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 </template>
 
 <style scoped>
-.docx-bounded {
-  max-height: 220px;
-  font-family: 'SimSun', 'FangSong', serif;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #333;
-  white-space: normal;
-}
-.docx-bounded :deep(.doc-title) {
-  text-align: center;
-  font-weight: 700;
-  font-size: 15px;
-  font-family: 'SimHei', 'SimSun', sans-serif;
-  margin: 0 0 8px;
-}
-.docx-bounded :deep(.doc-para) {
-  margin: 0 0 4px;
-  text-indent: 2em;
-}
-.docx-bounded :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 4px 0;
-}
-.docx-bounded :deep(td) {
-  border: 1px solid #cbd5e1;
-  padding: 2px 6px;
-  vertical-align: top;
-}
-.docx-bounded :deep(.doc-kv-key) {
-  width: 90px;
-  color: #64748b;
-  background: #f8fafc;
-}
+/* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
+.ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }
+.ind-tab { appearance: none; background: #eceff2; border: 2px solid var(--ind-line); border-bottom: none; border-radius: 4px 4px 0 0;
+  font-size: 15px; font-weight: 700; color: #4b5563; padding: 10px 20px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.ind-tab:hover { background: #f6f1e6; }
+.ind-tab.on { background: var(--ind-paper); color: var(--ind-ink-text); padding-bottom: 11px; margin-bottom: -2px; position: relative; }
+.ind-tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 4px; background: var(--ind-orange); }
+.ind-tab .cnt { font-size: 12px; font-weight: 800; background: var(--ind-ink); color: #fff; border-radius: 10px; padding: 0 8px; line-height: 18px; }
+.ind-tab.on .cnt { background: var(--ind-orange); }
+.ind-tab-body { background: var(--ind-paper); border: 2px solid var(--ind-line); border-top: none; padding: 16px; }
+.ind-empty { border: 2px dashed #c7ccd3; background: #fbfbfc; color: var(--ind-weak-text); text-align: center;
+  font-size: 14.5px; font-weight: 500; padding: 36px 20px; }
+.ind-sec-t { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800; color: var(--ind-ink-text); margin-bottom: 9px; }
+.ind-sec-t span { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
+  background: var(--ind-ink); color: var(--ind-orange); border-radius: 2px; font-size: 11.5px; font-weight: 800; letter-spacing: .5px; }
+.ind-doc-extra { max-height: 300px; overflow: auto; }
 </style>
+

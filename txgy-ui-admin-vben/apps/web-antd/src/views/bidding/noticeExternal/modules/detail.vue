@@ -163,7 +163,7 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal class="w-[1180px]">
+  <Modal class="w-[1180px] bid-ind">
     <div class="max-h-[76vh] overflow-auto px-2 py-1">
       <div v-if="loading" class="py-16 text-center text-gray-400">加载中…</div>
       <div v-else-if="errorMsg" class="py-10 text-center text-red-500">{{ errorMsg }}</div>

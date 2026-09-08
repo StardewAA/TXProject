@@ -43,7 +43,7 @@ const [Grid] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height class="bid-ind">
     <Grid table-title="采集批次">
       <template #col_trigger="{ row }">
         <Tag v-if="tagOf(TRIGGER_MAP, row.triggerType)" :color="tagOf(TRIGGER_MAP, row.triggerType)!.color">
