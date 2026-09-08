@@ -1,0 +1,8 @@
+-- ============================================================================
+-- bidding 业务数据导出（开发库 ruoyi-vue-pro → 当前 bidding 业务数据）
+-- 来源：Docker MySQL txgy-mysql-1 / ruoyi-vue-pro；导出：2026-09-08
+-- 范围：6 张有数据的 bidding_* 表（crawl_job/source、follow_item(+event)、
+--       notice_external、notice_subscription）共 21 条记录；含大字段（HTML 正文/JSON/meta），约 15MB。
+-- 注意：体积较大；INSERT 非幂等，重复执行前请先清空目标表；
+--       含真实站点采集数据与演示数据，仅用于开发/演示环境同步。
+-- ============================================================================
