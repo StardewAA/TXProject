@@ -34,13 +34,13 @@
 **Interfaces:**
 - Produces: `WmsIntegrationRequestRespDTO execute(String operationType, WmsIntegrationBaseReqDTO request, Supplier<WmsIntegrationRequestRespDTO> action)` and `WmsIntegrationRequestRespDTO getResult(String requestId)`.
 
-- [ ] **Step 1: Write failing tests** for first execution, identical replay without a second action call, changed payload rejection, and missing request lookup. Use the real H2 mapper and a counter-backed action; assert returned business status and persisted response rather than mapper call counts.
-- [ ] **Step 2: Run the test and verify RED** with:
+- [ ] **Step 1: Write failing tests** for first execution, identical replay without a second action call, changed payload rejection, missing request lookup, and concurrent duplicate delivery. The serial replay and changed-payload cases are complete; missing lookup and concurrency remain. Use the real H2 mapper and a counter-backed action; assert returned business status and persisted response rather than mapper call counts.
+- [x] **Step 2: Run the test and verify RED** with:
   `mvn -o -pl txgy-module-wms/txgy-module-wms-server -am -Dtest=WmsIntegrationRequestServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`
   Expected: compilation failure because the request service and record do not exist.
-- [ ] **Step 3: Implement the minimal ledger.** Serialize requests with the configured Jackson `ObjectMapper`, hash UTF-8 JSON with SHA-256, insert a PROCESSING record, run the supplied action, then store SUCCESS plus serialized response. On duplicate key, reload by tenant/requestId and return the saved response only when the digest matches; otherwise throw `INTEGRATION_REQUEST_DUPLICATE_CONFLICT`.
-- [ ] **Step 4: Run the focused test and verify GREEN**, then run existing WMS tests.
-- [ ] **Step 5: Commit** with `feat(wms): add idempotent integration request ledger`.
+- [ ] **Step 3: Implement the minimal ledger.** Serial execution, hashing, persistence and replay are complete; concurrent duplicate-key recovery remains. Serialize requests with the configured Jackson `ObjectMapper`, hash UTF-8 JSON with SHA-256, insert a PROCESSING record, run the supplied action, then store SUCCESS plus serialized response. On duplicate key, reload by tenant/requestId and return the saved response only when the digest matches; otherwise throw `INTEGRATION_REQUEST_DUPLICATE_CONFLICT`.
+- [ ] **Step 4: Run the focused test and verify GREEN**, then run existing WMS tests after concurrency coverage is complete.
+- [x] **Step 5: Commit** with `feat(wms): add idempotent integration request ledger`.
 
 ### Task 2: Material Master Data Synchronization
 
@@ -54,11 +54,11 @@
 - Consumes: request DTO and existing WMS item/SKU mappers.
 - Produces: `WmsIntegrationAcceptedRespDTO upsert(WmsMaterialUpsertReqDTO request)`.
 
-- [ ] **Step 1: Write failing database tests** proving a new material creates one default SKU, a higher version updates public fields while preserving category/brand/SKU selling price, an old version fails, and an ambiguous existing SKU mapping fails.
-- [ ] **Step 2: Run focused tests and verify RED** because the service is absent.
-- [ ] **Step 3: Implement minimal upsert logic** keyed by item code. Map ENABLED/DISABLED to `CommonStatusEnum`, validate RAW_MATERIAL/FINISHED_GOODS, use `dataVersion`, and create or find exactly one `<materialCode>-DEFAULT` SKU. Never update inventory or WMS extension fields.
-- [ ] **Step 4: Run focused and WMS regression tests; verify GREEN.**
-- [ ] **Step 5: Commit** with `feat(wms): synchronize ERP material master data`.
+- [x] **Step 1: Write failing database tests** proving a new material creates one default SKU, a higher version updates public fields while preserving category/brand/SKU selling price, an old version fails, and an ambiguous existing SKU mapping fails.
+- [x] **Step 2: Run focused tests and verify RED** because the service is absent.
+- [x] **Step 3: Implement minimal upsert logic** keyed by item code. Map ENABLED/DISABLED to `CommonStatusEnum`, validate RAW_MATERIAL/FINISHED_GOODS, use `dataVersion`, and create or find exactly one `<materialCode>-DEFAULT` SKU. Never update inventory or WMS extension fields.
+- [x] **Step 4: Run focused and WMS regression tests; verify GREEN.**
+- [x] **Step 5: Commit** with `feat(wms): synchronize ERP material master data`.
 
 ### Task 3: Partner and Warehouse Synchronization
 
