@@ -74,6 +74,56 @@ function filterTree(nodes: TrainingCourseApi.CourseCategory[]): TrainingCourseAp
 
 const displayTree = computed(() => filterTree(tree.value));
 
+/** 统计各层级节点数量（域 / 组 / 课） */
+const levelCount = computed(() => {
+  const cnt: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
+  const walk = (nodes: TrainingCourseApi.CourseCategory[]) => {
+    for (const node of nodes) {
+      const level = Math.min(node.level ?? 1, 3);
+      cnt[level] = (cnt[level] ?? 0) + 1;
+      walk(node.children ?? []);
+    }
+  };
+  walk(displayTree.value);
+  return cnt;
+});
+
+/** 统计树节点总数 */
+function countNodes(nodes: TrainingCourseApi.CourseCategory[]): number {
+  return nodes.reduce((s, n) => s + 1 + countNodes(n.children ?? []), 0);
+}
+
+/** 收集全部节点 id */
+function collectAllKeys(nodes: TrainingCourseApi.CourseCategory[]): number[] {
+  const keys: number[] = [];
+  const walk = (list: TrainingCourseApi.CourseCategory[]) => {
+    for (const node of list) {
+      if (node.id) keys.push(node.id);
+      walk(node.children ?? []);
+    }
+  };
+  walk(nodes);
+  return keys;
+}
+
+/** 树形表格展开控制：默认仅展示一级（8 个域），逐级展开查看组 / 课 */
+const expandedKeys = ref<number[]>([]);
+/** 关键字过滤时自动展开全部，展示全部命中节点；否则按用户展开状态展示 */
+const displayExpandedKeys = computed(() =>
+  keyword.value.trim() ? collectAllKeys(displayTree.value) : expandedKeys.value,
+);
+function onExpandedKeysChange(keys: number[]) {
+  if (!keyword.value.trim()) {
+    expandedKeys.value = keys;
+  }
+}
+function expandAll() {
+  expandedKeys.value = collectAllKeys(displayTree.value);
+}
+function collapseAll() {
+  expandedKeys.value = [];
+}
+
 const modalVisible = ref(false);
 const modalTitle = ref('');
 const form = ref<TrainingCourseApi.CourseCategory>({});
@@ -180,11 +230,19 @@ onMounted(load);
         allow-clear
         placeholder="按名称 / 编码（如 A、防腐、A0101）过滤"
       />
-      <span v-if="keyword.trim()" class="text-sm text-gray-400">
-        匹配 {{ displayTree.reduce((s, n) => s + 1 + (n.children?.length ?? 0), 0) }} 条
+      <span v-if="!keyword.trim()" class="text-sm text-gray-400">
+        树形分类：{{ levelCount[1] }} 域 / {{ levelCount[2] }} 组 / {{ levelCount[3] }} 课
+        （默认收起，可逐级展开）
       </span>
-      <Button class="ml-auto" type="primary" ghost @click="load">刷新</Button>
-      <Button type="primary" @click="openCreate">新增分类</Button>
+      <span v-else class="text-sm text-gray-400">
+        匹配 {{ countNodes(displayTree) }} 条（过滤时自动展开全部命中项）
+      </span>
+      <div class="ml-auto flex items-center gap-2">
+        <Button :disabled="!!keyword.trim()" @click="collapseAll">收起全部</Button>
+        <Button :disabled="!!keyword.trim()" @click="expandAll">展开全部</Button>
+        <Button type="primary" ghost @click="load">刷新</Button>
+        <Button type="primary" @click="openCreate">新增分类</Button>
+      </div>
     </div>
 
     <Table
@@ -192,7 +250,8 @@ onMounted(load);
       :data-source="displayTree"
       :loading="loading"
       :pagination="false"
-      :default-expand-all-rows="true"
+      :expanded-row-keys="displayExpandedKeys"
+      @update:expanded-row-keys="onExpandedKeysChange"
       size="middle"
       :columns="[
         { title: '分类名称', dataIndex: 'name', key: 'name' },
