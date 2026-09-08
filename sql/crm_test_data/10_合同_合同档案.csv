@@ -1,0 +1,4 @@
+﻿contract_id,contract_no,contract_name,customer_id,customer_name,business_id,owner_user_id,owner_user_name,order_date,start_time,end_time,total_product_price,discount_percent,total_price,audit_status,process_instance_id,sign_contact_id,sign_contact_name,remark,tenant_id
+6001,TXGY-HT-2026-0012,靖边采油厂油管防腐采购合同,3002,延长油田股份有限公司靖边采油厂,5002,103,刘志强,2026-09-05,2026-09-06,2027-03-31,1429000.00,3,1386130.00,2,BPM-6001,4003,物资供应站站长,油管防腐年度采购，分两批交付,1
+6002,TXGY-HT-2026-0015,延安炼油厂管道内检测服务合同,3005,延长石油集团延安炼油厂,5005,109,周文斌,2026-08-25,2026-08-26,2026-10-31,36000.00,0,36000.00,2,BPM-6002,4007,设备管理处处长,漏磁内检测服务合同,1
+6003,TXGY-HT-2026-0018,长庆五厂集输管线3PE防腐供货合同,3001,长庆油田分公司第五采油厂,5001,103,刘志强,2026-09-12,2026-09-15,2026-12-31,1096000.00,5,1041200.00,1,BPM-6003,4001,集输大队副大队长,框架首批供货，审核中,1
