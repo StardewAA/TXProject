@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.mes.enums;
+﻿package cn.iocoder.txgy.module.mes.enums;
 
 /**
  * MES 字典类型的枚举类
