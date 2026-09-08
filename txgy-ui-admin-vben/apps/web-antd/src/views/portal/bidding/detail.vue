@@ -320,6 +320,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+<!--
+  门户 · 外部公告详情（公开只读 + 关注/外链）
+  业务：完整展示一条外部公告：结构化字段+净化正文+PDF/附件（可见性分层 L1/L2）+外链白名单中转(/go?url=)；
+        登录用户可“关注”该项目（意向起点），未登录仅浏览。
+  理由：完整信息免费及时查阅（10号令第12条）；HTML 净化防存储型XSS；外链走白名单 302 防开放重定向（安全评审）。
+    依据（法规/政府文件/法律）：
+      · 招标公告和公示信息发布管理办法（发改委令第10号，部门规章/政府文件）第12/13条——免费、及时查阅完整公告公示信息；免费归类与检索、新公告醒目标识；
+      · 电子招标投标办法（八部委令第20号，部门规章/政府文件）第9条——市场主体免费注册登录、获取依法公开的招标投标信息；
+      · 招标投标法 第16条（法律）——公开招标应当发布招标公告（公告公开性的上位依据）。
+    依据（技术安全）：前端净化（DOMPurify/白名单）——安全评审要求存储型 XSS 载荷不下发（01 接口文档 §2.4）。
+    后端契约：01-接口逐一说明与设计依据.md §2（detail 三形态/附件 virusStatus、go 白名单 302）；外部公告-前端对接/01-接口契约.md §1；
+      follow/unfollow（bidding:notice-external:update，按登录人 user_id，T 轨）；GET /bidding/notice-external/detail、/go、/follow。
+-->
+
   <div class="detail-page bid-ind" v-if="detail">
     <div v-if="pageError" class="err-banner">页面异常：{{ pageError }}（可在控制台查看详细堆栈）</div>
     <div class="top-bar">
