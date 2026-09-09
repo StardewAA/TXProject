@@ -19,7 +19,7 @@ public class ErpWmsCollaborationBConfirmReqVO {
     private Long id;
 
     @NotBlank(message = "确认动作不能为空")
-    @Schema(description = "确认动作：ACCEPTED / REJECTED")
+    @Schema(description = "确认动作：ACCEPTED / REJECTED / NEED_SUPPLEMENT")
     private String action;
 
     private Long supplierId;

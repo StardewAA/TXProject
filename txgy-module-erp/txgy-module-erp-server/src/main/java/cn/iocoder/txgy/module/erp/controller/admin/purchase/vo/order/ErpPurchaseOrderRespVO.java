@@ -30,6 +30,15 @@ public class ErpPurchaseOrderRespVO {
     @Schema(description = "BPM 流程实例编号")
     private String processInstanceId;
 
+    @Schema(description = "来源类型")
+    private String sourceType;
+    @Schema(description = "来源业务编号")
+    private Long sourceId;
+    @Schema(description = "来源单号")
+    private String sourceNo;
+    @Schema(description = "全局业务链号")
+    private String businessChainNo;
+
     @Schema(description = "供应商编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1724")
     private Long supplierId;
     @Schema(description = "供应商名称", example = "OPENLAB BS")
