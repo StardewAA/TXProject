@@ -126,4 +126,19 @@ public interface ImFriendService {
      */
     PageResult<ImFriendDO> getFriendPage(ImFriendManagerPageReqVO reqVO);
 
+    /**
+     * 【管理后台】获得好友关系详情（按记录编号）
+     */
+    ImFriendDO getFriend(Long id);
+
+    /**
+     * 【管理后台】解除好友关系（双向）
+     * <p>
+     * 与用户端 {@link #deleteFriend} 的单边删除语义不同，管理员解除为双向删除：
+     * A→B、B→A 两条关系记录一并置 DISABLE；随后给双方多端推送 FRIEND_DELETE 通知（不入库）。
+     *
+     * @param id 好友关系记录编号（任一侧均可，自动处理双向）
+     */
+    void deleteFriendByManager(Long id);
+
 }

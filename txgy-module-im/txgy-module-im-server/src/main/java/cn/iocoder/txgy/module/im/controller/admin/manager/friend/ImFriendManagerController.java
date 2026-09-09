@@ -17,8 +17,10 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -60,6 +62,33 @@ public class ImFriendManagerController {
             MapUtils.findAndThen(userMap, vo.getFriendUserId(),
                     user -> vo.setFriendNickname(user.getNickname()));
         }));
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "获得好友关系详情")
+    @PreAuthorize("@ss.hasPermission('im:manager:friend:query')")
+    public CommonResult<ImFriendManagerRespVO> getFriend(@RequestParam("id") Long id) {
+        ImFriendDO friend = friendService.getFriend(id);
+        if (friend == null) {
+            return success(null);
+        }
+        // 填充双方昵称
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                Set.of(friend.getUserId(), friend.getFriendUserId()));
+        ImFriendManagerRespVO vo = BeanUtils.toBean(friend, ImFriendManagerRespVO.class);
+        MapUtils.findAndThen(userMap, vo.getUserId(),
+                user -> vo.setUserNickname(user.getNickname()));
+        MapUtils.findAndThen(userMap, vo.getFriendUserId(),
+                user -> vo.setFriendNickname(user.getNickname()));
+        return success(vo);
+    }
+
+    @DeleteMapping("/delete")
+    @Operation(summary = "解除好友关系（双向删除 A→B、B→A 两条记录）")
+    @PreAuthorize("@ss.hasPermission('im:manager:friend:delete')")
+    public CommonResult<Boolean> deleteFriend(@RequestParam("id") Long id) {
+        friendService.deleteFriendByManager(id);
+        return success(true);
     }
 
 }
