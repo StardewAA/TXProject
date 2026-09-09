@@ -10,7 +10,6 @@ import {
   Descriptions,
   Drawer,
   Dropdown,
-  Empty,
   message,
   Modal,
   Pagination,
@@ -57,6 +56,33 @@ const MANUAL_STATUS = {
   FAILED: { text: '失败', color: 'red' },
 } as Record<string, { text: string; color: string }>;
 const manualRuns = ref<ManualRun[]>([]);
+/* 测试任务条（与“任务”同款）：时间排序（desc=最新在前默认 / asc=最早在前）+ 本地分页 20/50/100 */
+const manualSort = ref<'desc' | 'asc'>('desc');
+const manualPage = ref(1);
+const manualPageSize = ref(20);
+const manualTotal = computed(() => manualRuns.value.length);
+function toggleManualSort(): void {
+  manualSort.value = manualSort.value === 'desc' ? 'asc' : 'desc';
+  manualPage.value = 1;
+}
+/** 展示行：时间排序 + 分页切片（desc=留档原序最新在前；asc=按 occurredAt 升序） */
+const manualShownRows = computed(() => {
+  const sorted =
+    manualSort.value === 'desc'
+      ? manualRuns.value.slice()
+      : [...manualRuns.value].sort((a, b) => (a.occurredAt ?? 0) - (b.occurredAt ?? 0));
+  const start = (manualPage.value - 1) * manualPageSize.value;
+  return sorted.slice(start, start + manualPageSize.value);
+});
+function manualPageChange(page: number, size: number): void {
+  manualPage.value = page;
+  manualPageSize.value = size;
+}
+/** 行留档序号（倒序：最新=#1） */
+const manualSeqOf = (pageIdx: number): number => {
+  const seq = (manualPage.value - 1) * manualPageSize.value + pageIdx + 1;
+  return manualSort.value === 'desc' ? manualTotal.value - seq + 1 : seq;
+};
 function loadManualStore(): ManualRun[] {
   try {
     const raw = localStorage.getItem(MANUAL_STORE_KEY);
@@ -81,6 +107,7 @@ function dropManualRun(id: string): void {
 /** 清空本页本地留档（测试仅本地留存，清空即无痕） */
 function clearManualRuns(): void {
   manualRuns.value = [];
+  manualPage.value = 1;
   saveManualStore();
 }
 
@@ -575,6 +602,15 @@ function renderHtmlOf(r: ManualRun): string {
   return parts.join('');
 }
 
+/** 测试任务条“消息/明细”列文本（与任务一致的单行可读格式：出错给出错，否则 解析器 · 输入口径 · 统计） */
+function manualMsgText(r: ManualRun): string {
+  if (r.resp?.error) return r.resp.error;
+  const parser = r.parserName || r.parserCode || '—';
+  const input = [r.inputType, r.fileName].filter(Boolean).join(' · ') || '—';
+  const len = r.contentLength != null ? r.contentLength + ' 字符' : '—';
+  const dur = r.durationMs != null ? r.durationMs + ' ms' : '—';
+  return '解析器 ' + parser + ' · ' + input + ' · ' + len + ' · ' + dur;
+}
 function manualStatusTag(r: ManualRun) {
   const m = MANUAL_STATUS[r.status] || { text: r.status, color: 'default' };
   return m;
@@ -759,34 +795,33 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
       <!-- ============ ② 测试（手动录入 / 解析器测试回执：任务条形式，点击行 → 抽屉看 源/提取/渲染 三段详情；localStorage 留档刷新保留，后端不落库） ============ -->
       <section v-show="activeTab === 'manual'">
-        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：一行一条任务条 —— 状态 / 时间 / 标题 / 解析器 / 输入口径；点行开详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留；后端 crawl-parser/test 不落库，仅本机可见）。</div>
-        <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条" />
+        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：任务条与「任务」页签同构 —— 状态 / 时间（可排序）/ # / 标题·输入 / 消息·明细；点行进详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留；后端 crawl-parser/test 不落库，仅本机可见）。</div>
+        <div v-if="!manualRuns.length" class="ind-empty">暂无测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染 的任务条</div>
         <template v-else>
           <div class="fp-tbl">
             <div class="fp-tr fp-th">
               <span class="fp-td w-status">状态</span>
-              <span class="fp-td w-time">时间</span>
+              <span class="fp-td w-time fp-sortable" @click="toggleManualSort" :title="manualSort === 'desc' ? '当前：最新在前（点此改最早在前）' : '当前：最早在前（点此改最新在前）'">时间 {{ manualSort === 'desc' ? '↓' : '↑' }}</span>
+              <span class="fp-td w-id">留档 #</span>
               <span class="fp-td flex-1">标题 / 输入</span>
-              <span class="fp-td w-parser">解析器</span>
               <span class="fp-td w-msg">消息 / 明细</span>
             </div>
-            <div v-for="r in manualRuns" :key="r.id" class="fp-tr fp-row-click" @click="openManualProcess(r)">
+            <div v-for="(r, i) in manualShownRows" :key="r.id" class="fp-tr fp-row-click" @click="openManualProcess(r)">
               <span class="fp-td w-status">
                 <Tag color="purple">测试</Tag>
                 <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
               </span>
-              <span class="fp-td w-time">{{ fmtDt(r.occurredAt) }}</span>
-              <span class="fp-td flex-1" style="color:#1f2937;font-weight:600">{{ (r.resp?.title || '').trim() || (r.url || '（无标题产出）') }}</span>
-              <span class="fp-td w-parser">{{ r.parserName || r.parserCode || '—' }}</span>
-              <span class="fp-td w-msg fp-msg">
-                <template v-if="r.resp?.error">{{ r.resp.error }}</template>
-                <template v-else>[{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}] · {{ r.contentLength != null ? r.contentLength + ' 字符' : '—' }} · {{ r.durationMs != null ? r.durationMs + ' ms' : '—' }}</template>
+              <span class="fp-td w-time">{{ fmtDt(r.occurredAt) || '—' }}</span>
+              <span class="fp-td w-id" :title="'本地留档序号（测试不落库）'">#{{ manualSeqOf(i) }}</span>
+              <span class="fp-td flex-1 fp-url" :title="r.url || ''">{{ (r.resp?.title || '').trim() || r.url || '（无标题产出，见详情）' }}</span>
+              <span class="fp-td w-msg fp-msg" :title="manualMsgText(r)">
+                {{ manualMsgText(r) }}
               </span>
             </div>
           </div>
-          <div class="mt-2 flex items-center justify-between text-xs font-medium text-gray-500">
-            <span>共 {{ manualRuns.length }} 条 · 本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）</span>
-            <a class="text-blue-700 font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a>
+          <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <span class="text-xs font-medium text-gray-500">本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）<a class="ml-3 text-blue-700 font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a></span>
+            <Pagination v-model:current="manualPage" :total="manualTotal" :page-size="manualPageSize" :show-total="pagiShowTotal" show-size-changer :page-size-options="['20', '50', '100']" @change="manualPageChange" />
           </div>
         </template>
       </section>
