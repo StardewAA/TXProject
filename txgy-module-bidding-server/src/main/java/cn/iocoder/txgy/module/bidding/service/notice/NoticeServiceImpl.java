@@ -476,11 +476,46 @@ public class NoticeServiceImpl implements NoticeService {
     private void checkRequired(NoticeTypeEnum type, LinkedHashMap<String, Object> canonical) {
         java.util.List<String> missing = NoticePayloadUtils.missingRequired(type, canonical);
         if (!missing.isEmpty()) {
+            // 2026-09-10：缺失提示附中文名（code（中文名）），前端可按类型字段模板定位；格式向后兼容纯 code 断言
+            StringBuilder sb = new StringBuilder("公告必填字段缺失（依据VO数据规范 必填=是，按类型 \"" + type.getLabel() + "\"）：");
+            for (String code : missing) {
+                String label = NoticePayloadUtils.labelOf(code);
+                sb.append(code).append(label == null ? "" : "（" + label + "）").append("、");
+            }
+            sb.setLength(sb.length() - 1);
             throw new cn.iocoder.txgy.framework.common.exception.ServiceException(
                     new cn.iocoder.txgy.framework.common.exception.ErrorCode(
-                            ErrorCodeConstants.NOTICE_PAYLOAD_INVALID.getCode(),
-                            "公告必填字段缺失（依据VO数据规范 必填=是）：" + String.join("、", missing)));
+                            ErrorCodeConstants.NOTICE_PAYLOAD_INVALID.getCode(), sb.toString()));
         }
+    }
+
+    @Override
+    public java.util.List<cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO> listTypeMeta() {
+        java.util.List<cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO> result = new java.util.ArrayList<>();
+        for (NoticeTypeEnum type : NoticeTypeEnum.values()) {
+            cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO vo =
+                    new cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO();
+            vo.setType(type.name());
+            vo.setName(type.getLabel());
+            vo.setDataset(type.getDatasetClass() == null ? null : type.getDatasetClass().getSimpleName());
+            java.util.Set<String> required = NoticePayloadUtils.requiredFieldNames(type);
+            java.util.List<cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO.FieldMeta> fields =
+                    new java.util.ArrayList<>();
+            // 数据集 record 组件即规范字段全集（组件名=字段 code）；必填=是 的排前
+            java.util.Set<String> ordered = new java.util.LinkedHashSet<>(required);
+            java.lang.reflect.RecordComponent[] comps = type.getDatasetClass() == null
+                    ? new java.lang.reflect.RecordComponent[0] : type.getDatasetClass().getRecordComponents();
+            for (java.lang.reflect.RecordComponent c : comps) {
+                ordered.add(c.getName());
+            }
+            for (String code : ordered) {
+                fields.add(cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO.FieldMeta.of(
+                        code, NoticePayloadUtils.labelOf(code), required.contains(code)));
+            }
+            vo.setFields(fields);
+            result.add(vo);
+        }
+        return result;
     }
 
     // ========== 内容版本 ==========

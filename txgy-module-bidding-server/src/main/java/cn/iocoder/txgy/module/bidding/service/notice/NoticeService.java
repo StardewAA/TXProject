@@ -50,6 +50,11 @@ public interface NoticeService {
      String reindexIndex();
 
     /**
+     * 公告类型字段模板元数据（按类型区分必填/可选，供前端动态表单；详见 NoticeTypeMetaRespVO）
+     */
+    java.util.List<cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO> listTypeMeta();
+
+    /**
      * 平台级全租户索引补偿（2026-09-10，es.enabled 启用前各租户存量公告从未建索引）：忽略租户遍历全部公告 indexDoc（幂等 PUT）。
      * 仅平台租户可调用（Controller 校验）；租户自服务用 {@link #reindexIndex()}。
      */

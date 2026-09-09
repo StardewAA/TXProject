@@ -115,6 +115,13 @@ public class NoticeController {
         return success(true);
     }
 
+    @GetMapping("/meta/types")
+    @PreAuthorize("@ss.hasPermission('bidding:notice:query')")
+    @Operation(summary = "公告类型字段模板元数据（按类型必填/可选 + 中文名，供新建/编辑动态表单）")
+    public CommonResult<java.util.List<cn.iocoder.txgy.module.bidding.controller.admin.notice.vo.NoticeTypeMetaRespVO>> typeMeta() {
+        return success(noticeService.listTypeMeta());
+    }
+
     @PostMapping("/reindex")
     @PreAuthorize("@ss.hasPermission('bidding:notice:update')")
     @Idempotent
