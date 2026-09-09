@@ -46,6 +46,7 @@ async function onQuickParse(payload: { fields: ParsedClue }) {
     'wechat',
     'email',
     'qq',
+    'customerId',
   ] as const) {
     let v: any = fields[key];
     if (v === undefined || v === null || v === '') continue;
