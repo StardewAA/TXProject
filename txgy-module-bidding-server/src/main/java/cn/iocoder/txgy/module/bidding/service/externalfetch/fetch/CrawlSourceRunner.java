@@ -348,7 +348,7 @@ public class CrawlSourceRunner {
                         if (taskId != null) {
                             cs.setIngested(cs.getIngested() + 1); // 投递模式：ingested=已入队
                         }
-                    } else if (ingestGxEntry(source.getSourceCode(), entry, seen)) {
+                    } else if (ingestGxEntry(source, entry, seen)) {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
@@ -376,10 +376,15 @@ public class CrawlSourceRunner {
     }
 
     /** 国信条目：详情页 → pdf.js 直链 → 下载 PDF → 文本解析 → 落库（PDF 形态；fileId 待 FileApi P2 回填） */
-    private boolean ingestGxEntry(String sourceCode, NoticeParseResult.ListEntry entry, Set<String> seen) throws Exception {
+    private boolean ingestGxEntry(CrawlSourceDO source, NoticeParseResult.ListEntry entry, Set<String> seen) throws Exception {
         String detailUrl = entry.getUrl();
         if (!StringUtils.hasText(detailUrl)) {
             throw new IllegalStateException("条目缺详情 URL");
+        }
+        // SSRF 防护：详情页/PDF 直链均须在采集源白名单（base_url ∪ allowed_hosts）内，源行缺失不阻断
+        if (source != null
+                && !UrlHostGuard.isExternalAllowed(detailUrl, source.getBaseUrl(), source.getAllowedHosts())) {
+            throw new IllegalStateException("详情 URL 不在采集源白名单（SSRF 防护），url=" + detailUrl);
         }
         String urlHash = sha256Hex(detailUrl);
         if (!seen.add(urlHash)) {
@@ -391,6 +396,10 @@ public class CrawlSourceRunner {
         if (!StringUtils.hasText(pdfUrl)) {
             throw new IllegalStateException("详情页未解析出 PDF 直链（页面结构变化？）");
         }
+        if (source != null
+                && !UrlHostGuard.isExternalAllowed(pdfUrl, source.getBaseUrl(), source.getAllowedHosts())) {
+            throw new IllegalStateException("PDF 直链不在采集源白名单（SSRF 防护），url=" + pdfUrl);
+        }
         byte[] pdf = httpFetchClient.getBytes(pdfUrl);
         if (pdf == null || pdf.length < 8) {
             throw new IllegalStateException("PDF 下载为空");
@@ -401,7 +410,7 @@ public class CrawlSourceRunner {
         pdfInput.setFileBytes(pdf);
         NoticeParseResult parsed = pdfTextNoticeParser.parse(pdfInput);
         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
-        dto.setSourceCode(sourceCode);
+        dto.setSourceCode(source == null ? null : source.getSourceCode());
         dto.setOrigUrl(detailUrl);
         dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : entry.getTitle());
         dto.setContentType("PDF");

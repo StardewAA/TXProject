@@ -28,16 +28,29 @@ class CrawlNoticeProcessorTest {
 
     private ExternalNoticeIngestService ingestService;
     private HttpFetchClient httpFetchClient;
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
     private CrawlNoticeProcessor processor;
 
     @BeforeEach
     void setUp() {
         ingestService = mock(ExternalNoticeIngestService.class);
         httpFetchClient = mock(HttpFetchClient.class);
+        crawlSourceMapper = mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper.class);
+        when(crawlSourceMapper.selectOne(any())).thenReturn(null); // 无源上下文=放行（SSRF 校验仅在源配置存在时强约束）
         processor = new CrawlNoticeProcessor();
         ReflectionTestUtils.setField(processor, "externalNoticeIngestService", ingestService);
         ReflectionTestUtils.setField(processor, "httpFetchClient", httpFetchClient);
+        ReflectionTestUtils.setField(processor, "crawlSourceMapper", crawlSourceMapper);
         when(ingestService.ingest(any())).thenReturn(888L);
+    }
+
+    private cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO sourceRow(String sourceCode, String baseUrl, String allowed) {
+        cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO s =
+                new cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO();
+        s.setSourceCode(sourceCode);
+        s.setBaseUrl(baseUrl);
+        s.setAllowedHosts(allowed);
+        return s;
     }
 
     private CrawlTaskDO task(Map<String, Object> payload) throws Exception {
@@ -76,6 +89,15 @@ class CrawlNoticeProcessorTest {
         verify(ingestService).ingest(cap.capture());
         assertTrue(cap.getValue().getContentHtml().contains("从文件拉的正文"));
         assertEquals("甲公司", cap.getValue().getIssuerName());
+    }
+
+    @Test
+    void execute_rawFileForeignHostRejected_whenSourceExists() throws Exception {
+        // SSRF 防护：源配置存在时，非平台文件端点的 rawFileUrl 须在源白名单内
+        when(crawlSourceMapper.selectOne(any())).thenReturn(sourceRow("QYZB", "https://qyzb.shccmg.com", null));
+        CrawlTaskDO t = task(Map.of("title", "某公告", "url", "https://qyzb.shccmg.com/x.html",
+                "rawFileUrl", "http://evil.example.com/raw/abc.html"));
+        assertThrows(IllegalStateException.class, () -> processor.execute(t));
     }
 
     @Test

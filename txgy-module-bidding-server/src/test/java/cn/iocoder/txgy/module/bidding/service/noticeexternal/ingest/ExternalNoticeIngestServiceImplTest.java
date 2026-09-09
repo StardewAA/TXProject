@@ -33,15 +33,27 @@ class ExternalNoticeIngestServiceImplTest {
 
     private NoticeExternalMapper noticeExternalMapper;
     private NoticeExternalAttachmentMapper attachmentMapper;
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
     private ExternalNoticeIngestServiceImpl service;
 
     @BeforeEach
     void setUp() {
         noticeExternalMapper = mock(NoticeExternalMapper.class);
         attachmentMapper = mock(NoticeExternalAttachmentMapper.class);
+        crawlSourceMapper = mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper.class);
+        when(crawlSourceMapper.selectOne(any())).thenReturn(null); // sourceName 兜底：源缺失不补名
         service = new ExternalNoticeIngestServiceImpl();
         ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
         ReflectionTestUtils.setField(service, "noticeExternalAttachmentMapper", attachmentMapper);
+        ReflectionTestUtils.setField(service, "crawlSourceMapper", crawlSourceMapper);
+    }
+
+    private void stubSourceName(String name) {
+        cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO src =
+                new cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO();
+        src.setSourceCode("S1");
+        src.setSourceName(name);
+        when(crawlSourceMapper.selectOne(any())).thenReturn(src);
     }
 
     private ExternalNoticeIngestDTO htmlDto() {
@@ -64,6 +76,23 @@ class ExternalNoticeIngestServiceImplTest {
     }
 
     @Test
+    void ingest_sourceNameFallsBackToSourceConfig() {
+        when(noticeExternalMapper.selectOne(any())).thenReturn(null);
+        stubSourceName("测试采集源");
+        assignId(300L);
+
+        ExternalNoticeIngestDTO dto = htmlDto();
+        dto.setSourceName(null); // 上游未传 → 按 source_code 兜底补源名快照（P2-3）
+
+        Long id = service.ingest(dto);
+
+        assertEquals(300L, id);
+        ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
+        verify(noticeExternalMapper).insert(cap.capture());
+        assertEquals("测试采集源", cap.getValue().getSourceName());
+    }
+
+    @Test
     void ingest_html_newNoticePersistedAsNew() {
         when(noticeExternalMapper.selectOne(any())).thenReturn(null);
         assignId(100L);
@@ -74,6 +103,7 @@ class ExternalNoticeIngestServiceImplTest {
         ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
         verify(noticeExternalMapper).insert(cap.capture());
         NoticeExternalDO saved = cap.getValue();
+        assertEquals("S1", saved.getSourceCode());
         assertEquals(NoticeExternalStatusEnum.NEW.getStatus(), saved.getStatus());
         assertEquals(NoticeExternalAuditStatusEnum.UNREVIEWED.getStatus(), saved.getAuditStatus());
         assertEquals("SOCIAL", saved.getPublicScope());

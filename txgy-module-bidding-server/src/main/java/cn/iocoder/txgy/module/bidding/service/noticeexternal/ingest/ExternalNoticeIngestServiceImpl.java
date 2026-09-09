@@ -71,6 +71,8 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
     private NoticeExternalMapper noticeExternalMapper;
     @Resource
     private NoticeExternalAttachmentMapper noticeExternalAttachmentMapper;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
 
     /**
      * 采集落库（同 URL 幂等 + 内容变更/终态重投语义，设计 §三/§12.2）。
@@ -90,6 +92,16 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
     public Long ingest(ExternalNoticeIngestDTO dto) {
         // 联调清单 R11：采集/历史数据常见 ORM 拼接把 null 写成字串 "NULL"（污染展示/检索/清洗口径）→ 写入前统一归一
         normalizeNullStringFields(dto);
+        // sourceName 快照兜底（P2-3）：上游未传时按 sourceCode 取源配置当前名（存量 NULL 由 sql/2026-09-10-source-name-backfill.sql 回填）
+        if (!StringUtils.hasText(dto.getSourceName()) && StringUtils.hasText(dto.getSourceCode())) {
+            cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO src = crawlSourceMapper.selectOne(
+                    new LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO>()
+                            .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO::getSourceCode, dto.getSourceCode())
+                            .last("LIMIT 1"));
+            if (src != null) {
+                dto.setSourceName(src.getSourceName());
+            }
+        }
         // 主列必填校验（采集产出不齐不落库，宁缺毋滥）
         if (!StringUtils.hasText(dto.getOrigUrl()) || !StringUtils.hasText(dto.getTitle())) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_INGEST_INVALID);

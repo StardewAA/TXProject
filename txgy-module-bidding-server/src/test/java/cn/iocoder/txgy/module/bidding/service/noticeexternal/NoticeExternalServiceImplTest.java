@@ -48,6 +48,7 @@ class NoticeExternalServiceImplTest {
     private ExternalNoticeSearchEngine externalNoticeSearchEngine;
     private HttpFetchClient httpFetchClient;
     private FileApi fileApi;
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
     private NoticeExternalServiceImpl service;
 
     @BeforeEach
@@ -57,11 +58,19 @@ class NoticeExternalServiceImplTest {
         externalNoticeSearchEngine = mock(ExternalNoticeSearchEngine.class);
         httpFetchClient = mock(HttpFetchClient.class);
         fileApi = mock(FileApi.class);
+        crawlSourceMapper = mock(cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper.class);
+        // backfill SSRF 守卫用源配置：默认源行白名单=gx.e-bidding.org（base_url），放行外站 PDF 重下载
+        cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO src =
+                new cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO();
+        src.setSourceCode("GX");
+        src.setBaseUrl("https://gx.e-bidding.org");
+        when(crawlSourceMapper.selectOne(any())).thenReturn(src);
         service = new NoticeExternalServiceImpl();
         ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
         ReflectionTestUtils.setField(service, "noticeExternalAttachmentMapper", noticeExternalAttachmentMapper);
         ReflectionTestUtils.setField(service, "externalNoticeSearchEngine", externalNoticeSearchEngine);
         ReflectionTestUtils.setField(service, "httpFetchClient", httpFetchClient);
+        ReflectionTestUtils.setField(service, "crawlSourceMapper", crawlSourceMapper);
         ReflectionTestUtils.setField(service, "fileApi", fileApi);
     }
 

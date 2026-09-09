@@ -4,6 +4,7 @@ package cn.iocoder.txgy.module.bidding.service.externalfetch;
 //           正文文本/源文件由下载链路 FileApi 承载，AI 结构化复用 noticeexternal.ai（v1.0 §三）。
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.UrlHostGuard;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
@@ -45,6 +46,8 @@ public class CrawlNoticeProcessor {
     private cn.iocoder.txgy.module.bidding.service.externalfetch.parser.PdfTextNoticeParser pdfTextNoticeParser;
     @Resource
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
 
     /**
      * 执行一条信息获取任务（按 payload 快照落库）。
@@ -68,6 +71,10 @@ public class CrawlNoticeProcessor {
         if (!StringUtils.hasText(contentHtml)) {
             String rawFileUrl = text(payload, "rawFileUrl");
             if (StringUtils.hasText(rawFileUrl)) {
+                // 纵深防御：非平台文件端点的 rawFileUrl（理论上自产受控）也过主机白名单（SSRF）
+                if (!UrlHostGuard.isInternalFileUrl(rawFileUrl)) {
+                    assertUrlAllowed(rawFileUrl, task.getSourceCode());
+                }
                 contentHtml = httpFetchClient.getText(rawFileUrl);
             }
         }
@@ -99,6 +106,7 @@ public class CrawlNoticeProcessor {
         if (!StringUtils.hasText(url)) {
             throw new IllegalStateException("GX 任务缺详情 URL");
         }
+        assertUrlAllowed(url, task.getSourceCode()); // 详情页下载前：主机白名单（SSRF 防护）
         String detailHtml = httpFetchClient.getText(url);
         NoticeParseResult detail = parserRegistry.get("GX_E_BIDDING")
                 .parse(inputOf("HTML", detailHtml, url));
@@ -106,6 +114,7 @@ public class CrawlNoticeProcessor {
         if (!StringUtils.hasText(pdfUrl)) {
             throw new IllegalStateException("详情页未解析出 PDF 直链（页面结构变化？）");
         }
+        assertUrlAllowed(pdfUrl, task.getSourceCode()); // PDF 直链下载前：主机白名单（SSRF 防护）
         byte[] pdf = httpFetchClient.getBytes(pdfUrl);
         if (pdf == null || pdf.length < 8) {
             throw new IllegalStateException("PDF 下载为空");
@@ -127,6 +136,26 @@ public class CrawlNoticeProcessor {
                 + ",\"fileStatus\":\"REGISTERED\"}");
         uploadPdfArchive(dto, pdf, StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
         return externalNoticeIngestService.ingest(dto);
+    }
+
+    /**
+     * 下载目标主机白名单校验（SSRF 防护）：源存在则强校验（白名单=base_url ∪ allowed_hosts 及子域）；
+     * 源缺失放行（手工任务/单测等无源上下文不阻断）。
+     */
+    private void assertUrlAllowed(String url, String sourceCode) {
+        if (!StringUtils.hasText(url) || !StringUtils.hasText(sourceCode)) {
+            return;
+        }
+        cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO source = crawlSourceMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO>()
+                        .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO::getSourceCode, sourceCode)
+                        .last("LIMIT 1"));
+        if (source == null) {
+            return; // 无源上下文：不阻断
+        }
+        if (!UrlHostGuard.isExternalAllowed(url, source.getBaseUrl(), source.getAllowedHosts())) {
+            throw new IllegalStateException("下载目标不在采集源白名单（SSRF 防护），url=" + url);
+        }
     }
 
     private static cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParseInput inputOfPdf(byte[] pdf) {

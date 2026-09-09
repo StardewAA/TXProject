@@ -21,6 +21,7 @@ import cn.iocoder.txgy.module.bidding.enums.NoticeExternalStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.indexer.ExternalNoticeIndexNotifier;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.sanitize.HtmlSanitizer;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.search.ExternalNoticeSearchEngine;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.UrlHostGuard;
 import cn.iocoder.txgy.module.bidding.service.noticefollow.FollowService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,6 +65,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     private ExternalNoticeSearchEngine externalNoticeSearchEngine;
     @Resource
     private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient httpFetchClient;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
     @Resource
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
 
@@ -500,6 +503,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
                     log.warn("[backfillPdf][id={}] meta_json 无外站 pdfDownloadUrl，跳过", pdf.getId());
                     continue;
                 }
+                // SSRF 防护：重下载外站 PDF 前校验主机白名单（行 source_code → 源配置 base_url ∪ allowed_hosts）
+                assertPdfDownloadAllowed(pdf, externalUrl);
                 byte[] bytes = httpFetchClient.getBytes(externalUrl);
                 if (bytes == null || bytes.length == 0) {
                     failed++;
@@ -527,6 +532,23 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
             }
         }
         return "total=" + pdfs.size() + ",ok=" + ok + ",failed=" + failed + ",skipped=" + skipped;
+    }
+
+    /** 重下载主机白名单校验：平台文件端点豁免；外站 URL 须在行 source_code 对应采集源白名单内（源缺失=拒绝，防脏数据外链 SSRF） */
+    private void assertPdfDownloadAllowed(NoticeExternalDO pdf, String externalUrl) {
+        if (UrlHostGuard.isInternalFileUrl(externalUrl)) {
+            return; // 平台自产文件端点
+        }
+        cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO source = crawlSourceMapper.selectOne(
+                new LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO>()
+                        .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO::getSourceCode, pdf.getSourceCode())
+                        .last("LIMIT 1"));
+        if (source == null) {
+            throw new IllegalStateException("PDF 行无对应采集源配置，拒绝重下载（SSRF 防护），id=" + pdf.getId());
+        }
+        if (!UrlHostGuard.isExternalAllowed(externalUrl, source.getBaseUrl(), source.getAllowedHosts())) {
+            throw new IllegalStateException("PDF 直链不在采集源白名单（SSRF 防护），url=" + externalUrl);
+        }
     }
 
     /** 读 meta_json 中的外站 pdfDownloadUrl（缺失/解析失败返回 null）。 */
