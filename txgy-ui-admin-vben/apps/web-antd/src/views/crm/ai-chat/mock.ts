@@ -548,10 +548,13 @@ function parseJsonSafe<T>(text: string): T | null {
 async function classifyIntentWithQwen(
   query: string,
 ): Promise<QwenClassify | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000); // 15s 超时，避免挂起导致发送锁死
   try {
     const res = await fetch('/api/ai/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'qwen-plus',
         temperature: 0.2,
@@ -568,6 +571,8 @@ async function classifyIntentWithQwen(
     return parseJsonSafe<QwenClassify>(content);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -100,9 +100,13 @@ function hasManagementAccess() {
     return true;
   }
 
-  return (accessStore.accessCodes ?? []).some((code) =>
+  const accessCodes = accessStore.accessCodes ?? [];
+  const hasManageCode = accessCodes.some((code) =>
     /(^|:)(admin|manage|permission|tenant)(:|$)/i.test(String(code)),
   );
+  // CRM 业务账号（销售/经理等，拥有 crm:* 权限）：登录后进入 CRM 管理界面，而不是门户/云培训
+  const hasCrmCode = accessCodes.some((code) => code.startsWith('crm:'));
+  return hasManageCode || hasCrmCode;
 }
 
 function resolveRedirectPath() {
