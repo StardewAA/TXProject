@@ -19,6 +19,8 @@
     · 06-bidding前端契约接口完全对照.md §2（notice）+ api/bidding/notice/index.ts；
     · 主体资格门：notice create/update/publish 均断言 招标人已授权且档案完善（assertTendererIssuanceAllowed，106_031/106_034）。
   权限点：bidding:notice:create|update|publish|delete|query（菜单 6754）。
+  界面（bid-indust 工业视觉基座 bid-indust.css）：石墨墨色页头 + 信号橙刻度条；
+    台账总览（状态分布，数据取自 notice/page 各状态 total，不伪造）+ 台账表 + 分节表单，避免平铺堆叠。
 ============================================================================ -->
 <script lang="ts" setup>
 import { NoticeApi } from '#/api/bidding/notice';
@@ -82,7 +84,7 @@ const fmtT = (v?: number | string): string => {
   if (v === undefined || v === null || v === '') return '—';
   const d = new Date(Number(v));
   if (Number.isNaN(+d)) return String(v);
-  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
 };
 const statusTag = (s?: string) =>
   s === 'PUBLISHED' ? { color: 'green', text: NoticeApi.NOTICE_STATUS_LABEL[s] || s }
@@ -95,6 +97,45 @@ const typeName = (row: NoticeApi.Row) => {
   return hit ? hit.label : row.noticeType || '—';
 };
 
+/* ============ 台账总览（状态分布 KPI，点击即按状态过滤） ============
+ * 后端 page 无按状态汇总出参，这里以 pageSize=1 对每个状态取 total（4+1 次轻量查询，
+ * 企业自营公告量小，开销可忽略；KPI 数字为后端真实计数，不做前端凑数）。
+ * 依据：GET /bidding/notice/page 契约（NoticeApi.PageParams.status 过滤，见 api/bidding/notice）。 */
+const kpis = ref<Array<{ status?: string; text: string; note: string; color: string; num: number }>>([]);
+const KPI_BASE: Array<{ status?: string; text: string; note: string; color: string }> = [
+  { text: '全部公告', note: '本企业全部公告/公示', color: 'k-gray' },
+  { text: '草稿', note: '起草中，可编辑后发布', color: 'k-blue', status: 'DRAFT' },
+  { text: '已发布', note: '对外公示中，可撤下', color: 'k-green', status: 'PUBLISHED' },
+  { text: '已撤下', note: '可重新发布或删除', color: 'k-orange', status: 'UNPUBLISHED' },
+  { text: '已归档', note: '归档终态，只读留痕', color: 'k-red', status: 'ARCHIVED' },
+];
+async function fetchKpiCounts() {
+  try {
+    const items = await Promise.all(
+      KPI_BASE.map(async (k) => {
+        const res = await fetchNoticePage({
+          pageNo: 1,
+          pageSize: 1,
+          ...(k.status ? { status: k.status } : {}),
+        });
+        return { ...k, num: Number(res.total || 0) };
+      }),
+    );
+    kpis.value = items;
+  } catch {
+    // KPI 统计失败不影响主列表（保留旧值）
+  }
+}
+const kpiActive = (k: { status?: string }) => (filters.status || undefined) === (k.status || undefined);
+function onKpiTap(k: { status?: string }) {
+  filters.status = k.status;
+  onSearch();
+}
+
+async function refreshAll() {
+  load();
+  void fetchKpiCounts();
+}
 async function load() {
   loading.value = true;
   try {
@@ -107,10 +148,19 @@ async function load() {
     loading.value = false;
   }
 }
-function onSearch() { pageNo.value = 1; load(); }
+function onSearch() { pageNo.value = 1; load(); void fetchKpiCounts(); }
 const pages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 function goPrev() { if (pageNo.value > 1) { pageNo.value -= 1; load(); } }
 function goNext() { if (pageNo.value < pages.value) { pageNo.value += 1; load(); } }
+
+/* 台账表格列（标题/类型/状态/发布时间/操作）：columns 必须显式声明，否则 antd Table 无列渲染 */
+const tableColumns = [
+  { title: '公告标题', key: 'title', dataIndex: 'title' },
+  { title: '公告类型', key: 'type', dataIndex: 'noticeType', width: 150 },
+  { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
+  { title: '发布时间', key: 'publishTime', dataIndex: 'publishTime', width: 160 },
+  { title: '操作', key: 'action', width: 240 },
+];
 
 /* ============ 编辑器 ============ */
 const editorOpen = ref(false);
@@ -186,6 +236,7 @@ function saveEditor() {
       }
       editorOpen.value = false;
       load();
+      void fetchKpiCounts();
     } catch (e) {
       const err = e as Error;
       createMessage.error((err.message || String(err)) + (err.message && /106-03[14]/.test(err.message) ? '（招标人发布门：需平台授权并完善主体档案）' : ''));
@@ -212,6 +263,7 @@ function doPublish(row: NoticeApi.Row) {
         await publishNotice(row.id!);
         createMessage.success('已发布');
         load();
+        void fetchKpiCounts();
       } catch (e) {
         const err = e as Error;
         createMessage.error((err.message || String(err)) + (/106-03[14]/.test(err.message || '') ? '（发布门未过：先授权+完善档案，或补正文/PDF）' : ''));
@@ -229,7 +281,7 @@ function doUnpublish(row: NoticeApi.Row) {
     okText: '撤下',
     cancelText: '取消',
     onOk: async () => {
-      try { await unpublishNotice(row.id!); createMessage.success('已撤下'); load(); } catch (e) { createMessage.error((e as Error).message || String(e)); }
+      try { await unpublishNotice(row.id!); createMessage.success('已撤下'); load(); void fetchKpiCounts(); } catch (e) { createMessage.error((e as Error).message || String(e)); }
     },
   });
 }
@@ -245,7 +297,7 @@ function doDelete(row: NoticeApi.Row) {
     okButtonProps: { danger: true },
     cancelText: '取消',
     onOk: async () => {
-      try { await deleteNotice(row.id!); createMessage.success('已删除'); load(); } catch (e) { createMessage.error((e as Error).message || String(e)); }
+      try { await deleteNotice(row.id!); createMessage.success('已删除'); load(); void fetchKpiCounts(); } catch (e) { createMessage.error((e as Error).message || String(e)); }
     },
   });
 }
@@ -259,16 +311,18 @@ async function openDetail(row: NoticeApi.Row) {
   try { detail.value = await fetchNoticeDetail(row.id!); } catch (e) { createMessage.error((e as Error).message || String(e)); }
 }
 
-onMounted(load);
+onMounted(() => { load(); void fetchKpiCounts(); });
 </script>
 
 <template>
   <div class="bid-ind ind-page">
-        <div class="ind-stripes"></div>
+    <div class="ind-stripes"></div>
     <div v-if="inPortal" class="ind-backbar">
       <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="goBackHall()">‹ 返回本平台发布</a>
       <span class="text-xs text-gray-400">门户 · 企业前台发布（当前登录租户自营公告）</span>
     </div>
+
+    <!-- 页头：石墨墨色面板（沉稳基调）+ 主操作 -->
     <div class="ind-head">
       <div class="min-w-0">
         <div class="ind-title">{{ inPortal ? '公告发布 · 发布工作台（企业前台）' : '公告 / 公示管理 · 发布工作台' }} <span class="ind-mark">NOTICE</span></div>
@@ -276,131 +330,210 @@ onMounted(load);
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
-        <Button size="large" @click="load">刷新</Button>
+        <Button size="large" @click="refreshAll">刷新</Button>
       </div>
     </div>
+
     <div class="ind-body">
+      <!-- 栏目一：台账总览（状态分布，点击卡片即按状态过滤） -->
+      <div class="ind-panel nw-kpi-panel">
+        <div class="ind-panel-h">
+          <span class="ind-panel-t">公告台账 · 状态分布</span>
+          <span class="ind-panel-meta">数字为后端实时统计 · 点击卡片按状态过滤（草稿 起草中可编辑发布 / 已发布 对外公示中 / 已撤下 可重发或删除 / 已归档 只读留痕）</span>
+        </div>
+        <div class="ind-panel-b">
+          <div v-if="kpis.length" class="ind-kpis nw-kpi-row">
+            <button
+              v-for="k in kpis"
+              :key="k.text"
+              type="button"
+              class="ind-kpi nw-kpi-tap"
+              :class="[k.color, { 'nw-kpi-on': kpiActive(k) }]"
+              @click="onKpiTap(k)"
+            >
+              <div class="k-label">{{ k.text }}</div>
+              <div class="k-num">{{ k.num }}</div>
+              <div class="k-note">{{ k.note }}</div>
+            </button>
+          </div>
+          <div v-else class="nw-kpi-empty">统计加载中…</div>
+        </div>
+      </div>
 
-    <div class="ind-filterbar">
-      <Select v-model:value="filters.status" placeholder="状态" allow-clear style="width: 140px">
-        <Select.Option v-for="(t, c) in NoticeApi.NOTICE_STATUS_LABEL" :key="c" :value="c">{{ t }}</Select.Option>
-      </Select>
-      <Select v-model:value="filters.noticeType" placeholder="公告类型" allow-clear style="width: 160px">
-        <Select.Option v-for="t in NoticeApi.NOTICE_TYPES" :key="t.code" :value="t.code">{{ t.label }}</Select.Option>
-      </Select>
-      <Radio.Group v-model:value="filters.internalFlag">
-        <Radio.Button :value="undefined">全部</Radio.Button>
-        <Radio.Button :value="true">仅内部公告</Radio.Button>
-        <Radio.Button :value="false">仅社会公开</Radio.Button>
-      </Radio.Group>
-      <Button type="primary" ghost @click="onSearch">查询</Button>
-    </div>
+      <!-- 栏目二：公告台账（过滤 + 列表） -->
+      <div class="ind-table-shell nw-table-shell">
+        <div class="nw-shell-head">
+          <div class="nw-shell-title">
+            全生命周期台账
+            <span class="nw-shell-meta">
+              共 {{ total }} 条
+              <template v-if="filters.status"> · {{ NoticeApi.NOTICE_STATUS_LABEL[filters.status] || filters.status }}</template>
+              <template v-if="filters.noticeType"> · {{ typeName({ noticeType: filters.noticeType } as NoticeApi.Row) }}</template>
+              <template v-if="filters.internalFlag !== undefined"> · {{ filters.internalFlag ? '仅内部' : '仅社会公开' }}</template>
+            </span>
+          </div>
+          <div class="ind-filterbar nw-inline-filter">
+            <Select v-model:value="filters.noticeType" placeholder="公告类型" allow-clear style="width: 170px">
+              <Select.Option v-for="t in NoticeApi.NOTICE_TYPES" :key="t.code" :value="t.code">{{ t.label }}</Select.Option>
+            </Select>
+            <Radio.Group v-model:value="filters.internalFlag">
+              <Radio.Button :value="undefined">全部</Radio.Button>
+              <Radio.Button :value="true">仅内部公告</Radio.Button>
+              <Radio.Button :value="false">仅社会公开</Radio.Button>
+            </Radio.Group>
+            <Button type="primary" ghost @click="onSearch">查询</Button>
+          </div>
+        </div>
 
-    <div class="rounded-md border border-gray-200 bg-white">
-      <Table
-        :data-source="rows"
-        :loading="loading"
-        :pagination="false"
-        row-key="id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'title'">
-            <span class="font-medium text-gray-800">{{ record.title }}</span>
-            <Tag v-if="record.internalFlag" class="ml-1">内部</Tag>
-            <Tag v-else-if="record.publicLevel" class="ml-1" color="geekblue">{{ record.publicLevel === 'GOVERNMENT' ? '政府公开' : '社会公开' }}</Tag>
+        <Table
+          :columns="tableColumns"
+          :data-source="rows"
+          :loading="loading"
+          :pagination="false"
+          :row-key="(r) => r.id"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'title'">
+              <div class="nw-title-cell">
+                <span class="nw-title-text">{{ record.title }}</span>
+                <Tag v-if="record.internalFlag" class="ml-1">内部</Tag>
+                <Tag v-else-if="record.publicLevel" class="ml-1" color="geekblue">{{ record.publicLevel === 'GOVERNMENT' ? '政府公开' : '社会公开' }}</Tag>
+                <div v-if="record.noticeCode || record.projectName || record.publisherName" class="nw-title-sub">
+                  <template v-if="record.noticeCode"><span class="nw-code">{{ record.noticeCode }}</span></template>
+                  <template v-if="record.projectName"><span>{{ record.projectName }}</span></template>
+                  <template v-if="record.publisherName"><span>发布单位：{{ record.publisherName }}</span></template>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'type'">
+              <span class="nw-type-text">{{ typeName(record as NoticeApi.Row) }}</span>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <Tag :color="statusTag(record.status).color">{{ statusTag(record.status).text }}</Tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Space :size="4" wrap>
+                <Button size="small" type="link" class="nw-act" @click="openDetail(record as NoticeApi.Row)">详情</Button>
+                <template v-if="record.status === 'DRAFT' || record.status === 'UNPUBLISHED'">
+                  <Button size="small" type="link" class="nw-act" @click="openEdit(record as NoticeApi.Row)">编辑</Button>
+                  <Button size="small" type="primary" ghost class="nw-act-primary" @click="doPublish(record as NoticeApi.Row)">{{ record.status === 'DRAFT' ? '发布' : '重新发布' }}</Button>
+                  <Button size="small" type="link" danger @click="doDelete(record as NoticeApi.Row)">删除</Button>
+                </template>
+                <template v-else-if="record.status === 'PUBLISHED'">
+                  <Button size="small" type="link" class="nw-act-warn" @click="doUnpublish(record as NoticeApi.Row)">撤下</Button>
+                </template>
+                <span v-else class="nw-readonly">只读</span>
+              </Space>
+            </template>
+            <template v-else-if="column.key === 'publishTime'">
+              <span class="nw-time">{{ fmtT(record.publishTime) }}</span>
+            </template>
           </template>
-          <template v-else-if="column.key === 'type'">{{ typeName(record as NoticeApi.Row) }}</template>
-          <template v-else-if="column.key === 'status'">
-            <Tag :color="statusTag(record.status).color">{{ statusTag(record.status).text }}</Tag>
+          <template #emptyText>
+            <div class="nw-empty">
+              <div class="nw-empty-title">暂无公告记录</div>
+              <div class="nw-empty-sub">点右上「新建公告」起草（发布前需主体档案完善 + 平台授权）</div>
+            </div>
           </template>
-          <template v-else-if="column.key === 'action'">
-            <Space>
-              <a class="text-xs text-blue-600" @click="openDetail(record as NoticeApi.Row)">详情</a>
-              <template v-if="record.status === 'DRAFT' || record.status === 'UNPUBLISHED'">
-                <a class="text-xs text-blue-600" @click="openEdit(record as NoticeApi.Row)">编辑</a>
-                <a class="text-xs text-green-600" @click="doPublish(record as NoticeApi.Row)">{{ record.status === 'DRAFT' ? '发布' : '重新发布' }}</a>
-                <a class="text-xs text-gray-400" @click="doDelete(record as NoticeApi.Row)">删除</a>
-              </template>
-              <template v-else-if="record.status === 'PUBLISHED'">
-                <a class="text-xs text-orange-500" @click="doUnpublish(record as NoticeApi.Row)">撤下</a>
-              </template>
-              <span v-else class="text-xs text-gray-300">只读</span>
-            </Space>
-          </template>
-          <template v-else-if="column.key === 'publishTime'">{{ fmtT(record.publishTime) }}</template>
-        </template>
-        <template #emptyText><div class="py-8 text-xs text-gray-300">暂无公告 — 点右上「新建公告」（发布前需主体档案完善 + 平台授权）</div></template>
-      </Table>
-      <div class="flex items-center justify-end gap-2 px-3 py-2 text-xs text-gray-400">
-        <span>共 {{ total }} 条</span>
-        <Button size="small" :disabled="pageNo <= 1" @click="goPrev">上一页</Button>
-        <span>{{ pageNo }} / {{ pages }}</span>
-        <Button size="small" :disabled="pageNo >= pages" @click="goNext">下一页</Button>
+        </Table>
+
+        <!-- 表尾：分页条 -->
+        <div class="nw-pager">
+          <span class="nw-pager-total">第 <b>{{ pageNo }}</b> / {{ pages }} 页 · 共 {{ total }} 条</span>
+          <div class="nw-pager-btns">
+            <Button size="small" :disabled="pageNo <= 1" @click="goPrev">‹ 上一页</Button>
+            <Button size="small" :disabled="pageNo >= pages" @click="goNext">下一页 ›</Button>
+          </div>
+        </div>
       </div>
     </div>
 
-    </div>
+    <!-- 新建/编辑弹窗（分节表单） -->
+    <Modal v-model:open="editorOpen" :title="editorTitle" :footer="null" width="880" destroy-on-close>
+      <div class="nw-modal-body">
+        <!-- 第一节：标题与辨识 -->
+        <div class="nw-form-sect">
+          <div class="nw-sect-h"><span class="nw-sect-no">1</span>标题与辨识<span class="nw-sect-ast">* 为必填</span></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <div class="mb-1 text-xs font-semibold text-gray-700">公告名称（标题）*</div>
+              <Input v-model:value="form.title" placeholder="如 榆林炼油厂 2026 大修消缺项目施工招标公告" />
+            </div>
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">公告类型 *</div>
+              <Select v-model:value="form.noticeType" style="width: 100%">
+                <Select.Option v-for="t in NoticeApi.NOTICE_TYPES" :key="t.code" :value="t.code">{{ t.label }}</Select.Option>
+              </Select>
+            </div>
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">发布单位</div>
+              <Input v-model:value="form.publisherName" placeholder="本企业名称快照（可留空由后端取）" />
+            </div>
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">公开范围</div>
+              <Select v-model:value="form.publicLevel" style="width: 100%">
+                <Select.Option value="SOCIAL">社会公开（大厅可见）</Select.Option>
+                <Select.Option value="GOVERNMENT">政府公开</Select.Option>
+              </Select>
+            </div>
+            <div class="flex items-end pb-1">
+              <div class="flex items-center gap-2 text-xs text-gray-600"><Switch v-model:checked="form.internalFlag" size="small" /> 企业内部公告（仅本租户可见，不进入大厅）</div>
+            </div>
+          </div>
+        </div>
 
-    <!-- 新建/编辑弹窗 -->
-    <Modal v-model:open="editorOpen" :title="editorTitle" :footer="null" width="760" destroy-on-close>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="col-span-2">
-          <div class="mb-1 text-xs font-medium text-gray-600">公告名称（标题）*</div>
-          <Input v-model:value="form.title" placeholder="如 榆林炼油厂 2026 大修消缺项目施工招标公告" />
-        </div>
-        <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">公告类型 *</div>
-          <Select v-model:value="form.noticeType" style="width: 100%">
-            <Select.Option v-for="t in NoticeApi.NOTICE_TYPES" :key="t.code" :value="t.code">{{ t.label }}</Select.Option>
-          </Select>
-        </div>
-        <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">发布单位</div>
-          <Input v-model:value="form.publisherName" placeholder="本企业名称快照（可留空由后端取）" />
-        </div>
-        <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">项目编号</div>
-          <Input v-model:value="form.projectCode" placeholder="关联招标项目编号（可选）" />
-        </div>
-        <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">项目名称</div>
-          <Input v-model:value="form.projectName" placeholder="招标项目名称（可选）" />
-        </div>
-        <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">公开范围</div>
-          <Select v-model:value="form.publicLevel" style="width: 100%">
-            <Select.Option value="SOCIAL">社会公开（大厅可见）</Select.Option>
-            <Select.Option value="GOVERNMENT">政府公开</Select.Option>
-          </Select>
-        </div>
-        <div class="flex items-end pb-1">
-          <div class="flex items-center gap-2 text-xs text-gray-600"><Switch v-model:checked="form.internalFlag" size="small" /> 企业内部公告（仅本租户可见，不进入大厅）</div>
-        </div>
-        <div class="col-span-2">
-          <div class="mb-1 text-xs font-medium text-gray-600">正文（发布前必填；实质变更自动追加版本）</div>
-          <Input.TextArea v-model:value="form.content" :rows="8" placeholder="公告正文全文…" />
-        </div>
-        <div class="col-span-2">
-          <div class="mb-1 flex items-center gap-3 text-xs font-medium text-gray-600">
-            <span>公告版式文件（PDF，发布前必填）— 文件服务上传，保存只带 file_id；URL 由业务系统按可见性签发</span>
-            <Upload :show-upload-list="false" accept=".pdf" :before-upload="onPdfBeforeUpload">
-              <Button size="small" :loading="pdfUploading">{{ form.pdfFileId !== undefined ? '重新上传 PDF' : '上传 PDF' }}</Button>
-            </Upload>
-          </div>
-          <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
-            file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
-            <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
+        <!-- 第二节：项目关联 -->
+        <div class="nw-form-sect">
+          <div class="nw-sect-h"><span class="nw-sect-no">2</span>项目关联<span class="nw-sect-sub">可选 — 公告将归入对应招标项目</span></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">项目编号</div>
+              <Input v-model:value="form.projectCode" placeholder="关联招标项目编号（可选）" />
+            </div>
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">项目名称</div>
+              <Input v-model:value="form.projectName" placeholder="招标项目名称（可选）" />
+            </div>
           </div>
         </div>
-        <div class="col-span-2">
-          <div class="mb-1 flex items-center justify-between text-xs font-medium text-gray-600">
-            <span>权威数据集字段 payload（key=规范英文名，JSON 对象）</span>
-            <span class="font-normal text-orange-500">发布时按数据集规整：缺失补 null、未知键剔除；字典接口落地后改动态表单</span>
+
+        <!-- 第三节：正文与版式 -->
+        <div class="nw-form-sect">
+          <div class="nw-sect-h"><span class="nw-sect-no">3</span>正文与版式<span class="nw-sect-sub">发布前必填；实质变更自动追加版本</span></div>
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <div class="mb-1 text-xs font-semibold text-gray-700">公告正文（全文）</div>
+              <Input.TextArea v-model:value="form.content" :rows="6" placeholder="公告正文全文…" />
+            </div>
+            <div class="nw-pdf-row">
+              <div class="mb-1 flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-700">
+                <span>公告版式文件（PDF，发布前必填）— 文件服务上传，保存只带 file_id；URL 由业务系统按可见性签发</span>
+                <Upload :show-upload-list="false" accept=".pdf" :before-upload="onPdfBeforeUpload">
+                  <Button size="small" :loading="pdfUploading">{{ form.pdfFileId !== undefined ? '重新上传 PDF' : '上传 PDF' }}</Button>
+                </Upload>
+              </div>
+              <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
+                file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
+                <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
+              </div>
+            </div>
           </div>
-          <Input.TextArea v-model:value="payloadText" :rows="5" placeholder='{"TENDER_PROJECT_CODE":"…","NOTICE_NAME":"…"}' />
         </div>
-        <div class="col-span-2 text-right">
+
+        <!-- 第四节：权威数据集 -->
+        <div class="nw-form-sect">
+          <div class="nw-sect-h"><span class="nw-sect-no">4</span>权威数据集字段<span class="nw-sect-sub">payload（key=规范英文名，JSON 对象）</span></div>
+          <div>
+            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span>按公告类型对应的数据集规范填写（后端 VO 层为权威）</span>
+              <span class="font-normal text-orange-500">发布时按数据集规整：缺失补 null、未知键剔除；字典接口落地后改动态表单</span>
+            </div>
+            <Input.TextArea v-model:value="payloadText" :rows="5" placeholder='{"TENDER_PROJECT_CODE":"…","NOTICE_NAME":"…"}' />
+          </div>
+        </div>
+
+        <div class="nw-modal-foot">
           <Space>
             <Button @click="editorOpen = false">取消</Button>
             <Button type="primary" :loading="editorSaving" @click="saveEditor">{{ editId === undefined ? '保存为草稿' : '保存修改' }}</Button>
@@ -410,7 +543,7 @@ onMounted(load);
     </Modal>
 
     <!-- 详情抽屉 -->
-    <Drawer v-model:open="detailOpen" :title="detail ? detail.title : '公告详情'" :width="680">
+    <Drawer v-model:open="detailOpen" :title="detail ? detail.title : '公告详情'" :width="720">
       <template v-if="detail">
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
           <Tag :color="statusTag(detail.status).color">{{ statusTag(detail.status).text }}</Tag>
@@ -432,4 +565,84 @@ onMounted(load);
   </div>
 </template>
 
+<style scoped>
+/* ===== 本页局部样式（基于 bid-indust 基座，仅增强版面层级，不改全局） ===== */
 
+/* 栏目一 KPI 面板 */
+.nw-kpi-panel { margin-bottom: 14px; }
+.nw-kpi-row { margin: 4px 0 6px; }
+.nw-kpi-tap {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  user-select: none;
+}
+.nw-kpi-tap:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20, 28, 38, .1); }
+.nw-kpi-tap.nw-kpi-on {
+  border-color: var(--ind-orange);
+  box-shadow: 0 0 0 1.5px var(--ind-orange) inset, 0 3px 10px rgba(232, 135, 30, .14);
+}
+.nw-kpi-tap.nw-kpi-on .k-label { color: var(--ind-orange); }
+.nw-kpi-empty { padding: 8px 2px; font-size: 13px; color: var(--ind-weak-text); }
+
+/* 栏目二 台账表壳：标题条 + 内联筛选 + 表格 + 表尾 */
+.nw-table-shell { margin-top: 14px; }
+.nw-shell-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; border-bottom: 1.5px solid var(--ind-line); background: #f4f5f7;
+}
+.nw-shell-title { font-size: 15px; font-weight: 800; color: var(--ind-ink-text); }
+.nw-shell-meta { margin-left: 10px; font-size: 12.5px; font-weight: 500; color: var(--ind-weak-text); }
+.nw-inline-filter {
+  margin-bottom: 0 !important; padding: 4px 6px !important;
+  box-shadow: none !important; background: transparent !important;
+  border: none !important; border-radius: 0 !important;
+}
+.nw-inline-filter .ant-select { width: 170px; }
+
+/* 标题单元格：主标题 + 次行元信息 */
+.nw-title-cell { min-width: 260px; }
+.nw-title-text { font-weight: 600; color: var(--ind-ink-text); line-height: 1.45; }
+.nw-title-sub { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ind-weak-text); }
+.nw-title-sub .nw-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a93a0; }
+.nw-type-text { color: var(--ind-sub-text); font-weight: 500; }
+.nw-time { font-variant-numeric: tabular-nums; color: var(--ind-sub-text); }
+.nw-readonly { color: #b6bec7; font-size: 12.5px; }
+
+/* 行操作按钮保持紧凑 */
+.nw-act { padding: 0 6px !important; }
+.nw-act-primary { padding: 0 10px !important; }
+.nw-act-warn { padding: 0 6px !important; color: #d97706 !important; }
+.nw-act-warn:hover { color: #b45309 !important; }
+
+/* 空态 */
+.nw-empty { padding: 34px 0 30px; text-align: center; }
+.nw-empty-title { font-size: 15px; font-weight: 700; color: #8a93a0; }
+.nw-empty-sub { margin-top: 6px; font-size: 12.5px; color: #b6bec7; }
+
+/* 表尾分页条 */
+.nw-pager {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 10px 14px; border-top: 1.5px solid var(--ind-line); background: #fafbfc;
+}
+.nw-pager-total { font-size: 12.5px; color: var(--ind-weak-text); }
+.nw-pager-total b { color: var(--ind-ink-text); font-variant-numeric: tabular-nums; }
+.nw-pager-btns { display: flex; gap: 8px; }
+
+/* 弹窗分节表单 */
+.nw-modal-body { max-height: 72vh; overflow-y: auto; padding-right: 6px; }
+.nw-form-sect { margin-bottom: 16px; padding: 14px 14px 4px; border: 1.5px solid var(--ind-line-soft); border-left: 4px solid var(--ind-ink); border-radius: 3px; background: #fff; }
+.nw-sect-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; font-weight: 800; color: var(--ind-ink-text); }
+.nw-sect-no {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  background: var(--ind-ink); color: #fff; font-size: 11.5px; font-weight: 800; border-radius: 2px; letter-spacing: .5px;
+}
+.nw-sect-ast { font-size: 11.5px; font-weight: 600; color: var(--ind-orange); }
+.nw-sect-sub { font-size: 12px; font-weight: 500; color: var(--ind-weak-text); margin-left: 2px; }
+.nw-pdf-row { background: #faf7f0; border: 1px dashed #d6c7a8; border-radius: 3px; padding: 10px 12px; }
+.nw-modal-foot { display: flex; justify-content: flex-end; border-top: 1.5px solid var(--ind-line-soft); padding-top: 12px; }
+
+/* 详情抽屉正文轻边框 */
+.nw-detail-doc { border: 1px solid var(--ind-line-soft); }
+</style>
