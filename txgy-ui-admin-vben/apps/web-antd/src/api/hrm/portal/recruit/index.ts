@@ -42,6 +42,11 @@ export namespace HrmPortalRecruitApi {
     postTypeId?: number;
     jobNature?: number;
     areaId?: number;
+    workTime?: number;
+    educationRequire?: number;
+    salaryMin?: number;
+    salaryMax?: number;
+    salaryNegotiable?: boolean;
   }
 
   export interface PostType {
@@ -145,9 +150,9 @@ export function createPortalRecruitApplication(
 export function getPortalRecruitApplicationPage(
   params: PageParam & { status?: string },
 ) {
-  return requestClient.get<PageResult<HrmPortalRecruitApi.Application>>(
+  return requestClient.request<PageResult<HrmPortalRecruitApi.Application>>(
     '/hrm/portal/recruit/application/page',
-    { params },
+    { method: 'GET', params },
   );
 }
 

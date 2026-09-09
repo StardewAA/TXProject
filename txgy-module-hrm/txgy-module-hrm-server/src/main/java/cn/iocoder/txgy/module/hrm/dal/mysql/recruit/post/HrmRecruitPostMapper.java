@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post;
 import cn.hutool.core.map.MapUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.framework.ip.core.Area;
+import cn.iocoder.txgy.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.QueryWrapperX;
@@ -11,6 +13,7 @@ import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -62,18 +65,70 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
                 .set(updateObj.getInterviewEmployeeIds() == null, HrmRecruitPostDO::getInterviewEmployeeIds, null)
                 .set(updateObj.getDescription() == null, HrmRecruitPostDO::getDescription, null)
                 .set(updateObj.getEmergencyLevel() == null, HrmRecruitPostDO::getEmergencyLevel, null)
-                .set(updateObj.getPostTypeId() == null, HrmRecruitPostDO::getPostTypeId, null));
+                .set(updateObj.getPostTypeId() == null, HrmRecruitPostDO::getPostTypeId, null)
+                .set(updateObj.getChannelId() == null, HrmRecruitPostDO::getChannelId, null));
     }
 
     private QueryWrapperX<HrmRecruitPostDO> buildQueryWrapper(HrmRecruitPostPageReqVO reqVO) {
-        return new QueryWrapperX<HrmRecruitPostDO>()
+        QueryWrapperX<HrmRecruitPostDO> query = new QueryWrapperX<HrmRecruitPostDO>()
                 .likeIfPresent("post_name", reqVO.getPostName())
                 .eqIfPresent("job_nature", reqVO.getJobNature())
-                .eqIfPresent("area_id", reqVO.getAreaId())
+                .inIfPresent("area_id", getAreaAndDescendantIds(reqVO.getAreaId()))
+                .eqIfPresent("work_time", reqVO.getWorkTime())
+                .eqIfPresent("education_require", reqVO.getEducationRequire())
                 .eqIfPresent("dept_id", reqVO.getDeptId())
                 .eqIfPresent("owner_employee_id", reqVO.getOwnerEmployeeId())
                 .eqIfPresent("post_type_id", reqVO.getPostTypeId())
                 .betweenIfPresent("create_time", reqVO.getCreateTime());
+        if (Boolean.TRUE.equals(reqVO.getSalaryNegotiable())) {
+            query.and(true, wrapper -> wrapper
+                    .eq("min_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                    .or()
+                    .eq("max_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE));
+        } else {
+            if (reqVO.getSalaryMin() != null) {
+                query.and(true, wrapper -> wrapper
+                        .eq("min_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                        .or()
+                        .ge("max_salary", reqVO.getSalaryMin()));
+            }
+            if (reqVO.getSalaryMax() != null) {
+                query.and(true, wrapper -> wrapper
+                        .eq("max_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                        .or()
+                        .le("min_salary", reqVO.getSalaryMax()));
+            }
+        }
+        return query;
+    }
+
+    /**
+     * 按地区树展开筛选范围：省份包含其下市、区县；城市包含其下区县；区县仅匹配自身。
+     */
+    private List<Integer> getAreaAndDescendantIds(Integer areaId) {
+        if (areaId == null) {
+            return null;
+        }
+        Area area = AreaUtils.getArea(areaId);
+        if (area == null) {
+            return List.of(areaId);
+        }
+        List<Integer> areaIds = new ArrayList<>();
+        collectAreaAndDescendantIds(area, areaIds);
+        return areaIds;
+    }
+
+    private void collectAreaAndDescendantIds(Area area, List<Integer> areaIds) {
+        if (area == null || area.getId() == null) {
+            return;
+        }
+        areaIds.add(area.getId());
+        if (area.getChildren() == null) {
+            return;
+        }
+        for (Area child : area.getChildren()) {
+            collectAreaAndDescendantIds(child, areaIds);
+        }
     }
 
 }

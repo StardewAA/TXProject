@@ -135,6 +135,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招聘应聘', hideInMenu: true },
       },
       {
+        name: 'PortalRecruitDetail',
+        path: 'recruit/detail',
+        component: () => import('#/views/portal/recruit/detail.vue'),
+        meta: { title: '职位详情', hideInMenu: true },
+      },
+      {
         name: 'PortalTraining',
         path: 'training',
         component: () => import('#/views/portal/training/index.vue'),
@@ -175,6 +181,12 @@ const coreRoutes: RouteRecordRaw[] = [
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
         meta: { title: '个人中心', hideInMenu: true },
+      },
+      {
+        name: 'PortalProfileRecruit',
+        path: 'profile/recruit',
+        component: () => import('#/views/portal/profile/recruit.vue'),
+        meta: { title: '招聘应聘', hideInMenu: true },
       },
     ],
   },

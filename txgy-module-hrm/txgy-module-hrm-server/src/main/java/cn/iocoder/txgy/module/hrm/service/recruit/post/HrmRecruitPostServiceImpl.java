@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post.HrmRecruitPostMapper;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -51,6 +52,9 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
 
     @Resource
     private HrmEmployeeService employeeService;
+
+    @Resource
+    private HrmRecruitChannelService recruitChannelService;
 
     @Resource
     private DeptApi deptApi;
@@ -196,6 +200,9 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
         recruitPostTypeService.validateRecruitPostTypeExists(reqVO.getPostTypeId());
         if (reqVO.getPostTypeId() != null) {
             recruitPostTypeService.validateRecruitPostTypeUsable(reqVO.getPostTypeId());
+        }
+        if (reqVO.getChannelId() != null) {
+            recruitChannelService.validateRecruitChannelUsable(reqVO.getChannelId());
         }
         if (reqVO.getDeptId() != null) {
             deptApi.validateDeptList(Collections.singleton(reqVO.getDeptId()));
