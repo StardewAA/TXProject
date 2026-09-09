@@ -22,6 +22,8 @@ import cn.iocoder.txgy.module.wms.api.integration.dto.WmsInventoryDecisionRespDT
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsReservationReleaseReqDTO;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -61,7 +63,8 @@ public class ErpSaleWmsIntegrationService {
     private ErpCustomerService customerService;
     @Resource
     private ErpWmsIntegrationGateway integrationGateway;
-    @Resource
+    @Autowired
+    @Qualifier("erpWmsIntegrationRecordService")
     private ErpWmsIntegrationRecordService recordService;
 
     /** 在 ERP 多级审批最终通过的事务中准备请求，提交成功后再调用 WMS。 */
