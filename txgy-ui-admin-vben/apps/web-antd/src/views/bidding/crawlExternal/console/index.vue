@@ -90,6 +90,8 @@ const tFilter = ref<{ status?: string; channelCode?: string; url?: string }>({})
 const tPage = ref(1);
 const tPageSize = ref(20);
 const tTotal = ref(0);
+/** 分页 total 文案（antd show-total 需函数） */
+const pagiShowTotal = (total: number, _range: [number, number]) => '共 ' + total + ' 条';
 const tRows = ref<CrawlExternalApi.TaskItem[]>([]);
 const tRowsLoading = ref(false);
 /** 详情当前任务在 tRows 中的游标 */
@@ -776,7 +778,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
               </div>
             </div>
             <div class="mt-3 flex justify-end">
-              <Pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" show-total show-size-changer :page-size-options="['20', '50', '100']" @change="loadTaskRows" />
+              <Pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" :show-total="pagiShowTotal" show-size-changer :page-size-options="['20', '50', '100']" @change="loadTaskRows" />
             </div>
           </template>
         </template>
