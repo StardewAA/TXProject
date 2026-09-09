@@ -12,6 +12,7 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   aiExtractNotice,
   approveNotice,
+  backfillPdfUrls,
   bodyStructureNotice,
   getManagePage,
   rejectNotice,
@@ -50,16 +51,25 @@ const extractionTagOf = (row: NoticeExternalApi.ManageItem) =>
   tagOf(EXTRACTION_MAP, row.extractionStatus);
 const bodyTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(BODY_MAP, row.bodyBlocksStatus);
 
+/** 行内操作执行锁（防双击重复提交；批量审核用独立的 approving） */
+const acting = ref(false);
+
 async function runAction(label: string, fn: () => Promise<unknown>) {
+  if (acting.value) return;
+  acting.value = true;
   const hideLoading = message.loading({ content: `${label}处理中…`, duration: 0 });
   try {
     await fn();
     message.success(`${label}成功`);
+    // 行状态已变化：清空勾选，避免工具栏"批量审查通过（N）"计数与实际不符
+    checkedRows.value = [];
+    (gridApi.grid as unknown as { clearCheckboxRow?: () => void } | undefined)?.clearCheckboxRow?.();
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
+    acting.value = false;
   }
 }
 
@@ -84,26 +94,29 @@ function handleTakeDown(row: NoticeExternalApi.ManageItem) {
 
 
 
-/** 行主操作：预览 + 当前状态下的关键动作（审核通过/下线）；次要动作全部收进“更多 ▾”避免按钮挤压 */
+/** 行主操作：预览 + 当前状态下的关键动作（下线/审核通过）；次要动作全部收进“更多 ▾”避免按钮挤压 */
 function rowActions(row: NoticeExternalApi.ManageItem): any[] {
   const acts: Array<Record<string, unknown>> = [
-    { label: '预览', type: 'link', auth: ['bidding:notice-external:update'], onClick: () => handlePreview(row) },
+    { label: '预览', type: 'link', auth: ['bidding:notice-external:update'], disabled: acting.value || approving.value, onClick: () => handlePreview(row) },
   ];
-  if (row.auditStatus === 'UNREVIEWED') {
-    acts.push({
-      label: '审核通过',
-      type: 'link',
-      auth: ['bidding:notice-external:update'],
-      // 需求：点击审查不弹确认框（减少多余点击），直接执行幂等审核通过
-      onClick: () => void handleApprove(row),
-    });
-  } else if (row.status === 'ACTIVE') {
+  if (row.status === 'ACTIVE') {
+    // 主操作按 status 优先：ACTIVE 行给“下线”（防御 ACTIVE+UNREVIEWED 并存时按钮错乱）
     acts.push({
       label: '下线',
       type: 'link',
       danger: true,
       auth: ['bidding:notice-external:update'],
+      disabled: acting.value || approving.value,
       popConfirm: { title: '确认下线？（大厅展示随即消失）', confirm: () => handleTakeDown(row) },
+    });
+  } else if (row.auditStatus === 'UNREVIEWED' && row.status === 'NEW') {
+    acts.push({
+      label: '审核通过',
+      type: 'link',
+      auth: ['bidding:notice-external:update'],
+      disabled: acting.value || approving.value,
+      // 需求：点击审查不弹确认框（减少多余点击），直接执行幂等审核通过
+      onClick: () => void handleApprove(row),
     });
   }
   return acts;
@@ -123,6 +136,7 @@ function moreItems(row: NoticeExternalApi.ManageItem): Array<{ key: string; labe
 
 /** 更多菜单项点击：二次确认后执行 */
 function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
+  if (acting.value || approving.value) return; // 操作进行中：防重复触发
   const title: Record<string, string> = {
     reject: '确认驳回该公告？（将不对外展示）',
     takeDown: '确认下线？（大厅展示随即消失）',
@@ -143,6 +157,32 @@ function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
 
 /** 勾选行（批量审查通过用） */
 const checkedRows = ref<NoticeExternalApi.ManageItem[]>([]);
+/**
+ * 并发执行器（修复“逐条 await 串行”：批量/一键审核原本 N 条串 N 个请求，后端逐个等；
+ * 改为固定小并发（batch=6）分片跑，既消除排队等待，又避免全量并发打爆审核/扇出/ES 链路）。
+ * 幂等前提：approve 接口幂等（后端按 status=NEW 校验），失败项仍逐条归因上报。
+ */
+async function runConcurrent<T>(
+  items: T[],
+  worker: (item: T) => Promise<void>,
+  onFail: (item: T) => void,
+  batch = 6,
+): Promise<number> {
+  let ok = 0;
+  for (let i = 0; i < items.length; i += batch) {
+    const slice = items.slice(i, i + batch);
+    const results = await Promise.allSettled(slice.map((it) => worker(it)));
+    results.forEach((r, j) => {
+      if (r.status === 'fulfilled') ok += 1;
+      else {
+        const item = slice[j];
+        if (item != null) onFail(item);
+      }
+    });
+  }
+  return ok;
+}
+
 /** 审查类操作进行中（批量/一键共用，防重复触发） */
 const approving = ref(false);
 function handleRowCheckboxChange({
@@ -151,6 +191,35 @@ function handleRowCheckboxChange({
   records: NoticeExternalApi.ManageItem[];
 }) {
   checkedRows.value = records || [];
+}
+
+/* PDF 归档回填（04-契约 §1：存量外部公告 pdf_download_url 回填，重下载外站 PDF → infra-file 归档；一次性人工触发，约几十秒）。
+ * 业务/理由：采集 PDF 经文件服务归档后才回填可访问 URL；旧数据为空需触发本端点补全，此后门户 PDF 内嵌预览/下载才可用。
+ * 权限 bidding:notice-external:update；POST /bidding/notice-external/backfill-pdf-urls 返回 total/ok/failed/skipped。 */
+function handleBackfillPdf() {
+  Modal.confirm({
+    title: 'PDF 归档回填',
+    content:
+      '将重下载外部公告 PDF 并归档回填 pdf_download_url（14 条 GX 数据约几十秒；期间详情 PDF 预览由空变有）。' +
+      '回填期间请勿重复触发。是否开始？',
+    okText: '开始回填',
+    cancelText: '取消',
+    onOk: () =>
+      runAction('PDF 归档回填', async () => {
+        const res = await backfillPdfUrls();
+        const s = res as { total?: number; ok?: number; failed?: number; skipped?: number };
+        message.info(
+          '回填完成：总数 ' +
+            (s?.total ?? '-') +
+            '，成功 ' +
+            (s?.ok ?? '-') +
+            '，失败 ' +
+            (s?.failed ?? '-') +
+            '，跳过 ' +
+            (s?.skipped ?? '-'),
+        );
+      }),
+  });
 }
 
 /**
@@ -170,17 +239,13 @@ async function handleApproveBatch() {
     content: '批量审查通过中（' + targets.length + ' 条，逐条幂等提交）…',
     duration: 0,
   });
-  let ok = 0;
   const failed: Array<number | string> = [];
   try {
-    for (const t of targets) {
-      try {
-        await approveNotice(t.id!);
-        ok += 1;
-      } catch {
-        failed.push(t.id!);
-      }
-    }
+    const ok = await runConcurrent(
+      targets,
+      (t) => approveNotice(t.id!),
+      (t) => failed.push(t.id!),
+    );
     message.success(
       '批量审查通过完成：成功 ' +
         ok +
@@ -225,17 +290,13 @@ async function handleApproveAll() {
       content: '一键审查通过中（' + ids.length + ' 条）…',
       duration: 0,
     });
-    let ok = 0;
     const failed: Array<number | string> = [];
     try {
-      for (const id of ids) {
-        try {
-          await approveNotice(id);
-          ok += 1;
-        } catch {
-          failed.push(id);
-        }
-      }
+      const ok = await runConcurrent(
+        ids,
+        (id) => approveNotice(id),
+        (id) => failed.push(id),
+      );
       message.success(
         '一键审查通过完成：成功 ' +
           ok +
@@ -246,8 +307,8 @@ async function handleApproveAll() {
       hide2();
       refresh();
     }
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     approving.value = false;
     checkedRows.value = [];
@@ -294,7 +355,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+<!--
+  管理端 · 外部公告审核管理（平台职能：采集入库→人工审核→进大厅）
+  业务：平台运营审核爬虫采集入库的外部公告：检查状态(NEW)/抽取/正文/归属行业，通过后进入大厅对外可见（ACTIVE+SOCIAL）；
+        支持单条与批量审查、一键全过。
+  理由：外部采集数据未经核验不得直接面向公众展示（防虚假/违规信息误导）；审核通过=公示信息真实来源的把关（职能角色矩阵）。
+    业务边界：本页属平台职能（G 轨，无租户语义）——职能角色矩阵（后端执行清单 §7）：爬虫管理/外部公告审核=平台职能，
+        勿授企业租户；企业租户只使用发布/档案/跟踪等 T 轨功能。
+    依据（法规/政府文件）：10号令 第12/13条（部门规章）——公开信息免费查阅与归类的合规来源（采集对象=依法公开公告）；电子办法 第9条（部门规章）。
+    后端契约：01-接口逐一说明与设计依据.md §2（manage/page 审核列表）、外部公告-前端对接/02-字段枚举（状态/抽取/正文/行业、virusStatus）；
+      GET /bidding/notice-external/manage/page、审核写接口（bidding:notice-external:update）。
+-->
+
+  <Page auto-content-height class="bid-ind">
     <Detail />
     <Grid table-title="外部公告审核管理（招投标）">
       <template #toolbar-tools>
@@ -313,6 +386,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               disabled: approving,
               auth: ['bidding:notice-external:update'],
               onClick: () => void handleApproveAll(),
+            },
+            {
+              label: 'PDF 归档回填',
+              type: 'link',
+              danger: false,
+              auth: ['bidding:notice-external:update'],
+              onClick: () => handleBackfillPdf(),
             },
           ]"
         />

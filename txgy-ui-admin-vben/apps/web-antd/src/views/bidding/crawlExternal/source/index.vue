@@ -2,22 +2,22 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
-import { ref } from 'vue';
+import { h, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Modal, message, Switch } from 'ant-design-vue';
+import { Modal, message, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteCrawlSource,
   fetchCrawlSourcePage,
   runCrawlSource,
-  setCrawlSourceEnabled,
 } from '#/api/bidding/crawlExternal';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import FormModal from './modules/form.vue';
+import SourceDetail from './modules/source-detail.vue';
 
 const [FormModalWrap, formModalApi] = useVbenModal({
   connectedComponent: FormModal,
@@ -28,7 +28,7 @@ function refresh() {
   gridApi.query();
 }
 
-const togglingId = ref<number | null>(null);
+const detailRef = ref<{ openSource: (s: CrawlExternalApi.SourceItem) => void } | null>(null);
 
 async function runAction(label: string, fn: () => Promise<unknown>) {
   const hideLoading = message.loading({ content: label + '处理中…', duration: 0 });
@@ -36,8 +36,8 @@ async function runAction(label: string, fn: () => Promise<unknown>) {
     await fn();
     message.success(label + '成功');
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
   }
@@ -53,61 +53,49 @@ function handleEdit(row: CrawlExternalApi.SourceItem) {
   formModalApi.setData(row).open();
 }
 
-/** 启停开关：二次确认后调后端（取消则回读刷新还原开关态） */
-function handleToggle(row: CrawlExternalApi.SourceItem, checked: boolean | string | number) {
-  const enable = Boolean(checked);
-  Modal.confirm({
-    title: enable ? '启用该采集源？' : '停用该采集源？',
-    content: enable
-      ? '启用后将进入外部链接 /go 白名单，定时调度将按抓取间隔执行采集。'
-      : '停用后不再参与调度；若有已生效(ACTIVE)公告请先下线再停用。',
-    okText: '确认',
-    cancelText: '取消',
-    onOk: async () => {
-      togglingId.value = row.id ?? null;
-      try {
-        await setCrawlSourceEnabled(row.id!, enable);
-        message.success(enable ? '已启用' : '已停用');
-        refresh();
-      } catch (e) {
-        message.error(e instanceof Error ? e.message : String(e));
-        refresh();
-      } finally {
-        togglingId.value = null;
-      }
-    },
-    onCancel: () => refresh(),
-  });
-}
 
-/** 立即采集一轮（同步下载并落库，结果弹窗汇总） */
-function runSummaryText(res?: CrawlExternalApi.RunResult): string {
-  if (!res) return '';
-  const lines: string[] = ['成功落库 ' + (res.totalIngested ?? 0) + ' 条，失败 ' + (res.totalFailed ?? 0) + ' 条'];
+/** 立即采集执行锁（同步长请求，防双击重入撞后端 RUNNING 守卫） */
+const runningSource = ref(false);
+
+/** 立即采集汇总行（Modal.info 纯文本不解析 \n，用 VNode 逐行渲染） */
+function runSummaryNodes(res?: CrawlExternalApi.RunResult) {
+  const lines: string[] = [];
+  if (!res) return lines;
+  lines.push('成功落库 ' + (res.totalIngested ?? 0) + ' 条，失败 ' + (res.totalFailed ?? 0) + ' 条');
   (res.categories || []).forEach((c) => {
     let l = c.name + '：抓到 ' + (c.fetched ?? 0) + '，新增 ' + (c.ingested ?? 0);
     if (c.failed) l += '，失败 ' + c.failed;
     if (c.error) l += '（' + c.error + '）';
     lines.push(l);
   });
-  return lines.join('\n');
+  return lines;
 }
 async function handleRun(row: CrawlExternalApi.SourceItem) {
+  if (runningSource.value) return;
+  runningSource.value = true;
   const hideLoading = message.loading({ content: '正在执行采集，同步下载中…', duration: 0 });
   try {
     const res = await runCrawlSource(row.sourceCode!);
-    Modal.info({ title: '采集执行完成', content: runSummaryText(res), width: 520 });
+    const nodes = runSummaryNodes(res).map((l) => h('div', l));
+    Modal.info({ title: '采集执行完成', content: nodes.length ? h('div', nodes) : '（无汇总）', width: 520 });
     refresh();
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
   } finally {
     hideLoading();
+    runningSource.value = false;
   }
 }
 
 /** 行操作 */
 function rowActs(row: CrawlExternalApi.SourceItem): any[] {
   return [
+    {
+      label: '详情',
+      type: 'link',
+      auth: ['bidding:crawl-source:query'],
+      onClick: () => detailRef.value?.openSource(row),
+    },
     {
       label: '编辑',
       type: 'link',
@@ -118,6 +106,7 @@ function rowActs(row: CrawlExternalApi.SourceItem): any[] {
       label: '立即采集',
       type: 'link',
       auth: ['bidding:crawl-source:update'],
+      disabled: runningSource.value,
       popConfirm: {
         title: '立即执行一轮采集「' + (row.sourceName || row.sourceCode) + '」？将同步下载并落库。',
         confirm: () => void handleRun(row),
@@ -129,7 +118,7 @@ function rowActs(row: CrawlExternalApi.SourceItem): any[] {
       danger: true,
       auth: ['bidding:crawl-source:delete'],
       popConfirm: {
-        title: '确认删除采集源「' + (row.sourceName || row.sourceCode) + '」？须无进行中任务且无公告引用。',
+        title: '确认删除信息源「' + (row.sourceName || row.sourceCode) + '」？须无未终态任务且无 ACTIVE 公告引用。',
         confirm: () => void runAction('删除', () => deleteCrawlSource(row.id!)),
       },
     },
@@ -167,9 +156,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+<!--
+  信息源管理（平台职能：源配置 → 定时轮询/立即获取）
+  业务：平台运营维护外部公告信息源（sourceCode 唯一；channel=GENERIC；parserCode 默认解析器；entryUrls 入口 URL 列表；轮询间隔≥120s）；启用后进入外链 /go 白名单。
+  理由：信息源=平台级资产（G 轨）；白名单域名防开放重定向；轮询间隔下限防对源站压力（安全评审+10号令免费查阅合规）。
+    业务边界：本页属平台职能（G 轨，无租户语义）——职能角色矩阵（后端执行清单 §7）：爬虫管理/外部公告审核=平台职能，
+        勿授企业租户；企业租户只使用发布/档案/跟踪等 T 轨功能。
+    依据（法规/政府文件）：10号令 第12条（部门规章）免费查阅——采集公开公告合法性基础；电子办法 第9条（部门规章）。
+    后端契约：爬虫任务工作台-前后端契约（source create/update/enabled/delete/page）；错误码 106_014 跳转拒绝/106_015 未启用检索/106_046 间隔<120。
+-->
+
+  <Page auto-content-height class="bid-ind">
     <FormModalWrap @success="refresh" />
-    <Grid table-title="采集源管理（外部公告爬虫）">
+    <SourceDetail ref="detailRef" />
+    <Grid table-title="信息源管理（外部公告）">
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -184,13 +184,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
       <template #col_enabled="{ row }">
-        <Switch
-          :checked="!!row.enabled"
-          :loading="togglingId === row.id"
-          checked-children="启用"
-          un-checked-children="停用"
-          @change="(v: any) => handleToggle(row, v)"
-        />
+        <Tag :color="row.enabled ? 'green' : 'default'">{{ row.enabled ? '已启用' : '停用' }}</Tag>
       </template>
       <template #operation="{ row }">
         <TableAction :actions="rowActs(row)" />

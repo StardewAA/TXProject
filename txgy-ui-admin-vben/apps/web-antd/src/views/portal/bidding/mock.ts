@@ -1,4 +1,9 @@
 /**
+ * 仅前端 mock 演示数据，联调后移除；字段真源以 NoticeDetailRespVO / ExternalNoticeVO 为准
+ * （内部公告详情=NoticeDetailRespVO；外部公告/关注域=后端 NoticeExternal* / Follow* 系列 VO，
+ * 口径另见 docs/外部公告-前端对接/01-接口契约.md）。
+ */
+/**
  * 内置 Mock（后端 notice-external 未部署到联调环境时使用；VITE_BIDDING_USE_MOCK=1 开启）。
  *
  * 数据结构与 01-接口契约.md / 后端 VO 一致（列表行已带 sourceCode/legalFlag，正文含结构化块演示）；
@@ -11,6 +16,8 @@ import type {
   FollowItem,
   FollowItemPageParams,
   FollowStatus,
+  InternalNoticeDetail,
+  InternalNoticeItem,
   NoticeBodyBlock,
   NoticeExternalDetail,
   NoticeExternalItem,
@@ -575,4 +582,99 @@ export function mockReadItem(itemId: number | string): void {
   followStore.events.forEach((e) => {
     if (String(e.itemId) === key) e.readFlag = true;
   });
+}
+
+/* ================= 内部公告（招标人自营公开公告；notice /public 域 Mock） =================
+ * 语义与后端 notice public/list（仅 PUBLISHED + 社会公开）一致：
+ * publicLevel=SOCIAL 且非 internalFlag 才进入大厅；行含 noticeTypeName/contentPreview。
+ */
+const INTERNAL_TYPE_LABEL: Record<string, string> = {
+  TENDER_NOTICE: '招标公告',
+  CHANGE_NOTICE: '变更公告',
+  WIN_CANDIDATE_PUBLICITY: '中标候选人公示',
+  WIN_RESULT_PUBLICITY: '中标结果公示',
+};
+const internalList: InternalNoticeItem[] = [
+  {
+    id: 7001,
+    noticeCode: 'BID-ENT-2026-0001',
+    noticeType: 'TENDER_NOTICE',
+    noticeTypeName: INTERNAL_TYPE_LABEL['TENDER_NOTICE'],
+    title: '榆林炼油厂 2026 年大修消缺项目防腐保温工程施工招标公告（本平台发布）',
+    projectCode: 'DYZB2026-LY-DX001',
+    projectName: '炼油厂 2026 年大修消缺防腐保温工程',
+    publisherName: '陕西延长石油（集团）有限责任公司炼化公司',
+    publishTime: d(1, 10, 0),
+    status: 'PUBLISHED',
+    publicLevel: 'SOCIAL',
+    contentPreview: '本公告由招标人在本平台发布…项目位于陕西榆林，内容含招标范围、投标人资格、文件获取等。',
+  },
+  {
+    id: 7002,
+    noticeCode: 'BID-ENT-2026-0002',
+    noticeType: 'WIN_RESULT_PUBLICITY',
+    noticeTypeName: INTERNAL_TYPE_LABEL['WIN_RESULT_PUBLICITY'],
+    title: '杨凌 LNG 储罐防腐保温保冷项目中标结果公示（本平台发布）',
+    projectCode: 'DYZB2026-YL-LNG001',
+    projectName: '杨凌 LNG 储罐防腐保温保冷项目',
+    publisherName: '陕西某燃气集团杨凌分公司',
+    publishTime: d(5, 15, 30),
+    status: 'PUBLISHED',
+    publicLevel: 'SOCIAL',
+    contentPreview: '中标结果公示：确定 XX 建设集团有限公司为本项目中标人，公示期三日。',
+  },
+];
+const internalDetails: Record<string, InternalNoticeDetail> = {
+  7001: {
+    ...internalList[0]!,
+    contentVersion: 3,
+    content: '一、招标条件\n 本招标项目已由主管部门批准建设…\n二、项目概况与招标范围\n 项目名称：榆林炼油厂 2026 年大修消缺项目防腐保温工程；工程内容：装置保温保冷拆除与恢复、管道防腐。\n三、投标人资格要求\n （一）须具备防腐保温工程专业承包资质；\n（二）本次招标不接受联合体投标。',
+    payload: {
+      LEGAL_NAME: '陕西延长石油（集团）有限责任公司炼化公司',
+      PROJECT_CODE: 'DYZB2026-LY-DX001',
+      NOTICE_SEND_TIME: '20260908100000',
+      SUBMIT_TIMESTAMP: '20260930170000',
+      BID_OPEN_TIME: '20261001100000',
+    },
+    pdfFileId: 700001,
+    pdfSize: 2_100_000,
+  },
+  7002: {
+    ...internalList[1]!,
+    contentVersion: 1,
+    content: '中标结果公示\n 招标人已按招标文件确定的评标标准与办法完成评审，现将中标结果公示如下：中标人：XX 建设集团有限公司；中标金额：人民币 8,650,000.00 元。',
+    payload: {
+      LEGAL_NAME: '陕西某燃气集团杨凌分公司',
+      PROJECT_CODE: 'DYZB2026-YL-LNG001',
+      WINNER_NAME: 'XX 建设集团有限公司',
+      WIN_AMOUNT: '8650000.00',
+    },
+    pdfFileId: 700002,
+    pdfSize: 860_000,
+  },
+};
+export function mockInternalPage(params: Record<string, unknown>): PageResult<InternalNoticeItem> {
+  let rows = [...internalList];
+  const kw = String(params.keyword ?? '').trim().toLowerCase();
+  if (kw) {
+    rows = rows.filter((r) =>
+      [r.title, r.publisherName, r.projectName, r.projectCode, r.noticeTypeName]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(kw),
+    );
+  }
+  const nt = String(params.noticeType ?? '');
+  if (nt) rows = rows.filter((r) => r.noticeType === nt);
+  rows.sort((a, b) => toMs(String(b.publishTime)) - toMs(String(a.publishTime)));
+  const pageNo = Math.max(1, Number(params.pageNo ?? 1) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(params.pageSize ?? 10) || 10));
+  const start = (pageNo - 1) * pageSize;
+  return { list: rows.slice(start, start + pageSize), total: rows.length };
+}
+export function mockInternalDetail(id: string): InternalNoticeDetail | undefined {
+  const hit = internalDetails[id];
+  if (!hit) return undefined;
+  return { ...hit, payload: hit.payload ? { ...hit.payload } : undefined };
 }

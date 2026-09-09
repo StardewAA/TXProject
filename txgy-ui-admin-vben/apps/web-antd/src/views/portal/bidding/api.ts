@@ -26,6 +26,8 @@ import {
   mockDetail,
   mockFollowed,
   mockFollowStatus,
+  mockInternalDetail,
+  mockInternalPage,
   mockMyFollow,
   mockPage,
   mockReadItem,
@@ -38,6 +40,9 @@ import type {
   FollowItemPageParams,
   FollowStatus,
   FollowReq,
+  InternalNoticeDetail,
+  InternalNoticeItem,
+  InternalNoticeParams,
   NoticeBodyBlock,
   NoticeExternalDetail,
   NoticeExternalItem,
@@ -90,7 +95,12 @@ async function getJson<T>(url: string): Promise<T> {
 
 function quickToBegin(quick?: string): string | undefined {
   if (!quick || quick === '全部时间') return undefined;
-  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90, 今年以来: 365 };
+  if (quick === '今年以来') {
+    // 自然年口径：当年 1 月 1 日 00:00:00（原 365 天回溯=去年今天起，语义错误）
+    const y = new Date().getFullYear();
+    return `${y}-01-01 00:00:00`;
+  }
+  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90 };
   const days = map[quick];
   if (!days) return undefined;
   const t = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -227,7 +237,12 @@ async function fetchMerged(
     return sa < sb ? 1 : -1; // 字符串时间格式可字典序倒排
   });
   const start = (pageNo - 1) * pageSize;
-  return { total: all.length, list: all.slice(start, start + pageSize) };
+  // truncated：合并视图命中 MAX_ROWS 上限（页脚据此提示"仅展示前 200 条"，避免 total 失真无感知）
+  return {
+    total: all.length,
+    list: all.slice(start, start + pageSize),
+    truncated: all.length >= MAX_ROWS,
+  } as PageResult<NoticeExternalItem> & { truncated?: boolean };
 }
 
 /** 列表（大厅公告目录） */
@@ -351,6 +366,10 @@ async function authedFetch<T>(
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
+  if (init.body !== undefined) {
+    // JSON body 必须显式声明，否则 fetch 默认 text/plain，后端 @RequestBody 直接 415
+    headers['Content-Type'] = 'application/json';
+  }
   let token: string | null = null;
   try {
     const { useAccessStore } = await import('@vben/stores');
@@ -488,5 +507,52 @@ export async function isFollowed(targetType: string, targetKey: string): Promise
   if (biddingConfig.useMock) return mockFollowed(targetType, targetKey);
   const st = await fetchFollowStatus(targetType, targetKey);
   return !!st?.followed;
+}
+
+/* ================= 内部公告（招标人自营公开公告；notice /public 域） =================
+ * 对应后端 /bidding/notice：public/list + public/detail（@PermitAll，仅 PUBLISHED + 社会公开 SOCIAL）。
+ * 行/详情 VO：NoticeRespVO / NoticeDetailRespVO（payload=权威数据集字段全集、content=正文 vN）。
+ */
+const INTERNAL_API = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice`;
+
+function normInternalRow(r: InternalNoticeItem): InternalNoticeItem {
+  return { ...r, title: cleanT(r.title) || r.title, publisherName: r.publisherName ? cleanT(r.publisherName) : undefined };
+}
+
+/** 招标人发布公告公开分页（大厅“本平台发布”目录） */
+export async function fetchInternalNotices(
+  params: InternalNoticeParams,
+): Promise<PageResult<InternalNoticeItem>> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+  });
+  const data = biddingConfig.useMock
+    ? await mockInternalPage({ ...params })
+    : await getJson<PageResult<InternalNoticeItem>>(`${INTERNAL_API}/public/list?${qs.toString()}`);
+  return { total: data.total, list: (data.list || []).map(normInternalRow) };
+}
+
+/** 招标人发布公告公开详情（payload 结构化字段 + content 正文 + PDF 元数据） */
+export async function fetchInternalNoticeDetail(
+  id: number | string,
+): Promise<InternalNoticeDetail> {
+  if (biddingConfig.useMock) {
+    const hit = mockInternalDetail(String(id));
+    if (!hit) throw new Error('公告不存在或已下架');
+    return hit;
+  }
+  let data: InternalNoticeDetail;
+  try {
+    data = await getJson<InternalNoticeDetail>(
+      `${INTERNAL_API}/public/detail?id=${encodeURIComponent(String(id))}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && (e.code === CODE_NOT_EXISTS || e.code === CODE_TAKEN_DOWN)) {
+      throw new Error('公告不存在或已下架');
+    }
+    throw e;
+  }
+  return normInternalRow(data) as InternalNoticeDetail;
 }
 
