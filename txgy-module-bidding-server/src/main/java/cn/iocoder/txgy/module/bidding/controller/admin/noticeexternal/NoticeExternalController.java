@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal;
 // 规范依据：设计文档 v0.6 §7/§15.1（大厅公开只读：SOCIAL+ACTIVE、三形态、原网址必带）；05 §3（HALL 口径）
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeBodyStructureRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalAiExtractRespVO;
@@ -200,6 +202,26 @@ public class NoticeExternalController {
         respVO.setTableCount(snapshot.getTableCount());
         respVO.setAiRecommended(snapshot.getAiRecommended());
         return success(respVO);
+    }
+
+
+    /**
+     * PDF 预览（公开免登，G 轨）：按公告 id 转发平台归档 PDF 字节流（Content-Type: application/pdf）。
+     * 前端 iframe/embed src 直接用本端点；非 PDF/无归档返回 404。避免前端直连 infra 文件 URL（内网 host 不可达）。
+     */
+    @GetMapping("/pdf")
+    @PermitAll
+    @TenantIgnore
+    @Operation(summary = "PDF 预览（公告归档，公开免登）")
+    public ResponseEntity<byte[]> pdf(@RequestParam("id") Long id) {
+        byte[] content = noticeExternalService.pdfContent(id);
+        if (content == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header("Content-Disposition", "inline; filename=notice-" + id + ".pdf")
+                .body(content);
     }
 
 }

@@ -42,6 +42,12 @@ public class NoticeParseResult {
     private String noticeTypeRaw;
     private String legalFlag;
     private String projectCode;
+    /** 防腐保温行业 AI 判定：BELONGS/NOT_BELONGS/UNCERTAIN（AI 解析器产出） */
+    private String industryFlag;
+    /** 行业判定置信度 0~1（AI 解析器产出） */
+    private String industryConfidence;
+    /** AI 结构化 meta（原样 JSON 留痕：额外字段/判定理由/命中词） */
+    private String aiMetaJson;
     private String tenderProjectCode;
     private String bidSectionCodes;
     private String projectName;

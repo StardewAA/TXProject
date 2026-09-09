@@ -162,6 +162,12 @@ bidding:
     # AI 渠道与 key，见 AiChatNoticeExtractor.resolveTenantId）；仅离线/无租户上下文时用此兜底
     tenant-id: 1
     timeout-seconds: 60
+    # 公告 AI 解析角色 id（2026-09-09：role 20=公告AI解析 / deepseek-chat / test key；建会话自动带该角色 System Message=解析提示词）
+    role-id: 20
+    # 温度（低=稳/贴 JSON，高=发散；抽取建议 0~0.5）
+    temperature: 0.3
+    # 单条回复最大 token
+    max-tokens: 4096
   ext-notice:
     pdf:
       open-data-loader:

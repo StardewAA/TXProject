@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlNoticeProcessor
 import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +38,8 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     private CrawlNoticeProcessor crawlNoticeProcessor;
     @Resource
     private cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlRunService crawlRunService;
+    @Resource
+    private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper crawlJobMapper;
 
     /** worker 标识：本机消费节点（日志/分布式归属） */
     private final String workerId = "bidding-consumer-" + System.getProperty("user.name", "local");
@@ -76,8 +79,32 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
             if (due != null) {
                 executeIfDue(due.getId());
             }
+            // 2026-09-09 兜底收尾：produced=1 且 task 全终态但没收尾的 RUNNING job（消费后 produced 未置时 tryFinalizeJob 早退的补收）
+            tryFinalizeStaleJobs();
         } catch (Exception e) {
             log.warn("[scanPendingAndConsume] 扫描异常（下轮再试）: {}", e.getMessage());
+        }
+    }
+
+    /** 兜底收尾：扫 RUNNING job 且 produced=1，无 PENDING/RUNNING task 的 → tryFinalizeJob（幂等，多次调用安全） */
+    private void tryFinalizeStaleJobs() {
+        try {
+            List<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO> running =
+                    crawlJobMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO>()
+                            .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO::getStatus, "RUNNING"));
+            for (cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlJobDO job : running) {
+                if (!Boolean.TRUE.equals(job.getProduced())) {
+                    continue; // 仍在投递：不收尾
+                }
+                Long pending = crawlTaskMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO>()
+                        .eq(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getJobId, job.getId())
+                        .in(cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO::getStatus, "PENDING", "RUNNING"));
+                if (pending == null || pending == 0) {
+                    crawlRunService.tryFinalizeJob(job.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[tryFinalizeStaleJobs] 兜底收尾扫描异常（下轮再试）: {}", e.getMessage());
         }
     }
 

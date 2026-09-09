@@ -201,6 +201,11 @@ public class FollowServiceImpl implements FollowService {
                     row.setIssuerName(internal.getPublisherName());
                 }
             }
+            // 2026-09-09 修复：PROJECT 关注行补名——按 project_code 回查最新公告填项目名/发布单位（此前显示一串编号）
+            if (row != null && TYPE_PROJECT.equals(row.getFollowType())
+                    && (row.getDisplayName() == null || row.getDisplayName().equals(row.getFollowKey()))) {
+                enrichProjectFromNotice(row);
+            }
             result.add(toItemResp(row, external, internal));
         }
         return result;
@@ -628,6 +633,41 @@ public class FollowServiceImpl implements FollowService {
         item.setDisplayName(internal.getTitle());
         if (StringUtils.hasText(internal.getPublisherName())) {
             item.setIssuerName(internal.getPublisherName());
+        }
+    }
+
+    /** PROJECT 关注行补名：按 followKey(=project_code) 回查公告库最新匹配公告，填 displayName/issuerName（落库快照，避免列表显示一串编号）。 */
+    private void enrichProjectFromNotice(FollowItemDO item) {
+        if (item == null || noticeExternalMapper == null || !StringUtils.hasText(item.getFollowKey())) {
+            return;
+        }
+        try {
+            NoticeExternalDO notice = noticeExternalMapper.selectOne(new LambdaQueryWrapper<NoticeExternalDO>()
+                    .eq(NoticeExternalDO::getProjectCode, item.getFollowKey())
+                    .orderByDesc(NoticeExternalDO::getPublishTime)
+                    .last("LIMIT 1"));
+            if (notice == null) {
+                // project_code 未命中：tender_project_code 兜底（关注键可能是招标项目编号）
+                notice = noticeExternalMapper.selectOne(new LambdaQueryWrapper<NoticeExternalDO>()
+                        .eq(NoticeExternalDO::getTenderProjectCode, item.getFollowKey())
+                        .orderByDesc(NoticeExternalDO::getPublishTime)
+                        .last("LIMIT 1"));
+            }
+            if (notice == null) {
+                return; // 库中无对应项目公告：保留 fallback（编号），有新公告扇出时再补
+            }
+            if (StringUtils.hasText(notice.getProjectName())) {
+                item.setDisplayName(notice.getProjectName());
+            } else if (StringUtils.hasText(notice.getTitle())) {
+                item.setDisplayName(notice.getTitle());
+            }
+            if (StringUtils.hasText(notice.getIssuerName())) {
+                item.setIssuerName(notice.getIssuerName());
+            }
+            item.setStageCode("UNKNOWN"); // 阶段推进能力见设计排期（F8），本期保持占位
+            followItemMapper.updateById(item);
+        } catch (Exception e) {
+            // 回查失败不阻断列表（保持 fallback 编号）
         }
     }
 
