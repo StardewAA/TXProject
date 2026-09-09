@@ -42,7 +42,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '统一沉淀企业培训内容与知识资产，建立标准、可复用、可追溯的资源库。',
     icon: 'lucide:library-big',
     accent: '#2563eb',
-    path: '/training/resource',
+    path: '/training/resource/doc-list',
     metrics: [
       { label: '资源总量', value: 0, suffix: '份' },
       { label: '本月新增', value: 0, suffix: '份' },
@@ -64,7 +64,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '围绕课程设计、内容编排、发布运营和质量评价建立完整的课程生命周期。',
     icon: 'lucide:notebook-tabs',
     accent: '#7c3aed',
-    path: '/training/course',
+    path: '/training/course/list',
     metrics: [
       { label: '课程总数', value: 0, suffix: '门' },
       { label: '已发布', value: 0, suffix: '门' },
@@ -108,7 +108,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '为学员集中呈现学习任务、课程进度、个人成果和持续成长路径。',
     icon: 'lucide:book-open-check',
     accent: '#16a34a',
-    path: '/training/learning',
+    path: '/training/learning/task',
     metrics: [
       { label: '待学任务', value: 0, suffix: '项' },
       { label: '学习中', value: 0, suffix: '门' },
@@ -174,7 +174,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '通过沉浸式场景复现高风险作业和关键工序，让实操训练安全、可重复、可量化。',
     icon: 'lucide:glasses',
     accent: '#4f46e5',
-    path: '/training/vr',
+    path: '/training/vr/task',
     metrics: [
       { label: '训练场景', value: 0, suffix: '个' },
       { label: '实训任务', value: 0, suffix: '项' },
@@ -196,7 +196,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '连接院校、企业、专家和赛事项目，促进人才共育、技术创新与成果转化。',
     icon: 'lucide:handshake',
     accent: '#ca8a04',
-    path: '/training/cooperation',
+    path: '/training/cooperation/contest',
     metrics: [
       { label: '合作院校', value: 0, suffix: '所' },
       { label: '合作项目', value: 0, suffix: '项' },
@@ -218,7 +218,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '汇总培训投入、过程和成效数据，形成按人、岗、组织可追溯的培训档案。',
     icon: 'lucide:chart-no-axes-combined',
     accent: '#475569',
-    path: '/training/analytics',
+    path: '/training/analytics/platform',
     metrics: [
       { label: '参训人次', value: 0, suffix: '次' },
       { label: '完成率', value: 0, suffix: '%' },
