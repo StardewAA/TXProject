@@ -27,8 +27,9 @@ export namespace HrmPortalResumeApi {
 }
 
 export function getPortalResumeList() {
-  return requestClient.get<HrmPortalResumeApi.Resume[]>(
+  return requestClient.request<HrmPortalResumeApi.Resume[]>(
     '/hrm/portal/resume/list',
+    { method: 'GET' },
   );
 }
 

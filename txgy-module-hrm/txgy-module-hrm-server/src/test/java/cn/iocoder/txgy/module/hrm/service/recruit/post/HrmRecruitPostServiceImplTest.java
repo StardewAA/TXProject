@@ -324,6 +324,34 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testGetRecruitPostPage_areaIdIncludesDescendants() {
+        HrmRecruitPostDO provincePost = randomRecruitPostDO(o -> o.setAreaId(440000));
+        HrmRecruitPostDO cityPost = randomRecruitPostDO(o -> o.setAreaId(440300));
+        HrmRecruitPostDO districtPost = randomRecruitPostDO(o -> o.setAreaId(440305));
+        HrmRecruitPostDO siblingCityPost = randomRecruitPostDO(o -> o.setAreaId(440600));
+        HrmRecruitPostDO otherProvincePost = randomRecruitPostDO(o -> o.setAreaId(430100));
+        recruitPostMapper.insert(provincePost);
+        recruitPostMapper.insert(cityPost);
+        recruitPostMapper.insert(districtPost);
+        recruitPostMapper.insert(siblingCityPost);
+        recruitPostMapper.insert(otherProvincePost);
+
+        HrmRecruitPostPageReqVO reqVO = new HrmRecruitPostPageReqVO();
+        reqVO.setAreaId(440000);
+        assertEquals(new HashSet<>(asList(provincePost.getId(), cityPost.getId(), districtPost.getId(),
+                        siblingCityPost.getId())),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+
+        reqVO.setAreaId(440300);
+        assertEquals(new HashSet<>(asList(cityPost.getId(), districtPost.getId())),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+
+        reqVO.setAreaId(440305);
+        assertEquals(singleton(districtPost.getId()),
+                convertSet(recruitPostService.getRecruitPostPage(reqVO).getList(), HrmRecruitPostDO::getId));
+    }
+
+    @Test
     public void testGetPortalRecruitPostPage_crossTenantOnlyPublished() {
         HrmRecruitPostDO firstTenantPost = randomRecruitPostDO(o -> {
             o.setTenantId(101L);
