@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { Avatar, Badge, Card, Progress, Tag } from 'ant-design-vue';
+import { Avatar, Badge, Card, Tag } from 'ant-design-vue';
 
 import { trainingModules } from '../module-data';
 
@@ -36,29 +36,21 @@ const messages = [
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 p-7 text-white shadow-sm md:p-9">
-        <div class="absolute -right-16 -top-20 size-72 rounded-full bg-white/10"></div>
-        <div class="absolute -bottom-28 right-48 size-64 rounded-full bg-cyan-300/10"></div>
-        <div class="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div>
-            <div class="mb-3 flex items-center gap-2 text-sm text-blue-100">
-              <IconifyIcon icon="lucide:graduation-cap" class="size-5" />
-              <span>企业数字化人才培养平台</span>
-            </div>
-            <h1 class="m-0 text-3xl font-semibold md:text-4xl">云培训学院</h1>
-            <p class="mb-0 mt-3 max-w-2xl text-sm leading-6 text-blue-100 md:text-base">
-              汇聚课程、培训、学习、考试、直播、VR 实训与校企合作，让知识传承和人才成长可衡量、可追踪。
-            </p>
+      <section class="flex flex-col items-start justify-between gap-4 rounded-xl bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 p-5 text-white shadow-sm sm:flex-row sm:items-center">
+        <div>
+          <div class="mb-1 flex items-center gap-2 text-sm text-blue-100">
+            <IconifyIcon icon="lucide:graduation-cap" class="size-5" />
+            <span>企业数字化人才培养平台</span>
           </div>
-          <div class="flex items-center gap-4 rounded-2xl bg-white/10 px-5 py-4 backdrop-blur-sm">
-            <Progress type="circle" :percent="15" :size="72" stroke-color="#67e8f9" trail-color="rgba(255,255,255,.18)" />
-            <div>
-              <div class="text-sm text-blue-100">平台建设进度</div>
-              <div class="mt-1 text-lg font-semibold">模块底座已完成</div>
-              <div class="mt-1 text-xs text-blue-100">9 个一级业务模块 · 1 个聚合工作台</div>
-            </div>
-          </div>
+          <h1 class="m-0 text-xl font-semibold">云培训学院</h1>
         </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg bg-white/15 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/25"
+          @click="router.push('/portal/training')"
+        >
+          进入学员端 →
+        </button>
       </section>
 
       <section class="grid grid-cols-2 gap-4 xl:grid-cols-4">
