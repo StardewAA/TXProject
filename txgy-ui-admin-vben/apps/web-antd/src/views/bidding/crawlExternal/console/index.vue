@@ -31,12 +31,13 @@ import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 import TaskChainView from './modules/task-chain.vue';
 
-/* ---------- 本地模型：手动/测试任务条（真实解析回执；localStorage 留档刷新保留，后端 crawl-parser/test 同步留痕 taskType=TEST） ---------- */
+/* ---------- 本地模型：手动/测试任务条（真实解析回执；localStorage 留档刷新保留。后端 crawl-parser/test 只返回不回执不落库——测试记录仅前端留档） ---------- */
 /** 本地回执留档键（最大保留 60 条；超出丢最旧） */
 const MANUAL_STORE_KEY = 'bid-crawl-manual-runs-v1';
 const MANUAL_STORE_MAX = 60;
 interface ManualRun {
   id: string;
+  /** 本地测试标记（非后端 crawl-task.taskType——后端测试不落库） */
   taskType: 'TEST';
   status: string;
   parserCode?: string;
@@ -77,7 +78,7 @@ function dropManualRun(id: string): void {
   manualRuns.value = manualRuns.value.filter((r) => r.id !== id);
   saveManualStore();
 }
-/** 清空本页本地留档（同步后端 TEST 任务不受影响，仍见「后端测试任务」页签） */
+/** 清空本页本地留档（测试仅本地留存，清空即无痕） */
 function clearManualRuns(): void {
   manualRuns.value = [];
   saveManualStore();
@@ -91,23 +92,16 @@ const sourceOptions = computed(() =>
     .map((s) => ({ label: (s.sourceName || s.sourceCode) + '（' + s.sourceCode + '）', value: s.sourceCode! })),
 );
 /** 顶部选项卡：tasks=任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
-const activeTab = ref<'tasks' | 'tests' | 'manual' | 'jobs'>('tasks');
+const activeTab = ref<'tasks' | 'manual' | 'jobs'>('tasks');
 /** 全部源任务总数（后端 total；KPI 与 tab 徽标显示真实总数，不再“首 20 条误导”） */
 const taskTotal = ref(0);
 const kpis = computed(() => ({
   sched: taskTotal.value,
-  tests: backendTests.value.length,
   manual: manualRuns.value.length,
   jobs: jobs.value.length,
 }));
-const filterSource = ref<string | undefined>(undefined);
-const filterStatus = ref<string | undefined>(undefined);
 const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ label: m.text, value }));
 
-const schedTasks = ref<CrawlExternalApi.TaskItem[]>([]);
-const schedPage = ref(1);
-const schedEnd = ref(false);
-const schedLoading = ref(false);
 
 /* ========== 整页三级导航状态（2026-09-10：任务器=信息源；信息源卡墙→该源任务条(筛选/分页/总数)→任务详情整页 上一条/下一条；任务详情不再用右侧抽屉） ========== */
 /** home=工作台 / taskDetail=任务详情整页 */
@@ -129,7 +123,6 @@ const detailCursorIdx = ref(-1);
 const srcCountMap = ref<Record<string, number>>({});
 /** 任务条时间排序：desc=最新在前(后端 id 倒序默认) / asc=最早在前(前端对当页升序) */
 const tSort = ref<'desc' | 'asc'>('desc');
-const backendTests = ref<CrawlExternalApi.TaskItem[]>([]);
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 
 const runBusy = ref(false);
@@ -163,47 +156,6 @@ async function loadSources() {
   }
 }
 
-async function loadSched(reset = false) {
-  if (reset) {
-    schedPage.value = 1;
-    schedTasks.value = [];
-    schedEnd.value = false;
-  }
-  if (schedEnd.value || schedLoading.value) return;
-  schedLoading.value = true;
-  try {
-    const params: CrawlExternalApi.TaskPageParams = {
-      pageNo: schedPage.value,
-      pageSize: 20,
-      sourceCode: filterSource.value,
-      status: filterStatus.value,
-      taskType: 'SCHEDULE',
-    };
-    const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[] };
-    const list = res.list || [];
-    schedTasks.value.push(...list);
-    if (list.length < 20) schedEnd.value = true;
-    else schedPage.value += 1;
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
-  } finally {
-    schedLoading.value = false;
-  }
-}
-
-async function loadBackendTests() {
-  try {
-    const res = (await fetchCrawlTaskPage({
-      pageNo: 1,
-      pageSize: 100,
-      taskType: 'TEST',
-    })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
-    backendTests.value = res.list || [];
-  } catch {
-    backendTests.value = [];
-  }
-}
-
 /** 全源任务总数（pageSize=1 只读 total） */
 async function loadTaskTotalGlobal(): Promise<void> {
   try {
@@ -227,8 +179,6 @@ async function loadJobs() {
 
 function refreshAll() {
   void loadTaskTotalGlobal();
-  void loadSched(true);
-  void loadBackendTests();
   void loadJobs();
 }
 
@@ -236,8 +186,6 @@ onMounted(() => {
   manualRuns.value = loadManualStore();
   void loadSources();
   void loadTaskTotalGlobal();
-  void loadSched(true);
-  void loadBackendTests();
   void loadJobs();
 });
 
@@ -264,7 +212,6 @@ function onParsed(
   });
   saveManualStore();
   if (!ok) message.error(resp?.error || '解析未成功');
-  void loadBackendTests();
 }
 
 /* ---------- 立即爬取（源下拉触发；同步接口 + 120s 节流） ---------- */
@@ -310,7 +257,9 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
           title: '本轮获取完成',
           content: lines.length ? lines.join('<br/>') : '无栏目产出（检查源 enabled/栏目 URL）',
         });
-        void loadSched(true);
+        void loadTaskTotalGlobal();
+        void loadJobs();
+        void fillSourceCounts(sources.value);
       } catch (e) {
         message.error(e instanceof Error ? e.message : String(e));
       } finally {
@@ -326,7 +275,7 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
   try {
     await retryCrawlTask(row.id);
     message.success('已加入重试队列');
-    void loadSched(true);
+    void loadTaskTotalGlobal();
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   } finally {
@@ -346,20 +295,6 @@ function deleteCurrentManual(): void {
   dropManualRun(processManual.value.id);
   processOpen.value = false;
 }
-async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
-  processManual.value = undefined;
-  processTask.value = row;
-  processDetail.value = undefined;
-  processOpen.value = true;
-  if (row.id != null) {
-    try {
-      processDetail.value = await getCrawlTask(row.id);
-    } catch {
-      processDetail.value = undefined;
-    }
-  }
-}
-
 /* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层，不嵌套 Drawer） ----------
  * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
  *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批爬虫任务 N 条(KPI+克制行) → 选中任务过程。
@@ -460,6 +395,7 @@ async function stepTask(dir: 1 | -1): Promise<void> {
 /** 从整页详情返回任务条列表（保持筛选/分页上下文） */
 function backFromDetail(): void {
   pageView.value = 'home';
+  activeTab.value = 'tasks';
   void loadTaskRows(tPage.value);
 }
 
@@ -735,16 +671,14 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     <!-- KPI -->
     <div class="ind-kpis">
       <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
-      <div class="ind-kpi k-green"><div class="k-label">后端测试</div><div class="k-num">{{ kpis.tests }}</div><div class="k-note">taskType=TEST 服务端留痕</div></div>
-      <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入解析回执（本地留档刷新保留）</div></div>
+      <div class="ind-kpi k-green"><div class="k-label">测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入 / 解析器测试回执（本地留档）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
 
     <!-- 选项卡 + 数据面板 -->
     <div class="ind-tabs">
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'tasks' }" @click="activeTab = 'tasks'">任务<span v-if="kpis.sched" class="cnt">{{ kpis.sched }}</span></button>
-      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tests' }" @click="activeTab = 'tests'">后端测试任务<span v-if="kpis.tests" class="cnt">{{ kpis.tests }}</span></button>
-      <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">会话测试 · 解析留档<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">测试<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'jobs' }" @click="activeTab = 'jobs'">采集批次<span v-if="kpis.jobs" class="cnt">{{ kpis.jobs }}</span></button>
     </div>
 
@@ -822,29 +756,10 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       </section>
 
 
-      <!-- ============ ② 后端测试任务 ============ -->
-      <section v-show="activeTab === 'tests'">
-        <div v-if="backendTests.length === 0" class="ind-empty">暂无后端测试任务（taskType=TEST）。手动录入后服务端留痕即出现于此。</div>
-        <article v-for="t in backendTests" :key="String(t.id)" class="ind-card">
-          <div class="ind-card-h">
-            <Tag color="purple">测试</Tag>
-            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '手动录入' }}</span>
-            <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-          </div>
-          <div class="ind-card-b">
-            <div class="ind-kv">
-              <div class="kv"><span class="k">源</span><span class="v">{{ t.sourceCode || '—' }}</span></div>
-              <div class="kv"><span class="k">尝试</span><span class="v">{{ t.attempt ?? '—' }}</span></div>
-              <div class="kv"><span class="k">动作</span><span class="v weak"><a class="text-blue-700 font-bold" @click="openTaskProcess(t)">查看过程</a></span></div>
-            </div>
-          </div>
-        </article>
-      </section>
 
-      <!-- ============ ③ 会话测试 · 手动录入（任务条形式：与任务/测试同构的表格化行，点击行 → 抽屉看 源/提取/渲染 三段详情；localStorage 留档刷新保留） ============ -->
+      <!-- ============ ② 测试（手动录入 / 解析器测试回执：任务条形式，点击行 → 抽屉看 源/提取/渲染 三段详情；localStorage 留档刷新保留，后端不落库） ============ -->
       <section v-show="activeTab === 'manual'">
-        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：一行一条任务条 —— 状态 / 时间 / 标题 / 解析器 / 输入口径；点行开详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留），后端同步留痕 taskType=TEST（「后端测试任务」页签）。</div>
+        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：一行一条任务条 —— 状态 / 时间 / 标题 / 解析器 / 输入口径；点行开详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留；后端 crawl-parser/test 不落库，仅本机可见）。</div>
         <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条" />
         <template v-else>
           <div class="fp-tbl">
@@ -876,7 +791,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         </template>
       </section>
 
-      <!-- ============ ④ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
+      <!-- ============ ③ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
           <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
@@ -1080,7 +995,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     </Drawer>
 
     <ManualModal :source-options="sourceOptions" @parsed="onParsed" />
-    <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadSched(true); }" />
+    <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadTaskTotalGlobal(); void loadJobs(); }" />
     </template>
   </div>
 </template>
