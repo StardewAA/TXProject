@@ -1,5 +1,6 @@
 <!-- 即将到期的合同 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmContractApi } from '#/api/crm/contract';
 
@@ -11,7 +12,7 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getContractPage } from '#/api/crm/contract';
 import { useGridColumns } from '#/views/crm/contract/data';
 
-import { CONTRACT_EXPIRY_TYPE } from '../data';
+import { CONTRACT_EXPIRY_TYPE, SCENE_TYPES } from '../data';
 
 const { push } = useRouter();
 
@@ -43,6 +44,11 @@ function handleBusinessDetail(row: CrmContractApi.Contract) {
   push({ name: 'CrmBusinessDetail', params: { id: row.id } });
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -55,6 +61,13 @@ const [Grid] = useVbenVxeGrid({
           options: CONTRACT_EXPIRY_TYPE,
         },
         defaultValue: CONTRACT_EXPIRY_TYPE[0]!.value,
+      },
+      {
+        fieldName: 'sceneType',
+        label: '归属',
+        component: 'Select',
+        componentProps: { allowClear: true, options: SCENE_TYPES },
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },
