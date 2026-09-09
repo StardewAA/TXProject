@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import { dateToTs } from '#/utils/crm/clue-parse';
+import { useUserStore } from '@vben/stores';
 import type { CrmReceivableApi } from '#/api/crm/receivable';
 
 import { computed, ref } from 'vue';
@@ -75,6 +78,23 @@ async function buildCreateFormData(
   return values;
 }
 
+/** 识别结果回填：把名片/文本中的公司与联系方式带入新增表单 */
+async function onQuickParse(payload: { fields: any }) {
+  const fields = payload.fields ?? {};
+  const apply: Record<string, any> = {};
+  if (fields.customerId) apply.customerId = fields.customerId;
+  if (fields.contractId) apply.contractId = fields.contractId;
+  if (fields.period != null) apply.period = fields.period;
+  // 回款日期 DatePicker 需要毫秒时间戳
+  const retTs = dateToTs(fields.returnTime);
+  if (retTs != null) apply.returnTime = retTs;
+  if (fields.returnType != null) apply.returnType = fields.returnType;
+  if (fields.price != null) apply.price = fields.price;
+  if (fields.ownerUserId) apply.ownerUserId = fields.ownerUserId;
+  if (fields.remark) apply.remark = fields.remark;
+  await formApi.setValues(apply);
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     const { valid } = await formApi.validate();
@@ -131,6 +151,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse mode="receivable" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>

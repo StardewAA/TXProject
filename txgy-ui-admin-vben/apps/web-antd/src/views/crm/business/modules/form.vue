@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import { dateToTs } from '#/utils/crm/clue-parse';
+import { useUserStore } from '@vben/stores';
 import type { CrmBusinessApi } from '#/api/crm/business';
 
 import { computed, ref } from 'vue';
@@ -62,6 +65,21 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
+/** 识别结果回填：把名片/文本中的公司与联系方式带入新增表单 */
+async function onQuickParse(payload: { fields: any }) {
+  const fields = payload.fields ?? {};
+  const apply: Record<string, any> = {};
+  if (fields.name) apply.name = fields.name;
+  if (fields.customerId) apply.customerId = fields.customerId;
+  if (fields.statusTypeId) apply.statusTypeId = fields.statusTypeId;
+  // 预计成交日期字段为 dealTime，DatePicker 需要毫秒时间戳
+  const dealTs = dateToTs(fields.dealTime ?? fields.endDate);
+  if (dealTs != null) apply.dealTime = dealTs;
+  if (fields.ownerUserId) apply.ownerUserId = fields.ownerUserId;
+  if (fields.remark) apply.remark = fields.remark;
+  await formApi.setValues(apply);
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     const { valid } = await formApi.validate();
@@ -106,6 +124,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-1/2">
+    <ClueQuickParse mode="business" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4">
       <template #product="slotProps">
         <ProductEditTable
