@@ -86,7 +86,7 @@ export const trainingModules: TrainingModuleDefinition[] = [
     description: '覆盖需求收集、计划制定、报名组织、过程执行和培训复盘的管理闭环。',
     icon: 'lucide:calendar-range',
     accent: '#0891b2',
-    path: '/training/plan',
+    path: '/training/plan/index',
     metrics: [
       { label: '年度计划', value: 0, suffix: '项' },
       { label: '进行中', value: 0, suffix: '项' },
