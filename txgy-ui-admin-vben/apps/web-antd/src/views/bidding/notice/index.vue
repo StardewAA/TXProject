@@ -24,6 +24,7 @@
 import { NoticeApi } from '#/api/bidding/notice';
 
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
 import { uploadFile } from '#/api/infra/file';
@@ -31,6 +32,13 @@ import NoticeHtmlView from './NoticeHtmlView.vue';
 
 import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 const createMessage = message;
+/* portal 前台模式：经 /portal/bidding/publish 挂载时展示前台返回栏（组件同源复用：管理端菜单与门户企业发布共用一套发布工作台） */
+const route = useRoute();
+const router = useRouter();
+const inPortal = computed(() => String(route.path).startsWith('/portal'));
+const goBackHall = () => {
+  router.push('/portal/bidding/internal-hall').catch(() => {});
+};
 
 /* PDF 版式上传（infra 文件服务：保存只带 file_id；对外 URL 由业务系统按可见性签发） */
 const pdfUploading = ref(false);
@@ -257,10 +265,14 @@ onMounted(load);
 <template>
   <div class="bid-ind ind-page">
         <div class="ind-stripes"></div>
+    <div v-if="inPortal" class="ind-backbar">
+      <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="goBackHall()">‹ 返回本平台发布</a>
+      <span class="text-xs text-gray-400">门户 · 企业前台发布（当前登录租户自营公告）</span>
+    </div>
     <div class="ind-head">
       <div class="min-w-0">
-        <div class="ind-title">公告 / 公示管理 · 发布工作台 <span class="ind-mark">NOTICE</span></div>
-        <div class="ind-sub">本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。</div>
+        <div class="ind-title">{{ inPortal ? '公告发布 · 发布工作台（企业前台）' : '公告 / 公示管理 · 发布工作台' }} <span class="ind-mark">NOTICE</span></div>
+        <div class="ind-sub">{{ inPortal ? '本企业（当前租户）自营公告：起草 → 发布 → 撤下 全生命周期。发布前需平台授权并完善主体档案；发布后订阅者将收到动态；修订需撤下后重新发布（历史版本保留）。' : '本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。' }}</div>
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>

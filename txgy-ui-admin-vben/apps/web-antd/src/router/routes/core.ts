@@ -177,6 +177,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '本平台公告详情', hideInMenu: true },
       },
       {
+        name: 'PortalBiddingPublish',
+        path: 'bidding/publish',
+        component: () => import('#/views/bidding/notice/index.vue'),
+        meta: { title: '公告发布（企业前台）', hideInMenu: true },
+      },
+      {
         name: 'PortalProfile',
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
