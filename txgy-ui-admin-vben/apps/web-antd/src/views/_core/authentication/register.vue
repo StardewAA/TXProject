@@ -35,7 +35,33 @@ const verifyRef = ref();
 const captchaType = 'blockPuzzle';
 const tenantList = ref<AuthApi.TenantResult[]>([]);
 
+function clearPersonalTenantContext() {
+  accessStore.setTenantId(null);
+  accessStore.clearVisitTenantId();
+}
+
+function handleRegisterTypeChange(type: RegisterType) {
+  registerType.value = type;
+  if (type === 'personal') {
+    // 个人账号固定注册到后端保留的 tenant_id=0，不能携带企业租户状态。
+    clearPersonalTenantContext();
+    registerRef.value?.getFormApi().setFieldValue('tenantId', undefined);
+    return;
+  }
+
+  const tenantId = accessStore.tenantId ?? tenantList.value[0]?.id ?? null;
+  accessStore.setTenantId(tenantId);
+  registerRef.value
+    ?.getFormApi()
+    .setFieldValue('tenantId', tenantId?.toString());
+}
+
 async function fetchTenantList() {
+  // 注册页默认是个人注册。先清理持久化的企业租户状态，再发起租户请求，
+  // 避免异步请求期间把旧 tenant-id 带到公开认证接口而触发越权校验。
+  if (registerType.value === 'personal') {
+    clearPersonalTenantContext();
+  }
   if (!tenantEnable) {
     return;
   }
@@ -53,16 +79,40 @@ async function fetchTenantList() {
     if (!tenantId && tenantList.value?.[0]?.id) {
       tenantId = tenantList.value[0].id;
     }
+
+    if (registerType.value === 'personal') {
+      clearPersonalTenantContext();
+      return;
+    }
+
     accessStore.setTenantId(tenantId);
     registerRef.value
       ?.getFormApi()
       .setFieldValue('tenantId', tenantId?.toString());
   } catch (error) {
+    if (registerType.value === 'personal') {
+      clearPersonalTenantContext();
+    }
     console.error('获取租户列表失败:', error);
   }
 }
 
+function syncRegisterTenantContext(values?: { tenantId?: number | string }) {
+  if (registerType.value === 'personal') {
+    clearPersonalTenantContext();
+    return;
+  }
+  if (
+    values?.tenantId !== undefined &&
+    values.tenantId !== null &&
+    values.tenantId !== ''
+  ) {
+    accessStore.setTenantId(Number(values.tenantId));
+  }
+}
+
 async function handleRegister(values: any) {
+  syncRegisterTenantContext(values);
   if (captchaEnable) {
     verifyRef.value.show();
     return;
@@ -78,10 +128,12 @@ async function handleRegister(values: any) {
 
 async function handleVerifySuccess({ captchaVerification }: any) {
   try {
+    const values = await registerRef.value.getFormApi().getValues();
+    syncRegisterTenantContext(values);
     await authStore.authLogin(
       'register',
       {
-        ...(await registerRef.value.getFormApi().getValues()),
+        ...values,
         captchaVerification,
         registerType: registerType.value,
       },
@@ -214,7 +266,7 @@ const formSchema = computed((): VbenFormSchema[] => {
         class="register-type-tab"
         role="tab"
         type="button"
-        @click="registerType = item.key as RegisterType"
+        @click="handleRegisterTypeChange(item.key as RegisterType)"
       >
         {{ item.label }}
       </button>

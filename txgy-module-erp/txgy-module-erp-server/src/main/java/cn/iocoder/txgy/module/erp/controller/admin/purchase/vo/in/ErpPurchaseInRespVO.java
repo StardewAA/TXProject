@@ -15,6 +15,15 @@ import java.util.List;
 @ExcelIgnoreUnannotated
 public class ErpPurchaseInRespVO {
 
+    @Schema(description = "全局业务链编号")
+    private String businessChainNo;
+    @Schema(description = "WMS 处理状态")
+    private String wmsStatus;
+    @Schema(description = "WMS 入库单号")
+    private String wmsOrderNo;
+    @Schema(description = "WMS 失败原因")
+    private String wmsFailureReason;
+
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "17386")
     @ExcelProperty("编号")
     private Long id;
@@ -118,6 +127,13 @@ public class ErpPurchaseInRespVO {
         @Schema(description = "产品数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "100.00")
         @NotNull(message = "产品数量不能为空")
         private BigDecimal count;
+
+        @Schema(description = "WMS 实收入库数量")
+        private BigDecimal wmsActualCount;
+        @Schema(description = "WMS 质检合格数量")
+        private BigDecimal qualifiedCount;
+        @Schema(description = "WMS 质检不合格数量")
+        private BigDecimal unqualifiedCount;
 
         @Schema(description = "税率，百分比", example = "99.88")
         private BigDecimal taxPercent;

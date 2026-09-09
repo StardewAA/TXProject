@@ -17,7 +17,8 @@ public enum WmsShipmentOrderTypeEnum implements ArrayValuable<Integer> {
 
     RETURN(WmsOrderTypeConstants.SHIPMENT_RETURN, "退货出库"),
     SALE(WmsOrderTypeConstants.SHIPMENT_SALE, "销售出库"),
-    PRODUCTION(WmsOrderTypeConstants.SHIPMENT_PRODUCTION, "生产出库");
+    PRODUCTION(WmsOrderTypeConstants.SHIPMENT_PRODUCTION, "生产出库"),
+    OTHER(WmsOrderTypeConstants.SHIPMENT_OTHER, "其他出库");
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(WmsShipmentOrderTypeEnum::getType).toArray(Integer[]::new);
 

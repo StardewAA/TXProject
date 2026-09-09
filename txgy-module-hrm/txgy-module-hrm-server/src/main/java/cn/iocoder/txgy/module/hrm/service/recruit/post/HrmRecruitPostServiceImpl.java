@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostPageReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostSaveReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostStatusReqVO;
@@ -29,6 +30,8 @@ import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_NOT_PUBLISHED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_STATUS_TRANSITION_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
 
 /**
@@ -59,9 +62,9 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
         // 1. 校验招聘职位关联
         validateRecruitPost(createReqVO);
 
-        // 2. 插入招聘职位。新职位统一为招聘中状态，后续通过状态接口停止招聘
+        // 2. 插入招聘职位。新职位直接发布，后续可暂停或关闭
         HrmRecruitPostDO recruitPost = BeanUtils.toBean(createReqVO, HrmRecruitPostDO.class)
-                .setStatus(HrmRecruitPostStatusEnum.RECRUITING.getStatus());
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         recruitPostMapper.insert(recruitPost);
 
         // 3. 记录操作日志上下文
@@ -100,6 +103,15 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
     }
 
     @Override
+    public HrmRecruitPostDO validateRecruitPostPublished(Long id) {
+        HrmRecruitPostDO recruitPost = validateRecruitPostExists(id);
+        if (!HrmRecruitPostStatusEnum.PUBLISHED.getStatus().equals(recruitPost.getStatus())) {
+            throw exception(RECRUIT_POST_NOT_PUBLISHED);
+        }
+        return recruitPost;
+    }
+
+    @Override
     public List<HrmRecruitPostDO> getRecruitPostList(Collection<Long> ids) {
         if (CollUtil.isEmpty(ids)) {
             return Collections.emptyList();
@@ -113,8 +125,27 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
     }
 
     @Override
+    public PageResult<HrmRecruitPostDO> getPortalRecruitPostPage(HrmRecruitPostPageReqVO pageReqVO) {
+        // 门户只公开已发布职位，不能由调用方传入暂停或关闭状态绕过可见范围。
+        pageReqVO.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        return TenantUtils.executeIgnore(() -> recruitPostMapper.selectPage(pageReqVO));
+    }
+
+    @Override
+    public HrmRecruitPostDO getPortalRecruitPostPublished(Long id) {
+        HrmRecruitPostDO recruitPost = TenantUtils.executeIgnore(() -> recruitPostMapper.selectById(id));
+        if (recruitPost == null) {
+            throw exception(RECRUIT_POST_NOT_EXISTS);
+        }
+        if (!HrmRecruitPostStatusEnum.PUBLISHED.getStatus().equals(recruitPost.getStatus())) {
+            throw exception(RECRUIT_POST_NOT_PUBLISHED);
+        }
+        return recruitPost;
+    }
+
+    @Override
     public List<HrmRecruitPostDO> getRecruitPostSimpleList() {
-        return recruitPostMapper.selectListByStatus(HrmRecruitPostStatusEnum.RECRUITING.getStatus());
+        return recruitPostMapper.selectListByStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
     }
 
     @Override
@@ -124,9 +155,15 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
         // 1. 校验招聘职位是否存在
         HrmRecruitPostDO recruitPost = validateRecruitPostExists(reqVO.getId());
 
-        // 2. 更新招聘职位状态
+        // 2. 已关闭的职位不可重新发布，防止终止的职位再次出现在候选人关联列表中
+        if (!canChangeStatus(recruitPost.getStatus(), reqVO.getStatus())) {
+            throw exception(RECRUIT_POST_STATUS_TRANSITION_INVALID);
+        }
+
+        // 3. 更新招聘职位状态
         HrmRecruitPostDO updateObj = BeanUtils.toBean(reqVO, HrmRecruitPostDO.class);
-        if (HrmRecruitPostStatusEnum.STOPPED.getStatus().equals(reqVO.getStatus())) {
+        if (HrmRecruitPostStatusEnum.PAUSED.getStatus().equals(reqVO.getStatus())
+                || HrmRecruitPostStatusEnum.CLOSED.getStatus().equals(reqVO.getStatus())) {
             updateObj.setStopReason(reqVO.getStopReason());
         } else {
             updateObj.setStopReason("");
@@ -142,9 +179,24 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
         return recruitPostMapper.selectCountMapByStatus(pageReqVO);
     }
 
+    private boolean canChangeStatus(Integer sourceStatus, Integer targetStatus) {
+        if (HrmRecruitPostStatusEnum.PUBLISHED.getStatus().equals(sourceStatus)) {
+            return HrmRecruitPostStatusEnum.PAUSED.getStatus().equals(targetStatus)
+                    || HrmRecruitPostStatusEnum.CLOSED.getStatus().equals(targetStatus);
+        }
+        if (HrmRecruitPostStatusEnum.PAUSED.getStatus().equals(sourceStatus)) {
+            return HrmRecruitPostStatusEnum.PUBLISHED.getStatus().equals(targetStatus)
+                    || HrmRecruitPostStatusEnum.CLOSED.getStatus().equals(targetStatus);
+        }
+        return false;
+    }
+
     private void validateRecruitPost(HrmRecruitPostSaveReqVO reqVO) {
-        // 1. 校验职位类型和用人部门存在
+        // 1. 职位必须关联启用的叶子类型，用于后续招聘流程稳定引用
         recruitPostTypeService.validateRecruitPostTypeExists(reqVO.getPostTypeId());
+        if (reqVO.getPostTypeId() != null) {
+            recruitPostTypeService.validateRecruitPostTypeUsable(reqVO.getPostTypeId());
+        }
         if (reqVO.getDeptId() != null) {
             deptApi.validateDeptList(Collections.singleton(reqVO.getDeptId()));
         }

@@ -15,6 +15,18 @@ public class ErpPurchaseOrderSaveReqVO {
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "17386")
     private Long id;
 
+    @Schema(description = "来源类型", example = "AWARD_RESULT")
+    private String sourceType;
+
+    @Schema(description = "来源业务编号")
+    private Long sourceId;
+
+    @Schema(description = "来源单号")
+    private String sourceNo;
+
+    @Schema(description = "全局业务链号")
+    private String businessChainNo;
+
     @Schema(description = "供应商编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1724")
     @NotNull(message = "供应商编号不能为空")
     private Long supplierId;

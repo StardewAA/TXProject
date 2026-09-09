@@ -13,6 +13,12 @@ import cn.iocoder.txgy.module.wms.enums.order.WmsReceiptOrderTypeEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemQualityReportService;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemQualityReportDO;
+import cn.iocoder.txgy.module.wms.enums.md.WmsItemQualityStatusEnum;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
 import jakarta.annotation.Resource;
@@ -25,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.RECEIPT_ORDER_DETAIL_REQUIRED;
@@ -36,6 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.RECEIPT_ORDER_ITEM_QUALITY_NOT_QUALIFIED;
 
 @Import({WmsReceiptOrderServiceImpl.class, WmsReceiptOrderDetailServiceImpl.class})
 public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
@@ -54,6 +63,10 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
     private WmsMerchantService merchantService;
     @MockitoBean
     private WmsItemSkuService itemSkuService;
+    @MockitoBean
+    private WmsItemService itemService;
+    @MockitoBean
+    private WmsItemQualityReportService qualityReportService;
     @MockitoBean
     private WmsInventoryService inventoryService;
 
@@ -106,6 +119,7 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
         WmsReceiptOrderDO order = createReceiptOrder(warehouseId);
         receiptOrderMapper.insert(order);
         receiptOrderDetailMapper.insert(createReceiptOrderDetail(order.getId(), skuId, warehouseId));
+        mockQuality(skuId, WmsItemQualityStatusEnum.QUALIFIED.getStatus());
 
         // 调用
         receiptOrderService.completeReceiptOrder(order.getId());
@@ -146,6 +160,7 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
         WmsReceiptOrderDO order = createReceiptOrder(100L);
         receiptOrderMapper.insert(order);
         receiptOrderDetailMapper.insert(createReceiptOrderDetail(order.getId(), 200L, 100L));
+        mockQuality(200L, WmsItemQualityStatusEnum.QUALIFIED.getStatus());
 
         // 调用
         receiptOrderService.completeReceiptOrder(order.getId());
@@ -154,6 +169,20 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
         assertServiceException(() -> receiptOrderService.completeReceiptOrder(order.getId()),
                 RECEIPT_ORDER_STATUS_NOT_PREPARE);
         verify(inventoryService).changeInventory(any());
+    }
+
+    @Test
+    public void testCompleteReceiptOrder_qualityAbnormal() {
+        WmsReceiptOrderDO order = createReceiptOrder(100L);
+        receiptOrderMapper.insert(order);
+        receiptOrderDetailMapper.insert(createReceiptOrderDetail(order.getId(), 200L, 100L));
+        mockQuality(200L, WmsItemQualityStatusEnum.ABNORMAL.getStatus());
+
+        assertServiceException(() -> receiptOrderService.completeReceiptOrder(order.getId()),
+                RECEIPT_ORDER_ITEM_QUALITY_NOT_QUALIFIED, "【测试商品】（异常）");
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(),
+                receiptOrderMapper.selectById(order.getId()).getStatus());
+        verify(inventoryService, never()).changeInventory(any());
     }
 
     @Test
@@ -266,6 +295,17 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
                 .price(new BigDecimal("20.00"))
                 .totalPrice(new BigDecimal("40.00"))
                 .build();
+    }
+
+    private void mockQuality(Long skuId, Integer status) {
+        Long itemId = 300L;
+        when(itemSkuService.getItemSkuMap(List.of(skuId)))
+                .thenReturn(Map.of(skuId, new WmsItemSkuDO().setId(skuId).setItemId(itemId)));
+        when(itemService.getItemMap(java.util.Set.of(itemId)))
+                .thenReturn(Map.of(itemId, new WmsItemDO().setId(itemId).setName("测试商品")));
+        when(qualityReportService.getCurrentQualityReportMap(java.util.Set.of(itemId)))
+                .thenReturn(Map.of(itemId, WmsItemQualityReportDO.builder()
+                        .id(400L).itemId(itemId).status(status).imageUrls("[]").build()));
     }
 
 }

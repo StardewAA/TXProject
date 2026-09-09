@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmItemReceiptStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmTransactionTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService;
+import cn.iocoder.txgy.module.mes.service.pollution.MesPollutionControlService;
 import cn.iocoder.txgy.module.mes.service.qc.iqc.MesQcIqcService;
 import cn.iocoder.txgy.module.mes.service.wm.arrivalnotice.MesWmArrivalNoticeService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.MesWmTransactionService;
@@ -59,6 +60,8 @@ public class MesWmItemReceiptServiceImpl implements MesWmItemReceiptService {
     private MesQcIqcService iqcService;
     @Resource
     private MesWmTransactionService wmTransactionService;
+    @Resource
+    private MesPollutionControlService pollutionControlService;
 
     @Override
     public Long createItemReceipt(MesWmItemReceiptSaveReqVO createReqVO) {
@@ -106,13 +109,15 @@ public class MesWmItemReceiptServiceImpl implements MesWmItemReceiptService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteItemReceipt(Long id) {
         // 校验存在 + 草稿状态
-        validateItemReceiptExistsAndDraft(id);
+        MesWmItemReceiptDO receipt = validateItemReceiptExistsAndDraft(id);
 
         // 级联删除明细和行
         itemReceiptDetailService.deleteItemReceiptDetailByReceiptId(id);
         itemReceiptLineService.deleteItemReceiptLineByReceiptId(id);
         // 删除
         itemReceiptMapper.deleteById(id);
+        // P2 环保级联(A4)：清该采购入库单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_PURCHASE_INBOUND, receipt.getCode());
     }
 
     @Override
@@ -216,6 +221,8 @@ public class MesWmItemReceiptServiceImpl implements MesWmItemReceiptService {
         // 取消
         itemReceiptMapper.updateById(new MesWmItemReceiptDO()
                 .setId(id).setStatus(MesWmItemReceiptStatusEnum.CANCELED.getStatus()));
+        // P2 环保级联(A4)：作废清该采购入库单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_PURCHASE_INBOUND, receipt.getCode());
     }
 
     @Override

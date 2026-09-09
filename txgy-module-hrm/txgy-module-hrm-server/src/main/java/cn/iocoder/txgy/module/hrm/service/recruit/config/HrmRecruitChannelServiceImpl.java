@@ -30,6 +30,7 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_SYSTEM_NAME_UPDATE_FORBIDDEN;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_SYSTEM_DELETE_FORBIDDEN;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_DISABLED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_TRANSFER_DISABLED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_TRANSFER_SELF;
 import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
@@ -139,6 +140,15 @@ public class HrmRecruitChannelServiceImpl implements HrmRecruitChannelService {
         HrmRecruitChannelDO recruitChannel = recruitChannelMapper.selectById(id);
         if (recruitChannel == null) {
             throw exception(RECRUIT_CHANNEL_NOT_EXISTS);
+        }
+        return recruitChannel;
+    }
+
+    @Override
+    public HrmRecruitChannelDO validateRecruitChannelUsable(Long id) {
+        HrmRecruitChannelDO recruitChannel = validateRecruitChannelExists(id);
+        if (!CommonStatusEnum.isEnable(recruitChannel.getStatus())) {
+            throw exception(RECRUIT_CHANNEL_DISABLED);
         }
         return recruitChannel;
     }

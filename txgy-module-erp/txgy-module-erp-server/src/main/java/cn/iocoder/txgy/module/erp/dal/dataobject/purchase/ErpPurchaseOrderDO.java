@@ -41,6 +41,18 @@ public class ErpPurchaseOrderDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 流程实例编号
+     */
+    private String processInstanceId;
+    /** 来源类型，例如 AWARD_RESULT */
+    private String sourceType;
+    /** 来源业务编号 */
+    private Long sourceId;
+    /** 来源单号 */
+    private String sourceNo;
+    /** 全局业务链号 */
+    private String businessChainNo;
+    /**
      * 供应商编号
      *
      * 关联 {@link ErpSupplierDO#getId()}

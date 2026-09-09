@@ -38,6 +38,13 @@ export function showShareModal() {
   });
 }
 
+// 直接打开二维码海报（个人中心二维码入口）
+export function showSharePoster() {
+  $store('modal').$patch((state) => {
+    state.sharePoster = true;
+  });
+}
+
 // 关闭分享弹框
 export function closeShareModal() {
   $store('modal').$patch((state) => {
