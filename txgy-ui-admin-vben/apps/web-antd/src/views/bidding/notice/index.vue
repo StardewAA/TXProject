@@ -30,9 +30,15 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
 import { uploadFile } from '#/api/infra/file';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
+import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
 import NoticeHtmlView from './NoticeHtmlView.vue';
+import TenderNoticeTable from './tables/TenderNoticeTable.vue';
+import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
+import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
+import ResultPublicityTable from './tables/ResultPublicityTable.vue';
 
-import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
+import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 const createMessage = message;
 /* portal 前台模式：经 /portal/bidding/publish 挂载时展示前台返回栏（组件同源复用：管理端菜单与门户企业发布共用一套发布工作台） */
 const route = useRoute();
@@ -46,7 +52,8 @@ const goBackHall = () => {
 const pdfUploading = ref(false);
 const pdfFileName = ref('');
 const pdfSize = ref<number>();
-const payloadText = ref('');
+/** 权威数据集字段值（key=规范英文名 → 值）；第四节的四张类型专属表（tables/*）双向绑定此对象 */
+const payloadValues = ref<Record<string, string>>({});
 const fmtBytes = (n?: number): string => {
   if (n === undefined || n === null) return '';
   if (n < 1024) return n + ' B';
@@ -172,6 +179,42 @@ const form = reactive<NoticeApi.SaveParams>({
   publicLevel: 'SOCIAL',
   internalFlag: false,
 });
+/** 后端 meta/types 类型模板（按 type code 索引）；拉取失败时为空 → 组件回退本地静态字典 */
+const typeMetaMap = ref<Record<string, NoticeApi.NoticeTypeMeta>>({});
+/** 当前类型 meta 模板（供组件 + 保存逻辑使用） */
+const currentTypeMeta = computed<NoticeApi.NoticeTypeMeta | undefined>(
+  () => typeMetaMap.value[form.noticeType],
+);
+/** 当前类型权威字段元数据（本地静态字典兜底：label/必填数；组件优先 remote） */
+const payloadMeta = computed(() => {
+  const m = NOTICE_PAYLOAD_FIELDS[form.noticeType];
+  if (m) return m;
+  return NOTICE_PAYLOAD_FIELDS.TENDER_NOTICE!;
+});
+/** 类型展示名（meta/types name 优先，静态字典兜底） */
+const typeLabel = computed(() => currentTypeMeta.value?.name || payloadMeta.value.label);
+/** 发布单位自动带：本企业（当前租户）招标人主体档案单位名（用户无需手填；档案在「主体档案」维护） */
+async function autoFillPublisher(): Promise<void> {
+  if (form.publisherName && form.publisherName.trim()) return; // 已有值不覆盖
+  try {
+    const p = await fetchSubjectProfile('TENDERER');
+    if (p && p.subjectName) form.publisherName = p.subjectName;
+  } catch {
+    /* 未建档/无权限：留空由用户填 */
+  }
+}
+/** 拉取类型字段模板（后端 meta/types；失败静默 → 组件用本地字典兜底渲染） */
+async function loadTypeMeta(): Promise<void> {
+  try {
+    const list = await fetchNoticeTypeMeta();
+    if (!Array.isArray(list)) return;
+    const map: Record<string, NoticeApi.NoticeTypeMeta> = {};
+    for (const t of list) map[t.type] = t;
+    typeMetaMap.value = map;
+  } catch {
+    /* 后端不可用/未部署：保留空 map 走本地字典 */
+  }
+}
 const openCreate = () => {
   editId.value = undefined;
   form.id = undefined;
@@ -185,10 +228,12 @@ const openCreate = () => {
   form.internalFlag = false;
   form.content = '';
   form.pdfFileId = undefined;
-  payloadText.value = '';
+  payloadValues.value = {};
   pdfFileName.value = '';
   pdfSize.value = undefined;
   editorOpen.value = true;
+  void autoFillPublisher();
+  void loadTypeMeta();
 };
 const openEdit = async (row: NoticeApi.Row) => {
   const d = await fetchNoticeDetail(row.id!);
@@ -206,7 +251,15 @@ const openEdit = async (row: NoticeApi.Row) => {
   form.pdfFileId = d.pdfFileId;
   pdfSize.value = typeof d.pdfSize === 'number' ? d.pdfSize : undefined;
   pdfFileName.value = '';
-  try { payloadText.value = d.payload ? JSON.stringify(d.payload, null, 1) : ''; } catch { payloadText.value = ''; }
+  payloadValues.value = {};
+  if (d.payload && typeof d.payload === 'object') {
+    const flat: Record<string, string> = {};
+    for (const [k, v] of Object.entries(d.payload)) {
+      if (v === null || v === undefined) continue;
+      flat[k] = String(v);
+    }
+    payloadValues.value = flat;
+  }
   editorOpen.value = true;
 };
 const editorTitle = computed(() => (editId.value === undefined ? '新建公告（草稿入库）' : '编辑公告'));
@@ -214,16 +267,40 @@ function saveEditor() {
   if (!form.title.trim()) { createMessage.warning('请填写公告名称'); return; }
   if (!form.noticeType) { createMessage.warning('请选择公告类型'); return; }
   if (form.internalFlag && form.publicLevel === 'GOVERNMENT') { createMessage.warning('企业内部公告请勿选择政府公开级别'); return; }
-  if (payloadText.value.trim()) {
-    try {
-      form.payload = JSON.parse(payloadText.value) as Record<string, unknown>;
-    } catch {
-      createMessage.warning('权威数据集 payload 不是合法 JSON，请检查后重试');
-      return;
-    }
-  } else {
-    form.payload = undefined;
+
+  /* 名称/正文权威键按类型映射：标题(第1节)与正文(第3节)自动并入权威字段，避免两处重复录入。
+     （公示类用 PUBLICITY_NAME/CONTENT；公告类用 NOTICE_NAME/NOTICE_CONTENT——依数据集 record 组件名） */
+  const nameKey = form.noticeType === 'WIN_CANDIDATE_PUBLICITY' ? 'PUBLICITY_NAME' : 'NOTICE_NAME';
+  const contentKey = form.noticeType === 'WIN_CANDIDATE_PUBLICITY' ? 'PUBLICITY_CONTENT' : 'NOTICE_CONTENT';
+  const merged: Record<string, string> = { ...payloadValues.value };
+  if ((merged[nameKey] || '').trim() !== form.title.trim()) merged[nameKey] = form.title.trim();
+  if (form.content && (merged[contentKey] || '').trim() !== form.content.trim()) merged[contentKey] = form.content.trim();
+
+  /* 必填预校验（业务字段：pub≠GOVERNMENT；时间 ISO yyyy-MM-ddTHH:mm:ss 由"现在"带入，校验非空）。
+     依据：VO数据规范"必填=是" + meta/types required；报送政务参数（平台码等）不在表单收集——
+     对外报送缺失由后端返回中文提示（公告必填字段缺失…），站内直建按联调文档 §6 可不填 payload。 */
+  const checklist: { key: string; label: string; required: boolean; pub: string }[] =
+    (payloadMeta.value.fields).map((f) => ({
+      key: f.key, label: f.label, required: f.required, pub: f.pub,
+    }));
+  const bizMissing: string[] = [];
+  for (const f of checklist) {
+    if (f.pub === 'GOVERNMENT') continue; // 报送政务：不强制（文档 §6 站内可不填；后端返回缺失则透出）
+    if (!f.required || (merged[f.key] || '').trim()) continue;
+    bizMissing.push(f.label + '（' + f.key + '）');
   }
+  if (bizMissing.length) {
+    createMessage.warning('权威必填字段未填全（' + bizMissing.length + ' 项）：\n' + bizMissing.slice(0, 12).join('、') + (bizMissing.length > 12 ? '…' : ''));
+    return;
+  }
+
+  /* payload 组装：仅带非空值（后端 canonicalize 补 null/剔未知键） */
+  const assembled: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(merged)) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') assembled[k] = v;
+  }
+  form.payload = Object.keys(assembled).length ? assembled : undefined;
+
   editorSaving.value = true;
   const submit = async () => {
     try {
@@ -239,14 +316,14 @@ function saveEditor() {
       void fetchKpiCounts();
     } catch (e) {
       const err = e as Error;
-      createMessage.error((err.message || String(err)) + (err.message && /106-03[14]/.test(err.message) ? '（招标人发布门：需平台授权并完善主体档案）' : ''));
+      const msg = err.message || String(err);
+      createMessage.error(msg + (msg.includes('106-03') || /106-03[14]/.test(msg) ? '（招标人发布门：需平台授权并完善主体档案）' : ''));
     } finally {
       editorSaving.value = false;
     }
   };
   void submit();
 }
-
 /* ============ 状态动作 ============ */
 /* 发布公告：DRAFT/UNPUBLISHED → PUBLISHED。
  * 业务/理由：发布后进大厅对外公示（对外文书）；发布前须已上传对外 PDF 版式并关联正文（对外最终件=pdf）。
@@ -521,15 +598,18 @@ onMounted(() => { load(); void fetchKpiCounts(); });
           </div>
         </div>
 
-        <!-- 第四节：权威数据集 -->
+        <!-- 第四节：权威数据集字段 —— 四张类型专属表（招标公告/变更公告/中标候选人公示/中标结果公示），按所选类型渲染对应表。
+             title/content（第1/3节）自动并入权威名称/正文键；政务报送参数（平台码/时间戳）不在此收集。 -->
         <div class="nw-form-sect">
-          <div class="nw-sect-h"><span class="nw-sect-no">4</span>权威数据集字段<span class="nw-sect-sub">payload（key=规范英文名，JSON 对象）</span></div>
+          <div class="nw-sect-h"><span class="nw-sect-no">4</span>权威数据集字段
+            <span class="nw-sect-sub">当前类型：{{ typeLabel }} · 按类型专属表分节填报（必填=VO数据规范“必填=是”/meta/types）</span>
+          </div>
           <div>
-            <div class="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
-              <span>按公告类型对应的数据集规范填写（后端 VO 层为权威）</span>
-              <span class="font-normal text-orange-500">发布时按数据集规整：缺失补 null、未知键剔除；字典接口落地后改动态表单</span>
-            </div>
-            <Input.TextArea v-model:value="payloadText" :rows="5" placeholder='{"TENDER_PROJECT_CODE":"…","NOTICE_NAME":"…"}' />
+            <TenderNoticeTable v-if="form.noticeType === 'TENDER_NOTICE'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
+            <ChangeNoticeTable v-else-if="form.noticeType === 'CHANGE_NOTICE'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
+            <CandidatePublicityTable v-else-if="form.noticeType === 'WIN_CANDIDATE_PUBLICITY'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
+            <ResultPublicityTable v-else-if="form.noticeType === 'WIN_RESULT_PUBLICITY'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
+            <div class="mt-2 text-xs text-gray-500">公告名称与正文已在上方第 1、3 节填写，保存时自动并入权威字段（NOTICE_NAME/NOTICE_CONTENT 等）；报送平台参数由系统/平台维护，不在表单中。</div>
           </div>
         </div>
 
