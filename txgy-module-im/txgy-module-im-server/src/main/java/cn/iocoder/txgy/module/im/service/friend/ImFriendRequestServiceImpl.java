@@ -246,6 +246,17 @@ public class ImFriendRequestServiceImpl implements ImFriendRequestService {
         return friendRequestMapper.selectPage(reqVO);
     }
 
+    @Override
+    public void deleteFriendRequestByManager(Long id) {
+        // 1. 校验存在（逻辑删除后 selectById 返回 null，天然幂等拦截重复删除）
+        ImFriendRequestDO request = friendRequestMapper.selectById(id);
+        if (request == null) {
+            throw exception(FRIEND_REQUEST_NOT_EXISTS);
+        }
+        // 2. 管理端治理动作：逻辑删除申请记录本身；双方已建立的好友关系不受影响
+        friendRequestMapper.deleteById(id);
+    }
+
     /**
      * 校验申请可被「当前用户」处理：申请存在 + 未处理 + 操作人 = 接收方
      */
