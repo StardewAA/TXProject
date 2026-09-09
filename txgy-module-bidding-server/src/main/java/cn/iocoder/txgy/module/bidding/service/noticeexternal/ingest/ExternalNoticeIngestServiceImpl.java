@@ -195,7 +195,6 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
           .set("bid_section_codes", fresh.getBidSectionCodes())
           .set("project_name", fresh.getProjectName())
           .set("issuer_name", fresh.getIssuerName())
-          .set("publish_time", fresh.getPublishTime())
           .set("effective_from", fresh.getEffectiveFrom())
           .set("effective_to", fresh.getEffectiveTo())
           .set("parser_code", fresh.getParserCode())
@@ -217,6 +216,10 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
           .set("body_blocks_status", "NONE")
           .set("body_blocks_json", null)
           .set("body_blocks_at", null);
+        // 2026-09-10：发布时间部分更新语义——采集侧解析到真实时间才覆盖（防把既有真实值/AI 回填值打回 null）
+        if (fresh.getPublishTime() != null) {
+            uw.set("publish_time", fresh.getPublishTime());
+        }
         noticeExternalMapper.update(null, uw);
         // 同步内存对象（供后续附件重建等使用）
         existing.setContentType(fresh.getContentType());
@@ -381,13 +384,15 @@ public class ExternalNoticeIngestServiceImpl implements ExternalNoticeIngestServ
         return changed;
     }
 
-    /** 发布日期兜底（BR-5）：解析器命中取原文发布日期；否则取当前时间（列注释口径“解析失败取抓取时间”，保证列表时间倒序可用）。 */
+    /** 发布日期（BR-5 修订 2026-09-10）：采集侧给定且年份正常（≥2000）直接用；否则尽力从原文解析；
+     *  仍无命中返回 null——不再用抓取时间冒充发布时间（宁缺毋假，沉底可接受；真实时间可由审核侧 AI 抽取回填 publish_time）。 */
     private LocalDateTime resolvePublishTime(ExternalNoticeIngestDTO dto) {
         LocalDateTime publish = dto.getPublishTime();
-        if (publish == null || publish.getYear() < 2000) {
-            publish = NoticePublishTimeResolver.resolveFromText(dto.getContentHtml(), dto.getTitle());
+        if (publish != null && publish.getYear() >= 2000) {
+            return publish;
         }
-        return publish != null ? publish : LocalDateTime.now();
+        LocalDateTime parsed = NoticePublishTimeResolver.resolveFromText(dto.getContentHtml(), dto.getTitle());
+        return parsed != null && parsed.getYear() >= 2000 ? parsed : null;
     }
 
     /** 附件子表落库，返回 ids JSON（无附件返回 null）；主档 attachment_ids_json 由调用方回填。 */

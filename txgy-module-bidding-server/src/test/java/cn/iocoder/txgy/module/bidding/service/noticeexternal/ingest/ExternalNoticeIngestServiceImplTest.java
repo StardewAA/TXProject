@@ -345,7 +345,8 @@ class ExternalNoticeIngestServiceImplTest {
     }
 
     @Test
-    void ingest_publishTime_noDateFallbackToNow() {
+    void ingest_publishTime_noDateLeavesNull() {
+        // 2026-09-10 语义修订：解析不到发布时间不再用抓取时间冒充（宁缺毋假；真实时间可由审核侧 AI 抽取回填）
         when(noticeExternalMapper.selectOne(any())).thenReturn(null);
         assignId(402L);
         ExternalNoticeIngestDTO dto = htmlDto();
@@ -355,7 +356,7 @@ class ExternalNoticeIngestServiceImplTest {
 
         ArgumentCaptor<NoticeExternalDO> cap = ArgumentCaptor.forClass(NoticeExternalDO.class);
         verify(noticeExternalMapper).insert(cap.capture());
-        org.junit.jupiter.api.Assertions.assertNotNull(cap.getValue().getPublishTime()); // 兜底抓取时间，恒非空
+        org.junit.jupiter.api.Assertions.assertNull(cap.getValue().getPublishTime());
     }
 
 }

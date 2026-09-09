@@ -83,7 +83,12 @@ public class CrawlNoticeProcessor {
             if (task.getParserCode() != null && task.getParserCode().startsWith("GX")) {
                 return executeGxDetail(task, title, url, date);
             }
-            // 无全文且非 GX：素材缺失，交由调用方计失败（可重试/死信）
+            // 2026-09-10 全链路补全：非 GX 的 HTML 详情任务（HTML_GENERIC/EBIDDING 等 HTML 列表栏目，async 模式）
+            // → 下载详情 HTML → 按任务 parser 解析 → 落库（此前 async 下这类任务全部“素材缺失”死信）
+            if (task.getParserCode() == null || !"QYZB_JSON".equals(task.getParserCode())) {
+                return executeHtmlDetail(task, title, url, date);
+            }
+            // QYZB_JSON 直采任务 payload 必有全文/文件引用，走到这里属异常
             throw new IllegalStateException("任务无正文素材（全文直采缺失/详情链路未接线），url=" + url);
         }
         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
@@ -94,9 +99,44 @@ public class CrawlNoticeProcessor {
         dto.setContentHtml(contentHtml);
         dto.setNoticeTypeRaw(category);
         LocalDateTime publish = parseDate(date);
-        dto.setPublishTime(publish == null ? LocalDateTime.now() : publish);
+        dto.setPublishTime(publish); // 2026-09-10：解析不出不再用抓取时间冒充发布时间（宁缺毋假，可经审核侧 AI 抽取回填）
         dto.setIssuerName(extractIssuer(contentHtml));
         dto.setParserCode(task.getParserCode() == null ? task.getChannelCode() : task.getParserCode());
+        return externalNoticeIngestService.ingest(dto);
+    }
+
+    /**
+     * HTML 详情类任务（HTML_GENERIC/EBIDDING 等 HTML 列表栏目，async 模式全链路补全 2026-09-10）：
+     * 下载详情 HTML → 按任务 parserCode 解析（站点/通用）→ 结构化字段落库；下载前过主机白名单（SSRF）。
+     */
+    private Long executeHtmlDetail(CrawlTaskDO task, String title, String url, String date) throws Exception {
+        if (!StringUtils.hasText(url)) {
+            throw new IllegalStateException("HTML 详情任务缺详情 URL");
+        }
+        assertUrlAllowed(url, task.getSourceCode());
+        String html = httpFetchClient.getText(url);
+        if (!StringUtils.hasText(html)) {
+            throw new IllegalStateException("详情页下载为空 url=" + url);
+        }
+        String parserCode = task.getParserCode() == null ? "HTML_GENERIC" : task.getParserCode();
+        NoticeParseResult parsed = parserRegistry.get(parserCode).parse(inputOf("HTML", html, url));
+        if (parsed.getStatus() == NoticeParseResult.Status.FAILED
+                && !StringUtils.hasText(parsed.getTitle()) && !StringUtils.hasText(parsed.getContentText())) {
+            throw new IllegalStateException("详情页解析无产出（parser=" + parserCode + "）: "
+                    + (parsed.getError() == null ? "未知" : parsed.getError()));
+        }
+        ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
+        dto.setSourceCode(task.getSourceCode());
+        dto.setOrigUrl(url);
+        dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
+        dto.setContentType("HTML");
+        dto.setContentHtml(html); // 原文留档（展示侧 sanitize）
+        dto.setIssuerName(parsed.getIssuerName());
+        dto.setProjectCode(parsed.getProjectCode());
+        dto.setTenderProjectCode(parsed.getTenderProjectCode());
+        dto.setProjectName(parsed.getProjectName());
+        dto.setPublishTime(parsed.getPublishTime() != null ? parsed.getPublishTime() : parseDate(date));
+        dto.setParserCode(parserCode);
         return externalNoticeIngestService.ingest(dto);
     }
 

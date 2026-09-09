@@ -132,6 +132,11 @@ public class CrawlSourceRunner {
             }
         }
         for (CategoryConfig config : configs) {
+            // 2026-09-10 配置模型：栏目未自带 apiConfig 时继承源级 api_config_json（接口模板只维护一份，栏目只写差异；
+            // 新增栏目/改接口参数不再复制粘贴；栏目自带配置仍优先，向后兼容存量配置）
+            if (config.getApiConfig() == null && StringUtils.hasText(source.getApiConfigJson())) {
+                config.setApiConfig(source.getApiConfigJson());
+            }
             CategorySummary cs = new CategorySummary();
             cs.setName(config.getName());
             try {
@@ -326,7 +331,9 @@ public class CrawlSourceRunner {
         for (int pageNo = 1; pageNo <= maxPages; pageNo++) {
             String pageUrl = pageNo == 1 ? listUrl : bumpPageParam(listUrl, pageNo);
             String html = httpFetchClient.getText(pageUrl);
-            NoticeParseResult result = parserRegistry.get("GX_E_BIDDING").parse(inputOf("HTML", html, pageUrl));
+            // 2026-09-10：HTML 栏目按栏目 parser 路由（GX 源配置=GX_E_BIDDING 行为不变；HTML_GENERIC/EBIDDING 等通用栏目各自解析列表）
+            String listParser = config.getParser() == null ? "HTML_GENERIC" : config.getParser();
+            NoticeParseResult result = parserRegistry.get(listParser).parse(inputOf("HTML", html, pageUrl));
             List<NoticeParseResult.ListEntry> entries = result.getEntries();
             if (entries == null || entries.isEmpty()) {
                 if (pageNo == 1) {

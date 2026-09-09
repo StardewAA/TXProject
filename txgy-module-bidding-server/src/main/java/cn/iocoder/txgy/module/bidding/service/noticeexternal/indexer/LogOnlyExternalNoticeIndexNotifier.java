@@ -16,6 +16,11 @@ import org.springframework.stereotype.Component;
 public class LogOnlyExternalNoticeIndexNotifier implements ExternalNoticeIndexNotifier {
 
     @Override
+    public void removeNotice(Long noticeId) {
+        log.info("[removeNotice][noticeId={}] ES 删除事件预留（MQ 未接入，占位日志）", noticeId);
+    }
+
+    @Override
     public void indexNotice(NoticeExternalDO notice) {
         // 预留：发布 MQ 事件 ext-notice.index（Redis Stream，3 次重试→死信转人工复核）
         log.info("[indexNotice][noticeId={} title={}] ES 索引事件预留（MQ 未接入，占位日志）",

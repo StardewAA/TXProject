@@ -106,6 +106,34 @@ public class EsExternalNoticeIndexNotifier implements ExternalNoticeIndexNotifie
         }
     }
 
+    @Override
+    public void removeNotice(Long noticeId) {
+        String uri = uris.replaceAll("/+$", "") + "/" + INDEX + "/_doc/" + noticeId;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri))
+                    .timeout(Duration.ofSeconds(10))
+                    .DELETE();
+            if (StringUtils.hasText(password)) {
+                String token = Base64.getEncoder().encodeToString(
+                        (username + ":" + password).getBytes(StandardCharsets.UTF_8));
+                builder.header("Authorization", "Basic " + token);
+            }
+            HttpResponse<String> response = httpClient.send(builder.build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            // 200/404 均视为成功（不存在=从未索引或已删，幂等）；其余状态告警（不影响主流程）
+            int code = response.statusCode();
+            if (code == 200 || code == 404) {
+                return;
+            }
+            log.warn("[EsExternalNoticeIndexNotifier][DELETE {}] -> {} {}", uri, code, truncate(response.body(), 300));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("[EsExternalNoticeIndexNotifier][DELETE {}] 被中断", uri);
+        } catch (Exception e) {
+            log.warn("[EsExternalNoticeIndexNotifier][DELETE {}] 失败: {}", uri, e.getMessage());
+        }
+    }
+
     /** 可检索字段：主列 + 正文纯文本（截断）+ 项目/标段 + 时间（索引幂等 PUT 覆盖=补偿重放安全） */
     private Map<String, Object> buildDoc(NoticeExternalDO n) {
         Map<String, Object> doc = new LinkedHashMap<>();

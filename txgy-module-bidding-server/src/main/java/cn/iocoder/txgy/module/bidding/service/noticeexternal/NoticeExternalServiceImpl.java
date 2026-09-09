@@ -127,6 +127,8 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
             // 并发竞态：该记录已被 approve/takeDown 等推进 → 拒绝旧快照覆盖
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
         }
+        // 2026-09-10 全链路补全：驳回后从检索索引移除（doc 一般不存在，DELETE 幂等；失败仅记日志）
+        removeIndexQuietly(id);
     }
 
     @Override
@@ -148,6 +150,17 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
                 .eq(NoticeExternalDO::getAuditStatus, NoticeExternalAuditStatusEnum.APPROVED.getStatus()));
         if (rows == 0) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_STATE_INVALID);
+        }
+        // 2026-09-10 全链路补全：下线后从检索索引移除（展示层本就靠回表 ACTIVE 过滤，删 doc 保持索引与状态一致）
+        removeIndexQuietly(id);
+    }
+
+    /** 删除检索索引文档（失败仅记日志，不影响审核主流程；幂等） */
+    private void removeIndexQuietly(Long id) {
+        try {
+            externalNoticeIndexNotifier.removeNotice(id);
+        } catch (Exception e) {
+            log.warn("[removeIndexQuietly][noticeId={}] ES 删除失败（可忽略，展示层有回表过滤）: {}", id, e.getMessage());
         }
     }
 

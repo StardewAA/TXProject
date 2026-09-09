@@ -43,7 +43,13 @@ public interface NoticeService {
     NoticeDetailRespVO getPublicNoticeDetail(Long id);
 
     /**
-     * 公开同步（05 §2.2 BID-SUP-GATHER-02）：白名单校验（PUBLISHED+非内部+SOCIAL）后
+     /**
+      * 全量重建本租户公告 ES 索引（管理端人工触发，2026-09-10）：遍历本租户全部公告逐条 indexDoc（幂等 PUT 覆盖），
+      * 补偿 es.enabled 启用前的存量（keyword 检索此前不可用/空命中）；各租户须以自己的上下文触发覆盖本租户数据。
+      */
+     String reindexIndex();
+
+     /** 公开同步（05 §2.2 BID-SUP-GATHER-02）：白名单校验（PUBLISHED+非内部+SOCIAL）后
      * 触发检索文档同步，返回任务编号。幂等键=公告编号+dataTimestamp（由调用方框架幂等保证）。
      */
     NoticePublicSyncRespVO syncPublicDocument(NoticePublicSyncReqVO reqVO);

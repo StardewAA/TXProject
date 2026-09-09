@@ -20,4 +20,12 @@ public interface ExternalNoticeIndexNotifier {
      */
     void indexNotice(NoticeExternalDO notice);
 
+    /**
+     * 删除索引文档（2026-09-10 补全：下线/驳回后从检索索引移除，保持展示与索引一致；
+     * 文档不存在=404 视为成功——幂等重放安全）。
+     *
+     * @param noticeId 公告 id
+     */
+    void removeNotice(Long noticeId);
+
 }

@@ -115,6 +115,14 @@ public class NoticeController {
         return success(true);
     }
 
+    @PostMapping("/reindex")
+    @PreAuthorize("@ss.hasPermission('bidding:notice:update')")
+    @Idempotent
+    @Operation(summary = "全量重建本租户公告 ES 索引（幂等 PUT 覆盖；补偿 es.enabled 启用前存量）")
+    public CommonResult<String> reindex() {
+        return success(noticeService.reindexIndex());
+    }
+
     @PostMapping("/unpublish")
     @Operation(summary = "撤下公告/公示")
     @PreAuthorize("@ss.hasPermission('bidding:notice:update')")

@@ -27,7 +27,8 @@ class QyzJsonListParserTest {
         NoticeParseResult.ListEntry entry = result.getEntries().get(0);
         assertEquals("某项目变更公告", entry.getTitle());
         assertEquals("https://qyzb.shccmg.com/cms/default/webfile/3ywgg/20260827/1277640981956526080.html", entry.getUrl());
-        assertEquals("2026-08-27", entry.getDate());
+        // 2026-09-10：dateOf 保留时分秒（不再截断到日期，publish_time 落库精确时间）
+        assertEquals("2026-08-27T14:49:07", entry.getDate());
         assertEquals("变更公告", entry.getCategory());
         assertEquals("2", result.getMeta().get("pageNo"));
     }

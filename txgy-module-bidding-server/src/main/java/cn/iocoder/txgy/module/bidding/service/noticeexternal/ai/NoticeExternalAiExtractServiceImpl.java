@@ -100,6 +100,16 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
             aiCols.put("industry_confidence", industryCols.get("industry_confidence"));
             notice.setIndustryConfidence((java.math.BigDecimal) industryCols.get("industry_confidence"));
         }
+        // 2026-09-10：AI 抽到的发布时间回填 publish_time——仅当原值缺失或异常早(<2000)时（防 AI 幻觉覆盖既有真实值）；
+        // 修正此前 AI 时间只躺在 ai_meta_json 不生效的缺陷（EBIDDING 等抓取时间冒充行可经本路径修正）
+        Object rawPt = result.getFields().get("publishTime");
+        if (rawPt != null && (notice.getPublishTime() == null || notice.getPublishTime().getYear() < 2000)) {
+            java.time.LocalDateTime aiTime = parseAiPublishTime(String.valueOf(rawPt));
+            if (aiTime != null) {
+                aiCols.put("publish_time", aiTime);
+                notice.setPublishTime(aiTime);
+            }
+        }
         aiCols.put("ai_extraction_status", AI_STATUS_SUCCESS);
         aiCols.put("ai_meta_json", writeJson(result.getFields()));
         aiCols.put("ai_extract_at", LocalDateTime.now());
@@ -118,6 +128,33 @@ public class NoticeExternalAiExtractServiceImpl implements NoticeExternalAiExtra
         snapshot.setIndustryFlag(notice.getIndustryFlag());
         snapshot.setIndustryConfidence(notice.getIndustryConfidence());
         return snapshot;
+    }
+
+    /** AI 返回发布时间字符串 → LocalDateTime（兼容 ISO 带毫秒/偏移与纯日期；解析失败 null） */
+    private static java.time.LocalDateTime parseAiPublishTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String v = raw.trim();
+        try {
+            String norm = v.endsWith("Z") ? v.substring(0, v.length() - 1) + "+00:00" : v;
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("([+-]\\d{2})(\\d{2})$").matcher(norm);
+            if (m.find()) {
+                norm = norm.substring(0, m.start()) + m.group(1) + ":" + m.group(2);
+            }
+            return java.time.OffsetDateTime.parse(norm,
+                    java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime();
+        } catch (Exception e1) {
+            try {
+                return java.time.LocalDateTime.parse(v, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (Exception e2) {
+                try {
+                    return java.time.LocalDate.parse(v.substring(0, Math.min(10, v.length()))).atStartOfDay();
+                } catch (Exception e3) {
+                    return null;
+                }
+            }
+        }
     }
 
     /** 素材文本优先级：本地 PDF 抽取纯文本 > HTML 去标签正文 */

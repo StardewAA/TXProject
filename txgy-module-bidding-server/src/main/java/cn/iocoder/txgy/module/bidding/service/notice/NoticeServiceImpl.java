@@ -153,6 +153,26 @@ public class NoticeServiceImpl implements NoticeService {
     }
 
     @Override
+    public String reindexIndex() {
+        List<cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO> all = noticeMapper.selectList(
+                new LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO>()
+                        .orderByAsc(cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO::getId));
+        int ok = 0;
+        int failed = 0;
+        for (cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO notice : all) {
+            try {
+                indexDoc(notice.getId());
+                ok++;
+            } catch (Exception e) {
+                failed++;
+                log.warn("[reindexIndex][noticeId={}] ES 索引失败: {}", notice.getId(), e.getMessage());
+            }
+        }
+        log.info("[reindexIndex] 完成 total={} ok={} failed={}", all.size(), ok, failed);
+        return "total=" + all.size() + ",ok=" + ok + ",failed=" + failed;
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishNotice(Long id) {
         subjectEligibilityService.assertTendererIssuanceAllowed(); // 招标人发布门：DRAFT→PUBLISHED 前复核主体资格
