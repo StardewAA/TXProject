@@ -1,41 +1,273 @@
 services:
   mysql:
-    image: mysql:8
+    ports:
+      !override
+      - "3307:3306"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
   redis:
-    image: redis:6-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
   nacos:
-    image: nacos-registry.cn-hangzhou.cr.aliyuncs.com/nacos/nacos-server:v3.0.3
-  frontend:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3072M
+  gateway:
     build:
-      dockerfile: deploy/frontend/Dockerfile.local
-    depends_on:
-      gateway:
-        condition: service_healthy
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx512m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
   system:
     build:
+      context: ..
       dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx768m
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1536M
   infra:
     build:
+      context: ..
       dockerfile: deploy/backend/Dockerfile.local
-  hrm:
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx768m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+  member:
     build:
+      context: ..
       dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
   bpm:
     build:
+      context: ..
       dockerfile: deploy/backend/Dockerfile.local
-  gateway:
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      nacos:
-        condition: service_healthy
-      system:
-        condition: service_healthy
-      infra:
-        condition: service_healthy
-      hrm:
-        condition: service_healthy
-      bpm:
-        condition: service_healthy
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  pay:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  report:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  mp:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx384m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  product:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  trade:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  promotion:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  statistics:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  crm:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  erp:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  iot:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  iot-gateway:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  mes:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  wms:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  im:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  ai:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  hrm:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  fms:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.local
+    environment:
+      JAVA_OPTS: -Xms64m -Xmx320m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend/Dockerfile.local
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
