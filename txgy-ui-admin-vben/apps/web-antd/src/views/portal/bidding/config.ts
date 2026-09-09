@@ -1,5 +1,6 @@
 /**
- * 招投标门户（外部公告域 notice-external）联调配置
+ * 职责：招投标门户接口联调/网关配置（baseUrl、apiPrefix、useMock），由 portal/bidding/api.ts 拼装
+ * notice-external / notice-follow / notice 各服务层请求前缀（env: VITE_BIDDING_API_BASE/PREFIX/USE_MOCK）。
  *
  * 路由说明：
  *  - 开发态（DEV）：走 /bidding-api 本地代理（见 apps/web-antd/vite.config.ts），

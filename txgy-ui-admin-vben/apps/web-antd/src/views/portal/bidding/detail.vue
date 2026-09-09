@@ -13,6 +13,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { biddingConfig } from './config';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
 import { blocksToHtml, cleanT, fmtDT, fmtDate, prettyNoticeHtml, toCleanList } from './format';
 import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
@@ -44,6 +45,11 @@ function hintOf(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   return /账号未登录|未登录/.test(m) ? `请先登录后关注：${m}` : m;
 }
+/** 登录态错误判定：ApiError.code === 401/403（api.ts authedFetch 统一抛出；其余业务/网络错误不在此列） */
+function isAuthError(e: unknown): boolean {
+  const code = (e as { code?: number } | null | undefined)?.code;
+  return code === 401 || code === 403;
+}
 /** 未登录/无权限：去管理端登录页（login.vue 的 resolveRedirectPath 支持 /portal/ 前缀回跳当前详情） */
 function goLogin(): void {
   router
@@ -54,6 +60,13 @@ function goLogin(): void {
     .catch(() => {
       /* 导航取消忽略 */
     });
+}
+
+/** “查看原文”锚点 href：与 api.openOrigUrl 同构 —— 经后端 /go 白名单中转（Mock 态无 go 服务，回退原地址） */
+function origGoHref(origUrl: string): string {
+  if (biddingConfig.useMock) return origUrl;
+  const api = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice-external`;
+  return `${api}/go?url=${encodeURIComponent(origUrl)}`;
 }
 
 async function toggleFollow(): Promise<void> {
@@ -72,8 +85,13 @@ async function toggleFollow(): Promise<void> {
       followState.value = 'followed';
     }
   } catch (e) {
-    followState.value = 'unavailable';
-    followHint.value = hintOf(e);
+    // 仅登录态错误（401/403）才切“需登录”；其余失败保留原状态，只给重试提示
+    if (isAuthError(e)) {
+      followState.value = 'unavailable';
+      followHint.value = hintOf(e);
+    } else {
+      followHint.value = '操作失败，请稍后重试';
+    }
   } finally {
     followBusy.value = false;
   }
@@ -113,8 +131,13 @@ async function toggleProjFollow(): Promise<void> {
       projFollowState.value = 'followed';
     }
   } catch (e) {
-    projFollowState.value = 'unavailable';
-    projFollowHint.value = hintOf(e);
+    // 仅登录态错误（401/403）才切“需登录”；其余失败保留原状态，只给重试提示
+    if (isAuthError(e)) {
+      projFollowState.value = 'unavailable';
+      projFollowHint.value = hintOf(e);
+    } else {
+      projFollowHint.value = '操作失败，请稍后重试';
+    }
   } finally {
     projFollowBusy.value = false;
   }
@@ -193,7 +216,13 @@ async function toggleSectionFollow(s: SecTrack): Promise<void> {
       sectionFollows.value[s.key] = { state: 'followed', busy: false, hint: '' };
     }
   } catch (e) {
-    sectionFollows.value[s.key] = { state: 'unavailable', busy: false, hint: hintOf(e) };
+    // 仅登录态错误（401/403）才切“需登录”；其余失败保留原状态，只给重试提示
+    sectionFollows.value[s.key] = {
+      ...st,
+      busy: false,
+      hint: isAuthError(e) ? hintOf(e) : '操作失败，请稍后重试',
+      state: isAuthError(e) ? 'unavailable' : st.state,
+    };
   }
 }
 
@@ -320,7 +349,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="detail-page" v-if="detail">
+<!--
+  门户 · 外部公告详情（公开只读 + 关注/外链）
+  业务：完整展示一条外部公告：结构化字段+净化正文+PDF/附件（可见性分层 L1/L2）+外链白名单中转(/go?url=)；
+        登录用户可“关注”该项目（意向起点），未登录仅浏览。
+  理由：完整信息免费及时查阅（10号令第12条）；HTML 净化防存储型XSS；外链走白名单 302 防开放重定向（安全评审）。
+    依据（法规/政府文件/法律）：
+      · 招标公告和公示信息发布管理办法（发改委令第10号，部门规章/政府文件）第12/13条——免费、及时查阅完整公告公示信息；免费归类与检索、新公告醒目标识；
+      · 电子招标投标办法（八部委令第20号，部门规章/政府文件）第9条——市场主体免费注册登录、获取依法公开的招标投标信息；
+      · 招标投标法 第16条（法律）——公开招标应当发布招标公告（公告公开性的上位依据）。
+    依据（技术安全）：前端净化（DOMPurify/白名单）——安全评审要求存储型 XSS 载荷不下发（01 接口文档 §2.4）。
+    后端契约：01-接口逐一说明与设计依据.md §2（detail 三形态/附件 virusStatus、go 白名单 302）；外部公告-前端对接/01-接口契约.md §1；
+      follow/unfollow（bidding:notice-external:update，按登录人 user_id，T 轨）；GET /bidding/notice-external/detail、/go、/follow。
+-->
+
+  <div class="detail-page bid-ind" v-if="detail">
     <div v-if="pageError" class="err-banner">页面异常：{{ pageError }}（可在控制台查看详细堆栈）</div>
     <div class="top-bar">
       <button class="back" @click="goBack()">‹ 返回上一页</button>
@@ -349,7 +392,10 @@ onBeforeUnmount(() => {
           <a
             v-if="detail.origUrl"
             class="go-orig"
+            :href="origGoHref(detail.origUrl)"
             title="经平台白名单中转跳转原站（防止外链绕过管控）"
+            target="_blank"
+            rel="noopener noreferrer"
             @click.prevent="openOrigUrl(detail.origUrl)"
           >查看原文 ↗</a>
         </div>
@@ -370,7 +416,7 @@ onBeforeUnmount(() => {
           @click="toggleProjFollow()"
         >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}</button>
         <button v-if="projFollowState === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
-        <span v-if="projFollowState === 'unavailable' && projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
+        <span v-if="projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
       </div>
 
       <!-- 标段跟踪（01 §3：bidSectionCodes/Keys 存在 → 逐标段关注；订阅页“标段”维度行 = 这些关注） -->
@@ -387,11 +433,11 @@ onBeforeUnmount(() => {
               @click="toggleSectionFollow(s)"
             >{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}</button>
             <button v-if="secStateOf(s).state === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
-            <span v-if="secStateOf(s).state === 'unavailable' && secStateOf(s).hint" class="follow-note">标段：{{ secStateOf(s).hint }}</span>
+            <span v-if="secStateOf(s).hint" class="follow-note">标段：{{ secStateOf(s).hint }}</span>
           </div>
         </div>
       </div>
-      <p v-if="followState === 'unavailable' && followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
+      <p v-if="followHint" class="follow-note">关注：{{ followHint }}（公告浏览不受影响）</p>
     </div>
 
     <!-- 正文：结构化块 优先 → contentHtmlSafe 回退（统一公文样式渲染） -->
@@ -406,7 +452,7 @@ onBeforeUnmount(() => {
           <iframe class="pdf-frame" :src="detail.pdfDownloadUrl" title="公告 PDF 预览"></iframe>
         </div>
         <div v-else class="pdf-empty">
-          PDF 文件 —— 文件服务签名地址（pdfDownloadUrl）回填后即可内嵌预览
+          源文件整理中——PDF 归档（pdf_download_url）尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
           <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
         </div>
       </div>
@@ -498,7 +544,7 @@ onBeforeUnmount(() => {
 }
 .crumb {
   font-size: 12.5px;
-  color: #7a8591;
+  color: #5f6b7a;
 }
 .head-card {
   background: #fff;
@@ -536,7 +582,7 @@ onBeforeUnmount(() => {
 }
 .meta b {
   font-weight: 400;
-  color: #7a8591;
+  color: #5f6b7a;
   margin-right: 4px;
 }
 .body-area {
@@ -649,12 +695,12 @@ onBeforeUnmount(() => {
 .pdf-empty {
   padding: 60px 20px;
   text-align: center;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 13px;
 }
 .pdf-empty .sub {
   margin-top: 6px;
-  color: #9aa4af;
+  color: #5f6b7a;
   font-size: 12px;
 }
 /* ===== 仅简略信息 ===== */
@@ -703,7 +749,7 @@ onBeforeUnmount(() => {
   color: #1e2832;
 }
 .fs {
-  color: #8a97a4;
+  color: #5f6b7a;
   font-size: 12px;
 }
 .st {
@@ -724,7 +770,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .dl-link.dim {
-  color: #9aa4af;
+  color: #5f6b7a;
   cursor: not-allowed;
 }
 .blocked {
@@ -734,7 +780,7 @@ onBeforeUnmount(() => {
 .foot-note {
   margin: 4px 22px 0;
   font-size: 11.5px;
-  color: #9aa4af;
+  color: #5f6b7a;
 }
 .state-card {
   background: #fff;
@@ -742,7 +788,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 60px 20px;
   text-align: center;
-  color: #7a8591;
+  color: #5f6b7a;
   font-size: 13.5px;
   margin: 40px auto;
   max-width: 560px;
@@ -805,7 +851,7 @@ onBeforeUnmount(() => {
 }
 .go-orig.need {
   border-style: dashed;
-  color: #8a97a4;
+  color: #5f6b7a;
   background: #fafbfc;
   border-color: #d3dae1;
 }
@@ -815,7 +861,7 @@ onBeforeUnmount(() => {
 .go-orig.ghost {
   border: 1px solid #d3dae1;
   background: #fff;
-  color: #7a8591;
+  color: #5f6b7a;
 }
 .go-orig.ghost:hover {
   background: #f3f5f7;
@@ -841,7 +887,7 @@ onBeforeUnmount(() => {
 .follow-note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #8a97a4;
+  color: #5f6b7a;
 }
 .track-row.secs {
   align-items: flex-start;
@@ -871,7 +917,7 @@ onBeforeUnmount(() => {
   color: #44505c;
 }
 .track-label {
-  color: #7a8591;
+  color: #5f6b7a;
 }
 .track-key {
   font-weight: 700;

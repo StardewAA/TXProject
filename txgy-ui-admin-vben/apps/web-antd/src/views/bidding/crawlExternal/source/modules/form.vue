@@ -18,7 +18,7 @@ import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const rowData = ref<CrawlExternalApi.SourceItem>();
-const getTitle = computed(() => (rowData.value?.id ? '编辑采集源' : '新增采集源'));
+const getTitle = computed(() => (rowData.value?.id ? '编辑信息源' : '新增信息源'));
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -41,7 +41,7 @@ const [Modal, modalApi] = useVbenModal({
     try {
       const data = (await formApi.getValues()) as CrawlExternalApi.SourcePayload;
       if (rowData.value?.id) {
-        await updateCrawlSource({ ...data, id: rowData.value.id });
+        await updateCrawlSource({ ...data, id: rowData.value.id! }); // truthy 分支已保证 id 存在
       } else {
         await createCrawlSource(data);
       }
@@ -64,6 +64,7 @@ const [Modal, modalApi] = useVbenModal({
       await formApi.resetForm();
       await formApi.setValues({
         channelCode: 'GENERIC',
+        fetchType: 'CRAWLER',
         fetchIntervalSeconds: 3600,
         robotsOk: false,
         enabled: false,
@@ -83,7 +84,7 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal :title="getTitle" class="w-1/2">
+  <Modal :title="getTitle" class="w-1/2 bid-ind">
     <Form class="mx-2" />
   </Modal>
 </template>
