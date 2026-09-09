@@ -139,7 +139,7 @@ export function useFriendGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 120,
+      width: 220,
       fixed: 'right',
       slots: { default: 'actions' },
     },
@@ -262,6 +262,12 @@ export function useFriendRequestGridColumns(): VxeTableGridOptions['columns'] {
       title: '创建时间',
       minWidth: 180,
       formatter: 'formatDateTime',
+    },
+    {
+      title: '操作',
+      width: 160,
+      fixed: 'right',
+      slots: { default: 'actions' },
     },
   ];
 }
