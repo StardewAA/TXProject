@@ -80,3 +80,6 @@ sql/mysql/
 /txgy-ui-app/unpackage/
 .DS_Store
 **/.DS_Store
+
+# 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
+/data/cms-import/

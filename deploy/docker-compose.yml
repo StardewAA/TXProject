@@ -11,8 +11,11 @@ x-backend-service: &backend-service
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: ${TXGY_DB_USERNAME:-root}
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${TXGY_DB_PASSWORD:-${MYSQL_ROOT_PASSWORD}}
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: ${TXGY_DB_USERNAME:-root}
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${TXGY_DB_PASSWORD:-${MYSQL_ROOT_PASSWORD}}
     SPRING_DATA_REDIS_HOST: redis
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
@@ -33,7 +36,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
