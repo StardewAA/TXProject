@@ -49,7 +49,7 @@ export interface BatchReviewResult {
   total: number;
   items: { fileName: string; report: ReviewReport }[];
 }
-export const listReviews = () => requestClient.get<ReviewReport[]>('/cms/review/list');
+export const listReviews = (limit = 100) => requestClient.get<ReviewReport[]>('/cms/review/list', { params: { limit } });
 export const getReview = (id: string) => requestClient.get<ReviewDetail>('/cms/review/get', { params: { id } });
 export const submitText = (metadata: ReviewMetadata, text: string, previousId?: string) =>
   requestClient.post<ReviewReport>(previousId ? '/cms/review/resubmit' : '/cms/review/text', { metadata, text }, { params: previousId ? { id: previousId } : {} });

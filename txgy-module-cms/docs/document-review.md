@@ -24,7 +24,7 @@
 1. 在已有业务库执行 `sql/cms_document_review.sql`，只有建表语句，不重置原有数据。
 2. 执行 `sql/cms_document_review_menu.sql`，为角色分配 `cms:review:query`、`cms:review:submit`、`cms:review:verify`。不要运行旧菜单脚本中的DELETE来替代本迁移。
 3. 使用原有CMS数据库配置启动CMS Server（48100），并保持System服务、认证、租户校验和网关可用。审查流程无需ES；如只运行审查，可设置 `TXGY_SEARCH_ES_ENABLED=false`。
-4. 前端位于 `txgy-ui-admin-vben/apps/web-antd/src/views/cms/review/index.vue`，菜单组件 `cms/review/index`，路径 `/cms/review`。前端权限模式可使用附带路由；后端权限模式使用新增菜单。
+4. 前端按审核管理下的三页拆分：`cms/review/parts/submit/index.vue`（文档审查）、`cms/review/parts/record/index.vue`（审查记录）、`cms/review/parts/report/index.vue`（审查报告）。菜单组件分别为 `cms/review/parts/submit/index`、`cms/review/parts/record/index`、`cms/review/parts/report/index`，路径 `/cms/audit/submit`、`/cms/audit/record`、`/cms/audit/report`。
 
 本次不自动运行生产迁移，也不假设用户丢失的Docker数据已经恢复。MySQL迁移与服务启动后才可在线使用。无需改动或恢复ES索引。
 
