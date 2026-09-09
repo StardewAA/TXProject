@@ -140,6 +140,14 @@ public class NoticeExternalController {
         return success(Boolean.TRUE);
     }
 
+    @PostMapping("/reindex")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Idempotent
+    @Operation(summary = "全量重建 ES 索引（管理端人工触发：遍历 ACTIVE 逐条 PUT 覆盖，幂等补偿）")
+    public CommonResult<String> reindex() {
+        return success(noticeExternalService.reindexIndex());
+    }
+
     @PostMapping("/backfill-pdf-urls")
     @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
     @Idempotent

@@ -61,6 +61,12 @@ public interface NoticeExternalService {
     void approveExternal(Long id);
 
     /**
+     * 全量重建外部公告 ES 索引（管理端人工触发）：遍历 ACTIVE 行逐条 PUT 覆盖（幂等，补偿重放安全）。
+     * 2026-09-10：ES 曾长期未启用/索引事件丢失，用本端点补偿存量；返回 total/ok/failed 摘要。
+     */
+    String reindexIndex();
+
+    /**
      * 驳回（审核不通过）：audit UNREVIEWED→REJECTED；驳回后不可直接 approve（需重新入库/重抓）。
      *
      * @param id 外部公告主档 ID

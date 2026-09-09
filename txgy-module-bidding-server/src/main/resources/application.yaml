@@ -144,6 +144,9 @@ bidding:
     scheduler:
       enabled: true
   es:
+    # enabled=true：装配 ES 检索引擎与索引通知器，且 EsStartupHealthCheck 启动强制探活（ES 不可达=拒绝启动，防无索引上线）；
+    # 确需无 ES 降级运行（检索报"未启用"、不建索引）才显式置 false
+    enabled: true
     uris: http://127.0.0.1:9200
     debug: true # ES 请求/响应调试日志（本地联调开 true；生产置 false）。ESDebug 开关即本键
     username: ${ES_USERNAME:elastic} # 账号（本地 dev，勿提交生产凭据）

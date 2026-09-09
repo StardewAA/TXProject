@@ -534,6 +534,26 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         return "total=" + pdfs.size() + ",ok=" + ok + ",failed=" + failed + ",skipped=" + skipped;
     }
 
+    @Override
+    public String reindexIndex() {
+        List<NoticeExternalDO> actives = noticeExternalMapper.selectList(new LambdaQueryWrapper<NoticeExternalDO>()
+                .eq(NoticeExternalDO::getStatus, NoticeExternalStatusEnum.ACTIVE.getStatus())
+                .orderByDesc(NoticeExternalDO::getId));
+        int ok = 0;
+        int failed = 0;
+        for (NoticeExternalDO n : actives) {
+            try {
+                externalNoticeIndexNotifier.indexNotice(n);
+                ok++;
+            } catch (Exception e) {
+                failed++;
+                log.warn("[reindexIndex][noticeId={}] ES 索引失败: {}", n.getId(), e.getMessage());
+            }
+        }
+        log.info("[reindexIndex] 完成 total={} ok={} failed={}", actives.size(), ok, failed);
+        return "total=" + actives.size() + ",ok=" + ok + ",failed=" + failed;
+    }
+
     /** 重下载主机白名单校验：平台文件端点豁免；外站 URL 须在行 source_code 对应采集源白名单内（源缺失=拒绝，防脏数据外链 SSRF） */
     private void assertPdfDownloadAllowed(NoticeExternalDO pdf, String externalUrl) {
         if (UrlHostGuard.isInternalFileUrl(externalUrl)) {
