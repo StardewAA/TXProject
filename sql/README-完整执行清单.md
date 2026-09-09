@@ -4,16 +4,18 @@
 > 业务库：`ruoyi-vue-pro`（bidding 全部业务表）；菜单脚本需在 **system 库**执行（system_menu 属 system 服务库）。
 > 全部 DDL/配置脚本幂等（IF NOT EXISTS / ON DUPLICATE KEY）为主，可重复执行；**演示数据文件除外**（勿重复导入）。
 
-## 目录说明（2026-09-10 起分类维护）
+## 目录说明（2026-09-10 整理）
 
-- `sql/history/`：**历史批次**（2026-09-03 ~ 2026-09-09：建表 DDL/菜单/早期修复，环境从零初始化按 §0 顺序执行即可）；
-- `sql/latest/`：**最新批次**（2026-09-10 起：采集源配置/授权调整/索引与数据补偿等增量脚本，按日期与提交说明回放）；
-- 本文件为总索引与执行顺序说明；新 SQL 一律按日期落 `latest/`，跑稳并归档后（或跨批次后）移入 `history/`。
+- **`sql/master-bidding-sync.sql`（根目录，一键增量同步包）**：master 基线 → 本模块当前数据状态，单文件幂等（结构/菜单挂载/采集源配置/主体授权/AI 链路/演示公告 5 条），合作者一条命令即可同步：
+  `mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-bidding-sync.sql`
+- `sql/history/`：**历史脚本全集**（建表 DDL/菜单/配置/修复/数据补偿，按日期与提交说明回放；已在上述一键包覆盖的部分无需单独执行）；
+- 本文件为索引与口径说明；新 SQL 按 `yyyy-MM-dd-<主题>.sql` 命名落 `history/`，若形成新的对外基线再升级为一键包。
 
 ## 0. 文件清单与执行顺序（history 部分）
 
 | 顺序 | 文件 | 内容 | 执行库 |
 | --- | --- | --- | --- |
+| 0 | **sql/master-bidding-sync.sql** | **一键增量同步（结构+菜单+配置+主体+AI+演示公告）** | ruoyi-vue-pro |
 | 1 | sql/history/2026-09-03-notice.sql | 公告/公示主档+正文（T轨） | ruoyi-vue-pro |
 | 2 | sql/history/2026-09-03-filing.sql | 备案（T轨） | ruoyi-vue-pro |
 | 3 | sql/history/2026-09-03-external-notice.sql | 外部公告主档/附件/meta + 采集源/任务/批次 + 关注订阅/关注项/事件/订阅事件（G/T 轨全套） | ruoyi-vue-pro |
@@ -36,16 +38,18 @@
 - 导出工具：export-bidding-data / export-bidding-tables
 
 ## 1. 快速命令（业务库 ruoyi-vue-pro，cwd=仓库根）
+
+**一键同步（推荐）**：
+```bash
+mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-bidding-sync.sql
+```
+
+按需单独回放历史脚本（已在同步包覆盖项可跳过）：
 ```bash
 mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-notice.sql
 mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-filing.sql
 mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-external-notice.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-05-external-notice-review.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-06-ai-extract.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-07-body-blocks.sql
 mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-09-subject.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/latest/2026-09-10-crawl-source-config.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/latest/2026-09-10-demo-data.sql
 ```
 
 ## 2. 菜单权限（system 库）与角色挂载
