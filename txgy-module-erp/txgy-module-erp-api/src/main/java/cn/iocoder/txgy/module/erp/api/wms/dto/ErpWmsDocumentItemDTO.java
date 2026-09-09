@@ -41,4 +41,11 @@ public class ErpWmsDocumentItemDTO {
     private BigDecimal unqualifiedQuantity;
     private BigDecimal shortageQuantity;
 
+    /** 参考价格（供应链协同单扩展字段，可空） */
+    private BigDecimal referencePrice;
+    /** 参考税率（供应链协同单扩展字段，可空） */
+    private BigDecimal taxRate;
+    /** 收货/交货地址（供应链协同单扩展字段，可空） */
+    private String deliveryAddress;
+
 }

@@ -20,6 +20,13 @@ public class ErpWmsCollaborationBDO extends TenantBaseDO {
     private Long id;
     private String collaborationNo;
     private String businessChainNo;
+    /** 协同单类型：PURCHASE_COLLABORATION/SALE_COLLABORATION/AWARD_COLLABORATION/SHORTAGE_COLLABORATION */
+    private String collaborationType;
+    private String sourceModule;
+    private String sourceOrderNo;
+    private String sourceEnterpriseCode;
+    private String targetEnterpriseCode;
+    private String currency;
     private String sourceProductionOrderNo;
     private String sourceCollaborationGNo;
     private String sourceSaleOrderNo;
@@ -30,4 +37,7 @@ public class ErpWmsCollaborationBDO extends TenantBaseDO {
     private Long purchaseOrderId;
     private String purchaseOrderNo;
     private String reason;
+    private Long confirmUserId;
+    private String confirmUserName;
+    private LocalDateTime confirmTime;
 }
