@@ -3,7 +3,19 @@ import { computed, ref } from 'vue';
 
 import { message } from 'ant-design-vue';
 
-import { parseClue, type ParsedClue } from '#/utils/crm/clue-parse';
+import { getCustomerPage } from '#/api/crm/customer';
+import { getBusinessPage } from '#/api/crm/business';
+import { getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
+import { getContractSimpleList } from '#/api/crm/contract';
+import { getSimpleUserList } from '#/api/system/user';
+
+import {
+  parseClue,
+  parseContract,
+  parseBusiness,
+  parseReceivable,
+  type ParsedClue,
+} from '#/utils/crm/clue-parse';
 import {
   getAiClueConfig,
   saveAiClueConfig,
@@ -11,8 +23,14 @@ import {
 } from '#/utils/crm/ai-config';
 
 const emit = defineEmits<{
-  apply: [payload: { fields: ParsedClue }];
+  apply: [payload: { fields: any }];
 }>();
+
+// mode: clue=线索/通用；contract=合同（提取合同名、客户、商机、日期、产品与金额）
+const props = withDefaults(
+  defineProps<{ mode?: 'clue' | 'contract' | 'business' | 'receivable' }>(),
+  { mode: 'clue' },
+);
 
 type ActiveTab = 'text' | 'image';
 
@@ -197,7 +215,131 @@ async function handleRecognize() {
     }
 
     const aiReadyFlag = aiReady.value;
-    const { fields, aiError } = await parseClue(text, imageDataUrls);
+    const isContract = props.mode === 'contract';
+    // 按当前模块选用专属解析 schema（商机/回款/合同/线索各不相同）
+    const parsed: any =
+      isContract
+        ? await parseContract(text, imageDataUrls)
+        : props.mode === 'business'
+          ? await parseBusiness(text, imageDataUrls)
+          : props.mode === 'receivable'
+            ? await parseReceivable(text, imageDataUrls)
+            : await parseClue(text, imageDataUrls);
+    const fields: any = parsed.fields ?? {};
+    const aiError = parsed.error;
+
+    // 按名称在 CRM 中匹配客户：商机/回款/合同取 customerName，线索取 name
+    try {
+      const name = String(
+        (props.mode === 'clue' ? fields?.name : fields?.customerName) ?? '',
+      ).trim();
+      if (name) {
+        const page: any = await getCustomerPage({
+          pageNo: 1,
+          pageSize: 5,
+          name,
+          sceneType: 3,
+        } as any);
+        const hit = page?.list?.[0];
+        if (hit?.id) {
+          fields.customerId = hit.id;
+        }
+      }
+    } catch {
+      // 匹配失败不阻塞回填
+    }
+
+    // 合同兜底：若 AI 未提取到负责人，从原文正则提取“负责人：XXX”
+    if (isContract && !fields?.ownerUserName) {
+      const m = String(text).match(
+        /(?:负责人|销售员|销售业务员|业务员|销售)\s*[:：]?\s*([\u4e00-\u9fa5·A-Za-z]{2,4})/,
+      );
+      if (m?.[1]) {
+        fields.ownerUserName = m[1];
+      }
+    }
+
+    // 按名称匹配系统用户：负责人 ownerUserName -> ownerUserId（商机/回款/合同）
+    // 用 getSimpleUserList（与负责人下拉同源）避免分页/数据权限过滤导致匹配不到
+    try {
+      const ownerName = String(fields?.ownerUserName ?? '').trim();
+      if (ownerName) {
+        const userList: any[] = await getSimpleUserList();
+        const hit =
+          userList.find((u: any) => u?.nickname === ownerName) ??
+          userList.find((u: any) =>
+            String(u?.nickname ?? '').includes(ownerName),
+          );
+        if (hit?.id) fields.ownerUserId = hit.id;
+      }
+    } catch {}
+
+    // 合同：再按名称匹配关联商机
+    if (isContract) {
+      try {
+        const bn = String(fields?.businessName ?? '').trim();
+        if (bn) {
+          const bp: any = await getBusinessPage({
+            pageNo: 1,
+            pageSize: 5,
+            name: bn,
+            sceneType: 3,
+          } as any);
+          const bhit = bp?.list?.[0];
+          if (bhit?.id) {
+            fields.businessId = bhit.id;
+          }
+        }
+      } catch {
+        // 匹配失败不阻塞回填
+      }
+      // 公司签约人 signUserName -> signUserId（同样用简单用户列表匹配）
+      try {
+        const signName = String(fields?.signUserName ?? '').trim();
+        if (signName) {
+          const userList: any[] = await getSimpleUserList();
+          const hit =
+            userList.find((u: any) => u?.nickname === signName) ??
+            userList.find((u: any) =>
+              String(u?.nickname ?? '').includes(signName),
+            );
+          if (hit?.id) fields.signUserId = hit.id;
+        }
+      } catch {}
+    }
+
+    // 商机：匹配状态组
+    if (props.mode === 'business') {
+      try {
+        const statusName = String(fields?.businessStatusTypeName ?? '').trim();
+        if (statusName) {
+          const stList: any[] = await getBusinessStatusTypeSimpleList();
+          const hit = stList.find((x: any) =>
+            String(x?.name ?? '').includes(statusName),
+          );
+          if (hit?.id) fields.statusTypeId = hit.id;
+        }
+      } catch {}
+    }
+
+    // 回款：匹配合同
+    if (props.mode === 'receivable') {
+      try {
+        const cid = fields?.customerId;
+        const cn = String(
+          (fields?.contractNo ?? '') || (fields?.contractName ?? ''),
+        ).trim();
+        if (cid && cn) {
+          const cp: any = await getContractSimpleList(cid);
+          const hit = cp?.find(
+            (c: any) =>
+              (fields?.contractNo && c?.no === fields.contractNo) ||
+              (fields?.contractName && c?.name?.includes(fields.contractName)),
+          );
+          if (hit?.id) fields.contractId = hit.id;
+        }
+      } catch {}
+    }
 
     // 图片仅用于识别信息，不作为附件保存
     emit('apply', { fields });
@@ -212,7 +354,7 @@ async function handleRecognize() {
         '当前未配置 AI，图片无法被识别。点右上角“AI 配置”填写 Base URL 与视觉模型后，即可自动识别图片文字。',
       );
     } else {
-      message.success('识别完成，已自动填充线索字段，请核对后提交');
+      message.success('识别完成，已自动填充表单字段，请核对后提交');
     }
   } finally {
     loading.value = false;
