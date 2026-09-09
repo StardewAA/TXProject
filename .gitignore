@@ -87,4 +87,4 @@ sql/mysql/
 /.preview_tmp/
 /design/.preview_tmp/
 lefthook.yml.*备份*
-/txgy-module-bidding/
+/txgy-module-bidding/.git-backup-merged/
