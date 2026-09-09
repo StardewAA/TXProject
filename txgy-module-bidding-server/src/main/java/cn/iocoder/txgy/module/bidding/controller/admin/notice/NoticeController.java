@@ -123,6 +123,20 @@ public class NoticeController {
         return success(noticeService.reindexIndex());
     }
 
+    @PostMapping("/reindex-all")
+    @PreAuthorize("@ss.hasPermission('bidding:notice:update')")
+    @Idempotent
+    @Operation(summary = "平台级全租户公告 ES 索引补偿（忽略租户遍历全部公告；仅平台租户可用，幂等可重跑）")
+    public CommonResult<String> reindexAll() {
+        // 仅平台租户（id=1）放行：本端点会索引全部租户公告，不允许租户互扫
+        Long tenantId = cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getTenantId();
+        if (tenantId == null || tenantId != 1L) {
+            throw cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception(
+                    cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN);
+        }
+        return success(noticeService.reindexAllTenants());
+    }
+
     @PostMapping("/unpublish")
     @Operation(summary = "撤下公告/公示")
     @PreAuthorize("@ss.hasPermission('bidding:notice:update')")

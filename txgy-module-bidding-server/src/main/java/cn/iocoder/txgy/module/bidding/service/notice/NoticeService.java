@@ -49,6 +49,12 @@ public interface NoticeService {
       */
      String reindexIndex();
 
+    /**
+     * 平台级全租户索引补偿（2026-09-10，es.enabled 启用前各租户存量公告从未建索引）：忽略租户遍历全部公告 indexDoc（幂等 PUT）。
+     * 仅平台租户可调用（Controller 校验）；租户自服务用 {@link #reindexIndex()}。
+     */
+    String reindexAllTenants();
+
      /** 公开同步（05 §2.2 BID-SUP-GATHER-02）：白名单校验（PUBLISHED+非内部+SOCIAL）后
      * 触发检索文档同步，返回任务编号。幂等键=公告编号+dataTimestamp（由调用方框架幂等保证）。
      */

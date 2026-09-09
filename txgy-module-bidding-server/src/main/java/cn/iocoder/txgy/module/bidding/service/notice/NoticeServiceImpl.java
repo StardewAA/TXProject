@@ -173,6 +173,30 @@ public class NoticeServiceImpl implements NoticeService {
     }
 
     @Override
+    public String reindexAllTenants() {
+        // 平台级补偿：es.enabled=false 期间（DevDisabled/LogOnly 装配）入库/发布的公告从未建索引，标题/正文检索不到；
+        // 忽略租户遍历全量重放（PUT 幂等，重复执行安全）；仅平台租户可调（Controller 校验 tenantId=1）
+        int[] stat = new int[3]; // total/ok/failed
+        TenantUtils.executeIgnore(() -> {
+            List<cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO> all = noticeMapper.selectList(
+                    new LambdaQueryWrapper<cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO>()
+                            .orderByAsc(cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO::getId));
+            stat[0] = all.size();
+            for (cn.iocoder.txgy.module.bidding.dal.dataobject.notice.NoticeDO notice : all) {
+                try {
+                    indexDoc(notice.getId());
+                    stat[1]++;
+                } catch (Exception e) {
+                    stat[2]++;
+                    log.warn("[reindexAllTenants][noticeId={}] ES 索引失败: {}", notice.getId(), e.getMessage());
+                }
+            }
+        });
+        log.info("[reindexAllTenants] 完成 total={} ok={} failed={}", stat[0], stat[1], stat[2]);
+        return "total=" + stat[0] + ",ok=" + stat[1] + ",failed=" + stat[2];
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishNotice(Long id) {
         subjectEligibilityService.assertTendererIssuanceAllowed(); // 招标人发布门：DRAFT→PUBLISHED 前复核主体资格
