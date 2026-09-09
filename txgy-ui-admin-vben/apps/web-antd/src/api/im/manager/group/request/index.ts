@@ -30,3 +30,15 @@ export function getManagerGroupRequestPage(params: PageParam) {
     { params },
   );
 }
+
+/** 获得加群申请详情 */
+export function getManagerGroupRequest(id: number) {
+  return requestClient.get<ImManagerGroupRequestApi.GroupRequest>(
+    `/im/manager/group-request/get?id=${id}`,
+  );
+}
+
+/** 删除加群申请记录（治理动作） */
+export function deleteManagerGroupRequest(id: number) {
+  return requestClient.delete(`/im/manager/group-request/delete?id=${id}`);
+}

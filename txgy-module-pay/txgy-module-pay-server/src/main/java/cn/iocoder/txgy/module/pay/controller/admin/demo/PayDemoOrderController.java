@@ -57,8 +57,10 @@ public class PayDemoOrderController {
     @PutMapping("/refund")
     @Operation(summary = "发起示例订单的退款")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    public CommonResult<Boolean> refundDemoOrder(@RequestParam("id") Long id) {
-        payDemoOrderService.refundDemoOrder(id, getClientIP());
+    @Parameter(name = "reason", description = "退款原因", example = "商品质量问题")
+    public CommonResult<Boolean> refundDemoOrder(@RequestParam("id") Long id,
+            @RequestParam(value = "reason", required = false, defaultValue = "想退钱") String reason) {
+        payDemoOrderService.refundDemoOrder(id, reason, getClientIP());
         return success(true);
     }
 

@@ -716,13 +716,16 @@ importers:
         version: 4.3.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(vue-tsc@3.3.5(typescript@6.0.3))
+        version: 0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(unrun@0.3.1(synckit@0.11.13))(vue-tsc@3.3.5(typescript@6.0.3))
       turbo:
         specifier: 'catalog:'
         version: 2.10.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      unrun:
+        specifier: ^0.3.1
+        version: 0.3.1(synckit@0.11.13)
       vite:
         specifier: 'catalog:'
         version: 8.0.10(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.6.7)(sass-embedded@1.100.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.9.0)
@@ -11555,6 +11558,16 @@ packages:
       webpack:
         optional: true
 
+  unrun@0.3.1:
+    resolution: {integrity: sha512-onIck/oNnCaytwths1ZVp1LK2Gq2hPoyFhiHebObuUXqR3S0uHuLLaBK8K6mRRgV7Ptip8AnNvaUsgzwWwBZuA==}
+    engines: {node: ^22.13.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      synckit: ^0.11.11
+    peerDependenciesMeta:
+      synckit:
+        optional: true
+
   unstorage@1.17.5:
     resolution: {integrity: sha512-0i3iqvRfx29hkNntHyQvJTpf5W9dQ9ZadSoRU8+xVlhVtT7jAX57fazYO9EHvcRCfBCyi5YRya7XCDOsbTgkPg==}
     peerDependencies:
@@ -15813,7 +15826,7 @@ snapshots:
       lightningcss: 1.32.0
       postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.15)(yaml@2.9.0)
       rolldown: 1.1.3
-      tsdown: 0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(vue-tsc@3.3.5(typescript@6.0.3))
+      tsdown: 0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(unrun@0.3.1(synckit@0.11.13))(vue-tsc@3.3.5(typescript@6.0.3))
     optionalDependencies:
       postcss: 8.5.15
       sass: 1.101.0
@@ -21890,7 +21903,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(vue-tsc@3.3.5(typescript@6.0.3)):
+  tsdown@0.22.3(@tsdown/css@0.22.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@6.0.3)(unrun@0.3.1(synckit@0.11.13))(vue-tsc@3.3.5(typescript@6.0.3)):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -21911,6 +21924,7 @@ snapshots:
       '@tsdown/css': 0.22.3(jiti@2.7.0)(postcss@8.5.15)(sass-embedded@1.100.0)(sass@1.101.0)(tsdown@0.22.3)(yaml@2.9.0)
       publint: 0.3.21
       typescript: 6.0.3
+      unrun: 0.3.1(synckit@0.11.13)
     transitivePeerDependencies:
       - '@ts-macro/tsc'
       - '@typescript/native-preview'
@@ -22198,6 +22212,12 @@ snapshots:
       rolldown: 1.1.3
       rollup: 4.62.2
       vite: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.6.7)(sass-embedded@1.100.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.9.0)
+
+  unrun@0.3.1(synckit@0.11.13):
+    dependencies:
+      rolldown: 1.1.3
+    optionalDependencies:
+      synckit: 0.11.13
 
   unstorage@1.17.5(db0@0.3.4)(ioredis@5.11.1):
     dependencies:

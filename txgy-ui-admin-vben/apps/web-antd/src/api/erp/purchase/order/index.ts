@@ -18,6 +18,11 @@ export namespace ErpPurchaseOrderApi {
     depositPrice?: number; // 定金金额，单位：元
     accountId?: number; // 结算账户编号
     status?: number; // 状态
+    processInstanceId?: string; // BPM 流程实例编号
+    sourceType?: string;
+    sourceId?: number;
+    sourceNo?: string;
+    businessChainNo?: string;
     remark?: string; // 备注
     fileUrl?: string; // 附件地址
     inCount?: number; // 采购入库数量
@@ -82,6 +87,13 @@ export function updatePurchaseOrder(data: ErpPurchaseOrderApi.PurchaseOrder) {
 export function updatePurchaseOrderStatus(id: number, status: number) {
   return requestClient.put('/erp/purchase-order/update-status', null, {
     params: { id, status },
+  });
+}
+
+/** 提交采购订单审批 */
+export function submitPurchaseOrder(id: number) {
+  return requestClient.put('/erp/purchase-order/submit', null, {
+    params: { id },
   });
 }
 

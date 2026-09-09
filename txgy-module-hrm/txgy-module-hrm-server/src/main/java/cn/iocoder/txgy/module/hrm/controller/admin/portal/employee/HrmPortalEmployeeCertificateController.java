@@ -33,7 +33,7 @@ public class HrmPortalEmployeeCertificateController {
 
     @GetMapping("/list")
     @Operation(summary = "获得我的证书列表")
-    @PreAuthorize("@ss.hasPermission('hrm:portal:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<HrmEmployeeCertificateRespVO>> getCertificateList() {
         Long employeeId = employeeService.validateEmployeeBySelf(getLoginUserId()).getId();
         List<HrmEmployeeCertificateDO> certificates =

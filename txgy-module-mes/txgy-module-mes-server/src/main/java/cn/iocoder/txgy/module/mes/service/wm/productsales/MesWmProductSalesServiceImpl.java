@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.service.wm.productsales;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -9,10 +10,12 @@ import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesShippingReqVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.wm.batch.MesWmBatchDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.salesnotice.MesWmSalesNoticeDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productsales.MesWmProductSalesDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productsales.MesWmProductSalesDetailDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productsales.MesWmProductSalesLineDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.wm.batch.MesWmBatchMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.wm.productsales.MesWmProductSalesMapper;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmProductSalesStatusEnum;
@@ -20,6 +23,7 @@ import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmSalesNoticeStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmTransactionTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.client.MesMdClientService;
+import cn.iocoder.txgy.module.mes.service.pollution.MesPollutionControlService;
 import cn.iocoder.txgy.module.mes.service.wm.salesnotice.MesWmSalesNoticeService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.MesWmTransactionService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.dto.MesWmTransactionSaveReqDTO;
@@ -57,6 +61,10 @@ public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
     private MesWmSalesNoticeService salesNoticeService;
     @Resource
     private MesWmTransactionService wmTransactionService;
+    @Resource
+    private MesWmBatchMapper batchMapper;
+    @Resource
+    private MesPollutionControlService pollutionControlService;
 
     @Override
     public Long createProductSales(MesWmProductSalesSaveReqVO createReqVO) {
@@ -206,6 +214,11 @@ public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
         if (ObjUtil.notEqual(MesWmProductSalesStatusEnum.APPROVED.getStatus(), sales.getStatus())) {
             throw exception(WM_PRODUCT_SALES_CANNOT_FINISH);
         }
+        // P2 环保门禁(A3)：明细批次存在"有污染/标记"环保判定 → 禁止出库（动库存前拦下）
+        List<MesWmProductSalesDetailDO> gateDetails = productSalesDetailService.getProductSalesDetailListBySalesId(id);
+        for (MesWmProductSalesDetailDO detail : gateDetails) {
+            pollutionControlService.assertOutboundAllowed(resolveBatchNo(detail.getBatchCode(), detail.getBatchId()));
+        }
 
         // 2. 遍历所有明细，创建库存事务（扣减库存 + 记录流水）
         createTransactionList(sales);
@@ -294,6 +307,22 @@ public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
             throw exception(WM_PRODUCT_SALES_NOT_PREPARE);
         }
         return sales;
+    }
+
+    /**
+     * 明细批次号兜底：明细存了 batchCode 直接用，否则按 batchId 回查（行只带批次ID时）
+     */
+    private String resolveBatchNo(String batchCode, Long batchId) {
+        if (StrUtil.isNotBlank(batchCode)) {
+            return batchCode;
+        }
+        if (batchId != null) {
+            MesWmBatchDO batch = batchMapper.selectById(batchId);
+            if (batch != null) {
+                return batch.getCode();
+            }
+        }
+        return null;
     }
 
     private void validateCodeUnique(Long id, String code) {

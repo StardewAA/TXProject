@@ -706,8 +706,9 @@ export const HrmEmployeeFileGroups = [
 
 /** 招聘职位状态枚举（对齐后端 HrmRecruitPostStatusEnum） */
 export const HrmRecruitPostStatus = {
-  STOPPED: 0, // 停止招聘
-  RECRUITING: 1, // 招聘中
+  PAUSED: 0, // 已暂停
+  PUBLISHED: 1, // 已发布
+  CLOSED: 2, // 已关闭
 } as const;
 
 /** 招聘职位状态取值 */
@@ -720,6 +721,12 @@ export const HrmRecruitJobNature = {
   INTERNSHIP: 2, // 实习
   PART_TIME: 3, // 兼职
 } as const;
+
+export const HrmRecruitJobNatureOptions = [
+  { label: '全职', value: HrmRecruitJobNature.FULL_TIME },
+  { label: '实习', value: HrmRecruitJobNature.INTERNSHIP },
+  { label: '兼职', value: HrmRecruitJobNature.PART_TIME },
+] as const;
 
 /** 招聘工作经验枚举（对齐 hrm_recruit_work_time 字典） */
 export const HrmRecruitWorkTime = {
@@ -740,6 +747,15 @@ export const HrmRecruitPostEducation = {
   MASTER_AND_ABOVE: 5, // 硕士及以上
   DOCTOR: 6, // 博士
 } as const;
+
+export const HrmRecruitPostEducationOptions = [
+  { label: '不限', value: HrmRecruitPostEducation.UNLIMITED },
+  { label: '高中及以上', value: HrmRecruitPostEducation.HIGH_SCHOOL_AND_ABOVE },
+  { label: '大专及以上', value: HrmRecruitPostEducation.COLLEGE_AND_ABOVE },
+  { label: '本科及以上', value: HrmRecruitPostEducation.BACHELOR_AND_ABOVE },
+  { label: '硕士及以上', value: HrmRecruitPostEducation.MASTER_AND_ABOVE },
+  { label: '博士', value: HrmRecruitPostEducation.DOCTOR },
+] as const;
 
 /** 招聘薪资单位枚举（对齐 hrm_recruit_salary_unit 字典） */
 export const HrmRecruitSalaryUnit = {

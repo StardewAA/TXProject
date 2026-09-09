@@ -152,6 +152,8 @@ public class TradePriceCalculateRespBO {
          * SPU 编号
          */
         private Long spuId;
+        /** 商品所属店铺 */
+        private Long shopId;
         /**
          * SKU 编号
          */

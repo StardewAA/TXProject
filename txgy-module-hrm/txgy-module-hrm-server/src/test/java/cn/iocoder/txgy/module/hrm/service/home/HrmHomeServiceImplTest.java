@@ -223,7 +223,7 @@ public class HrmHomeServiceImplTest extends BaseMockitoUnitTest {
 
         // mock 招聘数据
         when(recruitPostService.getRecruitPostStatusCount(any())).thenReturn(Collections.singletonMap(
-                HrmRecruitPostStatusEnum.RECRUITING.getStatus(), 1L));
+                HrmRecruitPostStatusEnum.PUBLISHED.getStatus(), 1L));
         Map<Integer, Long> candidateStatusCount = new HashMap<>();
         candidateStatusCount.put(HrmRecruitCandidateStatusEnum.NEW.getStatus(), 1L);
         candidateStatusCount.put(HrmRecruitCandidateStatusEnum.PENDING_ENTRY.getStatus(), 1L);

@@ -51,9 +51,10 @@ public interface PayDemoOrderService {
      * 发起示例订单的退款
      *
      * @param id 编号
+     * @param reason 退款原因（为空时使用默认值）
      * @param userIp 用户编号
      */
-    void refundDemoOrder(Long id, String userIp);
+    void refundDemoOrder(Long id, String reason, String userIp);
 
     /**
      * 更新示例订单为已退款

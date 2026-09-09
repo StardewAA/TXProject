@@ -106,10 +106,23 @@ export const DeliveryTypeEnum = {
   PICK_UP: { type: 2, name: '用户自提' },
 };
 export const getTimeStatusEnum = (startTime, endTime) => {
-  const now = dayjs();
-  if (now.isBefore(startTime)) {
+  const toMillis = (value) => {
+    if (value === null || value === undefined || value === '') return NaN;
+    if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+      const numeric = Number(value);
+      return String(value).length <= 10 ? numeric * 1000 : numeric;
+    }
+    return dayjs(value).valueOf();
+  };
+  const now = Date.now();
+  const start = toMillis(startTime);
+  const end = toMillis(endTime);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return TimeStatusEnum.END;
+  }
+  if (now < start) {
     return TimeStatusEnum.WAIT_START;
-  } else if (now.isAfter(endTime)) {
+  } else if (now > end) {
     return TimeStatusEnum.END;
   } else {
     return TimeStatusEnum.STARTED;

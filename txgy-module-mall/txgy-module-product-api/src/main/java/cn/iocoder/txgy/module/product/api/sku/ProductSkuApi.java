@@ -1,40 +1,50 @@
 package cn.iocoder.txgy.module.product.api.sku;
 
-import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.module.product.enums.ApiConstants;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuUpdateStockReqDTO;
-import cn.iocoder.txgy.module.product.enums.ApiConstants;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuStockLockReqDTO;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuStockStatusRespDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import jakarta.validation.Valid;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 
-@FeignClient(name = ApiConstants.NAME) // TODO 芋艿：fallbackFactory =
-@Tag(name = "RPC 服务 - 商品 SKU")
+/**
+ * 商品 SKU API 接口
+ *
+ * @author LeeYan9
+ * @since 2022-08-26
+ */
+@FeignClient(name = ApiConstants.NAME)
 public interface ProductSkuApi {
 
     String PREFIX = ApiConstants.PREFIX + "/sku";
 
+    /**
+     * 查询 SKU 信息
+     *
+     * @param id SKU 编号
+     * @return SKU 信息
+     */
     @GetMapping(PREFIX + "/get")
-    @Operation(summary = "查询 SKU 信息")
-    @Parameter(name = "id", description = "SKU 编号", required = true, example = "1024")
-    CommonResult<ProductSkuRespDTO> getSku(@RequestParam("id") Long id);
+    ProductSkuRespDTO getSku(@RequestParam("id") Long id);
 
+    /**
+     * 批量查询 SKU 数组
+     *
+     * @param ids SKU 编号列表
+     * @return SKU 数组
+     */
     @GetMapping(PREFIX + "/list")
-    @Operation(summary = "批量查询 SKU 信息")
-    @Parameter(name = "ids", description = "SKU 编号列表", required = true, example = "1024,2048")
-    CommonResult<List<ProductSkuRespDTO>> getSkuList(@RequestParam("ids") Collection<Long> ids);
+    List<ProductSkuRespDTO> getSkuList(@RequestParam("ids") Collection<Long> ids);
 
     /**
      * 批量查询 SKU MAP
@@ -43,16 +53,42 @@ public interface ProductSkuApi {
      * @return SKU MAP
      */
     default Map<Long, ProductSkuRespDTO> getSkuMap(Collection<Long> ids) {
-        return convertMap(getSkuList(ids).getCheckedData(), ProductSkuRespDTO::getId);
+        return convertMap(getSkuList(ids), ProductSkuRespDTO::getId);
     }
 
+    /**
+     * 批量查询 SKU 数组
+     *
+     * @param spuIds SPU 编号列表
+     * @return SKU 数组
+     */
     @GetMapping(PREFIX + "/list-by-spu-id")
-    @Operation(summary = "批量查询 SKU 信息")
-    @Parameter(name = "spuIds", description = "SPU 编号列表", required = true, example = "1024,2048")
-    CommonResult<List<ProductSkuRespDTO>> getSkuListBySpuId(@RequestParam("spuIds") Collection<Long> spuIds);
+    List<ProductSkuRespDTO> getSkuListBySpuId(@RequestParam("spuIds") Collection<Long> spuIds);
 
+    /**
+     * 更新 SKU 库存（增加 or 减少）
+     *
+     * @param updateStockReqDTO 更新请求
+     */
     @PostMapping(PREFIX + "/update-stock")
-    @Operation(summary = "更新 SKU 库存（增加 or 减少）")
-    CommonResult<Boolean> updateSkuStock(@RequestBody @Valid ProductSkuUpdateStockReqDTO updateStockReqDTO);
+    void updateSkuStock(@RequestBody ProductSkuUpdateStockReqDTO updateStockReqDTO);
+
+    @PostMapping(PREFIX + "/reserve-stock")
+    void reserveSkuStock(@RequestBody ProductSkuStockLockReqDTO reqDTO);
+
+    @PostMapping(PREFIX + "/release-stock")
+    void releaseSkuStock(@RequestBody ProductSkuStockLockReqDTO reqDTO);
+
+    @PostMapping(PREFIX + "/outbound-stock")
+    void outboundSkuStock(@RequestBody ProductSkuStockLockReqDTO reqDTO);
+
+    @PostMapping(PREFIX + "/inbound-return-stock")
+    void inboundReturnSkuStock(@RequestParam("returnNo") String returnNo,
+                               @RequestBody ProductSkuStockLockReqDTO reqDTO);
+
+    /** 批量查询订单的 WMS 库存履约状态，键为商城订单号。 */
+    @GetMapping(PREFIX + "/wms-stock-status")
+    Map<String, ProductSkuStockStatusRespDTO> getWmsStockStatus(@RequestParam("orderNos") Collection<String> orderNos);
 
 }
+

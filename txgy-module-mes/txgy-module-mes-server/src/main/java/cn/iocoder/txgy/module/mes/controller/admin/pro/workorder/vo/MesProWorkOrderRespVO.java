@@ -42,6 +42,17 @@ public class MesProWorkOrderRespVO {
     @ExcelProperty("来源单据编号")
     private String orderSourceCode;
 
+    @Schema(description = "所属项目编号", example = "1024")
+    private Long projectId;
+
+    @Schema(description = "项目编码", example = "PRJ20260902001")
+    @ExcelProperty("项目编码")
+    private String projectCode;
+
+    @Schema(description = "项目名称", example = "某防腐保温工程")
+    @ExcelProperty("项目名称")
+    private String projectName;
+
     @Schema(description = "产品编号", example = "100")
     private Long productId;
 

@@ -2,20 +2,24 @@ package cn.iocoder.txgy.module.mes.service.wm.productissue;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productissue.vo.MesWmProductIssuePageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productissue.vo.MesWmProductIssueSaveReqVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.wm.batch.MesWmBatchDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productissue.MesWmProductIssueDetailDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productissue.MesWmProductIssueDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productissue.MesWmProductIssueLineDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.wm.batch.MesWmBatchMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.wm.productissue.MesWmProductIssueMapper;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmProductIssueStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmTransactionTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
+import cn.iocoder.txgy.module.mes.service.pollution.MesPollutionControlService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.MesWmTransactionService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.dto.MesWmTransactionSaveReqDTO;
@@ -63,6 +67,10 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
     private MesWmWarehouseLocationService locationService;
     @Resource
     private MesWmWarehouseAreaService areaService;
+    @Resource
+    private MesWmBatchMapper batchMapper;
+    @Resource
+    private MesPollutionControlService pollutionControlService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -94,7 +102,7 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteProductIssue(Long id) {
         // 1. 校验存在 + 准备中状态
-        validateProductIssueExistsAndPrepare(id);
+        MesWmProductIssueDO issue = validateProductIssueExistsAndPrepare(id);
 
         // 2.1 级联删除明细
         issueDetailService.deleteProductIssueDetailByIssueId(id);
@@ -102,6 +110,8 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
         issueLineService.deleteProductIssueLineByIssueId(id);
         // 2.3 删除主表
         issueMapper.deleteById(id);
+        // P2 环保级联(A4)：清该生产领用单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_MATERIAL_ISSUE, issue.getCode());
     }
 
     @Override
@@ -165,6 +175,10 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
         if (!checkProductIssueQuantity(id)) {
             throw exception(WM_PRODUCT_ISSUE_DETAIL_QUANTITY_MISMATCH);
         }
+        // P2 环保门禁(A3)：明细批次存在"有污染受控"判定 → 拒绝领用（动库存前拦下）
+        for (MesWmProductIssueDetailDO detail : details) {
+            pollutionControlService.assertIssueAllowed(resolveBatchNo(detail.getBatchCode(), detail.getBatchId()));
+        }
 
         // 2. 遍历所有明细，创建库存事务（扣减库存 + 记录流水）
         createTransactionList(issue);
@@ -219,6 +233,8 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
         // 取消
         issueMapper.updateById(new MesWmProductIssueDO()
                 .setId(id).setStatus(MesWmProductIssueStatusEnum.CANCELED.getStatus()));
+        // P2 环保级联(A4)：作废清该生产领用单仍"待复核"的污染判定
+        pollutionControlService.purgePendingByBizNo(MesPollutionControlService.STAGE_MATERIAL_ISSUE, issue.getCode());
     }
 
     @Override
@@ -254,6 +270,22 @@ public class MesWmProductIssueServiceImpl implements MesWmProductIssueService {
             throw exception(WM_PRODUCT_ISSUE_STATUS_INVALID);
         }
         return issue;
+    }
+
+    /**
+     * 行明细批次号兜底：明细存了 batchCode 直接用，否则按 batchId 回查（行只带批次ID时）
+     */
+    private String resolveBatchNo(String batchCode, Long batchId) {
+        if (StrUtil.isNotBlank(batchCode)) {
+            return batchCode;
+        }
+        if (batchId != null) {
+            MesWmBatchDO batch = batchMapper.selectById(batchId);
+            if (batch != null) {
+                return batch.getCode();
+            }
+        }
+        return null;
     }
 
     /**

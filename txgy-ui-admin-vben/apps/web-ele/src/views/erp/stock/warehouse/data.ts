@@ -28,6 +28,14 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'required',
     },
     {
+      fieldName: 'wmsWarehouseCode',
+      label: 'WMS仓库编码',
+      component: 'Input',
+      componentProps: {
+        placeholder: '由WMS分配，ERP仅建立映射',
+      },
+    },
+    {
       fieldName: 'address',
       label: '仓库地址',
       component: 'Input',
@@ -135,6 +143,11 @@ export function useGridColumns(
     {
       field: 'name',
       title: '仓库名称',
+      minWidth: 150,
+    },
+    {
+      field: 'wmsWarehouseCode',
+      title: 'WMS仓库编码',
       minWidth: 150,
     },
     {

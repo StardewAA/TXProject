@@ -6,7 +6,7 @@ import type {
 } from '#/views/mall/product/spu/components';
 
 import { nextTick, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { useTabs } from '@vben/hooks';
@@ -30,9 +30,12 @@ import ProductPropertyAddForm from './modules/product-property-add-form.vue';
 
 const spuId = ref<number>();
 const { params, name } = useRoute();
+const router = useRouter();
 const { closeCurrentTab } = useTabs();
 const activeTabName = ref('info');
 const formLoading = ref(false); // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
+// 防止保存请求尚未完成时重复点击，造成重复创建商品
+const submitting = ref(false);
 const isDetail = ref(name === 'ProductSpuDetail'); // 是否查看详情
 const initializingForm = ref(false); // 详情回填时不触发 SKU 重置逻辑
 const skuListRef = ref(); // 商品属性列表 Ref
@@ -185,46 +188,62 @@ function handleTabChange(key: string) {
 
 /** 提交表单 */
 async function handleSubmit() {
-  const values: MallSpuApi.Spu = await infoFormApi
-    .merge(skuFormApi)
-    .merge(deliveryFormApi)
-    .merge(descriptionFormApi)
-    .merge(otherFormApi)
-    .submitAllForm(true);
-  // 校验商品名称不能为空（用于 SKU name）
-  if (!values.name || values.name.trim() === '') {
-    message.error('商品名称不能为空');
+  if (submitting.value) {
     return;
   }
+  submitting.value = true;
+  let submitted = false;
   try {
-    // 校验 sku
-    skuListRef.value.validateSku();
-  } catch {
-    message.error('【库存价格】不完善，请填写相关信息');
-    return;
-  }
-  // 金额转换：元转分
-  values.skus = formData.value.skus!.map((item) => ({
-    ...item,
-    name: values.name,
-    price: convertToInteger(item.price),
-    marketPrice: convertToInteger(item.marketPrice),
-    costPrice: convertToInteger(item.costPrice),
-    firstBrokeragePrice: convertToInteger(item.firstBrokeragePrice),
-    secondBrokeragePrice: convertToInteger(item.secondBrokeragePrice),
-  }));
-  // 处理轮播图列表：上传组件可能返回对象或字符串，统一处理成字符串数组
-  const newSliderPicUrls: any[] = [];
-  values.sliderPicUrls!.forEach((item: any) => {
-    // 如果是前端选的图
-    typeof item === 'object'
-      ? newSliderPicUrls.push(item.url)
-      : newSliderPicUrls.push(item);
-  });
-  values.sliderPicUrls = newSliderPicUrls;
+    const values: MallSpuApi.Spu = await infoFormApi
+      .merge(skuFormApi)
+      .merge(deliveryFormApi)
+      .merge(descriptionFormApi)
+      .merge(otherFormApi)
+      .submitAllForm(true);
+    // 校验商品名称不能为空（用于 SKU name）
+    if (!values.name || values.name.trim() === '') {
+      message.error('商品名称不能为空');
+      return;
+    }
+    try {
+      // 校验 sku
+      skuListRef.value.validateSku();
+    } catch {
+      message.error('【库存价格】不完善，请填写相关信息');
+      return;
+    }
+    // 金额转换：元转分
+    values.skus = formData.value.skus!.map((item) => ({
+      ...item,
+      name: values.name,
+      price: convertToInteger(item.price),
+      marketPrice: convertToInteger(item.marketPrice),
+      costPrice: convertToInteger(item.costPrice),
+      firstBrokeragePrice: convertToInteger(item.firstBrokeragePrice),
+      secondBrokeragePrice: convertToInteger(item.secondBrokeragePrice),
+    }));
+    // 处理轮播图列表：上传组件可能返回对象或字符串，统一处理成字符串数组
+    const newSliderPicUrls: any[] = [];
+    values.sliderPicUrls!.forEach((item: any) => {
+      // 如果是前端选的图
+      typeof item === 'object'
+        ? newSliderPicUrls.push(item.url)
+        : newSliderPicUrls.push(item);
+    });
+    values.sliderPicUrls = newSliderPicUrls;
 
-  // 提交数据
-  await (spuId.value ? updateSpu(values) : createSpu(values));
+    // 提交数据；成功后关闭当前页，避免用户误以为未提交而再次创建
+    await (spuId.value ? updateSpu(values) : createSpu(values));
+    submitted = true;
+    message.success(spuId.value ? '商品更新成功' : '商品创建成功');
+    await closeCurrentTab();
+    await router.push('/mall/product/spu');
+  } finally {
+    // 成功后保持锁定，即使标签页关闭/跳转异常也不能再次创建；失败时允许修正后重试
+    if (!submitted) {
+      submitting.value = false;
+    }
+  }
 }
 
 /** 获得详情 */
@@ -369,7 +388,13 @@ onMounted(async () => {
         @tab-change="handleTabChange"
       >
         <template #tabBarExtraContent>
-          <Button type="primary" v-if="!isDetail" @click="handleSubmit">
+          <Button
+            type="primary"
+            v-if="!isDetail"
+            :loading="submitting"
+            :disabled="submitting"
+            @click="handleSubmit"
+          >
             保存
           </Button>
           <Button type="default" v-else @click="() => closeCurrentTab()">

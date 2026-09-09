@@ -57,6 +57,29 @@ if ($fullDump) {
     }
 }
 
+# Apply the idempotent promotion-threshold extension after either restore path.
+# This keeps an existing local database in sync with the Excel-driven growth module.
+$promotionScripts = @(
+    (Join-Path $rootDir 'sql\training_promotion_threshold.sql'),
+    (Join-Path $rootDir 'sql\training_analytics_menu.sql')
+)
+foreach ($featureSql in $promotionScripts) {
+    if (Test-Path -LiteralPath $featureSql) {
+        Invoke-Mysql -SqlFile $featureSql
+        Write-Host "[OK]   $([IO.Path]::GetFileName($featureSql))" -ForegroundColor Green
+    }
+}
+
+# The full database dump predates the portal resume feature and is intentionally
+# not regenerated for every incremental change. Apply the additive migration
+# explicitly so an existing volume receives the table as well as a fresh one.
+$personalResumeSql = Join-Path $rootDir 'sql\2026-09-04-hrm-personal-resume.sql'
+if (Test-Path -LiteralPath $personalResumeSql) {
+    Write-Host "Applying HRM personal resume migration ..." -ForegroundColor Cyan
+    Invoke-Mysql -SqlFile $personalResumeSql
+    Write-Host "HRM personal resume migration applied." -ForegroundColor Green
+}
+
 # verify
 $count = docker exec $MysqlContainer mysql -uroot -p"$env:MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$Database'" 2>$null
-Write-Host "Tables in $Database: $count" -ForegroundColor Green
+Write-Host "Tables in ${Database}: $count" -ForegroundColor Green

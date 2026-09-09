@@ -24,5 +24,6 @@ public final class WmsOrderTypeConstants {
     public static final int SHIPMENT_RETURN = 200; // 退货出库：WmsShipmentOrderDO
     public static final int SHIPMENT_SALE = 201; // 销售出库：WmsShipmentOrderDO
     public static final int SHIPMENT_PRODUCTION = 202; // 生产出库：WmsShipmentOrderDO
+    public static final int SHIPMENT_OTHER = 203; // 其他出库：WmsShipmentOrderDO
 
 }
