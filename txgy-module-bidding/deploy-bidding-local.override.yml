@@ -1,0 +1,20 @@
+# 本地联调 override：system/infra/gateway 宿主端口映射 + 空 namespace（public，与本地 bidding/其余服务一致）。
+# 用法（deploy 目录）：docker compose -f docker-compose.yml -f ../txgy-module-bidding/deploy-bidding-local.override.yml -p txgy up -d system infra gateway
+# 配合：bidding run-local.cmd 中 openfeign url 指向 127.0.0.1:48087/48088。
+services:
+  gateway:
+    environment:
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+  system:
+    ports:
+      - "48087:48080"
+    environment:
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
+  infra:
+    ports:
+      - "48088:48080"
+    environment:
+      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
+      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
