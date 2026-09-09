@@ -31,7 +31,10 @@ import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 import TaskChainView from './modules/task-chain.vue';
 
-/* ---------- 本地模型：手动/测试任务条（本次会话，真实解析回执） ---------- */
+/* ---------- 本地模型：手动/测试任务条（真实解析回执；localStorage 留档刷新保留，后端 crawl-parser/test 同步留痕 taskType=TEST） ---------- */
+/** 本地回执留档键（最大保留 60 条；超出丢最旧） */
+const MANUAL_STORE_KEY = 'bid-crawl-manual-runs-v1';
+const MANUAL_STORE_MAX = 60;
 interface ManualRun {
   id: string;
   taskType: 'TEST';
@@ -53,6 +56,32 @@ const MANUAL_STATUS = {
   FAILED: { text: '失败', color: 'red' },
 } as Record<string, { text: string; color: string }>;
 const manualRuns = ref<ManualRun[]>([]);
+function loadManualStore(): ManualRun[] {
+  try {
+    const raw = localStorage.getItem(MANUAL_STORE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as ManualRun[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveManualStore(): void {
+  try {
+    localStorage.setItem(MANUAL_STORE_KEY, JSON.stringify(manualRuns.value.slice(0, MANUAL_STORE_MAX)));
+  } catch {
+    /* 容量/隐私模式等写失败不影响本会话内存 */
+  }
+}
+function dropManualRun(id: string): void {
+  manualRuns.value = manualRuns.value.filter((r) => r.id !== id);
+  saveManualStore();
+}
+/** 清空本页本地留档（同步后端 TEST 任务不受影响，仍见「后端测试任务」页签） */
+function clearManualRuns(): void {
+  manualRuns.value = [];
+  saveManualStore();
+}
 
 /* ---------- 真实接口状态 ---------- */
 const sources = ref<CrawlExternalApi.SourceItem[]>([]);
@@ -204,6 +233,7 @@ function refreshAll() {
 }
 
 onMounted(() => {
+  manualRuns.value = loadManualStore();
   void loadSources();
   void loadTaskTotalGlobal();
   void loadSched(true);
@@ -232,6 +262,7 @@ function onParsed(
     resp,
     occurredAt: Date.now(),
   });
+  saveManualStore();
   if (!ok) message.error(resp?.error || '解析未成功');
   void loadBackendTests();
 }
@@ -308,6 +339,12 @@ async function openManualProcess(run: ManualRun) {
   processManual.value = run;
   processTask.value = undefined;
   processOpen.value = true;
+}
+/** 抽屉内删除当前留档（数据 + 本地存储；删除后关闭抽屉） */
+function deleteCurrentManual(): void {
+  if (!processManual.value) return;
+  dropManualRun(processManual.value.id);
+  processOpen.value = false;
 }
 async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
   processManual.value = undefined;
@@ -699,7 +736,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     <div class="ind-kpis">
       <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
       <div class="ind-kpi k-green"><div class="k-label">后端测试</div><div class="k-num">{{ kpis.tests }}</div><div class="k-note">taskType=TEST 服务端留痕</div></div>
-      <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">本次会话手动录入（刷新清空）</div></div>
+      <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入解析回执（本地留档刷新保留）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
 
@@ -805,51 +842,38 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         </article>
       </section>
 
-      <!-- ============ ③ 会话测试 · 手动录入 ============ -->
+      <!-- ============ ③ 会话测试 · 手动录入（任务条形式：与任务/测试同构的表格化行，点击行 → 抽屉看 源/提取/渲染 三段详情；localStorage 留档刷新保留） ============ -->
       <section v-show="activeTab === 'manual'">
+        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：一行一条任务条 —— 状态 / 时间 / 标题 / 解析器 / 输入口径；点行开详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留），后端同步留痕 taskType=TEST（「后端测试任务」页签）。</div>
         <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条" />
-        <article v-for="r in manualRuns" :key="r.id" class="ind-card">
-          <div class="ind-card-h">
-            <Tag color="purple">测试</Tag>
-            <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
-            <span class="cd-title truncate">{{ (r.resp?.title || '').trim() || '（无标题产出）' }}</span>
-            <span class="cd-meta">{{ fmtDt(r.occurredAt) }}</span>
-            <a class="text-sm font-bold text-blue-700" @click="openManualProcess(r)">过程</a>
-          </div>
-          <div class="grid grid-cols-3 max-lg:grid-cols-1">
-            <!-- ① 源 -->
-            <div class="p-4 border-r border-dashed border-gray-300">
-              <div class="ind-sec-t"><span>①</span> 源 · 源代码 / PDF</div>
-              <div class="ind-kv" style="grid-template-columns: 1fr;">
-                <div class="kv"><span class="k">输入口径</span><span class="v">{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}</span></div>
-                <div v-if="r.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ r.contentLength }} 字符</span></div>
-                <div v-if="r.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="r.url">{{ r.url }}</span></div>
-              </div>
-              <div class="mt-2 text-xs font-medium text-gray-500">原文 HTML/PDF 完整内容由后端 FileApi 落库后经 fileUrl 提供（契约 TaskRunVO.raw），本会话仅保留解析回执。</div>
+        <template v-else>
+          <div class="fp-tbl">
+            <div class="fp-tr fp-th">
+              <span class="fp-td w-status">状态</span>
+              <span class="fp-td w-time">时间</span>
+              <span class="fp-td flex-1">标题 / 输入</span>
+              <span class="fp-td w-parser">解析器</span>
+              <span class="fp-td w-msg">消息 / 明细</span>
             </div>
-            <!-- ② 提取内容 -->
-            <div class="p-4 border-r border-dashed border-gray-300">
-              <div class="ind-sec-t"><span>②</span> 提取内容</div>
-              <div class="ind-kv" style="grid-template-columns: 1fr;">
-                <div v-for="[k, v] in kvOf(r)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
-              </div>
-              <div v-if="extractedOf(r).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
-                <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
-                <div class="ind-kv" style="grid-template-columns: 1fr;">
-                  <div v-for="[k, v] in extractedOf(r)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
-                </div>
-              </div>
-              <div v-if="r.resp?.warnings?.length" class="mt-2">
-                <Tag v-for="(w, i) in r.resp.warnings" :key="i" color="orange" class="mr-1 mt-0.5">{{ w }}</Tag>
-              </div>
-            </div>
-            <!-- ③ 渲染内容 -->
-            <div class="p-4">
-              <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
-              <div class="ind-doc" v-html="renderHtmlOf(r)"></div>
+            <div v-for="r in manualRuns" :key="r.id" class="fp-tr fp-row-click" @click="openManualProcess(r)">
+              <span class="fp-td w-status">
+                <Tag color="purple">测试</Tag>
+                <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
+              </span>
+              <span class="fp-td w-time">{{ fmtDt(r.occurredAt) }}</span>
+              <span class="fp-td flex-1" style="color:#1f2937;font-weight:600">{{ (r.resp?.title || '').trim() || (r.url || '（无标题产出）') }}</span>
+              <span class="fp-td w-parser">{{ r.parserName || r.parserCode || '—' }}</span>
+              <span class="fp-td w-msg fp-msg">
+                <template v-if="r.resp?.error">{{ r.resp.error }}</template>
+                <template v-else>[{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}] · {{ r.contentLength != null ? r.contentLength + ' 字符' : '—' }} · {{ r.durationMs != null ? r.durationMs + ' ms' : '—' }}</template>
+              </span>
             </div>
           </div>
-        </article>
+          <div class="mt-2 flex items-center justify-between text-xs font-medium text-gray-500">
+            <span>共 {{ manualRuns.length }} 条 · 本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）</span>
+            <a class="text-blue-700 font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a>
+          </div>
+        </template>
       </section>
 
       <!-- ============ ④ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
@@ -871,44 +895,70 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       </section>
     </div>
 
-    <!-- 过程抽屉 -->
-    <Drawer v-model:open="processOpen" title="任务过程" :width="720">
-      <div v-if="processTask" class="space-y-3">
+    <!-- 详情抽屉（任务过程 / 会话测试解析详情；会话=任务条行点击的三段详情，任务=回读明细） -->
+    <Drawer v-model:open="processOpen" :width="processTask ? 720 : 980" :title="processTask ? '任务过程' : '会话测试 · 解析详情'">
+      <!-- 会话测试解析详情（manual 任务条行点击 → 三段：源 · 提取 · 渲染 + 观测；含本会话本地留档 + 后端 TEST 留痕） -->
+      <div v-if="processManual" class="space-y-3">
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
-          <div class="ind-panel-b">
-            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
-            <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
-              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
-            </Descriptions>
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">解析回执</span>
+            <span class="ind-panel-meta">parserCode={{ processManual.parserCode || '—' }} · {{ fmtDt(processManual.occurredAt) }}</span>
           </div>
-        </div>
-      </div>
-      <div v-else-if="processManual" class="space-y-3">
-        <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">会话测试过程</span></div>
           <div class="ind-panel-b">
             <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode }}</Descriptions.Item>
-              <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') }}</Descriptions.Item>
+              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') || '—' }}</Descriptions.Item>
               <Descriptions.Item label="来源 URL">{{ processManual.url || '—' }}</Descriptions.Item>
               <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? processManual.durationMs + ' ms' : '—' }}</Descriptions.Item>
-              <Descriptions.Item label="解析状态">{{ manualStatusTag(processManual).text }}</Descriptions.Item>
+              <Descriptions.Item label="解析状态"><Tag :color="manualStatusTag(processManual).color">{{ manualStatusTag(processManual).text }}</Tag></Descriptions.Item>
               <Descriptions.Item v-if="processManual.resp?.error" label="失败原因">{{ processManual.resp.error }}</Descriptions.Item>
             </Descriptions>
-            <div class="mt-3">
-              <div class="ind-sec-t"><span>STEP</span> 过程步骤</div>
-              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
-                <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
-                <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
-                <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
+            <div class="mt-2 flex justify-end">
+              <Button size="small" type="primary" ghost @click="deleteCurrentManual()">删除本条留档</Button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 max-lg:grid-cols-1 gap-3">
+          <!-- ① 源 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>①</span> 源 · 输入</div>
+            <div class="ind-kv" style="grid-template-columns: 1fr;">
+              <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ' · ' + processManual.fileName : '' }}</span></div>
+              <div v-if="processManual.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ processManual.contentLength }} 字符</span></div>
+              <div v-if="processManual.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="processManual.url">{{ processManual.url }}</span></div>
+            </div>
+          </div>
+          <!-- ② 提取内容 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>②</span> 提取内容</div>
+            <div class="ind-kv" style="grid-template-columns: 1fr;">
+              <div v-for="[k, v] in kvOf(processManual)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+            </div>
+            <div v-if="extractedOf(processManual).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
+              <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
+              <div class="ind-kv" style="grid-template-columns: 1fr;">
+                <div v-for="[k, v] in extractedOf(processManual)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
               </div>
+            </div>
+            <div v-if="processManual.resp?.warnings?.length" class="mt-2">
+              <Tag v-for="(w, i) in processManual.resp.warnings" :key="i" color="orange" class="mr-1 mt-0.5">{{ w }}</Tag>
+            </div>
+          </div>
+          <!-- ③ 渲染内容 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
+            <div class="ind-doc" v-html="renderHtmlOf(processManual)"></div>
+          </div>
+        </div>
+
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">过程步骤</span></div>
+          <div class="ind-panel-b">
+            <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+              <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
+              <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
+              <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
             </div>
             <div v-if="processManual.resp?.meta && Object.keys(processManual.resp.meta).length" class="mt-3">
               <div class="ind-sec-t"><span>OBS</span> 解析观测（meta）</div>
@@ -931,6 +981,25 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 任务过程（tasks/批次内任务行 → 回读明细） -->
+      <div v-else-if="processTask" class="space-y-3">
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
+          <div class="ind-panel-b">
+            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+            <Descriptions :column="1" size="small" bordered>
+              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
+              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
+              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
+            </Descriptions>
           </div>
         </div>
       </div>
@@ -1050,6 +1119,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
 .fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
 .fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text); }
+.fp-td.w-parser { width: 140px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
 .fp-td.fp-url { color: #1f2937; font-weight: 600; }
 .fp-td.fp-msg { font-size: 12.5px; }
 .fp-sortable { cursor: pointer; user-select: none; }
