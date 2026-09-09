@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 QYZB 配置模型升级：源级 api_config_json=接口模板（一份），栏目只写差异（继承生效见 CrawlSourceRunner）
 UPDATE bidding_fetch_source
 SET api_config_json = '{"url":"https://qyzb.shccmg.com/cms/api/dynamicData/queryContentPage","method":"POST","mapping":{"url":"url","date":"publishDate","title":"title","category":"categoryName","contentHtml":"text"},"rowsPath":"res.rows","totalPath":"res.total","urlPrefix":"https://qyzb.shccmg.com/cms/default/webfile","bodyTemplate":"{\\"pageNo\\":{page},\\"pageSize\\":{size},\\"dto\\":{\\"siteId\\":\\"{siteId}\\",\\"categoryId\\":\\"{categoryId}\\"}}"}',

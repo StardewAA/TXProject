@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 补管理页菜单行（type=2）：外部公告管理页 + 采集源管理页
 -- 背景：2026-09-08-notice-external-menu.sql 只注册了目录(60001000/60002000)与按钮权限(type=3)，
 --       没有任何带 component 的页面菜单行；前端 accessMode=backend 下 noticeExternal/crawlExternal

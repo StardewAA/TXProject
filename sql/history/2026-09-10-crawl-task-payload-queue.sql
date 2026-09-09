@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- ============================================================================
 -- bidding_crawl_task 增加 payload_json：列表阶段快照（QYZB 全文 HTML / GX 标题日期）
 -- 设计：MySQL = 持久队列（唯一真相），Redis Stream = 轻信号（仅 taskId），全文不进 Redis

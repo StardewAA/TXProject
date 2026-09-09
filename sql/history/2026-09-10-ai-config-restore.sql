@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 AI 链路配置修复（公告AI解析 role 20 → deepseek-chat → test key）
 -- 现象：ai-extract 依次报“聊天角色(公告AI解析)已禁用”→“模型({})已禁用”→“该聊天模型的配置不完整”
 -- 根因：ai_chat_role(20)/ai_model(66)/ai_api_key(28) 三处启用位被打成禁用；role.model_id 悬空指向被删行

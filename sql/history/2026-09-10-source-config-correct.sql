@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 采集源配置正确化（实测校准）
 -- 1) EBIDDING.base_url 错填 qyzb.shccmg.com URL（真站=秦源招标电子招标平台 www.ebidding.com.cn）——影响 /go 与下载白名单语义
 UPDATE bidding_fetch_source SET base_url = 'https://www.ebidding.com.cn'

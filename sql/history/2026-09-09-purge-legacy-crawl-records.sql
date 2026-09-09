@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-09 一次性清理：删除旧体系爬虫运行记录（task/job），之后按批次 jobId 管理。
 -- 背景：bidding_crawl_task 残留 10 条旧版失败记录均无 job_id（旧 runner 只记失败、无批次归属）；
 --       bidding_crawl_job 2 条为早期冒烟批次。采集源配置(bidding_crawl_source)与采集公告(bidding_notice_external)不受影响。

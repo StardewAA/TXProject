@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 外部公告 AI 结构化抽取（PDF→AI 结构化输出，供检索/信息提取；待 AI 渠道就绪后联调）
 -- 背景：采集链本地 PDFBox 只能抽文字层文本（扫描件无文字层=FAIL_EMPTY）；AI 抽取可
 -- 结构化字段 + 扫描件全文转写，转写全文回写 extraction_text（复用既有 ES contentText 索引源）。

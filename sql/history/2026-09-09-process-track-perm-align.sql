@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-09 权限对齐：投标流程跟踪(6748) 菜单 permission 改为 bidding:notice-external:query
 -- 原因：页面唯一接口 GET /bidding/notice-follow/item/page 校验 bidding:notice-external:query；
 --      原 bidding:process-track:query 在任何已授菜单上均不匹配该接口 → 打开页面必 403。已应用到本地库。

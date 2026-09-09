@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 超管公司（tenant 1 西安鸥鹏互联科技有限公司）发布门数据补齐
 -- 资格门（NoticeService create/update/publish → assertTendererIssuanceAllowed）要求：
 --   bidding_subject_auth 存在 (tenant_id=1, subject_type=TENDERER, auth_status=ENABLED)

@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- ============================================================================
 -- bidding 模块业务表 DDL（从开发库 ruoyi-vue-pro 导出，仅结构，不含数据/不加 DROP）
 -- 来源：Docker MySQL txgy-mysql-1 / ruoyi-vue-pro；导出：2026-09-08

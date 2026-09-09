@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- ============================================================================
 -- QYZB 升级为 API 源样板：栏目对象内嵌 apiConfig（runner 走 runApiCategory 新路径）
 -- bodyTemplate 用 {page}/{size}/{siteId}/{categoryId} 占位（driver renderBody 替换）

@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 源配置对齐：增量小窗口 + 首跑全量窗口分离（2026-09-10）
 -- 语义：lookbackDays=增量窗口（每次调度只回溯 N 天）；fullLookbackDays=首跑全量窗口（源无 SUCCESS 历史时回溯 60 天）
 -- fetch_interval_seconds=300（下载器间隔 5 分钟，用户口径；原 QYZB 180 偏密）

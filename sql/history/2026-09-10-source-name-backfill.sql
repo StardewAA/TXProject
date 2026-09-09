@@ -1,3 +1,6 @@
+-- 编码声明：强制 utf8mb4（防乱码）
+SET NAMES utf8mb4;
+
 -- 2026-09-10 外部公告 source_name 快照回填（P2-3）
 -- 背景：ingest 落库有 source_name 列，但上游 DTO 长期未传（683/687 行为 NULL）；
 --       已加 ingest 兜底（按 source_code 查源配置取名），本脚本回填存量。
