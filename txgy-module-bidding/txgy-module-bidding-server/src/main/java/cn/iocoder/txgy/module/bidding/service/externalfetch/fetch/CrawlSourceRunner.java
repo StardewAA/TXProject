@@ -204,7 +204,12 @@ public class CrawlSourceRunner {
                 try {
                     if (asyncMode) {
                         // 异步投递：全文生产端归档 FileApi + 落 PENDING task + 发轻信号（消费端执行落库）；ingested 语义=已入队
-                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        // 2026-09-10 下载器改 AI：task.parser_code 仍为列表解析器（执行路由依据不变），
+                        // 详情/落库解析器 detailParser 随 payload 下发（缺省由消费端回退列表解析器）
+                        entry.setDetailParser("HTML_AI".equals(effectiveDetailParser(config)) || "PDF_AI".equals(effectiveDetailParser(config))
+                                ? effectiveDetailParser(config) : null);
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(),
+                                StringUtils.hasText(config.getParser()) ? config.getParser() : "HTML_GENERIC", entry);
                         if (taskId != null) {
                             cs.setIngested(cs.getIngested() + 1);
                         }
@@ -225,6 +230,8 @@ public class CrawlSourceRunner {
                         dto.setPublishTime(publish); // A5：解析失败传 null，日期回填决策交还 ingest（BR-5 原文日期优先）
                         dto.setIssuerName(extractIssuer(entry.getContentHtml()));
                         dto.setParserCode(config.getParser());
+                        // 2026-09-10 下载器改 AI：同步直采同样过 AI 结构化与行业判定（detailParser=HTML_AI 时生效）
+                        applyAiEnrich(dto, effectiveDetailParser(config), entry.getContentHtml(), entry.getUrl());
                         externalNoticeIngestService.ingest(dto);
                         cs.setIngested(cs.getIngested() + 1);
                     }
@@ -271,11 +278,15 @@ public class CrawlSourceRunner {
                 cs.setFetched(cs.getFetched() + 1);
                 try {
                     if (asyncMode) {
-                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        // 2026-09-10 下载器改 AI：秦源 JSON 列表直采同样按 detailParser（如 HTML_AI）执行正文抽取与行业分类；
+                        // task.parser_code 保持 QYZB_JSON（QYZB 直采路由与 JSON 语义不变）
+                        entry.setDetailParser("HTML_AI".equals(effectiveDetailParser(config)) || "PDF_AI".equals(effectiveDetailParser(config))
+                                ? effectiveDetailParser(config) : null);
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), "QYZB_JSON", entry);
                         if (taskId != null) {
                             cs.setIngested(cs.getIngested() + 1); // 投递模式：ingested=已入队
                         }
-                    } else if (ingestQyzEntry(source.getSourceCode(), entry, seen)) {
+                    } else if (ingestQyzEntry(source.getSourceCode(), entry, seen, effectiveDetailParser(config))) {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
@@ -293,7 +304,8 @@ public class CrawlSourceRunner {
     }
 
     /** 秦源条目：rows.text 全文直采（本轮 seen 去重；跨轮 ingest urlHash 幂等） */
-    private boolean ingestQyzEntry(String sourceCode, NoticeParseResult.ListEntry entry, Set<String> seen) throws Exception {
+    private boolean ingestQyzEntry(String sourceCode, NoticeParseResult.ListEntry entry, Set<String> seen,
+                                   String detailParser) throws Exception {
         if (!StringUtils.hasText(entry.getUrl()) || !StringUtils.hasText(entry.getContentHtml())) {
             throw new IllegalStateException("条目缺 url/contentHtml（接口结构变化？）");
         }
@@ -312,6 +324,8 @@ public class CrawlSourceRunner {
         dto.setPublishTime(publish); // A5：解析失败传 null，日期回填决策交还 ingest（BR-5 原文日期优先）
         dto.setIssuerName(extractIssuer(entry.getContentHtml()));
         dto.setParserCode("QYZB_JSON");
+        // 2026-09-10 下载器改 AI：秦源全文直采同样过 AI 结构化与行业判定（detailParser=HTML_AI 时生效）
+        applyAiEnrich(dto, detailParser, entry.getContentHtml(), entry.getUrl());
         externalNoticeIngestService.ingest(dto);
         return true;
     }
@@ -351,11 +365,15 @@ public class CrawlSourceRunner {
                 try {
                     if (asyncMode) {
                         // GX：enqueue 详情 URL，消费端抓详情→PDF→落库（长下载异步化，生产端不阻塞）
-                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), config.getParser(), entry);
+                        // 2026-09-10 下载器改 AI：PDF 正文抽取与行业分类走 detailParser（PDF_AI）；
+                        // task.parser_code 保持列表解析器（GX_E_BIDDING → 消费端走“详情→PDF 直链→PDF 解析”路由）
+                        entry.setDetailParser("HTML_AI".equals(effectiveDetailParser(config)) || "PDF_AI".equals(effectiveDetailParser(config))
+                                ? effectiveDetailParser(config) : null);
+                        Long taskId = crawlTaskDispatchService.enqueue(jobId, source.getSourceCode(), listParser, entry);
                         if (taskId != null) {
                             cs.setIngested(cs.getIngested() + 1); // 投递模式：ingested=已入队
                         }
-                    } else if (ingestGxEntry(source, entry, seen)) {
+                    } else if (ingestGxEntry(source, entry, seen, effectiveDetailParser(config))) {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
@@ -383,7 +401,8 @@ public class CrawlSourceRunner {
     }
 
     /** 国信条目：详情页 → pdf.js 直链 → 下载 PDF → 文本解析 → 落库（PDF 形态；fileId 待 FileApi P2 回填） */
-    private boolean ingestGxEntry(CrawlSourceDO source, NoticeParseResult.ListEntry entry, Set<String> seen) throws Exception {
+    private boolean ingestGxEntry(CrawlSourceDO source, NoticeParseResult.ListEntry entry, Set<String> seen,
+                                  String pdfParserCode) throws Exception {
         String detailUrl = entry.getUrl();
         if (!StringUtils.hasText(detailUrl)) {
             throw new IllegalStateException("条目缺详情 URL");
@@ -415,9 +434,14 @@ public class CrawlSourceRunner {
         pdfInput.setPayloadType("PDF");
         pdfInput.setFileName("notice.pdf");
         pdfInput.setFileBytes(pdf);
-        NoticeParseResult parsed = pdfTextNoticeParser.parse(pdfInput);
+        // 2026-09-10 下载器改 AI：PDF 正文抽取与行业分类按 detailParser（PDF_AI=PDFBox 抽文本→平台 AI；空=本地 PDF_TEXT_GENERIC）
+        String effectivePdfParser = StringUtils.hasText(pdfParserCode) ? pdfParserCode : "PDF_TEXT_GENERIC";
+        NoticeParseResult parsed = parserRegistry.get(effectivePdfParser).parse(pdfInput);
         ExternalNoticeIngestDTO dto = new ExternalNoticeIngestDTO();
         dto.setSourceCode(source == null ? null : source.getSourceCode());
+        dto.setIndustryFlag(parsed.getIndustryFlag());
+        dto.setIndustryConfidence(parseConfidence(parsed.getIndustryConfidence()));
+        dto.setAiMetaJson(parsed.getAiMetaJson());
         dto.setOrigUrl(detailUrl);
         dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : entry.getTitle());
         dto.setContentType("PDF");
@@ -485,6 +509,13 @@ public class CrawlSourceRunner {
     public static class CategoryConfig {
         private String name;
         private String parser;
+        /**
+         * 详情/落库解析器（2026-09-10 下载器改 AI）：列表发现仍用 {@link #parser}（站点/JSON 结构解析），
+         * 正文抽取与行业分类改用 AI 解析器（HTML_AI/PDF_AI）。
+         * 依据：数据获取与内容分类职责分离——AI 不承担站点列表结构解析（列表由 apiConfig/站点解析器负责），
+         * 空值回退 parser（向后兼容既有配置）。
+         */
+        private String detailParser;
         private String categoryId;
         private String siteId;
         private Integer pageSize;
@@ -596,6 +627,78 @@ public class CrawlSourceRunner {
         }
         boolean lookback = config.getLookbackDays() != null && config.getLookbackDays() > 0;
         return lookback ? DEFAULT_LOOKBACK_MAX_PAGES : SINGLE_PAGE_LIMIT;
+    }
+
+    /** AI 置信度字符串 → BigDecimal（解析失败返回 null，不阻断落库） */
+    private static java.math.BigDecimal parseConfidence(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return new java.math.BigDecimal(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * AI 结构化增强（2026-09-10 下载器改 AI；同步直采路径）。
+     *
+     * <p>规范依据：外部信息获取 v1.0 §三（AI 结构化与防腐保温行业判定）+ 用户口径「三个下载器都改成 AI 的」。
+     * 业务目标：正文落地前统一产出 title/projectCode/projectName/发布单位/发布时间与 industryFlag/confidence，
+     * 使「是否属于防腐保温行业」有据可查（行业库/商机跟进的前置条件）。
+     * 原因：detailParser 非 AI 解析器时保持本地规则结果（不引入额外模型成本与不确定性）；
+     * AI 异常/未启用一律降级为不增强，绝不因 AI 失败丢公告（宁可少字段，不可丢原文）。
+     */
+    private void applyAiEnrich(ExternalNoticeIngestDTO dto, String detailParser, String contentHtml, String url) {
+        if (dto == null || !isAiParser(detailParser) || !StringUtils.hasText(contentHtml)) {
+            return;
+        }
+        try {
+            NoticeParseResult ai = parserRegistry.get(detailParser)
+                    .parse(inputOf("HTML", contentHtml, url));
+            if (ai == null) {
+                return;
+            }
+            if (!StringUtils.hasText(dto.getIndustryFlag())) {
+                dto.setIndustryFlag(ai.getIndustryFlag());
+            }
+            dto.setIndustryConfidence(parseConfidence(ai.getIndustryConfidence()));
+            dto.setAiMetaJson(ai.getAiMetaJson());
+            if (!StringUtils.hasText(dto.getProjectCode())) {
+                dto.setProjectCode(ai.getProjectCode());
+            }
+            if (!StringUtils.hasText(dto.getTenderProjectCode())) {
+                dto.setTenderProjectCode(ai.getTenderProjectCode());
+            }
+            if (!StringUtils.hasText(dto.getProjectName())) {
+                dto.setProjectName(ai.getProjectName());
+            }
+            if (!StringUtils.hasText(dto.getIssuerName()) && StringUtils.hasText(ai.getIssuerName())) {
+                dto.setIssuerName(ai.getIssuerName());
+            }
+            if (dto.getPublishTime() == null) {
+                dto.setPublishTime(ai.getPublishTime());
+            }
+            if (ai.getStatus() == NoticeParseResult.Status.FAILED) {
+                log.warn("[crawl][ai-enrich] AI 未产出（不阻断落库）: parser={} err={}", detailParser, ai.getError());
+            }
+        } catch (Exception ex) {
+            log.warn("[crawl][ai-enrich] AI 增强异常（不阻断落库）: parser={} msg={}", detailParser, ex.getMessage());
+        }
+    }
+
+    /** AI 解析器判定：仅 *_AI 策略码走平台 AI（HTML_AI/PDF_AI），其余本地规则解析 */
+    private static boolean isAiParser(String parserCode) {
+        return StringUtils.hasText(parserCode) && parserCode.endsWith("_AI");
+    }
+
+    /** 详情/落库解析器：detailParser 优先（下载器改 AI），空则回退列表解析器 parser（兼容既有配置） */
+    private static String effectiveDetailParser(CategoryConfig config) {
+        if (config == null) {
+            return null;
+        }
+        return StringUtils.hasText(config.getDetailParser()) ? config.getDetailParser() : config.getParser();
     }
 
     /** 窗口起点（含当天向前 lookbackDays 天）；未启用回溯返回 null（不过滤） */

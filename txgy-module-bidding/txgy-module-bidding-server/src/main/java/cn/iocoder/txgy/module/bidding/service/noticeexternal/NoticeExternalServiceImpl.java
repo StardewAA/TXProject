@@ -604,26 +604,69 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (notice == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.EXTERNAL_NOTICE_NOT_EXISTS);
         }
-        if (!"PDF".equalsIgnoreCase(notice.getContentType()) || !StringUtils.hasText(notice.getPdfDownloadUrl())) {
-            return null; // 非 PDF 或无归档：调用方按 404 处理
+        if (!"PDF".equalsIgnoreCase(notice.getContentType())) {
+            return null; // 非 PDF 形态：调用方按 404 处理
+        }
+        // ① 平台归档（首选：pdf_download_url 指向平台文件服务，稳定且不受站点鉴权影响）
+        if (StringUtils.hasText(notice.getPdfDownloadUrl())) {
+            byte[] archived = fetchPdfBytes(notice.getPdfDownloadUrl(), id, "平台归档");
+            if (archived != null) {
+                return archived;
+            }
+        }
+        // ② 兜底：外站直链（meta_json.pdfDownloadUrl，采集详情时记录；使用它需过采集源白名单 = SSRF 防护）
+        String externalUrl = pdfMetaPdfDownloadUrl(notice.getMetaJson());
+        if (StringUtils.hasText(externalUrl) && !externalUrl.equals(notice.getPdfDownloadUrl())) {
+            try {
+                assertPdfDownloadAllowed(notice, externalUrl);
+                byte[] external = fetchPdfBytes(externalUrl, id, "外站直链");
+                if (external != null) {
+                    log.info("[pdfContent][id={}] 平台归档不可用，已回退外站直链预览", id);
+                    return external;
+                }
+            } catch (Exception e) {
+                log.warn("[pdfContent][id={}] 外站直链回退被拒: {}", id, e.getMessage());
+            }
+        }
+        // 双通道皆不可用：返回 null → 404（前端提示「暂无 PDF 原文」，不再返回 0 字节的空白 PDF）
+        log.warn("[pdfContent][id={}] 无可用 PDF 原文（归档 url={}，外站直链={}）",
+                id, notice.getPdfDownloadUrl(), externalUrl);
+        return null;
+    }
+
+    /**
+     * 下载 PDF 字节并做「空体」判定。
+     *
+     * <p>规范依据：《外部信息获取 v1.0》§7.6/F-2 契约（PDF 预览端点：非 PDF 或无归档返回 404）。
+     * 业务目标：预览必须「要么给出可看的原文，要么明确 404」。
+     * 原因（2026-09-10 缺陷修复）：原实现只判 HTTP 200 + body 非 null，
+     * 文件服务在文件缺失/内容为空时同样返回 200 空体，于是前端拿到 0 字节空白 PDF（表现为"预览打不开也没报错"）。
+     * 现按字节长度判定，空体一律视为不可用并记录 url 与状态码，便于定位是「归档缺失」还是「存储读空」。
+     *
+     * @return 非空字节数组；任何失败（网络/状态码非 200/空体）返回 null
+     */
+    private byte[] fetchPdfBytes(String url, Long id, String channel) {
+        if (!StringUtils.hasText(url)) {
+            return null;
         }
         try {
             java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
                     .connectTimeout(java.time.Duration.ofSeconds(10))
                     .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
                     .build();
-            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(notice.getPdfDownloadUrl()))
+            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
                     .timeout(java.time.Duration.ofSeconds(60))
                     .GET().build();
             java.net.http.HttpResponse<byte[]> resp = client.send(req,
                     java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-            if (resp.statusCode() == 200 && resp.body() != null) {
+            int length = resp.body() == null ? 0 : resp.body().length;
+            if (resp.statusCode() == 200 && length > 0) {
                 return resp.body();
             }
-            log.warn("[pdfContent][id={}] 文件服务返回 HTTP {}", id, resp.statusCode());
+            log.warn("[pdfContent][id={}][{}] 不可用：HTTP {} 字节数 {} url={}", id, channel, resp.statusCode(), length, url);
             return null;
         } catch (Exception e) {
-            log.warn("[pdfContent][id={}] PDF 获取失败: {}", id, e.getMessage());
+            log.warn("[pdfContent][id={}][{}] 获取失败: {} url={}", id, channel, e.getMessage(), url);
             return null;
         }
     }

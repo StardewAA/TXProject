@@ -34,6 +34,10 @@ public class ExternalNoticeIngestDTO {
     private String legalFlag;
     /** BELONGS/NOT_BELONGS/UNCERTAIN */
     private String industryFlag;
+    /** 行业判定置信度 0~1（AI 解析器产出，2026-09-10 补齐链路字段） */
+    private java.math.BigDecimal industryConfidence;
+    /** AI 结构化 meta 原样 JSON（判定理由/命中词/其余字段留痕；AI 解析器产出） */
+    private String aiMetaJson;
     private String projectCode;
     private String tenderProjectCode;
     private String bidSectionCodes;

@@ -76,6 +76,10 @@ public class CrawlTaskDispatchServiceImpl implements CrawlTaskDispatchService {
             payload.put("url", entry.getUrl());
             payload.put("date", entry.getDate());
             payload.put("category", entry.getCategory());
+            // 2026-09-10 下载器改 AI：详情解析器随 payload 下发（task.parser_code 保持列表解析器，用于执行路由）
+            if (StringUtils.hasText(entry.getDetailParser())) {
+                payload.put("detailParser", entry.getDetailParser());
+            }
             // 全文文件化：有 contentHtml 先归档 FileApi，payload 只存引用（v1.0 §2.2 原文文件化）
             if (StringUtils.hasText(entry.getContentHtml())) {
                 FileRef ref = archiveHtml(entry.getContentHtml(), entry.getTitle());
