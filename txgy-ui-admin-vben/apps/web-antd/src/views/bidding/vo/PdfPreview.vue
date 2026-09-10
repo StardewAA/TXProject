@@ -72,6 +72,10 @@ function close(): void {
           该类型不支持内嵌预览，请
           <a :href="resolved" target="_blank" rel="noopener noreferrer">在新窗口打开</a>。
         </div>
+        <div v-if="isPdf" class="pv-note">
+          若下方预览为空白：说明该文件地址（如平台文件服务内网 host）在浏览器侧不可达，或需鉴权头（iframe 无法携带）。
+          请点「新窗口打开」验证；此类情形需后端提供字节流代理端点（T 轨公告参照外部域 GET /bidding/notice-external/pdf 的实现）。
+        </div>
         <div class="pv-bar">
           <span class="pv-url" :title="resolved">{{ resolved }}</span>
           <a :href="resolved" target="_blank" rel="noopener noreferrer">新窗口打开</a>
@@ -94,6 +98,7 @@ function close(): void {
 .pv-bar { margin-top: 8px; display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
 .pv-url { color: #8a949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .pv-hint { padding: 24px 0; text-align: center; color: #6b7681; font-size: 13px; }
+.pv-note { margin-top: 6px; font-size: 11.5px; line-height: 1.65; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 3px; padding: 5px 9px; }
 .pv-err { padding: 20px 16px; background: #fdf3f2; border: 1px solid #f0c9c4; }
 .pv-err-t { font-size: 14px; font-weight: 700; color: #a12a20; margin: 0 0 6px; }
 .pv-err-m { font-size: 12.5px; line-height: 1.7; color: #7a3b33; margin: 0 0 4px; }
