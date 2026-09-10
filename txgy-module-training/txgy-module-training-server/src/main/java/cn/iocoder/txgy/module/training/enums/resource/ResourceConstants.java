@@ -36,7 +36,7 @@ public final class ResourceConstants {
     // 视频：MP4（短视频 / 录播）+ 原有 mov
     public static final Set<String> VIDEO_ALLOWED_EXTS = new HashSet<>(Arrays.asList("mp4", "mov"));
     public static final long MAX_DOC_SIZE = 50L * 1024 * 1024; // 50MB
-    public static final long MAX_VIDEO_SIZE = 500L * 1024 * 1024; // 500MB
+    public static final long MAX_VIDEO_SIZE = 2048L * 1024 * 1024; // 2GB（放宽原 500MB，覆盖长录播课程视频）
     public static final long MAX_AI_DOC_SIZE = 20L * 1024 * 1024; // AI 导入文档 20MB 上限
 
     // ========== 视频类型（短视频 / 录播）==========
