@@ -148,7 +148,8 @@ async function doSave() {
  * 依据：07-主体域 §3（营业执照影像是企业资格法定材料）；红线 8（文件三件套 file_id/sha256/size）；
  *   后端 BiddingFileController 注释：彻底移除"让用户手填文件 ID"的退化交互。
  * 契约：POST /bidding/file/upload（响应必带 fileId，并同时回 url/sha256/size，供即时查看）。
- * 链路：uploadAttachment 三级优先（bidding 统一入口 → 预签名直传 → /infra/file/upload 兜底）。 */
+ * 链路：uploadAttachment 单一链路（主 /bidding/file/upload，降级预签名直传），均保证返回 fileId；
+ *   拿不到 fileId 直接抛「文件注册失败，请重试」，前端绝不会退回"让用户手填 ID"（规范 §3.2/§3.4）。 */
 const licenseUploading = ref(false);
 /** 已上传影像的访问地址（上传响应一并返回，用于即时查看，免调需权限的 /infra/file/get） */
 const licenseFileUrl = ref('');
@@ -167,14 +168,9 @@ async function beforeLicenseUpload(file: File): Promise<boolean> {
     const up = await uploadAttachment(file, 'bidding/subject/license');
     licenseFileUrl.value = up.url;
     form.licenseFileName = up.name || file.name;
-    if (up.fileId === undefined || up.fileId === null) {
-      /* 兜底链路（/infra/file/upload）只回 URL、无 file_id：明确提示，不写脏值，也不让用户手填 */
-      form.licenseFileId = '';
-      createMessage.warning('文件已上传，但上传链路未返回 file_id：请确认后端 /bidding/file/upload 可用（file_id 由系统生成，不由用户填写）');
-    } else {
-      form.licenseFileId = String(up.fileId);
-      createMessage.success('营业执照影像已上传，系统已自动绑定 file_id=' + up.fileId);
-    }
+    /* fileId 由上传链路保证存在（缺失时 uploadAttachment 已抛错），这里只做自动绑定 */
+    form.licenseFileId = String(up.fileId);
+    createMessage.success('营业执照影像已上传，系统已自动绑定 file_id=' + up.fileId);
   } catch (e) {
     createMessage.error('上传失败：' + ((e as Error).message || String(e)));
   } finally {
