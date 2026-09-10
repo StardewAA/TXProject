@@ -152,7 +152,8 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         }
 
         // 2.1 更新当前轮次面试安排；取消后重新安排时恢复为未完成
-        updateReqVO.setCandidateId(recruitInterview.getCandidateId()).setStageNumber(recruitInterview.getStageNumber());
+        updateReqVO.setApplicationId(recruitInterview.getApplicationId())
+                .setCandidateId(recruitInterview.getCandidateId()).setStageNumber(recruitInterview.getStageNumber());
         HrmRecruitInterviewDO updateObj = BeanUtils.toBean(updateReqVO, HrmRecruitInterviewDO.class)
                 .setResult(HrmRecruitInterviewResultEnum.UNFINISHED.getResult());
         recruitInterviewMapper.updateRecruitInterviewArrangement(updateObj);
@@ -179,8 +180,7 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         HrmRecruitInterviewDO recruitInterview = validateRecruitInterviewExists(id);
         HrmRecruitCandidateDO recruitCandidate = recruitCandidateService
                 .validateRecruitCandidateExistsForUpdate(recruitInterview.getCandidateId());
-        HrmRecruitInterviewDO latestInterview = recruitInterviewMapper
-                .selectLatestByCandidateId(recruitInterview.getCandidateId());
+        HrmRecruitInterviewDO latestInterview = latestInterviewOf(recruitInterview);
         boolean currentInterview = latestInterview != null && Objects.equals(latestInterview.getId(), id);
         if (currentInterview) {
             validateCurrentInterview(recruitCandidate, recruitInterview);
@@ -199,6 +199,11 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
     @Override
     public HrmRecruitInterviewDO getRecruitInterview(Long id) {
         return recruitInterviewMapper.selectById(id);
+    }
+
+    @Override
+    public HrmRecruitInterviewDO getLatestRecruitInterviewByApplicationId(Long applicationId) {
+        return applicationId == null ? null : recruitInterviewMapper.selectLatestByApplicationId(applicationId);
     }
 
     @Override
@@ -305,13 +310,19 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
 
     private void validateCurrentInterview(HrmRecruitCandidateDO recruitCandidate,
                                           HrmRecruitInterviewDO recruitInterview) {
-        HrmRecruitInterviewDO latestInterview = recruitInterviewMapper
-                .selectLatestByCandidateId(recruitCandidate.getId());
+        HrmRecruitInterviewDO latestInterview = latestInterviewOf(recruitInterview);
         if (latestInterview == null || ObjUtil.notEqual(latestInterview.getId(), recruitInterview.getId())
-                || ObjUtil.notEqual(recruitCandidate.getStatus(), HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus())
-                || ObjUtil.notEqual(recruitCandidate.getStageNumber(), recruitInterview.getStageNumber())) {
+                || (recruitInterview.getApplicationId() == null
+                && (ObjUtil.notEqual(recruitCandidate.getStatus(), HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus())
+                || ObjUtil.notEqual(recruitCandidate.getStageNumber(), recruitInterview.getStageNumber())))) {
             throw exception(RECRUIT_INTERVIEW_NOT_CURRENT);
         }
+    }
+
+    private HrmRecruitInterviewDO latestInterviewOf(HrmRecruitInterviewDO interview) {
+        return interview.getApplicationId() == null
+                ? recruitInterviewMapper.selectLatestByCandidateId(interview.getCandidateId())
+                : recruitInterviewMapper.selectLatestByApplicationId(interview.getApplicationId());
     }
 
     private void repairCandidateInterviewState(Long candidateId, HrmRecruitInterviewDO latestInterview) {

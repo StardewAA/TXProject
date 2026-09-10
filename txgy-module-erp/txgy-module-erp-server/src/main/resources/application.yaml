@@ -99,6 +99,11 @@ xxl:
 --- #################### OPENLAB BS相关配置 ####################
 
 txgy:
+  integration:
+    wms:
+      mode: mock # WMS 正式接口完成后改为 remote，业务代码无需调整
+      mock:
+        stock-decision: PENDING # 联调可切换 FULL/PARTIAL/SHORTAGE/REJECTED
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.erp

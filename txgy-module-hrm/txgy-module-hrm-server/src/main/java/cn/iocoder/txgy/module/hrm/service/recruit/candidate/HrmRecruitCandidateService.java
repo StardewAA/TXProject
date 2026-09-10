@@ -88,6 +88,9 @@ public interface HrmRecruitCandidateService {
      */
     HrmRecruitCandidateDO validateRecruitCandidateExists(Long id);
 
+    /** 按联系方式查找候选人，用于门户重复投递时复用人才档案。 */
+    HrmRecruitCandidateDO getRecruitCandidateByMobile(String mobile);
+
     /**
      * 锁定并校验招聘候选人是否存在
      *

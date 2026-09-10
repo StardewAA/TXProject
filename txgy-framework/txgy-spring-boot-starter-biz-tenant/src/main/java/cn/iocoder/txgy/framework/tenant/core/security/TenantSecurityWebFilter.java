@@ -17,6 +17,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
 
 import java.io.IOException;
@@ -33,6 +34,13 @@ import java.util.Set;
  */
 @Slf4j
 public class TenantSecurityWebFilter extends ApiRequestFilter {
+
+    /** 无租户个人用户使用的保留租户编号。 */
+    private static final Long PERSONAL_TENANT_ID = 0L;
+
+    /** 登录、注册是公开认证入口，不能使用浏览器残留的旧会话校验租户。 */
+    private static final String AUTH_LOGIN_PATH = "/admin-api/system/auth/login";
+    private static final String AUTH_REGISTER_PATH = "/admin-api/system/auth/register";
 
     private final TenantProperties tenantProperties;
 
@@ -65,9 +73,20 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Long tenantId = TenantContextHolder.getTenantId();
+        boolean authenticationEntry = isAuthenticationEntry(request);
+        // 认证入口由服务层按请求类型校验租户；即使外部配置未及时刷新，也不能
+        // 因旧会话或缺少 tenant-id 阻断个人/企业注册请求。
+        boolean ignoreUrl = authenticationEntry || isIgnoreUrl(request);
+        if (authenticationEntry) {
+            // 令牌过滤器早于本过滤器执行。认证入口必须与浏览器残留会话隔离，
+            // 否则旧用户会参与数据权限和创建人注入，污染本次登录/注册流程。
+            SecurityContextHolder.clearContext();
+        }
         // 1. 登陆的用户，校验是否有权限访问该租户，避免越权问题。
         LoginUser user = SecurityFrameworkUtils.getLoginUser();
-        if (user != null) {
+        // 登录/注册允许在已有会话仍存在时重新选择认证入口；认证服务会根据请求体
+        // 决定个人租户 0 或校验企业租户，不能在这里用旧令牌提前拦截。
+        if (user != null && !authenticationEntry) {
             // 如果获取不到租户编号，则尝试使用登陆用户的租户编号
             if (tenantId == null) {
                 tenantId = user.getTenantId();
@@ -84,7 +103,7 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
         }
 
         // 如果非允许忽略租户的 URL，则校验租户是否合法
-        if (!isIgnoreUrl(request)) {
+        if (!ignoreUrl) {
             // 2. 如果请求未带租户的编号，不允许访问。
             if (tenantId == null) {
                 log.error("[doFilterInternal][URL({}/{}) 未传递租户编号]", request.getRequestURI(), request.getMethod());
@@ -93,12 +112,16 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
                 return;
             }
             // 3. 校验租户是合法，例如说被禁用、到期
-            try {
-                tenantFrameworkService.validTenant(tenantId);
-            } catch (Throwable ex) {
-                CommonResult<?> result = globalExceptionHandler.allExceptionHandler(request, ex);
-                ServletUtils.writeJSON(response, result);
-                return;
+            // 个人用户使用 tenant_id=0 隔离数据，但系统租户表中不会创建 0 号租户。
+            // 因此跳过 0 号的租户状态校验，其余租户仍必须存在、启用且未过期。
+            if (!Objects.equals(tenantId, PERSONAL_TENANT_ID)) {
+                try {
+                    tenantFrameworkService.validTenant(tenantId);
+                } catch (Throwable ex) {
+                    CommonResult<?> result = globalExceptionHandler.allExceptionHandler(request, ex);
+                    ServletUtils.writeJSON(response, result);
+                    return;
+                }
             }
         } else { // 如果是允许忽略租户的 URL，若未传递租户编号，则默认忽略租户编号，避免报错
             if (tenantId == null) {
@@ -108,6 +131,11 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
 
         // 继续过滤
         chain.doFilter(request, response);
+    }
+
+    private boolean isAuthenticationEntry(HttpServletRequest request) {
+        String apiUri = request.getRequestURI().substring(request.getContextPath().length());
+        return AUTH_LOGIN_PATH.equals(apiUri) || AUTH_REGISTER_PATH.equals(apiUri);
     }
 
     private boolean isIgnoreUrl(HttpServletRequest request) {

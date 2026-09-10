@@ -246,7 +246,7 @@ const bodyHtml = computed(() => {
     const blocks = blocksToHtml(trimLeadHeading(d.bodyBlocks, d.title));
     if (blocks) return blocks;
   }
-  return prettyNoticeHtml(d.contentHtmlSafe);
+  return prettyNoticeHtml(d.contentHtmlSafe, d.title);
 });
 const hasBodyHtml = computed(() => !!bodyHtml.value);
 const isPdf = computed(() => !hasBodyHtml.value && detail.value?.contentType === 'PDF');

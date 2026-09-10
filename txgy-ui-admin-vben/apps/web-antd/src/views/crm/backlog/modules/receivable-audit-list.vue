@@ -1,5 +1,6 @@
 <!-- 待审核回款 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmReceivableApi } from '#/api/crm/receivable';
 
@@ -11,7 +12,7 @@ import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getReceivablePage } from '#/api/crm/receivable';
 import { useGridColumns } from '#/views/crm/receivable/data';
 
-import { AUDIT_STATUS } from '../data';
+import { AUDIT_STATUS, SCENE_TYPES } from '../data';
 
 const { push } = useRouter();
 
@@ -38,6 +39,11 @@ function handleContractDetail(row: CrmReceivableApi.Receivable) {
   push({ name: 'CrmContractDetail', params: { id: row.contractId } });
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -50,6 +56,13 @@ const [Grid] = useVbenVxeGrid({
           options: AUDIT_STATUS,
         },
         defaultValue: AUDIT_STATUS[0]!.value,
+      },
+      {
+        fieldName: 'sceneType',
+        label: '归属',
+        component: 'Select',
+        componentProps: { allowClear: true, options: SCENE_TYPES },
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },

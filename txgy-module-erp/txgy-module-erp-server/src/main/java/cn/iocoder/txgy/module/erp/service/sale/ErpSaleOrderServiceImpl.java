@@ -18,6 +18,7 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpSaleWmsIntegrationService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -68,6 +69,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private BpmProcessInstanceApi bpmProcessInstanceApi;
     @Resource
     private ErpApprovalNotificationService approvalNotificationService;
+    @Resource
+    private ErpSaleWmsIntegrationService saleWmsIntegrationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -95,7 +98,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
         // 2.1 插入订单
         ErpSaleOrderDO saleOrder = BeanUtils.toBean(createReqVO, ErpSaleOrderDO.class, in -> in
-                .setNo(no).setStatus(ErpAuditStatus.DRAFT.getStatus()));
+                .setNo(no).setStatus(ErpAuditStatus.DRAFT.getStatus())
+                .setWarehouseStatus("NOT_SUBMITTED").setWmsEventVersion(0L));
         calculateTotalPrice(saleOrder, saleOrderItems);
         saleOrderMapper.insert(saleOrder);
         // 2.2 插入订单项
@@ -174,6 +178,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (updateCount == 0) {
             throw exception(approve ? SALE_ORDER_APPROVE_FAIL : SALE_ORDER_PROCESS_FAIL);
         }
+        if (approve) {
+            saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
+        } else if (saleOrder.getReservationNo() != null) {
+            saleWmsIntegrationService.prepareReservationReleaseAfterCommit(id, "ORDER_CHANGED", "销售订单反审批");
+        }
     }
 
     @Override
@@ -201,13 +210,17 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateSaleOrderAuditStatus(Long id, Integer bpmStatus) {
         ErpSaleOrderDO saleOrder = validateSaleOrderExists(id);
         if (!ObjectUtil.equal(saleOrder.getStatus(), ErpAuditStatus.PROCESS.getStatus())) {
             return;
         }
-        saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id)
-                .setStatus(ErpAuditStatusUtils.convertBpmResultToAuditStatus(bpmStatus)));
+        Integer auditStatus = ErpAuditStatusUtils.convertBpmResultToAuditStatus(bpmStatus);
+        saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id).setStatus(auditStatus));
+        if (ErpAuditStatus.APPROVE.getStatus().equals(auditStatus)) {
+            saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
+        }
     }
 
     private List<ErpSaleOrderItemDO> validateSaleOrderItems(List<ErpSaleOrderSaveReqVO.Item> list) {

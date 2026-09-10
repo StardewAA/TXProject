@@ -21,11 +21,11 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       componentProps: {
         options: [
-          { label: '华为手机 --- 1.00元', value: 1 },
-          { label: '小米电视 --- 10.00元', value: 2 },
-          { label: '苹果手表 --- 100.00元', value: 3 },
-          { label: '华硕笔记本 --- 1000.00元', value: 4 },
-          { label: '蔚来汽车 --- 200000.00元', value: 5 },
+          { label: '华为手机 --- 0.01元', value: 1 },
+          { label: '小米电视 --- 0.10元', value: 2 },
+          { label: '苹果手表 --- 1.00元', value: 3 },
+          { label: '华硕笔记本 --- 10.00元', value: 4 },
+          { label: '蔚来汽车 --- 2000.00元', value: 5 },
         ],
         placeholder: '请选择下单商品',
         clearable: true,
@@ -34,6 +34,16 @@ export function useFormSchema(): VbenFormSchema[] {
     },
   ];
 }
+
+/** 预置退款原因选项（"其他"时支持自定义输入） */
+export const REFUND_REASON_OPTIONS = [
+  { label: '不想要了', value: '不想要了' },
+  { label: '商品信息填写错误', value: '商品信息填写错误' },
+  { label: '商品质量问题', value: '商品质量问题' },
+  { label: '缺少商品/漏发', value: '缺少商品/漏发' },
+  { label: '协商一致退款', value: '协商一致退款' },
+  { label: '其他', value: '其他' },
+];
 
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {

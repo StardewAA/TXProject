@@ -1,5 +1,6 @@
 <!-- 今日需联系客户 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmCustomerApi } from '#/api/crm/customer';
 
@@ -20,6 +21,11 @@ function handleDetail(row: CrmCustomerApi.Customer) {
   push({ name: 'CrmCustomerDetail', params: { id: row.id } });
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -41,7 +47,7 @@ const [Grid] = useVbenVxeGrid({
           allowClear: true,
           options: SCENE_TYPES,
         },
-        defaultValue: SCENE_TYPES[0]!.value,
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },

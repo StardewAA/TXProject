@@ -158,7 +158,7 @@ onMounted(loadAll);
         <div class="ind-stripes"></div>
     <div class="ind-head">
       <div class="min-w-0">
-        <div class="ind-title">'主体档案 · 企业自维护（' + (SubjectApi.SUBJECT_TYPE_LABEL[subjectType] || subjectType) + '）' <span class="ind-mark">PROFILE</span></div>
+        <div class="ind-title">主体档案 · 企业自维护（{{ SubjectApi.SUBJECT_TYPE_LABEL[subjectType] || subjectType }}）<span class="ind-mark">PROFILE</span></div>
         <div class="ind-sub">同一租户可分别维护投标人（BIDDER）/ 招标人（TENDERER）两套档案——主体类型是企业扮演的角色，非二选一。授权后仍须完善必填信息（资格 = 授权 + 档案完善）。</div>
       </div>
       <div class="ind-actions">

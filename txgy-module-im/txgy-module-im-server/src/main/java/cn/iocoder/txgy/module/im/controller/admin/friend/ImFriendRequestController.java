@@ -129,7 +129,7 @@ public class ImFriendRequestController {
         // 双向 OR 列表，userIds 取 from + to 两组并集
         Set<Long> userIds = convertSetByFlatMap(list,
                 request -> Stream.of(request.getFromUserId(), request.getToUserId()));
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(userIds);
         return convertList(list, request -> {
             ImFriendRequestRespVO vo = BeanUtils.toBean(request, ImFriendRequestRespVO.class);
             MapUtils.findAndThen(userMap, request.getFromUserId(), user ->

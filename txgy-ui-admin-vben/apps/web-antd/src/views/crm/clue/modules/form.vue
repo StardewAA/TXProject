@@ -57,8 +57,13 @@ async function onQuickParse(payload: { fields: ParsedClue }) {
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
+    try {
     const { valid } = await formApi.validate();
     if (!valid) {
+      // OCR 只能识别名片/文本内容；客户来源、客户类别等系统字段需手动补选
+      message.warning(
+        '还有带红星标记的必填项未填（识别不到的请手动补选，如客户来源、客户类别）',
+      );
       return;
     }
     modalApi.lock();
@@ -82,6 +87,10 @@ const [Modal, modalApi] = useVbenModal({
       message.success($t('ui.actionMessage.operationSuccess'));
     } finally {
       modalApi.unlock();
+    }
+    } catch (err: any) {
+      console.error('[clue-save-error]', err);
+      message.error(`保存失败：${err?.message ?? String(err) ?? '未知错误'}`);
     }
   },
   async onOpenChange(isOpen: boolean) {

@@ -56,6 +56,7 @@ public interface ErrorCodeConstants {
     ErrorCode FRIEND_ADD_SELF = new ErrorCode(1_040_600_002, "不允许添加自己为好友");
     ErrorCode FRIEND_NOT_BLOCKED = new ErrorCode(1_040_600_003, "对方未在黑名单中");
     ErrorCode FRIEND_BLOCKED_BY_PEER = new ErrorCode(1_040_600_004, "您已被对方拉入黑名单，无法发送消息");
+    ErrorCode FRIEND_NOT_EXISTS = new ErrorCode(1_040_600_005, "好友关系不存在");
 
     // ========== 加群申请 (1-040-510-000) ==========
     ErrorCode GROUP_REQUEST_NOT_EXISTS = new ErrorCode(1_040_510_001, "加群申请不存在");

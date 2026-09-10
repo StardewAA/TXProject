@@ -73,4 +73,13 @@ public interface ErpSaleOrderMapper extends BaseMapperX<ErpSaleOrderDO> {
         return selectOne(ErpSaleOrderDO::getNo, no);
     }
 
+    default int clearReservationAfterRelease(Long id, Long eventVersion) {
+        return update(new LambdaUpdateWrapper<ErpSaleOrderDO>()
+                .eq(ErpSaleOrderDO::getId, id)
+                .set(ErpSaleOrderDO::getReservationNo, null)
+                .set(ErpSaleOrderDO::getWarehouseStatus, "NOT_SUBMITTED")
+                .set(ErpSaleOrderDO::getWmsEventVersion, eventVersion)
+                .set(ErpSaleOrderDO::getWmsFailureReason, null));
+    }
+
 }
