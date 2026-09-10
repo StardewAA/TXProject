@@ -9,8 +9,10 @@ import java.time.LocalDateTime;
 @Data
 public class HrmRecruitApplicationRespVO {
     private Long id;
+    private Long applicantUserId;
     private Long candidateId;
     private Long postId;
+    private String postName;
     private Long resumeId;
     private Long channelId;
     private String status;

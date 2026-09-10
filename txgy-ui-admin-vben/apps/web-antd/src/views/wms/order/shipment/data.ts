@@ -184,7 +184,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       align: 'center',
       cellRender: {
         name: 'CellDict',
-        props: { type: DICT_TYPE.WMS_SHIPMENT_ORDER_TYPE },
+        props: {
+          colorMap: { 203: 'purple' },
+          type: DICT_TYPE.WMS_SHIPMENT_ORDER_TYPE,
+        },
       },
       field: 'type',
       title: '出库类型',

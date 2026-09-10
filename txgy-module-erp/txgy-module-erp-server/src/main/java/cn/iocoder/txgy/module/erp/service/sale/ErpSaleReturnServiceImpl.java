@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.enums.stock.ErpStockRecordBizTypeEnum;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpWmsBusinessDocumentService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockRecordService;
 import cn.iocoder.txgy.module.erp.service.stock.bo.ErpStockRecordCreateReqBO;
@@ -24,6 +25,7 @@ import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -48,6 +50,9 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
 
+    @Value("${txgy.integration.wms.mode:mock}")
+    private String wmsMode;
+
     @Resource
     private ErpSaleReturnMapper saleReturnMapper;
     @Resource
@@ -65,6 +70,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private ErpAccountService accountService;
     @Resource
     private ErpStockRecordService stockRecordService;
+    @Resource
+    private ErpWmsBusinessDocumentService wmsBusinessDocumentService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -187,12 +194,17 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         List<ErpSaleReturnItemDO> saleReturnItems = saleReturnItemMapper.selectListByReturnId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.SALE_RETURN.getType()
                 : ErpStockRecordBizTypeEnum.SALE_RETURN_CANCEL.getType();
-        saleReturnItems.forEach(saleReturnItem -> {
-            BigDecimal count = approve ? saleReturnItem.getCount() : saleReturnItem.getCount().negate();
-            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
-                    saleReturnItem.getProductId(), saleReturnItem.getWarehouseId(), count,
-                    bizType, saleReturnItem.getReturnId(), saleReturnItem.getId(), saleReturn.getNo()));
-        });
+        if (!"remote".equalsIgnoreCase(wmsMode)) {
+            saleReturnItems.forEach(saleReturnItem -> {
+                BigDecimal count = approve ? saleReturnItem.getCount() : saleReturnItem.getCount().negate();
+                stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
+                        saleReturnItem.getProductId(), saleReturnItem.getWarehouseId(), count,
+                        bizType, saleReturnItem.getReturnId(), saleReturnItem.getId(), saleReturn.getNo()));
+            });
+        }
+        if (approve) {
+            wmsBusinessDocumentService.prepareCustomerReturnReceiptAfterCommit(id);
+        }
     }
 
     @Override

@@ -70,6 +70,9 @@ public class ErpPurchaseInItemDO extends BaseDO {
      * 数量
      */
     private BigDecimal count;
+    private BigDecimal wmsActualCount;
+    private BigDecimal qualifiedCount;
+    private BigDecimal unqualifiedCount;
     /**
      * 总价，单位：元
      *

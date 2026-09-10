@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.util.collection.ArrayUtils;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostTypeDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post.HrmRecruitPostTypeMapper;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.type.HrmRecruitPostTypeSaveReqVO;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
@@ -18,6 +19,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.*;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_TYPE_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_TYPE_PARENT_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_TYPE_HAS_CHILDREN;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.*;
@@ -111,6 +114,23 @@ public class HrmRecruitPostTypeServiceImplTest extends BaseDbUnitTest {
 
         // 断言
         assertTrue(postTypes.isEmpty());
+    }
+
+    @Test
+    public void testCreateRecruitPostType_parentNotExists() {
+        HrmRecruitPostTypeSaveReqVO reqVO = new HrmRecruitPostTypeSaveReqVO()
+                .setName("后端开发").setParentId(randomLongId()).setSort(1);
+        assertServiceException(() -> recruitPostTypeService.createRecruitPostType(reqVO),
+                RECRUIT_POST_TYPE_PARENT_NOT_EXISTS);
+    }
+
+    @Test
+    public void testDeleteRecruitPostType_hasChildren() {
+        HrmRecruitPostTypeDO parent = randomRecruitPostTypeDO();
+        recruitPostTypeMapper.insert(parent);
+        recruitPostTypeMapper.insert(randomRecruitPostTypeDO(o -> o.setParentId(parent.getId())));
+        assertServiceException(() -> recruitPostTypeService.deleteRecruitPostType(parent.getId()),
+                RECRUIT_POST_TYPE_HAS_CHILDREN);
     }
 
     // ========== 随机对象 ==========

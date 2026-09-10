@@ -46,6 +46,9 @@ public class MesProProjectRespVO {
     @DictFormat(DictTypeConstants.MES_PRO_PROJECT_PRIORITY)
     private Integer priority;
 
+    @Schema(description = "负责人用户编号", example = "1")
+    private Long ownerUserId;
+
     @Schema(description = "负责人", example = "张三")
     @ExcelProperty("负责人")
     private String owner;
