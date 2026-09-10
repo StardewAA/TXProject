@@ -256,6 +256,17 @@ public class ImGroupRequestServiceImpl implements ImGroupRequestService {
         return groupRequestMapper.selectPage(reqVO);
     }
 
+    @Override
+    public void deleteGroupRequestByManager(Long id) {
+        // 1. 校验存在（逻辑删除后 selectById 返回 null，天然幂等拦截重复删除）
+        ImGroupRequestDO request = groupRequestMapper.selectById(id);
+        if (request == null) {
+            throw exception(GROUP_REQUEST_NOT_EXISTS);
+        }
+        // 2. 管理端治理动作：逻辑删除申请记录本身；已建立的群成员关系不受影响
+        groupRequestMapper.deleteById(id);
+    }
+
     /**
      * 创建或重置主动加群申请
      *

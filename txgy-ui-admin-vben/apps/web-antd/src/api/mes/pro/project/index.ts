@@ -33,6 +33,18 @@ export namespace MesProProjectApi {
     failureCodes?: Record<string, string>;
   }
 
+  /** MES 项目附件 */
+  export interface ProjectFile {
+    id?: number;
+    projectId?: number;
+    fileId?: number;
+    fileName?: string;
+    fileUrl?: string;
+    fileSize?: number;
+    remark?: string;
+    createTime?: number;
+  }
+
   /** MES 项目分页查询参数 */
   export interface PageParams extends PageParam {
     code?: string;
@@ -128,16 +140,42 @@ export function forceCloseProject(id: number) {
 
 /** 导入项目 Excel */
 export function importProject(file: File, updateSupport: boolean) {
+  if (!(file instanceof File)) {
+    return Promise.reject(new Error('上传文件无效，请重新选择 Excel 文件'));
+  }
   const formData = new FormData();
-  formData.append('file', file);
-  formData.append('updateSupport', updateSupport.toString());
+  // 显式声明 multipart，避免 axios 在 JSON Content-Type 下把 FormData 序列化成 JSON
+  formData.append('file', file, file.name);
+  formData.append('updateSupport', String(updateSupport ?? false));
   return requestClient.post<MesProProjectApi.ProjectImportRespVO>(
     '/mes/pro/project/import',
     formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
   );
 }
 
 /** 下载项目导入模板 */
 export function getImportTemplate() {
   return requestClient.download('/mes/pro/project/get-import-template');
+}
+
+// ==================== 项目附件 ====================
+
+/** 获得项目的附件列表 */
+export function getProjectFileList(projectId: number) {
+  return requestClient.get<MesProProjectApi.ProjectFile[]>(
+    `/mes/pro-project-file/list?projectId=${projectId}`,
+  );
+}
+
+/** 新增项目附件（文件需先上传到 infra 文件服务） */
+export function createProjectFile(data: MesProProjectApi.ProjectFile) {
+  return requestClient.post<number>('/mes/pro-project-file/create', data);
+}
+
+/** 删除项目附件 */
+export function deleteProjectFile(id: number) {
+  return requestClient.delete(`/mes/pro-project-file/delete?id=${id}`);
 }

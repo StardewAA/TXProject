@@ -118,6 +118,11 @@ txgy:
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:
+      - /member/auth/register
     ignore-tables:
+
+mall:
+  registration:
+    platform-tenant-id: 1
 
 debug: false

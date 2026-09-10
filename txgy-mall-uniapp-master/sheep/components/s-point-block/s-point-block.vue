@@ -11,24 +11,24 @@
         class="goods-box"
         v-for="item in state.spuList"
         :key="item.id"
-        :style="[{ marginBottom: data.space * 2 + 'rpx' }]"
+        :style="[{ marginBottom: (Number(data?.space) || 0) * 2 + 'rpx' }]"
       >
         <s-goods-column
           class=""
           size="sl"
-          :goodsFields="data.fields"
-          :tagStyle="data.badge"
+          :goodsFields="data?.fields || undefined"
+          :tagStyle="data?.badge || undefined"
           :data="item"
-          :titleColor="data.fields.name?.color"
-          :subTitleColor="data.fields.introduction.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
+          :titleColor="data?.fields?.name?.color"
+          :subTitleColor="data?.fields?.introduction?.color"
+          :topRadius="data?.borderRadiusTop"
+          :bottomRadius="data?.borderRadiusBottom"
           @click="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
         >
           <!-- 购买按钮 -->
           <template v-slot:cart>
             <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-              {{ btnBuy.type === 'text' ? btnBuy.text : '' }}
+              {{ btnBuy?.type === 'text' ? btnBuy?.text : '' }}
             </button>
           </template>
         </s-goods-column>
@@ -42,26 +42,26 @@
     >
       <view
         class="goods-box"
-        :style="[{ marginBottom: data.space + 'px' }]"
+        :style="[{ marginBottom: (Number(data?.space) || 0) + 'px' }]"
         v-for="item in state.spuList"
         :key="item.id"
       >
         <s-goods-column
           class="goods-card"
           size="lg"
-          :goodsFields="data.fields"
+          :goodsFields="data?.fields || undefined"
           :data="item"
-          :tagStyle="data.badge"
-          :titleColor="data.fields.name?.color"
-          :subTitleColor="data.fields.introduction.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
+          :tagStyle="data?.badge || undefined"
+          :titleColor="data?.fields?.name?.color"
+          :subTitleColor="data?.fields?.introduction?.color"
+          :topRadius="data?.borderRadiusTop"
+          :bottomRadius="data?.borderRadiusBottom"
           @tap="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
         >
           <!-- 购买按钮 -->
           <template v-slot:cart>
             <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-              {{ btnBuy.type === 'text' ? btnBuy.text : '' }}
+              {{ btnBuy?.type === 'text' ? btnBuy?.text : '' }}
             </button>
           </template>
         </s-goods-column>
@@ -76,20 +76,25 @@
       <view class="goods-list-box">
         <view
           class="left-list"
-          :style="[{ paddingRight: data.space + 'rpx', marginBottom: data.space + 'px' }]"
+          :style="[
+            {
+              paddingRight: (Number(data?.space) || 0) + 'rpx',
+              marginBottom: (Number(data?.space) || 0) + 'px',
+            },
+          ]"
           v-for="item in state.leftSpuList"
           :key="item.id"
         >
           <s-goods-column
             class="goods-md-box"
             size="md"
-            :goodsFields="data.fields"
-            :tagStyle="data.badge"
+            :goodsFields="data?.fields || undefined"
+            :tagStyle="data?.badge || undefined"
             :data="item"
-            :titleColor="data.fields.name?.color"
-            :subTitleColor="data.fields.introduction.color"
-            :topRadius="data.borderRadiusTop"
-            :bottomRadius="data.borderRadiusBottom"
+            :titleColor="data?.fields?.name?.color"
+            :subTitleColor="data?.fields?.introduction?.color"
+            :topRadius="data?.borderRadiusTop"
+            :bottomRadius="data?.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
             @click="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
             @getHeight="calculateGoodsColumn($event, 'left')"
@@ -97,7 +102,7 @@
             <!-- 购买按钮 -->
             <template v-slot:cart>
               <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-                {{ btnBuy.type === 'text' ? btnBuy.text : '' }}
+                {{ btnBuy?.type === 'text' ? btnBuy?.text : '' }}
               </button>
             </template>
           </s-goods-column>
@@ -106,20 +111,25 @@
       <view class="goods-list-box">
         <view
           class="right-list"
-          :style="[{ paddingLeft: data.space + 'rpx', marginBottom: data.space + 'px' }]"
+          :style="[
+            {
+              paddingLeft: (Number(data?.space) || 0) + 'rpx',
+              marginBottom: (Number(data?.space) || 0) + 'px',
+            },
+          ]"
           v-for="item in state.rightSpuList"
           :key="item.id"
         >
           <s-goods-column
             class="goods-md-box"
             size="md"
-            :goodsFields="data.fields"
-            :tagStyle="data.badge"
+            :goodsFields="data?.fields || undefined"
+            :tagStyle="data?.badge || undefined"
             :data="item"
-            :titleColor="data.fields.name?.color"
-            :subTitleColor="data.fields.introduction.color"
-            :topRadius="data.borderRadiusTop"
-            :bottomRadius="data.borderRadiusBottom"
+            :titleColor="data?.fields?.name?.color"
+            :subTitleColor="data?.fields?.introduction?.color"
+            :topRadius="data?.borderRadiusTop"
+            :bottomRadius="data?.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
             @click="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
             @getHeight="calculateGoodsColumn($event, 'right')"
@@ -127,7 +137,7 @@
             <!-- 购买按钮 -->
             <template v-slot:cart>
               <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-                {{ btnBuy.type === 'text' ? btnBuy.text : '' }}
+                {{ btnBuy?.type === 'text' ? btnBuy?.text : '' }}
               </button>
             </template>
           </s-goods-column>
@@ -165,23 +175,23 @@
   const props = defineProps({
     data: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
     styles: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
   });
 
   const { layoutType, btnBuy = {}, activityIds = [] } = props.data || {};
-  const { marginLeft, marginRight } = props.styles || {};
+  const { marginLeft = 8, marginRight = 8 } = props.styles || {};
 
   // 购买按钮样式
   const buyStyle = computed(() => {
     if (btnBuy?.type === 'text') {
       // 文字按钮：线性渐变背景颜色
       return {
-        background: `linear-gradient(to right, ${btnBuy.bgBeginColor}, ${btnBuy.bgEndColor})`,
+        background: `linear-gradient(to right, ${btnBuy.bgBeginColor || '#FF6000'}, ${btnBuy.bgEndColor || '#FE832A'})`,
       };
     }
     if (btnBuy?.type === 'img') {
@@ -189,10 +199,11 @@
       return {
         width: '54rpx',
         height: '54rpx',
-        background: `url(${sheep.$url.cdn(btnBuy.imgUrl)}) no-repeat`,
+        background: `url(${sheep.$url.cdn(btnBuy.imgUrl || '')}) no-repeat`,
         backgroundSize: '100% 100%',
       };
     }
+    return {};
   });
 
   //region 商品瀑布流布局
@@ -211,6 +222,8 @@
   function calculateGoodsColumn(height = 0, where = 'left') {
     // 处理完
     if (!state.spuList[count]) return;
+    height = Number(height);
+    if (!Number.isFinite(height) || height < 0) height = 0;
     // 增加列的高度
     if (where === 'left') leftHeight += height;
     if (where === 'right') rightHeight += height;
@@ -251,7 +264,9 @@
   async function getSpuDetail(ids) {
     try {
       const response = await SpuApi.getSpuDetail(ids);
-      return response?.data || null;
+      return response?.data && typeof response.data === 'object' && !Array.isArray(response.data)
+        ? response.data
+        : null;
     } catch (error) {
       console.warn('积分商品加载失败:', error);
       return null;
@@ -264,14 +279,17 @@
     const activityList = await getPointActivityDetailList(
       Array.isArray(activityIds) ? activityIds.join(',') : '',
     );
+    const safeActivityList = activityList.filter(
+      (item) => item && typeof item === 'object' && item.spuId !== undefined,
+    );
     // 循环获取活动商品SPU详情并添加到spuList
-    for (const activity of activityList) {
+    for (const activity of safeActivityList) {
       const spu = await getSpuDetail(activity.spuId);
       if (spu) state.spuList.push(spu);
     }
 
     // 循环活动列表
-    activityList.forEach((activity) => {
+    safeActivityList.forEach((activity) => {
       // 查找对应的 spu 并更新价格
       const spu = state.spuList.find((spu) => activity.spuId === spu.id);
       if (spu) {

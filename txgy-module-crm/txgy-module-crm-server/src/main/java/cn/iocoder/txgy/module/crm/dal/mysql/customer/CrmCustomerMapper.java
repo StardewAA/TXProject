@@ -160,9 +160,14 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default Long selectCountByTodayContact(Long ownerUserId) {
         MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
-        // 我负责的 + 非公海
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
-                CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
         // 今天需联系
         LocalDateTime beginOfToday = LocalDateTimeUtil.beginOfDay(LocalDateTime.now());
         LocalDateTime endOfToday = LocalDateTimeUtil.endOfDay(LocalDateTime.now());
@@ -172,9 +177,14 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default Long selectCountByFollow(Long ownerUserId) {
         MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
-        // 我负责的 + 非公海
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
-                CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
         // 未跟进
         query.eq(CrmClueDO::getFollowUpStatus, false);
         return selectCount(query);

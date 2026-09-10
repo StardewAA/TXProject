@@ -4,6 +4,8 @@ export namespace MallShopApi {
   export interface Shop {
     id?: number;
     enterpriseId?: number;
+    enterpriseName?: string;
+    tenantId?: number;
     name: string;
     logoUrl?: string;
     contactName?: string;

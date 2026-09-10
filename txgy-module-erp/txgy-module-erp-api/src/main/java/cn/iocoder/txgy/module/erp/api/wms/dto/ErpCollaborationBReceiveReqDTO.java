@@ -16,7 +16,15 @@ public class ErpCollaborationBReceiveReqDTO extends ErpWmsCallbackBaseReqDTO {
     @NotBlank(message = "协作单 B 编号不能为空")
     private String collaborationNo;
 
-    @NotBlank(message = "来源生产工单号不能为空")
+    /** 协同单类型：PURCHASE_COLLABORATION/SALE_COLLABORATION/AWARD_COLLABORATION/SHORTAGE_COLLABORATION，缺省视为缺料采购协同单 */
+    private String collaborationType;
+    private String sourceModule;
+    private String sourceOrderNo;
+    private String sourceEnterpriseCode;
+    private String targetEnterpriseCode;
+    private String currency;
+
+    /** 来源生产工单号：SHORTAGE_COLLABORATION 必填，其余类型可选 */
     private String sourceProductionOrderNo;
 
     private String sourceCollaborationGNo;

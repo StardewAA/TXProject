@@ -20,6 +20,7 @@ public class ErpWmsCollaborationBItemDO extends TenantBaseDO {
     private Long id;
     private Long collaborationId;
     private Integer lineNo;
+    private Integer sourceLineNo;
     private String materialCode;
     private String skuCode;
     private String materialNameSnapshot;
@@ -27,4 +28,7 @@ public class ErpWmsCollaborationBItemDO extends TenantBaseDO {
     private String unitCode;
     private String unitNameSnapshot;
     private BigDecimal shortageQuantity;
+    private BigDecimal referencePrice;
+    private BigDecimal taxRate;
+    private String deliveryAddress;
 }

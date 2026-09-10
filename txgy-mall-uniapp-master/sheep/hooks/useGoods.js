@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import dayjs from 'dayjs';
 import $url from '@/sheep/url';
 import { formatDate } from '@/sheep/helper/utils';
+import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
 
 /**
  * 格式化销量
@@ -42,7 +43,10 @@ export function formatStock(type, num) {
  * @return {string} 格式化后的销量字符串
  */
 export function formatNum(prefix, type, num) {
-  num = num || 0;
+  num = Number(num);
+  if (!Number.isFinite(num) || num < 0) {
+    num = 0;
+  }
   // 情况一：精确数值
   if (type === 'exact') {
     return prefix + num;
@@ -62,6 +66,9 @@ export function formatNum(prefix, type, num) {
 
 // 格式化价格
 export function formatPrice(e) {
+  if (!Array.isArray(e)) {
+    return e ?? '';
+  }
   return e.length === 1 ? e[0] : e.join('~');
 }
 
@@ -167,7 +174,8 @@ export function formatOrderStatusDescription(order) {
  */
 export function handleOrderButtons(order) {
   order.buttons = [];
-  if (order.type === 3) {
+  // 拼团订单入口仅在完整营销模式下显示；简化工业品商城不暴露该入口。
+  if (!isSimpleMarketingEnabled() && order.type === 3) {
     // 查看拼团
     order.buttons.push('combination');
   }
@@ -285,10 +293,11 @@ export function handleAfterSaleButtons(afterSale) {
  */
 export function useDurationTime(toTime, fromTime = '') {
   toTime = getDayjsTime(toTime);
-  if (fromTime === '') {
-    fromTime = dayjs();
-  }
+  fromTime = fromTime === '' ? dayjs() : getDayjsTime(fromTime);
   let duration = ref(toTime - fromTime);
+  if (!Number.isFinite(duration.value)) {
+    duration.value = 0;
+  }
   if (duration.value > 0) {
     setTimeout(() => {
       if (duration.value > 0) {
@@ -314,19 +323,26 @@ export function useDurationTime(toTime, fromTime = '') {
  * @return {dayjs.Dayjs}
  */
 function getDayjsTime(time) {
-  time = time.toString();
+  // 接口异常或订单尚未生成时，时间字段可能为 null/undefined。
+  // 统一返回 epoch，保证倒计时格式化不会在渲染阶段抛错。
+  if (time === null || time === undefined || time === '') {
+    return dayjs(0);
+  }
+  time = String(time);
+  let result;
   if (time.indexOf('-') > 0) {
     // 'date'
-    return dayjs(time);
-  }
-  if (time.length > 10) {
+    result = dayjs(time);
+  } else if (/^\d+$/.test(time) && time.length > 10) {
     // 'timestamp'
-    return dayjs(parseInt(time));
-  }
-  if (time.length === 10) {
+    result = dayjs(parseInt(time, 10));
+  } else if (/^\d+$/.test(time) && time.length === 10) {
     // 'unixTime'
-    return dayjs.unix(parseInt(time));
+    result = dayjs.unix(parseInt(time, 10));
+  } else {
+    result = dayjs(time);
   }
+  return result.isValid() ? result : dayjs(0);
 }
 
 /**
@@ -336,7 +352,8 @@ function getDayjsTime(time) {
  * @returns {string} 元，例如说 1.00 元
  */
 export function fen2yuan(price) {
-  return (price / 100.0).toFixed(2);
+  const amount = Number(price);
+  return (Number.isFinite(amount) ? amount / 100.0 : 0).toFixed(2);
 }
 
 /**
@@ -374,13 +391,14 @@ export function formatDiscountPercent(discountPercent) {
  *
  * @param skus 商品 SKU 数组
  */
-export function convertProductPropertyList(skus) {
+export function convertProductPropertyList(skus = []) {
   let result = [];
-  for (const sku of skus) {
-    if (!sku.properties) {
-      continue;
-    }
-    for (const property of sku.properties) {
+  for (const sku of Array.isArray(skus) ? skus : []) {
+    const properties = Array.isArray(sku?.properties) ? sku.properties : [];
+    for (const property of properties) {
+      if (!property || property.propertyId === undefined || property.propertyId === null) {
+        continue;
+      }
       // ① 先处理属性
       let resultProperty = result.find((item) => item.id === property.propertyId);
       if (!resultProperty) {
@@ -405,18 +423,23 @@ export function convertProductPropertyList(skus) {
 }
 
 export function appendSettlementProduct(spus, settlementInfos) {
-  if (!settlementInfos || settlementInfos.length === 0) {
+  if (!Array.isArray(spus) || !Array.isArray(settlementInfos) || settlementInfos.length === 0) {
     return;
   }
   for (const spu of spus) {
     const settlementInfo = settlementInfos.find((info) => info.spuId === spu.id);
     if (!settlementInfo) {
-      return;
+      // 某个商品结算信息缺失时继续处理其它商品，避免一条异常数据
+      // 让整页商品都失去活动价格。
+      continue;
     }
     // 选择价格最小的 SKU 设置到 SPU 上
-    const settlementSku = settlementInfo.skus
+    const settlementSku = (Array.isArray(settlementInfo.skus) ? settlementInfo.skus : [])
       .filter((sku) => sku.promotionPrice > 0)
-      .reduce((prev, curr) => (prev.promotionPrice < curr.promotionPrice ? prev : curr), []);
+      .reduce(
+        (prev, curr) => (!prev || curr.promotionPrice < prev.promotionPrice ? curr : prev),
+        null,
+      );
     if (settlementSku) {
       spu.promotionType = settlementSku.promotionType;
       spu.promotionPrice = settlementSku.promotionPrice;

@@ -193,7 +193,14 @@ function importLocalFile() {
   }
   file.text().then((result: any) => {
     if (isString(result)) {
-      processNodeTree.value = JSON.parse(result);
+      const importedNode = JSON.parse(result) as SimpleFlowNode;
+      // processNodeTree initially shares the object reference owned by the
+      // outer designer. Mutating that object keeps the outer validation and
+      // save data in sync with the imported canvas content.
+      Object.keys(processNodeTree.value).forEach((key) => {
+        delete (processNodeTree.value as any)[key];
+      });
+      Object.assign(processNodeTree.value, importedNode);
       // 改变 key，强制 ProcessNodeTree 重新挂载，
       // 规避 watch(() => props.flowNode) 在组件复用场景下同步失效导致画布不刷新的问题
       importKey.value++;

@@ -12,6 +12,8 @@ import cn.iocoder.txgy.module.wms.api.integration.dto.WmsMaterialUpsertReqDTO;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsPartnerUpsertReqDTO;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -30,7 +32,8 @@ public class ErpWmsMasterDataSyncService {
     private ErpWmsIntegrationGateway integrationGateway;
     @Resource
     private ErpProductUnitService productUnitService;
-    @Resource
+    @Autowired
+    @Qualifier("erpWmsIntegrationRecordService")
     private ErpWmsIntegrationRecordService recordService;
 
     public void syncProductAfterCommit(ErpProductDO product) {

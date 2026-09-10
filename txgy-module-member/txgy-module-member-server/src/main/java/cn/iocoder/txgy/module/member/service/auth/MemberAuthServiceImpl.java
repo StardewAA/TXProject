@@ -16,6 +16,7 @@ import cn.iocoder.txgy.framework.common.biz.system.oauth2.OAuth2TokenCommonApi;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCreateReqDTO;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenRespDTO;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
+import cn.iocoder.txgy.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
 import cn.iocoder.txgy.module.system.api.social.SocialUserApi;
 import cn.iocoder.txgy.module.system.api.social.dto.SocialUserBindReqDTO;
@@ -74,6 +75,20 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
         // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, openid);
+    }
+
+    @Override
+    @Transactional
+    public AppAuthLoginRespVO register(AppAuthRegisterReqVO reqVO) {
+        String clientIp = getClientIP();
+        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO()
+                .setMobile(reqVO.getMobile())
+                .setCode(reqVO.getCode())
+                .setScene(SmsSceneEnum.MEMBER_LOGIN.getScene())
+                .setUsedIp(clientIp)).checkError();
+        MemberUserDO user = userService.registerUser(reqVO.getMobile(), reqVO.getPassword(),
+                reqVO.getNickname(), clientIp, getTerminal());
+        return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, null);
     }
 
     @Override
