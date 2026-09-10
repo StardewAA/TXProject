@@ -29,7 +29,10 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
-import { uploadFile } from '#/api/infra/file';
+import { uploadAttachment } from '../vo/attachmentUpload';
+import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
+import { stageItems, type AttachmentRecord } from '../vo/attachmentStages';
+import { loadDraft, type ChainRecord } from '../vo/voDraft';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
 import NoticeHtmlView from './NoticeHtmlView.vue';
@@ -51,9 +54,22 @@ const goBackHall = () => {
 /* PDF 版式上传（infra 文件服务：保存只带 file_id；对外 URL 由业务系统按可见性签发） */
 const pdfUploading = ref(false);
 const pdfFileName = ref('');
+/** 版式文件 URL（上传链路只回 URL 时保留展示；file_id 取到则另行写入 pdfFileId） */
+const pdfUrl = ref('');
 const pdfSize = ref<number>();
 /** 权威数据集字段值（key=规范英文名 → 值）；第四节的四张类型专属表（tables/*）双向绑定此对象 */
 const payloadValues = ref<Record<string, string>>({});
+/** 公告附件（AttachmentSetVO 列表）：按公告类型对应环节的附件采集项分组，可加多个 */
+const noticeAttachments = ref<AttachmentRecord[]>([]);
+/** 公告类型 → 附件环节（AttachmentItemVO 采集项随环节不同） */
+const NOTICE_ATTACH_STAGE: Record<string, string> = {
+  TENDER_NOTICE: 'NOTICE_TENDER',
+  CHANGE_NOTICE: 'NOTICE_CHANGE',
+  WIN_CANDIDATE_PUBLICITY: 'NOTICE_CANDIDATE',
+  WIN_RESULT_PUBLICITY: 'NOTICE_RESULT',
+};
+/** 业务链草稿（项目→招标项目→标段）：公告的招标项目编号/标段编号/标段数量由此带出 */
+const chain = ref(loadDraft());
 const fmtBytes = (n?: number): string => {
   if (n === undefined || n === null) return '';
   if (n < 1024) return n + ' B';
@@ -64,13 +80,18 @@ async function onPdfBeforeUpload(file: File): Promise<boolean> {
   if (!/\.pdf$/i.test(file.name)) { createMessage.warning('仅支持 PDF 文件'); return false; }
   pdfUploading.value = true;
   try {
-    const res = await uploadFile({ file, directory: 'bidding/notice' });
-    const id = (res as unknown as { id?: number }).id;
-    if (id === undefined) throw new Error('上传未返回 file_id');
-    form.pdfFileId = id;
+    /* 上传口径：/infra/file/upload 只返回 URL（无 file_id）；预签名直传链路可落库取 file_id。
+       VO/接口需要 pdfFileId，故优先直传链路；仅在拿到 file_id 时写入表单，否则提示由后端补录。 */
+    const up = await uploadAttachment(file, 'bidding/notice');
+    pdfUrl.value = up.url;
     pdfFileName.value = file.name;
-    pdfSize.value = file.size;
-    createMessage.success('版式文件已上传：file_id=' + id);
+    pdfSize.value = up.size;
+    if (up.fileId === undefined) {
+      createMessage.warning('文件已上传（URL 已取得），但当前上传链路未返回 file_id：发布所需的 pdfFileId 需后端支持（直传链路或上传接口返回 id）');
+    } else {
+      form.pdfFileId = up.fileId;
+      createMessage.success('版式文件已上传：file_id=' + up.fileId);
+    }
   } catch (e) {
     createMessage.error('上传失败：' + ((e as Error).message || String(e)));
   } finally {
@@ -193,6 +214,58 @@ const payloadMeta = computed(() => {
 });
 /** 类型展示名（meta/types name 优先，静态字典兜底） */
 const typeLabel = computed(() => currentTypeMeta.value?.name || payloadMeta.value.label);
+
+/* ===== 业务链带值（先项目→招标项目→标段，再对标准段发公告）=====
+ * 公告数据集的 TENDER_PROJECT_CODE/BID_SECTION_CODES/NOTICE_BID_NUM 由上游带出，用户不手抄编号。
+ * 数据源：业务链工作台草稿（voDraft，本地）；后端接口就绪后改读接口即可。 */
+const noticeStage = computed(() => NOTICE_ATTACH_STAGE[form.noticeType] ?? 'NOTICE_TENDER');
+const chainTenderProjects = computed<ChainRecord[]>(() => chain.value.tenderProjects);
+const chainSections = computed<ChainRecord[]>(() => {
+  const code = payloadValues.value.TENDER_PROJECT_CODE ?? '';
+  return chain.value.bidSections.filter((s) => !code || (s.fields.TENDER_PROJECT_CODE ?? '') === code);
+});
+/** 已选标段编号（BID_SECTION_CODES 半角分号分隔，规范口径） */
+const selectedSectionCodes = computed<string[]>(() =>
+  (payloadValues.value.BID_SECTION_CODES ?? '').split(';').map((s) => s.trim()).filter(Boolean),
+);
+/** 公告附件的必传采集项缺失（AttachmentItemVO 必填=是，陕西必传口径） */
+const noticeAttachMissing = computed(() =>
+  stageItems(noticeStage.value)
+    .filter((it) => it.required && !noticeAttachments.value.some((a) => a.setCode === it.code))
+    .map((it) => it.label),
+);
+/** 招标项目选项文案（编号 + 名称） */
+function tenderProjectLabel(r: ChainRecord): string {
+  const code = r.fields.TENDER_PROJECT_CODE ?? '';
+  const name = r.fields.TENDER_PROJECT_NAME ?? '';
+  return code ? code + (name ? ' · ' + name : '') : name || '（未命名招标项目）';
+}
+/** 标段选项文案（编号 + 名称） */
+function bidSectionLabel(r: ChainRecord): string {
+  const code = r.fields.BID_SECTION_CODE ?? '';
+  const name = r.fields.BID_SECTION_NAME ?? '';
+  return code ? code + (name ? ' · ' + name : '') : name || '（未命名标段）';
+}
+/** 选招标项目：带 TENDER_PROJECT_CODE，并清掉不属于该项目的标段选择 */
+function applyTenderProject(code: string): void {
+  const tp = chain.value.tenderProjects.find((t) => (t.fields.TENDER_PROJECT_CODE ?? '') === code);
+  const kept = selectedSectionCodes.value.filter((sc) =>
+    chain.value.bidSections.some((s) => (s.fields.BID_SECTION_CODE ?? '') === sc && (s.fields.TENDER_PROJECT_CODE ?? '') === code),
+  );
+  const next: Record<string, string> = { ...payloadValues.value, TENDER_PROJECT_CODE: code, BID_SECTION_CODES: kept.join(';') };
+  if (kept.length) next.NOTICE_BID_NUM = String(kept.length);
+  else delete next.NOTICE_BID_NUM;
+  payloadValues.value = next;
+  form.projectCode = code;
+  form.projectName = tp?.fields.TENDER_PROJECT_NAME ?? form.projectName ?? '';
+}
+/** 选标段（可多选）：带 BID_SECTION_CODES（半角分号）与 NOTICE_BID_NUM（数量） */
+function applySections(codes: string[]): void {
+  const next: Record<string, string> = { ...payloadValues.value, BID_SECTION_CODES: codes.join(';') };
+  if (codes.length) next.NOTICE_BID_NUM = String(codes.length);
+  else delete next.NOTICE_BID_NUM;
+  payloadValues.value = next;
+}
 /** 发布单位自动带：本企业（当前租户）招标人主体档案单位名（用户无需手填；档案在「主体档案」维护） */
 async function autoFillPublisher(): Promise<void> {
   if (form.publisherName && form.publisherName.trim()) return; // 已有值不覆盖
@@ -231,6 +304,9 @@ const openCreate = () => {
   payloadValues.value = {};
   pdfFileName.value = '';
   pdfSize.value = undefined;
+  pdfUrl.value = '';
+  noticeAttachments.value = [];
+  chain.value = loadDraft();
   editorOpen.value = true;
   void autoFillPublisher();
   void loadTypeMeta();
@@ -251,6 +327,9 @@ const openEdit = async (row: NoticeApi.Row) => {
   form.pdfFileId = d.pdfFileId;
   pdfSize.value = typeof d.pdfSize === 'number' ? d.pdfSize : undefined;
   pdfFileName.value = '';
+  pdfUrl.value = '';
+  noticeAttachments.value = [];
+  chain.value = loadDraft();
   payloadValues.value = {};
   if (d.payload && typeof d.payload === 'object') {
     const flat: Record<string, string> = {};
@@ -292,6 +371,16 @@ function saveEditor() {
   if (bizMissing.length) {
     createMessage.warning('权威必填字段未填全（' + bizMissing.length + ' 项）：\n' + bizMissing.slice(0, 12).join('、') + (bizMissing.length > 12 ? '…' : ''));
     return;
+  }
+
+  /* 公告附件：ATTACHMENT_CODE（附件关联标识号）保留历史并追加新增——规范：多个标识号半角分号隔开 */
+  if (noticeAttachments.value.length) {
+    const exist = (merged.ATTACHMENT_CODE ?? '').split(';').map((s) => s.trim()).filter(Boolean);
+    const fresh = noticeAttachments.value.map((a) => a.guid).filter((g) => !!g && !exist.includes(g));
+    merged.ATTACHMENT_CODE = [...exist, ...fresh].join(';');
+  }
+  if (noticeAttachMissing.value.length) {
+    createMessage.warning('公告必传附件（AttachmentItemVO 必填=是）尚未添加：' + noticeAttachMissing.value.join('、') + '；仍可保存草稿，发布前请补齐');
   }
 
   /* payload 组装：仅带非空值（后端 canonicalize 补 null/剔未知键） */
@@ -562,15 +651,49 @@ onMounted(() => { load(); void fetchKpiCounts(); });
 
         <!-- 第二节：项目关联 -->
         <div class="nw-form-sect">
-          <div class="nw-sect-h"><span class="nw-sect-no">2</span>项目关联<span class="nw-sect-sub">可选 — 公告将归入对应招标项目</span></div>
+          <div class="nw-sect-h"><span class="nw-sect-no">2</span>业务链关联
+            <span class="nw-sect-sub">先项目 → 再招标项目 → 再标段，公告对“标段”发布：招标项目编号/标段编号/标段数量由上游带出，不手抄</span>
+          </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">项目编号</div>
-              <Input v-model:value="form.projectCode" placeholder="关联招标项目编号（可选）" />
+              <div class="mb-1 text-xs font-semibold text-gray-700">招标项目（TENDER_PROJECT_CODE）</div>
+              <Select
+                :value="payloadValues.TENDER_PROJECT_CODE || undefined"
+                class="w-full"
+                show-search
+                option-filter-prop="label"
+                placeholder="选择业务链工作台已建的招标项目"
+                @update:value="(v) => applyTenderProject(String(v ?? ''))"
+              >
+                <Select.Option v-for="t in chainTenderProjects" :key="t.id" :value="t.fields.TENDER_PROJECT_CODE || ''" :label="tenderProjectLabel(t)">
+                  {{ tenderProjectLabel(t) }}
+                </Select.Option>
+              </Select>
             </div>
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">项目名称</div>
-              <Input v-model:value="form.projectName" placeholder="招标项目名称（可选）" />
+              <div class="mb-1 text-xs font-semibold text-gray-700">项目编号（表单字段 projectCode）</div>
+              <Input v-model:value="form.projectCode" placeholder="随招标项目自动带出" />
+            </div>
+            <div class="col-span-2">
+              <div class="mb-1 text-xs font-semibold text-gray-700">
+                相关标段（包）（BID_SECTION_CODES，多选，半角分号分隔）
+                <span class="ml-2 font-normal text-gray-400">公告标段（包）数量 NOTICE_BID_NUM 按选择个数自动写入</span>
+              </div>
+              <Select
+                mode="multiple"
+                :value="selectedSectionCodes"
+                class="w-full"
+                placeholder="选择标段（可多选）；未选到请先在业务链工作台建立标段"
+                @update:value="(v) => applySections((v as string[]) ?? [])"
+              >
+                <Select.Option v-for="s in chainSections" :key="s.id" :value="s.fields.BID_SECTION_CODE || ''">
+                  {{ bidSectionLabel(s) }}
+                </Select.Option>
+              </Select>
+              <div class="mt-1 text-xs text-gray-500">
+                已选 {{ selectedSectionCodes.length }} 个标段<template v-if="payloadValues.NOTICE_BID_NUM"> · NOTICE_BID_NUM={{ payloadValues.NOTICE_BID_NUM }}</template>
+                <span v-if="!chainTenderProjects.length" class="ml-2 text-orange-500">尚无招标项目草稿：请到「招投标业务链（VO 设计稿）」按 项目 → 招标项目 → 标段 顺序建立</span>
+              </div>
             </div>
           </div>
         </div>
@@ -593,6 +716,7 @@ onMounted(() => { load(); void fetchKpiCounts(); });
               <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
                 file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
                 <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
+                <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="ml-2">查看已上传文件</a>
               </div>
             </div>
           </div>
@@ -611,6 +735,19 @@ onMounted(() => { load(); void fetchKpiCounts(); });
             <ResultPublicityTable v-else-if="form.noticeType === 'WIN_RESULT_PUBLICITY'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
             <div class="mt-2 text-xs text-gray-500">公告名称与正文已在上方第 1、3 节填写，保存时自动并入权威字段（NOTICE_NAME/NOTICE_CONTENT 等）；报送平台参数由系统/平台维护，不在表单中。</div>
           </div>
+        </div>
+
+        <!-- 第五节：公告附件（AttachmentSetVO 附件集结构，按本类型公告的采集项 AttachmentItemVO 分组，可加多个） -->
+        <div class="nw-form-sect">
+          <div class="nw-sect-h"><span class="nw-sect-no">5</span>公告附件
+            <span class="nw-sect-sub">附件集结构 AttachmentSetVO · 采集项 AttachmentItemVO；同一采集项可加多个，保存时并入 ATTACHMENT_CODE（半角分号分隔）</span>
+          </div>
+          <AttachmentsPanel
+            v-model="noticeAttachments"
+            :stage="noticeStage"
+            :title="typeLabel + '附件'"
+            directory="bidding/notice"
+          />
         </div>
 
         <div class="nw-modal-foot">
