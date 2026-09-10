@@ -36,7 +36,9 @@ export function getDemoOrderPage(params: PageParam) {
   );
 }
 
-/** 退款示例订单 */
-export function refundDemoOrder(id: number) {
-  return requestClient.put(`/pay/demo-order/refund?id=${id}`);
+/** 退款示例订单（支持自定义退款原因） */
+export function refundDemoOrder(id: number, reason?: string) {
+  return requestClient.put(
+    `/pay/demo-order/refund?id=${id}&reason=${encodeURIComponent(reason ?? '')}`,
+  );
 }

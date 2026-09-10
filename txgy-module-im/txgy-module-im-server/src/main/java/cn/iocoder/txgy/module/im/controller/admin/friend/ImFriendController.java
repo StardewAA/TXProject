@@ -120,7 +120,7 @@ public class ImFriendController {
             return Collections.emptyList();
         }
         // 批量聚合 AdminUser 信息（昵称 / 头像），避免 N+1
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertList(friends, ImFriendDO::getFriendUserId));
         return convertList(friends, friend -> {
             ImFriendRespVO vo = BeanUtils.toBean(friend, ImFriendRespVO.class);

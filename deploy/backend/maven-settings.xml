@@ -12,7 +12,7 @@
   <proxies>
     <proxy>
       <id>local-vpn</id>
-      <active>true</active>
+      <active>false</active>
       <protocol>http</protocol>
       <host>host.docker.internal</host>
       <port>7897</port>

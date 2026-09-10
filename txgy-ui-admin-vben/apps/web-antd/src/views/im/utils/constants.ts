@@ -265,7 +265,8 @@ export const ImFriendAddSource = {
   SEARCH: 1, // 搜索
   GROUP: 2, // 群聊
   QR_CODE: 3, // 扫码
-  CARD: 4 // 名片
+  CARD: 4, // 名片
+  RECRUITMENT: 5 // 招聘应聘
 } as const
 
 /** 好友申请处理结果（对齐后端 ImFriendRequestHandleResultEnum） */

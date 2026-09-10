@@ -6,6 +6,7 @@ export namespace ErpProductUnitApi {
   /** 产品单位信息 */
   export interface ProductUnit {
     id?: number; // 单位编号
+    code: string; // 跨模块统一单位编码
     name: string; // 单位名字
     status: number; // 单位状态
   }

@@ -40,9 +40,14 @@ public interface CrmClueMapper extends BaseMapperX<CrmClueDO> {
 
     default Long selectCountByFollow(Long userId) {
         MPJLambdaWrapperX<CrmClueDO> query = new MPJLambdaWrapperX<>();
-        // 我负责的 + 非公海
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CLUE.getType(),
-                CrmClueDO::getId, userId, CrmSceneTypeEnum.OWNER.getType());
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(userId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CLUE.getType(),
+                    CrmClueDO::getId, userId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CLUE.getType(),
+                    CrmClueDO::getId, userId, CrmSceneTypeEnum.OWNER.getType());
+        }
         // 未跟进 + 未转化
         query.eq(CrmClueDO::getFollowUpStatus, false)
                 .eq(CrmClueDO::getTransformStatus, false);

@@ -37,6 +37,23 @@ public class CrmPermissionUtils {
     }
 
     /**
+     * 校验用户是否是 CRM 管理员或租户管理员
+     */
+    public static boolean isCrmOrTenantAdmin() {
+        PermissionCommonApi permissionApi = SpringUtil.getBean(PermissionCommonApi.class);
+        return permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.CRM_ADMIN.getCode()).getCheckedData()
+                || permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.TENANT_ADMIN.getCode()).getCheckedData();
+    }
+
+    /**
+     * 判断用户是否有下属（主管/经理），待办将按其下属范围统计
+     */
+    public static boolean hasSubordinate(Long userId) {
+        AdminUserApi adminUserApi = SpringUtil.getBean(AdminUserApi.class);
+        return CollUtil.isNotEmpty(adminUserApi.getUserListBySubordinate(userId).getCheckedData());
+    }
+
+    /**
      * 构造 CRM 数据类型数据【分页】查询条件
      *
      * @param query     连表查询对象

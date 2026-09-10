@@ -15,9 +15,12 @@ import {
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import type { ParsedClue } from '#/utils/crm/clue-parse';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmCustomerApi.Customer>();
+const modalKey = ref(0);
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['客户'])
@@ -36,6 +39,19 @@ const [Form, formApi] = useVbenForm({
   schema: useFormSchema(),
   showDefaultActions: false,
 });
+
+/** 识别结果回填：把解析出的字段设置到客户表单（客户表单无 customerCategory 字段，忽略） */
+async function onQuickParse(payload: { fields: ParsedClue }) {
+  const { fields } = payload;
+  const apply: Record<string, any> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined && v !== null && v !== '') {
+      apply[k] = v;
+    }
+  }
+  delete apply.customerCategory;
+  await formApi.setValues(apply);
+}
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
@@ -80,6 +96,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse :key="modalKey" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>

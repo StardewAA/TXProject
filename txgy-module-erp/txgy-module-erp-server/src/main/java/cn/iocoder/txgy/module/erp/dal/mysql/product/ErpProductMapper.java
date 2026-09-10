@@ -37,4 +37,8 @@ public interface ErpProductMapper extends BaseMapperX<ErpProductDO> {
         return selectList(ErpProductDO::getStatus, status);
     }
 
+    default ErpProductDO selectByMaterialCode(String materialCode) {
+        return selectOne(ErpProductDO::getMaterialCode, materialCode);
+    }
+
 }

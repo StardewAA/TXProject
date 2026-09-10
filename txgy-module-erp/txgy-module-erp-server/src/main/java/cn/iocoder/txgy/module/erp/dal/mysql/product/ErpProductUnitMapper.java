@@ -28,6 +28,10 @@ public interface ErpProductUnitMapper extends BaseMapperX<ErpProductUnitDO> {
         return selectOne(ErpProductUnitDO::getName, name);
     }
 
+    default ErpProductUnitDO selectByCode(String code) {
+        return selectOne(ErpProductUnitDO::getCode, code);
+    }
+
     default List<ErpProductUnitDO> selectListByStatus(Integer status) {
         return selectList(ErpProductUnitDO::getStatus, status);
     }

@@ -11,8 +11,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.util.List;
-
 @Schema(description = "管理后台 - HRM 招聘候选人新增/修改 Request VO")
 @Data
 public class HrmRecruitCandidateSaveReqVO {
@@ -84,10 +82,5 @@ public class HrmRecruitCandidateSaveReqVO {
     @Size(max = 255, message = "备注长度不能超过 255 个字符")
     @DiffLogField(name = "备注")
     private String remark;
-
-    @Schema(description = "简历附件地址数组", example = "[\"https://example.com/resume.pdf\"]")
-    @Size(max = 5, message = "简历附件不能超过 5 个")
-    @DiffLogField(name = "简历附件")
-    private List<@Size(max = 512, message = "简历附件地址长度不能超过 512 个字符") String> resumeUrls;
 
 }

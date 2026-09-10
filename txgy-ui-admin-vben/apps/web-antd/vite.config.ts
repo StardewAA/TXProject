@@ -1,6 +1,14 @@
+import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
+
 import { defineConfig } from '@vben/vite-config';
 
-export default defineConfig(async () => {
+export default defineConfig(async (configEnv) => {
+  // 以 vite.config.ts 所在目录为基准加载 .env.local 的 DASHSCOPE_API_KEY（非 VITE_ 前缀，不会暴露给浏览器）
+  const envDir = fileURLToPath(new URL('.', import.meta.url));
+  const env = loadEnv(configEnv.mode, envDir, '');
+  const dashscopeApiKey = env.DASHSCOPE_API_KEY ?? '';
+
   return {
     application: {},
     vite: {
@@ -28,6 +36,10 @@ export default defineConfig(async () => {
         // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
         host: true,
         proxy: {
+          '/training-exam': {
+            target: 'http://localhost:5173',
+            changeOrigin: true,
+          },
           '/admin-api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/admin-api/, ''),
@@ -41,6 +53,16 @@ export default defineConfig(async () => {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/bidding-api/, ''),
             target: 'http://127.0.0.1:48110/admin-api',
+          // 千问（通义千问 / DashScope）OpenAI 兼容接口代理：
+          // 前端同源调用 /api/ai/chat/completions，由 Vite 在服务端转发并注入密钥，避免跨域与密钥暴露。
+          '/api/ai': {
+            target: 'https://dashscope.aliyuncs.com',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (path) => path.replace(/^\/api\/ai/, '/compatible-mode/v1'),
+            headers: dashscopeApiKey
+              ? { Authorization: `Bearer ${dashscopeApiKey}` }
+              : {},
           },
         },
       },

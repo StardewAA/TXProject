@@ -11,6 +11,15 @@ export function useFormSchema(): VbenFormSchema[] {
   return [
     {
       component: 'Input',
+      fieldName: 'code',
+      label: '单位编码',
+      rules: 'required',
+      componentProps: {
+        placeholder: '例如：TON、M、PCS',
+      },
+    },
+    {
+      component: 'Input',
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
@@ -70,6 +79,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'id',
       title: '单位编号',
       minWidth: 100,
+    },
+    {
+      field: 'code',
+      title: '单位编码',
+      minWidth: 120,
     },
     {
       field: 'name',
