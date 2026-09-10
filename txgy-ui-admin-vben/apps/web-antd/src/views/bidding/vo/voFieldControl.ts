@@ -55,3 +55,26 @@ export function nowIsoLocal(): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':00';
 }
+
+/** 平台/系统注入字段（企业不填，由发布工具/交易平台或系统生成）
+ * 重要口径纠正：VO 的「公开范围」是**披露范围**（政务公开=仅向政务平台报送、不对外公开），
+ * 不是"谁填报"。因此不能按 pub 隐藏字段——像 IS_MARGIN（是否缴纳投标保证金，必填=是）、
+ * DOC_TYPE（招标文件类型）、CLARIFY_NUM（澄清次数）都是企业必须填、但只报政务的字段。
+ * 只有下列平台标识码/时间戳/附件关联标识号才是平台与系统维护。 */
+export const PLATFORM_MAINTAINED_CODES: ReadonlySet<string> = new Set<string>([
+  'UNIFIED_DEAL_CODES',
+  'UNIFIED_DEAL_CODE',
+  'FROM_TRADE_PLAT_CODE',
+  'PLATFORM_CODE',
+  'PUB_SERVICE_PLAT_CODE',
+  'TRADE_PLAT',
+  'PUB_SERVICE_PLAT',
+  'SUBMIT_TIMESTAMP',
+  'DATA_TIMESTAMP',
+  'ATTACHMENT_CODE',
+]);
+
+/** 是否平台/系统注入字段（企业表单不收集；附件关联标识号由附件面板生成） */
+export function isPlatformMaintained(f: VoField): boolean {
+  return PLATFORM_MAINTAINED_CODES.has(f.code);
+}

@@ -32,6 +32,7 @@ import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Ta
 import { uploadAttachment } from '../vo/attachmentUpload';
 import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
 import { stageItems, type AttachmentRecord } from '../vo/attachmentStages';
+import { PLATFORM_MAINTAINED_CODES } from '../vo/voFieldControl';
 import { loadDraft, type ChainRecord } from '../vo/voDraft';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
@@ -355,16 +356,17 @@ function saveEditor() {
   if ((merged[nameKey] || '').trim() !== form.title.trim()) merged[nameKey] = form.title.trim();
   if (form.content && (merged[contentKey] || '').trim() !== form.content.trim()) merged[contentKey] = form.content.trim();
 
-  /* 必填预校验（业务字段：pub≠GOVERNMENT；时间 ISO yyyy-MM-ddTHH:mm:ss 由"现在"带入，校验非空）。
-     依据：VO数据规范"必填=是" + meta/types required；报送政务参数（平台码等）不在表单收集——
-     对外报送缺失由后端返回中文提示（公告必填字段缺失…），站内直建按联调文档 §6 可不填 payload。 */
+  /* 必填预校验（企业填报字段 = 规范必填 − 平台注入字段；时间 ISO yyyy-MM-ddTHH:mm:ss 由"现在"带入，校验非空）。
+     口径纠正：VO 的「公开范围」是披露范围（政务公开=只报政务平台、不对外公开），不是"谁填报"，
+     故不再按 pub 跳过，只跳过平台注入字段（平台码/时间戳/统一交易标识码/附件关联标识号——
+     附件关联标识号由附件面板生成）。依据：VO数据规范"必填=是" + meta/types required。 */
   const checklist: { key: string; label: string; required: boolean; pub: string }[] =
     (payloadMeta.value.fields).map((f) => ({
       key: f.key, label: f.label, required: f.required, pub: f.pub,
     }));
   const bizMissing: string[] = [];
   for (const f of checklist) {
-    if (f.pub === 'GOVERNMENT') continue; // 报送政务：不强制（文档 §6 站内可不填；后端返回缺失则透出）
+    if (PLATFORM_MAINTAINED_CODES.has(f.key)) continue; // 平台注入：企业表单不收集（附件关联标识号由附件面板写入）
     if (!f.required || (merged[f.key] || '').trim()) continue;
     bizMissing.push(f.label + '（' + f.key + '）');
   }

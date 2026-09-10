@@ -18,12 +18,16 @@ export interface ChainDraft {
   projects: ChainRecord[];
   tenderProjects: ChainRecord[];
   bidSections: ChainRecord[];
+  /** 招标文件 / 答疑澄清文件（TenderDocVO）：标段之后、公告之前 */
+  tenderDocs: ChainRecord[];
+  /** 招标控制价文件（ControlPriceDocVO，如有） */
+  controlPriceDocs: ChainRecord[];
 }
 
 const KEY = 'bid-vo-chain-v1';
 
 export function emptyDraft(): ChainDraft {
-  return { projects: [], tenderProjects: [], bidSections: [] };
+  return { projects: [], tenderProjects: [], bidSections: [], tenderDocs: [], controlPriceDocs: [] };
 }
 
 export function loadDraft(): ChainDraft {
@@ -35,6 +39,8 @@ export function loadDraft(): ChainDraft {
       projects: d.projects ?? [],
       tenderProjects: d.tenderProjects ?? [],
       bidSections: d.bidSections ?? [],
+      tenderDocs: d.tenderDocs ?? [],
+      controlPriceDocs: d.controlPriceDocs ?? [],
     };
   } catch {
     return emptyDraft();

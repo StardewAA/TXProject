@@ -1,12 +1,15 @@
 <script setup lang="ts">
-/* VO 环节表单（通用）：按规范 VO 分组渲染字段 + 政务公开参数折叠 + 本环节附件面板（可多个）。
+/* VO 环节表单（通用）：按规范 VO 分组渲染字段 + 平台注入参数折叠 + 本环节附件面板（可多个）。
  * 严格照录 VO：字段中文名/英文名/类型/必填/公开范围/备注全部来自 voSpec.gen.ts（自动生成）。
- * 企业填报只收「社会公开」字段；「政务公开」字段=报送平台/监管参数，折叠只读展示（不要求企业手填）。 */
+ * 分区口径（重要）：VO 的「公开范围」是披露范围，不是"谁填报"——
+ *   · 企业填报 = 全部字段 - 平台注入字段（PLATFORM_MAINTAINED_CODES：平台码/时间戳/统一交易标识码/附件关联标识号）；
+ *   · 政务公开字段照常由企业填写，仅额外标注"政务"（表示只向政务平台报送、不对外公开）；
+ *   · 平台注入字段折叠只读展示，说明由平台/系统维护。 */
 import { computed, ref } from 'vue';
 
 import { Tag } from 'ant-design-vue';
 
-import { splitByPublic } from './voFieldControl';
+import { isPlatformMaintained } from './voFieldControl';
 import { VO_SPEC, type VoField } from './voSpec.gen';
 import AttachmentsPanel from './AttachmentsPanel.vue';
 import VoFieldGrid from './VoFieldGrid.vue';
@@ -38,8 +41,13 @@ const emit = defineEmits<{
 
 const dataset = computed(() => VO_SPEC[props.vo]);
 const allFields = computed<VoField[]>(() => dataset.value?.fields ?? []);
-const split = computed(() => splitByPublic(allFields.value));
-const govOpen = ref(false);
+/** 企业填报字段（全部字段 - 平台注入） */
+const editableFields = computed(() => allFields.value.filter((f) => !isPlatformMaintained(f)));
+/** 平台注入字段（折叠只读） */
+const platformFields = computed(() => allFields.value.filter((f) => isPlatformMaintained(f)));
+/** 披露范围为政务公开的字段数（仅提示披露口径，不影响填报） */
+const govCount = computed(() => allFields.value.filter((f) => f.pub === 'GOVERNMENT').length);
+const platformOpen = ref(false);
 
 function fieldsOf(codes: string[]): VoField[] {
   const byCode = new Map(allFields.value.map((f) => [f.code, f]));
@@ -47,18 +55,18 @@ function fieldsOf(codes: string[]): VoField[] {
 }
 const groupsResolved = computed(() =>
   props.groups
-    .map((g) => ({ ...g, list: fieldsOf(g.codes).filter((f) => f.pub !== 'GOVERNMENT') }))
+    .map((g) => ({ ...g, list: fieldsOf(g.codes).filter((f) => !isPlatformMaintained(f)) }))
     .filter((g) => g.list.length > 0),
 );
-/** 未列入任何分组的社会公开字段（防漏：兜底展示） */
+/** 未列入任何分组的可填字段（防漏：兜底展示） */
 const restFields = computed(() => {
   const used = new Set(props.groups.flatMap((g) => g.codes));
-  return split.value.social.filter((f) => !used.has(f.code));
+  return editableFields.value.filter((f) => !used.has(f.code));
 });
 
-const requiredSocial = computed(() => split.value.social.filter((f) => f.required));
+const requiredEditable = computed(() => editableFields.value.filter((f) => f.required));
 const missing = computed(() =>
-  requiredSocial.value.filter((f) => !(props.fields[f.code] ?? '').trim()).map((f) => f.label + '（' + f.code + '）'),
+  requiredEditable.value.filter((f) => !(props.fields[f.code] ?? '').trim()).map((f) => f.label + '（' + f.code + '）'),
 );
 const filled = computed(() => allFields.value.filter((f) => (props.fields[f.code] ?? '').trim()).length);
 </script>
@@ -73,14 +81,15 @@ const filled = computed(() => allFields.value.filter((f) => (props.fields[f.code
       <div class="vs-h-r">
         <Tag color="blue">已填 {{ filled }}</Tag>
         <Tag :color="missing.length ? 'red' : 'green'">
-          社会公开必填 {{ requiredSocial.length - missing.length }}/{{ requiredSocial.length }}
+          必填 {{ requiredEditable.length - missing.length }}/{{ requiredEditable.length }}
         </Tag>
-        <Tag v-if="split.government.length">政务公开参数 {{ split.government.length }} 项</Tag>
+        <Tag v-if="govCount">政务披露口径 {{ govCount }} 项</Tag>
+        <Tag v-if="platformFields.length">平台注入 {{ platformFields.length }} 项</Tag>
       </div>
     </header>
 
     <div v-if="missing.length" class="vs-warn">
-      规范必填（社会公开）未填：{{ missing.slice(0, 10).join('、') }}<template v-if="missing.length > 10"> …</template>
+      规范必填未填：{{ missing.slice(0, 10).join('、') }}<template v-if="missing.length > 10"> …</template>
     </div>
 
     <section v-for="g in groupsResolved" :key="g.title" class="vs-sec">
@@ -93,20 +102,20 @@ const filled = computed(() => allFields.value.filter((f) => (props.fields[f.code
 
     <section v-if="restFields.length" class="vs-sec">
       <div class="vs-sec-h">
-        <span class="vs-sec-t">其它社会公开字段</span>
+        <span class="vs-sec-t">其它规范字段</span>
         <span class="vs-sec-hint">VO 未分组兜底（防漏字段）</span>
       </div>
       <VoFieldGrid :fields="restFields" :model-value="fields" :read-only="readOnly" @update:model-value="(v) => emit('update:fields', v)" />
     </section>
 
-    <section v-if="split.government.length" class="vs-sec vs-gov">
-      <div class="vs-sec-h vs-gov-h" role="button" tabindex="0" @click="govOpen = !govOpen" @keydown.enter="govOpen = !govOpen">
-        <span class="vs-sec-t">政务公开报送参数（{{ split.government.length }} 项）</span>
-        <span class="vs-sec-hint">规范公开范围=政务公开：由交易平台/发布工具与系统维护，企业表单不收集</span>
-        <Tag :color="govOpen ? 'orange' : 'default'">{{ govOpen ? '收起' : '展开查看' }}</Tag>
+    <section v-if="platformFields.length" class="vs-sec vs-gov">
+      <div class="vs-sec-h vs-gov-h" role="button" tabindex="0" @click="platformOpen = !platformOpen" @keydown.enter="platformOpen = !platformOpen">
+        <span class="vs-sec-t">平台注入参数（{{ platformFields.length }} 项）</span>
+        <span class="vs-sec-hint">平台标识码 / 统一交易标识码 / 时间戳 / 附件关联标识号：由发布工具、交易平台与系统维护，企业表单不收集</span>
+        <Tag :color="platformOpen ? 'orange' : 'default'">{{ platformOpen ? '收起' : '展开查看' }}</Tag>
       </div>
-      <div v-if="govOpen" class="vs-gov-b">
-        <VoFieldGrid :fields="split.government" :model-value="fields" read-only :columns="2" />
+      <div v-if="platformOpen" class="vs-gov-b">
+        <VoFieldGrid :fields="platformFields" :model-value="fields" read-only :columns="2" />
       </div>
     </section>
 
