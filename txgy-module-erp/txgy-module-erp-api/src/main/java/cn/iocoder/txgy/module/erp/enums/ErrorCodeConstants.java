@@ -27,6 +27,14 @@ public interface ErrorCodeConstants {
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_IN = new ErrorCode(1_030_101_008, "反审核失败，已存在对应的采购入库单");
 ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_009, "采购订单项({})超过最大允许退货数量({})");
     ErrorCode PURCHASE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_030_101_010, "反审核失败，已存在对应的采购退货单");
+
+    // ========== ERP 商城缺货采购需求（1-030-104-000） ===========
+    ErrorCode MALL_PURCHASE_DEMAND_NOT_EXISTS = new ErrorCode(1_030_104_000, "商城缺货采购需求不存在");
+    ErrorCode MALL_PURCHASE_DEMAND_REQUEST_CONFLICT = new ErrorCode(1_030_104_001, "商城缺货采购请求与已受理请求不一致");
+    ErrorCode MALL_PURCHASE_DEMAND_TENANT_MISMATCH = new ErrorCode(1_030_104_002, "商城缺货采购请求的租户不匹配");
+    ErrorCode MALL_PURCHASE_DEMAND_QUANTITY_INVALID = new ErrorCode(1_030_104_003, "商城缺货采购明细({})的数量不合法");
+    ErrorCode MALL_PURCHASE_DEMAND_STATUS_INVALID = new ErrorCode(1_030_104_004, "商城缺货采购需求不能从状态({})变更为({})");
+    ErrorCode MALL_PURCHASE_DEMAND_RESULT_REASON_REQUIRED = new ErrorCode(1_030_104_005, "商城缺货采购需求状态({})必须填写原因说明");
     ErrorCode PURCHASE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_101_011, "采购订单({})当前状态无法提交审批");
     ErrorCode PURCHASE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_030_101_012, "采购订单({})正在审批，无法修改");
 
@@ -187,5 +195,40 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode COLLABORATION_B_ALREADY_CONFIRMED = new ErrorCode(1_030_900_005, "协作单 B 已完成业务确认");
     ErrorCode COLLABORATION_B_NOT_EXISTS = new ErrorCode(1_030_900_006, "协作单 B 不存在");
     ErrorCode COLLABORATION_B_CONFIRM_ITEM_INVALID = new ErrorCode(1_030_900_007, "协作单 B 确认明细与接收明细不一致");
+    ErrorCode COLLABORATION_B_TYPE_INVALID = new ErrorCode(1_030_900_008, "协同单类型不支持");
+
+    // ========== ERP 采购申请（1-030-700-000） ==========
+    ErrorCode PURCHASE_REQUEST_NOT_EXISTS = new ErrorCode(1_030_700_000, "采购申请不存在");
+    ErrorCode PURCHASE_REQUEST_NO_EXISTS = new ErrorCode(1_030_700_001, "生成采购申请编号失败，请重新提交");
+    ErrorCode PURCHASE_REQUEST_UPDATE_FAIL_STATUS = new ErrorCode(1_030_700_002, "采购申请({})当前状态无法修改");
+    ErrorCode PURCHASE_REQUEST_DELETE_FAIL_STATUS = new ErrorCode(1_030_700_003, "采购申请({})当前状态无法删除");
+    ErrorCode PURCHASE_REQUEST_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_700_004, "采购申请({})当前状态无法提交审批");
+    ErrorCode PURCHASE_REQUEST_CONVERT_FAIL_STATUS = new ErrorCode(1_030_700_005, "采购申请({})未审批通过，无法转询价");
+    ErrorCode PURCHASE_REQUEST_ITEM_COUNT_INVALID = new ErrorCode(1_030_700_006, "采购申请明细数量必须大于零");
+
+    // ========== ERP 询价与定标（1-030-710-000） ==========
+    ErrorCode INQUIRY_NOT_EXISTS = new ErrorCode(1_030_710_000, "询价单不存在");
+    ErrorCode INQUIRY_NO_EXISTS = new ErrorCode(1_030_710_001, "生成询价单编号失败，请重新提交");
+    ErrorCode INQUIRY_UPDATE_FAIL_STATUS = new ErrorCode(1_030_710_002, "询价单({})当前状态无法修改");
+    ErrorCode INQUIRY_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_710_003, "询价单({})当前状态无法提交审批");
+    ErrorCode INQUIRY_PUBLISH_FAIL_STATUS = new ErrorCode(1_030_710_004, "询价单({})未审批通过，无法发布");
+    ErrorCode INQUIRY_CLOSE_FAIL_STATUS = new ErrorCode(1_030_710_005, "询价单({})当前状态无法截止报价");
+    ErrorCode INQUIRY_DEADLINE_INVALID = new ErrorCode(1_030_710_006, "报价截止时间必须晚于当前时间");
+    ErrorCode INQUIRY_QUOTE_NOT_EXISTS = new ErrorCode(1_030_710_007, "报价不存在");
+    ErrorCode INQUIRY_QUOTE_STATUS_INVALID = new ErrorCode(1_030_710_008, "当前询价状态不允许维护报价");
+    ErrorCode INQUIRY_QUOTE_DUPLICATE = new ErrorCode(1_030_710_009, "供应商当前报价版本已经存在");
+    ErrorCode AWARD_SELECTION_INVALID = new ErrorCode(1_030_710_010, "每条询价明细必须且只能选择一个中标报价");
+    ErrorCode AWARD_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_710_011, "询价单({})当前状态无法提交定标审批");
+    ErrorCode AWARD_CONFIRM_FAIL_STATUS = new ErrorCode(1_030_710_012, "询价单({})定标尚未审批通过");
+    ErrorCode AWARD_ALREADY_CONFIRMED = new ErrorCode(1_030_710_013, "询价单({})已经生成采购订单");
+
+    // ========== ERP 造价结果（1-030-720-000） ==========
+    ErrorCode COST_RESULT_NOT_EXISTS = new ErrorCode(1_030_720_000, "造价结果不存在");
+    ErrorCode COST_RESULT_NO_EXISTS = new ErrorCode(1_030_720_001, "生成造价结果编号失败，请重新提交");
+    ErrorCode COST_RESULT_VERSION_DUPLICATE = new ErrorCode(1_030_720_002, "项目当前造价版本已经存在");
+    ErrorCode COST_RESULT_UPDATE_FAIL_STATUS = new ErrorCode(1_030_720_003, "造价结果({})当前状态无法修改");
+    ErrorCode COST_RESULT_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_720_004, "造价结果({})当前状态无法提交审批");
+    ErrorCode COST_RESULT_MAPPING_INCOMPLETE = new ErrorCode(1_030_720_005, "造价结果仍有未完成映射的材料");
+    ErrorCode COST_RESULT_CONVERT_FAIL_STATUS = new ErrorCode(1_030_720_006, "造价结果({})未审批通过，无法转换");
 
 }

@@ -20,6 +20,7 @@ export interface ParsedClue {
   detailAddress?: string;
   remark?: string;
   customerCategory?: number; // 1 下游客户 / 2 上游供应商（前端级联用）
+  customerId?: number; // 按识别名称在 CRM 中匹配到的客户编号（自动回填所属客户）
 }
 
 // 行业关键词 → 字典数值（下游 101-110，上游 201-206）
@@ -166,6 +167,12 @@ function buildPrompt(text: string, hasImage: boolean): string {
     : '';
   return `你是一个 CRM 线索信息提取助手。${imageHint}请从下面的一段客户资料文本（及可能的图片）中，提取结构化字段，并以 JSON 格式只输出结果（不要包含任何解释，也不要使用 markdown 代码块标记）。
 
+重要约束（必须遵守）：
+- 严禁臆造或默认填充任何字段：资料中未出现的内容一律输出 null，不要猜测。
+- name 必须是资料中真实出现的客户 / 公司 / 联系人名称。
+- 若图片是软件界面或系统截图，请忽略界面上的系统名称、平台名、菜单、按钮、自有公司名称等无关文字，只提取客户联系信息。
+- 无法确定的字段输出 null。
+
 可提取字段及取值约束：
 - name: 线索名称 / 客户或公司名称（字符串）
 - mobile: 手机号（11 位数字字符串）
@@ -186,6 +193,54 @@ function buildPrompt(text: string, hasImage: boolean): string {
 """
 ${text || '（无文本，请从图片中识别）'}
 """`;
+}
+
+/**
+ * 将各种日期写法规范化为 YYYY-MM-DD。兼容：
+ * 2026-10-20 | 2026-10-2 | 2026.2.3 | 2026/2/3 | 2026年10月2日 | 2026年10月2号 | 2026 10 20
+ */
+export function normalizeDateStr(value?: string): string | undefined {
+  if (!value) return undefined;
+  let m = String(value).trim();
+  if (!m) return undefined;
+  // 先去掉可能的时间部分（如 "2026-10-20 00:00:00"）
+  m = m.split(/\s+/)[0] ?? m;
+  // 中文字符：年月转分隔符，日/号去掉
+  m = m.replace(/[年月]/g, '-').replace(/[日号]/g, '');
+  // 各种分隔符统一为 -
+  m = m.replace(/[./\\\u3001\uFF0C\u3002]+/g, '-');
+  // 只保留数字块（丢弃中文等残余字符，防 "10月2" 残留）
+  const parts = m
+    .split('-')
+    .map((x) => x.match(/\d{1,4}/)?.[0] ?? '')
+    .filter(Boolean);
+  if (parts.length < 3) return undefined;
+  let year = parts[0];
+  let mon = parts[1];
+  let day = parts[2];
+  // 支持省略年份（仅月日，如 10.2/10-2）——无年份不识别，必须带完整年月日
+  if (!/^\d{4}$/.test(year)) {
+    if (/^\d{2}$/.test(year)) year = `20${year}`;
+    else return undefined;
+  }
+  mon = mon.padStart(2, '0');
+  day = day.padStart(2, '0');
+  if (!/^\d{2}$/.test(mon) || !/^\d{2}$/.test(day)) return undefined;
+  const date = new Date(`${year}-${mon}-${day}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  // 用本地年月日拼接，避免 toISOString 的 UTC 偏移导致差一天
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${dd}`;
+}
+
+/** 将规范化日期字符串转为毫秒时间戳（DatePicker valueFormat:'x' 用） */
+export function dateToTs(value?: string): number | undefined {
+  const s = normalizeDateStr(value);
+  if (!s) return undefined;
+  const ts = new Date(`${s}T00:00:00`).getTime();
+  return Number.isNaN(ts) ? undefined : ts;
 }
 
 function extractJson(content: string): Record<string, any> | null {
@@ -346,4 +401,568 @@ export async function parseClue(
     // 忽略，使用规则解析结果
   }
   return { fields: rb, aiError };
+}
+
+
+/* ----------------------------- 合同专属识别 ----------------------------- */
+
+export interface ParsedContractProduct {
+  name?: string;
+  no?: string;
+  unit?: string;
+  price?: number;
+  count?: number;
+  totalPrice?: number;
+}
+
+export interface ParsedContract {
+  name?: string;
+  customerName?: string;
+  customerId?: number;
+  businessName?: string;
+  businessId?: number;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  orderDate?: string;
+  startTime?: string;
+  endTime?: string;
+  signUserName?: string;
+  signUserId?: number;
+  signContactName?: string;
+  discountPercent?: number;
+  totalPrice?: number;
+  products?: ParsedContractProduct[];
+  remark?: string;
+}
+
+function buildContractPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 合同信息提取助手。${imageHint}请从下面的合同资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造：资料中未出现的内容一律输出 null。
+- name 必须是【合同名称】（形如“……施工合同 / 采购合同 / 供货合同”），不要把客户公司名称当作合同名。
+- customerName 是客户（对方公司）名称；businessName 是关联商机 / 项目名称。
+- ownerUserName 是合同负责人（我方销售）姓名，资料中出现“负责人”“销售”“业务员”等并附姓名时提取。
+- 日期统一输出 yyyy-MM-dd 格式。
+- discountPercent 是【优惠掉的百分比】：出现“折扣 95%”“95 折”表示优惠 5%，输出 5；没有折扣输出 0。
+- totalPrice 是折后应付总金额（数字）；products 中 totalPrice 是某产品小计（单价 × 数量）。
+- 若资料未直接给出数量 count，可用总价 ÷ 单价推算。
+- remark 放补充说明（如施工内容、工艺要求等）。
+
+输出 JSON 结构示例：
+{"name":"延安产业园外墙防腐保温施工合同","customerName":"某某公司","businessName":"某某项目","ownerUserName":"刘志强","orderDate":"2026-10-01","startTime":"2026-10-05","endTime":"2026-12-25","signUserName":"朱琳","signContactName":"王经理","discountPercent":5,"totalPrice":74100,"products":[{"name":"聚氨酯保温板","no":"WB001","unit":"㎡","price":78,"count":1000,"totalPrice":78000}],"remark":"项目含外墙除锈、防腐底漆、保温板铺设、防水面层"}
+
+合同资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseContract(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedContract> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) {
+    return { fields: null };
+  }
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildContractPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content }],
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const j: any = await resp.json();
+        if (j?.error?.message) {
+          detail = j.error.message;
+        }
+      } catch {
+        // 忽略
+      }
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) {
+      return { fields: null, error: 'AI 返回内容无法解析为 JSON' };
+    }
+    const out: Partial<ParsedContract> = {};
+    const setStr = (k: keyof ParsedContract, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        (out as any)[k] = `${v}`;
+      }
+    };
+    const setNum = (k: keyof ParsedContract, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) {
+          (out as any)[k] = n;
+        }
+      }
+    };
+    setStr('name', json.name);
+    setStr('customerName', json.customerName);
+    setStr('businessName', json.businessName);
+    setStr('ownerUserName', json.ownerUserName);
+    setStr('orderDate', json.orderDate);
+    setStr('startTime', json.startTime);
+    setStr('endTime', json.endTime);
+    setStr('signUserName', json.signUserName);
+    setStr('signContactName', json.signContactName);
+    setNum('discountPercent', json.discountPercent);
+    setNum('totalPrice', json.totalPrice);
+    setStr('remark', json.remark);
+    if (Array.isArray(json.products)) {
+      out.products = json.products
+        .map((p: any) => ({
+          name: p?.name ? String(p.name) : undefined,
+          no: p?.no ? String(p.no) : undefined,
+          unit: p?.unit ? String(p.unit) : undefined,
+          price: p?.price != null ? Number(p.price) : undefined,
+          count: p?.count != null ? Number(p.count) : undefined,
+          totalPrice: p?.totalPrice != null ? Number(p.totalPrice) : undefined,
+        }))
+        .filter((p: any) => p.name || p.no);
+    }
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
+
+
+/* ----------------------------- 商机专属识别 ----------------------------- */
+
+export interface ParsedBusiness {
+  name?: string;
+  customerName?: string;
+  customerId?: number;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  businessStatusTypeName?: string;
+  statusTypeId?: number;
+  endDate?: string;
+  remark?: string;
+}
+
+function buildBusinessPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 商机信息提取助手。${imageHint}请从下面的商机资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- name 必须是【商机名称】（一般是项目/工程名称）。
+- customerName 是客户公司名称；ownerUserName 是负责人姓名。
+- businessStatusTypeName 是商机阶段/状态组名称（如"初步接洽"、"需求确认"、"报价及方案确认"、"商务谈判"、"赢单"）。
+- endDate 是预计成交日期，输出 yyyy-MM-dd。
+- remark 放补充说明。
+
+输出 JSON 结构示例：
+{"name":"延安产业园外墙防腐保温项目","customerName":"固邦防腐材料制造有限公司","ownerUserName":"刘志强","businessStatusTypeName":"报价及方案确认","endDate":"2026-10-20","remark":"客户预算约8万，需尽快报价"}
+
+商机资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseBusiness(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedBusiness> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildBusinessPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedBusiness> = {};
+    const setStr = (k: keyof ParsedBusiness, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    setStr('name', json.name);
+    setStr('customerName', json.customerName);
+    setStr('ownerUserName', json.ownerUserName);
+    setStr('businessStatusTypeName', json.businessStatusTypeName);
+    setStr('endDate', json.endDate);
+    setStr('remark', json.remark);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
+
+/* ----------------------------- 回款专属识别 ----------------------------- */
+
+export interface ParsedReceivable {
+  customerName?: string;
+  customerId?: number;
+  contractNo?: string;
+  contractName?: string;
+  contractId?: number;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  period?: number;
+  returnTime?: string;
+  returnTypeName?: string;
+  returnType?: number;
+  price?: number;
+  remark?: string;
+}
+
+function buildReceivablePrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 回款信息提取助手。${imageHint}请从下面的回款资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- customerName 是客户公司名称；contractNo 是合同编号；contractName 是合同名称。
+- period 是回款期数（第几期），输出纯数字（如 1、2、3）。
+- returnTime 是回款日期，输出 yyyy-MM-dd。
+- returnTypeName 是回款方式名称，如"现金"、"银行转账"、"电汇"、"承兑汇票"等。
+- price 是回款金额（数字）。
+- ownerUserName 是负责人姓名。
+- remark 放补充说明。
+
+输出 JSON 结构示例：
+{"customerName":"固邦防腐材料制造有限公司","contractNo":"TXGY-HT-2026-0012","period":1,"returnTime":"2026-10-15","returnTypeName":"电汇","price":74100,"ownerUserName":"刘志强","remark":"项目第一期回款"}
+
+回款资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+// 回款方式字典(crm_receivable_return_type)：1支票 2现金 3邮政汇款 4电汇 5网上转账 6支付宝 7微信支付 8其他
+const RETURN_TYPE_NAME_MAP: Record<string, number> = {
+  '支票': 1,
+  '现金': 2,
+  '邮政汇款': 3,
+  '电汇': 4,
+  '网上转账': 5,
+  '银行转账': 5,
+  '银行': 5,
+  '转账': 5,
+  '支付宝': 6,
+  '微信': 7,
+  '承兑': 8, // 承兑汇票不在字典中，归入其他避免空白
+  '其他': 8,
+};
+
+export function matchReturnType(name?: string): number | undefined {
+  if (!name) return undefined;
+  const n = String(name).trim();
+  for (const [k, v] of Object.entries(RETURN_TYPE_NAME_MAP)) {
+    if (n.includes(k)) return v;
+  }
+  return undefined;
+}
+
+export async function parseReceivable(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedReceivable> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildReceivablePrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedReceivable> = {};
+    const setStr = (k: keyof ParsedReceivable, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    const setNum = (k: keyof ParsedReceivable, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) (out as any)[k] = n;
+      }
+    };
+    setStr('customerName', json.customerName);
+    setStr('contractNo', json.contractNo);
+    setStr('contractName', json.contractName);
+    setStr('ownerUserName', json.ownerUserName);
+    setNum('period', json.period);
+    setStr('returnTime', json.returnTime);
+    setStr('returnTypeName', json.returnTypeName);
+    setNum('price', json.price);
+    setStr('remark', json.remark);
+    if (out.returnTypeName) {
+      out.returnType = matchReturnType(out.returnTypeName);
+    }
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
+
+
+/* ----------------------------- 产品专属识别 ----------------------------- */
+
+export interface ParsedProduct {
+  name?: string;
+  no?: string;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  categoryName?: string;
+  categoryId?: number;
+  unitName?: string;
+  unit?: number;
+  price?: number;
+  statusName?: string;
+  status?: number;
+  description?: string;
+}
+
+// 产品单位：固邦字典 crm_product_unit（1个 2块 3只 ...）+ 常见别名
+const UNIT_NAME_MAP: Record<string, number> = {
+  '个': 1, '只': 3, '块': 2, '把': 4, '枚': 5, '瓶': 6, '盒': 7,
+  '台': 8, '吨': 9, '千克': 10, '公斤': 10, '斤': 10, '米': 11,
+  '箱': 12, '套': 13, '件': 1,
+};
+export function matchProductUnit(name?: string): number | undefined {
+  if (!name) return undefined;
+  const n = String(name).trim();
+  for (const [k, v] of Object.entries(UNIT_NAME_MAP)) {
+    if (n.includes(k)) return v;
+  }
+  return undefined;
+}
+
+// 上架状态：固邦字典 crm_product_status（0下架 1上架）
+const PRODUCT_STATUS_MAP: Record<string, number> = {
+  '上架': 1, '在售': 1, '在售中': 1, '已上架': 1, '启用': 1,
+  '下架': 0, '停售': 0, '已下架': 0, '禁用': 0, '停用': 0,
+};
+export function matchProductStatus(name?: string): number | undefined {
+  if (!name) return undefined;
+  const n = String(name).trim();
+  for (const [k, v] of Object.entries(PRODUCT_STATUS_MAP)) {
+    if (n.includes(k)) return v;
+  }
+  return undefined;
+}
+
+function buildProductPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 产品信息提取助手。${imageHint}请从下面的产品资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- name 是【产品名称】，如"3PE 防腐钢管"。
+- no 是【产品编码】/SKU；ownerUserName 是负责人姓名。
+- categoryName 是产品类型/分类名（图片里没有就输出 null）。
+- unitName 是产品单位，如"个/块/只/把/枚/瓶/盒/台/吨/千克/米/箱/套"等。
+- price 是产品价格（数字，万元/元请统一为元）。
+- statusName 是上架状态（"上架"或"下架"）。
+- description 是产品描述/规格/材质等。
+
+输出 JSON 结构示例：
+{"name":"3PE 防腐钢管","no":"PRD-3PE-001","ownerUserName":"刘志强","categoryName":"防腐材料","unitName":"吨","price":6000,"statusName":"上架","description":"3PE 防腐钢管 DN200 适合油田集输管线"}
+
+产品资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseProduct(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedProduct> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildProductPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedProduct> = {};
+    const setStr = (k: keyof ParsedProduct, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    const setNum = (k: keyof ParsedProduct, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) (out as any)[k] = n;
+      }
+    };
+    setStr('name', json.name);
+    setStr('no', json.no);
+    setStr('ownerUserName', json.ownerUserName);
+    setStr('categoryName', json.categoryName);
+    setStr('unitName', json.unitName);
+    setNum('price', json.price);
+    setStr('statusName', json.statusName);
+    setStr('description', json.description);
+    if (out.unitName) out.unit = matchProductUnit(out.unitName);
+    if (out.statusName) out.status = matchProductStatus(out.statusName);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
+
+/* ----------------------------- 回款计划专属识别 ----------------------------- */
+
+export interface ParsedReceivablePlan {
+  customerName?: string;
+  customerId?: number;
+  contractName?: string;
+  contractNo?: string;
+  contractId?: number;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  price?: number;
+  returnTime?: string;
+  returnTypeName?: string;
+  returnType?: number;
+  remindDays?: number;
+  remark?: string;
+}
+
+function buildReceivablePlanPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 回款计划信息提取助手。${imageHint}请从下面的回款计划资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- customerName 是客户公司名称；contractName 是合同名称；contractNo 是合同编号。
+- price 是计划回款金额（数字）。
+- returnTime 是计划回款日期，输出 yyyy-MM-dd。
+- returnTypeName 是回款方式名称（现金/电汇/银行转账/承兑等）。
+- remindDays 是提前几天提醒（数字）。
+- ownerUserName 是负责人姓名。
+- remark 放补充说明。
+
+输出 JSON 结构示例：
+{"customerName":"固邦防腐材料制造有限公司","contractNo":"TXGY-HT-2026-0012","price":370500,"returnTime":"2026-10-15","returnTypeName":"电汇","remindDays":7,"ownerUserName":"刘志强","remark":"项目第一期回款"}
+
+回款计划资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseReceivablePlan(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedReceivablePlan> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildReceivablePlanPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedReceivablePlan> = {};
+    const setStr = (k: keyof ParsedReceivablePlan, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    const setNum = (k: keyof ParsedReceivablePlan, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) (out as any)[k] = n;
+      }
+    };
+    setStr('customerName', json.customerName);
+    setStr('contractName', json.contractName);
+    setStr('contractNo', json.contractNo);
+    setStr('ownerUserName', json.ownerUserName);
+    setNum('price', json.price);
+    setStr('returnTime', json.returnTime);
+    setStr('returnTypeName', json.returnTypeName);
+    setNum('remindDays', json.remindDays);
+    setStr('remark', json.remark);
+    if (out.returnTypeName) out.returnType = matchReturnType(out.returnTypeName);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
 }

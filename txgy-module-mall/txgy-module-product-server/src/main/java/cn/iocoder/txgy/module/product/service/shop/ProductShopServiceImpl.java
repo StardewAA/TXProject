@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.product.service.shop;
 
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpriseDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.dal.mysql.shop.ProductShopMapper;
 import cn.iocoder.txgy.module.product.service.enterprise.ProductEnterpriseService;
@@ -25,7 +26,8 @@ public class ProductShopServiceImpl implements ProductShopService {
 
     @Override
     public Long createShop(ProductShopDO shop) {
-        enterpriseService.validateApproved(shop.getEnterpriseId());
+        ProductEnterpriseDO enterprise = enterpriseService.validateApproved(shop.getEnterpriseId());
+        shop.setTenantId(enterprise.getTenantId());
         if (shopMapper.selectByEnterpriseId(shop.getEnterpriseId()) != null) {
             throw exception(SHOP_ENTERPRISE_EXISTS);
         }
@@ -37,7 +39,8 @@ public class ProductShopServiceImpl implements ProductShopService {
 
     @Override
     public void updateShop(ProductShopDO shop) {
-        enterpriseService.validateApproved(shop.getEnterpriseId());
+        ProductEnterpriseDO enterprise = enterpriseService.validateApproved(shop.getEnterpriseId());
+        shop.setTenantId(enterprise.getTenantId());
         ProductShopDO existingShop = validateShopExists(shop.getId());
         if (!Objects.equals(existingShop.getEnterpriseId(), shop.getEnterpriseId())
                 && shopMapper.selectByEnterpriseId(shop.getEnterpriseId()) != null) {

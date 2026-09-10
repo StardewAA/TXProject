@@ -10,6 +10,7 @@ interface DictTagProps {
   type: string; // 字典类型
   value: any; // 字典值
   icon?: string; // 图标
+  color?: string; // 标签颜色覆盖
 }
 
 const props = defineProps<DictTagProps>();
@@ -28,7 +29,7 @@ const dictTag = computed(() => {
   }
 
   // 处理颜色类型
-  let colorType = dict.colorType;
+  let colorType = props.color || dict.colorType;
   switch (colorType) {
     case 'danger': {
       colorType = 'error';
@@ -49,7 +50,7 @@ const dictTag = computed(() => {
     }
   }
 
-  if (isValidColor(dict.cssClass)) {
+  if (!props.color && isValidColor(dict.cssClass)) {
     colorType = new TinyColor(dict.cssClass).toHexString();
   }
 

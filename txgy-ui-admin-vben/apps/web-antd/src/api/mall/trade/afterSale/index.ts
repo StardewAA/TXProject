@@ -9,6 +9,8 @@ export namespace MallAfterSaleApi {
   export interface AfterSale {
     id?: number; // 售后编号
     no?: string; // 售后单号
+    shopId?: number; // 售后责任店铺编号
+    shopName?: string; // 售后责任店铺名称快照
     status?: number; // 退款状态
     way?: number; // 售后方式
     type?: number; // 售后类型

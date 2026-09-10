@@ -324,8 +324,8 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_PROJECT_STATUS_NOT_PAUSED = new ErrorCode(1_040_509_104, "项目当前状态不允许恢复，仅“已暂停”状态可恢复");
     ErrorCode PRO_PROJECT_FORCE_CLOSE_FORBIDDEN = new ErrorCode(1_040_509_105, "已取消的项目不允许强制结项");
     ErrorCode PRO_PROJECT_IMPORT_LIST_EMPTY = new ErrorCode(1_040_509_106, "导入数据为空");
-    ErrorCode PRO_PROJECT_PLAN_TIME_INVALID = new ErrorCode(1_040_509_107, "计划结束时间不能早于计划开始时间");
-    ErrorCode PRO_PROJECT_ACTUAL_TIME_INVALID = new ErrorCode(1_040_509_108, "实际结束时间不能早于实际开始时间");
+    ErrorCode PRO_PROJECT_PLAN_TIME_INVALID = new ErrorCode(1_040_509_107, "计划结束时间必须晚于计划开始时间");
+    ErrorCode PRO_PROJECT_ACTUAL_TIME_INVALID = new ErrorCode(1_040_509_108, "实际结束时间必须晚于实际开始时间");
     ErrorCode PRO_PROJECT_STATUS_TRANSFER_FORBIDDEN = new ErrorCode(1_040_509_109, "项目状态不允许从「{}」变更为「{}」");
     ErrorCode PRO_PROJECT_OWNER_NOT_EXISTS = new ErrorCode(1_040_509_112, "项目负责人不存在");
     ErrorCode PRO_PROJECT_MEMBER_NOT_EXISTS = new ErrorCode(1_040_509_110, "项目成员不存在");

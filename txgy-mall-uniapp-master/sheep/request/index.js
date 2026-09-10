@@ -111,27 +111,32 @@ http.interceptors.request.use(
  */
 http.interceptors.response.use(
   (response) => {
+    // 防止网关/网络异常返回空响应时，直接访问 response.data.code 导致页面白屏
+    const responseData =
+      response?.data && typeof response.data === 'object'
+        ? response.data
+        : { code: -1, msg: '服务器返回数据为空' };
     // 约定：如果是 /auth/ 下的 URL 地址，并且返回了 accessToken 说明是登录相关的接口，则自动设置登陆令牌
-    if (response.config.url.indexOf('/member/auth/') >= 0 && response.data?.data?.accessToken) {
-      $store('user').setToken(response.data.data.accessToken, response.data.data.refreshToken);
+    if (response.config.url.indexOf('/member/auth/') >= 0 && responseData.data?.accessToken) {
+      $store('user').setToken(responseData.data.accessToken, responseData.data.refreshToken);
     }
 
     // 自定处理【loading 加载中】：如果需要显示 loading，则关闭 loading
     response.config.custom.showLoading && closeLoading();
 
     // 自定义处理【error 错误提示】：如果需要显示错误提示，则显示错误提示
-    if (response.data.code !== 0) {
+    if (responseData.code !== 0) {
       // 特殊：如果 401 错误码，则跳转到登录页 or 刷新令牌
-      if (response.data.code === 401) {
+      if (responseData.code === 401) {
         return refreshToken(response.config);
       }
       // 特殊：处理分销用户绑定失败的提示
-      if ((response.data.code + '').includes('1011007')) {
-        console.error(`分销用户绑定失败，原因：${response.data.msg}`);
+      if ((responseData.code + '').includes('1011007')) {
+        console.error(`分销用户绑定失败，原因：${responseData.msg}`);
       } else if (response.config.custom.showError) {
         // 错误提示
         uni.showToast({
-          title: response.data.msg || '服务器开小差啦,请稍后再试~',
+          title: responseData.msg || '服务器开小差啦,请稍后再试~',
           icon: 'none',
           mask: true,
         });
@@ -142,7 +147,7 @@ http.interceptors.response.use(
     if (
       response.config.custom.showSuccess &&
       response.config.custom.successMsg !== '' &&
-      response.data.code === 0
+      responseData.code === 0
     ) {
       uni.showToast({
         title: response.config.custom.successMsg,
@@ -151,7 +156,7 @@ http.interceptors.response.use(
     }
 
     // 返回结果：包括 code + data + msg
-    return Promise.resolve(response.data);
+    return Promise.resolve(responseData);
   },
   (error) => {
     const userStore = $store('user');
@@ -197,9 +202,9 @@ http.interceptors.response.use(
           errorMessage = 'HTTP 版本不受支持';
           break;
       }
-      if (error.errMsg.includes('timeout')) errorMessage = '请求超时';
+      if (error?.errMsg?.includes('timeout')) errorMessage = '请求超时';
       // #ifdef H5
-      if (error.errMsg.includes('Network'))
+      if (error?.errMsg?.includes('Network'))
         errorMessage = window.navigator.onLine ? '服务器异常' : '请检查您的网络连接';
       // #endif
     }

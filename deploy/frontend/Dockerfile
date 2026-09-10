@@ -22,6 +22,7 @@ RUN pnpm run build:antd
 
 FROM nginx:1.27-alpine
 
+COPY deploy/frontend/nginx-main.conf /etc/nginx/nginx.conf
 COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /workspace/txgy-ui-admin-vben/apps/web-antd/dist /usr/share/nginx/html
 

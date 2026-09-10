@@ -23,6 +23,12 @@ public class TradeOrderItemBaseVO {
 
     // ========== 商品基本信息 ==========
 
+    @Schema(description = "履约店铺编号", example = "1")
+    private Long shopId;
+
+    @Schema(description = "履约店铺名称快照", example = "测试1111")
+    private String shopName;
+
     @Schema(description = "商品 SPU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Long spuId;
 

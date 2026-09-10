@@ -26,6 +26,8 @@ import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItem
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsOrderRequestDTO;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -59,7 +61,8 @@ public class ErpWmsBusinessDocumentService {
     @Resource private ErpCustomerMapper customerMapper;
     @Resource private FileApi fileApi;
     @Resource private ErpWmsIntegrationGateway integrationGateway;
-    @Resource private ErpWmsIntegrationRecordService recordService;
+    @Autowired @Qualifier("erpWmsIntegrationRecordService")
+    private ErpWmsIntegrationRecordService recordService;
 
     public void preparePurchaseReceiptAfterCommit(Long id) {
         ErpPurchaseInDO document = requireDocument(purchaseInMapper.selectById(id), "采购入库单");

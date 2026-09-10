@@ -41,7 +41,9 @@
         </button>
         <button
           class="check-btn ss-reset-button"
-          v-if="payResult === 'success' && state.tradeOrder.type === 3"
+          v-if="
+            payResult === 'success' && !isSimpleMarketingEnabled() && state.tradeOrder.type === 3
+          "
           @tap="sheep.$router.redirect('/pages/activity/groupon/order')"
         >
           我的拼团
@@ -71,6 +73,7 @@
   import { fen2yuan } from '@/sheep/hooks/useGoods';
   import OrderApi from '@/sheep/api/trade/order';
   import { WxaSubscribeTemplate } from '@/sheep/helper/const';
+  import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
 
   const state = reactive({
     id: 0, // 支付单号
@@ -80,6 +83,25 @@
     tradeOrder: {}, // 商品订单信息，只有在 orderType 为 goods 才会请求。目的：【我的拼团】按钮的展示
     counter: 0, // 获取结果次数
   });
+  let pollTimer = null;
+  let requestInFlight = false;
+  let requestSerial = 0;
+  let activeRequestSerial = 0;
+  let pollGeneration = 0;
+
+  function clearPollTimer() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function invalidateRequest() {
+    // 标记旧请求失效。请求本身无法取消时，响应回来也不会再改写当前页面状态。
+    requestSerial += 1;
+    activeRequestSerial = requestSerial;
+    requestInFlight = false;
+  }
 
   // 支付结果 result => payResult
   const payResult = computed(() => {
@@ -107,8 +129,14 @@
       success: function (res) {
         if (res.confirm) {
           state.counter = 0;
-          setTimeout(() => {
-            getOrderInfo(state.id);
+          clearPollTimer();
+          pollGeneration += 1;
+          const generation = pollGeneration;
+          pollTimer = setTimeout(() => {
+            pollTimer = null;
+            if (generation === pollGeneration) {
+              getOrderInfo(state.id, generation);
+            }
           }, 100);
         }
       },
@@ -116,49 +144,106 @@
   }
 
   // 获得订单信息
-  async function getOrderInfo(id) {
+  async function getOrderInfo(id, generation = pollGeneration) {
+    if (!id) {
+      state.result = 'failed';
+      sheep.$helper.toast('支付订单号缺失');
+      return;
+    }
+    // onShow 可能与 onLoad 的首次查询同时触发，避免并发轮询把次数快速耗尽。
+    if (requestInFlight) {
+      return;
+    }
+    requestInFlight = true;
+    const requestId = ++requestSerial;
+    activeRequestSerial = requestId;
     state.counter++;
-    // 1. 加载订单信息
-    const { data, code } = await PayOrderApi.getOrder(id, true);
-    if (code === 0) {
-      state.orderInfo = data;
-      if (!state.orderInfo || state.orderInfo.status === 30) {
-        // 支付关闭
-        state.result = 'closed';
+    try {
+      // 1. 加载订单信息。网络异常时 request 可能返回 false，需先判断响应对象。
+      const response = await PayOrderApi.getOrder(id, true);
+      if (generation !== pollGeneration || activeRequestSerial !== requestId) {
         return;
       }
-      if (state.orderInfo.status !== 0) {
-        // 非待支付，可能是已支付，可能是已退款
-        state.result = 'paid';
-        // #ifdef MP
-        uni.showModal({
-          title: '支付结果',
-          showCancel: false, // 不要取消按钮
-          content: '支付成功',
-          success: () => {
-            // 订阅只能由用户主动触发，只能包一层 showModal 诱导用户点击
-            autoSubscribeMessage();
-          },
-        });
+      // code=0 但 data=null 是“未找到支付单”，不能把空对象当成已支付。
+      const orderInfo = response?.data;
+      const validOrderInfo =
+        response?.code === 0 &&
+        orderInfo &&
+        typeof orderInfo === 'object' &&
+        !Array.isArray(orderInfo) &&
+        Object.keys(orderInfo).length > 0 &&
+        orderInfo.status !== undefined &&
+        orderInfo.status !== null;
+      if (validOrderInfo) {
+        state.orderInfo = orderInfo;
+        const status = Number(orderInfo.status);
+        if (!Number.isFinite(status)) {
+          // 响应结构不完整，交给轮询重试。
+          state.orderInfo = {};
+        } else if (status === 30) {
+          // 支付关闭
+          state.result = 'closed';
+          clearPollTimer();
+          return;
+        } else if (status !== 0) {
+          // 非待支付，可能是已支付，可能是已退款
+          state.result = 'paid';
+          clearPollTimer();
+          // #ifdef MP
+          uni.showModal({
+            title: '支付结果',
+            showCancel: false, // 不要取消按钮
+            content: '支付成功',
+            success: () => {
+              // 订阅只能由用户主动触发，只能包一层 showModal 诱导用户点击
+              autoSubscribeMessage();
+            },
+          });
 
-        // #endif
-        // 特殊：获得商品订单信息
-        if (state.orderType === 'goods') {
-          const { data, code } = await OrderApi.getOrderDetail(
-            state.orderInfo.merchantOrderId,
-            true,
-          );
-          if (code === 0) {
-            state.tradeOrder = data;
+          // #endif
+          // 特殊：获得商品订单信息
+          if (state.orderType === 'goods' && state.orderInfo.merchantOrderId) {
+            try {
+              const tradeResponse = await OrderApi.getOrderDetail(
+                state.orderInfo.merchantOrderId,
+                true,
+              );
+              if (
+                generation === pollGeneration &&
+                activeRequestSerial === requestId &&
+                tradeResponse?.code === 0 &&
+                tradeResponse.data
+              ) {
+                state.tradeOrder = tradeResponse.data;
+              }
+            } catch (error) {
+              console.warn('加载交易订单详情失败', error);
+            }
           }
+          return;
         }
-        return;
       }
+    } catch (error) {
+      // 轮询期间的网络/令牌异常不能让支付结果页直接白屏，继续按次数重试。
+      console.warn('查询支付结果失败', error);
+    } finally {
+      if (activeRequestSerial === requestId) {
+        requestInFlight = false;
+      }
+    }
+    // 页面已经隐藏或新一轮查询已开始时，丢弃过期响应，不再创建定时器。
+    if (generation !== pollGeneration) {
+      return;
     }
     // 2.1 情况三一：未支付，且轮询次数小于五次，则继续轮询
     if (state.counter < 5 && state.result === 'unpaid') {
-      setTimeout(() => {
-        getOrderInfo(id);
+      clearPollTimer();
+      const nextGeneration = pollGeneration;
+      pollTimer = setTimeout(() => {
+        pollTimer = null;
+        if (nextGeneration === pollGeneration) {
+          getOrderInfo(id, nextGeneration);
+        }
       }, 2000);
     }
     // 2.2 情况二：超过五次检测才判断为支付失败
@@ -184,7 +269,7 @@
       return;
     }
     const event = [WxaSubscribeTemplate.TRADE_ORDER_DELIVERY];
-    if (state.tradeOrder.type === 3) {
+    if (!isSimpleMarketingEnabled() && state.tradeOrder.type === 3) {
       event.push(WxaSubscribeTemplate.PROMOTION_COMBINATION_SUCCESS);
     }
     sheep.$platform.useProvider('wechat').subscribeMessage(event, () => {
@@ -208,7 +293,16 @@
   }
   // #endif
 
-  onLoad(async (options) => {
+  onLoad(async (options = {}) => {
+    clearPollTimer();
+    invalidateRequest();
+    pollGeneration += 1;
+    state.counter = 0;
+    state.result = 'unpaid';
+    state.id = 0;
+    state.orderType = 'goods';
+    state.orderInfo = {};
+    state.tradeOrder = {};
     // 支付订单号
     if (options.id) {
       state.id = options.id;
@@ -223,18 +317,21 @@
       state.result = 'failed';
     } else {
       // 轮询五次检测订单支付结果
-      await getOrderInfo(state.id);
+      await getOrderInfo(state.id, pollGeneration);
     }
   });
 
   onShow(() => {
-    if (isEmpty(state.orderInfo)) {
+    if (state.result !== 'unpaid' || isEmpty(state.orderInfo)) {
       return;
     }
-    getOrderInfo(state.id);
+    getOrderInfo(state.id, pollGeneration);
   });
 
   onHide(() => {
+    clearPollTimer();
+    invalidateRequest();
+    pollGeneration += 1;
     state.result = 'unpaid';
     state.counter = 0;
   });

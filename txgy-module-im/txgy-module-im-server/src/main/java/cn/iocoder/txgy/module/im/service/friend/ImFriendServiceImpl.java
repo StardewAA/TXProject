@@ -19,6 +19,8 @@ import cn.iocoder.txgy.module.im.service.websocket.ImWebSocketService;
 import cn.iocoder.txgy.module.im.service.websocket.notification.friend.*;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -39,6 +41,7 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.f
 import static cn.iocoder.txgy.module.im.dal.redis.RedisKeyConstants.FRIEND_STATE;
 import static cn.iocoder.txgy.module.im.enums.ErrorCodeConstants.FRIEND_BLOCKED_BY_PEER;
 import static cn.iocoder.txgy.module.im.enums.ErrorCodeConstants.FRIEND_NOT_BLOCKED;
+import static cn.iocoder.txgy.module.im.enums.ErrorCodeConstants.FRIEND_NOT_EXISTS;
 import static cn.iocoder.txgy.module.im.enums.ErrorCodeConstants.FRIEND_NOT_FRIEND;
 
 /**
@@ -53,6 +56,9 @@ public class ImFriendServiceImpl implements ImFriendService {
 
     @Resource
     private ImFriendMapper friendMapper;
+
+    @Resource
+    private CacheManager cacheManager;
 
     @Resource
     private ImWebSocketService websocketService;
@@ -334,6 +340,53 @@ public class ImFriendServiceImpl implements ImFriendService {
     @Override
     public PageResult<ImFriendDO> getFriendPage(ImFriendManagerPageReqVO reqVO) {
         return friendMapper.selectPage(reqVO);
+    }
+
+    @Override
+    public ImFriendDO getFriend(Long id) {
+        return friendMapper.selectById(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteFriendByManager(Long id) {
+        // 1. 校验存在
+        ImFriendDO friend = friendMapper.selectById(id);
+        if (friend == null) {
+            throw exception(FRIEND_NOT_EXISTS);
+        }
+        Long userId = friend.getUserId();
+        Long friendUserId = friend.getFriendUserId();
+
+        // 2. 双向软删：A→B、B→A 两条记录一并置 DISABLE；双向均已删除时幂等返回
+        boolean deleted = deleteFriend0(userId, friendUserId);
+        deleteFriend0(friendUserId, userId);
+        if (!deleted) {
+            return;
+        }
+
+        // 3. 手动失效双向 FRIEND_STATE 缓存（@Caching 的 SpEL 无法从 id 动态推导双方缓存键）
+        evictFriendState(userId, friendUserId);
+
+        // 4. 双方多端 FRIEND_DELETE 通知（persistent=false 不入库；clear=false 前端渲染「你已删除好友」瞬时气泡）
+        sendFriendDeleteNotification(userId, friendUserId);
+        sendFriendDeleteNotification(friendUserId, userId);
+    }
+
+    private void evictFriendState(Long userId, Long friendUserId) {
+        Cache cache = cacheManager.getCache(FRIEND_STATE);
+        if (cache != null) {
+            cache.evict(userId + "_" + friendUserId);
+            cache.evict(friendUserId + "_" + userId);
+        }
+    }
+
+    private void sendFriendDeleteNotification(Long userId, Long friendUserId) {
+        FriendDeleteNotification payload = ((FriendDeleteNotification) new FriendDeleteNotification()
+                .setOperatorUserId(userId).setFriendUserId(friendUserId)).setClear(false);
+        privateMessageService.sendPrivateMessage(userId, new ImPrivateMessageSendDTO()
+                .setReceiverId(friendUserId).setType(ImContentTypeEnum.FRIEND_DELETE.getType())
+                .setContent(payload).setPersistent(false));
     }
 
 }
