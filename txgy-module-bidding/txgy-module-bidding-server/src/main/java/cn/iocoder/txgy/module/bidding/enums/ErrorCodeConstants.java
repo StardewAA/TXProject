@@ -5,6 +5,10 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
 /**
  * bidding 的错误码。
  * 段位从 1-060-xxx-xxx 开始，按业务区块往下排，别跨段乱用。
+ *
+ * <p>规范出处：docs/招投标模块开发规范.md §4.7 错误码规范（1-060-xxx-xxx 结构，
+ * 服务异常经 ServiceExceptionUtil 抛出，由框架全局异常处理器回写 HTTP 响应）；
+ * 证书/资质域子段 106（1-060-106-000~026，ErrorCodeFormatTest 门禁校验格式与全半角）。
  */
 public interface ErrorCodeConstants {
 
@@ -48,6 +52,35 @@ public interface ErrorCodeConstants {
     ErrorCode COMPLAINT_NOT_EXISTS = new ErrorCode(1_060_105_000, "投诉不存在");
     ErrorCode ILLEGAL_INFO_NOT_EXISTS = new ErrorCode(1_060_105_001, "违法违规信息不存在");
     ErrorCode BLACKLIST_NOT_EXISTS = new ErrorCode(1_060_105_002, "黑名单信息不存在");
+
+    // ========== 资质证书 1-060-106-000 ==========
+    ErrorCode CERTIFICATE_NOT_EXISTS = new ErrorCode(1_060_106_000, "证照不存在");
+    ErrorCode CERTIFICATE_NO_DUPLICATE = new ErrorCode(1_060_106_001, "证照编号已存在");
+    ErrorCode CERTIFICATE_DATA_MODIFIED = new ErrorCode(1_060_106_002, "数据已被他人修改，请刷新后重试");
+    ErrorCode CERTIFICATE_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_003, "证照当前状态不允许该流转");
+    ErrorCode CERT_CHANGE_LOG_LINK_BROKEN = new ErrorCode(1_060_106_004, "证照变更日志哈希链断裂");
+    ErrorCode CERT_FILE_NOT_EXISTS = new ErrorCode(1_060_106_005, "证照文件不存在");
+    ErrorCode CERT_FILE_VIRUS_NOT_CLEAN = new ErrorCode(1_060_106_006, "证照文件未通过病毒扫描，禁止预览/下载");
+    ErrorCode CERT_FILE_HASH_DUPLICATE = new ErrorCode(1_060_106_007, "同证照已存在相同哈希的文件，禁止重复上传");
+    ErrorCode CERT_FILE_VERSION_CONFLICT = new ErrorCode(1_060_106_008, "文件版本已存在（并发冲突），请刷新后重试");
+    ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_106_009, "文件参数不合法");
+    ErrorCode CERT_ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_060_106_010, "预警记录不存在");
+    ErrorCode CERT_ALERT_RECORD_MODIFIED = new ErrorCode(1_060_106_011, "预警记录已被他人修改，请刷新");
+    ErrorCode CERT_VERIFY_IN_PROGRESS = new ErrorCode(1_060_106_012, "验真进行中，请稍后刷新");
+    ErrorCode CERT_VERIFY_GATEWAY_UNAVAILABLE = new ErrorCode(1_060_106_013, "核验通道未就绪，请联系管理员开通");
+    ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_106_014, "验真渠道不合法");
+    ErrorCode QUALIFICATION_NOT_EXISTS = new ErrorCode(1_060_106_015, "资质主档不存在");
+    ErrorCode QUALIFICATION_NO_DUPLICATE = new ErrorCode(1_060_106_016, "同序列/类别/等级的资质证书编号已存在");
+    ErrorCode QUALIFICATION_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_017, "资质状态流转非法");
+    ErrorCode QUALIFICATION_DATA_MODIFIED = new ErrorCode(1_060_106_018, "资质主档已被他人修改，请刷新");
+    ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_106_019, "申报记录不存在");
+    ErrorCode QUAL_APPLY_STATUS_INVALID = new ErrorCode(1_060_106_020, "申报状态流转非法");
+    ErrorCode QUAL_APPLY_PARAM_INVALID = new ErrorCode(1_060_106_021, "申报参数不合法（当前版本支持延续 RENEW 申报）");
+    ErrorCode QUAL_STANDARD_NOT_FOUND = new ErrorCode(1_060_106_022, "未找到适用资质标准（按序列/类别/等级与生效区间）");
+    ErrorCode QUAL_STANDARD_VERSION_DUPLICATE = new ErrorCode(1_060_106_023, "同标准版本/适用范围已存在，请换版本号");
+    ErrorCode SAFETY_PERMIT_NOT_EXISTS = new ErrorCode(1_060_106_024, "安全生产许可证不存在");
+    ErrorCode SAFETY_PERMIT_NO_DUPLICATE = new ErrorCode(1_060_106_025, "安全生产许可证编号已存在");
+    ErrorCode SAFETY_PERMIT_STATUS_INVALID = new ErrorCode(1_060_106_026, "安许状态流转非法");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
