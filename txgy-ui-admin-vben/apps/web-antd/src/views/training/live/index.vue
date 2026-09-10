@@ -37,7 +37,7 @@ onMounted(load);
 <template>
  <Page auto-content-height>
   <div class="heading"><div><small>云培训学院 · MODULE 06</small><h1>直播与讲师体系</h1><p>从开播预约到学习反馈，让每一场培训都有记录。</p></div><Tag color="blue">{{ctx?.platform?'平台运营':ctx?.teacher?'认证讲师':ctx?.enterprise?'企业管理员':'学员'}}</Tag></div>
-  <Tabs v-model:active-key="tab" @change="changeTab">
+  <Tabs v-model:active-key="tab" class="module-tabs" tab-position="left" @change="changeTab">
    <TabPane key="hall" tab="直播大厅"><LiveHall/></TabPane>
    <TabPane v-if="ctx?.teacher" key="rooms" tab="直播管理">
     <div class="toolbar"><Input v-model:value="keyword" placeholder="搜索主题" style="width:230px" @press-enter="load"/><Select v-if="ctx?.platform" v-model:value="scope" :options="[{value:'mine',label:'我的直播'},{value:'platform',label:'全平台直播'}]" @change="load"/><Button @click="load">查询</Button><Button type="primary" @click="editRoom()">创建直播预告</Button><Button v-if="ctx?.profile" @click="editProfile(true)">我的讲师资料</Button></div>
@@ -62,4 +62,15 @@ onMounted(load);
 </template>
 <style scoped>
 .heading{display:flex;align-items:center;justify-content:space-between;padding:26px 28px;background:linear-gradient(120deg,#e9f1ff,#f4f9ff);border-radius:12px;margin-bottom:18px;color:#173354}.heading h1{font-size:26px;font-weight:650;margin:7px 0}.heading p,.muted{color:#738195;font-size:12px}.heading small{letter-spacing:2px;color:#4672b4}.toolbar,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}.actions{gap:6px}.form{display:grid;gap:14px}.form label{display:grid;gap:6px}.form input,input[type=date]{border:1px solid #d9d9d9;border-radius:6px;padding:7px;background:transparent}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}.metrics :deep(.ant-card-body){font-size:28px}
+.module-tabs :deep(.ant-tabs-nav){flex:0 0 176px;width:176px;min-width:176px;margin:0;padding:8px;background:hsl(var(--menu));border:1px solid hsl(var(--border));border-radius:10px}
+.module-tabs :deep(.ant-tabs-nav::before){display:none}
+.module-tabs :deep(.ant-tabs-nav-list){gap:2px}
+.module-tabs :deep(.ant-tabs-ink-bar){display:none}
+.module-tabs :deep(.ant-tabs-tab){justify-content:flex-start;height:38px;margin:0!important;padding:0 12px;border-radius:8px;transition:background .15s ease,color .15s ease}
+.module-tabs :deep(.ant-tabs-tab .ant-tabs-tab-btn){color:hsl(var(--accent-foreground));font-size:14px;font-weight:500}
+.module-tabs :deep(.ant-tabs-tab:hover){background:hsl(var(--accent))}
+.module-tabs :deep(.ant-tabs-tab-active){background:hsl(var(--primary) / 15%)}
+.module-tabs :deep(.ant-tabs-tab-active .ant-tabs-tab-btn){color:hsl(var(--primary))!important;font-weight:600}
+.module-tabs :deep(.ant-tabs-content-holder){flex:1;min-width:0;border-left:0}
+.module-tabs :deep(.ant-tabs-content){height:auto}
 </style>
