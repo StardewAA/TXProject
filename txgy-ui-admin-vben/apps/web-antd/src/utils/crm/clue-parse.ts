@@ -749,3 +749,220 @@ export async function parseReceivable(
     return { fields: null, error: e?.message ?? '调用失败' };
   }
 }
+
+
+/* ----------------------------- 产品专属识别 ----------------------------- */
+
+export interface ParsedProduct {
+  name?: string;
+  no?: string;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  categoryName?: string;
+  categoryId?: number;
+  unitName?: string;
+  unit?: number;
+  price?: number;
+  statusName?: string;
+  status?: number;
+  description?: string;
+}
+
+// 产品单位：固邦字典 crm_product_unit（1个 2块 3只 ...）+ 常见别名
+const UNIT_NAME_MAP: Record<string, number> = {
+  '个': 1, '只': 3, '块': 2, '把': 4, '枚': 5, '瓶': 6, '盒': 7,
+  '台': 8, '吨': 9, '千克': 10, '公斤': 10, '斤': 10, '米': 11,
+  '箱': 12, '套': 13, '件': 1,
+};
+export function matchProductUnit(name?: string): number | undefined {
+  if (!name) return undefined;
+  const n = String(name).trim();
+  for (const [k, v] of Object.entries(UNIT_NAME_MAP)) {
+    if (n.includes(k)) return v;
+  }
+  return undefined;
+}
+
+// 上架状态：固邦字典 crm_product_status（0下架 1上架）
+const PRODUCT_STATUS_MAP: Record<string, number> = {
+  '上架': 1, '在售': 1, '在售中': 1, '已上架': 1, '启用': 1,
+  '下架': 0, '停售': 0, '已下架': 0, '禁用': 0, '停用': 0,
+};
+export function matchProductStatus(name?: string): number | undefined {
+  if (!name) return undefined;
+  const n = String(name).trim();
+  for (const [k, v] of Object.entries(PRODUCT_STATUS_MAP)) {
+    if (n.includes(k)) return v;
+  }
+  return undefined;
+}
+
+function buildProductPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 产品信息提取助手。${imageHint}请从下面的产品资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- name 是【产品名称】，如"3PE 防腐钢管"。
+- no 是【产品编码】/SKU；ownerUserName 是负责人姓名。
+- categoryName 是产品类型/分类名（图片里没有就输出 null）。
+- unitName 是产品单位，如"个/块/只/把/枚/瓶/盒/台/吨/千克/米/箱/套"等。
+- price 是产品价格（数字，万元/元请统一为元）。
+- statusName 是上架状态（"上架"或"下架"）。
+- description 是产品描述/规格/材质等。
+
+输出 JSON 结构示例：
+{"name":"3PE 防腐钢管","no":"PRD-3PE-001","ownerUserName":"刘志强","categoryName":"防腐材料","unitName":"吨","price":6000,"statusName":"上架","description":"3PE 防腐钢管 DN200 适合油田集输管线"}
+
+产品资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseProduct(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedProduct> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildProductPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedProduct> = {};
+    const setStr = (k: keyof ParsedProduct, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    const setNum = (k: keyof ParsedProduct, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) (out as any)[k] = n;
+      }
+    };
+    setStr('name', json.name);
+    setStr('no', json.no);
+    setStr('ownerUserName', json.ownerUserName);
+    setStr('categoryName', json.categoryName);
+    setStr('unitName', json.unitName);
+    setNum('price', json.price);
+    setStr('statusName', json.statusName);
+    setStr('description', json.description);
+    if (out.unitName) out.unit = matchProductUnit(out.unitName);
+    if (out.statusName) out.status = matchProductStatus(out.statusName);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
+
+/* ----------------------------- 回款计划专属识别 ----------------------------- */
+
+export interface ParsedReceivablePlan {
+  customerName?: string;
+  customerId?: number;
+  contractName?: string;
+  contractNo?: string;
+  contractId?: number;
+  ownerUserName?: string;
+  ownerUserId?: number;
+  price?: number;
+  returnTime?: string;
+  returnTypeName?: string;
+  returnType?: number;
+  remindDays?: number;
+  remark?: string;
+}
+
+function buildReceivablePlanPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：输入可能包含图片，请先 OCR 识别图中文字，再结合文本提取字段。'
+    : '';
+  return `你是 CRM 回款计划信息提取助手。${imageHint}请从下面的回款计划资料中提取结构化字段，只输出 JSON（不要任何解释，也不要使用 markdown 代码块）。
+
+重要约束：
+- 严禁臆造，资料中未出现的内容一律输出 null。
+- customerName 是客户公司名称；contractName 是合同名称；contractNo 是合同编号。
+- price 是计划回款金额（数字）。
+- returnTime 是计划回款日期，输出 yyyy-MM-dd。
+- returnTypeName 是回款方式名称（现金/电汇/银行转账/承兑等）。
+- remindDays 是提前几天提醒（数字）。
+- ownerUserName 是负责人姓名。
+- remark 放补充说明。
+
+输出 JSON 结构示例：
+{"customerName":"固邦防腐材料制造有限公司","contractNo":"TXGY-HT-2026-0012","price":370500,"returnTime":"2026-10-15","returnTypeName":"电汇","remindDays":7,"ownerUserName":"刘志强","remark":"项目第一期回款"}
+
+回款计划资料如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+export async function parseReceivablePlan(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedReceivablePlan> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) return { fields: null };
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildReceivablePlanPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) content.push({ type: 'image_url', image_url: { url: img } });
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content }], temperature: 0 }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j: any = await resp.json(); if (j?.error?.message) detail = j.error.message; } catch {}
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) return { fields: null, error: 'AI 返回无法解析为 JSON' };
+    const out: Partial<ParsedReceivablePlan> = {};
+    const setStr = (k: keyof ParsedReceivablePlan, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') (out as any)[k] = `${v}`;
+    };
+    const setNum = (k: keyof ParsedReceivablePlan, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        const n = Number(v);
+        if (!Number.isNaN(n)) (out as any)[k] = n;
+      }
+    };
+    setStr('customerName', json.customerName);
+    setStr('contractName', json.contractName);
+    setStr('contractNo', json.contractNo);
+    setStr('ownerUserName', json.ownerUserName);
+    setNum('price', json.price);
+    setStr('returnTime', json.returnTime);
+    setStr('returnTypeName', json.returnTypeName);
+    setNum('remindDays', json.remindDays);
+    setStr('remark', json.remark);
+    if (out.returnTypeName) out.returnType = matchReturnType(out.returnTypeName);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? '调用失败' };
+  }
+}
