@@ -42,6 +42,17 @@ public interface ErrorCodeConstants {
     ErrorCode FILING_NOT_EXISTS = new ErrorCode(1_060_101_011, "备案记录不存在");
     ErrorCode FILING_STATUS_INVALID = new ErrorCode(1_060_101_012, "备案状态不允许该操作（仅 PENDING 可回推终态）");
 
+    // ========== 文件注册（101 段「公告与文件」顺延 013~）==========
+    // [规范依据]《招投标模块开发规范》§4.7 段位表（101=公告与文件）+ §5 三-5 文件存储口径
+    //   （文件经 FileApi，库内只记 file_id + sha256 + size，URL 非一致性依据）+ 红线 8。
+    // [业务目标] 业务表（notice.pdf_file_id / notice_external_attachment.file_id 等）以 file_id 为唯一关联键，
+    //   故「上传成功但没有 file_id」必须作为**明确失败**返回，绝不能静默放行。
+    // [为什么] 原平台上传接口 /infra/file/upload 的响应体是 URL 字符串（不含 id），前端取不到 file_id
+    //   只能提示"需后端支持"；缺失 file_id 的表单若继续走发布流程，会在业务侧产生无法关联文件的脏数据。
+    ErrorCode FILE_UPLOAD_EMPTY = new ErrorCode(1_060_101_013, "上传文件为空，请重新选择文件");
+    ErrorCode FILE_REGISTER_FAILED = new ErrorCode(1_060_101_014, "文件注册失败，请重试（文件服务未返回 file_id）");
+    ErrorCode FILE_URL_INVALID = new ErrorCode(1_060_101_015, "文件地址无效或不属于本平台文件服务，无法补登记 file_id");
+
     // ========== 开标/评标 1-060-102-000 ==========
     ErrorCode BID_OPEN_RECORD_NOT_EXISTS = new ErrorCode(1_060_102_000, "开标记录不存在");
     ErrorCode EVAL_COMMITTEE_NOT_EXISTS = new ErrorCode(1_060_102_001, "评标委员会不存在");
