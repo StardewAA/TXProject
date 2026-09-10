@@ -15,7 +15,7 @@ import {
   Tag,
 } from 'ant-design-vue';
 
-import { getProgressPage, getRemindRecordPage, sendRemind } from './api';
+import { getAllProgress, getRemindRecordPage, sendRemind } from './api';
 import ClassBar from './class-bar.vue';
 
 defineOptions({ name: 'TrainingPlanRemind' });
@@ -40,12 +40,8 @@ async function loadUnfinished() {
   }
   unfinishedLoading.value = true;
   try {
-    const data = await getProgressPage({
-      pageNo: 1,
-      pageSize: 500,
-      classId: currentClass.value.id,
-    });
-    unfinishedCount.value = (data?.list ?? []).filter(
+    const rows = await getAllProgress(currentClass.value.id);
+    unfinishedCount.value = rows.filter(
       (item) => item.overallStatus !== 2,
     ).length;
   } finally {
