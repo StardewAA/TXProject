@@ -30,6 +30,9 @@ public class ReviewService {
         return stored;
     }
     public List<Report> list(long tenant,int limit) {return repository.list(tenant,Math.max(1,Math.min(limit,100)));}
+    public List<SubmissionStatus> listBySubmitter(long tenant,Long user,int limit) {
+        return repository.listBySubmitter(tenant,user,Math.max(1,Math.min(limit,100)));
+    }
     public byte[] original(long tenant,String id) {get(tenant,id);return repository.original(tenant,id);}
 
     /** 清单已在控制器完整校验；任一数据库写入失败时整批事务回滚。解析失败仍保存为单独退回报告。 */

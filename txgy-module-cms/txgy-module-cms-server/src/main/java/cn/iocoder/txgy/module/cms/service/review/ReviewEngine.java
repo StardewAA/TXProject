@@ -46,7 +46,7 @@ public class ReviewEngine {
         if (Pattern.compile("[ÃÂ]{2,}|锟斤拷").matcher(text).find())
             add(issues,Dimension.ENCODING,Severity.ERROR,"MOJIBAKE","全文","发现疑似编码损坏文本","用正确编码重新导出原文");
         if (text.strip().length()<80) add(issues,Dimension.QUALITY,Severity.ERROR,"TOO_SHORT","全文","正文不足80字符，无法作为完整法规资料","提交完整原文，不能只提交名称或摘要");
-        if (text.length()>ReviewParser.MAX_CHARS) add(issues,Dimension.QUALITY,Severity.ERROR,"TEXT_LIMIT","全文","正文超过50万字符","分卷提交");
+        if (text.length()>ReviewParser.MAX_CHARS) add(issues,Dimension.QUALITY,Severity.ERROR,"TEXT_LIMIT","全文","正文超过100万字符","分卷提交");
         if (!officialUrl(m.sourceUrl())) add(issues,Dimension.AUTHENTICITY,Severity.ERROR,"SOURCE_DOMAIN","来源链接","需要HTTPS政府官网原文链接","填写官方发布页；官网域名仅是初筛，不代表已经核实");
         if (evidence==null) {
             add(issues,Dimension.AUTHENTICITY,Severity.ERROR,"SOURCE_UNVERIFIED","来源与效力","尚无授权核验人员提交的官方依据","由核验人员对照官方原文、版本沿革并登记核验记录");
@@ -93,7 +93,8 @@ public class ReviewEngine {
         return new Report(id,createdAt,m,hash(text),decision,total,Map.copyOf(scores),List.copyOf(issues),evidence,false,0);
     }
     private void checkArticles(String[] lines,List<Issue> issues) {
-        var pattern=Pattern.compile("^\\s*第([一二三四五六七八九十百千万零〇]+)\\s*条");
+        // Official Chinese texts use ideographic, non-breaking and narrow spaces around article numbers.
+        var pattern=Pattern.compile("^\\s*第([^\\s条]{1,12})\\s*条", Pattern.UNICODE_CHARACTER_CLASS);
         int previous=0;
         for (int i=0;i<lines.length;i++) {
             var match=pattern.matcher(lines[i]);
@@ -121,7 +122,7 @@ public class ReviewEngine {
     public static List<Chunk> chunk(String text) {
         List<Chunk> chunks=new ArrayList<>();
         for(int start=0;start<text.length();) {
-            int end=Math.min(start+1200,text.length());
+            int end=Math.min(start+800,text.length());
             if(end<text.length()) {
                 int line=text.lastIndexOf('\n',end-1);
                 if(line>start+400) end=line+1;

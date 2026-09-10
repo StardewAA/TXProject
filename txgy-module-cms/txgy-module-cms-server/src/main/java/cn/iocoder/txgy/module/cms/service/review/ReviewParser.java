@@ -17,7 +17,7 @@ import static cn.iocoder.txgy.module.cms.service.review.ReviewModels.*;
 @Component
 public class ReviewParser {
     public static final int MAX_BYTES = 25 * 1024 * 1024;
-    public static final int MAX_CHARS = 500000;
+    public static final int MAX_CHARS = 1_000_000;
     private static final String WORD = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     public Parsed parse(MultipartFile file) {
@@ -38,7 +38,7 @@ public class ReviewParser {
             } else if (filename.endsWith(".pdf")) {
                 text = pdf(bytes, issues);
             } else return failure("UNSUPPORTED_TYPE", "仅支持UTF-8 TXT、DOCX和PDF，请转换文件格式");
-            if (text.length() > MAX_CHARS) return failure("TEXT_LIMIT", "正文超过50万字符，请分卷提交");
+            if (text.length() > MAX_CHARS) return failure("TEXT_LIMIT", "正文超过100万字符，请分卷提交");
             return new Parsed(text, List.copyOf(issues));
         } catch (CharacterCodingException e) {
             return failure("INVALID_UTF8", "TXT不是有效UTF-8文本，请重新编码后提交");

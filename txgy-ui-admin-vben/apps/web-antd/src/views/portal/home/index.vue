@@ -13,8 +13,8 @@ const services = [
     path: '/portal/recruit',
   },
   {
-    title: '内容管理',
-    description: '浏览标准、材料、工艺、定额与政策内容。',
+    title: 'CMS系统',
+    description: '检索已发布法规，或提交内容申请审查发布。',
     path: '/portal/content',
   },
   {

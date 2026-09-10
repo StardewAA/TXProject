@@ -13,7 +13,7 @@ const authStore = useAuthStore();
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
-  { label: '内容管理', path: '/portal/content' },
+  { label: 'CMS系统', path: '/portal/content' },
   { label: '招聘应聘', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },

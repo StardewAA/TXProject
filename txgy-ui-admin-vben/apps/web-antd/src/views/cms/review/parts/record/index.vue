@@ -34,7 +34,7 @@ async function refresh() {
 }
 
 function open(id: string) {
-  router.push(`/cms/audit/report?id=${id}`);
+  router.push(`/cms/review/report?id=${id}`);
 }
 
 onMounted(refresh);
@@ -65,7 +65,7 @@ onMounted(refresh);
               </Tag>
             </template>
             <template v-else-if="column.key === 'destination'">
-              {{ record.admitted ? '已入知识库' : '数据库待核验 / 退回' }}
+              {{ record.admitted ? '审查通过 / 待发布' : '数据库待核验 / 退回' }}
             </template>
             <template v-else-if="column.key === 'action'">
               <Button type="link" @click="open(record.id)">查看报告</Button>

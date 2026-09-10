@@ -117,7 +117,7 @@ async function submit() {
         ? await uploadReview(cleanMetadata(metadata), file.value)
         : await submitText(cleanMetadata(metadata), text.value);
     message.success('审查报告已保存。');
-    router.push(`/cms/audit/report?id=${result.id}`);
+    router.push(`/cms/review/report?id=${result.id}`);
   } finally {
     busy.value = false;
   }
@@ -137,7 +137,7 @@ async function submitBatch() {
     batchOpen.value = false;
     batchRows.value = [];
     message.success(`批次 ${result.batchId.slice(0, 8)} 已生成 ${result.total} 条审查记录。`);
-    if (result.items[0]) router.push(`/cms/audit/report?id=${result.items[0].report.id}`);
+    if (result.items[0]) router.push(`/cms/review/report?id=${result.items[0].report.id}`);
   } finally {
     busy.value = false;
   }

@@ -1,4 +1,5 @@
 import type { PageParam, PageResult } from '@vben/request';
+import type { Recordable } from '@vben/types';
 
 import { requestClient } from '#/api/request';
 

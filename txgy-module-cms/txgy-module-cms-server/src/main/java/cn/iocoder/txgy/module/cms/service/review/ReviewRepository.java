@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Objects;
 import static cn.iocoder.txgy.module.cms.service.review.ReviewModels.*;
 
 /** 显式租户条件；事务由服务层控制。JSON快照保留每次审查和核验依据。 */
@@ -29,12 +30,29 @@ public class ReviewRepository {
         return jdbc.query("SELECT snapshot FROM cms_document_review WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT ?",
                 (rs,row)->JsonUtils.parseObject(rs.getString(1),Stored.class).report(),tenant,limit);
     }
+    public List<SubmissionStatus> listBySubmitter(long tenant, Long submittedBy, int limit) {
+        return jdbc.query("""
+                        SELECT r.snapshot, COALESCE(d.published, 0)
+                        FROM cms_document_review r
+                        LEFT JOIN cms_knowledge_document d
+                          ON d.tenant_id = r.tenant_id AND d.review_id = r.id
+                        WHERE r.tenant_id = ?
+                        ORDER BY r.created_at DESC, r.id DESC
+                        LIMIT 500
+                        """,
+                        (rs, row) -> java.util.Map.entry(
+                                JsonUtils.parseObject(rs.getString(1), Stored.class), rs.getBoolean(2)), tenant).stream()
+                .filter(entry -> Objects.equals(entry.getKey().submittedBy(), submittedBy))
+                .limit(limit)
+                .map(entry -> new SubmissionStatus(entry.getKey().report(), entry.getValue()))
+                .toList();
+    }
     public byte[] original(long tenant,String id) {
         return jdbc.queryForObject("SELECT original_file FROM cms_document_review WHERE tenant_id=? AND id=?",byte[].class,tenant,id);
     }
     public void admit(long tenant,Stored stored) {
         Report r=stored.report();
-        jdbc.update("INSERT INTO cms_knowledge_document (review_id,tenant_id,title,validity,source_url,text_hash,content,created_at) VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
+        jdbc.update("INSERT INTO cms_knowledge_document (review_id,tenant_id,title,validity,source_url,text_hash,content,published,created_at) VALUES (?,?,?,?,?,?,?,0,CURRENT_TIMESTAMP)",
                 r.id(),tenant,r.metadata().title(),r.metadata().validity().name(),r.metadata().sourceUrl(),r.textHash(),stored.text());
         jdbc.batchUpdate("INSERT INTO cms_knowledge_chunk (review_id,tenant_id,ordinal,start_offset,end_offset,content) VALUES (?,?,?,?,?,?)",
                 stored.chunks(),100,(ps,c)->{ps.setString(1,r.id());ps.setLong(2,tenant);ps.setInt(3,c.ordinal());ps.setInt(4,c.startOffset());ps.setInt(5,c.endOffset());ps.setString(6,c.text());});

@@ -5,9 +5,11 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.cms.api.law.CmsLawApi;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
+import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerReqDTO;
+import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerRespDTO;
+import cn.iocoder.txgy.module.cms.service.rag.CmsRagService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -22,13 +26,14 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 @RestController
 @RequestMapping("/cms/law")
 @Validated
-@PermitAll
 public class AppCmsLawController {
 
     private final CmsLawApi lawApi;
+    private final CmsRagService ragService;
 
-    public AppCmsLawController(CmsLawApi lawApi) {
+    public AppCmsLawController(CmsLawApi lawApi, CmsRagService ragService) {
         this.lawApi = lawApi;
+        this.ragService = ragService;
     }
 
     @GetMapping("/search")
@@ -41,6 +46,12 @@ public class AppCmsLawController {
     @Operation(summary = "获得已发布的法规条款详情")
     public CommonResult<CmsLawSearchRespDTO> getArticle(@RequestParam @Positive Long articleId) {
         return success(lawApi.getArticle(articleId));
+    }
+
+    @PostMapping("/answer")
+    @Operation(summary = "基于已发布法规原文进行智能回答")
+    public CommonResult<CmsLawAnswerRespDTO> answer(@Valid @RequestBody CmsLawAnswerReqDTO request) {
+        return success(ragService.answer(request));
     }
 
 }

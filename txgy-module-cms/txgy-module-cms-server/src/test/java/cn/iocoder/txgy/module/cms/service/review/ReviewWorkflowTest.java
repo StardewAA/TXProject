@@ -48,6 +48,13 @@ class ReviewWorkflowTest {
         assertThat(pass.admitted()).isTrue();
         assertThat(service.verify(2005,2L,r.id(),proof(TEXT)).admitted()).isTrue();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT published FROM cms_knowledge_document",Boolean.class)).isFalse();
+        assertThat(service.listBySubmitter(2005,1L,50)).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.report().admitted()).isTrue();
+                    assertThat(item.published()).isFalse();
+                });
+        assertThat(service.listBySubmitter(2005,99L,50)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT content FROM cms_knowledge_chunk",String.class)).isEqualTo(TEXT);
     }
     @Test void failedVerificationNeverEntersKnowledge() {

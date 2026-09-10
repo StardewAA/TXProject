@@ -117,7 +117,7 @@ async function verify() {
       note.value.trim(),
     );
     verifyOpen.value = false;
-    message.success(result.admitted ? '审查通过，文档和切片已写入知识库。' : '审查未通过，已返回数据库退回记录。');
+    message.success(result.admitted ? '审查通过，文档已入库并等待管理员发布。' : '审查未通过，已返回数据库退回记录。');
     await load(String(route.query.id || report.value.id));
   } finally {
     busy.value = false;
@@ -150,22 +150,22 @@ watch(
       <p>查看单项文档的完整审查结论、问题明细与知识库切片。</p>
     </header>
     <div class="toolbar">
-      <Button @click="router.push('/cms/audit/record')">返回审查记录</Button>
-      <Button type="primary" ghost @click="router.push('/cms/audit/submit')">提交新文档</Button>
+      <Button @click="router.push('/cms/review/record')">返回审查记录</Button>
+      <Button type="primary" ghost @click="router.push('/cms/review/submit')">提交新文档</Button>
     </div>
     <Alert v-if="error" type="error" :message="error" show-icon />
     <Spin :spinning="busy">
       <Card v-if="report" title="审查报告">
         <template #extra>
           <Button @click="downloadReport">下载报告</Button>
-          <Button class="ml-2" @click="router.push(`/cms/audit/report?id=${report.id}`)">刷新</Button>
+          <Button class="ml-2" @click="router.push(`/cms/review/report?id=${report.id}`)">刷新</Button>
         </template>
         <h2>{{ report.metadata.title }}</h2>
         <div class="tags">
           <Tag :color="report.decision === 'FAIL' ? 'red' : report.decision === 'WARNING' ? 'orange' : 'green'">
             {{ decisionNames[report.decision as keyof typeof decisionNames] }}
           </Tag>
-          <Tag>{{ report.admitted ? '已入知识库' : '数据库保留 · 待核验或退回修改' }}</Tag>
+          <Tag>{{ report.admitted ? '审查通过 · 待发布' : '数据库保留 · 待核验或退回修改' }}</Tag>
           <Tag v-if="report.metadata.kind === 'LAW'">法律法规</Tag>
           <Tag v-else-if="report.metadata.kind === 'STANDARD'">国家标准</Tag>
           <Tag v-else>政策文件</Tag>
@@ -210,7 +210,7 @@ watch(
           >
             登记官方核验依据
           </Button>
-          <Button v-if="!report.admitted" @click="router.push(`/cms/audit/submit`)">修改并重新提交</Button>
+          <Button v-if="!report.admitted" @click="router.push(`/cms/review/submit`)">修改并重新提交</Button>
         </div>
         <details v-if="detail?.chunks.length" class="chunks">
           <summary>查看知识库切片（{{ detail.chunks.length }}）</summary>
@@ -223,13 +223,13 @@ watch(
       <Card v-else class="empty-card" title="审查报告">
         <div class="empty">
           <p>请先从“审查记录”选择一条记录，或提交一份新文档后查看报告。</p>
-          <Button type="primary" @click="router.push('/cms/audit/record')">去审查记录</Button>
+          <Button type="primary" @click="router.push('/cms/review/record')">去审查记录</Button>
         </div>
       </Card>
     </Spin>
 
     <Modal v-model:open="verifyOpen" title="官方来源与法规效力核验" :width="800" :confirm-loading="busy" ok-text="核验并重新审查" @ok="verify">
-      <Alert type="info" show-icon message="请独立打开官方来源，核对原文、版本沿革及表格图片。通过或警告通过后将自动写入知识库。" />
+      <Alert type="info" show-icon message="请独立打开官方来源，核对原文、版本沿革及表格图片。通过或警告通过后将写入待发布知识库。" />
       <div class="fields">
         <label>官方标题<Input v-model:value="official.title" :maxlength="300" /></label>
         <label>官方文号<Input v-model:value="official.documentNo" :maxlength="100" /></label>

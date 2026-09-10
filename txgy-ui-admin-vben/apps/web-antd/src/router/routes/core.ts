@@ -132,7 +132,7 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'PortalContent',
         path: 'content',
         component: () => import('#/views/portal/content/index.vue'),
-        meta: { title: '内容管理', hideInMenu: true },
+        meta: { title: 'CMS系统', hideInMenu: true },
       },
       {
         name: 'PortalRecruit',

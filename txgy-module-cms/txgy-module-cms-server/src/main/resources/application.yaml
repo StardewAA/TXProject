@@ -88,7 +88,7 @@ txgy:
       key-prefix: txgy:cms:search
       ttl: 5m
     redis:
-      enabled: ${TXGY_SEARCH_VECTOR_ENABLED:false}
+      enabled: ${CMS_VECTOR_ENABLED:${TXGY_SEARCH_VECTOR_ENABLED:false}}
       host: ${TXGY_SEARCH_REDIS_HOST:127.0.0.1}
       port: ${TXGY_SEARCH_REDIS_PORT:6380}
       username: ${TXGY_SEARCH_REDIS_USERNAME:}
@@ -99,3 +99,16 @@ txgy:
       vector-dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
       default-top-k: 50
       distance-metric: COSINE
+  cms:
+    rag:
+      enabled: ${CMS_RAG_ENABLED:false}
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      embedding-model: ${CMS_EMBEDDING_MODEL:text-embedding-v3}
+      chat-model: ${CMS_CHAT_MODEL:qwen-plus}
+      dimensions: ${TXGY_SEARCH_VECTOR_DIMENSIONS:768}
+      embedding-batch-size: 10
+      top-k: 5
+      similarity-threshold: 0.5
+      request-timeout-seconds: 60
+      max-answer-tokens: 1200
