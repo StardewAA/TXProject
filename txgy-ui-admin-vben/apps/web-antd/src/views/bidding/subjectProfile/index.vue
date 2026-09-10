@@ -18,9 +18,10 @@ import { SubjectApi } from '#/api/bidding/subject';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import { Alert, Button, Card, Input, message, Radio, Select, Spin } from 'ant-design-vue';
+import { Alert, Button, Card, Input, message, Radio, Select, Spin, Upload } from 'ant-design-vue';
 
 import { fetchSubjectEligibility, fetchSubjectProfile, saveSubjectProfile } from '#/api/bidding/subject';
+import { uploadAttachment } from '../vo/attachmentUpload';
 
 const createMessage = message;
 const loading = ref(false);
@@ -141,6 +142,54 @@ async function doSave() {
   }
 }
 
+/* ===== 营业执照影像：标准上传交互（选择/拖拽文件 → 上传 → 前端自动绑定系统返回的 file_id）=====
+ * 业务/理由：file_id 是平台文件服务生成的系统主键，用户不可能知道也拿不到，
+ *   因此绝不能让用户手填；用户只做"选文件"，file_id 由前端在上传成功后写入表单隐藏字段随表单提交。
+ * 依据：07-主体域 §3（营业执照影像是企业资格法定材料）；红线 8（文件三件套 file_id/sha256/size）；
+ *   后端 BiddingFileController 注释：彻底移除"让用户手填文件 ID"的退化交互。
+ * 契约：POST /bidding/file/upload（响应必带 fileId，并同时回 url/sha256/size，供即时查看）。
+ * 链路：uploadAttachment 三级优先（bidding 统一入口 → 预签名直传 → /infra/file/upload 兜底）。 */
+const licenseUploading = ref(false);
+/** 已上传影像的访问地址（上传响应一并返回，用于即时查看，免调需权限的 /infra/file/get） */
+const licenseFileUrl = ref('');
+/** 允许的影像类型：营业执照通常为图片或 PDF 扫描件 */
+const licenseAccept = '.jpg,.jpeg,.png,.pdf';
+
+/** 选文件后立即上传（阻止组件默认提交），成功后自动把 file_id 绑进表单 */
+async function beforeLicenseUpload(file: File): Promise<boolean> {
+  const name = (file?.name ?? '').toLowerCase();
+  if (!/\.(jpe?g|png|pdf)$/.test(name)) {
+    createMessage.warning('营业执照影像仅支持 jpg / png / pdf');
+    return false;
+  }
+  licenseUploading.value = true;
+  try {
+    const up = await uploadAttachment(file, 'bidding/subject/license');
+    licenseFileUrl.value = up.url;
+    form.licenseFileName = up.name || file.name;
+    if (up.fileId === undefined || up.fileId === null) {
+      /* 兜底链路（/infra/file/upload）只回 URL、无 file_id：明确提示，不写脏值，也不让用户手填 */
+      form.licenseFileId = '';
+      createMessage.warning('文件已上传，但上传链路未返回 file_id：请确认后端 /bidding/file/upload 可用（file_id 由系统生成，不由用户填写）');
+    } else {
+      form.licenseFileId = String(up.fileId);
+      createMessage.success('营业执照影像已上传，系统已自动绑定 file_id=' + up.fileId);
+    }
+  } catch (e) {
+    createMessage.error('上传失败：' + ((e as Error).message || String(e)));
+  } finally {
+    licenseUploading.value = false;
+  }
+  return false;
+}
+
+/** 移除已上传影像（清空表单绑定值） */
+function clearLicense(): void {
+  form.licenseFileId = '';
+  form.licenseFileName = '';
+  licenseFileUrl.value = '';
+}
+
 const typeOptions = Object.keys(SubjectApi.SUBJECT_TYPE_LABEL).map((k) => ({ label: SubjectApi.SUBJECT_TYPE_LABEL[k] + '（' + k + '）', value: k }));
 const eligibilityTip = () => {
   const e = eligibility.value;
@@ -233,12 +282,25 @@ onMounted(loadAll);
             <Input v-model:value="form.regCapCurrency" placeholder="GB/T 12406-2008" />
           </div>
           <div>
-            <div class="form-lbl">营业执照影像 file_id</div>
-            <Input v-model:value="form.licenseFileId" placeholder="infra file 主键（可选）" />
-          </div>
-          <div>
-            <div class="form-lbl">影像附件名</div>
-            <Input v-model:value="form.licenseFileName" placeholder="可选" />
+            <div class="form-lbl">营业执照影像</div>
+            <Upload.Dragger
+              class="lic-drag"
+              :accept="licenseAccept"
+              :before-upload="beforeLicenseUpload"
+              :disabled="licenseUploading"
+              :show-upload-list="false"
+            >
+              <p class="lic-drag-t">{{ licenseUploading ? '正在上传…' : '点击或拖拽文件到此处上传' }}</p>
+              <p class="lic-drag-h">支持 jpg / png / pdf；上传成功后系统自动绑定文件标识（file_id），无需也无法手填</p>
+            </Upload.Dragger>
+            <div v-if="form.licenseFileId || form.licenseFileName" class="lic-info">
+              <span class="lic-ok">已上传</span>
+              <span class="lic-name" :title="form.licenseFileName">{{ form.licenseFileName || '（未命名）' }}</span>
+              <span v-if="form.licenseFileId" class="lic-id">file_id #{{ form.licenseFileId }}</span>
+              <a v-if="licenseFileUrl" :href="licenseFileUrl" target="_blank" rel="noopener noreferrer">查看</a>
+              <a class="lic-del" @click="clearLicense">移除</a>
+            </div>
+            <div v-else class="lic-hint">尚未上传营业执照影像（保存档案时不阻断，但资格审核通常需要）</div>
           </div>
         </div>
         <div class="mt-4 flex items-center justify-end gap-2">
@@ -255,3 +317,29 @@ onMounted(loadAll);
 
   </div>
 </template>
+<style scoped>
+/* 上传区（线稿风：白底细边、直角、提示字清晰） */
+.lic-drag :deep(.ant-upload-drag) {
+  border: 1px dashed #c9cfd6;
+  border-radius: 3px;
+  background: #fbfcfd;
+  padding: 10px 8px;
+}
+.lic-drag :deep(.ant-upload-drag:hover) { border-color: #2b6cb0; background: #f7fbff; }
+.lic-drag-t { margin: 0; font-size: 13px; font-weight: 600; color: #2e3947; }
+.lic-drag-h { margin: 4px 0 0; font-size: 11.5px; color: #8a949e; line-height: 1.6; }
+.lic-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: #2e3947;
+}
+.lic-ok { color: #15803d; font-weight: 700; }
+.lic-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lic-id { font-size: 11px; color: #8a949e; background: #f6f8fa; border: 1px solid #e3e8ed; border-radius: 2px; padding: 0 4px; }
+.lic-del { color: #cf1322; cursor: pointer; }
+.lic-hint { margin-top: 6px; font-size: 11.5px; color: #8a949e; }
+</style>
