@@ -32,6 +32,7 @@ const UserApi = {
       method: 'PUT',
       data,
       custom: {
+        auth: true,
         loadingMsg: '验证中',
         showSuccess: true,
         successMsg: '修改成功'
@@ -47,6 +48,7 @@ const UserApi = {
         code
       },
       custom: {
+        auth: true,
         showSuccess: true,
         loadingMsg: '获取中',
         successMsg: '修改成功'
@@ -60,6 +62,7 @@ const UserApi = {
       method: 'PUT',
       data,
       custom: {
+        auth: true,
         loadingMsg: '验证中',
         showSuccess: true,
         successMsg: '修改成功'

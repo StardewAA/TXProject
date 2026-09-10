@@ -361,6 +361,15 @@ txgy:
     begin-code: 9999 # 这里配置 9999 的原因是，测试方便。
     end-code: 9999 # 这里配置 9999 的原因是，测试方便。
   trade:
+    # 与 trade-server 保持一致的商城营销开关（本地配置和配置中心均可覆盖）。
+    marketing:
+      simple-mode: true
+      discount-enabled: true
+      reward-enabled: true
+      coupon-enabled: true
+      point-deduct-enabled: true
+      point-give-enabled: true
+      brokerage-enabled: false
     order:
       pay-expire-time: 2h # 支付的过期时间
       receive-expire-time: 14d # 收货的过期时间

@@ -4,56 +4,59 @@ import { isEmpty } from '@/sheep/helper/utils';
 const OrderApi = {
   // 计算订单信息
   settlementOrder: (data) => {
+    const source = data && typeof data === 'object' ? data : {};
     const data2 = {
-      ...data,
+      ...source,
     };
     // 移除多余字段
-    if (!(data.couponId > 0)) {
+    if (!(source.couponId > 0)) {
       delete data2.couponId;
     }
-    if (!(data.addressId > 0)) {
+    if (!(source.addressId > 0)) {
       delete data2.addressId;
     }
-    if (!(data.pickUpStoreId > 0)) {
+    if (!(source.pickUpStoreId > 0)) {
       delete data2.pickUpStoreId;
     }
-    if (isEmpty(data.receiverName)) {
+    if (isEmpty(source.receiverName)) {
       delete data2.receiverName;
     }
-    if (isEmpty(data.receiverMobile)) {
+    if (isEmpty(source.receiverMobile)) {
       delete data2.receiverMobile;
     }
-    if (!(data.combinationActivityId > 0)) {
+    if (!(source.combinationActivityId > 0)) {
       delete data2.combinationActivityId;
     }
-    if (!(data.combinationHeadId > 0)) {
+    if (!(source.combinationHeadId > 0)) {
       delete data2.combinationHeadId;
     }
-    if (!(data.seckillActivityId > 0)) {
+    if (!(source.seckillActivityId > 0)) {
       delete data2.seckillActivityId;
     }
-    if (!(data.pointActivityId > 0)) {
+    if (!(source.pointActivityId > 0)) {
       delete data2.pointActivityId;
     }
-    if (!(data.deliveryType > 0)) {
+    if (!(source.deliveryType > 0)) {
       delete data2.deliveryType;
     }
     // 解决 SpringMVC 接受 List<Item> 参数的问题
     delete data2.items;
-    for (let i = 0; i < data.items.length; i++) {
-      data2[encodeURIComponent('items[' + i + '' + '].skuId')] = data.items[i].skuId + '';
-      data2[encodeURIComponent('items[' + i + '' + '].count')] = data.items[i].count + '';
-      if (data.items[i].cartId) {
-        data2[encodeURIComponent('items[' + i + '' + '].cartId')] = data.items[i].cartId + '';
+    const items = Array.isArray(source.items) ? source.items : [];
+    for (let i = 0; i < items.length; i++) {
+      data2[encodeURIComponent('items[' + i + '].skuId')] = items[i].skuId + '';
+      data2[encodeURIComponent('items[' + i + '].count')] = items[i].count + '';
+      if (items[i].cartId) {
+        data2[encodeURIComponent('items[' + i + '].cartId')] = items[i].cartId + '';
       }
     }
     const queryString = Object.keys(data2)
-      .map((key) => key + '=' + data2[key])
+      .map((key) => key + '=' + encodeURIComponent(data2[key]))
       .join('&');
     return request({
       url: `/trade/order/settlement?${queryString}`,
       method: 'GET',
       custom: {
+        auth: true,
         showError: true,
         showLoading: true,
       },
@@ -77,6 +80,9 @@ const OrderApi = {
       url: `/trade/order/create`,
       method: 'POST',
       data,
+      custom: {
+        auth: true,
+      },
     });
   },
   // 获得订单详细：sync 是可选参数
@@ -89,6 +95,7 @@ const OrderApi = {
         sync,
       },
       custom: {
+        auth: true,
         showLoading: false,
       },
     });
@@ -100,6 +107,7 @@ const OrderApi = {
       method: 'GET',
       params,
       custom: {
+        auth: true,
         showLoading: false,
       },
     });
@@ -112,6 +120,7 @@ const OrderApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 取消订单
@@ -122,6 +131,7 @@ const OrderApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 删除订单
@@ -132,6 +142,7 @@ const OrderApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 获得交易订单的物流轨迹
@@ -142,6 +153,7 @@ const OrderApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 获得交易订单数量
@@ -161,6 +173,7 @@ const OrderApi = {
       url: `/trade/order/item/create-comment`,
       method: 'POST',
       data,
+      custom: { auth: true },
     });
   },
 };

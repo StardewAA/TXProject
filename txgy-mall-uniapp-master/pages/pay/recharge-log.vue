@@ -68,24 +68,30 @@
       pageSize: 5,
     },
     loadStatus: '',
+    loading: false,
   });
 
-  async function getLogList(page = 1, list_rows = 5) {
-    const { code, data } = await PayWalletApi.getWalletRechargePage({
+  async function getLogList(page = state.pagination.pageNo, list_rows = state.pagination.pageSize) {
+    if (state.loading) return;
+    state.loading = true;
+    state.loadStatus = 'loading';
+    try {
+      const { code, data } = await PayWalletApi.getWalletRechargePage({
       pageNo: page,
       pageSize: list_rows,
-    });
-    if (code !== 0) {
-      return;
-    }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      });
+      if (code === 0) {
+        const list = Array.isArray(data?.list) ? data.list : [];
+        state.pagination.list = concat(state.pagination.list, list);
+        state.pagination.total = Number(data?.total) || 0;
+        state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      } else state.loadStatus = 'more';
+    } finally { state.loading = false; }
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (state.loading || state.loadStatus === 'noMore') {
       return;
     }
     state.pagination.pageNo++;

@@ -14,6 +14,19 @@ const AuthUtil = {
       },
     });
   },
+  // 手机号注册商城用户，注册成功后自动登录
+  register: (data) => {
+    return request({
+      url: '/member/auth/register',
+      method: 'POST',
+      data,
+      custom: {
+        showSuccess: true,
+        loadingMsg: '注册中',
+        successMsg: '注册成功',
+      },
+    });
+  },
   // 使用手机 + 验证码登录
   smsLogin: (data) => {
     return request({

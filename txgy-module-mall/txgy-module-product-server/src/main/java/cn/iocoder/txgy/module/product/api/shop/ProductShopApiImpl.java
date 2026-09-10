@@ -1,11 +1,12 @@
 package cn.iocoder.txgy.module.product.api.shop;
 
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import jakarta.annotation.Resource;
-import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.validation.annotation.Validated;
 
 /**
@@ -13,7 +14,7 @@ import org.springframework.validation.annotation.Validated;
  *
  * @author DAMU
  */
-@Service
+@RestController
 @Validated
 public class ProductShopApiImpl implements ProductShopApi {
 
@@ -21,15 +22,15 @@ public class ProductShopApiImpl implements ProductShopApi {
     private ProductShopService shopService;
 
     @Override
-    public ProductShopRespDTO getShop(Long id) {
+    public CommonResult<ProductShopRespDTO> getShop(Long id) {
         ProductShopDO shop = shopService.getShop(id);
-        return BeanUtils.toBean(shop, ProductShopRespDTO.class);
+        return CommonResult.success(BeanUtils.toBean(shop, ProductShopRespDTO.class));
     }
 
     @Override
-    public ProductShopRespDTO getShopByManagerUserId(Long managerUserId) {
+    public CommonResult<ProductShopRespDTO> getShopByManagerUserId(Long managerUserId) {
         ProductShopDO shop = shopService.getShopByManagerUserId(managerUserId);
-        return BeanUtils.toBean(shop, ProductShopRespDTO.class);
+        return CommonResult.success(BeanUtils.toBean(shop, ProductShopRespDTO.class));
     }
 
 }

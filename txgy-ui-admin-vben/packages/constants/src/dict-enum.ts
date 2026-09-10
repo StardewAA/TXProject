@@ -127,6 +127,18 @@ const CRM_DICT = {
   CRM_PRODUCT_STATUS: 'crm_product_status', // CRM 商品状态
   CRM_PRODUCT_UNIT: 'crm_product_unit', // CRM 产品单位
   CRM_RECEIVABLE_RETURN_TYPE: 'crm_receivable_return_type', // CRM 回款的还款方式
+  CRM_AFTER_SALE_WARRANTY_STATUS: 'crm_after_sale_warranty_status', // CRM 售后的质保状态
+  CRM_AFTER_SALE_VISIT_PLAN_TYPE: 'crm_after_sale_visit_plan_type', // CRM 售后的回访计划类型
+  CRM_AFTER_SALE_VISIT_PLAN_STATUS: 'crm_after_sale_visit_plan_status', // CRM 售后的回访计划状态
+  CRM_AFTER_SALE_VISIT_CYCLE: 'crm_after_sale_visit_cycle', // CRM 售后的回访周期
+  CRM_AFTER_SALE_VISIT_TASK_STATUS: 'crm_after_sale_visit_task_status', // CRM 售后的回访任务状态
+  CRM_AFTER_SALE_VISIT_TYPE: 'crm_after_sale_visit_type', // CRM 售后的回访方式
+  CRM_AFTER_SALE_SATISFACTION: 'crm_after_sale_satisfaction', // CRM 售后的回访满意度
+  CRM_AFTER_SALE_TICKET_STATUS: 'crm_after_sale_ticket_status', // CRM 售后的工单状态
+  CRM_AFTER_SALE_TICKET_SOURCE: 'crm_after_sale_ticket_source', // CRM 售后的工单来源
+  CRM_AFTER_SALE_TICKET_PRIORITY: 'crm_after_sale_ticket_priority', // CRM 售后的工单优先级
+  CRM_AFTER_SALE_TICKET_OPERATE_TYPE: 'crm_after_sale_ticket_operate_type', // CRM 售后的工单流转类型
+  CRM_AFTER_SALE_BUSINESS_SOURCE_TYPE: 'crm_after_sale_business_source_type', // CRM 售后的转商机类型
 } as const;
 
 /** ========== ERP - 企业资源计划模块 ========== */
