@@ -13,8 +13,8 @@ spring:
   # 资源中心大文件上传（视频 ≤500MB）
   servlet:
     multipart:
-      max-file-size: 2200MB
-      max-request-size: 2200MB
+      max-file-size: 4300MB
+      max-request-size: 4300MB
 
 server:
   port: 48094

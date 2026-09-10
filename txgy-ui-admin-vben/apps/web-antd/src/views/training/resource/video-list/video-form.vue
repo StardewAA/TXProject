@@ -77,8 +77,8 @@ const getTitle = computed(() => {
 });
 
 function pickFile(file: File) {
-  if (file.size > 2048 * 1024 * 1024) {
-    message.error('视频大小不能超过 2GB');
+  if (file.size > 4096 * 1024 * 1024) {
+    message.error('视频大小不能超过 4GB');
     return false;
   }
   selectedFile.value = file;
@@ -208,7 +208,7 @@ const [Modal, modalApi] = useVbenModal({
 
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
-          上传视频文件（短视频 / 录播，MP4 ≤2GB）
+          上传视频文件（短视频 / 录播，MP4 ≤4GB）
         </div>
         <Upload
           accept=".mp4,.mov"
