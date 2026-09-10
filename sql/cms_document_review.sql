@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS cms_knowledge_document (
   source_url varchar(2000) NOT NULL,
   text_hash char(64) NOT NULL,
   content longtext NOT NULL,
+  published bit(1) NOT NULL DEFAULT 0 COMMENT '审查通过后仅入库，由管理员发布后才可检索',
+  deleted_at datetime NULL COMMENT '管理员下架时间，审查记录仍保留',
   created_at datetime NOT NULL,
   PRIMARY KEY (tenant_id,review_id),
   CONSTRAINT fk_cms_knowledge_review FOREIGN KEY (tenant_id,review_id) REFERENCES cms_document_review(tenant_id,id)

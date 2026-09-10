@@ -21,15 +21,16 @@ public final class ReviewModels {
                            @NotNull Kind kind, @NotNull Validity validity,
                            LocalDate effectiveDate, LocalDate expiryDate, boolean historical) { }
     public record Submission(@NotNull @jakarta.validation.Valid Metadata metadata,
-                             @NotBlank @Size(max=500000) String text) { }
+                             @NotBlank @Size(max=1000000) String text) { }
     public record BatchItem(@NotBlank @Size(max=255) String fileName,
                             @NotNull @Valid Metadata metadata) { }
     public record BatchManifest(@NotEmpty @Size(max=20) List<@Valid BatchItem> items) { }
     public record BatchDocument(String fileName, Metadata metadata, Parsed parsed, byte[] original) { }
     public record BatchItemResult(String fileName, Report report) { }
     public record BatchResult(String batchId, int total, List<BatchItemResult> items) { }
+    public record SubmissionStatus(Report report, boolean published) { }
     public record EvidenceRequest(@NotNull @jakarta.validation.Valid Metadata officialMetadata,
-                                  @NotBlank @Size(max=500000) String officialText,
+                                  @NotBlank @Size(max=1000000) String officialText,
                                   @NotBlank @Size(max=2000) String validitySourceUrl,
                                   @NotBlank @Size(max=4000) String note) { }
     public record Evidence(Metadata officialMetadata, String officialTextHash, String validitySourceUrl,

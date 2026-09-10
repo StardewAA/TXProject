@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
 import cn.iocoder.txgy.module.cms.enums.CmsLawStatusEnum;
 import cn.iocoder.txgy.module.cms.service.search.LegalIdentifierNormalizer;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
@@ -27,6 +28,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.cms.enums.ErrorCodeConstants.LAW_ARTICLE_NOT_FOUND;
@@ -191,6 +193,53 @@ public class CmsLawSearchServiceImpl implements CmsLawApi {
         result.setStatus(statusValue(source.get("status")));
         result.setScore(hit.score());
         return result;
+    }
+
+    /** 按 sourceId 回读融合命中，避免把 Redis 当作法规原文存储。 */
+    public Map<String, CmsLawSearchRespDTO> findPublishedBySourceIds(List<String> sourceIds) {
+        if (sourceIds == null || sourceIds.isEmpty()) {
+            return Map.of();
+        }
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        try {
+            List<FieldValue> values = sourceIds.stream().distinct().map(FieldValue::of).toList();
+            Query query = new BoolQuery.Builder()
+                    .filter(term("tenant_id", tenantId.toString()))
+                    .filter(term("published", true))
+                    .filter(filter -> filter.terms(terms -> terms.field("source_id")
+                            .terms(field -> field.value(values))))
+                    .build()._toQuery();
+            SearchResponse<Map> response = requiredClient().search(builder -> builder
+                            .index(readAlias())
+                            .size(values.size())
+                            .query(query),
+                    Map.class);
+            Map<String, CmsLawSearchRespDTO> result = new LinkedHashMap<>();
+            for (Hit<Map> hit : response.hits().hits()) {
+                CmsLawSearchRespDTO item = toResponse(hit);
+                result.put(item.getSourceId(), item);
+            }
+            return result;
+        } catch (IOException ex) {
+            throw exception(LAW_SEARCH_UNAVAILABLE);
+        }
+    }
+
+    /** 读取当前租户全部已发布片段，用于受控的向量索引重建。 */
+    public List<CmsLawSearchRespDTO> listPublishedForVectorIndex(int limit) {
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        try {
+            SearchResponse<Map> response = requiredClient().search(builder -> builder
+                            .index(readAlias())
+                            .size(limit)
+                            .query(query -> query.bool(bool -> bool
+                                    .filter(term("tenant_id", tenantId.toString()))
+                                    .filter(term("published", true)))),
+                    Map.class);
+            return response.hits().hits().stream().map(CmsLawSearchServiceImpl::toResponse).toList();
+        } catch (IOException ex) {
+            throw exception(LAW_SEARCH_UNAVAILABLE);
+        }
     }
 
     private ElasticsearchClient requiredClient() {

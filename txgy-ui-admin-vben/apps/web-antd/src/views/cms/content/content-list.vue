@@ -93,7 +93,7 @@ function openCreate() {
 }
 
 function openEdit(row: CmsRecord) {
-  editingId.value = row.id;
+  editingId.value = row.id ?? null;
   formTitle.value = `编辑${props.moduleName}内容`;
   Object.assign(formModel, { ...row });
   formVisible.value = true;
@@ -116,7 +116,7 @@ function saveRow() {
       rows.value[index] = { ...row, id: editingId.value };
     }
   } else {
-    const maxId = rows.value.reduce((max, item) => Math.max(max, item.id), 0);
+    const maxId = rows.value.reduce((max, item) => Math.max(max, item.id ?? 0), 0);
     rows.value.push({ ...row, id: maxId + 1 });
   }
   message.success('保存成功');
