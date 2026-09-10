@@ -31,6 +31,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
 import { uploadAttachment } from '../vo/attachmentUpload';
 import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
+import PdfPreview from '../vo/PdfPreview.vue';
 import { stageItems, type AttachmentRecord } from '../vo/attachmentStages';
 import { PLATFORM_MAINTAINED_CODES } from '../vo/voFieldControl';
 import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
@@ -58,6 +59,8 @@ const pdfFileName = ref('');
 /** 版式文件 URL（上传链路只回 URL 时保留展示；file_id 取到则另行写入 pdfFileId） */
 const pdfUrl = ref('');
 const pdfSize = ref<number>();
+/** 版式文件内嵌预览（浏览器原生 PDF 查看器；上传后立即有 URL，历史数据走 file_id 取 URL） */
+const pdfPreviewOpen = ref(false);
 /** 权威数据集字段值（key=规范英文名 → 值）；第四节的四张类型专属表（tables/*）双向绑定此对象 */
 const payloadValues = ref<Record<string, string>>({});
 /** 公告附件（AttachmentSetVO 列表）：按公告类型对应环节的附件采集项分组，可加多个 */
@@ -100,8 +103,11 @@ async function onPdfBeforeUpload(file: File): Promise<boolean> {
   if (!/\.pdf$/i.test(file.name)) { createMessage.warning('仅支持 PDF 文件'); return false; }
   pdfUploading.value = true;
   try {
-    /* 上传口径：/infra/file/upload 只返回 URL（无 file_id）；预签名直传链路可落库取 file_id。
-       VO/接口需要 pdfFileId，故优先直传链路；仅在拿到 file_id 时写入表单，否则提示由后端补录。 */
+    /* 上传口径（三级优先，见 vo/attachmentUpload.ts）：
+       ① POST /bidding/file/upload —— 响应必带 fileId，且同时回 url/sha256/size（bidding 统一入口，推荐）；
+       ② 预签名直传 GET /infra/file/presigned-url → PUT → POST /infra/file/create（回 file_id）；
+       ③ POST /infra/file/upload —— 只回 URL（无 file_id）兜底。
+       发布强制 pdfFileId 非空，故①/②优先；仅③命中时提示由后端补录。 */
     const up = await uploadAttachment(file, 'bidding/notice');
     pdfUrl.value = up.url;
     pdfFileName.value = file.name;
@@ -741,7 +747,21 @@ onMounted(() => { load(); void fetchKpiCounts(); });
                 file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
                 <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
                 <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="ml-2">查看已上传文件</a>
+                <Button
+                  v-if="pdfUrl || form.pdfFileId !== undefined"
+                  class="ml-2"
+                  size="small"
+                  type="link"
+                  @click="pdfPreviewOpen = true"
+                >内嵌预览</Button>
               </div>
+              <PdfPreview
+                v-model:open="pdfPreviewOpen"
+                :url="pdfUrl"
+                :file-id="form.pdfFileId"
+                :file-name="pdfFileName || '公告版式文件.pdf'"
+                title="公告版式文件预览"
+              />
             </div>
           </div>
         </div>
