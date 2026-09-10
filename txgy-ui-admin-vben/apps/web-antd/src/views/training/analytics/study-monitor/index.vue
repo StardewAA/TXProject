@@ -16,6 +16,8 @@ import {
   Tag,
 } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'TrainingStudyMonitor' });
 
 // TODO[模块九-学习行为] 对接 /admin-api/training/analytics/study-monitor/page
@@ -54,16 +56,11 @@ function handleRemind() {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #475569 0%, #475569dc 44%, #111827 115%)"
-      >
-        <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 91（管理员）</div>
-        <h1 class="m-0 text-2xl font-semibold md:text-3xl">学时管控与学习监管</h1>
-        <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-          全量学习行为日志记录，结合防刷课规则计算有效学时，区分正常学时与刷课异常标记。
-        </p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 91（管理员）"
+        title="学时管控与学习监管"
+        description="全量学习行为日志记录，结合防刷课规则计算有效学时，区分正常学时与刷课异常标记。"
+      />
 
       <Row :gutter="16">
         <Col :span="6"><Card :bordered="false"><Statistic title="学习总人次" :value="0" /></Card></Col>
