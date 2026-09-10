@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
 import { Pagination } from 'ant-design-vue';
 
 import {
   getPortalRecruitPostPage,
+  getPortalRecruitPostTypeList,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
 import { AreaCascader } from '#/components/area';
@@ -20,6 +21,8 @@ const applyPost = ref<HrmPortalRecruitApi.Post>();
 const keyword = ref('');
 const sortBy = ref<'latest' | 'salary'>('latest');
 const salaryRange = ref<string>();
+const postTypes = ref<HrmPortalRecruitApi.PostType[]>([]);
+const selectedPost = ref<HrmPortalRecruitApi.Post>();
 const postPage = reactive<HrmPortalRecruitApi.PostPageParams>({
   pageNo: 1,
   pageSize: 10,
@@ -34,6 +37,10 @@ const postPage = reactive<HrmPortalRecruitApi.PostPageParams>({
   salaryNegotiable: undefined,
 });
 const router = useRouter();
+const route = useRoute();
+
+const showAllPosts = computed(() => route.query.view === 'list');
+const previewPosts = computed(() => displayPosts.value.slice(0, 9));
 
 const jobNatureOptions = [
   { label: '不限', value: 'all' as const },
@@ -86,6 +93,20 @@ const displayPosts = computed(() => {
   return result;
 });
 
+const isSearchMode = computed(
+  () => Boolean(
+    keyword.value.trim() ||
+      postPage.postTypeId ||
+      postPage.jobNature ||
+      postPage.areaId ||
+      postPage.workTime ||
+      postPage.educationRequire ||
+      postPage.salaryMin ||
+      postPage.salaryMax ||
+      postPage.salaryNegotiable,
+  ),
+);
+
 function formatLocation(post: HrmPortalRecruitApi.Post) {
   return (
     post.areaName || (post.areaId ? `地区 ${post.areaId}` : '工作地点待确认')
@@ -99,9 +120,36 @@ function getDescriptionExcerpt(description?: string) {
   return excerpt.length > 110 ? `${excerpt.slice(0, 110)}…` : excerpt;
 }
 
+function formatSalary(post: HrmPortalRecruitApi.Post) {
+  if (post.salaryUnit === -1 || (post.minSalary ?? 0) < 0) return '面议';
+  const min = post.minSalary;
+  const max = post.maxSalary;
+  if (min == null && max == null) return '薪资面议';
+  const format = (value?: number) => (value == null ? '' : `${value / 1000}K`);
+  if (min != null && max != null) return `${format(min)}-${format(max)}`;
+  return min != null ? `${format(min)}起` : `${format(max)}以内`;
+}
+
+function formatWorkTime(value?: number) {
+  return workTimeOptions.find((option) => option.value === value)?.label || '经验不限';
+}
+
+function formatEducation(value?: number) {
+  return educationOptions.find((option) => option.value === value)?.label || '学历不限';
+}
+
+function selectPostType(id?: number) {
+  postPage.postTypeId = id;
+  refreshPosts();
+}
+
 function openApply(post: HrmPortalRecruitApi.Post) {
   applyPost.value = post;
   applyModalOpen.value = true;
+}
+
+function selectPost(post: HrmPortalRecruitApi.Post) {
+  selectedPost.value = post;
 }
 
 function handleSearch() {
@@ -141,6 +189,7 @@ function refreshPosts() {
 function resetFilters() {
   keyword.value = '';
   postPage.postName = '';
+  postPage.postTypeId = undefined;
   postPage.jobNature = undefined;
   postPage.areaId = undefined;
   postPage.workTime = undefined;
@@ -160,6 +209,7 @@ async function loadPosts() {
     const result = await getPortalRecruitPostPage(postPage);
     posts.value = result.list || [];
     postTotal.value = result.total || 0;
+    selectedPost.value = posts.value[0];
   } catch (error) {
     posts.value = [];
     postTotal.value = 0;
@@ -179,8 +229,21 @@ function formatPostTotal(total: number) {
   return `共 ${total} 个岗位`;
 }
 
+function showMorePosts() {
+  router.push({ name: 'PortalRecruit', query: { view: 'list' } });
+}
+
 onMounted(async () => {
-  await loadPosts();
+  await Promise.all([
+    loadPosts(),
+    getPortalRecruitPostTypeList()
+      .then((result) => {
+        postTypes.value = result || [];
+      })
+      .catch(() => {
+        postTypes.value = [];
+      }),
+  ]);
 });
 </script>
 
@@ -188,8 +251,19 @@ onMounted(async () => {
   <div class="portal-page recruit-page">
     <section class="recruit-hero">
       <div class="hero-copy">
-        <p class="eyebrow">人才服务 · 职业机会</p>
+        <p class="eyebrow">天信人才服务 · 职业机会</p>
         <h1>发现适合你的下一份工作</h1>
+        <p class="hero-note">连接防腐保温行业优质企业，让专业经验找到更好的去处。</p>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="hero-orbit hero-orbit-one"></div>
+        <div class="hero-orbit hero-orbit-two"></div>
+        <div class="hero-profile-card">
+          <span class="hero-avatar">职</span>
+          <span><b>专业人才</b><small>正在寻找新机会</small></span>
+          <i>↗</i>
+        </div>
+        <div class="hero-role-card"><span>匹配职位</span><b>项目管理 · 延安</b></div>
       </div>
       <div class="hero-search">
         <a-input
@@ -207,6 +281,18 @@ onMounted(async () => {
           搜索职位
         </a-button>
       </div>
+      <div class="quick-searches">
+        <span>热门职位</span>
+        <button
+          v-for="type in postTypes.slice(0, 6)"
+          :key="type.id"
+          type="button"
+          @click="selectPostType(type.id)"
+        >
+          {{ type.name }}
+        </button>
+        <span v-if="!postTypes.length" class="quick-searches-muted">工程管理 · 采购 · 资料员 · 行政人事</span>
+      </div>
     </section>
 
     <a-tabs
@@ -214,6 +300,13 @@ onMounted(async () => {
     >
       <a-tab-pane key="posts" tab="岗位机会">
         <section class="filter-panel">
+          <div class="filter-heading">
+            <div>
+              <span class="section-kicker">岗位机会</span>
+              <strong>筛选你感兴趣的职位</strong>
+            </div>
+            <span class="result-count">{{ formatPostTotal(postTotal) }}</span>
+          </div>
           <div class="filter-toolbar">
             <AreaCascader
               v-model="postPage.areaId"
@@ -226,6 +319,22 @@ onMounted(async () => {
               show-search
               @update:model-value="handleFilterChange"
             />
+            <a-select
+              v-model:value="postPage.postTypeId"
+              allow-clear
+              class="filter-control"
+              placeholder="职位类型"
+              popup-class-name="recruit-filter-dropdown"
+              @change="handleFilterChange"
+            >
+              <a-select-option
+                v-for="type in postTypes"
+                :key="type.id"
+                :value="type.id"
+              >
+                {{ type.name }}
+              </a-select-option>
+            </a-select>
             <a-select
               :value="postPage.jobNature ?? 'all'"
               allow-clear
@@ -311,11 +420,12 @@ onMounted(async () => {
           <strong>暂时没有符合条件的职位</strong>
           <p>试试调整工作性质、职位类型或搜索关键词</p>
         </div>
-        <div v-else class="post-list">
+        <div v-else-if="!isSearchMode && !showAllPosts" class="home-job-grid">
           <article
-            v-for="post in displayPosts"
+            v-for="post in previewPosts"
             :key="post.id"
             class="post-card"
+            @click="selectPost(post)"
           >
             <div class="post-card-main">
               <div class="post-title-row">
@@ -331,9 +441,19 @@ onMounted(async () => {
                   <span>{{ formatLocation(post) }}</span>
                 </span>
               </div>
+              <div class="post-company-row">
+                <span>{{ post.companyShortName || post.companyName || '行业企业' }}</span>
+                <span v-if="post.postTypeName" class="post-type-tag">{{ post.postTypeName }}</span>
+              </div>
               <p class="post-excerpt">{{ getDescriptionExcerpt(post.description) }}</p>
+              <div class="post-tags">
+                <span>{{ post.jobNature === 2 ? '实习' : post.jobNature === 3 ? '兼职' : '全职' }}</span>
+                <span>{{ formatEducation(post.educationRequire) }}</span>
+                <span>{{ formatWorkTime(post.workTime) }}</span>
+              </div>
             </div>
             <div class="post-card-actions">
+              <strong class="post-salary">{{ formatSalary(post) }}</strong>
               <a-button
                 class="post-apply"
                 type="primary"
@@ -344,8 +464,71 @@ onMounted(async () => {
             </div>
           </article>
         </div>
+        <div v-else class="search-results-layout">
+          <div class="search-result-list">
+            <div class="search-result-heading">
+              <strong>搜索结果</strong>
+              <span>{{ formatPostTotal(postTotal) }}</span>
+            </div>
+            <article
+              v-for="post in displayPosts"
+              :key="post.id"
+              class="search-post-card"
+              :class="{ selected: selectedPost?.id === post.id }"
+              @click="selectPost(post)"
+            >
+              <div class="search-post-topline">
+                <strong>{{ post.postName }}</strong>
+                <b>{{ formatSalary(post) }}</b>
+              </div>
+              <div class="search-post-meta">
+                <span>{{ formatLocation(post) }}</span>
+                <span>{{ formatWorkTime(post.workTime) }}</span>
+                <span>{{ formatEducation(post.educationRequire) }}</span>
+              </div>
+              <div class="search-post-company">
+                {{ post.companyShortName || post.companyName || '行业企业' }}
+              </div>
+            </article>
+          </div>
+          <article v-if="selectedPost" class="search-detail-card">
+            <div class="search-detail-header">
+              <div>
+                <p class="detail-eyebrow">职位机会</p>
+                <h2>{{ selectedPost.postName }}</h2>
+                <div class="search-post-meta">
+                  <span>{{ formatLocation(selectedPost) }}</span>
+                  <span>{{ formatWorkTime(selectedPost.workTime) }}</span>
+                  <span>{{ formatEducation(selectedPost.educationRequire) }}</span>
+                </div>
+              </div>
+              <div class="search-detail-actions">
+                <strong>{{ formatSalary(selectedPost) }}</strong>
+                <a-button type="primary" @click="openApply(selectedPost)">立即投递</a-button>
+              </div>
+            </div>
+            <section class="search-detail-section">
+              <h3>职位描述</h3>
+              <p>{{ getDescriptionExcerpt(selectedPost.description) }}</p>
+              <p v-for="(line, index) in (selectedPost.description || '').split(/\r?\n/).slice(0, 8)" :key="index">
+                {{ line }}
+              </p>
+            </section>
+            <a-button type="link" @click="router.push({ name: 'PortalRecruitDetail', query: { id: selectedPost.id } })">
+              查看完整职位详情 →
+            </a-button>
+          </article>
+        </div>
+        <a-button
+          v-if="!isSearchMode && !showAllPosts && postTotal > previewPosts.length"
+          class="show-more-posts"
+          type="default"
+          @click="showMorePosts"
+        >
+          查看更多
+        </a-button>
         <Pagination
-          v-if="postTotal"
+          v-if="postTotal && (isSearchMode || showAllPosts)"
           :current="postPage.pageNo"
           :page-size="postPage.pageSize"
           :page-size-options="['10', '15', '20']"
@@ -374,20 +557,64 @@ onMounted(async () => {
   gap: 20px;
 }
 
+.recruit-page {
+  --recruit-ink: #17231f;
+  --recruit-muted: #71807a;
+  --recruit-line: #e8eeeb;
+  --recruit-accent: #08b6ad;
+  --recruit-accent-soft: #e9f8f6;
+}
+
 .recruit-hero {
+  position: relative;
   display: grid;
   width: min(100%, 1280px);
   box-sizing: border-box;
   margin-inline: auto;
   gap: 24px;
-  padding: 36px 42px 38px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  padding: 42px 52px 28px;
+  border: 1px solid #dcebe8;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eff9f7 0%, #f8fbfa 62%, #e4f4f0 100%);
+  box-shadow: 0 18px 46px rgb(35 105 185 / 8%);
 }
 
 .hero-copy {
   max-width: 760px;
 }
+
+.hero-visual {
+  position: absolute;
+  top: 22px;
+  right: 34px;
+  width: 250px;
+  height: 142px;
+  pointer-events: none;
+}
+.hero-orbit { position: absolute; border: 1px solid rgb(8 182 173 / 23%); border-radius: 50%; }
+.hero-orbit-one { inset: 12px 22px 2px 32px; transform: rotate(22deg); }
+.hero-orbit-two { inset: 0 4px 25px 60px; transform: rotate(-26deg); }
+.hero-profile-card,
+.hero-role-card {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 12px 28px rgb(46 112 101 / 12%);
+}
+.hero-profile-card { top: 34px; left: 22px; }
+.hero-profile-card > span:not(.hero-avatar) { display: grid; gap: 3px; }
+.hero-profile-card b { color: #19342e; font-size: 13px; }
+.hero-profile-card small { color: #81918b; font-size: 11px; }
+.hero-profile-card i { color: var(--recruit-accent); font-size: 18px; font-style: normal; }
+.hero-avatar { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 9px; color: #fff; background: var(--recruit-accent); font-size: 13px; font-weight: 700; }
+.hero-role-card { right: 2px; bottom: 4px; display: grid; gap: 3px; padding: 9px 12px; }
+.hero-role-card span { color: #87968f; font-size: 10px; }
+.hero-role-card b { color: #355a50; font-size: 12px; }
 
 .hero-copy h1,
 .hero-copy p {
@@ -397,11 +624,12 @@ onMounted(async () => {
 .hero-copy h1 {
   margin-bottom: 8px;
   color: #0f172a;
-  font-size: 38px;
+  font-size: clamp(32px, 4vw, 46px);
   line-height: 1.18;
 }
 
-.hero-copy > p:last-child {
+.hero-note {
+  margin: 0;
   color: #475569;
   font-size: 17px;
   line-height: 1.7;
@@ -409,7 +637,7 @@ onMounted(async () => {
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: var(--recruit-accent);
   font-size: 16px;
   font-weight: 600;
 }
@@ -425,7 +653,7 @@ onMounted(async () => {
   min-height: 54px;
   padding-inline: 16px;
   background: #fff !important;
-  border-color: #bfdbfe;
+  border-color: #b9e1db;
 }
 
 .hero-search :deep(.ant-input) {
@@ -441,8 +669,38 @@ onMounted(async () => {
   min-width: 132px;
   height: 54px;
   padding-inline: 24px;
+  border-color: var(--recruit-accent);
+  background: var(--recruit-accent);
   font-size: 16px;
 }
+
+.quick-searches {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.quick-searches button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #087f77;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.quick-searches button:hover,
+.quick-searches button:focus-visible {
+  color: #fff;
+  background: var(--recruit-accent);
+  outline: none;
+}
+
+.quick-searches-muted { color: #64748b; }
 
 .recruit-tabs {
   min-height: 420px;
@@ -455,10 +713,25 @@ onMounted(async () => {
   gap: 14px;
   margin-bottom: 16px;
   margin-inline: auto;
-  padding: 16px 18px;
+  padding: 20px 22px;
+  border-radius: 12px;
   border: 1px solid #e5e7eb;
   background: #fff;
 }
+
+.filter-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.filter-heading > div { display: grid; gap: 4px; }
+.section-kicker { color: #2563eb; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.filter-heading strong { color: #0f172a; font-size: 18px; }
+.result-count { color: #94a3b8; font-size: 13px; }
 
 .filter-toolbar {
   display: grid;
@@ -536,6 +809,117 @@ onMounted(async () => {
   background: #eff6ff !important;
 }
 
+.home-job-grid {
+  display: grid;
+  width: min(100%, 1280px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-inline: auto;
+}
+
+.home-job-grid .post-card {
+  grid-template-columns: 1fr;
+  gap: 18px;
+  min-height: 204px;
+  padding: 24px 28px 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.home-job-grid .post-card-main { min-width: 0; }
+.home-job-grid .post-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-inline: -28px;
+  padding: 13px 28px;
+  background: #f5fbfa;
+}
+.home-job-grid .post-apply { display: none; }
+
+.show-more-posts {
+  display: block;
+  width: 276px;
+  height: 60px;
+  margin: 16px auto 4px;
+  border: 0;
+  border-radius: 12px;
+  background: #d8f3f5;
+  color: #08a6b3;
+  font-size: 20px;
+}
+
+.show-more-posts:hover,
+.show-more-posts:focus-visible {
+  border: 0;
+  background: #c6edf0;
+  color: #078d99;
+}
+
+.search-results-layout {
+  display: grid;
+  width: min(100%, 1280px);
+  grid-template-columns: minmax(320px, 410px) minmax(0, 1fr);
+  gap: 18px;
+  margin-inline: auto;
+}
+
+.search-result-list,
+.search-detail-card {
+  min-width: 0;
+  border: 1px solid var(--recruit-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.search-result-list { overflow: hidden; }
+.search-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--recruit-line);
+}
+.search-result-heading strong { color: var(--recruit-ink); font-size: 17px; }
+.search-result-heading span { color: var(--recruit-muted); font-size: 13px; }
+.search-post-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #f0f3f2;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.search-post-card:last-child { border-bottom: 0; }
+.search-post-card:hover,
+.search-post-card.selected { background: var(--recruit-accent-soft); }
+.search-post-topline,
+.search-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.search-post-topline strong { color: var(--recruit-ink); font-size: 16px; }
+.search-post-topline b,
+.search-detail-actions strong { color: #ef665c; font-size: 17px; white-space: nowrap; }
+.search-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--recruit-muted);
+  font-size: 13px;
+}
+.search-post-company { color: #52615c; font-size: 13px; }
+.search-detail-card { padding: 30px 34px; }
+.search-detail-header { padding-bottom: 26px; border-bottom: 1px solid var(--recruit-line); }
+.search-detail-header h2 { margin: 0 0 12px; color: var(--recruit-ink); font-size: 28px; }
+.search-detail-actions { display: grid; justify-items: end; gap: 16px; }
+.search-detail-actions .ant-btn { min-width: 112px; background: var(--recruit-accent); border-color: var(--recruit-accent); }
+.search-detail-section { padding: 28px 0 12px; color: #596862; font-size: 15px; line-height: 1.9; }
+.search-detail-section h3 { margin: 0 0 14px; color: var(--recruit-ink); font-size: 18px; }
+.search-detail-section p { margin: 0 0 7px; }
+
 .post-list {
   display: grid;
   width: min(100%, 1280px);
@@ -550,7 +934,8 @@ onMounted(async () => {
   align-items: center;
   justify-self: center;
   gap: 28px;
-  padding: 22px 24px;
+  padding: 22px 26px;
+  border-radius: 12px;
   border: 1px solid #dbe3ee;
   background: #fff;
   transition:
@@ -589,6 +974,22 @@ onMounted(async () => {
   transition: color 160ms ease;
 }
 
+.post-company-row,
+.post-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.post-company-row { margin-top: 9px; color: #475569; font-weight: 600; }
+.post-type-tag,
+.post-tags span { padding: 3px 8px; border-radius: 4px; background: #f1f5f9; font-weight: 400; }
+.post-excerpt { margin-top: 9px; }
+.post-tags { margin-top: 12px; }
+
 .post-title:hover,
 .post-title:focus-visible {
   color: #2563eb;
@@ -622,10 +1023,16 @@ onMounted(async () => {
 }
 
 .post-card-actions {
-  display: flex;
+  display: grid;
   min-width: 0;
   align-items: center;
   justify-content: flex-end;
+}
+
+.post-salary {
+  color: #f05b52;
+  font-size: 20px;
+  white-space: nowrap;
 }
 
 .post-apply {
@@ -756,6 +1163,14 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
+  .hero-visual { opacity: .38; right: 14px; }
+
+  .home-job-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-results-layout { grid-template-columns: 1fr; }
+
   .filter-toolbar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -768,14 +1183,16 @@ onMounted(async () => {
 
 @media (max-width: 640px) {
   .recruit-hero {
-    padding: 24px 20px;
+    padding: 28px 20px 22px;
   }
 
   .hero-copy h1 {
     font-size: 28px;
   }
 
-  .hero-copy > p:last-child {
+  .hero-visual { display: none; }
+
+  .hero-note {
     font-size: 15px;
   }
 
@@ -793,6 +1210,15 @@ onMounted(async () => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .home-job-grid { grid-template-columns: 1fr; }
+
+  .filter-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+
+  .search-detail-card { padding: 22px 20px; }
+  .search-detail-header { flex-direction: column; }
+  .search-detail-actions { width: 100%; justify-items: stretch; }
+  .search-detail-actions .ant-btn { width: 100%; }
+
   .post-card {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -809,7 +1235,9 @@ onMounted(async () => {
   }
 
   .post-card-actions {
-    justify-content: flex-start;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .post-apply {
