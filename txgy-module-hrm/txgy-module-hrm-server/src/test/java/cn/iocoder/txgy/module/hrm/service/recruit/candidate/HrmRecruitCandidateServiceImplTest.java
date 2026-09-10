@@ -33,12 +33,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import static cn.iocoder.txgy.framework.common.util.object.ObjectUtils.cloneIgnoreId;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertPojoEquals;
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.*;
@@ -47,8 +49,11 @@ import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDID
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_CONVERT_STATUS_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_DELETE_STATUS_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_ELIMINATE_STATUS_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_MOBILE_DUPLICATE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_HAS_EMPLOYEE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHANNEL_DISABLED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_POST_NOT_PUBLISHED;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
@@ -88,9 +93,9 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         HrmRecruitCandidateSaveReqVO reqVO = randomRecruitCandidateSaveReqVO();
         // mock 方法
-        when(recruitPostService.validateRecruitPostExists(eq(reqVO.getPostId())))
+        when(recruitPostService.validateRecruitPostPublished(eq(reqVO.getPostId())))
                 .thenReturn(randomRecruitPostDO(o -> o.setId(reqVO.getPostId())));
-        when(recruitChannelService.validateRecruitChannelExists(eq(reqVO.getChannelId())))
+        when(recruitChannelService.validateRecruitChannelUsable(eq(reqVO.getChannelId())))
                 .thenReturn(randomPojo(HrmRecruitChannelDO.class, o -> o.setId(reqVO.getChannelId())));
 
         // 调用
@@ -103,6 +108,8 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         assertEquals(HrmRecruitCandidateStatusEnum.NEW.getStatus(), candidate.getStatus());
         assertEquals(0, candidate.getStageNumber());
         assertNotNull(candidate.getStatusUpdateTime());
+        verify(recruitPostService).validateRecruitPostPublished(reqVO.getPostId());
+        verify(recruitChannelService).validateRecruitChannelUsable(reqVO.getChannelId());
     }
 
     @Test
@@ -113,9 +120,9 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         HrmRecruitCandidateSaveReqVO reqVO = randomRecruitCandidateSaveReqVO(o -> o.setId(dbCandidate.getId()));
         // mock 方法
-        when(recruitPostService.validateRecruitPostExists(eq(reqVO.getPostId())))
+        when(recruitPostService.validateRecruitPostPublished(eq(reqVO.getPostId())))
                 .thenReturn(randomRecruitPostDO(o -> o.setId(reqVO.getPostId())));
-        when(recruitChannelService.validateRecruitChannelExists(eq(reqVO.getChannelId())))
+        when(recruitChannelService.validateRecruitChannelUsable(eq(reqVO.getChannelId())))
                 .thenReturn(randomPojo(HrmRecruitChannelDO.class, o -> o.setId(reqVO.getChannelId())));
 
         // 调用
@@ -124,6 +131,8 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         // 断言
         HrmRecruitCandidateDO candidate = recruitCandidateMapper.selectById(dbCandidate.getId());
         assertPojoEquals(reqVO, candidate);
+        verify(recruitPostService).validateRecruitPostPublished(reqVO.getPostId());
+        verify(recruitChannelService).validateRecruitChannelUsable(reqVO.getChannelId());
     }
 
     @Test
@@ -136,8 +145,8 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         HrmRecruitCandidateSaveReqVO reqVO = randomRecruitCandidateSaveReqVO(o -> o
                 .setId(dbCandidate.getId()).setAge(null).setEmail(null).setWorkTime(null)
                 .setGraduateSchool(null).setLatestWorkPlace(null).setChannelId(null)
-                .setRemark(null).setResumeUrls(null));
-        when(recruitPostService.validateRecruitPostExists(eq(reqVO.getPostId())))
+                .setRemark(null));
+        when(recruitPostService.validateRecruitPostPublished(eq(reqVO.getPostId())))
                 .thenReturn(randomRecruitPostDO(o -> o.setId(reqVO.getPostId())));
 
         // 调用
@@ -152,9 +161,10 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         assertNull(candidate.getLatestWorkPlace());
         assertNull(candidate.getChannelId());
         assertNull(candidate.getRemark());
-        assertNull(candidate.getResumeUrls());
         assertEquals(entryTime, candidate.getEntryTime());
         assertEquals(dbCandidate.getStatus(), candidate.getStatus());
+        verify(recruitPostService).validateRecruitPostPublished(reqVO.getPostId());
+        verifyNoInteractions(recruitChannelService);
     }
 
     @Test
@@ -396,7 +406,7 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         // 断言
         HrmRecruitCandidateDO dbCandidate = recruitCandidateMapper.selectById(candidate.getId());
         assertEquals(HrmRecruitCandidateStatusEnum.JOINED.getStatus(), dbCandidate.getStatus());
-        assertEquals(entryTime, dbCandidate.getEntryTime());
+        assertTrue(Math.abs(Duration.between(entryTime, dbCandidate.getEntryTime()).toNanos()) <= 1_000L);
         assertNotNull(dbCandidate.getStatusUpdateTime());
     }
 
@@ -426,13 +436,14 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         HrmRecruitCandidateUpdatePostReqVO reqVO = randomPojo(HrmRecruitCandidateUpdatePostReqVO.class, o -> o
                 .setId(dbCandidate.getId()).setPostId(recruitPost.getId()));
         // mock 方法
-        when(recruitPostService.validateRecruitPostExists(eq(reqVO.getPostId()))).thenReturn(recruitPost);
+        when(recruitPostService.validateRecruitPostPublished(eq(reqVO.getPostId()))).thenReturn(recruitPost);
 
         // 调用
         recruitCandidateService.updateRecruitCandidatePost(reqVO);
 
         // 断言
         assertEquals(reqVO.getPostId(), recruitCandidateMapper.selectById(dbCandidate.getId()).getPostId());
+        verify(recruitPostService).validateRecruitPostPublished(reqVO.getPostId());
     }
 
     @Test
@@ -445,13 +456,53 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         HrmRecruitCandidateUpdateChannelReqVO reqVO = randomPojo(HrmRecruitCandidateUpdateChannelReqVO.class, o -> o
                 .setId(dbCandidate.getId()).setChannelId(recruitChannel.getId()));
         // mock 方法
-        when(recruitChannelService.validateRecruitChannelExists(eq(reqVO.getChannelId()))).thenReturn(recruitChannel);
+        when(recruitChannelService.validateRecruitChannelUsable(eq(reqVO.getChannelId()))).thenReturn(recruitChannel);
 
         // 调用
         recruitCandidateService.updateRecruitCandidateChannel(reqVO);
 
         // 断言
         assertEquals(reqVO.getChannelId(), recruitCandidateMapper.selectById(dbCandidate.getId()).getChannelId());
+        verify(recruitChannelService).validateRecruitChannelUsable(reqVO.getChannelId());
+    }
+
+    @Test
+    public void testCreateRecruitCandidate_mobileDuplicate() {
+        HrmRecruitCandidateDO existing = randomRecruitCandidateDO(o -> o.setMobile("13800138000"));
+        recruitCandidateMapper.insert(existing);
+        HrmRecruitCandidateSaveReqVO reqVO = randomRecruitCandidateSaveReqVO(o -> o
+                .setMobile(existing.getMobile()));
+        assertServiceException(() -> recruitCandidateService.createRecruitCandidate(reqVO),
+                RECRUIT_CANDIDATE_MOBILE_DUPLICATE);
+        verifyNoInteractions(recruitPostService, recruitChannelService);
+    }
+
+    @Test
+    public void testCreateRecruitCandidate_postNotPublished() {
+        HrmRecruitCandidateSaveReqVO reqVO = randomRecruitCandidateSaveReqVO();
+        doThrow(exception(RECRUIT_POST_NOT_PUBLISHED)).when(recruitPostService)
+                .validateRecruitPostPublished(reqVO.getPostId());
+
+        assertServiceException(() -> recruitCandidateService.createRecruitCandidate(reqVO),
+                RECRUIT_POST_NOT_PUBLISHED);
+        assertEquals(0L, recruitCandidateMapper.selectCount());
+        verifyNoInteractions(recruitChannelService);
+    }
+
+    @Test
+    public void testUpdateRecruitCandidateChannel_disabled() {
+        HrmRecruitCandidateDO candidate = randomRecruitCandidateDO();
+        recruitCandidateMapper.insert(candidate);
+        HrmRecruitCandidateUpdateChannelReqVO reqVO = randomPojo(
+                HrmRecruitCandidateUpdateChannelReqVO.class,
+                o -> o.setId(candidate.getId()).setChannelId(randomLongId()));
+        doThrow(exception(RECRUIT_CHANNEL_DISABLED)).when(recruitChannelService)
+                .validateRecruitChannelUsable(reqVO.getChannelId());
+
+        assertServiceException(() -> recruitCandidateService.updateRecruitCandidateChannel(reqVO),
+                RECRUIT_CHANNEL_DISABLED);
+        assertEquals(candidate.getChannelId(),
+                recruitCandidateMapper.selectById(candidate.getId()).getChannelId());
     }
 
     @Test
@@ -743,8 +794,7 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
                 .setName(randomString()).setMobile(randomMobile()).setSex(1).setAge(28).setEmail(randomEmail())
                 .setStageNumber(0).setWorkTime(5).setEducation(5)
                 .setStatus(HrmRecruitCandidateStatusEnum.NEW.getStatus())
-                .setEliminate(null).setStatusUpdateTime(randomLocalDateTime()).setEntryTime(null)
-                .setResumeUrls(singletonList(randomURL()));
+                .setEliminate(null).setStatusUpdateTime(randomLocalDateTime()).setEntryTime(null);
         return randomPojo(HrmRecruitCandidateDO.class, ArrayUtils.append(consumer, consumers));
     }
 
@@ -756,7 +806,7 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
                 .setMinSalary(new BigDecimal("10000.00")).setMaxSalary(new BigDecimal("20000.00")).setSalaryUnit(2)
                 .setMinAge(22).setMaxAge(35).setEmergencyLevel(2)
                 .setOwnerEmployeeId(null).setInterviewEmployeeIds(emptyList())
-                .setStatus(HrmRecruitPostStatusEnum.RECRUITING.getStatus()).setStopReason(null);
+                .setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus()).setStopReason(null);
         return randomPojo(HrmRecruitPostDO.class, ArrayUtils.append(consumer, consumers));
     }
 
@@ -774,7 +824,7 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
         Consumer<HrmRecruitCandidateSaveReqVO> consumer = o -> o.setId(null)
                 .setName(randomString()).setMobile(randomMobile()).setSex(1).setAge(28).setEmail(randomEmail())
                 .setPostId(randomLongId()).setWorkTime(5).setEducation(5)
-                .setChannelId(randomLongId()).setResumeUrls(singletonList(randomURL()));
+                .setChannelId(randomLongId());
         return randomPojo(HrmRecruitCandidateSaveReqVO.class, ArrayUtils.append(consumer, consumers));
     }
 

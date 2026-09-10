@@ -108,6 +108,9 @@ export const useAccessStore = defineStore('core-access', {
     setVisitTenantId(visitTenantId: number) {
       this.visitTenantId = visitTenantId;
     },
+    clearVisitTenantId() {
+      this.visitTenantId = null;
+    },
     unlockScreen() {
       this.isLockScreen = false;
       this.lockScreenPassword = undefined;

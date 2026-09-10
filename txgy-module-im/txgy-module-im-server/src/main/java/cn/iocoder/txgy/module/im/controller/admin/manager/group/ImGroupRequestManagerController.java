@@ -19,8 +19,10 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -70,6 +72,37 @@ public class ImGroupRequestManagerController {
             MapUtils.findAndThen(userMap, vo.getHandleUserId(), user -> vo.setHandleNickname(user.getNickname()));
             MapUtils.findAndThen(groupMap, vo.getGroupId(), group -> vo.setGroupName(group.getName()));
         }));
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "获得加群申请详情")
+    @PreAuthorize("@ss.hasPermission('im:manager:group-request:query')")
+    public CommonResult<ImGroupRequestManagerRespVO> getGroupRequest(@RequestParam("id") Long id) {
+        ImGroupRequestDO request = groupRequestService.getGroupRequest(id);
+        if (request == null) {
+            return success(null);
+        }
+        // 1. 批量聚合用户昵称
+        Set<Long> userIds = Stream.of(request.getUserId(), request.getInviterUserId(), request.getHandleUserId())
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
+        // 2. 聚合群信息
+        Map<Long, ImGroupDO> groupMap = groupService.getGroupMap(Set.of(request.getGroupId()));
+        ImGroupRequestManagerRespVO vo = BeanUtils.toBean(request, ImGroupRequestManagerRespVO.class);
+        MapUtils.findAndThen(userMap, vo.getUserId(), user -> vo.setUserNickname(user.getNickname()));
+        MapUtils.findAndThen(userMap, vo.getInviterUserId(), user -> vo.setInviterNickname(user.getNickname()));
+        MapUtils.findAndThen(userMap, vo.getHandleUserId(), user -> vo.setHandleNickname(user.getNickname()));
+        MapUtils.findAndThen(groupMap, vo.getGroupId(), group -> vo.setGroupName(group.getName()));
+        return success(vo);
+    }
+
+    @DeleteMapping("/delete")
+    @Operation(summary = "删除加群申请记录（治理动作，不影响已建立的群成员关系）")
+    @PreAuthorize("@ss.hasPermission('im:manager:group-request:delete')")
+    public CommonResult<Boolean> deleteGroupRequest(@RequestParam("id") Long id) {
+        groupRequestService.deleteGroupRequestByManager(id);
+        return success(true);
     }
 
 }

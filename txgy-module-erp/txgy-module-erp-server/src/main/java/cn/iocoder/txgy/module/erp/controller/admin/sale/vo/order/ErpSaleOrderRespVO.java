@@ -30,6 +30,21 @@ public class ErpSaleOrderRespVO {
     @Schema(description = "BPM 流程实例编号")
     private String processInstanceId;
 
+    @Schema(description = "全局业务链编号")
+    private String businessChainNo;
+    @Schema(description = "WMS 仓储履约状态")
+    private String warehouseStatus;
+    @Schema(description = "WMS 库存判断编号")
+    private String inventoryDecisionNo;
+    @Schema(description = "WMS 库存预留编号")
+    private String reservationNo;
+    @Schema(description = "WMS 销售出库单号")
+    private String wmsShipmentOrderNo;
+    @Schema(description = "最后 WMS 事件版本")
+    private Long wmsEventVersion;
+    @Schema(description = "WMS 失败原因")
+    private String wmsFailureReason;
+
     @Schema(description = "客户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1724")
     private Long customerId;
     @Schema(description = "客户名称", example = "OPENLAB BS")
@@ -114,6 +129,15 @@ public class ErpSaleOrderRespVO {
 
         @Schema(description = "产品单位单位", requiredMode = Schema.RequiredMode.REQUIRED, example = "3113")
         private Long productUnitId;
+
+        @Schema(description = "WMS 统一仓库编码")
+        private String warehouseCode;
+
+        @Schema(description = "WMS 已预留数量")
+        private BigDecimal reservedCount;
+
+        @Schema(description = "WMS 缺口数量")
+        private BigDecimal shortageCount;
 
         @Schema(description = "产品单价", example = "100.00")
         private BigDecimal productPrice;

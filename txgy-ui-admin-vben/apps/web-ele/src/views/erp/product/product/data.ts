@@ -22,6 +22,34 @@ export function useFormSchema(): VbenFormSchema[] {
     },
     {
       component: 'Input',
+      fieldName: 'materialCode',
+      label: '物料编码',
+      rules: 'required',
+      componentProps: {
+        placeholder: '请输入统一物料编码，创建后不可随意修改',
+      },
+    },
+    {
+      component: 'Select',
+      fieldName: 'materialType',
+      label: '物料类型',
+      componentProps: {
+        options: [
+          { label: '成品', value: 'FINISHED_GOODS' },
+          { label: '原料', value: 'RAW_MATERIAL' },
+        ],
+        placeholder: '请选择物料类型',
+      },
+      rules: z.string().default('FINISHED_GOODS'),
+    },
+    {
+      component: 'Switch',
+      fieldName: 'qualityRequired',
+      label: '需要质检',
+      rules: z.boolean().default(false),
+    },
+    {
+      component: 'Input',
       fieldName: 'name',
       label: '名称',
       rules: 'required',
@@ -191,6 +219,18 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
+      field: 'materialCode',
+      title: '物料编码',
+      minWidth: 150,
+    },
+    {
+      field: 'materialType',
+      title: '物料类型',
+      minWidth: 100,
+      formatter: ({ cellValue }) =>
+        cellValue === 'RAW_MATERIAL' ? '原料' : '成品',
+    },
+    {
       field: 'barCode',
       title: '条码',
       minWidth: 120,
@@ -241,6 +281,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
         name: 'CellDict',
         props: { type: DICT_TYPE.COMMON_STATUS },
       },
+    },
+    {
+      field: 'qualityRequired',
+      title: '质检要求',
+      minWidth: 100,
+      formatter: ({ cellValue }) => (cellValue ? '必检' : '免检'),
     },
     {
       field: 'createTime',

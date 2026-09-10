@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.getMaxValue;
-import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.USER_USERNAME_EXISTS;
+import static cn.iocoder.txgy.module.mp.enums.ErrorCodeConstants.ACCOUNT_APP_ID_EXISTS;
 
 /**
  * 公众号账号 Service 实现类
@@ -168,7 +168,7 @@ public class MpAccountServiceImpl implements MpAccountService {
             // 存在 account 记录的情况下
             if (id == null // 新增时，说明重复
                     || ObjUtil.notEqual(id, account.getId())) { // 更新时，如果 id 不一致，说明重复
-                throw exception(USER_USERNAME_EXISTS);
+                throw exception(ACCOUNT_APP_ID_EXISTS);
             }
         });
     }

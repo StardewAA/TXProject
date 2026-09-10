@@ -72,6 +72,9 @@ public interface ErrorCodeConstants {
     ErrorCode SHIPMENT_ORDER_DETAIL_REQUIRED = new ErrorCode(1_060_201_003, "出库单至少包含一条明细");
     ErrorCode SHIPMENT_ORDER_STATUS_NOT_DELETABLE = new ErrorCode(1_060_201_005, "出库单状态不是草稿或已作废，不能删除");
     ErrorCode SHIPMENT_ORDER_DETAIL_NOT_EXISTS = new ErrorCode(1_060_201_007, "出库单明细不存在");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_RUNNING = new ErrorCode(1_060_201_008, "出库单正在审批中，请勿重复提交");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_NOT_APPROVED = new ErrorCode(1_060_201_009, "出库单尚未审批通过，不能完成出库");
+    ErrorCode SHIPMENT_ORDER_APPROVAL_NOT_EDITABLE = new ErrorCode(1_060_201_010, "出库单正在审批或已经审批通过，不能修改");
 
     // ========== WMS 移库单 1-060-202-000 ==========
     ErrorCode MOVEMENT_ORDER_NOT_EXISTS = new ErrorCode(1_060_202_000, "移库单不存在");
@@ -94,5 +97,29 @@ public interface ErrorCodeConstants {
     // ========== WMS 库存 1-060-300-000 ==========
     ErrorCode INVENTORY_QUANTITY_NOT_ENOUGH = new ErrorCode(1_060_300_000,
             "库存不足，商品：{}，商品规格：{}，仓库：{}，当前库存：{}，变更数量：{}");
+
+    // ========== ERP/WMS 跨模块集成 1-060-900-000 ==========
+    ErrorCode INTEGRATION_REQUEST_DUPLICATE_CONFLICT = new ErrorCode(1_060_900_000,
+            "相同 requestId 的请求内容不一致");
+    ErrorCode SYNC_VERSION_STALE = new ErrorCode(1_060_900_001, "同步版本已过期");
+    ErrorCode MATERIAL_CODE_NOT_EXISTS = new ErrorCode(1_060_900_002, "统一物料编码不存在");
+    ErrorCode MATERIAL_TYPE_INVALID = new ErrorCode(1_060_900_003, "原料或成品类型无效");
+    ErrorCode WAREHOUSE_TYPE_MISMATCH = new ErrorCode(1_060_900_004, "物料类型与仓库类型不匹配");
+    ErrorCode INVENTORY_DECISION_STATE_INVALID = new ErrorCode(1_060_900_005, "库存判断状态不允许当前操作");
+    ErrorCode QUALITY_IMAGES_REQUIRED = new ErrorCode(1_060_900_006, "必检物料缺少质检图片");
+    ErrorCode INTEGRATION_SOURCE_ORDER_NOT_EXISTS = new ErrorCode(1_060_900_007, "来源单据不存在");
+    ErrorCode INTEGRATION_CALLBACK_STATE_STALE = new ErrorCode(1_060_900_008, "回调状态早于当前状态");
+    ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_060_900_009, "来源与目标租户不一致");
+    ErrorCode EVENT_VERSION_STALE = new ErrorCode(1_060_900_010, "事件版本已过期");
+    ErrorCode EVENT_VERSION_GAP = new ErrorCode(1_060_900_011, "事件版本断档");
+    ErrorCode RESERVATION_NOT_EXISTS = new ErrorCode(1_060_900_012, "库存预留不存在");
+    ErrorCode RESERVATION_ALREADY_CONSUMED = new ErrorCode(1_060_900_013, "库存预留已核销，不能释放");
+    ErrorCode RESERVATION_RELEASE_EXCEED = new ErrorCode(1_060_900_014, "释放数量超过未核销预留");
+    ErrorCode SALE_SHIPMENT_TRIGGER_INVALID = new ErrorCode(1_060_900_015, "不满足销售出库触发条件");
+    ErrorCode SALE_SHIPMENT_DUPLICATE = new ErrorCode(1_060_900_016, "销售出库单已存在");
+    ErrorCode WAREHOUSE_VERSION_CONFLICT = new ErrorCode(1_060_900_017, "仓库版本冲突");
+    ErrorCode INTEGRATION_REQUEST_NOT_EXISTS = new ErrorCode(1_060_900_018, "幂等请求不存在");
+    ErrorCode INTEGRATION_MASTER_DATA_MAPPING_CONFLICT = new ErrorCode(1_060_900_019,
+            "主数据存在无法自动确认的存量映射");
 
 }

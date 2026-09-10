@@ -16,8 +16,9 @@ import java.util.Arrays;
 @AllArgsConstructor
 public enum HrmRecruitPostStatusEnum implements ArrayValuable<Integer> {
 
-    RECRUITING(1, "招聘中"),
-    STOPPED(0, "停止招聘");
+    PAUSED(0, "已暂停"),
+    PUBLISHED(1, "已发布"),
+    CLOSED(2, "已关闭");
 
     public static final Integer[] ARRAYS = Arrays.stream(values())
             .map(HrmRecruitPostStatusEnum::getStatus).toArray(Integer[]::new);

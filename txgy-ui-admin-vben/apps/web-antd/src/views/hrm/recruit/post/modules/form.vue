@@ -19,7 +19,6 @@ import {
   HrmRecruitJobNature,
   HrmRecruitPostEducation,
   HrmRecruitSalaryUnit,
-  HrmRecruitWorkTime,
   SALARY_NEGOTIABLE_UNIT_VALUE,
   SALARY_NEGOTIABLE_VALUE,
 } from '#/views/hrm/utils/constants';
@@ -112,7 +111,7 @@ const [Modal, modalApi] = useVbenModal({
       await formApi.setValues({
         postName: '',
         jobNature: HrmRecruitJobNature.FULL_TIME,
-        workTime: HrmRecruitWorkTime.UNLIMITED,
+        workTime: 0,
         educationRequire: HrmRecruitPostEducation.UNLIMITED,
         salaryUnit: HrmRecruitSalaryUnit.MONTH,
         emergencyLevel: HrmRecruitEmergencyLevel.URGENT,

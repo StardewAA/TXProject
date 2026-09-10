@@ -17,8 +17,10 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -61,6 +63,33 @@ public class ImFriendRequestManagerController {
             MapUtils.findAndThen(userMap, vo.getToUserId(),
                     user -> vo.setToNickname(user.getNickname()));
         }));
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "获得好友申请详情")
+    @PreAuthorize("@ss.hasPermission('im:manager:friend-request:query')")
+    public CommonResult<ImFriendRequestManagerRespVO> getFriendRequest(@RequestParam("id") Long id) {
+        ImFriendRequestDO request = friendRequestService.getFriendRequest(id);
+        if (request == null) {
+            return success(null);
+        }
+        // 填充双方昵称
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                Set.of(request.getFromUserId(), request.getToUserId()));
+        ImFriendRequestManagerRespVO vo = BeanUtils.toBean(request, ImFriendRequestManagerRespVO.class);
+        MapUtils.findAndThen(userMap, vo.getFromUserId(),
+                user -> vo.setFromNickname(user.getNickname()));
+        MapUtils.findAndThen(userMap, vo.getToUserId(),
+                user -> vo.setToNickname(user.getNickname()));
+        return success(vo);
+    }
+
+    @DeleteMapping("/delete")
+    @Operation(summary = "删除好友申请记录（治理动作，不影响已建立的好友关系）")
+    @PreAuthorize("@ss.hasPermission('im:manager:friend-request:delete')")
+    public CommonResult<Boolean> deleteFriendRequest(@RequestParam("id") Long id) {
+        friendRequestService.deleteFriendRequestByManager(id);
+        return success(true);
     }
 
 }
