@@ -10,7 +10,6 @@ import {
   Descriptions,
   Drawer,
   Dropdown,
-  Empty,
   message,
   Modal,
   Pagination,
@@ -31,9 +30,13 @@ import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 import TaskChainView from './modules/task-chain.vue';
 
-/* ---------- 本地模型：手动/测试任务条（本次会话，真实解析回执） ---------- */
+/* ---------- 本地模型：手动/测试任务条（真实解析回执；localStorage 留档刷新保留。后端 crawl-parser/test 只返回不回执不落库——测试记录仅前端留档） ---------- */
+/** 本地回执留档键（最大保留 60 条；超出丢最旧） */
+const MANUAL_STORE_KEY = 'bid-crawl-manual-runs-v1';
+const MANUAL_STORE_MAX = 60;
 interface ManualRun {
   id: string;
+  /** 本地测试标记（非后端 crawl-task.taskType——后端测试不落库） */
   taskType: 'TEST';
   status: string;
   parserCode?: string;
@@ -53,6 +56,60 @@ const MANUAL_STATUS = {
   FAILED: { text: '失败', color: 'red' },
 } as Record<string, { text: string; color: string }>;
 const manualRuns = ref<ManualRun[]>([]);
+/* 测试任务条（与“任务”同款）：时间排序（desc=最新在前默认 / asc=最早在前）+ 本地分页 20/50/100 */
+const manualSort = ref<'desc' | 'asc'>('desc');
+const manualPage = ref(1);
+const manualPageSize = ref(20);
+const manualTotal = computed(() => manualRuns.value.length);
+function toggleManualSort(): void {
+  manualSort.value = manualSort.value === 'desc' ? 'asc' : 'desc';
+  manualPage.value = 1;
+}
+/** 展示行：时间排序 + 分页切片（desc=留档原序最新在前；asc=按 occurredAt 升序） */
+const manualShownRows = computed(() => {
+  const sorted =
+    manualSort.value === 'desc'
+      ? manualRuns.value.slice()
+      : [...manualRuns.value].sort((a, b) => (a.occurredAt ?? 0) - (b.occurredAt ?? 0));
+  const start = (manualPage.value - 1) * manualPageSize.value;
+  return sorted.slice(start, start + manualPageSize.value);
+});
+function manualPageChange(page: number, size: number): void {
+  manualPage.value = page;
+  manualPageSize.value = size;
+}
+/** 行留档序号（倒序：最新=#1） */
+const manualSeqOf = (pageIdx: number): number => {
+  const seq = (manualPage.value - 1) * manualPageSize.value + pageIdx + 1;
+  return manualSort.value === 'desc' ? manualTotal.value - seq + 1 : seq;
+};
+function loadManualStore(): ManualRun[] {
+  try {
+    const raw = localStorage.getItem(MANUAL_STORE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as ManualRun[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveManualStore(): void {
+  try {
+    localStorage.setItem(MANUAL_STORE_KEY, JSON.stringify(manualRuns.value.slice(0, MANUAL_STORE_MAX)));
+  } catch {
+    /* 容量/隐私模式等写失败不影响本会话内存 */
+  }
+}
+function dropManualRun(id: string): void {
+  manualRuns.value = manualRuns.value.filter((r) => r.id !== id);
+  saveManualStore();
+}
+/** 清空本页本地留档（测试仅本地留存，清空即无痕） */
+function clearManualRuns(): void {
+  manualRuns.value = [];
+  manualPage.value = 1;
+  saveManualStore();
+}
 
 /* ---------- 真实接口状态 ---------- */
 const sources = ref<CrawlExternalApi.SourceItem[]>([]);
@@ -62,23 +119,16 @@ const sourceOptions = computed(() =>
     .map((s) => ({ label: (s.sourceName || s.sourceCode) + '（' + s.sourceCode + '）', value: s.sourceCode! })),
 );
 /** 顶部选项卡：tasks=任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
-const activeTab = ref<'tasks' | 'tests' | 'manual' | 'jobs'>('tasks');
+const activeTab = ref<'tasks' | 'manual' | 'jobs'>('tasks');
 /** 全部源任务总数（后端 total；KPI 与 tab 徽标显示真实总数，不再“首 20 条误导”） */
 const taskTotal = ref(0);
 const kpis = computed(() => ({
   sched: taskTotal.value,
-  tests: backendTests.value.length,
   manual: manualRuns.value.length,
   jobs: jobs.value.length,
 }));
-const filterSource = ref<string | undefined>(undefined);
-const filterStatus = ref<string | undefined>(undefined);
 const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ label: m.text, value }));
 
-const schedTasks = ref<CrawlExternalApi.TaskItem[]>([]);
-const schedPage = ref(1);
-const schedEnd = ref(false);
-const schedLoading = ref(false);
 
 /* ========== 整页三级导航状态（2026-09-10：任务器=信息源；信息源卡墙→该源任务条(筛选/分页/总数)→任务详情整页 上一条/下一条；任务详情不再用右侧抽屉） ========== */
 /** home=工作台 / taskDetail=任务详情整页 */
@@ -90,6 +140,8 @@ const tFilter = ref<{ status?: string; channelCode?: string; url?: string }>({})
 const tPage = ref(1);
 const tPageSize = ref(20);
 const tTotal = ref(0);
+/** 分页 total 文案（antd show-total 需函数） */
+const pagiShowTotal = (total: number, _range: [number, number]) => '共 ' + total + ' 条';
 const tRows = ref<CrawlExternalApi.TaskItem[]>([]);
 const tRowsLoading = ref(false);
 /** 详情当前任务在 tRows 中的游标 */
@@ -98,7 +150,6 @@ const detailCursorIdx = ref(-1);
 const srcCountMap = ref<Record<string, number>>({});
 /** 任务条时间排序：desc=最新在前(后端 id 倒序默认) / asc=最早在前(前端对当页升序) */
 const tSort = ref<'desc' | 'asc'>('desc');
-const backendTests = ref<CrawlExternalApi.TaskItem[]>([]);
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 
 const runBusy = ref(false);
@@ -132,47 +183,6 @@ async function loadSources() {
   }
 }
 
-async function loadSched(reset = false) {
-  if (reset) {
-    schedPage.value = 1;
-    schedTasks.value = [];
-    schedEnd.value = false;
-  }
-  if (schedEnd.value || schedLoading.value) return;
-  schedLoading.value = true;
-  try {
-    const params: CrawlExternalApi.TaskPageParams = {
-      pageNo: schedPage.value,
-      pageSize: 20,
-      sourceCode: filterSource.value,
-      status: filterStatus.value,
-      taskType: 'SCHEDULE',
-    };
-    const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[] };
-    const list = res.list || [];
-    schedTasks.value.push(...list);
-    if (list.length < 20) schedEnd.value = true;
-    else schedPage.value += 1;
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
-  } finally {
-    schedLoading.value = false;
-  }
-}
-
-async function loadBackendTests() {
-  try {
-    const res = (await fetchCrawlTaskPage({
-      pageNo: 1,
-      pageSize: 100,
-      taskType: 'TEST',
-    })) as unknown as { list?: CrawlExternalApi.TaskItem[] };
-    backendTests.value = res.list || [];
-  } catch {
-    backendTests.value = [];
-  }
-}
-
 /** 全源任务总数（pageSize=1 只读 total） */
 async function loadTaskTotalGlobal(): Promise<void> {
   try {
@@ -196,16 +206,13 @@ async function loadJobs() {
 
 function refreshAll() {
   void loadTaskTotalGlobal();
-  void loadSched(true);
-  void loadBackendTests();
   void loadJobs();
 }
 
 onMounted(() => {
+  manualRuns.value = loadManualStore();
   void loadSources();
   void loadTaskTotalGlobal();
-  void loadSched(true);
-  void loadBackendTests();
   void loadJobs();
 });
 
@@ -230,8 +237,8 @@ function onParsed(
     resp,
     occurredAt: Date.now(),
   });
+  saveManualStore();
   if (!ok) message.error(resp?.error || '解析未成功');
-  void loadBackendTests();
 }
 
 /* ---------- 立即爬取（源下拉触发；同步接口 + 120s 节流） ---------- */
@@ -277,7 +284,9 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
           title: '本轮获取完成',
           content: lines.length ? lines.join('<br/>') : '无栏目产出（检查源 enabled/栏目 URL）',
         });
-        void loadSched(true);
+        void loadTaskTotalGlobal();
+        void loadJobs();
+        void fillSourceCounts(sources.value);
       } catch (e) {
         message.error(e instanceof Error ? e.message : String(e));
       } finally {
@@ -293,7 +302,7 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
   try {
     await retryCrawlTask(row.id);
     message.success('已加入重试队列');
-    void loadSched(true);
+    void loadTaskTotalGlobal();
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));
   } finally {
@@ -307,20 +316,12 @@ async function openManualProcess(run: ManualRun) {
   processTask.value = undefined;
   processOpen.value = true;
 }
-async function openTaskProcess(row: CrawlExternalApi.TaskItem) {
-  processManual.value = undefined;
-  processTask.value = row;
-  processDetail.value = undefined;
-  processOpen.value = true;
-  if (row.id != null) {
-    try {
-      processDetail.value = await getCrawlTask(row.id);
-    } catch {
-      processDetail.value = undefined;
-    }
-  }
+/** 抽屉内删除当前留档（数据 + 本地存储；删除后关闭抽屉） */
+function deleteCurrentManual(): void {
+  if (!processManual.value) return;
+  dropManualRun(processManual.value.id);
+  processOpen.value = false;
 }
-
 /* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层，不嵌套 Drawer） ----------
  * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
  *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批爬虫任务 N 条(KPI+克制行) → 选中任务过程。
@@ -421,6 +422,7 @@ async function stepTask(dir: 1 | -1): Promise<void> {
 /** 从整页详情返回任务条列表（保持筛选/分页上下文） */
 function backFromDetail(): void {
   pageView.value = 'home';
+  activeTab.value = 'tasks';
   void loadTaskRows(tPage.value);
 }
 
@@ -600,6 +602,15 @@ function renderHtmlOf(r: ManualRun): string {
   return parts.join('');
 }
 
+/** 测试任务条“消息/明细”列文本（与任务一致的单行可读格式：出错给出错，否则 解析器 · 输入口径 · 统计） */
+function manualMsgText(r: ManualRun): string {
+  if (r.resp?.error) return r.resp.error;
+  const parser = r.parserName || r.parserCode || '—';
+  const input = [r.inputType, r.fileName].filter(Boolean).join(' · ') || '—';
+  const len = r.contentLength != null ? r.contentLength + ' 字符' : '—';
+  const dur = r.durationMs != null ? r.durationMs + ' ms' : '—';
+  return '解析器 ' + parser + ' · ' + input + ' · ' + len + ' · ' + dur;
+}
 function manualStatusTag(r: ManualRun) {
   const m = MANUAL_STATUS[r.status] || { text: r.status, color: 'default' };
   return m;
@@ -696,16 +707,14 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     <!-- KPI -->
     <div class="ind-kpis">
       <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
-      <div class="ind-kpi k-green"><div class="k-label">后端测试</div><div class="k-num">{{ kpis.tests }}</div><div class="k-note">taskType=TEST 服务端留痕</div></div>
-      <div class="ind-kpi k-orange"><div class="k-label">会话测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">本次会话手动录入（刷新清空）</div></div>
+      <div class="ind-kpi k-green"><div class="k-label">测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入 / 解析器测试回执（本地留档）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
 
     <!-- 选项卡 + 数据面板 -->
     <div class="ind-tabs">
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'tasks' }" @click="activeTab = 'tasks'">任务<span v-if="kpis.sched" class="cnt">{{ kpis.sched }}</span></button>
-      <button type="button" class="ind-tab" :class="{ on: activeTab === 'tests' }" @click="activeTab = 'tests'">后端测试任务<span v-if="kpis.tests" class="cnt">{{ kpis.tests }}</span></button>
-      <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">会话测试 · 解析留档<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
+      <button type="button" class="ind-tab" :class="{ on: activeTab === 'manual' }" @click="activeTab = 'manual'">测试<span v-if="kpis.manual" class="cnt">{{ kpis.manual }}</span></button>
       <button type="button" class="ind-tab" :class="{ on: activeTab === 'jobs' }" @click="activeTab = 'jobs'">采集批次<span v-if="kpis.jobs" class="cnt">{{ kpis.jobs }}</span></button>
     </div>
 
@@ -776,81 +785,48 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
               </div>
             </div>
             <div class="mt-3 flex justify-end">
-              <Pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" show-total show-size-changer :page-size-options="['20', '50', '100']" @change="loadTaskRows" />
+              <Pagination v-model:current="tPage" :total="tTotal" :page-size="tPageSize" :show-total="pagiShowTotal" show-size-changer :page-size-options="['20', '50', '100']" @change="loadTaskRows" />
             </div>
           </template>
         </template>
       </section>
 
 
-      <!-- ============ ② 后端测试任务 ============ -->
-      <section v-show="activeTab === 'tests'">
-        <div v-if="backendTests.length === 0" class="ind-empty">暂无后端测试任务（taskType=TEST）。手动录入后服务端留痕即出现于此。</div>
-        <article v-for="t in backendTests" :key="String(t.id)" class="ind-card">
-          <div class="ind-card-h">
-            <Tag color="purple">测试</Tag>
-            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-            <span class="cd-title truncate" :title="t.url || ''">{{ t.url || '手动录入' }}</span>
-            <span class="cd-meta">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
-          </div>
-          <div class="ind-card-b">
-            <div class="ind-kv">
-              <div class="kv"><span class="k">源</span><span class="v">{{ t.sourceCode || '—' }}</span></div>
-              <div class="kv"><span class="k">尝试</span><span class="v">{{ t.attempt ?? '—' }}</span></div>
-              <div class="kv"><span class="k">动作</span><span class="v weak"><a class="text-blue-700 font-bold" @click="openTaskProcess(t)">查看过程</a></span></div>
-            </div>
-          </div>
-        </article>
-      </section>
 
-      <!-- ============ ③ 会话测试 · 手动录入 ============ -->
+      <!-- ============ ② 测试（手动录入 / 解析器测试回执：任务条形式，点击行 → 抽屉看 源/提取/渲染 三段详情；localStorage 留档刷新保留，后端不落库） ============ -->
       <section v-show="activeTab === 'manual'">
-        <Empty v-if="!manualRuns.length" description="暂无手动/测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染·过程 的任务条" />
-        <article v-for="r in manualRuns" :key="r.id" class="ind-card">
-          <div class="ind-card-h">
-            <Tag color="purple">测试</Tag>
-            <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
-            <span class="cd-title truncate">{{ (r.resp?.title || '').trim() || '（无标题产出）' }}</span>
-            <span class="cd-meta">{{ fmtDt(r.occurredAt) }}</span>
-            <a class="text-sm font-bold text-blue-700" @click="openManualProcess(r)">过程</a>
-          </div>
-          <div class="grid grid-cols-3 max-lg:grid-cols-1">
-            <!-- ① 源 -->
-            <div class="p-4 border-r border-dashed border-gray-300">
-              <div class="ind-sec-t"><span>①</span> 源 · 源代码 / PDF</div>
-              <div class="ind-kv" style="grid-template-columns: 1fr;">
-                <div class="kv"><span class="k">输入口径</span><span class="v">{{ r.inputType || '—' }}{{ r.fileName ? ' · ' + r.fileName : '' }}</span></div>
-                <div v-if="r.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ r.contentLength }} 字符</span></div>
-                <div v-if="r.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="r.url">{{ r.url }}</span></div>
-              </div>
-              <div class="mt-2 text-xs font-medium text-gray-500">原文 HTML/PDF 完整内容由后端 FileApi 落库后经 fileUrl 提供（契约 TaskRunVO.raw），本会话仅保留解析回执。</div>
+        <div class="fp-guide">手动录入（右上按钮）或会话解析回执：任务条与「任务」页签同构 —— 状态 / 时间（可排序）/ # / 标题·输入 / 消息·明细；点行进详情看 源·提取·渲染。留档存于本地（最多 {{ MANUAL_STORE_MAX }} 条，刷新保留；后端 crawl-parser/test 不落库，仅本机可见）。</div>
+        <div v-if="!manualRuns.length" class="ind-empty">暂无测试任务条 —— 点右上「手动录入」，粘贴 HTML/JSON 或上传 PDF/HTML/JSON 文件，即刻生成一条含 源·提取·渲染 的任务条</div>
+        <template v-else>
+          <div class="fp-tbl">
+            <div class="fp-tr fp-th">
+              <span class="fp-td w-status">状态</span>
+              <span class="fp-td w-time fp-sortable" @click="toggleManualSort" :title="manualSort === 'desc' ? '当前：最新在前（点此改最早在前）' : '当前：最早在前（点此改最新在前）'">时间 {{ manualSort === 'desc' ? '↓' : '↑' }}</span>
+              <span class="fp-td w-id">留档 #</span>
+              <span class="fp-td flex-1">标题 / 输入</span>
+              <span class="fp-td w-msg">消息 / 明细</span>
             </div>
-            <!-- ② 提取内容 -->
-            <div class="p-4 border-r border-dashed border-gray-300">
-              <div class="ind-sec-t"><span>②</span> 提取内容</div>
-              <div class="ind-kv" style="grid-template-columns: 1fr;">
-                <div v-for="[k, v] in kvOf(r)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
-              </div>
-              <div v-if="extractedOf(r).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
-                <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
-                <div class="ind-kv" style="grid-template-columns: 1fr;">
-                  <div v-for="[k, v] in extractedOf(r)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
-                </div>
-              </div>
-              <div v-if="r.resp?.warnings?.length" class="mt-2">
-                <Tag v-for="(w, i) in r.resp.warnings" :key="i" color="orange" class="mr-1 mt-0.5">{{ w }}</Tag>
-              </div>
-            </div>
-            <!-- ③ 渲染内容 -->
-            <div class="p-4">
-              <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
-              <div class="ind-doc" v-html="renderHtmlOf(r)"></div>
+            <div v-for="(r, i) in manualShownRows" :key="r.id" class="fp-tr fp-row-click" @click="openManualProcess(r)">
+              <span class="fp-td w-status">
+                <Tag color="purple">测试</Tag>
+                <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
+              </span>
+              <span class="fp-td w-time">{{ fmtDt(r.occurredAt) || '—' }}</span>
+              <span class="fp-td w-id" :title="'本地留档序号（测试不落库）'">#{{ manualSeqOf(i) }}</span>
+              <span class="fp-td flex-1 fp-url" :title="r.url || ''">{{ (r.resp?.title || '').trim() || r.url || '（无标题产出，见详情）' }}</span>
+              <span class="fp-td w-msg fp-msg" :title="manualMsgText(r)">
+                {{ manualMsgText(r) }}
+              </span>
             </div>
           </div>
-        </article>
+          <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <span class="text-xs font-medium text-gray-500">本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）<a class="ml-3 text-blue-700 font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a></span>
+            <Pagination v-model:current="manualPage" :total="manualTotal" :page-size="manualPageSize" :show-total="pagiShowTotal" show-size-changer :page-size-options="['20', '50', '100']" @change="manualPageChange" />
+          </div>
+        </template>
       </section>
 
-      <!-- ============ ④ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
+      <!-- ============ ③ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
           <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
@@ -869,44 +845,70 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       </section>
     </div>
 
-    <!-- 过程抽屉 -->
-    <Drawer v-model:open="processOpen" title="任务过程" :width="720">
-      <div v-if="processTask" class="space-y-3">
+    <!-- 详情抽屉（任务过程 / 会话测试解析详情；会话=任务条行点击的三段详情，任务=回读明细） -->
+    <Drawer v-model:open="processOpen" :width="processTask ? 720 : 980" :title="processTask ? '任务过程' : '会话测试 · 解析详情'">
+      <!-- 会话测试解析详情（manual 任务条行点击 → 三段：源 · 提取 · 渲染 + 观测；含本会话本地留档 + 后端 TEST 留痕） -->
+      <div v-if="processManual" class="space-y-3">
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
-          <div class="ind-panel-b">
-            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
-            <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
-              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
-            </Descriptions>
+          <div class="ind-panel-h">
+            <span class="ind-panel-t">解析回执</span>
+            <span class="ind-panel-meta">parserCode={{ processManual.parserCode || '—' }} · {{ fmtDt(processManual.occurredAt) }}</span>
           </div>
-        </div>
-      </div>
-      <div v-else-if="processManual" class="space-y-3">
-        <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">会话测试过程</span></div>
           <div class="ind-panel-b">
             <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode }}</Descriptions.Item>
-              <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') }}</Descriptions.Item>
+              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') || '—' }}</Descriptions.Item>
               <Descriptions.Item label="来源 URL">{{ processManual.url || '—' }}</Descriptions.Item>
               <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? processManual.durationMs + ' ms' : '—' }}</Descriptions.Item>
-              <Descriptions.Item label="解析状态">{{ manualStatusTag(processManual).text }}</Descriptions.Item>
+              <Descriptions.Item label="解析状态"><Tag :color="manualStatusTag(processManual).color">{{ manualStatusTag(processManual).text }}</Tag></Descriptions.Item>
               <Descriptions.Item v-if="processManual.resp?.error" label="失败原因">{{ processManual.resp.error }}</Descriptions.Item>
             </Descriptions>
-            <div class="mt-3">
-              <div class="ind-sec-t"><span>STEP</span> 过程步骤</div>
-              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
-                <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
-                <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
-                <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
+            <div class="mt-2 flex justify-end">
+              <Button size="small" type="primary" ghost @click="deleteCurrentManual()">删除本条留档</Button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 max-lg:grid-cols-1 gap-3">
+          <!-- ① 源 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>①</span> 源 · 输入</div>
+            <div class="ind-kv" style="grid-template-columns: 1fr;">
+              <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ' · ' + processManual.fileName : '' }}</span></div>
+              <div v-if="processManual.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ processManual.contentLength }} 字符</span></div>
+              <div v-if="processManual.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="processManual.url">{{ processManual.url }}</span></div>
+            </div>
+          </div>
+          <!-- ② 提取内容 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>②</span> 提取内容</div>
+            <div class="ind-kv" style="grid-template-columns: 1fr;">
+              <div v-for="[k, v] in kvOf(processManual)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+            </div>
+            <div v-if="extractedOf(processManual).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
+              <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
+              <div class="ind-kv" style="grid-template-columns: 1fr;">
+                <div v-for="[k, v] in extractedOf(processManual)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
               </div>
+            </div>
+            <div v-if="processManual.resp?.warnings?.length" class="mt-2">
+              <Tag v-for="(w, i) in processManual.resp.warnings" :key="i" color="orange" class="mr-1 mt-0.5">{{ w }}</Tag>
+            </div>
+          </div>
+          <!-- ③ 渲染内容 -->
+          <div class="p-4 border border-dashed border-gray-300 rounded">
+            <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
+            <div class="ind-doc" v-html="renderHtmlOf(processManual)"></div>
+          </div>
+        </div>
+
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">过程步骤</span></div>
+          <div class="ind-panel-b">
+            <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+              <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
+              <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
+              <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
             </div>
             <div v-if="processManual.resp?.meta && Object.keys(processManual.resp.meta).length" class="mt-3">
               <div class="ind-sec-t"><span>OBS</span> 解析观测（meta）</div>
@@ -929,6 +931,25 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 任务过程（tasks/批次内任务行 → 回读明细） -->
+      <div v-else-if="processTask" class="space-y-3">
+        <div class="ind-panel">
+          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
+          <div class="ind-panel-b">
+            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+            <Descriptions :column="1" size="small" bordered>
+              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
+              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
+              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
+            </Descriptions>
           </div>
         </div>
       </div>
@@ -1009,7 +1030,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     </Drawer>
 
     <ManualModal :source-options="sourceOptions" @parsed="onParsed" />
-    <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadSched(true); }" />
+    <SourceDrawer v-model:open="sourceOpen" @changed="() => { void loadSources(); void loadTaskTotalGlobal(); void loadJobs(); }" />
     </template>
   </div>
 </template>
@@ -1048,6 +1069,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
 .fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
 .fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text); }
+.fp-td.w-parser { width: 140px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
 .fp-td.fp-url { color: #1f2937; font-weight: 600; }
 .fp-td.fp-msg { font-size: 12.5px; }
 .fp-sortable { cursor: pointer; user-select: none; }

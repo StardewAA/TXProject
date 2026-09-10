@@ -58,6 +58,19 @@ export namespace NoticeApi {
     projectCode?: string;
   }
 
+  /** 类型字段模板元数据（GET /bidding/notice/meta/types，2026-09-10 后端新增）：按类型渲染字段表单 */
+  export interface TypeFieldMeta {
+    code: string;
+    label: string;
+    required: boolean;
+  }
+  export interface NoticeTypeMeta {
+    type: NoticeTypeCode;
+    name: string;
+    dataset?: string;
+    fields: TypeFieldMeta[];
+  }
+
   export interface SaveParams {
     id?: number | string;
     noticeCode?: string;
@@ -100,6 +113,10 @@ export function publishNotice(id: number | string) {
 /** 契约：POST /bidding/notice/unpublish —— 撤下公告（PUBLISHED 转 UNPUBLISHED，状态机约束，历史版本保留可再发）；权限 bidding:notice:update；依据 04-全链路 §1.8 / 08 口径 §3、§6 */
 export function unpublishNotice(id: number | string) {
   return requestClient.post<boolean>('/bidding/notice/unpublish', undefined, { params: { id } });
+}
+/** 契约：GET /bidding/notice/meta/types —— 公告类型字段模板（必填优先+中文名）；权限 bidding:notice:query；依据 notice 域新文档 §3（2026-09-10 后端新增端点） */
+export function fetchNoticeTypeMeta() {
+  return requestClient.get<NoticeApi.NoticeTypeMeta[]>('/bidding/notice/meta/types');
 }
 /** 契约：DELETE /bidding/notice/delete —— 逻辑删除公告（仅草稿/已撤下态，发布/归档禁删，后端状态守卫）；权限 bidding:notice:delete；依据 04-全链路 §1.9 / 08 口径 §3、§8 */
 export function deleteNotice(id: number | string) {

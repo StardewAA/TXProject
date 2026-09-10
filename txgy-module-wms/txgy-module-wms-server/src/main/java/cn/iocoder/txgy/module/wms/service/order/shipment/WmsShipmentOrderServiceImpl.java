@@ -2,6 +2,9 @@ package cn.iocoder.txgy.module.wms.service.order.shipment;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -23,7 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -38,6 +44,8 @@ import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.*;
 @Validated
 public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
 
+    public static final String PROCESS_KEY = "wms_shipment_approval";
+
     @Resource
     private WmsShipmentOrderMapper shipmentOrderMapper;
     @Resource
@@ -48,6 +56,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     private WmsMerchantService merchantService;
     @Resource
     private WmsInventoryService inventoryService;
+    @Resource
+    private BpmProcessInstanceApi processInstanceApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -57,7 +67,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
 
         // 2.1 插入出库单
         WmsShipmentOrderDO order = BeanUtils.toBean(createReqVO, WmsShipmentOrderDO.class);
-        order.setStatus(WmsOrderStatusEnum.PREPARE.getStatus());
+        order.setStatus(WmsOrderStatusEnum.PREPARE.getStatus())
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.NOT_START.getStatus());
         fillShipmentOrderTotal(order, createReqVO);
         shipmentOrderMapper.insert(order);
         // 2.2 插入出库单明细
@@ -69,7 +80,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void updateShipmentOrder(WmsShipmentOrderSaveReqVO updateReqVO) {
         // 1. 校验出库单保存数据
-        validateShipmentOrderPrepare(updateReqVO.getId());
+        validateShipmentOrderEditable(updateReqVO.getId());
         validateShipmentOrderSaveData(updateReqVO);
 
         // 2.1 更新出库单
@@ -94,6 +105,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
                 && ObjectUtil.notEqual(order.getStatus(), WmsOrderStatusEnum.CANCELED.getStatus())) {
             throw exception(SHIPMENT_ORDER_STATUS_NOT_DELETABLE);
         }
+        validateApprovalEditable(order);
 
         // 2.1 删除出库单
         shipmentOrderMapper.deleteById(id);
@@ -106,11 +118,19 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     public void completeShipmentOrder(Long id) {
         // 1.1 校验存在，且草稿
         WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        if (ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            throw exception(SHIPMENT_ORDER_APPROVAL_NOT_APPROVED);
+        }
+        completeApprovedShipmentOrder(order);
+    }
+
+    private void completeApprovedShipmentOrder(WmsShipmentOrderDO order) {
         // 1.2 校验出库单明细存在
-        List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService.validateShipmentOrderDetailListExists(id);
+        List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
+                .validateShipmentOrderDetailListExists(order.getId());
 
         // 2. 完成出库单
-        if (shipmentOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),
+        if (shipmentOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(),
                 new WmsShipmentOrderDO().setStatus(WmsOrderStatusEnum.FINISHED.getStatus())) == 0) {
             throw exception(SHIPMENT_ORDER_STATUS_NOT_PREPARE);
         }
@@ -121,9 +141,55 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public String submitShipmentOrderApproval(Long userId, Long id) {
+        WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        validateApprovalEditable(order);
+        List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
+                .validateShipmentOrderDetailListExists(id);
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("orderId", order.getId());
+        variables.put("orderNo", order.getNo());
+        variables.put("warehouseId", order.getWarehouseId());
+        variables.put("merchantId", order.getMerchantId());
+        variables.put("totalQuantity", order.getTotalQuantity());
+        variables.put("totalPrice", order.getTotalPrice());
+        variables.put("detailCount", details.size());
+        String processInstanceId = processInstanceApi.createProcessInstance(userId,
+                new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
+                        .setBusinessKey(String.valueOf(id)).setVariables(variables)).getCheckedData();
+        shipmentOrderMapper.updateById(new WmsShipmentOrderDO().setId(id)
+                .setProcessInstanceId(processInstanceId)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.RUNNING.getStatus())
+                .setApprovalTime(null).setApprovalReason(null));
+        return processInstanceId;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateShipmentOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason) {
+        if (!BpmProcessInstanceStatusEnum.isProcessEndStatus(status)) {
+            return;
+        }
+        WmsShipmentOrderDO order = validateShipmentOrderExists(id);
+        if (ObjectUtil.notEqual(order.getProcessInstanceId(), processInstanceId)
+                || ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.RUNNING.getStatus())) {
+            return;
+        }
+        int updateCount = shipmentOrderMapper.updateApprovalResultIfRunning(id, processInstanceId,
+                BpmProcessInstanceStatusEnum.RUNNING.getStatus(), new WmsShipmentOrderDO()
+                        .setApprovalStatus(status).setApprovalTime(LocalDateTime.now()).setApprovalReason(reason));
+        if (updateCount > 0 && ObjectUtil.equal(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            completeApprovedShipmentOrder(order);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void cancelShipmentOrder(Long id) {
         // 1. 校验存在，且草稿
-        validateShipmentOrderPrepare(id);
+        WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        validateApprovalEditable(order);
 
         // 2. 作废出库单
         if (shipmentOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),
@@ -218,6 +284,21 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
             throw exception(SHIPMENT_ORDER_STATUS_NOT_PREPARE);
         }
         return order;
+    }
+
+    private WmsShipmentOrderDO validateShipmentOrderEditable(Long id) {
+        WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        validateApprovalEditable(order);
+        return order;
+    }
+
+    private void validateApprovalEditable(WmsShipmentOrderDO order) {
+        if (ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.RUNNING.getStatus())) {
+            throw exception(SHIPMENT_ORDER_APPROVAL_RUNNING);
+        }
+        if (ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            throw exception(SHIPMENT_ORDER_APPROVAL_NOT_EDITABLE);
+        }
     }
 
     /**

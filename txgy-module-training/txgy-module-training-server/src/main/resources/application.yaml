@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: training-server
+  profiles:
+    active: local
+  main:
+    allow-circular-references: true
+    allow-bean-definition-overriding: true
+  config:
+    import:
+      - optional:classpath:application-${spring.profiles.active}.yaml
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml
+  # 资源中心大文件上传（视频 ≤500MB）
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+
+server:
+  port: 48094
+
+logging:
+  file:
+    name: ${user.home}/logs/${spring.application.name}.log
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+txgy:
+  info:
+    version: 1.0.0
+    base-package: cn.iocoder.txgy.module.training
+  web:
+    admin-ui:
+      url: http://localhost:5173
+  swagger:
+    title: 云培训学院
+    description: 云培训学院管理后台接口
+    version: ${txgy.info.version}
+  tenant:
+    enable: true
+    ignore-urls:
+      - /admin-api/training/live-media/hook
+      - /admin-api/training/live-media/authorize
+      - /training/live-media/hook
+      - /training/live-media/authorize
+      - /training/document/preview
+      - /training/video/play
+      # 模块九：证书公开验真免登录接口（公共 H5 无租户头，两种前缀写法都注册以防框架差异）
+      - /training/analytics/cert-verify/public
+      - /admin-api/training/analytics/cert-verify/public
+  # 资源中心本地文件存储根目录（容器内通过 RESOURCE_UPLOAD_DIR=/app/uploads 覆盖）
+  resource:
+    upload-dir: ${RESOURCE_UPLOAD_DIR:./uploads}
+
+# AI 大模型（考试题库：文档导入自动提取试题）
+# 支持任意 OpenAI 兼容接口：DeepSeek / 豆包（火山方舟）/ 通义 / 月之暗面 等
+# 未配置 api-key 时自动降级为本地规则解析，不影响功能可用性
+training:
+  ai:
+    enabled: ${TRAINING_AI_ENABLED:false}
+    provider: ${TRAINING_AI_PROVIDER:deepseek}
+    base-url: ${TRAINING_AI_BASE_URL:https://api.deepseek.com}
+    chat-path: ${TRAINING_AI_CHAT_PATH:/chat/completions}
+    api-key: ${TRAINING_AI_API_KEY:}
+    model: ${TRAINING_AI_MODEL:deepseek-chat}
+    timeout-ms: ${TRAINING_AI_TIMEOUT_MS:60000}
+    max-text-length: ${TRAINING_AI_MAX_TEXT_LENGTH:12000}
+    max-questions: ${TRAINING_AI_MAX_QUESTIONS:30}
+
+debug: false

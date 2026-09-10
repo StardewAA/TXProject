@@ -68,11 +68,16 @@ export const PAYLOAD_LABEL: Record<string, string> = {
 export const UNKNOWN_FIELD_LABEL = '（未收录标签）';
 
 const p2 = (n: number): string => String(n).padStart(2, '0');
-/** 字段值格式化：14 位 yyyyMMddHHmmss / epoch 毫秒 → yyyy-MM-dd HH:mm；其余原样 */
+/** 字段值格式化：ISO yyyy-MM-ddTHH:mm(:ss) / 14 位 yyyyMMddHHmmss / epoch 毫秒 → yyyy-MM-dd HH:mm；其余原样 */
 export function fmtFieldValue(v: unknown): string {
   if (v === null || v === undefined) return '';
   const s = String(v).trim();
   if (!s || s === 'null' || s === 'undefined') return '';
+  // ISO 时间（yyyy-MM-ddTHH:mm:ss，后端 2026-09-10 联调口径，见 notice 域联调文档 §4）
+  const iso = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  if (iso) {
+    return iso[1] + '-' + iso[2] + '-' + iso[3] + ' ' + iso[4] + ':' + iso[5];
+  }
   if (/^\d{14}$/.test(s)) {
     const d = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), Number(s.slice(8, 10)), Number(s.slice(10, 12)));
     if (!Number.isNaN(+d)) return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());

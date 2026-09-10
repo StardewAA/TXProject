@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.txgy.framework.datapermission.core.util.DataPermissionUtils;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.txgy.module.system.dal.dataobject.user.AdminUserDO;
@@ -35,6 +36,14 @@ public class AdminUserApiImpl implements AdminUserApi {
     @Override
     @DataPermission(enable = false) // 忽略数据权限，避免因为过滤，导致无法查询用户。类似：https://github.com/YunaiV/ruoyi-vue-pro/issues/1051
     public CommonResult<AdminUserRespDTO> getUser(Long id) {
+        AdminUserDO user = userService.getUser(id);
+        return success(BeanUtils.toBean(user, AdminUserRespDTO.class));
+    }
+
+    @Override
+    @TenantIgnore
+    @DataPermission(enable = false)
+    public CommonResult<AdminUserRespDTO> getUserIgnoreTenant(Long id) {
         AdminUserDO user = userService.getUser(id);
         return success(BeanUtils.toBean(user, AdminUserRespDTO.class));
     }
@@ -82,6 +91,16 @@ public class AdminUserApiImpl implements AdminUserApi {
     }
 
     @Override
+    @TenantIgnore
+    @DataPermission(enable = false)
+    public CommonResult<List<AdminUserRespDTO>> getUserListIgnoreTenant(Collection<Long> ids) {
+        return success(DataPermissionUtils.executeIgnore(() -> {
+            List<AdminUserDO> users = userService.getUserList(ids);
+            return BeanUtils.toBean(users, AdminUserRespDTO.class);
+        }));
+    }
+
+    @Override
     public CommonResult<List<AdminUserRespDTO>> getUserListByDeptIds(Collection<Long> deptIds) {
         List<AdminUserDO> users = userService.getUserListByDeptIds(deptIds);
         return success(BeanUtils.toBean(users, AdminUserRespDTO.class));
@@ -101,6 +120,14 @@ public class AdminUserApiImpl implements AdminUserApi {
 
     @Override
     public CommonResult<Boolean> validateUserList(Collection<Long> ids) {
+        userService.validateUserList(ids);
+        return success(true);
+    }
+
+    @Override
+    @TenantIgnore
+    @DataPermission(enable = false)
+    public CommonResult<Boolean> validateUserListIgnoreTenant(Collection<Long> ids) {
         userService.validateUserList(ids);
         return success(true);
     }

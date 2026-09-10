@@ -105,6 +105,11 @@ onMounted(() => void load());
         <div class="n-name">本平台发布</div>
         <div class="n-sub">招标人公告 · 大厅公开</div>
       </div>
+      <div class="nav-item pub kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/publish')" @keydown.enter="goNav('/portal/bidding/publish')">
+        <span class="ic">✎</span>
+        <div class="n-name">发布公告</div>
+        <div class="n-sub">起草 · 四类公告 · 发布/撤下</div>
+      </div>
       <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/subscription')" @keydown.enter="goNav('/portal/bidding/subscription')">
         <span class="ic">✦</span>
         <div class="n-name">我的关注</div>
@@ -182,6 +187,10 @@ onMounted(() => void load());
 .nav-item .n-name { font-weight: 600; margin-top: 4px; }
 .nav-item .n-sub { font-size: 12px; color: #909399; margin-top: 2px; }
 .nav-item.on { border-color: #17539a; background: #eff4ff; }
+.nav-item.pub { border-color: #b45309; background: #fff7ed; }
+.nav-item.pub:hover { border-color: #b45309; }
+.nav-item.pub .ic { color: #b45309; }
+.nav-item.pub .n-name { color: #92400e; }
 .flag { position: absolute; }
 .panel { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 16px 18px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }

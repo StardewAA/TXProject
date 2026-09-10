@@ -4,7 +4,9 @@
     按自然人账号 user_id 各自维护（A 方案：资格归企业、操作与跟踪归个人）；不做企业级合并。
     阶段字典：INTENTION → QUALIFICATION_REVIEW → PENDING_BID → BIDDED / TERMINATED。
   现状/理由：后端状态机尚未实现（报名/审核/上传标书等写端点不存在，bidding:process-track:* 待上线），
-    v1 阶段保存在 localStorage（键 txgy.bidding.processTrack.v1），真实数据仅 fetchMyFollowPage 拉“我的关注”。
+    v1 阶段保存在 localStorage（键按 租户:用户 维度隔离：txgy.bidding.processTrack.v1.{tenantId}:{userId}），
+    真实数据仅 fetchMyFollowPage 拉“我的关注”。修复记录：早期版本用无维度全局键（txgy.bidding.processTrack.v1），
+    同浏览器切换账号会读到他人（如超管演示）的本地留档；现按 accessStore.tenantId + userStore.userInfo.userId 隔离，旧全局键数据不再读取。
     页面动作按钮为占位：点击提示“该能力待上线”，不得静默失败或伪造服务端状态（09 §6/§8）。
   依据（法规，含文件类型）：
     · 电子招标投标办法 第9条（部门规章/政府文件）——市场主体免费注册登录获取依法公开信息（关注/浏览前置）；
@@ -21,10 +23,22 @@ import { computed, onMounted, ref } from 'vue';
 
 import { Button, Drawer, Empty, Input, message, Modal, Radio, Select, Space, Tag } from 'ant-design-vue';
 
+import { useAccessStore, useUserStore } from '@vben/stores';
+
 import { fetchMyFollowPage } from '#/api/bidding/processTrack';
 
 /* ============ 常量与状态字典 ============ */
-const LS_KEY = 'txgy.bidding.processTrack.v1';
+/* 本地留档键：按 租户:登录用户 维度隔离，避免同浏览器跨账号串数据（修复记录：
+ * 早前无维度全局键致延河热力账号读到 admin 演示数据；旧键 txgy.bidding.processTrack.v1 不再读取）。
+ * 真实数据源为服务端“我的关注”（user_id 隔离），本地仅演示留档。 */
+const LS_KEY_BASE = 'txgy.bidding.processTrack.v1';
+function lsKey(): string {
+  const accessStore = useAccessStore();
+  const userStore = useUserStore();
+  const tenant = accessStore.tenantId ?? 'anon';
+  const userId = userStore.userInfo?.userId ?? 'anon';
+  return LS_KEY_BASE + '.' + tenant + ':' + userId;
+}
 const STATE_TEXT: Record<string, string> = {
   INTENTION: '意向投标',
   QUALIFICATION_REVIEW: '资质审核',
@@ -88,11 +102,11 @@ const detail = computed(() => tracks.value.find((t) => t.id === detailId.value))
 
 /* ============ 持久化 ============ */
 function save() {
-  localStorage.setItem(LS_KEY, JSON.stringify(tracks.value));
+  localStorage.setItem(lsKey(), JSON.stringify(tracks.value));
 }
 function load() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(lsKey());
     tracks.value = raw ? (JSON.parse(raw) as ProcessTrackApi.Track[]) : [];
   } catch {
     tracks.value = [];

@@ -11,12 +11,19 @@
 -->
 <script lang="ts" setup>
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
+import type { NoticeExternalApi } from '#/api/bidding/noticeExternal';
 
 import { computed, ref, watch } from 'vue';
 
 import { Button, message, Modal, Select, Tag } from 'ant-design-vue';
 
 import { fetchCrawlSourcePage, fetchCrawlTaskPage, getCrawlTask, retryCrawlTask } from '#/api/bidding/crawlExternal';
+import { getManagePage } from '#/api/bidding/noticeExternal';
+
+import { useVbenModal } from '@vben/common-ui';
+
+import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
+import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
 
 import { TASK_STATUS_MAP, fmtDt, tagOf } from '../../shared';
 
@@ -62,6 +69,8 @@ async function load() {
   try {
     const got = (await getCrawlTask(row.id)) as unknown as CrawlExternalApi.TaskItem;
     full.value = got || row;
+    // SUCCESS 任务：按 sourceCode+origUrl 定位产出入库的外部公告（段6 成品预览）
+    if (got?.status === 'SUCCESS') void findProduct();
   } catch (e) {
     full.value = row;
     message.error(e instanceof Error ? e.message : String(e));
@@ -106,6 +115,12 @@ async function loadSameBatch(jobId: number | string) {
 
 watch(() => props.task, () => void load(), { immediate: true });
 
+/** 成品预览弹窗（外部公告管理预览：默认落在“前台观感”页签） */
+const [NoticeDetail, noticeDetailApi] = useVbenModal({
+  connectedComponent: NoticeDetailModal,
+  destroyOnClose: true,
+});
+
 /** FAILED 死信重试（attempt 归零回 PENDING） */
 async function handleRetry() {
   const id = t.value?.id;
@@ -146,6 +161,63 @@ const previewText = computed(() => {
 function openPreview(k: BlobKey) {
   if (previewOptions.value.some((o) => o.value === k)) previewKey.value = k;
   previewOpen.value = true;
+}
+
+/* ===== 段6 产出自查：任务 SUCCESS → 按 sourceCode+origUrl 在 notice-external 管理列表定位本条公告 ===== */
+const productState = ref<'idle' | 'loading' | 'none' | 'found' | 'error'>('idle');
+const productErr = ref('');
+const productRows = ref<NoticeExternalApi.ManageItem[]>([]);
+const productLoading = ref(false);
+
+/** URL 归一：去首尾空白（站点外壳页 hash/query 差异由后端入库时已规整，前端只做基本 trim 兜底） */
+const normUrl = (u?: string | null): string => (u || '').trim();
+
+/** 本条任务对应的外部公告候选：payload 快照 URL / 任务行 url 任一同源即认（origUrl 即采集详情 URL，后端 ingest 同值写入） */
+async function findProduct() {
+  productState.value = 'idle';
+  productRows.value = [];
+  productErr.value = '';
+  const code = src.value?.sourceCode || props.task?.sourceCode;
+  if (!code) return;
+  const tUrl = normUrl(t.value?.url);
+  const pUrl = normUrl(payloadObj.value?.url);
+  if (!tUrl && !pUrl) {
+    productState.value = 'none';
+    return;
+  }
+  productLoading.value = true;
+  productState.value = 'loading';
+  try {
+    const res = (await getManagePage({ sourceCode: code, pageNo: 1, pageSize: 100 })) as unknown as {
+      list?: NoticeExternalApi.ManageItem[];
+      total?: number;
+    };
+    const list = res.list || [];
+    const hit = list.filter((row) => {
+      const o = normUrl(row.origUrl);
+      return o && (o === tUrl || o === pUrl);
+    });
+    // 同源未按 URL 精确命中时：最近 20 条内标题兜底（爬取端与入库标题可能略有差异，仅展示候选供人工比对）
+    const titleHit = hit.length
+      ? []
+      : list.slice(0, 20).filter((row) => {
+          const a = (row.title || '').replace(/\s+/g, '').replace(/[/／]/g, '');
+          const b = (payloadObj.value?.title || '').replace(/\s+/g, '').replace(/[/／]/g, '');
+          return b && a === b;
+        });
+    productRows.value = hit.length ? hit : titleHit;
+    productState.value = productRows.value.length ? 'found' : 'none';
+  } catch (e) {
+    productErr.value = e instanceof Error ? e.message : String(e);
+    productState.value = 'error';
+  } finally {
+    productLoading.value = false;
+  }
+}
+
+/** 打开成品预览（外部公告管理详情，默认页签=前台观感：审核发布后门户展示形态） */
+function openProduct(row: NoticeExternalApi.ManageItem) {
+  noticeDetailApi.setData({ id: row.id, title: row.title }).open();
 }
 
 async function copyText(text: string | undefined) {
@@ -300,12 +372,41 @@ function fmtBytes(n: number | undefined): string {
       </div>
     </div>
 
-    <!-- 段5：落库产出（占位：task → notice 回指待后端补） -->
+    <!-- 段6：落库 / 产出（notice-external 成品定位：SUCCESS 时按 sourceCode + origUrl 匹配入库公告，可看“前台观感”） -->
     <div class="tc-step">
-      <div class="tc-step-t">⑥ 落库 / 产出（外部公告关联）</div>
-      <div class="tc-step-b tc-hint">
-        本条任务抓取/解析后的结构化产出入库外部公告 NEW 待审（notice-external 域）。
-        任务 → 公告的产出回指（noticeId / origUrl 反查）由后端在任务链写入后补齐，届时在此展示该条公告的标题/落库时间/审核入口。
+      <div class="tc-step-t">⑥ 落库 / 产出（外部公告 · 成品）
+        <template v-if="productState === 'found'">
+          <a class="tc-act" href="#" @click.prevent="findProduct">刷新</a>
+        </template>
+      </div>
+      <div class="tc-step-b">
+        <template v-if="productLoading">
+          <div class="tc-hint">在外部公告库中定位本条任务产出…</div>
+        </template>
+        <template v-else-if="productState === 'found'">
+          <div class="tc-hint">任务抓取内容已入库（notice-external 域），点击「查看成品」看它在门户大厅发布后的样子：</div>
+          <div v-for="r in productRows.slice(0, 5)" :key="String(r.id)" class="tc-prod">
+            <span class="tc-prod-title truncate" :title="r.title || ''">{{ r.title || '（无标题）' }}</span>
+            <span class="tc-prod-tags">
+              <Tag v-if="r.status" :color="tagOf(EXT_STATUS_MAP, r.status)?.color || 'default'">{{ tagOf(EXT_STATUS_MAP, r.status)?.text || r.status }}</Tag>
+              <Tag v-if="r.auditStatus" :color="tagOf(AUDIT_MAP, r.auditStatus)?.color || 'default'">{{ tagOf(AUDIT_MAP, r.auditStatus)?.text || r.auditStatus }}</Tag>
+            </span>
+            <a class="tc-act tc-prod-go" href="#" @click.prevent="openProduct(r)">查看成品 ▸</a>
+          </div>
+          <div class="tc-hint" v-if="productRows.length > 5">（仅列前 5 条；同源同日多条同名公告属正常，可逐条比对）</div>
+        </template>
+        <template v-else-if="productState === 'none'">
+          <div class="tc-hint">
+            {{ t.status === 'SUCCESS' ? '任务执行成功，但在外部公告库未按 URL 匹配到对应产出。' : '任务未成功执行，暂无落库产出。' }}
+            落库仅在 SUCCESS 且后端投递链路完成时发生；若已成功仍未见，可到「外部公告审核管理」按来源站人工核查，或等后端 task→notice 回指补齐后此处自动直达。
+          </div>
+        </template>
+        <template v-else-if="productState === 'error'">
+          <div class="tc-hint">产出定位失败：{{ productErr || '接口异常' }}（管理列表需 bidding:notice-external:update 权限）</div>
+        </template>
+        <template v-else>
+          <div class="tc-hint">本条任务执行成功后，自动在外部公告库中定位产出入库的成品（notice-external 域 → 审核 → 大厅）。</div>
+        </template>
       </div>
     </div>
 
@@ -327,6 +428,9 @@ function fmtBytes(n: number | undefined): string {
     </div>
   </div>
 
+  <!-- 成品预览（外部公告管理详情，前台观感页签） -->
+  <NoticeDetail />
+
   <!-- 全屏完整预览 Modal（下拉切换数据源） -->
   <Modal v-model:open="previewOpen" :width="'92vw'" :body-style="{ maxHeight: '78vh', overflow: 'auto', padding: 0 }" :footer="null">
     <div class="pv-head">
@@ -340,6 +444,10 @@ function fmtBytes(n: number | undefined): string {
 
 <style scoped>
 .tc-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 10px 2px; }
+.tc-prod { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--ind-line, #e5e7eb); border-radius: 6px; margin-bottom: 6px; background: #fff; font-size: 13px; }
+.tc-prod-title { flex: 1; min-width: 0; font-weight: 600; color: var(--ind-ink-text, #1f2937); }
+.tc-prod-tags { display: flex; gap: 4px; flex: none; }
+.tc-prod-go { flex: none; font-weight: 700; }
 .tc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .tc-head-id { font-size: 16px; font-weight: 800; color: var(--ind-ink-text, #1f2937); }
 .tc-ops { margin-left: auto; }

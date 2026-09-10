@@ -110,7 +110,7 @@ const viewHtml = computed(() => {
     const h = blocksToHtml(trimLead(parseBlocks(d.bodyBlocksJson), d.title));
     if (h) return h;
   }
-  return prettyNoticeHtml(d.contentHtmlSafe);
+  return prettyNoticeHtml(d.contentHtmlSafe, d.title);
 });
 const hasViewBody = computed(() => !!viewHtml.value);
 
