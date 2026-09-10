@@ -334,6 +334,9 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_PROJECT_MILESTONE_NAME_DUPLICATE = new ErrorCode(1_040_509_121, "该里程碑已存在于当前项目中");
     ErrorCode PRO_PROJECT_FILE_NOT_EXISTS = new ErrorCode(1_040_509_130, "项目附件不存在");
     ErrorCode PRO_PROJECT_FILE_NAME_EMPTY = new ErrorCode(1_040_509_131, "文件名称不能为空");
+    // ========== MES 项目同步任务（销售订单审批通过 → 自动生成项目）（1-040-509-140） ==========
+    ErrorCode PRO_PROJECT_SYNC_TASK_NOT_EXISTS = new ErrorCode(1_040_509_140, "项目同步任务不存在");
+    ErrorCode PRO_PROJECT_SALE_ORDER_NOT_APPROVED = new ErrorCode(1_040_509_141, "销售订单校验失败：{}");
 
     // ========== MES 质量管理-质检方案（1-040-600-000） ==========
     ErrorCode QC_TEMPLATE_NOT_EXISTS = new ErrorCode(1_040_600_000, "质检方案不存在");
