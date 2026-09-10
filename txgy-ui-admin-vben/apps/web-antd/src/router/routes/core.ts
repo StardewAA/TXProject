@@ -214,6 +214,28 @@ const coreRoutes: RouteRecordRaw[] = [
       },
     ],
   },
+  /** 招投标业务链工作台（VO 设计稿）：后端业务接口/菜单未就绪期间的可用稿，字段严格照录 VO 规范。
+   *  核心路由不走权限校验、直接显示在菜单中，便于评审；后端接口与菜单就绪后可移除本入口。 */
+  {
+    component: BasicLayout,
+    meta: {
+      hideInBreadcrumb: true,
+      icon: 'lucide:workflow',
+      order: 3,
+      title: '招投标业务链（VO 设计稿）',
+    },
+    name: 'BiddingChain',
+    path: '/bidding-chain',
+    redirect: '/bidding-chain/workbench',
+    children: [
+      {
+        name: 'BiddingChainWorkbench',
+        path: 'workbench',
+        component: () => import('#/views/bidding/chain/index.vue'),
+        meta: { icon: 'lucide:list-tree', title: '业务链工作台' },
+      },
+    ],
+  },
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };
