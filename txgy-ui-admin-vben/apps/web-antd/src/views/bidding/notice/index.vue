@@ -33,7 +33,7 @@ import { uploadAttachment } from '../vo/attachmentUpload';
 import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
 import { stageItems, type AttachmentRecord } from '../vo/attachmentStages';
 import { PLATFORM_MAINTAINED_CODES } from '../vo/voFieldControl';
-import { loadDraft, type ChainRecord } from '../vo/voDraft';
+import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
 import NoticeHtmlView from './NoticeHtmlView.vue';
@@ -69,8 +69,27 @@ const NOTICE_ATTACH_STAGE: Record<string, string> = {
   WIN_CANDIDATE_PUBLICITY: 'NOTICE_CANDIDATE',
   WIN_RESULT_PUBLICITY: 'NOTICE_RESULT',
 };
-/** 业务链草稿（项目→招标项目→标段）：公告的招标项目编号/标段编号/标段数量由此带出 */
-const chain = ref(loadDraft());
+/** 业务链选项（项目→招标项目→标段）：公告的招标项目编号/标段编号/标段数量由此带出。
+ *  数据源已切换为后端真实台账：GET /bidding/tender-project/page 与 /bidding/bid-section/page。 */
+const tenderProjects = ref<ProjectApi.TenderProject[]>([]);
+const sections = ref<ProjectApi.BidSection[]>([]);
+const chainLoading = ref(false);
+async function loadChainOptions(): Promise<void> {
+  chainLoading.value = true;
+  try {
+    const [tp, bs] = await Promise.all([
+      getTenderProjectPage({ pageNo: 1, pageSize: 200 }),
+      getBidSectionPage({ pageNo: 1, pageSize: 500 }),
+    ]);
+    tenderProjects.value = tp?.list ?? [];
+    sections.value = bs?.list ?? [];
+  } catch {
+    tenderProjects.value = [];
+    sections.value = [];
+  } finally {
+    chainLoading.value = false;
+  }
+}
 const fmtBytes = (n?: number): string => {
   if (n === undefined || n === null) return '';
   if (n < 1024) return n + ' B';
@@ -218,12 +237,13 @@ const typeLabel = computed(() => currentTypeMeta.value?.name || payloadMeta.valu
 
 /* ===== 业务链带值（先项目→招标项目→标段，再对标准段发公告）=====
  * 公告数据集的 TENDER_PROJECT_CODE/BID_SECTION_CODES/NOTICE_BID_NUM 由上游带出，用户不手抄编号。
- * 数据源：业务链工作台草稿（voDraft，本地）；后端接口就绪后改读接口即可。 */
+ * 数据源：后端真实台账（/bidding/tender-project/page、/bidding/bid-section/page）；
+ * 前台「项目公告管理」项目→招标项目→标段→公告 的同一套数据，避免本地草稿与台账两套口径。 */
 const noticeStage = computed(() => NOTICE_ATTACH_STAGE[form.noticeType] ?? 'NOTICE_TENDER');
-const chainTenderProjects = computed<ChainRecord[]>(() => chain.value.tenderProjects);
-const chainSections = computed<ChainRecord[]>(() => {
+const chainTenderProjects = computed<ProjectApi.TenderProject[]>(() => tenderProjects.value);
+const chainSections = computed<ProjectApi.BidSection[]>(() => {
   const code = payloadValues.value.TENDER_PROJECT_CODE ?? '';
-  return chain.value.bidSections.filter((s) => !code || (s.fields.TENDER_PROJECT_CODE ?? '') === code);
+  return sections.value.filter((s) => !code || (s.tenderProjectCode ?? '') === code);
 });
 /** 已选标段编号（BID_SECTION_CODES 半角分号分隔，规范口径） */
 const selectedSectionCodes = computed<string[]>(() =>
@@ -236,29 +256,29 @@ const noticeAttachMissing = computed(() =>
     .map((it) => it.label),
 );
 /** 招标项目选项文案（编号 + 名称） */
-function tenderProjectLabel(r: ChainRecord): string {
-  const code = r.fields.TENDER_PROJECT_CODE ?? '';
-  const name = r.fields.TENDER_PROJECT_NAME ?? '';
+function tenderProjectLabel(r: ProjectApi.TenderProject): string {
+  const code = r.tenderProjectCode ?? '';
+  const name = r.tenderProjectName ?? '';
   return code ? code + (name ? ' · ' + name : '') : name || '（未命名招标项目）';
 }
 /** 标段选项文案（编号 + 名称） */
-function bidSectionLabel(r: ChainRecord): string {
-  const code = r.fields.BID_SECTION_CODE ?? '';
-  const name = r.fields.BID_SECTION_NAME ?? '';
+function bidSectionLabel(r: ProjectApi.BidSection): string {
+  const code = r.bidSectionCode ?? '';
+  const name = r.bidSectionName ?? '';
   return code ? code + (name ? ' · ' + name : '') : name || '（未命名标段）';
 }
 /** 选招标项目：带 TENDER_PROJECT_CODE，并清掉不属于该项目的标段选择 */
 function applyTenderProject(code: string): void {
-  const tp = chain.value.tenderProjects.find((t) => (t.fields.TENDER_PROJECT_CODE ?? '') === code);
+  const tp = tenderProjects.value.find((t) => (t.tenderProjectCode ?? '') === code);
   const kept = selectedSectionCodes.value.filter((sc) =>
-    chain.value.bidSections.some((s) => (s.fields.BID_SECTION_CODE ?? '') === sc && (s.fields.TENDER_PROJECT_CODE ?? '') === code),
+    sections.value.some((s) => (s.bidSectionCode ?? '') === sc && (s.tenderProjectCode ?? '') === code),
   );
   const next: Record<string, string> = { ...payloadValues.value, TENDER_PROJECT_CODE: code, BID_SECTION_CODES: kept.join(';') };
   if (kept.length) next.NOTICE_BID_NUM = String(kept.length);
   else delete next.NOTICE_BID_NUM;
   payloadValues.value = next;
   form.projectCode = code;
-  form.projectName = tp?.fields.TENDER_PROJECT_NAME ?? form.projectName ?? '';
+  form.projectName = tp?.tenderProjectName ?? form.projectName ?? '';
 }
 /** 选标段（可多选）：带 BID_SECTION_CODES（半角分号）与 NOTICE_BID_NUM（数量） */
 function applySections(codes: string[]): void {
@@ -307,7 +327,7 @@ const openCreate = () => {
   pdfSize.value = undefined;
   pdfUrl.value = '';
   noticeAttachments.value = [];
-  chain.value = loadDraft();
+  void loadChainOptions();
   editorOpen.value = true;
   void autoFillPublisher();
   void loadTypeMeta();
@@ -330,7 +350,7 @@ const openEdit = async (row: NoticeApi.Row) => {
   pdfFileName.value = '';
   pdfUrl.value = '';
   noticeAttachments.value = [];
-  chain.value = loadDraft();
+  void loadChainOptions();
   payloadValues.value = {};
   if (d.payload && typeof d.payload === 'object') {
     const flat: Record<string, string> = {};
@@ -664,10 +684,10 @@ onMounted(() => { load(); void fetchKpiCounts(); });
                 class="w-full"
                 show-search
                 option-filter-prop="label"
-                placeholder="选择业务链工作台已建的招标项目"
+                placeholder="选择已登记的招标项目（前台项目公告管理中创建）"
                 @update:value="(v) => applyTenderProject(String(v ?? ''))"
               >
-                <Select.Option v-for="t in chainTenderProjects" :key="t.id" :value="t.fields.TENDER_PROJECT_CODE || ''" :label="tenderProjectLabel(t)">
+                <Select.Option v-for="t in chainTenderProjects" :key="t.id" :value="t.tenderProjectCode || ''" :label="tenderProjectLabel(t)">
                   {{ tenderProjectLabel(t) }}
                 </Select.Option>
               </Select>
@@ -685,10 +705,10 @@ onMounted(() => { load(); void fetchKpiCounts(); });
                 mode="multiple"
                 :value="selectedSectionCodes"
                 class="w-full"
-                placeholder="选择标段（可多选）；未选到请先在业务链工作台建立标段"
+                placeholder="选择标段（可多选）；未选到请先在项目公告管理中建立标段"
                 @update:value="(v) => applySections((v as string[]) ?? [])"
               >
-                <Select.Option v-for="s in chainSections" :key="s.id" :value="s.fields.BID_SECTION_CODE || ''">
+                <Select.Option v-for="s in chainSections" :key="s.id" :value="s.bidSectionCode || ''">
                   {{ bidSectionLabel(s) }}
                 </Select.Option>
               </Select>
