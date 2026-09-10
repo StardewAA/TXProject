@@ -4,13 +4,15 @@
     ① bodyBlocksStatus=SUCCESS 且 bodyBlocksJson 非空 → 按结构化块渲染（heading/paragraph/table/list，02 §4）；
     ② 回退 contentHtmlSafe（后端 jsoup 白名单净化 HTML：p/h1~h6/table/… 保留，script/on*/style 剥除）；
       遗留“单一长段落拍平正文”由 prettyNoticeHtml 公文化切段兜底；
-  - PDF → 内嵌预览（pdfDownloadUrl，FileApi 签名地址回填后可预览）；
+  - PDF → 内嵌预览（后端字节流代理 /bidding/notice-external/pdf 公开免登；pdfDownloadUrl 签名地址优先）；
   - 仅简略信息 → 简略信息 + “前往原地址查看”。
   外链：一律经后端 /go 中转（origUrl 白名单校验，02 §3.3），前端不直接 window.open 外站。
   附件：downloadUrl=FileApi 签名下载；INFECTED 后端不下发链接（页面显示已拦截），PENDING 显示扫描中。
 -->
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useAppConfig } from '@vben/hooks';
+
 import { useRoute, useRouter } from 'vue-router';
 
 import { biddingConfig } from './config';
@@ -250,6 +252,20 @@ const bodyHtml = computed(() => {
 });
 const hasBodyHtml = computed(() => !!bodyHtml.value);
 const isPdf = computed(() => !hasBodyHtml.value && detail.value?.contentType === 'PDF');
+/* PDF 预览地址（两级）：
+   ① 后端字节流代理 GET /bidding/notice-external/pdf?id= —— 公开免登（@PermitAll @TenantIgnore）、
+      直接转发平台归档 PDF 字节流，前端 iframe src 直接用；后端注释明确"避免前端直连 infra 文件 URL（内网 host 不可达）"；
+   ② detail.pdfDownloadUrl（FileApi 签名地址，回填后可用）优先于①。
+   理由：此前只等 pdfDownloadUrl 回填，导致 contentType=PDF 的公告长期显示"源文件整理中"、无法预览。 */
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+const pdfFrameUrl = computed(() => {
+  const signed = cleanT(detail.value?.pdfDownloadUrl);
+  if (signed) return signed;
+  const nid = id.value;
+  if (!nid) return '';
+  return apiURL.replace(/\/$/, '') + '/bidding/notice-external/pdf?id=' + encodeURIComponent(nid);
+});
+const canPreviewPdf = computed(() => !!pdfFrameUrl.value);
 /** 附件区是否没有任何可下载链接（FileApi 签名地址尚未回填 / 数据源无附件样例，R6） */
 const noRealDownload = computed(
   () => !!detail.value?.attachments?.length && !detail.value.attachments.some((a) => a.downloadUrl),
@@ -445,14 +461,18 @@ onBeforeUnmount(() => {
       <div class="docx" v-dompurify-html="bodyHtml"></div>
     </div>
 
-    <!-- 形态 · PDF：内嵌预览（pdfDownloadUrl 回填后生效，R6） -->
+    <!-- 形态 · PDF：内嵌预览（后端字节流代理 /bidding/notice-external/pdf 公开免登，签名地址优先） -->
     <div v-else-if="isPdf" class="body-area">
       <div class="pdf-panel">
-        <div v-if="detail.pdfDownloadUrl" class="pdf-frame-wrap">
-          <iframe class="pdf-frame" :src="detail.pdfDownloadUrl" title="公告 PDF 预览"></iframe>
+        <div v-if="canPreviewPdf" class="pdf-frame-wrap">
+          <iframe class="pdf-frame" :src="pdfFrameUrl" title="公告 PDF 预览"></iframe>
+          <div class="sub pdf-actions">
+            <a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+            <a :href="pdfFrameUrl" download>下载</a>
+          </div>
         </div>
         <div v-else class="pdf-empty">
-          源文件整理中——PDF 归档（pdf_download_url）尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
+          源文件整理中——PDF 归档尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
           <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
         </div>
       </div>
