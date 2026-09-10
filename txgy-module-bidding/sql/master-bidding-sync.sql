@@ -821,8 +821,34 @@ SELECT r.id, m.id, '1', NOW(), '1', NOW(), b'0', 0
 FROM system_role r JOIN system_menu m ON m.id BETWEEN 6770 AND 6776
 WHERE r.id IN (1, 2);
 
+-- ========== ⑩ 原文下载限速闸（合规频控，2026-09-10） ==========
+-- 规范依据：《外部信息获取 v1.0》§六/§11（消费端执行与频控）；用户口径 2026-09-10：
+--   「下载器的时间间隔必须且只能作用于『下载公告原文文件』这一动作」「每次下载原文文件前必须强制休眠等待」
+--   「排队中的任务绝对不允许直接触发下载」。
+-- 业务目标：把"原文下载"间隔从进程内易失变量改为**库内原子占位**（条件 UPDATE）：
+--   进程重启不重置、多实例全局仍为每 interval 一次、且只在下真实下载时消耗间隔。
+-- 注意：缺此表时下载器**失败关闭**（拒绝下载并报错提示执行本脚本），不会退化成"无限速照跑"。
+CREATE TABLE IF NOT EXISTS bidding_crawl_download_gate (
+  id               bigint       NOT NULL COMMENT '固定主键（GLOBAL 闸位=1）',
+  scope_key        varchar(64)  NOT NULL COMMENT '闸位作用域（GLOBAL=全局单闸）',
+  last_download_at  datetime    DEFAULT NULL COMMENT '上次发起原文下载时刻；NULL=从未下载',
+  last_task_id     bigint       DEFAULT NULL COMMENT '上次占位对应任务 id（审计）',
+  last_url         varchar(1024) DEFAULT NULL COMMENT '上次下载地址（审计）',
+  creator          varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time      datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater          varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time      datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted          bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_gate_scope (scope_key, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='原文下载限速闸（原子占位；合规频控唯一真相）';
+
+INSERT IGNORE INTO bidding_crawl_download_gate (id, scope_key, last_download_at, creator, create_time, updater, update_time, deleted)
+VALUES (1, 'GLOBAL', NULL, 'system', NOW(), 'system', NOW(), b'0');
+
 -- ========== 校验 ==========
 SELECT COUNT(*) AS bidding_menus FROM system_menu WHERE id BETWEEN 6735 AND 6765;
+SELECT COUNT(*) AS download_gate_rows FROM bidding_crawl_download_gate WHERE scope_key = 'GLOBAL';
 SELECT COUNT(*) AS project_menus FROM system_menu WHERE id BETWEEN 6770 AND 6776;
 SELECT COUNT(*) AS project_tables FROM information_schema.tables
  WHERE table_schema = DATABASE() AND table_name IN ('bidding_project','bidding_tender_project','bidding_bid_section');

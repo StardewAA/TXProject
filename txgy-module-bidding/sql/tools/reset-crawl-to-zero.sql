@@ -47,6 +47,11 @@ TRUNCATE TABLE bidding_fetch_job;
 TRUNCATE TABLE bidding_notice_external_attachment;
 TRUNCATE TABLE bidding_notice_external_meta;
 TRUNCATE TABLE bidding_notice_external;
+-- 下载限速闸复位（2026-09-10）：last_download_at 置空，归零后首条原文下载不必等待历史时间戳；
+-- 前置：闸位表须已存在（sql/history/2026-09-10-crawl-download-gate.sql 或 master 包第 ⑩ 节），否则本句会报错；
+-- 注意：清的是"历史占位"而非"限速能力"——归零后仍按间隔逐条下载（合规口径不变）。
+UPDATE bidding_crawl_download_gate SET last_download_at = NULL, last_task_id = NULL, last_url = NULL
+ WHERE scope_key = 'GLOBAL';
 -- 说明：bidding_notice（内部公告）/bidding_notice_content 为站内自建公告，不属爬虫产出，
 --       默认不动；若确需连站内公告一起归零，另行人工确认后单独执行（当前为 0 行，多数场景无需处理）。
 

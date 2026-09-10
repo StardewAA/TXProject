@@ -33,6 +33,10 @@ public class GenericHttpDownloadChannel implements DownloadChannelAdapter {
     @Resource
     private CrawlHttpProperties props;
 
+    /** 原文下载限速闸：通道是"下载公告原文文件"的执行点之一，必须与消费端共用同一闸位（合规频控唯一入口） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+
     @Override
     public String getChannelCode() {
         return CHANNEL_CODE;
@@ -43,6 +47,12 @@ public class GenericHttpDownloadChannel implements DownloadChannelAdapter {
         String url = task == null ? null : task.getUrl();
         if (url == null || url.isEmpty()) {
             throw new IllegalArgumentException("下载任务缺少 url，taskId=" + (task == null ? "?" : task.getId()));
+        }
+        // 合规限速（2026-09-10）：下载原文文件前必须获得闸位——未到间隔即抛 NotDue（消费端负责把任务放回 PENDING 排队），
+        // 绝不"先请求再判断"。批量/同步线程调用本通道时，调用方应改用 crawlDownloadGate.acquireBlocking(...) 等待到位。
+        if (!crawlDownloadGate.tryAcquire(task.getSourceCode(), task.getId(), url)) {
+            throw new cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadNotDueException(
+                    crawlDownloadGate.nextDueAt(task.getSourceCode()), url);
         }
         byte[] bytes;
         try {

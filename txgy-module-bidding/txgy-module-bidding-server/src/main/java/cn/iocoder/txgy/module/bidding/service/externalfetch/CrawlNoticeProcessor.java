@@ -8,6 +8,8 @@ import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.UrlHostGuard;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestDTO;
 import cn.iocoder.txgy.module.bidding.service.noticeexternal.ingest.ExternalNoticeIngestService;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadNotDueException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
@@ -48,6 +50,9 @@ public class CrawlNoticeProcessor {
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
     @Resource
     private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
+    /** 原文下载限速闸：所有"下载公告原文文件"的动作必须经它放行（合规频控唯一入口） */
+    @Resource
+    private CrawlDownloadGate crawlDownloadGate;
 
     /**
      * 执行一条信息获取任务（按 payload 快照落库）。
@@ -71,6 +76,21 @@ public class CrawlNoticeProcessor {
         // 兼容旧任务：payload 无 detailParser 时回退到 task.parserCode（不改变既有行为）
         String detailParser = text(payload, "detailParser");
         String effectiveDetail = StringUtils.hasText(detailParser) ? detailParser : task.getParserCode();
+
+        // ===== 合规限速闸（唯一入口，2026-09-10 重构）=====
+        // 规范依据：《外部信息获取 v1.0》§六/§11 + 用户口径「时间间隔必须且只能作用于『下载公告原文文件』这一动作」
+        //   「每次下载原文文件之前，必须强制执行休眠等待」。
+        // 判定口径：
+        //   · payload 已带 contentHtml（列表接口全文直采，如秦源 res.rows.text）→ 纯本地处理，**不下载**，不占闸位；
+        //   · 否则本次执行必然要去取原文（平台归档 rawFileUrl / 详情页 HTML / 详情页内 PDF 直链）
+        //     → 在**任何 HTTP 下载之前**占一次闸位，未获闸位即抛 NotDue，绝不发起请求。
+        // 为什么一次占位而非每个请求各占一次：详情页与其 PDF 直链是"同一份公告原文"的取回过程，
+        //   按公告计数才与「每 interval 一条原文」的合规口径一致；每个请求各占会导致间隔被重复消耗。
+        if (!StringUtils.hasText(contentHtml)) {
+            if (!crawlDownloadGate.tryAcquire(task.getSourceCode(), task.getId(), task.getUrl())) {
+                throw new CrawlDownloadNotDueException(crawlDownloadGate.nextDueAt(task.getSourceCode()), task.getUrl());
+            }
+        }
         // 全文文件化：payload 无内联全文时按 rawFileUrl 从平台文件服务拉取（v1.0 §2.2 原文文件化）
         if (!StringUtils.hasText(contentHtml)) {
             String rawFileUrl = text(payload, "rawFileUrl");

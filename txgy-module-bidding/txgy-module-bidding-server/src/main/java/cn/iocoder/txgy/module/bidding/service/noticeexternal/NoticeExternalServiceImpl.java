@@ -69,6 +69,9 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
     @Resource
     private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
+    /** 原文下载限速闸：批量回填 PDF 属"从目标站点下载公告原文文件"，同样受合规频控约束 */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
 
     @Override
     public void approveExternal(Long id) {
@@ -518,6 +521,16 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
                 }
                 // SSRF 防护：重下载外站 PDF 前校验主机白名单（行 source_code → 源配置 base_url ∪ allowed_hosts）
                 assertPdfDownloadAllowed(pdf, externalUrl);
+                // 合规限速（2026-09-10 重构）：批量回填也是"下载公告原文文件"，必须逐份占用合规闸位。
+                // 原实现是 for 循环里无间隔连发请求（本模块最严重的频控缺口），现改为：
+                // 未到间隔即跳过本条（不下载、不改数据），由运维择时再调本接口，或等待到点后重跑——
+                // 用"跳过+可重入"而不是"就地长睡"，避免管理端请求被 N×interval 长时间挂住。
+                if (!crawlDownloadGate.tryAcquire(pdf.getSourceCode(), null, externalUrl)) {
+                    skipped++;
+                    log.info("[backfillPdf][id={}] 未到合规下载间隔，本轮跳过（到点后重跑本接口即可；可下载时间={}）",
+                            pdf.getId(), crawlDownloadGate.nextDueAt(pdf.getSourceCode()));
+                    continue;
+                }
                 byte[] bytes = httpFetchClient.getBytes(externalUrl);
                 if (bytes == null || bytes.length == 0) {
                     failed++;

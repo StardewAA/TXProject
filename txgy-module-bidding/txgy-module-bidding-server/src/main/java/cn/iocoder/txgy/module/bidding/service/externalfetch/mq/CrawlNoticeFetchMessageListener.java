@@ -19,11 +19,20 @@ import org.springframework.stereotype.Component;
 /**
  * 信息获取任务消费者：监听 Redis Stream 轻信号（CrawlNoticeFetchMessage）。
  *
- * <p>处理流（审查 A4 修复，2026-09-09）：收到 taskId → 节流闸放行才执行；执行=markRunning → processor → 回写终态 → tryFinalizeJob。
- * 消息始终快速 ACK（onMessage 不 sleep 不持锁），未 ACK 长睡导致的 pending 重投双跑被消除；
- * “每条间隔 consumer-delay-ms（默认 5 分钟）”由 executeIfDue 的节流闸保证——未到点的信号直接 ACK，任务保持 PENDING 等兜底扫描。
+ * <p><b>2026-09-10 重构（合规限速）</b>：消息不再"谁的消息谁执行"，而是**纯唤醒信号**——
+ * 收到消息与 30s 兜底扫描都走同一入口 {@link #consumeOldestDue()}，按 id 升序取"最老的到期 PENDING 任务"执行，
+ * 保证①排队顺序②排队中的任务不会绕过队列直接触发下载。
  *
- * <p>兜底（审查 A3 修复）：@Scheduled 每 30s 扫描 PENDING 且 nextRetryTime 到期任务 → executeIfDue 重投执行；
+ * <p>限速位置也被纠正：间隔**只在真正下载公告原文文件那一刻**由 {@code CrawlDownloadGate} 原子占位消耗
+ * （在 CrawlNoticeProcessor 内、任何 HTTP 下载之前），而不是在"任务被调度"时消耗——
+ * 后者会给纯本地处理任务白扣间隔，却对下载动作本身失去约束力。未获闸位时抛
+ * {@code CrawlDownloadNotDueException}，本监听器把任务放回 PENDING（next_retry_time=可下载时刻，
+ * **不计**尝试次数），到点自动续跑。
+ *
+ * <p>并发安全：同一任务的重复下载由 {@code tryMarkRunning} 条件更新（PENDING→RUNNING）拦住；
+ * 跨实例的执行权由 DB 行锁保证，限速闸同样在 DB 层原子占位（重启/多实例均不会放宽速率）。
+ *
+ * <p>兜底（审查 A3 修复）：@Scheduled 每 30s 扫描 PENDING 且 nextRetryTime 到期任务 → 同一入口消费；
  * 进程崩溃/消息丢失后任务仍在 DB（唯一真相），扫描续跑不重排链表；重试退避到期即被捞起，不再永久卡 PENDING。
  */
 @Slf4j
@@ -44,12 +53,14 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     /** worker 标识：本机消费节点（日志/分布式归属） */
     private final String workerId = "bidding-consumer-" + System.getProperty("user.name", "local");
 
-    /** 下载器每条任务处理间隔（毫秒）。主控在 application.yaml bidding.crawl.runner.consumer-delay-ms，默认值仅兜底 */
-    @org.springframework.beans.factory.annotation.Value("${bidding.crawl.runner.consumer-delay-ms:300000}")
-    private long consumerDelayMs;
-
-    /** 上次真正执行完成时刻（ms；节流闸依据，进程内；多实例各自节流 + DB RUNNING 守卫防同任务双跑） */
-    private volatile long lastConsumeAtMs = 0L;
+    /**
+     * 单实例执行互斥：防 30s 扫描与消息回调在同一 JVM 内并发进入消费（跨实例由 DB 条件抢占保证）。
+     *
+     * <p>为什么删掉原来的 lastConsumeAtMs：进程内变量重启即归零（重启后立刻下载）、多实例各自计时（速率 ×N），
+     * 且它限制的是"任务调度"而非"下载动作"。限速职责已全部移交 CrawlDownloadGate（库内原子占位）。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean consuming =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public CrawlNoticeFetchMessageListener() {
         super();
@@ -60,7 +71,8 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
         if (message == null || message.getTaskId() == null) {
             return; // 空消息直接 ACK
         }
-        executeIfDue(message.getTaskId()); // 未到节流点则本信号直接 ACK，任务留 PENDING 等兜底扫描
+        // 纯唤醒：不直接执行"消息携带的那个任务"，而是按序取最老到期任务（未到下载间隔则任务留 PENDING 排队）
+        consumeOldestDue();
     }
 
     /**
@@ -70,15 +82,7 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 30_000)
     public void scanPendingAndConsume() {
         try {
-            CrawlTaskDO due = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
-                    .eq(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus())
-                    .and(w -> w.isNull(CrawlTaskDO::getNextRetryTime)
-                            .or().le(CrawlTaskDO::getNextRetryTime, java.time.LocalDateTime.now()))
-                    .orderByAsc(CrawlTaskDO::getId)
-                    .last("LIMIT 1"));
-            if (due != null) {
-                executeIfDue(due.getId());
-            }
+            consumeOldestDue();
             // 2026-09-09 兜底收尾：produced=1 且 task 全终态但没收尾的 RUNNING job（消费后 produced 未置时 tryFinalizeJob 早退的补收）
             tryFinalizeStaleJobs();
         } catch (Exception e) {
@@ -109,32 +113,65 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
     }
 
     /**
-     * 节流闸 + 执行一条任务。距上次执行不足 consumerDelayMs → 不执行（任务保持 PENDING，等下一信号/扫描）；
-     * 到点才执行，执行完更新 lastConsumeAtMs。幂等：任务不存在/已终态直接跳过。
+     * 消费入口（消息唤醒与 30s 扫描共用）：按 id 升序取**最老的到期 PENDING 任务**执行。
+     *
+     * <p>为什么不用"消息里带的 taskId"：那会让新入队任务越过队列先下载（乱序），
+     * 与用户口径「排队中的任务绝对不允许直接触发下载，必须按顺序流转」冲突。
+     * 本方法每轮只处理一条（与"每 interval 一次原文下载"的合规节奏一致），处理完等下一个信号/扫描。
      */
-    private void executeIfDue(Long taskId) {
-        long now = System.currentTimeMillis();
-        if (now - lastConsumeAtMs < consumerDelayMs) {
-            return; // 节流未到点：本信号/扫描不作为（不持锁不 sleep，快速返回）
+    private void consumeOldestDue() {
+        if (!consuming.compareAndSet(false, true)) {
+            return; // 本实例上一轮尚未结束：本次信号/扫描直接返回（下一轮再试）
         }
-        CrawlTaskDO task = crawlTaskMapper.selectById(taskId);
-        if (task == null) {
+        try {
+            CrawlTaskDO due = crawlTaskMapper.selectOne(new LambdaQueryWrapper<CrawlTaskDO>()
+                    .eq(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus())
+                    .and(w -> w.isNull(CrawlTaskDO::getNextRetryTime)
+                            .or().le(CrawlTaskDO::getNextRetryTime, java.time.LocalDateTime.now()))
+                    .orderByAsc(CrawlTaskDO::getId)
+                    .last("LIMIT 1"));
+            if (due == null) {
+                return; // 队列空/都在等待期
+            }
+            executeTask(due);
+        } finally {
+            consuming.set(false);
+        }
+    }
+
+    /**
+     * 执行一条已选定的任务：条件抢占 → processor（内部在下载原文前过合规限速闸）→ 回写终态。
+     *
+     * <p>三分支语义（务必区分）：
+     * <ul>
+     *   <li>抢占失败 → 放弃（他实例已执行/已终态），不下载；</li>
+     *   <li>{@link cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadNotDueException}
+     *       → 未到下载间隔：任务回 PENDING 排队，next_retry_time=可下载时刻，<b>不计</b>失败次数；</li>
+     *   <li>其它异常 → 既有失败语义（3 次内退避重试，耗尽转人工审核）。</li>
+     * </ul>
+     */
+    private void executeTask(CrawlTaskDO task) {
+        Long taskId = task.getId();
+        // 抢占执行权：条件更新（仅 PENDING → RUNNING），杜绝同一任务被并发执行导致重复下载目标站点
+        if (!crawlTaskService.tryMarkRunning(taskId, workerId)) {
             return;
         }
-        if (isTerminal(task.getStatus())) {
-            return; // 已终态：幂等跳过（含 pending 重投到已 SUCCESS 的消息）
-        }
-        // 抢占：仅 PENDING 可执行；RUNNING（他实例/上次未收尾）不动（DB RUNNING 守卫防双跑）
-        if (!CrawlTaskStatusEnum.PENDING.getStatus().equals(task.getStatus())) {
-            return;
-        }
-        lastConsumeAtMs = now; // 到点，占住节流位
         boolean finalized = false;
         try {
-            crawlTaskService.markRunning(taskId, workerId);
             Long noticeId = crawlNoticeProcessor.execute(task);
             crawlTaskService.markDownloadSuccess(taskId, noticeId == null ? null : String.valueOf(noticeId), "HTML");
             log.info("[consume][taskId={} url={}] 执行成功 noticeId={}", taskId, task.getUrl(), noticeId);
+        } catch (cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadNotDueException e) {
+            // 未到合规下载间隔：不是失败 → 回 PENDING 排队（保留下载资格，到点自动续跑）
+            try {
+                // dueAt 为空仅在闸位行被并发删除等极端情形出现：退避 1 分钟再排队（绝不无间隔重试）
+                java.time.LocalDateTime dueAt = e.getDueAt() == null
+                        ? java.time.LocalDateTime.now().plusMinutes(1) : e.getDueAt();
+                crawlTaskService.releaseToPending(taskId, dueAt, "等待原文下载间隔（合规限速）");
+            } catch (Exception ex) {
+                log.error("[consume][taskId={}] 回 PENDING 失败（保持 RUNNING，待人工/下一轮）: {}", taskId, ex.getMessage());
+                finalized = true;
+            }
         } catch (Exception e) {
             String cause = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             log.warn("[consume][taskId={}] 执行失败: {}", taskId, cause);
@@ -155,12 +192,4 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
         }
     }
 
-    private boolean isTerminal(String status) {
-        if (status == null) {
-            return false;
-        }
-        return CrawlTaskStatusEnum.SUCCESS.getStatus().equals(status)
-                || CrawlTaskStatusEnum.FAILED.getStatus().equals(status)
-                || CrawlTaskStatusEnum.SKIPPED.getStatus().equals(status);
-    }
 }

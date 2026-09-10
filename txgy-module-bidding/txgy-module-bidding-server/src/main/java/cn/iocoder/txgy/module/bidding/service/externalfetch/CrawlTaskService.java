@@ -6,6 +6,8 @@ import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTas
 import cn.iocoder.txgy.module.bidding.controller.admin.externalfetch.vo.CrawlTaskRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 
+import java.time.LocalDateTime;
+
 /**
  * 采集任务编排服务。
  *
@@ -31,6 +33,25 @@ public interface CrawlTaskService {
      * 标记开始执行（RUNNING + worker 归属）。
      */
     void markRunning(Long taskId, String workerId);
+
+    /**
+     * 原子抢占执行权（仅 PENDING → RUNNING）。
+     *
+     * <p>为什么需要它：原 {@link #markRunning} 是"先读后写"的无条件更新，同一任务被并发捞出时
+     * 两个执行者都能置 RUNNING 并各自发起一次原文下载——既是数据重复，也对目标站点构成无谓压力（合规风险）。
+     * 条件更新（WHERE status='PENDING'）由 InnoDB 行锁保证只有一个执行者成功。
+     *
+     * @return true=抢占成功（本次由我执行）；false=已被他人抢占或已终态，调用方必须放弃本次执行
+     */
+    boolean tryMarkRunning(Long taskId, String workerId);
+
+    /**
+     * 未到合规下载间隔：把任务放回 PENDING 排队（**不计**尝试次数、不进失败退避、不进死信）。
+     *
+     * <p>规范依据：用户口径 2026-09-10「排队中的任务绝对不允许直接触发下载」「必须确保任务按顺序流转」。
+     * 语义：这不是失败，而是"尚未轮到下载"；next_retry_time 置为下次可下载时刻，到点由扫描按 id 升序续跑。
+     */
+    void releaseToPending(Long taskId, LocalDateTime nextRetryTime, String reason);
 
     /**
      * 下载成功：置 SUCCESS 并记录原文引用/内容形态（原文落库/抽取由下游消费驱动，见设计 §四）。
