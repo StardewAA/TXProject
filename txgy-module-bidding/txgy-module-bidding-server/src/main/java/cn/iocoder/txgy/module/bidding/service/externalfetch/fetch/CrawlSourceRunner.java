@@ -71,6 +71,8 @@ public class CrawlSourceRunner {
     @jakarta.annotation.Resource private PdfTextNoticeParser pdfTextNoticeParser;
     @jakarta.annotation.Resource private ApiFetchDriver apiFetchDriver;
     @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskDispatchService crawlTaskDispatchService;
+    /** 原文下载限速闸：同步直抓路径的详情页/PDF 下载前必须过闸（合规频控唯一入口） */
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
     /** 异步投递模式（bidding.crawl.runner.async-mode=true 启用：列表发现→落 task+发轻信号，下载/落库由消费者执行）；默认 false=同步直抓（现状） */
     @Value("${bidding.crawl.runner.async-mode:false}")
     private boolean asyncMode;
@@ -416,6 +418,11 @@ public class CrawlSourceRunner {
         if (!seen.add(urlHash)) {
             return false; // 本轮已见
         }
+        // ===== 合规限速（2026-09-10 重构）：同步直抓路径不再"无间隔连发" =====
+        // 规范依据：用户口径「每次下载原文文件之前必须强制执行休眠等待，严禁无间隔高频请求」。
+        // 原实现在条目循环里直接下载详情页+PDF（仅 entry-delay-ms=1.5s 间隔），属高频请求目标站点；
+        // 现改为：下载前阻塞等待合规闸位（默认 5 分钟/条原文，与消费端同一闸位），等待期间打进度日志。
+        crawlDownloadGate.acquireBlocking(source == null ? null : source.getSourceCode(), null, detailUrl);
         String detailHtml = httpFetchClient.getText(detailUrl);
         NoticeParseResult detail = parserRegistry.get("GX_E_BIDDING").parse(inputOf("HTML", detailHtml, detailUrl));
         String pdfUrl = detail.getMeta() == null ? null : detail.getMeta().get("pdfDownloadUrl");

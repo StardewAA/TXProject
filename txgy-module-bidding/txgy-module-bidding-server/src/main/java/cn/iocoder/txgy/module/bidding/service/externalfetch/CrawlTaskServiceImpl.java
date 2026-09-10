@@ -210,6 +210,41 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
     }
 
     @Override
+    public boolean tryMarkRunning(Long taskId, String workerId) {
+        // 条件更新抢占：仅 PENDING → RUNNING 成功（并发/多实例下同一任务只允许一个执行者下载，防重复请求目标站点）
+        int updated = crawlTaskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CrawlTaskDO>()
+                .eq(CrawlTaskDO::getId, taskId)
+                .eq(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus())
+                .set(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.RUNNING.getStatus())
+                .set(CrawlTaskDO::getWorkerId, workerId)
+                .set(CrawlTaskDO::getStartedAt, LocalDateTime.now()));
+        if (updated > 0) {
+            log.info("[tryMarkRunning][taskId={} worker={}] 抢占成功（PENDING→RUNNING）", taskId, workerId);
+        } else {
+            log.debug("[tryMarkRunning][taskId={} worker={}] 未抢占（已被他人执行或已终态）", taskId, workerId);
+        }
+        return updated > 0;
+    }
+
+    @Override
+    public void releaseToPending(Long taskId, LocalDateTime nextRetryTime, String reason) {
+        // 只允许 RUNNING → PENDING（终态任务不得被本方法改写）；attempt 保持不变：等待间隔不是失败
+        int updated = crawlTaskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CrawlTaskDO>()
+                .eq(CrawlTaskDO::getId, taskId)
+                .eq(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.RUNNING.getStatus())
+                .set(CrawlTaskDO::getStatus, CrawlTaskStatusEnum.PENDING.getStatus())
+                .set(CrawlTaskDO::getNextRetryTime, nextRetryTime)
+                .set(CrawlTaskDO::getWorkerId, null)
+                .set(CrawlTaskDO::getStartedAt, null)
+                .set(CrawlTaskDO::getMessage, "WAIT_DOWNLOAD_INTERVAL " + (reason == null ? "" : reason)));
+        log.info("[releaseToPending][taskId={}] 未到合规下载间隔，回 PENDING 排队（nextRetryTime={}）：{}",
+                taskId, nextRetryTime, reason);
+        if (updated == 0) {
+            log.debug("[releaseToPending][taskId={}] 未更新（任务已非 RUNNING，可能已被并发处理）", taskId);
+        }
+    }
+
+    @Override
     public void markDownloadSuccess(Long taskId, String contentRef, String contentType) {
         CrawlTaskDO task = require(taskId);
         task.setStatus(CrawlTaskStatusEnum.SUCCESS.getStatus());
