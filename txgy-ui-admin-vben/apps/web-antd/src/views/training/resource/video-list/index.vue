@@ -336,7 +336,7 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="视频资源库（MP4/MOV ≤2GB，上传即上线）">
+    <Grid table-title="视频资源库（MP4/MOV ≤4GB，上传即上线）">
       <template #toolbar-tools>
         <TableAction
           :actions="[
