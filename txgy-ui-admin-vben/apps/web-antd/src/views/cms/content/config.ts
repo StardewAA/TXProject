@@ -1,6 +1,14 @@
+export type CmsApiType = 'material' | 'policy' | 'process' | 'quota' | 'standard';
+
 export interface CmsRecord {
   id?: number;
   status?: string;
+  type?: string;
+  title?: string;
+  content?: string;
+  updatedAt?: string;
+  attachmentUrls?: string[];
+  sourceUrl?: string;
   [key: string]: any;
 }
 
@@ -15,9 +23,12 @@ export interface CmsFormField {
   label: string;
   multiline?: boolean;
   options?: Array<{ label: string; value: string }>;
+  required?: boolean;
+  date?: boolean;
 }
 
 export interface CmsContentConfig {
+  apiType: CmsApiType;
   columns: CmsColumn[];
   formFields: CmsFormField[];
   moduleName: string;
