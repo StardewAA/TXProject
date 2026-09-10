@@ -426,20 +426,24 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         Integer newStatus;
         if (ObjUtil.equals(afterSale.getRefundPrice(), 0)) {
             // 特殊：退款为 0 的订单，直接标记为完成（积分商城）。关联案例：https://t.zsxq.com/AQEvL
-            updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
-                    .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
+            completeAfterSaleRefund(afterSale);
             newStatus = AfterSaleStatusEnum.COMPLETE.getStatus();
         } else {
-            // 发起退款单。注意，需要在事务提交后，再进行发起，避免重复发起
-            createPayRefund(userIp, afterSale);
-            newStatus = afterSale.getStatus();  // 特殊：这里状态不变，而是最终 updateAfterSaleRefunded 处理！！！
+            // 已经存在退款单时，只同步支付结果，避免用户重复点击后再次创建退款单。
+            Long payRefundId = afterSale.getPayRefundId();
+            if (payRefundId == null) {
+                payRefundId = createPayRefund(userIp, afterSale);
+            }
+            // 模拟支付、余额支付会同步返回成功。此时立即完成售后；其它渠道仍由异步通知完成。
+            newStatus = syncAfterSaleRefundResult(afterSale, payRefundId)
+                    ? AfterSaleStatusEnum.COMPLETE.getStatus() : afterSale.getStatus();
         }
 
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), newStatus);
     }
 
-    private void createPayRefund(String userIp, AfterSaleDO afterSale) {
+    private Long createPayRefund(String userIp, AfterSaleDO afterSale) {
         // 创建退款单
         PayRefundCreateReqDTO createReqDTO = AfterSaleConvert.INSTANCE.convert(userIp, afterSale, tradeOrderProperties)
                 .setUserId(afterSale.getUserId()).setUserType(UserTypeEnum.MEMBER.getValue())
@@ -448,6 +452,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 更新售后单的退款单号
         tradeAfterSaleMapper.updateById(new AfterSaleDO().setId(afterSale.getId()).setPayRefundId(payRefundId));
+        return payRefundId;
     }
 
     @Override
@@ -459,6 +464,11 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (afterSale == null) {
             throw exception(AFTER_SALE_NOT_FOUND);
         }
+        // 支付平台可能重复通知。已经完成且退款单一致时直接返回，保证回调幂等。
+        if (ObjectUtil.equal(afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus())
+                && ObjectUtil.equal(afterSale.getPayRefundId(), payRefundId)) {
+            return;
+        }
         if (ObjectUtil.notEqual(afterSale.getStatus(), AfterSaleStatusEnum.WAIT_REFUND.getStatus())) {
             throw exception(AFTER_SALE_REFUND_FAIL_STATUS_NOT_WAIT_REFUND);
         }
@@ -468,21 +478,39 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 3. 处理退款结果
         if (PayRefundStatusEnum.isSuccess(payRefund.getStatus())) {
-            // 【情况一：退款成功】
-            updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
-                .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
-
-            // 记录售后日志
-            AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus());
-
-            // 更新交易订单项的售后状态为【已完成】
-            tradeOrderUpdateService.updateOrderItemWhenAfterSaleSuccess(afterSale.getOrderItemId(), afterSale.getRefundPrice());
+            completeAfterSaleRefund(afterSale);
             // 【情况二：退款失败】
         } else if (PayRefundStatusEnum.isFailure(payRefund.getStatus())) {
             // 记录售后日志
             AfterSaleLogUtils.setAfterSaleOperateType(AfterSaleOperateTypeEnum.SYSTEM_REFUND_FAIL);
             AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), afterSale.getStatus());
         }
+    }
+
+    /**
+     * 同步支付服务中的退款结果。用于同步完成的退款渠道，以及修复通知暂时不可达时的状态滞后。
+     */
+    private boolean syncAfterSaleRefundResult(AfterSaleDO afterSale, Long payRefundId) {
+        PayRefundRespDTO payRefund = payRefundApi.getRefund(payRefundId).getCheckedData();
+        if (payRefund == null || (!PayRefundStatusEnum.isSuccess(payRefund.getStatus())
+                && !PayRefundStatusEnum.isFailure(payRefund.getStatus()))) {
+            return false;
+        }
+        validatePayRefund(afterSale, payRefundId);
+        if (PayRefundStatusEnum.isSuccess(payRefund.getStatus())) {
+            completeAfterSaleRefund(afterSale);
+            return true;
+        }
+        AfterSaleLogUtils.setAfterSaleOperateType(AfterSaleOperateTypeEnum.SYSTEM_REFUND_FAIL);
+        return false;
+    }
+
+    private void completeAfterSaleRefund(AfterSaleDO afterSale) {
+        updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
+                .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
+        AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(),
+                AfterSaleStatusEnum.COMPLETE.getStatus());
+        tradeOrderUpdateService.updateOrderItemWhenAfterSaleSuccess(afterSale.getOrderItemId(), afterSale.getRefundPrice());
     }
 
     /**
