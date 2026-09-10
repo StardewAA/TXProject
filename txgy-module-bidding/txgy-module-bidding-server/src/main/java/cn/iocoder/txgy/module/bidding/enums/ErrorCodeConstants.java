@@ -8,7 +8,8 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
  *
  * <p>规范出处：docs/招投标模块开发规范.md §4.7 错误码规范（1-060-xxx-xxx 结构，
  * 服务异常经 ServiceExceptionUtil 抛出，由框架全局异常处理器回写 HTTP 响应）；
- * 证书/资质域子段 106（1-060-106-000~026，ErrorCodeFormatTest 门禁校验格式与全半角）。
+ * 证书/资质域子段 106（1-060-106-000~026，ErrorCodeFormatTest 门禁校验格式与全半角）；
+ * 员工资质域子段 107（1-060-107-000~021，人员档案/证书/配证/合规核验，2026-09-13 随员工资质模块登记）。
  */
 public interface ErrorCodeConstants {
 
@@ -17,6 +18,11 @@ public interface ErrorCodeConstants {
     ErrorCode TENDER_PROJECT_NOT_EXISTS = new ErrorCode(1_060_100_001, "招标项目不存在");
     ErrorCode BID_SECTION_NOT_EXISTS = new ErrorCode(1_060_100_002, "标段（包）不存在");
     ErrorCode BID_SECTION_CODE_DUPLICATE = new ErrorCode(1_060_100_003, "标段（包）编号已存在");
+    // [补充登记 2026-09-10] 项目域唯一性与关联完整性（与上方 100 段同段位；依据数据规范 V2.0 唯一键口径 + 规范 §5）
+    ErrorCode PROJECT_CODE_DUPLICATE = new ErrorCode(1_060_100_004, "项目编号已存在（租户内唯一，如需换号请删除后重建）");
+    ErrorCode TENDER_PROJECT_CODE_DUPLICATE = new ErrorCode(1_060_100_005, "招标项目编号已存在（租户内唯一）");
+    ErrorCode BID_SECTION_TENDER_PROJECT_REQUIRED = new ErrorCode(1_060_100_006, "标段必须归属已登记的招标项目（追溯链完整性）");
+    ErrorCode PROJECT_HAS_SECTIONS = new ErrorCode(1_060_100_007, "项目下存在招标项目/标段，不能删除，请先清理下级");
 
     // ========== 公告/文件 1-060-101-000 ==========
     ErrorCode NOTICE_NOT_EXISTS = new ErrorCode(1_060_101_000, "公告不存在");
@@ -137,4 +143,48 @@ public interface ErrorCodeConstants {
     ErrorCode CRAWL_PARSER_FILE_INVALID = new ErrorCode(1_060_106_044, "测试文件无效（仅支持 .html/.htm/.json；读取或编码失败）");
     ErrorCode CRAWL_PARSER_EXECUTE_FAILED = new ErrorCode(1_060_106_045, "解析器执行异常：{0}");
     ErrorCode CRAWL_SOURCE_INTERVAL_TOO_FREQUENT = new ErrorCode(1_060_106_046, "爬取间隔不能小于 120 秒（≥2 分钟，防目标站封禁）");
+
+
+    // ========== 员工资质（personnel：人员档案/证书/培训/社保/劳动合同/智能配证/合规核验/企业材料）1-060-107-000 ==========
+    // [依据] 用户业务口径《资质管理规范文件》三分类材料 + 《电子证件全流程管理_数据库设计.md》v3.3 表 15-3（人员配置台账：
+    //       在职/社保/注册有效期=挂靠核查）与表 15-6（PASS/RISK/FAIL 三档 + diff 明细）；
+    //       《招投标模块开发规范》§4.7——新段位先在规范 4.7 表登记，再登记进 ErrorCodeFormatTest 门禁集合（本段 107 已两处登记）。
+    // [为什么] 人员域与企业资质域的错误语义不同（一人一档判重、配证人数不足、人证分离），单独段位便于前端按段归类提示。
+    // [业务目标] 申报/投标前把"人证分离、证书失效、社保不一致"挡在提交之前，并保证错误提示可直接指导业务人员修正。
+    ErrorCode PERSONNEL_NOT_EXISTS = new ErrorCode(1_060_107_000, "员工档案不存在");
+    ErrorCode PERSONNEL_ID_CARD_DUPLICATE = new ErrorCode(1_060_107_001, "该身份证号已登记员工档案（一人一档，禁止重复录入）");
+    ErrorCode PERSONNEL_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_107_002, "员工在职状态流转非法");
+    ErrorCode PERSONNEL_DATA_MODIFIED = new ErrorCode(1_060_107_003, "员工档案已被他人修改，请刷新后重试");
+    ErrorCode PERSONNEL_NOT_ACTIVE = new ErrorCode(1_060_107_004, "员工非在职状态，不能参与投标配证/资质申报");
+    ErrorCode PERSONNEL_CERT_NOT_EXISTS = new ErrorCode(1_060_107_005, "员工证书不存在");
+    ErrorCode PERSONNEL_CERT_NO_DUPLICATE = new ErrorCode(1_060_107_006, "同员工同类型同编号证书已存在");
+    ErrorCode PERSONNEL_CERT_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_107_007, "员工证书状态流转非法");
+    ErrorCode PERSONNEL_CERT_EXPIRED = new ErrorCode(1_060_107_008, "证书已失效（过期/吊销/注销），不能用于配证或申报");
+    ErrorCode PERSONNEL_CERT_EXPIRY_REQUIRED = new ErrorCode(1_060_107_009, "该证书类型必须登记有效期（到期自动预警依赖此字段）");
+    ErrorCode PERSONNEL_RECORD_NOT_EXISTS = new ErrorCode(1_060_107_010, "员工附属记录不存在（培训/社保/劳动合同）");
+    ErrorCode PERSONNEL_BLIND_INDEX_REQUIRED = new ErrorCode(1_060_107_011, "身份证号（或其盲索引）必填：一人一档判重依赖此值");
+    ErrorCode PERSONNEL_ALERT_SCAN_DISABLED = new ErrorCode(1_060_107_012, "员工证书到期预警未启用或阈值未配置");
+    ErrorCode ENTERPRISE_MATERIAL_INCOMPLETE = new ErrorCode(1_060_107_013, "企业材料不完备，缺少：{0}");
+    ErrorCode ENTERPRISE_MATERIAL_REQUIRED_EMPTY = new ErrorCode(1_060_107_014, "必备材料清单为空，无法执行完备性检查");
+
+    // [依据] 用户范围口径（2026-09-13 确认）：做到"证照全生命周期管理（中级）"——变更/注销/年检/到期提醒/版本管理，不做签发；
+    //       《电子证件全流程管理_数据库设计.md》v3.3 表 3/5/6/7（四类流程的状态与回写口径）；
+    //       《招投标模块开发规范》§4.5（状态跃迁走接口 + 乐观锁 CAS，非法流转抛错）。
+    // [业务目标] 生命周期各环节的非法流转、缺少必要字段、重复发起都能给出可操作的提示，保证流程留痕真实可信。
+    ErrorCode CERT_LIFECYCLE_NOT_EXISTS = new ErrorCode(1_060_107_015, "证件生命周期记录不存在");
+    ErrorCode CERT_LIFECYCLE_STATUS_INVALID = new ErrorCode(1_060_107_016, "生命周期流程状态流转非法（待办→审核中→通过→生效）");
+    ErrorCode CERT_LIFECYCLE_DATA_MODIFIED = new ErrorCode(1_060_107_017, "生命周期记录已被他人修改，请刷新后重试");
+    ErrorCode CERT_LIFECYCLE_CHANGE_EMPTY = new ErrorCode(1_060_107_018, "变更流程必须至少提交一项字段变更");
+    ErrorCode CERT_LIFECYCLE_BIZ_DOMAIN_INVALID = new ErrorCode(1_060_107_019, "生命周期业务对象域不支持：{0}");
+    ErrorCode CERT_LIFECYCLE_TARGET_REQUIRED = new ErrorCode(1_060_107_020, "该生命周期流程缺少必要字段：{0}");
+    ErrorCode CERT_LIFECYCLE_APPLY_NO_DUPLICATE = new ErrorCode(1_060_107_021, "同对象同类型同申请单号的流程已存在（幂等防重复发起）");
+    ErrorCode CERT_LIFECYCLE_BIZ_NOT_EXISTS = new ErrorCode(1_060_107_022, "生命周期关联的业务对象（证照/员工证书/资质/安许证）不存在");
+
+    // [依据] 用户业务口径"员工信息一人一档、编号可检索"；《招投标模块开发规范》§5 六-1（业务键 UK 含 tenant_id 与 deleted）。
+    // [业务目标] 同一企业内员工编号不可重复，重复录入即时给出可读提示（而不是抛数据库唯一键异常）。
+    ErrorCode PERSONNEL_NO_DUPLICATE = new ErrorCode(1_060_107_023, "员工编号已存在：同一企业内员工编号不可重复");
+    // [依据] 《电子证件全流程管理_数据库设计.md》v3.3 表 15-3（社保/劳动合同为挂靠核查证据，须按月/按份唯一）；
+    //        《招投标模块开发规范》§4.5（幂等：同业务键重复提交直接拒绝）。
+    // [业务目标] 同月社保、同编号合同不允许重复登记，避免月度核对时出现两条互相矛盾的记录导致结论不可复算。
+    ErrorCode PERSONNEL_RECORD_DUPLICATE = new ErrorCode(1_060_107_024, "记录已存在：同一员工的该月份社保/该编号合同不可重复登记");
 }
