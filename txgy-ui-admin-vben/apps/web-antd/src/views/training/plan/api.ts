@@ -211,6 +211,39 @@ export function getProgressPage(params: PageParam & Record<string, any>) {
   );
 }
 
+/** 后端分页每页条数上限为 200（超出会报「每页条数最大值为 200」），故按上限循环拉取全量数据 */
+const MAX_PAGE_SIZE = 200;
+
+async function fetchAllPages<T>(
+  fetcher: (params: PageParam & Record<string, any>) => Promise<PageResult<T>>,
+  params: Record<string, any>,
+): Promise<T[]> {
+  const list: T[] = [];
+  for (let pageNo = 1; ; pageNo++) {
+    const data = await fetcher({ ...params, pageNo, pageSize: MAX_PAGE_SIZE });
+    const rows = data?.list ?? [];
+    list.push(...rows);
+    if (rows.length < MAX_PAGE_SIZE) {
+      break;
+    }
+  }
+  return list;
+}
+
+/** 在班学员全量（用于去重、下拉等需要完整数据的场景） */
+export function getAllClassStudents(classId: number) {
+  return fetchAllPages<TrainingPlanApi.ClassStudent>(getClassStudentPage, {
+    classId,
+  });
+}
+
+/** 班级进度全量（用于进度看板、未完成统计等需要完整数据的场景） */
+export function getAllProgress(classId: number) {
+  return fetchAllPages<TrainingPlanApi.ClassProgress>(getProgressPage, {
+    classId,
+  });
+}
+
 /** 登记学习进度 */
 export function registerProgress(data: Record<string, any>) {
   return requestClient.post('/training/plan/class/progress/register', data);
