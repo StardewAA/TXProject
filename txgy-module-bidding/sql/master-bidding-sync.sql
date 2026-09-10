@@ -8,7 +8,7 @@
 --   ⑤ AI 链路配置（角色 20 公告AI解析 + model 66 + test key 28，含启用状态）
 --   ⑥ 演示公告 5 条（ACTIVE，大厅可见：EBIDDING 4 条 + QYZB 1 条）
 -- 执行：mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < master-bidding-sync.sql
--- 说明：全部语句幂等；公告大数据与运行痕迹不在包内，结构就绪后由爬虫自行采集；细粒度历史见 sql/history/。
+-- 说明：全部语句幂等（结构 IF NOT EXISTS、数据 INSERT IGNORE，包内无任何 DROP/TRUNCATE，不会清空既有数据）；公告大数据与运行痕迹不在包内，结构就绪后由爬虫自行采集；细粒度历史见 sql/history/。
 -- ============================================================================
 SET NAMES utf8mb4;
 
@@ -25,7 +25,6 @@ SET NAMES utf8mb4;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-DROP TABLE IF EXISTS `bidding_fetch_job`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_job` (
@@ -46,7 +45,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_job` (
   KEY `idx_job_status` (`status`,`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_fetch_source`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_source` (
@@ -73,7 +71,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_source` (
   UNIQUE KEY `uk_source_code` (`source_code`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_fetch_task`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_task` (
@@ -103,7 +100,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_task` (
   KEY `idx_task_status_retry` (`status`,`next_retry_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_filing`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_filing` (
@@ -135,7 +131,6 @@ CREATE TABLE IF NOT EXISTS `bidding_filing` (
   KEY `idx_filing_status_time` (`status`,`submit_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_follow_item`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
@@ -165,7 +160,6 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
   KEY `idx_follow_item_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_follow_item_event`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
@@ -192,7 +186,6 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
   KEY `idx_event_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice` (
@@ -224,7 +217,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice` (
   KEY `idx_notice_project` (`project_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_content`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_content` (
@@ -244,7 +236,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_content` (
   UNIQUE KEY `uk_notice_version` (`notice_id`,`content_type`,`version`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external` (
@@ -306,7 +297,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external` (
   KEY `idx_external_type_time` (`content_type`,`publish_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external_attachment`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external_attachment` (
@@ -328,7 +318,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external_attachment` (
   KEY `idx_att_notice` (`notice_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external_meta`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external_meta` (
@@ -345,7 +334,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external_meta` (
   UNIQUE KEY `uk_meta_notice` (`notice_id`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_subscription`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
@@ -368,7 +356,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
   KEY `idx_sub_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_subscription_event`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
@@ -392,7 +379,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
   KEY `idx_se_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_auth`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_auth` (
@@ -415,7 +401,6 @@ CREATE TABLE IF NOT EXISTS `bidding_subject_auth` (
   KEY `idx_subject_auth_status` (`auth_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_profile`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_profile` (
@@ -448,7 +433,6 @@ CREATE TABLE IF NOT EXISTS `bidding_subject_profile` (
   KEY `idx_subject_profile_uscc` (`uscc`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_user`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_user` (
