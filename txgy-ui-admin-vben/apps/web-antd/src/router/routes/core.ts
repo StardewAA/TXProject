@@ -206,33 +206,38 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () => import('#/views/bidding/notice/index.vue'),
         meta: { title: '公告发布（企业前台）', hideInMenu: true },
       },
+      /** 项目公告管理（前台）：项目 → 招标项目 → 标段（包） → 公告 四级层级导航。
+       *  创建入口逐级提供（创建项目/招标项目/标段），创建公告仅放在第三级进入的标段公告列表页。
+       *  接口：/bidding/project|tender-project|bid-section（page/get/save/trace）。 */
+      {
+        name: 'PortalBiddingProjects',
+        path: 'bidding/projects',
+        component: () => import('#/views/portal/bidding/project/index.vue'),
+        meta: { title: '项目公告管理', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectTenderProjects',
+        path: 'bidding/projects/:projectCode/tender-projects',
+        component: () => import('#/views/portal/bidding/project/tenderProjects.vue'),
+        meta: { title: '招标项目', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectBidSections',
+        path: 'bidding/projects/:projectCode/tender-projects/:tenderProjectCode/sections',
+        component: () => import('#/views/portal/bidding/project/bidSections.vue'),
+        meta: { title: '标段（包）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSectionNotices',
+        path: 'bidding/sections/:bidSectionCode/notices',
+        component: () => import('#/views/portal/bidding/project/notices.vue'),
+        meta: { title: '公告 / 公示', hideInMenu: true },
+      },
       {
         name: 'PortalProfile',
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
         meta: { title: '个人中心', hideInMenu: true },
-      },
-    ],
-  },
-  /** 招投标业务链工作台（VO 设计稿）：后端业务接口/菜单未就绪期间的可用稿，字段严格照录 VO 规范。
-   *  核心路由不走权限校验、直接显示在菜单中，便于评审；后端接口与菜单就绪后可移除本入口。 */
-  {
-    component: BasicLayout,
-    meta: {
-      hideInBreadcrumb: true,
-      icon: 'lucide:workflow',
-      order: 3,
-      title: '招投标业务链（VO 设计稿）',
-    },
-    name: 'BiddingChain',
-    path: '/bidding-chain',
-    redirect: '/bidding-chain/workbench',
-    children: [
-      {
-        name: 'BiddingChainWorkbench',
-        path: 'workbench',
-        component: () => import('#/views/bidding/chain/index.vue'),
-        meta: { icon: 'lucide:list-tree', title: '业务链工作台' },
       },
     ],
   },
