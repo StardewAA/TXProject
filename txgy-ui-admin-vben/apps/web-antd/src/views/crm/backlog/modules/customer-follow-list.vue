@@ -1,5 +1,6 @@
 <!-- 分配给我的客户 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmCustomerApi } from '#/api/crm/customer';
 
@@ -11,7 +12,7 @@ import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCustomerPage } from '#/api/crm/customer';
 import { useGridColumns } from '#/views/crm/customer/data';
 
-import { FOLLOWUP_STATUS } from '../data';
+import { FOLLOWUP_STATUS, SCENE_TYPES } from '../data';
 
 const { push } = useRouter();
 
@@ -20,6 +21,11 @@ function handleDetail(row: CrmCustomerApi.Customer) {
   push({ name: 'CrmCustomerDetail', params: { id: row.id } });
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -32,6 +38,13 @@ const [Grid] = useVbenVxeGrid({
           options: FOLLOWUP_STATUS,
         },
         defaultValue: false,
+      },
+      {
+        fieldName: 'sceneType',
+        label: '归属',
+        component: 'Select',
+        componentProps: { allowClear: true, options: SCENE_TYPES },
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },

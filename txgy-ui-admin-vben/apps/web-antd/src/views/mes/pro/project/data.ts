@@ -5,6 +5,8 @@ import type { MesProProjectApi } from '#/api/mes/pro/project';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { getSimpleUserList } from '#/api/system/user';
+
 /** 表单类型 */
 export type FormType = 'create' | 'detail' | 'update';
 
@@ -81,12 +83,15 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'owner',
+      fieldName: 'ownerUserId',
       label: '负责人',
-      component: 'Input',
+      component: 'ApiSelect',
       componentProps: {
+        api: getSimpleUserList,
+        labelField: 'nickname',
+        valueField: 'id',
         disabled: headerReadonly,
-        placeholder: '请输入负责人',
+        placeholder: '请选择负责人',
       },
     },
     {

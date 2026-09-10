@@ -12,7 +12,8 @@ export namespace MesProProjectApi {
     sourceType?: number; // 项目来源类型
     status?: number; // 项目状态
     priority?: number; // 项目优先级
-    owner?: string; // 负责人
+    ownerUserId?: number; // 负责人用户编号
+    owner?: string; // 负责人（根据用户自动回填）
     dept?: string; // 责任部门
     planStartTime?: string; // 计划开始时间
     planEndTime?: string; // 计划结束时间

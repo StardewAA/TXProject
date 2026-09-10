@@ -13,6 +13,9 @@ public class HrmRecruitInterviewRespVO {
     @Schema(description = "面试编号", example = "1024")
     private Long id;
 
+    @Schema(description = "应聘记录编号", example = "1024")
+    private Long applicationId;
+
     @Schema(description = "候选人编号", example = "1024")
     private Long candidateId;
 

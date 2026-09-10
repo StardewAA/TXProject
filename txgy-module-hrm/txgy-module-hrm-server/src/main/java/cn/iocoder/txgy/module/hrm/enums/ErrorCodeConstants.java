@@ -66,6 +66,9 @@ public interface ErrorCodeConstants {
 
     // ========== 招聘职位 1-050-200-000 ==========
     ErrorCode RECRUIT_POST_NOT_EXISTS = new ErrorCode(1_050_200_000, "招聘职位不存在");
+    ErrorCode RECRUIT_POST_STATUS_TRANSITION_INVALID =
+            new ErrorCode(1_050_200_028, "当前招聘职位状态不允许变更为目标状态");
+    ErrorCode RECRUIT_POST_NOT_PUBLISHED = new ErrorCode(1_050_200_029, "招聘职位未发布，不能关联候选人");
 
     // ========== 招聘候选人 1-050-200-001 ==========
     ErrorCode RECRUIT_CANDIDATE_NOT_EXISTS = new ErrorCode(1_050_200_001, "招聘候选人不存在");
@@ -79,6 +82,8 @@ public interface ErrorCodeConstants {
             new ErrorCode(1_050_200_017, "候选人当前状态不允许转为员工");
     ErrorCode RECRUIT_CANDIDATE_ELIMINATE_STATUS_INVALID =
             new ErrorCode(1_050_200_018, "候选人当前状态不允许淘汰");
+    ErrorCode RECRUIT_CANDIDATE_MOBILE_DUPLICATE =
+            new ErrorCode(1_050_200_026, "候选人手机号已存在");
 
     // ========== 招聘面试 1-050-200-002 ==========
     ErrorCode RECRUIT_INTERVIEW_NOT_EXISTS = new ErrorCode(1_050_200_002, "招聘面试不存在");
@@ -101,9 +106,18 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_CHANNEL_TRANSFER_SELF =
             new ErrorCode(1_050_200_007, "承接招聘渠道不能是待删除渠道");
     ErrorCode RECRUIT_CHANNEL_TRANSFER_DISABLED = new ErrorCode(1_050_200_008, "承接招聘渠道已停用");
+    ErrorCode RECRUIT_CHANNEL_DISABLED = new ErrorCode(1_050_200_030, "招聘渠道已停用");
 
     // ========== 招聘职位类型 1-050-200-004 ==========
     ErrorCode RECRUIT_POST_TYPE_NOT_EXISTS = new ErrorCode(1_050_200_004, "招聘职位类型不存在");
+    ErrorCode RECRUIT_POST_TYPE_PARENT_ERROR = new ErrorCode(1_050_200_019, "父职位类型不能是自身或下属节点");
+    ErrorCode RECRUIT_POST_TYPE_PARENT_NOT_EXISTS = new ErrorCode(1_050_200_020, "父职位类型不存在");
+    ErrorCode RECRUIT_POST_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_200_021, "同级职位类型名称已存在");
+    ErrorCode RECRUIT_POST_TYPE_HAS_CHILDREN = new ErrorCode(1_050_200_022, "职位类型存在子类型，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_USED = new ErrorCode(1_050_200_023, "职位类型已被职位使用，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_DISABLED = new ErrorCode(1_050_200_024, "职位类型已停用");
+    ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_025, "职位类型必须选择叶子节点");
+    ErrorCode RECRUIT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_027, "招聘简历版本不存在");
 
     // ========== 招聘应聘流程 1-050-200-020 ==========
     ErrorCode RECRUIT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_020, "招聘应聘记录不存在");

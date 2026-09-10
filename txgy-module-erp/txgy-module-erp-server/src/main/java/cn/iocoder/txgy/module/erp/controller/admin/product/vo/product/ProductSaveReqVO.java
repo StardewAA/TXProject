@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.erp.controller.admin.product.vo.product;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -13,6 +14,19 @@ public class ProductSaveReqVO {
 
     @Schema(description = "产品编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "15672")
     private Long id;
+
+    @Schema(description = "跨模块统一物料编码", requiredMode = Schema.RequiredMode.REQUIRED, example = "MAT-FG-0001")
+    @NotEmpty(message = "统一物料编码不能为空")
+    private String materialCode;
+
+    @Schema(description = "物料类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "FINISHED_GOODS")
+    @NotEmpty(message = "物料类型不能为空")
+    @Pattern(regexp = "RAW_MATERIAL|FINISHED_GOODS", message = "物料类型必须是 RAW_MATERIAL 或 FINISHED_GOODS")
+    private String materialType;
+
+    @Schema(description = "是否需要质检", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "质检标志不能为空")
+    private Boolean qualityRequired;
 
     @Schema(description = "产品名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @NotEmpty(message = "产品名称不能为空")

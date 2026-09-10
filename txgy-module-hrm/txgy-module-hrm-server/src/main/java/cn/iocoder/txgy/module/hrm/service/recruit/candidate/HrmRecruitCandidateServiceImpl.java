@@ -2,8 +2,10 @@ package cn.iocoder.txgy.module.hrm.service.recruit.candidate;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.hrm.controller.admin.employee.vo.employee.HrmEmployeeSaveReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateUpdateChannelReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateEntryReqVO;
@@ -15,12 +17,15 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecru
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.candidate.HrmRecruitCandidateMapper;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -48,6 +53,7 @@ import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDID
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_ELIMINATE_STATUS_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_HAS_EMPLOYEE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_MOBILE_DUPLICATE;
 import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
 
 /**
@@ -71,22 +77,29 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     private HrmRecruitInterviewService recruitInterviewService;
     @Resource
     private HrmEmployeeService employeeService;
+    @Resource
+    @Lazy
+    private HrmRecruitApplicationService recruitApplicationService;
 
     @Override
     @LogRecord(type = HRM_RECRUIT_CANDIDATE_TYPE, subType = HRM_RECRUIT_CANDIDATE_CREATE_SUB_TYPE,
             bizNo = "{{#recruitCandidate.id}}", success = HRM_RECRUIT_CANDIDATE_CREATE_SUCCESS)
+    @Transactional(rollbackFor = Exception.class)
     public Long createRecruitCandidate(HrmRecruitCandidateSaveReqVO createReqVO) {
+        validateMobileUnique(createReqVO.getMobile(), null);
         // 1.1 校验招聘职位是否存在
-        recruitPostService.validateRecruitPostExists(createReqVO.getPostId());
+        recruitPostService.validateRecruitPostPublished(createReqVO.getPostId());
         // 1.2 校验招聘渠道是否存在
         if (createReqVO.getChannelId() != null) {
-            recruitChannelService.validateRecruitChannelExists(createReqVO.getChannelId());
+            recruitChannelService.validateRecruitChannelUsable(createReqVO.getChannelId());
         }
 
         // 2. 创建候选人，初始状态由后端统一设置
         HrmRecruitCandidateDO recruitCandidate = BeanUtils.toBean(createReqVO, HrmRecruitCandidateDO.class)
                 .setStatus(HrmRecruitCandidateStatusEnum.NEW.getStatus()).setStageNumber(0)
                 .setStatusUpdateTime(LocalDateTime.now());
+        // 显式写入租户，避免没有租户字段自动填充时落成数据库默认值 0。
+        recruitCandidate.setTenantId(TenantContextHolder.getTenantId());
         recruitCandidateMapper.insert(recruitCandidate);
 
         // 3. 记录操作日志上下文
@@ -100,11 +113,13 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void updateRecruitCandidate(HrmRecruitCandidateSaveReqVO updateReqVO) {
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExists(updateReqVO.getId());
+        validateMobileUnique(updateReqVO.getMobile(), updateReqVO.getId());
         // 1.2 校验招聘职位是否存在
-        recruitPostService.validateRecruitPostExists(updateReqVO.getPostId());
+        recruitPostService.validateRecruitPostPublished(updateReqVO.getPostId());
         // 1.3 校验招聘渠道是否存在
-        if (updateReqVO.getChannelId() != null) {
-            recruitChannelService.validateRecruitChannelExists(updateReqVO.getChannelId());
+        if (updateReqVO.getChannelId() != null
+                && !Objects.equals(updateReqVO.getChannelId(), recruitCandidate.getChannelId())) {
+            recruitChannelService.validateRecruitChannelUsable(updateReqVO.getChannelId());
         }
 
         // 2. 更新候选人
@@ -113,6 +128,16 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable(DiffParseFunction.OLD_OBJECT,
                 BeanUtils.toBean(recruitCandidate, HrmRecruitCandidateSaveReqVO.class));
+    }
+
+    private void validateMobileUnique(String mobile, Long id) {
+        if (StrUtil.isBlank(mobile)) {
+            return;
+        }
+        HrmRecruitCandidateDO same = recruitCandidateMapper.selectByMobile(mobile);
+        if (same != null && !Objects.equals(same.getId(), id)) {
+            throw exception(RECRUIT_CANDIDATE_MOBILE_DUPLICATE);
+        }
     }
 
     @Override
@@ -278,7 +303,7 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExists(reqVO.getId());
         // 1.2 校验招聘职位是否存在
-        HrmRecruitPostDO recruitPost = recruitPostService.validateRecruitPostExists(reqVO.getPostId());
+        HrmRecruitPostDO recruitPost = recruitPostService.validateRecruitPostPublished(reqVO.getPostId());
 
         // 2. 更新候选人的招聘职位
         recruitCandidateMapper.updateById(new HrmRecruitCandidateDO()
@@ -296,7 +321,7 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExists(reqVO.getId());
         // 1.2 校验招聘渠道是否存在
-        HrmRecruitChannelDO recruitChannel = recruitChannelService.validateRecruitChannelExists(reqVO.getChannelId());
+        HrmRecruitChannelDO recruitChannel = recruitChannelService.validateRecruitChannelUsable(reqVO.getChannelId());
 
         // 2. 更新候选人的招聘渠道
         recruitCandidateMapper.updateById(new HrmRecruitCandidateDO()
@@ -376,6 +401,15 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
                         : HrmRecruitCandidateStatusEnum.PENDING_ENTRY.getStatus())
                 .setEntryTime(reqVO.getEntryTime()).setStatusUpdateTime(LocalDateTime.now()));
 
+        // 员工档案创建成功后同步当前岗位应聘记录，避免后台候选人页仍显示“待入职”。
+        HrmRecruitApplicationDO application = recruitApplicationService.getLatestRecruitApplicationByCandidateAndPost(
+                recruitCandidate.getId(), recruitCandidate.getPostId());
+        if (application != null && !HrmRecruitApplicationStatusEnum.ONBOARDED.getStatus().equals(application.getStatus())
+                && !HrmRecruitApplicationStatusEnum.ELIMINATED.getStatus().equals(application.getStatus())
+                && !HrmRecruitApplicationStatusEnum.WITHDRAWN.getStatus().equals(application.getStatus())) {
+            recruitApplicationService.markOnboarded(application.getId(), employeeId);
+        }
+
         // 4. 记录操作日志上下文
         LogRecordContext.putVariable("recruitCandidate", recruitCandidate);
         LogRecordContext.putVariable("employeeId", employeeId);
@@ -426,6 +460,11 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
             throw exception(RECRUIT_CANDIDATE_NOT_EXISTS);
         }
         return recruitCandidate;
+    }
+
+    @Override
+    public HrmRecruitCandidateDO getRecruitCandidateByMobile(String mobile) {
+        return recruitCandidateMapper.selectByMobile(mobile);
     }
 
 }

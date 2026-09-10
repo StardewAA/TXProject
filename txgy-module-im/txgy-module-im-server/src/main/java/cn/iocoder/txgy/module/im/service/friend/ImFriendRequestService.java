@@ -73,4 +73,13 @@ public interface ImFriendRequestService {
      */
     PageResult<ImFriendRequestDO> getFriendRequestPage(ImFriendRequestManagerPageReqVO reqVO);
 
+    /**
+     * 【管理后台】删除好友申请记录（治理动作，逻辑删除）
+     * <p>
+     * 仅删除申请记录本身，不影响双方已建立的好友关系；主要用于清理恶意申请、测试数据。
+     *
+     * @param id 申请记录编号
+     */
+    void deleteFriendRequestByManager(Long id);
+
 }

@@ -19,6 +19,10 @@ export namespace ErpPurchaseOrderApi {
     accountId?: number; // 结算账户编号
     status?: number; // 状态
     processInstanceId?: string; // BPM 流程实例编号
+    sourceType?: string;
+    sourceId?: number;
+    sourceNo?: string;
+    businessChainNo?: string;
     remark?: string; // 备注
     fileUrl?: string; // 附件地址
     inCount?: number; // 采购入库数量

@@ -1,15 +1,26 @@
 <script lang="ts" setup>
+import { computed } from 'vue';
+
 import { useVbenForm, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
 import { updateRecruitPostStatus } from '#/api/hrm/recruit/post';
 import { $t } from '#/locales';
-import { HrmRecruitPostStatus } from '#/views/hrm/utils/constants';
+import {
+  HrmRecruitPostStatus,
+  type HrmRecruitPostStatusValue,
+} from '#/views/hrm/utils/constants';
 
 import { useStopFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
+const targetStatus = computed<HrmRecruitPostStatusValue | undefined>(
+  () => modalApi.getData<{ status?: HrmRecruitPostStatusValue }>()?.status,
+);
+const modalTitle = computed(() =>
+  targetStatus.value === HrmRecruitPostStatus.CLOSED ? '关闭职位' : '暂停职位',
+);
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -32,22 +43,29 @@ const [Modal, modalApi] = useVbenModal({
     const values = await formApi.getValues();
     const stopReason = String(values.stopReason ?? '').trim();
     if (!stopReason) {
-      message.warning('停止原因不能为空');
+      message.warning('状态变更原因不能为空');
       return;
     }
     if (stopReason.length > 255) {
-      message.warning('停止原因不能超过 255 个字符');
+      message.warning('状态变更原因不能超过 255 个字符');
       return;
     }
-    const data = modalApi.getData<{ id: number }>();
-    if (!data?.id) {
+    const data = modalApi.getData<{
+      id: number;
+      status: HrmRecruitPostStatusValue;
+    }>();
+    if (
+      !data?.id ||
+      (data.status !== HrmRecruitPostStatus.PAUSED &&
+        data.status !== HrmRecruitPostStatus.CLOSED)
+    ) {
       return;
     }
     modalApi.lock();
     try {
       await updateRecruitPostStatus({
         id: data.id,
-        status: HrmRecruitPostStatus.STOPPED,
+        status: data.status,
         stopReason,
       });
       await modalApi.close();
@@ -67,7 +85,7 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal title="停止招聘" class="w-[520px]">
+  <Modal :title="modalTitle" class="w-[520px]">
     <Form class="mx-4" />
   </Modal>
 </template>
