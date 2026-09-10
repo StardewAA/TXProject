@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /* PDF / 图片在线预览（内嵌查看器）
- * 取 URL 的两条路径（已核实）：
- *   1) 调用方直接给 url（附件 AttachmentSetVO.URL，上传接口返回的即是可访问 URL）——首选，立即可用；
- *   2) 只给 fileId（公告版式文件 pdfFileId）：GET /infra/file/get?id= 取 url。
- *      该接口需权限 infra:file:query；若前端账号无此权限或后端未回传 url，则预览不可用并在弹窗内给出明确提示（需后端支持）。
+ * 口径（《11-文件上传与file_id契约-2026-09-10.md》§3.5）：上传成功后响应已带 url，**直接用 url 预览**；
+ *   fileId 分支仅服务历史数据（旧记录只存了 file_id）。
+ * 取 URL 的两条路径：
+ *   1) 调用方给 url（上传接口 /bidding/file/upload 返回，立即可用）——首选；
+ *   2) 只给 fileId（如公告版式文件 pdfFileId）：GET /infra/file/get?id= 取 url；
+ *      该接口需权限 infra:file:query，业务账号通常没有 ⇒ 历史数据可先用 registerBiddingFileByUrl 补登记，
+ *      或由后端在出参直接回传可访问 URL（站内公告 PDF 字节流代理，规范 §3.5 备注）。
  * 渲染：浏览器原生 PDF 查看器（iframe）；图片类型用 <img>。 */
 import { computed, ref, watch } from 'vue';
 

@@ -3,8 +3,9 @@
  *   AttachmentItemVO 附件采集项（35 类）= 分组维度（含 5 类陕西必传）
  *   AttachmentSetVO 附件集结构 = 每个附件的字段（GUID / 关联数据集标识 / 名称 / 类型 / 文件名 / URL）
  *   20号令 A.1.2/A.1.4：数据集以 ATTACHMENT_CODE 关联附件集，多个标识号半角分号隔开 → 每环节可加多个附件
- * 上传：预签名直传（可得 file_id）失败自动回落后端上传（只得 URL）；亦可直接登记外部 URL。
- * 说明：后端业务接口未就绪时，本面板仅产出符合 VO 的附件数据（内存/本地草稿），不伪造后端成功。 */
+ * 上传：POST /bidding/file/upload（响应必带 file_id + url）；URL 与 file_id 均由上传结果自动写入，
+ *   URL 只读展示不提供手填（规范《11-文件上传与file_id契约》§3.4：移除手填 URL 与"仅 URL"兜底提示）。
+ * 说明：项目/招标项目/标段的附件明细持久化接口后端尚未提供，本面板产出符合 VO 的附件数据（本地暂存）。 */
 import { computed, ref, watch } from 'vue';
 
 import { Button, Input, message, Tag, Upload } from 'ant-design-vue';
@@ -15,7 +16,6 @@ import {
   makeAttachment,
   missingRequiredItems,
   stageItems,
-  typeOfFileName,
   type AttachmentRecord,
 } from './attachmentStages';
 import type { VoField } from './voSpec.gen';
@@ -49,7 +49,6 @@ const uploadingKey = ref('');
 /** 附件关联标识号（ATTACHMENT_CODE）：多个 GUID 半角分号隔开 —— 交给所在数据集的该字段 */
 const attachmentCode = computed(() => attachmentCodeOf(list.value));
 const missing = computed(() => missingRequiredItems(props.stage, list.value));
-const hasFileId = computed(() => list.value.some((a) => a.fileId !== undefined));
 
 function ofItem(code: string): AttachmentRecord[] {
   return list.value.filter((a) => a.setCode === code);
@@ -59,7 +58,7 @@ async function onPick(item: VoField, file: File): Promise<boolean> {
   try {
     const up = await uploadAttachment(file, props.directory);
     push([...list.value, makeAttachment(item.code, up)]);
-    message.success('已添加附件：' + file.name + (up.fileId === undefined ? '（仅 URL，未取到 file_id）' : ''));
+    message.success('已添加附件：' + file.name + '（file_id ' + up.fileId + '）');
   } catch (e) {
     message.error('上传失败：' + ((e as Error).message || String(e)));
   } finally {
@@ -67,14 +66,9 @@ async function onPick(item: VoField, file: File): Promise<boolean> {
   }
   return false;
 }
-/** 手工登记外部 URL（VO：URL 必填，可指向发布媒介/外部归档地址） */
-function addByUrl(item: VoField): void {
-  const url = globalThis.prompt('登记附件 URL（规范必填字段 URL）：');
-  if (!url) return;
-  const fileName = url.split('/').pop() || item.label;
-  push([...list.value, makeAttachment(item.code, { url, name: item.label + '（外部链接）', type: typeOfFileName(fileName) }, item.label + '（外部链接）')]);
-}
-function patch(a: AttachmentRecord, key: 'name' | 'url', v: string): void {
+/* 规范 §3.4：删除"登记 URL / 手填 URL"入口——URL 由上传结果自动写入，用户不接触地址与 ID。
+ * 仅保留附件名称可改（ATTACHMENT_NAME 属业务名称，非系统生成）。 */
+function patch(a: AttachmentRecord, key: 'name', v: string): void {
   push(list.value.map((x) => (x.guid === a.guid ? { ...x, [key]: v } : x)));
 }
 function remove(a: AttachmentRecord): void {
@@ -115,9 +109,8 @@ function copyCode(): void {
         <span class="ap-grp-cnt">{{ ofItem(it.code).length }} 个</span>
         <div class="ap-grp-act">
           <Upload :show-upload-list="false" multiple :disabled="disabled" :before-upload="(f: File) => onPick(it, f)">
-            <Button size="small" :loading="uploadingKey === it.code" :disabled="disabled">添加附件</Button>
+            <Button size="small" :loading="uploadingKey === it.code" :disabled="disabled">选择文件上传</Button>
           </Upload>
-          <Button size="small" type="link" :disabled="disabled" @click="addByUrl(it)">登记 URL</Button>
         </div>
       </div>
 
@@ -128,7 +121,10 @@ function copyCode(): void {
             <span class="ap-file-n">{{ a.fileName }}</span>
             <span class="ap-file-t">{{ a.type || '—' }}<template v-if="a.size"> · {{ (a.size / 1024).toFixed(0) }} KB</template><template v-if="a.fileId !== undefined"> · file_id {{ a.fileId }}</template></span>
           </div>
-          <Input :value="a.url" class="ap-url" placeholder="URL（附件URL地址，规范必填）" :disabled="disabled" @change="(e) => patch(a, 'url', String((e.target as HTMLInputElement).value ?? ''))" />
+          <div class="ap-url" :title="a.url">
+            <span class="ap-url-t">URL 由上传自动写入</span>
+            <span class="ap-url-v">{{ a.url }}</span>
+          </div>
           <div class="ap-row-act">
             <a v-if="a.url" :href="a.url" target="_blank" rel="noopener noreferrer" class="ap-open">打开</a>
             <Button size="small" type="link" danger :disabled="disabled" @click="remove(a)">移除</Button>
@@ -142,7 +138,7 @@ function copyCode(): void {
     <footer class="ap-f">
       <span class="ap-f-l">ATTACHMENT_CODE（半角分号分隔）：</span>
       <code class="ap-f-code">{{ attachmentCode || '（无附件时不写入该字段）' }}</code>
-      <span v-if="!hasFileId && list.length" class="ap-f-note">当前附件仅含 URL（后端上传接口只返回 URL）；预签名直传链路可用时自动补 file_id</span>
+      <span v-if="list.length" class="ap-f-note">附件三件套（file_id / sha256 / size）由上传接口返回并落库；URL 仅供预览</span>
     </footer>
   </section>
 </template>
@@ -205,6 +201,9 @@ function copyCode(): void {
 .ap-file { min-width: 0; display: flex; flex-direction: column; }
 .ap-file-n { font-size: 12.5px; color: #2e3947; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-file-t { font-size: 11px; color: #8a949e; }
+.ap-url { min-width: 0; display: flex; flex-direction: column; }
+.ap-url-t { font-size: 10.5px; color: #9aa4af; }
+.ap-url-v { font-size: 11.5px; color: #6b7681; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-row-act { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .ap-open { font-size: 12.5px; color: #2b6cb0; }
 .ap-guid {

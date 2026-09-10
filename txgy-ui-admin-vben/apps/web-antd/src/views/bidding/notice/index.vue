@@ -103,23 +103,18 @@ async function onPdfBeforeUpload(file: File): Promise<boolean> {
   if (!/\.pdf$/i.test(file.name)) { createMessage.warning('仅支持 PDF 文件'); return false; }
   pdfUploading.value = true;
   try {
-    /* 上传口径（三级优先，见 vo/attachmentUpload.ts）：
-       ① POST /bidding/file/upload —— 响应必带 fileId，且同时回 url/sha256/size（bidding 统一入口，推荐）；
-       ② 预签名直传 GET /infra/file/presigned-url → PUT → POST /infra/file/create（回 file_id）；
-       ③ POST /infra/file/upload —— 只回 URL（无 file_id）兜底。
-       发布强制 pdfFileId 非空，故①/②优先；仅③命中时提示由后端补录。 */
+    /* 上传口径（规范《11-文件上传与file_id契约》§3.2/§3.3）：单一链路
+       主：POST /bidding/file/upload（响应必带 fileId + url + sha256/size）；
+       降：预签名直传 /infra/file/presigned-url → PUT → /infra/file/create（同样必须拿到 file_id）。
+       拿不到 file_id 时 uploadAttachment 直接抛「文件注册失败，请重试」——绝不回退到让用户手填 ID。 */
     const up = await uploadAttachment(file, 'bidding/notice');
     pdfUrl.value = up.url;
     pdfFileName.value = file.name;
     pdfSize.value = up.size;
-    /* 红线 8 三件套：pdfFileId + pdfSha256 + pdfSize 同源留存 */
+    /* 红线 8 三件套：pdfFileId + pdfSha256 + pdfSize 同源留存（fileId 由类型保证必存在，无分支） */
+    form.pdfFileId = up.fileId;
     if (up.sha256) form.pdfSha256 = up.sha256;
-    if (up.fileId === undefined) {
-      createMessage.warning('文件已上传（URL 已取得），但当前上传链路未返回 file_id：发布所需的 pdfFileId 需后端支持（直传链路或上传接口返回 id）');
-    } else {
-      form.pdfFileId = up.fileId;
-      createMessage.success('版式文件已上传：file_id=' + up.fileId + (up.sha256 ? '（已附 SHA-256）' : ''));
-    }
+    createMessage.success('版式文件已上传：file_id=' + up.fileId + (up.sha256 ? '（已附 SHA-256）' : ''));
   } catch (e) {
     createMessage.error('上传失败：' + ((e as Error).message || String(e)));
   } finally {
