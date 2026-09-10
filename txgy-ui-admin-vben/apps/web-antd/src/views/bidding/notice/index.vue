@@ -106,11 +106,13 @@ async function onPdfBeforeUpload(file: File): Promise<boolean> {
     pdfUrl.value = up.url;
     pdfFileName.value = file.name;
     pdfSize.value = up.size;
+    /* 红线 8 三件套：pdfFileId + pdfSha256 + pdfSize 同源留存 */
+    if (up.sha256) form.pdfSha256 = up.sha256;
     if (up.fileId === undefined) {
       createMessage.warning('文件已上传（URL 已取得），但当前上传链路未返回 file_id：发布所需的 pdfFileId 需后端支持（直传链路或上传接口返回 id）');
     } else {
       form.pdfFileId = up.fileId;
-      createMessage.success('版式文件已上传：file_id=' + up.fileId);
+      createMessage.success('版式文件已上传：file_id=' + up.fileId + (up.sha256 ? '（已附 SHA-256）' : ''));
     }
   } catch (e) {
     createMessage.error('上传失败：' + ((e as Error).message || String(e)));
