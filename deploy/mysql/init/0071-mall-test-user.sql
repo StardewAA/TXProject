@@ -7,6 +7,7 @@ UPDATE member_user
 SET password = @test_password,
     status = 0,
     nickname = '商城测试用户',
+    tenant_id = 1,
     updater = 'system',
     update_time = NOW()
 WHERE mobile = @test_mobile;

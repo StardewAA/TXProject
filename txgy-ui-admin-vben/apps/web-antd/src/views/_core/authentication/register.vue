@@ -14,8 +14,6 @@ import { useAccessStore } from '@vben/stores';
 import {
   checkCaptcha,
   getCaptcha,
-  getTenantByWebsite,
-  getTenantSimpleList,
 } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
 
@@ -28,12 +26,18 @@ const accessStore = useAccessStore();
 const authStore = useAuthStore();
 const tenantEnable = isTenantEnable();
 const captchaEnable = isCaptchaEnable();
+const platformTenantId = 1;
 
 const registerType = ref<RegisterType>('personal');
 const registerRef = ref();
 const verifyRef = ref();
 const captchaType = 'blockPuzzle';
-const tenantList = ref<AuthApi.TenantResult[]>([]);
+const tenantList = ref<AuthApi.TenantResult[]>([
+  {
+    id: platformTenantId,
+    name: '商城平台公共用户',
+  } as AuthApi.TenantResult,
+]);
 
 function clearPersonalTenantContext() {
   accessStore.setTenantId(null);
@@ -65,36 +69,10 @@ async function fetchTenantList() {
   if (!tenantEnable) {
     return;
   }
-  try {
-    const websiteTenantPromise = getTenantByWebsite(window.location.hostname);
-    tenantList.value = await getTenantSimpleList();
-    let tenantId: null | number = null;
-    const websiteTenant = await websiteTenantPromise;
-    if (websiteTenant?.id) {
-      tenantId = websiteTenant.id;
-    }
-    if (!tenantId && accessStore.tenantId) {
-      tenantId = accessStore.tenantId;
-    }
-    if (!tenantId && tenantList.value?.[0]?.id) {
-      tenantId = tenantList.value[0].id;
-    }
-
-    if (registerType.value === 'personal') {
-      clearPersonalTenantContext();
-      return;
-    }
-
-    accessStore.setTenantId(tenantId);
-    registerRef.value
-      ?.getFormApi()
-      .setFieldValue('tenantId', tenantId?.toString());
-  } catch (error) {
-    if (registerType.value === 'personal') {
-      clearPersonalTenantContext();
-    }
-    console.error('获取租户列表失败:', error);
-  }
+  accessStore.setTenantId(platformTenantId);
+  registerRef.value
+    ?.getFormApi()
+    .setFieldValue('tenantId', platformTenantId.toString());
 }
 
 function syncRegisterTenantContext(values?: { tenantId?: number | string }) {
@@ -117,6 +95,7 @@ async function handleRegister(values: any) {
     verifyRef.value.show();
     return;
   }
+  accessStore.setTenantId(platformTenantId);
   await authStore.authLogin(
     'register',
     { ...values, registerType: registerType.value },
@@ -128,8 +107,7 @@ async function handleRegister(values: any) {
 
 async function handleVerifySuccess({ captchaVerification }: any) {
   try {
-    const values = await registerRef.value.getFormApi().getValues();
-    syncRegisterTenantContext(values);
+    accessStore.setTenantId(platformTenantId);
     await authStore.authLogin(
       'register',
       {

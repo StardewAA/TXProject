@@ -18,6 +18,7 @@
     SPRING_DATA_REDIS_HOST: redis
     # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
     RESOURCE_UPLOAD_DIR: /app/uploads
+    TXGY_CAPTCHA_ENABLE: "false" # 关闭登录行为验证码，便于本地联调；生产环境请移除或置 true
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
     interval: 15s
@@ -66,6 +67,7 @@ services:
 
   nacos:
     image: nacos/nacos-server:v3.0.3
+    restart: unless-stopped
     environment:
       MODE: standalone
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}

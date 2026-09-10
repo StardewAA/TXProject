@@ -6,7 +6,7 @@ export default {
     // 第三方登录
     login: (data) =>
       request({
-        url: 'third/apple/login',
+        url: '/third/apple/login',
         method: 'POST',
         data,
         custom: {

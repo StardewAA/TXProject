@@ -1,6 +1,6 @@
 <!-- 装修组件容器 -->
 <template>
-  <view :style="[elStyles, elBackground]"><slot /></view>
+  <view class="ss-block-shell" :style="[elStyles, elBackground]"><slot /></view>
 </template>
 
 <script setup>
@@ -51,3 +51,16 @@
     }
   });
 </script>
+
+<style lang="scss" scoped>
+  .ss-block-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--ui-Surface-radius);
+    background: var(--ui-Surface-bg);
+    border: 1rpx solid var(--ui-Surface-border);
+    box-shadow: var(--ui-Surface-shadow);
+    backdrop-filter: blur(18rpx);
+    -webkit-backdrop-filter: blur(18rpx);
+  }
+</style>

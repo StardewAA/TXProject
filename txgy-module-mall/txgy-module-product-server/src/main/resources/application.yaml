@@ -104,6 +104,11 @@ txgy:
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.product
+  integration:
+    wms:
+      readonly:
+        mode: mock # mock：本地直接读同库 WMS 表；remote：调用 /admin-api/wms/inventory/sku-summary
+        authorization: # remote 模式下使用的 WMS 只读账号 Authorization 头，示例：Bearer xxx
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

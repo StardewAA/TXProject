@@ -36,11 +36,23 @@
     <s-goods-shelves v-if="type === 'ProductList'" :data="data" :styles="styles" />
 
     <!-- 营销组件：拼团 -->
-    <s-groupon-block v-if="type === 'PromotionCombination'" :data="data" :styles="styles" />
+    <s-groupon-block
+      v-if="type === 'PromotionCombination' && !isDisabledMarketingBlock(type)"
+      :data="data"
+      :styles="styles"
+    />
     <!-- 营销组件：秒杀 -->
-    <s-seckill-block v-if="type === 'PromotionSeckill'" :data="data" :styles="styles" />
+    <s-seckill-block
+      v-if="type === 'PromotionSeckill' && !isDisabledMarketingBlock(type)"
+      :data="data"
+      :styles="styles"
+    />
     <!-- 营销组件：积分商城 -->
-    <s-point-block v-if="type === 'PromotionPoint'" :data="data" :styles="styles" />
+    <s-point-block
+      v-if="type === 'PromotionPoint' && !isDisabledMarketingBlock(type)"
+      :data="data"
+      :styles="styles"
+    />
     <!-- 营销组件：小程序直播（暂时没有这个功能） -->
     <s-live-block v-if="type === 'MpLive'" :data="data" :styles="styles" />
     <!-- 营销组件：优惠券 -->
@@ -63,6 +75,9 @@
   /**
    * 装修组件 - 组件集
    */
+  import { computed } from 'vue';
+  import { isDisabledMarketingBlock } from '@/sheep/helper/simplified-marketing';
+
   const props = defineProps({
     type: {
       type: String,
@@ -70,13 +85,21 @@
     },
     data: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
     styles: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
   });
+
+  const isRecord = (value) => value && typeof value === 'object' && !Array.isArray(value);
+  // 装修接口异常时可能把 property/style 返回为 null 或基础类型。
+  // 统一传递对象，避免任一子组件在渲染阶段直接访问 undefined 导致白屏。
+  const data = computed(() => (isRecord(props.data) ? props.data : {}));
+  const styles = computed(() => (isRecord(props.styles) ? props.styles : {}));
+  const type = computed(() => (typeof props.type === 'string' ? props.type : ''));
+
   function onSearch() {}
 </script>
 

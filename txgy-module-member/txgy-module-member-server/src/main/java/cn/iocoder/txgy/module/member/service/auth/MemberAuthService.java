@@ -22,6 +22,11 @@ public interface MemberAuthService {
     AppAuthLoginRespVO login(@Valid AppAuthLoginReqVO reqVO);
 
     /**
+     * 手机号注册并自动登录
+     */
+    AppAuthLoginRespVO register(@Valid AppAuthRegisterReqVO reqVO);
+
+    /**
      * 基于 token 退出登录
      *
      * @param token token
