@@ -4,6 +4,7 @@ import { Page } from '@vben/common-ui';
 import { Button, Card, Input, Modal, Select, Switch, Table, Tabs, TabPane, Tag, message } from 'ant-design-vue';
 import type { LiveContext, LiveRow, Profile } from './api';
 import { exportCsv, getLive, postLive, statusText } from './api';
+import PageHeaderBar from '../components/page-header-bar.vue';
 import LiveHall from './live-hall.vue';
 import RoomPanel from './room-panel.vue';
 defineOptions({ name:'TrainingLive' });
@@ -36,7 +37,11 @@ onMounted(load);
 </script>
 <template>
  <Page auto-content-height>
-  <div class="heading"><div><small>云培训学院 · MODULE 06</small><h1>直播与讲师体系</h1><p>从开播预约到学习反馈，让每一场培训都有记录。</p></div><Tag color="blue">{{ctx?.platform?'平台运营':ctx?.teacher?'认证讲师':ctx?.enterprise?'企业管理员':'学员'}}</Tag></div>
+  <PageHeaderBar crumb="云培训学院 · MODULE 06" title="直播与讲师体系" description="从开播预约到学习反馈，让每一场培训都有记录。">
+    <template #actions>
+      <Tag color="blue" class="!m-0">{{ctx?.platform?'平台运营':ctx?.teacher?'认证讲师':ctx?.enterprise?'企业管理员':'学员'}}</Tag>
+    </template>
+  </PageHeaderBar>
   <Tabs v-model:active-key="tab" @change="changeTab">
    <TabPane key="hall" tab="直播大厅"><LiveHall/></TabPane>
    <TabPane v-if="ctx?.teacher" key="rooms" tab="直播管理">
@@ -61,5 +66,5 @@ onMounted(load);
  </Page>
 </template>
 <style scoped>
-.heading{display:flex;align-items:center;justify-content:space-between;padding:26px 28px;background:linear-gradient(120deg,#e9f1ff,#f4f9ff);border-radius:12px;margin-bottom:18px;color:#173354}.heading h1{font-size:26px;font-weight:650;margin:7px 0}.heading p,.muted{color:#738195;font-size:12px}.heading small{letter-spacing:2px;color:#4672b4}.toolbar,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}.actions{gap:6px}.form{display:grid;gap:14px}.form label{display:grid;gap:6px}.form input,input[type=date]{border:1px solid #d9d9d9;border-radius:6px;padding:7px;background:transparent}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}.metrics :deep(.ant-card-body){font-size:28px}
+.toolbar,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}.actions{gap:6px}.form{display:grid;gap:14px}.form label{display:grid;gap:6px}.form input,input[type=date]{border:1px solid #d9d9d9;border-radius:6px;padding:7px;background:transparent}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}.metrics :deep(.ant-card-body){font-size:28px}
 </style>
