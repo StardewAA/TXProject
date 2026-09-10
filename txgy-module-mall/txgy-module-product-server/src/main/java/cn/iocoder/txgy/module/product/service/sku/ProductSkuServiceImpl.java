@@ -17,6 +17,8 @@ import cn.iocoder.txgy.module.product.service.property.ProductPropertyValueServi
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
 import cn.iocoder.txgy.module.product.service.sku.adapter.ProductWmsInventoryAdapter;
 import cn.iocoder.txgy.module.product.service.sku.dto.ProductWmsStockReconciliationDTO;
+import cn.iocoder.txgy.module.product.service.wms.readonly.ProductWmsReadonlyQueryAdapter;
+import cn.iocoder.txgy.module.product.service.wms.readonly.ProductWmsSkuSummaryDTO;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -53,6 +55,8 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     private ProductPropertyValueService productPropertyValueService;
     @Resource
     private ProductWmsInventoryAdapter productWmsInventoryAdapter;
+    @Resource
+    private ProductWmsReadonlyQueryAdapter productWmsReadonlyQueryAdapter;
 
     @Override
     public void deleteSku(Long id) {
@@ -323,6 +327,11 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     @Override
     public Map<String, ProductWmsInventoryAdapter.ReservationSummary> getWmsStockStatus(Collection<String> orderNos) {
         return productWmsInventoryAdapter.getReservationSummaries(orderNos);
+    }
+
+    @Override
+    public List<ProductWmsSkuSummaryDTO> getWmsSkuSummary(Long itemId) {
+        return productWmsReadonlyQueryAdapter.getSkuSummary(itemId);
     }
 
     @Override

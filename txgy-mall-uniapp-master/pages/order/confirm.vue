@@ -10,7 +10,7 @@
         :key="item.skuId"
         :img="item.picUrl"
         :title="item.spuName"
-        :skuText="item.properties.map((property) => property.valueName).join(' ')"
+        :skuText="(Array.isArray(item.properties) ? item.properties : []).map((property) => property.valueName).join(' ')"
         :price="item.price"
         :num="item.count"
         marginBottom="10"
@@ -138,15 +138,15 @@
             <text
               class="item-value"
               :class="
-                state.couponInfo.filter((coupon) => coupon.match).length > 0
+                state.couponInfo.filter((coupon) => coupon?.match).length > 0
                   ? 'text-red'
                   : 'text-disabled'
               "
               v-else
             >
               {{
-                state.couponInfo.filter((coupon) => coupon.match).length > 0
-                  ? state.couponInfo.filter((coupon) => coupon.match).length + ' 张可用'
+                state.couponInfo.filter((coupon) => coupon?.match).length > 0
+                  ? state.couponInfo.filter((coupon) => coupon?.match).length + ' 张可用'
                   : '暂无可用优惠券'
               }}
             </text>
@@ -179,7 +179,7 @@
       </view>
       <view class="total-box-footer ss-font-28 ss-flex ss-row-right ss-col-center ss-m-r-28">
         <view class="total-num ss-m-r-20">
-          共{{ state.orderInfo.items.reduce((acc, item) => acc + item.count, 0) }}件
+          共{{ state.orderInfo.items.reduce((acc, item) => acc + (Number(item?.count) || 0), 0) }}件
         </view>
         <view>合计：</view>
         <view class="total-num text-red"> ￥{{ fen2yuan(state.orderInfo.price.payPrice) }}</view>
@@ -211,6 +211,7 @@
         </view>
         <button
           class="ss-reset-button ui-BG-Main-Gradient ss-r-40 submit-btn ui-Shadow-Main"
+          :disabled="state.submitting || state.loading"
           @tap="onConfirm"
         >
           提交订单
@@ -241,7 +242,11 @@
     showDiscount: false, // 是否展示营销活动
     // ========== 积分 ==========
     pointStatus: false, //是否使用积分
+    submitting: false,
+    loading: false,
   });
+
+  let orderInfoRequestId = 0;
 
   const addressState = ref({
     addressInfo: {}, // 选择的收货地址
@@ -270,12 +275,28 @@
 
   // 提交订单
   function onConfirm() {
-    if (addressState.value.deliveryType === 1 && !addressState.value.addressInfo.id) {
+    if (!Array.isArray(state.orderPayload?.items) || state.orderPayload.items.length === 0) {
+      sheep.$helper.toast('订单商品信息不完整，请返回重试');
+      return;
+    }
+    if (addressState.value.deliveryType === 1 && !addressState.value.addressInfo?.id) {
       sheep.$helper.toast('请选择收货地址');
       return;
     }
+    if (![1, 2].includes(addressState.value.deliveryType)) {
+      sheep.$helper.toast('请选择配送方式');
+      return;
+    }
+    if (
+      !state.orderInfo?.items?.length ||
+      !state.orderInfo?.price ||
+      !Object.prototype.hasOwnProperty.call(state.orderInfo.price, 'payPrice')
+    ) {
+      sheep.$helper.toast('订单金额尚未计算完成，请稍后重试');
+      return;
+    }
     if (addressState.value.deliveryType === 2) {
-      if (!addressState.value.pickUpInfo.id) {
+      if (!addressState.value.pickUpInfo?.id) {
         sheep.$helper.toast('请选择自提门店地址');
         return;
       }
@@ -297,82 +318,169 @@
 
   // 创建订单&跳转
   async function submitOrder() {
-    const { code, data } = await OrderApi.createOrder({
-      items: state.orderPayload.items,
-      couponId: state.orderPayload.couponId,
-      remark: state.orderPayload.remark,
-      deliveryType: addressState.value.deliveryType,
-      addressId: addressState.value.addressInfo.id, // 收件地址编号
-      pickUpStoreId: addressState.value.pickUpInfo.id, //自提门店编号
-      receiverName: addressState.value.receiverName, // 选择门店自提时，该字段为联系人名
-      receiverMobile: addressState.value.receiverMobile, // 选择门店自提时，该字段为联系人手机
-      pointStatus: state.pointStatus,
-      combinationActivityId: state.orderPayload.combinationActivityId,
-      combinationHeadId: state.orderPayload.combinationHeadId,
-      seckillActivityId: state.orderPayload.seckillActivityId,
-      pointActivityId: state.orderPayload.pointActivityId,
-    });
-    if (code !== 0) {
-      return;
-    }
-    // 更新购物车列表，如果来自购物车
-    if (state.orderPayload.items[0].cartId > 0) {
-      sheep.$store('cart').getList();
-    }
+    if (state.submitting) return;
+    state.submitting = true;
+    try {
+      const response = await OrderApi.createOrder({
+        items: state.orderPayload.items,
+        couponId: state.orderPayload.couponId,
+        remark: state.orderPayload.remark,
+        deliveryType: addressState.value.deliveryType,
+        addressId: addressState.value.addressInfo.id, // 收件地址编号
+        pickUpStoreId: addressState.value.pickUpInfo.id, //自提门店编号
+        receiverName: addressState.value.receiverName, // 选择门店自提时，该字段为联系人名
+        receiverMobile: addressState.value.receiverMobile, // 选择门店自提时，该字段为联系人手机
+        pointStatus: state.pointStatus,
+        combinationActivityId: state.orderPayload.combinationActivityId,
+        combinationHeadId: state.orderPayload.combinationHeadId,
+        seckillActivityId: state.orderPayload.seckillActivityId,
+        pointActivityId: state.orderPayload.pointActivityId,
+      });
+      const orderId = response?.data?.id;
+      if (response?.code !== 0 || orderId === undefined || orderId === null || String(orderId) === '') {
+        sheep.$helper.toast(response?.msg || '订单创建失败，请稍后重试');
+        return;
+      }
+      const data = response.data;
+      // 更新购物车列表，如果来自购物车
+      if (state.orderPayload.items[0]?.cartId > 0) {
+        sheep.$store('cart').getList();
+      }
 
-    // 跳转到支付页面
-    if (data.payOrderId && data.payOrderId > 0) {
-      sheep.$router.redirect('/pages/pay/index', {
-        id: data.payOrderId,
-      });
-    } else {
-      sheep.$router.redirect('/pages/order/detail', {
-        id: data.id,
-      });
+      // 跳转到支付页面
+      const payOrderId = data.payOrderId;
+      if (payOrderId !== undefined && payOrderId !== null && String(payOrderId) !== '' && String(payOrderId) !== '0') {
+        sheep.$router.redirect('/pages/pay/index', {
+          id: String(payOrderId),
+        });
+      } else {
+        sheep.$router.redirect('/pages/order/detail', {
+          id: String(data.id),
+        });
+      }
+    } catch (error) {
+      // request 已负责提示接口错误，这里只保证页面不会因 false/null 响应崩溃。
+      return;
+    } finally {
+      state.submitting = false;
     }
   }
 
   // 检查库存 & 计算订单价格
   async function getOrderInfo() {
-    // 计算价格
-    const { data, code } = await OrderApi.settlementOrder({
-      items: state.orderPayload.items,
-      couponId: state.orderPayload.couponId,
-      deliveryType: addressState.value.deliveryType,
-      addressId: addressState.value.addressInfo.id, // 收件地址编号
-      pickUpStoreId: addressState.value.pickUpInfo.id, //自提门店编号
-      receiverName: addressState.value.receiverName, // 选择门店自提时，该字段为联系人名
-      receiverMobile: addressState.value.receiverMobile, // 选择门店自提时，该字段为联系人手机
-      pointStatus: state.pointStatus,
-      combinationActivityId: state.orderPayload.combinationActivityId,
-      combinationHeadId: state.orderPayload.combinationHeadId,
-      seckillActivityId: state.orderPayload.seckillActivityId,
-      pointActivityId: state.orderPayload.pointActivityId,
-    });
-    if (code !== 0) {
-      return code;
+    if (!Array.isArray(state.orderPayload?.items) || state.orderPayload.items.length === 0) {
+      return 1;
     }
-    state.orderInfo = data;
-    state.couponInfo = data.coupons || [];
-    // 设置收货地址
-    if (state.orderInfo.address) {
-      addressState.value.addressInfo = state.orderInfo.address;
+    const requestId = ++orderInfoRequestId;
+    state.loading = true;
+    try {
+      // 计算价格
+      const response = await OrderApi.settlementOrder({
+        items: state.orderPayload.items,
+        couponId: state.orderPayload.couponId,
+        deliveryType: addressState.value.deliveryType,
+        addressId: addressState.value.addressInfo.id, // 收件地址编号
+        pickUpStoreId: addressState.value.pickUpInfo.id, //自提门店编号
+        receiverName: addressState.value.receiverName, // 选择门店自提时，该字段为联系人名
+        receiverMobile: addressState.value.receiverMobile, // 选择门店自提时，该字段为联系人手机
+        pointStatus: state.pointStatus,
+        combinationActivityId: state.orderPayload.combinationActivityId,
+        combinationHeadId: state.orderPayload.combinationHeadId,
+        seckillActivityId: state.orderPayload.seckillActivityId,
+        pointActivityId: state.orderPayload.pointActivityId,
+      });
+      if (response?.code !== 0 || !response.data) {
+        if (requestId !== orderInfoRequestId) return 1;
+        state.orderInfo = { items: [], price: {} };
+        state.couponInfo = [];
+        return response?.code || 1;
+      }
+      if (requestId !== orderInfoRequestId) return 1;
+      state.orderInfo = {
+        ...response.data,
+        items: Array.isArray(response.data.items)
+          ? response.data.items
+              .filter((item) => item && typeof item === 'object')
+              .map((item) => ({
+              ...item,
+              properties: Array.isArray(item.properties) ? item.properties : [],
+              count: Number(item.count) || 0,
+              price: Number(item.price) || 0,
+              }))
+          : [],
+        price: response.data.price || {},
+      };
+      state.couponInfo = Array.isArray(response.data.coupons)
+        ? response.data.coupons.filter((coupon) => coupon && typeof coupon === 'object')
+        : [];
+      // 设置收货地址
+      if (state.orderInfo.address) {
+        addressState.value.addressInfo = state.orderInfo.address;
+      }
+      return 0;
+    } catch (error) {
+      return 1;
+    } finally {
+      if (requestId === orderInfoRequestId) state.loading = false;
     }
-    return code;
   }
 
-  onLoad(async (options) => {
+  onLoad(async (options = {}) => {
     // 解析参数
-    if (!options.data) {
+    const encodedData = options?.data;
+    if (!encodedData) {
       sheep.$helper.toast('参数不正确，请检查！');
       return;
     }
-    state.orderPayload = JSON.parse(options.data);
+    try {
+      // uni.navigateTo 在 H5 下会对已经编码过的 query 再编码一次，
+      // 因而这里可能收到 `%7B...%7D` 或 `%257B...%257D`。最多解码两次，
+      // 同时避免对普通 JSON/非法字符串抛出异常。
+      let dataText = String(encodedData);
+      for (let index = 0; index < 2; index++) {
+        try {
+          const decoded = decodeURIComponent(dataText);
+          if (decoded === dataText) break;
+          dataText = decoded;
+        } catch (error) {
+          break;
+        }
+      }
+      const parsedPayload = JSON.parse(dataText);
+      if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) {
+        throw new Error('invalid order payload');
+      }
+      state.orderPayload = parsedPayload;
+      // Keep backend Long identifiers as strings across H5 and mini-program query parsing.
+      if (Array.isArray(state.orderPayload.items)) {
+        state.orderPayload.items = state.orderPayload.items.map((item) => {
+          if (!item || typeof item !== 'object') return item;
+          const normalized = { ...item };
+          ['id', 'skuId', 'spuId', 'cartId'].forEach((key) => {
+            if (normalized[key] !== undefined && normalized[key] !== null) {
+              normalized[key] = String(normalized[key]);
+            }
+          });
+          return normalized;
+        });
+      }
+    } catch (error) {
+      sheep.$helper.toast('订单参数不正确，请返回重试');
+      return;
+    }
+    if (!Array.isArray(state.orderPayload?.items) || state.orderPayload.items.length === 0) {
+      sheep.$helper.toast('订单商品信息不完整，请返回重试');
+      return;
+    }
 
     // 获取交易配置
-    const { data, code } = await TradeConfigApi.getTradeConfig();
-    if (code === 0) {
-      addressState.value.isPickUp = data.deliveryPickUpEnabled;
+    try {
+      const response = await TradeConfigApi.getTradeConfig();
+      if (response?.code === 0 && response.data) {
+        addressState.value.isPickUp = response.data.deliveryPickUpEnabled === true;
+      }
+    } catch (error) {
+      // 默认保留快递配送；自提是否开启由后端结算结果再决定。
     }
 
     // 价格计算
@@ -397,10 +505,20 @@
 
   // 使用 watch 监听地址和配送方式的变化
   watch(addressState, async (newAddress, oldAddress) => {
+    if (!oldAddress) {
+      return;
+    }
     // 如果收货地址或配送方式有变化，则重新计算价格
+    const newAddressId = newAddress.addressInfo?.id || 0;
+    const oldAddressId = oldAddress.addressInfo?.id || 0;
+    const newPickUpId = newAddress.pickUpInfo?.id || 0;
+    const oldPickUpId = oldAddress.pickUpInfo?.id || 0;
     if (
-      newAddress.addressInfo.id !== oldAddress.addressInfo.id ||
-      newAddress.deliveryType !== oldAddress.deliveryType
+      newAddressId !== oldAddressId ||
+      newPickUpId !== oldPickUpId ||
+      newAddress.deliveryType !== oldAddress.deliveryType ||
+      newAddress.receiverName !== oldAddress.receiverName ||
+      newAddress.receiverMobile !== oldAddress.receiverMobile
     ) {
       await getOrderInfo();
     }

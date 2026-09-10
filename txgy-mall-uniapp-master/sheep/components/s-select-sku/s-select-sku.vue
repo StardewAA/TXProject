@@ -122,9 +122,11 @@
   const propertyList = convertProductPropertyList(props.goodsInfo.skus);
   // SKU 列表
   const skuList = computed(() => {
-    let skuPrices = props.goodsInfo.skus;
+    const skuPrices = Array.isArray(props.goodsInfo?.skus) ? props.goodsInfo.skus : [];
     for (let price of skuPrices) {
-      price.value_id_array = price.properties.map((item) => item.valueId);
+      price.value_id_array = (Array.isArray(price.properties) ? price.properties : []).map(
+        (item) => item.valueId,
+      );
     }
     return skuPrices;
   });
@@ -149,7 +151,7 @@
 
   // 加入购物车
   function onAddCart() {
-    if (state.selectedSku.id <= 0) {
+    if (!state.selectedSku?.id) {
       sheep.$helper.toast('请选择规格');
       return;
     }
@@ -163,7 +165,7 @@
 
   // 立即购买
   function onBuy() {
-    if (state.selectedSku.id <= 0) {
+    if (!state.selectedSku?.id) {
       sheep.$helper.toast('请选择规格');
       return;
     }
@@ -279,7 +281,9 @@
     ) {
       // 点击已被选中的，删除并填充 ''
       isChecked = false;
-      state.currentPropertyArray.splice(propertyId, 1, '');
+      // currentPropertyArray is a keyed map (not an array); assigning an
+      // empty value keeps the property in the map while allowing re-selection.
+      state.currentPropertyArray[propertyId] = '';
     } else {
       // 选中
       state.currentPropertyArray[propertyId] = valueId;
@@ -312,6 +316,16 @@
   changeDisabled(false);
   // 初始化默认选中规格中的第一个，如果不需要，注释这段代码即可
   initDefaultSelect(propertyList, onSelectSku);
+
+  // 没有规格属性的商品（例如“默认规格”）不会经过上面的属性选择流程，
+  // 仍需自动选中一个有库存的 SKU，才能直接加入购物车或立即购买。
+  if (propertyList.length === 0) {
+    const defaultSku = skuList.value.find((sku) => Number(sku.stock) > 0) || skuList.value[0];
+    if (defaultSku) {
+      defaultSku.goods_num = defaultSku.goods_num || 1;
+      state.selectedSku = defaultSku;
+    }
+  }
 </script>
 
 <style lang="scss" scoped>

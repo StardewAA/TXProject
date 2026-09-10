@@ -97,6 +97,19 @@ public class AfterSaleDO extends BaseDO {
      * 关联 {@link TradeOrderItemDO#getId()}
      */
     private Long orderItemId;
+
+    /**
+     * 售后责任店铺编号，来源订单项店铺快照；0 表示平台自营。
+     * 该字段已存在于 trade_after_sale.shop_id，历史版本 DO 漏了映射。
+     */
+    private Long shopId;
+
+    /**
+     * 店铺名称只用于响应展示，不落库。售后表保存 shop_id，名称通过店铺 API 补齐。
+     */
+    @TableField(exist = false)
+    private String shopName;
+
     /**
      * 商品 SPU 编号
      *

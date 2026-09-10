@@ -7,6 +7,7 @@ const CartApi = {
       method: 'POST',
       data: data,
       custom: {
+        auth: true,
         showSuccess: true,
         successMsg: '已添加到购物车~',
       }
@@ -16,14 +17,16 @@ const CartApi = {
     return request({
       url: '/trade/cart/update-count',
       method: 'PUT',
-      data: data
+      data: data,
+      custom: { auth: true },
     });
   },
   updateCartSelected: (data) => {
     return request({
       url: '/trade/cart/update-selected',
       method: 'PUT',
-      data: data
+      data: data,
+      custom: { auth: true },
     });
   },
   deleteCart: (ids) => {
@@ -32,7 +35,8 @@ const CartApi = {
       method: 'DELETE',
       params: {
         ids
-      }
+      },
+      custom: { auth: true },
     });
   },
   getCartList: () => {

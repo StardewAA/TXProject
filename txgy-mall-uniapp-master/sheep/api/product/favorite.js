@@ -7,6 +7,7 @@ const FavoriteApi = {
       url: '/product/favorite/page',
       method: 'GET',
       params: data,
+      custom: { auth: true, showLoading: false },
     });
   },
   // 检查是否收藏过商品
@@ -17,6 +18,7 @@ const FavoriteApi = {
       params: {
         spuId,
       },
+      custom: { auth: true, showLoading: false },
     });
   },
   // 添加商品收藏

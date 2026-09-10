@@ -3,7 +3,7 @@
   <view class="detail-cell-wrap ss-flex ss-col-center ss-row-between" @tap="onClick">
     <view class="label-text">{{ label }}</view>
     <view class="cell-content ss-line-1 ss-flex-1">{{ value }}</view>
-    <button class="ss-reset-button">
+    <button v-if="showArrow" class="ss-reset-button">
       <text class="_icon-forward right-forwrad-icon"></text>
     </button>
   </view>
@@ -23,12 +23,23 @@
       type: String,
       default: '',
     },
+    clickable: {
+      type: Boolean,
+      default: true,
+    },
+    showArrow: {
+      type: Boolean,
+      default: true,
+    },
   });
 
   const emits = defineEmits(['click']);
 
   // 点击
   const onClick = () => {
+    if (!props.clickable) {
+      return;
+    }
     emits('click');
   };
 </script>

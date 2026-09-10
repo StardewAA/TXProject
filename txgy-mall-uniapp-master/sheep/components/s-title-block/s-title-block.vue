@@ -83,29 +83,40 @@
 
 <style lang="scss" scoped>
   .ss-title-wrap {
-    height: 80rpx;
+    min-height: 84rpx;
     position: relative;
+    padding: 0 24rpx;
+    border-radius: 24rpx;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72));
+    border: 1rpx solid rgba(148, 163, 184, 0.12);
+    box-shadow: var(--ui-Surface-shadow-soft);
 
     .title-content {
+      border-left: 6rpx solid #3b82f6;
+      padding-left: 16rpx;
+
       .title-text {
         font-size: 30rpx;
-        color: #333;
+        color: #1f2937;
+        font-weight: 600;
       }
 
       .sub-title-text {
         font-size: 22rpx;
-        color: #999;
+        color: #94a3b8;
       }
     }
 
     .more-box {
       white-space: nowrap;
       font-size: 22rpx;
-      color: #999;
+      color: #3b82f6;
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
       right: 20rpx;
+      font-weight: 500;
     }
   }
 </style>

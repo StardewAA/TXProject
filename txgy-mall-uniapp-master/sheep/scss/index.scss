@@ -16,7 +16,7 @@ page {
   // font-family: OPPOSANS;
   word-break: break-all; //英文文本不换行
   white-space: normal;
-  background-color: $bg-page;
+  background: var(--ui-App-bg);
   color: $dark-3;
 }
 ::-webkit-scrollbar {

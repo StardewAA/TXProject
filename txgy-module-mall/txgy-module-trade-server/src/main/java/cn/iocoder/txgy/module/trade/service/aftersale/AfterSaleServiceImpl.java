@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
 import cn.iocoder.txgy.module.pay.api.refund.PayRefundApi;
@@ -13,6 +14,8 @@ import cn.iocoder.txgy.module.pay.api.refund.dto.PayRefundRespDTO;
 import cn.iocoder.txgy.module.pay.enums.refund.PayRefundStatusEnum;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.dto.CombinationRecordRespDTO;
+import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.promotion.enums.combination.CombinationRecordStatusEnum;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSaleDisagreeReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSalePageReqVO;
@@ -48,6 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString;
@@ -82,26 +88,83 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private CombinationRecordApi combinationRecordApi;
 
     @Resource
+    private ProductShopApi productShopApi;
+
+    @Resource
     private TradeOrderProperties tradeOrderProperties;
 
     @Override
     public PageResult<AfterSaleDO> getAfterSalePage(AfterSalePageReqVO pageReqVO) {
-        return tradeAfterSaleMapper.selectPage(pageReqVO);
+        PageResult<AfterSaleDO> page = tradeAfterSaleMapper.selectPage(pageReqVO);
+        enrichShopNames(page.getList());
+        return page;
     }
 
     @Override
     public PageResult<AfterSaleDO> getAfterSalePage(Long userId, AppAfterSalePageReqVO pageReqVO) {
-        return tradeAfterSaleMapper.selectPage(userId, pageReqVO);
+        PageResult<AfterSaleDO> page = tradeAfterSaleMapper.selectPage(userId, pageReqVO);
+        enrichShopNames(page.getList());
+        return page;
     }
 
     @Override
     public AfterSaleDO getAfterSale(Long userId, Long id) {
-        return tradeAfterSaleMapper.selectByIdAndUserId(id, userId);
+        AfterSaleDO afterSale = tradeAfterSaleMapper.selectByIdAndUserId(id, userId);
+        enrichShopName(afterSale);
+        return afterSale;
     }
 
     @Override
     public AfterSaleDO getAfterSale(Long id) {
-        return tradeAfterSaleMapper.selectById(id);
+        AfterSaleDO afterSale = tradeAfterSaleMapper.selectById(id);
+        enrichShopName(afterSale);
+        return afterSale;
+    }
+
+    /**
+     * 售后表只保存 shop_id。响应前补齐名称，避免管理端把企业店铺显示成“店铺 1”。
+     * 店铺不存在或店铺服务暂时不可用时保留可识别的降级文案，不影响售后列表查询。
+     */
+    private void enrichShopNames(List<AfterSaleDO> afterSales) {
+        if (afterSales == null || afterSales.isEmpty()) {
+            return;
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (AfterSaleDO afterSale : afterSales) {
+            if (afterSale == null) {
+                continue;
+            }
+            Long shopId = afterSale.getShopId();
+            if (shopId == null || shopId == 0L) {
+                afterSale.setShopName("平台自营");
+                continue;
+            }
+            if (!names.containsKey(shopId)) {
+                names.put(shopId, resolveShopName(shopId));
+            }
+            afterSale.setShopName(names.get(shopId));
+        }
+    }
+
+    private void enrichShopName(AfterSaleDO afterSale) {
+        if (afterSale == null) {
+            return;
+        }
+        Long shopId = afterSale.getShopId();
+        afterSale.setShopName(shopId == null || shopId == 0L ? "平台自营" : resolveShopName(shopId));
+    }
+
+    private String resolveShopName(Long shopId) {
+        try {
+            CommonResult<ProductShopRespDTO> result = productShopApi.getShop(shopId);
+            ProductShopRespDTO shop = result == null ? null : result.getCheckedData();
+            if (shop != null && shop.getName() != null && !shop.getName().isBlank()) {
+                return shop.getName();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("[enrichShopName][shopId({}) 查询店铺失败]", shopId, ex);
+        }
+        return "店铺 " + shopId;
     }
 
     @Override
@@ -172,6 +235,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                                         TradeOrderItemDO orderItem) {
         // 创建售后单
         AfterSaleDO afterSale = AfterSaleConvert.INSTANCE.convert(createReqVO, orderItem);
+        // 售后单保存订单项的店铺快照，列表和退款处理页无需再根据已变更的商品反查归属。
+        // 兼容历史订单：早期订单项没有店铺快照，数据库 shop_id 又是非空字段。
+        Long shopId = orderItem.getShopId() == null ? 0L : orderItem.getShopId();
+        String shopName = StrUtil.isBlank(orderItem.getShopName())
+                ? (shopId == 0L ? "平台自营" : "店铺 " + shopId)
+                : orderItem.getShopName();
+        afterSale.setShopId(shopId).setShopName(shopName);
         afterSale.setNo(tradeNoRedisDAO.generate(TradeNoRedisDAO.AFTER_SALE_NO_PREFIX));
         afterSale.setStatus(AfterSaleStatusEnum.APPLY.getStatus());
         // 标记是售中还是售后

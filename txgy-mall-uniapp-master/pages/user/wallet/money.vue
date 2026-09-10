@@ -69,7 +69,7 @@
             </view>
           </view>
           <text class="time">
-            {{ sheep.$helper.timeFormat(state.createTime, 'yyyy-mm-dd hh:MM:ss') }}
+            {{ sheep.$helper.timeFormat(item.createTime, 'yyyy-mm-dd hh:MM:ss') }}
           </text>
         </view>
       </view>
@@ -113,6 +113,7 @@
     },
     loadStatus: '',
     today: '',
+    loading: false,
   });
 
   const tabMaps = [
@@ -143,20 +144,24 @@
 
   // 获得钱包记录分页
   async function getLogList() {
+    if (state.loading) return;
+    state.loading = true;
     state.loadStatus = 'loading';
-    const { data, code } = await PayWalletApi.getWalletTransactionPage({
+    try {
+      const { data, code } = await PayWalletApi.getWalletTransactionPage({
       pageNo: state.pagination.pageNo,
       pageSize: state.pagination.pageSize,
       type: tabMaps[state.currentTab].value,
       'createTime[0]': state.date[0] + ' 00:00:00',
       'createTime[1]': state.date[1] + ' 23:59:59',
-    });
-    if (code !== 0) {
-      return;
-    }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      });
+      if (code === 0) {
+        const list = Array.isArray(data?.list) ? data.list : [];
+        state.pagination.list = concat(state.pagination.list, list);
+        state.pagination.total = Number(data?.total) || 0;
+        state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      } else state.loadStatus = 'more';
+    } finally { state.loading = false; }
   }
 
   // 获得钱包统计
@@ -167,7 +172,7 @@
     if (code !== 0) {
       return;
     }
-    state.summary = data;
+    state.summary = data && typeof data === 'object' ? { ...state.summary, ...data } : { totalIncome: 0, totalExpense: 0 };
   }
 
   onLoad(() => {
@@ -199,7 +204,7 @@
   }
 
   onReachBottom(() => {
-    if (state.loadStatus === 'noMore') {
+    if (state.loading || state.loadStatus === 'noMore') {
       return;
     }
     state.pagination.pageNo++;

@@ -5,7 +5,7 @@
     <view
       v-if="layoutType === 'twoCol'"
       class="goods-xs-box ss-flex ss-flex-wrap"
-      :style="[{ margin: '-' + data.space + 'rpx' }]"
+      :style="[{ margin: '-' + safeData.space + 'rpx' }]"
     >
       <view
         class="goods-xs-list"
@@ -13,20 +13,20 @@
         :key="item.id"
         :style="[
           {
-            padding: data.space + 'rpx',
+            padding: safeData.space + 'rpx',
           },
         ]"
       >
         <s-goods-column
           class="goods-card"
           size="xs"
-          :goodsFields="data.fields"
-          :tagStyle="data.badge"
+          :goodsFields="safeData.fields"
+          :tagStyle="safeData.badge"
           :data="item"
-          :titleColor="data.fields.name?.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
-          :titleWidth="(454 - marginRight * 2 - data.space * 2 - marginLeft * 2) / 2"
+          :titleColor="safeData.fields?.name?.color"
+          :topRadius="safeData.borderRadiusTop"
+          :bottomRadius="safeData.borderRadiusBottom"
+          :titleWidth="(454 - marginRight * 2 - safeData.space * 2 - marginLeft * 2) / 2"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
         />
       </view>
@@ -35,7 +35,7 @@
     <view
       v-if="layoutType === 'threeCol'"
       class="goods-sm-box ss-flex ss-flex-wrap"
-      :style="[{ margin: '-' + data.space + 'rpx' }]"
+      :style="[{ margin: '-' + safeData.space + 'rpx' }]"
     >
       <view
         v-for="item in goodsList"
@@ -43,19 +43,19 @@
         class="goods-card-box"
         :style="[
           {
-            padding: data.space + 'rpx',
+            padding: safeData.space + 'rpx',
           },
         ]"
       >
         <s-goods-column
           class="goods-card"
           size="sm"
-          :goodsFields="data.fields"
-          :tagStyle="data.badge"
+          :goodsFields="safeData.fields"
+          :tagStyle="safeData.badge"
           :data="item"
-          :titleColor="data.fields.name?.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
+          :titleColor="safeData.fields?.name?.color"
+          :topRadius="safeData.borderRadiusTop"
+          :bottomRadius="safeData.borderRadiusBottom"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
         />
       </view>
@@ -69,16 +69,16 @@
             class="goods-card-box"
             v-for="item in goodsList"
             :key="item.id"
-            :style="[{ marginRight: data.space * 2 + 'rpx' }]"
+            :style="[{ marginRight: safeData.space * 2 + 'rpx' }]"
           >
             <s-goods-column
               class="goods-card"
               size="sm"
-              :goodsFields="data.fields"
-              :tagStyle="data.badge"
+              :goodsFields="safeData.fields"
+              :tagStyle="safeData.badge"
               :data="item"
-              :titleColor="data.fields.name?.color"
-              :titleWidth="(750 - marginRight * 2 - data.space * 4 - marginLeft * 2) / 3"
+              :titleColor="safeData.fields?.name?.color"
+              :titleWidth="(750 - marginRight * 2 - safeData.space * 4 - marginLeft * 2) / 3"
               @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
             />
           </view>
@@ -92,27 +92,72 @@
   /**
    * 商品栏
    */
-  import { onMounted, ref, computed } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import sheep from '@/sheep';
-  import SpuApi from "@/sheep/api/product/spu";
+  import SpuApi from '@/sheep/api/product/spu';
 
   const props = defineProps({
     data: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
     styles: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
   });
-  const { layoutType, spuIds } = props.data;
-  let { marginLeft, marginRight } = props.styles;
+
+  const isRecord = (value) => value && typeof value === 'object' && !Array.isArray(value);
+  const toNumber = (value, fallback = 0) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+  const safeData = computed(() => {
+    const source = isRecord(props.data) ? props.data : {};
+    const sourceFields = isRecord(source.fields) ? source.fields : {};
+    return {
+      ...source,
+      layoutType: source.layoutType || '',
+      space: Math.max(0, toNumber(source.space)),
+      borderRadiusTop: Math.max(0, toNumber(source.borderRadiusTop)),
+      borderRadiusBottom: Math.max(0, toNumber(source.borderRadiusBottom)),
+      fields: {
+        ...sourceFields,
+        name: isRecord(sourceFields.name) ? sourceFields.name : {},
+        title: isRecord(sourceFields.title) ? sourceFields.title : {},
+        price: isRecord(sourceFields.price) ? sourceFields.price : {},
+        marketPrice: isRecord(sourceFields.marketPrice) ? sourceFields.marketPrice : {},
+        original_price: isRecord(sourceFields.original_price) ? sourceFields.original_price : {},
+        introduction: isRecord(sourceFields.introduction) ? sourceFields.introduction : {},
+        subtitle: isRecord(sourceFields.subtitle) ? sourceFields.subtitle : {},
+        salesCount: isRecord(sourceFields.salesCount) ? sourceFields.salesCount : {},
+        stock: isRecord(sourceFields.stock) ? sourceFields.stock : {},
+      },
+      badge: isRecord(source.badge) ? source.badge : {},
+      spuIds: Array.isArray(source.spuIds)
+        ? source.spuIds.filter((id) => id !== undefined && id !== null && String(id) !== '')
+        : [],
+    };
+  });
+  const safeStyles = computed(() => (isRecord(props.styles) ? props.styles : {}));
+  const layoutType = computed(() => safeData.value.layoutType);
+  const marginLeft = computed(() => Math.max(0, toNumber(safeStyles.value.marginLeft)));
+  const marginRight = computed(() => Math.max(0, toNumber(safeStyles.value.marginRight)));
   const goodsList = ref([]);
   onMounted(async () => {
-    if (spuIds.length > 0) {
-      let { data } = await SpuApi.getSpuListByIds(spuIds.join(','));
-      goodsList.value = data;
+    if (safeData.value.spuIds.length === 0) {
+      return;
+    }
+    try {
+      const response = await SpuApi.getSpuListByIds(safeData.value.spuIds.join(','));
+      goodsList.value =
+        response?.code === 0 && Array.isArray(response.data)
+          ? response.data.filter(
+              (item) => isRecord(item) && item.id !== undefined && item.id !== null,
+            )
+          : [];
+    } catch (error) {
+      goodsList.value = [];
     }
   });
 </script>
