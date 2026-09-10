@@ -7,6 +7,7 @@ import { getCustomerPage } from '#/api/crm/customer';
 import { getBusinessPage } from '#/api/crm/business';
 import { getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
 import { getContractSimpleList } from '#/api/crm/contract';
+import { getProductCategoryList } from '#/api/crm/product/category';
 import { getSimpleUserList } from '#/api/system/user';
 
 import {
@@ -14,6 +15,8 @@ import {
   parseContract,
   parseBusiness,
   parseReceivable,
+  parseProduct,
+  parseReceivablePlan,
   type ParsedClue,
 } from '#/utils/crm/clue-parse';
 import {
@@ -28,7 +31,7 @@ const emit = defineEmits<{
 
 // mode: clue=线索/通用；contract=合同（提取合同名、客户、商机、日期、产品与金额）
 const props = withDefaults(
-  defineProps<{ mode?: 'clue' | 'contract' | 'business' | 'receivable' }>(),
+  defineProps<{ mode?: 'clue' | 'contract' | 'business' | 'receivable' | 'product' | 'plan' }>(),
   { mode: 'clue' },
 );
 
@@ -216,7 +219,7 @@ async function handleRecognize() {
 
     const aiReadyFlag = aiReady.value;
     const isContract = props.mode === 'contract';
-    // 按当前模块选用专属解析 schema（商机/回款/合同/线索各不相同）
+    // 按当前模块选用专属解析 schema
     const parsed: any =
       isContract
         ? await parseContract(text, imageDataUrls)
@@ -224,29 +227,35 @@ async function handleRecognize() {
           ? await parseBusiness(text, imageDataUrls)
           : props.mode === 'receivable'
             ? await parseReceivable(text, imageDataUrls)
-            : await parseClue(text, imageDataUrls);
+            : props.mode === 'product'
+              ? await parseProduct(text, imageDataUrls)
+              : props.mode === 'plan'
+                ? await parseReceivablePlan(text, imageDataUrls)
+                : await parseClue(text, imageDataUrls);
     const fields: any = parsed.fields ?? {};
     const aiError = parsed.error;
 
-    // 按名称在 CRM 中匹配客户：商机/回款/合同取 customerName，线索取 name
-    try {
-      const name = String(
-        (props.mode === 'clue' ? fields?.name : fields?.customerName) ?? '',
-      ).trim();
-      if (name) {
-        const page: any = await getCustomerPage({
-          pageNo: 1,
-          pageSize: 5,
-          name,
-          sceneType: 3,
-        } as any);
-        const hit = page?.list?.[0];
-        if (hit?.id) {
-          fields.customerId = hit.id;
+    // 客户匹配：商机/回款/合同/回款计划取 customerName，线索取 name；产品不需要
+    if (props.mode !== 'product') {
+      try {
+        const name = String(
+          (props.mode === 'clue' ? fields?.name : fields?.customerName) ?? '',
+        ).trim();
+        if (name) {
+          const page: any = await getCustomerPage({
+            pageNo: 1,
+            pageSize: 5,
+            name,
+            sceneType: 3,
+          } as any);
+          const hit = page?.list?.[0];
+          if (hit?.id) {
+            fields.customerId = hit.id;
+          }
         }
+      } catch {
+        // 匹配失败不阻塞回填
       }
-    } catch {
-      // 匹配失败不阻塞回填
     }
 
     // 合同兜底：若 AI 未提取到负责人，从原文正则提取“负责人：XXX”
@@ -304,6 +313,41 @@ async function handleRecognize() {
               String(u?.nickname ?? '').includes(signName),
             );
           if (hit?.id) fields.signUserId = hit.id;
+        }
+      } catch {}
+    }
+
+    // 产品：匹配产品类型(树)、负责人；上架状态/单位已在 parse 阶段字典映射
+    if (props.mode === 'product') {
+      try {
+        const catName = String(fields?.categoryName ?? '').trim();
+        if (catName) {
+          const tree: any[] = await getProductCategoryList();
+          const flat: any[] = [];
+          const walk = (arr: any[]) => arr.forEach((n) => { flat.push(n); n.children?.length && walk(n.children); });
+          walk(tree);
+          const hit = flat.find((n: any) => String(n?.name ?? '').includes(catName))
+            ?? flat.find((n: any) => catName.includes(String(n?.name ?? '')));
+          if (hit?.id) fields.categoryId = hit.id;
+        }
+      } catch {}
+    }
+
+    // 回款计划：匹配合同（同 receivable 处理）
+    if (props.mode === 'plan') {
+      try {
+        const cid = fields?.customerId;
+        const cn = String(
+          (fields?.contractNo ?? '') || (fields?.contractName ?? ''),
+        ).trim();
+        if (cid && cn) {
+          const cp: any = await getContractSimpleList(cid);
+          const hit = cp?.find(
+            (c: any) =>
+              (fields?.contractNo && c?.no === fields.contractNo) ||
+              (fields?.contractName && c?.name?.includes(fields.contractName)),
+          );
+          if (hit?.id) fields.contractId = hit.id;
         }
       } catch {}
     }
