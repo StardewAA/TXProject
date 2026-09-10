@@ -7,6 +7,9 @@ export namespace MallOrderApi {
   export interface Order {
     id?: number; // 订单编号
     no?: string; // 订单流水号
+    shopId?: number; // 单店铺订单的店铺编号；多店铺订单为空
+    shopName?: string; // 店铺名称快照
+    shopLogoUrl?: string; // 店铺 Logo 快照
     createTime?: Date; // 下单时间
     type?: number; // 订单类型
     terminal?: number; // 订单来源
@@ -70,6 +73,8 @@ export namespace MallOrderApi {
     userId?: number; // 用户编号
     orderId?: number; // 订单编号
     spuId?: number; // 商品 SPU 编号
+    shopId?: number; // 履约店铺编号
+    shopName?: string; // 店铺名称快照
     spuName?: string; // 商品 SPU 名称
     skuId?: number; // 商品 SKU 编号
     picUrl?: string; // 商品图片

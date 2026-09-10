@@ -11,6 +11,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.module.member.api.address.MemberAddressApi;
@@ -25,6 +26,8 @@ import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.pay.enums.refund.PayRefundStatusEnum;
 import cn.iocoder.txgy.module.product.api.comment.ProductCommentApi;
 import cn.iocoder.txgy.module.product.api.comment.dto.ProductCommentCreateReqDTO;
+import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.dto.CombinationRecordRespDTO;
 import cn.iocoder.txgy.module.promotion.enums.combination.CombinationRecordStatusEnum;
@@ -71,7 +74,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -120,6 +125,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     private MemberAddressApi addressApi;
     @Resource
     private ProductCommentApi productCommentApi;
+    @Resource
+    private ProductShopApi productShopApi;
     @Resource
     public SocialClientApi socialClientApi;
     @Resource
@@ -195,6 +202,9 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         if (orderShopIds.size() == 1) {
             order.setShopId(orderShopIds.iterator().next());
         }
+        // 订单和订单项都保存店铺快照。后续店铺名称变更或列表跨服务查询时，
+        // 仍能稳定显示下单时的归属；查询失败时使用可识别的降级名称，不阻断下单。
+        fillShopSnapshots(order, orderItems);
 
         // 2. 订单创建前的逻辑
         tradeOrderHandlers.forEach(handler -> handler.beforeOrderCreate(order, orderItems));
@@ -240,6 +250,52 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     private List<TradeOrderItemDO> buildTradeOrderItems(TradeOrderDO tradeOrderDO,
                                                         TradePriceCalculateRespBO calculateRespBO) {
         return TradeOrderConvert.INSTANCE.convertList(tradeOrderDO, calculateRespBO);
+    }
+
+    private void fillShopSnapshots(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        Map<Long, ProductShopRespDTO> shopMap = new HashMap<>();
+        for (TradeOrderItemDO item : orderItems) {
+            Long shopId = item.getShopId() == null ? 0L : item.getShopId();
+            item.setShopId(shopId);
+            if (shopId == 0L) {
+                item.setShopName("平台自营");
+                continue;
+            }
+            ProductShopRespDTO shop = shopMap.computeIfAbsent(shopId, this::getShopSafely);
+            item.setShopName(resolveShopName(shopId, shop));
+        }
+
+        if (order.getShopId() == null) {
+            // 生产库 trade_order.shop_id 为 NOT NULL DEFAULT 0。
+            // 多店铺订单用 0 占位，店铺名称快照保留“多店铺”，避免插入 NULL 失败；
+            // 订单项仍保存各自真实店铺编号，履约分组不受影响。
+            order.setShopId(0L);
+            order.setShopName("多店铺");
+            return;
+        }
+        Long shopId = order.getShopId();
+        if (shopId == 0L) {
+            order.setShopName("平台自营");
+            order.setShopLogoUrl(null);
+            return;
+        }
+        ProductShopRespDTO shop = shopMap.computeIfAbsent(shopId, this::getShopSafely);
+        order.setShopName(resolveShopName(shopId, shop));
+        order.setShopLogoUrl(shop == null ? null : shop.getLogoUrl());
+    }
+
+    private ProductShopRespDTO getShopSafely(Long shopId) {
+        try {
+            CommonResult<ProductShopRespDTO> result = productShopApi.getShop(shopId);
+            return result == null ? null : result.getCheckedData();
+        } catch (RuntimeException ex) {
+            log.warn("[fillShopSnapshots][shopId({}) 查询店铺失败]", shopId, ex);
+            return null;
+        }
+    }
+
+    private String resolveShopName(Long shopId, ProductShopRespDTO shop) {
+        return shop != null && StrUtil.isNotBlank(shop.getName()) ? shop.getName() : "店铺 " + shopId;
     }
 
     /**

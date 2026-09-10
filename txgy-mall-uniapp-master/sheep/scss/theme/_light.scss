@@ -2,10 +2,19 @@
 @mixin theme-light {
   // 背景色
   --ui-BG: #ffffff;
-  --ui-BG-1: #f6f6f6;
-  --ui-BG-2: #f1f1f1;
-  --ui-BG-3: #e8e8e8;
-  --ui-BG-4: #e0e0e0;
+  --ui-BG-1: #f4f8fc;
+  --ui-BG-2: #edf2f8;
+  --ui-BG-3: #e1e8f2;
+  --ui-BG-4: #d7e0ea;
+
+  --ui-App-bg: linear-gradient(180deg, #f8fbff 0%, #f2f6fb 44%, #ecf1f7 100%);
+  --ui-Surface-bg: rgba(255, 255, 255, 0.88);
+  --ui-Surface-bg-strong: rgba(255, 255, 255, 0.96);
+  --ui-Surface-border: rgba(148, 163, 184, 0.14);
+  --ui-Surface-shadow: 0 18rpx 40rpx rgba(15, 23, 42, 0.06);
+  --ui-Surface-shadow-lg: 0 24rpx 60rpx rgba(15, 23, 42, 0.1);
+  --ui-Surface-shadow-soft: 0 12rpx 30rpx rgba(15, 23, 42, 0.04);
+  --ui-Surface-radius: 28rpx;
 
   // 文本色
   --ui-TC: #303030;

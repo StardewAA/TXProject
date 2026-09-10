@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.iocoder.txgy.module.trade.enums.brokerage.BrokerageRecordBizTypeEnum;
+import cn.iocoder.txgy.module.trade.framework.marketing.config.TradeMarketingProperties;
 import cn.iocoder.txgy.module.trade.service.brokerage.BrokerageRecordService;
 import cn.iocoder.txgy.module.trade.service.brokerage.BrokerageUserService;
 import cn.iocoder.txgy.module.trade.service.brokerage.bo.BrokerageAddReqBO;
@@ -43,9 +44,14 @@ public class TradeBrokerageOrderHandler implements TradeOrderHandler {
     private BrokerageRecordService brokerageRecordService;
     @Resource
     private BrokerageUserService brokerageUserService;
+    @Resource
+    private TradeMarketingProperties marketingProperties;
 
     @Override
     public void beforeOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        if (!isBrokerageEnabled()) {
+            return;
+        }
         // 设置订单推广人
         BrokerageUserDO brokerageUser = brokerageUserService.getBrokerageUser(order.getUserId());
         if (brokerageUser != null && brokerageUser.getBindUserId() != null) {
@@ -55,6 +61,9 @@ public class TradeBrokerageOrderHandler implements TradeOrderHandler {
 
     @Override
     public void afterPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        if (!isBrokerageEnabled()) {
+            return;
+        }
         if (order.getBrokerageUserId() == null) {
             return;
         }
@@ -114,6 +123,14 @@ public class TradeBrokerageOrderHandler implements TradeOrderHandler {
             return TradeOrderConvert.INSTANCE.convert(user, item, spu, sku);
         });
         brokerageRecordService.addBrokerage(userId, BrokerageRecordBizTypeEnum.ORDER, addList);
+    }
+
+    /**
+     * 企业采购模式默认关闭分销。只有退出简单模式并显式打开开关时，
+     * 才会为新支付订单创建佣金记录；取消流程仍按订单已有的推广人回滚历史记录。
+     */
+    private boolean isBrokerageEnabled() {
+        return !marketingProperties.isSimpleMode() && marketingProperties.isBrokerageEnabled();
     }
 
 }
