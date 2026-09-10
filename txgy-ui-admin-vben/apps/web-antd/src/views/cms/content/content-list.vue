@@ -248,7 +248,7 @@ function removeRow(row: CmsRecord) {
       >
         <Form layout="vertical">
           <div class="cms-form-grid">
-            <div v-for="field in formFields" :key="field.dataIndex">
+            <div v-for="field in formFields.filter(f => f.dataIndex !== 'status')" :key="field.dataIndex">
               <FormItem :label="field.label">
                 <component
                   :is="field.options ? Select : field.multiline ? Input.TextArea : Input"
