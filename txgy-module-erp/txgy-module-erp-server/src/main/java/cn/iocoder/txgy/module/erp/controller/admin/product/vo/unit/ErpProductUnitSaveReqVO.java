@@ -14,6 +14,10 @@ public class ErpProductUnitSaveReqVO {
     @Schema(description = "单位编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "31254")
     private Long id;
 
+    @Schema(description = "跨模块统一单位编码", requiredMode = Schema.RequiredMode.REQUIRED, example = "TON")
+    @NotEmpty(message = "统一单位编码不能为空")
+    private String code;
+
     @Schema(description = "单位名字", requiredMode = Schema.RequiredMode.REQUIRED, example = "芋艿")
     @NotEmpty(message = "单位名字不能为空")
     private String name;

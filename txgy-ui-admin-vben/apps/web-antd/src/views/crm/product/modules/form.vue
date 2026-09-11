@@ -9,12 +9,28 @@ import { message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { createProduct, getProduct, updateProduct } from '#/api/crm/product';
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmProductApi.Product>();
+
+/** 识别结果回填产品信息 */
+async function onQuickParse(payload: { fields: any }) {
+  const fields = payload.fields ?? {};
+  const apply: Record<string, any> = {};
+  if (fields.name) apply.name = fields.name;
+  if (fields.no) apply.no = fields.no;
+  if (fields.price != null) apply.price = fields.price;
+  if (fields.description) apply.description = fields.description;
+  if (fields.unit != null) apply.unit = fields.unit;
+  if (fields.status != null) apply.status = fields.status;
+  if (fields.categoryId != null) apply.categoryId = fields.categoryId;
+  if (fields.ownerUserId) apply.ownerUserId = fields.ownerUserId;
+  await formApi.setValues(apply);
+}
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['产品'])
@@ -77,6 +93,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse mode="product" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>

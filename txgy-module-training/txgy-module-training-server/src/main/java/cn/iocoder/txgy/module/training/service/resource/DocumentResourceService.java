@@ -1,0 +1,46 @@
+package cn.iocoder.txgy.module.training.service.resource;
+
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageReqVO;
+import cn.iocoder.txgy.module.training.dal.dataobject.resource.DocumentResourceDO;
+import org.springframework.web.multipart.MultipartFile;
+
+/**
+ * 文档资源 Service
+ *
+ * @author 云培训学院课题小组
+ */
+public interface DocumentResourceService {
+
+    PageResult<DocumentResourceDO> getDocumentPage(DocumentPageReqVO reqVO);
+
+    DocumentResourceDO getDocument(Long id);
+
+    /**
+     * 上传文档（PDF/JPG/PNG ≤50MB），成功即上线，返回资源 ID
+     */
+    Long uploadDocument(MultipartFile file, String title, Long categoryId,
+                        String bizCategory, String tags, Integer estMinutes);
+
+    /**
+     * 更新文档元数据（标题/分类/业务分类/标签/预估阅读）
+     */
+    void updateDocument(Long id, String title, Long categoryId,
+                        String bizCategory, String tags, Integer estMinutes);
+
+    /**
+     * 状态流转：DRAFT 草稿 / ONLINE 上线 / OFFLINE 下架 / ARCHIVED 归档
+     */
+    void changeDocumentStatus(Long id, String action);
+
+    /**
+     * 阅读上报：预览次数 +1、停留秒数累加
+     */
+    void reportReading(Long id, Integer seconds);
+
+    /**
+     * 逻辑删除（被引用时禁止删除）
+     */
+    void deleteDocument(Long id);
+
+}

@@ -21,8 +21,9 @@
 							<input placeholder='请填写物流单号' class='num' name="logisticsNo"
                      placeholder-class='placeholder' />
 						</view>
-						<button class='returnBnt bg-color ss-reset-button ui-BG-Main-Gradient sub-btn'
+							<button class='returnBnt bg-color ss-reset-button ui-BG-Main-Gradient sub-btn'
 							form-type="submit"
+							:disabled="state.submitting"
 							style="background: linear-gradient(90deg,var(--ui-BG-Main),var(--ui-BG-Main-gradient))!important">提交</button>
 					</view>
 				</view>
@@ -42,35 +43,46 @@
     id: 0, // 售后编号
 		expressIndex: 0, // 选中的 expresses 下标
 		expresses: [], // 可选的快递列表
+		submitting: false,
 	})
 
 	function bindPickerChange(e) {
-		state.expressIndex = e.detail.value;
+		state.expressIndex = Number(e.detail.value) || 0;
 	}
 
 	async function subRefund(e) {
+		if (state.submitting || !state.expresses.length) return;
+		const logisticsNo = String(e?.detail?.value?.logisticsNo || '').trim();
+		if (!logisticsNo) {
+			sheep.$helper.toast('请填写物流单号');
+			return;
+		}
+		state.submitting = true;
     let data = {
-      id: state.id,
-      logisticsId: state.expresses[state.expressIndex].id,
-      logisticsNo: e.detail.value.logisticsNo,
+      id: String(state.id),
+      logisticsId: String(state.expresses[state.expressIndex].id),
+      logisticsNo,
     };
-    const { code } = await AfterSaleApi.deliveryAfterSale(data);
-    if (code !== 0) {
-      return;
-    }
-    uni.showToast({
-      title: '填写退货成功',
-    });
-    sheep.$router.go('/pages/order/aftersale/detail', { id: state.id });
+		try {
+			const res = await AfterSaleApi.deliveryAfterSale(data);
+			if (!res || res.code !== 0) return;
+			uni.showToast({ title: '填写退货成功' });
+			sheep.$router.go('/pages/order/aftersale/detail', { id: String(state.id) });
+		} finally {
+			state.submitting = false;
+		}
 	}
 
   // 获得快递物流列表
 	async function getExpressList() {
-    const { code, data } = await DeliveryApi.getDeliveryExpressList();
-    if (code !== 0) {
-      return;
-    }
-    state.expresses = data;
+		try {
+			const res = await DeliveryApi.getDeliveryExpressList();
+			if (!res || res.code !== 0) return;
+			state.expresses = Array.isArray(res.data) ? res.data : [];
+			if (state.expressIndex >= state.expresses.length) state.expressIndex = 0;
+		} catch {
+			state.expresses = [];
+		}
 	}
 
 	onLoad(options => {
@@ -78,7 +90,7 @@
       sheep.$helper.toast(`缺少订单信息，请检查`);
       return
     }
-    state.id = options.id;
+    state.id = String(options.id);
     // 获得快递物流列表
     getExpressList();
 	})

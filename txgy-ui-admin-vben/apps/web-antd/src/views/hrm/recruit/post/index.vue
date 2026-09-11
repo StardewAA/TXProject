@@ -29,7 +29,7 @@ defineOptions({ name: 'HrmRecruitPost' });
 
 const { push } = useRouter();
 
-const activeStatus = ref(String(HrmRecruitPostStatus.RECRUITING));
+const activeStatus = ref(String(HrmRecruitPostStatus.PUBLISHED));
 const statusCounts = ref<HrmRecruitPostApi.StatusCount[]>([]);
 
 const statusTabOptions = computed(() => {
@@ -92,23 +92,35 @@ function handleDetail(id?: number) {
   push({ name: 'HrmRecruitPostDetail', params: { id } });
 }
 
-/** 是否正在招聘 */
-function isRecruiting(row: HrmRecruitPostApi.RecruitPost) {
-  return row.status === HrmRecruitPostStatus.RECRUITING;
+/** 是否已发布 */
+function isPublished(row: HrmRecruitPostApi.RecruitPost) {
+  return row.status === HrmRecruitPostStatus.PUBLISHED;
 }
 
-/** 修改招聘职位状态 */
-async function handleStatus(row: HrmRecruitPostApi.RecruitPost) {
+/** 是否已暂停 */
+function isPaused(row: HrmRecruitPostApi.RecruitPost) {
+  return row.status === HrmRecruitPostStatus.PAUSED;
+}
+
+/** 打开需要填写原因的状态变更表单 */
+function openStatusForm(
+  row: HrmRecruitPostApi.RecruitPost,
+  status: HrmRecruitPostStatusValue,
+) {
   if (!row.id) {
     return;
   }
-  if (isRecruiting(row)) {
-    stopModalApi.setData({ id: row.id }).open();
+  stopModalApi.setData({ id: row.id, status }).open();
+}
+
+/** 重新发布职位 */
+async function handlePublish(row: HrmRecruitPostApi.RecruitPost) {
+  if (!row.id) {
     return;
   }
   await updateRecruitPostStatus({
     id: row.id,
-    status: HrmRecruitPostStatus.RECRUITING,
+    status: HrmRecruitPostStatus.PUBLISHED,
   });
   message.success($t('ui.actionMessage.operationSuccess'));
   await handleRefresh();
@@ -207,10 +219,34 @@ onMounted(async () => {
               onClick: handleEdit.bind(null, row),
             },
             {
-              label: isRecruiting(row) ? '停止招聘' : '重新招聘',
+              label: '暂停',
               type: 'link',
               auth: ['hrm:recruit:post:update'],
-              onClick: handleStatus.bind(null, row),
+              ifShow: isPublished(row),
+              onClick: openStatusForm.bind(
+                null,
+                row,
+                HrmRecruitPostStatus.PAUSED,
+              ),
+            },
+            {
+              label: '发布',
+              type: 'link',
+              auth: ['hrm:recruit:post:update'],
+              ifShow: isPaused(row),
+              onClick: handlePublish.bind(null, row),
+            },
+            {
+              label: '关闭',
+              type: 'link',
+              danger: true,
+              auth: ['hrm:recruit:post:update'],
+              ifShow: isPublished(row) || isPaused(row),
+              onClick: openStatusForm.bind(
+                null,
+                row,
+                HrmRecruitPostStatus.CLOSED,
+              ),
             },
           ]"
         />

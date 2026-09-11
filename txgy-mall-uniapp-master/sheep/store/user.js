@@ -48,35 +48,43 @@ const user = defineStore('user', {
   actions: {
     // 获取用户信息
     async getInfo() {
-      const { code, data } = await UserApi.getUserInfo();
-      if (code !== 0) {
+      try {
+        const response = await UserApi.getUserInfo();
+        if (response?.code !== 0 || !response.data) {
+          return;
+        }
+        this.userInfo = response.data;
+        return Promise.resolve(response.data);
+      } catch (error) {
         return;
       }
-      this.userInfo = data;
-      return Promise.resolve(data);
     },
 
     // 获得用户钱包
     async getWallet() {
-      const { code, data } = await PayWalletApi.getPayWallet();
-      if (code !== 0) {
+      try {
+        const response = await PayWalletApi.getPayWallet();
+        if (response?.code !== 0 || !response.data) {
+          return;
+        }
+        this.userWallet = response.data;
+      } catch (error) {
         return;
       }
-      this.userWallet = data;
     },
 
     // 获取订单、优惠券等其他资产信息
     getNumData() {
       OrderApi.getOrderCount().then((res) => {
-        if (res.code === 0) {
+        if (res?.code === 0 && res.data) {
           this.numData.orderCount = res.data;
         }
-      });
+      }).catch(() => {});
       CouponApi.getUnusedCouponCount().then((res) => {
-        if (res.code === 0) {
+        if (res?.code === 0) {
           this.numData.unusedCouponCount = res.data;
         }
-      });
+      }).catch(() => {});
     },
 
     // 设置 token

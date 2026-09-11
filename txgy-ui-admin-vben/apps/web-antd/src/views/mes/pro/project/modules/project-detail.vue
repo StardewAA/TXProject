@@ -1,8 +1,11 @@
 <script lang="ts" setup>
+import type { FileType } from 'ant-design-vue/es/upload/interface';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MesProProjectApi } from '#/api/mes/pro/project';
 import type { MesProWorkOrderApi } from '#/api/mes/pro/workorder';
 import type { MesProProjectMemberApi } from '#/api/mes/pro/project-member';
+import type { MesProProjectMilestoneApi } from '#/api/mes/pro/project-milestone';
 
 import { computed, nextTick, ref } from 'vue';
 
@@ -23,11 +26,22 @@ import {
   Space,
   Table,
   Tag,
+  Timeline,
+  TimelineItem,
+  Upload,
 } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
+  ACTION_ICON,
+  TableAction,
+  useVbenVxeGrid,
+} from '#/adapter/vxe-table';
+import { uploadFile } from '#/api/infra/file';
+import {
+  createProjectFile,
+  deleteProjectFile,
   getProject,
+  getProjectFileList,
   getProjectStatistics,
   unbindWorkOrders,
 } from '#/api/mes/pro/project';
@@ -36,6 +50,12 @@ import {
   deleteProjectMember,
   getProjectMemberList,
 } from '#/api/mes/pro/project-member';
+import {
+  createMilestone,
+  deleteMilestone,
+  getMilestoneList,
+  updateMilestone,
+} from '#/api/mes/pro/project-milestone';
 import { getWorkOrderPage } from '#/api/mes/pro/workorder';
 import WorkOrderForm from '#/views/mes/pro/workorder/modules/form.vue';
 
@@ -158,6 +178,8 @@ async function loadData() {
   project.value = await getProject(projectId.value);
   statistics.value = await getProjectStatistics(projectId.value);
   await loadMembers();
+  await loadMilestones();
+  await loadFiles();
 }
 
 // ==================== 参与成员 ====================
@@ -248,6 +270,194 @@ async function handleDeleteMember(row: MesProProjectMemberApi.ProjectMember) {
   await deleteProjectMember(row.id);
   message.success('成员已移除');
   await loadMembers();
+}
+
+// ==================== 项目里程碑 ====================
+
+/** 是否具备里程碑维护权限 */
+const milestoneEditable = hasAccessByCodes([
+  'mes:pro-project-milestone:create',
+  'mes:pro-project-milestone:update',
+  'mes:pro-project-milestone:delete',
+]);
+
+/** 里程碑列表 */
+const milestones = ref<MesProProjectMilestoneApi.Milestone[]>([]);
+
+/** 里程碑状态文案 */
+const milestoneStatusText: Record<number, string> = {
+  0: '未开始',
+  1: '进行中',
+  2: '已完成',
+};
+
+/** 里程碑状态颜色 */
+const milestoneStatusColor: Record<number, string> = {
+  0: 'default',
+  1: 'processing',
+  2: 'success',
+};
+
+/** 加载项目里程碑 */
+async function loadMilestones() {
+  if (!projectId.value) {
+    return;
+  }
+  milestones.value = await getMilestoneList(projectId.value);
+}
+
+/** 添加里程碑弹窗 */
+const milestoneModalOpen = ref(false);
+const milestoneForm = ref<MesProProjectMilestoneApi.Milestone>({
+  name: '',
+  planDate: undefined,
+  sort: undefined,
+  remark: '',
+});
+
+function openMilestoneModal() {
+  milestoneForm.value = {
+    name: '',
+    planDate: undefined,
+    sort: undefined,
+    remark: '',
+  };
+  milestoneModalOpen.value = true;
+}
+
+function closeMilestoneModal() {
+  milestoneModalOpen.value = false;
+}
+
+/** 提交新增里程碑 */
+async function submitMilestone() {
+  if (!milestoneForm.value.name) {
+    message.warning('请输入里程碑名称');
+    return;
+  }
+  await createMilestone({
+    projectId: projectId.value,
+    name: milestoneForm.value.name,
+    planDate: milestoneForm.value.planDate,
+    sort: milestoneForm.value.sort,
+    remark: milestoneForm.value.remark,
+  });
+  message.success('里程碑已添加');
+  closeMilestoneModal();
+  await loadMilestones();
+}
+
+/** 标记里程碑完成 */
+async function handleFinishMilestone(
+  row: MesProProjectMilestoneApi.Milestone,
+) {
+  if (!row.id) {
+    return;
+  }
+  await updateMilestone({
+    ...row,
+    status: 2,
+    actualDate: new Date().toISOString(),
+  });
+  message.success('里程碑已标记完成');
+  await loadMilestones();
+}
+
+/** 删除里程碑 */
+async function handleDeleteMilestone(
+  row: MesProProjectMilestoneApi.Milestone,
+) {
+  if (!row.id) {
+    return;
+  }
+  await deleteMilestone(row.id);
+  message.success('里程碑已删除');
+  await loadMilestones();
+}
+
+// ==================== 项目附件 ====================
+
+/** 是否具备附件维护权限 */
+const fileEditable = hasAccessByCodes([
+  'mes:pro-project-file:create',
+  'mes:pro-project-file:delete',
+]);
+
+/** 附件列表 */
+const files = ref<MesProProjectApi.ProjectFile[]>([]);
+const fileUploading = ref(false);
+
+/** 附件表格列 */
+const fileColumns = [
+  { title: '文件名称', dataIndex: 'fileName', key: 'fileName' },
+  { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 90 },
+  { title: '备注', dataIndex: 'remark', key: 'remark' },
+  { title: '上传时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
+  { title: '操作', key: 'action', width: 120 },
+];
+
+/** 加载附件列表 */
+async function loadFiles() {
+  if (!projectId.value) {
+    return;
+  }
+  files.value = await getProjectFileList(projectId.value);
+}
+
+/** 文件大小格式化 */
+function formatFileSize(size?: number) {
+  if (!size) {
+    return '-';
+  }
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 上传附件：先传 infra 文件服务拿到 URL，再关联到项目 */
+async function beforeUploadFile(file: FileType) {
+  const raw = (file as any)?.originFileObj ?? file;
+  if (!(raw instanceof File)) {
+    message.error('文件无效，请重新选择');
+    return false;
+  }
+  fileUploading.value = true;
+  try {
+    const res: any = await uploadFile({ file: raw });
+    const url = typeof res === 'string' ? res : (res?.data ?? res?.url ?? '');
+    await createProjectFile({
+      projectId: projectId.value,
+      fileName: raw.name,
+      fileUrl: url,
+      fileSize: raw.size,
+    });
+    message.success('附件已上传');
+    await loadFiles();
+  } finally {
+    fileUploading.value = false;
+  }
+  return false; // 阻止 Upload 组件自动上传
+}
+
+/** 下载/预览附件 */
+function handleDownloadFile(row: MesProProjectApi.ProjectFile) {
+  if (row.fileUrl) {
+    window.open(row.fileUrl, '_blank');
+  }
+}
+
+/** 删除附件 */
+async function handleDeleteFile(row: MesProProjectApi.ProjectFile) {
+  if (!row.id) {
+    return;
+  }
+  await deleteProjectFile(row.id);
+  message.success('附件已删除');
+  await loadFiles();
 }
 
 /** 打开项目详情弹窗 */
@@ -366,7 +576,7 @@ defineExpose({ open: openModal });
         </Descriptions.Item>
       </Descriptions>
       <!-- 生产进度 -->
-      <div class="mb-3 rounded-md bg-gray-50 p-3">
+      <div class="mb-3 rounded-md bg-card p-3">
         <div class="mb-1 text-sm font-medium">生产进度</div>
         <div class="mb-2 text-sm">
           工单完成率：{{ statistics?.finishedCount ?? 0 }} /
@@ -394,7 +604,7 @@ defineExpose({ open: openModal });
         </Space>
       </div>
       <!-- 参与成员 -->
-      <div class="mb-3 rounded-md bg-gray-50 p-3">
+      <div class="mb-3 rounded-md bg-card p-3">
         <div class="mb-2 flex items-center justify-between">
           <span class="text-sm font-medium">参与成员</span>
           <Button
@@ -431,6 +641,115 @@ defineExpose({ open: openModal });
           </template>
         </Table>
       </div>
+      <!-- 项目里程碑 -->
+      <div class="mb-3 rounded-md bg-card p-3">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm font-medium">项目里程碑</span>
+          <Button
+            v-if="milestoneEditable"
+            size="small"
+            type="primary"
+            @click="openMilestoneModal"
+          >
+            添加里程碑
+          </Button>
+        </div>
+        <Timeline v-if="milestones.length > 0">
+          <TimelineItem v-for="item in milestones" :key="item.id">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-medium">{{ item.name }}</span>
+                <Tag
+                  v-if="item.status !== undefined"
+                  :color="milestoneStatusColor[item.status]"
+                  class="ml-2"
+                >
+                  {{ milestoneStatusText[item.status] }}
+                </Tag>
+                <span class="ml-2 text-xs text-muted-foreground">
+                  计划：{{ item.planDate || '-' }}
+                  <template v-if="item.actualDate">
+                    ｜ 实际：{{ item.actualDate }}
+                  </template>
+                </span>
+              </div>
+              <Space v-if="milestoneEditable" size="small">
+                <Button
+                  v-if="item.status !== 2"
+                  size="small"
+                  type="link"
+                  @click="handleFinishMilestone(item)"
+                >
+                  标记完成
+                </Button>
+                <Button
+                  danger
+                  size="small"
+                  type="link"
+                  @click="handleDeleteMilestone(item)"
+                >
+                  删除
+                </Button>
+              </Space>
+            </div>
+          </TimelineItem>
+        </Timeline>
+        <div v-else class="text-xs text-muted-foreground">暂无里程碑</div>
+      </div>
+      <!-- 项目附件 -->
+      <div class="mb-3 rounded-md bg-card p-3">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm font-medium">项目附件</span>
+          <Upload
+            v-if="fileEditable"
+            :before-upload="beforeUploadFile"
+            :show-upload-list="false"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar"
+          >
+            <Button :loading="fileUploading" size="small" type="primary">
+              上传附件
+            </Button>
+          </Upload>
+        </div>
+        <Table
+          :columns="fileColumns"
+          :data-source="files"
+          :pagination="false"
+          row-key="id"
+          size="small"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'fileName'">
+              <a @click="handleDownloadFile(record)">{{ record.fileName }}</a>
+            </template>
+            <template v-else-if="column.key === 'fileSize'">
+              {{ formatFileSize(record.fileSize) }}
+            </template>
+            <template v-else-if="column.key === 'createTime'">
+              {{ formatTime(record.createTime) }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Space size="small">
+                <Button size="small" type="link" @click="handleDownloadFile(record)">
+                  下载
+                </Button>
+                <Button
+                  v-if="fileEditable"
+                  danger
+                  size="small"
+                  type="link"
+                  @click="handleDeleteFile(record)"
+                >
+                  删除
+                </Button>
+              </Space>
+            </template>
+          </template>
+        </Table>
+        <div v-if="files.length === 0" class="mt-1 text-xs text-muted-foreground">
+          暂无附件，点击右上角「上传附件」添加
+        </div>
+      </div>
     </template>
     <!-- 项目工单列表与操作 -->
     <div class="mb-2 flex items-center justify-between">
@@ -442,7 +761,24 @@ defineExpose({ open: openModal });
         <Button @click="openBindWorkOrder"> 挂接已有工单 </Button>
       </Space>
     </div>
-    <Grid />
+    <Grid>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: '解除关联',
+              type: 'link',
+              danger: true,
+              icon: ACTION_ICON.DELETE,
+              popConfirm: {
+                title: '确定要解除该工单的项目关联吗？',
+                confirm: handleUnbind.bind(null, row),
+              },
+            },
+          ]"
+        />
+      </template>
+    </Grid>
   </Modal>
 
   <!-- 挂接已有工单弹窗 -->
@@ -475,6 +811,41 @@ defineExpose({ open: openModal });
       <FormItem label="备注">
         <Input
           v-model:value="memberForm.remark"
+          placeholder="请输入备注"
+        />
+      </FormItem>
+    </Form>
+  </Modal>
+
+  <!-- 添加项目里程碑弹窗 -->
+  <Modal
+    v-model:open="milestoneModalOpen"
+    title="添加项目里程碑"
+    @cancel="closeMilestoneModal"
+    @ok="submitMilestone"
+  >
+    <Form :label-col="{ span: 5 }" :wrapper-col="{ span: 16 }">
+      <FormItem label="里程碑名称">
+        <Input
+          v-model:value="milestoneForm.name"
+          placeholder="请输入里程碑名称"
+        />
+      </FormItem>
+      <FormItem label="计划完成日期">
+        <Input
+          v-model:value="milestoneForm.planDate"
+          placeholder="如 2026-10-01 00:00:00"
+        />
+      </FormItem>
+      <FormItem label="排序">
+        <Input
+          v-model:value="milestoneForm.sort"
+          placeholder="数字越小越靠前"
+        />
+      </FormItem>
+      <FormItem label="备注">
+        <Input
+          v-model:value="milestoneForm.remark"
           placeholder="请输入备注"
         />
       </FormItem>

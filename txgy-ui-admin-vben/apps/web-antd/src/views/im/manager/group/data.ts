@@ -254,5 +254,11 @@ export function useGroupRequestGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 180,
       formatter: 'formatDateTime',
     },
+    {
+      title: '操作',
+      width: 160,
+      fixed: 'right',
+      slots: { default: 'actions' },
+    },
   ];
 }

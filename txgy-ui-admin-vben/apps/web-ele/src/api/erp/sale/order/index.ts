@@ -13,6 +13,13 @@ export namespace ErpSaleOrderApi {
     totalCount: number; // 合计数量
     totalPrice: number; // 合计金额，单位：元
     status: number; // 状态
+    businessChainNo?: string; // 跨模块业务链编号
+    warehouseStatus?: string; // WMS 仓储履约状态
+    inventoryDecisionNo?: string; // WMS 库存判断单号
+    reservationNo?: string; // WMS 预留单号
+    wmsShipmentOrderNo?: string; // WMS 销售出库单号
+    wmsEventVersion?: number; // WMS 事件版本
+    wmsFailureReason?: string; // WMS 失败原因
     remark: string; // 备注
     outCount: number; // 销售出库数量
     fileUrl?: string; // 附件地址
@@ -35,6 +42,9 @@ export namespace ErpSaleOrderApi {
     productBarCode?: string; // 产品条码
     productUnitId?: number; // 产品单位编号
     productUnitName?: string; // 产品单位名称
+    warehouseCode?: string; // WMS 统一仓库编码
+    reservedCount?: number; // WMS 已预留数量
+    shortageCount?: number; // WMS 缺口数量
     productPrice?: number; // 产品单价，单位：元
     totalProductPrice?: number; // 产品总价，单位：元
     count?: number; // 数量

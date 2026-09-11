@@ -234,12 +234,14 @@ async function handleSubmitApply() {
                   class="flex-shrink-0"
                 />
               </div>
-              <!-- 部门 -->
+              <!-- 账号 + 部门（同名用户靠账号区分） -->
               <div
-                v-if="user.deptName"
+                v-if="user.username || user.deptName"
                 class="mt-0.5 text-xs truncate text-[var(--ant-color-text-secondary)]"
               >
-                {{ user.deptName }}
+                <span v-if="user.username">@{{ user.username }}</span>
+                <span v-if="user.username && user.deptName"> · </span>
+                <span v-if="user.deptName">{{ user.deptName }}</span>
               </div>
             </div>
             <!-- 已是好友显示「已添加」；否则显示「添加」（点击进入 apply 步骤） -->
@@ -277,10 +279,12 @@ async function handleSubmitApply() {
             {{ targetUser.nickname }}
           </div>
           <div
-            v-if="targetUser.deptName"
+            v-if="targetUser.username || targetUser.deptName"
             class="mt-0.5 text-xs truncate text-[var(--ant-color-text-secondary)]"
           >
-            {{ targetUser.deptName }}
+            <span v-if="targetUser.username">@{{ targetUser.username }}</span>
+            <span v-if="targetUser.username && targetUser.deptName"> · </span>
+            <span v-if="targetUser.deptName">{{ targetUser.deptName }}</span>
           </div>
         </div>
       </div>

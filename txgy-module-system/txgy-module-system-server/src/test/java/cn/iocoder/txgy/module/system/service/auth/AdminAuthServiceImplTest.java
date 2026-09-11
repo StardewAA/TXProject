@@ -4,6 +4,8 @@ import cn.hutool.core.util.ReflectUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.service.TenantFrameworkService;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
 import cn.iocoder.txgy.module.system.api.social.dto.SocialUserBindReqDTO;
 import cn.iocoder.txgy.module.system.api.social.dto.SocialUserRespDTO;
@@ -24,6 +26,7 @@ import com.anji.captcha.service.CaptchaService;
 import jakarta.annotation.Resource;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
@@ -37,6 +40,7 @@ import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.randomPojo;
 import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.randomString;
 import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -61,6 +65,8 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
     @MockitoBean
     private MemberService memberService;
     @MockitoBean
+    private TenantFrameworkService tenantFrameworkService;
+    @MockitoBean
     private Validator validator;
 
     @BeforeEach
@@ -69,6 +75,11 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         // 注入一个 Validator 对象
         ReflectUtil.setFieldValue(authService, "validator",
                 Validation.buildDefaultValidatorFactory().getValidator());
+    }
+
+    @AfterEach
+    public void tearDown() {
+        TenantContextHolder.clear();
     }
 
     @Test
@@ -152,13 +163,14 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         AuthLoginReqVO reqVO = randomPojo(AuthLoginReqVO.class, o ->
                 o.setUsername("test_username").setPassword("test_password")
+                        .setLoginType(AuthLoginReqVO.LOGIN_TYPE_ENTERPRISE)
                         .setSocialType(randomEle(SocialTypeEnum.values()).getType()));
 
         // mock 验证码正确
         authService.setCaptchaEnable(false);
         // mock user 数据
         AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(1L).setUsername("test_username")
-                .setPassword("test_password").setStatus(CommonStatusEnum.ENABLE.getStatus()));
+                .setPassword("test_password").setStatus(CommonStatusEnum.ENABLE.getStatus()).setTenantId(1L));
         when(userService.getUserByUsername(eq("test_username"))).thenReturn(user);
         // mock password 匹配
         when(userService.isPasswordMatch(eq("test_password"), eq(user.getPassword()))).thenReturn(true);
@@ -167,6 +179,8 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
                 .setUserType(UserTypeEnum.ADMIN.getValue()));
         when(oauth2TokenService.createAccessToken(eq(1L), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), isNull()))
                 .thenReturn(accessTokenDO);
+
+        TenantContextHolder.setTenantId(1L);
 
         // 调用，并校验
         AuthLoginRespVO loginRespVO = authService.login(reqVO);
@@ -180,6 +194,50 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         verify(socialUserService).bindSocialUser(eq(new SocialUserBindReqDTO(
                 user.getId(), UserTypeEnum.ADMIN.getValue(),
                 reqVO.getSocialType(), reqVO.getSocialCode(), reqVO.getSocialState())));
+        verify(tenantFrameworkService).validTenant(1L);
+    }
+
+    @Test
+    public void testLogin_personal_usesReservedTenant() {
+        AuthLoginReqVO reqVO = new AuthLoginReqVO()
+                .setUsername("personal_user")
+                .setPassword("test_password")
+                .setLoginType(AuthLoginReqVO.LOGIN_TYPE_PERSONAL);
+        authService.setCaptchaEnable(false);
+
+        AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(2L)
+                .setUsername(reqVO.getUsername()).setPassword(reqVO.getPassword())
+                .setStatus(CommonStatusEnum.ENABLE.getStatus()).setTenantId(0L));
+        when(userService.getUserByUsername(eq(reqVO.getUsername()))).thenAnswer(invocation -> {
+            assertEquals(0L, TenantContextHolder.getTenantId());
+            return user;
+        });
+        when(userService.isPasswordMatch(eq(reqVO.getPassword()), eq(user.getPassword()))).thenReturn(true);
+        OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(user.getId())
+                .setUserType(UserTypeEnum.ADMIN.getValue()).setTenantId(0L));
+        when(oauth2TokenService.createAccessToken(eq(user.getId()), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull())).thenReturn(accessTokenDO);
+
+        AuthLoginRespVO loginRespVO = authService.login(reqVO);
+
+        assertPojoEquals(accessTokenDO, loginRespVO);
+        verify(tenantFrameworkService, never()).validTenant(anyLong());
+    }
+
+    @Test
+    public void testLogin_enterprise_requiresTenant() {
+        AuthLoginReqVO reqVO = new AuthLoginReqVO()
+                .setUsername("enterprise_user")
+                .setPassword("test_password")
+                .setLoginType(AuthLoginReqVO.LOGIN_TYPE_ENTERPRISE);
+        authService.setCaptchaEnable(false);
+
+        var exception = assertThrows(cn.iocoder.txgy.framework.common.exception.ServiceException.class,
+                () -> authService.login(reqVO));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("企业登录需要传递租户编号", exception.getMessage());
+        verifyNoInteractions(userService, oauth2TokenService);
     }
 
     @Test
@@ -308,7 +366,8 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testRegister_success() {
         // 准备参数
-        AuthRegisterReqVO reqVO = randomPojo(AuthRegisterReqVO.class);
+        AuthRegisterReqVO reqVO = randomPojo(AuthRegisterReqVO.class,
+                o -> o.setRegisterType(AuthRegisterReqVO.REGISTER_TYPE_ENTERPRISE));
         authService.setCaptchaEnable(false);
         AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(1L)
                 .setUsername(reqVO.getUsername()).setStatus(CommonStatusEnum.ENABLE.getStatus()));
@@ -318,10 +377,52 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         when(oauth2TokenService.createAccessToken(eq(user.getId()), eq(UserTypeEnum.ADMIN.getValue()),
                 eq("default"), isNull())).thenReturn(accessTokenDO);
 
+        TenantContextHolder.setTenantId(1L);
+
         // 调用，并断言
         AuthLoginRespVO loginRespVO = authService.register(reqVO);
         assertPojoEquals(accessTokenDO, loginRespVO);
         verify(userService, never()).getUser(anyLong());
+    }
+
+    @Test
+    public void testRegister_personal_usesReservedTenant() {
+        AuthRegisterReqVO reqVO = randomPojo(AuthRegisterReqVO.class, o ->
+                o.setRegisterType(AuthRegisterReqVO.REGISTER_TYPE_PERSONAL));
+        authService.setCaptchaEnable(false);
+        AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(2L)
+                .setUsername(reqVO.getUsername()).setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setTenantId(0L));
+        when(userService.registerUser(eq(reqVO))).thenAnswer(invocation -> {
+            assertEquals(0L, TenantContextHolder.getTenantId());
+            return user;
+        });
+        OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(user.getId())
+                .setUserType(UserTypeEnum.ADMIN.getValue()).setTenantId(0L));
+        when(oauth2TokenService.createAccessToken(eq(user.getId()), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull())).thenReturn(accessTokenDO);
+
+        AuthLoginRespVO loginRespVO = authService.register(reqVO);
+
+        assertPojoEquals(accessTokenDO, loginRespVO);
+        verify(tenantFrameworkService, never()).validTenant(anyLong());
+    }
+
+    @Test
+    public void testRegister_enterprise_requiresTenant() {
+        AuthRegisterReqVO reqVO = new AuthRegisterReqVO()
+                .setUsername("enterprise_user")
+                .setNickname("Enterprise")
+                .setPassword("test_password")
+                .setRegisterType(AuthRegisterReqVO.REGISTER_TYPE_ENTERPRISE);
+        authService.setCaptchaEnable(false);
+
+        var exception = assertThrows(cn.iocoder.txgy.framework.common.exception.ServiceException.class,
+                () -> authService.register(reqVO));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("企业注册需要传递租户编号", exception.getMessage());
+        verifyNoInteractions(userService, oauth2TokenService);
     }
 
     @Test

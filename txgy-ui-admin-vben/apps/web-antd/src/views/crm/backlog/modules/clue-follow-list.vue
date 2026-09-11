@@ -1,5 +1,6 @@
 <!-- 分配给我的线索 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmClueApi } from '#/api/crm/clue';
 
@@ -11,7 +12,7 @@ import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCluePage } from '#/api/crm/clue';
 import { useGridColumns } from '#/views/crm/clue/data';
 
-import { FOLLOWUP_STATUS } from '../data';
+import { FOLLOWUP_STATUS, SCENE_TYPES } from '../data';
 
 const { push } = useRouter();
 
@@ -20,6 +21,11 @@ function handleDetail(row: CrmClueApi.Clue) {
   push({ name: 'CrmClueDetail', params: { id: row.id } });
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -32,6 +38,13 @@ const [Grid] = useVbenVxeGrid({
           options: FOLLOWUP_STATUS,
         },
         defaultValue: false,
+      },
+      {
+        fieldName: 'sceneType',
+        label: '归属',
+        component: 'Select',
+        componentProps: { allowClear: true, options: SCENE_TYPES },
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },

@@ -7,6 +7,8 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.*;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
+import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -16,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -27,6 +30,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 public class HrmRecruitApplicationController {
     @Resource
     private HrmRecruitApplicationService applicationService;
+    @Resource
+    private HrmRecruitPostService postService;
 
     @PostMapping("/create")
     @Operation(summary = "创建招聘应聘")
@@ -77,8 +82,12 @@ public class HrmRecruitApplicationController {
     }
 
     private List<HrmRecruitApplicationRespVO> buildList(List<HrmRecruitApplicationDO> list) {
+        Map<Long, HrmRecruitPostDO> postMap = postService.getRecruitPostMap(
+                cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet(list,
+                        HrmRecruitApplicationDO::getPostId));
         return convertList(list, item -> BeanUtils.toBean(item, HrmRecruitApplicationRespVO.class,
                 vo -> vo.setStatusName(HrmRecruitApplicationStatusEnum.valueOfStatus(vo.getStatus()) == null ? null
-                        : HrmRecruitApplicationStatusEnum.valueOfStatus(vo.getStatus()).getName())));
+                        : HrmRecruitApplicationStatusEnum.valueOfStatus(vo.getStatus()).getName())
+                        .setPostName(postMap.get(item.getPostId()) == null ? null : postMap.get(item.getPostId()).getPostName())));
     }
 }

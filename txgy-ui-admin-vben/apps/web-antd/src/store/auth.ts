@@ -67,6 +67,16 @@ export const useAuthStore = defineStore('auth', () => {
 
       // 如果成功获取到 accessToken
       if (accessToken) {
+        // 个人登录和个人注册固定属于后端保留的 tenant_id=0。
+        // 认证页可能仍保留上一位企业用户的租户选择；在请求权限信息前
+        // 先覆盖该状态，避免新个人账号带着旧 tenant-id 被后端判为越权。
+        const isPersonalAuthentication =
+          (type === 'register' && params.registerType === 'personal') ||
+          (type === 'username' && params.loginType === 'personal');
+        if (isPersonalAuthentication) {
+          accessStore.setTenantId(0);
+          accessStore.clearVisitTenantId();
+        }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
 

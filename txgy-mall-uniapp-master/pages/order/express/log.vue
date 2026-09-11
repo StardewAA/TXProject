@@ -61,13 +61,13 @@
   import HighlightNumber from '@/pages/components/HighlightNumberText.vue';
 
   const state = reactive({
-    info: [],
+    info: {},
     tracks: [],
   });
 
   const goodsImages = computed(() => {
     let array = [];
-    if (state.info.items) {
+    if (Array.isArray(state.info.items)) {
       state.info.items.forEach((item) => {
         array.push({
           image: item.picUrl,
@@ -78,18 +78,27 @@
   });
 
   async function getExpressDetail(id) {
-    const { data } = await OrderApi.getOrderExpressTrackList(id);
-    state.tracks = data;
+    try {
+      const res = await OrderApi.getOrderExpressTrackList(String(id));
+      state.tracks = Array.isArray(res?.data) ? res.data : [];
+    } catch {
+      state.tracks = [];
+    }
   }
 
   async function getOrderDetail(id) {
-    const { data } = await OrderApi.getOrderDetail(id);
-    state.info = data;
+    try {
+      const res = await OrderApi.getOrderDetail(String(id));
+      state.info = res?.data && typeof res.data === 'object' ? res.data : {};
+    } catch {
+      state.info = {};
+    }
   }
 
   onLoad((options) => {
-    getExpressDetail(options.id);
-    getOrderDetail(options.id);
+    if (!options?.id) return;
+    getExpressDetail(String(options.id));
+    getOrderDetail(String(options.id));
   });
 
   function handlePhoneClick(data) {

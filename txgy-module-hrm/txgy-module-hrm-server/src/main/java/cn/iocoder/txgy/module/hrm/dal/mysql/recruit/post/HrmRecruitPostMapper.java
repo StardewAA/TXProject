@@ -17,6 +17,11 @@ import java.util.Map;
 @Mapper
 public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
 
+    default long selectCountByPostTypeId(Long postTypeId) {
+        return selectCount(new LambdaQueryWrapperX<HrmRecruitPostDO>()
+                .eq(HrmRecruitPostDO::getPostTypeId, postTypeId));
+    }
+
     default PageResult<HrmRecruitPostDO> selectPage(HrmRecruitPostPageReqVO reqVO) {
         return selectPage(reqVO, buildQueryWrapper(reqVO)
                 .eqIfPresent("status", reqVO.getStatus())

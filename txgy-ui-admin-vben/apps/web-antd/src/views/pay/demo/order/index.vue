@@ -6,16 +6,20 @@ import { useRouter } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 
-import { message } from 'ant-design-vue';
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getDemoOrderPage, refundDemoOrder } from '#/api/pay/demo/order';
+import { getDemoOrderPage } from '#/api/pay/demo/order';
 
 import { useGridColumns } from './data';
 import Form from './modules/form.vue';
+import RefundForm from './modules/refund-form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [RefundModal, refundModalApi] = useVbenModal({
+  connectedComponent: RefundForm,
   destroyOnClose: true,
 });
 
@@ -42,19 +46,9 @@ function handlePay(row: DemoOrderApi.Order) {
   });
 }
 
-/** 退款按钮操作 */
-async function handleRefund(row: DemoOrderApi.Order) {
-  const hideLoading = message.loading({
-    content: '退款中，请稍后...',
-    duration: 0,
-  });
-  try {
-    await refundDemoOrder(row.id as number);
-    message.success('发起退款成功！');
-    handleRefresh();
-  } finally {
-    hideLoading();
-  }
+/** 退款按钮操作：打开退款原因弹窗 */
+function handleRefund(row: DemoOrderApi.Order) {
+  refundModalApi.setData({ id: row.id }).open();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -106,6 +100,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <RefundModal @success="handleRefresh" />
     <Grid table-title="示例订单列表">
       <template #toolbar-tools>
         <TableAction
@@ -135,10 +130,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               danger: true,
               icon: ACTION_ICON.EDIT,
               ifShow: row.payStatus && !row.payRefundId,
-              popConfirm: {
-                title: '确定发起退款吗？',
-                confirm: handleRefund.bind(null, row),
-              },
+              onClick: handleRefund.bind(null, row),
             },
           ]"
         />

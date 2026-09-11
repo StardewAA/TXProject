@@ -54,7 +54,7 @@
 
   // 选择收货地址
   const onSelect = (addressInfo) => {
-    if (state.openType !== 'select'){ // 不作为选择组件时阻断操作
+    if (state.openType !== 'select') { // 不作为选择组件时阻断操作
       return
     }
     uni.$emit('SELECT_ADDRESS', {
@@ -113,15 +113,21 @@
     // #endif
   }
 
-  onLoad((option) => {
+  onLoad((option = {}) => {
     if (option.type) {
       state.openType = option.type;
     }
   });
 
   onShow(async () => {
-    state.list = (await AddressApi.getAddressList()).data;
-    state.loading = false;
+    try {
+      const response = await AddressApi.getAddressList();
+      state.list = response?.code === 0 && Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      state.list = [];
+    } finally {
+      state.loading = false;
+    }
   });
 
   onBeforeMount(() => {
@@ -130,10 +136,10 @@
     }
     // 提前加载省市区数据
     AreaApi.getAreaTree().then((res) => {
-      if (res.code === 0) {
+      if (res?.code === 0 && res.data) {
         uni.setStorageSync('areaData', res.data);
       }
-    });
+    }).catch(() => {});
   });
 </script>
 
