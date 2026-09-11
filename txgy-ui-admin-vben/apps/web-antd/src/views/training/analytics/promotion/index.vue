@@ -8,7 +8,7 @@ import {
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
 
-import PageHeaderBar from '../components/page-header-bar.vue';
+import PageHeaderBar from '../../components/page-header-bar.vue';
 
 import {
   getPromotionContext, getPromotionEmployees, getPromotionEvaluation, getPromotionProfile,
