@@ -267,25 +267,34 @@ export namespace CertificateApi {
   /* ===================== §7 材料完备性 ===================== */
   export interface MaterialItem {
     materialType: string;
-    materialName: string;
+    /** 材料类型名称（中文，直接用；不要回退到 code） */
+    materialLabel: string;
+    /** 材料大类：IDENTITY/QUALIFICATION/STRENGTH/OTHER（字典 material_category） */
     category: string;
     mandatory: boolean;
-    status: 'EXPIRING' | 'MISSING' | 'READY' | string;
-    sourceRef?: string;
-    /** 长期为 null → 显示"长期" */
-    expireDate?: null | string;
+    /** 字典 material_status：READY 齐备 / EXPIRING 临近到期 / MISSING 缺失 / EXPIRED 已过期 */
+    status: 'EXPIRED' | 'EXPIRING' | 'MISSING' | 'READY' | string;
+    /** 匹配到的记录主键（证照/资质/安许/业绩） */
+    refId?: null | number;
+    /** 匹配到的名称/编号 */
+    refName?: null | string;
+    /** 有效期止（字符串，可空 = 长期） */
+    validTo?: null | string;
     message?: null | string;
   }
+  /** 企业材料完备性结论（EnterpriseMaterialCompletenessRespVO，逐字段核对）
+   *  注意：missingItems/expiringItems 是**字符串清单**（缺失材料名 / 名称+到期日），逐项明细在 items */
   export interface MaterialCompleteness {
     entId: number;
-    asOf: string;
-    /** PASS 齐备 / RISK 有临近到期 / FAIL 有缺失或已过期 */
+    /** 字典 material_result：PASS 齐备 / RISK 部分缺失或临近到期 / FAIL 必备材料缺失 */
     result: 'FAIL' | 'PASS' | 'RISK' | string;
     requiredCount: number;
     readyCount: number;
     items: MaterialItem[];
-    missingItems: MaterialItem[];
-    expiringItems: MaterialItem[];
+    /** 缺失清单（材料名称） */
+    missingItems: string[];
+    /** 临近到期清单（材料名称 + 到期日） */
+    expiringItems: string[];
   }
 }
 
