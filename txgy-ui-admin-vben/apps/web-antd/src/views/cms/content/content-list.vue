@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { CmsContentConfig, CmsRecord } from './config';
 
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -13,10 +13,20 @@ import {
   Modal,
   Select,
   Space,
+  Spin,
   Table,
   Tag,
   message,
 } from 'ant-design-vue';
+
+import {
+  createCmsRow,
+  deleteCmsRow,
+  fetchCmsDetail,
+  fetchCmsRows,
+  submitCmsAudit,
+  updateCmsRow,
+} from './adapter';
 
 defineOptions({ name: 'CmsContentList' });
 
@@ -24,14 +34,35 @@ const props = defineProps<CmsContentConfig>();
 
 const keyword = ref('');
 const statusFilter = ref('全部');
-const rows = ref<CmsRecord[]>(props.records.map((item) => ({ ...item })));
+const rows = ref<CmsRecord[]>([]);
+const loading = ref(false);
 
 const statusMeta: Record<string, string> = {
   已发布: 'success',
+  待发布: 'processing',
   待审核: 'warning',
   已驳回: 'error',
+  已下架: 'default',
   草稿: 'default',
 };
+
+// 清单D2⑤：草稿/已驳回/已下架可编辑删除提交审核；待审核/通过/已发布只可查看
+function canEdit(status: string): boolean {
+  return status === '草稿' || status === '已驳回' || status === '已下架';
+}
+
+async function loadRows() {
+  loading.value = true;
+  try {
+    rows.value = await fetchCmsRows(props.apiType);
+  } catch {
+    message.error('数据加载失败，请检查后端服务');
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadRows);
 
 const tableColumns = computed(() => [
   ...props.columns.map((column) => ({
@@ -79,6 +110,37 @@ const formModel = reactive<Record<string, any>>({});
 
 const detailVisible = ref(false);
 const detailRow = ref<CmsRecord | null>(null);
+const fullVisible = ref(false);
+
+function openFile(url: string) {
+  if (!url) return;
+  window.open(url.startsWith('http') ? url : `${location.origin}${url}`, '_blank');
+}
+
+/** 详情里可用的原件地址（标准库挂的是 coverImage，政策库挂的是 attachmentUrls） */
+const documentUrl = computed(() => detailRow.value?.attachmentUrls?.[0] || '');
+
+/**
+ * 查看全文：有原文链接直接跳原文；没有链接则打开原件文档；
+ * 两者都没有时打开正文全文弹窗。
+ */
+function viewFullText() {
+  const row = detailRow.value;
+  if (!row) return;
+  if (row.sourceUrl) {
+    openFile(row.sourceUrl);
+    return;
+  }
+  if (documentUrl.value) {
+    openFile(documentUrl.value);
+    return;
+  }
+  if (row.content) {
+    fullVisible.value = true;
+    return;
+  }
+  message.info('该条目暂无原文链接或文档');
+}
 
 function openCreate() {
   editingId.value = null;
@@ -95,39 +157,66 @@ function openCreate() {
 function openEdit(row: CmsRecord) {
   editingId.value = row.id ?? null;
   formTitle.value = `编辑${props.moduleName}内容`;
+  Object.keys(formModel).forEach((key) => delete formModel[key]);
   Object.assign(formModel, { ...row });
   formVisible.value = true;
 }
 
-function openDetail(row: CmsRecord) {
-  detailRow.value = row;
+async function openDetail(row: CmsRecord) {
   detailVisible.value = true;
+  fullVisible.value = false;
+  detailRow.value = row;
+  // 列表接口已排除 content，点查看时单独查详情拿全文
+  const detail = await fetchCmsDetail(props.apiType, row.id!);
+  if (detail) detailRow.value = detail;
 }
 
 function closeForm() {
   formVisible.value = false;
 }
 
-function saveRow() {
-  const row = { ...formModel };
-  if (editingId.value) {
-    const index = rows.value.findIndex((item) => item.id === editingId.value);
-    if (index >= 0) {
-      rows.value[index] = { ...row, id: editingId.value };
+function validateForm(): string | null {
+  for (const field of props.formFields) {
+    const value = formModel[field.dataIndex];
+    const empty =
+      value === undefined || value === null || String(value).trim() === '';
+    if (field.required && empty) {
+      return `${field.label}不能为空`;
     }
-  } else {
-    const maxId = rows.value.reduce((max, item) => Math.max(max, item.id ?? 0), 0);
-    rows.value.push({ ...row, id: maxId + 1 });
+    if (field.date && !empty && !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+      return `${field.label}格式应为 2026-01-01`;
+    }
   }
-  message.success('保存成功');
-  closeForm();
+  return null;
 }
 
-function submitAudit(row: CmsRecord) {
-  const target = rows.value.find((item) => item.id === row.id);
-  if (target) {
-    target.status = '待审核';
+async function saveRow() {
+  const error = validateForm();
+  if (error) {
+    message.warning(error);
+    return;
+  }
+  try {
+    if (editingId.value) {
+      await updateCmsRow(props.apiType, { ...formModel }, editingId.value);
+    } else {
+      await createCmsRow(props.apiType, { ...formModel });
+    }
+    message.success('保存成功');
+    closeForm();
+    await loadRows();
+  } catch (error: any) {
+    message.error(error?.msg || '保存失败，请检查必填项');
+  }
+}
+
+async function submitAudit(row: CmsRecord) {
+  try {
+    await submitCmsAudit(props.apiType, row.id!);
     message.success('已提交审核');
+    await loadRows();
+  } catch (error: any) {
+    message.error(error?.msg || '提交审核失败');
   }
 }
 
@@ -136,8 +225,13 @@ function removeRow(row: CmsRecord) {
     content: `确认删除“${row.title || row.name || row.standardNo}”吗？`,
     title: '删除确认',
     async onOk() {
-      rows.value = rows.value.filter((item) => item.id !== row.id);
-      message.success('删除成功');
+      try {
+        await deleteCmsRow(props.apiType, row.id!);
+        message.success('删除成功');
+        await loadRows();
+      } catch (error: any) {
+        message.error(error?.msg || '删除失败');
+      }
     },
   });
 }
@@ -179,47 +273,55 @@ function removeRow(row: CmsRecord) {
         />
       </div>
 
-      <Table
-        :columns="tableColumns"
-        :data-source="filteredRows"
-        :pagination="{ pageSize: 8, showSizeChanger: true }"
-        row-key="id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
-            <Tag :color="statusMeta[record.status] || 'default'">
-              {{ record.status }}
-            </Tag>
+      <Spin :spinning="loading">
+        <Table
+          :columns="tableColumns"
+          :data-source="filteredRows"
+          :pagination="{ pageSize: 8, showSizeChanger: true }"
+          row-key="id"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'status'">
+              <Tag :color="statusMeta[record.status] || 'default'">
+                {{ record.status }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Space :size="4">
+                <Button size="small" type="link" @click="openDetail(record)">
+                  查看
+                </Button>
+                <Button
+                  v-if="canEdit(record.status)"
+                  size="small"
+                  type="link"
+                  @click="openEdit(record)"
+                >
+                  编辑
+                </Button>
+                <Button
+                  v-if="record.status === '草稿' || record.status === '已驳回'"
+                  size="small"
+                  type="link"
+                  @click="submitAudit(record)"
+                >
+                  提交审核
+                </Button>
+                <Button
+                  v-if="canEdit(record.status)"
+                  size="small"
+                  danger
+                  type="link"
+                  @click="removeRow(record)"
+                >
+                  删除
+                </Button>
+              </Space>
+            </template>
           </template>
-          <template v-else-if="column.key === 'action'">
-            <Space :size="4">
-              <Button size="small" type="link" @click="openDetail(record)">
-                查看
-              </Button>
-              <Button size="small" type="link" @click="openEdit(record)">
-                编辑
-              </Button>
-              <Button
-                v-if="record.status === '草稿' || record.status === '已驳回'"
-                size="small"
-                type="link"
-                @click="submitAudit(record)"
-              >
-                提交审核
-              </Button>
-              <Button
-                size="small"
-                danger
-                type="link"
-                @click="removeRow(record)"
-              >
-                删除
-              </Button>
-            </Space>
-          </template>
-        </template>
-      </Table>
+        </Table>
+      </Spin>
 
       <Modal
         v-model:open="detailVisible"
@@ -237,6 +339,41 @@ function removeRow(row: CmsRecord) {
             <strong>{{ detailRow[column.dataIndex] ?? '-' }}</strong>
           </div>
         </div>
+        <div
+          v-if="detailRow?.content || detailRow?.attachmentUrls?.length || detailRow?.sourceUrl"
+          class="cms-detail-content"
+        >
+          <span>全文与原件</span>
+          <div class="cms-doc-links">
+            <Button size="small" type="primary" @click="viewFullText">
+              查看全文
+            </Button>
+            <Button
+              v-if="detailRow?.sourceUrl && documentUrl"
+              size="small"
+              @click="openFile(documentUrl)"
+            >
+              📎 查看文档原件（PDF）
+            </Button>
+            <Button
+              v-if="detailRow?.content"
+              size="small"
+              ghost
+              @click="fullVisible = true"
+            >
+              📄 查看正文内容
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        v-model:open="fullVisible"
+        :footer="null"
+        :title="`${detailRow?.title || pageTitle} · 文档内容`"
+        :width="900"
+      >
+        <pre class="cms-fulltext">{{ detailRow?.content }}</pre>
       </Modal>
 
       <Modal
@@ -248,7 +385,7 @@ function removeRow(row: CmsRecord) {
       >
         <Form layout="vertical">
           <div class="cms-form-grid">
-            <div v-for="field in formFields.filter(f => f.dataIndex !== 'status')" :key="field.dataIndex">
+            <div v-for="field in formFields" :key="field.dataIndex">
               <FormItem :label="field.label">
                 <component
                   :is="field.options ? Select : field.multiline ? Input.TextArea : Input"
@@ -357,6 +494,55 @@ h1 {
   color: #111827;
   font-size: 14px;
   font-weight: 500;
+}
+
+.cms-detail-content {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.cms-detail-content span {
+  display: block;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.cms-detail-content pre {
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #111827;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cms-doc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cms-fulltext {
+  margin: 0;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #111827;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .cms-form-grid {
