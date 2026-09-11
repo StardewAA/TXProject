@@ -16,6 +16,9 @@ public class ErpWarehouseSaveReqVO {
     @Schema(description = "仓库编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "11614")
     private Long id;
 
+    @Schema(description = "WMS 权威仓库编码；由 WMS 分配后在 ERP 建立映射", example = "WH-XBHT-001")
+    private String wmsWarehouseCode;
+
     @Schema(description = "仓库名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @NotEmpty(message = "仓库名称不能为空")
     private String name;

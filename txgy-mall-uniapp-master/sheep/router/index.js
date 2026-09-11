@@ -2,6 +2,10 @@ import $store from '@/sheep/store';
 import { showAuthModal, showShareModal } from '@/sheep/hooks/useModal';
 import { isNumber, isString, isEmpty, startsWith, isObject, isNil, clone } from 'lodash-es';
 import throttle from '@/sheep/helper/throttle';
+import {
+  isSimpleMarketingEnabled,
+  isDisabledMarketingPath,
+} from '@/sheep/helper/simplified-marketing';
 
 const _go = (
   path,
@@ -46,6 +50,16 @@ const _go = (
     if (!isNil(path.params)) {
       query = paramsToQuery(path.params);
     }
+  }
+
+  // 统一由 simplified-marketing helper 决定活动是否开放，避免路由再维护一份黑名单。
+  // 在简化模式下，即使是旧分享链接或活动详情子路径，也只提示并留在当前页面。
+  if (isSimpleMarketingEnabled() && isDisabledMarketingPath(page)) {
+    uni.showToast({
+      title: '该营销活动暂未开放',
+      icon: 'none',
+    });
+    return;
   }
 
   const nextRoute = ROUTES_MAP[page];
@@ -108,7 +122,9 @@ function paramsToQuery(params) {
   // return new URLSearchParams(Object.entries(params)).toString();
   let query = [];
   for (let key in params) {
-    query.push(key + '=' + params[key]);
+    // Encode query values so Chinese titles (例如“关于我们”“隐私协议”) are
+    // preserved when uni.navigateTo/switchTab serialises the URL on H5.
+    query.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
   }
 
   return query.join('&');

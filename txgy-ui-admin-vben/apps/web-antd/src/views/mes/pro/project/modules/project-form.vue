@@ -2,7 +2,7 @@
 import type { FormType } from '../data';
 import type { MesProProjectApi } from '#/api/mes/pro/project';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -14,6 +14,7 @@ import {
   getProject,
   updateProject,
 } from '#/api/mes/pro/project';
+import { getSimpleUser } from '#/api/system/user';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
@@ -54,6 +55,18 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
   wrapperClass: 'grid-cols-3',
 });
+
+/** 监听负责人变化，自动带出责任部门 */
+watch(
+  () => formApi.values?.ownerUserId,
+  async (val) => {
+    if (!val) {
+      return;
+    }
+    const user = await getSimpleUser(val as number);
+    await formApi.setFieldValue('dept', user?.deptName ?? '');
+  },
+);
 
 /** 重新挂载 schema 并按表单态控制底部确认按钮 */
 function applySchema() {

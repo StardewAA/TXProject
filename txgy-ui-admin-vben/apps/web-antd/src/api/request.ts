@@ -24,27 +24,54 @@ const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const tenantEnable = isTenantEnable();
 const apiEncrypt = createApiEncrypt(import.meta.env);
 
+function getRequestPath(url?: string) {
+  return (url || '').split('?')[0] ?? '';
+}
+
+function isAuthenticationEntry(url?: string) {
+  const path = getRequestPath(url);
+  return (
+    path.endsWith('/system/auth/login') ||
+    path.endsWith('/system/auth/register')
+  );
+}
+
+function isPersonalRegister(config: { data?: unknown; url?: string }) {
+  if (!getRequestPath(config.url).endsWith('/system/auth/register')) {
+    return false;
+  }
+  if (!config.data || typeof config.data !== 'object') {
+    return false;
+  }
+  return (config.data as { registerType?: string }).registerType === 'personal';
+}
+
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
     ...options,
     baseURL,
   });
+  let reAuthing = false;
 
   /**
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
+    if (reAuthing) return;
+    reAuthing = true;
     console.warn('Access token or refresh token is invalid or expired. ');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
+    accessStore.setRefreshToken(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      try { await authStore.logout(); } catch { /* token 已失效，忽略退出请求错误 */ }
+      window.location.href = '/#/auth/login';
     }
   }
 
@@ -76,7 +103,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
 
-      config.headers.Authorization = formatToken(accessStore.accessToken);
+      // 登录/注册是公开认证入口，忽略旧会话令牌，避免旧租户上下文干扰新认证。
+      config.headers.Authorization = isAuthenticationEntry(config.url)
+        ? undefined
+        : formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       // 添加租户编号
       config.headers['tenant-id'] = tenantEnable
@@ -86,6 +116,11 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       config.headers['visit-tenant-id'] = tenantEnable
         ? accessStore.visitTenantId
         : undefined;
+      if (isPersonalRegister(config)) {
+        // 个人注册固定落在后端保留的 tenant_id=0，不允许携带企业租户或访问租户。
+        config.headers['tenant-id'] = undefined;
+        config.headers['visit-tenant-id'] = undefined;
+      }
 
       // 是否 API 加密
       if ((config.headers || {}).isEncrypt) {
@@ -194,6 +229,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
+      // 门户中的可选企业数据允许为空，不应触发全局错误弹窗。
+      if (error?.config?.headers?.['X-Silent-Error'] === 'true') {
+        return;
+      }
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
       const responseData = error?.response?.data ?? {};

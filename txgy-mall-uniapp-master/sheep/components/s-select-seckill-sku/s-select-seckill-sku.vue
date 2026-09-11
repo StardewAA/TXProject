@@ -136,12 +136,16 @@
     }
     return priceText;
   });
-  const propertyList = convertProductPropertyList(state.goodsInfo.skus);
+  const propertyList = convertProductPropertyList(state.goodsInfo?.skus);
   // SKU 列表
   const skuList = computed(() => {
-    let skuPrices = state.goodsInfo.skus;
-    for (let price of skuPrices) {
-      price.value_id_array = price.properties.map((item) => item.valueId);
+    const skuPrices = Array.isArray(state.goodsInfo?.skus)
+      ? state.goodsInfo.skus.filter(Boolean)
+      : [];
+    for (const price of skuPrices) {
+      price.value_id_array = (Array.isArray(price.properties) ? price.properties : []).map(
+        (item) => item.valueId,
+      );
     }
     return skuPrices;
   });
@@ -206,7 +210,9 @@
     if (isChecked) {
       // 去除当前选中的 value 属性值 id
       let index = noChooseValueIds.indexOf(valueId);
-      noChooseValueIds.splice(index, 1);
+      if (index >= 0) {
+        noChooseValueIds.splice(index, 1);
+      }
     } else {
       // 循环去除当前已选择的 value 属性值 id
       Object.entries(state.currentPropertyArray).forEach(([propertyId, currentPropertyId]) => {
@@ -281,7 +287,9 @@
     ) {
       // 点击已被选中的，删除并填充 ''
       isChecked = false;
-      state.currentPropertyArray.splice(propertyId, 1, '');
+      // currentPropertyArray is a keyed map (not an array); assigning an
+      // empty value keeps the property in the map while allowing re-selection.
+      state.currentPropertyArray[propertyId] = '';
     } else {
       // 选中
       state.currentPropertyArray[propertyId] = valueId;

@@ -5,6 +5,8 @@ import type { MesProProjectApi } from '#/api/mes/pro/project';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { getSimpleUserList } from '#/api/system/user';
+
 /** 表单类型 */
 export type FormType = 'create' | 'detail' | 'update';
 
@@ -81,12 +83,15 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'owner',
+      fieldName: 'ownerUserId',
       label: '负责人',
-      component: 'Input',
+      component: 'ApiSelect',
       componentProps: {
+        api: getSimpleUserList,
+        labelField: 'nickname',
+        valueField: 'id',
         disabled: headerReadonly,
-        placeholder: '请输入负责人',
+        placeholder: '请选择负责人',
       },
     },
     {
@@ -94,8 +99,8 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       label: '责任部门',
       component: 'Input',
       componentProps: {
-        disabled: headerReadonly,
-        placeholder: '请输入责任部门',
+        disabled: true,
+        placeholder: '选择负责人后自动带出',
       },
     },
     {
@@ -105,7 +110,9 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       componentProps: {
         disabled: headerReadonly,
         showTime: true,
-        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        // 后端 TimestampLocalDateTimeDeserializer 只接受毫秒时间戳
+        valueFormat: 'x',
+        format: 'YYYY-MM-DD HH:mm:ss',
         placeholder: '请选择计划开始时间',
       },
     },
@@ -116,7 +123,8 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       componentProps: {
         disabled: headerReadonly,
         showTime: true,
-        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        valueFormat: 'x',
+        format: 'YYYY-MM-DD HH:mm:ss',
         placeholder: '请选择计划结束时间',
       },
     },
@@ -127,7 +135,8 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       componentProps: {
         disabled: headerReadonly,
         showTime: true,
-        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        valueFormat: 'x',
+        format: 'YYYY-MM-DD HH:mm:ss',
         placeholder: '请选择实际开始时间',
       },
     },
@@ -138,7 +147,8 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       componentProps: {
         disabled: headerReadonly,
         showTime: true,
-        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        valueFormat: 'x',
+        format: 'YYYY-MM-DD HH:mm:ss',
         placeholder: '请选择实际结束时间',
       },
     },
@@ -311,7 +321,7 @@ export function useGridColumns(): VxeTableGridOptions<MesProProjectApi.Project>[
     },
     {
       title: '操作',
-      width: 200,
+      width: 320,
       fixed: 'right',
       slots: { default: 'actions' },
     },
@@ -409,6 +419,7 @@ export function useImportFormSchema(): VbenFormSchema[] {
       label: '是否覆盖更新',
       component: 'Switch',
       componentProps: { defaultChecked: false },
+      defaultValue: false,
     },
   ];
 }

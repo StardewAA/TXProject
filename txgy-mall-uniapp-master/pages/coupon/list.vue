@@ -10,7 +10,7 @@
       />
     </su-sticky>
     <s-empty
-      v-if="state.pagination.total === 0"
+      v-if="state.pagination.total === 0 && !state.loading"
       icon="/static/coupon-empty.png"
       text="暂无优惠券"
     />
@@ -86,6 +86,8 @@
       pageSize: 5,
     },
     loadStatus: '',
+    loading: false,
+    takingId: null,
   });
 
   const tabMaps = [
@@ -106,70 +108,130 @@
       value: '3',
     },
   ];
+  let requestVersion = 0;
 
-  function onTabsChange(e) {
-    state.currentTab = e.index;
-    state.type = e.value;
+  function onTabsChange(e = {}) {
+    const eventIndex = Number(e.index);
+    const valueIndex = tabMaps.findIndex((item) => String(item.value) === String(e.value ?? ''));
+    const nextIndex = Number.isInteger(eventIndex) && eventIndex >= 0 ? eventIndex : valueIndex;
+    state.currentTab = Math.min(Math.max(nextIndex >= 0 ? nextIndex : 0, 0), tabMaps.length - 1);
+    state.type = tabMaps[state.currentTab]?.value || 'all';
+    // 使上一个 tab 的请求失效；无法取消的网络响应也不能覆盖当前 tab。
+    requestVersion += 1;
+    state.loading = false;
     resetPagination(state.pagination);
+    state.loadStatus = '';
     if (state.currentTab === 0) {
       getData();
     } else {
       getCoupon();
+    }
+  }
+
+  // 将分页接口返回值统一成安全的列表结构。部分旧服务在异常时会返回 false，
+  // 或者只返回 data/list 中的一部分字段，页面不能直接解构使用。
+  function appendPage(response, pageNo) {
+    if (response?.code !== 0) {
+      state.loadStatus = state.pagination.list.length > 0 ? 'more' : 'noMore';
+      return false;
+    }
+    const page = response.data && typeof response.data === 'object' ? response.data : {};
+    const list = Array.isArray(page.list) ? page.list.filter(Boolean) : [];
+    const parsedTotal = Number(page.total);
+    const total = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : 0;
+    // 只有当前页仍然有效时才合并，避免切换 tab 后旧请求覆盖新数据。
+    if (pageNo !== state.pagination.pageNo) {
+      return false;
+    }
+    state.pagination.list = pageNo === 1 ? list : concat(state.pagination.list, list);
+    state.pagination.total = total;
+    state.pagination.pageNo = pageNo + 1;
+    state.loadStatus = state.pagination.list.length < total ? 'more' : 'noMore';
+    return true;
+  }
+
+  async function requestPage(loader) {
+    if (state.loading) {
+      return;
+    }
+    const version = ++requestVersion;
+    const pageNo = Math.max(1, Number(state.pagination.pageNo) || 1);
+    state.loading = true;
+    state.loadStatus = 'loading';
+    try {
+      const response = await loader(pageNo);
+      if (version === requestVersion) {
+        appendPage(response, pageNo);
+      }
+    } catch (error) {
+      // request 层会负责网络错误提示；这里保持页面可继续重试。
+      if (version === requestVersion) {
+        state.loadStatus = state.pagination.list.length > 0 ? 'more' : 'noMore';
+      }
+    } finally {
+      if (version === requestVersion) {
+        state.loading = false;
+      }
     }
   }
 
   // 获得优惠劵模版列表
   async function getData() {
-    state.loadStatus = 'loading';
-    const { data, code } = await CouponApi.getCouponTemplatePage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-    });
-    if (code !== 0) {
-      return;
-    }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    return requestPage((pageNo) =>
+      CouponApi.getCouponTemplatePage({
+        pageNo,
+        pageSize: state.pagination.pageSize,
+      }),
+    );
   }
 
   // 获得我的优惠劵
   async function getCoupon() {
-    state.loadStatus = 'loading';
-    const { data, code } = await CouponApi.getCouponPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-      status: state.type,
-    });
-    if (code !== 0) {
-      return;
-    }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    return requestPage((pageNo) =>
+      CouponApi.getCouponPage({
+        pageNo,
+        pageSize: state.pagination.pageSize,
+        status: state.type,
+      }),
+    );
   }
 
   // 领取优惠劵
   async function getBuy(id) {
-    const { code } = await CouponApi.takeCoupon(id);
-    if (code !== 0) {
+    const couponId = Number(id);
+    if (!Number.isFinite(couponId) || couponId <= 0 || state.takingId !== null) {
       return;
     }
-    uni.showToast({
-      title: '领取成功',
-    });
-    setTimeout(() => {
+    state.takingId = couponId;
+    try {
+      const response = await CouponApi.takeCoupon(couponId);
+      if (response?.code !== 0) {
+        return;
+      }
+      uni.showToast({
+        title: '领取成功',
+      });
+      requestVersion += 1;
+      state.loading = false;
       resetPagination(state.pagination);
-      getData();
-    }, 1000);
+      state.loadStatus = '';
+      await getData();
+    } catch (error) {
+      // request 层负责展示错误提示。
+    } finally {
+      state.takingId = null;
+    }
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (
+      state.loading ||
+      state.loadStatus === 'noMore' ||
+      (state.pagination.total > 0 && state.pagination.list.length >= state.pagination.total)
+    ) {
       return;
     }
-    state.pagination.pageNo++;
     if (state.currentTab === 0) {
       getData();
     } else {
@@ -177,18 +239,24 @@
     }
   }
 
-  onLoad((Option) => {
-    // 领劵中心
-    if (Option.type === 'all' || !Option.type) {
+  onLoad((options = {}) => {
+    const requestedType = String(options.type ?? 'all');
+    const typeIndexMap = {
+      all: 0,
+      geted: 1,
+      received: 1,
+      1: 1,
+      used: 2,
+      2: 2,
+      expired: 3,
+      invalid: 3,
+      3: 3,
+    };
+    state.currentTab = typeIndexMap[requestedType] ?? 0;
+    state.type = tabMaps[state.currentTab]?.value || 'all';
+    if (state.currentTab === 0) {
       getData();
-      // 我的优惠劵
     } else {
-      Option.type === 'geted'
-        ? (state.currentTab = 1)
-        : Option.type === 'used'
-        ? (state.currentTab = 2)
-        : (state.currentTab = 3);
-      state.type = state.currentTab;
       getCoupon();
     }
   });

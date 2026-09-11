@@ -30,6 +30,14 @@ public class WmsItemDO extends BaseDO {
      * 商品编号
      */
     private String code;
+    /** RAW_MATERIAL / FINISHED_GOODS */
+    private String materialType;
+    /** 是否需要质检 */
+    private Boolean qualityRequired;
+    /** ERP 主数据版本 */
+    private Long sourceVersion;
+    /** 启用状态 */
+    private Integer status;
     /**
      * 商品名称
      */

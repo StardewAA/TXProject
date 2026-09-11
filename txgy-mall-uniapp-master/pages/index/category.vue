@@ -1,247 +1,537 @@
 <!-- 商品分类列表 -->
 <template>
-  <s-layout :bgStyle="{ color: '#fff' }" tabbar="/pages/index/category" title="分类">
-    <view class="s-category">
-      <view class="three-level-wrap ss-flex ss-col-top">
-        <!-- 商品分类（左） -->
-        <view class="side-menu-wrap" :style="[{ top: Number(statusBarHeight + 88) + 'rpx' }]">
-          <scroll-view scroll-y :style="[{ height: pageHeight + 'px' }]">
+  <s-layout
+    :bgStyle="{ color: '#f4f7fb' }"
+    tabbar="/pages/index/category"
+    title="商品分类"
+  >
+    <view class="mall-category">
+      <view class="category-intro">
+        <view>
+          <text class="intro-title">商品分类</text>
+          <text class="intro-subtitle">按产品档案快速找到工程材料</text>
+        </view>
+        <text class="intro-count">{{ products.length }} 款可售档案</text>
+      </view>
+
+      <view class="category-layout">
+        <!-- 分类菜单 -->
+        <scroll-view class="category-sidebar" scroll-y :style="{ height: pageHeight + 'px' }">
+          <view
+            v-for="(category, index) in mallCategories"
+            :key="category.key"
+            class="sidebar-item"
+            :class="{ 'sidebar-item-active': index === state.activeMenu }"
+            @tap="onMenu(index)"
+          >
+            <view class="sidebar-icon" :style="{ backgroundColor: category.color }">
+              {{ category.icon }}
+            </view>
+            <text class="sidebar-name">{{ category.name }}</text>
+            <text class="sidebar-count">{{ categoryProductCount(category.key) }} 款</text>
+          </view>
+        </scroll-view>
+
+        <!-- 商品档案 -->
+        <scroll-view class="category-products" scroll-y :style="{ height: pageHeight + 'px' }">
+          <view
+            v-if="activeCategory"
+            class="active-category"
+            :style="{ background: categoryGradient(activeCategory) }"
+          >
+            <view>
+              <text class="active-category-name">{{ activeCategory.name }}</text>
+              <text class="active-category-hint">{{ activeCategory.hint }}</text>
+            </view>
+            <text class="active-category-count">
+              {{ activeProducts.length }} 款
+            </text>
+          </view>
+
+          <view class="group-label">
+            <text>{{ activeCategory?.group || '工程材料' }}</text>
+            <text class="group-label-line" />
+          </view>
+
+          <view v-if="activeProducts.length" class="product-list">
             <view
-              class="menu-item ss-flex"
-              v-for="(item, index) in state.categoryList"
-              :key="item.id"
-              :class="[{ 'menu-item-active': index === state.activeMenu }]"
-              @tap="onMenu(index)"
+              v-for="product in activeProducts"
+              :key="product.id || product.code"
+              class="catalog-product"
+              @tap="openProduct(product)"
             >
-              <view class="menu-title ss-line-1">
-                {{ item.name }}
+              <view class="catalog-cover" :style="{ background: productGradient(product) }">
+                <image
+                  v-if="product.picUrl"
+                  class="catalog-cover-image"
+                  :src="sheep.$url.cdn(product.picUrl)"
+                  mode="aspectFill"
+                />
+                <text class="catalog-code">{{ product.code }}</text>
+                <text class="catalog-unit">{{ product.unit }}</text>
+                <text class="catalog-cover-label">产品档案</text>
+              </view>
+              <view class="catalog-product-body">
+                <text class="catalog-product-name">{{ product.name }}</text>
+                <text class="catalog-product-spec">{{ product.spec }}</text>
+                <view class="catalog-price-row">
+                  <text class="catalog-price">¥{{ formatPrice(product.price) }}</text>
+                  <text class="catalog-price-unit">/{{ product.unit }}</text>
+                </view>
+                <text class="catalog-stock" :class="{ 'catalog-stock-empty': product.stock <= 0 }">
+                  {{ product.stock > 0 ? `库存 ${product.stock}` : '暂时缺货' }}
+                </text>
               </view>
             </view>
-          </scroll-view>
-        </view>
-        <!-- 商品分类（右） -->
-        <view class="goods-list-box" v-if="state.categoryList?.length">
-          <scroll-view scroll-y :style="[{ height: pageHeight + 'px' }]">
-            <image
-              v-if="state.categoryList[state.activeMenu].picUrl"
-              class="banner-img"
-              :src="sheep.$url.cdn(state.categoryList[state.activeMenu].picUrl)"
-              mode="widthFix"
-            />
-            <first-one v-if="state.style === 'first_one'" :pagination="state.pagination" />
-            <first-two v-if="state.style === 'first_two'" :pagination="state.pagination" />
-            <second-one
-              v-if="state.style === 'second_one'"
-              :data="state.categoryList"
-              :activeMenu="state.activeMenu"
-            />
-            <uni-load-more
-              v-if="
-                (state.style === 'first_one' || state.style === 'first_two') &&
-                state.pagination.total > 0
-              "
-              :status="state.loadStatus"
-              :content-text="{
-                contentdown: '点击查看更多',
-              }"
-              @tap="loadMore"
-            />
-          </scroll-view>
-        </view>
+          </view>
+
+          <view v-else class="catalog-empty">
+            <text class="catalog-empty-title">暂无可售商品</text>
+            <text class="catalog-empty-desc">该分类的商品档案正在补充</text>
+          </view>
+
+          <view class="integration-tip">
+            <text>{{ catalogSource === 'api' ? '点击商品进入详情，可选择规格并加入购物车' : '接口暂不可用，当前仅展示本地商品档案' }}</text>
+          </view>
+        </scroll-view>
       </view>
     </view>
   </s-layout>
 </template>
 
 <script setup>
-  import secondOne from './components/second-one.vue';
-  import firstOne from './components/first-one.vue';
-  import firstTwo from './components/first-two.vue';
+  import { computed, reactive, ref } from 'vue';
+  import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
-  import CategoryApi from '@/sheep/api/product/category';
-  import SpuApi from '@/sheep/api/product/spu';
-  import { onLoad, onShow } from '@dcloudio/uni-app';
-  import { computed, reactive } from 'vue';
-  import { concat } from 'lodash-es';
-  import { handleTree } from '@/sheep/helper/utils';
+  import {
+    categoryProducts,
+    getMallCategory,
+    mallCategories,
+    mallProducts,
+  } from '@/sheep/data/mall-catalog';
+  import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
 
   const state = reactive({
-    style: 'second_one', // first_one（一级 - 样式一）, first_two（二级 - 样式二）, second_one（二级）
-    categoryList: [], // 商品分类树
-    activeMenu: 0, // 选中的一级菜单，在 categoryList 的下标
-
-    pagination: {
-      // 商品分页
-      list: [], // 商品列表
-      total: [], // 商品总数
-      pageNo: 1,
-      pageSize: 6,
-    },
-    loadStatus: '',
+    activeMenu: 0,
   });
+  const products = ref(mallProducts);
+  const catalogSource = ref('local');
 
-  const { safeArea } = sheep.$platform.device;
-  const pageHeight = computed(() => safeArea.height - 44 - 50);
-  const statusBarHeight = sheep.$platform.device.statusBarHeight * 2;
+  const safeArea = sheep.$platform.device?.safeArea || {
+    height: typeof window === 'undefined' ? 667 : window.innerHeight,
+  };
+  const pageHeight = computed(() => Math.max(320, safeArea.height - 44 - 50));
+  const activeCategory = computed(() => mallCategories[state.activeMenu] || mallCategories[0]);
+  const activeProducts = computed(() =>
+    activeCategory.value && Array.isArray(products.value)
+      ? products.value.filter((product) => product?.categoryKey === activeCategory.value.key)
+      : [],
+  );
 
-  // 加载商品分类
-  async function getList() {
-    const { code, data } = await CategoryApi.getCategoryList();
-    if (code !== 0) {
-      return;
-    }
-    state.categoryList = handleTree(data);
-  }
-
-  // 选中菜单
-  const onMenu = (val) => {
-    state.activeMenu = val;
-    if (state.style === 'first_one' || state.style === 'first_two') {
-      state.pagination.pageNo = 1;
-      state.pagination.list = [];
-      state.pagination.total = 0;
-      getGoodsList();
-    }
+  const categoryProductCount = (categoryKey) =>
+    (Array.isArray(products.value) ? products.value : []).filter(
+      (product) => product?.categoryKey === categoryKey,
+    ).length ||
+    categoryProducts(categoryKey).length;
+  const categoryColor = (categoryKey) => getMallCategory(categoryKey)?.color || '#0f766e';
+  const categoryGradient = (item) => {
+    const color = typeof item === 'string' ? categoryColor(item) : item?.color || '#0f766e';
+    return `linear-gradient(135deg, ${color} 0%, #0f172a 100%)`;
+  };
+  const productGradient = (product) => categoryGradient(product?.categoryKey);
+  const formatPrice = (price) => {
+    const value = Number(price);
+    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
   };
 
-  // 加载商品列表
-  async function getGoodsList() {
-    // 加载列表
-    state.loadStatus = 'loading';
-    const res = await SpuApi.getSpuPage({
-      categoryId: state.categoryList[state.activeMenu].id,
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-    });
-    if (res.code !== 0) {
+  const onMenu = (index) => {
+    state.activeMenu = index;
+  };
+
+  const openProduct = (product) => {
+    if (product?.id) {
+      sheep.$router.go('/pages/goods/index', { id: product.id });
       return;
     }
-    // 合并列表
-    state.pagination.list = concat(state.pagination.list, res.data.list);
-    state.pagination.total = res.data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    uni.showToast({
+      title: '商品接口暂不可用，请稍后重试',
+      icon: 'none',
+    });
+  };
+
+  async function loadCatalog(force = false) {
+    try {
+      const result = await loadMallCatalog(force);
+      if (Array.isArray(result?.products)) {
+        products.value = result.products.filter(Boolean);
+        catalogSource.value = result.source === 'api' ? 'api' : 'local';
+      }
+    } catch (error) {
+      products.value = Array.isArray(products.value) ? products.value : mallProducts;
+      catalogSource.value = 'local';
+    }
   }
 
-  // 加载更多商品
-  function loadMore() {
-    if (state.loadStatus === 'noMore') {
-      return;
-    }
-    state.pagination.pageNo++;
-    getGoodsList();
-  }
-  function initMenuIndex() {
-    // TODO @AI：可优化：增加一个 params.id 的兼容
+  function applyCategoryParam(options = {}) {
+    // switchTab cannot carry a query string. The router stores those
+    // parameters in the app store, so consume them on every show (the page
+    // may already be mounted when a category tile is clicked).
     const appStore = sheep.$store('app');
-    // 处理 tabbar 传参的情况
-    const tabbarParams = appStore.paramsForTabbar || {};
-    const id = tabbarParams.id;
-    appStore.clearParamsForTabbar(); // 使用完后清理，避免影响下次跳转
-    // 首页点击分类的处理：查找满足条件的分类
-    const foundCategory = state.categoryList.find((category) => category.id === Number(id));
-    // 如果找到则调用 onMenu 自动勾选相应分类，否则调用 onMenu(0) 勾选第一个分类
-    onMenu(foundCategory ? state.categoryList.indexOf(foundCategory) : 0);
+    const tabbarParams = appStore?.paramsForTabbar || {};
+    const params = { ...options, ...tabbarParams };
+    let index = mallCategories.findIndex((item) => item.key === params.categoryKey);
+    const categoryId = Number(params.categoryId || params.id);
+    if (index < 0 && Number.isFinite(categoryId) && categoryId > 0) {
+      const apiCategoryKeys = {
+        900002: 'primer',
+        900003: 'intermediate',
+        900004: 'finish',
+        900015: 'adhesive',
+        900005: 'fireproof',
+        900006: 'insulation',
+        900007: 'cold-insulation',
+        900008: 'moisture-proof',
+        900009: 'outer-protection',
+        900010: 'pipe-support',
+        900011: 'construction',
+        900012: 'safety-tools',
+      };
+      index = mallCategories.findIndex((item) => item.key === apiCategoryKeys[categoryId]);
+    }
+    if (index >= 0) {
+      state.activeMenu = index;
+    }
+    if (Object.keys(tabbarParams).length) {
+      appStore?.clearParamsForTabbar?.();
+    }
   }
-  onShow(async () => {
-    await getList();
-    initMenuIndex();
+
+  onLoad((options = {}) => {
+    loadCatalog();
+    applyCategoryParam(options);
   });
 
-  function handleScrollToLower() {
-    loadMore();
-  }
+  onShow(() => applyCategoryParam());
+
+  onPullDownRefresh(async () => {
+    try {
+      await loadCatalog(true);
+    } finally {
+      uni.stopPullDownRefresh();
+    }
+  });
 </script>
 
 <style lang="scss" scoped>
-  .s-category {
-    :deep() {
-      .side-menu-wrap {
-        width: 200rpx;
-        height: 100%;
-        padding-left: 12rpx;
-        background-color: #f6f6f6;
-        position: fixed;
-        left: 0;
+  .mall-category {
+    padding: 24rpx 20rpx calc(120rpx + env(safe-area-inset-bottom));
+  }
 
-        .menu-item {
-          width: 100%;
-          height: 88rpx;
-          position: relative;
-          transition: all linear 0.2s;
+  .category-intro {
+    padding: 24rpx 26rpx;
+    border-radius: 22rpx;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    background: #fff;
+    box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.05);
+  }
 
-          .menu-title {
-            line-height: 32rpx;
-            font-size: 30rpx;
-            font-weight: 400;
-            color: #333;
-            margin-left: 28rpx;
-            position: relative;
-            z-index: 0;
+  .intro-title,
+  .intro-subtitle {
+    display: block;
+  }
 
-            &::before {
-              content: '';
-              width: 64rpx;
-              height: 12rpx;
-              background: linear-gradient(
-                90deg,
-                var(--ui-BG-Main-gradient),
-                var(--ui-BG-Main-light)
-              ) !important;
-              position: absolute;
-              left: -64rpx;
-              bottom: 0;
-              z-index: -1;
-              transition: all linear 0.2s;
-            }
-          }
+  .intro-title {
+    color: #0f172a;
+    font-size: 34rpx;
+    font-weight: 700;
+  }
 
-          &.menu-item-active {
-            background-color: #fff;
-            border-radius: 20rpx 0 0 20rpx;
+  .intro-subtitle {
+    margin-top: 8rpx;
+    color: #64748b;
+    font-size: 21rpx;
+  }
 
-            &::before {
-              content: '';
-              position: absolute;
-              right: 0;
-              bottom: -20rpx;
-              width: 20rpx;
-              height: 20rpx;
-              background: radial-gradient(circle at 0 100%, transparent 20rpx, #fff 0);
-            }
+  .intro-count {
+    color: #0f766e;
+    font-size: 21rpx;
+    font-weight: 600;
+  }
 
-            &::after {
-              content: '';
-              position: absolute;
-              top: -20rpx;
-              right: 0;
-              width: 20rpx;
-              height: 20rpx;
-              background: radial-gradient(circle at 0% 0%, transparent 20rpx, #fff 0);
-            }
+  .category-layout {
+    min-height: 320px;
+    margin-top: 20rpx;
+    display: flex;
+    overflow: hidden;
+    border-radius: 22rpx;
+    background: #fff;
+    box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.05);
+  }
 
-            .menu-title {
-              font-weight: 600;
+  .category-sidebar {
+    width: 184rpx;
+    flex: 0 0 184rpx;
+    box-sizing: border-box;
+    padding: 12rpx 0;
+    background: #f1f5f9;
+  }
 
-              &::before {
-                left: 0;
-              }
-            }
-          }
-        }
-      }
+  .sidebar-item {
+    min-height: 112rpx;
+    padding: 14rpx 8rpx;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    position: relative;
+  }
 
-      .goods-list-box {
-        background-color: #fff;
-        width: calc(100vw - 200rpx);
-        padding: 10px;
-        margin-left: 200rpx;
-      }
+  .sidebar-item-active {
+    background: #fff;
+  }
 
-      .banner-img {
-        width: calc(100vw - 130px);
-        border-radius: 5px;
-        margin-bottom: 20rpx;
-      }
-    }
+  .sidebar-item-active::before {
+    content: '';
+    width: 8rpx;
+    height: 58rpx;
+    border-radius: 0 8rpx 8rpx 0;
+    position: absolute;
+    left: 0;
+    top: 28rpx;
+    background: #0f766e;
+  }
+
+  .sidebar-icon {
+    width: 48rpx;
+    height: 48rpx;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 17rpx;
+    font-weight: 700;
+  }
+
+  .sidebar-name {
+    max-width: 100%;
+    margin-top: 9rpx;
+    overflow: hidden;
+    color: #334155;
+    font-size: 22rpx;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-count {
+    margin-top: 4rpx;
+    color: #94a3b8;
+    font-size: 18rpx;
+  }
+
+  .category-products {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 20rpx;
+    background: #fff;
+  }
+
+  .active-category {
+    min-height: 128rpx;
+    padding: 22rpx 24rpx;
+    box-sizing: border-box;
+    border-radius: 18rpx;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    color: #fff;
+  }
+
+  .active-category-name,
+  .active-category-hint {
+    display: block;
+  }
+
+  .active-category-name {
+    font-size: 32rpx;
+    font-weight: 700;
+  }
+
+  .active-category-hint {
+    margin-top: 8rpx;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 20rpx;
+  }
+
+  .active-category-count {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 22rpx;
+  }
+
+  .group-label {
+    margin: 24rpx 0 16rpx;
+    display: flex;
+    align-items: center;
+    color: #334155;
+    font-size: 23rpx;
+    font-weight: 600;
+  }
+
+  .group-label-line {
+    height: 1rpx;
+    flex: 1;
+    margin-left: 14rpx;
+    background: #e2e8f0;
+  }
+
+  .product-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .catalog-product {
+    width: calc(50% - 8rpx);
+    margin-bottom: 18rpx;
+    overflow: hidden;
+    border-radius: 18rpx;
+    background: #fff;
+    box-shadow: 0 8rpx 20rpx rgba(15, 23, 42, 0.08);
+  }
+
+  .catalog-cover {
+    height: 144rpx;
+    padding: 16rpx;
+    box-sizing: border-box;
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    justify-content: space-between;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .catalog-cover-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.28;
+    mix-blend-mode: screen;
+  }
+
+  .catalog-code,
+  .catalog-unit,
+  .catalog-cover-label {
+    position: relative;
+    z-index: 1;
+  }
+
+  .catalog-code {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 17rpx;
+    letter-spacing: 1rpx;
+  }
+
+  .catalog-unit {
+    align-self: flex-end;
+    padding: 4rpx 10rpx;
+    border: 1rpx solid rgba(255, 255, 255, 0.4);
+    border-radius: 999rpx;
+    font-size: 17rpx;
+  }
+
+  .catalog-cover-label {
+    font-size: 19rpx;
+    font-weight: 600;
+  }
+
+  .catalog-product-body {
+    padding: 14rpx;
+  }
+
+  .catalog-product-name,
+  .catalog-product-spec {
+    display: block;
+  }
+
+  .catalog-product-name {
+    overflow: hidden;
+    color: #1e293b;
+    font-size: 23rpx;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .catalog-product-spec {
+    height: 32rpx;
+    margin-top: 7rpx;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 18rpx;
+    line-height: 32rpx;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .catalog-price-row {
+    display: flex;
+    align-items: baseline;
+    margin-top: 12rpx;
+  }
+
+  .catalog-price {
+    color: #dc2626;
+    font-size: 25rpx;
+    font-weight: 700;
+  }
+
+  .catalog-price-unit {
+    margin-left: 3rpx;
+    color: #94a3b8;
+    font-size: 17rpx;
+  }
+
+  .catalog-stock {
+    display: block;
+    margin-top: 7rpx;
+    color: #0f766e;
+    font-size: 18rpx;
+  }
+
+  .catalog-stock-empty {
+    color: #94a3b8;
+  }
+
+  .catalog-empty {
+    padding: 100rpx 10rpx;
+    text-align: center;
+  }
+
+  .catalog-empty-title,
+  .catalog-empty-desc {
+    display: block;
+  }
+
+  .catalog-empty-title {
+    color: #334155;
+    font-size: 26rpx;
+    font-weight: 600;
+  }
+
+  .catalog-empty-desc {
+    margin-top: 10rpx;
+    color: #94a3b8;
+    font-size: 20rpx;
+  }
+
+  .integration-tip {
+    padding: 26rpx 0 12rpx;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 18rpx;
   }
 </style>

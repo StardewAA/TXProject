@@ -36,6 +36,8 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     @Override
     public Long createWarehouse(ErpWarehouseSaveReqVO createReqVO) {
+        createReqVO.setWmsWarehouseCode(normalizeWmsWarehouseCode(createReqVO.getWmsWarehouseCode()));
+        validateWmsWarehouseCodeUnique(null, createReqVO.getWmsWarehouseCode());
         // 插入
         ErpWarehouseDO warehouse = BeanUtils.toBean(createReqVO, ErpWarehouseDO.class);
         warehouseMapper.insert(warehouse);
@@ -45,8 +47,10 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     @Override
     public void updateWarehouse(ErpWarehouseSaveReqVO updateReqVO) {
+        updateReqVO.setWmsWarehouseCode(normalizeWmsWarehouseCode(updateReqVO.getWmsWarehouseCode()));
         // 校验存在
         validateWarehouseExists(updateReqVO.getId());
+        validateWmsWarehouseCodeUnique(updateReqVO.getId(), updateReqVO.getWmsWarehouseCode());
         // 更新
         ErpWarehouseDO updateObj = BeanUtils.toBean(updateReqVO, ErpWarehouseDO.class);
         warehouseMapper.updateById(updateObj);
@@ -81,6 +85,20 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         if (warehouseMapper.selectById(id) == null) {
             throw exception(WAREHOUSE_NOT_EXISTS);
         }
+    }
+
+    private void validateWmsWarehouseCodeUnique(Long id, String wmsWarehouseCode) {
+        if (wmsWarehouseCode == null || wmsWarehouseCode.isBlank()) {
+            return;
+        }
+        ErpWarehouseDO existing = warehouseMapper.selectByWmsWarehouseCode(wmsWarehouseCode.trim());
+        if (existing != null && !existing.getId().equals(id)) {
+            throw exception(WAREHOUSE_WMS_CODE_DUPLICATE, wmsWarehouseCode);
+        }
+    }
+
+    private String normalizeWmsWarehouseCode(String wmsWarehouseCode) {
+        return wmsWarehouseCode == null || wmsWarehouseCode.isBlank() ? null : wmsWarehouseCode.trim();
     }
 
     @Override

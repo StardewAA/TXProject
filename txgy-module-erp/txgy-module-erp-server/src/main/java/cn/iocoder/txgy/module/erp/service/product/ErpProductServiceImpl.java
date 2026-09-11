@@ -12,8 +12,10 @@ import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductCategoryDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductUnitDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.product.ErpProductMapper;
+import cn.iocoder.txgy.module.erp.service.integration.ErpWmsMasterDataSyncService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.*;
@@ -38,33 +40,50 @@ public class ErpProductServiceImpl implements ErpProductService {
     private ErpProductCategoryService productCategoryService;
     @Resource
     private ErpProductUnitService productUnitService;
+    @Resource
+    private ErpWmsMasterDataSyncService wmsMasterDataSyncService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Long createProduct(ProductSaveReqVO createReqVO) {
         // TODO 芋艿：校验分类
+        validateMaterialCodeUnique(null, createReqVO.getMaterialCode());
         // 插入
         ErpProductDO product = BeanUtils.toBean(createReqVO, ErpProductDO.class);
+        product.setSyncVersion(1L);
         productMapper.insert(product);
+        wmsMasterDataSyncService.syncProductAfterCommit(product);
         // 返回
         return product.getId();
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateProduct(ProductSaveReqVO updateReqVO) {
         // TODO 芋艿：校验分类
         // 校验存在
-        validateProductExists(updateReqVO.getId());
+        ErpProductDO oldProduct = validateProductExists(updateReqVO.getId());
+        if (!Objects.equals(oldProduct.getMaterialCode(), updateReqVO.getMaterialCode())) {
+            throw exception(PRODUCT_MATERIAL_CODE_IMMUTABLE);
+        }
+        validateMaterialCodeUnique(updateReqVO.getId(), updateReqVO.getMaterialCode());
         // 更新
         ErpProductDO updateObj = BeanUtils.toBean(updateReqVO, ErpProductDO.class);
+        updateObj.setSyncVersion(oldProduct.getSyncVersion() == null ? 1L : oldProduct.getSyncVersion() + 1);
         productMapper.updateById(updateObj);
+        wmsMasterDataSyncService.syncProductAfterCommit(updateObj);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(Long id) {
         // 校验存在
-        validateProductExists(id);
+        ErpProductDO product = validateProductExists(id);
         // 删除
         productMapper.deleteById(id);
+        product.setStatus(CommonStatusEnum.DISABLE.getStatus());
+        product.setSyncVersion(product.getSyncVersion() == null ? 1L : product.getSyncVersion() + 1);
+        wmsMasterDataSyncService.syncProductAfterCommit(product);
     }
 
     @Override
@@ -86,9 +105,18 @@ public class ErpProductServiceImpl implements ErpProductService {
         return list;
     }
 
-    private void validateProductExists(Long id) {
-        if (productMapper.selectById(id) == null) {
+    private ErpProductDO validateProductExists(Long id) {
+        ErpProductDO product = productMapper.selectById(id);
+        if (product == null) {
             throw exception(PRODUCT_NOT_EXISTS);
+        }
+        return product;
+    }
+
+    private void validateMaterialCodeUnique(Long id, String materialCode) {
+        ErpProductDO product = productMapper.selectByMaterialCode(materialCode);
+        if (product != null && !Objects.equals(product.getId(), id)) {
+            throw exception(PRODUCT_MATERIAL_CODE_DUPLICATE, materialCode);
         }
     }
 

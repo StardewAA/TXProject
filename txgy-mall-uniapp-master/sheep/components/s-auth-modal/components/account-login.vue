@@ -10,6 +10,7 @@
         <view class="head-title ss-m-r-40 head-title-animation">账号登录</view>
       </view>
       <view class="head-subtitle">如果未设置过密码，请点击忘记密码</view>
+      <view class="register-link" @tap="showAuthModal('register')">没有账号？立即注册</view>
     </view>
 
     <!-- 表单项 -->
@@ -99,13 +100,24 @@
     }
 
     // 提交数据
-    const { code, data } = await AuthUtil.login(state.model);
-    if (code === 0) {
-      closeAuthModal();
+    try {
+      const result = await AuthUtil.login(state.model);
+      if (result?.code === 0) {
+        closeAuthModal();
+      }
+    } catch (error) {
+      // request 层已展示错误提示，避免网络异常导致授权弹窗报错。
     }
   }
 </script>
 
 <style lang="scss" scoped>
   @import '../index.scss';
+
+  .register-link {
+    margin-top: 18rpx;
+    color: var(--ui-BG-Main);
+    font-size: 26rpx;
+    text-align: right;
+  }
 </style>

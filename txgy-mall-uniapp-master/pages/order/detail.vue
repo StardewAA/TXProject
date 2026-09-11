@@ -66,13 +66,17 @@
       :style="[{ marginTop: state.orderInfo.receiverAreaId > 0 ? '0' : '-40rpx' }]"
     >
       <!-- 订单信 -->
-      <view class="order-list" v-for="item in state.orderInfo.items" :key="item.goods_id">
+      <view
+        class="order-list"
+        v-for="item in state.orderInfo.items || []"
+        :key="item.id || item.goods_id || item.skuId"
+      >
         <view class="order-card">
           <s-goods-item
             @tap="onGoodsDetail(item.spuId)"
             :img="item.picUrl"
             :title="item.spuName"
-            :skuText="item.properties.map((property) => property.valueName).join(' ')"
+            :skuText="(item.properties || []).map((property) => property.valueName).join(' ')"
             :price="item.price"
             :num="item.count"
           >
@@ -152,6 +156,10 @@
           <text class="detail">
             {{ sheep.$helper.timeFormat(state.orderInfo.payTime, 'yyyy-mm-dd hh:MM:ss') }}
           </text>
+        </view>
+        <view class="notice-item">
+          <text class="title">店铺：</text>
+          <text class="detail">{{ state.orderInfo.shopName || '平台自营' }}</text>
         </view>
         <view class="notice-item">
           <text class="title">支付方式：</text>
@@ -279,16 +287,64 @@
     orderInfo: {},
   });
 
+  // 订单详情接口在网络异常或历史数据不完整时可能返回空字段。先归一化数组和金额，
+  // 确保详情页模板不会因 properties/items/buttons 缺失而中断渲染。
+  function normalizeOrderDetail(order) {
+    const source = order && typeof order === 'object' ? order : {};
+    const items = Array.isArray(source.items)
+      ? source.items.filter(Boolean).map((item) => ({
+          ...item,
+          properties: Array.isArray(item.properties) ? item.properties : [],
+          count: Number(item.count) || 0,
+          price: Number(item.price) || 0,
+          afterSaleStatus: Number(item.afterSaleStatus) || 0,
+        }))
+      : [];
+    const status = Number(source.status);
+    const itemShopNames = [
+      ...new Set(items.map((item) => String(item.shopName || '').trim()).filter(Boolean)),
+    ];
+    const shopName = String(source.shopName || '').trim();
+    return {
+      ...source,
+      status: Number.isFinite(status) ? status : source.status,
+      items,
+      // 详情接口旧版本没有订单级店铺字段，单店铺订单可从订单项安全推断。
+      shopName:
+        shopName ||
+        (itemShopNames.length === 1
+          ? itemShopNames[0]
+          : itemShopNames.length > 1
+          ? '多店铺订单'
+          : '平台自营'),
+      buttons: Array.isArray(source.buttons) ? source.buttons : [],
+      totalPrice: Number(source.totalPrice) || 0,
+      deliveryPrice: Number(source.deliveryPrice) || 0,
+      couponPrice: Number(source.couponPrice) || 0,
+      pointPrice: Number(source.pointPrice) || 0,
+      discountPrice: Number(source.discountPrice) || 0,
+      vipPrice: Number(source.vipPrice) || 0,
+      payPrice: Number(source.payPrice) || 0,
+      refundPrice: Number(source.refundPrice) || 0,
+    };
+  }
+
   // ========== 门店自提（核销） ==========
   const systemStore = ref({}); // 门店信息
 
   // 复制
   const onCopy = () => {
-    sheep.$helper.copyText(state.orderInfo.no);
+    if (state.orderInfo.no) {
+      sheep.$helper.copyText(state.orderInfo.no);
+    }
   };
 
   // 去支付
   function onPay(payOrderId) {
+    if (!payOrderId) {
+      sheep.$helper.toast('支付订单不存在');
+      return;
+    }
     sheep.$router.go('/pages/pay/index', {
       id: payOrderId,
     });
@@ -296,6 +352,9 @@
 
   // 查看商品
   function onGoodsDetail(id) {
+    if (!id) {
+      return;
+    }
     sheep.$router.go('/pages/goods/index', {
       id,
     });
@@ -310,9 +369,13 @@
         if (!res.confirm) {
           return;
         }
-        const { code } = await OrderApi.cancelOrder(orderId);
-        if (code === 0) {
-          await getOrderDetail(orderId);
+        try {
+          const response = await OrderApi.cancelOrder(orderId);
+          if (response?.code === 0) {
+            await getOrderDetail(orderId);
+          }
+        } catch (error) {
+          console.warn('取消订单失败', error);
         }
       },
     });
@@ -320,6 +383,9 @@
 
   // 查看物流
   async function onExpress(id) {
+    if (!id) {
+      return;
+    }
     sheep.$router.go('/pages/order/express/log', {
       id,
     });
@@ -350,9 +416,13 @@
           return;
         }
         // 正常的确认收货流程
-        const { code } = await OrderApi.receiveOrder(orderId);
-        if (code === 0) {
-          await getOrderDetail(orderId);
+        try {
+          const response = await OrderApi.receiveOrder(orderId);
+          if (response?.code === 0) {
+            await getOrderDetail(orderId);
+          }
+        } catch (error) {
+          console.warn('确认收货失败', error);
         }
       },
     });
@@ -392,6 +462,9 @@
 
   // 评价
   function onComment(id) {
+    if (!id) {
+      return;
+    }
     sheep.$router.go('/pages/goods/comment/add', {
       id,
     });
@@ -400,29 +473,49 @@
   const pickUpVerifyRef = ref();
 
   async function getOrderDetail(id) {
-    // 对详情数据进行适配
-    let res;
-    if (state.comeinType === 'wechat') {
-      // TODO 芋艿：【微信物流】微信场景下
-      res = await OrderApi.getOrderDetail(id, {
-        merchant_trade_no: state.merchantTradeNo,
-      });
-    } else {
-      res = await OrderApi.getOrderDetail(id);
+    if (!id) {
+      sheep.$helper.toast('订单不存在');
+      return false;
     }
-    if (res.code === 0) {
-      state.orderInfo = res.data;
+    // 对详情数据进行适配
+    try {
+      let res;
+      if (state.comeinType === 'wechat') {
+        // TODO 芋艿：【微信物流】微信场景下
+        res = await OrderApi.getOrderDetail(id, {
+          merchant_trade_no: state.merchantTradeNo,
+        });
+      } else {
+        res = await OrderApi.getOrderDetail(id);
+      }
+      if (res?.code !== 0 || !res.data) {
+        sheep.$router.back();
+        return false;
+      }
+
+      state.orderInfo = normalizeOrderDetail(res.data);
       handleOrderButtons(state.orderInfo);
       // 配送方式：门店自提
-      if (res.data.pickUpStoreId) {
-        const { data } = await DeliveryApi.getDeliveryPickUpStore(res.data.pickUpStoreId);
-        systemStore.value = data || {};
+      if (state.orderInfo.pickUpStoreId) {
+        try {
+          const storeResponse = await DeliveryApi.getDeliveryPickUpStore(
+            state.orderInfo.pickUpStoreId,
+          );
+          if (storeResponse?.code === 0) {
+            systemStore.value = storeResponse.data || {};
+          }
+        } catch (error) {
+          console.warn('加载自提门店失败', error);
+        }
       }
       if (state.orderInfo.deliveryType === 2 && state.orderInfo.payStatus) {
-        pickUpVerifyRef.value && pickUpVerifyRef.value.markCode(res.data.pickUpVerifyCode);
+        pickUpVerifyRef.value && pickUpVerifyRef.value.markCode(state.orderInfo.pickUpVerifyCode);
       }
-    } else {
+      return true;
+    } catch (error) {
+      console.warn('加载订单详情失败', error);
       sheep.$router.back();
+      return false;
     }
   }
 
@@ -434,7 +527,7 @@
     }
   });
 
-  onLoad(async (options) => {
+  onLoad(async (options = {}) => {
     let id = 0;
     if (options.id) {
       id = options.id;
@@ -444,14 +537,22 @@
     // （小程序商品订单详情 path）配置参考：pages/order/detail?payOrderNo=${商品订单号} 。其中：${商品订单号} out_trade_no 为 payOrderNo
     if (!id && options.payOrderNo) {
       // 查询支付订单：根据 payOrderNo 取 merchantOrderId ，merchantOrderId 即 tradeOrderId
-      const payOrder = await PayOrderApi.getOrder(undefined, undefined, options.payOrderNo);
-      if (payOrder.code === 0) {
-        id = payOrder.data?.merchantOrderId;
+      try {
+        const payOrder = await PayOrderApi.getOrder(undefined, undefined, options.payOrderNo);
+        if (payOrder?.code === 0) {
+          id = payOrder.data?.merchantOrderId;
+        }
+      } catch (error) {
+        console.warn('查询支付订单失败', error);
       }
     }
     state.orderInfo.id = id;
     // 完成 state.orderInfo.id 赋值后加载一次detail，但有几率与 onShow 重复可能导致 detail 会加载两次。
-    await getOrderDetail(state.orderInfo.id);
+    if (id) {
+      await getOrderDetail(id);
+    } else {
+      sheep.$helper.toast('订单不存在');
+    }
   });
 </script>
 
