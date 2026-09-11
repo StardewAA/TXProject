@@ -6,6 +6,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonLevelStat
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonReasonStatRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeCheckMaintenRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDefectAnalysisRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDeliveryAnalysisRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeMachineryStatusRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeProductionTrendRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeQcPassRateRespVO;
@@ -343,6 +344,29 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
                 getLong(summary, "recordCount"), getLong(summary, "totalQuantity"),
                 getLong(summary, "criticalQuantity"), getLong(summary, "majorQuantity"),
                 getLong(summary, "minorQuantity"), topList);
+    }
+
+    @Override
+    public MesHomeDeliveryAnalysisRespVO getDeliveryAnalysis(Integer days) {
+        // 1. 时间范围
+        LocalDate endDate = LocalDate.now().plusDays(1);
+        LocalDateTime endTime = endDate.atStartOfDay();
+        LocalDateTime beginTime = endDate.minusDays(days).atStartOfDay();
+
+        // 2. 近 N 天完成的工单交付情况 + 在制超期数
+        Map<String, Object> summary = homeStatisticsMapper.selectDeliverySummary(beginTime, endTime);
+        Long overdueOpenCount = homeStatisticsMapper.selectOverdueOpenCount();
+
+        // 3. 组装 + 计算按期完成率
+        long total = getLong(summary, "totalCount");
+        long onTime = getLong(summary, "onTimeCount");
+        Object avgOverdueDays = summary == null ? null : summary.get("avgOverdueDays");
+        return new MesHomeDeliveryAnalysisRespVO(
+                total, onTime, getLong(summary, "overdueCount"),
+                calcRate(BigDecimal.valueOf(onTime), BigDecimal.valueOf(total)),
+                overdueOpenCount == null ? 0L : overdueOpenCount,
+                avgOverdueDays == null ? BigDecimal.ZERO
+                        : new BigDecimal(avgOverdueDays.toString()).setScale(1, RoundingMode.HALF_UP));
     }
 
     // ========== 工具方法 ==========

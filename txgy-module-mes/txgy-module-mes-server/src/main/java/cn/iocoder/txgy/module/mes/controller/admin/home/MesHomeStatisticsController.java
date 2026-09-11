@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonAnalysisRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeCheckMaintenRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDefectAnalysisRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDeliveryAnalysisRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeMachineryStatusRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeProductionTrendRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeQcPassRateRespVO;
@@ -110,6 +111,15 @@ public class MesHomeStatisticsController {
     public CommonResult<MesHomeDefectAnalysisRespVO> getDefectAnalysis(
             @RequestParam(value = "days", defaultValue = "30") @Min(1) @Max(365) Integer days) {
         return success(homeStatisticsService.getDefectAnalysis(days));
+    }
+
+    @GetMapping("/delivery-analysis")
+    @Operation(summary = "获得生产交付达成分析")
+    @Parameter(name = "days", description = "天数", example = "30")
+    @PreAuthorize("@ss.hasPermission('mes:home:query')")
+    public CommonResult<MesHomeDeliveryAnalysisRespVO> getDeliveryAnalysis(
+            @RequestParam(value = "days", defaultValue = "30") @Min(1) @Max(365) Integer days) {
+        return success(homeStatisticsService.getDeliveryAnalysis(days));
     }
 
 }

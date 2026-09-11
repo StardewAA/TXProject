@@ -152,6 +152,21 @@ public interface MesHomeStatisticsMapper {
                                             @Param("endTime") LocalDateTime endTime);
 
     /**
+     * 统计近 N 天完成的工单交付情况（按完成时间）
+     *
+     * @return { "totalCount": 12, "onTimeCount": 8, "overdueCount": 4, "avgOverdueDays": 4.5 }
+     */
+    Map<String, Object> selectDeliverySummary(@Param("beginTime") LocalDateTime beginTime,
+                                              @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * 统计在制超期工单数（已过需求日期但尚未完成）
+     *
+     * @return 在制超期工单数
+     */
+    Long selectOverdueOpenCount();
+
+    /**
      * 统计缺陷 TOP N（近 N 天，按缺陷描述聚合数量）
      *
      * @return [ { "name": "焊缝气孔", "quantity": 42 } ]
