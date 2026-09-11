@@ -104,6 +104,12 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     private CrmContactMapper contactMapper;
 
     @Override
+    public List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit) {
+        CrmCustomerDO current = validateCustomerExists(customerId);
+        return customerMapper.selectSimilarList(current, limit);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)

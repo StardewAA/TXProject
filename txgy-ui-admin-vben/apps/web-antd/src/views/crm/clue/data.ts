@@ -101,7 +101,7 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'customerCategory',
+      fieldName: 'customerType',
       label: '客户类别',
       component: 'Select',
       rules: 'required',
@@ -115,9 +115,9 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '客户行业',
       component: 'Select',
       dependencies: {
-        triggerFields: ['customerCategory'],
+        triggerFields: ['customerType'],
         async componentProps(values, form) {
-          const category = values.customerCategory;
+          const category = values.customerType;
           // 切换类别后，若已选行业不属于当前类别则清空，避免跨类别残留
           const industry = values.industryId;
           if (industry != null && category != null) {
@@ -294,6 +294,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'detailAddress',
       title: '地址',
       minWidth: 180,
+    },
+    {
+      field: 'customerType',
+      title: '客户类别',
+      minWidth: 110,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.CRM_CUSTOMER_CATEGORY },
+      },
     },
     {
       field: 'industryId',
