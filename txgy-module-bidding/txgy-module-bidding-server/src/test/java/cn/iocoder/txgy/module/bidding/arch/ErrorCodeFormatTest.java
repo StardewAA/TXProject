@@ -29,8 +29,9 @@ class ErrorCodeFormatTest {
     private static final String ERROR_CODE_CLASS = "cn.iocoder.txgy.framework.common.exception.ErrorCode";
 
     /** 与《招投标模块开发规范》4.7 段位表保持一致；新子模块段位先在文档登记，再追加到这里。
-     *  106 段 = 外部公告/采集/关注提醒（规范 4.7 表已单列登记）。 */
-    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 106, 199};
+     *  106 段 = 外部公告/采集/关注提醒（规范 4.7 表已单列登记）。
+     *  107 段 = 员工资质/人员配证（规范 4.7 表已单列登记，2026-09-13 新增）。 */
+    private static final int[] ALLOWED_SEGMENTS = {100, 101, 102, 103, 104, 105, 106, 107, 108, 199};
 
     @Test
     void errorCodesFollowDocumentedSegments() throws Exception {

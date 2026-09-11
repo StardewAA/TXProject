@@ -7,8 +7,9 @@
 --   ④ 主体授权与档案（tenant 1 招标人发布门 / 延河热力）
 --   ⑤ AI 链路配置（角色 20 公告AI解析 + model 66 + test key 28，含启用状态）
 --   ⑥ 演示公告 5 条（ACTIVE，大厅可见：EBIDDING 4 条 + QYZB 1 条）
+--   ⑦ 项目域主档（bidding_project / bidding_tender_project / bidding_bid_section + 菜单 6770~6776 + 角色授权，2026-09-10 新增）
 -- 执行：mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < master-bidding-sync.sql
--- 说明：全部语句幂等；公告大数据与运行痕迹不在包内，结构就绪后由爬虫自行采集；细粒度历史见 sql/history/。
+-- 说明：全部语句幂等（结构 IF NOT EXISTS、数据 INSERT IGNORE，包内无任何 DROP/TRUNCATE，不会清空既有数据）；公告大数据与运行痕迹不在包内，结构就绪后由爬虫自行采集；细粒度历史见 sql/history/。
 -- ============================================================================
 SET NAMES utf8mb4;
 
@@ -25,7 +26,6 @@ SET NAMES utf8mb4;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-DROP TABLE IF EXISTS `bidding_fetch_job`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_job` (
@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_job` (
   KEY `idx_job_status` (`status`,`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_fetch_source`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_source` (
@@ -73,7 +72,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_source` (
   UNIQUE KEY `uk_source_code` (`source_code`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_fetch_task`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_fetch_task` (
@@ -103,7 +101,6 @@ CREATE TABLE IF NOT EXISTS `bidding_fetch_task` (
   KEY `idx_task_status_retry` (`status`,`next_retry_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_filing`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_filing` (
@@ -135,7 +132,6 @@ CREATE TABLE IF NOT EXISTS `bidding_filing` (
   KEY `idx_filing_status_time` (`status`,`submit_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_follow_item`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
@@ -165,7 +161,6 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item` (
   KEY `idx_follow_item_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_follow_item_event`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
@@ -192,7 +187,6 @@ CREATE TABLE IF NOT EXISTS `bidding_follow_item_event` (
   KEY `idx_event_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice` (
@@ -224,7 +218,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice` (
   KEY `idx_notice_project` (`project_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_content`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_content` (
@@ -244,7 +237,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_content` (
   UNIQUE KEY `uk_notice_version` (`notice_id`,`content_type`,`version`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external` (
@@ -306,7 +298,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external` (
   KEY `idx_external_type_time` (`content_type`,`publish_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external_attachment`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external_attachment` (
@@ -328,7 +319,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external_attachment` (
   KEY `idx_att_notice` (`notice_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_external_meta`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_external_meta` (
@@ -345,7 +335,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_external_meta` (
   UNIQUE KEY `uk_meta_notice` (`notice_id`,`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_subscription`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
@@ -368,7 +357,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription` (
   KEY `idx_sub_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_notice_subscription_event`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
@@ -392,7 +380,6 @@ CREATE TABLE IF NOT EXISTS `bidding_notice_subscription_event` (
   KEY `idx_se_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_auth`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_auth` (
@@ -415,7 +402,6 @@ CREATE TABLE IF NOT EXISTS `bidding_subject_auth` (
   KEY `idx_subject_auth_status` (`auth_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_profile`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_profile` (
@@ -448,7 +434,6 @@ CREATE TABLE IF NOT EXISTS `bidding_subject_profile` (
   KEY `idx_subject_profile_uscc` (`uscc`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `bidding_subject_user`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE IF NOT EXISTS `bidding_subject_user` (
@@ -493,7 +478,7 @@ CREATE TABLE IF NOT EXISTS `bidding_subject_user` (
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 LOCK TABLES `system_menu` WRITE;
 /*!40000 ALTER TABLE `system_menu` DISABLE KEYS */;
-INSERT IGNORE INTO `system_menu` VALUES (6735,'招投标','',1,301,0,'/bidding','carbon:integration','','',0,_binary '',_binary '',_binary '','admin','2026-09-06 14:01:47','1','2026-09-07 14:57:58',_binary '\0'),(6736,'外部公告审核管理','bidding:notice-external:update',2,1,6735,'noticeExternal','ep:document-copy','bidding/noticeExternal/index','BiddingNoticeExternalIndex',0,_binary '',_binary '',_binary '','1','2026-09-07 14:52:15','1','2026-09-07 14:57:23',_binary '\0'),(6737,'爬虫管理','',1,2,6735,'crawl','carbon:data-vis','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:15','1','2026-09-07 17:24:15',_binary '\0'),(6738,'爬取任务工作台','bidding:crawl-source:query',2,1,6737,'console','','bidding/crawlExternal/console/index','CrawlExternalConsole',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:16','1','2026-09-08 08:52:36',_binary '\0'),(6739,'采集任务','bidding:crawl-task:query',2,2,6737,'task','','bidding/crawlExternal/task/index','CrawlTaskIndex',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:16','1','2026-09-08 08:52:56',_binary ''),(6740,'采集批次','bidding:crawl-job:query',2,3,6737,'job','','bidding/crawlExternal/job/index','CrawlJobIndex',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-08 08:52:56',_binary ''),(6741,'采集源新增','bidding:crawl-source:create',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6742,'采集源修改','bidding:crawl-source:update',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6743,'采集源删除','bidding:crawl-source:delete',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6744,'采集任务重试','bidding:crawl-task:update',3,1,6739,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:18','1','2026-09-08 08:52:56',_binary ''),(6745,'爬取任务查询','bidding:crawl-task:query',3,1,6739,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 08:53:10','1','2026-09-09 02:25:43',_binary '\0'),(6747,'批次查询','bidding:crawl-job:query',3,3,6740,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 08:53:10','1','2026-09-09 02:25:43',_binary '\0'),(6748,'投标流程跟踪','bidding:notice-external:query',2,3,6735,'processTrack','','bidding/processTrack/index','BiddingProcessTrackIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:30','1','2026-09-08 11:19:39',_binary '\0'),(6749,'新建意向','bidding:process-track:create',3,1,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6750,'报名投标','bidding:process-track:register',3,2,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6751,'审核操作','bidding:process-track:review',3,3,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6752,'上传标书','bidding:process-track:upload',3,4,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6753,'公告/公示管理','',1,1000,6735,'notice','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:27:32',_binary '\0'),(6754,'公告列表','bidding:notice:query',2,1,6753,'list','','bidding/notice/index','NoticeIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:07:03',_binary '\0'),(6755,'公告新建','bidding:notice:create',3,2,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:07:03',_binary '\0'),(6756,'公告修改','bidding:notice:update',3,3,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6757,'公告发布','bidding:notice:publish',3,4,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6758,'公告删除','bidding:notice:delete',3,5,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6759,'主体信息与授权管理','',1,1001,6735,'subject-auth','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:34:31',_binary '\0'),(6760,'主体档案（企业自维护）','bidding:subject:query',2,1,6759,'subjectProfile','','bidding/subjectProfile/index','SubjectProfileIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6761,'主体档案维护','bidding:subject:update',3,2,6760,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6762,'平台授权管理','bidding:subject-auth:query',2,2,6759,'subjectAuth','','bidding/subjectAuth/index','SubjectAuthIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6763,'主体授权/经办用户管理','bidding:subject-auth:update',3,3,6762,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6764,'备案提交','bidding:filing:create',3,5,6748,'','',NULL,NULL,0,_binary '',_binary '',_binary '','1','2026-09-09 02:25:43','1','2026-09-09 02:25:43',_binary '\0'),(6765,'备案结果回推','bidding:filing:update',3,6,6748,'','',NULL,NULL,0,_binary '',_binary '',_binary '','1','2026-09-09 02:25:43','1','2026-09-09 02:25:43',_binary '\0');
+INSERT IGNORE INTO `system_menu` VALUES (6735,'招投标','',1,301,0,'/bidding','carbon:integration','','',0,_binary '',_binary '',_binary '','admin','2026-09-06 14:01:47','1','2026-09-07 14:57:58',_binary '\0'),(6736,'外部公告审核管理','bidding:notice-external:update',2,1,6735,'noticeExternal','ep:document-copy','bidding/noticeExternal/index','BiddingNoticeExternalIndex',0,_binary '',_binary '',_binary '','1','2026-09-07 14:52:15','1','2026-09-07 14:57:23',_binary '\0'),(6737,'信息聚合任务管理','',1,2,6735,'crawl','carbon:data-vis','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:15','1','2026-09-07 17:24:15',_binary '\0'),(6738,'爬取任务工作台','bidding:crawl-source:query',2,1,6737,'console','','bidding/crawlExternal/console/index','CrawlExternalConsole',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:16','1','2026-09-08 08:52:36',_binary '\0'),(6739,'任务查询','bidding:crawl-task:query',3,4,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:16','1','2026-09-11 00:00:00',_binary '\0'),(6740,'采集批次','bidding:crawl-job:query',2,3,6737,'job','','bidding/crawlExternal/job/index','CrawlJobIndex',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-08 08:52:56',_binary ''),(6741,'采集源新增','bidding:crawl-source:create',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6742,'采集源修改','bidding:crawl-source:update',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6743,'采集源删除','bidding:crawl-source:delete',3,1,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:17','1','2026-09-07 17:24:17',_binary '\0'),(6744,'采集任务重试','bidding:crawl-task:update',3,5,6738,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-07 17:24:18','1','2026-09-11 00:00:00',_binary '\0'),(6747,'批次查询','bidding:crawl-job:query',3,3,6740,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 08:53:10','1','2026-09-09 02:25:43',_binary '\0'),(6748,'投标流程跟踪','bidding:notice-external:query',2,3,6735,'processTrack','','bidding/processTrack/index','BiddingProcessTrackIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:30','1','2026-09-08 11:19:39',_binary '\0'),(6749,'新建意向','bidding:process-track:create',3,1,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6750,'报名投标','bidding:process-track:register',3,2,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6751,'审核操作','bidding:process-track:review',3,3,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6752,'上传标书','bidding:process-track:upload',3,4,6748,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 09:33:31','1','2026-09-08 09:33:31',_binary '\0'),(6753,'公告/公示管理','',1,1000,6735,'notice','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:27:32',_binary '\0'),(6754,'公告列表','bidding:notice:query',2,1,6753,'list','','bidding/notice/index','NoticeIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:07:03',_binary '\0'),(6755,'公告新建','bidding:notice:create',3,2,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:03','1','2026-09-08 10:07:03',_binary '\0'),(6756,'公告修改','bidding:notice:update',3,3,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6757,'公告发布','bidding:notice:publish',3,4,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6758,'公告删除','bidding:notice:delete',3,5,6754,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6759,'主体信息与授权管理','',1,1001,6735,'subject-auth','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:34:31',_binary '\0'),(6760,'主体档案（企业自维护）','bidding:subject:query',2,1,6759,'subjectProfile','','bidding/subjectProfile/index','SubjectProfileIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6761,'主体档案维护','bidding:subject:update',3,2,6760,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6762,'平台授权管理','bidding:subject-auth:query',2,2,6759,'subjectAuth','','bidding/subjectAuth/index','SubjectAuthIndex',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6763,'主体授权/经办用户管理','bidding:subject-auth:update',3,3,6762,'','','','',0,_binary '',_binary '',_binary '','1','2026-09-08 10:07:04','1','2026-09-08 10:07:04',_binary '\0'),(6764,'备案提交','bidding:filing:create',3,5,6748,'','',NULL,NULL,0,_binary '',_binary '',_binary '','1','2026-09-09 02:25:43','1','2026-09-09 02:25:43',_binary '\0'),(6765,'备案结果回推','bidding:filing:update',3,6,6748,'','',NULL,NULL,0,_binary '',_binary '',_binary '','1','2026-09-09 02:25:43','1','2026-09-09 02:25:43',_binary '\0');
 /*!40000 ALTER TABLE `system_menu` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -705,7 +690,200 @@ UPDATE ai_chat_role SET status = 0, model_id = 66 WHERE id = 20;
 UPDATE ai_model SET status = 0 WHERE id = 66;
 UPDATE ai_api_key SET status = 0 WHERE id = 28;
 
+-- ========== ⑨ 项目域主档（项目 / 招标项目 / 标段 + 菜单 6770~6776 + 角色授权） ==========
+-- 规范依据：
+--   ·《招投标模块开发规范》§5 数据层（bidding_<域>_<实体> 命名、T 轨 TenantBaseDO 租户隔离、唯一键含 deleted、JSON 兜底列）
+--   · 公共资源交易平台系统数据规范 V2.0 / 陕西适配版数据集：ProjectVO（项目）、TenderProjectVO（招标项目）、BidSectionVO（标段(包)）
+--     —— 权威字段名照录规范（含原文拼写瑕疵 QULIFICATION_CHECK_MODE / BID_ECTION_NUM），全量字段落 fields_json，检索/列表列单列存储
+-- 业务目标：为「一个项目可追溯到全部信息」提供主档锚点——公告/外部公告/备案/关注/主体均以
+--   project_code / tender_project_code / bid_section_code 精确关联（替代此前靠 LIKE 拼装、口径不一的追溯方式）
+-- 原因：既有 notice/external/filing/follow 各自存项目号但无权威主档，项目规模/资金来源/招标人/代理/监督部门等无处落
+-- 幂等：结构 IF NOT EXISTS、菜单/授权 INSERT IGNORE（包内无 DROP/TRUNCATE，不覆盖既有数据）
+
+CREATE TABLE IF NOT EXISTS bidding_project (
+  id                    bigint       NOT NULL COMMENT '主键（雪花）',
+  tenant_id             bigint       NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨，拦截器自动维护）',
+  project_code          varchar(64)  NOT NULL COMMENT '项目编号（数据集 ProjectVO.PROJECT_CODE，租户内唯一）',
+  project_name          varchar(512) NOT NULL COMMENT '项目名称（PROJECT_NAME）',
+  region_code           varchar(16)  DEFAULT NULL COMMENT '行政区划代码（REGION_CODE，GB/T 2260）',
+  invest_project_code   varchar(64)  DEFAULT NULL COMMENT '投资项目统一代码（INVEST_PROJECT_CODE）',
+  relate_code           varchar(64)  DEFAULT NULL COMMENT '关联项目编号（RELATE_CODE）',
+  address               varchar(512) DEFAULT NULL COMMENT '建设地点（ADDRESS）',
+  legal_person          varchar(128) DEFAULT NULL COMMENT '法定代表人（LEGAL_PERSON）',
+  industries_type       varchar(32)  DEFAULT NULL COMMENT '行业类别（INDUSTRIES_TYPE，GB/T 4754）',
+  fund_source           varchar(64)  DEFAULT NULL COMMENT '资金来源（FUND_SOURCE）',
+  contribution_scale    varchar(64)  DEFAULT NULL COMMENT '出资比例（CONTRIBUTION_SCALE）',
+  project_scale         varchar(512) DEFAULT NULL COMMENT '项目规模（PROJECT_SCALE）',
+  approval_dept_name    varchar(128) DEFAULT NULL COMMENT '审批部门（APPROVAL_DEPT_NAME）',
+  approval_dept_code    varchar(32)  DEFAULT NULL COMMENT '审批部门代码（APPROVAL_DEPT_CODE）',
+  approval_doc_no       varchar(128) DEFAULT NULL COMMENT '审批文号（APPROVAL_DOC_NO）',
+  state                 varchar(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '内部管理态：ACTIVE=进行中 / CLOSED=已结束（数据集无状态字段，为本模块管理需要自建）',
+  fields_json           json         DEFAULT NULL COMMENT 'ProjectVO 数据集全量字段快照（key=规范英文名，缺失补 null）',
+  remark                varchar(512) DEFAULT NULL COMMENT '备注',
+  creator               varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time           datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater               varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time           datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted               bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_project_code (tenant_id, project_code, deleted),
+  KEY idx_project_name (project_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目主档（数据集 ProjectVO）';
+
+CREATE TABLE IF NOT EXISTS bidding_tender_project (
+  id                       bigint       NOT NULL COMMENT '主键（雪花）',
+  tenant_id                bigint       NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨）',
+  tender_project_code      varchar(64)  NOT NULL COMMENT '招标项目编号（TenderProjectVO.TENDER_PROJECT_CODE，租户内唯一，全链路追溯主键）',
+  project_code             varchar(64)  DEFAULT NULL COMMENT '所属项目编号（PROJECT_CODE，关联 bidding_project.project_code）',
+  tender_project_name      varchar(512) NOT NULL COMMENT '招标项目名称（TENDER_PROJECT_NAME）',
+  tender_project_type      varchar(32)  DEFAULT NULL COMMENT '招标项目类型（TENDER_PROJECT_TYPE）',
+  region_code              varchar(16)  DEFAULT NULL COMMENT '行政区划（REGION_CODE）',
+  tender_content           text         COMMENT '招标内容（TENDER_CONTENT）',
+  tenderer_name            varchar(256) DEFAULT NULL COMMENT '招标人名称（TENDERER_NAME）',
+  tenderer_code_type       varchar(8)   DEFAULT NULL COMMENT '招标人代码类型（TENDERER_CODE_TYPE）',
+  tenderer_code            varchar(64)  DEFAULT NULL COMMENT '招标人代码（TENDERER_CODE）',
+  tender_agency_name       varchar(256) DEFAULT NULL COMMENT '招标代理机构名称（TENDER_AGENCY_NAME）',
+  tender_agency_code_type  varchar(8)   DEFAULT NULL COMMENT '代理机构代码类型（TENDER_AGENCY_CODE_TYPE）',
+  tender_agency_code       varchar(64)  DEFAULT NULL COMMENT '代理机构代码（TENDER_AGENCY_CODE）',
+  tender_mode              varchar(16)  DEFAULT NULL COMMENT '招标方式（TENDER_MODE）',
+  qulification_check_mode  varchar(16)  DEFAULT NULL COMMENT '资格审查方式（QULIFICATION_CHECK_MODE，规范原文拼写照录）',
+  tender_organize_form     varchar(16)  DEFAULT NULL COMMENT '招标组织形式（TENDER_ORGANIZE_FORM）',
+  supervise_dept_name      varchar(256) DEFAULT NULL COMMENT '监督部门名称（SUPERVISE_DEPT_NAME）',
+  supervise_dept_code      varchar(32)  DEFAULT NULL COMMENT '监督部门代码（SUPERVISE_DEPT_CODE）',
+  approve_dept_name        varchar(256) DEFAULT NULL COMMENT '审批部门名称（APPROVE_DEPT_NAME）',
+  approve_dept_code        varchar(32)  DEFAULT NULL COMMENT '审批部门代码（APPROVE_DEPT_CODE）',
+  state                    varchar(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '内部管理态：ACTIVE/CLOSED（同项目主档口径）',
+  fields_json              json         DEFAULT NULL COMMENT 'TenderProjectVO 全量字段快照',
+  remark                   varchar(512) DEFAULT NULL COMMENT '备注',
+  creator                  varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time              datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater                  varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time              datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted                  bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tender_project_code (tenant_id, tender_project_code, deleted),
+  KEY idx_tp_project (project_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='招标项目主档（数据集 TenderProjectVO）';
+
+CREATE TABLE IF NOT EXISTS bidding_bid_section (
+  id                    bigint       NOT NULL COMMENT '主键（雪花）',
+  tenant_id             bigint       NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨）',
+  bid_section_code      varchar(64)  NOT NULL COMMENT '标段（包）编号（BidSectionVO.BID_SECTION_CODE，租户内唯一）',
+  tender_project_code   varchar(64)  NOT NULL COMMENT '所属招标项目编号（TENDER_PROJECT_CODE）',
+  bid_section_name      varchar(512) NOT NULL COMMENT '标段（包）名称（BID_SECTION_NAME）',
+  unified_deal_code     varchar(64)  DEFAULT NULL COMMENT '统一交易标识码（UNIFIED_DEAL_CODE）',
+  bid_ection_num        varchar(32)  DEFAULT NULL COMMENT '标段（包）序号（BID_ECTION_NUM，规范原文拼写照录）',
+  bid_tender_mode       varchar(16)  DEFAULT NULL COMMENT '招标方式（BID_TENDER_MODE）',
+  region_code           varchar(16)  DEFAULT NULL COMMENT '行政区划（REGION_CODE）',
+  tra_place_code        varchar(32)  DEFAULT NULL COMMENT '交易场地代码（TRA_PLACE_CODE）',
+  bid_section_content   text         COMMENT '标段（包）内容（BID_SECTION_CONTENT）',
+  bid_section_type      varchar(32)  DEFAULT NULL COMMENT '标段（包）类型（BID_SECTION_TYPE）',
+  contract_reckon_price varchar(32)  DEFAULT NULL COMMENT '合同估算价（CONTRACT_RECKON_PRICE，按数据集保真为字符串）',
+  currency_code         varchar(8)   DEFAULT NULL COMMENT '币种（CURRENCY_CODE）',
+  price_unit            varchar(16)  DEFAULT NULL COMMENT '价格单位（PRICE_UNIT）',
+  time_limit            varchar(64)  DEFAULT NULL COMMENT '工期/服务期（TIME_LIMIT）',
+  bid_qualification     text         COMMENT '投标人资格条件（BID_QUALIFICATION）',
+  is_web_bidding        varchar(8)   DEFAULT NULL COMMENT '是否电子招投标（IS_WEB_BIDDING）',
+  is_nomeet_bidding     varchar(8)   DEFAULT NULL COMMENT '是否不见面开标（IS_NOMEET_BIDDING）',
+  state                 varchar(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '内部管理态：ACTIVE/CLOSED',
+  fields_json           json         DEFAULT NULL COMMENT 'BidSectionVO 全量字段快照',
+  remark                varchar(512) DEFAULT NULL COMMENT '备注',
+  creator               varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time           datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater               varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time           datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted               bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_bid_section_code (tenant_id, bid_section_code, deleted),
+  KEY idx_bs_tender_project (tender_project_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='标段（包）主档（数据集 BidSectionVO）';
+
+-- 菜单与权限点（id 6770+ 段，不与 notice/certificate 段冲突）：目录 6770「项目与标段」；页面 6771 项目台账 / 6772 标段台账
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6770, '项目与标段', '', 1, 30, 6735, 'project', 'ep:collection', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6771, '项目台账', 'bidding:project:query', 2, 1, 6770, 'project', 'ep:document', 'bidding/project/index', 'BiddingProject', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6772, '标段台账', 'bidding:bid-section:query', 2, 2, 6770, 'bid-section', 'ep:grid', 'bidding/bidSection/index', 'BiddingBidSection', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6773, '项目新建', 'bidding:project:create', 3, 1, 6771, '', '', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6774, '项目修改', 'bidding:project:update', 3, 2, 6771, '', '', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6775, '标段新建', 'bidding:bid-section:create', 3, 1, 6772, '', '', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+INSERT IGNORE INTO system_menu (id, name, permission, type, sort, parent_id, path, icon, component, component_name, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
+VALUES (6776, '标段修改', 'bidding:bid-section:update', 3, 2, 6772, '', '', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0');
+
+-- 角色授权：平台超管/普通角色（1/2）+ 租户业务角色（60346 甲方超级管理员、60352 招标管理员）——项目/标段属业务功能（与 notice 域口径一致）
+-- 说明：仅按存在的角色授权（JOIN system_role），角色不存在则不产生孤立授权
+INSERT IGNORE INTO system_role_menu (role_id, menu_id, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT r.id, m.id, '1', NOW(), '1', NOW(), b'0', 0
+FROM system_role r JOIN system_menu m ON m.id BETWEEN 6770 AND 6776
+WHERE r.id IN (1, 2);
+
+-- ========== ⑩ 原文下载限速闸（合规频控，2026-09-10） ==========
+-- 规范依据：《外部信息获取 v1.0》§六/§11（消费端执行与频控）；用户口径 2026-09-10：
+--   「下载器的时间间隔必须且只能作用于『下载公告原文文件』这一动作」「每次下载原文文件前必须强制休眠等待」
+--   「排队中的任务绝对不允许直接触发下载」。
+-- 业务目标：把"原文下载"间隔从进程内易失变量改为**库内原子占位**（条件 UPDATE）：
+--   进程重启不重置、多实例全局仍为每 interval 一次、且只在下真实下载时消耗间隔。
+-- 注意：缺此表时下载器**失败关闭**（拒绝下载并报错提示执行本脚本），不会退化成"无限速照跑"。
+CREATE TABLE IF NOT EXISTS bidding_crawl_download_gate (
+  id               bigint       NOT NULL COMMENT '固定主键（GLOBAL 闸位=1）',
+  scope_key        varchar(64)  NOT NULL COMMENT '闸位作用域（GLOBAL=全局单闸）',
+  last_download_at  datetime    DEFAULT NULL COMMENT '上次发起原文下载时刻；NULL=从未下载',
+  last_task_id     bigint       DEFAULT NULL COMMENT '上次占位对应任务 id（审计）',
+  last_url         varchar(1024) DEFAULT NULL COMMENT '上次下载地址（审计）',
+  creator          varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time      datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater          varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time      datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted          bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_gate_scope (scope_key, deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='原文下载限速闸（原子占位；合规频控唯一真相）';
+
+INSERT IGNORE INTO bidding_crawl_download_gate (id, scope_key, last_download_at, creator, create_time, updater, update_time, deleted)
+VALUES (1, 'GLOBAL', NULL, 'system', NOW(), 'system', NOW(), b'0');
+
+-- ========== ⑪ 原文下载审计（下载速度/完整性/存储状态监控，2026-09-10） ==========
+-- 规范依据：用户口径 2026-09-10「必须增加严格的监控指标：下载速度监测、文件完整性与状态监测（MD5/SHA、大小、格式、存储状态）」；
+--   《招投标模块开发规范》红线 8（file_id + sha256 + size）。
+-- 业务目标：每次原文下载留一条不可变审计（量 byte_size / 速 speed_bps / 摘要 sha256 / 结论 integrity_verdict / 存储 storage_status+file_id），
+--   支撑"带宽是否异常""文件是否完整""是否真的存下来了"三问。
+CREATE TABLE IF NOT EXISTS bidding_crawl_download_audit (
+  id                 bigint       NOT NULL COMMENT '主键（雪花）',
+  task_id            bigint       DEFAULT NULL COMMENT '采集任务 id',
+  source_code        varchar(32)  DEFAULT NULL COMMENT '采集源 code',
+  url                varchar(1024) NOT NULL COMMENT '下载地址',
+  download_kind      varchar(24)  NOT NULL COMMENT 'DETAIL_HTML/PDF/ARCHIVE_HTML/ATTACHMENT/CHANNEL',
+  http_status        int          DEFAULT NULL COMMENT 'HTTP 状态码',
+  byte_size          bigint       DEFAULT NULL COMMENT '下载字节数',
+  duration_ms        bigint       DEFAULT NULL COMMENT '耗时（毫秒）',
+  speed_bps          bigint       DEFAULT NULL COMMENT '下载速率（字节/秒）',
+  sha256             char(64)     DEFAULT NULL COMMENT '内容 SHA-256',
+  integrity_verdict  varchar(24)  DEFAULT NULL COMMENT '完整性结论 PASS/FAIL_*',
+  storage_status     varchar(16)  DEFAULT NULL COMMENT '存储状态 NONE/REGISTERED/FAILED',
+  file_id            bigint       DEFAULT NULL COMMENT '归档后的平台文件 id',
+  message            varchar(512) DEFAULT NULL COMMENT '备注/失败原因',
+  creator            varchar(64)  DEFAULT '' COMMENT '创建者',
+  create_time        datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updater            varchar(64)  DEFAULT '' COMMENT '更新者',
+  update_time        datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  deleted            bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  PRIMARY KEY (id),
+  KEY idx_dl_audit_task (task_id),
+  KEY idx_dl_audit_time (create_time),
+  KEY idx_dl_audit_verdict (integrity_verdict),
+  KEY idx_dl_audit_source (source_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='原文下载审计（下载量/速率/摘要/完整性/存储状态）';
+
 -- ========== 校验 ==========
 SELECT COUNT(*) AS bidding_menus FROM system_menu WHERE id BETWEEN 6735 AND 6765;
+SELECT COUNT(*) AS download_audit_rows FROM bidding_crawl_download_audit;
+SELECT COUNT(*) AS download_gate_rows FROM bidding_crawl_download_gate WHERE scope_key = 'GLOBAL';
+SELECT COUNT(*) AS project_menus FROM system_menu WHERE id BETWEEN 6770 AND 6776;
+SELECT COUNT(*) AS project_tables FROM information_schema.tables
+ WHERE table_schema = DATABASE() AND table_name IN ('bidding_project','bidding_tender_project','bidding_bid_section');
 SELECT source_code, source_name FROM bidding_fetch_source;
 SELECT id, name, status FROM ai_chat_role WHERE id = 20;

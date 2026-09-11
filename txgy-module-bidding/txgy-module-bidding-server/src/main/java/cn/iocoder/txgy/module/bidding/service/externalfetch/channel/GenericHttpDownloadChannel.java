@@ -33,6 +33,19 @@ public class GenericHttpDownloadChannel implements DownloadChannelAdapter {
     @Resource
     private CrawlHttpProperties props;
 
+    /** 原文下载限速闸：通道是"下载公告原文文件"的执行点之一，必须与消费端共用同一闸位（合规频控唯一入口） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+    /** 下载完整性校验（通道与消费端同一口径：不合格内容不得进入解析/落库） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.validate.DownloadIntegrityValidator integrityValidator;
+    /** 下载审计与速度监控 */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor downloadAuditor;
+    /** robots.txt 合规检查 */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
+
     @Override
     public String getChannelCode() {
         return CHANNEL_CODE;
@@ -44,21 +57,55 @@ public class GenericHttpDownloadChannel implements DownloadChannelAdapter {
         if (url == null || url.isEmpty()) {
             throw new IllegalArgumentException("下载任务缺少 url，taskId=" + (task == null ? "?" : task.getId()));
         }
-        byte[] bytes;
+        // robots.txt 合规（2026-09-10 补齐）：被 Disallow 的路径不抓
+        if (!robotsGuard.isAllowed(url)) {
+            throw new IllegalStateException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + url);
+        }
+        // 合规限速（2026-09-10）：下载原文文件前必须获得闸位——未到间隔即抛 NotDue（消费端负责把任务放回 PENDING 排队），
+        // 绝不"先请求再判断"。批量/同步线程调用本通道时，调用方应改用 crawlDownloadGate.acquireBlocking(...) 等待到位。
+        if (!crawlDownloadGate.tryAcquire(task.getSourceCode(), task.getId(), url)) {
+            throw new cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadNotDueException(
+                    crawlDownloadGate.nextDueAt(task.getSourceCode()), url);
+        }
+        // 下载 + 完整性校验 + 审计（用户口径：文件大小/格式合规性/sha256/速率都要留痕）
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome;
         try {
-            bytes = httpFetchClient.getBytes(url);
-        } catch (IOException e) {
+            outcome = httpFetchClient.fetchBytes(url);
+        } catch (java.io.IOException e) {
+            downloadAuditor.record(task.getId(), task.getSourceCode(), url, "CHANNEL", null, null, null, null,
+                    "FAIL_DOWNLOAD", cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                    null, "下载失败: " + e.getMessage());
             throw new IllegalStateException("下载失败 url=" + url + " : " + e.getMessage(), e);
         }
-        if (bytes == null || bytes.length == 0) {
-            throw new IllegalStateException("下载返回空内容 url=" + url);
-        }
+        byte[] bytes = outcome.getBytes();
         String text = sniffText(bytes);
         String contentType = sniffContentType(text);
+        var verdict = "PDF".equals(contentType)
+                ? integrityValidator.validateBinary(bytes, "PDF", url)
+                : integrityValidator.validateText(text, url);
+        if (!verdict.pass()) {
+            downloadAuditor.record(task.getId(), task.getSourceCode(), url, "CHANNEL", outcome.getStatusCode(),
+                    (long) outcome.getByteSize(), outcome.getDurationMs(), verdict.getSha256(),
+                    verdict.getVerdict().name(),
+                    cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_FAILED,
+                    null, verdict.getDetail());
+            throw new IllegalStateException("下载内容完整性校验不通过 url=" + url + "：" + verdict.getDetail());
+        }
         if ("PDF".equals(contentType)) {
-            return pdfResult(persistPdf(url, bytes));
+            String filePath = persistPdf(url, bytes);
+            downloadAuditor.record(task.getId(), task.getSourceCode(), url, "CHANNEL", outcome.getStatusCode(),
+                    (long) outcome.getByteSize(), outcome.getDurationMs(), verdict.getSha256(),
+                    verdict.getVerdict().name(),
+                    cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_REGISTERED,
+                    null, "PDF 已落本地临时文件: " + filePath);
+            return pdfResult(filePath);
         }
         // HTML/JSON/其它按文本回
+        downloadAuditor.record(task.getId(), task.getSourceCode(), url, "CHANNEL", outcome.getStatusCode(),
+                (long) outcome.getByteSize(), outcome.getDurationMs(), verdict.getSha256(),
+                verdict.getVerdict().name(),
+                cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                null, verdict.getDetail());
         return textResult(text);
     }
 

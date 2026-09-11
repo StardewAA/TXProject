@@ -78,6 +78,15 @@ public class NoticeParseResult {
         private String category;
         /** 全文 HTML（全文型列表接口如秦源 res.rows.text 携带；下载器直采入库，测试 VO 不回显） */
         private String contentHtml;
+        /**
+         * 详情/落库阶段解析器（2026-09-10 下载器改 AI）。
+         *
+         * <p>依据：用户口径「把现在的三个下载器都改成 AI 的」——列表解析器只负责“栏目→条目列表”，
+         * 条目正文的结构化与防腐保温行业判定应交 AI 解析器（HTML_AI/PDF_AI）。
+         * 原因：task.parser_code 仍须保留列表解析器用于执行路由（GX 详情→PDF、QYZB JSON 直采等），
+         * 故详情解析器随 payload 快照下发，二者解耦、互不污染既有路由与去重语义。
+         */
+        private String detailParser;
     }
 
     @Data

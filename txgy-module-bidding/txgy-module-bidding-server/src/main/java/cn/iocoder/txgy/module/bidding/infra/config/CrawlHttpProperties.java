@@ -34,4 +34,21 @@ public class CrawlHttpProperties {
 
     /** 下载临时目录（PDF 二进制 → PDFBox 解析前落盘）；空=java.io.tmpdir */
     private String downloadTmpDir = "";
+
+    // ===== 2026-09-10 新增：下载监控与数据完整性（用户口径「严格监测下载速度/文件完整性」）=====
+
+    /** 单文件下载上限（字节，默认 50MB）：流式读取超限即中断，防被灌注大文件撑爆内存与带宽 */
+    private long maxDownloadBytes = 50L * 1024 * 1024;
+
+    /** 下载速率上限告警（字节/秒，默认 2MB/s）：超过可能意味着带宽异常占用（或被镜像加速），记 WARN 并落审计 */
+    private long speedWarnBps = 2L * 1024 * 1024;
+
+    /** 下载速率下限告警（字节/秒，默认 2KB/s）：长期低于可能被限速或站点异常，记 WARN 并落审计 */
+    private long speedSlowWarnBps = 2L * 1024;
+
+    /** 是否遵循 robots.txt（默认 true：抓取前检查 Disallow；robots.txt 不可达时放行并记审计） */
+    private boolean robotsEnabled = true;
+
+    /** robots.txt 缓存时长（分钟，默认 360=6 小时，避免每任务都去取 robots） */
+    private int robotsCacheMinutes = 360;
 }
