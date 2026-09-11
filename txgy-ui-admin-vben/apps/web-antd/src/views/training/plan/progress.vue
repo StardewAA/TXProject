@@ -22,7 +22,7 @@ import {
 import { $t } from '#/locales';
 
 import {
-  getProgressPage,
+  getAllProgress,
   getStudentTaskList,
   registerProgress,
 } from './api';
@@ -71,12 +71,7 @@ async function loadProgress() {
   }
   loading.value = true;
   try {
-    const data = await getProgressPage({
-      pageNo: 1,
-      pageSize: 500,
-      classId: currentClass.value.id,
-    });
-    allRows.value = data?.list ?? [];
+    allRows.value = await getAllProgress(currentClass.value.id);
   } finally {
     loading.value = false;
   }

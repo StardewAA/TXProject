@@ -8,6 +8,8 @@ import {
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
 
+import PageHeaderBar from '../components/page-header-bar.vue';
+
 import {
   getPromotionContext, getPromotionEmployees, getPromotionEvaluation, getPromotionProfile,
   getPromotionRules, reportPromotionMetric, runPromotionEvaluation, savePromotionProfile,
@@ -113,11 +115,11 @@ onMounted(async () => {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section class="rounded-2xl px-8 py-7 text-white" style="background:linear-gradient(120deg,#166534,#16a34a 55%,#0f172a)">
-        <div class="text-sm text-white/70">云培训学院 / 人才成长体系</div>
-        <h1 class="mb-2 mt-2 text-3xl font-semibold">晋级门槛与关联评估</h1>
-        <p class="m-0 text-white/80">依据岗位等级要求，综合评估学习成果、实操能力、工作表现和人才培养情况。</p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 人才成长体系"
+        title="晋级门槛与关联评估"
+        description="依据岗位等级要求，综合评估学习成果、实操能力、工作表现和人才培养情况。"
+      />
 
       <Alert show-icon type="info" message="系统将自动汇总已有业务数据；暂未记录的考核结果可在门槛列表中补充。" />
 

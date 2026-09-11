@@ -9,6 +9,12 @@ import { Image } from 'antdv-next';
 
 import { DictTag } from '#/components/dict-tag';
 
+/** 交易接口金额字段为分，显示层统一转换为元。 */
+function formatFenAmount(value: unknown): string {
+  const fen = typeof value === 'number' ? value : Number(value ?? 0);
+  return `${fenToYuan(Number.isFinite(fen) ? fen : 0)} 元`;
+}
+
 /** 订单信息 schema */
 export function useOrderInfoSchema(): DescriptionItemSchema[] {
   return [
@@ -87,6 +93,16 @@ export function useAfterSaleInfoSchema(): DescriptionItemSchema[] {
       label: '退款编号',
     },
     {
+      field: 'shopName',
+      label: '责任店铺',
+      render: (val, data) => {
+        const name = String(val ?? '').trim();
+        if (name) return name;
+        const shopId = Number(data?.shopId ?? 0);
+        return shopId > 0 ? `店铺 ${shopId}` : '平台自营';
+      },
+    },
+    {
       field: 'auditTime',
       label: '申请时间',
       render: (val) => formatDate(val) as string,
@@ -112,7 +128,7 @@ export function useAfterSaleInfoSchema(): DescriptionItemSchema[] {
     {
       field: 'refundPrice',
       label: '退款金额',
-      render: (val) => fenToYuan(val ?? 0),
+      render: (val) => formatFenAmount(val),
     },
     {
       field: 'applyReason',
@@ -182,7 +198,7 @@ export function useProductColumns() {
       field: 'price',
       title: '商品原价',
       minWidth: 150,
-      formatter: 'formatFenToYuanAmount',
+      formatter: ({ cellValue }: { cellValue: unknown }) => formatFenAmount(cellValue),
     },
     {
       field: 'count',
@@ -193,7 +209,7 @@ export function useProductColumns() {
       field: 'payPrice',
       title: '合计',
       minWidth: 150,
-      formatter: 'formatFenToYuanAmount',
+      formatter: ({ cellValue }: { cellValue: unknown }) => formatFenAmount(cellValue),
     },
   ];
 }

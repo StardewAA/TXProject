@@ -103,6 +103,10 @@ public class TradeDiscountActivityPriceCalculator implements TradePriceCalculato
      * @return 用户等级
      */
     public MemberLevelRespDTO getMemberLevel(Long userId) {
+        // 未登录用户没有会员资料，不能带着空 userId 调用 member 服务（Feign 会生成缺少 id 的请求）
+        if (userId == null || userId <= 0) {
+            return null;
+        }
         MemberUserRespDTO user = memberUserApi.getUser(userId).getCheckedData();
         if (user == null || user.getLevelId() == null || user.getLevelId() <= 0) {
             return null;

@@ -10,6 +10,7 @@ const SocialApi = {
         type
       },
       custom: {
+        auth: true,
         showLoading: false,
       },
     });
@@ -25,11 +26,10 @@ const SocialApi = {
         state
       },
       custom: {
-        custom: {
-          showSuccess: true,
-          loadingMsg: '绑定中',
-          successMsg: '绑定成功',
-        },
+        auth: true,
+        showSuccess: true,
+        loadingMsg: '绑定中',
+        successMsg: '绑定成功',
       },
     });
   },
@@ -43,6 +43,7 @@ const SocialApi = {
         openid
       },
       custom: {
+        auth: true,
         showLoading: false,
         loadingMsg: '解除绑定',
         successMsg: '解绑成功',

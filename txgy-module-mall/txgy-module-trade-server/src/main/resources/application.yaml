@@ -120,6 +120,16 @@ txgy:
     ignore-urls:
     ignore-tables:
   trade:
+    # 防腐保温商城采用企业采购的简化营销模式。普通折扣、满额优惠、优惠券
+    # 和订单积分抵扣保留；秒杀、砍价、拼团、积分商城、分销由服务端拦截。
+    marketing:
+      simple-mode: true
+      discount-enabled: true
+      reward-enabled: true
+      coupon-enabled: true
+      point-deduct-enabled: true
+      point-give-enabled: true
+      brokerage-enabled: false
     order:
       pay-expire-time: 2h # 支付的过期时间
       receive-expire-time: 14d # 收货的过期时间

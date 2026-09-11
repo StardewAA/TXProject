@@ -23,6 +23,7 @@ import { getSimpleUserList } from '#/api/system/user';
 
 import {
   addClassStudents,
+  getAllClassStudents,
   getClassStudentPage,
   getStudentImportTemplate,
   importClassStudents,
@@ -56,13 +57,9 @@ async function loadActiveIds() {
     activeUserIds.value = new Set();
     return;
   }
-  const data = await getClassStudentPage({
-    pageNo: 1,
-    pageSize: 500,
-    classId: currentClass.value.id,
-  });
+  const list = await getAllClassStudents(currentClass.value.id);
   activeUserIds.value = new Set(
-    (data?.list ?? []).map((item) => item.userId!).filter(Boolean),
+    list.map((item) => item.userId!).filter(Boolean),
   );
 }
 
@@ -169,6 +166,13 @@ const importVisible = ref(false);
 const importFile = ref<File>();
 const importing = ref(false);
 const importResult = ref<TrainingPlanApi.ImportStudentResult>();
+/** 导入失败明细弹窗 */
+const failDetailVisible = ref(false);
+const failColumns = [
+  { title: '行号', dataIndex: 'rowNumber', key: 'rowNumber', width: 80 },
+  { title: '手机号', dataIndex: 'mobile', key: 'mobile', width: 150 },
+  { title: '失败原因', dataIndex: 'reason', key: 'reason' },
+];
 
 function beforeUpload(file: File) {
   importFile.value = file;
@@ -199,6 +203,7 @@ async function handleImport() {
         (failCount ? `，失败 ${failCount} 行` : ''),
     );
     importVisible.value = false;
+    failDetailVisible.value = failCount > 0;
     await Promise.all([loadStudents(), loadActiveIds()]);
   } finally {
     importing.value = false;
@@ -357,6 +362,22 @@ const columns = [
           </Button>
         </Space>
       </div>
+    </Modal>
+
+    <!-- 导入失败明细弹窗 -->
+    <Modal
+      v-model:open="failDetailVisible"
+      title="导入失败明细"
+      :footer="null"
+      width="640px"
+    >
+      <Table
+        :columns="failColumns"
+        :data-source="importResult?.failRows ?? []"
+        :pagination="false"
+        row-key="rowNumber"
+        size="small"
+      />
     </Modal>
   </Page>
 </template>

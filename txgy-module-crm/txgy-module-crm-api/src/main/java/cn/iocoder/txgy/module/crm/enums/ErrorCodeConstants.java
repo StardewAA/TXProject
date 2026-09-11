@@ -109,4 +109,50 @@ public interface ErrorCodeConstants {
     ErrorCode PERFORMANCE_CONFIG_EXISTS = new ErrorCode(1_020_011_001, "该对象当前年份的业绩目标配置已存在");
     ErrorCode PERFORMANCE_CONFIG_TYPE_INVALID = new ErrorCode(1_020_011_002, "目标对象类型不正确");
 
+    // ========== 售后质保档案 1_020_014_000 ==========
+    ErrorCode AFTER_SALE_WARRANTY_NOT_EXISTS = new ErrorCode(1_020_014_000, "质保档案不存在");
+    ErrorCode AFTER_SALE_WARRANTY_NO_EXISTS = new ErrorCode(1_020_014_001, "生成质保编号重复，请重试");
+    ErrorCode AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_NOT_APPROVE = new ErrorCode(1_020_014_002, "创建质保档案失败，原因：合同不是审核通过状态");
+    ErrorCode AFTER_SALE_WARRANTY_YEARS_INVALID = new ErrorCode(1_020_014_003, "质保年限不正确，仅支持 1-5 年");
+    ErrorCode AFTER_SALE_WARRANTY_END_DATE_INVALID = new ErrorCode(1_020_014_004, "质保到期日期不能早于项目完工验收日期");
+    ErrorCode AFTER_SALE_WARRANTY_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_014_005, "删除质保档案失败，原因：已存在回访任务，不允许删除");
+
+    // ========== 售后设置 1_020_015_000 ==========
+    ErrorCode AFTER_SALE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_015_000, "售后设置不存在");
+
+    // ========== 售后回访计划 1_020_016_000 ==========
+    ErrorCode AFTER_SALE_VISIT_PLAN_NOT_EXISTS = new ErrorCode(1_020_016_000, "回访计划不存在");
+    ErrorCode AFTER_SALE_VISIT_PLAN_NOT_ENABLE = new ErrorCode(1_020_016_001, "回访计划不是启用状态，无法生成回访任务");
+    ErrorCode AFTER_SALE_VISIT_PLAN_CYCLE_INVALID = new ErrorCode(1_020_016_002, "回访计划的周期配置不正确");
+    ErrorCode AFTER_SALE_VISIT_PLAN_UPDATE_FAIL_NOT_ENABLE = new ErrorCode(1_020_016_003, "更新回访计划失败，原因：计划已生成回访任务，不可编辑周期配置");
+    ErrorCode AFTER_SALE_VISIT_PLAN_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_016_004, "删除回访计划失败，原因：计划已生成回访任务，不允许删除");
+    ErrorCode AFTER_SALE_VISIT_PLAN_DATE_RANGE_INVALID = new ErrorCode(1_020_016_005, "回访计划的生效结束日期不能早于生效开始日期");
+
+    // ========== 售后回访任务 1_020_017_000 ==========
+    ErrorCode AFTER_SALE_VISIT_TASK_NOT_EXISTS = new ErrorCode(1_020_017_000, "回访任务不存在");
+    ErrorCode AFTER_SALE_VISIT_TASK_FINISH_FAIL_STATUS = new ErrorCode(1_020_017_001, "完成回访任务失败，原因：回访任务已处于已完成状态");
+    ErrorCode AFTER_SALE_VISIT_TASK_OPERATE_DENIED = new ErrorCode(1_020_017_002, "回访任务操作失败，原因：不是任务的处理人");
+    ErrorCode AFTER_SALE_VISIT_TASK_WARRANTY_NOT_EXISTS = new ErrorCode(1_020_017_003, "回访任务关联的质保档案不存在");
+    ErrorCode AFTER_SALE_VISIT_TASK_DELETE_FAIL_FINISH = new ErrorCode(1_020_017_004, "删除回访任务失败，原因：任务已完成，不允许删除");
+    ErrorCode AFTER_SALE_VISIT_TASK_UPDATE_FAIL_FINISH = new ErrorCode(1_020_017_005, "更新回访任务失败，原因：任务已完成，不允许编辑");
+
+    // ========== 售后回访记录 1_020_018_000 ==========
+    ErrorCode AFTER_SALE_VISIT_RECORD_NOT_EXISTS = new ErrorCode(1_020_018_000, "回访记录不存在");
+    ErrorCode AFTER_SALE_VISIT_RECORD_DELETE_DENIED = new ErrorCode(1_020_018_001, "删除回访记录失败，原因：没有权限");
+    ErrorCode AFTER_SALE_VISIT_RECORD_OPERATE_DENIED = new ErrorCode(1_020_018_002, "回访记录操作失败，原因：不是登记人本人，且没有管理员权限");
+
+    // ========== 售后问题工单 1_020_019_000 ==========
+    ErrorCode AFTER_SALE_TICKET_NOT_EXISTS = new ErrorCode(1_020_019_000, "问题工单不存在");
+    ErrorCode AFTER_SALE_TICKET_NO_EXISTS = new ErrorCode(1_020_019_001, "生成工单编号重复，请重试");
+    ErrorCode AFTER_SALE_TICKET_UPDATE_STATUS_FAIL_INVALID = new ErrorCode(1_020_019_002, "更新工单状态失败，原因：工单当前状态不允许该操作");
+    ErrorCode AFTER_SALE_TICKET_ASSIGN_FAIL_DENIED = new ErrorCode(1_020_019_003, "指派工单失败，原因：没有权限");
+    ErrorCode AFTER_SALE_TICKET_OPERATE_DENIED = new ErrorCode(1_020_019_004, "工单操作失败，原因：不是工单的处理人或创建人");
+    ErrorCode AFTER_SALE_TICKET_DELETE_DENIED = new ErrorCode(1_020_019_005, "删除工单失败，原因：工单已处理，不允许删除");
+    ErrorCode AFTER_SALE_TICKET_CREATE_FAIL_CUSTOMER_NOT_EXISTS = new ErrorCode(1_020_019_006, "创建工单失败，原因：客户不存在");
+    ErrorCode AFTER_SALE_TICKET_UPDATE_FAIL_FINISH = new ErrorCode(1_020_019_007, "更新工单失败，原因：工单已完成或已关闭，不允许编辑");
+
+    // ========== 售后转商机关联 1_020_020_000 ==========
+    ErrorCode AFTER_SALE_BUSINESS_REL_NOT_EXISTS = new ErrorCode(1_020_020_000, "售后转商机关联不存在");
+    ErrorCode AFTER_SALE_BUSINESS_CREATE_FAIL_WARRANTY_NOT_EXISTS = new ErrorCode(1_020_020_001, "生成商机失败，原因：质保档案不存在");
+
 }

@@ -7,6 +7,8 @@ import { useVbenForm, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
+import ClueQuickParse from '../../../clue/modules/ClueQuickParse.vue';
+import { dateToTs } from '#/utils/crm/clue-parse';
 import {
   createReceivablePlan,
   getReceivablePlan,
@@ -18,6 +20,22 @@ import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmReceivablePlanApi.Plan>();
+
+/** 识别结果回填回款计划 */
+async function onQuickParse(payload: { fields: any }) {
+  const fields = payload.fields ?? {};
+  const apply: Record<string, any> = {};
+  if (fields.customerId) apply.customerId = fields.customerId;
+  if (fields.contractId) apply.contractId = fields.contractId;
+  if (fields.price != null) apply.price = fields.price;
+  const ts = dateToTs(fields.returnTime);
+  if (ts != null) apply.returnTime = ts;
+  if (fields.returnType != null) apply.returnType = fields.returnType;
+  if (fields.remindDays != null) apply.remindDays = fields.remindDays;
+  if (fields.ownerUserId) apply.ownerUserId = fields.ownerUserId;
+  if (fields.remark) apply.remark = fields.remark;
+  await formApi.setValues(apply);
+}
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['回款计划'])
@@ -83,6 +101,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse mode="plan" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>

@@ -11,6 +11,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.validation.ValidationUtils;
+import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.txgy.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.infra.api.config.ConfigApi;
@@ -383,6 +384,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    @DataPermission(enable = false) // 忽略数据权限：加好友等场景按租户全量用户搜索；否则"自定义部门"范围为空的角色搜不到任何用户，导致无法互加好友（类似 https://github.com/YunaiV/ruoyi-vue-pro/issues/1051）
     public List<AdminUserDO> getUserListByNickname(String nickname) {
         return userMapper.selectListByNickname(nickname);
     }

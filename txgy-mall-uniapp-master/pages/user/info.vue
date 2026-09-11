@@ -195,6 +195,7 @@
     model: {}, // 个人信息
     rules: {},
     thirdInfo: {}, // 社交用户的信息
+    submitting: false,
   });
 
   const placeholderStyle = 'color:#BBBBBB;font-size:28rpx;line-height:normal';
@@ -224,7 +225,6 @@
 
   // 选择微信的头像，进行上传
   async function onChooseAvatar(e) {
-    debugger;
     const tempUrl = e.detail.avatarUrl || '';
     if (!tempUrl) return;
     const files = await uploadFilesFromPath(tempUrl);
@@ -275,26 +275,39 @@
 
   // 保存信息
   async function onSubmit() {
-    const { code } = await UserApi.updateUser({
-      avatar: state.model.avatar,
-      nickname: state.model.nickname,
-      sex: state.model.sex,
-    });
-    if (code === 0) {
-      await getUserInfo();
-    }
+    if (state.submitting) return;
+    state.submitting = true;
+    try {
+      const response = await UserApi.updateUser({
+        avatar: state.model.avatar,
+        nickname: state.model.nickname,
+        sex: state.model.sex,
+      });
+      if (response?.code === 0) {
+        await getUserInfo();
+      }
+    } catch (error) {
+      // request 层负责展示错误提示。
+    } finally { state.submitting = false; }
   }
 
   // 获得用户信息
   const getUserInfo = async () => {
     // 个人信息
-    const userInfo = await sheep.$store('user').getInfo();
-    state.model = clone(userInfo);
+    try {
+      const userInfo = await sheep.$store('user').getInfo();
+      if (!userInfo) {
+        return;
+      }
+      state.model = clone(userInfo);
 
-    // 获得社交用户的信息
-    if (sheep.$platform.name !== 'H5') {
-      const result = await sheep.$platform.useProvider('wechat').getInfo();
-      state.thirdInfo = result || {};
+      // 获得社交用户的信息
+      if (sheep.$platform.name !== 'H5') {
+        const result = await sheep.$platform.useProvider('wechat').getInfo();
+        state.thirdInfo = result || {};
+      }
+    } catch (error) {
+      // 页面保持已有信息，避免网络异常导致用户中心白屏。
     }
   };
 
