@@ -6,6 +6,7 @@ import { ref } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { useUserStore } from '@vben/stores';
+import { fenToYuan } from '@vben/utils';
 
 import { getSimpleDeliveryPickUpStoreList } from '#/api/mall/trade/delivery/pickUpStore';
 import { getRangePickerDefaultProps } from '#/utils';
@@ -15,6 +16,13 @@ const userStore = useUserStore();
 const pickUpStoreList = ref<MallDeliveryPickUpStoreApi.DeliveryPickUpStore[]>(
   [],
 );
+
+/** 交易接口金额以分返回，自提订单列表显示为元。 */
+function formatFenAmount(value: unknown): string {
+  const fen = typeof value === 'number' ? value : Number(value ?? 0);
+  return `${fenToYuan(Number.isFinite(fen) ? fen : 0)} 元`;
+}
+
 getSimpleDeliveryPickUpStoreList().then((res) => {
   pickUpStoreList.value = res;
   // 移除自己无法核销的门店
@@ -117,7 +125,7 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
     {
       field: 'payPrice',
       title: '实付金额(元)',
-      formatter: 'formatAmount2',
+      formatter: ({ cellValue }) => formatFenAmount(cellValue),
       minWidth: 180,
     },
     {

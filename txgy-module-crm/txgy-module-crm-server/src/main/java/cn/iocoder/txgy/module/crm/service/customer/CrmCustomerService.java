@@ -170,6 +170,15 @@ public interface CrmCustomerService {
      */
     CrmCustomerImportRespVO importCustomerList(List<CrmCustomerImportExcelVO> importCustomers, CrmCustomerImportReqVO importReqVO);
 
+    /**
+     * 查重：根据手机号、名称匹配已存在的客户、线索、联系人
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   名称（客户名 / 线索名 / 联系人姓名），精确匹配
+     * @return 查重结果
+     */
+    CrmDuplicateCheckRespVO checkDuplicate(String mobile, String name);
+
     // ==================== 公海相关操作 ====================
 
     /**

@@ -11,7 +11,7 @@ import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.txgy.module.product.enums.ProductConstants;
 import cn.iocoder.txgy.module.product.enums.spu.ProductSpuStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import org.apache.ibatis.annotations.*;
 
 import java.util.Objects;
@@ -26,7 +26,7 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
      */
     @Select("SELECT * FROM product_spu WHERE id = #{id}")
     @Results({
-            @Result(column = "slider_pic_urls", property = "sliderPicUrls", typeHandler = JacksonTypeHandler.class),
+            @Result(column = "slider_pic_urls", property = "sliderPicUrls", typeHandler = Jackson3TypeHandler.class),
             @Result(column = "delivery_types", property = "deliveryTypes", typeHandler = IntegerListTypeHandler.class),
     })
     ProductSpuDO selectByIdIncludeDeleted(@Param("id") Long id);
@@ -115,6 +115,12 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
         update(null, updateWrapper);
     }
 
+    default void updateStockCache(Long id, Integer stock) {
+        update(null, new LambdaUpdateWrapper<ProductSpuDO>()
+                .set(ProductSpuDO::getStock, stock)
+                .eq(ProductSpuDO::getId, id));
+    }
+
     /**
      * 添加后台 Tab 选项的查询条件
      *
@@ -176,3 +182,4 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
     }
 
 }
+

@@ -28,6 +28,8 @@ public class ErpWarehouseDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /** WMS 权威仓库编码；ERP 仅保存映射，不维护真实库存。 */
+    private String wmsWarehouseCode;
     /**
      * 仓库名称
      */

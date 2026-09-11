@@ -116,7 +116,10 @@ const CRM_DICT = {
   CRM_AUDIT_STATUS: 'crm_audit_status', // CRM 审批状态
   CRM_BIZ_TYPE: 'crm_biz_type', // CRM 业务类型
   CRM_BUSINESS_END_STATUS_TYPE: 'crm_business_end_status_type', // CRM 商机结束状态类型
-  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业
+  CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业（合并：下游+上游，用于展示）
+  CRM_CUSTOMER_CATEGORY: 'crm_customer_category', // CRM 客户类别（下游客户/上游供应商）
+  CRM_CUSTOMER_INDUSTRY_DOWNSTREAM: 'crm_customer_industry_downstream', // CRM 下游客户行业
+  CRM_CUSTOMER_INDUSTRY_UPSTREAM: 'crm_customer_industry_upstream', // CRM 上游供应商行业
   CRM_CUSTOMER_LEVEL: 'crm_customer_level', // CRM 客户级别
   CRM_CUSTOMER_SOURCE: 'crm_customer_source', // CRM 客户来源
   CRM_FOLLOW_UP_TYPE: 'crm_follow_up_type', // CRM 跟进方式
@@ -124,6 +127,18 @@ const CRM_DICT = {
   CRM_PRODUCT_STATUS: 'crm_product_status', // CRM 商品状态
   CRM_PRODUCT_UNIT: 'crm_product_unit', // CRM 产品单位
   CRM_RECEIVABLE_RETURN_TYPE: 'crm_receivable_return_type', // CRM 回款的还款方式
+  CRM_AFTER_SALE_WARRANTY_STATUS: 'crm_after_sale_warranty_status', // CRM 售后的质保状态
+  CRM_AFTER_SALE_VISIT_PLAN_TYPE: 'crm_after_sale_visit_plan_type', // CRM 售后的回访计划类型
+  CRM_AFTER_SALE_VISIT_PLAN_STATUS: 'crm_after_sale_visit_plan_status', // CRM 售后的回访计划状态
+  CRM_AFTER_SALE_VISIT_CYCLE: 'crm_after_sale_visit_cycle', // CRM 售后的回访周期
+  CRM_AFTER_SALE_VISIT_TASK_STATUS: 'crm_after_sale_visit_task_status', // CRM 售后的回访任务状态
+  CRM_AFTER_SALE_VISIT_TYPE: 'crm_after_sale_visit_type', // CRM 售后的回访方式
+  CRM_AFTER_SALE_SATISFACTION: 'crm_after_sale_satisfaction', // CRM 售后的回访满意度
+  CRM_AFTER_SALE_TICKET_STATUS: 'crm_after_sale_ticket_status', // CRM 售后的工单状态
+  CRM_AFTER_SALE_TICKET_SOURCE: 'crm_after_sale_ticket_source', // CRM 售后的工单来源
+  CRM_AFTER_SALE_TICKET_PRIORITY: 'crm_after_sale_ticket_priority', // CRM 售后的工单优先级
+  CRM_AFTER_SALE_TICKET_OPERATE_TYPE: 'crm_after_sale_ticket_operate_type', // CRM 售后的工单流转类型
+  CRM_AFTER_SALE_BUSINESS_SOURCE_TYPE: 'crm_after_sale_business_source_type', // CRM 售后的转商机类型
 } as const;
 
 /** ========== ERP - 企业资源计划模块 ========== */
@@ -294,6 +309,9 @@ const MES_DICT = {
   MES_PRO_LINK_TYPE: 'mes_pro_link_type', // MES 工序关系类型
   MES_PRO_PROJECT_STATUS: 'mes_pro_project_status', // MES 项目状态
   MES_PRO_PROJECT_SOURCE_TYPE: 'mes_pro_project_source_type', // MES 项目来源类型
+  MES_PRO_PROJECT_PRIORITY: 'mes_pro_project_priority', // MES 项目优先级
+  MES_PRO_PROJECT_MEMBER_ROLE: 'mes_pro_project_member_role', // MES 项目成员角色
+  MES_PRO_PROJECT_MILESTONE_STATUS: 'mes_pro_project_milestone_status', // MES 项目里程碑状态
   MES_PRO_WORK_ORDER_STATUS: 'mes_pro_work_order_status', // MES 生产工单状态
   MES_PRO_WORK_ORDER_TYPE: 'mes_pro_work_order_type', // MES 工单类型
   MES_PRO_WORK_ORDER_SOURCE_TYPE: 'mes_pro_work_order_source_type', // MES 工单来源类型

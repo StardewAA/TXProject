@@ -1,6 +1,8 @@
 package cn.iocoder.txgy.module.mes.service.pro.project;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
@@ -126,5 +128,28 @@ public interface MesProProjectService {
      * @param projectId 项目编号
      */
     void refreshProjectStatus(Long projectId);
+
+    /**
+     * 恢复项目：仅“已暂停”状态可恢复为“进行中”
+     *
+     * @param id 项目编号
+     */
+    void resumeProject(Long id);
+
+    /**
+     * 强制结项：任意非取消状态强制流转为“已完成”
+     *
+     * @param id 项目编号
+     */
+    void forceCloseProject(Long id);
+
+    /**
+     * 批量导入项目
+     *
+     * @param importList     导入项目列表
+     * @param updateSupport 是否支持覆盖更新
+     * @return 导入结果
+     */
+    MesProProjectImportRespVO importProjectList(List<MesProProjectImportExcelVO> importList, boolean updateSupport);
 
 }

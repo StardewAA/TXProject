@@ -5,8 +5,6 @@ import lombok.Data;
 
 import java.util.List;
 
-// TODO @LeeYan9: ProductSpuRespDTO
-
 /**
  * 商品 SPU 信息 Response DTO
  *
@@ -21,18 +19,17 @@ public class ProductSpuRespDTO {
      */
     private Long id;
 
+    /**
+     * 所属店铺编号；为空时代表平台自营商品
+     */
+    private Long shopId;
+
     // ========== 基本信息 =========
 
     /**
      * 商品名称
      */
     private String name;
-    /**
-     * 单位
-     *
-     * 对应 product_unit 数据字典
-     */
-    private Integer unit;
 
     /**
      * 商品分类编号
@@ -110,3 +107,4 @@ public class ProductSpuRespDTO {
     private Boolean subCommissionType;
 
 }
+

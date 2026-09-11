@@ -29,7 +29,8 @@ public class DesensitizeTest {
     public void test() {
         // 准备参数
         DesensitizeDemo desensitizeDemo = new DesensitizeDemo();
-        desensitizeDemo.setNickname("OPENLAB BS");
+        // 使用中文姓名测试 @ChineseNameDesensitize（保留首字，其他字符脱敏）
+        desensitizeDemo.setNickname("芋道源码");
         desensitizeDemo.setBankCard("9988002866797031");
         desensitizeDemo.setCarLicense("粤A66666");
         desensitizeDemo.setFixedPhone("01086551122");

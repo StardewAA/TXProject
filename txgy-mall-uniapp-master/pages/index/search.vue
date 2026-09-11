@@ -71,7 +71,7 @@
       content: '确认清除搜索历史吗？',
       success: function (res) {
         if (res.confirm) {
-          state.historyTag = [];
+          state.historyList = [];
           uni.removeStorageSync('searchHistory');
         }
       },

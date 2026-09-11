@@ -111,7 +111,7 @@ public class WmsCheckOrderDetailServiceImpl implements WmsCheckOrderDetailServic
         }
         return convertList(reqVO.getDetails(), detail -> {
             // 校验 SKU 存在
-            itemSkuService.validateItemSkuExists(detail.getSkuId());
+            itemSkuService.validateItemSkuExistsAndItemEnabled(detail.getSkuId());
             // 构建对象
             return BeanUtils.toBean(detail, WmsCheckOrderDetailDO.class).setWarehouseId(reqVO.getWarehouseId());
         });

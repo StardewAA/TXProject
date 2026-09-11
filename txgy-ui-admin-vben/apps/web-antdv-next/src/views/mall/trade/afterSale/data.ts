@@ -3,9 +3,16 @@ import type { VxeGridPropTypes } from '#/adapter/vxe-table';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
+import { fenToYuan } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { getRangePickerDefaultProps } from '#/utils';
+
+/** 售后接口的退款金额单位为分，列表只转换一次为元。 */
+function formatFenAmount(value: unknown): string {
+  const fen = typeof value === 'number' ? value : Number(value ?? 0);
+  return `${fenToYuan(Number.isFinite(fen) ? fen : 0)} 元`;
+}
 
 /** 拒绝售后表单的 schema 配置 */
 export function useDisagreeFormSchema(): VbenFormSchema[] {
@@ -30,7 +37,6 @@ export function useDisagreeFormSchema(): VbenFormSchema[] {
     },
   ];
 }
-
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
@@ -99,7 +105,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
     },
   ];
 }
-
 /** 表格列配置 */
 export function useGridColumns(): VxeGridPropTypes.Columns {
   return [
@@ -123,10 +128,22 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
       slots: { default: 'productInfo' },
     },
     {
+      field: 'shopName',
+      title: '责任店铺',
+      width: 140,
+      formatter: ({ row }) =>
+        row.shopName ||
+        (row.shopId === 0
+          ? '平台自营'
+          : row.shopId
+            ? `店铺 ${row.shopId}`
+            : '平台自营'),
+    },
+    {
       field: 'refundPrice',
-      title: '订单金额',
+      title: '退款金额',
       width: 120,
-      formatter: 'formatAmount2',
+      formatter: ({ cellValue }) => formatFenAmount(cellValue),
     },
     {
       field: 'user.nickname',

@@ -17,16 +17,26 @@
 
   const state = reactive({
     list: [],
+    loading: false,
   });
 
   async function getDetail(id) {
-    const { data } = await AfterSaleApi.getAfterSaleLogList(id);
-    state.list = data;
+    if (state.loading) return;
+    state.loading = true;
+    try {
+      const res = await AfterSaleApi.getAfterSaleLogList(String(id));
+      state.list = Array.isArray(res?.data) ? res.data : [];
+    } catch {
+      state.list = [];
+    } finally {
+      state.loading = false;
+    }
   }
 
   onLoad((options) => {
-    state.aftersaleId = options.id;
-    getDetail(options.id);
+    if (!options?.id) return;
+    state.aftersaleId = String(options.id);
+    getDetail(state.aftersaleId);
   });
 </script>
 

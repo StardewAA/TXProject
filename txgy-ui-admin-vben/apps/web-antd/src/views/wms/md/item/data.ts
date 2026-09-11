@@ -3,7 +3,8 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { h, markRaw } from 'vue';
 
-import { generateWmsCode } from '@vben/constants';
+import { useAccess } from '@vben/access';
+import { CommonStatusEnum, generateWmsCode } from '@vben/constants';
 
 import { Button } from 'ant-design-vue';
 
@@ -312,7 +313,14 @@ export function useGridFormSchema(): VbenFormSchema[] {
 }
 
 /** 列表的字段（对应【4-2 商品档案总览】） */
-export function useGridColumns(): VxeTableGridOptions['columns'] {
+export function useGridColumns(
+  onStatusChange?: (
+    newStatus: number,
+    row: any,
+  ) => PromiseLike<boolean | undefined>,
+): VxeTableGridOptions['columns'] {
+  const { hasAccessByCodes } = useAccess();
+
   return [
     {
       field: 'itemCode',
@@ -370,6 +378,21 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'storageCondition',
       title: '存储条件',
       minWidth: 160,
+    },
+    {
+      field: 'status',
+      title: '状态',
+      width: 110,
+      align: 'center',
+      cellRender: {
+        attrs: { beforeChange: onStatusChange },
+        name: 'CellSwitch',
+        props: {
+          checkedValue: CommonStatusEnum.ENABLE,
+          disabled: !hasAccessByCodes(['wms:item:update']),
+          unCheckedValue: CommonStatusEnum.DISABLE,
+        },
+      },
     },
     {
       field: 'actions',

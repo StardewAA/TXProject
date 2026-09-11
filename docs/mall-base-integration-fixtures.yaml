@@ -1,0 +1,65 @@
+# 联调环境数据约定。ID 仅用于测试，不得写入生产环境。
+tenants:
+  - id: 1001
+    name: "测试企业集团 A"
+    status: enabled
+  - id: 1002
+    name: "测试企业集团 B"
+    status: enabled
+enterprises:
+  - id: 91001
+    tenantId: 1001
+    name: "测试制造企业 A"
+    auditStatus: approved
+  - id: 91002
+    tenantId: 1002
+    name: "测试采购企业 B"
+    auditStatus: approved
+shops:
+  - id: 92001
+    tenantId: 1001
+    enterpriseId: 91001
+    name: "测试店铺 A"
+  - id: 92002
+    tenantId: 1002
+    enterpriseId: 91002
+    name: "测试店铺 B"
+users:
+  - id: 2001
+    tenantId: 1001
+    role: enterprise-purchaser
+  - id: 2002
+    tenantId: 1002
+    role: enterprise-purchaser
+  - id: 3001
+    tenantId: 1001
+    role: shop-operator
+products:
+  - skuId: 93001
+    shopId: 92001
+    scenario: in-stock
+  - skuId: 93002
+    shopId: 92001
+    scenario: out-of-stock
+  - skuId: 93003
+    shopId: 92001
+    scenario: custom-production
+scenarios:
+  - id: A-01
+    action: "用户 2001 登录并查询商城数据"
+    expect: "仅返回 tenantId=1001 的数据"
+  - id: A-02
+    action: "用户 2001 查询 tenantId=1002 的订单"
+    expect: "HTTP 403"
+  - id: A-03
+    action: "基座发送 TENANT_DISABLED(1001)，用户 2001 再次下单"
+    expect: "拒绝创建订单并保留审计日志"
+  - id: A-04
+    action: "同一支付回调发送两次"
+    expect: "订单和库存只处理一次"
+  - id: A-05
+    action: "SKU 93002 下单"
+    expect: "WMS 返回库存不足，商城不进入待支付"
+  - id: A-06
+    action: "同时购买 SKU 93001 与店铺 B 商品"
+    expect: "订单项按 shopId 分组，主订单保持关联"

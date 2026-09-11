@@ -6,5 +6,7 @@ import { requestClient } from '#/api/request';
 export function getEmployeeTrainingExperienceList() {
   return requestClient.get<
     HrmEmployeeTrainingExperienceApi.EmployeeTrainingExperience[]
-  >('/hrm/portal/employee/training-experience/list');
+  >('/hrm/portal/employee/training-experience/list', {
+    headers: { 'X-Silent-Error': 'true' },
+  });
 }

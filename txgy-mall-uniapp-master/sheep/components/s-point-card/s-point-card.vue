@@ -20,7 +20,7 @@
           :tagStyle="state.property.badge"
           :data="item"
           :titleColor="state.property.fields.name?.color"
-          :subTitleColor="state.property.fields.introduction.color"
+          :subTitleColor="state.property.fields.introduction?.color"
           :topRadius="state.property.borderRadiusTop"
           :bottomRadius="state.property.borderRadiusBottom"
           @click="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
@@ -28,7 +28,7 @@
           <!-- 购买按钮 -->
           <template v-slot:cart>
             <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-              {{ state.property.btnBuy.type === 'text' ? state.property.btnBuy.text : '' }}
+              {{ state.property.btnBuy?.type === 'text' ? state.property.btnBuy?.text : '' }}
             </button>
           </template>
         </s-goods-column>
@@ -53,7 +53,7 @@
           :data="item"
           :tagStyle="state.property.badge"
           :titleColor="state.property.fields.name?.color"
-          :subTitleColor="state.property.fields.introduction.color"
+          :subTitleColor="state.property.fields.introduction?.color"
           :topRadius="state.property.borderRadiusTop"
           :bottomRadius="state.property.borderRadiusBottom"
           @tap="sheep.$router.go('/pages/goods/point', { id: item.activityId })"
@@ -61,7 +61,7 @@
           <!-- 购买按钮 -->
           <template v-slot:cart>
             <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-              {{ state.property.btnBuy.type === 'text' ? state.property.btnBuy.text : '' }}
+              {{ state.property.btnBuy?.type === 'text' ? state.property.btnBuy?.text : '' }}
             </button>
           </template>
         </s-goods-column>
@@ -92,7 +92,7 @@
             :tagStyle="state.property.badge"
             :data="item"
             :titleColor="state.property.fields.name?.color"
-            :subTitleColor="state.property.fields.introduction.color"
+            :subTitleColor="state.property.fields.introduction?.color"
             :topRadius="state.property.borderRadiusTop"
             :bottomRadius="state.property.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
@@ -102,7 +102,7 @@
             <!-- 购买按钮 -->
             <template v-slot:cart>
               <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-                {{ state.property.btnBuy.type === 'text' ? state.property.btnBuy.text : '' }}
+                {{ state.property.btnBuy?.type === 'text' ? state.property.btnBuy?.text : '' }}
               </button>
             </template>
           </s-goods-column>
@@ -127,7 +127,7 @@
             :tagStyle="state.property.badge"
             :data="item"
             :titleColor="state.property.fields.name?.color"
-            :subTitleColor="state.property.fields.introduction.color"
+            :subTitleColor="state.property.fields.introduction?.color"
             :topRadius="state.property.borderRadiusTop"
             :bottomRadius="state.property.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
@@ -137,7 +137,7 @@
             <!-- 购买按钮 -->
             <template v-slot:cart>
               <button class="ss-reset-button cart-btn" :style="[buyStyle]">
-                {{ state.property.btnBuy.type === 'text' ? state.property.btnBuy.text : '' }}
+                {{ state.property.btnBuy?.type === 'text' ? state.property.btnBuy?.text : '' }}
               </button>
             </template>
           </s-goods-column>
@@ -232,29 +232,74 @@
   watch(
     () => props.property,
     (newVal) => {
-      state.property = { ...state.property, ...newVal };
+      // 装修配置可能来自历史模板或接口异常响应，补齐嵌套对象，避免
+      // fields/btnBuy 等被 null 覆盖后在模板计算阶段直接抛异常。
+      const source = newVal && typeof newVal === 'object' ? newVal : {};
+      const current = state.property || {};
+      const fields =
+        source.fields && typeof source.fields === 'object' && !Array.isArray(source.fields)
+          ? source.fields
+          : {};
+      const badge =
+        source.badge && typeof source.badge === 'object' && !Array.isArray(source.badge)
+          ? source.badge
+          : {};
+      const btnBuy =
+        source.btnBuy && typeof source.btnBuy === 'object' && !Array.isArray(source.btnBuy)
+          ? source.btnBuy
+          : {};
+      const style =
+        source.style && typeof source.style === 'object' && !Array.isArray(source.style)
+          ? source.style
+          : {};
+      const mergedFields = { ...(current.fields || {}), ...fields };
+      const fieldDefaults = {
+        name: { show: true, color: '#000' },
+        introduction: { show: true, color: '#999' },
+        price: { show: true, color: '#ff3000' },
+        marketPrice: { show: true, color: '#c4c4c4' },
+        salesCount: { show: true, color: '#c4c4c4' },
+        stock: { show: true, color: '#c4c4c4' },
+      };
+      Object.keys(fieldDefaults).forEach((key) => {
+        const value = mergedFields[key];
+        mergedFields[key] =
+          value && typeof value === 'object' && !Array.isArray(value)
+            ? { ...fieldDefaults[key], ...value }
+            : { ...fieldDefaults[key] };
+      });
+      state.property = {
+        ...current,
+        ...source,
+        fields: mergedFields,
+        badge: { ...(current.badge || {}), ...badge },
+        btnBuy: { ...(current.btnBuy || {}), ...btnBuy },
+        style: { ...(current.style || {}), ...style },
+      };
     },
     { immediate: true, deep: true },
   );
-  const { marginLeft, marginRight } = state.property.styles || {};
+  const { marginLeft = 8, marginRight = 8 } = state.property.style || {};
 
   // 购买按钮样式
   const buyStyle = computed(() => {
-    if (state.property.btnBuy.type === 'text') {
+    const btnBuy = state.property.btnBuy || {};
+    if (btnBuy.type === 'text') {
       // 文字按钮：线性渐变背景颜色
       return {
-        background: `linear-gradient(to right, ${state.property.btnBuy.bgBeginColor}, ${state.property.btnBuy.bgEndColor})`,
+        background: `linear-gradient(to right, ${btnBuy.bgBeginColor || '#FF6000'}, ${btnBuy.bgEndColor || '#FE832A'})`,
       };
     }
-    if (state.property.btnBuy.type === 'img') {
+    if (btnBuy.type === 'img') {
       // 图片按钮
       return {
         width: '54rpx',
         height: '54rpx',
-        background: `url(${sheep.$url.cdn(state.property.btnBuy.imgUrl)}) no-repeat`,
+        background: `url(${sheep.$url.cdn(btnBuy.imgUrl || '')}) no-repeat`,
         backgroundSize: '100% 100%',
       };
     }
+    return {};
   });
 
   //region 商品瀑布流布局
@@ -273,6 +318,10 @@
   function calculateGoodsColumn(height = 0, where = 'left') {
     // 处理完
     if (!state.spuList[count]) return;
+    height = Number(height);
+    if (!Number.isFinite(height) || height < 0) {
+      height = 0;
+    }
     // 增加列的高度
     if (where === 'left') leftHeight += height;
     if (where === 'right') rightHeight += height;
@@ -294,33 +343,41 @@
    * @return {Promise<undefined>} 商品列表
    */
   async function getSpuDetail(ids) {
-    const { data: spu } = await SpuApi.getSpuDetail(ids);
-    return spu;
+    try {
+      const response = await SpuApi.getSpuDetail(ids);
+      return response?.code === 0 && response.data && typeof response.data === 'object'
+        ? response.data
+        : null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async function concatActivity(list) {
-    if (isEmpty(list)) {
+    if (!Array.isArray(list) || isEmpty(list)) {
       return;
     }
-    // 循环获取活动商品SPU详情并添加到spuList
+    // 循环获取活动商品 SPU 详情；活动可能引用已下架/删除的商品，需要过滤空值。
+    const validActivities = [];
     for (const activity of list) {
-      state.spuList.push(await getSpuDetail(activity.spuId));
+      if (!activity || activity.spuId === undefined || activity.spuId === null) continue;
+      const spu = await getSpuDetail(activity.spuId);
+      if (spu && spu.id !== undefined && spu.id !== null) {
+        state.spuList.push(spu);
+        validActivities.push({ activity, spu });
+      }
     }
 
     // 循环活动列表
-    list.forEach((activity) => {
-      // 查找对应的 spu 并更新价格
-      const spu = state.spuList.find((spu) => activity.spuId === spu.id);
-      if (spu) {
-        spu.pointStock = activity.stock;
-        spu.pointTotalStock = activity.totalStock;
-        spu.point = activity.point;
-        spu.pointPrice = activity.price;
-        // 赋值活动ID，为了点击跳转详情页
-        spu.activityId = activity.id;
-        // 赋值活动类型
-        spu.activityType = PromotionActivityTypeEnum.POINT.type;
-      }
+    validActivities.forEach(({ activity, spu }) => {
+      spu.pointStock = activity.stock;
+      spu.pointTotalStock = activity.totalStock;
+      spu.point = activity.point;
+      spu.pointPrice = activity.price;
+      // 赋值活动ID，为了点击跳转详情页
+      spu.activityId = activity.id;
+      // 赋值活动类型
+      spu.activityType = PromotionActivityTypeEnum.POINT.type;
     });
     // 只有双列布局时需要
     if (state.property.layoutType === LayoutTypeEnum.TWO_COL) {

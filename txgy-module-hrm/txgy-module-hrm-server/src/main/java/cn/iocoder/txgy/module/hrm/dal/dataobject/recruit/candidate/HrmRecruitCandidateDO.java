@@ -2,7 +2,7 @@ package cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.framework.mybatis.core.type.StringListTypeHandler;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
@@ -34,7 +34,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmRecruitCandidateDO extends BaseDO {
+public class HrmRecruitCandidateDO extends TenantBaseDO {
 
     /**
      * 候选人编号

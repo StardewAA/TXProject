@@ -213,6 +213,27 @@ public class HrmRecruitChannelServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testValidateRecruitChannelUsable_success() {
+        HrmRecruitChannelDO dbChannel = randomRecruitChannelDO(o -> o
+                .setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        recruitChannelMapper.insert(dbChannel);
+
+        HrmRecruitChannelDO channel = recruitChannelService.validateRecruitChannelUsable(dbChannel.getId());
+
+        assertPojoEquals(dbChannel, channel);
+    }
+
+    @Test
+    public void testValidateRecruitChannelUsable_disabled() {
+        HrmRecruitChannelDO dbChannel = randomRecruitChannelDO(o -> o
+                .setStatus(CommonStatusEnum.DISABLE.getStatus()));
+        recruitChannelMapper.insert(dbChannel);
+
+        assertServiceException(() -> recruitChannelService.validateRecruitChannelUsable(dbChannel.getId()),
+                RECRUIT_CHANNEL_DISABLED);
+    }
+
+    @Test
     public void testGetRecruitChannelList() {
         // mock 数据
         HrmRecruitChannelDO firstChannel = randomRecruitChannelDO();

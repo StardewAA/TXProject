@@ -42,6 +42,12 @@ public interface ErpPurchaseOrderService {
      */
     void updatePurchaseOrderStatus(Long id, Integer status);
 
+    /** 提交采购订单审批 */
+    void submitPurchaseOrder(Long id, Long userId);
+
+    /** 接收 BPM 回调并更新采购订单审批状态 */
+    void updatePurchaseOrderAuditStatus(Long id, Integer bpmStatus);
+
     /**
      * 更新采购订单的入库数量
      *

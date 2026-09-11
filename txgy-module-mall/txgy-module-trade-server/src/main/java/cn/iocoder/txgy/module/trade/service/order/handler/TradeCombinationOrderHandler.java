@@ -50,7 +50,10 @@ public class TradeCombinationOrderHandler implements TradeOrderHandler {
 
         // 1. 校验是否满足拼团活动相关限制
         TradeOrderItemDO item = orderItems.get(0);
-        combinationRecordApi.validateCombinationRecord(order.getUserId(), order.getCombinationActivityId(),
+        // 开团时 combinationHeadId 为空，参团时才会传入真实团长编号。
+        // validateCombinationRecord 的 headId 是必填参数，会导致首次开团被错误拦截；
+        // 使用允许 headId 为空的 validateJoinCombination 完成统一校验。
+        combinationRecordApi.validateJoinCombination(order.getUserId(), order.getCombinationActivityId(),
                 order.getCombinationHeadId(), item.getSkuId(), item.getCount()).checkError();
 
         // 2. 校验该用户是否存在未支付的拼团活动订单，避免一个拼团可以下多个单子了
