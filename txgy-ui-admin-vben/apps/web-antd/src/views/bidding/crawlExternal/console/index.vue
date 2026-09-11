@@ -25,6 +25,8 @@ import {
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
 
+import '../taskbar.css';
+
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
@@ -161,8 +163,6 @@ const sourceOpen = ref(false);
 
 const processOpen = ref(false);
 const processManual = ref<ManualRun>();
-const processTask = ref<CrawlExternalApi.TaskItem>();
-const processDetail = ref<CrawlExternalApi.TaskItem>();
 
 /* ---------- modal 挂载 ---------- */
 const [ManualModal, manualModalApi] = useVbenModal({
@@ -313,7 +313,6 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
 /* ---------- 过程抽屉 ---------- */
 async function openManualProcess(run: ManualRun) {
   processManual.value = run;
-  processTask.value = undefined;
   processOpen.value = true;
 }
 /** 抽屉内删除当前留档（数据 + 本地存储；删除后关闭抽屉） */
@@ -826,27 +825,38 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         </template>
       </section>
 
-      <!-- ============ ③ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
+      <!-- ============ ③ 采集批次（统一任务条 fp-tbl：状态/时间/批次#/源·触发/摘要；行点击进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
           <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
-            <div v-for="j in jobs" :key="String(j.id)" class="ind-row ind-dl-row" @click="openJobDetail(j)">
-              <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
-              <span class="rw">源：{{ j.sourceCode || '—' }}</span>
-              <span class="rw">触发：{{ j.triggerType || '—' }}</span>
-              <span class="rw main" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
-              <span class="rw time">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
-              <a class="rw cd-link shrink-0" href="#" @click.prevent.stop="openJobDetail(j)">详情 ▸</a>
+            <div v-else class="fp-tbl">
+              <div class="fp-tr fp-th">
+                <span class="fp-td w-status">状态</span>
+                <span class="fp-td w-time">时间</span>
+                <span class="fp-td w-id">批次 #</span>
+                <span class="fp-td flex-1">源 / 触发</span>
+                <span class="fp-td w-msg">摘要</span>
+              </div>
+              <div v-for="j in jobs" :key="String(j.id)" class="fp-tr fp-row-click" @click="openJobDetail(j)">
+                <span class="fp-td w-status">
+                  <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
+                </span>
+                <span class="fp-td w-time">{{ fmtDt(j.finishedAt || j.createTime) || '—' }}</span>
+                <span class="fp-td w-id">#{{ String(j.id) }}</span>
+                <span class="fp-td flex-1 fp-url">{{ j.sourceCode || '—' }}<template v-if="j.triggerType"> · {{ j.triggerType }}</template></span>
+                <span class="fp-td w-msg fp-msg" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
+              </div>
             </div>
           </div>
         </div>
       </section>
     </div>
 
-    <!-- 详情抽屉（任务过程 / 会话测试解析详情；会话=任务条行点击的三段详情，任务=回读明细） -->
-    <Drawer v-model:open="processOpen" :width="processTask ? 720 : 980" :title="processTask ? '任务过程' : '会话测试 · 解析详情'">
+    <!-- 会话测试解析详情抽屉（测试任务条行点击 → 三段：源 · 提取 · 渲染）。
+         任务详情已统一为整页视图（pageView=taskDetail，见上方 fp-page），此处不再保留任务过程分支。 -->
+    <Drawer v-model:open="processOpen" class="bid-ind" :width="980" title="会话测试 · 解析详情">
       <!-- 会话测试解析详情（manual 任务条行点击 → 三段：源 · 提取 · 渲染 + 观测；含本会话本地留档 + 后端 TEST 留痕） -->
       <div v-if="processManual" class="space-y-3">
         <div class="ind-panel">
@@ -934,30 +944,11 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           </div>
         </div>
       </div>
-
-      <!-- 任务过程（tasks/批次内任务行 → 回读明细） -->
-      <div v-else-if="processTask" class="space-y-3">
-        <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
-          <div class="ind-panel-b">
-            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
-            <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
-              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </div>
-      </div>
       <div v-else class="text-sm font-semibold text-gray-500">加载中…</div>
     </Drawer>
 
     <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染，不嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
-    <Drawer v-model:open="detailOpen" :width="900" :title="detailTitle">
+    <Drawer v-model:open="detailOpen" class="bid-ind" :width="900" :title="detailTitle">
       <!-- ===== 批次详情：层1 批次概要 → 层2 该批爬虫任务 N 条（KPI 卡+克制行） → 层3 选中任务过程（同抽屉第二区域） ===== -->
       <div v-if="detailKind === 'job' && detailJob" class="space-y-3">
         <div class="ind-panel">
@@ -978,7 +969,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <div class="ind-panel">
           <div class="ind-panel-h">
             <span class="ind-panel-t">该批爬虫任务</span>
-            <span class="ind-panel-meta">jobId #{{ String(detailJob.id) }} · 点击行就地展开该任务过程</span>
+            <span class="ind-panel-meta">jobId #{{ String(detailJob.id) }} · 任务条同工作台口径（状态/时间/任务#/URL/消息），点击行就地展开过程</span>
           </div>
           <div class="ind-panel-b">
             <div class="ind-kpis" style="margin: 0 0 6px; max-width: 340px;">
@@ -990,13 +981,25 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </div>
             <div v-if="jobTasksLoading" class="text-xs font-semibold text-orange-600">任务加载中…</div>
             <div v-else-if="!jobTasks.length" class="text-sm font-medium text-gray-500">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
-            <div v-else class="-my-1">
-              <div v-for="t in jobTasks" :key="String(t.id)" class="ind-row ind-dl-row" :class="{ on: selJobTask && selJobTask.id === t.id }" @click="pickJobTask(t)">
-                <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-                <span class="rw main truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
-                <span class="rw">解析器：{{ t.parserCode || '—' }}</span>
-                <span class="rw">attempt {{ t.attempt ?? '—' }}</span>
-                <span class="rw time">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+            <div v-else class="fp-tbl">
+              <div class="fp-tr fp-th">
+                <span class="fp-td w-status">状态</span>
+                <span class="fp-td w-time">时间</span>
+                <span class="fp-td w-id">任务 #</span>
+                <span class="fp-td flex-1">URL / 来源</span>
+                <span class="fp-td w-msg">消息 / 明细</span>
+              </div>
+              <div v-for="t in jobTasks" :key="String(t.id)" class="fp-tr fp-row-click" :class="{ 'fp-row-on': selJobTask && selJobTask.id === t.id }" @click="pickJobTask(t)">
+                <span class="fp-td w-status">
+                  <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+                </span>
+                <span class="fp-td w-time">{{ fmtDt(t.finishedAt || t.createTime) || '—' }}</span>
+                <span class="fp-td w-id">#{{ String(t.id) }}</span>
+                <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+                <span class="fp-td w-msg fp-msg" :title="t.message || ''">
+                  <template v-if="t.message">{{ t.message }}</template>
+                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}</template>
+                </span>
               </div>
             </div>
           </div>
@@ -1057,23 +1060,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: #1f2937; background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; outline: none; transition: border-color .15s; }
 .fp-url-input:focus { border-color: #1d4ed8; }
 .fp-url-input::placeholder { color: #9aa3ad; }
-/* 表格化任务条（公告式查询：列分状态/时间/任务#/URL/消息，行点击进详情） */
-.fp-tbl { border: 1.5px solid var(--ind-line); border-radius: 8px; overflow: hidden; background: #fff; }
-.fp-tr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #eceff2; transition: background .12s; }
-.fp-tr:last-child { border-bottom: none; }
-.fp-th { background: #f4f6f8; color: var(--ind-sub-text); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
-.fp-row-click { cursor: pointer; }
-.fp-row-click:hover { background: #f6f1e6; }
-.fp-td { font-size: 13px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fp-td.w-status { width: 128px; flex: none; display: flex; gap: 4px; }
-.fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
-.fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
-.fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text); }
-.fp-td.w-parser { width: 140px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
-.fp-td.fp-url { color: #1f2937; font-weight: 600; }
-.fp-td.fp-msg { font-size: 12.5px; }
-.fp-sortable { cursor: pointer; user-select: none; }
-.fp-sortable:hover { color: #1d4ed8; }
+/* 表格化任务条 .fp-tbl / .fp-tr / .fp-td 等样式已抽到 ../taskbar.css，多组件共用（任务页签/测试页签/批次抽屉/数据链同批/批次详情/信息源详情），勿在本文件重复定义。 */
 
 /* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
 .ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }

@@ -11,6 +11,7 @@
     电子招标投标办法（八部委令第20号，2013）第24条【部门规章】：
       投标人等应在平台上注册登记、如实递交信息并经验证 —— 平台对测试/录入类动作实施身份验证与权限控制
       （bidding:crawl-source:query/update），防止非授权操作。
+  解析器选择：GET /bidding/crawl-parser/list 下拉选择（code 属系统标识，禁止手填；接口不可用时用内置清单兜底）。
   关联契约：POST /bidding/crawl-parser/test（multipart：parserCode/payloadType/content/fileName/url/file），
     见 docs/bidding-notice-external/爬虫任务工作台-前后端契约-2026-09-07.md §1.3/§3.2 与
     docs/爬虫解析器插件化架构与测试接口.md §3；前端函数见 apps/web-antd/src/api/bidding/crawlExternal
@@ -39,12 +40,56 @@ const parserOptions = ref<CrawlExternalApi.ParserInfo[]>([]);
 const file = ref<File>();
 const running = ref(false);
 
+interface ParserChoice { code: string; name: string; supportedTypes: string[] }
+
+/** 解析器内置清单（兜底）：GET /bidding/crawl-parser/list 不可用（后端未启/账号无 bidding:crawl-source:query）时，
+ *  仍保证"只能选、不能填"——清单与后端 ParserRegistry 已注册解析器一致；新增解析器以上线接口为准。 */
+const PARSER_FALLBACK: ParserChoice[] = [
+  { code: 'HTML_GENERIC', name: '通用 HTML 公告解析器', supportedTypes: ['HTML'] },
+  { code: 'HTML_AI', name: 'HTML + AI 结构化解析（含行业相关判定）', supportedTypes: ['HTML'] },
+  { code: 'JSON_GENERIC', name: '通用 JSON 公告解析器', supportedTypes: ['JSON'] },
+  { code: 'PDF_TEXT_GENERIC', name: '通用 PDF 文本公告解析器', supportedTypes: ['PDF'] },
+  { code: 'PDF_AI', name: 'PDF + AI 结构化解析（含行业相关判定）', supportedTypes: ['PDF'] },
+  { code: 'EBIDDING', name: '秦源电子招标平台解析器（ebidding.com.cn）', supportedTypes: ['HTML'] },
+  { code: 'GX_E_BIDDING', name: '国信e采（山西）解析器（gx.e-bidding.org）', supportedTypes: ['HTML'] },
+  { code: 'QYZB_JSON', name: '秦源栏目 JSON 接口解析器（qyzb.shccmg.com）', supportedTypes: ['JSON'] },
+  { code: 'QYZB_SHCCMG', name: '秦源招标电子招标平台解析器（qyzb.shccmg.com）', supportedTypes: ['HTML'] },
+];
+
+/** 当前输入口径对应的载荷类型（FILE 按扩展名归一：pdf→PDF / json→JSON / 其余→HTML） */
+const payloadKind = computed<'HTML' | 'JSON' | 'PDF'>(() => {
+  if (inputType.value === 'JSON') return 'JSON';
+  if (inputType.value !== 'FILE') return 'HTML';
+  const n = (file.value?.name ?? '').toLowerCase();
+  if (n.endsWith('.pdf')) return 'PDF';
+  if (n.endsWith('.json')) return 'JSON';
+  return 'HTML';
+});
+/** 展示用解析器清单：接口优先（含站点新增），为空则内置兜底 —— 下拉永不为空，杜绝"退回手填 code" */
+const parserCatalog = computed<ParserChoice[]>(() => {
+  const list: ParserChoice[] = [];
+  for (const p of parserOptions.value) {
+    if (!p?.code) continue;
+    list.push({ code: p.code, name: p.name || p.code, supportedTypes: p.supportedTypes ?? [] });
+  }
+  return list.length > 0 ? list : PARSER_FALLBACK;
+});
+/** 是否在用内置兜底清单（用于给出"清单接口不可用"的提示） */
+const usingFallbackCatalog = computed(() => parserCatalog.value === PARSER_FALLBACK);
 const parserCodeOptions = computed(() =>
-  parserOptions.value.map((p) => ({
-    label: p.name ? p.code + ' · ' + p.name : (p.code ?? ''),
-    value: p.code ?? '',
+  parserCatalog.value.map((p) => ({
+    label: p.code + ' · ' + p.name,
+    value: p.code,
+    /* 不支持当前口径的解析器置灰（如 PDF 专用解析器在 HTML 口径下不可选） */
+    disabled: p.supportedTypes.length > 0 && !p.supportedTypes.includes(payloadKind.value),
   })),
 );
+/** 所选解析器是否支持当前口径（提交前软校验，省一次必然失败的后端调用） */
+function parserMatchesPayload(): boolean {
+  const hit = parserCatalog.value.find((p) => p.code === parserCode.value);
+  if (!hit || hit.supportedTypes.length === 0) return true;
+  return hit.supportedTypes.includes(payloadKind.value);
+}
 
 /** 按输入口径建议缺省解析器 */
 function suggestParser(): string {
@@ -64,10 +109,11 @@ watch([inputType, () => file.value?.name], () => {
 onMounted(async () => {
   try {
     parserOptions.value = (await fetchCrawlParserList()) || [];
-    parserCode.value = suggestParser();
   } catch {
-    // 解析器清单不可用（契约未落地环境）——下拉留空，手动输入 code
+    /* 清单接口不可用：置空即走内置兜底清单（见 parserCatalog），下拉仍可选项，绝不退回手填 code */
+    parserOptions.value = [];
   }
+  parserCode.value = suggestParser();
 });
 
 const [Modal, modalApi] = useVbenModal({
@@ -75,6 +121,11 @@ const [Modal, modalApi] = useVbenModal({
     if (running.value) return;
     if (!parserCode.value) {
       message.warning('请选择解析器');
+      return;
+    }
+    if (!parserMatchesPayload()) {
+      const hit = parserCatalog.value.find((p) => p.code === parserCode.value);
+      message.warning('所选解析器不支持当前输入口径（支持：' + (hit?.supportedTypes.join('/') ?? '—') + '），请改选或调整输入口径');
       return;
     }
     if (inputType.value === 'FILE') {
@@ -150,7 +201,21 @@ const [Modal, modalApi] = useVbenModal({
     <div class="grid grid-cols-2 gap-3">
       <div>
         <div class="mb-1 text-xs font-medium text-gray-600">解析器</div>
-        <Select v-model:value="parserCode" :options="parserCodeOptions" placeholder="选择解析器（按口径自动建议）" style="width: 100%" />
+        <Select
+          v-model:value="parserCode"
+          :options="parserCodeOptions"
+          option-filter-prop="label"
+          placeholder="选择解析器（按口径自动建议，可搜索）"
+          show-search
+          allow-clear
+          style="width: 100%"
+        />
+        <div v-if="usingFallbackCatalog" class="mt-1 text-[11px] leading-4 text-amber-700">
+          解析器清单接口不可用，当前为内置清单（{{ PARSER_FALLBACK.length }} 个）；如站点已新增解析器，请检查账号权限 bidding:crawl-source:query。
+        </div>
+        <div v-else class="mt-1 text-[11px] leading-4 text-gray-400">
+          共 {{ parserCatalog.length }} 个解析器；与当前口径不匹配的项已置灰。
+        </div>
       </div>
       <div>
         <div class="mb-1 text-xs font-medium text-gray-600">归属信息源（可选，MANUAL 直测）</div>

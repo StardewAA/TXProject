@@ -53,6 +53,7 @@ export default defineConfig(async (configEnv) => {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/bidding-api/, ''),
             target: 'http://127.0.0.1:48110/admin-api',
+          },
           // 千问（通义千问 / DashScope）OpenAI 兼容接口代理：
           // 前端同源调用 /api/ai/chat/completions，由 Vite 在服务端转发并注入密钥，避免跨域与密钥暴露。
           '/api/ai': {

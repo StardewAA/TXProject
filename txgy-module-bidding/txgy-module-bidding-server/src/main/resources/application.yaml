@@ -117,10 +117,22 @@ bidding:
   crawl:
     # 下载器 HTTP 客户端参数（配置文件为准；HttpFetchClient 启动时 @ConfigurationProperties 读取）
     # connect/second 连接超时（秒）；read/second 单请求读超时（秒）；followRedirects 是否跟随重定向（默认 NORMAL）
-    # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+      # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+      # 2026-09-10 新增（下载监控与数据完整性，见 docs/开发联调与运维/爬虫测试与监控指标-2026-09-10.md）：
+      #   max-download-bytes 单文件下载上限（防跑飞/防被灌大文件撑爆内存，超限即失败并审计）
+      #   speed-warn-bps 下载速率上限告警（超过=带宽异常/被镜像加速，记 WARN 并落审计）
+      #   speed-slow-warn-bps 速率下限告警（长期低于=被限速/站点异常，记 WARN 并落审计）
+      #   robots-enabled 是否遵循 robots.txt（true=抓取前检查 Disallow；robots.txt 不可达时放行并记审计）
+      #   robots-cache-minutes robots.txt 缓存时长（分钟，默认 360）
     http:
       connect-timeout-seconds: 10
       read-timeout-seconds: 20
+      download-timeout-seconds: 60
+      max-download-bytes: 52428800
+      speed-warn-bps: 2097152
+      speed-slow-warn-bps: 2048
+      robots-enabled: true
+      robots-cache-minutes: 360
       follow-redirects: true
       user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36
       # 下载目标临时目录（存 PDF 二进制后做 PDFBox 解析；空=java.io.tmpdir）
@@ -128,13 +140,21 @@ bidding:
     # ============ 爬取频率（唯一事实源：改本文件即生效，无需改代码） ============
     # 业务要求（2026-09-09 用户口径）：安全、稳，演示节奏像正常业务；慢是要求，不是缺陷
     runner:
-      # 下载器（消费端）处理每条任务间隔：本地/外站数据一律节流（都是数据），当前 5 分钟=300000
-      consumer-delay-ms: 300000
+      # 【2026-09-10 语义变更】下载「公告原文文件」的最小间隔（毫秒），当前 5 分钟=300000。
+      # 生效位置：CrawlDownloadGate（库内原子占位，表 bidding_crawl_download_gate）——在真正发起原文下载**之前**占位，
+      #   而不是在"任务被调度"时。因此：纯本地处理任务（列表已带全文，无网络下载）不消耗间隔；
+      #   进程重启、多实例部署都不会放宽速率（原实现是进程内变量，重启即归零、多实例各算一份）。
+      # 实际间隔 = max(本值, 源 fetch_interval_seconds×1000)，且不低于合规下限 120 秒。
+      # 2026-09-10 用户口径调整：由 5 分钟缩短为 2 分钟（120000ms）——2 分钟即合规下限，
+      # 故 CrawlDownloadGate 的 MIN_INTERVAL_SECONDS=120 与之对齐；再调小将不生效（下限保护）。
+      consumer-delay-ms: 120000
       # 生产端翻页间隔：多页回溯每页之间等 1 分钟再翻下一页
       page-delay-ms: 60000
       # 页内条目处理间隔（列表已整页取回后的本地处理节拍，随主节奏保持低频观感）
       entry-delay-ms: 1500
-      # 异步投递模式（审查 A1：必须 true 消费者 5 分钟/条才生效；false=同步直抓则频控口径失效）
+      # 异步投递模式（审查 A1）：true=列表只入队，原文下载由消费端按限速闸逐条执行（**推荐的合规形态**）；
+      # false=同步直抓：GX 详情页/PDF 会在列表循环内下载，自 2026-09-10 起该路径同样先过限速闸并阻塞等待，
+      #   不再出现"一有任务就直接下载"，但会让单轮采集耗时 = 条数 × 间隔，仅建议小规模人工验证时使用。
       async-mode: true
       # 首次全量窗口（天）：源从无 SUCCESS 历史（首次爬取无断点）时回溯补历史的天数；栏目级 fullLookbackDays 可覆盖
       full-lookback-days: 60

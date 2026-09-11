@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { fetchCrawlParserList } from '#/api/bidding/crawlExternal';
+
 import { fmtDt } from '../shared';
 
 /** 顶部检索表单 */
@@ -89,10 +91,18 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
       componentProps: { placeholder: '如 ["/zhaobiao/gglist?p=1"]；留空=从首页链接发现。\n栏目对象可带窗口字段（04-契约 §3）：[{"url":"/zhaobiao/gglist?p=1","lookbackDays":1,"fullLookbackDays":60,"maxPages":10}] —— lookbackDays=每轮增量回溯天（缺省仅最新页）、fullLookbackDays=首跑全量回溯天（缺省回退全局 60）、maxPages=单轮最大翻页', rows: 3, autoSize: { minRows: 3, maxRows: 8 } },
     },
     {
+      /* 解析器为后端 ParserRegistry 注册的可插拔 SPI（9 个），code 属系统标识 → 只能选不能手填 */
       fieldName: 'parserCodeDefault',
       label: '默认解析/策略码',
-      component: 'Input',
-      componentProps: { placeholder: '留空=按 URL 规则自动匹配解析器' },
+      component: 'ApiSelect',
+      componentProps: {
+        api: fetchCrawlParserList,
+        labelField: 'name',
+        valueField: 'code',
+        allowClear: true,
+        showSearch: true,
+        placeholder: '下拉选择解析器；留空=按 URL 规则自动匹配',
+      },
     },
     {
       fieldName: 'fetchIntervalSeconds',

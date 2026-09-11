@@ -3,7 +3,7 @@ import type { VbenFormSchema } from '@vben/common-ui';
 
 import type { AuthApi } from '#/api/core/auth';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { AuthenticationLogin, Verification, z } from '@vben/common-ui';
@@ -40,12 +40,19 @@ const captchaType = 'blockPuzzle';
 const tenantList = ref<AuthApi.TenantResult[]>([]);
 
 function handleLoginTypeChange(type: LoginType) {
+  const prev = loginType.value;
   loginType.value = type;
   if (type === 'personal') {
     // 个人账号固定使用后端保留的 tenant_id=0，不能沿用登录页初始化的企业租户。
     accessStore.setTenantId(null);
     accessStore.clearVisitTenantId();
     loginRef.value?.getFormApi().setFieldValue('tenantId', undefined);
+    return;
+  }
+  // 切回企业登录：tenantId 已被个人分支清空，且 fetchTenantList 只在 onMounted 执行过一次，
+  // 若不再解析一次，企业登录将永久缺少租户 id（租户下拉为空、请求头不带 tenant-id）。
+  if (prev !== 'enterprise') {
+    void nextTick(() => fetchTenantList());
   }
 }
 

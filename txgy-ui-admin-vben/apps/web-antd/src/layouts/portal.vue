@@ -16,6 +16,7 @@ const navItems = [
   { label: '招聘应聘', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
+  { label: '项目公告管理', path: '/portal/bidding/projects' },
   { label: '个人中心', path: '/portal/profile' },
 ];
 

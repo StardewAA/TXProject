@@ -206,6 +206,33 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () => import('#/views/bidding/notice/index.vue'),
         meta: { title: '公告发布（企业前台）', hideInMenu: true },
       },
+      /** 项目公告管理（前台）：项目 → 招标项目 → 标段（包） → 公告 四级层级导航。
+       *  创建入口逐级提供（创建项目/招标项目/标段），创建公告仅放在第三级进入的标段公告列表页。
+       *  接口：/bidding/project|tender-project|bid-section（page/get/save/trace）。 */
+      {
+        name: 'PortalBiddingProjects',
+        path: 'bidding/projects',
+        component: () => import('#/views/portal/bidding/project/index.vue'),
+        meta: { title: '项目公告管理', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectTenderProjects',
+        path: 'bidding/projects/:projectCode/tender-projects',
+        component: () => import('#/views/portal/bidding/project/tenderProjects.vue'),
+        meta: { title: '招标项目', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectBidSections',
+        path: 'bidding/projects/:projectCode/tender-projects/:tenderProjectCode/sections',
+        component: () => import('#/views/portal/bidding/project/bidSections.vue'),
+        meta: { title: '标段（包）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSectionNotices',
+        path: 'bidding/sections/:bidSectionCode/notices',
+        component: () => import('#/views/portal/bidding/project/notices.vue'),
+        meta: { title: '公告 / 公示', hideInMenu: true },
+      },
       {
         name: 'PortalProfile',
         path: 'profile',
