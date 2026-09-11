@@ -112,11 +112,14 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     @Override
     public void submitFeedback(Long id) {
         // 1. 校验存在 + 草稿状态
-        validateFeedbackStatusPrepare(id);
+        MesProFeedbackDO feedback = validateFeedbackStatusPrepare(id);
 
         // 2. 更新状态为审批中（报工人和报工时间由表单保存时确定，提交不覆盖）
         feedbackMapper.updateById(new MesProFeedbackDO().setId(id)
                 .setStatus(MesProFeedbackStatusEnum.APPROVING.getStatus()));
+
+        // 3. 首次报工自动置位"生产中"（v2.2 状态机决策②，幂等）
+        workOrderService.markInProductionIfIssued(feedback.getWorkOrderId());
     }
 
     @Override
