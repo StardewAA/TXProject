@@ -1,14 +1,6 @@
-export type CmsApiType = 'material' | 'policy' | 'process' | 'quota' | 'standard';
-
 export interface CmsRecord {
   id?: number;
   status?: string;
-  type?: string;
-  title?: string;
-  content?: string;
-  updatedAt?: string;
-  attachmentUrls?: string[];
-  sourceUrl?: string;
   [key: string]: any;
 }
 
@@ -26,6 +18,8 @@ export interface CmsFormField {
   required?: boolean;
   date?: boolean;
 }
+
+export type CmsApiType = 'material' | 'policy' | 'process' | 'quota' | 'standard';
 
 export interface CmsContentConfig {
   apiType: CmsApiType;
@@ -46,6 +40,7 @@ export interface CmsContentConfigMap {
 
 const statusOptions = [
   { label: '已发布', value: '已发布' },
+  { label: '待发布', value: '待发布' },
   { label: '待审核', value: '待审核' },
   { label: '已驳回', value: '已驳回' },
   { label: '草稿', value: '草稿' },
@@ -53,6 +48,7 @@ const statusOptions = [
 
 export const cmsContentConfigs: CmsContentConfigMap = {
   standard: {
+    apiType: 'standard',
     columns: [
       { dataIndex: 'standardNo', title: '标准编号', width: 160 },
       { dataIndex: 'name', title: '标准名称', width: 300 },
@@ -62,19 +58,29 @@ export const cmsContentConfigs: CmsContentConfigMap = {
       { dataIndex: 'views', title: '浏览量', width: 100 },
     ],
     formFields: [
-      { dataIndex: 'standardNo', label: '标准编号' },
+      { dataIndex: 'standardNo', label: '标准编号', required: true },
       { dataIndex: 'name', label: '标准名称' },
       {
         dataIndex: 'standardType',
         label: '标准类型',
+        required: true,
         options: [
-          { label: '国家标准', value: '国家标准' },
-          { label: '行业标准', value: '行业标准' },
-          { label: '地方标准', value: '地方标准' },
-          { label: '团体标准', value: '团体标准' },
+          { label: '国家标准', value: '1' },
+          { label: '行业标准', value: '2' },
+          { label: '地方标准', value: '3' },
+          { label: '团体标准', value: '4' },
+          { label: '企业标准', value: '5' },
         ],
       },
-      { dataIndex: 'industryField', label: '适用领域' },
+      { dataIndex: 'publishOrg', label: '发布机构', required: true },
+      { dataIndex: 'publishDate', label: '发布日期', required: true, date: true, placeholder: '2026-01-01' },
+      { dataIndex: 'implementDate', label: '实施日期', required: true, date: true, placeholder: '2026-06-01' },
+      { dataIndex: 'industryField', label: '适用领域', multiline: true },
+      {
+        dataIndex: 'status',
+        label: '状态',
+        options: statusOptions,
+      },
       { dataIndex: 'keywords', label: '关键词', multiline: true },
     ],
     moduleName: '行业标准规范库',
@@ -149,6 +155,7 @@ export const cmsContentConfigs: CmsContentConfigMap = {
     ],
   },
   material: {
+    apiType: 'material',
     columns: [
       { dataIndex: 'name', title: '材料名称', width: 220 },
       { dataIndex: 'category', title: '材料大类', width: 140 },
@@ -158,17 +165,22 @@ export const cmsContentConfigs: CmsContentConfigMap = {
       { dataIndex: 'updatedAt', title: '更新时间', width: 120 },
     ],
     formFields: [
-      { dataIndex: 'name', label: '材料名称' },
+      { dataIndex: 'name', label: '材料名称', required: true },
       {
         dataIndex: 'category',
         label: '材料大类',
+        required: true,
         options: [
-          { label: '无机保温', value: '无机保温' },
-          { label: '有机保温', value: '有机保温' },
-          { label: '防腐涂料', value: '防腐涂料' },
-          { label: '衬里材料', value: '衬里材料' },
+          { label: '无机保温', value: '1' },
+          { label: '有机保温', value: '2' },
+          { label: '防腐涂料', value: '3' },
+          { label: '衬里材料', value: '4' },
+          { label: '防腐管件', value: '5' },
+          { label: '预制制品', value: '6' },
         ],
       },
+      { dataIndex: 'subcategory', label: '材料子类', required: true },
+      { dataIndex: 'applicableCondition', label: '适用工况', required: true },
       { dataIndex: 'tempRange', label: '适用温度范围' },
       { dataIndex: 'conductivity', label: '导热系数' },
       {
@@ -180,7 +192,12 @@ export const cmsContentConfigs: CmsContentConfigMap = {
           { label: 'B2级', value: 'B2级' },
         ],
       },
-      { dataIndex: 'industryField', label: '适用领域' },
+      { dataIndex: 'industryField', label: '适用领域', multiline: true },
+      {
+        dataIndex: 'status',
+        label: '状态',
+        options: statusOptions,
+      },
     ],
     moduleName: '材料参数数据库',
     pageTitle: '材料参数库管理',
@@ -243,6 +260,7 @@ export const cmsContentConfigs: CmsContentConfigMap = {
     ],
   },
   process: {
+    apiType: 'process',
     columns: [
       { dataIndex: 'title', title: '工艺案例名称', width: 300 },
       { dataIndex: 'resourceType', title: '资源类型', width: 130 },
@@ -251,31 +269,39 @@ export const cmsContentConfigs: CmsContentConfigMap = {
       { dataIndex: 'updatedAt', title: '更新时间', width: 120 },
     ],
     formFields: [
-      { dataIndex: 'title', label: '工艺案例名称' },
+      { dataIndex: 'title', label: '工艺案例名称', required: true },
       {
         dataIndex: 'resourceType',
         label: '资源类型',
+        required: true,
         options: [
-          { label: '标准工序', value: '标准工序' },
-          { label: '施工工法', value: '施工工法' },
-          { label: '技术交底', value: '技术交底' },
-          { label: '通病防治', value: '通病防治' },
-          { label: '优秀案例', value: '优秀案例' },
-          { label: '整改方案', value: '整改方案' },
+          { label: '施工工序', value: '1' },
+          { label: '技术交底模板', value: '2' },
+          { label: '通病防治', value: '3' },
+          { label: '优秀案例', value: '4' },
+          { label: '不合格对比', value: '5' },
+          { label: '整改方案', value: '6' },
         ],
       },
       {
         dataIndex: 'difficulty',
         label: '难度等级',
+        required: true,
         options: [
-          { label: '入门', value: '入门' },
-          { label: '初级', value: '初级' },
-          { label: '中级', value: '中级' },
-          { label: '高级', value: '高级' },
-          { label: '专家级', value: '专家级' },
+          { label: '入门', value: '1' },
+          { label: '初级', value: '2' },
+          { label: '中级', value: '3' },
+          { label: '高级', value: '4' },
+          { label: '专家', value: '5' },
         ],
       },
-      { dataIndex: 'industryField', label: '适用领域' },
+      { dataIndex: 'industryField', label: '适用领域', multiline: true },
+      { dataIndex: 'content', label: '正文内容', required: true, multiline: true },
+      {
+        dataIndex: 'status',
+        label: '状态',
+        options: statusOptions,
+      },
       { dataIndex: 'summary', label: '内容摘要', multiline: true },
     ],
     moduleName: '工艺工法与案例库',
@@ -334,6 +360,7 @@ export const cmsContentConfigs: CmsContentConfigMap = {
     ],
   },
   quota: {
+    apiType: 'quota',
     columns: [
       { dataIndex: 'title', title: '定额资料名称', width: 320 },
       { dataIndex: 'quotaType', title: '定额类型', width: 130 },
@@ -342,22 +369,28 @@ export const cmsContentConfigs: CmsContentConfigMap = {
       { dataIndex: 'updatedAt', title: '更新时间', width: 120 },
     ],
     formFields: [
-      { dataIndex: 'title', label: '定额资料名称' },
+      { dataIndex: 'title', label: '定额资料名称', required: true },
       {
         dataIndex: 'quotaType',
         label: '定额类型',
+        required: true,
         options: [
-          { label: '施工定额', value: '施工定额' },
-          { label: '预算定额', value: '预算定额' },
-          { label: '概算定额', value: '概算定额' },
-          { label: '人工单价', value: '人工单价' },
-          { label: '材料市场价', value: '材料市场价' },
-          { label: '规费标准', value: '规费标准' },
-          { label: '资料模板', value: '资料模板' },
+          { label: '资质要求', value: '1' },
+          { label: '施工定额', value: '2' },
+          { label: '人工单价', value: '3' },
+          { label: '材料市场价', value: '4' },
+          { label: '规费标准', value: '5' },
+          { label: '报验流程', value: '6' },
+          { label: '资料模板', value: '7' },
         ],
       },
-      { dataIndex: 'region', label: '适用地区' },
-      { dataIndex: 'publishDate', label: '发布日期' },
+      { dataIndex: 'region', label: '适用地区', required: true },
+      { dataIndex: 'publishDate', label: '发布日期', placeholder: '2026-01-01' },
+      {
+        dataIndex: 'status',
+        label: '状态',
+        options: statusOptions,
+      },
     ],
     moduleName: '资质定额资料库',
     pageTitle: '定额资料库管理',
@@ -410,6 +443,7 @@ export const cmsContentConfigs: CmsContentConfigMap = {
     ],
   },
   policy: {
+    apiType: 'policy',
     columns: [
       { dataIndex: 'title', title: '政策标题', width: 340 },
       { dataIndex: 'policyLevel', title: '政策级别', width: 120 },
@@ -418,23 +452,29 @@ export const cmsContentConfigs: CmsContentConfigMap = {
       { dataIndex: 'updatedAt', title: '更新时间', width: 120 },
     ],
     formFields: [
-      { dataIndex: 'title', label: '政策标题' },
+      { dataIndex: 'title', label: '政策标题', required: true },
       {
         dataIndex: 'policyLevel',
         label: '政策级别',
         options: [
-          { label: '国家', value: '国家' },
-          { label: '省级', value: '省级' },
-          { label: '市级', value: '市级' },
+          { label: '国家', value: '1' },
+          { label: '省级', value: '2' },
+          { label: '市级', value: '3' },
+          { label: '区县级', value: '4' },
         ],
       },
       { dataIndex: 'department', label: '发布机构' },
       { dataIndex: 'category', label: '政策分类' },
-      { dataIndex: 'publishDate', label: '发布日期' },
+      { dataIndex: 'publishDate', label: '发布日期', placeholder: '2026-01-01' },
+      {
+        dataIndex: 'status',
+        label: '状态',
+        options: statusOptions,
+      },
       { dataIndex: 'summary', label: '政策摘要', multiline: true },
     ],
-    moduleName: '政策资讯库',
-    pageTitle: '政策资讯管理',
+    moduleName: '政策咨询库',
+    pageTitle: '政策咨询管理',
     records: [
       {
         id: 1,

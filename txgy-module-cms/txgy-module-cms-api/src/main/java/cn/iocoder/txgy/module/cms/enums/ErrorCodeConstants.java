@@ -20,4 +20,13 @@ public interface ErrorCodeConstants {
     ErrorCode PUBLICATION_URL_NOT_DOCUMENT = new ErrorCode(1_041_000_009,
             "请输入具体法规原文页链接，不能使用政府网站或法规数据库首页");
 
+    // ========== 五大库 CRUD（1_050_xxx_xxx 段） ==========
+    ErrorCode STANDARD_NOT_EXISTS = new ErrorCode(1_050_001_000, "标准不存在");
+    ErrorCode MATERIAL_NOT_EXISTS = new ErrorCode(1_050_002_000, "材料不存在");
+    ErrorCode PROCESS_NOT_EXISTS = new ErrorCode(1_050_003_000, "工艺资源不存在");
+    ErrorCode QUOTA_NOT_EXISTS = new ErrorCode(1_050_004_000, "定额资料不存在");
+    ErrorCode POLICY_NOT_EXISTS = new ErrorCode(1_050_005_000, "政策资讯不存在");
+    ErrorCode QUOTA_DETAIL_NOT_EXISTS = new ErrorCode(1_050_006_000, "定额明细不存在");
+    ErrorCode CMS_CONTENT_NOT_EXISTS = new ErrorCode(1_050_007_000, "内容不存在");
+
 }
