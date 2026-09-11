@@ -30,6 +30,7 @@ import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermi
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.crm.service.quotation.CrmQuotationService;
 import cn.iocoder.txgy.module.crm.service.customer.bo.CrmCustomerCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.CrmOwnerRecordService;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
@@ -90,6 +91,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @Resource
     @Lazy
     private CrmContractService contractService;
+    @Resource
+    @Lazy
+    private CrmQuotationService quotationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -105,26 +109,18 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerSaveReqVO createReqVO, Long userId) {
         createReqVO.setId(null);
-        // 1. 负责人：以表单选择为准；未选择时默认当前登录人
-        Long ownerUserId = createReqVO.getOwnerUserId() != null ? createReqVO.getOwnerUserId() : userId;
-        createReqVO.setOwnerUserId(ownerUserId);
-        // 2. 校验拥有客户是否到达上限
-        validateCustomerExceedOwnerLimit(ownerUserId, 1);
+        // 1. 校验拥有客户是否到达上限
+        validateCustomerExceedOwnerLimit(createReqVO.getOwnerUserId(), 1);
 
-        // 3. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqVO, ownerUserId);
+        // 2. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqVO, userId);
         customerMapper.insert(customer);
 
-        // 4. 创建数据权限：负责人拥有 OWNER
+        // 3. 创建数据权限
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
-        // 5. 若创建人不是负责人，保留其读/写权限，避免创建后丢失可见性
-        if (!ownerUserId.equals(userId)) {
-            permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                    .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.WRITE.getLevel()));
-        }
+                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
 
-        // 6. 记录操作日志上下文
+        // 4. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -634,6 +630,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         }
         if (contractService.getContractCountByCustomerId(id) > 0) {
             throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_CONTRACT.getName());
+        }
+        if (quotationService.getQuotationCountByCustomerId(id) > 0) {
+            throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_QUOTATION.getName());
         }
     }
 

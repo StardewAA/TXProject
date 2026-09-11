@@ -16,7 +16,9 @@ import {
   createBusiness,
   getBusiness,
   updateBusiness,
+  updateBusinessStatus,
 } from '#/api/crm/business';
+import { getBusinessStatusSimpleList } from '#/api/crm/business/status';
 import { BizTypeEnum } from '#/api/crm/permission';
 import { $t } from '#/locales';
 import { ProductEditTable } from '#/views/crm/product/components';
@@ -91,7 +93,18 @@ const [Modal, modalApi] = useVbenModal({
     const data = (await formApi.getValues()) as CrmBusinessApi.Business;
     data.products = formData.value?.products;
     try {
-      await (formData.value?.id ? updateBusiness(data) : createBusiness(data));
+      if (formData.value?.id) {
+        await updateBusiness(data);
+      } else {
+        const id = await createBusiness(data);
+        // 新增时若手动选择了商机阶段，且与默认阶段不同，则同步更新
+        if (data.statusId) {
+          const list = await getBusinessStatusSimpleList(data.statusTypeId);
+          if (list.length > 0 && list[0]?.id !== data.statusId) {
+            await updateBusinessStatus({ id, statusId: data.statusId });
+          }
+        }
+      }
       // 关闭并提示
       await modalApi.close();
       emit('success');
