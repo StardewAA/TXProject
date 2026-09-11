@@ -293,14 +293,20 @@ public class ResourceCategoryServiceImpl implements ResourceCategoryService {
         if (parent == null) {
             return null;
         }
-        for (CategoryTreeRespVO root : roots) {
-            if (ObjUtil.equal(root.getId(), parent.getId())) {
-                return root;
+        return findTreeRecursive(parent.getId(), roots);
+    }
+
+    private CategoryTreeRespVO findTreeRecursive(Long targetId, List<CategoryTreeRespVO> nodes) {
+        if (nodes == null) {
+            return null;
+        }
+        for (CategoryTreeRespVO node : nodes) {
+            if (ObjUtil.equal(node.getId(), targetId)) {
+                return node;
             }
-            for (CategoryTreeRespVO child : root.getChildren()) {
-                if (ObjUtil.equal(child.getId(), parent.getId())) {
-                    return child;
-                }
+            CategoryTreeRespVO found = findTreeRecursive(targetId, node.getChildren());
+            if (found != null) {
+                return found;
             }
         }
         return null;
