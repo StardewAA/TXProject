@@ -28,6 +28,7 @@ export namespace CrmClueApi {
     areaName?: string; // 所在地名称
     detailAddress: string; // 详细地址
     industryId: number; // 所属行业
+    customerType: number; // 客户类别 1=下游客户 2=上游供应商
     level: number; // 客户等级
     source: number; // 客户来源
     remark: string; // 备注
