@@ -22,7 +22,9 @@ import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
+import { getPersonnelProfilePage, type PersonnelProfileApi } from '#/api/bidding/personnel';
 import {
+  assignKeyPost,
   checkMultiPost,
   getPersonnelRisk,
   getProjectKeyPostChanges,
@@ -130,6 +132,84 @@ async function doKeyPost() {
     // 静默
   } finally {
     keyPostLoading.value = false;
+  }
+}
+
+/* ===== ④b 关键岗位任职 / 变更登记 =====
+ * 口径：岗位码表逐字取自 KeyPostEnum（KEY_POST_OPTIONS，不做自由文本）；
+ * 任职开始日按契约 'YYYY-MM-DD'，留空由后端取今天；变更原因为留痕字段（申诉时说明用），可空。
+ * 后端会自动闭合上任任期并回传 changeSeq（该岗位第几次变更），据此在提示里给出可核对的结论。 */
+const assignOpen = ref(false);
+const assignSaving = ref(false);
+const assignPersons = ref<Array<{ label: string; value: number }>>([]);
+const assignPersonLoading = ref(false);
+const assignForm = reactive<SafetyPermitApi.KeyPostAssignmentReq>({
+  projectId: 0,
+  postCode: '',
+  personId: 0,
+  startAt: '',
+  changeReason: '',
+});
+
+async function loadAssignPersons(keyword?: string) {
+  assignPersonLoading.value = true;
+  try {
+    const page = await getPersonnelProfilePage({ pageNo: 1, pageSize: 20, personName: keyword ?? '' });
+    assignPersons.value = (page.list ?? [])
+      .map((p: PersonnelProfileApi.Profile) => ({
+        // idCard 只写不读（列表回传 idCardMasked），故用姓名 + 工号做标识
+        label: `${p.personName ?? '—'}${p.personNo ? `（${p.personNo}）` : ''}`,
+        value: Number(p.id ?? 0),
+      }))
+      .filter((o) => o.value > 0);
+  } catch {
+    // 静默：档案列表不可用时仍可手输人员 id
+  } finally {
+    assignPersonLoading.value = false;
+  }
+}
+
+function openAssign() {
+  assignForm.projectId = Number(projectId.value ?? 0);
+  assignForm.postCode = '';
+  assignForm.personId = 0;
+  assignForm.startAt = '';
+  assignForm.changeReason = '';
+  assignOpen.value = true;
+  void loadAssignPersons();
+}
+
+async function submitAssign() {
+  if (!assignForm.projectId) {
+    message.warning('请先填写项目 id（④ 区的项目 id 会自动带入）');
+    return;
+  }
+  if (!assignForm.postCode) {
+    message.warning('请选择关键岗位');
+    return;
+  }
+  if (!assignForm.personId) {
+    message.warning('请选择任职人员');
+    return;
+  }
+  assignSaving.value = true;
+  try {
+    const resp = await assignKeyPost({
+      projectId: assignForm.projectId,
+      postCode: assignForm.postCode,
+      personId: assignForm.personId,
+      startAt: assignForm.startAt ? assignForm.startAt : undefined,
+      changeReason: assignForm.changeReason?.trim() ? assignForm.changeReason.trim() : undefined,
+    });
+    message.success(
+      `已登记 ${resp.postLabel ?? assignForm.postCode}${resp.changeSeq ? `（该岗位第 ${resp.changeSeq} 次变更）` : ''}`,
+    );
+    assignOpen.value = false;
+    if (Number(projectId.value) === assignForm.projectId) await doKeyPost();
+  } catch {
+    // 错误提示由请求层统一处理
+  } finally {
+    assignSaving.value = false;
   }
 }
 
@@ -279,6 +359,13 @@ onMounted(() => {
         <a-button v-if="can('bidding:project:query')" type="primary" :loading="keyPostLoading" @click="doKeyPost">
           查询
         </a-button>
+        <a-button
+          v-if="can('bidding:project:update')"
+          :disabled="!projectId"
+          @click="openAssign"
+        >
+          登记任职 / 变更
+        </a-button>
         <span class="ct-panel-meta">阈值缺省取配置 project.key.post.change.window.days</span>
       </div>
       <div class="ct-panel-b">
@@ -315,6 +402,67 @@ onMounted(() => {
         <div v-else class="ct-empty">输入项目 id 后查询：逐岗位给出窗口内变更次数、阈值与是否超限</div>
       </div>
     </div>
+
+    <!-- ④b 登记关键岗位任职/变更（bidding:project:update） -->
+    <a-modal
+      v-model:open="assignOpen"
+      title="登记关键岗位任职 / 变更"
+      :confirm-loading="assignSaving"
+      ok-text="提交登记"
+      @ok="submitAssign"
+    >
+      <a-alert type="info" show-icon class="mb-3">
+        <template #message>提交后后端自动闭合该岗位上任任期</template>
+        <template #description>
+          <div>
+            达变更阈值会当场提示挂靠嫌疑，待办由后端 Job 产出；岗位码表逐字取自 KeyPostEnum，不做自由文本。
+          </div>
+        </template>
+      </a-alert>
+      <a-form layout="vertical">
+        <a-form-item label="项目 id" required>
+          <a-input-number v-model:value="assignForm.projectId" :min="1" style="width: 100%" />
+          <div class="ct-panel-meta">默认带入 ④ 区已填的项目 id</div>
+        </a-form-item>
+        <a-form-item label="关键岗位" required>
+          <a-select
+            v-model:value="assignForm.postCode"
+            :options="KEY_POST_OPTIONS"
+            placeholder="选择关键岗位（KeyPostEnum）"
+            show-search
+            option-filter-prop="label"
+          />
+        </a-form-item>
+        <a-form-item label="任职人员" required>
+          <a-select
+            v-model:value="assignForm.personId"
+            :options="assignPersons"
+            :loading="assignPersonLoading"
+            :filter-option="false"
+            placeholder="按姓名搜索员工档案"
+            show-search
+            @search="loadAssignPersons"
+          />
+        </a-form-item>
+        <a-form-item label="任职开始日">
+          <a-date-picker
+            v-model:value="assignForm.startAt"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+            placeholder="留空 = 今天"
+          />
+        </a-form-item>
+        <a-form-item label="变更原因">
+          <a-textarea
+            v-model:value="assignForm.changeReason"
+            :rows="2"
+            :maxlength="256"
+            show-count
+            placeholder="如：原项目经理离职，由注册建造师接任（留痕，申诉时说明用）"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- ⑤ 规则配置：阈值生效值 / 发布与灰度 / 版本历史与回滚 / 读取审计（bidding:rule-config:*） -->
     <div class="ct-panel">

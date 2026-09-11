@@ -98,6 +98,29 @@ export namespace SafetyPermitApi {
       threshold?: number;
     }>;
   }
+
+  /** #7b 关键岗位任职/变更登记（自动闭合上任任期；达阈值当场提示挂靠嫌疑） */
+  export interface KeyPostAssignmentReq {
+    projectId: number;
+    postCode: string;
+    personId: number;
+    /** 任职开始日 'YYYY-MM-DD'；留空 = 后端取今天 */
+    startAt?: null | string;
+    /** 变更原因（留痕，便于申诉时说明） */
+    changeReason?: string;
+  }
+
+  export interface KeyPostAssignmentResp {
+    id?: number;
+    projectId?: number;
+    postCode?: string;
+    postLabel?: string;
+    personId?: number;
+    /** LocalDate → 'YYYY-MM-DD' */
+    startAt?: null | string;
+    /** 该岗位第几次变更（首次任职为 1） */
+    changeSeq?: number;
+  }
 }
 
 /** #1 读取安许风险状态（entId 必填；asOf 可回填做历史预演） */
@@ -144,4 +167,12 @@ export function getProjectKeyPostChanges(projectId: number | string, windowDays?
   return requestClient.get<SafetyPermitApi.KeyPostChanges>('/bidding/safety-permit/project/key-post-changes', {
     params: { projectId, windowDays },
   });
+}
+
+/** #7b 登记关键岗位任职/变更（@Idempotent；后端自动闭合上任任期，达阈值当场提示挂靠嫌疑，待办由 Job 产出） */
+export function assignKeyPost(data: SafetyPermitApi.KeyPostAssignmentReq) {
+  return requestClient.post<SafetyPermitApi.KeyPostAssignmentResp>(
+    '/bidding/safety-permit/project/key-post-assignment',
+    data,
+  );
 }
