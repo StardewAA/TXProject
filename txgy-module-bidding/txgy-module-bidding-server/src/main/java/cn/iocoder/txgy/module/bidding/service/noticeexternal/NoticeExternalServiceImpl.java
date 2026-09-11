@@ -679,21 +679,16 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (!StringUtils.hasText(url)) {
             return null;
         }
+        // 2026-09-11 统一走 HttpFetchClient（与采集链路同一套连接/读超时、浏览器 UA、单文件 50MB 上限、
+        //   反爬特征识别），不再自建裸 HttpClient。原因：裸客户端没有 UA（部分站点直接拒绝）、没有大小上限
+        //   （恶意/异常大文件会撑爆管理端响应），且无法在单测中打桩（预览回退的合规行为无法回归验证）。
+        //   契约不变：任何失败/空体一律返回 null，调用方按"暂无原文"404 处理。
         try {
-            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(10))
-                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-                    .build();
-            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
-                    .timeout(java.time.Duration.ofSeconds(60))
-                    .GET().build();
-            java.net.http.HttpResponse<byte[]> resp = client.send(req,
-                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-            int length = resp.body() == null ? 0 : resp.body().length;
-            if (resp.statusCode() == 200 && length > 0) {
-                return resp.body();
+            byte[] bytes = httpFetchClient.getBytes(url);
+            if (bytes != null && bytes.length > 0) {
+                return bytes;
             }
-            log.warn("[pdfContent][id={}][{}] 不可用：HTTP {} 字节数 {} url={}", id, channel, resp.statusCode(), length, url);
+            log.warn("[pdfContent][id={}][{}] 不可用：空体 url={}", id, channel, url);
             return null;
         } catch (Exception e) {
             log.warn("[pdfContent][id={}][{}] 获取失败: {} url={}", id, channel, e.getMessage(), url);
