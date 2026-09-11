@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 员工证书台账。表：personnel_certificate（DDL sql/2026-09-13-personnel-qualification.sql）。
+ * 员工证书台账。表：personnel_certificate（DDL sql/history/2026-09-13-personnel-qualification.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §一（PERSON 类证书走人员扩展）、表 15-3
  * （注册/执业编号 reg_no、注册有效期 reg_valid_to）；《电子招标投标办法》（20号令）第42条（从业人员

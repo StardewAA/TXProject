@@ -7,6 +7,7 @@ package cn.iocoder.txgy.module.bidding.controller.admin.project;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import cn.iocoder.txgy.module.bidding.controller.admin.project.vo.*;
 import cn.iocoder.txgy.module.bidding.service.project.ProjectService;
 import cn.iocoder.txgy.module.bidding.service.project.ProjectTraceService;
@@ -56,6 +57,7 @@ public class ProjectController {
     @PostMapping("/save")
     @PreAuthorize("@ss.hasPermission('bidding:project:create')")
     @Operation(summary = "项目登记/修改（编号租户内唯一，重复提交幂等 upsert）")
+    @Idempotent
     public CommonResult<Long> save(@Valid @RequestBody ProjectSaveReqVO reqVO) {
         return success(projectService.saveProject(reqVO));
     }
@@ -64,6 +66,7 @@ public class ProjectController {
     @PreAuthorize("@ss.hasPermission('bidding:project:update')")
     @Operation(summary = "项目删除（存在招标项目时拒绝，保追溯链完整）")
     @Parameter(name = "id", description = "项目 ID", required = true)
+    @Idempotent
     public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
         projectService.deleteProject(id);
         return success(true);

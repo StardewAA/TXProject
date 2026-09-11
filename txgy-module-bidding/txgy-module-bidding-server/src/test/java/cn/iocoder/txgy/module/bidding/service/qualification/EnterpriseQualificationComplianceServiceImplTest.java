@@ -92,7 +92,7 @@ class EnterpriseQualificationComplianceServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.createStandard("CONSTRUCTION", "总承包", "一级", "建市〔2014〕159号",
                         "{}", null, null, null, LocalDate.now(), null, null));
-        assertEquals(Integer.valueOf(1_060_106_023), e.getCode(), "同版本应报 QUAL_STANDARD_VERSION_DUPLICATE");
+        assertEquals(Integer.valueOf(1_060_109_023), e.getCode(), "同版本应报 QUAL_STANDARD_VERSION_DUPLICATE");
         verify(qualificationStandardMapper, never()).insert(any(QualificationStandardDO.class));
     }
 
@@ -166,7 +166,7 @@ class EnterpriseQualificationComplianceServiceImplTest {
         when(enterpriseQualificationMapper.selectById(99L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.runComplianceReview(99L, null, 1L, null));
-        assertEquals(Integer.valueOf(1_060_106_015), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_015), e.getCode());
     }
 
     @Test
@@ -176,7 +176,7 @@ class EnterpriseQualificationComplianceServiceImplTest {
                 any(LocalDate.class))).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.runComplianceReview(1L, null, 1L, null));
-        assertEquals(Integer.valueOf(1_060_106_022), e.getCode(), "无现行标准应报 QUAL_STANDARD_NOT_FOUND");
+        assertEquals(Integer.valueOf(1_060_109_022), e.getCode(), "无现行标准应报 QUAL_STANDARD_NOT_FOUND");
     }
 
     // ---------- 工具 ----------

@@ -7,6 +7,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.List;
 
 /**
  * 证件/资质生命周期流程发起入参（变更 / 续期 / 注销吊销 / 年检 四类共用）。
@@ -93,8 +94,11 @@ public class CertLifecycleApplyReqVO {
     @Schema(description = "新文件 id（变更页/延续页/新证扫描件，经 FileApi 上传后登记）")
     private Long newCertFileId;
 
-    @Schema(description = "佐证材料文件 id 列表（JSON 数组字符串）", example = "[1001,1002]")
-    private String evidenceFileIds;
+    // 类型口径（《招投标模块开发规范》§三-1：自建 VO 用常规类型含 List；§四-1 返回/入参不进存储形态）：
+    // 对外一律 List<Long>，JSON 字符串只是 DO/DB 的存储形态（json 列），转换在 Service 完成。
+    // 同模块既有先例：FilingSubmitReqVO.attachmentFileIds 亦为 List<Long>。
+    @Schema(description = "佐证材料文件 id 列表", example = "[1001,1002]")
+    private List<Long> evidenceFileIds;
 
     @Schema(description = "备注")
     private String remark;

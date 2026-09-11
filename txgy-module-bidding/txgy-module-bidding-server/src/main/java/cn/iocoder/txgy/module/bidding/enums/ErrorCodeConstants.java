@@ -8,7 +8,8 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
  *
  * <p>规范出处：docs/招投标模块开发规范.md §4.7 错误码规范（1-060-xxx-xxx 结构，
  * 服务异常经 ServiceExceptionUtil 抛出，由框架全局异常处理器回写 HTTP 响应）；
- * 证书/资质域子段 106（1-060-106-000~026，ErrorCodeFormatTest 门禁校验格式与全半角）；
+ * 证书与资质台账子段 109（1-060-109-000~026，2026-09-13 由 106 段迁出——106 已登记给外部公告/采集域，
+ * 两域原 000~026 重叠会造成同码两义；ErrorCodeFormatTest 门禁校验段位与格式）；
  * 员工资质域子段 107（1-060-107-000~021，人员档案/证书/配证/合规核验，2026-09-13 随员工资质模块登记）。
  */
 public interface ErrorCodeConstants {
@@ -70,34 +71,37 @@ public interface ErrorCodeConstants {
     ErrorCode ILLEGAL_INFO_NOT_EXISTS = new ErrorCode(1_060_105_001, "违法违规信息不存在");
     ErrorCode BLACKLIST_NOT_EXISTS = new ErrorCode(1_060_105_002, "黑名单信息不存在");
 
-    // ========== 资质证书 1-060-106-000 ==========
-    ErrorCode CERTIFICATE_NOT_EXISTS = new ErrorCode(1_060_106_000, "证照不存在");
-    ErrorCode CERTIFICATE_NO_DUPLICATE = new ErrorCode(1_060_106_001, "证照编号已存在");
-    ErrorCode CERTIFICATE_DATA_MODIFIED = new ErrorCode(1_060_106_002, "数据已被他人修改，请刷新后重试");
-    ErrorCode CERTIFICATE_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_003, "证照当前状态不允许该流转");
-    ErrorCode CERT_CHANGE_LOG_LINK_BROKEN = new ErrorCode(1_060_106_004, "证照变更日志哈希链断裂");
-    ErrorCode CERT_FILE_NOT_EXISTS = new ErrorCode(1_060_106_005, "证照文件不存在");
-    ErrorCode CERT_FILE_VIRUS_NOT_CLEAN = new ErrorCode(1_060_106_006, "证照文件未通过病毒扫描，禁止预览/下载");
-    ErrorCode CERT_FILE_HASH_DUPLICATE = new ErrorCode(1_060_106_007, "同证照已存在相同哈希的文件，禁止重复上传");
-    ErrorCode CERT_FILE_VERSION_CONFLICT = new ErrorCode(1_060_106_008, "文件版本已存在（并发冲突），请刷新后重试");
-    ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_106_009, "文件参数不合法");
-    ErrorCode CERT_ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_060_106_010, "预警记录不存在");
-    ErrorCode CERT_ALERT_RECORD_MODIFIED = new ErrorCode(1_060_106_011, "预警记录已被他人修改，请刷新");
-    ErrorCode CERT_VERIFY_IN_PROGRESS = new ErrorCode(1_060_106_012, "验真进行中，请稍后刷新");
-    ErrorCode CERT_VERIFY_GATEWAY_UNAVAILABLE = new ErrorCode(1_060_106_013, "核验通道未就绪，请联系管理员开通");
-    ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_106_014, "验真渠道不合法");
-    ErrorCode QUALIFICATION_NOT_EXISTS = new ErrorCode(1_060_106_015, "资质主档不存在");
-    ErrorCode QUALIFICATION_NO_DUPLICATE = new ErrorCode(1_060_106_016, "同序列/类别/等级的资质证书编号已存在");
-    ErrorCode QUALIFICATION_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_106_017, "资质状态流转非法");
-    ErrorCode QUALIFICATION_DATA_MODIFIED = new ErrorCode(1_060_106_018, "资质主档已被他人修改，请刷新");
-    ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_106_019, "申报记录不存在");
-    ErrorCode QUAL_APPLY_STATUS_INVALID = new ErrorCode(1_060_106_020, "申报状态流转非法");
-    ErrorCode QUAL_APPLY_PARAM_INVALID = new ErrorCode(1_060_106_021, "申报参数不合法（当前版本支持延续 RENEW 申报）");
-    ErrorCode QUAL_STANDARD_NOT_FOUND = new ErrorCode(1_060_106_022, "未找到适用资质标准（按序列/类别/等级与生效区间）");
-    ErrorCode QUAL_STANDARD_VERSION_DUPLICATE = new ErrorCode(1_060_106_023, "同标准版本/适用范围已存在，请换版本号");
-    ErrorCode SAFETY_PERMIT_NOT_EXISTS = new ErrorCode(1_060_106_024, "安全生产许可证不存在");
-    ErrorCode SAFETY_PERMIT_NO_DUPLICATE = new ErrorCode(1_060_106_025, "安全生产许可证编号已存在");
-    ErrorCode SAFETY_PERMIT_STATUS_INVALID = new ErrorCode(1_060_106_026, "安许状态流转非法");
+    // ========== 证书与资质台账 1-060-109-000（规范 §4.7；2026-09-13 自 106 段迁出）==========
+    // [依据] 规范 §4.7：106 段已登记给"外部公告/采集/关注提醒"，本块原占 106 段且未登记，
+    //       与公告/采集块 000~026 整段重叠（同码两义，前端按码分流会误判），故整块迁至新登记的 109 段。
+    // [业务目标] 错误码全局唯一可判定：证照不存在的 1090109000 与 PDF 抽取为空的 1060106000 不再混淆。
+    ErrorCode CERTIFICATE_NOT_EXISTS = new ErrorCode(1_060_109_000, "证照不存在");
+    ErrorCode CERTIFICATE_NO_DUPLICATE = new ErrorCode(1_060_109_001, "证照编号已存在");
+    ErrorCode CERTIFICATE_DATA_MODIFIED = new ErrorCode(1_060_109_002, "数据已被他人修改，请刷新后重试");
+    ErrorCode CERTIFICATE_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_109_003, "证照当前状态不允许该流转");
+    ErrorCode CERT_CHANGE_LOG_LINK_BROKEN = new ErrorCode(1_060_109_004, "证照变更日志哈希链断裂");
+    ErrorCode CERT_FILE_NOT_EXISTS = new ErrorCode(1_060_109_005, "证照文件不存在");
+    ErrorCode CERT_FILE_VIRUS_NOT_CLEAN = new ErrorCode(1_060_109_006, "证照文件未通过病毒扫描，禁止预览/下载");
+    ErrorCode CERT_FILE_HASH_DUPLICATE = new ErrorCode(1_060_109_007, "同证照已存在相同哈希的文件，禁止重复上传");
+    ErrorCode CERT_FILE_VERSION_CONFLICT = new ErrorCode(1_060_109_008, "文件版本已存在（并发冲突），请刷新后重试");
+    ErrorCode CERT_FILE_PARAM_INVALID = new ErrorCode(1_060_109_009, "文件参数不合法");
+    ErrorCode CERT_ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_060_109_010, "预警记录不存在");
+    ErrorCode CERT_ALERT_RECORD_MODIFIED = new ErrorCode(1_060_109_011, "预警记录已被他人修改，请刷新");
+    ErrorCode CERT_VERIFY_IN_PROGRESS = new ErrorCode(1_060_109_012, "验真进行中，请稍后刷新");
+    ErrorCode CERT_VERIFY_GATEWAY_UNAVAILABLE = new ErrorCode(1_060_109_013, "核验通道未就绪，请联系管理员开通");
+    ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_109_014, "验真渠道不合法");
+    ErrorCode QUALIFICATION_NOT_EXISTS = new ErrorCode(1_060_109_015, "资质主档不存在");
+    ErrorCode QUALIFICATION_NO_DUPLICATE = new ErrorCode(1_060_109_016, "同序列/类别/等级的资质证书编号已存在");
+    ErrorCode QUALIFICATION_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_109_017, "资质状态流转非法");
+    ErrorCode QUALIFICATION_DATA_MODIFIED = new ErrorCode(1_060_109_018, "资质主档已被他人修改，请刷新");
+    ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_109_019, "申报记录不存在");
+    ErrorCode QUAL_APPLY_STATUS_INVALID = new ErrorCode(1_060_109_020, "申报状态流转非法");
+    ErrorCode QUAL_APPLY_PARAM_INVALID = new ErrorCode(1_060_109_021, "申报参数不合法（当前版本支持延续 RENEW 申报）");
+    ErrorCode QUAL_STANDARD_NOT_FOUND = new ErrorCode(1_060_109_022, "未找到适用资质标准（按序列/类别/等级与生效区间）");
+    ErrorCode QUAL_STANDARD_VERSION_DUPLICATE = new ErrorCode(1_060_109_023, "同标准版本/适用范围已存在，请换版本号");
+    ErrorCode SAFETY_PERMIT_NOT_EXISTS = new ErrorCode(1_060_109_024, "安全生产许可证不存在");
+    ErrorCode SAFETY_PERMIT_NO_DUPLICATE = new ErrorCode(1_060_109_025, "安全生产许可证编号已存在");
+    ErrorCode SAFETY_PERMIT_STATUS_INVALID = new ErrorCode(1_060_109_026, "安许状态流转非法");
 
     // ========== 通用 1-060-199-000 ==========
     ErrorCode EXCHANGE_VO_VALIDATE_FAILED = new ErrorCode(1_060_199_000, "交换层VO校验失败");
@@ -198,6 +202,15 @@ public interface ErrorCodeConstants {
     //        《招投标模块开发规范》§4.5（幂等：同业务键重复提交直接拒绝）。
     // [业务目标] 同月社保、同编号合同不允许重复登记，避免月度核对时出现两条互相矛盾的记录导致结论不可复算。
     ErrorCode PERSONNEL_RECORD_DUPLICATE = new ErrorCode(1_060_107_024, "记录已存在：同一员工的该月份社保/该编号合同不可重复登记");
+
+    // [依据] 用户业务口径（安许 A/B/C 联动、宽限规则可配、多岗兼任须持证）；《电子资质七大模块技术方案.md》§1.2~§1.4；
+    //        《安全生产许可证条例》（国务院令第653号修正）。占位符用 hutool 风格 {}（见 108 段说明）。
+    // [业务目标] 人数不达标、宽限被滥用、无证兼任等情形都能给出可操作提示，且提示里带出具体口径。
+    // 注：安许"档案不存在"复用既有 1_060_109_024 SAFETY_PERMIT_NOT_EXISTS（109 段），不重复定义。
+    ErrorCode SAFETY_GRACE_REASON_NOT_ALLOWED = new ErrorCode(1_060_107_025, "宽限原因不在允许范围内：{}（宽限仅限非主观过错情形）");
+    ErrorCode SAFETY_GRACE_DAYS_EXCEEDED = new ErrorCode(1_060_107_026, "宽限天数超出配置上限：最多 {} 天");
+    ErrorCode MULTI_POST_SAME_POST = new ErrorCode(1_060_107_027, "主岗位与兼任岗位不能相同");
+    ErrorCode KEY_POST_INVALID = new ErrorCode(1_060_107_028, "关键岗位 code 不支持：{}");
 
     // ========== 规则配置中心与业务字典 1-060-108-000（方案 §8.1，契约 §1.1/§1.2）==========
     // [依据] 用户硬约束"所有数值参数必须支持动态配置，严禁硬编码"；《电子资质七大模块技术方案.md》§8.1/§8.2；

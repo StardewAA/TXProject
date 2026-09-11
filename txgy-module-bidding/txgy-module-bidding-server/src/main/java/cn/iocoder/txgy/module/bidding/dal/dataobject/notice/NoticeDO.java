@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 公告/公示主档（T 轨）。表：bidding_notice（DDL 见 sql/2026-09-03-notice.sql）。
+ * 公告/公示主档（T 轨）。表：bidding_notice（DDL 见 sql/history/2026-09-03-notice.sql）。
  *
  * <p>权威字段全集以 {@code fieldsJson} 快照存储（key 照录规范英文名称，见 NoticePayloadUtils），
  * 本表只承载检索/列表/状态所需列 + 版式文件（PDF）指针。
