@@ -5,7 +5,7 @@ import { onMounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Card, Progress, Select, Table, Tabs, Tag } from 'ant-design-vue';
+import { Progress, Select, Table, Tag } from 'ant-design-vue';
 
 import { getMyCheckins, getMySummary, getMyTracks } from '../learning/api';
 
@@ -17,6 +17,13 @@ const MEDIA_TYPE_OPTIONS = [
   { label: '文档', value: 'document' },
   { label: '直播', value: 'live' },
   { label: '回放', value: 'replay' },
+];
+
+const profileTab = ref('course');
+const profileTabs = [
+  { key: 'course', label: '课程进度' },
+  { key: 'track', label: '学习轨迹' },
+  { key: 'checkin', label: '打卡记录' },
 ];
 
 const summary = ref<TrainingLearnerApi.TrackSummary>({});
@@ -84,37 +91,74 @@ onMounted(() => {
 
 <template>
   <Page auto-content-height>
-    <div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-      <Card size="small" class="text-center">
-        <div class="text-2xl font-semibold text-blue-600">
-          {{ durationText(summary.totalValidSeconds) }}
+    <section class="profile-stats">
+      <div class="stat stat--blue">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3.5 2" />
+          </svg>
         </div>
-        <div class="mt-1 text-xs text-gray-500">累计有效学习时长</div>
-      </Card>
-      <Card size="small" class="text-center">
-        <div class="text-2xl font-semibold text-green-600">
-          {{ summary.totalCreditEarned ?? 0 }}
+        <div class="stat-info">
+          <div class="stat-value stat-value--sm">{{ durationText(summary.totalValidSeconds) }}</div>
+          <div class="stat-label">累计有效学习时长</div>
         </div>
-        <div class="mt-1 text-xs text-gray-500">
-          已获学时 / {{ summary.creditTotal ?? 0 }}
-        </div>
-      </Card>
-      <Card size="small" class="text-center">
-        <div class="text-2xl font-semibold">
-          {{ summary.taskCompletedCount ?? 0 }}/{{ summary.taskTotalCount ?? 0 }}
-        </div>
-        <div class="mt-1 text-xs text-gray-500">已完成课程</div>
-      </Card>
-      <Card size="small" class="text-center">
-        <div class="text-2xl font-semibold text-purple-600">
-          {{ summary.checkinCount ?? 0 }}
-        </div>
-        <div class="mt-1 text-xs text-gray-500">学习打卡次数</div>
-      </Card>
-    </div>
+      </div>
 
-    <Tabs type="card">
-      <Tabs.TabPane key="course" tab="课程进度">
+      <div class="stat stat--green">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l2.4 5.8 6.3.6-4.8 4.2 1.5 6.2L12 16.9 6.6 19.8 8.1 13.6 3.3 9.4l6.3-.6z" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ summary.totalCreditEarned ?? 0 }}<span class="stat-unit">/ {{ summary.creditTotal ?? 0 }} 学时</span></div>
+          <div class="stat-label">已获学时</div>
+        </div>
+      </div>
+
+      <div class="stat stat--purple">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.5l4.5 4.5L19 7" />
+            <path d="M3 19h18" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ summary.taskCompletedCount ?? 0 }}<span class="stat-unit">/ {{ summary.taskTotalCount ?? 0 }} 门</span></div>
+          <div class="stat-label">已完成课程</div>
+        </div>
+      </div>
+
+      <div class="stat stat--orange">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+            <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+            <path d="M9 14l2 2 3.5-3.5" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ summary.checkinCount ?? 0 }}<span class="stat-unit">次</span></div>
+          <div class="stat-label">学习打卡次数</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="profile-panel">
+      <div class="tab-bar">
+        <button
+          v-for="tab in profileTabs"
+          :key="tab.key"
+          type="button"
+          :class="{ active: profileTab === tab.key }"
+          @click="profileTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <div v-show="profileTab === 'course'">
         <Table
           row-key="courseId"
           :data-source="summary.courseRows ?? []"
@@ -159,9 +203,9 @@ onMounted(() => {
             </template>
           </Table>
         </div>
-      </Tabs.TabPane>
+      </div>
 
-      <Tabs.TabPane key="track" tab="学习轨迹">
+      <div v-show="profileTab === 'track'">
         <div class="mb-3 flex items-center gap-3">
           <Select
             v-model:value="trackQuery.mediaType"
@@ -214,9 +258,9 @@ onMounted(() => {
             </template>
           </template>
         </Table>
-      </Tabs.TabPane>
+      </div>
 
-      <Tabs.TabPane key="checkin" tab="打卡记录">
+      <div v-show="profileTab === 'checkin'">
         <Table
           row-key="id"
           :data-source="checkins"
@@ -228,7 +272,217 @@ onMounted(() => {
             { title: '打卡时有效秒数', dataIndex: 'validSecondsBefore', key: 'validSecondsBefore', width: 160, align: 'center' },
           ]"
         />
-      </Tabs.TabPane>
-    </Tabs>
+      </div>
+    </section>
   </Page>
 </template>
+
+<style scoped>
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.stat {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid #eaeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.stat:hover {
+  border-color: #d8e2f2;
+  box-shadow: 0 6px 18px rgb(16 24 40 / 8%);
+}
+
+.stat-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--c-icon, #2f6bff);
+  background: var(--c-icon-bg, #eef3ff);
+  border-radius: 12px;
+}
+
+.stat-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.stat-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.stat-value {
+  color: #1b2437;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-value--sm {
+  font-size: 20px;
+}
+
+.stat-unit {
+  margin-left: 3px;
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.stat-label {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.stat--blue {
+  --c-icon: #2f6bff;
+  --c-icon-bg: #eef3ff;
+}
+
+.stat--orange {
+  --c-icon: #ea7b0c;
+  --c-icon-bg: #fff5e8;
+}
+
+.stat--green {
+  --c-icon: #16a34a;
+  --c-icon-bg: #eefaf2;
+}
+
+.stat--purple {
+  --c-icon: #7a3ddc;
+  --c-icon-bg: #f4edff;
+}
+
+.profile-panel {
+  padding: 18px 22px 22px;
+  background: linear-gradient(120deg, #eef4ff 0%, #f7fbff 100%);
+  border: 1px solid #dbe5f4;
+  border-radius: 12px;
+}
+
+/* 覆盖 antd 暗色主题下的深色表格，融入渐变蓝白卡片 */
+.profile-panel :deep(.ant-table),
+.profile-panel :deep(.ant-table-container),
+.profile-panel :deep(.ant-table-content),
+.profile-panel :deep(.ant-table-header),
+.profile-panel :deep(.ant-table-body) {
+  background: transparent;
+}
+
+.profile-panel :deep(.ant-table) {
+  color: #334155;
+}
+
+.profile-panel :deep(.ant-table-thead > tr > th) {
+  color: #475569;
+  background: rgb(255 255 255 / 62%);
+  border-bottom: 1px solid #d7e2f2;
+}
+
+.profile-panel :deep(.ant-table-thead > tr > th::before) {
+  background-color: rgb(215 226 242 / 90%) !important;
+}
+
+.profile-panel :deep(.ant-table-tbody > tr > td) {
+  color: #1e293b;
+  background: transparent;
+  border-bottom: 1px solid rgb(215 226 242 / 70%);
+}
+
+.profile-panel :deep(.ant-table-tbody > tr.ant-table-row:hover > td),
+.profile-panel :deep(.ant-table-tbody > tr > td.ant-table-cell-row-hover) {
+  background: rgb(255 255 255 / 55%);
+}
+
+.profile-panel :deep(.ant-table-placeholder > td),
+.profile-panel :deep(.ant-table-placeholder:hover > td) {
+  background: transparent;
+}
+
+.profile-panel :deep(.ant-empty-description) {
+  color: #8a97ac;
+}
+
+.profile-panel :deep(.ant-progress-text) {
+  color: #475569;
+}
+
+.profile-panel :deep(.ant-pagination) {
+  color: #475569;
+}
+
+.profile-panel :deep(.ant-pagination-item) {
+  background: rgb(255 255 255 / 70%);
+  border-color: #d7e2f2;
+}
+
+.profile-panel :deep(.ant-pagination-item a) {
+  color: #475569;
+}
+
+.profile-panel :deep(.ant-pagination-item-active) {
+  background: #2f6bff;
+  border-color: #2f6bff;
+}
+
+.profile-panel :deep(.ant-pagination-item-active a) {
+  color: #fff;
+}
+
+.profile-panel :deep(.ant-pagination-prev .ant-pagination-item-link),
+.profile-panel :deep(.ant-pagination-next .ant-pagination-item-link) {
+  color: #475569;
+  background: rgb(255 255 255 / 70%);
+  border-color: #d7e2f2;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin: 0 -8px 18px;
+  padding: 0 8px;
+  border-bottom: 1px solid #eaeef5;
+}
+
+.tab-bar button {
+  padding: 10px 16px;
+  background: transparent;
+  border: 0;
+  color: #667085;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-bar button:hover {
+  color: #1b2437;
+}
+
+.tab-bar button.active {
+  color: #1b2437;
+  font-weight: 600;
+  border-bottom-color: #2f6bff;
+}
+
+@media (max-width: 760px) {
+  .profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>
