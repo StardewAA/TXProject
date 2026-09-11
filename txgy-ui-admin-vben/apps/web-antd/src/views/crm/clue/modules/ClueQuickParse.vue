@@ -17,13 +17,19 @@ import {
   parseReceivable,
   parseProduct,
   parseReceivablePlan,
-  type ParsedClue,
 } from '#/utils/crm/clue-parse';
 import {
   getAiClueConfig,
   saveAiClueConfig,
   type AiClueConfig,
 } from '#/utils/crm/ai-config';
+import {
+  checkContractFile,
+  extractPdfContent,
+  formatFileSize,
+  MAX_FILE_COUNT,
+  type ContractFileItem,
+} from '#/utils/crm/contract-file';
 
 const emit = defineEmits<{
   apply: [payload: { fields: any }];
@@ -35,13 +41,22 @@ const props = withDefaults(
   { mode: 'clue' },
 );
 
-type ActiveTab = 'text' | 'image';
+type ActiveTab = 'file' | 'image' | 'text';
+
+/** 合同文件识别入口仅对合同表单开放，其它模块的界面与交互保持不变 */
+const isContractMode = computed(() => props.mode === 'contract');
+/** 单次提交给视觉模型的图片上限（含 PDF 渲染出的页面），防止请求体过大 */
+const MAX_OCR_IMAGES = 6;
 
 const collapsed = ref(false);
 const activeTab = ref<ActiveTab>('text');
 const content = ref('');
 const loading = ref(false);
 const images = ref<{ file: File; url: string }[]>([]);
+/** 待识别的合同文件（PDF / 图片） */
+const contractFiles = ref<ContractFileItem[]>([]);
+/** 文件解析进度（PDF 逐页读取/渲染时展示） */
+const fileProgress = ref('');
 
 // AI 识别配置（界面内可填，存浏览器本地）
 const aiCfg = ref<AiClueConfig>(getAiClueConfig());
@@ -124,9 +139,91 @@ function addImageFile(file: File) {
   images.value.push({ file, url: URL.createObjectURL(file) });
 }
 
+/**
+ * 加入待识别合同文件。
+ * 逐个校验（空文件 / 超大 / 不支持的格式 / 重复），校验失败直接提示并跳过；
+ * 返回是否至少成功加入一个文件，供粘贴、拖拽场景判断。
+ */
+function addContractFiles(list: File[]): boolean {
+  let added = false;
+  for (const file of list) {
+    if (contractFiles.value.length >= MAX_FILE_COUNT) {
+      message.warning(`一次最多识别 ${MAX_FILE_COUNT} 个文件，多余的已忽略`);
+      break;
+    }
+    const { ok, kind, message: errMsg } = checkContractFile(file);
+    if (!ok) {
+      message.error(errMsg ?? '文件校验未通过，请更换文件');
+      continue;
+    }
+    const name = file.name || '未命名文件';
+    if (
+      contractFiles.value.some((f) => f.name === name && f.size === file.size)
+    ) {
+      message.warning(`「${name}」已在待识别列表中，无需重复添加`);
+      continue;
+    }
+    contractFiles.value.push({
+      uid: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      size: file.size,
+      kind: kind!,
+      file,
+      url: kind === 'image' ? URL.createObjectURL(file) : undefined,
+    });
+    added = true;
+  }
+  return added;
+}
+
+function onFilePickContract(e: Event) {
+  const input = e.target as HTMLInputElement;
+  if (input.files?.length) {
+    addContractFiles(Array.from(input.files));
+  }
+  input.value = '';
+}
+
+function removeContractFile(index: number) {
+  const [removed] = contractFiles.value.splice(index, 1);
+  if (removed?.url) {
+    URL.revokeObjectURL(removed.url);
+  }
+}
+
+function clearContractFiles() {
+  contractFiles.value.forEach((f) => f.url && URL.revokeObjectURL(f.url));
+  contractFiles.value = [];
+}
+
+/** 文件识别模式下：从剪贴板收集 PDF / 图片文件 */
+function collectPastedFiles(dt: DataTransfer): boolean {
+  let added = false;
+  if (dt.files?.length) {
+    added = addContractFiles(Array.from(dt.files));
+  }
+  if (!added) {
+    // 部分浏览器（截图粘贴）只在 items 中暴露图片，兜底再取一次
+    for (const it of Array.from(dt.items ?? [])) {
+      if (it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f && addContractFiles([f])) {
+          added = true;
+        }
+      }
+    }
+  }
+  return added;
+}
+
 function onPaste(e: ClipboardEvent) {
   const dt = e.clipboardData;
   if (!dt) {
+    return;
+  }
+  // 合同文件识别模式：粘贴内容作为合同文件处理，不切换标签
+  if (activeTab.value === 'file') {
+    collectPastedFiles(dt);
     return;
   }
   let handled = false;
@@ -171,6 +268,11 @@ function onFilePick(e: Event) {
 function onDrop(e: DragEvent) {
   if (e.dataTransfer?.files?.length) {
     const files = Array.from(e.dataTransfer.files);
+    // 合同文件识别模式：拖入的 PDF / 图片都作为合同文件处理
+    if (activeTab.value === 'file') {
+      addContractFiles(files);
+      return;
+    }
     if (files.some((f) => f.type.startsWith('image/'))) {
       activeTab.value = 'image';
       files.forEach(addImageFile);
@@ -188,13 +290,67 @@ function removeImage(i: number) {
 function clearAll() {
   images.value.forEach((i) => URL.revokeObjectURL(i.url));
   images.value = [];
+  clearContractFiles();
   content.value = '';
-  activeTab.value = 'text';
+  fileProgress.value = '';
+  // 文件识别模式下清空后保留当前标签，方便继续上传下一份合同；文本/图片模式行为不变
+  if (activeTab.value !== 'file') {
+    activeTab.value = 'text';
+  }
+}
+
+/**
+ * 逐个解析待识别合同文件：
+ * - PDF：有文字层则取文本；扫描件则渲染成页面图片走 OCR；
+ * - 图片：压缩后交给视觉大模型 OCR。
+ * 单个文件失败不会中断其它文件，失败与降级信息统一汇总到 warnings 提示用户。
+ */
+async function collectContractFiles(
+  warnings: string[],
+): Promise<{ images: string[]; text: string }> {
+  const texts: string[] = [];
+  let images: string[] = [];
+  for (const item of contractFiles.value) {
+    try {
+      if (item.kind === 'pdf') {
+        fileProgress.value = `正在解析「${item.name}」…`;
+        const r = await extractPdfContent(item.file, (msg) => {
+          fileProgress.value = `「${item.name}」${msg}`;
+        });
+        if (r.truncated) {
+          warnings.push(
+            `「${item.name}」共 ${r.pageCount} 页，仅识别前 ${r.usedPages} 页`,
+          );
+        }
+        if (r.mode === 'text') {
+          // 矢量 PDF 直接用文本层，比 OCR 更准且更快
+          texts.push(`【文件：${item.name}】\n${r.text}`);
+        } else {
+          warnings.push(`「${item.name}」未检测到文字，已按扫描件转图片识别`);
+          images.push(...r.images);
+        }
+      } else {
+        fileProgress.value = `正在处理图片「${item.name}」…`;
+        images.push(await compressImage(item.file));
+      }
+    } catch (e: any) {
+      warnings.push(`「${item.name}」识别失败：${e?.message ?? '未知错误'}`);
+    }
+  }
+  if (images.length > MAX_OCR_IMAGES) {
+    warnings.push(
+      `图片数量较多，仅识别前 ${MAX_OCR_IMAGES} 张（共 ${images.length} 张）`,
+    );
+    images = images.slice(0, MAX_OCR_IMAGES);
+  }
+  fileProgress.value = '';
+  return { images, text: texts.join('\n\n') };
 }
 
 async function handleRecognize() {
   const isImageMode = activeTab.value === 'image';
-  if (!isImageMode && !content.value.trim()) {
+  const isFileMode = activeTab.value === 'file';
+  if (!isImageMode && !isFileMode && !content.value.trim()) {
     message.warning('请先粘贴文本');
     return;
   }
@@ -202,11 +358,18 @@ async function handleRecognize() {
     message.warning('请先上传或粘贴图片');
     return;
   }
+  if (isFileMode && contractFiles.value.length === 0) {
+    message.warning('请先上传合同文件（PDF / 图片）');
+    return;
+  }
 
   loading.value = true;
+  fileProgress.value = '';
   try {
-    const text = isImageMode ? '' : content.value;
+    let text = isImageMode || isFileMode ? '' : content.value;
     let imageDataUrls: string[] = [];
+    // 文件相关的异常 / 降级提示
+    const fileWarnings: string[] = [];
     if (isImageMode && images.value.length) {
       try {
         imageDataUrls = await Promise.all(
@@ -216,8 +379,22 @@ async function handleRecognize() {
         // 转换失败不影响文本识别
       }
     }
+    if (isFileMode) {
+      const collected = await collectContractFiles(fileWarnings);
+      text = collected.text;
+      imageDataUrls = collected.images;
+      // 全部文件都读不出内容时，明确提示而不是回填空表单
+      if (!text.trim() && imageDataUrls.length === 0) {
+        message.error(
+          '未能从所选文件中读取到内容，请确认上传的是完整合同 PDF 或清晰图片',
+        );
+        return;
+      }
+    }
 
     const aiReadyFlag = aiReady.value;
+    // 需要「未配置 AI」提示的场景：图片识别，或文件识别产生了待 OCR 图片
+    const needAi = isImageMode || (isFileMode && imageDataUrls.length > 0);
     const isContract = props.mode === 'contract';
     // 按当前模块选用专属解析 schema
     const parsed: any =
@@ -388,16 +565,25 @@ async function handleRecognize() {
     // 图片仅用于识别信息，不作为附件保存
     emit('apply', { fields });
 
+    // 文件相关的异常 / 降级提示优先展示，让用户明确知道哪些文件未被完整识别
+    if (fileWarnings.length > 0) {
+      message.warning(
+        `识别完成，但存在以下情况：${fileWarnings.slice(0, 2).join('；')}`,
+      );
+      if (fileWarnings.length > 2) {
+        message.info(`另有 ${fileWarnings.length - 2} 条文件提示未展示`);
+      }
+    }
     if (aiError) {
       // AI 真正调用失败（网络 / CORS / 接口报错 / 超大图片超时等），明确告知用户
       message.warning(
         `AI 识别失败：${aiError}。已按规则识别文本；如需识别图片请检查网络或点右上角“AI 配置”核对 Base URL 与模型。`,
       );
-    } else if (!aiReadyFlag && isImageMode) {
+    } else if (!aiReadyFlag && needAi) {
       message.info(
-        '当前未配置 AI，图片无法被识别。点右上角“AI 配置”填写 Base URL 与视觉模型后，即可自动识别图片文字。',
+        '当前未配置 AI，图片/扫描件内容无法被识别。点右上角“AI 配置”填写 Base URL 与视觉模型后，即可自动识别图片文字。',
       );
-    } else {
+    } else if (fileWarnings.length === 0) {
       message.success('识别完成，已自动填充表单字段，请核对后提交');
     }
   } finally {
@@ -494,6 +680,14 @@ async function handleRecognize() {
         >
           图片 OCR 识别
         </a-button>
+        <a-button
+          v-if="isContractMode"
+          :type="activeTab === 'file' ? 'primary' : 'default'"
+          size="small"
+          @click="activeTab = 'file'"
+        >
+          合同文件识别
+        </a-button>
         <a-tag v-if="aiReady" color="green" class="ml-auto">AI 已启用</a-tag>
         <a-tag v-else color="orange" class="ml-auto">AI 未配置</a-tag>
       </div>
@@ -508,7 +702,7 @@ async function handleRecognize() {
       </template>
 
       <!-- 方案二：图片 OCR 识别 -->
-      <template v-else>
+      <template v-else-if="activeTab === 'image'">
         <div
           class="rounded border border-dashed border-border bg-muted/20 p-4"
           @dragover.prevent
@@ -545,6 +739,76 @@ async function handleRecognize() {
           </p>
           <p class="mt-1 text-center text-xs text-muted-foreground">
             {{ aiReady ? 'AI 已配置：上传后点击“智能解析并填充”即可识别图中文字。' : '当前未配置 AI，图片无法被识别；请先点右上角“AI 配置”。' }}
+          </p>
+        </div>
+      </template>
+
+      <!-- 方案三：合同文件识别（仅合同表单） -->
+      <template v-else>
+        <div
+          class="rounded border border-dashed border-border bg-muted/20 p-4"
+          @dragover.prevent
+          @drop.prevent="onDrop"
+        >
+          <!-- 待识别文件列表 -->
+          <div v-if="contractFiles.length > 0" class="mb-3 space-y-2">
+            <div
+              v-for="(f, i) in contractFiles"
+              :key="f.uid"
+              class="flex items-center gap-2 rounded border border-border bg-background px-2 py-1.5"
+            >
+              <img
+                v-if="f.url"
+                :src="f.url"
+                class="h-8 w-8 rounded border object-cover"
+                alt="预览"
+              />
+              <span
+                v-else
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-red-50 text-[10px] font-medium text-red-500"
+              >
+                PDF
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-xs" :title="f.name">{{ f.name }}</div>
+                <div class="text-[11px] text-muted-foreground">
+                  {{ formatFileSize(f.size) }}
+                </div>
+              </div>
+              <span
+                class="cursor-pointer text-muted-foreground hover:text-red-500"
+                @click="removeContractFile(i)"
+              >
+                ×
+              </span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-center gap-2">
+            <label
+              class="flex h-16 w-20 cursor-pointer flex-col items-center justify-center rounded border border-dashed text-xs text-muted-foreground hover:bg-muted/40"
+            >
+              + 合同文件
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                multiple
+                class="hidden"
+                @change="onFilePickContract"
+              />
+            </label>
+          </div>
+          <p class="mt-2 text-center text-xs text-muted-foreground">
+            支持 PDF 合同与合同图片，可点击选择、拖拽或直接粘贴；单文件 ≤ 20MB，最多 {{ MAX_FILE_COUNT }} 个
+          </p>
+          <p class="mt-1 text-center text-xs text-muted-foreground">
+            {{ aiReady ? 'PDF 会自动读取文字，扫描件转图片 OCR 识别；上传后点击“智能解析并填充”。' : '当前未配置 AI，扫描件/图片无法识别；请先点右上角“AI 配置”。' }}
+          </p>
+          <p
+            v-if="fileProgress"
+            class="mt-1 text-center text-xs text-primary"
+          >
+            {{ fileProgress }}
           </p>
         </div>
       </template>
