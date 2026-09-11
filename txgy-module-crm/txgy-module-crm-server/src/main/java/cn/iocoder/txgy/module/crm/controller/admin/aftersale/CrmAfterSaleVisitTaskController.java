@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskSaveReqVO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitRecordDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitTaskDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
@@ -126,7 +127,13 @@ public class CrmAfterSaleVisitTaskController {
                     customer -> task.setCustomerName(customer.getName()));
             MapUtils.findAndThen(userMap, task.getAssigneeUserId(),
                     user -> task.setAssigneeNickname(user.getNickname()));
-            task.setHasRecord(visitRecordMapper.selectCountByTaskId(task.getId()) > 0);
+            // 任务完成后会自动生成一条回访记录，这里带出记录编号与状态，前端可直接跳转填写
+            CrmAfterSaleVisitRecordDO record = visitRecordMapper.selectOneByTaskId(task.getId());
+            task.setHasRecord(record != null);
+            if (record != null) {
+                task.setRecordId(record.getId());
+                task.setRecordStatus(record.getStatus());
+            }
         });
         return success(respPage);
     }

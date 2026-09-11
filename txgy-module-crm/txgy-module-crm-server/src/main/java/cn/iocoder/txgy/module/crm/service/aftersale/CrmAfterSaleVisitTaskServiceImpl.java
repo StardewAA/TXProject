@@ -5,11 +5,15 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskSaveReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleConfigDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitRecordDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitTaskDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitRecordMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitTaskMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleWarrantyMapper;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitRecordStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitTaskStatusEnum;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitTypeEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,8 @@ public class CrmAfterSaleVisitTaskServiceImpl implements CrmAfterSaleVisitTaskSe
 
     @Resource
     private CrmAfterSaleVisitTaskMapper visitTaskMapper;
+    @Resource
+    private CrmAfterSaleVisitRecordMapper visitRecordMapper;
     @Resource
     private CrmAfterSaleWarrantyMapper warrantyMapper;
     @Resource
@@ -112,6 +118,20 @@ public class CrmAfterSaleVisitTaskServiceImpl implements CrmAfterSaleVisitTaskSe
             warrantyUpdate.setId(warranty.getId());
             warrantyUpdate.setLastVisitTime(LocalDateTime.now());
             warrantyMapper.updateById(warrantyUpdate);
+        }
+        // 4. 自动生成「待填写」回访记录：任务一完成即预置记录，用户可直接打开填写，无需手动新建
+        //    幂等保护：该任务若已有记录（例如手动登记过），则不重复生成
+        if (visitRecordMapper.selectCountByTaskId(id) == 0) {
+            CrmAfterSaleVisitRecordDO visitRecord = new CrmAfterSaleVisitRecordDO();
+            visitRecord.setTaskId(id);
+            visitRecord.setWarrantyId(visitTask.getWarrantyId());
+            visitRecord.setCustomerId(visitTask.getCustomerId());
+            visitRecord.setContractId(visitTask.getContractId());
+            visitRecord.setVisitType(CrmAfterSaleVisitTypeEnum.PHONE.getType()); // 默认电话，待用户修改
+            visitRecord.setVisitTime(LocalDateTime.now());
+            visitRecord.setContent(""); // content 为非空字段，占位空串，待用户填写
+            visitRecord.setStatus(CrmAfterSaleVisitRecordStatusEnum.TO_FILL.getStatus());
+            visitRecordMapper.insert(visitRecord);
         }
     }
 

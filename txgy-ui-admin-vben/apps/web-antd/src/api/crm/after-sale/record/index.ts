@@ -7,6 +7,8 @@ export namespace CrmAfterSaleVisitRecordApi {
   export interface VisitRecord {
     id?: number;
     taskId?: number;
+    /** 记录状态：1=待填写 2=已填写 */
+    status?: number;
     warrantyId?: number;
     customerId?: number;
     contractId?: number;
@@ -54,6 +56,13 @@ export function getAfterSaleVisitRecordPage(
 export function getAfterSaleVisitRecord(id: number) {
   return requestClient.get<CrmAfterSaleVisitRecordApi.VisitRecord>(
     `/crm/after-sale/visit-record/get?id=${id}`,
+  );
+}
+
+/** 查询回访任务关联的回访记录（任务完成后自动生成，供直接填写） */
+export function getAfterSaleVisitRecordByTaskId(taskId: number) {
+  return requestClient.get<CrmAfterSaleVisitRecordApi.VisitRecord>(
+    `/crm/after-sale/visit-record/get-by-task-id?taskId=${taskId}`,
   );
 }
 

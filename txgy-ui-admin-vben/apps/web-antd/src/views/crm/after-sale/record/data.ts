@@ -132,6 +132,19 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'status',
+      label: '记录状态',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        placeholder: '请选择记录状态',
+        options: [
+          { label: '待填写', value: 1 },
+          { label: '已填写', value: 2 },
+        ],
+      },
+    },
+    {
       fieldName: 'visitType',
       label: '回访方式',
       component: 'Select',
@@ -172,6 +185,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'customerName',
       title: '客户名称',
       minWidth: 160,
+    },
+    {
+      field: 'status',
+      title: '记录状态',
+      minWidth: 110,
+      slots: { default: 'status' },
     },
     {
       field: 'visitType',
