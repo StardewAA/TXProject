@@ -31,9 +31,7 @@
         <module>txgy-module-ai</module>
         <module>txgy-module-hrm</module>
         <module>txgy-module-fms</module>
-        <!-- 本地工作区缺少 txgy-module-training 目录（该模块在 origin/master 上，本地落后 76 个提交）。
-             为保证后端可编译，暂时停用；同步分支后请恢复此行。 -->
-        <!-- <module>txgy-module-training</module> -->
+        <module>txgy-module-training</module>
     </modules>
 
     <name>${project.artifactId}</name>

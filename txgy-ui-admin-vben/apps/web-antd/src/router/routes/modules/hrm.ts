@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/hrm/dept/detail/index.vue'),
       },
       {
+        path: 'recruit/post-type',
+        name: 'HrmRecruitPostType',
+        meta: { title: '职位类型', activePath: '/hrm/recruit/post-type' },
+        component: () => import('#/views/hrm/recruit/post-type/index.vue'),
+      },
+      {
         path: 'recruit/candidate/detail/:id',
         name: 'HrmRecruitCandidateDetail',
         meta: {

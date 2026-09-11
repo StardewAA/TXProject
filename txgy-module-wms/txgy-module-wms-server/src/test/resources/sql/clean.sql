@@ -1,3 +1,4 @@
+DELETE FROM "wms_integration_request";
 DELETE FROM "wms_check_order_detail";
 DELETE FROM "wms_check_order";
 DELETE FROM "wms_movement_order_detail";

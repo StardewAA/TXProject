@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bpm.service.message;
 import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenProcessInstanceApproveReqDTO;
 import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenProcessInstanceRejectReqDTO;
 import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskCreatedReqDTO;
+import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskCompletedReqDTO;
 import cn.iocoder.txgy.module.bpm.service.message.dto.BpmMessageSendWhenTaskTimeoutReqDTO;
 import jakarta.validation.Valid;
 
@@ -35,6 +36,9 @@ public interface BpmMessageService {
      * @param reqDTO 发送信息
      */
     void sendMessageWhenTaskAssigned(@Valid BpmMessageSendWhenTaskCreatedReqDTO reqDTO);
+
+    /** 发送审批人完成 ERP 订单审批的站内信回执。 */
+    void sendMessageWhenTaskCompleted(@Valid BpmMessageSendWhenTaskCompletedReqDTO reqDTO);
 
     /**
      * 发送任务审批超时的消息

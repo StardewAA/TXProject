@@ -1,12 +1,11 @@
 import DiyApi from '@/sheep/api/promotion/diy';
-import { getTenantByWebsite } from '@/sheep/api/infra/tenant';
 import { getTenantId } from '@/sheep/request';
 import { defineStore } from 'pinia';
 import $platform from '@/sheep/platform';
 import $router from '@/sheep/router';
 import user from './user';
 import sys from './sys';
-import { baseUrl, h5Url } from '@/sheep/config';
+import { baseUrl, h5Url, tenantId } from '@/sheep/config';
 
 const app = defineStore('app', {
   state: () => ({
@@ -138,7 +137,8 @@ const adaptTenant = async () => {
   let newTenantId = null;
 
   try {
-    // 2.1 情况一：H5：根据 url 参数、域名来获取新的租户ID
+    // 2.1 情况一：H5：默认使用商城平台公共租户，仅允许显式 URL 参数切换。
+    // 不再按 localhost/域名解析企业租户，避免普通注册用户被归入企业租户。
     // #ifdef H5
     // H5 环境下的处理逻辑
     if (window?.location) {
@@ -146,21 +146,13 @@ const adaptTenant = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       newTenantId = urlParams.get('tenantId');
 
-      // 如果 URL 参数中没有，则通过 host 获取
-      if (!newTenantId && window.location.host) {
-        const { data } = await getTenantByWebsite(window.location.host);
-        newTenantId = data?.id;
-      }
+      newTenantId = newTenantId || tenantId;
     }
     // #endif
 
-    // 2.2 情况二：微信小程序：小程序环境下的处理逻辑 - 根据 appId 获取租户
+    // 2.2 情况二：微信小程序：默认使用商城平台公共租户。
     // #ifdef MP
-    const appId = uni.getAccountInfoSync()?.miniProgram?.appId;
-    if (appId) {
-      const { data } = await getTenantByWebsite(appId);
-      newTenantId = data?.id;
-    }
+    newTenantId = tenantId;
     // #endif
 
     // 3. 如果是新租户（不相等），则进行切换
@@ -181,14 +173,23 @@ const adaptTenant = async () => {
 
 /** 初始化装修模版 */
 const adaptTemplate = async (appTemplate, templateId) => {
-  const { data: diyTemplate } = templateId
-    ? // 查询指定模板，一般是预览时使用
-      await DiyApi.getDiyTemplate(templateId)
-    : await DiyApi.getUsedDiyTemplate();
-  // 模板不存在
+  let response;
+  try {
+    response = templateId
+      ? // 查询指定模板，一般是预览时使用
+        await DiyApi.getDiyTemplate(templateId)
+      : await DiyApi.getUsedDiyTemplate();
+  } catch (error) {
+    console.warn('商城装修模板加载失败，将使用空模板继续运行:', error);
+  }
+
+  const diyTemplate = response?.data;
+  // 模板不存在或接口暂不可用时，使用空模板，避免首页直接跳转错误页。
   if (!diyTemplate) {
-    $router.error('TemplateError');
-    return;
+    console.warn('未找到已启用的商城装修模板');
+    appTemplate.home = { style: {}, data: [], components: [] };
+    appTemplate.user = { style: {}, data: [], components: [] };
+    return false;
   }
 
   const tabBar = diyTemplate?.property?.tabBar;

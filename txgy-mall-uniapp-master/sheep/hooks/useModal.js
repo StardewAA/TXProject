@@ -38,6 +38,13 @@ export function showShareModal() {
   });
 }
 
+// 直接打开二维码海报（个人中心二维码入口）
+export function showSharePoster() {
+  $store('modal').$patch((state) => {
+    state.sharePoster = true;
+  });
+}
+
 // 关闭分享弹框
 export function closeShareModal() {
   $store('modal').$patch((state) => {
@@ -95,13 +102,18 @@ export function getSmsCode(event, mobile) {
     case 'smsLogin':
       scene = 1;
       break;
+    case 'register':
+      scene = 1;
+      break;
   }
   AuthUtil.sendSmsCode(mobile, scene).then((res) => {
-    if (res.code === 0) {
+    if (res?.code === 0) {
       modalStore.$patch((state) => {
         state.lastTimer[event] = dayjs().unix();
       });
     }
+  }).catch(() => {
+    // request 层负责提示网络/接口错误；验证码发送失败时不启动倒计时。
   });
 }
 

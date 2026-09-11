@@ -58,6 +58,9 @@ public class ErpSaleOrderSaveReqVO {
         @NotNull(message = "产品单位单位不能为空")
         private Long productUnitId;
 
+        @Schema(description = "WMS 统一仓库编码")
+        private String warehouseCode;
+
         @Schema(description = "产品单价", example = "100.00")
         private BigDecimal productPrice;
 

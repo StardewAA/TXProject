@@ -17,6 +17,21 @@ public class ErpProductRespVO {
     @ExcelProperty("产品编号")
     private Long id;
 
+    @Schema(description = "跨模块统一物料编码", requiredMode = Schema.RequiredMode.REQUIRED)
+    @ExcelProperty("物料编码")
+    private String materialCode;
+
+    @Schema(description = "物料类型", requiredMode = Schema.RequiredMode.REQUIRED)
+    @ExcelProperty("物料类型")
+    private String materialType;
+
+    @Schema(description = "是否需要质检", requiredMode = Schema.RequiredMode.REQUIRED)
+    @ExcelProperty("是否需要质检")
+    private Boolean qualityRequired;
+
+    @Schema(description = "主数据同步版本", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Long syncVersion;
+
     @Schema(description = "产品名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @ExcelProperty("产品名称")
     private String name;

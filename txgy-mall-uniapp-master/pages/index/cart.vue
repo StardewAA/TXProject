@@ -25,14 +25,14 @@
       </view>
       <!-- 内容 -->
       <view class="cart-content ss-flex-1 ss-p-x-30 ss-m-b-40">
-        <view v-for="item in state.list" :key="item.id" class="goods-box ss-r-10 ss-m-b-14">
+        <view v-for="item in state.list" :key="item?.id || item?.sku?.id" class="goods-box ss-r-10 ss-m-b-14">
           <view class="ss-flex ss-col-center">
-            <label class="check-box ss-flex ss-col-center ss-p-l-10" @tap="onSelectSingle(item.id)">
+            <label class="check-box ss-flex ss-col-center ss-p-l-10" @tap="onSelectSingle(item?.id)">
               <radio
-                :checked="state.selectedIds.includes(item.id)"
+                :checked="state.selectedIds.includes(item?.id)"
                 color="var(--ui-BG-Main)"
                 style="transform: scale(0.8)"
-                @tap.stop="onSelectSingle(item.id)"
+                @tap.stop="onSelectSingle(item?.id)"
               />
             </label>
             <view v-if="item.spu?.status !== 1 && !state.editMode" class="down-box">
@@ -42,23 +42,17 @@
               该商品无库存
             </view>
             <s-goods-item
-              :img="item.spu.picUrl || item.goods.image"
-              :price="item.sku.price"
-              :skuText="
-                item.sku.properties.length > 1
-                  ? item.sku.properties.reduce(
-                      (items2, items) => items2.valueName + ' ' + items.valueName,
-                    )
-                  : item.sku.properties[0].valueName
-              "
-              :title="item.spu.name"
+              :img="item.spu?.picUrl || item.sku?.picUrl || ''"
+              :price="item.sku?.price || 0"
+              :skuText="getSkuText(item)"
+              :title="item.spu?.name || item.sku?.name || '商品'"
               :titleWidth="400"
               priceColor="#FF3000"
             >
               <template v-if="!state.editMode" v-slot:tool>
                 <su-number-box
                   v-model="item.count"
-                  :max="item.sku.stock"
+                  :max="item.sku?.stock || item.spu?.stock || 0"
                   :min="0"
                   :step="1"
                   @change="onNumberChange($event, item)"
@@ -136,6 +130,7 @@
 
   // 单选选中
   function onSelectSingle(id) {
+    if (id === undefined || id === null || id === '') return;
     cart.selectSingle(id);
   }
 
@@ -152,21 +147,29 @@
   // 结算
   async function onConfirm() {
     const items = [];
-    state.selectedList = state.list.filter((item) => state.selectedIds.includes(item.id));
-    state.selectedList.map((item) => {
-      // 此处前端做出修改
+    state.selectedList = state.list.filter((item) => item && state.selectedIds.includes(item.id));
+    state.selectedList.forEach((item) => {
+      const skuId = item?.sku?.id;
+      const count = Number(item?.count);
+      const skuIdText = skuId === undefined || skuId === null ? '' : String(skuId);
+      if (!/^\d+$/.test(skuIdText) || skuIdText === '0' || !Number.isFinite(count) || count <= 0) {
+        return;
+      }
       items.push({
-        skuId: item.sku.id,
-        count: item.count,
+        skuId: skuIdText,
+        count,
         cartId: item.id,
-        categoryId: item.spu.categoryId,
+        categoryId: item.spu?.categoryId,
       });
     });
     if (isEmpty(items)) {
       sheep.$helper.toast('请先选择商品');
       return;
     }
-    await validateDeliveryType(state.selectedList.map((item) => item.spu).map((spu) => spu.id));
+    const spuIds = state.selectedList.map((item) => item?.spu?.id).filter((id) => id > 0);
+    if (!(await validateDeliveryType(spuIds))) {
+      return;
+    }
     sheep.$router.go('/pages/order/confirm', {
       data: JSON.stringify({
         items,
@@ -182,19 +185,35 @@
    * @throws {Error} 当配送方式冲突或获取商品信息失败时抛出错误
    */
   async function validateDeliveryType(spuIds) {
-    // 获取商品信息
-    const { data: spuList } = await SpuApi.getSpuListByIds(spuIds.join(','));
-    if (isEmpty(spuList)) {
+    if (!Array.isArray(spuIds) || spuIds.length === 0) {
       sheep.$helper.toast('未找到商品信息');
-      throw new Error('未找到商品信息');
+      return false;
     }
-    // 获取所有商品的配送方式列表
-    const deliveryTypesList = spuList.map((item) => item.deliveryTypes);
-    // 检查配送方式冲突
-    const hasConflict = checkDeliveryConflicts(deliveryTypesList);
-    if (hasConflict) {
-      sheep.$helper.toast('选中商品支持的配送方式冲突，不允许提交');
-      throw new Error('选中商品支持的配送方式冲突，不允许提交');
+    try {
+      // 获取商品信息。request 在网络异常时可能返回 false，需先校验响应。
+      const response = await SpuApi.getSpuListByIds(spuIds.join(','));
+      const spuList = response?.code === 0 && Array.isArray(response.data) ? response.data : [];
+      if (isEmpty(spuList)) {
+        sheep.$helper.toast('未找到商品信息');
+        return false;
+      }
+      // 配送方式缺失时无法安全判断，交由用户稍后重试，避免运行时异常。
+      if (spuList.some((item) => !Array.isArray(item?.deliveryTypes) || item.deliveryTypes.length === 0)) {
+        sheep.$helper.toast('商品配送信息暂不可用，请稍后重试');
+        return false;
+      }
+      // 获取所有商品的配送方式列表
+      const deliveryTypesList = spuList.map((item) => item.deliveryTypes);
+      // 检查配送方式冲突
+      const hasConflict = checkDeliveryConflicts(deliveryTypesList);
+      if (hasConflict) {
+        sheep.$helper.toast('选中商品支持的配送方式冲突，不允许提交');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      sheep.$helper.toast('商品配送信息暂不可用，请稍后重试');
+      return false;
     }
   }
 
@@ -229,25 +248,41 @@
   }
 
   function onNumberChange(e, cartItem) {
-    if (e === 0) {
+    if (!cartItem?.id) return;
+    const count = Number(e);
+    if (!Number.isFinite(count) || count <= 0) {
       cart.delete(cartItem.id);
       return;
     }
-    if (cartItem.goods_num === e) return;
-    cartItem.goods_num = e;
+    if (Number(cartItem.count) === count) return;
+    cartItem.count = count;
     cart.update({
       goods_id: cartItem.id,
-      goods_num: e,
-      goods_sku_price_id: cartItem.goods_sku_price_id,
+      goods_num: count,
     });
   }
 
   async function onDelete() {
+    if (!state.selectedIds.length) {
+      sheep.$helper.toast('请先选择商品');
+      return;
+    }
     cart.delete(state.selectedIds);
   }
 
   function getCartList() {
     cart.getList();
+  }
+
+  function getSkuText(item) {
+    const properties = Array.isArray(item?.sku?.properties)
+      ? item.sku.properties.filter((property) => property && typeof property === 'object')
+      : [];
+    const text = properties
+      .map((property) => property.valueName || property.name)
+      .filter(Boolean)
+      .join(' ');
+    return text || '默认规格';
   }
 
   onShow(() => {

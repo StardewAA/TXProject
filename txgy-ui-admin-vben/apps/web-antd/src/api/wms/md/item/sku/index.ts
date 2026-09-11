@@ -29,6 +29,7 @@ export namespace WmsItemSkuApi {
     palletSpec?: string;
     minPackageUnit?: string;
     createTime?: Date;
+    itemStatus?: number;
   }
 }
 

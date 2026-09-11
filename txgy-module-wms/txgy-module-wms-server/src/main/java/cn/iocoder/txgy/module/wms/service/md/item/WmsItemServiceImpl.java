@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.wms.service.md.item;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.item.WmsItemListReqVO;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -48,10 +50,11 @@ public class WmsItemServiceImpl implements WmsItemService {
     @Transactional(rollbackFor = Exception.class)
     public Long createItem(WmsItemSaveReqVO createReqVO) {
         // 校验数据
-        validateItemSaveData(createReqVO);
+        validateItemSaveData(createReqVO, null);
 
         // 插入商品
         WmsItemDO item = BeanUtils.toBean(createReqVO, WmsItemDO.class);
+        item.setStatus(CommonStatusEnum.ENABLE.getStatus());
         itemMapper.insert(item);
         // 插入 SKU
         itemSkuService.createItemSkuList(item.getId(), createReqVO.getSkus());
@@ -66,9 +69,9 @@ public class WmsItemServiceImpl implements WmsItemService {
     @Transactional(rollbackFor = Exception.class)
     public void updateItem(WmsItemSaveReqVO updateReqVO) {
         // 校验存在
-        validateItemExists(updateReqVO.getId());
+        WmsItemDO existingItem = validateItemExists(updateReqVO.getId());
         // 校验数据
-        validateItemSaveData(updateReqVO);
+        validateItemSaveData(updateReqVO, existingItem.getCategoryId());
 
         // 更新商品
         WmsItemDO updateObj = BeanUtils.toBean(updateReqVO, WmsItemDO.class);
@@ -77,13 +80,17 @@ public class WmsItemServiceImpl implements WmsItemService {
         itemSkuService.updateItemSkuList(updateReqVO.getId(), updateReqVO.getSkus());
     }
 
-    private void validateItemSaveData(WmsItemSaveReqVO reqVO) {
+    private void validateItemSaveData(WmsItemSaveReqVO reqVO, Long existingCategoryId) {
         // 校验商品编号唯一
         validateItemCodeUnique(reqVO.getId(), reqVO.getCode());
         // 校验商品名称唯一
         validateItemNameUnique(reqVO.getId(), reqVO.getName());
-        // 校验商品分类存在
-        validateCategoryExists(reqVO.getCategoryId());
+        // 新增商品必须使用可用分类；编辑商品保持原分类时，兼容历史已关闭分类
+        if (existingCategoryId == null || !ObjectUtil.equal(existingCategoryId, reqVO.getCategoryId())) {
+            validateCategoryEnabled(reqVO.getCategoryId());
+        } else {
+            categoryService.validateItemCategoryExists(reqVO.getCategoryId());
+        }
         // 校验商品品牌存在
         validateBrandExists(reqVO.getBrandId());
     }
@@ -108,8 +115,8 @@ public class WmsItemServiceImpl implements WmsItemService {
         }
     }
 
-    private void validateCategoryExists(Long categoryId) {
-        categoryService.validateItemCategoryExists(categoryId);
+    private void validateCategoryEnabled(Long categoryId) {
+        categoryService.validateItemCategoryEnabled(categoryId);
     }
 
     private void validateBrandExists(Long brandId) {
@@ -123,7 +130,17 @@ public class WmsItemServiceImpl implements WmsItemService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteItem(Long id) {
         // 校验存在
-        validateItemExists(id);
+        WmsItemDO item = validateItemExists(id);
+
+        // 删除前统一检查商品关联的 WMS 业务数据，避免只提示第一个 SKU 的关联类型
+        List<String> associations = new ArrayList<>(itemSkuService.getItemSkuAssociationSummary(id));
+        long qualityReportCount = qualityReportService.getQualityReportCount(id);
+        if (qualityReportCount > 0) {
+            associations.add("质检报告(" + qualityReportCount + "条)");
+        }
+        if (!associations.isEmpty()) {
+            throw exception(ITEM_HAS_ASSOCIATIONS, item.getName(), String.join("、", associations));
+        }
 
         // 删除商品和 SKU
         itemSkuService.deleteItemSkuListByItemId(id);
@@ -131,10 +148,30 @@ public class WmsItemServiceImpl implements WmsItemService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateItemStatus(Long id, Integer status) {
+        validateItemExists(id);
+        if (!CommonStatusEnum.ENABLE.getStatus().equals(status)
+                && !CommonStatusEnum.DISABLE.getStatus().equals(status)) {
+            throw exception(ITEM_STATUS_INVALID);
+        }
+        itemMapper.updateById(new WmsItemDO().setId(id).setStatus(status));
+    }
+
+    @Override
     public WmsItemDO validateItemExists(Long id) {
         WmsItemDO item = itemMapper.selectById(id);
         if (item == null) {
             throw exception(ITEM_NOT_EXISTS);
+        }
+        return item;
+    }
+
+    @Override
+    public WmsItemDO validateItemExistsAndEnabled(Long id) {
+        WmsItemDO item = validateItemExists(id);
+        if (!CommonStatusEnum.isEnable(item.getStatus())) {
+            throw exception(ITEM_IS_DISABLED);
         }
         return item;
     }

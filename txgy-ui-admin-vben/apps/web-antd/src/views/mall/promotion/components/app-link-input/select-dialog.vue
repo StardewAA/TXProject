@@ -10,7 +10,7 @@ import { Button, Form, FormItem, Tooltip } from 'ant-design-vue';
 
 import { ProductCategorySelect } from '#/views/mall/product/category/components/';
 
-import { APP_LINK_GROUP_LIST, APP_LINK_TYPE_ENUM } from './data';
+import { AVAILABLE_APP_LINK_GROUP_LIST, APP_LINK_TYPE_ENUM } from './data';
 
 /** APP 链接选择弹框 */
 defineOptions({ name: 'AppLinkSelectDialog' });
@@ -20,7 +20,7 @@ const emit = defineEmits<{
   change: [link: string];
 }>();
 
-const activeGroup = ref(APP_LINK_GROUP_LIST[0]?.name); // 选中的分组，默认选中第一个
+const activeGroup = ref(AVAILABLE_APP_LINK_GROUP_LIST[0]?.name); // 选中的分组，默认选中第一个
 const activeAppLink = ref({} as AppLink); // 选中的 APP 链接
 
 const linkScrollbar = ref<HTMLDivElement>(); // 右侧滚动条
@@ -57,7 +57,7 @@ async function open(link: string) {
   activeAppLink.value.path = link;
   modalApi.open();
   // 滚动到当前的链接
-  const group = APP_LINK_GROUP_LIST.find((group) =>
+  const group = AVAILABLE_APP_LINK_GROUP_LIST.find((group) =>
     group.links.some((linkItem) => {
       const sameLink = isSameLink(linkItem.path, link);
       if (sameLink) {
@@ -166,7 +166,7 @@ function handleProductCategorySelected(id: number) {
         ref="groupScrollbar"
       >
         <Button
-          v-for="(group, groupIndex) in APP_LINK_GROUP_LIST"
+          v-for="(group, groupIndex) in AVAILABLE_APP_LINK_GROUP_LIST"
           :key="groupIndex"
           class="!ml-0 mb-1 mr-4 !justify-start"
           :class="[{ active: activeGroup === group.name }]"
@@ -184,7 +184,7 @@ function handleProductCategorySelected(id: number) {
         ref="linkScrollbar"
       >
         <div
-          v-for="(group, groupIndex) in APP_LINK_GROUP_LIST"
+          v-for="(group, groupIndex) in AVAILABLE_APP_LINK_GROUP_LIST"
           :key="groupIndex"
           class="mb-4 border-b border-gray-100 pb-4 last:mb-0 last:border-b-0"
         >

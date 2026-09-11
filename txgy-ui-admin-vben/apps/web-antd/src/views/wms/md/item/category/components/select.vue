@@ -7,7 +7,7 @@ import { handleTree } from '@vben/utils';
 
 import { TreeSelect } from 'ant-design-vue';
 
-import { getItemCategorySimpleList } from '#/api/wms/md/item/category';
+import { getEnabledItemCategorySimpleList } from '#/api/wms/md/item/category';
 
 /** WMS 商品分类选择器 */
 defineOptions({ name: 'WmsItemCategorySelect', inheritAttrs: false });
@@ -42,7 +42,7 @@ const selectValue = computed({
 
 /** 查询商品分类树 */
 async function getCategoryTree() {
-  const data = await getItemCategorySimpleList();
+  const data = await getEnabledItemCategorySimpleList();
   categoryTree.value = handleTree(data, 'id', 'parentId');
 }
 

@@ -11,10 +11,38 @@ export namespace MesProProjectApi {
     orderSourceCode?: string; // 来源单据编号
     sourceType?: number; // 项目来源类型
     status?: number; // 项目状态
+    priority?: number; // 项目优先级
+    ownerUserId?: number; // 负责人用户编号
+    owner?: string; // 负责人（根据用户自动回填）
+    dept?: string; // 责任部门
+    planStartTime?: string; // 计划开始时间
+    planEndTime?: string; // 计划结束时间
+    actualStartTime?: string; // 实际开始时间
+    actualEndTime?: string; // 实际结束时间
+    durationDays?: number; // 工期天数
     remark?: string; // 备注
     workOrderCount?: number; // 关联生产工单数
     finishedWorkOrderCount?: number; // 已完成生产工单数
     createTime?: number; // 创建时间
+  }
+
+  /** MES 项目导入返回 */
+  export interface ProjectImportRespVO {
+    createCodes?: string[];
+    updateCodes?: string[];
+    failureCodes?: Record<string, string>;
+  }
+
+  /** MES 项目附件 */
+  export interface ProjectFile {
+    id?: number;
+    projectId?: number;
+    fileId?: number;
+    fileName?: string;
+    fileUrl?: string;
+    fileSize?: number;
+    remark?: string;
+    createTime?: number;
   }
 
   /** MES 项目分页查询参数 */
@@ -23,6 +51,9 @@ export namespace MesProProjectApi {
     name?: string;
     status?: number;
     sourceType?: number;
+    priority?: number;
+    owner?: string;
+    dept?: string;
   }
 
   /** MES 项目生产进度统计 */
@@ -95,4 +126,56 @@ export function bindWorkOrders(projectId: number, workOrderIds: number[]) {
 /** 批量解除生产工单的项目关联 */
 export function unbindWorkOrders(workOrderIds: number[]) {
   return requestClient.put('/mes/pro/project/unbind-work-orders', workOrderIds);
+}
+
+/** 恢复项目（已暂停 -> 进行中） */
+export function resumeProject(id: number) {
+  return requestClient.post(`/mes/pro/project/resume?id=${id}`);
+}
+
+/** 强制结项（任意非取消状态 -> 已完成） */
+export function forceCloseProject(id: number) {
+  return requestClient.put(`/mes/pro/project/force-close?id=${id}`);
+}
+
+/** 导入项目 Excel */
+export function importProject(file: File, updateSupport: boolean) {
+  if (!(file instanceof File)) {
+    return Promise.reject(new Error('上传文件无效，请重新选择 Excel 文件'));
+  }
+  const formData = new FormData();
+  // 显式声明 multipart，避免 axios 在 JSON Content-Type 下把 FormData 序列化成 JSON
+  formData.append('file', file, file.name);
+  formData.append('updateSupport', String(updateSupport ?? false));
+  return requestClient.post<MesProProjectApi.ProjectImportRespVO>(
+    '/mes/pro/project/import',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
+  );
+}
+
+/** 下载项目导入模板 */
+export function getImportTemplate() {
+  return requestClient.download('/mes/pro/project/get-import-template');
+}
+
+// ==================== 项目附件 ====================
+
+/** 获得项目的附件列表 */
+export function getProjectFileList(projectId: number) {
+  return requestClient.get<MesProProjectApi.ProjectFile[]>(
+    `/mes/pro-project-file/list?projectId=${projectId}`,
+  );
+}
+
+/** 新增项目附件（文件需先上传到 infra 文件服务） */
+export function createProjectFile(data: MesProProjectApi.ProjectFile) {
+  return requestClient.post<number>('/mes/pro-project-file/create', data);
+}
+
+/** 删除项目附件 */
+export function deleteProjectFile(id: number) {
+  return requestClient.delete(`/mes/pro-project-file/delete?id=${id}`);
 }

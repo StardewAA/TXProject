@@ -16,6 +16,7 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import ImportForm from './modules/import-form.vue';
 
 const { push } = useRouter();
 const sceneType = ref('1');
@@ -24,6 +25,16 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+const [ImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportForm,
+  destroyOnClose: true,
+});
+
+/** 批量导入线索（Excel） */
+function handleImport() {
+  importModalApi.open();
+}
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -146,6 +157,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['crm:clue:export'],
               onClick: handleExport,
             },
+            {
+              label: '批量导入',
+              type: 'primary',
+              auth: ['crm:clue:import'],
+              onClick: handleImport,
+            },
           ]"
         />
       </template>
@@ -179,5 +196,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
     </Grid>
+    <ImportModal @success="handleRefresh" />
   </Page>
 </template>

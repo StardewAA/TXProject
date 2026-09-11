@@ -2,8 +2,12 @@ package cn.iocoder.txgy.module.crm.service.clue;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportExcelVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmCluePageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueTransferReqVO;
@@ -30,12 +34,17 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.filterList;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.singleton;
+import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.CLUE_CREATE_NAME_NOT_NULL;
+import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.CLUE_IMPORT_LIST_IS_EMPTY;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.CLUE_NOT_EXISTS;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.CLUE_TRANSFORM_FAIL_ALREADY;
 import static cn.iocoder.txgy.module.crm.enums.LogRecordConstants.*;
@@ -85,6 +94,65 @@ public class CrmClueServiceImpl implements CrmClueService {
         // 4. 记录操作日志上下文
         LogRecordContext.putVariable("clue", clue);
         return clue.getId();
+    }
+
+    @Override
+    public CrmClueImportRespVO importClueList(List<CrmClueImportExcelVO> importClues,
+                                              CrmClueImportReqVO importReqVO) {
+        // 1. 校验非空
+        importClues = filterList(importClues, item -> Objects.nonNull(item.getName()));
+        if (CollUtil.isEmpty(importClues)) {
+            throw exception(CLUE_IMPORT_LIST_IS_EMPTY);
+        }
+        // 2. 逐条处理
+        CrmClueImportRespVO respVO = CrmClueImportRespVO.builder()
+                .createClueNames(new ArrayList<>()).updateClueNames(new ArrayList<>())
+                .failureClueNames(new LinkedHashMap<>()).build();
+        importClues.forEach(importClue -> {
+            // 2.1 校验名称
+            if (StrUtil.isBlank(importClue.getName())) {
+                respVO.getFailureClueNames().put(importClue.getName(), CLUE_CREATE_NAME_NOT_NULL.getMsg());
+                return;
+            }
+            // 2.2 查重：按名称精确匹配
+            CrmClueDO existClue = clueMapper.selectOne(CrmClueDO::getName, importClue.getName());
+            // 情况一：不存在，直接插入
+            if (existClue == null) {
+                CrmClueDO clue = initClue(importClue, importReqVO.getOwnerUserId());
+                clueMapper.insert(clue);
+                respVO.getCreateClueNames().add(importClue.getName());
+                // 创建数据权限
+                if (importReqVO.getOwnerUserId() != null) {
+                    crmPermissionService.createPermission(new CrmPermissionCreateReqBO()
+                            .setBizType(CrmBizTypeEnum.CRM_CLUE.getType()).setBizId(clue.getId())
+                            .setUserId(importReqVO.getOwnerUserId()).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
+                }
+                return;
+            }
+            // 情况二：已存在，判断是否允许更新
+            if (!Boolean.TRUE.equals(importReqVO.getUpdateSupport())) {
+                respVO.getFailureClueNames().put(importClue.getName(), "线索已存在，未开启「支持更新」");
+                return;
+            }
+            CrmClueDO updateClue = BeanUtils.toBean(importClue, CrmClueDO.class).setId(existClue.getId());
+            clueMapper.updateById(updateClue);
+            respVO.getUpdateClueNames().add(importClue.getName());
+        });
+        return respVO;
+    }
+
+    /**
+     * 初始化导入线索的通用字段
+     *
+     * @param clue        线索信息
+     * @param ownerUserId 负责人编号
+     * @return 线索 DO
+     */
+    private static CrmClueDO initClue(Object clue, Long ownerUserId) {
+        return BeanUtils.toBean(clue, CrmClueDO.class)
+                .setOwnerUserId(ownerUserId)
+                .setFollowUpStatus(false)
+                .setTransformStatus(false);
     }
 
     @Override

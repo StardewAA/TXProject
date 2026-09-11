@@ -12,6 +12,10 @@ export namespace ErpPurchaseInApi {
     totalCount?: number; // 合计数量
     totalPrice?: number; // 合计金额，单位：元
     status?: number; // 状态
+    businessChainNo?: string;
+    wmsStatus?: string;
+    wmsOrderNo?: string;
+    wmsFailureReason?: string;
     remark?: string; // 备注
     outCount?: number; // 采购出库数量
     returnCount?: number; // 采购退货数量
@@ -27,6 +31,9 @@ export namespace ErpPurchaseInApi {
   /** 采购项信息 */
   export interface PurchaseInItem {
     count?: number;
+    wmsActualCount?: number;
+    qualifiedCount?: number;
+    unqualifiedCount?: number;
     id?: number;
     seq?: number; // 前端行号
     orderItemId?: number;

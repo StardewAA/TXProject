@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.crm.dal.mysql.customer;
 
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -20,6 +21,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -86,6 +88,28 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default CrmCustomerDO selectByCustomerName(String name) {
         return selectOne(CrmCustomerDO::getName, name);
+    }
+
+    /**
+     * 查重：根据手机号、客户名称查询匹配的客户（包含公海客户）
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   客户名称，精确匹配
+     * @return 客户列表，最多 5 条
+     */
+    default List<CrmCustomerDO> selectListByDuplicate(String mobile, String name) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {
+            query.and(w -> w.eq(CrmCustomerDO::getMobile, mobile).or().eq(CrmCustomerDO::getName, name));
+        } else if (StrUtil.isNotBlank(mobile)) {
+            query.eq(CrmCustomerDO::getMobile, mobile);
+        } else if (StrUtil.isNotBlank(name)) {
+            query.eq(CrmCustomerDO::getName, name);
+        } else {
+            return Collections.emptyList();
+        }
+        query.orderByDesc(CrmCustomerDO::getId).last("LIMIT 5");
+        return selectList(query);
     }
 
     default PageResult<CrmCustomerDO> selectPutPoolRemindCustomerPage(CrmCustomerPageReqVO pageReqVO,
@@ -160,9 +184,14 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default Long selectCountByTodayContact(Long ownerUserId) {
         MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
-        // 我负责的 + 非公海
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
-                CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
         // 今天需联系
         LocalDateTime beginOfToday = LocalDateTimeUtil.beginOfDay(LocalDateTime.now());
         LocalDateTime endOfToday = LocalDateTimeUtil.endOfDay(LocalDateTime.now());
@@ -172,9 +201,14 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default Long selectCountByFollow(Long ownerUserId) {
         MPJLambdaWrapperX<CrmCustomerDO> query = new MPJLambdaWrapperX<>();
-        // 我负责的 + 非公海
-        CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
-                CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        // 主管/租户管理员统计下属负责的；普通销售统计自己负责的
+        if (CrmPermissionUtils.isCrmOrTenantAdmin() || CrmPermissionUtils.hasSubordinate(ownerUserId)) {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.SUBORDINATE.getType());
+        } else {
+            CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
+                    CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
+        }
         // 未跟进
         query.eq(CrmClueDO::getFollowUpStatus, false);
         return selectCount(query);

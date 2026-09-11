@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate;
 
+import cn.iocoder.txgy.framework.desensitize.core.regex.annotation.EmailDesensitize;
+import cn.iocoder.txgy.framework.desensitize.core.slider.annotation.MobileDesensitize;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -19,6 +21,7 @@ public class HrmRecruitCandidateRespVO {
     private String name;
 
     @Schema(description = "手机号码", example = "15601691399")
+    @MobileDesensitize
     private String mobile;
 
     @Schema(description = "性别", example = "1")
@@ -28,10 +31,14 @@ public class HrmRecruitCandidateRespVO {
     private Integer age;
 
     @Schema(description = "邮箱", example = "candidate@example.com")
+    @EmailDesensitize
     private String email;
 
     @Schema(description = "应聘职位编号", example = "1024")
     private Long postId;
+
+    @Schema(description = "当前岗位应聘记录编号", example = "1024")
+    private Long applicationId;
 
     @Schema(description = "应聘职位名称", example = "Java 开发工程师")
     private String postName;
@@ -86,9 +93,6 @@ public class HrmRecruitCandidateRespVO {
 
     @Schema(description = "入职时间")
     private LocalDateTime entryTime;
-
-    @Schema(description = "简历附件地址数组", example = "[\"https://example.com/resume.pdf\"]")
-    private List<String> resumeUrls;
 
     @Schema(description = "当前面试编号", example = "1024")
     private Long interviewId;

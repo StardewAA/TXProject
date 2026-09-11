@@ -12,6 +12,9 @@ import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
 
+import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import type { ParsedClue } from '#/utils/crm/clue-parse';
+
 const emit = defineEmits(['success']);
 const formData = ref<CrmContactApi.Contact>();
 const getTitle = computed(() => {
@@ -31,6 +34,41 @@ const [Form, formApi] = useVbenForm({
   schema: useFormSchema(),
   showDefaultActions: false,
 });
+
+/** 识别结果回填到联系人新增表单 */
+async function onQuickParse(payload: { fields: ParsedClue }) {
+  const { fields } = payload;
+  const apply: Record<string, any> = {};
+  for (const key of [
+    'name',
+    'mobile',
+    'telephone',
+    'wechat',
+    'email',
+    'qq',
+    'customerId',
+  ] as const) {
+    let v: any = fields[key];
+    if (v === undefined || v === null || v === '') continue;
+    // qq 后端是 Long 且 DB 为 32 位整数，OCR 可能误把错误码等当 QQ 填进来
+    if (key === 'qq') {
+      v = String(v).replace(/\D/g, '');
+      const qqNum = Number(v);
+      // QQ 号长度有限且不能超过 int 上限；超范围视为误识别，不填
+      if (
+        !v ||
+        v.length > 11 ||
+        !Number.isSafeInteger(qqNum) ||
+        qqNum > 2147483647
+      ) {
+        continue;
+      }
+    }
+    apply[key] = v;
+  }
+  await formApi.setValues(apply);
+  message.success('识别完成，请核对信息并补选所属客户后保存');
+}
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
@@ -75,6 +113,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>
