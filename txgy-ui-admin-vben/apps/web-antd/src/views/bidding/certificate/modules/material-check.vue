@@ -17,7 +17,7 @@ import {
 
 import { useCertMeta } from '../useCertMeta';
 
-const { dictLabel, dictOptions } = useCertMeta();
+const { dictLabel, dictOptions, dictTag } = useCertMeta();
 
 const entId = ref<number | undefined>(undefined);
 const asOf = ref<string | undefined>(undefined);
@@ -34,29 +34,32 @@ const RESULT_FALLBACK: Record<string, { color: string; label: string }> = {
 const resultTag = computed(() => {
   const r = data.value?.result;
   if (!r) return null;
-  const fromDict = dictOptions('material_result').find((o) => o.value === r);
-  if (fromDict) return { color: 'blue', label: fromDict.label };
+  // 字典优先（tagType→颜色由 dictTag 统一映射）；缺字典时用契约 §7.1 兜底文案
+  if (dictOptions('material_result').length > 0) return dictTag('material_result', r);
   return RESULT_FALLBACK[r] ?? { color: 'default', label: r };
 });
 
+/* 字段逐字对齐 EnterpriseMaterialCompletenessRespVO.MaterialItem：
+ *   materialLabel 材料名称 / category 大类 / mandatory 必备 / status 状态 /
+ *   validTo 有效期止（字符串） / refName 匹配到的名称或编号 / message 说明 */
 const columns = [
-  { title: '材料名称', dataIndex: 'materialName', key: 'materialName', width: 240 },
+  { title: '材料名称', dataIndex: 'materialLabel', key: 'materialLabel', width: 240 },
   { title: '大类', dataIndex: 'category', key: 'category', width: 110 },
   { title: '必备', dataIndex: 'mandatory', key: 'mandatory', width: 80 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
-  { title: '到期日', dataIndex: 'expireDate', key: 'expireDate', width: 120 },
-  { title: '取数来源', dataIndex: 'sourceRef', key: 'sourceRef', width: 160 },
+  { title: '有效期止', dataIndex: 'validTo', key: 'validTo', width: 120 },
+  { title: '取数来源', dataIndex: 'refName', key: 'refName', width: 180 },
   { title: '说明', dataIndex: 'message', key: 'message', ellipsis: true },
 ];
 
 const STATUS_FALLBACK: Record<string, { color: string; label: string }> = {
   READY: { color: 'green', label: '齐备' },
   EXPIRING: { color: 'orange', label: '临近到期' },
-  MISSING: { color: 'red', label: '缺失或已过期' },
+  MISSING: { color: 'red', label: '缺失' },
+  EXPIRED: { color: 'red', label: '已过期' },
 };
 function statusTag(s: string) {
-  const fromDict = dictOptions('material_status').find((o) => o.value === s);
-  if (fromDict) return { color: 'blue', label: fromDict.label };
+  if (dictOptions('material_status').length > 0) return dictTag('material_status', s);
   return STATUS_FALLBACK[s] ?? { color: 'default', label: s };
 }
 
@@ -101,7 +104,7 @@ async function run() {
         <div class="flex flex-wrap items-center gap-3 mb-3">
           <a-tag :color="resultTag?.color">{{ resultTag?.label }}</a-tag>
           <span class="ct-panel-meta">
-            基准日 {{ data.asOf }}；必备 {{ data.requiredCount }} 项，已齐备 {{ data.readyCount }} 项
+            基准日 {{ asOf || '今天' }}；必备 {{ data.requiredCount }} 项，已齐备 {{ data.readyCount }} 项
           </span>
           <a-progress
             style="width: 220px"
@@ -115,7 +118,7 @@ async function run() {
           type="error"
           show-icon
           :message="`缺失/过期 ${data.missingItems.length} 项`"
-          :description="data.missingItems.map((i) => i.materialName).join('、')"
+          :description="data.missingItems.join('、')"
         />
         <a-alert
           v-if="data.expiringItems?.length"
@@ -123,7 +126,7 @@ async function run() {
           type="warning"
           show-icon
           :message="`临近到期 ${data.expiringItems.length} 项`"
-          :description="data.expiringItems.map((i) => `${i.materialName}（${i.expireDate || '长期'}）`).join('、')"
+          :description="data.expiringItems.join('、')"
         />
         <a-table
           class="ct-table"
@@ -144,8 +147,8 @@ async function run() {
             <template v-else-if="column.key === 'status'">
               <a-tag :color="statusTag(record.status).color">{{ statusTag(record.status).label }}</a-tag>
             </template>
-            <template v-else-if="column.key === 'expireDate'">
-              {{ record.expireDate || '长期' }}
+            <template v-else-if="column.key === 'validTo'">
+              {{ record.validTo || '长期' }}
             </template>
           </template>
         </a-table>
