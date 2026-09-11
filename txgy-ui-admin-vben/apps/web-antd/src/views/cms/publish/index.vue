@@ -2,19 +2,22 @@
 import { onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
-import { Alert, Button, Card, Modal, Spin, Table, Tag, message } from 'ant-design-vue';
+import { Alert, Button, Card, Modal, Spin, Table, Tabs, Tag, message } from 'ant-design-vue';
 
 import type { CmsKnowledgeItem } from '#/api/cms/knowledge';
 import {
   listCmsKnowledge,
-  publishCmsKnowledge,
+  listCmsArchives,
+  archiveCmsKnowledge,
   reindexCmsKnowledge,
-  unpublishCmsKnowledge,
 } from '#/api/cms/knowledge';
+import PublicationSubmit from '../review/parts/submit/index.vue';
 
 defineOptions({ name: 'CmsPublishManagement' });
 
 const rows = ref<CmsKnowledgeItem[]>([]);
+const archives = ref<CmsKnowledgeItem[]>([]);
+const activeTab = ref('submit');
 const loading = ref(false);
 const operatingId = ref('');
 const error = ref('');
@@ -23,8 +26,7 @@ const columns = [
   { title: '文档名称', dataIndex: 'title', key: 'title' },
   { title: '效力状态', dataIndex: 'validity', key: 'validity', width: 130 },
   { title: '切片数', dataIndex: 'chunkCount', key: 'chunkCount', width: 100 },
-  { title: '发布状态', dataIndex: 'published', key: 'published', width: 120 },
-  { title: '审查入库时间', dataIndex: 'createdAt', key: 'createdAt', width: 190 },
+  { title: '发布时间', dataIndex: 'createdAt', key: 'createdAt', width: 190 },
   { title: '操作', key: 'action', width: 170 },
 ];
 
@@ -40,7 +42,7 @@ async function refresh() {
   loading.value = true;
   error.value = '';
   try {
-    rows.value = await listCmsKnowledge();
+    [rows.value, archives.value] = await Promise.all([listCmsKnowledge(), listCmsArchives()]);
   } catch (exception) {
     console.error(exception);
     error.value = '读取待发布知识库失败，请检查 CMS 服务和权限。';
@@ -49,30 +51,18 @@ async function refresh() {
   }
 }
 
-async function publish(row: Record<string, any>) {
-  const item = row as CmsKnowledgeItem;
-  operatingId.value = item.reviewId;
-  try {
-    const result = await publishCmsKnowledge(item.reviewId);
-    message.success(`发布成功，已写入 ${result.keywordChunks} 个可检索片段。`);
-    await refresh();
-  } finally {
-    operatingId.value = '';
-  }
-}
-
-function confirmUnpublish(row: Record<string, any>) {
+function confirmArchive(row: Record<string, any>) {
   const item = row as CmsKnowledgeItem;
   Modal.confirm({
-    title: '确认下架',
-    content: `下架“${item.title}”后，企业用户将无法检索到该内容。`,
-    okText: '确认下架',
+    title: '确认归档',
+    content: `归档“${item.title}”后将移出主知识库检索，但审查与发布历史会保留。`,
+    okText: '确认归档',
     okType: 'danger',
     async onOk() {
       operatingId.value = item.reviewId;
       try {
-        await unpublishCmsKnowledge(item.reviewId);
-        message.success('已下架，并从关键词与向量索引中移除。');
+        await archiveCmsKnowledge(item.reviewId);
+        message.success('已软删除并移入归档库，检索索引已移除。');
         await refresh();
       } finally {
         operatingId.value = '';
@@ -100,8 +90,8 @@ onMounted(refresh);
       <header>
         <div>
           <p>CMS 系统 · 发布管理</p>
-          <h1>审查通过内容发布</h1>
-          <span>列表仅包含已通过官方来源与效力核验的文档。</span>
+          <h1>内容发布与归档</h1>
+          <span>录入内容、查看已发布资料，并对历史内容进行可追溯归档。</span>
         </div>
         <div class="header-actions">
           <Button @click="refresh">刷新</Button>
@@ -109,14 +99,15 @@ onMounted(refresh);
         </div>
       </header>
 
-      <Alert
-        message="未通过审查的申请不会进入本列表，也无法绕过审查直接发布。"
-        show-icon
-        type="info"
-      />
+      <Alert message="所有发布内容必须经过异步 AI 初审和管理员人工复核，人工批准后才进入检索知识库。" show-icon type="info" />
       <Alert v-if="error" :message="error" show-icon type="error" />
 
-      <Card title="待发布与已发布内容">
+      <Tabs v-model:active-key="activeTab" type="card">
+        <Tabs.TabPane key="submit" tab="发布内容">
+          <PublicationSubmit embedded />
+        </Tabs.TabPane>
+        <Tabs.TabPane key="published" tab="已发布内容">
+      <Card title="已发布内容">
         <Spin :spinning="loading">
           <Table :columns="columns" :data-source="rows" row-key="reviewId" :pagination="{ pageSize: 10 }">
             <template #bodyCell="{ column, record }">
@@ -127,30 +118,31 @@ onMounted(refresh);
               <template v-else-if="column.key === 'validity'">
                 <Tag>{{ validityNames[record.validity] || record.validity }}</Tag>
               </template>
-              <template v-else-if="column.key === 'published'">
-                <Tag :color="record.published ? 'green' : 'orange'">{{ record.published ? '已发布' : '待发布' }}</Tag>
-              </template>
               <template v-else-if="column.key === 'action'">
                 <Button
-                  v-if="!record.published"
-                  v-access:code="['cms:knowledge:publish']"
-                  type="link"
-                  :loading="operatingId === record.reviewId"
-                  @click="publish(record)"
-                >发布</Button>
-                <Button
-                  v-else
                   v-access:code="['cms:knowledge:delete']"
                   danger
                   type="link"
                   :loading="operatingId === record.reviewId"
-                  @click="confirmUnpublish(record)"
-                >下架</Button>
+                  @click="confirmArchive(record)"
+                >归档</Button>
               </template>
             </template>
           </Table>
         </Spin>
       </Card>
+        </Tabs.TabPane>
+        <Tabs.TabPane key="archive" tab="归档库">
+          <Card title="归档内容（保留历史，不参与检索）">
+            <Table :columns="columns.filter((item) => item.key !== 'action')" :data-source="archives" row-key="reviewId" :pagination="{ pageSize: 10 }">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'title'"><strong>{{ record.title }}</strong></template>
+                <template v-else-if="column.key === 'validity'"><Tag>{{ validityNames[record.validity] || record.validity }}</Tag></template>
+              </template>
+            </Table>
+          </Card>
+        </Tabs.TabPane>
+      </Tabs>
     </div>
   </Page>
 </template>

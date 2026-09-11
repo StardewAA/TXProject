@@ -11,6 +11,7 @@ import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { useAccessStore, useUserStore } from '@vben/stores';
 import { preferences } from '@vben/preferences';
+import { message } from 'ant-design-vue';
 
 import {
   checkCaptcha,
@@ -70,6 +71,20 @@ async function fetchTenantList() {
   }
 }
 
+/** 登录请求发出前固定租户，避免列表尚未加载时签发 tenantId=0 的令牌。 */
+async function ensureLoginTenant(values: Record<string, any>) {
+  if (!tenantEnable) return;
+  if (!tenantList.value.length) await fetchTenantList();
+  const selected = Number(
+    values.tenantId || accessStore.tenantId || tenantList.value[0]?.id,
+  );
+  if (!Number.isInteger(selected) || selected <= 0) {
+    message.error('无法确定登录租户，请刷新页面后重新登录。');
+    throw new Error('Login tenant is unavailable');
+  }
+  accessStore.setTenantId(selected);
+}
+
 /** 管理权限由后端用户信息和角色决定，兼容不同版本的字段命名。 */
 function hasManagementAccess() {
   const userInfo = userStore.userInfo as Record<string, any> | null;
@@ -124,6 +139,7 @@ function resolveRedirectPath() {
 }
 
 async function handleLogin(values: any) {
+  await ensureLoginTenant(values);
   if (captchaEnable) {
     verifyRef.value.show();
     return;
@@ -139,10 +155,12 @@ async function handleLogin(values: any) {
 
 async function handleVerifySuccess({ captchaVerification }: any) {
   try {
+    const values = await loginRef.value.getFormApi().getValues();
+    await ensureLoginTenant(values);
     await authStore.authLogin(
       'username',
       {
-        ...(await loginRef.value.getFormApi().getValues()),
+        ...values,
         captchaVerification,
         loginType: loginType.value,
       },

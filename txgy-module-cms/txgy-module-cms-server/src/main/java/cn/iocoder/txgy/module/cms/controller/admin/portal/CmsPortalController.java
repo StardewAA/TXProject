@@ -8,7 +8,9 @@ import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerRespDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
+import cn.iocoder.txgy.module.cms.dto.law.CmsLawSuggestionDTO;
 import cn.iocoder.txgy.module.cms.service.rag.CmsRagService;
+import cn.iocoder.txgy.module.cms.service.publication.PublicationUrlParser;
 import cn.iocoder.txgy.module.cms.service.review.ReviewModels;
 import cn.iocoder.txgy.module.cms.service.review.ReviewParser;
 import cn.iocoder.txgy.module.cms.service.review.ReviewService;
@@ -48,19 +50,27 @@ public class CmsPortalController {
     private final CmsRagService ragService;
     private final ReviewService reviewService;
     private final ReviewParser reviewParser;
+    private final PublicationUrlParser publicationUrlParser;
 
     public CmsPortalController(CmsLawApi lawApi, CmsRagService ragService,
-                               ReviewService reviewService, ReviewParser reviewParser) {
+                               ReviewService reviewService, ReviewParser reviewParser,
+                               PublicationUrlParser publicationUrlParser) {
         this.lawApi = lawApi;
         this.ragService = ragService;
         this.reviewService = reviewService;
         this.reviewParser = reviewParser;
+        this.publicationUrlParser = publicationUrlParser;
     }
 
     @GetMapping("/law/search")
     @Operation(summary = "检索已审查且已发布的法规原文")
     public CommonResult<PageResult<CmsLawSearchRespDTO>> search(@Valid CmsLawSearchReqDTO request) {
         return success(lawApi.search(request));
+    }
+
+    @GetMapping("/law/suggest")
+    public CommonResult<List<CmsLawSuggestionDTO>> suggest(@RequestParam String keyword) {
+        return success(lawApi.suggest(keyword,5));
     }
 
     @PostMapping("/law/answer")
@@ -75,6 +85,20 @@ public class CmsPortalController {
         byte[] original = input.text().getBytes(StandardCharsets.UTF_8);
         return success(reviewService.submit(tenant(), user(), input.metadata(),
                 new ReviewModels.Parsed(input.text(), List.of()), "正文.txt", original));
+    }
+
+    @PostMapping("/submission/url/parse")
+    @Operation(summary = "解析政府网站发布原文并提取待确认元数据")
+    public CommonResult<PublicationUrlParser.ParseResult> parseUrl(
+            @RequestBody @Valid PublicationUrlParserRequest input) {
+        return success(publicationUrlParser.parse(input.url()));
+    }
+
+    @PostMapping("/submission/duplicate-check")
+    @Operation(summary = "提交发布申请前执行唯一性查重")
+    public CommonResult<ReviewModels.DuplicateCheckResult> duplicateCheck(
+            @Valid @RequestBody ReviewModels.DuplicateCheckRequest input) {
+        return success(reviewService.checkDuplicate(tenant(), input.metadata(), input.text()));
     }
 
     @PostMapping(value = "/submission/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -108,4 +132,7 @@ public class CmsPortalController {
     private long user() {
         return getLoginUserId();
     }
+
+    public record PublicationUrlParserRequest(@jakarta.validation.constraints.NotBlank
+                                               @jakarta.validation.constraints.Size(max=2000) String url) { }
 }

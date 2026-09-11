@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawAnswerRespDTO;
+import cn.iocoder.txgy.module.cms.dto.law.CmsLawSuggestionDTO;
 import cn.iocoder.txgy.module.cms.service.rag.CmsRagService;
 import cn.iocoder.txgy.module.cms.service.rag.CmsVectorIndexService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -55,6 +57,12 @@ public class CmsLawController {
     @Parameter(name = "articleId", description = "法规条款编号", required = true)
     public CommonResult<CmsLawSearchRespDTO> getArticle(@RequestParam @Positive Long articleId) {
         return success(lawApi.getArticle(articleId));
+    }
+
+    @GetMapping("/suggest")
+    @PreAuthorize("@ss.hasPermission('cms:law:query')")
+    public CommonResult<List<CmsLawSuggestionDTO>> suggest(@RequestParam String keyword) {
+        return success(lawApi.suggest(keyword,5));
     }
 
     @PostMapping("/answer")

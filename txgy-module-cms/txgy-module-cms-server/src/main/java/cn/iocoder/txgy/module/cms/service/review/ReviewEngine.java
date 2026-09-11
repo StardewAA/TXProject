@@ -90,7 +90,8 @@ public class ReviewEngine {
         for (Dimension d:Dimension.values()) scores.put(d,Math.max(0,100-issues.stream().filter(x->x.dimension()==d).mapToInt(x->x.severity()==Severity.ERROR?50:10).sum()));
         int total=scores.values().stream().mapToInt(Integer::intValue).sum()/4;
         Decision decision=issues.stream().anyMatch(x->x.severity()==Severity.ERROR)?Decision.FAIL:issues.isEmpty()?Decision.PASS:Decision.WARNING;
-        return new Report(id,createdAt,m,hash(text),decision,total,Map.copyOf(scores),List.copyOf(issues),evidence,false,0);
+        return new Report(id,createdAt,m,hash(text),decision,total,Map.copyOf(scores),List.copyOf(issues),evidence,false,0,
+                WorkflowStatus.PENDING_MANUAL,"compliance-rule-v1",Instant.now(clock).toString(),null,null,null);
     }
     private void checkArticles(String[] lines,List<Issue> issues) {
         // Official Chinese texts use ideographic, non-breaking and narrow spaces around article numbers.

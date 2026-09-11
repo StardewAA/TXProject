@@ -7,6 +7,21 @@ export interface PublicationSubmission {
   report: ReviewReport;
 }
 
+export interface PublicationUrlParseResult {
+  llmExtracted: boolean;
+  metadata: ReviewMetadata;
+  text: string;
+  warning?: string;
+}
+
+export const parsePublicationUrl = (url: string, portal = false) =>
+  requestClient.post<PublicationUrlParseResult>(portal ? '/cms/portal/submission/url/parse' : '/cms/publication/url/parse', { url }, { timeout: 120_000 });
+
+export const checkPublicationDuplicate = (metadata: ReviewMetadata, text: string) =>
+  requestClient.post<{ duplicate: boolean; matchedReviewId?: string; reason?: string }>(
+    '/cms/portal/submission/duplicate-check', { metadata, text },
+  );
+
 export const submitPublicationText = (metadata: ReviewMetadata, text: string) =>
   requestClient.post<ReviewReport>('/cms/portal/submission/text', {
     metadata,

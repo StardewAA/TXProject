@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.cms.api.law.CmsLawApi;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchReqDTO;
 import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
+import cn.iocoder.txgy.module.cms.dto.law.CmsLawSuggestionDTO;
 import cn.iocoder.txgy.module.cms.enums.CmsLawStatusEnum;
 import cn.iocoder.txgy.module.cms.service.search.LegalIdentifierNormalizer;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.cms.enums.ErrorCodeConstants.LAW_ARTICLE_NOT_FOUND;
@@ -100,6 +102,42 @@ public class CmsLawSearchServiceImpl implements CmsLawApi {
         }
     }
 
+    @Override
+    public List<CmsLawSuggestionDTO> suggest(String keyword,int limit) {
+        Long tenantId=TenantContextHolder.getRequiredTenantId();
+        String value=keyword==null?"":keyword.strip();
+        if(value.isEmpty()) return List.of();
+        try {
+            SearchResponse<Map> response=requiredClient().search(builder->builder.index(readAlias())
+                    .size(Math.min(50,Math.max(5,limit*5)))
+                    .source(source->source.filter(filter->filter.includes("title","document_no","issuing_authority","law_type")))
+                    .query(query->query.bool(bool->bool
+                            .filter(term("tenant_id",tenantId.toString()))
+                            .filter(term("published",true))
+                            .must(must->must.multiMatch(match->match.query(value)
+                                    .fields("title^5","document_no^8","issuing_authority^2","content"))))),Map.class);
+            LinkedHashSet<String> seen=new LinkedHashSet<>();
+            List<CmsLawSuggestionDTO> result=new ArrayList<>();
+            for(Hit<Map> hit:response.hits().hits()) {
+                Map source=hit.source();
+                if(source==null) continue;
+                String title=stringValue(source.get("title"));
+                if(title==null || !seen.add(title)) continue;
+                CmsLawSuggestionDTO item=new CmsLawSuggestionDTO();
+                item.setTitle(title);
+                item.setDocumentNo(stringValue(source.get("document_no")));
+                item.setIssuingAuthority(stringValue(source.get("issuing_authority")));
+                item.setLawType(stringValue(source.get("law_type")));
+                result.add(item);
+                if(result.size()>=Math.max(1,Math.min(limit,5))) break;
+            }
+            return List.copyOf(result);
+        } catch(IOException | RuntimeException ex) {
+            log.warn("[suggest][法规联想失败，tenantId={}, keyword={}]",tenantId,value,ex);
+            return List.of();
+        }
+    }
+
     static Query buildSearchQuery(CmsLawSearchReqDTO request, Long tenantId) {
         String keyword = request.getKeyword().trim();
         String normalized = LegalIdentifierNormalizer.normalize(keyword);
@@ -129,11 +167,23 @@ public class CmsLawSearchServiceImpl implements CmsLawApi {
         addOptionalTermFilter(bool, "industry_code", request.getIndustryCode());
         addOptionalTermFilter(bool, "region_code", request.getRegionCode());
         addOptionalTermFilter(bool, "law_type", request.getLawType());
+        if(request.getIssuingAuthority()!=null && !request.getIssuingAuthority().isBlank()) {
+            bool.filter(query->query.matchPhrase(match->match.field("issuing_authority")
+                    .query(request.getIssuingAuthority().strip())));
+        }
         if (request.getStatus() != null) {
             bool.filter(term("status", request.getStatus().name()));
         }
         if (request.getAsOfDate() != null) {
             addAsOfDateFilters(bool, request.getAsOfDate());
+        }
+        if(request.getEffectiveDateFrom()!=null || request.getEffectiveDateTo()!=null) {
+            bool.filter(query->query.range(range->range.date(dateRange->{
+                dateRange.field("effective_date");
+                if(request.getEffectiveDateFrom()!=null) dateRange.gte(request.getEffectiveDateFrom().toString());
+                if(request.getEffectiveDateTo()!=null) dateRange.lte(request.getEffectiveDateTo().toString());
+                return dateRange;
+            })));
         }
         return bool.build()._toQuery();
     }

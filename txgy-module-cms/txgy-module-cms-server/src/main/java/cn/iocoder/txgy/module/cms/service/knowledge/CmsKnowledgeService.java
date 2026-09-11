@@ -58,17 +58,30 @@ public class CmsKnowledgeService {
     }
 
     public List<KnowledgeItem> list() {
+        return list(false);
+    }
+
+    public List<KnowledgeItem> listArchived() {
+        return list(true);
+    }
+
+    private List<KnowledgeItem> list(boolean archived) {
         long tenantId = TenantContextHolder.getRequiredTenantId();
-        return jdbc.query("""
-                        SELECT d.review_id,d.title,d.validity,d.source_url,d.text_hash,d.published,d.created_at,COUNT(c.ordinal)
+        String archiveCondition = archived ? "d.deleted_at IS NOT NULL" : "d.deleted_at IS NULL AND d.published=1";
+        String sql = """
+                        SELECT d.review_id,d.title,d.validity,d.source_url,d.text_hash,d.published,d.created_at,
+                               COUNT(c.ordinal),d.deleted_at
                         FROM cms_knowledge_document d LEFT JOIN cms_knowledge_chunk c
                           ON c.tenant_id=d.tenant_id AND c.review_id=d.review_id
-                        WHERE d.tenant_id=? GROUP BY d.review_id,d.title,d.validity,d.source_url,d.text_hash,d.published,d.created_at
+                        WHERE d.tenant_id=? AND %s
+                        GROUP BY d.review_id,d.title,d.validity,d.source_url,d.text_hash,d.published,d.created_at,d.deleted_at
                         ORDER BY d.created_at DESC,d.review_id DESC LIMIT 200
-                        """,
+                        """.formatted(archiveCondition);
+        return jdbc.query(sql,
                 (rs, row) -> new KnowledgeItem(rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getString(5), rs.getBoolean(6),
-                        rs.getTimestamp(7).toLocalDateTime(), rs.getInt(8)), tenantId);
+                        rs.getTimestamp(7).toLocalDateTime(), rs.getInt(8),rs.getTimestamp(9)!=null,
+                        rs.getTimestamp(9)==null?null:rs.getTimestamp(9).toLocalDateTime()), tenantId);
     }
 
     /** 只有官方核验通过后进入知识库的文档才能发布。 */
@@ -85,11 +98,12 @@ public class CmsKnowledgeService {
                 tenantId, reviewId);
         List<IndexRecord> records = loadRecords(tenantId, reviewId);
         indexRecords(records);
-        return new PublishResult(reviewId, true, records.size(), true);
+        int vectorChunks = vectorIndexService.indexPublished(records.stream().map(IndexRecord::sourceId).toList());
+        return new PublishResult(reviewId, true, records.size(), vectorChunks != records.size());
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void unpublish(String reviewId) {
+    public void archive(String reviewId) {
         long tenantId = TenantContextHolder.getRequiredTenantId();
         List<Integer> ordinals = jdbc.queryForList(
                 "SELECT ordinal FROM cms_knowledge_chunk WHERE tenant_id=? AND review_id=?", Integer.class,
@@ -106,6 +120,8 @@ public class CmsKnowledgeService {
                     tenantId, sourceId(tenantId, reviewId, ordinal)));
         }
     }
+
+    public void unpublish(String reviewId) { archive(reviewId); }
 
     public ReindexResult rebuildSearchIndex() {
         long tenantId = TenantContextHolder.getRequiredTenantId();
@@ -229,7 +245,8 @@ public class CmsKnowledgeService {
 
     private record IndexRecord(String sourceId, Map<String, Object> document) { }
     public record KnowledgeItem(String reviewId, String title, String validity, String sourceUrl,
-                                String textHash, boolean published, LocalDateTime createdAt, int chunkCount) { }
+                                String textHash, boolean published, LocalDateTime createdAt, int chunkCount,
+                                boolean archived, LocalDateTime archivedAt) { }
     public record PublishResult(String reviewId, boolean published, int keywordChunks,
                                 boolean vectorRebuildRequired) { }
     public record ReindexResult(int keywordChunks, int vectorChunks, String embeddingModel) { }

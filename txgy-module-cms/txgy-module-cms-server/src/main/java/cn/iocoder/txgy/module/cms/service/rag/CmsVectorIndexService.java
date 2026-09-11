@@ -8,14 +8,18 @@ import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
 import cn.iocoder.txgy.module.cms.service.law.CmsLawSearchServiceImpl;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.cms.enums.ErrorCodeConstants.LAW_SEARCH_UNAVAILABLE;
 
 /** 从 Elasticsearch 已发布原文重建 Redis 向量索引。 */
 @Service
+@Slf4j
 public class CmsVectorIndexService {
 
     private final CmsLawSearchServiceImpl lawSearchService;
@@ -39,6 +43,36 @@ public class CmsVectorIndexService {
         long tenantId = TenantContextHolder.getRequiredTenantId();
         vectors.ensureIndex(CmsRagService.VECTOR_COLLECTION);
         List<CmsLawSearchRespDTO> documents = lawSearchService.listPublishedForVectorIndex(10_000);
+        int indexed = indexDocuments(tenantId, documents, embedding, vectors);
+        return new RebuildResult(indexed, embedding.modelId(), embedding.dimensions());
+    }
+
+    /** 发布时增量写入本次文档的向量；模型暂不可用时保留关键词发布，由重建任务补偿。 */
+    public int indexPublished(List<String> sourceIds) {
+        TextEmbeddingProvider embedding = embeddingProvider.getIfAvailable();
+        RedisVectorSearchOperations vectors = vectorSearchProvider.getIfAvailable();
+        if (embedding == null || vectors == null || sourceIds == null || sourceIds.isEmpty()) {
+            return 0;
+        }
+        long tenantId = TenantContextHolder.getRequiredTenantId();
+        try {
+            vectors.ensureIndex(CmsRagService.VECTOR_COLLECTION);
+            Map<String, CmsLawSearchRespDTO> found = lawSearchService.findPublishedBySourceIds(sourceIds);
+            List<CmsLawSearchRespDTO> documents = new ArrayList<>(sourceIds.size());
+            for (String sourceId : sourceIds) {
+                CmsLawSearchRespDTO document = found.get(sourceId);
+                if (document != null) documents.add(document);
+            }
+            return indexDocuments(tenantId, documents, embedding, vectors);
+        } catch (RuntimeException ex) {
+            log.warn("[indexPublished][发布内容向量增量写入失败，tenantId={}, sourceCount={}]",
+                    tenantId, sourceIds.size(), ex);
+            return 0;
+        }
+    }
+
+    private static int indexDocuments(long tenantId, List<CmsLawSearchRespDTO> documents,
+                                      TextEmbeddingProvider embedding, RedisVectorSearchOperations vectors) {
         int batchSize = 10;
         int indexed = 0;
         for (int offset = 0; offset < documents.size(); offset += batchSize) {
@@ -57,7 +91,7 @@ public class CmsVectorIndexService {
                 indexed++;
             }
         }
-        return new RebuildResult(indexed, embedding.modelId(), embedding.dimensions());
+        return indexed;
     }
 
     public record RebuildResult(int indexed, String embeddingModel, int dimensions) { }

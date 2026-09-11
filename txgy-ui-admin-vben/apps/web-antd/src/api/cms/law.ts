@@ -4,13 +4,23 @@ import { requestClient } from '#/api/request';
 
 export interface LawSearchParams {
   asOfDate?: string;
+  effectiveDateFrom?: string;
+  effectiveDateTo?: string;
   industryCode?: string;
   keyword: string;
   lawType?: 'LAW' | 'POLICY' | 'STANDARD';
+  issuingAuthority?: string;
   pageNo: number;
   pageSize: number;
   regionCode?: string;
   status?: 'EFFECTIVE' | 'EXPIRED' | 'NOT_YET_EFFECTIVE' | 'REPEALED' | 'UNKNOWN';
+}
+
+export interface LawSuggestion {
+  documentNo?: string;
+  issuingAuthority?: string;
+  lawType?: string;
+  title: string;
 }
 
 export interface LawSearchItem {
@@ -64,4 +74,9 @@ export function answerLaw(question: string, topK = 5, portal = false) {
   return requestClient.post<LawAnswer>(`${prefix}/answer`, { question, topK }, {
     timeout: 120_000,
   });
+}
+
+export function suggestLaws(keyword: string, portal = false) {
+  const prefix = portal ? '/cms/portal/law' : '/cms/law';
+  return requestClient.get<LawSuggestion[]>(`${prefix}/suggest`, { params: { keyword } });
 }

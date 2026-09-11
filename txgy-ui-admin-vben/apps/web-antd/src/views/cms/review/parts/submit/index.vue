@@ -4,9 +4,17 @@ import { useRouter } from 'vue-router';
 import { Alert, Button, Card, Checkbox, Input, Modal, Select, message } from 'ant-design-vue';
 
 import type { BatchReviewItem, ReviewMetadata } from '#/api/cms/review';
-import { batchUploadReviews, submitText, uploadReview } from '#/api/cms/review';
+import { batchUploadReviews, checkReviewDuplicate, submitText, uploadReview } from '#/api/cms/review';
+import { parsePublicationUrl } from '#/api/cms/submission';
+import CmsFilePicker from '../../../_shared/cms-file-picker.vue';
+import CmsWangEditor from '../../../_shared/cms-wang-editor.vue';
+import {
+  editorHtmlToPlainText,
+  plainTextToEditorHtml,
+} from '../../../_shared/rich-text';
 
 defineOptions({ name: 'CmsReviewSubmit' });
+withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
 
 const router = useRouter();
 const metadata = reactive<ReviewMetadata>({
@@ -22,7 +30,8 @@ const metadata = reactive<ReviewMetadata>({
 });
 const text = ref('');
 const file = ref<File>();
-const mode = ref('text');
+const mode = ref<'file' | 'text'>('text');
+const parseWarning = ref('');
 const busy = ref(false);
 const batchOpen = ref(false);
 const batchRows = ref<BatchReviewItem[]>([]);
@@ -70,10 +79,6 @@ function standardNumber(filename: string) {
   return match ? `GB/T ${match[1]}-${match[2]}` : '';
 }
 
-function chooseFile(event: Event) {
-  file.value = (event.target as HTMLInputElement).files?.[0];
-}
-
 function chooseBatchFiles(event: Event) {
   const files = Array.from((event.target as HTMLInputElement).files || []);
   if (!files.length) return;
@@ -100,24 +105,56 @@ function chooseBatchFiles(event: Event) {
   });
 }
 
+async function parseUrl() {
+  const requestedUrl = metadata.sourceUrl.trim();
+  if (!requestedUrl) {
+    message.warning('请输入政府网站 HTTPS 原文链接。');
+    return;
+  }
+  busy.value = true;
+  try {
+    const result = await parsePublicationUrl(requestedUrl);
+    Object.assign(metadata, result.metadata);
+    metadata.sourceUrl = result.metadata.sourceUrl?.trim() || requestedUrl;
+    text.value = plainTextToEditorHtml(result.text);
+    mode.value = 'text';
+    parseWarning.value = result.warning || '';
+    message.success(result.llmExtracted ? '千问已提取元数据，请确认补全后提交。' : '网页已解析，请确认补全元数据。');
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function submit() {
   if (!validMetadata(metadata)) return;
   if (mode.value === 'file' && (!file.value || file.value.size > 25 * 1024 * 1024)) {
     message.warning('请选择不超过25MB的文档。');
     return;
   }
-  if (mode.value === 'text' && !text.value.trim()) {
+  const plainText = editorHtmlToPlainText(text.value);
+  if (mode.value !== 'file' && !plainText) {
     message.warning('请填写完整正文。');
+    return;
+  }
+  if (plainText.length > 500_000) {
+    message.warning('正文最多 50 万字，请精简后再提交。');
     return;
   }
   busy.value = true;
   try {
+    if (mode.value !== 'file') {
+      const duplicate = await checkReviewDuplicate(cleanMetadata(metadata), plainText);
+      if (duplicate.duplicate) {
+        message.error(`提交已阻止：${duplicate.reason || '内容重复'}`);
+        return;
+      }
+    }
     const result =
       mode.value === 'file' && file.value
         ? await uploadReview(cleanMetadata(metadata), file.value)
-        : await submitText(cleanMetadata(metadata), text.value);
-    message.success('审查报告已保存。');
-    router.push(`/cms/review/report?id=${result.id}`);
+        : await submitText(cleanMetadata(metadata), plainText);
+    message.success('发布内容已提交，AI 初审完成后将进入待人工复核队列。');
+    router.push(`/cms/review/record?id=${result.id}`);
   } finally {
     busy.value = false;
   }
@@ -137,7 +174,7 @@ async function submitBatch() {
     batchOpen.value = false;
     batchRows.value = [];
     message.success(`批次 ${result.batchId.slice(0, 8)} 已生成 ${result.total} 条审查记录。`);
-    if (result.items[0]) router.push(`/cms/review/report?id=${result.items[0].report.id}`);
+    if (result.items[0]) router.push(`/cms/review/record?id=${result.items[0].report.id}`);
   } finally {
     busy.value = false;
   }
@@ -146,16 +183,27 @@ async function submitBatch() {
 
 <template>
   <main class="review-page">
-    <header>
-      <h1>文档审查</h1>
-      <p>提交 UTF-8 TXT、DOCX 或 PDF，系统生成质量、来源、格式和效力检查报告。</p>
+    <header v-if="!embedded">
+      <h1>发布内容</h1>
+      <p>录入待发布内容，提交后异步进行 AI 合规初审并进入人工复核。</p>
     </header>
-    <Card title="提交文档">
+    <Card title="发布内容">
       <div class="fields">
         <label>文档标题<Input v-model:value="metadata.title" :maxlength="300" /></label>
         <label>文号 / 标准编号<Input v-model:value="metadata.documentNo" :maxlength="100" /></label>
         <label>发布机关<Input v-model:value="metadata.issuer" :maxlength="200" /></label>
-        <label>官方原文链接<Input v-model:value="metadata.sourceUrl" placeholder="https://…gov.cn/…" :maxlength="2000" /></label>
+        <label>
+          官方原文链接
+          <div class="source-url-field">
+            <Input
+              v-model:value="metadata.sourceUrl"
+              placeholder="https://…gov.cn/…"
+              :maxlength="2000"
+              @press-enter="parseUrl"
+            />
+            <Button :loading="busy" @click="parseUrl">智能解析</Button>
+          </div>
+        </label>
         <label>文档类型<Select v-model:value="metadata.kind" :options="kinds" /></label>
         <label>声明效力<Select v-model:value="metadata.validity" :options="validities" /></label>
         <label>实施日期<input v-model="metadata.effectiveDate" type="date" /></label>
@@ -165,23 +213,15 @@ async function submitBatch() {
       <div class="body-input">
         <Select
           v-model:value="mode"
-          :options="[{ value: 'text', label: '粘贴正文' }, { value: 'file', label: '上传文件' }]"
+          :options="[{ value: 'text', label: '手动录入' }, { value: 'file', label: '上传文件' }]"
           aria-label="提交方式"
         />
-        <Input.TextArea
-          v-if="mode === 'text'"
-          v-model:value="text"
-          :rows="12"
-          :maxlength="500000"
-          placeholder="粘贴完整原文，保留条号与段落。文档里的指令不会被执行。"
-        />
-        <div v-else>
-          <input type="file" accept=".txt,.docx,.pdf" aria-label="上传待审文档" @change="chooseFile" />
-          <p>支持 UTF-8 TXT、DOCX、PDF，每份最大 25MB。扫描件需 OCR 校对后再提交。</p>
-        </div>
+        <Alert v-if="parseWarning" :message="parseWarning" show-icon type="warning" />
+        <CmsWangEditor v-if="mode === 'text'" v-model="text" :height="360" />
+        <CmsFilePicker v-else v-model="file" />
       </div>
       <div class="actions">
-        <Button v-access:code="['cms:review:submit']" type="primary" :loading="busy" @click="submit">提交审查</Button>
+        <Button v-access:code="['cms:review:submit']" type="primary" :loading="busy" @click="submit">提交发布并送审</Button>
         <Button v-access:code="['cms:review:submit']" :disabled="busy" @click="batchOpen = true">批量送审</Button>
       </div>
     </Card>
@@ -221,6 +261,7 @@ p { color: #64748b; margin: 8px 0; line-height: 1.6; }
 label { display: grid; gap: 6px; color: #334155; font-size: 13px; }
 .body-input { display: grid; gap: 10px; margin: 16px 0; }
 .actions { display: flex; gap: 8px; }
+.source-url-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .batch-picker { margin: 14px 0; }
 .batch-row { border-top: 1px solid #e5e7eb; padding: 12px 0; }
 .batch-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

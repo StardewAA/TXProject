@@ -9,7 +9,9 @@ import java.util.Map;
 /** 审查输入不是可信依据，Evidence 只能由独立核验权限的人员提交。 */
 public final class ReviewModels {
     private ReviewModels() { }
-    public enum Decision { PASS, WARNING, FAIL }
+    public enum Decision { PENDING, PASS, WARNING, FAIL }
+    public enum WorkflowStatus { AI_REVIEWING, PENDING_MANUAL, APPROVED, REJECTED }
+    public enum ManualDecision { APPROVE, REJECT }
     public enum Dimension { ENCODING, AUTHENTICITY, FORMAT, QUALITY }
     public enum Severity { WARNING, ERROR }
     public enum Validity { EFFECTIVE, NOT_YET_EFFECTIVE, REPEALED, EXPIRED, UNKNOWN }
@@ -39,7 +41,16 @@ public final class ReviewModels {
                         String message, String suggestion) { }
     public record Report(String id, String createdAt, Metadata metadata, String textHash,
                          Decision decision, int score, Map<Dimension,Integer> scores, List<Issue> issues,
-                         Evidence evidence, boolean admitted, int chunkCount) { }
+                         Evidence evidence, boolean admitted, int chunkCount,
+                         WorkflowStatus workflowStatus, String aiModel, String aiCompletedAt,
+                         Long manualReviewerId, String manualReviewedAt, String manualNote) { }
+    public record ManualReviewRequest(@NotNull ManualDecision decision,
+                                      @NotBlank @Size(max=4000) String note,
+                                      @Valid EvidenceRequest evidence) { }
+    public record DuplicateCheckRequest(@NotNull @Valid Metadata metadata,
+                                        @NotBlank @Size(max=1000000) String text) { }
+    public record DuplicateCheckResult(boolean duplicate, String matchedReviewId, String reason) { }
+    public record ReviewSubmittedEvent(long tenantId, String reviewId) { }
     public record Chunk(int ordinal, int startOffset, int endOffset, String text) { }
     public record Stored(Report report, String text, String filename, List<Issue> parsingIssues,
                          Long submittedBy, List<Evidence> evidenceHistory, List<Chunk> chunks) { }

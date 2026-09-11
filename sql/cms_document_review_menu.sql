@@ -4,9 +4,9 @@ SET @legacy_review_menu = (SELECT id FROM system_menu WHERE permission='cms:revi
 DELETE FROM system_menu WHERE parent_id=@legacy_review_menu AND deleted=b'0';
 DELETE FROM system_menu WHERE id=@legacy_review_menu AND deleted=b'0';
 
-UPDATE system_menu SET name='文档审查', permission='cms:review:query', sort=5, path='submit', component='cms/review/parts/submit/index', component_name='CmsReviewSubmit', icon='ep:document-add', updater='1', update_time=NOW() WHERE id=70008 AND deleted=b'0';
-UPDATE system_menu SET name='审查记录', permission='cms:review:query', sort=10, path='record', component='cms/review/parts/record/index', component_name='CmsReviewRecord', icon='ep:tickets', updater='1', update_time=NOW() WHERE id=70009 AND deleted=b'0';
-UPDATE system_menu SET name='审查报告', permission='cms:review:query', sort=20, path='report', component='cms/review/parts/report/index', component_name='CmsReviewReport', icon='ep:document-checked', updater='1', update_time=NOW() WHERE id=70010 AND deleted=b'0';
+UPDATE system_menu SET name='提交审查', permission='cms:review:query', visible=b'0', sort=5, path='submit', component='cms/review/parts/submit/index', component_name='CmsReviewSubmit', icon='ep:document-add', updater='1', update_time=NOW() WHERE id=70008 AND deleted=b'0';
+UPDATE system_menu SET name='审查复核', permission='cms:review:query', visible=b'1', sort=10, path='record', component='cms/review/parts/record/index', component_name='CmsReviewRecord', icon='ep:tickets', updater='1', update_time=NOW() WHERE id=70009 AND deleted=b'0';
+UPDATE system_menu SET name='审查报告', permission='cms:review:query', visible=b'0', sort=20, path='report', component='cms/review/parts/report/index', component_name='CmsReviewReport', icon='ep:document-checked', updater='1', update_time=NOW() WHERE id=70010 AND deleted=b'0';
 
 DELETE FROM system_menu WHERE parent_id IN (70008,70009,70010) AND deleted=b'0' AND permission IN ('cms:review:submit','cms:review:query','cms:review:verify');
 INSERT INTO system_menu (name,permission,type,sort,parent_id,path,status,visible,keep_alive,always_show,creator,create_time,updater,update_time,deleted)

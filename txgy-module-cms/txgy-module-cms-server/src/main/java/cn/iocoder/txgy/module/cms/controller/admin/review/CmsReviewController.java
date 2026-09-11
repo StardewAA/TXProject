@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.cms.service.review.*;
+import cn.iocoder.txgy.module.cms.service.knowledge.CmsKnowledgeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -30,7 +31,10 @@ public class CmsReviewController {
     private static final long MAX_BATCH_BYTES=75L*1024*1024;
     private final ReviewService service;
     private final ReviewParser parser;
-    public CmsReviewController(ReviewService service,ReviewParser parser) {this.service=service;this.parser=parser;}
+    private final CmsKnowledgeService knowledgeService;
+    public CmsReviewController(ReviewService service,ReviewParser parser,CmsKnowledgeService knowledgeService) {
+        this.service=service;this.parser=parser;this.knowledgeService=knowledgeService;
+    }
     private long tenant() {return TenantContextHolder.getRequiredTenantId();}
 
     @PostMapping("/text")
@@ -104,7 +108,22 @@ public class CmsReviewController {
     @PutMapping("/verify")
     @PreAuthorize("@ss.hasPermission('cms:review:verify')")
     public CommonResult<Report> verify(@RequestParam @Pattern(regexp="[a-f0-9\\-]{36}") String id,@Valid @RequestBody EvidenceRequest input) {
-        return success(service.verify(tenant(),getLoginUserId(),id,input));
+        Report report=service.verify(tenant(),getLoginUserId(),id,input);
+        knowledgeService.publish(id);
+        return success(report);
+    }
+    @PostMapping("/duplicate-check")
+    @PreAuthorize("@ss.hasPermission('cms:review:submit')")
+    public CommonResult<DuplicateCheckResult> duplicateCheck(@Valid @RequestBody DuplicateCheckRequest input) {
+        return success(service.checkDuplicate(tenant(),input.metadata(),input.text()));
+    }
+    @PutMapping("/manual-review")
+    @PreAuthorize("@ss.hasPermission('cms:review:verify')")
+    public CommonResult<Report> manualReview(@RequestParam @Pattern(regexp="[a-f0-9\\-]{36}") String id,
+                                              @Valid @RequestBody ManualReviewRequest input) {
+        Report report=service.manualReview(tenant(),getLoginUserId(),id,input);
+        if(input.decision()==ManualDecision.APPROVE) knowledgeService.publish(id);
+        return success(report);
     }
     @PostMapping("/resubmit")
     @PreAuthorize("@ss.hasPermission('cms:review:submit')")
