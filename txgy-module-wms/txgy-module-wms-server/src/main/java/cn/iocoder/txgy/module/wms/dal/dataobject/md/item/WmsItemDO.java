@@ -64,25 +64,9 @@ public class WmsItemDO extends BaseDO {
      * 备注
      */
     private String remark;
-    /** 状态：0 启用，1 停用 */
-    private Integer status;
     /** 当前有效质检报告编号 */
     private Long currentQualityReportId;
 
-    /**
-     * 物料类型
-     */
-    private String materialType;
-    /**
-     * 是否需要质检
-     */
-    private Boolean qualityRequired;
-    /**
-     * 状态
-     *
-     * 枚举 {@link cn.iocoder.txgy.framework.common.enums.CommonStatusEnum}
-     */
-    private Integer status;
 
     // ========== 批次 / 保质期 / 序列号 ==========
     /**
