@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.training.service.resource;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageCountRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.DocumentResourceDO;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,7 +18,14 @@ public interface DocumentResourceService {
     DocumentResourceDO getDocument(Long id);
 
     /**
-     * 上传文档（PDF/JPG/PNG ≤50MB），成功即上线，返回资源 ID
+     * 识别文档页数，并按 总页数 × 10 分钟/页 换算预估阅读时长
+     */
+    DocumentPageCountRespVO countDocumentPages(MultipartFile file);
+
+    /**
+     * 上传文档（PDF/Word/WPS/图片 ≤50MB），成功即上线，返回资源 ID
+     *
+     * <p>上传时自动识别总页数；未显式传入 estMinutes 时按 页数 × 10 分钟 自动设置</p>
      */
     Long uploadDocument(MultipartFile file, String title, Long categoryId,
                         String bizCategory, String tags, Integer estMinutes);
