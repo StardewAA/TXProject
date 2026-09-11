@@ -66,7 +66,7 @@
 - [ ] 捕获 `bidding.es.enabled` 关闭态的 `..._005` 错误，展示"检索暂不可用"。
 
 ## 4. 公共约定
-- 路由/菜单：菜单由 `sql/2026-09-03-notice-menu.sql` 下发（权限码 `bidding:notice:query/create/publish`，父目录"公告公示"）；前端不硬编码菜单。
+- 路由/菜单：菜单由 `sql/history/2026-09-03-notice-menu.sql` 下发（权限码 `bidding:notice:query/create/publish`，父目录"公告公示"）；前端不硬编码菜单。
 - 分页统一 `PageParam`；返回 `CommonResult`（code/msg/data），前端仅处理 code≠0 的错误。
 - 金额域无；时间统一后端返回口径（§5 待确认格式后固化一次）。
 
@@ -87,4 +87,4 @@ API 层(3.1) → 管理端 CRUD+发布流(3.2–3.5) → 大厅只读(3.6) → �
 - 菜单节点：招投标(6735) → 公告/公示管理(6753，目录 path=notice) → 公告列表(6754, component bidding/notice/index) + 按钮 6755 新建/6756 修改/6757 发布(bidding:notice:publish)/6758 删除。
 - 公告/公示管理此前误置顶层，已归位招投标内部；主体信息与授权管理(6759) 同批归位招投标内部（目录 path=subject-auth，子页 6760 主体档案/6762 平台授权）。
 - 权限串：bidding:notice:query(列表/详情/截止查询)/create/update(含撤下 unpublish)/publish/delete；公共大厅只读走 /bidding/notice/public/*（PermitAll）。
-- 角色授权：role1(super_admin)、role2(common/成员) 均已授招投标整棵 26 项（sql/2026-09-09-notice-menu-under-bidding.sql，幂等）。改动菜单/授权后需重新登录生效。
+- 角色授权：role1(super_admin)、role2(common/成员) 均已授招投标整棵 26 项（sql/history/2026-09-09-notice-menu-under-bidding.sql，幂等）。改动菜单/授权后需重新登录生效。
