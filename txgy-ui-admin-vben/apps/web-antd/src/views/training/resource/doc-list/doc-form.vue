@@ -18,6 +18,7 @@ import {
 import { $t } from '#/locales';
 
 import {
+  countDocumentPages,
   getResourceCategoryTree,
   updateDocument,
   uploadDocument,
@@ -36,6 +37,11 @@ const tags = ref('');
 const estMinutes = ref<number | undefined>();
 const selectedFile = ref<File | null>(null);
 const uploading = ref(false);
+/** 自动识别的文档总页数 */
+const pageCount = ref<number | undefined>();
+/** 页数是否精确识别 */
+const pageCountPrecise = ref(true);
+const counting = ref(false);
 
 const categoryOptions = ref<any[]>([]);
 
@@ -61,17 +67,54 @@ const getTitle = computed(() => {
     : $t('ui.actionTitle.create', ['文档']);
 });
 
+/** 页数识别请求序号，避免连续选文件时旧响应覆盖新结果 */
+let detectToken = 0;
+
+/** 自动检索文档页数，并按「总页数 × 10 分钟/页」自动设置预估阅读时长 */
+async function detectPageCount(file: File) {
+  const token = ++detectToken;
+  counting.value = true;
+  try {
+    const res = await countDocumentPages(file);
+    if (token !== detectToken) {
+      return;
+    }
+    pageCount.value = res.pageCount;
+    pageCountPrecise.value = res.precise !== false;
+    estMinutes.value = res.estMinutes;
+    message.success(
+      `已识别文档页数：${res.pageCount} 页，预估阅读时长 ${res.estMinutes} 分钟`,
+    );
+  } catch {
+    if (token !== detectToken) {
+      return;
+    }
+    pageCount.value = undefined;
+    message.warning('文档页数识别失败，请手动填写预估阅读时长');
+  } finally {
+    if (token === detectToken) {
+      counting.value = false;
+    }
+  }
+}
+
 function pickFile(file: File) {
   if (file.size > 50 * 1024 * 1024) {
     message.error('文档大小不能超过 50MB');
     return false;
   }
   selectedFile.value = file;
+  pageCount.value = undefined;
+  estMinutes.value = undefined;
+  detectPageCount(file);
   return false; // 阻止自动上传，由用户点击确认后统一提交
 }
 
 function clearFile() {
   selectedFile.value = null;
+  pageCount.value = undefined;
+  pageCountPrecise.value = true;
+  estMinutes.value = undefined;
 }
 
 async function handleConfirm() {
@@ -127,6 +170,9 @@ const [Modal, modalApi] = useVbenModal({
       tags.value = '';
       estMinutes.value = undefined;
       selectedFile.value = null;
+      pageCount.value = undefined;
+      pageCountPrecise.value = true;
+      counting.value = false;
       return;
     }
     loadCategories();
@@ -139,6 +185,8 @@ const [Modal, modalApi] = useVbenModal({
       bizCategory.value = data.bizCategory || '';
       tags.value = data.tags || '';
       estMinutes.value = data.estMinutes;
+      pageCount.value = data.pageCount;
+      pageCountPrecise.value = true;
     } else {
       editing.value = false;
     }
@@ -213,13 +261,30 @@ const [Modal, modalApi] = useVbenModal({
       </div>
 
       <div>
-        <div class="mb-1 text-sm text-gray-600">预估阅读时长（分钟，预留学时换算）</div>
+        <div class="mb-1 text-sm text-gray-600">
+          预估阅读时长（分钟）
+          <span class="ml-1 text-xs text-gray-400">
+            自动按「总页数 × 10 分钟/页」计算
+          </span>
+        </div>
         <InputNumber
           v-model:value="estMinutes"
           class="w-full"
           :min="0"
-          placeholder="选填"
+          :disabled="!editing && !!pageCount"
+          :placeholder="editing ? '选填' : '选择文件后自动计算'"
         />
+        <div v-if="counting" class="mt-1 text-xs text-gray-400">
+          正在识别文档页数…
+        </div>
+        <div v-else-if="pageCount" class="mt-1 text-xs text-gray-400">
+          已识别 {{ pageCount }} 页{{ pageCountPrecise ? '' : '（按内容估算）' }}，
+          预估阅读时长 = {{ pageCount }} × 10 =
+          {{ pageCount * 10 }} 分钟
+        </div>
+        <div v-else-if="!editing" class="mt-1 text-xs text-gray-400">
+          选择文件后将自动识别页数并计算阅读时长
+        </div>
       </div>
     </div>
   </Modal>

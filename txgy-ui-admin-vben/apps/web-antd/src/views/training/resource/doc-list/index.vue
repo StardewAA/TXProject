@@ -88,6 +88,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         width: 110,
         formatter: ({ cellValue }) => formatFileSize(cellValue),
       },
+      {
+        field: 'pageCount',
+        title: '页数',
+        width: 80,
+        align: 'center',
+        formatter: ({ cellValue }) =>
+          cellValue === null || cellValue === undefined ? '-' : cellValue,
+      },
       { field: 'estMinutes', title: '预估(分)', width: 90, align: 'center' },
       { field: 'viewCount', title: '预览数', width: 80, align: 'center' },
       {
@@ -249,7 +257,9 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="文档资源库（PDF/图片 ≤50MB，上传即上线）">
+    <Grid
+      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，上传即上线，自动识别页数）"
+    >
       <template #toolbar-tools>
         <TableAction
           :actions="[
