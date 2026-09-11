@@ -125,6 +125,15 @@ public class MesProWorkOrderController {
         return success(true);
     }
 
+    @PutMapping("/issue")
+    @Operation(summary = "下发工单")
+    @Parameter(name = "id", description = "编号", required = true)
+    @PreAuthorize("@ss.hasPermission('mes:pro-work-order:update')")
+    public CommonResult<Boolean> issueWorkOrder(@RequestParam("id") Long id) {
+        workOrderService.issueWorkOrder(id);
+        return success(true);
+    }
+
     @PutMapping("/finish")
     @Operation(summary = "完成工单")
     @Parameter(name = "id", description = "编号", required = true)

@@ -15,6 +15,8 @@ import {
   Tabs,
 } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'TrainingExternalApi' });
 
 const activeKey = ref('dispatch');
@@ -64,16 +66,11 @@ function handleArchives() {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #7c3aed 0%, #7c3aeddc 44%, #111827 115%)"
-      >
-        <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 96</div>
-        <h1 class="m-0 text-2xl font-semibold md:text-3xl">外部系统对接</h1>
-        <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-          接收外部工程项目管理系统请求：培训任务下发、人员培训状态查询/推送、脱敏培训档案批量获取。
-        </p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 96"
+        title="外部系统对接"
+        description="接收外部工程项目管理系统请求：培训任务下发、人员培训状态查询/推送、脱敏培训档案批量获取。"
+      />
 
       <Card :bordered="false">
         <Tabs v-model:active-key="activeKey">

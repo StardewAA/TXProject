@@ -1,11 +1,20 @@
 // 核心主题样式文件
 @mixin theme-dark {
   // 背景色
-  --ui-BG: #393939;
-  --ui-BG-1: #333333;
-  --ui-BG-2: #2c2c2c;
-  --ui-BG-3: #292929;
-  --ui-BG-4: #222222;
+  --ui-BG: #262b36;
+  --ui-BG-1: #1c2230;
+  --ui-BG-2: #181d29;
+  --ui-BG-3: #151a24;
+  --ui-BG-4: #11151d;
+
+  --ui-App-bg: linear-gradient(180deg, #1a2030 0%, #151a24 45%, #10141b 100%);
+  --ui-Surface-bg: rgba(17, 24, 39, 0.88);
+  --ui-Surface-bg-strong: rgba(17, 24, 39, 0.96);
+  --ui-Surface-border: rgba(148, 163, 184, 0.14);
+  --ui-Surface-shadow: 0 18rpx 48rpx rgba(0, 0, 0, 0.32);
+  --ui-Surface-shadow-lg: 0 24rpx 60rpx rgba(0, 0, 0, 0.38);
+  --ui-Surface-shadow-soft: 0 12rpx 30rpx rgba(0, 0, 0, 0.2);
+  --ui-Surface-radius: 28rpx;
 
   // 文本色
   --ui-TC: #ffffff;

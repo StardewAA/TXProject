@@ -160,10 +160,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 180,
     },
     {
-      field: 'hasRecord',
-      title: '已登记记录',
+      field: 'recordStatus',
+      title: '回访记录',
       minWidth: 120,
-      slots: { default: 'hasRecord' },
+      slots: { default: 'recordStatus' },
     },
     {
       field: 'remark',

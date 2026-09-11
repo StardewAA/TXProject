@@ -67,7 +67,7 @@
    */
   import { reactive } from 'vue';
   import sheep from '@/sheep';
-  import { showShareModal } from '@/sheep/hooks/useModal';
+  import { showAuthModal, showShareModal } from '@/sheep/hooks/useModal';
   import FavoriteApi from '@/sheep/api/product/favorite';
 
   // 数据
@@ -115,22 +115,27 @@
   });
 
   async function onFavorite() {
-    // 情况一：取消收藏
-    if (props.modelValue.favorite) {
-      const { code } = await FavoriteApi.deleteFavorite(props.modelValue.id);
-      if (code !== 0) {
-        return
+    if (!props.modelValue?.id) {
+      return;
+    }
+    if (!sheep.$store('user').isLogin) {
+      // 收藏接口需要会员上下文；匿名点击只打开登录弹窗，不让拒绝的 Promise
+      // 冒泡成未处理异常。
+      showAuthModal();
+      return;
+    }
+    try {
+      // 情况一：取消收藏
+      const response = props.modelValue.favorite
+        ? await FavoriteApi.deleteFavorite(props.modelValue.id)
+        : await FavoriteApi.createFavorite(props.modelValue.id);
+      if (response?.code !== 0) {
+        return;
       }
-      sheep.$helper.toast('取消收藏');
-      props.modelValue.favorite = false;
-    // 情况二：添加收藏
-    } else {
-      const { code } = await FavoriteApi.createFavorite(props.modelValue.id);
-      if (code !== 0) {
-        return
-      }
-      sheep.$helper.toast('收藏成功');
-      props.modelValue.favorite = true;
+      props.modelValue.favorite = !props.modelValue.favorite;
+      sheep.$helper.toast(props.modelValue.favorite ? '收藏成功' : '取消收藏');
+    } catch (error) {
+      // 请求层负责展示错误提示，组件只需保持当前收藏状态。
     }
   }
 

@@ -122,6 +122,20 @@ public interface MesProWorkOrderService {
     void cancelWorkOrder(Long id);
 
     /**
+     * 下发工单（已确认 → 已下发）
+     *
+     * @param id 编号
+     */
+    void issueWorkOrder(Long id);
+
+    /**
+     * 若工单处于已下发状态，则置为生产中（首次报工触发，幂等）
+     *
+     * @param id 工单编号
+     */
+    void markInProductionIfIssued(Long id);
+
+    /**
      * 累加工单的已生产数量
      *
      * @param id                   工单编号

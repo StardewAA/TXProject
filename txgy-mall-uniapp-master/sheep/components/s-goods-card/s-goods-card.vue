@@ -11,18 +11,18 @@
         class="goods-box"
         v-for="item in state.goodsList"
         :key="item.id"
-        :style="[{ marginBottom: data.space * 2 + 'rpx' }]"
+        :style="[{ marginBottom: safeData.space * 2 + 'rpx' }]"
       >
         <s-goods-column
           class=""
           size="sl"
-          :goodsFields="data.fields"
-          :tagStyle="data.badge"
+          :goodsFields="safeData.fields"
+          :tagStyle="safeData.badge"
           :data="item"
-          :titleColor="data.fields.name?.color"
-          :subTitleColor="data.fields.introduction.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
+          :titleColor="safeData.fields?.name?.color"
+          :subTitleColor="safeData.fields?.introduction?.color"
+          :topRadius="safeData.borderRadiusTop"
+          :bottomRadius="safeData.borderRadiusBottom"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
         >
           <!-- 购买按钮 -->
@@ -43,20 +43,20 @@
       <view class="goods-list-box">
         <view
           class="left-list"
-          :style="[{ paddingRight: data.space + 'rpx', marginBottom: data.space + 'px' }]"
+          :style="[{ paddingRight: safeData.space + 'rpx', marginBottom: safeData.space + 'px' }]"
           v-for="item in state.leftGoodsList"
           :key="item.id"
         >
           <s-goods-column
             class="goods-md-box"
             size="md"
-            :goodsFields="data.fields"
-            :tagStyle="data.badge"
+            :goodsFields="safeData.fields"
+            :tagStyle="safeData.badge"
             :data="item"
-            :titleColor="data.fields.name?.color"
-            :subTitleColor="data.fields.introduction.color"
-            :topRadius="data.borderRadiusTop"
-            :bottomRadius="data.borderRadiusBottom"
+            :titleColor="safeData.fields?.name?.color"
+            :subTitleColor="safeData.fields?.introduction?.color"
+            :topRadius="safeData.borderRadiusTop"
+            :bottomRadius="safeData.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
             @getHeight="calculateGoodsColumn($event, 'left')"
@@ -73,20 +73,20 @@
       <view class="goods-list-box">
         <view
           class="right-list"
-          :style="[{ paddingLeft: data.space + 'rpx', marginBottom: data.space + 'px' }]"
+          :style="[{ paddingLeft: safeData.space + 'rpx', marginBottom: safeData.space + 'px' }]"
           v-for="item in state.rightGoodsList"
           :key="item.id"
         >
           <s-goods-column
             class="goods-md-box"
             size="md"
-            :goodsFields="data.fields"
-            :tagStyle="data.badge"
+            :goodsFields="safeData.fields"
+            :tagStyle="safeData.badge"
             :data="item"
-            :titleColor="data.fields.name?.color"
-            :subTitleColor="data.fields.introduction.color"
-            :topRadius="data.borderRadiusTop"
-            :bottomRadius="data.borderRadiusBottom"
+            :titleColor="safeData.fields?.name?.color"
+            :subTitleColor="safeData.fields?.introduction?.color"
+            :topRadius="safeData.borderRadiusTop"
+            :bottomRadius="safeData.borderRadiusBottom"
             :titleWidth="330 - marginLeft - marginRight"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
             @getHeight="calculateGoodsColumn($event, 'right')"
@@ -109,20 +109,20 @@
     >
       <view
         class="goods-box"
-        :style="[{ marginBottom: data.space + 'px' }]"
+        :style="[{ marginBottom: safeData.space + 'px' }]"
         v-for="item in state.goodsList"
         :key="item.id"
       >
         <s-goods-column
           class="goods-card"
           size="lg"
-          :goodsFields="data.fields"
+          :goodsFields="safeData.fields"
           :data="item"
-          :tagStyle="data.badge"
-          :titleColor="data.fields.name?.color"
-          :subTitleColor="data.fields.introduction.color"
-          :topRadius="data.borderRadiusTop"
-          :bottomRadius="data.borderRadiusBottom"
+          :tagStyle="safeData.badge"
+          :titleColor="safeData.fields?.name?.color"
+          :subTitleColor="safeData.fields?.introduction?.color"
+          :topRadius="safeData.borderRadiusTop"
+          :bottomRadius="safeData.borderRadiusBottom"
           @tap="sheep.$router.go('/pages/goods/index', { id: item.id })"
         >
           <!-- 购买按钮 -->
@@ -173,26 +173,67 @@
     },
   });
 
-  const { layoutType, btnBuy, spuIds } = props.data || {};
-  const { marginLeft, marginRight } = props.styles || {};
+  const isRecord = (value) => value && typeof value === 'object' && !Array.isArray(value);
+  const toNumber = (value, fallback = 0) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+
+  const safeData = computed(() => {
+    const source = isRecord(props.data) ? props.data : {};
+    const sourceFields = isRecord(source.fields) ? source.fields : {};
+    return {
+      ...source,
+      layoutType: source.layoutType || '',
+      space: Math.max(0, toNumber(source.space)),
+      borderRadiusTop: Math.max(0, toNumber(source.borderRadiusTop)),
+      borderRadiusBottom: Math.max(0, toNumber(source.borderRadiusBottom)),
+      fields: {
+        ...sourceFields,
+        name: isRecord(sourceFields.name) ? sourceFields.name : {},
+        introduction: isRecord(sourceFields.introduction) ? sourceFields.introduction : {},
+        title: isRecord(sourceFields.title) ? sourceFields.title : {},
+        subtitle: isRecord(sourceFields.subtitle) ? sourceFields.subtitle : {},
+        price: isRecord(sourceFields.price) ? sourceFields.price : {},
+        marketPrice: isRecord(sourceFields.marketPrice) ? sourceFields.marketPrice : {},
+        original_price: isRecord(sourceFields.original_price) ? sourceFields.original_price : {},
+        salesCount: isRecord(sourceFields.salesCount) ? sourceFields.salesCount : {},
+        stock: isRecord(sourceFields.stock) ? sourceFields.stock : {},
+      },
+      badge: isRecord(source.badge) ? source.badge : {},
+      btnBuy: isRecord(source.btnBuy) ? source.btnBuy : {},
+      spuIds: Array.isArray(source.spuIds)
+        ? source.spuIds.filter((id) => id !== undefined && id !== null && String(id) !== '')
+        : [],
+    };
+  });
+  const safeStyles = computed(() => (isRecord(props.styles) ? props.styles : {}));
+  const layoutType = computed(() => safeData.value.layoutType);
+  const btnBuy = computed(() => safeData.value.btnBuy);
+  const spuIds = computed(() => safeData.value.spuIds);
+  const marginLeft = computed(() => Math.max(0, toNumber(safeStyles.value.marginLeft)));
+  const marginRight = computed(() => Math.max(0, toNumber(safeStyles.value.marginRight)));
 
   // 购买按钮样式
   const buyStyle = computed(() => {
-    if (btnBuy.type === 'text') {
+    if (btnBuy.value.type === 'text') {
       // 文字按钮：线性渐变背景颜色
       return {
-        background: `linear-gradient(to right, ${btnBuy.bgBeginColor}, ${btnBuy.bgEndColor})`,
+        background: `linear-gradient(to right, ${btnBuy.value.bgBeginColor || '#0f766e'}, ${
+          btnBuy.value.bgEndColor || '#0d9488'
+        })`,
       };
     }
-    if (btnBuy.type === 'img') {
+    if (btnBuy.value.type === 'img' && btnBuy.value.imgUrl) {
       // 图片按钮
       return {
         width: '54rpx',
         height: '54rpx',
-        background: `url(${sheep.$url.cdn(btnBuy.imgUrl)}) no-repeat`,
+        background: `url(${sheep.$url.cdn(btnBuy.value.imgUrl)}) no-repeat`,
         backgroundSize: '100% 100%',
       };
     }
+    return {};
   });
 
   //region 商品瀑布流布局
@@ -211,9 +252,10 @@
   function calculateGoodsColumn(height = 0, where = 'left') {
     // 处理完
     if (!state.goodsList[count]) return;
+    const cardHeight = Math.max(0, toNumber(height));
     // 增加列的高度
-    if (where === 'left') leftHeight += height;
-    if (where === 'right') rightHeight += height;
+    if (where === 'left') leftHeight += cardHeight;
+    if (where === 'right') rightHeight += cardHeight;
     // 添加到矮的一列
     if (leftHeight <= rightHeight) {
       state.leftGoodsList.push(state.goodsList[count]);
@@ -232,25 +274,47 @@
    * @return {Promise<undefined>} 商品列表
    */
   async function getGoodsListByIds(ids) {
-    const { data } = await SpuApi.getSpuListByIds(ids);
-    return data;
+    if (!ids) {
+      return [];
+    }
+    try {
+      const response = await SpuApi.getSpuListByIds(ids);
+      return response?.code === 0 && Array.isArray(response.data)
+        ? response.data.filter(
+            (item) => isRecord(item) && item.id !== undefined && item.id !== null,
+          )
+        : [];
+    } catch (error) {
+      return [];
+    }
   }
 
   // 初始化
   onMounted(async () => {
     // 加载商品列表
-    state.goodsList = await getGoodsListByIds(spuIds.join(','));
+    state.goodsList = await getGoodsListByIds(spuIds.value.join(','));
+    // 重置瀑布流状态，避免组件复用时旧商品列数据污染当前渲染。
+    state.leftGoodsList = [];
+    state.rightGoodsList = [];
+    count = 0;
+    leftHeight = 0;
+    rightHeight = 0;
+    if (!state.goodsList.length) {
+      return;
+    }
     // 拼接结算信息（营销）
-    await OrderApi.getSettlementProduct(state.goodsList.map((item) => item.id).join(',')).then(
-      (res) => {
-        if (res.code !== 0) {
-          return;
-        }
-        appendSettlementProduct(state.goodsList, res.data);
-      },
-    );
+    try {
+      const response = await OrderApi.getSettlementProduct(
+        state.goodsList.map((item) => item.id).join(','),
+      );
+      if (response?.code === 0 && Array.isArray(response.data)) {
+        appendSettlementProduct(state.goodsList, response.data);
+      }
+    } catch (error) {
+      // 营销接口不可用时仍展示基础商品，不能阻断 DIY 页面。
+    }
     // 只有双列布局时需要
-    if (layoutType === LayoutTypeEnum.TWO_COL) {
+    if (layoutType.value === LayoutTypeEnum.TWO_COL) {
       // 分列
       calculateGoodsColumn();
     }

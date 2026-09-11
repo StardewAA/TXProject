@@ -102,13 +102,18 @@ export function getSmsCode(event, mobile) {
     case 'smsLogin':
       scene = 1;
       break;
+    case 'register':
+      scene = 1;
+      break;
   }
   AuthUtil.sendSmsCode(mobile, scene).then((res) => {
-    if (res.code === 0) {
+    if (res?.code === 0) {
       modalStore.$patch((state) => {
         state.lastTimer[event] = dayjs().unix();
       });
     }
+  }).catch(() => {
+    // request 层负责提示网络/接口错误；验证码发送失败时不启动倒计时。
   });
 }
 

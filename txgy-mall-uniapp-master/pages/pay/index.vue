@@ -38,7 +38,7 @@
               </view>
               <view class="check-box ss-flex ss-col-center ss-p-l-10">
                 <view class="userInfo-money ss-m-r-10" v-if="item.value === 'wallet'">
-                  余额: {{ fen2yuan(userWallet.balance) }}元
+                  余额: {{ fen2yuan(userWallet?.balance) }}元
                 </view>
                 <radio
                   :value="item.value"
@@ -95,6 +95,10 @@
   });
 
   const onPay = () => {
+    if (!state.orderInfo?.id) {
+      sheep.$helper.toast('支付单信息不可用，请返回重试');
+      return;
+    }
     if (state.payment === '') {
       sheep.$helper.toast('请选择支付方式');
       return;
@@ -135,7 +139,12 @@
 
   // 状态转换：payOrder.status => payStatus
   function checkPayStatus() {
-    if (state.orderInfo.status === 10 || state.orderInfo.status === 20) {
+    const status = Number(state.orderInfo?.status);
+    if (!Number.isFinite(status)) {
+      state.payStatus = -2;
+      return;
+    }
+    if (status === 10 || status === 20) {
       // 支付成功
       state.payStatus = 2;
       // 跳转回支付成功页
@@ -149,7 +158,7 @@
       });
       return;
     }
-    if (state.orderInfo.status === 30) {
+    if (status === 30) {
       // 支付关闭
       state.payStatus = -1;
       return;
@@ -159,40 +168,72 @@
 
   // 切换支付方式
   function onTapPay(e) {
-    state.payment = e.detail.value;
+    const value = e?.detail?.value;
+    if (value) {
+      state.payment = value;
+    }
   }
 
   // 设置支付订单信息
   async function setOrder(id) {
-    // 获得支付订单信息
-    const { data, code } = await PayOrderApi.getOrder(id, true);
-    if (code !== 0 || !data) {
+    if (!id) {
       state.payStatus = -2;
       return;
     }
-    state.orderInfo = data;
-    // 设置支付状态
-    checkPayStatus();
-    // 获得支付方式
-    await setPayMethods();
+
+    try {
+      // 获得支付订单信息。request 在网络异常时可能返回 false，不能直接解构。
+      const response = await PayOrderApi.getOrder(id, true);
+      const data = response?.data;
+      if (
+        response?.code !== 0 ||
+        !data ||
+        typeof data !== 'object' ||
+        Array.isArray(data) ||
+        data.id === undefined ||
+        data.id === null ||
+        data.status === undefined ||
+        data.status === null
+      ) {
+        state.payStatus = -2;
+        return;
+      }
+      state.orderInfo = data;
+      // 设置支付状态
+      checkPayStatus();
+      // 获得支付方式
+      await setPayMethods();
+    } catch (error) {
+      state.payStatus = -2;
+      state.payMethods = [];
+    }
   }
 
   // 获得支付方式
   async function setPayMethods() {
-    const { data, code } = await PayChannelApi.getEnableChannelCodeList(state.orderInfo.appId);
-    if (code !== 0) {
-      return;
-    }
-    state.payMethods = getPayMethods(data);
-    state.payMethods.find((item) => {
-      if (item.value && !item.disabled) {
-        state.payment = item.value;
-        return true;
+    try {
+      const response = await PayChannelApi.getEnableChannelCodeList(state.orderInfo.appId);
+      const data = response?.data;
+      if (response?.code !== 0 || !Array.isArray(data)) {
+        state.payMethods = [];
+        return;
       }
-    });
+      state.payMethods = (getPayMethods(data) || []).filter(
+        (item) => item && typeof item === 'object' && item.value,
+      );
+      state.payMethods.find((item) => {
+        if (item.value && !item.disabled) {
+          state.payment = item.value;
+          return true;
+        }
+      });
+    } catch (error) {
+      state.payMethods = [];
+      state.payment = '';
+    }
   }
 
-  onLoad((options) => {
+  onLoad((options = {}) => {
     if (
       sheep.$platform.name === 'WechatOfficialAccount' &&
       sheep.$platform.os === 'ios' &&
@@ -202,8 +243,8 @@
       return;
     }
     // 获得支付订单信息
-    let id = options.id;
-    if (options.orderType) {
+    let id = options?.id;
+    if (options?.orderType) {
       state.orderType = options.orderType;
     }
     setOrder(id);

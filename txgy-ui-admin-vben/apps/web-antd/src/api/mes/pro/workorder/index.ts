@@ -104,3 +104,8 @@ export function cancelWorkOrder(id: number) {
 export function confirmWorkOrder(id: number) {
   return requestClient.put(`/mes/pro/work-order/confirm?id=${id}`);
 }
+
+/** 下发工单 */
+export function issueWorkOrder(id: number) {
+  return requestClient.put(`/mes/pro/work-order/issue?id=${id}`);
+}

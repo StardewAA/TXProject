@@ -2,57 +2,33 @@
 import type { TrainingModuleKey } from '../module-data';
 
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 
-import { Button, Card, Progress, Tag } from 'ant-design-vue';
+import { Card, Progress, Tag } from 'ant-design-vue';
 
 import { getTrainingModule } from '../module-data';
+import PageHeaderBar from './page-header-bar.vue';
 
 defineOptions({ name: 'TrainingModuleOverview' });
 
 const props = defineProps<{ moduleKey: TrainingModuleKey }>();
-const router = useRouter();
 const currentModule = computed(() => getTrainingModule(props.moduleKey));
 </script>
 
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        :style="{
-          background: `linear-gradient(125deg, ${currentModule.accent} 0%, ${currentModule.accent}dc 44%, #111827 115%)`,
-        }"
+      <PageHeaderBar
+        :crumb="`云培训学院 / 模块 ${currentModule.number}`"
+        :title="currentModule.name"
+        :description="currentModule.description"
       >
-        <div class="absolute -right-14 -top-20 size-64 rounded-full bg-white/10"></div>
-        <div class="absolute -bottom-24 right-28 size-52 rounded-full bg-white/10"></div>
-        <div class="relative flex flex-col justify-between gap-6 md:flex-row md:items-center">
-          <div class="flex items-start gap-4">
-            <div class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-              <IconifyIcon :icon="currentModule.icon" class="size-7" />
-            </div>
-            <div>
-              <div class="mb-2 flex flex-wrap items-center gap-2 text-sm text-white/75">
-                <span>云培训学院</span><span>/</span><span>模块 {{ currentModule.number }}</span>
-              </div>
-              <h1 class="m-0 text-2xl font-semibold md:text-3xl">{{ currentModule.name }}</h1>
-              <p class="mb-0 mt-3 max-w-3xl text-sm leading-6 text-white/80">
-                {{ currentModule.description }}
-              </p>
-            </div>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <Tag color="processing" class="!m-0">模块框架已就绪</Tag>
-            <Button ghost @click="router.push('/training/workbench')">
-              <template #icon><IconifyIcon icon="lucide:layout-dashboard" /></template>
-              返回工作台
-            </Button>
-          </div>
-        </div>
-      </section>
+        <template #actions>
+          <Tag color="processing" class="!m-0">模块框架已就绪</Tag>
+        </template>
+      </PageHeaderBar>
 
       <section class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card v-for="metric in currentModule.metrics" :key="metric.label" :bordered="false">

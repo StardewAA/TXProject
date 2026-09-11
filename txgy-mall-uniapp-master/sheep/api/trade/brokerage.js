@@ -7,6 +7,7 @@ const BrokerageApi = {
       url: '/trade/brokerage-user/bind',
       method: 'PUT',
       data,
+      custom: { auth: true },
     });
   },
   // 获得个人分销信息
@@ -14,6 +15,7 @@ const BrokerageApi = {
     return request({
       url: '/trade/brokerage-user/get',
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得个人分销统计
@@ -21,6 +23,7 @@ const BrokerageApi = {
     return request({
       url: '/trade/brokerage-user/get-summary',
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得分销记录分页
@@ -34,6 +37,7 @@ const BrokerageApi = {
     return request({
       url: `/trade/brokerage-record/page?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 创建分销提现
@@ -42,6 +46,7 @@ const BrokerageApi = {
       url: '/trade/brokerage-withdraw/create',
       method: 'POST',
       data,
+      custom: { auth: true },
     });
   },
   // 获得分销提现分页
@@ -52,6 +57,7 @@ const BrokerageApi = {
     return request({
       url: `/trade/brokerage-withdraw/page?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得分销提现详情
@@ -60,6 +66,7 @@ const BrokerageApi = {
       url: `/trade/brokerage-withdraw/get`,
       method: 'GET',
       params: { id },
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得商品的分销金额
@@ -68,6 +75,7 @@ const BrokerageApi = {
       url: '/trade/brokerage-record/get-product-brokerage-price',
       method: 'GET',
       params: { spuId },
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得分销用户排行（基于佣金）
@@ -76,6 +84,7 @@ const BrokerageApi = {
     return request({
       url: `/trade/brokerage-user/get-rank-by-price?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得分销用户排行分页（基于佣金）
@@ -86,6 +95,7 @@ const BrokerageApi = {
     return request({
       url: `/trade/brokerage-user/rank-page-by-price?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得分销用户排行分页（基于用户量）
@@ -96,6 +106,7 @@ const BrokerageApi = {
     return request({
       url: `/trade/brokerage-user/rank-page-by-user-count?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得下级分销统计分页
@@ -104,6 +115,7 @@ const BrokerageApi = {
       url: '/trade/brokerage-user/child-summary-page',
       method: 'GET',
       params,
+      custom: { auth: true, showLoading: false },
     });
   },
 };

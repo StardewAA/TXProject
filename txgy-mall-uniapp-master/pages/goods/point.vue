@@ -152,11 +152,21 @@
 
   // 规格变更
   function onSkuChange(e) {
-    state.selectedSku = e;
+    state.selectedSku = e && typeof e === 'object' ? e : {};
   }
 
   // 立即购买
   function onBuy(sku) {
+    if (
+      !sku ||
+      typeof sku !== 'object' ||
+      !sku.id ||
+      Number(sku.count) <= 0 ||
+      !activity.value?.id
+    ) {
+      sheep.$helper.toast('请选择商品规格');
+      return;
+    }
     sheep.$router.go('/pages/order/confirm', {
       data: JSON.stringify({
         order_type: 'goods',
@@ -174,7 +184,9 @@
 
   // 分享信息
   const shareInfo = computed(() => {
-    if (isEmpty(unref(activity))) return {};
+    if (isEmpty(unref(activity)) || !state.goodsInfo || typeof state.goodsInfo !== 'object') {
+      return {};
+    }
     return sheep.$platform.share.getShareInfo(
       {
         title: activity.value.name,
@@ -194,70 +206,122 @@
     );
   });
 
-  const activity = ref();
+  const activity = ref({});
 
   const getShowPrice = computed(() => {
     if (!isEmpty(state.selectedSku)) {
       const sku = state.selectedSku;
       return {
-        point: sku.point,
+        point: Number(sku.point) || 0,
         price: !sku.pointPrice ? '' : fen2yuan(sku.pointPrice),
       };
     }
     return {
-      point: activity.value.point,
-      price: !activity.value.price ? '' : fen2yuan(activity.value.price),
+      point: Number(activity.value?.point) || 0,
+      price: !activity.value?.price ? '' : fen2yuan(activity.value.price),
     };
   });
 
   // 查询活动
   const getActivity = async (id) => {
-    const { data } = await PointApi.getPointActivity(id);
-    if (!data) {
+    try {
+      const response = await PointApi.getPointActivity(id);
+      const data =
+        response?.code === 0 &&
+        response.data &&
+        typeof response.data === 'object' &&
+        !Array.isArray(response.data)
+          ? response.data
+          : null;
+      if (!data || data.spuId === undefined || data.spuId === null) {
+        state.goodsInfo = null;
+        state.skeletonLoading = false;
+        return;
+      }
+      activity.value = {
+        ...data,
+        products: Array.isArray(data.products) ? data.products.filter(Boolean) : [],
+      };
+      // 查询商品
+      await getSpu(data.spuId);
+    } catch (error) {
       state.goodsInfo = null;
       state.skeletonLoading = false;
-      return;
     }
-    activity.value = data;
-    // 查询商品
-    await getSpu(data.spuId);
   };
 
   // 查询商品
   const getSpu = async (id) => {
-    const { data } = await SpuApi.getSpuDetail(id);
-    if (!data) {
+    try {
+      const response = await SpuApi.getSpuDetail(id);
+      const data =
+        response?.code === 0 &&
+        response.data &&
+        typeof response.data === 'object' &&
+        !Array.isArray(response.data)
+          ? response.data
+          : null;
+      if (!data) {
+        state.goodsInfo = null;
+        state.skeletonLoading = false;
+        return;
+      }
+      const products = Array.isArray(activity.value?.products)
+        ? activity.value.products.filter((product) => product && typeof product === 'object')
+        : [];
+      const skus = Array.isArray(data.skus)
+        ? data.skus.filter((sku) => sku && typeof sku === 'object')
+        : [];
+      const goodsInfo = {
+        ...data,
+        skus,
+        activity_type: PromotionActivityTypeEnum.POINT.type,
+      };
+      state.goodsInfo = goodsInfo;
+      const goodsStock = Number(data.stock);
+      const activityStock = Number(activity.value?.stock);
+      const safeGoodsStock =
+        Number.isFinite(goodsStock) && goodsStock >= 0 ? goodsStock : Number.POSITIVE_INFINITY;
+      const safeActivityStock =
+        Number.isFinite(activityStock) && activityStock >= 0 ? activityStock : safeGoodsStock;
+      state.goodsInfo.stock = Math.min(
+        safeGoodsStock,
+        safeActivityStock,
+      );
+      if (!Number.isFinite(state.goodsInfo.stock)) state.goodsInfo.stock = 0;
+      // 处理轮播图
+      state.goodsSwiper = formatGoodsSwiper(state.goodsInfo.sliderPicUrls);
+
+      // 价格、库存使用活动的
+      skus.forEach((sku) => {
+        const product = products.find((item) => String(item.skuId) === String(sku.id));
+        if (product) {
+          sku.point = product.point;
+          sku.pointPrice = product.price;
+          const skuStock = Number(sku.stock);
+          const productStock = Number(product.stock);
+          sku.stock = Math.min(
+            Number.isFinite(skuStock) && skuStock >= 0 ? skuStock : 0,
+            Number.isFinite(productStock) && productStock >= 0 ? productStock : 0,
+          );
+          // 设置限购数量
+          sku.limitCount = product.count;
+        } else {
+          // 找不到可能是没配置
+          sku.stock = 0;
+        }
+      });
+
+      state.skeletonLoading = false;
+    } catch (error) {
       state.goodsInfo = null;
       state.skeletonLoading = false;
-      return;
     }
-    data.activity_type = PromotionActivityTypeEnum.POINT.type;
-    state.goodsInfo = data;
-    state.goodsInfo.stock = Math.min(data.stock, activity.value.stock);
-    // 处理轮播图
-    state.goodsSwiper = formatGoodsSwiper(state.goodsInfo.sliderPicUrls);
-
-    // 价格、库存使用活动的
-    data.skus.forEach((sku) => {
-      const product = activity.value.products.find((product) => product.skuId === sku.id);
-      if (product) {
-        sku.point = product.point;
-        sku.pointPrice = product.price;
-        sku.stock = Math.min(sku.stock, product.stock);
-        // 设置限购数量
-        sku.limitCount = product.count;
-      } else {
-        // 找不到可能是没配置
-        sku.stock = 0;
-      }
-    });
-
-    state.skeletonLoading = false;
   };
 
-  onLoad((options) => {
+  onLoad((options = {}) => {
     // 非法参数
-    if (!options.id) {
+    if (!options?.id) {
       state.goodsInfo = null;
       state.skeletonLoading = false;
       return;

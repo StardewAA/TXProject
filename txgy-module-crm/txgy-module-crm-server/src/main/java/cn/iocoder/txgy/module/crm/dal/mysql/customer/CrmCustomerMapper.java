@@ -8,7 +8,6 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerPageReqVO;
-import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
@@ -226,8 +225,8 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
             CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
                     CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
         }
-        // 未跟进
-        query.eq(CrmClueDO::getFollowUpStatus, false);
+        // 未跟进（注意：这里统计的是客户，字段要取 CrmCustomerDO）
+        query.eq(CrmCustomerDO::getFollowUpStatus, false);
         return selectCount(query);
     }
 

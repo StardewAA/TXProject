@@ -39,6 +39,7 @@ public interface WmsItemSkuMapper extends BaseMapperX<WmsItemSkuDO> {
                 .likeIfPresent(WmsItemSkuDO::getCode, reqVO.getCode())
                 .likeIfPresent(WmsItemSkuDO::getName, reqVO.getName())
                 .likeIfPresent(WmsItemSkuDO::getBarCode, reqVO.getBarCode())
+                .eqIfPresent(WmsItemDO::getStatus, reqVO.getItemStatus())
                 .orderByDesc(WmsItemSkuDO::getId);
         return selectJoinPage(reqVO, WmsItemSkuDO.class, query);
     }
