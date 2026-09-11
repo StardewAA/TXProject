@@ -25,6 +25,8 @@ import {
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
 
+import '../taskbar.css';
+
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
@@ -978,7 +980,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <div class="ind-panel">
           <div class="ind-panel-h">
             <span class="ind-panel-t">该批爬虫任务</span>
-            <span class="ind-panel-meta">jobId #{{ String(detailJob.id) }} · 点击行就地展开该任务过程</span>
+            <span class="ind-panel-meta">jobId #{{ String(detailJob.id) }} · 任务条同工作台口径（状态/时间/任务#/URL/消息），点击行就地展开过程</span>
           </div>
           <div class="ind-panel-b">
             <div class="ind-kpis" style="margin: 0 0 6px; max-width: 340px;">
@@ -990,13 +992,25 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </div>
             <div v-if="jobTasksLoading" class="text-xs font-semibold text-orange-600">任务加载中…</div>
             <div v-else-if="!jobTasks.length" class="text-sm font-medium text-gray-500">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
-            <div v-else class="-my-1">
-              <div v-for="t in jobTasks" :key="String(t.id)" class="ind-row ind-dl-row" :class="{ on: selJobTask && selJobTask.id === t.id }" @click="pickJobTask(t)">
-                <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-                <span class="rw main truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
-                <span class="rw">解析器：{{ t.parserCode || '—' }}</span>
-                <span class="rw">attempt {{ t.attempt ?? '—' }}</span>
-                <span class="rw time">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+            <div v-else class="fp-tbl">
+              <div class="fp-tr fp-th">
+                <span class="fp-td w-status">状态</span>
+                <span class="fp-td w-time">时间</span>
+                <span class="fp-td w-id">任务 #</span>
+                <span class="fp-td flex-1">URL / 来源</span>
+                <span class="fp-td w-msg">消息 / 明细</span>
+              </div>
+              <div v-for="t in jobTasks" :key="String(t.id)" class="fp-tr fp-row-click" :class="{ 'fp-row-on': selJobTask && selJobTask.id === t.id }" @click="pickJobTask(t)">
+                <span class="fp-td w-status">
+                  <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+                </span>
+                <span class="fp-td w-time">{{ fmtDt(t.finishedAt || t.createTime) || '—' }}</span>
+                <span class="fp-td w-id">#{{ String(t.id) }}</span>
+                <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+                <span class="fp-td w-msg fp-msg" :title="t.message || ''">
+                  <template v-if="t.message">{{ t.message }}</template>
+                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}</template>
+                </span>
               </div>
             </div>
           </div>
@@ -1057,23 +1071,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 .fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: #1f2937; background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; outline: none; transition: border-color .15s; }
 .fp-url-input:focus { border-color: #1d4ed8; }
 .fp-url-input::placeholder { color: #9aa3ad; }
-/* 表格化任务条（公告式查询：列分状态/时间/任务#/URL/消息，行点击进详情） */
-.fp-tbl { border: 1.5px solid var(--ind-line); border-radius: 8px; overflow: hidden; background: #fff; }
-.fp-tr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #eceff2; transition: background .12s; }
-.fp-tr:last-child { border-bottom: none; }
-.fp-th { background: #f4f6f8; color: var(--ind-sub-text); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
-.fp-row-click { cursor: pointer; }
-.fp-row-click:hover { background: #f6f1e6; }
-.fp-td { font-size: 13px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fp-td.w-status { width: 128px; flex: none; display: flex; gap: 4px; }
-.fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
-.fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
-.fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text); }
-.fp-td.w-parser { width: 140px; flex: none; color: var(--ind-ink-text); font-weight: 600; }
-.fp-td.fp-url { color: #1f2937; font-weight: 600; }
-.fp-td.fp-msg { font-size: 12.5px; }
-.fp-sortable { cursor: pointer; user-select: none; }
-.fp-sortable:hover { color: #1d4ed8; }
+/* 表格化任务条 .fp-tbl / .fp-tr / .fp-td 等样式已抽到 ../taskbar.css，多组件共用（任务页签/测试页签/批次抽屉/数据链同批/批次详情/信息源详情），勿在本文件重复定义。 */
 
 /* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
 .ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }
