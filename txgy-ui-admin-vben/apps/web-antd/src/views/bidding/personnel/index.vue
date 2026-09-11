@@ -1,7 +1,12 @@
 <script setup lang="ts">
-/* 员工资质 · 员工证书区块（契约 §8.1 分页 / §8.2 到期清单 / §8.3 细分统计 / §8.4 法定预警下限）
+/* 员工资质（菜单终态 60005300 / component bidding/personnel/index）
+ *   ① 员工档案   GET/POST/PUT /bidding/personnel-profile/{page,get,overview,create,update,change-status}
+ *   ② 履历       /bidding/personnel-record/{training,social-security,labor-contract}/{create,list}
+ *   ③ 员工证书   契约 §8.1 分页 / §8.2 到期清单 / §8.3 细分统计 / §8.4 法定预警下限
+ *   ④ 到期看板   ⑤ 安许配备自查（依赖 certSubType 统计，阈值取 safety.abc.required）
  * 人证合一：按员工、证书类型、状态、到期窗口检索；安许 A/B/C 三类人员配备自查依赖 certSubType 统计。
- * 权限：bidding:personnel:cert:{query,create,update,delete}、bidding:personnel:alert-run
+ * 权限：bidding:personnel:cert:{query,create,update,delete}、bidding:personnel:profile:{query,create,update}、
+ *      bidding:personnel:record:{query,create}、bidding:personnel:alert-run
  * 阈值：到期窗口默认取配置 personnel.cert.expiring.window.days；配备要求取 safety.abc.required（不硬编码天数/人数） */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
@@ -13,15 +18,27 @@ import { message, Modal } from 'ant-design-vue';
 import { certErrorMsg } from '#/api/bidding/certificate';
 import {
   changePersonnelCertStatus,
+  changePersonnelProfileStatus,
   countPersonnelCertBySubType,
   createPersonnelCert,
+  createPersonnelLaborContract,
+  createPersonnelProfile,
+  createPersonnelSocialSecurity,
+  createPersonnelTraining,
   deletePersonnelCert,
   getPersonnelCertExpiring,
   getPersonnelCertPage,
+  getPersonnelLaborContractList,
   getPersonnelLegalFloorDays,
+  getPersonnelOverview,
+  getPersonnelProfilePage,
+  getPersonnelSocialSecurityList,
+  getPersonnelTrainingList,
   type PersonnelCertApi,
+  type PersonnelProfileApi,
   runPersonnelAlertScan,
   updatePersonnelCert,
+  updatePersonnelProfile,
 } from '#/api/bidding/personnel';
 import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
 
@@ -398,6 +415,357 @@ async function scanPageRisk() {
   }
 }
 
+/* ================= 员工档案（profile）与履历（培训 / 社保 / 劳动合同） ================= */
+
+/** 档案状态码表（逐字取自 PersonnelStatusEnum） */
+const PROFILE_STATUS_OPTIONS = ['ACTIVE', 'SUSPENDED', 'LEAVE', 'RETIRED'].map((s) => ({ label: s, value: s }));
+/** 允许的状态迁移（与 PersonnelStatusEnum.TRANSITIONS 一致，避免提交必然被拒的目标） */
+const PROFILE_TRANSITIONS: Record<string, string[]> = {
+  ACTIVE: ['LEAVE', 'SUSPENDED', 'RETIRED'],
+  LEAVE: ['ACTIVE', 'RETIRED'],
+  RETIRED: [],
+  SUSPENDED: ['ACTIVE', 'LEAVE', 'RETIRED'],
+};
+
+const profileQuery = reactive<PersonnelProfileApi.PageReq>({ pageNo: 1, pageSize: 10 });
+const profileRows = ref<PersonnelProfileApi.Profile[]>([]);
+const profileTotal = ref(0);
+const profileLoading = ref(false);
+const profileColumns = [
+  { title: '工号', dataIndex: 'personNo', key: 'personNo', width: 120 },
+  { title: '姓名', dataIndex: 'personName', key: 'personName', width: 100 },
+  { title: '身份证（脱敏）', dataIndex: 'idCardMasked', key: 'idCardMasked', width: 170 },
+  { title: '性别', key: 'gender', width: 80 },
+  { title: '部门', dataIndex: 'deptName', key: 'deptName', width: 130 },
+  { title: '学历', key: 'eduLevel', width: 100 },
+  { title: '职称', key: 'titleLevel', width: 110 },
+  { title: '入职日期', dataIndex: 'joinDate', key: 'joinDate', width: 115 },
+  { title: '状态', key: 'personnelStatus', width: 100 },
+  { title: '操作', key: 'action', width: 210, fixed: 'right' as const },
+];
+
+async function loadProfiles() {
+  profileLoading.value = true;
+  try {
+    const page = await getPersonnelProfilePage({ ...profileQuery });
+    profileRows.value = page.list ?? [];
+    profileTotal.value = page.total ?? 0;
+  } catch {
+    // 静默
+  } finally {
+    profileLoading.value = false;
+  }
+}
+function onProfilePage(p: number) {
+  profileQuery.pageNo = p;
+  void loadProfiles();
+}
+
+const profileFormOpen = ref(false);
+const profileSaving = ref(false);
+const profileForm = reactive<PersonnelProfileApi.SaveReq>({ entId: 0, personName: '' });
+
+function resetProfileForm() {
+  Object.assign(profileForm, {
+    birthDate: undefined,
+    deptName: undefined,
+    eduLevel: undefined,
+    eduMajor: undefined,
+    email: undefined,
+    entId: profileQuery.entId ?? 0,
+    gender: undefined,
+    graduateDate: undefined,
+    id: undefined,
+    idCard: undefined,
+    idCardValidTo: undefined,
+    joinDate: undefined,
+    mobile: undefined,
+    personName: '',
+    personNo: undefined,
+    remark: undefined,
+    school: undefined,
+    titleLevel: undefined,
+    titleMajor: undefined,
+    workStartDate: undefined,
+  });
+}
+function openProfileCreate() {
+  resetProfileForm();
+  profileFormOpen.value = true;
+}
+function openProfileEdit(row: PersonnelProfileApi.Profile) {
+  resetProfileForm();
+  Object.assign(profileForm, {
+    birthDate: row.birthDate ?? undefined,
+    deptName: row.deptName,
+    eduLevel: row.eduLevel ?? undefined,
+    eduMajor: row.eduMajor,
+    email: row.email,
+    entId: row.entId ?? profileForm.entId,
+    gender: row.gender ?? undefined,
+    graduateDate: row.graduateDate ?? undefined,
+    id: row.id,
+    idCard: undefined,
+    idCardValidTo: row.idCardValidTo ?? undefined,
+    joinDate: row.joinDate ?? undefined,
+    mobile: row.mobile,
+    personName: row.personName ?? '',
+    personNo: row.personNo,
+    school: row.school,
+    titleLevel: row.titleLevel ?? undefined,
+    titleMajor: row.titleMajor,
+    workStartDate: row.workStartDate ?? undefined,
+  });
+  profileFormOpen.value = true;
+}
+
+async function submitProfile() {
+  if (!profileForm.entId) {
+    message.warning('企业主体 id（entId）必填');
+    return;
+  }
+  if (!profileForm.personName?.trim()) {
+    message.warning('姓名必填');
+    return;
+  }
+  profileSaving.value = true;
+  try {
+    if (profileForm.id) {
+      await updatePersonnelProfile({ ...profileForm });
+      message.success('档案已更新');
+    } else {
+      const id = await createPersonnelProfile({ ...profileForm });
+      message.success(`建档成功（id=${id}）`);
+    }
+    profileFormOpen.value = false;
+    refreshProfileTab();
+  } catch {
+    // 静默：§0.4 错误由请求层呈现（身份证唯一性等）
+  } finally {
+    profileSaving.value = false;
+  }
+}
+
+/* ===== 档案状态流转 ===== */
+const profileStatusOpen = ref(false);
+const profileStatusSaving = ref(false);
+const profileStatusRow = ref<null | PersonnelProfileApi.Profile>(null);
+const profileStatusForm = reactive<PersonnelProfileApi.StatusChangeReq>({ id: 0, targetStatus: '', version: 0 });
+const profileTargetOptions = computed(() =>
+  (PROFILE_TRANSITIONS[profileStatusRow.value?.personnelStatus ?? ''] ?? []).map((s) => ({ label: s, value: s })),
+);
+
+function openProfileStatus(row: PersonnelProfileApi.Profile) {
+  if (row.version === undefined) {
+    message.warning('该行缺少 version（乐观锁），请刷新后重试');
+    return;
+  }
+  profileStatusRow.value = row;
+  Object.assign(profileStatusForm, { id: row.id, reason: undefined, targetStatus: '', version: row.version });
+  profileStatusOpen.value = true;
+}
+
+async function submitProfileStatus() {
+  if (!profileStatusForm.targetStatus) {
+    message.warning('请选择目标状态');
+    return;
+  }
+  profileStatusSaving.value = true;
+  try {
+    await changePersonnelProfileStatus({ ...profileStatusForm });
+    message.success('档案状态已流转');
+    profileStatusOpen.value = false;
+    refreshProfileTab();
+  } catch {
+    // 静默
+  } finally {
+    profileStatusSaving.value = false;
+  }
+}
+
+/* ===== 履职概览（证书 / 社保 / 合同 / 学时 / 风险） ===== */
+const overviewOpen = ref(false);
+const overviewLoading = ref(false);
+const overview = ref<null | PersonnelProfileApi.Overview>(null);
+
+async function openOverview(row: PersonnelProfileApi.Profile) {
+  overviewOpen.value = true;
+  overviewLoading.value = true;
+  overview.value = null;
+  try {
+    overview.value = await getPersonnelOverview(row.id);
+  } catch {
+    // 静默
+  } finally {
+    overviewLoading.value = false;
+  }
+}
+
+function refreshProfileTab() {
+  void loadProfiles();
+  const openId = overview.value?.profile?.id;
+  if (overviewOpen.value && openId) void openOverview({ id: openId });
+}
+
+/* ===== 履历：培训 / 社保 / 劳动合同 ===== */
+const recordPersonId = ref<number | undefined>(undefined);
+const recordType = ref('training');
+const recordLoading = ref(false);
+const trainingRows = ref<PersonnelProfileApi.Training[]>([]);
+const socialRows = ref<PersonnelProfileApi.SocialSecurity[]>([]);
+const contractRows = ref<PersonnelProfileApi.LaborContract[]>([]);
+const trainingColumns = [
+  { title: '培训名称', dataIndex: 'trainingName', key: 'trainingName', width: 200 },
+  { title: '类型', dataIndex: 'trainingType', key: 'trainingType', width: 120 },
+  { title: '主办方', dataIndex: 'organizer', key: 'organizer', width: 160 },
+  { title: '起止', key: 'period', width: 200 },
+  { title: '学时', dataIndex: 'eduHours', key: 'eduHours', width: 90 },
+  { title: '结果', dataIndex: 'result', key: 'result', width: 100 },
+  { title: '成绩', dataIndex: 'score', key: 'score', width: 90 },
+  { title: '证书编号', dataIndex: 'certNo', key: 'certNo', width: 150 },
+  { title: '证书有效期至', dataIndex: 'certValidTo', key: 'certValidTo', width: 130 },
+];
+const socialColumns = [
+  { title: '缴费月份', dataIndex: 'payMonth', key: 'payMonth', width: 110 },
+  { title: '缴纳单位', dataIndex: 'payerName', key: 'payerName', width: 200 },
+  { title: '统一社会信用代码', dataIndex: 'payerCreditCode', key: 'payerCreditCode', width: 190 },
+  { title: '状态', dataIndex: 'payStatus', key: 'payStatus', width: 110 },
+  { title: '缴费基数', dataIndex: 'payBase', key: 'payBase', width: 120 },
+  { title: '缴费金额', dataIndex: 'payAmount', key: 'payAmount', width: 120 },
+  { title: '社保号', dataIndex: 'socialNo', key: 'socialNo', width: 150 },
+  { title: '来源', dataIndex: 'sourceChannel', key: 'sourceChannel', width: 120 },
+];
+const contractColumns = [
+  { title: '合同编号', dataIndex: 'contractNo', key: 'contractNo', width: 170 },
+  { title: '类型', dataIndex: 'contractType', key: 'contractType', width: 120 },
+  { title: '签订日期', dataIndex: 'signDate', key: 'signDate', width: 120 },
+  { title: '起止', key: 'period', width: 200 },
+  { title: '状态', dataIndex: 'contractStatus', key: 'contractStatus', width: 110 },
+  { title: '岗位', dataIndex: 'positionName', key: 'positionName', width: 150 },
+  { title: '附件', dataIndex: 'fileId', key: 'fileId', width: 100 },
+];
+
+async function loadRecords() {
+  if (!recordPersonId.value) {
+    message.warning('请先填写员工 id（personId）');
+    return;
+  }
+  recordLoading.value = true;
+  try {
+    if (recordType.value === 'socialSecurity') {
+      socialRows.value = await getPersonnelSocialSecurityList(recordPersonId.value);
+    } else if (recordType.value === 'laborContract') {
+      contractRows.value = await getPersonnelLaborContractList(recordPersonId.value);
+    } else {
+      trainingRows.value = await getPersonnelTrainingList(recordPersonId.value);
+    }
+  } catch {
+    // 静默
+  } finally {
+    recordLoading.value = false;
+  }
+}
+function switchRecordType() {
+  void loadRecords();
+}
+
+const recFormOpen = ref(false);
+const recSaving = ref(false);
+const trainingForm = reactive<PersonnelProfileApi.TrainingSaveReq>({ entId: 0, personId: 0, trainingName: '' });
+const socialForm = reactive<PersonnelProfileApi.SocialSecuritySaveReq>({ entId: 0, payMonth: '', personId: 0 });
+const contractForm = reactive<PersonnelProfileApi.LaborContractSaveReq>({ contractNo: '', entId: 0, personId: 0 });
+
+function openRecordCreate() {
+  if (!recordPersonId.value) {
+    message.warning('请先填写并查询员工 id（personId）');
+    return;
+  }
+  const personId = recordPersonId.value;
+  const entId = profileRows.value.find((r) => r.id === personId)?.entId ?? profileQuery.entId ?? 0;
+  Object.assign(trainingForm, {
+    certNo: undefined,
+    certValidTo: undefined,
+    eduHours: undefined,
+    endDate: undefined,
+    entId,
+    fileId: undefined,
+    organizer: undefined,
+    personId,
+    remark: undefined,
+    result: undefined,
+    score: undefined,
+    startDate: undefined,
+    trainingName: '',
+    trainingType: undefined,
+  });
+  Object.assign(socialForm, {
+    entId,
+    evidenceFileId: undefined,
+    payAmount: undefined,
+    payBase: undefined,
+    payMonth: '',
+    payerCreditCode: undefined,
+    payerName: undefined,
+    payStatus: undefined,
+    personId,
+    remark: undefined,
+    socialNo: undefined,
+    sourceChannel: undefined,
+  });
+  Object.assign(contractForm, {
+    contractNo: '',
+    contractStatus: undefined,
+    contractType: undefined,
+    endDate: undefined,
+    entId,
+    fileId: undefined,
+    personId,
+    positionName: undefined,
+    remark: undefined,
+    signDate: undefined,
+    startDate: undefined,
+  });
+  recFormOpen.value = true;
+}
+
+async function submitRecord() {
+  if (recordType.value === 'training' && !trainingForm.trainingName?.trim()) {
+    message.warning('培训名称必填');
+    return;
+  }
+  if (recordType.value === 'socialSecurity' && !socialForm.payMonth?.trim()) {
+    message.warning('缴费月份（yyyy-MM）必填');
+    return;
+  }
+  if (recordType.value === 'laborContract' && !contractForm.contractNo?.trim()) {
+    message.warning('合同编号必填');
+    return;
+  }
+  recSaving.value = true;
+  try {
+    if (recordType.value === 'socialSecurity') {
+      await createPersonnelSocialSecurity({ ...socialForm });
+    } else if (recordType.value === 'laborContract') {
+      await createPersonnelLaborContract({ ...contractForm });
+    } else {
+      await createPersonnelTraining({ ...trainingForm });
+    }
+    message.success('履历记录已录入');
+    recFormOpen.value = false;
+    void loadRecords();
+    refreshProfileTab();
+  } catch {
+    // 静默
+  } finally {
+    recSaving.value = false;
+  }
+}
+
+/** 页签懒加载：首次进入档案页签才拉档案列表 */
+watch(tab, (t) => {
+  if (t === 'profile' && profileRows.value.length === 0) void loadProfiles();
+});
+
 onMounted(() => {
   void load();
   syncBoardDays();
@@ -443,7 +811,8 @@ function remainTag(r: PersonnelCertApi.Cert) {
         <h2 class="ct-title">员工资质</h2>
         <p class="ct-sub">
           人证合一：把「人」和「证」关联起来，支持按员工、类型、状态与到期窗口检索，供安许证三类人员（A/B/C）配备自查。
-          本页覆盖员工证书（契约 §8）；员工档案与履历（培训/社保/劳动合同）由另一份契约接入。
+          本页覆盖员工档案、履历（培训/社保/劳动合同）与员工证书（契约 §8）；档案的身份证只写不读（回传脱敏值），
+          在职状态按 PersonnelStatusEnum 状态机流转，离职/退休不计入资质人数与配证候选。
         </p>
       </div>
       <div class="ct-actions">
@@ -463,7 +832,167 @@ function remainTag(r: PersonnelCertApi.Cert) {
     />
 
     <a-tabs v-model:active-key="tab">
-      <a-tab-pane key="list" tab="员工证书">
+      <a-tab-pane key="profile" tab="① 员工档案">
+        <div class="ct-panel">
+          <div class="ct-filter">
+            <a-input-number v-model:value="profileQuery.entId" :min="1" placeholder="企业主体 id" style="width: 160px" />
+            <a-input v-model:value="profileQuery.personName" placeholder="姓名" style="width: 120px" />
+            <a-input v-model:value="profileQuery.personNo" placeholder="工号" style="width: 120px" />
+            <a-input v-model:value="profileQuery.deptName" placeholder="部门" style="width: 130px" />
+            <a-select
+              v-model:value="profileQuery.personnelStatus"
+              placeholder="在职状态"
+              allow-clear
+              :options="PROFILE_STATUS_OPTIONS"
+              style="width: 140px"
+            />
+            <a-select
+              v-model:value="profileQuery.eduLevel"
+              placeholder="学历"
+              allow-clear
+              :options="dictOptions('edu_level')"
+              style="width: 120px"
+            />
+            <a-button type="primary" @click="profileQuery.pageNo = 1; loadProfiles()">查询</a-button>
+            <a-button v-if="can('bidding:personnel:profile:create')" type="primary" @click="openProfileCreate">
+              建档
+            </a-button>
+            <span class="ct-panel-meta">身份证仅提交、回读脱敏；离职/退休人员不计入资质人数</span>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="profileColumns"
+              :data-source="profileRows"
+              :loading="profileLoading"
+              :pagination="{
+                current: profileQuery.pageNo,
+                pageSize: profileQuery.pageSize,
+                total: profileTotal,
+                showSizeChanger: false,
+                onChange: onProfilePage,
+              }"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1450 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'gender'">{{ record.gender ? dictLabel('gender', record.gender) : '—' }}</template>
+                <template v-else-if="column.key === 'eduLevel'">
+                  {{ record.eduLevel ? dictLabel('edu_level', record.eduLevel) : '—' }}
+                </template>
+                <template v-else-if="column.key === 'titleLevel'">{{ record.titleLevel || '—' }}</template>
+                <template v-else-if="column.key === 'personnelStatus'">
+                  <a-tag
+                    :color="dictOptions('personnel_status').length > 0 ? dictTag('personnel_status', record.personnelStatus).color : record.personnelStatus === 'ACTIVE' ? 'green' : 'default'"
+                  >
+                    {{
+                      dictOptions('personnel_status').length > 0
+                        ? dictTag('personnel_status', record.personnelStatus).label
+                        : record.personnelStatus
+                    }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a v-if="can('bidding:personnel:profile:query')" @click="openOverview(record)">履职概览</a>
+                  <a v-if="can('bidding:personnel:profile:update')" @click="openProfileEdit(record)">编辑</a>
+                  <a
+                    v-if="can('bidding:personnel:profile:update') && (PROFILE_TRANSITIONS[record.personnelStatus] ?? []).length > 0"
+                    @click="openProfileStatus(record)"
+                  >
+                    状态流转
+                  </a>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">按主体/姓名/工号筛选，或先建一份员工档案</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="record" tab="② 履历（培训·社保·劳动合同）">
+        <div class="ct-panel">
+          <div class="ct-filter">
+            <a-input-number v-model:value="recordPersonId" :min="1" placeholder="员工 id（personId）" style="width: 190px" />
+            <a-button type="primary" @click="loadRecords">查询</a-button>
+            <a-radio-group v-model:value="recordType" button-style="solid" @change="switchRecordType">
+              <a-radio-button value="training">培训</a-radio-button>
+              <a-radio-button value="socialSecurity">社保</a-radio-button>
+              <a-radio-button value="laborContract">劳动合同</a-radio-button>
+            </a-radio-group>
+            <a-button v-if="can('bidding:personnel:record:create')" @click="openRecordCreate">录入</a-button>
+            <span class="ct-panel-meta">履历按员工维度查询（接口无分页，返回全部倒序）</span>
+          </div>
+          <div class="ct-panel-b">
+            <a-table
+              v-if="recordType === 'training'"
+              class="ct-table"
+              :columns="trainingColumns"
+              :data-source="trainingRows"
+              :loading="recordLoading"
+              :pagination="false"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1300 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'period'">
+                  {{ record.startDate || '—' }} ~ {{ record.endDate || '—' }}
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">该员工暂无培训记录</div></template>
+            </a-table>
+
+            <a-table
+              v-else-if="recordType === 'socialSecurity'"
+              class="ct-table"
+              :columns="socialColumns"
+              :data-source="socialRows"
+              :loading="recordLoading"
+              :pagination="false"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1300 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'payStatus'">
+                  <a-tag
+                    :color="dictOptions('social_pay_status').length > 0 ? dictTag('social_pay_status', record.payStatus).color : 'default'"
+                  >
+                    {{
+                      dictOptions('social_pay_status').length > 0
+                        ? dictTag('social_pay_status', record.payStatus).label
+                        : (record.payStatus ?? '—')
+                    }}
+                  </a-tag>
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">该员工暂无社保记录（社保单位与主体不一致会进风险项）</div></template>
+            </a-table>
+
+            <a-table
+              v-else
+              class="ct-table"
+              :columns="contractColumns"
+              :data-source="contractRows"
+              :loading="recordLoading"
+              :pagination="false"
+              row-key="id"
+              size="small"
+              :scroll="{ x: 1200 }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'period'">
+                  {{ record.startDate || '—' }} ~ {{ record.endDate || '（无固定期限）' }}
+                </template>
+              </template>
+              <template #emptyText><div class="ct-empty">该员工暂无劳动合同记录</div></template>
+            </a-table>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <a-tab-pane key="list" tab="③ 员工证书">
         <div class="ct-panel">
           <div class="ct-filter">
             <a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" />
@@ -563,7 +1092,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
         </div>
       </a-tab-pane>
 
-      <a-tab-pane key="board" tab="到期看板">
+      <a-tab-pane key="board" tab="④ 到期看板">
         <div class="ct-panel">
           <div class="ct-filter">
             <a-input-number v-model:value="boardEntId" :min="1" placeholder="企业 ID（空=全部）" style="width: 180px" />
@@ -626,7 +1155,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
         </div>
       </a-tab-pane>
 
-      <a-tab-pane key="abc" tab="安许配备自查">
+      <a-tab-pane key="abc" tab="⑤ 安许配备自查">
         <div class="ct-panel">
           <div class="ct-filter">
             <a-input-number v-model:value="countEntId" :min="1" placeholder="企业 ID（必填）" style="width: 180px" />
@@ -768,6 +1297,371 @@ function remainTag(r: PersonnelCertApi.Cert) {
           <div class="ct-tip">人员风险仅用于提示与留痕，不自动拒绝业务操作（契约 v1.1 §12.6）。</div>
         </template>
         <div v-else class="ct-empty">未取到人员风险数据</div>
+      </a-spin>
+    </a-drawer>
+
+    <!-- 员工档案建档 / 编辑 -->
+    <a-modal
+      v-model:open="profileFormOpen"
+      :title="profileForm.id ? `编辑员工档案 #${profileForm.id}` : '员工档案建档'"
+      :width="900"
+      :confirm-loading="profileSaving"
+      ok-text="保存"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitProfile"
+    >
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="企业主体 id（必填）">
+              <a-input-number v-model:value="profileForm.entId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="姓名（必填）"><a-input v-model:value="profileForm.personName" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="工号"><a-input v-model:value="profileForm.personNo" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item :label="profileForm.id ? '身份证号（留空=不修改）' : '身份证号'">
+              <a-input v-model:value="profileForm.idCard" placeholder="18 位，后端唯一性校验" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="身份证有效期至">
+              <a-date-picker v-model:value="profileForm.idCardValidTo" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="性别">
+              <a-select v-model:value="profileForm.gender" allow-clear :options="dictOptions('gender')" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="出生日期">
+              <a-date-picker v-model:value="profileForm.birthDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="手机号"><a-input v-model:value="profileForm.mobile" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="邮箱"><a-input v-model:value="profileForm.email" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="学历">
+              <a-select v-model:value="profileForm.eduLevel" allow-clear :options="dictOptions('edu_level')" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="所学专业"><a-input v-model:value="profileForm.eduMajor" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="毕业院校"><a-input v-model:value="profileForm.school" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="毕业日期">
+              <a-date-picker v-model:value="profileForm.graduateDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="职称等级"><a-input v-model:value="profileForm.titleLevel" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="职称专业"><a-input v-model:value="profileForm.titleMajor" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="参加工作日期">
+              <a-date-picker v-model:value="profileForm.workStartDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="入职日期">
+              <a-date-picker v-model:value="profileForm.joinDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="部门"><a-input v-model:value="profileForm.deptName" /></a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注"><a-textarea v-model:value="profileForm.remark" :rows="2" /></a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <div class="ct-tip">
+        编辑时不回填身份证号（详情只回传脱敏值），如需换证请重新填写；在职状态请用行内「状态流转」。
+      </div>
+    </a-modal>
+
+    <!-- 档案状态流转 -->
+    <a-modal
+      v-model:open="profileStatusOpen"
+      title="员工档案状态流转"
+      :width="620"
+      :confirm-loading="profileStatusSaving"
+      ok-text="提交"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitProfileStatus"
+    >
+      <a-descriptions :column="2" size="small" class="mb-3">
+        <a-descriptions-item label="姓名">{{ profileStatusRow?.personName ?? '—' }}</a-descriptions-item>
+        <a-descriptions-item label="当前状态">{{ profileStatusRow?.personnelStatus ?? '—' }}</a-descriptions-item>
+        <a-descriptions-item label="乐观锁 version">{{ profileStatusForm.version }}</a-descriptions-item>
+        <a-descriptions-item label="部门">{{ profileStatusRow?.deptName ?? '—' }}</a-descriptions-item>
+      </a-descriptions>
+      <a-form layout="vertical">
+        <a-form-item label="目标状态（只列合法迁移）">
+          <a-select v-model:value="profileStatusForm.targetStatus" :options="profileTargetOptions" placeholder="请选择" />
+        </a-form-item>
+        <a-form-item label="原因">
+          <a-textarea v-model:value="profileStatusForm.reason" :rows="3" placeholder="如：离职交接完成 / 停职待岗" />
+        </a-form-item>
+      </a-form>
+      <div class="ct-tip">离职/退休后该员工不再计入资质人数与投标配证候选；非法迁移由后端按状态机拒绝。</div>
+    </a-modal>
+
+    <!-- 履历录入（按当前页签切换表单） -->
+    <a-modal
+      v-model:open="recFormOpen"
+      :title="recordType === 'training' ? '培训记录录入' : recordType === 'socialSecurity' ? '社保记录录入' : '劳动合同录入'"
+      :width="820"
+      :confirm-loading="recSaving"
+      ok-text="录入"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitRecord"
+    >
+      <a-form v-if="recordType === 'training'" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="培训名称（必填）"><a-input v-model:value="trainingForm.trainingName" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="培训类型"><a-input v-model:value="trainingForm.trainingType" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="主办方"><a-input v-model:value="trainingForm.organizer" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="开始日期">
+              <a-date-picker v-model:value="trainingForm.startDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="结束日期">
+              <a-date-picker v-model:value="trainingForm.endDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="学时">
+              <a-input-number v-model:value="trainingForm.eduHours" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="成绩">
+              <a-input-number v-model:value="trainingForm.score" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="结果"><a-input v-model:value="trainingForm.result" placeholder="如：合格" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="证书编号"><a-input v-model:value="trainingForm.certNo" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="证书有效期至">
+              <a-date-picker v-model:value="trainingForm.certValidTo" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="附件文件 id">
+              <a-input-number v-model:value="trainingForm.fileId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注"><a-textarea v-model:value="trainingForm.remark" :rows="2" /></a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+
+      <a-form v-else-if="recordType === 'socialSecurity'" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="缴费月份（必填，yyyy-MM）">
+              <a-input v-model:value="socialForm.payMonth" placeholder="如 2026-09" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="缴纳单位"><a-input v-model:value="socialForm.payerName" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="单位统一社会信用代码">
+              <a-input v-model:value="socialForm.payerCreditCode" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="缴费状态"><a-input v-model:value="socialForm.payStatus" placeholder="如：正常" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="缴费基数">
+              <a-input-number v-model:value="socialForm.payBase" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="缴费金额">
+              <a-input-number v-model:value="socialForm.payAmount" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="社保号"><a-input v-model:value="socialForm.socialNo" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="来源渠道">
+              <a-input v-model:value="socialForm.sourceChannel" placeholder="如：社保局导出" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="证据文件 id">
+              <a-input-number v-model:value="socialForm.evidenceFileId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注"><a-textarea v-model:value="socialForm.remark" :rows="2" /></a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+
+      <a-form v-else layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="合同编号（必填）"><a-input v-model:value="contractForm.contractNo" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="合同类型">
+              <a-input v-model:value="contractForm.contractType" placeholder="如：固定期限" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="岗位"><a-input v-model:value="contractForm.positionName" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="签订日期">
+              <a-date-picker v-model:value="contractForm.signDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="开始日期">
+              <a-date-picker v-model:value="contractForm.startDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="结束日期（空=无固定期限）">
+              <a-date-picker v-model:value="contractForm.endDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="合同状态">
+              <a-input v-model:value="contractForm.contractStatus" placeholder="如：履行中" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="附件文件 id">
+              <a-input-number v-model:value="contractForm.fileId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注"><a-textarea v-model:value="contractForm.remark" :rows="2" /></a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <div class="ct-tip">
+        履历记录只增不删（审计需要）；录入后「履职概览」的社保一致性、合同有效性与学时汇总会同步变化。
+      </div>
+    </a-modal>
+
+    <!-- 履职概览 -->
+    <a-drawer v-model:open="overviewOpen" class="bid-ind" :width="720" title="履职概览" destroy-on-close>
+      <a-spin :spinning="overviewLoading">
+        <template v-if="overview">
+          <a-descriptions :column="2" size="small" bordered class="mb-3">
+            <a-descriptions-item label="姓名">{{ overview.profile?.personName ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="工号">{{ overview.profile?.personNo ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="在职状态">
+              <a-tag :color="overview.profile?.personnelStatus === 'ACTIVE' ? 'green' : 'default'">
+                {{ overview.profile?.personnelStatus ?? '—' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="身份证有效">
+              <a-tag :color="overview.idCardValid ? 'green' : 'red'">
+                {{ overview.idCardValid ? '有效' : '过期/缺失' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="可用证书">
+              {{ overview.usableCertCount ?? 0 }} / {{ overview.totalCertCount ?? 0 }}
+            </a-descriptions-item>
+            <a-descriptions-item label="累计学时">{{ overview.totalEduHours ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="最新社保">
+              {{ overview.latestSocialSecurityMonth || '—' }}（{{ overview.latestSocialSecurityStatus || '—' }}）
+            </a-descriptions-item>
+            <a-descriptions-item label="社保缴纳单位">{{ overview.latestSocialSecurityPayer || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="社保一致性">
+              <a-tag :color="overview.socialSecurityConsistent ? 'green' : 'red'">
+                {{ overview.socialSecurityConsistent ? '与主体一致' : '不一致' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="劳动合同">
+              <a-tag :color="overview.laborContractValid ? 'green' : 'red'">
+                {{ overview.laborContractValid ? '有效' : '缺失/过期' }}
+              </a-tag>
+              <a-tag v-if="overview.laborContractConsistent === false" color="orange">主体不一致</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="可否参与投标">
+              <a-tag :color="overview.usableForTender ? 'green' : 'red'">
+                {{ overview.usableForTender ? '可参与' : '不可参与' }}
+              </a-tag>
+            </a-descriptions-item>
+          </a-descriptions>
+
+          <a-alert
+            v-if="(overview.risks?.length ?? 0) > 0"
+            class="mb-3"
+            type="warning"
+            show-icon
+            :message="`风险项 ${overview.risks?.length} 条`"
+            :description="(overview.risks ?? []).join('；')"
+          />
+          <a-alert v-else class="mb-3" type="success" show-icon message="无风险项" />
+
+          <a-table
+            class="ct-table"
+            :columns="[
+              { title: '证书名称', dataIndex: 'certName', key: 'certName' },
+              { title: '类型', dataIndex: 'certType', key: 'certType', width: 140 },
+              { title: '状态', dataIndex: 'certStatus', key: 'certStatus', width: 110 },
+              { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 120 },
+            ]"
+            :data-source="overview.certificates ?? []"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'certType'">
+                {{ record.certType ? dictLabel('person_cert_type', record.certType) : '—' }}
+              </template>
+              <template v-else-if="column.key === 'certStatus'">
+                <a-tag :color="dictTag('person_cert_status', record.certStatus).color">
+                  {{ dictTag('person_cert_status', record.certStatus).label }}
+                </a-tag>
+              </template>
+            </template>
+            <template #emptyText><div class="ct-empty">该员工暂无证书</div></template>
+          </a-table>
+        </template>
+        <div v-else class="ct-empty">正在读取概览…</div>
       </a-spin>
     </a-drawer>
 

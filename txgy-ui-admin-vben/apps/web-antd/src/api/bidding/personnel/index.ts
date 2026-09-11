@@ -5,7 +5,8 @@ import { requestClient } from '#/api/request';
 /** 契约来源：《电子证照模块-前端接口契约-v1.0.md》§8 员工证书（证照域延伸：人证合一）
  *  + 后端 PersonnelCertificateController / PersonnelAlertRunController 逐一核对
  *  权限：bidding:personnel:cert:{query,create,update,delete}、bidding:personnel:alert-run
- *  说明：员工档案（profile）与履历（培训/社保/劳动合同）由「员工资质」另一份契约覆盖，本文件只接证书相关端点。 */
+ *  说明：员工档案（profile）与履历（培训/社保/劳动合同）于 2026-09-20 后端接口就绪后一并接入，
+ *  见本文件末尾 PersonnelProfileApi（端点 PersonnelProfileController / PersonnelRecordController）。 */
 export namespace PersonnelCertApi {
   export interface Cert {
     id: number;
@@ -140,4 +141,278 @@ export function deletePersonnelCert(id: number | string) {
 /** 手动触发员工证书/复审/身份证到期扫描（同日幂等） */
 export function runPersonnelAlertScan() {
   return requestClient.post<number>('/bidding/personnel-alert-run/scan');
+}
+
+/**
+ * ===== 员工档案（profile）与履历（培训 / 社保 / 劳动合同） =====
+ * 端点：PersonnelProfileController（/bidding/personnel-profile）与 PersonnelRecordController（/bidding/personnel-record）
+ * 权限：bidding:personnel:profile:{query,create,update}、bidding:personnel:record:{query,create}
+ * 口径：idCard 只写不读——列表/详情回传的是 idCardMasked（脱敏），故类型里没有 idCard 字段。
+ */
+export namespace PersonnelProfileApi {
+  /** 员工档案保存（PersonnelProfileSaveReqVO；id 为空=新建，否则更新） */
+  export interface SaveReq {
+    id?: number;
+    entId: number;
+    personNo?: string;
+    personName: string;
+    /** 身份证号（仅提交，回读为脱敏值） */
+    idCard?: string;
+    /** LocalDate */
+    idCardValidTo?: null | string;
+    /** 字典 gender */
+    gender?: string;
+    /** LocalDate */
+    birthDate?: null | string;
+    mobile?: string;
+    email?: string;
+    /** 字典 edu_level */
+    eduLevel?: string;
+    eduMajor?: string;
+    school?: string;
+    /** LocalDate */
+    graduateDate?: null | string;
+    titleLevel?: string;
+    titleMajor?: string;
+    /** LocalDate */
+    workStartDate?: null | string;
+    /** LocalDate */
+    joinDate?: null | string;
+    deptName?: string;
+    remark?: string;
+  }
+
+  /** 员工档案（PersonnelProfileRespVO） */
+  export interface Profile {
+    id: number;
+    tenantId?: number;
+    entId?: number;
+    personNo?: string;
+    personName?: string;
+    /** 脱敏身份证号 */
+    idCardMasked?: string;
+    idCardValidTo?: null | string;
+    gender?: null | string;
+    birthDate?: null | string;
+    mobile?: string;
+    email?: string;
+    eduLevel?: null | string;
+    eduMajor?: string;
+    school?: string;
+    graduateDate?: null | string;
+    titleLevel?: null | string;
+    titleMajor?: string;
+    workStartDate?: null | string;
+    joinDate?: null | string;
+    deptName?: string;
+    /** 字典 personnel_status */
+    personnelStatus?: string;
+    /** 乐观锁版本（状态流转必传） */
+    version?: number;
+  }
+
+  /** 员工档案分页入参（PersonnelProfilePageReqVO） */
+  export interface PageReq extends PageParam {
+    entId?: number;
+    personNo?: string;
+    personName?: string;
+    deptName?: string;
+    personnelStatus?: string;
+    eduLevel?: string;
+    titleLevel?: string;
+    certType?: string;
+  }
+
+  /** 状态流转（PersonnelProfileStatusChangeReqVO）：迁移表由 PersonnelStatusEnum 校验 */
+  export interface StatusChangeReq {
+    id: number;
+    targetStatus: string;
+    version: number;
+    reason?: string;
+  }
+
+  /** 履职概览（PersonnelOverviewRespVO）：证书/社保/合同/学时与风险项汇总 */
+  export interface Overview {
+    profile?: Profile;
+    idCardValid?: boolean;
+    usableCertCount?: number;
+    totalCertCount?: number;
+    certificates?: PersonnelCertApi.Cert[];
+    latestSocialSecurityMonth?: null | string;
+    latestSocialSecurityStatus?: null | string;
+    latestSocialSecurityPayer?: null | string;
+    socialSecurityConsistent?: boolean;
+    laborContractValid?: boolean;
+    laborContractConsistent?: boolean;
+    totalEduHours?: null | string;
+    risks?: string[];
+    usableForTender?: boolean;
+  }
+
+  /** 培训记录保存（PersonnelTrainingSaveReqVO） */
+  export interface TrainingSaveReq {
+    entId: number;
+    personId: number;
+    trainingName: string;
+    trainingType?: string;
+    organizer?: string;
+    /** LocalDate */
+    startDate?: null | string;
+    /** LocalDate */
+    endDate?: null | string;
+    eduHours?: null | number;
+    result?: string;
+    score?: null | number;
+    certNo?: string;
+    /** LocalDate */
+    certValidTo?: null | string;
+    fileId?: null | number;
+    remark?: string;
+  }
+
+  export interface Training {
+    id: number;
+    entId?: number;
+    personId?: number;
+    trainingName?: string;
+    trainingType?: string;
+    organizer?: string;
+    startDate?: null | string;
+    endDate?: null | string;
+    eduHours?: null | number;
+    result?: string;
+    score?: null | number;
+    certNo?: string;
+    certValidTo?: null | string;
+    fileId?: null | number;
+    remark?: string;
+  }
+
+  /** 社保记录保存（PersonnelSocialSecuritySaveReqVO） */
+  export interface SocialSecuritySaveReq {
+    entId: number;
+    personId: number;
+    payerName?: string;
+    payerCreditCode?: string;
+    /** yyyy-MM */
+    payMonth: string;
+    payStatus?: string;
+    payBase?: null | number;
+    payAmount?: null | number;
+    socialNo?: string;
+    sourceChannel?: string;
+    evidenceFileId?: null | number;
+    remark?: string;
+  }
+
+  export interface SocialSecurity {
+    id: number;
+    entId?: number;
+    personId?: number;
+    payerName?: string;
+    payerCreditCode?: string;
+    payMonth?: string;
+    payStatus?: string;
+    payBase?: null | number;
+    payAmount?: null | number;
+    socialNo?: string;
+    sourceChannel?: string;
+    evidenceFileId?: null | number;
+    remark?: string;
+  }
+
+  /** 劳动合同保存（PersonnelLaborContractSaveReqVO） */
+  export interface LaborContractSaveReq {
+    entId: number;
+    personId: number;
+    contractNo: string;
+    contractType?: string;
+    /** LocalDate */
+    signDate?: null | string;
+    /** LocalDate */
+    startDate?: null | string;
+    /** LocalDate */
+    endDate?: null | string;
+    contractStatus?: string;
+    positionName?: string;
+    fileId?: null | number;
+    remark?: string;
+  }
+
+  export interface LaborContract {
+    id: number;
+    entId?: number;
+    personId?: number;
+    contractNo?: string;
+    contractType?: string;
+    signDate?: null | string;
+    startDate?: null | string;
+    endDate?: null | string;
+    contractStatus?: string;
+    positionName?: string;
+    fileId?: null | number;
+    remark?: string;
+  }
+}
+
+/** 员工档案分页（权限 bidding:personnel:profile:query） */
+export function getPersonnelProfilePage(params: PersonnelProfileApi.PageReq) {
+  return requestClient.get<PageResult<PersonnelProfileApi.Profile>>('/bidding/personnel-profile/page', { params });
+}
+
+/** 员工档案详情 */
+export function getPersonnelProfile(id: number | string) {
+  return requestClient.get<PersonnelProfileApi.Profile>('/bidding/personnel-profile/get', { params: { id } });
+}
+
+/** 履职概览：证书可用数 / 社保一致性 / 合同有效性 / 学时与风险项 */
+export function getPersonnelOverview(id: number | string) {
+  return requestClient.get<PersonnelProfileApi.Overview>('/bidding/personnel-profile/overview', { params: { id } });
+}
+
+/** 建档（权限 bidding:personnel:profile:create） */
+export function createPersonnelProfile(data: PersonnelProfileApi.SaveReq) {
+  return requestClient.post<number>('/bidding/personnel-profile/create', data);
+}
+
+/** 编辑（权限 bidding:personnel:profile:update；乐观锁 version 由后端校验） */
+export function updatePersonnelProfile(data: PersonnelProfileApi.SaveReq) {
+  return requestClient.put<boolean>('/bidding/personnel-profile/update', data);
+}
+
+/** 档案状态流转（在职/停职/离职/退休；迁移表 PersonnelStatusEnum） */
+export function changePersonnelProfileStatus(data: PersonnelProfileApi.StatusChangeReq) {
+  return requestClient.put<boolean>('/bidding/personnel-profile/change-status', data);
+}
+
+/** 培训记录录入（权限 bidding:personnel:record:create） */
+export function createPersonnelTraining(data: PersonnelProfileApi.TrainingSaveReq) {
+  return requestClient.post<number>('/bidding/personnel-record/training/create', data);
+}
+/** 培训记录（某员工，倒序） */
+export function getPersonnelTrainingList(personId: number | string) {
+  return requestClient.get<PersonnelProfileApi.Training[]>('/bidding/personnel-record/training/list', {
+    params: { personId },
+  });
+}
+/** 社保记录录入 */
+export function createPersonnelSocialSecurity(data: PersonnelProfileApi.SocialSecuritySaveReq) {
+  return requestClient.post<number>('/bidding/personnel-record/social-security/create', data);
+}
+/** 社保记录（某员工，倒序） */
+export function getPersonnelSocialSecurityList(personId: number | string) {
+  return requestClient.get<PersonnelProfileApi.SocialSecurity[]>(
+    '/bidding/personnel-record/social-security/list',
+    { params: { personId } },
+  );
+}
+/** 劳动合同录入 */
+export function createPersonnelLaborContract(data: PersonnelProfileApi.LaborContractSaveReq) {
+  return requestClient.post<number>('/bidding/personnel-record/labor-contract/create', data);
+}
+/** 劳动合同（某员工，倒序） */
+export function getPersonnelLaborContractList(personId: number | string) {
+  return requestClient.get<PersonnelProfileApi.LaborContract[]>('/bidding/personnel-record/labor-contract/list', {
+    params: { personId },
+  });
 }
