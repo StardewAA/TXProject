@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.wms.enums.order.WmsOrderStatusEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,8 @@ public class WmsMovementOrderServiceImpl implements WmsMovementOrderService {
     private WmsWarehouseService warehouseService;
     @Resource
     private WmsInventoryService inventoryService;
+    @Resource
+    private WmsItemSkuService itemSkuService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -105,6 +108,8 @@ public class WmsMovementOrderServiceImpl implements WmsMovementOrderService {
         WmsMovementOrderDO order = validateMovementOrderPrepare(id);
         // 1.2 校验移库单明细存在
         List<WmsMovementOrderDetailDO> details = movementOrderDetailService.validateMovementOrderDetailListExists(id);
+        itemSkuService.validateItemSkuListItemEnabled(details.stream()
+                .map(WmsMovementOrderDetailDO::getSkuId).toList());
 
         // 2. 完成移库单
         if (movementOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),
