@@ -113,7 +113,7 @@ defineExpose({ openJob });
 </script>
 
 <template>
-  <Drawer v-model:open="open" :width="920" :title="row ? '批次 #' + String(row.id) + ' 详情' : '批次详情'">
+  <Drawer v-model:open="open" class="bid-ind" :width="920" :title="row ? '批次 #' + String(row.id) + ' 详情' : '批次详情'">
     <div v-if="loading" class="jd-hint">明细回读中…</div>
     <template v-else-if="row">
       <!-- 层1：批次概要 -->
