@@ -58,7 +58,10 @@ public class BiddingFileServiceImpl implements BiddingFileService {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.FILE_URL_INVALID);
         }
         // 只向 infra 查询元数据（不主动下载该地址），因此不存在 SSRF 面
-        FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url.trim());
+        // 适配 infra FileApi 契约变更（返回 CommonResult）：错误信封时 getCheckedData 抛 ServiceException；
+        // 保留 null 容忍，查不到元数据时仍走下方的"URL 无效"分支
+        cn.iocoder.txgy.framework.common.pojo.CommonResult<FileMetadataRespDTO> metaResult = fileApi.getMetadataByUrl(url.trim());
+        FileMetadataRespDTO meta = metaResult == null ? null : metaResult.getCheckedData();
         if (meta == null || meta.getId() == null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.FILE_URL_INVALID);
         }
@@ -84,7 +87,8 @@ public class BiddingFileServiceImpl implements BiddingFileService {
             log.warn("[BiddingFileServiceImpl][register] 文件服务未返回访问地址 name={}", name);
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.FILE_REGISTER_FAILED);
         }
-        FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url);
+        cn.iocoder.txgy.framework.common.pojo.CommonResult<FileMetadataRespDTO> metaResult = fileApi.getMetadataByUrl(url);
+        FileMetadataRespDTO meta = metaResult == null ? null : metaResult.getCheckedData();
         if (meta == null || meta.getId() == null) {
             // 用户口径：上传成功但响应体缺失 file_id → 明确报错，禁止回退到"让用户手填 ID"
             log.warn("[BiddingFileServiceImpl][register] 文件已上传但未取到 file_id（元数据缺失）url={}", url);

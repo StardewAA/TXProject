@@ -11,10 +11,12 @@
 --   4) 《电子招标投标办法》（20号令）第42条 —— 应公开并提交从业人员职称/职业资格与电子证书编号；
 --   5) 《招投标模块开发规范》§5：一（表结构分轨，本域沿用 qualification_ 前缀例外并新增 bidding_personnel_ 前缀）、
 --      四-1（审计列由 BaseDO 提供）、五（T 轨继承 TenantBaseDO，自动租户隔离）、六-1（UK 含 deleted 与 tenant_id）。
--- 说明：本文件 7 张新表 + 1 处增量列；全部幂等（CREATE TABLE IF NOT EXISTS）；
---       ALTER 仅首次执行，重复执行报 Duplicate column 可忽略（同一口径见 sql/2026-09-10-qual-expiry-alert.sql）。
--- 业务目标：把"员工资质"从 Excel 台账升级为可检索、可预警、可核验、可配证的电子化主数据，
---          并与企业资质（15-1/15-3）、投标项目（配证要求）、社保/合同/财务数据互联互通。
+-- 说明：本文件 5 张新表（员工档案/证书/培训/社保/劳动合同），全部幂等（CREATE TABLE IF NOT EXISTS）；
+--       范围口径（用户 2026-09-13 确认）：做到“证照全生命周期管理（中级）”，不做签发；
+--       故原设计的“一键配证/人证合一合规核验”判定引擎不在本期落地（要求库/配证结果表暂不建）。
+--       证件生命周期（变更/续期/注销吊销/年检）统一落 sql/2026-09-14-cert-lifecycle.sql 的 cert_lifecycle_record。
+-- 业务目标：把"员工资质"从 Excel 台账升级为可检索、可预警、可核验的电子化人员主数据，
+--          并与企业资质（15-1/15-3 人员配置）、社保/劳动合同数据互联互通（关联列在后续配证阶段再增，本期不增）。
 -- =====================================================================
 SET NAMES utf8mb4;
 
@@ -87,7 +89,9 @@ CREATE TABLE IF NOT EXISTS `personnel_certificate` (
     `cert_name` varchar(256) NOT NULL COMMENT '证书名称（照面全称）',
     `cert_no` varchar(128) NOT NULL COMMENT '证书编号（电子证书编号，20号令第42条要求可公开）',
     `cert_level` varchar(64) DEFAULT NULL COMMENT '等级（一级/二级，或安管人员 A/B/C 证）',
+    `cert_sub_type` varchar(16) DEFAULT NULL COMMENT '证书细分 code：安管人员 A/B/C（C 可再分 C1 机械/C2 土建/C3 综合）、特种设备作业 G1/G2/G3、RT/UT 等级等（06 文档 §二-3；码表 bidding_ 前缀）',
     `major` varchar(128) DEFAULT NULL COMMENT '专业（与资质要求专业比对，人岗匹配）',
+    `next_review_date` date DEFAULT NULL COMMENT '下次复审/年审日期（与有效期独立的时间维度：司炉证届满前 1 个月复审、ISO 监督审核 ≤12 个月一次；06 文档 §二-4）',
     `edu_level` varchar(16) DEFAULT NULL COMMENT '学历层次 code（学历/学位证书用）',
     `issuing_authority` varchar(256) DEFAULT NULL COMMENT '发证机关',
     `issue_date` date DEFAULT NULL COMMENT '发证日期',
@@ -96,7 +100,7 @@ CREATE TABLE IF NOT EXISTS `personnel_certificate` (
     `register_unit` varchar(256) DEFAULT NULL COMMENT '注册/执业单位名称（防挂证核验：须与申报企业一致）',
     `register_unit_code` varchar(64) DEFAULT NULL COMMENT '注册单位统一社会信用代码（GB 32100-2015，一致性核验键）',
     `register_no` varchar(128) DEFAULT NULL COMMENT '注册号/执业印章号（与 15-3 reg_no 同口径）',
-    `cert_status` varchar(16) NOT NULL DEFAULT 'VALID' COMMENT '台账状态 code：VALID/EXPIRING_SOON/EXPIRED/REVOKED/CANCELLED（对齐建办市〔2024〕51号 ZZZT 口径）',
+    `cert_status` varchar(16) NOT NULL DEFAULT 'VALID' COMMENT '台账状态 code：VALID/EXPIRING_SOON/EXPIRED/SUSPENDED 暂扣/REVOKED/CANCELLED（对齐建办市〔2024〕51号 ZZZT 口径）',
     `platform_verified` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否已在四库一平台线上核验（jzsc.mohurd.gov.cn）',
     `verify_url` varchar(512) DEFAULT NULL COMMENT '官方核验链接（照面二维码/查询网址）',
     `verified_at` datetime DEFAULT NULL COMMENT '最近核验时间',
@@ -111,7 +115,9 @@ CREATE TABLE IF NOT EXISTS `personnel_certificate` (
     UNIQUE KEY `uk_pcert_no` (`tenant_id`, `person_id`, `cert_type`, `cert_no`, `deleted`),
     KEY `idx_pcert_person` (`tenant_id`, `person_id`, `cert_type`, `is_current`),
     KEY `idx_pcert_ent_type` (`tenant_id`, `ent_id`, `cert_type`, `cert_status`),
-    KEY `idx_pcert_valid` (`cert_status`, `valid_to`)
+    KEY `idx_pcert_valid` (`cert_status`, `valid_to`),
+    KEY `idx_pcert_review` (`cert_status`, `next_review_date`),
+    KEY `idx_pcert_sub_type` (`tenant_id`, `ent_id`, `cert_type`, `cert_sub_type`, `cert_status`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '员工证书台账（身份/学历/职称/执业/安全/技能类）';
 
 -- ---------------------------------------------------------------------
@@ -208,94 +214,3 @@ CREATE TABLE IF NOT EXISTS `personnel_labor_contract` (
     UNIQUE KEY `uk_plc_no` (`tenant_id`, `person_id`, `contract_no`, `deleted`),
     KEY `idx_plc_person` (`tenant_id`, `person_id`, `contract_status`, `end_date`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '员工劳动合同（劳动关系证据）';
-
--- ---------------------------------------------------------------------
--- 表 6：qual_staff_cert_requirement 人员配证要求（投标/申报的人员资格要求）
--- 依据：用户要求"参与项目投标时，根据招标要求从内部人才库快速筛选符合条件的员工，实现投标项目一键配证"；
---       v3.3 表 15-7（申报流 PRE_APPLY 核查）、表 15-3（角色口径 staff_role）。
--- 目标：把招标文件/资质标准里的"人员要求"结构化，作为匹配引擎的输入与留痕依据。
--- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `qual_staff_cert_requirement` (
-    `id` bigint NOT NULL COMMENT '主键（雪花 ID）',
-    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨）',
-    `creator` varchar(64) DEFAULT '' COMMENT '创建者',
-    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updater` varchar(64) DEFAULT '' COMMENT '更新者',
-    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-    `ent_id` bigint NOT NULL COMMENT '归属企业',
-    `req_code` varchar(64) NOT NULL COMMENT '要求编号（业务键，UK 组成，便于外部系统引用）',
-    `req_name` varchar(256) NOT NULL COMMENT '要求名称（如"××项目项目经理岗要求"）',
-    `scene` varchar(16) NOT NULL DEFAULT 'TENDER' COMMENT '场景 code：TENDER 投标配证/QUAL_APPLY 资质申报配人/OTHER',
-    `biz_id` bigint DEFAULT NULL COMMENT '关联业务主键（投标项目/标段 id）',
-    `qual_id` bigint DEFAULT NULL COMMENT '关联资质主档（scene=QUAL_APPLY 时配证结果同步 15-3 资质人员台账）',
-    `staff_role` varchar(24) DEFAULT NULL COMMENT '人员角色 code（对齐 15-3：REGISTERED_BUILDER/TECH_LEAD/MID_TITLE/SKILLED_WORKER/SITE_MGR）',
-    `cert_type` varchar(24) NOT NULL COMMENT '要求证书类型 code（personnel_certificate.cert_type）',
-    `cert_level` varchar(64) DEFAULT NULL COMMENT '要求证书等级（一级/二级、A/B/C 证等）',
-    `major` varchar(128) DEFAULT NULL COMMENT '要求专业（与证书专业/所学专业比对）',
-    `title_level` varchar(32) DEFAULT NULL COMMENT '要求职称等级 code',
-    `min_edu_level` varchar(16) DEFAULT NULL COMMENT '最低学历层次 code',
-    `min_work_years` int DEFAULT NULL COMMENT '最低工作年限（按参加工作时间推算）',
-    `headcount` int NOT NULL DEFAULT 1 COMMENT '需要人数',
-    `cover_to_date` date DEFAULT NULL COMMENT '证书有效期须覆盖到的日期（投标截止日/预计办结日）',
-    `require_platform_verified` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否要求四库一平台可核验',
-    `require_social_security` bit(1) NOT NULL DEFAULT b'1' COMMENT '是否要求社保由本企业缴纳',
-    `require_labor_contract` bit(1) NOT NULL DEFAULT b'1' COMMENT '是否要求劳动合同主体为本企业',
-    `require_full_time` bit(1) NOT NULL DEFAULT b'1' COMMENT '是否要求本单位全职（防挂靠）',
-    `require_id_card` bit(1) NOT NULL DEFAULT b'1' COMMENT '是否要求身份证有效（身份证明基础）',
-    `extra_conds` json DEFAULT NULL COMMENT '扩展条件（JSON，如"具有同类工程业绩"等文本条件，供人工复核）',
-    `req_status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '要求状态 code：ACTIVE 生效/CLOSED 关闭',
-    `remark` text COMMENT '备注',
-    `version` int NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_qscr_code` (`tenant_id`, `req_code`, `deleted`),
-    KEY `idx_qscr_biz` (`tenant_id`, `ent_id`, `scene`, `biz_id`, `req_status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '人员配证要求（投标/申报的人员资格要求）';
-
--- ---------------------------------------------------------------------
--- 表 7：qual_staff_allocation 配证结果（只追加 · 防抵赖）
--- 依据：v3.3 表 15-6（只追加 + 时点快照 + 三档结论，防事后篡改）、表 15-1（lock_info 占用记账）。
--- 目标：记录"这次投标/申报最终用了谁、匹配度多少、依据是什么"，可追溯、可释放，支撑一键配证结果回看。
--- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `qual_staff_allocation` (
-    `id` bigint NOT NULL COMMENT '主键（雪花 ID）',
-    `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号（T 轨）',
-    `creator` varchar(64) DEFAULT '' COMMENT '创建者',
-    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updater` varchar(64) DEFAULT '' COMMENT '更新者',
-    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-    `ent_id` bigint NOT NULL COMMENT '归属企业',
-    `req_id` bigint NOT NULL COMMENT '配证要求 id（qual_staff_cert_requirement.id）',
-    `scene` varchar(16) NOT NULL COMMENT '场景 code（快照，防要求变更后口径漂移）',
-    `biz_id` bigint DEFAULT NULL COMMENT '关联业务主键快照（投标项目/标段）',
-    `qual_id` bigint DEFAULT NULL COMMENT '关联资质主档快照（同步 15-3 用）',
-    `person_id` bigint NOT NULL COMMENT '选中员工（bidding_personnel_profile.id）',
-    `cert_id` bigint DEFAULT NULL COMMENT '采用的证书（personnel_certificate.id）',
-    `staff_config_id` bigint DEFAULT NULL COMMENT '同步生成的 15-3 资质人员配置行 id（scene=QUAL_APPLY 时回填）',
-    `match_score` int NOT NULL DEFAULT 0 COMMENT '匹配度得分（0~100，算法口径见服务注释）',
-    `match_detail` json DEFAULT NULL COMMENT '逐项匹配明细快照（命中/缺项，防事后篡改）',
-    `allocation_status` varchar(16) NOT NULL DEFAULT 'ALLOCATED' COMMENT '状态 code：ALLOCATED 占用中/RELEASED 已释放/REPLACED 被替换',
-    `idempotent_key` varchar(160) NOT NULL COMMENT '幂等键（req_id:person_id:cert_id，防重复配证）',
-    `allocated_by` bigint DEFAULT NULL COMMENT '配证人（用户 id）',
-    `allocated_at` datetime DEFAULT NULL COMMENT '配证时间',
-    `released_by` bigint DEFAULT NULL COMMENT '释放人',
-    `released_at` datetime DEFAULT NULL COMMENT '释放时间',
-    `release_reason` varchar(512) DEFAULT NULL COMMENT '释放原因（换人/落标/项目结束）',
-    `remark` text COMMENT '备注',
-    `version` int NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_qsa_idem` (`tenant_id`, `idempotent_key`, `deleted`),
-    KEY `idx_qsa_biz` (`tenant_id`, `scene`, `biz_id`, `allocation_status`),
-    KEY `idx_qsa_req` (`tenant_id`, `req_id`, `allocation_status`),
-    KEY `idx_qsa_person` (`tenant_id`, `person_id`, `allocation_status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '人员配证结果（只追加 · 防抵赖）';
-
--- ---------------------------------------------------------------------
--- 增量列：qualification_staff_config.staff_id
--- 依据：v3.3 表 15-3 只描述"资质人员配置台账"，其与员工主档（bidding_personnel_profile）此前无关联键，
---       配证结果回写时无法反查/去重，故增列关联员工档案（可空，兼容存量行）。
--- 目标：打通"员工资质 ↔ 企业资质"——同一员工在同一资质下只保留一条配置行，配证可幂等同步。
--- ---------------------------------------------------------------------
-ALTER TABLE `qualification_staff_config`
-    ADD COLUMN `staff_id` bigint DEFAULT NULL COMMENT '关联员工档案 bidding_personnel_profile.id（配证同步；存量行为空）' AFTER `qual_id`;
