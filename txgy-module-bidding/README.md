@@ -28,7 +28,10 @@
 
 ```
 txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
-├── txgy-module-bidding-api/              对外契约：DTO / VO / 枚举 / Feign 接口
+├── pom.xml                               聚合 POM（api + server）
+├── VO数据规范/                           国家/省规范原文 + 整理版 VO 文件（**原文不要动**）
+├── 千问中间脚本和文件存放位置/            生成脚本与中间产物
+├── txgy-module-bidding-api/              对外契约：全量 VO（170 个）/ 代码集常量（125 个）/ Feign 接口
 ├── txgy-module-bidding-server/           业务实现：controller / service / dal / job / mq
 │   └── src/main/resources/
 │       ├── application.yaml              ★ 主配置（端口、爬虫频率、ES、AI 等，随代码走）
@@ -53,6 +56,24 @@ txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
 | 数据库 | 库名 `ruoyi-vue-pro`（MySQL 8.4 容器）；SQL 执行统一加 `--default-character-set=utf8mb4` |
 | 任务队列 | 公告原文下载走 **Redis Stream**（`CrawlNoticeFetchMessage`），非线程池直跑 |
 | 检索 | 外部公告索引 `bidding-notice-external`（状态转 ACTIVE 时投递索引事件） |
+| 业务依据 | 国家《公共资源交易平台系统数据规范（V2.0）》+ 陕西省 V2.0 规范；**国家、陕西都有的概念以陕西为准** |
+| 接入平台 | 根 `pom.xml` 已挂本模块；`txgy-server/pom.xml` 里对本模块的依赖默认注释着，按需打开；本模块也可独立启动（48110） |
+
+### 1.1 开发约定（改代码前先读这条）
+
+> **唯一开发规范入口：`docs/招投标模块开发规范.md`** —— 全量 VO 怎么定位、自建 VO 怎么建、
+> 前后端如何配合、哪些坑不能踩，都在这份文档里。
+
+1. **全量 VO 是字典，不是页面 DTO**：`api/vo/` 下 170 个类是规范原样映射（类名 = 规范数据集名、
+   字段名照录英文名、统一 String），只用于**上报 / 对接第三方 / 跨系统交换**；
+   页面出参**自己建 VO**（规范第三章有约定），自建 VO ↔ 全量 VO 在 service 层转换。
+2. **公开范围跟着规范走**：规范里写了"社会公开/政务公开"的字段才标 `@PublicLevel`，没写的不标；
+   对外出参统一过 `PublicLevelFilter` —— **政务字段到不了公共服务大厅 / ES**。
+3. **代码字典表**：`api/enums/` 下 125 个代码集常量类，配 `DictTypeConstants` 的 125 个 key，
+   取值以陕西 V2.0 为准。
+4. **前后端分离**：前端在 vben 工程的 `apps/web-antd` 下 —— 接口封装 `src/api/bidding/<domain>`，
+   页面 `src/views/bidding/<menu>`；后端链路 controller → service → dal，跨模块走 api 契约 + RPC。
+5. **数据层冗余约定**（超长字段、编码长度预留）先落在规范文档里，建表时按约定执行。
 
 ---
 
@@ -68,7 +89,7 @@ txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
 | System | `127.0.0.1:48087`（容器内 48080） | 容器（需 override 映射） | 本模块 Feign 直连：菜单/权限/租户 |
 | Infra | `127.0.0.1:48088`（容器内 48080） | 容器（需 override 映射） | 本模块 Feign 直连：文件服务（`file_id` 契约） |
 | Elasticsearch | `http://127.0.0.1:9200` | 容器 `elasticsearch`（8.10.0） | 基本认证；索引 `bidding-notice-external` |
-| 管理后台前端 | 另仓 `txgy-ui/txgy-ui-admin-vue3` | Node 独立启动 | 本模块只提供接口与菜单数据 |
+| 管理后台前端 | 另仓 vben 工程（`txgy-ui/txgy-ui-admin-vben/apps/web-antd`） | Node 独立启动 | 接口封装 `src/api/bidding/<domain>`、页面 `src/views/bidding/<menu>`；本模块只提供接口与菜单数据 |
 
 > ⚠️ **Gateway 必须运行**：爬虫任务里的原文地址是 `http://127.0.0.1:48080/admin-api/infra/file/4/get/...`（infra 文件服务经网关），
 > 网关不在时会**秒失败**并报 `HTTP 请求失败: null`（连接被拒），看起来像"站点封禁"，实则本地依赖缺失。
@@ -451,6 +472,9 @@ curl -X POST http://127.0.0.1:48110/admin-api/bidding/notice-external/reindex
 ---
 
 ## 11. 文档索引
+
+**★ 开发必读（唯一规范）**
+- `docs/招投标模块开发规范.md` —— VO 定位与自建约定、前后端配合、代码集、踩坑清单
 
 **启动与运维**
 - `docs/开发联调与运维/部署与启动方式.md` —— 部署细节 + 排障清单（本文的详尽版）
