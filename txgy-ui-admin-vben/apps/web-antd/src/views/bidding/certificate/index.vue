@@ -18,6 +18,7 @@ import {
   runCertAlertScan,
 } from '#/api/bidding/certificate';
 
+import { fmtDate, fmtDateTime } from './format';
 import CertFiles from './modules/cert-files.vue';
 import CertForm from './modules/cert-form.vue';
 import CertTimeline from './modules/cert-timeline.vue';
@@ -30,7 +31,8 @@ import './cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-const { configNumber, dictLabel, dictOptions, dictTag, metaError, metaLoaded, reloadMeta } = useCertMeta();
+const { configNumber, dictItems, dictLabel, dictOptions, dictTag, metaError, metaLoaded, reloadMeta } =
+  useCertMeta();
 
 /** 权限判定：权限码未下发时放行（最终由后端 @PreAuthorize 裁决），避免界面被锁死 */
 function can(code: string): boolean {
@@ -96,23 +98,17 @@ function resetQuery() {
 
 onMounted(load);
 
-/* ===== 展示派生（全部由数据 + 配置驱动） ===== */
-function daysLeft(validTo?: null | string): null | number {
-  if (!validTo) return null;
-  const end = new Date(`${validTo}T23:59:59`).getTime();
-  if (Number.isNaN(end)) return null;
-  return Math.ceil((end - Date.now()) / 86_400_000);
-}
+/* ===== 展示派生 =====
+ * 契约 §2.1④：前端**不得**拿 validTo 与本地时间比较派生"临期/已过期"——
+ * 该结论由后端按 cert.expiring.window.days / cert.alert.legal.floor.days 计算后写入 certStatus，
+ * 前端只做"字典 → 展示"的映射（本文件下方的 KPI 亦按字典 tagType 归集）。 */
 function validityText(r: CertificateApi.Certificate): string {
   if (!r.validFrom && !r.validTo) return '—';
-  return `${r.validFrom || '—'} ~ ${r.validTo || '长期'}`;
+  return `${fmtDate(r.validFrom)} ~ ${r.validTo ? fmtDate(r.validTo) : '长期'}`;
 }
-function validityTag(r: CertificateApi.Certificate): null | { color: string; label: string } {
-  const d = daysLeft(r.validTo);
-  if (d === null) return null; // 长期有效
-  if (d < 0) return { color: 'red', label: `已过期 ${Math.abs(d)} 天` };
-  if (d <= expiringDays.value) return { color: 'orange', label: `临期 ${d} 天` };
-  return null;
+/** 长期有效：仅依据后端字段是否为空，不做日期推算 */
+function isLongTerm(r: CertificateApi.Certificate): boolean {
+  return !r.validTo;
 }
 function maskCertNo(no?: string): string {
   if (!no) return '—';
@@ -120,19 +116,23 @@ function maskCertNo(no?: string): string {
   return `${no.slice(0, 4)}${'*'.repeat(Math.min(6, no.length - 8))}${no.slice(-4)}`;
 }
 
+/** 本页按字典 tagType 归集（success=正常 / warning=需关注 / error=异常），不自行判定业务口径 */
 const kpi = computed(() => {
   const list = rows.value;
-  const expiring = list.filter((r) => {
-    const d = daysLeft(r.validTo);
-    return d !== null && d >= 0 && d <= expiringDays.value;
-  }).length;
-  const expired = list.filter((r) => {
-    const d = daysLeft(r.validTo);
-    return d !== null && d < 0;
-  }).length;
-  const longTerm = list.filter((r) => !r.validTo).length;
+  const typeOf = (code?: null | string) =>
+    dictItems('cert_status').find((i) => i.value === code)?.tagType ?? '';
+  let ok = 0;
+  let warn = 0;
+  let bad = 0;
+  for (const r of list) {
+    const t = typeOf(r.certStatus);
+    if (t === 'success') ok += 1;
+    else if (t === 'warning') warn += 1;
+    else if (t === 'error') bad += 1;
+  }
   const unverified = list.filter((r) => !r.lastVerifiedAt).length;
-  return { expiring, expired, longTerm, unverified };
+  const longTerm = list.filter((r) => isLongTerm(r)).length;
+  return { bad, longTerm, ok, unverified, warn };
 });
 
 const columns = [
@@ -144,6 +144,7 @@ const columns = [
   { title: '验真', dataIndex: 'verificationStatus', key: 'verificationStatus', width: 150 },
   { title: '来源', dataIndex: 'sourceChannel', key: 'sourceChannel', width: 100 },
   { title: '更新时间', dataIndex: 'updateTime', key: 'updateTime', width: 165 },
+  /* 时间列统一在 bodyCell 用 fmtDateTime 渲染（后端 LocalDateTime = epoch 毫秒） */
   { title: '操作', key: 'action', width: 230, fixed: 'right' },
 ];
 
@@ -265,17 +266,22 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
         <div class="k-num">{{ total }}</div>
         <div class="k-note">按当前筛选条件</div>
       </div>
+      <div class="ct-kpi k-green">
+        <div class="k-label">本页正常</div>
+        <div class="k-num">{{ kpi.ok }}</div>
+        <div class="k-note">状态字典 tagType=success</div>
+      </div>
       <div class="ct-kpi k-orange">
-        <div class="k-label">本页临期</div>
-        <div class="k-num">{{ kpi.expiring }}</div>
-        <div class="k-note">距到期 ≤ {{ expiringDays }} 天（配置）</div>
+        <div class="k-label">本页需关注</div>
+        <div class="k-num">{{ kpi.warn }}</div>
+        <div class="k-note">临期等，由后端按 {{ expiringDays }} 天窗口判定</div>
       </div>
       <div class="ct-kpi k-red">
-        <div class="k-label">本页已过期</div>
-        <div class="k-num">{{ kpi.expired }}</div>
-        <div class="k-note">有效期止早于今天</div>
+        <div class="k-label">本页异常</div>
+        <div class="k-num">{{ kpi.bad }}</div>
+        <div class="k-note">过期/吊销/注销等（字典 tagType=error）</div>
       </div>
-      <div class="ct-kpi k-green">
+      <div class="ct-kpi">
         <div class="k-label">本页长期有效</div>
         <div class="k-num">{{ kpi.longTerm }}</div>
         <div class="k-note">无有效期止，不入到期扫描</div>
@@ -391,10 +397,10 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
             </template>
             <template v-else-if="column.key === 'validity'">
               <div>{{ validityText(record) }}</div>
-              <a-tag v-if="validityTag(record)" :color="validityTag(record)!.color">
-                {{ validityTag(record)!.label }}
+              <a-tag v-if="isLongTerm(record)" color="green">长期</a-tag>
+              <a-tag v-else :color="dictTag('cert_status', record.certStatus).color">
+                {{ dictTag('cert_status', record.certStatus).label }}
               </a-tag>
-              <a-tag v-else-if="!record.validTo" color="green">长期</a-tag>
             </template>
             <template v-else-if="column.key === 'certStatus'">
               <a-tag :color="dictTag('cert_status', record.certStatus).color">
@@ -405,7 +411,12 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
               <a-tag :color="dictTag('verification_status', record.verificationStatus).color">
                 {{ dictTag('verification_status', record.verificationStatus).label }}
               </a-tag>
-              <div class="ct-panel-meta">{{ record.lastVerifiedAt || '未验真' }}</div>
+              <div class="ct-panel-meta">
+                {{ record.lastVerifiedAt ? fmtDateTime(record.lastVerifiedAt) : '未验真' }}
+              </div>
+            </template>
+            <template v-else-if="column.key === 'updateTime'">
+              {{ fmtDateTime(record.updateTime) }}
             </template>
             <template v-else-if="column.key === 'sourceChannel'">
               {{ record.sourceChannel ? dictLabel('source_channel', record.sourceChannel) : '—' }}
@@ -466,8 +477,8 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
               <a-descriptions-item label="颁发日期">{{ detail?.issueDate || '—' }}</a-descriptions-item>
               <a-descriptions-item label="有效期">
                 {{ validityText(detail ?? ({} as CertificateApi.Certificate)) }}
-                <a-tag v-if="detail && validityTag(detail)" :color="validityTag(detail)!.color">
-                  {{ validityTag(detail)!.label }}
+                <a-tag v-if="detail" :color="dictTag('cert_status', detail.certStatus).color">
+                  {{ dictTag('cert_status', detail.certStatus).label }}
                 </a-tag>
               </a-descriptions-item>
               <a-descriptions-item label="电子证照标识">{{ detail?.eCertIdent || '—' }}</a-descriptions-item>
@@ -476,8 +487,8 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
               </a-descriptions-item>
               <a-descriptions-item label="许可/业务范围" :span="2">{{ detail?.certScope || '—' }}</a-descriptions-item>
               <a-descriptions-item label="备注" :span="2">{{ detail?.remark || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="建档时间">{{ detail?.createTime || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="更新时间">{{ detail?.updateTime || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="建档时间">{{ fmtDateTime(detail?.createTime) }}</a-descriptions-item>
+              <a-descriptions-item label="更新时间">{{ fmtDateTime(detail?.updateTime) }}</a-descriptions-item>
             </a-descriptions>
             <div class="mt-3 flex flex-wrap gap-2">
               <a-button

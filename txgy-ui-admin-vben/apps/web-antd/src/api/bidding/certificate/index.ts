@@ -124,7 +124,7 @@ export namespace CertificateApi {
     isCurrent: boolean;
     sha256?: string;
     virusScanStatus?: string;
-    copyExpirationTime?: null | string;
+    copyExpiringTime?: null | string;
     createTime?: string;
   }
 
@@ -138,10 +138,11 @@ export namespace CertificateApi {
     fileHash?: string;
     fileFormat?: string;
     fileSize?: number;
-    copyCreationTime?: string;
+    /** 加注时间/加注有效期：LocalDateTime → **epoch 毫秒**（平台无 @JsonFormat，统一毫秒序列化） */
+    copyCreationTime?: number;
     copyCreator?: string;
     copyCause?: string;
-    copyExpiringTime?: string;
+    copyExpiringTime?: number;
     remark?: string;
   }
 
@@ -313,18 +314,18 @@ export function getCertificate(id: number | string) {
   return requestClient.get<CertificateApi.Certificate>('/bidding/certificate/get', { params: { id } });
 }
 export function createCertificate(data: CertificateApi.SaveReq) {
-  return requestClient.post<number>('/bidding/certificate/create', data);
+  return requestClient.post<number>('/bidding/certificate/create', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function updateCertificate(data: CertificateApi.SaveReq) {
-  return requestClient.put<boolean>('/bidding/certificate/update', data);
+  return requestClient.put<boolean>('/bidding/certificate/update', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function changeCertificateStatus(data: CertificateApi.StatusChangeReq) {
-  return requestClient.post<boolean>('/bidding/certificate/change-status', data);
+  return requestClient.post<boolean>('/bidding/certificate/change-status', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 
 /* ========== §3 文件版本 ========== */
 export function registerCertFile(data: CertificateApi.FileRegisterReq) {
-  return requestClient.post<number>('/bidding/certificate/file/register', data);
+  return requestClient.post<number>('/bidding/certificate/file/register', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function getCertFileList(certId: number | string) {
   return requestClient.get<CertificateApi.CertFileVersion[]>('/bidding/certificate/file/list', { params: { certId } });
@@ -332,29 +333,29 @@ export function getCertFileList(certId: number | string) {
 
 /* ========== §4 验真 ========== */
 export function verifyCertificate(data: CertificateApi.VerifyReq) {
-  return requestClient.post<number>('/bidding/certificate-verify/verify', data);
+  return requestClient.post<number>('/bidding/certificate-verify/verify', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function verifyCertificateFile(data: CertificateApi.VerifyReq) {
-  return requestClient.post<number>('/bidding/certificate-verify/verify-file', data);
+  return requestClient.post<number>('/bidding/certificate-verify/verify-file', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 
 /* ========== §5 预警运行（运维补跑，均幂等） ========== */
 export function runCertAlertScan() {
-  return requestClient.post<number>('/bidding/certificate-alert-run/scan');
+  return requestClient.post<number>('/bidding/certificate-alert-run/scan', undefined, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function runCertAlertDispatch() {
-  return requestClient.post<number>('/bidding/certificate-alert-run/dispatch');
+  return requestClient.post<number>('/bidding/certificate-alert-run/dispatch', undefined, { headers: { 'X-Silent-Error': 'true' } });
 }
 
 /* ========== §6 生命周期 ========== */
 export function applyCertLifecycle(data: CertificateApi.LifecycleApplyReq) {
-  return requestClient.post<number>('/bidding/cert-lifecycle/apply', data);
+  return requestClient.post<number>('/bidding/cert-lifecycle/apply', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function auditCertLifecycle(data: CertificateApi.LifecycleAuditReq) {
-  return requestClient.post<boolean>('/bidding/cert-lifecycle/audit', data);
+  return requestClient.post<boolean>('/bidding/cert-lifecycle/audit', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function effectCertLifecycle(data: CertificateApi.LifecycleEffectReq) {
-  return requestClient.post<boolean>('/bidding/cert-lifecycle/effect', data);
+  return requestClient.post<boolean>('/bidding/cert-lifecycle/effect', data, { headers: { 'X-Silent-Error': 'true' } });
 }
 export function getCertLifecycle(id: number | string) {
   return requestClient.get<CertificateApi.Lifecycle>('/bidding/cert-lifecycle/get', { params: { id } });

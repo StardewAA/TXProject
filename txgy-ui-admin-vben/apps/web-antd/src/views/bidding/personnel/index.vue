@@ -3,7 +3,7 @@
  * 人证合一：按员工、证书类型、状态、到期窗口检索；安许 A/B/C 三类人员配备自查依赖 certSubType 统计。
  * 权限：bidding:personnel:cert:{query,create,update,delete}、bidding:personnel:alert-run
  * 阈值：到期窗口默认取配置 personnel.cert.expiring.window.days；配备要求取 safety.abc.required（不硬编码天数/人数） */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -25,6 +25,7 @@ import {
 } from '#/api/bidding/personnel';
 import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
 
+import { fmtDate } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
 
@@ -107,6 +108,13 @@ async function loadBoard() {
 function syncBoardDays() {
   boardDays.value = expiringDaysCfg.value;
 }
+/** 配置是异步加载的：到达后同步窗口值；用户已手动改过则尊重用户输入 */
+const boardDaysTouched = ref(false);
+watch(expiringDaysCfg, (v) => {
+  if (!boardDaysTouched.value && v > 0) boardDays.value = v;
+});
+/** §8.1④ 复审提醒：阈值取配置 personnel.cert.review.warn.days（默认 30），不硬编码 */
+const reviewWarnDays = computed(() => configNumber('personnel.cert.review.warn.days', 30));
 
 /* ===== §8.3 安许配备自查 ===== */
 const countEntId = ref<number | undefined>(undefined);
@@ -410,6 +418,15 @@ const columns = [
   { title: '操作', key: 'action', width: 180, fixed: 'right' },
 ];
 
+/** 下次复审角标：用后端 reviewRemainingDays（前端不做日期减法） */
+function reviewTag(r: PersonnelCertApi.Cert): null | { color: string; label: string } {
+  const d = r.reviewRemainingDays;
+  if (d === undefined || d === null) return null;
+  if (d < 0) return { color: 'red', label: `复审逾期 ${Math.abs(d)} 天` };
+  if (d <= reviewWarnDays.value) return { color: 'orange', label: `复审 ${d} 天` };
+  return null;
+}
+
 function remainTag(r: PersonnelCertApi.Cert) {
   const d = r.remainingDays;
   if (d === undefined || d === null) return null;
@@ -516,6 +533,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 <template v-else-if="column.key === 'validity'">
                   <div>{{ record.validFrom || '—' }} ~ {{ record.validTo || '长期' }}</div>
                   <a-tag v-if="remainTag(record)" :color="remainTag(record)!.color">{{ remainTag(record)!.label }}</a-tag>
+                  <a-tag v-if="reviewTag(record)" :color="reviewTag(record)!.color">{{ reviewTag(record)!.label }}</a-tag>
                 </template>
                 <template v-else-if="column.key === 'certStatus'">
                   <a-tag :color="dictTag('person_cert_status', record.certStatus).color">
@@ -549,7 +567,14 @@ function remainTag(r: PersonnelCertApi.Cert) {
         <div class="ct-panel">
           <div class="ct-filter">
             <a-input-number v-model:value="boardEntId" :min="1" placeholder="企业 ID（空=全部）" style="width: 180px" />
-            <a-input-number v-model:value="boardDays" :min="1" placeholder="到期窗口天数" style="width: 160px" />
+            <a-input-number
+              v-model:value="boardDays"
+              :min="1"
+              :max="730"
+              placeholder="到期窗口天数"
+              style="width: 160px"
+              @change="boardDaysTouched = true"
+            />
             <a-button type="primary" :loading="boardLoading" @click="loadBoard">刷新看板</a-button>
             <span class="ct-ml">
               窗口默认取配置 personnel.cert.expiring.window.days = {{ expiringDaysCfg }} 天
@@ -584,7 +609,10 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   </div>
                   <div class="tl-m">
                     <span class="tl-k">到期日：</span>{{ b.validTo || '长期' }}
-                    <template v-if="b.nextReviewDate">；<span class="tl-k">下次复审：</span>{{ b.nextReviewDate }}</template>
+                    <template v-if="b.nextReviewDate">
+                      ；<span class="tl-k">下次复审：</span>{{ fmtDate(b.nextReviewDate) }}
+                      <a-tag v-if="reviewTag(b)" :color="reviewTag(b)!.color">{{ reviewTag(b)!.label }}</a-tag>
+                    </template>
                     <template v-if="b.registerUnit">；<span class="tl-k">注册单位：</span>{{ b.registerUnit }}</template>
                     <template v-if="b.certSubType">；<span class="tl-k">细分：</span>{{ b.certSubType }}</template>
                   </div>

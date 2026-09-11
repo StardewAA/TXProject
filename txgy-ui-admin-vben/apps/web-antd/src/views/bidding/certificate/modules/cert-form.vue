@@ -96,12 +96,26 @@ function fill(record?: CertificateApi.Certificate | null) {
   });
 }
 
+/** 打开即以 §2.2 详情回填（契约 §2.4④：不得用列表行旧值直接编辑，version 必须最新） */
+const latest = ref<CertificateApi.Certificate | null>(null);
+async function loadDetail() {
+  if (!props.record?.id) return;
+  try {
+    latest.value = await getCertificate(props.record.id);
+    fill(latest.value);
+  } catch {
+    latest.value = null; // 拉不到退回列表行数据，提交冲突由后端 1060106002 兜底
+  }
+}
+
 watch(
   () => props.open,
   (v) => {
     if (v) {
+      latest.value = null;
       fill(props.record);
       formRef.value?.clearValidate?.();
+      void loadDetail();
     }
   },
 );
@@ -127,7 +141,12 @@ async function submit() {
   saving.value = true;
   try {
     if (isEdit.value) {
-      await updateCertificate({ ...form, id: props.record?.id, version: props.record?.version });
+      // version 取刚拉到的详情（回退列表行），避免陈旧版本触发 1060106002
+      await updateCertificate({
+        ...form,
+        id: props.record?.id,
+        version: latest.value?.version ?? props.record?.version,
+      });
       message.success('已保存');
       emit('saved', props.record?.id);
     } else {

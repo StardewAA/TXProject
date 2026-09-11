@@ -26,9 +26,10 @@ const emit = defineEmits<{
   (e: 'update:open', v: boolean): void;
 }>();
 
-const { dictItems, isTerminal } = useCertMeta();
+const { dictItems, dictTag, isTerminal } = useCertMeta();
 const saving = ref(false);
-const version = ref(0);
+/** 乐观锁版本：打开时先取列表行、再被详情覆盖；两者都没有则为 undefined（不伪造 0） */
+const version = ref<number | undefined>(undefined);
 const form = reactive<{ reason?: string; targetStatus?: string }>({ reason: undefined, targetStatus: undefined });
 
 /** 可选目标状态：排除当前状态；仅提示终态（是否允许由后端裁判，前端只做禁用提示） */
@@ -51,7 +52,8 @@ watch(
     if (!v) return;
     form.targetStatus = undefined;
     form.reason = undefined;
-    version.value = props.cert?.version ?? 0;
+    // 乐观锁版本：未知时保持 undefined（提交前由详情回填），**不得伪造 0**（0 会被后端判为版本冲突）
+    version.value = props.cert?.version;
     // 打开时拉一次最新详情，拿到最新乐观锁版本（避免用户拿着旧列表行提交）
     if (props.cert?.id) {
       getCertificate(props.cert.id)
@@ -73,6 +75,11 @@ async function submit() {
   }
   if (reasonRequired.value && !form.reason?.trim()) {
     message.warning('目标状态为终态，请填写事由（留痕）');
+    return;
+  }
+  if (version.value === undefined) {
+    // 乐观锁版本缺失（详情未取到）：不发请求，避免被后端判为版本冲突
+    message.warning('未取到该证照的最新版本号，请关闭窗口后重试');
     return;
   }
   saving.value = true;
@@ -127,7 +134,9 @@ async function submit() {
     />
     <div class="ct-lb">当前状态</div>
     <div class="mb-3">
-      <a-tag>{{ cert?.certStatus ?? '—' }}</a-tag>
+      <a-tag :color="dictTag('cert_status', cert?.certStatus).color">
+        {{ dictTag('cert_status', cert?.certStatus).label }}
+      </a-tag>
     </div>
     <div class="ct-lb"><span class="ct-ast">*</span>目标状态</div>
     <a-select
@@ -145,6 +154,6 @@ async function submit() {
       :rows="3"
       :placeholder="reasonRequired ? '终态流转必须填写事由，将写入留痕' : '选填（吊销/注销建议填写事由）'"
     />
-    <div class="ct-tip">提交时回传乐观锁版本 v{{ version }}；冲突会自动提示并刷新。</div>
+    <div class="ct-tip">提交时回传乐观锁版本 v{{ version ?? '—' }}；冲突会自动提示并刷新。</div>
   </a-modal>
 </template>

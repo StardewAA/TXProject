@@ -22,7 +22,7 @@ import { useCertMeta } from '../useCertMeta';
 
 const props = defineProps<{ entId?: null | number }>();
 
-const { configNumber, configValue, dictLabel, dictOptions, dictTag } = useCertMeta();
+const { configNumber, configValue, dictLabel, dictTag } = useCertMeta();
 
 const entIdInput = ref<number | undefined>(undefined);
 const asOf = ref<string | undefined>(undefined);

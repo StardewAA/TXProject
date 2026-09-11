@@ -26,6 +26,8 @@ const { configNumber, dictOptions, dictTag } = useCertMeta();
 const channel = ref<string | undefined>(undefined);
 const running = ref(false);
 const runningFile = ref(false);
+/** 结果回写等待中（验真为异步受理，需延时再看状态） */
+const verifyPending = ref(false);
 
 const channels = computed(() => dictOptions('verify_channel'));
 const windowSeconds = computed(() => configNumber('cert.verify.idempotent.window.seconds', 60));
@@ -40,8 +42,14 @@ async function run(kind: 'cert' | 'file') {
       kind === 'cert'
         ? await verifyCertificate({ certId: props.cert.id, verifyChannel: channel.value })
         : await verifyCertificateFile({ certId: props.cert.id, verifyChannel: channel.value });
-    message.success(`验真已受理（记录 #${id}）`);
+    // 契约 §4.1：受理后结果通常需数十秒才回写，故提示 + 延时自动刷新（不做轮询）
+    message.success(`验真已受理（记录 #${id}），官方核验通常需数十秒，页面将在 4 秒后自动刷新`);
     emit('changed');
+    verifyPending.value = true;
+    globalThis.setTimeout(() => {
+      verifyPending.value = false;
+      emit('changed');
+    }, 4000);
   } catch (error: unknown) {
     // 契约 §4.1：未配置可用渠道 / 无当前文件等业务拒绝 → 直接展示后端 msg（后端已本地化）
     message.warning(certErrorMsg(error));
@@ -57,6 +65,7 @@ async function run(kind: 'cert' | 'file') {
     <div class="ct-panel-h">
       <span class="ct-panel-t">验真</span>
       <span class="ct-panel-meta">向官方白名单渠道核验，结果与请求快照留档</span>
+      <a-tag v-if="verifyPending" color="processing" style="margin-left: 8px">结果回写中…</a-tag>
     </div>
     <div class="ct-panel-b">
       <a-descriptions :column="2" size="small" bordered>

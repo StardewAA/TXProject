@@ -19,6 +19,7 @@ import {
   getCertLifecyclePage,
 } from '#/api/bidding/certificate';
 
+import { fmtDateTime } from '../format';
 import LifecycleApply from '../modules/lifecycle-apply.vue';
 import MaterialCheck from '../modules/material-check.vue';
 import { useCertMeta } from '../useCertMeta';
@@ -27,7 +28,12 @@ import '../cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-const { dictLabel, dictOptions, dictTag, metaError } = useCertMeta();
+const { dictLabel, dictOptions, dictTag, isTerminal, metaError } = useCertMeta();
+
+/** 审核按钮可见性：非终态（终态由字典 lifecycle_status.terminal 判定，不写死状态集合） */
+function auditable(r: CertificateApi.Lifecycle): boolean {
+  return !isTerminal('lifecycle_status', r.status);
+}
 
 function can(code: string): boolean {
   const codes = accessStore.accessCodes ?? [];
@@ -197,10 +203,16 @@ async function submitAudit() {
   }
 }
 
-function openEffect(r: CertificateApi.Lifecycle) {
+async function openEffect(r: CertificateApi.Lifecycle) {
   effectRow.value = r;
   effectRemark.value = '';
   effectOpen.value = true;
+  // 乐观锁：生效前重取 §6.4 详情，拿最新 version（列表行 version 可能已过期）
+  try {
+    effectRow.value = await getCertLifecycle(r.id);
+  } catch {
+    // 详情取失败时保留列表行数据，由后端乐观锁兜底
+  }
 }
 
 async function submitEffect() {
@@ -343,13 +355,26 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
             </template>
             <template v-else-if="column.key === 'content'">{{ contentText(record) }}</template>
             <template v-else-if="column.key === 'effectiveAt'">
-              {{ record.effectiveAt || '未生效' }}
+              {{ record.effectiveAt ? fmtDateTime(record.effectiveAt) : '未生效' }}
             </template>
+            <template v-else-if="column.key === 'applied'">{{ fmtDateTime(record.appliedAt) }}</template>
+            <template v-else-if="column.key === 'handled'">{{ fmtDateTime(record.handledAt) }}</template>
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
                 <a @click="openDetail(record)">详情</a>
-                <a v-if="can('bidding:certificate:lifecycle:audit')" @click="openAudit(record)">审核</a>
-                <a v-if="can('bidding:certificate:lifecycle:audit')" @click="openEffect(record)">生效</a>
+                <!-- §6.2④/§6.3④：审核仅待办/审核中可点；生效仅审核通过可点（终态/已生效不再展示） -->
+                <a
+                  v-if="can('bidding:certificate:lifecycle:audit') && auditable(record)"
+                  @click="openAudit(record)"
+                >
+                  审核
+                </a>
+                <a
+                  v-if="can('bidding:certificate:lifecycle:audit') && record.status === 'APPROVED'"
+                  @click="openEffect(record)"
+                >
+                  生效
+                </a>
               </a-space>
             </template>
           </template>
@@ -396,12 +421,14 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
             {{ detail?.reviewYear ? `${detail.reviewYear} 年度 · ${detail.reviewDate || '—'}` : '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="申请人 / 时间">
-            {{ detail?.appliedBy || '—' }} / {{ detail?.appliedAt || '—' }}
+            {{ detail?.appliedBy || '—' }} / {{ fmtDateTime(detail?.appliedAt) }}
           </a-descriptions-item>
           <a-descriptions-item label="处理人 / 时间">
-            {{ detail?.handledBy || '—' }} / {{ detail?.handledAt || '—' }}
+            {{ detail?.handledBy || '—' }} / {{ fmtDateTime(detail?.handledAt) }}
           </a-descriptions-item>
-          <a-descriptions-item label="生效时间">{{ detail?.effectiveAt || '未生效' }}</a-descriptions-item>
+          <a-descriptions-item label="生效时间">
+            {{ detail?.effectiveAt ? fmtDateTime(detail.effectiveAt) : '未生效' }}
+          </a-descriptions-item>
           <a-descriptions-item label="事由 / 备注" :span="2">{{ detail?.remark || detail?.revokeReason || '—' }}</a-descriptions-item>
           <a-descriptions-item label="佐证材料 fileId" :span="2">{{ detail?.evidenceFileIds || '—' }}</a-descriptions-item>
         </a-descriptions>
