@@ -129,6 +129,208 @@ export namespace QualificationApi {
     remark?: string;
   }
 
+  /* ===== v1.1 新增读接口（页面级契约 §3.11~§3.20） ===== */
+
+  /** 资质标准分页入参（QualificationStandardPageReqVO） */
+  export interface StandardPageReq extends PageParam {
+    qualSerial?: string;
+    qualCategory?: string;
+    qualGrade?: string;
+    stdVersion?: string;
+    onlyEffective?: boolean;
+  }
+
+  /** 资质标准（QualificationStandardRespVO；req* 为文本要求，非结构化） */
+  export interface Standard {
+    id: number;
+    stdVersion?: string;
+    qualSerial?: string;
+    qualCategory?: string;
+    qualGrade?: string;
+    reqAssets?: string;
+    reqStaff?: string;
+    reqPerformance?: string;
+    reqEquipment?: string;
+    /** LocalDate */
+    effectiveFrom?: null | string;
+    /** LocalDate；空=长期有效 */
+    effectiveTo?: null | string;
+    sourceRef?: string;
+    isEffective?: boolean;
+  }
+
+  /** 资质维度选项（QualificationStandardOptionsRespVO）：序列 → 类别 → 等级 */
+  export interface StandardOptions {
+    stdVersions?: string[];
+    serials?: Array<{
+      categories?: Array<{ grades?: string[]; qualCategory?: string; }>;
+      qualSerial?: string;
+    }>;
+  }
+
+  /** 要素台账分页入参（QualificationElementPageReqVO，三个要素接口共用） */
+  export interface ElementPageReq extends PageParam {
+    entId?: number;
+    qualId?: number;
+  }
+
+  /** 资质人员台账（QualificationStaffRespVO） */
+  export interface Staff {
+    id: number;
+    entId?: number;
+    qualId?: number;
+    staffRole?: string;
+    personName?: string;
+    major?: string;
+    regNo?: string;
+    titleLevel?: string;
+    isFullTime?: boolean;
+    socialSecurityStatus?: string;
+    socialSecurityTenant?: string;
+    eduHours?: number;
+    eduHoursRequired?: number;
+    /** LocalDate */
+    regValidTo?: null | string;
+    bindedCertId?: null | number;
+    version?: number;
+  }
+
+  /** 工程业绩台账（QualificationPerformanceRespVO） */
+  export interface Performance {
+    id: number;
+    entId?: number;
+    qualId?: number;
+    projectName?: string;
+    projectType?: string;
+    scaleMetrics?: string;
+    contractAmount?: number;
+    /** LocalDate */
+    completionDate?: null | string;
+    role?: string;
+    qualityResult?: string;
+    ownerName?: string;
+    isPlatformVerified?: boolean;
+    evidenceFileIds?: string;
+  }
+
+  /** 资产/技术装备台账（QualificationAssetRespVO） */
+  export interface Asset {
+    id: number;
+    entId?: number;
+    assetType?: string;
+    name?: string;
+    spec?: string;
+    quantity?: number;
+    valueAmount?: number;
+    statYear?: number;
+    evidenceFileIds?: string;
+  }
+
+  /** 达标核查历史入参（QualificationReviewPageReqVO） */
+  export interface ReviewPageReq extends PageParam {
+    entId?: number;
+    qualId?: number;
+    reviewResult?: string;
+  }
+
+  /** 达标核查记录（QualificationReviewRespVO；elementSnapshot/diffItems 为 JSON 文本） */
+  export interface Review {
+    id: number;
+    entId?: number;
+    qualId?: number;
+    stdVersion?: string;
+    reviewType?: string;
+    reviewResult?: string;
+    elementSnapshot?: string;
+    diffItems?: string;
+    reviewer?: null | number;
+    /** LocalDateTime → epoch 毫秒 */
+    reviewedAt?: null | number | string;
+    linkedApplyId?: null | number;
+  }
+
+  /** 安许证台账入参（QualificationPermitPageReqVO） */
+  export interface PermitPageReq extends PageParam {
+    entId?: number;
+    permitStatus?: string;
+    expiringInDays?: number;
+    keyword?: string;
+  }
+
+  /** 安许证（QualificationPermitRespVO；risk* 为联动快照，grace* 为整改宽限） */
+  export interface Permit {
+    id: number;
+    entId?: number;
+    permitNo?: string;
+    issuingAuthority?: string;
+    /** LocalDate */
+    issueDate?: null | string;
+    /** LocalDate；空=长期 */
+    validTo?: null | string;
+    daysToExpire?: null | number;
+    permitStatus?: string;
+    legalPerson?: string;
+    bindedCertId?: null | number;
+    riskFlag?: null | string;
+    riskLevel?: null | string;
+    riskEvaluatedAt?: null | number | string;
+    graceExpireAt?: null | number | string;
+    graceReason?: null | string;
+    graceSourceRef?: null | string;
+    frequentAlertCount?: null | number;
+    frequentWindowStart?: null | number | string;
+    ruleVersion?: null | string;
+    /** 乐观锁版本（状态流转必传） */
+    version?: number;
+  }
+
+  /** 安许状态流转（SafetyPermitStatusChangeReqVO）：version 必传，命中乐观锁失败返回 §0.4 错误 */
+  export interface PermitStatusChangeReq {
+    permitId: number;
+    version: number;
+    targetStatus: string;
+    reason?: string;
+  }
+
+  /** 预警清单入参（QualificationAlertPageReqVO） */
+  export interface AlertPageReq extends PageParam {
+    entId?: number;
+    /** QUAL / SAFETY_PERMIT / STAFF */
+    refType?: string;
+    /** 字典 risk_level */
+    alertLevel?: string;
+    handled?: boolean;
+  }
+
+  /** 预警记录（QualificationAlertRespVO） */
+  export interface Alert {
+    id: number;
+    refType?: string;
+    refId?: null | number;
+    refName?: string;
+    certId?: null | number;
+    alertType?: string;
+    alertLevel?: string;
+    alertMessage?: string;
+    /** LocalDateTime → epoch 毫秒 */
+    triggeredAt?: null | number | string;
+    idempotentKey?: string;
+    notifyChannel?: string;
+    notifyTarget?: string;
+    notifyStatus?: string;
+    handled?: boolean;
+    handledBy?: null | number;
+    handledAt?: null | number | string;
+    handleNote?: string;
+  }
+
+  /** 预警来源类型（QualificationAlertRefTypeEnum：资质 / 安许 / 人员配置） */
+  export const ALERT_REF_TYPE_OPTIONS = [
+    { label: '资质（QUAL）', value: 'QUAL' },
+    { label: '安许证（SAFETY_PERMIT）', value: 'SAFETY_PERMIT' },
+    { label: '人员配置（STAFF）', value: 'STAFF' },
+  ];
+
   /** 资质人员录入（StaffSaveReqVO，QualificationElementController#staff） */
   export interface StaffSaveReq {
     entId: number;
@@ -278,6 +480,70 @@ export function approveQualificationRenew(data: QualificationApi.ApproveReq) {
 export function rejectQualificationRenew(data: QualificationApi.RejectReq) {
   return requestClient.post<number>('/bidding/qualification/reject', data, SILENT);
 }
+/* ===== v1.1 读接口（页面级契约 §3.11~§3.20） ===== */
+
+/** 资质标准分页（权限 bidding:qualification:query） */
+export function getStandardPage(params: QualificationApi.StandardPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Standard>>('/bidding/qualification/standard/page', { params });
+}
+
+/** 资质维度选项：序列 → 类别 → 等级（供下拉联动，避免前端硬编码枚举） */
+export function getStandardOptions() {
+  return requestClient.get<QualificationApi.StandardOptions>('/bidding/qualification/standard/options');
+}
+
+/** 要素台账 · 人员配置分页 */
+export function getQualificationStaffPage(params: QualificationApi.ElementPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Staff>>('/bidding/qualification/element/staff/page', {
+    params,
+  });
+}
+
+/** 要素台账 · 工程业绩分页 */
+export function getQualificationPerformancePage(params: QualificationApi.ElementPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Performance>>(
+    '/bidding/qualification/element/performance/page',
+    { params },
+  );
+}
+
+/** 要素台账 · 资产/技术装备分页 */
+export function getQualificationAssetPage(params: QualificationApi.ElementPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Asset>>('/bidding/qualification/element/asset/page', {
+    params,
+  });
+}
+
+/** 达标核查历史分页 */
+export function getQualificationReviewPage(params: QualificationApi.ReviewPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Review>>('/bidding/qualification/review/page', { params });
+}
+
+/** 安许证台账分页 */
+export function getQualificationPermitPage(params: QualificationApi.PermitPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Permit>>('/bidding/qualification/permit/page', { params });
+}
+
+/** 安许证详情（含联动风险与宽限快照） */
+export function getQualificationPermit(id: number | string) {
+  return requestClient.get<QualificationApi.Permit>('/bidding/qualification/permit/get', { params: { id } });
+}
+
+/** 安许状态流转（version 必传；并发冲突按 §0.4 返回 fieldErrors） */
+export function changePermitStatus(data: QualificationApi.PermitStatusChangeReq) {
+  return requestClient.post<boolean>('/bidding/qualification/permit/status', data, SILENT);
+}
+
+/** 资质标准登记（权限 bidding:qualification:standard） */
+export function createQualificationStandard(data: QualificationApi.StandardCreateReq) {
+  return requestClient.post<number>('/bidding/qualification/standard/create', data, SILENT);
+}
+
+/** 到期/风险预警清单分页（三源：QUAL / SAFETY_PERMIT / STAFF） */
+export function getQualificationAlertPage(params: QualificationApi.AlertPageReq) {
+  return requestClient.get<PageResult<QualificationApi.Alert>>('/bidding/qualification/alert/page', { params });
+}
+
 /** 资质人员录入（需 qualId；权限 bidding:qualification:element） */
 export function createQualificationStaff(data: QualificationApi.StaffSaveReq) {
   return requestClient.post<number>('/bidding/qualification/element/staff', data, SILENT);
