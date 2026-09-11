@@ -73,6 +73,12 @@ public class CrawlSourceRunner {
     @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskDispatchService crawlTaskDispatchService;
     /** 原文下载限速闸：同步直抓路径的详情页/PDF 下载前必须过闸（合规频控唯一入口） */
     @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+    /** 下载完整性校验（同步路径与消费端同一口径） */
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.validate.DownloadIntegrityValidator integrityValidator;
+    /** 下载审计与速度监控（同步路径同样留台账，否则"测试时看不到同步路径的速率"） */
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor downloadAuditor;
+    /** robots.txt 合规检查 */
+    @jakarta.annotation.Resource private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
     /** 异步投递模式（bidding.crawl.runner.async-mode=true 启用：列表发现→落 task+发轻信号，下载/落库由消费者执行）；默认 false=同步直抓（现状） */
     @Value("${bidding.crawl.runner.async-mode:false}")
     private boolean asyncMode;
@@ -423,7 +429,23 @@ public class CrawlSourceRunner {
         // 原实现在条目循环里直接下载详情页+PDF（仅 entry-delay-ms=1.5s 间隔），属高频请求目标站点；
         // 现改为：下载前阻塞等待合规闸位（默认 5 分钟/条原文，与消费端同一闸位），等待期间打进度日志。
         crawlDownloadGate.acquireBlocking(source == null ? null : source.getSourceCode(), null, detailUrl);
-        String detailHtml = httpFetchClient.getText(detailUrl);
+        String sourceCode = source == null ? null : source.getSourceCode();
+        if (!robotsGuard.isAllowed(detailUrl)) {
+            throw new IllegalStateException("详情页被 robots.txt 禁止抓取（合规跳过） url=" + detailUrl);
+        }
+        // 下载 + 完整性校验 + 审计（同步路径与消费端同一口径：空/截断/错误页/乱码一律不入库）
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome detailOutcome =
+                httpFetchClient.fetchText(detailUrl);
+        var detailVerdict = integrityValidator.validateText(detailOutcome.getText(), detailUrl);
+        downloadAuditor.record(null, sourceCode, detailUrl, "DETAIL_HTML",
+                detailOutcome.getStatusCode(), (long) detailOutcome.getByteSize(), detailOutcome.getDurationMs(),
+                detailVerdict.getSha256(), detailVerdict.getVerdict().name(),
+                cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                null, detailVerdict.getDetail());
+        if (!detailVerdict.pass()) {
+            throw new IllegalStateException("GX 详情页完整性校验不通过：" + detailVerdict.getDetail());
+        }
+        String detailHtml = detailOutcome.getText();
         NoticeParseResult detail = parserRegistry.get("GX_E_BIDDING").parse(inputOf("HTML", detailHtml, detailUrl));
         String pdfUrl = detail.getMeta() == null ? null : detail.getMeta().get("pdfDownloadUrl");
         if (!StringUtils.hasText(pdfUrl)) {
@@ -433,9 +455,20 @@ public class CrawlSourceRunner {
                 && !UrlHostGuard.isExternalAllowed(pdfUrl, source.getBaseUrl(), source.getAllowedHosts())) {
             throw new IllegalStateException("PDF 直链不在采集源白名单（SSRF 防护），url=" + pdfUrl);
         }
-        byte[] pdf = httpFetchClient.getBytes(pdfUrl);
-        if (pdf == null || pdf.length < 8) {
-            throw new IllegalStateException("PDF 下载为空");
+        if (!robotsGuard.isAllowed(pdfUrl)) {
+            throw new IllegalStateException("PDF 直链被 robots.txt 禁止抓取（合规跳过） url=" + pdfUrl);
+        }
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome pdfOutcome =
+                httpFetchClient.fetchBytes(pdfUrl);
+        byte[] pdf = pdfOutcome.getBytes();
+        var pdfVerdict = integrityValidator.validateBinary(pdf, "PDF", pdfUrl);
+        if (!pdfVerdict.pass()) {
+            downloadAuditor.record(null, sourceCode, pdfUrl, "PDF",
+                    pdfOutcome.getStatusCode(), (long) pdfOutcome.getByteSize(), pdfOutcome.getDurationMs(),
+                    pdfVerdict.getSha256(), pdfVerdict.getVerdict().name(),
+                    cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_FAILED,
+                    null, pdfVerdict.getDetail());
+            throw new IllegalStateException("PDF 完整性校验不通过：" + pdfVerdict.getDetail());
         }
         ParseInput pdfInput = new ParseInput();
         pdfInput.setPayloadType("PDF");
@@ -452,17 +485,26 @@ public class CrawlSourceRunner {
         dto.setOrigUrl(detailUrl);
         dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : entry.getTitle());
         dto.setContentType("PDF");
-        dto.setPdfSha256(sha256HexBytes(pdf));
+        // 摘要与审计台账同源（用校验器产出值）
+        dto.setPdfSha256(pdfVerdict.getSha256());
         dto.setPdfSize((long) pdf.length);
         dto.setParserCode("GX_E_BIDDING");
         dto.setIssuerName(parsed.getIssuerName());
         dto.setProjectCode(parsed.getProjectCode());
         dto.setTenderProjectCode(parsed.getTenderProjectCode());
         dto.setPublishTime(parsed.getPublishTime() != null ? parsed.getPublishTime() : parseDate(entry.getDate()));
+        // 归档 + 存储校验：fileStatus/fileId 反映真实存储状态（不再写死 REGISTERED）
+        cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome storage =
+                uploadPdfArchive(dto, pdf, parsed.getTitle() != null ? parsed.getTitle() : entry.getTitle());
         dto.setMetaJson("{\"pdfDownloadUrl\":\"" + escapeJson(pdfUrl) + "\",\"textChars\":"
                 + (parsed.getContentText() == null ? 0 : parsed.getContentText().length())
-                + ",\"fileStatus\":\"REGISTERED\"}");
-        uploadPdfArchive(dto, pdf, parsed.getTitle() != null ? parsed.getTitle() : entry.getTitle());
+                + ",\"fileStatus\":\"" + storage.getStatus() + "\",\"fileId\":"
+                + (storage.getFileId() == null ? "null" : storage.getFileId()) + "}");
+        // 审计台账：同步直抓路径同样是"原文下载"，量/速/摘要/结论/存储状态一并留痕
+        downloadAuditor.record(null, sourceCode, pdfUrl, "PDF",
+                pdfOutcome.getStatusCode(), (long) pdfOutcome.getByteSize(), pdfOutcome.getDurationMs(),
+                pdfVerdict.getSha256(), pdfVerdict.getVerdict().name(), storage.getStatus(), storage.getFileId(),
+                storage.getDetail() + " | " + pdfVerdict.getDetail());
         externalNoticeIngestService.ingest(dto);
         return true;
     }
@@ -470,9 +512,10 @@ public class CrawlSourceRunner {
     /** 把 PDF 归档到平台文件服务（FileApi.createFile → 访问 URL 回填 dto.pdfDownloadUrl）。
      *  上传失败不阻断入库（metaJson 保留外站 pdfDownloadUrl 直链兜底，可后续补传）。
      *  2026-09-10：平台 RPC 上传不返回 Long fileId（fileId 仅前端直传登记模式有），文件访问由 pdfDownloadUrl 承担。 */
-    private void uploadPdfArchive(ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome uploadPdfArchive(
+            ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
         if (pdf == null || pdf.length == 0) {
-            return;
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "PDF 字节为空，未归档");
         }
         try {
             String safeName = (title == null ? "notice" : title.replaceAll("[\\/:*?\"<>|]", "_")).trim();
@@ -480,12 +523,27 @@ public class CrawlSourceRunner {
                 safeName = safeName.substring(0, 80);
             }
             String url = fileApi.createFile(pdf, safeName + ".pdf", "bidding/notice-external", "application/pdf");
-            if (org.springframework.util.StringUtils.hasText(url)) {
-                dto.setPdfDownloadUrl(url);
-                log.info("[crawl][pdf-archive] 归档成功 file={} url={}", safeName + ".pdf", url);
+            if (!org.springframework.util.StringUtils.hasText(url)) {
+                return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "文件服务未返回访问地址");
             }
+            dto.setPdfDownloadUrl(url);
+            // 存储校验（2026-09-10 用户口径「存储状态监测」）：回查元数据核对 file_id 与字节数
+            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url);
+            if (meta == null || meta.getId() == null) {
+                log.warn("[crawl][pdf-archive] 归档已上传但回查未取到 file_id（存储状态存疑）url={}", url);
+                return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "回查元数据未取到 file_id");
+            }
+            dto.setPdfFileId(meta.getId()); // 红线 8 三件套之 file_id
+            if (meta.getSize() != null && meta.getSize() > 0 && meta.getSize() != pdf.length) {
+                return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(
+                        meta.getId(), "存储字节数不符：期望 " + pdf.length + " 实际 " + meta.getSize());
+            }
+            log.info("[crawl][pdf-archive] 归档成功并校验通过 file={} url={} fileId={}", safeName + ".pdf", url, meta.getId());
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.registered(
+                    meta.getId(), "归档校验通过 fileId=" + meta.getId());
         } catch (Exception e) {
             log.warn("[crawl][pdf-archive] 归档失败（不阻断入库，meta pdfDownloadUrl 兜底）: {}", e.getMessage());
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "归档异常: " + e.getMessage());
         }
     }
 

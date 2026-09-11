@@ -12,15 +12,12 @@ package cn.iocoder.txgy.module.bidding.service.externalfetch.throttle;
 //   而不是"任务被调度"这件事——放错位置就会出现"任务流转被限速、而下载本身不受控"的假合规。
 
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlDownloadGateDO;
-import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlDownloadGateMapper;
-import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -59,8 +56,6 @@ public class CrawlDownloadGate {
 
     @Resource
     private CrawlDownloadGateMapper gateMapper;
-    @Resource
-    private CrawlSourceMapper crawlSourceMapper;
 
     /**
      * 尝试获得"下载原文文件"的资格（非阻塞）。
@@ -123,22 +118,16 @@ public class CrawlDownloadGate {
         return row.getLastDownloadAt().plusSeconds(intervalSecondsOf(sourceCode));
     }
 
-    /** 当前生效间隔（秒）：取「全局 consumer-delay-ms」与「源 fetch_interval_seconds」的较大者，并不低于合规下限 120s */
+    /**
+     * 当前生效间隔（秒）= 下载间隔配置（bidding.crawl.runner.consumer-delay-ms），且不低于合规下限 120 秒。
+     *
+     * <p>2026-09-10 修正（用户口径「下载的间隔定为 2 分钟」）：**不再**与源表 {@code fetch_interval_seconds} 取较大者。
+     * 原因：两者语义不同——{@code consumer-delay-ms}=两次「原文下载」的最小间隔（本闸门管的就是它），
+     * {@code fetch_interval_seconds}=调度器多久触发一轮采集（CrawlRunServiceImpl 读）。
+     * 取 max 会让"把下载间隔改成 2 分钟"失效（源表 300s 会把实际间隔顶回 5 分钟），属于两个旋钮互相打架。
+     */
     public int intervalSecondsOf(String sourceCode) {
         long intervalMs = Math.max(defaultIntervalMs, MIN_INTERVAL_SECONDS * 1000);
-        if (StringUtils.hasText(sourceCode)) {
-            try {
-                CrawlSourceDO source = crawlSourceMapper.selectOne(new LambdaQueryWrapper<CrawlSourceDO>()
-                        .eq(CrawlSourceDO::getSourceCode, sourceCode).last("LIMIT 1"));
-                if (source != null && source.getFetchIntervalSeconds() != null && source.getFetchIntervalSeconds() > 0) {
-                    intervalMs = Math.max(intervalMs, source.getFetchIntervalSeconds() * 1000L);
-                }
-            } catch (Exception e) {
-                // 读源配置失败只影响"是否取更严格值"，按全局值继续（不放宽下限）
-                log.warn("[download-gate] 读取源 {} 的 fetch_interval_seconds 失败，按全局间隔 {}s 执行: {}",
-                        sourceCode, intervalMs / 1000, e.getMessage());
-            }
-        }
         return (int) Math.max(MIN_INTERVAL_SECONDS, intervalMs / 1000);
     }
 
