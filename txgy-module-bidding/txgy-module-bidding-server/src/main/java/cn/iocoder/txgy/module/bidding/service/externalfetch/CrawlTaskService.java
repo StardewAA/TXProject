@@ -59,11 +59,30 @@ public interface CrawlTaskService {
     void markDownloadSuccess(Long taskId, String contentRef, String contentType);
 
     /**
+     * 规则性跳过（**不是失败**）：置 SKIPPED 终态，不计尝试次数、不进失败退避、不进死信。
+     *
+     * <p>规范依据：《外部信息获取 v1.0》§合规（robots 约定）+ §三 状态机（SUCCESS/FAILED/SKIPPED）。
+     * 业务目标：把"永远不该抓/不允许抓"（如 robots.txt Disallow、增量未变）与"这次抓取失败了"分开，
+     * 否则被禁止的页面会被反复重试并最终堆进人工审核队列，掩盖真正的站点故障。
+     */
+    void markSkipped(Long taskId, String reason);
+
+    /**
      * 处理下载/处理失败：3 次内退避重试；耗尽置 FAILED 并转人工审核。
      *
      * @return 重试中 或 死信转审核
      */
     CrawlAttemptOutcome handleFailure(Long taskId, String cause);
+
+    /**
+     * 处理失败（尊重站点声明的冷却时间）：实际等待 = max(指数退避, 站点 Retry-After)。
+     *
+     * <p>规范依据：《外部信息获取 v1.0》§合规（频控）；HTTP 429/503 的 Retry-After 是站点的明确要求。
+     * 业务目标：被反爬警告后不得按"固定 2 分钟"继续敲同一站点——反爬拦截的冷却下限为 10 分钟（监听器传入）。
+     *
+     * @param retryAfterSeconds 站点/异常声明的最小冷却秒数；null=无特殊要求，按指数退避
+     */
+    CrawlAttemptOutcome handleFailure(Long taskId, String cause, Integer retryAfterSeconds);
 
     /** 处理结果分类（对外断言用） */
     enum CrawlAttemptOutcome {

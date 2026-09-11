@@ -9,6 +9,8 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.CrawlTaskStatusEnum;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlNoticeProcessor;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSkipException;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.FetchException;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlTaskService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
@@ -172,11 +174,29 @@ public class CrawlNoticeFetchMessageListener extends AbstractRedisStreamMessageL
                 log.error("[consume][taskId={}] 回 PENDING 失败（保持 RUNNING，待人工/下一轮）: {}", taskId, ex.getMessage());
                 finalized = true;
             }
+        } catch (CrawlSkipException e) {
+            // 规则性跳过（robots 禁止等）：终态 SKIPPED，不计失败次数、不进退避、不进死信（2026-09-11 语义修正）
+            log.info("[consume][taskId={}] 按规则跳过: {}", taskId, e.getMessage());
+            try {
+                crawlTaskService.markSkipped(taskId, e.getMessage());
+            } catch (Exception ex) {
+                log.error("[consume][taskId={}] 跳过状态回写异常（保持 RUNNING，待下一轮）: {}", taskId, ex.getMessage());
+                finalized = true;
+            }
         } catch (Exception e) {
             String cause = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             log.warn("[consume][taskId={}] 执行失败: {}", taskId, cause);
+            // 反爬拦截（403/429/Retry-After/验证码页）给"更长冷却"：下限 10 分钟，绝不在被警告后 2 分钟又去敲同一站点
+            // 规范依据：《外部信息获取 v1.0》§合规（频控/反爬）+ 用户口径「慢是要求，不是缺陷」。
+            Integer cooldownSeconds = null;
+            if (e instanceof FetchException) {
+                Integer retryAfter = ((FetchException) e).getRetryAfterSeconds();
+                cooldownSeconds = e instanceof FetchException.AntiCrawl
+                        ? Math.max(600, retryAfter == null ? 0 : retryAfter)
+                        : retryAfter;
+            }
             try {
-                crawlTaskService.handleFailure(taskId, cause);
+                crawlTaskService.handleFailure(taskId, cause, cooldownSeconds);
             } catch (Exception ex) {
                 log.error("[consume][taskId={}] 失败状态回写异常（保留原状待重投）: {}", taskId, ex.getMessage());
                 finalized = true; // 状态未回写：不触发批次收尾（task 仍 RUNNING）
