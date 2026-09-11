@@ -1,5 +1,5 @@
 import { editorActions } from './editors.js';
-export const state={session:null,token:'',tenant:0,mode:new URLSearchParams(location.search).get('mode')||'admin',data:{},active:'overview',attempt:null,pending:new Set(),drafts:{},errors:{}};
+export const state={session:null,token:'',tenant:0,mode:new URLSearchParams(location.search).get('mode')||'admin',embedded:new URLSearchParams(location.search).get('nav')==='0',data:{},active:'overview',attempt:null,pending:new Set(),drafts:{},errors:{}};
 export const $=(q,root=document)=>root.querySelector(q);
 export const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const types={single:'单选题',multi:'多选题',judge:'判断题',essay:'实操问答',case:'案例分析'};
@@ -30,7 +30,7 @@ function available(){if(state.mode==='learner'||state.session?.role==='learner')
 export async function load(page=state.active){
  if(state.attempt&&page!=='taking'){toast('请先交卷，再离开答题页面');return}
  const version=(state.viewVersion||0)+1;state.viewVersion=version;state.controller?.abort();state.controller=new AbortController();
- state.active=available().includes(page)?page:available()[0];$('#nav').innerHTML=available().map(k=>`<button class="${k===state.active?'active':''}" data-action="navigate" data-id="${k}">${navs[k]}</button>`).join('');$('#app').innerHTML='<div class="empty">正在加载…</div>';
+ state.active=available().includes(page)?page:available()[0];if(state.embedded){parent.postMessage({type:'training-exam:navigate',page:state.active},location.origin)}else{$('#nav').innerHTML=available().map(k=>`<button class="${k===state.active?'active':''}" data-action="navigate" data-id="${k}">${navs[k]}</button>`).join('')}$('#app').innerHTML='<div class="empty">正在加载…</div>';
  try{await pages[state.active]()}catch(e){if(version!==state.viewVersion)return;$('#app').innerHTML=`<div class="card empty"><strong>暂时无法加载</strong>${esc(e.message)}<p>${button('重试','reload')}</p></div>`}
 }
 const card=(title,actions,body)=>`<div class="card"><div class="cardhead"><h2>${title}</h2><div class="actions" style="margin:0">${actions||''}</div></div>${body}</div>`;
@@ -68,5 +68,5 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-acti
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.attempt?.anti_switch)post(`/my/exams/attempts/${state.attempt.attempt_id}/switch`).catch(()=>{})});
 window.addEventListener('beforeunload',e=>{if(state.attempt){e.preventDefault();e.returnValue='考试进行中，请先交卷'}});
 let initialized=false;
-window.addEventListener('message',async e=>{if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='training-exam:session')return;const {token,tenantId,dark}=e.data;document.body.classList.toggle('dark',!!dark);if(!token||!tenantId)return;state.token=token.startsWith('Bearer ')?token:'Bearer '+token;state.tenant=tenantId;if(initialized)return;try{state.session=await api('/session');initialized=true;clearInterval(handshake);$('#identity').textContent=state.session.name+' · '+({admin:'考试管理员',teacher:'讲师',reviewer:'审核员',viewer:'只读访问',learner:'学员'}[state.session.role]);document.body.dataset.mode=state.mode;await load(new URLSearchParams(location.search).get('page')||(state.mode==='learner'?'myexams':'overview'))}catch(e){$('#app').innerHTML=`<div class="empty">${esc(e.message)}</div>`}});
+window.addEventListener('message',async e=>{if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='training-exam:session')return;const {token,tenantId,dark}=e.data;document.body.classList.toggle('dark',!!dark);if(!token||!tenantId)return;state.token=token.startsWith('Bearer ')?token:'Bearer '+token;state.tenant=tenantId;if(initialized)return;try{state.session=await api('/session');initialized=true;clearInterval(handshake);$('#identity').textContent=state.session.name+' · '+({admin:'考试管理员',teacher:'讲师',reviewer:'审核员',viewer:'只读访问',learner:'学员'}[state.session.role]);document.body.dataset.mode=state.mode;if(state.embedded)document.body.classList.add('embedded');await load(new URLSearchParams(location.search).get('page')||(state.mode==='learner'?'myexams':'overview'))}catch(e){$('#app').innerHTML=`<div class="empty">${esc(e.message)}</div>`}});
 const announce=()=>parent.postMessage({type:'training-exam:ready'},location.origin);announce();const handshake=setInterval(announce,2000);setTimeout(()=>{if(!initialized)$('#app').innerHTML='<div class="empty"><strong>请从平台登录后进入</strong>企业后台：云培训学院 → 考试与认证<br>个人门户：云培训学院 → 考试与证书</div>'},8000);
