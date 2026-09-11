@@ -56,5 +56,9 @@ public class WmsItemCategoryDO extends BaseDO {
      * 枚举 {@link CommonStatusEnum}
      */
     private Integer status;
+    /**
+     * 存储说明
+     */
+    private String storageDescription;
 
 }
