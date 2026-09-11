@@ -31,6 +31,23 @@ import java.util.List;
 @Mapper
 public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
+    /**
+     * 查询相似客户：同客户类别 + 同行业（按编号倒序，最多 limit 条）
+     *
+     * @param current 当前客户
+     * @param limit   返回数量
+     * @return 相似客户列表
+     */
+    default List<CrmCustomerDO> selectSimilarList(CrmCustomerDO current, Integer limit) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        query.ne(CrmCustomerDO::getId, current.getId());
+        query.eqIfPresent(CrmCustomerDO::getCustomerType, current.getCustomerType());
+        query.eqIfPresent(CrmCustomerDO::getIndustryId, current.getIndustryId());
+        query.orderByDesc(CrmCustomerDO::getId);
+        query.last("LIMIT " + (limit == null || limit <= 0 ? 10 : Math.min(limit, 50)));
+        return selectList(query);
+    }
+
     default Long selectCountByLockStatusAndOwnerUserId(Boolean lockStatus, Long ownerUserId) {
         return selectCount(new LambdaUpdateWrapper<CrmCustomerDO>()
                 .eq(CrmCustomerDO::getLockStatus, lockStatus)

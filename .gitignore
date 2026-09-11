@@ -70,6 +70,8 @@ node_modules/
 # 本地数据库整库备份
 sql/mysql/
 deploy/mysql/init/*mysql-all-databases*.sql*
+# 运维操作前的本地表备份（含数据，不入库）
+deploy/backup_*.sql
 
 ######################################################################
 # 环境变量

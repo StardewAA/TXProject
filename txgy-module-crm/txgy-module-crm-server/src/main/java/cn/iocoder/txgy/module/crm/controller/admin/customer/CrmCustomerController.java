@@ -137,6 +137,27 @@ public class CrmCustomerController {
                 .url(url).title(page.getTitle()).content(page.getContent()).build());
     }
 
+    @GetMapping("/similar-list")
+    @Operation(summary = "获得相似客户列表", description = "按客户类别与行业推荐相似客户，便于业务对比与拓展")
+    @Parameter(name = "customerId", description = "客户编号", required = true, example = "1024")
+    @Parameter(name = "limit", description = "返回数量", example = "10")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<List<CrmCustomerRespVO>> getSimilarCustomerList(@RequestParam("customerId") Long customerId,
+                                                                       @RequestParam(value = "limit", required = false, defaultValue = "10") Integer limit) {
+        List<CrmCustomerDO> list = customerService.getSimilarCustomerList(customerId, limit);
+        if (CollUtil.isEmpty(list)) {
+            return success(java.util.Collections.emptyList());
+        }
+        // 填充负责人姓名
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                convertSet(list, CrmCustomerDO::getOwnerUserId));
+        return success(convertList(list, customer -> {
+            CrmCustomerRespVO vo = BeanUtils.toBean(customer, CrmCustomerRespVO.class);
+            MapUtils.findAndThen(userMap, customer.getOwnerUserId(), user -> vo.setOwnerUserName(user.getNickname()));
+            return vo;
+        }));
+    }
+
     @GetMapping("/page")
     @Operation(summary = "获得客户分页")
     @PreAuthorize("@ss.hasPermission('crm:customer:query')")

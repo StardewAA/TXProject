@@ -16,10 +16,14 @@ import {
 } from '#/api/crm/receivable/plan';
 import { $t } from '#/locales';
 
+import CustomerInfoCard from '#/views/crm/components/customer-info-card.vue';
+
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmReceivablePlanApi.Plan>();
+/** 当前选中的客户编号：用于展示"客户信息速览"卡片 */
+const currentCustomerId = ref<number>();
 
 /** 识别结果回填回款计划 */
 async function onQuickParse(payload: { fields: any }) {
@@ -52,6 +56,10 @@ const [Form, formApi] = useVbenForm({
   layout: 'horizontal',
   schema: useFormSchema(),
   showDefaultActions: false,
+  // 选中客户后展示"客户信息速览"卡片（一键引用）
+  handleValuesChange(values) {
+    currentCustomerId.value = values.customerId;
+  },
 });
 
 const [Modal, modalApi] = useVbenModal({
@@ -102,6 +110,7 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-2/5">
     <ClueQuickParse mode="plan" class="mx-4" @apply="onQuickParse" />
+    <CustomerInfoCard :customer-id="currentCustomerId" />
     <Form class="mx-4" />
   </Modal>
 </template>
