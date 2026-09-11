@@ -9,8 +9,10 @@ export namespace TrainingResourceApi {
   export interface CategoryNode {
     id?: number;
     parentId?: number;
+    code?: string;
     name?: string;
     sort?: number;
+    level?: number;
     children?: CategoryNode[];
   }
 
@@ -20,7 +22,7 @@ export namespace TrainingResourceApi {
     /** 分类类型：doc 文档 / video 视频 / question 试题 */
     type?: string;
     name?: string;
-    /** 父分类 ID（0=根，仅支持二级） */
+    /** 父分类 ID（0=根，最多支持三级） */
     parentId?: number;
     sort?: number;
   }
