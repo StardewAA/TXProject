@@ -275,7 +275,8 @@ function injectAiChatMenu(menus: AppRouteRecordRaw[]) {
     icon: 'lucide:bot',
     meta: {},
     visible: true,
-    sort: 999,
+    // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）
+    sort: -1,
     keepAlive: true,
     parentId: crmParent ? crmParent.id : 0,
   };
@@ -286,7 +287,8 @@ function injectAiChatMenu(menus: AppRouteRecordRaw[]) {
         (c) => (c.componentName || c.name) === 'CrmAiChat',
       )
     ) {
-      crmParent.children.push(item);
+      // 同时插入数组首位，兼容不按 sort 排序的渲染场景
+      crmParent.children.unshift(item);
     }
   } else {
     // 兜底：作为顶级菜单，并包裹 BasicLayout
