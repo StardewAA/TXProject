@@ -80,6 +80,15 @@ if (Test-Path -LiteralPath $personalResumeSql) {
     Write-Host "HRM personal resume migration applied." -ForegroundColor Green
 }
 
+# Additive resource-center enhancement (document page_count + question category_id).
+# Idempotent, so it is safe to run against an existing local database.
+$resourceEnhanceSql = Join-Path $rootDir 'sql\2026-09-11-training-doc-page-count-question-category.sql'
+if (Test-Path -LiteralPath $resourceEnhanceSql) {
+    Write-Host "Applying resource-center page-count / question-category migration ..." -ForegroundColor Cyan
+    Invoke-Mysql -SqlFile $resourceEnhanceSql
+    Write-Host "Resource-center enhancement migration applied." -ForegroundColor Green
+}
+
 # verify
 $count = docker exec $MysqlContainer mysql -uroot -p"$env:MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$Database'" 2>$null
 Write-Host "Tables in ${Database}: $count" -ForegroundColor Green
