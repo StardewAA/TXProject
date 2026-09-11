@@ -25,6 +25,7 @@ public interface ErrorCodeConstants {
     ErrorCode ITEM_CATEGORY_HAS_CHILDREN = new ErrorCode(1_060_102_005, "删除失败！请先删除该分类下的子分类！");
     ErrorCode ITEM_CATEGORY_HAS_ITEM = new ErrorCode(1_060_102_006, "删除失败！分类已被商品使用！");
     ErrorCode ITEM_CATEGORY_CODE_DUPLICATE = new ErrorCode(1_060_102_007, "商品分类编号重复");
+    ErrorCode ITEM_CATEGORY_NOT_ENABLED = new ErrorCode(1_060_102_008, "商品分类已停用，请先启用该分类或其上级分类");
 
     // ========== WMS 基础数据-商品品牌 1-060-103-000 ==========
     ErrorCode ITEM_BRAND_NOT_EXISTS = new ErrorCode(1_060_103_000, "商品品牌不存在");

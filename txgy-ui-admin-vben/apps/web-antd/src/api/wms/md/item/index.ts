@@ -17,6 +17,54 @@ export namespace WmsItemApi {
     brandId?: number;
     brandName?: string;
     remark?: string;
+
+    /** 物料类型 */
+    materialType?: string;
+    /** 是否需要质检 */
+    qualityRequired?: boolean;
+    /** 状态 */
+    status?: number;
+
+    // ========== 批次 / 保质期 / 序列号 ==========
+    /** 是否启用批次管理 */
+    batchManage?: boolean;
+    /** 是否启用保质期管理 */
+    shelfLifeManage?: boolean;
+    /** 是否启用序列号管理 */
+    serialNumberManage?: boolean;
+    /** 保质期（月） */
+    shelfLifeMonths?: number;
+    /** 生产日期 */
+    productionDate?: string;
+    /** 有效期至 */
+    expirationDate?: string;
+    /** 批次号规则 */
+    batchNumberRule?: string;
+    /** 有效期计算规则 */
+    expirationRule?: string;
+    /** 到期预警天数 */
+    expiryWarningDays?: number;
+    /** 过期后是否禁止出库 */
+    expiredOutboundBlocked?: boolean;
+
+    // ========== 包装 ==========
+    /** 包装规格 */
+    packageSpec?: string;
+    /** 箱规 */
+    boxSpec?: string;
+    /** 托盘规格 */
+    palletSpec?: string;
+    /** 最小包装单位 */
+    minPackageUnit?: string;
+
+    // ========== 存储 ==========
+    /** 存储条件 */
+    storageCondition?: string;
+    /** 温度要求 */
+    temperatureRequirement?: string;
+    /** 是否危险品 */
+    dangerousGoods?: boolean;
+
     skus?: WmsItemSkuApi.ItemSku[];
     initialQualityReport?: QualityReport;
     currentQualityReport?: QualityReport;
