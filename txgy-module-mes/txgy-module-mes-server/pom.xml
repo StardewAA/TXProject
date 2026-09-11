@@ -34,6 +34,12 @@
             <artifactId>txgy-module-erp-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!-- BPM 审批流：报工审批发起流程实例 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-bpm-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-module-mes-api</artifactId>
