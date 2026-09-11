@@ -29,7 +29,7 @@ defineExpose({ openTask });
 </script>
 
 <template>
-  <Drawer v-model:open="open" :width="940" :title="cur ? '任务 #' + String(cur.id) + ' · 纵向数据链' : '任务详情'">
+  <Drawer v-model:open="open" class="bid-ind" :width="940" :title="cur ? '任务 #' + String(cur.id) + ' · 纵向数据链' : '任务详情'">
     <TaskChainView v-if="cur" :task="cur" @pick="pick" />
     <div v-else class="tdh">（未选择任务）</div>
   </Drawer>

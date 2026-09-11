@@ -163,8 +163,6 @@ const sourceOpen = ref(false);
 
 const processOpen = ref(false);
 const processManual = ref<ManualRun>();
-const processTask = ref<CrawlExternalApi.TaskItem>();
-const processDetail = ref<CrawlExternalApi.TaskItem>();
 
 /* ---------- modal 挂载 ---------- */
 const [ManualModal, manualModalApi] = useVbenModal({
@@ -315,7 +313,6 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
 /* ---------- 过程抽屉 ---------- */
 async function openManualProcess(run: ManualRun) {
   processManual.value = run;
-  processTask.value = undefined;
   processOpen.value = true;
 }
 /** 抽屉内删除当前留档（数据 + 本地存储；删除后关闭抽屉） */
@@ -847,8 +844,9 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       </section>
     </div>
 
-    <!-- 详情抽屉（任务过程 / 会话测试解析详情；会话=任务条行点击的三段详情，任务=回读明细） -->
-    <Drawer v-model:open="processOpen" :width="processTask ? 720 : 980" :title="processTask ? '任务过程' : '会话测试 · 解析详情'">
+    <!-- 会话测试解析详情抽屉（测试任务条行点击 → 三段：源 · 提取 · 渲染）。
+         任务详情已统一为整页视图（pageView=taskDetail，见上方 fp-page），此处不再保留任务过程分支。 -->
+    <Drawer v-model:open="processOpen" class="bid-ind" :width="980" title="会话测试 · 解析详情">
       <!-- 会话测试解析详情（manual 任务条行点击 → 三段：源 · 提取 · 渲染 + 观测；含本会话本地留档 + 后端 TEST 留痕） -->
       <div v-if="processManual" class="space-y-3">
         <div class="ind-panel">
@@ -936,30 +934,11 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           </div>
         </div>
       </div>
-
-      <!-- 任务过程（tasks/批次内任务行 → 回读明细） -->
-      <div v-else-if="processTask" class="space-y-3">
-        <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">任务过程</span><span class="ind-panel-meta">主键：{{ String(processTask.id) }}</span></div>
-          <div class="ind-panel-b">
-            <div class="mb-2 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
-            <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, processTask.status)?.text || processTask.status }}</Descriptions.Item>
-              <Descriptions.Item label="源 / URL">{{ processTask.sourceCode || '—' }}<br />{{ processTask.url || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="通道 / 解析器">{{ processTask.channelCode || '—' }} / {{ processTask.parserCode || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="尝试次数">{{ processTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ processTask.workerId || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="开始 / 完成">{{ fmtDt(processTask.startedAt) || '—' }} / {{ fmtDt(processTask.finishedAt) || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="消息 / 错误">{{ processDetail?.message || processTask.message || '—' }}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </div>
-      </div>
       <div v-else class="text-sm font-semibold text-gray-500">加载中…</div>
     </Drawer>
 
     <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染，不嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
-    <Drawer v-model:open="detailOpen" :width="900" :title="detailTitle">
+    <Drawer v-model:open="detailOpen" class="bid-ind" :width="900" :title="detailTitle">
       <!-- ===== 批次详情：层1 批次概要 → 层2 该批爬虫任务 N 条（KPI 卡+克制行） → 层3 选中任务过程（同抽屉第二区域） ===== -->
       <div v-if="detailKind === 'job' && detailJob" class="space-y-3">
         <div class="ind-panel">

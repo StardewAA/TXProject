@@ -185,7 +185,7 @@ function fmtListUrl(raw?: string): string[] {
 defineExpose({ openSource });
 </script>
 <template>
-  <Drawer v-model:open="open" :width="960" :title="row ? '信息源详情 · ' + (row.sourceName || row.sourceCode) : '信息源详情'">
+  <Drawer v-model:open="open" class="bid-ind" :width="960" :title="row ? '信息源详情 · ' + (row.sourceName || row.sourceCode) : '信息源详情'">
     <div v-if="loading" class="sd-hint">加载中…</div>
     <template v-else-if="row">
       <!-- 层1：源概要 + 操作（启停/立即获取收在本档，不进列表行） -->
