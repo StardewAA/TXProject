@@ -15,6 +15,7 @@ import {
   certErrorCode,
   certErrorMsg,
   type CertificateApi,
+  getCertificate,
   getCertificatePage,
 } from '#/api/bidding/certificate';
 
@@ -141,11 +142,43 @@ function addChange() {
 function removeChange(i: number) {
   form.changes = (form.changes ?? []).filter((_, idx) => idx !== i);
 }
-/** 选中字段后自动带出当前值作为 oldValue（减少手填，仍可改） */
-function fillOldValue(row: CertificateApi.FieldChange) {
-  const src = active.value as unknown as null | Record<string, unknown>;
+/** 证据文件 ID：'1024, 1025' → '"[1024,1025]"'；空 → undefined（不发送） */
+function normalizeFileIds(raw?: null | string): string | undefined {
+  if (!raw) return undefined;
+  const ids = String(raw)
+    .split(/[,\s\[\]"]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => Number(s))
+    .filter((n) => Number.isFinite(n));
+  return ids.length > 0 ? JSON.stringify(ids) : undefined;
+}
+
+/** 选中字段后自动带出当前值作为 oldValue（减少手填，仍可改）
+ *  §6.1④：列表行字段不全，故以 §2.2 详情为准，拉一次最新详情填旧值。 */
+async function fillOldValue(row: CertificateApi.FieldChange) {
+  const src = (await ensureDetail()) as unknown as null | Record<string, unknown>;
   const v = src && row.fieldName ? src[row.fieldName] : undefined;
   row.oldValue = v === undefined || v === null ? '' : String(v);
+}
+
+/** 变更流程的旧值来源：按需拉取 §2.2 详情（缓存，避免每次点选都请求） */
+const detailCache = ref<CertificateApi.Certificate | null>(null);
+let detailFetching: null | Promise<CertificateApi.Certificate | null> = null;
+async function ensureDetail() {
+  if (detailCache.value) return detailCache.value;
+  const id = props.cert?.id ?? form.bizId;
+  if (!id) return active.value;
+  detailFetching ??= getCertificate(id)
+    .then((d) => {
+      detailCache.value = d;
+      return d;
+    })
+    .catch(() => active.value)
+    .finally(() => {
+      detailFetching = null;
+    });
+  return detailFetching;
 }
 
 watch(
@@ -154,6 +187,7 @@ watch(
     if (!v) return;
     picked.value = null;
     options.value = [];
+    detailCache.value = null; // 每次打开重取详情，避免旧值来自过期缓存
     form.bizId = props.cert?.id ?? 0;
     form.bizDomain = 'CERT';
     form.lifecycleType = T_CHANGE;
@@ -225,7 +259,9 @@ async function submit() {
     payload.reviewDate = form.reviewDate;
     payload.reviewResult = form.reviewResult === undefined ? undefined : Number(form.reviewResult);
   }
-  payload.evidenceFileIds = form.evidenceFileIds;
+  // 后端 CertLifecycleApplyReqVO.evidenceFileIds 是 String（JSON 数组串，例 "[1024,1025]"），
+  // 与契约 §6.1 写的 array<number> 不一致 → 以**后端为准**，这里把逗号串规范化为 JSON 数组串。
+  payload.evidenceFileIds = normalizeFileIds(form.evidenceFileIds);
   try {
     const id = await applyCertLifecycle(payload);
     message.success(`流程已发起（#${id}），待审核`);
@@ -368,12 +404,7 @@ async function submit() {
         </a-col>
         <a-col :span="8">
           <div class="ct-lb">决定生效时间</div>
-          <a-date-picker
-            v-model:value="form.revokeEffectiveAt"
-            class="w-full mb-3"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            show-time
-          />
+          <a-date-picker v-model:value="form.revokeEffectiveAt" class="w-full mb-3" value-format="YYYY-MM-DD" />
         </a-col>
         <a-col :span="24">
           <div class="ct-lb">事由</div>
@@ -398,8 +429,8 @@ async function submit() {
       </template>
 
       <a-col :span="24">
-        <div class="ct-lb">佐证材料文件 ID（多个用半角逗号分隔）</div>
-        <a-input v-model:value="form.evidenceFileIds" class="mb-3" placeholder="如 1024,1025（先在文件版本中上传取得 fileId）" />
+        <div class="ct-lb">佐证材料文件 ID（多个用半角逗号分隔，提交时转 JSON 数组串）</div>
+        <a-input v-model:value="form.evidenceFileIds" class="mb-3" placeholder="如 1024,1025（先在「文件版本」上传取得 fileId）" />
       </a-col>
       <a-col :span="24">
         <div class="ct-lb">备注</div>

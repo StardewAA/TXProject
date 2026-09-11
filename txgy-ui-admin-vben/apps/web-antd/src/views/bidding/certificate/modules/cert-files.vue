@@ -3,7 +3,9 @@
  * · 前置：先经平台通用文件接口（本仓 /bidding/file/upload）拿到 fileId，再登记元数据 → file_id 契约
  * · 上传前校验取配置：cert.file.max.size.mb / cert.file.allow.formats（**不硬编码阈值与格式**）
  * · fileHash 建议传：浏览器算 SHA-256（非安全上下文时自动跳过，不阻断登记）
- * · 旧版本必须保留：本页只追加，不提供删除（契约 §3.1 业务目标） */
+ * · 旧版本必须保留：本页只追加，不提供删除（契约 §3.1 业务目标）
+ * · 加注件（file_category=COPY）必填 4 个法定字段：copyCreationTime/copyCreator/copyCause/copyExpiringTime
+ *   （契约 §3.1④）；其中两个时间为 LocalDateTime → 必须发 **epoch 毫秒**（后端统一序列化口径）。 */
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
@@ -11,6 +13,7 @@ import { message } from 'ant-design-vue';
 import { type CertificateApi, getCertFileList, registerCertFile } from '#/api/bidding/certificate';
 import { uploadBiddingFile } from '#/api/bidding/file';
 
+import { dateTimeToMs, fmtDateTime } from '../format';
 import { useCertMeta } from '../useCertMeta';
 
 const props = defineProps<{
@@ -19,6 +22,22 @@ const props = defineProps<{
 }>();
 
 const { configNumber, configValue, dictLabel, dictOptions } = useCertMeta();
+/** 加注件法定元数据（仅 file_category=COPY 时必填） */
+const copyForm = ref<{
+  copyCause?: string;
+  copyCreationTime?: string;
+  copyCreator?: string;
+  copyExpiringTime?: string;
+}>({ copyCause: undefined, copyCreationTime: undefined, copyCreator: undefined, copyExpiringTime: undefined });
+const isCopy = computed(() => fileCategory.value === 'COPY');
+/** 加注件有效期上限（配置 cert.annotation.max.days），并给出提示天数（cert.annotation.warn.days） */
+const annotationMaxDays = computed(() => configNumber('cert.annotation.max.days', 0));
+const annotationWarnDays = computed(() => configNumber('cert.annotation.warn.days', 0));
+const copyExpiringDisabledDate = (d: any) => {
+  if (!copyForm.value.copyCreationTime || annotationMaxDays.value <= 0) return false;
+  const max = new Date(copyForm.value.copyCreationTime).getTime() + annotationMaxDays.value * 86_400_000;
+  return d && d.valueOf() > max;
+};
 const loading = ref(false);
 const uploading = ref(false);
 const rows = ref<CertificateApi.CertFileVersion[]>([]);
@@ -82,6 +101,21 @@ async function onPick(file: File) {
     message.warning(`单文件不得超过 ${maxMb.value} MB（配置 cert.file.max.size.mb）`);
     return false;
   }
+  // §3.1④ 加注件 4 法定字段前置校验（缺一不可，避免后端登记出不合规数据）
+  if (isCopy.value) {
+    if (!copyForm.value.copyCreator?.trim()) {
+      message.warning('加注件须填写加注人（copyCreator）');
+      return false;
+    }
+    if (!copyForm.value.copyCause?.trim()) {
+      message.warning('加注件须填写加注事由（copyCause）');
+      return false;
+    }
+    if (!copyForm.value.copyCreationTime) {
+      message.warning('加注件须填写加注时间（copyCreationTime）');
+      return false;
+    }
+  }
   uploading.value = true;
   try {
     const uploaded = await uploadBiddingFile(file, 'bidding/certificate');
@@ -94,6 +128,11 @@ async function onPick(file: File) {
       fileHash: hash || undefined,
       fileFormat: (file.name.split('.').pop() ?? '').toUpperCase() || undefined,
       fileSize: file.size,
+      // 加注件法定字段：时间转 epoch 毫秒（后端 LocalDateTime 入参口径）
+      copyCreator: isCopy.value ? copyForm.value.copyCreator?.trim() : undefined,
+      copyCause: isCopy.value ? copyForm.value.copyCause?.trim() : undefined,
+      copyCreationTime: isCopy.value ? dateTimeToMs(copyForm.value.copyCreationTime) : undefined,
+      copyExpiringTime: isCopy.value ? dateTimeToMs(copyForm.value.copyExpiringTime) : undefined,
     });
     message.success('文件版本已登记');
     await load();
@@ -120,6 +159,10 @@ const columns = [
   { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
   { title: 'SHA-256', dataIndex: 'sha256', key: 'sha256', width: 150 },
   { title: '登记时间', dataIndex: 'createTime', key: 'createTime', width: 165 },
+  { title: '加注人', dataIndex: 'copyCreator', key: 'copyCreator', width: 110 },
+  { title: '加注事由', dataIndex: 'copyCause', key: 'copyCause', ellipsis: true },
+  { title: '加注时间', dataIndex: 'copyCreationTime', key: 'copyCreationTime', width: 155 },
+  { title: '加注有效期至', dataIndex: 'copyExpiringTime', key: 'copyExpiringTime', width: 155 },
 ];
 </script>
 
@@ -153,6 +196,49 @@ const columns = [
         允许格式：{{ allowFormats.length ? allowFormats.join(' / ') : '（未配置 cert.file.allow.formats）' }}；单文件上限
         {{ maxMb }} MB。阈值取自配置接口 §1.2。
       </div>
+
+      <!-- §3.1④ 加注件（file_category=COPY）法定元数据：必填，否则拒绝登记 -->
+      <a-alert
+        v-if="isCopy"
+        class="mb-2"
+        type="warning"
+        show-icon
+        message="已选择「加注件」：加注人、加注事由、加注时间必填（法定要素）"
+        :description="annotationMaxDays > 0
+          ? `加注有效期不得超过加注时间 + ${annotationMaxDays} 天（配置 cert.annotation.max.days）${annotationWarnDays > 0 ? `；剩余 ${annotationWarnDays} 天时开始提醒` : ''}`
+          : '未取到 cert.annotation.max.days 配置，加注有效期不做上限校验'"
+      />
+      <div v-if="isCopy" class="ct-grid mb-3">
+        <div>
+          <div class="ct-lb"><span class="ct-ast">*</span>加注人</div>
+          <a-input v-model:value="copyForm.copyCreator" placeholder="加注人姓名/机构" />
+        </div>
+        <div>
+          <div class="ct-lb"><span class="ct-ast">*</span>加注事由</div>
+          <a-input v-model:value="copyForm.copyCause" placeholder="如：遗失补办、信息变更" />
+        </div>
+        <div>
+          <div class="ct-lb"><span class="ct-ast">*</span>加注时间</div>
+          <a-date-picker
+            v-model:value="copyForm.copyCreationTime"
+            class="w-full"
+            show-time
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="选择加注时间"
+          />
+        </div>
+        <div>
+          <div class="ct-lb">加注有效期至</div>
+          <a-date-picker
+            v-model:value="copyForm.copyExpiringTime"
+            class="w-full"
+            show-time
+            value-format="YYYY-MM-DD HH:mm:ss"
+            :disabled-date="copyExpiringDisabledDate"
+            placeholder="可空"
+          />
+        </div>
+      </div>
       <a-table
         class="ct-table"
         :columns="columns"
@@ -173,6 +259,15 @@ const columns = [
             </a-tag>
           </template>
           <template v-else-if="column.key === 'fileSize'">{{ sizeText(record.fileSize) }}</template>
+          <template v-else-if="column.key === 'createTime'">{{ fmtDateTime(record.createTime) }}</template>
+          <template v-else-if="column.key === 'copyCreationTime'">
+            {{ fmtDateTime(record.copyCreationTime) }}
+          </template>
+          <template v-else-if="column.key === 'copyExpiringTime'">
+            {{ fmtDateTime(record.copyExpiringTime) }}
+          </template>
+          <template v-else-if="column.key === 'copyCause'">{{ record.copyCause || '—' }}</template>
+          <template v-else-if="column.key === 'copyCreator'">{{ record.copyCreator || '—' }}</template>
           <template v-else-if="column.key === 'sha256'">
             <span class="ct-id">{{ record.sha256 ? `${record.sha256.slice(0, 12)}…` : '—' }}</span>
           </template>
