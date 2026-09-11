@@ -62,16 +62,16 @@ export function nowIsoLocal(): string {
  * DOC_TYPE（招标文件类型）、CLARIFY_NUM（澄清次数）都是企业必须填、但只报政务的字段。
  * 只有下列平台标识码/时间戳/附件关联标识号才是平台与系统维护。 */
 export const PLATFORM_MAINTAINED_CODES: ReadonlySet<string> = new Set<string>([
-  'UNIFIED_DEAL_CODES',
-  'UNIFIED_DEAL_CODE',
+  'ATTACHMENT_CODE',
+  'DATA_TIMESTAMP',
   'FROM_TRADE_PLAT_CODE',
   'PLATFORM_CODE',
-  'PUB_SERVICE_PLAT_CODE',
-  'TRADE_PLAT',
   'PUB_SERVICE_PLAT',
+  'PUB_SERVICE_PLAT_CODE',
   'SUBMIT_TIMESTAMP',
-  'DATA_TIMESTAMP',
-  'ATTACHMENT_CODE',
+  'TRADE_PLAT',
+  'UNIFIED_DEAL_CODE',
+  'UNIFIED_DEAL_CODES',
 ]);
 
 /** 是否平台/系统注入字段（企业表单不收集；附件关联标识号由附件面板生成） */

@@ -1,7 +1,7 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { fmtDt, JOB_STATUS_OPTIONS, TRIGGER_OPTIONS, jobSummaryText } from '../shared';
+import { fmtDt, JOB_STATUS_OPTIONS, jobSummaryText, TRIGGER_OPTIONS } from '../shared';
 
 /** 顶部检索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -27,8 +27,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'status', title: '状态', width: 120, slots: { default: 'col_status' } },
     { field: 'scope', title: '范围说明', minWidth: 160, showOverflow: true },
     { field: 'summaryJson', title: '汇总', minWidth: 170, formatter: ({ cellValue }) => jobSummaryText(cellValue as string | undefined) },
-    { field: 'finishedAt', title: '结束时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
-    { field: 'createTime', title: '创建时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null) },
+    { field: 'finishedAt', title: '结束时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as null | number | string) },
+    { field: 'createTime', title: '创建时间', width: 150, formatter: ({ cellValue }) => fmtDt(cellValue as null | number | string) },
     { field: 'operation', title: '操作', width: 90, fixed: 'right', slots: { default: 'operation' } },
   ];
 }

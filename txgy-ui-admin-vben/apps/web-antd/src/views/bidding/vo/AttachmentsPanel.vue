@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { VoField } from './voSpec.gen';
+
 /* 附件面板（任何环节可用）：严格按 VO 的附件模型组织
  *   AttachmentItemVO 附件采集项（35 类）= 分组维度（含 5 类陕西必传）
  *   AttachmentSetVO 附件集结构 = 每个附件的字段（GUID / 关联数据集标识 / 名称 / 类型 / 文件名 / URL）
@@ -10,23 +12,22 @@ import { computed, ref, watch } from 'vue';
 
 import { Button, Input, message, Tag, Upload } from 'ant-design-vue';
 
-import { uploadAttachment } from './attachmentUpload';
 import {
   attachmentCodeOf,
+  type AttachmentRecord,
   makeAttachment,
   missingRequiredItems,
   stageItems,
-  type AttachmentRecord,
 } from './attachmentStages';
-import type { VoField } from './voSpec.gen';
+import { uploadAttachment } from './attachmentUpload';
 
 const props = withDefaults(
   defineProps<{
+    directory?: string;
+    disabled?: boolean;
     modelValue: AttachmentRecord[];
     stage: string;
     title?: string;
-    disabled?: boolean;
-    directory?: string;
   }>(),
   { title: '附件', disabled: false, directory: 'bidding/attachment' },
 );
@@ -129,7 +130,7 @@ function copyCode(): void {
             <a v-if="a.url" :href="a.url" target="_blank" rel="noopener noreferrer" class="ap-open">打开</a>
             <Button size="small" type="link" danger :disabled="disabled" @click="remove(a)">移除</Button>
           </div>
-          <div class="ap-guid" :title="'ATTACHMENT_GUID：' + a.guid">{{ a.guid }}</div>
+          <div class="ap-guid" :title="`ATTACHMENT_GUID：${ a.guid}`">{{ a.guid }}</div>
         </div>
       </div>
       <div v-else class="ap-empty">暂无附件（可上传多个；同一采集项可加多个附件）</div>

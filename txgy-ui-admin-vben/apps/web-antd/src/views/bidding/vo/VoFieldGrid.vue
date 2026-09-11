@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { VoField } from './voSpec.gen';
+
 /* VO 字段网格：按规范字段（中文名/英文名/类型/必填/公开范围/备注）渲染控件。
  * 严格照录 VO：字段英文名以徽标展示、必填以 * 标注、政务公开以标签区分、值域备注随字段展示。
  * 线稿清爽风：白底细边、直角、方正圆润字、提示加大、选中无整体高亮；长字段占整行、短字段并排。 */
@@ -6,15 +8,14 @@ import { computed } from 'vue';
 
 import { Button, Input, InputNumber, Select } from 'ant-design-vue';
 
-import { YES_NO_OPTIONS, dtypeText, isGovernment, isYesNoField, nowIsoLocal, voControl } from './voFieldControl';
-import type { VoField } from './voSpec.gen';
+import { dtypeText, isGovernment, isYesNoField, nowIsoLocal, voControl, YES_NO_OPTIONS } from './voFieldControl';
 
 const props = withDefaults(
   defineProps<{
+    columns?: number;
     fields: VoField[];
     modelValue: Record<string, string>;
     readOnly?: boolean;
-    columns?: number;
   }>(),
   { readOnly: false, columns: 2 },
 );
@@ -40,10 +41,10 @@ function wide(f: VoField): boolean {
 <template>
   <div class="vf-grid" :style="gridStyle">
     <div v-for="f in fields" :key="f.code" class="vf-cell" :class="{ 'vf-wide': wide(f) }">
-      <label class="vf-lb" :for="'vf-' + f.code">
+      <label class="vf-lb" :for="`vf-${ f.code}`">
         <span v-if="f.required" class="vf-ast" title="规范必填=是">*</span>
         <span class="vf-label">{{ f.label }}</span>
-        <code class="vf-code" :title="'规范字段英文名：' + f.code">{{ f.code }}</code>
+        <code class="vf-code" :title="`规范字段英文名：${ f.code}`">{{ f.code }}</code>
         <span v-if="isGovernment(f)" class="vf-gov" title="规范公开范围=政务公开（报送平台/监管参数）">政务</span>
       </label>
 
@@ -52,7 +53,7 @@ function wide(f: VoField): boolean {
       </template>
       <template v-else-if="voControl(f) === 'boolean'">
         <Select
-          :id="'vf-' + f.code"
+          :id="`vf-${ f.code}`"
           :value="get(f.code)"
           class="vf-in"
           style="width: 100%"
@@ -65,18 +66,18 @@ function wide(f: VoField): boolean {
       </template>
       <template v-else-if="voControl(f) === 'time'">
         <div class="vf-line">
-          <Input :id="'vf-' + f.code" :value="get(f.code)" class="vf-in" placeholder="yyyy-MM-ddTHH:mm:ss" @update:value="(v) => set(f.code, v)" />
+          <Input :id="`vf-${ f.code}`" :value="get(f.code)" class="vf-in" placeholder="yyyy-MM-ddTHH:mm:ss" @update:value="(v) => set(f.code, v)" />
           <Button size="small" class="vf-now" @click="set(f.code, nowIsoLocal())">现在</Button>
         </div>
       </template>
       <template v-else-if="voControl(f) === 'amount' || voControl(f) === 'number'">
-        <InputNumber :id="'vf-' + f.code" :value="get(f.code)" class="vf-in" style="width: 100%" :placeholder="dtypeText(f)" @update:value="(v) => set(f.code, v)" />
+        <InputNumber :id="`vf-${ f.code}`" :value="get(f.code)" class="vf-in" style="width: 100%" :placeholder="dtypeText(f)" @update:value="(v) => set(f.code, v)" />
       </template>
       <template v-else-if="voControl(f) === 'multiline'">
-        <Input.TextArea :id="'vf-' + f.code" :value="get(f.code)" :rows="3" class="vf-in" placeholder="请输入" @update:value="(v) => set(f.code, v)" />
+        <Input.TextArea :id="`vf-${ f.code}`" :value="get(f.code)" :rows="3" class="vf-in" placeholder="请输入" @update:value="(v) => set(f.code, v)" />
       </template>
       <template v-else>
-        <Input :id="'vf-' + f.code" :value="get(f.code)" class="vf-in" :placeholder="dtypeText(f)" @update:value="(v) => set(f.code, v)" />
+        <Input :id="`vf-${ f.code}`" :value="get(f.code)" class="vf-in" :placeholder="dtypeText(f)" @update:value="(v) => set(f.code, v)" />
       </template>
 
       <div class="vf-meta">

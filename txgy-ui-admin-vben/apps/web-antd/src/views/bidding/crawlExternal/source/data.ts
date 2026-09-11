@@ -145,7 +145,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'createTime',
       title: '创建时间',
       width: 160,
-      formatter: ({ cellValue }) => fmtDt(cellValue as number | string | null),
+      formatter: ({ cellValue }) => fmtDt(cellValue as null | number | string),
     },
     {
       field: 'operation',

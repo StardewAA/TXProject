@@ -14,11 +14,11 @@ import { getFile } from '#/api/infra/file';
 
 const props = withDefaults(
   defineProps<{
+    fileId?: number | string;
+    fileName?: string;
     open: boolean;
     title?: string;
     url?: string;
-    fileId?: number | string;
-    fileName?: string;
   }>(),
   { title: '文件预览', url: '', fileId: undefined, fileName: '' },
 );
@@ -70,7 +70,7 @@ function close(): void {
       <div v-if="loading" class="pv-hint">正在获取文件…</div>
       <template v-else-if="resolved">
         <img v-if="isImage" :src="resolved" class="pv-img" alt="附件预览" />
-        <iframe v-else-if="isPdf" :src="resolved" class="pv-frame" title="PDF 预览" />
+        <iframe v-else-if="isPdf" :src="resolved" class="pv-frame" title="PDF 预览"></iframe>
         <div v-else class="pv-hint">
           该类型不支持内嵌预览，请
           <a :href="resolved" target="_blank" rel="noopener noreferrer">在新窗口打开</a>。

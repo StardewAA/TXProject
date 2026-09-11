@@ -3,14 +3,14 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 /* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） ===== */
 
-export const STATUS_MAP: Record<string, { text: string; color: string }> = {
+export const STATUS_MAP: Record<string, { color: string; text: string; }> = {
   NEW: { text: '待审核', color: 'orange' },
   ACTIVE: { text: '已生效', color: 'green' },
   INACTIVE: { text: '已失效', color: 'default' },
   ARCHIVED: { text: '已归档', color: 'blue' },
 };
 
-export const AUDIT_MAP: Record<string, { text: string; color: string }> = {
+export const AUDIT_MAP: Record<string, { color: string; text: string; }> = {
   UNREVIEWED: { text: '未审核', color: 'default' },
   APPROVED: { text: '审核通过', color: 'green' },
   REJECTED: { text: '已驳回', color: 'red' },
@@ -25,32 +25,32 @@ export const CONTENT_TYPE_MAP: Record<string, string> = {
   OTHER: '其他',
 };
 
-export const INDUSTRY_MAP: Record<string, { text: string; color: string }> = {
+export const INDUSTRY_MAP: Record<string, { color: string; text: string; }> = {
   BELONGS: { text: '行业相关', color: 'blue' },
   NOT_BELONGS: { text: '不相关', color: 'default' },
   UNCERTAIN: { text: '未知', color: 'orange' },
 };
 
-export const EXTRACTION_MAP: Record<string, { text: string; color: string }> = {
+export const EXTRACTION_MAP: Record<string, { color: string; text: string; }> = {
   NONE: { text: '未抽取', color: 'default' },
   SUCCESS: { text: '抽取成功', color: 'green' },
   FAIL_EMPTY: { text: '空(扫描件)', color: 'orange' },
   FAIL: { text: '抽取失败', color: 'red' },
 };
 
-export const AI_MAP: Record<string, { text: string; color: string }> = {
+export const AI_MAP: Record<string, { color: string; text: string; }> = {
   NONE: { text: '未执行', color: 'default' },
   SUCCESS: { text: 'AI成功', color: 'green' },
   FAILED: { text: 'AI失败', color: 'red' },
 };
 
-export const BODY_MAP: Record<string, { text: string; color: string }> = {
+export const BODY_MAP: Record<string, { color: string; text: string; }> = {
   NONE: { text: '未结构化', color: 'default' },
   SUCCESS: { text: '已结构化', color: 'green' },
   FAILED: { text: '结构化失败', color: 'red' },
 };
 
-const tagOpts = (map: Record<string, { text: string; color: string }>) =>
+const tagOpts = (map: Record<string, { color: string; text: string; }>) =>
   Object.entries(map).map(([value, c]) => ({ label: c.text, value }));
 
 /** 列表搜索表单（manage/page 结构化过滤：状态/审核/形态/行业/来源/类型/项目编号） */
@@ -122,7 +122,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
  * 兼容 ISO 字符串 'yyyy-MM-ddTHH:mm:ss' 与数字两种形态）。
  */
 const p2t = (n: number) => String(n).padStart(2, '0');
-const fmtT = (v?: string | number | null): string => {
+const fmtT = (v?: null | number | string): string => {
   if (v == null || v === '') return '';
   let d: Date;
   if (typeof v === 'number') {
