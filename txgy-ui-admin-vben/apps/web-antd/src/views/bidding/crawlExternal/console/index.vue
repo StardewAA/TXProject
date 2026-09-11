@@ -825,19 +825,29 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         </template>
       </section>
 
-      <!-- ============ ③ 采集批次（克制档行：状态Tag/源/触发/摘要(单行截断, title 全量)/时间；整行或「详情 ▸」进批次详情层） ============ -->
+      <!-- ============ ③ 采集批次（统一任务条 fp-tbl：状态/时间/批次#/源·触发/摘要；行点击进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
           <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
-            <div v-for="j in jobs" :key="String(j.id)" class="ind-row ind-dl-row" @click="openJobDetail(j)">
-              <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
-              <span class="rw">源：{{ j.sourceCode || '—' }}</span>
-              <span class="rw">触发：{{ j.triggerType || '—' }}</span>
-              <span class="rw main" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
-              <span class="rw time">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
-              <a class="rw cd-link shrink-0" href="#" @click.prevent.stop="openJobDetail(j)">详情 ▸</a>
+            <div v-else class="fp-tbl">
+              <div class="fp-tr fp-th">
+                <span class="fp-td w-status">状态</span>
+                <span class="fp-td w-time">时间</span>
+                <span class="fp-td w-id">批次 #</span>
+                <span class="fp-td flex-1">源 / 触发</span>
+                <span class="fp-td w-msg">摘要</span>
+              </div>
+              <div v-for="j in jobs" :key="String(j.id)" class="fp-tr fp-row-click" @click="openJobDetail(j)">
+                <span class="fp-td w-status">
+                  <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
+                </span>
+                <span class="fp-td w-time">{{ fmtDt(j.finishedAt || j.createTime) || '—' }}</span>
+                <span class="fp-td w-id">#{{ String(j.id) }}</span>
+                <span class="fp-td flex-1 fp-url">{{ j.sourceCode || '—' }}<template v-if="j.triggerType"> · {{ j.triggerType }}</template></span>
+                <span class="fp-td w-msg fp-msg" :title="j.summaryJson ? jobSummaryText(j.summaryJson) : ''">{{ j.summaryJson ? jobSummaryText(j.summaryJson) : '—' }}</span>
+              </div>
             </div>
           </div>
         </div>
