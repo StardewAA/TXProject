@@ -35,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -49,6 +51,10 @@ class NoticeExternalServiceImplTest {
     private HttpFetchClient httpFetchClient;
     private FileApi fileApi;
     private cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper crawlSourceMapper;
+    // 2026-09-11 补齐：合规链路依赖（PDF 回填/预览回退都要过下载闸位与 robots 检查），
+    //   不注入则单测里为 null → NPE（backfillPdfDownloadUrls_downloadsUploadsAndPatches 变红的原因）
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
     private NoticeExternalServiceImpl service;
 
     @BeforeEach
@@ -65,6 +71,11 @@ class NoticeExternalServiceImplTest {
         src.setSourceCode("GX");
         src.setBaseUrl("https://gx.e-bidding.org");
         when(crawlSourceMapper.selectOne(any())).thenReturn(src);
+        // 默认：robots 允许、闸位随时可得（限速语义另有专门用例）
+        crawlDownloadGate = mock(cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate.class);
+        when(crawlDownloadGate.tryAcquire(any(), any(), any())).thenReturn(true);
+        robotsGuard = mock(cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard.class);
+        when(robotsGuard.isAllowed(any())).thenReturn(true);
         service = new NoticeExternalServiceImpl();
         ReflectionTestUtils.setField(service, "noticeExternalMapper", noticeExternalMapper);
         ReflectionTestUtils.setField(service, "noticeExternalAttachmentMapper", noticeExternalAttachmentMapper);
@@ -72,6 +83,8 @@ class NoticeExternalServiceImplTest {
         ReflectionTestUtils.setField(service, "httpFetchClient", httpFetchClient);
         ReflectionTestUtils.setField(service, "crawlSourceMapper", crawlSourceMapper);
         ReflectionTestUtils.setField(service, "fileApi", fileApi);
+        ReflectionTestUtils.setField(service, "crawlDownloadGate", crawlDownloadGate);
+        ReflectionTestUtils.setField(service, "robotsGuard", robotsGuard);
     }
 
     private NoticeExternalDO doActiveSocial(String contentType) {
@@ -351,6 +364,49 @@ class NoticeExternalServiceImplTest {
         org.mockito.ArgumentCaptor<NoticeExternalDO> cap = org.mockito.ArgumentCaptor.forClass(NoticeExternalDO.class);
         org.mockito.Mockito.verify(noticeExternalMapper).updateById(cap.capture());
         assertEquals("http://127.0.0.1:48080/admin-api/infra/file/4/get/bidding/notice-external/10185.pdf", cap.getValue().getPdfDownloadUrl());
+    }
+
+    // ===== 2026-09-11 PDF 在线预览的合规闸门（预览不得成为绕过 2 分钟限速的后门）=====
+
+    @Test
+    void pdfContent_externalFallback_gateNotDue_returnsNullWithoutFetching() throws Exception {
+        // 平台归档缺失 → 回退外站直链；但未到合规下载间隔时必须"不发请求、直接 404"（返回 null）
+        NoticeExternalDO pdf = doActiveSocial("PDF");
+        pdf.setMetaJson("{\"pdfDownloadUrl\":\"https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf\"}");
+        when(noticeExternalMapper.selectById(1L)).thenReturn(pdf);
+        when(crawlDownloadGate.tryAcquire(any(), any(), any())).thenReturn(false);
+
+        assertNull(service.pdfContent(1L));
+        verify(crawlDownloadGate).tryAcquire(any(), any(), any());
+        verify(httpFetchClient, never()).getBytes(any());
+    }
+
+    @Test
+    void pdfContent_externalFallback_gateGranted_fetchesBytes() throws Exception {
+        // 拿到闸位才允许访问外站；下载失败/空体仍按 404（返回 null）处理
+        NoticeExternalDO pdf = doActiveSocial("PDF");
+        pdf.setMetaJson("{\"pdfDownloadUrl\":\"https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf\"}");
+        when(noticeExternalMapper.selectById(1L)).thenReturn(pdf);
+        when(crawlDownloadGate.tryAcquire(any(), any(), any())).thenReturn(true);
+        when(httpFetchClient.getBytes("https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf"))
+                .thenReturn("%PDF-1.4 test".getBytes());
+
+        byte[] content = service.pdfContent(1L);
+        assertNotNull(content);
+        assertEquals('%', content[0]);
+    }
+
+    @Test
+    void pdfContent_robotsDisallowed_returnsNull() throws Exception {
+        // robots.txt 禁止抓取该路径：合规优先，直接 404，且不占用闸位
+        NoticeExternalDO pdf = doActiveSocial("PDF");
+        pdf.setMetaJson("{\"pdfDownloadUrl\":\"https://gx.e-bidding.org/sdny_bulletin/2026-03-04/10185.pdf\"}");
+        when(noticeExternalMapper.selectById(1L)).thenReturn(pdf);
+        when(robotsGuard.isAllowed(any())).thenReturn(false);
+
+        assertNull(service.pdfContent(1L));
+        verify(crawlDownloadGate, never()).tryAcquire(any(), any(), any());
+        verify(httpFetchClient, never()).getBytes(any());
     }
 
     @Test

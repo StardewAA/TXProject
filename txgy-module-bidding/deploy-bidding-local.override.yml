@@ -2,6 +2,15 @@
 # 用法（deploy 目录）：docker compose -f docker-compose.yml -f ../txgy-module-bidding/deploy-bidding-local.override.yml -p txgy up -d system infra gateway
 # 配合：bidding run-local.cmd 中 openfeign url 指向 127.0.0.1:48087/48088。
 services:
+  nacos:
+    # 2026-09-11 实测：Nacos 3.x 镜像默认堆较大（-Xmx2g），而本机给容器的 cgroup 限额只有 768MB，
+    # 结果启动 6 分钟后被内核 OOMKilled（ExitCode=137, OOMKilled=true），随后 infra/system/gateway
+    # 因"连不上 nacos"接连退出。这里把堆固定小：768MB 限额下 512m 堆 + 非堆开销刚好放得下。
+    # 规范依据：《招投标模块开发规范》本地联调环境说明；用户口径 2026-09-11「自己把后端开启」。
+    environment:
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
   gateway:
     environment:
       SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""

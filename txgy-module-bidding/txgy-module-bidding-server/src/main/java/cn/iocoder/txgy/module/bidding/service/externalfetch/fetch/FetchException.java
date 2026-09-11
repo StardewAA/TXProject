@@ -61,4 +61,31 @@ public class FetchException extends IOException {
         }
     }
 
+    /**
+     * 把异常描述成"可诊断的一句话"（class + message + cause 链，最多 4 层）。
+     *
+     * <p>缺陷背景（2026-09-11 实测）：Java HttpClient 对连接类失败常抛出 message=null 的包装异常，
+     * 若只拼 e.getMessage()，任务里只会留下 "HTTP 请求失败: null"——排障时完全无从下手
+     * （真实案例：网关未启动，rawFileUrl 指向的 127.0.0.1:48080 拒绝连接，19ms 即失败）。
+     * 因此统一由本方法产出描述，异常类名与 cause 链必须带上。
+     */
+    public static String describe(Throwable e) {
+        if (e == null) {
+            return "未知异常";
+        }
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = e;
+        int depth = 0;
+        while (cur != null && depth < 4) {
+            if (depth > 0) {
+                sb.append(" <- ");
+            }
+            sb.append(cur.getClass().getSimpleName());
+            String msg = cur.getMessage();
+            sb.append(msg == null || msg.isBlank() ? "(无 message)" : ": " + msg);
+            cur = cur.getCause() == cur ? null : cur.getCause();
+            depth++;
+        }
+        return sb.toString();
+    }
 }

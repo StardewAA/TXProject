@@ -1,122 +1,71 @@
-# bidding 模块 SQL 完整执行清单（小组成员环境初始化用）
+# bidding 模块 SQL 索引（初始状态包 + 历史增量 + 工具）
 
-> 用途：让团队成员/演示环境与本开发库一致（16 张表 + 演示数据 + 菜单权限 + 爬虫源配置）。
-> 业务库：`ruoyi-vue-pro`（bidding 全部业务表）；菜单脚本需在 **system 库**执行（system_menu 属 system 服务库）。
-> 全部 DDL/配置脚本幂等（IF NOT EXISTS / ON DUPLICATE KEY）为主，可重复执行；**演示数据文件除外**（勿重复导入）。
+> 业务库：`ruoyi-vue-pro`（bidding 全部业务表；本环境 system_menu / system_role_menu 同库）。
+> **口径（2026-09-11 整理）**：SQL 只保留**表结构 + 最基础数据**——能建表、能进菜单、能启动爬虫；
+> 任务/公告等业务数据不入脚本。全部脚本幂等（`IF NOT EXISTS` / `INSERT IGNORE`），
+> 包内**无 DROP / TRUNCATE / DELETE**，重复执行不改动既有行、不清空任何业务数据。
 
-## 目录说明（2026-09-10 整理）
+## 1. 初始状态包（新环境一键初始化）
 
-- **`sql/master-bidding-sync.sql`（根目录，一键增量同步包）**：master 基线 → 本模块当前数据状态，单文件幂等（结构/菜单挂载/采集源配置/主体授权/AI 链路/演示公告 5 条），合作者一条命令即可同步：
-  `mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-bidding-sync.sql`
-- `sql/history/`：**历史脚本全集**（建表 DDL/菜单/配置/修复/数据补偿，按日期与提交说明回放；已在上述一键包覆盖的部分无需单独执行）；
-- 本文件为索引与口径说明；新 SQL 按 `yyyy-MM-dd-<主题>.sql` 命名落 `history/`，若形成新的对外基线再升级为一键包。
+**`sql/master-bidding-sync.sql`**
 
-## 0. 文件清单与执行顺序（history 部分）
+| 段 | 内容 | 规模 |
+| --- | --- | --- |
+| ① | 业务表结构（CREATE TABLE IF NOT EXISTS） | **21 张** |
+| ② | 菜单：招投标 6735 子树（含子菜单与按钮权限） | **37 条** |
+| ③ | 角色菜单授权（system_role_menu） | **135 条** |
+| ④ | 采集源配置（EBIDDING / QYZB / GX）——**爬虫可启动的最小数据** | **3 条** |
+| ⑤ | 原文下载限速闸位（GLOBAL 单行，合规频控 2 分钟/次） | **1 行** |
 
-| 顺序 | 文件 | 内容 | 执行库 |
-| --- | --- | --- | --- |
-| 0 | **sql/master-bidding-sync.sql** | **一键增量同步（结构+菜单+配置+主体+AI+演示公告）** | ruoyi-vue-pro |
-| 1 | sql/history/2026-09-03-notice.sql | 公告/公示主档+正文（T轨） | ruoyi-vue-pro |
-| 2 | sql/history/2026-09-03-filing.sql | 备案（T轨） | ruoyi-vue-pro |
-| 3 | sql/history/2026-09-03-external-notice.sql | 外部公告主档/附件/meta + 采集源/任务/批次 + 关注订阅/关注项/事件/订阅事件（G/T 轨全套） | ruoyi-vue-pro |
-| 4 | sql/history/2026-09-05-external-notice-review.sql | 外部公告审核字段 | ruoyi-vue-pro |
-| 5 | sql/history/2026-09-06-ai-extract.sql | AI 结构化抽取字段 | ruoyi-vue-pro |
-| 6 | sql/history/2026-09-07-body-blocks.sql | 正文结构化字段 | ruoyi-vue-pro |
-| 7 | sql/history/2026-09-09-subject.sql | 主体档案/授权/经办用户（T/G 轨） | ruoyi-vue-pro |
-| 8 | sql/history/2026-09-03-notice-menu.sql | 公告域菜单（60001000 目录 + 权限按钮） | **system** |
-| 9 | sql/history/2026-09-08-notice-external-menu.sql | 外部公告/关注 + 采集管理菜单（60001200/1、60002000 目录 + 60002100~106） | **system** |
-| 10 | sql/history/2026-09-09-subject-menu.sql | 主体域菜单（60003000 目录 + 按钮） | **system** |
-| 11 | sql/latest/2026-09-10-crawl-source-config.sql | 采集源配置（QYZB 六栏目/GX） | ruoyi-vue-pro |
-| 12 | **sql/latest/2026-09-10-demo-data.sql** | 演示数据：外部公告 ACTIVE 5 条（大厅可见）+ 采集源 3 条 | ruoyi-vue-pro（**勿重复执行**） |
-| 13 | sql/latest/2026-09-10-backfill-external-notice-publish-time.sql | 存量 publish_time 回填（可选） | ruoyi-vue-pro |
+执行（包尾自带校验段，执行后直接打印期望值）：
 
-## 0.1 近期增量脚本（sql/latest，按需/按提交说明回放）
-
-- 菜单与租户授权：2026-09-09-menu-permission-fix / 2026-09-09-notice-menu-under-bidding / 2026-09-09-process-track-perm-align / 2026-09-09-tenant-bidding-grant-sample（history）、2026-09-10-external-admin-menu-pages、2026-09-10-revoke-platform-menus-tenant
-- 采集与来源配置：2026-09-10-crawl-source-window-split / crawl-task-payload-queue / fetch-job-produced / fetch-rename-source-type / qyzb-api-source-sample / qyzb-six-columns / qyzb-template-inherit / gx-three-columns / source-config-correct
-- 数据修复与补偿：2026-09-10-ai-config-restore / source-name-backfill / external-notice-pdf-download-url / batch-approve-external / tenant1-tenderer-grant
-- 导出工具：export-bidding-data / export-bidding-tables
-
-## 0.2 员工资质 + 证件全生命周期（M11/M12，业务库 ruoyi-vue-pro + system 库）
-
-> 依据：《员工资质与证件生命周期-设计说明.md》；范围口径 = 做到"证照全生命周期管理（中级）"，**不含签发**。
-
-按顺序执行（脚本均幂等，可重复回放）：
-
-| 序 | 脚本 | 内容 | 目标库 |
-| --- | --- | --- | --- |
-| 1 | sql/2026-09-13-personnel-qualification.sql | 员工域 5 表：bidding_personnel_profile / personnel_certificate / personnel_training_record / personnel_social_security / personnel_labor_contract | ruoyi-vue-pro |
-| 2 | sql/2026-09-14-cert-lifecycle.sql | 全生命周期 1 表：cert_lifecycle_record（四域×四流程归并） | ruoyi-vue-pro |
-| 3 | sql/2026-09-15-personnel-lifecycle-menu.sql | 菜单/权限：60002300 员工资质（9 按钮）+ 60002400 证件全生命周期（3 按钮） | **system** |
-| 4 | sql/2026-09-16-rule-config-center.sql | **规则配置中心**：bidding_rule_config（动态阈值）+ history（哈希链审计）+ audit（读取审计）+ bidding_dict_data（枚举字典，68 条种子）；含 §4 电子证照域 11 个默认阈值 | ruoyi-vue-pro |
-
-> §0.2-4 为**前端契约的前置依赖**：契约《电子证照模块-前端接口契约-v1.0.md》§1.1/§1.2 的
-> `GET /bidding/meta/dicts`、`GET /bidding/meta/configs` 直接读这两张表；未执行本脚本时接口会走代码兜底值
-> （功能可用，但枚举中文名/标签色/阈值不可运营调整），因此联调前务必先执行。
-
-执行后需把菜单挂到角色（否则接口 403）：
-```sql
-INSERT INTO system_role_menu (role_id, menu_id, creator, create_time, updater, update_time, deleted, tenant_id)
-SELECT 2, id, '1', NOW(), '1', NOW(), b'0', 0 FROM system_menu
- WHERE id BETWEEN 60002300 AND 60002403;
-```
-
-验证要点：证书/身份证到期预警依赖 valid_to 与 id_card_valid_to（员工证书登记时**必填**有效期）；
-按 `bidding.personnel.id-card-secret` 配置身份证盲索引盐（未配置时退化为开发默认盐，生产必须配置）。
-
-## 1. 快速命令（业务库 ruoyi-vue-pro，cwd=仓库根）
-
-**一键同步（推荐）**：
 ```bash
 mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-bidding-sync.sql
 ```
 
-按需单独回放历史脚本（已在同步包覆盖项可跳过）：
-```bash
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-notice.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-filing.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-03-external-notice.sql
-mysql -uroot -p123456 ruoyi-vue-pro < sql/history/2026-09-09-subject.sql
-```
+实测：空库一次执行通过（结构 21 / 菜单 37 / 授权 135 / 采集源 3 / 闸位 1）；**连续执行两遍结果完全一致**（幂等）。
 
-## 2. 菜单权限（system 库）与角色挂载
-- 执行 sql/history/2026-09-03-notice-menu.sql、sql/history/2026-09-08-notice-external-menu.sql、sql/history/2026-09-09-subject-menu.sql（system 库）；
-- 菜单行只注册权限点，需挂角色（system_role_menu）后对应用户重新登录：
-```sql
-SELECT id, name FROM system_role;  -- 找到目标角色 role_id
--- 示例：给 role_id=2 挂 09-08/09-09 菜单（按需改 role_id）
-INSERT INTO system_role_menu (role_id, menu_id, creator, create_time, updater, update_time, deleted, tenant_id)
-SELECT 2, id, '1', NOW(), '1', NOW(), b'0', 0 FROM system_menu
- WHERE id IN (60001200,60001201,60002100,60002101,60002102,60002103,60002104,60002105,60002106,60003000,60003100,60003101,60003200,60003201);
-```
+**不包含**（按「不要数据」口径）：采集任务/批次、公告/附件/正文、主体授权与档案、AI 渠道与密钥、演示公告。
 
-## 3. 成员常见问题速查
+## 2. 历史增量（老库追平用；新库直接跑第 1 节即可）
 
-| 现象 | 原因 / 处理 |
+`sql/history/`：按日期归档的增量脚本（建表 / 字段 / 菜单 / 配置 / 修复 / 数据补偿）。
+
+- `2026-09-11-master-sync-removed-seeds.sql`：**归档文件**——原同步包中被剔除的业务数据种子
+  （原 §⑤ 主体授权与档案、§⑥ AI 链路、§⑦ 演示公告、§⑧ AI 启用状态），确需时人工取用，不在初始包内执行；
+- 其余为模块演进记录（爬虫合规频控、项目域、采集源模板、公告域字段等）。
+
+## 3. 工具（`sql/tools/`）
+
+| 文件 | 用途 |
 | --- | --- |
-| 接口报表不存在（如 bidding_subject_profile） | 漏跑对应 DDL（第 7 或第 3 步），按顺序补执行 |
-| 大厅/列表看不到公告 | 未导入演示数据（第 12 步），或数据 status 非 ACTIVE（NEW 待审核不上大厅，需 approve；批量放行见 sql/latest/2026-09-10-batch-approve-external.sql） |
-| 关注/审核/采集接口 403 | 菜单脚本未在 system 库执行，或角色未挂 system_role_menu（§2）；租户菜单口径见 sql/latest/2026-09-10-revoke-platform-menus-tenant.sql |
-| crawl-parser/list 空或 404 | 后端需为含 parser 插件的最新构建；权限码 crawl-source:query（60002100） |
-| 时间字段是毫秒数字 | 平台统一序列化（与 system 一致）；前端用 dayjs(Number(v)) 格式化 |
-| 采集源跑不动 | enabled=1 且 fetch_interval_seconds 至少 120；人工触发 POST /admin-api/bidding/crawl-source/run?sourceCode=QYZB |
-| 前端 48080 网关 404（No static resource） | 网关路由需含 bidding（bidding-admin-api）；见 docs/开发联调与运维/爬虫开发-会话状态与断点.md §5 |
-| 关键词检索为空 | bidding.es.enabled=true 后执行 POST /bidding/notice-external/reindex 与 /bidding/notice/reindex(-all) 补偿存量 |
+| `validate-sql-structure.js` | 纯文本自检：括号/引号闭合、语句截断、建表重名、**意外 DROP/TRUNCATE** |
+| `build-init-from-db.js` | 从开发库重新导出种子（菜单/授权/采集源/闸位）→ `sql/.tmp/` |
+| `build-init.js` | 用导出的种子重新拼装初始状态包（表结构原样保留、不改写） |
+| `reset-crawl-to-zero.sql` / `.sh` | 采集域归零（**破坏性脚本**，需人工确认后执行；含 Redis 布隆与 ES 清理） |
+| `restore-external-from-es.js` / `fallback-content-from-es.js` | 从 ES 恢复公告正文的应急脚本 |
+| `README-数据恢复.md` | 数据恢复说明 |
 
-## 4. 版本配套
-- 后端：txgy-module-bidding-server 最新构建（9 解析器 + 下载器 v1 + ES 启动探活）；
-- 菜单 id 段 6000xxxx 冲突时自行改 id（脚本头有说明）；
-- 演示数据中 EBIDDING 源的 origUrl 指向 ebidding.com.cn（旧演示域名，仅展示用）；QYZB 演示公告来自真实站点采集。
+校验用法：`node sql/tools/validate-sql-structure.js`（缺省校验初始状态包）。
 
----
+## 4. 其他域的脚本（不在初始包内）
 
-## 附：编写说明（本文档尾部固定段）
+`sql/2026-09-*.sql`（电子证照、人员资质、规则配置中心、安许风险联动等）由相应负责同事维护。
+本初始状态包**不包含其表与菜单**，以免互相覆盖；各文件按其自身说明执行。
 
-### 编写原因
-小组成员环境缺表/缺数据/权限报错，需要一套完整、有序、可照做的 SQL 执行包与排错清单；2026-09-10 按"历史/最新"双目录归类便于追批次。
+## 5. 已移除的纯数据文件（2026-09-11 整理）
 
-### 编写依据
-模块 sql/ 下既有脚本（DDL/菜单/配置）+ 2026-09-10 开发库演示数据导出（mysqldump ACTIVE 外部公告与采集源）+ 当日增量脚本提交记录。
+按「不要数据」口径，以下文件已从工作区移除（**均在 git 历史中，可 `git checkout <commit> -- <file>` 取回**）：
 
-### 所满足的业务需求内容及其实现方式
-"全员可联调"：统一建表（16 张）、演示数据（大厅 5 条 ACTIVE + 3 采集源）、菜单权限与角色挂载指引、频控与网关口径，使各成员环境与开发库对齐。
+| 文件 | 原大小 | 说明 |
+| --- | --- | --- |
+| `history/2026-09-10-export-bidding-data.sql` | 14.9 MB | 全库数据导出（公告/任务等业务数据） |
+| `history/2026-09-10-export-bidding-tables.sql` | 33 KB | bidding 业务表数据导出 |
+| `history/2026-09-10-demo-data.sql` | 79 KB | 演示公告数据 |
+
+需要重新导出时（示例）：
+
+```bash
+docker exec txgy-mysql mysqldump -uroot -p123456 --default-character-set=utf8mb4 \
+  --single-transaction --no-create-info ruoyi-vue-pro bidding_notice_external > export.sql
+```

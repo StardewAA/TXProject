@@ -81,6 +81,16 @@ public class HttpFetchClient {
         private final Integer retryAfterSeconds;
         private final byte[] bytes;
 
+        /**
+         * 构造入口（回放/单测用；生产链路统一由 {@code sendForBytes} 产出）。
+         *
+         * <p>原因（2026-09-11）：构造器为包内可见，跨包单测（如 CrawlNoticeProcessorTest）无法构造本对象，
+         * 只能去 mock 其 getter，容易与真实语义（字节数/速率由 bytes 推导）脱节；提供显式工厂更贴近真实值对象。
+         */
+        public static FetchOutcome of(String url, int statusCode, long durationMs, Integer retryAfterSeconds, byte[] bytes) {
+            return new FetchOutcome(url, statusCode, durationMs, retryAfterSeconds, bytes);
+        }
+
         FetchOutcome(String url, int statusCode, long durationMs, Integer retryAfterSeconds, byte[] bytes) {
             this.url = url;
             this.statusCode = statusCode;
@@ -201,8 +211,12 @@ public class HttpFetchClient {
             Thread.currentThread().interrupt();
             throw new FetchException.Transient("HTTP 请求被中断: " + e.getMessage(), null, null, e);
         } catch (IOException e) {
-            // 连接超时/重置/UnknownHost 等：归入瞬时失败（可退避重试）
-            throw new FetchException.Transient("HTTP 请求失败: " + e.getMessage(), null, null, e);
+            // 连接超时/重置/UnknownHost/端口未监听 等：归入瞬时失败（可退避重试）
+            // 2026-09-11 缺陷修复：原写法只取 e.getMessage()，而 HttpClient 对连接失败常抛出
+            //   message=null 的包装异常（如 ConnectException 被包在 IOException 里），
+            //   结果任务里只剩 "HTTP 请求失败: null"，完全无法诊断（实测踩坑：网关未启动导致
+            //   rawFileUrl 指向的 127.0.0.1:48080 拒绝连接）。此处改为 class + 完整 cause 链。
+            throw new FetchException.Transient("HTTP 请求失败（" + FetchException.describe(e) + "）", null, null, e);
         }
         int status = response.statusCode();
         Integer retryAfter = retryAfterSeconds(response);
@@ -211,7 +225,8 @@ public class HttpFetchClient {
         try (InputStream in = response.body()) {
             body = readCapped(in, cap, url);
         } catch (IOException e) {
-            throw new FetchException.Transient("读取响应体失败: " + e.getMessage(), status, retryAfter, e);
+            throw new FetchException.Transient("读取响应体失败（" + FetchException.describe(e) + "）",
+                    status, retryAfter, e);
         }
         long durationMs = System.currentTimeMillis() - start;
 

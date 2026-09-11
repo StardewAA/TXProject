@@ -11,6 +11,8 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlTaskDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlTaskMapper;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
+// 规则性跳过（robots 禁止等）与失败分开处理：跳过=SKIPPED 终态，不计失败率（2026-09-11）
+import cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSkipException;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParseResult;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.NoticeParser;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.parser.ParserRegistry;
@@ -165,6 +167,7 @@ public class CrawlSourceRunner {
         for (CategorySummary cs : categories) {
             summary.setTotalIngested(summary.getTotalIngested() + cs.getIngested());
             summary.setTotalFailed(summary.getTotalFailed() + cs.getFailed());
+            summary.setTotalSkipped(summary.getTotalSkipped() + cs.getSkipped());
         }
         summary.setFinishedAt(LocalDateTime.now());
         return summary;
@@ -244,8 +247,15 @@ public class CrawlSourceRunner {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
-                    cs.setFailed(cs.getFailed() + 1);
-                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
+                    // 2026-09-11：规则性跳过（robots 禁止等）与真正的失败分开计数与落库状态——
+                    //   否则"永远抓不到的页面"会污染失败率、触发调度退避，并掩盖真正的站点故障。
+                    boolean skip = e instanceof cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSkipException;
+                    if (skip) {
+                        cs.setSkipped(cs.getSkipped() + 1);
+                    } else {
+                        cs.setFailed(cs.getFailed() + 1);
+                    }
+                    recordTask(source, config, entry, skip ? "SKIPPED" : "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] API 条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(entryDelayMs);
@@ -298,8 +308,15 @@ public class CrawlSourceRunner {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
-                    cs.setFailed(cs.getFailed() + 1);
-                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
+                    // 2026-09-11：规则性跳过（robots 禁止等）与真正的失败分开计数与落库状态——
+                    //   否则"永远抓不到的页面"会污染失败率、触发调度退避，并掩盖真正的站点故障。
+                    boolean skip = e instanceof cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSkipException;
+                    if (skip) {
+                        cs.setSkipped(cs.getSkipped() + 1);
+                    } else {
+                        cs.setFailed(cs.getFailed() + 1);
+                    }
+                    recordTask(source, config, entry, skip ? "SKIPPED" : "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 条目落库失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(entryDelayMs);
@@ -385,8 +402,15 @@ public class CrawlSourceRunner {
                         cs.setIngested(cs.getIngested() + 1);
                     }
                 } catch (Exception e) {
-                    cs.setFailed(cs.getFailed() + 1);
-                    recordTask(source, config, entry, "FAILED", e.getMessage(), jobId);
+                    // 2026-09-11：规则性跳过（robots 禁止等）与真正的失败分开计数与落库状态——
+                    //   否则"永远抓不到的页面"会污染失败率、触发调度退避，并掩盖真正的站点故障。
+                    boolean skip = e instanceof cn.iocoder.txgy.module.bidding.service.externalfetch.CrawlSkipException;
+                    if (skip) {
+                        cs.setSkipped(cs.getSkipped() + 1);
+                    } else {
+                        cs.setFailed(cs.getFailed() + 1);
+                    }
+                    recordTask(source, config, entry, skip ? "SKIPPED" : "FAILED", e.getMessage(), jobId);
                     log.warn("[crawl][source={}] 国信条目失败 url={} err={}", source.getSourceCode(), entry.getUrl(), e.getMessage());
                 }
                 sleep(entryDelayMs);
@@ -427,12 +451,14 @@ public class CrawlSourceRunner {
         // ===== 合规限速（2026-09-10 重构）：同步直抓路径不再"无间隔连发" =====
         // 规范依据：用户口径「每次下载原文文件之前必须强制执行休眠等待，严禁无间隔高频请求」。
         // 原实现在条目循环里直接下载详情页+PDF（仅 entry-delay-ms=1.5s 间隔），属高频请求目标站点；
-        // 现改为：下载前阻塞等待合规闸位（默认 5 分钟/条原文，与消费端同一闸位），等待期间打进度日志。
-        crawlDownloadGate.acquireBlocking(source == null ? null : source.getSourceCode(), null, detailUrl);
+        // 现改为：下载前阻塞等待合规闸位（默认 2 分钟/条原文，与消费端同一闸位），等待期间打进度日志。
         String sourceCode = source == null ? null : source.getSourceCode();
+        // robots 预检必须在占闸之前（2026-09-11 缺陷修复）：被禁止的页面不应消耗宝贵的合规额度，
+        //   也不该按失败重试（它永远抓不到）——按 SKIPPED 终态处理（规范依据：《外部信息获取 v1.0》§合规）。
         if (!robotsGuard.isAllowed(detailUrl)) {
-            throw new IllegalStateException("详情页被 robots.txt 禁止抓取（合规跳过） url=" + detailUrl);
+            throw new CrawlSkipException("详情页被 robots.txt 禁止抓取（合规跳过） url=" + detailUrl);
         }
+        crawlDownloadGate.acquireBlocking(sourceCode, null, detailUrl);
         // 下载 + 完整性校验 + 审计（同步路径与消费端同一口径：空/截断/错误页/乱码一律不入库）
         cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome detailOutcome =
                 httpFetchClient.fetchText(detailUrl);
@@ -560,6 +586,8 @@ public class CrawlSourceRunner {
         private LocalDateTime finishedAt;
         private int totalIngested;
         private int totalFailed;
+        /** 规则性跳过总数（与 failed 分开统计：跳过不是故障） */
+        private int totalSkipped;
         /** 投递模式标志：true=本轮回合并未落库而是投递 task（ingested 语义=入队数），job 由消费端 tryFinalizeJob 收尾 */
         private boolean async;
         private List<CategorySummary> categories = new ArrayList<>();
@@ -571,6 +599,8 @@ public class CrawlSourceRunner {
         private int fetched;
         private int ingested;
         private int failed;
+        /** 规则性跳过数（robots 禁止/增量未变/源配置缺字段等）：不计入 failed，避免污染失败率 */
+        private int skipped;
         private String error;
     }
 

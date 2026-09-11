@@ -72,6 +72,9 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     /** 原文下载限速闸：批量回填 PDF 属"从目标站点下载公告原文文件"，同样受合规频控约束 */
     @Resource
     private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+    /** robots 合规检查：在线预览若回退外站直链，同样属于"抓取目标站点内容" */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
 
     @Override
     public void approveExternal(Long id) {
@@ -632,6 +635,20 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (StringUtils.hasText(externalUrl) && !externalUrl.equals(notice.getPdfDownloadUrl())) {
             try {
                 assertPdfDownloadAllowed(notice, externalUrl);
+                // 2026-09-11 缺陷修复（合规旁路）：外站直链预览同样是从目标站点下载原文文件，
+                //   必须与采集链路共用同一个 2 分钟闸位，否则"预览"就成了绕过限速的后门。
+                //   规范依据：《外部信息获取 v1.0》§六 频控（间隔只作用于"下载原文文件"这一动作）
+                //   + 用户口径「绝对保证 2 分钟才爬一次详细页」。
+                //   为什么用非阻塞 tryAcquire 而非 acquireBlocking：这是用户点开的在线预览，等 2 分钟不可接受；
+                //   拿得到额度就预览，拿不到就明确 404（前端已有"暂无 PDF 原文"提示），绝不"先请求再判断"。
+                if (!robotsGuard.isAllowed(externalUrl)) {
+                    log.info("[pdfContent][id={}] 外站直链被 robots.txt 禁止，按 404 返回（合规优先）: {}", id, externalUrl);
+                    return null;
+                }
+                if (!crawlDownloadGate.tryAcquire(notice.getSourceCode(), null, externalUrl)) {
+                    log.info("[pdfContent][id={}] 未到合规下载间隔，本次不访问外站（避免绕过限频）: {}", id, externalUrl);
+                    return null;
+                }
                 byte[] external = fetchPdfBytes(externalUrl, id, "外站直链");
                 if (external != null) {
                     log.info("[pdfContent][id={}] 平台归档不可用，已回退外站直链预览", id);
@@ -662,21 +679,16 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (!StringUtils.hasText(url)) {
             return null;
         }
+        // 2026-09-11 统一走 HttpFetchClient（与采集链路同一套连接/读超时、浏览器 UA、单文件 50MB 上限、
+        //   反爬特征识别），不再自建裸 HttpClient。原因：裸客户端没有 UA（部分站点直接拒绝）、没有大小上限
+        //   （恶意/异常大文件会撑爆管理端响应），且无法在单测中打桩（预览回退的合规行为无法回归验证）。
+        //   契约不变：任何失败/空体一律返回 null，调用方按"暂无原文"404 处理。
         try {
-            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(10))
-                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-                    .build();
-            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
-                    .timeout(java.time.Duration.ofSeconds(60))
-                    .GET().build();
-            java.net.http.HttpResponse<byte[]> resp = client.send(req,
-                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-            int length = resp.body() == null ? 0 : resp.body().length;
-            if (resp.statusCode() == 200 && length > 0) {
-                return resp.body();
+            byte[] bytes = httpFetchClient.getBytes(url);
+            if (bytes != null && bytes.length > 0) {
+                return bytes;
             }
-            log.warn("[pdfContent][id={}][{}] 不可用：HTTP {} 字节数 {} url={}", id, channel, resp.statusCode(), length, url);
+            log.warn("[pdfContent][id={}][{}] 不可用：空体 url={}", id, channel, url);
             return null;
         } catch (Exception e) {
             log.warn("[pdfContent][id={}][{}] 获取失败: {} url={}", id, channel, e.getMessage(), url);
