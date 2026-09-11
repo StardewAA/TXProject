@@ -424,7 +424,12 @@ public class CrawlNoticeProcessor {
     /** 归档校验：按访问地址回查元数据，取 file_id 并核对字节数（size 为空则只校验 file_id 存在） */
     private FileMetadataCheck verifyStored(String url, int expectedBytes) {
         try {
-            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url);
+            // 适配 infra FileApi 契约变更（返回 CommonResult）：错误信封时 getCheckedData 抛 ServiceException；
+            // 同时保留对 null 返回的容忍（原实现允许"查不到元数据"，调用方按 null 分支处理）
+            cn.iocoder.txgy.framework.common.pojo.CommonResult<cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO> metaResult =
+                    fileApi.getMetadataByUrl(url);
+            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta =
+                    metaResult == null ? null : metaResult.getCheckedData();
             if (meta == null || meta.getId() == null) {
                 return new FileMetadataCheck(false, null, "回查元数据未取到 file_id");
             }

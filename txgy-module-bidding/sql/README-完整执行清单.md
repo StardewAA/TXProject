@@ -37,6 +37,33 @@
 - 数据修复与补偿：2026-09-10-ai-config-restore / source-name-backfill / external-notice-pdf-download-url / batch-approve-external / tenant1-tenderer-grant
 - 导出工具：export-bidding-data / export-bidding-tables
 
+## 0.2 员工资质 + 证件全生命周期（M11/M12，业务库 ruoyi-vue-pro + system 库）
+
+> 依据：《员工资质与证件生命周期-设计说明.md》；范围口径 = 做到"证照全生命周期管理（中级）"，**不含签发**。
+
+按顺序执行（脚本均幂等，可重复回放）：
+
+| 序 | 脚本 | 内容 | 目标库 |
+| --- | --- | --- | --- |
+| 1 | sql/2026-09-13-personnel-qualification.sql | 员工域 5 表：bidding_personnel_profile / personnel_certificate / personnel_training_record / personnel_social_security / personnel_labor_contract | ruoyi-vue-pro |
+| 2 | sql/2026-09-14-cert-lifecycle.sql | 全生命周期 1 表：cert_lifecycle_record（四域×四流程归并） | ruoyi-vue-pro |
+| 3 | sql/2026-09-15-personnel-lifecycle-menu.sql | 菜单/权限：60002300 员工资质（9 按钮）+ 60002400 证件全生命周期（3 按钮） | **system** |
+| 4 | sql/2026-09-16-rule-config-center.sql | **规则配置中心**：bidding_rule_config（动态阈值）+ history（哈希链审计）+ audit（读取审计）+ bidding_dict_data（枚举字典，68 条种子）；含 §4 电子证照域 11 个默认阈值 | ruoyi-vue-pro |
+
+> §0.2-4 为**前端契约的前置依赖**：契约《电子证照模块-前端接口契约-v1.0.md》§1.1/§1.2 的
+> `GET /bidding/meta/dicts`、`GET /bidding/meta/configs` 直接读这两张表；未执行本脚本时接口会走代码兜底值
+> （功能可用，但枚举中文名/标签色/阈值不可运营调整），因此联调前务必先执行。
+
+执行后需把菜单挂到角色（否则接口 403）：
+```sql
+INSERT INTO system_role_menu (role_id, menu_id, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT 2, id, '1', NOW(), '1', NOW(), b'0', 0 FROM system_menu
+ WHERE id BETWEEN 60002300 AND 60002403;
+```
+
+验证要点：证书/身份证到期预警依赖 valid_to 与 id_card_valid_to（员工证书登记时**必填**有效期）；
+按 `bidding.personnel.id-card-secret` 配置身份证盲索引盐（未配置时退化为开发默认盐，生产必须配置）。
+
 ## 1. 快速命令（业务库 ruoyi-vue-pro，cwd=仓库根）
 
 **一键同步（推荐）**：

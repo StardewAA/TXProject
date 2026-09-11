@@ -528,7 +528,11 @@ public class CrawlSourceRunner {
             }
             dto.setPdfDownloadUrl(url);
             // 存储校验（2026-09-10 用户口径「存储状态监测」）：回查元数据核对 file_id 与字节数
-            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url);
+            // 适配 infra FileApi 契约变更（返回 CommonResult），并保留对 null 返回的容忍
+            cn.iocoder.txgy.framework.common.pojo.CommonResult<cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO> metaResult =
+                    fileApi.getMetadataByUrl(url);
+            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta =
+                    metaResult == null ? null : metaResult.getCheckedData();
             if (meta == null || meta.getId() == null) {
                 log.warn("[crawl][pdf-archive] 归档已上传但回查未取到 file_id（存储状态存疑）url={}", url);
                 return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "回查元数据未取到 file_id");

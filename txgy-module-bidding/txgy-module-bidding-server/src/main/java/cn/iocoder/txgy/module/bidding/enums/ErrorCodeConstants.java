@@ -198,4 +198,22 @@ public interface ErrorCodeConstants {
     //        《招投标模块开发规范》§4.5（幂等：同业务键重复提交直接拒绝）。
     // [业务目标] 同月社保、同编号合同不允许重复登记，避免月度核对时出现两条互相矛盾的记录导致结论不可复算。
     ErrorCode PERSONNEL_RECORD_DUPLICATE = new ErrorCode(1_060_107_024, "记录已存在：同一员工的该月份社保/该编号合同不可重复登记");
+
+    // ========== 规则配置中心与业务字典 1-060-108-000（方案 §8.1，契约 §1.1/§1.2）==========
+    // [依据] 用户硬约束"所有数值参数必须支持动态配置，严禁硬编码"；《电子资质七大模块技术方案.md》§8.1/§8.2；
+    //        《招投标模块开发规范》§4.7（新段位先登记规范表再登记进校验测试）、§4.5（乐观锁）。
+    // [业务目标] 配置误配、越界、状态非法、并发覆盖都能给出可操作提示，保证"改配置即改行为"这一机制本身是安全的。
+    // 注意：本平台 ServiceExceptionUtil.doFormat 使用 hutool 风格占位符 {}（按参数顺序替换），
+    //      写成 {0}/{1} 不会被替换，用户看到的提示会残留占位符——契约 §1.2/§9 要求 msg 里必须带出
+    //      具体下限天数与法规出处，故本段统一使用 {}。
+    ErrorCode RULE_CONFIG_NOT_EXISTS = new ErrorCode(1_060_108_000, "规则配置不存在：{}");
+    ErrorCode RULE_CONFIG_VALUE_TYPE_INVALID = new ErrorCode(1_060_108_001, "规则值类型不支持：{}");
+    ErrorCode RULE_CONFIG_BOUND_VIOLATED = new ErrorCode(1_060_108_002, "配置值超出允许范围：{}（允许 {}）");
+    ErrorCode RULE_CONFIG_STATUS_INVALID = new ErrorCode(1_060_108_003, "规则配置状态流转非法：{} → {}");
+    ErrorCode RULE_CONFIG_CONSISTENCY_VIOLATED = new ErrorCode(1_060_108_004, "配置项之间关系不合法：{}");
+    ErrorCode RULE_CONFIG_CHANGE_REASON_REQUIRED = new ErrorCode(1_060_108_005, "变更原因必填（配置影响线上判定，须留痕追责）");
+    ErrorCode RULE_CONFIG_DATA_MODIFIED = new ErrorCode(1_060_108_006, "规则配置已被他人修改，请刷新后重试");
+    ErrorCode RULE_CONFIG_VALUE_FORMAT_INVALID = new ErrorCode(1_060_108_007, "配置值与声明的值类型不匹配：{}");
+    ErrorCode DICT_TYPE_NOT_SUPPORTED = new ErrorCode(1_060_108_008, "字典类型不支持：{}");
+    ErrorCode LEGAL_FLOOR_VIOLATED = new ErrorCode(1_060_108_009, "预警天数不得低于法定下限 {} 天（依据：{}）");
 }
