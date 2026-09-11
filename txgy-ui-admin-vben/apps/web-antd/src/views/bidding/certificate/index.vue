@@ -30,7 +30,7 @@ import './cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-const { configNumber, dictLabel, dictOptions, dictTag, metaLoaded, reloadMeta } = useCertMeta();
+const { configNumber, dictLabel, dictOptions, dictTag, metaError, metaLoaded, reloadMeta } = useCertMeta();
 
 /** 权限判定：权限码未下发时放行（最终由后端 @PreAuthorize 裁决），避免界面被锁死 */
 function can(code: string): boolean {
@@ -249,6 +249,15 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
         <a-button v-if="!metaLoaded" type="link" @click="reloadMeta">重载字典/配置</a-button>
       </div>
     </div>
+
+    <a-alert
+      v-if="metaError"
+      type="warning"
+      show-icon
+      class="mb-3"
+      message="字典/配置未加载，页面按 code 降级展示（功能不受影响）"
+      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query；补齐后点右上「重载字典/配置」即可恢复中文名与阈值。`"
+    />
 
     <div class="ct-kpis">
       <div class="ct-kpi k-blue">

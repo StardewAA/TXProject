@@ -128,3 +128,20 @@ txgy:
     mock-enable: true
   access-log: # 访问日志的配置项
     enable: false
+
+--- #################### 检索组件（本地 ES 容器） ####################
+
+# 规范依据：《招投标模块开发规范》4.6（notice 全文检索 ES 组件，无集群时置 enabled=false 走 DB 兜底）；
+#   用户口径 2026-09-11「为什么 ES 用不到，爬到的数据要入 ES 的呀」。
+# 业务目标：本机 ES 容器 **开启了安全认证**，不带密码时 EsStartupHealthCheck 会以 HTTP 401 中止启动
+#   （fail-fast 是刻意设计：宁可起不来，也不要在"检索静默失效"的状态下对外服务）。
+# 原因：2026-09-11 实测——缺 password 时启动报
+#   "ES 集群健康检查 HTTP 401 -> security_exception: missing authentication credentials"。
+# 变更提示：密码随 ES 容器实例（本机 elasticsearch 容器）走；换集群时同步改这里，
+#   或用启动参数 -Dbidding.es.password=xxx 覆盖。
+bidding:
+  es:
+    enabled: true
+    uris: http://127.0.0.1:9200
+    username: elastic
+    password: ww0qPgaEbSyT6oMMeART

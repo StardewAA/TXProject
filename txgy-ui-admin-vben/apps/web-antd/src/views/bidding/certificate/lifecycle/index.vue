@@ -27,7 +27,7 @@ import '../cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-const { dictLabel, dictOptions, dictTag } = useCertMeta();
+const { dictLabel, dictOptions, dictTag, metaError } = useCertMeta();
 
 function can(code: string): boolean {
   const codes = accessStore.accessCodes ?? [];
@@ -260,6 +260,15 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
         <a-button @click="load">刷新</a-button>
       </div>
     </div>
+
+    <a-alert
+      v-if="metaError"
+      type="warning"
+      show-icon
+      class="mb-3"
+      message="字典/配置未加载，状态与类型将按 code 展示"
+      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query（契约 §1.1 写的是登录即可，后端当前更严）；补齐后可恢复中文名。`"
+    />
 
     <div class="ct-panel">
       <div class="ct-filter">

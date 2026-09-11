@@ -23,14 +23,16 @@ import {
   runPersonnelAlertScan,
   updatePersonnelCert,
 } from '#/api/bidding/personnel';
+import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
 
+import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
 
 import '../certificate/cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-const { configNumber, configValue, dictLabel, dictOptions, dictTag } = useCertMeta();
+const { configNumber, configValue, dictLabel, dictOptions, dictTag, metaError } = useCertMeta();
 
 function can(code: string): boolean {
   const codes = accessStore.accessCodes ?? [];
@@ -303,6 +305,91 @@ function confirmScan() {
   });
 }
 
+/* ===== v1.1 §12.5 多岗兼任校验（权限 bidding:personnel:cert:query，已登记，可直接用） ===== */
+const multiForm = ref<{ personId?: number; primaryPost?: string; secondaryPost?: string }>({
+  personId: undefined,
+  primaryPost: undefined,
+  secondaryPost: undefined,
+});
+const multiChecking = ref(false);
+const multiResult = ref<null | SafetyPermitApi.MultiPostCheck>(null);
+/** 岗位 code 取配置 safety.abc.roles（A/B/C…），不硬编码 */
+const roleOptions = computed(() => {
+  const v = configValue<unknown>('safety.abc.roles', []);
+  return Array.isArray(v) ? v.map((x) => ({ label: String(x), value: String(x) })) : [];
+});
+
+async function runMultiCheck() {
+  if (!multiForm.value.personId || !multiForm.value.primaryPost || !multiForm.value.secondaryPost) {
+    message.warning('请填写员工 ID 并选择主岗位与兼任岗位');
+    return;
+  }
+  if (multiForm.value.primaryPost === multiForm.value.secondaryPost) {
+    message.warning('主岗位与兼任岗位不能相同');
+    return;
+  }
+  multiChecking.value = true;
+  multiResult.value = null;
+  try {
+    multiResult.value = await checkMultiPost({
+      personId: multiForm.value.personId,
+      primaryPost: multiForm.value.primaryPost,
+      secondaryPost: multiForm.value.secondaryPost,
+    });
+  } catch (error: unknown) {
+    message.warning(certErrorMsg(error));
+  } finally {
+    multiChecking.value = false;
+  }
+}
+
+/* ===== v1.1 §12.6 人员风险（权限 bidding:personnel:profile:query，已登记） ===== */
+const riskMap = ref<Record<number, SafetyPermitApi.PersonRisk>>({});
+const riskOpen = ref(false);
+const riskLoading = ref(false);
+const riskRow = ref<null | PersonnelCertApi.Cert>(null);
+const riskDetail = ref<null | SafetyPermitApi.PersonRisk>(null);
+const riskScanning = ref(false);
+
+async function openPersonRisk(r: PersonnelCertApi.Cert) {
+  if (!r.personId) {
+    message.warning('该证书未关联员工（personId 为空）');
+    return;
+  }
+  riskRow.value = r;
+  riskOpen.value = true;
+  riskLoading.value = true;
+  try {
+    riskDetail.value = await getPersonnelRisk(r.personId);
+  } catch (error: unknown) {
+    riskDetail.value = null;
+    message.warning(certErrorMsg(error));
+  } finally {
+    riskLoading.value = false;
+  }
+}
+
+/** 本页风险体检：对当前页去重后的员工并发取风险（显式动作，非自动轮询） */
+async function scanPageRisk() {
+  const ids = [...new Set(rows.value.map((r) => r.personId).filter((x): x is number => !!x))];
+  if (ids.length === 0) {
+    message.warning('当前页没有可体检的员工');
+    return;
+  }
+  riskScanning.value = true;
+  try {
+    const results = await Promise.all(ids.map((id) => getPersonnelRisk(id).catch(() => null)));
+    const next = { ...riskMap.value };
+    for (const item of results) {
+      if (item?.personId) next[item.personId] = item;
+    }
+    riskMap.value = next;
+    message.success(`已体检 ${ids.length} 名员工`);
+  } finally {
+    riskScanning.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
   syncBoardDays();
@@ -349,6 +436,15 @@ function remainTag(r: PersonnelCertApi.Cert) {
       </div>
     </div>
 
+    <a-alert
+      v-if="metaError"
+      type="warning"
+      show-icon
+      class="mb-3"
+      message="字典/配置未加载，证书类型与状态将按 code 展示"
+      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query；只授了员工资质权限时会出现该提示，可让管理员补该权限或由后端放开。`"
+    />
+
     <a-tabs v-model:active-key="tab">
       <a-tab-pane key="list" tab="员工证书">
         <div class="ct-panel">
@@ -376,6 +472,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
             <a-input-number v-model:value="query.expiringDays" :min="1" placeholder="到期窗口(天)" style="width: 140px" />
             <a-button type="primary" @click="load">查询</a-button>
             <a-button @click="resetQuery">重置</a-button>
+            <a-button :loading="riskScanning" @click="scanPageRisk">本页风险体检</a-button>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -403,7 +500,13 @@ function remainTag(r: PersonnelCertApi.Cert) {
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'person'">
-                  <div style="font-weight: 700">{{ record.personName || `员工 #${record.personId}` }}</div>
+                  <div style="font-weight: 700">
+                    {{ record.personName || `员工 #${record.personId}` }}
+                    <a-tag v-if="riskMap[record.personId]?.abnormal" color="red">异常</a-tag>
+                    <a-tag v-else-if="riskMap[record.personId]?.personRiskFlag" color="orange">
+                      {{ dictLabel('person_risk_flag', riskMap[record.personId]?.personRiskFlag) }}
+                    </a-tag>
+                  </div>
                   <div class="ct-id">{{ record.certName || '—' }} · {{ record.certNo || '—' }}</div>
                 </template>
                 <template v-else-if="column.key === 'certType'">
@@ -429,6 +532,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   <a-space size="small">
                     <a v-if="can('bidding:personnel:cert:update')" @click="openEdit(record)">编辑</a>
                     <a v-if="can('bidding:personnel:cert:update')" @click="openStatus(record)">状态</a>
+                    <a v-if="can('bidding:personnel:cert:query')" @click="openPersonRisk(record)">风险</a>
                     <a v-if="can('bidding:personnel:cert:delete')" style="color: #c6362e" @click="confirmDelete(record)">
                       删除
                     </a>
@@ -511,6 +615,8 @@ function remainTag(r: PersonnelCertApi.Cert) {
             <span class="ct-ml">配备要求取自配置 safety.abc.required</span>
           </div>
           <div class="ct-panel-b">
+            <!-- v1.1 §12.1~§12.4 安许风险联动（读取/重算/快照/宽限） -->
+            <SafetyRisk class="mb-3" :ent-id="countEntId ?? null" />
             <a-table
               class="ct-table"
               :columns="[
@@ -541,6 +647,46 @@ function remainTag(r: PersonnelCertApi.Cert) {
         </div>
       </a-tab-pane>
 
+      <a-tab-pane key="multi" tab="多岗兼任校验">
+        <div class="ct-panel">
+          <div class="ct-filter">
+            <a-input-number v-model:value="multiForm.personId" :min="1" placeholder="员工 ID（必填）" style="width: 160px" />
+            <a-select
+              v-model:value="multiForm.primaryPost"
+              :options="roleOptions"
+              placeholder="主岗位"
+              style="width: 140px"
+              allow-clear
+              :disabled="roleOptions.length === 0"
+            />
+            <a-select
+              v-model:value="multiForm.secondaryPost"
+              :options="roleOptions"
+              placeholder="兼任岗位"
+              style="width: 140px"
+              allow-clear
+              :disabled="roleOptions.length === 0"
+            />
+            <a-button type="primary" :loading="multiChecking" @click="runMultiCheck">校验</a-button>
+            <span class="ct-ml">岗位 code 取配置 safety.abc.roles；兼任须持对应考核合格证</span>
+          </div>
+          <div class="ct-panel-b">
+            <template v-if="multiResult">
+              <a-alert
+                :type="multiResult.pass ? 'success' : 'error'"
+                show-icon
+                :message="multiResult.pass ? '兼任合规' : '兼任不合规'"
+                :description="multiResult.pass
+                  ? `匹配证书 #${multiResult.matchedCertId ?? '—'}（${multiResult.requiredCertType || '—'} / ${multiResult.requiredCertSubType || '—'}）· ${multiResult.checkedAt || ''}`
+                  : (multiResult.failReason || '未匹配到对应考核合格证')"
+              />
+              <div class="ct-tip">校验结论会落库留痕（幂等，可重复校验）。</div>
+            </template>
+            <div v-else class="ct-empty">选择员工与主/兼任岗位后校验：校验结论不阻断登记，仅提示留痕</div>
+          </div>
+        </div>
+      </a-tab-pane>
+
       <a-tab-pane key="floor" tab="法定预警下限">
         <div class="ct-panel">
           <div class="ct-panel-h">
@@ -567,6 +713,35 @@ function remainTag(r: PersonnelCertApi.Cert) {
         </div>
       </a-tab-pane>
     </a-tabs>
+
+    <!-- v1.1 §12.6 人员风险抽屉（不自动拒绝，仅提示留痕） -->
+    <a-drawer v-model:open="riskOpen" class="bid-ind" :width="620" title="人员风险" destroy-on-close>
+      <a-spin :spinning="riskLoading">
+        <div class="ct-lb">员工</div>
+        <div class="mb-3">
+          {{ riskRow?.personName || `员工 #${riskRow?.personId}` }}
+          <span class="ct-id">{{ riskRow?.certName || '' }}</span>
+        </div>
+        <template v-if="riskDetail">
+          <a-descriptions :column="1" size="small" bordered>
+            <a-descriptions-item label="人员风险标识">
+              <a-tag :color="dictTag('person_risk_flag', riskDetail.personRiskFlag).color">
+                {{ riskDetail.personRiskFlag ? dictTag('person_risk_flag', riskDetail.personRiskFlag).label : '未评估' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="12 个月岗位变更次数">
+              {{ riskDetail.jobChangeCount12m ?? 0 }} 次（窗口起 {{ riskDetail.jobChangeWindowStart || '—' }}）
+            </a-descriptions-item>
+            <a-descriptions-item label="是否异常">
+              <a-tag :color="riskDetail.abnormal ? 'red' : 'green'">{{ riskDetail.abnormal ? '异常' : '正常' }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="评估时间">{{ riskDetail.personRiskEvaluatedAt || '未评估' }}</a-descriptions-item>
+          </a-descriptions>
+          <div class="ct-tip">人员风险仅用于提示与留痕，不自动拒绝业务操作（契约 v1.1 §12.6）。</div>
+        </template>
+        <div v-else class="ct-empty">未取到人员风险数据</div>
+      </a-spin>
+    </a-drawer>
 
     <!-- 登记 / 编辑 -->
     <a-modal
