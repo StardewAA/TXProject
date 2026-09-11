@@ -81,6 +81,16 @@ public class HttpFetchClient {
         private final Integer retryAfterSeconds;
         private final byte[] bytes;
 
+        /**
+         * 构造入口（回放/单测用；生产链路统一由 {@code sendForBytes} 产出）。
+         *
+         * <p>原因（2026-09-11）：构造器为包内可见，跨包单测（如 CrawlNoticeProcessorTest）无法构造本对象，
+         * 只能去 mock 其 getter，容易与真实语义（字节数/速率由 bytes 推导）脱节；提供显式工厂更贴近真实值对象。
+         */
+        public static FetchOutcome of(String url, int statusCode, long durationMs, Integer retryAfterSeconds, byte[] bytes) {
+            return new FetchOutcome(url, statusCode, durationMs, retryAfterSeconds, bytes);
+        }
+
         FetchOutcome(String url, int statusCode, long durationMs, Integer retryAfterSeconds, byte[] bytes) {
             this.url = url;
             this.statusCode = statusCode;
