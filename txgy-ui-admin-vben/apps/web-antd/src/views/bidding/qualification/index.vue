@@ -1902,7 +1902,7 @@ onMounted(() => {
               <a-select
                 v-model:value="stdForm.qualSerial"
                 :options="stdSerialOptions"
-                @change="stdForm.qualCategory = undefined; stdForm.qualGrade = undefined"
+                @change="stdForm.qualCategory = ''; stdForm.qualGrade = ''"
               />
             </a-form-item>
           </a-col>
@@ -1911,7 +1911,7 @@ onMounted(() => {
               <a-select
                 v-model:value="stdForm.qualCategory"
                 :options="stdCategoryOptions"
-                @change="stdForm.qualGrade = undefined"
+                @change="stdForm.qualGrade = ''"
               />
             </a-form-item>
           </a-col>

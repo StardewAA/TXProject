@@ -6,7 +6,7 @@ import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Dropdown, message, Modal, Tag } from 'ant-design-vue';
+import { Button, Dropdown, message, Modal, Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -15,6 +15,7 @@ import {
   backfillPdfUrls,
   bodyStructureNotice,
   getManagePage,
+  reindexNoticeExternalIndex,
   rejectNotice,
   takeDownNotice,
 } from '#/api/bidding/noticeExternal';
@@ -34,6 +35,21 @@ const [Detail, detailModalApi] = useVbenModal({
   connectedComponent: DetailModal,
   destroyOnClose: true,
 });
+
+/* 运维：重建外部公告检索索引（无入参；权限 bidding:notice-external:update） */
+const reindexing = ref(false);
+
+async function doReindex() {
+  reindexing.value = true;
+  try {
+    const result = await reindexNoticeExternalIndex();
+    message.success(result || '外部公告索引已重建');
+  } catch {
+    // 静默：403/失败由请求层提示
+  } finally {
+    reindexing.value = false;
+  }
+}
 
 function refresh() {
   gridApi.query();
@@ -371,6 +387,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <Detail />
     <Grid table-title="外部公告审核管理（招投标）">
       <template #toolbar-tools>
+        <Button :loading="reindexing" @click="doReindex">重建索引</Button>
         <TableAction
           :actions="[
             {

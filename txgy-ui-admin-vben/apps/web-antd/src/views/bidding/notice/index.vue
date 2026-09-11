@@ -29,7 +29,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
 
 import { NoticeApi } from '#/api/bidding/notice';
-import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
+import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, reindexAllNotices, reindexNotices, syncNoticePublic, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 
@@ -503,6 +503,43 @@ async function openDetail(row: NoticeApi.Row) {
 }
 
 onMounted(() => { load(); void fetchKpiCounts(); });
+
+/* ================= 运维动作：索引重建 / 公开同步（权限 bidding:notice:update，由后端 @PreAuthorize 把关） ================= */
+const reindexing = ref<'' | 'all' | 'one'>('');
+
+async function doReindex(all = false) {
+  reindexing.value = all ? 'all' : 'one';
+  try {
+    const result = all ? await reindexAllNotices() : await reindexNotices();
+    message.success(result || (all ? '全量重建已完成' : '索引重建已完成'));
+  } catch {
+    // 静默：403/失败由请求层提示
+  } finally {
+    reindexing.value = '';
+  }
+}
+
+const syncOpen = ref(false);
+const syncing = ref(false);
+const syncBizNo = ref('');
+
+async function doSync() {
+  const bizNo = syncBizNo.value.trim();
+  if (!bizNo) {
+    message.warning('请填写业务单号 bizNo');
+    return;
+  }
+  syncing.value = true;
+  try {
+    const resp = await syncNoticePublic({ bizNo });
+    message.success(`公开同步已受理：taskNo=${resp?.taskNo ?? '—'}｜status=${resp?.status ?? '—'}`);
+    syncOpen.value = false;
+  } catch {
+    // 静默
+  } finally {
+    syncing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -521,6 +558,9 @@ onMounted(() => { load(); void fetchKpiCounts(); });
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
+        <Button size="large" :loading="reindexing === 'one'" @click="doReindex(false)">重建索引</Button>
+        <Button size="large" :loading="reindexing === 'all'" @click="doReindex(true)">全量重建</Button>
+        <Button size="large" @click="syncOpen = true">公开同步</Button>
         <Button size="large" @click="refreshAll">刷新</Button>
       </div>
     </div>
@@ -641,6 +681,18 @@ onMounted(() => { load(); void fetchKpiCounts(); });
     </div>
 
     <!-- 新建/编辑弹窗（分节表单） -->
+    <Modal v-model:open="syncOpen" title="公告公开同步（公告 → 归集 → 检索文档）" :footer="null" width="540" destroy-on-close>
+      <div class="mb-2 text-xs text-gray-600">
+        按业务单号触发一次公开同步；后端 <code>@Idempotent</code>，重复提交不会重复归集，返回值即受理回执（taskNo / status）。
+      </div>
+      <Input v-model:value="syncBizNo" placeholder="业务单号 bizNo（如公告编号 / 项目编号）" allow-clear />
+      <div class="mt-1 text-xs text-gray-500">dataTimestamp 留空由服务端取当前时间（请求侧时间格式未在契约中约定，故不在表单暴露）。</div>
+      <div class="mt-3 flex justify-end gap-2">
+        <Button @click="syncOpen = false">取消</Button>
+        <Button type="primary" :loading="syncing" @click="doSync">提交同步</Button>
+      </div>
+    </Modal>
+
     <Modal v-model:open="editorOpen" :title="editorTitle" :footer="null" width="880" destroy-on-close>
       <div class="nw-modal-body">
         <!-- 第一节：标题与辨识 -->
