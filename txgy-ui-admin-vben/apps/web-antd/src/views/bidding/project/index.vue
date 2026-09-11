@@ -360,7 +360,9 @@ function confirmDelete(r: ProjectApi.Project) {
                 <a v-if="can('bidding:filing:create')" @click="openFiling(record)">提交备案</a>
                 <a v-if="can('bidding:filing:update')" @click="openReceipt()">登记回执</a>
                 <a v-if="can('bidding:project:update')" @click="onEdit(record)">编辑</a>
-                <a v-if="can('bidding:project:delete')" style="color: #c6362e" @click="confirmDelete(record)">删除</a>
+                <!-- 权限码口径：后端删除端点（POST /bidding/project/delete）用的是 bidding:project:update，
+                     按规范 §4.2 复用项目域既有权限点，无独立的 :delete 码；此处若写 :delete 则普通角色永远看不到删除入口 -->
+                <a v-if="can('bidding:project:update')" style="color: #c6362e" @click="confirmDelete(record)">删除</a>
               </a-space>
             </template>
           </template>

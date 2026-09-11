@@ -27,6 +27,7 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 | `check-menu-pages.js` | `type=2` 菜单的 `component` 必须有对应 `.vue` | **死菜单**：侧边栏能点、点进去 404 |
 | `check-dict-coverage.js` | 前端引用的字典类型已在 `bidding_dict_data` 注册 | **英文码直出**：页面拿不到中文名与标签色 |
 | `check-api-coverage.js` | 正向：后端 `/bidding` 端点都已在前端接线；反向：前端请求路径在后端都存在 | 正向失败 = **功能静默缺失**（后端有端点、前端无人调用）；反向失败 = **运行期 404**（前端调了不存在的路径） |
+| `check-permission-coverage.js` | 前端判权码、后端 `@PreAuthorize`、`system_menu` 注册三处一致 | **按钮永远不可见**：码没注册就无法在「角色授权」里勾选；或**拼错码**：前端判的码后端不认 |
 
 `check-api-coverage.js` 的选项与口径：
 
@@ -61,6 +62,13 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
    `const FOLLOW_API = \`\${baseUrl}\${apiPrefix}/notice-follow\`` 拼出来的 5 个关注端点误判成"未接线"。
    加上"模板常量尾段 + 内层变量归一 + 后缀匹配"后自纠；同一轮还发现 `notice/public/detail` 其实由门户站的
    `INTERNAL_API/public/detail` 调用——**校验器的假阳性会把"已实现"误报成"缺失"，所以每次新增校验器都要做反向自测**。
+
+## 权限码三处一致（check-permission-coverage.js）
+
+前端 `can('bidding:xxx:yyy')` 里的码要真的可用，必须同时满足：后端接口 `@PreAuthorize` 认它、`system_menu` 注册了它。
+缺前者 = 点下去 403；缺后者 = 「角色授权」界面里没有这一项 → 任何角色都授不出去 → 按钮永远不渲染。两种都不报错。
+该脚本实测抓到过：`bidding:project:delete`（后端根本没有这个码，删除端点复用 `bidding:project:update`）、
+`bidding:rule-config:query/update`（后端与前端都在用，但 `system_menu` 从未注册 → ⑤ 规则配置面板对普通角色整块不可见）。
 
 ## 新增校验器的约定
 
