@@ -1,3 +1,4 @@
+-- ⚠ 本文件中的 AI 密钥已脱敏（真实值不入库；需要时可从平台「AI 密钥管理」重新配置）。
 -- ============================================================================
 -- 【已归档】原 master-bidding-sync.sql 中被剔除的种子数据（2026-09-11 整理）
 -- 剔除原因：用户口径「不要数据，只要结构和最基础的数据（爬虫能启动 + 菜单能进），
@@ -109,7 +110,7 @@ UNLOCK TABLES;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 LOCK TABLES `ai_api_key` WRITE;
 /*!40000 ALTER TABLE `ai_api_key` DISABLE KEYS */;
-INSERT IGNORE INTO `ai_api_key` VALUES (28,'test','sk-4f6f16cbc98841a28d5b43b283344158','DeepSeek','https://api.deepseek.com',0,'1','2026-09-08 08:01:13','1','2026-09-09 11:22:05',_binary '\0',1);
+INSERT IGNORE INTO `ai_api_key` VALUES (28,'test','__REDACTED__（真实密钥不入库：请在平台「AI 密钥管理」配置，或由环境变量注入）','DeepSeek','https://api.deepseek.com',0,'1','2026-09-08 08:01:13','1','2026-09-09 11:22:05',_binary '\0',1);
 /*!40000 ALTER TABLE `ai_api_key` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
