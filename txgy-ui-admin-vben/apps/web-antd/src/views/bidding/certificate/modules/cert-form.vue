@@ -10,7 +10,9 @@ import { message } from 'ant-design-vue';
 import {
   CERT_ERR,
   certErrorCode,
+  certFieldErrorFields,
   type CertificateApi,
+  certTraceId,
   createCertificate,
   getCertificate,
   updateCertificate,
@@ -165,8 +167,19 @@ async function submit() {
       message.error('证照不存在，已刷新列表');
       emit('update:open', false);
       emit('saved');
+    } else if (code === 400) {
+      // 契约 §0.4：400 的 data.fieldErrors 必须逐字段落到表单项（后端 BiddingValidationAdvice 已返回）
+      const fields = certFieldErrorFields(error);
+      if (fields.length > 0) {
+        formRef.value?.setFields(fields);
+        message.warning(`有 ${fields.length} 处字段需要修正，详见表单提示`);
+      }
+    } else if (code === 500) {
+      // 契约 §0.4：500 必须带 traceId 反馈运维
+      const traceId = certTraceId(error);
+      if (traceId) message.error(`服务异常，请把 traceId 反馈运维：${traceId}`);
     }
-    // 其余错误（400 字段校验 / 幂等拦截 / 403 / 500）由请求层统一 toast 后端 msg，此处不重复提示，
+    // 其余错误（幂等拦截 / 403）由请求层统一 toast 后端 msg，此处不重复提示，
     // 且**禁止**对幂等拦截做自动重试（契约 §9）。
   } finally {
     saving.value = false;

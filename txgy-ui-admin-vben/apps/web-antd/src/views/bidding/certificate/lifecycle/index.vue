@@ -279,7 +279,7 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
       show-icon
       class="mb-3"
       message="字典/配置未加载，状态与类型将按 code 展示"
-      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query（契约 §1.1 写的是登录即可，后端当前更严）；补齐后可恢复中文名。`"
+      :description="`${metaError}｜/bidding/meta/* 需电子证照域任一页面权限（后端 hasAnyPermissions，已含 certificate:lifecycle:query）；补齐后可恢复中文名。`"
     />
 
     <div class="ct-panel">
@@ -430,7 +430,9 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
             {{ detail?.effectiveAt ? fmtDateTime(detail.effectiveAt) : '未生效' }}
           </a-descriptions-item>
           <a-descriptions-item label="事由 / 备注" :span="2">{{ detail?.remark || detail?.revokeReason || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="佐证材料 fileId" :span="2">{{ detail?.evidenceFileIds || '—' }}</a-descriptions-item>
+          <a-descriptions-item label="佐证材料 fileId" :span="2">
+            {{ detail?.evidenceFileIds?.length ? detail.evidenceFileIds.join('、') : '—' }}
+          </a-descriptions-item>
         </a-descriptions>
       </a-spin>
     </a-drawer>

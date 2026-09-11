@@ -257,7 +257,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
       show-icon
       class="mb-3"
       message="字典/配置未加载，页面按 code 降级展示（功能不受影响）"
-      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query；补齐后点右上「重载字典/配置」即可恢复中文名与阈值。`"
+      :description="`${metaError}｜/bidding/meta/* 需电子证照域任一页面权限（后端 hasAnyPermissions：certificate:query / qualification:query / personnel:profile:query / certificate:lifecycle:query / qualification:permit:query）；补齐后点右上「重载字典/配置」即可恢复中文名与阈值。`"
     />
 
     <div class="ct-kpis">
