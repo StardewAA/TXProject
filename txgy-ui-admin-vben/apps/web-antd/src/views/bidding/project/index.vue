@@ -13,6 +13,7 @@ import { useAccessStore } from '@vben/stores';
 
 import { message, Modal } from 'ant-design-vue';
 
+import { FILING_STATUS_OPTIONS, type FilingApi, receiveFilingResult, submitFiling } from '#/api/bidding/filing';
 import {
   deleteProject,
   getProject,
@@ -71,6 +72,86 @@ function resetQuery() {
   query.state = undefined;
   query.pageNo = 1;
   void load();
+}
+
+/* ================= 项目备案：提交 / 回执登记（FilingController） ================= */
+const filingOpen = ref(false);
+const filingSaving = ref(false);
+const filingForm = reactive<FilingApi.SubmitReq>({ filingType: '', projectCode: '' });
+const filingAttachmentText = ref('');
+
+/** 逗号/空格分隔的文件 id → number[]（后端为 Long 列表） */
+function toFileIds(text: string) {
+  const ids = text
+    .split(/[,\s，]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => Number(t))
+    .filter((n) => Number.isFinite(n));
+  return ids.length > 0 ? ids : undefined;
+}
+
+function openFiling(row: ProjectApi.Project) {
+  Object.assign(filingForm, {
+    attachmentFileIds: undefined,
+    dataTimestamp: undefined,
+    filingType: '',
+    orgForm: undefined,
+    projectCode: row.projectCode ?? '',
+    submitTime: undefined,
+    superviseDeptCode: undefined,
+    superviseDeptName: undefined,
+    tenderMode: undefined,
+    tenderProjectCode: undefined,
+    unifiedDealCode: undefined,
+  });
+  filingAttachmentText.value = '';
+  filingOpen.value = true;
+}
+
+const receiptOpen = ref(false);
+const receiptSaving = ref(false);
+const receiptForm = reactive<FilingApi.ResultReq>({ receiptNo: '', resultStatus: '' });
+
+async function submitFilingForm() {
+  if (!filingForm.filingType.trim() || !filingForm.projectCode.trim()) {
+    message.warning('备案类型与项目编号必填');
+    return;
+  }
+  filingSaving.value = true;
+  try {
+    const resp = await submitFiling({ ...filingForm, attachmentFileIds: toFileIds(filingAttachmentText.value) });
+    message.success(`备案已提交：受理号 ${resp?.receiptNo ?? '—'}｜状态 ${resp?.status ?? '—'}`);
+    filingOpen.value = false;
+    // 提交后把受理号带到回执登记，省一次手工誊抄
+    receiptForm.receiptNo = resp?.receiptNo ?? '';
+  } catch {
+    // 静默：重复提交由后端返回 FILING_ALREADY_SUBMITTED（§0.4）
+  } finally {
+    filingSaving.value = false;
+  }
+}
+
+function openReceipt() {
+  Object.assign(receiptForm, { opinion: undefined, receiptNo: receiptForm.receiptNo ?? '', resultStatus: '' });
+  receiptOpen.value = true;
+}
+
+async function submitReceipt() {
+  if (!receiptForm.receiptNo.trim() || !receiptForm.resultStatus) {
+    message.warning('受理号与回推结果必填');
+    return;
+  }
+  receiptSaving.value = true;
+  try {
+    await receiveFilingResult({ ...receiptForm });
+    message.success('备案回执已登记');
+    receiptOpen.value = false;
+  } catch {
+    // 静默
+  } finally {
+    receiptSaving.value = false;
+  }
 }
 
 onMounted(load);
@@ -276,6 +357,8 @@ function confirmDelete(r: ProjectApi.Project) {
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
                 <a @click="openTrace(record)">追溯</a>
+                <a v-if="can('bidding:filing:create')" @click="openFiling(record)">提交备案</a>
+                <a v-if="can('bidding:filing:update')" @click="openReceipt()">登记回执</a>
                 <a v-if="can('bidding:project:update')" @click="onEdit(record)">编辑</a>
                 <a v-if="can('bidding:project:delete')" style="color: #c6362e" @click="confirmDelete(record)">删除</a>
               </a-space>
@@ -379,6 +462,84 @@ function confirmDelete(r: ProjectApi.Project) {
         <div v-else-if="!traceLoading" class="ct-empty">未取到追溯数据</div>
       </a-spin>
     </a-drawer>
+
+    <!-- 提交备案（项目编号随行带入；filingType 为业务约定文本） -->
+    <a-modal
+      v-model:open="filingOpen"
+      title="提交项目备案"
+      :width="820"
+      :confirm-loading="filingSaving"
+      ok-text="提交"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitFilingForm"
+    >
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="备案类型（必填）">
+              <a-input v-model:value="filingForm.filingType" placeholder="如：招标备案 / 中标备案（后端为自由文本）" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="项目编号（必填）">
+              <a-input v-model:value="filingForm.projectCode" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="招标项目编号"><a-input v-model:value="filingForm.tenderProjectCode" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="统一交易码"><a-input v-model:value="filingForm.unifiedDealCode" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="招标方式"><a-input v-model:value="filingForm.tenderMode" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="组织形式"><a-input v-model:value="filingForm.orgForm" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="监管部门编码"><a-input v-model:value="filingForm.superviseDeptCode" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="监管部门名称"><a-input v-model:value="filingForm.superviseDeptName" /></a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="附件文件 id（逗号分隔）">
+              <a-input v-model:value="filingAttachmentText" placeholder="如：301,302" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <div class="ct-tip">
+        幂等键为「备案类型 + 项目编号」，重复提交后端返回 FILING_ALREADY_SUBMITTED；提交时间由服务端取当前时间。
+      </div>
+    </a-modal>
+
+    <!-- 备案回执登记 -->
+    <a-modal
+      v-model:open="receiptOpen"
+      title="登记备案回执"
+      :width="620"
+      :confirm-loading="receiptSaving"
+      ok-text="登记"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitReceipt"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="受理号（必填）">
+          <a-input v-model:value="receiptForm.receiptNo" placeholder="提交备案时后端返回的 receiptNo" />
+        </a-form-item>
+        <a-form-item label="回推结果（必填）">
+          <a-select v-model:value="receiptForm.resultStatus" :options="FILING_STATUS_OPTIONS" placeholder="请选择" />
+        </a-form-item>
+        <a-form-item label="受理意见">
+          <a-textarea v-model:value="receiptForm.opinion" :rows="3" placeholder="如：材料齐全，予以受理" />
+        </a-form-item>
+      </a-form>
+      <div class="ct-tip">回执状态码表逐字取自 FilingStatusEnum；登记后「追溯」里的备案一栏即为最新状态。</div>
+    </a-modal>
 
     <!-- 登记 / 编辑 -->
     <a-modal
