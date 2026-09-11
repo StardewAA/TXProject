@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 证照变更审计日志（T 轨 · 只追加 · 等保 2.0 三级）。表：cert_change_logs（DDL 见 sql/2026-09-04-certificate.sql）。
+ * 证照变更审计日志（T 轨 · 只追加 · 等保 2.0 三级）。表：cert_change_logs（DDL 见 sql/history/2026-09-04-certificate.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §13＋§18.3 v3.4 对齐；《招投标模块开发规范》§5 六-3。
  * <p>设计遵循/针对：① record_hash=SHA-256(字段拼接)＋prev_hash 哈希链，链首 prev_hash=ROOT，根哈希定期固化

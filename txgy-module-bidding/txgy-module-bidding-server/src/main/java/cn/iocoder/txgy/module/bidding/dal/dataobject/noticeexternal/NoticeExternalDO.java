@@ -100,13 +100,13 @@ public class NoticeExternalDO extends BaseDO {
     private String extractionTablesJson;
     /** PDF 抽取时间 */
     private LocalDateTime extractionAt;
-    /** AI 结构化抽取状态：NONE/SUCCESS/FAILED（PDF→AI 结构化输出；见 sql/2026-09-06-ai-extract.sql） */
+    /** AI 结构化抽取状态：NONE/SUCCESS/FAILED（PDF→AI 结构化输出；见 sql/history/2026-09-06-ai-extract.sql） */
     private String aiExtractionStatus;
     /** AI 结构化字段集（JSON；含 noticeFullText=全文转写，非空回写 extractionText） */
     private String aiMetaJson;
     /** 最近一次 AI 抽取时间 */
     private LocalDateTime aiExtractAt;
-    /** 正文结构化策略码：HTML_STRUCTURE=常规 HTML 结构解析 / AI_FALLBACK=AI 兜底排版（见 sql/2026-09-07-body-blocks.sql） */
+    /** 正文结构化策略码：HTML_STRUCTURE=常规 HTML 结构解析 / AI_FALLBACK=AI 兜底排版（见 sql/history/2026-09-07-body-blocks.sql） */
     private String bodyParserCode;
     /** 正文结构化状态：NONE/SUCCESS/FAILED */
     private String bodyBlocksStatus;

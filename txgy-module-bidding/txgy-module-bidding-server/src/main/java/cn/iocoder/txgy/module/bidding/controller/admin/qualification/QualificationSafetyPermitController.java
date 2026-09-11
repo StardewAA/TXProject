@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 安全生产许可证管理接口（15-8：建档 + 状态流转）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 15-8；《招投标模块开发规范》§4.4
- * （权限码 bidding:qualification:permit，菜单脚本 sql/2026-09-11-…）。
+ * （权限码 bidding:qualification:permit，菜单脚本 sql/history/2026-09-11-…）。
  */
 @Tag(name = "管理后台 - 安许证")
 @RestController

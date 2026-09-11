@@ -7,6 +7,7 @@ package cn.iocoder.txgy.module.bidding.controller.admin.project;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import cn.iocoder.txgy.module.bidding.controller.admin.project.vo.*;
 import cn.iocoder.txgy.module.bidding.service.project.ProjectService;
 import cn.iocoder.txgy.module.bidding.service.project.ProjectTraceService;
@@ -55,6 +56,7 @@ public class BidSectionController {
     @PostMapping("/save")
     @PreAuthorize("@ss.hasPermission('bidding:bid-section:create')")
     @Operation(summary = "标段（包）登记/修改（须归属已登记招标项目）")
+    @Idempotent
     public CommonResult<Long> save(@Valid @RequestBody BidSectionSaveReqVO reqVO) {
         return success(projectService.saveBidSection(reqVO));
     }

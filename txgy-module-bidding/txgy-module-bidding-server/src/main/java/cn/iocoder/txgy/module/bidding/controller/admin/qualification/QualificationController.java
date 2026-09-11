@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 企业资质主档/申报流管理接口（建档 + 延续申报 RENEW 全流程）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §十五 表 15-1/15-7（建档/延续申报/办结回写）；
- * 《招投标模块开发规范》§4.4（权限码 bidding:qualification:*，菜单脚本见 sql/2026-09-08-…）。
+ * 《招投标模块开发规范》§4.4（权限码 bidding:qualification:*，菜单脚本见 sql/history/2026-09-08-…）。
  */
 @Tag(name = "管理后台 - 企业资质")
 @RestController

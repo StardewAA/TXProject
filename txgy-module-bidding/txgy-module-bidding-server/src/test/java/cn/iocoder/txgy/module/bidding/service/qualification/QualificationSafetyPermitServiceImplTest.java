@@ -62,7 +62,7 @@ class QualificationSafetyPermitServiceImplTest {
         when(qualificationSafetyPermitMapper.selectByPermitNo("X")).thenReturn(new QualificationSafetyPermitDO());
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.createPermit(1L, "X", "a", null, null, null, null, null));
-        assertEquals(Integer.valueOf(1_060_106_025), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_025), e.getCode());
         verify(qualificationSafetyPermitMapper, never()).insert(any(QualificationSafetyPermitDO.class));
     }
 
@@ -72,7 +72,7 @@ class QualificationSafetyPermitServiceImplTest {
         when(certificateInfoMapper.selectById(5L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.createPermit(1L, "X", "a", null, null, null, 5L, null));
-        assertEquals(Integer.valueOf(1_060_106_000), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_000), e.getCode());
     }
 
     @Test
@@ -93,7 +93,7 @@ class QualificationSafetyPermitServiceImplTest {
         when(qualificationSafetyPermitMapper.selectById(1L)).thenReturn(p);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.changeStatus(1L, SafetyPermitStatusEnum.VALID.name(), 0, null));
-        assertEquals(Integer.valueOf(1_060_106_026), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_026), e.getCode());
         verify(qualificationSafetyPermitMapper, never()).updateById(any(QualificationSafetyPermitDO.class));
     }
 
@@ -104,7 +104,7 @@ class QualificationSafetyPermitServiceImplTest {
         when(qualificationSafetyPermitMapper.selectById(1L)).thenReturn(p);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.changeStatus(1L, SafetyPermitStatusEnum.EXPIRED.name(), 2, null));
-        assertEquals(Integer.valueOf(1_060_106_026), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_026), e.getCode());
     }
 
     private QualificationSafetyPermitDO permitOf(SafetyPermitStatusEnum status) {

@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.bidding.service.certificate;
 
+import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertLifecycleRespVO;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertLifecycleApplyReqVO;
@@ -501,6 +503,38 @@ public class CertLifecycleServiceImpl implements CertLifecycleService {
         }
     }
 
+    // ========== 存储形态转换（VO List<Long> ↔ DB json 文本）==========
+
+    /** List&lt;Long&gt; → JSON 串；空集合落 NULL（避免 DB 里出现 "[]" 与 NULL 两种"空"）。 */
+    private String toJsonIds(java.util.List<Long> ids) {
+        return (ids == null || ids.isEmpty()) ? null : JsonUtils.toJsonString(ids);
+    }
+
+    /** JSON 串 → List&lt;Long&gt;；脏数据不抛异常（返回空列表），避免一条坏记录让整页 500。 */
+    private java.util.List<Long> parseIds(String json) {
+        if (json == null || json.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            java.util.List<Long> ids = JsonUtils.parseArray(json, Long.class);
+            return ids == null ? java.util.Collections.emptyList() : ids;
+        } catch (Exception ex) {
+            log.warn("[cert-lifecycle][parseIds] 佐证材料 JSON 解析失败，已按空处理：{}", ex.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    @Override
+    public CertLifecycleRespVO toRespVO(CertLifecycleRecordDO record) {
+        if (record == null) {
+            return null;
+        }
+        CertLifecycleRespVO vo = new CertLifecycleRespVO();
+        org.springframework.beans.BeanUtils.copyProperties(record, vo);
+        vo.setEvidenceFileIds(parseIds(record.getEvidenceFileIds()));
+        return vo;
+    }
+
     // ========== 内部 ==========
 
     private CertLifecycleRecordDO buildBaseRecord(CertLifecycleBizDomainEnum domain, CertLifecycleTypeEnum type,
@@ -516,7 +550,8 @@ public class CertLifecycleServiceImpl implements CertLifecycleService {
         row.setStatus(CertLifecycleStatusEnum.PENDING.name());
         row.setApplyNo(applyNo);
         row.setNewCertFileId(reqVO.getNewCertFileId());
-        row.setEvidenceFileIds(reqVO.getEvidenceFileIds());
+        // 存储形态转换：VO 的 List<Long> → DB json 列文本（规范 §四：转换收敛在 Service）
+        row.setEvidenceFileIds(toJsonIds(reqVO.getEvidenceFileIds()));
         row.setRemark(reqVO.getRemark());
         row.setAppliedBy(currentUserId());
         row.setAppliedAt(LocalDateTime.now());

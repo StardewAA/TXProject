@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 验真历史表（T 轨 · 只追加 · 幂等防重）。表：cert_verify_history（DDL 见 sql/2026-09-06-cert-verify-history.sql）。
+ * 验真历史表（T 轨 · 只追加 · 幂等防重）。表：cert_verify_history（DDL 见 sql/history/2026-09-06-cert-verify-history.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §17.5（必建；主表 verification_status 仅承载最近一次状态，
  * 历史调用落本表 + 表 11 usage_type=VERIFY 形成验真调用链审计）；GB/T 36906—2018 §6.4/§6.5（verifyinfo/verifyfile）。

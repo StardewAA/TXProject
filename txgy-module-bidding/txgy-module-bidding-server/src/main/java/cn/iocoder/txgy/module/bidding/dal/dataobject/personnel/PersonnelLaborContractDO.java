@@ -9,7 +9,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 员工劳动合同。表：personnel_labor_contract（DDL sql/2026-09-13-personnel-qualification.sql）。
+ * 员工劳动合同。表：personnel_labor_contract（DDL sql/history/2026-09-13-personnel-qualification.sql）。
  *
  * <p>规范出处：用户业务口径"核验劳动合同主体是否与申报企业完全一致"；《中华人民共和国劳动合同法》第十条
  * （建立劳动关系应当订立书面劳动合同）；《建筑业企业资质管理规定》（住建部令第22号）人员指标须为本企业员工。

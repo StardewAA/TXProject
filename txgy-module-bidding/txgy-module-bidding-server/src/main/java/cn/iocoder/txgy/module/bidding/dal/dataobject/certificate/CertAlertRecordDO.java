@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 预警记录（T 轨 · 幂等防重跑）。表：cert_alert_records（DDL 见 sql/2026-09-05-cert-alert.sql）。
+ * 预警记录（T 轨 · 幂等防重跑）。表：cert_alert_records（DDL 见 sql/history/2026-09-05-cert-alert.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §九：idempotent_key UNIQUE 按
  * (cert_id, alert_type, 触发日期) 生成，定时任务重启/重跑不重复；alert_level 档位；notify_status 与
