@@ -40,6 +40,17 @@ const routes: RouteRecordRaw[] = [
           title: 'AI首页',
         },
       },
+      {
+        // 资源中心 - 文档资源库（菜单 API 注册了 dashboard/doc-list，路由直接渲染培训资源中心文档列表）
+        path: 'doc-list',
+        component: () => import('#/views/training/resource/doc-list/index.vue'),
+        meta: {
+          hideInMenu: true,
+          icon: 'lucide:library-big',
+          title: '文档资源库',
+        },
+        name: 'ResourceDocList',
+      },
     ],
   },
   {
