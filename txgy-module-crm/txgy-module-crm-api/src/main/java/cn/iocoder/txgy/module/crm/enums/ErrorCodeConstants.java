@@ -20,6 +20,8 @@ public interface ErrorCodeConstants {
     // ========== 线索管理 1-020-001-000 ==========
     ErrorCode CLUE_NOT_EXISTS = new ErrorCode(1_020_001_000, "线索不存在");
     ErrorCode CLUE_TRANSFORM_FAIL_ALREADY = new ErrorCode(1_020_001_001, "线索已经转化过了，请勿重复转化");
+    ErrorCode CLUE_IMPORT_LIST_IS_EMPTY = new ErrorCode(1_020_001_002, "导入线索数据不能为空！");
+    ErrorCode CLUE_CREATE_NAME_NOT_NULL = new ErrorCode(1_020_001_003, "线索名称不能为空！");
 
     // ========== 商机管理 1-020-002-000 ==========
     ErrorCode BUSINESS_NOT_EXISTS = new ErrorCode(1_020_002_000, "商机不存在");
@@ -66,6 +68,7 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_CREATE_NAME_NOT_NULL = new ErrorCode(1_020_006_013, "客户名称不能为空！");
     ErrorCode CUSTOMER_NAME_EXISTS = new ErrorCode(1_020_006_014, "已存在名为【{}】的客户！");
     ErrorCode CUSTOMER_UPDATE_DEAL_STATUS_FAIL = new ErrorCode(1_020_006_015, "更新客户的成交状态失败，原因：已经是该状态，无需更新");
+    ErrorCode CUSTOMER_FETCH_WEB_PAGE_FAIL = new ErrorCode(1_020_006_016, "网页抓取失败：{}");
 
     // ========== 权限管理 1_020_007_000 ==========
     ErrorCode CRM_PERMISSION_NOT_EXISTS = new ErrorCode(1_020_007_000, "数据权限不存在");

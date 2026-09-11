@@ -4,7 +4,7 @@ import type { CrmCustomerApi } from '#/api/crm/customer';
 
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Button } from 'ant-design-vue';
@@ -15,9 +15,25 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import ClueQuickParse from '../../clue/modules/ClueQuickParse.vue';
+import ImportForm from './modules/import-form.vue';
 import type { ParsedClue } from '#/utils/crm/clue-parse';
 
 const { push } = useRouter();
+
+const [ImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportForm,
+  destroyOnClose: true,
+});
+
+/** 批量导入客户到公海（Excel） */
+function handleImport() {
+  importModalApi.open();
+}
+
+/** 刷新表格 */
+function handleRefresh() {
+  gridApi.query();
+}
 
 /** 导出表格 */
 async function handleExport() {
@@ -108,6 +124,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['crm:customer:export'],
               onClick: handleExport,
             },
+            {
+              label: '批量导入',
+              type: 'primary',
+              auth: ['crm:customer:import'],
+              onClick: handleImport,
+            },
           ]"
         />
       </template>
@@ -117,5 +139,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </Button>
       </template>
     </Grid>
+    <ImportModal @success="handleRefresh" />
   </Page>
 </template>
