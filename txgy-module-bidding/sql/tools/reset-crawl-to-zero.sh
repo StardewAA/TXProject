@@ -80,7 +80,7 @@ if [[ "$CONFIRM" == "YES" ]]; then
   fi
   log "登录成功，开始触发全量"
   for s in $SOURCES; do
-    log "触发 $s 一轮采集（async 模式：仅入队，消费端每 5 分钟一条慢慢爬）"
+    log "触发 $s 一轮采集（async 模式：仅入队，消费端每 2 分钟一条慢慢爬；2026-09-10 由 5 分钟调整为 2 分钟）"
     curl -s -X POST "$GATEWAY/bidding/crawl-source/run?sourceCode=$s" \
       -H "Authorization: Bearer $TOKEN" -H "tenant-id: $TENANT_ID" ; echo
   done
@@ -92,7 +92,8 @@ cat <<'EOF'
 
 后续（爬取入队后）：
   1) 观察入队与消费：SELECT status, COUNT(*) FROM bidding_fetch_task GROUP BY status;
-     —— PENDING 多属正常（consumer-delay-ms=300000，每 5 分钟消费一条；慢是要求，不是缺陷）。
+     —— PENDING 多属正常（consumer-delay-ms=120000，每 2 分钟消费一条；慢是要求，不是缺陷）。
+     —— 下载速率/完整性/存储状态看审计台账：SELECT * FROM bidding_crawl_download_audit ORDER BY id DESC LIMIT 20;
   2) 公告审核转 ACTIVE 后建索引；批量补偿用：
      POST /admin-api/bidding/notice-external/reindex     （外部公告，需 bidding:notice-external:update）
      POST /admin-api/bidding/notice/reindex              （本租户站内公告）

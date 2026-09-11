@@ -53,6 +53,15 @@ public class CrawlNoticeProcessor {
     /** 原文下载限速闸：所有"下载公告原文文件"的动作必须经它放行（合规频控唯一入口） */
     @Resource
     private CrawlDownloadGate crawlDownloadGate;
+    /** 下载内容完整性校验（空/截断/格式不符/错误页/乱码 → 不入库；并产出 sha256） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.validate.DownloadIntegrityValidator integrityValidator;
+    /** 下载审计与速度监控（量/速/摘要/结论/存储状态落台账） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor downloadAuditor;
+    /** robots.txt 合规检查（抓取前检查 Disallow） */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
 
     /**
      * 执行一条信息获取任务（按 payload 快照落库）。
@@ -99,7 +108,19 @@ public class CrawlNoticeProcessor {
                 if (!UrlHostGuard.isInternalFileUrl(rawFileUrl)) {
                     assertUrlAllowed(rawFileUrl, task.getSourceCode());
                 }
-                contentHtml = httpFetchClient.getText(rawFileUrl);
+                // 下载监控 + 完整性校验（2026-09-10）：平台归档原文同样记录量/速/摘要，校验不通过不得入库
+                cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome =
+                        httpFetchClient.fetchText(rawFileUrl);
+                contentHtml = outcome.getText();
+                var verdict = integrityValidator.validateText(contentHtml, rawFileUrl);
+                downloadAuditor.record(task.getId(), task.getSourceCode(), rawFileUrl, "ARCHIVE_HTML",
+                        outcome.getStatusCode(), (long) outcome.getByteSize(), outcome.getDurationMs(),
+                        verdict.getSha256(), verdict.getVerdict().name(),
+                        cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                        null, verdict.getDetail());
+                if (!verdict.pass()) {
+                    throw new IllegalStateException("平台归档原文校验不通过：" + verdict.getDetail());
+                }
             }
         }
         if (!StringUtils.hasText(contentHtml)) {
@@ -140,9 +161,22 @@ public class CrawlNoticeProcessor {
             throw new IllegalStateException("HTML 详情任务缺详情 URL");
         }
         assertUrlAllowed(url, task.getSourceCode());
-        String html = httpFetchClient.getText(url);
-        if (!StringUtils.hasText(html)) {
-            throw new IllegalStateException("详情页下载为空 url=" + url);
+        // robots.txt 合规：目标路径被 Disallow 即不抓（2026-09-10 补齐，此前该字段形同虚设）
+        if (!robotsGuard.isAllowed(url)) {
+            throw new IllegalStateException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + url);
+        }
+        // 下载 + 即时校验 + 审计（速度监控与完整性结论一并落台账）
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome =
+                httpFetchClient.fetchText(url);
+        String html = outcome.getText();
+        var verdict = integrityValidator.validateText(html, url);
+        downloadAuditor.record(task.getId(), task.getSourceCode(), url, "DETAIL_HTML",
+                outcome.getStatusCode(), (long) outcome.getByteSize(), outcome.getDurationMs(),
+                verdict.getSha256(), verdict.getVerdict().name(),
+                cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                null, verdict.getDetail());
+        if (!verdict.pass()) {
+            throw new IllegalStateException("详情页完整性校验不通过：" + verdict.getDetail());
         }
         // 2026-09-10 下载器改 AI：详情正文解析器 = detailParser（HTML_AI 时走平台 AI 结构化+行业判定），
         // 缺省回退任务列表解析器（HTML_GENERIC/EBIDDING 等本站规则解析器），保持既有行为
@@ -180,7 +214,21 @@ public class CrawlNoticeProcessor {
             throw new IllegalStateException("GX 任务缺详情 URL");
         }
         assertUrlAllowed(url, task.getSourceCode()); // 详情页下载前：主机白名单（SSRF 防护）
-        String detailHtml = httpFetchClient.getText(url);
+        // robots.txt 合规（2026-09-10 补齐）
+        if (!robotsGuard.isAllowed(url)) {
+            throw new IllegalStateException("详情页被 robots.txt 禁止抓取（合规跳过） url=" + url);
+        }
+        var detailOutcome = httpFetchClient.fetchText(url);
+        var detailVerdict = integrityValidator.validateText(detailOutcome.getText(), url);
+        downloadAuditor.record(task.getId(), task.getSourceCode(), url, "DETAIL_HTML",
+                detailOutcome.getStatusCode(), (long) detailOutcome.getByteSize(), detailOutcome.getDurationMs(),
+                detailVerdict.getSha256(), detailVerdict.getVerdict().name(),
+                cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                null, detailVerdict.getDetail());
+        if (!detailVerdict.pass()) {
+            throw new IllegalStateException("GX 详情页完整性校验不通过：" + detailVerdict.getDetail());
+        }
+        String detailHtml = detailOutcome.getText();
         NoticeParseResult detail = parserRegistry.get("GX_E_BIDDING")
                 .parse(inputOf("HTML", detailHtml, url));
         String pdfUrl = detail.getMeta() == null ? null : detail.getMeta().get("pdfDownloadUrl");
@@ -188,9 +236,20 @@ public class CrawlNoticeProcessor {
             throw new IllegalStateException("详情页未解析出 PDF 直链（页面结构变化？）");
         }
         assertUrlAllowed(pdfUrl, task.getSourceCode()); // PDF 直链下载前：主机白名单（SSRF 防护）
-        byte[] pdf = httpFetchClient.getBytes(pdfUrl);
-        if (pdf == null || pdf.length < 8) {
-            throw new IllegalStateException("PDF 下载为空");
+        if (!robotsGuard.isAllowed(pdfUrl)) {
+            throw new IllegalStateException("PDF 直链被 robots.txt 禁止抓取（合规跳过） url=" + pdfUrl);
+        }
+        // PDF 下载：限速闸（execute 已占位）→ 单文件上限 → 完整性校验（%PDF 头 + %%EOF 结尾 + sha256）
+        var pdfOutcome = httpFetchClient.fetchBytes(pdfUrl);
+        byte[] pdf = pdfOutcome.getBytes();
+        var pdfVerdict = integrityValidator.validateBinary(pdf, "PDF", pdfUrl);
+        if (!pdfVerdict.pass()) {
+            downloadAuditor.record(task.getId(), task.getSourceCode(), pdfUrl, "PDF",
+                    pdfOutcome.getStatusCode(), (long) pdfOutcome.getByteSize(), pdfOutcome.getDurationMs(),
+                    pdfVerdict.getSha256(), pdfVerdict.getVerdict().name(),
+                    cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_FAILED,
+                    null, pdfVerdict.getDetail());
+            throw new IllegalStateException("PDF 完整性校验不通过：" + pdfVerdict.getDetail());
         }
         // 2026-09-10 下载器改 AI：PDF 正文解析器 = detailParser（PDF_AI=PDFBox 抽文本→平台 AI 结构化+行业判定）；
         // 非 AI（或未配置）继续走本地 PDF_TEXT_GENERIC，保持既有行为（AI 未启用不阻断公告入库）
@@ -203,7 +262,8 @@ public class CrawlNoticeProcessor {
         dto.setOrigUrl(url);
         dto.setTitle(StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
         dto.setContentType("PDF");
-        dto.setPdfSha256(sha256Hex(pdf));
+        // 摘要与审计台账同源（用校验器产出值，避免两处各算一次导致口径不一致）
+        dto.setPdfSha256(pdfVerdict.getSha256());
         dto.setPdfSize((long) pdf.length);
         dto.setParserCode(pdfParser); // 实际参与解析的策略码（PDF_AI 或 PDF_TEXT_GENERIC）可追溯
         dto.setIndustryFlag(parsed.getIndustryFlag());
@@ -213,9 +273,16 @@ public class CrawlNoticeProcessor {
         dto.setProjectCode(parsed.getProjectCode());
         dto.setTenderProjectCode(parsed.getTenderProjectCode());
         dto.setPublishTime(parsed.getPublishTime() != null ? parsed.getPublishTime() : parseDate(date));
+        // 归档 + 存储校验：metaJson 的 fileStatus/fileId 反映**真实**存储状态（不再写死 REGISTERED）
+        cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome storage =
+                uploadPdfArchive(dto, pdf, StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
         dto.setMetaJson("{\"pdfDownloadUrl\":\"" + escapeJson(pdfUrl) + "\",\"textChars\":" + (parsed.getContentText() == null ? 0 : parsed.getContentText().length())
-                + ",\"fileStatus\":\"REGISTERED\"}");
-        uploadPdfArchive(dto, pdf, StringUtils.hasText(parsed.getTitle()) ? parsed.getTitle() : title);
+                + ",\"fileStatus\":\"" + storage.getStatus() + "\",\"fileId\":" + (storage.getFileId() == null ? "null" : storage.getFileId()) + "}");
+        // 审计台账（下载量/速率/sha256/完整性结论/存储状态）：监控"文件完整性与状态"的唯一数据源
+        downloadAuditor.record(task.getId(), task.getSourceCode(), pdfUrl, "PDF",
+                pdfOutcome.getStatusCode(), (long) pdfOutcome.getByteSize(), pdfOutcome.getDurationMs(),
+                pdfVerdict.getSha256(), pdfVerdict.getVerdict().name(), storage.getStatus(), storage.getFileId(),
+                storage.getDetail() + " | " + pdfVerdict.getDetail());
         return externalNoticeIngestService.ingest(dto);
     }
 
@@ -316,10 +383,17 @@ public class CrawlNoticeProcessor {
         }
     }
 
-    /** PDF 归档平台文件服务（失败不阻断落库，metaJson 保留外站直链兜底） */
-    private void uploadPdfArchive(ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
+    /**
+     * PDF 归档平台文件服务（失败不阻断落库，metaJson 保留外站直链兜底）。
+     *
+     * <p>2026-09-10 增强（用户口径「存储状态监测」）：归档后回查元数据核对 file_id 与字节数，
+     * 返回真实的存储状态（REGISTERED/FAILED）与 file_id——原实现只要 createFile 返回 URL 就写死
+     * metaJson {@code fileStatus=REGISTERED}，存储实际失败（URL 指不到文件）时也被标成"已归档"。
+     */
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome uploadPdfArchive(
+            ExternalNoticeIngestDTO dto, byte[] pdf, String title) {
         if (pdf == null || pdf.length == 0) {
-            return;
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "PDF 字节为空，未归档");
         }
         try {
             String safeName = (title == null ? "notice" : title.replaceAll("[/:*?\"<>|]", "_")).trim();
@@ -327,13 +401,57 @@ public class CrawlNoticeProcessor {
                 safeName = safeName.substring(0, 80);
             }
             String u = fileApi.createFile(pdf, safeName + ".pdf", "bidding/notice-external", "application/pdf");
-            if (StringUtils.hasText(u)) {
-                dto.setPdfDownloadUrl(u);
+            if (!StringUtils.hasText(u)) {
+                return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "文件服务未返回访问地址");
             }
+            dto.setPdfDownloadUrl(u);
+            // 存储校验：回查元数据拿 file_id（红线 8 三件套）并核对字节数，避免"URL 有了但文件没落下来"
+            FileMetadataCheck check = verifyStored(u, pdf.length);
+            if (check.fileId != null) {
+                dto.setPdfFileId(check.fileId);
+            }
+            if (!check.ok) {
+                log.warn("[processor][pdf-archive] 归档校验未通过（保留外站直链兜底）: {} url={}", check.detail, u);
+                return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(check.fileId, check.detail);
+            }
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.registered(check.fileId, check.detail);
         } catch (Exception e) {
             log.warn("[processor][pdf-archive] 归档失败（不阻断入库）: {}", e.getMessage());
+            return cn.iocoder.txgy.module.bidding.service.externalfetch.audit.StorageOutcome.failed(null, "归档异常: " + e.getMessage());
         }
     }
+
+    /** 归档校验：按访问地址回查元数据，取 file_id 并核对字节数（size 为空则只校验 file_id 存在） */
+    private FileMetadataCheck verifyStored(String url, int expectedBytes) {
+        try {
+            cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO meta = fileApi.getMetadataByUrl(url);
+            if (meta == null || meta.getId() == null) {
+                return new FileMetadataCheck(false, null, "回查元数据未取到 file_id");
+            }
+            if (meta.getSize() != null && meta.getSize() > 0 && meta.getSize() != expectedBytes) {
+                return new FileMetadataCheck(false, meta.getId(),
+                        "存储字节数不符：期望 " + expectedBytes + " 实际 " + meta.getSize());
+            }
+            return new FileMetadataCheck(true, meta.getId(), "归档校验通过 fileId=" + meta.getId());
+        } catch (Exception e) {
+            return new FileMetadataCheck(false, null, "归档校验异常: " + e.getMessage());
+        }
+    }
+
+    /** 存储校验结果（file_id + 结论 + 说明） */
+    private static class FileMetadataCheck {
+        final boolean ok;
+        final Long fileId;
+        final String detail;
+
+        FileMetadataCheck(boolean ok, Long fileId, String detail) {
+            this.ok = ok;
+            this.fileId = fileId;
+            this.detail = detail;
+        }
+    }
+
+
 
     private static String escapeJson(String s) {
         if (s == null) {
@@ -342,19 +460,8 @@ public class CrawlNoticeProcessor {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String sha256Hex(byte[] data) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(data);
-            StringBuilder sb = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("SHA-256 计算失败", e);
-        }
-    }
+    // 注：原 sha256Hex(byte[]) 已随"PDF 摘要统一由 DownloadIntegrityValidator 产出"移除（2026-09-10），
+    // 避免同一份字节在两处各算一次摘要导致口径不一致（审计台账与落库 sha256 必须同源）。
 
     private JsonNode parsePayload(String payloadJson) {
         if (!StringUtils.hasText(payloadJson)) {

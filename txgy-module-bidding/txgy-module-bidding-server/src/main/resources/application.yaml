@@ -117,10 +117,22 @@ bidding:
   crawl:
     # 下载器 HTTP 客户端参数（配置文件为准；HttpFetchClient 启动时 @ConfigurationProperties 读取）
     # connect/second 连接超时（秒）；read/second 单请求读超时（秒）；followRedirects 是否跟随重定向（默认 NORMAL）
-    # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+      # userAgent 默认走浏览器 UA；referer 可选注入；downloadTimeoutSeconds PDF/附件下载超时（秒）
+      # 2026-09-10 新增（下载监控与数据完整性，见 docs/开发联调与运维/爬虫测试与监控指标-2026-09-10.md）：
+      #   max-download-bytes 单文件下载上限（防跑飞/防被灌大文件撑爆内存，超限即失败并审计）
+      #   speed-warn-bps 下载速率上限告警（超过=带宽异常/被镜像加速，记 WARN 并落审计）
+      #   speed-slow-warn-bps 速率下限告警（长期低于=被限速/站点异常，记 WARN 并落审计）
+      #   robots-enabled 是否遵循 robots.txt（true=抓取前检查 Disallow；robots.txt 不可达时放行并记审计）
+      #   robots-cache-minutes robots.txt 缓存时长（分钟，默认 360）
     http:
       connect-timeout-seconds: 10
       read-timeout-seconds: 20
+      download-timeout-seconds: 60
+      max-download-bytes: 52428800
+      speed-warn-bps: 2097152
+      speed-slow-warn-bps: 2048
+      robots-enabled: true
+      robots-cache-minutes: 360
       follow-redirects: true
       user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36
       # 下载目标临时目录（存 PDF 二进制后做 PDFBox 解析；空=java.io.tmpdir）
@@ -133,7 +145,9 @@ bidding:
       #   而不是在"任务被调度"时。因此：纯本地处理任务（列表已带全文，无网络下载）不消耗间隔；
       #   进程重启、多实例部署都不会放宽速率（原实现是进程内变量，重启即归零、多实例各算一份）。
       # 实际间隔 = max(本值, 源 fetch_interval_seconds×1000)，且不低于合规下限 120 秒。
-      consumer-delay-ms: 300000
+      # 2026-09-10 用户口径调整：由 5 分钟缩短为 2 分钟（120000ms）——2 分钟即合规下限，
+      # 故 CrawlDownloadGate 的 MIN_INTERVAL_SECONDS=120 与之对齐；再调小将不生效（下限保护）。
+      consumer-delay-ms: 120000
       # 生产端翻页间隔：多页回溯每页之间等 1 分钟再翻下一页
       page-delay-ms: 60000
       # 页内条目处理间隔（列表已整页取回后的本地处理节拍，随主节奏保持低频观感）
