@@ -129,6 +129,102 @@ export namespace QualificationApi {
     remark?: string;
   }
 
+  /** 资质人员录入（StaffSaveReqVO，QualificationElementController#staff） */
+  export interface StaffSaveReq {
+    entId: number;
+    qualId: number;
+    personName: string;
+    /** QualificationStaffRoleEnum */
+    staffRole?: string;
+    major?: string;
+    regNo?: string;
+    titleLevel?: string;
+    isFullTime?: boolean;
+    /** LocalDate */
+    regValidTo?: null | string;
+    bindedCertId?: null | number;
+  }
+
+  /** 工程业绩录入（PerformanceSaveReqVO） */
+  export interface PerformanceSaveReq {
+    entId: number;
+    qualId: number;
+    projectName: string;
+    projectType?: string;
+    /** PerformanceRoleEnum：GENERAL 总承包 / SUB 分包 */
+    role?: string;
+    contractAmount?: null | number;
+    /** LocalDate */
+    completionDate?: null | string;
+    qualityResult?: string;
+    ownerName?: string;
+    isPlatformVerified?: boolean;
+    /** 证据文件 id 的 JSON 数组字符串（后端 String 列） */
+    evidenceFileIds?: string;
+  }
+
+  /** 资产/技术装备录入（AssetSaveReqVO，无 qualId 字段） */
+  export interface AssetSaveReq {
+    entId: number;
+    /** QualificationAssetTypeEnum */
+    assetType?: string;
+    name: string;
+    spec?: string;
+    quantity?: null | number;
+    valueAmount?: null | number;
+    statYear?: null | number;
+    evidenceFileIds?: string;
+  }
+
+  /** 达标核查执行（ComplianceReviewRunReqVO）：只返回核查主键，结论由详情 latestReview 回读 */
+  export interface ReviewRunReq {
+    qualId: number;
+    /** QualificationReviewTypeEnum：SELF / DYNAMIC / PRE_APPLY */
+    reviewType?: string;
+    linkedApplyId?: null | number;
+  }
+
+  /** 安许建档（PermitCreateReqVO，permit_no UK 判重） */
+  export interface PermitCreateReq {
+    entId: number;
+    permitNo: string;
+    issuingAuthority?: string;
+    /** LocalDate */
+    issueDate?: null | string;
+    /** LocalDate；NULL=长期 */
+    validTo?: null | string;
+    legalPerson?: string;
+    bindedCertId?: null | number;
+    remark?: string;
+  }
+
+  /** 资质人员角色（QualificationStaffRoleEnum，尚未登记字典 → 建议值） */
+  export const STAFF_ROLE_OPTIONS = [
+    { label: '注册建造师（REGISTERED_BUILDER）', value: 'REGISTERED_BUILDER' },
+    { label: '技术负责人（TECH_LEAD）', value: 'TECH_LEAD' },
+    { label: '中级职称（MID_TITLE）', value: 'MID_TITLE' },
+    { label: '技术工人（SKILLED_WORKER）', value: 'SKILLED_WORKER' },
+    { label: '现场管理人员（SITE_MGR）', value: 'SITE_MGR' },
+  ];
+  /** 业绩角色（PerformanceRoleEnum） */
+  export const PERFORMANCE_ROLE_OPTIONS = [
+    { label: '总承包（GENERAL）', value: 'GENERAL' },
+    { label: '分包（SUB）', value: 'SUB' },
+  ];
+  /** 资产类型（QualificationAssetTypeEnum） */
+  export const ASSET_TYPE_OPTIONS = [
+    { label: '净资产（NET_ASSET）', value: 'NET_ASSET' },
+    { label: '厂房（PLANT）', value: 'PLANT' },
+    { label: '主要设备（MAJOR_EQUIP）', value: 'MAJOR_EQUIP' },
+    { label: '检测仪器（TEST_INSTR）', value: 'TEST_INSTR' },
+  ];
+  /** 达标核查类型（QualificationReviewTypeEnum） */
+  export const REVIEW_TYPE_OPTIONS = [
+    { label: '企业自查（SELF）', value: 'SELF' },
+    { label: '动态核查（DYNAMIC）', value: 'DYNAMIC' },
+    { label: '申报前核查（PRE_APPLY）', value: 'PRE_APPLY' },
+  ];
+
   /** 延续申报入参（QualificationRenewReqVO） */
   export interface RenewReq {
     qualificationId: number;
@@ -181,6 +277,26 @@ export function approveQualificationRenew(data: QualificationApi.ApproveReq) {
 }
 export function rejectQualificationRenew(data: QualificationApi.RejectReq) {
   return requestClient.post<number>('/bidding/qualification/reject', data, SILENT);
+}
+/** 资质人员录入（需 qualId；权限 bidding:qualification:element） */
+export function createQualificationStaff(data: QualificationApi.StaffSaveReq) {
+  return requestClient.post<number>('/bidding/qualification/element/staff', data, SILENT);
+}
+/** 工程业绩录入（权限 bidding:qualification:element） */
+export function createQualificationPerformance(data: QualificationApi.PerformanceSaveReq) {
+  return requestClient.post<number>('/bidding/qualification/element/performance', data, SILENT);
+}
+/** 资产/技术装备录入（权限 bidding:qualification:element） */
+export function createQualificationAsset(data: QualificationApi.AssetSaveReq) {
+  return requestClient.post<number>('/bidding/qualification/element/asset', data, SILENT);
+}
+/** 执行一次达标核查（权限 bidding:qualification:review）：返回核查主键，结论经 /get 的 latestReview 回读 */
+export function runComplianceReview(data: QualificationApi.ReviewRunReq) {
+  return requestClient.post<number>('/bidding/qualification/review/run', data, SILENT);
+}
+/** 安许建档（权限 bidding:qualification:permit；状态流转 /permit/status 需 permitId+version，待安许列表接口） */
+export function createSafetyPermit(data: QualificationApi.PermitCreateReq) {
+  return requestClient.post<number>('/bidding/qualification/permit/create', data, SILENT);
 }
 /** 手动触发资质到期预警 QUAL_EXPIRY 三源扫描（同日幂等），返回命中条数 */
 export function runQualificationAlertScan() {

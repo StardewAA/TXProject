@@ -25,11 +25,16 @@ import { type CertificateApi, getMaterialCompleteness } from '#/api/bidding/cert
 import {
   approveQualificationRenew,
   createQualification,
+  createQualificationAsset,
+  createQualificationPerformance,
+  createQualificationStaff,
+  createSafetyPermit,
   getQualification,
   getQualificationApplyPage,
   getQualificationPage,
   QualificationApi,
   rejectQualificationRenew,
+  runComplianceReview,
   runQualificationAlertScan,
   submitQualificationRenew,
 } from '#/api/bidding/qualification';
@@ -119,7 +124,7 @@ const ledgerColumns = [
   { title: '剩余天数', dataIndex: 'daysToExpire', key: 'daysToExpire', width: 110 },
   { title: '在途申报', dataIndex: 'hasPendingApply', key: 'hasPendingApply', width: 100 },
   { title: '版本', dataIndex: 'version', key: 'version', width: 80 },
-  { title: '操作', key: 'action', width: 150, fixed: 'right' as const },
+  { title: '操作', key: 'action', width: 280, fixed: 'right' as const },
 ];
 
 function daysColor(d?: null | number) {
@@ -438,6 +443,149 @@ async function doScan() {
   }
 }
 
+/* ===== 要素录入（人员 / 业绩 / 资产装备，权限 bidding:qualification:element） ===== */
+const elementOpen = ref(false);
+const elementSaving = ref(false);
+const elementTab = ref('staff');
+const elementIds = reactive<{ entId: number; qualId: number }>({ entId: 0, qualId: 0 });
+const staffForm = reactive<QualificationApi.StaffSaveReq>({ entId: 0, personName: '', qualId: 0 });
+const perfForm = reactive<QualificationApi.PerformanceSaveReq>({ entId: 0, projectName: '', qualId: 0 });
+const assetForm = reactive<QualificationApi.AssetSaveReq>({ entId: 0, name: '' });
+
+function openElement(row: QualificationApi.Qualification) {
+  Object.assign(elementIds, { entId: row.entId, qualId: row.id });
+  Object.assign(staffForm, {
+    bindedCertId: undefined,
+    entId: row.entId,
+    isFullTime: undefined,
+    major: undefined,
+    personName: '',
+    qualId: row.id,
+    regNo: undefined,
+    regValidTo: undefined,
+    staffRole: undefined,
+    titleLevel: undefined,
+  });
+  Object.assign(perfForm, {
+    completionDate: undefined,
+    contractAmount: undefined,
+    entId: row.entId,
+    evidenceFileIds: undefined,
+    isPlatformVerified: undefined,
+    ownerName: undefined,
+    projectName: '',
+    projectType: undefined,
+    qualId: row.id,
+    qualityResult: undefined,
+    role: undefined,
+  });
+  Object.assign(assetForm, {
+    assetType: undefined,
+    entId: row.entId,
+    evidenceFileIds: undefined,
+    name: '',
+    quantity: undefined,
+    spec: undefined,
+    statYear: undefined,
+    valueAmount: undefined,
+  });
+  elementTab.value = 'staff';
+  elementOpen.value = true;
+}
+
+/** 逗号/空格分隔 id → JSON 数组字符串（后端 evidenceFileIds 为 String 列，存 JSON） */
+function toEvidenceJson(text?: string) {
+  const ids = (text ?? '')
+    .split(/[,\s，]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => Number(t))
+    .filter((n) => Number.isFinite(n));
+  return ids.length > 0 ? JSON.stringify(ids) : undefined;
+}
+
+async function submitElement() {
+  if (elementTab.value === 'staff' && !staffForm.personName?.trim()) {
+    message.warning('人员姓名必填');
+    return;
+  }
+  if (elementTab.value === 'performance' && !perfForm.projectName?.trim()) {
+    message.warning('项目名称必填');
+    return;
+  }
+  if (elementTab.value === 'asset' && !assetForm.name?.trim()) {
+    message.warning('资产/装备名称必填');
+    return;
+  }
+  elementSaving.value = true;
+  try {
+    if (elementTab.value === 'staff') {
+      await createQualificationStaff({ ...staffForm });
+    } else if (elementTab.value === 'performance') {
+      await createQualificationPerformance({ ...perfForm, evidenceFileIds: toEvidenceJson(perfForm.evidenceFileIds) });
+    } else {
+      await createQualificationAsset({ ...assetForm, evidenceFileIds: toEvidenceJson(assetForm.evidenceFileIds) });
+    }
+    message.success('要素已录入');
+    elementOpen.value = false;
+  } catch {
+    // 静默：§0.4 错误结构由请求层呈现
+  } finally {
+    elementSaving.value = false;
+  }
+}
+
+/* ===== 达标核查执行（权限 bidding:qualification:review） ===== */
+const reviewType = ref('SELF');
+
+function confirmReview(row: QualificationApi.Qualification) {
+  Modal.confirm({
+    title: `执行达标核查：资质 #${row.id}`,
+    content: `按当前生效标准复算要素差额，核查类型 ${reviewType.value}；核查只返回主键，结论请在「详情 → 最近一次达标核查」回读。`,
+    async onOk() {
+      const id = await runComplianceReview({ qualId: row.id, reviewType: reviewType.value });
+      message.success(`核查已执行（主键 ${id}）`);
+      if (detail.value?.id === row.id) void openDetail(row);
+    },
+  });
+}
+
+/* ===== 安许建档（权限 bidding:qualification:permit） ===== */
+const permitOpen = ref(false);
+const permitSaving = ref(false);
+const permitForm = reactive<QualificationApi.PermitCreateReq>({ entId: 0, permitNo: '' });
+
+function openPermit() {
+  Object.assign(permitForm, {
+    bindedCertId: undefined,
+    entId: query.entId ?? 0,
+    issueDate: undefined,
+    issuingAuthority: undefined,
+    legalPerson: undefined,
+    permitNo: '',
+    remark: undefined,
+    validTo: undefined,
+  });
+  permitOpen.value = true;
+}
+
+async function submitPermit() {
+  if (!permitForm.entId || !permitForm.permitNo?.trim()) {
+    message.warning('企业主体 id 与安全生产许可证编号必填');
+    return;
+  }
+  permitSaving.value = true;
+  try {
+    const id = await createSafetyPermit({ ...permitForm });
+    message.success(`安许建档成功（id=${id}）`);
+    permitOpen.value = false;
+  } catch {
+    // 静默
+  } finally {
+    permitSaving.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
   void loadApplies();
@@ -453,6 +601,7 @@ onMounted(() => {
       </div>
       <div class="ct-actions">
         <a-button v-if="can('bidding:qualification:create')" type="primary" @click="onCreate">资质建档</a-button>
+        <a-button v-if="can('bidding:qualification:permit')" @click="openPermit">安许建档</a-button>
         <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">执行预警扫描</a-button>
         <a-button @click="load(); loadApplies();">刷新</a-button>
       </div>
@@ -467,10 +616,12 @@ onMounted(() => {
           字典登记后同页面自动显示中文名与标签色（dictLabel/dictTag 优先）。
         </div>
         <div style="margin-top: 6px">
-          仍未提供接口的动作：资质主档<strong>编辑</strong>（无 update，create 只走 insert）、
+          已接入：台账列表/详情（含绑定证照与最近核查）、延续申报、审批通过/退回、要素录入（人员·业绩·资产装备）、
+          达标核查执行、安许建档、材料完备性自查、到期预警扫描。
+          仍缺接口：资质主档<strong>编辑</strong>（无 update，create 只走 insert）、
           资质<strong>状态流转</strong>（Service 有 changeStatus 但无 Controller 暴露）、
-          <strong>要素录入</strong>（staff/performance/asset 需 qualId，可按需接入）、
-          <strong>达标核查结论查看</strong>（review/run 只返回 id）。
+          <strong>安许状态流转</strong>（需 permitId+version，待安许列表接口）、
+          <strong>要素/核查台账查看</strong>（无 element/review 列表，核查结论仅能从详情 latestReview 回读一条）。
         </div>
       </template>
     </a-alert>
@@ -514,6 +665,12 @@ onMounted(() => {
             <a-input v-model:value="query.qualStatus" placeholder="状态 code（如 VALID）" style="width: 180px" allow-clear @press-enter="load" />
             <a-input v-model:value="query.keyword" placeholder="关键字（证书编号/机关）" style="width: 200px" allow-clear @press-enter="load" />
             <a-input-number v-model:value="query.expiringInDays" :min="1" placeholder="N 天内到期" style="width: 140px" />
+            <a-select
+              v-model:value="reviewType"
+              placeholder="核查类型"
+              style="width: 170px"
+              :options="QualificationApi.REVIEW_TYPE_OPTIONS"
+            />
             <a-button type="primary" @click="load">查询</a-button>
             <a-button @click="resetQuery">重置</a-button>
           </div>
@@ -557,6 +714,8 @@ onMounted(() => {
                   <a-space size="small">
                     <a @click="openDetail(record)">详情</a>
                     <a v-if="can('bidding:qualification:renew')" @click="openRenew(record)">延续申报</a>
+                    <a v-if="can('bidding:qualification:element')" @click="openElement(record)">要素录入</a>
+                    <a v-if="can('bidding:qualification:review')" @click="confirmReview(record)">达标核查</a>
                   </a-space>
                 </template>
               </template>
@@ -925,6 +1084,200 @@ onMounted(() => {
           </a-col>
         </a-row>
       </a-form>
+    </a-modal>
+
+    <!-- 要素录入：人员 / 业绩 / 资产装备（每次提交一项） -->
+    <a-modal
+      v-model:open="elementOpen"
+      :title="`要素录入：资质 #${elementIds.qualId}`"
+      :width="900"
+      :confirm-loading="elementSaving"
+      ok-text="提交当前页签"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitElement"
+    >
+      <a-descriptions :column="2" size="small" class="mb-3">
+        <a-descriptions-item label="企业主体 id">{{ elementIds.entId }}</a-descriptions-item>
+        <a-descriptions-item label="资质 id">{{ elementIds.qualId }}</a-descriptions-item>
+      </a-descriptions>
+      <a-tabs v-model:active-key="elementTab">
+        <a-tab-pane key="staff" tab="资质人员">
+          <a-form layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="姓名（必填）"><a-input v-model:value="staffForm.personName" /></a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="岗位角色">
+                  <a-select v-model:value="staffForm.staffRole" :options="QualificationApi.STAFF_ROLE_OPTIONS" allow-clear />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="专业"><a-input v-model:value="staffForm.major" /></a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="注册号"><a-input v-model:value="staffForm.regNo" /></a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="职称等级"><a-input v-model:value="staffForm.titleLevel" /></a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="是否全职"><a-switch v-model:checked="staffForm.isFullTime" /></a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="注册有效期至">
+                  <a-date-picker v-model:value="staffForm.regValidTo" value-format="YYYY-MM-DD" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="关联证照 id（可空）">
+                  <a-input-number v-model:value="staffForm.bindedCertId" :min="1" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </a-form>
+        </a-tab-pane>
+
+        <a-tab-pane key="performance" tab="工程业绩">
+          <a-form layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="项目名称（必填）"><a-input v-model:value="perfForm.projectName" /></a-form-item>
+              </a-col>
+              <a-col :span="6">
+                <a-form-item label="项目类型"><a-input v-model:value="perfForm.projectType" /></a-form-item>
+              </a-col>
+              <a-col :span="6">
+                <a-form-item label="角色">
+                  <a-select v-model:value="perfForm.role" :options="QualificationApi.PERFORMANCE_ROLE_OPTIONS" allow-clear />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="合同金额">
+                  <a-input-number v-model:value="perfForm.contractAmount" :min="0" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="竣工日期">
+                  <a-date-picker v-model:value="perfForm.completionDate" value-format="YYYY-MM-DD" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="质量结论"><a-input v-model:value="perfForm.qualityResult" /></a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="业主名称"><a-input v-model:value="perfForm.ownerName" /></a-form-item>
+              </a-col>
+              <a-col :span="6">
+                <a-form-item label="平台可核验"><a-switch v-model:checked="perfForm.isPlatformVerified" /></a-form-item>
+              </a-col>
+              <a-col :span="24">
+                <a-form-item label="证据文件 id（逗号分隔，提交时转 JSON 数组）">
+                  <a-input v-model:value="perfForm.evidenceFileIds" placeholder="如：101,102" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </a-form>
+        </a-tab-pane>
+
+        <a-tab-pane key="asset" tab="资产/技术装备">
+          <a-form layout="vertical">
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="名称（必填）"><a-input v-model:value="assetForm.name" /></a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="资产类型">
+                  <a-select v-model:value="assetForm.assetType" :options="QualificationApi.ASSET_TYPE_OPTIONS" allow-clear />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="规格型号"><a-input v-model:value="assetForm.spec" /></a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="数量">
+                  <a-input-number v-model:value="assetForm.quantity" :min="0" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="价值金额">
+                  <a-input-number v-model:value="assetForm.valueAmount" :min="0" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="统计年份">
+                  <a-input-number v-model:value="assetForm.statYear" :min="1990" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="16">
+                <a-form-item label="证据文件 id（逗号分隔，提交时转 JSON 数组）">
+                  <a-input v-model:value="assetForm.evidenceFileIds" placeholder="如：201,202" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </a-form>
+        </a-tab-pane>
+      </a-tabs>
+      <div class="ct-tip">
+        每次提交当前页签的一条要素（后端逐条插入）；角色/资产类型码表取自 QualificationStaffRoleEnum /
+        QualificationAssetTypeEnum / PerformanceRoleEnum，尚未登记字典故仅作建议值。录入后可用「达标核查」复算差额。
+      </div>
+    </a-modal>
+
+    <!-- 安许建档 -->
+    <a-modal
+      v-model:open="permitOpen"
+      title="安全生产许可证建档"
+      :width="760"
+      :confirm-loading="permitSaving"
+      ok-text="建档"
+      cancel-text="取消"
+      destroy-on-close
+      @ok="submitPermit"
+    >
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="企业主体 id（必填）">
+              <a-input-number v-model:value="permitForm.entId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="许可证编号（必填，UK 判重）">
+              <a-input v-model:value="permitForm.permitNo" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="发证机关"><a-input v-model:value="permitForm.issuingAuthority" /></a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="发证日期">
+              <a-date-picker v-model:value="permitForm.issueDate" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="有效期至（空=长期）">
+              <a-date-picker v-model:value="permitForm.validTo" value-format="YYYY-MM-DD" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="法定代表人"><a-input v-model:value="permitForm.legalPerson" /></a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="关联证照 id（可空）">
+              <a-input-number v-model:value="permitForm.bindedCertId" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注"><a-textarea v-model:value="permitForm.remark" :rows="2" /></a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+      <div class="ct-tip">
+        建档后安许状态为 VALID；状态流转（挂起/吊销等）需 permitId+version，当前无安许列表接口，故本页不提供。
+        风险评估与宽限期登记见「员工资质/安许风险」页的安许风险卡片。
+      </div>
     </a-modal>
   </div>
 </template>
