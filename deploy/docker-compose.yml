@@ -1,4 +1,4 @@
-﻿x-backend-service: &backend-service
+x-backend-service: &backend-service
   depends_on:
     mysql:
       condition: service_healthy
@@ -8,8 +8,6 @@
       condition: service_healthy
   environment:
     SERVER_PORT: 48080
-    JAVA_OPTS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m
-    TZ: ${TZ}
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
@@ -32,13 +30,14 @@
 services:
   mysql:
     image: mysql:8.4
+    restart: unless-stopped
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
@@ -53,8 +52,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -115,13 +115,13 @@ services:
       args:
         MODULE_PATH: txgy-module-infra/txgy-module-infra-server
 
-  # member: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-member/txgy-module-member-server
+  member:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-member/txgy-module-member-server
 
   bpm:
     <<: *backend-service
@@ -131,13 +131,13 @@ services:
       args:
         MODULE_PATH: txgy-module-bpm/txgy-module-bpm-server
 
-  # pay: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-pay/txgy-module-pay-server
+  pay:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-pay/txgy-module-pay-server
 
   report:
     <<: *backend-service
@@ -147,53 +147,53 @@ services:
       args:
         MODULE_PATH: txgy-module-report/txgy-module-report-server
 
-  # mp: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mp/txgy-module-mp-server
+  mp:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mp/txgy-module-mp-server
 
-  # product: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-product-server
+  product:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-product-server
 
-  # trade: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-trade-server
+  trade:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-trade-server
 
-  # promotion: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+  promotion:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
 
-  # statistics: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
+  statistics:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
 
-  # crm: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-crm/txgy-module-crm-server
+  crm:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-crm/txgy-module-crm-server
 
   erp:
     <<: *backend-service
@@ -267,17 +267,6 @@ services:
       args:
         MODULE_PATH: txgy-module-fms/txgy-module-fms-server
 
-  training:
-    <<: *backend-service
-    build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
-      args:
-        MODULE_PATH: txgy-module-training/txgy-module-training-server
-    # 资源中心上传文件持久化（工作目录 /app，upload-dir 默认 ./uploads）
-    volumes:
-      - training-uploads:/app/uploads
-
   frontend:
     build:
       context: ..
@@ -300,7 +289,6 @@ volumes:
   mysql-data:
   redis-data:
   nacos-data:
-  training-uploads:
 
 networks:
   txgy-dev:

@@ -59,4 +59,20 @@ public class WmsItemSkuSaveReqVO {
     @DecimalMin(value = "0", message = "销售价不能小于 0")
     private BigDecimal sellingPrice;
 
+    @Schema(description = "最小包装说明", example = "主剂16kg+固化剂4kg")
+    @Size(max = 255, message = "最小包装说明长度不能超过 255 个字符")
+    private String packageSpec;
+
+    @Schema(description = "箱装数量", example = "1组/箱")
+    @Size(max = 100, message = "箱装数量长度不能超过 100 个字符")
+    private String boxSpec;
+
+    @Schema(description = "托盘装载量", example = "20组/托盘（400kg）")
+    @Size(max = 100, message = "托盘装载量长度不能超过 100 个字符")
+    private String palletSpec;
+
+    @Schema(description = "最小包装单位", example = "组")
+    @Size(max = 20, message = "最小包装单位长度不能超过 20 个字符")
+    private String minPackageUnit;
+
 }

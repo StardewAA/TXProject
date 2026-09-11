@@ -8,6 +8,18 @@ export namespace WmsItemBrandApi {
     id?: number;
     code?: string;
     name?: string;
+    /** 关联商品分类编号 */
+    categoryId?: number;
+    /** 关联商品分类名称 */
+    categoryName?: string;
+    /** 主要供应商编号 */
+    supplierId?: number;
+    /** 主要供应商名称 */
+    supplierName?: string;
+    /** 品牌说明 */
+    description?: string;
+    /** 资质文件地址，多个以逗号分隔 */
+    qualificationFiles?: string;
     createTime?: Date;
   }
 }
