@@ -254,4 +254,5 @@ allowBuilds:
   core-js-pure: true
   esbuild: true
   lefthook: true
+  tesseract.js: false
   vue-demi: true
