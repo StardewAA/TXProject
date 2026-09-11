@@ -25,6 +25,8 @@ import { useVbenModal } from '@vben/common-ui';
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
 
+import '../../taskbar.css';
+
 import { TASK_STATUS_MAP, fmtDt, tagOf } from '../../shared';
 
 const emit = defineEmits<{ (e: 'pick', t: CrawlExternalApi.TaskItem): void }>();
@@ -416,12 +418,26 @@ function fmtBytes(n: number | undefined): string {
       <div class="tc-step-b">
         <div v-if="sameBatchLoading" class="tc-hint">加载中…</div>
         <div v-else-if="!sameBatch.length" class="tc-hint">该批暂无其它任务行</div>
-        <div v-else class="tc-batch">
-          <div v-for="s in sameBatch" :key="String(s.id)" class="ind-row ind-dl-row tc-sib" @click="$emit('pick', s)">
-            <Tag v-if="tagOf(TASK_STATUS_MAP, s.status)" :color="tagOf(TASK_STATUS_MAP, s.status)!.color">{{ tagOf(TASK_STATUS_MAP, s.status)!.text }}</Tag>
-            <span v-else>—</span>
-            <span class="rw main truncate" :title="s.url || ''">{{ s.url || '（无 URL）' }}</span>
-            <span class="rw time">{{ fmtDt(s.finishedAt || s.createTime) }}</span>
+        <div v-else class="fp-tbl">
+          <div class="fp-tr fp-th">
+            <span class="fp-td w-status">状态</span>
+            <span class="fp-td w-time">时间</span>
+            <span class="fp-td w-id">任务 #</span>
+            <span class="fp-td flex-1">URL / 来源</span>
+            <span class="fp-td w-msg">消息 / 明细</span>
+          </div>
+          <div v-for="s in sameBatch" :key="String(s.id)" class="fp-tr fp-row-click" @click="$emit('pick', s)">
+            <span class="fp-td w-status">
+              <Tag v-if="tagOf(TASK_STATUS_MAP, s.status)" :color="tagOf(TASK_STATUS_MAP, s.status)!.color">{{ tagOf(TASK_STATUS_MAP, s.status)!.text }}</Tag>
+              <span v-else>—</span>
+            </span>
+            <span class="fp-td w-time">{{ fmtDt(s.finishedAt || s.createTime) || '—' }}</span>
+            <span class="fp-td w-id">#{{ String(s.id) }}</span>
+            <span class="fp-td flex-1 fp-url" :title="s.url || ''">{{ s.url || '（无 URL）' }}</span>
+            <span class="fp-td w-msg fp-msg" :title="s.message || ''">
+              <template v-if="s.message">{{ s.message }}</template>
+              <template v-else>解析器 {{ s.parserCode || '—' }} · 尝试 {{ s.attempt ?? '—' }}</template>
+            </span>
           </div>
         </div>
       </div>
@@ -465,8 +481,7 @@ function fmtBytes(n: number | undefined): string {
 .tc-act { color: #2563eb; font-size: 12px; margin-left: auto; text-decoration: none; }
 .tc-act + .tc-act { margin-left: 6px; }
 .tc-batch { display: flex; flex-direction: column; gap: 2px; }
-.tc-sib { cursor: pointer; padding: 6px 10px; border-radius: 5px; }
-.tc-sib:hover { background: var(--ind-row-hover, #f5f7fa); }
+/* 同批任务行改用统一任务条样式（../taskbar.css 的 .fp-tbl） */
 .pv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: #fff; z-index: 1; }
 .pv-sel { width: 260px; }
 .d-block { display: block; }

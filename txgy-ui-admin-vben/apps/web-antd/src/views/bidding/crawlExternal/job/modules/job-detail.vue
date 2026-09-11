@@ -16,6 +16,8 @@ import { Descriptions, Drawer, message, Tag } from 'ant-design-vue';
 
 import { fetchCrawlTaskPage, getCrawlJob, getCrawlTask } from '#/api/bidding/crawlExternal';
 
+import '../../taskbar.css';
+
 import { JOB_STATUS_MAP, TASK_STATUS_MAP, TRIGGER_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
 import TaskChainView from '../../console/modules/task-chain.vue';
 
@@ -142,7 +144,7 @@ defineExpose({ openJob });
         </div>
       </div>
 
-      <!-- 层2：该批爬虫任务 N 条（克制行，点击就地展开过程；后端异步化后 RUNNING 批次可轮询看进度） -->
+      <!-- 层2：该批爬虫任务 N 条（统一任务条 fp-tbl：状态/时间/任务#/URL/消息；点击就地展开过程） -->
       <div class="ind-panel" style="margin-top: 14px">
         <div class="ind-panel-h">
           <span class="ind-panel-t">该批爬虫任务</span>
@@ -151,14 +153,26 @@ defineExpose({ openJob });
         <div class="ind-panel-b">
           <div v-if="tasksLoading" class="jd-hint">任务加载中…</div>
           <div v-else-if="!tasks.length" class="jd-hint">该批暂无任务行（一次空跑/纯列表发现未投递；或消费尚未落库）</div>
-          <div v-else class="jd-tasks">
-            <div v-for="t in tasks" :key="String(t.id)" class="ind-row jd-row" :class="{ on: selTask && selTask.id === t.id }" @click="pickTask(t)">
-              <Tag v-if="tagOf(TASK_STATUS_MAP, t.status)" :color="tagOf(TASK_STATUS_MAP, t.status)!.color">{{ tagOf(TASK_STATUS_MAP, t.status)!.text }}</Tag>
-              <span v-else>—</span>
-              <span class="rw main truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
-              <span class="rw">解析器：{{ t.parserCode || '—' }}</span>
-              <span class="rw">attempt {{ t.attempt ?? '—' }}</span>
-              <span class="rw time">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+          <div v-else class="fp-tbl">
+            <div class="fp-tr fp-th">
+              <span class="fp-td w-status">状态</span>
+              <span class="fp-td w-time">时间</span>
+              <span class="fp-td w-id">任务 #</span>
+              <span class="fp-td flex-1">URL / 来源</span>
+              <span class="fp-td w-msg">消息 / 明细</span>
+            </div>
+            <div v-for="t in tasks" :key="String(t.id)" class="fp-tr fp-row-click" :class="{ 'fp-row-on': selTask && selTask.id === t.id }" @click="pickTask(t)">
+              <span class="fp-td w-status">
+                <Tag v-if="tagOf(TASK_STATUS_MAP, t.status)" :color="tagOf(TASK_STATUS_MAP, t.status)!.color">{{ tagOf(TASK_STATUS_MAP, t.status)!.text }}</Tag>
+                <span v-else>—</span>
+              </span>
+              <span class="fp-td w-time">{{ fmtDt(t.finishedAt || t.createTime) || '—' }}</span>
+              <span class="fp-td w-id">#{{ String(t.id) }}</span>
+              <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+              <span class="fp-td w-msg fp-msg" :title="t.message || ''">
+                <template v-if="t.message">{{ t.message }}</template>
+                <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}</template>
+              </span>
             </div>
           </div>
         </div>
@@ -182,9 +196,7 @@ defineExpose({ openJob });
 <style scoped>
 .jd-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 10px 2px; }
 .jd-tasks { display: flex; flex-direction: column; gap: 2px; }
-.jd-row { cursor: pointer; padding: 7px 10px; border-radius: 6px; transition: background-color 0.15s; }
-.jd-row:hover { background: var(--ind-row-hover, #f5f7fa); }
-.jd-row.on { background: var(--ind-row-active, #e6f4ff); }
+/* 批内任务行改用统一任务条样式（../../taskbar.css 的 .fp-tbl，选中态 .fp-row-on） */
 .jd-sum { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.8; }
 .ln { display: block; }
 </style>

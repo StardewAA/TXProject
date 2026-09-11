@@ -16,6 +16,8 @@ import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vu
 
 import { fetchCrawlJobPage, fetchCrawlTaskPage, getCrawlSource, getCrawlTask, runCrawlSource, setCrawlSourceEnabled } from '#/api/bidding/crawlExternal';
 
+import '../../taskbar.css';
+
 import { JOB_STATUS_MAP, TASK_STATUS_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
 
 const open = ref(false);
@@ -238,18 +240,31 @@ defineExpose({ openSource });
         </div>
       </div>
 
-      <!-- 层4：选中批次 → 该批爬虫任务 N 条（克制行） -->
+      <!-- 层4：选中批次 → 该批爬虫任务 N 条（统一任务条 fp-tbl：状态/时间/任务#/URL/消息，与工作台同款） -->
       <div v-if="selJob" class="sd-sec">
-        <div class="sd-sec-t">该批爬虫任务 <span class="sd-muted">（jobId={{ selJob.id }} · {{ tasks.length }} 条）</span></div>
+        <div class="sd-sec-t">该批爬虫任务 <span class="sd-muted">（jobId={{ selJob.id }} · {{ tasks.length }} 条 · 点击行查看过程）</span></div>
         <div v-if="tasksLoading" class="sd-hint">任务加载中…</div>
         <div v-else-if="tasksError" class="sd-hint">任务加载失败：{{ tasksError }}（可重选批次重试）</div>
         <div v-else-if="!tasks.length" class="sd-hint">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
-        <div v-else class="sd-tasks">
-          <div v-for="t in tasks" :key="String(t.id)" class="sd-task" :class="{ on: selTask && selTask.id === t.id }" @click="pickTask(t)">
-            <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
-            <span class="sd-url2 truncate" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
-            <span class="sd-trig">{{ t.parserCode || '—' }}</span>
-            <span class="sd-time">{{ fmtDt(t.finishedAt || t.createTime) }}</span>
+        <div v-else class="fp-tbl">
+          <div class="fp-tr fp-th">
+            <span class="fp-td w-status">状态</span>
+            <span class="fp-td w-time">时间</span>
+            <span class="fp-td w-id">任务 #</span>
+            <span class="fp-td flex-1">URL / 来源</span>
+            <span class="fp-td w-msg">消息 / 明细</span>
+          </div>
+          <div v-for="t in tasks" :key="String(t.id)" class="fp-tr fp-row-click" :class="{ 'fp-row-on': selTask && selTask.id === t.id }" @click="pickTask(t)">
+            <span class="fp-td w-status">
+              <Tag :color="tagOf(TASK_STATUS_MAP, t.status)?.color || 'default'">{{ tagOf(TASK_STATUS_MAP, t.status)?.text || t.status || '—' }}</Tag>
+            </span>
+            <span class="fp-td w-time">{{ fmtDt(t.finishedAt || t.createTime) || '—' }}</span>
+            <span class="fp-td w-id">#{{ String(t.id) }}</span>
+            <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL）' }}</span>
+            <span class="fp-td w-msg fp-msg" :title="t.message || ''">
+              <template v-if="t.message">{{ t.message }}</template>
+              <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}</template>
+            </span>
           </div>
         </div>
       </div>
