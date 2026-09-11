@@ -30,6 +30,10 @@ public class ReviewRepository {
         return jdbc.query("SELECT snapshot FROM cms_document_review WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT ?",
                 (rs,row)->JsonUtils.parseObject(rs.getString(1),Stored.class).report(),tenant,limit);
     }
+    public List<Stored> listStored(long tenant,int limit) {
+        return jdbc.query("SELECT snapshot FROM cms_document_review WHERE tenant_id=? ORDER BY created_at DESC,id DESC LIMIT ?",
+                (rs,row)->JsonUtils.parseObject(rs.getString(1),Stored.class),tenant,limit);
+    }
     public List<SubmissionStatus> listBySubmitter(long tenant, Long submittedBy, int limit) {
         return jdbc.query("""
                         SELECT r.snapshot, COALESCE(d.published, 0)
@@ -56,5 +60,10 @@ public class ReviewRepository {
                 r.id(),tenant,r.metadata().title(),r.metadata().validity().name(),r.metadata().sourceUrl(),r.textHash(),stored.text());
         jdbc.batchUpdate("INSERT INTO cms_knowledge_chunk (review_id,tenant_id,ordinal,start_offset,end_offset,content) VALUES (?,?,?,?,?,?)",
                 stored.chunks(),100,(ps,c)->{ps.setString(1,r.id());ps.setLong(2,tenant);ps.setInt(3,c.ordinal());ps.setInt(4,c.startOffset());ps.setInt(5,c.endOffset());ps.setString(6,c.text());});
+    }
+    public boolean knowledgeExists(long tenant,String id) {
+        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document WHERE tenant_id=? AND review_id=?",
+                Integer.class,tenant,id);
+        return count!=null && count>0;
     }
 }

@@ -73,6 +73,7 @@
     "vue-router": "catalog:",
     "vue3-print-nb": "catalog:",
     "vue3-signature": "catalog:",
-    "vuedraggable": "catalog:"
+    "vuedraggable": "catalog:",
+    "wangeditor": "4.7.15"
   }
 }

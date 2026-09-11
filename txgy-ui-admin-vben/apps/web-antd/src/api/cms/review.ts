@@ -25,13 +25,19 @@ export interface ReviewReport {
   createdAt: string;
   metadata: ReviewMetadata;
   textHash: string;
-  decision: 'PASS' | 'WARNING' | 'FAIL';
+  decision: 'PENDING' | 'PASS' | 'WARNING' | 'FAIL';
   score: number;
   scores: Record<string, number>;
   issues: { dimension: string; severity: 'WARNING' | 'ERROR'; code: string; location: string; message: string; suggestion: string }[];
   evidence?: Evidence;
   admitted: boolean;
   chunkCount: number;
+  workflowStatus: 'AI_REVIEWING' | 'PENDING_MANUAL' | 'APPROVED' | 'REJECTED';
+  aiModel?: string;
+  aiCompletedAt?: string;
+  manualReviewerId?: number;
+  manualReviewedAt?: string;
+  manualNote?: string;
 }
 export interface ReviewDetail {
   report: ReviewReport;
@@ -68,3 +74,7 @@ export function batchUploadReviews(items: BatchReviewItem[]) {
 }
 export const verifyReview = (id: string, officialMetadata: ReviewMetadata, officialText: string, validitySourceUrl: string, note: string) =>
   requestClient.put<ReviewReport>('/cms/review/verify', { officialMetadata, officialText, validitySourceUrl, note }, { params: { id }, timeout: 120000 });
+export const checkReviewDuplicate = (metadata: ReviewMetadata, text: string) =>
+  requestClient.post<{ duplicate: boolean; matchedReviewId?: string; reason?: string }>('/cms/review/duplicate-check', { metadata, text });
+export const manualReview = (id: string, decision: 'APPROVE' | 'REJECT', note: string) =>
+  requestClient.put<ReviewReport>('/cms/review/manual-review', { decision, note }, { params: { id }, timeout: 120000 });

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import {
   Alert,
+  AutoComplete,
   Button,
   Card,
   Input,
@@ -15,7 +16,7 @@ import {
 } from 'ant-design-vue';
 
 import type { LawAnswer, LawSearchItem } from '#/api/cms/law';
-import { answerLaw, searchLaws } from '#/api/cms/law';
+import { answerLaw, searchLaws, suggestLaws } from '#/api/cms/law';
 
 const props = withDefaults(defineProps<{ portal?: boolean }>(), {
   portal: false,
@@ -26,6 +27,11 @@ const keyword = ref('');
 const lawType = ref<string>();
 const status = ref<string>();
 const asOfDate = ref('');
+const issuingAuthority = ref('');
+const effectiveDateFrom = ref('');
+const effectiveDateTo = ref('');
+const suggestionOptions = ref<{ label: string; value: string }[]>([]);
+let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 const loading = ref(false);
 const answer = ref<LawAnswer>();
 const rows = ref<LawSearchItem[]>([]);
@@ -75,6 +81,9 @@ async function run() {
       const result = await searchLaws(
         {
           asOfDate: asOfDate.value || undefined,
+          issuingAuthority: issuingAuthority.value.trim() || undefined,
+          effectiveDateFrom: effectiveDateFrom.value || undefined,
+          effectiveDateTo: effectiveDateTo.value || undefined,
           keyword: query,
           lawType: (lawType.value || undefined) as any,
           pageNo: pageNo.value,
@@ -94,6 +103,26 @@ async function run() {
     loading.value = false;
   }
 }
+
+watch(keyword, (value) => {
+  if (suggestionTimer) clearTimeout(suggestionTimer);
+  const query = value.trim();
+  if (!query) {
+    suggestionOptions.value = [];
+    return;
+  }
+  suggestionTimer = setTimeout(async () => {
+    try {
+      const suggestions = await suggestLaws(query, props.portal);
+      suggestionOptions.value = suggestions.slice(0, 5).map((item) => ({
+        value: item.title,
+        label: `${item.title}${item.documentNo ? ` · ${item.documentNo}` : ''}${item.issuingAuthority ? ` · ${item.issuingAuthority}` : ''}`,
+      }));
+    } catch {
+      suggestionOptions.value = [];
+    }
+  }, 250);
+});
 
 async function changePage(page: number, size: number) {
   pageNo.value = page;
@@ -115,20 +144,24 @@ function score(value?: number) {
       </Tabs>
 
       <div class="search-row">
-        <Input.Search
-          v-model:value="keyword"
-          :loading="loading"
-          :placeholder="mode === 'answer' ? '例：企业安全生产的主要责任有哪些？' : '输入标准号、条款或关键词'"
-          enter-button="查询"
-          size="large"
-          @search="run"
-        />
+        <AutoComplete v-model:value="keyword" :options="suggestionOptions" style="width: 100%" @select="run">
+          <Input.Search
+            :loading="loading"
+            :placeholder="mode === 'answer' ? '例：企业安全生产的主要责任有哪些？' : '输入标准号、条款或关键词'"
+            enter-button="查询"
+            size="large"
+            @search="run"
+          />
+        </AutoComplete>
       </div>
 
       <div v-if="mode === 'original'" class="filters">
         <Select v-model:value="lawType" :options="typeOptions" placeholder="全部类型" />
         <Select v-model:value="status" :options="statusOptions" placeholder="全部效力" />
+        <Input v-model:value="issuingAuthority" class="authority-input" placeholder="发布机关" />
         <label>查询时点 <input v-model="asOfDate" type="date" /></label>
+        <label>实施日期从 <input v-model="effectiveDateFrom" type="date" /></label>
+        <label>至 <input v-model="effectiveDateTo" type="date" /></label>
         <Button :loading="loading" @click="run">应用筛选</Button>
       </div>
 
@@ -204,6 +237,7 @@ function score(value?: number) {
 .search-row { max-width: 920px; }
 .filters { display: flex; align-items: center; margin-top: 14px; gap: 10px; flex-wrap: wrap; }
 .filters :deep(.ant-select) { width: 160px; }
+.filters .authority-input { width: 180px; }
 .filters label { display: inline-flex; align-items: center; gap: 8px; color: #475569; }
 .filters input { min-height: 32px; padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 6px; }
 .scope-tip { margin: 12px 0 0; color: #64748b; font-size: 13px; }

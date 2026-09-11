@@ -9,6 +9,8 @@ export interface CmsKnowledgeItem {
   textHash: string;
   title: string;
   validity: string;
+  archived: boolean;
+  archivedAt?: string;
 }
 
 export interface CmsPublishResult {
@@ -27,6 +29,9 @@ export interface CmsReindexResult {
 export const listCmsKnowledge = () =>
   requestClient.get<CmsKnowledgeItem[]>('/cms/knowledge/list');
 
+export const listCmsArchives = () =>
+  requestClient.get<CmsKnowledgeItem[]>('/cms/knowledge/archive/list');
+
 export const publishCmsKnowledge = (reviewId: string) =>
   requestClient.post<CmsPublishResult>('/cms/knowledge/publish', undefined, {
     params: { reviewId },
@@ -37,6 +42,9 @@ export const unpublishCmsKnowledge = (reviewId: string) =>
   requestClient.delete<boolean>('/cms/knowledge/unpublish', {
     params: { reviewId },
   });
+
+export const archiveCmsKnowledge = (reviewId: string) =>
+  requestClient.delete<boolean>('/cms/knowledge/archive', { params: { reviewId } });
 
 export const reindexCmsKnowledge = () =>
   requestClient.post<CmsReindexResult>('/cms/knowledge/reindex', undefined, {

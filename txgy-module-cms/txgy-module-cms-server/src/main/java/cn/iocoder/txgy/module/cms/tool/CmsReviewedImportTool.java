@@ -95,6 +95,7 @@ public final class CmsReviewedImportTool {
         for (int i = 0; i < pending.size(); i++) {
             ImportDocument document = pending.get(i);
             Report initial = submitted.items().get(i).report();
+            initial = reviewService.completeAiReview(TENANT_ID, initial.id());
             if (initial.decision() != Decision.FAIL || initial.issues().stream().noneMatch(issue -> "SOURCE_UNVERIFIED".equals(issue.code()))) {
                 throw new IllegalStateException("Document did not enter the expected pending-verification state: " + document.metadata().title());
             }

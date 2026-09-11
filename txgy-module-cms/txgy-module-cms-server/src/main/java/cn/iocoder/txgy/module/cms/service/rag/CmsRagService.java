@@ -14,6 +14,7 @@ import cn.iocoder.txgy.module.cms.dto.law.CmsLawSearchRespDTO;
 import cn.iocoder.txgy.module.cms.service.law.CmsLawSearchServiceImpl;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import static cn.iocoder.txgy.module.cms.enums.ErrorCodeConstants.LAW_SEARCH_UNA
 
 /** 法规关键词/向量融合检索及带原文引用的回答。 */
 @Service
+@Slf4j
 public class CmsRagService {
 
     public static final String VECTOR_COLLECTION = "law";
@@ -69,6 +71,7 @@ public class CmsRagService {
                 answer = generator.generate(request.getQuestion(), bundle.contexts());
                 generated = true;
             } catch (RuntimeException ex) {
+                log.warn("qwen-plus answer generation failed: {}", ex.getMessage());
                 generated = false;
                 warning = "大模型暂时不可用，已降级为原文检索结果";
                 answer = "已找到相关法规原文，但大模型本次未能生成回答，请直接核对下方引用。";

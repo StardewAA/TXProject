@@ -41,7 +41,8 @@ class ReviewWorkflowTest {
     EvidenceRequest proof(String text) {return new EvidenceRequest(META,text,META.sourceUrl(),"已对照官方原文和沿革核验完整性");}
     @Test void rejectionStaysInDatabaseAndPassAdmitsOnce() {
         Report r=submit();
-        assertThat(r.decision()).isEqualTo(Decision.FAIL);
+        assertThat(r.decision()).isEqualTo(Decision.PENDING);
+        assertThat(r.workflowStatus()).isEqualTo(WorkflowStatus.AI_REVIEWING);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_document_review",Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document",Integer.class)).isZero();
         Report pass=service.verify(2005,2L,r.id(),proof(TEXT));
@@ -57,11 +58,13 @@ class ReviewWorkflowTest {
         assertThat(service.listBySubmitter(2005,99L,50)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT content FROM cms_knowledge_chunk",String.class)).isEqualTo(TEXT);
     }
-    @Test void failedVerificationNeverEntersKnowledge() {
+    @Test void aiFailureStillEntersManualQueueAndNeverAutoPublishes() {
         Report r=submit();
-        assertThat(service.verify(2005,2L,r.id(),proof(TEXT+"不同原文")).admitted()).isFalse();
+        Report reviewed=service.completeAiReview(2005,r.id());
+        assertThat(reviewed.decision()).isEqualTo(Decision.FAIL);
+        assertThat(reviewed.workflowStatus()).isEqualTo(WorkflowStatus.PENDING_MANUAL);
+        assertThat(reviewed.admitted()).isFalse();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document",Integer.class)).isZero();
-        assertThat(service.get(2005,r.id()).evidenceHistory()).hasSize(1);
     }
     @Test void anotherTenantCannotReadVerifyOrResubmit() {
         Report r=submit();
@@ -87,13 +90,20 @@ class ReviewWorkflowTest {
     @Test void batchSubmissionCreatesIndependentReports() {
         List<BatchDocument> documents=List.of(
                 new BatchDocument("一.txt",META,new Parsed(TEXT,List.of()),TEXT.getBytes()),
-                new BatchDocument("二.txt",META,new Parsed(TEXT+"第二份",List.of()),(TEXT+"第二份").getBytes()));
+                new BatchDocument("二.txt",new Metadata("第二份", "", META.issuer(),
+                        "https://www.gov.cn/second", Kind.LAW, META.validity(), META.effectiveDate(), null, false),
+                        new Parsed(TEXT+"第二份",List.of()),(TEXT+"第二份").getBytes()));
         BatchResult result=service.submitBatch(2005,1L,documents);
         assertThat(result.batchId()).matches("[a-f0-9\\-]{36}");
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(BatchItemResult::fileName).containsExactly("一.txt","二.txt");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_document_review",Integer.class)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_knowledge_document",Integer.class)).isZero();
+    }
+    @Test void duplicateSubmissionIsRejectedBeforeInsert() {
+        submit();
+        assertThatThrownBy(this::submit);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cms_document_review",Integer.class)).isEqualTo(1);
     }
     @Test void batchDatabaseFailureRollsBackAllItems() {
         List<BatchDocument> documents=List.of(

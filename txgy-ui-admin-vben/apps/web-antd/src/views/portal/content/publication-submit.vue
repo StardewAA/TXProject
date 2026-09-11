@@ -18,9 +18,17 @@ import type { ReviewMetadata } from '#/api/cms/review';
 import type { PublicationSubmission } from '#/api/cms/submission';
 import {
   listMyPublicationSubmissions,
+  checkPublicationDuplicate,
+  parsePublicationUrl,
   submitPublicationFile,
   submitPublicationText,
 } from '#/api/cms/submission';
+import CmsFilePicker from '../../cms/_shared/cms-file-picker.vue';
+import CmsWangEditor from '../../cms/_shared/cms-wang-editor.vue';
+import {
+  editorHtmlToPlainText,
+  plainTextToEditorHtml,
+} from '../../cms/_shared/rich-text';
 
 const metadata = reactive<ReviewMetadata>({
   documentNo: '',
@@ -34,6 +42,7 @@ const metadata = reactive<ReviewMetadata>({
   validity: 'UNKNOWN',
 });
 const mode = ref<'file' | 'text'>('file');
+const parseWarning = ref('');
 const text = ref('');
 const file = ref<File>();
 const busy = ref(false);
@@ -71,16 +80,32 @@ function cleanMetadata(): ReviewMetadata {
   };
 }
 
-function chooseFile(event: Event) {
-  file.value = (event.target as HTMLInputElement).files?.[0];
-}
-
 async function refresh() {
   loading.value = true;
   try {
     rows.value = await listMyPublicationSubmissions();
   } finally {
     loading.value = false;
+  }
+}
+
+async function parseUrl() {
+  const requestedUrl = metadata.sourceUrl.trim();
+  if (!requestedUrl) {
+    message.warning('请输入政府网站 HTTPS 原文链接。');
+    return;
+  }
+  busy.value = true;
+  try {
+    const result = await parsePublicationUrl(requestedUrl, true);
+    Object.assign(metadata, result.metadata);
+    metadata.sourceUrl = result.metadata.sourceUrl?.trim() || requestedUrl;
+    text.value = plainTextToEditorHtml(result.text);
+    mode.value = 'text';
+    parseWarning.value = result.warning || '';
+    message.success(result.llmExtracted ? '元数据已智能提取，请确认补全。' : '网页正文已解析，请确认补全元数据。');
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -97,8 +122,13 @@ async function submit() {
     message.warning('请选择待发布的 TXT、DOCX 或 PDF 文档。');
     return;
   }
-  if (mode.value === 'text' && !text.value.trim()) {
+  const plainText = editorHtmlToPlainText(text.value);
+  if (mode.value !== 'file' && !plainText) {
     message.warning('请粘贴完整正文。');
+    return;
+  }
+  if (plainText.length > 500_000) {
+    message.warning('正文最多 50 万字，请精简后再提交。');
     return;
   }
   busy.value = true;
@@ -106,9 +136,14 @@ async function submit() {
     if (mode.value === 'file' && file.value) {
       await submitPublicationFile(cleanMetadata(), file.value);
     } else {
-      await submitPublicationText(cleanMetadata(), text.value.trim());
+      const duplicate = await checkPublicationDuplicate(cleanMetadata(), plainText);
+      if (duplicate.duplicate) {
+        message.error(`提交已阻止：${duplicate.reason || '内容重复'}`);
+        return;
+      }
+      await submitPublicationText(cleanMetadata(), plainText);
     }
-    message.success('发布申请已提交，通过管理员审查和发布后才会进入检索。');
+    message.success('发布申请已提交，AI 初审后将进入管理员人工复核。');
     text.value = '';
     file.value = undefined;
     await refresh();
@@ -119,16 +154,16 @@ async function submit() {
 
 function reviewLabel(row: Record<string, any>) {
   const item = row as PublicationSubmission;
-  if (item.report.admitted) return '审查通过';
-  if (!item.report.evidence) return '待管理员审查';
-  return '审查未通过';
+  return ({
+    AI_REVIEWING: 'AI 初审中', PENDING_MANUAL: '待人工复核', APPROVED: '人工通过', REJECTED: '人工驳回',
+  } as Record<string, string>)[item.report.workflowStatus] || item.report.workflowStatus;
 }
 
 function reviewColor(row: Record<string, any>) {
   const item = row as PublicationSubmission;
-  if (item.report.admitted) return 'green';
-  if (!item.report.evidence) return 'blue';
-  return 'red';
+  if (item.report.workflowStatus === 'APPROVED') return 'green';
+  if (item.report.workflowStatus === 'REJECTED') return 'red';
+  return item.report.workflowStatus === 'PENDING_MANUAL' ? 'orange' : 'blue';
 }
 
 onMounted(refresh);
@@ -146,7 +181,18 @@ onMounted(refresh);
         <label>文档标题<Input v-model:value="metadata.title" :maxlength="300" /></label>
         <label>文号 / 标准编号<Input v-model:value="metadata.documentNo" :maxlength="100" /></label>
         <label>发布机关<Input v-model:value="metadata.issuer" :maxlength="200" /></label>
-        <label>官方原文链接<Input v-model:value="metadata.sourceUrl" :maxlength="2000" placeholder="https://….gov.cn/…" /></label>
+        <label>
+          官方原文链接
+          <div class="source-url-field">
+            <Input
+              v-model:value="metadata.sourceUrl"
+              :maxlength="2000"
+              placeholder="https://….gov.cn/…"
+              @press-enter="parseUrl"
+            />
+            <Button :loading="busy" @click="parseUrl">智能解析</Button>
+          </div>
+        </label>
         <label>文档类型<Select v-model:value="metadata.kind" :options="kindOptions" /></label>
         <label>申报效力<Select v-model:value="metadata.validity" :options="validityOptions" /></label>
         <label>实施日期<input v-model="metadata.effectiveDate" type="date" /></label>
@@ -156,10 +202,11 @@ onMounted(refresh);
       <div class="body-input">
         <Select
           v-model:value="mode"
-          :options="[{ label: '上传文件', value: 'file' }, { label: '粘贴正文', value: 'text' }]"
+          :options="[{ label: '上传文件', value: 'file' }, { label: '手动录入', value: 'text' }]"
         />
-        <input v-if="mode === 'file'" type="file" accept=".txt,.docx,.pdf" @change="chooseFile" />
-        <Input.TextArea v-else v-model:value="text" :maxlength="1000000" :rows="12" placeholder="粘贴完整原文，保留条号与段落。" />
+        <CmsFilePicker v-if="mode === 'file'" v-model="file" />
+        <Alert v-if="parseWarning" :message="parseWarning" show-icon type="warning" />
+        <CmsWangEditor v-if="mode === 'text'" v-model="text" :height="360" />
       </div>
       <Button type="primary" :loading="busy" @click="submit">提交审查并申请发布</Button>
     </Card>
@@ -181,7 +228,7 @@ onMounted(refresh);
             </template>
             <template v-else-if="column.key === 'published'">
               <Tag :color="record.published ? 'green' : 'default'">
-                {{ record.published ? '已发布' : record.report.admitted ? '待管理员发布' : '未发布' }}
+                {{ record.published ? '已发布' : record.report.workflowStatus === 'REJECTED' ? '已驳回' : '未发布' }}
               </Tag>
             </template>
           </template>
@@ -198,5 +245,6 @@ label { display: grid; gap: 6px; color: #334155; font-size: 13px; }
 label > input { min-height: 32px; padding: 4px 10px; border: 1px solid #d9d9d9; border-radius: 6px; }
 .body-input { display: grid; gap: 10px; margin: 16px 0; }
 .body-input :deep(.ant-select) { width: 180px; }
+.source-url-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 @media (max-width: 800px) { .fields { grid-template-columns: 1fr; } }
 </style>

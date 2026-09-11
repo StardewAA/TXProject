@@ -28,6 +28,13 @@ public class CmsLawSearchReqDTO {
     @Size(max = 64)
     private String lawType;
 
+    @Size(max = 200)
+    private String issuingAuthority;
+
+    private LocalDate effectiveDateFrom;
+
+    private LocalDate effectiveDateTo;
+
     /** 法律效力与平台发布状态不是同一概念。 */
     private CmsLawStatusEnum status;
 

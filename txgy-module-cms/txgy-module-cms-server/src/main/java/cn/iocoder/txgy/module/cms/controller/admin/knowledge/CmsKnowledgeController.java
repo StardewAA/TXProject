@@ -37,6 +37,13 @@ public class CmsKnowledgeController {
         return success(knowledgeService.list());
     }
 
+    @GetMapping("/archive/list")
+    @Operation(summary = "查询已软删除的归档内容")
+    @PreAuthorize("@ss.hasPermission('cms:knowledge:query')")
+    public CommonResult<List<CmsKnowledgeService.KnowledgeItem>> archiveList() {
+        return success(knowledgeService.listArchived());
+    }
+
     @PostMapping("/publish")
     @Operation(summary = "发布已审查通过的知识库文档")
     @PreAuthorize("@ss.hasPermission('cms:knowledge:publish')")
@@ -51,6 +58,15 @@ public class CmsKnowledgeController {
     public CommonResult<Boolean> unpublish(
             @RequestParam @Pattern(regexp = "[a-f0-9\\-]{36}") String reviewId) {
         knowledgeService.unpublish(reviewId);
+        return success(true);
+    }
+
+    @DeleteMapping("/archive")
+    @Operation(summary = "软删除已发布内容并移入归档库")
+    @PreAuthorize("@ss.hasPermission('cms:knowledge:delete')")
+    public CommonResult<Boolean> archive(
+            @RequestParam @Pattern(regexp = "[a-f0-9\\-]{36}") String reviewId) {
+        knowledgeService.archive(reviewId);
         return success(true);
     }
 
