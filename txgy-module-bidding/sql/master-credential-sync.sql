@@ -1517,7 +1517,9 @@ VALUES
 (60005501, '风险重算 / 宽限登记', 'bidding:qualification:permit:update', 3, 26, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 (60005502, '多岗兼任合规校验', 'bidding:personnel:cert:query', 3, 27, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 (60005503, '人员风险标签（一年异常）', 'bidding:personnel:profile:query', 3, 28, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60005504, '项目关键岗位变更监控', 'bidding:project:query', 3, 29, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0')
+(60005504, '项目关键岗位变更监控', 'bidding:project:query', 3, 29, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005505, '规则配置查询', 'bidding:rule-config:query', 3, 30, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005506, '规则配置修改 / 发布 / 回滚', 'bidding:rule-config:update', 3, 31, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
   `parent_id` = VALUES(`parent_id`), `path` = VALUES(`path`), `icon` = VALUES(`icon`),
   `component` = VALUES(`component`), `component_name` = VALUES(`component_name`),
