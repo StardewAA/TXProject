@@ -9,6 +9,9 @@ import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.framework.ip.core.utils.AreaUtils;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportExcelVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmCluePageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueSaveReqVO;
@@ -32,6 +35,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +122,30 @@ public class CrmClueController {
         List<CrmClueDO> list = clueService.getCluePage(pageReqVO, getLoginUserId()).getList();
         // 导出 Excel
         ExcelUtils.write(response, "线索.xls", "数据", CrmClueRespVO.class, buildClueDetailList(list));
+    }
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得导入线索模板")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        // 手动创建导出 demo
+        List<CrmClueImportExcelVO> list = Arrays.asList(
+                CrmClueImportExcelVO.builder().name("天信管业科技有限公司").mobile("15601691300").telephone("")
+                        .qq("").wechat("").email("yunai@iocoder.cn").areaId(null).detailAddress("")
+                        .industryId(1).level(1).source(1).remark("").build());
+        // 输出
+        ExcelUtils.write(response, "线索导入模板.xls", "线索列表", CrmClueImportExcelVO.class, list);
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入线索")
+    @PreAuthorize("@ss.hasPermission('crm:clue:import')")
+    public CommonResult<CrmClueImportRespVO> importExcel(@Valid CrmClueImportReqVO importReqVO) throws Exception {
+        List<CrmClueImportExcelVO> list = ExcelUtils.read(importReqVO.getFile(), CrmClueImportExcelVO.class);
+        // 未指定负责人时，默认当前登录用户
+        if (importReqVO.getOwnerUserId() == null) {
+            importReqVO.setOwnerUserId(getLoginUserId());
+        }
+        return success(clueService.importClueList(list, importReqVO));
     }
 
     private List<CrmClueRespVO> buildClueDetailList(List<CrmClueDO> list) {

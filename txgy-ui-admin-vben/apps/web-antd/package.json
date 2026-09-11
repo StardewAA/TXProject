@@ -63,6 +63,7 @@
     "fast-xml-parser": "catalog:",
     "highlight.js": "catalog:",
     "livekit-client": "catalog:",
+    "pdfjs-dist": "catalog:",
     "pinia": "catalog:",
     "steady-xml": "catalog:",
     "tinymce": "catalog:",

@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerPoolConfigService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
+import cn.iocoder.txgy.module.crm.util.CrmWebPageUtils;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -114,6 +115,26 @@ public class CrmCustomerController {
             return null;
         }
         return buildCustomerDetailList(singletonList(customer)).get(0);
+    }
+
+    @GetMapping("/check-duplicate")
+    @Operation(summary = "查重：根据手机号、名称匹配已存在的客户、线索、联系人")
+    @Parameter(name = "mobile", description = "手机号", example = "13800138000")
+    @Parameter(name = "name", description = "名称", example = "天信管业")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmDuplicateCheckRespVO> checkDuplicate(@RequestParam(value = "mobile", required = false) String mobile,
+                                                                @RequestParam(value = "name", required = false) String name) {
+        return success(customerService.checkDuplicate(mobile, name));
+    }
+
+    @GetMapping("/fetch-web-page")
+    @Operation(summary = "抓取网页正文（用于网页链接一键识别）")
+    @Parameter(name = "url", description = "网页地址", required = true, example = "https://www.example.com")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmWebPageFetchRespVO> fetchWebPage(@RequestParam("url") String url) {
+        CrmWebPageUtils.WebPage page = CrmWebPageUtils.fetch(url);
+        return success(CrmWebPageFetchRespVO.builder()
+                .url(url).title(page.getTitle()).content(page.getContent()).build());
     }
 
     @GetMapping("/page")

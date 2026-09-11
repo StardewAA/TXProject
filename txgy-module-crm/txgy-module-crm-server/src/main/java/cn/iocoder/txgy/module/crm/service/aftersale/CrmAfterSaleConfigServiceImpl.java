@@ -20,11 +20,11 @@ public class CrmAfterSaleConfigServiceImpl implements CrmAfterSaleConfigService 
     public static final Long CONFIG_ID = 1L;
 
     @Resource
-    private CrmAfterSaleConfigMapper configMapper;
+    private CrmAfterSaleConfigMapper crmAfterSaleConfigMapper;
 
     @Override
     public CrmAfterSaleConfigDO getConfig() {
-        CrmAfterSaleConfigDO config = configMapper.selectById(CONFIG_ID);
+        CrmAfterSaleConfigDO config = crmAfterSaleConfigMapper.selectById(CONFIG_ID);
         if (config != null) {
             return config;
         }
@@ -43,14 +43,14 @@ public class CrmAfterSaleConfigServiceImpl implements CrmAfterSaleConfigService 
     @Override
     public void updateConfig(CrmAfterSaleConfigSaveReqVO updateReqVO) {
         // 单行配置：不存在则插入，存在则更新
-        CrmAfterSaleConfigDO oldConfig = configMapper.selectById(CONFIG_ID);
+        CrmAfterSaleConfigDO oldConfig = crmAfterSaleConfigMapper.selectById(CONFIG_ID);
         CrmAfterSaleConfigDO config = BeanUtils.toBean(updateReqVO, CrmAfterSaleConfigDO.class);
         if (oldConfig == null) {
             config.setId(CONFIG_ID);
-            configMapper.insert(config);
+            crmAfterSaleConfigMapper.insert(config);
         } else {
             config.setId(CONFIG_ID);
-            configMapper.updateById(config);
+            crmAfterSaleConfigMapper.updateById(config);
         }
     }
 

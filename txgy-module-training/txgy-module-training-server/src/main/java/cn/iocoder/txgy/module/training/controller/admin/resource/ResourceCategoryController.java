@@ -29,7 +29,8 @@ public class ResourceCategoryController {
     @GetMapping("/tree")
     @Operation(summary = "分类树（按类型：doc/video/question）")
     @Parameter(name = "type", description = "分类类型：doc/video/question", required = true, example = "doc")
-    @PreAuthorize("@ss.hasPermission('training:resource-category:query')")
+    // 查询权限与「资源中心 → 分类与标签」菜单权限点保持一致（training:resource-category:query 未在菜单中定义）
+    @PreAuthorize("@ss.hasPermission('training:resource:query')")
     public CommonResult<List<CategoryTreeRespVO>> getCategoryTree(@RequestParam("type") String type) {
         return success(categoryService.getCategoryTree(type));
     }

@@ -11,7 +11,8 @@ import lombok.EqualsAndHashCode;
 /**
  * 资源中心分类 DO
  *
- * 对应表 training_category（文档/视频/试题三类共用，type 区分，支持二级层级）
+ * 对应表 training_category（文档/视频/试题三类共用，type 区分，支持三级层级）
+ * 三类分类通过 code 保持一致，对任一类型的增删改会同步到另外两类。
  *
  * @author 云培训学院课题小组
  */
@@ -32,7 +33,11 @@ public class ResourceCategoryDO extends TenantBaseDO {
      */
     private String name;
     /**
-     * 父分类 ID（0 = 根，仅支持二级）
+     * 分类编码，用于 doc/video/question 三类之间同步（导入课程分类时复用课程分类编码）
+     */
+    private String code;
+    /**
+     * 父分类 ID（0 = 根，最多支持三级）
      */
     private Long parentId;
     /**

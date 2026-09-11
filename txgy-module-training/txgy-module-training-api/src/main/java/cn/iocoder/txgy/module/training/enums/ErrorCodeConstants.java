@@ -81,6 +81,7 @@ public interface ErrorCodeConstants {
     ErrorCode QUESTION_STATUS_CHANGE_INVALID = new ErrorCode(1_061_009_004, "试题当前状态不允许执行该操作");
     ErrorCode QUESTION_IMPORT_EMPTY = new ErrorCode(1_061_009_005, "导入文件为空或不含有效数据行");
     ErrorCode QUESTION_IMPORT_PARSE_ERROR = new ErrorCode(1_061_009_006, "导入文件解析失败，请使用系统下载的标准 Excel 模板");
+    ErrorCode QUESTION_IMPORT_HEADER_INVALID = new ErrorCode(1_061_009_013, "未识别到导入表头，请使用【下载模板】的 Excel 格式（表头行需包含“题型”“题干”列）");
     // AI 智能导入（文档 → 试题）
     ErrorCode QUESTION_AI_NOT_CONFIGURED = new ErrorCode(1_061_009_007, "未配置 AI 大模型（请联系管理员配置模型服务地址与密钥）");
     ErrorCode QUESTION_AI_DOC_TYPE_INVALID = new ErrorCode(1_061_009_008, "AI 导入仅支持 PDF / Word(doc,docx) / WPS(wps) 文档");

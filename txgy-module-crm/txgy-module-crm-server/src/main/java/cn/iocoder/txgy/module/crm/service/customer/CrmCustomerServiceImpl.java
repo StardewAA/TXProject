@@ -14,11 +14,14 @@ import cn.iocoder.txgy.module.crm.controller.admin.contact.vo.CrmContactTransfer
 import cn.iocoder.txgy.module.crm.controller.admin.contract.vo.contract.CrmContractTransferReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.*;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contact.CrmContactDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerLimitConfigDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.clue.CrmClueMapper;
+import cn.iocoder.txgy.module.crm.dal.mysql.contact.CrmContactMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
@@ -90,6 +93,11 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
 
     @Resource
     private AdminUserApi adminUserApi;
+
+    @Resource
+    private CrmClueMapper clueMapper;
+    @Resource
+    private CrmContactMapper contactMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -354,6 +362,55 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
             getSelf().importCustomerLog(updateCustomer, true);
         });
         return respVO;
+    }
+
+    @Override
+    public CrmDuplicateCheckRespVO checkDuplicate(String mobile, String name) {
+        // 1. 手机号、名称均为空时，无需查重
+        if (StrUtil.isBlank(mobile) && StrUtil.isBlank(name)) {
+            return CrmDuplicateCheckRespVO.builder().duplicated(false)
+                    .items(Collections.emptyList()).build();
+        }
+        List<CrmDuplicateCheckRespVO.Item> items = new ArrayList<>();
+        // 2. 客户（包含公海客户）
+        customerMapper.selectListByDuplicate(mobile, name).forEach(customer -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CUSTOMER).bizTypeName("客户")
+                        .id(customer.getId()).name(customer.getName()).mobile(customer.getMobile())
+                        .ownerUserId(customer.getOwnerUserId()).inPool(customer.getOwnerUserId() == null)
+                        .matchReason(buildDuplicateMatchReason(customer.getMobile(), customer.getName(), mobile, name))
+                        .build()));
+        // 3. 线索
+        clueMapper.selectListByDuplicate(mobile, name).forEach(clue -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CLUE).bizTypeName("线索")
+                        .id(clue.getId()).name(clue.getName()).mobile(clue.getMobile())
+                        .ownerUserId(clue.getOwnerUserId())
+                        .matchReason(buildDuplicateMatchReason(clue.getMobile(), clue.getName(), mobile, name))
+                        .build()));
+        // 4. 联系人
+        contactMapper.selectListByDuplicate(mobile, name).forEach(contact -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CONTACT).bizTypeName("联系人")
+                        .id(contact.getId()).name(contact.getName()).mobile(contact.getMobile())
+                        .ownerUserId(contact.getOwnerUserId())
+                        .matchReason(buildDuplicateMatchReason(contact.getMobile(), contact.getName(), mobile, name))
+                        .build()));
+        return CrmDuplicateCheckRespVO.builder().duplicated(!items.isEmpty()).items(items).build();
+    }
+
+    /**
+     * 计算查重命中的原因，便于前端展示「手机号一致 / 名称一致」
+     */
+    private static String buildDuplicateMatchReason(String itemMobile, String itemName, String mobile, String name) {
+        List<String> reasons = new ArrayList<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.equals(mobile, itemMobile)) {
+            reasons.add("手机号一致");
+        }
+        if (StrUtil.isNotBlank(name) && StrUtil.equals(name, itemName)) {
+            reasons.add("名称一致");
+        }
+        return String.join("、", reasons);
     }
 
     /**

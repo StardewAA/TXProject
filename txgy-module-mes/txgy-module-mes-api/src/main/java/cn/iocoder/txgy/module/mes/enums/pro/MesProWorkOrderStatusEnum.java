@@ -38,9 +38,22 @@ public enum MesProWorkOrderStatusEnum implements ArrayValuable<Integer> {
      *
      * 对应 MesProWorkOrderService#cancelWorkOrder 方法
      */
-    CANCELED(3, "已取消");
+    CANCELED(3, "已取消"),
+    /**
+     * 已下发
+     *
+     * 对应 MesProWorkOrderService#issueWorkOrder 方法
+     */
+    ISSUED(10, "已下发"),
+    /**
+     * 生产中
+     *
+     * 首次报工自动置位，对应 MesProWorkOrderService#markInProductionIfIssued 方法
+     */
+    IN_PRODUCTION(11, "生产中");
 
-    public static final Integer[] ARRAYS = Arrays.stream(values()).map(MesProWorkOrderStatusEnum::getStatus).toArray(Integer[]::new);
+    public static final Integer[] ARRAYS = Arrays.stream(values()).map(MesProWorkOrderStatusEnum::getStatus)
+            .toArray(Integer[]::new);
 
     /**
      * 状态值

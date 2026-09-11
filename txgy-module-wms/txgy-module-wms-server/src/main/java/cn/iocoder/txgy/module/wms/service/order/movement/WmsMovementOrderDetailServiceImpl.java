@@ -112,7 +112,7 @@ public class WmsMovementOrderDetailServiceImpl implements WmsMovementOrderDetail
         }
         return convertList(reqVO.getDetails(), detail -> {
             // 校验 SKU 存在
-            itemSkuService.validateItemSkuExists(detail.getSkuId());
+            itemSkuService.validateItemSkuExistsAndItemEnabled(detail.getSkuId());
             // 构建对象
             WmsMovementOrderDetailDO detailDO = BeanUtils.toBean(detail, WmsMovementOrderDetailDO.class)
                     .setSourceWarehouseId(reqVO.getSourceWarehouseId())

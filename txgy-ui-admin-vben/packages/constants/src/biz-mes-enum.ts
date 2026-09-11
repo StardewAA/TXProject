@@ -215,9 +215,12 @@ export const MesWmStockTakingParamTypeEnum = {
 export const MesProWorkOrderStatusEnum = {
   PREPARE: 0, // 草稿
   CONFIRMED: 1, // 已确认
+  ISSUED: 10, // 已下发
+  IN_PRODUCTION: 11, // 生产中
   FINISHED: 2, // 已完成
   CANCELED: 3, // 已取消
 } as const;
+
 
 /** MES 工单类型枚举 */
 export const MesProWorkOrderTypeEnum = {

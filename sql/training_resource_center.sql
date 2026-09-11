@@ -10,13 +10,14 @@
 -- ======================================================================
 
 -- ----------------------------------------------------------------------
--- 4.1 分类表 training_category（doc/video/question 共用，parent_id 二级层级）
+-- 4.1 分类表 training_category（doc/video/question 共用，parent_id 最多三级层级）
 -- ----------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `training_category` (
   `id`          bigint       NOT NULL AUTO_INCREMENT COMMENT '分类ID',
-  `type`        varchar(20)  NOT NULL COMMENT '分类类型：doc文档 video视频 question试题 course课程(预留)',
+  `type`        varchar(20)  NOT NULL COMMENT '分类类型：doc文档 video视频 question试题',
   `name`        varchar(100) NOT NULL COMMENT '分类名称',
-  `parent_id`   bigint       NOT NULL DEFAULT 0 COMMENT '父分类ID（0=根，仅支持二级）',
+  `code`        varchar(64)  DEFAULT NULL COMMENT '分类编码，用于 doc/video/question 三类之间同步',
+  `parent_id`   bigint       NOT NULL DEFAULT 0 COMMENT '父分类ID（0=根，最多支持三级）',
   `sort`        int          NOT NULL DEFAULT 0 COMMENT '排序',
   `creator`     varchar(64)  DEFAULT '' COMMENT '创建者',
   `create_time` datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `training_category` (
   `tenant_id`   bigint       NOT NULL DEFAULT 1 COMMENT '租户编号',
   PRIMARY KEY (`id`),
   KEY `idx_tcat_type_parent` (`type`, `parent_id`),
+  KEY `idx_tcat_type_code` (`type`, `code`),
   KEY `idx_tcat_tenant` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资源中心分类表（文档/视频/试题共用）';
 
@@ -145,7 +147,9 @@ CREATE TABLE IF NOT EXISTS `training_question_tag` (
   `question_id` bigint      NOT NULL COMMENT '试题ID',
   `tag_id`      bigint      NOT NULL COMMENT '标签ID',
   `creator`     varchar(64) DEFAULT '' COMMENT '创建者',
+  `updater`     varchar(64) DEFAULT '' COMMENT '更新者',
   `create_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted`     bit(1)      NOT NULL DEFAULT b'0' COMMENT '是否删除',
   `tenant_id`   bigint      NOT NULL DEFAULT 1 COMMENT '租户编号',
   PRIMARY KEY (`id`),
@@ -164,7 +168,9 @@ CREATE TABLE IF NOT EXISTS `training_resource_reference` (
   `ref_id`        bigint      NOT NULL COMMENT '引用方ID（课程ID/试卷ID等）',
   `remark`        varchar(500) DEFAULT NULL COMMENT '备注',
   `creator`       varchar(64) DEFAULT '' COMMENT '创建者',
+  `updater`       varchar(64) DEFAULT '' COMMENT '更新者',
   `create_time`   datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '建立引用时间',
+  `update_time`   datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted`       bit(1)      NOT NULL DEFAULT b'0' COMMENT '是否删除',
   `tenant_id`     bigint      NOT NULL DEFAULT 1 COMMENT '租户编号',
   PRIMARY KEY (`id`),
@@ -200,24 +206,24 @@ CREATE TABLE IF NOT EXISTS `training_operation_log` (
 -- ======================================================================
 
 -- 文档分类
-INSERT INTO `training_category` (`type`, `name`, `parent_id`, `sort`, `creator`) VALUES
-  ('doc', '行业新规', 0, 1, 'admin'),
-  ('doc', '国标解读', 0, 2, 'admin'),
-  ('doc', '防腐工艺', 0, 3, 'admin');
+INSERT INTO `training_category` (`type`, `name`, `code`, `parent_id`, `sort`, `creator`) VALUES
+  ('doc', '行业新规', 'DOC-A', 0, 1, 'admin'),
+  ('doc', '国标解读', 'DOC-B', 0, 2, 'admin'),
+  ('doc', '防腐工艺', 'DOC-C', 0, 3, 'admin');
 -- 视频分类
-INSERT INTO `training_category` (`type`, `name`, `parent_id`, `sort`, `creator`) VALUES
-  ('video', '安全培训', 0, 1, 'admin'),
-  ('video', '岗位技能', 0, 2, 'admin'),
-  ('video', '现场实录', 0, 3, 'admin');
+INSERT INTO `training_category` (`type`, `name`, `code`, `parent_id`, `sort`, `creator`) VALUES
+  ('video', '安全培训', 'VID-A', 0, 1, 'admin'),
+  ('video', '岗位技能', 'VID-B', 0, 2, 'admin'),
+  ('video', '现场实录', 'VID-C', 0, 3, 'admin');
 -- 试题分类
-INSERT INTO `training_category` (`type`, `name`, `parent_id`, `sort`, `creator`) VALUES
-  ('question', '通用安全', 0, 1, 'admin'),
-  ('question', '特种作业', 0, 2, 'admin'),
-  ('question', '施工工艺', 0, 3, 'admin');
+INSERT INTO `training_category` (`type`, `name`, `code`, `parent_id`, `sort`, `creator`) VALUES
+  ('question', '通用安全', 'QUE-A', 0, 1, 'admin'),
+  ('question', '特种作业', 'QUE-B', 0, 2, 'admin'),
+  ('question', '施工工艺', 'QUE-C', 0, 3, 'admin');
 -- 二级分类示例（文档：防腐工艺下的子类）
-INSERT INTO `training_category` (`type`, `name`, `parent_id`, `sort`, `creator`) VALUES
-  ('doc', '管道防腐', (SELECT id FROM (SELECT id FROM `training_category` WHERE `type`='doc' AND `name`='防腐工艺' AND `deleted`=b'0' LIMIT 1) t), 1, 'admin'),
-  ('doc', '保温绝热', (SELECT id FROM (SELECT id FROM `training_category` WHERE `type`='doc' AND `name`='防腐工艺' AND `deleted`=b'0' LIMIT 1) t), 2, 'admin');
+INSERT INTO `training_category` (`type`, `name`, `code`, `parent_id`, `sort`, `creator`) VALUES
+  ('doc', '管道防腐', 'DOC-C01', (SELECT id FROM (SELECT id FROM `training_category` WHERE `type`='doc' AND `code`='DOC-C' AND `deleted`=b'0' LIMIT 1) t), 1, 'admin'),
+  ('doc', '保温绝热', 'DOC-C02', (SELECT id FROM (SELECT id FROM `training_category` WHERE `type`='doc' AND `code`='DOC-C' AND `deleted`=b'0' LIMIT 1) t), 2, 'admin');
 
 -- 标签（四维）
 INSERT INTO `training_tag` (`name`, `dimension`, `sort`, `creator`) VALUES
