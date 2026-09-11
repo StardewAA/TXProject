@@ -1,0 +1,556 @@
+mes_cal_holiday                        tenant_id                bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_cal_plan                           tenant_id                bigint       n=   8 sample=1, 2, 3, 4, 5, 10, 11, 12
+mes_cal_plan_shift                     plan_id                  bigint       n=  17 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_cal_plan_shift                     tenant_id                bigint       n=  17 sample=1, 2, 3, 4, 5, 10, 11, 12
+mes_cal_plan_team                      plan_id                  bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_cal_plan_team                      team_id                  bigint       n=  16 sample=1, 2, 3, 4, 5, 10, 11, 12
+mes_cal_plan_team                      tenant_id                bigint       n=  16 sample=201, 202, 203, 211, 208, 209, 210
+mes_cal_team                           tenant_id                bigint       n=   7 sample=201, 202, 203, 208, 209, 210, 211
+mes_cal_team_member                    team_id                  bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_cal_team_member                    user_id                  bigint       n=   6 sample=201, 202, 211
+mes_cal_team_member                    tenant_id                bigint       n=   6 sample=1, 104, 105, 2, 100, 115
+mes_cal_team_shift                     plan_id                  bigint       n= 120 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_cal_team_shift                     team_id                  bigint       n= 120 sample=10, 11, 12
+mes_cal_team_shift                     shift_id                 bigint       n= 120 sample=201, 202, 203, 208, 209, 211
+mes_cal_team_shift                     tenant_id                bigint       n= 120 sample=101, 102, 103, 104, 105, 106
+mes_dv_check_plan                      tenant_id                bigint       n=   3 sample=1, 2, 3
+mes_dv_check_plan_machinery            plan_id                  bigint       n=   3 sample=1, 2, 3
+mes_dv_check_plan_machinery            machinery_id             bigint       n=   3 sample=1, 3
+mes_dv_check_plan_machinery            tenant_id                bigint       n=   3 sample=1, 2, 10
+mes_dv_check_plan_subject              plan_id                  bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_dv_check_plan_subject              subject_id               bigint       n=   6 sample=1, 3, 2
+mes_dv_check_plan_subject              tenant_id                bigint       n=   6 sample=1, 2, 3, 6, 7
+mes_dv_check_record                    plan_id                  bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_dv_check_record                    machinery_id             bigint       n=   8 sample=1, 3, 2
+mes_dv_check_record                    user_id                  bigint       n=   8 sample=1, 2, 3, 10
+mes_dv_check_record                    tenant_id                bigint       n=   8 sample=2025-03-10 08:30:00, 2025-03-11 09:00:00, 2025-03-12 08:00:00, 2025-03-13 14:00:00, 2025-03-09 16:00:00, 2026-04-16 00:00:00, 2026-04-24 00:00:00, 2026-04-11 18:28:00
+mes_dv_check_record_line               record_id                bigint       n=  15 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_dv_check_record_line               subject_id               bigint       n=  15 sample=1, 2, 3, 4, 6, 7, 8
+mes_dv_check_record_line               tenant_id                bigint       n=  15 sample=1, 2, 3, 8, 6, 7, 4
+mes_dv_machinery                       machinery_type_id        bigint       n=  10 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_dv_machinery                       workshop_id              bigint       n=  10 sample=M0001, M0002, M0003, M0004, M0005, M0006, M0007, M0008, M00001, M00002
+mes_dv_machinery                       tenant_id                bigint       n=  10 sample=海天注塑机A, 海天注塑机B, 钢筋裁切机, 冲压机, 物料干燥机, 自动拧螺丝机A, 压装机, CCD视觉检测台, ABCED, AAA
+mes_dv_machinery_type                  parent_id                bigint       n=  12 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_dv_machinery_type                  tenant_id                bigint       n=  12 sample=M_TYPE_001, M_TYPE_002, M_TYPE_003, M_TYPE_004, M_TYPE_005, M_TYPE_006, M_TYPE_007, M_TYPE_008, M_TYPE_009, M_TYPE_010
+mes_dv_mainten_record                  plan_id                  bigint       n=   9 sample=1, 2, 3, 4, 5, 6, 7, 8, 9
+mes_dv_mainten_record                  machinery_id             bigint       n=   9 sample=1, 2, 3
+mes_dv_mainten_record                  user_id                  bigint       n=   9 sample=1, 2, 4, 3, 5, 10, 9
+mes_dv_mainten_record                  tenant_id                bigint       n=   9 sample=2026-01-15 09:00:00, 2026-01-15 14:00:00, 2026-01-20 08:30:00, 2026-02-15 09:00:00, 2026-02-16 10:00:00, 2026-02-18 13:00:00, 2026-04-09 00:00:00, 2026-04-11 00:00:00, 2026-04-11 18:28:00
+mes_dv_mainten_record_line             record_id                bigint       n=  15 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_dv_mainten_record_line             subject_id               bigint       n=  15 sample=1, 2, 3, 4, 7, 9
+mes_dv_mainten_record_line             tenant_id                bigint       n=  15 sample=1, 2, 3, 4, 5, 6, 8, 7
+mes_dv_repair                          machinery_id             bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_dv_repair                          accepted_user_id         bigint       n=   8 sample=REP2024001, REP2024002, REP2024003, BX20260404000002, BX20260404000003, BX20260404000004, BX20260404000005, BX20260416000004
+mes_dv_repair                          confirm_user_id          bigint       n=   8 sample=注塑机液压系统漏油维修, 数控机床主轴异常噪音排查, 注塑机控制面板故障维修, AAB, EEAA, abc, AAAA, EEE
+mes_dv_repair                          source_doc_id            bigint       n=   8 sample=1, 2, 10, 7, 5
+mes_dv_repair                          tenant_id                bigint       n=   8 sample=2024-03-10 18:00:00, 2024-03-12 08:00:00, 2024-02-20 08:00:00, 2026-04-03 00:00:00, 2026-04-29 00:00:00, 2026-04-22 00:00:00, 2026-04-08 00:00:00, 2026-04-15 00:00:00
+mes_dv_repair_line                     repair_id                bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_dv_repair_line                     subject_id               bigint       n=   5 sample=1, 2, 3, 8
+mes_dv_repair_line                     tenant_id                bigint       n=   5 sample=1, 2, 7
+mes_dv_subject                         tenant_id                bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_md_client                          tenant_id                bigint       n=   3 sample=200, 207, 208
+mes_md_item                            unit_measure_id          bigint       n=  17 sample=69, 70, 71, 72, 73, 74, 75, 94, 95, 96
+mes_md_item                            item_type_id             bigint       n=  17 sample=IF2022082437, IF2022082432, IF2022082403, IF2022082404, IF2022082428, IF2022082416, IF2022082439, IF20250312003, IF20250312004, IF20250312005
+mes_md_item                            tenant_id                bigint       n=  17 sample=色粉【黑色】, PVC颗粒, 色粉【蓝色】, 钢筋, 螺丝刀刀柄【蓝色】, 螺丝刀刀头, 螺丝刀【蓝色，一字型】, 小包装盒, 大包装箱, 螺丝刀刀柄【黑色】
+mes_md_item_batch_config               item_id                  bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_md_item_batch_config               tenant_id                bigint       n=   8 sample=96, 95, 100, 102, 103, 75, 104, 106
+mes_md_item_type                       parent_id                bigint       n=  10 sample=200, 272, 273, 274, 275, 276, 277, 278, 282, 283
+mes_md_item_type                       tenant_id                bigint       n=  10 sample=ITEM_TYPE_0000, ITYP202604090005, ITEM_TYPE_0088, ITEM_TYPE_0089, ITEM_TYPE_0090, ITEM_TYPE_0091, ITEM_TYPE_0092, ITEM_TYPE_0093, ITEM_TYPE_0097, xx
+mes_md_product_bom                     item_id                  bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_md_product_bom                     bom_item_id              bigint       n=  16 sample=96, 100, 103, 104, 106
+mes_md_product_bom                     tenant_id                bigint       n=  16 sample=95, 94, 75, 101, 102, 103, 73, 100
+mes_md_product_sip                     item_id                  bigint       n=   4 sample=1, 2, 3, 4
+mes_md_product_sip                     process_id               bigint       n=   4 sample=96, 106, 103
+mes_md_product_sip                     tenant_id                bigint       n=   4 sample=2
+mes_md_product_sop                     item_id                  bigint       n=   3 sample=1, 2, 3
+mes_md_product_sop                     process_id               bigint       n=   3 sample=96, 106, 103
+mes_md_product_sop                     tenant_id                bigint       n=   3 sample=2
+mes_md_unit_measure                    primary_id               bigint       n=  15 sample=200, 201, 202, 203, 204, 205, 206, 214, 216, 218
+mes_md_unit_measure                    tenant_id                bigint       n=  15 sample=KG, g, PCS, CASE, m, cm, mm, T, p, pm
+mes_md_vendor                          tenant_id                bigint       n=   3 sample=200, 201, 202
+mes_md_workshop                        charge_user_id           bigint       n=   3 sample=1, 2, 3
+mes_md_workshop                        tenant_id                bigint       n=   3 sample=WS001, WS002, WS003
+mes_md_workstation                     workshop_id              bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_md_workstation                     process_id               bigint       n=   8 sample=ST001, ST002, ST003, ST004, ST005, ST006, ST_ACCEPT_FB_P1, ST_ACCEPT_FB_P4
+mes_md_workstation                     warehouse_id             bigint       n=   8 sample=注塑工位A, 注塑工位B, 组装工位A, 包装工位, 裁切工位, 刀头加工工位, 验收报工-下料工位, 验收报工-质检工位
+mes_md_workstation                     location_id              bigint       n=   8 sample=注塑车间A区, 注塑车间B区, 组装车间A区, 组装车间B区, 五金车间A区, 五金车间B区, 验收造数
+mes_md_workstation                     area_id                  bigint       n=   8 sample=1, 2, 3
+mes_md_workstation                     tenant_id                bigint       n=   8 sample=1, 4
+mes_md_workstation_machine             workstation_id           bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_md_workstation_machine             machinery_id             bigint       n=   5 sample=1, 2, 5, 6
+mes_md_workstation_machine             tenant_id                bigint       n=   5 sample=1, 2, 3, 4, 8
+mes_md_workstation_tool                workstation_id           bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_md_workstation_tool                tool_type_id             bigint       n=   5 sample=3, 5, 6
+mes_md_workstation_tool                tenant_id                bigint       n=   5 sample=1, 2, 3, 205
+mes_md_workstation_worker              workstation_id           bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_md_workstation_worker              post_id                  bigint       n=   6 sample=1, 3, 4, 5, 6
+mes_md_workstation_worker              tenant_id                bigint       n=   6 sample=1, 2
+mes_pro_andon_config                   handler_role_id          bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_pro_andon_config                   handler_user_id          bigint       n=   5 sample=设备故障，需要维修, 物料不足，需要补料, 质量异常，需要确认, 人员不足，需要支援, 工艺问题，需要技术支持
+mes_pro_andon_config                   tenant_id                bigint       n=   5 sample=1, 2, 3
+mes_pro_andon_record                   config_id                bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_pro_andon_record                   workstation_id           bigint       n=   7 sample=4, 3, 2
+mes_pro_andon_record                   user_id                  bigint       n=   7 sample=1, 2, 3
+mes_pro_andon_record                   work_order_id            bigint       n=   7 sample=100, 101, 1
+mes_pro_andon_record                   process_id               bigint       n=   7 sample=1, 2, 16
+mes_pro_andon_record                   handler_user_id          bigint       n=   7 sample=1, 2
+mes_pro_andon_record                   tenant_id                bigint       n=   7 sample=设备故障，需要维修, 物料不足，需要补料, 质量异常，需要确认, 人员不足，需要支援
+mes_pro_card                           work_order_id            bigint       n=   4 sample=1, 2, 3, 4
+mes_pro_card                           item_id                  bigint       n=   4 sample=CARD202503150001, CARD202503160001, CARD202503200001, CARD20260404000001
+mes_pro_card                           tenant_id                bigint       n=   4 sample=1, 4, 16
+mes_pro_card_process                   card_id                  bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_pro_card_process                   process_id               bigint       n=   6 sample=1, 3, 4
+mes_pro_card_process                   workstation_id           bigint       n=   6 sample=1, 2, 3
+mes_pro_card_process                   user_id                  bigint       n=   6 sample=1, 2, 3
+mes_pro_card_process                   ipqc_id                  bigint       n=   6 sample=2025-03-15 08:00:00, 2025-03-16 08:00:00, 2025-03-17 08:00:00, 2025-03-20 08:00:00, 2026-04-06 00:00:00
+mes_pro_card_process                   tenant_id                bigint       n=   6 sample=2025-03-15 16:00:00, 2025-03-16 16:00:00, 2025-03-20 18:00:00, 2026-04-15 00:00:00
+mes_pro_feedback                       workstation_id           bigint       n=  13 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_feedback                       route_id                 bigint       n=  13 sample=FB202503160001, FB202503170001, FB202503180001, FB20260318233037414, FB20260319083538497, FB20260319083926305, FB20260319085214000, FB20260324231635515, FB20260324231843582, FB_ACCEPT_PREPARE
+mes_pro_feedback                       process_id               bigint       n=  13 sample=1, 2
+mes_pro_feedback                       work_order_id            bigint       n=  13 sample=PC, APP
+mes_pro_feedback                       task_id                  bigint       n=  13 sample=2025-03-16 10:30:00, 2026-02-21 12:29:27, 2025-03-18 09:00:00, 2026-03-19 08:35:25, 2026-03-19 08:39:03, 2026-03-19 13:01:06, 2026-03-19 08:52:59, 2026-03-24 23:17:21, 2026-03-24 23:19:14, 2026-05-26 00:33:47
+mes_pro_feedback                       item_id                  bigint       n=  13 sample=1, 3, 7, 8
+mes_pro_feedback                       feedback_user_id         bigint       n=  13 sample=1
+mes_pro_feedback                       approve_user_id          bigint       n=  13 sample=1, 3, 4
+mes_pro_feedback                       tenant_id                bigint       n=  13 sample=1, 17
+mes_pro_process                        tenant_id                bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_pro_process_content                process_id               bigint       n=  11 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_process_content                tenant_id                bigint       n=  11 sample=3, 5, 6
+mes_pro_route                          tenant_id                bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_pro_route_process                  route_id                 bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_route_process                  process_id               bigint       n=  16 sample=1, 2, 3, 5, 6
+mes_pro_route_process                  next_process_id          bigint       n=  16 sample=1, 2, 3, 4, 5, 6
+mes_pro_route_process                  tenant_id                bigint       n=  16 sample=1, 2, 3, 4, 5
+mes_pro_route_product                  route_id                 bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_pro_route_product                  item_id                  bigint       n=   8 sample=1, 2, 3, 6
+mes_pro_route_product                  tenant_id                bigint       n=   8 sample=75, 73, 96, 74, 100, 101, 102, 103
+mes_pro_route_product_bom              route_id                 bigint       n=  14 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_route_product_bom              process_id               bigint       n=  14 sample=1, 2, 3, 6
+mes_pro_route_product_bom              product_id               bigint       n=  14 sample=1, 3, 5, 6
+mes_pro_route_product_bom              item_id                  bigint       n=  14 sample=75, 73, 96, 74, 100
+mes_pro_route_product_bom              tenant_id                bigint       n=  14 sample=72, 71, 70, 69, 101, 102, 103
+mes_pro_task                           work_order_id            bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_pro_task                           workstation_id           bigint       n=   8 sample=PT202503150001, PT202503150002, PT202503150003, PT202503150004, PT202503200001, TASK20260315000001, TASK_ACCEPT_FB_NORMAL, TASK_ACCEPT_FB_CHECK
+mes_pro_task                           route_id                 bigint       n=   8 sample=博世螺丝刀【5000】PCS 注塑, 博世螺丝刀【10000】PCS 冲压, 博世螺丝刀【10000】PCS 组装, 德力西螺丝刀【10000】PCS 注塑, ABC【null】, 验收报工任务-非质检, 验收报工任务-待检验
+mes_pro_task                           process_id               bigint       n=   8 sample=1, 4, 15, 17
+mes_pro_task                           item_id                  bigint       n=   8 sample=1, 2, 3, 7, 8
+mes_pro_task                           client_id                bigint       n=   8 sample=1, 6
+mes_pro_task                           tenant_id                bigint       n=   8 sample=1, 2, 3, 6, 4
+mes_pro_task_issue                     task_id                  bigint       n=   2 sample=1, 2
+mes_pro_task_issue                     work_order_id            bigint       n=   2 sample=1
+mes_pro_task_issue                     workstation_id           bigint       n=   2 sample=1
+mes_pro_task_issue                     source_doc_id            bigint       n=   2 sample=1
+mes_pro_task_issue                     source_line_id           bigint       n=   2 sample=ISSUE
+mes_pro_task_issue                     item_id                  bigint       n=   2 sample=1001
+mes_pro_task_issue                     unit_measure_id          bigint       n=   2 sample=1, 2
+mes_pro_task_issue                     tenant_id                bigint       n=   2 sample=ISS202503150001
+mes_pro_work_order                     project_id               bigint       n=  17 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_work_order                     product_id               bigint       n=  17 sample=MO202503120008, MO202503120009, MO202503120010, MO202503180007, MO202503180013, MO202503180014, MO202504120001, MOPFAsX7VPpn, MO2FkNe4IlHv, MOp6T6IA7yJS
+mes_pro_work_order                     client_id                bigint       n=  17 sample=博世螺丝刀【一字型，蓝色刀柄】, 螺丝刀刀柄【蓝色】【10000】PCS, 螺丝刀刀头【10000】PCS, 德力西螺丝刀【蓝色、一字型】, 外协工单-螺丝刀刀柄【蓝色】【1000】个, 222, EEE, 123, eee, 11
+mes_pro_work_order                     vendor_id                bigint       n=  17 sample=1, 2
+mes_pro_work_order                     parent_id                bigint       n=  17 sample=1, 2
+mes_pro_work_order                     tenant_id                bigint       n=  17 sample=PO202503011001, 202503181001, 1, ACCEPT-FEEDBACK
+mes_pro_work_order_bom                 work_order_id            bigint       n=  27 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_work_order_bom                 item_id                  bigint       n=  27 sample=1, 2, 3, 4, 5, 6, 7, 12, 14, 15
+mes_pro_work_order_bom                 tenant_id                bigint       n=  27 sample=73, 74, 94, 95, 71, 70, 72, 101, 102, 103
+mes_pro_work_record                    user_id                  bigint       n=   1 sample=1
+mes_pro_work_record                    workstation_id           bigint       n=   1 sample=1
+mes_pro_work_record                    tenant_id                bigint       n=   1 sample=7
+mes_pro_work_record_log                user_id                  bigint       n=  17 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_pro_work_record_log                workstation_id           bigint       n=  17 sample=1
+mes_pro_work_record_log                tenant_id                bigint       n=  17 sample=1, 3, 4, 6, 5, 7
+mes_qc_defect                          tenant_id                bigint       n=   8 sample=200, 201, 202, 203, 204, 205, 206, 207
+mes_qc_defect_record                   qc_id                    bigint       n=  18 sample=200, 201, 202, 203, 204, 210, 211, 212, 213, 214
+mes_qc_defect_record                   line_id                  bigint       n=  18 sample=1, 2, 3, 4
+mes_qc_defect_record                   tenant_id                bigint       n=  18 sample=201, 202, 203, 301, 302, 304, 208, 204
+mes_qc_indicator                       tenant_id                bigint       n=   7 sample=200, 201, 202, 203, 204, 205, 206
+mes_qc_indicator_result                qc_id                    bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_qc_indicator_result                item_id                  bigint       n=   7 sample=xx, 33, 1, 2, QR2026041500001, QR2026041500002, QR2026041700001
+mes_qc_indicator_result                tenant_id                bigint       n=   7 sample=203, 204, 209
+mes_qc_indicator_result_detail         result_id                bigint       n=  21 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_qc_indicator_result_detail         indicator_id             bigint       n=  21 sample=1, 2, 3, 4, 5, 6, 7
+mes_qc_indicator_result_detail         tenant_id                bigint       n=  21 sample=200, 201, 206, 205
+mes_qc_ipqc                            template_id              bigint       n=   4 sample=300, 301, 302, 303
+mes_qc_ipqc                            source_doc_id            bigint       n=   4 sample=IPQC20260220001, IPQC20260221002, IPQC20260222003, IPQC20260325000002
+mes_qc_ipqc                            source_line_id           bigint       n=   4 sample=螺丝刀组装过程巡检, 刀柄注塑首检, 包装工序自检, FB202503180001 过程检验单
+mes_qc_ipqc                            work_order_id            bigint       n=   4 sample=1, 2, 4
+mes_qc_ipqc                            task_id                  bigint       n=   4 sample=102, 105
+mes_qc_ipqc                            workstation_id           bigint       n=   4 sample=304
+mes_qc_ipqc                            process_id               bigint       n=   4 sample=3
+mes_qc_ipqc                            item_id                  bigint       n=   4 sample=
+mes_qc_ipqc                            inspector_user_id        bigint       n=   4 sample=
+mes_qc_ipqc                            tenant_id                bigint       n=   4 sample=1, 2
+mes_qc_ipqc_line                       ipqc_id                  bigint       n=  10 sample=300, 301, 302, 303, 304, 305, 306, 307, 308, 309
+mes_qc_ipqc_line                       indicator_id             bigint       n=  10 sample=300, 301, 302, 303
+mes_qc_ipqc_line                       unit_measure_id          bigint       n=  10 sample=200, 205, 206
+mes_qc_ipqc_line                       tenant_id                bigint       n=  10 sample=卡尺
+mes_qc_iqc                             template_id              bigint       n=  10 sample=200, 201, 202, 203, 204, 206, 207, 208, 209, 210
+mes_qc_iqc                             source_doc_id            bigint       n=  10 sample=IQC20260201001, IQC20260203002, IQC20260210003, IQC20260215004, IQCFsDNvt7ZHX, IQC8vMXxJFbUe, IQCRFgr3hdsbJ, IQCDPBIp5v1S8, IQC20260325001, IQC20260529001
+mes_qc_iqc                             source_line_id           bigint       n=  10 sample=螺丝刀刀柄【蓝色】来料检验, 螺丝刀刀头来料检验, PVC颗粒来料检验, 钢筋来料检验, 呃呃呃, aaa, ANbhv1kzQHtc 来料检验单, ABC, ANpcHrG0Q7S2 来料检验单, 测试一下
+mes_qc_iqc                             vendor_id                bigint       n=  10 sample=100, 102
+mes_qc_iqc                             item_id                  bigint       n=  10 sample=100
+mes_qc_iqc                             inspector_user_id        bigint       n=  10 sample=106, 105
+mes_qc_iqc                             tenant_id                bigint       n=  10 sample=110, 109
+mes_qc_iqc_line                        iqc_id                   bigint       n=  28 sample=200, 201, 202, 203, 204, 205, 206, 207, 208, 209
+mes_qc_iqc_line                        indicator_id             bigint       n=  28 sample=200, 201, 202, 203, 204, 206, 207, 208, 209, 210
+mes_qc_iqc_line                        unit_measure_id          bigint       n=  28 sample=200, 201, 202, 203, 205, 206
+mes_qc_iqc_line                        tenant_id                bigint       n=  28 sample=卡尺
+mes_qc_oqc                             template_id              bigint       n=   5 sample=200, 201, 202, 203, 204
+mes_qc_oqc                             source_doc_id            bigint       n=   5 sample=OQC20260218001, OQC20260219002, OQC20260220003, OQC20260222004, OQC20260327001
+mes_qc_oqc                             source_line_id           bigint       n=   5 sample=螺丝刀成品【蓝色一字型】出货检验, 小包装盒出货检验, 大包装箱出货检验, PVC颗粒出货检验, AAA
+mes_qc_oqc                             client_id                bigint       n=   5 sample=101, 102
+mes_qc_oqc                             item_id                  bigint       n=   5 sample=
+mes_qc_oqc                             inspector_user_id        bigint       n=   5 sample=
+mes_qc_oqc                             tenant_id                bigint       n=   5 sample=
+mes_qc_oqc_line                        oqc_id                   bigint       n=  13 sample=200, 201, 202, 203, 204, 205, 206, 207, 208, 209
+mes_qc_oqc_line                        indicator_id             bigint       n=  13 sample=200, 201, 202, 203, 204
+mes_qc_oqc_line                        unit_measure_id          bigint       n=  13 sample=200, 203, 205, 206
+mes_qc_oqc_line                        tenant_id                bigint       n=  13 sample=卡尺
+mes_qc_rqc                             template_id              bigint       n=   8 sample=300, 301, 302, 303, 304, 305, 306, 307
+mes_qc_rqc                             source_doc_id            bigint       n=   8 sample=RQC20260220001, RQC20260221002, RQC20260222003, RQC20260222004, RQCV5CsmJAiJg, RQC20260326000002, RQC20260326000003, RQC20260326000004
+mes_qc_rqc                             source_line_id           bigint       n=   8 sample=螺丝刀刀柄【蓝色】生产退料检验, 螺丝刀刀头销售退货检验, PVC颗粒生产退料检验, 螺丝刀成品【蓝色一字型】销售退货检验, 3, RITmmKTJb4p0 退货检验单, RIpV4sw33lVy 退货检验单
+mes_qc_rqc                             item_id                  bigint       n=   8 sample=102
+mes_qc_rqc                             inspector_user_id        bigint       n=   8 sample=116
+mes_qc_rqc                             tenant_id                bigint       n=   8 sample=7, 4
+mes_qc_rqc_line                        rqc_id                   bigint       n=  22 sample=300, 301, 302, 303, 304, 305, 306, 307, 308, 309
+mes_qc_rqc_line                        indicator_id             bigint       n=  22 sample=300, 301, 302, 303, 304, 305, 306, 307
+mes_qc_rqc_line                        unit_measure_id          bigint       n=  22 sample=200, 205, 206
+mes_qc_rqc_line                        tenant_id                bigint       n=  22 sample=卡尺
+mes_qc_template                        tenant_id                bigint       n=   5 sample=100, 101, 102, 105, 106
+mes_qc_template_indicator              template_id              bigint       n=  10 sample=200, 201, 202, 203, 204, 205, 206, 207, 208, 209
+mes_qc_template_indicator              indicator_id             bigint       n=  10 sample=100, 101, 102, 105, 106
+mes_qc_template_indicator              unit_measure_id          bigint       n=  10 sample=200, 201, 202, 203, 205, 206
+mes_qc_template_indicator              tenant_id                bigint       n=  10 sample=使用卡尺测量长度，记录实测值, 使用卡尺测量宽度，记录实测值, 目视检查颜色是否符合标准色板, 使用卡尺测量长度, 拍摄外观照片存档, 使用千分尺测量长度, 人工清点数量, 核对合格证编号与送检批次一致性, 游标卡尺测量, 4
+mes_qc_template_item                   template_id              bigint       n=  10 sample=300, 301, 302, 303, 304, 305, 306, 307, 308, 309
+mes_qc_template_item                   item_id                  bigint       n=  10 sample=100, 101, 102, 105, 106
+mes_qc_template_item                   tenant_id                bigint       n=  10 sample=73, 74, 75, 94, 70, 72, 95, 69
+mes_tm_tool                            tool_type_id             bigint       n=   7 sample=200, 201, 202, 203, 204, 205, 206
+mes_tm_tool                            tenant_id                bigint       n=   7 sample=T00060, T00061, T00062, T00063, T00064
+mes_tm_tool_type                       tenant_id                bigint       n=   5 sample=200, 201, 202, 204, 205
+mes_wm_arrival_notice                  vendor_id                bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 100, 101, 102, 103
+mes_wm_arrival_notice                  tenant_id                bigint       n=  16 sample=AN2026020001, AN2026020002, AN2026020003, AN2026020004, AN2026020005, ANFCnFEfb9NT, AN2026020100, AN2026020101, AN2026020102, ANSXI1qnG1Ue
+mes_wm_arrival_notice_line             notice_id                bigint       n=  23 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 100
+mes_wm_arrival_notice_line             item_id                  bigint       n=  23 sample=1, 2, 3, 4, 5, 100, 101, 102, 103, 104
+mes_wm_arrival_notice_line             iqc_id                   bigint       n=  23 sample=1, 2, 3, 4, 5, 6, 7, 69
+mes_wm_arrival_notice_line             tenant_id                bigint       n=  23 sample=500.00, 200.00, 1000.00, 800.00, 300.00, 600.00, 400.00, 250.00, 100.00, 222.00
+mes_wm_barcode                         config_id                bigint       n=  29 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_barcode                         biz_id                   bigint       n=  29 sample=1, 2, 3, 4, 5, 43, 40, 37, 39, 45
+mes_wm_barcode                         tenant_id                bigint       n=  29 sample=1, 2, 3
+mes_wm_barcode_config                  tenant_id                bigint       n=  18 sample=34, 35, 36, 37, 38, 39, 40, 41, 42, 43
+mes_wm_batch                           item_id                  bigint       n=  10 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_batch                           vendor_id                bigint       n=  10 sample=PC, PC20260, PC202600001, PC202600002, BATCH_ITEM_1, BATCH_ITEM_2, BATCH_ITEM_94, BATCH_ITEM_72, RAW-BATCH-001, PC202600003
+mes_wm_batch                           client_id                bigint       n=  10 sample=100, 75, 1, 2, 94, 72
+mes_wm_batch                           work_order_id            bigint       n=  10 sample=2026-03-21 00:00:00, 2026-03-24 00:00:00
+mes_wm_batch                           task_id                  bigint       n=  10 sample=2026-03-12 00:00:00, 2026-02-26 00:00:00, 2026-04-17 00:00:00
+mes_wm_batch                           workstation_id           bigint       n=  10 sample=
+mes_wm_batch                           tool_id                  bigint       n=  10 sample=
+mes_wm_batch                           mold_id                  bigint       n=  10 sample=
+mes_wm_batch                           tenant_id                bigint       n=  10 sample=
+mes_wm_item_consume                    work_order_id            bigint       n=   7 sample=1, 18, 19, 20, 21, 22, 23
+mes_wm_item_consume                    task_id                  bigint       n=   7 sample=1, 17
+mes_wm_item_consume                    workstation_id           bigint       n=   7 sample=4, 1, 8, 7
+mes_wm_item_consume                    process_id               bigint       n=   7 sample=3, 1, 8, 7
+mes_wm_item_consume                    feedback_id              bigint       n=   7 sample=3, 1, 4
+mes_wm_item_consume                    tenant_id                bigint       n=   7 sample=7, 5, 6, 8, 9, 12, 13
+mes_wm_item_consume_detail             consume_id               bigint       n=   1 sample=1
+mes_wm_item_consume_detail             line_id                  bigint       n=   1 sample=1
+mes_wm_item_consume_detail             material_stock_id        bigint       n=   1 sample=1
+mes_wm_item_consume_detail             item_id                  bigint       n=   1 sample=
+mes_wm_item_consume_detail             batch_id                 bigint       n=   1 sample=94
+mes_wm_item_consume_detail             warehouse_id             bigint       n=   1 sample=10.00
+mes_wm_item_consume_detail             location_id              bigint       n=   1 sample=9
+mes_wm_item_consume_detail             area_id                  bigint       n=   1 sample=RAW-BATCH-001
+mes_wm_item_consume_detail             tenant_id                bigint       n=   1 sample=1
+mes_wm_item_consume_line               consume_id               bigint       n=   7 sample=1, 18, 19, 20, 21, 22, 23
+mes_wm_item_consume_line               item_id                  bigint       n=   7 sample=1, 18, 19, 20, 21, 22, 23
+mes_wm_item_consume_line               batch_id                 bigint       n=   7 sample=72
+mes_wm_item_consume_line               tenant_id                bigint       n=   7 sample=0.50, 1.00, 45.00, 7.50, 10.00
+mes_wm_item_receipt                    iqc_id                   bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_item_receipt                    notice_id                bigint       n=  16 sample=IR2026020001, IR2026020002, IR2026020003, IR2026020004, IR2026020005, IRo3krPXYf2D, IRsr2UM5pbmU, IRLqesOjVdQU, IRoUJ96EoC20, IRjrLOepPdD5
+mes_wm_item_receipt                    vendor_id                bigint       n=  16 sample=铝材入库-草稿, 螺丝入库-待上架, 铝材入库-待入库, 铜线入库-已完成, 钢板入库-已取消, xx, 测试入库-无检验（必填）, 111, 11, 1122
+mes_wm_item_receipt                    tenant_id                bigint       n=  16 sample=1, 2, 3
+mes_wm_item_receipt_detail             line_id                  bigint       n=  17 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_item_receipt_detail             receipt_id               bigint       n=  17 sample=3, 4, 5, 6, 7, 9, 10, 11, 13, 19
+mes_wm_item_receipt_detail             item_id                  bigint       n=  17 sample=2, 3, 4, 6, 7, 10, 12, 15, 14
+mes_wm_item_receipt_detail             batch_id                 bigint       n=  17 sample=3, 4, 5, 6, 7, 69, 94
+mes_wm_item_receipt_detail             warehouse_id             bigint       n=  17 sample=600.00, 400.00, 500.00, 300.00, 200.00, 123.00, 4.00, 321321.00, 555.00, 222.00
+mes_wm_item_receipt_detail             location_id              bigint       n=  17 sample=
+mes_wm_item_receipt_detail             area_id                  bigint       n=  17 sample=701, 702, 703
+mes_wm_item_receipt_detail             tenant_id                bigint       n=  17 sample=711, 712, 713, 714
+mes_wm_item_receipt_line               receipt_id               bigint       n=  19 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_item_receipt_line               arrival_notice_line_id   bigint       n=  19 sample=1, 2, 3, 4, 5, 6, 7, 10, 11, 12
+mes_wm_item_receipt_line               item_id                  bigint       n=  19 sample=5, 6, 3, 4, 7, 1, 108
+mes_wm_item_receipt_line               batch_id                 bigint       n=  19 sample=69, 70, 3, 4, 5, 6, 7, 1, 94, 100
+mes_wm_item_receipt_line               tenant_id                bigint       n=  19 sample=800.00, 300.00, 1000.00, 500.00, 600.00, 5.00, 222.00, 1.00, 3.00, 11.00
+mes_wm_material_stock                  item_type_id             bigint       n=  62 sample=1, 2, 3, 4, 5, 7, 9, 10, 11, 12
+mes_wm_material_stock                  item_id                  bigint       n=  62 sample=1, 275, 272, 282, 274, 277, 276, 273, 200
+mes_wm_material_stock                  batch_id                 bigint       n=  62 sample=70, 2, 1, 69, 100, 94, 72, 75, 71, 73
+mes_wm_material_stock                  warehouse_id             bigint       n=  62 sample=5, 6, 1, 7, 8, 4, 999, 888
+mes_wm_material_stock                  location_id              bigint       n=  62 sample=BATCH_ITEM_1, BATCH_ITEM_2, TEST, PC, BATCH_ITEM_94, BATCH_ITEM_72, PC202600002, B-TEST, B-TEST-2, B-TEST-3
+mes_wm_material_stock                  area_id                  bigint       n=  62 sample=701, 702, 703
+mes_wm_material_stock                  vendor_id                bigint       n=  62 sample=711, 713, 712, 714
+mes_wm_material_stock                  tenant_id                bigint       n=  62 sample=721, 722, 724, 723, 725
+mes_wm_misc_issue                      source_doc_id            bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_misc_issue                      tenant_id                bigint       n=   8 sample=MI2026030201, MI2026030202, MIokj1zVk4I6, MI47CkggsQpp, MIwCYpUvm6gE, MIhtTkVvZZgk, AABBB, MISCI20260417001
+mes_wm_misc_issue_detail               issue_id                 bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_wm_misc_issue_detail               line_id                  bigint       n=   6 sample=3, 4, 5, 6, 7, 8
+mes_wm_misc_issue_detail               material_stock_id        bigint       n=   6 sample=4, 5, 6, 7, 8, 9
+mes_wm_misc_issue_detail               item_id                  bigint       n=   6 sample=14, 1
+mes_wm_misc_issue_detail               batch_id                 bigint       n=   6 sample=69, 94, 70
+mes_wm_misc_issue_detail               warehouse_id             bigint       n=   6 sample=1.00, 123.00, 321321.00
+mes_wm_misc_issue_detail               location_id              bigint       n=   6 sample=
+mes_wm_misc_issue_detail               area_id                  bigint       n=   6 sample=BATCH_ITEM_94, BATCH_ITEM_1
+mes_wm_misc_issue_detail               tenant_id                bigint       n=   6 sample=702, 701, 703
+mes_wm_misc_issue_line                 issue_id                 bigint       n=   7 sample=1, 4, 5, 6, 7, 8, 9
+mes_wm_misc_issue_line                 source_doc_line_id       bigint       n=   7 sample=1, 3, 4, 5, 6, 7, 8
+mes_wm_misc_issue_line                 material_stock_id        bigint       n=   7 sample=
+mes_wm_misc_issue_line                 item_id                  bigint       n=   7 sample=14, 1
+mes_wm_misc_issue_line                 batch_id                 bigint       n=   7 sample=69, 94, 70
+mes_wm_misc_issue_line                 warehouse_id             bigint       n=   7 sample=10.00, 1.00, 123.00, 321321.00
+mes_wm_misc_issue_line                 location_id              bigint       n=   7 sample=
+mes_wm_misc_issue_line                 area_id                  bigint       n=   7 sample=BATCH_ITEM_94, BATCH_ITEM_1
+mes_wm_misc_issue_line                 tenant_id                bigint       n=   7 sample=702, 701, 703
+mes_wm_misc_receipt                    source_doc_id            bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_wm_misc_receipt                    tenant_id                bigint       n=   6 sample=MRRvmpXXBVDn, MRbJ5HI6aOMZ, MRbWmZ1QXwg8, MRlD8OQUII96, MROO8b4vMA5x, MISCR20260417001
+mes_wm_misc_receipt_detail             receipt_id               bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_misc_receipt_detail             line_id                  bigint       n=   7 sample=1, 2, 3, 4, 5, 6
+mes_wm_misc_receipt_detail             item_id                  bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_misc_receipt_detail             warehouse_id             bigint       n=   7 sample=69, 94, 103
+mes_wm_misc_receipt_detail             location_id              bigint       n=   7 sample=123.00, 1.00, 321321321.00
+mes_wm_misc_receipt_detail             area_id                  bigint       n=   7 sample=123
+mes_wm_misc_receipt_detail             tenant_id                bigint       n=   7 sample=702
+mes_wm_misc_receipt_line               receipt_id               bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_misc_receipt_line               item_id                  bigint       n=   7 sample=1, 2, 3, 4, 5, 6
+mes_wm_misc_receipt_line               warehouse_id             bigint       n=   7 sample=69, 94, 103
+mes_wm_misc_receipt_line               location_id              bigint       n=   7 sample=123.000000, 1.000000, 321321321.000000
+mes_wm_misc_receipt_line               area_id                  bigint       n=   7 sample=123
+mes_wm_misc_receipt_line               tenant_id                bigint       n=   7 sample=702
+mes_wm_outsource_issue                 vendor_id                bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_outsource_issue                 work_order_id            bigint       n=   8 sample=WOS202603020001, WOS202603020002, WOSZsffkmATpU, WOScd6ieKFrT1, WOScrc6yVP8ir, OSI202603310002, OSI202603310003, OSI202603310004
+mes_wm_outsource_issue                 tenant_id                bigint       n=   8 sample=外协发料单001-修改, 外协发料单002, 呃呃, 123, abce, ABCED, 啊呃呃呃呃呃呃呃呃呃呃呃呃
+mes_wm_outsource_issue_detail          line_id                  bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_outsource_issue_detail          issue_id                 bigint       n=   8 sample=1, 3, 7
+mes_wm_outsource_issue_detail          material_stock_id        bigint       n=   8 sample=1, 5, 8
+mes_wm_outsource_issue_detail          item_id                  bigint       n=   8 sample=1, 17
+mes_wm_outsource_issue_detail          batch_id                 bigint       n=   8 sample=69, 70
+mes_wm_outsource_issue_detail          warehouse_id             bigint       n=   8 sample=100.00, 19.00, 500.00
+mes_wm_outsource_issue_detail          location_id              bigint       n=   8 sample=5
+mes_wm_outsource_issue_detail          area_id                  bigint       n=   8 sample=701, 702
+mes_wm_outsource_issue_detail          tenant_id                bigint       n=   8 sample=713, 711
+mes_wm_outsource_issue_line            issue_id                 bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_outsource_issue_line            material_stock_id        bigint       n=   7 sample=1, 3, 5, 6, 7, 8
+mes_wm_outsource_issue_line            item_id                  bigint       n=   7 sample=
+mes_wm_outsource_issue_line            batch_id                 bigint       n=   7 sample=69, 70
+mes_wm_outsource_issue_line            tenant_id                bigint       n=   7 sample=100.00, 123.00, 19.00, 1.00, 2.00
+mes_wm_outsource_receipt               work_order_id            bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_outsource_receipt               vendor_id                bigint       n=   7 sample=WXRK202603020001, WXRK202603020002, ORKmNEby6zRM, ORtzeQxWKcWI, ORmX7bwErplO, ORGo10IXNGtn, WWO
+mes_wm_outsource_receipt               tenant_id                bigint       n=   7 sample=外协加工入库单-测试（已修改）, 外协入库测试单（已修改）, 112, 呃呃呃, EEE, AAA, WWO
+mes_wm_outsource_receipt_detail        line_id                  bigint       n=   3 sample=1, 2, 3
+mes_wm_outsource_receipt_detail        receipt_id               bigint       n=   3 sample=1, 2, 3
+mes_wm_outsource_receipt_detail        item_id                  bigint       n=   3 sample=1, 4, 5
+mes_wm_outsource_receipt_detail        batch_id                 bigint       n=   3 sample=1, 69
+mes_wm_outsource_receipt_detail        warehouse_id             bigint       n=   3 sample=100.00, 123.00, 1.00
+mes_wm_outsource_receipt_detail        location_id              bigint       n=   3 sample=
+mes_wm_outsource_receipt_detail        area_id                  bigint       n=   3 sample=1, 702
+mes_wm_outsource_receipt_detail        tenant_id                bigint       n=   3 sample=1, 713
+mes_wm_outsource_receipt_line          receipt_id               bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_wm_outsource_receipt_line          item_id                  bigint       n=   6 sample=1, 4, 5, 6, 7, 3
+mes_wm_outsource_receipt_line          batch_id                 bigint       n=   6 sample=1, 69, 100
+mes_wm_outsource_receipt_line          iqc_id                   bigint       n=   6 sample=100.00, 1.00, 2.00
+mes_wm_outsource_receipt_line          tenant_id                bigint       n=   6 sample=10
+mes_wm_package                         parent_id                bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_package                         client_id                bigint       n=   7 sample=PKGl4uxKEk1ck, PKGwDvyH9z962, PKGSWNYn4Nbpm, PKG202603080007, PKG202603310001, PKG202604060001, PKG202604060002
+mes_wm_package                         size_unit_id             bigint       n=   7 sample=3, 2, 4
+mes_wm_package                         weight_unit_id           bigint       n=   7 sample=2026-03-10 00:00:00, 2026-03-04 00:00:00, 2026-03-18 00:00:00, 2026-03-20 00:00:00, 2026-03-12 00:00:00, 2026-04-14 00:00:00
+mes_wm_package                         inspector_user_id        bigint       n=   7 sample=
+mes_wm_package                         tenant_id                bigint       n=   7 sample=
+mes_wm_package_line                    package_id               bigint       n=   1 sample=1
+mes_wm_package_line                    material_stock_id        bigint       n=   1 sample=2
+mes_wm_package_line                    item_id                  bigint       n=   1 sample=
+mes_wm_package_line                    work_order_id            bigint       n=   1 sample=94
+mes_wm_package_line                    tenant_id                bigint       n=   1 sample=123.00
+mes_wm_product_issue                   workstation_id           bigint       n=  10 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_product_issue                   work_order_id            bigint       n=  10 sample=ISSUE-2026-0001, ISSUE-2026-0002, ISSUE-2026-0003, ISSUE-2026-0004, PIvQ6NaiEFGL, PIKp8EIm2d3A, PIF6HVZGjbf9, PI20260330000002, PI20260416000002, PI20260417000001
+mes_wm_product_issue                   task_id                  bigint       n=  10 sample=工单WO-001领料单, 工单WO-002领料单, 工单WO-003领料单, 工单WO-004领料单, 112, 132, 111, 0303, Test Picking, abc
+mes_wm_product_issue                   tenant_id                bigint       n=  10 sample=1, 2, 3, 4, 6
+mes_wm_product_issue_detail            issue_id                 bigint       n=  13 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_product_issue_detail            line_id                  bigint       n=  13 sample=3, 4, 5, 7, 8
+mes_wm_product_issue_detail            material_stock_id        bigint       n=  13 sample=6, 7, 8, 9, 10, 11, 13, 14
+mes_wm_product_issue_detail            item_id                  bigint       n=  13 sample=5001, 5002, 5003, 5004, 5005, 5006, 5007
+mes_wm_product_issue_detail            batch_id                 bigint       n=  13 sample=106, 107, 108, 109, 110, 70, 94
+mes_wm_product_issue_detail            warehouse_id             bigint       n=  13 sample=60.00, 90.00, 100.00, 80.00, 75.00, 12.00, 10.00, 1.00
+mes_wm_product_issue_detail            location_id              bigint       n=  13 sample=1006, 1007, 1008, 1009, 1010, 7
+mes_wm_product_issue_detail            area_id                  bigint       n=  13 sample=123, BATCH_ITEM_94
+mes_wm_product_issue_detail            tenant_id                bigint       n=  13 sample=1, 2, 702, 701
+mes_wm_product_issue_line              issue_id                 bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_product_issue_line              item_id                  bigint       n=  16 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_product_issue_line              batch_id                 bigint       n=  16 sample=101, 102, 103, 104, 105, 106, 107, 108, 109, 110
+mes_wm_product_issue_line              tenant_id                bigint       n=  16 sample=100.00, 50.00, 200.00, 150.00, 80.00, 120.00, 90.00, 60.00, 180.00, 75.00
+mes_wm_product_produce                 work_order_id            bigint       n=   5 sample=17, 18, 19, 20, 21
+mes_wm_product_produce                 feedback_id              bigint       n=   5 sample=1, 17
+mes_wm_product_produce                 task_id                  bigint       n=   5 sample=5, 6, 8, 12, 13
+mes_wm_product_produce                 workstation_id           bigint       n=   5 sample=4, 8, 7
+mes_wm_product_produce                 process_id               bigint       n=   5 sample=3, 8, 7
+mes_wm_product_produce                 tenant_id                bigint       n=   5 sample=3, 4, 1
+mes_wm_product_produce_detail          produce_id               bigint       n=   4 sample=1, 2, 3, 4
+mes_wm_product_produce_detail          line_id                  bigint       n=   4 sample=17, 18, 19
+mes_wm_product_produce_detail          item_id                  bigint       n=   4 sample=1, 2, 3, 4
+mes_wm_product_produce_detail          batch_id                 bigint       n=   4 sample=75
+mes_wm_product_produce_detail          warehouse_id             bigint       n=   4 sample=1.00
+mes_wm_product_produce_detail          location_id              bigint       n=   4 sample=3, 4
+mes_wm_product_produce_detail          area_id                  bigint       n=   4 sample=PC202600001, PC202600002
+mes_wm_product_produce_detail          tenant_id                bigint       n=   4 sample=703
+mes_wm_product_produce_line            produce_id               bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_product_produce_line            feedback_id              bigint       n=   7 sample=17, 18, 19, 20, 21
+mes_wm_product_produce_line            item_id                  bigint       n=   7 sample=5, 6, 8, 12, 13
+mes_wm_product_produce_line            batch_id                 bigint       n=   7 sample=75
+mes_wm_product_produce_line            tenant_id                bigint       n=   7 sample=1.00, 15.00, 18.00, 2.00
+mes_wm_product_receipt                 work_order_id            bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_product_receipt                 item_id                  bigint       n=   8 sample=PR202603010001, PR202603010002, PR202603010003, PRWZbODiG5NB, PRyhCGt9TzjO, PRF0d2CB7sar, PRoDYEoZY1BK, PR20260330000001
+mes_wm_product_receipt                 tenant_id                bigint       n=   8 sample=产品入库单-工单001, 产品入库单-工单002, 产品入库单-工单003, 3231, 呃呃呃, aaa, eee, AAAEEE
+mes_wm_product_receipt_detail          line_id                  bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_product_receipt_detail          receipt_id               bigint       n=   8 sample=3, 4, 5, 6, 10
+mes_wm_product_receipt_detail          item_id                  bigint       n=   8 sample=2, 3, 4, 8
+mes_wm_product_receipt_detail          batch_id                 bigint       n=   8 sample=2002, 2003, 69
+mes_wm_product_receipt_detail          warehouse_id             bigint       n=   8 sample=100.00, 150.00, 300.00, 123.00, 22.00, 1.00
+mes_wm_product_receipt_detail          location_id              bigint       n=   8 sample=3003, 3004, 3005
+mes_wm_product_receipt_detail          area_id                  bigint       n=   8 sample=4001, 4002, 4003, 702, 703
+mes_wm_product_receipt_detail          tenant_id                bigint       n=   8 sample=5001, 5002, 5003, 5004, 713, 714
+mes_wm_product_receipt_line            receipt_id               bigint       n=  12 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_product_receipt_line            item_id                  bigint       n=  12 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_product_receipt_line            material_stock_id        bigint       n=  12 sample=2001, 94, 2002, 2003, 69
+mes_wm_product_receipt_line            batch_id                 bigint       n=  12 sample=9
+mes_wm_product_receipt_line            tenant_id                bigint       n=  12 sample=100.00, 1.00, 200.00, 150.00, 300.00, 22.00, 123.00
+mes_wm_product_sales                   client_id                bigint       n=   9 sample=1, 2, 3, 99999, 100000, 100001, 100002, 100003, 100004
+mes_wm_product_sales                   notice_id                bigint       n=   9 sample=PS202603020001, PSe6mfNzWE7n, PSatKKrWp6sH, SALES-TEST-OQC, PS20260330000003, PS20260330000004, PS20260330000005, A0, PS-20260412-001
+mes_wm_product_sales                   tenant_id                bigint       n=   9 sample=更新后的销售出库单, 3313213, 呃呃呃, OQC出库单测试, AAAA, ABCD, ABC, A0, ä¸´æ—¶é”€å”®å‡ºåº“å•çš„æ¨¡æ‹Ÿæ•°æ®
+mes_wm_product_sales_detail            line_id                  bigint       n=   3 sample=1, 2, 3
+mes_wm_product_sales_detail            sales_id                 bigint       n=   3 sample=1, 2, 100002
+mes_wm_product_sales_detail            item_id                  bigint       n=   3 sample=2, 3, 100003
+mes_wm_product_sales_detail            material_stock_id        bigint       n=   3 sample=69
+mes_wm_product_sales_detail            batch_id                 bigint       n=   3 sample=1.000000, 123.000000, 736.000000
+mes_wm_product_sales_detail            warehouse_id             bigint       n=   3 sample=4
+mes_wm_product_sales_detail            location_id              bigint       n=   3 sample=1
+mes_wm_product_sales_detail            area_id                  bigint       n=   3 sample=TEST
+mes_wm_product_sales_detail            tenant_id                bigint       n=   3 sample=702
+mes_wm_product_sales_line              sales_id                 bigint       n=   6 sample=1, 2, 99999, 100000, 100001, 100002
+mes_wm_product_sales_line              notice_line_id           bigint       n=   6 sample=2, 3, 99999, 100001, 100002, 100003
+mes_wm_product_sales_line              item_id                  bigint       n=   6 sample=
+mes_wm_product_sales_line              batch_id                 bigint       n=   6 sample=69
+mes_wm_product_sales_line              material_stock_id        bigint       n=   6 sample=1.000000, 123.000000, 100.500000, 10.000000
+mes_wm_product_sales_line              oqc_id                   bigint       n=   6 sample=123, 1
+mes_wm_product_sales_line              tenant_id                bigint       n=   6 sample=TTTT
+mes_wm_return_issue                    work_order_id            bigint       n=   9 sample=1, 2, 3, 4, 5, 6, 7, 8, 9
+mes_wm_return_issue                    workstation_id           bigint       n=   9 sample=RI-20260228-001, RI-20260228-002, RI-20260228-003, RIpV4sw33lVy, RIKygemCMm69, RIOSAqiWoaXI, RITmmKTJb4p0, RI20260330000001, RI20260330000002
+mes_wm_return_issue                    tenant_id                bigint       n=   9 sample=生产退料单-草稿, 生产退料单-已完成, 生产退料单-已取消, XXX, 111, 12323, aaa, EEE, AAA
+mes_wm_return_issue_detail             issue_id                 bigint       n=   7 sample=1, 2, 3, 4, 5, 6, 7
+mes_wm_return_issue_detail             line_id                  bigint       n=   7 sample=1, 2, 5, 6, 9
+mes_wm_return_issue_detail             material_stock_id        bigint       n=   7 sample=1, 3, 4, 7, 8, 11
+mes_wm_return_issue_detail             item_id                  bigint       n=   7 sample=14
+mes_wm_return_issue_detail             batch_id                 bigint       n=   7 sample=101, 103, 104, 69, 70, 94
+mes_wm_return_issue_detail             warehouse_id             bigint       n=   7 sample=60.00, 40.00, 200.00, 30.00, 1.00
+mes_wm_return_issue_detail             location_id              bigint       n=   7 sample=7
+mes_wm_return_issue_detail             area_id                  bigint       n=   7 sample=BATCH-001, BATCH-002, 32321, BATCH_ITEM_94
+mes_wm_return_issue_detail             tenant_id                bigint       n=   7 sample=1, 2, 702, 703
+mes_wm_return_issue_line               issue_id                 bigint       n=  12 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_return_issue_line               material_stock_id        bigint       n=  12 sample=1, 2, 3, 4, 5, 6, 7, 8, 9
+mes_wm_return_issue_line               item_id                  bigint       n=  12 sample=9, 14
+mes_wm_return_issue_line               batch_id                 bigint       n=  12 sample=101, 102, 103, 104, 105, 70, 69, 94
+mes_wm_return_issue_line               rqc_id                   bigint       n=  12 sample=100.00, 50.00, 200.00, 30.00, 80.00, 5.00, 323.00, 1.00, 10.00, 123.00
+mes_wm_return_issue_line               tenant_id                bigint       n=  12 sample=7
+mes_wm_return_sales                    client_id                bigint       n=  11 sample=1, 2, 3, 4, 7, 8, 9, 10, 11, 12
+mes_wm_return_sales                    tenant_id                bigint       n=  11 sample=RS202603010001, RS202603010002, RS202603010003, RS20260301001, RS202603010099, RS202603010101, RS202603010102, RSZFhj41kGEq, RSrRH6uk69T5, RS20260330001
+mes_wm_return_sales_detail             return_id                bigint       n=   6 sample=1, 2, 3, 4, 5, 6
+mes_wm_return_sales_detail             line_id                  bigint       n=   6 sample=2, 3, 8, 10
+mes_wm_return_sales_detail             item_id                  bigint       n=   6 sample=3, 4, 5, 6, 9
+mes_wm_return_sales_detail             batch_id                 bigint       n=   6 sample=2002, 2003, 69
+mes_wm_return_sales_detail             warehouse_id             bigint       n=   6 sample=100.00, 150.00, 300.00, 123.00
+mes_wm_return_sales_detail             location_id              bigint       n=   6 sample=3003, 3004, 3005
+mes_wm_return_sales_detail             area_id                  bigint       n=   6 sample=
+mes_wm_return_sales_detail             tenant_id                bigint       n=   6 sample=4001, 4002, 4003, 701, 702
+mes_wm_return_sales_line               return_id                bigint       n=  11 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_return_sales_line               item_id                  bigint       n=  11 sample=1, 2, 3, 8, 9, 7, 10, 11, 12
+mes_wm_return_sales_line               batch_id                 bigint       n=  11 sample=2001, 2002, 2003, 69, 94, 70
+mes_wm_return_sales_line               rqc_id                   bigint       n=  11 sample=100.00, 50.00, 200.00, 150.00, 300.00, 10.00, 333.00, 1.00, 12.00
+mes_wm_return_sales_line               tenant_id                bigint       n=  11 sample=3001, 3002, 3003, 3004, 3005, 5
+mes_wm_return_vendor                   vendor_id                bigint       n=   9 sample=1, 2, 3, 4, 5, 6, 7, 8, 9
+mes_wm_return_vendor                   tenant_id                bigint       n=   9 sample=RTV-20260228-001, RTV-20260228-002, RTV-20260228-003, RVfZlUJ5mhRB, RV20260329000001, RV20260329000010, RV20260329000011, RV20260406000001, RV20260406000002
+mes_wm_return_vendor_detail            return_id                bigint       n=   8 sample=1, 2, 3, 4, 5, 6, 7, 8
+mes_wm_return_vendor_detail            line_id                  bigint       n=   8 sample=1, 2, 4, 5, 7
+mes_wm_return_vendor_detail            material_stock_id        bigint       n=   8 sample=1, 3, 4, 6, 2, 7, 9
+mes_wm_return_vendor_detail            item_id                  bigint       n=   8 sample=4
+mes_wm_return_vendor_detail            batch_id                 bigint       n=   8 sample=101, 103, 104, 69
+mes_wm_return_vendor_detail            warehouse_id             bigint       n=   8 sample=60.00, 40.00, 200.00, 30.00, 555.00, 1.00, 10.00
+mes_wm_return_vendor_detail            location_id              bigint       n=   8 sample=1
+mes_wm_return_vendor_detail            area_id                  bigint       n=   8 sample=BATCH-001, BATCH-002, TEST
+mes_wm_return_vendor_detail            tenant_id                bigint       n=   8 sample=1, 2, 702, 703
+mes_wm_return_vendor_line              return_id                bigint       n=  11 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_return_vendor_line              item_id                  bigint       n=  11 sample=1, 2, 3, 4, 5, 6, 7, 8, 9
+mes_wm_return_vendor_line              batch_id                 bigint       n=  11 sample=101, 69, 103, 104, 105, 102, 95
+mes_wm_return_vendor_line              tenant_id                bigint       n=  11 sample=100.00, 50.00, 200.00, 30.00, 80.00, 555.00, 10.00, 1.00, 12.00
+mes_wm_sales_notice                    client_id                bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_wm_sales_notice                    tenant_id                bigint       n=   5 sample=SN202603020001, SN202603020002, SN20260330000003, SN20260330000004, SN20260417000001
+mes_wm_sales_notice_line               notice_id                bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_wm_sales_notice_line               item_id                  bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_wm_sales_notice_line               batch_id                 bigint       n=   5 sample=69, 94, 103
+mes_wm_sales_notice_line               tenant_id                bigint       n=   5 sample=7, 8
+mes_wm_sn                              item_id                  bigint       n= 218 sample=151, 152, 153, 154, 155, 156, 157, 158, 159, 160
+mes_wm_sn                              work_order_id            bigint       n= 218 sample=1ebdb59516c54de98a911d943ee6e933, doc-snap-sn-20260415-a, doc-snap-sn-20260415-b, 6578fe3d133c4e3f800e2e3cb5f9873a
+mes_wm_sn                              tenant_id                bigint       n= 218 sample=SN20260305000151, SN20260305000152, SN20260305000153, SN20260305000154, SN20260305000155, SN20260305000156, SN20260305000157, SN20260305000158, SN20260305000159, SN20260305000160
+mes_wm_stock_taking_plan               tenant_id                bigint       n=   4 sample=1, 2, 3, 4
+mes_wm_stock_taking_plan_param         plan_id                  bigint       n=  18 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_stock_taking_plan_param         value_id                 bigint       n=  18 sample=1, 2, 3, 4
+mes_wm_stock_taking_plan_param         tenant_id                bigint       n=  18 sample=1, 4, 2, 103, 102, 104, 600, 107, 900
+mes_wm_stock_taking_task               user_id                  bigint       n=   9 sample=1, 2, 3, 4, 5, 6, 7, 13, 15
+mes_wm_stock_taking_task               plan_id                  bigint       n=   9 sample=TASK2026031001, TASK2026031101, TASK2026031201, TASK2026032001, TASK2026032101, TASK2026030501, TASK2026030601, STOHHQIEQp0q, PDT202604060001
+mes_wm_stock_taking_task               tenant_id                bigint       n=   9 sample=原料仓全盘任务, 成品仓全盘任务, 辅料仓全盘任务, 原料仓A区抽盘, 原料仓B区抽盘, 成品仓循环盘点-第1轮, 成品仓循环盘点-第2轮, 消息, 2026年第一季度全盘
+mes_wm_stock_taking_task_line          task_id                  bigint       n=  13 sample=1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+mes_wm_stock_taking_task_line          material_stock_id        bigint       n=  13 sample=13, 3, 15
+mes_wm_stock_taking_task_line          item_id                  bigint       n=  13 sample=4, 16, 79, 48, 5, 12
+mes_wm_stock_taking_task_line          batch_id                 bigint       n=  13 sample=69, 100, 75, 94
+mes_wm_stock_taking_task_line          warehouse_id             bigint       n=  13 sample=888, 999, 1, 4, 7
+mes_wm_stock_taking_task_line          location_id              bigint       n=  13 sample=
+mes_wm_stock_taking_task_line          area_id                  bigint       n=  13 sample=737.000000, 123.000000, 1.000000, 100.000000, 80.000000, 50.000000, 800.000000, 200.000000, 2.000000
+mes_wm_stock_taking_task_line          tenant_id                bigint       n=  13 sample=1.000000, 0.000000
+mes_wm_stock_taking_task_result        task_id                  bigint       n=   5 sample=1, 2, 3, 4, 5
+mes_wm_stock_taking_task_result        line_id                  bigint       n=   5 sample=13, 3
+mes_wm_stock_taking_task_result        material_stock_id        bigint       n=   5 sample=2, 3
+mes_wm_stock_taking_task_result        item_id                  bigint       n=   5 sample=
+mes_wm_stock_taking_task_result        batch_id                 bigint       n=   5 sample=69
+mes_wm_stock_taking_task_result        warehouse_id             bigint       n=   5 sample=
+mes_wm_stock_taking_task_result        location_id              bigint       n=   5 sample=
+mes_wm_stock_taking_task_result        area_id                  bigint       n=   5 sample=702
+mes_wm_stock_taking_task_result        tenant_id                bigint       n=   5 sample=713
+mes_wm_transaction                     biz_id                   bigint       n=  15 sample=1, 2, 3, 5, 6, 7, 8, 9, 10, 11
+mes_wm_transaction                     biz_line_id              bigint       n=  15 sample=1, 2, 3, 4
+mes_wm_transaction                     material_stock_id        bigint       n=  15 sample=114, 113, 111, 112, 122, 123, 110, 124, 115, 118
+mes_wm_transaction                     related_transaction_id   bigint       n=  15 sample=2, 4, 9001007, 20, 19, 21, 15, 7, 8, 100003
+mes_wm_transaction                     item_id                  bigint       n=  15 sample=MRbJ5HI6aOMZ, MI47CkggsQpp, MRlD8OQUII96, TRkOGr5InPcE, IR20260329000001, RV20260329000011, PI20260330000002, A0, MROO8b4vMA5x
+mes_wm_transaction                     batch_id                 bigint       n=  15 sample=3, 5, 9001107, 20, 4, 21, 19, 9, 14, 100002
+mes_wm_transaction                     warehouse_id             bigint       n=  15 sample=4, 9, 10, 11, 12, 14
+mes_wm_transaction                     location_id              bigint       n=  15 sample=5, 13
+mes_wm_transaction                     area_id                  bigint       n=  15 sample=69, 94, 72, 75
+mes_wm_transaction                     tenant_id                bigint       n=  15 sample=123.0000, -123.0000, -1.0000, 1.0000, -45.0000, -736.0000, 321321321.0000
+mes_wm_transfer                        tenant_id                bigint       n=   7 sample=9001001, 9001002, 9001003, 9001004, 9001005, 9001006, 9001007
+mes_wm_transfer_detail                 line_id                  bigint       n=   7 sample=9001201, 9001202, 9001203, 9001204, 9001205, 9001206, 9001207
+mes_wm_transfer_detail                 transfer_id              bigint       n=   7 sample=9001101, 9001103, 9001104, 9001106, 9001105, 9001107
+mes_wm_transfer_detail                 item_id                  bigint       n=   7 sample=9001001, 9001002, 9001005, 9001004, 9001006, 9001007
+mes_wm_transfer_detail                 batch_id                 bigint       n=   7 sample=20001, 20003, 69, 94
+mes_wm_transfer_detail                 to_warehouse_id          bigint       n=   7 sample=6.00, 4.00, 8.00, 10.00, 1.00
+mes_wm_transfer_detail                 to_location_id           bigint       n=   7 sample=
+mes_wm_transfer_detail                 to_area_id               bigint       n=   7 sample=30003, 30004, 702, 701
+mes_wm_transfer_detail                 tenant_id                bigint       n=   7 sample=31003, 31004, 713, 712
+mes_wm_transfer_line                   transfer_id              bigint       n=   8 sample=9001101, 9001102, 9001103, 9001104, 9001105, 9001106, 9001107, 9001108
+mes_wm_transfer_line                   material_stock_id        bigint       n=   8 sample=9001001, 9001002, 9001005, 9001006, 9001004, 9001007, 9001003
+mes_wm_transfer_line                   item_id                  bigint       n=   8 sample=10001, 10002, 10003, 1
+mes_wm_transfer_line                   batch_id                 bigint       n=   8 sample=20001, 20002, 20003, 69, 94, 70
+mes_wm_transfer_line                   from_warehouse_id        bigint       n=   8 sample=10.00, 5.00, 8.00, 1.00, 500.00
+mes_wm_transfer_line                   from_location_id         bigint       n=   8 sample=5
+mes_wm_transfer_line                   from_area_id             bigint       n=   8 sample=30001, 30002, 702, 701
+mes_wm_transfer_line                   tenant_id                bigint       n=   8 sample=31001, 31002, 713, 711
+mes_wm_warehouse                       charge_user_id           bigint       n=   3 sample=702, 701, 703
+mes_wm_warehouse                       tenant_id                bigint       n=   3 sample=WH-FIN, WH-RAW, WIP_VIRTUAL_WAREHOUSE
+mes_wm_warehouse_area                  location_id              bigint       n=   6 sample=721, 722, 726, 723, 724, 725
+mes_wm_warehouse_area                  tenant_id                bigint       n=   6 sample=AREA-RAW-A-01, AREA-RAW-A-02, AREA-RAW-A-03, AREA-RAW-B-01, AREA-FIN-A-01, WIP_VIRTUAL_AREA
+mes_wm_warehouse_location              warehouse_id             bigint       n=   5 sample=711, 712, 715, 713, 714
+mes_wm_warehouse_location              tenant_id                bigint       n=   5 sample=LOC-RAW-A, LOC-RAW-B, LOC-RAW-C, LOC-FIN-A, WIP_VIRTUAL_LOCATION
