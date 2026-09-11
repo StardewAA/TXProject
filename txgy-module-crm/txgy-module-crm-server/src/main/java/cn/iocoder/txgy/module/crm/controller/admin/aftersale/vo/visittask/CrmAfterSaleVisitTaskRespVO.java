@@ -30,4 +30,10 @@ public class CrmAfterSaleVisitTaskRespVO extends CrmAfterSaleVisitTaskDO {
     @Schema(description = "是否已完成回访记录登记")
     private Boolean hasRecord;
 
+    @Schema(description = "关联回访记录编号（任务完成后自动生成）", example = "1")
+    private Long recordId;
+
+    @Schema(description = "关联回访记录状态：1=待填写 2=已填写", example = "1")
+    private Integer recordStatus;
+
 }

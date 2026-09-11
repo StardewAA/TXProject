@@ -14,11 +14,18 @@ import {
 } from '#/api/crm/after-sale/task';
 import { $t } from '#/locales';
 
+import RecordForm from '../record/modules/form.vue';
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+// 复用回访记录表单：任务完成后自动生成的记录，可直接打开填写
+const [RecordFormModal, recordFormModalApi] = useVbenModal({
+  connectedComponent: RecordForm,
   destroyOnClose: true,
 });
 
@@ -52,7 +59,7 @@ async function handleDelete(row: CrmAfterSaleVisitTaskApi.VisitTask) {
   }
 }
 
-/** 完成回访任务 */
+/** 完成回访任务（后端会自动生成一条「待填写」回访记录） */
 async function handleFinish(row: CrmAfterSaleVisitTaskApi.VisitTask) {
   const hideLoading = message.loading({
     content: '正在完成回访任务...',
@@ -60,11 +67,20 @@ async function handleFinish(row: CrmAfterSaleVisitTaskApi.VisitTask) {
   });
   try {
     await finishAfterSaleVisitTask(row.id!);
-    message.success('已完成回访任务');
+    message.success('已完成回访任务，并自动生成待填写的回访记录');
     handleRefresh();
   } finally {
     hideLoading();
   }
+}
+
+/** 填写回访记录（直接打开任务自动生成的记录，无需手动新建） */
+function handleFillRecord(row: CrmAfterSaleVisitTaskApi.VisitTask) {
+  if (!row.recordId) {
+    message.warning('该任务尚未生成回访记录，请先完成回访任务');
+    return;
+  }
+  recordFormModalApi.setData({ id: row.recordId }).open();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -101,6 +117,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
+    <RecordFormModal @success="handleRefresh" />
     <Grid table-title="回访任务列表">
       <template #toolbar-tools>
         <TableAction
@@ -115,8 +132,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
           ]"
         />
       </template>
-      <template #hasRecord="{ row }">
-        <span>{{ row.hasRecord ? '是' : '否' }}</span>
+      <template #recordStatus="{ row }">
+        <span v-if="row.recordStatus === 1" style="color: #fa8c16">待填写</span>
+        <span v-else-if="row.recordStatus === 2">已填写</span>
+        <span v-else>—</span>
       </template>
       <template #actions="{ row }">
         <TableAction
@@ -134,6 +153,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['crm:after-sale-visit-task:update'],
               ifShow: row.status !== 2,
               onClick: handleFinish.bind(null, row),
+            },
+            {
+              label: '填写回访记录',
+              type: 'link',
+              auth: ['crm:after-sale-visit-record:update'],
+              ifShow: row.recordId && row.recordStatus === 1,
+              onClick: handleFillRecord.bind(null, row),
             },
             {
               label: $t('common.delete'),
