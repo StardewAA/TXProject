@@ -155,7 +155,6 @@ async function openDetail(row: QualificationApi.Qualification) {
 /* ===== 延续申报 ===== */
 const renewOpen = ref(false);
 const renewSaving = ref(false);
-const renewFormRef = ref();
 const renewForm = reactive<{ dueDate?: string; qualificationId: number; remark?: string; version: number }>({
   qualificationId: 0,
   version: 0,

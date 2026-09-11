@@ -68,7 +68,7 @@ export namespace SafetyPermitApi {
     requiredCertSubType?: null | string;
     matchedCertId?: null | number;
     failReason?: null | string;
-    checkedAt?: null | string;
+    checkedAt?: null | number | string;
   }
 
   /** #6 人员风险（不自动拒绝，仅提示留痕） */
@@ -77,21 +77,21 @@ export namespace SafetyPermitApi {
     /** 字典 person_risk_flag（NORMAL/ABNORMAL/FREQUENT） */
     personRiskFlag?: null | string;
     jobChangeCount12m?: number;
-    jobChangeWindowStart?: null | string;
+    jobChangeWindowStart?: null | number | string;
     abnormal?: boolean;
-    personRiskEvaluatedAt?: null | string;
+    personRiskEvaluatedAt?: null | number | string;
   }
 
   /** #7 项目关键岗位变更超限 */
   export interface KeyPostChanges {
     projectId?: number;
     windowDays?: number;
-    windowStart?: null | string;
+    windowStart?: null | number | string;
     anyExceeded?: boolean;
     items?: Array<{
       changeCount?: number;
       exceeded?: boolean;
-      lastChangeDate?: null | string;
+      lastChangeDate?: null | number | string;
       personIds?: number[];
       postCode?: string;
       postLabel?: string;
