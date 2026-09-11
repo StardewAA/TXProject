@@ -20,6 +20,7 @@ defineProps<{ product: Product }>()
         <span>{{ Number(product.stock || 0) > 0 ? `库存 ${product.stock}` : '不可购买' }}</span>
       </div>
       <small>{{ product.shopName || '店铺信息以详情为准' }}</small>
+      <div class="product-card__footer"><span>查看规格与详情</span><b aria-hidden="true">↗</b></div>
     </div>
   </RouterLink>
 </template>

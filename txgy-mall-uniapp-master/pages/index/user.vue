@@ -33,7 +33,7 @@
             class="quick-item"
             @tap="openAction(item)"
           >
-            <view class="quick-icon">{{ item.icon }}</view>
+            <s-menu-icon class="quick-icon" :label="item.title" />
             <text class="quick-label">{{ item.title }}</text>
           </view>
         </view>

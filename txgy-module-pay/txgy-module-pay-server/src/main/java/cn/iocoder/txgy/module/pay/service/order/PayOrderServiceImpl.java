@@ -221,14 +221,28 @@ public class PayOrderServiceImpl implements PayOrderService {
                         id, orderExtension.getId());
                 throw exception(PAY_ORDER_EXTENSION_IS_PAID);
             }
+            // 已明确关闭的支付尝试不再查询渠道；新支付仍需核实其他未完成的尝试。
+            if (PayOrderStatusEnum.isClosed(orderExtension.getStatus())) {
+                return;
+            }
             // 情况二：调用三方接口，查询支付单状态，是不是已支付
             PayClient<?> payClient = channelService.getPayClient(orderExtension.getChannelId());
             if (payClient == null) {
                 log.error("[validateOrderCanSubmit][渠道编号({}) 找不到对应的支付客户端]", orderExtension.getChannelId());
-                return;
+                throw exception(PAY_ORDER_PREVIOUS_ATTEMPT_UNCONFIRMED);
             }
-            PayOrderRespDTO respDTO = payClient.getOrder(orderExtension.getNo());
-            if (respDTO != null && PayOrderStatusEnum.isSuccess(respDTO.getStatus())) {
+            PayOrderRespDTO respDTO;
+            try {
+                respDTO = payClient.getOrder(orderExtension.getNo());
+            } catch (Exception e) {
+                log.warn("[validateOrderActuallyPaid][order({}) extension({}) 暂时无法查询历史支付结果]",
+                        id, orderExtension.getId(), e);
+                throw exception(PAY_ORDER_PREVIOUS_ATTEMPT_UNCONFIRMED);
+            }
+            if (respDTO == null) {
+                throw exception(PAY_ORDER_PREVIOUS_ATTEMPT_UNCONFIRMED);
+            }
+            if (PayOrderStatusEnum.isSuccess(respDTO.getStatus())) {
                 log.warn("[validateOrderCanSubmit][order({}) 的 PayOrderRespDTO({}) 已支付，可能是回调延迟]",
                         id, toJsonString(respDTO));
                 throw exception(PAY_ORDER_EXTENSION_IS_PAID);
