@@ -78,4 +78,21 @@ public class WmsItemSkuDO extends BaseDO {
      */
     private BigDecimal sellingPrice;
 
+    /**
+     * 最小包装说明，例如：主剂16kg+固化剂4kg
+     */
+    private String packageSpec;
+    /**
+     * 箱装数量，例如：1组/箱
+     */
+    private String boxSpec;
+    /**
+     * 托盘装载量，例如：20组/托盘（400kg）
+     */
+    private String palletSpec;
+    /**
+     * 最小包装单位，例如：组
+     */
+    private String minPackageUnit;
+
 }
