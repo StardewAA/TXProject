@@ -9,9 +9,11 @@
  *   ② 延续申报台账  GET /bidding/qualification/apply/page + 审批通过 POST /approve / 退回 POST /reject
  *   ③ 材料完备性    GET /bidding/enterprise-material/completeness（字段逐字对齐 RespVO）
  *
- * 字典口径（契约 §0.5，禁止自造中文枚举）：qual_status / qual_serial / apply_type / apply_status /
- *   review_result(资质达标语义) **尚未登记字典** → 标签一律 dictLabel/dictTag 优先、缺字典回退原始 code；
- *   material_result / material_status / material_category 已注册，走字典标签与颜色。
+ * 字典口径（契约 §0.5，禁止自造中文枚举）：一律 dictLabel/dictTag 优先、缺字典回落原始 code。
+ *   已注册：qual_status、qual_apply_type、qual_apply_status、qual_serial（2026-09-20 新增）、
+ *   material_category / material_result / material_status、safety_permit_status、safety_risk_flag、risk_level。
+ *   未注册：qual_grade（国标表110 等级无 code 口径，候选取自 standard/options，展示回落原码）。
+ *   注意：字典类型名以 bidding_dict_data 为准 —— 申报类型/状态为 qual_apply_type / qual_apply_status（曾误写 apply_*）。
  * 时间口径：LocalDate（issueDate/validTo/submitDate/dueDate/newValidTo）为 'yyyy-MM-dd' 字符串；
  *   仅 latestReview.reviewedAt 是 LocalDateTime（epoch 毫秒）→ 过 fmtDateTime。 */
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
@@ -1045,13 +1047,16 @@ onMounted(() => {
       </div>
     </div>
 
-    <a-alert type="warning" show-icon class="mb-3">
-      <template #message>资质域码表尚未登记字典，列表中序列/状态/申报类型等显示英文 code</template>
+    <a-alert type="info" show-icon class="mb-3">
+      <template #message>字典口径：状态 / 申报类型 / 序列已注册字典，等级按标准库候选与原码展示</template>
       <template #description>
         <div>
-          <code>bidding_dict_data</code> 现无 <code>qual_status / qual_serial / qual_grade / apply_type / apply_status</code>
-          任何一类（<code>?types=qual_status</code> 会抛 1060108008），故本页对这些字段<strong>不做前端硬编码翻译</strong>：
-          字典登记后同页面自动显示中文名与标签色（dictLabel/dictTag 优先）。
+          已注册（中文名 + 标签色）：<code>qual_status</code> 台账状态、<code>qual_apply_type</code> / <code>qual_apply_status</code> 申报类型与状态、
+          <code>qual_serial</code> 序列、<code>material_result / material_status / material_category</code>、
+          <code>safety_permit_status</code>、<code>safety_risk_flag</code>、<code>risk_level</code>。
+          仍缺 <code>qual_grade</code>：其值为国标表110 的等级（特级/一级/二级…），无稳定 code 口径，
+          故不登记字典，候选取自 <code>/bidding/qualification/standard/options</code>、展示回落原码。
+          本页一律字典优先、缺字典回落 code（<strong>不硬编码中文枚举</strong>）。
         </div>
         <div style="margin-top: 6px">
           已接入：台账列表/详情、延续申报与审批、资质标准登记与台账（序列/类别/等级候选取自 /standard/options）、
@@ -1244,10 +1249,10 @@ onMounted(() => {
               @change="(p: any) => { applyQuery.pageNo = p.current; applyQuery.pageSize = p.pageSize; void loadApplies(); }"
             >
               <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'applyType'">{{ textOf('apply_type', record.applyType) }}</template>
+                <template v-if="column.key === 'applyType'">{{ textOf('qual_apply_type', record.applyType) }}</template>
                 <template v-else-if="column.key === 'status'">
-                  <a-tag :color="tagOf('apply_status', record.status).color">
-                    {{ tagOf('apply_status', record.status).label }}
+                  <a-tag :color="tagOf('qual_apply_status', record.status).color">
+                    {{ tagOf('qual_apply_status', record.status).label }}
                   </a-tag>
                 </template>
                 <template v-else-if="column.key === 'submitDate'">{{ record.submitDate ? fmtDate(record.submitDate) : '—' }}</template>
