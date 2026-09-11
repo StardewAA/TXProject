@@ -85,6 +85,15 @@ public class WmsItemController {
         return success(true);
     }
 
+    @PutMapping("/update-status")
+    @Operation(summary = "更新商品状态")
+    @PreAuthorize("@ss.hasPermission('wms:item:update')")
+    public CommonResult<Boolean> updateItemStatus(@RequestParam("id") Long id,
+                                                   @RequestParam("status") Integer status) {
+        itemService.updateItemStatus(id, status);
+        return success(true);
+    }
+
     @GetMapping("/get")
     @Operation(summary = "获得商品")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")

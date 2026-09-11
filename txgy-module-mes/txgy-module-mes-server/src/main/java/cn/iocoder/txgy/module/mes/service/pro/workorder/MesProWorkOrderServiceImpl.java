@@ -4,10 +4,13 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemBatchConfigDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.feedback.MesProFeedbackDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
@@ -15,6 +18,7 @@ import cn.iocoder.txgy.module.mes.enums.wm.BarcodeBizTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemBatchConfigService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
+import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.wm.barcode.MesWmBarcodeService;
 import jakarta.annotation.Resource;
@@ -58,6 +62,10 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     private MesWmBarcodeService barcodeService;
     @Resource
     private MesProTaskService taskService;
+    @Resource
+    private MesProRouteProductService routeProductService;
+    @Resource
+    private MesProFeedbackMapper feedbackMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -161,8 +169,10 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     @Override
     public MesProWorkOrderDO validateWorkOrderConfirmed(Long id) {
         MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
-        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
-            throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
+        // v2.2 状态机：报工前提改为"已下发/生产中"（方法名保留以兼容既有调用方）
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_ISSUED);
         }
         return workOrder;
     }
@@ -182,11 +192,43 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void finishWorkOrder(Long id) {
-        // 1. 校验存在 + 只有已确认状态才能完成
+    public void issueWorkOrder(Long id) {
+        // 1.1 校验存在 + 只有已确认状态才能下发
         MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
         if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
+            throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
+        }
+        // 1.2 校验产品已绑定工艺路线（没有路线，下发后无法拆分任务）
+        if (routeProductService.getRouteProductByItemId(workOrder.getProductId()) == null) {
+            throw exception(PRO_WORK_ORDER_ROUTE_REQUIRED);
+        }
+
+        // 2. 更新状态为已下发，记录下发人/时间（v2.2 状态机）
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                .setIssueBy(SecurityFrameworkUtils.getLoginUserId())
+                .setIssueTime(LocalDateTime.now()));
+    }
+
+    @Override
+    public void markInProductionIfIssued(Long id) {
+        // 非"已下发"状态不处理，天然幂等（重复报工无副作用）
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())) {
+            return;
+        }
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setStatus(MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void finishWorkOrder(Long id) {
+        // 1. 校验存在 + 已确认/已下发/生产中状态才能完成（v2.2 状态机）
+        MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
+        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())
+                && ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus())) {
             throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
         }
 
@@ -207,10 +249,21 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelWorkOrder(Long id) {
-        // 1. 校验存在 + 只有已确认状态才能取消
+        // 1.1 校验存在 + 可取消状态（v2.2 状态机决策①）
         MesProWorkOrderDO workOrder = validateWorkOrderExists(id);
-        if (ObjUtil.notEqual(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
-            throw exception(PRO_WORK_ORDER_NOT_CONFIRMED);
+        if (ObjUtil.equal(workOrder.getStatus(), MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
+            // 已确认：随时可取消（现状规则）
+        } else if (ObjUtil.equal(workOrder.getStatus(), MesProWorkOrderStatusEnum.ISSUED.getStatus())) {
+            // 已下发：仅限下发后 24 小时内，且不能有报工记录
+            if (workOrder.getIssueTime() == null
+                    || workOrder.getIssueTime().plusHours(24).isBefore(LocalDateTime.now())) {
+                throw exception(PRO_WORK_ORDER_CANCEL_TIMEOUT);
+            }
+            if (feedbackMapper.selectCount(MesProFeedbackDO::getWorkOrderId, id) > 0) {
+                throw exception(PRO_WORK_ORDER_HAS_FEEDBACK);
+            }
+        } else {
+            throw exception(PRO_WORK_ORDER_CANCEL_NOT_ALLOWED);
         }
 
         // 2. 级联取消所有关联任务
