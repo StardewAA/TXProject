@@ -17,6 +17,12 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @Data
 public class AfterSaleBaseVO {
 
+    @Schema(description = "售后责任店铺编号；0 表示平台自营", example = "1")
+    private Long shopId;
+
+    @Schema(description = "售后责任店铺名称", example = "测试1111")
+    private String shopName;
+
     @Schema(description = "售后流水号", requiredMode = Schema.RequiredMode.REQUIRED, example = "202211190847450020500077")
     @NotNull(message = "售后流水号不能为空")
     private String no;

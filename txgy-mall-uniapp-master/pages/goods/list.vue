@@ -59,6 +59,7 @@
           class=""
           size="lg"
           :data="item"
+          :show-shop-name="true"
           :topRadius="10"
           :bottomRadius="10"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
@@ -76,6 +77,7 @@
             class="goods-md-box"
             size="md"
             :data="item"
+            :show-shop-name="true"
             :topRadius="10"
             :bottomRadius="10"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
@@ -95,6 +97,7 @@
             :topRadius="10"
             :bottomRadius="10"
             :data="item"
+            :show-shop-name="true"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
             @getHeight="mountMasonry($event, 'right')"
           >
@@ -118,7 +121,7 @@
 </template>
 
 <script setup>
-  import { reactive, ref } from 'vue';
+  import { reactive } from 'vue';
   import { onLoad, onReachBottom } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
   import { concat } from 'lodash-es';
@@ -128,7 +131,7 @@
   import { appendSettlementProduct } from '@/sheep/hooks/useGoods';
 
   const sys_navBar = sheep.$platform.navbar;
-  const emits = defineEmits(['close', 'change']);
+  const userStore = sheep.$store('user');
 
   const state = reactive({
     pagination: {
@@ -268,42 +271,65 @@
 
   async function getList() {
     state.loadStatus = 'loading';
-    const { code, data } = await SpuApi.getSpuPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-      sortField: state.currentSort,
-      sortAsc: state.currentOrder,
-      categoryId: state.categoryId,
-      keyword: state.keyword,
-    });
-    if (code !== 0) {
-      return;
-    }
-    // 拼接结算信息（营销）
-    await OrderApi.getSettlementProduct(data.list.map((item) => item.id).join(',')).then((res) => {
-      if (res.code !== 0) {
+    try {
+      const response = await SpuApi.getSpuPage({
+        pageNo: state.pagination.pageNo,
+        pageSize: state.pagination.pageSize,
+        sortField: state.currentSort,
+        sortAsc: state.currentOrder,
+        categoryId: state.categoryId,
+        keyword: state.keyword,
+      });
+      // request 在网络异常时会返回 false，不能直接解构，否则会导致页面白屏。
+      if (!response || response.code !== 0) {
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
         return;
       }
-      appendSettlementProduct(data.list, res.data);
-    });
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
-    mountMasonry();
+      const pageData = response.data || {};
+      const pageList = Array.isArray(pageData.list) ? pageData.list.filter((item) => item?.id) : [];
+
+      // 营销结算信息仅对已登录用户请求。匿名接口在部分旧服务中会触发用户信息调用，
+      // 商品列表本身不应因该附加请求失败而中断。
+      if (userStore.isLogin && pageList.length) {
+        try {
+          const settlement = await OrderApi.getSettlementProduct(
+            pageList.map((item) => item.id).join(','),
+          );
+          if (settlement?.code === 0) {
+            appendSettlementProduct(pageList, settlement.data);
+          }
+        } catch (error) {
+          console.warn('加载商品营销价格失败，使用基础商品信息', error);
+        }
+      }
+
+      state.pagination.list = concat(state.pagination.list, pageList);
+      const total = Number(pageData.total);
+      state.pagination.total = Number.isFinite(total) && total >= 0 ? total : state.pagination.list.length;
+      state.loadStatus =
+        state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      if (pageList.length) {
+        mountMasonry();
+      }
+    } catch (error) {
+      console.warn('加载商品列表失败', error);
+      state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+    }
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (state.loadStatus === 'noMore' || state.loadStatus === 'loading') {
       return;
     }
     state.pagination.pageNo++;
     getList(state.currentSort, state.currentOrder);
   }
 
-  onLoad((options) => {
-    state.categoryId = options.categoryId;
-    state.keyword = options.keyword;
+  onLoad((options = {}) => {
+    const categoryId = Number(options.categoryId);
+    state.categoryId = Number.isFinite(categoryId) && categoryId > 0 ? categoryId : 0;
+    state.keyword = options.keyword || '';
     getList(state.currentSort, state.currentOrder);
   });
 

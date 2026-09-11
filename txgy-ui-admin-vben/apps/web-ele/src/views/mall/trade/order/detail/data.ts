@@ -8,12 +8,28 @@ import { fenToYuan, formatDateTime } from '@vben/utils';
 
 import { DictTag } from '#/components/dict-tag';
 
+/** 交易接口金额字段为分，详情表格统一转换一次为元。 */
+function formatFenAmount(value: unknown): string {
+  const fen = typeof value === 'number' ? value : Number(value ?? 0);
+  return `${fenToYuan(Number.isFinite(fen) ? fen : 0)} 元`;
+}
+
 /** 订单基础信息 schema */
 export function useOrderInfoSchema(): DescriptionItemSchema[] {
   return [
     {
       field: 'no',
       label: '订单号',
+    },
+    {
+      field: 'shopName',
+      label: '店铺',
+      render: (val, data) => {
+        const name = String(val ?? '').trim();
+        if (name) return name;
+        const shopId = Number(data?.shopId ?? 0);
+        return shopId > 0 ? `店铺 ${shopId}` : '平台自营';
+      },
     },
     {
       field: 'user.nickname',
@@ -189,7 +205,7 @@ export function useProductColumns(): VxeTableGridOptions['columns'] {
       field: 'price',
       title: '商品原价',
       width: 150,
-      formatter: 'formatFenToYuanAmount',
+      formatter: ({ cellValue }) => formatFenAmount(cellValue),
     },
     {
       field: 'count',
@@ -200,7 +216,7 @@ export function useProductColumns(): VxeTableGridOptions['columns'] {
       field: 'payPrice',
       title: '合计',
       width: 150,
-      formatter: 'formatFenToYuanAmount',
+      formatter: ({ cellValue }) => formatFenAmount(cellValue),
     },
     {
       field: 'afterSaleStatus',

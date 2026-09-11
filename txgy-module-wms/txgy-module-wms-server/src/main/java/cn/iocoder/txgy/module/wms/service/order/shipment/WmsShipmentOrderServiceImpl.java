@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderMappe
 import cn.iocoder.txgy.module.wms.enums.order.WmsOrderTypeEnum;
 import cn.iocoder.txgy.module.wms.enums.order.WmsOrderStatusEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
@@ -57,6 +58,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     @Resource
     private WmsInventoryService inventoryService;
     @Resource
+    private WmsItemSkuService itemSkuService;
     private BpmProcessInstanceApi processInstanceApi;
 
     @Override
@@ -128,6 +130,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         // 1.2 校验出库单明细存在
         List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
                 .validateShipmentOrderDetailListExists(order.getId());
+        itemSkuService.validateItemSkuListItemEnabled(details.stream()
+                .map(WmsShipmentOrderDetailDO::getSkuId).toList());
 
         // 2. 完成出库单
         if (shipmentOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(),

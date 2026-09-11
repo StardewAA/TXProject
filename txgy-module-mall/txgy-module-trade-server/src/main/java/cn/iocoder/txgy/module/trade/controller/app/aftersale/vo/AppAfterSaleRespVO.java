@@ -11,6 +11,12 @@ import java.util.List;
 @Data
 public class AppAfterSaleRespVO {
 
+    @Schema(description = "售后责任店铺编号；0 表示平台自营", example = "1")
+    private Long shopId;
+
+    @Schema(description = "售后责任店铺名称", example = "测试1111")
+    private String shopName;
+
     @Schema(description = "售后编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 

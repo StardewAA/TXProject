@@ -5,13 +5,20 @@ import type { WmsItemSkuApi } from '#/api/wms/md/item/sku';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
+import { getDictLabel } from '@vben/hooks';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Card, message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteItem, exportItem, getItemPage } from '#/api/wms/md/item';
+import {
+  deleteItem,
+  exportItem,
+  getItemPage,
+  updateItemStatus,
+} from '#/api/wms/md/item';
 import { $t } from '#/locales';
 import { WmsItemCategoryTree } from '#/views/wms/md/item/category/components';
 import {
@@ -53,6 +60,7 @@ function buildItemSkuRows(items: WmsItemApi.Item[]) {
       unit: item.unit,
       brandId: item.brandId,
       brandName: item.brandName,
+      status: item.status ?? CommonStatusEnum.ENABLE,
     }));
   });
 }
@@ -82,6 +90,23 @@ async function handleDelete(row: ItemSkuRow) {
   }
 }
 
+/** 更新商品状态 */
+async function handleStatusChange(
+  newStatus: number,
+  row: ItemSkuRow,
+): Promise<boolean | undefined> {
+  try {
+    await confirm(
+      `确认要将"${row.itemName}"商品切换为【${getDictLabel(DICT_TYPE.COMMON_STATUS, newStatus)}】吗？`,
+    );
+  } catch {
+    return false;
+  }
+  await updateItemStatus(row.itemId!, newStatus);
+  message.success($t('ui.actionMessage.operationSuccess'));
+  return true;
+}
+
 /** 导出商品 */
 async function handleExport() {
   const data = await exportItem(await gridApi.formApi.getValues());
@@ -104,7 +129,7 @@ function handleSpanMethod({
   rowIndex: number;
 }) {
   const field = column.field || column.property;
-  if (!['actions', 'itemInfo'].includes(field || '')) {
+  if (!['actions', 'itemInfo', 'status'].includes(field || '')) {
     return { colspan: 1, rowspan: 1 };
   }
   const row = currentRows.value[rowIndex];
@@ -130,7 +155,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     schema: useGridFormSchema(),
   },
   gridOptions: {
-    columns: useGridColumns(),
+    columns: useGridColumns(handleStatusChange),
     height: 'auto',
     keepSource: true,
     showOverflow: false,

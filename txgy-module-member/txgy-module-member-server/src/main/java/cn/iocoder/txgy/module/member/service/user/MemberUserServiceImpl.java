@@ -94,6 +94,23 @@ public class MemberUserServiceImpl implements MemberUserService {
         return createUser(null, nickname, avtar, registerIp, terminal);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MemberUserDO registerUser(String mobile, String password, String nickname,
+                                     String registerIp, Integer terminal) {
+        validateMobileUnique(null, mobile);
+        MemberUserDO user = new MemberUserDO();
+        user.setMobile(mobile);
+        user.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        user.setPassword(encodePassword(password));
+        user.setRegisterIp(registerIp).setRegisterTerminal(terminal);
+        user.setNickname(StrUtil.isBlank(nickname) ? "用户" + RandomUtil.randomNumbers(6) : nickname);
+        user.setAvatar("");
+        memberUserMapper.insert(user);
+        registerUserCreateMessage(user);
+        return user;
+    }
+
     private MemberUserDO createUser(String mobile, String nickname, String avtar,
                                     String registerIp, Integer terminal) {
         // 生成密码
@@ -112,6 +129,11 @@ public class MemberUserServiceImpl implements MemberUserService {
         memberUserMapper.insert(user);
 
         // 发送 MQ 消息：用户创建
+        registerUserCreateMessage(user);
+        return user;
+    }
+
+    private void registerUserCreateMessage(MemberUserDO user) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 
             @Override
@@ -120,7 +142,6 @@ public class MemberUserServiceImpl implements MemberUserService {
             }
 
         });
-        return user;
     }
 
     @Override

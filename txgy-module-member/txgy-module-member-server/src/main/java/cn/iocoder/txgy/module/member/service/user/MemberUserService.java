@@ -59,6 +59,12 @@ public interface MemberUserService {
     MemberUserDO createUser(String nickname, String avtar, String registerIp, Integer terminal);
 
     /**
+     * 使用手机号和密码注册用户。租户编号由当前租户上下文决定，不从请求参数接收。
+     */
+    MemberUserDO registerUser(@Mobile String mobile, String password, String nickname,
+                              String registerIp, Integer terminal);
+
+    /**
      * 更新用户的最后登陆信息
      *
      * @param id      用户编号

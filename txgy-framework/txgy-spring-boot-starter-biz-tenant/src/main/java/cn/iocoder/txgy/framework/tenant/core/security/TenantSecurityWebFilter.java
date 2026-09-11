@@ -38,9 +38,10 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
     /** 无租户个人用户使用的保留租户编号。 */
     private static final Long PERSONAL_TENANT_ID = 0L;
 
-    /** 登录、注册是公开认证入口，不能使用浏览器残留的旧会话校验租户。 */
-    private static final String AUTH_LOGIN_PATH = "/admin-api/system/auth/login";
-    private static final String AUTH_REGISTER_PATH = "/admin-api/system/auth/register";
+    /** 登录、注册是公开认证入口，不能使用浏览器残留的旧会话校验租户。
+     * 注意：网关转发后会剥离 /admin-api 前缀，微服务内部实际路径为 /system/auth/login 和 /system/auth/register。 */
+    private static final String AUTH_LOGIN_PATH = "/system/auth/login";
+    private static final String AUTH_REGISTER_PATH = "/system/auth/register";
 
     private final TenantProperties tenantProperties;
 

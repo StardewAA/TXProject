@@ -67,6 +67,7 @@ services:
 
   nacos:
     image: nacos/nacos-server:v3.0.3
+    restart: unless-stopped
     environment:
       MODE: standalone
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}

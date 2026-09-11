@@ -31,4 +31,28 @@ public interface MesProProjectMapper extends BaseMapperX<MesProProjectDO> {
         return selectOne(MesProProjectDO::getCode, code);
     }
 
+    /**
+     * 按来源类型 + 来源单据号查询项目（销售订单 → 项目幂等创建使用）
+     *
+     * @param sourceType      来源类型
+     * @param orderSourceCode 来源单据号
+     * @return 项目
+     */
+    default MesProProjectDO selectBySourceTypeAndOrderSourceCode(Integer sourceType, String orderSourceCode) {
+        return selectOne(new LambdaQueryWrapperX<MesProProjectDO>()
+                .eq(MesProProjectDO::getSourceType, sourceType)
+                .eq(MesProProjectDO::getOrderSourceCode, orderSourceCode));
+    }
+
+    /**
+     * 按编码前缀模糊查询项目列表（PRJ 编码生成时计算当日最大序号使用）
+     *
+     * @param codePrefix 编码前缀
+     * @return 项目列表
+     */
+    default java.util.List<MesProProjectDO> selectListByCodeLike(String codePrefix) {
+        return selectList(new LambdaQueryWrapperX<MesProProjectDO>()
+                .likeRight(MesProProjectDO::getCode, codePrefix));
+    }
+
 }

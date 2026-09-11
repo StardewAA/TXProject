@@ -128,12 +128,18 @@
   }
   .ss-order-card-warp {
     padding: 20rpx;
+    border-radius: 28rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+    border: 1rpx solid rgba(148, 163, 184, 0.12);
+    box-shadow: var(--ui-Surface-shadow-soft);
 
     .img-box {
       width: 164rpx;
       height: 164rpx;
-      border-radius: 10rpx;
+      border-radius: 20rpx;
       overflow: hidden;
+      background: #f8fafc;
 
       .order-img {
         width: 164rpx;
@@ -156,14 +162,15 @@
 
     .title-text {
       font-size: 28rpx;
-      font-weight: 500;
+      font-weight: 600;
       line-height: 40rpx;
+      color: #1f2937;
     }
 
     .spec-text {
       font-size: 24rpx;
       font-weight: 400;
-      color: $dark-9;
+      color: #94a3b8;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -176,13 +183,14 @@
       font-size: 24rpx;
       font-weight: 500;
       font-family: OPPOSANS;
+      color: #ef4444;
     }
 
     .total-text {
       font-size: 24rpx;
       font-weight: 400;
       line-height: 24rpx;
-      color: $dark-9;
+      color: #94a3b8;
       margin-left: 8rpx;
     }
   }

@@ -6,7 +6,7 @@ import { h } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { erpPriceInputFormatter, formatDateTime } from '@vben/utils';
+import { fenToYuan, formatDateTime } from '@vben/utils';
 
 import { Tag } from 'antdv-next';
 
@@ -105,13 +105,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'payPrice',
       title: '支付金额',
       minWidth: 120,
-      formatter: 'formatAmount2',
+      formatter: 'formatFenToYuanAmount',
     },
     {
       field: 'refundPrice',
       title: '退款金额',
       minWidth: 120,
-      formatter: 'formatAmount2',
+      formatter: 'formatFenToYuanAmount',
     },
     {
       field: 'merchantRefundId',
@@ -204,7 +204,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
         h(
           Tag,
           { color: 'success' },
-          () => `￥${erpPriceInputFormatter(val || 0)}`,
+          () => `￥${fenToYuan(val || 0)}`,
         ),
     },
     {
@@ -214,7 +214,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
         h(
           Tag,
           { color: 'danger' },
-          () => `￥${erpPriceInputFormatter(val || 0)}`,
+          () => `￥${fenToYuan(val || 0)}`,
         ),
     },
     {

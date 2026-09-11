@@ -138,6 +138,14 @@ public class MesProWorkOrderDO extends BaseDO {
      */
     private Integer status;
     /**
+     * 下发人
+     */
+    private Long issueBy;
+    /**
+     * 下发时间
+     */
+    private LocalDateTime issueTime;
+    /**
      * 备注
      */
     private String remark;

@@ -89,7 +89,17 @@
   // computed 解决父子组件双向数据同步
   const state = computed({
     get() {
-      return new Proxy(props.modelValue, {
+      // 接口或页面恢复过程中可能暂时得到 null；Proxy 不能代理 null/undefined，
+      // 这里统一使用空对象，避免结算页初始化直接白屏。
+      const raw =
+        props.modelValue && typeof props.modelValue === 'object' ? props.modelValue : {};
+      const source = {
+        ...raw,
+        addressInfo:
+          raw.addressInfo && typeof raw.addressInfo === 'object' ? raw.addressInfo : {},
+        pickUpInfo: raw.pickUpInfo && typeof raw.pickUpInfo === 'object' ? raw.pickUpInfo : {},
+      };
+      return new Proxy(source, {
         set(obj, name, val) {
           emits('update:modelValue', {
             ...obj,

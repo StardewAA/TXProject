@@ -17,6 +17,8 @@ import {
   Tabs,
 } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'TrainingEnterpriseReport' });
 
 const activeKey = ref('archive');
@@ -61,16 +63,11 @@ function handleProjectArchive() {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #0891b2 0%, #0891b2dc 44%, #111827 115%)"
-      >
-        <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 94（企业管理员，严格企业数据隔离）</div>
-        <h1 class="m-0 text-2xl font-semibold md:text-3xl">企业培训报表与档案</h1>
-        <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-          本企业全员档案、学徒技师人才等级分布、多维报表导出、项目培训归档、任务督办与员工基础档案维护。
-        </p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 94（企业管理员，严格企业数据隔离）"
+        title="企业培训报表与档案"
+        description="本企业全员档案、学徒技师人才等级分布、多维报表导出、项目培训归档、任务督办与员工基础档案维护。"
+      />
 
       <Row :gutter="16">
         <Col :span="6"><Card :bordered="false"><Statistic title="本企业员工数" :value="0" /></Card></Col>

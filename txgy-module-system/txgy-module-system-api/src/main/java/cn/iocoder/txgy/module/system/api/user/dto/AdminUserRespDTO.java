@@ -22,6 +22,9 @@ public class AdminUserRespDTO implements VO {
     @Schema(description = "部门编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Long deptId;
 
+    @Schema(description = "部门名称", example = "IT 部")
+    private String deptName;
+
     @Schema(description = "岗位编号数组", requiredMode = Schema.RequiredMode.REQUIRED, example = "[1, 3]")
     private Set<Long> postIds;
 
