@@ -20,12 +20,11 @@
 ============================================================================ -->
 
 <script lang="ts" setup>
-import { SubjectApi } from '#/api/bidding/subject';
-
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag } from 'ant-design-vue';
 
+import { SubjectApi } from '#/api/bidding/subject';
 import {
   authorizeSubject,
   fetchSubjectAuthEligibility,
@@ -47,7 +46,7 @@ const rows = ref<SubjectApi.AuthRow[]>([]);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = ref(10);
-const filters = reactive<{ subjectType?: string; authStatus?: string; tenantName?: string }>({});
+const filters = reactive<{ authStatus?: string; subjectType?: string; tenantName?: string }>({});
 
 /* ============ 时间格式 ============
  * 契约：04-全链路 §0 通用约定——时间字段为 epoch 毫秒数字，前端统一格式化。
@@ -86,7 +85,7 @@ function onSearch() { pageNo.value = 1; load(); }
 const authOpen = ref(false);
 const authSaving = ref(false);
 const tenantOptions = ref<Array<{ label: string; value: number | string }>>([]);
-const authForm = reactive<{ tenantId?: number | string; subjectType: string; remark?: string }>({ subjectType: 'BIDDER' });
+const authForm = reactive<{ remark?: string; subjectType: string; tenantId?: number | string; }>({ subjectType: 'BIDDER' });
 async function loadTenants() {
   if (tenantOptions.value.length) return;
   try {
@@ -172,6 +171,32 @@ async function openEligibility(row: SubjectApi.AuthRow) {
 onMounted(load);
 </script>
 
+<script lang="ts">
+/* 页面基础工具组件（Spin 包裹 + 键值信息格）：与法规/契约无涉，仅 UI 组装 */
+import { defineComponent, h } from 'vue';
+
+import { Spin } from 'ant-design-vue';
+
+const SpinWrap = defineComponent({
+  name: 'SpinWrap',
+  props: { loading: Boolean },
+  setup(props, { slots }) {
+    return () => h(Spin, { spinning: props.loading }, () => slots.default?.());
+  },
+});
+const InfoCell = defineComponent({
+  name: 'InfoCell',
+  props: { label: String, value: { type: String, default: '' } },
+  setup(props) {
+    return () => h('div', { class: 'rounded border border-gray-100 bg-gray-50 p-2' }, [
+      h('div', { class: 'text-gray-400' }, props.label),
+      h('div', { class: 'font-medium text-gray-700' }, props.value || '—'),
+    ]);
+  },
+});
+export default { components: { SpinWrap, InfoCell } };
+</script>
+
 <template>
   <div class="bid-ind ind-page">
         <div class="ind-stripes"></div>
@@ -180,9 +205,11 @@ onMounted(load);
         <div class="ind-title">平台授权管理 · 企业主体资格 <span class="ind-mark">SUBJECT</span></div>
         <!-- 页头说明（业务口径）：资格具备→授权可参与；不具备→不授权不可参与；租户/权限/具体项目评审均另有其主 -->
 
-        <div class="ind-sub">平台按“资格具备与否”给已入驻企业（基座租户）授权投标人/招标人主体身份：资格具备 → 授权，可投标/招标；
+        <div class="ind-sub">
+平台按“资格具备与否”给已入驻企业（基座租户）授权投标人/招标人主体身份：资格具备 → 授权，可投标/招标；
 资格不具备 → 不授权，发布/投标被资格门拒绝。企业是否具备资格由招标文件/资格预审与专家评审认定（本页只落台账与授权开关）；
-租户=基座管、菜单权限=系统角色授权管、经办账号=企业自管。</div>
+租户=基座管、菜单权限=系统角色授权管、经办账号=企业自管。
+</div>
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openAuthorize">＋ 授权主体</Button>
@@ -190,8 +217,7 @@ onMounted(load);
       </div>
     </div>
     <div class="ind-body">
-
-    <!-- 筛选台：主体类型 / 授权状态 / 企业名；授权状态按“已授权 / 未授权（已撤销）”展示 -->
+<!-- 筛选台：主体类型 / 授权状态 / 企业名；授权状态按“已授权 / 未授权（已撤销）”展示 -->
     <div class="ind-filterbar">
       <Select v-model:value="filters.subjectType" placeholder="主体类型" allow-clear style="width: 130px">
         <Select.Option value="BIDDER">投标人</Select.Option>
@@ -272,11 +298,10 @@ onMounted(load);
         <div class="text-right"><Space><Button @click="authOpen = false">取消</Button><Button type="primary" :loading="authSaving" @click="doAuthorize">授权</Button></Space></div>
       </div>
     </Modal>
-
-    </div>
+</div>
 
     <!-- 资格抽屉：单家企业的参与资格核验（授权 ∧ 档案完善） -->
-    <Drawer v-model:open="elOpen" :title="(elRow?.tenantName || '企业') + ' 资格状态'" :width="520">
+    <Drawer v-model:open="elOpen" :title="`${elRow?.tenantName || '企业' } 资格状态`" :width="520">
       <SpinWrap :loading="elLoading">
         <div v-if="elData" class="space-y-2 text-xs">
           <div class="rounded-md border p-3" :class="elData.eligible ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'">
@@ -300,28 +325,3 @@ onMounted(load);
     </Drawer>
   </div>
 </template>
-
-<script lang="ts">
-/* 页面基础工具组件（Spin 包裹 + 键值信息格）：与法规/契约无涉，仅 UI 组装 */
-import { defineComponent, h } from 'vue';
-import { Spin } from 'ant-design-vue';
-
-const SpinWrap = defineComponent({
-  name: 'SpinWrap',
-  props: { loading: Boolean },
-  setup(props, { slots }) {
-    return () => h(Spin, { spinning: props.loading }, () => slots.default?.());
-  },
-});
-const InfoCell = defineComponent({
-  name: 'InfoCell',
-  props: { label: String, value: { type: String, default: '' } },
-  setup(props) {
-    return () => h('div', { class: 'rounded border border-gray-100 bg-gray-50 p-2' }, [
-      h('div', { class: 'text-gray-400' }, props.label),
-      h('div', { class: 'font-medium text-gray-700' }, props.value || '—'),
-    ]);
-  },
-});
-export default { components: { SpinWrap, InfoCell } };
-</script>

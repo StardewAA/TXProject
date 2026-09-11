@@ -3,12 +3,12 @@
      业务（10号令 第5条 变更依法公告 + VO数据规范）：原公告指向（项目/标段）、变更内容与变更后时间。
      标题/正文在第1、3节已填，保存时自动并入 NOTICE_NAME/NOTICE_CONTENT；本表不重复。 -->
 <script setup lang="ts">
+import type { NoticeApi } from '#/api/bidding/notice';
+
 import { computed } from 'vue';
 
 import PayloadCell from '../PayloadCell.vue';
 import { buildRowMap, type RowSpec, type TableGroup } from '../typeFieldRow';
-
-import type { NoticeApi } from '#/api/bidding/notice';
 
 const props = defineProps<{
   typeMeta?: NoticeApi.NoticeTypeMeta | null;

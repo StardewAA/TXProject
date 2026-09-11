@@ -6,7 +6,7 @@ import { h, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Modal, message, Tag } from 'ant-design-vue';
+import { message, Modal, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -28,7 +28,7 @@ function refresh() {
   gridApi.query();
 }
 
-const detailRef = ref<{ openSource: (s: CrawlExternalApi.SourceItem) => void } | null>(null);
+const detailRef = ref<null | { openSource: (s: CrawlExternalApi.SourceItem) => void }>(null);
 
 async function runAction(label: string, fn: () => Promise<unknown>) {
   const hideLoading = message.loading({ content: label + '处理中…', duration: 0 });

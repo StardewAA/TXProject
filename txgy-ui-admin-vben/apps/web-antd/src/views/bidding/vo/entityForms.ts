@@ -23,7 +23,7 @@ export interface EntityDef {
   mainMap: Record<string, string>;
   groups: VoGroup[];
   /** 上级归属：本实体字段码 ← 上级实体 */
-  parent?: { self: string; from: EntityKey; parentField: string };
+  parent?: { from: EntityKey; parentField: string; self: string; };
 }
 
 const projectGroups: VoGroup[] = [
@@ -151,7 +151,7 @@ export const ENTITY_DEFS: Record<EntityKey, EntityDef> = {
 };
 
 /** 由后端记录还原表单字段（规范码 → 值）：先取 fields（数据集全量），再用主列覆盖同名规范码 */
-export function recordToFields(def: EntityDef, record: Record<string, unknown> | undefined | null): Record<string, string> {
+export function recordToFields(def: EntityDef, record: null | Record<string, unknown> | undefined): Record<string, string> {
   if (!record) return {};
   const out: Record<string, string> = {};
   const fields = record.fields as Record<string, unknown> | undefined;

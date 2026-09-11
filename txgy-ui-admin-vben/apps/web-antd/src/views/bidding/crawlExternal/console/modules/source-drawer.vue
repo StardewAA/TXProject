@@ -101,7 +101,7 @@ async function runSource(row: CrawlExternalApi.SourceItem) {
   try {
     const r = await runCrawlSource(row.sourceCode);
     const cats =
-      ((r as { categories?: Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }> })
+      ((r as { categories?: Array<{ error?: string; failed?: number; fetched?: number; ingested?: number; name?: string; }> })
         .categories || []);
     const lines = cats.map(
       (c) =>

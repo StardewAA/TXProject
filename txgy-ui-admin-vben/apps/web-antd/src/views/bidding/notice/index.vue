@@ -23,27 +23,27 @@
     台账总览（状态分布，数据取自 notice/page 各状态 total，不伪造）+ 台账表 + 分节表单，避免平铺堆叠。
 ============================================================================ -->
 <script lang="ts" setup>
-import { NoticeApi } from '#/api/bidding/notice';
-
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Table, Tag, Upload } from 'ant-design-vue';
-import { uploadAttachment } from '../vo/attachmentUpload';
-import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
-import PdfPreview from '../vo/PdfPreview.vue';
-import { stageItems, type AttachmentRecord } from '../vo/attachmentStages';
-import { PLATFORM_MAINTAINED_CODES } from '../vo/voFieldControl';
+
+import { NoticeApi } from '#/api/bidding/notice';
+import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
-import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
-import NoticeHtmlView from './NoticeHtmlView.vue';
-import TenderNoticeTable from './tables/TenderNoticeTable.vue';
-import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
-import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
-import ResultPublicityTable from './tables/ResultPublicityTable.vue';
 
-import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, unpublishNotice, updateNotice } from '#/api/bidding/notice';
+import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
+import { type AttachmentRecord, stageItems } from '../vo/attachmentStages';
+import { uploadAttachment } from '../vo/attachmentUpload';
+import PdfPreview from '../vo/PdfPreview.vue';
+import { PLATFORM_MAINTAINED_CODES } from '../vo/voFieldControl';
+import NoticeHtmlView from './NoticeHtmlView.vue';
+import { NOTICE_PAYLOAD_FIELDS } from './payloadFieldMeta';
+import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
+import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
+import ResultPublicityTable from './tables/ResultPublicityTable.vue';
+import TenderNoticeTable from './tables/TenderNoticeTable.vue';
 const createMessage = message;
 /* portal 前台模式：经 /portal/bidding/publish 挂载时展示前台返回栏（组件同源复用：管理端菜单与门户企业发布共用一套发布工作台） */
 const route = useRoute();
@@ -128,7 +128,7 @@ const rows = ref<NoticeApi.Row[]>([]);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = ref(10);
-const filters = reactive<{ status?: string; noticeType?: string; internalFlag?: boolean }>({});
+const filters = reactive<{ internalFlag?: boolean; noticeType?: string; status?: string; }>({});
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 const fmtT = (v?: number | string): string => {
@@ -152,8 +152,8 @@ const typeName = (row: NoticeApi.Row) => {
  * 后端 page 无按状态汇总出参，这里以 pageSize=1 对每个状态取 total（4+1 次轻量查询，
  * 企业自营公告量小，开销可忽略；KPI 数字为后端真实计数，不做前端凑数）。
  * 依据：GET /bidding/notice/page 契约（NoticeApi.PageParams.status 过滤，见 api/bidding/notice）。 */
-const kpis = ref<Array<{ status?: string; text: string; note: string; color: string; num: number }>>([]);
-const KPI_BASE: Array<{ status?: string; text: string; note: string; color: string }> = [
+const kpis = ref<Array<{ color: string; note: string; num: number; status?: string; text: string; }>>([]);
+const KPI_BASE: Array<{ color: string; note: string; status?: string; text: string; }> = [
   { text: '全部公告', note: '本企业全部公告/公示', color: 'k-gray' },
   { text: '草稿', note: '起草中，可编辑后发布', color: 'k-blue', status: 'DRAFT' },
   { text: '已发布', note: '对外公示中，可撤下', color: 'k-green', status: 'PUBLISHED' },
@@ -383,7 +383,7 @@ function saveEditor() {
      口径纠正：VO 的「公开范围」是披露范围（政务公开=只报政务平台、不对外公开），不是"谁填报"，
      故不再按 pub 跳过，只跳过平台注入字段（平台码/时间戳/统一交易标识码/附件关联标识号——
      附件关联标识号由附件面板生成）。依据：VO数据规范"必填=是" + meta/types required。 */
-  const checklist: { key: string; label: string; required: boolean; pub: string }[] =
+  const checklist: { key: string; label: string; pub: string; required: boolean; }[] =
     (payloadMeta.value.fields).map((f) => ({
       key: f.key, label: f.label, required: f.required, pub: f.pub,
     }));
@@ -676,7 +676,8 @@ onMounted(() => { load(); void fetchKpiCounts(); });
 
         <!-- 第二节：项目关联 -->
         <div class="nw-form-sect">
-          <div class="nw-sect-h"><span class="nw-sect-no">2</span>业务链关联
+          <div class="nw-sect-h">
+<span class="nw-sect-no">2</span>业务链关联
             <span class="nw-sect-sub">先项目 → 再招标项目 → 再标段，公告对“标段”发布：招标项目编号/标段编号/标段数量由上游带出，不手抄</span>
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -748,7 +749,9 @@ onMounted(() => { load(); void fetchKpiCounts(); });
                   size="small"
                   type="link"
                   @click="pdfPreviewOpen = true"
-                >内嵌预览</Button>
+                >
+内嵌预览
+</Button>
               </div>
               <PdfPreview
                 v-model:open="pdfPreviewOpen"
@@ -764,7 +767,8 @@ onMounted(() => { load(); void fetchKpiCounts(); });
         <!-- 第四节：权威数据集字段 —— 四张类型专属表（招标公告/变更公告/中标候选人公示/中标结果公示），按所选类型渲染对应表。
              title/content（第1/3节）自动并入权威名称/正文键；政务报送参数（平台码/时间戳）不在此收集。 -->
         <div class="nw-form-sect">
-          <div class="nw-sect-h"><span class="nw-sect-no">4</span>权威数据集字段
+          <div class="nw-sect-h">
+<span class="nw-sect-no">4</span>权威数据集字段
             <span class="nw-sect-sub">当前类型：{{ typeLabel }} · 按类型专属表分节填报（必填=VO数据规范“必填=是”/meta/types）</span>
           </div>
           <div>
@@ -778,13 +782,14 @@ onMounted(() => { load(); void fetchKpiCounts(); });
 
         <!-- 第五节：公告附件（AttachmentSetVO 附件集结构，按本类型公告的采集项 AttachmentItemVO 分组，可加多个） -->
         <div class="nw-form-sect">
-          <div class="nw-sect-h"><span class="nw-sect-no">5</span>公告附件
+          <div class="nw-sect-h">
+<span class="nw-sect-no">5</span>公告附件
             <span class="nw-sect-sub">附件集结构 AttachmentSetVO · 采集项 AttachmentItemVO；同一采集项可加多个，保存时并入 ATTACHMENT_CODE（半角分号分隔）</span>
           </div>
           <AttachmentsPanel
             v-model="noticeAttachments"
             :stage="noticeStage"
-            :title="typeLabel + '附件'"
+            :title="`${typeLabel }附件`"
             directory="bidding/notice"
           />
         </div>

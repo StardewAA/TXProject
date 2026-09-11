@@ -1,4 +1,4 @@
-export function fmtDt(v?: string | number | null): string {
+export function fmtDt(v?: null | number | string): string {
   if (v == null || v === '') return '—';
   let d: Date;
   if (typeof v === 'number') d = new Date(v);
@@ -9,7 +9,7 @@ export function fmtDt(v?: string | number | null): string {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
 
-export type TagOf = { text: string; color: string };
+export type TagOf = { color: string; text: string; };
 
 /** 采集任务状态 */
 export const TASK_STATUS_MAP: Record<string, TagOf> = {
@@ -43,7 +43,7 @@ export const JOB_STATUS_OPTIONS = Object.keys(JOB_STATUS_MAP).map((k) => ({ labe
 export const TRIGGER_OPTIONS = Object.keys(TRIGGER_MAP).map((k) => ({ label: TRIGGER_MAP[k]!.text, value: k }));
 
 /** 标签取色（undefined → null 显示 —） */
-export function tagOf(map: Record<string, TagOf>, v?: string): TagOf | null {
+export function tagOf(map: Record<string, TagOf>, v?: string): null | TagOf {
   const c = v ? map[v] : undefined;
   return c ? { text: c.text, color: c.color } : null;
 }

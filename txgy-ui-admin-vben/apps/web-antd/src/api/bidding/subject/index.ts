@@ -41,7 +41,7 @@ export namespace SubjectApi {
     tenantName?: string;
     subjectType?: string;
     authorized?: boolean;
-    authStatus?: 'ENABLED' | 'DISABLED' | 'NOT_AUTHORIZED';
+    authStatus?: 'DISABLED' | 'ENABLED' | 'NOT_AUTHORIZED';
     profileComplete?: boolean;
     eligible?: boolean;
     reasonCodes?: string[];
@@ -57,7 +57,7 @@ export namespace SubjectApi {
     tenantId?: number | string;
     tenantName?: string;
     subjectType?: string;
-    authStatus?: 'ENABLED' | 'DISABLED';
+    authStatus?: 'DISABLED' | 'ENABLED';
     profileExists?: boolean;
     profileComplete?: boolean;
     missingRequiredCodes?: string[];
@@ -89,7 +89,7 @@ export namespace SubjectApi {
     subjectType?: string;
     userId?: number | string;
     userNickname?: string;
-    userRole?: 'OPERATOR' | 'CONTACT';
+    userRole?: 'CONTACT' | 'OPERATOR';
     enabled?: boolean;
     remark?: string;
     createTime?: number;

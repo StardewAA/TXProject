@@ -15,30 +15,29 @@ import type { NoticeExternalApi } from '#/api/bidding/noticeExternal';
 
 import { computed, ref, watch } from 'vue';
 
+import { useVbenModal } from '@vben/common-ui';
+
 import { Button, message, Modal, Select, Tag } from 'ant-design-vue';
 
 import { fetchCrawlSourcePage, fetchCrawlTaskPage, getCrawlTask, retryCrawlTask } from '#/api/bidding/crawlExternal';
 import { getManagePage } from '#/api/bidding/noticeExternal';
 
-import { useVbenModal } from '@vben/common-ui';
-
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
+import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
 
-import { TASK_STATUS_MAP, fmtDt, tagOf } from '../../shared';
-
-const emit = defineEmits<{ (e: 'pick', t: CrawlExternalApi.TaskItem): void }>();
-
 const props = withDefaults(defineProps<{
-  /** 任务行对象（列表行即可，组件按 id 回读明细；为 null 显示空态） */
-  task?: CrawlExternalApi.TaskItem | null;
-  /** 是否内嵌展示同批任务（有 jobId 时），默认 true */
-  showSameBatch?: boolean;
   /** 是否允许 FAILED 死信重试按钮，默认 true */
   allowRetry?: boolean;
+  /** 是否内嵌展示同批任务（有 jobId 时），默认 true */
+  showSameBatch?: boolean;
+  /** 任务行对象（列表行即可，组件按 id 回读明细；为 null 显示空态） */
+  task?: CrawlExternalApi.TaskItem | null;
 }>(), { task: null, showSameBatch: true, allowRetry: true });
+
+const emit = defineEmits<{ (e: 'pick', t: CrawlExternalApi.TaskItem): void }>();
 
 const loading = ref(false);
 const srcLoading = ref(false);
@@ -141,11 +140,11 @@ async function handleRetry() {
 
 /* ===== 全屏预览：下拉切换数据源 + 大 Modal 完整查看 ===== */
 const previewOpen = ref(false);
-type BlobKey = 'payload' | 'apiConfig' | 'taskFields' | 'sourceFields';
+type BlobKey = 'apiConfig' | 'payload' | 'sourceFields' | 'taskFields';
 const previewKey = ref<BlobKey>('payload');
 /** 可选数据源（只列有内容的） */
 const previewOptions = computed(() => {
-  const opts: Array<{ value: BlobKey; label: string }> = [];
+  const opts: Array<{ label: string; value: BlobKey; }> = [];
   if (t.value?.payloadJson) opts.push({ value: 'payload', label: '原始载荷 payload_json' });
   if (isApi.value && src.value?.apiConfigJson) opts.push({ value: 'apiConfig', label: 'API 配置 api_config_json' });
   opts.push({ value: 'taskFields', label: '任务全字段(JSON)' });
@@ -166,13 +165,13 @@ function openPreview(k: BlobKey) {
 }
 
 /* ===== 段6 产出自查：任务 SUCCESS → 按 sourceCode+origUrl 在 notice-external 管理列表定位本条公告 ===== */
-const productState = ref<'idle' | 'loading' | 'none' | 'found' | 'error'>('idle');
+const productState = ref<'error' | 'found' | 'idle' | 'loading' | 'none'>('idle');
 const productErr = ref('');
 const productRows = ref<NoticeExternalApi.ManageItem[]>([]);
 const productLoading = ref(false);
 
 /** URL 归一：去首尾空白（站点外壳页 hash/query 差异由后端入库时已规整，前端只做基本 trim 兜底） */
-const normUrl = (u?: string | null): string => (u || '').trim();
+const normUrl = (u?: null | string): string => (u || '').trim();
 
 /** 本条任务对应的外部公告候选：payload 快照 URL / 任务行 url 任一同源即认（origUrl 即采集详情 URL，后端 ingest 同值写入） */
 async function findProduct() {
@@ -256,7 +255,7 @@ function apiCfgLines(): string[] {
 }
 
 /** payloadJson → 结构化快照（05 契约：{title,url,date,category,rawFileUrl?,rawSha256?,rawSize?}） */
-const payloadObj = computed<{ title?: string; url?: string; date?: string; category?: string; rawFileUrl?: string; rawSha256?: string; rawSize?: number }>(() => {
+const payloadObj = computed<{ category?: string; date?: string; rawFileUrl?: string; rawSha256?: string; rawSize?: number; title?: string; url?: string; }>(() => {
   try {
     const raw = t.value?.payloadJson;
     if (!raw) return {};
@@ -315,9 +314,10 @@ function fmtBytes(n: number | undefined): string {
       <div class="ind-panel-b">
         <div v-if="srcLoading" class="tc-hint">源信息回读中…</div>
         <template v-else>
-          <div class="tc-kv"><span class="tc-k">获取方式</span><span class="tc-v">{{ isApi ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ' · ' + src.sourceName : '' }}）</span></span></div>
+          <div class="tc-kv"><span class="tc-k">获取方式</span><span class="tc-v">{{ isApi ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ` · ${ src.sourceName}` : '' }}）</span></span></div>
           <div v-if="!isApi" class="tc-kv"><span class="tc-k">下载器/通道</span><span class="tc-v mono">{{ t.channelCode || src?.channelCode || '—' }}</span></div>
-          <div v-else class="tc-kv"><span class="tc-k">接口配置</span>
+          <div v-else class="tc-kv">
+<span class="tc-k">接口配置</span>
             <span class="tc-v mono">
               <span v-if="apiCfgLines().length" class="tc-apitxt"><span v-for="(ln, i) in apiCfgLines()" :key="i" class="d-block">{{ ln }}</span></span>
               <span v-else>{{ src?.apiConfigJson || '（API 源未配置 api_config_json）' }}</span>
@@ -330,7 +330,8 @@ function fmtBytes(n: number | undefined): string {
 
     <!-- 段2：原始载荷 payload_json（05 契约：{title,url,date,category,rawFileUrl?,rawSha256?,rawSize?}——全文已文件化，payload 只存引用） -->
     <div class="ind-panel tc-step">
-      <div class="ind-panel-h tc-step-t">③ 原始载荷（payload_json）
+      <div class="ind-panel-h tc-step-t">
+③ 原始载荷（payload_json）
         <a class="tc-act" href="#" @click.prevent="openPreview('payload')">全屏 ▾</a>
         <a class="tc-act" href="#" @click.prevent="copyText(t.payloadJson)">复制</a>
       </div>
@@ -376,7 +377,8 @@ function fmtBytes(n: number | undefined): string {
 
     <!-- 段6：落库 / 产出（notice-external 成品定位：SUCCESS 时按 sourceCode + origUrl 匹配入库公告，可看“前台观感”） -->
     <div class="ind-panel tc-step">
-      <div class="ind-panel-h tc-step-t">⑥ 落库 / 产出（外部公告 · 成品）
+      <div class="ind-panel-h tc-step-t">
+⑥ 落库 / 产出（外部公告 · 成品）
         <template v-if="productState === 'found'">
           <a class="tc-act" href="#" @click.prevent="findProduct">刷新</a>
         </template>
@@ -448,7 +450,7 @@ function fmtBytes(n: number | undefined): string {
   <NoticeDetail />
 
   <!-- 全屏完整预览 Modal（下拉切换数据源） -->
-  <Modal v-model:open="previewOpen" :width="'92vw'" :body-style="{ maxHeight: '78vh', overflow: 'auto', padding: 0 }" :footer="null">
+  <Modal v-model:open="previewOpen" width="92vw" :body-style="{ maxHeight: '78vh', overflow: 'auto', padding: 0 }" :footer="null">
     <div class="pv-head">
       <Select v-model:value="previewKey" :options="previewOptions" class="pv-sel" size="small" />
       <Button size="small" @click="copyText(previewText)">复制</Button>

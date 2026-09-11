@@ -16,9 +16,9 @@ import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vu
 
 import { fetchCrawlJobPage, fetchCrawlTaskPage, getCrawlSource, getCrawlTask, runCrawlSource, setCrawlSourceEnabled } from '#/api/bidding/crawlExternal';
 
-import '../../taskbar.css';
+import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../../shared';
 
-import { JOB_STATUS_MAP, TASK_STATUS_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
+import '../../taskbar.css';
 
 const open = ref(false);
 const loading = ref(false);
@@ -152,9 +152,9 @@ async function handleRun() {
   const hide = message.loading({ content: '正在执行采集：' + (s.sourceName || s.sourceCode) + '…', duration: 0 });
   try {
     const res = (await runCrawlSource(s.sourceCode)) as unknown as {
-      categories?: Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>;
+      categories?: Array<{ error?: string; failed?: number; fetched?: number; ingested?: number; name?: string; }>;
     };
-    const nodes = ((res.categories || []) as Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>).map(
+    const nodes = ((res.categories || []) as Array<{ error?: string; failed?: number; fetched?: number; ingested?: number; name?: string; }>).map(
       (c) => '• ' + (c.name || '') + '：抓取 ' + (c.fetched ?? 0) + '，入库 ' + (c.ingested ?? 0) + '，失败 ' + (c.failed ?? 0) + (c.error ? '（' + c.error + '）' : ''),
     );
     // antd Modal content 为纯文本渲染，'<br/>'/'\n' 均不换行：改 VNode 逐行
@@ -185,7 +185,7 @@ function fmtListUrl(raw?: string): string[] {
 defineExpose({ openSource });
 </script>
 <template>
-  <Drawer v-model:open="open" class="bid-ind" :width="960" :title="row ? '信息源详情 · ' + (row.sourceName || row.sourceCode) : '信息源详情'">
+  <Drawer v-model:open="open" class="bid-ind" :width="960" :title="row ? `信息源详情 · ${ row.sourceName || row.sourceCode}` : '信息源详情'">
     <div v-if="loading" class="sd-hint">加载中…</div>
     <template v-else-if="row">
       <!-- 层1：源概要 + 操作（启停/立即获取收在本档，不进列表行） -->
@@ -208,7 +208,7 @@ defineExpose({ openSource });
         <Descriptions :column="2" size="small" bordered>
           <Descriptions.Item label="入口站点">{{ row.baseUrl || '—' }}</Descriptions.Item>
           <Descriptions.Item label="获取方式">{{ row.fetchType === 'API' ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}</Descriptions.Item>
-          <Descriptions.Item label="抓取间隔">{{ row.fetchIntervalSeconds != null ? row.fetchIntervalSeconds + ' 秒' : '—' }}</Descriptions.Item>
+          <Descriptions.Item label="抓取间隔">{{ row.fetchIntervalSeconds != null ? `${row.fetchIntervalSeconds } 秒` : '—' }}</Descriptions.Item>
           <Descriptions.Item label="默认解析/策略码">{{ row.parserCodeDefault || '（按 URL 规则自动匹配）' }}</Descriptions.Item>
           <Descriptions.Item label="robots">{{ row.robotsOk ? '允许按 robots 抓取' : '禁止' }}</Descriptions.Item>
           <Descriptions.Item label="额外放行域名" :span="2">{{ row.allowedHosts || '（仅 baseUrl 域）' }}</Descriptions.Item>

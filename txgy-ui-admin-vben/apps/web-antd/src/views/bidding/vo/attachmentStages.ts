@@ -26,7 +26,7 @@ export interface AttachmentRecord {
 
 /** 采集项按英文名索引（35 类） */
 const ITEM_BY_CODE = new Map(ATTACHMENT_ITEMS.map((f) => [f.code, f]));
-export function attachmentItem(code: string): VoField | undefined {
+export function attachmentItem(code: string): undefined | VoField {
   return ITEM_BY_CODE.get(code);
 }
 export function attachmentItemLabel(code: string): string {
@@ -81,7 +81,7 @@ export function typeOfFileName(fileName: string): string {
 /** 构造一条附件记录 */
 export function makeAttachment(
   setCode: string,
-  f: { url: string; name: string; type?: string; size?: number; fileId?: number },
+  f: { fileId?: number; name: string; size?: number; type?: string; url: string; },
   nameOverride?: string,
 ): AttachmentRecord {
   return {
