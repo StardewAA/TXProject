@@ -117,6 +117,21 @@ export namespace MesHomeApi {
     avgOverdueDays: number; // 超期工单平均延期天数
   }
 
+  /** MES 人员报工产出分析 */
+  export interface FeedbackUserAnalysis {
+    userCount: number; // 参与报工人数
+    totalQuantity: number; // 报工总量
+    qualifiedQuantity: number; // 合格品总量
+    passRate: number; // 合格率（%）
+    topList: {
+      // 报工人产出 TOP N
+      userId: number;
+      userName: string;
+      recordCount: number;
+      qualifiedQuantity: number;
+    }[];
+  }
+
   /** MES 生产趋势 */
   export interface ProductionTrend {
     date: string; // 日期
@@ -189,6 +204,14 @@ export function getDefectAnalysis(days?: number) {
 export function getDeliveryAnalysis(days?: number) {
   return requestClient.get<MesHomeApi.DeliveryAnalysis>(
     '/mes/home-statistics/delivery-analysis',
+    { params: { days } },
+  );
+}
+
+/** 获得人员报工产出分析 */
+export function getFeedbackUserAnalysis(days?: number) {
+  return requestClient.get<MesHomeApi.FeedbackUserAnalysis>(
+    '/mes/home-statistics/feedback-user-analysis',
     { params: { days } },
   );
 }

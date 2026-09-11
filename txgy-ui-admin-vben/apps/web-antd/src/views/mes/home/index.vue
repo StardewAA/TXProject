@@ -17,6 +17,7 @@ import AndonAnalysis from './modules/andon-analysis.vue';
 import CheckMaintenAnalysis from './modules/check-mainten-analysis.vue';
 import DefectAnalysis from './modules/defect-analysis.vue';
 import DeliveryAnalysis from './modules/delivery-analysis.vue';
+import FeedbackUserAnalysis from './modules/feedback-user-analysis.vue';
 import KpiCards from './modules/kpi-cards.vue';
 import MachineryStatusChart from './modules/machinery-status-chart.vue';
 import ProductionTrend from './modules/production-trend.vue';
@@ -108,10 +109,13 @@ onMounted(() => {
       </Col>
     </Row>
 
-    <!-- 第八行：生产交付达成 -->
+    <!-- 第八行：生产交付达成 + 人员报工产出 -->
     <Row :gutter="16">
       <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
         <DeliveryAnalysis />
+      </Col>
+      <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
+        <FeedbackUserAnalysis />
       </Col>
     </Row>
   </Page>

@@ -4,6 +4,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonAnalysisR
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeCheckMaintenRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDefectAnalysisRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDeliveryAnalysisRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeFeedbackUserRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeMachineryStatusRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeProductionTrendRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeQcPassRateRespVO;
@@ -96,5 +97,13 @@ public interface MesHomeStatisticsService {
      * @return 生产交付达成分析数据
      */
     MesHomeDeliveryAnalysisRespVO getDeliveryAnalysis(Integer days);
+
+    /**
+     * 获得人员报工产出分析（近 N 天）
+     *
+     * @param days 天数
+     * @return 人员报工产出分析数据
+     */
+    MesHomeFeedbackUserRespVO getFeedbackUserAnalysis(Integer days);
 
 }
