@@ -193,7 +193,8 @@ export namespace CertificateApi {
     reviewResult?: number;
     newCertFileId?: number;
     /** 佐证材料文件 ID（后端为字符串字段，多个以半角逗号分隔） */
-    evidenceFileIds?: string;
+    /** 佐证材料文件 ID：后端为 List<Long>（JSON 数组），DB 侧 json 列由 Service 转换 */
+    evidenceFileIds?: number[];
     remark?: string;
   }
 
@@ -228,7 +229,8 @@ export namespace CertificateApi {
     reviewDate?: string;
     reviewResult?: number;
     newCertFileId?: number;
-    evidenceFileIds?: string;
+    /** 佐证材料文件 ID（后端 List<Long>） */
+    evidenceFileIds?: number[];
     appliedBy?: number;
     appliedAt?: string;
     handledBy?: number;
@@ -423,10 +425,27 @@ export function certErrorMsg(error: unknown): string {
 }
 
 /** 参数校验失败（400）时的逐字段错误（契约 §0.4 ValidationErrorData） */
-export function certFieldErrors(error: unknown): Array<{ field: string; message: string }> {
-  const e = error as { data?: { data?: { fieldErrors?: Array<{ field: string; message: string }> } }; response?: { data?: { data?: { fieldErrors?: Array<{ field: string; message: string }> } } } };
+export interface CertFieldError {
+    field: string;
+    message: string;
+    /** 被拒原值（调试用；提示语不暴露内部细节） */
+    rejectedValue?: unknown;
+  }
+
+export function certFieldErrors(error: unknown): CertFieldError[] {
+  const e = error as {
+    data?: { data?: { fieldErrors?: CertFieldError[] } };
+    response?: { data?: { data?: { fieldErrors?: CertFieldError[] } } };
+  };
   const body = e?.response?.data ?? e?.data;
   return body?.data?.fieldErrors ?? [];
+}
+
+/** §0.4：把 400 的字段级错误映射到表单字段（antd 表单 setFields 入参格式） */
+export function certFieldErrorFields(error: unknown): Array<{ errors: string[]; name: string }> {
+  return certFieldErrors(error)
+    .filter((i) => !!i.field)
+    .map((i) => ({ errors: [i.message || '参数不正确'], name: i.field }));
 }
 
 /** 统一 traceId（契约 §0.4：500 时 toast + 记录 traceId） */

@@ -14,6 +14,7 @@ import {
   CERT_ERR,
   certErrorCode,
   certErrorMsg,
+  certFieldErrors,
   type CertificateApi,
   getCertificate,
   getCertificatePage,
@@ -62,6 +63,9 @@ const saving = ref(false);
 const picking = ref(false);
 const options = ref<Array<{ label: string; value: number }>>([]);
 const picked = ref<CertificateApi.Certificate | null>(null);
+
+/** 佐证文件 ID 输入态（字符串）→ 提交时转 number[]；表单模型的该字段是数组，不能直接绑 input */
+const evidenceText = ref<string | undefined>(undefined);
 
 const form = reactive<CertificateApi.LifecycleApplyReq>({
   bizDomain: 'CERT',
@@ -142,8 +146,9 @@ function addChange() {
 function removeChange(i: number) {
   form.changes = (form.changes ?? []).filter((_, idx) => idx !== i);
 }
-/** 证据文件 ID：'1024, 1025' → '"[1024,1025]"'；空 → undefined（不发送） */
-function normalizeFileIds(raw?: null | string): string | undefined {
+/** 证据文件 ID：'1024, 1025' → [1024,1025]；空 → undefined（不发送，避免后端落 "[]"）
+ *  后端 CertLifecycleApplyReqVO.evidenceFileIds 已由 String 改为 List<Long>（DB json 列在 Service 转换）。 */
+function normalizeFileIds(raw?: null | string): number[] | undefined {
   if (!raw) return undefined;
   const ids = String(raw)
     .split(/[,\s\[\]"]+/)
@@ -151,7 +156,7 @@ function normalizeFileIds(raw?: null | string): string | undefined {
     .filter((s) => s.length > 0)
     .map((s) => Number(s))
     .filter((n) => Number.isFinite(n));
-  return ids.length > 0 ? JSON.stringify(ids) : undefined;
+  return ids.length > 0 ? ids : undefined;
 }
 
 /** 选中字段后自动带出当前值作为 oldValue（减少手填，仍可改）
@@ -207,6 +212,7 @@ watch(
     form.reviewDate = undefined;
     form.reviewResult = undefined;
     form.evidenceFileIds = undefined;
+    evidenceText.value = undefined;
     form.remark = undefined;
   },
 );
@@ -259,9 +265,7 @@ async function submit() {
     payload.reviewDate = form.reviewDate;
     payload.reviewResult = form.reviewResult === undefined ? undefined : Number(form.reviewResult);
   }
-  // 后端 CertLifecycleApplyReqVO.evidenceFileIds 是 String（JSON 数组串，例 "[1024,1025]"），
-  // 与契约 §6.1 写的 array<number> 不一致 → 以**后端为准**，这里把逗号串规范化为 JSON 数组串。
-  payload.evidenceFileIds = normalizeFileIds(form.evidenceFileIds);
+  payload.evidenceFileIds = normalizeFileIds(evidenceText.value);
   try {
     const id = await applyCertLifecycle(payload);
     message.success(`流程已发起（#${id}），待审核`);
@@ -272,6 +276,14 @@ async function submit() {
     if (code === CERT_ERR.APPLY_NO_DUPLICATE) {
       message.warning('该申请单号已提交过，请更换或到流程台账查看');
       form.applyNo = genApplyNo(form.bizId);
+    } else if (code === 400) {
+      // 契约 §0.4：400 的 data.fieldErrors 逐条展示（本表单字段多，用合并提示）
+      const fields = certFieldErrors(error);
+      message.warning(
+        fields.length > 0
+          ? `参数校验未通过：${fields.map((f) => `${f.field} ${f.message}`).join('；')}`
+          : certErrorMsg(error),
+      );
     } else if (code === CERT_ERR.CHANGE_EMPTY || code === CERT_ERR.LIFECYCLE_FIELD_MISSING) {
       message.warning(certErrorMsg(error));
     } else if (code === CERT_ERR.LIFECYCLE_BIZ_NOT_FOUND) {
@@ -429,8 +441,8 @@ async function submit() {
       </template>
 
       <a-col :span="24">
-        <div class="ct-lb">佐证材料文件 ID（多个用半角逗号分隔，提交时转 JSON 数组串）</div>
-        <a-input v-model:value="form.evidenceFileIds" class="mb-3" placeholder="如 1024,1025（先在「文件版本」上传取得 fileId）" />
+        <div class="ct-lb">佐证材料文件 ID（多个用半角逗号分隔，提交为数组）</div>
+        <a-input v-model:value="evidenceText" class="mb-3" placeholder="如 1024,1025（先在「文件版本」上传取得 fileId）" />
       </a-col>
       <a-col :span="24">
         <div class="ct-lb">备注</div>

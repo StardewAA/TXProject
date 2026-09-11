@@ -459,7 +459,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
       show-icon
       class="mb-3"
       message="字典/配置未加载，证书类型与状态将按 code 展示"
-      :description="`${metaError}｜/bidding/meta/* 需要权限 bidding:certificate:query；只授了员工资质权限时会出现该提示，可让管理员补该权限或由后端放开。`"
+      :description="`${metaError}｜/bidding/meta/* 需电子证照域任一页面权限（已含 personnel:profile:query，故正常授权下不应出现该提示）。`"
     />
 
     <a-tabs v-model:active-key="tab">
