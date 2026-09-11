@@ -9,7 +9,7 @@
  * 缓存：模块级单例 + 并发去重（首屏多处调用只发一次请求）。 */
 import { computed, ref } from 'vue';
 
-import { type CertificateApi, getCertConfigs, getCertDicts } from '#/api/bidding/certificate';
+import { certErrorMsg, type CertificateApi, getCertConfigs, getCertDicts } from '#/api/bidding/certificate';
 
 const dicts = ref<CertificateApi.DictMap>({});
 const configs = ref<CertificateApi.RuleConfigItem[]>([]);
@@ -24,14 +24,23 @@ export function loadCertMeta(force = false): Promise<void> {
   if (inflight) return inflight;
   loading.value = true;
   error.value = '';
+  let firstErr = '';
   inflight = Promise.all([
-    getCertDicts().catch(() => ({}) as CertificateApi.DictMap),
-    getCertConfigs().catch(() => ({ items: [] }) as CertificateApi.RuleConfigData),
+    getCertDicts().catch((e: unknown) => {
+      firstErr ||= certErrorMsg(e);
+      return {} as CertificateApi.DictMap;
+    }),
+    getCertConfigs().catch((e: unknown) => {
+      firstErr ||= certErrorMsg(e);
+      return { items: [] } as CertificateApi.RuleConfigData;
+    }),
   ])
     .then(([d, c]) => {
       dicts.value = d ?? {};
       configs.value = c?.items ?? [];
-      loaded.value = true;
+      // 失败原因（如 403：后端 /bidding/meta/* 需要 bidding:certificate:query）留档给页面做降级提示
+      error.value = firstErr;
+      loaded.value = Object.keys(dicts.value).length > 0 || configs.value.length > 0;
     })
     .catch((e: unknown) => {
       error.value = e instanceof Error ? e.message : String(e);

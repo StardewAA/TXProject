@@ -109,8 +109,13 @@ public class CrawlNoticeProcessor {
                     assertUrlAllowed(rawFileUrl, task.getSourceCode());
                 }
                 // 下载监控 + 完整性校验（2026-09-10）：平台归档原文同样记录量/速/摘要，校验不通过不得入库
-                cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome =
-                        httpFetchClient.fetchText(rawFileUrl);
+                cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome;
+                try {
+                    outcome = httpFetchClient.fetchText(rawFileUrl);
+                } catch (Exception ex) {
+                    auditFetchFailure(task, rawFileUrl, "ARCHIVE_HTML", ex);
+                    throw ex;
+                }
                 contentHtml = outcome.getText();
                 var verdict = integrityValidator.validateText(contentHtml, rawFileUrl);
                 downloadAuditor.record(task.getId(), task.getSourceCode(), rawFileUrl, "ARCHIVE_HTML",
@@ -166,8 +171,13 @@ public class CrawlNoticeProcessor {
             throw new IllegalStateException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + url);
         }
         // 下载 + 即时校验 + 审计（速度监控与完整性结论一并落台账）
-        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome =
-                httpFetchClient.fetchText(url);
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome;
+        try {
+            outcome = httpFetchClient.fetchText(url);
+        } catch (Exception ex) {
+            auditFetchFailure(task, url, "DETAIL_HTML", ex);
+            throw ex;
+        }
         String html = outcome.getText();
         var verdict = integrityValidator.validateText(html, url);
         downloadAuditor.record(task.getId(), task.getSourceCode(), url, "DETAIL_HTML",
@@ -218,7 +228,13 @@ public class CrawlNoticeProcessor {
         if (!robotsGuard.isAllowed(url)) {
             throw new IllegalStateException("详情页被 robots.txt 禁止抓取（合规跳过） url=" + url);
         }
-        var detailOutcome = httpFetchClient.fetchText(url);
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome detailOutcome;
+        try {
+            detailOutcome = httpFetchClient.fetchText(url);
+        } catch (Exception ex) {
+            auditFetchFailure(task, url, "DETAIL_HTML", ex);
+            throw ex;
+        }
         var detailVerdict = integrityValidator.validateText(detailOutcome.getText(), url);
         downloadAuditor.record(task.getId(), task.getSourceCode(), url, "DETAIL_HTML",
                 detailOutcome.getStatusCode(), (long) detailOutcome.getByteSize(), detailOutcome.getDurationMs(),
@@ -240,7 +256,13 @@ public class CrawlNoticeProcessor {
             throw new IllegalStateException("PDF 直链被 robots.txt 禁止抓取（合规跳过） url=" + pdfUrl);
         }
         // PDF 下载：限速闸（execute 已占位）→ 单文件上限 → 完整性校验（%PDF 头 + %%EOF 结尾 + sha256）
-        var pdfOutcome = httpFetchClient.fetchBytes(pdfUrl);
+        cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome pdfOutcome;
+        try {
+            pdfOutcome = httpFetchClient.fetchBytes(pdfUrl);
+        } catch (Exception ex) {
+            auditFetchFailure(task, pdfUrl, "PDF", ex);
+            throw ex;
+        }
         byte[] pdf = pdfOutcome.getBytes();
         var pdfVerdict = integrityValidator.validateBinary(pdf, "PDF", pdfUrl);
         if (!pdfVerdict.pass()) {
@@ -467,6 +489,22 @@ public class CrawlNoticeProcessor {
 
     // 注：原 sha256Hex(byte[]) 已随"PDF 摘要统一由 DownloadIntegrityValidator 产出"移除（2026-09-10），
     // 避免同一份字节在两处各算一次摘要导致口径不一致（审计台账与落库 sha256 必须同源）。
+
+    /**
+     * 下载失败也要留痕（用户口径 2026-09-10「文件完整性与状态监测」）。
+     *
+     * <p>业务目标：失败同样是一次"原文下载尝试"，必须能在审计台账看到**失败原因**，
+     * 否则只看到任务失败，无法判断是目标站点问题还是平台自身问题（2026-09-11 实际踩坑：
+     * 网关未启动 → rawFileUrl 指向 127.0.0.1:48080 拒绝连接，任务只留 "HTTP 请求失败: null"，
+     * 既不能定位也不能统计）。记录后**原样抛出**，绝不吞异常——重试/退避仍由上层统一决定。
+     */
+    private void auditFetchFailure(CrawlTaskDO task, String url, String kind, Exception ex) {
+        downloadAuditor.record(task.getId(), task.getSourceCode(), url, kind, null, null, null, null,
+                "FAIL_DOWNLOAD",
+                cn.iocoder.txgy.module.bidding.service.externalfetch.audit.CrawlDownloadAuditor.STORAGE_NONE,
+                null, "下载失败（"
+                        + cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.FetchException.describe(ex) + "）");
+    }
 
     private JsonNode parsePayload(String payloadJson) {
         if (!StringUtils.hasText(payloadJson)) {
