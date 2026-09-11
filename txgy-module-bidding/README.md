@@ -11,6 +11,10 @@
 ## 目录
 
 1. [项目结构与技术栈](#1-项目结构与技术栈)
+   - [1.1 唯一开发规范](#11-唯一开发规范改代码前先读这一份)
+   - [1.2 文件摆放位置](#12-文件摆放位置放哪一层哪一目录)
+   - [1.3 注释方式](#13-注释方式写为什么并给出处)
+   - [1.4 SQL 整理方式](#14-sql-整理方式)
 2. [服务清单与端口（先看这个）](#2-服务清单与端口)
 3. [从零启动（首次跑通全流程）](#3-从零启动)
 4. [配置方式（各服务怎么配）](#4-配置方式)
@@ -18,9 +22,10 @@
 6. [解析器：站点规则插件化](#6-解析器站点规则插件化)
 7. [公告：采集→审核→发布→检索](#7-公告采集审核发布检索)
 8. [如何使用（管理端菜单与主要流程）](#8-如何使用)
-9. [常用运维动作](#9-常用运维动作)
-10. [故障排查（FAQ）](#10-故障排查faq)
-11. [文档索引](#11-文档索引)
+9. [前后端联调方式](#9-前后端联调方式)
+10. [常用运维动作](#10-常用运维动作)
+11. [故障排查（FAQ）](#11-故障排查faq)
+12. [文档索引](#12-文档索引)
 
 ---
 
@@ -42,7 +47,7 @@ txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
 │   ├── history/                          历史增量脚本（老库追平用）
 │   ├── tools/                            校验 / 归零 / 恢复 / 初始包生成脚本
 │   └── README-完整执行清单.md            SQL 索引与口径
-├── docs/                                 设计、联调、运维、前端契约文档（见 §11）
+├── docs/                                 设计、联调、运维、前端契约文档（见 §12）
 ├── deploy-bidding-local.override.yml     本地联调 compose override（端口映射 + 空 namespace）
 └── build.cmd                             一键构建（内置 JDK/Maven 绝对路径）
 ```
@@ -59,10 +64,20 @@ txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
 | 业务依据 | 国家《公共资源交易平台系统数据规范（V2.0）》+ 陕西省 V2.0 规范；**国家、陕西都有的概念以陕西为准** |
 | 接入平台 | 根 `pom.xml` 已挂本模块；`txgy-server/pom.xml` 里对本模块的依赖默认注释着，按需打开；本模块也可独立启动（48110） |
 
-### 1.1 开发约定（改代码前先读这条）
+### 1.1 唯一开发规范（改代码前先读这一份）
 
-> **唯一开发规范入口：`docs/招投标模块开发规范.md`** —— 全量 VO 怎么定位、自建 VO 怎么建、
-> 前后端如何配合、哪些坑不能踩，都在这份文档里。
+> **位置：`docs/招投标模块开发规范.md`** —— 本模块**唯一**的开发规范，讲清四件事：**全量 VO 怎么用、
+> 模块自建 VO 怎么建、前后端怎么配合、哪些是红线**。新约定**直接补进它对应章节，不再另开文件**；
+> 其余文档（设计 / 联调 / 契约）只作补充，与之冲突时**以规范为准**。
+
+| 规范章节 | 讲什么 |
+| --- | --- |
+| 一、三条底线 | 全量 VO 不是页面 DTO；字段名照录规范原文（含拼写瑕疵如 `QULIFICATION_CHECK_MODE`、`BID_ECTION_NUM`）；要增删字段先回规范核对、说清理由 |
+| 二、全量 VO（170 个） | 定位、命名规则（字段名照录英文名、交换层统一 `String`、金额默认元、时间 `yyyyMMddHHmmss`）、170 个数据集清单 |
+| 三、模块自建 VO | 3.1 放置与命名；3.2 与全量 VO 的切换（**转换只在 Service 层**，用 `BeanUtils`；上报出口过 `PublicLevelFilter`） |
+| 四、前后端分离框架 | 4.1 整体结构；4.2 后端分层（对齐 fms）；4.3 前端目录约定；4.4 接口与数据统一约定；4.5 写接口并发与幂等（`@Idempotent` / `@Lock4j`）；4.6 检索、缓存与慢查询 |
+
+§1.1 以下五条是规范要点速览（**细节与边界一律回到规范原文**）：
 
 1. **全量 VO 是字典，不是页面 DTO**：`api/vo/` 下 170 个类是规范原样映射（类名 = 规范数据集名、
    字段名照录英文名、统一 String），只用于**上报 / 对接第三方 / 跨系统交换**；
@@ -74,6 +89,113 @@ txgycloud/txgy-module-bidding/            ← 本仓库根（独立 git）
 4. **前后端分离**：前端在 vben 工程的 `apps/web-antd` 下 —— 接口封装 `src/api/bidding/<domain>`，
    页面 `src/views/bidding/<menu>`；后端链路 controller → service → dal，跨模块走 api 契约 + RPC。
 5. **数据层冗余约定**（超长字段、编码长度预留）先落在规范文档里，建表时按约定执行。
+
+### 1.2 文件摆放位置（放哪一层、哪一目录）
+
+**后端**（规范 §4.2，对齐 fms）：
+
+| 层 | 包路径 | 类命名 | 要点 |
+| --- | --- | --- | --- |
+| 接口契约 | `txgy-module-bidding-api` 的 `api/<domain>`、`api/vo`、`api/enums` | `XxxApi`、全量 VO、代码集常量类 | 只依赖 txgy-common，**不依赖 server** |
+| Controller | `server` 的 `controller/admin/<domain>` | `XxxController` | 只做参数校验、权限注解、Swagger，**不写业务** |
+| Service | `service/<domain>` | `XxxService` / `XxxServiceImpl` | 业务规则、事务、自建 VO ↔ 全量 VO 转换都在这里 |
+| DO | `dal/dataobject/<domain>` | `XxxDO extends BaseDO` | 与表一一对应，驼峰字段，`@TableName` |
+| Mapper | `dal/mysql/<domain>` | `XxxMapper extends BaseMapperX` | 分页条件用 `LambdaQueryWrapperX`（`eqIfPresent`/`likeIfPresent`）；**必须标 `@Mapper`** |
+| 枚举 / 错误码 / 字典 | `enums` | `ErrorCodeConstants`、`DictTypeConstants` | 错误码段 `1-060-xxx-xxx`；字典 key 前缀 `bidding_` |
+| 配置 | `framework/*` | Security / Rpc / Web Configuration | 骨架已就位，一般不动 |
+
+**自建 VO**（规范 §3.1，全部放 `controller/admin/<domain>/vo/`）：
+
+| 用途 | 类名 | 位置 |
+| --- | --- | --- |
+| 列表/分页出参 | `<业务>RespVO` | `controller/admin/<domain>/vo/` |
+| 新增/修改入参 | `<业务>SaveReqVO` | 同上 |
+| 分页查询入参 | `<业务>PageReqVO extends PageParam` | 同上 |
+| 详情出参 | `<业务>DetailRespVO`（字段少就并入 RespVO） | 同上 |
+| 跨模块 RPC 出入参 | `<业务>Api` + DTO | **api 的 `api/<domain>/dto/`**，别放全量 VO 目录 |
+
+- 自建 VO 用驼峰 + 常规类型（Long/Integer/String/BigDecimal/LocalDateTime/Boolean/List），**不沿用全大写交换层风格**；
+- 能对上规范字段时在 `@Schema` 注明（如 `对应规范字段 PROJECT_CODE`）便于回溯；字典值注明 `DictTypeConstants`、枚举注明枚举类；
+- **不要**把全量 VO 直接当 `@RequestBody` / `@ResponseBody`（字段多、混政务字段、类型不适合前端）。
+
+**前端**（规范 §4.3，vben 工程 `apps/web-antd`；本模块工作区之外）：
+
+| 目录 | 约定 |
+| --- | --- |
+| `src/api/bidding/<domain>/index.ts` | 一个业务域一个文件；顶部 `export namespace BiddingXxxApi`，下面 `export function getXxxPage()` 走 `requestClient` |
+| `src/api/bidding/<domain>/<子域>/index.ts` | 子域再开子目录（如 `project/section/index.ts`） |
+| `src/views/bidding/<菜单>/*.vue` | 页面组件（`<script setup lang="ts">`）；请求一律走 api 封装，**页面里不出现裸 axios** |
+
+**文档 / SQL / 脚本**：
+
+| 放什么 | 放哪 |
+| --- | --- |
+| 设计、方案、规范 | `docs/模块设计与规范/`（唯一规范 `招投标模块开发规范.md` 在 `docs/` 根） |
+| 联调记录、运维、排障、监控 | `docs/开发联调与运维/` |
+| 前端接口契约 | `docs/前端规范-全域接口说明/`、`docs/外部公告-前端对接/`、`docs/电子证照前前端契约/` |
+| 表结构基线 | `sql/master-bidding-sync.sql`（**初始状态包**，见 §1.4） |
+| SQL 增量 | `sql/history/yyyy-MM-dd-<主题>.sql` |
+| SQL 工具 | `sql/tools/`（校验 / 生成 / 归零 / 恢复） |
+| 构建脚本 | 模块根 `build.cmd`；临时排查脚本用完即删，不提交 |
+
+### 1.3 注释方式（写“为什么”，并给出处）
+
+**总原则**：注释解释**为什么这么写**（依据、目标、约束），而不是复述代码做了什么；
+凡涉及合规、限速、幂等、公开范围、跨系统字段这类**不能靠读代码推断的决策，必须留出处**，便于复核与追责。
+
+三种位置与本仓现行格式：
+
+| 位置 | 格式 | 真实示例 |
+| --- | --- | --- |
+| 类头（`package` 之后） | `// 规范依据：<文档> §章节（要点）；《招投标模块开发规范》§4.2` | `CrawlNoticeProcessor.java` 头部 |
+| 方法 Javadoc | `<p>规范依据：…<p>业务目标：…原因：…` | `CrawlNoticeProcessor#aiExtract` |
+| 关键分支内联 | `// 规范依据：…；用户口径「…」` + `// 判定口径：` 列表 | 合规限速闸段落 |
+
+```java
+// 规范依据：外部信息获取 v1.0 §五/§六（Redis Stream 轻信号消费端执行：收 taskId → 回查 payload → 下载/直采 → ingest 回写）
+
+/**
+ * <p>规范依据：外部信息获取 v1.0 §三（AI 结构化抽取 + 行业判定）；
+ * <p>业务目标：公告落库即带 industryFlag/industryConfidence，使“是否属于防腐保温行业”可查、可复核。
+ * <p>原因：列表接口已带全文的源（QYZB）不能跳过行业判定，否则同一批公告口径不一致。
+ */
+
+// ===== 合规限速闸（唯一入口）=====
+// 规范依据：《外部信息获取 v1.0》§六 + 用户口径「时间间隔必须且只能作用于『下载公告原文文件』这一动作」
+// 判定口径：
+//   · payload 已带 contentHtml（列表全文直采）→ 纯本地处理，不下载，不占闸位；
+//   · 否则必然要取原文 → 在任何 HTTP 下载之前占一次闸位，未获闸位即抛 NotDue，绝不发起请求。
+```
+
+**红线**：① 不写“// 设置值”“// 循环处理”这类代码复述；② 不写无出处的“优化/兼容/临时”；
+③ 改了行为必须同步改注释（注释与代码不一致视同缺陷）；④ 注释里不写口令、内网地址、个人姓名。
+
+### 1.4 SQL 整理方式
+
+**目标形态**：`sql/` 只保留**表结构 + 最小启动数据**——能建表、能进菜单、**能启动爬虫**；业务数据不入脚本。
+
+| 文件 | 定位 | 内容 |
+| --- | --- | --- |
+| `sql/master-bidding-sync.sql` | **初始状态包**（新环境一键初始化） | 21 张表结构 + 菜单 37 条 + 角色授权 135 条 + 采集源 3 条 + 限速闸位 1 行 |
+| `sql/history/yyyy-MM-dd-<主题>.sql` | 历史增量（老库追平用） | 建表 / 字段 / 菜单 / 配置 / 修复；新 SQL 一律加在这里 |
+| `sql/history/2026-09-11-master-sync-removed-seeds.sql` | 归档 | 从初始包剔除的业务数据种子（主体授权、AI 链路、演示公告），需用时人工执行 |
+| `sql/tools/*` | 工具 | 结构自检、初始包重生成、采集域归零、ES 恢复 |
+
+```bash
+# 新库初始化（幂等，可重复执行；包尾自带校验）
+docker exec -i txgy-mysql mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro \
+  < sql/master-bidding-sync.sql
+```
+
+**硬性规则**：
+
+1. **幂等**：结构用 `CREATE TABLE IF NOT EXISTS`，数据用 `INSERT IGNORE`；
+2. **禁止破坏性语句**：初始包与增量脚本内**不得出现 `DROP` / `TRUNCATE` / `DELETE`**（归零脚本例外，须人工确认后执行）；
+3. **提交前自检**：`node sql/tools/validate-sql-structure.js`（括号/引号闭合、语句截断、重复建表、意外破坏性语句）；
+4. **数据不进仓**：导出文件、演示数据不提交；需要时用 `mysqldump` 现导（历史曾提交的 3 个数据文件已移除，可从 git 历史取回）；
+5. **改结构后同步基线**：增量落 `history/` 后，用 `sql/tools/build-init-from-db.js` + `build-init.js` 重生成初始状态包；
+6. **别人的域不乱动**：`sql/2026-09-*.sql`（电子证照 / 人员资质 / 规则配置 / 安许风险）由对应同事维护，不在本初始包内，避免互相覆盖；
+7. **执行环境**：统一 `--default-character-set=utf8mb4`；菜单脚本与业务脚本同库（本环境 system_menu 也在 `ruoyi-vue-pro`）。
 
 ---
 
@@ -236,7 +358,7 @@ CP="target/classes;$(cat ../cp.txt)"
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `bidding.es.enabled` / `uris` | true / `http://127.0.0.1:9200` | 无 ES 时置 false，服务仍可启动 |
-| `bidding.es.username` / `password` | `elastic` / `${ES_PASSWORD:}` | 本地用环境变量或 `-D` 注入（**口令不入库/不入 git**；见 §10 FAQ 取法） |
+| `bidding.es.username` / `password` | `elastic` / `${ES_PASSWORD:}` | 本地用环境变量或 `-D` 注入（**口令不入库/不入 git**；见 §11 FAQ 取法） |
 | `bidding.ai.enabled` | true | 关闭则 `/notice-external/ai-extract` 报"未配置"，`HTML_AI`/`PDF_AI` 解析器不可用 |
 | `bidding.ai.base-url` / `admin-token` / `role-id` | 网关 / `test1` / 20 | AI 结构化抽取走平台 AI 模块（经网关） |
 | `bidding.ext-notice.pdf.open-data-loader.loader-class` | `PdfBoxOpenDataLoader` | PDF 正文加载器（可替换实现） |
@@ -411,14 +533,75 @@ curl -F parserCode=EBIDDING -F payloadType=FILE -F fileName=page.html \
    ```
 
    然后在「采集批次 / 采集任务」看进度；
-2. **看下载是否合规**：查审计表（见 §9），确认相邻两次 `create_time` 间隔 ≥120 秒；
+2. **看下载是否合规**：查审计表（见 §10），确认相邻两次 `create_time` 间隔 ≥120 秒；
 3. **校准解析**：用 §6.3 的测试接口贴真实样本，字段不对就调解析器；
 4. **审核公告**：外部公告审核管理 → 通过 → 状态 ACTIVE → 前台大厅可见、ES 可检索；
 5. **预览原文**：详情页 PDF 预览（本地 `file_id` 优先），未归档时会触发一次受闸位约束的抓取。
 
 ---
 
-## 9. 常用运维动作
+## 9. 前后端联调方式
+
+### 9.1 三个入口（按用途选）
+
+| 入口 | 地址 | 说明 |
+| --- | --- | --- |
+| **后端直连**（联调主力） | `http://127.0.0.1:48110/admin-api/bidding/**` | HTTP 层生效前缀 `/admin-api`；**无前缀返回“请求地址不存在”**。实测可用 |
+| 网关 | `http://127.0.0.1:48080/admin-api/bidding/**` | 已注册路由（实测返回 `{"code":401,"msg":"账号未登录"}` = 路由通、需鉴权）；文件下载 URL 必须走它 |
+| 前端 dev 代理 | vben `apps/web-antd` 的 vite 代理（`/bidding-api` → `127.0.0.1:48110/admin-api`） | 前端页面按此联调；**改 `vite.config.ts` 后必须重启 dev 进程**才生效 |
+
+接口文档：`http://127.0.0.1:48110/swagger-ui/index.html`（`/v3/api-docs` 可取全部 paths）。
+
+### 9.2 鉴权与请求头
+
+- **公开端点免登录免租户**：`notice-external` 的 page/detail/go、`notice` 的 `public/*`；
+- **其余接口**需带 `Authorization: Bearer <token>` + `tenant-id: 1`；
+- 权限码与菜单同源（`bidding:xxx:query|create|update|delete`），由初始状态包的 `system_menu`/`system_role_menu` 提供；
+- 所有写接口标了 `@Idempotent`：**超时重试请带同一幂等 key**，不要靠“再点一次”。
+
+### 9.3 数据格式约定（实测）
+
+| 项 | 约定 |
+| --- | --- |
+| 返回结构 | `CommonResult<T>`；分页 `PageResult<T>`（`list` + `total`） |
+| 时间出参 | `LocalDateTime` 统一序列化为 **epoch 毫秒数字**（如 `1788668723000`），前端自行格式化（dayjs）；契约文档里的 `yyyy-MM-dd HH:mm:ss` 仅作文义说明 |
+| 时间入参 | ISO 带 T（`2026-09-06T00:00:00`）与空格格式（`2026-09-06 00:00:00`，URL 需编码）**均可解析** |
+| 文件 | 上传/归档统一返回全局唯一 `file_id`（infra 文件服务），前端凭它预览/下载；**没有手工“文件 ID”表单字段** |
+| 公开范围 | 对外出参过 `PublicLevelFilter`：**政务公开字段到不了大厅 / ES**，前端“字段缺失”先查这一层 |
+
+### 9.4 契约文档（联调前先看，别靠猜）
+
+| 域 | 文档 |
+| --- | --- |
+| 本地运行与联调（入口/时间/演示数据修正） | `docs/前端规范-全域接口说明/03-本地运行与联调说明.md` |
+| 全链路接口说明 / 接口逐一说明 | `04-全链路接口说明.md`、`01-接口逐一说明与设计依据.md`、`06-bidding前端契约接口完全对照.md` |
+| 文件上传与 `file_id` 契约 | `11-文件上传与file_id契约-2026-09-10.md` |
+| 外部公告对接 | `docs/外部公告-前端对接/05-外部信息获取改造-前端跟进.md`、`06-外部信息获取-详细接口调用说明.md` |
+| 公告字段模板 | `docs/开发联调与运维/公告创建接口与类型字段模板说明.md` |
+
+### 9.5 联调标准动作
+
+1. 起依赖（§3.2）→ 起后端（§3.4）→ `curl /actuator/health` 确认 UP；
+2. `swagger-ui` 找到目标接口，确认**路径前缀、权限码、入参字段**；
+3. 直连 48110 用 curl/Postman 打通一次（带 `Authorization` + `tenant-id`）；
+4. 打通后前端接 vben：接口封装落 `src/api/bidding/<domain>/index.ts`，页面落 `src/views/bidding/<菜单>/`；
+5. 联调中发现的**字段/口径变更**，回写对应契约文档（并在需要时同步规范）。
+
+### 9.6 联调常见问题
+
+| 现象 | 原因 / 处理 |
+| --- | --- |
+| 404 且提示“请求地址不存在” | 少了 `/admin-api` 前缀，或路径与 `@RequestMapping` 不一致 |
+| 401 “账号未登录” | 缺 `Authorization`；或访问的是非公开端点 |
+| 200 但列表为空、菜单看不到 | 缺 `tenant-id` 头，或该租户没授权菜单（初始状态包只给默认角色授权） |
+| 前端改了代理/端口不生效 | vite 配置需**重启 dev 进程** |
+| 时间显示不对 | 后端给的是 epoch 毫秒，前端需 `dayjs` 格式化 |
+| 上传后前端报“文件注册失败，请重试” | 响应体里没有全局唯一 `file_id`（infra 未启动 / 网关未起 / 返回体被包裹），按 §10 排查 |
+| 字段明明有值却收不到 | 该字段被 `PublicLevelFilter` 按政务级别裁掉（对外接口正常行为） |
+
+---
+
+## 10. 常用运维动作
 
 **查看下载审计（合规证据）**
 
@@ -455,7 +638,7 @@ curl -X POST http://127.0.0.1:48110/admin-api/bidding/notice-external/reindex
 
 ---
 
-## 10. 故障排查（FAQ）
+## 11. 故障排查（FAQ）
 
 | 现象 | 根因 | 处理 |
 | --- | --- | --- |
@@ -471,7 +654,7 @@ curl -X POST http://127.0.0.1:48110/admin-api/bidding/notice-external/reindex
 
 ---
 
-## 11. 文档索引
+## 12. 文档索引
 
 **★ 开发必读（唯一规范）**
 - `docs/招投标模块开发规范.md` —— VO 定位与自建约定、前后端配合、代码集、踩坑清单
