@@ -69,9 +69,12 @@ const header = [
   '--   mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-credential-sync.sql',
   '--   结构自检：node sql/tools/validate-sql-structure.js sql/master-credential-sync.sql',
   '--',
-  '-- 【菜单号段】证书与资质台账使用 60004000 段（60004000 目录 / 600041xx 证照台账 / 600042xx 企业资质 /',
-  '--   600043xx 员工资质 / 600044xx 证件全生命周期 / 600045xx 安许风险联动）。',
-  '--   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突），',
+  '-- 【菜单号段】证书与资质台账使用 60005000 段（60005000 目录 / 600051xx 证照台账 / 600052xx 企业资质 /',
+  '--   600053xx 员工资质 / 600054xx 证件全生命周期 / 600055xx 安许风险联动）。',
+  '--   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突）；',
+  '--   60004000/600042xx 段已被《docs/前端规范-全域接口说明/投标流程跟踪功能设计方案.md》§8.3 预约',
+  '--   （投标流程跟踪：父级 60004000 + 页面 60004200 + 按钮 60004201~203），按"先登记再占用"让出，',
+  '--   故本域改用 60005000 段（登记时 SQL 侧 60005000~60005999 无任何占用）。',
   '--   本包直接落终态，不产生废弃号段的行。',
   '--',
   '-- 【不包含】角色菜单授权（除超级管理员）——授权属业务决策；见包尾"授权指引"按需执行。',
@@ -109,6 +112,10 @@ const created = [...ddlText.matchAll(/CREATE\s+TABLE(\s+IF\s+NOT\s+EXISTS)?\s+\`
   .filter((v, i, a) => a.indexOf(v) === i).sort();
 // 精确统计某条 INSERT 的顶层元组数（跳过字符串字面量），使"期望值"与校验查询口径一致
 function countTuplesIn(text, i) {
+  // 从 VALUES 之后开始数，避免把 INSERT 的"列清单 (...) 也算成一个元组"
+  const tail = text.slice(i);
+  const vm = tail.match(/\bVALUES\b/i);
+  if (vm) i = i + vm.index + vm[0].length;
   let depth = 0, n = 0, started = false;
   for (let k = i; k < text.length; k++) {
     const c = text[k];
@@ -222,6 +229,10 @@ function foldAlters(text) {
 
 let finalText = parts.join('\n');
 finalText = foldAlters(finalText);
+// 菜单号段终态：让出 60004 段（流程跟踪方案已预约），统一落到 60005 段
+const beforeCount = (finalText.match(/60004\d{3}/g) || []).length;
+finalText = finalText.replace(/60004(\d{3})/g, '60005$1');
+console.log('— 菜单号段：60004xxx → 60005xxx，改写 ' + beforeCount + ' 处');
 fs.writeFileSync(OUT, finalText, 'utf8');
 console.log('已生成 ' + OUT + ' (' + (fs.statSync(OUT).size / 1024).toFixed(1) + ' KB)');
 console.log('— 合并来源 ' + DDL_SOURCES.length + ' 个 + 菜单终态段 1 个');

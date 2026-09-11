@@ -1,60 +1,31 @@
-# 千问中间脚本和文件存放位置（用户要求忽略）
-千问中间脚本和文件存放位置/
+# 本仓库为 txgy-module-bidding 的独立仓库（从父仓库 txgycloud 拆出）
+# 说明：2026-09-13 因多个 AI 并行改动同一父仓库、互相暂存/提交造成冲突，故本模块单独建仓。
+# 父仓库侧需执行（见 README-git-独立仓库.md）：git rm -r --cached txgy-module-bidding && 在父 .gitignore 加入 txgy-module-bidding/
 
-# IntelliJ IDEA
+# Maven / 构建产物
+target/
+**/target/
+*.jar
+*.war
+*.class
+
+# IDE
 .idea/
 *.iml
 *.ipr
 *.iws
-
-# Eclipse
-.classpath
-.project
-.settings/
-*.prefs
-
-# VS Code
 .vscode/
+.settings/
+.project
+.classpath
 
-# Maven / Java 构建产物
-target/
-*.class
-*.jar
-*.war
-*.ear
-!**/src/main/**/*.jar
-!**/src/test/**/*.jar
-
-# LibreOffice 文档锁文件
-.~lock.*#
-~$*
-
-# 日志与临时文件
+# 日志与临时
 *.log
 logs/
+.tmp/
+sql/.tmp/
 *.tmp
-*.temp
-*.bak
-*.swp
+
+# 系统
 .DS_Store
 Thumbs.db
-
-# 编译/生成目录
-out/
-gen/
-
-# Maven flatten 插件产物（IDE/Maven 构建生成，不入库）
-.flattened-pom.xml
-
-# 本地调试临时产物（截图/OCR/日志等）
-.tmp_debug/
-
-# 用户提供招投标资料目录（大数据/二进制，不入库；测试副本放 samples/）
-docs/招投标版块数据提供/
-
-# 本地一键启动脚本（含本机 JDK 路径/网卡 IP/端口覆盖，成员各自环境不同，不入库；
-# 需要时按 docs/03-本地运行与联调说明.md 自行生成，或参考 deploy-bidding-local.override.yml 注释；
-# 现统一放仓库外 D:\Code\IDEA\txgy\local-config\）
-txgy-module-bidding-server/run-local.cmd
-txgy-module-bidding-server/bidding-dev.cmd
-txgy-module-bidding-server/bidding-dev.sh

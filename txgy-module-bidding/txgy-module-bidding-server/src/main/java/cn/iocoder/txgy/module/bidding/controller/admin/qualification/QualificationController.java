@@ -1,19 +1,28 @@
 package cn.iocoder.txgy.module.bidding.controller.admin.qualification;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.EnterpriseQualificationSaveReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationApplyPageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationApplyRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationApproveReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationRejectReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationRenewReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.qualification.vo.QualificationRespVO;
 import cn.iocoder.txgy.module.bidding.service.qualification.EnterpriseQualificationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import cn.iocoder.txgy.framework.idempotent.core.annotation.Idempotent;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +41,30 @@ public class QualificationController {
 
     @Resource
     private EnterpriseQualificationService enterpriseQualificationService;
+
+    @GetMapping("/page")
+    @Operation(summary = "资质台账分页（按企业主体；支持序列/类别/等级/状态/临近到期/关键字筛选）")
+    @PreAuthorize("@ss.hasPermission('bidding:qualification:query')")
+    public CommonResult<PageResult<QualificationRespVO>> getQualificationPage(
+            @Valid QualificationPageReqVO reqVO) {
+        return CommonResult.success(enterpriseQualificationService.getQualificationPage(reqVO));
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "资质详情（含绑定证照摘要与最近一次达标核查）")
+    @Parameter(name = "id", description = "资质主档 id", required = true, example = "9001")
+    @PreAuthorize("@ss.hasPermission('bidding:qualification:query')")
+    public CommonResult<QualificationDetailRespVO> getQualification(@RequestParam("id") Long id) {
+        return CommonResult.success(enterpriseQualificationService.getQualification(id));
+    }
+
+    @GetMapping("/apply/page")
+    @Operation(summary = "延续申报单分页（按企业主体；支持资质/申报类型/状态筛选，提交日期倒序）")
+    @PreAuthorize("@ss.hasPermission('bidding:qualification:query')")
+    public CommonResult<PageResult<QualificationApplyRespVO>> getApplyPage(
+            @Valid QualificationApplyPageReqVO reqVO) {
+        return CommonResult.success(enterpriseQualificationService.getApplyPage(reqVO));
+    }
 
     @PostMapping("/create")
     @Idempotent
