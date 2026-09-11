@@ -26,7 +26,7 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 | `check-do-columns.js` | DO 字段在合并包中有对应列 | DO 与 DDL 字段漂移，运行期报 Unknown column |
 | `check-menu-pages.js` | `type=2` 菜单的 `component` 必须有对应 `.vue` | **死菜单**：侧边栏能点、点进去 404 |
 | `check-dict-coverage.js` | 前端引用的字典类型已在 `bidding_dict_data` 注册 | **英文码直出**：页面拿不到中文名与标签色 |
-| `check-api-coverage.js` | 后端 `/bidding` 端点都已在前端接线 | **功能静默缺失**：后端有端点、前端无人调用 |
+| `check-api-coverage.js` | 正向：后端 `/bidding` 端点都已在前端接线；反向：前端请求路径在后端都存在 | 正向失败 = **功能静默缺失**（后端有端点、前端无人调用）；反向失败 = **运行期 404**（前端调了不存在的路径） |
 
 `check-api-coverage.js` 的选项与口径：
 
@@ -35,6 +35,10 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
   `const API = \`\${baseUrl}\${apiPrefix}/notice-follow\`` 这类**配置常量拼前缀**的写法（门户站就是这么写的，
   字面量里根本没有 `/bidding`，只做精确比对会把 5 个已接线的关注端点误报成未接线）
 - `ALLOW` 白名单：只应放"公开接口/程序化接口/他人在飞功能"，并在理由里说明替代路径或跟进条件
+- `--orphans`：只跑反向检查（前端请求调用点 → 后端是否存在），排查"改后端路径忘了改前端"
+- 反向检查**只认请求调用点**（`requestClient.get('...')`、`authedFetch(\`...\`)` 的第一个字符串参数）。
+  若把任意字符串引用都算进去，`#/views/bidding/vo/...` 这类 import 路径与路由 `path` 会被误判成 56 个"孤儿"——
+  实测该口径下真正的孤儿为 0，说明"只认调用点"既能查问题又不误报
 
 `check-dict-coverage.js` 的选项：
 

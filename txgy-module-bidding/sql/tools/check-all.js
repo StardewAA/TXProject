@@ -26,7 +26,7 @@ const CHECKS = [
   { args: ['sql/tools/check-do-columns.js'], name: 'DO ↔ 列覆盖', why: 'DO 字段必须在合并包中有对应列' },
   { args: ['sql/tools/check-menu-pages.js'], name: '菜单 ↔ 页面一致性', why: 'type=2 菜单的 component 必须存在对应 .vue（防死菜单/404）' },
   { args: ['sql/tools/check-dict-coverage.js'], name: '字典覆盖率', why: '前端引用的字典类型必须已在 bidding_dict_data 注册（防英文码直出）' },
-  { args: ['sql/tools/check-api-coverage.js'], name: '接口接线覆盖率', why: '后端 /bidding 端点必须已在前端接线（白名单需写明理由）' },
+  { args: ['sql/tools/check-api-coverage.js'], name: '接口接线覆盖率', why: '正向：后端端点已接线；反向：前端请求路径都存在（防 404）' },
 ];
 
 const results = [];
