@@ -84,6 +84,7 @@ public class CrawlNoticeProcessor {
         // 2026-09-10 下载器改 AI：详情/落库解析器随 payload 下发（task.parserCode 仍为列表解析器，用于执行路由与去重语义）；
         // 兼容旧任务：payload 无 detailParser 时回退到 task.parserCode（不改变既有行为）
         String detailParser = text(payload, "detailParser");
+        // 详情解析器兜底：优先 payload.detailParser，其次任务 parserCode，最后按空处理（下游有 hasText 兜底）
         String effectiveDetail = StringUtils.hasText(detailParser) ? detailParser : task.getParserCode();
 
         // ===== 合规限速闸（唯一入口，2026-09-10 重构）=====
@@ -96,6 +97,14 @@ public class CrawlNoticeProcessor {
         // 为什么一次占位而非每个请求各占一次：详情页与其 PDF 直链是"同一份公告原文"的取回过程，
         //   按公告计数才与「每 interval 一条原文」的合规口径一致；每个请求各占会导致间隔被重复消耗。
         if (!StringUtils.hasText(contentHtml)) {
+            // robots 合规预检前移（2026-09-11 缺陷修复）：
+            //   原实现把 robots 判定放在"下载前"，但闸位已在更早处被占掉 → 被禁止的页面照样消耗 1 个 2 分钟额度，
+            //   并按普通失败重试 3 次（同一禁止页面必然次次失败）后进死信。规范依据：《外部信息获取 v1.0》§合规
+            //   （robots 约定）+ 用户口径「绝对保证 2 分钟才爬一次详细页」——额度只能花在真正会抓的页面上。
+            //   正确语义：被禁止 = 规则性跳过（SKIPPED 终态），不占额度、不重试、不进死信。
+            if (!robotsGuard.isAllowed(task.getUrl())) {
+                throw new CrawlSkipException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + task.getUrl());
+            }
             if (!crawlDownloadGate.tryAcquire(task.getSourceCode(), task.getId(), task.getUrl())) {
                 throw new CrawlDownloadNotDueException(crawlDownloadGate.nextDueAt(task.getSourceCode()), task.getUrl());
             }
@@ -130,12 +139,12 @@ public class CrawlNoticeProcessor {
         }
         if (!StringUtils.hasText(contentHtml)) {
             // GX 类：task.url=详情页 → 详情→PDF 直链→下载→PDFBox→归档→落库（长任务异步化的核心收益）
-            if (task.getParserCode() != null && task.getParserCode().startsWith("GX")) {
+            if (StringUtils.hasText(task.getParserCode()) && task.getParserCode().startsWith("GX")) {
                 return executeGxDetail(task, title, url, date, effectiveDetail);
             }
             // 2026-09-10 全链路补全：非 GX 的 HTML 详情任务（HTML_GENERIC/EBIDDING 等 HTML 列表栏目，async 模式）
             // → 下载详情 HTML → 按任务 parser 解析 → 落库（此前 async 下这类任务全部“素材缺失”死信）
-            if (task.getParserCode() == null || !"QYZB_JSON".equals(task.getParserCode())) {
+            if (!"QYZB_JSON".equals(task.getParserCode())) { // 含 null/空白：都按 HTML 详情处理（hasText 口径）
                 return executeHtmlDetail(task, title, url, date, effectiveDetail);
             }
             // QYZB_JSON 直采任务 payload 必有全文/文件引用，走到这里属异常
@@ -151,7 +160,9 @@ public class CrawlNoticeProcessor {
         LocalDateTime publish = parseDate(date);
         dto.setPublishTime(publish); // 2026-09-10：解析不出不再用抓取时间冒充发布时间（宁缺毋假，可经审核侧 AI 抽取回填）
         dto.setIssuerName(extractIssuer(contentHtml));
-        dto.setParserCode(task.getParserCode() == null ? task.getChannelCode() : task.getParserCode());
+        // 2026-09-11 缺陷修复：兜底判定必须用 hasText（空串/纯空白同样算"没有"）。
+        //   原写法只判 == null，导致 parser_code='' 被原样写库，且下游 parserRegistry.get("") 直接抛"未知解析器"。
+        dto.setParserCode(StringUtils.hasText(task.getParserCode()) ? task.getParserCode() : task.getChannelCode());
         // 2026-09-10 下载器改 AI：全文直采（QYZB 类）同样过 AI 结构化与行业判定（detailParser=HTML_AI 时生效）
         applyAiEnrichIfConfigured(dto, effectiveDetail, contentHtml, url);
         return externalNoticeIngestService.ingest(dto);
@@ -168,7 +179,8 @@ public class CrawlNoticeProcessor {
         assertUrlAllowed(url, task.getSourceCode());
         // robots.txt 合规：目标路径被 Disallow 即不抓（2026-09-10 补齐，此前该字段形同虚设）
         if (!robotsGuard.isAllowed(url)) {
-            throw new IllegalStateException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + url);
+            // 上游占闸前已预检（此处命中 robots 缓存，不产生额外请求）：纵深防御，语义同为"跳过"而非"失败"
+            throw new CrawlSkipException("目标路径被 robots.txt 禁止抓取（合规跳过） url=" + url);
         }
         // 下载 + 即时校验 + 审计（速度监控与完整性结论一并落台账）
         cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.HttpFetchClient.FetchOutcome outcome;
@@ -191,7 +203,7 @@ public class CrawlNoticeProcessor {
         // 2026-09-10 下载器改 AI：详情正文解析器 = detailParser（HTML_AI 时走平台 AI 结构化+行业判定），
         // 缺省回退任务列表解析器（HTML_GENERIC/EBIDDING 等本站规则解析器），保持既有行为
         String parserCode = StringUtils.hasText(detailParser) ? detailParser
-                : (task.getParserCode() == null ? "HTML_GENERIC" : task.getParserCode());
+                : (StringUtils.hasText(task.getParserCode()) ? task.getParserCode() : "HTML_GENERIC");
         NoticeParseResult parsed = parserRegistry.get(parserCode).parse(inputOf("HTML", html, url));
         if (parsed.getStatus() == NoticeParseResult.Status.FAILED
                 && !StringUtils.hasText(parsed.getTitle()) && !StringUtils.hasText(parsed.getContentText())) {

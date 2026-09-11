@@ -255,7 +255,22 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
     }
 
     @Override
+    public void markSkipped(Long taskId, String reason) {
+        CrawlTaskDO task = require(taskId);
+        task.setStatus(CrawlTaskStatusEnum.SKIPPED.getStatus());
+        task.setFinishedAt(LocalDateTime.now());
+        task.setMessage("skipped: " + (reason == null ? "" : reason));
+        crawlTaskMapper.updateById(task);
+        log.info("[markSkipped][taskId={} url={}] {}", taskId, task.getUrl(), reason);
+    }
+
+    @Override
     public CrawlAttemptOutcome handleFailure(Long taskId, String cause) {
+        return handleFailure(taskId, cause, null);
+    }
+
+    @Override
+    public CrawlAttemptOutcome handleFailure(Long taskId, String cause, Integer retryAfterSeconds) {
         CrawlTaskDO task = require(taskId);
         int attempt = (task.getAttempt() == null ? 0 : task.getAttempt()) + 1;
         task.setAttempt(attempt);
@@ -275,10 +290,19 @@ public class CrawlTaskServiceImpl implements CrawlTaskService {
         }
         // 未耗尽：指数退避后回 PENDING（等价 crawl.retry 重投，Redis Stream 确认/重投语义由接入的 MQ 承担）
         task.setStatus(CrawlTaskStatusEnum.PENDING.getStatus());
-        task.setNextRetryTime(LocalDateTime.now().plusSeconds(backoffSeconds(attempt)));
-        task.setMessage("retry scheduled attempt=" + attempt + " cause=" + cause);
+        // 2026-09-11：尊重站点声明的冷却（防反爬）——实际等待取"指数退避"与"站点 Retry-After"的较大者，
+        //   否则会出现"站点已明确要求 300s 后再来，我们 120s 就又敲门"的合规风险。
+        long waitSeconds = backoffSeconds(attempt);
+        boolean extended = retryAfterSeconds != null && retryAfterSeconds > waitSeconds;
+        if (extended) {
+            waitSeconds = retryAfterSeconds;
+        }
+        task.setNextRetryTime(LocalDateTime.now().plusSeconds(waitSeconds));
+        task.setMessage("retry scheduled attempt=" + attempt + " cause=" + cause
+                + (extended ? " wait=" + waitSeconds + "s(站点冷却)" : ""));
         crawlTaskMapper.updateById(task);
-        log.info("[handleFailure][taskId={}] 第 {} 次失败，{} 秒后重试", taskId, attempt, backoffSeconds(attempt));
+        log.info("[handleFailure][taskId={}] 第 {} 次失败，{} 秒后重试{}", taskId, attempt, waitSeconds,
+                extended ? "（站点冷却要求）" : "");
         return CrawlAttemptOutcome.RETRY_SCHEDULED;
     }
 

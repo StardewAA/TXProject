@@ -72,6 +72,9 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
     /** 原文下载限速闸：批量回填 PDF 属"从目标站点下载公告原文文件"，同样受合规频控约束 */
     @Resource
     private cn.iocoder.txgy.module.bidding.service.externalfetch.throttle.CrawlDownloadGate crawlDownloadGate;
+    /** robots 合规检查：在线预览若回退外站直链，同样属于"抓取目标站点内容" */
+    @Resource
+    private cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.RobotsGuard robotsGuard;
 
     @Override
     public void approveExternal(Long id) {
@@ -632,6 +635,20 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         if (StringUtils.hasText(externalUrl) && !externalUrl.equals(notice.getPdfDownloadUrl())) {
             try {
                 assertPdfDownloadAllowed(notice, externalUrl);
+                // 2026-09-11 缺陷修复（合规旁路）：外站直链预览同样是从目标站点下载原文文件，
+                //   必须与采集链路共用同一个 2 分钟闸位，否则"预览"就成了绕过限速的后门。
+                //   规范依据：《外部信息获取 v1.0》§六 频控（间隔只作用于"下载原文文件"这一动作）
+                //   + 用户口径「绝对保证 2 分钟才爬一次详细页」。
+                //   为什么用非阻塞 tryAcquire 而非 acquireBlocking：这是用户点开的在线预览，等 2 分钟不可接受；
+                //   拿得到额度就预览，拿不到就明确 404（前端已有"暂无 PDF 原文"提示），绝不"先请求再判断"。
+                if (!robotsGuard.isAllowed(externalUrl)) {
+                    log.info("[pdfContent][id={}] 外站直链被 robots.txt 禁止，按 404 返回（合规优先）: {}", id, externalUrl);
+                    return null;
+                }
+                if (!crawlDownloadGate.tryAcquire(notice.getSourceCode(), null, externalUrl)) {
+                    log.info("[pdfContent][id={}] 未到合规下载间隔，本次不访问外站（避免绕过限频）: {}", id, externalUrl);
+                    return null;
+                }
                 byte[] external = fetchPdfBytes(externalUrl, id, "外站直链");
                 if (external != null) {
                     log.info("[pdfContent][id={}] 平台归档不可用，已回退外站直链预览", id);
