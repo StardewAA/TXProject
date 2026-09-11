@@ -15,6 +15,7 @@ import { getReceivablePage } from '#/api/crm/receivable';
 import { getReceivablePlanPage } from '#/api/crm/receivable/plan';
 import { getProductPage } from '#/api/crm/product';
 import { getSimpleDictDataList } from '#/api/system/dict/data';
+import { requestClient } from '#/api/request';
 
 import {
   getTodayContactCustomerCount,
@@ -31,17 +32,32 @@ export interface TableColumn {
   key: string;
 }
 
+/** 业务类型：决定点击表格行时跳转到哪个详情页 */
+export type BizType =
+  | 'business'
+  | 'clue'
+  | 'contact'
+  | 'contract'
+  | 'customer'
+  | 'product'
+  | 'receivable'
+  | 'receivablePlan';
+
 export interface TableResult {
   title: string;
   columns: TableColumn[];
   rows: Record<string, any>[];
   /** 数据来源提示 */
   source?: string;
+  /** 业务类型，用于点击行时跳转对应详情页 */
+  bizType?: BizType;
 }
 
 export interface AiReply {
   text: string;
   table?: TableResult;
+  /** AI 意图识别不可用、已降级为关键词匹配 */
+  degraded?: boolean;
 }
 
 function nowMonth(): string {
@@ -266,6 +282,7 @@ async function replyCustomers(
           ? `客户：${name}`
           : '客户列表',
       source: 'CRM 客户管理 · 实查数据',
+      bizType: 'customer',
       columns: [
         { title: '客户名称', dataIndex: 'name', key: 'name' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
@@ -299,6 +316,7 @@ async function replyPool(): Promise<AiReply> {
     table: {
       title: '客户公海',
       source: 'CRM 客户公海 · 实查数据',
+      bizType: 'customer',
       columns: [
         { title: '客户名称', dataIndex: 'name', key: 'name' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
@@ -322,7 +340,10 @@ async function replyClues(
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
-  const res = await getCluePage({ pageNo: 1, pageSize: 100 });
+  // 注意：有名称时必须交给后端过滤。只取前 100 条再在前端筛，数据一多就会「搜不到」
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getCluePage(params);
   const all: any[] = res.list || [];
   const rows = filterByName(all, name, [
     (r: any) => r.name,
@@ -340,6 +361,7 @@ async function replyClues(
     table: {
       title: name ? `线索：${name}` : '线索列表',
       source: 'CRM 线索管理 · 实查数据',
+      bizType: 'clue',
       columns: [
         { title: '线索名称', dataIndex: 'name', key: 'name' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
@@ -367,7 +389,10 @@ async function replyBusinesses(
 ): Promise<AiReply> {
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
-  const res = await getBusinessPage({ pageNo: 1, pageSize: 100 });
+  // 有名称时交给后端过滤，避免只在前 100 条里找
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getBusinessPage(params);
   let rows: any[] = res.list || [];
   if (month) {
     rows = rows.filter((b) => isCurrentMonth(b.dealTime || b.createTime));
@@ -390,6 +415,7 @@ async function replyBusinesses(
     table: {
       title: name ? `商机：${name}` : '商机列表',
       source: 'CRM 商机管理 · 实查数据',
+      bizType: 'business',
       columns: [
         { title: '商机名称', dataIndex: 'name', key: 'name' },
         { title: '客户', dataIndex: 'customer', key: 'customer' },
@@ -411,7 +437,14 @@ async function replyBusinesses(
   };
 }
 
-async function replyTodos(): Promise<AiReply> {
+async function replyTodos(q = ''): Promise<AiReply> {
+  // 用户提到「下属/团队」时按「下属负责的」视角查（sceneType=3），否则用默认视角
+  const sceneType = /下属|团队|他们/.test(q) ? 3 : undefined;
+  const baseQuery: Record<string, any> = { pageNo: 1, pageSize: 20 };
+  if (sceneType) {
+    baseQuery.sceneType = sceneType;
+  }
+
   const [todayContact, poolRemind, follow, planRemind, contractAudit, contractRemind, receivableAudit] =
     await Promise.all([
       getTodayContactCustomerCount(),
@@ -433,16 +466,72 @@ async function replyTodos(): Promise<AiReply> {
     { item: '待审批回款', count: receivableAudit },
   ];
 
+  // 关键：只给数量用户没法跟进，同时把「具体是哪些客户」也查出来
+  const [overduePage, todayPage, followPage] = await Promise.all([
+    getCustomerPage({ ...baseQuery, contactStatus: 2 } as any).catch(() => null),
+    getCustomerPage({ ...baseQuery, contactStatus: 1 } as any).catch(() => null),
+    getCustomerPage({ ...baseQuery, followUpStatus: false } as any).catch(() => null),
+  ]);
+
+  const detailRows: Array<Record<string, any>> = [];
+  const collect = (
+    page: any,
+    type: string,
+    timeField: string,
+    fallbackField: string,
+  ) => {
+    for (const c of page?.list ?? []) {
+      detailRows.push({
+        type,
+        name: c?.name ?? '-',
+        mobile: c?.mobile ?? '-',
+        owner: c?.ownerUserName ?? '-',
+        time: fmtDate(c?.[timeField] ?? c?.[fallbackField]),
+      });
+    }
+  };
+  collect(overduePage, '已逾期未联系', 'contactNextTime', 'contactLastTime');
+  collect(todayPage, '今日需联系', 'contactNextTime', 'contactLastTime');
+  collect(followPage, '待跟进', 'contactNextTime', 'contactLastTime');
+
+  const summary =
+    `待办总览：今日需联系 ${todayContact} 人、待跟进 ${follow} 人、` +
+    `即将进入公海 ${poolRemind} 人、待回款提醒 ${planRemind} 笔、` +
+    `待审批合同 ${contractAudit} 份、即将到期合同 ${contractRemind} 份、` +
+    `待审批回款 ${receivableAudit} 笔。`;
+
+  // 没有需要联系的客户时，退回展示统计表
+  if (detailRows.length === 0) {
+    return {
+      text: `${summary}\n当前没有需要联系或跟进的客户。`,
+      table: {
+        title: '待办事项总览',
+        source: 'CRM 统计 · 实查数据',
+        columns: [
+          { title: '待办类型', dataIndex: 'item', key: 'item' },
+          { title: '数量', dataIndex: 'count', key: 'count' },
+        ],
+        rows,
+      },
+    };
+  }
+
   return {
-    text: `以下是 CRM 系统当前的待办事项总览（实查）：`,
+    text:
+      `${summary}\n以下是需要处理的客户明细` +
+      `${detailRows.length >= 20 ? '（仅显示前 20 条）' : ''}：`,
     table: {
-      title: '待办事项总览',
-      source: 'CRM 统计 · 实查数据',
+      title: '待办客户明细',
+      source: `CRM 客户 · 实查数据${sceneType === 3 ? ' · 下属负责的' : ''}`,
+      bizType: 'customer',
       columns: [
-        { title: '待办类型', dataIndex: 'item', key: 'item' },
-        { title: '数量', dataIndex: 'count', key: 'count' },
+        { title: '待办类型', dataIndex: 'type', key: 'type' },
+        { title: '客户名称', dataIndex: 'name', key: 'name' },
+        { title: '手机号', dataIndex: 'mobile', key: 'mobile' },
+        { title: '负责人', dataIndex: 'owner', key: 'owner' },
+        { title: '下次联系', dataIndex: 'time', key: 'time' },
       ],
-      rows,
+      rows: detailRows,
     },
   };
 }
@@ -452,7 +541,10 @@ async function replyContacts(
   hintName?: string | null,
 ): Promise<AiReply> {
   const name = pickName(hintName, q);
-  const res = await getContactPage({ pageNo: 1, pageSize: 100 });
+  // 有名称时交给后端过滤，避免只在前 100 条里找
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getContactPage(params);
   const all: any[] = res.list || [];
   const rows = filterByName(all, name, [
     (r: any) => r.name,
@@ -470,6 +562,7 @@ async function replyContacts(
     table: {
       title: name ? `联系人：${name}` : '联系人列表',
       source: 'CRM 联系人管理 · 实查数据',
+      bizType: 'contact',
       columns: [
         { title: '姓名', dataIndex: 'name', key: 'name' },
         { title: '客户', dataIndex: 'customer', key: 'customer' },
@@ -496,7 +589,10 @@ async function replyContracts(
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
-  const res = await getContractPage({ pageNo: 1, pageSize: 100 });
+  // 有名称时交给后端过滤，避免只在前 100 条里找
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getContractPage(params);
   let rows: any[] = res.list || [];
   if (month) {
     rows = rows.filter((c) => isCurrentMonth(c.createTime || c.startTime));
@@ -520,6 +616,7 @@ async function replyContracts(
     table: {
       title: name ? `合同：${name}` : '合同列表',
       source: 'CRM 合同管理 · 实查数据',
+      bizType: 'contract',
       columns: [
         { title: '合同编号', dataIndex: 'no', key: 'no' },
         { title: '客户', dataIndex: 'customer', key: 'customer' },
@@ -546,7 +643,10 @@ async function replyReceivables(
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
-  const res = await getReceivablePage({ pageNo: 1, pageSize: 100 });
+  // 有名称时交给后端过滤，避免只在前 100 条里找
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getReceivablePage(params);
   let rows: any[] = res.list || [];
   if (month) {
     rows = rows.filter((r) => isCurrentMonth(r.returnTime));
@@ -569,6 +669,7 @@ async function replyReceivables(
     table: {
       title: name ? `回款：${name}` : '回款列表',
       source: 'CRM 回款管理 · 实查数据',
+      bizType: 'receivable',
       columns: [
         { title: '回款编号', dataIndex: 'no', key: 'no' },
         { title: '客户', dataIndex: 'customer', key: 'customer' },
@@ -595,7 +696,10 @@ async function replyReceivablePlans(
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
-  const res = await getReceivablePlanPage({ pageNo: 1, pageSize: 100 });
+  // 有名称时交给后端过滤，避免只在前 100 条里找
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  const res = await getReceivablePlanPage(params);
   let rows: any[] = res.list || [];
   if (month) {
     rows = rows.filter((r) => isCurrentMonth(r.returnTime));
@@ -615,6 +719,7 @@ async function replyReceivablePlans(
     table: {
       title: name ? `回款计划：${name}` : '回款计划列表',
       source: 'CRM 回款计划 · 实查数据',
+      bizType: 'receivablePlan',
       columns: [
         { title: '计划编号', dataIndex: 'id', key: 'id' },
         { title: '客户', dataIndex: 'customer', key: 'customer' },
@@ -645,6 +750,7 @@ async function replyProducts(): Promise<AiReply> {
     table: {
       title: '产品列表',
       source: 'CRM 产品管理 · 实查数据',
+      bizType: 'product',
       columns: [
         { title: '产品名称', dataIndex: 'name', key: 'name' },
         { title: '产品编码', dataIndex: 'no', key: 'no' },
@@ -695,14 +801,8 @@ interface QwenClassify {
   summary?: string;
 }
 
-const QWEN_SYSTEM_PROMPT = `你是一个 CRM 智能助手。用户会用中文询问 CRM 业务（客户、线索、商机、待办、联系人、合同、回款、回款计划、产品、客户公海）。
-请分析用户意图并提取过滤条件，只返回一个 JSON 对象（不要 markdown、不要多余文字），结构如下：
-{
-  "intent": "customer" | "pool" | "clue" | "business" | "todo" | "contact" | "contract" | "receivable" | "receivablePlan" | "product" | "unknown",
-  "name": "当用户在询问某个具体的客户/公司/联系人/合同名称时，提取该名称的原文（例如用户问“帮我查找长庆油田分公司第五采油厂客户信息”，则 name 为“长庆油田分公司第五采油厂”）；用户只是泛问列表（如“列出所有客户”“本月合同”）时为 null",
-  "month": true或false（用户是否要求“本月/这个月”）,
-  "summary": "用一句中文简要说明你将展示什么（1-2 句）。必须与实际返回的列表一致：intent=customer 时只能说明将展示客户列表，不要承诺展示联系人、商机、合同、回款等未返回的数据"
-}`;
+// 注意：意图识别提示词与模型密钥都已移到后端（CrmAiIntentClient + txgy.crm.ai 配置），
+// 前端只调 /crm/ai/classify-intent，不再保存密钥，也不依赖 Vite 代理。
 
 function parseJsonSafe<T>(text: string): T | null {
   if (!text) return null;
@@ -724,31 +824,16 @@ function parseJsonSafe<T>(text: string): T | null {
 async function classifyIntentWithQwen(
   query: string,
 ): Promise<QwenClassify | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000); // 15s 超时，避免挂起导致发送锁死
   try {
-    const res = await fetch('/api/ai/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'qwen-plus',
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: QWEN_SYSTEM_PROMPT },
-          { role: 'user', content: query },
-        ],
-      }),
+    // 由后端转发大模型：密钥保存在服务端，前端接触不到；
+    // 也不再依赖 Vite 开发代理，打包部署后同样可用
+    const res: any = await requestClient.post('/crm/ai/classify-intent', {
+      query,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? '';
+    const content: string = res?.content ?? '';
     return parseJsonSafe<QwenClassify>(content);
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -767,7 +852,7 @@ async function getLocalTable(
     case 'business':
       return await replyBusinesses(q, hintName);
     case 'todo':
-      return await replyTodos();
+      return await replyTodos(q);
     case 'contact':
       return await replyContacts(q, hintName);
     case 'contract':
@@ -786,6 +871,21 @@ async function getLocalTable(
 /* ----------------------------- 意图分发 ----------------------------- */
 
 /**
+ * 结果条数达到单次查询上限时补一句说明。
+ * 否则用户会把「只取回 100 条」误判成「系统里就这么多数据」。
+ */
+function withLimitHint(reply: AiReply): AiReply {
+  const count = reply.table?.rows?.length ?? 0;
+  if (count >= 100) {
+    return {
+      ...reply,
+      text: `${reply.text}\n（本次最多展示 100 条，可补充名称等条件缩小范围）`,
+    };
+  }
+  return reply;
+}
+
+/**
  * 主入口：优先调用千问大模型做意图理解，再用 CRM 真实接口拉取数据；
  * 若千问不可用（网络/密钥问题），则回退到本地关键词识别，仍调用真实接口。
  */
@@ -797,8 +897,11 @@ export async function mockAiReply(query: string): Promise<AiReply> {
     if (cls) {
       const local = await getLocalTable(cls.intent, q, cls.name);
       if (local) {
-        const text = cls.summary?.trim() || local.text;
-        return { text, table: local.table };
+        // 只有确实查到数据时才用千问的口头总结；
+        // 未查到时要保留真实提示（否则「未找到」会被总结语盖掉，看着像有数据）
+        const hasRows = (local.table?.rows?.length ?? 0) > 0;
+        const text = hasRows ? cls.summary?.trim() || local.text : local.text;
+        return withLimitHint({ text, table: local.table });
       }
       if (cls.summary) {
         return { text: cls.summary };
@@ -808,8 +911,9 @@ export async function mockAiReply(query: string): Promise<AiReply> {
     // 落到下方关键词兜底
   }
 
-  // 兜底：纯前端关键词识别（仍调用真实接口）
-  return keywordMockReply(q);
+  // 兜底：纯前端关键词识别（仍调用真实接口）。
+  // 标记 degraded，让界面明确告知用户「AI 意图识别未生效」，而不是静默变笨
+  return { ...withLimitHint(await keywordMockReply(q)), degraded: true };
 }
 
 async function keywordMockReply(query: string): Promise<AiReply> {
@@ -817,10 +921,11 @@ async function keywordMockReply(query: string): Promise<AiReply> {
 
   // 优先级：公海 > 客户 > 线索 > 商机 > 待办 > 联系人 > 合同 > 回款计划 > 回款 > 产品
   if (/公海/.test(q)) return await replyPool();
+  // 「待办」必须排在「客户」之前：像「今日待办要联系的客户」同时含两个词，应走待办明细
+  if (/待办|todo|事项/.test(q)) return await replyTodos(q);
   if (/客户/.test(q) && !/公海/.test(q)) return await replyCustomers(q);
   if (/线索/.test(q)) return await replyClues(q);
   if (/商机|机会/.test(q)) return await replyBusinesses(q);
-  if (/待办|todo|事项/.test(q)) return await replyTodos();
   if (/联系人|联系/.test(q)) return await replyContacts(q);
   if (/合同/.test(q)) return await replyContracts(q);
   if (/回款计划/.test(q)) return await replyReceivablePlans(q);

@@ -20,6 +20,9 @@ public class CrmAfterSaleVisitRecordPageReqVO extends PageParam {
     @Schema(description = "关联回访任务编号", example = "1")
     private Long taskId;
 
+    @Schema(description = "记录状态：1=待填写 2=已填写", example = "1")
+    private Integer status;
+
     @Schema(description = "质保档案编号", example = "1")
     private Long warrantyId;
 
