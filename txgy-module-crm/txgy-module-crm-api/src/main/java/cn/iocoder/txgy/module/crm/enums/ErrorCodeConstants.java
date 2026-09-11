@@ -107,6 +107,19 @@ public interface ErrorCodeConstants {
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
 
+    // ========== 报价 1_020_014_000 ==========
+    ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");
+    ErrorCode QUOTATION_NO_EXISTS = new ErrorCode(1_020_014_001, "生成报价序列号重复，请重试");
+    ErrorCode QUOTATION_UPDATE_FAIL_NOT_DRAFT = new ErrorCode(1_020_014_002, "报价更新失败，原因：报价不是草稿状态");
+    ErrorCode QUOTATION_SUBMIT_FAIL_NOT_DRAFT = new ErrorCode(1_020_014_003, "报价提交审核失败，原因：报价没处在未提交状态");
+    ErrorCode QUOTATION_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS = new ErrorCode(1_020_014_004, "更新报价审核状态失败，原因：报价不是审核中状态");
+    ErrorCode QUOTATION_DELETE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_005, "删除报价失败，原因：报价已生成合同，不能删除");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_NOT_APPROVE = new ErrorCode(1_020_014_006, "转为合同失败，原因：报价不是审批通过状态");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_EXISTS = new ErrorCode(1_020_014_007, "转为合同失败，原因：报价已生成合同");
+
+    // ========== 商机管理 1_020_002_000 报价关联校验 ==========
+    ErrorCode BUSINESS_DELETE_FAIL_QUOTATION_EXISTS = new ErrorCode(1_020_002_005, "商机已关联报价，不能删除");
+
     // ========== 业绩目标配置 1_020_011_000 ==========
     ErrorCode PERFORMANCE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_011_000, "业绩目标配置不存在");
     ErrorCode PERFORMANCE_CONFIG_EXISTS = new ErrorCode(1_020_011_001, "该对象当前年份的业绩目标配置已存在");
