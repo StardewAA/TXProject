@@ -23,6 +23,7 @@ import { useAccessStore } from '@vben/stores';
 import { message } from 'ant-design-vue';
 
 import { getPersonnelProfilePage, type PersonnelProfileApi } from '#/api/bidding/personnel';
+import { getProjectPage } from '#/api/bidding/project';
 import {
   assignKeyPost,
   checkMultiPost,
@@ -169,6 +170,35 @@ async function loadAssignPersons(keyword?: string) {
   }
 }
 
+/* 项目选择器：④ 区原先只能手输项目 id（用户往往只记得项目名称）；
+ * 保留 id 输入框兼容既有用法，另加按名称远程搜索的下拉，选中即回填 projectId。
+ * 无 bidding:project:query 权限时列表为空也不影响手输 id。 */
+const projectOptions = ref<Array<{ label: string; value: number }>>([]);
+const projectLoading = ref(false);
+
+async function loadProjects(keyword?: string) {
+  projectLoading.value = true;
+  try {
+    const page = await getProjectPage({ pageNo: 1, pageSize: 20, projectName: keyword ?? '' });
+    projectOptions.value = (page.list ?? [])
+      .map((p) => ({
+        label: `${p.projectName ?? '—'}（${p.projectCode ?? '无编号'}）`,
+        value: Number(p.id ?? 0),
+      }))
+      .filter((o) => o.value > 0);
+  } catch {
+    // 静默：无项目查询权限时仍可手输项目 id
+  } finally {
+    projectLoading.value = false;
+  }
+}
+
+/** 监控表里对某个超限岗位直接发起变更登记（省去手抄岗位 code 的环节） */
+function openAssignForPost(postCode?: string) {
+  openAssign();
+  assignForm.postCode = postCode ?? '';
+}
+
 function openAssign() {
   assignForm.projectId = Number(projectId.value ?? 0);
   assignForm.postCode = '';
@@ -221,6 +251,7 @@ const keyPostColumns = [
   { title: '是否超限', dataIndex: 'exceeded', key: 'exceeded', width: 100 },
   { title: '最近变更日期', dataIndex: 'lastChangeDate', key: 'lastChangeDate', width: 150 },
   { title: '涉及人员', dataIndex: 'personIds', key: 'personIds' },
+  { title: '操作', key: 'action', width: 110 },
 ];
 
 onMounted(() => {
@@ -354,7 +385,19 @@ onMounted(() => {
     <div class="ct-panel">
       <div class="ct-panel-t">④ 项目关键岗位变更监控</div>
       <div class="ct-filter">
-        <a-input-number v-model:value="projectId" :min="1" placeholder="项目 id" style="width: 180px" />
+        <a-input-number v-model:value="projectId" :min="1" placeholder="项目 id" style="width: 150px" />
+        <a-select
+          v-model:value="projectId"
+          :options="projectOptions"
+          :loading="projectLoading"
+          :filter-option="false"
+          placeholder="或按项目名称搜索"
+          show-search
+          allow-clear
+          style="width: 280px"
+          @focus="loadProjects()"
+          @search="loadProjects"
+        />
         <a-input-number v-model:value="windowDays" :min="1" placeholder="窗口天数（空=取配置）" style="width: 200px" />
         <a-button v-if="can('bidding:project:query')" type="primary" :loading="keyPostLoading" @click="doKeyPost">
           查询
@@ -385,7 +428,7 @@ onMounted(() => {
             :pagination="false"
             row-key="postCode"
             size="small"
-            :scroll="{ x: 1000 }"
+            :scroll="{ x: 1120 }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'exceeded'">
@@ -394,6 +437,16 @@ onMounted(() => {
               <template v-else-if="column.key === 'lastChangeDate'">{{ fmtDateTime(record.lastChangeDate) }}</template>
               <template v-else-if="column.key === 'personIds'">
                 {{ (record.personIds ?? []).join('、') || '—' }}
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button
+                  v-if="can('bidding:project:update')"
+                  type="link"
+                  size="small"
+                  @click="openAssignForPost(record.postCode)"
+                >
+                  登记变更
+                </a-button>
               </template>
             </template>
             <template #emptyText><div class="ct-empty">窗口内无关键岗位变更</div></template>
