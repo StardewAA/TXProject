@@ -26,6 +26,7 @@ const path = require('node:path');
 
 const LIST = process.argv.includes('--list');
 const AS_JSON = process.argv.includes('--json');
+const ORPHANS = process.argv.includes('--orphans');
 
 /** 有意不接前端调用的端点（必须写明理由，并说明替代路径） */
 const ALLOW = new Map([
@@ -97,6 +98,8 @@ const chD = String.fromCharCode(DOLLAR), chLB = String.fromCharCode(LBRACE), chR
 const PLACEHOLDER = chLB + 'x' + chRB;
 const isPathChar = (c) => (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === UNDERSCORE || c === DASH || c === SLASH || c === LBRACE || c === RBRACE;
 
+const feOrigin = new Map();  // FE 路径 -> 首次出现的文件（定位用）
+const feCalls = new Set();   // 仅"请求调用点"里的路径（反向检查用，排除 import/路由字符串）
 const fePaths = new Set();  // 含 /bidding 前缀的完整路径
 const feSuffix = new Set(); // 由模板常量拼出的后缀路径（如 /notice-follow/item/{x}/timeline）
 
@@ -165,11 +168,30 @@ for (const f of walk(feRoot, (p) => /\.(ts|vue)$/.test(p))) {
     out += text[i];
     i++;
   }
+  // ⑤ 请求调用点（用于反向检查）：requestClient.get/post/... 或 authedFetch/fetch 的第一个字符串参数
+  const CALL_RE = /(?:requestClient|request)\s*\.\s*(?:delete|download|get|post|put|request|upload)\s*(?:<[^>()]*>)?\s*\(\s*(['"\u0060])([^'"\u0060]*)\1/g;
+  const FETCH_RE = /(?:authedFetch|axios\.\w+|fetch)\s*(?:<[^>()]*>)?\s*\(\s*(['"\u0060])([^'"\u0060]*)\1/g;
+  for (const re of [CALL_RE, FETCH_RE]) {
+    for (const mm of out.matchAll(re)) {
+      const raw = mm[2];
+      const withIdx = raw.includes('/bidding/') ? raw : '';
+      if (!withIdx) continue;
+      let k = raw.indexOf('/bidding/');
+      let end = k + 9;
+      while (end < raw.length && isPathChar(raw.charCodeAt(end))) end++;
+      const p = norm(raw.slice(k, end));
+      feCalls.add(p);
+      if (!feOrigin.has(p)) feOrigin.set(p, path.relative(repoRoot, f));
+    }
+  }
+
   i = 0;
   while ((i = out.indexOf('/bidding/', i)) !== -1) {
     let j = i + 9;
     while (j < out.length && isPathChar(out.charCodeAt(j))) j++;
-    fePaths.add(norm(out.slice(i, j)));
+    const p = norm(out.slice(i, j));
+    fePaths.add(p);
+    if (!feOrigin.has(p)) feOrigin.set(p, path.relative(repoRoot, f));
     i = j;
   }
 }
@@ -187,15 +209,32 @@ function isWired(p) {
   return '';
 }
 
+/** 反向：前端引用的路径在后端是否存在（精确命中，或端点以该路径结尾——应对前端省略公共前缀的写法） */
+function backendHas(f) {
+  if (backend.has(f)) return true;
+  for (const p of backend.keys()) {
+    if (p.endsWith(f)) return true;
+  }
+  return false;
+}
+const orphans = [...feCalls].filter((f) => f.split('/').filter(Boolean).length >= 2 && !backendHas(f)).sort();
+
 const wiredBy = new Map([...backend.keys()].map((p) => [p, isWired(p)]));
 const unwired = [...backend.keys()].filter((p) => !wiredBy.get(p)).sort();
 const unexpected = unwired.filter((p) => !ALLOW.has(p));
 const suffixCount = [...wiredBy.values()].filter((v) => v === 'suffix').length;
 
+if (ORPHANS) {
+  console.log('请求调用点路径 ' + feCalls.size + ' 个（另有 ' + fePaths.size + ' 个任意字符串引用）；后端不存在对应端点的 ' + orphans.length + ' 个：');
+  for (const f of orphans) console.log('  ❌ ' + f + '\n      ' + (feOrigin.get(f) ?? ''));
+  process.exit(0);
+}
+
 if (AS_JSON) {
-  console.log(JSON.stringify({ endpoints: backend.size, fePaths: fePaths.size, feSuffix: feSuffix.size, suffixMatched: suffixCount, unwired, allowed: unwired.filter((p) => ALLOW.has(p)) }, null, 2));
+  console.log(JSON.stringify({ endpoints: backend.size, fePaths: fePaths.size, feSuffix: feSuffix.size, suffixMatched: suffixCount, orphans, unwired, allowed: unwired.filter((p) => ALLOW.has(p)) }, null, 2));
 } else {
   console.log('后端 /bidding 端点 ' + backend.size + ' 个；前端引用 ' + fePaths.size + ' 个完整路径 + ' + feSuffix.size + ' 个后缀路径；未接线 ' + unwired.length + ' 个（白名单 ' + ALLOW.size + '，其中 ' + suffixCount + ' 个按后缀匹配认定已接线）');
+  console.log('反向：前端请求调用点 ' + feCalls.size + ' 个路径，后端不存在的 ' + orphans.length + ' 个');
   if (LIST) {
     console.log('\n--- 全量端点 ---');
     for (const p of [...backend.keys()].sort()) {
@@ -213,9 +252,17 @@ if (AS_JSON) {
   }
 }
 
+let failed = false;
 if (unexpected.length > 0) {
   console.error('\n[FAIL] ' + unexpected.length + ' 个端点前端未接线：' + unexpected.join(', '));
   console.error('修复二选一：① 在前端补调用（api/ 模块 + 页面动作）；② 确属不需前端调用，则加入本脚本 ALLOW 白名单并写明理由。');
-  process.exit(1);
+  failed = true;
 }
-console.log('\n[OK] 除白名单 ' + ALLOW.size + ' 项外，后端端点均已在前端接线');
+if (orphans.length > 0) {
+  console.error('\n[FAIL] ' + orphans.length + ' 个前端请求路径在后端不存在（运行期 404）：');
+  for (const f of orphans) console.error('  ' + f + '   ← ' + (feOrigin.get(f) ?? ''));
+  console.error('修复：改前端路径 / 补后端端点；若路径由常量拼接而成，检查是否漏了模块前缀。');
+  failed = true;
+}
+if (failed) process.exit(1);
+console.log('\n[OK] 正向：除白名单 ' + ALLOW.size + ' 项外后端端点均已接线；反向：前端请求路径全部存在');
