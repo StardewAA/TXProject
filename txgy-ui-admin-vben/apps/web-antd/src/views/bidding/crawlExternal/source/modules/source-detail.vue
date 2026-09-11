@@ -224,18 +224,28 @@ defineExpose({ openSource });
         <div v-else class="sd-hint">（留空=从首页链接发现）</div>
       </div>
 
-      <!-- 层3：获取批次（克制行：状态/触发/时间/摘要） -->
+      <!-- 层3：获取批次（统一任务条 fp-tbl：状态/时间/批次#/触发/摘要；行点击下钻该批任务） -->
       <div class="sd-sec">
         <div class="sd-sec-t">获取批次 <span class="sd-muted">（最近 {{ jobs.length }} 批；一次采集 = 一个批次）</span></div>
         <div v-if="jobsLoading" class="sd-hint">批次加载中…</div>
         <div v-else-if="jobsError" class="sd-hint">批次加载失败：{{ jobsError }}（可关闭后重开重试）</div>
         <div v-else-if="!jobs.length" class="sd-hint">暂无批次记录 —— 点上方「立即获取一轮」或等待定时调度</div>
-        <div v-else class="sd-jobs">
-          <div v-for="j in jobs" :key="String(j.id)" class="sd-job" :class="{ on: selJob && selJob.id === j.id }" @click="pickJob(j)">
-            <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
-            <span class="sd-trig">{{ j.triggerType || '—' }}</span>
-            <span class="sd-abs truncate" :title="jobSummaryText(j.summaryJson)">{{ jobSummaryText(j.summaryJson) || '—' }}</span>
-            <span class="sd-time">{{ fmtDt(j.finishedAt || j.createTime) }}</span>
+        <div v-else class="fp-tbl">
+          <div class="fp-tr fp-th">
+            <span class="fp-td w-status">状态</span>
+            <span class="fp-td w-time">时间</span>
+            <span class="fp-td w-id">批次 #</span>
+            <span class="fp-td flex-1">源 / 触发</span>
+            <span class="fp-td w-msg">摘要</span>
+          </div>
+          <div v-for="j in jobs" :key="String(j.id)" class="fp-tr fp-row-click" :class="{ 'fp-row-on': selJob && selJob.id === j.id }" @click="pickJob(j)">
+            <span class="fp-td w-status">
+              <Tag :color="tagOf(JOB_STATUS_MAP, j.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, j.status)?.text || j.status || '—' }}</Tag>
+            </span>
+            <span class="fp-td w-time">{{ fmtDt(j.finishedAt || j.createTime) || '—' }}</span>
+            <span class="fp-td w-id">#{{ String(j.id) }}</span>
+            <span class="fp-td flex-1 fp-url">{{ j.sourceCode || row.sourceCode || '—' }}<template v-if="j.triggerType"> · {{ j.triggerType }}</template></span>
+            <span class="fp-td w-msg fp-msg" :title="jobSummaryText(j.summaryJson)">{{ jobSummaryText(j.summaryJson) || '—' }}</span>
           </div>
         </div>
       </div>
@@ -299,13 +309,6 @@ defineExpose({ openSource });
 .sd-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 12px 4px; }
 .sd-urls { display: flex; flex-direction: column; gap: 4px; }
 .sd-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: #f6f8fa; border: 1px solid #e5e7eb; padding: 4px 8px; border-radius: 4px; }
-.sd-jobs, .sd-tasks { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
-.sd-job, .sd-task { display: flex; align-items: center; gap: 10px; padding: 7px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
-.sd-job:last-child, .sd-task:last-child { border-bottom: none; }
-.sd-job:hover, .sd-task:hover { background: #fafafa; }
-.sd-job.on, .sd-task.on { background: #e6f4ff; }
-.sd-trig { flex-shrink: 0; font-size: 12px; color: #6b7280; font-weight: 600; }
-.sd-abs, .sd-url2 { flex: 1; min-width: 0; }
-.sd-time { flex-shrink: 0; font-size: 12px; color: #9ca3af; }
+/* 批次行与批内任务行均已改用统一任务条样式（../../taskbar.css 的 .fp-tbl） */
 .sd-json { background: #0b1220; color: #d1e4ff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: 4px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
 </style>
