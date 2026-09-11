@@ -8,6 +8,9 @@
  *   ② 多岗兼任校验   POST /bidding/safety-permit/personnel/multi-post-check（权限 bidding:personnel:cert:query）
  *   ③ 人员风险       GET  /bidding/safety-permit/personnel/risk（权限 bidding:personnel:profile:query）
  *   ④ 项目关键岗位变更 GET /bidding/safety-permit/project/key-post-changes（权限 bidding:project:query）
+ *   ⑤ 规则配置（阈值）RuleConfigController：GET get / POST save / POST rollback / GET history / GET audit/page
+ *      （权限 bidding:rule-config:query|update）——④③②①里用到的阈值（safety.abc.*、变更窗口、检查提前量）都在这里改，
+ *      页面上展示的生效值与允许边界全部来自接口，前端不内联任何阈值。
  *
  * 口径：岗位码表取自 KeyPostEnum（后端校验只认这些 code，自由文本会被判非法）；
  *   人员/安许风险标签走字典 person_risk_flag / safety_risk_flag（已注册）；
@@ -29,6 +32,7 @@ import {
 import { fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
+import RuleConfigPanel from './modules/RuleConfigPanel.vue';
 
 import '../certificate/cert.css';
 
@@ -309,6 +313,14 @@ onMounted(() => {
           </a-table>
         </template>
         <div v-else class="ct-empty">输入项目 id 后查询：逐岗位给出窗口内变更次数、阈值与是否超限</div>
+      </div>
+    </div>
+
+    <!-- ⑤ 规则配置：阈值生效值 / 发布与灰度 / 版本历史与回滚 / 读取审计（bidding:rule-config:*） -->
+    <div class="ct-panel">
+      <div class="ct-panel-t">⑤ 规则配置（阈值 · 版本 · 读取审计）</div>
+      <div class="ct-panel-b">
+        <RuleConfigPanel />
       </div>
     </div>
   </div>
