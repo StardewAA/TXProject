@@ -61,6 +61,8 @@ public class QuestionServiceImpl implements QuestionService {
     @Resource
     private ResourceReferenceMapper referenceMapper;
     @Resource
+    private ResourceCategoryService categoryService;
+    @Resource
     private OperationLogService operationLogService;
 
     // ========== 查询 ==========
@@ -101,6 +103,8 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionTypeEnum type = checkType(reqVO.getQtype());
         checkDifficulty(reqVO.getDifficulty());
         checkChoicePayload(type, reqVO);
+        // 分类校验（question 类型，支持三级分类）
+        categoryService.validateCategory(reqVO.getCategoryId(), ResourceConstants.TYPE_QUESTION);
         // 1. 试题
         QuestionDO question = new QuestionDO();
         question.setQtype(reqVO.getQtype());
@@ -109,6 +113,7 @@ public class QuestionServiceImpl implements QuestionService {
         question.setAnswer(StrUtil.trim(reqVO.getAnswer()));
         question.setAnalysis(StrUtil.trim(reqVO.getAnalysis()));
         question.setDifficulty(reqVO.getDifficulty());
+        question.setCategoryId(reqVO.getCategoryId());
         question.setStatus(1); // 默认启用
         question.setCreatorId(SecurityFrameworkUtils.getLoginUserId());
         question.setCreatorName(SecurityFrameworkUtils.getLoginUserNickname());
@@ -127,6 +132,8 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionTypeEnum type = checkType(reqVO.getQtype());
         checkDifficulty(reqVO.getDifficulty());
         checkChoicePayload(type, reqVO);
+        // 分类校验（question 类型，支持三级分类）
+        categoryService.validateCategory(reqVO.getCategoryId(), ResourceConstants.TYPE_QUESTION);
         QuestionDO update = new QuestionDO();
         update.setId(reqVO.getId());
         update.setQtype(reqVO.getQtype());
@@ -135,6 +142,7 @@ public class QuestionServiceImpl implements QuestionService {
         update.setAnswer(StrUtil.trim(reqVO.getAnswer()));
         update.setAnalysis(StrUtil.trim(reqVO.getAnalysis()));
         update.setDifficulty(reqVO.getDifficulty());
+        update.setCategoryId(reqVO.getCategoryId());
         questionMapper.updateById(update);
         // 重新绑定标签：先逻辑删除旧的，再插入新的
         questionTagMapper.deleteByQuestionId(reqVO.getId());

@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageCountRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.DocumentResourceDO;
 import cn.iocoder.txgy.module.training.dal.mysql.resource.DocumentResourceMapper;
@@ -35,6 +36,8 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
     @Resource
     private ResourceCategoryService categoryService;
     @Resource
+    private ResourcePageCountService pageCountService;
+    @Resource
     private OperationLogService operationLogService;
 
     @Override
@@ -57,9 +60,11 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         // 1. 校验
         String ext = validateFile(file);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_DOC);
-        // 2. 保存文件
+        // 2. 自动识别文档页数（识别失败兜底 1 页，不阻断上传）
+        DocumentPageCountRespVO pageInfo = pageCountService.count(file);
+        // 3. 保存文件
         String filePath = fileStorage.store(file, "doc", ext);
-        // 3. 落库（上传即上线，便于课程引用与即时预览）
+        // 4. 落库（上传即上线，便于课程引用与即时预览）
         DocumentResourceDO document = new DocumentResourceDO();
         document.setTitle(StrUtil.trim(title));
         document.setCategoryId(categoryId);
@@ -67,9 +72,11 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         document.setFilePath(filePath);
         document.setFileType(ext);
         document.setFileSize(file.getSize());
+        document.setPageCount(pageInfo.getPageCount());
         document.setBizCategory(bizCategory);
         document.setTags(tags);
-        document.setEstMinutes(estMinutes);
+        // 预估阅读时长 = 总页数 × 10 分钟/页；显式传入时以传入值为准
+        document.setEstMinutes(estMinutes != null ? estMinutes : pageInfo.getEstMinutes());
         document.setStatus(ResourceStatusEnum.ONLINE.getStatus());
         document.setViewCount(0);
         document.setReadSeconds(0);
@@ -77,8 +84,16 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         document.setUploaderName(SecurityFrameworkUtils.getLoginUserNickname());
         documentMapper.insert(document);
         operationLogService.createLog(ResourceConstants.ACTION_UPLOAD, ResourceConstants.TARGET_DOCUMENT,
-                document.getId(), "上传文档《" + title + "》，大小 " + formatSize(file.getSize()));
+                document.getId(), "上传文档《" + title + "》，大小 " + formatSize(file.getSize())
+                        + "，识别页数 " + pageInfo.getPageCount() + " 页，预估阅读 "
+                        + document.getEstMinutes() + " 分钟");
         return document.getId();
+    }
+
+    @Override
+    public DocumentPageCountRespVO countDocumentPages(MultipartFile file) {
+        validateFile(file);
+        return pageCountService.count(file);
     }
 
     @Override
