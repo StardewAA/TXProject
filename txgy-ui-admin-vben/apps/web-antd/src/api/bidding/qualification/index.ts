@@ -131,6 +131,23 @@ export namespace QualificationApi {
 
   /* ===== v1.1 新增读接口（页面级契约 §3.11~§3.20） ===== */
 
+  /** 资质标准登记（StandardCreateReqVO）：同一「序列+类别+等级+版本」判重（§0.7） */
+  export interface StandardCreateReq {
+    qualSerial: string;
+    qualCategory: string;
+    qualGrade: string;
+    stdVersion: string;
+    reqStaff?: string;
+    reqAssets?: string;
+    reqPerformance?: string;
+    reqEquipment?: string;
+    /** LocalDate */
+    effectiveFrom?: null | string;
+    /** LocalDate；空=长期有效 */
+    effectiveTo?: null | string;
+    sourceRef?: string;
+  }
+
   /** 资质标准分页入参（QualificationStandardPageReqVO） */
   export interface StandardPageReq extends PageParam {
     qualSerial?: string;

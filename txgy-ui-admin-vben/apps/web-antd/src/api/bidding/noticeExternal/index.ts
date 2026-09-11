@@ -135,3 +135,11 @@ export function backfillPdfUrls() {
     undefined,
   );
 }
+
+/**
+ * 重建外部公告检索索引（POST /bidding/notice-external/reindex；权限 bidding:notice-external:update）。
+ * 返回后端结果文案；与 /ingest 不同，本端点无需入参，属于运维重跑动作。
+ */
+export function reindexNoticeExternalIndex() {
+  return requestClient.post<string>('/bidding/notice-external/reindex');
+}
