@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyD
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitRecordMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitTaskMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleWarrantyMapper;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitRecordStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitTaskStatusEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
 import jakarta.annotation.Resource;
@@ -62,9 +63,11 @@ public class CrmAfterSaleVisitRecordServiceImpl implements CrmAfterSaleVisitReco
             createReqVO.setVisitTime(LocalDateTime.now());
         }
         // 2. 插入回访记录（永久留存，逻辑删除可恢复）
+        //    手动登记/直接填写均视为「已填写」；由任务完成自动生成的记录才是「待填写」
         CrmAfterSaleVisitRecordDO visitRecord = BeanUtils.toBean(createReqVO, CrmAfterSaleVisitRecordDO.class);
         visitRecord.setCustomerId(warranty.getCustomerId());
         visitRecord.setContractId(warranty.getContractId());
+        visitRecord.setStatus(CrmAfterSaleVisitRecordStatusEnum.FILLED.getStatus());
         visitRecordMapper.insert(visitRecord);
         // 3. 关联任务则完成任务（未完成时才回写，防止重复登记时误报）
         if (taskId != null) {
@@ -90,8 +93,10 @@ public class CrmAfterSaleVisitRecordServiceImpl implements CrmAfterSaleVisitReco
         // 1.1 恢复不可修改字段旧值（任务/质保等主数据）
         updateReqVO.setTaskId(oldRecord.getTaskId()).setWarrantyId(oldRecord.getWarrantyId());
         // 2. 更新
+        //    待填写的记录一旦提交填写，即流转为「已填写」
         CrmAfterSaleVisitRecordDO updateObj = BeanUtils.toBean(updateReqVO, CrmAfterSaleVisitRecordDO.class);
         updateObj.setCustomerId(oldRecord.getCustomerId()).setContractId(oldRecord.getContractId());
+        updateObj.setStatus(CrmAfterSaleVisitRecordStatusEnum.FILLED.getStatus());
         visitRecordMapper.updateById(updateObj);
         // 3. 回写质保档案最近回访时间（重算该质保下最新记录）
         CrmAfterSaleVisitRecordDO latest = selectLatestRecord(oldRecord.getWarrantyId());
@@ -127,6 +132,11 @@ public class CrmAfterSaleVisitRecordServiceImpl implements CrmAfterSaleVisitReco
     @Override
     public CrmAfterSaleVisitRecordDO getVisitRecord(Long id) {
         return visitRecordMapper.selectById(id);
+    }
+
+    @Override
+    public CrmAfterSaleVisitRecordDO getVisitRecordByTaskId(Long taskId) {
+        return visitRecordMapper.selectOneByTaskId(taskId);
     }
 
     @Override

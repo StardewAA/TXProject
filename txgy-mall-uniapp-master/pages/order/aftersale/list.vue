@@ -10,9 +10,13 @@
         :current="state.currentTab"
       />
     </su-sticky>
-    <s-empty v-if="state.pagination.total === 0" icon="/static/data-empty.png" text="暂无数据" />
+    <s-empty
+      v-if="state.loaded && state.pagination.list.length === 0"
+      icon="/static/data-empty.png"
+      text="暂无数据"
+    />
     <!-- 列表 -->
-    <view v-if="state.pagination.total > 0">
+    <view v-if="state.pagination.list.length > 0">
       <view
         class="list-box ss-m-y-20"
         v-for="order in state.pagination.list"
@@ -23,10 +27,11 @@
           <text class="no">服务单号：{{ order.no }}</text>
           <text class="state">{{ formatAfterSaleStatus(order) }}</text>
         </view>
+        <view class="shop-name">店铺：{{ order.shopName }}</view>
         <s-goods-item
           :img="order.picUrl"
           :title="order.spuName"
-          :skuText="order.properties.map((property) => property.valueName).join(' ')"
+          :skuText="(order.properties || []).map((property) => property.valueName).join(' ')"
           :price="order.refundPrice"
         />
         <view class="apply-box ss-flex ss-col-center ss-row-between border-bottom ss-p-x-20">
@@ -41,7 +46,8 @@
             <button
               class="ss-reset-button tool-btn"
               @tap.stop="onApply(order.id)"
-              v-if="order?.buttons.includes('cancel')"
+              :disabled="String(state.cancellingId) === String(order.id)"
+              v-if="order?.buttons?.includes('cancel')"
             >
               取消申请
             </button>
@@ -50,7 +56,9 @@
       </view>
     </view>
     <uni-load-more
-      v-if="state.pagination.total > 0"
+      v-if="
+        state.pagination.list.length > 0 && state.pagination.total > state.pagination.list.length
+      "
       :status="state.loadStatus"
       :content-text="{
         contentdown: '上拉加载更多',
@@ -83,6 +91,9 @@
       pageSize: 10,
     },
     loadStatus: '',
+    loaded: false,
+    loading: false,
+    cancellingId: null,
   });
 
   const tabMaps = [
@@ -108,31 +119,97 @@
     },
   ];
 
+  let requestSerial = 0;
+
+  function normalizeAfterSale(order) {
+    const source = order && typeof order === 'object' ? order : {};
+    return {
+      ...source,
+      // Long 类型编号可能超过 JS 安全整数范围，保留后端原始字符串/数字
+      id: source.id,
+      status: Number(source.status),
+      way: Number(source.way),
+      shopName: String(source.shopName || '').trim() || '平台自营',
+      properties: Array.isArray(source.properties) ? source.properties : [],
+      buttons: Array.isArray(source.buttons) ? source.buttons : [],
+      refundPrice: Number(source.refundPrice) || 0,
+      count: Number(source.count) || 0,
+    };
+  }
+
   // 切换选项卡
   function onTabsChange(e) {
+    const index = Number(e?.index);
+    if (!Number.isInteger(index) || index < 0 || index >= tabMaps.length) {
+      return;
+    }
+    requestSerial++;
     resetPagination(state.pagination);
-    state.currentTab = e.index;
-    getOrderList();
+    state.currentTab = index;
+    state.loaded = false;
+    state.loadStatus = '';
+    getOrderList(true);
   }
 
   // 获取售后列表
-  async function getOrderList() {
-    state.loadStatus = 'loading';
-    let { data, code } = await AfterSaleApi.getAfterSalePage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-      statuses: tabMaps[state.currentTab].value.join(','),
-    });
-    if (code !== 0) {
+  async function getOrderList(force = false) {
+    if (state.loading && !force) {
       return;
     }
-    data.list.forEach((order) => handleAfterSaleButtons(order));
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    const serial = ++requestSerial;
+    const pageNo = state.pagination.pageNo;
+    state.loading = true;
+    state.loadStatus = 'loading';
+    try {
+      const response = await AfterSaleApi.getAfterSalePage({
+        pageNo,
+        pageSize: state.pagination.pageSize,
+        statuses: tabMaps[state.currentTab].value.join(','),
+      });
+      if (serial !== requestSerial) {
+        return;
+      }
+      if (response?.code !== 0) {
+        if (pageNo > 1) {
+          state.pagination.pageNo = pageNo - 1;
+        }
+        state.loadStatus = 'more';
+        return;
+      }
+
+      const page = response.data && typeof response.data === 'object' ? response.data : {};
+      const list = Array.isArray(page.list)
+        ? page.list.filter(Boolean).map((order) => {
+            const normalized = normalizeAfterSale(order);
+            handleAfterSaleButtons(normalized);
+            return normalized;
+          })
+        : [];
+      state.pagination.list = pageNo === 1 ? list : concat(state.pagination.list, list);
+      const total = Number(page.total);
+      state.pagination.total =
+        Number.isFinite(total) && total >= 0 ? total : state.pagination.list.length;
+      state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    } catch (error) {
+      if (serial === requestSerial) {
+        if (pageNo > 1) {
+          state.pagination.pageNo = pageNo - 1;
+        }
+        state.loadStatus = 'more';
+        console.warn('加载售后列表失败', error);
+      }
+    } finally {
+      if (serial === requestSerial) {
+        state.loading = false;
+        state.loaded = true;
+      }
+    }
   }
 
   function onApply(orderId) {
+    if (!orderId || state.cancellingId !== null) {
+      return;
+    }
     uni.showModal({
       title: '提示',
       content: '确定要取消此申请吗？',
@@ -140,25 +217,38 @@
         if (!res.confirm) {
           return;
         }
-        const { code } = await AfterSaleApi.cancelAfterSale(orderId);
-        if (code === 0) {
-          resetPagination(state.pagination);
-          await getOrderList();
+        state.cancellingId = orderId;
+        try {
+          const response = await AfterSaleApi.cancelAfterSale(orderId);
+          if (response?.code === 0) {
+            resetPagination(state.pagination);
+            await getOrderList();
+          }
+        } catch (error) {
+          console.warn('取消售后申请失败', error);
+          sheep.$helper.toast('取消售后申请失败');
+        } finally {
+          state.cancellingId = null;
         }
       },
     });
   }
 
-  onLoad(async (options) => {
-    if (options.type) {
-      state.currentTab = options.type;
+  onLoad(async (options = {}) => {
+    const index = Number(options.type);
+    if (Number.isInteger(index) && index >= 0 && index < tabMaps.length) {
+      state.currentTab = index;
     }
     await getOrderList();
   });
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (
+      state.loading ||
+      state.loadStatus === 'noMore' ||
+      (state.pagination.total > 0 && state.pagination.list.length >= state.pagination.total)
+    ) {
       return;
     }
     state.pagination.pageNo++;
@@ -178,6 +268,12 @@
     .order-head {
       padding: 0 25rpx;
       height: 77rpx;
+    }
+
+    .shop-name {
+      padding: 0 25rpx 14rpx;
+      color: #666;
+      font-size: 24rpx;
     }
 
     .apply-box {

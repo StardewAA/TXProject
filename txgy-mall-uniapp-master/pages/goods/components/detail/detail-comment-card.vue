@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-  import { reactive, onBeforeMount } from 'vue';
+  import { reactive, watch } from 'vue';
   import sheep from '@/sheep';
   import CommentApi from '@/sheep/api/product/comment';
   import commentItem from './comment-item.vue';
@@ -50,14 +50,40 @@
   });
 
   async function getComment(id) {
-    const { data } = await CommentApi.getCommentPage(id, 1, 3, 0);
-    state.commentList = data.list;
-    state.total = data.total;
+    // The detail page renders its children while the SPU request is still in
+    // flight. Avoid calling the API with the initial placeholder id (0), and
+    // tolerate an unavailable/empty response so a comment card cannot blank
+    // the whole product page.
+    const spuId = Number(id);
+    if (!Number.isFinite(spuId) || spuId <= 0) {
+      state.commentList = [];
+      state.total = 0;
+      return;
+    }
+
+    try {
+      const res = await CommentApi.getCommentPage(spuId, 1, 3, 0);
+      if (res?.code !== 0 || !res?.data) {
+        state.commentList = [];
+        state.total = 0;
+        return;
+      }
+      state.commentList = Array.isArray(res.data.list) ? res.data.list : [];
+      state.total = Number(res.data.total) || 0;
+    } catch (error) {
+      // Comments are supplementary; an API failure must not interrupt the
+      // product detail/checkout flow.
+      state.commentList = [];
+      state.total = 0;
+    }
   }
 
-  onBeforeMount(() => {
-    getComment(props.goodsId);
-  });
+  // Re-fetch once the asynchronous detail request supplies a real SPU id.
+  watch(
+    () => props.goodsId,
+    (id) => getComment(id),
+    { immediate: true },
+  );
 </script>
 
 <style lang="scss" scoped>

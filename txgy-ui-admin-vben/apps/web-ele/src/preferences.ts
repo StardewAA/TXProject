@@ -10,7 +10,7 @@ export const overridesPreferences = defineOverridesPreferences({
   app: {
     /** 后端路由模式 */
     accessMode: 'backend',
-    name: import.meta.env.VITE_APP_TITLE,
+    name: import.meta.env.VITE_APP_TITLE ?? '防腐保温智慧平台',
     enableRefreshToken: true,
   },
   footer: {
@@ -19,7 +19,7 @@ export const overridesPreferences = defineOverridesPreferences({
     fixed: false,
   },
   copyright: {
-    companyName: import.meta.env.VITE_APP_TITLE,
+    companyName: import.meta.env.VITE_APP_TITLE ?? '防腐保温智慧平台',
     companySiteLink: 'https://gitee.com/txgycode/txgy-ui-admin-vben',
   },
 });

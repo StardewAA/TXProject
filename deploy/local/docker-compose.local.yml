@@ -177,6 +177,8 @@ services:
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+      # CRM AI 助手（意图识别）在后端调用千问，密钥从 .env 注入，不进代码仓库
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
     mem_limit: 850m
 
   ai:

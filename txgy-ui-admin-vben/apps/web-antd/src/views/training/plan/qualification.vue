@@ -16,7 +16,7 @@ import {
   Tag,
 } from 'ant-design-vue';
 
-import { checkQualification, getClassStudentPage } from './api';
+import { checkQualification, getAllClassStudents } from './api';
 import { CLASS_TYPE_TEXT } from './data';
 import ClassBar from './class-bar.vue';
 
@@ -43,12 +43,7 @@ async function loadStudents() {
   }
   loading.value = true;
   try {
-    const data = await getClassStudentPage({
-      pageNo: 1,
-      pageSize: 500,
-      classId: currentClass.value.id,
-    });
-    students.value = data?.list ?? [];
+    students.value = await getAllClassStudents(currentClass.value.id);
   } finally {
     loading.value = false;
   }

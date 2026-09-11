@@ -35,11 +35,15 @@ const [Modal, modalApi] = useVbenModal({
     if (!valid) {
       return;
     }
+    const data = await formApi.getValues();
+    if (!uploadRawFile) {
+      message.error('请先选择 Excel 文件');
+      return;
+    }
     modalApi.lock();
     // 提交表单
-    const data = await formApi.getValues();
     try {
-      const result = await importProject(data.file, data.updateSupport);
+      const result = await importProject(uploadRawFile, data.updateSupport === true);
       const importData = result as MesProProjectApi.ProjectImportRespVO;
       let text = `上传成功数量：${importData.createCodes?.length || 0};`;
       for (const code of importData.createCodes || []) {
@@ -66,9 +70,15 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
+/** 原生 File 引用（不经过表单值，避免被 Input 组件破坏） */
+let uploadRawFile: null | File = null;
+
 /** 上传前 */
 function beforeUpload(file: FileType) {
-  formApi.setFieldValue('file', file);
+  const raw = (file as any)?.originFileObj ?? file;
+  uploadRawFile = raw instanceof File ? raw : null;
+  // 表单值只存文件名，用于必填校验展示
+  formApi.setFieldValue('file', (raw as any)?.name ?? '');
   return false;
 }
 

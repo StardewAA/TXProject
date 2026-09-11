@@ -32,7 +32,9 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { field: 'name', title: '店铺名称', minWidth: 180 },
+    { field: 'enterpriseName', title: '企业名称', minWidth: 180 },
     { field: 'enterpriseId', title: '企业编号', width: 110 },
+    { field: 'tenantId', title: '租户编号', width: 110 },
     { field: 'logoUrl', title: 'Logo', width: 90, cellRender: { name: 'CellImage' } },
     { field: 'contactName', title: '联系人', width: 100 },
     { field: 'contactMobile', title: '联系电话', width: 140 },

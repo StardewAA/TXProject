@@ -29,6 +29,10 @@ export namespace CrmAfterSaleVisitTaskApi {
     assigneeNickname?: string;
     /** 扩展：是否已登记回访记录 */
     hasRecord?: boolean;
+    /** 扩展：任务完成后自动生成的回访记录编号 */
+    recordId?: number;
+    /** 扩展：回访记录状态：1=待填写 2=已填写 */
+    recordStatus?: number;
   }
 
   /** 分页查询参数 */

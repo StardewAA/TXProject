@@ -4,6 +4,8 @@ import type { WmsItemSkuApi } from '#/api/wms/md/item/sku';
 
 import { nextTick, ref } from 'vue';
 
+import { CommonStatusEnum } from '@vben/constants';
+
 import { message, Modal } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -104,6 +106,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            itemStatus: CommonStatusEnum.ENABLE,
           });
         },
       },

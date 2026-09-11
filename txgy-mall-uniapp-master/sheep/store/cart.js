@@ -13,10 +13,20 @@ const cart = defineStore('cart', {
   actions: {
     // 获取购物车列表
     async getList() {
-      const { data, code } = await CartApi.getCartList();
-      if (code === 0) {
-        this.list = [...data.validList, ...data.invalidList];
-        this.newList = data.validList;
+      try {
+        const response = await CartApi.getCartList();
+        if (!response || response.code !== 0) {
+          return;
+        }
+        const data = response.data || {};
+        const validList = Array.isArray(data.validList)
+          ? data.validList.filter((item) => item && typeof item === 'object' && item.id !== undefined)
+          : [];
+        const invalidList = Array.isArray(data.invalidList)
+          ? data.invalidList.filter((item) => item && typeof item === 'object' && item.id !== undefined)
+          : [];
+        this.list = [...validList, ...invalidList];
+        this.newList = validList;
 
         // 计算各种关联属性
         this.selectedIds = [];
@@ -25,11 +35,18 @@ const cart = defineStore('cart', {
         (this.editMode ? this.list : this.newList).forEach((item) => {
           if (item.selected) {
             this.selectedIds.push(item.id);
-            this.totalPriceSelected += item.count * item.sku?.price;
+            this.totalPriceSelected += Number(item.count || 0) * Number(item.sku?.price || 0);
           } else {
             this.isAllSelected = false;
           }
         });
+      } catch (error) {
+        // 未登录或接口暂不可用时保持空购物车，不阻塞首页/分类页渲染。
+        this.list = [];
+        this.newList = [];
+        this.selectedIds = [];
+        this.isAllSelected = true;
+        this.totalPriceSelected = 0;
       }
     },
 
@@ -41,26 +58,34 @@ const cart = defineStore('cart', {
 
     // 添加购物车
     async add(goodsInfo) {
-      // 添加购物项
-      const { code } = await CartApi.addCart({
-        skuId: goodsInfo.id,
-        count: goodsInfo.goods_num,
-      });
-      // 刷新购物车列表
-      if (code === 0) {
+      try {
+        // 添加购物项
+        const response = await CartApi.addCart({
+          skuId: goodsInfo.id,
+          count: goodsInfo.goods_num || 1,
+        });
+        // 刷新购物车列表
+        if (response?.code !== 0) return false;
         await this.getList();
+      } catch (error) {
+        return false;
       }
+      return true;
     },
 
     // 更新购物车
     async update(goodsInfo) {
-      const { code } = await CartApi.updateCartCount({
-        id: goodsInfo.goods_id,
-        count: goodsInfo.goods_num,
-      });
-      if (code === 0) {
+      try {
+        const response = await CartApi.updateCartCount({
+          id: goodsInfo.goods_id,
+          count: goodsInfo.goods_num,
+        });
+        if (response?.code !== 0) return false;
         await this.getList();
+      } catch (error) {
+        return false;
       }
+      return true;
     },
 
     // 移除购物车
@@ -71,32 +96,44 @@ const cart = defineStore('cart', {
       } else {
         idsTemp = ids;
       }
-      const { code } = await CartApi.deleteCart(idsTemp);
-      if (code === 0) {
+      try {
+        const response = await CartApi.deleteCart(idsTemp);
+        if (response?.code !== 0) return false;
         await this.getList();
+      } catch (error) {
+        return false;
       }
+      return true;
     },
 
     // 单选购物车商品
     async selectSingle(goodsId) {
-      const { code } = await CartApi.updateCartSelected({
-        ids: [goodsId],
-        selected: !this.selectedIds.includes(goodsId), // 取反
-      });
-      if (code === 0) {
+      try {
+        const response = await CartApi.updateCartSelected({
+          ids: [goodsId],
+          selected: !this.selectedIds.includes(goodsId), // 取反
+        });
+        if (response?.code !== 0) return false;
         await this.getList();
+      } catch (error) {
+        return false;
       }
+      return true;
     },
 
     // 全选购物车商品
     async selectAll(flag) {
-      const { code } = await CartApi.updateCartSelected({
-        ids: this.list.map((item) => item.id),
-        selected: flag,
-      });
-      if (code === 0) {
+      try {
+        const response = await CartApi.updateCartSelected({
+          ids: this.list.map((item) => item.id),
+          selected: flag,
+        });
+        if (response?.code !== 0) return false;
         await this.getList();
+      } catch (error) {
+        return false;
       }
+      return true;
     },
 
     // 清空购物车。注意，仅用于用户退出时，重置数据

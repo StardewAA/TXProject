@@ -5,6 +5,8 @@ import { Page } from '@vben/common-ui';
 
 import { Card, Col, Row, Select, Statistic, Table } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'TrainingLecturerData' });
 
 // TODO[模块九-讲师权限] 课程下拉数据源 = 讲师自己创建的课程列表
@@ -27,16 +29,11 @@ const columns = [
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #db2777 0%, #db2777dc 44%, #111827 115%)"
-      >
-        <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 93（认证讲师）</div>
-        <h1 class="m-0 text-2xl font-semibold md:text-3xl">讲师数据权限</h1>
-        <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-          仅可查看自己创建课程下学员学习完成情况；无跨课程、企业级档案和报表查看权限。
-        </p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 93（认证讲师）"
+        title="讲师数据权限"
+        description="仅可查看自己创建课程下学员学习完成情况；无跨课程、企业级档案和报表查看权限。"
+      />
 
       <Row :gutter="16">
         <Col :span="8"><Card :bordered="false"><Statistic title="我的课程数" :value="0" /></Card></Col>

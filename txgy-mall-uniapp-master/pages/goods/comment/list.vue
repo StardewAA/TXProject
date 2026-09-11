@@ -9,7 +9,11 @@
     />
     <!-- 评论列表 -->
     <view class="ss-m-t-20">
-      <view class="list-item" v-for="item in state.pagination.list" :key="item">
+      <view
+        class="list-item"
+        v-for="(item, index) in state.pagination.list"
+        :key="item.id || item.orderItemId || index"
+      >
         <comment-item :item="item" />
       </view>
     </view>
@@ -43,7 +47,8 @@
       { type: 3, name: '差评' },
     ],
     currentTab: 0, // 选中的 TAB
-    loadStatus: '',
+    loadStatus: 'more',
+    loading: false,
     pagination: {
       list: [],
       total: 0,
@@ -53,8 +58,12 @@
   });
 
   // 切换选项卡
-  function onTabsChange(e) {
-    state.currentTab = e.index;
+  function onTabsChange(e = {}) {
+    const index = Number(e.index);
+    if (!Number.isInteger(index) || index < 0 || index >= state.type.length) {
+      return;
+    }
+    state.currentTab = index;
     // 加载列表
     state.pagination.pageNo = 1;
     state.pagination.list = [];
@@ -63,34 +72,59 @@
   }
 
   async function getList() {
+    if (state.loading) return false;
+    state.loading = true;
     // 加载列表
     state.loadStatus = 'loading';
-    let res = await CommentApi.getCommentPage(
-      state.id,
-      state.pagination.pageNo,
-      state.pagination.pageSize,
-      state.type[state.currentTab].type,
-    );
-    if (res.code !== 0) {
-      return;
+    let res;
+    try {
+      res = await CommentApi.getCommentPage(
+        String(state.id),
+        state.pagination.pageNo,
+        state.pagination.pageSize,
+        state.type[state.currentTab].type,
+      );
+      if (!res || res.code !== 0) {
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+        return false;
+      }
+      const data = res.data && typeof res.data === 'object' ? res.data : {};
+      const list = Array.isArray(data.list) ? data.list.filter(Boolean) : [];
+      state.pagination.list = concat(state.pagination.list, list);
+      state.pagination.total = Number(data.total) || 0;
+      state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      return true;
+    } catch (error) {
+      console.warn('加载商品评论失败', error);
+      state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+      return false;
+    } finally {
+      if (state.loadStatus === 'loading') {
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+      }
+      state.loading = false;
     }
-    // 合并列表
-    state.pagination.list = concat(state.pagination.list, res.data.list);
-    state.pagination.total = res.data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
   }
 
   // 加载更多
-  function loadMore() {
-    if (state.loadStatus === 'noMore') {
+  async function loadMore() {
+    if (state.loadStatus === 'noMore' || state.loadStatus === 'loading') {
       return;
     }
-    state.pagination.pageNo++;
-    getList();
+    if (state.loading) return;
+    const nextPage = state.pagination.pageNo + 1;
+    state.pagination.pageNo = nextPage;
+    const loaded = await getList();
+    if (!loaded) state.pagination.pageNo = Math.max(1, nextPage - 1);
   }
 
-  onLoad((options) => {
-    state.id = options.id;
+  onLoad((options = {}) => {
+    const id = String(options.id || '').trim();
+    if (!/^\d+$/.test(id) || /^0+$/.test(id)) {
+      state.loadStatus = 'noMore';
+      return;
+    }
+    state.id = id;
     getList();
   });
 

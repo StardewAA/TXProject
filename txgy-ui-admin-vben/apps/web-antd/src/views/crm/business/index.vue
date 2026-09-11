@@ -20,12 +20,18 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import StageForm from './modules/stage-form.vue';
 
 const { push } = useRouter();
 const sceneType = ref('1');
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [StageModal, stageModalApi] = useVbenModal({
+  connectedComponent: StageForm,
   destroyOnClose: true,
 });
 
@@ -58,6 +64,11 @@ function handleCreate() {
 /** 编辑商机 */
 function handleEdit(row: CrmBusinessApi.Business) {
   formModalApi.setData(row).open();
+}
+
+/** 更改商机阶段 */
+function handleChangeStage(row: CrmBusinessApi.Business) {
+  stageModalApi.setData(row).open();
 }
 
 /** 删除商机 */
@@ -131,6 +142,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <StageModal @success="handleRefresh" />
     <Grid>
       <template #toolbar-actions>
         <Tabs class="w-full" @change="handleChangeSceneType">
@@ -172,6 +184,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '更改阶段',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !row.endStatus,
+              onClick: handleChangeStage.bind(null, row),
+            },
             {
               label: $t('common.edit'),
               type: 'link',

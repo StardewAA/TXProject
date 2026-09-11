@@ -15,7 +15,7 @@
         actionText="再逛逛"
         actionUrl="/pages/goods/list"
       />
-      <block v-else>
+      <block v-else-if="state.goodsInfo && state.goodsInfo.id">
         <view class="detail-swiper-selector">
           <!-- 商品轮播图  -->
           <su-swiper
@@ -142,6 +142,12 @@
 
           <!-- 功能卡片 -->
           <view class="detail-cell-card detail-card ss-flex-col">
+            <detail-cell
+              :clickable="false"
+              :show-arrow="false"
+              label="店铺"
+              :value="state.goodsInfo.shopName || '平台自营'"
+            />
             <detail-cell-sku
               v-model="state.selectedSku.goods_sku_text"
               :sku="state.selectedSku"
@@ -149,8 +155,27 @@
             />
           </view>
 
+          <!-- 规格库存 -->
+          <view class="detail-card sku-stock-card ss-p-y-20 ss-p-x-20" v-if="skuStockList.length">
+            <view class="stock-title ss-m-b-16">规格库存</view>
+            <view class="sku-stock-list">
+              <view
+                class="sku-stock-item ss-flex ss-row-between ss-col-start"
+                v-for="sku in skuStockList"
+                :key="sku.id"
+              >
+                <view class="sku-stock-name ss-line-2">{{ formatSkuText(sku) }}</view>
+                <view class="sku-stock-meta">
+                  <view class="sku-stock-price">￥{{ fen2yuan(sku.promotionPrice || sku.price || 0) }}</view>
+                  <view class="sku-stock-count">库存 {{ sku.stock ?? 0 }}</view>
+                </view>
+              </view>
+            </view>
+          </view>
+
           <!-- 规格与数量弹框 -->
           <s-select-sku
+            v-if="Array.isArray(state.goodsInfo?.skus) && state.goodsInfo.skus.length"
             :goodsInfo="state.goodsInfo"
             :show="state.showSelectSku"
             @addCart="onAddCart"
@@ -168,9 +193,9 @@
           :content="state.goodsInfo.description"
         />
 
-        <!-- 活动跳转：拼团/秒杀/砍价活动 -->
+        <!-- 活动跳转：拼团/秒杀/砍价活动（企业采购简化模式下不展示） -->
         <detail-activity-tip
-          v-if="state.activityList.length > 0"
+          v-if="!isSimpleMarketingEnabled() && state.activityList.length > 0"
           :activity-list="state.activityList"
         />
 
@@ -203,6 +228,13 @@
           @get="onTakeCoupon"
         />
       </block>
+      <s-empty
+        v-else
+        text="商品信息加载失败，请稍后重试"
+        showAction
+        actionText="返回商品列表"
+        actionUrl="/pages/goods/list"
+      />
     </s-layout>
   </view>
 </template>
@@ -224,6 +256,7 @@
     getRewardActivityRuleItemDescriptions,
   } from '@/sheep/hooks/useGoods';
   import detailNavbar from './components/detail/detail-navbar.vue';
+  import detailCell from './components/detail/detail-cell.vue';
   import detailCellSku from './components/detail/detail-cell-sku.vue';
   import detailTabbar from './components/detail/detail-tabbar.vue';
   import detailSkeleton from './components/detail/detail-skeleton.vue';
@@ -236,6 +269,7 @@
   onPageScroll(() => {});
   import OrderApi from '@/sheep/api/trade/order';
   import { SharePageEnum } from '@/sheep/helper/const';
+  import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
 
   const bgColor = {
     bgColor: '#E93323',
@@ -258,25 +292,40 @@
     rewardActivity: {}, // 【满减送】活动
     activityList: [], // 【秒杀/拼团/砍价】可参与的 Activity 营销活动的列表
   });
+  const skuStockList = computed(() => (Array.isArray(state.goodsInfo?.skus) ? state.goodsInfo.skus : []));
 
   // 规格变更
   function onSkuChange(e) {
-    state.selectedSku = e;
-    state.settlementSku = e;
+    const sku = e && typeof e === 'object' ? e : {};
+    state.selectedSku = sku;
+    state.settlementSku = sku;
+  }
+
+  function formatSkuText(sku) {
+    if (!sku?.properties?.length) {
+      return '默认规格';
+    }
+    return sku.properties
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => `${item.propertyName || ''}:${item.valueName || ''}`)
+      .filter((item) => item !== ':')
+      .join(' / ') || '默认规格';
   }
 
   // 添加购物车
-  function onAddCart(e) {
-    if (!e.id) {
+  async function onAddCart(e) {
+    if (!e || typeof e !== 'object' || !e.id) {
       sheep.$helper.toast('请选择商品规格');
       return;
     }
-    sheep.$store('cart').add(e);
+    const added = await sheep.$store('cart').add(e);
+    // 只有后端确认添加成功后才关闭规格弹窗，库存不足/请求失败时保留现场便于重试。
+    if (added) state.showSelectSku = false;
   }
 
   // 立即购买
   function onBuy(e) {
-    if (!e.id) {
+    if (!e || typeof e !== 'object' || !e.id) {
       sheep.$helper.toast('请选择商品规格');
       return;
     }
@@ -300,16 +349,24 @@
 
   // 立即领取优惠劵
   async function onTakeCoupon(id) {
-    const { code } = await CouponApi.takeCoupon(id);
-    if (code !== 0) {
+    if (!id || !isLogin.value) {
+      sheep.$helper.toast('请先登录后领取优惠券');
       return;
     }
-    uni.showToast({
-      title: '领取成功',
-    });
-    setTimeout(() => {
-      getCoupon();
-    }, 1000);
+    try {
+      const response = await CouponApi.takeCoupon(id);
+      if (response?.code !== 0) {
+        return;
+      }
+      uni.showToast({
+        title: '领取成功',
+      });
+      setTimeout(() => {
+        getCoupon();
+      }, 1000);
+    } catch (error) {
+      // 请求层负责展示接口错误，这里避免弹窗回调异常导致详情页崩溃。
+    }
   }
 
   const shareInfo = computed(() => {
@@ -335,57 +392,88 @@
   });
 
   async function getCoupon() {
-    const { code, data } = await CouponApi.getCouponTemplateList(state.goodsId, 2, 10);
-    if (code === 0) {
-      state.couponInfo = data;
+    if (!state.goodsId) {
+      return;
+    }
+    try {
+      const response = await CouponApi.getCouponTemplateList(state.goodsId, 2, 10);
+      if (response?.code === 0 && Array.isArray(response.data)) {
+        state.couponInfo = response.data.filter(
+          (coupon) => coupon && typeof coupon === 'object',
+        );
+      }
+    } catch (error) {
+      state.couponInfo = [];
     }
   }
 
   async function getSettlementByIds(ids) {
-    let { data, code } = await OrderApi.getSettlementProduct(ids);
-    if (code !== 0 || data.length !== 1) {
-      return;
-    }
-    data = data[0];
+    try {
+      const response = await OrderApi.getSettlementProduct(ids);
+      let data = response?.data;
+      if (response?.code !== 0 || !Array.isArray(data) || data.length !== 1) {
+        return;
+      }
+      data = data[0];
 
-    // 补充 SKU 的价格信息
-    state.goodsInfo.skus.forEach((sku) => {
-      data.skus.forEach((item) => {
-        if (sku.id === item.id) {
-          sku.promotionType = item.promotionType;
-          sku.promotionPrice = item.promotionPrice;
-          sku.promotionId = item.promotionId;
-          sku.promotionEndTime = item.promotionEndTime;
-        }
+      // 补充 SKU 的价格信息
+      const promotionSkus = Array.isArray(data.skus)
+        ? data.skus.filter((sku) => sku && typeof sku === 'object')
+        : [];
+      const goodsSkus = Array.isArray(state.goodsInfo?.skus)
+        ? state.goodsInfo.skus.filter((sku) => sku && typeof sku === 'object')
+        : [];
+      goodsSkus.forEach((sku) => {
+        promotionSkus.forEach((item) => {
+          if (sku.id === item.id) {
+            sku.promotionType = item.promotionType;
+            sku.promotionPrice = item.promotionPrice;
+            sku.promotionId = item.promotionId;
+            sku.promotionEndTime = item.promotionEndTime;
+          }
+        });
       });
-    });
 
-    // 选择有 promotionPrice 且最小的
-    state.settlementSku = state.goodsInfo.skus
-      .filter((sku) => sku.stock > 0 && sku.promotionPrice > 0)
-      .reduce((prev, curr) => (prev.promotionPrice < curr.promotionPrice ? prev : curr), []);
+      // 选择有 promotionPrice 且最小的
+      const promotionSku = goodsSkus
+        .filter((sku) => sku.stock > 0 && sku.promotionPrice > 0)
+        .reduce(
+          (prev, curr) => (!prev || curr.promotionPrice < prev.promotionPrice ? curr : prev),
+          null,
+        );
+      state.settlementSku = promotionSku || {};
 
-    // 设置满减送活动
-    if (data.rewardActivity) {
-      state.rewardActivity = data.rewardActivity;
-      //获取活动时间
-      getActivityTime(state.rewardActivity.id);
+      // 设置满减送活动
+      if (data.rewardActivity) {
+        state.rewardActivity = data.rewardActivity;
+        //获取活动时间
+        getActivityTime(state.rewardActivity.id);
+      }
+    } catch (error) {
+      state.settlementSku = {};
     }
   }
 
   //获取活动时间
   async function getActivityTime(id) {
-    const { code, data } = await RewardActivityApi.getRewardActivity(id);
-    if (code === 0) {
-      // console.log('获取到的活动 数据', data)
-      state.rewardActivity.startTime = data.startTime;
-      state.rewardActivity.endTime = data.endTime;
+    if (!id) {
+      return;
+    }
+    try {
+      const response = await RewardActivityApi.getRewardActivity(id);
+      if (response?.code === 0 && response.data) {
+        // console.log('获取到的活动 数据', data)
+        state.rewardActivity.startTime = response.data.startTime;
+        state.rewardActivity.endTime = response.data.endTime;
+      }
+    } catch (error) {
+      // 活动时间仅用于展示，不应影响商品详情和下单。
     }
   }
 
-  onLoad((options) => {
+  onLoad((options = {}) => {
     // 非法参数
-    if (!options.id) {
+    if (!options?.id) {
       state.goodsInfo = null;
       state.skeletonLoading = false;
       return;
@@ -393,7 +481,7 @@
     state.goodsId = options.id;
     // 1. 加载商品信息
     SpuApi.getSpuDetail(state.goodsId).then((res) => {
-      if (res.code !== 0 || !res.data) {
+      if (res?.code !== 0 || !res?.data) {
         state.goodsInfo = null;
         state.skeletonLoading = false;
         return;
@@ -401,29 +489,44 @@
       // 加载到商品
       state.skeletonLoading = false;
       state.goodsInfo = res.data;
-      // 获取结算信息
-      getSettlementByIds(state.goodsId);
+      // 获取结算信息。该接口需要会员上下文，未登录时跳过，避免匿名
+      // 请求触发 trade 服务的空 userId Feign 调用。
+      if (isLogin.value) {
+        getSettlementByIds(state.goodsId);
+      }
       // 加载是否收藏
       if (isLogin.value) {
         FavoriteApi.isFavoriteExists(state.goodsId, 'goods').then((res) => {
-          if (res.code !== 0) {
+          if (res?.code !== 0) {
             return;
           }
-          state.goodsInfo.favorite = res.data;
+          state.goodsInfo.favorite = res?.data === true;
+        }).catch(() => {
+          state.goodsInfo.favorite = false;
         });
       }
+    }).catch(() => {
+      state.goodsInfo = null;
+      state.skeletonLoading = false;
     });
 
     // 2. 加载优惠劵信息
-    getCoupon();
+    if (isLogin.value) {
+      getCoupon();
+    }
 
-    // 3. 加载营销活动信息
-    ActivityApi.getActivityListBySpuId(state.goodsId).then((res) => {
-      if (res.code !== 0) {
-        return;
-      }
-      state.activityList = res.data;
-    });
+    // 3. 加载营销活动信息。企业采购简化模式不展示也不请求
+    // 拼团/秒杀/砍价活动，避免旧活动数据再次出现在用户端。
+    if (!isSimpleMarketingEnabled()) {
+      ActivityApi.getActivityListBySpuId(state.goodsId).then((res) => {
+        if (res?.code !== 0) {
+          return;
+        }
+        state.activityList = Array.isArray(res?.data) ? res.data : [];
+      }).catch(() => {
+        state.activityList = [];
+      });
+    }
   });
 </script>
 
@@ -668,5 +771,47 @@
     line-height: 40rpx;
     display: flex;
     justify-content: flex-end;
+  }
+
+  .sku-stock-card {
+    .stock-title {
+      font-size: 28rpx;
+      font-weight: 600;
+      color: #333333;
+    }
+
+    .sku-stock-item {
+      padding: 20rpx 0;
+      border-top: 1rpx solid #f2f2f2;
+
+      &:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+    }
+
+    .sku-stock-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 26rpx;
+      color: #333333;
+      line-height: 36rpx;
+    }
+
+    .sku-stock-meta {
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 24rpx;
+      color: #666666;
+    }
+
+    .sku-stock-price {
+      font-weight: 600;
+      color: #ff3000;
+    }
+
+    .sku-stock-count {
+      margin-top: 6rpx;
+    }
   }
 </style>
