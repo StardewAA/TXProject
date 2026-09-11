@@ -11,6 +11,10 @@ const PayOrderApi = {
       url: '/pay/order/get',
       method: 'GET',
       params,
+      custom: {
+        auth: true,
+        showLoading: false,
+      },
     });
   },
   // 提交支付订单
@@ -19,6 +23,9 @@ const PayOrderApi = {
       url: '/pay/order/submit',
       method: 'POST',
       data,
+      custom: {
+        auth: true,
+      },
     });
   },
 };

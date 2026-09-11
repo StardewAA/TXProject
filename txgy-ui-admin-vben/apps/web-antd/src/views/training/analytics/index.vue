@@ -4,19 +4,18 @@ import type { EchartsUIType } from '@vben/plugins/echarts';
 import type { TrainingAnalyticsApi } from './api';
 
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
-import { Button, Card, Col, Row, Statistic, Table, Tag } from 'ant-design-vue';
+import { Card, Col, Row, Statistic, Table, Tag } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
+import PageHeaderBar from '../components/page-header-bar.vue';
 import { getAnalyticsDashboard } from './api';
 
 defineOptions({ name: 'TrainingAnalytics' });
 
-const router = useRouter();
 const loading = ref(false);
 const dashboard = ref<TrainingAnalyticsApi.Dashboard>();
 
@@ -101,25 +100,11 @@ onMounted(() => {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #475569 0%, #475569dc 44%, #111827 115%)"
-      >
-        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09</div>
-            <h1 class="m-0 text-2xl font-semibold md:text-3xl">数据统计与档案归档</h1>
-            <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-              汇总培训投入、过程和成效数据，形成可追溯的培训档案（首期：统计看板）。
-            </p>
-          </div>
-          <div class="shrink-0">
-            <Button ghost @click="router.push('/training/workbench')">
-              返回工作台
-            </Button>
-          </div>
-        </div>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09"
+        title="数据统计与档案归档"
+        description="汇总培训投入、过程和成效数据，形成可追溯的培训档案（首期：统计看板）。"
+      />
 
       <Card title="课程规模" :loading="loading" :bordered="false">
         <Row :gutter="16">

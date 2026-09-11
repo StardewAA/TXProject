@@ -53,9 +53,11 @@ public class TradeOrderDO extends BaseDO {
      * 例如说，1146347329394184195
      */
     private String no;
-    /** 店铺编号；多店铺订单为空，订单项保留实际店铺归属 */
+    /** 店铺编号；平台自营和多店铺订单均使用 0，订单项保留实际店铺归属 */
     private Long shopId;
     private String shopName;
+    /** 店铺 Logo 快照；对应 trade_order.shop_logo_url。 */
+    private String shopLogoUrl;
     /**
      * 订单类型
      *

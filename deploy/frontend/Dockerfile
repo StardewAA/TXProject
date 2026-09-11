@@ -26,6 +26,7 @@ RUN pnpm exec turbo build --filter=@vben/web-antd --concurrency=2
 
 FROM nginx:1.27-alpine
 
+COPY deploy/frontend/nginx-main.conf /etc/nginx/nginx.conf
 COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /workspace/txgy-ui-admin-vben/apps/web-antd/dist /usr/share/nginx/html
 

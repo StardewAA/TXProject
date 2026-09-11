@@ -1,7 +1,7 @@
 <template>
-  <su-fixed bottom placeholder :val="44">
+  <su-fixed v-if="enabledActivityList.length" bottom placeholder :val="44">
     <view>
-      <view v-for="activity in props.activityList" :key="activity.id">
+      <view v-for="activity in enabledActivityList" :key="activity.id">
         <view
           class="activity-box ss-p-x-38 ss-flex ss-row-between ss-col-center"
           :class="activity.type === 1 ? 'seckill-box' : 'groupon-box'"
@@ -29,7 +29,9 @@
 </template>
 
 <script setup>
+  import { computed } from 'vue';
   import sheep from '@/sheep';
+  import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
 
   const seckillBg = sheep.$url.css('/static/img/shop/goods/seckill-tip-bg.png');
   const grouponBg = sheep.$url.css('/static/img/shop/goods/groupon-tip-bg.png');
@@ -41,6 +43,19 @@
         return [];
       },
     },
+  });
+
+  // 工业品商城暂不开放秒杀、砍价、拼团；即使旧接口返回活动，
+  // 商品详情也不再展示消费型活动入口。
+  const enabledActivityList = computed(() => {
+    if (isSimpleMarketingEnabled()) {
+      return [];
+    }
+    // 详情提示组件目前只支持秒杀(type=1)和拼团(type=3)跳转；其它活动
+    // 由各自页面处理，避免渲染出无法点击的“GO”按钮。
+    return (Array.isArray(props.activityList) ? props.activityList : []).filter((activity) =>
+      [1, 3].includes(Number(activity?.type)),
+    );
   });
 
   function onActivity(activity) {

@@ -8,6 +8,7 @@ const AfterSaleApi = {
       method: 'GET',
       params,
       custom: {
+        auth: true,
         showLoading: false,
       },
     });
@@ -18,6 +19,7 @@ const AfterSaleApi = {
       url: `/trade/after-sale/create`,
       method: 'POST',
       data,
+      custom: { auth: true },
     });
   },
   // 获得售后
@@ -28,6 +30,7 @@ const AfterSaleApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 取消售后
@@ -38,6 +41,7 @@ const AfterSaleApi = {
       params: {
         id,
       },
+      custom: { auth: true },
     });
   },
   // 获得售后日志列表
@@ -48,6 +52,7 @@ const AfterSaleApi = {
       params: {
         afterSaleId,
       },
+      custom: { auth: true },
     });
   },
   // 退回货物
@@ -56,6 +61,7 @@ const AfterSaleApi = {
       url: `/trade/after-sale/delivery`,
       method: 'PUT',
       data,
+      custom: { auth: true },
     });
   }
 };

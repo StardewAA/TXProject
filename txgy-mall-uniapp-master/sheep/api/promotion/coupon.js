@@ -43,6 +43,7 @@ const CouponApi = {
       url: '/promotion/coupon/page',
       method: 'GET',
       params,
+      custom: { auth: true, showLoading: false },
     });
   },
   // 领取优惠券
@@ -66,6 +67,7 @@ const CouponApi = {
       url: '/promotion/coupon/get',
       method: 'GET',
       params: { id },
+      custom: { auth: true, showLoading: false },
     });
   },
   // 获得未使用的优惠劵数量

@@ -20,7 +20,9 @@ import {
   deleteWorkOrder,
   exportWorkOrder,
   getWorkOrderPage,
+  issueWorkOrder,
 } from '#/api/mes/pro/workorder';
+
 import { $t } from '#/locales';
 import { BarcodeDetail } from '#/views/mes/wm/barcode/components';
 
@@ -85,6 +87,14 @@ async function handleCancel(row: MesProWorkOrderApi.WorkOrder) {
   message.success('工单已取消');
   handleRefresh();
 }
+
+/** 下发工单 */
+async function handleIssue(row: MesProWorkOrderApi.WorkOrder) {
+  await issueWorkOrder(row.id!);
+  message.success('工单已下发，可进行任务排产');
+  handleRefresh();
+}
+
 
 /** 查看工单条码 */
 function handleBarcode(row: MesProWorkOrderApi.WorkOrder) {
@@ -209,6 +219,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
                 row.type === MesProWorkOrderTypeEnum.SELF,
               onClick: handleAddChild.bind(null, row),
             },
+            {
+              label: '下发',
+              type: 'link',
+              auth: ['mes:pro-work-order:update'],
+              ifShow: row.status === MesProWorkOrderStatusEnum.CONFIRMED,
+              popConfirm: {
+                title: '确认下发该工单？下发后将按工艺路线进行任务排产。',
+                confirm: handleIssue.bind(null, row),
+              },
+            },
+            
             {
               label: '完成',
               type: 'link',
