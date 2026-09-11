@@ -97,6 +97,10 @@ public class CrmClueSaveReqVO {
     @DiffLogField(name = "客户来源", function = CrmCustomerSourceParseFunction.NAME)
     private Integer source;
 
+    @Schema(description = "客户类别(1=下游客户 2=上游供应商)", example = "1")
+    @DiffLogField(name = "客户类别")
+    private Integer customerType;
+
     @Schema(description = "客户描述", example = "任意文字")
     @DiffLogField(name = "客户描述")
     @Size(max = 4096, message = "客户描述长度不能超过 4096 个字符")

@@ -28,6 +28,7 @@ export namespace CrmCustomerApi {
     areaName?: string; // 所在地名称
     detailAddress: string; // 详细地址
     industryId: number; // 所属行业
+    customerType: number; // 客户类别 1=下游客户 2=上游供应商
     level: number; // 客户等级
     source: number; // 客户来源
     remark: string; // 备注
@@ -120,6 +121,14 @@ export function importCustomer(data: CrmCustomerApi.CustomerImportReqVO) {
 export function getCustomerSimpleList() {
   return requestClient.get<CrmCustomerApi.Customer[]>(
     '/crm/customer/simple-list',
+  );
+}
+
+/** 获得相似客户列表（同客户类别、同行业） */
+export function getSimilarCustomerList(customerId: number, limit = 10) {
+  return requestClient.get<CrmCustomerApi.Customer[]>(
+    '/crm/customer/similar-list',
+    { params: { customerId, limit } },
   );
 }
 

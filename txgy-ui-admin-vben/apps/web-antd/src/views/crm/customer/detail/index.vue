@@ -30,6 +30,7 @@ import { FollowUp } from '#/views/crm/followup';
 import { PermissionList, TransferForm } from '#/views/crm/permission';
 import { ReceivableDetailsList } from '#/views/crm/receivable/components';
 import { ReceivablePlanDetailsList } from '#/views/crm/receivable/plan/components';
+import SimilarCustomerCard from '#/views/crm/customer/components/similar-customer-card.vue';
 
 import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
@@ -241,6 +242,9 @@ onMounted(() => {
     </template>
     <Card class="min-h-[10%]">
       <Descriptions :data="customer" />
+    </Card>
+    <Card class="mt-4">
+      <SimilarCustomerCard :customer-id="customerId" />
     </Card>
     <Card class="mt-4 min-h-[60%]">
       <Tabs>
