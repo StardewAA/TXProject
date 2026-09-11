@@ -1,7 +1,7 @@
 <!-- 装修基础组件：菜单导航（金刚区） -->
 <template>
 	<!-- 包裹层 -->
-	<view class="ui-swiper" :class="[props.mode, props.ui]"
+	<view v-if="menuList.length" class="ui-swiper" :class="[props.mode, props.ui]"
 		:style="[bgStyle, { height: swiperHeight + (menuList.length > 1 ? 50 : 0) + 'rpx' }]">
 		<!-- 轮播 -->
 		<swiper :circular="props.circular" :current="state.cur" :autoplay="props.autoplay" :interval="props.interval"
@@ -82,6 +82,7 @@
 		computed
 	} from 'vue';
 	import sheep from '@/sheep';
+	import { filterMarketingMenuItems } from '@/sheep/helper/simplified-marketing';
 
 	// 数据
 	const state = reactive({
@@ -187,7 +188,14 @@
 	});
 
 	// 生成数据
-	const menuList = computed(() => splitData(props.data.list, props.data.row * props.data.column));
+	// 装修配置可能来自旧版本，先过滤已下线的消费型营销入口，
+	// 再按行列拆分，避免出现空白菜单格。
+	const menuList = computed(() =>
+		splitData(
+			filterMarketingMenuItems(props.data?.list),
+			props.data.row * props.data.column,
+		),
+	);
 	const swiperHeight = computed(() => props.data.row * (props.data.layout === 'iconText' ? 200 : 180));
 	const windowWidth = sheep.$platform.device.windowWidth;
 

@@ -106,16 +106,18 @@ export async function getAuthPermissionInfoApi() {
 
 /** 获取租户列表 */
 export async function getTenantSimpleList() {
-  return requestClient.get<AuthApi.TenantResult[]>(
-    `/system/tenant/simple-list`,
-  );
+  const response = await baseRequestClient.get<{
+    data?: AuthApi.TenantResult[];
+  }>(`/system/tenant/simple-list`);
+  return response?.data?.data ?? response?.data ?? [];
 }
 
 /** 使用租户域名，获得租户信息 */
 export async function getTenantByWebsite(website: string) {
-  return requestClient.get<AuthApi.TenantResult>(
-    `/system/tenant/get-by-website?website=${website}`,
-  );
+  const response = await baseRequestClient.get<{
+    data?: null | AuthApi.TenantResult;
+  }>(`/system/tenant/get-by-website?website=${website}`);
+  return response?.data?.data ?? response?.data ?? null;
 }
 
 /** 获取验证码 */

@@ -218,3 +218,70 @@ export const APP_LINK_GROUP_LIST = [
     ],
   },
 ] as AppLinkGroup[];
+
+/**
+ * Consumer-oriented activity links that are not part of the procurement
+ * mall's simplified marketing flow.  Keep them in APP_LINK_GROUP_LIST above
+ * so existing saved links can still be read and the entries can be restored
+ * without changing the source catalogue.
+ */
+const DISABLED_APP_LINK_TYPES = new Set<APP_LINK_TYPE_ENUM>([
+  APP_LINK_TYPE_ENUM.ACTIVITY_COMBINATION,
+  APP_LINK_TYPE_ENUM.ACTIVITY_POINT,
+  APP_LINK_TYPE_ENUM.ACTIVITY_SECKILL,
+  APP_LINK_TYPE_ENUM.PRODUCT_DETAIL_COMBINATION,
+  APP_LINK_TYPE_ENUM.PRODUCT_DETAIL_SECKILL,
+]);
+
+const DISABLED_APP_LINK_PATH_PARTS = [
+  '/groupon',
+  '/seckill',
+  '/point/list',
+  '/commission',
+  '/brokerage',
+];
+
+const DISABLED_APP_LINK_NAME_PARTS = [
+  '拼团',
+  '秒杀',
+  '积分商城',
+  '分销',
+  '佣金',
+];
+
+/** Whether an APP link is available in the simplified marketing selector. */
+export function isAvailableAppLink(appLink: AppLink): boolean {
+  if (appLink.type !== undefined && DISABLED_APP_LINK_TYPES.has(appLink.type)) {
+    return false;
+  }
+
+  const normalizedPath = appLink.path.toLowerCase();
+  if (
+    DISABLED_APP_LINK_PATH_PARTS.some((part) => normalizedPath.includes(part))
+  ) {
+    return false;
+  }
+
+  return !DISABLED_APP_LINK_NAME_PARTS.some((part) =>
+    appLink.name.includes(part),
+  );
+}
+
+/**
+ * Return a filtered copy so the complete catalogue remains available for
+ * restoring old marketing links in a later phase.
+ */
+export function filterAvailableAppLinkGroups(
+  groups: readonly AppLinkGroup[],
+): AppLinkGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      links: group.links.filter(isAvailableAppLink),
+    }))
+    .filter((group) => group.links.length > 0);
+}
+
+/** Links shown by the simplified procurement-mall selector. */
+export const AVAILABLE_APP_LINK_GROUP_LIST =
+  filterAvailableAppLinkGroups(APP_LINK_GROUP_LIST);

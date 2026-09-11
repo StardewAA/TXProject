@@ -38,8 +38,8 @@
             <!-- #endif -->
           </view>
           <view class="store-distance ss-flex ss-row-center" @tap.stop="showMaoLocation(item)">
-            <text class="addressTxt" v-if="item.distance">
-              距离{{ item.distance.toFixed(2) }}千米
+            <text class="addressTxt" v-if="Number.isFinite(Number(item.distance)) && Number(item.distance) > 0">
+              距离{{ Number(item.distance).toFixed(2) }}千米
             </text>
             <text class="addressTxt" v-else>查看地图</text>
             <view class="iconfont">
@@ -155,15 +155,22 @@
       return;
     }
     state.loading = true;
-    const { data, code } = await DeliveryApi.getDeliveryPickUpStoreList({
-      latitude: state.user_latitude,
-      longitude: state.user_longitude,
-    });
-    if (code !== 0) {
-      return;
+    try {
+      const response = await DeliveryApi.getDeliveryPickUpStoreList({
+        latitude: state.user_latitude,
+        longitude: state.user_longitude,
+      });
+      if (response?.code !== 0) {
+        state.storeList = [];
+        return;
+      }
+      state.storeList = Array.isArray(response.data) ? response.data : [];
+      state.loaded = true;
+    } catch (error) {
+      state.storeList = [];
+    } finally {
+      state.loading = false;
     }
-    state.loading = false;
-    state.storeList = data;
   };
 
   onMounted(() => {

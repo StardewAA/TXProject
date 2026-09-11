@@ -106,11 +106,17 @@
     const { bgType, bgImg, bgColor } = props.styles;
 
     // 根据 bgType 返回相应的样式
-    return {
-      background: bgType === 'img'
-        ? `url(${bgImg}) no-repeat top center / 100% 100%`
-        : bgColor,
-    };
+    if (bgType === 'img') {
+      return {
+        background: `url(${bgImg}) no-repeat top center / 100% 100%`,
+      };
+    }
+    if (bgColor) {
+      return {
+        backgroundColor: bgColor,
+      };
+    }
+    return {};
   });
 
   // 绑定手机号
@@ -127,12 +133,34 @@
 <style lang="scss" scoped>
   .ss-user-info-wrap {
     box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    border-radius: 32rpx;
+    background:
+      radial-gradient(circle at 14% 18%, rgba(59, 130, 246, 0.16), transparent 30%),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+    border: 1rpx solid rgba(255, 255, 255, 0.08);
+    box-shadow: var(--ui-Surface-shadow-lg);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -80rpx;
+      right: -40rpx;
+      width: 220rpx;
+      height: 220rpx;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(96, 165, 250, 0.28), transparent 68%);
+      pointer-events: none;
+    }
 
     .avatar-box {
       width: 100rpx;
       height: 100rpx;
       border-radius: 50%;
       overflow: hidden;
+      border: 4rpx solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.2);
 
       .avatar-img {
         width: 100%;
@@ -142,8 +170,8 @@
 
     .nick-name {
       font-size: 34rpx;
-      font-weight: 400;
-      color: #333333;
+      font-weight: 600;
+      color: #ffffff;
       line-height: normal;
     }
 
@@ -154,6 +182,20 @@
 
     .sicon-qrcode {
       font-size: 40rpx;
+      color: #ffffff;
+    }
+
+    .right-box {
+      .ss-reset-button {
+        width: 76rpx;
+        height: 76rpx;
+        border-radius: 24rpx;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1rpx solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
+      }
     }
   }
 
@@ -162,28 +204,31 @@
     height: 84rpx;
     padding: 0 34rpx 0 44rpx;
     box-sizing: border-box;
-    background: #ffffff;
-    box-shadow: 0px -8rpx 9rpx 0px rgba(#e0e0e0, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    border-top: 1rpx solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.9);
 
     .cicon-mobile-o {
       font-size: 30rpx;
-      color: #ff690d;
+      color: #fbbf24;
     }
 
     .mobile-title {
       font-size: 24rpx;
       font-weight: 500;
-      color: #ff690d;
+      color: rgba(255, 255, 255, 0.92);
     }
 
     .bind-btn {
       width: 100rpx;
       height: 50rpx;
-      background: #ff6100;
+      background: linear-gradient(90deg, #f59e0b, #f97316);
       border-radius: 25rpx;
       font-size: 24rpx;
       font-weight: 500;
       color: #ffffff;
+      box-shadow: 0 10rpx 22rpx rgba(249, 115, 22, 0.22);
     }
   }
 </style>

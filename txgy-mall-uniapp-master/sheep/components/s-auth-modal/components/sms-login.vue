@@ -126,9 +126,13 @@
       return;
     }
     // 提交数据
-    const { code } = await AuthUtil.smsLogin(state.model);
-    if (code === 0) {
-      closeAuthModal();
+    try {
+      const result = await AuthUtil.smsLogin(state.model);
+      if (result?.code === 0) {
+        closeAuthModal();
+      }
+    } catch (error) {
+      // request 层已展示错误提示。
     }
   }
 </script>

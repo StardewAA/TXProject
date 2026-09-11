@@ -37,7 +37,14 @@ public class AdminUserApiImpl implements AdminUserApi {
     @DataPermission(enable = false) // 忽略数据权限，避免因为过滤，导致无法查询用户。类似：https://github.com/YunaiV/ruoyi-vue-pro/issues/1051
     public CommonResult<AdminUserRespDTO> getUser(Long id) {
         AdminUserDO user = userService.getUser(id);
-        return success(BeanUtils.toBean(user, AdminUserRespDTO.class));
+        AdminUserRespDTO dto = BeanUtils.toBean(user, AdminUserRespDTO.class);
+        if (user.getDeptId() != null) {
+            DeptDO dept = deptService.getDept(user.getDeptId());
+            if (dept != null) {
+                dto.setDeptName(dept.getName());
+            }
+        }
+        return success(dto);
     }
 
     @Override

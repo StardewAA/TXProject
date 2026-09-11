@@ -152,11 +152,13 @@
   // 获得地区数据
   const getAreaData = () => {
     if (isEmpty(uni.getStorageSync('areaData'))) {
-      AreaApi.getAreaTree().then((res) => {
-        if (res.code === 0) {
-          uni.setStorageSync('areaData', res.data);
-        }
-      });
+      AreaApi.getAreaTree()
+        .then((res) => {
+          if (res?.code === 0 && res.data) {
+            uni.setStorageSync('areaData', res.data);
+          }
+        })
+        .catch(() => {});
     }
   };
 
@@ -176,12 +178,16 @@
     const formData = {
       ...state.model,
     };
-    const { code } =
-      state.model.id > 0
-        ? await AddressApi.updateAddress(formData)
-        : await AddressApi.createAddress(formData);
-    if (code === 0) {
-      sheep.$router.back();
+    try {
+      const response =
+        state.model.id > 0
+          ? await AddressApi.updateAddress(formData)
+          : await AddressApi.createAddress(formData);
+      if (response?.code === 0) {
+        sheep.$router.back();
+      }
+    } catch (error) {
+      // request 层负责展示错误提示。
     }
   };
 
@@ -194,35 +200,81 @@
         if (!res.confirm) {
           return;
         }
-        const { code } = await AddressApi.deleteAddress(state.model.id);
-        if (code === 0) {
-          sheep.$router.back();
+        try {
+          const response = await AddressApi.deleteAddress(state.model.id);
+          if (response?.code === 0) {
+            sheep.$router.back();
+          }
+        } catch (error) {
+          // request 层负责展示错误提示。
         }
       },
     });
   };
 
-  onLoad(async (options) => {
+  onLoad(async (options = {}) => {
     // 获得地区数据
     getAreaData();
     // 情况一：基于 id 获得收件地址
     if (options.id) {
-      let { code, data } = await AddressApi.getAddress(options.id);
-      if (code !== 0) {
+      try {
+        const response = await AddressApi.getAddress(options.id);
+        if (response?.code !== 0 || !response.data) {
+          return;
+        }
+        state.model = response.data;
+      } catch (error) {
         return;
       }
-      state.model = data;
     }
     // 情况二：微信导入
     if (options.data) {
-      let data = JSON.parse(options.data);
+      let data;
+      let dataText = typeof options.data === 'string' ? options.data : '';
+      // 路由层会对 query 参数做 encodeURIComponent，H5 某些版本还会再次编码。
+      // 在每一轮先尝试 JSON.parse，失败后再解码，避免把地址中的合法百分号误解码。
+      for (let index = 0; index < 4 && !data; index++) {
+        try {
+          data = JSON.parse(dataText);
+          break;
+        } catch (error) {
+          try {
+            const decoded = decodeURIComponent(dataText);
+            if (decoded === dataText) {
+              break;
+            }
+            dataText = decoded;
+          } catch (decodeError) {
+            break;
+          }
+        }
+      }
+      if (!data || typeof data !== 'object') {
+        sheep.$helper.toast('地址参数不正确');
+        return;
+      }
       const areaData = uni.getStorageSync('areaData');
-      const findAreaByName = (areas, name) => areas.find((item) => item.name === name);
+      if (!Array.isArray(areaData)) {
+        sheep.$helper.toast('地区数据加载失败，请稍后重试');
+        return;
+      }
+      // 微信地址导入在 H5 中会经过路由 query 编码，且不同运行时可能会重复编码。
+      // 先尝试解析，再逐层解码，兼容 `%7B...%7D` 与 `%257B...%257D` 两种形式。
+      const findAreaByName = (areas, name) =>
+        Array.isArray(areas) ? areas.find((item) => item?.name === name) : undefined;
 
       let provinceObj = findAreaByName(areaData, data.province_name);
-      let cityObj = provinceObj ? findAreaByName(provinceObj.children, data.city_name) : undefined;
-      let districtObj = cityObj ? findAreaByName(cityObj.children, data.district_name) : undefined;
-      let areaId = (districtObj || cityObj || provinceObj).id;
+      const cityObj = provinceObj
+        ? findAreaByName(provinceObj.children, data.city_name)
+        : undefined;
+      const districtObj = cityObj
+        ? findAreaByName(cityObj.children, data.district_name)
+        : undefined;
+      const areaId = (districtObj || cityObj || provinceObj)?.id;
+      if (!areaId) {
+        sheep.$helper.toast('无法识别收货地区');
+        return;
+      }
 
       state.model = {
         ...state.model,
@@ -231,9 +283,9 @@
           .filter(Boolean)
           .join(' '),
         defaultStatus: false,
-        detailAddress: data.address,
-        mobile: data.mobile,
-        name: data.consignee,
+        detailAddress: data.address || '',
+        mobile: data.mobile || '',
+        name: data.consignee || '',
       };
     }
   });

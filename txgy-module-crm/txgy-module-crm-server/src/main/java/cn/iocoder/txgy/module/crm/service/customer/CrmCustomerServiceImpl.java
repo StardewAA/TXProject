@@ -97,18 +97,26 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerSaveReqVO createReqVO, Long userId) {
         createReqVO.setId(null);
-        // 1. 校验拥有客户是否到达上限
-        validateCustomerExceedOwnerLimit(createReqVO.getOwnerUserId(), 1);
+        // 1. 负责人：以表单选择为准；未选择时默认当前登录人
+        Long ownerUserId = createReqVO.getOwnerUserId() != null ? createReqVO.getOwnerUserId() : userId;
+        createReqVO.setOwnerUserId(ownerUserId);
+        // 2. 校验拥有客户是否到达上限
+        validateCustomerExceedOwnerLimit(ownerUserId, 1);
 
-        // 2. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqVO, userId);
+        // 3. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqVO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 3. 创建数据权限
+        // 4. 创建数据权限：负责人拥有 OWNER
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
+                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
+        // 5. 若创建人不是负责人，保留其读/写权限，避免创建后丢失可见性
+        if (!ownerUserId.equals(userId)) {
+            permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
+                    .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.WRITE.getLevel()));
+        }
 
-        // 4. 记录操作日志上下文
+        // 6. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }

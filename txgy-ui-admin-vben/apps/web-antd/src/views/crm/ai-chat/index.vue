@@ -58,6 +58,23 @@ async function scrollToBottom() {
   }
 }
 
+/** 给整次回复加超时，避免 AI/接口挂起导致发送按钮一直被锁死 */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('回复超时，请稍后重试')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function send(text?: string) {
   const content = (text ?? inputText.value).trim();
   if (!content || sending.value) return;
@@ -85,7 +102,7 @@ async function send(text?: string) {
   await scrollToBottom();
 
   try {
-    const reply = await mockAiReply(content);
+    const reply = await withTimeout(mockAiReply(content), 30000);
     assistant.loading = false;
     assistant.text = reply?.text ?? '';
     if (reply?.table) {

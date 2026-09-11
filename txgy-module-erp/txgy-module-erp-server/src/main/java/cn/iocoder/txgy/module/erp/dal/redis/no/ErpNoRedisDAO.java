@@ -56,6 +56,10 @@ public class ErpNoRedisDAO {
      */
     public static final String PURCHASE_ORDER_NO_PREFIX = "CGDD";
     /**
+     * Mall shortage procurement demand. It is not an ERP supplier purchase order.
+     */
+    public static final String MALL_PURCHASE_DEMAND_NO_PREFIX = "MCPQ";
+    /**
      * 采购入库 {@link cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseInDO}
      */
     public static final String PURCHASE_IN_NO_PREFIX = "CGRK";
@@ -63,6 +67,15 @@ public class ErpNoRedisDAO {
      * 采购退货 {@link cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseReturnDO}
      */
     public static final String PURCHASE_RETURN_NO_PREFIX = "CGTH";
+
+    /** 采购申请 */
+    public static final String PURCHASE_REQUEST_NO_PREFIX = "CGSQ";
+    /** 采购询价 */
+    public static final String INQUIRY_NO_PREFIX = "CGXJ";
+    /** 供应商报价 */
+    public static final String INQUIRY_QUOTE_NO_PREFIX = "GYSBJ";
+    /** 造价结果 */
+    public static final String COST_RESULT_NO_PREFIX = "ZJJG";
 
     /**
      * 付款单 {@link cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinancePaymentDO}

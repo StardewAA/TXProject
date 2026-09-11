@@ -85,3 +85,6 @@ services/training-exam/data/
 services/training-exam/__pycache__/
 services/training-exam/.pytest_cache/
 txgy-ui-admin-vben/.exam-*.log
+
+# 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
+uploads/

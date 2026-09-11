@@ -43,7 +43,7 @@ public class VideoResourceController {
     private ResourceFileStorageService fileStorage;
 
     @PostMapping("/upload")
-    @Operation(summary = "上传视频（短视频/录播，MP4/MOV ≤500MB，成功即上线，记录原始清晰度）")
+    @Operation(summary = "上传视频（短视频/录播，MP4/MOV ≤4GB，成功即上线，记录原始清晰度）")
     @PreAuthorize("@ss.hasPermission('training:resource-video:create')")
     public CommonResult<Long> uploadVideo(@RequestParam("file") MultipartFile file,
                                           @RequestParam("title") String title,

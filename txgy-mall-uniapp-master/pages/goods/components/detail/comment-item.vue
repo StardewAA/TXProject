@@ -11,7 +11,17 @@
         <uni-rate :readonly="true" v-model="item.scores" size="18" />
       </view>
     </view>
-    <view class="content"> {{ item.content }} </view>
+    <view class="content"> {{ item.content || '用户未填写文字评价' }} </view>
+    <!-- 评价保留下单时的 SKU 快照，便于核对 ERP 商品的规格和单位。 -->
+    <view class="sku-properties ss-flex ss-flex-wrap" v-if="skuProperties(item).length">
+      <text
+        class="sku-property ss-m-r-12"
+        v-for="property in skuProperties(item)"
+        :key="`${property.propertyId || property.propertyName}-${property.valueId || property.valueName}`"
+      >
+        {{ property.propertyName }}：{{ property.valueName }}
+      </text>
+    </view>
     <view class="ss-m-t-24" v-if="item.picUrls?.length">
       <scroll-view class="scroll-box" scroll-x scroll-anchoring>
         <view class="ss-flex">
@@ -42,9 +52,21 @@
   const props = defineProps({
     item: {
       type: Object,
-      default() {},
+      default: () => ({}),
     },
   });
+
+  function skuProperties(item) {
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+    const properties = Array.isArray(item.skuProperties)
+      ? item.skuProperties
+      : Array.isArray(item.properties)
+        ? item.properties
+        : [];
+    return properties.filter((property) => property && (property.valueName || property.valueId));
+  }
 </script>
 
 <style lang="scss" scoped>
@@ -65,6 +87,19 @@
     font-size: 26rpx;
     font-weight: 400;
     color: #333333;
+  }
+
+  .sku-properties {
+    margin-top: 12rpx;
+    color: #999999;
+    font-size: 22rpx;
+  }
+
+  .sku-property {
+    padding: 4rpx 10rpx;
+    margin-bottom: 6rpx;
+    background: #f7f7f7;
+    border-radius: 4rpx;
   }
 
   .reply-box {

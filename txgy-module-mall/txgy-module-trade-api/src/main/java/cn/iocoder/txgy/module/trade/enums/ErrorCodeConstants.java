@@ -76,6 +76,11 @@ public interface ErrorCodeConstants {
     ErrorCode PRICE_CALCULATE_POINT_TOTAL_LIMIT_COUNT = new ErrorCode(1_011_003_004, "参与积分活动的商品，超过了积分活动商品总限购数量");
     ErrorCode PRICE_CALCULATE_DELIVERY_PRICE_TYPE_ILLEGAL = new ErrorCode(1_011_003_005, "计算快递运费异常，配送方式不匹配");
     ErrorCode PRICE_CALCULATE_COUPON_CAN_NOT_USE = new ErrorCode(1_011_003_006, "该优惠劵无法使用，原因：{}」");
+    /**
+     * 企业采购简单营销模式下，不允许参与复杂营销活动。
+     */
+    ErrorCode PRICE_CALCULATE_MARKETING_NOT_SUPPORTED =
+            new ErrorCode(1_011_003_007, "当前商城仅支持普通折扣、满额优惠、优惠券和积分抵扣，暂不支持该营销活动");
 
     // ========== 物流 Express 模块 1-011-004-000 ==========
     ErrorCode EXPRESS_NOT_EXISTS = new ErrorCode(1_011_004_000, "快递公司不存在");

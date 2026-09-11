@@ -13,6 +13,15 @@ public class AppTradeOrderDetailRespVO {
 
     // ========== 订单基本信息 ==========
 
+    @Schema(description = "订单店铺编号；平台自营或多店铺订单为 0", example = "1")
+    private Long shopId;
+
+    @Schema(description = "订单店铺名称快照；多店铺订单为“多店铺”", example = "测试1111")
+    private String shopName;
+
+    @Schema(description = "订单店铺 Logo 快照")
+    private String shopLogoUrl;
+
     @Schema(description = "订单编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 

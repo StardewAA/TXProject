@@ -60,14 +60,20 @@
 	// 设置背景样式
 	const bgStyle = computed(() => {
 	  // 直接从 props.styles 解构
-	  const { bgType, bgImg, bgColor } = props.styles; 
+	  const { bgType, bgImg, bgColor } = props.styles;
 	
 	  // 根据 bgType 返回相应的样式
-	  return {
-		background: bgType === 'img'
-			? `url(${bgImg}) no-repeat top center / 100% 100%`
-			: bgColor
+	  if (bgType === 'img') {
+		return {
+		  background: `url(${bgImg}) no-repeat top center / 100% 100%`,
 		};
+	  }
+	  if (bgColor) {
+		return {
+		  backgroundColor: bgColor,
+		};
+	  }
+	  return {};
 	});
 	
 	const userWallet = computed(() => sheep.$store('user').userWallet);
@@ -77,22 +83,39 @@
 
 <style lang="scss" scoped>
 	.ss-wallet-menu-wrap {
+		box-sizing: border-box;
+		overflow: hidden;
+		border-radius: 32rpx;
+		padding: 14rpx 10rpx;
+		background:
+			radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 28%),
+			linear-gradient(135deg, rgba(15, 118, 110, 0.95), rgba(37, 99, 235, 0.92));
+		border: 1rpx solid rgba(255, 255, 255, 0.08);
+		box-shadow: var(--ui-Surface-shadow-lg);
+
 		.menu-wallet {
-			width: 144rpx;
+			width: 148rpx;
+			margin-left: 4rpx;
+			background: rgba(255, 255, 255, 0.08);
+			border-radius: 24rpx;
 		}
 
 		.menu-item {
-			height: 160rpx;
+			height: 164rpx;
+			border-radius: 22rpx;
 
 			.menu-title {
 				font-size: 24rpx;
 				line-height: 24rpx;
-				color: #333333;
+				color: rgba(255, 255, 255, 0.82);
+				font-weight: 500;
 			}
 
 			.item-icon {
 				width: 44rpx;
 				height: 44rpx;
+				border-radius: 16rpx;
+				box-shadow: 0 10rpx 20rpx rgba(15, 23, 42, 0.12);
 			}
 
 			.value-box {
@@ -101,7 +124,7 @@
 
 				.value-text {
 					font-size: 28rpx;
-					color: #000000;
+					color: #ffffff;
 					line-height: 28rpx;
 					vertical-align: text-bottom;
 					font-family: OPPOSANS;
@@ -109,7 +132,7 @@
 
 				.unit-text {
 					font-size: 24rpx;
-					color: #343434;
+					color: rgba(255, 255, 255, 0.72);
 					line-height: 24rpx;
 				}
 			}

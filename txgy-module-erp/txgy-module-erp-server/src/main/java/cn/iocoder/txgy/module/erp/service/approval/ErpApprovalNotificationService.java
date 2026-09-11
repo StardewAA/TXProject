@@ -43,21 +43,41 @@ public class ErpApprovalNotificationService {
         });
     }
 
+    public void sendBusinessSubmittedAfterCommit(Long userId, String businessName, String businessNo,
+                                                 Long businessId, String detailPath) {
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        Runnable sender = () -> TenantUtils.execute(tenantId,
+                () -> sendBusinessSubmitted(userId, businessName, businessNo, businessId, detailPath));
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            sender.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { sender.run(); }
+        });
+    }
+
     private void sendOrderSubmitted(Long userId, String orderType, String orderNo, Long orderId) {
+        sendBusinessSubmitted(userId, "PURCHASE".equals(orderType) ? "采购订单" : "销售订单",
+                orderNo, orderId, "/erp/approval");
+    }
+
+    private void sendBusinessSubmitted(Long userId, String businessName, String businessNo,
+                                       Long businessId, String detailPath) {
         try {
             Map<String, Object> templateParams = new HashMap<>();
-            templateParams.put("orderType", orderType);
-            templateParams.put("orderTypeName", "PURCHASE".equals(orderType) ? "采购订单" : "销售订单");
-            templateParams.put("orderNo", orderNo);
-            templateParams.put("orderId", orderId);
-            templateParams.put("detailPath", "/erp/approval");
+            templateParams.put("orderType", businessName);
+            templateParams.put("orderTypeName", businessName);
+            templateParams.put("orderNo", businessNo);
+            templateParams.put("orderId", businessId);
+            templateParams.put("detailPath", detailPath);
             notifyMessageSendApi.sendSingleMessageToAdmin(new NotifySendSingleToUserReqDTO()
                     .setUserId(userId)
                     .setTemplateCode(ORDER_SUBMITTED_TEMPLATE)
                     .setTemplateParams(templateParams)).checkError();
         } catch (Exception ex) {
-            log.error("[sendOrderSubmitted][tenantId({}) userId({}) orderNo({}) 发送站内信失败]",
-                    TenantContextHolder.getTenantId(), userId, orderNo, ex);
+            log.error("[sendBusinessSubmitted][tenantId({}) userId({}) businessNo({}) 发送站内信失败]",
+                    TenantContextHolder.getTenantId(), userId, businessNo, ex);
         }
     }
 }

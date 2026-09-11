@@ -6,6 +6,7 @@ import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSkuSaveReqV
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.service.sku.dto.ProductWmsStockReconciliationDTO;
 import cn.iocoder.txgy.module.product.service.sku.adapter.ProductWmsInventoryAdapter;
+import cn.iocoder.txgy.module.product.service.wms.readonly.ProductWmsSkuSummaryDTO;
 
 import java.util.Collection;
 import java.util.List;
@@ -96,6 +97,9 @@ public interface ProductSkuService {
 
     /** 批量查询订单的 WMS 库存履约状态。 */
     Map<String, ProductWmsInventoryAdapter.ReservationSummary> getWmsStockStatus(Collection<String> orderNos);
+
+    /** 查询 WMS 商品下所有规格的售价及库存摘要。 */
+    List<ProductWmsSkuSummaryDTO> getWmsSkuSummary(Long itemId);
 
     /** 对比商品缓存库存与 WMS 库存；spuIds 为 null 时查询全部。 */
     List<ProductWmsStockReconciliationDTO> getWmsStockReconciliation(Collection<Long> spuIds);

@@ -27,3 +27,15 @@ export function getManagerFriendRequestPage(params: PageParam) {
     { params },
   );
 }
+
+/** 获得好友申请详情 */
+export function getManagerFriendRequest(id: number) {
+  return requestClient.get<ImManagerFriendRequestApi.FriendRequest>(
+    `/im/manager/friend-request/get?id=${id}`,
+  );
+}
+
+/** 删除好友申请记录（治理动作） */
+export function deleteManagerFriendRequest(id: number) {
+  return requestClient.delete(`/im/manager/friend-request/delete?id=${id}`);
+}
