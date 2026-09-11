@@ -45,6 +45,14 @@ const form = reactive<RuleConfigApi.SaveReq>({
   valueType: 'INT',
 });
 const saving = ref(false);
+/* 生效区间：选择器用 'YYYY-MM-DD HH:mm:ss' 便于阅读，提交前转 epoch 毫秒
+ * （框架 TimestampLocalDateTimeDeserializer 只接受数字，直接传字符串会得到 1970 或反序列化失败）。 */
+const effectiveFromText = ref('');
+const effectiveToText = ref('');
+function toMillis(text: string): number | undefined {
+  const ms = new Date(text.replace(/-/g, '/')).getTime();
+  return Number.isNaN(ms) ? undefined : ms;
+}
 
 /** 值 → 表单文本：JSON/对象按美化 JSON，标量原样 */
 function toText(value: unknown): string {
@@ -72,6 +80,8 @@ async function load() {
     const it = await getRuleConfig(key);
     item.value = it;
     history.value = await getRuleConfigHistory(key);
+    effectiveFromText.value = '';
+    effectiveToText.value = '';
     Object.assign(form, {
       changeReason: '',
       configValue: toText(it?.value),
@@ -111,7 +121,11 @@ async function submit() {
     onOk: async () => {
       saving.value = true;
       try {
-        await saveRuleConfig({ ...form });
+        await saveRuleConfig({
+          ...form,
+          effectiveFrom: effectiveFromText.value ? toMillis(effectiveFromText.value) : undefined,
+          effectiveTo: effectiveToText.value ? toMillis(effectiveToText.value) : undefined,
+        });
         message.success('配置已保存');
         await load();
       } finally {
@@ -157,6 +171,8 @@ const auditQuery = reactive<RuleConfigApi.AuditPageReq>({
   hitSource: undefined,
   pageNo: 1,
   pageSize: 10,
+  readAtFrom: undefined,
+  readAtTo: undefined,
   readBy: '',
   ruleKey: '',
 });
@@ -268,12 +284,34 @@ onMounted(async () => {
           <a-col :span="12">
             <a-form-item label="依据 regulationRef"><a-input v-model:value="form.regulationRef" /></a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item label="生效开始（空 = 立即）">
+              <a-date-picker
+                v-model:value="effectiveFromText"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                placeholder="如 2026-10-01 00:00:00"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="生效结束（空 = 长期）">
+              <a-date-picker
+                v-model:value="effectiveToText"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                placeholder="留空 = 长期有效"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
         </a-row>
       </a-form>
       <div class="rc-foot">
         <a-button type="primary" :loading="saving" @click="submit">保存配置</a-button>
         <span class="rc-hint">
-          生效区间（effectiveFrom / effectiveTo）属 LocalDateTime，请求侧时间格式未在契约中约定，故本面板不提交；
+          生效区间以本机时区转 epoch 毫秒提交（后端 TimestampLocalDateTimeDeserializer 只认毫秒数）；
           版本号随查询结果自动回传（并发改动会被后端识别）。
         </span>
       </div>
@@ -329,6 +367,20 @@ onMounted(async () => {
         allow-clear
         placeholder="命中层"
         style="width: 200px"
+      />
+      <a-date-picker
+        v-model:value="auditQuery.readAtFrom"
+        show-time
+        value-format="YYYY-MM-DD HH:mm:ss"
+        placeholder="读取时刻起（含）"
+        style="width: 210px"
+      />
+      <a-date-picker
+        v-model:value="auditQuery.readAtTo"
+        show-time
+        value-format="YYYY-MM-DD HH:mm:ss"
+        placeholder="读取时刻止（含）"
+        style="width: 210px"
       />
       <a-button :loading="auditLoading" @click="loadAudit">查询审计</a-button>
     </a-space>

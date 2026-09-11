@@ -45,6 +45,14 @@ export namespace RuleConfigApi {
     status?: string;
     /** 灰度范围（status=GRAY 时有效） */
     grayScope?: string;
+    /**
+     * 生效开始/结束（空 = 立即生效 / 长期有效）。
+     * 这两个在 **JSON body** 里，后端走框架的 TimestampLocalDateTimeDeserializer，
+     * 只接受 epoch 毫秒数字（LocalDateTime.ofInstant(Instant.ofEpochMilli(...))）；
+     * 与 query 参数上 @DateTimeFormat 的 'yyyy-MM-dd HH:mm:ss' 不是同一口径。
+     */
+    effectiveFrom?: null | number;
+    effectiveTo?: null | number;
     /** 乐观锁：回传查询得到的 versionNo */
     version?: number;
   }
@@ -84,9 +92,13 @@ export namespace RuleConfigApi {
     hitSource?: string;
     bizScene?: string;
     readBy?: string;
-    /** LocalDateTime；请求侧时间格式未在契约中约定，页面不传 */
-    readAtFrom?: null | number | string;
-    readAtTo?: null | number | string;
+    /**
+     * 读取时刻起/止（含）。这两个是 **query 参数**，格式由后端 VO 的
+     * @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") 明确约定（示例 2026-09-01 00:00:00），
+     * 与 JSON body 里 LocalDateTime 走毫秒时间戳的口径不同，勿混用。
+     */
+    readAtFrom?: null | string;
+    readAtTo?: null | string;
   }
 }
 

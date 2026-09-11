@@ -22,7 +22,7 @@ import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
-import { getPersonnelProfilePage, type PersonnelProfileApi } from '#/api/bidding/personnel';
+import { getPersonnelProfile, getPersonnelProfilePage, type PersonnelProfileApi } from '#/api/bidding/personnel';
 import { getProjectPage } from '#/api/bidding/project';
 import {
   assignKeyPost,
@@ -120,6 +120,27 @@ const windowDays = ref<number | undefined>(undefined);
 const keyPostLoading = ref(false);
 const keyPost = ref<null | SafetyPermitApi.KeyPostChanges>(null);
 
+/* 涉及人员：后端只回 personIds（员工档案主键），处理超限时看 id 无意义；
+ * 解析不到姓名（档案已删 / 无 bidding:personnel:profile:query 权限）时回落 #id，
+ * 不显示空白——空白会让人误以为"没有涉及人员"。 */
+const personNameMap = ref<Record<number, string>>({});
+function personLabel(id: number) {
+  return personNameMap.value[id] ?? `#${id}`;
+}
+async function resolvePersonNames(ids: number[]) {
+  const pending = [...new Set(ids.filter((id) => id > 0))].filter((id) => !(id in personNameMap.value));
+  if (pending.length === 0) {
+    return;
+  }
+  const results = await Promise.allSettled(pending.map((id) => getPersonnelProfile(id)));
+  const next = { ...personNameMap.value };
+  results.forEach((r, i) => {
+    const id = pending[i] as number;
+    next[id] = r.status === 'fulfilled' ? (r.value?.personName ?? `#${id}`) : `#${id}`;
+  });
+  personNameMap.value = next;
+}
+
 async function doKeyPost() {
   if (!projectId.value) {
     message.warning('请填写项目 id');
@@ -129,6 +150,7 @@ async function doKeyPost() {
   keyPost.value = null;
   try {
     keyPost.value = await getProjectKeyPostChanges(projectId.value, windowDays.value);
+    void resolvePersonNames((keyPost.value?.items ?? []).flatMap((i) => i.personIds ?? []));
   } catch {
     // 静默
   } finally {
@@ -436,7 +458,7 @@ onMounted(() => {
               </template>
               <template v-else-if="column.key === 'lastChangeDate'">{{ fmtDateTime(record.lastChangeDate) }}</template>
               <template v-else-if="column.key === 'personIds'">
-                {{ (record.personIds ?? []).join('、') || '—' }}
+                {{ (record.personIds ?? []).map(personLabel).join('、') || '—' }}
               </template>
               <template v-else-if="column.key === 'action'">
                 <a-button
