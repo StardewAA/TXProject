@@ -19,9 +19,12 @@
 --   mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-credential-sync.sql
 --   结构自检：node sql/tools/validate-sql-structure.js sql/master-credential-sync.sql
 --
--- 【菜单号段】证书与资质台账使用 60004000 段（60004000 目录 / 600041xx 证照台账 / 600042xx 企业资质 /
---   600043xx 员工资质 / 600044xx 证件全生命周期 / 600045xx 安许风险联动）。
---   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突），
+-- 【菜单号段】证书与资质台账使用 60005000 段（60005000 目录 / 600051xx 证照台账 / 600052xx 企业资质 /
+--   600053xx 员工资质 / 600054xx 证件全生命周期 / 600055xx 安许风险联动）。
+--   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突）；
+--   60005000/600042xx 段已被《docs/前端规范-全域接口说明/投标流程跟踪功能设计方案.md》§8.3 预约
+--   （投标流程跟踪：父级 60005000 + 页面 60005200 + 按钮 60005201~203），按"先登记再占用"让出，
+--   故本域改用 60005000 段（登记时 SQL 侧 60005000~60005999 无任何占用）。
 --   本包直接落终态，不产生废弃号段的行。
 --
 -- 【不包含】角色菜单授权（除超级管理员）——授权属业务决策；见包尾"授权指引"按需执行。
@@ -1379,58 +1382,84 @@ INSERT IGNORE INTO `bidding_dict_data`
 -- SELECT dict_type, COUNT(*) FROM bidding_dict_data WHERE deleted = b'0' GROUP BY dict_type ORDER BY dict_type;
 -- SELECT COUNT(*) FROM bidding_dict_data WHERE id BETWEEN 710000000000002001 AND 710000000000002799;
 
+-- ---------------------------------------------------------------------
+-- 补充（2026-09-13）：材料完备性「总体结论」与「逐项状态」两类字典
+--   取值逐字来自 EnterpriseMaterialCompletenessRespVO 的 @Schema 说明：
+--     总体结论 PASS 齐备 / RISK 部分缺失或临近到期 / FAIL 必备材料缺失；
+--     逐项状态 READY 齐备 / EXPIRING 临近到期 / MISSING 缺失 / EXPIRED 已过期。
+--   规范出处：契约 §1.1 字典类型表；用户硬约束"枚举与阈值一律动态配置"（前端不得硬编码中文与颜色）。
+--   同期后端：MetaDictServiceImpl 新增 material_result / material_status 枚举映射，
+--   并把"受支持类型"改为「枚举 ∪ 字典表已配置」，使纯字面量字典（cert_type 等）也能下发。
+-- ---------------------------------------------------------------------
+INSERT IGNORE INTO `bidding_dict_data`
+(`id`, `tenant_id`, `dict_type`, `dict_value`, `dict_label`, `color_type`, `terminal`, `sort`, `enabled`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+-- material_result（3 条）
+(710000000000002801,0,'material_result','PASS','齐备','success',b'0',1,b'1','材料完备性总体结论：必备材料齐备','1',NOW(),'1',NOW(),b'0'),
+(710000000000002802,0,'material_result','RISK','部分缺失或临近到期','warning',b'0',2,b'1','可投标但需提示风险','1',NOW(),'1',NOW(),b'0'),
+(710000000000002803,0,'material_result','FAIL','必备材料缺失','danger',b'0',3,b'1','不满足投标条件','1',NOW(),'1',NOW(),b'0'),
+-- material_status（4 条）
+(710000000000002804,0,'material_status','READY','齐备','success',b'0',1,b'1','材料在册且未临近到期','1',NOW(),'1',NOW(),b'0'),
+(710000000000002805,0,'material_status','EXPIRING','临近到期','warning',b'0',2,b'1','进入到期预警窗口，窗口天数由规则配置驱动','1',NOW(),'1',NOW(),b'0'),
+(710000000000002806,0,'material_status','MISSING','缺失','danger',b'0',3,b'1','未匹配到任何在册材料','1',NOW(),'1',NOW(),b'0'),
+(710000000000002807,0,'material_status','EXPIRED','已过期','danger',b'0',4,b'1','有效期止早于基准日','1',NOW(),'1',NOW(),b'0');
+
+-- ---------------------------------------------------------------------
+-- 校验（执行后：dict_type 数应为 23 = v1.0 的 14 + 09-19 的 7 + 本次 2；行数 = v1.0 基线 + 45 行）
+-- ---------------------------------------------------------------------
+-- SELECT dict_type, COUNT(*) FROM bidding_dict_data WHERE deleted = b'0' GROUP BY dict_type ORDER BY dict_type;
+
 
 -- #####################################################################
 -- 【来源】2026-09-18-cert-menu-renumber.sql 第 2 步（菜单终态段）——原脚本的迁移/恢复动作不再需要
 -- #####################################################################
--- 第 2 步：证照域迁入新号段（60004000 目录 + 四个页面 + 按钮，权限码/路径/组件逐字保留）
---        映射关系：60002000→60004000、600021xx→600041xx、600022xx→600042xx、
+-- 第 2 步：证照域迁入新号段（60005000 目录 + 四个页面 + 按钮，权限码/路径/组件逐字保留）
+--        映射关系：60002000→60005000、600021xx→600041xx、600022xx→600042xx、
 --                 600023xx→600043xx、600024xx→600044xx
 -- ---------------------------------------------------------------------
 INSERT INTO `system_menu` (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
 VALUES
 -- 目录
-(60004000, '资质与证书管理', '', 1, 1100, 0, 'certificate', 'ep:medal', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005000, '资质与证书管理', '', 1, 1100, 0, 'certificate', 'ep:medal', NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 -- 证照台账
-(60004100, '证照台账', 'bidding:certificate:query', 2, 1, 60004000, 'list', NULL, 'bidding/certificate/index', 'CertificateIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004101, '证照新建', 'bidding:certificate:create', 3, 2, 60004100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004102, '证照修改/状态流转/文件版本', 'bidding:certificate:update', 3, 3, 60004100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004103, '证照验真', 'bidding:certificate:verify', 3, 4, 60004100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004104, '预警扫描/派发', 'bidding:certificate:alert-run', 3, 5, 60004100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004105, '文件版本登记', 'bidding:certificate:file', 3, 6, 60004100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005100, '证照台账', 'bidding:certificate:query', 2, 1, 60005000, 'list', NULL, 'bidding/certificate/index', 'CertificateIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005101, '证照新建', 'bidding:certificate:create', 3, 2, 60005100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005102, '证照修改/状态流转/文件版本', 'bidding:certificate:update', 3, 3, 60005100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005103, '证照验真', 'bidding:certificate:verify', 3, 4, 60005100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005104, '预警扫描/派发', 'bidding:certificate:alert-run', 3, 5, 60005100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005105, '文件版本登记', 'bidding:certificate:file', 3, 6, 60005100, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 -- 企业资质
-(60004200, '企业资质', 'bidding:qualification:query', 2, 6, 60004000, 'qualification', NULL, 'bidding/qualification/index', 'QualificationIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004201, '资质建档', 'bidding:qualification:create', 3, 7, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004202, '延续申报', 'bidding:qualification:renew', 3, 8, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004203, '延续审批通过', 'bidding:qualification:approve', 3, 9, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004204, '延续审批退回', 'bidding:qualification:reject', 3, 10, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004210, '资质标准登记', 'bidding:qualification:standard', 3, 11, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004211, '要素台账录入', 'bidding:qualification:element', 3, 12, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004212, '达标核查执行', 'bidding:qualification:review', 3, 13, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004213, '安许证管理', 'bidding:qualification:permit', 3, 14, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004214, '资质到期预警扫描', 'bidding:qualification:alert-run', 3, 15, 60004200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005200, '企业资质', 'bidding:qualification:query', 2, 6, 60005000, 'qualification', NULL, 'bidding/qualification/index', 'QualificationIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005201, '资质建档', 'bidding:qualification:create', 3, 7, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005202, '延续申报', 'bidding:qualification:renew', 3, 8, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005203, '延续审批通过', 'bidding:qualification:approve', 3, 9, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005204, '延续审批退回', 'bidding:qualification:reject', 3, 10, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005210, '资质标准登记', 'bidding:qualification:standard', 3, 11, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005211, '要素台账录入', 'bidding:qualification:element', 3, 12, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005212, '达标核查执行', 'bidding:qualification:review', 3, 13, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005213, '安许证管理', 'bidding:qualification:permit', 3, 14, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005214, '资质到期预警扫描', 'bidding:qualification:alert-run', 3, 15, 60005200, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 -- 员工资质（父节点随目录迁移）
-(60004300, '员工资质', 'bidding:personnel:profile:query', 2, 11, 60004000, 'personnel', 'ep:user', 'bidding/personnel/index', 'PersonnelIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004301, '员工建档（一人一档）', 'bidding:personnel:profile:create', 3, 12, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004302, '档案修改/在职状态流转', 'bidding:personnel:profile:update', 3, 13, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004303, '员工证书登记', 'bidding:personnel:cert:create', 3, 14, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004304, '证书修改/状态流转（吊销注销恢复）', 'bidding:personnel:cert:update', 3, 15, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004305, '员工证书删除', 'bidding:personnel:cert:delete', 3, 16, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004306, '证书检索/到期清单/细分统计', 'bidding:personnel:cert:query', 3, 17, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004307, '履历登记（培训/社保/劳动合同）', 'bidding:personnel:record:create', 3, 18, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004308, '履历查询（培训/社保/劳动合同）', 'bidding:personnel:record:query', 3, 19, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004309, '员工证件到期预警扫描', 'bidding:personnel:alert-run', 3, 20, 60004300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005300, '员工资质', 'bidding:personnel:profile:query', 2, 11, 60005000, 'personnel', 'ep:user', 'bidding/personnel/index', 'PersonnelIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005301, '员工建档（一人一档）', 'bidding:personnel:profile:create', 3, 12, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005302, '档案修改/在职状态流转', 'bidding:personnel:profile:update', 3, 13, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005303, '员工证书登记', 'bidding:personnel:cert:create', 3, 14, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005304, '证书修改/状态流转（吊销注销恢复）', 'bidding:personnel:cert:update', 3, 15, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005305, '员工证书删除', 'bidding:personnel:cert:delete', 3, 16, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005306, '证书检索/到期清单/细分统计', 'bidding:personnel:cert:query', 3, 17, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005307, '履历登记（培训/社保/劳动合同）', 'bidding:personnel:record:create', 3, 18, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005308, '履历查询（培训/社保/劳动合同）', 'bidding:personnel:record:query', 3, 19, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005309, '员工证件到期预警扫描', 'bidding:personnel:alert-run', 3, 20, 60005300, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 -- 证件全生命周期
-(60004400, '证件全生命周期', 'bidding:certificate:lifecycle:query', 2, 21, 60004000, 'cert-lifecycle', 'ep:refresh', 'bidding/certificate/lifecycle/index', 'CertLifecycleIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004401, '生命周期发起（变更/续期/注销吊销/年检）', 'bidding:certificate:lifecycle:apply', 3, 22, 60004400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004402, '生命周期审核与生效（回写台账）', 'bidding:certificate:lifecycle:audit', 3, 23, 60004400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004403, '企业材料完备性自查（身份/资质/实力）', 'bidding:qualification:material:query', 3, 24, 60004400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005400, '证件全生命周期', 'bidding:certificate:lifecycle:query', 2, 21, 60005000, 'cert-lifecycle', 'ep:refresh', 'bidding/certificate/lifecycle/index', 'CertLifecycleIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005401, '生命周期发起（变更/续期/注销吊销/年检）', 'bidding:certificate:lifecycle:apply', 3, 22, 60005400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005402, '生命周期审核与生效（回写台账）', 'bidding:certificate:lifecycle:audit', 3, 23, 60005400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005403, '企业材料完备性自查（身份/资质/实力）', 'bidding:qualification:material:query', 3, 24, 60005400, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
 -- 安许风险联动（v1.1 新增页面 + 本次补齐的权限点）
-(60004500, '安许风险联动', 'bidding:qualification:permit:query', 2, 25, 60004000, 'safety-risk', 'ep:warning', 'bidding/safety-risk/index', 'SafetyRiskIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004501, '风险重算 / 宽限登记', 'bidding:qualification:permit:update', 3, 26, 60004500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004502, '多岗兼任合规校验', 'bidding:personnel:cert:query', 3, 27, 60004500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004503, '人员风险标签（一年异常）', 'bidding:personnel:profile:query', 3, 28, 60004500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
-(60004504, '项目关键岗位变更监控', 'bidding:project:query', 3, 29, 60004500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0')
+(60005500, '安许风险联动', 'bidding:qualification:permit:query', 2, 25, 60005000, 'safety-risk', 'ep:warning', 'bidding/safety-risk/index', 'SafetyRiskIndex', 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005501, '风险重算 / 宽限登记', 'bidding:qualification:permit:update', 3, 26, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005502, '多岗兼任合规校验', 'bidding:personnel:cert:query', 3, 27, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005503, '人员风险标签（一年异常）', 'bidding:personnel:profile:query', 3, 28, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0'),
+(60005504, '项目关键岗位变更监控', 'bidding:project:query', 3, 29, 60005500, NULL, NULL, NULL, NULL, 0, b'1', b'1', b'1', '1', NOW(), '1', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`),
   `parent_id` = VALUES(`parent_id`), `path` = VALUES(`path`), `icon` = VALUES(`icon`),
   `component` = VALUES(`component`), `component_name` = VALUES(`component_name`),
@@ -1446,12 +1475,12 @@ ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permissi
 -- 第 5 步：安许风险联动新页面的授权（600045xx）——**不自动授权**，按需执行
 --   原因：新页面给谁看属于业务授权决策，脚本不应替管理员决定；超级管理员（role_id=1）默认放行全部权限，
 --        非超管角色需显式授权。下面给出"与安许证管理同权限范围的角色"批量授权示例（把 600045xx 给
---        已拥有 60004213 安许证管理的角色），需要时取消注释执行。
+--        已拥有 60005213 安许证管理的角色），需要时取消注释执行。
 -- ---------------------------------------------------------------------
 -- INSERT IGNORE INTO `system_role_menu` (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 -- SELECT DISTINCT rm.`role_id`, m.`id`, '1', NOW(), '1', NOW(), b'0', rm.`tenant_id`
--- FROM `system_role_menu` rm JOIN `system_menu` m ON m.`id` BETWEEN 60004500 AND 60004504
--- WHERE rm.`menu_id` = 60004213 AND rm.`deleted` = b'0';
+-- FROM `system_role_menu` rm JOIN `system_menu` m ON m.`id` BETWEEN 60005500 AND 60005504
+-- WHERE rm.`menu_id` = 60005213 AND rm.`deleted` = b'0';
 
 -- ---------------------------------------------------------------------
 -- 校验段：执行后应打印本包的规模（与包内实际条数一致即正常）
@@ -1459,9 +1488,9 @@ ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permissi
 SELECT '电子资质域建表' AS item, COUNT(*) AS cnt FROM information_schema.TABLES
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('bidding_dict_data','bidding_personnel_profile','bidding_rule_config','bidding_rule_config_audit','bidding_rule_config_history','cert_alert_config','cert_alert_records','cert_change_logs','cert_file_versions','cert_lifecycle_record','cert_notify_outbox','cert_verify_history','certificate_info','enterprise_qualification','personnel_certificate','personnel_job_change_log','personnel_labor_contract','personnel_multi_post_check','personnel_social_security','personnel_training_record','project_key_post_assignment','qualification_apply_record','qualification_asset','qualification_compliance_review','qualification_performance','qualification_safety_permit','qualification_staff_config','qualification_standard','safety_permit_risk_snapshot')
 -- 期望：29 张表（包内 CREATE TABLE 数）
-UNION ALL SELECT '菜单与权限点(60004xxx)', COUNT(*) FROM system_menu WHERE id BETWEEN 60004000 AND 60004599 AND deleted = b'0'
--- 期望：46 行（目录 + 页面 + 按钮权限点）
+UNION ALL SELECT '菜单与权限点(60004xxx)', COUNT(*) FROM system_menu WHERE id BETWEEN 60005000 AND 60005599 AND deleted = b'0'
+-- 期望：45 行（目录 + 页面 + 按钮权限点）
 UNION ALL SELECT '默认规则阈值', COUNT(*) FROM bidding_rule_config WHERE deleted = b'0'
--- 期望：28 行（证照阈值 + 安许风险参数；重复执行时已存在行走 ON DUPLICATE KEY UPDATE，不新增）
+-- 期望：26 行（证照阈值 + 安许风险参数；重复执行时已存在行走 ON DUPLICATE KEY UPDATE，不新增）
 UNION ALL SELECT '枚举字典行', COUNT(*) FROM bidding_dict_data WHERE deleted = b'0';
--- 期望：104 行（cert_type / holder_type / review_result / material_category / material_type / safety_risk_flag / person_risk_flag / risk_level）
+-- 期望：109 行（cert_type / holder_type / review_result / material_category / material_type / safety_risk_flag / person_risk_flag / risk_level）

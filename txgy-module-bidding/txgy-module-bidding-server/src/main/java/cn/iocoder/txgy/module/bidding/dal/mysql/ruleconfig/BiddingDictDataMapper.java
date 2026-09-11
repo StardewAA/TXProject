@@ -27,6 +27,25 @@ public interface BiddingDictDataMapper extends BaseMapperX<BiddingDictDataDO> {
                 .orderByAsc(BiddingDictDataDO::getSort));
     }
 
+    /**
+     * 取某租户下**已配置**的字典类型清单（去重、按类型名升序）。
+     *
+     * <p>规范出处：契约 §1.1（字典读取）+ 用户硬约束"枚举值必须支持动态配置"。
+     * <p>为什么这样写：类型是否"受支持"应以字典表里真实配置为准——cert_type / holder_type / review_result
+     * 这类字典的取值是业务字面量集合，代码里没有枚举类，旧实现仅凭枚举白名单判定，导致种了数据也取不到。
+     * <p>业务目标：新增一类字典只需插数据即可下发，不必为每种字典补一个枚举类；
+     * 同时 `/meta/dicts` 不带 types 时也能把纯字典类型一并带出。
+     */
+    default List<String> selectEnabledTypes(Long tenantId) {
+        return selectList(new LambdaQueryWrapper<BiddingDictDataDO>()
+                .select(BiddingDictDataDO::getDictType)
+                .eq(BiddingDictDataDO::getTenantId, tenantId)
+                .eq(BiddingDictDataDO::getEnabled, true)
+                .groupBy(BiddingDictDataDO::getDictType)
+                .orderByAsc(BiddingDictDataDO::getDictType))
+                .stream().map(BiddingDictDataDO::getDictType).distinct().toList();
+    }
+
     /** 取某租户下多个类型的启用枚举（一次取回，避免前端按类型多次往返）。 */
     default List<BiddingDictDataDO> selectEnabledByTypes(Long tenantId, List<String> dictTypes) {
         return selectList(new LambdaQueryWrapper<BiddingDictDataDO>()

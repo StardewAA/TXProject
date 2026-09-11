@@ -92,6 +92,7 @@ public interface ErrorCodeConstants {
     ErrorCode CERT_VERIFY_CHANNEL_INVALID = new ErrorCode(1_060_109_014, "验真渠道不合法");
     ErrorCode QUALIFICATION_NOT_EXISTS = new ErrorCode(1_060_109_015, "资质主档不存在");
     ErrorCode QUALIFICATION_NO_DUPLICATE = new ErrorCode(1_060_109_016, "同序列/类别/等级的资质证书编号已存在");
+    ErrorCode QUALIFICATION_QUERY_ENT_REQUIRED = new ErrorCode(1_060_109_027, "企业主体不能为空（资质按企业主体查询）");
     ErrorCode QUALIFICATION_STATUS_TRANSITION_INVALID = new ErrorCode(1_060_109_017, "资质状态流转非法");
     ErrorCode QUALIFICATION_DATA_MODIFIED = new ErrorCode(1_060_109_018, "资质主档已被他人修改，请刷新");
     ErrorCode QUAL_APPLY_NOT_EXISTS = new ErrorCode(1_060_109_019, "申报记录不存在");
