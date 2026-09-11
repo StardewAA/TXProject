@@ -1,0 +1,52 @@
+# 自检脚本（sql/tools）
+
+模块 SQL 包与前端页面之间的一致性由脚本把关——它们都只做静态比对，不需要连数据库，可随时跑、可进 CI。
+
+## 一键跑全部
+
+```bash
+cd txgy-module-bidding
+node sql/tools/check-all.js            # 汇总（失败项打印尾部日志）
+node sql/tools/check-all.js --verbose  # 打印每项完整输出
+```
+
+退出码 0 = 全部通过；1 = 有失败项（可直接作为提交/发版门禁）。CI 里只需一行：
+
+```yaml
+- run: node sql/tools/check-all.js
+```
+
+## 各脚本职责与失败含义
+
+| 脚本 | 校验什么 | 失败代表 |
+| --- | --- | --- |
+| `validate-sql-structure.js` | 语句数/建表数统计、括号与分号闭合 | SQL 被改坏（漏分号、括号不配对），导入会中途报错 |
+| `verify-credential-sync.js` | 一键包内不得残留 `ALTER`/`DROP`/`TRUNCATE`/`DELETE` | 迁移语句没折叠进基表，包不可重复执行 |
+| `check-do-tables.js` | 每个 `*DO` 都能在任一一键包中找到建表 | DO 有表无 DDL（启动即缺表），或表名写错 |
+| `check-do-columns.js` | DO 字段在合并包中有对应列 | DO 与 DDL 字段漂移，运行期报 Unknown column |
+| `check-menu-pages.js` | `type=2` 菜单的 `component` 必须有对应 `.vue` | **死菜单**：侧边栏能点、点进去 404 |
+| `check-dict-coverage.js` | 前端引用的字典类型已在 `bidding_dict_data` 注册 | **英文码直出**：页面拿不到中文名与标签色 |
+
+`check-dict-coverage.js` 的选项：
+
+- 默认口径 = `sql/*.sql` + `sql/history/*.sql`（判"整仓是否注册过"）
+- `--masters-only`：只校验一键包（发版前用——确保**新装库**不缺字典）
+- `--list`：打印全量清单（每个类型的注册行数 / 前端引用次数），排查"注册了但没人用"或"用了但没注册"
+- `ALLOW` 白名单：确属有意不登记的类型写进脚本常量并注明理由（现仅 `qual_grade`：国标表110 等级无稳定 code 口径）
+
+## 这些脚本抓到过的真实问题
+
+1. **死菜单**：`master-bidding-sync.sql` 里菜单 6739 仍以 `type=2` 指向已删除的 `bidding/crawlExternal/task/index`，
+   而退役动作只存在于 `sql/history/2026-09-10-menu-retire-crawl-task-page.sql` → 新装库会重建一个点进去 404 的菜单。
+   修复：终态包里直接把 6739 落成工作台下的按钮（保留 `bidding:crawl-task:query` 权限码，避免授权失效），6744 重挂，6745 逻辑删除并清授权。
+2. **字典名写错**：资质页读 `apply_type`/`apply_status`，而注册名是 `qual_apply_type`/`qual_apply_status`。
+   写错不报错——页面只是静默显示 `DRAFT`/`APPROVED` 英文码，靠人工比对才发现。修复见 `2026-09-20-bidding-dict-register-personnel.sql`。
+3. **漏注册**：员工档案页请求 `personnel_status`/`social_pay_status`/`gender`/`edu_level`/`qual_serial` 五类字典，
+   库里一条种子都没有 → 下拉框空白、列表显示英文码。修复同上（22 行，逐条标注取值出处）。
+
+## 新增校验器的约定
+
+- 只读、零副作用；不连数据库
+- 失败必须**能被看见**：打印具体文件/类型/菜单 id，并给出修复方向
+- 退出码 1，便于 CI 拦截
+- 新增校验器后：加进 `check-all.js` 的 `CHECKS`，并补到本文件表格
