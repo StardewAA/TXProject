@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.time.LocalDateTime;
 
 /**
@@ -74,8 +75,8 @@ public class CertLifecycleRespVO {
     private Integer reviewResult;
     @Schema(description = "新文件 id")
     private Long newCertFileId;
-    @Schema(description = "佐证材料文件 id 列表（JSON 串）")
-    private String evidenceFileIds;
+    @Schema(description = "佐证材料文件 id 列表", example = "[1001,1002]")
+    private List<Long> evidenceFileIds;
     @Schema(description = "申请人")
     private Long appliedBy;
     @Schema(description = "申请时间")

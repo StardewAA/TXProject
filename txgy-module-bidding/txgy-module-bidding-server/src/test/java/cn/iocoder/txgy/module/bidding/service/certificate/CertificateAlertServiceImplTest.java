@@ -215,7 +215,7 @@ class CertificateAlertServiceImplTest {
         when(certAlertRecordMapper.selectById(8L)).thenReturn(rec2);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.markAlertHandled(8L, 1, 42L, "已续期"));
-        assertEquals(Integer.valueOf(1_060_106_011), e.getCode(), "版本不符应报 CERT_ALERT_RECORD_MODIFIED");
+        assertEquals(Integer.valueOf(1_060_109_011), e.getCode(), "版本不符应报 CERT_ALERT_RECORD_MODIFIED");
     }
 
     // ========== 工具 ==========

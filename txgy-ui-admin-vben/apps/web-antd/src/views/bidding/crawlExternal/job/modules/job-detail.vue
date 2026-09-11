@@ -16,10 +16,10 @@ import { Descriptions, Drawer, message, Tag } from 'ant-design-vue';
 
 import { fetchCrawlTaskPage, getCrawlJob, getCrawlTask } from '#/api/bidding/crawlExternal';
 
-import '../../taskbar.css';
-
-import { JOB_STATUS_MAP, TASK_STATUS_MAP, TRIGGER_MAP, fmtDt, jobSummaryText, tagOf } from '../../shared';
 import TaskChainView from '../../console/modules/task-chain.vue';
+import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP, TRIGGER_MAP } from '../../shared';
+
+import '../../taskbar.css';
 
 const open = ref(false);
 const loading = ref(false);
@@ -113,7 +113,7 @@ defineExpose({ openJob });
 </script>
 
 <template>
-  <Drawer v-model:open="open" class="bid-ind" :width="920" :title="row ? '批次 #' + String(row.id) + ' 详情' : '批次详情'">
+  <Drawer v-model:open="open" class="bid-ind" :width="920" :title="row ? `批次 #${ String(row.id) } 详情` : '批次详情'">
     <div v-if="loading" class="jd-hint">明细回读中…</div>
     <template v-else-if="row">
       <!-- 层1：批次概要 -->

@@ -84,5 +84,5 @@ GET /status、/item/{itemId}/timeline、POST /item/{itemId}/read（…:query/…
 ## 7. 附：跑批口径（承接 2026-09-08 批次化）
 
 每次执行（人工 MANUAL/调度 SCHEDULE）落一条 bidding_crawl_job（jobId），失败条目挂 jobId 进 bidding_crawl_task；
-前端任务页按 jobId 过滤 + retry 单条。旧体系 task/job 记录已于 2026-09-09 清理（sql/2026-09-09-purge-legacy-crawl-records.sql）。
+前端任务页按 jobId 过滤 + retry 单条。旧体系 task/job 记录已于 2026-09-09 清理（sql/history/2026-09-09-purge-legacy-crawl-records.sql）。
 

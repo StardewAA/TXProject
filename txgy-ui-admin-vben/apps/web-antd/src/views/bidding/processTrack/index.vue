@@ -21,9 +21,9 @@ import type { ProcessTrackApi } from '#/api/bidding/processTrack';
 
 import { computed, onMounted, ref } from 'vue';
 
-import { Button, Drawer, Empty, Input, message, Modal, Radio, Select, Space, Tag } from 'ant-design-vue';
-
 import { useAccessStore, useUserStore } from '@vben/stores';
+
+import { Button, Drawer, Empty, Input, message, Modal, Radio, Select, Space, Tag } from 'ant-design-vue';
 
 import { fetchMyFollowPage } from '#/api/bidding/processTrack';
 
@@ -67,7 +67,7 @@ const STEP_ORDER = ['INTENTION', 'QUALIFICATION_REVIEW', 'PENDING_BID', 'BIDDED'
 const tracks = ref<ProcessTrackApi.Track[]>([]);
 const stateFilter = ref<'ALL' | ProcessTrackApi.StateCode>('ALL');
 const keyword = ref('');
-const followOptions = ref<Array<{ label: string; value: string; displayName?: string; issuerName?: string }>>([]);
+const followOptions = ref<Array<{ displayName?: string; issuerName?: string; label: string; value: string; }>>([]);
 const followLoaded = ref(false);
 
 /* 详情抽屉 */
@@ -75,7 +75,7 @@ const detailOpen = ref(false);
 const detailId = ref<string>();
 
 /* 操作弹窗（统一：按 action 动态字段） */
-type ActKind = 'register' | 'review' | 'upload' | 'cancel';
+type ActKind = 'cancel' | 'register' | 'review' | 'upload';
 const actOpen = ref(false);
 const actKind = ref<ActKind>('register');
 const actTrackId = ref('');
@@ -136,8 +136,8 @@ const stateTag = (s: string) => ({ text: STATE_TEXT[s] || s, color: STATE_COLOR[
 function advance(
   t: ProcessTrackApi.Track,
   ev: ProcessTrackApi.EventCode,
-  extra: { desc?: string; reviewResult?: string; docName?: string; docSize?: number },
-): { ok: boolean; error?: string; to?: ProcessTrackApi.StateCode } {
+  extra: { desc?: string; docName?: string; docSize?: number; reviewResult?: string; },
+): { error?: string; ok: boolean; to?: ProcessTrackApi.StateCode } {
   const cur = t.currentState;
   const m: Record<string, Record<string, ProcessTrackApi.StateCode>> = {
     INTENTION: { REGISTER: 'QUALIFICATION_REVIEW', CANCEL: 'TERMINATED' },
@@ -293,7 +293,7 @@ function doAct() {
   actSubmitting.value = true;
   try {
     let ev: ProcessTrackApi.EventCode;
-    const extra: { desc?: string; reviewResult?: string; docName?: string; docSize?: number } = { desc: reason };
+    const extra: { desc?: string; docName?: string; docSize?: number; reviewResult?: string; } = { desc: reason };
     if (actKind.value === 'register') ev = 'REGISTER';
     else if (actKind.value === 'review') {
       ev = actReviewResult.value === 'APPROVED' ? 'APPROVE' : 'REJECT';
@@ -355,18 +355,17 @@ onMounted(() => {
       </div>
     </div>
     <div class="ind-body">
-
-    <div class="ind-filterbar">
+<div class="ind-filterbar">
       <Radio.Group
         v-model:value="stateFilter"
         option-type="button"
         :options="[
-          { label: '全部（' + tracks.length + '）', value: 'ALL' },
-          { label: '意向投标（' + (statCounts.INTENTION || 0) + '）', value: 'INTENTION' },
-          { label: '资质审核（' + (statCounts.QUALIFICATION_REVIEW || 0) + '）', value: 'QUALIFICATION_REVIEW' },
-          { label: '待投标（' + (statCounts.PENDING_BID || 0) + '）', value: 'PENDING_BID' },
-          { label: '已投标（' + (statCounts.BIDDED || 0) + '）', value: 'BIDDED' },
-          { label: '流程结束（' + (statCounts.TERMINATED || 0) + '）', value: 'TERMINATED' },
+          { label: `全部（${ tracks.length }）`, value: 'ALL' },
+          { label: `意向投标（${ statCounts.INTENTION || 0 }）`, value: 'INTENTION' },
+          { label: `资质审核（${ statCounts.QUALIFICATION_REVIEW || 0 }）`, value: 'QUALIFICATION_REVIEW' },
+          { label: `待投标（${ statCounts.PENDING_BID || 0 }）`, value: 'PENDING_BID' },
+          { label: `已投标（${ statCounts.BIDDED || 0 }）`, value: 'BIDDED' },
+          { label: `流程结束（${ statCounts.TERMINATED || 0 }）`, value: 'TERMINATED' },
         ]"
       />
       <Input v-model:value="keyword" placeholder="搜索项目名 / 编号 / 发布单位" allow-clear style="width: 240px" />
@@ -387,7 +386,7 @@ onMounted(() => {
         <span class="it-title">{{ t.projectName }}</span>
         <Tag v-if="t.projectCode" class="font-mono text-xs">{{ t.projectCode }}</Tag>
         <span v-if="t.issuerName" class="text-xs text-gray-400">{{ t.issuerName }}</span>
-        <span class="flex-1" />
+        <span class="flex-1"></span>
         <!-- 行操作：按状态 -->
         <template v-if="t.currentState === 'INTENTION'">
           <a class="text-xs text-blue-600" @click="openAct('register', t)">报名投标</a>
@@ -413,10 +412,9 @@ onMounted(() => {
         <span v-if="t.events.length" class="truncate text-gray-300">最近：{{ EVENT_TEXT[t.events[0]!.eventType] }}</span>
       </div>
       <div v-if="t.currentState === 'QUALIFICATION_REVIEW' && t.reviewReason" class="mt-1 text-xs text-amber-600">审核说明：{{ t.reviewReason }}</div>
-      <div v-if="t.documentName" class="mt-1 text-xs text-gray-500">标书：{{ t.documentName }}{{ t.documentSize ? '（' + t.documentSize + ' KB）' : '' }}</div>
+      <div v-if="t.documentName" class="mt-1 text-xs text-gray-500">标书：{{ t.documentName }}{{ t.documentSize ? `（${ t.documentSize } KB）` : '' }}</div>
     </article>
-
-    </div>
+</div>
 
     <!-- 详情抽屉 -->
     <Drawer v-model:open="detailOpen" :title="detail ? detail.projectName : '流程详情'" :width="560">

@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 /**
  * 证件/资质生命周期记录（变更/续期/注销吊销/年检，只追加）。表：cert_lifecycle_record
- * （DDL sql/2026-09-14-cert-lifecycle.sql）。
+ * （DDL sql/history/2026-09-14-cert-lifecycle.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 3（审查，含 ANNUAL 年检）、表 5（续期/补换证）、
  * 表 6（变更：change_group_id 归组、字段级 old/new 留痕）、表 7（吊销/注销/暂扣/恢复）；

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { AttachmentRecord } from './attachmentStages';
+
 /* VO 环节表单（通用）：按规范 VO 分组渲染字段 + 平台注入参数折叠 + 本环节附件面板（可多个）。
  * 严格照录 VO：字段中文名/英文名/类型/必填/公开范围/备注全部来自 voSpec.gen.ts（自动生成）。
  * 分区口径（重要）：VO 的「公开范围」是披露范围，不是"谁填报"——
@@ -9,11 +11,10 @@ import { computed, ref } from 'vue';
 
 import { Tag } from 'ant-design-vue';
 
-import { isPlatformMaintained } from './voFieldControl';
-import { VO_SPEC, type VoField } from './voSpec.gen';
 import AttachmentsPanel from './AttachmentsPanel.vue';
+import { isPlatformMaintained } from './voFieldControl';
 import VoFieldGrid from './VoFieldGrid.vue';
-import type { AttachmentRecord } from './attachmentStages';
+import { VO_SPEC, type VoField } from './voSpec.gen';
 
 export interface VoGroup {
   title: string;
@@ -23,14 +24,14 @@ export interface VoGroup {
 
 const props = withDefaults(
   defineProps<{
-    vo: string;
+    attachments: AttachmentRecord[];
+    attachmentTitle?: string;
+    fields: Record<string, string>;
+    groups: VoGroup[];
+    readOnly?: boolean;
     stage: string;
     title: string;
-    groups: VoGroup[];
-    fields: Record<string, string>;
-    attachments: AttachmentRecord[];
-    readOnly?: boolean;
-    attachmentTitle?: string;
+    vo: string;
   }>(),
   { readOnly: false, attachmentTitle: '附件（可加多个）' },
 );

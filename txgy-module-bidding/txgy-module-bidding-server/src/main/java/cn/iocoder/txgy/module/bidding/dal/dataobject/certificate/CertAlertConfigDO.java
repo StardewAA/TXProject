@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 到期/年检/续期预警配置（T 轨）。表：cert_alert_config（DDL 见 sql/2026-09-05-cert-alert.sql）。
+ * 到期/年检/续期预警配置（T 轨）。表：cert_alert_config（DDL 见 sql/history/2026-09-05-cert-alert.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §九（cert_type IS NULL=全局；alert_type；
  * thresholds 默认 [90,60,30,7]；enabled；notify_channels 默认 ["EMAIL","IN_APP"]）。

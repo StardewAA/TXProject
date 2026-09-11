@@ -28,7 +28,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import { PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL, fmtFieldValue, groupPayload } from './payloadLabel';
+import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
 
 export interface HtmlAttachment {
   id?: number | string;
@@ -48,13 +48,13 @@ export interface RenderDetail {
   publishTime?: number | string;
   publicLevel?: string;
   internalFlag?: boolean;
-  contentVersion?: number | null;
-  content?: string | null;
-  payload?: Record<string, unknown> | null;
-  pdfFileId?: number | string | null;
-  pdfSize?: number | null;
-  pdfSha256?: string | null;
-  pdfDownloadUrl?: string | null;
+  contentVersion?: null | number;
+  content?: null | string;
+  payload?: null | Record<string, unknown>;
+  pdfFileId?: null | number | string;
+  pdfSize?: null | number;
+  pdfSha256?: null | string;
+  pdfDownloadUrl?: null | string;
   attachments?: HtmlAttachment[] | null;
 }
 
@@ -65,14 +65,14 @@ const p2 = (n: number): string => String(n).padStart(2, '0');
  * 业务/理由：权威数据集时间类值为 yyyyMMddHHmmss / epoch ms，统一转可读时间展示（payloadLabel.ts 约定）；
  * 展示“发布日期/公示起止”等法定时效字段时保持原文语义，不擅自改时区/裁剪（08 §5 合规提醒）。
  * 依据：10号令 第5/6条（部门规章/政府文件，公示期限等载明事项）；契约：08 §5、NoticeDetailRespVO 时间字段为 epoch ms。 */
-function fmtDateTime(v?: number | string | null): string {
+function fmtDateTime(v?: null | number | string): string {
   if (v === undefined || v === null || v === '') return '—';
   const s = String(v);
   const d = /^\d+$/.test(s) ? new Date(Number(s)) : new Date(s);
   if (Number.isNaN(+d)) return fmtFieldValue(v);
   return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
 }
-const fmtBytes = (n?: number | null): string => {
+const fmtBytes = (n?: null | number): string => {
   if (n === undefined || n === null) return '';
   if (n < 1024) return n + ' B';
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';

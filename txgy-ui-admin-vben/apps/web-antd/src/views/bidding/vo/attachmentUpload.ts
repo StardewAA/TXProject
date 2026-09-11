@@ -7,8 +7,8 @@
  *   · 两条链路都拿不到 file_id ⇒ 统一抛「文件注册失败，请重试」，绝不回退到让用户手填 ID。
  * 补充：原「/infra/file/upload 只回 URL」的兜底链路已按规范删除（该响应不含 file_id，属退化来源）。 */
 import { uploadBiddingFile } from '#/api/bidding/file';
-import { baseRequestClient } from '#/api/request';
 import { createFile, getFilePresignedUrl } from '#/api/infra/file';
+import { baseRequestClient } from '#/api/request';
 
 export interface UploadedFile {
   /** 附件 URL（VO AttachmentSetVO.URL，必填）——仅用于预览/展示 */

@@ -134,6 +134,45 @@ INSERT IGNORE INTO `bidding_rule_config`
  '员工证书复审/年审提前提醒天数（复审是与到期日独立的时间维度）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0');
 
 -- ---------------------------------------------------------------------
+-- 6) 安许 A/B/C 联动与 risk_flag 默认配置种子（方案 §1.2；幂等 INSERT IGNORE）
+-- 业务目标：黄/红/失效/频繁四态、宽限、豁免、人员异常、关键岗位变更、多岗校验的参数全部可运营调整。
+-- ---------------------------------------------------------------------
+INSERT IGNORE INTO `bidding_rule_config`
+(`id`, `tenant_id`, `rule_key`, `rule_group`, `value_type`, `config_value`, `legal_floor`, `description`, `regulation_ref`, `version_no`, `status`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+(720000000000000001, 0, 'safety.abc.required', 'SAFETY', 'JSON', '{"A":1,"B":1,"C":1}', '{"itemMin":0,"itemMax":99}',
+ 'A/B/C 三类安全生产管理人员最低配备人数（按资质等级可覆盖）', '《安全生产许可证条例》（国务院令第653号修正）', 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000002, 0, 'safety.abc.roles', 'SAFETY', 'JSON', '["A","B","C"]', '{"itemMin":1}',
+ '参与判定的角色集合（新增角色类别时在此扩展）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000003, 0, 'safety.abc.exempt.ent.types', 'SAFETY', 'JSON', '{"LABOR_SUBCONTRACT":["B"]}', NULL,
+ '豁免矩阵：企业类型 → 允许为 0 而不触发红色的角色（劳务分包企业 B 证为 0 不触发红）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000004, 0, 'safety.abc.grace.legal.person.change.days', 'SAFETY', 'INT', '180', '{"min":1,"max":365}',
+ '法定代表人变更致人数不足时的宽限天数（宽限期内风险降一档）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000005, 0, 'safety.abc.grace.reason.whitelist', 'SAFETY', 'JSON', '["LEGAL_PERSON_CHANGE"]', '{"itemMin":1}',
+ '允许触发宽限的原因白名单（防滥用宽限逃避整改）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000006, 0, 'safety.abc.frequent.alert.threshold', 'SAFETY', 'INT', '4', '{"min":1,"max":99}',
+ '滑动窗口内预警次数达到该值即打"频繁预警"标签', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000007, 0, 'safety.abc.frequent.window.days', 'SAFETY', 'INT', '365', '{"min":1,"max":1095}',
+ '频繁预警统计滑动窗口（天）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000008, 0, 'safety.abc.invalid.grace.days', 'SAFETY', 'INT', '90', '{"min":1,"max":365}',
+ '三类全为 0 后允许整改的天数，逾期列失效（陕西口径：3 个月不整改列失效）', '06 文档 §二-1（附录A §2.6）', 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000009, 0, 'safety.abc.block.flags', 'SAFETY', 'JSON', '["INVALID","RED"]', '{"itemMin":1}',
+ '哪些风险档位阻断业务（招投标/施工许可）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000010, 0, 'personnel.job.change.threshold', 'SAFETY', 'INT', '4', '{"min":1,"max":99}',
+ '人员 12 个月内更换受聘企业次数达到该值即打"一年异常"标签', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000011, 0, 'personnel.job.change.window.days', 'SAFETY', 'INT', '365', '{"min":1,"max":1095}',
+ '人员更换受聘企业统计窗口（天，默认 12 个月）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000012, 0, 'project.key.post.change.threshold', 'SAFETY', 'INT', '2', '{"min":1,"max":99}',
+ '同一项目同一关键岗位变更次数阈值（超阈值产出挂靠/管理失控待办）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000013, 0, 'project.key.post.change.window.days', 'SAFETY', 'INT', '90', '{"min":1,"max":1095}',
+ '关键岗位变更统计窗口（天）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000014, 0, 'personnel.multi.post.require.cert', 'SAFETY', 'BOOL', 'true', NULL,
+ '兼任两个及以上岗位是否必须持另一岗位考核合格证书', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0'),
+(720000000000000015, 0, 'risk.level.mapping', 'SAFETY', 'JSON',
+ '{"NORMAL":"LOW","YELLOW":"MEDIUM","RED":"HIGH","INVALID":"MAJOR","FREQUENT":"MEDIUM","ABNORMAL":"MEDIUM"}', NULL,
+ '风险档 → 风险等级映射（供周检 Job 的提前量取值）', NULL, 1, 'PUBLISHED', '1', NOW(), '1', NOW(), b'0');
+
+
+-- ---------------------------------------------------------------------
 -- 5) 业务字典表（电子证照域枚举的“唯一动态来源”）
 -- 依据：用户硬约束“状态码/枚举值必须支持动态配置，严禁硬编码”；
 --      契约《电子证照模块-前端接口契约-v1.0.md》§1.1（GET /bidding/meta/dicts 的返回结构）。

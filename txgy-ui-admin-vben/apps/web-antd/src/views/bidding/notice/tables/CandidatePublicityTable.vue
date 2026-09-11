@@ -5,12 +5,12 @@
        中标候选人推荐排序 1/2/3 各自：名称/统一社会信用代码/项目负责人及证书/中标价/获奖情况。
      公示标题/正文（PUBLICITY_NAME/PUBLICITY_CONTENT）在第1、3节已填，保存自动并入；本表不重复。 -->
 <script setup lang="ts">
+import type { NoticeApi } from '#/api/bidding/notice';
+
 import { computed } from 'vue';
 
 import PayloadCell from '../PayloadCell.vue';
 import { buildRowMap, type RowSpec, type TableGroup } from '../typeFieldRow';
-
-import type { NoticeApi } from '#/api/bidding/notice';
 
 const props = defineProps<{
   typeMeta?: NoticeApi.NoticeTypeMeta | null;

@@ -54,7 +54,7 @@ const errorMsg = ref('');
 /** 页签：data=审核数据/原文；look=前台观感 */
 const tab = ref<'data' | 'look'>('look');
 
-const tag = (map: Record<string, { text: string; color: string }>, v?: string) => {
+const tag = (map: Record<string, { color: string; text: string; }>, v?: string) => {
   const c = v ? map[v] : undefined;
   return c ? { text: c.text, color: c.color } : null;
 };
@@ -62,7 +62,7 @@ const tag = (map: Record<string, { text: string; color: string }>, v?: string) =
 const hasBody = computed(() => !!detail.value?.contentHtmlSafe);
 /** 时间格式化（epoch 毫秒 / ISO 字符串都兼容；空值显示 —） */
 const p2t = (n: number) => String(n).padStart(2, '0');
-const fmtT = (v?: string | number | null): string => {
+const fmtT = (v?: null | number | string): string => {
   if (v == null || v === '') return '—';
   let d: Date;
   if (typeof v === 'number') d = new Date(v);
@@ -75,7 +75,7 @@ const empty = (v?: string) => (v ? v : '—');
 
 /** 外链一律经 /go 中转打开（04-契约 §2：源站/附件 origDownloadUrl 不得直开 window.open/a[href]，防开放重定向；go 对启用采集源域名白名单校验）。
  * 实现理由：管理预览与门户同语义——origUrl 为目标站壳页，非 PDF 本身；中转失败(400 拒绝)时浏览器落在 go 错误响应上，不在本页报错。 */
-function openGo(url?: string | null): void {
+function openGo(url?: null | string): void {
   if (!url) return;
   const base = (import.meta.env.VITE_GLOB_API_URL as string) || '/admin-api';
   const go = base.replace(/\/$/, '') + '/bidding/notice-external/go?url=' + encodeURIComponent(url);
@@ -262,7 +262,7 @@ const [Modal, modalApi] = useVbenModal({
             <div><b class="text-gray-400">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-blue-600 underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
           </div>
           <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
-            PDF 原文件：{{ detail.pdfSize ? Math.round(detail.pdfSize / 1024) + ' KB' : '大小未知' }}
+            PDF 原文件：{{ detail.pdfSize ? `${Math.round(detail.pdfSize / 1024) } KB` : '大小未知' }}
             <template v-if="detail.pdfDownloadUrl">｜<a :href="detail.pdfDownloadUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
             <div v-if="detail.extractionSummary" class="mt-1 text-gray-500">抽取摘要：{{ detail.extractionSummary }}</div>
           </div>

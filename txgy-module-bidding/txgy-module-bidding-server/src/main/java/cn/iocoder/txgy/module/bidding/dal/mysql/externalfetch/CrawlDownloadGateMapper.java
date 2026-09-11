@@ -5,12 +5,16 @@ package cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlDownloadGateDO;
 import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
 /**
  * 原文下载限速闸 Mapper：占位与初始化均以 SQL 原子语义实现。
  */
+// 注：@Mapper 必须显式标注——框架 @MapperScan 是 annotationClass=Mapper.class 的注解扫描（见 TxgyMybatisAutoConfiguration），
+// 漏标不会报编译错，只会在启动时"找不到 Mapper bean"（2026-09-11 实测踩过）。
+@Mapper
 public interface CrawlDownloadGateMapper extends BaseMapperX<CrawlDownloadGateDO> {
 
     /**

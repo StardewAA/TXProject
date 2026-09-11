@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 通知发送发件箱（T 轨 · 可靠投递）。表：cert_notify_outbox（DDL 见 sql/2026-09-05-cert-alert.sql）。
+ * 通知发送发件箱（T 轨 · 可靠投递）。表：cert_notify_outbox（DDL 见 sql/history/2026-09-05-cert-alert.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §十一 表12：与业务同事务写入，通知不丢不重
  * （UNIQUE biz_type+biz_id+channel+receiver）；PENDING→SENDING→SUCCESS/FAILED（重试退避）→DEAD 死信。

@@ -2,18 +2,18 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
-import { Page } from '@vben/common-ui';
-
 import { ref } from 'vue';
+
+import { Page } from '@vben/common-ui';
 
 import { Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { fetchCrawlJobPage } from '#/api/bidding/crawlExternal';
 
+import { JOB_STATUS_MAP, tagOf, TRIGGER_MAP } from '../shared';
 import { useGridColumns, useGridFormSchema } from './data';
 import JobDetail from './modules/job-detail.vue';
-import { JOB_STATUS_MAP, TRIGGER_MAP, tagOf } from '../shared';
 
 /** 行操作（克制）：批次只读，统一「详情」入口进入详情档分层查看（概要 → 该批 N 条任务 → 任务过程） */
 function rowActs(row: CrawlExternalApi.JobItem): any[] {
@@ -27,7 +27,7 @@ function rowActs(row: CrawlExternalApi.JobItem): any[] {
   ];
 }
 
-const jobDetailRef = ref<{ openJob: (j: CrawlExternalApi.JobItem) => void } | null>(null);
+const jobDetailRef = ref<null | { openJob: (j: CrawlExternalApi.JobItem) => void }>(null);
 
 const [Grid] = useVbenVxeGrid({
   formOptions: {

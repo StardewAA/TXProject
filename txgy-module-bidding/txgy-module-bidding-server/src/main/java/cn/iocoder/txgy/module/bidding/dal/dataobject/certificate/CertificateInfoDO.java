@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 证照台账主表（T 轨）。表：certificate_info（DDL 见 sql/2026-09-04-certificate.sql）。
+ * 证照台账主表（T 轨）。表：certificate_info（DDL 见 sql/history/2026-09-04-certificate.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §二＋§18.1 v3.4 对齐；字段语义逐列对齐
  * GB/T 36903—2018 §5.2（证照元数据）与建办市〔2024〕51 号（17 信息项/ZZZT），列注释已标出处。

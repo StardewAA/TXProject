@@ -10,7 +10,7 @@ import { attachmentItemLabel, attachmentItemRequired, type AttachmentRecord } fr
 import PdfPreview from './PdfPreview.vue';
 
 const props = withDefaults(
-  defineProps<{ list: AttachmentRecord[]; title?: string; compact?: boolean }>(),
+  defineProps<{ compact?: boolean; list: AttachmentRecord[]; title?: string; }>(),
   { title: '附件', compact: false },
 );
 
@@ -74,7 +74,7 @@ function isPreviewable(a: AttachmentRecord): boolean {
           <a v-if="a.url" :href="a.url" target="_blank" rel="noopener noreferrer">打开</a>
           <a v-if="a.url" :href="a.url" download>下载</a>
         </span>
-        <span class="al-guid" :title="'ATTACHMENT_GUID：' + a.guid">{{ a.guid }}</span>
+        <span class="al-guid" :title="`ATTACHMENT_GUID：${ a.guid}`">{{ a.guid }}</span>
       </div>
     </div>
     <PdfPreview v-model:open="previewOpen" :url="previewUrl" :file-name="previewName" title="附件预览" />

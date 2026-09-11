@@ -7,9 +7,9 @@ export interface PayloadFieldMeta {
   label: string;
   required: boolean;
   /** 公开范围：SOCIAL=社会公开（大厅可见/企业填报）；GOVERNMENT=政务公开（报送平台/监管，见 remark 提示） */
-  pub: 'SOCIAL' | 'GOVERNMENT' | '';
+  pub: '' | 'GOVERNMENT' | 'SOCIAL';
   /** 控件类别 */
-  input: 'text' | 'multiline' | 'time14' | 'boolean';
+  input: 'boolean' | 'multiline' | 'text' | 'time14';
   dtype?: string;
   remark?: string;
 }

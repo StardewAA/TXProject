@@ -6,18 +6,18 @@ import { requestClient } from '#/api/request';
 export namespace ProcessTrackApi {
   /** 流程状态（契约 §1） */
   export type StateCode =
-    | 'INTENTION'
-    | 'QUALIFICATION_REVIEW'
-    | 'PENDING_BID'
     | 'BIDDED'
+    | 'INTENTION'
+    | 'PENDING_BID'
+    | 'QUALIFICATION_REVIEW'
     | 'TERMINATED';
   export type EventCode =
+    | 'APPROVE'
+    | 'CANCEL'
     | 'CREATE'
     | 'REGISTER'
-    | 'APPROVE'
     | 'REJECT'
-    | 'UPLOAD_DOCUMENT'
-    | 'CANCEL';
+    | 'UPLOAD_DOCUMENT';
 
   /** 我的关注行（后端 notice-follow 真实接口，作为“意向建档”数据源） */
   export interface FollowItem {

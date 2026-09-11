@@ -107,7 +107,7 @@ export namespace CrawlExternalApi {
     finishedAt?: string;
     totalIngested?: number;
     totalFailed?: number;
-    categories?: Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }>;
+    categories?: Array<{ error?: string; failed?: number; fetched?: number; ingested?: number; name?: string; }>;
   }
   /** 采集任务（CrawlTaskRespVO，02 §6.2） */
   export interface TaskItem {
@@ -191,12 +191,12 @@ export function fetchCrawlParserList() {
 }
 /** 契约：POST /bidding/crawl-parser/test —— 手动录入解析测试（multipart：对粘贴原文或上传文件真实解析一次，返回 CrawlParseTestRespVO）；权限 bidding:crawl-source:update；依据 爬虫工作台契约 §0 复用 / §1.3 字段 / 06 对照 §1 */
 export function crawlParserTest(data: {
-  parserCode: string;
-  payloadType: 'HTML' | 'JSON' | 'FILE';
   content?: string;
-  fileName?: string;
-  url?: string;
   file?: File;
+  fileName?: string;
+  parserCode: string;
+  payloadType: 'FILE' | 'HTML' | 'JSON';
+  url?: string;
 }) {
   // 走框架官方 upload 通道（与 infra 文件上传同实现）：自动构造 FormData 并强制
   // multipart/form-data，字段名与后端 CrawlParserController.test 的 @RequestParam/@RequestPart 一一对应

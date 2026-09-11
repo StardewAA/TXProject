@@ -7,23 +7,23 @@ import { computed, ref, watch } from 'vue';
 
 import { Button, message, Modal } from 'ant-design-vue';
 
-import VoStageForm from './VoStageForm.vue';
 import { attachmentCodeOf, type AttachmentRecord } from './attachmentStages';
-import { assembleSave, recordToFields, type EntityDef } from './entityForms';
 import { loadAttachments, saveAttachments } from './attachmentStore';
+import { assembleSave, type EntityDef, recordToFields } from './entityForms';
+import VoStageForm from './VoStageForm.vue';
 
 const props = withDefaults(
   defineProps<{
-    open: boolean;
     def: EntityDef;
-    /** 编辑时传入后端记录（含 fields 与主列） */
-    record?: Record<string, unknown> | null;
-    /** 新建时预置字段（如上级归属编号） */
-    preset?: Record<string, string>;
-    /** 保存接口（后端 /save） */
-    save: (data: Record<string, unknown>) => Promise<unknown>;
+    open: boolean;
     /** 上级选择项（可选，用于归属下拉） */
     parentLabel?: string;
+    /** 新建时预置字段（如上级归属编号） */
+    preset?: Record<string, string>;
+    /** 编辑时传入后端记录（含 fields 与主列） */
+    record?: null | Record<string, unknown>;
+    /** 保存接口（后端 /save） */
+    save: (data: Record<string, unknown>) => Promise<unknown>;
   }>(),
   { record: null, preset: () => ({}), parentLabel: '' },
 );
@@ -100,11 +100,11 @@ function onAttachments(v: AttachmentRecord[]): void {
       <VoStageForm
         :vo="def.vo"
         :stage="def.stage"
-        :title="def.title + '（' + def.vo + '）'"
+        :title="`${def.title }（${ def.vo }）`"
         :groups="def.groups"
         :fields="fields"
         :attachments="attachments"
-        :attachment-title="def.title + '附件（采集项见下，可加多个）'"
+        :attachment-title="`${def.title }附件（采集项见下，可加多个）`"
         @update:fields="onFields"
         @update:attachments="onAttachments"
       />

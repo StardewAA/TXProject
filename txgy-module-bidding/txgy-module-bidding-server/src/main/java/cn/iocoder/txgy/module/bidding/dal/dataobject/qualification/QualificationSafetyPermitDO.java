@@ -33,6 +33,29 @@ public class QualificationSafetyPermitDO extends TenantBaseDO {
     private String legalPerson;
     private Long bindedCertId;
     private String remark;
+    /**
+     * 企业级风险档 code（SafetyRiskFlagEnum）：NORMAL/YELLOW/RED/INVALID/FREQUENT；NULL=未评估（业务侧视为不阻断）。
+     *
+     * <p>为什么用 NULL 表示"未评估"而不是默认 NORMAL：存量数据尚未评估时若默认成"正常"，
+     * 会给人"已核查通过"的错觉；NULL 让页面能明确显示"未评估"，也让上线回滚有退路（置回 NULL 即回到改造前）。
+     */
+    private String riskFlag;
+    /** 风险等级 code（RiskLevelEnum）：LOW/MEDIUM/HIGH/MAJOR，供周检 Job 取提前量 */
+    private String riskLevel;
+    /** 最近风险评估时刻 */
+    private java.time.LocalDateTime riskEvaluatedAt;
+    /** 宽限截止（NULL=无宽限） */
+    private java.time.LocalDateTime graceExpireAt;
+    /** 宽限原因（须在 safety.abc.grace.reason.whitelist 内） */
+    private String graceReason;
+    /** 宽限依据（变更单号/决定书号，便于核查宽限真实性） */
+    private String graceSourceRef;
+    /** 滑动窗口内预警次数 */
+    private Integer frequentAlertCount;
+    /** 频繁统计滑动窗口起点 */
+    private java.time.LocalDateTime frequentWindowStart;
+    /** 本次评估所用规则版本（可复算） */
+    private String ruleVersion;
     @com.baomidou.mybatisplus.annotation.Version
     private Integer version;
 }

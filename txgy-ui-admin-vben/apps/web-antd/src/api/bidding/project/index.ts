@@ -147,7 +147,7 @@ export function getProject(id: number | string) {
   return requestClient.get<ProjectApi.Project>('/bidding/project/get', { params: { id } });
 }
 export function getProjectByCode(projectCode: string) {
-  return requestClient.get<ProjectApi.Project | null>('/bidding/project/get-by-code', { params: { projectCode } });
+  return requestClient.get<null | ProjectApi.Project>('/bidding/project/get-by-code', { params: { projectCode } });
 }
 export function saveProject(data: ProjectApi.Project) {
   return requestClient.post<number>('/bidding/project/save', data);
@@ -167,7 +167,7 @@ export function getTenderProject(id: number | string) {
   return requestClient.get<ProjectApi.TenderProject>('/bidding/tender-project/get', { params: { id } });
 }
 export function getTenderProjectByCode(tenderProjectCode: string) {
-  return requestClient.get<ProjectApi.TenderProject | null>('/bidding/tender-project/get-by-code', { params: { tenderProjectCode } });
+  return requestClient.get<null | ProjectApi.TenderProject>('/bidding/tender-project/get-by-code', { params: { tenderProjectCode } });
 }
 export function saveTenderProject(data: ProjectApi.TenderProject) {
   return requestClient.post<number>('/bidding/tender-project/save', data);
@@ -187,7 +187,7 @@ export function getBidSection(id: number | string) {
   return requestClient.get<ProjectApi.BidSection>('/bidding/bid-section/get', { params: { id } });
 }
 export function getBidSectionByCode(bidSectionCode: string) {
-  return requestClient.get<ProjectApi.BidSection | null>('/bidding/bid-section/get-by-code', { params: { bidSectionCode } });
+  return requestClient.get<null | ProjectApi.BidSection>('/bidding/bid-section/get-by-code', { params: { bidSectionCode } });
 }
 export function saveBidSection(data: ProjectApi.BidSection) {
   return requestClient.post<number>('/bidding/bid-section/save', data);

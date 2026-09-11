@@ -4,12 +4,12 @@
      价款形式与中标金额、工期质量、中标说明；联合体成员（代码/名称）。
      公示标题/正文（NOTICE_NAME/NOTICE_CONTENT）在第1、3节已填，保存自动并入；本表不重复。 -->
 <script setup lang="ts">
+import type { NoticeApi } from '#/api/bidding/notice';
+
 import { computed } from 'vue';
 
 import PayloadCell from '../PayloadCell.vue';
 import { buildRowMap, type RowSpec, type TableGroup } from '../typeFieldRow';
-
-import type { NoticeApi } from '#/api/bidding/notice';
 
 const props = defineProps<{
   typeMeta?: NoticeApi.NoticeTypeMeta | null;

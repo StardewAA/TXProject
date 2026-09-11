@@ -94,7 +94,7 @@ class CertificateServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.createCertificate(req("XZ-2026-001")));
 
-        assertEquals(Integer.valueOf(1_060_106_001), e.getCode(), "重复证书编号应报 CERTIFICATE_NO_DUPLICATE");
+        assertEquals(Integer.valueOf(1_060_109_001), e.getCode(), "重复证书编号应报 CERTIFICATE_NO_DUPLICATE");
         verify(certificateInfoMapper, never()).insert(any(CertificateInfoDO.class));
     }
 
@@ -137,7 +137,7 @@ class CertificateServiceImplTest {
         reqVO.setRemark("新备注");
 
         ServiceException e = assertThrows(ServiceException.class, () -> service.updateCertificate(reqVO));
-        assertEquals(Integer.valueOf(1_060_106_002), e.getCode(), "版本不一致应报 CERTIFICATE_DATA_MODIFIED");
+        assertEquals(Integer.valueOf(1_060_109_002), e.getCode(), "版本不一致应报 CERTIFICATE_DATA_MODIFIED");
         verify(certificateInfoMapper, never()).updateById(any(CertificateInfoDO.class));
     }
 
@@ -154,7 +154,7 @@ class CertificateServiceImplTest {
         reqVO.setRemark("并发修改");
 
         ServiceException e = assertThrows(ServiceException.class, () -> service.updateCertificate(reqVO));
-        assertEquals(Integer.valueOf(1_060_106_002), e.getCode(), "CAS 0 行应报 CERTIFICATE_DATA_MODIFIED");
+        assertEquals(Integer.valueOf(1_060_109_002), e.getCode(), "CAS 0 行应报 CERTIFICATE_DATA_MODIFIED");
     }
 
     @Test
@@ -186,7 +186,7 @@ class CertificateServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.changeStatus(7L, CertificateStatusEnum.ACTIVE.name(), 2, null,
                         CertificateChangeSourceEnum.MANUAL, null));
-        assertEquals(Integer.valueOf(1_060_106_003), e.getCode(), "终态不可恢复应报状态流转非法");
+        assertEquals(Integer.valueOf(1_060_109_003), e.getCode(), "终态不可恢复应报状态流转非法");
         verify(certificateInfoMapper, never()).updateById(any(CertificateInfoDO.class));
     }
 
@@ -240,7 +240,7 @@ class CertificateServiceImplTest {
     void get_notExistsThrows() {
         when(certificateInfoMapper.selectById(7L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class, () -> service.getCertificate(7L));
-        assertEquals(Integer.valueOf(1_060_106_000), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_000), e.getCode());
     }
 
     @Test

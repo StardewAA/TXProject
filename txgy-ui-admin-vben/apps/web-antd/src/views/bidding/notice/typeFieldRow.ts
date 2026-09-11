@@ -1,9 +1,10 @@
+import type { FieldRow } from './PayloadCell.vue';
+
+import type { NoticeApi } from '#/api/bidding/notice';
+
 // 类型字段行规约：meta/types（权威 label/required）∪ 本地静态字典（pub/控件类别/备注）。
 // 四张业务表组件共享本工具；字段分组（表格分区）由各表组件自定（按各公告类型的业务文书结构）。
 import { NOTICE_PAYLOAD_FIELDS, type PayloadFieldMeta } from './payloadFieldMeta';
-
-import type { NoticeApi } from '#/api/bidding/notice';
-import type { FieldRow } from './PayloadCell.vue';
 
 export interface RowSpec extends FieldRow {
   pub: PayloadFieldMeta['pub'];

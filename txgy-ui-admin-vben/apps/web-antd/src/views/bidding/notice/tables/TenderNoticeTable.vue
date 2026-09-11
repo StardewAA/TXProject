@@ -5,12 +5,12 @@
      标题/正文在第1、3节已填，保存时自动并入 NOTICE_NAME/NOTICE_CONTENT；本表不重复。
      报送参数（平台码/时间戳等政务公开字段）不在本表出现（系统/平台侧）。 -->
 <script setup lang="ts">
+import type { NoticeApi } from '#/api/bidding/notice';
+
 import { computed } from 'vue';
 
 import PayloadCell from '../PayloadCell.vue';
 import { buildRowMap, type RowSpec, type TableGroup } from '../typeFieldRow';
-
-import type { NoticeApi } from '#/api/bidding/notice';
 
 const props = defineProps<{
   typeMeta?: NoticeApi.NoticeTypeMeta | null;
