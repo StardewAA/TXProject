@@ -49,6 +49,10 @@ public class WmsItemRespVO {
     @ExcelProperty("备注")
     private String remark;
 
+    @Schema(description = "状态：0启用，1停用", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
+    @ExcelProperty("状态")
+    private Integer status;
+
     @Schema(description = "规格列表")
     private List<WmsItemSkuRespVO> skus;
 

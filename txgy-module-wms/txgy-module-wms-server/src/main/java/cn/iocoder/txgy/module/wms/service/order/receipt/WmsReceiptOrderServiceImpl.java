@@ -124,6 +124,8 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
         WmsReceiptOrderDO order = validateReceiptOrderPrepare(id);
         // 1.2 校验入库单明细存在
         List<WmsReceiptOrderDetailDO> details = receiptOrderDetailService.validateReceiptOrderDetailListExists(id);
+        itemSkuService.validateItemSkuListItemEnabled(details.stream()
+                .map(WmsReceiptOrderDetailDO::getSkuId).toList());
         // 1.3 完成入库前以商品当前有效报告为准执行服务端硬校验
         validateItemQualityQualified(details);
 
