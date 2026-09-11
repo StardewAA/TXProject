@@ -153,6 +153,34 @@
         GROUP BY status
     </select>
 
+    <!-- 统计近 N 天报工汇总（按报工人维度，排除草稿） -->
+    <select id="selectFeedbackUserSummary" resultType="java.util.Map">
+        SELECT COUNT(DISTINCT feedback_user_id) AS userCount,
+               IFNULL(SUM(feedback_quantity), 0) AS totalQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+    </select>
+
+    <!-- 统计近 N 天报工人产出 TOP N（按合格品数量降序） -->
+    <select id="selectFeedbackUserTopList" resultType="java.util.Map">
+        SELECT feedback_user_id AS feedbackUserId,
+               COUNT(*) AS recordCount,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+          AND feedback_user_id IS NOT NULL
+        GROUP BY feedback_user_id
+        ORDER BY qualifiedQuantity DESC
+        LIMIT #{limit}
+    </select>
+
     <!-- 统计近 N 天完成的工单交付情况（按完成时间，需求日期为交付基准） -->
     <select id="selectDeliverySummary" resultType="java.util.Map">
         SELECT COUNT(*) AS totalCount,

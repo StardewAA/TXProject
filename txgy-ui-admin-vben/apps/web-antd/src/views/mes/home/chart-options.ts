@@ -113,6 +113,29 @@ export function getQcPassRateChartOptions(
   };
 }
 
+/** 人员报工产出 TOP N 横向柱状图配置 */
+export function getFeedbackUserChartOptions(
+  categories: string[],
+  quantities: number[],
+): EChartsOption {
+  return {
+    grid: { bottom: 20, left: 90, right: 50, top: 20 },
+    series: [
+      {
+        barWidth: 18,
+        data: quantities,
+        itemStyle: { borderRadius: [0, 4, 4, 0], color: '#409EFF' },
+        label: { position: 'right', show: true },
+        name: '合格品数量',
+        type: 'bar',
+      },
+    ],
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'value' },
+    yAxis: { data: categories, inverse: true, type: 'category' },
+  };
+}
+
 /** 生产交付达成饼图配置（按期 vs 超期） */
 export function getDeliveryPieChartOptions(
   onTimeCount: number,
