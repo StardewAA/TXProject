@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 备案受理记录（T 轨）。表：bidding_filing（DDL 见 sql/2026-09-03-filing.sql）。
+ * 备案受理记录（T 轨）。表：bidding_filing（DDL 见 sql/history/2026-09-03-filing.sql）。
  */
 @TableName("bidding_filing")
 @Data

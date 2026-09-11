@@ -1,5 +1,10 @@
 package cn.iocoder.txgy.module.bidding.service.ruleconfig;
 
+import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialCategoryEnum;
+import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialTypeEnum;
+import cn.iocoder.txgy.module.bidding.enums.PersonRiskFlagEnum;
+import cn.iocoder.txgy.module.bidding.enums.RiskLevelEnum;
+import cn.iocoder.txgy.module.bidding.enums.SafetyRiskFlagEnum;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.bidding.controller.admin.meta.vo.DictItemRespVO;
@@ -69,6 +74,15 @@ public class MetaDictServiceImpl implements MetaDictService {
         TYPE_TO_ENUM.put("person_cert_type", PersonnelCertificateTypeEnum.class);
         TYPE_TO_ENUM.put("revoke_type", CertRevokeTypeEnum.class);
         TYPE_TO_ENUM.put("renewal_type", CertRenewalTypeEnum.class);
+        // 以下 5 个类型为"注册补齐"（用户核查结论第 3 条）：
+        // 前 3 个是安许风险联动新增枚举；后 2 个是企业材料分类/材料类型枚举。
+        // 说明：cert_type / holder_type / review_result 在代码里没有对应枚举（取值是字面量集合），
+        //       因此只由 bidding_dict_data 种子提供（见 sql/2026-09-19-cert-dict-register.sql）。
+        TYPE_TO_ENUM.put("safety_risk_flag", SafetyRiskFlagEnum.class);
+        TYPE_TO_ENUM.put("person_risk_flag", PersonRiskFlagEnum.class);
+        TYPE_TO_ENUM.put("risk_level", RiskLevelEnum.class);
+        TYPE_TO_ENUM.put("material_category", EnterpriseMaterialCategoryEnum.class);
+        TYPE_TO_ENUM.put("material_type", EnterpriseMaterialTypeEnum.class);
         TYPE_TO_ENUM.put("material_category", EnterpriseMaterialCategoryEnum.class);
     }
 

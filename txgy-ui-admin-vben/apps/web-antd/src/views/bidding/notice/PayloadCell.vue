@@ -9,7 +9,7 @@ export interface FieldRow {
   input?: string; // text|multiline|time|boolean|select
   remark?: string;
   dtype?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ label: string; value: string; }>;
 }
 
 const props = defineProps<{ f: FieldRow; value: string; wide?: boolean }>();
@@ -26,27 +26,27 @@ function nowIso(): string {
 
 <template>
   <div class="pc-cell" :class="{ 'pc-wide': wide || f.input === 'multiline' }">
-    <label class="pc-lb" :for="'pc-' + f.key"><span v-if="f.required" class="pc-ast">*</span>{{ f.label }}</label>
+    <label class="pc-lb" :for="`pc-${ f.key}`"><span v-if="f.required" class="pc-ast">*</span>{{ f.label }}</label>
     <div v-if="f.input === 'multiline'" class="pc-ctl">
-      <Input.TextArea :id="'pc-' + f.key" :value="value" :rows="3" class="pc-in" :placeholder="f.remark || '请输入'" @update:value="setV" />
+      <Input.TextArea :id="`pc-${ f.key}`" :value="value" :rows="3" class="pc-in" :placeholder="f.remark || '请输入'" @update:value="setV" />
     </div>
     <div v-else-if="f.input === 'boolean'" class="pc-ctl">
-      <Select :id="'pc-' + f.key" :value="value" class="pc-in" style="width: 100%" :placeholder="f.remark || '是 / 否'" @update:value="setV">
+      <Select :id="`pc-${ f.key}`" :value="value" class="pc-in" style="width: 100%" :placeholder="f.remark || '是 / 否'" @update:value="setV">
         <Select.Option value="1">是（1）</Select.Option>
         <Select.Option value="0">否（0）</Select.Option>
       </Select>
     </div>
     <div v-else-if="f.input === 'select' || (f.options && f.options.length)" class="pc-ctl">
-      <Select :id="'pc-' + f.key" :value="value" class="pc-in" style="width: 100%" allow-clear :placeholder="f.remark || '请选择'" @update:value="setV">
+      <Select :id="`pc-${ f.key}`" :value="value" class="pc-in" style="width: 100%" allow-clear :placeholder="f.remark || '请选择'" @update:value="setV">
         <Select.Option v-for="o in f.options" :key="o.value" :value="o.value">{{ o.label }}</Select.Option>
       </Select>
     </div>
     <div v-else-if="f.input === 'time'" class="pc-line">
-      <Input :id="'pc-' + f.key" :value="value" class="pc-in" placeholder="yyyy-MM-ddTHH:mm:ss" @update:value="setV" />
+      <Input :id="`pc-${ f.key}`" :value="value" class="pc-in" placeholder="yyyy-MM-ddTHH:mm:ss" @update:value="setV" />
       <Button size="small" class="pc-now" @click="setV(nowIso())">现在</Button>
     </div>
     <div v-else class="pc-ctl">
-      <Input :id="'pc-' + f.key" :value="value" class="pc-in" :placeholder="f.remark || '请输入'" @update:value="setV" />
+      <Input :id="`pc-${ f.key}`" :value="value" class="pc-in" :placeholder="f.remark || '请输入'" @update:value="setV" />
     </div>
     <div v-if="f.remark && f.input !== 'multiline'" class="pc-rm">{{ f.remark }}</div>
   </div>

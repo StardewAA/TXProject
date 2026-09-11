@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 员工培训记录。表：personnel_training_record（DDL sql/2026-09-13-personnel-qualification.sql）。
+ * 员工培训记录。表：personnel_training_record（DDL sql/history/2026-09-13-personnel-qualification.sql）。
  *
  * <p>规范出处：用户业务口径"记录员工基本信息、资质证书、培训记录等"；《电子证件全流程管理_数据库设计.md》
  * v3.3 表 15-3（edu_hours/edu_hours_required 继续教育学时=达标要素之一）。

@@ -109,7 +109,7 @@ export interface PayloadItem { key: string; label: string; value: string; known:
 export interface PayloadSection { title: string; items: PayloadItem[]; }
 
 /** 按数据集声明序规整 payload 并分组（空值跳过；组序：标识/时间/资格与条件/结果/其它） */
-export function groupPayload(payload?: Record<string, unknown> | null): PayloadSection[] {
+export function groupPayload(payload?: null | Record<string, unknown>): PayloadSection[] {
   const entries = payload ? Object.entries(payload) : [];
   const groups: PayloadSection[] = [
     { title: '项目与公告标识', items: [] },

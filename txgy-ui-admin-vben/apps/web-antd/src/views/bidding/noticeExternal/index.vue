@@ -39,7 +39,7 @@ function refresh() {
   gridApi.query();
 }
 
-function tagOf(map: Record<string, { text: string; color: string }>, v?: string) {
+function tagOf(map: Record<string, { color: string; text: string; }>, v?: string) {
   const c = v ? map[v] : undefined;
   return c ? { text: c.text, color: c.color } : null;
 }
@@ -63,7 +63,7 @@ async function runAction(label: string, fn: () => Promise<unknown>) {
     message.success(`${label}成功`);
     // 行状态已变化：清空勾选，避免工具栏"批量审查通过（N）"计数与实际不符
     checkedRows.value = [];
-    (gridApi.grid as unknown as { clearCheckboxRow?: () => void } | undefined)?.clearCheckboxRow?.();
+    (gridApi.grid as unknown as undefined | { clearCheckboxRow?: () => void })?.clearCheckboxRow?.();
     refresh();
   } catch {
     // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
@@ -123,8 +123,8 @@ function rowActions(row: NoticeExternalApi.ManageItem): any[] {
 }
 
 /** 更多菜单项（按行状态裁剪） */
-function moreItems(row: NoticeExternalApi.ManageItem): Array<{ key: string; label: string; danger?: boolean }> {
-  const items: Array<{ key: string; label: string; danger?: boolean }> = [];
+function moreItems(row: NoticeExternalApi.ManageItem): Array<{ danger?: boolean; key: string; label: string; }> {
+  const items: Array<{ danger?: boolean; key: string; label: string; }> = [];
   if (row.auditStatus === 'UNREVIEWED') items.push({ key: 'reject', label: '驳回', danger: true });
   if (row.status === 'ACTIVE') items.push({ key: 'takeDown', label: '下线', danger: true });
   if (row.status !== 'ARCHIVED') {
@@ -207,7 +207,7 @@ function handleBackfillPdf() {
     onOk: () =>
       runAction('PDF 归档回填', async () => {
         const res = await backfillPdfUrls();
-        const s = res as { total?: number; ok?: number; failed?: number; skipped?: number };
+        const s = res as { failed?: number; ok?: number; skipped?: number; total?: number; };
         message.info(
           '回填完成：总数 ' +
             (s?.total ?? '-') +
@@ -374,7 +374,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
-              label: checkedRows.length ? '批量审查通过（' + checkedRows.length + '）' : '批量审查通过',
+              label: checkedRows.length ? `批量审查通过（${ checkedRows.length }）` : '批量审查通过',
               type: 'primary',
               disabled: approving || checkedRows.length === 0,
               auth: ['bidding:notice-external:update'],

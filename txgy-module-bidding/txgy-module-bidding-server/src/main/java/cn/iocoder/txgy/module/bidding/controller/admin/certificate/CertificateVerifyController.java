@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 证照验真管理接口（GB/T 36906 verifyinfo 客户端编排）。
  *
  * <p>规范出处：GB/T 36906—2018 §6.4；《电子证件全流程管理_数据库设计.md》v3.3 §17.5；
- * 《招投标模块开发规范》§4.4（Controller 权限码 bidding:certificate:verify，菜单脚本见 sql/2026-09-08-…）。
+ * 《招投标模块开发规范》§4.4（Controller 权限码 bidding:certificate:verify，菜单脚本见 sql/history/2026-09-08-…）。
  */
 @Tag(name = "管理后台 - 证照验真")
 @RestController

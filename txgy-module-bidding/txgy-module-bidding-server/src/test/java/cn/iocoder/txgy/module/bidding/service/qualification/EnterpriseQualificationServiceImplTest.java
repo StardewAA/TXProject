@@ -75,7 +75,7 @@ class EnterpriseQualificationServiceImplTest {
                 .thenReturn(new EnterpriseQualificationDO());
 
         ServiceException e = assertThrows(ServiceException.class, () -> service.createQualification(req(null)));
-        assertEquals(Integer.valueOf(1_060_106_016), e.getCode(), "UK 命中应报 QUALIFICATION_NO_DUPLICATE");
+        assertEquals(Integer.valueOf(1_060_109_016), e.getCode(), "UK 命中应报 QUALIFICATION_NO_DUPLICATE");
         verify(enterpriseQualificationMapper, never()).insert(any(EnterpriseQualificationDO.class));
     }
 
@@ -87,7 +87,7 @@ class EnterpriseQualificationServiceImplTest {
         EnterpriseQualificationSaveReqVO r = req(null);
         r.setBindedCertId(88L);
         ServiceException e = assertThrows(ServiceException.class, () -> service.createQualification(r));
-        assertEquals(Integer.valueOf(1_060_106_000), e.getCode(), "关联台账证书不存在应报 CERTIFICATE_NOT_EXISTS");
+        assertEquals(Integer.valueOf(1_060_109_000), e.getCode(), "关联台账证书不存在应报 CERTIFICATE_NOT_EXISTS");
     }
 
     @Test
@@ -112,7 +112,7 @@ class EnterpriseQualificationServiceImplTest {
 
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.changeStatus(1L, QualificationStatusEnum.VALID.name(), 1, null, 42L));
-        assertEquals(Integer.valueOf(1_060_106_017), e.getCode(), "终态不可恢复应报状态流转非法");
+        assertEquals(Integer.valueOf(1_060_109_017), e.getCode(), "终态不可恢复应报状态流转非法");
         verify(enterpriseQualificationMapper, never()).updateById(any(EnterpriseQualificationDO.class));
     }
 
@@ -125,7 +125,7 @@ class EnterpriseQualificationServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.changeStatus(1L, QualificationStatusEnum.EXPIRED.name(), 2, null, null));
         // 版本先于枚举解析校验：确保 version 冲突在迁移表解析前拦截
-        assertEquals(Integer.valueOf(1_060_106_018), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_018), e.getCode());
     }
 
     @Test
@@ -160,7 +160,7 @@ class EnterpriseQualificationServiceImplTest {
 
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.submitRenewalApply(1L, 0, 42L, null, null));
-        assertEquals(Integer.valueOf(1_060_106_017), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_017), e.getCode());
         verify(qualificationApplyRecordMapper, never()).insert(any(QualificationApplyRecordDO.class));
     }
 
@@ -196,7 +196,7 @@ class EnterpriseQualificationServiceImplTest {
 
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.approveRenewalApply(50L, 0, "文号", null, null, 7L));
-        assertEquals(Integer.valueOf(1_060_106_021), e.getCode(), "延续必须给新有效期");
+        assertEquals(Integer.valueOf(1_060_109_021), e.getCode(), "延续必须给新有效期");
         verify(enterpriseQualificationMapper, never()).updateById(any(EnterpriseQualificationDO.class));
     }
 

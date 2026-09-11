@@ -14,13 +14,13 @@
   权限点：bidding:subject:query / update（企业自维护）。
 ============================================================================ -->
 <script lang="ts" setup>
-import { SubjectApi } from '#/api/bidding/subject';
-
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { Alert, Button, Card, Input, message, Radio, Select, Spin, Upload } from 'ant-design-vue';
 
+import { SubjectApi } from '#/api/bidding/subject';
 import { fetchSubjectEligibility, fetchSubjectProfile, saveSubjectProfile } from '#/api/bidding/subject';
+
 import { uploadAttachment } from '../vo/attachmentUpload';
 
 const createMessage = message;
@@ -95,7 +95,7 @@ function switchType(t: SubjectApi.SubjectTypeCode) {
 
 /* 保存前校验：必填 + uscc 18 位（GB 32100-2015，技术规范）。
  * 依据：07 §5 易错点「uscc 用 18 位校验，非法格式应拦截」；后端 save 亦强校验（错误码 106_035）。 */
-function validate(): string | null {
+function validate(): null | string {
   const need: Array<[unknown, string]> = [
     [form.subjectName, '单位名称'], [form.uscc, '统一社会信用代码'], [form.legalPersonName, '法定代表人姓名'],
     [form.legalPersonTypeCode, '法人机构类别代码'], [form.regionCode, '行政区划代码'],
@@ -211,8 +211,7 @@ onMounted(loadAll);
       </div>
     </div>
     <div class="ind-body">
-
-    <Spin :spinning="loading">
+<Spin :spinning="loading">
       <div v-if="loaded" class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
         <Alert
           :type="eligibility?.eligible ? 'success' : 'warning'"
@@ -224,7 +223,7 @@ onMounted(loadAll);
           :type="complete ? 'success' : 'info'"
           :show-icon="true"
           :message="complete ? '档案信息已完善' : '档案信息尚未完善'"
-          :description="missingNames.length ? '缺失必填字段：' + missingNames.join('、') : (complete ? '全部必填字段已齐' : '保存后实时核算')"
+          :description="missingNames.length ? `缺失必填字段：${ missingNames.join('、')}` : (complete ? '全部必填字段已齐' : '保存后实时核算')"
         />
       </div>
 
@@ -310,8 +309,7 @@ onMounted(loadAll);
       </Card>
     </Spin>
     </div>
-
-  </div>
+</div>
 </template>
 <style scoped>
 /* 上传区（线稿风：白底细边、直角、提示字清晰） */

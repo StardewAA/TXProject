@@ -40,6 +40,38 @@ public final class RuleConfigKeys {
     /** 员工证书复审/年审提前提醒天数 */
     public static final String PERSONNEL_CERT_REVIEW_WARN_DAYS = "personnel.cert.review.warn.days";
 
+    // ========== 安许 A/B/C 与 risk_flag 域（方案 §1.2）==========
+    /** A/B/C 三类人员最低配备（JSON：{"A":1,"B":1,"C":1}） */
+    public static final String SAFETY_ABC_REQUIRED = "safety.abc.required";
+    /** 参与判定的角色集合 */
+    public static final String SAFETY_ABC_ROLES = "safety.abc.roles";
+    /** 豁免矩阵：企业类型 → 允许为 0 的角色（劳务分包 B 证为 0 不触发红） */
+    public static final String SAFETY_ABC_EXEMPT_ENT_TYPES = "safety.abc.exempt.ent.types";
+    /** 法定代表人变更致人数不足的宽限天数（180） */
+    public static final String SAFETY_ABC_GRACE_LEGAL_PERSON_CHANGE_DAYS = "safety.abc.grace.legal.person.change.days";
+    /** 允许触发宽限的原因白名单 */
+    public static final String SAFETY_ABC_GRACE_REASON_WHITELIST = "safety.abc.grace.reason.whitelist";
+    /** 频繁预警次数阈值（4） */
+    public static final String SAFETY_ABC_FREQUENT_ALERT_THRESHOLD = "safety.abc.frequent.alert.threshold";
+    /** 频繁预警统计窗口（365 天） */
+    public static final String SAFETY_ABC_FREQUENT_WINDOW_DAYS = "safety.abc.frequent.window.days";
+    /** 三类全 0 后允许整改天数（90） */
+    public static final String SAFETY_ABC_INVALID_GRACE_DAYS = "safety.abc.invalid.grace.days";
+    /** 阻断业务的风险档位集合 */
+    public static final String SAFETY_ABC_BLOCK_FLAGS = "safety.abc.block.flags";
+    /** 人员更换受聘企业次数阈值（4） */
+    public static final String PERSONNEL_JOB_CHANGE_THRESHOLD = "personnel.job.change.threshold";
+    /** 人员更换受聘企业统计窗口（365 天） */
+    public static final String PERSONNEL_JOB_CHANGE_WINDOW_DAYS = "personnel.job.change.window.days";
+    /** 同一项目同一关键岗位变更次数阈值（2） */
+    public static final String PROJECT_KEY_POST_CHANGE_THRESHOLD = "project.key.post.change.threshold";
+    /** 关键岗位变更统计窗口（90 天） */
+    public static final String PROJECT_KEY_POST_CHANGE_WINDOW_DAYS = "project.key.post.change.window.days";
+    /** 多岗是否必须持另一岗位证书 */
+    public static final String PERSONNEL_MULTI_POST_REQUIRE_CERT = "personnel.multi.post.require.cert";
+    /** 风险档 → 等级映射 */
+    public static final String RISK_LEVEL_MAPPING = "risk.level.mapping";
+
     /**
      * 代码兜底默认值（JSON 文本，与 sql/2026-09-16-rule-config-center.sql 的种子行逐键一致）。
      *
@@ -61,6 +93,23 @@ public final class RuleConfigKeys {
         FALLBACK.put(CERT_ANNOTATION_CASCADE_ON_REVOKE, "true");
         FALLBACK.put(PERSONNEL_CERT_EXPIRING_WINDOW_DAYS, "30");
         FALLBACK.put(PERSONNEL_CERT_REVIEW_WARN_DAYS, "60");
+        FALLBACK.put(SAFETY_ABC_REQUIRED, "{\"A\":1,\"B\":1,\"C\":1}");
+        FALLBACK.put(SAFETY_ABC_ROLES, "[\"A\",\"B\",\"C\"]");
+        FALLBACK.put(SAFETY_ABC_EXEMPT_ENT_TYPES, "{\"LABOR_SUBCONTRACT\":[\"B\"]}");
+        FALLBACK.put(SAFETY_ABC_GRACE_LEGAL_PERSON_CHANGE_DAYS, "180");
+        FALLBACK.put(SAFETY_ABC_GRACE_REASON_WHITELIST, "[\"LEGAL_PERSON_CHANGE\"]");
+        FALLBACK.put(SAFETY_ABC_FREQUENT_ALERT_THRESHOLD, "4");
+        FALLBACK.put(SAFETY_ABC_FREQUENT_WINDOW_DAYS, "365");
+        FALLBACK.put(SAFETY_ABC_INVALID_GRACE_DAYS, "90");
+        FALLBACK.put(SAFETY_ABC_BLOCK_FLAGS, "[\"INVALID\",\"RED\"]");
+        FALLBACK.put(PERSONNEL_JOB_CHANGE_THRESHOLD, "4");
+        FALLBACK.put(PERSONNEL_JOB_CHANGE_WINDOW_DAYS, "365");
+        FALLBACK.put(PROJECT_KEY_POST_CHANGE_THRESHOLD, "2");
+        FALLBACK.put(PROJECT_KEY_POST_CHANGE_WINDOW_DAYS, "90");
+        FALLBACK.put(PERSONNEL_MULTI_POST_REQUIRE_CERT, "true");
+        FALLBACK.put(RISK_LEVEL_MAPPING,
+                "{\"NORMAL\":\"LOW\",\"YELLOW\":\"MEDIUM\",\"RED\":\"HIGH\",\"INVALID\":\"MAJOR\","
+                        + "\"FREQUENT\":\"MEDIUM\",\"ABNORMAL\":\"MEDIUM\"}");
     }
 
     private RuleConfigKeys() {

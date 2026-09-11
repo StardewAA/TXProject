@@ -161,7 +161,7 @@ class CertificateVerifyServiceImplTest {
 
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.verifyCertificate(1L, "FOUR_PLATFORM", 42L));
-        assertEquals(Integer.valueOf(1_060_106_012), e.getCode(), "验真进行中应报 CERT_VERIFY_IN_PROGRESS");
+        assertEquals(Integer.valueOf(1_060_109_012), e.getCode(), "验真进行中应报 CERT_VERIFY_IN_PROGRESS");
     }
 
     @Test
@@ -169,7 +169,7 @@ class CertificateVerifyServiceImplTest {
         when(certificateInfoMapper.selectById(1L)).thenReturn(certOf("UNVERIFIED"));
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.verifyCertificate(1L, "NOT_A_CHANNEL", 42L));
-        assertEquals(Integer.valueOf(1_060_106_014), e.getCode(), "非法渠道应报 CERT_VERIFY_CHANNEL_INVALID");
+        assertEquals(Integer.valueOf(1_060_109_014), e.getCode(), "非法渠道应报 CERT_VERIFY_CHANNEL_INVALID");
         verify(certVerifyGateway, never()).verifyInfo(any());
     }
 
@@ -178,7 +178,7 @@ class CertificateVerifyServiceImplTest {
         when(certificateInfoMapper.selectById(9L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.verifyCertificate(9L, "FOUR_PLATFORM", 42L));
-        assertEquals(Integer.valueOf(1_060_106_000), e.getCode());
+        assertEquals(Integer.valueOf(1_060_109_000), e.getCode());
     }
 
     @Test
@@ -223,7 +223,7 @@ class CertificateVerifyServiceImplTest {
 
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.verifyCertificateFile(1L, "FOUR_PLATFORM", 42L));
-        assertEquals(Integer.valueOf(1_060_106_005), e.getCode(), "无生效文件应报 CERT_FILE_NOT_EXISTS");
+        assertEquals(Integer.valueOf(1_060_109_005), e.getCode(), "无生效文件应报 CERT_FILE_NOT_EXISTS");
         verify(certVerifyGateway, never()).verifyFile(any());
     }
 

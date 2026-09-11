@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bidding.service.certificate;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertLifecycleApplyReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertLifecyclePageReqVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.certificate.vo.CertLifecycleRespVO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.personnel.CertLifecycleRecordDO;
 
 import java.util.List;
@@ -45,4 +46,14 @@ public interface CertLifecycleService {
 
     /** 某业务对象的完整生命周期轨迹（按申请时间倒序）。 */
     List<CertLifecycleRecordDO> listByBiz(String bizDomain, Long bizId);
+
+    /**
+     * DO → 出参 VO（含存储形态转换：evidence_file_ids 的 JSON 串 ↔ List&lt;Long&gt;）。
+     *
+     * <p>规范出处：《招投标模块开发规范》§二（"自建 VO ↔ 全量 VO 转换都在 Service"、
+     * Controller "只做参数校验、权限注解、Swagger，不写业务"）；§三-1（VO 用常规类型含 List）。
+     * <p>为什么放在 Service 而不是 Controller：JSON 串 ↔ List 的转换是**存储形态与接口形态的边界**，
+     * 放 Controller 会让每个读接口各自实现一遍解析，迟早出现"有的接口返回数组、有的返回字符串"。
+     */
+    CertLifecycleRespVO toRespVO(CertLifecycleRecordDO record);
 }

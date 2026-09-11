@@ -15,7 +15,7 @@
 --   "通用证照（certificate_info）"与"员工证书（personnel_certificate）"两个域的生命周期；
 --   若按四表 × 两域展开即为 8 张近乎同构的表与 8 套 Mapper/Service。
 --   故本模块归并为**一张 cert_lifecycle_record**，用 biz_domain 区分业务对象、lifecycle_type 区分四类流程，
---   与既有 cert_alert_records 的 ref_type/ref_id 泛化范式保持一致（sql/2026-09-10-qual-expiry-alert.sql 先例）。
+--   与既有 cert_alert_records 的 ref_type/ref_id 泛化范式保持一致（sql/history/2026-09-10-qual-expiry-alert.sql 先例）。
 --   如后续评审要求拆表，按 lifecycle_type 过滤即可无损拆分（字段已按四类分组排列）。
 -- 业务目标：每一次证件/证书的变更、续期、注销吊销、年检都留痕可追溯，并与主档同事务回写，
 --          替代"只在 Excel 改个数字、事后说不清谁改的"的台账模式。

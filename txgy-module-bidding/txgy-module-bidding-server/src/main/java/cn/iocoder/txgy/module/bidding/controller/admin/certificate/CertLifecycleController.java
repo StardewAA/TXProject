@@ -15,7 +15,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
-import org.springframework.beans.BeanUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -78,7 +77,7 @@ public class CertLifecycleController {
     @Parameter(name = "id", description = "记录主键", required = true)
     @PreAuthorize("@ss.hasPermission('bidding:certificate:lifecycle:query')")
     public CommonResult<CertLifecycleRespVO> getRecord(@RequestParam("id") Long id) {
-        return CommonResult.success(toVO(certLifecycleService.getRecord(id)));
+        return CommonResult.success(certLifecycleService.toRespVO(certLifecycleService.getRecord(id)));
     }
 
     @GetMapping("/page")
@@ -87,7 +86,7 @@ public class CertLifecycleController {
     public CommonResult<PageResult<CertLifecycleRespVO>> pageRecord(@Valid CertLifecyclePageReqVO reqVO) {
         PageResult<CertLifecycleRecordDO> page = certLifecycleService.pageRecord(reqVO);
         return CommonResult.success(new PageResult<>(
-                page.getList().stream().map(this::toVO).toList(), page.getTotal()));
+                page.getList().stream().map(certLifecycleService::toRespVO).toList(), page.getTotal()));
     }
 
     @GetMapping("/list-by-biz")
@@ -98,12 +97,7 @@ public class CertLifecycleController {
     public CommonResult<List<CertLifecycleRespVO>> listByBiz(@RequestParam("bizDomain") String bizDomain,
                                                              @RequestParam("bizId") Long bizId) {
         return CommonResult.success(certLifecycleService.listByBiz(bizDomain, bizId).stream()
-                .map(this::toVO).toList());
+                .map(certLifecycleService::toRespVO).toList());
     }
 
-    private CertLifecycleRespVO toVO(CertLifecycleRecordDO record) {
-        CertLifecycleRespVO vo = new CertLifecycleRespVO();
-        BeanUtils.copyProperties(record, vo);
-        return vo;
-    }
 }

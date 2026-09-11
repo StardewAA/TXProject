@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 企业资质主档（T 轨 · qualification_ 前缀例外）。表：enterprise_qualification（DDL 见 sql/2026-09-07-…sql）。
+ * 企业资质主档（T 轨 · qualification_ 前缀例外）。表：enterprise_qualification（DDL 见 sql/history/2026-09-07-…sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 15-1（序列/类别/等级/cert_no UK、
  * qual_status 状态机、binded_cert_id 关联通用台账复用影像与验真）。

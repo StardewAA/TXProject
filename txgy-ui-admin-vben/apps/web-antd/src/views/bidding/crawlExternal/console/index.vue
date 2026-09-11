@@ -16,6 +16,7 @@ import {
   Select,
   Tag,
 } from 'ant-design-vue';
+
 import {
   fetchCrawlJobPage,
   fetchCrawlSourcePage,
@@ -25,12 +26,12 @@ import {
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
 
-import '../taskbar.css';
-
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 import TaskChainView from './modules/task-chain.vue';
+
+import '../taskbar.css';
 
 /* ---------- 本地模型：手动/测试任务条（真实解析回执；localStorage 留档刷新保留。后端 crawl-parser/test 只返回不回执不落库——测试记录仅前端留档） ---------- */
 /** 本地回执留档键（最大保留 60 条；超出丢最旧） */
@@ -56,10 +57,10 @@ const MANUAL_STATUS = {
   SUCCESS: { text: '成功', color: 'green' },
   PARTIAL: { text: '部分产出', color: 'orange' },
   FAILED: { text: '失败', color: 'red' },
-} as Record<string, { text: string; color: string }>;
+} as Record<string, { color: string; text: string; }>;
 const manualRuns = ref<ManualRun[]>([]);
 /* 测试任务条（与“任务”同款）：时间排序（desc=最新在前默认 / asc=最早在前）+ 本地分页 20/50/100 */
-const manualSort = ref<'desc' | 'asc'>('desc');
+const manualSort = ref<'asc' | 'desc'>('desc');
 const manualPage = ref(1);
 const manualPageSize = ref(20);
 const manualTotal = computed(() => manualRuns.value.length);
@@ -121,7 +122,7 @@ const sourceOptions = computed(() =>
     .map((s) => ({ label: (s.sourceName || s.sourceCode) + '（' + s.sourceCode + '）', value: s.sourceCode! })),
 );
 /** 顶部选项卡：tasks=任务 / tests=后端测试 / manual=会话测试 / jobs=采集批次 */
-const activeTab = ref<'tasks' | 'manual' | 'jobs'>('tasks');
+const activeTab = ref<'jobs' | 'manual' | 'tasks'>('tasks');
 /** 全部源任务总数（后端 total；KPI 与 tab 徽标显示真实总数，不再“首 20 条误导”） */
 const taskTotal = ref(0);
 const kpis = computed(() => ({
@@ -138,7 +139,7 @@ const pageView = ref<'home' | 'taskDetail'>('home');
 /** 当前选中信息源（任务器）；空=任务 tab 显示信息源卡墙 */
 const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
 /** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传） */
-const tFilter = ref<{ status?: string; channelCode?: string; url?: string }>({});
+const tFilter = ref<{ channelCode?: string; status?: string; url?: string }>({});
 const tPage = ref(1);
 const tPageSize = ref(20);
 const tTotal = ref(0);
@@ -151,7 +152,7 @@ const detailCursorIdx = ref(-1);
 /** 源卡墙任务数角标（sourceCode → 条数） */
 const srcCountMap = ref<Record<string, number>>({});
 /** 任务条时间排序：desc=最新在前(后端 id 倒序默认) / asc=最早在前(前端对当页升序) */
-const tSort = ref<'desc' | 'asc'>('desc');
+const tSort = ref<'asc' | 'desc'>('desc');
 const jobs = ref<CrawlExternalApi.JobItem[]>([]);
 
 const runBusy = ref(false);
@@ -219,7 +220,7 @@ onMounted(() => {
 /* ---------- 手动录入 → 生成测试任务条 ---------- */
 function onParsed(
   resp: CrawlExternalApi.ParseTestResp,
-  input: { inputType?: string; fileName?: string },
+  input: { fileName?: string; inputType?: string; },
 ) {
   const ok = resp && (resp.status === 'SUCCESS' || resp.status === 'PARTIAL');
   manualRuns.value.unshift({
@@ -266,7 +267,7 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
         const r = await runCrawlSource(source.sourceCode!);
         lastTriggerAt.value[source.sourceCode!] = Date.now();
         const cats =
-          ((r as { categories?: Array<{ name?: string; fetched?: number; ingested?: number; failed?: number; error?: string }> })
+          ((r as { categories?: Array<{ error?: string; failed?: number; fetched?: number; ingested?: number; name?: string; }> })
             .categories || []);
         const lines = cats.map(
           (c) =>
@@ -330,7 +331,7 @@ function deleteCurrentManual(): void {
  *       getCrawlTask(id) 见 §5.8（失败原因/尝试/worker 回读）。 */
 const detailOpen = ref(false);
 /** 详情抽屉当前档位：task=任务详情 / job=批次详情（标题随档位切换） */
-const detailKind = ref<'task' | 'job'>('task');
+const detailKind = ref<'job' | 'task'>('task');
 const detailTitle = computed(() =>
   detailJob.value ? '批次 #' + String(detailJob.value.id) + ' · ' + (detailJob.value.sourceCode || '未知源') : '批次详情',
 );
@@ -398,7 +399,7 @@ function applyTaskFilter(): void {
 }
 
 /** 整页详情：上一条 / 下一条（按当前 tRows 游标） */
-async function stepTask(dir: 1 | -1): Promise<void> {
+async function stepTask(dir: -1 | 1): Promise<void> {
   if (!tRows.value.length) return;
   const next = detailCursorIdx.value + dir;
   if (next < 0 || next >= tRows.value.length) {
@@ -733,7 +734,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <span class="fp-src-code">{{ src.sourceCode || '—' }}</span>
               </div>
               <div class="fp-src-name" :title="src.sourceName || ''">{{ src.sourceName || '（未命名）' }}</div>
-              <div class="fp-src-meta">任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · {{ src.fetchIntervalSeconds != null ? '间隔 ' + src.fetchIntervalSeconds + 's' : '—' }}</div>
+              <div class="fp-src-meta">任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · {{ src.fetchIntervalSeconds != null ? `间隔 ${ src.fetchIntervalSeconds }s` : '—' }}</div>
               <div class="fp-src-go">查看任务条 ▸</div>
             </div>
           </div>
@@ -811,7 +812,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <Tag :color="manualStatusTag(r).color">{{ manualStatusTag(r).text }}</Tag>
               </span>
               <span class="fp-td w-time">{{ fmtDt(r.occurredAt) || '—' }}</span>
-              <span class="fp-td w-id" :title="'本地留档序号（测试不落库）'">#{{ manualSeqOf(i) }}</span>
+              <span class="fp-td w-id" title="本地留档序号（测试不落库）">#{{ manualSeqOf(i) }}</span>
               <span class="fp-td flex-1 fp-url" :title="r.url || ''">{{ (r.resp?.title || '').trim() || r.url || '（无标题产出，见详情）' }}</span>
               <span class="fp-td w-msg fp-msg" :title="manualMsgText(r)">
                 {{ manualMsgText(r) }}
@@ -866,10 +867,10 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           </div>
           <div class="ind-panel-b">
             <Descriptions :column="1" size="small" bordered>
-              <Descriptions.Item label="解析器">{{ processManual.parserName ? processManual.parserName + '（' + processManual.parserCode + '）' : processManual.parserCode || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="解析器">{{ processManual.parserName ? `${processManual.parserName }（${ processManual.parserCode }）` : processManual.parserCode || '—' }}</Descriptions.Item>
               <Descriptions.Item label="输入口径">{{ [processManual.inputType, processManual.fileName].filter(Boolean).join(' · ') || '—' }}</Descriptions.Item>
               <Descriptions.Item label="来源 URL">{{ processManual.url || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? processManual.durationMs + ' ms' : '—' }}</Descriptions.Item>
+              <Descriptions.Item label="耗时">{{ processManual.durationMs != null ? `${processManual.durationMs } ms` : '—' }}</Descriptions.Item>
               <Descriptions.Item label="解析状态"><Tag :color="manualStatusTag(processManual).color">{{ manualStatusTag(processManual).text }}</Tag></Descriptions.Item>
               <Descriptions.Item v-if="processManual.resp?.error" label="失败原因">{{ processManual.resp.error }}</Descriptions.Item>
             </Descriptions>
@@ -884,7 +885,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <div class="p-4 border border-dashed border-gray-300 rounded">
             <div class="ind-sec-t"><span>①</span> 源 · 输入</div>
             <div class="ind-kv" style="grid-template-columns: 1fr;">
-              <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ' · ' + processManual.fileName : '' }}</span></div>
+              <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ` · ${ processManual.fileName}` : '' }}</span></div>
               <div v-if="processManual.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ processManual.contentLength }} 字符</span></div>
               <div v-if="processManual.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="processManual.url">{{ processManual.url }}</span></div>
             </div>
@@ -893,12 +894,12 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <div class="p-4 border border-dashed border-gray-300 rounded">
             <div class="ind-sec-t"><span>②</span> 提取内容</div>
             <div class="ind-kv" style="grid-template-columns: 1fr;">
-              <div v-for="[k, v] in kvOf(processManual)" :key="'k' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+              <div v-for="[k, v] in kvOf(processManual)" :key="`k${ k}`" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
             </div>
             <div v-if="extractedOf(processManual).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
               <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
               <div class="ind-kv" style="grid-template-columns: 1fr;">
-                <div v-for="[k, v] in extractedOf(processManual)" :key="'e' + k" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
+                <div v-for="[k, v] in extractedOf(processManual)" :key="`e${ k}`" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
               </div>
             </div>
             <div v-if="processManual.resp?.warnings?.length" class="mt-2">

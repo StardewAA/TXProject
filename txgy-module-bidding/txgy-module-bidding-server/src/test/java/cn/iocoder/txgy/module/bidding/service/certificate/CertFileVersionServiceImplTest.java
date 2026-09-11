@@ -100,7 +100,7 @@ class CertFileVersionServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.registerFile(req(1L, null, "HASH-1", "原件.pdf")));
 
-        assertEquals(Integer.valueOf(1_060_106_007), e.getCode(), "同哈希应报 CERT_FILE_HASH_DUPLICATE");
+        assertEquals(Integer.valueOf(1_060_109_007), e.getCode(), "同哈希应报 CERT_FILE_HASH_DUPLICATE");
         verify(certFileVersionMapper, never()).insert(any(CertFileVersionDO.class));
     }
 
@@ -111,7 +111,7 @@ class CertFileVersionServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.registerFile(req(1L, null, "HASH-1", "原件.pdf")));
 
-        assertEquals(Integer.valueOf(1_060_106_000), e.getCode(), "证照不存在应报 CERTIFICATE_NOT_EXISTS");
+        assertEquals(Integer.valueOf(1_060_109_000), e.getCode(), "证照不存在应报 CERTIFICATE_NOT_EXISTS");
         verify(certFileVersionMapper, never()).insert(any(CertFileVersionDO.class));
     }
 
@@ -122,7 +122,7 @@ class CertFileVersionServiceImplTest {
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.registerFile(req(1L, "NOT_A_CATEGORY", "HASH-1", "原件.pdf")));
 
-        assertEquals(Integer.valueOf(1_060_106_009), e.getCode(), "非法类别应报 CERT_FILE_PARAM_INVALID");
+        assertEquals(Integer.valueOf(1_060_109_009), e.getCode(), "非法类别应报 CERT_FILE_PARAM_INVALID");
     }
 
     @Test
@@ -176,7 +176,7 @@ class CertFileVersionServiceImplTest {
         when(certFileVersionMapper.selectById(99L)).thenReturn(null);
         ServiceException e = assertThrows(ServiceException.class,
                 () -> service.markScanResult(99L, CertificateVirusScanStatusEnum.CLEAN.name()));
-        assertEquals(Integer.valueOf(1_060_106_005), e.getCode(), "应报 CERT_FILE_NOT_EXISTS");
+        assertEquals(Integer.valueOf(1_060_109_005), e.getCode(), "应报 CERT_FILE_NOT_EXISTS");
     }
 
     // ========== 工具 ==========

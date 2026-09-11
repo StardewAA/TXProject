@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * 证照文件版本表（T 轨）。表：cert_file_versions（DDL 见 sql/2026-09-04-certificate.sql）。
+ * 证照文件版本表（T 轨）。表：cert_file_versions（DDL 见 sql/history/2026-09-04-certificate.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 §三＋§18.2 v3.4 对齐；GB/T 36903—2018 §5.4 加注件元数据；
  * 《招投标模块开发规范》§5 三-5（文件经 FileApi，库内只记 file_id+sha256+size，URL 非一致性依据）。

@@ -50,12 +50,12 @@ export namespace NoticeExternalApi {
     tenderProjectKey?: string;
     bidSectionKeys?: string[];
     attachments?: Array<{
+      downloadUrl?: string;
+      ext?: string;
       id?: number | string;
       name?: string;
-      ext?: string;
-      size?: number;
-      downloadUrl?: string;
       origDownloadUrl?: string;
+      size?: number;
       virusStatus?: string;
     }>;
   }
@@ -130,7 +130,7 @@ export function bodyStructureNotice(id: number | string) {
  * 权威判断：外部采集公告 pdf_file_id 恒 NULL，有否 PDF 看 contentType=='PDF'、访问一律用 pdf_download_url（勿再拼 pdf_file_id）。
  * 权限 bidding:notice-external:update；依据 外部公告-前端对接/04-PDF归档与源站跳转与采集窗口契约补充.md §1（存量回填，返回 total/ok/failed/skipped，约几十秒完成）。 */
 export function backfillPdfUrls() {
-  return requestClient.post<{ total?: number; ok?: number; failed?: number; skipped?: number }>(
+  return requestClient.post<{ failed?: number; ok?: number; skipped?: number; total?: number; }>(
     '/bidding/notice-external/backfill-pdf-urls',
     undefined,
   );

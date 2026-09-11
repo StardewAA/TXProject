@@ -31,7 +31,7 @@ import { crawlParserTest, fetchCrawlParserList } from '#/api/bidding/crawlExtern
 const props = defineProps<{ sourceOptions?: Array<{ label: string; value: string }> }>();
 const emit = defineEmits(['parsed']);
 
-const inputType = ref<'HTML' | 'JSON' | 'FILE'>('HTML');
+const inputType = ref<'FILE' | 'HTML' | 'JSON'>('HTML');
 const content = ref('');
 const url = ref('');
 const sourceCode = ref<string | undefined>(undefined);
@@ -193,7 +193,7 @@ const [Modal, modalApi] = useVbenModal({
     <div v-else class="mb-2">
       <div class="mb-1 text-xs font-medium text-gray-600">上传文件（PDF/HTML/JSON）</div>
       <Upload.Dragger :max-count="1" accept=".html,.htm,.json,.pdf" :before-upload="(f: File) => { file = f; return false; }" :file-list="[]">
-        <p class="ant-upload-text">{{ file ? file.name + '（' + file.size + ' 字节）' : '点击或拖拽文件到此处' }}</p>
+        <p class="ant-upload-text">{{ file ? `${file.name }（${ file.size } 字节）` : '点击或拖拽文件到此处' }}</p>
         <p class="ant-upload-hint">PDF 需含文字层（扫描件将解析失败并如实标记）；HTML/JSON 文件同文本口径。</p>
       </Upload.Dragger>
     </div>

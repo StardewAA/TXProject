@@ -9,7 +9,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 /**
- * 员工档案（人员主数据，一人一档）。表：bidding_personnel_profile（DDL sql/2026-09-13-personnel-qualification.sql）。
+ * 员工档案（人员主数据，一人一档）。表：bidding_personnel_profile（DDL sql/history/2026-09-13-personnel-qualification.sql）。
  *
  * <p>规范出处：《电子证件全流程管理_数据库设计.md》v3.3 表 15-3（person_name/id_card_enc/id_card_blind_index/
  * is_full_time/reg_valid_to 等人员口径的"人"侧主档）；《招投标模块开发规范》§5 四-1（审计列由 BaseDO 提供）
@@ -71,6 +71,14 @@ public class PersonnelProfileDO extends TenantBaseDO {
     private Long bindedAuthUserId;
     private String archiveNo;
     private String remark;
+    /** 人员级风险标签 code（PersonRiskFlagEnum）：NORMAL/ABNORMAL/FREQUENT（与企业级 risk_flag 严格分离） */
+    private String personRiskFlag;
+    /** 12 个月内更换受聘企业次数 */
+    private Integer jobChangeCount12m;
+    /** 统计窗口起点 */
+    private java.time.LocalDate jobChangeWindowStart;
+    /** 最近人员风险评估时刻 */
+    private java.time.LocalDateTime personRiskEvaluatedAt;
     /** 乐观锁版本（开发规范 §4.5 并发覆盖防护） */
     @Version
     private Integer version;

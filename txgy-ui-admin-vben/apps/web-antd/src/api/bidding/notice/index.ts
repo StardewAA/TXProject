@@ -6,11 +6,11 @@ import { requestClient } from '#/api/request';
 export namespace NoticeApi {
   /** 公告类型（NoticeTypeEnum：本期 4 个工程域数据集） */
   export type NoticeTypeCode =
-    | 'TENDER_NOTICE'
     | 'CHANGE_NOTICE'
+    | 'TENDER_NOTICE'
     | 'WIN_CANDIDATE_PUBLICITY'
     | 'WIN_RESULT_PUBLICITY';
-  export type NoticeStatus = 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED' | 'ARCHIVED';
+  export type NoticeStatus = 'ARCHIVED' | 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
 
   export const NOTICE_TYPES: Array<{ code: NoticeTypeCode; label: string }> = [
     { code: 'TENDER_NOTICE', label: '招标公告' },

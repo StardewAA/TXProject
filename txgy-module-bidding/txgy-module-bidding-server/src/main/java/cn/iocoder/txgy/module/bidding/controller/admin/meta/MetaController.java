@@ -44,7 +44,10 @@ public class MetaController {
     @GetMapping("/dicts")
     @Operation(summary = "获取字典（枚举值对照表；前端禁止硬编码枚举）")
     @Parameter(name = "types", description = "字典类型，逗号分隔（空=全部）")
-    @PreAuthorize("@ss.hasPermission('bidding:certificate:query')")
+    // 权限口径（用户核查结论第 2 条 + 规范 4.4"映射方法必须带 @PreAuthorize"）：
+    // 字典/配置是所有电子证照页面共用的**前置元数据**，绑死单个权限会让其他域页面拿不到枚举与阈值；
+    // 改为"电子证照域任一页面权限即可读"，既不新增权限点，也不会让有页面权限的角色 403。
+    @PreAuthorize("@ss.hasAnyPermissions('bidding:certificate:query', 'bidding:qualification:query', 'bidding:personnel:profile:query', 'bidding:certificate:lifecycle:query', 'bidding:qualification:permit:query')")
     public CommonResult<Map<String, List<DictItemRespVO>>> getDicts(
             @RequestParam(value = "types", required = false) String types) {
         List<String> typeList = (types == null || types.isBlank())
@@ -56,7 +59,8 @@ public class MetaController {
     @Operation(summary = "获取业务阈值与规则配置（前端禁止硬编码阈值）")
     @Parameter(name = "group", description = "分组 code：CERT/ALERT/PERSONNEL（空=全部）")
     @Parameter(name = "keys", description = "精确取某些键，逗号分隔（空=分组全部）")
-    @PreAuthorize("@ss.hasPermission('bidding:certificate:query')")
+    // 同上：任一电子证照域页面权限即可读取阈值配置，避免按域授权的角色取不到值而回落到前端硬编码。
+    @PreAuthorize("@ss.hasAnyPermissions('bidding:certificate:query', 'bidding:qualification:query', 'bidding:personnel:profile:query', 'bidding:certificate:lifecycle:query', 'bidding:qualification:permit:query')")
     public CommonResult<MetaConfigsRespVO> getConfigs(
             @RequestParam(value = "group", required = false) String group,
             @RequestParam(value = "keys", required = false) String keys) {

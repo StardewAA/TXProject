@@ -9,7 +9,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 /**
- * 员工社保缴纳记录。表：personnel_social_security（DDL sql/2026-09-13-personnel-qualification.sql）。
+ * 员工社保缴纳记录。表：personnel_social_security（DDL sql/history/2026-09-13-personnel-qualification.sql）。
  *
  * <p>规范出处：用户业务口径"核验员工社保缴纳单位、劳动合同主体是否与申报企业完全一致，杜绝人证分离和挂证"；
  * 《电子证件全流程管理_数据库设计.md》v3.3 表 15-3（social_security_status/social_security_tenant）。
