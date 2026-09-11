@@ -36,6 +36,20 @@ export namespace CrmClueApi {
     createTime: Date; // 创建时间
     updateTime: Date; // 更新时间
   }
+
+  /** 线索导入请求 */
+  export interface ClueImportReqVO {
+    ownerUserId?: number; // 负责人（为空时默认当前登录用户）
+    file: File; // Excel 文件
+    updateSupport: boolean; // 是否支持更新
+  }
+
+  /** 线索导入结果 */
+  export interface ClueImportRespVO {
+    createClueNames: string[]; // 创建成功的线索名数组
+    updateClueNames: string[]; // 更新成功的线索名数组
+    failureClueNames: Record<string, string>; // 导入失败的线索集合
+  }
 }
 
 /** 查询线索列表 */
@@ -83,4 +97,14 @@ export function transformClue(id: number) {
 /** 获得分配给我的、待跟进的线索数量 */
 export function getFollowClueCount() {
   return requestClient.get<number>('/crm/clue/follow-count');
+}
+
+/** 下载线索导入模板 */
+export function importClueTemplate() {
+  return requestClient.download('/crm/clue/get-import-template');
+}
+
+/** 导入线索 */
+export function importClue(data: CrmClueApi.ClueImportReqVO) {
+  return requestClient.upload('/crm/clue/import', data);
 }
