@@ -156,21 +156,22 @@ public class ResourceCategoryServiceImpl implements ResourceCategoryService {
             return new ArrayList<>();
         }
         // 组装树（依赖 selectListByType 按 parent_id 排序，父节点先出现）
-        Map<Long, ResourceCategoryDO> map = list.stream().collect(Collectors.toMap(ResourceCategoryDO::getId, x -> x));
+        // 修复：使用 voMap 缓存已构建节点，支持任意层级（此前 findTree 仅在顶层查找，
+        // 三级分类的父节点是二级节点时会找不到，导致三级被错误打平为根节点）
+        Map<Long, CategoryTreeRespVO> voMap = new java.util.HashMap<>();
         List<CategoryTreeRespVO> roots = new ArrayList<>();
         for (ResourceCategoryDO node : list) {
             CategoryTreeRespVO vo = convert(node);
-            if (ObjUtil.equal(node.getParentId(), 0L)) {
-                roots.add(vo);
-            } else {
-                CategoryTreeRespVO parent = findTree(map.get(node.getParentId()), roots);
-                if (parent != null) {
-                    parent.getChildren().add(vo);
-                } else {
+            voMap.put(node.getId(), vo);
+            CategoryTreeRespVO parent = voMap.get(node.getParentId());
+            if (ObjUtil.equal(node.getParentId(), 0L) || parent == null) {
+                if (parent == null && !ObjUtil.equal(node.getParentId(), 0L)) {
                     // 父级缺失（脏数据）按根展示
                     vo.setParentId(0L);
-                    roots.add(vo);
                 }
+                roots.add(vo);
+            } else {
+                parent.getChildren().add(vo);
             }
         }
         fillLevel(roots, 1);
@@ -287,23 +288,6 @@ public class ResourceCategoryServiceImpl implements ResourceCategoryService {
         vo.setParentId(node.getParentId());
         vo.setSort(node.getSort());
         return vo;
-    }
-
-    private CategoryTreeRespVO findTree(ResourceCategoryDO parent, List<CategoryTreeRespVO> roots) {
-        if (parent == null) {
-            return null;
-        }
-        for (CategoryTreeRespVO root : roots) {
-            if (ObjUtil.equal(root.getId(), parent.getId())) {
-                return root;
-            }
-            for (CategoryTreeRespVO child : root.getChildren()) {
-                if (ObjUtil.equal(child.getId(), parent.getId())) {
-                    return child;
-                }
-            }
-        }
-        return null;
     }
 
     private void fillLevel(List<CategoryTreeRespVO> nodes, int level) {
