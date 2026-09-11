@@ -8,17 +8,12 @@ import { ref } from 'vue';
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Card, message } from 'ant-design-vue';
+import { Card, message, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteItem, exportItem, getItemPage } from '#/api/wms/md/item';
 import { $t } from '#/locales';
 import { WmsItemCategoryTree } from '#/views/wms/md/item/category/components';
-import {
-  formatDimensionText,
-  formatPrice,
-  formatWeight,
-} from '#/views/wms/utils/format';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
@@ -53,6 +48,13 @@ function buildItemSkuRows(items: WmsItemApi.Item[]) {
       unit: item.unit,
       brandId: item.brandId,
       brandName: item.brandName,
+      // 【4-2 商品档案总览】新增列
+      batchManage: item.batchManage,
+      shelfLifeManage: item.shelfLifeManage,
+      shelfLifeMonths: item.shelfLifeMonths,
+      dangerousGoods: item.dangerousGoods,
+      temperatureRequirement: item.temperatureRequirement,
+      storageCondition: item.storageCondition,
     }));
   });
 }
@@ -95,7 +97,7 @@ function handleCategoryNodeClick(categoryId: number | undefined) {
   handleRefresh();
 }
 
-/** 合并商品维度的重复单元格 */
+/** 合并商品维度的重复单元格（商品编号、名称、分类、单位、品牌等按商品合并） */
 function handleSpanMethod({
   column,
   rowIndex,
@@ -104,7 +106,20 @@ function handleSpanMethod({
   rowIndex: number;
 }) {
   const field = column.field || column.property;
-  if (!['actions', 'itemInfo'].includes(field || '')) {
+  const spanFields = [
+    'itemCode',
+    'itemInfo',
+    'categoryName',
+    'unit',
+    'brandName',
+    'batchManage',
+    'shelfLife',
+    'dangerousGoods',
+    'temperatureRequirement',
+    'storageCondition',
+    'actions',
+  ];
+  if (!spanFields.includes(field || '')) {
     return { colspan: 1, rowspan: 1 };
   }
   const row = currentRows.value[rowIndex];
@@ -119,10 +134,6 @@ function handleSpanMethod({
     rowspan += 1;
   }
   return { colspan: 1, rowspan };
-}
-
-function hasValue(value: unknown) {
-  return value !== undefined && value !== null;
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -204,50 +215,23 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <template #itemInfo="{ row }">
             <div class="flex flex-col gap-1 py-1 leading-5">
               <div class="text-sm">{{ row.itemName || '-' }}</div>
-              <div v-if="row.itemCode" class="text-xs text-gray-500">
-                {{ row.itemCode }}
-              </div>
-              <div v-if="row.brandName" class="text-xs text-gray-500">
-                品牌：{{ row.brandName }}
-              </div>
-              <div v-if="row.categoryName" class="text-xs text-gray-500">
-                分类：{{ row.categoryName }}
+              <div v-if="row.name" class="text-xs text-gray-500">
+                规格：{{ row.name }}
               </div>
             </div>
           </template>
-          <template #skuInfo="{ row }">
-            <div class="flex flex-col gap-1 py-1 leading-5">
-              <div class="text-sm">{{ row.name || '-' }}</div>
-              <div v-if="row.code" class="text-xs text-gray-500">
-                编号：{{ row.code }}
-              </div>
-              <div v-if="row.barCode" class="text-xs text-gray-500">
-                条码：{{ row.barCode }}
-              </div>
-            </div>
+          <template #batchManage="{ row }">
+            <Tag :color="row.batchManage ? 'green' : 'default'">
+              {{ row.batchManage ? '是' : '否' }}
+            </Tag>
           </template>
-          <template #priceInfo="{ row }">
-            <div class="flex flex-col gap-1 py-1 leading-5">
-              <div v-if="hasValue(row.costPrice)">
-                成本价：{{ formatPrice(row.costPrice) }}
-              </div>
-              <div v-if="hasValue(row.sellingPrice)">
-                销售价：{{ formatPrice(row.sellingPrice) }}
-              </div>
-            </div>
+          <template #shelfLife="{ row }">
+            {{ row.shelfLifeMonths ? `${row.shelfLifeMonths}个月` : '无' }}
           </template>
-          <template #weightInfo="{ row }">
-            <div class="flex flex-col gap-1 py-1 leading-5">
-              <div v-if="hasValue(row.netWeight)">
-                净重：{{ formatWeight(row.netWeight) }}
-              </div>
-              <div v-if="hasValue(row.grossWeight)">
-                毛重：{{ formatWeight(row.grossWeight) }}
-              </div>
-            </div>
-          </template>
-          <template #dimensionInfo="{ row }">
-            {{ formatDimensionText(row.length, row.width, row.height) || '-' }}
+          <template #dangerousGoods="{ row }">
+            <Tag :color="row.dangerousGoods ? 'red' : 'default'">
+              {{ row.dangerousGoods ? '危险品' : '普通商品' }}
+            </Tag>
           </template>
           <template #actions="{ row }">
             <TableAction

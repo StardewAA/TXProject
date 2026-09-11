@@ -65,10 +65,16 @@ _debug/
 ######################################################################
 # 前端依赖与构建产物
 node_modules/
+# pnpm 本地内容寻址存储（本机 12 万文件 / 1.6GB，仅本地缓存，禁止入库）
+.pnpm-store/
+# 镜像构建用的临时上下文
+.fe-image-context/
+.wms-image-context/
 
 ######################################################################
 # 本地数据库整库备份
 sql/mysql/
+deploy/mysql/init/*mysql-all-databases*.sql*
 
 ######################################################################
 # 环境变量
@@ -78,3 +84,10 @@ sql/mysql/
 /txgy-ui-app/unpackage/
 .DS_Store
 **/.DS_Store
+
+# Local exam database and build verification logs
+services/training-exam/data/
+services/training-exam/__pycache__/
+services/training-exam/.pytest_cache/
+txgy-ui-admin-vben/.exam-*.log
+
