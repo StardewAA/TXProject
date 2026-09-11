@@ -34,7 +34,6 @@
               state.settlementSku && state.settlementSku.id && state.settlementSku.promotionPrice
             "
           >
-            <image class="disImg" :src="sheep.$url.static('/static/img/shop/goods/dis.png')" />
             <view class="discountCont">
               <view class="disContT">
                 <view class="disContT1">
@@ -143,10 +142,11 @@
           <!-- 功能卡片 -->
           <view class="detail-cell-card detail-card ss-flex-col">
             <detail-cell
-              :clickable="false"
-              :show-arrow="false"
+              :clickable="!!state.goodsInfo.shopId"
+              :show-arrow="!!state.goodsInfo.shopId"
               label="店铺"
-              :value="state.goodsInfo.shopName || '平台自营'"
+              :value="state.goodsInfo.shopName || '店铺信息暂未提供'"
+              @click="sheep.$router.go('/pages/goods/list', { shopId: state.goodsInfo.shopId })"
             />
             <detail-cell-sku
               v-model="state.selectedSku.goods_sku_text"
@@ -628,22 +628,22 @@
   .buy-box {
     .add-btn {
       width: 214rpx;
-      height: 72rpx;
-      font-weight: 500;
+      height: 82rpx;
+      font-weight: 600;
       font-size: 28rpx;
       border-radius: 40rpx 0 0 40rpx;
-      background-color: var(--ui-BG-Main-light);
-      color: var(--ui-BG-Main);
+      background-color: #e2f3eb;
+      color: #156b52;
     }
 
     .buy-btn {
       width: 214rpx;
-      height: 72rpx;
-      font-weight: 500;
+      height: 82rpx;
+      font-weight: 600;
       font-size: 28rpx;
 
       border-radius: 0 40rpx 40rpx 0;
-      background: linear-gradient(90deg, var(--ui-BG-Main), var(--ui-BG-Main-gradient));
+      background: linear-gradient(110deg, #137962, #105849);
       color: $white;
     }
 
@@ -678,19 +678,11 @@
 
   // 限时折扣
   .discount {
-    width: 750rpx;
+    width: 100%;
     height: 100rpx;
-    // background-color: red;
+    background: linear-gradient(110deg, #137962, #105849);
     overflow: hidden;
     position: relative;
-  }
-
-  .disImg {
-    width: 750rpx;
-    height: 100rpx;
-    position: absolute;
-    top: 0;
-    z-index: -1;
   }
 
   .discountCont {

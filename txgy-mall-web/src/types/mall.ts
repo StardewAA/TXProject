@@ -86,6 +86,10 @@ export interface Shop {
   id: Identifier
   name: string
   logo?: string
+  logoUrl?: string
+  introduction?: string
+  contactName?: string
+  contactMobile?: string
 }
 
 export interface CouponTemplate {
