@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS "wms_item" (
     "unit" varchar(20) DEFAULT NULL,
     "brand_id" bigint DEFAULT NULL,
     "remark" varchar(255) DEFAULT NULL,
+    "status" tinyint NOT NULL DEFAULT 0,
     "current_quality_report_id" bigint DEFAULT NULL,
     "creator" varchar(64) DEFAULT '',
     "create_time" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,

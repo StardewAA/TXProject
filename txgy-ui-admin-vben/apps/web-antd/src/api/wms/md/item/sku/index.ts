@@ -25,6 +25,7 @@ export namespace WmsItemSkuApi {
     costPrice?: number;
     sellingPrice?: number;
     createTime?: Date;
+    itemStatus?: number;
   }
 }
 

@@ -42,6 +42,9 @@ public interface WmsItemService {
      */
     void deleteItem(Long id);
 
+    /** 更新商品启用/停用状态。 */
+    void updateItemStatus(Long id, Integer status);
+
     /**
      * 校验商品存在
      *
@@ -49,6 +52,9 @@ public interface WmsItemService {
      * @return 商品
      */
     WmsItemDO validateItemExists(Long id);
+
+    /** 校验商品存在且已启用。 */
+    WmsItemDO validateItemExistsAndEnabled(Long id);
 
     /**
      * 获得商品
