@@ -28,6 +28,7 @@ const CHECKS = [
   { args: ['sql/tools/check-dict-coverage.js'], name: '字典覆盖率', why: '前端引用的字典类型必须已在 bidding_dict_data 注册（防英文码直出）' },
   { args: ['sql/tools/check-api-coverage.js'], name: '接口接线覆盖率', why: '正向：后端端点已接线；反向：前端请求路径都存在（防 404）' },
   { args: ['sql/tools/check-permission-coverage.js'], name: '权限码覆盖率', why: '前端判权码必须同时在 system_menu 注册（否则无法授权 → 按钮永远不可见）' },
+  { args: ['sql/tools/check-master-mirror.js'], name: '一键包镜像完整性', why: 'history 脚本内容必须真的在一键包里（否则重建会静默抹掉，新装库缺功能）' },
 ];
 
 const results = [];

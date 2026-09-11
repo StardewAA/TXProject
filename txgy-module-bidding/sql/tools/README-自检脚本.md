@@ -28,6 +28,7 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 | `check-dict-coverage.js` | 前端引用的字典类型已在 `bidding_dict_data` 注册 | **英文码直出**：页面拿不到中文名与标签色 |
 | `check-api-coverage.js` | 正向：后端 `/bidding` 端点都已在前端接线；反向：前端请求路径在后端都存在 | 正向失败 = **功能静默缺失**（后端有端点、前端无人调用）；反向失败 = **运行期 404**（前端调了不存在的路径） |
 | `check-permission-coverage.js` | 前端判权码、后端 `@PreAuthorize`、`system_menu` 注册三处一致 | **按钮永远不可见**：码没注册就无法在「角色授权」里勾选；或**拼错码**：前端判的码后端不认 |
+| `check-master-mirror.js` | `sql/history` 脚本内容是否真的进了 `master-*.sql`（按业务键比对） | **重建一键包会静默抹掉**：新装库缺字典/权限点，功能直接没了 |
 
 `check-api-coverage.js` 的选项与口径：
 
@@ -62,6 +63,16 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
    `const FOLLOW_API = \`\${baseUrl}\${apiPrefix}/notice-follow\`` 拼出来的 5 个关注端点误判成"未接线"。
    加上"模板常量尾段 + 内层变量归一 + 后缀匹配"后自纠；同一轮还发现 `notice/public/detail` 其实由门户站的
    `INTERNAL_API/public/detail` 调用——**校验器的假阳性会把"已实现"误报成"缺失"，所以每次新增校验器都要做反向自测**。
+
+## 一键包是生成物：history 必须被镜像（check-master-mirror.js）
+
+`master-*.sql` 由 `sql/tools/build-credential-sync.js` 按**写死的来源清单**拼接。新增 `sql/history` 脚本却没加进清单时，
+下次重建就会把这段内容静默抹掉——实测发生过两次（2026-09-20 字典 22 行、2026-09-21 规则配置权限点 2 行），
+都是"新装库缺功能"而运行中的库看不出来。
+
+该脚本按**业务键**比对而非自增 id（号段迁移会换 id，按 id 比会全是假阳性）：
+`bidding_dict_data` 用 (dict_type, dict_value)，`system_menu` 用 permission 码，`system_role_menu` 跳过（授权属部署态）。
+实测 57 个脚本 / 279 个键，零假阳性。文件头写了「新库不需要」的迁移脚本自动跳过。
 
 ## 权限码三处一致（check-permission-coverage.js）
 
