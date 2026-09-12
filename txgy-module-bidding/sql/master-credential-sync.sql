@@ -1500,6 +1500,15 @@ INSERT IGNORE INTO `bidding_dict_data`
 (710000000000004204,0,'notice_external_content_type','IMAGE','图片','default',b'0',4,b'1','图片形态展示','1',NOW(),'1',NOW(),b'0'),
 (710000000000004205,0,'notice_external_content_type','OTHER','其它','default',b'0',5,b'1','兜底：展示原网址','1',NOW(),'1',NOW(),b'0');
 
+INSERT IGNORE INTO `bidding_dict_data`
+(`id`, `tenant_id`, `dict_type`, `dict_value`, `dict_label`, `color_type`, `terminal`, `sort`, `enabled`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+(710000000000004301,0,'key_post','PROJECT_MANAGER','项目经理','processing',b'0',1,b'1','注册建造师；防挂靠监控的核心岗位','1',NOW(),'1',NOW(),b'0'),
+(710000000000004302,0,'key_post','TECH_LEADER','技术负责人','processing',b'0',2,b'1','项目技术负责人','1',NOW(),'1',NOW(),b'0'),
+(710000000000004303,0,'key_post','SAFETY_OFFICER','专职安全员','warning',b'0',3,b'1','专职安全生产管理人员（与安许证联动核查）','1',NOW(),'1',NOW(),b'0'),
+(710000000000004304,0,'key_post','QUALITY_OFFICER','质量负责人','default',b'0',4,b'1','项目质量负责人','1',NOW(),'1',NOW(),b'0'),
+(710000000000004305,0,'key_post','CONSTRUCTION_ENGINEER','施工员','default',b'0',5,b'1','施工现场管理人员','1',NOW(),'1',NOW(),b'0');
+
+
 
 
 
