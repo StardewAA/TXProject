@@ -15,7 +15,7 @@
  * 口径：岗位码表取自 KeyPostEnum（后端校验只认这些 code，自由文本会被判非法）；
  *   人员/安许风险标签走字典 person_risk_flag / safety_risk_flag（已注册）；
  *   时间字段 LocalDateTime → epoch 毫秒，统一过 fmtDateTime；未评估（null）一律显示「未评估」而非当成正常。 */
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -49,7 +49,12 @@ function can(code: string): boolean {
   return codes.includes('*') || codes.includes('*:*:*') || hasAccessByCodes([code]);
 }
 
-/** 关键岗位码表（逐字取自 KeyPostEnum；后端 isValid 只认这些 code，故不做自由文本） */
+/** 关键岗位码表兜底（字典 key_post 为主路径——后端 KeyPostEnum 是本码表的唯一事实来源，
+ * 字典可在后台维护文案；此数组仅在字典尚未下发的环境兜底，不参与主展示路径） */
+/** 下拉选项：字典优先；字典未下发（如后端未升级）时回落兜底数组，避免下拉空白导致无法登记 */
+const keyPostOptions = computed(() =>
+  dictOptions('key_post').length > 0 ? dictOptions('key_post') : KEY_POST_OPTIONS,
+);
 const KEY_POST_OPTIONS = [
   { label: '项目经理（PROJECT_MANAGER）', value: 'PROJECT_MANAGER' },
   { label: '技术负责人（TECH_LEADER）', value: 'TECH_LEADER' },
@@ -159,7 +164,7 @@ async function doKeyPost() {
 }
 
 /* ===== ④b 关键岗位任职 / 变更登记 =====
- * 口径：岗位码表逐字取自 KeyPostEnum（KEY_POST_OPTIONS，不做自由文本）；
+ * 口径：岗位码表走字典 key_post（兜底 KEY_POST_OPTIONS，不做自由文本，后端 isValid 只认枚举 code）；
  * 任职开始日按契约 'YYYY-MM-DD'，留空由后端取今天；变更原因为留痕字段（申诉时说明用），可空。
  * 后端会自动闭合上任任期并回传 changeSeq（该岗位第几次变更），据此在提示里给出可核对的结论。 */
 const assignOpen = ref(false);
@@ -369,14 +374,14 @@ onMounted(() => {
                 v-model:value="multiForm.primaryPost"
                 placeholder="主岗"
                 allow-clear
-                :options="KEY_POST_OPTIONS"
+                :options="keyPostOptions"
                 style="width: 100%"
               />
               <a-select
                 v-model:value="multiForm.secondaryPost"
                 placeholder="兼任岗"
                 allow-clear
-                :options="KEY_POST_OPTIONS"
+                :options="keyPostOptions"
                 style="width: 100%"
               />
               <a-button
@@ -568,8 +573,8 @@ onMounted(() => {
         <a-form-item label="关键岗位" required>
           <a-select
             v-model:value="assignForm.postCode"
-            :options="KEY_POST_OPTIONS"
-            placeholder="选择关键岗位（KeyPostEnum）"
+            :options="keyPostOptions"
+            placeholder="选择关键岗位"
             show-search
             option-filter-prop="label"
           />

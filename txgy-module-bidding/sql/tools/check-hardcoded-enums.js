@@ -44,7 +44,7 @@ const KNOWN_HARDCODED = new Map([
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/console/index.vue', [1, '采集控制台手动作业状态文案；采集域字典未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/NoticeHtmlView.vue', [1, '公告状态文案（管理端与门户共用渲染件）；notice 状态字典未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/payloadLabel.ts', [1, '公告 payload/正文块类型文案，属渲染件内部标签']],
-  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/safety-risk/index.vue', [1, 'KEY_POST_OPTIONS：逐字取自后端 KeyPostEnum，但 key_post 字典尚未注册（登记后此处即可改走字典）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/safety-risk/index.vue', [1, 'KEY_POST_OPTIONS：key_post 字典已注册，本页已改为字典优先；此数组仅作字典未下发环境的兜底（与备案状态下拉同一口径）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/subjectAuth/index.vue', [1, '主体授权原因文案（reasonLabel）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/filing/index.ts', [1, 'FILING_STATUS_OPTIONS：filing_status 字典本轮已注册，项目页已改为字典优先，此数组仅作未升级环境兜底；可删除']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/notice/index.ts', [1, 'NOTICE_STATUS_LABEL 映射，notice 状态字典未注册']],
