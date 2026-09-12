@@ -55,6 +55,9 @@ deploy/.env
 # 本地 Docker Compose 个性化覆盖（端口冲突规避等），不应入库
 deploy/docker-compose.override.yml
 
+# jar-only 镜像的构建输入（本机 mvn 编译产物，不应入库）
+deploy/backend/app.jar
+
 ######################################################################
 # 本地缓存与开发工具
 .codegraph/
