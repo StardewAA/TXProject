@@ -377,10 +377,20 @@ function confirmDelete(r: ProjectApi.Project) {
         <template v-if="trace">
           <div class="ct-panel-meta mb-3">
             查询：{{ trace.queryCode || currentRow?.projectCode }}（{{ trace.queryType || 'PROJECT' }}）
-            <span v-for="(v, k) in trace.stats ?? {}" :key="k" style="margin-left: 12px">
-              {{ k }}：{{ v }}
-            </span>
           </div>
+          <!-- 统计原先用 v-for 直出后端键名（tenderProjectCount：3），中文标签后才可用；
+               后端一次聚合 6 个域的计数与最近动态，正是本抽屉"一屏看清"要用的那一行。 -->
+          <a-descriptions v-if="trace.stats" :column="4" size="small" bordered class="mb-3">
+            <a-descriptions-item label="关联招标项目">{{ trace.stats.tenderProjectCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="关联标段">{{ trace.stats.sectionCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="内部公告">{{ trace.stats.noticeCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="外部公告">{{ trace.stats.externalNoticeCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="备案记录">{{ trace.stats.filingCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="关注项">{{ trace.stats.followCount ?? 0 }}</a-descriptions-item>
+            <a-descriptions-item label="各域最近动态" :span="4">
+              {{ fmtDateTime(trace.stats.latestDynamicTime) }}
+            </a-descriptions-item>
+          </a-descriptions>
 
           <div class="ct-panel-t mb-2">项目基本信息</div>
           <a-descriptions :column="2" size="small" bordered class="mb-3">
@@ -456,9 +466,120 @@ function confirmDelete(r: ProjectApi.Project) {
             <template #emptyText><div class="ct-empty">无关联公告</div></template>
           </a-table>
 
+          <!-- 以下四张清单后端一直在返回，此前只有一行条数（"追溯"却看不到记录）。
+               原文按本仓外链约定只给可复制文本 + 可达性标记，不直接给 <a>（外链需走 /go 白名单）。 -->
+          <div class="ct-panel-t mb-2">外部公告（{{ trace.externalNotices?.length ?? 0 }}）</div>
+          <a-table
+            class="ct-table mb-3"
+            :columns="[
+              { title: '标题', dataIndex: 'title', key: 'title' },
+              { title: '采集源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
+              { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 110 },
+              { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
+              { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 100 },
+              { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 160 },
+              { title: '原文', key: 'origUrl', width: 90 },
+            ]"
+            :data-source="trace.externalNotices ?? []"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
+              <template v-else-if="column.key === 'origUrl'">
+                <span v-if="record.origUrl" class="mono" :title="record.origUrl" style="cursor: text">
+                  {{ record.available ? '可达（可复制）' : '平台内不可达' }}
+                </span>
+                <span v-else>—</span>
+              </template>
+            </template>
+            <template #emptyText><div class="ct-empty">无关联外部公告</div></template>
+          </a-table>
+
+          <div class="ct-panel-t mb-2">备案记录（{{ trace.filings?.length ?? 0 }}）</div>
+          <a-table
+            class="ct-table mb-3"
+            :columns="[
+              { title: '备案类型', dataIndex: 'filingType', key: 'filingType', width: 140 },
+              { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
+              { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 170 },
+              { title: '项目编号', dataIndex: 'projectCode', key: 'projectCode', width: 200 },
+              { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'tenderProjectCode' },
+            ]"
+            :data-source="trace.filings ?? []"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'submitTime'">{{ fmtDateTime(record.submitTime) }}</template>
+            </template>
+            <template #emptyText><div class="ct-empty">无关联备案</div></template>
+          </a-table>
+
+          <div class="ct-panel-t mb-2">关注项（{{ trace.follows?.length ?? 0 }}）</div>
+          <a-table
+            class="ct-table mb-3"
+            :columns="[
+              { title: '名称', dataIndex: 'displayName', key: 'displayName' },
+              { title: '关注类型', dataIndex: 'followType', key: 'followType', width: 120 },
+              { title: '状态', dataIndex: 'followStatus', key: 'followStatus', width: 110 },
+              { title: '最近动态', dataIndex: 'latestDynamicTime', key: 'latestDynamicTime', width: 170 },
+              { title: '未读', dataIndex: 'unreadCount', key: 'unreadCount', width: 90 },
+            ]"
+            :data-source="trace.follows ?? []"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'latestDynamicTime'">
+                {{ fmtDateTime(record.latestDynamicTime) }}
+              </template>
+              <template v-else-if="column.key === 'unreadCount'">
+                <a-badge
+                  v-if="Number(record.unreadCount ?? 0) > 0"
+                  :count="record.unreadCount"
+                  :overflow-count="99"
+                />
+                <span v-else>—</span>
+              </template>
+            </template>
+            <template #emptyText><div class="ct-empty">无关注项</div></template>
+          </a-table>
+
+          <div class="ct-panel-t mb-2">参与主体（{{ trace.subjects?.length ?? 0 }}）</div>
+          <a-table
+            class="ct-table"
+            :columns="[
+              { title: '来源', dataIndex: 'source', key: 'source', width: 190 },
+              { title: '主体角色', dataIndex: 'subjectRole', key: 'subjectRole', width: 120 },
+              { title: '主体名称', dataIndex: 'subjectName', key: 'subjectName' },
+              { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 110 },
+              { title: '证件号', dataIndex: 'code', key: 'code', width: 190 },
+              { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 110 },
+              { title: '档案完备', dataIndex: 'profileComplete', key: 'profileComplete', width: 100 },
+            ]"
+            :data-source="trace.subjects ?? []"
+            :pagination="false"
+            row-key="code"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'profileComplete'">
+                <a-tag :color="record.profileComplete ? 'green' : 'orange'">
+                  {{ record.profileComplete ? '完备' : '缺项' }}
+                </a-tag>
+              </template>
+            </template>
+            <template #emptyText><div class="ct-empty">无参与主体</div></template>
+          </a-table>
+
           <div class="ct-tip mt-3">
-            外部公告 {{ trace.externalNotices?.length ?? 0 }} 条 · 备案 {{ trace.filings?.length ?? 0 }} 条 ·
-            关注 {{ trace.follows?.length ?? 0 }} 条 · 主体 {{ trace.subjects?.length ?? 0 }} 条
+            说明：「内容类型 / 状态 / 审核 / 主体角色 / 授权状态」为后端 code —— 这些域的字典尚未注册，
+            登记后此处会自动转为中文（见 sql/history 的字典注册脚本）；「原文」按本仓外链约定只给可复制文本，
+            平台内可达性由后端 available（ACTIVE 才可达）判定。
           </div>
         </template>
         <div v-else-if="!traceLoading" class="ct-empty">未取到追溯数据</div>
