@@ -153,6 +153,32 @@ export namespace CertificateApi {
     verifyChannel?: string;
   }
 
+  /* ===================== §4b 验真历史（读出口） ===================== */
+  /** 验真历史查询入参（后端口径：主表已按 verifiedAt 倒序，按 certId 定位即可，暂不按时间区间过滤） */
+  export interface VerifyHistoryPageReq extends PageParam {
+    /** 被验真证照 ID（精确；为空则查全部） */
+    certId?: number;
+    /** 验真渠道 code：FOUR_PLATFORM/MINISTRY/PROVINCE/THIRD_PARTY */
+    verifyChannel?: string;
+    /** 验真结论 code：MATCH/MISMATCH/UNAVAILABLE */
+    verifyResult?: string;
+  }
+  /** 验真历史行（CertVerifyHistoryRespVO 逐字对齐） */
+  export interface VerifyHistoryItem {
+    id?: number;
+    certId?: number;
+    /** 后端按行批量回查证照名（避免 N+1）：历史行的 certId 对人不可读 */
+    certName?: string;
+    verifyChannel?: string;
+    verifyResult?: string;
+    /** 发起人 ID（含 SYSTEM） */
+    verifyBy?: number;
+    /** 验真完成时间（LocalDateTime → epoch 毫秒） */
+    verifiedAt?: null | number;
+    /** 是否留有 L3 报文原文（内容不下发，需调阅请按主键查库取证） */
+    snapshotAvailable?: boolean;
+  }
+
   /* ===================== §6 生命周期 ===================== */
   export type BizDomain = 'CERT' | 'ENTERPRISE_QUAL' | 'PERSON_CERT' | 'SAFETY_PERMIT';
   export type LifecycleType = 'ANNUAL' | 'CHANGE' | 'RENEW' | 'REVOKE';
@@ -348,6 +374,19 @@ export function verifyCertificate(data: CertificateApi.VerifyReq) {
 }
 export function verifyCertificateFile(data: CertificateApi.VerifyReq) {
   return requestClient.post<number>('/bidding/certificate-verify/verify-file', data, { headers: { 'X-Silent-Error': 'true' } });
+}
+
+/* ========== §4b 验真历史（读出口） ==========
+ * 背景（后端 Javadoc 原话）：/verify 与 /verify-file 每次都返回"验真历史主键"，但此前**没有任何接口能把它读回来**
+ * ——留痕只进不出，主键等于一个再也打不开的句柄；事后追溯"谁在什么时候验了哪张证、结论是什么"只能查库。
+ * GET /bidding/certificate-verify/history/page 补上该读出口，页面据此提供"验真历史"抽屉。
+ * 注意：L3 报文原文（request_snapshot/result_snapshot）**不下发**——报文含证照编号等可识别信息、列表又是高频读取面，
+ * 故只给 snapshotAvailable 布尔位，界面据此提示"可申请调阅"：既不泄露，也不丢可追溯性。 */
+export function getCertVerifyHistoryPage(params: CertificateApi.VerifyHistoryPageReq) {
+  return requestClient.get<PageResult<CertificateApi.VerifyHistoryItem>>(
+    '/bidding/certificate-verify/history/page',
+    { params },
+  );
 }
 
 /* ========== §5 预警运行（运维补跑，均幂等） ========== */

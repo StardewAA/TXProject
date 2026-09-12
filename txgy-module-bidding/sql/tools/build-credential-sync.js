@@ -33,6 +33,8 @@ const DDL_SOURCES = [
   '2026-09-23-bidding-dict-trace-and-notice-status.sql',
   // 2026-09-24 新增：关键岗位字典（KeyPostEnum 5 值，安许风险联动页下拉）
   '2026-09-24-bidding-dict-key-post.sql',
+  // 2026-09-25 新增：验真结论字典 verify_result 3 行 + verify_channel 补 THIRD_PARTY（验真历史读出口接线）
+  '2026-09-25-bidding-dict-verify-result-channel.sql',
 ];
 // 仅含菜单的脚本（旧号段）不并入：其内容已被 09-18 的"终态菜单段"取代
 const MENU_SOURCE = '2026-09-18-cert-menu-renumber.sql';
