@@ -74,6 +74,25 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 `bidding_dict_data` 用 (dict_type, dict_value)，`system_menu` 用 permission 码，`system_role_menu` 跳过（授权属部署态）。
 实测 57 个脚本 / 279 个键，零假阳性。文件头写了「新库不需要」的迁移脚本自动跳过。
 
+## 接入 CI 与本地钩子
+
+门禁不接自动化就等于没有。三处已就位（**均零依赖**，只用 Node 内置模块，不需要 npm install）：
+
+| 位置 | 文件 | 触发时机 |
+|---|---|---|
+| GitHub / 镜像仓库 | `.github/workflows/bidding-gates.yml` | push、PR、手动 workflow_dispatch |
+| **Gitee Go（本仓库远端）** | `.workflow/bidding-gates.yaml` | push（含 `feat/*`）、PR |
+| 本地提交前（可选） | `.githooks/pre-commit` | 仅当暂存改动涉及 SQL / 前端 bidding / 后端 bidding 控制器时 |
+
+本地启用钩子（每仓库一次）：`git config core.hooksPath .githooks`；确需跳过：`git commit --no-verify`。
+钩子对无关改动（如纯文档）直接放行，不会拖慢日常提交。
+
+CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.js`，**退出码非 0 即失败**。
+
+> 脚本刻意兼容 **Node 14**：Gitee Go 的 `nodeVersion` 仅支持 8.16.2 / 10.17.0 / 12.16.1 / 14.16.0 / 15.12.0。
+> 因此门禁脚本内不使用 `String.replaceAll`、`Array.at`、`??=`、`Object.hasOwn`、`structuredClone` 等新特性
+> （曾因 `check-dict-coverage.js` 用了 `replaceAll` 而在 Gitee Go 上会直接崩，已改为 `split('\\').join('/')`）。
+
 ## 权限码三处一致（check-permission-coverage.js）
 
 前端 `can('bidding:xxx:yyy')` 里的码要真的可用，必须同时满足：后端接口 `@PreAuthorize` 认它、`system_menu` 注册了它。

@@ -65,7 +65,7 @@ for (const f of sqlFiles) {
       if (!registered.has(type)) registered.set(type, { count: 0, files: new Set() });
       const o = registered.get(type);
       o.count += 1;
-      o.files.add(path.relative(repoRoot, f).replaceAll('\\', '/'));
+      o.files.add(path.relative(repoRoot, f).split('\\').join('/'));
     }
   }
 }
@@ -81,7 +81,7 @@ for (const dir of feDirs) {
       if (!used.has(type)) used.set(type, { count: 0, files: new Set() });
       const o = used.get(type);
       o.count += 1;
-      o.files.add(path.relative(repoRoot, f).replaceAll('\\', '/'));
+      o.files.add(path.relative(repoRoot, f).split('\\').join('/'));
     }
   }
 }
