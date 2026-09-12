@@ -74,6 +74,22 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 `bidding_dict_data` 用 (dict_type, dict_value)，`system_menu` 用 permission 码，`system_role_menu` 跳过（授权属部署态）。
 实测 57 个脚本 / 279 个键，零假阳性。文件头写了「新库不需要」的迁移脚本自动跳过。
 
+## 出参消费审计（audit-respvo-fields.js，只报告、不入 CI）
+
+审的是"**后端算了、页面没接**"的字段：用户看不到的数据，而且编译期完全静默（前端类型若也没声明该字段，
+连 vue-tsc 都不报）。跑法：`node sql/tools/audit-respvo-fields.js`（加 `--all` 连"已确认有意为之"一并列出，
+加 `--strict` 时有未归类命中则退出 1，供将来按需接入 CI）。
+
+实测口径（2026-09 基线）：后端 63 个 RespVO / 860 个字段，未被前端引用 28 个；其中 17 个已确认有意为之
+（采集源 api* 扁平字段、结构化解析诊断量、AI 抽取诊断量、字典复合键），**11 个待确认**（见脚本输出）。
+
+两条踩过的坑，写在这里免得重犯：
+1. **扫描范围必须覆盖整个前端 monorepo**：只扫 `apps/web-antd` 时报 55 个，把门户应用一并纳入后降到 28 个
+   —— `contentHtml` / `bidSectionNames` 等是门户消费的，管理端用 `contentHtmlSafe` / `bodyBlocksJson`。
+2. **前端类型漏字段会让缺口彻底静默**：`KeyPostAssignmentResp` 曾只声明 7 个字段、漏掉后端实际返回的
+   7 个风险字段（含 `exceeded`/`windowChangeCount`/`threshold`），于是"达阈值当场提示挂靠嫌疑"这条
+   后端明写的需求在页面上根本没实现，而编译与 lint 全绿。补齐类型后 vue-tsc 立刻报出 12 处引用错误。
+
 ## 接入 CI 与本地钩子
 
 门禁不接自动化就等于没有。三处已就位（**均零依赖**，只用 Node 内置模块，不需要 npm install）：

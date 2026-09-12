@@ -173,6 +173,27 @@ const assignForm = reactive<SafetyPermitApi.KeyPostAssignmentReq>({
   startAt: '',
   changeReason: '',
 });
+/* 登记结果：exceeded=true（窗口内变更次数达阈值）时**不关闭弹窗**，就地换成风险提示。
+ * 依据 KeyPostAssignmentRespVO 的 Javadoc："登记是关键岗位变更的唯一入口，前端需要在保存成功的同一屏
+ * 立刻提示挂靠嫌疑；若让前端保存后再调一次统计接口，会出现保存成功但提示闪烁/失败的中间态。" */
+const assignResult = ref<null | SafetyPermitApi.KeyPostAssignmentResp>(null);
+/** 上一位任职人显示名（personLabel 解析，解析不到回落 #id） */
+const assignPrevLabel = ref('');
+
+function closeAssignResult() {
+  assignResult.value = null;
+  assignPrevLabel.value = '';
+  assignOpen.value = false;
+}
+
+/** 弹窗确认键：结果态是"知道了"（关窗），表单态才是提交 */
+function onAssignOk() {
+  if (assignResult.value) {
+    closeAssignResult();
+    return;
+  }
+  void submitAssign();
+}
 
 async function loadAssignPersons(keyword?: string) {
   assignPersonLoading.value = true;
@@ -222,6 +243,8 @@ function openAssignForPost(postCode?: string) {
 }
 
 function openAssign() {
+  assignResult.value = null;
+  assignPrevLabel.value = '';
   assignForm.projectId = Number(projectId.value ?? 0);
   assignForm.postCode = '';
   assignForm.personId = 0;
@@ -253,10 +276,29 @@ async function submitAssign() {
       startAt: assignForm.startAt ? assignForm.startAt : undefined,
       changeReason: assignForm.changeReason?.trim() ? assignForm.changeReason.trim() : undefined,
     });
-    message.success(
-      `已登记 ${resp.postLabel ?? assignForm.postCode}${resp.changeSeq ? `（该岗位第 ${resp.changeSeq} 次变更）` : ''}`,
-    );
-    assignOpen.value = false;
+    /* 原任职人只以 id 回传，这里解析成姓名，避免让使用者拿着 id 去猜"换掉的是谁" */
+    const prevId = Number(resp.previousPersonId ?? 0);
+    if (prevId > 0) {
+      await resolvePersonNames([prevId]);
+      assignPrevLabel.value = personLabel(prevId);
+    } else {
+      assignPrevLabel.value = '';
+    }
+    const seqText = resp.changeSeq ? `第 ${resp.changeSeq} 次变更` : '首次任职';
+    if (resp.exceeded) {
+      /* 达阈值：保留弹窗并展示风险明细（见 assignResult 注释），列表仍刷新以便与 ④ 区数字对上 */
+      assignResult.value = resp;
+      message.warning(
+        `${resp.postLabel ?? assignForm.postCode} ${seqText}：${resp.windowDays} 天内已变更 ${resp.windowChangeCount} 次，达阈值 ${resp.threshold}`,
+      );
+    } else {
+      message.success(
+        `已登记 ${resp.postLabel ?? assignForm.postCode}（${seqText}）${
+          assignPrevLabel.value ? `；原任职人 ${assignPrevLabel.value} 任期已闭合` : ''
+        }`,
+      );
+      assignOpen.value = false;
+    }
     if (Number(projectId.value) === assignForm.projectId) await doKeyPost();
   } catch {
     // 错误提示由请求层统一处理
@@ -481,12 +523,36 @@ onMounted(() => {
     <!-- ④b 登记关键岗位任职/变更（bidding:project:update） -->
     <a-modal
       v-model:open="assignOpen"
-      title="登记关键岗位任职 / 变更"
+      :title="assignResult ? '登记成功 · 变更频次风险' : '登记关键岗位任职 / 变更'"
       :confirm-loading="assignSaving"
-      ok-text="提交登记"
-      @ok="submitAssign"
+      :ok-text="assignResult ? '知道了' : '提交登记'"
+      @ok="onAssignOk"
     >
-      <a-alert type="info" show-icon class="mb-3">
+      <!-- 达阈值：后端把判定所需数字（窗口天数 / 窗口内次数 / 阈值 / 原任职人）一次回传，
+           就是为了在保存成功的**同一屏**给结论，而不是让前端保存后再查一次统计接口
+           —— KeyPostAssignmentRespVO 的 Javadoc 明写此口径。此处即兑现弹窗里那句
+           "达变更阈值会当场提示挂靠嫌疑"。 -->
+      <a-alert v-if="assignResult" type="warning" show-icon class="mb-3">
+        <template #message>
+          {{ assignResult.postLabel ?? assignResult.postCode }}：{{ assignResult.windowDays }} 天内已变更
+          {{ assignResult.windowChangeCount }} 次，达阈值 {{ assignResult.threshold }}（挂靠嫌疑）
+        </template>
+        <template #description>
+          <div>
+            项目 #{{ assignResult.projectId }} · 本次任职 #{{ assignResult.personId
+            }}{{ assignResult.startAt ? ` 起自 ${assignResult.startAt}` : '（起自今天）' }} · 第
+            {{ assignResult.changeSeq }} 次变更
+          </div>
+          <div v-if="assignResult.previousPersonId">
+            上一位任职人 {{ assignPrevLabel }}，任期已闭合至 {{ assignResult.previousEndAt ?? '—' }}
+          </div>
+          <div>
+            统计窗口：{{ assignResult.windowStart ?? '—' }} 起 {{ assignResult.windowDays ?? '—' }} 天
+          </div>
+          <div>此处仅提示、不产出待办——待办由后端 Job 统一产出，两处都产出会让同一嫌疑重复推送。</div>
+        </template>
+      </a-alert>
+      <a-alert v-if="!assignResult" type="info" show-icon class="mb-3">
         <template #message>提交后后端自动闭合该岗位上任任期</template>
         <template #description>
           <div>
