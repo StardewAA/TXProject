@@ -1467,6 +1467,40 @@ INSERT IGNORE INTO `bidding_dict_data`
 (710000000000003504,0,'employment_type','RETIRED_REHIRE','退休返聘','warning',b'0',4,b'1','可承担岗位，但不计入本单位全职口径（is_full_time 为假）','1',NOW(),'1',NOW(),b'0'),
 (710000000000003505,0,'employment_type','OTHER','其他','default',b'0',5,b'1','其它用工形式，核验时按非全职处理','1',NOW(),'1',NOW(),b'0');
 
+INSERT IGNORE INTO `bidding_dict_data`
+(`id`, `tenant_id`, `dict_type`, `dict_value`, `dict_label`, `color_type`, `terminal`, `sort`, `enabled`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+-- filing_status（3 条）
+(710000000000003601,0,'filing_status','PENDING','待监管受理','processing',b'0',1,b'1','已提交，等待监管平台 BID-SUP-FILE-01 回推','1',NOW(),'1',NOW(),b'0'),
+(710000000000003602,0,'filing_status','ACCEPTED','受理通过','success',b'1',2,b'1','监管回推终态：受理通过','1',NOW(),'1',NOW(),b'0'),
+(710000000000003603,0,'filing_status','REJECTED','受理驳回','danger',b'1',3,b'1','监管回推终态：驳回（需按驳回意见整改后重新提交）','1',NOW(),'1',NOW(),b'0'),
+-- subject_auth_status（2 条）
+(710000000000003701,0,'subject_auth_status','ENABLED','已授权','success',b'0',1,b'1','可进入后续流程（投标人可完善档案后投标；招标人可完善后发布公告）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003702,0,'subject_auth_status','DISABLED','已停用','danger',b'0',2,b'1','平台撤销授权：失去投标/发布资格，档案保留（留痕不删）','1',NOW(),'1',NOW(),b'0'),
+-- subject_type（3 条）
+(710000000000003801,0,'subject_type','BIDDER','投标人','info',b'0',1,b'1','响应招标、参加投标竞争的法人或其他组织（《招标投标法》第 25 条）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003802,0,'subject_type','TENDERER','招标人','success',b'0',2,b'1','依法提出招标项目、进行招标的法人或其他组织（《招标投标法》第 8 条）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003803,0,'subject_type','AGENCY','招标代理机构','default',b'0',3,b'1','扩展位：本期未落地，预留枚举防止脏数据入库','1',NOW(),'1',NOW(),b'0'),
+-- trace_subject_source（2 条）
+(710000000000003901,0,'trace_subject_source','TENDER_PROJECT_SNAPSHOT','招标项目主档快照','info',b'0',1,b'1','来自关联招标项目主档的招标人信息','1',NOW(),'1',NOW(),b'0'),
+(710000000000003902,0,'trace_subject_source','TENANT_AUTH','本租户平台授权主体','success',b'0',2,b'1','来自本租户的主体授权记录（含授权状态与档案完备度）','1',NOW(),'1',NOW(),b'0'),
+-- notice_external_status（4 条）
+(710000000000004001,0,'notice_external_status','NEW','待审核','processing',b'0',1,b'1','采集入库，等待审核','1',NOW(),'1',NOW(),b'0'),
+(710000000000004002,0,'notice_external_status','ACTIVE','生效中（可展示）','success',b'0',2,b'1','审核通过后生效并触发 ES 索引事件（MQ）','1',NOW(),'1',NOW(),b'0'),
+(710000000000004003,0,'notice_external_status','INACTIVE','已失效','default',b'1',3,b'1','超生效期或源站下线','1',NOW(),'1',NOW(),b'0'),
+(710000000000004004,0,'notice_external_status','ARCHIVED','已归档（只读留痕）','default',b'1',4,b'1','归档只读，不再展示','1',NOW(),'1',NOW(),b'0'),
+-- notice_external_audit_status（4 条）
+(710000000000004101,0,'notice_external_audit_status','UNREVIEWED','待审核','processing',b'0',1,b'1','采集入库后的初始审核态','1',NOW(),'1',NOW(),b'0'),
+(710000000000004102,0,'notice_external_audit_status','APPROVED','已审核通过','success',b'0',2,b'1','审核通过并转 ACTIVE 展示','1',NOW(),'1',NOW(),b'0'),
+(710000000000004103,0,'notice_external_audit_status','REJECTED','已驳回','danger',b'0',3,b'1','驳回：不展示','1',NOW(),'1',NOW(),b'0'),
+(710000000000004104,0,'notice_external_audit_status','TAKEN_DOWN','已下线','warning',b'0',4,b'1','曾上线后被运营撤下，展示接口随即拒绝','1',NOW(),'1',NOW(),b'0'),
+-- notice_external_content_type（5 条）
+(710000000000004201,0,'notice_external_content_type','HTML','HTML 原文','default',b'0',1,b'1','原文原样展示 + 原网址','1',NOW(),'1',NOW(),b'0'),
+(710000000000004202,0,'notice_external_content_type','PDF','PDF 原文件','default',b'0',2,b'1','pdfFileId 前端预览 + 下载 + 原网址','1',NOW(),'1',NOW(),b'0'),
+(710000000000004203,0,'notice_external_content_type','ATTACHMENT','附件下载','default',b'0',3,b'1','以附件下载列表形式展示','1',NOW(),'1',NOW(),b'0'),
+(710000000000004204,0,'notice_external_content_type','IMAGE','图片','default',b'0',4,b'1','图片形态展示','1',NOW(),'1',NOW(),b'0'),
+(710000000000004205,0,'notice_external_content_type','OTHER','其它','default',b'0',5,b'1','兜底：展示原网址','1',NOW(),'1',NOW(),b'0');
+
+
 
 
 -- ---------------------------------------------------------------------
