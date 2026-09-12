@@ -85,6 +85,8 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 | 本地提交前（可选） | `.githooks/pre-commit` | 仅当暂存改动涉及 SQL / 前端 bidding / 后端 bidding 控制器时 |
 
 本地启用钩子（每仓库一次）：`git config core.hooksPath .githooks`；确需跳过：`git commit --no-verify`。
+若在 Linux/macOS 上提示 `Permission denied`（Windows 提交时 `core.fileMode=false`，执行位可能没进索引）：
+`chmod +x .githooks/pre-commit` 或 `git update-index --chmod=+x .githooks/pre-commit`。
 钩子对无关改动（如纯文档）直接放行，不会拖慢日常提交。
 
 CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.js`，**退出码非 0 即失败**。
