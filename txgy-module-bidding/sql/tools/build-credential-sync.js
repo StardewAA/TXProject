@@ -23,9 +23,16 @@ const DDL_SOURCES = [
   '2026-09-16-rule-config-center.sql',
   '2026-09-17-safety-permit-risk.sql',
   '2026-09-19-cert-dict-register.sql',
+  // 2026-09-20 新增：员工域 5 类字典（personnel_status / social_pay_status / gender / edu_level / qual_serial）
+  // ⚠️ 新增 history 脚本务必登记到本清单：漏登记时重建会**静默抹掉**该脚本内容（新装库缺功能，
+  //    运行中的库看不出来）。sql/tools/check-master-mirror.js 专门守这条不变式。
+  '2026-09-20-bidding-dict-register-personnel.sql',
 ];
 // 仅含菜单的脚本（旧号段）不并入：其内容已被 09-18 的"终态菜单段"取代
 const MENU_SOURCE = '2026-09-18-cert-menu-renumber.sql';
+// 菜单/权限点补充脚本：按 MENU_SOURCE 相同的口径"截到校验段"并入（只取权限点注册，不含授权语句——
+// 本包口径是"授权属业务决策，见包尾授权指引"）
+const MENU_EXTRA_SOURCES = ['2026-09-21-bidding-rule-config-menu.sql'];
 
 const strip = (s) => s.replace(/\r\n/g, '\n').replace(/\s+$/, '') + '\n';
 // 源脚本已归档至 sql/history/（合并后不再在根目录维护），故按 history → 根目录顺序解析
@@ -95,6 +102,20 @@ parts.push('-- #################################################################
 parts.push('-- 【来源】' + MENU_SOURCE + ' 第 2 步（菜单终态段）——原脚本的迁移/恢复动作不再需要');
 parts.push('-- #####################################################################');
 parts.push(menuSection, '');
+for (const f of MENU_EXTRA_SOURCES) {
+  const raw = fs.readFileSync(src(f), 'utf8');
+  // 截到"② 角色授权"之前：包内只落权限点注册，授权语句留给 history 脚本与包尾授权指引
+  const cutGrant = raw.indexOf('-- ② 角色授权');
+  const cutCheck = raw.indexOf('-- ========== 校验 ==========');
+  const end = [cutGrant, cutCheck].filter((x) => x >= 0).sort((a, b) => a - b)[0];
+  const body = (end >= 0 ? raw.slice(0, end) : raw)
+    .replace(/^SET NAMES[^\n]*\n/m, '')
+    .replace(/\s+$/, '');
+  parts.push('-- #####################################################################');
+  parts.push('-- 【来源】' + f + '（菜单与权限点补充；已并入本包）');
+  parts.push('-- #####################################################################');
+  parts.push(body, '');
+}
 parts.push('-- =====================================================================');
 parts.push('-- 菜单与权限点已就位。以下为"授权指引"（默认不执行）：');
 parts.push('--   1) 超级管理员（role_id=1，租户 0）默认放行全部权限，无需授权；');
@@ -135,7 +156,9 @@ function countTuples(text, anchorRe) {
 }
 const dictRows = countTuples(ddlText, /INSERT[^;]*?INTO\s+`?bidding_dict_data`?/i);
 const cfgRows = countTuples(ddlText, /INSERT[^;]*?INTO\s+`?bidding_rule_config`?\s*\(/i);
-const menuRows = countTuples(menuSection, /INSERT[^;]*?INTO\s+`?system_menu`?/i);
+const menuRows =
+  countTuples(menuSection, /INSERT[^;]*?INTO\s+`?system_menu`?/i) +
+  MENU_EXTRA_SOURCES.reduce((n, f) => n + countTuples(fs.readFileSync(src(f), 'utf8'), /INSERT[^;]*?INTO\s+`?system_menu`?/i), 0);
 parts.push("  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (" + created.map(t => "'" + t + "'").join(',') + ")");
 parts.push("-- 期望：" + created.length + " 张表（包内 CREATE TABLE 数）");
 parts.push("UNION ALL SELECT '菜单与权限点(60004xxx)', COUNT(*) FROM system_menu WHERE id BETWEEN 60004000 AND 60004599 AND deleted = b'0'");
