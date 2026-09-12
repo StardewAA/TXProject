@@ -110,6 +110,11 @@ export namespace SafetyPermitApi {
     changeReason?: string;
   }
 
+  /* 出参逐字对齐后端 KeyPostAssignmentRespVO —— 后端把"窗口内变更次数 / 阈值 / 是否超阈值 / 原任职人"
+   * 一起回传，是为了让前端在**保存成功的同一屏**给出挂靠嫌疑结论（该 VO 的 Javadoc 明确写了这个口径：
+   * "若让前端保存后再调一次统计接口，会出现保存成功但提示闪烁/失败的中间态"）。
+   * 教训：本类型此前只声明了 7 个字段，漏掉下面 7 个风险字段 —— 类型不全会让"后端算了风险、前端根本没接"
+   * 这类缺口在编译期完全静默（vue-tsc 一旦补齐类型即可当场暴露）。 */
   export interface KeyPostAssignmentResp {
     id?: number;
     projectId?: number;
@@ -120,6 +125,20 @@ export namespace SafetyPermitApi {
     startAt?: null | string;
     /** 该岗位第几次变更（首次任职为 1） */
     changeSeq?: number;
+    /** 被本次变更结束任期的上一位人员（首次任职为空）；前端解析成姓名后展示 */
+    previousPersonId?: null | number;
+    /** 上一位人员的任期结束日（= 本次任职开始日；首次任职为空）LocalDate → 'YYYY-MM-DD' */
+    previousEndAt?: null | string;
+    /** 统计窗口天数（配置中心 project.key.post.change.window.days） */
+    windowDays?: number;
+    /** 统计窗口起点 LocalDate → 'YYYY-MM-DD' */
+    windowStart?: null | string;
+    /** 窗口内该岗位变更次数（含本次；首次任职算 0） */
+    windowChangeCount?: number;
+    /** 变更次数阈值（配置中心 project.key.post.change.threshold） */
+    threshold?: number;
+    /** 是否已达阈值（true = 前端应提示挂靠嫌疑） */
+    exceeded?: boolean;
   }
 }
 
