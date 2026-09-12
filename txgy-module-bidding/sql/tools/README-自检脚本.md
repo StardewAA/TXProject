@@ -124,6 +124,19 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 > 因此门禁脚本内不使用 `String.replaceAll`、`Array.at`、`??=`、`Object.hasOwn`、`structuredClone` 等新特性
 > （曾因 `check-dict-coverage.js` 用了 `replaceAll` 而在 Gitee Go 上会直接崩，已改为 `split('\\').join('/')`）。
 
+## 枚举不得硬编码（check-hardcoded-enums.js，棘轮式）
+
+字典门禁只能发现"引用了未注册的字典"，**看不见"前端干脆自己写死一张 code→中文 映射表"**——这类硬编码在页面上
+看不出异常，却让后台改字典文案不生效、多租户/多语言差异无从落地（用户硬约束：状态码/枚举值必须支持动态配置）。
+
+检测两类形态（要求 SCREAMING_SNAKE code 与中文文案成对出现，避免误报）：对象映射
+`const X = { CODE: '中文' }` / `{ CODE: { text|label: '中文' } }`，以及选项数组 `[{ label: '中文', value: 'CODE' }]`。
+
+**棘轮口径**：既有欠债按文件登记在 `KNOWN_HARDCODED`（逐条写明理由）——只许减少、不许增加；
+新文件出现即 FAIL，在册文件变多也 FAIL。实测基线：**15 个文件 / 33 处**。迁移到字典后把处数改小
+（`--update-baseline` 可打印新基线），文件彻底清干净后从表里删除。
+`--list` 列出每处命中的常量名与项数。
+
 ## 权限码三处一致（check-permission-coverage.js）
 
 前端 `can('bidding:xxx:yyy')` 里的码要真的可用，必须同时满足：后端接口 `@PreAuthorize` 认它、`system_menu` 注册了它。

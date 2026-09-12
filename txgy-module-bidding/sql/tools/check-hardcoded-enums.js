@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+/**
+ * 硬编码枚举映射表自检（棘轮式：冻结既有欠债，只拦"新增或变多"）。
+ *
+ * 为什么需要它：用户硬约束是"状态码/枚举值必须支持动态配置，严禁硬编码"。此前的字典门禁只能发现
+ * "引用了未注册的字典"，看不见"前端干脆自己写死一张 code→中文 的映射表"——这类硬编码在页面上看不出异常，
+ * 却让后台改了字典文案也不生效、多租户/多语言差异无从落地。实测 bidding 域有 20+ 处、10+ 个文件。
+ *
+ * 检测两类形态（均要求"SCREAMING_SNAKE code + 中文文案"成对出现，避免误报）：
+ *   MAP     const X = { CODE: '中文' } / { CODE: { label|text|title|name: '中文' } }
+ *   OPTIONS const X = [{ label: '中文', value: 'CODE' }, ...]
+ *
+ * 门禁口径（棘轮）：
+ *   · 文件不在 KNOWN_HARDCODED 里且命中 → FAIL（新页面必须走字典）；
+ *   · 文件在册但命中数**超过**登记数      → FAIL（不许变多）；
+ *   · 命中数少于登记数                    → OK，并提示用 --update-baseline 收紧基线。
+ *
+ * 用法：node sql/tools/check-hardcoded-enums.js [--list] [--update-baseline]
+ * 退出码：0 通过；1 违反棘轮。
+ */
+const fs = require('node:fs');
+const path = require('node:path');
+
+const LIST = process.argv.includes('--list');
+const UPDATE = process.argv.includes('--update-baseline');
+const repoRoot = path.resolve(__dirname, '../../..');
+const SRC = path.join(repoRoot, 'txgy-ui-admin-vben/apps/web-antd/src');
+const DIRS = [path.join(SRC, 'views/bidding'), path.join(SRC, 'api/bidding')];
+const SKIP_DIRS = new Set(['node_modules', 'dist']);
+
+/**
+ * 登记在册的硬编码（棘轮基线）：文件 → [允许处数, 理由]。
+ * 只许减少、不许增加；迁移到字典后把处数改小（--update-baseline 可生成新基线）。
+ * 说明：这些是"既有欠债"，逐条登记是为了让新页面无处可藏，而不是认可它们的写法。
+ */
+const KNOWN_HARDCODED = new Map([
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/noticeExternal/data.ts', [7, '外部公告管理页 7 张既有映射表（状态/审核/形态/行业/抽取/AI/正文结构化）；notice_external_* 三类字典本轮已注册，可直接迁移，属该页负责人的待办']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/qualification/index.ts', [6, '资质域选项表（序列/预警来源/人员角色/业绩角色等）——取值来自后端枚举，但该域字典尚未注册']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/shared.ts', [3, '采集任务/解析状态映射；采集域字典未注册（属采集工作台待办）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/ruleConfig/index.ts', [3, '规则配置的值类型/状态/命中来源选项；规则配置域字典未注册']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/certificate/modules/material-check.vue', [2, 'RESULT_FALLBACK / STATUS_FALLBACK —— 命名即口径：字典为主路径、此表仅在字典未下发时兜底，非硬编码主展示']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/qualification/index.vue', [2, '同上（兜底表），资质页字典未下发时回落']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/processTrack/index.vue', [2, '流转状态/事件文案；投标流程跟踪页由他人开发中（菜单 60004xxx 尚在让位期）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/console/index.vue', [1, '采集控制台手动作业状态文案；采集域字典未注册']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/NoticeHtmlView.vue', [1, '公告状态文案（管理端与门户共用渲染件）；notice 状态字典未注册']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/payloadLabel.ts', [1, '公告 payload/正文块类型文案，属渲染件内部标签']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/safety-risk/index.vue', [1, 'KEY_POST_OPTIONS：逐字取自后端 KeyPostEnum，但 key_post 字典尚未注册（登记后此处即可改走字典）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/subjectAuth/index.vue', [1, '主体授权原因文案（reasonLabel）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/filing/index.ts', [1, 'FILING_STATUS_OPTIONS：filing_status 字典本轮已注册，项目页已改为字典优先，此数组仅作未升级环境兜底；可删除']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/notice/index.ts', [1, 'NOTICE_STATUS_LABEL 映射，notice 状态字典未注册']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/subject/index.ts', [1, 'SUBJECT_TYPE_LABEL：subject_type 字典本轮已注册，可迁移']],
+]);
+
+function walk(dir, out) {
+  let ents = [];
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of ents) {
+    if (SKIP_DIRS.has(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else out.push(p);
+  }
+  return out;
+}
+
+const CN = '[\\u4e00-\\u9fa5]';
+const RE_MAP = /(?:export\s+)?const\s+(\w+)\s*(?::[^=]+)?=\s*\{([\s\S]{0,2000}?)\n\s*\}/g;
+const RE_OPTIONS = /(?:export\s+)?const\s+(\w+)\s*(?::[^=]+)?=\s*\[([\s\S]{0,3000}?)\n\s*\];/g;
+const RE_PAIR = new RegExp("['\"]?([A-Z][A-Z0-9_]{2,})['\"]?\\s*:\\s*(?:\\{[^}]*?(?:label|text|title|name)\\s*:\\s*)?['\"][^'\"]*" + CN + "[^'\"]*['\"]", 'g');
+const RE_CODE = /value\s*:\s*['"]([A-Z][A-Z0-9_]{2,})['"]/;
+const RE_LABEL = new RegExp("label\\s*:\\s*['\"][^'\"]*" + CN);
+
+function scanFile(file) {
+  const src = fs.readFileSync(file, 'utf8');
+  const hits = [];
+  for (const m of src.matchAll(RE_MAP)) {
+    const pairs = [...m[2].matchAll(RE_PAIR)];
+    if (pairs.length >= 2) hits.push({ kind: 'MAP', name: m[1], n: pairs.length });
+  }
+  for (const m of src.matchAll(RE_OPTIONS)) {
+    let n = 0;
+    for (const chunk of m[2].split('},')) {
+      if (RE_CODE.test(chunk) && RE_LABEL.test(chunk)) n += 1;
+    }
+    if (n >= 2) hits.push({ kind: 'OPTIONS', name: m[1], n });
+  }
+  return hits;
+}
+
+const files = DIRS.flatMap((d) => walk(d, [])).filter((f) => /\.(vue|ts)$/.test(f));
+const found = new Map();
+for (const f of files) {
+  const hits = scanFile(f);
+  if (hits.length > 0) found.set(path.relative(repoRoot, f).split(path.sep).join('/'), hits);
+}
+
+if (UPDATE) {
+  console.log('const KNOWN_HARDCODED = new Map([');
+  [...found.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .forEach(([f, hs]) => console.log("  ['" + f + "', [" + hs.length + ", '待迁移字典']],"));
+  console.log(']);');
+  process.exit(0);
+}
+
+let bad = 0;
+let total = 0;
+for (const [f, hs] of [...found.entries()].sort()) {
+  total += hs.length;
+  const known = KNOWN_HARDCODED.get(f);
+  const allowed = known ? known[0] : 0;
+  const over = hs.length > allowed;
+  if (over) bad += 1;
+  const mark = over ? (known ? '❌ 变多' : '❌ 新增') : '✅ 在册';
+  console.log('  [' + mark + '] ' + f + '  ' + hs.length + ' 处（登记 ' + allowed + '）');
+  if (LIST || over) {
+    hs.forEach((h) => console.log('        ' + h.kind.padEnd(8) + h.name + '（' + h.n + ' 项）'));
+    if (known) console.log('        理由：' + known[1]);
+  }
+}
+
+console.log('\n扫描 ' + files.length + ' 个源文件；硬编码枚举映射 ' + total + ' 处 / ' + found.size + ' 个文件；违规 ' + bad + ' 个文件');
+if (bad > 0) {
+  console.error('[FAIL] 不允许新增硬编码枚举映射（硬约束：状态码/枚举值必须支持动态配置）。');
+  console.error('修复二选一：① 改用字典（sql/history 注册 dict_type + 页面 dictLabel/dictTag/dictOptions）；');
+  console.error('           ② 确属无字典语义（如外部标准码），在 KNOWN_HARDCODED 登记文件与理由。');
+  process.exit(1);
+}
+console.log('[OK] 硬编码枚举映射未超过基线（只减不增）');
