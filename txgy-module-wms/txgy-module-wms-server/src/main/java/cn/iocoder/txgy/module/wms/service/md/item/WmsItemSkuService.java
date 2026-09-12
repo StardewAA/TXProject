@@ -44,12 +44,26 @@ public interface WmsItemSkuService {
     void deleteItemSkuListByItemId(Long itemId);
 
     /**
+     * 获取商品 SKU 关联的 WMS 业务数据摘要。
+     *
+     * @param itemId 商品编号
+     * @return 关联摘要；无关联时返回空列表
+     */
+    List<String> getItemSkuAssociationSummary(Long itemId);
+
+    /**
      * 校验 SKU 存在
      *
      * @param id 编号
      * @return SKU
      */
     WmsItemSkuDO validateItemSkuExists(Long id);
+
+    /** 校验 SKU 存在且所属商品已启用。 */
+    WmsItemSkuDO validateItemSkuExistsAndItemEnabled(Long id);
+
+    /** 批量校验 SKU 所属商品已启用。 */
+    void validateItemSkuListItemEnabled(Collection<Long> ids);
 
     /**
      * 按商品编号获得 SKU 列表

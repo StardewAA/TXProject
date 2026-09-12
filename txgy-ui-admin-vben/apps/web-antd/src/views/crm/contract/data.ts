@@ -7,7 +7,10 @@ import { erpPriceInputFormatter, erpPriceMultiply } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { getSimpleBusinessList } from '#/api/crm/business';
-import { getSimpleContactList } from '#/api/crm/contact';
+import {
+  getContactListByCustomer,
+  getSimpleContactList,
+} from '#/api/crm/contact';
 import { getCustomerSimpleList } from '#/api/crm/customer';
 import { getSimpleUserList } from '#/api/system/user';
 
@@ -62,12 +65,28 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '客户名称',
       component: 'ApiSelect',
       rules: 'required',
-      componentProps: {
+      componentProps: (_values, form) => ({
         api: getCustomerSimpleList,
         labelField: 'name',
         valueField: 'id',
         placeholder: '请选择客户',
-      },
+        // 一键引用回填：选择客户后，自动带出该客户的主要联系人为签约联系人
+        async onChange(customerId: number) {
+          if (!customerId) {
+            return;
+          }
+          try {
+            const contacts = await getContactListByCustomer(customerId);
+            const mainContact =
+              contacts?.find((item) => item.master) ?? contacts?.[0];
+            if (mainContact) {
+              form.setFieldValue('signContactId', mainContact.id);
+            }
+          } catch {
+            // 客户暂无联系人时忽略，不影响正常填写
+          }
+        },
+      }),
     },
     {
       fieldName: 'businessId',

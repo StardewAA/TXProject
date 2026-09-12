@@ -17,6 +17,7 @@ import {
   Tabs,
 } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
 import { getPersonalArchive, type PromotionApi } from '../api';
 
 defineOptions({ name: 'TrainingPersonalArchive' });
@@ -84,16 +85,11 @@ function goVerify() {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #16a34a 0%, #16a34adc 44%, #111827 115%)"
-      >
-        <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 92（学员）</div>
-        <h1 class="m-0 text-2xl font-semibold md:text-3xl">个人学习档案</h1>
-        <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-          课程学时明细、全部考试记录、电子证书与联合认证、VR 实操记录、人才成长进度与晋升条件缺口。
-        </p>
-      </section>
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 92（学员）"
+        title="个人学习档案"
+        description="课程学时明细、全部考试记录、电子证书与联合认证、VR 实操记录、人才成长进度与晋升条件缺口。"
+      />
 
       <Row :gutter="16">
         <Col :span="6"><Card :bordered="false"><Statistic title="累计学时(小时)" :value="0" /></Card></Col>

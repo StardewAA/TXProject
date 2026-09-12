@@ -29,6 +29,7 @@ import com.alibaba.cloud.ai.dashscope.embedding.text.DashScopeEmbeddingModel;
 import com.alibaba.cloud.ai.dashscope.embedding.text.DashScopeEmbeddingOptions;
 import com.alibaba.cloud.ai.dashscope.image.DashScopeImageModel;
 import com.alibaba.cloud.ai.dashscope.image.DashScopeImageOptions;
+import com.fasterxml.jackson.annotation.JsonClassDescription;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -46,6 +47,7 @@ import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
 import org.springframework.ai.tokenizer.TokenCountEstimator;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusServiceClientProperties;
 import org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreProperties;
 import org.springframework.ai.vectorstore.qdrant.autoconfigure.QdrantVectorStoreProperties;
@@ -54,10 +56,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.util.ClassUtils;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * OPENLAB BS AI 自动配置
@@ -473,8 +482,83 @@ public class AiAutoConfiguration {
      * 参考自 <a href="https://docs.spring.io/spring-ai/reference/api/mcp/mcp-client-boot-starter-docs.html">MCP Server Boot Starter</>
      */
     @Bean
-    public List<ToolCallback> toolCallbacks(PersonService personService) {
-        return List.of(ToolCallbacks.from(personService));
+    public List<ToolCallback> toolCallbacks(PersonService personService, ApplicationContext applicationContext) {
+        List<ToolCallback> toolCallbacks = new ArrayList<>(List.of(ToolCallbacks.from(personService)));
+        toolCallbacks.addAll(buildFunctionToolCallbacks(applicationContext));
+        return toolCallbacks;
+    }
+
+    /**
+     * 函数式工具 Bean 所在的包
+     */
+    private static final String FUNCTION_TOOL_PACKAGE = "cn.iocoder.txgy.module.ai.tool.function";
+
+    /**
+     * 将 {@code @Component} 形式的函数式工具 Bean（Function / BiFunction）注册为 ToolCallback
+     *
+     * 注意：Spring AI 2.0 移除了 SpringBeanToolCallbackResolver，不再支持按 Bean 名解析函数式工具。
+     * 若不在此处注册，角色的 toolIds 会全部解析为 null，导致模型收不到任何工具定义，
+     * 从而退化为输出模型原生的文本工具调用格式（如 {@code <|FunctionCallBegin|>...<|FunctionCallEnd|>}）。
+     */
+    private List<ToolCallback> buildFunctionToolCallbacks(ApplicationContext applicationContext) {
+        List<ToolCallback> toolCallbacks = new ArrayList<>();
+        List<String> toolNames = new ArrayList<>();
+        // 1. BiFunction<Request, ToolContext, Response> 形式的工具
+        for (String beanName : applicationContext.getBeanNamesForType(BiFunction.class)) {
+            Class<?> inputType = resolveFunctionToolInputType(applicationContext, beanName, BiFunction.class);
+            if (inputType == null) {
+                continue;
+            }
+            // noinspection rawtypes,unchecked
+            toolCallbacks.add(buildFunctionToolCallback(beanName,
+                    FunctionToolCallback.builder(beanName, (BiFunction) applicationContext.getBean(beanName)), inputType));
+            toolNames.add(beanName);
+        }
+        // 2. Function<Request, Response> 形式的工具
+        for (String beanName : applicationContext.getBeanNamesForType(Function.class)) {
+            Class<?> inputType = resolveFunctionToolInputType(applicationContext, beanName, Function.class);
+            if (inputType == null) {
+                continue;
+            }
+            // noinspection rawtypes,unchecked
+            toolCallbacks.add(buildFunctionToolCallback(beanName,
+                    FunctionToolCallback.builder(beanName, (Function) applicationContext.getBean(beanName)), inputType));
+            toolNames.add(beanName);
+        }
+        log.info("[buildFunctionToolCallbacks][注册函数式工具 {} 个：{}]", toolNames.size(), toolNames);
+        return toolCallbacks;
+    }
+
+    /**
+     * 解析函数式工具 Bean 的入参类型（即 Request 类型）；非工具包下的 Bean 返回 null
+     */
+    private Class<?> resolveFunctionToolInputType(ApplicationContext applicationContext, String beanName,
+                                                  Class<?> functionInterface) {
+        Class<?> beanType = applicationContext.getType(beanName);
+        if (beanType == null) {
+            return null;
+        }
+        beanType = ClassUtils.getUserClass(beanType);
+        if (!beanType.getPackageName().startsWith(FUNCTION_TOOL_PACKAGE)) {
+            return null;
+        }
+        Class<?> inputType = ResolvableType.forClass(beanType).as(functionInterface).getGeneric(0).resolve();
+        if (inputType == null) {
+            log.warn("[resolveFunctionToolInputType][工具({}) 无法解析入参类型，跳过注册]", beanName);
+        }
+        return inputType;
+    }
+
+    /**
+     * 构建 ToolCallback，并使用入参类型上的 {@link JsonClassDescription} 作为工具描述
+     */
+    private ToolCallback buildFunctionToolCallback(String beanName,
+                                                   FunctionToolCallback.Builder<?, ?> builder, Class<?> inputType) {
+        JsonClassDescription description = AnnotatedElementUtils.findMergedAnnotation(inputType, JsonClassDescription.class);
+        if (description != null && StrUtil.isNotBlank(description.value())) {
+            builder.description(description.value());
+        }
+        return builder.inputType(inputType).build();
     }
 
 }

@@ -39,9 +39,31 @@ import {
 defineOptions({ name: 'TrainingResourceCategory' });
 
 // ==================== 分类 Tab ====================
+// 默认展示「文档分类」
 const categoryType = ref<string>('doc');
 const categoryLoading = ref(false);
 const categoryTree = ref<TrainingResourceApi.CategoryNode[]>([]);
+
+const levelTagMap: Record<number, { color: string; text: string }> = {
+  1: { color: 'geekblue', text: '一级' },
+  2: { color: 'cyan', text: '二级' },
+  3: { color: 'green', text: '三级' },
+};
+
+/** 递归平铺当前分类树，用于生成上级选项 */
+function flatCategoryTree(
+  nodes: TrainingResourceApi.CategoryNode[],
+  level = 1,
+): Array<{ level: number; node: TrainingResourceApi.CategoryNode }> {
+  const result: Array<{ level: number; node: TrainingResourceApi.CategoryNode }> = [];
+  for (const node of nodes) {
+    result.push({ level, node });
+    if (node.children?.length) {
+      result.push(...flatCategoryTree(node.children, level + 1));
+    }
+  }
+  return result;
+}
 
 async function loadCategoryTree() {
   categoryLoading.value = true;
@@ -66,11 +88,14 @@ const categoryForm = ref({
   sort: 0,
 });
 const parentOptions = computed(() => {
-  const root: any[] = [{ label: '（一级分类）', value: 0 }];
-  categoryTree.value.forEach((node) => {
-    root.push({ label: node.name, value: node.id });
+  const options: any[] = [{ label: '（一级分类）', value: 0 }];
+  flatCategoryTree(categoryTree.value).forEach(({ level, node }) => {
+    // 三级节点不能再新增子分类
+    if (level < 3) {
+      options.push({ label: '　'.repeat(level - 1) + node.name, value: node.id });
+    }
   });
-  return root;
+  return options;
 });
 
 function handleCreateCategory(parentId = 0) {
@@ -212,7 +237,12 @@ loadTags();
             button-style="solid"
             @change="loadCategoryTree"
           />
-          <Button type="primary" ghost class="ml-auto" @click="handleCreateCategory(0)">
+          <Button
+            type="primary"
+            ghost
+            class="ml-auto"
+            @click="handleCreateCategory(0)"
+          >
             新增一级分类
           </Button>
         </div>
@@ -232,12 +262,13 @@ loadTags();
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'level'">
-              <Tag :color="record.parentId === 0 ? 'geekblue' : 'default'">
-                {{ record.parentId === 0 ? '一级' : '二级' }}
+              <Tag :color="levelTagMap[record.level ?? 1]?.color">
+                {{ levelTagMap[record.level ?? 1]?.text }}
               </Tag>
             </template>
             <template v-else-if="column.key === 'actions'">
               <Button
+                v-if="record.level && record.level < 3"
                 type="link"
                 size="small"
                 @click="handleCreateCategory(record.id)"
@@ -256,9 +287,6 @@ loadTags();
             </template>
           </template>
         </Table>
-        <div class="mt-2 text-xs text-gray-400">
-          分类最多两级，用于文档/视频/试题的上传与筛选。
-        </div>
       </Tabs.TabPane>
 
       <!-- ============ 标签管理 ============ -->

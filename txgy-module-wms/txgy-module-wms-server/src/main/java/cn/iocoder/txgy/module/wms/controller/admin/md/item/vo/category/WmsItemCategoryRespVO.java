@@ -27,6 +27,9 @@ public class WmsItemCategoryRespVO {
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
     private Integer status;
 
+    @Schema(description = "存储说明", example = "密封避光，存储温度5-35℃")
+    private String storageDescription;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;
 

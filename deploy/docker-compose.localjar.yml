@@ -1,0 +1,7 @@
+# 临时 override：mes/ai 使用已用宿主机 fat-jar 预构建的 deploy-mes:new / deploy-ai:new 镜像
+# （避免 Docker 内存不足时在容器内全量 Maven 构建）
+services:
+  mes:
+    image: deploy-mes:new
+  ai:
+    image: deploy-ai:new

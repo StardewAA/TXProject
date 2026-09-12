@@ -54,6 +54,18 @@ public class CrmPermissionUtils {
     }
 
     /**
+     * 校验用户是否是管理员（超级管理员/租户管理员/CRM 管理员，任一即可）
+     *
+     * @param userId 用户编号
+     * @return 是/否
+     */
+    public static boolean isAdminUser(Long userId) {
+        PermissionCommonApi permissionApi = SpringUtil.getBean(PermissionCommonApi.class);
+        return permissionApi.hasAnyRoles(userId, RoleCodeEnum.SUPER_ADMIN.getCode(),
+                RoleCodeEnum.TENANT_ADMIN.getCode(), RoleCodeEnum.CRM_ADMIN.getCode()).getCheckedData();
+    }
+
+    /**
      * 构造 CRM 数据类型数据【分页】查询条件
      *
      * @param query     连表查询对象

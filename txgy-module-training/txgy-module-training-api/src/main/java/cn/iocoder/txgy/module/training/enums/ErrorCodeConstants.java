@@ -54,7 +54,7 @@ public interface ErrorCodeConstants {
     ErrorCode RESOURCE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_006_002, "已存在同类型下同名分类");
     ErrorCode RESOURCE_CATEGORY_HAS_CHILDREN = new ErrorCode(1_061_006_003, "该分类存在子分类，禁止删除（请先删除子分类）");
     ErrorCode RESOURCE_CATEGORY_HAS_RESOURCE = new ErrorCode(1_061_006_004, "该分类下仍存在资源，禁止删除（请先转移或删除资源）");
-    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持一级父分类，不支持三级及以上层级");
+    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持选择一级、二级分类，不支持四级及以上层级");
 
     // ========== 资源中心-文档（document resource）1-061-007-000 ==========
     ErrorCode DOCUMENT_NOT_EXISTS = new ErrorCode(1_061_007_000, "文档资源不存在");
@@ -81,6 +81,7 @@ public interface ErrorCodeConstants {
     ErrorCode QUESTION_STATUS_CHANGE_INVALID = new ErrorCode(1_061_009_004, "试题当前状态不允许执行该操作");
     ErrorCode QUESTION_IMPORT_EMPTY = new ErrorCode(1_061_009_005, "导入文件为空或不含有效数据行");
     ErrorCode QUESTION_IMPORT_PARSE_ERROR = new ErrorCode(1_061_009_006, "导入文件解析失败，请使用系统下载的标准 Excel 模板");
+    ErrorCode QUESTION_IMPORT_HEADER_INVALID = new ErrorCode(1_061_009_013, "未识别到导入表头，请使用【下载模板】的 Excel 格式（表头行需包含“题型”“题干”列）");
     // AI 智能导入（文档 → 试题）
     ErrorCode QUESTION_AI_NOT_CONFIGURED = new ErrorCode(1_061_009_007, "未配置 AI 大模型（请联系管理员配置模型服务地址与密钥）");
     ErrorCode QUESTION_AI_DOC_TYPE_INVALID = new ErrorCode(1_061_009_008, "AI 导入仅支持 PDF / Word(doc,docx) / WPS(wps) 文档");
@@ -158,5 +159,20 @@ public interface ErrorCodeConstants {
     ErrorCode GROWTH_LEVEL_NAME_EXISTS = new ErrorCode(1_061_017_002, "已存在同名称成长等级");
     ErrorCode GROWTH_LEVEL_NO_EXISTS = new ErrorCode(1_061_017_003, "已存在同序号成长等级");
     ErrorCode GROWTH_LEVEL_HAS_COURSE = new ErrorCode(1_061_017_004, "该等级已被课程成长等级标记引用，禁止删除（请先调整课程等级）");
+
+    // ========== 基础数据字典（岗位工种 / 工种资格证 / 学习地图）1-061-018-000 ==========
+    ErrorCode JOB_NOT_EXISTS = new ErrorCode(1_061_018_000, "岗位工种不存在");
+    ErrorCode JOB_CODE_EXISTS = new ErrorCode(1_061_018_001, "已存在同编码岗位工种");
+    ErrorCode JOB_NAME_EXISTS = new ErrorCode(1_061_018_002, "已存在同名称岗位工种");
+    ErrorCode JOB_HAS_CERT = new ErrorCode(1_061_018_003, "该工种下存在资格证要求，禁止删除（请先清理资格证）");
+    ErrorCode JOB_HAS_LEARNING_MAP = new ErrorCode(1_061_018_004, "该工种下存在学习地图课程，禁止删除（请先清理学习地图）");
+
+    ErrorCode JOB_CERT_NOT_EXISTS = new ErrorCode(1_061_018_010, "工种资格证不存在");
+    ErrorCode JOB_CERT_EXISTS = new ErrorCode(1_061_018_011, "该工种下已存在同名资格证要求");
+
+    ErrorCode LEARNING_MAP_NOT_EXISTS = new ErrorCode(1_061_018_020, "学习地图记录不存在");
+    ErrorCode LEARNING_MAP_EXISTS = new ErrorCode(1_061_018_021, "该工种下该阶段已存在同一课程");
+    ErrorCode LEARNING_MAP_STAGE_INVALID = new ErrorCode(1_061_018_022, "成长阶段非法，仅支持 entry/core/advanced/technician");
+    ErrorCode LEARNING_MAP_COURSE_NOT_EXISTS = new ErrorCode(1_061_018_023, "课程不存在（需为课程分类中已维护的课程级编码）");
 
 }

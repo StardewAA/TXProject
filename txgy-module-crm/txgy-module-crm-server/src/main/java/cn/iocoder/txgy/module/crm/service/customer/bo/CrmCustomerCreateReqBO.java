@@ -53,6 +53,13 @@ public class CrmCustomerCreateReqBO {
      * 对应字典 {@link DictTypeConstants#CRM_CUSTOMER_SOURCE}
      */
     private Integer source;
+    /**
+     * 客户类别
+     *
+     * 1=下游客户(采购方)；2=上游供应商
+     * 对应字典 {@link DictTypeConstants#CRM_CUSTOMER_CATEGORY}
+     */
+    private Integer customerType;
 
     /**
      * 手机

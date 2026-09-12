@@ -140,6 +140,7 @@ onMounted(async () => {
             <MessageReasoning
               :reasoning-content="item.reasoningContent || ''"
               :content="item.content || ''"
+              :duration-seconds="(item as any).reasoningSeconds"
             />
             <MarkdownView
               class="text-sm text-gray-600"

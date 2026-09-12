@@ -13,11 +13,16 @@ spring:
   # 资源中心大文件上传（视频 ≤500MB）
   servlet:
     multipart:
-      max-file-size: 512MB
-      max-request-size: 512MB
+      max-file-size: 4300MB
+      max-request-size: 4300MB
+      # 上传临时文件随请求结束自动清理；大文件分片落盘避免占用内存
+      file-size-threshold: 10MB
 
 server:
   port: 48094
+  tomcat:
+    # 超限上传时允许 Tomcat 完整消费请求体并返回友好错误 JSON，避免直接断连
+    max-swallow-size: -1
 
 logging:
   file:

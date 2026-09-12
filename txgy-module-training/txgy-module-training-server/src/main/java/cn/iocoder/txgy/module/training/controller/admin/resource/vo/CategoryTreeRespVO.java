@@ -16,8 +16,14 @@ public class CategoryTreeRespVO {
     @Schema(description = "分类名称")
     private String name;
 
+    @Schema(description = "分类编码，用于跨类型同步")
+    private String code;
+
     @Schema(description = "父分类 ID（0=根）")
     private Long parentId;
+
+    @Schema(description = "层级（1=一级 / 2=二级 / 3=三级）")
+    private Integer level;
 
     @Schema(description = "排序")
     private Integer sort;

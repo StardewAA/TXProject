@@ -21,6 +21,9 @@ public class QuestionPageReqVO extends PageParam {
     @Schema(description = "难度：1 易 2 中 3 难")
     private Integer difficulty;
 
+    @Schema(description = "所属分类 ID（资源分类 question 类型，支持三级）")
+    private Long categoryId;
+
     @Schema(description = "状态：1 启用 2 停用")
     private Integer status;
 

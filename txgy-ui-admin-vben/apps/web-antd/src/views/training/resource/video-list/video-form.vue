@@ -55,19 +55,20 @@ const uploading = ref(false);
 
 const categoryOptions = ref<any[]>([]);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('video');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 const getTitle = computed(() => {
@@ -77,8 +78,8 @@ const getTitle = computed(() => {
 });
 
 function pickFile(file: File) {
-  if (file.size > 500 * 1024 * 1024) {
-    message.error('视频大小不能超过 500MB');
+  if (file.size > 4096 * 1024 * 1024) {
+    message.error('视频大小不能超过 4GB');
     return false;
   }
   selectedFile.value = file;
@@ -208,7 +209,7 @@ const [Modal, modalApi] = useVbenModal({
 
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
-          上传视频文件（短视频 / 录播，MP4 ≤500MB）
+          上传视频文件（短视频 / 录播，MP4 ≤4GB）
         </div>
         <Upload
           accept=".mp4,.mov"
