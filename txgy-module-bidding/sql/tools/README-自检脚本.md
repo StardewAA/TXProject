@@ -74,6 +74,17 @@ node sql/tools/check-all.js --verbose  # 打印每项完整输出
 `bidding_dict_data` 用 (dict_type, dict_value)，`system_menu` 用 permission 码，`system_role_menu` 跳过（授权属部署态）。
 实测 57 个脚本 / 279 个键，零假阳性。文件头写了「新库不需要」的迁移脚本自动跳过。
 
+## 接口接线覆盖率的白名单口径（必须逐条写理由）
+
+`check-api-coverage.js` 的 ALLOW 里每条都要写清"为什么不需要前端调用"或"为什么暂时接不了"，并按下列约定维护：
+
+| 端点 | 理由 | 何时删除 |
+|---|---|---|
+| `/bidding/notice-external/ingest` | 入参是采集侧 DTO，属爬虫/脚本程序化入库，后台不应提供人工表单 | 长期（设计使然） |
+| `/bidding/qualification/alert/handle` | **后端契约缺口**：请求 VO 要求 `version` 做 CAS，但清单出参 `QualificationAlertRespVO` 不回传 version、也无 detail 端点 → 前端拿不到版本号，接了只能发假版本（恒冲突或绕过 CAS） | 后端出参补上 `version` 后**立即删除并接线** |
+
+**白名单不是垃圾桶**：本轮就清掉了一条已过期的 `/bidding/safety-permit/project/key-post-assignment`（该端点早先因"另一开发者在飞、语义未稳定"入表，后来前端已接线）。过期的白名单项会**掩盖将来重新断线**，所以接线完成后要同步删除。
+
 ## 出参消费审计（audit-respvo-fields.js，只报告、不入 CI）
 
 审的是"**后端算了、页面没接**"的字段：用户看不到的数据，而且编译期完全静默（前端类型若也没声明该字段，
@@ -117,6 +128,18 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 缺前者 = 点下去 403；缺后者 = 「角色授权」界面里没有这一项 → 任何角色都授不出去 → 按钮永远不渲染。两种都不报错。
 该脚本实测抓到过：`bidding:project:delete`（后端根本没有这个码，删除端点复用 `bidding:project:update`）、
 `bidding:rule-config:query/update`（后端与前端都在用，但 `system_menu` 从未注册 → ⑤ 规则配置面板对普通角色整块不可见）。
+
+## 事故记录（每条都对应一次真实故障/缺口）
+
+| 日期 | 现象 | 根因 | 现在的守门人 |
+|---|---|---|---|
+| 09-13 | 字典名写错 `apply_type`（实际 `qual_apply_type`），前端下拉空白 | 前端凭记忆写字典名 | `check-dict-coverage.js` |
+| 09-20 | 5 类员工域字典未注册，状态/学历/社保只能显示英文 code | 新页面引用了没登记的枚举 | `check-dict-coverage.js` |
+| 09-20/21 | 一键包生成器来源清单漏登记 → 重建时**静默抹掉**22 行字典与 2 个权限点（实测连抹两次） | `build-credential-sync.js` 写死的 SOURCES 清单 | `check-master-mirror.js` |
+| 09-21 | `bidding:project:delete` 后端根本不存在；`bidding:rule-config:*` 从未注册 → 按钮永远不可见 | 判权码三处（前端/后端/菜单）不一致 | `check-permission-coverage.js` |
+| 09-21 | 清理 Windows 下提交的 `100644` 钩子（Linux 上 Permission denied，钩子静默不跑） | `core.fileMode=false` 不记录执行位 | `git update-index --chmod=+x` + README 说明 |
+| 09-22 | `KeyPostAssignmentResp` 前端类型漏 7 个风险字段 → "达阈值当场提示挂靠嫌疑"这条后端明写的需求根本没实现，而编译/lint/门禁全绿 | 前端出参类型是后端 VO 的不完整镜像 | 补类型后 vue-tsc 报 12 处；`audit-respvo-fields.js` 可复审 |
+| 09-22 | 到期预警"闭环处理"缺出口：端点已加但前端接不了 | 出参缺 `version`（请求侧 CAS 必填） | 覆盖率白名单登记理由，待后端补字段 |
 
 ## 新增校验器的约定
 

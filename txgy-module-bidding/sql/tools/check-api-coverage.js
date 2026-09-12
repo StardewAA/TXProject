@@ -31,7 +31,14 @@ const ORPHANS = process.argv.includes('--orphans');
 /** 有意不接前端调用的端点（必须写明理由，并说明替代路径） */
 const ALLOW = new Map([
   ['/bidding/notice-external/ingest', '入参为采集侧 ExternalNoticeIngestDTO，属爬虫/脚本程序化入库，后台不应提供人工表单'],
-  ['/bidding/safety-permit/project/key-post-assignment', '后端新增写端点（项目关键岗位任职登记），属另一开发者在飞的功能；VO/语义未稳定，接线待其提交后跟进'],
+  [
+    '/bidding/qualification/alert/handle',
+    '【后端契约缺口，待补后接线】该端点用于把到期预警标记为已处理（含版本 CAS 防覆盖他人备注），' +
+      '但清单出参 QualificationAlertRespVO 未回传 version、也没有 detail 端点可取值，而请求 VO 把 version 标为 @NotNull' +
+      '——前端拿不到版本号，接了也只能发一个假版本（要么恒冲突、要么绕过 CAS，两者都不可接受）。' +
+      '同模块 QualificationApplyRespVO 的注释已写明正确做法（"出参带 version——审批必须回传申报单版本"），本条属该 VO 漏了一个字段。' +
+      '后端补上 version 后请立即删除本白名单项并接线（前端已具备清单与 handled 过滤，缺的只是版本号）。',
+  ],
 ]);
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
