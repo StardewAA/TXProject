@@ -166,7 +166,10 @@ const [Modal, modalApi] = useVbenModal({
     subTabsName.value = data.formType === 'execute' ? 'results' : 'lines';
     formApi.setState({ schema: useFormSchema(formType.value, formApi) });
     formApi.setDisabled(!isEditable.value);
-    modalApi.setState({ showConfirmButton: isEditable.value });
+    modalApi.setState({
+      confirmText: '保存',
+      showConfirmButton: isEditable.value,
+    });
     if (data?.id) {
       modalApi.lock();
       try {
