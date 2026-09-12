@@ -99,6 +99,33 @@ def install(ctx):
     def members(db: Session = Depends(db_session),actor: Actor=Depends(require("admin"))):
         return ok(sync_members(db,actor))
 
+    @app.get("/api/course-categories")
+    def course_categories(actor: Actor = Depends(current_user)):
+        """课程分类「课级（第三级）」选项，供题库「关联课程」标签下拉使用。"""
+        try:
+            tree = platform_get("/training/course-category/list-tree", actor.token, actor.tenant_id) or []
+        except HTTPException as error:
+            if getattr(error, "status_code", None) == 403:
+                tree = []
+            else:
+                raise
+        result = []
+
+        def walk(nodes, chain):
+            for node in nodes or []:
+                if not isinstance(node, dict):
+                    continue
+                name = str(node.get("name") or "").strip()
+                path = [*chain, name] if name else list(chain)
+                children = node.get("children") or []
+                if children:
+                    walk(children, path)
+                elif len(path) >= 3 or int(node.get("level") or 0) >= 3:
+                    result.append({"id": node.get("id"), "name": name, "code": node.get("code"), "path": " / ".join(path)})
+
+        walk(tree, [])
+        return ok(result)
+
     class ClassIn(BaseModel):
         name: str = Field(min_length=2,max_length=200)
         user_ids: list[int] = Field(min_length=1)

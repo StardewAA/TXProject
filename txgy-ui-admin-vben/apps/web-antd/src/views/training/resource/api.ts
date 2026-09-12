@@ -9,8 +9,10 @@ export namespace TrainingResourceApi {
   export interface CategoryNode {
     id?: number;
     parentId?: number;
+    code?: string;
     name?: string;
     sort?: number;
+    level?: number;
     children?: CategoryNode[];
   }
 
@@ -20,7 +22,7 @@ export namespace TrainingResourceApi {
     /** 分类类型：doc 文档 / video 视频 / question 试题 */
     type?: string;
     name?: string;
-    /** 父分类 ID（0=根，仅支持二级） */
+    /** 父分类 ID（0=根，最多支持三级） */
     parentId?: number;
     sort?: number;
   }
@@ -43,6 +45,8 @@ export namespace TrainingResourceApi {
     filePath?: string;
     fileType?: string;
     fileSize?: number;
+    /** 文档总页数（上传时自动识别） */
+    pageCount?: number;
     bizCategory?: string;
     tags?: string;
     estMinutes?: number;
@@ -93,12 +97,22 @@ export namespace TrainingResourceApi {
     analysis?: string;
     /** 难度：1 易 2 中 3 难 */
     difficulty?: number;
+    /** 所属分类 ID（资源分类 question 类型，支持三级） */
+    categoryId?: number;
     /** 状态：1 启用 2 停用 */
     status?: number;
     creatorName?: string;
     tagIds?: number[];
     tagNames?: string;
     createTime?: string;
+  }
+
+  /** 文档页数识别结果 */
+  export interface DocumentPageCount {
+    pageCount?: number;
+    estMinutes?: number;
+    minutesPerPage?: number;
+    precise?: boolean;
   }
 
   /** 操作日志 */
@@ -217,6 +231,17 @@ export function uploadDocument(data: FormData) {
   return requestClient.post<number>('/training/document/upload', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+}
+
+/** 识别文档页数（自动换算预估阅读时长 = 页数 × 10 分钟/页） */
+export function countDocumentPages(file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<TrainingResourceApi.DocumentPageCount>(
+    '/training/document/page-count',
+    data,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
 }
 
 /** 修改文档元数据 */

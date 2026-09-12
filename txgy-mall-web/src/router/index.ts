@@ -8,6 +8,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/MallLayout.vue'),
     children: [
       { path: '', name: 'home', component: () => import('@/views/HomeView.vue') },
+      { path: 'shops', name: 'shops', component: () => import('@/views/ShopsView.vue') },
+      { path: 'shops/:id', name: 'shop-detail', component: () => import('@/views/ShopDetailView.vue') },
       { path: 'categories', name: 'categories', component: () => import('@/views/CategoriesView.vue') },
       { path: 'search', name: 'search', component: () => import('@/views/ProductListView.vue') },
       { path: 'goods', name: 'goods-list', component: () => import('@/views/ProductListView.vue') },

@@ -36,4 +36,11 @@ public interface ResourceCategoryMapper extends BaseMapperX<ResourceCategoryDO> 
                 .last("limit 1"));
     }
 
+    default ResourceCategoryDO selectByTypeAndCode(String type, String code) {
+        return selectOne(new LambdaQueryWrapperX<ResourceCategoryDO>()
+                .eq(ResourceCategoryDO::getType, type)
+                .eq(ResourceCategoryDO::getCode, code)
+                .last("limit 1"));
+    }
+
 }

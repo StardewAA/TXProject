@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_API_PREFIX: string
   readonly VITE_TENANT_ID: string
   readonly VITE_STATIC_BASE_URL: string
+  readonly VITE_PAYMENT_PREVIEW?: string
 }
 
 interface ImportMeta {

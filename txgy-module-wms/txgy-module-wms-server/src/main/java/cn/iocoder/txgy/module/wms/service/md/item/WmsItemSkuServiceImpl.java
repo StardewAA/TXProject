@@ -8,9 +8,11 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.sku.WmsItemSkuPageReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.sku.WmsItemSkuSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryHistoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemSkuMapper;
 import cn.iocoder.txgy.module.wms.enums.order.WmsOrderTypeEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
 import cn.iocoder.txgy.module.wms.service.order.check.WmsCheckOrderDetailService;
 import cn.iocoder.txgy.module.wms.service.order.movement.WmsMovementOrderDetailService;
 import cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderDetailService;
@@ -21,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,6 +45,11 @@ public class WmsItemSkuServiceImpl implements WmsItemSkuService {
 
     @Resource
     private WmsItemSkuMapper itemSkuMapper;
+    @Resource
+    @Lazy
+    private WmsItemService itemService;
+    @Resource
+    private WmsInventoryHistoryMapper inventoryHistoryMapper;
     @Resource
     @Lazy // 延迟加载，避免循环依赖
     private WmsInventoryService inventoryService;
@@ -110,12 +119,63 @@ public class WmsItemSkuServiceImpl implements WmsItemSkuService {
     }
 
     @Override
+    public List<String> getItemSkuAssociationSummary(Long itemId) {
+        List<WmsItemSkuDO> skus = itemSkuMapper.selectListByItemId(itemId);
+        if (CollUtil.isEmpty(skus)) {
+            return Collections.emptyList();
+        }
+        List<String> summary = new ArrayList<>();
+        long inventoryCount = 0;
+        long inventoryHistoryCount = 0;
+        long receiptCount = 0;
+        long shipmentCount = 0;
+        long movementCount = 0;
+        long checkCount = 0;
+        for (WmsItemSkuDO sku : skus) {
+            inventoryCount += inventoryService.getInventoryCountBySkuId(sku.getId());
+            inventoryHistoryCount += inventoryHistoryMapper.selectCountBySkuId(sku.getId());
+            receiptCount += receiptOrderDetailService.getReceiptOrderDetailCountBySkuId(sku.getId());
+            shipmentCount += shipmentOrderDetailService.getShipmentOrderDetailCountBySkuId(sku.getId());
+            movementCount += movementOrderDetailService.getMovementOrderDetailCountBySkuId(sku.getId());
+            checkCount += checkOrderDetailService.getCheckOrderDetailCountBySkuId(sku.getId());
+        }
+        appendAssociation(summary, "库存信息", inventoryCount);
+        appendAssociation(summary, "库存流水", inventoryHistoryCount);
+        appendAssociation(summary, "入库单明细", receiptCount);
+        appendAssociation(summary, "出库单明细", shipmentCount);
+        appendAssociation(summary, "移库单明细", movementCount);
+        appendAssociation(summary, "盘库单明细", checkCount);
+        return summary;
+    }
+
+    private void appendAssociation(List<String> summary, String name, long count) {
+        if (count > 0) {
+            summary.add(name + "(" + count + "条)");
+        }
+    }
+
+    @Override
     public WmsItemSkuDO validateItemSkuExists(Long id) {
         WmsItemSkuDO sku = itemSkuMapper.selectById(id);
         if (sku == null) {
             throw exception(ITEM_SKU_NOT_EXISTS);
         }
         return sku;
+    }
+
+    @Override
+    public WmsItemSkuDO validateItemSkuExistsAndItemEnabled(Long id) {
+        WmsItemSkuDO sku = validateItemSkuExists(id);
+        itemService.validateItemExistsAndEnabled(sku.getItemId());
+        return sku;
+    }
+
+    @Override
+    public void validateItemSkuListItemEnabled(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return;
+        }
+        ids.forEach(this::validateItemSkuExistsAndItemEnabled);
     }
 
     @Override

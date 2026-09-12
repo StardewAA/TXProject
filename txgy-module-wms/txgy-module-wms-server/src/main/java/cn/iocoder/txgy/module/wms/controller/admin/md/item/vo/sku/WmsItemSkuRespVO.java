@@ -67,6 +67,18 @@ public class WmsItemSkuRespVO {
     @Schema(description = "销售价，单位元", example = "5288.00")
     private BigDecimal sellingPrice;
 
+    @Schema(description = "最小包装说明", example = "主剂16kg+固化剂4kg")
+    private String packageSpec;
+
+    @Schema(description = "箱装数量", example = "1组/箱")
+    private String boxSpec;
+
+    @Schema(description = "托盘装载量", example = "20组/托盘（400kg）")
+    private String palletSpec;
+
+    @Schema(description = "最小包装单位", example = "组")
+    private String minPackageUnit;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;
 

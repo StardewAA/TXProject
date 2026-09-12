@@ -46,6 +46,10 @@ public interface ErrorCodeConstants {
     ErrorCode ITEM_QUALITY_REPORT_IMAGES_INVALID = new ErrorCode(1_060_104_009, "合格或异常质检报告必须上传 1 至 9 张图片");
     ErrorCode ITEM_QUALITY_REPORT_REMARK_REQUIRED = new ErrorCode(1_060_104_010, "异常质检报告必须填写异常说明");
     ErrorCode ITEM_QUALITY_REPORT_IMAGE_URL_INVALID = new ErrorCode(1_060_104_011, "质检报告包含无效图片地址");
+    ErrorCode ITEM_HAS_ASSOCIATIONS = new ErrorCode(1_060_104_012,
+            "商品【{}】已关联：{}，无法删除");
+    ErrorCode ITEM_STATUS_INVALID = new ErrorCode(1_060_104_013, "商品状态无效");
+    ErrorCode ITEM_IS_DISABLED = new ErrorCode(1_060_104_014, "商品已停用，无法用于新业务");
 
     // ========== WMS 基础数据-往来企业 1-060-105-000 ==========
     ErrorCode MERCHANT_NOT_EXISTS = new ErrorCode(1_060_105_000, "往来企业不存在");

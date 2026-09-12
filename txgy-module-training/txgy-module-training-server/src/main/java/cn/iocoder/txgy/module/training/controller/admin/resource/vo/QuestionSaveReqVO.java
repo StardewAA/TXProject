@@ -34,6 +34,9 @@ public class QuestionSaveReqVO {
     @Schema(description = "难度：1 易 2 中 3 难")
     private Integer difficulty;
 
+    @Schema(description = "所属分类 ID（资源分类 question 类型，支持三级）")
+    private Long categoryId;
+
     @Schema(description = "标签 ID 集合")
     private List<Long> tagIds;
 

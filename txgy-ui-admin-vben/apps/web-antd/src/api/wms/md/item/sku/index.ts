@@ -24,7 +24,12 @@ export namespace WmsItemSkuApi {
     netWeight?: number;
     costPrice?: number;
     sellingPrice?: number;
+    packageSpec?: string;
+    boxSpec?: string;
+    palletSpec?: string;
+    minPackageUnit?: string;
     createTime?: Date;
+    itemStatus?: number;
   }
 }
 

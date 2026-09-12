@@ -12,11 +12,18 @@ import {
   Radio,
   Select,
   Tag,
+  TreeSelect,
 } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
-import { createQuestion, getQuestion, getResourceTagList, updateQuestion } from '../api';
+import {
+  createQuestion,
+  getQuestion,
+  getResourceCategoryTree,
+  getResourceTagList,
+  updateQuestion,
+} from '../api';
 import {
   QUESTION_DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -43,6 +50,8 @@ const qaAnswer = ref<string>('');
 const analysis = ref<string>('');
 const difficulty = ref<number>(2);
 const tagIds = ref<number[]>([]);
+/** 所属分类 ID（资源分类 question 类型，支持三级） */
+const categoryId = ref<number | undefined>();
 const saving = ref(false);
 
 const tagOptions = ref<any[]>([]);
@@ -52,6 +61,25 @@ async function loadTags() {
     label: item.name,
     value: item.id,
   }));
+}
+
+const categoryOptions = ref<any[]>([]);
+function buildCategoryTree(
+  nodes?: TrainingResourceApi.CategoryNode[],
+): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
+async function loadCategories() {
+  const tree = await getResourceCategoryTree('question');
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 const isChoice = computed(() => qtype.value === 1 || qtype.value === 2);
@@ -165,6 +193,7 @@ async function handleConfirm() {
       qtype: qtype.value,
       stem: stem.value.trim(),
       difficulty: difficulty.value,
+      categoryId: categoryId.value,
       analysis: analysis.value.trim(),
       tagIds: tagIds.value,
       answer: '',
@@ -215,9 +244,11 @@ const [Modal, modalApi] = useVbenModal({
       analysis.value = '';
       difficulty.value = 2;
       tagIds.value = [];
+      categoryId.value = undefined;
       return;
     }
     loadTags();
+    loadCategories();
     const data = modalApi.getData<number>();
     if (data) {
       editingId.value = data;
@@ -227,6 +258,7 @@ const [Modal, modalApi] = useVbenModal({
       analysis.value = detail.analysis || '';
       difficulty.value = detail.difficulty || 2;
       tagIds.value = detail.tagIds || [];
+      categoryId.value = detail.categoryId;
       if (qtype.value === 3) {
         judgeAnswer.value = detail.answer || '对';
       } else if (qtype.value === 4 || qtype.value === 5) {
@@ -250,6 +282,19 @@ const [Modal, modalApi] = useVbenModal({
           题型 <span class="text-red-500">*</span>
         </div>
         <Radio.Group v-model:value="qtype" :options="QUESTION_TYPE_OPTIONS" />
+      </div>
+
+      <!-- 所属分类（支持三级） -->
+      <div>
+        <div class="mb-1 text-sm text-gray-600">所属分类</div>
+        <TreeSelect
+          v-model:value="categoryId"
+          class="w-full"
+          :allow-clear="true"
+          tree-default-expand-all
+          placeholder="请选择试题分类（分类与标签 → 资源分类中维护，支持三级）"
+          :tree-data="categoryOptions"
+        />
       </div>
 
       <!-- 题干 -->
