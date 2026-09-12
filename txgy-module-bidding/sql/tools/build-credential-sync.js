@@ -29,6 +29,8 @@ const DDL_SOURCES = [
   '2026-09-20-bidding-dict-register-personnel.sql',
   // 2026-09-22 新增：用工形式字典（employment_type 5 类，前端"员工档案"用工形式列/录入项的枚举来源）
   '2026-09-22-bidding-dict-employment-type.sql',
+  // 2026-09-23 新增：追溯/备案/主体/外部公告 状态类字典 7 类 23 行（取值逐条对齐后端枚举）
+  '2026-09-23-bidding-dict-trace-and-notice-status.sql',
 ];
 // 仅含菜单的脚本（旧号段）不并入：其内容已被 09-18 的"终态菜单段"取代
 const MENU_SOURCE = '2026-09-18-cert-menu-renumber.sql';

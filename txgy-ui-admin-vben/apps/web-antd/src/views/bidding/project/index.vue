@@ -24,11 +24,15 @@ import {
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
+import { useCertMeta } from '../certificate/useCertMeta';
 
 import '../certificate/cert.css';
 
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
+/* 字典：追溯抽屉里的状态/类型一律走字典（dictLabel/dictTag 自带回落——字典未下发时回显原码、空值给"—"），
+ * 避免把中文枚举硬编码在前端（用户硬约束：状态码/枚举值必须支持动态配置）。 */
+const { dictLabel, dictOptions, dictTag } = useCertMeta();
 
 /** 权限判定：权限码未下发时放行（最终由后端 @PreAuthorize 裁决），避免界面被锁死 */
 function can(code: string): boolean {
@@ -474,9 +478,9 @@ function confirmDelete(r: ProjectApi.Project) {
             :columns="[
               { title: '标题', dataIndex: 'title', key: 'title' },
               { title: '采集源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
-              { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 110 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-              { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 100 },
+              { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 130 },
+              { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
+              { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 120 },
               { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 160 },
               { title: '原文', key: 'origUrl', width: 90 },
             ]"
@@ -487,6 +491,19 @@ function confirmDelete(r: ProjectApi.Project) {
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
+              <template v-else-if="column.key === 'contentType'">
+                {{ dictLabel('notice_external_content_type', record.contentType) }}
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="dictTag('notice_external_status', record.status).color">
+                  {{ dictTag('notice_external_status', record.status).label }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'auditStatus'">
+                <a-tag :color="dictTag('notice_external_audit_status', record.auditStatus).color">
+                  {{ dictTag('notice_external_audit_status', record.auditStatus).label }}
+                </a-tag>
+              </template>
               <template v-else-if="column.key === 'origUrl'">
                 <span v-if="record.origUrl" class="mono" :title="record.origUrl" style="cursor: text">
                   {{ record.available ? '可达（可复制）' : '平台内不可达' }}
@@ -502,7 +519,7 @@ function confirmDelete(r: ProjectApi.Project) {
             class="ct-table mb-3"
             :columns="[
               { title: '备案类型', dataIndex: 'filingType', key: 'filingType', width: 140 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
+              { title: '状态', dataIndex: 'status', key: 'status', width: 140 },
               { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 170 },
               { title: '项目编号', dataIndex: 'projectCode', key: 'projectCode', width: 200 },
               { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'tenderProjectCode' },
@@ -514,6 +531,11 @@ function confirmDelete(r: ProjectApi.Project) {
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'submitTime'">{{ fmtDateTime(record.submitTime) }}</template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="dictTag('filing_status', record.status).color">
+                  {{ dictTag('filing_status', record.status).label }}
+                </a-tag>
+              </template>
             </template>
             <template #emptyText><div class="ct-empty">无关联备案</div></template>
           </a-table>
@@ -556,9 +578,9 @@ function confirmDelete(r: ProjectApi.Project) {
               { title: '来源', dataIndex: 'source', key: 'source', width: 190 },
               { title: '主体角色', dataIndex: 'subjectRole', key: 'subjectRole', width: 120 },
               { title: '主体名称', dataIndex: 'subjectName', key: 'subjectName' },
-              { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 110 },
+              { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 130 },
               { title: '证件号', dataIndex: 'code', key: 'code', width: 190 },
-              { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 110 },
+              { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 120 },
               { title: '档案完备', dataIndex: 'profileComplete', key: 'profileComplete', width: 100 },
             ]"
             :data-source="trace.subjects ?? []"
@@ -572,14 +594,32 @@ function confirmDelete(r: ProjectApi.Project) {
                   {{ record.profileComplete ? '完备' : '缺项' }}
                 </a-tag>
               </template>
+              <template v-else-if="column.key === 'source'">
+                {{ dictLabel('trace_subject_source', record.source) }}
+              </template>
+              <template v-else-if="column.key === 'subjectRole'">
+                {{ dictLabel('subject_type', record.subjectRole) }}
+              </template>
+              <template v-else-if="column.key === 'codeType'">
+                <!-- tenderer_code_type 无后端枚举可对齐（外部标准码），故按原码展示，见字典脚本"不登记"说明 -->
+                {{ record.codeType || '—' }}
+              </template>
+              <template v-else-if="column.key === 'authStatus'">
+                <a-tag v-if="record.authStatus" :color="dictTag('subject_auth_status', record.authStatus).color">
+                  {{ dictTag('subject_auth_status', record.authStatus).label }}
+                </a-tag>
+                <span v-else>—</span>
+              </template>
             </template>
             <template #emptyText><div class="ct-empty">无参与主体</div></template>
           </a-table>
 
           <div class="ct-tip mt-3">
-            说明：「内容类型 / 状态 / 审核 / 主体角色 / 授权状态」为后端 code —— 这些域的字典尚未注册，
-            登记后此处会自动转为中文（见 sql/history 的字典注册脚本）；「原文」按本仓外链约定只给可复制文本，
-            平台内可达性由后端 available（ACTIVE 才可达）判定。
+            说明：状态与类型均取自字典（filing_status / subject_auth_status / subject_type /
+            trace_subject_source / notice_external_status / notice_external_audit_status /
+            notice_external_content_type），可在后台动态调整文案；字典未下发时回显原码，不会空白。
+            「证件类型」（tenderer_code_type）取值来自外部标准码、模块内无枚举可对齐，故按原码展示。
+            「原文」按本仓外链约定只给可复制文本，不直接给链接；平台内可达性由后端 available（ACTIVE 才可达）判定。
           </div>
         </template>
         <div v-else-if="!traceLoading" class="ct-empty">未取到追溯数据</div>
@@ -655,7 +695,12 @@ function confirmDelete(r: ProjectApi.Project) {
           <a-input v-model:value="receiptForm.receiptNo" placeholder="提交备案时后端返回的 receiptNo" />
         </a-form-item>
         <a-form-item label="回推结果（必填）">
-          <a-select v-model:value="receiptForm.resultStatus" :options="FILING_STATUS_OPTIONS" placeholder="请选择" />
+          <!-- 优先走字典 filing_status（可后台动态调整文案）；FILING_STATUS_OPTIONS 仅作字典尚未下发环境的兜底 -->
+          <a-select
+            v-model:value="receiptForm.resultStatus"
+            :options="dictOptions('filing_status').length > 0 ? dictOptions('filing_status') : FILING_STATUS_OPTIONS"
+            placeholder="请选择"
+          />
         </a-form-item>
         <a-form-item label="受理意见">
           <a-textarea v-model:value="receiptForm.opinion" :rows="3" placeholder="如：材料齐全，予以受理" />
