@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.wms.enums.order.WmsOrderStatusEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryCheckReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,8 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
     private WmsWarehouseService warehouseService;
     @Resource
     private WmsInventoryService inventoryService;
+    @Resource
+    private WmsItemSkuService itemSkuService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -104,6 +107,8 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
         WmsCheckOrderDO order = validateCheckOrderPrepare(id);
         // 1.2 校验盘库单明细存在
         List<WmsCheckOrderDetailDO> details = checkOrderDetailService.validateCheckOrderDetailListExists(id);
+        itemSkuService.validateItemSkuListItemEnabled(details.stream()
+                .map(WmsCheckOrderDetailDO::getSkuId).toList());
 
         // 2. 完成盘库单
         if (checkOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),

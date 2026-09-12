@@ -5,6 +5,8 @@ WORKDIR /workspace/txgy-ui-admin-vben
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+# CI 环境下 is-ci 短路 lefthook install（容器内无 git）
+ENV CI=true
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
@@ -18,10 +20,13 @@ ENV VITE_GLOB_API_URL=/admin-api
 ENV VITE_APP_CAPTCHA_ENABLE=false
 ENV VITE_APP_DOCALERT_ENABLE=false
 
-RUN pnpm run build:antd
+# 直接调用 turbo：绕过 package.json 中 cross-env 的 8GB 堆上限（VM 内存不足），
+# 并限制并发构建数，避免 node 多进程内存峰值过大
+RUN pnpm exec turbo build --filter=@vben/web-antd --concurrency=2
 
 FROM nginx:1.27-alpine
 
+# nginx 主配置(含 $final_tenant_id 的 map 定义)
 COPY deploy/frontend/nginx-main.conf /etc/nginx/nginx.conf
 COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /workspace/txgy-ui-admin-vben/apps/web-antd/dist /usr/share/nginx/html

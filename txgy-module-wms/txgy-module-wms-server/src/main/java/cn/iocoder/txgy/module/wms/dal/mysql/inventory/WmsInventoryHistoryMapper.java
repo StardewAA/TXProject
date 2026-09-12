@@ -17,6 +17,10 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface WmsInventoryHistoryMapper extends BaseMapperX<WmsInventoryHistoryDO> {
 
+    default Long selectCountBySkuId(Long skuId) {
+        return selectCount(WmsInventoryHistoryDO::getSkuId, skuId);
+    }
+
     default PageResult<WmsInventoryHistoryDO> selectPage(WmsInventoryHistoryPageReqVO reqVO) {
         MPJLambdaWrapperX<WmsInventoryHistoryDO> query = new MPJLambdaWrapperX<WmsInventoryHistoryDO>()
                 .selectAll(WmsInventoryHistoryDO.class)

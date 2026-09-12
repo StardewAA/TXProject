@@ -19,4 +19,19 @@ public interface DictTypeConstants {
     String CRM_FOLLOW_UP_TYPE = "crm_follow_up_type"; // CRM 跟进方式
     String CRM_RECEIVABLE_RETURN_TYPE = "crm_receivable_return_type"; // CRM 回款方式
 
+    // ========== CRM 售后回访与质保管理 ==========
+    String CRM_BUSINESS_SOURCE = "crm_business_source"; // CRM 商机来源
+    String CRM_AFTER_SALE_WARRANTY_STATUS = "crm_after_sale_warranty_status"; // CRM 质保状态
+    String CRM_AFTER_SALE_PLAN_TYPE = "crm_after_sale_visit_plan_type"; // CRM 回访计划类型
+    String CRM_AFTER_SALE_VISIT_PLAN_STATUS = "crm_after_sale_visit_plan_status"; // CRM 回访计划状态
+    String CRM_AFTER_SALE_VISIT_CYCLE = "crm_after_sale_visit_cycle"; // CRM 回访周期类型
+    String CRM_AFTER_SALE_VISIT_TASK_STATUS = "crm_after_sale_visit_task_status"; // CRM 回访任务状态
+    String CRM_AFTER_SALE_VISIT_TYPE = "crm_after_sale_visit_type"; // CRM 回访方式
+    String CRM_AFTER_SALE_SATISFACTION = "crm_after_sale_satisfaction"; // CRM 满意度评价
+    String CRM_AFTER_SALE_TICKET_STATUS = "crm_after_sale_ticket_status"; // CRM 问题工单状态
+    String CRM_AFTER_SALE_TICKET_SOURCE = "crm_after_sale_ticket_source"; // CRM 问题工单来源
+    String CRM_AFTER_SALE_TICKET_PRIORITY = "crm_after_sale_ticket_priority"; // CRM 问题工单优先级
+    String CRM_AFTER_SALE_TICKET_OPERATE_TYPE = "crm_after_sale_ticket_operate_type"; // CRM 工单流转操作类型
+    String CRM_AFTER_SALE_BUSINESS_SOURCE_TYPE = "crm_after_sale_business_source_type"; // CRM 售后转商机方向
+
 }

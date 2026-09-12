@@ -70,6 +70,8 @@ node_modules/
 # 本地数据库整库备份
 sql/mysql/
 deploy/mysql/init/*mysql-all-databases*.sql*
+# 运维操作前的本地表备份（含数据，不入库）
+deploy/backup_*.sql
 
 ######################################################################
 # 环境变量
@@ -85,3 +87,13 @@ services/training-exam/data/
 services/training-exam/__pycache__/
 services/training-exam/.pytest_cache/
 txgy-ui-admin-vben/.exam-*.log
+
+# 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
+uploads/
+
+######################################################################
+# pnpm 本地内容寻址存储（仅本地缓存，禁止入库）
+.pnpm-store/
+# 镜像构建用的临时上下文
+.fe-image-context/
+.wms-image-context/

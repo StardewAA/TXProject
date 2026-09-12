@@ -60,7 +60,7 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="portal-main">
+    <main class="portal-main" :class="{ 'portal-main--training': route.path.startsWith('/portal/training') }">
       <RouterView />
     </main>
 
@@ -174,6 +174,14 @@ async function handleLogout() {
   min-height: calc(100vh - 112px);
   margin: 0 auto;
   padding: 32px 0 48px;
+}
+
+.portal-main--training {
+  width: calc(100% - 64px);
+  max-width: none;
+  margin-right: 32px;
+  margin-left: 32px;
+  padding-top: 32px;
 }
 
 .portal-footer {

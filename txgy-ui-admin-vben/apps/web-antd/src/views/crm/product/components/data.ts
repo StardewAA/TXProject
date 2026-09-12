@@ -2,9 +2,11 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { DICT_TYPE } from '@vben/constants';
 
+import { BizTypeEnum } from '#/api/crm/permission';
+
 /** 产品详情列表的列定义 */
 export function useDetailListColumns(
-  showBusinessPrice: boolean,
+  bizType: BizTypeEnum,
 ): VxeTableGridOptions['columns'] {
   return [
     {
@@ -32,13 +34,19 @@ export function useDetailListColumns(
       field: 'businessPrice',
       title: '商机价格（元）',
       formatter: 'formatAmount2',
-      visible: showBusinessPrice,
+      visible: bizType === BizTypeEnum.CRM_BUSINESS,
     },
     {
       field: 'contractPrice',
       title: '合同价格（元）',
       formatter: 'formatAmount2',
-      visible: !showBusinessPrice,
+      visible: bizType === BizTypeEnum.CRM_CONTRACT,
+    },
+    {
+      field: 'quotationPrice',
+      title: '报价价格（元）',
+      formatter: 'formatAmount2',
+      visible: bizType === BizTypeEnum.CRM_QUOTATION,
     },
     {
       field: 'count',
