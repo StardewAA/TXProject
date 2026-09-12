@@ -12,7 +12,8 @@
  * 字典口径（契约 §0.5，禁止自造中文枚举）：一律 dictLabel/dictTag 优先、缺字典回落原始 code。
  *   已注册：qual_status、qual_apply_type、qual_apply_status、qual_serial（2026-09-20 新增）、
  *   material_category / material_result / material_status、safety_permit_status、safety_risk_flag、risk_level。
- *   未注册：qual_grade（国标表110 等级无 code 口径，候选取自 standard/options，展示回落原码）。
+ *   非字典：qual_grade —— 其值域由**现行标准库数据**决定（后端 /bidding/qualification/standard/options
+ *   口径为"取自现行标准库，不固化字典"），页面原样展示；登记成字典反而制造第二套编码。
  *   注意：字典类型名以 bidding_dict_data 为准 —— 申报类型/状态为 qual_apply_type / qual_apply_status（曾误写 apply_*）。
  * 时间口径：LocalDate（issueDate/validTo/submitDate/dueDate/newValidTo）为 'yyyy-MM-dd' 字符串；
  *   仅 latestReview.reviewedAt 是 LocalDateTime（epoch 毫秒）→ 过 fmtDateTime。 */
@@ -1054,8 +1055,9 @@ onMounted(() => {
           已注册（中文名 + 标签色）：<code>qual_status</code> 台账状态、<code>qual_apply_type</code> / <code>qual_apply_status</code> 申报类型与状态、
           <code>qual_serial</code> 序列、<code>material_result / material_status / material_category</code>、
           <code>safety_permit_status</code>、<code>safety_risk_flag</code>、<code>risk_level</code>。
-          仍缺 <code>qual_grade</code>：其值为国标表110 的等级（特级/一级/二级…），无稳定 code 口径，
-          故不登记字典，候选取自 <code>/bidding/qualification/standard/options</code>、展示回落原码。
+          <code>qual_grade</code> <strong>不是字典</strong>：其值域由现行标准库数据决定（后端接口口径：
+          <code>/bidding/qualification/standard/options</code> 取自标准库、不固化字典），故原样展示；
+          登记成字典反而会制造第二套编码。
           本页一律字典优先、缺字典回落 code（<strong>不硬编码中文枚举</strong>）。
         </div>
         <div style="margin-top: 6px">

@@ -20,10 +20,13 @@ const path = require('node:path');
 const MASTERS_ONLY = process.argv.includes('--masters-only');
 const LIST_ALL = process.argv.includes('--list');
 
-/** 有意不登记字典的类型：登记反而制造第二套编码（必须在 reason 里写清理由） */
-const ALLOW = new Map([
-  ['qual_grade', '国标表110 的等级值（特级/一级/二级…）无稳定 code 口径，候选取自 standard/options，展示回落原码'],
-]);
+/** 有意不登记字典的类型：登记反而制造第二套编码（必须在 reason 里写清理由）
+ *  ⚠️ 白名单只对"**当前真实引用**"生效：条目一旦不再被引用就是死配置，门禁会直接 FAIL 要求删除
+ *     —— 陈旧白名单会变成静默盲区（将来前端真的引用该类型时会被放行）。
+ *  历史：qual_grade 曾在此列，后经核实**前端并无任何调用**（全仓仅两行注释提及），
+ *        且后端 /bidding/qualification/standard/options 明确"取自现行标准库，不固化字典"，
+ *        故条目已删除；该值域由标准库数据决定，页面原样展示，本就不需要字典。 */
+const ALLOW = new Map([]);
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const sqlDir = path.join(repoRoot, 'txgy-module-bidding', 'sql');
@@ -88,6 +91,10 @@ for (const dir of feDirs) {
 
 const missing = [...used.keys()].filter((t) => !registered.has(t)).sort();
 const unexpected = missing.filter((t) => !ALLOW.has(t));
+/** 命中的白名单（当前确实被引用且有意不登记） */
+const allowHit = missing.filter((t) => ALLOW.has(t));
+/** 陈旧白名单：登记了但当前没有任何引用 —— 死配置，必须删掉 */
+const allowStale = [...ALLOW.keys()].filter((t) => !missing.includes(t));
 
 console.log(`扫描范围：${MASTERS_ONLY ? 'sql/*.sql（仅一键包）' : 'sql/*.sql + sql/history/*.sql（整仓）'}；前端 bidding 域 views/api`);
 console.log(`已注册字典 ${registered.size} 类；前端引用 ${used.size} 类`);
@@ -120,4 +127,14 @@ if (unexpected.length > 0) {
   process.exit(1);
 }
 
-console.log(`\n[OK] 前端引用的字典类型均已注册（白名单 ${ALLOW.size} 类：${[...ALLOW.keys()].join(', ') || '无'}）`);
+if (allowStale.length > 0) {
+  console.error(`\n[FAIL] ALLOW 白名单存在陈旧条目：${allowStale.join(', ')}`);
+  console.error('白名单只对"当前真实引用"生效；陈旧条目是静默盲区——将来前端真引用了该类型，门禁会直接放行。');
+  console.error('处理：删除该条目（字典已注册 / 前端已不再引用 / 从未真正引用过，三种情况都只需删一行）。');
+  process.exit(1);
+}
+
+const allowNote = allowHit.length > 0
+  ? `白名单命中 ${allowHit.length} 类：${allowHit.map((t) => `${t}（${ALLOW.get(t)}）`).join('；')}`
+  : '白名单 0 条（全部字典均已注册，无需例外）';
+console.log(`\n[OK] 前端引用的字典类型均已注册（${allowNote}）`);
