@@ -1459,6 +1459,15 @@ INSERT IGNORE INTO `bidding_dict_data`
 (710000000000003404,0,'qual_serial','SUPERVISION','监理','info',b'0',4,b'1','同上','1',NOW(),'1',NOW(),b'0'),
 (710000000000003405,0,'qual_serial','TESTING','检测','default',b'0',5,b'1','同上','1',NOW(),'1',NOW(),b'0');
 
+INSERT IGNORE INTO `bidding_dict_data`
+(`id`, `tenant_id`, `dict_type`, `dict_value`, `dict_label`, `color_type`, `terminal`, `sort`, `enabled`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+(710000000000003501,0,'employment_type','FULL_TIME','全职','success',b'0',1,b'1','本企业正式员工，可计入资质人员指标（等价 15-3 is_full_time=TRUE）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003502,0,'employment_type','PART_TIME','兼职','danger',b'0',2,b'1','挂靠/人证分离高风险形态（PersonnelEmploymentTypeEnum.isOutsourceRisk）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003503,0,'employment_type','LABOR_DISPATCH','劳务派遣','danger',b'0',3,b'1','劳动关系在派遣单位，属挂靠高风险形态（isOutsourceRisk）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003504,0,'employment_type','RETIRED_REHIRE','退休返聘','warning',b'0',4,b'1','可承担岗位，但不计入本单位全职口径（is_full_time 为假）','1',NOW(),'1',NOW(),b'0'),
+(710000000000003505,0,'employment_type','OTHER','其他','default',b'0',5,b'1','其它用工形式，核验时按非全职处理','1',NOW(),'1',NOW(),b'0');
+
+
 
 -- ---------------------------------------------------------------------
 -- 校验（执行后：dict_type 数应为 28 = v1.0 的 14 + 09-19 的 7 + 材料 2 + 09-20 的 5；

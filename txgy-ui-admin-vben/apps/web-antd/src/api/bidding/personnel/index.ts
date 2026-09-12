@@ -179,6 +179,8 @@ export namespace PersonnelProfileApi {
     /** LocalDate */
     joinDate?: null | string;
     deptName?: string;
+    /** 字典 employment_type（PersonnelEmploymentTypeEnum：FULL_TIME/PART_TIME/LABOR_DISPATCH/RETIRED_REHIRE/OTHER） */
+    employmentType?: string;
     remark?: string;
   }
 
@@ -205,8 +207,25 @@ export namespace PersonnelProfileApi {
     workStartDate?: null | string;
     joinDate?: null | string;
     deptName?: string;
+    /** 岗位名称 */
+    positionName?: string;
+    /** 字典 employment_type（PersonnelEmploymentTypeEnum） */
+    employmentType?: null | string;
+    /** 是否本单位在职（后端口径：仅 FULL_TIME 为真；null = 未评估） */
+    isFullTime?: boolean;
     /** 字典 personnel_status */
     personnelStatus?: string;
+    /** 最近状态变更日期 LocalDate → 'YYYY-MM-DD' */
+    statusChangeDate?: null | string;
+    /** 人事档案号 */
+    archiveNo?: string;
+    remark?: string;
+    /** 在册证书数量（注意与 Overview.totalCertCount 的区别：本字段来自档案出参） */
+    certCount?: number;
+    /** 可用（有效/临近到期）证书数量 */
+    usableCertCount?: number;
+    /** 身份证是否在有效期内 */
+    idCardValid?: boolean;
     /** 乐观锁版本（状态流转必传） */
     version?: number;
   }

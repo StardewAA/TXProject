@@ -27,6 +27,8 @@ const DDL_SOURCES = [
   // ⚠️ 新增 history 脚本务必登记到本清单：漏登记时重建会**静默抹掉**该脚本内容（新装库缺功能，
   //    运行中的库看不出来）。sql/tools/check-master-mirror.js 专门守这条不变式。
   '2026-09-20-bidding-dict-register-personnel.sql',
+  // 2026-09-22 新增：用工形式字典（employment_type 5 类，前端"员工档案"用工形式列/录入项的枚举来源）
+  '2026-09-22-bidding-dict-employment-type.sql',
 ];
 // 仅含菜单的脚本（旧号段）不并入：其内容已被 09-18 的"终态菜单段"取代
 const MENU_SOURCE = '2026-09-18-cert-menu-renumber.sql';

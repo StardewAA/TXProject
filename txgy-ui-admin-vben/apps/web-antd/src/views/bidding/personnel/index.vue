@@ -437,6 +437,9 @@ const profileColumns = [
   { title: '身份证（脱敏）', dataIndex: 'idCardMasked', key: 'idCardMasked', width: 170 },
   { title: '性别', key: 'gender', width: 80 },
   { title: '部门', dataIndex: 'deptName', key: 'deptName', width: 130 },
+  /* 用工形式：后端 PersonnelEmploymentTypeEnum 明写"劳务派遣/兼职人员即使证书齐全，也应在核验中判为风险项"，
+   * 故这里按字典 color_type 着色（LABOR_DISPATCH/PART_TIME = danger），把挂靠信号放在列表上而非藏进详情。 */
+  { title: '用工形式', key: 'employmentType', width: 110 },
   { title: '学历', key: 'eduLevel', width: 100 },
   { title: '职称', key: 'titleLevel', width: 110 },
   { title: '入职日期', dataIndex: 'joinDate', key: 'joinDate', width: 115 },
@@ -469,6 +472,7 @@ function resetProfileForm() {
   Object.assign(profileForm, {
     birthDate: undefined,
     deptName: undefined,
+    employmentType: undefined,
     eduLevel: undefined,
     eduMajor: undefined,
     email: undefined,
@@ -501,6 +505,7 @@ function openProfileEdit(row: PersonnelProfileApi.Profile) {
     eduLevel: row.eduLevel ?? undefined,
     eduMajor: row.eduMajor,
     email: row.email,
+    employmentType: row.employmentType ?? undefined,
     entId: row.entId ?? profileForm.entId,
     gender: row.gender ?? undefined,
     graduateDate: row.graduateDate ?? undefined,
@@ -882,6 +887,19 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   {{ record.eduLevel ? dictLabel('edu_level', record.eduLevel) : '—' }}
                 </template>
                 <template v-else-if="column.key === 'titleLevel'">{{ record.titleLevel || '—' }}</template>
+                <template v-else-if="column.key === 'employmentType'">
+                  <a-tag
+                    v-if="record.employmentType"
+                    :color="dictOptions('employment_type').length > 0 ? dictTag('employment_type', record.employmentType).color : 'default'"
+                  >
+                    {{
+                      dictOptions('employment_type').length > 0
+                        ? dictTag('employment_type', record.employmentType).label
+                        : record.employmentType
+                    }}
+                  </a-tag>
+                  <span v-else>—</span>
+                </template>
                 <template v-else-if="column.key === 'personnelStatus'">
                   <a-tag
                     :color="dictOptions('personnel_status').length > 0 ? dictTag('personnel_status', record.personnelStatus).color : record.personnelStatus === 'ACTIVE' ? 'green' : 'default'"
@@ -1385,6 +1403,18 @@ function remainTag(r: PersonnelCertApi.Cert) {
           <a-col :span="8">
             <a-form-item label="部门"><a-input v-model:value="profileForm.deptName" /></a-form-item>
           </a-col>
+          <a-col :span="8">
+            <!-- 用工形式：字典 employment_type（PersonnelEmploymentTypeEnum）。留空 = 后端按列默认 FULL_TIME 落库，
+                 故不设为必填，避免把"没填"变成提交失败。 -->
+            <a-form-item label="用工形式">
+              <a-select
+                v-model:value="profileForm.employmentType"
+                :options="dictOptions('employment_type')"
+                placeholder="留空 = 全职（后端默认）"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
           <a-col :span="24">
             <a-form-item label="备注"><a-textarea v-model:value="profileForm.remark" :rows="2" /></a-form-item>
           </a-col>
@@ -1411,6 +1441,8 @@ function remainTag(r: PersonnelCertApi.Cert) {
         <a-descriptions-item label="当前状态">{{ profileStatusRow?.personnelStatus ?? '—' }}</a-descriptions-item>
         <a-descriptions-item label="乐观锁 version">{{ profileStatusForm.version }}</a-descriptions-item>
         <a-descriptions-item label="部门">{{ profileStatusRow?.deptName ?? '—' }}</a-descriptions-item>
+        <!-- 状态流转前先给"上次何时变的"：避免刚改过又改（后端 statusChangeDate 一直在回传，此前未展示） -->
+        <a-descriptions-item label="最近状态变更">{{ profileStatusRow?.statusChangeDate || '—' }}</a-descriptions-item>
       </a-descriptions>
       <a-form layout="vertical">
         <a-form-item label="目标状态（只列合法迁移）">
