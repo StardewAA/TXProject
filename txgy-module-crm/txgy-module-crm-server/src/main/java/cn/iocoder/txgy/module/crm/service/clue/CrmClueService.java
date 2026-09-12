@@ -1,6 +1,9 @@
 package cn.iocoder.txgy.module.crm.service.clue;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportExcelVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmCluePageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueTransferReqVO;
@@ -8,6 +11,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import jakarta.validation.Valid;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 线索 Service 接口
@@ -87,5 +91,14 @@ public interface CrmClueService {
      * @return 数量
      */
     Long getFollowClueCount(Long userId);
+
+    /**
+     * 批量导入线索
+     *
+     * @param importClues 导入线索列表
+     * @param importReqVO 导入请求
+     * @return 导入结果
+     */
+    CrmClueImportRespVO importClueList(List<CrmClueImportExcelVO> importClues, CrmClueImportReqVO importReqVO);
 
 }

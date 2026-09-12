@@ -93,7 +93,7 @@ onMounted(load)
         <div class="goods-info">
           <h1>{{ product.name }}</h1><p class="intro">{{ product.introduction }}</p>
           <div class="price-box"><span>平台价格</span><strong>¥{{ formatMoney(displayPrice) }}</strong><del v-if="product.marketPrice">¥{{ formatMoney(product.marketPrice) }}</del></div>
-          <dl><dt>所属店铺</dt><dd>{{ shop?.name || product.shopName || '店铺信息加载失败' }}</dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
+          <dl><dt>所属店铺</dt><dd><RouterLink v-if="product.shopId" :to="`/shops/${product.shopId}`" class="store-detail-link">{{ shop?.name || product.shopName || '查看店铺' }} ↗</RouterLink><span v-else>{{ product.shopName || '暂无店铺信息' }}</span></dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
           <div v-if="product.skus?.length" class="sku-area"><label>规格选择</label><div><button v-for="sku in product.skus" :key="sku.id" :class="{ active: selectedSku?.id === sku.id, disabled: sku.stock <= 0 }" :disabled="sku.stock <= 0" @click="selectSku(sku)">{{ propertyText(sku.properties) || `规格 ${sku.id}` }}</button></div></div>
           <div class="quantity"><label>采购数量</label><el-input-number v-model="quantity" :min="1" :max="Math.max(1, displayStock)" /><span>当前可售 {{ displayStock }}</span></div>
           <div class="goods-actions"><el-button size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(false)">{{ displayStock > 0 ? '加入购物车' : '暂时售罄' }}</el-button><el-button type="primary" size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(true)">立即采购</el-button><button class="favorite" @click="toggleFavorite">{{ product.favorite ? '★ 已收藏' : '☆ 收藏商品' }}</button></div>

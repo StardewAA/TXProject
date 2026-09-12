@@ -1,7 +1,9 @@
 package cn.iocoder.txgy.module.crm.dal.mysql.clue;
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmCluePageReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
@@ -9,6 +11,9 @@ import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
 import org.apache.ibatis.annotations.Mapper;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 线索 Mapper
@@ -52,6 +57,28 @@ public interface CrmClueMapper extends BaseMapperX<CrmClueDO> {
         query.eq(CrmClueDO::getFollowUpStatus, false)
                 .eq(CrmClueDO::getTransformStatus, false);
         return selectCount(query);
+    }
+
+    /**
+     * 查重：根据手机号、线索名称查询匹配的线索
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   线索名称，精确匹配
+     * @return 线索列表，最多 5 条
+     */
+    default List<CrmClueDO> selectListByDuplicate(String mobile, String name) {
+        LambdaQueryWrapperX<CrmClueDO> query = new LambdaQueryWrapperX<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {
+            query.and(w -> w.eq(CrmClueDO::getMobile, mobile).or().eq(CrmClueDO::getName, name));
+        } else if (StrUtil.isNotBlank(mobile)) {
+            query.eq(CrmClueDO::getMobile, mobile);
+        } else if (StrUtil.isNotBlank(name)) {
+            query.eq(CrmClueDO::getName, name);
+        } else {
+            return Collections.emptyList();
+        }
+        query.orderByDesc(CrmClueDO::getId).last("LIMIT 5");
+        return selectList(query);
     }
 
 }

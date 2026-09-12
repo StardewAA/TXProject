@@ -216,6 +216,35 @@ export namespace TrainingLearnerApi {
     totalPages?: number;
     progressPercent?: number;
   }
+
+  /** 学员端已上架课程（门户课程中心） */
+  export interface PortalCourse {
+    id?: number;
+    code?: string;
+    title?: string;
+    subtitle?: string;
+    summary?: string;
+    coverUrl?: string;
+    courseLevel?: string;
+    durationMinutes?: number;
+    lecturer?: string;
+    mediaType?: number;
+    mediaCount?: number;
+    commentCount?: number;
+    isRequired?: boolean;
+  }
+
+  /** VR 实训记录（模块六预留，当前后端返回空列表） */
+  export interface VrRecord {
+    id?: number;
+    sceneName?: string;
+    courseTitle?: string;
+    score?: number;
+    validSeconds?: number;
+    completed?: boolean;
+    startAt?: string;
+    endAt?: string;
+  }
 }
 
 /** 我的课程（分组） */
@@ -371,5 +400,22 @@ export function getMyCheckins(courseId?: number) {
     `/training/portal/learner/track/checkins${
       courseId ? `?courseId=${courseId}` : ''
     }`,
+  );
+}
+
+/** 学员端已上架课程分页（门户课程中心） */
+export function getPortalCoursePage(
+  params: PageParam & { keyword?: string; categoryId?: number },
+) {
+  return requestClient.get<PageResult<TrainingLearnerApi.PortalCourse>>(
+    '/training/portal/course/page',
+    { params },
+  );
+}
+
+/** VR 实训记录（模块六预留，当前后端返回空列表） */
+export function getVrRecords() {
+  return requestClient.get<TrainingLearnerApi.VrRecord[]>(
+    '/training/portal/learner/track/vr-records',
   );
 }

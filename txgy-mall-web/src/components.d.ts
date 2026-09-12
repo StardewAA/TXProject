@@ -32,11 +32,13 @@ declare module 'vue' {
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
+    IndustryCarousel: typeof import('./components/IndustryCarousel.vue')['default']
     MemberPage: typeof import('./components/MemberPage.vue')['default']
     MemberSidebar: typeof import('./components/MemberSidebar.vue')['default']
     ProductCard: typeof import('./components/ProductCard.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ShopCard: typeof import('./components/ShopCard.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

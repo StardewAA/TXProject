@@ -68,6 +68,7 @@ export const systemApi = {
 }
 
 export const productApi = {
+  getShops: () => request<Shop[]>({ url: '/product/shop/list' }),
   getCategories: () => request<Category[]>({ url: '/product/category/list' }),
   getPage: (params: Record<string, unknown>) =>
     request<PageResult<Product>>({ url: '/product/spu/page', params }),

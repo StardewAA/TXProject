@@ -20,6 +20,8 @@ public interface ErrorCodeConstants {
     // ========== 线索管理 1-020-001-000 ==========
     ErrorCode CLUE_NOT_EXISTS = new ErrorCode(1_020_001_000, "线索不存在");
     ErrorCode CLUE_TRANSFORM_FAIL_ALREADY = new ErrorCode(1_020_001_001, "线索已经转化过了，请勿重复转化");
+    ErrorCode CLUE_IMPORT_LIST_IS_EMPTY = new ErrorCode(1_020_001_002, "导入线索数据不能为空！");
+    ErrorCode CLUE_CREATE_NAME_NOT_NULL = new ErrorCode(1_020_001_003, "线索名称不能为空！");
 
     // ========== 商机管理 1-020-002-000 ==========
     ErrorCode BUSINESS_NOT_EXISTS = new ErrorCode(1_020_002_000, "商机不存在");
@@ -66,6 +68,8 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_CREATE_NAME_NOT_NULL = new ErrorCode(1_020_006_013, "客户名称不能为空！");
     ErrorCode CUSTOMER_NAME_EXISTS = new ErrorCode(1_020_006_014, "已存在名为【{}】的客户！");
     ErrorCode CUSTOMER_UPDATE_DEAL_STATUS_FAIL = new ErrorCode(1_020_006_015, "更新客户的成交状态失败，原因：已经是该状态，无需更新");
+    ErrorCode CUSTOMER_FETCH_WEB_PAGE_FAIL = new ErrorCode(1_020_006_016, "网页抓取失败：{}");
+    ErrorCode CRM_AI_CLASSIFY_FAIL = new ErrorCode(1_020_006_017, "AI 意图识别失败：{}");
 
     // ========== 权限管理 1_020_007_000 ==========
     ErrorCode CRM_PERMISSION_NOT_EXISTS = new ErrorCode(1_020_007_000, "数据权限不存在");
@@ -103,6 +107,19 @@ public interface ErrorCodeConstants {
     // ========== 跟进记录 1_020_013_000 ==========
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
+
+    // ========== 报价 1_020_014_000 ==========
+    ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");
+    ErrorCode QUOTATION_NO_EXISTS = new ErrorCode(1_020_014_001, "生成报价序列号重复，请重试");
+    ErrorCode QUOTATION_UPDATE_FAIL_NOT_DRAFT = new ErrorCode(1_020_014_002, "报价更新失败，原因：报价不是草稿状态");
+    ErrorCode QUOTATION_SUBMIT_FAIL_NOT_DRAFT = new ErrorCode(1_020_014_003, "报价提交审核失败，原因：报价没处在未提交状态");
+    ErrorCode QUOTATION_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS = new ErrorCode(1_020_014_004, "更新报价审核状态失败，原因：报价不是审核中状态");
+    ErrorCode QUOTATION_DELETE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_005, "删除报价失败，原因：报价已生成合同，不能删除");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_NOT_APPROVE = new ErrorCode(1_020_014_006, "转为合同失败，原因：报价不是审批通过状态");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_EXISTS = new ErrorCode(1_020_014_007, "转为合同失败，原因：报价已生成合同");
+
+    // ========== 商机管理 1_020_002_000 报价关联校验 ==========
+    ErrorCode BUSINESS_DELETE_FAIL_QUOTATION_EXISTS = new ErrorCode(1_020_002_005, "商机已关联报价，不能删除");
 
     // ========== 业绩目标配置 1_020_011_000 ==========
     ErrorCode PERFORMANCE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_011_000, "业绩目标配置不存在");

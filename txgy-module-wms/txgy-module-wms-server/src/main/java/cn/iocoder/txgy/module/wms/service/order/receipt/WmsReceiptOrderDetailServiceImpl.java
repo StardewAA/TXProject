@@ -112,7 +112,7 @@ public class WmsReceiptOrderDetailServiceImpl implements WmsReceiptOrderDetailSe
         }
         return convertList(reqVO.getDetails(), detail -> {
             // 校验 SKU 存在
-            itemSkuService.validateItemSkuExists(detail.getSkuId());
+            itemSkuService.validateItemSkuExistsAndItemEnabled(detail.getSkuId());
             // 构建对象
             WmsReceiptOrderDetailDO detailDO = BeanUtils.toBean(detail, WmsReceiptOrderDetailDO.class)
                     .setWarehouseId(reqVO.getWarehouseId());

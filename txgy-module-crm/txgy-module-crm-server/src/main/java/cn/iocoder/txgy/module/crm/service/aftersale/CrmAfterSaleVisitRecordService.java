@@ -47,6 +47,17 @@ public interface CrmAfterSaleVisitRecordService {
     CrmAfterSaleVisitRecordDO getVisitRecord(Long id);
 
     /**
+     * 获得回访任务自动生成的回访记录
+     *
+     * <p>用于任务列表「填写回访记录」入口：任务完成后会自动生成一条待填写记录，
+     * 前端凭 taskId 直接定位该记录并打开填写，无需手动新建。
+     *
+     * @param taskId 回访任务编号
+     * @return 回访记录（不存在时返回 null）
+     */
+    CrmAfterSaleVisitRecordDO getVisitRecordByTaskId(Long taskId);
+
+    /**
      * 校验回访记录是否存在
      *
      * @param id 编号

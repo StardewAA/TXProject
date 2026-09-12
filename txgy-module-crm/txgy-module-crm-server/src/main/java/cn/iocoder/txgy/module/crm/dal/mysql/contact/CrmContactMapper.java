@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.crm.dal.mysql.contact;
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -12,6 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -76,6 +78,28 @@ public interface CrmContactMapper extends BaseMapperX<CrmContactDO> {
     default List<CrmContactDO> selectListByCustomerIdOwnerUserId(Long customerId, Long ownerUserId) {
         return selectList(CrmContactDO::getCustomerId, customerId,
                 CrmContactDO::getOwnerUserId, ownerUserId);
+    }
+
+    /**
+     * 查重：根据手机号、姓名查询匹配的联系人
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   姓名，精确匹配
+     * @return 联系人列表，最多 5 条
+     */
+    default List<CrmContactDO> selectListByDuplicate(String mobile, String name) {
+        LambdaQueryWrapperX<CrmContactDO> query = new LambdaQueryWrapperX<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {
+            query.and(w -> w.eq(CrmContactDO::getMobile, mobile).or().eq(CrmContactDO::getName, name));
+        } else if (StrUtil.isNotBlank(mobile)) {
+            query.eq(CrmContactDO::getMobile, mobile);
+        } else if (StrUtil.isNotBlank(name)) {
+            query.eq(CrmContactDO::getName, name);
+        } else {
+            return Collections.emptyList();
+        }
+        query.orderByDesc(CrmContactDO::getId).last("LIMIT 5");
+        return selectList(query);
     }
 
 }

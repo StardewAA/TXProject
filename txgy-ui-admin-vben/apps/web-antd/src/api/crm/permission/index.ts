@@ -43,6 +43,7 @@ export enum BizTypeEnum {
   CRM_PRODUCT = 6, // 产品
   CRM_RECEIVABLE = 7, // 回款
   CRM_RECEIVABLE_PLAN = 8, // 回款计划
+  CRM_QUOTATION = 9, // 报价
 }
 
 /**
