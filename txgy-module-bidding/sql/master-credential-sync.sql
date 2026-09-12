@@ -1508,6 +1508,16 @@ INSERT IGNORE INTO `bidding_dict_data`
 (710000000000004304,0,'key_post','QUALITY_OFFICER','质量负责人','default',b'0',4,b'1','项目质量负责人','1',NOW(),'1',NOW(),b'0'),
 (710000000000004305,0,'key_post','CONSTRUCTION_ENGINEER','施工员','default',b'0',5,b'1','施工现场管理人员','1',NOW(),'1',NOW(),b'0');
 
+INSERT IGNORE INTO `bidding_dict_data`
+(`id`, `tenant_id`, `dict_type`, `dict_value`, `dict_label`, `color_type`, `terminal`, `sort`, `enabled`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`) VALUES
+-- verify_result（新增类型 3 条）
+(710000000000004401,0,'verify_result','MATCH','与官方底账一致','success',b'1',1,b'1','GB/T 36906 verifyinfo result=0（校验正确）','1',NOW(),'1',NOW(),b'0'),
+(710000000000004402,0,'verify_result','MISMATCH','与官方底账不一致','danger',b'1',2,b'1','result=1/2/3（未激活/暂时失效/已失效）→ 状态异常','1',NOW(),'1',NOW(),b'0'),
+(710000000000004403,0,'verify_result','UNAVAILABLE','无法判定','warning',b'0',3,b'1','result=4/5（信息不全/查无此信息）→ 不可得，可重试','1',NOW(),'1',NOW(),b'0'),
+-- verify_channel 补齐（第 4 个渠道）
+(710000000000004501,0,'verify_channel','THIRD_PARTY','第三方核验通道','default',b'0',4,b'1','设计文档 v3.3 §17.5 四渠道之一（本轮按 CertVerifyChannelEnum 补齐漏行）','1',NOW(),'1',NOW(),b'0');
+
+
 
 
 
