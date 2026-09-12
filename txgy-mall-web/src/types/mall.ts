@@ -13,6 +13,7 @@ export interface TokenResult {
 }
 
 export interface UserProfile {
+  memberIdentity?: 'buyer' | 'supplier'
   id?: Identifier
   nickname?: string
   mobile?: string
@@ -157,6 +158,11 @@ export interface TradeOrder {
 }
 
 export interface AfterSale {
+  returnReceiverName?: string
+  returnReceiverMobile?: string
+  returnAddress?: string
+  auditReason?: string
+  receiveReason?: string
   id: Identifier
   no?: string
   status: number

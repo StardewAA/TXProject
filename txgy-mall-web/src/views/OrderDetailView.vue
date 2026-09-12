@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useBuyerNavigation } from '@/composables/useBuyerNavigation'
+const { buyerTo, paymentTo } = useBuyerNavigation()
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -36,11 +38,12 @@ onMounted(() => load(true))
 
 <template>
   <MemberPage title="订单详情" description="状态会从服务端重新同步">
+    <template #actions><RouterLink :to="buyerTo('/member/orders')">返回订单列表</RouterLink></template>
     <div v-if="loading" class="loading-box"><el-skeleton :rows="10" animated /></div>
     <template v-else-if="order">
-      <div class="status-card"><div><span>当前状态</span><strong>{{ order.statusName || statusNames[order.status] || order.status }}</strong><small>订单号：{{ order.no || order.id }}　创建时间：{{ formatDate(order.createTime) }}</small></div><div class="toolbar"><el-button v-if="order.status === 0" @click="cancel">取消订单</el-button><el-button v-if="order.status === 0 && order.payOrderId" type="primary" @click="router.push(`/pay/${order.payOrderId}?orderId=${order.id}`)">立即支付</el-button><el-button v-if="order.status === 20" type="primary" @click="receive">确认收货</el-button><el-button v-if="order.status === 30" type="primary" @click="router.push(`/member/orders/${order.id}/comment`)">评价商品</el-button></div></div>
+      <div class="status-card"><div><span>当前状态</span><strong>{{ order.statusName || statusNames[order.status] || order.status }}</strong><small>订单号：{{ order.no || order.id }}　创建时间：{{ formatDate(order.createTime) }}</small></div><div class="toolbar"><el-button v-if="order.status === 0" @click="cancel">取消订单</el-button><el-button v-if="order.status === 0 && order.payOrderId" type="primary" @click="router.push(paymentTo(order.payOrderId, order.id))">立即支付</el-button><el-button v-if="order.status === 20" type="primary" @click="receive">确认收货</el-button><el-button v-if="order.status === 30" type="primary" @click="router.push(buyerTo(`/member/orders/${order.id}/comment`))">评价商品</el-button></div></div>
       <section class="detail-block"><h2>收货信息</h2><p>{{ order.receiverName || '-' }}　{{ order.receiverMobile || '-' }}</p><p>{{ order.receiverAreaName }} {{ order.receiverDetailAddress }}</p></section>
-      <section class="detail-block"><h2>商品清单</h2><div class="detail-item" v-for="item in order.items || []" :key="item.id"><div class="detail-image"><img v-if="item.picUrl" :src="normalizeImage(item.picUrl)" alt="商品" /></div><div><RouterLink :to="`/goods/${item.spuId}`">{{ item.spuName || '商品' }}</RouterLink><small>{{ propertyText(item.properties) }}</small><RouterLink v-if="[10,20,30].includes(order.status) && Number(item.afterSaleStatus || 0) === 0" class="after-link" :to="{ path: '/member/after-sales/apply', query: { orderId: order.id, itemId: item.id } }">申请售后</RouterLink><RouterLink v-else-if="Number(item.afterSaleStatus || 0) > 0" class="after-link" to="/member/after-sales">查看售后</RouterLink></div><span>¥{{ formatMoney(item.price) }} × {{ item.count }}</span><strong>¥{{ formatMoney(item.payPrice ?? item.price * item.count) }}</strong></div></section>
+      <section class="detail-block"><h2>商品清单</h2><div class="detail-item" v-for="item in order.items || []" :key="item.id"><div class="detail-image"><img v-if="item.picUrl" :src="normalizeImage(item.picUrl)" alt="商品" /></div><div><RouterLink :to="`/goods/${item.spuId}`">{{ item.spuName || '商品' }}</RouterLink><small>{{ propertyText(item.properties) }}</small><RouterLink v-if="[10,20,30].includes(order.status) && Number(item.afterSaleStatus || 0) === 0" class="after-link" :to="{ path: buyerTo('/member/after-sales/apply'), query: { orderId: order.id, itemId: item.id } }">申请售后</RouterLink><RouterLink v-else-if="Number(item.afterSaleStatus || 0) > 0" class="after-link" :to="buyerTo('/member/after-sales')">查看售后</RouterLink></div><span>¥{{ formatMoney(item.price) }} × {{ item.count }}</span><strong>¥{{ formatMoney(item.payPrice ?? item.price * item.count) }}</strong></div></section>
       <section class="money-block"><span>订单实付：</span><strong>¥{{ formatMoney(order.payPrice) }}</strong></section>
     </template>
   </MemberPage>

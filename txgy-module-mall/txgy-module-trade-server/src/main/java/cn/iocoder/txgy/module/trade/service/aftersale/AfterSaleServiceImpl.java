@@ -70,6 +70,9 @@ import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.*;
 public class AfterSaleServiceImpl implements AfterSaleService {
 
     @Resource
+    private cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper settlementOrderLock;
+
+    @Resource
     @Lazy // 延迟加载，避免循环依赖
     private TradeOrderUpdateService tradeOrderUpdateService;
     @Resource
@@ -173,6 +176,12 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     public Long createAfterSale(Long userId, AppAfterSaleCreateReqVO createReqVO) {
         // 第一步，前置校验
         TradeOrderItemDO tradeOrderItem = validateOrderItemApplicable(userId, createReqVO);
+
+        // Serialize new after-sale applications with settlement's final order check.
+        // The tenant interceptor still applies; never lock an arbitrary client-supplied order.
+        settlementOrderLock.selectOne(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, tradeOrderItem.getOrderId()).last("FOR UPDATE"));
+        tradeOrderItem = validateOrderItemApplicable(userId, createReqVO);
 
         // 第二步，存储售后订单
         AfterSaleDO afterSale = createAfterSale(createReqVO, tradeOrderItem);

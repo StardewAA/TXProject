@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PurchaseLayout from './PurchaseLayout.vue'
+import { isPurchasePath } from '@/utils/buyer-navigation'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -41,6 +43,8 @@ onMounted(() => {
             <RouterLink to="/register">免费注册</RouterLink>
           </template>
           <RouterLink to="/member/orders">我的订单</RouterLink>
+          <RouterLink to="/purchase">采购中心</RouterLink>
+          <RouterLink to="/sales">销售中心</RouterLink>
           <RouterLink to="/member/after-sales">售后服务</RouterLink>
           <RouterLink to="/member/customer-service">在线客服</RouterLink>
         </nav>
@@ -84,7 +88,7 @@ onMounted(() => {
       </div>
     </header>
 
-    <main class="site-main"><RouterView /></main>
+    <main class="site-main"><PurchaseLayout v-if="isPurchasePath(router.currentRoute.value.path)"><RouterView /></PurchaseLayout><RouterView v-else /></main>
 
     <footer class="site-footer">
       <div class="container footer-features">
