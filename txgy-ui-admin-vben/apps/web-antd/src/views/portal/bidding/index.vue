@@ -38,7 +38,7 @@ const INDUSTRIES: Array<{ label: string; value: string }> = [
   { label: '不相关', value: 'NOT_BELONGS' },
   { label: '未知', value: 'UNCERTAIN' },
 ];
-const QUICK_RANGES = ['全部时间', '近7天', '近1个月', '近3个月', '今年以来'];
+const QUICK_RANGES = ['全部时间', '最近 7 天', '最近 30 天', '最近 90 天', '今年以来'];
 
 const state = reactive({
   keyword: '',

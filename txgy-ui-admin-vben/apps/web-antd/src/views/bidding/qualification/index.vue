@@ -258,7 +258,7 @@ const approveSaving = ref(false);
 const approveFormRef = ref();
 const approveForm = reactive<QualificationApi.ApproveReq>({ applyId: 0, version: 0, newValidTo: '' });
 const approveRules = {
-  newValidTo: [{ required: true, message: '延续后有效期必填', trigger: 'change' }],
+  newValidTo: [{ required: true, message: '延续后有效期不能为空', trigger: 'change' }],
 };
 
 function openApprove(r: QualificationApi.ApplyRecord) {
@@ -394,11 +394,11 @@ const form = reactive<QualificationApi.SaveReq>({
   certNo: '',
 });
 const rules = {
-  entId: [{ required: true, message: '企业主体 id 必填', trigger: 'change' }],
-  qualSerial: [{ required: true, message: '资质序列必填', trigger: 'change' }],
-  qualCategory: [{ required: true, message: '资质类别必填', trigger: 'blur' }],
-  qualGrade: [{ required: true, message: '资质等级必填', trigger: 'blur' }],
-  certNo: [{ required: true, message: '资质证书编号必填（租户内唯一）', trigger: 'blur' }],
+  entId: [{ required: true, message: '企业主体不能为空', trigger: 'change' }],
+  qualSerial: [{ required: true, message: '资质序列不能为空', trigger: 'change' }],
+  qualCategory: [{ required: true, message: '资质类别不能为空', trigger: 'blur' }],
+  qualGrade: [{ required: true, message: '资质等级不能为空', trigger: 'blur' }],
+  certNo: [{ required: true, message: '资质证书编号不能为空（租户内唯一）', trigger: 'blur' }],
 };
 
 function onCreate() {

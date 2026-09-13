@@ -223,8 +223,15 @@ const details: Record<string, NoticeExternalDetail> = {
 
 function quickStart(quick?: string): string | undefined {
   if (!quick || quick === '全部时间') return undefined;
-  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90, 今年以来: 365 };
-  return iso(now - (map[quick] ?? 7) * DAY);
+  /* 与 api.ts 的 quickToBegin **同口径**（本函数是 Mock 版实现，此前两处不同步）：
+   *   · 标签逐字一致 —— 2026-09-14 界面统一为「最近 7 天 / 最近 30 天 / 最近 90 天」后，旧键名会让 Mock 全部落到兜底值；
+   *   · 「今年以来」= 自然年 1 月 1 日（旧版按 365 天回溯 = "去年今天"，真实实现已修并注释说明，Mock 此前没跟上）；
+   *   · 未识别标签返回 undefined（旧版兜底成 7 天，会静默改变筛选语义）。 */
+  if (quick === '今年以来') return iso(new Date(new Date().getFullYear(), 0, 1).getTime());
+  const map: Record<string, number> = { '最近 7 天': 7, '最近 30 天': 30, '最近 90 天': 90 };
+  const days = map[quick];
+  if (!days) return undefined;
+  return iso(now - days * DAY);
 }
 
 /**

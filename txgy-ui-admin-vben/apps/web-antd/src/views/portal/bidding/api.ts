@@ -101,7 +101,8 @@ function quickToBegin(quick?: string): string | undefined {
     const y = new Date().getFullYear();
     return `${y}-01-01 00:00:00`;
   }
-  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90 };
+  // 键必须与 QUICK_RANGES 的标签**逐字一致**（标签即本函数的入参；改标签须同步改这里）
+  const map: Record<string, number> = { '最近 7 天': 7, '最近 30 天': 30, '最近 90 天': 90 };
   const days = map[quick];
   if (!days) return undefined;
   const t = new Date(Date.now() - days * 24 * 60 * 60 * 1000);

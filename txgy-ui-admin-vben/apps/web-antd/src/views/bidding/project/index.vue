@@ -120,7 +120,7 @@ const receiptForm = reactive<FilingApi.ResultReq>({ receiptNo: '', resultStatus:
 
 async function submitFilingForm() {
   if (!filingForm.filingType.trim() || !filingForm.projectCode.trim()) {
-    message.warning('备案类型与项目编号必填');
+    message.warning('备案类型与项目编号不能为空');
     return;
   }
   filingSaving.value = true;
@@ -144,7 +144,7 @@ function openReceipt() {
 
 async function submitReceipt() {
   if (!receiptForm.receiptNo.trim() || !receiptForm.resultStatus) {
-    message.warning('受理号与回推结果必填');
+    message.warning('受理号与回推结果不能为空');
     return;
   }
   receiptSaving.value = true;
@@ -211,8 +211,8 @@ const form = reactive<ProjectApi.Project>({ projectCode: '', projectName: '' });
 const isEdit = computed(() => !!form.id);
 
 const rules = {
-  projectCode: [{ required: true, message: '项目编号必填', trigger: 'blur' }],
-  projectName: [{ required: true, message: '项目名称必填', trigger: 'blur' }],
+  projectCode: [{ required: true, message: '项目编号不能为空', trigger: 'blur' }],
+  projectName: [{ required: true, message: '项目名称不能为空', trigger: 'blur' }],
 };
 
 async function onCreate() {
