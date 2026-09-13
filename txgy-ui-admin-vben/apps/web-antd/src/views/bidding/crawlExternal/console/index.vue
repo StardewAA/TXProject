@@ -28,7 +28,7 @@ import {
 } from '#/api/bidding/crawlExternal';
 import { getRangePickerDefaultProps } from '#/utils/rangePickerProps';
 
-import { CHANNEL_GENERIC_TEXT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
+import { CHANNEL_GENERIC_TEXT, contentFormText, FETCH_TYPE_HINT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
@@ -750,7 +750,8 @@ const incompleteOf = (r: ManualRun) =>
           <div v-else class="fp-wall">
             <div v-for="src in sources" :key="String(src.id)" class="fp-src" @click="enterSourceTasks(src)">
               <div class="fp-src-h">
-                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'">{{ fetchTypeText(src.fetchType) }}</Tag>
+                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'" :title="FETCH_TYPE_HINT">{{ fetchTypeText(src.fetchType) }}</Tag>
+                <Tag v-if="src.contentForm" color="cyan" :title="FETCH_TYPE_HINT">{{ contentFormText(src.contentForm) }}</Tag>
                 <Tag :color="src.enabled ? 'green' : 'default'">{{ src.enabled ? '启用' : '停用' }}</Tag>
                 <span class="fp-src-code">{{ src.sourceCode || '—' }}</span>
               </div>
@@ -768,7 +769,11 @@ const incompleteOf = (r: ManualRun) =>
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
             <span class="text-sm font-extrabold text-gray-700">{{ curSource.sourceName || curSource.sourceCode }}</span>
-            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ fetchTypeText(curSource.fetchType) }}</Tag>
+            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'" :title="FETCH_TYPE_HINT">{{ fetchTypeText(curSource.fetchType) }}</Tag>
+            <Tag v-if="curSource.contentForm" color="cyan" :title="FETCH_TYPE_HINT">{{ contentFormText(curSource.contentForm) }}</Tag>
+            <span class="text-xs text-gray-500">
+              列表解析器 {{ curSource.parserCodeDefault || '—' }} · 正文解析器 {{ curSource.detailParserCode || '—' }}
+            </span>
           </div>
 
           <!-- 筛选行 -->
