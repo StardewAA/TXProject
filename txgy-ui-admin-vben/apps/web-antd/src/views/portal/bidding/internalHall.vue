@@ -155,6 +155,9 @@ onMounted(() => void load());
           <div class="row-title">
             <span class="tt">{{ r.title }}</span>
             <span class="tag-type">{{ r.noticeTypeName || r.noticeType }}</span>
+            <!-- 可见范围：internalFlag=true 仅本租户可见（08 §4）；false/未给=对外社会公开。
+                 两类公告都在这一个大厅里，不给标记的话用户无从判断"这条会不会对社会公开"。 -->
+            <span v-if="r.internalFlag === true" class="tag-scope" title="仅本企业租户可见，不对社会公开">仅本租户</span>
           </div>
           <div class="row-meta">
             <span class="pub">{{ r.publisherName }}</span>
@@ -209,6 +212,7 @@ onMounted(() => void load());
 .row-title { display: flex; align-items: center; gap: 8px; }
 .row-title .tt { font-weight: 600; color: #1f2937; }
 .tag-type { font-size: 11px; color: #17539a; background: #eff4ff; border: 1px solid #c7d7f7; border-radius: 4px; padding: 1px 6px; }
+.tag-scope { font-size: 11px; color: #a15c00; background: #fff7e6; border: 1px solid #ffd591; border-radius: 4px; padding: 1px 6px; }
 .row-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: #6b7280; }
 .row-meta .code { font-family: ui-monospace, monospace; }
 .row-meta .time { color: #9ca3af; }
