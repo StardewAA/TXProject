@@ -10,7 +10,8 @@ import { requestClient } from '#/api/request';
 export namespace CertificateApi {
   /* ===================== §1 元数据 ===================== */
   export type DictTagType = 'default' | 'error' | 'info' | 'success' | 'warning';
-  export interface DictItem {
+  /** 契约来源：DictItemRespVO */
+export interface DictItem {
     value: string;
     label: string;
     /** 标签色（前端直接用，勿自造映射） */
@@ -18,11 +19,15 @@ export namespace CertificateApi {
     /** 是否终态（终态不可再流转，用于禁用状态操作） */
     terminal: boolean;
     sort: number;
-  }
+    /** 字典类型键（前端按域筛选字典项时使用）
+   *  契约来源：DictItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  dictTypeKey?: string;
+}
   /** key = 字典名（cert_status / verification_status / cert_type / file_category / verify_channel / lifecycle_type / lifecycle_status / biz_domain / revoke_type / renewal_type / material_category / person_cert_type / person_cert_status …） */
   export type DictMap = Record<string, DictItem[]>;
 
-  export interface RuleConfigItem {
+  /** 契约来源：RuleConfigItemRespVO */
+export interface RuleConfigItem {
     ruleKey: string;
     value: unknown;
     valueType: 'BOOL' | 'DECIMAL' | 'INT' | 'JSON' | 'STRING';
@@ -31,12 +36,19 @@ export namespace CertificateApi {
     /** 法定下限（配置值不得低于该值） */
     legalFloor?: null | { max?: number; min?: number };
     versionNo: number;
-  }
+    /** 规则分组（RuleConfigGroupEnum）
+   *  契约来源：RuleConfigItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  ruleGroup?: string;
+  /** 规则来源（平台默认/租户覆盖）
+   *  契约来源：RuleConfigItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  source?: string;
+}
   export interface RuleConfigData {
     items: RuleConfigItem[];
   }
 
-  /* ===================== §2 证照台账 ===================== */
+  /* ===================== §2 证照台账 =====================  * 契约来源：CertificateRespVO（GET /bidding/certificate/page|get）
+     */
   export interface Certificate {
     id: number;
     /** 乐观锁版本（更新/状态流转必须回传） */
@@ -112,7 +124,8 @@ export namespace CertificateApi {
     reason?: string;
   }
 
-  /* ===================== §3 文件版本 ===================== */
+  /* ===================== §3 文件版本 =====================  * 契约来源：CertFileVersionRespVO
+     */
   export interface CertFileVersion {
     id: number;
     certId: number;
@@ -124,7 +137,8 @@ export namespace CertificateApi {
     version: number;
     /** 当前生效版本 */
     isCurrent: boolean;
-    sha256?: string;
+  /** 文件 SHA-256（**后端字段名是 fileHash**：本页曾错写 sha256，导致该列恒为空——写入侧用的是 fileHash，读取侧却绑 sha256，2026-09-25 修正） */
+  fileHash?: string;
     virusScanStatus?: string;
     copyExpiringTime?: null | string;
     createTime?: string;
@@ -188,7 +202,8 @@ export namespace CertificateApi {
   export type LifecycleType = 'ANNUAL' | 'CHANGE' | 'RENEW' | 'REVOKE';
   export type LifecycleStatus = 'APPROVED' | 'EFFECTIVE' | 'PENDING' | 'REJECTED' | 'REVIEWING';
 
-  export interface FieldChange {
+  /** 契约来源：CertLifecycleApplyReqVO.FieldChange（嵌套类；CHANGE 申请一行一字段） */
+export interface FieldChange {
     fieldName: string;
     oldValue?: string;
     newValue?: string;
@@ -229,7 +244,8 @@ export namespace CertificateApi {
     remark?: string;
   }
 
-  export interface Lifecycle {
+  /** 契约来源：CertLifecycleRespVO（GET /bidding/cert-lifecycle/page） */
+export interface Lifecycle {
     id: number;
     bizDomain: string;
     bizId: number;
@@ -297,7 +313,8 @@ export namespace CertificateApi {
     remark?: string;
   }
 
-  /* ===================== §7 材料完备性 ===================== */
+  /* ===================== §7 材料完备性 =====================  * 契约来源：EnterpriseMaterialCompletenessRespVO.MaterialItem（嵌套类）
+   */
   export interface MaterialItem {
     materialType: string;
     /** 材料类型名称（中文，直接用；不要回退到 code） */
@@ -479,7 +496,8 @@ export function certErrorMsg(error: unknown): string {
   return e?.response?.data?.msg ?? e?.data?.msg ?? e?.message ?? '请求失败';
 }
 
-/** 参数校验失败（400）时的逐字段错误（契约 §0.4 ValidationErrorData） */
+/** 参数校验失败（400）时的逐字段错误（契约 §0.4 ValidationErrorData）  * 契约来源：FieldErrorRespVO
+ */
 export interface CertFieldError {
     field: string;
     message: string;

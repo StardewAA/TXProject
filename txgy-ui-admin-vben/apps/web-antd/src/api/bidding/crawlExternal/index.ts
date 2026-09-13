@@ -5,13 +5,15 @@ import { requestClient } from '#/api/request';
 /** 契约来源：爬虫任务工作台-前后端契约-2026-09-07（父仓 docs/bidding-notice-external/）+ 04-全链路接口说明 §5 采集管理域 + 06-接口完全对照 §1；解析器端点复用 crawl-source 权限（见 06 对照 §1）。 */
 export namespace CrawlExternalApi {
 // ===== 解析器（手动录入/测试链路，02 契约 §1.3 / §3.2） =====
-  export interface ParserInfo {
+  /** 契约来源：CrawlParserInfoRespVO */
+export interface ParserInfo {
     code?: string;
     name?: string;
     description?: string;
     supportedTypes?: string[];
   }
-  export interface ParseAttachment {
+  /** 契约来源：CrawlParseTestRespVO.Attachment（嵌套类） */
+export interface ParseAttachment {
     name?: string;
     url?: string;
     /** 链接是否未绝对化（缺来源 URL 时 true）——下载器阶段会拿不到绝对地址，是"解析规则/源配置需校准"的信号 */
@@ -59,7 +61,8 @@ export namespace CrawlExternalApi {
   }
 
 
-  /** 采集源（CrawlSourceRespVO，02 §6.1） */
+  /** 采集源（CrawlSourceRespVO，02 §6.1）  * 契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）
+   */
   export interface SourceItem {
     /** 主键（雪花 Long；后端超 2^53 序列化为字符串，兼容两者） */
     id?: number | string;
@@ -80,8 +83,44 @@ export namespace CrawlExternalApi {
     remark?: string;
     createTime?: string;
     updateTime?: string;
-  }
-  /** 采集源保存入参（sourceCode 仅新建可传） */
+    /** API 直取：接口地址
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiUrl?: string;
+  /** API 直取：请求方法
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiMethod?: string;
+  /** API 直取：请求头 JSON
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiHeadersJson?: string;
+  /** API 直取：请求体模板
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiBodyTemplate?: string;
+  /** API 直取：分页参数名
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiPageParam?: string;
+  /** API 直取：每页条数参数名
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiSizeParam?: string;
+  /** API 直取：每页条数
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiPageSize?: number;
+  /** API 直取：数据行 JSONPath
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiRowsPath?: string;
+  /** API 直取：总数 JSONPath
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiTotalPath?: string;
+  /** API 直取：字段映射 JSON
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiMappingJson?: string;
+  /** API 直取：相对链接补全前缀
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiUrlPrefix?: string;
+}
+  /**
+   * 采集源保存入参（sourceCode 仅新建可传）
+   * 契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）
+   */
   export interface SourcePayload {
     /** 主键（雪花 Long；更新时后端回传字符串） */
     id?: number | string;
@@ -99,7 +138,40 @@ export namespace CrawlExternalApi {
     robotsOk?: boolean;
     enabled?: boolean;
     remark?: string;
-  }
+    /** API 直取：接口地址（与 apiConfigJson 二选一；当前页面走 apiConfigJson 整体配置）
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiUrl?: string;
+  /** API 直取：请求方法
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiMethod?: string;
+  /** API 直取：请求头 JSON
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiHeadersJson?: string;
+  /** API 直取：请求体模板
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiBodyTemplate?: string;
+  /** API 直取：分页参数名
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiPageParam?: string;
+  /** API 直取：每页条数参数名
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiSizeParam?: string;
+  /** API 直取：每页条数
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiPageSize?: number;
+  /** API 直取：数据行 JSONPath
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiRowsPath?: string;
+  /** API 直取：总数 JSONPath
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiTotalPath?: string;
+  /** API 直取：字段映射 JSON
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiMappingJson?: string;
+  /** API 直取：相对链接补全前缀
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiUrlPrefix?: string;
+}
   export interface SourcePageParams extends PageParam {
     sourceCode?: string;
     sourceName?: string;

@@ -8,7 +8,8 @@ import { requestClient } from '#/api/request';
  *  错误码（规范 §2.1）：1_060_101_013 文件为空 / 1_060_101_014 文件注册失败，请重试 / 1_060_101_015 文件地址无效。
  *  鉴权：登录即可（@PreAuthorize("isAuthenticated()") + @Idempotent）。
  *  幂等键：后端按「文件名 + 大小」取（框架默认解析器会忽略 MultipartFile 参数，
- *    否则 1 秒内批量上传不同文件会被误判为重复请求）。 */
+ *    否则 1 秒内批量上传不同文件会被误判为重复请求）。  * 契约来源：BiddingFileRespVO
+ */
 export interface BiddingFileResp {
   /** 文件编号（全局唯一，infra_file.id；业务表落库关联键） */
   fileId: number;

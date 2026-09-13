@@ -25,7 +25,8 @@ export namespace NoticeApi {
     ARCHIVED: '已归档',
   };
 
-  export interface Row {
+  /** 契约来源：NoticeRespVO（GET /bidding/notice/page|public/list 行） */
+export interface Row {
     id: number | string;
     noticeCode?: string;
     noticeType?: string;
@@ -58,13 +59,15 @@ export namespace NoticeApi {
     projectCode?: string;
   }
 
-  /** 类型字段模板元数据（GET /bidding/notice/meta/types，2026-09-10 后端新增）：按类型渲染字段表单 */
+  /** 类型字段模板元数据（GET /bidding/notice/meta/types，2026-09-10 后端新增）：按类型渲染字段表单  * 契约来源：NoticeTypeMetaRespVO.FieldMeta（嵌套类）
+   */
   export interface TypeFieldMeta {
     code: string;
     label: string;
     required: boolean;
   }
-  export interface NoticeTypeMeta {
+  /** 契约来源：NoticeTypeMetaRespVO */
+export interface NoticeTypeMeta {
     type: NoticeTypeCode;
     name: string;
     dataset?: string;
