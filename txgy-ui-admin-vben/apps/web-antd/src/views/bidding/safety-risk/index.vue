@@ -320,7 +320,7 @@ const keyPostColumns = [
   { title: '是否超限', dataIndex: 'exceeded', key: 'exceeded', width: 100 },
   { title: '最近变更日期', dataIndex: 'lastChangeDate', key: 'lastChangeDate', width: 150 },
   { title: '涉及人员', dataIndex: 'personIds', key: 'personIds' },
-  { title: '操作', key: 'action', width: 110 },
+  { title: '操作', fixed: 'right', key: 'action', width: 110 },
 ];
 
 onMounted(() => {
