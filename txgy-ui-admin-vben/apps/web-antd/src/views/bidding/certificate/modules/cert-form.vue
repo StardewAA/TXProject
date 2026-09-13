@@ -284,7 +284,7 @@ async function submit() {
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="有效期止" name="validTo">
+          <a-form-item label="有效期至" name="validTo">
             <a-date-picker v-model:value="form.validTo" class="w-full" value-format="YYYY-MM-DD" placeholder="留空 = 长期有效" allow-clear />
             <div class="ct-tip">留空表示长期有效：长期证不参与到期预警扫描。</div>
           </a-form-item>

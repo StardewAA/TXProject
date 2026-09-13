@@ -41,13 +41,13 @@ const resultTag = computed(() => {
 
 /* 字段逐字对齐 EnterpriseMaterialCompletenessRespVO.MaterialItem：
  *   materialLabel 材料名称 / category 大类 / mandatory 必备 / status 状态 /
- *   validTo 有效期止（字符串） / refName 匹配到的名称或编号 / message 说明 */
+ *   validTo 有效期至（字符串；后端 VO 对该字段有"有效期止/至"两种写法，见契约 17） / refName 匹配到的名称或编号 / message 说明 */
 const columns = [
   { title: '材料名称', dataIndex: 'materialLabel', key: 'materialLabel', width: 240 },
   { title: '大类', dataIndex: 'category', key: 'category', width: 110 },
   { title: '必备', dataIndex: 'mandatory', key: 'mandatory', width: 80 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
-  { title: '有效期止', dataIndex: 'validTo', key: 'validTo', width: 120 },
+  { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 120 },
   { title: '取数来源', dataIndex: 'refName', key: 'refName', width: 180 },
   { title: '说明', dataIndex: 'message', key: 'message', ellipsis: true },
 ];
