@@ -9,7 +9,7 @@
 							:style="[{ background: item.badge.bgColor, color: item.badge.textColor }]">
 							{{ item.badge.text }}
 						</view>
-						<image class="menu-image" :src="sheep.$url.cdn(item.iconUrl)"></image>
+<s-menu-icon class="menu-image" :src="sheep.$url.cdn(item.iconUrl)" :label="item.title" />
 					</view>
 
 					<view class="title-box ss-flex ss-flex-col ss-row-center ss-col-center">

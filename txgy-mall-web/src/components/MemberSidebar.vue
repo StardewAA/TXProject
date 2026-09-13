@@ -11,3 +11,6 @@
     <RouterLink to="/member/customer-service">在线客服</RouterLink>
   </aside>
 </template>
+<style scoped>
+.member-sidebar{overflow:hidden;border-radius:14px}.member-sidebar h3{margin:0;padding:28px 24px;background:linear-gradient(125deg,#183d43,#27675c);color:white;letter-spacing:2px}.member-sidebar a{border-left:3px solid transparent;transition:background .2s}.member-sidebar a:hover{background:#f1f7f4}.member-sidebar a.router-link-exact-active{background:#e5f2ec;color:#147d6b;border-left-color:#147d6b;font-weight:600}
+</style>

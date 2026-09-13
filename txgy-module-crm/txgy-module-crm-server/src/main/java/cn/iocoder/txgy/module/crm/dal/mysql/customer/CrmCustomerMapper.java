@@ -8,7 +8,6 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerPageReqVO;
-import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
@@ -31,6 +30,23 @@ import java.util.List;
  */
 @Mapper
 public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
+
+    /**
+     * 查询相似客户：同客户类别 + 同行业（按编号倒序，最多 limit 条）
+     *
+     * @param current 当前客户
+     * @param limit   返回数量
+     * @return 相似客户列表
+     */
+    default List<CrmCustomerDO> selectSimilarList(CrmCustomerDO current, Integer limit) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        query.ne(CrmCustomerDO::getId, current.getId());
+        query.eqIfPresent(CrmCustomerDO::getCustomerType, current.getCustomerType());
+        query.eqIfPresent(CrmCustomerDO::getIndustryId, current.getIndustryId());
+        query.orderByDesc(CrmCustomerDO::getId);
+        query.last("LIMIT " + (limit == null || limit <= 0 ? 10 : Math.min(limit, 50)));
+        return selectList(query);
+    }
 
     default Long selectCountByLockStatusAndOwnerUserId(Boolean lockStatus, Long ownerUserId) {
         return selectCount(new LambdaUpdateWrapper<CrmCustomerDO>()
@@ -209,8 +225,8 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
             CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
                     CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
         }
-        // 未跟进
-        query.eq(CrmClueDO::getFollowUpStatus, false);
+        // 未跟进（注意：这里统计的是客户，字段要取 CrmCustomerDO）
+        query.eq(CrmCustomerDO::getFollowUpStatus, false);
         return selectCount(query);
     }
 

@@ -81,6 +81,10 @@ onUnmounted(() => window.removeEventListener('focus', refreshWhenFocused))
           <p>{{ item.applyReason || item.reason || '售后申请' }}</p>
           <small>售后单：{{ item.no || item.id }}　{{ formatDate(item.createTime) }}</small>
           <small v-if="item.logisticsNo">退货物流单号：{{ item.logisticsNo }}</small>
+          <p v-if="item.returnAddress">退货收件人：{{ item.returnReceiverName }}　{{ item.returnReceiverMobile }}<br />退货地址：{{ item.returnAddress }}</p>
+          <p v-else-if="item.status === 20">此历史/平台审核售后未记录退货地址，请先联系商家确认后再寄出。</p>
+          <p v-if="item.auditReason">审核说明：{{ item.auditReason }}</p>
+          <p v-if="item.receiveReason">拒收原因：{{ item.receiveReason }}</p>
         </div>
         <div class="after-actions">
           <b>{{ item.statusName || statusNames[item.status] || `状态 ${item.status}` }}</b>

@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.bpm.framework.rpc.config;
 
 import cn.iocoder.txgy.module.bpm.api.event.CrmContractStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.CrmQuotationStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.CrmReceivableStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
@@ -8,7 +9,6 @@ import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
 import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
-import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
 import cn.iocoder.txgy.module.system.api.permission.RoleApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsSendApi;
@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(value = "bpmRpcConfiguration", proxyBeanMethods = false)
 @EnableFeignClients(clients = {RoleApi.class, DeptApi.class, PostApi.class, AdminUserApi.class, SmsSendApi.class, DictDataApi.class,
-        PermissionApi.class, NotifyMessageSendApi.class})
+        PermissionApi.class})
 public class RpcConfiguration {
 
     // ========== 特殊：解决微 txgy-cloud 微服务场景下，跨服务（进程）无法 Listener 的问题 ==========
@@ -38,15 +38,9 @@ public class RpcConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(name = "erpPurchaseOrderStatusListener")
-    public ErpPurchaseOrderStatusListener erpPurchaseOrderStatusListener() {
-        return new ErpPurchaseOrderStatusListener();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(name = "erpSaleOrderStatusListener")
-    public ErpSaleOrderStatusListener erpSaleOrderStatusListener() {
-        return new ErpSaleOrderStatusListener();
+    @ConditionalOnMissingBean(name = "crmQuotationStatusListener")
+    public CrmQuotationStatusListener crmQuotationStatusListener() {
+        return new CrmQuotationStatusListener();
     }
 
     @Bean

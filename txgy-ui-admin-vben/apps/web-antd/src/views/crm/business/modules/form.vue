@@ -16,15 +16,21 @@ import {
   createBusiness,
   getBusiness,
   updateBusiness,
+  updateBusinessStatus,
 } from '#/api/crm/business';
+import { getBusinessStatusSimpleList } from '#/api/crm/business/status';
 import { BizTypeEnum } from '#/api/crm/permission';
 import { $t } from '#/locales';
 import { ProductEditTable } from '#/views/crm/product/components';
+
+import CustomerInfoCard from '#/views/crm/components/customer-info-card.vue';
 
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmBusinessApi.Business>();
+/** 当前选中的客户编号：用于展示"客户信息速览"卡片 */
+const currentCustomerId = ref<number>();
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['商机'])
@@ -63,6 +69,10 @@ const [Form, formApi] = useVbenForm({
   layout: 'vertical',
   schema: useFormSchema(),
   showDefaultActions: false,
+  // 选中客户后展示"客户信息速览"卡片（一键引用）
+  handleValuesChange(values) {
+    currentCustomerId.value = values.customerId;
+  },
 });
 
 /** 识别结果回填：把名片/文本中的公司与联系方式带入新增表单 */
@@ -91,7 +101,18 @@ const [Modal, modalApi] = useVbenModal({
     const data = (await formApi.getValues()) as CrmBusinessApi.Business;
     data.products = formData.value?.products;
     try {
-      await (formData.value?.id ? updateBusiness(data) : createBusiness(data));
+      if (formData.value?.id) {
+        await updateBusiness(data);
+      } else {
+        const id = await createBusiness(data);
+        // 新增时若手动选择了商机阶段，且与默认阶段不同，则同步更新
+        if (data.statusId) {
+          const list = await getBusinessStatusSimpleList(data.statusTypeId);
+          if (list.length > 0 && list[0]?.id !== data.statusId) {
+            await updateBusinessStatus({ id, statusId: data.statusId });
+          }
+        }
+      }
       // 关闭并提示
       await modalApi.close();
       emit('success');
@@ -125,6 +146,7 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-1/2">
     <ClueQuickParse mode="business" class="mx-4" @apply="onQuickParse" />
+    <CustomerInfoCard :customer-id="currentCustomerId" />
     <Form class="mx-4">
       <template #product="slotProps">
         <ProductEditTable

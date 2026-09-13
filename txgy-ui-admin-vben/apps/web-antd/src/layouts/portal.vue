@@ -60,7 +60,7 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="portal-main" :class="{ 'portal-main--training': route.path === '/portal/training' }">
+    <main class="portal-main" :class="{ 'portal-main--training': route.path.startsWith('/portal/training') }">
       <RouterView />
     </main>
 

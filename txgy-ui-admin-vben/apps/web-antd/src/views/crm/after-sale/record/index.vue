@@ -99,11 +99,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
           ]"
         />
       </template>
+      <template #status="{ row }">
+        <span v-if="row.status === 1" style="color: #fa8c16">待填写</span>
+        <span v-else>已填写</span>
+      </template>
       <template #actions="{ row }">
         <TableAction
           :actions="[
             {
-              label: $t('common.edit'),
+              label: row.status === 1 ? '填写' : $t('common.edit'),
               type: 'link',
               icon: ACTION_ICON.EDIT,
               auth: ['crm:after-sale-visit-record:update'],

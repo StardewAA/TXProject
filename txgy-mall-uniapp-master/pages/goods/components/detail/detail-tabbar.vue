@@ -11,7 +11,7 @@
           <block v-if="modelValue.favorite">
             <image
               class="item-icon"
-              :src="sheep.$url.static('/static/img/shop/goods/collect_1.gif')"
+              src="/static/icons/mall/star-filled.svg"
               mode="aspectFit"
             />
             <view class="item-title">已收藏</view>
@@ -19,7 +19,7 @@
           <block v-else>
             <image
               class="item-icon"
-              :src="sheep.$url.static('/static/img/shop/goods/collect_0.png')"
+              src="/static/icons/mall/star.svg"
               mode="aspectFit"
             />
             <view class="item-title">收藏</view>
@@ -32,7 +32,7 @@
         >
           <image
             class="item-icon"
-            :src="sheep.$url.static('/static/img/shop/goods/message.png')"
+            src="/static/icons/mall/chat.svg"
             mode="aspectFit"
           />
           <view class="item-title">客服</view>
@@ -44,7 +44,7 @@
         >
           <image
             class="item-icon"
-            :src="sheep.$url.static('/static/img/shop/goods/share.png')"
+            src="/static/icons/mall/share.svg"
             mode="aspectFit"
           />
           <view class="item-title">分享</view>

@@ -48,6 +48,10 @@ public class DocumentResourceDO extends TenantBaseDO {
      */
     private Long fileSize;
     /**
+     * 文档总页数（上传时自动识别）
+     */
+    private Integer pageCount;
+    /**
      * 归属业务分类（行业新规/国标解读/防腐工艺等，自由文本）
      */
     private String bizCategory;

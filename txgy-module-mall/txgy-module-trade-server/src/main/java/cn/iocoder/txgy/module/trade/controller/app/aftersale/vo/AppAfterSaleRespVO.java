@@ -10,6 +10,9 @@ import java.util.List;
 @Schema(description = "用户 App - 交易售后 Response VO")
 @Data
 public class AppAfterSaleRespVO {
+    private String returnReceiverName;
+    private String returnReceiverMobile;
+    private String returnAddress;
 
     @Schema(description = "售后责任店铺编号；0 表示平台自营", example = "1")
     private Long shopId;

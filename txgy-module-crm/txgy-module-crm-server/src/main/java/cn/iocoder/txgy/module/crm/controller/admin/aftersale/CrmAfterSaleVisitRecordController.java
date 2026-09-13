@@ -85,6 +85,15 @@ public class CrmAfterSaleVisitRecordController {
         return success(BeanUtils.toBean(visitRecordService.getVisitRecord(id), CrmAfterSaleVisitRecordRespVO.class));
     }
 
+    @GetMapping("/get-by-task-id")
+    @Operation(summary = "获得回访任务关联的回访记录（任务完成后自动生成，供直接填写）")
+    @Parameter(name = "taskId", description = "回访任务编号", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-record:query')")
+    public CommonResult<CrmAfterSaleVisitRecordRespVO> getVisitRecordByTaskId(@RequestParam("taskId") Long taskId) {
+        return success(BeanUtils.toBean(visitRecordService.getVisitRecordByTaskId(taskId),
+                CrmAfterSaleVisitRecordRespVO.class));
+    }
+
     @GetMapping("/page")
     @Operation(summary = "获得回访记录分页")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-record:query')")
