@@ -262,6 +262,12 @@ export interface InternalNoticeItem {
   publishTime?: number | string;
   status?: string;
   publicLevel?: string;
+  /**
+   * 是否企业内部公告（NoticeRespVO.internalFlag）：true = 仅本租户可见（不对社会公开），
+   * false/undefined = 对外（社会公开）。大厅同时展示两类，故需要它来标注可见范围——
+   * 2026-09-25 由"类型对等"门禁（NoticeRespVO ← InternalNoticeItem）发现此前漏声明。
+   */
+  internalFlag?: boolean;
   contentPreview?: string;
 }
 /** 内部公告公开详情（契约来源：/bidding/notice public/detail 出参 NoticeDetailRespVO = 行字段 +

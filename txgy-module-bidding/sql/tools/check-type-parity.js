@@ -40,9 +40,20 @@ const MIN_OVERLAP = 0.6;
 const KNOWN_INCOMPLETE = new Map([
   ['CrawlSourceRespVO ← SourceItem', [11, '缺的是 API 直取的 11 个展开列（apiUrl/apiMethod/apiHeadersJson/…/apiUrlPrefix）；页面走 apiConfigJson 整体 JSON 配置，未逐一展开——属②后端保留字段；若将来改为表单化配置需先补类型']],
   ['NoticeExternalManageRespVO ← ManageItem', [10, '缺审核留痕（auditSource/auditStageName/auditByName/auditBy/auditAt/auditRemark）与 AI 复核（aiReviewStatus/aiReviewReason/aiReviewHitWords/aiReviewAt）共 10 个。2026-09-25 复核：**留痕已由新接线的「操作日志」抽屉覆盖**（GET /bidding/notice-external/manage/operate-log/page，数据源 system_operate_log，AI 理由与命中词在 action/extra），故这 10 个字段属"列表列未采用"而非数据拿不到；若要在列表直接显示 AI 复核结论列再补类型']],
-  ['PersonnelProfileSaveReqVO ← SaveReq', [4, '缺 positionName/archiveNo/bindedAuthUserId/version；属①真缺口——岗位名与档案号是档案必填口径的一部分，version 是更新时的乐观锁字段（不传则并发更新可能被后端拒绝）']],
-  ['NoticeRespVO ← InternalNoticeItem', [1, '缺 internalFlag（是否内部公告）；属①真缺口——门户列表需要据此标注/过滤内部公告']],
 ]);
+
+/** 从 '{' 起按花括号配平取出接口体（见上文关于嵌套对象字面量的说明） */
+function sliceBraces(text, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) return text.slice(openIdx + 1, i);
+    }
+  }
+  return text.slice(openIdx + 1);
+}
 
 function walk(dir, filter, out = []) {
   let ents = [];
@@ -77,14 +88,19 @@ const pairs = [];
 const skipped = [];
 for (const f of walk(FE_ROOT, (p) => /\.(ts|vue)$/.test(p))) {
   const text = fs.readFileSync(f, 'utf8');
-  const re = /(\/\*\*[\s\S]{0,300}?\*\/\s*)?export\s+interface\s+(\w+)\s*\{([\s\S]*?)\n\s*\}/g;
+  // 逐个 interface 定位，再用**花括号配平**取接口体：
+  // 不能用"第一个行首 }"截断——接口里出现嵌套对象字面量（字段?: { … }）时会提前结束，
+  // 导致后面的字段被误报为"缺失"（假阳性）。花括号配平对字符串/注释里的括号不敏感，
+  // 属可接受的近似（前端接口定义里极少出现这类内容）。
+  const re = /(\/\*\*[\s\S]{0,300}?\*\/\s*)?export\s+interface\s+(\w+)\s*(\{)/g;
   for (const m of text.matchAll(re)) {
     const vo = (m[1] || '').match(/([A-Z]\w*VO)(?:\.(\w+))?/);
     if (!vo) continue;
+    const body = sliceBraces(text, m.index + m[0].length - 1);
     const outer = vo[1];
     const cands = [outer, ...[...backend.keys()].filter((k) => k.startsWith(outer + '.'))].filter((k) => backend.has(k));
     if (!cands.length) { skipped.push({ fe: m[2], vo: outer, why: '后端无此 VO（可能已删除/改名）' }); continue; }
-    const feFields = [...m[3].matchAll(/^\s*(\w+)\s*\??\s*:/gm)].map((x) => x[1]);
+    const feFields = [...body.matchAll(/^\s*(\w+)\s*\??\s*:/gm)].map((x) => x[1]);
     if (!feFields.length) continue;
     let best = null;
     for (const c of cands) {

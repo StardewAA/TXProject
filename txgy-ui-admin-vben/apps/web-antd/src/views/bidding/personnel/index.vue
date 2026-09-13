@@ -470,6 +470,8 @@ const profileForm = reactive<PersonnelProfileApi.SaveReq>({ entId: 0, personName
 
 function resetProfileForm() {
   Object.assign(profileForm, {
+    archiveNo: undefined,
+    bindedAuthUserId: undefined,
     birthDate: undefined,
     deptName: undefined,
     employmentType: undefined,
@@ -486,10 +488,12 @@ function resetProfileForm() {
     mobile: undefined,
     personName: '',
     personNo: undefined,
+    positionName: undefined,
     remark: undefined,
     school: undefined,
     titleLevel: undefined,
     titleMajor: undefined,
+    version: undefined,
     workStartDate: undefined,
   });
 }
@@ -500,6 +504,7 @@ function openProfileCreate() {
 function openProfileEdit(row: PersonnelProfileApi.Profile) {
   resetProfileForm();
   Object.assign(profileForm, {
+    archiveNo: row.archiveNo,
     birthDate: row.birthDate ?? undefined,
     deptName: row.deptName,
     eduLevel: row.eduLevel ?? undefined,
@@ -519,6 +524,8 @@ function openProfileEdit(row: PersonnelProfileApi.Profile) {
     school: row.school,
     titleLevel: row.titleLevel ?? undefined,
     titleMajor: row.titleMajor,
+    // 乐观锁版本（PersonnelProfileSaveReqVO.version）：编辑时原样回传，防并发覆盖
+    version: row.version,
     workStartDate: row.workStartDate ?? undefined,
   });
   profileFormOpen.value = true;
@@ -1402,6 +1409,14 @@ function remainTag(r: PersonnelCertApi.Cert) {
           </a-col>
           <a-col :span="8">
             <a-form-item label="部门"><a-input v-model:value="profileForm.deptName" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <!-- 岗位名称 / 人事档案号：Profile 出参本来就有，SaveReq 此前缺声明导致"看得见存不下"；
+                 2026-09-25 由"类型对等"门禁（PersonnelProfileSaveReqVO ← SaveReq）发现后补齐。 -->
+            <a-form-item label="岗位名称"><a-input v-model:value="profileForm.positionName" /></a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="人事档案号"><a-input v-model:value="profileForm.archiveNo" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <!-- 用工形式：字典 employment_type（PersonnelEmploymentTypeEnum）。留空 = 后端按列默认 FULL_TIME 落库，
