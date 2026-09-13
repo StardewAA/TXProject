@@ -197,6 +197,14 @@ export function useGridColumns(dict: NoticeExternalDictBridge = {}): VxeTableGri
       slots: { default: 'col_proc' },
     },
     {
+      // AI 合规审查结论独立成列：它决定"这条能不能自动生效 / 是否需要人工兜底"，
+      // 与"抽取是否成功"是两件事（抽取成功≠内容合规），混在同一列里会被误读。
+      field: '__ai',
+      title: 'AI 复核',
+      width: 130,
+      slots: { default: 'col_ai' },
+    },
+    {
       field: 'operation',
       title: '操作',
       width: 170,

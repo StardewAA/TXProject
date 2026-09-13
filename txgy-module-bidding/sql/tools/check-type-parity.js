@@ -41,7 +41,6 @@ const MIN_OVERLAP = 0.6;
  */
 const KNOWN_INCOMPLETE = new Map([
   ['CrawlSourceRespVO ← SourceItem', [11, '缺的是 API 直取的 11 个展开列（apiUrl/apiMethod/apiHeadersJson/…/apiUrlPrefix）；页面走 apiConfigJson 整体 JSON 配置，未逐一展开——属②后端保留字段；若将来改为表单化配置需先补类型']],
-  ['NoticeExternalManageRespVO ← ManageItem', [10, '缺审核留痕（auditSource/auditStageName/auditByName/auditBy/auditAt/auditRemark）与 AI 复核（aiReviewStatus/aiReviewReason/aiReviewHitWords/aiReviewAt）共 10 个。2026-09-25 复核：**留痕已由新接线的「操作日志」抽屉覆盖**（GET /bidding/notice-external/manage/operate-log/page，数据源 system_operate_log，AI 理由与命中词在 action/extra），故这 10 个字段属"列表列未采用"而非数据拿不到；若要在列表直接显示 AI 复核结论列再补类型']],
 ]);
 
 /** 从 '{' 起按花括号配平取出接口体（见上文关于嵌套对象字面量的说明） */
