@@ -34,6 +34,8 @@ import {
 import { requestClient } from '#/api/request';
 
 import { useCertMeta } from '../certificate/useCertMeta';
+import InfoCell from './modules/InfoCell.vue';
+import SpinWrap from './modules/SpinWrap.vue';
 
 const createMessage = message;
 
@@ -190,32 +192,6 @@ async function openEligibility(row: SubjectApi.AuthRow) {
 }
 
 onMounted(load);
-</script>
-
-<script lang="ts">
-/* 页面基础工具组件（Spin 包裹 + 键值信息格）：与法规/契约无涉，仅 UI 组装 */
-import { defineComponent, h } from 'vue';
-
-import { Spin } from 'ant-design-vue';
-
-const SpinWrap = defineComponent({
-  name: 'SpinWrap',
-  props: { loading: Boolean },
-  setup(props, { slots }) {
-    return () => h(Spin, { spinning: props.loading }, () => slots.default?.());
-  },
-});
-const InfoCell = defineComponent({
-  name: 'InfoCell',
-  props: { label: String, value: { type: String, default: '' } },
-  setup(props) {
-    return () => h('div', { class: 'rounded border border-gray-100 bg-gray-50 p-2' }, [
-      h('div', { class: 'text-gray-400' }, props.label),
-      h('div', { class: 'font-medium text-gray-700' }, props.value || '—'),
-    ]);
-  },
-});
-export default { components: { SpinWrap, InfoCell } };
 </script>
 
 <template>
