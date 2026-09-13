@@ -191,7 +191,7 @@ export namespace PersonnelProfileApi {
     remark?: string;
     /**
      * 岗位名称（Profile 出参已有同名字段，SaveReq 此前未声明 → 界面上填不了、存不下）。
-     * 2026-09-25 由"类型对等"门禁发现（PersonnelProfileSaveReqVO ← SaveReq 缺 4 字段）。
+     * 2026-09-14 由"类型对等"门禁发现（PersonnelProfileSaveReqVO ← SaveReq 缺 4 字段）。
      */
     positionName?: string;
     /** 人事档案号（同上，Profile 出参有、SaveReq 缺） */

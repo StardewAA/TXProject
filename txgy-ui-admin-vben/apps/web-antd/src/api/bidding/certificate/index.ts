@@ -139,7 +139,7 @@ export interface RuleConfigItem {
     version: number;
     /** 当前生效版本 */
     isCurrent: boolean;
-  /** 文件 SHA-256（**后端字段名是 fileHash**：本页曾错写 sha256，导致该列恒为空——写入侧用的是 fileHash，读取侧却绑 sha256，2026-09-25 修正） */
+  /** 文件 SHA-256（**后端字段名是 fileHash**：本页曾错写 sha256，导致该列恒为空——写入侧用的是 fileHash，读取侧却绑 sha256，2026-09-14 修正） */
   fileHash?: string;
     virusScanStatus?: string;
     copyExpiringTime?: null | string;

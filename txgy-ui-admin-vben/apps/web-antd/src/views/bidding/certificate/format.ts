@@ -6,7 +6,7 @@ import { dateTimeToMs, msToDateTime, fmtDate as sharedFmtDate, fmtDateTime as sh
 
 type TimeLike = null | number | string | undefined;
 
-/* 2026-09-25：解析与格式化改为**委托 utils/datetime**（此前本文件自带一份 dayjs 解析，是全域 4 套实现之一）。
+/* 2026-09-14：解析与格式化改为**委托 utils/datetime**（此前本文件自带一份 dayjs 解析，是全域 4 套实现之一）。
  * 保留本域导出名（fmtDateTime/fmtDate/msToDateTime/dateTimeToMs），避免 6 个页面改导入。 */
 
 /** LocalDateTime（毫秒或字符串）→ 'YYYY-MM-DD HH:mm:ss' */

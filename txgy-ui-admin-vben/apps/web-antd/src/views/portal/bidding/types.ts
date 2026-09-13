@@ -267,7 +267,7 @@ export interface InternalNoticeItem {
   /**
    * 是否企业内部公告（NoticeRespVO.internalFlag）：true = 仅本租户可见（不对社会公开），
    * false/undefined = 对外（社会公开）。大厅同时展示两类，故需要它来标注可见范围——
-   * 2026-09-25 由"类型对等"门禁（NoticeRespVO ← InternalNoticeItem）发现此前漏声明。
+   * 2026-09-14 由"类型对等"门禁（NoticeRespVO ← InternalNoticeItem）发现此前漏声明。
    */
   internalFlag?: boolean;
   contentPreview?: string;
@@ -279,12 +279,15 @@ export interface InternalNoticeDetail extends InternalNoticeItem {
   contentVersion?: number;
   payload?: Record<string, unknown>;
   pdfFileId?: number | string;
+  /** 版式文件（PDF）原文件哈希（SHA-256）——后端 NoticeDetailRespVO 有此字段，门户此前漏声明；
+   *  本次对齐依据：api/bidding/notice 的 Detail 类型 + 后端 @Schema。 */
+  pdfSha256?: null | string;
   /** 版式文件 PDF 原文件大小（字节）（与后端 VO @Schema 同单位；门户类型见本文件头说明） */
   pdfSize?: number;
 }
 /** 内部公告公开分页入参（契约来源：notice public/list 入参 NoticePageReqVO 大厅口径：pageNo/pageSize/keyword/noticeType）。 */
 export interface InternalNoticeParams {
-  // 2026-09-25：按后端 NoticePageReqVO 补齐——此前只声明了 4 个字段，导致这 6 个后端支持的过滤条件
+  // 2026-09-14：按后端 NoticePageReqVO 补齐——此前只声明了 4 个字段，导致这 6 个后端支持的过滤条件
   // 在门户侧"想用也没得传"（由"类型对等"门禁在修好同名类串模块问题后暴露）。均为可选，不传即不过滤。
   /** 公告状态（门户侧通常只展示 PUBLISHED；后端支持按状态过滤） */
   status?: string;

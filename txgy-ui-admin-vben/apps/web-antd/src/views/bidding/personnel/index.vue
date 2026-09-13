@@ -1413,7 +1413,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
           </a-col>
           <a-col :span="8">
             <!-- 岗位名称 / 人事档案号：Profile 出参本来就有，SaveReq 此前缺声明导致"看得见存不下"；
-                 2026-09-25 由"类型对等"门禁（PersonnelProfileSaveReqVO ← SaveReq）发现后补齐。 -->
+                 2026-09-14 由"类型对等"门禁（PersonnelProfileSaveReqVO ← SaveReq）发现后补齐。 -->
             <a-form-item label="岗位名称"><a-input v-model:value="profileForm.positionName" /></a-form-item>
           </a-col>
           <a-col :span="8">

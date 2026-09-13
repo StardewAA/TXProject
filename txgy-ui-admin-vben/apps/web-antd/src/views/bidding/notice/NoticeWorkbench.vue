@@ -49,7 +49,7 @@ import TenderNoticeTable from './tables/TenderNoticeTable.vue';
 const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
 /* 身份由**显式 prop** 决定，不再嗅探 route.path —— 此前 /portal/bidding/publish 直接挂本组件，
  * 组件靠 route.path.startsWith('/portal') 猜自己是谁，导致"前台没有自己的页面、前后台共用一个工作台"，
- * 职责也就分不开（用户 2026-09-25 指出）。现在：
+ * 职责也就分不开（用户 2026-09-14 指出）。现在：
  *   · 管理端页面  views/bidding/notice/index.vue       → <NoticeWorkbench mode="admin" />
  *   · 门户发布页  views/portal/bidding/publish.vue     → <NoticeWorkbench mode="portal" />
  * 待办（需业务口径，不由前端擅定）：管理端应收敛为"管理前台"（全量/下架/留痕/运维），
