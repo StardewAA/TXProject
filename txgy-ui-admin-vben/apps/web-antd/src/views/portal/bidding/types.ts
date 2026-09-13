@@ -281,6 +281,20 @@ export interface InternalNoticeDetail extends InternalNoticeItem {
 }
 /** 内部公告公开分页入参（契约来源：notice public/list 入参 NoticePageReqVO 大厅口径：pageNo/pageSize/keyword/noticeType）。 */
 export interface InternalNoticeParams {
+  // 2026-09-25：按后端 NoticePageReqVO 补齐——此前只声明了 4 个字段，导致这 6 个后端支持的过滤条件
+  // 在门户侧"想用也没得传"（由"类型对等"门禁在修好同名类串模块问题后暴露）。均为可选，不传即不过滤。
+  /** 公告状态（门户侧通常只展示 PUBLISHED；后端支持按状态过滤） */
+  status?: string;
+  /** 是否内部公告（true=仅本租户可见）——大厅可据此只看内部/只看对外 */
+  internalFlag?: boolean;
+  /** 公开级别（如 SOCIAL） */
+  publicLevel?: string;
+  /** 项目编号 */
+  projectCode?: string;
+  /** 发布时间起（含）——查询参数里的 LocalDateTime 走 @DateTimeFormat，传 'yyyy-MM-dd HH:mm:ss' 字符串（毫秒只用于 JSON 体） */
+  publishTimeStart?: string;
+  /** 发布时间止（含）——同上，'yyyy-MM-dd HH:mm:ss' */
+  publishTimeEnd?: string;
   pageNo?: number;
   pageSize?: number;
   keyword?: string;

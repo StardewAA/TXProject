@@ -72,7 +72,8 @@ const logColumns = [
   { title: '操作人', key: 'user', width: 120 },
   { title: '操作', dataIndex: 'subType', key: 'subType', width: 160 },
   { title: '内容', dataIndex: 'action', key: 'action' },
-  { title: '结果', key: 'success', width: 72 },
+  // 「结果」列已移除：后端 NoticeExternalOperateLogRespVO 无 success 字段（2026-09-25 复核，
+  // 由"类型对等"门禁反向检查发现前端声明了 VO 没有的字段），留着只会永远显示「—」。
   { title: '来源', key: 'source', width: 200 },
 ];
 
@@ -524,11 +525,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
             <div v-if="record.extra" class="break-all text-xs text-gray-400" :title="record.extra">
               拓展：{{ record.extra }}
             </div>
-          </template>
-          <template v-else-if="column.key === 'success'">
-            <Tag v-if="record.success === true" color="green">成功</Tag>
-            <Tag v-else-if="record.success === false" color="red">失败</Tag>
-            <span v-else>—</span>
           </template>
           <template v-else-if="column.key === 'source'">
             <div class="text-xs">{{ record.requestMethod || '—' }}</div>

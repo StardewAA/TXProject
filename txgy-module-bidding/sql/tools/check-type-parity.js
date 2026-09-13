@@ -30,6 +30,8 @@ const LIST = process.argv.includes('--list');
 const UPDATE = process.argv.includes('--update-baseline');
 const repoRoot = path.resolve(__dirname, '../../..');
 const BE_ROOT = path.join(repoRoot, 'txgy-module-bidding/txgy-module-bidding-server/src/main/java');
+/** 全仓 Java 根：解析 extends 继承需能查到框架层类（如 txgy-framework 的 PageParam） */
+const REPO_JAVA_ROOT = repoRoot;
 const FE_ROOT = path.join(repoRoot, 'txgy-ui-admin-vben/apps/web-antd/src');
 const MIN_OVERLAP = 0.6;
 
@@ -55,6 +57,20 @@ function sliceBraces(text, openIdx) {
   return text.slice(openIdx + 1);
 }
 
+/**
+ * 反向检查白名单：前端类型里有、后端 VO 没有，但**确属前端自有字段**（不是拼写错位/凭空字段）。
+ * 目前为空——若有新增，必须写明"为什么它是前端自有的"。
+ */
+const IGNORED_EXTRA = new Set([]);
+
+/**
+ * 既知反向差异（只许减少）：key = VO名 ← 前端 interface 名；值 = [冻结多字段数, 理由]。
+ * 出现未登记的反向差异 → FAIL（这类差异＝前端在读取一个后端根本不返回的字段，界面必然是空的）。
+ */
+const KNOWN_EXTRA = new Map([
+  ['NoticeExternalPageReqVO ← NoticePageParams', [1, 'resultRaws：门户"合并视图按组逐原始值抓全"的前端内部参数，不发后端（api.ts 的 toQueryPlain 白名单构造请求）；后端无此字段属正常']],
+]);
+
 function walk(dir, filter, out = []) {
   let ents = [];
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
@@ -66,7 +82,60 @@ function walk(dir, filter, out = []) {
   return out;
 }
 
-/* ---- 后端 VO（含嵌套类）→ 字段集 ---- */
+/* ---- 后端类 → 字段集（含 extends 继承） ----
+ * 为什么要解析继承：VO 常继承 PageParam，pageNo/pageSize 不在本类体内声明。
+ * 不解析继承会把这两个字段误判成"前端多出来的字段"（假阳性），故这里：
+ *   ① 扫**全仓** Java（不只 bidding 模块）建立 类名 → 字段集 索引，才能查到框架层的 PageParam；
+ *   ② 字段集 = 本类字段 ∪ 父类字段（递归，带环保护）。 */
+const classFields = new Map(); // FQN → { fields, parent, pkg, isBidding }
+const bySimple = new Map();     // 简单类名 → [FQN, ...]（**同名类在不同模块很常见**，必须按 FQN 区分：
+                                //  实测 QualificationRespVO / NoticeRespVO 在别的模块也有同名类，
+                                //  早期按简单类名索引会被覆盖，导致前端类型与"别的模块的同名 VO"比对 → 误判重合度）
+for (const f of walk(REPO_JAVA_ROOT, (p) => /\.java$/.test(p))) {
+  const text = fs.readFileSync(f, 'utf8');
+  const pkg = (text.match(/^\s*package\s+([\w.]+)\s*;/m) || [])[1] || '';
+  const isBidding = /txgy-module-bidding/.test(f);
+  const classes = [...text.matchAll(/(?:public\s+)?(?:static\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/g)];
+  const outer = classes[0] && classes[0][1];
+  if (!outer) continue;
+  text.split(/class\s+\w+/).slice(1).forEach((body, i) => {
+    const m = classes[i];
+    if (!m) return;
+    // 注意要容忍**带初始化的字段**（如 PageParam 的 private Integer pageNo = PAGE_NO;）——
+    // 早期版本要求"名字后紧跟分号"，导致整个 PageParam 的字段都读不到，
+    // 进而把 pageNo/pageSize 误判成"前端多出来的字段"（假阳性）。
+    // 只取**实例字段**：排除 static（常量如 PageParam.PAGE_NO 不是 JSON 字段）与 serialVersionUID
+    const fields = [...body.matchAll(/private\s+(static\s+final\s+)?[\w<>,\[\]\.\s]+?\s+(\w+)\s*(?:=[^;]*)?;/g)]
+      .filter((x) => !x[1])
+      .map((x) => x[2])
+      .filter((n) => n !== 'serialVersionUID');
+    const simple = i === 0 ? m[1] : outer + '.' + m[1];
+    const fqn = pkg + '.' + simple;
+    classFields.set(fqn, { fields, parent: m[2] || null, pkg, isBidding });
+    if (!bySimple.has(simple)) bySimple.set(simple, []);
+    bySimple.get(simple).push(fqn);
+  });
+}
+/** 按简单名解析父类：**优先同模块（招投标）、再同包、再唯一候选**——避免同名类串模块 */
+function resolveParent(simple, child) {
+  const cands = bySimple.get(simple) || [];
+  if (!cands.length) return null;
+  const sameModule = cands.find((c) => classFields.get(c).isBidding === child.isBidding);
+  if (sameModule) return sameModule;
+  const samePkg = cands.find((c) => classFields.get(c).pkg === child.pkg);
+  if (samePkg) return samePkg;
+  return cands.length === 1 ? cands[0] : null;
+}
+/** 递归合并父类字段（带环保护） */
+function withInherited(fqn, seen = new Set()) {
+  const info = classFields.get(fqn);
+  if (!info || seen.has(fqn)) return new Set();
+  seen.add(fqn);
+  const out = new Set(info.fields);
+  const parentFqn = info.parent ? resolveParent(info.parent, info) : null;
+  if (parentFqn) for (const x of withInherited(parentFqn, seen)) out.add(x);
+  return out;
+}
 const backend = new Map();
 for (const f of walk(BE_ROOT, (p) => /VO\.java$/.test(p))) {
   const text = fs.readFileSync(f, 'utf8');
@@ -76,10 +145,10 @@ for (const f of walk(BE_ROOT, (p) => /VO\.java$/.test(p))) {
   text.split(/class\s+\w+/).slice(1).forEach((body, i) => {
     const name = classes[i];
     if (!name) return;
-    const fields = [...body.matchAll(/private\s+(?:static\s+final\s+)?[\w<>,\[\]\.\s]+?\s+(\w+)\s*;/g)]
-      .map((m) => m[1])
-      .filter((n) => n !== 'serialVersionUID');
-    backend.set(i === 0 ? outer : outer + '.' + name, new Set(fields));
+    const key = i === 0 ? outer : outer + '.' + name;
+    // 用招投标模块下的 FQN 取字段（同名类别模块也有，按 FQN 才不会串）
+    const fqn = (text.match(/^\s*package\s+([\w.]+)\s*;/m) || [])[1] + '.' + key;
+    backend.set(key, withInherited(fqn));
   });
 }
 
@@ -110,11 +179,14 @@ for (const f of walk(FE_ROOT, (p) => /\.(ts|vue)$/.test(p))) {
     }
     if (best.ov < MIN_OVERLAP) { skipped.push({ fe: m[2], vo: best.key, why: '重合度 ' + best.ov.toFixed(2) + ' < ' + MIN_OVERLAP + '（疑似误链，已剔除）' }); continue; }
     const missing = [...best.bf].filter((x) => !feFields.includes(x));
+    // 反向：前端有、VO 没有（扣除 IGNORED_EXTRA 里的白名单）
+    const extra = feFields.filter((x) => !best.bf.has(x) && !IGNORED_EXTRA.has(x));
     pairs.push({
       key: best.key + ' ← ' + m[2],
       file: path.relative(repoRoot, f).split(path.sep).join('/'),
       ov: best.ov,
       missing,
+      extra,
       total: best.bf.size,
     });
   }
@@ -131,8 +203,21 @@ for (const p of incomplete) {
 }
 const stale = [...KNOWN_INCOMPLETE.entries()].filter(([k]) => !incomplete.some((p) => p.key === k));
 
+// 反向：前端多出来的字段
+const withExtra = pairs.filter((p) => p.extra.length > 0);
+const extraViolations = [];
+const extraShrunk = [];
+for (const p of withExtra) {
+  const base = KNOWN_EXTRA.get(p.key);
+  if (!base) extraViolations.push({ ...p, why: '新出现的反向差异（基线未登记）' });
+  else if (p.extra.length > base[0]) extraViolations.push({ ...p, why: '反向差异扩大：' + base[0] + ' → ' + p.extra.length });
+  else if (p.extra.length < base[0]) extraShrunk.push({ ...p, was: base[0] });
+}
+const extraStale = [...KNOWN_EXTRA.entries()].filter(([k]) => !withExtra.some((p) => p.key === k));
+
 console.log('\n后端 VO（含嵌套）' + backend.size + ' 个；前端按注释可链接的 interface ' + pairs.length + ' 个（剔除疑似误链 ' + skipped.filter((s) => s.why.includes('重合度')).length + ' 个）');
 console.log('完整镜像 ' + (pairs.length - incomplete.length) + ' 个；不完整 ' + incomplete.length + ' 个（基线登记 ' + KNOWN_INCOMPLETE.size + ' 个）');
+console.log('反向（前端多出字段）差异 ' + withExtra.length + ' 个（基线登记 ' + KNOWN_EXTRA.size + ' 个）');
 if (skipped.length && LIST) {
   console.log('\n--- 未纳入比对的配对 ---');
   for (const s of skipped) console.log('  ' + s.vo.padEnd(34) + ' ← ' + s.fe.padEnd(24) + s.why);
@@ -144,6 +229,17 @@ if (LIST) {
     console.log('  ' + (base ? '⚪ 基线' : '❌ 未登记') + ' 缺' + String(p.missing.length).padStart(3) + '/' + String(p.total).padStart(3) + '  重合' + p.ov.toFixed(2) + '  ' + p.key);
     console.log('        ' + p.file);
     console.log('        缺：' + p.missing.join(', '));
+    if (base) console.log('        理由：' + base[1]);
+  }
+}
+
+if (LIST && withExtra.length) {
+  console.log('\n--- 反向差异清单（前端有、后端 VO 没有 → 该字段在界面上恒为空）---');
+  for (const p of withExtra.sort((a, b) => b.extra.length - a.extra.length)) {
+    const base = KNOWN_EXTRA.get(p.key);
+    console.log('  ' + (base ? '⚪ 基线' : '❌ 未登记') + ' 多' + String(p.extra.length).padStart(3) + '/' + String(p.extra.length + p.total - p.missing.length).padStart(3) + '  ' + p.key);
+    console.log('        ' + p.file);
+    console.log('        多：' + p.extra.join(', '));
     if (base) console.log('        理由：' + base[1]);
   }
 }
@@ -165,6 +261,21 @@ if (violations.length) {
   }
   console.error('处理：① 补齐前端类型并接线（真缺口）；② 若确属后端保留字段，登记进本脚本 KNOWN_INCOMPLETE 并写明理由。');
 }
+if (extraViolations.length) {
+  failed = true;
+  console.error('\n[FAIL] 前端类型声明了后端 VO 没有的字段（界面读它必然是空的/拼写错位）：');
+  for (const v of extraViolations) {
+    console.error('  ✗ ' + v.key + '  多 ' + v.extra.length + '（' + v.why + '）');
+    console.error('      多：' + v.extra.join(', '));
+    console.error('      ' + v.file);
+  }
+  console.error('处理：① 删掉前端凭空/拼错的字段；② 若确属前端自有（不发后端），写进 IGNORED_EXTRA 或 KNOWN_EXTRA 并说明理由。');
+}
+if (extraStale.length) {
+  failed = true;
+  console.error('\n[FAIL] KNOWN_EXTRA 存在陈旧条目：' + extraStale.map(([k]) => k).join('、'));
+  console.error('反向差异已消失（字段已删或后端已补），请删除条目。');
+}
 if (stale.length) {
   failed = true;
   console.error('\n[FAIL] KNOWN_INCOMPLETE 存在陈旧条目：' + stale.map(([k]) => k).join('、'));
@@ -176,4 +287,8 @@ if (shrunk.length) {
   console.log('\n提示：以下条目缺口已缩小，请把基线数字改小（只许减）：');
   for (const s of shrunk) console.log('  ' + s.key + '：' + s.was + ' → ' + s.missing.length);
 }
-console.log('[OK] 前端类型与后端 VO 对等（' + pairs.length + ' 个配对：完整 ' + (pairs.length - incomplete.length) + '，既知不完整 ' + KNOWN_INCOMPLETE.size + ' 且均注明理由）');
+if (extraShrunk.length) {
+  console.log('\n提示：以下反向差异已缩小，请把基线数字改小（只许减）：');
+  for (const e of extraShrunk) console.log('  ' + e.key + '：' + e.was + ' → ' + e.extra.length);
+}
+console.log('[OK] 前端类型与后端 VO 双向对等（' + pairs.length + ' 个配对：完整 ' + (pairs.length - incomplete.length) + '，既知不完整 ' + KNOWN_INCOMPLETE.size + '，既知反向差异 ' + KNOWN_EXTRA.size + '，均注明理由）');
