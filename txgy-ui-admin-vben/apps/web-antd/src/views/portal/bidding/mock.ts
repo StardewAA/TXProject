@@ -667,6 +667,19 @@ export function mockInternalPage(params: Record<string, unknown>): PageResult<In
   }
   const nt = String(params.noticeType ?? '');
   if (nt) rows = rows.filter((r) => r.noticeType === nt);
+  // 以下三项与真实接口口径保持一致（internalFlag / projectCode / publishTimeStart 下界），
+  // 演示模式（useMock）下筛选也必须真的生效——否则"筛了没反应"会被误判成前端 bug。
+  if (params.internalFlag !== undefined && params.internalFlag !== null && params.internalFlag !== '') {
+    const want = params.internalFlag === true || params.internalFlag === 'true';
+    rows = rows.filter((r) => (r.internalFlag === true) === want);
+  }
+  const pc = String(params.projectCode ?? '').trim().toLowerCase();
+  if (pc) rows = rows.filter((r) => String(r.projectCode ?? '').toLowerCase() === pc);
+  const from = String(params.publishTimeStart ?? '').trim();
+  if (from) {
+    const t = Date.parse(from.replace(' ', 'T'));
+    if (!Number.isNaN(t)) rows = rows.filter((r) => toMs(String(r.publishTime)) >= t);
+  }
   rows.sort((a, b) => toMs(String(b.publishTime)) - toMs(String(a.publishTime)));
   const pageNo = Math.max(1, Number(params.pageNo ?? 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(params.pageSize ?? 10) || 10));
