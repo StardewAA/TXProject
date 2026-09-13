@@ -249,7 +249,7 @@ function onParsed(
   if (!ok) message.error(resp?.error || '解析未成功');
 }
 
-/* ---------- 立即爬取（源下拉触发；同步接口 + 120s 节流） ---------- */
+/* ---------- 立即获取（源下拉触发；同步接口 + 120s 节流）---------- */
 function onRunMenu(source: CrawlExternalApi.SourceItem) {
   if (!source.sourceCode) return;
   const last = lastTriggerAt.value[source.sourceCode];
@@ -331,7 +331,7 @@ function deleteCurrentManual(): void {
 }
 /* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层，不嵌套 Drawer） ----------
  * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
- *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批爬虫任务 N 条(KPI+克制行) → 选中任务过程。
+ *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批采集任务 N 条(KPI+克制行) → 选中任务过程。
  * 理由：查看过程/重试/批内任务下钻等操作收进详情档，列表不再跳 tab（旧 drillJob 已被批次抽屉取代），
  *       避免跨 tab 上下文丢失；与 source-detail.vue（两档视图样板）口径一致。
  * 契约：fetchCrawlTaskPage({ jobId, pageNo, pageSize }) 见 crawl-batch §三.1 / 04-全链路 §5.7；
@@ -504,7 +504,7 @@ async function openJobDetail(j: CrawlExternalApi.JobItem): Promise<void> {
   void loadJobTasks(j);
 }
 
-/** 批次详情层2：该批爬虫任务（pageSize 200；契约见 crawl-batch §三.1） */
+/** 批次详情层2：该批采集任务（pageSize 200；契约见 crawl-batch §三.1） */
 async function loadJobTasks(j: CrawlExternalApi.JobItem): Promise<void> {
   if (j.id == null) return;
   jobTasksLoading.value = true;
@@ -703,8 +703,8 @@ const incompleteOf = (r: ManualRun) =>
           <span class="ind-mark">PLATFORM</span>
         </div>
         <div class="ind-sub">
-          平台级采集（G 轨，外部公告域）。每次「立即爬取 / 手动录入 / 定时轮询」生成一条任务条：
-          信息源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整爬取的行迹。
+          平台级采集（G 轨，外部公告域）。每次「立即获取 / 手动录入 / 定时轮询」生成一条任务条：
+          信息源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整获取的行迹。
         </div>
       </div>
       <div class="ind-actions">
@@ -727,7 +727,7 @@ const incompleteOf = (r: ManualRun) =>
 
     <!-- KPI -->
     <div class="ind-kpis">
-      <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
+      <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即获取（crawl-task）</div></div>
       <div class="ind-kpi k-green"><div class="k-label">测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入 / 解析器测试回执（本地留档）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
@@ -866,7 +866,7 @@ const incompleteOf = (r: ManualRun) =>
       <!-- ============ ③ 采集批次（统一任务条 fp-tbl：状态/时间/批次#/源·触发/摘要；行点击进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
+          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整获取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
             <div v-else class="fp-tbl">
