@@ -303,6 +303,7 @@ function confirmReject(r: QualificationApi.ApplyRecord) {
   let remark = '';
   Modal.confirm({
     title: `退回延续申报 #${r.id}`,
+    okText: '退回',
     content: () =>
       // 退回理由必填：后端 remark 可空，但业务上必须留痕
       h('textarea', {
@@ -555,6 +556,7 @@ const reviewType = ref('SELF');
 function confirmReview(row: QualificationApi.Qualification) {
   Modal.confirm({
     title: `执行达标核查：资质 #${row.id}`,
+    okText: '开始核查',
     content: `按当前生效标准复算要素差额，核查类型 ${reviewType.value}；核查只返回主键，结论请在「详情 → 最近一次达标核查」回读。`,
     async onOk() {
       const id = await runComplianceReview({ qualId: row.id, reviewType: reviewType.value });
