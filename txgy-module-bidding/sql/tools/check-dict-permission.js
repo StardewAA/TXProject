@@ -42,6 +42,8 @@ const META_READABLE = new Set([
  */
 const KNOWN_GAP = new Map([
   ['project/index.vue', '页权限 bidding:project:query 不在 meta 可读集合内（契约文件 12 §二 影响面第 1 行）；后端放开后删除本条'],
+  ['noticeExternal/index.vue', '页权限 bidding:notice-external:update 不在集合内；2026-09-25 起状态/审核/内容形态改为"字典优先、映射表兜底"，后端放开前靠兜底不退化（契约 12 §二 第 4 行）'],
+  ['subjectAuth/index.vue', '页权限 bidding:subject-auth:query 不在集合内；2026-09-25 起主体类型文案与选项改为"字典优先、SUBJECT_TYPE_LABEL 兜底"（契约 12 §二 第 5 行）'],
 ]);
 
 function walk(dir, filter, out = []) {

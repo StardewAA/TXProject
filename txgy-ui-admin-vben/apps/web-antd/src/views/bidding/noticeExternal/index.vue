@@ -20,9 +20,11 @@ import {
   takeDownNotice,
 } from '#/api/bidding/noticeExternal';
 
+import { useCertMeta } from '../certificate/useCertMeta';
 import {
   AUDIT_MAP,
   BODY_MAP,
+  CONTENT_TYPE_MAP,
   EXTRACTION_MAP,
   INDUSTRY_MAP,
   STATUS_MAP,
@@ -30,6 +32,13 @@ import {
   useGridFormSchema,
 } from './data';
 import DetailModal from './modules/detail.vue';
+
+/* 字典（状态 / 审核 / 内容形态）：**字典优先、页面内映射表兜底**。
+ * 兜底不是欠债而是必需——本页用户未必有 /bidding/meta/* 权限（后端 @PreAuthorize 只列 5 个电子证照/资质/人员域权限，
+ * 已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-25.md 请后端放开）；
+ * 纯字典化会让这些角色从"中文"退化成"英文 code"，所以两条路径都要在。
+ * 读取发生在**渲染期**：字典加载完成后 Vue 自动重渲染为字典文案，无需刷新。 */
+const { dictLabel, dictTag } = useCertMeta();
 
 const [Detail, detailModalApi] = useVbenModal({
   connectedComponent: DetailModal,
@@ -60,8 +69,23 @@ function tagOf(map: Record<string, { color: string; text: string; }>, v?: string
   return c ? { text: c.text, color: c.color } : null;
 }
 
-const statusTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(STATUS_MAP, row.status);
-const auditTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(AUDIT_MAP, row.auditStatus);
+/** 字典优先、映射表兜底。判定命中：dictTag 未命中时会回落成 label=原值，故 label !== v 即字典命中。
+ *  （字典文案可后台调整；未命中或字典未加载 → 回落本页映射表，绝不出现空白或英文 code） */
+function dictTagFirst(
+  dictType: string,
+  map: Record<string, { color: string; text: string; }>,
+  v?: string,
+) {
+  if (!v) return null;
+  const hit = dictTag(dictType, v);
+  if (hit.label !== v) return { text: hit.label, color: hit.color };
+  return tagOf(map, v);
+}
+
+const statusTagOf = (row: NoticeExternalApi.ManageItem) =>
+  dictTagFirst('notice_external_status', STATUS_MAP, row.status);
+const auditTagOf = (row: NoticeExternalApi.ManageItem) =>
+  dictTagFirst('notice_external_audit_status', AUDIT_MAP, row.auditStatus);
 const industryTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(INDUSTRY_MAP, row.industryFlag);
 const extractionTagOf = (row: NoticeExternalApi.ManageItem) =>
   tagOf(EXTRACTION_MAP, row.extractionStatus);
@@ -341,7 +365,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
     schema: useGridFormSchema(),
   },
   gridOptions: {
-    columns: useGridColumns(),
+    columns: useGridColumns({
+      // 内容形态列：字典优先、CONTENT_TYPE_MAP 兜底（同上"两条路径都要在"）
+      contentTypeLabel: (v?: string) => {
+        if (!v) return '';
+        const byDict = dictLabel('notice_external_content_type', v);
+        return byDict === v ? CONTENT_TYPE_MAP[v] || v : byDict;
+      },
+    }),
     height: 'auto',
     proxyConfig: {
       ajax: {
