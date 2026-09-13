@@ -351,7 +351,7 @@ const itemColumns = [
   { title: '大类', dataIndex: 'category', key: 'category', width: 110 },
   { title: '必备', dataIndex: 'mandatory', key: 'mandatory', width: 80 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
-  { title: '有效期止', dataIndex: 'validTo', key: 'validTo', width: 120 },
+  { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 120 },
   { title: '匹配记录', dataIndex: 'refName', key: 'refName', width: 180 },
   { title: '说明', dataIndex: 'message', key: 'message' },
 ];

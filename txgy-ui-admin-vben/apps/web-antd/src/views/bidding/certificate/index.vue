@@ -334,7 +334,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
       <div class="ct-kpi">
         <div class="k-label">本页长期有效</div>
         <div class="k-num">{{ kpi.longTerm }}</div>
-        <div class="k-note">无有效期止，不入到期扫描</div>
+        <div class="k-note">无有效期至，不入到期扫描</div>
       </div>
       <div class="ct-kpi">
         <div class="k-label">本页未验真</div>

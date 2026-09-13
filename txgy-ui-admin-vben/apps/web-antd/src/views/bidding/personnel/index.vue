@@ -1783,7 +1783,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
           <a-date-picker v-model:value="form.validFrom" class="w-full mb-3" value-format="YYYY-MM-DD" />
         </a-col>
         <a-col :span="8">
-          <div class="ct-lb">有效期止</div>
+          <div class="ct-lb">有效期至</div>
           <a-date-picker v-model:value="form.validTo" class="w-full mb-3" value-format="YYYY-MM-DD" allow-clear />
           <div class="ct-tip">部分证书类型必须登记有效期（到期预警依赖该字段）。</div>
         </a-col>
