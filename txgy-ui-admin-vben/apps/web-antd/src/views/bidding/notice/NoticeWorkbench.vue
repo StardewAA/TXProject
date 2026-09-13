@@ -32,6 +32,7 @@ import { NoticeApi } from '#/api/bidding/notice';
 import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, reindexAllNotices, reindexNotices, syncNoticePublic, unpublishNotice, updateNotice } from '#/api/bidding/notice';
 import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
+import { fmtDateTime } from '#/utils/datetime';
 
 import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
 import { type AttachmentRecord, stageItems } from '../vo/attachmentStages';
@@ -44,6 +45,7 @@ import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
 import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
 import ResultPublicityTable from './tables/ResultPublicityTable.vue';
 import TenderNoticeTable from './tables/TenderNoticeTable.vue';
+const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
 /* 身份由**显式 prop** 决定，不再嗅探 route.path —— 此前 /portal/bidding/publish 直接挂本组件，
  * 组件靠 route.path.startsWith('/portal') 猜自己是谁，导致"前台没有自己的页面、前后台共用一个工作台"，
  * 职责也就分不开（用户 2026-09-25 指出）。现在：
@@ -51,7 +53,9 @@ import TenderNoticeTable from './tables/TenderNoticeTable.vue';
  *   · 门户发布页  views/portal/bidding/publish.vue     → <NoticeWorkbench mode="portal" />
  * 待办（需业务口径，不由前端擅定）：管理端应收敛为"管理前台"（全量/下架/留痕/运维），
  * 发布动作归前台；内部公告是否需"提交 → 审核"取决于后端是否补 PENDING_AUDIT/REJECTED 与 submit/approve/reject。 */
-const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
+// 时间展示统一走 #/utils/datetime（本页原有一份本地 fmtT，与 noticeExternal/data.ts 的同名实现重复；
+// 两处空值口径还不一致：那边空串、这里 '—' —— 台账页要显式占位，故此处保留 '—'）
+const fmtT = (v?: null | number | string): string => fmtDateTime(v, '—');
 const createMessage = message;
 const router = useRouter();
 const inPortal = computed(() => props.mode === 'portal');
@@ -136,13 +140,6 @@ const pageNo = ref(1);
 const pageSize = ref(10);
 const filters = reactive<{ internalFlag?: boolean; noticeType?: string; status?: string; }>({});
 
-const p2 = (n: number) => String(n).padStart(2, '0');
-const fmtT = (v?: number | string): string => {
-  if (v === undefined || v === null || v === '') return '—';
-  const d = new Date(Number(v));
-  if (Number.isNaN(+d)) return String(v);
-  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
-};
 const statusTag = (s?: string) =>
   s === 'PUBLISHED' ? { color: 'green', text: NoticeApi.NOTICE_STATUS_LABEL[s] || s }
     : s === 'DRAFT' ? { color: 'default', text: NoticeApi.NOTICE_STATUS_LABEL[s] || s }
