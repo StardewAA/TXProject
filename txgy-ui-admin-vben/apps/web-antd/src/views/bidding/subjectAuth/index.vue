@@ -34,6 +34,7 @@ import {
 import { requestClient } from '#/api/request';
 
 import { useCertMeta } from '../certificate/useCertMeta';
+import { eligibleReasonText } from '../subject/labels';
 import InfoCell from './modules/InfoCell.vue';
 import SpinWrap from './modules/SpinWrap.vue';
 
@@ -176,7 +177,6 @@ const elOpen = ref(false);
 const elLoading = ref(false);
 const elData = ref<SubjectApi.Eligibility>();
 const elRow = ref<SubjectApi.AuthRow>();
-const reasonLabel: Record<string, string> = { NOT_AUTHORIZED: '未授权', AUTH_DISABLED: '授权已撤销', PROFILE_MISSING: '档案缺失', PROFILE_INCOMPLETE: '档案不完善' };
 async function openEligibility(row: SubjectApi.AuthRow) {
   elRow.value = row;
   elData.value = undefined;
@@ -313,7 +313,7 @@ onMounted(load);
             <InfoCell label="撤销时间" :value="fmtT(elData.disableTime)" />
           </div>
           <div v-if="elData.reasonCodes?.length" class="rounded border border-red-100 bg-red-50 p-2">
-            原因：{{ elData.reasonCodes.map((r) => reasonLabel[r] || r).join('、') }}
+            原因：{{ eligibleReasonText(elData.reasonCodes) }}
             <span v-if="elData.missingRequiredNames?.length" class="ml-2">缺失：{{ elData.missingRequiredNames.join('、') }}</span>
           </div>
           <div class="pt-1 text-gray-300">资格 = 平台授权（ENABLED） ∧ 档案必填齐（信息不完整无法参与投标/发布；关注与订阅不受影响）</div>

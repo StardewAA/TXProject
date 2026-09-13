@@ -21,6 +21,7 @@ import { Alert, Button, Card, Input, message, Radio, Select, Spin, Upload } from
 import { SubjectApi } from '#/api/bidding/subject';
 import { fetchSubjectEligibility, fetchSubjectProfile, saveSubjectProfile } from '#/api/bidding/subject';
 
+import { eligibleReasonText } from '../subject/labels';
 import { uploadAttachment } from '../vo/attachmentUpload';
 
 const createMessage = message;
@@ -191,7 +192,7 @@ const eligibilityTip = () => {
   const e = eligibility.value;
   if (!e) return '';
   if (e.eligible) return '当前具备投标/发布资格（已授权 + 档案完善）';
-  const reasons = (e.reasonCodes || []).map((r) => ({ NOT_AUTHORIZED: '未授权', AUTH_DISABLED: '授权已停用', PROFILE_MISSING: '档案缺失', PROFILE_INCOMPLETE: '档案不完善' })[r] || r).join('、');
+  const reasons = eligibleReasonText(e.reasonCodes);
   return (e.message || '') + (reasons ? '（' + reasons + '）' : '');
 };
 
