@@ -77,7 +77,9 @@ export namespace NoticeExternalApi {
     subType?: string;
     /** 操作内容（人可读描述，AI 审查含理由与命中词） */
     action?: string;
-    success?: boolean;
+    // 注：曾按初版 VO 声明过 success（是否成功）并据此做了「结果」列，
+    // 2026-09-25 复核发现后端已移除该字段（VO 迭代中删掉）→ 已删除声明与列，
+    // 这正是"类型对等"门禁反向检查（前端有、VO 没有）抓到的问题。
     /** 拓展字段（JSON：来源站/AI 结论等） */
     extra?: string;
     /** 请求方式（系统动作为 SYSTEM/AI 占位标识） */
