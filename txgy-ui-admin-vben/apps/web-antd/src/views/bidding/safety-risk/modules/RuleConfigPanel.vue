@@ -118,6 +118,7 @@ async function submit() {
   }
   Modal.confirm({
     content: `即将写入 ${form.ruleKey} = ${form.configValue}（类型 ${form.valueType}，目标状态 ${form.status}），确认提交？`,
+    okText: '提交',
     onOk: async () => {
       saving.value = true;
       try {

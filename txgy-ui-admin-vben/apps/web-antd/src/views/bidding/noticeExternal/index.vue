@@ -312,7 +312,7 @@ function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
   };
   const fn = runner[key];
   if (!fn) return;
-  Modal.confirm({ title: title[key] || label[key], okText: '确认', cancelText: '取消', onOk: () => runAction(label[key] ?? key, fn) });
+  Modal.confirm({ title: title[key] || label[key], okText: label[key] ?? key, cancelText: '取消', onOk: () => runAction(label[key] ?? key, fn) });
 }
 
 /** 勾选行（批量审查通过用） */

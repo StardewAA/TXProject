@@ -268,6 +268,7 @@ async function submit() {
 function confirmDelete(r: ProjectApi.Project) {
   Modal.confirm({
     title: '删除项目',
+    okText: '删除',
     content: `确认删除项目「${r.projectName}（${r.projectCode}）」？已关联招标项目/标段时后端会拒绝。`,
     okType: 'danger',
     async onOk() {

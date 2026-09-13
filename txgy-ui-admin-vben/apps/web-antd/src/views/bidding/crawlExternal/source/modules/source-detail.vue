@@ -127,7 +127,7 @@ function toggleEnabled() {
     content: enable
       ? '启用后进入外链 /go 白名单，定时调度按抓取间隔执行采集。'
       : '停用后不再参与调度；若有已生效(ACTIVE)公告请先下线再停用。',
-    okText: '确认',
+    okText: enable ? '启用' : '停用',
     cancelText: '取消',
     onOk: async () => {
       busy.value = true;
