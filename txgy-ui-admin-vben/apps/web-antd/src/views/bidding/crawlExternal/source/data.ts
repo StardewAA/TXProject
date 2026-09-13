@@ -3,7 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { fetchCrawlParserList } from '#/api/bidding/crawlExternal';
 
-import { CHANNEL_LABEL, channelText, FETCH_TYPE_LABEL, FETCH_TYPE_OPTIONS, fetchTypeText, INTERVAL_LABEL, intervalText, MIN_INTERVAL_SECONDS } from '../labels';
+import { CHANNEL_LABEL, channelText, CONTENT_FORM_LABEL, contentFormText, FETCH_TYPE_HINT, FETCH_TYPE_LABEL, FETCH_TYPE_OPTIONS, fetchTypeText, INTERVAL_LABEL, intervalText, MIN_INTERVAL_SECONDS } from '../labels';
 import { fmtDt } from '../shared';
 
 /** 顶部检索表单 */
@@ -53,13 +53,14 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
     },
     {
       fieldName: 'fetchType',
-      label: '获取方式',
+      label: FETCH_TYPE_LABEL,
+      help: FETCH_TYPE_HINT,
       component: 'Select',
       componentProps: {
         options: [
           ...FETCH_TYPE_OPTIONS.map((o) => ({ ...o })),
         ],
-        placeholder: '默认 CRAWLER（存量兼容）',
+        placeholder: '默认 CRAWLER（存量兼容）；只管列表怎么拿，正文形态另见「正文形态」列',
       },
       // 05-外部信息获取改造-前端跟进 §三：fetchType=CRAWLER/API；后端缺省 CRAWLER
     },
@@ -139,6 +140,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'baseUrl', title: '入口站点', minWidth: 200, showOverflow: true },
     { field: 'fetchType', title: FETCH_TYPE_LABEL, width: 170, formatter: ({ cellValue }) => fetchTypeText(cellValue as null | string) },
     { field: 'channelCode', title: CHANNEL_LABEL, width: 170, formatter: ({ cellValue }) => channelText(cellValue as null | string) },
+    { field: 'contentForm', title: CONTENT_FORM_LABEL, width: 170, formatter: ({ cellValue }) => contentFormText(cellValue as null | string) },
     { field: 'enabled', title: '启用(/go 白名单)', width: 170, slots: { default: 'col_enabled' } },
     {
       field: 'fetchIntervalSeconds',

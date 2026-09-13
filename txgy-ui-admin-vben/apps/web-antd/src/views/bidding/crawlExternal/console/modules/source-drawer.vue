@@ -33,7 +33,7 @@ import {
   setCrawlSourceEnabled,
 } from '#/api/bidding/crawlExternal';
 
-import { fetchTypeText, intervalText } from '../../labels';
+import { CONTENT_FORM_LABEL, contentFormText, DETAIL_PARSER_LABEL, fetchTypeText, intervalText, LIST_PARSER_LABEL, parserText } from '../../labels';
 import SourceForm from '../../source/modules/form.vue';
 
 const emit = defineEmits(['changed']);
@@ -185,10 +185,12 @@ watch(open, (v) => onOpen(v));
       :columns="[
         { title: '源名称', dataIndex: 'sourceName', key: 'n', width: 180 },
         { title: '源代码', dataIndex: 'sourceCode', key: 'c', width: 130 },
-        { title: '方式', dataIndex: 'fetchType', key: 'ft', width: 120 },
+        { title: '列表驱动方式', dataIndex: 'fetchType', key: 'ft', width: 150 },
+        { title: CONTENT_FORM_LABEL, dataIndex: 'contentForm', key: 'cf', width: 150, customRender: ({ text }: { text?: null | string }) => contentFormText(text) },
         { title: '通道', dataIndex: 'channelCode', key: 'ch', width: 90 },
         { title: '抓取间隔（秒）', dataIndex: 'fetchIntervalSeconds', key: 'i', width: 130, customRender: ({ text }: { text?: null | number }) => intervalText(text) },
-        { title: '解析器', dataIndex: 'parserCodeDefault', key: 'p', width: 130 },
+        { title: LIST_PARSER_LABEL, dataIndex: 'parserCodeDefault', key: 'p', width: 130, customRender: ({ text }: { text?: null | string }) => parserText(text) },
+        { title: DETAIL_PARSER_LABEL, dataIndex: 'detailParserCode', key: 'dp', width: 130, customRender: ({ text }: { text?: null | string }) => parserText(text) },
         { title: '启用', key: 'en', width: 70 },
         { title: '操作', key: 'op', width: 210 },
       ]"

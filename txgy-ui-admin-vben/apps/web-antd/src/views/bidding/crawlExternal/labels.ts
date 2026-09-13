@@ -37,19 +37,39 @@ export function channelText(code?: null | string): string {
   return code === 'GENERIC' ? CHANNEL_GENERIC_TEXT : code;
 }
 
-/** 获取方式：统一"获取方式"这一种叫法与两种取值文案 */
-export const FETCH_TYPE_LABEL = '获取方式';
+/** 列表驱动方式：**只描述「列表怎么拿」，不描述正文形态**（依据后端 CrawlSourceRespVO.fetchType 与
+ *  sql/2026-09-13-fetch-type-semantics.sql 的列注释："API=列表走 JSON 接口 / CRAWLER=列表走 HTML 页面"）。
+ *  旧叫法"获取方式"会让人以为它描述**整个源**的类型 —— 秦源是 API(列表) 但正文仍逐条下载 HTML，
+ *  于是界面把两个维度混在一处，读的人自然得出"这源到底是 API 还是爬虫"的错误问题。 */
+export const FETCH_TYPE_LABEL = '列表驱动方式';
+export const FETCH_TYPE_HINT =
+  '只描述「列表怎么拿」；正文怎么取看「正文形态」与「正文解析器」。两者不可混用——PDF 源配 HTML_AI 会静默退化为本地 PDFBox 抽取。';
 export function fetchTypeText(t?: null | string): string {
-  if (t === 'API') return 'API · 接口直取（JSON）';
-  if (t === 'CRAWLER') return 'CRAWLER · 爬虫（列表 HTML）';
+  if (t === 'API') return 'API · 列表走 JSON 接口';
+  if (t === 'CRAWLER') return 'CRAWLER · 列表走 HTML 页面';
   return '—';
 }
 
-/** 获取方式：表单下拉用的**详细**文案（说明取值差异）；标签展示用上面的 fetchTypeText（短文案） */
+/** 列表驱动方式：表单下拉用的**详细**文案；标签展示用上面的 fetchTypeText（短文案） */
 export const FETCH_TYPE_OPTIONS = [
-  { label: 'CRAWLER · 爬虫（列表 HTML / 逐条下载）', value: 'CRAWLER' },
-  { label: 'API · 接口直取（JSON 列表 + 字段映射）', value: 'API' },
+  { label: 'CRAWLER · 列表走 HTML 页面（翻页）', value: 'CRAWLER' },
+  { label: 'API · 列表走 JSON 接口（分页参数 + 字段映射）', value: 'API' },
 ];
+
+/** 正文形态（与「列表驱动方式」是**两个维度**）：HTML=逐条下载详情页 / PDF=取直链下载原文 */
+export const CONTENT_FORM_LABEL = '正文形态';
+export function contentFormText(v?: null | string): string {
+  if (v === 'HTML') return 'HTML · 逐条下载详情页';
+  if (v === 'PDF') return 'PDF · 取直链下载原文';
+  return '—';
+}
+
+/** 解析器分两侧：列表侧 parserCodeDefault（解析列表页/接口响应）/ 正文侧 detailParserCode（HTML_AI、PDF_AI） */
+export const LIST_PARSER_LABEL = '列表解析器';
+export const DETAIL_PARSER_LABEL = '正文解析器';
+export function parserText(code?: null | string): string {
+  return code || '—';
+}
 
 /** 下载通道：表单下拉选项（当前仅 GENERIC） */
 export const CHANNEL_OPTIONS = [{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }];
