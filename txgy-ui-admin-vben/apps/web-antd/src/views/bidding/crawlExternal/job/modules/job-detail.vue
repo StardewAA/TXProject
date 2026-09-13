@@ -21,6 +21,13 @@ import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP, TRIGGER_
 
 import '../../taskbar.css';
 
+/* 信息源显示名：名称（code）由父页传入——后端 CrawlJobRespVO 只有 sourceCode，无 sourceName（契约 16 已请求补）；
+ * 缺省回落显示 code，保证本组件单独使用时也不报错。 */
+const props = withDefaults(
+  defineProps<{ sourceLabel?: (code?: null | string) => string }>(),
+  { sourceLabel: (code?: null | string) => (code ? String(code) : '全源') },
+);
+
 const open = ref(false);
 const loading = ref(false);
 const row = ref<CrawlExternalApi.JobItem | null>(null);
@@ -120,7 +127,7 @@ defineExpose({ openJob });
       <div class="ind-panel">
         <div class="ind-panel-h">
           <span class="ind-panel-t">批次概要</span>
-          <span v-if="show().sourceCode" class="ind-panel-meta">源 {{ show().sourceCode }}</span>
+          <span v-if="show().sourceCode" class="ind-panel-meta">信息源 {{ sourceLabel(show().sourceCode) }}</span>
         </div>
         <div class="ind-panel-b">
           <Descriptions :column="2" size="small" bordered>
@@ -132,7 +139,7 @@ defineExpose({ openJob });
               <Tag v-if="tagOf(TRIGGER_MAP, show().triggerType)" :color="tagOf(TRIGGER_MAP, show().triggerType)!.color">{{ tagOf(TRIGGER_MAP, show().triggerType)!.text }}</Tag>
               <span v-else>—</span>
             </Descriptions.Item>
-            <Descriptions.Item label="源 code">{{ show().sourceCode || '（全源）' }}</Descriptions.Item>
+            <Descriptions.Item label="信息源">{{ sourceLabel(show().sourceCode) }}</Descriptions.Item>
             <Descriptions.Item label="范围">{{ show().scope || '—' }}</Descriptions.Item>
             <Descriptions.Item label="创建 / 完成">{{ fmtDt(show().createTime) }} / {{ fmtDt(show().finishedAt) }}</Descriptions.Item>
             <Descriptions.Item label="更新">{{ fmtDt(show().updateTime) }}</Descriptions.Item>

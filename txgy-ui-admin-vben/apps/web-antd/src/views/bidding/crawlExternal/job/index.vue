@@ -2,14 +2,14 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrawlExternalApi } from '#/api/bidding/crawlExternal';
 
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
 import { Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { fetchCrawlJobPage } from '#/api/bidding/crawlExternal';
+import { fetchCrawlJobPage, fetchCrawlSourcePage } from '#/api/bidding/crawlExternal';
 
 import { JOB_STATUS_MAP, tagOf, TRIGGER_MAP } from '../shared';
 import { useGridColumns, useGridFormSchema } from './data';
@@ -29,12 +29,22 @@ function rowActs(row: CrawlExternalApi.JobItem): any[] {
 
 const jobDetailRef = ref<null | { openJob: (j: CrawlExternalApi.JobItem) => void }>(null);
 
-const [Grid] = useVbenVxeGrid({
+/* 信息源名称映射：后端批次出参只有 sourceCode（CrawlJobRespVO），故用源列表在前端做 code → 名称（契约 16 已请求后端补 sourceName）。
+ * 拿不到源列表时**不阻塞页面**：筛选退化为空选项，列照旧显示 code。 */
+const sourceNameMap = ref<Record<string, string>>({});
+const sourceOptions = ref<Array<{ label: string; value: string }>>([]);
+const sourceLabel = (code?: null | string): string => {
+  if (!code) return '全源';
+  const name = sourceNameMap.value[code];
+  return name ? `${name}（${code}）` : code;
+};
+
+const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: useGridFormSchema(),
+    schema: useGridFormSchema([]),
   },
   gridOptions: {
-    columns: useGridColumns(),
+    columns: useGridColumns(sourceLabel),
     height: 'auto',
     proxyConfig: {
       ajax: {
@@ -56,6 +66,25 @@ const [Grid] = useVbenVxeGrid({
       search: true,
     },
   } as VxeTableGridOptions<CrawlExternalApi.JobItem>,
+});
+onMounted(async () => {
+  try {
+    const res = await fetchCrawlSourcePage({ pageNo: 1, pageSize: 100 });
+    const list = res.list ?? [];
+    const map: Record<string, string> = {};
+    const opts: Array<{ label: string; value: string }> = [];
+    for (const s of list) {
+      if (!s.sourceCode) continue;
+      if (s.sourceName) map[s.sourceCode] = s.sourceName;
+      opts.push({ label: `${s.sourceName || s.sourceCode}（${s.sourceCode}）`, value: s.sourceCode });
+    }
+    sourceNameMap.value = map;
+    sourceOptions.value = opts;
+    // 异步选项：schema 在 setup 期构建会拿到空下拉，故加载完再注入
+    gridApi.formApi.updateSchema(useGridFormSchema(opts));
+  } catch {
+    /* 源列表加载失败不阻塞批次页：列回落显示 code，筛选项为空 */
+  }
 });
 </script>
 
@@ -88,6 +117,6 @@ const [Grid] = useVbenVxeGrid({
         <TableAction :actions="rowActs(row)" />
       </template>
     </Grid>
-    <JobDetail ref="jobDetailRef" />
+    <JobDetail ref="jobDetailRef" :source-label="sourceLabel" />
   </Page>
 </template>

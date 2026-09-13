@@ -146,10 +146,10 @@ const previewKey = ref<BlobKey>('payload');
 /** 可选数据源（只列有内容的） */
 const previewOptions = computed(() => {
   const opts: Array<{ label: string; value: BlobKey; }> = [];
-  if (t.value?.payloadJson) opts.push({ value: 'payload', label: '原始载荷 payload_json' });
-  if (isApi.value && src.value?.apiConfigJson) opts.push({ value: 'apiConfig', label: 'API 配置 api_config_json' });
-  opts.push({ value: 'taskFields', label: '任务全字段(JSON)' });
-  if (src.value) opts.push({ value: 'sourceFields', label: '源配置全字段(JSON)' });
+  if (t.value?.payloadJson) opts.push({ value: 'payload', label: '原始载荷（payload_json）— 技术视图' });
+  if (isApi.value && src.value?.apiConfigJson) opts.push({ value: 'apiConfig', label: 'API 配置（api_config_json）— 技术视图' });
+  opts.push({ value: 'taskFields', label: '任务全字段（JSON）— 技术视图' });
+  if (src.value) opts.push({ value: 'sourceFields', label: '源配置全字段（JSON）— 技术视图' });
   return opts;
 });
 const previewText = computed(() => {
