@@ -130,14 +130,14 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
 
     @Override
     public PageResult<HrmRecruitPostDO> getPortalRecruitPostPage(HrmRecruitPostPageReqVO pageReqVO) {
-        // 门户只公开已发布职位，不能由调用方传入暂停或关闭状态绕过可见范围。
+        // 门户只公开已发布且由 HR 账号创建的职位，不能由调用方传入暂停或关闭状态绕过可见范围。
         pageReqVO.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
-        return TenantUtils.executeIgnore(() -> recruitPostMapper.selectPage(pageReqVO));
+        return TenantUtils.executeIgnore(() -> recruitPostMapper.selectPortalPage(pageReqVO));
     }
 
     @Override
     public HrmRecruitPostDO getPortalRecruitPostPublished(Long id) {
-        HrmRecruitPostDO recruitPost = TenantUtils.executeIgnore(() -> recruitPostMapper.selectById(id));
+        HrmRecruitPostDO recruitPost = TenantUtils.executeIgnore(() -> recruitPostMapper.selectPortalById(id));
         if (recruitPost == null) {
             throw exception(RECRUIT_POST_NOT_EXISTS);
         }

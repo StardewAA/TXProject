@@ -20,6 +20,31 @@ import java.util.Map;
 @Mapper
 public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
 
+    String PORTAL_HR_PUBLISHER_EXISTS_SQL = """
+            EXISTS (
+                SELECT 1
+                FROM system_users publisher_user
+                JOIN system_user_role publisher_user_role
+                  ON publisher_user_role.user_id = publisher_user.id
+                 AND publisher_user_role.tenant_id = publisher_user.tenant_id
+                 AND publisher_user_role.deleted = 0
+                JOIN system_role publisher_role
+                  ON publisher_role.id = publisher_user_role.role_id
+                 AND publisher_role.tenant_id = publisher_user.tenant_id
+                 AND publisher_role.deleted = 0
+                 AND publisher_role.status = 0
+                WHERE publisher_user.deleted = 0
+                  AND publisher_user.status = 0
+                  AND publisher_user.tenant_id = hrm_recruit_post.tenant_id
+                  AND (CONCAT(publisher_user.id, '') = hrm_recruit_post.creator
+                       OR publisher_user.username = hrm_recruit_post.creator)
+                  AND (LOWER(publisher_role.code) LIKE '%hr%'
+                       OR LOWER(publisher_role.name) LIKE '%hr%'
+                       OR publisher_role.name LIKE '%人力%'
+                       OR publisher_role.name LIKE '%人事%')
+            )
+            """;
+
     default long selectCountByPostTypeId(Long postTypeId) {
         return selectCount(new LambdaQueryWrapperX<HrmRecruitPostDO>()
                 .eq(HrmRecruitPostDO::getPostTypeId, postTypeId));
@@ -29,6 +54,19 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
         return selectPage(reqVO, buildQueryWrapper(reqVO)
                 .eqIfPresent("status", reqVO.getStatus())
                 .orderByDesc("id"));
+    }
+
+    default PageResult<HrmRecruitPostDO> selectPortalPage(HrmRecruitPostPageReqVO reqVO) {
+        return selectPage(reqVO, buildQueryWrapper(reqVO)
+                .eqIfPresent("status", reqVO.getStatus())
+                .apply(PORTAL_HR_PUBLISHER_EXISTS_SQL)
+                .orderByDesc("id"));
+    }
+
+    default HrmRecruitPostDO selectPortalById(Long id) {
+        return selectOne(new QueryWrapperX<HrmRecruitPostDO>()
+                .eq("id", id)
+                .apply(PORTAL_HR_PUBLISHER_EXISTS_SQL));
     }
 
     default Map<Integer, Long> selectCountMapByStatus(HrmRecruitPostPageReqVO reqVO) {
