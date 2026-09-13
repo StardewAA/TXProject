@@ -31,7 +31,14 @@ const LIST = process.argv.includes('--list');
 const UPDATE = process.argv.includes('--update-baseline');
 const repoRoot = path.resolve(__dirname, '../../..');
 const SRC = path.join(repoRoot, 'txgy-ui-admin-vben/apps/web-antd/src');
-const DIRS = [path.join(SRC, 'views/bidding'), path.join(SRC, 'api/bidding')];
+/* 扫描根：管理端 bidding 域 + 门户前台 bidding 域。2026-09-25 补门户——此前只扫 views/bidding，
+ * 导致门户里同一批枚举（公告状态、内容形态、关注类型、跟踪阶段…）的中文映射**完全逃过门禁**，
+ * 而后台同一状态走字典 ⇒ 前后台两套口径却无人拦。 */
+const DIRS = [
+  path.join(SRC, 'views/bidding'),
+  path.join(SRC, 'api/bidding'),
+  path.join(SRC, 'views/portal/bidding'),
+];
 const SKIP_DIRS = new Set(['node_modules', 'dist']);
 
 /**
@@ -55,6 +62,16 @@ const KNOWN_HARDCODED = new Map([
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/filing/index.ts', [1, 'FILING_STATUS_OPTIONS：filing_status 字典本轮已注册，项目页已改为字典优先，此数组仅作未升级环境兜底；可删除']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/notice/index.ts', [1, 'NOTICE_STATUS_LABEL 映射，notice 状态字典未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/subject/index.ts', [1, 'SUBJECT_TYPE_LABEL：subject_type 字典本轮已注册，可迁移']],
+
+  /* ===== 门户前台（views/portal/bidding）——2026-09-25 纳入扫描后实测登记的欠债 =====
+   * 纳入原因：与后台**同一批枚举**（公告状态/内容形态/公告类型/关注类型/跟踪阶段），后台走字典、门户写死中文，
+   * 字典改名后前后台展示会不一致；此前只扫 views/bidding，这些映射无处可拦。 */
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/project/notices.vue', [1, '公告状态文案（DRAFT/PUBLISHED/UNPUBLISHED/ARCHIVED）：与后台 NoticeHtmlView 同一缺口——notice_status 字典未注册 → 见契约 13（A 类可照抄 NoticeStatusEnum）；注册后前台一并迁移']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/index.vue', [2, 'CONTENT_TYPES（内容形态，与后台同值域，待 notice 域字典注册后迁移）+ INDUSTRIES（行业，后端无枚举可对齐，口径同 noticeExternal/data.ts 的 INDUSTRY_MAP）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/internalHall.vue', [1, 'TYPE_FILTERS（4 类公告类型）：**可迁移**——后端已下发类型元数据 GET /bidding/notice/meta/types（NoticeTypeMetaRespVO），应改为按元数据构建筛选，勿再写死']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/format.ts', [4, '关注/订阅域展示文案：关注对象类型(FOLLOW_TYPE)、项目跟踪阶段(STAGE)、动态事件类型、阶段名兜底——该域字典未注册（取值来自 NoticeFollowController 的 targetType/stage 注释）→ 契约 13 追加 B 类；**且门户含免登页面（公告大厅/详情），即便注册字典也需后端提供匿名可读的公开字典面**，否则前台拿不到']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/subscription.vue', [1, '关注类型筛选项：同上（follow_type 字典缺失）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/portal/bidding/mock.ts', [1, 'INTERNAL_TYPE_LABEL：**演示数据**专用（仅 VITE_BIDDING_USE_MOCK=1 启用），不参与线上口径 → 永久豁免']],
 ]);
 
 function walk(dir, out) {

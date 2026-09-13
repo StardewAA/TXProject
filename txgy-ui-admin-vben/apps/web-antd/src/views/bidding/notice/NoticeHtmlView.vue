@@ -166,7 +166,10 @@ const publicReadable = computed(() => !props.detail?.internalFlag && props.detai
 
     <!-- ⑤ L1 版式 PDF + L2 附件：下载地址由业务系统按公开性签发（前端零拼接）；
          依据：10号令 第12/13条（部门规章/政府文件，免费查阅与归类检索）、电子办法 第9条（部门规章/政府文件）；
-         契约：docs/公告发布… §三 L1/L2；外部公告附件病毒扫描 CLEAN 后放行（R-3 后端缺口待补）。 -->
+         契约：docs/公告发布… §三 L1/L2；外部公告附件病毒扫描 CLEAN 后放行 —— **后端已实现**
+         （NoticeExternalServiceImpl：INFECTED 一律不下发链接、逐条下发 virusStatus，前端据此显示"已拦截/扫描中"）；
+         仍在的缺口是签名下载地址：后端注释为"FileApi 签名 downloadUrl 待 infra 文件下载能力接入后回填（TODO）"，
+         故此处 pdfDownloadUrl 为空时只给提示、不拼链接。 -->
     <section v-if="detail?.pdfFileId || detail?.attachments?.length" class="nh-sec">
       <div class="nh-sec-t">版式文件与公告附件</div>
       <ul class="nh-files">
