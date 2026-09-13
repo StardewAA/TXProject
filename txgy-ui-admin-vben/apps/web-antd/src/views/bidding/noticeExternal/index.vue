@@ -69,7 +69,7 @@ function logUserText(row: NoticeExternalApi.OperateLogItem) {
 }
 
 const logColumns = [
-  { title: '时间', dataIndex: 'createTime', key: 'createTime', width: 150 },
+  { title: '操作时间', dataIndex: 'createTime', key: 'createTime', width: 150 },
   { title: '操作人', key: 'user', width: 120 },
   { title: '操作', dataIndex: 'subType', key: 'subType', width: 160 },
   { title: '内容', dataIndex: 'action', key: 'action' },

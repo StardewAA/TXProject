@@ -183,8 +183,8 @@ watch(open, (v) => onOpen(v));
     <Table
       :data-source="rows"
       :columns="[
-        { title: '源名称', dataIndex: 'sourceName', key: 'n', width: 180 },
-        { title: '源代码', dataIndex: 'sourceCode', key: 'c', width: 130 },
+        { title: '信息源名称', dataIndex: 'sourceName', key: 'n', width: 180 },
+        { title: '信息源代码', dataIndex: 'sourceCode', key: 'c', width: 140 },
         { title: '列表驱动方式', dataIndex: 'fetchType', key: 'ft', width: 150 },
         { title: CONTENT_FORM_LABEL, dataIndex: 'contentForm', key: 'cf', width: 150, customRender: ({ text }: { text?: null | string }) => contentFormText(text) },
         { title: '通道', dataIndex: 'channelCode', key: 'ch', width: 90 },

@@ -171,7 +171,7 @@ const columns = [
   { title: '项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '项目编号' }),  dataIndex: 'projectCode', key: 'projectCode', width: 190 },
   { title: '项目名称', dataIndex: 'projectName', key: 'projectName', width: 320 },
   { title: '地区', dataIndex: 'regionCode', key: 'regionCode', width: 110 },
-  { title: '法人', dataIndex: 'legalPerson', key: 'legalPerson', width: 110 },
+  { title: '法定代表人', dataIndex: 'legalPerson', key: 'legalPerson', width: 130 },
   { title: '状态', dataIndex: 'state', key: 'state', width: 100 },
   { title: '登记时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
   { title: '操作', key: 'action', width: 210, fixed: 'right' as const },
