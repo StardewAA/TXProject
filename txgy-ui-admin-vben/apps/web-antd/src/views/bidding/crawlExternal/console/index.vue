@@ -795,7 +795,7 @@ const incompleteOf = (r: ManualRun) =>
                 <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL，见详情）' }}</span>
                 <span class="fp-td w-msg fp-msg" :title="t.message || ''">
                   <template v-if="t.message">{{ t.message }}</template>
-                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · {{ t.workerId }}</template></template>
+                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · 执行节点 {{ t.workerId }}</template></template>
                 </span>
               </div>
             </div>
@@ -1022,7 +1022,7 @@ const incompleteOf = (r: ManualRun) =>
               <Descriptions.Item label="状态"><Tag :color="tagOf(JOB_STATUS_MAP, detailJob.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, detailJob.status)?.text || detailJob.status || '—' }}</Tag></Descriptions.Item>
               <Descriptions.Item label="源">{{ detailJob.sourceCode || '—' }}</Descriptions.Item>
               <Descriptions.Item label="触发">{{ detailJob.triggerType || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="scope">{{ detailJob.scope || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="采集范围">{{ detailJob.scope || '—' }}</Descriptions.Item>
               <Descriptions.Item label="创建">{{ fmtDt(detailJob.createTime) }}</Descriptions.Item>
               <Descriptions.Item label="完成">{{ fmtDt(detailJob.finishedAt) }}</Descriptions.Item>
               <Descriptions.Item label="汇总摘要" :span="2"><span class="break-all" :title="detailJob.summaryJson || ''">{{ jobSummaryText(detailJob.summaryJson) || '—' }}</span></Descriptions.Item>
@@ -1086,7 +1086,7 @@ const incompleteOf = (r: ManualRun) =>
               <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ selJobTaskFull?.url || selJobTask.url || '—' }}</span></Descriptions.Item>
               <Descriptions.Item label="通道 / 解析器">{{ selJobTaskFull?.channelCode || selJobTask.channelCode || '—' }} / {{ selJobTaskFull?.parserCode || selJobTask.parserCode || '—' }}</Descriptions.Item>
               <Descriptions.Item label="尝试">{{ selJobTaskFull?.attempt ?? selJobTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ selJobTaskFull?.workerId || selJobTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="执行节点">{{ selJobTaskFull?.workerId || selJobTask.workerId || '—' }}</Descriptions.Item>
               <Descriptions.Item label="开始 / 完成">{{ fmtDt(selJobTaskFull?.startedAt || selJobTask.startedAt) }} / {{ fmtDt(selJobTaskFull?.finishedAt || selJobTask.finishedAt) }}</Descriptions.Item>
               <Descriptions.Item label="消息 / 错误" :span="2">{{ selJobTaskFull?.message || selJobTask.message || '—' }}</Descriptions.Item>
             </Descriptions>

@@ -184,7 +184,7 @@ watch(open, (v) => onOpen(v));
       :data-source="rows"
       :columns="[
         { title: '源名称', dataIndex: 'sourceName', key: 'n', width: 180 },
-        { title: 'code', dataIndex: 'sourceCode', key: 'c', width: 120 },
+        { title: '源代码', dataIndex: 'sourceCode', key: 'c', width: 130 },
         { title: '方式', dataIndex: 'fetchType', key: 'ft', width: 120 },
         { title: '通道', dataIndex: 'channelCode', key: 'ch', width: 90 },
         { title: '抓取间隔（秒）', dataIndex: 'fetchIntervalSeconds', key: 'i', width: 130, customRender: ({ text }: { text?: null | number }) => intervalText(text) },

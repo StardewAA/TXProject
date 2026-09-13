@@ -489,6 +489,30 @@ export namespace QualificationApi {
 /** 写接口统一静默：错误由调用方按 §0.4 呈现（code/msg/traceId/fieldErrors） */
 const SILENT = { headers: { 'X-Silent-Error': 'true' } } as const;
 
+/* ================= 申报（apply）选项：值域以后端 Schema 为准，勿再直出英文码 ================= */
+
+/** 申报类型选项（apply_type）——权威来源：QualificationApplyPageReqVO.applyType 的 @Schema
+ * "申报类型 code：RENEW 延续 / UPGRADE 升级 …（当前仅 RENEW 支持）"。
+ * 为什么只有这两项：此前界面把 6 个英文码（NEW/UPGRADE/RENEW/ADDITION/CHANGE/CANCEL）**直出为选项文案**，
+ * 用户能选到后端 Schema 未收录、也无枚举文件的值（NEW/ADDITION/CHANGE/CANCEL）→ 选完查不到数据。
+ * UPGRADE 后端已识别但注明"当前仅 RENEW 支持"，故保留可见但 disabled（提示而非撒谎）。
+ * 业务若确需其余 4 类，请后端补枚举后在此登记（契约 13 追加项）。 */
+export const APPLY_TYPE_OPTIONS = [
+  { label: '延续（RENEW）', value: 'RENEW' },
+  { disabled: true, label: '升级（UPGRADE）· 后端暂未支持', value: 'UPGRADE' },
+];
+
+/** 申报状态选项（status）——权威来源：QualificationApplyPageReqVO.status 的 @Schema
+ * "SUBMITTED 待批 / APPROVED 已批 / REJECTED 已退回 / ISSUED 已办结"。
+ * 此前是**手输英文 code 的输入框**（placeholder「状态 code（如 SUBMITTED）」）——业务人员背英文码既易错，
+ * 也不该出现在中文界面；改下拉后与后端值域一一对应。 */
+export const APPLY_STATUS_OPTIONS = [
+  { label: '待批（SUBMITTED）', value: 'SUBMITTED' },
+  { label: '已批（APPROVED）', value: 'APPROVED' },
+  { label: '已退回（REJECTED）', value: 'REJECTED' },
+  { label: '已办结（ISSUED）', value: 'ISSUED' },
+];
+
 /* ========== 查询 ========== */
 export function getQualificationPage(params: QualificationApi.PageReq) {
   return requestClient.get<PageResult<QualificationApi.Qualification>>('/bidding/qualification/page', { params });

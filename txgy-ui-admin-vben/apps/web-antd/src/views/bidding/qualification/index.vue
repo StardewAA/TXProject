@@ -52,6 +52,7 @@ import {
   runQualificationAlertScan,
   submitQualificationRenew,
 } from '#/api/bidding/qualification';
+import { APPLY_STATUS_OPTIONS, APPLY_TYPE_OPTIONS } from '#/api/bidding/qualification';
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
@@ -1267,17 +1268,10 @@ onMounted(() => {
               placeholder="申报类型"
               style="width: 150px"
               allow-clear
-              :options="[
-                { label: 'NEW', value: 'NEW' },
-                { label: 'UPGRADE', value: 'UPGRADE' },
-                { label: 'RENEW', value: 'RENEW' },
-                { label: 'ADDITION', value: 'ADDITION' },
-                { label: 'CHANGE', value: 'CHANGE' },
-                { label: 'CANCEL', value: 'CANCEL' },
-              ]"
+              :options="APPLY_TYPE_OPTIONS"
               @change="loadApplies"
             />
-            <a-input v-model:value="applyQuery.status" placeholder="状态 code（如 SUBMITTED）" style="width: 200px" allow-clear @press-enter="loadApplies" />
+            <a-select v-model:value="applyQuery.status" placeholder="申报状态" style="width: 160px" allow-clear :options="APPLY_STATUS_OPTIONS" @change="loadApplies" />
             <a-button type="primary" @click="loadApplies">查询</a-button>
           </div>
           <div class="ct-panel-b">

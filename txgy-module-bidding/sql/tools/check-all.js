@@ -31,6 +31,7 @@ const CHECKS = [
   { args: ['sql/tools/check-master-mirror.js'], name: '一键包镜像完整性', why: 'history 脚本内容必须真的在一键包里（否则重建会静默抹掉，新装库缺功能）' },
   { args: ['sql/tools/check-hardcoded-enums.js'], name: '枚举硬编码棘轮', why: '状态码/枚举值必须动态配置：新页面不得再写死 code→中文映射（既有欠债按文件冻结，只减不增）' },
   { args: ['sql/tools/check-dict-permission.js'], name: '字典可读性', why: '消费字典的页面，其用户必须读得到 /bidding/meta/*（否则 403 → 中文静默变英文 code）' },
+  { args: ['sql/tools/check-internal-terms.js'], name: '内部术语直出', why: '中文界面的列名/标签不得是纯英文开发字段名（worker/scope/traceId/英文业务码），补枚举棘轮看不见的内联标签盲区' },
   { args: ['sql/tools/check-unit-semantics.js'], name: '单位语义对等', why: '后端 @Schema 声明了单位的数值字段，前端声明必须带同一单位（防"接口含义没对齐"，如抓取间隔到底是列表还是详情页）' },
   { args: ['sql/tools/check-type-parity.js'], name: '类型对等', why: '前端 interface 必须是后端 VO 的完整镜像：少字段=页面永远拿不到该数据（已咬过三次：KeyPostAssignmentResp / ParseAttachment / ParseEntry）' },
 ];

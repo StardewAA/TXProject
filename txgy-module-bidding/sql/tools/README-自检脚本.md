@@ -339,3 +339,23 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 
 **顺带发现（结构性）**：门户 `views/portal/bidding/types.ts` 自建了一套与 `api/bidding` 并行的类型，
 所以它同时逃过类型对等与单位语义两道门禁——本门禁已把该文件纳入扫描。
+
+## 内部术语直出（check-internal-terms.js，第 15 道）
+
+**由来**（用户 2026-09-25"数据胡乱展示"）：采集控制台把 `scope`/`worker` 直接当列名、规则配置面板把
+`traceId` 当列名、资质页把 6 个英文业务码（NEW/UPGRADE/RENEW/ADDITION/CHANGE/CANCEL）直出为筛选项文案，
+甚至用**手输英文 code 的输入框**筛申报状态 —— 业务人员在中文界面里看到的是开发者的字段名。
+
+**与第 11 道的关系**：枚举棘轮只认**具名常量**里的 code→中文映射，README 早已记录"内联在模板里的枚举映射"
+是它的盲区（当时只能靠约定）；本门禁正是补这块：扫 `title:'…'`/`label:'…'`/`<Descriptions.Item label>`/`<th>`，
+**不含中文即命中**，除非在 ALLOW（标准术语 URL/JSON/SHA-256/robots/API…）。
+
+**实测**：全 bidding 域 + 门户共 80 个文件，命中 16 处 → 甄别后 **5 处为真问题**（scope/worker×2/code/traceId）
++ 资质页 6 个英文码（改具名常量后由第 11 道接手）+ 若干标准术语（入 ALLOW）。修完输出
+`[OK] 未发现内部术语直出`。
+
+**反向验证**：把 `source-detail.vue` 的"执行节点"临时改回 `worker` → 门禁 FAIL 并点名行号；恢复后转绿。
+
+**顺带修掉的交互矛盾**：资质页申报状态原为"手输状态 code（如 SUBMITTED）"输入框 → 改中文下拉
+（值域取自后端 `QualificationApplyPageReqVO.status` 的 @Schema）；申报类型原 6 个英文码 → 只留
+RENEW 延续（UPGRADE 升级置 disabled 并注明"后端暂未支持"）；其余 4 码后端 Schema 未收录，已写进契约 13 第八节请后端确认。
