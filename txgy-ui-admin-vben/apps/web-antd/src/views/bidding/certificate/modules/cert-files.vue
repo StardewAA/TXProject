@@ -12,6 +12,7 @@ import { message } from 'ant-design-vue';
 
 import { type CertificateApi, getCertFileList, registerCertFile } from '#/api/bidding/certificate';
 import { uploadBiddingFile } from '#/api/bidding/file';
+import { fmtBytes } from '#/utils/format';
 
 import { dateTimeToMs, fmtDateTime } from '../format';
 import { useCertMeta } from '../useCertMeta';
@@ -146,9 +147,7 @@ async function onPick(file: File) {
 
 function sizeText(n?: number) {
   if (!n && n !== 0) return '—';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+  return fmtBytes(n);
 }
 
 const columns = [

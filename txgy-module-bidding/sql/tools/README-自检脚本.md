@@ -359,3 +359,21 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 **顺带修掉的交互矛盾**：资质页申报状态原为"手输状态 code（如 SUBMITTED）"输入框 → 改中文下拉
 （值域取自后端 `QualificationApplyPageReqVO.status` 的 @Schema）；申报类型原 6 个英文码 → 只留
 RENEW 延续（UPGRADE 升级置 disabled 并注明"后端暂未支持"）；其余 4 码后端 Schema 未收录，已写进契约 13 第八节请后端确认。
+
+## FE 同名遮蔽 / 自委托（check-fe-shadowing.js，第 16 道）
+
+**由来（我 2026-09-25 连续踩了三次同一个坑）**：把各页自带的 `fmtBytes`/`fmtT` 改为委托共享实现时，
+用"整文件批量改名"把**局部包装函数体内的委托调用也改了名**，产生：
+`const fmtBytes = (n) => fmtBytes(n)`（箭头自递归）、`function sizeText(n) { return sizeText(n, '') }`（函数自递归）、
+以及局部名与 import 同名（遮蔽）。**eslint 不报、vue-tsc 也不报**（递归与遮蔽类型都正确），只有真跑起来才栈溢出。
+
+**口径（零基线）**：
+· R1 自委托——**按花括号配对取真实函数体**，要求"整个函数体就是调用自己"（`return f(…)` 或 `=> f(…)>`）；
+  早期版本用"声明后 8 行"的窗口判断，把**下一个函数里的调用**误判成自委托（实测 2 处误报：`timeKeyOf`/`iso`），已改正。
+· R2 同名遮蔽——本文件声明的函数/常量名与 import 进来的名字相同。
+· 只扫招投标域（views/bidding、views/portal/bidding、api/bidding、utils/format.ts、utils/datetime.ts）。
+  mall 域另有 2 处 `message` 遮蔽，**不属本模块范围，故不扫**——避免门禁越界去改别人的代码。
+
+**反向验证（三种形态都试过）**：表达式箭头自委托 ✅ 抓到、函数声明自委托 ✅ 抓到、import 同名遮蔽 ✅ 抓到；
+移除后恢复 `[OK]`。第一次做反向验证时**注入的用例没被抓到**——原因是声明正则漏了返回类型注解
+（`const f = (n: number): string => ...`），修好后才通过；这条记录保留，说明"门禁的第一次反向验证失败"很常见，必须真做。

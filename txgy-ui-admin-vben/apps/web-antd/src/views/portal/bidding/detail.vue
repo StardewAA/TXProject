@@ -17,6 +17,8 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useAppConfig } from '@vben/hooks';
 
+import { fmtBytes } from '#/utils/format';
+
 import CopyText from '../../bidding/components/CopyText.vue';
 import { buildExternalNoticePdfUrl } from '../../bidding/noticeExternal/pdfUrl';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
@@ -315,11 +317,7 @@ const tagList = computed(() => {
 const fmtSize = (n?: number) =>
   n == null
     ? ''
-    : n >= 1024 * 1024
-      ? `${(n / 1024 / 1024).toFixed(1)} MB`
-      : n >= 1024
-        ? `${Math.round(n / 1024)} KB`
-        : `${n} B`;
+    : fmtBytes(n);
 
 const virusText = (v?: string) =>
   v === 'CLEAN' ? { text: '已扫描 CLEAN', bad: false } : v === 'PENDING' ? { text: '扫描中 PENDING', bad: false } : v === 'INFECTED' ? { text: '文件含病毒 · 已拦截', bad: true } : { text: '', bad: false };

@@ -34,6 +34,7 @@ import { useAppConfig } from '@vben/hooks';
 import { Tag } from 'ant-design-vue';
 
 import { getManageDetail } from '#/api/bidding/noticeExternal';
+import { fmtBytes, fmtRatioPercent } from '#/utils/format';
 import {
   blocksToHtml,
   cleanT,
@@ -218,7 +219,7 @@ const [Modal, modalApi] = useVbenModal({
           </template>
           <Tag v-if="detail.contentType">{{ CONTENT_TYPE_MAP[detail.contentType] || detail.contentType }}</Tag>
           <Tag v-if="detail.noticeTypeRaw">{{ detail.noticeTypeRaw }}</Tag>
-          <span v-if="detail.industryConfidence != null" class="text-gray-400">置信度 {{ (detail.industryConfidence * 100).toFixed(0) }}%</span>
+          <span v-if="detail.industryConfidence != null" class="text-gray-400">置信度 {{ fmtRatioPercent(detail.industryConfidence) }}</span>
         </div>
         <div class="mb-2 flex gap-1 border-b border-gray-100">
           <button class="fb-tab" :class="{ on: tab === 'look' }" @click="tab = 'look'">前台观感（发布后）</button>
@@ -288,7 +289,7 @@ const [Modal, modalApi] = useVbenModal({
             <div><b class="text-gray-400">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-blue-600 underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
           </div>
           <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
-            PDF 原文件：{{ detail.pdfSize ? `${Math.round(detail.pdfSize / 1024) } KB` : '大小未知' }}
+            PDF 原文件：{{ fmtBytes(detail.pdfSize, '大小未知') }}
             <template v-if="pdfFrameUrl">｜<a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
             <div v-if="detail.extractionSummary" class="mt-1 text-gray-500">抽取摘要：{{ detail.extractionSummary }}</div>
           </div>
