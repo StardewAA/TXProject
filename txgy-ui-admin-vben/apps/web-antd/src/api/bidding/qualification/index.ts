@@ -5,6 +5,7 @@
  *   · QualificationController   GET  /bidding/qualification/page | /get | /apply/page
  *                               POST /bidding/qualification/{create,renew,approve,reject}
  *   · QualificationAlertRunController  POST /bidding/qualification-alert-run/scan
+ *   · QualificationController          POST /bidding/qualification/alert/handle（版本 CAS 标记已处理）
  *   · EnterpriseMaterialController     GET  /bidding/enterprise-material/completeness
  *     （前端复用 api/bidding/certificate 的 getMaterialCompleteness）
  *
@@ -321,6 +322,15 @@ export namespace QualificationApi {
     handled?: boolean;
   }
 
+  /** 预警处理入参（QualificationAlertHandleReqVO）：alertId 与 version 后端标 @NotNull，handleNote 选填 */
+  export interface AlertHandleReq {
+    alertId: number | string;
+    /** 处理备注（后端 handleNote；CAS 冲突被拒时这段备注不会落库） */
+    handleNote?: string;
+    /** 乐观锁版本：**原样回传清单里的 version**；与库中不一致 = 已被他人处理 */
+    version: number;
+  }
+
   /** 预警记录（QualificationAlertRespVO） */
   export interface Alert {
     id: number;
@@ -563,6 +573,13 @@ export function createQualificationStandard(data: QualificationApi.StandardCreat
 /** 到期/风险预警清单分页（三源：QUAL / SAFETY_PERMIT / STAFF） */
 export function getQualificationAlertPage(params: QualificationApi.AlertPageReq) {
   return requestClient.get<PageResult<QualificationApi.Alert>>('/bidding/qualification/alert/page', { params });
+}
+
+/** 把到期预警标记为已处理（销账）。
+ *  CAS 口径：version 必须与清单一致，否则后端拒绝——那说明**别人已经处理过**，
+ *  此时绝不能重试覆盖（会盖掉他人的处理备注），页面只重新拉取清单让用户看到最新状态。 */
+export function handleQualificationAlert(payload: QualificationApi.AlertHandleReq) {
+  return requestClient.post<boolean>('/bidding/qualification/alert/handle', payload);
 }
 
 /** 资质人员录入（需 qualId；权限 bidding:qualification:element） */
