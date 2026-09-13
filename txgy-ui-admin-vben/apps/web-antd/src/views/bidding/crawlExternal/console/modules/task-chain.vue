@@ -21,6 +21,7 @@ import { Button, message, Modal, Select, Tag } from 'ant-design-vue';
 
 import { fetchCrawlSourcePage, fetchCrawlTaskPage, getCrawlTask, retryCrawlTask } from '#/api/bidding/crawlExternal';
 import { getManagePage } from '#/api/bidding/noticeExternal';
+import { fmtBytes } from '#/utils/format';
 
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
@@ -28,7 +29,6 @@ import { FETCH_TYPE_LABEL, fetchTypeText } from '../../labels';
 import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
-import { fmtBytes } from '#/utils/format';
 
 const props = withDefaults(defineProps<{
   /** 是否允许 FAILED 死信重试按钮，默认 true */

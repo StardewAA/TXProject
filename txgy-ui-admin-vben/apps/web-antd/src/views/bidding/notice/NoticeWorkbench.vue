@@ -33,6 +33,7 @@ import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNo
 import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 import { fmtDateTime } from '#/utils/datetime';
+import { fmtBytes } from '#/utils/format';
 
 import AttachmentsPanel from '../vo/AttachmentsPanel.vue';
 import { type AttachmentRecord, stageItems } from '../vo/attachmentStages';
@@ -45,7 +46,6 @@ import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
 import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
 import ResultPublicityTable from './tables/ResultPublicityTable.vue';
 import TenderNoticeTable from './tables/TenderNoticeTable.vue';
-import { fmtBytes } from '#/utils/format';
 const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
 /* 身份由**显式 prop** 决定，不再嗅探 route.path —— 此前 /portal/bidding/publish 直接挂本组件，
  * 组件靠 route.path.startsWith('/portal') 猜自己是谁，导致"前台没有自己的页面、前后台共用一个工作台"，

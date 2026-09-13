@@ -28,8 +28,9 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
 import { fmtBytes } from '#/utils/format';
+
+import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
 
 export interface HtmlAttachment {
   id?: number | string;
