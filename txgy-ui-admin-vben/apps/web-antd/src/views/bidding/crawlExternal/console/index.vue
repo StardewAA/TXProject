@@ -635,10 +635,22 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     ['招标项目编号', (x?.tenderProjectKey || '').trim()],
     ['标段编号', (x?.bidSectionCodes || '').trim()],
     ['公告类型', (x?.noticeTypeRaw || '').trim()],
+    ['内容形态建议', (x?.contentType || '').trim()],
+    ['依法必招', x?.legalFlag === 'Y' ? '是' : x?.legalFlag === 'N' ? '否' : ''],
+    ['生效开始', (x?.effectiveFrom || '').trim()],
+    ['生效截止', (x?.effectiveTo || '').trim()],
     ['原网址', (x?.origUrl || '').trim()],
   ];
   return list.filter(([, v]) => v);
 };
+
+/** 页面形态中文名（后端 pageType：DETAIL/LIST/UNKNOWN）——列表页输入时解析器只出条目、不出公告字段 */
+const pageTypeText = (t?: string) =>
+  t === 'DETAIL' ? '公告详情' : t === 'LIST' ? '公告列表（出条目）' : t === 'UNKNOWN' ? '未识别' : (t || '—');
+
+/** 附件候选里"链接未绝对化"的条数——>0 表示下载器阶段拿不到绝对地址，属解析规则/源配置需校准 */
+const incompleteOf = (r: ManualRun) =>
+  (r.resp?.attachments || []).filter((att) => att.urlIncomplete).length;
 </script>
 
 <!-- ============ 外部信息获取工作台 · 工业风：选项卡 + 数据面板（2026-09-10） ============ -->
@@ -887,6 +899,13 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             <div class="ind-kv" style="grid-template-columns: 1fr;">
               <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ` · ${ processManual.fileName}` : '' }}</span></div>
               <div v-if="processManual.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ processManual.contentLength }} 字符</span></div>
+              <div v-if="processManual.resp?.pageType" class="kv">
+                <span class="k">页面形态</span><span class="v">{{ pageTypeText(processManual.resp.pageType) }}</span>
+              </div>
+              <div v-if="processManual.resp?.contentHtmlLength != null" class="kv">
+                <span class="k">HTML 原文长度</span>
+                <span class="v">{{ processManual.resp.contentHtmlLength }} 字符（仅下发长度，正文按预览核对）</span>
+              </div>
               <div v-if="processManual.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="processManual.url">{{ processManual.url }}</span></div>
             </div>
           </div>
@@ -936,10 +955,51 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <div v-for="(w, i) in processManual.resp.warnings" :key="i">• {{ w }}</div>
               </div>
             </div>
-            <div v-if="processManual.resp?.entries?.length" class="mt-3">
-              <div class="ind-sec-t"><span>LIST</span> 列表条目（列表页输入时）</div>
+            <!-- 附件候选：解析出的附件清单（下载器阶段会下载后回传 ingest）。
+                 urlIncomplete=true 表示相对链接未绝对化——下载会失败，属"该补源 baseUrl / 调解析规则"的直接信号，
+                 故单列标记而不是只列文件名。 -->
+            <div v-if="processManual.resp?.attachments?.length" class="mt-3">
+              <div class="ind-sec-t">
+                <span>ATTACH</span> 附件候选（{{ processManual.resp.attachments.length }} 个<span
+                  v-if="incompleteOf(processManual) > 0"
+                  class="ml-1 text-amber-700"
+                  >· {{ incompleteOf(processManual) }} 个链接未绝对化</span>）
+              </div>
               <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
-                <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
+                <div
+                  v-for="(att, i) in processManual.resp.attachments"
+                  :key="i"
+                  class="flex items-start gap-2"
+                >
+                  <span class="shrink-0" :class="att.urlIncomplete ? 'text-amber-700' : 'text-gray-500'">
+                    {{ att.urlIncomplete ? '⚠' : '•' }}
+                  </span>
+                  <span class="min-w-0">
+                    <span>{{ att.name || '（未命名附件）' }}</span>
+                    <span v-if="att.url" class="ml-2 break-all text-xs text-gray-500" :title="att.url">{{ att.url }}</span>
+                    <span v-if="att.urlIncomplete" class="ml-2 text-xs text-amber-700">
+                      （相对链接，缺来源 URL → 下载阶段无法定位；请在源配置里补 baseUrl 或改用带 url 的录入）
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-if="processManual.resp?.entries?.length" class="mt-3">
+              <div class="ind-sec-t">
+                <span>LIST</span> 列表条目（{{ processManual.resp.entries.length }} 条<span
+                  v-if="processManual.resp.entries.length > 10"
+                  >，展示前 10</span>）
+              </div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+                <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i" class="flex items-start gap-2">
+                  <span class="shrink-0 text-gray-500">•</span>
+                  <span class="min-w-0">
+                    <span>{{ en.title || '（无标题）' }}</span>
+                    <span v-if="en.date" class="ml-2 text-xs text-gray-500">{{ en.date }}</span>
+                    <span v-if="en.category" class="ml-2 text-xs text-gray-500">[{{ en.category }}]</span>
+                    <span v-if="en.url" class="ml-2 break-all text-xs text-gray-500" :title="en.url">{{ en.url }}</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>

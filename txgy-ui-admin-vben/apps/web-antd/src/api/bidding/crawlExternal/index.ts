@@ -14,10 +14,16 @@ export namespace CrawlExternalApi {
   export interface ParseAttachment {
     name?: string;
     url?: string;
+    /** 链接是否未绝对化（缺来源 URL 时 true）——下载器阶段会拿不到绝对地址，是"解析规则/源配置需校准"的信号 */
+    urlIncomplete?: boolean;
   }
   export interface ParseEntry {
     title?: string;
     url?: string;
+    /** 日期（yyyy-MM-dd） */
+    date?: string;
+    /** 栏目/类型提示 */
+    category?: string;
   }
   /** 解析测试回执（CrawlParseTestRespVO）——手动录入即真实解析一次 */
   export interface ParseTestResp {
