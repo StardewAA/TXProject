@@ -135,6 +135,10 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 检测两类形态（要求 SCREAMING_SNAKE code 与中文文案成对出现，避免误报）：对象映射
 `const X = { CODE: '中文' }` / `{ CODE: { text|label: '中文' } }`，以及选项数组 `[{ label: '中文', value: 'CODE' }]`。
 
+**已知盲区**：只认"具名常量"——模板内联的枚举映射（如 `<Select.Option value="BIDDER">投标人</Select.Option>`、
+`:options="[{ label: '投标人 BIDDER', value: 'BIDDER' }]"`）不会被识别。实测 `subjectAuth/index.vue` 就有两处，
+是人工迁移时才发现并收口的。约定替代：**枚举类文案一律收口到具名常量或字典**（收口后本门禁即可见）。
+
 **棘轮口径**：既有欠债按文件登记在 `KNOWN_HARDCODED`（逐条写明理由）——只许减少、不许增加；
 新文件出现即 FAIL，在册文件变多也 FAIL。实测基线：**15 个文件 / 33 处**。迁移到字典后把处数改小
 （`--update-baseline` 可打印新基线），文件彻底清干净后从表里删除。

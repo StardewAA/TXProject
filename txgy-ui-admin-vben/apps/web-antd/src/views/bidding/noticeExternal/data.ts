@@ -1,7 +1,17 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-/* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） ===== */
+/* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） =====
+ *
+ * 定位变更（2026-09-25）：状态 / 审核 / 内容形态三类**展示标签已改为"字典优先、本表兜底"**
+ * （见 index.vue 的 dictTagFirst/contentTypeLabel）。原因有两条，缺一不可：
+ *   ① 用户硬约束「状态码、枚举值必须动态配置，严禁硬编码」——字典才是主路径；
+ *   ② 本页用户**未必有** /bidding/meta/* 权限（后端 @PreAuthorize 只列 5 个电子证照/资质/人员域权限，
+ *      已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-25.md 请后端放开），
+ *      若纯字典化，这些角色会从"中文"直接退化成"英文 code"——所以本表必须保留为兜底，不是欠债。
+ * 字典类型：notice_external_status / notice_external_audit_status / notice_external_content_type（均已注册）。
+ * 行业相关 / 抽取状态 / AI 抽取 / 正文结构化四类暂无后端枚举可对齐，仍以本表为主（见棘轮基线登记）。 */
+
 
 export const STATUS_MAP: Record<string, { color: string; text: string; }> = {
   NEW: { text: '待审核', color: 'orange' },
@@ -138,7 +148,13 @@ const fmtT = (v?: null | number | string): string => {
 const textOf = (m: Record<string, string>, v?: string) => (v && m[v] ? m[v] : (v || ''));
 
 /** 列表列（状态/审核/行业/抽取/正文结构化用 slots 上色，见 index.vue 对应 # 模板） */
-export function useGridColumns(): VxeTableGridOptions['columns'] {
+/** 字典桥（可选）：传入则"字典优先"，不传/为空则用本文件映射表兜底（见文件头"定位变更"） */
+export interface NoticeExternalDictBridge {
+  /** 内容形态的中文名（字典优先；缺字典时调用方回退 textOf(CONTENT_TYPE_MAP, v)） */
+  contentTypeLabel?: (v?: string) => string;
+}
+
+export function useGridColumns(dict: NoticeExternalDictBridge = {}): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
     { field: 'id', title: 'ID', width: 90 },
@@ -149,7 +165,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'contentType',
       title: '形态',
       width: 95,
-      formatter: ({ cellValue }) => textOf(CONTENT_TYPE_MAP, cellValue as string | undefined),
+      formatter: ({ cellValue }) =>
+        dict.contentTypeLabel
+          ? dict.contentTypeLabel(cellValue as string | undefined)
+          : textOf(CONTENT_TYPE_MAP, cellValue as string | undefined),
     },
     {
       field: '__industry',

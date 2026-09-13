@@ -10,6 +10,12 @@
  *   MAP     const X = { CODE: '中文' } / { CODE: { label|text|title|name: '中文' } }
  *   OPTIONS const X = [{ label: '中文', value: 'CODE' }, ...]
  *
+ * ⚠️ 已知盲区（2026-09-25 实测发现）：**只认"具名常量"**。写在模板/内联处的枚举映射看不出来，例如
+ *    subjectAuth/index.vue 里 <Select.Option value="BIDDER">投标人</Select.Option> 与
+ *    :options="[{ label: '投标人 BIDDER', value: 'BIDDER' }, …]" —— 这两处硬编码是人工迁移时才发现并收口的。
+ *    要覆盖内联形态需要 AST 级识别（按属性名+中文文案判定），误报率与成本都更高，故暂不纳入，
+ *    改用约定：**枚举类文案一律收口到具名常量或字典**（收口后本门禁即可见）。
+ *
  * 门禁口径（棘轮）：
  *   · 文件不在 KNOWN_HARDCODED 里且命中 → FAIL（新页面必须走字典）；
  *   · 文件在册但命中数**超过**登记数      → FAIL（不许变多）；
@@ -34,7 +40,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist']);
  * 说明：这些是"既有欠债"，逐条登记是为了让新页面无处可藏，而不是认可它们的写法。
  */
 const KNOWN_HARDCODED = new Map([
-  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/noticeExternal/data.ts', [7, '外部公告管理页 7 张既有映射表（状态/审核/形态/行业/抽取/AI/正文结构化）；notice_external_* 三类字典本轮已注册，可直接迁移，属该页负责人的待办']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/noticeExternal/data.ts', [7, '状态/审核/内容形态 3 类已于 2026-09-25 改为"字典优先、本表兜底"（本表仍保留：本页用户未必有 /bidding/meta/* 权限，纯字典化会退化成英文码）；行业/抽取/AI/正文结构化 4 类无后端枚举可对齐，仍以本表为主；筛选下拉仍由本表构建（form schema 在 setup 期构建，字典异步加载时会拿到空下拉）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/qualification/index.ts', [6, '资质域选项表（序列/预警来源/人员角色/业绩角色等）——取值来自后端枚举，但该域字典尚未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/shared.ts', [3, '采集任务/解析状态映射；采集域字典未注册（属采集工作台待办）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/ruleConfig/index.ts', [3, '规则配置的值类型/状态/命中来源选项；规则配置域字典未注册']],
@@ -45,7 +51,7 @@ const KNOWN_HARDCODED = new Map([
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/NoticeHtmlView.vue', [1, '公告状态文案（管理端与门户共用渲染件）；notice 状态字典未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/notice/payloadLabel.ts', [1, '公告 payload/正文块类型文案，属渲染件内部标签']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/safety-risk/index.vue', [1, 'KEY_POST_OPTIONS：key_post 字典已注册，本页已改为字典优先；此数组仅作字典未下发环境的兜底（与备案状态下拉同一口径）']],
-  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/subjectAuth/index.vue', [1, '主体授权原因文案（reasonLabel）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/subjectAuth/index.vue', [1, 'SUBJECT_TYPE_LABEL 已于 2026-09-25 降级为兜底（展示与选项均字典优先）；另有 reasonLabel 授权原因文案待该域字典']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/filing/index.ts', [1, 'FILING_STATUS_OPTIONS：filing_status 字典本轮已注册，项目页已改为字典优先，此数组仅作未升级环境兜底；可删除']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/notice/index.ts', [1, 'NOTICE_STATUS_LABEL 映射，notice 状态字典未注册']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/subject/index.ts', [1, 'SUBJECT_TYPE_LABEL：subject_type 字典本轮已注册，可迁移']],
