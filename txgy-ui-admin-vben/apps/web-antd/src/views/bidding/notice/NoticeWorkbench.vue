@@ -504,7 +504,11 @@ async function openDetail(row: NoticeApi.Row) {
 
 onMounted(() => { load(); void fetchKpiCounts(); });
 
-/* ================= 运维动作：索引重建 / 公开同步（权限 bidding:notice:update，由后端 @PreAuthorize 把关） ================= */
+/* ================= 运维动作：索引重建 / 公开同步（**管理端专属**） =================
+ * 权限 bidding:notice:update 由后端 @PreAuthorize 把关，但**权限码相同不等于职责相同**：
+ * 门户"撤下公告"同样用 bidding:notice:update，故门户用户能通过校验触发平台级索引重建/公开同步。
+ * 2026-09-14 按用户口径（企业在后台、个人在前台）在**界面层**收敛为仅管理端可见（v-if="!inPortal"）；
+ * 若后端愿意把运维端点拆到独立权限码（如 bidding:notice:ops），界面层这道约束即可降级为冗余双保险。 */
 const reindexing = ref<'' | 'all' | 'one'>('');
 
 async function doReindex(all = false) {
@@ -558,9 +562,14 @@ async function doSync() {
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
-        <Button size="large" :loading="reindexing === 'one'" @click="doReindex(false)">重建索引</Button>
-        <Button size="large" :loading="reindexing === 'all'" @click="doReindex(true)">全量重建</Button>
-        <Button size="large" @click="syncOpen = true">公开同步</Button>
+        <!-- 运维动作**仅管理端**：门户发布工作台不出现（口径 2026-09-14：企业在后台、个人在前台；
+             且这三个端点权限为 bidding:notice:update，而门户"撤下"用的也是该码 ⇒ 门户用户点得动，
+             等于把平台级索引重建/公开同步暴露给了前台） -->
+        <template v-if="!inPortal">
+          <Button size="large" :loading="reindexing === 'one'" @click="doReindex(false)">重建索引</Button>
+          <Button size="large" :loading="reindexing === 'all'" @click="doReindex(true)">全量重建</Button>
+          <Button size="large" @click="syncOpen = true">公开同步</Button>
+        </template>
         <Button size="large" @click="refreshAll">刷新</Button>
       </div>
     </div>
