@@ -1,0 +1,111 @@
+-- 商城公共租户 1 的防腐保温规格档案；仅补充缺失项，保留旧属性及其商品关联。
+-- 可重复执行；按租户 + 未删除名称匹配，不使用固定业务 ID。
+SET NAMES utf8mb4;
+START TRANSACTION;
+CREATE TEMPORARY TABLE mall_material_spec_seed (property_name VARCHAR(64), value_name VARCHAR(128)) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+INSERT INTO mall_material_spec_seed VALUES
+('材质','岩棉'),
+('材质','玻璃棉'),
+('材质','硅酸铝'),
+('材质','橡塑'),
+('材质','聚氨酯（PU）'),
+('材质','聚异氰脲酸酯（PIR）'),
+('材质','气凝胶'),
+('材质','环氧树脂'),
+('材质','玻璃纤维'),
+('材质','碳钢'),
+('材质','304不锈钢'),
+('材质','316不锈钢'),
+('厚度','0.5mm'),
+('厚度','1mm'),
+('厚度','2mm'),
+('厚度','3mm'),
+('厚度','5mm'),
+('厚度','10mm'),
+('厚度','15mm'),
+('厚度','20mm'),
+('厚度','25mm'),
+('厚度','30mm'),
+('厚度','40mm'),
+('厚度','50mm'),
+('厚度','60mm'),
+('厚度','80mm'),
+('厚度','100mm'),
+('容重','32kg/m³'),
+('容重','40kg/m³'),
+('容重','45kg/m³'),
+('容重','48kg/m³'),
+('容重','60kg/m³'),
+('容重','80kg/m³'),
+('容重','100kg/m³'),
+('容重','120kg/m³'),
+('容重','150kg/m³'),
+('容重','160kg/m³'),
+('公称直径','DN15'),
+('公称直径','DN20'),
+('公称直径','DN25'),
+('公称直径','DN32'),
+('公称直径','DN40'),
+('公称直径','DN50'),
+('公称直径','DN65'),
+('公称直径','DN80'),
+('公称直径','DN100'),
+('公称直径','DN125'),
+('公称直径','DN150'),
+('公称直径','DN200'),
+('公称直径','DN250'),
+('公称直径','DN300'),
+('公称直径','DN400'),
+('公称直径','DN500'),
+('公称直径','DN600'),
+('壁厚','2mm'),
+('壁厚','2.5mm'),
+('壁厚','3mm'),
+('壁厚','3.5mm'),
+('壁厚','4mm'),
+('壁厚','4.5mm'),
+('壁厚','5mm'),
+('壁厚','6mm'),
+('壁厚','8mm'),
+('壁厚','10mm'),
+('壁厚','12mm'),
+('包装规格','1kg/桶'),
+('包装规格','5kg/桶'),
+('包装规格','10kg/桶'),
+('包装规格','20kg/桶'),
+('包装规格','25kg/桶'),
+('包装规格','20kg/组'),
+('包装规格','25kg/组'),
+('包装规格','25kg/袋'),
+('包装规格','25kg/箱'),
+('包装规格','50kg/袋'),
+('包装规格','200kg/桶'),
+('长度','0.6m'),
+('长度','1m'),
+('长度','1.2m'),
+('长度','2m'),
+('长度','3m'),
+('长度','6m'),
+('长度','10m'),
+('长度','20m'),
+('长度','30m'),
+('长度','50m'),
+('宽度','0.5m'),
+('宽度','0.6m'),
+('宽度','1m'),
+('宽度','1.2m'),
+('宽度','1.5m');
+INSERT INTO product_property (name,status,remark,tenant_id,creator,updater)
+SELECT DISTINCT s.property_name,0,'防腐保温常用规格',1,'mall-material-specs','mall-material-specs'
+FROM mall_material_spec_seed s WHERE NOT EXISTS (
+ SELECT 1 FROM product_property p WHERE p.tenant_id=1 AND p.deleted=0 AND p.name=s.property_name
+);
+INSERT INTO product_property_value (property_id,name,remark,tenant_id,creator,updater)
+SELECT p.id,s.value_name,'防腐保温规格可选值',1,'mall-material-specs','mall-material-specs'
+FROM mall_material_spec_seed s JOIN (
+ SELECT MIN(id) id,name FROM product_property WHERE tenant_id=1 AND deleted=0 GROUP BY name
+) p ON p.name=s.property_name
+WHERE NOT EXISTS (SELECT 1 FROM product_property_value v
+ WHERE v.tenant_id=1 AND v.deleted=0 AND v.property_id=p.id AND v.name=s.value_name);
+DROP TEMPORARY TABLE mall_material_spec_seed;
+COMMIT;
