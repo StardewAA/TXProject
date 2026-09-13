@@ -14,11 +14,14 @@ import AttachmentList from '../../../bidding/vo/AttachmentList.vue';
 import { loadAttachments } from '../../../bidding/vo/attachmentStore';
 import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { TENDER_PROJECT_DEF } from '../../../bidding/vo/entityForms';
+import { usePortalCan } from '../access';
 
 import './panel.css';
 
 const route = useRoute();
 const router = useRouter();
+/* 判权口径见 ../access.ts（未下发权限码时放行，与后台一致） */
+const { can } = usePortalCan();
 const projectCode = computed(() => String(route.params.projectCode ?? ''));
 
 const loading = ref(false);
@@ -125,7 +128,8 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
         </p>
       </div>
       <div class="pn-acts">
-        <Button type="primary" @click="create">创建招标项目</Button>
+        <Button v-if="can('bidding:project:create')" type="primary" @click="create">创建招标项目</Button>
+        <span v-else class="pn-dim">无创建权限（bidding:project:create）：可浏览现有招标项目，创建请联系管理员开通</span>
         <Button @click="load">刷新</Button>
       </div>
     </div>
