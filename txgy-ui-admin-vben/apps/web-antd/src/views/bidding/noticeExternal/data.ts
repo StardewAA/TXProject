@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { fmtDateTime } from '#/utils/datetime';
+
 /* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） =====
  *
  * 定位变更（2026-09-25）：状态 / 审核 / 内容形态三类**展示标签已改为"字典优先、本表兜底"**
@@ -130,22 +132,12 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /**
  * 时间格式化（02 §5：publishTime/effectiveFrom/effectiveTo 出参为 epoch 毫秒整数，
  * 兼容 ISO 字符串 'yyyy-MM-ddTHH:mm:ss' 与数字两种形态）。
+ * 2026-09-25：**解析口径委托 #/utils/datetime**（此前本文件与 NoticeWorkbench.vue 各有一份同名 fmtT，
+ * 且空值口径不一致：本文件空串、工作台 '—'）。本域保持空串占位——表格里空白比 "—" 干净。
+ * 导出供操作日志抽屉复用（避免第二套时间解析）。
  */
-const p2t = (n: number) => String(n).padStart(2, '0');
-/** 时间格式化：兼容 epoch 毫秒数字 / 13 位串 / 'yyyy-MM-dd HH:mm:ss'。导出供操作日志抽屉复用（避免第二套时间解析） */
-export const fmtT = (v?: null | number | string): string => {
-  if (v == null || v === '') return '';
-  let d: Date;
-  if (typeof v === 'number') {
-    d = new Date(v);
-  } else if (/^\d{13}$/.test(String(v).trim())) {
-    d = new Date(Number(v));
-  } else {
-    d = new Date(String(v).replace(' ', 'T'));
-  }
-  if (Number.isNaN(+d)) return String(v).slice(0, 19).replace('T', ' ');
-  return `${d.getFullYear()}-${p2t(d.getMonth() + 1)}-${p2t(d.getDate())} ${p2t(d.getHours())}:${p2t(d.getMinutes())}:${p2t(d.getSeconds())}`;
-};
+export const fmtT = (v?: null | number | string): string => fmtDateTime(v, '');
+
 const textOf = (m: Record<string, string>, v?: string) => (v && m[v] ? m[v] : (v || ''));
 
 /** 列表列（状态/审核/行业/抽取/正文结构化用 slots 上色，见 index.vue 对应 # 模板） */

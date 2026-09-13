@@ -6,37 +6,15 @@
  */
 import type { NoticeBodyBlock } from './types';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
-function toDate(v: null | number | string | undefined): Date | null {
-  if (v === null || v === undefined || v === '') return null;
-  if (typeof v === 'number') {
-    // 0/负值 = 未填（演示库存在 publishTime=0），不渲染成 1970
-    if (v <= 0) return null;
-    const d = new Date(v);
-    return Number.isNaN(+d) ? null : d;
-  }
-  // 'YYYY-MM-DD HH:mm' / 'YYYY-MM-DD HH:mm:ss' / ISO
-  const t = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/.test(v)
-    ? v.replace(' ', 'T')
-    : v;
-  const d = new Date(t);
-  return Number.isNaN(+d) ? null : d;
-}
+import { fmtDateTimeMinutes, fmtDate as sharedFmtDate } from '#/utils/datetime';
 
 /** 日期时间：YYYY-MM-DD HH:mm（无值返回空串） */
-export function fmtDT(v: null | number | string | undefined): string {
-  const d = toDate(v);
-  if (!d) return '';
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+export const fmtDT = (v: null | number | string | undefined): string =>
+  // 门户面向公众：无秒（紧凑）+ 空值留白（比"—"干净）；解析口径与后台共用同一实现，见 #/utils/datetime
+  fmtDateTimeMinutes(v, '');
 
 /** 仅日期：YYYY-MM-DD（有效期区间用） */
-export function fmtDate(v: null | number | string | undefined): string {
-  const d = toDate(v);
-  if (!d) return '';
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+export const fmtDate = (v: null | number | string | undefined): string => sharedFmtDate(v, '');
 
 /** 后端空值可能以字符串 "NULL"/"null" 下发（历史脏数据），统一还原为空 */
 const NULL_RE = /^(NULL|null|N\/A|-)$/i;

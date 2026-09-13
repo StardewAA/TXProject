@@ -42,7 +42,7 @@ import {
 } from '#/api/bidding/personnel';
 import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
 
-import { fmtDate } from '../certificate/format';
+import { fmtDate, fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
 import CopyText from '../components/CopyText.vue';
@@ -1099,7 +1099,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   <a-tag :color="record.platformVerified ? 'green' : 'default'">
                     {{ record.platformVerified ? '已核验' : '未核验' }}
                   </a-tag>
-                  <div v-if="record.verifiedAt" class="ct-panel-meta">{{ record.verifiedAt }}</div>
+                  <div v-if="record.verifiedAt" class="ct-panel-meta">{{ fmtDateTime(record.verifiedAt) }}</div>
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space size="small">
