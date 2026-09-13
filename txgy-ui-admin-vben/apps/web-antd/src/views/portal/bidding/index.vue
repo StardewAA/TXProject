@@ -11,13 +11,14 @@
    - 行业：industryFlag 三态 eq（防腐保温相关/不相关/未知，R10）。
 -->
 <script lang="ts" setup>
+import type { NoticeExternalItem } from './types';
+
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { RESULT_TYPE_MERGE, classifyResultRaw, fetchNoticePage } from './api';
+import { classifyResultRaw, fetchNoticePage, RESULT_TYPE_MERGE } from './api';
 import { biddingConfig } from './config';
-import { fmtDT, fmtDate } from './format';
-import type { NoticeExternalItem } from './types';
+import { fmtDate, fmtDT } from './format';
 
 const router = useRouter();
 
@@ -70,12 +71,12 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize))
 const pageList = computed(() => {
   const p = pageNo.value;
   const last = totalPages.value;
-  const nums: (number | '…')[] = [];
+  const nums: ('…' | number)[] = [];
   const push = (n: number) => nums.push(n);
   push(1);
   for (let i = Math.max(2, p - 1); i <= Math.min(last - 1, p + 1); i++) push(i);
   if (last > 1) push(last);
-  const out: (number | '…')[] = [];
+  const out: ('…' | number)[] = [];
   nums.forEach((n, i) => {
     const prev = nums[i - 1];
     if (typeof n === 'number' && typeof prev === 'number' && n - prev > 1) out.push('…');
@@ -207,7 +208,7 @@ function turnCustomOn(): void {
   state.customOn = true;
   state.quick = '';
 }
-function gotoPage(p: number | '…'): void {
+function gotoPage(p: '…' | number): void {
   if (typeof p !== 'number' || p === pageNo.value) return;
   const target = Math.min(Math.max(1, p), totalPages.value);
   if (target === pageNo.value) return;

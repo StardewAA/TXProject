@@ -1,3 +1,19 @@
+import type {
+  FollowEvent,
+  FollowItem,
+  FollowItemPageParams,
+  FollowReq,
+  FollowStatus,
+  InternalNoticeDetail,
+  InternalNoticeItem,
+  InternalNoticeParams,
+  NoticeBodyBlock,
+  NoticeExternalDetail,
+  NoticeExternalItem,
+  NoticePageParams,
+  PageResult,
+} from './types';
+
 /**
  * notice-external 服务层：真实接口 ↔ 内置 Mock 切换。
  *
@@ -34,21 +50,6 @@ import {
   mockTimeline,
   mockToggleFollow,
 } from './mock';
-import type {
-  FollowEvent,
-  FollowItem,
-  FollowItemPageParams,
-  FollowStatus,
-  FollowReq,
-  InternalNoticeDetail,
-  InternalNoticeItem,
-  InternalNoticeParams,
-  NoticeBodyBlock,
-  NoticeExternalDetail,
-  NoticeExternalItem,
-  NoticePageParams,
-  PageResult,
-} from './types';
 
 const API = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice-external`;
 
@@ -110,7 +111,7 @@ function quickToBegin(quick?: string): string | undefined {
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** 日期/时间串 → 接口可解析的 'yyyy-MM-dd HH:mm:ss'（仅日期自动补起止时刻） */
-function normTime(v: string | number | undefined, isEnd: boolean): string | undefined {
+function normTime(v: number | string | undefined, isEnd: boolean): string | undefined {
   if (v === undefined || v === null || v === '') return undefined;
   const s = String(v);
   if (DATE_ONLY_RE.test(s)) return isEnd ? `${s} 23:59:59` : `${s} 00:00:00`;
@@ -266,7 +267,7 @@ export async function fetchNoticePage(
 /* ---------- 详情 ---------- */
 
 function parseBodyBlocks(
-  rawJson: string | null | undefined,
+  rawJson: null | string | undefined,
   preset?: NoticeBodyBlock[],
 ): NoticeBodyBlock[] {
   if (preset) return preset;
@@ -278,7 +279,7 @@ function parseBodyBlocks(
       (b): b is NoticeBodyBlock =>
         !!b &&
         typeof b.type === 'string' &&
-        ['heading', 'paragraph', 'table', 'list'].includes(b.type),
+        ['heading', 'list', 'paragraph', 'table'].includes(b.type),
     );
   } catch {
     return [];
@@ -335,7 +336,7 @@ export async function fetchNoticeDetail(id: number | string): Promise<NoticeExte
 }
 
 /** “前往原地址查看”：真实态一律走后端 /go 中转（白名单校验 + 防开放重定向，02 §3.3） */
-export function openOrigUrl(origUrl?: string | null): void {
+export function openOrigUrl(origUrl?: null | string): void {
   if (!origUrl) return;
   if (biddingConfig.useMock) {
     // Mock 态无 go 服务，直接打开原地址便于演示
@@ -363,18 +364,19 @@ const FOLLOW_API = `${biddingConfig.baseUrl}${biddingConfig.apiPrefix}/notice-fo
 /** 登录态请求（附加 Authorization/tenant-id；无 token 时报“请先登录”） */
 async function authedFetch<T>(
   url: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { body?: unknown; method?: string; } = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (init.body !== undefined) {
     // JSON body 必须显式声明，否则 fetch 默认 text/plain，后端 @RequestBody 直接 415
     headers['Content-Type'] = 'application/json';
   }
-  let token: string | null = null;
   try {
     const { useAccessStore } = await import('@vben/stores');
     const accessStore = useAccessStore();
-    token = accessStore.accessToken;
+    // token 只在本 try 内使用（下方拼 Authorization）→ 就地 const，不再外层 let 再赋值
+    // （原写法被 no-useless-assignment 判为"死初始化"：初始 null 一定会被覆盖且 catch 后不再读）
+    const token = accessStore.accessToken;
     const tenantId = accessStore.tenantId;
     if (token) headers.Authorization = `Bearer ${token}`;
     if (tenantId !== null && tenantId !== undefined) headers['tenant-id'] = String(tenantId);
@@ -386,7 +388,7 @@ async function authedFetch<T>(
     headers,
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
-  let body: { code?: number; data?: T; msg?: string } | null = null;
+  let body: null | { code?: number; data?: T; msg?: string } = null;
   try {
     body = (await res.json()) as { code?: number; data?: T; msg?: string };
   } catch {

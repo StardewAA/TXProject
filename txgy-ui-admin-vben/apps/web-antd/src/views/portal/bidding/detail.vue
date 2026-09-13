@@ -10,15 +10,16 @@
   附件：downloadUrl=FileApi 签名下载；INFECTED 后端不下发链接（页面显示已拦截），PENDING 显示扫描中。
 -->
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useAppConfig } from '@vben/hooks';
+import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
 
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { biddingConfig } from './config';
+import { useAppConfig } from '@vben/hooks';
+
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
-import { blocksToHtml, cleanT, fmtDT, fmtDate, prettyNoticeHtml, toCleanList } from './format';
-import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
+import { biddingConfig } from './config';
+import { blocksToHtml, cleanT, fmtDate, fmtDT, prettyNoticeHtml, toCleanList } from './format';
 
 const route = useRoute();
 const router = useRouter();
@@ -28,7 +29,7 @@ const errorMsg = ref('');
 const detail = ref<NoticeExternalDetail | null>(null);
 
 /** 关注状态：idle=探测中 / followed / unfollowed / unavailable（未登录或无权限时不展示按钮并给提示） */
-const followState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const followState = ref<'followed' | 'idle' | 'unavailable' | 'unfollowed'>('idle');
 const followBusy = ref(false);
 const followHint = ref('');
 
@@ -49,7 +50,7 @@ function hintOf(e: unknown): string {
 }
 /** 登录态错误判定：ApiError.code === 401/403（api.ts authedFetch 统一抛出；其余业务/网络错误不在此列） */
 function isAuthError(e: unknown): boolean {
-  const code = (e as { code?: number } | null | undefined)?.code;
+  const code = (e as null | undefined | { code?: number })?.code;
   return code === 401 || code === 403;
 }
 /** 未登录/无权限：去管理端登录页（login.vue 的 resolveRedirectPath 支持 /portal/ 前缀回跳当前详情） */
@@ -99,7 +100,7 @@ async function toggleFollow(): Promise<void> {
   }
 }
 /** 项目级次级关注（跟踪该招标项目；targetType=PROJECT + targetKey=projectKey，BR-1/01 §3） */
-const projFollowState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const projFollowState = ref<'followed' | 'idle' | 'unavailable' | 'unfollowed'>('idle');
 const projFollowBusy = ref(false);
 const projFollowHint = ref('');
 
@@ -147,7 +148,7 @@ async function toggleProjFollow(): Promise<void> {
 
 /** 兜底：未捕获的运行时/异步错误显示到页面上，便于定位（开发辅助） */
 const pageError = ref('');
-function onUnhandled(e: PromiseRejectionEvent | ErrorEvent): void {
+function onUnhandled(e: ErrorEvent | PromiseRejectionEvent): void {
   const reason = e instanceof PromiseRejectionEvent ? e.reason : e.error;
   const msg =
     reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason ?? e);
@@ -183,9 +184,9 @@ const sections = computed<SecTrack[]>(() => {
     }))
     .filter((s) => !!s.key);
 });
-type SecState = 'idle' | 'followed' | 'unfollowed' | 'unavailable';
-const sectionFollows = ref<Record<string, { state: SecState; busy: boolean; hint: string }>>({});
-function secStateOf(s: SecTrack): { state: SecState; busy: boolean; hint: string } {
+type SecState = 'followed' | 'idle' | 'unavailable' | 'unfollowed';
+const sectionFollows = ref<Record<string, { busy: boolean; hint: string; state: SecState; }>>({});
+function secStateOf(s: SecTrack): { busy: boolean; hint: string; state: SecState; } {
   return sectionFollows.value[s.key] || { state: 'idle', busy: false, hint: '' };
 }
 async function probeSectionFollows(): Promise<void> {
@@ -399,12 +400,16 @@ onBeforeUnmount(() => {
             :class="{ active: followState === 'followed', need: followState === 'unavailable' }"
             :disabled="followBusy"
             @click="toggleFollow()"
-          >{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : followState === 'unavailable' ? '＋ 关注 · 需登录' : '＋ 关注' }}</button>
+          >
+{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : followState === 'unavailable' ? '＋ 关注 · 需登录' : '＋ 关注' }}
+</button>
           <button
             v-if="followState === 'unavailable'"
             class="go-orig ghost"
             @click="goLogin()"
-          >去登录</button>
+          >
+去登录
+</button>
           <a
             v-if="detail.origUrl"
             class="go-orig"
@@ -430,7 +435,9 @@ onBeforeUnmount(() => {
           :class="{ active: projFollowState === 'followed', need: projFollowState === 'unavailable' }"
           :disabled="projFollowBusy"
           @click="toggleProjFollow()"
-        >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}</button>
+        >
+{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}
+</button>
         <button v-if="projFollowState === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
         <span v-if="projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
       </div>
@@ -447,7 +454,9 @@ onBeforeUnmount(() => {
               :class="{ active: secStateOf(s).state === 'followed', need: secStateOf(s).state === 'unavailable' }"
               :disabled="secStateOf(s).busy"
               @click="toggleSectionFollow(s)"
-            >{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}</button>
+            >
+{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}
+</button>
             <button v-if="secStateOf(s).state === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
             <span v-if="secStateOf(s).hint" class="follow-note">标段：{{ secStateOf(s).hint }}</span>
           </div>

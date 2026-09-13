@@ -8,7 +8,7 @@ import type { NoticeBodyBlock } from './types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function toDate(v: number | string | null | undefined): Date | null {
+function toDate(v: null | number | string | undefined): Date | null {
   if (v === null || v === undefined || v === '') return null;
   if (typeof v === 'number') {
     // 0/负值 = 未填（演示库存在 publishTime=0），不渲染成 1970
@@ -25,14 +25,14 @@ function toDate(v: number | string | null | undefined): Date | null {
 }
 
 /** 日期时间：YYYY-MM-DD HH:mm（无值返回空串） */
-export function fmtDT(v: number | string | null | undefined): string {
+export function fmtDT(v: null | number | string | undefined): string {
   const d = toDate(v);
   if (!d) return '';
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** 仅日期：YYYY-MM-DD（有效期区间用） */
-export function fmtDate(v: number | string | null | undefined): string {
+export function fmtDate(v: null | number | string | undefined): string {
   const d = toDate(v);
   if (!d) return '';
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -56,7 +56,7 @@ export function toCleanList(v: unknown): string[] {
 /* ---------- HTML 转义 / 净化安全渲染 ---------- */
 
 /** 文本 → HTML 转义（所有来自后端/结构化块的文本先转义再进入 v-dompurify-html） */
-export function escapeHtml(s: string | number | null | undefined): string {
+export function escapeHtml(s: null | number | string | undefined): string {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -148,7 +148,7 @@ function stripLeadTitle(line: string, title: string): string {
 function splitSeq(line: string): string[] {
   const out: string[] = [];
   let last = 0;
-  let m: RegExpExecArray | null;
+  let m: null | RegExpExecArray;
   SEQ_SPLIT_RE.lastIndex = 0;
   while ((m = SEQ_SPLIT_RE.exec(line))) {
     const idx = m.index;
@@ -182,7 +182,7 @@ function splitSeq(line: string): string[] {
  * 现对无 table/img/多级标题的正文一律走本智能排版：按原文 strong 包裹与序号/文档标题
  * 特征把疑似标题行抬成 h 标签（h 不受 text-indent 影响），普通段才落 p.doc-para。
  */
-export function prettyNoticeHtml(html: string | null | undefined, docTitle?: string | null): string {
+export function prettyNoticeHtml(html: null | string | undefined, docTitle?: null | string): string {
   if (!html) return '';
   // 含表格/图片/列表/多级标题 → 结构化内容，保留原 HTML（公文 CSS 已覆盖）
   if (/<(?:table|img|ul|ol|li|h[2-6])[ >]/i.test(html)) return html;
@@ -194,8 +194,8 @@ export function prettyNoticeHtml(html: string | null | undefined, docTitle?: str
   // 先按 <p>…</p>（或 <div>…</div> 文本块）切行，保留“整段 strong”的标题候选特征；
   // 站点正文普遍以 p 为段容器，无 p 时退回按 br/标签剥行
   const blockRe = /<(p|div)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
-  let m: RegExpExecArray | null;
-  const rawLines: Array<{ text: string; strong: boolean }> = [];
+  let m: null | RegExpExecArray;
+  const rawLines: Array<{ strong: boolean; text: string; }> = [];
   blockRe.lastIndex = 0;
   while ((m = blockRe.exec(body)) !== null) {
     const inner = m[2] || '';
@@ -230,7 +230,7 @@ export function prettyNoticeHtml(html: string | null | undefined, docTitle?: str
   const normForCmp = (s: string) => s.replace(/\s+/g, '').replace(/[/／]/g, '');
   const h1Norm = normForCmp(h1Text);
 
-  const paras: Array<{ text: string; strong: boolean }> = rawLines.map((l, idx) =>
+  const paras: Array<{ strong: boolean; text: string; }> = rawLines.map((l, idx) =>
     idx === 0 ? { text: stripLeadTitle(l.text, h1Text), strong: l.strong } : l,
   );
 
@@ -306,6 +306,14 @@ function renderBlock(b: NoticeBodyBlock): string {
       const text = (b.text ?? '').trim();
       return text ? `<h${lv}>${esc(text)}</h${lv}>` : '';
     }
+    case 'list': {
+      const items = Array.isArray(b.items)
+        ? b.items.map((it) => (it == null ? '' : String(it).trim())).filter(Boolean)
+        : [];
+      if (!items.length) return '';
+      const tag = b.ordered ? 'ol' : 'ul';
+      return `<${tag}>${items.map((it) => `<li>${esc(it)}</li>`).join('')}</${tag}>`;
+    }
     case 'paragraph': {
       const text = (b.text ?? '').trim();
       return text ? `<p class="doc-para">${esc(text)}</p>` : '';
@@ -333,14 +341,6 @@ function renderBlock(b: NoticeBodyBlock): string {
       if (!head && !body) return '';
       return `<table>${cap}${head}${body}</table>`;
     }
-    case 'list': {
-      const items = Array.isArray(b.items)
-        ? b.items.map((it) => (it == null ? '' : String(it).trim())).filter(Boolean)
-        : [];
-      if (!items.length) return '';
-      const tag = b.ordered ? 'ol' : 'ul';
-      return `<${tag}>${items.map((it) => `<li>${esc(it)}</li>`).join('')}</${tag}>`;
-    }
     default:
       return '';
   }
@@ -364,7 +364,7 @@ const FOLLOW_TYPE_NAME: Record<string, string> = {
   SECTION: '标段',
 };
 /** 维度 code → 展示名（未知原文回显自身） */
-export function followTypeName(code?: string | null): string {
+export function followTypeName(code?: null | string): string {
   if (!code) return '';
   return FOLLOW_TYPE_NAME[code] || code;
 }
@@ -380,14 +380,14 @@ const STAGE_NAME: Record<string, string> = {
   UNKNOWN: '未知',
 };
 /** 阶段展示：后端 stageName 优先（快照可含业务改写），否则按 stageCode 字典 */
-export function stageNameOf(stageCode?: string | null, stageName?: string | null): string {
+export function stageNameOf(stageCode?: null | string, stageName?: null | string): string {
   if (stageName) return stageName;
   if (!stageCode) return '';
   return STAGE_NAME[stageCode] || stageCode;
 }
 
 /** 事件类型 → 展示名 */
-export function eventTypeText(eventType?: string | null): string {
+export function eventTypeText(eventType?: null | string): string {
   const map: Record<string, string> = {
     NOTICE_PUBLISHED: '公告发布',
     NOTICE_UPDATED: '公告更新',
@@ -399,7 +399,7 @@ export function eventTypeText(eventType?: string | null): string {
 }
 
 /** 事件来源 → 展示名 */
-export function eventSourceText(source?: string | null): string {
+export function eventSourceText(source?: null | string): string {
   const map: Record<string, string> = { INTERNAL: '内部公告', EXTERNAL: '外部平台' };
   if (!source) return '';
   return map[source] || source;

@@ -15,11 +15,11 @@ import AttachmentsPanel from '../../../bidding/vo/AttachmentsPanel.vue';
 import { attachmentCodeOf, type AttachmentRecord } from '../../../bidding/vo/attachmentStages';
 
 const props = defineProps<{
-  open: boolean;
-  tenderProjectCode: string;
   bidSectionCode: string;
   bidSectionName?: string;
+  open: boolean;
   projectCode?: string;
+  tenderProjectCode: string;
 }>();
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void;
@@ -36,7 +36,7 @@ const TYPE_TABLES = {
 
 type TypeCode = keyof typeof TYPE_TABLES;
 
-const TYPE_LIST: Array<{ code: TypeCode; label: string; desc: string; dataset: string }> = [
+const TYPE_LIST: Array<{ code: TypeCode; dataset: string; desc: string; label: string; }> = [
   { code: 'TENDER_NOTICE', label: '招标公告', desc: '招标公告与资格预审公告（含获取招标文件办法、递交截止与开标安排）', dataset: 'TenderNoticeVO' },
   { code: 'CHANGE_NOTICE', label: '变更公告', desc: '对已发公告的澄清、修改与时间变更', dataset: 'TenderChangeNoticeVO' },
   { code: 'WIN_CANDIDATE_PUBLICITY', label: '中标候选人公示', desc: '中标候选人名单与排序、异议渠道与期限', dataset: 'WinCandidatePublicityVO' },
@@ -156,7 +156,7 @@ function close(): void {
     <!-- 第一步：选择公告类型（四选一） -->
     <div v-if="step === 1" class="nc">
       <div class="nc-tip">
-        当前标段：<b>{{ bidSectionCode }}</b>{{ bidSectionName ? '（' + bidSectionName + '）' : '' }} · 招标项目 {{ tenderProjectCode }}。
+        当前标段：<b>{{ bidSectionCode }}</b>{{ bidSectionName ? `（${ bidSectionName }）` : '' }} · 招标项目 {{ tenderProjectCode }}。
         请选择要创建的公告类型，系统将按类型加载对应的专属字段表（四类数据集字段不同）。
       </div>
       <div class="nc-types">
@@ -172,7 +172,7 @@ function close(): void {
     <!-- 第二步：按类型动态加载专属表 -->
     <div v-else class="nc">
       <div class="nc-tip">
-        类型：<b>{{ typeLabel }}</b>{{ currentMeta ? '（' + currentMeta.dataset + '）' : '' }} ·
+        类型：<b>{{ typeLabel }}</b>{{ currentMeta ? `（${ currentMeta.dataset }）` : '' }} ·
         归属：招标项目 {{ tenderProjectCode }} / 标段 {{ bidSectionCode }}（已自动写入数据集字段，无需手填编号）。
       </div>
 
@@ -214,7 +214,7 @@ function close(): void {
           <span class="nc-sec-t">三、公告附件</span>
           <span class="nc-sec-hint">按该类型公告的附件采集项（AttachmentItemVO）分组，可加多个</span>
         </div>
-        <AttachmentsPanel v-model="attachments" :stage="currentStage" :title="typeLabel + '附件'" directory="bidding/notice" />
+        <AttachmentsPanel v-model="attachments" :stage="currentStage" :title="`${typeLabel }附件`" directory="bidding/notice" />
       </div>
 
       <div class="nc-foot">

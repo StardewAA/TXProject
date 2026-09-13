@@ -3,13 +3,14 @@
   数据源：真实接口 /bidding/notice/public/list（@PermitAll，仅 PUBLISHED + 社会公开）或内置 Mock
 -->
 <script lang="ts" setup>
+import type { InternalNoticeItem } from './types';
+
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { fetchInternalNotices } from './api';
 import { biddingConfig } from './config';
 import { fmtDate } from './format';
-import type { InternalNoticeItem } from './types';
 
 const router = useRouter();
 const loading = ref(false);

@@ -386,9 +386,9 @@ function seedTimeline(): MockTimelineRec[] {
 }
 
 /** 关注存储（模块级单例：跨页面（详情关注 ↔ 我的关注列表）共享状态） */
-const followStore: { rows: MockFollowRec[]; events: MockTimelineRec[] } = (() => {
+const followStore: { events: MockTimelineRec[]; rows: MockFollowRec[]; } = (() => {
   const saved = (globalThis as Record<string, unknown>).__bidding_mock_follow;
-  if (saved) return saved as { rows: MockFollowRec[]; events: MockTimelineRec[] };
+  if (saved) return saved as { events: MockTimelineRec[]; rows: MockFollowRec[]; };
   const store = { rows: followSeedRows(), events: seedTimeline() };
   (globalThis as Record<string, unknown>).__bidding_mock_follow = store;
   return store;
@@ -599,7 +599,7 @@ const internalList: InternalNoticeItem[] = [
     id: 7001,
     noticeCode: 'BID-ENT-2026-0001',
     noticeType: 'TENDER_NOTICE',
-    noticeTypeName: INTERNAL_TYPE_LABEL['TENDER_NOTICE'],
+    noticeTypeName: INTERNAL_TYPE_LABEL.TENDER_NOTICE,
     title: '榆林炼油厂 2026 年大修消缺项目防腐保温工程施工招标公告（本平台发布）',
     projectCode: 'DYZB2026-LY-DX001',
     projectName: '炼油厂 2026 年大修消缺防腐保温工程',
@@ -613,7 +613,7 @@ const internalList: InternalNoticeItem[] = [
     id: 7002,
     noticeCode: 'BID-ENT-2026-0002',
     noticeType: 'WIN_RESULT_PUBLICITY',
-    noticeTypeName: INTERNAL_TYPE_LABEL['WIN_RESULT_PUBLICITY'],
+    noticeTypeName: INTERNAL_TYPE_LABEL.WIN_RESULT_PUBLICITY,
     title: '杨凌 LNG 储罐防腐保温保冷项目中标结果公示（本平台发布）',
     projectCode: 'DYZB2026-YL-LNG001',
     projectName: '杨凌 LNG 储罐防腐保温保冷项目',
