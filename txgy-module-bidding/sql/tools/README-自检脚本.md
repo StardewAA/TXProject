@@ -144,6 +144,27 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 （`--update-baseline` 可打印新基线），文件彻底清干净后从表里删除。
 `--list` 列出每处命中的常量名与项数。
 
+## 类型对等（check-type-parity.js）
+
+**同一类缺陷咬过三次**：`KeyPostAssignmentResp` 只声明一半字段（挂靠嫌疑告警拿不到数据）、
+`ParseAttachment` 漏 `urlIncomplete`、`ParseEntry` 漏 `date`/`category`（解析诊断面板做不出来）。
+`audit-respvo-fields.js` 只能按"字段名是否在全仓出现"比对，`date`/`category` 这种**通用词**会被别处同名用法掩盖
+而漏报；本门禁**按类型对类型**比对，没有这个盲区。
+
+判定口径（先量化后定阈值）：
+· 只认**注释里点名了 VO 的前端 interface**，不猜、不按名字硬凑；
+· 候选 = 被点名的 VO ∪ 它的嵌套类（前端类型常对应嵌套行）；取**字段重合度最高**者，且必须 ≥ 0.6 —
+  实测 < 0.6 的基本都是误链（如 `QualificationPermitPageReqVO ← Permit` 重合 0.10）；
+· 重合度 = 前端字段中能在该 VO 找到同名的比例；1.00 = 前端类型是后端 VO 的严格子集（可信）；
+· 缺失字段超基线即 FAIL；基线 `KNOWN_INCOMPLETE` **只许减少**，补全后不删条目同样 FAIL（陈旧基线会掩盖重现的缺口）。
+
+**实测（2026-09-25）**：后端 VO（含嵌套）152 个、前端可链接 interface 57 个 → **完整镜像 53 个**、
+不完整 4 个（均已按 VO←前端 逐条冻结并写明"真缺口/后端保留字段"）：
+`CrawlSourceRespVO ← SourceItem`（11，API 直取展开列，页面走 apiConfigJson 整体配置）、
+`NoticeExternalManageRespVO ← ManageItem`（10，审核留痕 + AI 复核命中词——真缺口）、
+`PersonnelProfileSaveReqVO ← SaveReq`（4，岗位名/档案号/乐观锁 version——真缺口）、
+`NoticeRespVO ← InternalNoticeItem`（1，internalFlag 内部公告标记——真缺口）。
+
 ## 字典可读性（check-dict-permission.js）
 
 「页面用字典」与「用它的角色读得到字典」是两件事：`/bidding/meta/dicts|configs` 的 `@PreAuthorize` 只列了
