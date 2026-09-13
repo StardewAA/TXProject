@@ -138,9 +138,17 @@ public class HrmPortalRecruitController {
         HrmRecruitApplicationStatusEnum status = HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
         vo.setStatusName(status == null ? null : status.getName());
         if (application.getResumeId() != null) {
-            var resume = TenantUtils.executeIgnore(
-                    () -> resumeService.getAuthorizedRecruitResume(application.getResumeId()));
-            vo.setResumeFileName(resume.getFileName()).setResumeFileUrl(resume.getFileUrl());
+            // 简历附件授权失败不应让整页应聘记录查询失败；记录本身仍需正常展示。
+            try {
+                var resume = TenantUtils.executeIgnore(
+                        () -> resumeService.getAuthorizedRecruitResume(application.getResumeId()));
+                if (resume != null) {
+                    vo.setResumeFileName(resume.getFileName()).setResumeFileUrl(resume.getFileUrl());
+                }
+            } catch (RuntimeException ex) {
+                log.warn("[buildApplication][applicationId({}) resumeId({}) 简历授权失败，跳过附件信息]",
+                        application.getId(), application.getResumeId(), ex);
+            }
         }
         List<HrmRecruitInterviewDO> interviews = TenantUtils.executeIgnore(
                 () -> interviewMapper.selectListByApplicationId(application.getId()));

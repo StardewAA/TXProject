@@ -77,7 +77,12 @@ if ([int]([string]$hrmTableCount).Trim() -eq 0) {
 $hrmRecruitmentScripts = @(
     (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-group-one.sql'),
     (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-groups-integration.sql'),
-    (Join-Path $rootDir 'sql\2026-09-09-qinchuan-hrm-recruit-200.sql')
+    (Join-Path $rootDir 'sql\2026-09-09-qinchuan-hrm-recruit-200.sql'),
+    (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat.sql'),
+    (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat-qualify.sql'),
+    (Join-Path $rootDir 'sql\2026-09-12-hrm-recruit-chat-menu.sql'),
+    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-start-status.sql'),
+    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-delete.sql')
 )
 foreach ($hrmSql in $hrmRecruitmentScripts) {
     if (Test-Path -LiteralPath $hrmSql) {

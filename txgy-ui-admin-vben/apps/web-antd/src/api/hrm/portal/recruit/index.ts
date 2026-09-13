@@ -3,6 +3,11 @@ import type { PageParam, PageResult } from '@vben/request';
 import { requestClient } from '#/api/request';
 
 export namespace HrmPortalRecruitApi {
+  export interface Company {
+    id: number;
+    name: string;
+  }
+
   export interface Post {
     id: number;
     tenantId?: number;
@@ -111,6 +116,7 @@ export namespace HrmPortalRecruitApi {
     latestWorkPlace?: string;
     resumeFileName: string;
     resumeFileUrl: string;
+    resumeId?: number;
     resumeRemark?: string;
     sourceRemark?: string;
   }
@@ -122,6 +128,12 @@ export function getPortalRecruitPostPage(
   return requestClient.get<PageResult<HrmPortalRecruitApi.Post>>(
     '/hrm/portal/recruit/post/page',
     { params },
+  );
+}
+
+export function getPortalRecruitCompanyList() {
+  return requestClient.get<HrmPortalRecruitApi.Company[]>(
+    '/system/tenant/simple-list',
   );
 }
 

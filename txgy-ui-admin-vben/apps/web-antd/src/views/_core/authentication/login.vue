@@ -43,8 +43,6 @@ function handleLoginTypeChange(type: LoginType) {
   loginType.value = type;
   if (type === 'personal') {
     // 个人账号固定使用后端保留的 tenant_id=0，不能沿用登录页初始化的企业租户。
-    accessStore.setTenantId(null);
-    accessStore.clearVisitTenantId();
     loginRef.value?.getFormApi().setFieldValue('tenantId', undefined);
   }
 }
@@ -71,12 +69,9 @@ async function fetchTenantList() {
     }
 
     if (loginType.value === 'personal') {
-      accessStore.setTenantId(null);
-      accessStore.clearVisitTenantId();
       return;
     }
 
-    accessStore.setTenantId(tenantId);
     loginRef.value
       ?.getFormApi()
       .setFieldValue('tenantId', tenantId?.toString());
@@ -216,11 +211,6 @@ const formSchema = computed((): VbenFormSchema[] => {
       dependencies: {
         triggerFields: ['tenantId'],
         if: tenantEnable,
-        trigger(values) {
-          if (values.tenantId) {
-            accessStore.setTenantId(Number(values.tenantId));
-          }
-        },
       },
     });
   }

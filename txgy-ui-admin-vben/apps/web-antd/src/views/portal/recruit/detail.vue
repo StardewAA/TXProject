@@ -18,6 +18,14 @@ const loading = ref(true);
 const post = ref<HrmPortalRecruitApi.Post>();
 const loadError = ref(false);
 const applyModalOpen = ref(false);
+
+function openChat() {
+  if (!post.value?.id) return;
+  void router.push({
+    name: 'PortalRecruit',
+    query: { section: 'messages', postId: String(post.value.id) },
+  });
+}
 const tenantNames = ref<Record<number, string>>({});
 
 const descriptionLines = computed(() => splitContent(post.value?.description));
@@ -63,8 +71,9 @@ function getCompanyName(current: HrmPortalRecruitApi.Post) {
 async function loadTenantNames() {
   try {
     const tenants = await getTenantSimpleList();
+    const tenantList = tenants as Array<{ id?: number; name?: string }>;
     tenantNames.value = Object.fromEntries(
-      tenants
+      tenantList
         .filter((tenant) => tenant.id && tenant.name)
         .map((tenant) => [tenant.id, tenant.name]),
     );
@@ -144,9 +153,12 @@ function backToRecruit() {
   void router.push({ name: 'PortalRecruit' });
 }
 
-onMounted(() => {
+onMounted(async () => {
   void loadTenantNames();
-  void loadPost();
+  await loadPost();
+  if (route.query.apply === '1' && post.value) {
+    applyModalOpen.value = true;
+  }
 });
 </script>
 
@@ -178,19 +190,14 @@ onMounted(() => {
           <h1>{{ post.postName }}</h1>
           <div class="detail-meta">
             <span>
-              <IconifyIcon icon="lucide:map-pin" />
               {{ formatLocation(post) }}
             </span>
             <span v-if="post.postTypeName">{{ post.postTypeName }}</span>
           </div>
         </div>
-        <a-button
-          class="detail-apply"
-          type="primary"
-          @click="applyModalOpen = true"
-        >
-          立即投递
-        </a-button>
+        <div class="detail-actions">
+          <a-button @click="openChat">立即沟通</a-button>
+        </div>
       </header>
 
       <main class="detail-content">
@@ -262,7 +269,7 @@ onMounted(() => {
 
 .back-link:hover,
 .back-link:focus-visible {
-  color: #2563eb;
+  color: #d86616;
   outline: none;
 }
 
@@ -285,7 +292,7 @@ onMounted(() => {
 
 .detail-eyebrow {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: #d86616;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -318,21 +325,10 @@ onMounted(() => {
   color: #2563eb;
 }
 
-.detail-apply {
-  min-width: 120px;
-  height: 44px;
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.detail-apply:hover,
-.detail-apply:focus-visible {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #fff;
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .detail-content {
@@ -371,7 +367,7 @@ onMounted(() => {
   width: 4px;
   height: 22px;
   border-radius: 2px;
-  background: #2563eb;
+  background: #e87522;
   content: '';
 }
 
@@ -400,7 +396,7 @@ onMounted(() => {
 }
 
 .requirement-list li::marker {
-  color: #2563eb;
+  color: #d86616;
 }
 
 .detail-aside {
@@ -458,12 +454,11 @@ onMounted(() => {
     font-size: 25px;
   }
 
-  .detail-apply {
-    width: 100%;
-  }
-
   .detail-main {
     padding: 24px 20px;
   }
 }
+.recruit-detail-page { color: #5d4636; }
+.recruit-detail-page .detail-hero, .recruit-detail-page .detail-main, .recruit-detail-page .detail-section { border-color: #f4e5d7; background: #fff; }
+.recruit-detail-page .detail-section h2, .recruit-detail-page .detail-section h3 { color: #5d341d; }
 </style>

@@ -40,3 +40,30 @@ export function uploadPortalResume(data: HrmPortalResumeApi.UploadReq) {
 export function createPortalResume(data: HrmPortalResumeApi.CreateReq) {
   return requestClient.post<number>('/hrm/portal/resume/create', data);
 }
+
+export const RECRUIT_PROFILE_TITLE = '求职资料（系统）';
+
+export function getRecruitProfileResume() {
+  return getPortalResumeList().then((list) =>
+    list.find(
+      (resume) =>
+        resume.resumeType === 2 && resume.title === RECRUIT_PROFILE_TITLE,
+    ),
+  );
+}
+
+export function parseRecruitProfileName(content?: string) {
+  if (!content) return '';
+  try {
+    const parsed = JSON.parse(content) as { name?: unknown };
+    return typeof parsed?.name === 'string' ? parsed.name.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+export function getRecruitProfileName() {
+  return getRecruitProfileResume().then((resume) =>
+    parseRecruitProfileName(resume?.content),
+  );
+}

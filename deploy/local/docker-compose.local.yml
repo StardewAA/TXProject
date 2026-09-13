@@ -52,7 +52,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -184,15 +184,29 @@ services:
   hrm:
     <<: *txgy-service
     container_name: txgy-hrm
+    image: local-hrm:latest
     build:
-      context: .
-      dockerfile: Dockerfile.runtime
+      context: ../..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: jars/hrm.jar
+        MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx640m -XX:+UseG1GC
     mem_limit: 950m
+
+  im:
+    <<: *txgy-service
+    container_name: txgy-im
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/im.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 800m
 
   member:
     <<: *txgy-service
@@ -237,6 +251,7 @@ services:
 
   frontend:
     container_name: txgy-frontend
+    image: local-frontend:latest
     build:
       context: ../..
       dockerfile: deploy/frontend/Dockerfile.runtime

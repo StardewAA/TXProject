@@ -91,6 +91,9 @@ public interface HrmRecruitCandidateService {
     /** 按联系方式查找候选人，用于门户重复投递时复用人才档案。 */
     HrmRecruitCandidateDO getRecruitCandidateByMobile(String mobile);
 
+    /** 门户正式投递后，将候选人绑定到本次岗位并回到招聘流程起点。 */
+    void markRecruitCandidateSubmitted(Long candidateId, Long postId);
+
     /**
      * 锁定并校验招聘候选人是否存在
      *
