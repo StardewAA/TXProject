@@ -8,7 +8,8 @@ import { requestClient } from '#/api/request';
  *  说明：员工档案（profile）与履历（培训/社保/劳动合同）于 2026-09-20 后端接口就绪后一并接入，
  *  见本文件末尾 PersonnelProfileApi（端点 PersonnelProfileController / PersonnelRecordController）。 */
 export namespace PersonnelCertApi {
-  export interface Cert {
+  /** 契约来源：PersonnelCertRespVO */
+export interface Cert {
     id: number;
     entId?: number;
     /** 持证员工主键 */
@@ -45,7 +46,10 @@ export namespace PersonnelCertApi {
     sourceChannel?: string;
     remark?: string;
     version?: number;
-  }
+    /** 是否当前在用版本/有效记录
+   *  契约来源：PersonnelCertRespVO——本轮仅补类型，未接 UI。 */
+  isCurrent?: boolean;
+}
 
   export interface PageReq extends PageParam {
     personId?: number;
@@ -305,7 +309,8 @@ export namespace PersonnelProfileApi {
     remark?: string;
   }
 
-  export interface Training {
+  /** 契约来源：PersonnelTrainingRespVO */
+export interface Training {
     id: number;
     entId?: number;
     personId?: number;
@@ -340,7 +345,8 @@ export namespace PersonnelProfileApi {
     remark?: string;
   }
 
-  export interface SocialSecurity {
+  /** 契约来源：PersonnelSocialSecurityRespVO */
+export interface SocialSecurity {
     id: number;
     entId?: number;
     personId?: number;
@@ -374,7 +380,8 @@ export namespace PersonnelProfileApi {
     remark?: string;
   }
 
-  export interface LaborContract {
+  /** 契约来源：PersonnelLaborContractRespVO */
+export interface LaborContract {
     id: number;
     entId?: number;
     personId?: number;

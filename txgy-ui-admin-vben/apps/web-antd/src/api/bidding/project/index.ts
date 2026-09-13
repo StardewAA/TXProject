@@ -126,7 +126,8 @@ export namespace ProjectApi {
   }
   /* 以下四个子项原先被声明为 Record<string, unknown>（不透明袋子），于是"后端返回了清单、前端只显示条数"
    * 这类缺口既不报错也无人察觉（审计脚本按字段名比对时也看不出前端到底渲染了什么）。
-   * 这里逐字对齐 ProjectTraceRespVO 的嵌套类，让每个字段名都在前端出现，缺口无处可藏。 */
+   * 这里逐字对齐 ProjectTraceRespVO 的嵌套类，让每个字段名都在前端出现，缺口无处可藏。  * 契约来源：ProjectTraceRespVO.ExternalNoticeItem（嵌套类）
+   */
   export interface TraceExternalNotice {
     id?: number;
     title?: string;
@@ -144,7 +145,8 @@ export namespace ProjectApi {
     /** 平台详情可达（ACTIVE 才可在平台内打开） */
     available?: boolean;
   }
-  export interface TraceFiling {
+  /** 契约来源：ProjectTraceRespVO.FilingItem（嵌套类） */
+export interface TraceFiling {
     id?: number;
     filingType?: string;
     projectCode?: string;
@@ -153,7 +155,8 @@ export namespace ProjectApi {
     /** epoch 毫秒 */
     submitTime?: null | number;
   }
-  export interface TraceFollow {
+  /** 契约来源：ProjectTraceRespVO.FollowItem（嵌套类） */
+export interface TraceFollow {
     id?: number;
     followType?: string;
     followKey?: string;
@@ -184,7 +187,8 @@ export namespace ProjectApi {
     /** 各域最近动态时间（epoch 毫秒，无则 null） */
     latestDynamicTime?: null | number;
   }
-  export interface Trace {
+  /** 契约来源：ProjectTraceRespVO */
+export interface Trace {
     queryCode?: string;
     queryType?: 'BID_SECTION' | 'PROJECT' | 'TENDER_PROJECT';
     project?: Project;

@@ -299,7 +299,9 @@ export namespace QualificationApi {
     ruleVersion?: null | string;
     /** 乐观锁版本（状态流转必传） */
     version?: number;
-  }
+    /** 备注（后端下发；此前未声明） */
+  remark?: string;
+}
 
   /** 安许状态流转（SafetyPermitStatusChangeReqVO）：version 必传，命中乐观锁失败返回 §0.4 错误 */
   export interface PermitStatusChangeReq {
@@ -339,7 +341,9 @@ export namespace QualificationApi {
     handledBy?: null | number;
     handledAt?: null | number | string;
     handleNote?: string;
-  }
+    /** 乐观锁版本：**处理预警必须回传**（QualificationAlertRespVO 下发；此前前端未声明 → 处理接口一直无法接线） */
+  version?: number;
+}
 
   /** 预警来源类型（QualificationAlertRefTypeEnum：资质 / 安许 / 人员配置） */
   export const ALERT_REF_TYPE_OPTIONS = [

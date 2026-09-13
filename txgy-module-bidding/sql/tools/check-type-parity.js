@@ -41,7 +41,6 @@ const MIN_OVERLAP = 0.6;
  * 缺口变多 → FAIL；缺口消失（补全了）→ 也必须删条目（陈旧基线会掩盖将来重现的缺口）。
  */
 const KNOWN_INCOMPLETE = new Map([
-  ['CrawlSourceRespVO ← SourceItem', [11, '缺的是 API 直取的 11 个展开列（apiUrl/apiMethod/apiHeadersJson/…/apiUrlPrefix）；页面走 apiConfigJson 整体 JSON 配置，未逐一展开——属②后端保留字段；若将来改为表单化配置需先补类型']],
 ]);
 
 /** 从 '{' 起按花括号配平取出接口体（见上文关于嵌套对象字面量的说明） */
@@ -161,7 +160,10 @@ for (const f of walk(FE_ROOT, (p) => /\.(ts|vue)$/.test(p))) {
   // 不能用"第一个行首 }"截断——接口里出现嵌套对象字面量（字段?: { … }）时会提前结束，
   // 导致后面的字段被误报为"缺失"（假阳性）。花括号配平对字符串/注释里的括号不敏感，
   // 属可接受的近似（前端接口定义里极少出现这类内容）。
-  const re = /(\/\*\*[\s\S]{0,300}?\*\/\s*)?export\s+interface\s+(\w+)\s*(\{)/g;
+  // 注释块用"(?!\*\/)"约束：**一个 JSDoc 里不能出现 */ **，否则惰性量词会从更早的 /** 一路吞到
+  // 目标声明前，把中间整个接口的代码和别人的注释都算作本接口的注释 → 取到错误的 VO 名（实测踩过：
+  // SourcePayload 被链到 CrawlSourceRespVO，只因为上一个接口的字段注释里先出现了那个名字）。
+  const re = /(\/\*\*(?:(?!\*\/)[\s\S]){0,400}?\*\/\s*)?export\s+interface\s+(\w+)\s*(\{)/g;
   for (const m of text.matchAll(re)) {
     const vo = (m[1] || '').match(/([A-Z]\w*VO)(?:\.(\w+))?/);
     if (!vo) continue;

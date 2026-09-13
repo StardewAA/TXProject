@@ -157,7 +157,7 @@ const columns = [
   { title: '版本', dataIndex: 'version', key: 'version', width: 90 },
   { title: '格式', dataIndex: 'fileFormat', key: 'fileFormat', width: 80 },
   { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
-  { title: 'SHA-256', dataIndex: 'sha256', key: 'sha256', width: 150 },
+  { title: 'SHA-256', dataIndex: 'fileHash', key: 'sha256', width: 150 },
   { title: '登记时间', dataIndex: 'createTime', key: 'createTime', width: 165 },
   { title: '加注人', dataIndex: 'copyCreator', key: 'copyCreator', width: 110 },
   { title: '加注事由', dataIndex: 'copyCause', key: 'copyCause', ellipsis: true },

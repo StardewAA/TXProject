@@ -9,7 +9,8 @@ import { requestClient } from '#/api/request';
  *  口径：riskFlag=null 表示"未评估、不阻断"；blocked 命中 safety.abc.block.flags 时为硬阻断。
  *  说明：本文件只做接口封装，不做本地缓存；页面按需自行决定是否缓存（建议 60s + 提交前强制重取）。 */
 export namespace SafetyPermitApi {
-  /** #1 风险状态（GET /bidding/safety-permit/risk） */
+  /** #1 风险状态（GET /bidding/safety-permit/risk）  * 契约来源：SafetyPermitRiskRespVO
+   */
   export interface Risk {
     permitId?: number;
     entId?: number;
@@ -31,7 +32,8 @@ export namespace SafetyPermitApi {
     riskEvaluatedAt?: null | string;
   }
 
-  /** #3 风险快照（含哈希链，审计可比对） */
+  /** #3 风险快照（含哈希链，审计可比对）  * 契约来源：RiskSnapshotRespVO
+   */
   export interface RiskSnapshot {
     id: number;
     riskFlag?: string;
@@ -62,7 +64,8 @@ export namespace SafetyPermitApi {
     remark?: string;
   }
 
-  /** #5 多岗兼任校验 */
+  /** #5 多岗兼任校验  * 契约来源：MultiPostCheckRespVO
+   */
   export interface MultiPostCheck {
     pass?: boolean;
     requiredCertType?: null | string;
@@ -72,7 +75,8 @@ export namespace SafetyPermitApi {
     checkedAt?: null | number | string;
   }
 
-  /** #6 人员风险（不自动拒绝，仅提示留痕） */
+  /** #6 人员风险（不自动拒绝，仅提示留痕）  * 契约来源：PersonRiskRespVO
+   */
   export interface PersonRisk {
     personId?: number;
     /** 字典 person_risk_flag（NORMAL/ABNORMAL/FREQUENT） */
