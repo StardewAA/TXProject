@@ -162,8 +162,8 @@ public class HrmPortalRecruitController {
     /**
      * 查询岗位咨询联系人对应的系统用户。
      *
-     * <p>优先使用岗位配置的招聘负责人；历史岗位可能没有配置负责人，此时退回到岗位创建人，
-     * 以保证求职者仍能联系发布该岗位的 HR。公开岗位接口需要跨租户读取职位，故所有用户查询
+     * <p>优先使用岗位发布 HR；历史岗位可能没有可用的 HR 发布账号，此时退回到岗位配置的招聘负责人，
+     * 以保证求职者仍能联系招聘方。公开岗位接口需要跨租户读取职位，故所有用户查询
      * 均必须使用岗位所属租户，且负责人档案或系统用户服务异常时不能影响职位列表/详情的正常浏览。</p>
      */
     private AdminUserRespDTO getPostOwnerUser(HrmRecruitPostDO post) {
@@ -171,36 +171,37 @@ public class HrmPortalRecruitController {
             return null;
         }
         Long tenantId = post.getTenantId();
-        if (post.getOwnerEmployeeId() != null) {
+        Long creatorUserId = NumberUtil.isNumber(post.getCreator())
+                ? NumberUtil.parseLong(post.getCreator()) : null;
+        if (creatorUserId != null) {
             try {
-                HrmEmployeeDO owner = TenantUtils.execute(tenantId,
-                        () -> employeeService.getEmployee(post.getOwnerEmployeeId()));
-                if (owner != null && owner.getUserId() != null) {
-                    AdminUserRespDTO ownerUser = TenantUtils.execute(tenantId,
-                            () -> adminUserApi.getUserIgnoreTenant(owner.getUserId()).getCheckedData());
-                    if (ownerUser != null) {
-                        return ownerUser;
-                    }
+                AdminUserRespDTO creator = TenantUtils.execute(tenantId,
+                        () -> adminUserApi.getUserIgnoreTenant(creatorUserId).getCheckedData());
+                if (creator != null) {
+                    return creator;
                 }
             } catch (RuntimeException ex) {
-                log.warn("[getPostOwnerUser][postId({}) tenantId({}) ownerEmployeeId({}) 查询招聘负责人失败，"
-                                + "尝试回退到岗位创建人]",
-                        post.getId(), tenantId, post.getOwnerEmployeeId(), ex);
+                log.warn("[getPostOwnerUser][postId({}) tenantId({}) creator({}) 查询岗位发布 HR 失败，"
+                                + "尝试回退到招聘负责人]",
+                        post.getId(), tenantId, post.getCreator(), ex);
             }
         }
 
-        Long creatorUserId = NumberUtil.isNumber(post.getCreator())
-                ? NumberUtil.parseLong(post.getCreator()) : null;
-        if (creatorUserId == null) {
+        if (post.getOwnerEmployeeId() == null) {
             return null;
         }
         try {
+            HrmEmployeeDO owner = TenantUtils.execute(tenantId,
+                    () -> employeeService.getEmployee(post.getOwnerEmployeeId()));
+            if (owner == null || owner.getUserId() == null) {
+                return null;
+            }
             return TenantUtils.execute(tenantId,
-                    () -> adminUserApi.getUserIgnoreTenant(creatorUserId).getCheckedData());
+                    () -> adminUserApi.getUserIgnoreTenant(owner.getUserId()).getCheckedData());
         } catch (RuntimeException ex) {
-            log.warn("[getPostOwnerUser][postId({}) tenantId({}) creator({}) 查询岗位创建人失败，"
+            log.warn("[getPostOwnerUser][postId({}) tenantId({}) ownerEmployeeId({}) 查询招聘负责人失败，"
                             + "跳过 IM 联系人信息]",
-                    post.getId(), tenantId, post.getCreator(), ex);
+                    post.getId(), tenantId, post.getOwnerEmployeeId(), ex);
             return null;
         }
     }

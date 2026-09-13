@@ -51,3 +51,6 @@ DELETE FROM "hrm_recruit_candidate";
 DELETE FROM "hrm_recruit_post";
 DELETE FROM "hrm_recruit_channel";
 DELETE FROM "hrm_recruit_post_type";
+DELETE FROM "system_user_role";
+DELETE FROM "system_role";
+DELETE FROM "system_users";

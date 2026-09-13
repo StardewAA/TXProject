@@ -12,12 +12,17 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post.HrmRecruitPostMapper;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import jakarta.annotation.Resource;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -55,19 +60,33 @@ import static org.mockito.Mockito.verifyNoInteractions;
  *
  * @author OPENLAB BS
  */
-@Import(HrmRecruitPostServiceImpl.class)
+@Import({HrmRecruitPostServiceImpl.class, HrmRecruitPostServiceImplTest.JdbcTemplateTestConfiguration.class})
 public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class JdbcTemplateTestConfiguration {
+
+        @Bean
+        JdbcTemplate jdbcTemplate(DataSource dataSource) {
+            return new JdbcTemplate(dataSource);
+        }
+
+    }
 
     @Resource
     private HrmRecruitPostServiceImpl recruitPostService;
 
     @Resource
     private HrmRecruitPostMapper recruitPostMapper;
+    @Resource
+    private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
     private HrmRecruitPostTypeService recruitPostTypeService;
     @MockitoBean
     private HrmEmployeeService employeeService;
+    @MockitoBean
+    private HrmRecruitChannelService recruitChannelService;
     @MockitoBean
     private DeptApi deptApi;
 
@@ -353,14 +372,18 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
 
     @Test
     public void testGetPortalRecruitPostPage_crossTenantOnlyPublished() {
+        insertHrPublisher(10101L, 101L, "hr-one");
+        insertHrPublisher(20201L, 202L, "hr-two");
         HrmRecruitPostDO firstTenantPost = randomRecruitPostDO(o -> {
             o.setTenantId(101L);
             o.setPostName("企业一已发布岗位");
+            o.setCreator("10101");
             o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmRecruitPostDO secondTenantPost = randomRecruitPostDO(o -> {
             o.setTenantId(202L);
             o.setPostName("企业二已发布岗位");
+            o.setCreator("20201");
             o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
@@ -392,9 +415,41 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testGetPortalRecruitPostPage_hidesNonHrPublishers() {
+        insertHrPublisher(10101L, 101L, "hr-one");
+        insertTenantAdminPublisher(20201L, 202L, "tenant-admin");
+        HrmRecruitPostDO hrPost = randomRecruitPostDO(o -> {
+            o.setTenantId(101L);
+            o.setCreator("10101");
+            o.setPostName("HR 发布岗位");
+        });
+        HrmRecruitPostDO tenantAdminPost = randomRecruitPostDO(o -> {
+            o.setTenantId(202L);
+            o.setCreator("20201");
+            o.setPostName("租户管理员发布岗位");
+        });
+        HrmRecruitPostDO seedPost = randomRecruitPostDO(o -> {
+            o.setTenantId(303L);
+            o.setCreator("seed");
+            o.setPostName("种子岗位");
+        });
+        recruitPostMapper.insert(hrPost);
+        recruitPostMapper.insert(tenantAdminPost);
+        recruitPostMapper.insert(seedPost);
+
+        PageResult<HrmRecruitPostDO> pageResult = recruitPostService.getPortalRecruitPostPage(
+                new HrmRecruitPostPageReqVO());
+
+        assertEquals(1L, pageResult.getTotal());
+        assertEquals(hrPost.getId(), pageResult.getList().get(0).getId());
+    }
+
+    @Test
     public void testGetPortalRecruitPostPage_forcesPublishedStatus() {
+        insertHrPublisher(10101L, 101L, "hr-one");
         HrmRecruitPostDO publishedPost = randomRecruitPostDO(o -> {
             o.setTenantId(101L);
+            o.setCreator("10101");
             o.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
@@ -428,14 +483,27 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
 
     @Test
     public void testGetPortalRecruitPostPublished_rejectsPaused() {
+        insertHrPublisher(40401L, 404L, "hr-four");
         HrmRecruitPostDO pausedPost = randomRecruitPostDO(o -> {
             o.setTenantId(404L);
+            o.setCreator("40401");
             o.setStatus(HrmRecruitPostStatusEnum.PAUSED.getStatus());
         });
         recruitPostMapper.insert(pausedPost);
 
         assertServiceException(() -> recruitPostService.getPortalRecruitPostPublished(pausedPost.getId()),
                 RECRUIT_POST_NOT_PUBLISHED);
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPublished_rejectsTenantAdminPublisher() {
+        insertTenantAdminPublisher(50501L, 505L, "tenant-admin");
+        HrmRecruitPostDO tenantAdminPost = randomRecruitPostDO(o -> o
+                .setTenantId(505L).setCreator("50501"));
+        recruitPostMapper.insert(tenantAdminPost);
+
+        assertServiceException(() -> recruitPostService.getPortalRecruitPostPublished(tenantAdminPost.getId()),
+                RECRUIT_POST_NOT_EXISTS);
     }
 
     @Test
@@ -566,6 +634,23 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
     }
 
     // ========== 随机对象 ==========
+
+    private void insertHrPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "hrm_team_leader");
+    }
+
+    private void insertTenantAdminPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "tenant_admin");
+    }
+
+    private void insertPublisher(Long userId, Long tenantId, String username, Long roleId, String roleCode) {
+        jdbcTemplate.update("INSERT INTO system_users (id, username, status, deleted, tenant_id) VALUES (?, ?, 0, FALSE, ?)",
+                userId, username, tenantId);
+        jdbcTemplate.update("INSERT INTO system_role (id, name, code, status, deleted, tenant_id) VALUES (?, ?, ?, 0, FALSE, ?)",
+                roleId, roleCode, roleCode, tenantId);
+        jdbcTemplate.update("INSERT INTO system_user_role (user_id, role_id, deleted, tenant_id) VALUES (?, ?, FALSE, ?)",
+                userId, roleId, tenantId);
+    }
 
     @SafeVarargs
     private static HrmRecruitPostDO randomRecruitPostDO(Consumer<HrmRecruitPostDO>... consumers) {
