@@ -4,9 +4,9 @@
   挂到门户下，组件再靠 route.path.startsWith('/portal') 猜身份 —— 前台等于没有自己的页面，
   前后台职责因此分不开（用户 2026-09-25 指出："你前台和后台不能共用一个工作台"）。
   现在：门户拥有自己的页面与面向企业的说明文案，发布工作台以 <NoticeWorkbench mode="portal" /> 显式复用。
-  范围：仅本企业（当前登录租户）自营公告 —— 起草 → 发布 → 撤下 → 归档；
+  范围：仅本企业（当前登录租户）内部公告 —— 起草 → 发布 → 撤下 → 归档；
         外部采集公告的审核/发布在管理端「外部公告管理」，本页不做。
-  待定口径（需业务确认，前端不擅定）：自营公告是否需要"提交 → 平台审核"才能发布。
+  待定口径（需业务确认，前端不擅定）：内部公告是否需要"提交 → 平台审核"才能发布。
 -->
 <script lang="ts" setup>
 import NoticeWorkbench from '#/views/bidding/notice/NoticeWorkbench.vue';
@@ -15,7 +15,7 @@ import NoticeWorkbench from '#/views/bidding/notice/NoticeWorkbench.vue';
 <template>
   <div class="portal-publish">
     <div class="pp-note">
-      <b>本页发布的是本企业自营公告</b>：起草 → 发布 → 撤下 → 归档，作用于当前登录租户，发布后关注该项目的用户会收到动态。
+      <b>本页发布的是本企业内部公告</b>：起草 → 发布 → 撤下 → 归档，作用于当前登录租户，发布后关注该项目的用户会收到动态。
       外部采集公告的审核与发布请到管理端「外部公告管理」；平台侧对本企业公告的下架/归档由平台管理员操作。
     </div>
     <NoticeWorkbench mode="portal" />

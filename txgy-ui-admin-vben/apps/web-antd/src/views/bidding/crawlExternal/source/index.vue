@@ -174,7 +174,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
-              label: '新增采集源',
+              label: '新增信息源',
               type: 'primary',
               icon: ACTION_ICON.ADD,
               auth: ['bidding:crawl-source:create'],
