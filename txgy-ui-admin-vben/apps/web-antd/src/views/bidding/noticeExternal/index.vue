@@ -6,7 +6,7 @@ import { reactive, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Button, Drawer, Dropdown, message, Modal, Table, Tag } from 'ant-design-vue';
+import { Button, Drawer, Dropdown, message, Modal, Popover, Table, Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -150,6 +150,54 @@ const statusTagOf = (row: NoticeExternalApi.ManageItem) =>
   dictTagFirst('notice_external_status', STATUS_MAP, row.status);
 const auditTagOf = (row: NoticeExternalApi.ManageItem) =>
   dictTagFirst('notice_external_audit_status', AUDIT_MAP, row.auditStatus);
+
+/** 审核结论文案：**优先用后端合成好的 auditStageName**（VO 注明"前端直接显示"），
+ *  它已经把 AI/人工与"待人工审查"这些分支揉进一句话；缺失时再回落到字典/本页映射表。
+ *  颜色仍按 auditStatus 取（字典优先），保证与既有色板一致。 */
+function auditTextOf(row: NoticeExternalApi.ManageItem) {
+  const name = (row.auditStageName || '').trim();
+  if (name) return { text: name, color: auditTagOf(row)?.color || 'default' };
+  return auditTagOf(row);
+}
+
+/** 审核留痕（审核人/时间/意见/来源）——只在有人工留痕或 AI 审核时展示，避免空 Popover */
+function auditTraceOf(row: NoticeExternalApi.ManageItem) {
+  const src = (row.auditSource || '').trim();
+  // auditSource 只有 AI/HUMAN 两值：句子级渲染，不建 code→中文映射表（棘轮只减不增）
+  const srcText = src === 'AI' ? 'AI 审查' : src === 'HUMAN' ? '人工审查' : '';
+  const who = (row.auditByName || '').trim();
+  const id = row.auditBy === undefined || row.auditBy === null || row.auditBy === '' ? '' : String(row.auditBy);
+  const byText = who ? (id ? `${who}（编号 ${id}）` : who) : id ? `编号 ${id}` : '';
+  const remark = (row.auditRemark || '').trim();
+  if (!srcText && !byText && !row.auditAt && !remark) return null;
+  return { srcText, byText, at: row.auditAt, remark };
+}
+
+/**
+ * AI 合规审查结论（aiReviewStatus：PASS/REJECT/FAILED；NULL=未跑）。
+ * 语义（见 sql/2026-09-20-notice-audit-source.sql）：**AI 判 REJECT 不等于驳回**——
+ * 该条保持 UNREVIEWED 转人工复核，命中词/理由留档供人工参考；只有人工才能驳回。
+ * 文案走字典 ai_review_status（注册请求见 docs/…/13-…），字典未下发时显示后端原始 code：
+ * 不新增 code→中文映射表（棘轮只减不增），也不臆造措辞。颜色属展示层，未命中字典时按三值给底色。
+ */
+function aiReviewOf(row: NoticeExternalApi.ManageItem) {
+  const v = (row.aiReviewStatus || '').trim();
+  if (!v) return null;
+  const hit = dictTag('ai_review_status', v);
+  const fromDict = hit.label !== v;
+  return {
+    text: fromDict ? hit.label : v,
+    fromDict,
+    color: fromDict ? hit.color : v === 'PASS' ? 'green' : v === 'REJECT' ? 'red' : 'orange',
+    reason: (row.aiReviewReason || '').trim(),
+    hits: (row.aiReviewHitWords || '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+    at: row.aiReviewAt,
+    toHuman: v === 'REJECT',
+  };
+}
 const industryTagOf = (row: NoticeExternalApi.ManageItem) => tagOf(INDUSTRY_MAP, row.industryFlag);
 const extractionTagOf = (row: NoticeExternalApi.ManageItem) =>
   tagOf(EXTRACTION_MAP, row.extractionStatus);
@@ -572,8 +620,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #col_status="{ row }">
         <div class="flex flex-wrap items-center justify-center gap-1">
           <Tag v-if="statusTagOf(row)" :color="statusTagOf(row)!.color">{{ statusTagOf(row)!.text }}</Tag>
-          <Tag v-if="auditTagOf(row)" :color="auditTagOf(row)!.color">{{ auditTagOf(row)!.text }}</Tag>
-          <span v-if="!statusTagOf(row) && !auditTagOf(row)">—</span>
+          <!-- 审核结论优先显示后端 auditStageName；审核留痕（来源/审核人/时间/意见）收进悬浮卡，不占列宽 -->
+          <Popover v-if="auditTraceOf(row)" placement="top" trigger="hover">
+            <template #content>
+              <div class="trace-pop">
+                <div v-if="auditTraceOf(row)!.srcText">审核来源：{{ auditTraceOf(row)!.srcText }}</div>
+                <div v-if="auditTraceOf(row)!.byText">审核人：{{ auditTraceOf(row)!.byText }}</div>
+                <div v-if="auditTraceOf(row)!.at">审核时间：{{ fmtT(auditTraceOf(row)!.at) }}</div>
+                <div v-if="auditTraceOf(row)!.remark" class="remark">审核意见：{{ auditTraceOf(row)!.remark }}</div>
+              </div>
+            </template>
+            <Tag v-if="auditTextOf(row)" :color="auditTextOf(row)!.color">{{ auditTextOf(row)!.text }}</Tag>
+          </Popover>
+          <Tag v-else-if="auditTextOf(row)" :color="auditTextOf(row)!.color">{{ auditTextOf(row)!.text }}</Tag>
+          <span v-if="!statusTagOf(row) && !auditTextOf(row)">—</span>
         </div>
       </template>
       <template #col_proc="{ row }">
@@ -582,6 +642,27 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <Tag v-if="bodyTagOf(row)" :color="bodyTagOf(row)!.color">正文：{{ bodyTagOf(row)!.text }}</Tag>
           <span v-if="!extractionTagOf(row) && !bodyTagOf(row)">—</span>
         </div>
+      </template>
+      <template #col_ai="{ row }">
+        <div v-if="aiReviewOf(row)" class="flex items-center justify-center">
+          <Popover placement="top" trigger="hover">
+            <template #content>
+              <div class="trace-pop">
+                <div>
+                  AI 合规审查结论：{{ aiReviewOf(row)!.text }}<span v-if="!aiReviewOf(row)!.fromDict" class="raw">（后端原始 code；字典 ai_review_status 未下发，见契约文件 13）</span>
+                </div>
+                <div v-if="aiReviewOf(row)!.at">审查时间：{{ fmtT(aiReviewOf(row)!.at) }}</div>
+                <div v-if="aiReviewOf(row)!.reason" class="remark">理由：{{ aiReviewOf(row)!.reason }}</div>
+                <div v-if="aiReviewOf(row)!.hits.length" class="remark">命中词：{{ aiReviewOf(row)!.hits.join('、') }}</div>
+                <div v-if="aiReviewOf(row)!.toHuman" class="remark">
+                  AI 未通过 ≠ 驳回：本条保持「未审核」并转人工复核，命中词与理由留档供人工参考。
+                </div>
+              </div>
+            </template>
+            <Tag :color="aiReviewOf(row)!.color">AI 复核：{{ aiReviewOf(row)!.text }}</Tag>
+          </Popover>
+        </div>
+        <span v-else>—</span>
       </template>
       <template #operation="{ row }">
         <div class="flex items-center">
@@ -598,6 +679,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </template>
 
 <style scoped>
+/* 悬浮留痕卡（审核结论 / AI 复核详情）：正文右对齐的列里放长文本会挤爆列宽，故收进 Popover */
+.trace-pop {
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.trace-pop .remark {
+  white-space: normal;
+}
+
+.trace-pop .raw {
+  color: #9ca3af;
+}
+
 .cx-more-btn {
   margin-left: 4px;
   padding: 1px 6px;

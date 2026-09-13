@@ -26,7 +26,11 @@ const LIST_ALL = process.argv.includes('--list');
  *  历史：qual_grade 曾在此列，后经核实**前端并无任何调用**（全仓仅两行注释提及），
  *        且后端 /bidding/qualification/standard/options 明确"取自现行标准库，不固化字典"，
  *        故条目已删除；该值域由标准库数据决定，页面原样展示，本就不需要字典。 */
-const ALLOW = new Map([]);
+const ALLOW = new Map([
+  ['ai_review_status', 'AI 合规审查结论（PASS/REJECT/FAILED），前端已按"字典优先、未下发显示后端原始 code"接线，' +
+    '并在悬浮卡里注明原始 code 来源；注册请求见 docs/前端规范-全域接口说明/13-枚举字典注册请求-资质规则采集公告域-2026-09-25.md（B 类）。' +
+    '字典一注册，本列自动变中文，届时删除本条目（陈旧条目会 FAIL）'],
+]);
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const sqlDir = path.join(repoRoot, 'txgy-module-bidding', 'sql');

@@ -22,6 +22,30 @@ export namespace NoticeExternalApi {
     bidSectionCodes?: string;
     status?: string;
     auditStatus?: string;
+    /** 审核来源：AI=AI 审查通过 / HUMAN=人工审查通过；NULL=未审核（本列上线前的历史数据） */
+    auditSource?: string;
+    /**
+     * 审核结论**展示名**（后端合成，VO 注明"前端直接显示"）：
+     * AI 审查通过 / 人工审查通过 / AI 审查未通过，待人工审查 / 待审查。
+     * 优先用它而不是前端按 auditStatus 自己拼文案——措辞由后端维护，两边不会漂移。
+     */
+    auditStageName?: string;
+    /** 审核人姓名（人工审核写入；AI 审核为 NULL） */
+    auditByName?: string;
+    /** 审核人用户编号（人工审核写入） */
+    auditBy?: number | string;
+    /** 审核时间（AI/人工均写；LocalDateTime → epoch 毫秒） */
+    auditAt?: null | number | string;
+    /** 审核意见/驳回原因 */
+    auditRemark?: string;
+    /** AI 合规审查结论：PASS/REJECT/FAILED；NULL=未跑（违规词/不良词/歧视性内容审查） */
+    aiReviewStatus?: string;
+    /** AI 审查理由（未通过时供人工复核参考） */
+    aiReviewReason?: string;
+    /** AI 命中的违规/不良/歧视性词汇（逗号分隔） */
+    aiReviewHitWords?: string;
+    /** AI 审查时间（LocalDateTime → epoch 毫秒） */
+    aiReviewAt?: null | number | string;
     extractionStatus?: string;
     aiExtractionStatus?: string;
     bodyBlocksStatus?: string;
