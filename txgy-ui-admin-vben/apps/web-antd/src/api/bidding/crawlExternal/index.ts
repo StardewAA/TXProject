@@ -78,6 +78,12 @@ export interface ParseAttachment {
     /** API 源配置 JSON（fetch_type=API 时：method/url/headers/params/page/rowsPath/fieldMapping/envelope） */
     apiConfigJson?: string;
     parserCodeDefault?: string;
+    /** 正文形态（**与 fetchType 是两个维度，界面应分别展示**）：HTML=逐条下载详情页 HTML / PDF=取直链下载 PDF 原文。
+     *  后端 CrawlSourceRespVO 新增（同事工作区，未提交）；语义来源：fetchType 只管"列表怎么拿"，本字段管"正文怎么取"。 */
+    contentForm?: string;
+    /** 正文解析器 code：HTML_AI / PDF_AI（**列表解析器是 parserCodeDefault，两者不可混用**——
+     *  PDF 源配 HTML_AI 会静默退化为本地 PDFBox 抽取）。 */
+    detailParserCode?: string;
     /** 抓取间隔（秒）：**同时**约束①该源列表发现轮询 ②该源公告原文下载闸（硬下限 120，见 crawlExternal/labels.ts） */
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
