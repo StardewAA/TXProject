@@ -60,7 +60,8 @@ export namespace PersonnelCertApi {
     expiringDays?: number;
   }
 
-  export interface SaveReq {
+  /** 人员证书建档/编辑入参（POST /bidding/personnel-certificate/create、update）；契约来源：PersonnelCertificateSaveReqVO */
+export interface SaveReq {
     id?: number;
     entId?: number;
     personId?: number;
@@ -88,7 +89,8 @@ export namespace PersonnelCertApi {
     version?: number;
   }
 
-  export interface StatusChangeReq {
+  /** 人员证书状态变更入参；契约来源：PersonnelCertificateStatusChangeReqVO */
+export interface StatusChangeReq {
     id: number;
     targetStatus: string;
     version: number;

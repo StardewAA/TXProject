@@ -51,7 +51,8 @@ export namespace SafetyPermitApi {
     prevHash?: string;
   }
 
-  /** #4 整改宽限登记（原因须在 safety.abc.grace.reason.whitelist 内，天数不得超配置上限） */
+  /** #4 整改宽限登记（原因须在 safety.abc.grace.reason.whitelist 内，天数不得超配置上限）  * 契约来源：SafetyGraceRegisterReqVO
+   */
   export interface GraceRegisterReq {
     permitId?: number;
     entId?: number;
@@ -99,7 +100,8 @@ export namespace SafetyPermitApi {
     }>;
   }
 
-  /** #7b 关键岗位任职/变更登记（自动闭合上任任期；达阈值当场提示挂靠嫌疑） */
+  /** #7b 关键岗位任职/变更登记（自动闭合上任任期；达阈值当场提示挂靠嫌疑）  * 契约来源：KeyPostAssignmentCreateReqVO
+   */
   export interface KeyPostAssignmentReq {
     projectId: number;
     postCode: string;
