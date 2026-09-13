@@ -2,11 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { NoticeExternalApi } from '#/api/bidding/noticeExternal';
 
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Button, Dropdown, message, Modal, Tag } from 'ant-design-vue';
+import { Button, Drawer, Dropdown, message, Modal, Table, Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -15,6 +15,7 @@ import {
   backfillPdfUrls,
   bodyStructureNotice,
   getManagePage,
+  getOperateLogPage,
   reindexNoticeExternalIndex,
   rejectNotice,
   takeDownNotice,
@@ -26,6 +27,7 @@ import {
   BODY_MAP,
   CONTENT_TYPE_MAP,
   EXTRACTION_MAP,
+  fmtT,
   INDUSTRY_MAP,
   STATUS_MAP,
   useGridColumns,
@@ -44,6 +46,67 @@ const [Detail, detailModalApi] = useVbenModal({
   connectedComponent: DetailModal,
   destroyOnClose: true,
 });
+
+/* ========== 操作日志（GET /bidding/notice-external/manage/operate-log/page） ==========
+ * 回答"谁上传的、谁审查的、AI 什么时候审的"：数据源是平台 system_operate_log（不另建表），
+ * 人工动作由 @LogRecord 写入、系统/AI 动作由 NoticeOperateLogHelper 写入。
+ * AI 审查的理由与命中词就在 action / extra 里——这也是"审核留痕"在界面上的落点。
+ * 只读：无任何写操作，不进操作锁、不做二次确认。 */
+const logOpen = ref(false);
+const logLoading = ref(false);
+const logRows = ref<NoticeExternalApi.OperateLogItem[]>([]);
+const logTotal = ref(0);
+const logNotice = ref<NoticeExternalApi.ManageItem | null>(null);
+const logQuery = reactive({ noticeId: '' as number | string, pageNo: 1, pageSize: 20 });
+
+/** 操作人展示：后端已按 userId 翻译姓名；userType=0/未给且 userId=0 时是系统/AI 动作 */
+function logUserText(row: NoticeExternalApi.OperateLogItem) {
+  const name = (row.userName || '').trim();
+  if (name) return name;
+  if (String(row.userId ?? '') === '0') return '系统/AI';
+  return row.userId != null ? '用户 #' + row.userId : '—';
+}
+
+const logColumns = [
+  { title: '时间', dataIndex: 'createTime', key: 'createTime', width: 150 },
+  { title: '操作人', key: 'user', width: 120 },
+  { title: '操作', dataIndex: 'subType', key: 'subType', width: 160 },
+  { title: '内容', dataIndex: 'action', key: 'action' },
+  { title: '结果', key: 'success', width: 72 },
+  { title: '来源', key: 'source', width: 200 },
+];
+
+async function loadLog() {
+  logLoading.value = true;
+  try {
+    const page = await getOperateLogPage({ ...logQuery });
+    logRows.value = page.list ?? [];
+    logTotal.value = page.total ?? 0;
+  } catch {
+    // 失败提示由 requestClient 全局拦截器统一弹出，页面层不重复 toast
+    logRows.value = [];
+    logTotal.value = 0;
+  } finally {
+    logLoading.value = false;
+  }
+}
+
+/** 打开某条公告的操作日志（行内"更多 ▾ → 操作日志"） */
+function openLog(row: NoticeExternalApi.ManageItem) {
+  logNotice.value = row;
+  logQuery.noticeId = row.id!;
+  logQuery.pageNo = 1;
+  logRows.value = [];
+  logTotal.value = 0;
+  logOpen.value = true;
+  void loadLog();
+}
+
+function onLogTableChange(pagination: { current?: number; pageSize?: number }) {
+  logQuery.pageNo = pagination.current || 1;
+  logQuery.pageSize = pagination.pageSize || 20;
+  void loadLog();
+}
 
 /* 运维：重建外部公告检索索引（无入参；权限 bidding:notice-external:update） */
 const reindexing = ref(false);
@@ -165,6 +228,8 @@ function rowActions(row: NoticeExternalApi.ManageItem): any[] {
 /** 更多菜单项（按行状态裁剪） */
 function moreItems(row: NoticeExternalApi.ManageItem): Array<{ danger?: boolean; key: string; label: string; }> {
   const items: Array<{ danger?: boolean; key: string; label: string; }> = [];
+  // 操作日志：只读且与行状态无关，故不参与"按状态裁剪"，恒定提供（审核留痕是审核页的核心诉求之一）
+  items.push({ key: 'log', label: '操作日志' });
   if (row.auditStatus === 'UNREVIEWED') items.push({ key: 'reject', label: '驳回', danger: true });
   if (row.status === 'ACTIVE') items.push({ key: 'takeDown', label: '下线', danger: true });
   if (row.status !== 'ARCHIVED') {
@@ -176,6 +241,11 @@ function moreItems(row: NoticeExternalApi.ManageItem): Array<{ danger?: boolean;
 
 /** 更多菜单项点击：二次确认后执行 */
 function onMoreAction(row: NoticeExternalApi.ManageItem, key: string): void {
+  // 操作日志是只读查看，不进"操作进行中"锁，也不弹二次确认
+  if (key === 'log') {
+    openLog(row);
+    return;
+  }
   if (acting.value || approving.value) return; // 操作进行中：防重复触发
   const title: Record<string, string> = {
     reject: '确认驳回该公告？（将不对外展示）',
@@ -416,6 +486,60 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
   <Page auto-content-height class="bid-ind">
     <Detail />
+
+    <!-- 操作日志抽屉：谁上传/谁审查/AI 何时审（数据源=平台 system_operate_log，不另建表）。只读、无写操作。 -->
+    <Drawer
+      v-model:open="logOpen"
+      class="bid-ind"
+      :width="900"
+      :title="logNotice ? `操作日志 · ${ logNotice.title || String(logNotice.id)}` : '操作日志'"
+    >
+      <div class="mb-2 text-xs font-medium text-gray-500">
+        留痕来自平台操作日志（人工动作经 @LogRecord、系统/AI 动作经 NoticeOperateLogHelper 写入）；
+        AI 审查的理由与命中词在「内容 / 拓展」里。
+      </div>
+      <Table
+        size="small"
+        row-key="id"
+        :columns="logColumns"
+        :data-source="logRows"
+        :loading="logLoading"
+        :pagination="{
+          current: logQuery.pageNo,
+          pageSize: logQuery.pageSize,
+          total: logTotal,
+          showSizeChanger: true,
+          showTotal: (t: number) => `共 ${ t } 条`,
+        }"
+        @change="onLogTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'createTime'">{{ fmtT(record.createTime) }}</template>
+          <template v-else-if="column.key === 'user'">
+            <div>{{ logUserText(record) }}</div>
+            <div v-if="record.userIp" class="text-xs text-gray-400">{{ record.userIp }}</div>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <div>{{ record.action || '—' }}</div>
+            <div v-if="record.extra" class="break-all text-xs text-gray-400" :title="record.extra">
+              拓展：{{ record.extra }}
+            </div>
+          </template>
+          <template v-else-if="column.key === 'success'">
+            <Tag v-if="record.success === true" color="green">成功</Tag>
+            <Tag v-else-if="record.success === false" color="red">失败</Tag>
+            <span v-else>—</span>
+          </template>
+          <template v-else-if="column.key === 'source'">
+            <div class="text-xs">{{ record.requestMethod || '—' }}</div>
+            <div class="break-all text-xs text-gray-400" :title="record.requestUrl">
+              {{ record.requestUrl || '' }}
+            </div>
+          </template>
+        </template>
+      </Table>
+    </Drawer>
+
     <Grid table-title="外部公告审核管理（招投标）">
       <template #toolbar-tools>
         <Button :loading="reindexing" @click="doReindex">重建索引</Button>
