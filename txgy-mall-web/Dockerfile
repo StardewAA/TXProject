@@ -3,6 +3,8 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 ARG VITE_SMS_TEST_CODE
 ENV VITE_SMS_TEST_CODE=${VITE_SMS_TEST_CODE}
+ARG VITE_PAYMENT_PREVIEW=false
+ENV VITE_PAYMENT_PREVIEW=${VITE_PAYMENT_PREVIEW}
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile

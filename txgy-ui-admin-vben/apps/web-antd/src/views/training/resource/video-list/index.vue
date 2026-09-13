@@ -47,19 +47,20 @@ const categoryOptions = ref<any[]>([]);
 const categoryId = ref<number | undefined>();
 const includeArchived = ref(false);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('video');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 function handleSearch() {

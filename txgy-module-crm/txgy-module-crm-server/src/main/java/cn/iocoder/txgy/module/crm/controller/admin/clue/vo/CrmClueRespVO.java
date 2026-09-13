@@ -107,6 +107,11 @@ public class CrmClueRespVO {
     @DictFormat(cn.iocoder.txgy.module.crm.enums.DictTypeConstants.CRM_CUSTOMER_SOURCE)
     private Integer source;
 
+    @Schema(description = "客户类别", example = "1")
+    @ExcelProperty(value = "客户类别", converter = DictConvert.class)
+    @DictFormat(cn.iocoder.txgy.module.crm.enums.DictTypeConstants.CRM_CUSTOMER_CATEGORY)
+    private Integer customerType;
+
     @Schema(description = "备注", example = "随便")
     @ExcelProperty("备注")
     private String remark;

@@ -34,19 +34,20 @@ const categoryOptions = ref<any[]>([]);
 const categoryId = ref<number | undefined>();
 const includeArchived = ref(false);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('doc');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 function handleSearch() {
@@ -86,6 +87,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '大小',
         width: 110,
         formatter: ({ cellValue }) => formatFileSize(cellValue),
+      },
+      {
+        field: 'pageCount',
+        title: '页数',
+        width: 80,
+        align: 'center',
+        formatter: ({ cellValue }) =>
+          cellValue === null || cellValue === undefined ? '-' : cellValue,
       },
       { field: 'estMinutes', title: '预估(分)', width: 90, align: 'center' },
       { field: 'viewCount', title: '预览数', width: 80, align: 'center' },
@@ -248,7 +257,9 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="文档资源库（PDF/图片 ≤50MB，上传即上线）">
+    <Grid
+      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，上传即上线，自动识别页数）"
+    >
       <template #toolbar-tools>
         <TableAction
           :actions="[

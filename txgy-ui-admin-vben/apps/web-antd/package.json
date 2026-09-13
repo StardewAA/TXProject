@@ -66,6 +66,7 @@
     "pdfjs-dist": "catalog:",
     "pinia": "catalog:",
     "steady-xml": "catalog:",
+    "tesseract.js": "^5.1.1",
     "tinymce": "catalog:",
     "tyme4ts": "catalog:",
     "video.js": "catalog:",
