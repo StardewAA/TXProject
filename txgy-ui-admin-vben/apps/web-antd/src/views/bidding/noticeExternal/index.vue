@@ -38,7 +38,7 @@ import DetailModal from './modules/detail.vue';
 
 /* 字典（状态 / 审核 / 内容形态）：**字典优先、页面内映射表兜底**。
  * 兜底不是欠债而是必需——本页用户未必有 /bidding/meta/* 权限（后端 @PreAuthorize 只列 5 个电子证照/资质/人员域权限，
- * 已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-25.md 请后端放开）；
+ * 已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-14.md 请后端放开）；
  * 纯字典化会让这些角色从"中文"退化成"英文 code"，所以两条路径都要在。
  * 读取发生在**渲染期**：字典加载完成后 Vue 自动重渲染为字典文案，无需刷新。 */
 const { dictLabel, dictTag } = useCertMeta();
@@ -73,7 +73,7 @@ const logColumns = [
   { title: '操作人', key: 'user', width: 120 },
   { title: '操作', dataIndex: 'subType', key: 'subType', width: 160 },
   { title: '内容', dataIndex: 'action', key: 'action' },
-  // 「结果」列已移除：后端 NoticeExternalOperateLogRespVO 无 success 字段（2026-09-25 复核，
+  // 「结果」列已移除：后端 NoticeExternalOperateLogRespVO 无 success 字段（2026-09-14 复核，
   // 由"类型对等"门禁反向检查发现前端声明了 VO 没有的字段），留着只会永远显示「—」。
   { title: '来源', key: 'source', width: 200 },
 ];

@@ -222,7 +222,7 @@ export interface ParseAttachment {
     updateTime?: string;
   }
   export interface TaskPageParams extends PageParam {
-    /* 2026-09-25 删除幽灵字段 `taskType`：后端 CrawlTaskPageReqVO 无此字段（externalfetch 域全仓 0 处 task_type），
+    /* 2026-09-14 删除幽灵字段 `taskType`：后端 CrawlTaskPageReqVO 无此字段（externalfetch 域全仓 0 处 task_type），
      * 声明了它只会诱导后人去传一个被静默忽略的参数（控制台本地测试标记 taskType:'TEST' 只存本地、不走接口）。
      * 依据：契约 20《入参对等检查可行性记录》。 */
     jobId?: number | string;

@@ -3,8 +3,8 @@
  *
  * 为什么要有这个文件：平台 Jackson 把 LocalDateTime 序列化为 **epoch 毫秒**（无 @JsonFormat），
  * LocalDate 仍是 'yyyy-MM-dd' 字符串；而时间字段在出参里可能是
- * `number(epoch 毫秒)` / `'1757654321000'(13 位串)` / `'2026-09-25 14:03:02'` / ISO 串 四种形态。
- * 2026-09-25 实测：前端有 **4 套并行实现**（crawlExternal/shared.ts:fmtDt、certificate/format.ts:fmtDateTime、
+ * `number(epoch 毫秒)` / `'1757654321000'(13 位串)` / `'2026-09-14 14:03:02'` / ISO 串 四种形态。
+ * 2026-09-14 实测：前端有 **4 套并行实现**（crawlExternal/shared.ts:fmtDt、certificate/format.ts:fmtDateTime、
  * portal/bidding/format.ts:fmtDT、noticeExternal/data.ts:fmtT 与 NoticeWorkbench.vue 内的同名 fmtT），
  * 解析逻辑各写一遍、空值口径还不一样 —— 于是**同一个后端字段在后台显示 '—'、在门户显示空白**，
  * 且 personnel 页把 verifiedAt 直接插值（页面出现 1757654321000 这种数字）。

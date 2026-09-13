@@ -5,11 +5,11 @@ import { fmtDateTime } from '#/utils/datetime';
 
 /* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） =====
  *
- * 定位变更（2026-09-25）：状态 / 审核 / 内容形态三类**展示标签已改为"字典优先、本表兜底"**
+ * 定位变更（2026-09-14）：状态 / 审核 / 内容形态三类**展示标签已改为"字典优先、本表兜底"**
  * （见 index.vue 的 dictTagFirst/contentTypeLabel）。原因有两条，缺一不可：
  *   ① 用户硬约束「状态码、枚举值必须动态配置，严禁硬编码」——字典才是主路径；
  *   ② 本页用户**未必有** /bidding/meta/* 权限（后端 @PreAuthorize 只列 5 个电子证照/资质/人员域权限，
- *      已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-25.md 请后端放开），
+ *      已按 docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-14.md 请后端放开），
  *      若纯字典化，这些角色会从"中文"直接退化成"英文 code"——所以本表必须保留为兜底，不是欠债。
  * 字典类型：notice_external_status / notice_external_audit_status / notice_external_content_type（均已注册）。
  * 行业相关 / 抽取状态 / AI 抽取 / 正文结构化四类暂无后端枚举可对齐，仍以本表为主（见棘轮基线登记）。 */
@@ -132,7 +132,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /**
  * 时间格式化（02 §5：publishTime/effectiveFrom/effectiveTo 出参为 epoch 毫秒整数，
  * 兼容 ISO 字符串 'yyyy-MM-ddTHH:mm:ss' 与数字两种形态）。
- * 2026-09-25：**解析口径委托 #/utils/datetime**（此前本文件与 NoticeWorkbench.vue 各有一份同名 fmtT，
+ * 2026-09-14：**解析口径委托 #/utils/datetime**（此前本文件与 NoticeWorkbench.vue 各有一份同名 fmtT，
  * 且空值口径不一致：本文件空串、工作台 '—'）。本域保持空串占位——表格里空白比 "—" 干净。
  * 导出供操作日志抽屉复用（避免第二套时间解析）。
  */

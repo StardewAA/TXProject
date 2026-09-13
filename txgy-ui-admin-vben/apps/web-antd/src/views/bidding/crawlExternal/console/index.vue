@@ -142,7 +142,7 @@ const pageView = ref<'home' | 'taskDetail'>('home');
 /** 当前选中信息源（任务器）；空=任务 tab 显示信息源卡墙 */
 const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
 /** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传）
- *  2026-09-25：`range` 接线后端已支持的 beginTime/endTime —— 此前后端能按创建时间筛、界面却没入口，
+ *  2026-09-14：`range` 接线后端已支持的 beginTime/endTime —— 此前后端能按创建时间筛、界面却没入口，
  *  出问题时无法把死信缩到某个时间窗（"接口有能力、界面不可达"）。格式必须 'YYYY-MM-DD HH:mm:ss'（后端 @DateTimeFormat）。 */
 const tFilter = ref<{ channelCode?: string; range?: [string, string]; status?: string; url?: string }>({});
 /** 快捷时间段复用全站共享预设（src/utils/rangePickerProps.ts），避免本页自造"近 7 天"口径 */

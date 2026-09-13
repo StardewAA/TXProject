@@ -1,7 +1,7 @@
 /**
  * 招投标全域**数值展示统一实现**（文件大小 / 百分比）。
  *
- * 起因（用户 2026-09-25"数据胡乱展示"，与 utils/datetime.ts 同一类问题）：
+ * 起因（用户 2026-09-14"数据胡乱展示"，与 utils/datetime.ts 同一类问题）：
  * 实测**文件大小格式化有 8 处、5 种口径**，同一个附件在不同页面显示不一样：
  *   · cert-files.vue / NoticeWorkbench.vue / NoticeHtmlView.vue：B / KB(1 位) / **MB(2 位)**
  *   · crawlExternal/console/modules/task-chain.vue：B / KB(1 位) / **MB(1 位)**   ← 与上面不同

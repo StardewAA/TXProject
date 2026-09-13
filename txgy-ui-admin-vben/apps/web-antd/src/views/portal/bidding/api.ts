@@ -211,7 +211,7 @@ async function fetchMerged(
   // 合并视图按组逐原始值抓全（分页上限 100/页；行数上限 200，对齐 keyword 命中集上限 01 §1.1）
   const MAX_ROWS = 200;
   const acc = new Map<string, NoticeExternalItem>();
-  outer: for (const raw of raws) {
+  for (const raw of raws) {
     for (let p = 1; ; p += 1) {
       const plain: Record<string, string> = {
         ...base,
@@ -224,9 +224,12 @@ async function fetchMerged(
       for (const r of rows) {
         if (!acc.has(String(r.id))) acc.set(String(r.id), r);
       }
-      if (acc.size >= MAX_ROWS) break outer;
+      if (acc.size >= MAX_ROWS) break;
       if (!res.total || rows.length < 100 || p * 100 >= res.total) break;
     }
+    // 到达行数上限即停止处理后续原始值——原 `break outer` 的语义，改用"内层 break + 外层判断"表达，
+    // 因为仓库 lint 规则 no-restricted-syntax 禁止 LabeledStatement（该错误此前一直存在）。
+    if (acc.size >= MAX_ROWS) break;
   }
   const all = [...acc.values()].sort((a, b) => {
     const pa = a.publishTime ?? 0;
