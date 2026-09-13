@@ -302,7 +302,7 @@ export function crawlParserTest(data: {
     data as unknown as { file: Blob | File },
   );
 }
-/** 契约：POST /bidding/crawl-source/run —— 采集源立即同步爬取一轮（人工触发，批次落库见 06 对照 §附）；权限 bidding:crawl-source:update；依据 爬虫工作台契约 §0 复用 / 06 对照 §1、§附 */
+/** 契约：POST /bidding/crawl-source/run —— 采集源立即同步获取一轮（人工触发，批次落库见 06 对照 §附）；权限 bidding:crawl-source:update；依据 爬虫工作台契约 §0 复用 / 06 对照 §1、§附 */
 export function runCrawlSource(sourceCode: string) {
   return requestClient.post<CrawlExternalApi.RunResult>('/bidding/crawl-source/run', undefined, { params: { sourceCode } });
 }
