@@ -830,7 +830,7 @@ const reviewResultOptions = computed(() =>
 );
 const reviewColumns = [
   { title: '核查时间', key: 'reviewedAt', width: 165 },
-  { title: '资质 id', dataIndex: 'qualId', key: 'qualId', width: 100 },
+  { title: '资质', dataIndex: 'qualId', key: 'qualId', width: 100 },
   { title: '标准版本', dataIndex: 'stdVersion', key: 'stdVersion', width: 130 },
   { title: '核查类型', dataIndex: 'reviewType', key: 'reviewType', width: 120 },
   { title: '结论', key: 'reviewResult', width: 110 },

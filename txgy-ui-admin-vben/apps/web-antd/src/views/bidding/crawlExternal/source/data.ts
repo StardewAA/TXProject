@@ -9,8 +9,8 @@ import { fmtDt } from '../shared';
 /** 顶部检索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
-    { fieldName: 'sourceName', label: '源名称', component: 'Input', componentProps: { placeholder: '模糊检索', allowClear: true } },
-    { fieldName: 'sourceCode', label: '源 code', component: 'Input', componentProps: { placeholder: '精确匹配', allowClear: true } },
+    { fieldName: 'sourceName', label: '信息源名称', component: 'Input', componentProps: { placeholder: '模糊检索', allowClear: true } },
+    { fieldName: 'sourceCode', label: '信息源代码', component: 'Input', componentProps: { placeholder: '精确匹配', allowClear: true } },
     { fieldName: 'enabled', label: '状态', component: 'Select', componentProps: { options: [{ label: '已启用', value: true }, { label: '停用', value: false }], allowClear: true, placeholder: '全部' } },
   ];
 }
@@ -25,7 +25,7 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
     },
     {
       fieldName: 'sourceName',
-      label: '源名称',
+      label: '信息源名称',
       component: 'Input',
       componentProps: { placeholder: '如：中国采购与招标网' },
       rules: 'required',
@@ -135,8 +135,8 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
 /** 表格列 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
-    { field: 'sourceCode', title: '源 code', width: 120, showOverflow: true },
-    { field: 'sourceName', title: '源名称', minWidth: 150, showOverflow: true },
+    { field: 'sourceCode', title: '信息源代码', width: 130, showOverflow: true },
+    { field: 'sourceName', title: '信息源名称', minWidth: 150, showOverflow: true },
     { field: 'baseUrl', title: '入口站点', minWidth: 200, showOverflow: true },
     { field: 'fetchType', title: FETCH_TYPE_LABEL, width: 170, formatter: ({ cellValue }) => fetchTypeText(cellValue as null | string) },
     { field: 'channelCode', title: CHANNEL_LABEL, width: 170, formatter: ({ cellValue }) => channelText(cellValue as null | string) },

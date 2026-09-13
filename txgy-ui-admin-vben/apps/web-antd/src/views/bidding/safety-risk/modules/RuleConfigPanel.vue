@@ -326,7 +326,7 @@ onMounted(async () => {
         { title: '原值 → 新值', key: 'value' },
         { title: '原因', dataIndex: 'changeReason', key: 'changeReason', ellipsis: true },
         { title: '操作人', dataIndex: 'changedBy', key: 'changedBy', width: 120 },
-        { title: '时间', key: 'changedAt', width: 170 },
+        { title: '变更时间', key: 'changedAt', width: 170 },
         { title: '哈希', key: 'hash', width: 180 },
         { title: '操作', fixed: 'right', key: 'op', width: 100 },
       ]"
