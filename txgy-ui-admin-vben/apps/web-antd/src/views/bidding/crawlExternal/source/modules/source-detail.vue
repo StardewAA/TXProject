@@ -16,7 +16,7 @@ import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vu
 
 import { fetchCrawlJobPage, fetchCrawlTaskPage, getCrawlSource, getCrawlTask, runCrawlSource, setCrawlSourceEnabled } from '#/api/bidding/crawlExternal';
 
-import { FETCH_TYPE_LABEL, fetchTypeText, INTERVAL_HINT, INTERVAL_LABEL, intervalText } from '../../labels';
+import { channelText, FETCH_TYPE_LABEL, fetchTypeText, INTERVAL_HINT, INTERVAL_LABEL, intervalText } from '../../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
@@ -289,9 +289,9 @@ defineExpose({ openSource });
         <Descriptions :column="1" size="small" bordered>
           <Descriptions.Item label="URL">{{ taskDetail?.url || selTask.url || '—' }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, taskDetail?.status || selTask.status)?.text || selTask.status || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="源 / 通道">{{ taskDetail?.sourceCode || selTask.sourceCode || '—' }} / {{ taskDetail?.channelCode || selTask.channelCode || '—' }}</Descriptions.Item>
+          <Descriptions.Item label="源 / 下载通道">{{ taskDetail?.sourceCode || selTask.sourceCode || '—' }} / {{ channelText(taskDetail?.channelCode || selTask.channelCode) }}</Descriptions.Item>
           <Descriptions.Item label="尝试次数">{{ taskDetail?.attempt ?? selTask.attempt ?? '—' }}</Descriptions.Item>
-          <Descriptions.Item label="worker">{{ taskDetail?.workerId || selTask.workerId || '—' }}</Descriptions.Item>
+          <Descriptions.Item label="执行节点">{{ taskDetail?.workerId || selTask.workerId || '—' }}</Descriptions.Item>
           <Descriptions.Item label="开始 / 完成">{{ fmtDt(taskDetail?.startedAt || selTask.startedAt) }} / {{ fmtDt(taskDetail?.finishedAt || selTask.finishedAt) }}</Descriptions.Item>
           <Descriptions.Item label="消息 / 错误">{{ taskDetail?.message || selTask.message || '—' }}</Descriptions.Item>
         </Descriptions>

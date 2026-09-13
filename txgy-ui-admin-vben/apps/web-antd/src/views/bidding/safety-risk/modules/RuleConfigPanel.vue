@@ -393,7 +393,7 @@ onMounted(async () => {
         { title: '业务场景', dataIndex: 'bizScene', key: 'bizScene', width: 180 },
         { title: '读取人', dataIndex: 'readBy', key: 'readBy', width: 140 },
         { title: '读取时间', key: 'readAt', width: 170 },
-        { title: 'traceId', dataIndex: 'traceId', key: 'traceId' },
+        { title: '追踪编号', dataIndex: 'traceId', key: 'traceId' },
       ]"
       :data-source="auditRows"
       :loading="auditLoading"
