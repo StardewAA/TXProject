@@ -200,7 +200,7 @@ async function findProduct() {
       const o = normUrl(row.origUrl);
       return o && (o === tUrl || o === pUrl);
     });
-    // 同源未按 URL 精确命中时：最近 20 条内标题兜底（爬取端与入库标题可能略有差异，仅展示候选供人工比对）
+    // 同源未按 URL 精确命中时：最近 20 条内标题兜底（采集端与入库标题可能略有差异，仅展示候选供人工比对）
     const titleHit = hit.length
       ? []
       : list.slice(0, 20).filter((row) => {

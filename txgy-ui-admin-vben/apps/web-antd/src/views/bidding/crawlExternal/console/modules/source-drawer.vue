@@ -5,7 +5,7 @@
     产生 SCHEDULE 定时任务任务条，采集结果落库外部公告 NEW 待审核。
   实现理由：外部公告采集面向多个公开站点，须由管理端统一维护源（入口 URL/解析器/轮询间隔）方可可控采集；
     轮询间隔下限 120s 由后端强校验（错误码 1-060-106-046，对应产品"120s 频控"需求，见文件头契约 §0/§2），
-    前端对同一源 120s 内重复"立即爬取"做节流拦截提示，避免对源站请求过频被封；
+    前端对同一源 120s 内重复"立即获取"做节流拦截提示，避免对源站请求过频被封；
     启用的采集源域名进入外链中转 /go 域名白名单（fail-closed），前台"前往原地址"只能跳白名单内站点，防开放重定向。
   法规依据：
     招标公告和公示信息发布管理办法（国家发展改革委令第10号，2017）第12条【部门规章/政府文件】：
@@ -96,7 +96,7 @@ async function toggleEnabled(row: CrawlExternalApi.SourceItem, checked: boolean)
 
 async function runSource(row: CrawlExternalApi.SourceItem) {
   if (!row.sourceCode) return;
-  // 手动"立即爬取"：后端同步执行一次采集并返回按栏目汇总（fetched/ingested/failed）；
+  // 手动"立即获取"：后端同步执行一次采集并返回按栏目汇总（fetched/ingested/failed）；
   // 同一源 120s 内不可重复触发（频控，见文件头四要素注释与工作台契约 §0）
   runCode.value = row.sourceCode;
   try {
@@ -117,7 +117,7 @@ async function runSource(row: CrawlExternalApi.SourceItem) {
         (c.error ? '，' + c.error : ''),
     );
     Modal.info({
-      title: '爬取完成：' + (row.sourceName || row.sourceCode),
+      title: '获取完成：' + (row.sourceName || row.sourceCode),
       content:
         (lines.length ? lines.join('<br/>') : '无栏目产出') +
         '<br/>（任务条将出现在“定时任务”区；同一源 120s 内不可再次触发。' +
@@ -219,7 +219,7 @@ watch(open, (v) => onOpen(v));
             class="cursor-pointer"
             @click="runCode !== record.sourceCode && runSource(record as CrawlExternalApi.SourceItem)"
           >
-            {{ runCode === record.sourceCode ? '采集中…' : '立即爬取' }}
+            {{ runCode === record.sourceCode ? '采集中…' : '立即获取' }}
           </Tag>
           <Tag color="red" class="cursor-pointer" @click="removeSource(record as CrawlExternalApi.SourceItem)">删除</Tag>
         </template>
