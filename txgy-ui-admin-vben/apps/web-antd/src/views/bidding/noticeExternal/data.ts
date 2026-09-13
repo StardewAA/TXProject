@@ -132,7 +132,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
  * 兼容 ISO 字符串 'yyyy-MM-ddTHH:mm:ss' 与数字两种形态）。
  */
 const p2t = (n: number) => String(n).padStart(2, '0');
-const fmtT = (v?: null | number | string): string => {
+/** 时间格式化：兼容 epoch 毫秒数字 / 13 位串 / 'yyyy-MM-dd HH:mm:ss'。导出供操作日志抽屉复用（避免第二套时间解析） */
+export const fmtT = (v?: null | number | string): string => {
   if (v == null || v === '') return '';
   let d: Date;
   if (typeof v === 'number') {

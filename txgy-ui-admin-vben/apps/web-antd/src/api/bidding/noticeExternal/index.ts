@@ -60,6 +60,35 @@ export namespace NoticeExternalApi {
     }>;
   }
 
+  /**
+   * 操作日志行（NoticeExternalOperateLogRespVO）：数据源=**平台 system_operate_log**（不另建表），
+   * 用来回答"谁上传的、谁审查的、AI 什么时候审的"——AI 审查的理由与命中词就在 action / extra 里。
+   * 由 NoticeOperateLogHelper（系统/AI 动作）与 @LogRecord（人工动作）写入。
+   */
+  export interface OperateLogItem {
+    id?: number | string;
+    /** 操作人编号（0=系统/AI：爬虫入库、AI 审查等非人工动作） */
+    userId?: number | string;
+    /** 操作人姓名（平台按 userId 翻译；系统/AI 动作为「系统/AI」） */
+    userName?: string;
+    /** 操作人类型：1=会员 2=管理员 */
+    userType?: number;
+    /** 操作名（如「爬虫采录入库」「AI 审查通过」「人工审核通过外部公告」） */
+    subType?: string;
+    /** 操作内容（人可读描述，AI 审查含理由与命中词） */
+    action?: string;
+    success?: boolean;
+    /** 拓展字段（JSON：来源站/AI 结论等） */
+    extra?: string;
+    /** 请求方式（系统动作为 SYSTEM/AI 占位标识） */
+    requestMethod?: string;
+    /** 请求地址（系统动作为 bidding://... 伪地址） */
+    requestUrl?: string;
+    userIp?: string;
+    /** 操作时间（LocalDateTime → epoch 毫秒；渲染走 data.ts 的 fmtT，兼容数字/13 位串/带空格串） */
+    createTime?: string;
+  }
+
   /** manage/page 筛选（结构化过滤；勿传 keyword，管理列表无 ES 全文） */
   export interface ManagePageParams extends PageParam {
     status?: string;
@@ -78,6 +107,19 @@ export namespace NoticeExternalApi {
 export function getManagePage(params: NoticeExternalApi.ManagePageParams) {
   return requestClient.get<PageResult<NoticeExternalApi.ManageItem>>(
     '/bidding/notice-external/manage/page',
+    { params },
+  );
+}
+
+/** 契约：GET /bidding/notice-external/manage/operate-log/page —— 外部公告操作日志分页（谁上传/谁审查/AI 何时审；数据来自平台 system_operate_log，不另建表）；权限 bidding:notice-external:update；依据 NoticeExternalController#operateLogPage */
+export function getOperateLogPage(params: {
+  /** 公告主键（必传；后端 @RequestParam noticeId） */
+  noticeId: number | string;
+  pageNo?: number;
+  pageSize?: number;
+}) {
+  return requestClient.get<PageResult<NoticeExternalApi.OperateLogItem>>(
+    '/bidding/notice-external/manage/operate-log/page',
     { params },
   );
 }
