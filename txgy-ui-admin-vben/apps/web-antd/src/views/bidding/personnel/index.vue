@@ -8,7 +8,7 @@
  * 权限：bidding:personnel:cert:{query,create,update,delete}、bidding:personnel:profile:{query,create,update}、
  *      bidding:personnel:record:{query,create}、bidding:personnel:alert-run
  * 阈值：到期窗口默认取配置 personnel.cert.expiring.window.days；配备要求取 safety.abc.required（不硬编码天数/人数） */
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -45,6 +45,7 @@ import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bi
 import { fmtDate } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
+import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
 
@@ -432,7 +433,7 @@ const profileRows = ref<PersonnelProfileApi.Profile[]>([]);
 const profileTotal = ref(0);
 const profileLoading = ref(false);
 const profileColumns = [
-  { title: '工号', dataIndex: 'personNo', key: 'personNo', width: 120 },
+  { title: '工号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '工号' }),  dataIndex: 'personNo', key: 'personNo', width: 120 },
   { title: '姓名', dataIndex: 'personName', key: 'personName', width: 100 },
   { title: '身份证（脱敏）', dataIndex: 'idCardMasked', key: 'idCardMasked', width: 170 },
   { title: '性别', key: 'gender', width: 80 },
@@ -634,21 +635,21 @@ const trainingColumns = [
   { title: '学时', dataIndex: 'eduHours', key: 'eduHours', width: 90 },
   { title: '结果', dataIndex: 'result', key: 'result', width: 100 },
   { title: '成绩', dataIndex: 'score', key: 'score', width: 90 },
-  { title: '证书编号', dataIndex: 'certNo', key: 'certNo', width: 150 },
+  { title: '证书编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '证书编号' }),  dataIndex: 'certNo', key: 'certNo', width: 150 },
   { title: '证书有效期至', dataIndex: 'certValidTo', key: 'certValidTo', width: 130 },
 ];
 const socialColumns = [
   { title: '缴费月份', dataIndex: 'payMonth', key: 'payMonth', width: 110 },
   { title: '缴纳单位', dataIndex: 'payerName', key: 'payerName', width: 200 },
-  { title: '统一社会信用代码', dataIndex: 'payerCreditCode', key: 'payerCreditCode', width: 190 },
+  { title: '统一社会信用代码', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '统一社会信用代码' }),  dataIndex: 'payerCreditCode', key: 'payerCreditCode', width: 190 },
   { title: '状态', dataIndex: 'payStatus', key: 'payStatus', width: 110 },
   { title: '缴费基数', dataIndex: 'payBase', key: 'payBase', width: 120 },
   { title: '缴费金额', dataIndex: 'payAmount', key: 'payAmount', width: 120 },
-  { title: '社保号', dataIndex: 'socialNo', key: 'socialNo', width: 150 },
+  { title: '社保号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '社保号' }),  dataIndex: 'socialNo', key: 'socialNo', width: 150 },
   { title: '来源', dataIndex: 'sourceChannel', key: 'sourceChannel', width: 120 },
 ];
 const contractColumns = [
-  { title: '合同编号', dataIndex: 'contractNo', key: 'contractNo', width: 170 },
+  { title: '合同编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '合同编号' }),  dataIndex: 'contractNo', key: 'contractNo', width: 170 },
   { title: '类型', dataIndex: 'contractType', key: 'contractType', width: 120 },
   { title: '签订日期', dataIndex: 'signDate', key: 'signDate', width: 120 },
   { title: '起止', key: 'period', width: 200 },

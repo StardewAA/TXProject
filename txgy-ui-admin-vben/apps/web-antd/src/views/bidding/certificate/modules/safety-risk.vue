@@ -5,7 +5,7 @@
  *   · 配色/终态一律取字典 safety_risk_flag / risk_level；配备要求取配置 safety.abc.required；
  *   · 宽限原因取配置 safety.abc.grace.reason.whitelist，天数上限取 safety.abc.grace.legal.person.change.days；
  *   · 读取失败（含后端尚未登记 bidding:qualification:permit:query 导致的 403）→ 降级为"风险未知"，不阻断页面渲染。 */
-import { computed, ref, watch } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 
 import { message } from 'ant-design-vue';
 
@@ -18,6 +18,7 @@ import {
   type SafetyPermitApi,
 } from '#/api/bidding/safetyPermit';
 
+import CopyText from '../../components/CopyText.vue';
 import { useCertMeta } from '../useCertMeta';
 
 const props = defineProps<{ entId?: null | number }>();
@@ -294,7 +295,7 @@ function chainOk(idx: number): boolean {
             { title: '等级', dataIndex: 'riskLevel', key: 'riskLevel', width: 100 },
             { title: 'A/B/C', key: 'abc', width: 110 },
             { title: '宽限', dataIndex: 'graceApplied', key: 'graceApplied', width: 80 },
-            { title: '批次号', dataIndex: 'batchNo', key: 'batchNo', width: 170 },
+            { title: '批次号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '批次号' }), dataIndex: 'batchNo', key: 'batchNo', width: 170 },
             { title: '链', key: 'chain', width: 90 },
           ]"
           :data-source="history"

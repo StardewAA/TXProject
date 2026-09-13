@@ -158,7 +158,13 @@ export interface NoticeExternalDictBridge {
 export function useGridColumns(dict: NoticeExternalDictBridge = {}): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
-    { field: 'id', title: 'ID', width: 90 },
+    {
+      field: 'id',
+      title: 'ID',
+      width: 90,
+      // 公告 ID 是跨系统核验/对账最常被抄走的字段 → 挂一键复制（CopyText 的取值与空值口径见组件注释）
+      slots: { default: 'col_id' },
+    },
     { field: 'title', title: '公告标题', minWidth: 240, showOverflow: true },
     { field: 'sourceName', title: '来源', width: 130, showOverflow: true },
     { field: 'noticeTypeRaw', title: '公告类型', width: 110, showOverflow: true },

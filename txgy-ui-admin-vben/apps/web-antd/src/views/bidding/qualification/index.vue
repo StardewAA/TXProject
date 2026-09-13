@@ -54,6 +54,7 @@ import {
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
+import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
 
@@ -128,7 +129,7 @@ const kpi = computed(() => {
 });
 
 const ledgerColumns = [
-  { title: '资质证书编号', dataIndex: 'certNo', key: 'certNo', width: 200 },
+  { title: '资质证书编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '资质证书编号' }),  dataIndex: 'certNo', key: 'certNo', width: 200 },
   { title: '序列', dataIndex: 'qualSerial', key: 'qualSerial', width: 130 },
   { title: '类别', dataIndex: 'qualCategory', key: 'qualCategory', width: 220 },
   { title: '等级', dataIndex: 'qualGrade', key: 'qualGrade', width: 100 },
@@ -230,15 +231,15 @@ async function loadApplies() {
 }
 
 const applyColumns = [
-  { title: '申报单号', dataIndex: 'id', key: 'id', width: 110 },
+  { title: '申报单号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '申报单号' }),  dataIndex: 'id', key: 'id', width: 110 },
   { title: '资质', dataIndex: 'qualId', key: 'qualId', width: 90 },
   { title: '申报类型', dataIndex: 'applyType', key: 'applyType', width: 120 },
   { title: '目标等级', dataIndex: 'targetGrade', key: 'targetGrade', width: 100 },
   { title: '提交日期', dataIndex: 'submitDate', key: 'submitDate', width: 120 },
   { title: '申请延续至', dataIndex: 'dueDate', key: 'dueDate', width: 120 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
-  { title: '结果文号', dataIndex: 'resultNo', key: 'resultNo', width: 140 },
-  { title: '新证书编号', dataIndex: 'newCertNo', key: 'newCertNo', width: 170 },
+  { title: '结果文号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '结果文号' }),  dataIndex: 'resultNo', key: 'resultNo', width: 140 },
+  { title: '新证书编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '新证书编号' }),  dataIndex: 'newCertNo', key: 'newCertNo', width: 170 },
   { title: '新有效期至', dataIndex: 'newValidTo', key: 'newValidTo', width: 120 },
   { title: '备注', dataIndex: 'remark', key: 'remark', ellipsis: true },
   { title: '操作', key: 'action', width: 150, fixed: 'right' as const },
@@ -741,7 +742,7 @@ const STAFF_COLUMNS = [
   { title: '岗位角色', dataIndex: 'staffRole', key: 'staffRole', width: 170 },
   { title: '专业', dataIndex: 'major', key: 'major', width: 130 },
   { title: '职称等级', dataIndex: 'titleLevel', key: 'titleLevel', width: 110 },
-  { title: '注册号', dataIndex: 'regNo', key: 'regNo', width: 140 },
+  { title: '注册号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '注册号' }),  dataIndex: 'regNo', key: 'regNo', width: 140 },
   { title: '全职', key: 'isFullTime', width: 80 },
   { title: '社保状态', dataIndex: 'socialSecurityStatus', key: 'socialSecurityStatus', width: 110 },
   { title: '继续教育学时', key: 'eduHours', width: 130 },
@@ -860,7 +861,7 @@ const permitTotal = ref(0);
 const permitLoading = ref(false);
 const permitLoaded = ref(false);
 const permitColumns = [
-  { title: '许可证编号', dataIndex: 'permitNo', key: 'permitNo', width: 200 },
+  { title: '许可证编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '许可证编号' }),  dataIndex: 'permitNo', key: 'permitNo', width: 200 },
   { title: '发证机关', dataIndex: 'issuingAuthority', key: 'issuingAuthority', width: 160 },
   { title: '发证日期', dataIndex: 'issueDate', key: 'issueDate', width: 115 },
   { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 115 },
