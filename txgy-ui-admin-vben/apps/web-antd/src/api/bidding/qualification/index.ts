@@ -271,6 +271,7 @@ export namespace QualificationApi {
   export interface PermitPageReq extends PageParam {
     entId?: number;
     permitStatus?: string;
+    /** 距到期天数（天；负数=已过期，0=今天到期） */
     expiringInDays?: number;
     keyword?: string;
   }
@@ -285,6 +286,7 @@ export namespace QualificationApi {
     issueDate?: null | string;
     /** LocalDate；空=长期 */
     validTo?: null | string;
+    /** 距到期天数（天；null=长期或未填有效期，负数=已过期） */
     daysToExpire?: null | number;
     permitStatus?: string;
     legalPerson?: string;

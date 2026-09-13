@@ -41,6 +41,7 @@ export interface NoticeAttachment {
   ext?: string;
   fileId?: number | string;
   sha256?: string;
+  /** 文件大小（字节）（与后端 VO @Schema 同单位；门户类型见本文件头说明） */
   size?: number;
   downloadUrl?: string;
   origDownloadUrl?: string;
@@ -106,6 +107,7 @@ export interface NoticeExternalDetail extends NoticeExternalItem {
   contentHtmlSafe?: null | string;
   pdfFileId?: null | number | string;
   pdfSha256?: null | string;
+  /** 版式文件 PDF 原文件大小（字节）（与后端 VO @Schema 同单位；门户类型见本文件头说明） */
   pdfSize?: null | number;
   /** PDF 下载地址（FileApi 签名；签名能力接入前为 null，R6） */
   pdfDownloadUrl?: null | string;
@@ -277,6 +279,7 @@ export interface InternalNoticeDetail extends InternalNoticeItem {
   contentVersion?: number;
   payload?: Record<string, unknown>;
   pdfFileId?: number | string;
+  /** 版式文件 PDF 原文件大小（字节）（与后端 VO @Schema 同单位；门户类型见本文件头说明） */
   pdfSize?: number;
 }
 /** 内部公告公开分页入参（契约来源：notice public/list 入参 NoticePageReqVO 大厅口径：pageNo/pageSize/keyword/noticeType）。 */
