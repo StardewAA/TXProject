@@ -45,6 +45,7 @@ import CandidatePublicityTable from './tables/CandidatePublicityTable.vue';
 import ChangeNoticeTable from './tables/ChangeNoticeTable.vue';
 import ResultPublicityTable from './tables/ResultPublicityTable.vue';
 import TenderNoticeTable from './tables/TenderNoticeTable.vue';
+import { fmtBytes } from '#/utils/format';
 const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
 /* 身份由**显式 prop** 决定，不再嗅探 route.path —— 此前 /portal/bidding/publish 直接挂本组件，
  * 组件靠 route.path.startsWith('/portal') 猜自己是谁，导致"前台没有自己的页面、前后台共用一个工作台"，
@@ -103,12 +104,8 @@ async function loadChainOptions(): Promise<void> {
     chainLoading.value = false;
   }
 }
-const fmtBytes = (n?: number): string => {
-  if (n === undefined || n === null) return '';
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(2) + ' MB';
-};
+/** 本页空值留白（发布工作台附件行） */
+const sizeText = (n?: number): string => fmtBytes(n, '');
 async function onPdfBeforeUpload(file: File): Promise<boolean> {
   if (!/\.pdf$/i.test(file.name)) { createMessage.warning('仅支持 PDF 文件'); return false; }
   pdfUploading.value = true;
@@ -795,7 +792,7 @@ async function doSync() {
                 </Upload>
               </div>
               <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
-                file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
+                file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ sizeText(pdfSize) }}</template>
                 <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
                 <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="ml-2">查看已上传文件</a>
                 <Button

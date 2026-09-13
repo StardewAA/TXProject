@@ -28,6 +28,7 @@ import { FETCH_TYPE_LABEL, fetchTypeText } from '../../labels';
 import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
+import { fmtBytes } from '#/utils/format';
 
 const props = withDefaults(defineProps<{
   /** 是否允许 FAILED 死信重试按钮，默认 true */
@@ -276,12 +277,9 @@ function openRawFile() {
   const u = payloadObj.value.rawFileUrl;
   if (u) window.open(u, '_blank');
 }
-/** 字节数可读化 */
-function fmtBytes(n: number | undefined): string {
-  if (n == null) return '';
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(1) + ' MB';
+/** 字节数可读化（空值留白：原始文件大小未知时不显示占位）——委托 #/utils/format 的统一口径 */
+function sizeText(n: number | undefined): string {
+  return fmtBytes(n, '');
 }
 </script>
 
@@ -345,7 +343,7 @@ function fmtBytes(n: number | undefined): string {
             <span class="tc-v">
               <template v-if="payloadObj.rawFileUrl">
                 <a href="#" @click.prevent="openRawFile()">查看原文文件（FileApi 归档）</a>
-                <span class="tc-sub">{{ fmtBytes(payloadObj.rawSize) }}<template v-if="payloadObj.rawSha256"> · sha256 {{ String(payloadObj.rawSha256).slice(0, 16) }}…</template></span>
+                <span class="tc-sub">{{ sizeText(payloadObj.rawSize) }}<template v-if="payloadObj.rawSha256"> · sha256 {{ String(payloadObj.rawSha256).slice(0, 16) }}…</template></span>
               </template>
               <span v-else>（本任务无原文文件引用——归档由后端在列表阶段完成，见 05 契约 §四）</span>
             </span>

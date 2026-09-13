@@ -29,6 +29,7 @@
 import { computed } from 'vue';
 
 import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
+import { fmtBytes } from '#/utils/format';
 
 export interface HtmlAttachment {
   id?: number | string;
@@ -72,12 +73,8 @@ function fmtDateTime(v?: null | number | string): string {
   if (Number.isNaN(+d)) return fmtFieldValue(v);
   return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
 }
-const fmtBytes = (n?: null | number): string => {
-  if (n === undefined || n === null) return '';
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(2) + ' MB';
-};
+/** 本页空值留白（公告正文里的附件清单，没有大小就不显示单位占位） */
+const sizeText = (n?: null | number): string => fmtBytes(n, '');
 /** 公告生命周期文案/色板（管理端可见草稿/撤下/归档；大厅只读只展示 PUBLISHED）。
  * 契约：08 §3 状态机 DRAFT→PUBLISHED→UNPUBLISHED→(再发布)；ARCHIVED=归档终态；管理态字段仅管理端详情下发。 */
 const statusText: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', UNPUBLISHED: '已撤下', ARCHIVED: '已归档' };
@@ -175,13 +172,13 @@ const publicReadable = computed(() => !props.detail?.internalFlag && props.detai
       <ul class="nh-files">
         <li v-if="detail?.pdfFileId" class="nh-file">
           <span class="doc">公告版式文件（PDF）</span>
-          <span class="meta mono">file_id #{{ detail.pdfFileId }}<template v-if="detail?.pdfSize"> · {{ fmtBytes(detail.pdfSize) }}</template></span>
+          <span class="meta mono">file_id #{{ detail.pdfFileId }}<template v-if="detail?.pdfSize"> · {{ sizeText(detail.pdfSize) }}</template></span>
           <a v-if="detail?.pdfDownloadUrl" class="dl" :href="detail.pdfDownloadUrl" target="_blank" rel="noopener">{{ publicReadable ? '免费查阅下载 ↗' : '查阅 ↗' }}</a>
           <span v-else class="tip">{{ publicReadable ? '（公开公告可免费查阅；下载地址由业务系统签发后开放）' : '（企业内部公告，仅本租户可见）' }}</span>
         </li>
         <li v-for="a in detail?.attachments || []" :key="String(a.id ?? a.fileId)" class="nh-file">
           <span class="doc">{{ a.kind === 'PDF' ? 'PDF 附件' : '附件' }} {{ a.name || '（未命名）' }}</span>
-          <span class="meta mono">{{ fmtBytes(a.size) }}</span>
+          <span class="meta mono">{{ sizeText(a.size) }}</span>
           <a v-if="a.downloadUrl" class="dl" :href="a.downloadUrl" target="_blank" rel="noopener">下载 ↗</a>
           <span v-else class="tip">（附件下载地址由业务系统按公开性签发；外部公告附件需病毒扫描 CLEAN 后放行）</span>
         </li>
