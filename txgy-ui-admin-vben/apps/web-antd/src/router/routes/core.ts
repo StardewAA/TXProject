@@ -203,7 +203,8 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'PortalBiddingPublish',
         path: 'bidding/publish',
-        component: () => import('#/views/bidding/notice/index.vue'),
+        /** 门户自有页面（此前直挂管理端组件 views/bidding/notice/index.vue，靠 route.path 猜身份） */
+        component: () => import('#/views/portal/bidding/publish.vue'),
         meta: { title: '公告发布（企业前台）', hideInMenu: true },
       },
       /** 项目公告管理（前台）：项目 → 招标项目 → 标段（包） → 公告 四级层级导航。
