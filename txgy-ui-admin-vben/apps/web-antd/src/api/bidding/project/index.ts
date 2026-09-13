@@ -33,6 +33,7 @@ export namespace ProjectApi {
     remark?: string;
     /** ProjectVO 数据集全量字段（key=规范英文名，缺失补 null） */
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -61,6 +62,7 @@ export namespace ProjectApi {
     state?: State | string;
     remark?: string;
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -87,6 +89,7 @@ export namespace ProjectApi {
     state?: State | string;
     remark?: string;
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 

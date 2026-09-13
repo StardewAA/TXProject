@@ -31,6 +31,7 @@ export namespace SubjectApi {
     missingRequiredCodes?: string[];
     missingRequiredNames?: string[];
     completeTime?: number;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
     updateTime?: number;
   }
@@ -65,6 +66,7 @@ export namespace SubjectApi {
     authorizeTime?: number;
     disableTime?: number;
     remark?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -92,6 +94,7 @@ export namespace SubjectApi {
     userRole?: 'CONTACT' | 'OPERATOR';
     enabled?: boolean;
     remark?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 

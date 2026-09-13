@@ -17,6 +17,7 @@ export interface BiddingFileResp {
   url: string;
   name?: string;
   type?: string;
+  /** 文件大小（字节） */
   size?: number;
   /** 文件 SHA-256（红线 8 三件套之一；按 URL 补登记时为 null） */
   sha256?: string;

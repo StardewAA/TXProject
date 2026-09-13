@@ -70,6 +70,7 @@ export namespace ProcessTrackApi {
     biddedTime?: number;
     terminatedTime?: number;
     events: TrackEvent[];
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime: number;
   }
 

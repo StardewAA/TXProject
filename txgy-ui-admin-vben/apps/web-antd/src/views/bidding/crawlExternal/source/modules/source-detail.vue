@@ -16,6 +16,7 @@ import { Button, Descriptions, Drawer, message, Modal, Tag } from 'ant-design-vu
 
 import { fetchCrawlJobPage, fetchCrawlTaskPage, getCrawlSource, getCrawlTask, runCrawlSource, setCrawlSourceEnabled } from '#/api/bidding/crawlExternal';
 
+import { FETCH_TYPE_LABEL, fetchTypeText, INTERVAL_HINT, INTERVAL_LABEL, intervalText } from '../../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
@@ -207,8 +208,11 @@ defineExpose({ openSource });
         <div class="sd-sec-t">配置</div>
         <Descriptions :column="2" size="small" bordered>
           <Descriptions.Item label="入口站点">{{ row.baseUrl || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="获取方式">{{ row.fetchType === 'API' ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}</Descriptions.Item>
-          <Descriptions.Item label="抓取间隔">{{ row.fetchIntervalSeconds != null ? `${row.fetchIntervalSeconds } 秒` : '—' }}</Descriptions.Item>
+          <Descriptions.Item :label="FETCH_TYPE_LABEL">{{ fetchTypeText(row.fetchType) }}</Descriptions.Item>
+          <Descriptions.Item :label="INTERVAL_LABEL">
+            <span :title="INTERVAL_HINT">{{ intervalText(row.fetchIntervalSeconds) }}</span>
+            <span class="sd-dim">（列表轮询与原文下载共用，≥120 秒）</span>
+          </Descriptions.Item>
           <Descriptions.Item label="默认解析/策略码">{{ row.parserCodeDefault || '（按 URL 规则自动匹配）' }}</Descriptions.Item>
           <Descriptions.Item label="robots">{{ row.robotsOk ? '允许按 robots 抓取' : '禁止' }}</Descriptions.Item>
           <Descriptions.Item label="额外放行域名" :span="2">{{ row.allowedHosts || '（仅 baseUrl 域）' }}</Descriptions.Item>
@@ -307,6 +311,8 @@ defineExpose({ openSource });
 .sd-sec-t { font-size: 13.5px; font-weight: 800; color: var(--ind-ink-text, #1f2937); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .sd-muted { font-weight: 500; font-size: 12px; color: var(--ind-weak-text, #6b7280); }
 .sd-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 12px 4px; }
+/* 间隔等字段的"归属说明"：小字灰字，避免与值抢视线 */
+.sd-dim { margin-left: 6px; font-size: 12px; color: var(--ind-weak-text, #6b7280); }
 .sd-urls { display: flex; flex-direction: column; gap: 4px; }
 .sd-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: #f6f8fa; border: 1px solid #e5e7eb; padding: 4px 8px; border-radius: 4px; }
 /* 批次行与批内任务行均已改用统一任务条样式（../../taskbar.css 的 .fp-tbl） */

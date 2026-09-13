@@ -77,6 +77,7 @@ export interface RuleConfigItem {
     sourceChannel?: string;
     eCertIdent?: string;
     remark?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }
@@ -133,6 +134,7 @@ export interface RuleConfigItem {
     fileName: string;
     fileId: number;
     fileFormat?: string;
+    /** 文件大小（字节） */
     fileSize?: number;
     version: number;
     /** 当前生效版本 */
@@ -141,6 +143,7 @@ export interface RuleConfigItem {
   fileHash?: string;
     virusScanStatus?: string;
     copyExpiringTime?: null | string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
   }
 
@@ -154,6 +157,7 @@ export interface RuleConfigItem {
     /** SHA-256（建议传：同证同哈希判重与防篡改） */
     fileHash?: string;
     fileFormat?: string;
+    /** 文件大小（字节） */
     fileSize?: number;
     /** 加注时间/加注有效期：LocalDateTime → **epoch 毫秒**（平台无 @JsonFormat，统一毫秒序列化） */
     copyCreationTime?: number;
