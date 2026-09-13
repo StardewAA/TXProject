@@ -649,7 +649,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 const pageTypeText = (t?: string) =>
   t === 'DETAIL' ? '公告详情' : t === 'LIST' ? '公告列表（出条目）' : t === 'UNKNOWN' ? '未识别' : (t || '—');
 
-/** 附件候选里"链接未绝对化"的条数——>0 表示下载器阶段拿不到绝对地址，属解析规则/源配置需校准 */
+/** 附件候选里"链接未绝对化"的条数——>0 表示下载器阶段拿不到绝对地址，属解析规则/信息源配置需校准 */
 const incompleteOf = (r: ManualRun) =>
   (r.resp?.attachments || []).filter((att) => att.urlIncomplete).length;
 </script>
@@ -981,7 +981,7 @@ const incompleteOf = (r: ManualRun) =>
                     <span>{{ att.name || '（未命名附件）' }}</span>
                     <span v-if="att.url" class="ml-2 break-all text-xs text-gray-500" :title="att.url">{{ att.url }}</span>
                     <span v-if="att.urlIncomplete" class="ml-2 text-xs text-amber-700">
-                      （相对链接，缺来源 URL → 下载阶段无法定位；请在源配置里补 baseUrl 或改用带 url 的录入）
+                      （相对链接，缺来源 URL → 下载阶段无法定位；请在信息源配置里补 baseUrl 或改用带 url 的录入）
                     </span>
                   </span>
                 </div>

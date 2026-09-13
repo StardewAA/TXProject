@@ -1,5 +1,5 @@
 <!-- ============================================================================
-  公告 / 公示管理 · 招标人“发布工作台”（企业自营公告，管理端）
+  公告 / 公示管理 · 招标人“发布工作台”（企业内部公告，管理端）
   业务（08-公告公示前端交付-业务口径说明）：公告/公示是招标人（企业）对外发布的法律文书；
     本页做 起草→发布→撤下 的全生命周期（发布工作台），不是普通文章 CRUD；大厅只读展示已发布内容。
   类型（四类，勿自由扩展）：TENDER_NOTICE 招标公告 / CHANGE_NOTICE 变更公告 /
@@ -50,7 +50,7 @@ import TenderNoticeTable from './tables/TenderNoticeTable.vue';
  *   · 管理端页面  views/bidding/notice/index.vue       → <NoticeWorkbench mode="admin" />
  *   · 门户发布页  views/portal/bidding/publish.vue     → <NoticeWorkbench mode="portal" />
  * 待办（需业务口径，不由前端擅定）：管理端应收敛为"管理前台"（全量/下架/留痕/运维），
- * 发布动作归前台；自营公告是否需"提交 → 审核"取决于后端是否补 PENDING_AUDIT/REJECTED 与 submit/approve/reject。 */
+ * 发布动作归前台；内部公告是否需"提交 → 审核"取决于后端是否补 PENDING_AUDIT/REJECTED 与 submit/approve/reject。 */
 const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode: 'admin' });
 const createMessage = message;
 const router = useRouter();
@@ -156,7 +156,7 @@ const typeName = (row: NoticeApi.Row) => {
 
 /* ============ 台账总览（状态分布 KPI，点击即按状态过滤） ============
  * 后端 page 无按状态汇总出参，这里以 pageSize=1 对每个状态取 total（4+1 次轻量查询，
- * 企业自营公告量小，开销可忽略；KPI 数字为后端真实计数，不做前端凑数）。
+ * 企业内部公告量小，开销可忽略；KPI 数字为后端真实计数，不做前端凑数）。
  * 依据：GET /bidding/notice/page 契约（NoticeApi.PageParams.status 过滤，见 api/bidding/notice）。 */
 const kpis = ref<Array<{ color: string; note: string; num: number; status?: string; text: string; }>>([]);
 const KPI_BASE: Array<{ color: string; note: string; status?: string; text: string; }> = [
@@ -553,14 +553,14 @@ async function doSync() {
     <div class="ind-stripes"></div>
     <div v-if="inPortal" class="ind-backbar">
       <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="goBackHall()">‹ 返回本平台发布</a>
-      <span class="text-xs text-gray-400">门户 · 企业前台发布（当前登录租户自营公告）</span>
+      <span class="text-xs text-gray-400">门户 · 企业前台发布（当前登录租户内部公告）</span>
     </div>
 
     <!-- 页头：石墨墨色面板（沉稳基调）+ 主操作 -->
     <div class="ind-head">
       <div class="min-w-0">
         <div class="ind-title">{{ inPortal ? '公告发布 · 发布工作台（企业前台）' : '公告 / 公示管理 · 发布工作台' }} <span class="ind-mark">NOTICE</span></div>
-        <div class="ind-sub">{{ inPortal ? '本企业（当前租户）自营公告：起草 → 发布 → 撤下 全生命周期。发布前需平台授权并完善主体档案；发布后订阅者将收到动态；修订需撤下后重新发布（历史版本保留）。' : '本企业自营公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。' }}</div>
+        <div class="ind-sub">{{ inPortal ? '本企业（当前租户）内部公告：起草 → 发布 → 撤下 全生命周期。发布前需平台授权并完善主体档案；发布后订阅者将收到动态；修订需撤下后重新发布（历史版本保留）。' : '本企业内部公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。' }}</div>
       </div>
       <div class="ind-actions">
         <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>

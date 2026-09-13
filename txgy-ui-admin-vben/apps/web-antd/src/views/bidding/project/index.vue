@@ -478,7 +478,7 @@ function confirmDelete(r: ProjectApi.Project) {
             class="ct-table mb-3"
             :columns="[
               { title: '标题', dataIndex: 'title', key: 'title' },
-              { title: '采集源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
+              { title: '信息源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
               { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 130 },
               { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
               { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 120 },
