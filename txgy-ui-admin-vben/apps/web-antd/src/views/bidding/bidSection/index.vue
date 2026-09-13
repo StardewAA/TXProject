@@ -6,7 +6,7 @@
  *   · 「所属招标项目」必填：标段须归属已登记的招标项目（后端校验）；
  *   · 无删除接口（标段为主数据，只能登记/修改），故不提供删除动作；
  *   · 时间字段为 epoch 毫秒 → 过 fmtDateTime；追溯一次取回标段 → 招标项目 → 项目 + 公告。 */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -22,6 +22,7 @@ import {
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
+import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
 
@@ -79,7 +80,7 @@ const kpi = computed(() => {
 });
 
 const columns = [
-  { title: '标段编号', dataIndex: 'bidSectionCode', key: 'bidSectionCode', width: 200 },
+  { title: '标段编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '标段编号' }),  dataIndex: 'bidSectionCode', key: 'bidSectionCode', width: 200 },
   { title: '标段名称', dataIndex: 'bidSectionName', key: 'bidSectionName', width: 300 },
   { title: '所属招标项目', dataIndex: 'tenderProjectCode', key: 'tenderProjectCode', width: 200 },
   { title: '统一交易码', dataIndex: 'unifiedDealCode', key: 'unifiedDealCode', width: 180 },
@@ -297,7 +298,7 @@ async function submit() {
           <a-table
             class="ct-table mb-3"
             :columns="[
-              { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
+              { title: '招标项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '招标项目编号' }), dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
               { title: '名称', dataIndex: 'tenderProjectName', key: 'name' },
               { title: '招标方式', dataIndex: 'tenderMode', key: 'mode', width: 120 },
               { title: '招标人', dataIndex: 'tendererName', key: 'tenderer', width: 200 },
@@ -314,7 +315,7 @@ async function submit() {
           <a-table
             class="ct-table mb-3"
             :columns="[
-              { title: '公告编号', dataIndex: 'noticeCode', key: 'code', width: 200 },
+              { title: '公告编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '公告编号' }), dataIndex: 'noticeCode', key: 'code', width: 200 },
               { title: '标题', dataIndex: 'title', key: 'title' },
               { title: '类型', dataIndex: 'noticeTypeName', key: 'type', width: 130 },
               { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 170 },

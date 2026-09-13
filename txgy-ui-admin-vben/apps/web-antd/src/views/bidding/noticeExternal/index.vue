@@ -22,6 +22,7 @@ import {
 } from '#/api/bidding/noticeExternal';
 
 import { useCertMeta } from '../certificate/useCertMeta';
+import CopyText from '../components/CopyText.vue';
 import {
   AUDIT_MAP,
   BODY_MAP,
@@ -612,6 +613,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+      </template>
+      <template #col_id="{ row }">
+        <CopyText :text="row.id" label="公告 ID" />
       </template>
       <template #col_industry="{ row }">
         <Tag v-if="industryTagOf(row)" :color="industryTagOf(row)!.color">{{ industryTagOf(row)!.text }}</Tag>

@@ -6,7 +6,7 @@
  *   · state 是模块内部管理态（ACTIVE/CLOSED），不是数据集字段，故本地用固定两档展示；
  *   · fields 为 ProjectVO 数据集全量字段（key=规范英文名），详情按原样列出，不硬编码字段名清单；
  *   · 追溯（trace）一次取回：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 + 统计。 */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -25,6 +25,7 @@ import {
 
 import { fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
+import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
 
@@ -167,7 +168,7 @@ const kpi = computed(() => {
 });
 
 const columns = [
-  { title: '项目编号', dataIndex: 'projectCode', key: 'projectCode', width: 190 },
+  { title: '项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '项目编号' }),  dataIndex: 'projectCode', key: 'projectCode', width: 190 },
   { title: '项目名称', dataIndex: 'projectName', key: 'projectName', width: 320 },
   { title: '地区', dataIndex: 'regionCode', key: 'regionCode', width: 110 },
   { title: '法人', dataIndex: 'legalPerson', key: 'legalPerson', width: 110 },
@@ -420,7 +421,7 @@ function confirmDelete(r: ProjectApi.Project) {
           <a-table
             class="ct-table mb-3"
             :columns="[
-              { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
+              { title: '招标项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '招标项目编号' }), dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
               { title: '名称', dataIndex: 'tenderProjectName', key: 'name' },
               { title: '招标方式', dataIndex: 'tenderMode', key: 'mode', width: 120 },
               { title: '招标人', dataIndex: 'tendererName', key: 'tenderer', width: 200 },
@@ -437,7 +438,7 @@ function confirmDelete(r: ProjectApi.Project) {
           <a-table
             class="ct-table mb-3"
             :columns="[
-              { title: '标段编号', dataIndex: 'bidSectionCode', key: 'code', width: 200 },
+              { title: '标段编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '标段编号' }), dataIndex: 'bidSectionCode', key: 'code', width: 200 },
               { title: '名称', dataIndex: 'bidSectionName', key: 'name' },
               { title: '所属招标项目', dataIndex: 'tenderProjectCode', key: 'tp', width: 200 },
               { title: '合同估算价', dataIndex: 'contractReckonPrice', key: 'price', width: 130 },
@@ -454,7 +455,7 @@ function confirmDelete(r: ProjectApi.Project) {
           <a-table
             class="ct-table"
             :columns="[
-              { title: '公告编号', dataIndex: 'noticeCode', key: 'code', width: 200 },
+              { title: '公告编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '公告编号' }), dataIndex: 'noticeCode', key: 'code', width: 200 },
               { title: '标题', dataIndex: 'title', key: 'title' },
               { title: '类型', dataIndex: 'noticeTypeName', key: 'type', width: 130 },
               { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 170 },
@@ -579,7 +580,7 @@ function confirmDelete(r: ProjectApi.Project) {
               { title: '主体角色', dataIndex: 'subjectRole', key: 'subjectRole', width: 120 },
               { title: '主体名称', dataIndex: 'subjectName', key: 'subjectName' },
               { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 130 },
-              { title: '证件号', dataIndex: 'code', key: 'code', width: 190 },
+              { title: '证件号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '证件号' }), dataIndex: 'code', key: 'code', width: 190 },
               { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 120 },
               { title: '档案完备', dataIndex: 'profileComplete', key: 'profileComplete', width: 100 },
             ]"

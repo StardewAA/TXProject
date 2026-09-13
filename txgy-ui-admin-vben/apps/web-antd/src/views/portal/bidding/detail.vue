@@ -17,6 +17,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useAppConfig } from '@vben/hooks';
 
+import CopyText from '../../bidding/components/CopyText.vue';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
 import { biddingConfig } from './config';
 import { blocksToHtml, cleanT, fmtDate, fmtDT, prettyNoticeHtml, toCleanList } from './format';
@@ -275,7 +276,7 @@ const noRealDownload = computed(
 const metaPairs = computed(() => {
   const d = detail.value;
   if (!d) return [];
-  const pairs: Array<{ k: string; v: string }> = [];
+  const pairs: Array<{ copy?: boolean; k: string; v: string }> = [];
   const issuer = cleanT(d.issuerName);
   if (issuer) pairs.push({ k: '发布单位', v: issuer });
   if (fmtDT(d.publishTime)) pairs.push({ k: '发布时间', v: fmtDT(d.publishTime) });
@@ -284,10 +285,11 @@ const metaPairs = computed(() => {
   const proj = cleanT(d.projectName);
   const pKey = cleanT(d.projectKey);
   if (proj) pairs.push({ k: '关联项目', v: proj });
-  if (pKey) pairs.push(proj ? { k: '项目编号', v: pKey } : { k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
+  // 项目编号 / 投标人拿去搜索或对外引用时都要原样复制 → 带一键复制（CopyText 的失败提示口径见组件注释）
+  if (pKey) pairs.push(proj ? { copy: true, k: '项目编号', v: pKey } : { copy: true, k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
   const srcName = cleanT(d.sourceName);
   const srcCode = cleanT(d.sourceCode);
-  if (srcCode || srcName) pairs.push({ k: '来源', v: [srcCode, srcName].filter(Boolean).join(' · ') });
+  if (srcCode || srcName) pairs.push({ copy: Boolean(srcCode), k: '来源', v: [srcCode, srcName].filter(Boolean).join(' · ') }); // 有来源编码时才可复制（只有名称时复制意义不大）
   const nType = cleanT(d.noticeTypeRaw);
   if (nType) pairs.push({ k: '公告性质', v: nType });
   if (d.legalFlag === 'Y') pairs.push({ k: '依法必招', v: '是' });
@@ -423,7 +425,11 @@ onBeforeUnmount(() => {
       </div>
       <h1>{{ detail.title }}</h1>
       <div class="meta">
-        <span v-for="p in metaPairs" :key="p.k"><b>{{ p.k }}</b>{{ p.v }}</span>
+        <span v-for="p in metaPairs" :key="p.k">
+          <b>{{ p.k }}</b>
+          <CopyText v-if="p.copy" :label="p.k" :text="p.v" />
+          <template v-else>{{ p.v }}</template>
+        </span>
       </div>
       <!-- BR-1：detail.projectKey 存在 → 项目级次级关注（跟踪该招标项目）；未登录/无权限时不展示按钮只给提示 -->
       <div v-if="projectKeyVal" class="track-row">
