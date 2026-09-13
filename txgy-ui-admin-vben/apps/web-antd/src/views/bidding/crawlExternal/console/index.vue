@@ -26,6 +26,7 @@ import {
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
 
+import { CHANNEL_GENERIC_TEXT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
@@ -741,12 +742,14 @@ const incompleteOf = (r: ManualRun) =>
           <div v-else class="fp-wall">
             <div v-for="src in sources" :key="String(src.id)" class="fp-src" @click="enterSourceTasks(src)">
               <div class="fp-src-h">
-                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'">{{ src.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'">{{ fetchTypeText(src.fetchType) }}</Tag>
                 <Tag :color="src.enabled ? 'green' : 'default'">{{ src.enabled ? '启用' : '停用' }}</Tag>
                 <span class="fp-src-code">{{ src.sourceCode || '—' }}</span>
               </div>
               <div class="fp-src-name" :title="src.sourceName || ''">{{ src.sourceName || '（未命名）' }}</div>
-              <div class="fp-src-meta">任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · {{ src.fetchIntervalSeconds != null ? `间隔 ${ src.fetchIntervalSeconds }s` : '—' }}</div>
+              <div class="fp-src-meta" :title="INTERVAL_HINT">
+                任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · 抓取间隔 {{ intervalText(src.fetchIntervalSeconds) }}
+              </div>
               <div class="fp-src-go">查看任务条 ▸</div>
             </div>
           </div>
@@ -757,13 +760,13 @@ const incompleteOf = (r: ManualRun) =>
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
             <span class="text-sm font-extrabold text-gray-700">{{ curSource.sourceName || curSource.sourceCode }}</span>
-            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ curSource.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ fetchTypeText(curSource.fetchType) }}</Tag>
           </div>
 
           <!-- 筛选行 -->
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
-            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: 'GENERIC · 通用下载', value: 'GENERIC' }]" @change="applyTaskFilter" />
+            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }]" @change="applyTaskFilter" />
             <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
             <Button size="small" @click="applyTaskFilter">查询</Button>
             <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>

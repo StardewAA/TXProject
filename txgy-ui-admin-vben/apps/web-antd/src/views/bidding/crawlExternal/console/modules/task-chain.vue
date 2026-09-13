@@ -24,6 +24,7 @@ import { getManagePage } from '#/api/bidding/noticeExternal';
 
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
+import { FETCH_TYPE_LABEL, fetchTypeText } from '../../labels';
 import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
@@ -291,7 +292,7 @@ function fmtBytes(n: number | undefined): string {
     <!-- 链头：任务定位（ID/获取方式/状态） -->
     <div class="tc-head">
       <span class="tc-head-id">任务 #{{ String(t.id) }}</span>
-      <Tag :color="isApi ? 'purple' : 'blue'">{{ isApi ? 'API · 接口直取' : 'CRAWLER · 爬虫' }}</Tag>
+      <Tag :color="isApi ? 'purple' : 'blue'">{{ fetchTypeText(isApi ? 'API' : 'CRAWLER') }}</Tag>
       <Tag v-if="tagOf(TASK_STATUS_MAP, t.status)" :color="tagOf(TASK_STATUS_MAP, t.status)!.color">{{ tagOf(TASK_STATUS_MAP, t.status)!.text }}</Tag>
       <span class="ml-auto tc-ops">
         <Button v-if="allowRetry && t.status === 'FAILED'" danger size="small" :loading="retryBusy" @click="handleRetry">重试（attempt 归零）</Button>
@@ -314,7 +315,7 @@ function fmtBytes(n: number | undefined): string {
       <div class="ind-panel-b">
         <div v-if="srcLoading" class="tc-hint">源信息回读中…</div>
         <template v-else>
-          <div class="tc-kv"><span class="tc-k">获取方式</span><span class="tc-v">{{ isApi ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ` · ${ src.sourceName}` : '' }}）</span></span></div>
+          <div class="tc-kv"><span class="tc-k">{{ FETCH_TYPE_LABEL }}</span><span class="tc-v">{{ fetchTypeText(isApi ? 'API' : 'CRAWLER') }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ` · ${ src.sourceName}` : '' }}）</span></span></div>
           <div v-if="!isApi" class="tc-kv"><span class="tc-k">下载器/通道</span><span class="tc-v mono">{{ t.channelCode || src?.channelCode || '—' }}</span></div>
           <div v-else class="tc-kv">
 <span class="tc-k">接口配置</span>

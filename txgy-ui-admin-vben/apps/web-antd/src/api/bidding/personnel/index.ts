@@ -24,6 +24,7 @@ export interface Cert {
     certSubType?: string;
     /** 下次复审日（与到期日独立：司炉/ISO 等"到期前就已失效"） */
     nextReviewDate?: string;
+    /** 复审剩余天数（天；负数=已逾期，空=无复审要求） */
     reviewRemainingDays?: number;
     major?: string;
     eduLevel?: string;

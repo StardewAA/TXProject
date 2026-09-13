@@ -55,6 +55,7 @@ export namespace NoticeExternalApi {
     effectiveTo?: string;
     fetchCount?: number;
     lastFetchTime?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }
@@ -66,6 +67,7 @@ export namespace NoticeExternalApi {
     bodyBlocksJson?: string;
     pdfFileId?: number;
     pdfSha256?: string;
+    /** 公告 PDF 原文件大小（字节） */
     pdfSize?: number;
     pdfDownloadUrl?: string;
     extractionSummary?: string;
@@ -79,6 +81,7 @@ export namespace NoticeExternalApi {
       id?: number | string;
       name?: string;
       origDownloadUrl?: string;
+      /** 文件大小（字节） */
       size?: number;
       virusStatus?: string;
     }>;

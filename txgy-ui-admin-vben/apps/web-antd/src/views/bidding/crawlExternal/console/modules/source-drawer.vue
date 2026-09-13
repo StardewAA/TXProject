@@ -33,6 +33,7 @@ import {
   setCrawlSourceEnabled,
 } from '#/api/bidding/crawlExternal';
 
+import { fetchTypeText, intervalText } from '../../labels';
 import SourceForm from '../../source/modules/form.vue';
 
 const emit = defineEmits(['changed']);
@@ -186,7 +187,7 @@ watch(open, (v) => onOpen(v));
         { title: 'code', dataIndex: 'sourceCode', key: 'c', width: 120 },
         { title: '方式', dataIndex: 'fetchType', key: 'ft', width: 120 },
         { title: '通道', dataIndex: 'channelCode', key: 'ch', width: 90 },
-        { title: '间隔/秒', dataIndex: 'fetchIntervalSeconds', key: 'i', width: 90 },
+        { title: '抓取间隔（秒）', dataIndex: 'fetchIntervalSeconds', key: 'i', width: 130, customRender: ({ text }: { text?: null | number }) => intervalText(text) },
         { title: '解析器', dataIndex: 'parserCodeDefault', key: 'p', width: 130 },
         { title: '启用', key: 'en', width: 70 },
         { title: '操作', key: 'op', width: 210 },
@@ -198,8 +199,8 @@ watch(open, (v) => onOpen(v));
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'ft'">
-          <Tag v-if="record.fetchType === 'API'" color="purple">API · 直取</Tag>
-          <Tag v-else-if="record.fetchType === 'CRAWLER'" color="blue">CRAWLER · 爬虫</Tag>
+          <Tag v-if="record.fetchType === 'API'" color="purple">{{ fetchTypeText(record.fetchType) }}</Tag>
+          <Tag v-else-if="record.fetchType === 'CRAWLER'" color="blue">{{ fetchTypeText(record.fetchType) }}</Tag>
           <span v-else>—</span>
         </template>
         <template v-else-if="column.key === 'en'">

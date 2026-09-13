@@ -60,6 +60,7 @@ export namespace SafetyPermitApi {
     entId?: number;
     reason: string;
     sourceRef?: string;
+    /** 宽限天数（天；留空=取配置默认值） */
     days?: number;
     remark?: string;
   }
@@ -90,6 +91,7 @@ export namespace SafetyPermitApi {
   /** #7 项目关键岗位变更超限 */
   export interface KeyPostChanges {
     projectId?: number;
+    /** 统计窗口（天） */
     windowDays?: number;
     windowStart?: null | number | string;
     anyExceeded?: boolean;

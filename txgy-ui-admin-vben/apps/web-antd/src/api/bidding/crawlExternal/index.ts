@@ -35,6 +35,7 @@ export interface ParseAttachment {
     fileName?: string;
     url?: string;
     contentLength?: number;
+    /** 耗时（毫秒） */
     durationMs?: number;
     status?: string;
     error?: string;
@@ -77,10 +78,12 @@ export interface ParseAttachment {
     /** API 源配置 JSON（fetch_type=API 时：method/url/headers/params/page/rowsPath/fieldMapping/envelope） */
     apiConfigJson?: string;
     parserCodeDefault?: string;
+    /** 抓取间隔（秒）：**同时**约束①该源列表发现轮询 ②该源公告原文下载闸（硬下限 120，见 crawlExternal/labels.ts） */
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
     enabled?: boolean;
     remark?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
     /** API 直取：接口地址
@@ -134,6 +137,7 @@ export interface ParseAttachment {
     fetchType?: string;
     apiConfigJson?: string;
     parserCodeDefault?: string;
+    /** 抓取间隔（秒）：**同时**约束①该源列表发现轮询 ②该源公告原文下载闸（硬下限 120，见 crawlExternal/labels.ts） */
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
     enabled?: boolean;
@@ -207,6 +211,7 @@ export interface ParseAttachment {
     message?: string;
     /** 载荷快照 JSON（列表阶段条目：QYZB 全文 HTML / GX 标题日期 / API 源=接口原始 JSON？——后端 CrawlTaskRespVO.payloadJson） */
     payloadJson?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }
@@ -228,6 +233,7 @@ export interface ParseAttachment {
     status?: string;
     summaryJson?: string;
     finishedAt?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }

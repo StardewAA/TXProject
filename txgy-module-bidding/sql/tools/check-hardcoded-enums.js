@@ -49,6 +49,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist']);
 const KNOWN_HARDCODED = new Map([
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/noticeExternal/data.ts', [7, '状态/审核/内容形态 3 类已于 2026-09-25 改为"字典优先、本表兜底"（本表仍保留：本页用户未必有 /bidding/meta/* 权限，纯字典化会退化成英文码）；行业/抽取/AI/正文结构化 4 类无后端枚举可对齐，仍以本表为主；筛选下拉仍由本表构建（form schema 在 setup 期构建，字典异步加载时会拿到空下拉）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/qualification/index.ts', [6, '资质域选项表（序列/预警来源/人员角色/业绩角色等）——取值来自后端枚举，但该域字典尚未注册；**已逐条对照 QualificationSerialEnum/StaffRole/PerformanceRole/AssetType/ReviewType 确认取值一致**，注册请求见 docs/前端规范-全域接口说明/13-枚举字典注册请求…（A 类：可照抄枚举）']],
+  ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/labels.ts', [1, 'FETCH_TYPE_OPTIONS（CRAWLER/API 两种获取方式）：fetch_type 字典未注册（取值来自后端 CrawlSourceSaveReqVO.fetchType 枚举语义）→ 见契约 13 追加项；此处是**故意收口**——2026-09-25 前同一字段有 4 种叫法散在 5 个页面，收口到本文件后才被门禁看见（这正是门禁想要的效果）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/crawlExternal/shared.ts', [3, '采集任务/解析状态映射；采集域字典未注册。已核对：任务状态=CrawlTaskStatusEnum(5) 一致；**批次状态与触发方式后端无枚举**（B 类：请后端补 CrawlJobStatusEnum/CrawlTriggerTypeEnum）→ 见契约 13']],
   ['txgy-ui-admin-vben/apps/web-antd/src/api/bidding/ruleConfig/index.ts', [3, '规则配置的值类型/状态/命中来源选项；规则配置域字典未注册。已核对：值类型=RuleConfigValueTypeEnum(5) 一致、状态=RuleConfigStatusEnum(4) 而前端**有意只列 3 个可写入目标**（ROLLED_BACK 只能由回滚接口产生，注释在案）、命中来源无枚举（仅 VO 注释）→ 见契约 13（A 类 + B 类）']],
   ['txgy-ui-admin-vben/apps/web-antd/src/views/bidding/certificate/modules/material-check.vue', [2, 'RESULT_FALLBACK / STATUS_FALLBACK —— 命名即口径：字典为主路径、此表仅在字典未下发时兜底，非硬编码主展示']],

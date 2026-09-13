@@ -48,6 +48,7 @@ export interface Row {
     payload?: Record<string, unknown>;
     pdfFileId?: number | string;
     pdfSha256?: string;
+    /** 公告 PDF 原文件大小（字节） */
     pdfSize?: number;
   }
 
@@ -90,6 +91,7 @@ export interface SaveParams {
     content?: string;
     pdfFileId?: number | string;
     pdfSha256?: string;
+    /** 公告 PDF 原文件大小（字节） */
     pdfSize?: number;
   }
 }
