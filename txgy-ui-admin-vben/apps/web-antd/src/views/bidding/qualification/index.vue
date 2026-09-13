@@ -45,6 +45,7 @@ import {
   getQualificationStaffPage,
   getStandardOptions,
   getStandardPage,
+  handleQualificationAlert,
   QualificationApi,
   rejectQualificationRenew,
   runComplianceReview,
@@ -964,6 +965,7 @@ const alertColumns = [
   { title: '通知', key: 'notify', width: 150 },
   { title: '已处理', key: 'handled', width: 110 },
   { title: '处理说明', dataIndex: 'handleNote', key: 'handleNote', width: 160, ellipsis: true },
+  { title: '操作', key: 'operation', width: 110, fixed: 'right' },
 ];
 const handledOptions = [
   { label: '未处理', value: false },
@@ -985,6 +987,51 @@ async function loadAlerts() {
 function onAlertPage(p: number) {
   alertQuery.pageNo = p;
   void loadAlerts();
+}
+
+/* ===== 预警处理（销账）=====
+ * 权限：与"执行一次扫描"同码 bidding:qualification:alert-run（后端 QualificationController#handleAlert 同码；
+ *   前端未擅自新登记权限码——那属于权限模型决策，需同时改权限表与菜单行 SQL）。
+ * CAS：version 取自清单行，后端不一致即拒绝，说明已被他人处理；失败后**只重拉清单**，
+ *   不自动重试（重试会覆盖他人处理备注）。 */
+const alertHandleOpen = ref(false);
+const alertHandleRow = ref<null | QualificationApi.Alert>(null);
+const alertHandleNote = ref('');
+const alertHandleSaving = ref(false);
+
+function openAlertHandle(row: QualificationApi.Alert) {
+  alertHandleRow.value = row;
+  alertHandleNote.value = '';
+  alertHandleOpen.value = true;
+}
+
+async function submitAlertHandle() {
+  const row = alertHandleRow.value;
+  if (!row) return;
+  // 版本号是 CAS 的前置条件：拿不到就**明确拒绝**，绝不发一个假版本（要么恒冲突、要么绕过并发控制）
+  const version = row.version;
+  if (version === undefined || version === null) {
+    message.warning('该预警未下发版本号，无法处理：请刷新清单，仍无版本号请联系后端确认 version 是否下发');
+    return;
+  }
+  alertHandleSaving.value = true;
+  try {
+    await handleQualificationAlert({
+      alertId: row.id,
+      handleNote: alertHandleNote.value.trim() || undefined,
+      version,
+    });
+    message.success('预警已标记为处理');
+    alertHandleOpen.value = false;
+    await loadAlerts();
+    refreshAfterWrite();
+  } catch {
+    // 后端错误由请求层 toast（含 CAS 冲突的提示）；此处重拉清单让用户看到"被别人处理过"的真实状态
+    alertHandleOpen.value = false;
+    await loadAlerts();
+  } finally {
+    alertHandleSaving.value = false;
+  }
 }
 
 /* ===== 页签懒加载 + 主体切换全页重拉（契约 §2：页签切换不重拉已加载数据；主体切换全页重拉） ===== */
@@ -1067,8 +1114,8 @@ onMounted(() => {
           到期预警清单与手动扫描、材料完备性自查。
           仍缺接口：资质主档<strong>编辑</strong>（无 update，create 只走 insert）、
           资质<strong>主档状态流转</strong>（Service 有 changeStatus 但无 Controller 暴露）、
-          要素记录的<strong>编辑/删除</strong>（仅 create + page）、
-          预警的<strong>处理闭环</strong>（handled / handledBy / handleNote 只读，无 handle 接口）。
+          要素记录的<strong>编辑/删除</strong>（仅 create + page）。
+          预警<strong>处理闭环已接通</strong>（POST /bidding/qualification/alert/handle，版本 CAS；处理人/时间/说明见清单列）。
         </div>
       </template>
     </a-alert>
@@ -1590,6 +1637,20 @@ onMounted(() => {
                   <a-tag :color="record.handled ? 'green' : 'orange'">
                     {{ record.handled ? '已处理' : '未处理' }}
                   </a-tag>
+                  <span v-if="record.handled && (record.handledBy || record.handledAt)" class="ct-panel-meta">
+                    {{ record.handledBy ? `#${record.handledBy}` : '' }}{{ record.handledAt ? ` ${fmtDateTime(record.handledAt)}` : '' }}
+                  </span>
+                </template>
+                <template v-else-if="column.key === 'operation'">
+                  <a-button
+                    v-if="!record.handled && can('bidding:qualification:alert-run')"
+                    size="small"
+                    type="link"
+                    @click="openAlertHandle(record)"
+                  >
+                    标记已处理
+                  </a-button>
+                  <span v-else>—</span>
                 </template>
               </template>
               <template #emptyText><div class="ct-empty">暂无预警记录，可点「执行一次扫描」</div></template>
@@ -1754,6 +1815,31 @@ onMounted(() => {
         <div v-else-if="!detailLoading" class="ct-empty">未取到详情</div>
       </a-spin>
     </a-drawer>
+
+    <!-- 预警处理（销账）-->
+    <a-modal
+      v-model:open="alertHandleOpen"
+      :confirm-loading="alertHandleSaving"
+      title="标记预警已处理"
+      :width="560"
+      @ok="submitAlertHandle"
+    >
+      <div class="mb-2">
+        <div class="ct-panel-meta">预警</div>
+        <div>{{ alertHandleRow?.refName || '—' }} · {{ alertHandleRow?.alertMessage || '—' }}</div>
+      </div>
+      <a-textarea
+        v-model:value="alertHandleNote"
+        :rows="3"
+        maxlength="200"
+        placeholder="处理说明（选填，例：已换证，新证书编号 XXX）"
+        show-count
+      />
+      <div class="ct-tip">
+        处理含版本校验：若该预警已被他人处理，本次提交会被拒绝且<strong>不会覆盖他人的处理说明</strong>，
+        页面会自动刷新显示最新状态。
+      </div>
+    </a-modal>
 
     <!-- 延续申报 -->
     <a-modal
