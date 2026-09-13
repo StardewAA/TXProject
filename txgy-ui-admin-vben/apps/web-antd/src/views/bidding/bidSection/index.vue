@@ -121,9 +121,9 @@ const formRef = ref();
 const form = reactive<ProjectApi.BidSection>({ bidSectionCode: '', tenderProjectCode: '', bidSectionName: '' });
 const isEdit = computed(() => !!form.id);
 const rules = {
-  bidSectionCode: [{ required: true, message: '标段编号必填', trigger: 'blur' }],
-  tenderProjectCode: [{ required: true, message: '所属招标项目编号必填', trigger: 'blur' }],
-  bidSectionName: [{ required: true, message: '标段名称必填', trigger: 'blur' }],
+  bidSectionCode: [{ required: true, message: '标段编号不能为空', trigger: 'blur' }],
+  tenderProjectCode: [{ required: true, message: '所属招标项目编号不能为空', trigger: 'blur' }],
+  bidSectionName: [{ required: true, message: '标段名称不能为空', trigger: 'blur' }],
 };
 
 function onCreate() {

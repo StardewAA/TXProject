@@ -36,8 +36,8 @@ const SCOPE_FILTERS: Array<{ label: string; value: '' | 'internal' | 'public' }>
 // 也不要因本机与服务端的时钟/时区偏差把刚发布的公告挡在门外。
 const TIME_FILTERS: Array<{ days: number; label: string }> = [
   { days: 0, label: '全部时间' },
-  { days: 7, label: '近 7 天' },
-  { days: 30, label: '近 30 天' },
+  { days: 7, label: '最近 7 天' },
+  { days: 30, label: '最近 30 天' },
 ];
 
 const TYPE_FILTERS: Array<{ label: string; value: string }> = [

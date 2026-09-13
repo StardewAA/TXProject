@@ -145,7 +145,7 @@ const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
  *  2026-09-14：`range` 接线后端已支持的 beginTime/endTime —— 此前后端能按创建时间筛、界面却没入口，
  *  出问题时无法把死信缩到某个时间窗（"接口有能力、界面不可达"）。格式必须 'YYYY-MM-DD HH:mm:ss'（后端 @DateTimeFormat）。 */
 const tFilter = ref<{ channelCode?: string; range?: [string, string]; status?: string; url?: string }>({});
-/** 快捷时间段复用全站共享预设（src/utils/rangePickerProps.ts），避免本页自造"近 7 天"口径 */
+/** 快捷时间段复用全站共享预设（src/utils/rangePickerProps.ts），避免本页自造"最近 7 天"口径 */
 const RANGE_PRESETS = getRangePickerDefaultProps().presets;
 const tPage = ref(1);
 const tPageSize = ref(20);
