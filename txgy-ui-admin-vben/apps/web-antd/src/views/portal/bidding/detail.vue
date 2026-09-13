@@ -18,6 +18,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAppConfig } from '@vben/hooks';
 
 import CopyText from '../../bidding/components/CopyText.vue';
+import { buildExternalNoticePdfUrl } from '../../bidding/noticeExternal/pdfUrl';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
 import { biddingConfig } from './config';
 import { blocksToHtml, cleanT, fmtDate, fmtDT, prettyNoticeHtml, toCleanList } from './format';
@@ -260,13 +261,8 @@ const isPdf = computed(() => !hasBodyHtml.value && detail.value?.contentType ===
    ② detail.pdfDownloadUrl（FileApi 签名地址，回填后可用）优先于①。
    理由：此前只等 pdfDownloadUrl 回填，导致 contentType=PDF 的公告长期显示"源文件整理中"、无法预览。 */
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-const pdfFrameUrl = computed(() => {
-  const signed = cleanT(detail.value?.pdfDownloadUrl);
-  if (signed) return signed;
-  const nid = id.value;
-  if (!nid) return '';
-  return apiURL.replace(/\/$/, '') + '/bidding/notice-external/pdf?id=' + encodeURIComponent(nid);
-});
+// 解析口径见 views/bidding/noticeExternal/pdfUrl.ts（单一真源，后台审核详情共用，避免再次分叉）
+const pdfFrameUrl = computed(() => buildExternalNoticePdfUrl(apiURL, id.value, detail.value?.pdfDownloadUrl));
 const canPreviewPdf = computed(() => !!pdfFrameUrl.value);
 /** 附件区是否没有任何可下载链接（FileApi 签名地址尚未回填 / 数据源无附件样例，R6） */
 const noRealDownload = computed(
@@ -487,7 +483,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div v-else class="pdf-empty">
-          源文件整理中——PDF 归档尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
+          无法定位该公告的 PDF：缺少公告 id（字节流代理需要 id）且签名地址未回填，暂不提供预览/下载。
+          <div class="sub">
+            说明：只要公告 id 存在，本页会自动走后端字节流代理 /bidding/notice-external/pdf；此处为两条路径都不可用。
+          </div>
           <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
         </div>
       </div>

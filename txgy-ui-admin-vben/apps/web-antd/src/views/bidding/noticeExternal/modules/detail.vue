@@ -29,6 +29,7 @@ import type { NoticeBodyBlock } from '#/views/portal/bidding/types';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { useAppConfig } from '@vben/hooks';
 
 import { Tag } from 'ant-design-vue';
 
@@ -47,8 +48,17 @@ import {
   INDUSTRY_MAP,
   STATUS_MAP,
 } from '../data';
+import { buildExternalNoticePdfUrl } from '../pdfUrl';
 
 const detail = ref<NoticeExternalApi.ManageDetail | null>(null);
+
+/* PDF 可访问地址：走**单一真源**解析（签名地址 pdfDownloadUrl → 平台字节流代理 /bidding/notice-external/pdf?id=），
+ * 与门户详情同口径。此前本页只认 pdfDownloadUrl，导致**审核人在"前台观感"里看不到 PDF**、
+ * 只看到一句"源文件整理中（尚未回填）"——而同一公告在门户已能预览（审核看不到最终件属功能缺陷）。 */
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+const pdfFrameUrl = computed(() =>
+  buildExternalNoticePdfUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
+);
 const loading = ref(false);
 const errorMsg = ref('');
 /** 页签：data=审核数据/原文；look=前台观感 */
@@ -237,9 +247,25 @@ const [Modal, modalApi] = useVbenModal({
           </div>
           <div class="fb-body-area">
             <div v-if="hasViewBody" class="fb-docx" v-dompurify-html="viewHtml"></div>
-            <div v-else-if="viewIsPdf" class="fb-pdf-empty">
-              源文件整理中——PDF 归档（pdf_download_url）尚未回填；回填完成后此处提供内嵌预览/下载（04-契约 §1）。
-              <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
+            <div v-else-if="viewIsPdf" class="fb-pdf-panel">
+              <template v-if="pdfFrameUrl">
+                <iframe class="fb-pdf-frame" :src="pdfFrameUrl" title="公告 PDF 预览"></iframe>
+                <div class="fb-pdf-actions">
+                  <a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+                  <a :href="pdfFrameUrl" download>下载</a>
+                  <span class="hint">
+                    {{
+                      detail.pdfDownloadUrl
+                        ? '来源：FileApi 签名地址（pdf_download_url）'
+                        : '来源：平台字节流代理（pdf_download_url 尚未回填，走 /bidding/notice-external/pdf）'
+                    }}
+                  </span>
+                </div>
+              </template>
+              <div v-else class="fb-pdf-empty">
+                无法预览：既无 pdf_download_url，也取不到公告 id（字节流代理需要 id）。
+                <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
+              </div>
             </div>
             <div v-else class="fb-slim">
               <p>该公告仅有简略信息（标题、发布单位、发布时间见上方），无正文、无文件。</p>
@@ -263,7 +289,7 @@ const [Modal, modalApi] = useVbenModal({
           </div>
           <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
             PDF 原文件：{{ detail.pdfSize ? `${Math.round(detail.pdfSize / 1024) } KB` : '大小未知' }}
-            <template v-if="detail.pdfDownloadUrl">｜<a :href="detail.pdfDownloadUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
+            <template v-if="pdfFrameUrl">｜<a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
             <div v-if="detail.extractionSummary" class="mt-1 text-gray-500">抽取摘要：{{ detail.extractionSummary }}</div>
           </div>
           <div class="mb-1 flex items-center gap-2 text-xs text-gray-400">
@@ -308,6 +334,12 @@ const [Modal, modalApi] = useVbenModal({
 .fb-preview-meta { display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: 12px; color: #44505c; border-top: 1px solid #eceff3; padding-top: 8px; }
 .fb-preview-meta b { font-weight: 400; color: #7a8591; margin-right: 4px; }
 .fb-body-area { background: #f3f5f7; border: 1px solid #e2e6eb; padding: 14px 18px; }
+/* PDF 内嵌预览（审核人在"前台观感"页签必须能看到最终版式件，否则会盲审） */
+.fb-pdf-panel { background: #fff; border: 1px solid #d9d3c4; padding: 8px; }
+.fb-pdf-frame { width: 100%; height: 640px; border: 1px solid #e2e6eb; background: #fff; }
+.fb-pdf-actions { display: flex; gap: 14px; align-items: center; padding: 6px 2px 0; font-size: 12px; }
+.fb-pdf-actions a { color: #17539a; text-decoration: underline; }
+.fb-pdf-actions .hint { color: #8a939d; }
 .fb-docx { background: #fff; border: 1px solid #d9d3c4; width: min(900px, 100%); margin: 0 auto; padding: 40px 60px 44px; font-family: 'FangSong_GB2312', '仿宋', 'FangSong', 'STFangsong', '华文仿宋', 'SimSun', serif; font-size: 17px; line-height: 2; color: #1c1c1c; }
 .fb-docx h1, .fb-docx h2, .fb-docx h3, .fb-docx h4, .fb-docx h5, .fb-docx h6 { font-family: 'SimHei', '黑体', 'Microsoft YaHei', sans-serif; font-weight: 700; color: #161616; margin: 20px 0 2px; line-height: 1.8; }
 .fb-docx h1 { font-size: 24px; }
