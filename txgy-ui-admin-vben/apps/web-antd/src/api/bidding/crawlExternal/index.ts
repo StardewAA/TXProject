@@ -222,6 +222,11 @@ export interface ParseAttachment {
     status?: string;
     channelCode?: string;
     url?: string;
+    /** 创建时间起 —— **必须 'yyyy-MM-dd HH:mm:ss' 字符串**：后端 @DateTimeFormat(FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)，
+     *  传 epoch 毫秒会被解析失败/忽略（此前前端只用 status/channelCode/url，该能力一直未接线）。 */
+    beginTime?: string;
+    /** 创建时间止（格式同 beginTime） */
+    endTime?: string;
   }
   /** 采集批次（CrawlJobRespVO，02 §6.3） */
   export interface JobItem {

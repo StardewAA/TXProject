@@ -13,6 +13,7 @@ import {
   message,
   Modal,
   Pagination,
+  RangePicker,
   Select,
   Tag,
 } from 'ant-design-vue';
@@ -25,6 +26,7 @@ import {
   retryCrawlTask,
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
+import { getRangePickerDefaultProps } from '#/utils/rangePickerProps';
 
 import { CHANNEL_GENERIC_TEXT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
@@ -139,8 +141,12 @@ const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ lab
 const pageView = ref<'home' | 'taskDetail'>('home');
 /** 当前选中信息源（任务器）；空=任务 tab 显示信息源卡墙 */
 const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
-/** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传） */
-const tFilter = ref<{ channelCode?: string; status?: string; url?: string }>({});
+/** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传）
+ *  2026-09-25：`range` 接线后端已支持的 beginTime/endTime —— 此前后端能按创建时间筛、界面却没入口，
+ *  出问题时无法把死信缩到某个时间窗（"接口有能力、界面不可达"）。格式必须 'YYYY-MM-DD HH:mm:ss'（后端 @DateTimeFormat）。 */
+const tFilter = ref<{ channelCode?: string; range?: [string, string]; status?: string; url?: string }>({});
+/** 快捷时间段复用全站共享预设（src/utils/rangePickerProps.ts），避免本页自造"近 7 天"口径 */
+const RANGE_PRESETS = getRangePickerDefaultProps().presets;
 const tPage = ref(1);
 const tPageSize = ref(20);
 const tTotal = ref(0);
@@ -367,6 +373,8 @@ async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise
       status: tFilter.value.status,
       channelCode: tFilter.value.channelCode,
       url: tFilter.value.url,
+      beginTime: tFilter.value.range?.[0],
+      endTime: tFilter.value.range?.[1],
     };
     const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[]; total?: number };
     tRows.value = res.list || [];
@@ -383,7 +391,7 @@ async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise
 function enterSourceTasks(src: CrawlExternalApi.SourceItem): void {
   if (!src?.sourceCode) return;
   curSource.value = src;
-  tFilter.value = { status: undefined, channelCode: undefined, url: undefined };
+  tFilter.value = { status: undefined, channelCode: undefined, url: undefined, range: undefined };
   tPage.value = 1;
   void loadTaskRows(1);
 }
@@ -768,8 +776,17 @@ const incompleteOf = (r: ManualRun) =>
             <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
             <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }]" @change="applyTaskFilter" />
             <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
+            <RangePicker
+              v-model:value="tFilter.range"
+              show-time
+              value-format="YYYY-MM-DD HH:mm:ss"
+              :presets="RANGE_PRESETS"
+              :placeholder="['创建时间起', '创建时间止']"
+              style="width: 330px"
+              @change="applyTaskFilter"
+            />
             <Button size="small" @click="applyTaskFilter">查询</Button>
-            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>
+            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined, range: undefined }; applyTaskFilter()">重置</Button>
             <span class="ml-auto text-xs font-semibold text-gray-500">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
           </div>
 
