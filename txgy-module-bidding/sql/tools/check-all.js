@@ -30,6 +30,7 @@ const CHECKS = [
   { args: ['sql/tools/check-permission-coverage.js'], name: '权限码覆盖率', why: '前端判权码必须同时在 system_menu 注册（否则无法授权 → 按钮永远不可见）' },
   { args: ['sql/tools/check-master-mirror.js'], name: '一键包镜像完整性', why: 'history 脚本内容必须真的在一键包里（否则重建会静默抹掉，新装库缺功能）' },
   { args: ['sql/tools/check-hardcoded-enums.js'], name: '枚举硬编码棘轮', why: '状态码/枚举值必须动态配置：新页面不得再写死 code→中文映射（既有欠债按文件冻结，只减不增）' },
+  { args: ['sql/tools/check-dict-permission.js'], name: '字典可读性', why: '消费字典的页面，其用户必须读得到 /bidding/meta/*（否则 403 → 中文静默变英文 code）' },
 ];
 
 const results = [];

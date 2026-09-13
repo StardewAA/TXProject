@@ -140,6 +140,23 @@ CI 与本地命令完全一致：`node txgy-module-bidding/sql/tools/check-all.j
 （`--update-baseline` 可打印新基线），文件彻底清干净后从表里删除。
 `--list` 列出每处命中的常量名与项数。
 
+## 字典可读性（check-dict-permission.js）
+
+「页面用字典」与「用它的角色读得到字典」是两件事：`/bidding/meta/dicts|configs` 的 `@PreAuthorize` 只列了
+5 个电子证照/资质/人员域权限，而这两个接口是招投标全域页面共用的前置元数据。只持有其它页面权限的角色调用会 403，
+页面**静默回落英文 code**——界面上看不出坏，只是中文变英文。
+
+判定口径：只看调用 `useCertMeta()` 的文件；其"可读性证据" = 文件内引用的 bidding 权限码 **∪ 该页面菜单的页权限**
+（从 sql 的 `system_menu` 解析 component → permission）。**只看文件内的 `can(...)` 会误判**：
+`certificate/lifecycle` 页自身只引用 `lifecycle:apply/audit`，而它的菜单页权限 `bidding:certificate:lifecycle:query`
+本就在可读集合内。两者与可读集合无交集即 FAIL；纯子组件（无权限码）跟随父页面，跳过。
+
+实测：15 个消费字典的文件 → 5 个页面自身命中、9 个子组件跟随、**1 个真缺口**（`project/index.vue`：页权限
+`bidding:project:query` 不在集合内），已登记 KNOWN_GAP 并注明契约出处
+（`docs/前端规范-全域接口说明/12-字典元数据读取权限契约-2026-09-25.md`）。
+**前端只提契约，不自行改权限**；后端放开后更新脚本常量 `META_READABLE` 并清空 `KNOWN_GAP`。
+与字典门禁同理，KNOWN_GAP 陈旧（缺口已消失）也 FAIL。
+
 ## 权限码三处一致（check-permission-coverage.js）
 
 前端 `can('bidding:xxx:yyy')` 里的码要真的可用，必须同时满足：后端接口 `@PreAuthorize` 认它、`system_menu` 注册了它。
