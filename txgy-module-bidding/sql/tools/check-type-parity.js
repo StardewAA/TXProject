@@ -27,6 +27,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const LIST = process.argv.includes('--list');
+const PAIRS = process.argv.includes('--pairs');
 const UPDATE = process.argv.includes('--update-baseline');
 const repoRoot = path.resolve(__dirname, '../../..');
 const BE_ROOT = path.join(repoRoot, 'txgy-module-bidding/txgy-module-bidding-server/src/main/java');
@@ -229,6 +230,14 @@ if (LIST) {
     console.log('        ' + p.file);
     console.log('        缺：' + p.missing.join(', '));
     if (base) console.log('        理由：' + base[1]);
+  }
+}
+
+if (PAIRS) {
+  console.log('\n--- 全部配对（VO ← 前端 interface，重合度与字段规模）---');
+  for (const p of [...pairs].sort((a, b) => a.key.localeCompare(b.key))) {
+    console.log('  ' + p.key.padEnd(58) + ' 重合' + p.ov.toFixed(2) + '  VO字段' + String(p.total).padStart(3) +
+      '  缺' + String(p.missing.length).padStart(3) + '  多' + String(p.extra.length).padStart(2) + '  ' + p.file.replace(/^txgy-ui-admin-vben\/apps\/web-antd\/src\//, ''));
   }
 }
 

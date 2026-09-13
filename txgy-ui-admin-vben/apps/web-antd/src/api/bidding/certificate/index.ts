@@ -80,7 +80,8 @@ export namespace CertificateApi {
     verificationStatus?: string;
   }
 
-  /** 建档（§2.3）：certName/certNo 必填；holderType 默认 ORG；validTo 留空=长期 */
+  /** 建档（§2.3）：certName/certNo 必填；holderType 默认 ORG；validTo 留空=长期  * 契约来源：CertificateSaveReqVO
+   */
   export interface SaveReq {
     id?: number;
     version?: number;
@@ -101,7 +102,8 @@ export namespace CertificateApi {
     remark?: string;
   }
 
-  /** 状态流转（§2.5）：targetStatus 取 dicts.cert_status；终态不可再流转 */
+  /** 状态流转（§2.5）：targetStatus 取 dicts.cert_status；终态不可再流转  * 契约来源：CertificateStatusChangeReqVO
+   */
   export interface StatusChangeReq {
     certificateId: number;
     targetStatus: string;
@@ -128,7 +130,8 @@ export namespace CertificateApi {
     createTime?: string;
   }
 
-  /** 登记文件版本（§3.1）：前置=已用 /bidding/file/upload 拿到 fileId */
+  /** 登记文件版本（§3.1）：前置=已用 /bidding/file/upload 拿到 fileId  * 契约来源：CertFileRegisterReqVO
+   */
   export interface FileRegisterReq {
     certId: number;
     fileCategory: string;
@@ -146,7 +149,8 @@ export namespace CertificateApi {
     remark?: string;
   }
 
-  /* ===================== §4 验真 ===================== */
+  /* ===================== §4 验真 =====================  * 契约来源：CertificateVerifyReqVO
+     */
   export interface VerifyReq {
     certId: number;
     /** 取 dicts.verify_channel；不传由后端按类别选默认渠道 */
@@ -190,7 +194,8 @@ export namespace CertificateApi {
     newValue?: string;
   }
 
-  /** 发起流程（§6.1）：按类型条件必填（changes / renewalType / revokeType / reviewYear…），后端逐项校验 */
+  /** 发起流程（§6.1）：按类型条件必填（changes / renewalType / revokeType / reviewYear…），后端逐项校验  * 契约来源：CertLifecycleApplyReqVO
+   */
   export interface LifecycleApplyReq {
     bizDomain: BizDomain | string;
     bizId: number;
@@ -275,7 +280,8 @@ export namespace CertificateApi {
     applyNo?: string;
   }
 
-  /** 审核流转（§6.2）：REVIEWING 受理 / APPROVED 通过 / REJECTED 驳回（驳回建议必填 remark） */
+  /** 审核流转（§6.2）：REVIEWING 受理 / APPROVED 通过 / REJECTED 驳回（驳回建议必填 remark）  * 契约来源：CertLifecycleAuditReqVO
+   */
   export interface LifecycleAuditReq {
     id: number;
     targetStatus: string;
@@ -283,7 +289,8 @@ export namespace CertificateApi {
     remark?: string;
   }
 
-  /** 生效（§6.3）：仅 APPROVED 可生效，会回写台账 */
+  /** 生效（§6.3）：仅 APPROVED 可生效，会回写台账  * 契约来源：CertLifecycleEffectReqVO
+   */
   export interface LifecycleEffectReq {
     id: number;
     version: number;

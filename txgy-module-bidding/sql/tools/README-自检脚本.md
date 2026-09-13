@@ -2,6 +2,37 @@
 
 模块 SQL 包与前端页面之间的一致性由脚本把关——它们都只做静态比对，不需要连数据库，可随时跑、可进 CI。
 
+### 事件：一次"测量后决定不建门禁"的记录 + 类型对等覆盖扩到参数类（2026-09-25）
+
+想做一道新门禁：**查询参数名 ↔ 目标接口入参 VO 对账**（起因：内部大厅的时间筛选差点被我写成
+`beginTime/endTime` 发给只认 `publishTimeStart` 的 VO——**Spring 对不认识的多余参数是静默忽略的**，
+筛选会"看着在工作、实际空转"）。按"先测量、再设门禁"的规矩先写探针，结论是**不建**：
+
+1. 写接口的参数大多通过**类型化对象**下发（`fetchXxx(params)`），不走字符串键构造，
+   能扫到的构造器参数名只有 11 个 → 门禁覆盖率极低；
+2. 唯一命中 `pageNo` 还是**我探针自己的假阳性**（字段池只扫了 bidding 模块，
+   漏掉框架层 `PageParam`）——一个当场就误报的检查，加进去只会消耗信任；
+3. 这一类风险其实**已经被既有门禁覆盖**：参数类接口 ↔ ReqVO 的双向对等检查，
+   参数名写错/凭空字段都会被反向检查抓住。
+
+> 记这一笔是为了留证据：**"没建门禁"和"没想到"看起来一样，但只有前者是判断**。
+
+测量过程本身暴露了真问题，并已修复：类型对等的覆盖**依赖"接口注释点名 VO"**——
+没点名的接口会被静默跳过。实测 12 个参数类接口没点名（`CertificateSaveReqVO`/`CertFileRegisterReqVO`/
+`CertLifecycle*ReqVO`/`NoticeSaveReqVO`/`PersonnelCertificate*ReqVO`/`SafetyGraceRegisterReqVO`/
+`KeyPostAssignmentCreateReqVO` 等）。逐个**按 controller 方法签名核对**（不是只凭字段重合度）后补上
+"契约来源"注释，覆盖随即扩大：
+
+| | 补注释前 | 补注释后 |
+|---|---|---|
+| 配对 interface | 59 | **71** |
+| 完整镜像 | 58 | **70** |
+| 既知不完整 | 1 | 1（`CrawlSourceRespVO ← SourceItem`，②类后端保留字段） |
+
+顺带给门禁加了 `--pairs`：列出**全部**配对（VO ← interface、重合度、字段规模、缺/多计数）。
+此前 `--list` 只打印有问题的配对，"某接口到底链到了哪个 VO"无从查看——排查同名接口
+（`StatusChangeReq` 在 personnel 的两个 namespace 各有一个）时当场就需要它。
+
 ### 事件：AI 复核列接线，字典覆盖率门禁当场报警（2026-09-25）
 
 外部公告管理页新增「AI 复核」列（用 `aiReviewStatus`+`aiReviewReason`+`aiReviewHitWords`+`aiReviewAt` 与

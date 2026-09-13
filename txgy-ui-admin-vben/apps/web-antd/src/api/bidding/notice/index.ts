@@ -71,7 +71,8 @@ export namespace NoticeApi {
     fields: TypeFieldMeta[];
   }
 
-  export interface SaveParams {
+  /** 公告起草/编辑入参（POST /bidding/notice/create、PUT /bidding/notice/update）；契约来源：NoticeSaveReqVO */
+export interface SaveParams {
     id?: number | string;
     noticeCode?: string;
     noticeType: string;
