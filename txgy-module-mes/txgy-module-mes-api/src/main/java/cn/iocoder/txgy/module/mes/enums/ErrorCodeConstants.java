@@ -105,6 +105,7 @@ public interface ErrorCodeConstants {
         ErrorCode MD_PRODUCT_BOM_SELF_REFERENCE = new ErrorCode(1_040_107_001, "产品不能作为自身的BOM物料");
         ErrorCode MD_PRODUCT_BOM_CIRCULAR = new ErrorCode(1_040_107_002, "BOM物料存在闭环，无法新增");
         ErrorCode MD_PRODUCT_BOM_ITEM_INVALID = new ErrorCode(1_040_107_003, "选择的 BOM 物料不属于当前产品");
+        ErrorCode MD_PRODUCT_BOM_DUPLICATE = new ErrorCode(1_040_107_004, "当前产品已配置过该 BOM 物料");
 
         // ========== MES 基础数据-产品SOP（1-040-108-000） ==========
         ErrorCode MD_PRODUCT_SOP_NOT_EXISTS = new ErrorCode(1_040_108_000, "产品SOP不存在");

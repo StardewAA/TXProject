@@ -71,7 +71,10 @@ watch(
 /** 重新挂载 schema 并按表单态控制底部确认按钮 */
 function applySchema() {
   formApi.setState({ schema: useFormSchema(formType.value) });
-  modalApi.setState({ showConfirmButton: isEditable.value });
+  modalApi.setState({
+    confirmText: '保存',
+    showConfirmButton: isEditable.value,
+  });
 }
 
 const [Modal, modalApi] = useVbenModal({
