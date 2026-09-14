@@ -83,9 +83,13 @@ class ReviewWorkflowTest {
     }
     @Test void resubmitPreservesRejectedOriginal() {
         Report r=submit();
-        Report retry=service.resubmit(2005,1L,r.id(),new Submission(META,TEXT+"修订"));
+        service.completeAiReview(2005,r.id());
+        service.manualReview(2005,2L,r.id(),new ManualReviewRequest(ManualDecision.REJECT,"请修改后重提",null));
+        Report retry=service.resubmit(2005,1L,r.id(),new Submission(META,TEXT));
         assertThat(retry.id()).isNotEqualTo(r.id());
         assertThat(service.get(2005,r.id()).text()).isEqualTo(TEXT);
+        assertThat(service.get(2005,r.id()).report().workflowStatus()).isEqualTo(WorkflowStatus.REJECTED);
+        assertThatThrownBy(()->service.resubmit(2005,99L,r.id(),new Submission(META,TEXT+"其他人")));
     }
     @Test void batchSubmissionCreatesIndependentReports() {
         List<BatchDocument> documents=List.of(

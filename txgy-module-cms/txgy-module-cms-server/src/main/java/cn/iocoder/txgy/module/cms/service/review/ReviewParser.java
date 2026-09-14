@@ -21,13 +21,25 @@ public class ReviewParser {
     private static final String WORD = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     public Parsed parse(MultipartFile file) {
-        List<Issue> issues = new ArrayList<>();
         if (file == null || file.isEmpty()) return failure("EMPTY_FILE", "文档为空，请上传正文文件");
         if (file.getSize() > MAX_BYTES) return failure("FILE_LIMIT", "文件超过25MB限制");
         String filename = Objects.toString(file.getOriginalFilename(), "").toLowerCase(Locale.ROOT);
         try (InputStream input = file.getInputStream()) {
             byte[] bytes = input.readNBytes(MAX_BYTES + 1);
             if (bytes.length > MAX_BYTES) return failure("FILE_LIMIT", "文件超过25MB限制");
+            return parse(filename, bytes);
+        } catch (Exception e) {
+            return failure("PARSE_FAILED", "文档损坏、加密、格式不匹配或解析超过限制，请提供可读原文");
+        }
+    }
+
+    /** 解析已经由可信来源下载的文档，复用上传文件的格式与安全限制。 */
+    public Parsed parse(String filename, byte[] bytes) {
+        List<Issue> issues = new ArrayList<>();
+        if (bytes == null || bytes.length == 0) return failure("EMPTY_FILE", "文档为空，请上传正文文件");
+        if (bytes.length > MAX_BYTES) return failure("FILE_LIMIT", "文件超过25MB限制");
+        filename = Objects.toString(filename, "").toLowerCase(Locale.ROOT);
+        try {
             String text;
             if (filename.endsWith(".txt")) {
                 text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)

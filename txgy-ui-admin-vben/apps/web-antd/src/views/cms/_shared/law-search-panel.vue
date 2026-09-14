@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import type { LawAnswer, LawSearchItem } from '#/api/cms/law';
+
+import { computed, nextTick, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -9,24 +11,24 @@ import {
   Button,
   Card,
   Input,
+  message,
   Pagination,
   Select,
   Spin,
   Tabs,
   Tag,
-  message,
 } from 'ant-design-vue';
 
-import type { LawAnswer, LawSearchItem } from '#/api/cms/law';
 import { answerLaw, searchLaws, suggestLaws } from '#/api/cms/law';
 
 const props = withDefaults(defineProps<{ portal?: boolean }>(), {
   portal: false,
 });
 
-const mode = ref<'answer' | 'original'>('answer');
+type SearchFeature = 'answer' | 'law' | 'standard';
+
+const feature = ref<SearchFeature>('answer');
 const keyword = ref('');
-const lawType = ref('');
 const status = ref<string>();
 const asOfDate = ref('');
 const issuingAuthority = ref('');
@@ -41,13 +43,8 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = ref(10);
 const error = ref('');
+const searchInputRef = ref<{ focus: () => void }>();
 
-const typeOptions = [
-  { label: '全部类型', value: '' },
-  { label: '法律法规', value: 'LAW' },
-  { label: '国家标准', value: 'STANDARD' },
-  { label: '政策文件', value: 'POLICY' },
-];
 const statusOptions = [
   { label: '全部效力', value: '' },
   { label: '现行有效', value: 'EFFECTIVE' },
@@ -73,8 +70,18 @@ const hotKeywords = [
 ];
 
 const hasResult = computed(() =>
-  mode.value === 'answer' ? Boolean(answer.value) : rows.value.length > 0,
+  feature.value === 'answer' ? Boolean(answer.value) : rows.value.length > 0,
 );
+
+const searchPlaceholder = computed(() => {
+  if (feature.value === 'standard') {
+    return '输入标准号、标准名称或条款，如：GB/T 23257-2017';
+  }
+  if (feature.value === 'law') {
+    return '输入法规名称、发布机关或条款关键词';
+  }
+  return '输入法规问题，如：企业安全生产的主要责任有哪些？';
+});
 
 async function run() {
   const query = keyword.value.trim();
@@ -85,7 +92,7 @@ async function run() {
   loading.value = true;
   error.value = '';
   try {
-    if (mode.value === 'answer') {
+    if (feature.value === 'answer') {
       answer.value = await answerLaw(query, 5, props.portal);
     } else {
       const result = await searchLaws(
@@ -95,7 +102,7 @@ async function run() {
           effectiveDateFrom: effectiveDateFrom.value || undefined,
           effectiveDateTo: effectiveDateTo.value || undefined,
           keyword: query,
-          lawType: (lawType.value || undefined) as any,
+          lawType: feature.value === 'standard' ? 'STANDARD' : 'LAW',
           pageNo: pageNo.value,
           pageSize: pageSize.value,
           status: (status.value || undefined) as any,
@@ -149,9 +156,12 @@ function quickSearch(value: string) {
   run();
 }
 
-function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
-  mode.value = nextMode;
-  lawType.value = nextType;
+async function switchEntry(nextFeature: SearchFeature) {
+  feature.value = nextFeature;
+  error.value = '';
+  pageNo.value = 1;
+  await nextTick();
+  searchInputRef.value?.focus();
 }
 </script>
 
@@ -166,12 +176,6 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
         </p>
 
         <div class="hero-search">
-          <Select
-            v-model:value="lawType"
-            :options="typeOptions"
-            class="hero-scope"
-            :bordered="false"
-          />
           <AutoComplete
             v-model:value="keyword"
             :options="suggestionOptions"
@@ -179,11 +183,8 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
             @select="run"
           >
             <Input
-              :placeholder="
-                mode === 'answer'
-                  ? '输入法规问题，如：企业安全生产的主要责任有哪些？'
-                  : '输入标准号、条款或法规关键词'
-              "
+              ref="searchInputRef"
+              :placeholder="searchPlaceholder"
               @press-enter="run"
             />
           </AutoComplete>
@@ -208,10 +209,14 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
     </section>
 
     <section class="quick-entry">
-      <button class="entry-card" type="button" @click="switchEntry('answer')">
-        <span class="entry-icon"
-          ><IconifyIcon icon="solar:chat-round-dots-linear"
-        /></span>
+      <button
+        :aria-pressed="feature === 'answer'"
+        :class="{ 'entry-card--active': feature === 'answer' }"
+        class="entry-card"
+        type="button"
+        @click="switchEntry('answer')"
+      >
+        <span class="entry-icon"><IconifyIcon icon="solar:chat-round-dots-linear" /></span>
         <span class="entry-copy">
           <strong>法规智能问答</strong>
           <small>基于已发布原文生成带引用的回答</small>
@@ -219,13 +224,13 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
         <span class="entry-arrow">→</span>
       </button>
       <button
+        :aria-pressed="feature === 'standard'"
+        :class="{ 'entry-card--active': feature === 'standard' }"
         class="entry-card entry-card--gold"
         type="button"
-        @click="switchEntry('original', 'STANDARD')"
+        @click="switchEntry('standard')"
       >
-        <span class="entry-icon"
-          ><IconifyIcon icon="solar:document-text-linear"
-        /></span>
+        <span class="entry-icon"><IconifyIcon icon="solar:document-text-linear" /></span>
         <span class="entry-copy">
           <strong>国家标准查询</strong>
           <small>按标准号、条款及效力状态精准检索</small>
@@ -233,13 +238,13 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
         <span class="entry-arrow">→</span>
       </button>
       <button
+        :aria-pressed="feature === 'law'"
+        :class="{ 'entry-card--active': feature === 'law' }"
         class="entry-card entry-card--blue"
         type="button"
-        @click="switchEntry('original', 'LAW')"
+        @click="switchEntry('law')"
       >
-        <span class="entry-icon"
-          ><IconifyIcon icon="solar:scale-linear"
-        /></span>
+        <span class="entry-icon"><IconifyIcon icon="solar:scale-linear" /></span>
         <span class="entry-copy">
           <strong>法律法规检索</strong>
           <small>查询现行法规、发布机关和原文依据</small>
@@ -249,17 +254,16 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
     </section>
 
     <Card :bordered="false" class="search-card">
-      <Tabs v-model:active-key="mode">
-        <Tabs.TabPane key="answer" tab="智能问答" />
-        <Tabs.TabPane key="original" tab="原文检索" />
+      <Tabs v-model:active-key="feature">
+        <Tabs.TabPane key="answer" tab="法规智能问答" />
+        <Tabs.TabPane key="standard" tab="国家标准查询" />
+        <Tabs.TabPane key="law" tab="法律法规检索" />
       </Tabs>
 
-      <div v-if="mode === 'original'" class="filters">
-        <Select
-          v-model:value="lawType"
-          :options="typeOptions"
-          placeholder="全部类型"
-        />
+      <div v-if="feature !== 'answer'" class="filters">
+        <Tag class="fixed-type-tag">
+          {{ feature === 'standard' ? '国家标准' : '法律法规' }}
+        </Tag>
         <Select
           v-model:value="status"
           :options="statusOptions"
@@ -271,9 +275,7 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
           placeholder="发布机关"
         />
         <label>查询时点 <input v-model="asOfDate" type="date" /></label>
-        <label
-          >实施日期从 <input v-model="effectiveDateFrom" type="date"
-        /></label>
+        <label>实施日期从 <input v-model="effectiveDateFrom" type="date" /></label>
         <label>至 <input v-model="effectiveDateTo" type="date" /></label>
         <Button :loading="loading" @click="run">应用筛选</Button>
       </div>
@@ -286,7 +288,7 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
     <Alert v-if="error" :message="error" show-icon type="error" />
 
     <Spin :spinning="loading">
-      <Card v-if="mode === 'answer' && answer" title="智能回答">
+      <Card v-if="feature === 'answer' && answer" title="智能回答">
         <template #extra>
           <Tag :color="answer.generated ? 'green' : 'orange'">
             {{ answer.generated ? answer.model || '已生成' : '原文降级回答' }}
@@ -312,9 +314,11 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
           >
             <div class="citation-heading">
               <strong>[{{ citation.index }}] {{ citation.title }}</strong>
-              <Tag>{{
+              <Tag>
+{{
                 citation.documentNo || citation.articleNo || '原文片段'
-              }}</Tag>
+              }}
+</Tag>
             </div>
             <p>{{ citation.quote }}</p>
             <div class="citation-meta">
@@ -323,8 +327,7 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
                 :href="citation.sourceUrl"
                 rel="noopener noreferrer"
                 target="_blank"
-                >查看官方原文</a
-              >
+                >查看官方原文</a>
             </div>
           </article>
         </div>
@@ -332,18 +335,18 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
       </Card>
 
       <Card
-        v-else-if="mode === 'original' && (hasResult || total === 0)"
-        title="原文检索结果"
+        v-else-if="feature !== 'answer' && (hasResult || total === 0)"
+        :title="
+          feature === 'standard' ? '国家标准查询结果' : '法律法规检索结果'
+        "
       >
         <div v-if="rows.length" class="result-list">
           <article v-for="row in rows" :key="row.sourceId" class="result-item">
             <div class="result-heading">
               <div>
                 <h3>{{ row.title }}</h3>
-                <span
-                  >{{ row.documentNo || '-' }} ·
-                  {{ row.articleNo || '原文片段' }}</span
-                >
+                <span>{{ row.documentNo || '-' }} ·
+                  {{ row.articleNo || '原文片段' }}</span>
               </div>
               <Tag :color="row.status === 'EFFECTIVE' ? 'green' : 'orange'">
                 {{ statusNames[row.status] || row.status }}
@@ -351,13 +354,9 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
             </div>
             <p>{{ row.content }}</p>
             <div class="citation-meta">
-              <span
-                >{{ row.issuingAuthority || '发布机关未标注' }} · 相关度
-                {{ score(row.score) }}</span
-              >
-              <a :href="row.sourceUrl" rel="noopener noreferrer" target="_blank"
-                >官方来源</a
-              >
+              <span>{{ row.issuingAuthority || '发布机关未标注' }} · 相关度
+                {{ score(row.score) }}</span>
+              <a :href="row.sourceUrl" rel="noopener noreferrer" target="_blank">官方来源</a>
             </div>
           </article>
           <Pagination
@@ -449,7 +448,7 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
 
 .hero-search {
   display: grid;
-  grid-template-columns: 138px minmax(0, 1fr) 104px;
+  grid-template-columns: minmax(0, 1fr) 104px;
   align-items: center;
   max-width: 780px;
   min-height: 54px;
@@ -460,24 +459,6 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
   border: 1px solid rgb(255 255 255 / 40%);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgb(5 15 34 / 28%);
-}
-
-.hero-scope {
-  width: 138px;
-}
-
-.hero-scope :deep(.ant-select-selector) {
-  height: 42px !important;
-  background: #f1eee7 !important;
-  border: 0 !important;
-  border-radius: 5px !important;
-  box-shadow: none !important;
-}
-
-.hero-scope :deep(.ant-select-selection-item) {
-  line-height: 42px !important;
-  color: #3d4148;
-  text-align: left;
 }
 
 .hero-keyword {
@@ -577,6 +558,19 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
 .entry-card:hover {
   box-shadow: 0 16px 32px rgb(26 43 74 / 17%);
   transform: translateY(-4px);
+}
+
+.entry-card--active {
+  border-color: rgb(201 169 97 / 78%);
+  box-shadow:
+    0 16px 34px rgb(26 43 74 / 18%),
+    0 0 0 3px rgb(201 169 97 / 14%);
+  transform: translateY(-4px);
+}
+
+.entry-card--active .entry-arrow {
+  color: #9d7d38;
+  transform: translateX(3px);
 }
 
 .entry-icon {
@@ -699,6 +693,18 @@ function switchEntry(nextMode: 'answer' | 'original', nextType = '') {
 
 .filters :deep(.ant-select) {
   width: 160px;
+}
+
+.fixed-type-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-inline: 14px;
+  margin-inline-end: 0;
+  font-weight: 600;
+  color: #8b6a25;
+  background: rgb(201 169 97 / 12%);
+  border-color: rgb(201 169 97 / 34%);
 }
 
 .filters .authority-input {
@@ -849,10 +855,6 @@ h3 {
 
   .hero-search {
     grid-template-columns: 1fr 82px;
-  }
-
-  .hero-scope {
-    display: none;
   }
 
   .quick-entry {

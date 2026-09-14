@@ -125,6 +125,21 @@ public class CmsPortalController {
         return success(reviewService.listBySubmitter(tenant(), user(), limit));
     }
 
+    @GetMapping("/submission/get")
+    @Operation(summary = "读取本人发布申请以便修改重提")
+    public CommonResult<ReviewModels.Stored> getSubmission(
+            @RequestParam @jakarta.validation.constraints.Pattern(regexp = "[a-f0-9\\-]{36}") String id) {
+        return success(reviewService.getBySubmitter(tenant(), user(), id));
+    }
+
+    @PostMapping("/submission/resubmit")
+    @Operation(summary = "修改并重新提交已被人工驳回的发布申请")
+    public CommonResult<ReviewModels.Report> resubmit(
+            @RequestParam @jakarta.validation.constraints.Pattern(regexp = "[a-f0-9\\-]{36}") String id,
+            @Valid @RequestBody ReviewModels.Submission input) {
+        return success(reviewService.resubmit(tenant(), user(), id, input));
+    }
+
     private long tenant() {
         return TenantContextHolder.getRequiredTenantId();
     }

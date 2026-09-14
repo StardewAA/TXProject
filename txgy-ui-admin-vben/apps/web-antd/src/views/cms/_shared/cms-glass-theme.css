@@ -304,12 +304,15 @@
 }
 
 .dark .cms-glass-page {
-  --cms-ink: #edf5ff;
-  --cms-muted: #94a6bf;
-  --cms-line: rgb(127 164 211 / 16%);
-  --cms-glass: rgb(19 29 44 / 66%);
-  --cms-glass-strong: rgb(21 33 50 / 82%);
-  --cms-shadow: 0 24px 68px rgb(0 0 0 / 24%);
+  --cms-ink: #18243a;
+  --cms-muted: #58677d;
+  --cms-line: rgb(79 98 124 / 17%);
+  --cms-glass: rgb(255 253 248 / 94%);
+  --cms-glass-strong: rgb(255 255 255 / 98%);
+  --cms-shadow: 0 22px 60px rgb(26 43 74 / 12%);
+
+  color: var(--cms-ink);
+  color-scheme: light;
 }
 
 .dark .cms-glass-hero {
@@ -324,15 +327,31 @@
 
 .dark .cms-glass-page .ant-card,
 .dark .cms-glass-content .ant-card {
-  border-color: rgb(124 157 199 / 13%) !important;
+  color: #26364d;
+  background: rgb(255 253 248 / 94%) !important;
+  border-color: rgb(255 255 255 / 88%) !important;
   box-shadow:
     var(--cms-shadow),
-    inset 0 1px 0 rgb(255 255 255 / 4%);
+    inset 0 1px 0 rgb(255 255 255 / 96%);
 }
 
 .dark .cms-glass-page .ant-card-head,
 .dark .cms-glass-content .ant-card-head {
-  background: rgb(255 255 255 / 2%);
+  color: #18243a;
+  background: rgb(249 246 238 / 78%);
+  border-bottom-color: rgb(93 111 137 / 16%);
+}
+
+.dark .cms-glass-page .ant-card-head-title,
+.dark .cms-glass-content .ant-card-head-title,
+.dark .cms-glass-page .ant-tabs-tab,
+.dark .cms-glass-content .ant-tabs-tab {
+  color: #536178;
+}
+
+.dark .cms-glass-content .ant-tabs-tab-active .ant-tabs-tab-btn,
+.dark .cms-glass-page .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #1a2b4a !important;
 }
 
 .dark .cms-glass-page .ant-input,
@@ -342,25 +361,63 @@
 .dark .cms-glass-content .ant-input-affix-wrapper,
 .dark .cms-glass-content .ant-select-selector,
 .dark .cms-glass-page input[type='date'] {
-  background: rgb(9 17 28 / 48%) !important;
-  border-color: rgb(130 158 193 / 18%) !important;
+  color: #26364d !important;
+  background: rgb(255 255 255 / 94%) !important;
+  border-color: rgb(96 112 135 / 24%) !important;
+}
+
+.dark .cms-glass-page .ant-input::placeholder,
+.dark .cms-glass-content .ant-input::placeholder {
+  color: #8a94a3 !important;
+}
+
+.dark .cms-glass-page .ant-select-selection-item,
+.dark .cms-glass-page .ant-select-selection-placeholder,
+.dark .cms-glass-content .ant-select-selection-item,
+.dark .cms-glass-content .ant-select-selection-placeholder,
+.dark .cms-glass-page label,
+.dark .cms-glass-content label {
+  color: #35465f;
+}
+
+.dark .cms-glass-page .ant-select-arrow,
+.dark .cms-glass-content .ant-select-arrow {
+  color: #69768a;
+}
+
+.dark .cms-glass-page .ant-tabs-tab,
+.dark .cms-glass-content .ant-tabs-tab {
+  color: #667085;
+}
+
+.dark .cms-glass-page .ant-checkbox-wrapper,
+.dark .cms-glass-content .ant-checkbox-wrapper,
+.dark .cms-glass-page .ant-pagination,
+.dark .cms-glass-content .ant-pagination {
+  color: #34445c;
 }
 
 .dark .cms-glass-page .ant-table-wrapper,
 .dark .cms-glass-content .ant-table-wrapper {
-  background: rgb(7 15 25 / 24%);
-  border-color: rgb(124 157 199 / 12%);
+  color: #26364d;
+  background: rgb(255 255 255 / 72%);
+  border-color: rgb(96 112 135 / 15%);
 }
 
 .dark .cms-glass-page .ant-table-thead > tr > th,
 .dark .cms-glass-content .ant-table-thead > tr > th {
-  color: #aabbd0;
-  background: rgb(44 65 91 / 45%) !important;
+  color: #3d4d64;
+  background: rgb(239 236 228 / 82%) !important;
+}
+
+.dark .cms-glass-page .ant-table-tbody > tr > td,
+.dark .cms-glass-content .ant-table-tbody > tr > td {
+  color: #35465f;
 }
 
 .dark .cms-glass-page .ant-table-tbody > tr:hover > td,
 .dark .cms-glass-content .ant-table-tbody > tr:hover > td {
-  background: rgb(45 91 143 / 15%) !important;
+  background: rgb(237 246 255 / 78%) !important;
 }
 
 @media (max-width: 760px) {

@@ -23,6 +23,7 @@ import static cn.iocoder.txgy.module.cms.service.review.ReviewModels.*;
 @Service
 public class ReviewService {
     private static final ErrorCode NOT_FOUND = new ErrorCode(1_041_001_000, "审查记录不存在或无权访问");
+    private static final ErrorCode RESUBMIT_NOT_ALLOWED = new ErrorCode(1_041_001_001, "只有本人提交且已被人工驳回的内容才能重新提交");
     private static final ErrorCode INVALID_EVIDENCE = new ErrorCode(1_041_001_002, "请提供官方来源、效力依据、实施日期和核验意见");
     private final ReviewRepository repository;
     private final ReviewEngine engine;
@@ -59,6 +60,12 @@ public class ReviewService {
         Stored stored = repository.get(tenant, id, false);
         if (stored == null) throw exception(NOT_FOUND);
         return normalize(stored);
+    }
+
+    public Stored getBySubmitter(long tenant, Long user, String id) {
+        Stored stored = get(tenant, id);
+        if (!Objects.equals(stored.submittedBy(), user)) throw exception(NOT_FOUND);
+        return stored;
     }
 
     public List<Report> list(long tenant, int limit) {
@@ -182,7 +189,10 @@ public class ReviewService {
 
     @Transactional(rollbackFor = Exception.class)
     public Report resubmit(long tenant, Long user, String previousId, Submission input) {
-        Stored previous = get(tenant, previousId);
+        Stored previous = getBySubmitter(tenant, user, previousId);
+        if (previous.report().workflowStatus() != WorkflowStatus.REJECTED) {
+            throw exception(RESUBMIT_NOT_ALLOWED);
+        }
         DuplicateCheckResult duplicate = checkDuplicate(tenant, input.metadata(), input.text(), previousId);
         if (duplicate.duplicate()) throw exception(REVIEW_DUPLICATE);
         String id = UUID.randomUUID().toString();
