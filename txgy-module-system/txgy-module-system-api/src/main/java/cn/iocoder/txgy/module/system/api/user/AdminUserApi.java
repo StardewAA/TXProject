@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.system.api.user;
 import cn.hutool.core.convert.Convert;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.system.enums.ApiConstants;
 import org.dromara.core.trans.anno.AutoTrans;
@@ -13,6 +14,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.Collection;
@@ -45,6 +48,18 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @GetMapping(PREFIX + "/get-by-mobile")
     @Operation(summary = "通过手机号查询用户")
     CommonResult<AdminUserRespDTO> getUserByMobile(@RequestParam("mobile") String mobile);
+
+    /**
+     * 通过手机号查询用户数组。
+     * 与 {@link #getUserByMobile(String)} 的区别：同号存在多个账号时返回列表而非抛错，避免调用方误判为「未找到」
+     */
+    @GetMapping(PREFIX + "/list-by-mobile")
+    @Operation(summary = "通过手机号查询用户数组（容忍同号多账号）")
+    CommonResult<List<AdminUserRespDTO>> getUserListByMobile(@RequestParam("mobile") String mobile);
+
+    @PostMapping(PREFIX + "/create")
+    @Operation(summary = "创建用户", description = "用于培训学员自动开户等场景；密码为空时使用系统「初始密码」配置")
+    CommonResult<Long> createUser(@RequestBody AdminUserCreateReqDTO reqDTO);
 
     @GetMapping(PREFIX + "/list-by-subordinate")
     @Operation(summary = "通过用户 ID 查询用户下属")
