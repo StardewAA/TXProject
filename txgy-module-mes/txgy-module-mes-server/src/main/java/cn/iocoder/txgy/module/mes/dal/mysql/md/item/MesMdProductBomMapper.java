@@ -25,6 +25,12 @@ public interface MesMdProductBomMapper extends BaseMapperX<MesMdProductBomDO> {
                 .orderByDesc(MesMdProductBomDO::getId));
     }
 
+    default MesMdProductBomDO selectByUnique(Long itemId, Long bomItemId) {
+        return selectOne(new LambdaQueryWrapperX<MesMdProductBomDO>()
+                .eq(MesMdProductBomDO::getItemId, itemId)
+                .eq(MesMdProductBomDO::getBomItemId, bomItemId));
+    }
+
     default List<MesMdProductBomDO> selectByItemId(Long itemId) {
         return selectList(MesMdProductBomDO::getItemId, itemId);
     }
