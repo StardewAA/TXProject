@@ -107,6 +107,31 @@ export namespace MesHomeApi {
     defectTopList: { name: string; quantity: number }[]; // 缺陷 TOP N 列表
   }
 
+  /** MES 生产交付达成分析 */
+  export interface DeliveryAnalysis {
+    totalCount: number; // 近 N 天完成工单数
+    onTimeCount: number; // 按期完成数
+    overdueCount: number; // 超期完成数
+    onTimeRate: number; // 按期完成率（%）
+    overdueOpenCount: number; // 在制超期数（交付风险预警）
+    avgOverdueDays: number; // 超期工单平均延期天数
+  }
+
+  /** MES 人员报工产出分析 */
+  export interface FeedbackUserAnalysis {
+    userCount: number; // 参与报工人数
+    totalQuantity: number; // 报工总量
+    qualifiedQuantity: number; // 合格品总量
+    passRate: number; // 合格率（%）
+    topList: {
+      // 报工人产出 TOP N
+      userId: number;
+      userName: string;
+      recordCount: number;
+      qualifiedQuantity: number;
+    }[];
+  }
+
   /** MES 生产趋势 */
   export interface ProductionTrend {
     date: string; // 日期
@@ -171,6 +196,22 @@ export function getCheckMainten(days?: number) {
 export function getDefectAnalysis(days?: number) {
   return requestClient.get<MesHomeApi.DefectAnalysis>(
     '/mes/home-statistics/defect-analysis',
+    { params: { days } },
+  );
+}
+
+/** 获得生产交付达成分析 */
+export function getDeliveryAnalysis(days?: number) {
+  return requestClient.get<MesHomeApi.DeliveryAnalysis>(
+    '/mes/home-statistics/delivery-analysis',
+    { params: { days } },
+  );
+}
+
+/** 获得人员报工产出分析 */
+export function getFeedbackUserAnalysis(days?: number) {
+  return requestClient.get<MesHomeApi.FeedbackUserAnalysis>(
+    '/mes/home-statistics/feedback-user-analysis',
     { params: { days } },
   );
 }
