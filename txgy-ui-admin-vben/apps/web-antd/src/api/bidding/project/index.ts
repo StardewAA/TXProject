@@ -33,6 +33,7 @@ export namespace ProjectApi {
     remark?: string;
     /** ProjectVO 数据集全量字段（key=规范英文名，缺失补 null） */
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -61,6 +62,7 @@ export namespace ProjectApi {
     state?: State | string;
     remark?: string;
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -87,6 +89,7 @@ export namespace ProjectApi {
     state?: State | string;
     remark?: string;
     fields?: Record<string, unknown>;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: number;
   }
 
@@ -124,18 +127,82 @@ export namespace ProjectApi {
     tenderProjectCode?: string;
     publishTime?: number;
   }
-  export interface Trace {
+  /* 以下四个子项原先被声明为 Record<string, unknown>（不透明袋子），于是"后端返回了清单、前端只显示条数"
+   * 这类缺口既不报错也无人察觉（审计脚本按字段名比对时也看不出前端到底渲染了什么）。
+   * 这里逐字对齐 ProjectTraceRespVO 的嵌套类，让每个字段名都在前端出现，缺口无处可藏。  * 契约来源：ProjectTraceRespVO.ExternalNoticeItem（嵌套类）
+   */
+  export interface TraceExternalNotice {
+    id?: number;
+    title?: string;
+    sourceCode?: string;
+    sourceName?: string;
+    contentType?: string;
+    status?: string;
+    auditStatus?: string;
+    origUrl?: string;
+    projectCode?: string;
+    tenderProjectCode?: string;
+    bidSectionCodes?: string;
+    /** epoch 毫秒 */
+    publishTime?: null | number;
+    /** 平台详情可达（ACTIVE 才可在平台内打开） */
+    available?: boolean;
+  }
+  /** 契约来源：ProjectTraceRespVO.FilingItem（嵌套类） */
+export interface TraceFiling {
+    id?: number;
+    filingType?: string;
+    projectCode?: string;
+    tenderProjectCode?: string;
+    status?: string;
+    /** epoch 毫秒 */
+    submitTime?: null | number;
+  }
+  /** 契约来源：ProjectTraceRespVO.FollowItem（嵌套类） */
+export interface TraceFollow {
+    id?: number;
+    followType?: string;
+    followKey?: string;
+    displayName?: string;
+    followStatus?: string;
+    /** epoch 毫秒 */
+    latestDynamicTime?: null | number;
+    unreadCount?: number;
+  }
+  export interface TraceSubject {
+    /** TENDER_PROJECT_SNAPSHOT=招标项目主档快照 / TENANT_AUTH=本租户平台授权主体 */
+    source?: string;
+    subjectRole?: string;
+    subjectName?: string;
+    codeType?: string;
+    code?: string;
+    authStatus?: string;
+    profileComplete?: boolean;
+  }
+  /** 追溯统计（ProjectTraceRespVO.Stats） */
+  export interface TraceStats {
+    tenderProjectCount?: number;
+    sectionCount?: number;
+    noticeCount?: number;
+    externalNoticeCount?: number;
+    filingCount?: number;
+    followCount?: number;
+    /** 各域最近动态时间（epoch 毫秒，无则 null） */
+    latestDynamicTime?: null | number;
+  }
+  /** 契约来源：ProjectTraceRespVO */
+export interface Trace {
     queryCode?: string;
     queryType?: 'BID_SECTION' | 'PROJECT' | 'TENDER_PROJECT';
     project?: Project;
     tenderProjects?: TenderProject[];
     sections?: BidSection[];
     notices?: TraceNotice[];
-    externalNotices?: Array<Record<string, unknown>>;
-    filings?: Array<Record<string, unknown>>;
-    follows?: Array<Record<string, unknown>>;
-    subjects?: Array<Record<string, unknown>>;
-    stats?: Record<string, number>;
+    externalNotices?: TraceExternalNotice[];
+    filings?: TraceFiling[];
+    follows?: TraceFollow[];
+    subjects?: TraceSubject[];
+    stats?: TraceStats;
   }
 }
 

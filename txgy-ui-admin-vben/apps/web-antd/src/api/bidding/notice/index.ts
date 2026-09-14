@@ -25,7 +25,8 @@ export namespace NoticeApi {
     ARCHIVED: '已归档',
   };
 
-  export interface Row {
+  /** 契约来源：NoticeRespVO（GET /bidding/notice/page|public/list 行） */
+export interface Row {
     id: number | string;
     noticeCode?: string;
     noticeType?: string;
@@ -47,6 +48,7 @@ export namespace NoticeApi {
     payload?: Record<string, unknown>;
     pdfFileId?: number | string;
     pdfSha256?: string;
+    /** 公告 PDF 原文件大小（字节） */
     pdfSize?: number;
   }
 
@@ -58,20 +60,23 @@ export namespace NoticeApi {
     projectCode?: string;
   }
 
-  /** 类型字段模板元数据（GET /bidding/notice/meta/types，2026-09-10 后端新增）：按类型渲染字段表单 */
+  /** 类型字段模板元数据（GET /bidding/notice/meta/types，2026-09-10 后端新增）：按类型渲染字段表单  * 契约来源：NoticeTypeMetaRespVO.FieldMeta（嵌套类）
+   */
   export interface TypeFieldMeta {
     code: string;
     label: string;
     required: boolean;
   }
-  export interface NoticeTypeMeta {
+  /** 契约来源：NoticeTypeMetaRespVO */
+export interface NoticeTypeMeta {
     type: NoticeTypeCode;
     name: string;
     dataset?: string;
     fields: TypeFieldMeta[];
   }
 
-  export interface SaveParams {
+  /** 公告起草/编辑入参（POST /bidding/notice/create、PUT /bidding/notice/update）；契约来源：NoticeSaveReqVO */
+export interface SaveParams {
     id?: number | string;
     noticeCode?: string;
     noticeType: string;
@@ -86,6 +91,7 @@ export namespace NoticeApi {
     content?: string;
     pdfFileId?: number | string;
     pdfSha256?: string;
+    /** 公告 PDF 原文件大小（字节） */
     pdfSize?: number;
   }
 }
@@ -121,4 +127,53 @@ export function fetchNoticeTypeMeta() {
 /** 契约：DELETE /bidding/notice/delete —— 逻辑删除公告（仅草稿/已撤下态，发布/归档禁删，后端状态守卫）；权限 bidding:notice:delete；依据 04-全链路 §1.9 / 08 口径 §3、§8 */
 export function deleteNotice(id: number | string) {
   return requestClient.delete<boolean>('/bidding/notice/delete', { params: { id } });
+}
+
+/* ================= 检索索引与公开同步（NoticeController 运维端点） ================= */
+
+/**
+ * 重建公告检索索引（POST /bidding/notice/reindex；权限 bidding:notice:update）。
+ * 返回后端生成的一句话结果（并发重建由后端幂等/串行化处理），页面直接展示即可。
+ */
+export function reindexNotices() {
+  return requestClient.post<string>('/bidding/notice/reindex');
+}
+
+/** 全量重建公告检索索引（POST /bidding/notice/reindex-all；权限 bidding:notice:update） */
+export function reindexAllNotices() {
+  return requestClient.post<string>('/bidding/notice/reindex-all');
+}
+
+/** 标段投标截止时间（NoticeDeadlineRespVO；后端已给格式化字符串，前端不再自行推导） */
+export interface NoticeDeadline {
+  bidSectionCode?: string;
+  noticeCode?: string;
+  noticeType?: string;
+  fileIssueTime?: string;
+  clarifyDeadline?: string;
+  submitDeadline?: string;
+  bidOpenTime?: string;
+}
+
+/** 截止时间查询（GET /bidding/notice/exchange/deadline；权限 bidding:notice:query；契约 BID-ENT-NOTICE-02） */
+export function getBidDeadline(bidSectionCode: string) {
+  return requestClient.get<NoticeDeadline>('/bidding/notice/exchange/deadline', { params: { bidSectionCode } });
+}
+
+/** 公开同步入参（NoticePublicSyncReqVO）：bizNo 为业务单号；dataTimestamp 留空由服务端取当前时间 */
+export interface PublicSyncReq {
+  bizNo: string;
+  /** LocalDateTime；本页不提交该字段（请求侧时间格式未在契约中约定），需要回填历史时间戳请走脚本 */
+  dataTimestamp?: null | number | string;
+}
+
+/** 公开同步回执（NoticePublicSyncRespVO） */
+export interface PublicSyncResp {
+  taskNo?: string;
+  status?: string;
+}
+
+/** 公告公开同步：公告 → 归集 → 检索文档（POST /bidding/notice/exchange/gather-sync；权限 bidding:notice:update，后端 @Idempotent） */
+export function syncNoticePublic(data: PublicSyncReq) {
+  return requestClient.post<PublicSyncResp>('/bidding/notice/exchange/gather-sync', data);
 }

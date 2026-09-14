@@ -28,6 +28,8 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
+import { fmtBytes } from '#/utils/format';
+
 import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
 
 export interface HtmlAttachment {
@@ -72,12 +74,8 @@ function fmtDateTime(v?: null | number | string): string {
   if (Number.isNaN(+d)) return fmtFieldValue(v);
   return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
 }
-const fmtBytes = (n?: null | number): string => {
-  if (n === undefined || n === null) return '';
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(2) + ' MB';
-};
+/** 本页空值留白（公告正文里的附件清单，没有大小就不显示单位占位） */
+const sizeText = (n?: null | number): string => fmtBytes(n, '');
 /** 公告生命周期文案/色板（管理端可见草稿/撤下/归档；大厅只读只展示 PUBLISHED）。
  * 契约：08 §3 状态机 DRAFT→PUBLISHED→UNPUBLISHED→(再发布)；ARCHIVED=归档终态；管理态字段仅管理端详情下发。 */
 const statusText: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', UNPUBLISHED: '已撤下', ARCHIVED: '已归档' };
@@ -172,19 +170,22 @@ const publicReadable = computed(() => !props.detail?.internalFlag && props.detai
 
     <!-- ⑤ L1 版式 PDF + L2 附件：下载地址由业务系统按公开性签发（前端零拼接）；
          依据：10号令 第12/13条（部门规章/政府文件，免费查阅与归类检索）、电子办法 第9条（部门规章/政府文件）；
-         契约：docs/公告发布… §三 L1/L2；外部公告附件病毒扫描 CLEAN 后放行（R-3 后端缺口待补）。 -->
+         契约：docs/公告发布… §三 L1/L2；外部公告附件病毒扫描 CLEAN 后放行 —— **后端已实现**
+         （NoticeExternalServiceImpl：INFECTED 一律不下发链接、逐条下发 virusStatus，前端据此显示"已拦截/扫描中"）；
+         仍在的缺口是签名下载地址：后端注释为"FileApi 签名 downloadUrl 待 infra 文件下载能力接入后回填（TODO）"，
+         故此处 pdfDownloadUrl 为空时只给提示、不拼链接。 -->
     <section v-if="detail?.pdfFileId || detail?.attachments?.length" class="nh-sec">
       <div class="nh-sec-t">版式文件与公告附件</div>
       <ul class="nh-files">
         <li v-if="detail?.pdfFileId" class="nh-file">
           <span class="doc">公告版式文件（PDF）</span>
-          <span class="meta mono">file_id #{{ detail.pdfFileId }}<template v-if="detail?.pdfSize"> · {{ fmtBytes(detail.pdfSize) }}</template></span>
+          <span class="meta mono">file_id #{{ detail.pdfFileId }}<template v-if="detail?.pdfSize"> · {{ sizeText(detail.pdfSize) }}</template></span>
           <a v-if="detail?.pdfDownloadUrl" class="dl" :href="detail.pdfDownloadUrl" target="_blank" rel="noopener">{{ publicReadable ? '免费查阅下载 ↗' : '查阅 ↗' }}</a>
           <span v-else class="tip">{{ publicReadable ? '（公开公告可免费查阅；下载地址由业务系统签发后开放）' : '（企业内部公告，仅本租户可见）' }}</span>
         </li>
         <li v-for="a in detail?.attachments || []" :key="String(a.id ?? a.fileId)" class="nh-file">
           <span class="doc">{{ a.kind === 'PDF' ? 'PDF 附件' : '附件' }} {{ a.name || '（未命名）' }}</span>
-          <span class="meta mono">{{ fmtBytes(a.size) }}</span>
+          <span class="meta mono">{{ sizeText(a.size) }}</span>
           <a v-if="a.downloadUrl" class="dl" :href="a.downloadUrl" target="_blank" rel="noopener">下载 ↗</a>
           <span v-else class="tip">（附件下载地址由业务系统按公开性签发；外部公告附件需病毒扫描 CLEAN 后放行）</span>
         </li>

@@ -19,7 +19,8 @@ export namespace ProcessTrackApi {
     | 'REJECT'
     | 'UPLOAD_DOCUMENT';
 
-  /** 我的关注行（后端 notice-follow 真实接口，作为“意向建档”数据源） */
+  /** 我的关注行（后端 notice-follow 真实接口，作为“意向建档”数据源）  * 契约来源：FollowItemRespVO
+   */
   export interface FollowItem {
     id?: number | string;
     followType?: string;
@@ -29,7 +30,22 @@ export namespace ProcessTrackApi {
     stageCode?: string;
     stageName?: string;
     followTime?: string;
-  }
+    /** 关注对象基础信息快照 JSON
+   *  契约来源：FollowItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  baseJson?: string;
+  /** 最近动态时间（LocalDateTime → epoch 毫秒）
+   *  契约来源：FollowItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  latestDynamicTime?: null | number | string;
+  /** 未读动态条数
+   *  契约来源：FollowItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  unreadCount?: number;
+  /** 公告状态（关注对象为公告时下发）
+   *  契约来源：FollowItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  noticeStatus?: string;
+  /** 对象是否仍可用/可访问
+   *  契约来源：FollowItemRespVO——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  available?: boolean;
+}
 
   /** 页面行/本地跟踪（契约 §3 未来字段对齐） */
   export interface Track {
@@ -54,6 +70,7 @@ export namespace ProcessTrackApi {
     biddedTime?: number;
     terminatedTime?: number;
     events: TrackEvent[];
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime: number;
   }
 

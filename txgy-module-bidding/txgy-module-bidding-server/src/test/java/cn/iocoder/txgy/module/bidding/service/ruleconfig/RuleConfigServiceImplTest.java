@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -227,7 +228,21 @@ class RuleConfigServiceImplTest {
 
     @Test
     void sqlSeed_matchesCodeFallbacks() throws Exception {
-        Path sql = Path.of("..", "sql", "2026-09-16-rule-config-center.sql");
+        // 规范出处：本次 SQL 收敛（电子资质域 16 个增量脚本合并进 master-credential-sync.sql，原文件归档 sql/history/）。
+        // 为什么这样写：种子一致性门禁不能因为"文件搬家"失效，故按 归档脚本 → 合并包 → 旧路径 顺序解析；
+        //   合并包包含同一批种子文本，指向它可额外保证"种子确实进了新环境一键包"。
+        // 业务目标：无论脚本怎么整理，代码兜底默认值与 SQL 种子必须始终一致，门禁始终有效。
+        Path sql = null;
+        for (Path candidate : new Path[]{
+                Path.of("..", "sql", "history", "2026-09-16-rule-config-center.sql"),
+                Path.of("..", "sql", "master-credential-sync.sql"),
+                Path.of("..", "sql", "2026-09-16-rule-config-center.sql")}) {
+            if (Files.exists(candidate)) {
+                sql = candidate;
+                break;
+            }
+        }
+        assertNotNull(sql, "未找到规则配置 DDL/种子脚本（已尝试 sql/history/ 与 sql/master-credential-sync.sql）");
         assertTrue(Files.exists(sql), "未找到规则配置 DDL/种子脚本，无法校验默认值一致性：" + sql.toAbsolutePath());
         String text = Files.readString(sql);
         // 去掉引号后比对，规避 SQL 单引号与 JSON 双引号的转义差异

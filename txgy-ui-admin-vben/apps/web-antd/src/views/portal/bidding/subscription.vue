@@ -10,6 +10,8 @@
   页面文案口径遵循 02 §5（维度/阶段/事件类型标签）。
 -->
 <script lang="ts" setup>
+import type { FollowEvent, FollowItem } from './types';
+
 import { computed, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -20,8 +22,7 @@ import {
   openOrigUrl,
   unfollowTarget,
 } from './api';
-import { fmtDT, stageNameOf, eventSourceText, eventTypeText, followTypeName } from './format';
-import type { FollowEvent, FollowItem } from './types';
+import { eventSourceText, eventTypeText, fmtDT, followTypeName, stageNameOf } from './format';
 
 const router = useRouter();
 
@@ -231,13 +232,13 @@ function openEvent(event: FollowEvent): void {
   openOrigUrl(event.origUrl);
 }
 
-const pagerNums = (cur: number, last: number): (number | '…')[] => {
-  const nums: (number | '…')[] = [];
+const pagerNums = (cur: number, last: number): ('…' | number)[] => {
+  const nums: ('…' | number)[] = [];
   const push = (n: number) => nums.push(n);
   push(1);
   for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) push(i);
   if (last > 1) push(last);
-  const out: (number | '…')[] = [];
+  const out: ('…' | number)[] = [];
   nums.forEach((n, i) => {
     const prev = nums[i - 1];
     if (typeof n === 'number' && typeof prev === 'number' && n - prev > 1) out.push('…');
@@ -335,7 +336,9 @@ onMounted(() => {
               v-if="r.followType === 'ANNOUNCEMENT' && r.available !== false && r.followKey && /^\d+$/.test(String(r.followKey))"
               class="mini primary"
               @click="goDetail(r)"
-            >公告详情</button>
+            >
+公告详情
+</button>
             <button class="mini" @click="openItem(r)">动态</button>
             <button class="mini" :disabled="!r.unreadCount" @click="markReadFromList(r)">已读</button>
             <button class="mini danger" @click="doUnfollow(r)">取消关注</button>
@@ -344,16 +347,22 @@ onMounted(() => {
       </div>
 
       <div class="pager" v-if="listTotalPages > 1">
-        <span class="pg kbd-btn" :class="{ off: listState.pageNo === 1 }" role="button" tabindex="0"
+        <span
+class="pg kbd-btn" :class="{ off: listState.pageNo === 1 }" role="button" tabindex="0"
           @click="listState.pageNo > 1 && goListPage(listState.pageNo - 1)"
-          @keydown.enter="listState.pageNo > 1 && goListPage(listState.pageNo - 1)">‹</span>
-        <span v-for="(p, i) in pagerNums(listState.pageNo, listTotalPages)" :key="i" class="pg kbd-btn"
+          @keydown.enter="listState.pageNo > 1 && goListPage(listState.pageNo - 1)"
+>‹</span>
+        <span
+v-for="(p, i) in pagerNums(listState.pageNo, listTotalPages)" :key="i" class="pg kbd-btn"
           :class="{ on: p === listState.pageNo, dot: p === '…' }" role="button" tabindex="0"
           @click="typeof p === 'number' && goListPage(p)"
-          @keydown.enter="typeof p === 'number' && goListPage(p)">{{ p }}</span>
-        <span class="pg kbd-btn" :class="{ off: listState.pageNo === listTotalPages }" role="button" tabindex="0"
+          @keydown.enter="typeof p === 'number' && goListPage(p)"
+>{{ p }}</span>
+        <span
+class="pg kbd-btn" :class="{ off: listState.pageNo === listTotalPages }" role="button" tabindex="0"
           @click="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)"
-          @keydown.enter="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)">›</span>
+          @keydown.enter="listState.pageNo < listTotalPages && goListPage(listState.pageNo + 1)"
+>›</span>
       </div>
     </template>
 
@@ -380,7 +389,9 @@ onMounted(() => {
           v-if="timelineState.item && timelineState.item.followType === 'ANNOUNCEMENT' && timelineState.item.available !== false && timelineState.item.followKey && /^\d+$/.test(String(timelineState.item.followKey))"
           class="btn"
           @click="goDetail(timelineState.item)"
-        >查看公告详情 →</button>
+        >
+查看公告详情 →
+</button>
       </div>
 
       <div v-else class="tl-list">
@@ -400,23 +411,31 @@ onMounted(() => {
               v-if="showEventDetail(e)"
               class="mini primary"
               @click="openEvent(e)"
-            >查看公告详情</button>
+            >
+查看公告详情
+</button>
             <button v-if="e.origUrl && e.source === 'EXTERNAL'" class="mini" @click="openOrigUrl(e.origUrl)">源站原文 ↗</button>
           </div>
         </div>
       </div>
 
       <div class="pager" v-if="totalPages > 1">
-        <span class="pg kbd-btn" :class="{ off: timelineState.pageNo === 1 }" role="button" tabindex="0"
+        <span
+class="pg kbd-btn" :class="{ off: timelineState.pageNo === 1 }" role="button" tabindex="0"
           @click="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)"
-          @keydown.enter="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)">‹</span>
-        <span v-for="(p, i) in pagerNums(timelineState.pageNo, totalPages)" :key="i" class="pg kbd-btn"
+          @keydown.enter="timelineState.pageNo > 1 && goTimelinePage(timelineState.pageNo - 1)"
+>‹</span>
+        <span
+v-for="(p, i) in pagerNums(timelineState.pageNo, totalPages)" :key="i" class="pg kbd-btn"
           :class="{ on: p === timelineState.pageNo, dot: p === '…' }" role="button" tabindex="0"
           @click="typeof p === 'number' && goTimelinePage(p)"
-          @keydown.enter="typeof p === 'number' && goTimelinePage(p)">{{ p }}</span>
-        <span class="pg kbd-btn" :class="{ off: timelineState.pageNo === totalPages }" role="button" tabindex="0"
+          @keydown.enter="typeof p === 'number' && goTimelinePage(p)"
+>{{ p }}</span>
+        <span
+class="pg kbd-btn" :class="{ off: timelineState.pageNo === totalPages }" role="button" tabindex="0"
           @click="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)"
-          @keydown.enter="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)">›</span>
+          @keydown.enter="timelineState.pageNo < totalPages && goTimelinePage(timelineState.pageNo + 1)"
+>›</span>
       </div>
     </template>
   </div>

@@ -9,7 +9,8 @@ import { requestClient } from '#/api/request';
  *  口径：riskFlag=null 表示"未评估、不阻断"；blocked 命中 safety.abc.block.flags 时为硬阻断。
  *  说明：本文件只做接口封装，不做本地缓存；页面按需自行决定是否缓存（建议 60s + 提交前强制重取）。 */
 export namespace SafetyPermitApi {
-  /** #1 风险状态（GET /bidding/safety-permit/risk） */
+  /** #1 风险状态（GET /bidding/safety-permit/risk）  * 契约来源：SafetyPermitRiskRespVO
+   */
   export interface Risk {
     permitId?: number;
     entId?: number;
@@ -31,7 +32,8 @@ export namespace SafetyPermitApi {
     riskEvaluatedAt?: null | string;
   }
 
-  /** #3 风险快照（含哈希链，审计可比对） */
+  /** #3 风险快照（含哈希链，审计可比对）  * 契约来源：RiskSnapshotRespVO
+   */
   export interface RiskSnapshot {
     id: number;
     riskFlag?: string;
@@ -51,52 +53,100 @@ export namespace SafetyPermitApi {
     prevHash?: string;
   }
 
-  /** #4 整改宽限登记（原因须在 safety.abc.grace.reason.whitelist 内，天数不得超配置上限） */
+  /** #4 整改宽限登记（原因须在 safety.abc.grace.reason.whitelist 内，天数不得超配置上限）  * 契约来源：SafetyGraceRegisterReqVO
+   */
   export interface GraceRegisterReq {
     permitId?: number;
     entId?: number;
     reason: string;
     sourceRef?: string;
+    /** 宽限天数（天；留空=取配置默认值） */
     days?: number;
     remark?: string;
   }
 
-  /** #5 多岗兼任校验 */
+  /** #5 多岗兼任校验  * 契约来源：MultiPostCheckRespVO
+   */
   export interface MultiPostCheck {
     pass?: boolean;
     requiredCertType?: null | string;
     requiredCertSubType?: null | string;
     matchedCertId?: null | number;
     failReason?: null | string;
-    checkedAt?: null | string;
+    checkedAt?: null | number | string;
   }
 
-  /** #6 人员风险（不自动拒绝，仅提示留痕） */
+  /** #6 人员风险（不自动拒绝，仅提示留痕）  * 契约来源：PersonRiskRespVO
+   */
   export interface PersonRisk {
     personId?: number;
     /** 字典 person_risk_flag（NORMAL/ABNORMAL/FREQUENT） */
     personRiskFlag?: null | string;
     jobChangeCount12m?: number;
-    jobChangeWindowStart?: null | string;
+    jobChangeWindowStart?: null | number | string;
     abnormal?: boolean;
-    personRiskEvaluatedAt?: null | string;
+    personRiskEvaluatedAt?: null | number | string;
   }
 
   /** #7 项目关键岗位变更超限 */
   export interface KeyPostChanges {
     projectId?: number;
+    /** 统计窗口（天） */
     windowDays?: number;
-    windowStart?: null | string;
+    windowStart?: null | number | string;
     anyExceeded?: boolean;
     items?: Array<{
       changeCount?: number;
       exceeded?: boolean;
-      lastChangeDate?: null | string;
+      lastChangeDate?: null | number | string;
       personIds?: number[];
       postCode?: string;
       postLabel?: string;
       threshold?: number;
     }>;
+  }
+
+  /** #7b 关键岗位任职/变更登记（自动闭合上任任期；达阈值当场提示挂靠嫌疑）  * 契约来源：KeyPostAssignmentCreateReqVO
+   */
+  export interface KeyPostAssignmentReq {
+    projectId: number;
+    postCode: string;
+    personId: number;
+    /** 任职开始日 'YYYY-MM-DD'；留空 = 后端取今天 */
+    startAt?: null | string;
+    /** 变更原因（留痕，便于申诉时说明） */
+    changeReason?: string;
+  }
+
+  /* 出参逐字对齐后端 KeyPostAssignmentRespVO —— 后端把"窗口内变更次数 / 阈值 / 是否超阈值 / 原任职人"
+   * 一起回传，是为了让前端在**保存成功的同一屏**给出挂靠嫌疑结论（该 VO 的 Javadoc 明确写了这个口径：
+   * "若让前端保存后再调一次统计接口，会出现保存成功但提示闪烁/失败的中间态"）。
+   * 教训：本类型此前只声明了 7 个字段，漏掉下面 7 个风险字段 —— 类型不全会让"后端算了风险、前端根本没接"
+   * 这类缺口在编译期完全静默（vue-tsc 一旦补齐类型即可当场暴露）。 */
+  export interface KeyPostAssignmentResp {
+    id?: number;
+    projectId?: number;
+    postCode?: string;
+    postLabel?: string;
+    personId?: number;
+    /** LocalDate → 'YYYY-MM-DD' */
+    startAt?: null | string;
+    /** 该岗位第几次变更（首次任职为 1） */
+    changeSeq?: number;
+    /** 被本次变更结束任期的上一位人员（首次任职为空）；前端解析成姓名后展示 */
+    previousPersonId?: null | number;
+    /** 上一位人员的任期结束日（= 本次任职开始日；首次任职为空）LocalDate → 'YYYY-MM-DD' */
+    previousEndAt?: null | string;
+    /** 统计窗口天数（配置中心 project.key.post.change.window.days） */
+    windowDays?: number;
+    /** 统计窗口起点 LocalDate → 'YYYY-MM-DD' */
+    windowStart?: null | string;
+    /** 窗口内该岗位变更次数（含本次；首次任职算 0） */
+    windowChangeCount?: number;
+    /** 变更次数阈值（配置中心 project.key.post.change.threshold） */
+    threshold?: number;
+    /** 是否已达阈值（true = 前端应提示挂靠嫌疑） */
+    exceeded?: boolean;
   }
 }
 
@@ -144,4 +194,12 @@ export function getProjectKeyPostChanges(projectId: number | string, windowDays?
   return requestClient.get<SafetyPermitApi.KeyPostChanges>('/bidding/safety-permit/project/key-post-changes', {
     params: { projectId, windowDays },
   });
+}
+
+/** #7b 登记关键岗位任职/变更（@Idempotent；后端自动闭合上任任期，达阈值当场提示挂靠嫌疑，待办由 Job 产出） */
+export function assignKeyPost(data: SafetyPermitApi.KeyPostAssignmentReq) {
+  return requestClient.post<SafetyPermitApi.KeyPostAssignmentResp>(
+    '/bidding/safety-permit/project/key-post-assignment',
+    data,
+  );
 }

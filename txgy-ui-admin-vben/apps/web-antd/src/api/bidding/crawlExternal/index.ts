@@ -5,19 +5,27 @@ import { requestClient } from '#/api/request';
 /** 契约来源：爬虫任务工作台-前后端契约-2026-09-07（父仓 docs/bidding-notice-external/）+ 04-全链路接口说明 §5 采集管理域 + 06-接口完全对照 §1；解析器端点复用 crawl-source 权限（见 06 对照 §1）。 */
 export namespace CrawlExternalApi {
 // ===== 解析器（手动录入/测试链路，02 契约 §1.3 / §3.2） =====
-  export interface ParserInfo {
+  /** 契约来源：CrawlParserInfoRespVO */
+export interface ParserInfo {
     code?: string;
     name?: string;
     description?: string;
     supportedTypes?: string[];
   }
-  export interface ParseAttachment {
+  /** 契约来源：CrawlParseTestRespVO.Attachment（嵌套类） */
+export interface ParseAttachment {
     name?: string;
     url?: string;
+    /** 链接是否未绝对化（缺来源 URL 时 true）——下载器阶段会拿不到绝对地址，是"解析规则/源配置需校准"的信号 */
+    urlIncomplete?: boolean;
   }
   export interface ParseEntry {
     title?: string;
     url?: string;
+    /** 日期（yyyy-MM-dd） */
+    date?: string;
+    /** 栏目/类型提示 */
+    category?: string;
   }
   /** 解析测试回执（CrawlParseTestRespVO）——手动录入即真实解析一次 */
   export interface ParseTestResp {
@@ -27,6 +35,7 @@ export namespace CrawlExternalApi {
     fileName?: string;
     url?: string;
     contentLength?: number;
+    /** 耗时（毫秒） */
     durationMs?: number;
     status?: string;
     error?: string;
@@ -53,7 +62,8 @@ export namespace CrawlExternalApi {
   }
 
 
-  /** 采集源（CrawlSourceRespVO，02 §6.1） */
+  /** 采集源（CrawlSourceRespVO，02 §6.1）  * 契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）
+   */
   export interface SourceItem {
     /** 主键（雪花 Long；后端超 2^53 序列化为字符串，兼容两者） */
     id?: number | string;
@@ -68,14 +78,58 @@ export namespace CrawlExternalApi {
     /** API 源配置 JSON（fetch_type=API 时：method/url/headers/params/page/rowsPath/fieldMapping/envelope） */
     apiConfigJson?: string;
     parserCodeDefault?: string;
+    /** 正文形态（**与 fetchType 是两个维度，界面应分别展示**）：HTML=逐条下载详情页 HTML / PDF=取直链下载 PDF 原文。
+     *  后端 CrawlSourceRespVO 新增（同事工作区，未提交）；语义来源：fetchType 只管"列表怎么拿"，本字段管"正文怎么取"。 */
+    contentForm?: string;
+    /** 正文解析器 code：HTML_AI / PDF_AI（**列表解析器是 parserCodeDefault，两者不可混用**——
+     *  PDF 源配 HTML_AI 会静默退化为本地 PDFBox 抽取）。 */
+    detailParserCode?: string;
+    /** 抓取间隔（秒）：**同时**约束①该源列表发现轮询 ②该源公告原文下载闸（硬下限 120，见 crawlExternal/labels.ts） */
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
     enabled?: boolean;
     remark?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
-  }
-  /** 采集源保存入参（sourceCode 仅新建可传） */
+    /** API 直取：接口地址
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiUrl?: string;
+  /** API 直取：请求方法
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiMethod?: string;
+  /** API 直取：请求头 JSON
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiHeadersJson?: string;
+  /** API 直取：请求体模板
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiBodyTemplate?: string;
+  /** API 直取：分页参数名
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiPageParam?: string;
+  /** API 直取：每页条数参数名
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiSizeParam?: string;
+  /** API 直取：每页条数
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiPageSize?: number;
+  /** API 直取：数据行 JSONPath
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiRowsPath?: string;
+  /** API 直取：总数 JSONPath
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiTotalPath?: string;
+  /** API 直取：字段映射 JSON
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiMappingJson?: string;
+  /** API 直取：相对链接补全前缀
+   *  契约来源：CrawlSourceRespVO（GET /bidding/crawl-source/page）——本轮仅补类型，未接 UI。 */
+  apiUrlPrefix?: string;
+}
+  /**
+   * 采集源保存入参（sourceCode 仅新建可传）
+   * 契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）
+   */
   export interface SourcePayload {
     /** 主键（雪花 Long；更新时后端回传字符串） */
     id?: number | string;
@@ -89,11 +143,45 @@ export namespace CrawlExternalApi {
     fetchType?: string;
     apiConfigJson?: string;
     parserCodeDefault?: string;
+    /** 抓取间隔（秒）：**同时**约束①该源列表发现轮询 ②该源公告原文下载闸（硬下限 120，见 crawlExternal/labels.ts） */
     fetchIntervalSeconds?: number;
     robotsOk?: boolean;
     enabled?: boolean;
     remark?: string;
-  }
+    /** API 直取：接口地址（与 apiConfigJson 二选一；当前页面走 apiConfigJson 整体配置）
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiUrl?: string;
+  /** API 直取：请求方法
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiMethod?: string;
+  /** API 直取：请求头 JSON
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiHeadersJson?: string;
+  /** API 直取：请求体模板
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiBodyTemplate?: string;
+  /** API 直取：分页参数名
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiPageParam?: string;
+  /** API 直取：每页条数参数名
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiSizeParam?: string;
+  /** API 直取：每页条数
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiPageSize?: number;
+  /** API 直取：数据行 JSONPath
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiRowsPath?: string;
+  /** API 直取：总数 JSONPath
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiTotalPath?: string;
+  /** API 直取：字段映射 JSON
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiMappingJson?: string;
+  /** API 直取：相对链接补全前缀
+   *  契约来源：CrawlSourceSaveReqVO（POST /bidding/crawl-source/create|update）——本轮仅补类型，未接 UI（避免"页面拿不到数据"与"没做界面"被混为一谈）。 */
+  apiUrlPrefix?: string;
+}
   export interface SourcePageParams extends PageParam {
     sourceCode?: string;
     sourceName?: string;
@@ -129,16 +217,24 @@ export namespace CrawlExternalApi {
     message?: string;
     /** 载荷快照 JSON（列表阶段条目：QYZB 全文 HTML / GX 标题日期 / API 源=接口原始 JSON？——后端 CrawlTaskRespVO.payloadJson） */
     payloadJson?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }
   export interface TaskPageParams extends PageParam {
-    taskType?: string;
+    /* 2026-09-14 删除幽灵字段 `taskType`：后端 CrawlTaskPageReqVO 无此字段（externalfetch 域全仓 0 处 task_type），
+     * 声明了它只会诱导后人去传一个被静默忽略的参数（控制台本地测试标记 taskType:'TEST' 只存本地、不走接口）。
+     * 依据：契约 20《入参对等检查可行性记录》。 */
     jobId?: number | string;
     sourceCode?: string;
     status?: string;
     channelCode?: string;
     url?: string;
+    /** 创建时间起 —— **必须 'yyyy-MM-dd HH:mm:ss' 字符串**：后端 @DateTimeFormat(FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)，
+     *  传 epoch 毫秒会被解析失败/忽略（此前前端只用 status/channelCode/url，该能力一直未接线）。 */
+    beginTime?: string;
+    /** 创建时间止（格式同 beginTime） */
+    endTime?: string;
   }
   /** 采集批次（CrawlJobRespVO，02 §6.3） */
   export interface JobItem {
@@ -150,6 +246,7 @@ export namespace CrawlExternalApi {
     status?: string;
     summaryJson?: string;
     finishedAt?: string;
+    /** 创建时间（epoch 毫秒；后端 LocalDateTime → 数字，类型兼容 number|string） */
     createTime?: string;
     updateTime?: string;
   }
@@ -205,7 +302,7 @@ export function crawlParserTest(data: {
     data as unknown as { file: Blob | File },
   );
 }
-/** 契约：POST /bidding/crawl-source/run —— 采集源立即同步爬取一轮（人工触发，批次落库见 06 对照 §附）；权限 bidding:crawl-source:update；依据 爬虫工作台契约 §0 复用 / 06 对照 §1、§附 */
+/** 契约：POST /bidding/crawl-source/run —— 采集源立即同步获取一轮（人工触发，批次落库见 06 对照 §附）；权限 bidding:crawl-source:update；依据 爬虫工作台契约 §0 复用 / 06 对照 §1、§附 */
 export function runCrawlSource(sourceCode: string) {
   return requestClient.post<CrawlExternalApi.RunResult>('/bidding/crawl-source/run', undefined, { params: { sourceCode } });
 }

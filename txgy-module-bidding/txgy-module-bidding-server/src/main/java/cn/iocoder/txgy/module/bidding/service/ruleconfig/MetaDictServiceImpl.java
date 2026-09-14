@@ -1,6 +1,8 @@
 package cn.iocoder.txgy.module.bidding.service.ruleconfig;
 
 import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialCategoryEnum;
+import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialResultEnum;
+import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialTypeEnum;
 import cn.iocoder.txgy.module.bidding.enums.PersonRiskFlagEnum;
 import cn.iocoder.txgy.module.bidding.enums.RiskLevelEnum;
@@ -21,7 +23,6 @@ import cn.iocoder.txgy.module.bidding.enums.CertVerifyChannelEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateSourceChannelEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.CertificateVerificationStatusEnum;
-import cn.iocoder.txgy.module.bidding.enums.EnterpriseMaterialCategoryEnum;
 import cn.iocoder.txgy.module.bidding.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.bidding.enums.PersonnelCertStatusEnum;
 import cn.iocoder.txgy.module.bidding.enums.PersonnelCertificateTypeEnum;
@@ -31,9 +32,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 业务字典服务实现（DB 字典优先 + 枚举兜底）。
@@ -83,7 +86,11 @@ public class MetaDictServiceImpl implements MetaDictService {
         TYPE_TO_ENUM.put("risk_level", RiskLevelEnum.class);
         TYPE_TO_ENUM.put("material_category", EnterpriseMaterialCategoryEnum.class);
         TYPE_TO_ENUM.put("material_type", EnterpriseMaterialTypeEnum.class);
-        TYPE_TO_ENUM.put("material_category", EnterpriseMaterialCategoryEnum.class);
+        // 材料完备性：总体结论 + 逐项状态（2026-09-13 补齐）。
+        // 为什么：这两个字段此前只是 VO 上的裸 String，既没进字典表也没进本映射，前端只能硬编码中文与颜色；
+        //        取值以 VO 的 @Schema 说明为准，见两个枚举类内的规范出处。
+        TYPE_TO_ENUM.put("material_result", EnterpriseMaterialResultEnum.class);
+        TYPE_TO_ENUM.put("material_status", EnterpriseMaterialStatusEnum.class);
     }
 
     @Resource
@@ -91,15 +98,22 @@ public class MetaDictServiceImpl implements MetaDictService {
 
     @Override
     public Map<String, List<DictItemRespVO>> getDicts(List<String> dictTypes) {
-        List<String> types = (dictTypes == null || dictTypes.isEmpty())
-                ? new ArrayList<>(TYPE_TO_ENUM.keySet()) : dictTypes;
+        Long tenantId = TenantContextHolder.getTenantId();
+        // 受支持类型 = 代码里有枚举的 ∪ 字典表里已配置的（有枚举的先出，保持既有返回顺序不变）
+        Set<String> dbTypes = dbTypeKeys(tenantId);
+        List<String> supported = new ArrayList<>(TYPE_TO_ENUM.keySet());
+        for (String dbType : dbTypes) {
+            if (!supported.contains(dbType)) {
+                supported.add(dbType);
+            }
+        }
+        List<String> types = (dictTypes == null || dictTypes.isEmpty()) ? supported : dictTypes;
         // 未知类型显式报错：静默返回空会让前端下拉变空且难以定位
         for (String type : types) {
-            if (!TYPE_TO_ENUM.containsKey(type)) {
+            if (!TYPE_TO_ENUM.containsKey(type) && !dbTypes.contains(type)) {
                 throw ServiceExceptionUtil.exception(ErrorCodeConstants.DICT_TYPE_NOT_SUPPORTED, type);
             }
         }
-        Long tenantId = TenantContextHolder.getTenantId();
         // 平台默认行先加载，再用租户行覆盖同名枚举（租户可差异化文案）
         Map<String, DictItemRespVO> merged = new LinkedHashMap<>();
         for (BiddingDictDataDO row : dictDataMapper.selectEnabledByTypes(PLATFORM_TENANT_ID, types)) {
@@ -119,7 +133,11 @@ public class MetaDictServiceImpl implements MetaDictService {
                 }
             }
             // 枚举兜底：字典表里没有的 code 补出来（label 退化为 code，前端仍可正常展示与提交）
-            for (Object constant : TYPE_TO_ENUM.get(type).getEnumConstants()) {
+            // 无枚举的类型（cert_type / holder_type / review_result 等纯字面量字典）跳过兜底：
+            // 它们的取值只由字典表定义，代码里不存在"应当有哪些 code"的事实来源。
+            Class<? extends Enum<?>> enumClass = TYPE_TO_ENUM.get(type);
+            Enum<?>[] enumConstants = enumClass == null ? new Enum<?>[0] : enumClass.getEnumConstants();
+            for (Object constant : enumConstants) {
                 String code = String.valueOf(constant);
                 boolean exists = items.stream().anyMatch(i -> Objects.equals(i.getValue(), code));
                 if (!exists) {
@@ -141,7 +159,31 @@ public class MetaDictServiceImpl implements MetaDictService {
 
     @Override
     public List<String> supportedTypes() {
-        return new ArrayList<>(TYPE_TO_ENUM.keySet());
+        List<String> types = new ArrayList<>(TYPE_TO_ENUM.keySet());
+        for (String dbType : dbTypeKeys(TenantContextHolder.getTenantId())) {
+            if (!types.contains(dbType)) {
+                types.add(dbType);
+            }
+        }
+        return types;
+    }
+
+    /**
+     * 取"字典表里真实配置过"的类型集合（平台默认行 + 当前租户行）。
+     *
+     * <p>规范出处：契约 §1.1（字典读取）；用户硬约束"枚举值必须支持动态配置"。
+     * <p>为什么这样写：cert_type / holder_type / review_result 这类字典的取值是业务字面量集合，
+     * 代码里没有对应枚举类；旧实现仅凭 TYPE_TO_ENUM 判定"是否支持"，于是 2026-09-19 已种好的字典
+     * 既不在 /bidding/meta/dicts 的默认返回里，显式 ?types=cert_type 还会抛 DICT_TYPE_NOT_SUPPORTED。
+     * <p>业务目标：字典"是否受支持"以数据为准——新增一类字典只需插数据即可下发，不必为每种字典补枚举；
+     * 同时保留显式报错：真正未知的类型仍报 1060108008，避免前端静默拿到空下拉。
+     */
+    private Set<String> dbTypeKeys(Long tenantId) {
+        Set<String> types = new LinkedHashSet<>(dictDataMapper.selectEnabledTypes(PLATFORM_TENANT_ID));
+        if (tenantId != null && !Objects.equals(tenantId, PLATFORM_TENANT_ID)) {
+            types.addAll(dictDataMapper.selectEnabledTypes(tenantId));
+        }
+        return types;
     }
 
     private DictItemRespVO toItem(BiddingDictDataDO row) {

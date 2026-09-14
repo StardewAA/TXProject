@@ -70,10 +70,10 @@ const holderTypes = computed(() => {
 const certTypes = computed(() => dictOptions('cert_type'));
 
 const rules = {
-  certName: [{ required: true, message: '请填写证照名称', trigger: 'blur' }],
-  certNo: [{ required: true, message: '请填写证书编号（唯一）', trigger: 'blur' }],
-  certType: [{ required: true, message: '请选择证照大类', trigger: 'change' }],
-  holderName: [{ required: true, message: '请填写持证主体名称', trigger: 'blur' }],
+  certName: [{ required: true, message: '证照名称不能为空', trigger: 'blur' }],
+  certNo: [{ required: true, message: '证书编号不能为空（唯一）', trigger: 'blur' }],
+  certType: [{ required: true, message: '证照大类不能为空', trigger: 'change' }],
+  holderName: [{ required: true, message: '持证主体名称不能为空', trigger: 'blur' }],
 };
 
 function fill(record?: CertificateApi.Certificate | null) {
@@ -284,7 +284,7 @@ async function submit() {
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="有效期止" name="validTo">
+          <a-form-item label="有效期至" name="validTo">
             <a-date-picker v-model:value="form.validTo" class="w-full" value-format="YYYY-MM-DD" placeholder="留空 = 长期有效" allow-clear />
             <div class="ct-tip">留空表示长期有效：长期证不参与到期预警扫描。</div>
           </a-form-item>

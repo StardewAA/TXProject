@@ -6,6 +6,8 @@ import { computed, ref } from 'vue';
 
 import { Button, Empty } from 'ant-design-vue';
 
+import { fmtBytes } from '#/utils/format';
+
 import { attachmentItemLabel, attachmentItemRequired, type AttachmentRecord } from './attachmentStages';
 import PdfPreview from './PdfPreview.vue';
 
@@ -67,7 +69,7 @@ function isPreviewable(a: AttachmentRecord): boolean {
         <span class="al-name" :title="a.name">{{ a.name }}</span>
         <span class="al-file" :title="a.fileName">{{ a.fileName }}</span>
         <span class="al-meta">
-          {{ a.type || '—' }}<template v-if="a.size"> · {{ (a.size / 1024).toFixed(0) }} KB</template>
+          {{ a.type || '—' }}<template v-if="a.size"> · {{ fmtBytes(a.size) }}</template>
         </span>
         <span class="al-act">
           <Button v-if="isPreviewable(a)" size="small" type="link" @click="preview(a)">预览</Button>

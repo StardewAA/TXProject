@@ -14,6 +14,7 @@ import {
   type CertificateApi,
   getCertificate,
   getCertificatePage,
+  getCertVerifyHistoryPage,
   runCertAlertDispatch,
   runCertAlertScan,
 } from '#/api/bidding/certificate';
@@ -68,6 +69,54 @@ const drawerOpen = ref(false);
 const detailLoading = ref(false);
 const detail = ref<CertificateApi.Certificate | null>(null);
 const tab = ref('basic');
+
+/* ===== 验真历史（读出口） =====
+ * 后端 /verify 与 /verify-file 每次都返回"验真历史主键"，但此前**没有接口能把它读回来**
+ * （后端 Javadoc 原话："留痕只进不出，主键等于一个再也打不开的句柄"）。本抽屉消费
+ * GET /bidding/certificate-verify/history/page：谁在什么时候验了哪张证、结论与渠道是什么，一屏可查。
+ * 口径：L3 报文原文不下发（含证照编号等可识别信息，列表是高频读取面），只给 snapshotAvailable，
+ *       界面据此提示"可申请调阅"——既不泄露，也不丢可追溯性。 */
+const historyOpen = ref(false);
+const historyLoading = ref(false);
+const historyRows = ref<CertificateApi.VerifyHistoryItem[]>([]);
+const historyTotal = ref(0);
+/** 从行内进入时带 certId，从工具栏进入时为空（= 本租户全部验真留痕） */
+const historyCert = ref<CertificateApi.Certificate | null>(null);
+const historyQuery = reactive<CertificateApi.VerifyHistoryPageReq>({
+  pageNo: 1,
+  pageSize: 10,
+  certId: undefined,
+  verifyChannel: undefined,
+  verifyResult: undefined,
+});
+const historyChannelOptions = computed(() => dictOptions('verify_channel'));
+const historyResultOptions = computed(() => dictOptions('verify_result'));
+
+function openHistory(record?: CertificateApi.Certificate) {
+  historyCert.value = record ?? null;
+  historyQuery.certId = record?.id;
+  historyQuery.verifyChannel = undefined;
+  historyQuery.verifyResult = undefined;
+  historyQuery.pageNo = 1;
+  historyOpen.value = true;
+  void loadHistory();
+}
+
+async function loadHistory() {
+  historyLoading.value = true;
+  try {
+    const page = await getCertVerifyHistoryPage({ ...historyQuery });
+    historyRows.value = page.list ?? [];
+    historyTotal.value = page.total ?? 0;
+  } catch (e: unknown) {
+    historyRows.value = [];
+    historyTotal.value = 0;
+    message.error(certErrorMsg(e));
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
 
 const expiringDays = computed(() => configNumber('cert.expiring.window.days', 60));
 
@@ -246,6 +295,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
         <a-button v-if="can('bidding:certificate:create')" type="primary" @click="onCreate">证照建档</a-button>
         <a-button v-if="can('bidding:certificate:alert-run')" @click="confirmScan">预警扫描</a-button>
         <a-button v-if="can('bidding:certificate:alert-run')" @click="confirmDispatch">派发通知</a-button>
+        <a-button v-if="can('bidding:certificate:query')" @click="openHistory()">验真历史</a-button>
         <a-button @click="load">刷新</a-button>
         <a-button v-if="!metaLoaded" type="link" @click="reloadMeta">重载字典/配置</a-button>
       </div>
@@ -284,7 +334,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
       <div class="ct-kpi">
         <div class="k-label">本页长期有效</div>
         <div class="k-num">{{ kpi.longTerm }}</div>
-        <div class="k-note">无有效期止，不入到期扫描</div>
+        <div class="k-note">无有效期至，不入到期扫描</div>
       </div>
       <div class="ct-kpi">
         <div class="k-label">本页未验真</div>
@@ -427,6 +477,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
                 <a v-if="can('bidding:certificate:update')" @click="onEdit(record)">编辑</a>
                 <a v-if="can('bidding:certificate:update')" @click="onStatus(record)">状态</a>
                 <a v-if="can('bidding:certificate:lifecycle:apply')" @click="onApply(record)">流程</a>
+                <a v-if="can('bidding:certificate:query')" @click="openHistory(record)">验真历史</a>
               </a-space>
             </template>
           </template>
@@ -525,6 +576,105 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
             <CertTimeline biz-domain="CERT" :biz-id="detail?.id ?? null" />
           </a-tab-pane>
         </a-tabs>
+      </a-spin>
+    </a-drawer>
+
+    <!-- 验真历史（读出口）：谁在何时验了哪张证、渠道与结论是什么。
+         后端明确 L3 报文原文不下发（含证照编号等可识别信息、列表是高频读取面），故只给 snapshotAvailable，
+         界面提示"可申请调阅"——既不泄露，也不丢可追溯性。 -->
+    <a-drawer
+      v-model:open="historyOpen"
+      class="bid-ind"
+      :width="920"
+      :title="historyCert ? `验真历史 · ${historyCert.certName}` : '验真历史 · 本租户全部留痕'"
+    >
+      <a-space class="mb-3" wrap>
+        <a-select
+          v-model:value="historyQuery.verifyChannel"
+          :options="historyChannelOptions"
+          allow-clear
+          placeholder="验真渠道"
+          style="width: 170px"
+          @change="
+            () => {
+              historyQuery.pageNo = 1;
+              loadHistory();
+            }
+          "
+        />
+        <a-select
+          v-model:value="historyQuery.verifyResult"
+          :options="historyResultOptions"
+          allow-clear
+          placeholder="验真结论"
+          style="width: 170px"
+          @change="
+            () => {
+              historyQuery.pageNo = 1;
+              loadHistory();
+            }
+          "
+        />
+        <a-button @click="loadHistory">刷新</a-button>
+        <span class="ct-panel-meta">共 {{ historyTotal }} 条留痕</span>
+      </a-space>
+      <a-spin :spinning="historyLoading">
+        <a-table
+          class="ct-table"
+          :columns="[
+            { title: '证照', dataIndex: 'certName', key: 'certName' },
+            { title: '渠道', dataIndex: 'verifyChannel', key: 'verifyChannel', width: 130 },
+            { title: '结论', dataIndex: 'verifyResult', key: 'verifyResult', width: 140 },
+            { title: '发起人', dataIndex: 'verifyBy', key: 'verifyBy', width: 100 },
+            { title: '完成时间', dataIndex: 'verifiedAt', key: 'verifiedAt', width: 170 },
+            { title: '报文留痕', dataIndex: 'snapshotAvailable', key: 'snapshotAvailable', width: 130 },
+          ]"
+          :data-source="historyRows"
+          :pagination="{
+            current: historyQuery.pageNo,
+            pageSize: historyQuery.pageSize,
+            total: historyTotal,
+            showSizeChanger: true,
+            showTotal: (t: number) => `共 ${t} 条`,
+          }"
+          row-key="id"
+          size="small"
+          @change="
+            (p: any) => {
+              historyQuery.pageNo = p.current;
+              historyQuery.pageSize = p.pageSize;
+              loadHistory();
+            }
+          "
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'verifyChannel'">
+              {{ dictLabel('verify_channel', record.verifyChannel) }}
+            </template>
+            <template v-else-if="column.key === 'verifyResult'">
+              <a-tag :color="dictTag('verify_result', record.verifyResult).color">
+                {{ dictTag('verify_result', record.verifyResult).label }}
+              </a-tag>
+            </template>
+            <template v-else-if="column.key === 'verifiedAt'">{{ fmtDateTime(record.verifiedAt) }}</template>
+            <template v-else-if="column.key === 'snapshotAvailable'">
+              <a-tooltip
+                :title="
+                  record.snapshotAvailable
+                    ? 'L3 报文原文（含证照编号等可识别信息）不下发；需举证/审计时按验真历史主键查库调阅'
+                    : '本次未留报文原文'
+                "
+              >
+                <a-tag :color="record.snapshotAvailable ? 'blue' : 'default'">
+                  {{ record.snapshotAvailable ? '可申请调阅' : '无原文' }}
+                </a-tag>
+              </a-tooltip>
+            </template>
+          </template>
+          <template #emptyText>
+            <div class="ct-empty">暂无验真留痕（发起验真后这里会逐条记录渠道与结论）</div>
+          </template>
+        </a-table>
       </a-spin>
     </a-drawer>
 

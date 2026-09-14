@@ -13,6 +13,7 @@ import {
   message,
   Modal,
   Pagination,
+  RangePicker,
   Select,
   Tag,
 } from 'ant-design-vue';
@@ -25,7 +26,9 @@ import {
   retryCrawlTask,
   runCrawlSource,
 } from '#/api/bidding/crawlExternal';
+import { getRangePickerDefaultProps } from '#/utils/rangePickerProps';
 
+import { CHANNEL_GENERIC_TEXT, contentFormText, FETCH_TYPE_HINT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
@@ -138,8 +141,12 @@ const statusOptions = Object.entries(TASK_STATUS_MAP).map(([value, m]) => ({ lab
 const pageView = ref<'home' | 'taskDetail'>('home');
 /** 当前选中信息源（任务器）；空=任务 tab 显示信息源卡墙 */
 const curSource = ref<CrawlExternalApi.SourceItem | null>(null);
-/** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传） */
-const tFilter = ref<{ channelCode?: string; status?: string; url?: string }>({});
+/** 任务条筛选（后端支持 sourceCode/status/channelCode/url/beginTime/endTime，无 task_type 勿传）
+ *  2026-09-14：`range` 接线后端已支持的 beginTime/endTime —— 此前后端能按创建时间筛、界面却没入口，
+ *  出问题时无法把死信缩到某个时间窗（"接口有能力、界面不可达"）。格式必须 'YYYY-MM-DD HH:mm:ss'（后端 @DateTimeFormat）。 */
+const tFilter = ref<{ channelCode?: string; range?: [string, string]; status?: string; url?: string }>({});
+/** 快捷时间段复用全站共享预设（src/utils/rangePickerProps.ts），避免本页自造"最近 7 天"口径 */
+const RANGE_PRESETS = getRangePickerDefaultProps().presets;
 const tPage = ref(1);
 const tPageSize = ref(20);
 const tTotal = ref(0);
@@ -242,7 +249,7 @@ function onParsed(
   if (!ok) message.error(resp?.error || '解析未成功');
 }
 
-/* ---------- 立即爬取（源下拉触发；同步接口 + 120s 节流） ---------- */
+/* ---------- 立即获取（源下拉触发；同步接口 + 120s 节流）---------- */
 function onRunMenu(source: CrawlExternalApi.SourceItem) {
   if (!source.sourceCode) return;
   const last = lastTriggerAt.value[source.sourceCode];
@@ -324,7 +331,7 @@ function deleteCurrentManual(): void {
 }
 /* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层，不嵌套 Drawer） ----------
  * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
- *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批爬虫任务 N 条(KPI+克制行) → 选中任务过程。
+ *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批采集任务 N 条(KPI+克制行) → 选中任务过程。
  * 理由：查看过程/重试/批内任务下钻等操作收进详情档，列表不再跳 tab（旧 drillJob 已被批次抽屉取代），
  *       避免跨 tab 上下文丢失；与 source-detail.vue（两档视图样板）口径一致。
  * 契约：fetchCrawlTaskPage({ jobId, pageNo, pageSize }) 见 crawl-batch §三.1 / 04-全链路 §5.7；
@@ -366,6 +373,8 @@ async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise
       status: tFilter.value.status,
       channelCode: tFilter.value.channelCode,
       url: tFilter.value.url,
+      beginTime: tFilter.value.range?.[0],
+      endTime: tFilter.value.range?.[1],
     };
     const res = (await fetchCrawlTaskPage(params)) as unknown as { list?: CrawlExternalApi.TaskItem[]; total?: number };
     tRows.value = res.list || [];
@@ -382,7 +391,7 @@ async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise
 function enterSourceTasks(src: CrawlExternalApi.SourceItem): void {
   if (!src?.sourceCode) return;
   curSource.value = src;
-  tFilter.value = { status: undefined, channelCode: undefined, url: undefined };
+  tFilter.value = { status: undefined, channelCode: undefined, url: undefined, range: undefined };
   tPage.value = 1;
   void loadTaskRows(1);
 }
@@ -495,7 +504,7 @@ async function openJobDetail(j: CrawlExternalApi.JobItem): Promise<void> {
   void loadJobTasks(j);
 }
 
-/** 批次详情层2：该批爬虫任务（pageSize 200；契约见 crawl-batch §三.1） */
+/** 批次详情层2：该批采集任务（pageSize 200；契约见 crawl-batch §三.1） */
 async function loadJobTasks(j: CrawlExternalApi.JobItem): Promise<void> {
   if (j.id == null) return;
   jobTasksLoading.value = true;
@@ -635,10 +644,22 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
     ['招标项目编号', (x?.tenderProjectKey || '').trim()],
     ['标段编号', (x?.bidSectionCodes || '').trim()],
     ['公告类型', (x?.noticeTypeRaw || '').trim()],
+    ['内容形态建议', (x?.contentType || '').trim()],
+    ['依法必招', x?.legalFlag === 'Y' ? '是' : x?.legalFlag === 'N' ? '否' : ''],
+    ['生效开始', (x?.effectiveFrom || '').trim()],
+    ['生效截止', (x?.effectiveTo || '').trim()],
     ['原网址', (x?.origUrl || '').trim()],
   ];
   return list.filter(([, v]) => v);
 };
+
+/** 页面形态中文名（后端 pageType：DETAIL/LIST/UNKNOWN）——列表页输入时解析器只出条目、不出公告字段 */
+const pageTypeText = (t?: string) =>
+  t === 'DETAIL' ? '公告详情' : t === 'LIST' ? '公告列表（出条目）' : t === 'UNKNOWN' ? '未识别' : (t || '—');
+
+/** 附件候选里"链接未绝对化"的条数——>0 表示下载器阶段拿不到绝对地址，属解析规则/信息源配置需校准 */
+const incompleteOf = (r: ManualRun) =>
+  (r.resp?.attachments || []).filter((att) => att.urlIncomplete).length;
 </script>
 
 <!-- ============ 外部信息获取工作台 · 工业风：选项卡 + 数据面板（2026-09-10） ============ -->
@@ -682,8 +703,8 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <span class="ind-mark">PLATFORM</span>
         </div>
         <div class="ind-sub">
-          平台级采集（G 轨，外部公告域）。每次「立即爬取 / 手动录入 / 定时轮询」生成一条任务条：
-          信息源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整爬取的行迹。
+          平台级采集（G 轨，外部公告域）。每次「立即获取 / 手动录入 / 定时轮询」生成一条任务条：
+          信息源 → 任务（通道/解析器/尝试） → 提取内容 → 渲染结果 → 过程明细；批次为一次完整获取的行迹。
         </div>
       </div>
       <div class="ind-actions">
@@ -706,7 +727,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
     <!-- KPI -->
     <div class="ind-kpis">
-      <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即爬取（crawl-task）</div></div>
+      <div class="ind-kpi k-blue"><div class="k-label">任务</div><div class="k-num">{{ kpis.sched }}</div><div class="k-note">调度轮询 / 立即获取（crawl-task）</div></div>
       <div class="ind-kpi k-green"><div class="k-label">测试</div><div class="k-num">{{ kpis.manual }}</div><div class="k-note">手动录入 / 解析器测试回执（本地留档）</div></div>
       <div class="ind-kpi k-gray"><div class="k-label">采集批次</div><div class="k-num">{{ kpis.jobs }}</div><div class="k-note">crawl-job 只读参照</div></div>
     </div>
@@ -729,12 +750,15 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <div v-else class="fp-wall">
             <div v-for="src in sources" :key="String(src.id)" class="fp-src" @click="enterSourceTasks(src)">
               <div class="fp-src-h">
-                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'">{{ src.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+                <Tag :color="src.fetchType === 'API' ? 'purple' : 'blue'" :title="FETCH_TYPE_HINT">{{ fetchTypeText(src.fetchType) }}</Tag>
+                <Tag v-if="src.contentForm" color="cyan" :title="FETCH_TYPE_HINT">{{ contentFormText(src.contentForm) }}</Tag>
                 <Tag :color="src.enabled ? 'green' : 'default'">{{ src.enabled ? '启用' : '停用' }}</Tag>
                 <span class="fp-src-code">{{ src.sourceCode || '—' }}</span>
               </div>
               <div class="fp-src-name" :title="src.sourceName || ''">{{ src.sourceName || '（未命名）' }}</div>
-              <div class="fp-src-meta">任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · {{ src.fetchIntervalSeconds != null ? `间隔 ${ src.fetchIntervalSeconds }s` : '—' }}</div>
+              <div class="fp-src-meta" :title="INTERVAL_HINT">
+                任务 {{ srcCountMap[src.sourceCode || ''] ?? '…' }} 条 · 抓取间隔 {{ intervalText(src.fetchIntervalSeconds) }}
+              </div>
               <div class="fp-src-go">查看任务条 ▸</div>
             </div>
           </div>
@@ -745,16 +769,29 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <a class="text-sm font-bold text-primary" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
             <span class="text-sm font-extrabold text-foreground">{{ curSource.sourceName || curSource.sourceCode }}</span>
-            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ curSource.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
+            <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'" :title="FETCH_TYPE_HINT">{{ fetchTypeText(curSource.fetchType) }}</Tag>
+            <Tag v-if="curSource.contentForm" color="cyan" :title="FETCH_TYPE_HINT">{{ contentFormText(curSource.contentForm) }}</Tag>
+            <span class="text-xs text-muted-foreground">
+              列表解析器 {{ curSource.parserCodeDefault || '—' }} · 正文解析器 {{ curSource.detailParserCode || '—' }}
+            </span>
           </div>
 
           <!-- 筛选行 -->
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
-            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: 'GENERIC · 通用下载', value: 'GENERIC' }]" @change="applyTaskFilter" />
+            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }]" @change="applyTaskFilter" />
             <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
+            <RangePicker
+              v-model:value="tFilter.range"
+              show-time
+              value-format="YYYY-MM-DD HH:mm:ss"
+              :presets="RANGE_PRESETS"
+              :placeholder="['创建时间起', '创建时间止']"
+              style="width: 330px"
+              @change="applyTaskFilter"
+            />
             <Button size="small" @click="applyTaskFilter">查询</Button>
-            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>
+            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined, range: undefined }; applyTaskFilter()">重置</Button>
             <span class="ml-auto text-xs font-semibold text-muted-foreground">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
           </div>
 
@@ -780,7 +817,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <span class="fp-td flex-1 fp-url" :title="t.url || ''">{{ t.url || '（无 URL，见详情）' }}</span>
                 <span class="fp-td w-msg fp-msg" :title="t.message || ''">
                   <template v-if="t.message">{{ t.message }}</template>
-                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · {{ t.workerId }}</template></template>
+                  <template v-else>解析器 {{ t.parserCode || '—' }} · 尝试 {{ t.attempt ?? '—' }}<template v-if="t.workerId"> · 执行节点 {{ t.workerId }}</template></template>
                 </span>
               </div>
             </div>
@@ -829,7 +866,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
       <!-- ============ ③ 采集批次（统一任务条 fp-tbl：状态/时间/批次#/源·触发/摘要；行点击进批次详情层） ============ -->
       <section v-show="activeTab === 'jobs'">
         <div class="ind-panel">
-          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整爬取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
+          <div class="ind-panel-h"><span class="ind-panel-t">采集批次</span><span class="ind-panel-meta">一次完整获取 = 一个批次（crawl-job，只读参照；批内任务在详情层内按 jobId 拉取）</span></div>
           <div class="ind-panel-b">
             <div v-if="!jobs.length" class="ind-empty">暂无批次记录</div>
             <div v-else class="fp-tbl">
@@ -887,6 +924,13 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             <div class="ind-kv" style="grid-template-columns: 1fr;">
               <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ` · ${ processManual.fileName}` : '' }}</span></div>
               <div v-if="processManual.contentLength != null" class="kv"><span class="k">内容长度</span><span class="v">{{ processManual.contentLength }} 字符</span></div>
+              <div v-if="processManual.resp?.pageType" class="kv">
+                <span class="k">页面形态</span><span class="v">{{ pageTypeText(processManual.resp.pageType) }}</span>
+              </div>
+              <div v-if="processManual.resp?.contentHtmlLength != null" class="kv">
+                <span class="k">HTML 原文长度</span>
+                <span class="v">{{ processManual.resp.contentHtmlLength }} 字符（仅下发长度，正文按预览核对）</span>
+              </div>
               <div v-if="processManual.url" class="kv"><span class="k">URL</span><span class="v truncate" :title="processManual.url">{{ processManual.url }}</span></div>
             </div>
           </div>
@@ -936,10 +980,51 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <div v-for="(w, i) in processManual.resp.warnings" :key="i">• {{ w }}</div>
               </div>
             </div>
-            <div v-if="processManual.resp?.entries?.length" class="mt-3">
-              <div class="ind-sec-t"><span>LIST</span> 列表条目（列表页输入时）</div>
+            <!-- 附件候选：解析出的附件清单（下载器阶段会下载后回传 ingest）。
+                 urlIncomplete=true 表示相对链接未绝对化——下载会失败，属"该补源 baseUrl / 调解析规则"的直接信号，
+                 故单列标记而不是只列文件名。 -->
+            <div v-if="processManual.resp?.attachments?.length" class="mt-3">
+              <div class="ind-sec-t">
+                <span>ATTACH</span> 附件候选（{{ processManual.resp.attachments.length }} 个<span
+                  v-if="incompleteOf(processManual) > 0"
+                  class="ml-1 text-amber-600 dark:text-amber-400"
+                  >· {{ incompleteOf(processManual) }} 个链接未绝对化</span>）
+              </div>
               <div class="mt-1 space-y-1 text-sm font-medium text-foreground">
-                <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
+                <div
+                  v-for="(att, i) in processManual.resp.attachments"
+                  :key="i"
+                  class="flex items-start gap-2"
+                >
+                  <span class="shrink-0" :class="att.urlIncomplete ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">
+                    {{ att.urlIncomplete ? '⚠' : '•' }}
+                  </span>
+                  <span class="min-w-0">
+                    <span>{{ att.name || '（未命名附件）' }}</span>
+                    <span v-if="att.url" class="ml-2 break-all text-xs text-muted-foreground" :title="att.url">{{ att.url }}</span>
+                    <span v-if="att.urlIncomplete" class="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                      （相对链接，缺来源 URL → 下载阶段无法定位；请在信息源配置里补 baseUrl 或改用带 url 的录入）
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-if="processManual.resp?.entries?.length" class="mt-3">
+              <div class="ind-sec-t">
+                <span>LIST</span> 列表条目（{{ processManual.resp.entries.length }} 条<span
+                  v-if="processManual.resp.entries.length > 10"
+                  >，展示前 10</span>）
+              </div>
+              <div class="mt-1 space-y-1 text-sm font-medium text-foreground">
+                <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i" class="flex items-start gap-2">
+                  <span class="shrink-0 text-muted-foreground">•</span>
+                  <span class="min-w-0">
+                    <span>{{ en.title || '（无标题）' }}</span>
+                    <span v-if="en.date" class="ml-2 text-xs text-muted-foreground">{{ en.date }}</span>
+                    <span v-if="en.category" class="ml-2 text-xs text-muted-foreground">[{{ en.category }}]</span>
+                    <span v-if="en.url" class="ml-2 break-all text-xs text-muted-foreground" :title="en.url">{{ en.url }}</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -959,7 +1044,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
               <Descriptions.Item label="状态"><Tag :color="tagOf(JOB_STATUS_MAP, detailJob.status)?.color || 'default'">{{ tagOf(JOB_STATUS_MAP, detailJob.status)?.text || detailJob.status || '—' }}</Tag></Descriptions.Item>
               <Descriptions.Item label="源">{{ detailJob.sourceCode || '—' }}</Descriptions.Item>
               <Descriptions.Item label="触发">{{ detailJob.triggerType || '—' }}</Descriptions.Item>
-              <Descriptions.Item label="scope">{{ detailJob.scope || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="采集范围">{{ detailJob.scope || '—' }}</Descriptions.Item>
               <Descriptions.Item label="创建">{{ fmtDt(detailJob.createTime) }}</Descriptions.Item>
               <Descriptions.Item label="完成">{{ fmtDt(detailJob.finishedAt) }}</Descriptions.Item>
               <Descriptions.Item label="汇总摘要" :span="2"><span class="break-all" :title="detailJob.summaryJson || ''">{{ jobSummaryText(detailJob.summaryJson) || '—' }}</span></Descriptions.Item>
@@ -1023,7 +1108,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
               <Descriptions.Item label="URL" :span="2"><span class="break-all">{{ selJobTaskFull?.url || selJobTask.url || '—' }}</span></Descriptions.Item>
               <Descriptions.Item label="通道 / 解析器">{{ selJobTaskFull?.channelCode || selJobTask.channelCode || '—' }} / {{ selJobTaskFull?.parserCode || selJobTask.parserCode || '—' }}</Descriptions.Item>
               <Descriptions.Item label="尝试">{{ selJobTaskFull?.attempt ?? selJobTask.attempt ?? '—' }}</Descriptions.Item>
-              <Descriptions.Item label="worker">{{ selJobTaskFull?.workerId || selJobTask.workerId || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="执行节点">{{ selJobTaskFull?.workerId || selJobTask.workerId || '—' }}</Descriptions.Item>
               <Descriptions.Item label="开始 / 完成">{{ fmtDt(selJobTaskFull?.startedAt || selJobTask.startedAt) }} / {{ fmtDt(selJobTaskFull?.finishedAt || selJobTask.finishedAt) }}</Descriptions.Item>
               <Descriptions.Item label="消息 / 错误" :span="2">{{ selJobTaskFull?.message || selJobTask.message || '—' }}</Descriptions.Item>
             </Descriptions>

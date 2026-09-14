@@ -23,9 +23,24 @@ const DDL_SOURCES = [
   '2026-09-16-rule-config-center.sql',
   '2026-09-17-safety-permit-risk.sql',
   '2026-09-19-cert-dict-register.sql',
+  // 2026-09-20 新增：员工域 5 类字典（personnel_status / social_pay_status / gender / edu_level / qual_serial）
+  // ⚠️ 新增 history 脚本务必登记到本清单：漏登记时重建会**静默抹掉**该脚本内容（新装库缺功能，
+  //    运行中的库看不出来）。sql/tools/check-master-mirror.js 专门守这条不变式。
+  '2026-09-20-bidding-dict-register-personnel.sql',
+  // 2026-09-22 新增：用工形式字典（employment_type 5 类，前端"员工档案"用工形式列/录入项的枚举来源）
+  '2026-09-22-bidding-dict-employment-type.sql',
+  // 2026-09-23 新增：追溯/备案/主体/外部公告 状态类字典 7 类 23 行（取值逐条对齐后端枚举）
+  '2026-09-23-bidding-dict-trace-and-notice-status.sql',
+  // 2026-09-24 新增：关键岗位字典（KeyPostEnum 5 值，安许风险联动页下拉）
+  '2026-09-24-bidding-dict-key-post.sql',
+  // 2026-09-25 新增：验真结论字典 verify_result 3 行 + verify_channel 补 THIRD_PARTY（验真历史读出口接线）
+  '2026-09-25-bidding-dict-verify-result-channel.sql',
 ];
 // 仅含菜单的脚本（旧号段）不并入：其内容已被 09-18 的"终态菜单段"取代
 const MENU_SOURCE = '2026-09-18-cert-menu-renumber.sql';
+// 菜单/权限点补充脚本：按 MENU_SOURCE 相同的口径"截到校验段"并入（只取权限点注册，不含授权语句——
+// 本包口径是"授权属业务决策，见包尾授权指引"）
+const MENU_EXTRA_SOURCES = ['2026-09-21-bidding-rule-config-menu.sql'];
 
 const strip = (s) => s.replace(/\r\n/g, '\n').replace(/\s+$/, '') + '\n';
 // 源脚本已归档至 sql/history/（合并后不再在根目录维护），故按 history → 根目录顺序解析
@@ -69,9 +84,12 @@ const header = [
   '--   mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < sql/master-credential-sync.sql',
   '--   结构自检：node sql/tools/validate-sql-structure.js sql/master-credential-sync.sql',
   '--',
-  '-- 【菜单号段】证书与资质台账使用 60004000 段（60004000 目录 / 600041xx 证照台账 / 600042xx 企业资质 /',
-  '--   600043xx 员工资质 / 600044xx 证件全生命周期 / 600045xx 安许风险联动）。',
-  '--   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突），',
+  '-- 【菜单号段】证书与资质台账使用 60005000 段（60005000 目录 / 600051xx 证照台账 / 600052xx 企业资质 /',
+  '--   600053xx 员工资质 / 600054xx 证件全生命周期 / 600055xx 安许风险联动）。',
+  '--   原 60002000/600021xx/600022xx/600023xx/600024xx 号段已废弃（与外部公告采集域冲突）；',
+  '--   60004000/600042xx 段已被《docs/前端规范-全域接口说明/投标流程跟踪功能设计方案.md》§8.3 预约',
+  '--   （投标流程跟踪：父级 60004000 + 页面 60004200 + 按钮 60004201~203），按"先登记再占用"让出，',
+  '--   故本域改用 60005000 段（登记时 SQL 侧 60005000~60005999 无任何占用）。',
   '--   本包直接落终态，不产生废弃号段的行。',
   '--',
   '-- 【不包含】角色菜单授权（除超级管理员）——授权属业务决策；见包尾"授权指引"按需执行。',
@@ -92,6 +110,20 @@ parts.push('-- #################################################################
 parts.push('-- 【来源】' + MENU_SOURCE + ' 第 2 步（菜单终态段）——原脚本的迁移/恢复动作不再需要');
 parts.push('-- #####################################################################');
 parts.push(menuSection, '');
+for (const f of MENU_EXTRA_SOURCES) {
+  const raw = fs.readFileSync(src(f), 'utf8');
+  // 截到"② 角色授权"之前：包内只落权限点注册，授权语句留给 history 脚本与包尾授权指引
+  const cutGrant = raw.indexOf('-- ② 角色授权');
+  const cutCheck = raw.indexOf('-- ========== 校验 ==========');
+  const end = [cutGrant, cutCheck].filter((x) => x >= 0).sort((a, b) => a - b)[0];
+  const body = (end >= 0 ? raw.slice(0, end) : raw)
+    .replace(/^SET NAMES[^\n]*\n/m, '')
+    .replace(/\s+$/, '');
+  parts.push('-- #####################################################################');
+  parts.push('-- 【来源】' + f + '（菜单与权限点补充；已并入本包）');
+  parts.push('-- #####################################################################');
+  parts.push(body, '');
+}
 parts.push('-- =====================================================================');
 parts.push('-- 菜单与权限点已就位。以下为"授权指引"（默认不执行）：');
 parts.push('--   1) 超级管理员（role_id=1，租户 0）默认放行全部权限，无需授权；');
@@ -109,6 +141,10 @@ const created = [...ddlText.matchAll(/CREATE\s+TABLE(\s+IF\s+NOT\s+EXISTS)?\s+\`
   .filter((v, i, a) => a.indexOf(v) === i).sort();
 // 精确统计某条 INSERT 的顶层元组数（跳过字符串字面量），使"期望值"与校验查询口径一致
 function countTuplesIn(text, i) {
+  // 从 VALUES 之后开始数，避免把 INSERT 的"列清单 (...) 也算成一个元组"
+  const tail = text.slice(i);
+  const vm = tail.match(/\bVALUES\b/i);
+  if (vm) i = i + vm.index + vm[0].length;
   let depth = 0, n = 0, started = false;
   for (let k = i; k < text.length; k++) {
     const c = text[k];
@@ -128,7 +164,9 @@ function countTuples(text, anchorRe) {
 }
 const dictRows = countTuples(ddlText, /INSERT[^;]*?INTO\s+`?bidding_dict_data`?/i);
 const cfgRows = countTuples(ddlText, /INSERT[^;]*?INTO\s+`?bidding_rule_config`?\s*\(/i);
-const menuRows = countTuples(menuSection, /INSERT[^;]*?INTO\s+`?system_menu`?/i);
+const menuRows =
+  countTuples(menuSection, /INSERT[^;]*?INTO\s+`?system_menu`?/i) +
+  MENU_EXTRA_SOURCES.reduce((n, f) => n + countTuples(fs.readFileSync(src(f), 'utf8'), /INSERT[^;]*?INTO\s+`?system_menu`?/i), 0);
 parts.push("  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (" + created.map(t => "'" + t + "'").join(',') + ")");
 parts.push("-- 期望：" + created.length + " 张表（包内 CREATE TABLE 数）");
 parts.push("UNION ALL SELECT '菜单与权限点(60004xxx)', COUNT(*) FROM system_menu WHERE id BETWEEN 60004000 AND 60004599 AND deleted = b'0'");
@@ -222,6 +260,10 @@ function foldAlters(text) {
 
 let finalText = parts.join('\n');
 finalText = foldAlters(finalText);
+// 菜单号段终态：让出 60004 段（流程跟踪方案已预约），统一落到 60005 段
+const beforeCount = (finalText.match(/60004\d{3}/g) || []).length;
+finalText = finalText.replace(/60004(\d{3})/g, '60005$1');
+console.log('— 菜单号段：60004xxx → 60005xxx，改写 ' + beforeCount + ' 处');
 fs.writeFileSync(OUT, finalText, 'utf8');
 console.log('已生成 ' + OUT + ' (' + (fs.statSync(OUT).size / 1024).toFixed(1) + ' KB)');
 console.log('— 合并来源 ' + DDL_SOURCES.length + ' 个 + 菜单终态段 1 个');
