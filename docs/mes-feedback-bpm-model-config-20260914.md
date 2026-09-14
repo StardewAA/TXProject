@@ -11,6 +11,48 @@
 
 ---
 
+## 〇、更新记录（2026-09-14 当日）：卡点已解除，模型已发布
+
+> 本节为文档发出后的补充。第 1~9 节的背景、约束与验收步骤依然有效，请以本节为最新状态。
+
+**当前状态：`mes-feedback-approval` 已创建并发布，`ACT_RE_PROCDEF` 由 0 条变为 1 条，P0 卡点解除。**
+
+已交付的可重复执行工具（取代「在管理端手工建模」）：
+
+| 文件 | 作用 |
+| --- | --- |
+| `script/mes/feedback-approval.bpmn` | 流程定义（含 `rejectHandlerType=1`、审批人占位符） |
+| `script/mes/Initialize-FeedbackApproval.ps1` | 通过官方 `/admin-api/bpm/model` API 创建 + 发布，幂等 |
+| `script/mes/feedback-approval-README.md` | 执行步骤、约束说明、验收清单 |
+| `apps/web-antd/src/views/mes/pro/feedback/bpm-detail.vue` | 审批人在流程详情页看到的报工单只读视图 |
+
+实测的模型元数据：`model_id = a9b0f9ba-b017-11f1-829c-0abce767011b`、`category = MAIN_01`、
+`form_type = 20`、`visible = false`、`allow_cancel_running_process = false`、审批人 = 用户 id 1、
+`SUSPENSION_STATE_ = 1`（已激活）。
+
+### 两条对原文档的更正（实测得出，请以此为准）
+
+1. **第 9 节把 `erp-sale-order-approval` 称作「已跑通的同类流程参考」——在当前环境不成立。**
+   实测 `ACT_RE_PROCDEF` 原本为 0 条，该流程在本环境同样没有部署（代码里有实现）。
+   真正可参照的落地范式是 WMS 的 `script/wms/Initialize-ReceiptApproval.ps1` +
+   `script/wms/receipt-approval.bpmn`，本流程完全沿用其做法。
+2. **第 3.1 节建议「可见范围放开给生产相关人员」——实现时改为 `visible = false`。**
+   原因：流程只能由 MES 提交报工单时发起；若允许用户手工发起，会出现「没有报工单的流程实例」，
+   回调时无单可更。审批人查看单据改由 `formCustomViewPath` 指向的只读组件承担。
+
+### 部署时踩到的一个硬约束（已解决，供后续流程复制）
+
+`formType = 20`（业务表单）在**部署**时校验「创建路径 + 查看路径」**都必须非空**，否则报
+`1_009_002_003 部署流程失败，原因：流程表单未配置`，见 `BpmModelServiceImpl#validateFormConfig`。
+因此每个走业务表单的流程都必须同时提供一个查看组件（本流程即上面的 `bpm-detail.vue`）。
+
+### 仍待 BPM 侧决策
+
+第 6 节问题 2 / 8（审批人用固定用户还是角色）。当前先用固定用户跑通联调，
+决策后执行 `Initialize-FeedbackApproval.ps1 ... -ApproverUserId <id> -UpdateExisting` 覆盖即可。
+
+---
+
 ## 一、为什么要做这件事（当前唯一卡点）
 
 MES 报工审批的代码链路已全部完成、编译并部署到位：
@@ -145,7 +187,7 @@ MES 发起与回写双向都依赖该 Key。若发布后修改 Key，则新提�
 
 | 事项 | 责任方 | 估时 | 状态 |
 | --- | --- | --- | --- |
-| 流程模型配置与发布 | BPM 侧同事 | 约 1 天 | 待开始（当前卡点） |
+| 流程模型配置与发布 | BPM 侧同事（实际由我方脚本完成） | 约 1 天 | ✅ 已完成，见第 〇 节 |
 | 端到端联调 | 双方 | 约 1.5 天 | 我方已就绪 |
 | 报工审批上线 | 人员4 | — | 编码完成，待联调 |
 | 出入库审批 / 环保复核审批 | 人员4 | 各 3~5 天 / 2~3 天 | 按本方案复制，均依赖本模型先跑通 |
