@@ -2,7 +2,7 @@ package cn.iocoder.txgy.module.cms.controller.admin.Material;
 
 import cn.iocoder.txgy.module.cms.controller.admin.Material.vo.*;
 import cn.iocoder.txgy.module.cms.dal.dataobject.Material.CmsMaterialDO;
-import cn.iocoder.txgy.module.cms.service.Material.CmsMaterialService;
+import cn.iocoder.txgy.module.cms.service.material.CmsMaterialService;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;

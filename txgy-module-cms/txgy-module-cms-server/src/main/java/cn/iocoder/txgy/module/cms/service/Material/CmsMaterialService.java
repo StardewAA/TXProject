@@ -1,4 +1,4 @@
-package cn.iocoder.txgy.module.cms.service.Material;
+package cn.iocoder.txgy.module.cms.service.material;
 
 import cn.iocoder.txgy.module.cms.controller.admin.Material.vo.*;
 import cn.iocoder.txgy.module.cms.dal.dataobject.Material.CmsMaterialDO;

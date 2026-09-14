@@ -392,6 +392,7 @@ function removeRow(row: CmsRecord) {
                   v-model:value="formModel[field.dataIndex]"
                   :allow-clear="Boolean(field.options)"
                   :options="field.options"
+                  :placeholder="field.placeholder"
                   :rows="field.multiline ? 3 : undefined"
                 />
               </FormItem>

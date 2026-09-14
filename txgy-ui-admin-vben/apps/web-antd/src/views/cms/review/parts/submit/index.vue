@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   Alert,
   Button,
@@ -16,6 +16,7 @@ import type { BatchReviewItem, ReviewMetadata } from '#/api/cms/review';
 import {
   batchUploadReviews,
   checkReviewDuplicate,
+  getReview,
   submitText,
   uploadReview,
 } from '#/api/cms/review';
@@ -32,6 +33,7 @@ defineOptions({ name: 'CmsReviewSubmit' });
 withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
 
 const router = useRouter();
+const route = useRoute();
 const metadata = reactive<ReviewMetadata>({
   title: '',
   documentNo: '',
@@ -50,6 +52,8 @@ const parseWarning = ref('');
 const busy = ref(false);
 const batchOpen = ref(false);
 const batchRows = ref<BatchReviewItem[]>([]);
+const resubmitId = ref('');
+const rejectionReason = ref('');
 
 const kinds = [
   { value: 'LAW', label: '法律法规' },
@@ -76,15 +80,17 @@ function cleanMetadata(value: ReviewMetadata): ReviewMetadata {
   };
 }
 
-function validMetadata(value: ReviewMetadata) {
+function validMetadata(value: ReviewMetadata, sourceRequired: boolean) {
   if (
     !value.title.trim() ||
     (value.kind === 'STANDARD' && !value.documentNo.trim()) ||
     !value.issuer.trim() ||
-    !value.sourceUrl.trim()
+    (sourceRequired && !value.sourceUrl.trim())
   ) {
     message.warning(
-      '请填写标题、发布机关和来源链接；国家标准必须填写标准编号。',
+      sourceRequired
+        ? '请填写标题、发布机关和来源链接；国家标准必须填写标准编号。'
+        : '请填写标题和发布机关；国家标准必须填写标准编号。',
     );
     return false;
   }
@@ -157,7 +163,8 @@ async function parseUrl() {
 }
 
 async function submit() {
-  if (!validMetadata(metadata)) return;
+  if (!validMetadata(metadata, mode.value !== 'file' && !resubmitId.value))
+    return;
   if (
     mode.value === 'file' &&
     (!file.value || file.value.size > 25 * 1024 * 1024)
@@ -176,7 +183,7 @@ async function submit() {
   }
   busy.value = true;
   try {
-    if (mode.value !== 'file') {
+    if (mode.value !== 'file' && !resubmitId.value) {
       const duplicate = await checkReviewDuplicate(
         cleanMetadata(metadata),
         plainText,
@@ -189,13 +196,44 @@ async function submit() {
     const result =
       mode.value === 'file' && file.value
         ? await uploadReview(cleanMetadata(metadata), file.value)
-        : await submitText(cleanMetadata(metadata), plainText);
-    message.success('发布内容已提交，AI 初审完成后将进入待人工复核队列。');
+        : await submitText(
+            cleanMetadata(metadata),
+            plainText,
+            resubmitId.value || undefined,
+          );
+    message.success(
+      resubmitId.value
+        ? '修改内容已重新提交，并重新进入 AI 初审。'
+        : '发布内容已提交，AI 初审完成后将进入待人工复核队列。',
+    );
     router.push(`/cms/review/record?id=${result.id}`);
   } finally {
     busy.value = false;
   }
 }
+
+async function loadResubmission() {
+  const id = typeof route.query.resubmit === 'string' ? route.query.resubmit : '';
+  if (!/^[a-f0-9-]{36}$/.test(id)) return;
+  busy.value = true;
+  try {
+    const detail = await getReview(id);
+    if (detail.report.workflowStatus !== 'REJECTED') {
+      message.warning('只有已被人工驳回的内容可以修改后重新提交。');
+      return;
+    }
+    resubmitId.value = id;
+    rejectionReason.value = detail.report.manualNote || '';
+    Object.assign(metadata, detail.report.metadata);
+    text.value = plainTextToEditorHtml(detail.text);
+    file.value = undefined;
+    mode.value = 'text';
+  } finally {
+    busy.value = false;
+  }
+}
+
+onMounted(loadResubmission);
 
 async function submitBatch() {
   if (!batchRows.value.length) {
@@ -205,7 +243,7 @@ async function submitBatch() {
   if (
     batchRows.value.some(
       ({ file: current, metadata: value }) =>
-        current.size > 25 * 1024 * 1024 || !validMetadata(value),
+        current.size > 25 * 1024 * 1024 || !validMetadata(value, false),
     )
   )
     return;
@@ -237,20 +275,28 @@ async function submitBatch() {
       <p>录入待发布内容，提交后异步进行 AI 合规初审并进入人工复核。</p>
     </header>
     <Card title="发布内容">
+      <Alert
+        v-if="resubmitId"
+        type="warning"
+        show-icon
+        :message="`正在修改被驳回的申请${rejectionReason ? `：${rejectionReason}` : ''}`"
+        class="resubmit-alert"
+      />
       <div class="fields">
         <label
           >文档标题<Input v-model:value="metadata.title" :maxlength="300"
         /></label>
-        <label
-          >文号 / 标准编号<Input
+        <label v-if="metadata.kind === 'STANDARD'"
+          >标准编号（国标必填）<Input
             v-model:value="metadata.documentNo"
             :maxlength="100"
+            placeholder="例如：GB/T 23257-2017"
         /></label>
         <label
           >发布机关<Input v-model:value="metadata.issuer" :maxlength="200"
         /></label>
         <label>
-          官方原文链接
+          官方原文链接（上传本地文件可不填）
           <div class="source-url-field">
             <Input
               v-model:value="metadata.sourceUrl"
@@ -260,6 +306,10 @@ async function submitBatch() {
             />
             <Button :loading="busy" @click="parseUrl">智能解析</Button>
           </div>
+          <small class="source-url-help">
+            URL 解析需填写具体详情页；上传本地文件可留空，AI
+            将标记来源待核验，由管理员补充官方依据后才能发布。
+          </small>
         </label>
         <label
           >文档类型<Select v-model:value="metadata.kind" :options="kinds"
@@ -272,9 +322,6 @@ async function submitBatch() {
         <label
           >实施日期<input v-model="metadata.effectiveDate" type="date"
         /></label>
-        <label
-          >最后有效日期<input v-model="metadata.expiryDate" type="date"
-        /></label>
       </div>
       <Checkbox v-model:checked="metadata.historical"
         >作为历史资料归档</Checkbox
@@ -282,6 +329,7 @@ async function submitBatch() {
       <div class="body-input">
         <Select
           v-model:value="mode"
+          :disabled="Boolean(resubmitId)"
           :options="[
             { value: 'text', label: '手动录入' },
             { value: 'file', label: '上传文件' },
@@ -303,7 +351,7 @@ async function submitBatch() {
           type="primary"
           :loading="busy"
           @click="submit"
-          >提交发布并送审</Button
+          >{{ resubmitId ? '修改后重新提交' : '提交发布并送审' }}</Button
         >
         <Button
           v-access:code="['cms:review:submit']"
@@ -351,10 +399,11 @@ async function submitBatch() {
           <label
             >文档标题<Input v-model:value="row.metadata.title" :maxlength="300"
           /></label>
-          <label
-            >文号 / 标准编号<Input
+          <label v-if="row.metadata.kind === 'STANDARD'"
+            >标准编号（国标必填）<Input
               v-model:value="row.metadata.documentNo"
               :maxlength="100"
+              placeholder="例如：GB/T 23257-2017"
           /></label>
           <label
             >发布机关<Input
@@ -362,7 +411,7 @@ async function submitBatch() {
               :maxlength="200"
           /></label>
           <label
-            >官方原文链接<Input
+            >官方原文链接（选填）<Input
               v-model:value="row.metadata.sourceUrl"
               :maxlength="2000"
           /></label>
@@ -376,9 +425,6 @@ async function submitBatch() {
           /></label>
           <label
             >实施日期<input v-model="row.metadata.effectiveDate" type="date"
-          /></label>
-          <label
-            >最后有效日期<input v-model="row.metadata.expiryDate" type="date"
           /></label>
         </div>
         <Checkbox v-model:checked="row.metadata.historical"
@@ -427,6 +473,13 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 9px;
+}
+
+.source-url-help {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #718096;
 }
 
 .batch-picker {

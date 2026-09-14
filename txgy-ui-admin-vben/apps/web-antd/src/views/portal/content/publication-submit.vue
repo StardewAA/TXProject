@@ -17,9 +17,11 @@ import {
 import type { ReviewMetadata } from '#/api/cms/review';
 import type { PublicationSubmission } from '#/api/cms/submission';
 import {
-  listMyPublicationSubmissions,
   checkPublicationDuplicate,
+  getMyPublicationSubmission,
+  listMyPublicationSubmissions,
   parsePublicationUrl,
+  resubmitPublicationText,
   submitPublicationFile,
   submitPublicationText,
 } from '#/api/cms/submission';
@@ -49,6 +51,8 @@ const file = ref<File>();
 const busy = ref(false);
 const loading = ref(false);
 const rows = ref<PublicationSubmission[]>([]);
+const resubmitId = ref('');
+const rejectionReason = ref('');
 
 const kindOptions = [
   { label: '法律法规', value: 'LAW' },
@@ -67,6 +71,7 @@ const columns = [
   { title: '提交时间', key: 'createdAt', width: 190 },
   { title: '审查结果', key: 'review', width: 150 },
   { title: '发布状态', key: 'published', width: 140 },
+  { title: '操作', key: 'action', width: 130 },
 ];
 
 function cleanMetadata(): ReviewMetadata {
@@ -115,12 +120,17 @@ async function parseUrl() {
 }
 
 async function submit() {
+  const sourceRequired = mode.value !== 'file' && !resubmitId.value;
   if (
     !metadata.title.trim() ||
     !metadata.issuer.trim() ||
-    !metadata.sourceUrl.trim()
+    (sourceRequired && !metadata.sourceUrl.trim())
   ) {
-    message.warning('请填写标题、发布机关和官方原文链接。');
+    message.warning(
+      sourceRequired
+        ? '请填写标题、发布机关和官方原文链接。'
+        : '请填写标题和发布机关。',
+    );
     return;
   }
   if (metadata.kind === 'STANDARD' && !metadata.documentNo.trim()) {
@@ -142,7 +152,13 @@ async function submit() {
   }
   busy.value = true;
   try {
-    if (mode.value === 'file' && file.value) {
+    if (resubmitId.value) {
+      await resubmitPublicationText(
+        resubmitId.value,
+        cleanMetadata(),
+        plainText,
+      );
+    } else if (mode.value === 'file' && file.value) {
       await submitPublicationFile(cleanMetadata(), file.value);
     } else {
       const duplicate = await checkPublicationDuplicate(
@@ -155,13 +171,46 @@ async function submit() {
       }
       await submitPublicationText(cleanMetadata(), plainText);
     }
-    message.success('发布申请已提交，AI 初审后将进入管理员人工复核。');
+    message.success(
+      resubmitId.value
+        ? '修改内容已重新提交，并重新进入 AI 初审。'
+        : '发布申请已提交，AI 初审后将进入管理员人工复核。',
+    );
+    resubmitId.value = '';
+    rejectionReason.value = '';
     text.value = '';
     file.value = undefined;
     await refresh();
   } finally {
     busy.value = false;
   }
+}
+
+async function startResubmit(row: Record<string, any>) {
+  const item = row as PublicationSubmission;
+  busy.value = true;
+  try {
+    const detail = await getMyPublicationSubmission(item.report.id);
+    if (detail.report.workflowStatus !== 'REJECTED') {
+      message.warning('只有已被人工驳回的申请可以修改后重新提交。');
+      return;
+    }
+    resubmitId.value = detail.report.id;
+    rejectionReason.value = detail.report.manualNote || '';
+    Object.assign(metadata, detail.report.metadata);
+    text.value = plainTextToEditorHtml(detail.text);
+    file.value = undefined;
+    mode.value = 'text';
+    window.scrollTo({ behavior: 'smooth', top: 0 });
+  } finally {
+    busy.value = false;
+  }
+}
+
+function cancelResubmit() {
+  resubmitId.value = '';
+  rejectionReason.value = '';
+  text.value = '';
 }
 
 function reviewLabel(row: Record<string, any>) {
@@ -196,20 +245,27 @@ onMounted(refresh);
       type="info"
     />
     <Card title="提交发布申请">
+      <Alert
+        v-if="resubmitId"
+        type="warning"
+        show-icon
+        :message="`正在修改被驳回的申请${rejectionReason ? `：${rejectionReason}` : ''}`"
+      />
       <div class="fields">
         <label
           >文档标题<Input v-model:value="metadata.title" :maxlength="300"
         /></label>
-        <label
-          >文号 / 标准编号<Input
+        <label v-if="metadata.kind === 'STANDARD'"
+          >标准编号（国标必填）<Input
             v-model:value="metadata.documentNo"
             :maxlength="100"
+            placeholder="例如：GB/T 23257-2017"
         /></label>
         <label
           >发布机关<Input v-model:value="metadata.issuer" :maxlength="200"
         /></label>
         <label>
-          官方原文链接
+          官方原文链接（上传本地文件可不填）
           <div class="source-url-field">
             <Input
               v-model:value="metadata.sourceUrl"
@@ -219,6 +275,10 @@ onMounted(refresh);
             />
             <Button :loading="busy" @click="parseUrl">智能解析</Button>
           </div>
+          <small class="source-url-help">
+            URL 解析需填写具体详情页；上传本地文件可留空，AI
+            将标记来源待核验，由管理员补充官方依据后才能发布。
+          </small>
         </label>
         <label
           >文档类型<Select v-model:value="metadata.kind" :options="kindOptions"
@@ -231,9 +291,6 @@ onMounted(refresh);
         <label
           >实施日期<input v-model="metadata.effectiveDate" type="date"
         /></label>
-        <label
-          >最后有效日期<input v-model="metadata.expiryDate" type="date"
-        /></label>
       </div>
       <Checkbox v-model:checked="metadata.historical"
         >作为历史资料申报</Checkbox
@@ -241,6 +298,7 @@ onMounted(refresh);
       <div class="body-input">
         <Select
           v-model:value="mode"
+          :disabled="Boolean(resubmitId)"
           :options="[
             { label: '上传文件', value: 'file' },
             { label: '手动录入', value: 'text' },
@@ -255,9 +313,14 @@ onMounted(refresh);
         />
         <CmsWangEditor v-if="mode === 'text'" v-model="text" :height="360" />
       </div>
-      <Button type="primary" :loading="busy" @click="submit"
-        >提交审查并申请发布</Button
-      >
+      <div class="submit-actions">
+        <Button type="primary" :loading="busy" @click="submit">
+          {{ resubmitId ? '修改后重新提交' : '提交审查并申请发布' }}
+        </Button>
+        <Button v-if="resubmitId" :disabled="busy" @click="cancelResubmit">
+          取消修改
+        </Button>
+      </div>
     </Card>
 
     <Card title="我的发布申请">
@@ -291,6 +354,17 @@ onMounted(refresh);
                       : '未发布'
                 }}
               </Tag>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Button
+                v-if="record.report.workflowStatus === 'REJECTED'"
+                type="link"
+                :disabled="busy"
+                @click="startResubmit(record)"
+              >
+                修改后重提
+              </Button>
+              <span v-else>-</span>
             </template>
           </template>
         </Table>
@@ -326,6 +400,11 @@ label > input {
   margin: 18px 0;
 }
 
+.submit-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .body-input :deep(.ant-select) {
   width: 180px;
 }
@@ -334,6 +413,13 @@ label > input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 9px;
+}
+
+.source-url-help {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #718096;
 }
 
 @media (max-width: 800px) {

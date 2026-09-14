@@ -15,6 +15,7 @@ export interface CmsFormField {
   label: string;
   multiline?: boolean;
   options?: Array<{ label: string; value: string }>;
+  placeholder?: string;
   required?: boolean;
   date?: boolean;
 }

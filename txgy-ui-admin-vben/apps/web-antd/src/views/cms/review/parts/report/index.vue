@@ -210,7 +210,10 @@ watch(
           >
             登记官方核验依据
           </Button>
-          <Button v-if="!report.admitted" @click="router.push(`/cms/review/submit`)">修改并重新提交</Button>
+          <Button
+            v-if="report.workflowStatus === 'REJECTED'"
+            @click="router.push(`/cms/review/submit?resubmit=${report.id}`)"
+          >修改并重新提交</Button>
         </div>
         <details v-if="detail?.chunks.length" class="chunks">
           <summary>查看知识库切片（{{ detail.chunks.length }}）</summary>

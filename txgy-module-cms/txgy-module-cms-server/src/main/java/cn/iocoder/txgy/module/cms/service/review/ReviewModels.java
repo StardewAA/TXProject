@@ -19,7 +19,7 @@ public final class ReviewModels {
     public record Metadata(@NotBlank @Size(max=300) String title,
                            @NotNull @Size(max=100) String documentNo,
                            @NotBlank @Size(max=200) String issuer,
-                           @NotBlank @Size(max=2000) String sourceUrl,
+                           @NotNull @Size(max=2000) String sourceUrl,
                            @NotNull Kind kind, @NotNull Validity validity,
                            LocalDate effectiveDate, LocalDate expiryDate, boolean historical) { }
     public record Submission(@NotNull @jakarta.validation.Valid Metadata metadata,

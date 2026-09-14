@@ -1,6 +1,6 @@
 import { requestClient } from '#/api/request';
 
-import type { ReviewMetadata, ReviewReport } from './review';
+import type { ReviewDetail, ReviewMetadata, ReviewReport } from './review';
 
 export interface PublicationSubmission {
   published: boolean;
@@ -27,6 +27,22 @@ export const submitPublicationText = (metadata: ReviewMetadata, text: string) =>
     metadata,
     text,
   });
+
+export const getMyPublicationSubmission = (id: string) =>
+  requestClient.get<ReviewDetail>('/cms/portal/submission/get', {
+    params: { id },
+  });
+
+export const resubmitPublicationText = (
+  id: string,
+  metadata: ReviewMetadata,
+  text: string,
+) =>
+  requestClient.post<ReviewReport>(
+    '/cms/portal/submission/resubmit',
+    { metadata, text },
+    { params: { id } },
+  );
 
 export function submitPublicationFile(metadata: ReviewMetadata, file: File) {
   const data = new FormData();
