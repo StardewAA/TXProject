@@ -26,6 +26,7 @@ import {
 
 import { fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
+import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
@@ -340,25 +341,19 @@ function confirmDelete(r: ProjectApi.Project) {
     </div>
 
     <div class="ct-panel">
-      <div class="ct-filter">
-        <a-input v-model:value="query.projectCode" placeholder="项目编号" style="width: 190px" allow-clear @press-enter="load" />
-        <a-input v-model:value="query.projectName" placeholder="项目名称（模糊）" style="width: 220px" allow-clear @press-enter="load" />
-        <a-input v-model:value="query.regionCode" placeholder="地区编码" style="width: 140px" allow-clear @press-enter="load" />
-        <a-input v-model:value="query.industriesType" placeholder="行业分类" style="width: 140px" allow-clear @press-enter="load" />
-        <a-select
-          v-model:value="query.state"
-          placeholder="管理态"
-          style="width: 130px"
-          allow-clear
-          :options="[
+      <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+        <AttrFilter label="项目编号"><a-input v-model:value="query.projectCode" placeholder="项目编号" style="width: 190px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="项目名称（模糊）"><a-input v-model:value="query.projectName" placeholder="项目名称（模糊）" style="width: 220px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="地区编码"><a-input v-model:value="query.regionCode" placeholder="地区编码" style="width: 140px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="行业分类"><a-input v-model:value="query.industriesType" placeholder="行业分类" style="width: 140px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter
+v-model="query.state" label="管理态" :options="[
             { label: '在建（ACTIVE）', value: 'ACTIVE' },
             { label: '已关闭（CLOSED）', value: 'CLOSED' },
-          ]"
-          @change="load"
-        />
-        <a-button type="primary" @click="load">查询</a-button>
-        <a-button @click="resetQuery">重置</a-button>
-      </div>
+          ]" @change="load"
+/>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button></div>
+          </div>
       <div class="ct-panel-b">
         <a-table
           class="ct-table"

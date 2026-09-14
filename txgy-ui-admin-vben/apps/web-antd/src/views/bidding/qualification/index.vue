@@ -57,6 +57,7 @@ import { APPLY_STATUS_OPTIONS, APPLY_TYPE_OPTIONS } from '#/api/bidding/qualific
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
+import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
@@ -1207,27 +1208,14 @@ onMounted(() => {
         </div>
 
         <div class="ct-panel">
-          <div class="ct-filter">
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <span class="ct-panel-meta">主体在页首选择 →</span>
-            <a-select
-              v-model:value="query.qualSerial"
-              placeholder="资质序列"
-              style="width: 170px"
-              allow-clear
-              :options="QualificationApi.QUAL_SERIAL_OPTIONS"
-              @change="load"
-            />
-            <a-input v-model:value="query.qualStatus" placeholder="状态 code（如 VALID）" style="width: 180px" allow-clear @press-enter="load" />
-            <a-input v-model:value="query.keyword" placeholder="关键字（证书编号/机关）" style="width: 200px" allow-clear @press-enter="load" />
-            <a-input-number v-model:value="query.expiringInDays" :min="1" placeholder="N 天内到期" style="width: 140px" />
-            <a-select
-              v-model:value="reviewType"
-              placeholder="核查类型"
-              style="width: 170px"
-              :options="QualificationApi.REVIEW_TYPE_OPTIONS"
-            />
-            <a-button type="primary" @click="load">查询</a-button>
-            <a-button @click="resetQuery">重置</a-button>
+            <AttrFilter v-model="query.qualSerial" label="资质序列" :options="QualificationApi.QUAL_SERIAL_OPTIONS" @change="load" />
+            <AttrFilter label="台账状态"><a-input v-model:value="query.qualStatus" placeholder="状态 code（如 VALID）" style="width: 180px" allow-clear @press-enter="load" /></AttrFilter>
+            <AttrFilter label="关键字"><a-input v-model:value="query.keyword" placeholder="关键字（证书编号/机关）" style="width: 200px" allow-clear @press-enter="load" /></AttrFilter>
+            <AttrFilter label="到期窗口"><a-input-number v-model:value="query.expiringInDays" :min="1" placeholder="N 天内到期" style="width: 140px" /></AttrFilter>
+            <AttrFilter v-model="reviewType" label="核查类型" :options="QualificationApi.REVIEW_TYPE_OPTIONS" />
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button></div>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -1282,19 +1270,12 @@ onMounted(() => {
 
       <a-tab-pane key="apply" tab="② 延续申报台账">
         <div class="ct-panel">
-          <div class="ct-filter">
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <span class="ct-panel-meta">主体在页首选择 →</span>
-            <a-input-number v-model:value="applyQuery.qualId" :min="1" placeholder="资质 id" style="width: 150px" />
-            <a-select
-              v-model:value="applyQuery.applyType"
-              placeholder="申报类型"
-              style="width: 150px"
-              allow-clear
-              :options="APPLY_TYPE_OPTIONS"
-              @change="loadApplies"
-            />
-            <a-select v-model:value="applyQuery.status" placeholder="申报状态" style="width: 160px" allow-clear :options="APPLY_STATUS_OPTIONS" @change="loadApplies" />
-            <a-button type="primary" @click="loadApplies">查询</a-button>
+            <AttrFilter label="资质"><a-input-number v-model:value="applyQuery.qualId" :min="1" placeholder="资质 id" style="width: 150px" /></AttrFilter>
+            <AttrFilter v-model="applyQuery.applyType" label="申报类型" :options="APPLY_TYPE_OPTIONS" @change="loadApplies" />
+            <AttrFilter v-model="applyQuery.status" label="申报状态" :options="APPLY_STATUS_OPTIONS" @change="loadApplies" />
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadApplies">查询</a-button></div>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -1343,41 +1324,15 @@ onMounted(() => {
       <a-tab-pane key="standard" tab="③ 标准与要素">
         <div class="ct-panel">
           <div class="ct-panel-t">资质标准（序列 / 类别 / 等级 → 人员·业绩·资产要求）</div>
-          <div class="ct-filter">
-            <a-select
-              v-model:value="stdQuery.qualSerial"
-              placeholder="序列"
-              allow-clear
-              :options="stdSerialOptions"
-              style="width: 150px"
-              @change="stdQuery.qualCategory = undefined; stdQuery.qualGrade = undefined"
-            />
-            <a-select
-              v-model:value="stdQuery.qualCategory"
-              placeholder="类别"
-              allow-clear
-              :options="stdCategoryOptions"
-              style="width: 150px"
-              @change="stdQuery.qualGrade = undefined"
-            />
-            <a-select
-              v-model:value="stdQuery.qualGrade"
-              placeholder="等级"
-              allow-clear
-              :options="stdGradeOptions"
-              style="width: 130px"
-            />
-            <a-select
-              v-model:value="stdQuery.stdVersion"
-              placeholder="标准版本"
-              allow-clear
-              :options="stdVersionOptions"
-              style="width: 150px"
-            />
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="stdQuery.qualSerial" label="序列" :options="stdSerialOptions" @change="stdQuery.qualCategory = undefined; stdQuery.qualGrade = undefined" />
+            <AttrFilter v-model="stdQuery.qualCategory" label="类别" :options="stdCategoryOptions" @change="stdQuery.qualGrade = undefined" />
+            <AttrFilter v-model="stdQuery.qualGrade" label="等级" :options="stdGradeOptions" />
+            <AttrFilter v-model="stdQuery.stdVersion" label="标准版本" :options="stdVersionOptions" />
             <a-checkbox v-model:checked="stdQuery.onlyEffective">仅生效中</a-checkbox>
-            <a-button type="primary" @click="loadStd">查询</a-button>
             <a-button v-if="can('bidding:qualification:standard')" @click="openStandard">标准登记</a-button>
             <span class="ct-panel-meta">候选来自 /standard/options，不硬编码枚举</span>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadStd">查询</a-button></div>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -1411,13 +1366,15 @@ onMounted(() => {
 
         <div class="ct-panel mt-3">
           <div class="ct-panel-t">要素台账（人员配置 / 工程业绩 / 资产技术装备）</div>
-          <div class="ct-filter">
-            <a-input-number
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="资质 id（qualId，可空=按主体查全部）">
+<a-input-number
               v-model:value="elemQualId"
               :min="1"
               placeholder="资质 id（qualId，可空=按主体查全部）"
               style="width: 290px"
-            />
+/>
+</AttrFilter>
             <a-button type="primary" @click="loadElements">查询</a-button>
             <a-radio-group v-model:value="elemTabKey" button-style="solid" @change="switchElemTab">
               <a-radio-button value="staff">人员配置</a-radio-button>
@@ -1466,20 +1423,16 @@ onMounted(() => {
 
         <div class="ct-panel mt-3">
           <div class="ct-panel-t">达标核查历史</div>
-          <div class="ct-filter">
-            <a-input-number
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="资质 id（qualId，可空）">
+<a-input-number
               v-model:value="reviewQuery.qualId"
               :min="1"
               placeholder="资质 id（qualId，可空）"
               style="width: 200px"
-            />
-            <a-select
-              v-model:value="reviewQuery.reviewResult"
-              placeholder="核查结论"
-              allow-clear
-              :options="reviewResultOptions"
-              style="width: 140px"
-            />
+/>
+</AttrFilter>
+            <AttrFilter v-model="reviewQuery.reviewResult" label="核查结论" :options="reviewResultOptions" />
             <a-button type="primary" @click="loadReviews">查询</a-button>
             <span class="ct-panel-meta">结论在「① 台账」行内「达标核查」执行后产生</span>
           </div>
@@ -1517,23 +1470,18 @@ onMounted(() => {
       <a-tab-pane key="safety" tab="④ 安许证与预警">
         <div class="ct-panel">
           <div class="ct-panel-t">安许证台账</div>
-          <div class="ct-filter">
-            <a-select
-              v-model:value="permitQuery.permitStatus"
-              placeholder="状态"
-              allow-clear
-              :options="PERMIT_STATUS_OPTIONS"
-              style="width: 150px"
-            />
-            <a-input-number
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="permitQuery.permitStatus" label="状态" :options="PERMIT_STATUS_OPTIONS" />
+            <AttrFilter label="到期窗口">
+<a-input-number
               v-model:value="permitQuery.expiringInDays"
               :min="1"
               placeholder="N 天内到期"
               style="width: 140px"
-            />
-            <a-input v-model:value="permitQuery.keyword" placeholder="编号 / 法人关键字" style="width: 190px" />
-            <a-button type="primary" @click="loadPermits">查询</a-button>
-            <a-button v-if="can('bidding:qualification:permit')" @click="openPermit">安许建档</a-button>
+/>
+</AttrFilter>
+            <AttrFilter label="编号 / 法人关键字"><a-input v-model:value="permitQuery.keyword" placeholder="编号 / 法人关键字" style="width: 190px" /></AttrFilter>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadPermits">查询</a-button> <a-button v-if="can('bidding:qualification:permit')" @click="openPermit">安许建档</a-button></div>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -1589,33 +1537,15 @@ onMounted(() => {
 
         <div class="ct-panel mt-3">
           <div class="ct-panel-t">到期 / 风险预警清单（QUAL / SAFETY_PERMIT / STAFF 三源）</div>
-          <div class="ct-filter">
-            <a-select
-              v-model:value="alertQuery.refType"
-              placeholder="来源类型"
-              allow-clear
-              :options="QualificationApi.ALERT_REF_TYPE_OPTIONS"
-              style="width: 180px"
-            />
-            <a-select
-              v-model:value="alertQuery.alertLevel"
-              placeholder="级别"
-              allow-clear
-              :options="dictOptions('risk_level')"
-              style="width: 140px"
-            />
-            <a-select
-              v-model:value="alertQuery.handled"
-              placeholder="处理状态"
-              allow-clear
-              :options="handledOptions"
-              style="width: 140px"
-            />
-            <a-button type="primary" @click="loadAlerts">查询</a-button>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="alertQuery.refType" label="来源类型" :options="QualificationApi.ALERT_REF_TYPE_OPTIONS" />
+            <AttrFilter v-model="alertQuery.alertLevel" label="级别" :options="dictOptions('risk_level')" />
+            <AttrFilter v-model="alertQuery.handled" label="处理状态" :options="handledOptions" />
             <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">
               执行一次扫描
             </a-button>
             <span class="ct-panel-meta">同日幂等（refType:refId:yyyyMMdd）</span>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="loadAlerts">查询</a-button></div>
           </div>
           <div class="ct-panel-b">
             <div v-if="scanHits !== null" class="mb-2">
@@ -1677,14 +1607,16 @@ onMounted(() => {
 
       <a-tab-pane key="material" tab="⑤ 完备性明细与扫描">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="completenessQuery.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" />
-            <a-date-picker
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="企业主体"><a-input-number v-model:value="completenessQuery.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" /></AttrFilter>
+            <AttrFilter label="核验基准日（可空=今天）">
+<a-date-picker
               v-model:value="completenessQuery.asOf"
               placeholder="核验基准日（可空=今天）"
               value-format="YYYY-MM-DD"
               style="width: 210px"
-            />
+/>
+</AttrFilter>
             <a-button
               v-if="can('bidding:qualification:material:query')"
               type="primary"
@@ -1787,7 +1719,7 @@ onMounted(() => {
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions :column="2" size="small" bordered class="mb-3">
-            <a-descriptions-item label="资质 id">{{ detail.id }}</a-descriptions-item>
+            <a-descriptions-item label="资质">{{ detail.id }}</a-descriptions-item>
             <a-descriptions-item label="企业主体">{{ detail.entId }}</a-descriptions-item>
             <a-descriptions-item label="证书编号">{{ detail.certNo }}</a-descriptions-item>
             <a-descriptions-item label="序列">{{ textOf('qual_serial', detail.qualSerial) }}</a-descriptions-item>
@@ -1933,7 +1865,7 @@ onMounted(() => {
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <a-row :gutter="16">
           <a-col :span="8">
-            <a-form-item label="企业主体 id（entId）" name="entId">
+            <a-form-item label="企业主体" name="entId">
               <a-input-number v-model:value="form.entId" :min="1" style="width: 100%" />
             </a-form-item>
           </a-col>
@@ -2110,7 +2042,7 @@ onMounted(() => {
     >
       <a-descriptions :column="2" size="small" class="mb-3">
         <a-descriptions-item label="企业主体 id">{{ elementIds.entId }}</a-descriptions-item>
-        <a-descriptions-item label="资质 id">{{ elementIds.qualId }}</a-descriptions-item>
+        <a-descriptions-item label="资质">{{ elementIds.qualId }}</a-descriptions-item>
       </a-descriptions>
       <a-tabs v-model:active-key="elementTab">
         <a-tab-pane key="staff" tab="资质人员">

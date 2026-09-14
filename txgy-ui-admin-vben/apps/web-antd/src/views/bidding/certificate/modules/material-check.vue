@@ -15,6 +15,7 @@ import {
   getMaterialCompleteness,
 } from '#/api/bidding/certificate';
 
+import AttrFilter from '../components/AttrFilter.vue';
 import { useCertMeta } from '../useCertMeta';
 
 const { dictLabel, dictOptions, dictTag } = useCertMeta();
@@ -93,9 +94,9 @@ async function run() {
 
 <template>
   <div>
-    <div class="ct-filter">
-      <a-input-number v-model:value="entId" :min="1" placeholder="企业主体 ID（必填）" style="width: 200px" />
-      <a-date-picker v-model:value="asOf" value-format="YYYY-MM-DD" placeholder="核验基准日（默认今天）" />
+    <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+      <AttrFilter label="企业主体 ID（必填）"><a-input-number v-model:value="entId" :min="1" placeholder="企业主体 ID（必填）" style="width: 200px" /></AttrFilter>
+      <AttrFilter label="核验基准日（默认今天）"><a-date-picker v-model:value="asOf" value-format="YYYY-MM-DD" placeholder="核验基准日（默认今天）" /></AttrFilter>
       <a-button type="primary" :loading="loading" @click="run">开始自查</a-button>
       <span class="ct-ml">可填未来日期预演"投标截止日是否仍有效"</span>
     </div>

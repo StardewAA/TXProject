@@ -35,6 +35,7 @@ import {
 import { fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
+import AttrFilter from '../components/AttrFilter.vue';
 import RuleConfigPanel from './modules/RuleConfigPanel.vue';
 
 import '../certificate/cert.css';
@@ -453,24 +454,10 @@ onMounted(() => {
 
     <div class="ct-panel">
       <div class="ct-panel-t">④ 项目关键岗位变更监控</div>
-      <div class="ct-filter">
-        <a-input-number v-model:value="projectId" :min="1" placeholder="项目 id" style="width: 150px" />
-        <a-select
-          v-model:value="projectId"
-          :options="projectOptions"
-          :loading="projectLoading"
-          :filter-option="false"
-          placeholder="或按项目名称搜索"
-          show-search
-          allow-clear
-          style="width: 280px"
-          @focus="loadProjects()"
-          @search="loadProjects"
-        />
-        <a-input-number v-model:value="windowDays" :min="1" placeholder="窗口天数（空=取配置）" style="width: 200px" />
-        <a-button v-if="can('bidding:project:query')" type="primary" :loading="keyPostLoading" @click="doKeyPost">
-          查询
-        </a-button>
+      <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+        <AttrFilter label="项目 id"><a-input-number v-model:value="projectId" :min="1" placeholder="项目 id" style="width: 150px" /></AttrFilter>
+        <AttrFilter v-model="projectId" label="或按项目名称搜索" :options="projectOptions" />
+        <AttrFilter label="窗口天数（空=取配置）"><a-input-number v-model:value="windowDays" :min="1" placeholder="窗口天数（空=取配置）" style="width: 200px" /></AttrFilter>
         <a-button
           v-if="can('bidding:project:update')"
           :disabled="!projectId"
@@ -479,7 +466,8 @@ onMounted(() => {
           登记任职 / 变更
         </a-button>
         <span class="ct-panel-meta">阈值缺省取配置 project.key.post.change.window.days</span>
-      </div>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button v-if="can('bidding:project:query')" type="primary" :loading="keyPostLoading" @click="doKeyPost"> 查询 </a-button></div>
+          </div>
       <div class="ct-panel-b">
         <template v-if="keyPost">
           <div class="mb-2">

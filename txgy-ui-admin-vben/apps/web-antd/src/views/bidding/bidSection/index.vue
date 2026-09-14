@@ -22,6 +22,7 @@ import {
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
+import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
@@ -216,24 +217,18 @@ async function submit() {
     </div>
 
     <div class="ct-panel">
-      <div class="ct-filter">
-        <a-input v-model:value="query.bidSectionCode" placeholder="标段编号" style="width: 200px" allow-clear @press-enter="load" />
-        <a-input v-model:value="query.bidSectionName" placeholder="标段名称（模糊）" style="width: 220px" allow-clear @press-enter="load" />
-        <a-input v-model:value="query.tenderProjectCode" placeholder="所属招标项目编号" style="width: 210px" allow-clear @press-enter="load" />
-        <a-select
-          v-model:value="query.state"
-          placeholder="管理态"
-          style="width: 130px"
-          allow-clear
-          :options="[
+      <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+        <AttrFilter label="标段编号"><a-input v-model:value="query.bidSectionCode" placeholder="标段编号" style="width: 200px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="标段名称（模糊）"><a-input v-model:value="query.bidSectionName" placeholder="标段名称（模糊）" style="width: 220px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="所属招标项目编号"><a-input v-model:value="query.tenderProjectCode" placeholder="所属招标项目编号" style="width: 210px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter
+v-model="query.state" label="管理态" :options="[
             { label: '在建（ACTIVE）', value: 'ACTIVE' },
             { label: '已关闭（CLOSED）', value: 'CLOSED' },
-          ]"
-          @change="load"
-        />
-        <a-button type="primary" @click="load">查询</a-button>
-        <a-button @click="resetQuery">重置</a-button>
-      </div>
+          ]" @change="load"
+/>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button></div>
+          </div>
       <div class="ct-panel-b">
         <a-table
           class="ct-table"
