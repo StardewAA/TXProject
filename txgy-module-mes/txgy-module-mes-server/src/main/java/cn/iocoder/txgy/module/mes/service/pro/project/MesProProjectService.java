@@ -5,6 +5,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectI
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
@@ -116,6 +117,13 @@ public interface MesProProjectService {
      * @return 统计详情
      */
     MesProProjectStatisticsDetailRespVO getProjectStatisticsDetail(Long projectId);
+
+    /**
+     * 获得里程碑到期预警列表（未完成且 3 天内到期 / 已超期）
+     *
+     * @return 预警列表，按计划完成时间升序
+     */
+    List<MesProProjectMilestoneAlertRespVO> getMilestoneAlerts();
 
     /**
      * 获得项目的工单统计 Map（key 为项目编号），供列表批量拼接使用

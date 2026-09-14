@@ -11,12 +11,14 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectI
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectFeedbackStatisticsRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMilestoneMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
@@ -61,6 +63,8 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     private MesProWorkOrderMapper workOrderMapper;
     @Resource
     private MesProFeedbackMapper feedbackMapper;
+    @Resource
+    private MesProProjectMilestoneMapper milestoneMapper;
     @Resource
     private AdminUserApi adminUserApi;
 
@@ -222,6 +226,15 @@ public class MesProProjectServiceImpl implements MesProProjectService {
             detail.setQualifyRate(feedback.getQualifyRate());
         }
         return detail;
+    }
+
+    @Override
+    public List<MesProProjectMilestoneAlertRespVO> getMilestoneAlerts() {
+        List<MesProProjectMilestoneAlertRespVO> alerts = milestoneMapper.selectAlertList();
+        // 计算预警级别：已超期 → overdue；未超期（3 天内到期）→ warning
+        alerts.forEach(alert -> alert.setLevel(
+                alert.getDaysLeft() != null && alert.getDaysLeft() < 0 ? "overdue" : "warning"));
+        return alerts;
     }
 
     /**
