@@ -24,6 +24,12 @@ public enum MesProTaskStatusEnum implements ArrayValuable<Integer> {
      */
     PREPARE(MesOrderStatusConstants.PREPARE, "草稿"),
     /**
+     * 已确认（已排产）
+     *
+     * 排产完成后任务进入已确认状态，可被报工选择器选中
+     */
+    CONFIRMED(MesOrderStatusConstants.CONFIRMED, "已确认"),
+    /**
      * 已完成
      *
      * 对应 MesProTaskService#finishTaskByOrderId 方法
