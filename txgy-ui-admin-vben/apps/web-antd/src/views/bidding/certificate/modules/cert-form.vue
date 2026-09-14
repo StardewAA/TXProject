@@ -17,6 +17,8 @@ import {
   getCertificate,
   updateCertificate,
 } from '#/api/bidding/certificate';
+import { getPersonnelProfilePage } from '#/api/bidding/personnel';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { useCertMeta } from '../useCertMeta';
 
@@ -55,6 +57,57 @@ function blank(): CertificateApi.SaveReq {
   };
 }
 const form = reactive<CertificateApi.SaveReq>(blank());
+
+/* 持证主体：**能选就不要手打**（2026-09-14 修正"应由系统给出的数据却让用户输入"）
+ *   · 后端 CertificateSaveReqVO 的 holderId 注释是"**关联档案 ID**"（人员证＝员工档案 id），
+ *     而本页此前只渲染了一个 holderName 文本框 ⇒ holderId 永远为空，**证照与持证主体的关联一直被丢掉**；
+ *   · 现在：类别=本企业(ORG) 可一键取「主体档案」单位名；类别=员工(PERSON) 从员工档案**选择**并回填 holderId；
+ *     类别=外部(EXTERNAL) 保留手填（外部机构不在本系统档案里，手填是合理的）。 */
+/** 已加载的员工档案（PERSON 类别的可选项） */
+const personOptions = ref<Array<{ label: string; value: number | string }>>([]);
+const personLoading = ref(false);
+async function loadPersons(): Promise<void> {
+  if (personOptions.value.length || personLoading.value) return;
+  personLoading.value = true;
+  try {
+    const res = await getPersonnelProfilePage({ pageNo: 1, pageSize: 200 });
+    personOptions.value = (res?.list ?? [])
+      .filter((p) => p.id !== undefined && p.personName)
+      .map((p) => ({ label: (p.personName ?? '') + (p.personNo ? ' · ' + p.personNo : ''), value: p.id as number }));
+  } catch {
+    personOptions.value = [];
+  } finally {
+    personLoading.value = false;
+  }
+}
+/** 选中员工：姓名与关联档案一起回填（避免手打错名导致与档案对不上） */
+function pickPerson(id: number | string): void {
+  const hit = personOptions.value.find((o) => o.value === id);
+  form.holderId = id as number;
+  if (hit) form.holderName = hit.label.split(' · ')[0] ?? form.holderName;
+}
+/** 本企业主体名一键带入（来源：主体档案，与公告工作台的发布单位同一口径） */
+async function takeOrgName(): Promise<void> {
+  try {
+    const p = (await fetchSubjectProfile('TENDERER')) ?? (await fetchSubjectProfile('BIDDER'));
+    if (p?.subjectName) {
+      form.holderName = p.subjectName;
+      message.success('已带入主体档案单位名');
+    } else {
+      message.warning('主体档案尚无单位名，请在「主体档案」维护后再带入');
+    }
+  } catch {
+    message.warning('主体档案读取失败（可能无权限或未建档），请手工填写');
+  }
+}
+/** 类别切换：离开 PERSON 时清掉 holderId（其后端语义是"关联档案 ID"，对 ORG 不该带旧人员 id） */
+watch(
+  () => form.holderType,
+  (t) => {
+    if (t === 'PERSON') void loadPersons();
+    else form.holderId = undefined;
+  },
+);
 
 /** 持证主体类别：优先取字典 holder_type；字典未提供时用契约 §2.3 明示的三值（ORG/PERSON/EXTERNAL） */
 const holderTypes = computed(() => {
@@ -249,13 +302,30 @@ async function submit() {
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="持证主体名称" name="holderName">
-            <a-input v-model:value="form.holderName" allow-clear />
+          <a-form-item label="持证主体类别" name="holderType">
+            <a-select v-model:value="form.holderType" :options="holderTypes" allow-clear />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="持证主体类别" name="holderType">
-            <a-select v-model:value="form.holderType" :options="holderTypes" allow-clear />
+          <a-form-item label="持证主体名称" name="holderName">
+            <!-- 人员证：直接从员工档案选择（value 即"关联档案 ID"，见 holderId 契约） -->
+            <a-select
+              v-if="form.holderType === 'PERSON'"
+              v-model:value="form.holderId"
+              :options="personOptions"
+              :loading="personLoading"
+              show-search
+              option-filter-prop="label"
+              placeholder="选择员工（来自员工档案）"
+              allow-clear
+              @change="pickPerson"
+            />
+            <!-- 本企业 / 外部机构：手填（本企业可一键带入主体档案单位名） -->
+            <a-input v-else v-model:value="form.holderName" allow-clear />
+            <div v-if="form.holderType === 'ORG'" class="ct-tip">
+              <a class="text-xs text-blue-600" @click="takeOrgName">用「主体档案」的本企业名称</a>
+            </div>
+            <div v-if="form.holderId" class="ct-tip">已关联档案 ID：{{ form.holderId }}</div>
           </a-form-item>
         </a-col>
         <a-col :span="12">
