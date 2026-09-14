@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.bpm.framework.rpc.config;
 
 import cn.iocoder.txgy.module.bpm.api.event.CrmContractStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.CrmQuotationStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.CrmReceivableStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
@@ -12,6 +13,7 @@ import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
 import cn.iocoder.txgy.module.system.api.permission.RoleApi;
+import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsSendApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -39,15 +41,9 @@ public class RpcConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(name = "erpPurchaseOrderStatusListener")
-    public ErpPurchaseOrderStatusListener erpPurchaseOrderStatusListener() {
-        return new ErpPurchaseOrderStatusListener();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(name = "erpSaleOrderStatusListener")
-    public ErpSaleOrderStatusListener erpSaleOrderStatusListener() {
-        return new ErpSaleOrderStatusListener();
+    @ConditionalOnMissingBean(name = "crmQuotationStatusListener")
+    public CrmQuotationStatusListener crmQuotationStatusListener() {
+        return new CrmQuotationStatusListener();
     }
 
     @Bean

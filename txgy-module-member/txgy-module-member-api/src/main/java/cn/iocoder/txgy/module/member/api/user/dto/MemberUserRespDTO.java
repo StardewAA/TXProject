@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 @Data
 public class MemberUserRespDTO {
 
+    private String memberIdentity;
+
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 

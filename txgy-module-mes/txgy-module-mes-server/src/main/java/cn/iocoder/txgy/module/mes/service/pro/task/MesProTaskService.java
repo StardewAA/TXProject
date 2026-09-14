@@ -29,6 +29,17 @@ public interface MesProTaskService {
     Long createTask(@Valid MesProTaskSaveReqVO createReqVO);
 
     /**
+     * 按工艺路线自动拆分生成任务
+     *
+     * 以工单产品的工艺路线工序序列为基准，为每道缺失任务的工序生成任务：
+     * 计划时间按每道工序 1 个工作日（8 小时）链式排布；已存在任务的工序自动跳过（幂等）。
+     *
+     * @param workOrderId 生产工单编号
+     * @return 本次新生成的任务数量
+     */
+    Integer autoGenerateTasksByRoute(Long workOrderId);
+
+    /**
      * 更新生产任务
      *
      * @param updateReqVO 更新信息

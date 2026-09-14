@@ -2,6 +2,7 @@
 import type { CrmBusinessApi } from '#/api/crm/business';
 import type { CrmContractApi } from '#/api/crm/contract';
 import type { CrmProductApi } from '#/api/crm/product';
+import type { CrmQuotationApi } from '#/api/crm/quotation';
 
 import { nextTick, onMounted, ref, watch } from 'vue';
 
@@ -20,7 +21,8 @@ const props = defineProps<{
   bizType: BizTypeEnum;
   products?:
     | CrmBusinessApi.BusinessProduct[]
-    | CrmContractApi.ContractProduct[];
+    | CrmContractApi.ContractProduct[]
+    | CrmQuotationApi.QuotationProduct[];
 }>();
 
 const emit = defineEmits(['update:products']);
@@ -66,6 +68,8 @@ function handleUpdateValue(row: any) {
     row.businessPrice = row.sellingPrice;
   } else if (props.bizType === BizTypeEnum.CRM_CONTRACT) {
     row.contractPrice = row.sellingPrice;
+  } else if (props.bizType === BizTypeEnum.CRM_QUOTATION) {
+    row.quotationPrice = row.sellingPrice;
   }
   if (index === -1) {
     row.id = tableData.value.length + 1;
@@ -117,6 +121,10 @@ watch(
     } else if (props.bizType === BizTypeEnum.CRM_CONTRACT) {
       tableData.value.forEach((item) => {
         item.sellingPrice = item.contractPrice;
+      });
+    } else if (props.bizType === BizTypeEnum.CRM_QUOTATION) {
+      tableData.value.forEach((item) => {
+        item.sellingPrice = item.quotationPrice;
       });
     }
     await gridApi.grid.reloadData(tableData.value);

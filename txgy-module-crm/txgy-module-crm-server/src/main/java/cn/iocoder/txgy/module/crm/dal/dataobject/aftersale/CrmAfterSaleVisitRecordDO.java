@@ -37,6 +37,12 @@ public class CrmAfterSaleVisitRecordDO extends BaseDO {
      */
     private Long taskId;
     /**
+     * 记录状态：1=待填写 2=已填写
+     *
+     * 枚举 {@link cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitRecordStatusEnum}
+     */
+    private Integer status;
+    /**
      * 质保档案编号
      */
     private Long warrantyId;

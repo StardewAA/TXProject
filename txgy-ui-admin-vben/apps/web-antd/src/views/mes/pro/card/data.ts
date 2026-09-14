@@ -2,6 +2,7 @@ import type { VbenFormApi, VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MesProCardApi } from '#/api/mes/pro/card';
 import type { MesProCardProcessApi } from '#/api/mes/pro/card/process';
+import type { MesProWorkOrderApi } from '#/api/mes/pro/workorder';
 
 import { h, markRaw } from 'vue';
 
@@ -86,6 +87,10 @@ export function useFormSchema(
         disabled: headerReadonly,
         placeholder: '请选择生产工单',
         status: MesProWorkOrderStatusEnum.CONFIRMED,
+        // 选择工单后自动带出该工单的产品（清空工单时同步清空产品）
+        onChange: async (item?: MesProWorkOrderApi.WorkOrder) => {
+          await formApi?.setFieldValue('itemId', item?.productId);
+        },
       },
       rules: 'selectRequired',
     },
@@ -235,7 +240,7 @@ export function useGridColumns(): VxeTableGridOptions<MesProCardApi.Card>['colum
     },
     {
       title: '操作',
-      width: 240,
+      width: 260,
       fixed: 'right',
       slots: { default: 'actions' },
     },

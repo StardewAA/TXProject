@@ -29,4 +29,16 @@ public class FileTypeUtilsTest {
         assertArrayEquals(content, response.getContentAsByteArray());
     }
 
+    @Test
+    public void testWriteInline_contentDispositionInline() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        byte[] content = "%PDF-1.4".getBytes(StandardCharsets.UTF_8);
+
+        FileTypeUtils.writeInline(response, "resume.pdf", content);
+
+        assertEquals("inline;filename=\"resume.pdf\";filename*=UTF-8''resume.pdf",
+                response.getHeader("Content-Disposition"));
+        assertArrayEquals(content, response.getContentAsByteArray());
+    }
+
 }

@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>招标投标门户 · 公告大厅（样式稿 v5）</title><link rel="stylesheet" href="design-tokens.css" data-ipw-design-tokens><style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--ipw-color-bg);color:var(--ipw-color-text);font-family:var(--ipw-font-body)}
+main{width:min(var(--ipw-content-width),calc(100% - 2 * var(--ipw-page-padding)));margin:0 auto;padding:var(--ipw-section-space) 0}
+.eyebrow{color:var(--ipw-color-primary);font-weight:700;letter-spacing:.14em;font-size:12px}
+h1{max-width:26ch;margin:14px 0 10px;font-size:clamp(1.8rem,3.4vw,2.6rem);font-weight:800;letter-spacing:.01em;line-height:1.2}
+.lead{max-width:82ch;color:var(--ipw-color-muted);font-size:14px;line-height:1.9;margin:0}
+.spec-note{font-size:12.5px;line-height:1.8;color:var(--ipw-color-muted)}
+h2{font-size:17px;margin:0}
+section.block{margin-top:calc(var(--ipw-section-space) * .7)}
+section.block + section.block{margin-top:calc(var(--ipw-section-space) * 1.15);padding-top:18px;border-top:1px dashed #cfd6dd}
+.kicker{display:flex;align-items:center;gap:10px;color:var(--ipw-color-primary);font-weight:700;letter-spacing:.1em;font-size:12px;margin-bottom:12px}
+.kicker::after{content:"";flex:1;height:1px;background:var(--ipw-color-border)}
+.card{background:var(--ipw-card-bg);border:1px solid var(--ipw-card-border);border-radius:var(--ipw-card-radius);padding:20px;box-shadow:var(--ipw-card-shadow)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px;margin-top:14px}
+.table-wrap{overflow:auto;background:#fff;border:1px solid var(--ipw-card-border);border-radius:8px;box-shadow:var(--ipw-card-shadow)}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+th,td{text-align:left;padding:8px 12px;border:1px solid #e4e8ec;vertical-align:top}
+th{background:#f3f5f8;font-weight:700;font-size:12px;color:#3d4a57;white-space:nowrap}
+code{background:#eef1f4;border:1px solid #d9dfe5;border-radius:4px;padding:0 5px;font-family:Consolas,"Courier New",monospace;font-size:11.5px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:4px;font-size:11.5px;line-height:1.7;white-space:nowrap;border:1px solid transparent}
+.tag.t{background:#e6eef8;color:#174a86;border-color:#c4d7ec}
+.tag.m{background:#eef1f4;color:#44505c;border-color:#d3dae1}
+.tag.d{background:#24303a;color:#fff}
+.tag.a{background:#fdf0e5;color:#9a4508;border-color:#f2d0ac}
+.tag.g{background:#e5f2ea;color:#176b44;border-color:#c1dfcd}
+.tag.o{background:#fff;color:#5d6a77;border-color:#d3dae1}
+.caption{font-size:12px;color:#5d6a77;margin-top:8px;line-height:1.8}
+.caption b{color:#33404c}
+mark{background:#fff3d6;color:#8a5a00;border-radius:3px;padding:0 3px}
+ul.checks{list-style:none;padding:0;margin:6px 0 0;font-size:13px;line-height:1.9}
+ul.checks li{padding-left:24px;position:relative}
+ul.checks li::before{content:"";position:absolute;left:2px;top:9px;width:8px;height:4px;border-left:2px solid var(--ipw-color-primary);border-bottom:2px solid var(--ipw-color-primary);transform:rotate(-45deg)}
+/* 浏览器样稿 */
+.browser{background:#fff;border:1px solid #cdd4db;border-top:2px solid #b8c1ca;border-radius:6px;overflow:hidden;box-shadow:0 14px 40px rgb(23 32 42 / 12%);margin-top:14px}
+.browser-bar{display:flex;align-items:center;gap:7px;background:#f2f4f7;border-bottom:1px solid #dde2e8;padding:8px 12px}
+.browser-url{flex:1;max-width:560px;margin-left:8px;background:#fff;border:1px solid #dde2e8;border-radius:4px;padding:3px 10px;font-size:11.5px;color:#7a8591;font-family:Consolas,monospace}
+.site-head{display:flex;align-items:center;gap:18px;padding:0 22px;height:46px;background:#1e2832;color:#dbe3ea}
+.site-head .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#fff}
+.site-head .brand-mark{width:18px;height:18px;border-radius:3px;background:var(--ipw-color-primary);color:#fff;display:grid;place-items:center;font-size:11px}
+.site-head .ext{font-size:12px;color:#9fb0be}
+.site-head .spacer{flex:1}
+.site-head a{color:#c8d3dc;font-size:12.5px;text-decoration:none;margin-left:14px}
+.main-nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:#d3dae1;border-bottom:1px solid #d3dae1;margin:0}
+.nav-item{background:#fbfcfd;padding:13px 12px 11px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;text-align:center;position:relative}
+.nav-item:hover{background:#f2f6fb}
+.nav-item svg{width:24px;height:24px;stroke:var(--ipw-color-primary);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.nav-item .n-name{font-size:13.5px;font-weight:700;color:#1e2832}
+.nav-item .n-sub{font-size:11px;color:#7a8591;line-height:1.4}
+.nav-item.on{background:#fff;box-shadow:inset 0 -3px 0 var(--ipw-color-primary)}
+.nav-item.on .n-name{color:var(--ipw-color-primary)}
+.nav-item .n-flag{position:absolute;top:8px;right:10px;font-size:10px;color:#9aa4af;border:1px solid #d3dae1;background:#fff;border-radius:3px;padding:0 5px;line-height:1.5}
+/* 关键词条：居中 */
+.kwbar{display:flex;justify-content:center;gap:8px;padding:18px 22px 8px}
+.kwbar .kw{position:relative;width:min(560px,100%)}
+.kwbar input{width:100%;border:1px solid #c4ccd4;border-radius:4px;padding:8px 40px 8px 14px;font-size:14px;color:#1e2832;outline:none}
+.kwbar input:focus{border-color:var(--ipw-color-primary)}
+.kwbar .kw-ic{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#8a97a4;font-size:14px}
+.btn{border-radius:4px;padding:7px 24px;font-size:13.5px;cursor:pointer;border:1px solid transparent;font-weight:600}
+.btn.primary{background:var(--ipw-color-primary);color:#fff}
+/* 行式属性查询区（动漫门户式：属性名靠左，右侧一排文字选项） */
+.qarea{background:#fff;border:1px solid #d9dfe5;border-radius:6px;margin:6px 22px 4px;padding:10px 16px}
+.qrow{display:flex;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #eceff3;line-height:1.9}
+.qrow:last-child{border-bottom:0}
+.qlb{flex:none;width:92px;font-size:13px;color:#33404c;font-weight:800;letter-spacing:.02em}
+.qopts{display:flex;flex-wrap:wrap;gap:2px 0;align-items:center;min-width:0}
+.opt{font-size:13px;color:#44505c;padding:1px 12px;cursor:pointer;white-space:nowrap;border-radius:3px;border:1px solid transparent}
+.opt:hover{color:var(--ipw-color-primary);background:#eef4fb}
+.opt.on{background:var(--ipw-color-primary);color:#fff;font-weight:600}
+.opt.custom{border:1px dashed #b9c3cd;color:#5d6a77;margin-left:6px}
+.opt.custom:hover{border-color:var(--ipw-color-primary);color:var(--ipw-color-primary);background:#fff}
+.qrow.drag .qopts{overflow-x:auto;flex-wrap:nowrap;cursor:grab;scrollbar-width:none}
+.qrow.drag .qopts::-webkit-scrollbar{display:none}
+.qsep{color:#d9dfe5;margin:0 3px;flex:none}
+.cust-line{display:flex;align-items:center;gap:8px;margin:4px 0 0 92px;background:#f7f9fb;border:1px dashed #c9d2db;border-radius:4px;padding:6px 10px}
+.input{border:1px solid #cfd6dd;background:#fff;border-radius:4px;padding:5px 9px;font-size:12.5px;color:#1e2832;width:150px}
+.cust-note{font-size:11.5px;color:#9aa4af}
+/* 目录 */
+.catalog{margin:8px 22px 0}
+.cat-head{display:flex;align-items:baseline;gap:10px;padding:6px 2px 4px}
+.cat-head .t{font-size:15px;font-weight:800}
+.cat-head small{color:#7a8591;font-size:12px}
+.notice-table{border:1px solid #e0e4e9;border-radius:6px;overflow:hidden}
+.nrow{display:grid;grid-template-columns:minmax(0,1fr) 118px 74px;gap:8px;padding:0 12px;border-bottom:1px solid #eceff3;cursor:pointer;background:#fff;align-items:center;min-height:52px}
+.nrow:hover{background:#f5f8fc}
+.nrow.head{background:#f3f5f8;cursor:default;font-size:12px;color:#5d6a77;font-weight:700;border-bottom:1px solid #d9dfe5}
+.nrow:last-child{border-bottom:0}
+.c-title{min-width:0}
+.n-title{font-size:13.5px;font-weight:700;color:#1e2832;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.n-title:hover{color:var(--ipw-color-primary);text-decoration:underline}
+.n-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.n-main{color:#5d6a77;font-size:11.5px;display:flex;flex-direction:column;gap:2px}
+.n-right{display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.n-time{font-size:12px;color:#33404c;font-variant-numeric:tabular-nums}
+.pager{display:flex;justify-content:flex-end;align-items:center;gap:5px;padding:10px 2px 18px;color:#7a8591;font-size:12px}
+.pg{min-width:26px;height:26px;border-radius:4px;border:1px solid #d3dae1;background:#fff;display:grid;place-items:center;font-size:12px;color:#44505c}
+.pg.on{background:var(--ipw-color-primary);color:#fff;border-color:var(--ipw-color-primary)}
+/* 详情页 */
+.detail-bar{display:flex;align-items:center;gap:14px;padding:10px 22px;border-bottom:1px solid #e2e6eb;background:#fff}
+.back{font-size:13px;color:var(--ipw-color-primary);font-weight:700;cursor:pointer;border:1px solid #c4d7ec;background:#eef4fb;border-radius:4px;padding:4px 12px}
+.back:hover{background:#e2ecf8}
+.detail-bar .sep{color:#cfd6dd}
+.detail-title-mini{font-size:12.5px;color:#7a8591;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-head{padding:12px 22px 12px;background:#fff}
+.detail-head h4{margin:6px 0 10px;font-size:17.5px;line-height:1.5}
+.detail-meta{display:flex;flex-wrap:wrap;gap:4px 20px;font-size:12.5px;color:#44505c;border-top:1px solid #eceff3;padding-top:9px}
+.detail-meta span b{font-weight:400;color:#7a8591;margin-right:4px}
+.detail-ops{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.detail-body{padding:6px 22px 24px}
+.doc{background:#fff;border:1px solid #d9d3c4;border-radius:2px;width:min(900px,100%);margin:0 auto;padding:64px 84px 54px;font-family:"仿宋_GB2312","FangSong_GB2312","仿宋","FangSong","STFangsong","华文仿宋","SimSun",serif;font-size:18px;line-height:2;color:#1c1c1c;text-align:justify}
+.doc h5{font-family:"黑体","SimHei","Microsoft YaHei",sans-serif;font-size:18px;font-weight:700;color:#161616;margin:24px 0 2px;text-indent:0}
+.doc p{margin:0;text-indent:2em}
+.doc .an{font-family:"Times New Roman","SimSun",serif}
+.doc table.sm{width:84%;margin:12px auto 16px;border-collapse:collapse;font-size:15px;font-family:inherit}
+.doc table.sm th,.doc table.sm td{border:1px solid #333;padding:5px 12px;text-align:center;font-family:inherit}
+.doc table.sm th{font-family:"黑体","SimHei",sans-serif;font-weight:700;background:#f7f5ef}
+.doc .sign{position:relative;text-align:right;margin:44px 0 0;text-indent:0;line-height:2.1;padding-right:60px}
+.doc .seal{position:absolute;right:24px;top:-14px;width:112px;height:112px;border-radius:50%;border:3px solid rgba(196,43,28,.92);color:rgba(196,43,28,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-family:"楷体","KaiTi","STKaiti",serif;font-size:13px;line-height:1.5;text-align:center;letter-spacing:1px;transform:rotate(-9deg);opacity:.9;background:radial-gradient(circle,rgba(196,43,28,.05) 0 46%,transparent 47%)}
+.doc .seal b{font-size:15px;color:inherit;line-height:1}
+.doc .img-slot{width:72%;margin:14px auto 6px;border:1.5px dashed #7f745c;background:#f3efe4;color:#6b5f45;font-family:"仿宋_GB2312","仿宋",serif;font-size:14px}
+.doc .img-slot .cap{padding:6px;border-bottom:1.5px dashed #c8bfa6;background:#ece6d4}
+.doc .img-slot .ph{height:130px;display:grid;place-items:center;font-size:15px;letter-spacing:1px}
+.render-rule{border:1px solid #d9d3c4;background:#faf8f2;border-radius:2px;padding:10px 14px;font-size:12.5px;color:#5a5344;line-height:1.85;margin:12px 0 0;text-align:left}
+.render-rule b{color:#333}
+.doc.doc-slim{width:100%;padding:20px 26px;font-size:15px}
+.src-tagline{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#7a8591}
+.notice-line{background:#fdf6ec;border:1px solid #f0dcb8;border-radius:4px;padding:10px 14px;font-size:12.5px;color:#8a5a00;margin:6px 0}
+.notice-line a{color:var(--ipw-color-primary)}
+.morphs{margin-top:6px}
+.morph{border:1px solid #e0e4e9;border-radius:6px;padding:12px;margin-bottom:12px}
+.m-title{font-size:12.5px;font-weight:800;color:#33404c;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.pdf-shell{background:#f7f9fb;border:1px dashed #b9c3cd;border-radius:4px;padding:26px 14px;color:#7a8591;font-size:12.5px;text-align:center;line-height:1.9}
+.dl-group{border-top:1px solid #e4e8ec}
+.dl-row{display:flex;align-items:center;gap:16px;padding:9px 2px;border-bottom:1px solid #eceff3;font-size:13px}
+.dl-row .fn{font-weight:600;color:#1e2832}
+.dl-row .fs{color:#8a97a4;font-size:12px}
+.dl-row .st{font-size:12px;color:#176b44}
+.dl-row .st.bad{color:#b42318}
+a.dl-link{color:var(--ipw-color-primary);text-decoration:underline;font-size:13px;font-weight:600;cursor:pointer}
+a.dl-link.dim{color:#9aa4af;cursor:not-allowed;text-decoration:none}
+.sec-label{font-size:12.5px;font-weight:800;color:#44505c;margin:14px 0 6px;padding-left:8px;border-left:3px solid var(--ipw-color-primary)}
+details{background:#fff;border:1px solid #d9dfe5;border-radius:6px;margin-top:10px}
+summary{cursor:pointer;padding:8px 12px;font-size:12.5px;font-weight:700;color:#44505c}
+details .inner{padding:0 12px 10px}
+.foot{margin-top:calc(var(--ipw-section-space) * .6);border-top:1px solid var(--ipw-color-border);padding-top:14px;font-size:12px;color:#7a8591}
+</style></head>
+<body>
+<main>
+
+  <div class="eyebrow">PORTAL · 招投标门户 · v5 样式稿（工业风）</div>
+  <h1>公告大厅 — 关键词 + 行式属性查询区 + 目录</h1>
+  <p class="lead">
+    v5 按你的示范调整查询区：<b>搜索关键词下直接是属性查询区（不做左侧栏）</b>。属性查询仿动漫门户的“筛选项”做法：
+    每个属性<b>一行</b>——<b>属性名向左靠齐</b>，其右侧横向排布<b>文字可选值</b>（如 公告性质：招标公告 / 资格预审 / 中标候选人公示 / 中标结果公示…；
+    时间：近7天 / 近1个月 / 近3个月…），<b>不用下拉框</b>；时间不给手输框，只有快捷区间，确有需要再点“自定义”展开精确起止日期。
+  </p>
+
+  <!-- 01 版式说明 -->
+  <section class="block">
+    <div class="kicker">01 · 查询区结构（行式属性 · 动漫门户式）</div>
+    <div class="grid2">
+      <div class="card">
+        <h2>查询区（自上而下）</h2>
+        <table style="min-width:0;font-size:12.5px;margin-top:8px">
+          <tr><th>区块</th><th>规则</th></tr>
+          <tr><td>① 关键词</td><td>水平居中，= title 前缀（无全文，ES 二期）</td></tr>
+          <tr><td>② 属性查询区</td><td>关键词正下方、整行铺开；每属性一行：<b>属性名左对齐</b>（如 公告性质 / 来源站 / 内容形态 / 行业 / 时间），右侧为该属性<b>文字可选值</b>（点击即筛，可多态切换）</td></tr>
+          <tr><td>③ 时间行</td><td>只给快捷区间（全部 / 近7天 / 近1个月 / 近3个月 / 今年以来）；确有精确需求时点行尾“自定义”，才展开起止日期两输入框</td></tr>
+          <tr><td>④ 目录区</td><td>选中条件后展示公告目录（对接文档 03 行结构 + 分页）</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2>可选值行的交互规则</h2>
+        <ul class="checks">
+          <li>行首“全部/不限”为默认选中；点击其它值即筛选（单选即可，可再点“全部”还原）</li>
+          <li>值多放不下时该行<b>横向可拖动</b>（鼠标按住左右拖）查看更多</li>
+          <li>不使用下拉框（点选即筛，减少操作）；选中项高亮深蓝底</li>
+          <li>“自定义”为虚线样式入口，展开后提供精确起止日期输入</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 大厅样式稿 -->
+  <section class="block">
+    <div class="kicker">02 · 公告大厅 样式稿（关键词 + 属性查询行 + 目录）</div>
+    <div class="browser">
+      <div class="browser-bar"><span class="browser-url" style="margin-left:0">http://portal/portal/bidding ｜ 公告大厅</span></div>
+      <div class="site-head">
+        <div class="brand"><span class="brand-mark">招</span>外部平台</div>
+        <div class="ext">站点顶栏（外部平台既有导航 —— 非本项目范围，勿改）</div>
+        <div class="spacer"></div><a>登录 / 注册</a>
+      </div>
+      <div class="main-nav">
+        <div class="nav-item on" title="公告大厅（当前页 · 本期实现）">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="16" r="2.4"/></svg>
+          <div class="n-name">公告大厅</div><div class="n-sub">查询 · 中标公示 · 详情</div></div>
+        <div class="nav-item" title="项目订阅（二期）"><span class="n-flag">二期</span>
+          <svg viewBox="0 0 24 24"><path d="M6 4h12v15l-3-2.2L12 19l-3-2.2L6 19z"/><path d="M12 8.5v3.5M10.2 10.2h3.6"/></svg>
+          <div class="n-name">项目订阅</div><div class="n-sub">订阅即跟踪 · 历史公告</div></div>
+        <div class="nav-item" title="个人中心（二期）"><span class="n-flag">二期</span>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c1-3 3.6-4.8 6.5-4.8s5.5 1.8 6.5 4.8"/></svg>
+          <div class="n-name">个人中心</div><div class="n-sub">自身信息 · 实名认证</div></div>
+      </div>
+
+      <!-- ① 关键词居中 -->
+      <div class="kwbar">
+        <div class="kw"><input placeholder="输入公告标题关键词（前缀匹配；全文检索二期开放）" /><span class="kw-ic">🔍</span></div>
+        <button class="btn primary">搜索</button>
+      </div>
+
+      <!-- ② 行式属性查询区 -->
+      <div class="qarea">
+        <div class="qrow drag">
+          <div class="qlb">公告性质</div>
+          <div class="qopts">
+            <span class="opt on">全部性质</span><span class="qsep">|</span>
+            <span class="opt">招标公告</span><span class="qsep">|</span>
+            <span class="opt">资格预审</span><span class="qsep">|</span>
+            <span class="opt">中标候选人公示</span><span class="qsep">|</span>
+            <span class="opt">中标结果公示</span><span class="qsep">|</span>
+            <span class="opt">变更 / 补充</span><span class="qsep">|</span>
+            <span class="opt">终止公告</span>
+          </div>
+        </div>
+        <div class="qrow drag">
+          <div class="qlb">来源站</div>
+          <div class="qopts">
+            <span class="opt on">全部来源</span><span class="qsep">|</span>
+            <span class="opt">本站</span><span class="qsep">|</span>
+            <span class="opt">示例交易平台</span><span class="qsep">|</span>
+            <span class="opt">公共资源交易中心</span><span class="qsep">|</span>
+            <span class="opt">采购与招标网</span>
+          </div>
+        </div>
+        <div class="qrow">
+          <div class="qlb">内容形态</div>
+          <div class="qopts">
+            <span class="opt on">全部形态</span><span class="qsep">|</span>
+            <span class="opt">HTML 网页</span><span class="qsep">|</span>
+            <span class="opt">PDF 文件</span><span class="qsep">|</span>
+            <span class="opt">附件下载</span><span class="qsep">|</span>
+            <span class="opt">图片</span><span class="qsep">|</span>
+            <span class="opt">其他</span>
+          </div>
+        </div>
+        <div class="qrow">
+          <div class="qlb">行业相关</div>
+          <div class="qopts">
+            <span class="opt on">不限</span><span class="qsep">|</span>
+            <span class="opt">防腐保温相关</span><span class="qsep">|</span>
+            <span class="opt">无关</span><span class="qsep">|</span>
+            <span class="opt">未知</span>
+          </div>
+        </div>
+        <div class="qrow">
+          <div class="qlb">时间</div>
+          <div class="qopts">
+            <span class="opt">全部时间</span><span class="qsep">|</span>
+            <span class="opt">近7天</span><span class="qsep">|</span>
+            <span class="opt">近1个月</span><span class="qsep">|</span>
+            <span class="opt">近3个月</span><span class="qsep">|</span>
+            <span class="opt">今年以来</span>
+            <span class="opt custom">＋ 自定义</span>
+          </div>
+        </div>
+        <div class="cust-line">
+          <span class="input">2026-09-01</span><span style="color:#9aa4af">至</span>
+          <span class="input">2026-09-30</span><button class="btn primary" style="padding:4px 14px;font-size:12.5px">确定</button>
+          <span class="cust-note">精确日期行：仅在点击“＋ 自定义”后出现</span>
+        </div>
+      </div>
+      <div class="caption" style="padding:0 22px">查询区说明：属性名左对齐、右侧文字选项随点随筛，<b>不用下拉框</b>；“公告性质”行值较多时横向可拖动。
+        属性/时间与 page 接口参数对应：性质=noticeTypeRaw、来源=sourceCode、形态=contentType、行业=industryFlag、时间=beginTime/endTime（快捷区间由前端换算成起止）。</div>
+
+      <!-- ③ 目录 -->
+      <div class="catalog">
+        <div class="cat-head"><span class="t">公告目录</span><small>仅 ACTIVE + 面向社会 · 按发布时间倒序 · 共 228 条 · 行结构见对接文档 03</small></div>
+        <div class="notice-table">
+          <div class="nrow head"><div class="c-title">公告标题（性质 / 形态 / 行业 / 依法 / 来源 标签）</div>
+            <div class="n-main">发布单位 · 有效期</div><div class="n-right">发布时间</div></div>
+          <div class="nrow"><div class="c-title">
+            <div class="n-title">平陆县集中供热管网改造工程（一标段）防腐保温材料采购招标公告</div>
+            <div class="n-tags"><span class="tag t">招标公告</span><span class="tag d">PDF</span><span class="tag a">行业相关</span><span class="tag g">依法必招</span><span class="tag m">来源：示例交易平台</span></div>
+          </div><div class="n-main"><span>平陆县住建局</span><span>生效 2026-09-04 ~ 09-25 09:00</span></div>
+          <div class="n-right"><span class="n-time">2026-09-04 09:30</span></div></div>
+          <div class="nrow"><div class="c-title">
+            <div class="n-title">太原市热力集团 2026 年度一次网保温管件采购项目中标候选人公示</div>
+            <div class="n-tags"><span class="tag t">中标候选人公示</span><span class="tag g">依法必招</span><span class="tag a">行业相关</span><span class="tag m">来源：公共资源交易中心</span></div>
+          </div><div class="n-main"><span>太原市热力集团</span><span>生效 2026-09-03 ~ 09-08</span></div>
+          <div class="n-right"><span class="n-time">2026-09-03 16:20</span></div></div>
+          <div class="nrow"><div class="c-title">
+            <div class="n-title">某石化项目低温乙烯储罐保冷工程（2#罐）更正公告</div>
+            <div class="n-tags"><span class="tag t">更正公告</span><span class="tag m">HTML</span><span class="tag a">行业相关</span><span class="tag m">来源：示例交易平台</span></div>
+          </div><div class="n-main"><span>某石化工程公司</span><span>生效 2026-09-02 ~ 09-17</span></div>
+          <div class="n-right"><span class="n-time">2026-09-02 11:05</span></div></div>
+          <div class="nrow"><div class="c-title">
+            <div class="n-title">晋城市新区市政供热配套项目监理招标（重新招标）</div>
+            <div class="n-tags"><span class="tag t">招标公告</span><span class="tag o">附件</span><span class="tag o">行业未知</span><span class="tag m">来源：示例交易平台</span></div>
+          </div><div class="n-main"><span>晋城新区管委会</span><span>生效 —</span></div>
+          <div class="n-right"><span class="n-time">2026-09-01 14:45</span></div></div>
+        </div>
+        <div class="pager"><span class="pg">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">12</span><span class="pg">›</span><span style="margin-left:10px">共 228 条</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 详情页（规则沿用 v4） -->
+  <section class="block">
+    <div class="kicker">03 · 公告详情页（无首页/公告入口 · 返回上一页 · 单页完整展示）</div>
+    <div class="browser">
+      <div class="browser-bar"><span class="browser-url" style="margin-left:0">http://portal/portal/bidding/notice/detail?id=…</span></div>
+      <div class="detail-bar">
+        <span class="back">‹ 返回上一页</span><span class="sep">|</span>
+        <span class="detail-title-mini">当前位置：公告详情 —— 平陆县集中供热管网改造工程…招标公告</span>
+      </div>
+      <div class="detail-head">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+          <span class="tag t">招标公告</span><span class="tag d">PDF</span><span class="tag a">行业相关</span><span class="tag g">依法必招 Y</span><span class="tag m">来源：示例交易平台</span>
+        </div>
+        <h4>平陆县集中供热管网改造工程（一标段）防腐保温材料采购招标公告</h4>
+        <div class="detail-meta">
+          <span><b>发布单位</b>平陆县住建局</span><span><b>发布时间</b>2026-09-04 09:30</span>
+          <span><b>生效期</b>2026-09-04 ~ 2026-09-25 09:00</span>
+          <span><b>关联项目</b>集中供热管网改造工程</span><span><b>标段</b>一标段</span>
+        </div>
+        <div class="detail-ops">
+          <button class="btn ghost" disabled style="opacity:.55">关注（二期）</button>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="sec-label">正文渲染（按内容形态分支 · 单页完整展示、不分页）</div>
+        <div class="morphs">
+          <div class="morph">
+            <div class="m-title">形态 · HTML：用 HTML 展示（本站与外部网站的 HTML 内容均走 HTML 渲染）</div>
+            <div class="doc">
+              <h5>一、项目概况与招标范围</h5>
+              <p>本招标项目平陆县集中供热管网改造工程（一标段）已由平发改审〔2026〕××号文件批准建设，项目业主为平陆县住房和城乡建设局，建设资金来自财政资金，项目出资比例为百分之百。项目已具备招标条件，现对该项目防腐保温材料采购与施工进行公开招标。</p>
+              <h5>二、标段划分</h5>
+              <table class="sm">
+                <tr><th>标段</th><th>工程内容</th><th>工期</th><th>质保期</th></tr>
+                <tr><td>一标段</td><td>一次网管道防腐保温采购与施工</td><td>90日历天</td><td>2年</td></tr>
+              </table>
+              <div class="img-slot"><div class="cap">（正文图片位 · 如图样 / 图纸截图等，按上传顺序排列）</div><div class="ph">图 1-1　管网保温敷设示意（占位）</div></div>
+              <h5>三、投标人资格要求</h5>
+              <p>（一）投标人须具备防腐保温工程专业承包资质，并在人员、设备、资金等方面具有相应的施工能力；</p>
+              <p>（二）投标人近三年内无骗取中标、严重违约及重大工程质量事故记录；</p>
+              <p>（三）本次招标不接受联合体投标。</p>
+              <div class="sign">招标人：平陆县住房和城乡建设局<br/>法定代表人（或委托代理人）：×××<br/>二〇二六年九月一日
+                <span class="seal"><span>平陆县住房和</span><b>★</b><span>城乡建设局</span></span>
+              </div>
+            </div>
+            <div class="render-rule"><b>标题按填报内容逐组渲染：</b>“一、项目概况”由 项目名称/批准文号/资金来源…驱动，“二、标段划分”由 标段/工期/范围…驱动，“三、投标人资格要求”由 资质/业绩/联合体…驱动——<b>某组所有字段均为空（非依法必招项目常见填报不全）则整组不渲染、不出现空标题</b>；全部字段皆空 → 走“仅简略信息”形态；HTML 原文内容完整时亦按此结构整理渲染。</div>
+          </div>
+          <div class="morph">
+            <div class="m-title">形态 · 仅简略信息：只展示简略信息 + 提示前往原地址</div>
+            <div class="doc doc-slim" style="min-height:0"><p style="text-indent:0">该公告仅采集到简略信息：标题、发布单位、发布时间见页头；无正文、无文件。</p></div>
+            <div class="notice-line" style="margin-top:6px">正文信息不全，仅展示标题与摘要，请前往原地址查看 —— <a href="#">前往原地址查看</a></div>
+          </div>
+          <div class="morph">
+            <div class="m-title">形态 · PDF：用 PDF 组件展示</div>
+            <div class="pdf-shell">PDF 组件区 —— 内嵌预览 pdfDownloadUrl（FileApi 签名）<br/>备选：无内嵌能力时提供“下载后查看”按钮（文件信息见下方文件/下载区）</div>
+          </div>
+          <p class="caption">其余形态：ATTACHMENT → 附件列表下载区；IMAGE → 图片物料展示；OTHER → 纯文本/兜底。附件下载见下方下载区。
+            图章与正文图片为<b>资源占位</b>：实现时替换为正式红章图（透明 PNG，叠加在落款上方）与公告内嵌图片。</p>
+        </div>
+
+        <div class="sec-label">招标文件及附件（仅下划线“下载链接”文字，无卡片/浮层）</div>
+        <div class="dl-group">
+          <div class="dl-row"><span class="fn">招标文件.pdf</span><span class="fs">2.4 MB · PDF</span><span class="st">已扫描 CLEAN</span><span style="flex:1"></span><a class="dl-link">下载链接</a></div>
+          <div class="dl-row"><span class="fn">图纸清单.dwg</span><span class="fs">18.1 MB · DWG</span><span class="st">已扫描 CLEAN</span><span style="flex:1"></span><a class="dl-link">下载链接</a></div>
+          <div class="dl-row"><span class="fn">补遗澄清-01.pdf</span><span class="fs">0.6 MB · PDF</span><span class="st">扫描中 PENDING</span><span style="flex:1"></span><a class="dl-link dim">下载链接</a></div>
+          <div class="dl-row"><span class="fn">（示例）可疑附件</span><span class="fs">—</span><span class="st bad">文件含病毒 · 已拦截</span><span style="flex:1"></span></div>
+        </div>
+
+        <div class="sec-label">字段全量核对（开发自检：接口返回的每个字段都有展示位）</div>
+        <details><summary>展开：列表 + 详情全部字段落地位置（禁止遗漏）</summary>
+          <div class="inner">
+            <div class="table-wrap" style="box-shadow:none"><table>
+              <tr><th>字段</th><th>列表页位置</th><th>详情页位置</th></tr>
+              <tr><td>id</td><td>行 key / 跳详情参数</td><td>路由参数</td></tr>
+              <tr><td>sourceCode</td><td>属性行“来源站”选中态</td><td>来源信息（sourceCode + sourceName）</td></tr>
+              <tr><td>sourceName</td><td>“来源：xx”标签</td><td>头部标签 / 来源信息</td></tr>
+              <tr><td>title</td><td>标题主列</td><td>详情 h4</td></tr>
+              <tr><td>origUrl</td><td>不单列展示（整行点击进入详情阅读全文）</td><td>完整正文形态不展示；仅“仅简略信息”形态提供“前往原地址查看”</td></tr>
+              <tr><td>contentType</td><td>形态标签</td><td>正文渲染分支 + 头部标签</td></tr>
+              <tr><td>noticeTypeRaw</td><td>性质标签 / 属性行归类</td><td>头部标签 + 元信息“类型原文”</td></tr>
+              <tr><td>legalFlag</td><td>Y 显示“依法必招”</td><td>Y 显示标签；N/NULL 隐藏位保留</td></tr>
+              <tr><td>industryFlag</td><td>BELONGS 相关 / UNCERTAIN 未知</td><td>头部标签同左</td></tr>
+              <tr><td>issuerName</td><td>中列“发布单位”</td><td>元信息“发布单位”</td></tr>
+              <tr><td>publishTime</td><td>右列发布时间</td><td>元信息“发布时间”</td></tr>
+              <tr><td>effectiveFrom/To</td><td>中列“生效 xx ~ xx”</td><td>元信息“生效期”</td></tr>
+              <tr><td>status</td><td>恒 ACTIVE（页头口径）</td><td>同左</td></tr>
+              <tr><td>projectName / bidSectionCodes</td><td>（可空）</td><td>元信息“关联项目 / 标段”</td></tr>
+              <tr><td>contentHtmlSafe / contentHtml</td><td>—</td><td>HTML 形态正文（本站/外站 HTML 内容均 HTML 展示，安全规则见 A6）</td></tr>
+              <tr><td>pdfFileId / pdfSha256 / pdfSize / pdfDownloadUrl / extractionStatus</td><td>PDF 形态标签</td><td>文件信息 + 预览/下载</td></tr>
+              <tr><td>attachments[] 基础字段</td><td>（列表不展开）</td><td>下载区行（名称/大小）</td></tr>
+              <tr><td>attachments[] downloadUrl / origDownloadUrl</td><td>—</td><td>“下载链接” / 溯源展示</td></tr>
+              <tr><td>attachments[] virusStatus</td><td>—</td><td>CLEAN 可下载 / PENDING 置灰 / INFECTED “已拦截”</td></tr>
+            </table></div>
+            <p class="caption" style="margin:8px 0 0">空值策略：为空则不显示对应位但保留位；无正文/无文件 → “信息不全，请前往原地址查看”。</p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 红线 -->
+  <section class="block">
+    <div class="kicker">04 · 筛选项 / 渲染红线</div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>界面要素</th><th>接口 / 依据</th><th>约定</th></tr>
+        <tr><td>列表</td><td><code>GET /bidding/notice-external/page</code></td><td>仅 ACTIVE + SOCIAL；倒序；G 轨免登录免租户</td></tr>
+        <tr><td>关键词</td><td><code>title</code>（前缀）</td><td><mark>暂无全文</mark>；ES 二期</td></tr>
+        <tr><td>属性行（性质/来源/形态/行业）</td><td><code>noticeTypeRaw / sourceCode / contentType / industryFlag</code></td><td>文字选项即选即筛，不用下拉框</td></tr>
+        <tr><td>时间行</td><td><code>beginTime / endTime</code></td><td>快捷区间（近7天/近1个月/近3个月/今年）；“自定义”才展开精确输入</td></tr>
+        <tr><td>正文渲染</td><td><code>contentType</code> 分支（HTML / 仅简略 / PDF / 附件 / 图片）</td><td>HTML → HTML 展示（本站与外部网站 HTML 内容同路）；仅简略信息 → 只展示简略信息并提示前往原地址；PDF → PDF 组件；单页完整展示不分页</td></tr>
+        <tr><td>目录行 / 详情 / 附件</td><td>对接文档 03、01；detail</td><td>目录行 03 结构（行右仅发布时间）；完整正文即“原文”，详情内阅读；仅简略信息才链往原地址；附件仅下划线“下载链接”</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 05 范围与开放点 -->
+  <section class="block">
+    <div class="kicker">05 · 本期范围 / 开放点</div>
+    <div class="grid2">
+      <div class="card">
+        <h2>本期（公告大厅 + 详情）</h2>
+        <ul class="checks">
+          <li>关键词居中 + 行式属性查询区（点选即筛、可拖动、时间快捷 + 自定义展开）</li>
+          <li>公告目录（03 行结构）+ 分页/空态/加载；详情返回上一页</li>
+          <li>正文分支渲染（表格保留；本站/外站）、下载区文本链接、无文件提示</li>
+          <li>二期子页占位：项目订阅 · 跟踪 / 个人中心</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>二期 / 开放点</h2>
+        <ul class="checks" style="opacity:.7">
+          <li>项目订阅 · 跟踪（订阅即跟踪，点项目看全部历史公告）；未读红点/短信另行排期</li>
+          <li>个人中心（自身信息、实名认证入口）；后台审核；ES 全文</li>
+          <li>A1 性质值域与计数下发；A6 外站原 HTML 安全照搬；A2 联调地址/登录壳；A3 分页形态</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">DeepSeek iDesign · 样式稿 v5 · manifest 单页入口 + design-tokens.css 令牌契约不变 · 2026-09</div>
+</main>
+</body></html>

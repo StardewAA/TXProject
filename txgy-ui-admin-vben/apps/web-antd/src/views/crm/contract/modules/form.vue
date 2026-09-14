@@ -21,10 +21,14 @@ import { getProductSimpleList } from '#/api/crm/product';
 import { $t } from '#/locales';
 import { ProductEditTable } from '#/views/crm/product/components';
 
+import CustomerInfoCard from '#/views/crm/components/customer-info-card.vue';
+
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmContractApi.Contract>();
+/** 当前选中的客户编号：用于展示"客户信息速览"卡片，避免二次跳转/抄写 */
+const currentCustomerId = ref<number>();
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['合同'])
@@ -64,6 +68,10 @@ const [Form, formApi] = useVbenForm({
   layout: 'vertical',
   schema: useFormSchema(),
   showDefaultActions: false,
+  // 选中客户后展示"客户信息速览"卡片（一键引用）
+  handleValuesChange(values) {
+    currentCustomerId.value = values.customerId;
+  },
 });
 
 /** 识别结果回填：把名片/文本中的公司与联系方式带入新增表单 */
@@ -183,6 +191,7 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-1/2">
     <ClueQuickParse mode="contract" class="mx-4" @apply="onQuickParse" />
+    <CustomerInfoCard :customer-id="currentCustomerId" />
     <Form class="mx-4">
       <template #product="slotProps">
         <ProductEditTable

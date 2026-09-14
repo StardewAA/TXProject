@@ -159,7 +159,10 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<{ formType: FormType; id?: number }>();
     formType.value = data.formType;
     formApi.setState({ schema: useFormSchema(formType.value, formApi) });
-    modalApi.setState({ showConfirmButton: isEditable.value });
+    modalApi.setState({
+      confirmText: '保存',
+      showConfirmButton: isEditable.value,
+    });
     if (data?.id) {
       modalApi.lock();
       try {

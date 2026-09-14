@@ -1,0 +1,1623 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>防腐保温智慧平台 · 招投标门户（现有页面静态还原底稿）</title>
+<link rel="stylesheet" href="design-tokens.css" data-ipw-design-tokens>
+<style>
+
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9edf2;font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;font-size:14px;color:#1e2832;-webkit-font-smoothing:antialiased}
+  .des-fab{position:fixed;right:16px;bottom:16px;z-index:99;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .des-fab .fab-main{background:#fff;border:1px solid #c4d7ec;color:#17539a;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgb(23 83 154 / 20%)}
+  .des-fab.open .fab-main{background:#17539a;color:#fff}
+  .des-fab .fab-panel{display:none;background:#fff;border:1px solid #d9dfe5;border-radius:8px;box-shadow:0 8px 24px rgb(16 30 54 / 12%);padding:8px;max-width:230px}
+  .des-fab.open .fab-panel{display:flex;flex-direction:column;gap:2px}
+  .des-fab .fab-panel button{border:0;background:transparent;text-align:left;font-size:12.5px;padding:6px 10px;border-radius:5px;color:#33404c;cursor:pointer;font-weight:600}
+  .des-fab .fab-panel button.on{background:#eef4fb;color:#17539a}
+  .des-fab .fab-panel .tip{font-size:10.5px;color:#9aa4af;line-height:1.5;padding:4px 10px 6px;border-top:1px dashed #eceff3;margin-top:4px}
+  .shell{background:#f3f5f7}
+  .screen{display:none}
+  .screen.on-scr{display:block}
+  body{background:#f3f5f7}
+  #hall .cust-line[hidden]{display:none!important}
+  .sub-view.tl-view[hidden]{display:none}.screen{display:none}
+  .screen.on-scr{display:block}
+  .des-mark{background:#fff7ec;border:1px solid #f0dcb8;border-radius:4px;color:#8a5a00;font-size:11.5px;padding:4px 10px;line-height:1.6;margin:0 20px}
+
+#hall .bidding-page {
+
+  background: #f3f5f7;
+  min-height: 100%;
+
+}#hall .main-nav {
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  background: #d3dae1;
+  gap: 1px;
+
+}#hall .nav-item {
+
+  background: #fbfcfd;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
+  text-align: center;
+
+}#hall .nav-item:hover {
+
+  background: #eef4fb;
+
+}#hall .nav-item.on {
+
+  background: #fff;
+  box-shadow: inset 0 -3px 0 #17539a;
+
+}#hall .nav-item .ic {
+
+  font-size: 20px;
+  color: #17539a;
+  line-height: 1;
+
+}#hall .nav-item .n-name {
+
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e2832;
+
+}#hall .nav-item.on .n-name {
+
+  color: #17539a;
+
+}#hall .nav-item .n-sub {
+
+  font-size: 11px;
+  color: #7a8591;
+
+}#hall .nav-item .flag {
+
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 10px;
+  color: #9aa4af;
+  border: 1px solid #d3dae1;
+  background: #fff;
+  border-radius: 3px;
+  padding: 0 5px;
+  line-height: 1.5;
+
+}#hall .kwbar {
+
+  display: flex;
+  justify-content: center;
+  padding: 18px 20px 8px;
+
+}#hall .kw {
+
+  display: flex;
+  gap: 8px;
+  width: min(620px, 100%);
+
+}#hall .kw input {
+
+  flex: 1;
+  border: 1px solid #c4ccd4;
+  border-radius: 4px;
+  padding: 9px 14px;
+  font-size: 14px;
+  color: #1e2832;
+  outline: none;
+
+}#hall .kw input:focus {
+
+  border-color: #17539a;
+
+}#hall .btn {
+
+  border-radius: 4px;
+  padding: 8px 26px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #17539a;
+  color: #fff;
+
+}#hall .btn.sm {
+
+  padding: 5px 16px;
+  font-size: 12.5px;
+
+}#hall .qarea {
+
+  background: #fff;
+  border: 1px solid #d9dfe5;
+  border-radius: 6px;
+  margin: 8px 20px 4px;
+  padding: 8px 16px;
+
+}#hall .qrow {
+
+  display: flex;
+  align-items: flex-start;
+  padding: 7px 0;
+  border-bottom: 1px dashed #eceff3;
+  line-height: 1.9;
+
+}#hall .qrow:last-child {
+
+  border-bottom: 0;
+
+}#hall .qlb {
+
+  flex: none;
+  width: 90px;
+  font-size: 13px;
+  color: #33404c;
+  font-weight: 800;
+
+}#hall .qopts {
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  min-width: 0;
+
+}#hall .opt {
+
+  font-size: 13px;
+  color: #44505c;
+  padding: 1px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 3px;
+
+}#hall .opt:hover {
+
+  color: #17539a;
+  background: #eef4fb;
+
+}#hall .opt.on {
+
+  background: #17539a;
+  color: #fff;
+  font-weight: 600;
+
+}#hall .opt.custom {
+
+  border: 1px dashed #b9c3cd;
+  color: #5d6a77;
+  margin-left: 6px;
+
+}#hall .opt.custom:hover {
+
+  border-color: #17539a;
+  color: #17539a;
+  background: #fff;
+
+}#hall .cust-line {
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px 90px;
+  background: #f7f9fb;
+  border: 1px dashed #c9d2db;
+  border-radius: 4px;
+  padding: 6px 10px;
+  flex-wrap: wrap;
+
+}#hall .input {
+
+  border: 1px solid #cfd6dd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  color: #1e2832;
+
+}#hall .tilde {
+
+  color: #9aa4af;
+
+}#hall .cust-note {
+
+  font-size: 11.5px;
+  color: #9aa4af;
+
+}#hall .catalog {
+
+  margin: 10px 20px 4px;
+
+}#hall .cat-head {
+
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 2px;
+
+}#hall .cat-head .t {
+
+  font-size: 16px;
+  font-weight: 800;
+
+}#hall .cat-head small {
+
+  color: #7a8591;
+  font-size: 12px;
+
+}#hall .table-card {
+
+  border: 1px solid #e0e4e9;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+
+}#hall .nrow {
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 88px;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid #eceff3;
+  cursor: pointer;
+  align-items: center;
+  min-height: 54px;
+
+}#hall .nrow:hover {
+
+  background: #f5f8fc;
+
+}#hall .nrow.head {
+
+  background: #f3f5f8;
+  cursor: default;
+  font-size: 12px;
+  color: #5d6a77;
+  font-weight: 700;
+
+}#hall .nrow:last-child {
+
+  border-bottom: 0;
+
+}#hall .n-title {
+
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e2832;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+}#hall .nrow:not(.head):hover .n-title {
+
+  color: #17539a;
+  text-decoration: underline;
+
+}#hall .n-tags {
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+
+}#hall .tag {
+
+  display: inline-flex;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  white-space: nowrap;
+
+}#hall .tag.t {
+
+  background: #e6eef8;
+  color: #174a86;
+
+}#hall .tag.m {
+
+  background: #eef1f4;
+  color: #44505c;
+
+}#hall .tag.a {
+
+  background: #fdf0e5;
+  color: #9a4508;
+
+}#hall .tag.g {
+
+  background: #e5f2ea;
+  color: #176b44;
+
+}#hall .tag.o {
+
+  background: #fff;
+  color: #5d6a77;
+  border: 1px solid #d3dae1;
+
+}#hall .n-main {
+
+  color: #5d6a77;
+  font-size: 11.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+
+}#hall .n-right {
+
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-end;
+
+}#hall .n-time {
+
+  font-size: 12px;
+  color: #33404c;
+  white-space: nowrap;
+
+}#hall .loading-line,
+#hall .empty-box {
+
+  padding: 42px 12px;
+  text-align: center;
+  color: #7a8591;
+  font-size: 13px;
+
+}#hall .empty-box.error {
+
+  color: #b42318;
+  background: #fef4f2;
+
+}#hall .pager {
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 2px 18px;
+  color: #7a8591;
+  font-size: 12px;
+  flex-wrap: wrap;
+
+}#hall .pg {
+
+  min-width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid #d3dae1;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #44505c;
+  cursor: pointer;
+
+}#hall .pg.on {
+
+  background: #17539a;
+  color: #fff;
+  border-color: #17539a;
+
+}#hall .pg.off {
+
+  opacity: 0.45;
+  cursor: not-allowed;
+
+}#hall .pg.dot {
+
+  border: 0;
+  background: transparent;
+  cursor: default;
+
+}#hall .pg:not(.on):not(.off):not(.dot):hover {
+
+  border-color: #17539a;
+  color: #17539a;
+
+}#hall .sum {
+
+  margin-left: 10px;
+
+}
+
+#detail .detail-page {
+
+  background: #f3f5f7;
+  min-height: 100%;
+  padding: 0 0 30px;
+
+}#detail .err-banner {
+
+  background: #fef2f0;
+  border-bottom: 1px solid #f2b8b0;
+  color: #b42318;
+  font-size: 12.5px;
+  padding: 8px 22px;
+
+}#detail .top-bar {
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 22px;
+  background: #fff;
+  border-bottom: 1px solid #e2e6eb;
+
+}#detail .back {
+
+  font-size: 13px;
+  color: #17539a;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #c4d7ec;
+  background: #eef4fb;
+  border-radius: 4px;
+  padding: 4px 12px;
+
+}#detail .back:hover {
+
+  background: #e2ecf8;
+
+}#detail .sep {
+
+  color: #cfd6dd;
+
+}#detail .crumb {
+
+  font-size: 12.5px;
+  color: #7a8591;
+
+}#detail .head-card {
+
+  background: #fff;
+  border-bottom: 1px solid #e2e6eb;
+  padding: 14px 22px;
+
+}#detail .tags {
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+
+}#detail .tag {
+
+  display: inline-flex;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  background: #e6eef8;
+  color: #174a86;
+
+}#detail .head-card h1 {
+
+  margin: 8px 0 10px;
+  font-size: 19px;
+  line-height: 1.5;
+  color: #1e2832;
+
+}#detail .meta {
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  font-size: 12.5px;
+  color: #44505c;
+  border-top: 1px solid #eceff3;
+  padding-top: 9px;
+
+}#detail .meta b {
+
+  font-weight: 400;
+  color: #7a8591;
+  margin-right: 4px;
+
+}#detail .body-area {
+
+  margin: 14px 22px;
+
+}#detail .sec {
+
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: #1e2832;
+  padding-left: 8px;
+  border-left: 3px solid #17539a;
+
+}#detail /* ===== 公文渲染容器：正文样式 ===== */
+.docx {
+
+  background: #fff;
+  border: 1px solid #d9d3c4;
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 56px 80px 50px;
+  font-family: '仿宋_GB2312', 'FangSong_GB2312', '仿宋', 'FangSong', 'STFangsong', '华文仿宋', 'SimSun', serif;
+  font-size: 18px;
+  line-height: 2;
+  color: #1c1c1c;
+
+}#detail .docx h1,
+#detail .docx h2,
+#detail .docx h3,
+#detail .docx h4,
+#detail .docx h5,
+#detail .docx h6 {
+
+  font-family: '黑体', 'SimHei', 'Microsoft YaHei', sans-serif;
+  font-weight: 700;
+  color: #161616;
+  margin: 24px 0 2px;
+  line-height: 1.8;
+
+}#detail .docx h1 {
+
+  font-size: 26px;
+
+}#detail .docx h2 {
+
+  font-size: 22px;
+
+}#detail .docx p {
+
+  margin: 0;
+  text-indent: 2em;
+  text-align: justify;
+
+}#detail /* 智能排版输出的公文段落：段间留白避免粘连 */
+.docx p.doc-para {
+
+  margin: 0 0 2px;
+
+}#detail /* 智能排版输出的公文标题：居中黑体，与正文区隔 */
+.docx h1.doc-title {
+
+  text-align: center;
+  font-size: 22px;
+  margin: 0 0 18px;
+
+}#detail .docx p[align='right'],
+#detail .docx p[style*='right'],
+#detail .docx .sign,
+#detail .docx .ql {
+
+  text-indent: 0;
+
+}#detail .docx table {
+
+  border-collapse: collapse;
+  width: 84%;
+  margin: 12px auto;
+  font-size: 15px;
+  font-family: inherit;
+
+}#detail .docx th,
+#detail .docx td {
+
+  border: 1px solid #333;
+  padding: 5px 12px;
+  text-align: center;
+  font-family: inherit;
+
+}#detail .docx th {
+
+  font-family: '黑体', 'SimHei', sans-serif;
+  font-weight: 700;
+  background: #f7f5ef;
+
+}#detail .docx img {
+
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10px auto;
+
+}#detail .docx ol,
+#detail .docx ul {
+
+  padding-left: 3em;
+
+}#detail .docx a {
+
+  color: #17539a;
+
+}#detail /* ===== PDF 组件 ===== */
+.pdf-panel {
+
+  background: #fff;
+  border: 1px solid #d9dfe5;
+  border-radius: 4px;
+
+}#detail .pdf-frame-wrap {
+
+  height: 720px;
+
+}#detail .pdf-frame {
+
+  width: 100%;
+  height: 100%;
+  border: 0;
+
+}#detail .pdf-empty {
+
+  padding: 60px 20px;
+  text-align: center;
+  color: #7a8591;
+  font-size: 13px;
+
+}#detail .pdf-empty .sub {
+
+  margin-top: 6px;
+  color: #9aa4af;
+  font-size: 12px;
+
+}#detail /* ===== 仅简略信息 ===== */
+.slim-box {
+
+  background: #fff;
+  border: 1px solid #f0dcb8;
+  border-radius: 6px;
+  padding: 28px 24px;
+  text-align: center;
+
+}#detail .slim-box p {
+
+  color: #8a5a00;
+  font-size: 13.5px;
+  margin: 0 0 16px;
+
+}#detail .btn {
+
+  border-radius: 4px;
+  padding: 8px 26px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #17539a;
+  color: #fff;
+
+}#detail /* ===== 下载区：仅下划线文字 ===== */
+.dl-card {
+
+  background: #fff;
+  border: 1px solid #e0e4e9;
+  border-radius: 6px;
+  padding: 2px 14px;
+
+}#detail .dl-row {
+
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 9px 2px;
+  border-bottom: 1px solid #eceff3;
+  font-size: 13px;
+
+}#detail .dl-row:last-child {
+
+  border-bottom: 0;
+
+}#detail .fn {
+
+  font-weight: 600;
+  color: #1e2832;
+
+}#detail .fs {
+
+  color: #8a97a4;
+  font-size: 12px;
+
+}#detail .st {
+
+  font-size: 12px;
+  color: #176b44;
+
+}#detail .st.bad {
+
+  color: #b42318;
+
+}#detail .spacer {
+
+  flex: 1;
+
+}#detail .dl-link {
+
+  color: #17539a;
+  text-decoration: underline;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+}#detail .dl-link.dim {
+
+  color: #9aa4af;
+  cursor: not-allowed;
+
+}#detail .blocked {
+
+  color: #b42318;
+  font-size: 12px;
+
+}#detail .foot-note {
+
+  margin: 4px 22px 0;
+  font-size: 11.5px;
+  color: #9aa4af;
+
+}#detail .state-card {
+
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 60px 20px;
+  text-align: center;
+  color: #7a8591;
+  font-size: 13.5px;
+  margin: 40px auto;
+  max-width: 560px;
+
+}#detail .state-card .err {
+
+  color: #b42318;
+
+}#detail .state-card .back {
+
+  margin-top: 14px;
+
+}#detail .docx {
+
+  overflow-x: auto;
+
+}#detail .docx caption {
+
+  font-family: '黑体', 'SimHei', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 6px 0;
+  caption-side: top;
+
+}#detail .docx ol,
+#detail .docx ul {
+
+  padding-left: 2.6em;
+
+}#detail .docx ol li,
+#detail .docx ul li {
+
+  margin: 4px 0;
+  text-indent: 0;
+
+}#detail .docx table {
+
+  width: auto;
+  min-width: 60%;
+  max-width: 100%;
+
+}#detail .head-top {
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+
+}#detail .go-orig {
+
+  flex: none;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #17539a;
+  border: 1px solid #c4d7ec;
+  background: #eef4fb;
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+
+}#detail .go-orig:hover {
+
+  background: #e2ecf8;
+
+}#detail .head-actions {
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: none;
+
+}#detail .go-orig.active {
+
+  background: #e5f2ea;
+  border-color: #a9d6bd;
+  color: #176b44;
+
+}#detail .go-orig:disabled {
+
+  opacity: 0.6;
+  cursor: wait;
+
+}#detail .follow-note {
+
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #8a97a4;
+
+}
+
+
+#sub .sub-page {
+
+  background: #f3f5f7;
+  min-height: 100%;
+  padding: 16px 20px 30px;
+
+}#sub .top-bar {
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+
+}#sub .back {
+
+  font-size: 13px;
+  color: #17539a;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #c4d7ec;
+  background: #eef4fb;
+  border-radius: 4px;
+  padding: 5px 12px;
+
+}#sub .sep {
+
+  color: #c6cdd5;
+
+}#sub .crumb {
+
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e2832;
+
+}#sub .crumb-sub {
+
+  font-size: 12px;
+  color: #7a8591;
+
+}#sub .filter-row {
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  background: #fff;
+  border: 1px solid #d9dfe5;
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+
+}#sub .opt {
+
+  font-size: 13px;
+  color: #44505c;
+  padding: 2px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+
+}#sub .opt.on {
+
+  background: #17539a;
+  color: #fff;
+  font-weight: 600;
+
+}#sub .sum {
+
+  margin-left: auto;
+  color: #7a8591;
+  font-size: 12px;
+
+}#sub .msg-box {
+
+  padding: 30px 12px;
+  text-align: center;
+  color: #7a8591;
+  font-size: 13px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+
+}#sub .msg-box.error {
+
+  color: #b42318;
+  background: #fef4f2;
+  border-color: #f3c9c3;
+
+}#sub .empty-panel {
+
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 46px 20px;
+  text-align: center;
+  color: #44505c;
+  font-size: 14px;
+
+}#sub .empty-panel .tip {
+
+  color: #8a97a4;
+  font-size: 12.5px;
+  line-height: 1.8;
+
+}#sub .btn {
+
+  border-radius: 4px;
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #17539a;
+  color: #fff;
+  margin-top: 8px;
+
+}#sub .card-list {
+
+  background: #fff;
+  border: 1px solid #e0e4e9;
+  border-radius: 6px;
+  overflow: hidden;
+
+}#sub .frow {
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 220px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eceff3;
+  cursor: pointer;
+
+}#sub .frow:hover {
+
+  background: #f5f8fc;
+
+}#sub .frow.head {
+
+  background: #f3f5f8;
+  cursor: default;
+  font-size: 12px;
+  color: #5d6a77;
+  font-weight: 700;
+
+}#sub .frow:last-child {
+
+  border-bottom: 0;
+
+}#sub .f-name {
+
+  min-width: 0;
+
+}#sub .f-title {
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+
+}#sub .f-text {
+
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e2832;
+  word-break: break-all;
+
+}#sub .f-text.unread {
+
+  color: #17539a;
+
+}#sub .f-meta {
+
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: #8a97a4;
+  font-size: 11.5px;
+  margin-top: 3px;
+
+}#sub .chip {
+
+  display: inline-flex;
+  padding: 0 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.8;
+  background: #eef1f4;
+  color: #44505c;
+  white-space: nowrap;
+
+}#sub .chip.t {
+
+  background: #e6eef8;
+  color: #174a86;
+
+}#sub .chip.s {
+
+  background: #e5f2ea;
+  color: #176b44;
+
+}#sub .chip.b {
+
+  background: #fdf0e5;
+  color: #9a4508;
+
+}#sub .f-unread {
+
+  text-align: center;
+
+}#sub .badge {
+
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+
+}#sub .none {
+
+  color: #c6cdd5;
+
+}#sub .f-act {
+
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+
+}#sub .mini {
+
+  font-size: 12px;
+  color: #44505c;
+  border: 1px solid #d3dae1;
+  background: #fff;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+
+}#sub .mini.primary {
+
+  color: #17539a;
+  border-color: #c4d7ec;
+  background: #eef4fb;
+  font-weight: 600;
+
+}#sub .mini.danger {
+
+  color: #b42318;
+  border-color: #efc7c2;
+
+}#sub .mini:disabled {
+
+  opacity: 0.5;
+  cursor: not-allowed;
+
+}#sub .pager {
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 2px 8px;
+  color: #7a8591;
+  font-size: 12px;
+
+}#sub .pg {
+
+  min-width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid #d3dae1;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #44505c;
+  cursor: pointer;
+
+}#sub .pg.on {
+
+  background: #17539a;
+  color: #fff;
+  border-color: #17539a;
+
+}#sub .pg.off {
+
+  opacity: 0.45;
+  cursor: not-allowed;
+
+}#sub .pg.dot {
+
+  border: 0;
+  background: transparent;
+  cursor: default;
+
+}#sub .tl-head {
+
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #e0e4e9;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+
+}#sub .tl-title {
+
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+}#sub .tl-name {
+
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e2832;
+  word-break: break-all;
+
+}#sub .tl-meta {
+
+  color: #8a97a4;
+  font-size: 12px;
+  margin-left: 4px;
+
+}#sub .tl-list {
+
+  background: #fff;
+  border: 1px solid #e0e4e9;
+  border-radius: 6px;
+  overflow: hidden;
+
+}#sub .tl-row {
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eceff3;
+
+}#sub .tl-row:last-child {
+
+  border-bottom: 0;
+
+}#sub .tl-row.unread {
+
+  background: #f3f7fd;
+
+}#sub .tl-tags {
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+
+}#sub .unread-chip {
+
+  background: #d92d20;
+  color: #fff;
+
+}#sub .tl-time {
+
+  margin-left: 2px;
+  color: #8a97a4;
+  font-size: 11.5px;
+
+}#sub .tl-text {
+
+  margin-top: 5px;
+  font-size: 13.5px;
+  color: #1e2832;
+  line-height: 1.7;
+  word-break: break-all;
+
+}#sub .tl-act {
+
+  flex: none;
+  display: flex;
+  gap: 6px;
+
+}
+
+#profile .ph-page {
+
+  background: #f3f5f7;
+  min-height: 100%;
+  padding: 40px 22px;
+
+}#profile .ph-card {
+
+  max-width: 560px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 48px 32px;
+  text-align: center;
+
+}#profile .ph-card h1 {
+
+  margin: 0 0 12px;
+  font-size: 20px;
+  color: #1e2832;
+
+}#profile .ph-card p {
+
+  color: #7a8591;
+  font-size: 13.5px;
+  line-height: 1.8;
+  margin: 0 0 22px;
+
+}#profile .back {
+
+  font-size: 13px;
+  color: #17539a;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #c4d7ec;
+  background: #eef4fb;
+  border-radius: 4px;
+  padding: 6px 14px;
+
+}
+
+  #hall .cust-line[hidden]{display:none!important}
+  .sub-view.tl-view[hidden]{display:none}
+</style>
+</head>
+<body data-page="hall" data-ipw-theme-role="page">
+<div class="des-fab" id="fab" hidden data-ipw-theme-role="page">
+    <div class="fab-panel">
+      <button class="on" data-p="hall">≡ 公告大厅</button>
+      <button data-p="detail">公告详情（真实正文见页面说明）</button>
+      <button data-p="sub">✦ 我的关注（含时间线）</button>
+      <button data-p="profile">◎ 个人中心（二期）</button>
+      <div class="tip">预览控制悬浮层（默认隐藏）——点右下角“设计底稿”展开。<br>数据/正文真实性：列表与 meta 按后端现状回显（publishTime 未回填→“—”）；正文需真实后端样例（见说明）。</div>
+    </div>
+    <button class="fab-main" id="fabBtn">设计底稿 ▾</button>
+  </div>
+<div class="shell">
+  <section id="screen-hall" class="screen">
+  <div class="bidding-page">
+    <div class="main-nav">
+      <div class="nav-item on" data-nav="hall"><span class="ic">≡</span><div class="n-name">公告大厅</div><div class="n-sub">查询 · 中标公示 · 详情</div></div>
+      <div class="nav-item" data-nav="sub"><span class="ic">✦</span><div class="n-name">我的关注</div><div class="n-sub">关注的公告/项目 · 动态提醒</div></div>
+      <div class="nav-item" data-nav="profile"><span class="flag">二期</span><span class="ic">◎</span><div class="n-name">个人中心</div><div class="n-sub">自身信息 · 实名认证</div></div>
+    </div>
+    <div class="kwbar"><div class="kw">
+      <input placeholder="输入关键词检索公告（标题 / 项目名称 / 编号 / 正文全文检索）">
+      <button class="btn primary">搜索</button>
+    </div></div>
+    <div class="qarea">
+      <div class="qrow"><div class="qlb">公告性质</div><div class="qopts">
+        <span class="opt on">全部性质</span><span class="opt">招标公告</span><span class="opt">中标候选人公示</span><span class="opt">候选人公示</span><span class="opt">成交结果公告</span>
+        <span class="opt" title="中标候选人公示/中标结果公示等合并视图（前端按公告性质原文组合）">中标公示</span>
+      </div></div>
+      <div class="qrow"><div class="qlb">来源站</div><div class="qopts">
+        <span class="opt on">全部来源</span><span class="opt">秦源招标电子招标平台</span><span class="opt">中国招标投标公共服务平台</span><span class="opt">陕西采购与招标网</span>
+      </div></div>
+      <div class="qrow"><div class="qlb">内容形态</div><div class="qopts">
+        <span class="opt on">全部形态</span><span class="opt">HTML</span><span class="opt">PDF</span>
+      </div></div>
+      <div class="qrow"><div class="qlb">行业相关</div><div class="qopts">
+        <span class="opt on">全部</span><span class="opt">相关</span><span class="opt">未知</span>
+      </div></div>
+      <div class="qrow"><div class="qlb">时间</div><div class="qopts">
+        <span class="opt on">全部时间</span><span class="opt">近7天</span><span class="opt">近1个月</span><span class="opt">近3个月</span><span class="opt">今年以来</span>
+        <span class="opt custom">＋ 自定义</span>
+      </div></div>
+      <div class="cust-line" hidden>
+        <input class="input" type="date"><span class="tilde">至</span><input class="input" type="date">
+        <button class="btn primary sm">确定</button>
+        <span class="cust-note">精确日期行：点“全部时间”或其它快捷区间可收起</span>
+      </div>
+    </div>
+    <div class="catalog">
+      <div class="cat-head">
+        <span class="t">公告目录</span>
+        <small>仅 ACTIVE + 面向社会 · 按发布时间倒序 · 共 4 条 · 已接入真实接口 notice-external（演示数据）</small>
+      </div>
+      <div class="table-card">
+        <div class="nrow head">
+          <div class="c-title">公告标题（性质 / 形态 / 行业 / 依法 / 来源）</div>
+          <div class="n-main">发布单位 · 有效期</div>
+          <div class="n-right">发布时间</div>
+        </div>
+        <div class="nrow" data-detail="2096454639908225025">
+          <div class="c-title">
+            <div class="n-title">炼化公司所属各单位2026年装置大修消缺公开招标公告</div>
+            <div class="n-tags"><span class="tag t">招标公告</span><span class="tag m">HTML</span><span class="tag a">行业相关</span><span class="tag g">依法必招</span><span class="tag m">来源：秦源招标电子招标平台</span></div>
+          </div>
+          <div class="n-main"><span>陕西延长石油（集团）有限责任公司炼化公司</span><span>生效 —</span></div>
+          <div class="n-right"><span class="n-time">—</span></div>
+        </div>
+        <div class="nrow" data-detail="2096454684942467073">
+          <div class="c-title">
+            <div class="n-title">炼化公司所属各单位2026年装置大修消缺公开招标中标候选人公示</div>
+            <div class="n-tags"><span class="tag t">中标候选人公示</span><span class="tag m">HTML</span><span class="tag a">行业相关</span><span class="tag g">依法必招</span><span class="tag m">来源：秦源招标电子招标平台</span></div>
+          </div>
+          <div class="n-main"><span>陕西延长石油（集团）有限责任公司炼化公司</span><span>生效 —</span></div>
+          <div class="n-right"><span class="n-time">—</span></div>
+        </div>
+        <div class="nrow" data-detail="2096454687958171649">
+          <div class="c-title">
+            <div class="n-title">陕西液化天然气投资发展有限公司杨凌LNG工厂年度防腐、保温、保冷维修项目候选人公示</div>
+            <div class="n-tags"><span class="tag t">候选人公示</span><span class="tag m">HTML</span><span class="tag a">行业相关</span><span class="tag m">来源：秦源招标电子招标平台</span></div>
+          </div>
+          <div class="n-main"><span>陕西液化天然气投资发展有限公司</span><span>生效 —</span></div>
+          <div class="n-right"><span class="n-time">—</span></div>
+        </div>
+        <div class="nrow" data-detail="2096454689849802754">
+          <div class="c-title">
+            <div class="n-title">陕西液化天然气投资发展有限公司杨凌LNG工厂年度防腐、保温、保冷维修项目成交结果公告</div>
+            <div class="n-tags"><span class="tag t">成交结果公告</span><span class="tag m">HTML</span><span class="tag a">行业相关</span><span class="tag g">依法必招</span><span class="tag m">来源：秦源招标电子招标平台</span></div>
+          </div>
+          <div class="n-main"><span>陕西液化天然气投资发展有限公司</span><span>生效 —</span></div>
+          <div class="n-right"><span class="n-time">—</span></div>
+        </div>
+      </div>
+      <div class="pager">
+        <span class="pg off">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg dot">…</span><span class="pg">3</span><span class="pg off">›</span>
+        <span class="sum">共 4 条</span>
+      </div>
+    </div>
+  </div></section>
+  <section id="screen-detail" class="screen on-scr">
+  <div class="detail-page">
+    <div class="top-bar">
+      <button class="back" data-nav="hall">‹ 返回公告大厅</button><span class="sep">|</span><span class="crumb">公告详情</span>
+    </div>
+    <div class="head-card">
+      <div class="head-top">
+        <div class="tags">
+          <span class="tag">招标公告</span><span class="tag">HTML</span><span class="tag">行业相关</span><span class="tag">依法必招</span><span class="tag">来源：秦源招标电子招标平台</span>
+        </div>
+        <div class="head-actions">
+          <button class="go-orig active" data-follow>已关注 ✓</button>
+          <a class="go-orig" title="经平台白名单中转跳转原站（防止外链绕过管控）">查看原文 ↗</a>
+        </div>
+      </div>
+      <h1>炼化公司所属各单位2026年装置大修消缺公开招标公告</h1>
+      <div class="meta">
+        <span><b>发布单位</b>陕西延长石油（集团）有限责任公司炼化公司</span>
+                <span><b>来源</b>EBIDDING · 秦源招标电子招标平台</span>
+        <span><b>公告性质</b>招标公告</span>
+        <span><b>依法必招</b>是</span>
+        <span><b>内容形态</b>HTML</span>
+        <span><b>正文结构</b>AI 兜底排版</span>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="docx">
+        <h2 class="doc-title" style="text-align:center;font-family:'黑体','SimHei',sans-serif;font-size:22px;margin:0 0 18px">炼化公司所属各单位2026年装置大修消缺公开招标公告</h2>
+        <p style="text-align:center;font-size:16px">招标编号：DYZB2025-11-G141</p>
+        <p>一、招标条件</p>
+        <p>本招标项目炼化公司所属各单位2026年装置大修消缺公开招标已由项目审批/核准/备案机关批准，项目资金来源为自筹资金，招标人为陕西延长石油（集团）有限责任公司炼化公司，本项目已具备招标条件，现招标方式为公开招标。</p>
+        <p>二、项目概况与招标范围</p>
+        <p>规模：炼化公司所属延安炼油厂、永坪炼油厂、榆林炼油厂、延安石油化工厂及油田气化工科技公司2026年度装置大修、消缺期间所需的防腐、保温、保冷施工。范围：本招标项目划分为6个标段，本次招标为其中的：</p>
+        <table>
+          <thead><tr><th>标段</th><th>标段名称</th><th>工程范围</th><th>实施地点</th></tr></thead>
+          <tbody>
+            <tr><td>（001）</td><td>延炼大修防腐保温</td><td>装置大修防腐保温工程</td><td>延安炼油厂</td></tr>
+            <tr><td>（002）</td><td>永炼大修防腐保温</td><td>装置大修防腐保温工程</td><td>永坪炼油厂</td></tr>
+            <tr><td>（003）</td><td>榆炼大修防腐保温</td><td>装置大修防腐保温工程</td><td>榆林炼油厂</td></tr>
+            <tr><td>（004）</td><td>石化厂消缺防腐保温</td><td>装置消缺防腐保温工程</td><td>延安石油化工厂</td></tr>
+            <tr><td>（005）</td><td>油田气消缺防腐保温</td><td>装置消缺防腐保温工程</td><td>油田气化工科技公司</td></tr>
+            <tr><td>（006）</td><td>大修消缺综合防腐保温</td><td>各厂综合检修防腐保温项目</td><td>各炼化单位</td></tr>
+          </tbody>
+        </table>
+        <p>三、投标人资格要求</p>
+        <p>1.投标人须在中华人民共和国境内依法注册的法人或其他组织，具备有效的营业执照；</p>
+        <p>2.投标人须具备防水防腐保温工程专业承包二级及以上资质，并具有有效的安全生产许可证；</p>
+        <p>3.投标人近三年（2022年1月1日起）具有类似炼油化工装置检修防腐保温项目业绩；</p>
+        <p>4.本项目不允许联合体投标。</p>
+        <p>四、招标文件的获取</p>
+        <p>获取时间：从2025年11月26日09时00分到2025年12月02日17时00分。获取方式：凡有意参加投标者，请于获取时间内登录秦源招标电子招标平台（www.ebidding.com.cn）在线购买招标文件，招标文件每标段售价600元，售后不退。</p>
+        <p>五、投标文件的递交</p>
+        <p>递交截止时间：2025年12月18日09时00分。递交方式：秦源招标电子招标平台电子上传文件递交。</p>
+        <p>六、开标时间及地点</p>
+        <p>开标时间：2025年12月18日09时00分。开标地点：秦源招标电子招标平台线上开标大厅。</p>
+        <p>七、其他</p>
+        <p>本次招标公告在秦源招标电子招标平台（www.ebidding.com.cn）、陕西采购与招标网发布。</p>
+        <p style="text-align:right;text-indent:0">招标人：陕西延长石油（集团）有限责任公司炼化公司</p>
+        <p style="text-align:right;text-indent:0">招标代理机构：陕西德源招标有限责任公司</p>
+        <p style="text-align:right;text-indent:0">2025年11月26日</p>
+      </div>
+    </div>
+    <div class="foot-note">本页正文为按秦源平台该公告的典型版式整理的展示样例（真实接口 contentHtmlSafe / 结构化块需运行态后端回填，届时逐字一致）。</div><div class="foot-note">
+      正文为后端净化版 contentHtmlSafe / 结构化正文块（02 §3.1：保留段落与表格结构，已剥除脚本与事件属性；如需源站原版观感请点“查看原文”）。
+    </div>
+  </div></section>
+  <section id="screen-sub" class="screen">
+  <div class="sub-page">
+    <div class="top-bar">
+      <button class="back" data-nav="hall">‹ 返回公告大厅</button><span class="sep">|</span>
+      <span class="crumb">我的关注 · 订阅跟踪</span>
+      <span class="crumb-sub">公告/项目/招标项目/标段 · 新动态提醒（未读数角标，点开即已读）</span>
+    </div>
+    <div class="sub-view list-view">
+    <div class="filter-row">
+      <span class="opt on" data-f="all">全部</span><span class="opt" data-f="ANNOUNCEMENT">公告</span><span class="opt" data-f="PROJECT">项目</span><span class="opt" data-f="TENDER_PROJECT">招标项目</span><span class="opt" data-f="SECTION">标段</span>
+      <span class="sum">共 4 项关注</span>
+    </div>
+    <div class="card-list">
+      <div class="frow head">
+        <div class="f-name">关注内容（维度 / 阶段 / 最近动态）</div>
+        <div class="f-unread">未读</div>
+        <div class="f-act">操作</div>
+      </div>
+      <div class="frow" data-tl="1">
+        <div class="f-name">
+          <div class="f-title"><span class="chip t">招标项目</span><span class="chip s">评标</span><span class="f-text unread">炼化公司所属各单位2026年装置大修消缺（含六个标段）</span></div>
+          <div class="f-meta"><span>陕西延长石油（集团）有限责任公司炼化公司</span><span>最近动态 2025-12-20 09:00</span></div>
+        </div>
+        <div class="f-unread"><span class="badge">2</span></div>
+        <div class="f-act"><button class="mini primary" data-tl="1">动态</button><button class="mini">已读</button><button class="mini danger" title="演示底稿：不真正取消关注">取消关注</button></div>
+      </div>
+      <div class="frow" data-tl="2">
+        <div class="f-name">
+          <div class="f-title"><span class="chip t">公告</span><span class="f-text unread">陕西液化天然气投资发展有限公司杨凌LNG工厂年度防腐、保温、保冷维修项目成交结果公告</span></div>
+          <div class="f-meta"><span>陕西液化天然气投资发展有限公司</span><span>最近动态 2026-01-16 10:12</span></div>
+        </div>
+        <div class="f-unread"><span class="badge">1</span></div>
+        <div class="f-act"><button class="mini primary" data-tl="2">动态</button><button class="mini">已读</button><button class="mini danger" title="演示底稿：不真正取消关注">取消关注</button></div>
+      </div>
+      <div class="frow" data-tl="3">
+        <div class="f-name">
+          <div class="f-title"><span class="chip t">项目</span><span class="chip s">招标</span><span class="f-text unread">太原市热力集团2026年一次网保温管采购</span></div>
+          <div class="f-meta"><span>太原市热力集团有限责任公司</span><span>最近动态 2026-02-18 16:40</span></div>
+        </div>
+        <div class="f-unread"><span class="badge">1</span></div>
+        <div class="f-act"><button class="mini primary" data-tl="3">动态</button><button class="mini">已读</button><button class="mini danger" title="演示底稿：不真正取消关注">取消关注</button></div>
+      </div>
+      <div class="frow" data-tl="4">
+        <div class="f-name">
+          <div class="f-title"><span class="chip t">标段</span><span class="chip s">招标</span><span class="f-text">平陆县供热管网改造工程（一标段）</span></div>
+          <div class="f-meta"><span>平陆县住房和城乡建设局</span><span>暂无动态</span></div>
+        </div>
+        <div class="f-unread"><span class="none">—</span></div>
+        <div class="f-act"><button class="mini primary" data-tl="4">动态</button><button class="mini" disabled>已读</button><button class="mini danger" title="演示底稿：不真正取消关注">取消关注</button></div>
+      </div>
+    </div></div>
+    <div class="sub-view tl-view" hidden>
+    <div class="tl-head">
+      <button class="back" data-tl-back>‹ 返回关注列表</button>
+      <div class="tl-title">
+        <span class="chip t">招标项目</span>
+        <span class="tl-name">炼化公司所属各单位2026年装置大修消缺（含六个标段）</span>
+        <span class="tl-meta">陕西延长石油（集团）有限责任公司炼化公司</span>
+        <span class="tl-meta">阶段：评标</span>
+        <span class="tl-meta">已读后未读清零（本页打开即已读）</span>
+      </div>
+    </div>
+    <div class="tl-list">
+      <div class="tl-row unread">
+        <div class="tl-main">
+          <div class="tl-tags">
+            <span class="chip">外部平台</span><span class="chip b">外部公告生效</span><span class="chip unread-chip">未读</span>
+            <span class="tl-time">2025-12-04 10:20</span>
+          </div>
+          <div class="tl-text">炼化公司所属各单位2026年装置大修消缺公开招标中标候选人公示</div>
+        </div>
+        <div class="tl-act">
+          <button class="mini primary" data-nav="detail">查看公告详情</button>
+          <button class="mini" title="经平台白名单中转跳转原站">源站原文 ↗</button>
+        </div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-main">
+          <div class="tl-tags">
+            <span class="chip">外部平台</span><span class="chip b">外部公告生效</span>
+            <span class="tl-time">2025-11-26 09:00</span>
+          </div>
+          <div class="tl-text">关注时的公告快照：炼化公司所属各单位2026年装置大修消缺公开招标公告</div>
+        </div>
+        <div class="tl-act">
+          <button class="mini primary" data-nav="detail">查看公告详情</button>
+          <button class="mini" title="经平台白名单中转跳转原站">源站原文 ↗</button>
+        </div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-main">
+          <div class="tl-tags">
+            <span class="chip">平台内部</span><span class="chip b">阶段流转</span>
+            <span class="tl-time">2025-12-20 09:00</span>
+          </div>
+          <div class="tl-text">项目阶段流转：招标 → 评标（六个标段共 34 家单位递交投标文件）</div>
+        </div>
+      </div>
+    </div></div>
+  </div></section>
+  <section id="screen-profile" class="screen">
+  <div class="ph-page">
+    <div class="ph-card">
+      <h1>个人中心（投标人）</h1>
+      <p>二期建设中 —— 展示自身主体信息与办理入口；如实名认证等必填事项，将在此提供入口按钮引导办理。</p>
+      <button class="back" data-nav="hall">‹ 返回公告大厅</button>
+    </div>
+  </div></section>
+</div>
+<script>
+
+  function desShow(name){
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on-scr')});
+    var sec=document.getElementById('screen-'+name); if(sec) sec.classList.add('on-scr');
+    document.querySelectorAll('.fab-panel button[data-p]').forEach(function(b){b.classList.toggle('on', b.getAttribute('data-p')===name)});
+    var map={hall:0,detail:0,sub:1,profile:2};
+    var items=document.querySelectorAll('#hall .nav-item');
+    items.forEach(function(n){n.classList.toggle('on', (map[name]||0)===Array.prototype.indexOf.call(items,n))});
+    window.scrollTo(0,0);
+  }
+  document.addEventListener('click', function(e){
+    var nav=e.target.closest('[data-nav]');
+    if(nav){ e.preventDefault(); desShow(nav.getAttribute('data-nav')); return; }
+    var det=e.target.closest('[data-detail]');
+    if(det){ e.preventDefault(); desShow('detail'); return; }
+    // 我的关注：行内小按钮不触发行展开
+    var mini=e.target.closest('.frow .mini, .frow .none, .frow .badge');
+    if(mini){ var row=mini.closest('.frow'); if(!mini.classList.contains('danger') && mini.classList.contains('mini')){
+        if(mini.textContent==='已读'){ var b=row.querySelector('.badge'); if(b){b.remove(); var n=row.querySelector('.none'); if(n) n.textContent='—'; } row.querySelector('.f-text')?.classList.remove('unread'); mini.disabled=true; }
+      }
+      return;
+    }
+    var tlnav=e.target.closest('[data-tl]');
+    if(tlnav){ e.preventDefault(); document.querySelector('#sub .list-view').hidden=true; document.querySelector('#sub .tl-view').hidden=false; window.scrollTo(0,0); return; }
+    var backtl=e.target.closest('[data-tl-back]');
+    if(backtl){ e.preventDefault(); document.querySelector('#sub .list-view').hidden=false; document.querySelector('#sub .tl-view').hidden=true; return; }
+    var fol=e.target.closest('[data-follow]');
+    if(fol){ var on=fol.classList.toggle('active'); fol.textContent= on ? '已关注 ✓' : '＋ 关注'; return; }
+    // 单选筛选（同一容器内互斥；自定义时间行显隐）
+    var opt=e.target.closest('.qopts .opt, .filter-row .opt');
+    if(opt){ var box=opt.parentElement; var custom=opt.classList.contains('custom');
+      box.querySelectorAll('.opt').forEach(function(o){ o.classList.toggle('on', custom? false : o===opt)});
+      if(custom){ box.querySelectorAll('.opt:not(.custom)').forEach(function(o){o.classList.remove('on')}); opt.classList.add('on'); }
+      var row=opt.closest('.qrow'); if(row){ var cl=row.querySelector('.cust-line'); if(cl) cl.hidden = !custom; }
+      return;
+    }
+    var pg=e.target.closest('#hall .pager .pg');
+    if(pg && !pg.classList.contains('off') && !pg.classList.contains('dot')){ pg.parentElement.querySelectorAll('.pg').forEach(function(p){p.classList.remove('on')}); pg.classList.add('on'); return; }
+    // 分页控件在订阅页
+    var pg2=e.target.closest('#sub .pager .pg');
+    if(pg2 && !pg2.classList.contains('off') && !pg2.classList.contains('dot')){ pg2.parentElement.querySelectorAll('.pg').forEach(function(p){p.classList.remove('on')}); pg2.classList.add('on'); return; }
+  });
+  var initial=document.body.getAttribute('data-page')||'hall';
+  desShow(initial);
+  if(document.body.getAttribute('data-tl')==='1'){ document.querySelector('#sub .list-view').hidden=true; document.querySelector('#sub .tl-view').hidden=false; }
+
+
+  (function(){
+    var fab=document.getElementById('fab'), btn=document.getElementById('fabBtn');
+    if(btn){ btn.addEventListener('click', function(){ fab.classList.toggle('open'); }); }
+  })();
+</script>
+</body>
+</html>

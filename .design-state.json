@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-07T08:26:46.138Z",
+  "execution": {
+    "status": "not_started"
+  },
+  "designPlan": {
+    "status": "cancelled",
+    "cancelledAt": "2026-09-07T08:26:46.138Z",
+    "directExecutionRequested": true,
+    "directExecutionReason": "直接执行",
+    "directExecutionAt": "2026-09-07T08:26:46.138Z"
+  }
+}

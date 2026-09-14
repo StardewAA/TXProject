@@ -9,7 +9,6 @@ import {
   DICT_TYPE,
   MesAutoCodeRuleCode,
   MesProTaskStatusEnum,
-  MesProWorkOrderStatusEnum,
 } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
@@ -249,7 +248,9 @@ export function useFormSchema(
       componentProps: {
         disabled: isHeaderReadonly,
         placeholder: '请选择工单',
-        status: MesProWorkOrderStatusEnum.CONFIRMED,
+        // 报工对象为「已下发/生产中」的工单，不设 status 硬过滤：
+        // 选择器内部会以 props.status 覆盖用户所选筛选，若固定为「已确认」，
+        // 已下发/生产中的工单将永远无法选中（首次及后续工序报工均被阻断）
         // 工单变更：清空任务及任务带出的产品信息、数量区域控制位
         onChange: async () => {
           await formApi?.setValues({
@@ -277,7 +278,12 @@ export function useFormSchema(
         componentProps: (values) => ({
           disabled: isHeaderReadonly || !values.workOrderId,
           placeholder: values.workOrderId ? '请选择任务' : '请先选择工单',
-          statuses: [MesProTaskStatusEnum.PREPARE],
+          // 报工对象应为已排产的任务：排产后任务状态为"已确认"，生产中为"生产中"；
+          // 原先固定为 PREPARE（草稿）会把已排产任务全部过滤掉，导致跨工单误选草稿任务
+          statuses: [
+            MesProTaskStatusEnum.CONFIRMED,
+            MesProTaskStatusEnum.PRODUCING,
+          ],
           workOrderId: values.workOrderId,
           workstationId: values.workstationId,
         }),

@@ -2,7 +2,7 @@
 # Build context is deploy/local, and the jar is passed via JAR_FILE (e.g. jars/gateway.jar).
 # A dedicated context is used because the repository .dockerignore excludes **/target,
 # so jars left in target/ cannot be copied during build.
-FROM eclipse-temurin:25-jre
+FROM m.daocloud.io/docker.io/library/eclipse-temurin:25-jre
 
 WORKDIR /app
 

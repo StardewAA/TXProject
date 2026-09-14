@@ -21,6 +21,10 @@
 			}
 		},
 		{
+			"path": "pages/shop/list",
+			"style": { "navigationBarTitleText": "企业店铺", "enablePullDownRefresh": true },
+			"meta": { "auth": false, "sync": true, "title": "企业店铺", "group": "商城" }
+		}, {
 			"path": "pages/index/user",
 			"style": {
 				"navigationBarTitleText": "个人中心",

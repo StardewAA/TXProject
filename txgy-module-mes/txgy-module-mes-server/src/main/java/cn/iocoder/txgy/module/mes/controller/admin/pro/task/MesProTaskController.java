@@ -82,6 +82,14 @@ public class MesProTaskController {
         return success(taskService.createTask(createReqVO));
     }
 
+    @PostMapping("/auto-generate-by-route")
+    @Operation(summary = "按工艺路线自动拆分生成任务")
+    @Parameter(name = "workOrderId", description = "生产工单编号", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('mes:pro-task:create')")
+    public CommonResult<Integer> autoGenerateTasksByRoute(@RequestParam("workOrderId") Long workOrderId) {
+        return success(taskService.autoGenerateTasksByRoute(workOrderId));
+    }
+
     @PutMapping("/update")
     @Operation(summary = "更新生产任务")
     @PreAuthorize("@ss.hasPermission('mes:pro-task:update')")

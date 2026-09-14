@@ -85,7 +85,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       throw new Error('Refresh token is null!');
     }
     const resp = await refreshTokenApi(refreshToken);
-    const newToken = resp?.data?.data?.accessToken;
+    const newToken = resp?.data?.data?.accessToken ?? resp?.data?.accessToken;
     // add by 芋艿：这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中，刷新令牌失败！！！
     if (!newToken) {
       throw resp.data;
@@ -109,11 +109,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         : formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       // 添加租户编号
-      config.headers['tenant-id'] = tenantEnable
-        ? accessStore.tenantId
-        : undefined;
+      config.headers['tenant-id'] = tenantEnable ? accessStore.tenantId : undefined;
       // 只有登录时，才设置 visit-tenant-id 访问租户
-      config.headers['visit-tenant-id'] = tenantEnable
+      config.headers['visit-tenant-id'] = tenantEnable && accessStore.accessToken && !isAuthenticationEntry(config.url)
         ? accessStore.visitTenantId
         : undefined;
       if (isPersonalRegister(config)) {
@@ -238,6 +236,23 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const responseData = error?.response?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
+      // 开发者日志（仅 DEV 打印，避免生产刷屏）：任何走 requestClient 的请求失败都能在控制台定位，
+      // 含方法/URL/后端响应体(code+msg)/HTTP 状态；注意不打印 error.config（含 Authorization/租户头）。
+      if (import.meta.env.DEV) {
+        const method = String(error?.config?.method ?? 'GET').toUpperCase();
+        const url = error?.config?.url ?? '';
+        const httpStatus = error?.response?.status ?? '';
+        const bizCode = error?.data?.code ?? responseData?.code ?? '';
+        console.error(
+          '[api 请求失败]',
+          method,
+          url,
+          'http=' + httpStatus,
+          'code=' + bizCode,
+          'msg=' + (responseData?.msg ?? error?.message ?? msg),
+          { responseBody: responseData },
+        );
+      }
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
         return;
