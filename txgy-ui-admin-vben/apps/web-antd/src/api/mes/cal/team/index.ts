@@ -23,6 +23,7 @@ export function getTeamPage(params: PageParam) {
 }
 
 /** 查询班组列表 */
+/** 查询班组精简列表（下拉选项用） */
 export function getTeamList() {
   return requestClient.get<MesCalTeamApi.Team[]>('/mes/cal/team/list');
 }

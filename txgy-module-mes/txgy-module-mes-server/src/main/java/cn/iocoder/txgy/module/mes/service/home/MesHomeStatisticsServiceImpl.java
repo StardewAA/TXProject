@@ -13,7 +13,10 @@ import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeRepairAnalysis
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeRepairStatusStatRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeSummaryRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeWorkOrderStatusRespVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectMilestoneDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.home.MesHomeStatisticsMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMilestoneMapper;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.mes.enums.dv.MesDvMachineryStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProAndonLevelEnum;
@@ -44,6 +47,9 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
 
     @Resource
     private MesHomeStatisticsMapper homeStatisticsMapper;
+
+    @Resource
+    private MesProProjectMilestoneMapper projectMilestoneMapper;
 
     @Override
     public MesHomeSummaryRespVO getHomeSummary() {
@@ -107,6 +113,13 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
         // 5. 异常/待办
         summary.setAndonActiveCount(homeStatisticsMapper.selectAndonActiveCount());
         summary.setRepairActiveCount(homeStatisticsMapper.selectRepairActiveCount());
+
+        // 里程碑预警：未完成且 3 天内到期（含已超期）的数量
+        summary.setMilestoneAlertCount(projectMilestoneMapper.selectCount(
+                new LambdaQueryWrapperX<MesProProjectMilestoneDO>()
+                        .isNull(MesProProjectMilestoneDO::getActualDate)
+                        .isNotNull(MesProProjectMilestoneDO::getPlanDate)
+                        .le(MesProProjectMilestoneDO::getPlanDate, LocalDateTime.now().plusDays(3))));
 
         return summary;
     }
