@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.service.pro.project;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.erp.api.sale.ErpSaleOrderApi;
 import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderItemRespDTO;
@@ -9,15 +10,24 @@ import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderRespDTO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectSyncTaskDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProductDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProcessDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.md.item.MesMdItemMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectSyncTaskMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.route.MesProRouteProductMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
+import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
+import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
+import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteService;
+import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
+import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -77,6 +87,18 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     private MesProWorkOrderMapper workOrderMapper;
     @Resource
     private MesMdItemMapper itemMapper;
+    @Resource
+    private MesProWorkOrderService workOrderService;
+    @Resource
+    private MesProTaskService taskService;
+    @Resource
+    private MesProRouteProductService routeProductService;
+    @Resource
+    private MesProRouteProductMapper routeProductMapper;
+    @Resource
+    private MesProRouteService routeService;
+    @Resource
+    private MesProRouteProcessService routeProcessService;
     @Resource
     private ErpSaleOrderApi erpSaleOrderApi;
 
@@ -210,27 +232,90 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
         for (ErpSaleOrderItemRespDTO item : items) {
             index++;
             String code = "WO" + projectCode + "-" + index;
-            // 幂等：工单已存在则跳过
-            if (workOrderMapper.selectByCode(code) != null) {
-                continue;
+            // 幂等：工单已存在则复用（补下发/补拆任务）
+            MesProWorkOrderDO workOrder = workOrderMapper.selectByCode(code);
+            if (workOrder == null) {
+                Long productId = resolveOrCreateMesItem(item);
+                workOrder = new MesProWorkOrderDO();
+                workOrder.setCode(code);
+                workOrder.setName(StrUtil.maxLength(
+                        StrUtil.blankToDefault(item.getProductName(), "产品") + " 生产工单", 100));
+                workOrder.setType(WORK_ORDER_TYPE_SELF);
+                workOrder.setOrderSourceType(WORK_ORDER_SOURCE_ORDER);
+                workOrder.setOrderSourceCode(saleOrder.getNo());
+                workOrder.setProjectId(projectId);
+                workOrder.setProductId(productId);
+                workOrder.setQuantity(item.getCount() != null ? item.getCount() : BigDecimal.ZERO);
+                workOrder.setQuantityProduced(BigDecimal.ZERO);
+                workOrder.setRequestDate(saleOrder.getOrderTime() != null ? saleOrder.getOrderTime() : LocalDateTime.now());
+                workOrder.setStatus(WORK_ORDER_STATUS_PREPARE);
+                workOrder.setRemark("由销售订单 " + saleOrder.getNo() + " 第" + index + "行自动生成");
+                workOrderMapper.insert(workOrder);
             }
-            Long productId = resolveOrCreateMesItem(item);
-            MesProWorkOrderDO workOrder = new MesProWorkOrderDO();
-            workOrder.setCode(code);
-            workOrder.setName(StrUtil.maxLength(
-                    StrUtil.blankToDefault(item.getProductName(), "产品") + " 生产工单", 100));
-            workOrder.setType(WORK_ORDER_TYPE_SELF);
-            workOrder.setOrderSourceType(WORK_ORDER_SOURCE_ORDER);
-            workOrder.setOrderSourceCode(saleOrder.getNo());
-            workOrder.setProjectId(projectId);
-            workOrder.setProductId(productId);
-            workOrder.setQuantity(item.getCount() != null ? item.getCount() : BigDecimal.ZERO);
-            workOrder.setQuantityProduced(BigDecimal.ZERO);
-            workOrder.setRequestDate(saleOrder.getOrderTime() != null ? saleOrder.getOrderTime() : LocalDateTime.now());
-            workOrder.setStatus(WORK_ORDER_STATUS_PREPARE);
-            workOrder.setRemark("由销售订单 " + saleOrder.getNo() + " 第" + index + "行自动生成");
-            workOrderMapper.insert(workOrder);
+            // 自动确认→下发→按工艺路线拆分任务（幂等，失败不阻断项目同步）
+            autoIssueAndSplitTasks(workOrder);
         }
+    }
+
+    /**
+     * 自动推进工单状态机并拆分任务：草稿→已确认→已下发→按工艺路线生成工序任务。
+     *
+     * 幂等：仅处理草稿/已确认状态的工单；任务生成按工序查重，重复调用只补缺失工序。
+     * best-effort：产品未绑定工艺路线时自动绑定一条启用且有工序的默认路线；
+     * 全程失败仅记录日志，不阻断项目同步（项目与工单已落库）。
+     */
+    private void autoIssueAndSplitTasks(MesProWorkOrderDO workOrder) {
+        Integer status = workOrder.getStatus();
+        if (Objects.equals(status, MesProWorkOrderStatusEnum.CANCELED.getStatus())
+                || Objects.equals(status, MesProWorkOrderStatusEnum.FINISHED.getStatus())) {
+            return; // 终态工单不处理
+        }
+        try {
+            // 1. 未下发的先推进状态机：确保绑定工艺路线 → 确认 → 下发
+            if (Objects.equals(status, MesProWorkOrderStatusEnum.PREPARE.getStatus())
+                    || Objects.equals(status, MesProWorkOrderStatusEnum.CONFIRMED.getStatus())) {
+                if (routeProductService.getRouteProductByItemId(workOrder.getProductId()) == null) {
+                    Long routeId = findDefaultRouteId();
+                    if (routeId == null) {
+                        log.warn("[autoIssueAndSplitTasks][工单({}) 产品({}) 无可用工艺路线，保持当前状态待人工绑定]",
+                                workOrder.getId(), workOrder.getProductId());
+                        return;
+                    }
+                    MesProRouteProductDO binding = new MesProRouteProductDO();
+                    binding.setRouteId(routeId);
+                    binding.setItemId(workOrder.getProductId());
+                    binding.setRemark("销售订单同步自动绑定默认工艺路线");
+                    routeProductMapper.insert(binding);
+                }
+                if (Objects.equals(status, MesProWorkOrderStatusEnum.PREPARE.getStatus())) {
+                    workOrderService.confirmWorkOrder(workOrder.getId());
+                }
+                workOrderService.issueWorkOrder(workOrder.getId());
+            }
+            // 2. 按工艺路线拆分工序任务（幂等：已下发/生产中的工单缺任务时也能补齐）
+            int taskCount = taskService.autoGenerateTasksByRoute(workOrder.getId());
+            log.info("[autoIssueAndSplitTasks][工单({}) 已自动下发并拆分 {} 个任务]", workOrder.getId(), taskCount);
+        } catch (Exception e) {
+            log.error("[autoIssueAndSplitTasks][工单({}) 自动下发/拆任务失败，保持当前状态]", workOrder.getId(), e);
+        }
+    }
+
+    /**
+     * 查找默认工艺路线：第一条启用且有工序的路线
+     */
+    private Long findDefaultRouteId() {
+        List<MesProRouteDO> routes = routeService.getRouteListByStatus(CommonStatusEnum.ENABLE.getStatus());
+        if (CollUtil.isEmpty(routes)) {
+            return null;
+        }
+        for (MesProRouteDO route : routes) {
+            List<MesProRouteProcessDO> routeProcesses =
+                    routeProcessService.getRouteProcessListByRouteId(route.getId());
+            if (CollUtil.isNotEmpty(routeProcesses)) {
+                return route.getId();
+            }
+        }
+        return null;
     }
 
     /**
@@ -250,7 +335,7 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
                     StrUtil.blankToDefault(item.getProductName(), "ERP产品-" + item.getProductId()), 100));
             newItem.setUnitMeasureId(item.getProductUnitId() != null ? item.getProductUnitId() : 0L);
             newItem.setItemTypeId(0L);
-            newItem.setStatus(1);
+            newItem.setStatus(CommonStatusEnum.ENABLE.getStatus());
             newItem.setBatchFlag(Boolean.FALSE);
             newItem.setSafeStockFlag(Boolean.FALSE);
             itemMapper.insert(newItem);
