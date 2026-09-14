@@ -63,3 +63,10 @@ END$$
 DELIMITER ;
 CALL `sp_add_course_exam_time`();
 DROP PROCEDURE IF EXISTS `sp_add_course_exam_time`;
+
+-- ----------------------------------------------------------------------
+-- 3. 菜单名称：「课程列表」改为「课程名称」（需求 1 统一页面与菜单文案）
+-- ----------------------------------------------------------------------
+UPDATE `system_menu`
+SET `name` = '课程名称'
+WHERE `id` = 41020;
