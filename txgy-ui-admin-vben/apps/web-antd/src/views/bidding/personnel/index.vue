@@ -46,6 +46,7 @@ import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bi
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
 import { useCertMeta } from '../certificate/useCertMeta';
+import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
 
 import '../certificate/cert.css';
@@ -499,6 +500,12 @@ function resetProfileForm() {
     workStartDate: undefined,
   });
 }
+/** 筛选变化 → 回第 1 页重查 */
+function applyProfileFilter(): void {
+  profileQuery.pageNo = 1;
+  void loadProfiles();
+}
+
 function openProfileCreate() {
   resetProfileForm();
   profileFormOpen.value = true;
@@ -863,30 +870,27 @@ function remainTag(r: PersonnelCertApi.Cert) {
     <a-tabs v-model:active-key="tab">
       <a-tab-pane key="profile" tab="① 员工档案">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="profileQuery.entId" :min="1" placeholder="企业主体 id" style="width: 160px" />
-            <a-input v-model:value="profileQuery.personName" placeholder="姓名" style="width: 120px" />
-            <a-input v-model:value="profileQuery.personNo" placeholder="工号" style="width: 120px" />
-            <a-input v-model:value="profileQuery.deptName" placeholder="部门" style="width: 130px" />
-            <a-select
-              v-model:value="profileQuery.personnelStatus"
-              placeholder="在职状态"
-              allow-clear
-              :options="PROFILE_STATUS_OPTIONS"
-              style="width: 140px"
-            />
-            <a-select
-              v-model:value="profileQuery.eduLevel"
-              placeholder="学历"
-              allow-clear
-              :options="dictOptions('edu_level')"
-              style="width: 120px"
-            />
-            <a-button type="primary" @click="profileQuery.pageNo = 1; loadProfiles()">查询</a-button>
-            <a-button v-if="can('bidding:personnel:profile:create')" type="primary" @click="openProfileCreate">
-              建档
-            </a-button>
-            <span class="ct-panel-meta">身份证仅提交、回读脱敏；离职/退休人员不计入资质人数</span>
+          <!-- 筛选：**前台样式**（左侧属性名 + 右侧文字选项） -->
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="企业主体">
+              <a-input-number v-model:value="profileQuery.entId" :min="1" placeholder="企业主体 id" style="width: 200px" />
+            </AttrFilter>
+            <AttrFilter label="姓名">
+              <a-input v-model:value="profileQuery.personName" placeholder="模糊匹配，回车查询" style="width: 200px" allow-clear @press-enter="applyProfileFilter" />
+            </AttrFilter>
+            <AttrFilter label="工号">
+              <a-input v-model:value="profileQuery.personNo" placeholder="模糊匹配，回车查询" style="width: 200px" allow-clear @press-enter="applyProfileFilter" />
+            </AttrFilter>
+            <AttrFilter label="部门">
+              <a-input v-model:value="profileQuery.deptName" placeholder="模糊匹配，回车查询" style="width: 200px" allow-clear @press-enter="applyProfileFilter" />
+            </AttrFilter>
+            <AttrFilter v-model="profileQuery.personnelStatus" label="在职状态" :options="PROFILE_STATUS_OPTIONS" @change="applyProfileFilter" />
+            <AttrFilter v-model="profileQuery.eduLevel" label="学历" :options="dictOptions('edu_level')" @change="applyProfileFilter" />
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <a-button type="primary" @click="applyProfileFilter">查询</a-button>
+              <a-button v-if="can('bidding:personnel:profile:create')" type="primary" @click="openProfileCreate">建档</a-button>
+              <span class="ml-auto text-xs text-muted-foreground">身份证仅提交、回读脱敏；离职/退休人员不计入资质人数</span>
+            </div>
           </div>
           <div class="ct-panel-b">
             <a-table

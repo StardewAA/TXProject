@@ -14,7 +14,6 @@ import {
   Modal,
   Pagination,
   RangePicker,
-  Select,
   Tag,
 } from 'ant-design-vue';
 
@@ -28,6 +27,7 @@ import {
 } from '#/api/bidding/crawlExternal';
 import { getRangePickerDefaultProps } from '#/utils/rangePickerProps';
 
+import AttrFilter from '../../components/AttrFilter.vue';
 import { CHANNEL_GENERIC_TEXT, contentFormText, FETCH_TYPE_HINT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
 import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
@@ -400,6 +400,11 @@ function backToSourceWall(): void {
   curSource.value = null;
   tRows.value = [];
   tTotal.value = 0;
+}
+/** 重置全部筛选条件（行式筛选区与时间范围一起清） */
+function resetTaskFilter(): void {
+  tFilter.value = { status: undefined, channelCode: undefined, url: undefined, range: undefined };
+  applyTaskFilter();
 }
 /** 筛选变化 → 回第 1 页重查 */
 function applyTaskFilter(): void {
@@ -777,22 +782,30 @@ const incompleteOf = (r: ManualRun) =>
           </div>
 
           <!-- 筛选行 -->
-          <div class="mb-3 flex flex-wrap items-center gap-2">
-            <Select v-model:value="tFilter.status" placeholder="全部状态" allow-clear style="width: 140px" :options="statusOptions" @change="applyTaskFilter" />
-            <Select v-model:value="tFilter.channelCode" placeholder="全部通道" allow-clear style="width: 150px" :options="[{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }]" @change="applyTaskFilter" />
-            <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
-            <RangePicker
-              v-model:value="tFilter.range"
-              show-time
-              value-format="YYYY-MM-DD HH:mm:ss"
-              :presets="RANGE_PRESETS"
-              :placeholder="['创建时间起', '创建时间止']"
-              style="width: 330px"
-              @change="applyTaskFilter"
-            />
-            <Button size="small" @click="applyTaskFilter">查询</Button>
-            <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined, range: undefined }; applyTaskFilter()">重置</Button>
-            <span class="ml-auto text-xs font-semibold text-muted-foreground">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
+
+          <!-- 筛选：前台样式（左侧属性名 + 右侧文字选项），属性名写清在筛什么；此前只有 placeholder 暗示 -->
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter v-model="tFilter.status" label="任务状态" :options="statusOptions" @change="applyTaskFilter" />
+            <AttrFilter v-model="tFilter.channelCode" label="下载通道" :options="[{ label: CHANNEL_GENERIC_TEXT, value: 'GENERIC' }]" @change="applyTaskFilter" />
+            <AttrFilter label="URL 关键字">
+              <input v-model="tFilter.url" placeholder="模糊匹配采集地址，回车查询" class="fp-url-input" @keyup.enter="applyTaskFilter" />
+            </AttrFilter>
+            <AttrFilter label="创建时间">
+              <RangePicker
+                v-model:value="tFilter.range"
+                show-time
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :presets="RANGE_PRESETS"
+                :placeholder="['起（可选）', '止（可选）']"
+                style="width: 330px"
+                @change="applyTaskFilter"
+              />
+            </AttrFilter>
+            <div class="mt-2 flex items-center gap-2">
+              <Button size="small" type="primary" @click="applyTaskFilter">查询</Button>
+              <Button size="small" @click="resetTaskFilter">重置</Button>
+              <span class="ml-auto text-xs font-semibold text-muted-foreground">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
+            </div>
           </div>
 
           <div v-if="tRowsLoading" class="ind-empty">加载中…</div>
