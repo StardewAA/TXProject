@@ -20,7 +20,7 @@ import type {
 export const authApi = {
   login: (data: { mobile: string; password: string }) =>
     request<TokenResult>({ url: '/member/auth/login', method: 'POST', data }),
-  register: (data: { mobile: string; password: string; code: string; nickname: string; agree: true }) =>
+  register: (data: { mobile: string; password: string; code: string; nickname: string; agree: true; memberIdentity: 'buyer' | 'supplier' }) =>
     request<TokenResult>({ url: '/member/auth/register', method: 'POST', data }),
   sendSmsCode: (mobile: string, scene: number) =>
     request<boolean>({ url: '/member/auth/send-sms-code', method: 'POST', data: { mobile, scene } }),

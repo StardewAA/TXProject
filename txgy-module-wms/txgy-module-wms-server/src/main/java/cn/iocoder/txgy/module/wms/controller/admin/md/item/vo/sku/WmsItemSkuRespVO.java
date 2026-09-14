@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 @Data
 public class WmsItemSkuRespVO {
 
+    @Schema(description = "物料主数据类型：RAW_MATERIAL原材料、FINISHED_GOODS成品；空表示未设置")
+    private String materialType;
+
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 

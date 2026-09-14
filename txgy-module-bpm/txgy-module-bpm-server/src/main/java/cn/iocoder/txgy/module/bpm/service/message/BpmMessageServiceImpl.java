@@ -53,8 +53,8 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
         sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getStartUserId(),
                 ERP_FINISHED_TEMPLATE, templateParams);
-        smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getStartUserId(),
-                BpmMessageEnum.PROCESS_INSTANCE_APPROVE.getSmsTemplateCode(), templateParams)).checkError();
+        sendProcessResultSms(reqDTO.getProcessDefinitionKey(), reqDTO.getProcessInstanceId(),
+                reqDTO.getStartUserId(), BpmMessageEnum.PROCESS_INSTANCE_APPROVE.getSmsTemplateCode(), templateParams);
     }
 
     @Override
@@ -66,8 +66,8 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         putErpOrderParams(templateParams, reqDTO.getOrderType(), reqDTO.getOrderNo());
         sendErpNotify(reqDTO.getProcessDefinitionKey(), reqDTO.getStartUserId(),
                 ERP_REJECTED_TEMPLATE, templateParams);
-        smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getStartUserId(),
-                BpmMessageEnum.PROCESS_INSTANCE_REJECT.getSmsTemplateCode(), templateParams)).checkError();
+        sendProcessResultSms(reqDTO.getProcessDefinitionKey(), reqDTO.getProcessInstanceId(),
+                reqDTO.getStartUserId(), BpmMessageEnum.PROCESS_INSTANCE_REJECT.getSmsTemplateCode(), templateParams);
     }
 
     @Override
@@ -104,6 +104,20 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
         smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getAssigneeUserId(),
                 BpmMessageEnum.TASK_TIMEOUT.getSmsTemplateCode(), templateParams)).checkError();
+    }
+
+    private void sendProcessResultSms(String processKey, String instanceId, Long userId,
+                                      String templateCode, Map<String, Object> params) {
+        try {
+            smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(userId, templateCode, params)).checkError();
+        } catch (RuntimeException ex) {
+            // WMS 审批结果必须独立于附属短信服务；库存/状态回调异常仍由原事务传播。
+            if (!"wms_receipt_approval".equals(processKey) && !"wms_shipment_approval".equals(processKey)) {
+                throw ex;
+            }
+            log.error("[sendProcessResultSms][WMS 结果短信失败，processKey={}, instanceId={}, templateCode={}]",
+                    processKey, instanceId, templateCode, ex);
+        }
     }
 
     private String getProcessInstanceDetailUrl(String taskId) {

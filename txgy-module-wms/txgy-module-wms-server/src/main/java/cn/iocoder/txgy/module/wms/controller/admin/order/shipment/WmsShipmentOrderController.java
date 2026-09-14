@@ -75,6 +75,11 @@ public class WmsShipmentOrderController {
     @Operation(summary = "创建出库单")
     @PreAuthorize("@ss.hasPermission('wms:shipment-order:create')")
     public CommonResult<Long> createShipmentOrder(@Valid @RequestBody WmsShipmentOrderSaveReqVO createReqVO) {
+        if (createReqVO.getSourceModule() != null || createReqVO.getBusinessChainNo() != null
+                || (createReqVO.getDetails() != null && createReqVO.getDetails().stream().anyMatch(
+                detail -> detail.getSourceLineNo() != null || detail.getSourceSnapshotJson() != null))) {
+            throw new IllegalArgumentException("外部来源单据请使用专用申请接口");
+        }
         return success(shipmentOrderService.createShipmentOrder(createReqVO));
     }
 
@@ -109,7 +114,11 @@ public class WmsShipmentOrderController {
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('wms:shipment-order:submit-approval')")
     public CommonResult<String> submitShipmentOrderApproval(@RequestParam("id") Long id) {
-        return success(shipmentOrderService.submitShipmentOrderApproval(getLoginUserId(), id));
+        try {
+            return success(shipmentOrderService.submitShipmentOrderApproval(getLoginUserId(), id));
+        } catch (cn.iocoder.txgy.module.wms.service.integration.WmsShortageService.ShortageBlockedException shortage) {
+            return CommonResult.error(1060300000, shortage.getMessage());
+        }
     }
 
     @PutMapping("/cancel")

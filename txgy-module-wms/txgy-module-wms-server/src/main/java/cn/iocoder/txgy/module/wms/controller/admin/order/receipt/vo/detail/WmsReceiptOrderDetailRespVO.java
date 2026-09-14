@@ -15,6 +15,18 @@ public class WmsReceiptOrderDetailRespVO {
 
     @Schema(description = "入库单编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long orderId;
+    @Schema(description = "来源单据明细行号")
+    private Integer sourceLineNo;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
+    private String sourceSnapshotJson;
+
+    @Schema(description = "创建时的来源明细快照；其中数量和附件是来源申报，不代表 WMS 验收或质检结果；历史单据可为空")
+    public cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO getSourceSnapshot() {
+        return cn.iocoder.txgy.framework.common.util.json.JsonUtils.parseObject(sourceSnapshotJson,
+                cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO.class);
+    }
 
     @Schema(description = "商品编号", example = "2048")
     private Long itemId;
@@ -45,6 +57,14 @@ public class WmsReceiptOrderDetailRespVO {
 
     @Schema(description = "入库数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "100.00")
     private BigDecimal quantity;
+    private BigDecimal actualQuantity;
+    private BigDecimal qualifiedQuantity;
+    private BigDecimal unqualifiedQuantity;
+
+    private java.util.List<String> qualityImages;
+    private String qualityRemark;
+
+    private Boolean qualityRequiredSnapshot;
 
     @Schema(description = "单价", example = "1000.00")
     private BigDecimal price;

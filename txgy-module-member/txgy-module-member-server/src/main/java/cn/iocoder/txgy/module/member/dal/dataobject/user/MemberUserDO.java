@@ -34,6 +34,9 @@ import java.util.List;
 @AllArgsConstructor
 public class MemberUserDO extends TenantBaseDO {
 
+    /** 申请身份，不代表企业审核通过或具备销售权限。 */
+    private String memberIdentity;
+
     // ========== 账号信息 ==========
 
     /**

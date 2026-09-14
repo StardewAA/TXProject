@@ -12,6 +12,10 @@ import org.hibernate.validator.constraints.Length;
 @Data
 public class AppAuthRegisterReqVO {
 
+    @Schema(description = "申请身份：supplier / buyer；旧版移动端可不传")
+    @Pattern(regexp = "supplier|buyer", message = "会员身份不正确")
+    private String memberIdentity;
+
     @Schema(description = "手机号", requiredMode = Schema.RequiredMode.REQUIRED, example = "15601691300")
     @NotEmpty(message = "手机号不能为空")
     @Mobile

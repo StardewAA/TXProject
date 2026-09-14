@@ -14,6 +14,7 @@ import cn.iocoder.txgy.module.product.api.comment.ProductCommentApi;
 import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
 import cn.iocoder.txgy.module.promotion.api.bargain.BargainActivityApi;
 import cn.iocoder.txgy.module.promotion.api.bargain.BargainRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
@@ -35,7 +36,7 @@ import org.springframework.context.annotation.Configuration;
         CouponApi.class, DiscountActivityApi.class, RewardActivityApi.class, SeckillActivityApi.class, PointActivityApi.class,
         MemberUserApi.class, MemberPointApi.class, MemberLevelApi.class, MemberAddressApi.class, MemberConfigApi.class,
         ProductSpuApi.class, ProductSkuApi.class, ProductCommentApi.class, ProductCategoryApi.class,
-        ProductShopApi.class,
+        ProductShopApi.class, ProductSupplierApi.class,
         PayOrderApi.class, PayRefundApi.class, PayTransferApi.class, PayWalletApi.class,
         AdminUserApi.class, NotifyMessageSendApi.class, SocialClientApi.class, SocialUserApi.class
 })

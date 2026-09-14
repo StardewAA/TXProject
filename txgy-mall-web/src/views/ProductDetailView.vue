@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { productApi } from '@/api/mall'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { skuImage } from '@/utils/sku-image'
 import type { Product, ProductSku, Shop } from '@/types/mall'
 import { formatMoney, normalizeImage, productImage, propertyText, sanitizeRichHtml } from '@/utils/format'
 
@@ -25,6 +26,7 @@ const displayStock = computed(() => selectedSku.value?.stock ?? product.value?.s
 const safeDescription = computed(() => sanitizeRichHtml(product.value?.description))
 const detailImage = computed(() => productImage(product.value?.id, product.value?.picUrl))
 const galleryImages = computed(() => [...new Set([
+  skuImage(product.value?.id,product.value?.picUrl,selectedSku.value?.picUrl),
   detailImage.value,
   ...(product.value?.sliderPicUrls || []).map(normalizeImage),
 ].filter(Boolean))])
@@ -48,6 +50,7 @@ async function load() {
 
 function selectSku(sku: ProductSku) {
   selectedSku.value = sku
+  selectedImage.value = ''
   if (quantity.value > sku.stock) quantity.value = Math.max(1, sku.stock)
 }
 

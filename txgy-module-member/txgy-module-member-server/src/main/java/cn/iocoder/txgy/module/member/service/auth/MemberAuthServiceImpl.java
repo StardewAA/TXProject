@@ -51,6 +51,8 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Resource
     private MemberUserService userService;
     @Resource
+    private cn.iocoder.txgy.module.member.dal.mysql.user.MemberUserMapper memberUserMapper;
+    @Resource
     private SmsCodeApi smsCodeApi;
     @Resource
     private LoginLogApi loginLogApi;
@@ -88,6 +90,11 @@ public class MemberAuthServiceImpl implements MemberAuthService {
                 .setUsedIp(clientIp)).checkError();
         MemberUserDO user = userService.registerUser(reqVO.getMobile(), reqVO.getPassword(),
                 reqVO.getNickname(), clientIp, getTerminal());
+        if (reqVO.getMemberIdentity() != null) {
+            user.setMemberIdentity(reqVO.getMemberIdentity());
+            memberUserMapper.updateById(new MemberUserDO().setId(user.getId())
+                    .setMemberIdentity(reqVO.getMemberIdentity()));
+        }
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, null);
     }
 

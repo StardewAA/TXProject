@@ -23,6 +23,8 @@ export const defaultSummary: MesHomeApi.Summary = {
 export const WORK_ORDER_STATUS_COLOR_MAP: Record<number, string> = {
   [MesProWorkOrderStatusEnum.PREPARE]: '#909399', // 草稿
   [MesProWorkOrderStatusEnum.CONFIRMED]: '#409EFF', // 已确认
+  [MesProWorkOrderStatusEnum.ISSUED]: '#13C2C2', // 已下发
+  [MesProWorkOrderStatusEnum.IN_PRODUCTION]: '#FA8C16', // 生产中
   [MesProWorkOrderStatusEnum.FINISHED]: '#67C23A', // 已完成
   [MesProWorkOrderStatusEnum.CANCELED]: '#F56C6C', // 已取消
 };
