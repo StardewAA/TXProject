@@ -250,7 +250,9 @@ const [Modal, modalApi] = useVbenModal({
     loadTags();
     loadCategories();
     const data = modalApi.getData<number>();
-    if (data) {
+    // 注意：vben modal 的 getData 在未 setData 时返回 {}（truthy），
+    // 必须显式判断为数字（编辑时传入的题目 ID），否则新增会被误判为修改
+    if (data && typeof data === 'number') {
       editingId.value = data;
       const detail = await getQuestion(data);
       qtype.value = detail.qtype || 1;
