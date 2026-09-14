@@ -1,16 +1,29 @@
 package cn.iocoder.txgy.module.mes.service.pro.project;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.erp.api.sale.ErpSaleOrderApi;
+import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderItemRespDTO;
 import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderRespDTO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderSaveReqVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectSyncTaskDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.md.item.MesMdItemMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectSyncTaskMapper;
+import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
+import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
+import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
+import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
+import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +72,16 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     private MesProProjectSyncTaskMapper syncTaskMapper;
     @Resource
     private ErpSaleOrderApi erpSaleOrderApi;
+    @Resource
+    @Lazy
+    private MesProWorkOrderService workOrderService;
+    @Resource
+    @Lazy
+    private MesProTaskService taskService;
+    @Resource
+    private MesMdItemMapper itemMapper;
+    @Resource
+    private MesMdAutoCodeRecordService autoCodeRecordService;
 
     @Override
     public Long createSyncTask(Long saleOrderId) {
@@ -133,10 +156,70 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
             // 6. 创建项目
             Long projectId = createProjectFromSaleOrder(saleOrder);
             markSuccess(task, projectId);
+            // 7. 按订单行自动生成生产工单并拆分任务（P3：订单→项目→工单→任务全自动链）
+            generateWorkOrdersFromSaleOrder(projectId, saleOrder);
         } catch (Exception e) {
             log.error("[processTask][任务({}) 订单({}) 同步失败]", task.getId(), task.getSaleOrderId(), e);
             markRetry(task, StrUtil.maxLength(e.getMessage(), 500));
         }
+    }
+
+    /**
+     * 按销售订单行自动生成生产工单并拆分任务（P3 全自动链的最后一环）。
+     *
+     * 每行生成一个自行生产工单（来源=ERP，绑定项目），产品按 ERP 产品名称匹配 MES 物料；
+     * 工单创建后自动确认、下发，并按工艺路线拆分任务。任一行失败不影响其余行，
+     * 失败明细记录在日志中（项目已创建，人工可补建工单）。
+     *
+     * @param projectId 项目编号
+     * @param saleOrder 销售订单（含订单行明细）
+     */
+    private void generateWorkOrdersFromSaleOrder(Long projectId, ErpSaleOrderRespDTO saleOrder) {
+        List<ErpSaleOrderItemRespDTO> items = saleOrder.getItems();
+        if (CollUtil.isEmpty(items)) {
+            log.info("[generateWorkOrdersFromSaleOrder][订单({}) 无订单行明细，跳过工单生成]", saleOrder.getNo());
+            return;
+        }
+        int created = 0;
+        for (ErpSaleOrderItemRespDTO item : items) {
+            try {
+                // 1. ERP 产品名称 → MES 物料匹配（两套主数据体系，按名称对齐）
+                List<MesMdItemDO> matchedItems = itemMapper.selectList(
+                        new LambdaQueryWrapperX<MesMdItemDO>().eq(MesMdItemDO::getName, item.getProductName()));
+                if (CollUtil.isEmpty(matchedItems)) {
+                    log.warn("[generateWorkOrdersFromSaleOrder][订单({}) 行产品({}) 在 MES 物料中不存在，跳过该行]",
+                            saleOrder.getNo(), item.getProductName());
+                    continue;
+                }
+                MesMdItemDO mesItem = matchedItems.get(0);
+                // 2. 创建工单（ERP 来源，绑定项目，类型=自行生产）
+                MesProWorkOrderSaveReqVO workOrder = new MesProWorkOrderSaveReqVO();
+                workOrder.setCode(autoCodeRecordService.generateAutoCode(
+                        MesMdAutoCodeRuleCodeEnum.PRO_WORK_ORDER_CODE.getCode()));
+                workOrder.setName(saleOrder.getCustomerName() + "-" + item.getProductName());
+                workOrder.setType(MesProWorkOrderTypeEnum.SELF.getType());
+                workOrder.setOrderSourceType(MesProWorkOrderSourceTypeEnum.ERP.getType());
+                workOrder.setOrderSourceCode(saleOrder.getNo());
+                workOrder.setProjectId(projectId);
+                workOrder.setProductId(mesItem.getId());
+                workOrder.setQuantity(item.getCount());
+                workOrder.setRequestDate(saleOrder.getOrderTime());
+                Long workOrderId = workOrderService.createWorkOrder(workOrder);
+                // 3. 确认并下发（下发校验：产品必须已绑定工艺路线）
+                workOrderService.confirmWorkOrder(workOrderId);
+                workOrderService.issueWorkOrder(workOrderId);
+                // 4. 按工艺路线自动拆分任务（复用 P1 能力）
+                int taskCount = taskService.autoGenerateTasksByRoute(workOrderId);
+                created++;
+                log.info("[generateWorkOrdersFromSaleOrder][订单({}) 行产品({}) 已生成工单({})，自动拆分任务 {} 个]",
+                        saleOrder.getNo(), item.getProductName(), workOrderId, taskCount);
+            } catch (Exception e) {
+                log.error("[generateWorkOrdersFromSaleOrder][订单({}) 行产品({}) 自动生成工单失败，跳过该行]",
+                        saleOrder.getNo(), item.getProductName(), e);
+            }
+        }
+        log.info("[generateWorkOrdersFromSaleOrder][订单({}) 工单自动生成完成，成功 {} / 共 {} 行]",
+                saleOrder.getNo(), created, items.size());
     }
     /**
      * 由销售订单创建生产项目

@@ -16,7 +16,8 @@ import java.util.Arrays;
 public enum MesProWorkOrderSourceTypeEnum implements ArrayValuable<Integer> {
 
     ORDER(1, "客户订单"),
-    STORE(2, "库存备货");
+    STORE(2, "库存备货"),
+    ERP(3, "ERP订单");
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(MesProWorkOrderSourceTypeEnum::getType).toArray(Integer[]::new);
 
