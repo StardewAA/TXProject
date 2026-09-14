@@ -50,4 +50,7 @@ public class ErpSaleOrderRespDTO {
     @Schema(description = "备注")
     private String remark;
 
+@Schema(description = "订单行明细列表")
+private java.util.List<ErpSaleOrderItemRespDTO> items;
+
 }
