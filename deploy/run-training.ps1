@@ -1,6 +1,7 @@
 docker run -d `
   --name deploy-training-1 `
   --network txgy-dev `
+  --network-alias training `
   --restart unless-stopped `
   -e JAVA_OPTS="-Xms256m -Xmx512m -XX:MaxMetaspaceSize=256m" `
   -e "SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL=jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true" `
