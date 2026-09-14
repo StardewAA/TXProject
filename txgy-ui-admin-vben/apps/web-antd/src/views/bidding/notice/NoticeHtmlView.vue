@@ -26,10 +26,11 @@
       后端字典接口（契约 §四 F-1，R-4 字段字典）落地后以接口为准，本字典仅离线兜底。
 ============================================================================ -->
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { fmtBytes } from '#/utils/format';
 
+import PdfPreview from '../vo/PdfPreview.vue';
 import { fmtFieldValue, groupPayload, PAYLOAD_LABEL, UNKNOWN_FIELD_LABEL } from './payloadLabel';
 
 export interface HtmlAttachment {
@@ -111,6 +112,24 @@ const getHints = computed<Array<{ key: string; label: string; value: string }>>(
  * 依据：10号令 第12/13条（部门规章/政府文件）；电子办法 第9条（部门规章/政府文件）。
  * 契约：docs/公告发布-字段对齐… §三 L1 可见性；NoticeDetailRespVO.publicLevel/internalFlag。 */
 const publicReadable = computed(() => !props.detail?.internalFlag && props.detail?.publicLevel !== 'GOVERNMENT');
+
+/* ===== 预览 与 下载 是**两个动作**（用户 2026-09-14 指出此前混为一谈） =====
+ *   · 预览：内嵌查看器（iframe），只读，不触发另存 —— 走 PdfPreview 组件（给 url 优先；只有 file_id 时它去 /infra/file/get 取地址）；
+ *   · 下载：独立入口，用 HTML download 属性触发另存，与预览互不替代；
+ *   · 此前本区只有一条「免费查阅下载 ↗」指向 pdfDownloadUrl：既没有预览实现（预览区因此是空的），
+ *     又把"查阅"和"下载"混成一个词 —— 故拆开并分别命名。
+ *   · 内部公告（T 轨）目前**没有**后端字节流代理（外部公告才有 /bidding/notice-external/pdf），
+ *     所以 pdfDownloadUrl 为空时预览只能靠 file_id 走 /infra/file/get（可能 403）；已在契约 14 请求补齐。 */
+const previewOpen = ref(false);
+const previewUrl = ref('');
+const previewFileId = ref<number | string | undefined>(undefined);
+const previewName = ref('');
+function openPdfPreview(url?: null | string, fileId?: null | number | string, name?: string): void {
+  previewUrl.value = url ?? '';
+  previewFileId.value = fileId ?? undefined;
+  previewName.value = name ?? '';
+  previewOpen.value = true;
+}
 </script>
 
 <template>
@@ -180,17 +199,29 @@ const publicReadable = computed(() => !props.detail?.internalFlag && props.detai
         <li v-if="detail?.pdfFileId" class="nh-file">
           <span class="doc">公告版式文件（PDF）</span>
           <span class="meta mono">file_id #{{ detail.pdfFileId }}<template v-if="detail?.pdfSize"> · {{ sizeText(detail.pdfSize) }}</template></span>
-          <a v-if="detail?.pdfDownloadUrl" class="dl" :href="detail.pdfDownloadUrl" target="_blank" rel="noopener">{{ publicReadable ? '免费查阅下载 ↗' : '查阅 ↗' }}</a>
-          <span v-else class="tip">{{ publicReadable ? '（公开公告可免费查阅；下载地址由业务系统签发后开放）' : '（企业内部公告，仅本租户可见）' }}</span>
+          <a class="dl" role="button" tabindex="0" @click="openPdfPreview(detail?.pdfDownloadUrl, detail?.pdfFileId, '公告版式文件（PDF）')" @keydown.enter.prevent="openPdfPreview(detail?.pdfDownloadUrl, detail?.pdfFileId, '公告版式文件（PDF）')">预览</a>
+          <a v-if="detail?.pdfDownloadUrl" class="dl" :href="detail.pdfDownloadUrl" download rel="noopener">下载</a>
+          <span v-else class="tip">下载地址由业务系统签发后开放</span>
+          <span v-if="!publicReadable" class="tip">受限公告：仅本租户可见</span>
         </li>
         <li v-for="a in detail?.attachments || []" :key="String(a.id ?? a.fileId)" class="nh-file">
           <span class="doc">{{ a.kind === 'PDF' ? 'PDF 附件' : '附件' }} {{ a.name || '（未命名）' }}</span>
           <span class="meta mono">{{ sizeText(a.size) }}</span>
-          <a v-if="a.downloadUrl" class="dl" :href="a.downloadUrl" target="_blank" rel="noopener">下载 ↗</a>
+          <a v-if="a.kind === 'PDF'" class="dl" role="button" tabindex="0" @click="openPdfPreview(a.downloadUrl, a.fileId, a.name)" @keydown.enter.prevent="openPdfPreview(a.downloadUrl, a.fileId, a.name)">预览</a>
+          <a v-if="a.downloadUrl" class="dl" :href="a.downloadUrl" download rel="noopener">下载</a>
           <span v-else class="tip">（附件下载地址由业务系统按公开性签发；外部公告附件需病毒扫描 CLEAN 后放行）</span>
         </li>
       </ul>
     </section>
+    <!-- 预览弹窗（iframe 内嵌查看器）。**预览与下载是两个动作**：预览只读不改动文件，下载另存；
+         此前本区只有一条"免费查阅下载"链接且没有预览实现（预览区因此是空的）。 -->
+    <PdfPreview
+      v-model:open="previewOpen"
+      :file-id="previewFileId"
+      :file-name="previewName"
+      :title="previewName || '文件预览'"
+      :url="previewUrl"
+    />
   </div>
 </template>
 

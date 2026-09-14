@@ -20,7 +20,7 @@ import { useAppConfig } from '@vben/hooks';
 import { fmtBytes } from '#/utils/format';
 
 import CopyText from '../../bidding/components/CopyText.vue';
-import { buildExternalNoticePdfUrl } from '../../bidding/noticeExternal/pdfUrl';
+import { buildExternalNoticePdfDownloadUrl, buildExternalNoticePdfPreviewUrl } from '../../bidding/noticeExternal/pdfUrl';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
 import { biddingConfig } from './config';
 import { blocksToHtml, cleanT, fmtDate, fmtDT, prettyNoticeHtml, toCleanList } from './format';
@@ -257,15 +257,17 @@ const bodyHtml = computed(() => {
 });
 const hasBodyHtml = computed(() => !!bodyHtml.value);
 const isPdf = computed(() => !hasBodyHtml.value && detail.value?.contentType === 'PDF');
-/* PDF 预览地址（两级）：
-   ① 后端字节流代理 GET /bidding/notice-external/pdf?id= —— 公开免登（@PermitAll @TenantIgnore）、
-      直接转发平台归档 PDF 字节流，前端 iframe src 直接用；后端注释明确"避免前端直连 infra 文件 URL（内网 host 不可达）"；
-   ② detail.pdfDownloadUrl（FileApi 签名地址，回填后可用）优先于①。
-   理由：此前只等 pdfDownloadUrl 回填，导致 contentType=PDF 的公告长期显示"源文件整理中"、无法预览。 */
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-// 解析口径见 views/bidding/noticeExternal/pdfUrl.ts（单一真源，后台审核详情共用，避免再次分叉）
-const pdfFrameUrl = computed(() => buildExternalNoticePdfUrl(apiURL, id.value, detail.value?.pdfDownloadUrl));
-const canPreviewPdf = computed(() => !!pdfFrameUrl.value);
+/* 解析口径见 views/bidding/noticeExternal/pdfUrl.ts（单一真源，后台审核详情共用，避免再次分叉）。
+ * 预览 / 下载**两个地址**（拆分理由见该文件头）：
+ *   iframe 必须用 inline 型地址（后端字节流代理），签名地址是下载型、塞进 iframe 会直接触发下载。 */
+const pdfPreviewUrl = computed(() =>
+  buildExternalNoticePdfPreviewUrl(apiURL, id.value, detail.value?.pdfDownloadUrl),
+);
+const pdfSaveUrl = computed(() =>
+  buildExternalNoticePdfDownloadUrl(apiURL, id.value, detail.value?.pdfDownloadUrl),
+);
+const canPreviewPdf = computed(() => !!pdfPreviewUrl.value);
 /** 附件区是否没有任何可下载链接（FileApi 签名地址尚未回填 / 数据源无附件样例，R6） */
 const noRealDownload = computed(
   () => !!detail.value?.attachments?.length && !detail.value.attachments.some((a) => a.downloadUrl),
@@ -474,10 +476,11 @@ onBeforeUnmount(() => {
     <div v-else-if="isPdf" class="body-area">
       <div class="pdf-panel">
         <div v-if="canPreviewPdf" class="pdf-frame-wrap">
-          <iframe class="pdf-frame" :src="pdfFrameUrl" title="公告 PDF 预览"></iframe>
+          <!-- 预览：进入详情即内嵌显示（与 HTML 公告的正文展示同级，无需再点按钮） -->
+          <iframe class="pdf-frame" :src="pdfPreviewUrl" title="公告 PDF 预览"></iframe>
           <div class="sub pdf-actions">
-            <a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
-            <a :href="pdfFrameUrl" download>下载</a>
+            <a :href="pdfPreviewUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+            <a v-if="pdfSaveUrl" :href="pdfSaveUrl" download rel="noopener">下载</a>
           </div>
         </div>
         <div v-else class="pdf-empty">
