@@ -21,10 +21,25 @@
     Usage:
       powershell -ExecutionPolicy Bypass -File deploy\rebuild-frontend.ps1
       powershell -ExecutionPolicy Bypass -File deploy\rebuild-frontend.ps1 -BuildOnly
+
+      # Publish into a different container name / host port. Required when the
+      # default target is already taken on this machine, e.g. the stack is still
+      # running under the compose-generated name deploy-frontend-1:
+      powershell -ExecutionPolicy Bypass -File deploy\rebuild-frontend.ps1 `
+          -ContainerName deploy-frontend-1 -HostPort 5173
+
+    PORT CONFLICT BEHAVIOUR:
+      The publish step fails loudly when the target port is already published by
+      another container, instead of silently reporting success against the OLD
+      container. If that happens, stop the other container or pass a different
+      -ContainerName / -HostPort.
 #>
 param(
     [switch]$BuildOnly,
-    [int]$HeapMb = 4096
+    [int]$HeapMb = 4096,
+    [string]$ContainerName = 'txgy-frontend',
+    [int]$HostPort = 5173,
+    [string]$Network = 'txgy-dev'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +52,10 @@ $distDir   = Join-Path $vbenDir 'apps\web-antd\dist'
 $imageNew  = 'local-frontend:candidate'
 $imageLive = 'local-frontend:latest'
 $ctxDir    = Join-Path $rootDir '.fe-image-context'
+
+# The smoke test runs on a spare port derived from the publish port so that it
+# never collides with the live container, even when -HostPort is customised.
+$smokePort = $HostPort + 1
 
 function Step($msg) { Write-Host "`n== $msg ==" -ForegroundColor Cyan }
 function Ok($msg)   { Write-Host $msg -ForegroundColor Green }
@@ -126,15 +145,23 @@ if ($BuildOnly) {
     Remove-Item $ctxDir -Recurse -Force -ErrorAction SilentlyContinue
     Warn "`n-BuildOnly: running containers were NOT touched. To promote manually:"
     Warn "  docker tag $imageNew $imageLive"
-    Warn "  docker rm -f txgy-frontend"
-    Warn "  docker run -d --name txgy-frontend --network txgy-dev -p 5173:80 --restart unless-stopped $imageLive"
+    Warn "  docker rm -f $ContainerName"
+    Warn "  docker run -d --name $ContainerName --network $Network -p ${HostPort}:80 --restart unless-stopped $imageLive"
     exit 0
 }
 
 # ---------- 4. smoke test on a spare port ----------
-Step "4/5 smoke test on port 5174"
+Step "4/5 smoke test on port $smokePort"
 & docker rm -f fe-smoke 2>&1 | Out-Null
-& docker run -d --name fe-smoke --network txgy-dev -p 5174:80 $imageNew 2>&1 | Out-Null
+# Invoke-Native is used instead of a bare call on purpose: under
+# $ErrorActionPreference='Stop' a bare call turns docker's stderr into a terminating
+# error, which would skip the friendly message below.
+$smokeExit = Invoke-Native -Exe 'docker' -Arguments @('run', '-d', '--name', 'fe-smoke', '--network', $Network, '-p', "${smokePort}:80", $imageNew)
+if ($smokeExit -ne 0) {
+    & docker rm -f fe-smoke 2>&1 | Out-Null
+    throw ("smoke container failed to start (exit=$smokeExit). Port $smokePort is probably " +
+           "already in use on this machine; free it or pass a different -HostPort.")
+}
 Start-Sleep -Seconds 6
 
 function Test-Frontend([string]$Base) {
@@ -150,25 +177,43 @@ function Test-Frontend([string]$Base) {
     return $false
 }
 
-if (-not (Test-Frontend 'http://localhost:5174')) {
+if (-not (Test-Frontend "http://localhost:$smokePort")) {
     & docker logs --tail 20 fe-smoke 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     & docker rm -f fe-smoke 2>&1 | Out-Null
-    throw "smoke test FAILED. txgy-frontend was left untouched."
+    throw "smoke test FAILED. $ContainerName was left untouched."
 }
 Ok "smoke test passed (/ and SPA route both 200)"
 & docker rm -f fe-smoke 2>&1 | Out-Null
 
 # ---------- 5. promote ----------
-Step "5/5 promote to txgy-frontend"
+Step "5/5 promote to $ContainerName on port $HostPort"
 & docker tag $imageNew $imageLive
-& docker rm -f txgy-frontend 2>&1 | Out-Null
-& docker run -d --name txgy-frontend --network txgy-dev -p 5173:80 --restart unless-stopped $imageLive 2>&1 | Out-Null
+
+# If another container already publishes the target port, `docker run` fails. That
+# failure MUST be surfaced: swallowing it would let the probe below be answered by
+# the OLD container, reporting a false success while the new build is never served.
+& docker rm -f $ContainerName 2>&1 | Out-Null
+$runExit = Invoke-Native -Exe 'docker' -Arguments @('run', '-d', '--name', $ContainerName, '--network', $Network, '-p', "${HostPort}:80", '--restart', 'unless-stopped', $imageLive)
+if ($runExit -ne 0) {
+    throw ("cannot publish on port $HostPort as '$ContainerName' (docker run exit=$runExit). " +
+           "That port is already taken (check: docker ps --format '{{.Names}} {{.Ports}}'). " +
+           "Stop the container holding it, or re-run with -ContainerName / -HostPort on a free slot.")
+}
 Start-Sleep -Seconds 6
 
-if (Test-Frontend 'http://localhost:5173') {
-    Ok "live: http://localhost:5173"
+# A container that was created but is not running must never be reported as success.
+# `docker ps --filter` is used instead of `docker inspect` because it does not emit
+# stderr for a missing container, which would abort the script under 'Stop'.
+$state = (& docker ps -a --filter "name=^/$ContainerName$" --format '{{.State}}' 2>&1 | Out-String).Trim()
+if ($state -ne 'running') {
+    & docker logs --tail 30 $ContainerName 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    throw "$ContainerName is not running (state='$state'); refusing to report success."
+}
+
+if (Test-Frontend "http://localhost:$HostPort") {
+    Ok "live: http://localhost:$HostPort (container: $ContainerName)"
 } else {
-    Warn "post-promotion probe FAILED. Check: docker logs --tail 50 txgy-frontend"
+    Warn "post-promotion probe FAILED. Check: docker logs --tail 50 $ContainerName"
     exit 1
 }
 
