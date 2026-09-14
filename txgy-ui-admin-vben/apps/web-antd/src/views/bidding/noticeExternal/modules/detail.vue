@@ -49,16 +49,22 @@ import {
   INDUSTRY_MAP,
   STATUS_MAP,
 } from '../data';
-import { buildExternalNoticePdfUrl } from '../pdfUrl';
+import { buildExternalNoticePdfDownloadUrl, buildExternalNoticePdfPreviewUrl } from '../pdfUrl';
 
 const detail = ref<NoticeExternalApi.ManageDetail | null>(null);
 
-/* PDF 可访问地址：走**单一真源**解析（签名地址 pdfDownloadUrl → 平台字节流代理 /bidding/notice-external/pdf?id=），
- * 与门户详情同口径。此前本页只认 pdfDownloadUrl，导致**审核人在"前台观感"里看不到 PDF**、
- * 只看到一句"源文件整理中（尚未回填）"——而同一公告在门户已能预览（审核看不到最终件属功能缺陷）。 */
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-const pdfFrameUrl = computed(() =>
-  buildExternalNoticePdfUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
+/* PDF 地址走**单一真源**解析，与门户详情同口径。此前本页只认 pdfDownloadUrl，导致**审核人在"前台观感"里看不到 PDF**、
+ * 只看到一句"源文件整理中（尚未回填）"——而同一公告在门户已能预览（审核看不到最终件属功能缺陷）。 */
+/* 预览 / 下载**两个地址**（拆分理由见 pdfUrl.ts 文件头）：
+ *   · pdfPreviewUrl：iframe src 与"新窗口打开"用 —— 代理优先（inline，浏览器能直接渲染）；
+ *   · pdfSaveUrl：仅"下载"用 —— 签名地址优先 + download 属性触发另存。
+ * 此前只解析一个"可访问地址"且签名地址优先，导致 iframe 指向下载型 URL ⇒ 点进 PDF 公告直接下载、看不到内容。 */
+const pdfPreviewUrl = computed(() =>
+  buildExternalNoticePdfPreviewUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
+);
+const pdfSaveUrl = computed(() =>
+  buildExternalNoticePdfDownloadUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
 );
 const loading = ref(false);
 const errorMsg = ref('');
@@ -238,7 +244,7 @@ const [Modal, modalApi] = useVbenModal({
                 <button class="fb-follow-btn" :class="{ disabled: !viewCanFollow }" disabled>
                   {{ viewCanFollow ? '＋ 关注' : '审核通过后开放关注' }}
                 </button>
-                <a v-if="detail.origUrl" class="fb-orig-btn" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
+                <a v-if="detail.origUrl" class="fb-orig-link" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
               </div>
             </div>
             <div class="fb-preview-title">{{ detail.title }}</div>
@@ -249,17 +255,14 @@ const [Modal, modalApi] = useVbenModal({
           <div class="fb-body-area">
             <div v-if="hasViewBody" class="fb-docx" v-dompurify-html="viewHtml"></div>
             <div v-else-if="viewIsPdf" class="fb-pdf-panel">
-              <template v-if="pdfFrameUrl">
-                <iframe class="fb-pdf-frame" :src="pdfFrameUrl" title="公告 PDF 预览"></iframe>
+              <template v-if="pdfPreviewUrl">
+                <!-- 预览：内嵌查看器（地址为 inline 型） -->
+                <iframe class="fb-pdf-frame" :src="pdfPreviewUrl" title="公告 PDF 预览"></iframe>
                 <div class="fb-pdf-actions">
-                  <a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
-                  <a :href="pdfFrameUrl" download>下载</a>
+                  <a :href="pdfPreviewUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+                  <a v-if="pdfSaveUrl" :href="pdfSaveUrl" download rel="noopener">下载</a>
                   <span class="hint">
-                    {{
-                      detail.pdfDownloadUrl
-                        ? '来源：FileApi 签名地址（pdf_download_url）'
-                        : '来源：平台字节流代理（pdf_download_url 尚未回填，走 /bidding/notice-external/pdf）'
-                    }}
+                    {{ detail.id ? '预览来源：平台字节流代理（application/pdf + inline）' : '预览来源：FileApi 签名地址（无公告 id，代理不可用）' }}
                   </span>
                 </div>
               </template>
@@ -270,7 +273,7 @@ const [Modal, modalApi] = useVbenModal({
             </div>
             <div v-else class="fb-slim">
               <p>该公告仅有简略信息（标题、发布单位、发布时间见上方），无正文、无文件。</p>
-              <a v-if="detail.origUrl" class="fb-primary-btn" href="#" @click.prevent="openGo(detail.origUrl)">前往原地址查看</a>
+              <a v-if="detail.origUrl" class="fb-orig-link" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
             </div>
           </div>
           <div class="fb-preview-note">正文渲染优先级（与门户一致）：bodyBlocksStatus=SUCCESS → 结构化块（黑体标题/仿宋缩进段落/带框表格/列表）；否则回退净化正文智能排版；HTML 公告发布后同时提供右上“查看原文”（origUrl 经 /go 白名单中转）。</div>
@@ -290,7 +293,10 @@ const [Modal, modalApi] = useVbenModal({
           </div>
           <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
             PDF 原文件：{{ fmtBytes(detail.pdfSize, '大小未知') }}
-            <template v-if="pdfFrameUrl">｜<a :href="pdfFrameUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
+            <template v-if="pdfPreviewUrl">
+              ｜<a :href="pdfPreviewUrl" target="_blank" rel="noopener noreferrer" class="underline">预览</a>
+              <a v-if="pdfSaveUrl" :href="pdfSaveUrl" download rel="noopener" class="ml-2 underline">下载</a>
+            </template>
             <div v-if="detail.extractionSummary" class="mt-1 text-muted-foreground">抽取摘要：{{ detail.extractionSummary }}</div>
           </div>
           <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -332,7 +338,9 @@ const [Modal, modalApi] = useVbenModal({
 .fb-preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .fb-follow-btn { font-size: 12px; font-weight: 600; color: var(--ind-ok); border: 1px solid hsl(var(--success) / 45%); background: hsl(var(--success) / 10%); border-radius: 4px; padding: 3px 12px; cursor: default; }
 .fb-follow-btn.disabled { color: hsl(var(--muted-foreground)); border: 1px dashed hsl(var(--border)); background: hsl(var(--muted) / 40%); }
-.fb-orig-btn { font-size: 12px; font-weight: 600; color: hsl(var(--primary)); border: 1px solid hsl(var(--primary) / 30%); background: hsl(var(--primary) / 8%); border-radius: 4px; padding: 3px 12px; text-decoration: none; cursor: default; }
+/* 「查看原文」是**链接**不是按钮（用户口径）；并修掉旧类 cursor: default 的错（看着像按钮却不出手型）。 */
+.fb-orig-link { font-size: 12px; font-weight: 600; color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.fb-orig-link:hover { color: hsl(var(--primary) / 80%); }
 .fb-preview-title { margin: 10px 0; font-size: 17px; line-height: 1.5; color: hsl(var(--foreground)); }
 .fb-preview-meta { display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: 12px; color: hsl(var(--muted-foreground)); border-top: 1px solid hsl(var(--border)); padding-top: 8px; }
 .fb-preview-meta b { font-weight: 400; color: hsl(var(--muted-foreground)); margin-right: 4px; }
