@@ -391,9 +391,16 @@ export function parseQuestionByAi(file: File) {
   );
 }
 
-/** 确认导入 AI 识别的试题 */
-export function importQuestionsByAi(items: TrainingResourceApi.AiQuestionItem[]) {
-  return requestClient.post<number>('/training/question/ai/import', items);
+/** AI 试题导入确认参数（整批统一分类与标签） */
+export interface AiQuestionImportReq {
+  items: TrainingResourceApi.AiQuestionItem[];
+  categoryId?: number;
+  tagIds?: number[];
+}
+
+/** 确认导入 AI 识别的试题（整批统一归入所选分类、打上所选标签） */
+export function importQuestionsByAi(data: AiQuestionImportReq) {
+  return requestClient.post<number>('/training/question/ai/import', data);
 }
 
 // ========== 视频清晰度 ==========
