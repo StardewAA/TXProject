@@ -110,5 +110,7 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- 门户招聘入口及统一流程查询权限。权限复用已有 portal 查询权限。
 INSERT IGNORE INTO `system_menu`
 (`id`, `name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-VALUES (1645, '招聘应聘', 'hrm:portal:query', 2, 5, 1614, 'recruit', 'ep:briefcase', 'hrm/portal/recruit/index', 'HrmPortalRecruit', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
+VALUES (1645, '招聘应聘', 'hrm:portal:query', 2, 5, 1614, 'recruit', 'ep:briefcase', 'portal/recruit/index', 'HrmPortalRecruit', 0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `permission` = VALUES(`permission`), `component` = VALUES(`component`), `component_name` = VALUES(`component_name`), `deleted` = b'0';
+UPDATE system_menu SET component = 'portal/recruit/index', component_name = 'HrmPortalRecruit'
+WHERE id = 1645 AND component = 'hrm/portal/recruit/index';

@@ -188,8 +188,6 @@ async function handleTenantChange(tenant: SystemTenantApi.Tenant) {
     message.error('切换租户失败');
     return;
   }
-  // 当前后端租户隔离真正读取的是 tenant-id，这里要同步切换，visitTenantId 仅用于页面侧展示/记忆
-  accessStore.setTenantId(tenant.id as number);
   // 设置访问租户 ID
   accessStore.setVisitTenantId(tenant.id as number);
   // 关闭其他标签页，只保留当前页

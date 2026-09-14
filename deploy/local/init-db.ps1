@@ -57,6 +57,40 @@ if ($fullDump) {
     }
 }
 
+# The full dump predates the HRM module and therefore has no hrm_* tables.
+# Restore the HRM base schema only when the database has no HRM tables yet;
+# the base file contains DROP TABLE statements and must not run on an existing
+# database that already contains HRM data.
+$hrmTableCount = docker exec $MysqlContainer mysql -uroot -p"$env:MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$Database' AND table_name LIKE 'hrm_%'" 2>$null
+if ([int]([string]$hrmTableCount).Trim() -eq 0) {
+    $hrmBaseSql = Get-ChildItem -LiteralPath $initDir -Filter '0031*hrm*.sql.sql' -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($hrmBaseSql) {
+        Write-Host "Applying HRM base schema from $($hrmBaseSql.Name) ..." -ForegroundColor Cyan
+        Invoke-Mysql -SqlFile $hrmBaseSql.FullName
+        Write-Host "HRM base schema applied." -ForegroundColor Green
+    }
+}
+
+# Recruitment portal tables and menus are additive and idempotent. Applying
+# them here keeps a fresh local database aligned with the checked-in HRM code.
+$hrmRecruitmentScripts = @(
+    (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-group-one.sql'),
+    (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-groups-integration.sql'),
+    (Join-Path $rootDir 'sql\2026-09-09-qinchuan-hrm-recruit-200.sql'),
+    (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat.sql'),
+    (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat-qualify.sql'),
+    (Join-Path $rootDir 'sql\2026-09-12-hrm-recruit-chat-menu.sql'),
+    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-start-status.sql'),
+    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-delete.sql')
+)
+foreach ($hrmSql in $hrmRecruitmentScripts) {
+    if (Test-Path -LiteralPath $hrmSql) {
+        Invoke-Mysql -SqlFile $hrmSql
+        Write-Host "[OK]   $([IO.Path]::GetFileName($hrmSql))" -ForegroundColor Green
+    }
+}
+
 # Apply the idempotent promotion-threshold extension after either restore path.
 # This keeps an existing local database in sync with the Excel-driven growth module.
 $promotionScripts = @(

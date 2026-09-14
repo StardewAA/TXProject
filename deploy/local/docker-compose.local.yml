@@ -52,7 +52,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -125,6 +125,21 @@ services:
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     ports:
       - "48080:48080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      system:
+        condition: service_started
+      infra:
+        condition: service_started
+      bpm:
+        condition: service_started
+      hrm:
+        condition: service_started
     mem_limit: 800m
 
   system:
@@ -148,6 +163,46 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: jars/infra.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 800m
+
+  bpm:
+    <<: *txgy-service
+    container_name: txgy-bpm
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/bpm.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+    mem_limit: 800m
+
+  hrm:
+    <<: *txgy-service
+    container_name: txgy-hrm
+    image: local-hrm:latest
+    build:
+      context: ../..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx640m -XX:+UseG1GC
+    mem_limit: 950m
+
+  im:
+    <<: *txgy-service
+    container_name: txgy-im
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/im.jar
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
@@ -193,6 +248,26 @@ services:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     mem_limit: 850m
+
+  frontend:
+    container_name: txgy-frontend
+    image: local-frontend:latest
+    build:
+      context: ../..
+      dockerfile: deploy/frontend/Dockerfile.runtime
+    depends_on:
+      gateway:
+        condition: service_started
+    extra_hosts:
+      - "live-srs:127.0.0.1"
+      - "training:127.0.0.1"
+      - "training-exam:127.0.0.1"
+    ports:
+      - "5173:80"
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 256m
 
 volumes:
   mysql-data:

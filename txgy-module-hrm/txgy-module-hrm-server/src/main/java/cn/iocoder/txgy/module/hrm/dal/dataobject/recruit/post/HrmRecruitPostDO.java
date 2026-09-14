@@ -160,6 +160,8 @@ public class HrmRecruitPostDO extends TenantBaseDO {
      * 关联 {@link HrmRecruitPostTypeDO#getId()}
      */
     private Long postTypeId;
+    /** 发布渠道编号 */
+    private Long channelId;
     /**
      * 职位状态
      *
