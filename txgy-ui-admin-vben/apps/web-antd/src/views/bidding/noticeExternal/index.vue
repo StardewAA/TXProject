@@ -544,7 +544,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       :width="900"
       :title="logNotice ? `操作日志 · ${ logNotice.title || String(logNotice.id)}` : '操作日志'"
     >
-      <div class="mb-2 text-xs font-medium text-gray-500">
+      <div class="mb-2 text-xs font-medium text-muted-foreground">
         留痕来自平台操作日志（人工动作经 @LogRecord、系统/AI 动作经 NoticeOperateLogHelper 写入）；
         AI 审查的理由与命中词在「内容 / 拓展」里。
       </div>
@@ -567,17 +567,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <template v-if="column.key === 'createTime'">{{ fmtT(record.createTime) }}</template>
           <template v-else-if="column.key === 'user'">
             <div>{{ logUserText(record) }}</div>
-            <div v-if="record.userIp" class="text-xs text-gray-400">{{ record.userIp }}</div>
+            <div v-if="record.userIp" class="text-xs text-muted-foreground">{{ record.userIp }}</div>
           </template>
           <template v-else-if="column.key === 'action'">
             <div>{{ record.action || '—' }}</div>
-            <div v-if="record.extra" class="break-all text-xs text-gray-400" :title="record.extra">
+            <div v-if="record.extra" class="break-all text-xs text-muted-foreground" :title="record.extra">
               拓展：{{ record.extra }}
             </div>
           </template>
           <template v-else-if="column.key === 'source'">
             <div class="text-xs">{{ record.requestMethod || '—' }}</div>
-            <div class="break-all text-xs text-gray-400" :title="record.requestUrl">
+            <div class="break-all text-xs text-muted-foreground" :title="record.requestUrl">
               {{ record.requestUrl || '' }}
             </div>
           </template>
@@ -695,7 +695,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 }
 
 .trace-pop .raw {
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
 }
 
 .cx-more-btn {

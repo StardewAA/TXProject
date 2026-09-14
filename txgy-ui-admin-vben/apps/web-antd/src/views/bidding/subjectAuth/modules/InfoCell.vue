@@ -4,8 +4,8 @@ withDefaults(defineProps<{ label?: string; value?: null | string }>(), { label: 
 </script>
 
 <template>
-  <div class="rounded border border-gray-100 bg-gray-50 p-2">
-    <div class="text-gray-400">{{ label }}</div>
-    <div class="font-medium text-gray-700">{{ value || '—' }}</div>
+  <div class="rounded border border-border bg-muted/50 p-2">
+    <div class="text-muted-foreground">{{ label }}</div>
+    <div class="font-medium text-foreground">{{ value || '—' }}</div>
   </div>
 </template>
