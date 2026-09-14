@@ -9,15 +9,13 @@ import { useVbenModal } from '@vben/common-ui';
 import { MesAutoCodeRuleCode, MesProFeedbackStatusEnum } from '@vben/constants';
 import { useUserStore } from '@vben/stores';
 
-import { Button, message, Popconfirm, Tabs } from 'ant-design-vue';
+import { Alert, Button, message, Popconfirm, Tabs } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { generateAutoCode } from '#/api/mes/md/autocode/record';
 import {
-  approveFeedback,
   createFeedback,
   getFeedback,
-  rejectFeedback,
   submitFeedback,
   updateFeedback,
 } from '#/api/mes/pro/feedback';
@@ -43,7 +41,10 @@ const canSubmit = computed(
     isEditable.value &&
     formData.value?.status === MesProFeedbackStatusEnum.PREPARE,
 );
-const canApprove = computed(() => formType.value === 'approve');
+/** 审批中：审批已迁移至 BPM 流程引擎，界面仅做引导 */
+const isApproving = computed(
+  () => formData.value?.status === MesProFeedbackStatusEnum.APPROVING,
+);
 const showSubTabs = computed(
   () =>
     !!formData.value?.id &&
@@ -53,9 +54,6 @@ const showSubTabs = computed(
 const getTitle = computed(() => {
   if (formType.value === 'detail') {
     return $t('ui.actionTitle.view', ['生产报工']);
-  }
-  if (formType.value === 'approve') {
-    return '审批生产报工';
   }
   if (formType.value === 'submit') {
     return '提交生产报工';
@@ -158,40 +156,6 @@ async function handleSubmit() {
   }
 }
 
-/** 审批通过 */
-async function handleApprove() {
-  if (!formData.value?.id) {
-    return;
-  }
-  modalApi.lock();
-  try {
-    const finished = await approveFeedback(formData.value.id);
-    await modalApi.close();
-    emit('success');
-    message.success(
-      finished ? '报工单已审批完成' : '报工成功，请等待质量检验完成！',
-    );
-  } finally {
-    modalApi.unlock();
-  }
-}
-
-/** 审批不通过 */
-async function handleReject() {
-  if (!formData.value?.id) {
-    return;
-  }
-  modalApi.lock();
-  try {
-    await rejectFeedback(formData.value.id);
-    await modalApi.close();
-    emit('success');
-    message.success('报工单已驳回');
-  } finally {
-    modalApi.unlock();
-  }
-}
-
 /** 加载工序的 checkFlag 用于回显数量区域 */
 async function resolveCheckFlag(routeId?: number, processId?: number) {
   if (!routeId || !processId) {
@@ -210,7 +174,7 @@ async function resolveCheckFlag(routeId?: number, processId?: number) {
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
-    if (formType.value === 'detail' || formType.value === 'approve') {
+    if (formType.value === 'detail') {
       await modalApi.close();
       return;
     }
@@ -227,13 +191,10 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<{ formType: FormType; id?: number }>();
     formType.value = data.formType;
     formApi.setState({ schema: useFormSchema(formType.value, formApi) });
-    // 审批/详情整表禁用，避免审核人误改未提交的字段
-    formApi.setDisabled(
-      formType.value === 'approve' || formType.value === 'detail',
-    );
+    // 详情整表禁用，避免误改未提交的字段
+    formApi.setDisabled(formType.value === 'detail');
     modalApi.setState({
-      showConfirmButton:
-        formType.value !== 'detail' && formType.value !== 'approve',
+      showConfirmButton: formType.value !== 'detail',
     });
     if (!data?.id) {
       // 新增：默认报工人和报工时间，并自动生成报工单号
@@ -269,6 +230,14 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-3/5">
+    <Alert
+      v-if="isApproving"
+      class="mx-4 mt-2"
+      type="info"
+      show-icon
+      message="该报工单正在流程审批中"
+      description="请前往「工作流程 - 待办任务」处理，审批结果将自动回写到本单据。"
+    />
     <Form class="mx-4" />
     <Tabs
       v-if="showSubTabs"
@@ -291,20 +260,6 @@ const [Modal, modalApi] = useVbenModal({
           @confirm="handleSubmit"
         >
           <Button type="primary">{{ $t('common.submit') }}</Button>
-        </Popconfirm>
-        <Popconfirm
-          v-if="canApprove"
-          title="确认审批通过该报工单？"
-          @confirm="handleApprove"
-        >
-          <Button type="primary">通过</Button>
-        </Popconfirm>
-        <Popconfirm
-          v-if="canApprove"
-          title="确认驳回该报工单？"
-          @confirm="handleReject"
-        >
-          <Button danger>不通过</Button>
         </Popconfirm>
       </div>
     </template>
