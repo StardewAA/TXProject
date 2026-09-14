@@ -20,6 +20,20 @@ import Form from './modules/form.vue';
 
 defineOptions({ name: 'WmsItemBrand' });
 
+/** 资质文件地址解析：兼容逗号与中文顿号分隔 */
+function parseFiles(value?: string): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,、]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+/** 取文件名用于展示 */
+function fileName(url: string): string {
+  return url.slice(Math.max(0, url.lastIndexOf('/') + 1)) || url;
+}
+
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
@@ -115,6 +129,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+      </template>
+      <template #qualificationFiles="{ row }">
+        <div
+          v-if="parseFiles(row.qualificationFiles).length"
+          class="flex flex-col gap-1 py-1 leading-5"
+        >
+          <a
+            v-for="file in parseFiles(row.qualificationFiles)"
+            :key="file"
+            :href="file"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs text-primary hover:underline"
+          >
+            {{ fileName(file) }}
+          </a>
+        </div>
+        <span v-else class="text-gray-400">-</span>
       </template>
       <template #actions="{ row }">
         <TableAction

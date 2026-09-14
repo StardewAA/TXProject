@@ -33,4 +33,7 @@ public class WmsItemSkuPageReqVO extends PageParam {
     @Schema(description = "条码", example = "12345678")
     private String barCode;
 
+    @Schema(description = "商品状态：0启用，1停用", example = "0")
+    private Integer itemStatus;
+
 }

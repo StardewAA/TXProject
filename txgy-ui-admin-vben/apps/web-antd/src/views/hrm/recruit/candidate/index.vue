@@ -20,7 +20,13 @@ import {
   getRecruitCandidateStatusCount,
   updateRecruitCandidateStatus,
 } from '#/api/hrm/recruit/candidate';
-import { getRecruitInterview } from '#/api/hrm/recruit/interview';
+import {
+  enterRecruitApplicationInterview,
+  passRecruitApplicationScreening,
+  rejectRecruitApplicationResume,
+  startRecruitApplicationScreening,
+} from '#/api/hrm/recruit/application';
+import { getRecruitInterview, startRecruitInterview } from '#/api/hrm/recruit/interview';
 import { DictTag } from '#/components/dict-tag';
 import { $t } from '#/locales';
 import EmployeeForm from '#/views/hrm/employee/modules/form.vue';
@@ -31,6 +37,7 @@ import {
   HrmEmployeeStatus,
   HrmEmployeeType,
   HrmRecruitCandidateStatus,
+  HrmRecruitApplicationStatus,
   HrmRecruitInterviewResult,
 } from '#/views/hrm/utils/constants';
 
@@ -41,6 +48,8 @@ import EliminateForm from './modules/eliminate-form.vue';
 import Form from './modules/form.vue';
 import InterviewForm from './modules/interview-form.vue';
 import InterviewResultForm from './modules/interview-result-form.vue';
+import InterviewEvaluationForm from './modules/interview-evaluation-form.vue';
+import OfferForm from './modules/offer-form.vue';
 import PostBatchForm from './modules/post-batch-form.vue';
 import StatusBatchForm from './modules/status-batch-form.vue';
 
@@ -177,6 +186,14 @@ const [InterviewResultModal, interviewResultModalApi] = useVbenModal({
   connectedComponent: InterviewResultForm,
   destroyOnClose: true,
 });
+const [InterviewEvaluationModal, interviewEvaluationModalApi] = useVbenModal({
+  connectedComponent: InterviewEvaluationForm,
+  destroyOnClose: true,
+});
+const [OfferModal, offerModalApi] = useVbenModal({
+  connectedComponent: OfferForm,
+  destroyOnClose: true,
+});
 const [EmployeeFormModal, employeeFormModalApi] = useVbenModal({
   connectedComponent: EmployeeForm,
   destroyOnClose: true,
@@ -263,6 +280,41 @@ async function openInterviewResult(
   }
   const interview = await getRecruitInterview(candidate.interviewId);
   interviewResultModalApi.setData({ interview }).open();
+}
+
+function openInterviewEvaluation(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  if (!candidate.interviewId) return;
+  interviewEvaluationModalApi.setData({ id: candidate.interviewId }).open();
+}
+
+function openOfferForm(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  if (!candidate.applicationId || !candidate.postId) return;
+  offerModalApi.setData({ applicationId: candidate.applicationId, postId: candidate.postId }).open();
+}
+
+async function handleApplicationFlowAction(
+  command: string,
+  candidate: HrmRecruitCandidateApi.RecruitCandidate,
+) {
+  if (!candidate.applicationId) return;
+  if (command === 'start-screening') {
+    await startRecruitApplicationScreening(candidate.applicationId);
+  } else if (command === 'pass-screening') {
+    await passRecruitApplicationScreening(candidate.applicationId);
+  } else if (command === 'reject-resume') {
+    await rejectRecruitApplicationResume(candidate.applicationId, '简历不符合岗位要求');
+  } else if (command === 'enter-interview') {
+    await enterRecruitApplicationInterview(candidate.applicationId);
+    openInterview(candidate);
+    return;
+  } else if (command === 'start-interview' && candidate.interviewId) {
+    await startRecruitInterview(candidate.interviewId);
+  } else if (command === 'evaluate-interview') {
+    openInterviewEvaluation(candidate);
+    return;
+  }
+  await handleRefresh();
+  message.success($t('ui.actionMessage.operationSuccess'));
 }
 
 /** 更改面试安排 */
@@ -386,6 +438,33 @@ function openCleanForm() {
 function getPrimaryAction(
   candidate: HrmRecruitCandidateApi.RecruitCandidate,
 ): undefined | { command: string; label: string } {
+  if (candidate.applicationId) {
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.SUBMITTED) {
+      return { command: 'start-screening', label: '开始筛选' };
+    }
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING) {
+      return { command: 'pass-screening', label: '筛选通过' };
+    }
+    if (
+      candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING_PASSED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_INTERVIEW ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.NEXT_INTERVIEW
+    ) {
+      return { command: 'enter-interview', label: '安排面试' };
+    }
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_SCHEDULED) {
+      return { command: 'start-interview', label: '开始面试' };
+    }
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_EVALUATING) {
+      return { command: 'evaluate-interview', label: '面试评估' };
+    }
+    if (
+      candidate.applicationStatus === HrmRecruitApplicationStatus.FINAL_INTERVIEW_PASSED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_OFFER
+    ) {
+      return { command: 'offer', label: '创建 Offer' };
+    }
+  }
   if (
     hasAccessByCodes(['hrm:recruit:interview:update']) &&
     candidate.status === HrmRecruitCandidateStatus.INTERVIEW &&
@@ -449,6 +528,12 @@ function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
     actions.push({ command: 'reinterview', label: '安排复试' });
   }
   if (hasAccessByCodes(['hrm:recruit:candidate:update'])) {
+    if (
+      candidate.applicationStatus === HrmRecruitApplicationStatus.SUBMITTED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING
+    ) {
+      actions.push({ command: 'reject-resume', label: '简历淘汰' });
+    }
     if (candidate.status === HrmRecruitCandidateStatus.NEW) {
       actions.push({ command: 'primary-pass', label: '初选通过' });
     }
@@ -482,6 +567,12 @@ async function handlePrimaryAction(
   command: string,
   candidate: HrmRecruitCandidateApi.RecruitCandidate,
 ) {
+  if (
+    ['start-screening', 'pass-screening', 'enter-interview', 'start-interview', 'evaluate-interview'].includes(command)
+  ) {
+    await handleApplicationFlowAction(command, candidate);
+    return;
+  }
   if (command === 'interview-result') {
     await openInterviewResult(candidate);
     return;
@@ -498,6 +589,10 @@ async function handlePrimaryAction(
     openEntryForm(candidate);
     return;
   }
+  if (command === 'offer') {
+    openOfferForm(candidate);
+    return;
+  }
   if (command === 'interview' && candidate.id) {
     openInterview(candidate);
   }
@@ -508,12 +603,16 @@ async function handleMoreCommand(
   command: string,
   candidate: HrmRecruitCandidateApi.RecruitCandidate,
 ) {
-  if (command === 'primary-pass') {
-    await handleStatus(candidate, HrmRecruitCandidateStatus.PRIMARY_PASS);
+  if (command === 'reject-resume') {
+    await handleApplicationFlowAction(command, candidate);
     return;
   }
   if (command === 'offer') {
-    await handleStatus(candidate, HrmRecruitCandidateStatus.OFFER_SENT);
+    openOfferForm(candidate);
+    return;
+  }
+  if (command === 'primary-pass') {
+    await handleStatus(candidate, HrmRecruitCandidateStatus.PRIMARY_PASS);
     return;
   }
   if (command === 'restore') {
@@ -775,6 +874,8 @@ onMounted(async () => {
     <CleanModal @success="handleRefresh" />
     <InterviewModal @success="handleBatchSuccess" />
     <InterviewResultModal @success="handleRefresh" />
+    <InterviewEvaluationModal @success="handleRefresh" />
+    <OfferModal @success="handleRefresh" />
     <EmployeeFormModal @success="handleRefresh" />
 
     <Grid class="candidate-grid">

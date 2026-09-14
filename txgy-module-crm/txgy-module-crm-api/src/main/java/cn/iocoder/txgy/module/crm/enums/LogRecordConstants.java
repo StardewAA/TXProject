@@ -118,6 +118,22 @@ public interface LogRecordConstants {
     String CRM_CONTRACT_FOLLOW_UP_SUB_TYPE = "合同跟进";
     String CRM_CONTRACT_FOLLOW_UP_SUCCESS = "合同跟进【{{#contractName}}】";
 
+    // ======================= CRM_QUOTATION 报价 =======================
+
+    String CRM_QUOTATION_TYPE = "CRM 报价";
+    String CRM_QUOTATION_CREATE_SUB_TYPE = "创建报价";
+    String CRM_QUOTATION_CREATE_SUCCESS = "创建了报价{{#quotation.name}}";
+    String CRM_QUOTATION_UPDATE_SUB_TYPE = "更新报价";
+    String CRM_QUOTATION_UPDATE_SUCCESS = "更新了报价【{{#quotationName}}】: {_DIFF{#updateReqVO}}";
+    String CRM_QUOTATION_DELETE_SUB_TYPE = "删除报价";
+    String CRM_QUOTATION_DELETE_SUCCESS = "删除了报价【{{#quotationName}}】";
+    String CRM_QUOTATION_TRANSFER_SUB_TYPE = "转移报价";
+    String CRM_QUOTATION_TRANSFER_SUCCESS = "将报价【{{#quotation.name}}】的负责人从【{getAdminUserById{#quotation.ownerUserId}}】变更为了【{getAdminUserById{#reqVO.newOwnerUserId}}】";
+    String CRM_QUOTATION_SUBMIT_SUB_TYPE = "提交报价审批";
+    String CRM_QUOTATION_SUBMIT_SUCCESS = "提交报价【{{#quotationName}}】审批成功";
+    String CRM_QUOTATION_CREATE_CONTRACT_SUB_TYPE = "报价生成合同";
+    String CRM_QUOTATION_CREATE_CONTRACT_SUCCESS = "由报价【{{#quotationName}}】生成了合同";
+
     // ======================= CRM_PRODUCT 产品 =======================
 
     String CRM_PRODUCT_TYPE = "CRM 产品";

@@ -114,7 +114,9 @@ services:
 
   hrm:
     build:
-      dockerfile: deploy/backend/Dockerfile.local
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
 
   fms:
     build:
@@ -123,7 +125,7 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: deploy/frontend/Dockerfile.local
+      dockerfile: deploy/frontend/Dockerfile
     depends_on:
       gateway:
         condition: service_healthy

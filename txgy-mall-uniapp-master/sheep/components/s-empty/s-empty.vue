@@ -70,24 +70,51 @@
 <style lang="scss" scoped>
   .empty-box {
     width: 100%;
+    box-sizing: border-box;
+    padding: 64rpx 40rpx 56rpx;
+    margin: 0 24rpx;
+    border-radius: 32rpx;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 38%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.96));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: 0 20rpx 50rpx rgba(15, 23, 42, 0.08);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: auto -40rpx -60rpx auto;
+      width: 180rpx;
+      height: 180rpx;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.16), transparent 70%);
+      pointer-events: none;
+    }
   }
   .empty-icon {
-    width: 240rpx;
+    width: 220rpx;
+    filter: drop-shadow(0 16rpx 28rpx rgba(59, 130, 246, 0.12));
   }
 
   .empty-text {
     font-size: 26rpx;
     font-weight: 500;
-    color: #999999;
+    color: #64748b;
+    line-height: 40rpx;
+    text-align: center;
   }
 
   .empty-btn {
     width: 320rpx;
     height: 70rpx;
-    border: 2rpx solid v-bind('buttonColor');
+    border: none;
     border-radius: 35rpx;
-    font-weight: 500;
-    color: v-bind('buttonColor');
+    font-weight: 600;
+    color: #ffffff;
     font-size: 28rpx;
+    background: v-bind('buttonColor');
+    box-shadow: 0 14rpx 30rpx rgba(15, 23, 42, 0.14);
   }
 </style>

@@ -14,11 +14,14 @@ import cn.iocoder.txgy.module.crm.controller.admin.contact.vo.CrmContactTransfer
 import cn.iocoder.txgy.module.crm.controller.admin.contract.vo.contract.CrmContractTransferReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.*;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contact.CrmContactDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerLimitConfigDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.clue.CrmClueMapper;
+import cn.iocoder.txgy.module.crm.dal.mysql.contact.CrmContactMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
@@ -27,6 +30,7 @@ import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermi
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.crm.service.quotation.CrmQuotationService;
 import cn.iocoder.txgy.module.crm.service.customer.bo.CrmCustomerCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.CrmOwnerRecordService;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
@@ -87,9 +91,23 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @Resource
     @Lazy
     private CrmContractService contractService;
+    @Resource
+    @Lazy
+    private CrmQuotationService quotationService;
 
     @Resource
     private AdminUserApi adminUserApi;
+
+    @Resource
+    private CrmClueMapper clueMapper;
+    @Resource
+    private CrmContactMapper contactMapper;
+
+    @Override
+    public List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit) {
+        CrmCustomerDO current = validateCustomerExists(customerId);
+        return customerMapper.selectSimilarList(current, limit);
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -97,7 +115,7 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerSaveReqVO createReqVO, Long userId) {
         createReqVO.setId(null);
-        // 1. 负责人：以表单选择为准；未选择时默认当前登录人
+        // 1. 确定负责人：优先取表单选择的负责人，未选择时兜底为当前登录用户
         Long ownerUserId = createReqVO.getOwnerUserId() != null ? createReqVO.getOwnerUserId() : userId;
         createReqVO.setOwnerUserId(ownerUserId);
         // 2. 校验拥有客户是否到达上限
@@ -107,16 +125,11 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         CrmCustomerDO customer = initCustomer(createReqVO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 4. 创建数据权限：负责人拥有 OWNER
+        // 4. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
                 .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
-        // 5. 若创建人不是负责人，保留其读/写权限，避免创建后丢失可见性
-        if (!ownerUserId.equals(userId)) {
-            permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                    .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.WRITE.getLevel()));
-        }
 
-        // 6. 记录操作日志上下文
+        // 5. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -289,15 +302,17 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerCreateReqBO createReqBO, Long userId) {
-        // 1. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqBO, userId);
+        // 1. 确定负责人：优先取传入的负责人（如线索负责人），未指定时兜底为当前操作人
+        Long ownerUserId = createReqBO.getOwnerUserId() != null ? createReqBO.getOwnerUserId() : userId;
+        // 2. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqBO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 2. 创建数据权限
+        // 3. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
+                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
 
-        // 3. 记录操作日志上下文
+        // 4. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -354,6 +369,55 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
             getSelf().importCustomerLog(updateCustomer, true);
         });
         return respVO;
+    }
+
+    @Override
+    public CrmDuplicateCheckRespVO checkDuplicate(String mobile, String name) {
+        // 1. 手机号、名称均为空时，无需查重
+        if (StrUtil.isBlank(mobile) && StrUtil.isBlank(name)) {
+            return CrmDuplicateCheckRespVO.builder().duplicated(false)
+                    .items(Collections.emptyList()).build();
+        }
+        List<CrmDuplicateCheckRespVO.Item> items = new ArrayList<>();
+        // 2. 客户（包含公海客户）
+        customerMapper.selectListByDuplicate(mobile, name).forEach(customer -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CUSTOMER).bizTypeName("客户")
+                        .id(customer.getId()).name(customer.getName()).mobile(customer.getMobile())
+                        .ownerUserId(customer.getOwnerUserId()).inPool(customer.getOwnerUserId() == null)
+                        .matchReason(buildDuplicateMatchReason(customer.getMobile(), customer.getName(), mobile, name))
+                        .build()));
+        // 3. 线索
+        clueMapper.selectListByDuplicate(mobile, name).forEach(clue -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CLUE).bizTypeName("线索")
+                        .id(clue.getId()).name(clue.getName()).mobile(clue.getMobile())
+                        .ownerUserId(clue.getOwnerUserId())
+                        .matchReason(buildDuplicateMatchReason(clue.getMobile(), clue.getName(), mobile, name))
+                        .build()));
+        // 4. 联系人
+        contactMapper.selectListByDuplicate(mobile, name).forEach(contact -> items.add(
+                CrmDuplicateCheckRespVO.Item.builder()
+                        .bizType(CrmDuplicateCheckRespVO.BIZ_TYPE_CONTACT).bizTypeName("联系人")
+                        .id(contact.getId()).name(contact.getName()).mobile(contact.getMobile())
+                        .ownerUserId(contact.getOwnerUserId())
+                        .matchReason(buildDuplicateMatchReason(contact.getMobile(), contact.getName(), mobile, name))
+                        .build()));
+        return CrmDuplicateCheckRespVO.builder().duplicated(!items.isEmpty()).items(items).build();
+    }
+
+    /**
+     * 计算查重命中的原因，便于前端展示「手机号一致 / 名称一致」
+     */
+    private static String buildDuplicateMatchReason(String itemMobile, String itemName, String mobile, String name) {
+        List<String> reasons = new ArrayList<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.equals(mobile, itemMobile)) {
+            reasons.add("手机号一致");
+        }
+        if (StrUtil.isNotBlank(name) && StrUtil.equals(name, itemName)) {
+            reasons.add("名称一致");
+        }
+        return String.join("、", reasons);
     }
 
     /**
@@ -577,6 +641,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         }
         if (contractService.getContractCountByCustomerId(id) > 0) {
             throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_CONTRACT.getName());
+        }
+        if (quotationService.getQuotationCountByCustomerId(id) > 0) {
+            throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_QUOTATION.getName());
         }
     }
 

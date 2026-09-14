@@ -8,6 +8,7 @@ const SpuHistoryApi = {
       method: 'DELETE',
       data: { spuIds },
       custom: {
+        auth: true,
         showSuccess: true,
         successMsg: '删除成功',
       },
@@ -19,6 +20,7 @@ const SpuHistoryApi = {
       url: '/product/browse-history/clean',
       method: 'DELETE',
       custom: {
+        auth: true,
         showSuccess: true,
         successMsg: '清空成功',
       },
@@ -29,8 +31,9 @@ const SpuHistoryApi = {
     return request({
       url: '/product/browse-history/page',
       method: 'GET',
-      data,
+      params: data,
       custom: {
+        auth: true,
         showLoading: false
       },
     });

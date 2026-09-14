@@ -13,7 +13,7 @@
         absolute="rightTop"
         size="small"
       >
-        <image class="item-icon" :src="sheep.$url.static(item.icon)" mode="aspectFit" />
+<s-menu-icon class="item-icon" :label="item.title" />
       </uni-badge>
       <view class="menu-title ss-m-t-28">{{ item.title }}</view>
     </view>
@@ -85,30 +85,57 @@
   // 设置背景样式
   const style = computed(() => {
     // 直接从 props.styles 解构
-    const { bgType, bgImg, bgColor } = props.styles; 
+    const { bgType, bgImg, bgColor } = props.styles;
     // 根据 bgType 返回相应的样式
-    return {
-  		background: bgType === 'img'
-  			? `url(${bgImg}) no-repeat top center / 100% 100%`
-  			: bgColor
-  	};
+    if (bgType === 'img') {
+      return {
+        background: `url(${bgImg}) no-repeat top center / 100% 100%`,
+      };
+    }
+    if (bgColor) {
+      return {
+        backgroundColor: bgColor,
+      };
+    }
+    return {};
   });
 </script>
 
 <style lang="scss" scoped>
   .ss-order-menu-wrap {
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: 28rpx;
+    padding: 12rpx 8rpx;
+    background:
+      radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.96));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
+
     .menu-item {
-      height: 160rpx;
+      height: 158rpx;
       position: relative;
       z-index: 10;
+      border-radius: 22rpx;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+
+      &:active {
+        transform: translateY(2rpx) scale(0.99);
+      }
+
       .menu-title {
         font-size: 24rpx;
         line-height: 24rpx;
-        color: #333333;
+        color: #334155;
+        font-weight: 500;
       }
       .item-icon {
         width: 44rpx;
         height: 44rpx;
+        border-radius: 16rpx;
+        background: rgba(59, 130, 246, 0.08);
+        box-shadow: 0 10rpx 20rpx rgba(15, 23, 42, 0.06);
       }
       .num-icon {
         position: absolute;

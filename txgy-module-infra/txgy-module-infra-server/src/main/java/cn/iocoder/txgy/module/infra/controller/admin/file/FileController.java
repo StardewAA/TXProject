@@ -32,6 +32,7 @@ import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.module.infra.framework.file.core.utils.FileTypeUtils.writeAttachment;
+import static cn.iocoder.txgy.module.infra.framework.file.core.utils.FileTypeUtils.writeInline;
 
 @Tag(name = "管理后台 - 文件存储")
 @RestController
@@ -126,6 +127,31 @@ public class FileController {
         FileDO file = fileService.getFileByConfigIdAndPath(configId, path);
         String filename = file != null && StrUtil.isNotEmpty(file.getName()) ? file.getName() : FileUtil.getName(path);
         writeAttachment(response, filename, content);
+    }
+
+    @GetMapping("/{configId}/preview/**")
+    @PermitAll
+    @TenantIgnore
+    @Operation(summary = "在线预览文件")
+    @Parameter(name = "configId", description = "配置编号", required = true)
+    public void previewFileContent(HttpServletRequest request,
+                                   HttpServletResponse response,
+                                   @PathVariable("configId") Long configId) throws Exception {
+        String path = StrUtil.subAfter(request.getRequestURI(), "/preview/", false);
+        if (StrUtil.isEmpty(path)) {
+            throw new IllegalArgumentException("结尾的 path 路径必须传递");
+        }
+        path = HttpUtils.decodeUrlPath(path);
+
+        byte[] content = fileService.getFileContent(configId, path);
+        if (content == null) {
+            log.warn("[previewFileContent][configId({}) path({}) 文件不存在]", configId, path);
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            return;
+        }
+        FileDO file = fileService.getFileByConfigIdAndPath(configId, path);
+        String filename = file != null && StrUtil.isNotEmpty(file.getName()) ? file.getName() : FileUtil.getName(path);
+        writeInline(response, filename, content);
     }
 
     @GetMapping("/page")

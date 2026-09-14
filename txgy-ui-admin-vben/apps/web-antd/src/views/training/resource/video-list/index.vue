@@ -47,19 +47,20 @@ const categoryOptions = ref<any[]>([]);
 const categoryId = ref<number | undefined>();
 const includeArchived = ref(false);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('video');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 function handleSearch() {
@@ -336,7 +337,7 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="视频资源库（MP4/MOV ≤500MB，上传即上线）">
+    <Grid table-title="视频资源库（MP4/MOV ≤4GB，上传即上线）">
       <template #toolbar-tools>
         <TableAction
           :actions="[

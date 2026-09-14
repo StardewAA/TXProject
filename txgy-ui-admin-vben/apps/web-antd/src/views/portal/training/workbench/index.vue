@@ -1,0 +1,481 @@
+<script lang="ts" setup>
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+import { Button, Empty, Progress, Tag } from 'ant-design-vue';
+
+import { getMyCourses } from '../learning/api';
+import { TRAINING_LEVELS, useTrainingDirection } from '../use-training-direction';
+
+defineOptions({ name: 'PortalTrainingWorkbench' });
+
+const router = useRouter();
+const { state, levelName, load: loadDirection } = useTrainingDirection();
+
+const loading = ref(false);
+const group = ref<Record<string, any>>({});
+
+/** 学习中 + 待学习，按最近优先取前 5 门作为「继续学习」 */
+const continueList = computed(() =>
+  [...(group.value.learningCourses ?? []), ...(group.value.todoCourses ?? [])].slice(
+    0,
+    5,
+  ),
+);
+
+const completion = computed(() => {
+  const total = group.value.totalCount ?? 0;
+  if (!total) return 0;
+  return Math.round(((group.value.completedCount ?? 0) / total) * 100);
+});
+
+const directionText = computed(() =>
+  state.value.selected.length ? state.value.selected.join('、') : '尚未选择学习方向',
+);
+
+function statusColor(status?: number) {
+  if (status === 2) return 'green';
+  if (status === 1) return 'orange';
+  return 'default';
+}
+
+function statusText(status?: number) {
+  if (status === 2) return '已完成';
+  if (status === 1) return '学习中';
+  return '待学习';
+}
+
+async function load() {
+  loading.value = true;
+  try {
+    group.value = (await getMyCourses()) ?? {};
+  } catch {
+    group.value = {};
+  } finally {
+    loading.value = false;
+  }
+}
+
+function goLearning() {
+  router.push('/portal/training/learning');
+}
+
+function goCourses() {
+  router.push('/portal/training/courses');
+}
+
+onMounted(() => {
+  loadDirection();
+  load();
+});
+</script>
+
+<template>
+  <div class="workbench">
+    <section class="stats">
+      <div class="stat stat--blue">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v13A1.5 1.5 0 0 1 15.5 20h-11A1.5 1.5 0 0 1 3 18.5z" />
+            <path d="M6 4v16" />
+            <path d="M17 8h3.5A1.5 1.5 0 0 1 22 9.5v8A1.5 1.5 0 0 1 20.5 19H17" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ group.totalCount ?? 0 }}<span class="stat-unit">门</span></div>
+          <div class="stat-label">我的课程</div>
+        </div>
+      </div>
+
+      <div class="stat stat--orange">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3.5 2" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ group.learningCount ?? 0 }}<span class="stat-unit">门</span></div>
+          <div class="stat-label">学习中</div>
+        </div>
+      </div>
+
+      <div class="stat stat--green">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.5l4.5 4.5L19 7" />
+            <path d="M3 19h18" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ group.completedCount ?? 0 }}<span class="stat-unit">门</span></div>
+          <div class="stat-label">已完成</div>
+        </div>
+      </div>
+
+      <div class="stat stat--purple">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l2.4 5.8 6.3.6-4.8 4.2 1.5 6.2L12 16.9 6.6 19.8 8.1 13.6 3.3 9.4l6.3-.6z" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ group.creditEarned ?? 0 }}<span class="stat-unit">/ {{ group.creditTotal ?? 0 }} 学时</span></div>
+          <div class="stat-label">已获学时</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>继续学习</h2>
+        <Button type="link" size="small" @click="goLearning">全部课程</Button>
+      </div>
+      <div v-if="continueList.length" class="course-list">
+        <div v-for="item in continueList" :key="item.courseId" class="course-item">
+          <div class="course-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 5.5v13l10-6.5z" />
+            </svg>
+          </div>
+          <div class="course-main">
+            <div class="course-title">
+              <strong>{{ item.title }}</strong>
+              <Tag :color="statusColor(item.status)">{{ statusText(item.status) }}</Tag>
+            </div>
+            <div class="course-meta">
+              {{ item.lecturer || '—' }} · {{ item.credit ?? 0 }} 学时 · 已完成
+              {{ item.doneCount ?? 0 }}/{{ item.totalCount ?? 0 }} 项
+            </div>
+            <Progress
+              class="course-progress"
+              :percent="Number(item.progressPercent ?? 0)"
+              size="small"
+            />
+          </div>
+          <Button type="primary" size="small" @click="goLearning">
+            {{ item.status === 1 ? '继续学习' : '开始学习' }}
+          </Button>
+        </div>
+      </div>
+      <Empty v-else description="暂无进行中的课程，去课程中心挑一门吧">
+        <Button type="primary" @click="goCourses">浏览课程</Button>
+      </Empty>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>成长进度</h2>
+        <span class="hint">当前方向：{{ directionText }}</span>
+      </div>
+      <div class="growth">
+        <div class="growth-progress">
+          <Progress type="circle" :percent="completion" :size="92" />
+          <div class="growth-text">
+            <div class="growth-title">课程完成率 {{ completion }}%</div>
+            <div class="growth-sub">
+              已完成 {{ group.completedCount ?? 0 }} / {{ group.totalCount ?? 0 }} 门课程
+            </div>
+          </div>
+        </div>
+        <ol class="ladder">
+          <li
+            v-for="(name, index) in TRAINING_LEVELS"
+            :key="name"
+            :class="{ now: index === state.level, passed: index < state.level }"
+          >
+            <span class="dot">{{ index + 1 }}</span>
+            {{ name }}
+            <em v-if="index === state.level">{{ levelName }}</em>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding-top: 20px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid #eaeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.stat:hover {
+  border-color: #d8e2f2;
+  box-shadow: 0 6px 18px rgb(16 24 40 / 8%);
+}
+
+.stat-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--c-icon, #2f6bff);
+  background: var(--c-icon-bg, #eef3ff);
+  border-radius: 12px;
+}
+
+.stat-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.stat-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.stat-value {
+  color: #1b2437;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-unit {
+  margin-left: 3px;
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.stat-label {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.stat--blue {
+  --c-icon: #2f6bff;
+  --c-icon-bg: #eef3ff;
+}
+
+.stat--orange {
+  --c-icon: #ea7b0c;
+  --c-icon-bg: #fff5e8;
+}
+
+.stat--green {
+  --c-icon: #16a34a;
+  --c-icon-bg: #eefaf2;
+}
+
+.stat--purple {
+  --c-icon: #7a3ddc;
+  --c-icon-bg: #f4edff;
+}
+
+.block {
+  padding: 20px 0;
+  border-top: 1px solid #e6ebf3;
+}
+
+.block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.block-head h2 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 17px;
+}
+
+.block-head h2::before {
+  width: 4px;
+  height: 16px;
+  background: #2f6bff;
+  border-radius: 2px;
+  content: '';
+}
+
+.hint {
+  color: #7d899f;
+  font-size: 12px;
+}
+
+.course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.course-item {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #eaeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.course-item:hover {
+  border-color: #d3e0f7;
+  box-shadow: 0 8px 22px rgb(16 24 40 / 8%);
+}
+
+.course-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #2f6bff;
+  background: #eef3ff;
+  border-radius: 12px;
+}
+
+.course-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.course-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.course-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #1b2437;
+  font-size: 14px;
+}
+
+.course-meta {
+  margin-top: 4px;
+  color: #8892a6;
+  font-size: 12px;
+}
+
+.course-progress {
+  max-width: 360px;
+  margin-top: 8px;
+}
+
+.growth {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 22px 24px;
+  background: #fff;
+  border: 1px solid #eaeef5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.growth-progress {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.growth-title {
+  font-weight: 600;
+}
+
+.growth-sub {
+  margin-top: 4px;
+  color: #7d899f;
+  font-size: 12px;
+}
+
+.ladder {
+  display: flex;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border-top: 2px solid #ccd6eb;
+}
+
+.ladder li {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding-top: 14px;
+  color: #8592a8;
+  font-size: 13px;
+}
+
+.ladder li .dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: -24px;
+  font-size: 12px;
+  background: #fff;
+  border: 2px solid #ccd6eb;
+  border-radius: 50%;
+}
+
+.ladder li.passed .dot {
+  color: #fff;
+  background: #2f6bff;
+  border-color: #2f6bff;
+}
+
+.ladder li.now {
+  color: #245fec;
+  font-weight: 700;
+}
+
+.ladder li.now .dot {
+  color: #fff;
+  background: #2f6bff;
+  border-color: #bcd2ff;
+  box-shadow: 0 0 0 4px rgb(47 107 255 / 15%);
+}
+
+.ladder li em {
+  color: #2f6bff;
+  font-size: 11px;
+  font-style: normal;
+}
+
+@media (max-width: 1100px) {
+  .growth {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

@@ -27,6 +27,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -319,6 +320,16 @@ public class MesProProjectServiceImpl implements MesProProjectService {
                     respVO.getFailureCodes().put(key, "项目编码已存在");
                     return;
                 }
+                // 校验状态流转：导入更新同样遵循状态机规则，避免终态项目被"复活"
+                if (importProject.getStatus() != null
+                        && !MesProProjectStatusEnum.canTransferTo(exist.getStatus(), importProject.getStatus())) {
+                    MesProProjectStatusEnum from = MesProProjectStatusEnum.valueOfStatus(exist.getStatus());
+                    MesProProjectStatusEnum to = MesProProjectStatusEnum.valueOfStatus(importProject.getStatus());
+                    respVO.getFailureCodes().put(key, "项目状态不允许从「"
+                            + (from == null ? "未知" : from.getName())
+                            + "」变更为「" + (to == null ? "未知" : to.getName()) + "」");
+                    return;
+                }
                 MesProProjectDO updateObj = BeanUtils.toBean(importProject, MesProProjectDO.class);
                 updateObj.setId(exist.getId());
                 updateObj.setDurationDays(calculateDuration(updateObj));
@@ -360,12 +371,12 @@ public class MesProProjectServiceImpl implements MesProProjectService {
             return "项目状态不合法";
         }
         if (row.getPlanStartTime() != null && row.getPlanEndTime() != null
-                && row.getPlanEndTime().isBefore(row.getPlanStartTime())) {
-            return "计划结束时间不能早于计划开始时间";
+                && !row.getPlanEndTime().isAfter(row.getPlanStartTime())) {
+            return "计划结束时间必须晚于计划开始时间";
         }
         if (row.getActualStartTime() != null && row.getActualEndTime() != null
-                && row.getActualEndTime().isBefore(row.getActualStartTime())) {
-            return "实际结束时间不能早于实际开始时间";
+                && !row.getActualEndTime().isAfter(row.getActualStartTime())) {
+            return "实际结束时间必须晚于实际开始时间";
         }
         return null;
     }
@@ -382,7 +393,9 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         if (project.getPlanStartTime() == null || project.getPlanEndTime() == null) {
             return null;
         }
-        return (int) Duration.between(project.getPlanStartTime(), project.getPlanEndTime()).toDays();
+        return (int) ChronoUnit.DAYS.between(
+                project.getPlanStartTime().toLocalDate(),
+                project.getPlanEndTime().toLocalDate());
     }
 
     // ==================== 校验方法 ====================
@@ -407,10 +420,10 @@ public class MesProProjectServiceImpl implements MesProProjectService {
      */
     private void validateProjectTime(LocalDateTime planStart, LocalDateTime planEnd,
                                      LocalDateTime actualStart, LocalDateTime actualEnd) {
-        if (planStart != null && planEnd != null && planEnd.isBefore(planStart)) {
+        if (planStart != null && planEnd != null && !planEnd.isAfter(planStart)) {
             throw exception(PRO_PROJECT_PLAN_TIME_INVALID);
         }
-        if (actualStart != null && actualEnd != null && actualEnd.isBefore(actualStart)) {
+        if (actualStart != null && actualEnd != null && !actualEnd.isAfter(actualStart)) {
             throw exception(PRO_PROJECT_ACTUAL_TIME_INVALID);
         }
     }
@@ -429,6 +442,7 @@ public class MesProProjectServiceImpl implements MesProProjectService {
             throw exception(PRO_PROJECT_OWNER_NOT_EXISTS);
         }
         reqVO.setOwner(user.getNickname());
+        reqVO.setDept(user.getDeptName());
     }
 
     private void validateProjectCodeUnique(Long id, String code) {

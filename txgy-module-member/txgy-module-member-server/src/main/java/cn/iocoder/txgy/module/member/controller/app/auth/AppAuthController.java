@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.security.config.SecurityProperties;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.member.controller.app.auth.vo.*;
 import cn.iocoder.txgy.module.member.convert.auth.AuthConvert;
 import cn.iocoder.txgy.module.member.service.auth.MemberAuthService;
@@ -22,6 +23,7 @@ import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -42,11 +44,22 @@ public class AppAuthController {
     @Resource
     private SecurityProperties securityProperties;
 
+    @Value("${mall.registration.platform-tenant-id:1}")
+    private Long platformTenantId;
+
     @PostMapping("/login")
     @Operation(summary = "使用手机 + 密码登录")
     @PermitAll
     public CommonResult<AppAuthLoginRespVO> login(@RequestBody @Valid AppAuthLoginReqVO reqVO) {
         return success(authService.login(reqVO));
+    }
+
+    @PostMapping("/register")
+    @Operation(summary = "使用手机号注册商城用户")
+    @PermitAll
+    public CommonResult<AppAuthLoginRespVO> register(@RequestBody @Valid AppAuthRegisterReqVO reqVO) {
+        AppAuthLoginRespVO result = TenantUtils.execute(platformTenantId, () -> authService.register(reqVO));
+        return success(result);
     }
 
     @PostMapping("/logout")

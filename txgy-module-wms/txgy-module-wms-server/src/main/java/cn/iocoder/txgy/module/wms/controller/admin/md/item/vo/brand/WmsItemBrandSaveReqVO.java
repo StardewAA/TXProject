@@ -22,4 +22,18 @@ public class WmsItemBrandSaveReqVO {
     @Size(max = 30, message = "品牌名称长度不能超过 30 个字符")
     private String name;
 
+    @Schema(description = "关联商品分类编号", example = "3200201")
+    private Long categoryId;
+
+    @Schema(description = "主要供应商编号", example = "3200101")
+    private Long supplierId;
+
+    @Schema(description = "品牌说明", example = "国际知名防腐涂料品牌")
+    @Size(max = 500, message = "品牌说明长度不能超过 500 个字符")
+    private String description;
+
+    @Schema(description = "资质文件地址，多个以逗号分隔")
+    @Size(max = 2000, message = "资质文件地址长度不能超过 2000 个字符")
+    private String qualificationFiles;
+
 }

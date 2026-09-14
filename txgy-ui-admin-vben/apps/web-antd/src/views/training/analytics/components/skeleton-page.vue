@@ -1,14 +1,14 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
 import { Button, Card, Col, message, Row, Select } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'AnalyticsSkeletonPage' });
 
-const router = useRouter();
 const props = defineProps<{
   description?: string;
   showExport?: boolean;
@@ -30,28 +30,17 @@ function handleExport() {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #475569 0%, #475569dc 44%, #111827 115%)"
+      <PageHeaderBar
+        :crumb="`云培训学院 / 模块 09 / ${props.skeletonNo}`"
+        :title="props.title"
+        :description="props.description"
       >
-        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <div class="mb-2 text-sm text-white/75">
-              云培训学院 / 模块 09 / {{ props.skeletonNo }}
-            </div>
-            <h1 class="m-0 text-2xl font-semibold md:text-3xl">{{ props.title }}</h1>
-            <p v-if="props.description" class="mb-0 mt-3 text-sm leading-6 text-white/80">
-              {{ props.description }}
-            </p>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <Button v-if="props.showExport" :loading="exportLoading" ghost @click="handleExport">
-              导出
-            </Button>
-            <Button ghost @click="router.push('/training/workbench')"> 返回工作台 </Button>
-          </div>
-        </div>
-      </section>
+        <template v-if="props.showExport" #actions>
+          <Button :loading="exportLoading" size="small" @click="handleExport">
+            导出
+          </Button>
+        </template>
+      </PageHeaderBar>
 
       <Card :bordered="false" title="筛选条件（骨架）">
         <Row :gutter="16">

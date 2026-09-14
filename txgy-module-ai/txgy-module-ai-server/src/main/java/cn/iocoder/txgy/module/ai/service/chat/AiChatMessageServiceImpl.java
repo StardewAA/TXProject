@@ -35,6 +35,7 @@ import cn.iocoder.txgy.module.ai.service.model.AiModelService;
 import cn.iocoder.txgy.module.ai.service.model.AiToolService;
 import cn.iocoder.txgy.module.ai.util.AiUtils;
 import cn.iocoder.txgy.module.ai.util.FileTypeUtils;
+import cn.iocoder.txgy.module.ai.util.StreamContentSanitizer;
 import com.google.common.collect.Maps;
 import io.modelcontextprotocol.client.McpSyncClient;
 import jakarta.annotation.Resource;
@@ -57,6 +58,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -225,9 +227,10 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                 userId, conversation.getRoleId(), MessageType.ASSISTANT, "", sendReqVO.getUseContext(),
                 knowledgeSegments, null, webSearchResponse);
 
-        // 4.2 构建 Prompt，并进行调用
+        // 4.2 构建 Prompt，并进行调用（单次生成 30s 超时兜底，避免流式卡死/死循环）
         Prompt prompt = buildPrompt(conversation, historyMessages, knowledgeSegments, webSearchResponse, model, sendReqVO);
-        Flux<ChatResponse> streamResponse = chatModel.stream(prompt);
+        Flux<ChatResponse> streamResponse = chatModel.stream(prompt)
+                .timeout(Duration.ofSeconds(30));
 
         // 4.3 流式返回
         StringBuffer contentBuffer = new StringBuffer();
@@ -237,68 +240,147 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         AtomicBoolean firstExecuteFlag = new AtomicBoolean(true);
         AtomicReference<List<AiChatMessageRespVO.KnowledgeSegment>> cacheSegments = new AtomicReference<>();
         AtomicReference<List<AiWebSearchResponse.WebPage>> cacheWebSearchPages = new AtomicReference<>();
-        return streamResponse.map(chunk -> {
-            // 仅首次：返回知识库、联网搜索
-            if (StrUtil.isEmpty(contentBuffer)) {
-                if (firstExecuteFlag.compareAndSet(true, false)) { // CAS 操作，确保仅执行一次
-                    Map<Long, AiKnowledgeDocumentDO> documentMap = TenantUtils.executeIgnore(() -> knowledgeDocumentService.getKnowledgeDocumentMap(
-                            convertSet(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getDocumentId)));
-                    cacheSegments.set(BeanUtils.toBean(knowledgeSegments, AiChatMessageRespVO.KnowledgeSegment.class, segment -> {
-                        AiKnowledgeDocumentDO document = documentMap.get(segment.getDocumentId());
-                        segment.setDocumentName(document != null ? document.getName() : null);
-                    }));
-                    if (webSearchResponse != null) {
-                        cacheWebSearchPages.set(webSearchResponse.getLists());
+
+        // ---- 乱码 / 空包 / 重复 防护状态 ----
+        AtomicBoolean stopFlag = new AtomicBoolean(false); // 命中异常后提前结束本次生成
+        AtomicReference<String> lastDeltaKey = new AtomicReference<>(); // 上一段已推送 delta 的指纹，用于去重
+        int[] emptyStreak = { 0 }; // 连续空 chunk 计数
+        int[] garbageStreak = { 0 }; // 连续乱码 chunk 计数
+        return streamResponse
+                // 2) 异常 chunk 检测：空包连续 3 个、乱码字符连续 5 个 -> 提前终止
+                .doOnNext(chunk -> {
+                    String content = StrUtil.nullToDefault(AiUtils.getChatResponseContent(chunk), "");
+                    String reasoning = StrUtil.nullToDefault(AiUtils.getChatResponseReasoningContent(chunk), "");
+                    if (StrUtil.isEmpty(content) && StrUtil.isEmpty(reasoning)) {
+                        emptyStreak[0]++;
+                        if (emptyStreak[0] >= 3) {
+                            log.warn("[sendChatMessageStream] 连续 {} 个空 chunk，提前结束", emptyStreak[0]);
+                            stopFlag.set(true);
+                        }
+                        return;
                     }
-                }
+                    emptyStreak[0] = 0;
+                    int garbage = countGarbageChars(content) + countGarbageChars(reasoning);
+                    if (garbage > 0) {
+                        garbageStreak[0] += garbage;
+                    } else {
+                        garbageStreak[0] = 0;
+                    }
+                    if (garbageStreak[0] >= 5) {
+                        log.warn("[sendChatMessageStream] 检测到 {} 个非 UTF-8 字符，提前结束", garbageStreak[0]);
+                        stopFlag.set(true);
+                    }
+                })
+                .takeWhile(chunk -> !stopFlag.get())
+                // 1) 流式 chunk 去重：连续内容/推理完全相同的片段只推送一次
+                .filter(chunk -> {
+                    String key = buildDeltaKey(chunk);
+                    if (StrUtil.isEmpty(key)) {
+                        return true;
+                    }
+                    boolean duplicate = key.equals(lastDeltaKey.get());
+                    if (!duplicate) {
+                        lastDeltaKey.set(key);
+                    }
+                    return !duplicate;
+                })
+                .map(chunk -> {
+                    // 仅首次：返回知识库、联网搜索
+                    if (StrUtil.isEmpty(contentBuffer)) {
+                        if (firstExecuteFlag.compareAndSet(true, false)) { // CAS 操作，确保仅执行一次
+                            Map<Long, AiKnowledgeDocumentDO> documentMap = TenantUtils.executeIgnore(() -> knowledgeDocumentService.getKnowledgeDocumentMap(
+                                    convertSet(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getDocumentId)));
+                            cacheSegments.set(BeanUtils.toBean(knowledgeSegments, AiChatMessageRespVO.KnowledgeSegment.class, segment -> {
+                                AiKnowledgeDocumentDO document = documentMap.get(segment.getDocumentId());
+                                segment.setDocumentName(document != null ? document.getName() : null);
+                            }));
+                            if (webSearchResponse != null) {
+                                cacheWebSearchPages.set(webSearchResponse.getLists());
+                            }
+                        }
+                    }
+                    // 响应结果（SSE 推送前 trim，避免前导/尾部空白污染渲染）
+                    // SSE 推送前：剥离豆包私有协议 token，避免前端对话气泡出现乱码
+                    String newContent = StreamContentSanitizer.sanitize(StrUtil.trim(AiUtils.getChatResponseContent(chunk)));
+                    String newReasoningContent = StrUtil.trim(AiUtils.getChatResponseReasoningContent(chunk));
+                    if (StrUtil.isNotEmpty(newContent)) {
+                        contentBuffer.append(newContent);
+                    }
+                    if (StrUtil.isNotEmpty(newReasoningContent)) {
+                        reasoningContentBuffer.append(newReasoningContent);
+                    }
+                    return success(new AiChatMessageSendRespVO()
+                            .setSend(BeanUtils.toBean(userMessage, AiChatMessageSendRespVO.Message.class))
+                            .setReceive(BeanUtils.toBean(assistantMessage, AiChatMessageSendRespVO.Message.class)
+                                    .setContent(StrUtil.nullToDefault(newContent, "")) // 避免 null 的 情况
+                                    .setReasoningContent(StrUtil.nullToDefault(newReasoningContent, "")) // 避免 null 的 情况
+                                    .setSegments(cacheSegments.get()).setWebSearchPages(cacheWebSearchPages.get()))); // 知识库 + 联网搜索
+                }).doOnComplete(() -> {
+                    // 忽略租户，因为 Flux 异步无法透传租户
+                    TenantUtils.executeIgnore(() -> chatMessageMapper.updateById(
+                            new AiChatMessageDO().setId(assistantMessage.getId()).setContent(contentBuffer.toString().trim())
+                                    .setReasoningContent(reasoningContentBuffer.toString().trim())));
+                }).doOnError(throwable -> {
+                    log.error("[sendChatMessageStream][userId({}) sendReqVO({}) 发生异常]", userId, sendReqVO, throwable);
+                    // 忽略租户，因为 Flux 异步无法透传租户
+                    TenantUtils.executeIgnore(() -> {
+                        // 如果有内容，则更新内容
+                        if (StrUtil.isNotEmpty(contentBuffer)) {
+                            chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
+                                    .setContent(contentBuffer.toString().trim()).setReasoningContent(reasoningContentBuffer.toString().trim()));
+                        } else {
+                            // 否则，则进行删除
+                            chatMessageMapper.deleteById(assistantMessage.getId());
+                        }
+                    });
+                }).doOnCancel(() -> {
+                    log.info("[sendChatMessageStream][userId({}) sendReqVO({}) 取消请求]", userId, sendReqVO);
+                    // 忽略租户，因为 Flux 异步无法透传租户
+                    TenantUtils.executeIgnore(() -> {
+                        // 如果有内容，则更新内容
+                        if (StrUtil.isNotEmpty(contentBuffer)) {
+                            chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
+                                    .setContent(contentBuffer.toString().trim()).setReasoningContent(reasoningContentBuffer.toString().trim()));
+                        } else {
+                            // 否则，则进行删除
+                            chatMessageMapper.deleteById(assistantMessage.getId());
+                        }
+                    });
+                }).onErrorResume(error -> Flux.just(error(ErrorCodeConstants.CHAT_STREAM_ERROR)));
+    }
+
+    /**
+     * 计算一段增量文本中的"乱码"字符数（UTF-8 替换符 \uFFFD 与其它不可见控制字符）
+     */
+    private static int countGarbageChars(String text) {
+        if (StrUtil.isEmpty(text)) {
+            return 0;
+        }
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\uFFFD') { // 非法 UTF-8 字节被解码成的替换符
+                count++;
+                continue;
             }
-            // 响应结果
-            String newContent = AiUtils.getChatResponseContent(chunk);
-            String newReasoningContent = AiUtils.getChatResponseReasoningContent(chunk);
-            if (StrUtil.isNotEmpty(newContent)) {
-                contentBuffer.append(newContent);
+            // 除 \n \r \t 外的控制字符也算异常
+            if (Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t') {
+                count++;
             }
-            if (StrUtil.isNotEmpty(newReasoningContent)) {
-                reasoningContentBuffer.append(newReasoningContent);
-            }
-            return success(new AiChatMessageSendRespVO()
-                    .setSend(BeanUtils.toBean(userMessage, AiChatMessageSendRespVO.Message.class))
-                    .setReceive(BeanUtils.toBean(assistantMessage, AiChatMessageSendRespVO.Message.class)
-                            .setContent(StrUtil.nullToDefault(newContent, "")) // 避免 null 的 情况
-                            .setReasoningContent(StrUtil.nullToDefault(newReasoningContent, "")) // 避免 null 的 情况
-                            .setSegments(cacheSegments.get()).setWebSearchPages(cacheWebSearchPages.get()))); // 知识库 + 联网搜索
-        }).doOnComplete(() -> {
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> chatMessageMapper.updateById(
-                    new AiChatMessageDO().setId(assistantMessage.getId()).setContent(contentBuffer.toString())
-                            .setReasoningContent(reasoningContentBuffer.toString())));
-        }).doOnError(throwable -> {
-            log.error("[sendChatMessageStream][userId({}) sendReqVO({}) 发生异常]", userId, sendReqVO, throwable);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
-                // 如果有内容，则更新内容
-                if (StrUtil.isNotEmpty(contentBuffer)) {
-                    chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
-                            .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
-                } else {
-                    // 否则，则进行删除
-                    chatMessageMapper.deleteById(assistantMessage.getId());
-                }
-            });
-        }).doOnCancel(() -> {
-            log.info("[sendChatMessageStream][userId({}) sendReqVO({}) 取消请求]", userId, sendReqVO);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
-                // 如果有内容，则更新内容
-                if (StrUtil.isNotEmpty(contentBuffer)) {
-                    chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
-                            .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
-                } else {
-                    // 否则，则进行删除
-                    chatMessageMapper.deleteById(assistantMessage.getId());
-                }
-            });
-        }).onErrorResume(error -> Flux.just(error(ErrorCodeConstants.CHAT_STREAM_ERROR)));
+        }
+        return count;
+    }
+
+    /**
+     * 构建当前 chunk 的去重指纹：content + reasoningContent 拼接
+     */
+    private static String buildDeltaKey(ChatResponse chunk) {
+        String content = StrUtil.nullToDefault(AiUtils.getChatResponseContent(chunk), "");
+        String reasoning = StrUtil.nullToDefault(AiUtils.getChatResponseReasoningContent(chunk), "");
+        if (StrUtil.isEmpty(content) && StrUtil.isEmpty(reasoning)) {
+            return "";
+        }
+        return content + "\u0001" + reasoning;
     }
 
     private List<AiKnowledgeSegmentSearchRespBO> recallKnowledgeSegment(String content,
@@ -333,6 +415,22 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
         // 1.2 历史 history message 历史消息
         List<AiChatMessageDO> contextMessages = filterContextMessages(messages, conversation, sendReqVO);
+        // 1.2.1 兜底防重复反问：历史中已连续 2 次反问、或 2 次“信息不足”，追加一次强约束（紧跟角色设定之后，确保靠前）
+        if (StrUtil.isNotEmpty(sendReqVO.getContent())) {
+            long askTimes = contextMessages.stream()
+                    .filter(msg -> MessageType.ASSISTANT.getValue().equals(msg.getType())
+                            && (StrUtil.contains(msg.getContent(), "？") || StrUtil.contains(msg.getContent(), "?")
+                            || StrUtil.contains(msg.getContent(), "请提供") || StrUtil.contains(msg.getContent(), "请告知")))
+                    .count();
+            long infoLackTimes = contextMessages.stream()
+                    .filter(msg -> MessageType.ASSISTANT.getValue().equals(msg.getType())
+                            && (StrUtil.contains(msg.getContent(), "需要更多信息") || StrUtil.contains(msg.getContent(), "信息不足")
+                            || StrUtil.contains(msg.getContent(), "请提供更多")))
+                    .count();
+            if (askTimes >= 2 || infoLackTimes >= 2) {
+                chatMessages.add(new SystemMessage("注意：你已多次向用户反问信息。请基于已掌握内容直接给出最常见字段对应的默认答复，不要再继续反问；若仍无法回答，仅回复：请换个问法再试一次。"));
+            }
+        }
         contextMessages.forEach(message -> {
             chatMessages.add(AiUtils.buildMessage(message.getType(), message.getContent()));
             UserMessage attachmentUserMessage = buildAttachmentUserMessage(message.getAttachmentUrls());

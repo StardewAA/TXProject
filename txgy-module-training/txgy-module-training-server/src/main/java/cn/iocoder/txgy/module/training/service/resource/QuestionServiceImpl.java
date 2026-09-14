@@ -27,7 +27,10 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
@@ -52,6 +55,9 @@ public class QuestionServiceImpl implements QuestionService {
     private static final String[] TEMPLATE_HEADERS =
             {"题型", "题干", "选项A", "选项B", "选项C", "选项D", "正确答案", "解析", "难度", "标签"};
 
+    /** 失败原因回传前端的最大长度（避免 MyBatis 大段 SQL 上下文撑爆提示） */
+    private static final int ERROR_MESSAGE_MAX = 200;
+
     @Resource
     private QuestionMapper questionMapper;
     @Resource
@@ -61,7 +67,11 @@ public class QuestionServiceImpl implements QuestionService {
     @Resource
     private ResourceReferenceMapper referenceMapper;
     @Resource
+    private ResourceCategoryService categoryService;
+    @Resource
     private OperationLogService operationLogService;
+    @Resource
+    private PlatformTransactionManager transactionManager;
 
     // ========== 查询 ==========
 
@@ -101,6 +111,8 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionTypeEnum type = checkType(reqVO.getQtype());
         checkDifficulty(reqVO.getDifficulty());
         checkChoicePayload(type, reqVO);
+        // 分类校验（question 类型，支持三级分类）
+        categoryService.validateCategory(reqVO.getCategoryId(), ResourceConstants.TYPE_QUESTION);
         // 1. 试题
         QuestionDO question = new QuestionDO();
         question.setQtype(reqVO.getQtype());
@@ -109,6 +121,7 @@ public class QuestionServiceImpl implements QuestionService {
         question.setAnswer(StrUtil.trim(reqVO.getAnswer()));
         question.setAnalysis(StrUtil.trim(reqVO.getAnalysis()));
         question.setDifficulty(reqVO.getDifficulty());
+        question.setCategoryId(reqVO.getCategoryId());
         question.setStatus(1); // 默认启用
         question.setCreatorId(SecurityFrameworkUtils.getLoginUserId());
         question.setCreatorName(SecurityFrameworkUtils.getLoginUserNickname());
@@ -127,6 +140,8 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionTypeEnum type = checkType(reqVO.getQtype());
         checkDifficulty(reqVO.getDifficulty());
         checkChoicePayload(type, reqVO);
+        // 分类校验（question 类型，支持三级分类）
+        categoryService.validateCategory(reqVO.getCategoryId(), ResourceConstants.TYPE_QUESTION);
         QuestionDO update = new QuestionDO();
         update.setId(reqVO.getId());
         update.setQtype(reqVO.getQtype());
@@ -135,6 +150,7 @@ public class QuestionServiceImpl implements QuestionService {
         update.setAnswer(StrUtil.trim(reqVO.getAnswer()));
         update.setAnalysis(StrUtil.trim(reqVO.getAnalysis()));
         update.setDifficulty(reqVO.getDifficulty());
+        update.setCategoryId(reqVO.getCategoryId());
         questionMapper.updateById(update);
         // 重新绑定标签：先逻辑删除旧的，再插入新的
         questionTagMapper.deleteByQuestionId(reqVO.getId());
@@ -233,20 +249,20 @@ public class QuestionServiceImpl implements QuestionService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public QuestionImportRespVO importQuestions(MultipartFile file) {
         QuestionImportRespVO result = new QuestionImportRespVO();
         if (file == null || file.isEmpty()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.QUESTION_IMPORT_EMPTY);
         }
         try (InputStream in = file.getInputStream(); Workbook workbook = WorkbookFactory.create(in)) {
-            Sheet sheet = workbook.getSheetAt(0);
-            if (sheet == null) {
-                throw ServiceExceptionUtil.exception(ErrorCodeConstants.QUESTION_IMPORT_EMPTY);
-            }
             DataFormatter formatter = new DataFormatter();
+            // 先定位真正的数据表：非模板文件直接给出明确提示，避免被解析成一堆无意义的行错误
+            Sheet sheet = locateDataSheet(workbook, formatter);
+            if (sheet == null) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.QUESTION_IMPORT_HEADER_INVALID);
+            }
             int success = 0;
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
                     continue;
@@ -256,14 +272,17 @@ public class QuestionServiceImpl implements QuestionService {
                     continue; // 空行跳过
                 }
                 try {
-                    QuestionDO question = parseRow(row, formatter);
-                    questionMapper.insert(question);
-                    bindTagsByName(question.getId(), parseTags(cellStr(row, 9, formatter)));
+                    // 每行独立事务：失败行整体回滚，避免出现「试题已入库但标签未绑定」的半截数据
+                    rowTransactionTemplate().executeWithoutResult(status -> {
+                        QuestionDO question = parseRow(row, formatter);
+                        questionMapper.insert(question);
+                        bindTagsByName(question.getId(), parseTags(cellStr(row, 9, formatter)));
+                    });
                     success++;
                 } catch (Exception e) {
-                    // 单行失败不影响后续行；本行内 question 未落库则无脏数据
-                    log.warn("[importQuestions][第 {} 行解析失败: {}]", rowIndex + 1, e.getMessage());
-                    result.getErrors().add(new QuestionImportRespVO.ErrorItem(rowIndex + 1, e.getMessage()));
+                    // 单行失败不影响后续行
+                    log.warn("[importQuestions][第 {} 行导入失败: {}]", rowIndex + 1, e.getMessage());
+                    result.getErrors().add(new QuestionImportRespVO.ErrorItem(rowIndex + 1, readableError(e)));
                 }
             }
             if (success == 0 && CollUtil.isEmpty(result.getErrors())) {
@@ -281,6 +300,63 @@ public class QuestionServiceImpl implements QuestionService {
             log.error("[importQuestions][解析 Excel 失败]", e);
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.QUESTION_IMPORT_PARSE_ERROR);
         }
+    }
+
+    /**
+     * 单行导入事务模板：REQUIRES_NEW 保证每行独立提交，
+     * 既不影响已成功的行，也不会在失败时留下半截数据
+     */
+    private TransactionTemplate rowTransactionTemplate() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
+    }
+
+    /**
+     * 定位数据表：取首个「表头含 题型 + 题干」的工作表，
+     * 兼容封面页/说明页在前、以及数据不在第一个 Sheet 的文件
+     */
+    private Sheet locateDataSheet(Workbook workbook, DataFormatter formatter) {
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            if (sheet != null && isTemplateHeader(sheet.getRow(sheet.getFirstRowNum()), formatter)) {
+                return sheet;
+            }
+        }
+        return null;
+    }
+
+    private boolean isTemplateHeader(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return false;
+        }
+        return cellStr(row, 0, formatter).contains("题型") && cellStr(row, 1, formatter).contains("题干");
+    }
+
+    /**
+     * 失败原因可读化：业务校验异常原样返回；SQL/框架异常只取最内层原因，
+     * 避免把 MyBatis 的整段 SQL 堆栈回传给前端
+     */
+    private String readableError(Exception e) {
+        if (e instanceof IllegalArgumentException) {
+            return e.getMessage();
+        }
+        String raw = e.getMessage();
+        int causeAt = raw == null ? -1 : raw.lastIndexOf("### Cause:");
+        if (causeAt >= 0) {
+            raw = raw.substring(causeAt + "### Cause:".length());
+        }
+        String message = "该行写入失败，请检查该行内容后重试";
+        if (StrUtil.isNotBlank(raw)) {
+            for (String line : raw.split("\n")) {
+                String text = line.trim();
+                if (StrUtil.isNotBlank(text) && !text.startsWith("###")) {
+                    message = text;
+                    break;
+                }
+            }
+        }
+        return message.length() <= ERROR_MESSAGE_MAX ? message : message.substring(0, ERROR_MESSAGE_MAX) + "…";
     }
 
     // ========== 私有方法 ==========

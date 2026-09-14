@@ -139,21 +139,28 @@
     editMode: false,
     selectedSpuIdList: [],
     selectAll: false,
+    loading: false,
+    actionLoading: false,
   });
 
   async function getList() {
+    if (state.loading) return;
+    state.loading = true;
     state.loadStatus = 'loading';
-    const { code, data } = await SpuHistoryApi.getBrowseHistoryPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-    });
-    if (code !== 0) {
-      return;
+    try {
+      const { code, data } = await SpuHistoryApi.getBrowseHistoryPage({
+        pageNo: state.pagination.pageNo,
+        pageSize: state.pagination.pageSize,
+      });
+      if (code === 0) {
+        const list = Array.isArray(data?.list) ? data.list : [];
+        state.pagination.list = concat(state.pagination.list, list);
+        state.pagination.total = Number(data?.total) || 0;
+        state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      } else state.loadStatus = 'more';
+    } finally {
+      state.loading = false;
     }
-
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
   }
 
   // 单选选中
@@ -183,35 +190,38 @@
 
   // 删除足迹
   async function onDelete() {
-    if (state.selectedSpuIdList.length <= 0) {
+    if (state.actionLoading || state.selectedSpuIdList.length <= 0) {
       return;
     }
-
-    const { code } = await SpuHistoryApi.deleteBrowseHistory(state.selectedSpuIdList);
-    if (code === 0) {
-      reload();
-    }
+    state.actionLoading = true;
+    try {
+      const { code } = await SpuHistoryApi.deleteBrowseHistory(state.selectedSpuIdList);
+      if (code === 0) reload();
+    } finally { state.actionLoading = false; }
   }
 
   // 清空
   async function onClean() {
-    const { code } = await SpuHistoryApi.cleanBrowseHistory();
-    if (code === 0) {
-      reload();
-    }
+    if (state.actionLoading) return;
+    state.actionLoading = true;
+    try {
+      const { code } = await SpuHistoryApi.cleanBrowseHistory();
+      if (code === 0) reload();
+    } finally { state.actionLoading = false; }
   }
 
   function reload() {
     state.editMode = false;
     state.selectedSpuIdList = [];
     state.selectAll = false;
-    state.pagination = pagination;
+    state.pagination = cloneDeep(pagination);
+    state.loadStatus = '';
     getList();
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus !== 'noMore') {
+    if (!state.loading && state.loadStatus !== 'noMore') {
       state.pagination.pageNo += 1;
       getList();
     }

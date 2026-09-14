@@ -116,6 +116,7 @@ const [Modal, modalApi] = useVbenModal({
         salaryUnit: HrmRecruitSalaryUnit.MONTH,
         emergencyLevel: HrmRecruitEmergencyLevel.URGENT,
         interviewEmployeeIds: [],
+        channelId: undefined,
         salaryNegotiable: false,
         ageUnlimited: false,
       });

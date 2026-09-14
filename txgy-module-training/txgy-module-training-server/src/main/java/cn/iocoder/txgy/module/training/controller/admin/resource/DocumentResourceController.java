@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageCountRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPageReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.DocumentResourceDO;
 import cn.iocoder.txgy.module.training.enums.ErrorCodeConstants;
@@ -50,6 +51,13 @@ public class DocumentResourceController {
                                              @RequestParam(value = "tags", required = false) String tags,
                                              @RequestParam(value = "estMinutes", required = false) Integer estMinutes) {
         return success(documentService.uploadDocument(file, title, categoryId, bizCategory, tags, estMinutes));
+    }
+
+    @PostMapping("/page-count")
+    @Operation(summary = "识别文档页数（自动换算预估阅读时长 = 页数 × 10 分钟/页）")
+    @PreAuthorize("@ss.hasPermission('training:resource-doc:create')")
+    public CommonResult<DocumentPageCountRespVO> countDocumentPages(@RequestParam("file") MultipartFile file) {
+        return success(documentService.countDocumentPages(file));
     }
 
     @GetMapping("/page")

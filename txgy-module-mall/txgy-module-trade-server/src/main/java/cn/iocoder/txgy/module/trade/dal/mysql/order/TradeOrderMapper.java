@@ -19,6 +19,11 @@ import java.util.Set;
 @Mapper
 public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
+    default TradeOrderDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, id).last("FOR UPDATE"));
+    }
+
     default int updateByIdAndStatus(Long id, Integer status, TradeOrderDO update) {
         return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
                 .eq(TradeOrderDO::getId, id).eq(TradeOrderDO::getStatus, status));

@@ -9,7 +9,7 @@
             <s-goods-item
               :img="item.picUrl"
               :title="item.spuName"
-              :skuText="item.properties.map((property) => property.valueName).join(' ')"
+              :skuText="(Array.isArray(item.properties) ? item.properties : []).map((property) => property.valueName).join(' ')"
               :price="item.payPrice"
               :num="item.count"
             />
@@ -37,12 +37,11 @@
               />
               <view class="img-box">
                 <s-uploader
-                  v-model:url="state.commentList[index].images"
+                  v-model:url="state.commentList[index].picUrls"
                   fileMediatype="image"
                   limit="9"
                   mode="grid"
                   :imageStyles="{ width: '168rpx', height: '168rpx' }"
-                  @success="(payload) => uploadSuccess(payload, index)"
                 />
               </view>
             </view>
@@ -60,7 +59,7 @@
     </view>
     <su-fixed bottom placeholder>
       <view class="foot_box ss-flex ss-row-center ss-col-center">
-        <button class="ss-reset-button post-btn ui-BG-Main-Gradient ui-Shadow-Main" @tap="onSubmit">
+        <button class="ss-reset-button post-btn ui-BG-Main-Gradient ui-Shadow-Main" :disabled="state.submitting" @tap="onSubmit">
           发布
         </button>
       </view>
@@ -75,9 +74,11 @@
   import OrderApi from '@/sheep/api/trade/order';
 
   const state = reactive({
-    orderInfo: {},
+    orderInfo: { items: [] },
     commentList: [],
     id: null,
+    loading: false,
+    submitting: false,
   });
 
   /**
@@ -96,48 +97,50 @@
    * @returns {Promise<void>}
    */
   async function onSubmit() {
+    if (state.submitting || state.commentList.length === 0) return;
+    state.submitting = true;
     // 顺序提交评论
-    for (const comment of state.commentList) {
-      await OrderApi.createOrderItemComment(comment);
+    try {
+      for (const comment of state.commentList) {
+        const res = await OrderApi.createOrderItemComment(comment);
+        if (!res || res.code !== 0) return;
+      }
+      sheep.$router.back();
+    } finally {
+      state.submitting = false;
     }
-    // 都评论好，返回
-    sheep.$router.back();
-  }
-
-  /**
-   * 图片添加到表单
-   *
-   * @param payload 上传成功后的回调数据
-   * @param commentIndex  当前评论的下标
-   */
-  function uploadSuccess(payload, commentIndex) {
-    state.commentList[commentIndex].picUrls = payload.tempFilePaths;
   }
 
   onLoad(async (options) => {
-    if (!options.id) {
+    if (!options?.id) {
       sheep.$helper.toast(`缺少订单信息，请检查`);
       return;
     }
-    state.id = options.id;
-
-    const { code, data } = await OrderApi.getOrderDetail(state.id);
-    if (code !== 0) {
-      sheep.$helper.toast('无待评价订单');
-      return;
-    }
-    // 处理评论
-    data.items.forEach((item) => {
-      state.commentList.push({
-        anonymous: false,
-        orderItemId: item.id,
-        descriptionScores: 5,
-        benefitScores: 5,
-        content: '',
-        picUrls: [],
+    state.id = String(options.id);
+    if (state.loading) return;
+    state.loading = true;
+    try {
+      const res = await OrderApi.getOrderDetail(state.id);
+      const data = res?.data;
+      if (!res || res.code !== 0 || !data) {
+        sheep.$helper.toast('无待评价订单');
+        return;
+      }
+      // 处理评论
+      (Array.isArray(data.items) ? data.items : []).forEach((item) => {
+        state.commentList.push({
+          anonymous: false,
+          orderItemId: String(item.id),
+          descriptionScores: 5,
+          benefitScores: 5,
+          content: '',
+          picUrls: [],
+        });
       });
-    });
-    state.orderInfo = data;
+      state.orderInfo = { ...data, items: Array.isArray(data.items) ? data.items : [] };
+    } finally {
+      state.loading = false;
+    }
   });
 </script>
 
