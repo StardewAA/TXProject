@@ -103,6 +103,11 @@ function openHistory(record?: CertificateApi.Certificate) {
   void loadHistory();
 }
 
+function reloadHistory() {
+  historyQuery.pageNo = 1;
+  void loadHistory();
+}
+
 async function loadHistory() {
   historyLoading.value = true;
   try {
@@ -684,31 +689,17 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
       :title="historyCert ? `验真历史 · ${historyCert.certName}` : '验真历史 · 本租户全部留痕'"
     >
       <a-space class="mb-3" wrap>
-        <a-select
-          v-model:value="historyQuery.verifyChannel"
+        <AttrFilter
+          v-model="historyQuery.verifyChannel"
+          label="验真渠道"
           :options="historyChannelOptions"
-          allow-clear
-          placeholder="验真渠道"
-          style="width: 170px"
-          @change="
-            () => {
-              historyQuery.pageNo = 1;
-              loadHistory();
-            }
-          "
+          @change="reloadHistory"
         />
-        <a-select
-          v-model:value="historyQuery.verifyResult"
+        <AttrFilter
+          v-model="historyQuery.verifyResult"
+          label="验真结论"
           :options="historyResultOptions"
-          allow-clear
-          placeholder="验真结论"
-          style="width: 170px"
-          @change="
-            () => {
-              historyQuery.pageNo = 1;
-              loadHistory();
-            }
-          "
+          @change="reloadHistory"
         />
         <a-button @click="loadHistory">刷新</a-button>
         <span class="ct-panel-meta">共 {{ historyTotal }} 条留痕</span>
