@@ -33,6 +33,11 @@ public class WmsReceiptOrderDO extends BaseDO {
      */
     @TableId
     private Long id;
+    private Boolean simulation;
+    private String notificationStatus;
+    private String notificationError;
+    private Integer notificationAttempts;
+    private LocalDateTime nextNotificationTime;
     /**
      * 入库单号
      */
@@ -54,10 +59,21 @@ public class WmsReceiptOrderDO extends BaseDO {
      * 字典 {@link DictTypeConstants#ORDER_STATUS}
      */
     private Integer status;
+    private Integer approvalStatus;
+    private String processInstanceId;
+    private LocalDateTime approvalTime;
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
     /**
      * 业务订单号
      */
     private String bizOrderNo;
+    /** 集成来源模块；普通手工入库为空。 */
+    private String sourceModule;
+    /** 跨模块业务链编号。 */
+    private String businessChainNo;
     /**
      * 供应商编号
      *

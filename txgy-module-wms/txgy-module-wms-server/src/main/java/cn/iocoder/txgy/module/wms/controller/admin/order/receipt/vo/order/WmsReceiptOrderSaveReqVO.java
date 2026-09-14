@@ -37,6 +37,12 @@ public class WmsReceiptOrderSaveReqVO {
     @Schema(description = "业务单号", example = "PO202605110001")
     @Size(max = 64, message = "业务单号长度不能超过 64 个字符")
     private String bizOrderNo;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @Schema(description = "集成来源模块，由服务端写入", accessMode = Schema.AccessMode.READ_ONLY)
+    private String sourceModule;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @Schema(description = "业务链编号，由服务端写入", accessMode = Schema.AccessMode.READ_ONLY)
+    private String businessChainNo;
 
     @Schema(description = "供应商编号", example = "1024")
     private Long merchantId;

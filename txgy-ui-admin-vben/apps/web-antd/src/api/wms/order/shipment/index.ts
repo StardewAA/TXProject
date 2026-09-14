@@ -16,6 +16,10 @@ export namespace WmsShipmentOrderApi {
     processInstanceId?: string;
     approvalTime?: string;
     approvalReason?: string;
+    executionStatus?: number;
+    executionError?: string;
+    sourceModule?: string;
+    simulation?: boolean;
     bizOrderNo?: string;
     merchantId?: number;
     merchantName?: string;
@@ -32,6 +36,17 @@ export namespace WmsShipmentOrderApi {
     updater?: string;
     updaterName?: string;
   }
+}
+
+export interface ShipmentExecution {
+  targetOrderNo?: string;
+  status?: string;
+  completedQuantity?: number;
+  notificationStatus?: string;
+  notificationError?: string;
+}
+export function getShipmentExecution(id: number) {
+  return requestClient.get<ShipmentExecution>('/wms/shipment-order/execution', { params: { id } });
 }
 
 export function getShipmentOrderPage(params: PageParam) {

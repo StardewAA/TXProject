@@ -17,6 +17,8 @@ public class WmsShipmentOrderDetailSaveReqVO {
     @Schema(description = "SKU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "2048")
     @NotNull(message = "SKU 不能为空")
     private Long skuId;
+    private Integer sourceLineNo;
+    private String sourceSnapshotJson;
 
     @Schema(description = "出库数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "100.00")
     @NotNull(message = "出库数量不能为空")

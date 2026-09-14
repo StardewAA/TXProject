@@ -22,6 +22,10 @@ public class WmsWarehouseSaveReqVO {
     @NotEmpty(message = "仓库名称不能为空")
     private String name;
 
+    @Schema(description = "仓库类型：RAW_MATERIAL 原材料仓、FINISHED_GOODS 成品仓")
+    @jakarta.validation.constraints.Pattern(regexp = "RAW_MATERIAL|FINISHED_GOODS", message = "仓库类型必须为原材料仓或成品仓")
+    private String warehouseType;
+
     @Schema(description = "排序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "排序不能为空")
     private Integer sort;
