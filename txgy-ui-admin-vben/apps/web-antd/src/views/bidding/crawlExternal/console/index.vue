@@ -29,7 +29,7 @@ import { getRangePickerDefaultProps } from '#/utils/rangePickerProps';
 
 import AttrFilter from '../../components/AttrFilter.vue';
 import { CHANNEL_GENERIC_TEXT, contentFormText, FETCH_TYPE_HINT, fetchTypeText, INTERVAL_HINT, intervalText } from '../labels';
-import { fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
+import { crawlErrMsg, fmtDt, JOB_STATUS_MAP, jobSummaryText, tagOf, TASK_STATUS_MAP } from '../shared';
 import ManualForm from './modules/manual-form.vue';
 import SourceDrawer from './modules/source-drawer.vue';
 import TaskChainView from './modules/task-chain.vue';
@@ -296,7 +296,7 @@ function onRunMenu(source: CrawlExternalApi.SourceItem) {
         void loadJobs();
         void fillSourceCounts(sources.value);
       } catch (e) {
-        message.error(e instanceof Error ? e.message : String(e));
+        message.error(crawlErrMsg(e));
       } finally {
         runCodeBusy.value = undefined;
       }
@@ -312,7 +312,7 @@ async function retryTask(row: CrawlExternalApi.TaskItem) {
     message.success('已加入重试队列');
     void loadTaskTotalGlobal();
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     retryBusy.value = undefined;
   }
@@ -381,7 +381,7 @@ async function loadTaskRows(page = tPage.value, size = tPageSize.value): Promise
     tTotal.value = typeof res.total === 'number' ? res.total : tRows.value.length;
     tPage.value = page;
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     tRowsLoading.value = false;
   }
