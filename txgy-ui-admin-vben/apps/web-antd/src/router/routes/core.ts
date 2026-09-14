@@ -135,6 +135,24 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招聘应聘', hideInMenu: true },
       },
       {
+        name: 'PortalRecruitDetail',
+        path: 'recruit/detail',
+        component: () => import('#/views/portal/recruit/detail.vue'),
+        meta: { title: '职位详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalRecruitMessages',
+        path: 'recruit/messages',
+        component: () => import('#/views/portal/recruit/messages.vue'),
+        meta: { title: '招聘沟通', hideInMenu: true },
+      },
+      {
+        name: 'PortalRecruitProfileSetup',
+        path: 'recruit/profile-setup',
+        redirect: { name: 'PortalRecruit', query: { section: 'resume' } },
+        meta: { title: '在线简历', hideInMenu: true },
+      },
+      {
         // 云培训学院：带左侧 F1~F10 模块导航的父容器，具体内容由子路由在右侧渲染
         name: 'PortalTraining',
         path: 'training',
@@ -222,6 +240,12 @@ const coreRoutes: RouteRecordRaw[] = [
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
         meta: { title: '个人中心', hideInMenu: true },
+      },
+      {
+        name: 'PortalProfileRecruit',
+        path: 'profile/recruit',
+        component: () => import('#/views/portal/profile/recruit.vue'),
+        meta: { title: '应聘记录', hideInMenu: true },
       },
     ],
   },

@@ -16,6 +16,7 @@ import { getRangePickerDefaultProps } from '#/utils';
 import EmployeeSelect from '#/views/hrm/employee/components/employee-select.vue';
 import {
   HrmEmployeeEntryStatus,
+  HrmRecruitCandidateEducationOptions,
   HrmRecruitCandidateStatus,
   HrmRecruitInterviewResult,
   HrmRecruitInterviewType,
@@ -129,11 +130,8 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       rules: 'required',
       componentProps: {
-        options: getDictOptions(
-          DICT_TYPE.HRM_RECRUIT_CANDIDATE_EDUCATION,
-          'number',
-        ),
-        placeholder: '请选择学历',
+        options: HrmRecruitCandidateEducationOptions,
+        placeholder: '学历要求',
         allowClear: true,
       },
     },
