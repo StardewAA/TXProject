@@ -2,9 +2,10 @@
 import type { HrmEmployeeApi } from '#/api/hrm/employee';
 import type { HrmRecruitCandidateApi } from '#/api/hrm/recruit/candidate';
 
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import { useVbenForm, useVbenModal } from '@vben/common-ui';
+import { toTimestampPickerValue } from '@vben/utils';
 
 import { message, Tabs } from 'ant-design-vue';
 
@@ -41,6 +42,19 @@ const createFieldVisibleMap = ref<Record<number, Set<string>>>({});
 const leaderEmployeeId = ref<number>();
 const userId = ref<number>();
 const candidateId = ref<number>();
+
+function normalizeDatePickerValues(
+  values: Partial<HrmEmployeeApi.Employee>,
+) {
+  return {
+    ...values,
+    birthday: toTimestampPickerValue(values.birthday),
+    entryTime: toTimestampPickerValue(values.entryTime),
+    regularTime: toTimestampPickerValue(values.regularTime),
+    leaveTime: toTimestampPickerValue(values.leaveTime),
+    companyAgeStartTime: toTimestampPickerValue(values.companyAgeStartTime),
+  };
+}
 
 const modalTitle = computed(() => {
   if (formType.value === 'confirm') return '确认入职';
@@ -183,23 +197,24 @@ const [Modal, modalApi] = useVbenModal({
     formType.value = data?.type || 'create';
     activeTab.value = 'personal';
     modalApi.setState({ title: modalTitle.value });
-    const defaults = createDefaultEmployeeFormData();
-    await formApi.resetForm();
-    await entryFormApi.resetForm();
-    await formApi.setValues(defaults);
-    await entryFormApi.setValues(defaults);
-    leaderEmployeeId.value = undefined;
-    userId.value = undefined;
-    candidateId.value = undefined;
     modalApi.lock();
     try {
       if (formType.value !== 'update') {
         await loadCreateFieldConfig();
+        await nextTick();
       }
+      const defaults = createDefaultEmployeeFormData();
+      await formApi.resetForm();
+      await entryFormApi.resetForm();
+      await formApi.setValues(normalizeDatePickerValues(defaults));
+      await entryFormApi.setValues(normalizeDatePickerValues(defaults));
+      leaderEmployeeId.value = undefined;
+      userId.value = undefined;
+      candidateId.value = undefined;
       if (data?.id) {
         const employee = await getEmployee(data.id);
-        await formApi.setValues(employee);
-        await entryFormApi.setValues(employee);
+        await formApi.setValues(normalizeDatePickerValues(employee));
+        await entryFormApi.setValues(normalizeDatePickerValues(employee));
         leaderEmployeeId.value = employee.leaderEmployeeId;
         userId.value = employee.userId;
         candidateId.value = employee.candidateId;
@@ -210,25 +225,33 @@ const [Modal, modalApi] = useVbenModal({
           );
           if (!employee.entryTime || Number(employee.entryTime) > Date.now()) {
             const entryTime = Date.now();
-            await entryFormApi.setFieldValue('entryTime', entryTime);
+            await entryFormApi.setFieldValue(
+              'entryTime',
+              toTimestampPickerValue(entryTime),
+            );
             await entryFormApi.setFieldValue('regularTime', undefined);
-            await entryFormApi.setFieldValue('companyAgeStartTime', entryTime);
+            await entryFormApi.setFieldValue(
+              'companyAgeStartTime',
+              toTimestampPickerValue(entryTime),
+            );
           }
         } else if (formType.value === 'rehire') {
           const entryTime = Date.now();
-          await entryFormApi.setValues({
-            entryStatus: HrmEmployeeEntryStatus.ACTIVE,
-            entryTime,
-            companyAgeStartTime: entryTime,
-            regularTime: undefined,
-            leaveTime: undefined,
-            probation: HRM_EMPLOYEE_NO_PROBATION_MONTHS,
-          });
+          await entryFormApi.setValues(
+            normalizeDatePickerValues({
+              entryStatus: HrmEmployeeEntryStatus.ACTIVE,
+              entryTime,
+              companyAgeStartTime: entryTime,
+              regularTime: undefined,
+              leaveTime: undefined,
+              probation: HRM_EMPLOYEE_NO_PROBATION_MONTHS,
+            }),
+          );
         }
       } else if (data?.defaultData) {
         const merged = { ...defaults, ...data.defaultData };
-        await formApi.setValues(merged);
-        await entryFormApi.setValues(merged);
+        await formApi.setValues(normalizeDatePickerValues(merged));
+        await entryFormApi.setValues(normalizeDatePickerValues(merged));
         leaderEmployeeId.value = data.defaultData.leaderEmployeeId;
         userId.value = data.defaultData.userId;
         candidateId.value = data.defaultData.candidateId;

@@ -41,6 +41,18 @@ public interface WmsIntegrationApi {
     @Operation(summary = "提交采购原料入库申请")
     CommonResult<WmsIntegrationAcceptedRespDTO> createPurchaseReceipt(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
 
+    @PostMapping(PREFIX + "/receipt/production")
+    @Operation(summary = "MES 完工入库申请，仅创建 WMS 草稿")
+    CommonResult<WmsIntegrationAcceptedRespDTO> createProductionReceipt(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
+
+    @PostMapping(PREFIX + "/shipment/sale")
+    @Operation(summary = "ERP 销售出库申请，仅创建 WMS 草稿")
+    CommonResult<WmsIntegrationAcceptedRespDTO> createSaleShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
+
+    @PostMapping(PREFIX + "/shipment/production")
+    @Operation(summary = "MES 生产领料出库申请，仅创建 WMS 草稿")
+    CommonResult<WmsIntegrationAcceptedRespDTO> createProductionShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
+
     @PostMapping(PREFIX + "/receipt/customer-return")
     @Operation(summary = "提交客户退货入库申请")
     CommonResult<WmsIntegrationAcceptedRespDTO> createCustomerReturnReceipt(

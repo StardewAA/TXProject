@@ -1,0 +1,25 @@
+#!/bin/sh
+# txgy-module-bidding 规约校验钩子（提交前哨）：
+# 提交前运行 ArchUnit 规约测试（命名/分层/注解/错误码），违规即拒绝提交。
+#
+# 启用：  git config core.hooksPath .githooks
+# 跳过：  git commit --no-verify     或   NO_RULE_CHECK=1 git commit
+#
+# 环境：与 build.cmd 一致使用绝对路径 JDK/Maven，不依赖 PATH/JAVA_HOME。
+if [ -n "$NO_RULE_CHECK" ]; then
+    exit 0
+fi
+cd "$(dirname "$0")/.." || exit 1
+export JAVA_HOME="${JAVA_HOME:-D:/Java/jdk-25}"
+export PATH="$JAVA_HOME/bin:D:/maven/apache-maven-3.9.11/bin:$PATH"
+
+echo "[rule-check] 运行规约测试（ArchUnit：命名/分层/注解/错误码段位）……"
+mvn -q -pl txgy-module-bidding-server -am test -DskipTests=false
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    echo "[rule-check] 规约校验未通过：请修正后重试（测试见 txgy-module-bidding-server/src/test/.../arch）"
+    echo "[rule-check] 如确认是临时跳过，可用 git commit --no-verify 或 NO_RULE_CHECK=1"
+    exit 1
+fi
+echo "[rule-check] 规约校验通过"
+exit 0

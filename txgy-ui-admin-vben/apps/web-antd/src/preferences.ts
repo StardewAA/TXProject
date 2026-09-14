@@ -25,6 +25,10 @@ export const overridesPreferences = defineOverridesPreferences({
     name: '防腐保温智慧平台',
     enableRefreshToken: true,
   },
+  tabbar: {
+    /** 关闭顶部多标签页栏：页面切换靠左侧菜单，不再累积打开页签 */
+    enable: false,
+  },
   logo: {
     /** 登录页 / 首页 LOGO */
     source: logo,

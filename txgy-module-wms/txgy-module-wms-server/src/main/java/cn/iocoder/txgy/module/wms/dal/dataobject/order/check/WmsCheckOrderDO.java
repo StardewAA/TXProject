@@ -45,6 +45,13 @@ public class WmsCheckOrderDO extends BaseDO {
      * 字典 {@link DictTypeConstants#ORDER_STATUS}
      */
     private Integer status;
+    private Integer approvalStatus;
+    private String processInstanceId;
+    private LocalDateTime approvalTime;
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
     /**
      * 备注
      */

@@ -42,6 +42,14 @@ public class WmsIntegrationDocumentItemDTO {
     private String warehouseCode;
     private String batchNo;
 
+    @Schema(description = "来源单价，人民币元；未提供为 null，不采用商品档案价格")
+    @DecimalMin("0")
+    private BigDecimal price;
+
+    @Schema(description = "来源行金额，人民币元；有单价时等于申请数量乘单价，四舍五入两位")
+    @DecimalMin("0")
+    private BigDecimal totalPrice;
+
     @DecimalMin(value = "0.000001", message = "需求数量必须大于 0")
     private BigDecimal requiredQuantity;
 

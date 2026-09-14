@@ -36,6 +36,10 @@ public interface WmsReceiptOrderMapper extends BaseMapperX<WmsReceiptOrderDO> {
                 .orderByDesc(WmsReceiptOrderDO::getId));
     }
 
+    default WmsReceiptOrderDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapper<WmsReceiptOrderDO>().eq(WmsReceiptOrderDO::getId, id).last("FOR UPDATE"));
+    }
+
     default WmsReceiptOrderDO selectByNo(String no) {
         return selectOne(WmsReceiptOrderDO::getNo, no);
     }
@@ -52,6 +56,10 @@ public interface WmsReceiptOrderMapper extends BaseMapperX<WmsReceiptOrderDO> {
         return update(updateObj, new LambdaQueryWrapper<WmsReceiptOrderDO>()
                 .eq(WmsReceiptOrderDO::getId, id)
                 .eq(WmsReceiptOrderDO::getStatus, status));
+    }
+    default int updateApprovalResultIfRunning(Long id, String processInstanceId, Integer runningStatus, WmsReceiptOrderDO updateObj) {
+        return update(updateObj, new LambdaQueryWrapper<WmsReceiptOrderDO>().eq(WmsReceiptOrderDO::getId, id)
+                .eq(WmsReceiptOrderDO::getProcessInstanceId, processInstanceId).eq(WmsReceiptOrderDO::getApprovalStatus, runningStatus));
     }
 
 }

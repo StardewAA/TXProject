@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useBuyerNavigation } from '@/composables/useBuyerNavigation'
+const { buyerTo } = useBuyerNavigation()
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -24,7 +26,7 @@ async function submit() {
       await tradeApi.createComment({ anonymous: form.anonymous, orderItemId: form.item.id, descriptionScores: form.descriptionScores, benefitScores: form.benefitScores, content: form.content.trim(), picUrls: form.picUrlsText.split(/[\n,，]/).map((value) => value.trim()).filter(Boolean).slice(0, 9) })
     }
     ElMessage.success('评价发布成功')
-    await router.replace(`/member/orders/${route.params.id}`)
+    await router.replace(buyerTo(`/member/orders/${route.params.id}`))
   } finally { submitting.value = false }
 }
 

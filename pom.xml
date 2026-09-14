@@ -31,7 +31,7 @@
         <module>txgy-module-ai</module>
         <module>txgy-module-hrm</module>
         <module>txgy-module-fms</module>
-        <module>txgy-module-training</module>
+        <module>txgy-module-bidding</module>
     </modules>
 
     <name>${project.artifactId}</name>

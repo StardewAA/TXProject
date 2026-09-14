@@ -24,6 +24,7 @@ defineOptions({ name: 'WmsInventorySelect' });
 
 const props = defineProps<{
   warehouseId?: number;
+  quantityTitle?: string;
 }>();
 
 const emit = defineEmits<{
@@ -83,7 +84,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     schema: useInventorySelectGridFormSchema(),
   },
   gridOptions: {
-    columns: useInventorySelectGridColumns(),
+    columns: useInventorySelectGridColumns().map(column => column.field === 'availableQuantity' && props.quantityTitle
+      ? { ...column, title: props.quantityTitle } : column),
     height: 560,
     keepSource: true,
     showOverflow: false,

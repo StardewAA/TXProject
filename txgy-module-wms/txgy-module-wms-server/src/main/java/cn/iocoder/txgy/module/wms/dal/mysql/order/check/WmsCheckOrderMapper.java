@@ -48,5 +48,9 @@ public interface WmsCheckOrderMapper extends BaseMapperX<WmsCheckOrderDO> {
                 .eq(WmsCheckOrderDO::getId, id)
                 .eq(WmsCheckOrderDO::getStatus, status));
     }
+    default int updateApprovalResultIfRunning(Long id, String processInstanceId, Integer runningStatus, WmsCheckOrderDO updateObj) {
+        return update(updateObj, new LambdaQueryWrapper<WmsCheckOrderDO>().eq(WmsCheckOrderDO::getId, id)
+                .eq(WmsCheckOrderDO::getProcessInstanceId, processInstanceId).eq(WmsCheckOrderDO::getApprovalStatus, runningStatus));
+    }
 
 }

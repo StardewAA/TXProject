@@ -6,26 +6,12 @@ import type { WmsReceiptOrderDetailApi } from '#/api/wms/order/receipt/detail';
 import { reactive, ref } from 'vue';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
-import {
-  OrderDeleteStatusList,
-  OrderStatusEnum,
-  OrderUpdateStatusList,
-} from '@vben/constants';
-import {
-  downloadFileFromBlobPart,
-  formatDateTime,
-  isUndefined,
-} from '@vben/utils';
+import { OrderDeleteStatusList, OrderStatusEnum, OrderUpdateStatusList } from '@vben/constants';
+import { downloadFileFromBlobPart, formatDateTime, isUndefined } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 
-import {
-  ACTION_ICON,
-  TableAction,
-  useVbenVxeGrid,
-  VxeColumn,
-  VxeTable,
-} from '#/adapter/vxe-table';
+import { ACTION_ICON, TableAction, useVbenVxeGrid, VxeColumn, VxeTable } from '#/adapter/vxe-table';
 import {
   deleteReceiptOrder,
   exportReceiptOrder,
@@ -33,23 +19,30 @@ import {
   getReceiptOrderPage,
 } from '#/api/wms/order/receipt';
 import { $t } from '#/locales';
-import {
-  formatPrice,
-  formatQuantity,
-  multiplyPrice,
-} from '#/views/wms/utils/format';
+import { formatPrice, formatQuantity, multiplyPrice } from '#/views/wms/utils/format';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import ReceiptOrderDetail from './modules/detail.vue';
 import ReceiptOrderForm from './modules/form.vue';
 import ReceiptOrderPrint from './modules/print.vue';
+import SimulateReceipt from '../shared/simulate.vue';
+const [SimulateModal, simulateModalApi] = useVbenModal({
+  connectedComponent: SimulateReceipt,
+  destroyOnClose: true,
+});
 
 defineOptions({ name: 'WmsReceiptOrder' });
 
+const approvalLabels: Record<number, string> = {
+  '-1': '草稿',
+  0: '草稿',
+  1: '审批中',
+  2: '已通过',
+  3: '已拒绝',
+  4: '已取消',
+};
 const printRef = ref<InstanceType<typeof ReceiptOrderPrint>>();
-const detailMap = reactive<
-  Record<number, WmsReceiptOrderDetailApi.ReceiptOrderDetail[]>
->({});
+const detailMap = reactive<Record<number, WmsReceiptOrderDetailApi.ReceiptOrderDetail[]>>({});
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: ReceiptOrderForm,
@@ -91,9 +84,7 @@ function handleDetail(row: WmsReceiptOrderApi.ReceiptOrder) {
 }
 
 /** 计算单据明细金额 */
-function getDetailTotalPrice(
-  detail: WmsReceiptOrderDetailApi.ReceiptOrderDetail,
-) {
+function getDetailTotalPrice(detail: WmsReceiptOrderDetailApi.ReceiptOrderDetail) {
   return detail.totalPrice ?? multiplyPrice(detail.quantity, detail.price);
 }
 
@@ -103,10 +94,7 @@ function getExpandedDetails(row: WmsReceiptOrderApi.ReceiptOrder) {
 }
 
 /** 展开列表行时懒加载入库明细 */
-async function handleExpandChange(
-  row: WmsReceiptOrderApi.ReceiptOrder,
-  expanded: boolean,
-) {
+async function handleExpandChange(row: WmsReceiptOrderApi.ReceiptOrder, expanded: boolean) {
   if (!expanded) {
     return;
   }
@@ -185,6 +173,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
       padding: true,
     },
     height: 'auto',
+    showOverflow: false,
+    virtualYConfig: { enabled: false },
     keepSource: true,
     proxyConfig: {
       ajax: {
@@ -223,23 +213,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <template #doc>
-      <DocAlert
-        title="【单据】入库"
-        url="https://doc.iocoder.cn/wms/order/receipt/"
-      />
+      <DocAlert title="【单据】入库" url="https://doc.iocoder.cn/wms/order/receipt/" />
     </template>
     <FormModal @success="handleRefresh" />
-    <DetailModal />
+    <DetailModal /><SimulateModal @success="handleRefresh" />
     <ReceiptOrderPrint ref="printRef" />
 
-    <Grid table-title="入库单列表">
+    <Grid class="wms-order-list" table-title="入库单列表">
       <template #expand_content="{ row }">
-        <VxeTable
-          :data="getExpandedDetails(row)"
-          border
-          :show-overflow="true"
-          size="small"
-        >
+        <VxeTable :data="getExpandedDetails(row)" border :show-overflow="true" size="small">
           <VxeColumn title="商品信息" min-width="220">
             <template #default="{ row: detail }">
               <div>{{ detail.itemName || '-' }}</div>
@@ -284,6 +266,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
+              label: '模拟 ERP / MES 入库',
+              type: 'primary',
+              auth: ['wms:receipt-order:create'],
+              onClick: () => simulateModalApi.setData({ direction: 'receipt' }).open(),
+            },
+            {
               label: $t('ui.actionTitle.export'),
               type: 'primary',
               icon: ACTION_ICON.DOWNLOAD,
@@ -296,11 +284,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #no="{ row }">
         <div>
           单号：
-          <a class="text-primary" @click="handleDetail(row)">{{ row.no }}</a>
+          <a class="text-primary break-all" :title="row.no" @click="handleDetail(row)">{{ row.no }}</a>
         </div>
-        <div v-if="row.bizOrderNo" class="text-xs text-gray-500">
-          业务：{{ row.bizOrderNo }}
+        <div>
+          审批：{{ approvalLabels[row.approvalStatus ?? 0] || '待提交' }} / 执行：{{
+            row.executionStatus === 1 ? '已入库' : '待执行'
+          }}
         </div>
+        <div v-if="row.bizOrderNo" class="break-all text-sm text-gray-500">业务：{{ row.bizOrderNo }}</div>
       </template>
       <template #quantityAmount="{ row }">
         <div class="flex items-center justify-between">
@@ -329,7 +320,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: $t('common.edit'),
               type: 'link',
               icon: ACTION_ICON.EDIT,
-              disabled: !canUpdateReceiptOrder(row.status),
+              disabled: [1, 2].includes(row.approvalStatus ?? -1) || !canUpdateReceiptOrder(row.status),
               tooltip: getReceiptOrderUpdateTip(row.status),
               auth: ['wms:receipt-order:update'],
               onClick: handleEdit.bind(null, row),
@@ -339,7 +330,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               danger: true,
               icon: ACTION_ICON.DELETE,
-              disabled: !canDeleteReceiptOrder(row.status),
+              disabled: [1, 2].includes(row.approvalStatus ?? -1) || !canDeleteReceiptOrder(row.status),
               tooltip: getReceiptOrderDeleteTip(row.status),
               auth: ['wms:receipt-order:delete'],
               popConfirm: {
@@ -359,3 +350,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </Grid>
   </Page>
 </template>
+
+<style scoped>
+.wms-order-list :deep(.vxe-body--column .vxe-cell) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+</style>

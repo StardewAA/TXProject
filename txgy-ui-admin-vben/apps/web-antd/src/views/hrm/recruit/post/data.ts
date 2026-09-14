@@ -10,6 +10,8 @@ import { getDictOptions } from '@vben/hooks';
 import { formatDate, handleTree } from '@vben/utils';
 
 import { getSimpleDeptList } from '#/api/system/dept';
+import { getRecruitChannelSimpleList } from '#/api/hrm/recruit/channel';
+import { getRecruitPostTypeList } from '#/api/hrm/recruit/post/type';
 import { AreaCascader } from '#/components/area';
 import { DictTag } from '#/components/dict-tag';
 import EmployeeSelect from '#/views/hrm/employee/components/employee-select.vue';
@@ -177,6 +179,7 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitPostApi.RecruitP
     },
     { field: 'ownerEmployeeName', title: '招聘负责人', minWidth: 120 },
     { field: 'postTypeName', title: '职位类型', minWidth: 120 },
+    { field: 'channelName', title: '发布渠道', minWidth: 120 },
     {
       field: 'interviewEmployeeNames',
       title: '面试官',
@@ -249,6 +252,33 @@ export function useFormSchema(): VbenFormSchema[] {
       componentProps: {
         options: HrmRecruitJobNatureOptions,
         placeholder: '请选择职位类型',
+        allowClear: true,
+      },
+    },
+    {
+      fieldName: 'postTypeId',
+      label: '职位分类',
+      component: 'ApiTreeSelect',
+      componentProps: {
+        api: async () => handleTree(await getRecruitPostTypeList()),
+        labelField: 'name',
+        valueField: 'id',
+        childrenField: 'children',
+        placeholder: '请选择职位分类',
+        allowClear: true,
+        treeDefaultExpandAll: true,
+      },
+    },
+    {
+      fieldName: 'channelId',
+      label: '发布渠道',
+      component: 'ApiSelect',
+      rules: 'required',
+      componentProps: {
+        api: getRecruitChannelSimpleList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择发布渠道',
         allowClear: true,
       },
     },
@@ -537,6 +567,7 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
     },
     { field: 'ownerEmployeeName', label: '招聘负责人' },
     { field: 'postTypeName', label: '职位类型' },
+    { field: 'channelName', label: '发布渠道' },
     {
       field: 'interviewEmployeeNames',
       label: '面试官',
