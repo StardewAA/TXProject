@@ -112,3 +112,4 @@ uploads/
 
 # MES 后端构建产物（仅本地部署用，禁止入库）
 deploy/backend/app.jar
+deploy/backend/erp-app.jar
