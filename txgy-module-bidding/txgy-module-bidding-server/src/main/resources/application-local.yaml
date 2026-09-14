@@ -7,13 +7,29 @@ spring:
       username: # Nacos 账号
       password: # Nacos 密码
       discovery: # 【配置中心】配置项
-        namespace: '' # 命名空间。这里使用 public 开发环境
+        namespace: dev # 命名空间。与平台其余模块一致（gateway/网关按 dev 查找服务实例）
         group: DEFAULT_GROUP # 使用的 Nacos 配置分组，默认为 DEFAULT_GROUP
         metadata:
           version: 1.0.0 # 服务实例的版本号，可用于灰度发布
       config: # 【注册中心】配置项
-        namespace: '' # 命名空间。这里使用 public 开发环境
+        namespace: dev # 命名空间。与平台其余模块一致
         group: DEFAULT_GROUP # 使用的 Nacos 配置分组，默认为 DEFAULT_GROUP
+
+--- #################### 本地联调：RPC 直连宿主映射端口 ####################
+# 场景：bidding 跑在宿主机（IDEA），而 system/infra 跑在 docker；宿主无法直连容器内网 IP
+#   （172.18.x:48080 → SocketException: Unexpected end of file），导致租户校验/错误上报等 RPC 全挂。
+# 方案：system/infra 由 deploy-bidding-local.override.yml 映射到宿主端口 48087/48088，
+#   本地 bidding 的 Feign 直连这两个端口（绕过容器内网/负载均衡）。
+# 依据：docs/前端规范-全域接口说明/03-本地运行与联调说明.md §6（方案 A）；与 run-local.cmd 的环境变量等价。
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          system-server:
+            url: http://127.0.0.1:48087
+          infra-server:
+            url: http://127.0.0.1:48088
 
 --- #################### 数据库相关配置 ####################
 spring:
