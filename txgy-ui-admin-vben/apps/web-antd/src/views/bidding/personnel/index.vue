@@ -26,6 +26,7 @@ import {
   createPersonnelSocialSecurity,
   createPersonnelTraining,
   deletePersonnelCert,
+  getPersonnelCertByPerson,
   getPersonnelCertExpiring,
   getPersonnelCertPage,
   getPersonnelLaborContractList,
@@ -600,13 +601,28 @@ async function submitProfileStatus() {
 const overviewOpen = ref(false);
 const overviewLoading = ref(false);
 const overview = ref<null | PersonnelProfileApi.Overview>(null);
+/** 该员工的**全部在册证书**（含历史旧证；见 openOverview 里的口径说明） */
+const personCerts = ref<PersonnelCertApi.Cert[]>([]);
+/** 证书表数据源：按人查的完整列表优先，接口失败时回退全景出参里的现行证 */
+const certRows = computed<PersonnelCertApi.Cert[]>(() =>
+  personCerts.value.length ? personCerts.value : ((overview.value?.certificates ?? []) as PersonnelCertApi.Cert[]),
+);
 
 async function openOverview(row: PersonnelProfileApi.Profile) {
   overviewOpen.value = true;
   overviewLoading.value = true;
   overview.value = null;
+  personCerts.value = [];
   try {
-    overview.value = await getPersonnelOverview(row.id);
+    /* 证书表用 `list-by-person`（按人查**全部在册证书**）而不是全景出参里的 certificates：
+     * 依据后端《后端变更通知-给前端》：分页与到期清单两条接口**只返回当前有效证**（isCurrent 恒 true），
+     * 只有按人查全部证书会返回 isCurrent=false 的**历史旧证** —— 要区分现行/历史必须走这条。 */
+    const [ov, certs] = await Promise.all([
+      getPersonnelOverview(row.id),
+      getPersonnelCertByPerson(row.id).catch(() => [] as PersonnelCertApi.Cert[]),
+    ]);
+    overview.value = ov;
+    personCerts.value = certs ?? [];
   } catch {
     // 静默
   } finally {
@@ -1690,14 +1706,18 @@ function remainTag(r: PersonnelCertApi.Cert) {
               { title: '类型', dataIndex: 'certType', key: 'certType', width: 140 },
               { title: '状态', dataIndex: 'certStatus', key: 'certStatus', width: 110 },
               { title: '有效期至', dataIndex: 'validTo', key: 'validTo', width: 120 },
+              { title: '证态', dataIndex: 'isCurrent', key: 'certState', width: 90 },
             ]"
-            :data-source="overview.certificates ?? []"
+            :data-source="certRows"
             :pagination="false"
             row-key="id"
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'certType'">
+              <template v-if="column.key === 'certState'">
+                <a-tag :color="record.isCurrent ? 'green' : 'default'">{{ record.isCurrent ? '现行' : '历史' }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'certType'">
                 {{ record.certType ? dictLabel('person_cert_type', record.certType) : '—' }}
               </template>
               <template v-else-if="column.key === 'certStatus'">
