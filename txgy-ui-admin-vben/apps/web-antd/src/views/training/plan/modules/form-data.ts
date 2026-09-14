@@ -1,5 +1,10 @@
 import type { VbenFormSchema } from '#/adapter/form';
 
+import { handleTree } from '@vben/utils';
+
+import { getSimpleDeptList } from '#/api/system/dept';
+import { getSimplePostList } from '#/api/system/post';
+
 import { CLASS_TYPE_OPTIONS } from '../data';
 
 /** 常用岗位（定岗-四定之一，也可手工输入） */
@@ -107,13 +112,45 @@ export function useFormSchema(
       },
     },
     {
-      fieldName: 'targetCondition',
-      label: '参训对象筛选',
-      component: 'InputTextArea',
+      fieldName: 'scopeDeptIds',
+      label: '参训部门',
+      component: 'ApiTreeSelect',
       componentProps: {
-        placeholder: '筛选条件（JSON），如 {"posts":["管道工"],"dept":"管道一班"}，可空',
-        maxlength: 1000,
-        rows: 3,
+        allowClear: true,
+        api: async () => handleTree(await getSimpleDeptList()),
+        labelField: 'name',
+        valueField: 'id',
+        childrenField: 'children',
+        multiple: true,
+        treeCheckable: true,
+        showCheckedStrategy: 'SHOW_PARENT',
+        treeDefaultExpandAll: true,
+        placeholder: '按部门圈选参训人员（可多选）',
+      },
+    },
+    {
+      fieldName: 'scopeIncludeChildDept',
+      label: '含下级部门',
+      component: 'Switch',
+      defaultValue: true,
+      componentProps: {
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+    },
+    {
+      fieldName: 'scopePostIds',
+      label: '参训岗位',
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: async () =>
+          (await getSimplePostList()).filter((item) => item.status === 0),
+        labelField: 'name',
+        valueField: 'id',
+        mode: 'multiple',
+        optionFilterProp: 'label',
+        placeholder: '按系统岗位圈选参训人员（可多选）',
       },
     },
     {

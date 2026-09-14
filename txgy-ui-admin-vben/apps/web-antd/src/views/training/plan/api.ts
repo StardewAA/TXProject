@@ -119,6 +119,31 @@ export namespace TrainingPlanApi {
       reason?: string;
     }[];
   }
+
+  /** 参与对象筛选条件（部门 + 岗位，保存于培训班 targetCondition） */
+  export interface ClassStudentScope {
+    classId?: number;
+    deptIds?: number[];
+    postIds?: number[];
+    includeChildDept?: boolean;
+  }
+
+  /** 参与对象筛选命中人员 */
+  export interface ClassStudentScopePreview {
+    deptIds?: number[];
+    postIds?: number[];
+    includeChildDept?: boolean;
+    matchedDeptIds?: number[];
+    matchedCount?: number;
+    inClassCount?: number;
+    addableCount?: number;
+    users?: {
+      userId?: number;
+      nickname?: string;
+      deptName?: string;
+      inClass?: boolean;
+    }[];
+  }
 }
 
 /** 培训班分页 */
@@ -285,5 +310,23 @@ export function importClassStudents(classId: number, file: File) {
   return requestClient.upload<TrainingPlanApi.ImportStudentResult>(
     `/training/plan/class/student/import?classId=${classId}`,
     { file },
+  );
+}
+
+/** 参与对象筛选：预览命中人员（不落库，用于加入前确认） */
+export function previewClassScope(data: TrainingPlanApi.ClassStudentScope) {
+  return requestClient.post<TrainingPlanApi.ClassStudentScopePreview>(
+    '/training/plan/class/student/scope-preview',
+    data,
+  );
+}
+
+/** 按参与对象筛选条件批量加入学员（自动生成学习任务，已在班自动跳过） */
+export function addClassStudentsByScope(
+  data: TrainingPlanApi.ClassStudentScope,
+) {
+  return requestClient.post<number>(
+    '/training/plan/class/student/add-by-scope',
+    data,
   );
 }

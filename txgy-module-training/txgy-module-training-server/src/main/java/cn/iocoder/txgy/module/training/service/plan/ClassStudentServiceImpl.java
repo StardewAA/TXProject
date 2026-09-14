@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.training.service.plan;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.system.api.dept.DeptApi;
+import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.*;
@@ -42,6 +44,14 @@ public class ClassStudentServiceImpl {
     private StudentTaskMapper studentTaskMapper;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private DeptApi deptApi;
+
+    /**
+     * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选
+     */
+    private static final Integer SOURCE_MANUAL = 1;
+    private static final Integer SOURCE_IMPORT = 2;
 
     // ========== 学员管理 ==========
 
@@ -60,22 +70,27 @@ public class ClassStudentServiceImpl {
         if (CollUtil.isEmpty(courses)) {
             throw exception(PLAN_STUDENT_COURSE_REQUIRED);
         }
-        // 3. 查询用户昵称快照（容错：RPC 失败则降级为空）
+        // 3. 查询用户昵称 / 部门快照（容错：RPC 失败则降级为空）
         Map<Long, AdminUserRespDTO> userMap = fetchUserMap(reqVO.getUserIds());
+        Map<Long, String> deptNameMap = fetchDeptNameMap(userMap.values());
         List<ClassStudentDO> all = classStudentMapper.selectListByClassId(reqVO.getClassId(), null);
         Map<Long, ClassStudentDO> userIndex = all.stream()
                 .collect(Collectors.toMap(ClassStudentDO::getUserId, item -> item, (a, b) -> a));
         int added = 0;
         for (Long userId : reqVO.getUserIds()) {
+            AdminUserRespDTO user = userMap.get(userId);
             ClassStudentDO exist = userIndex.get(userId);
             if (exist != null && Objects.equals(exist.getStatus(), 0)) {
                 continue; // 已在班，幂等跳过
             }
             if (exist != null && Objects.equals(exist.getStatus(), 1)) {
-                // 曾被移除 → 恢复在班，并重新生成学习任务
+                // 曾被移除 → 恢复在班，并重新生成学习任务；同步刷新姓名/部门/来源快照
                 ClassStudentDO restore = new ClassStudentDO();
                 restore.setId(exist.getId());
                 restore.setStatus(0);
+                restore.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                restore.setDeptName(fetchDeptName(user, deptNameMap));
+                restore.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 restore.setJoinTime(LocalDateTime.now());
                 restore.setRemovedTime(null);
                 restore.setRemovedReason(null);
@@ -84,8 +99,9 @@ public class ClassStudentServiceImpl {
                 ClassStudentDO student = new ClassStudentDO();
                 student.setClassId(reqVO.getClassId());
                 student.setUserId(userId);
-                student.setUserName(Optional.ofNullable(userMap.get(userId)).map(AdminUserRespDTO::getNickname).orElse(null));
-                student.setSource(1);
+                student.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                student.setDeptName(fetchDeptName(user, deptNameMap));
+                student.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 student.setStatus(0);
                 student.setJoinTime(LocalDateTime.now());
                 classStudentMapper.insert(student);
@@ -162,12 +178,13 @@ public class ClassStudentServiceImpl {
             }
             userIdSet.add(user.getId());
         }
-        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过）
+        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「Excel 批量导入」
         int added = 0;
         if (CollUtil.isNotEmpty(userIdSet)) {
             ClassStudentAddReqVO reqVO = new ClassStudentAddReqVO();
             reqVO.setClassId(classId);
             reqVO.setUserIds(new ArrayList<>(userIdSet));
+            reqVO.setSource(SOURCE_IMPORT);
             added = addStudents(reqVO);
         }
         ClassStudentImportRespVO respVO = new ClassStudentImportRespVO();
@@ -363,6 +380,28 @@ public class ClassStudentServiceImpl {
             log.warn("[fetchUserMap][获取用户信息失败，降级 userName 为空] userIds={}", userIds, ex);
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * 批量获取用户所属部门名称（用于部门/班组快照）；RPC 异常时降级为空，不影响主流程
+     */
+    private Map<Long, String> fetchDeptNameMap(Collection<AdminUserRespDTO> users) {
+        Set<Long> deptIds = users.stream().map(AdminUserRespDTO::getDeptId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (CollUtil.isEmpty(deptIds)) {
+            return Collections.emptyMap();
+        }
+        try {
+            return deptApi.getDeptList(deptIds).getCheckedData().stream()
+                    .collect(Collectors.toMap(DeptRespDTO::getId, DeptRespDTO::getName, (a, b) -> a));
+        } catch (Throwable ex) {
+            log.warn("[fetchDeptNameMap][获取部门信息失败，降级 deptName 为空] deptIds={}", deptIds, ex);
+            return Collections.emptyMap();
+        }
+    }
+
+    private String fetchDeptName(AdminUserRespDTO user, Map<Long, String> deptNameMap) {
+        return user == null || user.getDeptId() == null ? null : deptNameMap.get(user.getDeptId());
     }
 
     private String getStatusName(Integer status) {
