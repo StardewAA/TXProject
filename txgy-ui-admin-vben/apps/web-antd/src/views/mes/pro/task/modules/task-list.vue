@@ -9,7 +9,11 @@ import { useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteTask, getTaskPage } from '#/api/mes/pro/task';
+import {
+  autoGenerateTasksByRoute,
+  deleteTask,
+  getTaskPage,
+} from '#/api/mes/pro/task';
 import { $t } from '#/locales';
 
 import { useTaskGridColumns } from '../data';
@@ -47,6 +51,25 @@ function handleCreate() {
       workOrderId: props.workOrderId,
     })
     .open();
+}
+
+/** 按工艺路线一键生成全部缺失工序的任务（幂等，已有任务的工序自动跳过） */
+async function handleAutoGenerate() {
+  const hideLoading = message.loading({
+    content: '正在按工艺路线生成任务...',
+    duration: 0,
+  });
+  try {
+    const created = await autoGenerateTasksByRoute(props.workOrderId);
+    if (created > 0) {
+      message.success(`已按工艺路线生成 ${created} 个任务`);
+    } else {
+      message.info('所有工序均已存在任务，无需生成');
+    }
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
 }
 
 /** 编辑任务 */
@@ -117,6 +140,16 @@ watch(
       <template v-if="editable" #toolbar-tools>
         <TableAction
           :actions="[
+            {
+              label: '一键生成全部工序任务',
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              auth: ['mes:pro-task:create'],
+              popConfirm: {
+                title: '将按工艺路线为所有缺失任务的工序生成任务（计划时长每道 8 小时），确认生成？',
+                confirm: handleAutoGenerate,
+              },
+            },
             {
               label: '新增任务',
               type: 'primary',
