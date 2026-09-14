@@ -69,6 +69,13 @@ function setupAccessGuard(router: Router) {
         return true;
       }
       if (!accessStore.accessToken) {
+        // 匿名访客点到「需登录」的门户页（首页/我要找工作/云培训学院/个人中心/我的关注/公告发布等）：
+        // 先明确提示「需登录」再跳登录页（原先只静默跳转，用户不知道发生了什么）；登录后按 redirect 回到原页。
+        // key 固定 → 连续点击只更新同一条提示，不叠加一屏。
+        message.warning({
+          content: '该页面需要登录后访问，正在跳转登录页…',
+          key: 'portal-need-login',
+        });
         return {
           path: LOGIN_PATH,
           query: { redirect: encodeURIComponent(to.fullPath) },
