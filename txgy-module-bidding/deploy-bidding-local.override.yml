@@ -1,6 +1,14 @@
-# 本地联调 override：system/infra/gateway 宿主端口映射 + 空 namespace（public，与本地 bidding/其余服务一致）。
-# 用法（deploy 目录）：docker compose -f docker-compose.yml -f ../txgy-module-bidding/deploy-bidding-local.override.yml -p txgy up -d system infra gateway
-# 配合：bidding run-local.cmd 中 openfeign url 指向 127.0.0.1:48087/48088。
+# 本地联调 override：system/infra 的宿主端口映射（供本地 bidding 的 Feign 直连调用）。
+#
+# 用法（在 txgycloud/deploy 目录执行；项目名须与在跑的栈一致＝deploy，勿再加 -p）：
+#   docker compose -f docker-compose.yml -f ../txgy-module-bidding/deploy-bidding-local.override.yml up -d system infra
+#
+# 配合：本地 bidding 的 openfeign url 指向 127.0.0.1:48087（system）/ 127.0.0.1:48088（infra）
+#       —— 见 txgy-module-bidding-server/src/main/resources/application-local.yaml 或 run-local.cmd。
+#
+# 2026-09-11 调整说明：命名空间统一为 dev（bidding 与 gateway/system/infra/report 全部一致），
+#   因此**去掉**了原先把 gateway/system/infra 置空(=public)的 environment 覆盖——
+#   若把这三者挪去 public，网关就看不到仍留在 dev 的 report 等其它服务，反而破坏路由。
 services:
   nacos:
     # 2026-09-11 实测：Nacos 3.x 镜像默认堆较大（-Xmx2g），而本机给容器的 cgroup 限额只有 768MB，
@@ -11,19 +19,9 @@ services:
       JVM_XMS: 256m
       JVM_XMX: 512m
       JVM_XMN: 128m
-  gateway:
-    environment:
-      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
-      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
   system:
     ports:
       - "48087:48080"
-    environment:
-      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
-      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
   infra:
     ports:
       - "48088:48080"
-    environment:
-      SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ""
-      SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ""
