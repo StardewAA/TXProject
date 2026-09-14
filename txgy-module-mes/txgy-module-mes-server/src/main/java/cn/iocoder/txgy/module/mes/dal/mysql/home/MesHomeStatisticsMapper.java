@@ -152,6 +152,38 @@ public interface MesHomeStatisticsMapper {
                                             @Param("endTime") LocalDateTime endTime);
 
     /**
+     * 统计近 N 天完成的工单交付情况（按完成时间）
+     *
+     * @return { "totalCount": 12, "onTimeCount": 8, "overdueCount": 4, "avgOverdueDays": 4.5 }
+     */
+    Map<String, Object> selectDeliverySummary(@Param("beginTime") LocalDateTime beginTime,
+                                              @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * 统计在制超期工单数（已过需求日期但尚未完成）
+     *
+     * @return 在制超期工单数
+     */
+    Long selectOverdueOpenCount();
+
+    /**
+     * 统计近 N 天报工汇总（按报工人维度，排除草稿）
+     *
+     * @return { "userCount": 3, "totalQuantity": 1596, "qualifiedQuantity": 1480 }
+     */
+    Map<String, Object> selectFeedbackUserSummary(@Param("beginTime") LocalDateTime beginTime,
+                                                  @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * 统计近 N 天报工人产出 TOP N（按合格品数量降序）
+     *
+     * @return [ { "feedbackUserId": 1, "recordCount": 9, "qualifiedQuantity": 1500 } ]
+     */
+    List<Map<String, Object>> selectFeedbackUserTopList(@Param("beginTime") LocalDateTime beginTime,
+                                                        @Param("endTime") LocalDateTime endTime,
+                                                        @Param("limit") Integer limit);
+
+    /**
      * 统计缺陷 TOP N（近 N 天，按缺陷描述聚合数量）
      *
      * @return [ { "name": "焊缝气孔", "quantity": 42 } ]

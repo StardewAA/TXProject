@@ -6,6 +6,8 @@ import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonLevelStat
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeAndonReasonStatRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeCheckMaintenRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDefectAnalysisRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeDeliveryAnalysisRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeFeedbackUserRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeMachineryStatusRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeProductionTrendRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.home.vo.MesHomeQcPassRateRespVO;
@@ -19,6 +21,8 @@ import cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProAndonLevelEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcTypeEnum;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +32,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * MES 首页统计 Service 实现类
@@ -42,8 +47,16 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
      */
     private static final int DEFECT_TOP_LIMIT = 5;
 
+    /**
+     * 报工人产出 TOP 统计条数
+     */
+    private static final int FEEDBACK_USER_TOP_LIMIT = 5;
+
     @Resource
     private MesHomeStatisticsMapper homeStatisticsMapper;
+
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Override
     public MesHomeSummaryRespVO getHomeSummary() {
@@ -345,6 +358,65 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
                 getLong(summary, "minorQuantity"), topList);
     }
 
+    @Override
+    public MesHomeDeliveryAnalysisRespVO getDeliveryAnalysis(Integer days) {
+        // 1. 时间范围
+        LocalDate endDate = LocalDate.now().plusDays(1);
+        LocalDateTime endTime = endDate.atStartOfDay();
+        LocalDateTime beginTime = endDate.minusDays(days).atStartOfDay();
+
+        // 2. 近 N 天完成的工单交付情况 + 在制超期数
+        Map<String, Object> summary = homeStatisticsMapper.selectDeliverySummary(beginTime, endTime);
+        Long overdueOpenCount = homeStatisticsMapper.selectOverdueOpenCount();
+
+        // 3. 组装 + 计算按期完成率
+        long total = getLong(summary, "totalCount");
+        long onTime = getLong(summary, "onTimeCount");
+        Object avgOverdueDays = summary == null ? null : summary.get("avgOverdueDays");
+        return new MesHomeDeliveryAnalysisRespVO(
+                total, onTime, getLong(summary, "overdueCount"),
+                calcRate(BigDecimal.valueOf(onTime), BigDecimal.valueOf(total)),
+                overdueOpenCount == null ? 0L : overdueOpenCount,
+                avgOverdueDays == null ? BigDecimal.ZERO
+                        : new BigDecimal(avgOverdueDays.toString()).setScale(1, RoundingMode.HALF_UP));
+    }
+
+    @Override
+    public MesHomeFeedbackUserRespVO getFeedbackUserAnalysis(Integer days) {
+        // 1. 时间范围
+        LocalDate endDate = LocalDate.now().plusDays(1);
+        LocalDateTime endTime = endDate.atStartOfDay();
+        LocalDateTime beginTime = endDate.minusDays(days).atStartOfDay();
+
+        // 2. 报工汇总 + 报工人产出 TOP N
+        Map<String, Object> summary = homeStatisticsMapper.selectFeedbackUserSummary(beginTime, endTime);
+        List<Map<String, Object>> topRows = homeStatisticsMapper.selectFeedbackUserTopList(beginTime, endTime,
+                FEEDBACK_USER_TOP_LIMIT);
+
+        // 3. 批量获取报工人昵称
+        Set<Long> userIds = topRows.stream()
+                .map(row -> ((Number) row.get("feedbackUserId")).longValue())
+                .collect(Collectors.toSet());
+        Map<Long, AdminUserRespDTO> userMap = userIds.isEmpty() ? Collections.emptyMap()
+                : adminUserApi.getUserMap(userIds);
+
+        // 4. 组装 TOP 列表
+        List<MesHomeFeedbackUserRespVO.UserItem> topList = new ArrayList<>();
+        for (Map<String, Object> row : topRows) {
+            long userId = ((Number) row.get("feedbackUserId")).longValue();
+            AdminUserRespDTO user = userMap.get(userId);
+            topList.add(new MesHomeFeedbackUserRespVO.UserItem(
+                    userId, user == null ? String.valueOf(userId) : user.getNickname(),
+                    getLong(row, "recordCount"), toBigDecimal(row.get("qualifiedQuantity"))));
+        }
+
+        // 5. 组装汇总 + 计算合格率
+        BigDecimal totalQuantity = toBigDecimal(summary == null ? null : summary.get("totalQuantity"));
+        BigDecimal qualifiedQuantity = toBigDecimal(summary == null ? null : summary.get("qualifiedQuantity"));
+        return new MesHomeFeedbackUserRespVO(getLong(summary, "userCount"), totalQuantity, qualifiedQuantity,
+                calcRate(qualifiedQuantity, totalQuantity), topList);
+    }
+
     // ========== 工具方法 ==========
 
     /**
@@ -355,6 +427,16 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
             return 0L;
         }
         return ((Number) map.get(key)).longValue();
+    }
+
+    /**
+     * 从查询结果中提取 BigDecimal 值，为空时返回 0
+     */
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal(value.toString());
     }
 
     /**

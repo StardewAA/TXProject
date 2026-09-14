@@ -156,6 +156,12 @@ public class MesProFeedbackDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 流程实例编号
+     *
+     * 接入 BPM 审批后，提交报工时发起流程实例并回填编号
+     */
+    private String processInstanceId;
+    /**
      * 备注
      */
     private String remark;
