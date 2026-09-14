@@ -103,6 +103,15 @@ export const HrmRecruitCandidateEducation = {
   DOCTOR: 7, // 博士
 } as const;
 
+export const HrmRecruitCandidateEducationOptions = [
+  { label: '学历不限', value: 1 },
+  { label: '高中及以上', value: 2 },
+  { label: '大专及以上', value: 3 },
+  { label: '本科及以上', value: 4 },
+  { label: '硕士及以上', value: 5 },
+  { label: '博士', value: 6 },
+] as const;
+
 /** 招聘面试方式枚举（对齐后端字典 hrm_recruit_interview_type） */
 export const HrmRecruitInterviewType = {
   ONSITE: 1, // 现场面试

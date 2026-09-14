@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitApplicationStatusReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
@@ -124,6 +125,10 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         // 3. 更新候选人的面试状态和轮次
         recruitCandidateService.updateRecruitCandidateInterview(
                 recruitInterview.getCandidateId(), recruitInterview.getStageNumber());
+        if (recruitInterview.getApplicationId() != null) {
+            recruitApplicationService.enterInterview(new HrmRecruitApplicationStatusReqVO()
+                    .setId(recruitInterview.getApplicationId()));
+        }
 
         // 4. 通知面试官
         sendRecruitInterviewArrangedMessage(recruitCandidate, recruitInterview);

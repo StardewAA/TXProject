@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useUserStore } from '@vben/stores';
 
+import txgyLogo from '#/assets/imgs/txgy-logo.png';
 import { useAuthStore } from '#/store';
 
 const router = useRouter();
@@ -13,7 +14,7 @@ const authStore = useAuthStore();
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
-  { label: '招聘应聘', path: '/portal/recruit' },
+  { label: '我要找工作', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
   { label: '个人中心', path: '/portal/profile' },
@@ -21,6 +22,9 @@ const navItems = [
 
 const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
+);
+const isRecruitPortal = computed(() =>
+  route.path.startsWith('/portal/recruit') || route.path.startsWith('/portal/profile/recruit'),
 );
 
 function isActive(path: string) {
@@ -33,10 +37,10 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="portal-shell">
+  <div :class="{ 'portal-shell--recruit': isRecruitPortal }" class="portal-shell">
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
-        <span class="portal-brand-mark">防</span>
+        <img :src="txgyLogo" alt="天信管业" class="portal-brand-logo" />
         <span>防腐保温智慧平台</span>
       </div>
 
@@ -60,7 +64,7 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="portal-main" :class="{ 'portal-main--training': route.path.startsWith('/portal/training') }">
+    <main class="portal-main" :class="{ 'portal-main--training': route.path.startsWith('/portal/training'), 'portal-main--recruit': isRecruitPortal }">
       <RouterView />
     </main>
 
@@ -70,9 +74,14 @@ async function handleLogout() {
 
 <style scoped>
 .portal-shell {
+  position: relative;
   min-height: 100vh;
   background: #f4f6f8;
   color: #1f2937;
+}
+
+.portal-shell--recruit {
+  background: #f4f6f8;
 }
 
 .portal-header {
@@ -96,17 +105,10 @@ async function handleLogout() {
   font-weight: 650;
 }
 
-.portal-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 700;
+.portal-brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .portal-nav {
@@ -131,7 +133,7 @@ async function handleLogout() {
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: #1d4ed8;
+  color: #d86616;
 }
 
 .portal-nav button.active::after {
@@ -140,7 +142,7 @@ async function handleLogout() {
   bottom: 0;
   left: 14px;
   height: 2px;
-  background: #2563eb;
+  background: linear-gradient(90deg, #ef8b35, #d86616);
   content: '';
 }
 
@@ -182,6 +184,19 @@ async function handleLogout() {
   margin-right: 32px;
   margin-left: 32px;
   padding-top: 32px;
+}
+
+.portal-main--recruit { position: relative; }
+
+.portal-shell--recruit :deep(.ant-btn-primary) {
+  border-color: #d86616;
+  background: linear-gradient(135deg, #ef8b35, #d86616);
+  box-shadow: 0 6px 14px rgb(216 102 22 / 18%);
+}
+
+.portal-shell--recruit :deep(.ant-btn-primary:hover) {
+  border-color: #b94e13;
+  background: linear-gradient(135deg, #d86616, #b94e13);
 }
 
 .portal-footer {

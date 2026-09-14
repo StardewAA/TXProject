@@ -57,7 +57,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       throw new Error('Refresh token is null!');
     }
     const resp = await refreshTokenApi(refreshToken);
-    const newToken = resp?.data?.data?.accessToken;
+    const newToken = resp?.data?.data?.accessToken ?? resp?.data?.accessToken;
     // add by 芋艿：这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中，刷新令牌失败！！！
     if (!newToken) {
       throw resp.data;

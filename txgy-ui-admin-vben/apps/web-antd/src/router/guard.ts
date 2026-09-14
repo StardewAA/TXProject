@@ -3,12 +3,13 @@ import type { Router } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
 import { $t } from '@vben/locales';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useDictStore, useUserStore } from '@vben/stores';
+import { resetAllStores, useAccessStore, useDictStore, useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 
 import { getSimpleDictDataList } from '#/api/system/dict/data';
+import { getRecruitProfileResume } from '#/api/hrm/portal/resume';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
@@ -55,6 +56,11 @@ function setupAccessGuard(router: Router) {
     const authStore = useAuthStore();
     const dictStore = useDictStore();
 
+    if (to.path === LOGIN_PATH || to.path === '/auth/register') {
+      resetAllStores();
+      return true;
+    }
+
     // 员工端门户是静态路由，但仍必须登录后才能访问。
     if (to.path === '/portal' || to.path.startsWith('/portal/')) {
       if (!accessStore.accessToken) {
@@ -64,18 +70,30 @@ function setupAccessGuard(router: Router) {
           replace: true,
         };
       }
+      if (
+        to.path.startsWith('/portal/recruit') &&
+        to.path !== '/portal/recruit/profile-setup' &&
+        to.query.section !== 'resume' &&
+        to.query.edit !== '1'
+      ) {
+        try {
+          const profile = await getRecruitProfileResume();
+          if (!profile) {
+            return {
+              path: '/portal/recruit/profile-setup',
+              query: { redirect: to.fullPath },
+              replace: true,
+            };
+          }
+        } catch (error) {
+          console.warn('[RecruitProfileGuard] 检查求职资料失败', error);
+        }
+      }
       return true;
     }
 
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
-      if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
-        );
-      }
       return true;
     }
 
@@ -108,7 +126,9 @@ function setupAccessGuard(router: Router) {
     }
 
     // 加载字典数据（不阻塞加载）
-    dictStore.setDictCacheByApi(getSimpleDictDataList);
+    void dictStore.setDictCacheByApi(getSimpleDictDataList).catch((error) => {
+      console.warn('加载字典失败', error);
+    });
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表
