@@ -5,12 +5,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { IconifyIcon } from '@vben/icons';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { message } from 'ant-design-vue';
+import { Modal as AntModal, message } from 'ant-design-vue';
 
 import {
   createPortalRecruitApplication,
+  acceptPortalRecruitOffer,
   getPortalRecruitApplicationPage,
   getPortalRecruitPost,
+  rejectPortalRecruitOffer,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
 import {
@@ -69,6 +71,7 @@ const ignoredConversationIds = ref<number[]>([]);
 const removedConversationIds = ref<number[]>([]);
 const conversationRemarks = ref<Record<number, string>>({});
 const interviewFilterLoaded = ref(false);
+const offersByPostId = ref<Record<number, HrmPortalRecruitApi.Offer & { applicationId: number }>>({});
 const conversationPane = ref<HTMLElement>();
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let selectionRequestId = 0;
@@ -159,6 +162,38 @@ function applicationStatusLabel(item?: HrmPortalRecruitChatApi.Conversation) {
   if (item?.applicationStatus === 'SUBMITTED') return '已投递';
   if (item?.applicationStatus === 'READY_TO_SUBMIT') return '待投递';
   return '';
+}
+
+function offerForConversation(item?: HrmPortalRecruitChatApi.Conversation) {
+  return item?.postId ? offersByPostId.value[item.postId] : undefined;
+}
+
+async function acceptOffer(item: HrmPortalRecruitChatApi.Conversation) {
+  const offer = offerForConversation(item);
+  if (!offer) return;
+  await acceptPortalRecruitOffer(offer.id);
+  message.success('Offer 已接受，已进入待入职');
+  await loadConversations(item.id);
+  interviewFilterLoaded.value = false;
+  await loadInterviewPostIds();
+}
+
+function rejectOffer(item: HrmPortalRecruitChatApi.Conversation) {
+  const offer = offerForConversation(item);
+  if (!offer) return;
+  AntModal.confirm({
+    title: '确认拒绝 Offer？',
+    content: '拒绝后本次应聘流程将结束。',
+    okText: '确认拒绝',
+    cancelText: '取消',
+    onOk: async () => {
+      await rejectPortalRecruitOffer(offer.id, '求职者拒绝 Offer');
+      message.success('Offer 已拒绝');
+      await loadConversations(item.id);
+      interviewFilterLoaded.value = false;
+      await loadInterviewPostIds();
+    },
+  });
 }
 
 function formatSalary(item?: HrmPortalRecruitChatApi.Conversation) {
@@ -403,6 +438,13 @@ async function loadInterviewPostIds() {
     interviewPostIds.value = (result.list || [])
       .filter((item) => item.interviews?.length)
       .map((item) => item.postId);
+    const offers: Record<number, HrmPortalRecruitApi.Offer & { applicationId: number }> = {};
+    (result.list || []).forEach((item) => {
+      if (item.offer && item.postId) {
+        offers[item.postId] = { ...item.offer, applicationId: item.id };
+      }
+    });
+    offersByPostId.value = offers;
     interviewFilterLoaded.value = true;
   } catch {
     interviewPostIds.value = [];
@@ -933,6 +975,18 @@ onUnmounted(() => {
           <strong>{{ formatSalary(activeConversation) }}</strong>
           <span>{{ activeConversation.areaName || '地点待确认' }}</span>
           <button class="job-view-button" type="button" @click="viewPost">查看职位 ›</button>
+        </div>
+        <div v-if="offerForConversation(activeConversation)" class="offer-card">
+          <div>
+            <strong>招聘 Offer</strong>
+            <span>{{ offerForConversation(activeConversation)?.offerNo || '待确认' }}</span>
+          </div>
+          <small>请在有效期内确认 Offer，接受后进入待入职。</small>
+          <div v-if="offerForConversation(activeConversation)?.approvalStatus === 'SENT'" class="offer-actions">
+            <button type="button" @click="acceptOffer(activeConversation)">接受 Offer</button>
+            <button type="button" class="reject" @click="rejectOffer(activeConversation)">拒绝 Offer</button>
+          </div>
+          <span v-else class="offer-state">已处理</span>
         </div>
         <div v-if="activeConversation.status === 0" class="chat-hint">
           {{ activeConversation.hrSide ? '等待求职者主动发起沟通。' : '请先发送消息，主动发起沟通。' }}
@@ -1474,6 +1528,45 @@ onUnmounted(() => {
 
 .job-strip .job-view-button {
   margin-left: auto;
+}
+
+.offer-card {
+  display: grid;
+  gap: 8px;
+  margin: 0 18px;
+  padding: 14px 18px;
+  border: 1px solid #f2c28f;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff8ef, #fff1df);
+  color: #7c4a21;
+}
+
+.offer-card > div:first-child,
+.offer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.offer-card > div:first-child span,
+.offer-card small,
+.offer-state {
+  color: #9a6b45;
+}
+
+.offer-actions button {
+  padding: 6px 12px;
+  border: 1px solid #d86616;
+  border-radius: 6px;
+  background: #e87522;
+  color: #fff;
+  cursor: pointer;
+}
+
+.offer-actions button.reject {
+  border-color: #ddb08a;
+  background: #fff;
+  color: #a45c2a;
 }
 
 .conversation {

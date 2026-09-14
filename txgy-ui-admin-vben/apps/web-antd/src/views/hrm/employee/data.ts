@@ -335,6 +335,7 @@ export function useImportFormSchema(): VbenFormSchema[] {
 
 /** 默认员工表单数据 */
 export function createDefaultEmployeeFormData(): HrmEmployeeApi.Employee {
+  const now = Date.now();
   return {
     name: '',
     jobNumber: '',
@@ -344,6 +345,8 @@ export function createDefaultEmployeeFormData(): HrmEmployeeApi.Employee {
     entryStatus: HrmEmployeeEntryStatus.ACTIVE,
     type: HrmEmployeeType.FORMAL,
     probation: HRM_EMPLOYEE_NO_PROBATION_MONTHS,
+    entryTime: now,
+    companyAgeStartTime: now,
   };
 }
 
@@ -981,6 +984,7 @@ export function useEmployeeEntryFormSchema(
       label: '入职时间',
       component: 'DatePicker',
       rules: 'required',
+      defaultValue: String(Date.now()),
       componentProps: {
         showTime: true,
         format: 'YYYY-MM-DD HH:mm:ss',

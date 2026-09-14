@@ -82,7 +82,8 @@ $hrmRecruitmentScripts = @(
     (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat-qualify.sql'),
     (Join-Path $rootDir 'sql\2026-09-12-hrm-recruit-chat-menu.sql'),
     (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-start-status.sql'),
-    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-delete.sql')
+    (Join-Path $rootDir 'sql\2026-09-13-hrm-recruit-chat-delete.sql'),
+    (Join-Path $rootDir 'sql\2026-09-14-hrm-hide-employee-recruit-menu.sql')
 )
 foreach ($hrmSql in $hrmRecruitmentScripts) {
     if (Test-Path -LiteralPath $hrmSql) {

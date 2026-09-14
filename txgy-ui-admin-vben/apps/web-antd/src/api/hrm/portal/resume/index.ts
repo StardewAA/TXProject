@@ -52,6 +52,16 @@ export function getRecruitProfileResume() {
   );
 }
 
+export function isRecruitProfileComplete(resume?: HrmPortalResumeApi.Resume) {
+  if (!resume?.content) return false;
+  try {
+    const profile = JSON.parse(resume.content) as { completedAt?: unknown };
+    return Boolean(profile && typeof profile === 'object' && profile.completedAt);
+  } catch {
+    return false;
+  }
+}
+
 export function parseRecruitProfileName(content?: string) {
   if (!content) return '';
   try {
