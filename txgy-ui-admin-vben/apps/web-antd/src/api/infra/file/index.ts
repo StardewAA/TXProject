@@ -33,6 +33,13 @@ export namespace InfraFileApi {
   }
 }
 
+/** 获得文件（含 url，用于前端预览/下载；权限 infra:file:query） */
+export function getFile(id: number | string) {
+  return requestClient.get<InfraFileApi.File>('/infra/file/get', {
+    params: { id },
+  });
+}
+
 /** 查询文件列表 */
 export function getFilePage(params: PageParam) {
   return requestClient.get<PageResult<InfraFileApi.File>>('/infra/file/page', {
