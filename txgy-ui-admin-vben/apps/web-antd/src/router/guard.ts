@@ -9,7 +9,6 @@ import { startProgress, stopProgress } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { getSimpleDictDataList } from '#/api/system/dict/data';
-import { getRecruitProfileResume } from '#/api/hrm/portal/resume';
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
@@ -69,25 +68,6 @@ function setupAccessGuard(router: Router) {
           query: { redirect: encodeURIComponent(to.fullPath) },
           replace: true,
         };
-      }
-      if (
-        to.path.startsWith('/portal/recruit') &&
-        to.path !== '/portal/recruit/profile-setup' &&
-        to.query.section !== 'resume' &&
-        to.query.edit !== '1'
-      ) {
-        try {
-          const profile = await getRecruitProfileResume();
-          if (!profile) {
-            return {
-              path: '/portal/recruit/profile-setup',
-              query: { redirect: to.fullPath },
-              replace: true,
-            };
-          }
-        } catch (error) {
-          console.warn('[RecruitProfileGuard] 检查求职资料失败', error);
-        }
       }
       return true;
     }

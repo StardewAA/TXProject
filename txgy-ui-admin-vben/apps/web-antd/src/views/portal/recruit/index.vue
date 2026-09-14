@@ -12,13 +12,19 @@ import {
   getPortalRecruitPostTypeList,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
-import { getRecruitProfileName } from '#/api/hrm/portal/resume';
+import {
+  getRecruitProfileName,
+  getRecruitProfileResume,
+  isRecruitProfileComplete,
+  parseRecruitProfileName,
+} from '#/api/hrm/portal/resume';
 import { AreaCascader } from '#/components/area';
 
 import RecruitProfile from '../profile/recruit.vue';
 import CompanyDirectory from './components/company-directory.vue';
 import Messages from './messages.vue';
 import OnlineResume from './online-resume.vue';
+import RecruitProfileSetup from './profile-setup.vue';
 
 const loading = ref(false);
 const posts = ref<HrmPortalRecruitApi.Post[]>([]);
@@ -45,6 +51,16 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const profileDisplayName = ref('');
+const profileChecked = ref(false);
+const profileCompleted = ref(true);
+const profileSetupOpen = ref(false);
+type ProfileAction = {
+  favoritePostId?: number;
+  postId?: string;
+  section?: 'messages' | 'resume' | 'user';
+};
+const pendingProfileAction = ref<ProfileAction>();
+let profileCheckPromise: Promise<boolean> | undefined;
 const navUserName = computed(() => {
   const name =
     profileDisplayName.value ||
@@ -58,9 +74,15 @@ const subnavScrolled = ref(false);
 const selectedHomeCategory = ref<'technology' | number>();
 
 const showAllPosts = computed(() => route.query.view === 'list');
+const requestedSection = computed<'companies' | 'home' | 'jobs' | 'messages' | 'resume' | 'user'>(() => {
+  const section = Array.isArray(route.query.section) ? route.query.section[0] : route.query.section;
+  if (section === 'companies' || section === 'jobs' || section === 'messages' || section === 'resume' || section === 'user') return section;
+  return 'home';
+});
 const activeSection = computed(() => {
-  const section = route.query.section;
-  return ['companies','jobs','messages','resume','user'].includes(String(section)) ? section : 'home';
+  if (!profileChecked.value) return 'home';
+  if (!profileCompleted.value && isProfileActionSection(requestedSection.value)) return 'home';
+  return requestedSection.value;
 });
 const previewPosts = computed(() => displayPosts.value.slice(0, 9));
 const homePreviewPosts = computed(() => {
@@ -187,11 +209,88 @@ function selectHomeCategory(category: 'technology' | number) {
   selectedHomeCategory.value = category;
 }
 
-function openChat(post: HrmPortalRecruitApi.Post) {
-  void router.push({
-    name: 'PortalRecruit',
-    query: { section: 'messages', postId: String(post.id) },
+function isProfileActionSection(section: string): section is 'messages' | 'resume' | 'user' {
+  return ['messages', 'resume', 'user'].includes(section);
+}
+
+async function checkRecruitProfile() {
+  if (profileChecked.value) return profileCompleted.value;
+  if (!profileCheckPromise) {
+    profileCheckPromise = getRecruitProfileResume()
+      .then((resume) => {
+        profileCompleted.value = isRecruitProfileComplete(resume);
+        const name = parseRecruitProfileName(resume?.content);
+        if (name) profileDisplayName.value = name;
+        return profileCompleted.value;
+      })
+      .catch((error) => {
+        console.warn('[PortalRecruit] 检查求职资料失败', error);
+        profileCompleted.value = true;
+        return true;
+      })
+      .finally(() => {
+        profileChecked.value = true;
+      });
+  }
+  return profileCheckPromise;
+}
+
+function applyFavorite(postId: number) {
+  favoritePostIds.value = favoritePostIds.value.includes(postId)
+    ? favoritePostIds.value.filter((id) => id !== postId)
+    : [...favoritePostIds.value, postId];
+  localStorage.setItem('portal-recruit-favorites', JSON.stringify(favoritePostIds.value));
+}
+
+function runPendingProfileAction() {
+  const action = pendingProfileAction.value;
+  pendingProfileAction.value = undefined;
+  if (!action) return;
+  if (action.favoritePostId != null) {
+    applyFavorite(action.favoritePostId);
+    return;
+  }
+  if (action.section) {
+    void router.push({
+      name: 'PortalRecruit',
+      query: {
+        section: action.section,
+        ...(action.postId ? { postId: action.postId } : {}),
+      },
+    });
+  }
+}
+
+async function requestProfileAction(action: ProfileAction) {
+  pendingProfileAction.value = action;
+  if (await checkRecruitProfile()) {
+    runPendingProfileAction();
+    return;
+  }
+  profileSetupOpen.value = true;
+}
+
+function handleProfileSetupCompleted() {
+  profileCompleted.value = true;
+  profileChecked.value = true;
+  profileSetupOpen.value = false;
+  void getRecruitProfileName().then((name) => {
+    if (name) profileDisplayName.value = name;
   });
+  runPendingProfileAction();
+}
+
+function cancelProfileSetup() {
+  profileSetupOpen.value = false;
+  pendingProfileAction.value = undefined;
+}
+
+function openGatedSection(section: 'messages' | 'resume' | 'user', postId?: string) {
+  void requestProfileAction({ section, postId });
+}
+
+function openChat(post: HrmPortalRecruitApi.Post) {
+  openGatedSection('messages', String(post.id));
 }
 
 function selectPost(post: HrmPortalRecruitApi.Post) {
@@ -203,10 +302,11 @@ function isFavorite(post: HrmPortalRecruitApi.Post) {
 }
 
 function toggleFavorite(post: HrmPortalRecruitApi.Post) {
-  favoritePostIds.value = isFavorite(post)
-    ? favoritePostIds.value.filter((id) => id !== post.id)
-    : [...favoritePostIds.value, post.id];
-  localStorage.setItem('portal-recruit-favorites', JSON.stringify(favoritePostIds.value));
+  if (profileChecked.value && profileCompleted.value) {
+    applyFavorite(post.id);
+    return;
+  }
+  void requestProfileAction({ favoritePostId: post.id });
 }
 
 function handleSearch() {
@@ -318,12 +418,14 @@ onMounted(async () => {
       .catch(() => {
         postTypes.value = [];
       }),
-    getRecruitProfileName()
-      .then((name) => {
-        if (name) profileDisplayName.value = name;
-      })
-      .catch(() => {}),
+    checkRecruitProfile(),
   ]);
+  const requestedProfileSection = requestedSection.value;
+  if (!profileCompleted.value && isProfileActionSection(requestedProfileSection) && !pendingProfileAction.value) {
+    const postId = Array.isArray(route.query.postId) ? route.query.postId[0] : route.query.postId;
+    pendingProfileAction.value = { section: requestedProfileSection, postId: postId || undefined };
+    profileSetupOpen.value = true;
+  }
 });
 
 onUnmounted(() => {
@@ -340,13 +442,24 @@ onUnmounted(() => {
       <button :class="{ active: activeSection === 'companies' }" type="button" @click="selectSection('companies')">公司</button>
       </div>
       <div class="recruit-nav-account">
-        <button type="button" @click="router.push({ name: 'PortalRecruit', query: { section: 'messages' } })"><IconifyIcon icon="lucide:bell" /> 消息</button>
-        <button type="button" @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历</button>
-        <button class="recruit-account-button" type="button" aria-label="打开我的应聘中心" @click="router.push({ name: 'PortalRecruit', query: { section: 'user' } })">
+        <button type="button" @click="openGatedSection('messages')"><IconifyIcon icon="lucide:bell" /> 消息</button>
+        <button type="button" @click="openGatedSection('resume')">在线简历</button>
+        <button class="recruit-account-button" type="button" aria-label="打开我的应聘中心" @click="openGatedSection('user')">
           <span class="recruit-account-name">{{ navUserName }}</span>
         </button>
       </div>
     </nav>
+
+    <a-modal
+      v-model:open="profileSetupOpen"
+      :footer="null"
+      :mask-closable="false"
+      width="1180px"
+      wrap-class-name="profile-setup-modal"
+      @cancel="cancelProfileSetup"
+    >
+      <RecruitProfileSetup :embedded="true" @completed="handleProfileSetupCompleted" />
+    </a-modal>
 
     <Messages v-if="activeSection === 'messages'" embedded />
     <OnlineResume v-else-if="activeSection === 'resume'" />
@@ -1559,4 +1672,116 @@ onUnmounted(() => {
 .company-meta-detail i { margin: 0 7px; color: #d7c8bb; font-style: normal; }
 .show-more-posts { width: 210px; height: 46px; border: 1px solid #f0c9a2; border-radius: 8px; background: linear-gradient(135deg, #fff7ed, #ffe9cf); color: #cc6a2a; font-size: 15px; }
 .show-more-posts:hover, .show-more-posts:focus-visible { border-color: #eeb37b; background: linear-gradient(135deg, #ffedda, #ffdfb9); color: #b9581d; }
+:global(.profile-setup-modal .ant-modal-content), :global(.profile-setup-modal .ant-modal-body) { background: #fff; }
+:global(.profile-setup-modal .ant-modal-content) { padding: 0; }
+:global(.profile-setup-modal .ant-modal-header) { background: #fff; }
+:global(.profile-setup-modal .ant-modal-close), :global(.profile-setup-modal .ant-modal-close .anticon) { color: #000 !important; }
+:global(.profile-setup-modal .ant-modal-close:hover), :global(.profile-setup-modal .ant-modal-close:focus-visible) { color: #000 !important; }
+
+.recruit-page {
+  --recruit-ink: #17343d;
+  --recruit-muted: #6a7d82;
+  --recruit-line: #dce8e7;
+  --recruit-accent: #c96632;
+  --recruit-accent-soft: #edf7f5;
+  gap: 18px;
+  padding-bottom: 24px;
+  background: radial-gradient(circle at 80% 3%, rgb(211 239 232 / 62%), transparent 26rem);
+}
+
+.recruit-subnav {
+  min-height: 60px;
+  border-color: rgb(220 232 231 / 90%);
+  background: rgb(255 255 255 / 90%);
+  box-shadow: 0 8px 24px rgb(23 52 61 / 8%);
+}
+
+.recruit-subnav button { height: 58px; color: #587178; font-weight: 600; }
+.recruit-subnav button:hover,
+.recruit-subnav button.active { color: var(--recruit-ink); }
+.recruit-subnav button.active::after { background: linear-gradient(90deg, #c96632, #e6a05b); }
+.recruit-nav-account button { color: #587178; }
+.recruit-nav-account button:hover { color: var(--recruit-accent); }
+
+.recruit-hero {
+  min-height: 290px;
+  padding: 48px 56px 34px;
+  border: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  background-color: #163a45;
+  background-image:
+    linear-gradient(120deg, rgb(19 55 65 / 98%), rgb(26 78 83 / 94%) 62%, rgb(201 102 50 / 88%)),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 5%) 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 4%) 0 1px, transparent 1px 42px);
+  box-shadow: 0 22px 44px rgb(23 52 61 / 18%);
+}
+
+.hero-copy h1 { max-width: 680px; color: #fff; font-size: clamp(34px, 4vw, 52px); letter-spacing: -.045em; }
+.eyebrow { color: #8de0d1; font-size: 14px; font-weight: 700; letter-spacing: .16em; }
+.hero-note { color: rgb(255 255 255 / 72%); }
+.hero-visual { opacity: .88; }
+.hero-orbit { border-color: rgb(141 224 209 / 42%); }
+.hero-profile-card,
+.hero-role-card { border-color: rgb(255 255 255 / 20%); background: rgb(255 255 255 / 14%); box-shadow: 0 16px 30px rgb(0 0 0 / 18%); backdrop-filter: blur(10px); }
+.hero-profile-card b, .hero-role-card b { color: #fff; }
+.hero-profile-card small, .hero-role-card span { color: rgb(255 255 255 / 68%); }
+.hero-avatar { background: #c96632; }
+.hero-profile-card i { color: #8de0d1; }
+.hero-search .ant-input-affix-wrapper { border: 0; box-shadow: 0 8px 20px rgb(0 0 0 / 12%); }
+.hero-search .ant-btn { border-color: #c96632; background: #c96632; box-shadow: 0 8px 18px rgb(0 0 0 / 16%); }
+.hero-search .ant-btn:hover { border-color: #df7c43; background: #df7c43; }
+.quick-searches { color: rgb(255 255 255 / 68%); }
+.quick-searches button { color: #dff8f3; background: rgb(255 255 255 / 12%); }
+.quick-searches button:hover, .quick-searches button:focus-visible { color: #17343d; background: #8de0d1; }
+
+.recruit-banner-grid { gap: 18px; }
+.banner-card { min-height: 204px; border-radius: 20px; box-shadow: 0 14px 30px rgb(23 52 61 / 9%); }
+.banner-primary { background: linear-gradient(120deg, #1b5560, #287c7c); }
+.banner-secondary { background: linear-gradient(120deg, #fff9ef, #f4e6d4); }
+.banner-card h2 { letter-spacing: -.035em; }
+.banner-card p { font-size: 15px; line-height: 1.6; }
+.banner-card button { transition: transform .18s ease, background-color .18s ease; }
+.banner-card button:hover { transform: translateY(-2px); }
+
+.home-jobs-heading { padding: 18px 0 20px; border-bottom-color: var(--recruit-line); }
+.home-jobs-heading h2 { color: var(--recruit-ink); font-size: 28px; }
+.home-job-categories { gap: 10px; }
+.home-job-categories button { border: 1px solid transparent; color: #6a7d82; background: transparent; }
+.home-job-categories button:hover, .home-job-categories button.active { border-color: #b9e2da; color: #16756f; background: #edf7f5; }
+
+.home-job-grid { gap: 18px; }
+.home-job-grid .post-card { min-height: 214px; border: 1px solid var(--recruit-line); border-radius: 16px; background: #fff; box-shadow: 0 8px 20px rgb(23 52 61 / 6%); }
+.home-job-grid .post-card:hover { border-color: #9ed4cc; box-shadow: 0 16px 30px rgb(23 52 61 / 11%); transform: translateY(-4px); }
+.home-job-grid .post-title { color: var(--recruit-ink); font-size: 18px; }
+.home-job-grid .post-salary-top { color: var(--recruit-accent); font-weight: 800; }
+.home-job-grid .post-tags span { border-radius: 999px; color: #5c777b; background: #f1f7f5; }
+.home-job-grid .post-card-actions { border-top-color: var(--recruit-line); background: #f7fbfa; }
+.company-meta-detail { color: #587178; }
+
+.service-section { padding-top: 24px; }
+.service-heading h2 { color: var(--recruit-ink); }
+.service-grid article { border-color: var(--recruit-line); border-radius: 16px; box-shadow: 0 6px 18px rgb(23 52 61 / 5%); }
+.service-grid article:hover { border-color: #9ed4cc; box-shadow: 0 14px 28px rgb(23 52 61 / 10%); }
+.service-icon { color: #16756f; background: #edf7f5; }
+.service-grid h3 { color: var(--recruit-ink); }
+.service-grid a { color: var(--recruit-accent); font-weight: 650; }
+
+.filter-panel,
+.search-result-list,
+.search-detail-card { border-color: var(--recruit-line); border-radius: 16px; box-shadow: 0 8px 22px rgb(23 52 61 / 6%); }
+.filter-heading { border-bottom-color: var(--recruit-line); }
+.section-kicker { color: #16756f; }
+.filter-heading strong, .search-result-heading strong, .search-detail-header h2 { color: var(--recruit-ink); }
+.search-post-card:hover, .search-post-card.selected { background: #edf7f5; }
+.search-post-topline b, .search-detail-actions strong { color: var(--recruit-accent); }
+.search-detail-actions .ant-btn-primary { border-color: var(--recruit-accent); background: var(--recruit-accent); }
+.search-detail-actions .ant-btn-primary:hover { border-color: #df7c43; background: #df7c43; }
+
+@media (max-width: 640px) {
+  .recruit-hero { min-height: 0; padding: 34px 22px 26px; border-radius: 18px; }
+  .hero-copy h1 { font-size: 34px; }
+  .recruit-banner-grid { gap: 12px; }
+  .banner-card { border-radius: 16px; }
+}
 </style>

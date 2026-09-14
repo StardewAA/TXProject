@@ -143,13 +143,13 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'PortalRecruitMessages',
         path: 'recruit/messages',
-        component: () => import('#/views/portal/recruit/messages.vue'),
+        redirect: { name: 'PortalRecruit', query: { section: 'messages' } },
         meta: { title: '招聘沟通', hideInMenu: true },
       },
       {
         name: 'PortalRecruitProfileSetup',
         path: 'recruit/profile-setup',
-        redirect: { name: 'PortalRecruit', query: { section: 'resume' } },
+        redirect: { name: 'PortalRecruit' },
         meta: { title: '在线简历', hideInMenu: true },
       },
       {

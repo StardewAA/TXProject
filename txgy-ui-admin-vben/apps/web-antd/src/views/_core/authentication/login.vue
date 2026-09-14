@@ -135,8 +135,13 @@ function resolveRedirectPath() {
   ) {
     const backendRedirect =
       redirect && !redirect.startsWith('/portal/') ? redirect : '';
+    const configuredHomePath = userInfo?.homePath;
+    const enterpriseHomePath =
+      configuredHomePath && !configuredHomePath.startsWith('/portal/')
+        ? configuredHomePath
+        : '';
     return (
-      backendRedirect || userInfo?.homePath || preferences.app.defaultHomePath
+      backendRedirect || enterpriseHomePath || preferences.app.defaultHomePath
     );
   }
 

@@ -181,3 +181,15 @@ export function withdrawPortalRecruitApplication(id: number, reason?: string) {
     { id, reason },
   );
 }
+
+export function acceptPortalRecruitOffer(id: number) {
+  return requestClient.put<boolean>('/hrm/portal/recruit/offer/accept', undefined, {
+    params: { id },
+  });
+}
+
+export function rejectPortalRecruitOffer(id: number, reason: string) {
+  return requestClient.put<boolean>('/hrm/portal/recruit/offer/reject', undefined, {
+    params: { id, reason },
+  });
+}

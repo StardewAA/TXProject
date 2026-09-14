@@ -10,7 +10,11 @@ public interface HrmRecruitOfferService {
     void submit(Long id);
     void approvalCallback(Long id, String processInstanceId, Integer approvalVersion, boolean approved);
     void withdraw(Long id);
+    void expire(Long id, String reason);
     void send(Long id);
     void confirm(Long id);
+    void acceptByCandidate(Long id, Long userId);
+    void rejectByCandidate(Long id, Long userId, String reason);
+    void expireOverdueOffers(Long applicantUserId);
     Long onboard(HrmRecruitOfferOnboardReqVO reqVO);
 }
