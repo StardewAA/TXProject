@@ -22,6 +22,9 @@ public class MesProTaskSaveReqVO {
     @Schema(description = "工作站编号", example = "1")
     private Long workstationId; // 编辑时，可不传递
 
+    @Schema(description = "所属班组编号（关联排班班组，打通排班与生产任务）", example = "1")
+    private Long teamId; // 编辑时，可不传递
+
     @Schema(description = "工艺路线编号", example = "1")
     private Long routeId; // 编辑时，可不传递
 
