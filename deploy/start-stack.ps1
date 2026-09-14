@@ -130,10 +130,16 @@ foreach ($layer in $LayerDefs) {
             Write-Host ("  {0,-18} already healthy" -f $name) -ForegroundColor DarkGray
             continue
         }
-        if ($s.Status -eq 'running') {
-            # running but unhealthy -- `docker start` would be a no-op, so restart instead
+        if ($s.Status -eq 'running' -and $s.Health -eq 'unhealthy') {
+            # the healthcheck is failing -- `docker start` would be a no-op, so restart instead
             $null = Invoke-Docker @('restart', $name)
-            Write-Host ("  {0,-18} was running/{1} -> restarted" -f $name, $s.Health) -ForegroundColor Yellow
+            Write-Host ("  {0,-18} was running/unhealthy -> restarted" -f $name) -ForegroundColor Yellow
+        }
+        elseif ($s.Status -eq 'running') {
+            # running and still inside its health start-period: `docker start` is a no-op and a
+            # restart would throw away a good boot. (Learned the hard way: this used to restart
+            # any container that was merely 'health: starting', e.g. right after a rebuild.)
+            Write-Host ("  {0,-18} is still starting -> waiting" -f $name) -ForegroundColor DarkGray
         }
         else {
             $null = Invoke-Docker @('start', $name)
