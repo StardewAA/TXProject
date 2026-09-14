@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectR
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
@@ -116,6 +117,13 @@ public class MesProProjectController {
     public CommonResult<MesProProjectStatisticsDetailRespVO> getProjectStatisticsDetail(
             @RequestParam("projectId") Long projectId) {
         return success(projectService.getProjectStatisticsDetail(projectId));
+    }
+
+    @GetMapping("/milestone-alerts")
+    @Operation(summary = "获得里程碑到期预警列表（未完成且 3 天内到期 / 已超期）")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:query')")
+    public CommonResult<List<MesProProjectMilestoneAlertRespVO>> getMilestoneAlerts() {
+        return success(projectService.getMilestoneAlerts());
     }
 
     @PutMapping("/refresh-status")

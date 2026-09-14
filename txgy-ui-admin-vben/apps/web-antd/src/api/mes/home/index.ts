@@ -16,6 +16,7 @@ export namespace MesHomeApi {
     machineryMaintenance: number; // 维护中设备数
     andonActiveCount: number; // 未处置安灯呼叫数
     repairActiveCount: number; // 待处理维修工单数
+    milestoneAlertCount: number; // 里程碑预警数（3 天内到期/已超期且未完成）
   }
 
   /** MES 工单状态分布 */

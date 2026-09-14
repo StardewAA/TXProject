@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskTeamLoadRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.unitmeasure.MesMdUnitMeasureDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.process.MesProProcessDO;
@@ -151,6 +152,11 @@ public class MesProTaskServiceImpl implements MesProTaskService {
             created++;
         }
         return created;
+    }
+
+    @Override
+    public List<MesProTaskTeamLoadRespVO> getTeamTaskLoad() {
+        return taskMapper.selectTeamTaskLoad();
     }
 
     @Override

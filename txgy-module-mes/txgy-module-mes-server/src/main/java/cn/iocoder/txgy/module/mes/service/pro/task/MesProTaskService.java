@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.mes.service.pro.task;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskTeamLoadRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.task.MesProTaskDO;
 import jakarta.validation.Valid;
 
@@ -38,6 +39,13 @@ public interface MesProTaskService {
      * @return 本次新生成的任务数量
      */
     Integer autoGenerateTasksByRoute(Long workOrderId);
+
+    /**
+     * 按班组聚合任务负载（任务数、排产数量、已生产数量）
+     *
+     * @return 各班组的任务负载列表
+     */
+    List<MesProTaskTeamLoadRespVO> getTeamTaskLoad();
 
     /**
      * 更新生产任务
