@@ -958,8 +958,8 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="record" tab="② 履历（培训·社保·劳动合同）">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="recordPersonId" :min="1" placeholder="员工 id（personId）" style="width: 190px" />
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="员工 id（personId）"><a-input-number v-model:value="recordPersonId" :min="1" placeholder="员工 id（personId）" style="width: 190px" /></AttrFilter>
             <a-button type="primary" @click="loadRecords">查询</a-button>
             <a-radio-group v-model:value="recordType" button-style="solid" @change="switchRecordType">
               <a-radio-button value="training">培训</a-radio-button>
@@ -1040,31 +1040,15 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="list" tab="③ 员工证书">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" />
-            <a-input-number v-model:value="query.entId" :min="1" placeholder="企业 ID" style="width: 130px" />
-            <a-select
-              v-model:value="query.certType"
-              :options="certTypeOptions"
-              placeholder="证书类型"
-              style="width: 180px"
-              allow-clear
-              show-search
-              option-filter-prop="label"
-            />
-            <a-select
-              v-model:value="query.certStatus"
-              :options="certStatusOptions"
-              placeholder="状态"
-              style="width: 140px"
-              allow-clear
-            />
-            <a-input v-model:value="query.certNo" placeholder="证书编号（精确）" style="width: 170px" allow-clear />
-            <a-input v-model:value="query.major" placeholder="专业（模糊）" style="width: 140px" allow-clear />
-            <a-input-number v-model:value="query.expiringDays" :min="1" placeholder="到期窗口(天)" style="width: 140px" />
-            <a-button type="primary" @click="load">查询</a-button>
-            <a-button @click="resetQuery">重置</a-button>
-            <a-button :loading="riskScanning" @click="scanPageRisk">本页风险体检</a-button>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="员工 ID"><a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" /></AttrFilter>
+            <AttrFilter label="企业 ID"><a-input-number v-model:value="query.entId" :min="1" placeholder="企业 ID" style="width: 130px" /></AttrFilter>
+            <AttrFilter v-model="query.certType" label="证书类型" :options="certTypeOptions" />
+            <AttrFilter v-model="query.certStatus" label="状态" :options="certStatusOptions" />
+            <AttrFilter label="证书编号（精确）"><a-input v-model:value="query.certNo" placeholder="证书编号（精确）" style="width: 170px" allow-clear /></AttrFilter>
+            <AttrFilter label="专业（模糊）"><a-input v-model:value="query.major" placeholder="专业（模糊）" style="width: 140px" allow-clear /></AttrFilter>
+            <AttrFilter label="到期窗口(天)"><a-input-number v-model:value="query.expiringDays" :min="1" placeholder="到期窗口(天)" style="width: 140px" /></AttrFilter>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button> <a-button :loading="riskScanning" @click="scanPageRisk">本页风险体检</a-button></div>
           </div>
           <div class="ct-panel-b">
             <a-table
@@ -1140,16 +1124,18 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="board" tab="④ 到期看板">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="boardEntId" :min="1" placeholder="企业 ID（空=全部）" style="width: 180px" />
-            <a-input-number
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="企业 ID（空=全部）"><a-input-number v-model:value="boardEntId" :min="1" placeholder="企业 ID（空=全部）" style="width: 180px" /></AttrFilter>
+            <AttrFilter label="到期窗口天数">
+<a-input-number
               v-model:value="boardDays"
               :min="1"
               :max="730"
               placeholder="到期窗口天数"
               style="width: 160px"
               @change="boardDaysTouched = true"
-            />
+/>
+</AttrFilter>
             <a-button type="primary" :loading="boardLoading" @click="loadBoard">刷新看板</a-button>
             <span class="ct-ml">
               窗口默认取配置 personnel.cert.expiring.window.days = {{ expiringDaysCfg }} 天
@@ -1203,17 +1189,9 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="abc" tab="⑤ 安许配备自查">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="countEntId" :min="1" placeholder="企业 ID（必填）" style="width: 180px" />
-            <a-select
-              v-model:value="countCertType"
-              :options="certTypeOptions"
-              placeholder="证书类型（如安许考核合格证）"
-              style="width: 260px"
-              allow-clear
-              show-search
-              option-filter-prop="label"
-            />
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="企业 ID（必填）"><a-input-number v-model:value="countEntId" :min="1" placeholder="企业 ID（必填）" style="width: 180px" /></AttrFilter>
+            <AttrFilter v-model="countCertType" label="证书类型（如安许考核合格证）" :options="certTypeOptions" />
             <a-button type="primary" :loading="counting" @click="runCount">统计可用持证人数</a-button>
             <span class="ct-ml">配备要求取自配置 safety.abc.required</span>
           </div>
@@ -1252,24 +1230,10 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="multi" tab="多岗兼任校验">
         <div class="ct-panel">
-          <div class="ct-filter">
-            <a-input-number v-model:value="multiForm.personId" :min="1" placeholder="员工 ID（必填）" style="width: 160px" />
-            <a-select
-              v-model:value="multiForm.primaryPost"
-              :options="roleOptions"
-              placeholder="主岗位"
-              style="width: 140px"
-              allow-clear
-              :disabled="roleOptions.length === 0"
-            />
-            <a-select
-              v-model:value="multiForm.secondaryPost"
-              :options="roleOptions"
-              placeholder="兼任岗位"
-              style="width: 140px"
-              allow-clear
-              :disabled="roleOptions.length === 0"
-            />
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="员工 ID（必填）"><a-input-number v-model:value="multiForm.personId" :min="1" placeholder="员工 ID（必填）" style="width: 160px" /></AttrFilter>
+            <AttrFilter v-model="multiForm.primaryPost" label="主岗位" :options="roleOptions" />
+            <AttrFilter v-model="multiForm.secondaryPost" label="兼任岗位" :options="roleOptions" />
             <a-button type="primary" :loading="multiChecking" @click="runMultiCheck">校验</a-button>
             <span class="ct-ml">岗位 code 取配置 safety.abc.roles；兼任须持对应考核合格证</span>
           </div>

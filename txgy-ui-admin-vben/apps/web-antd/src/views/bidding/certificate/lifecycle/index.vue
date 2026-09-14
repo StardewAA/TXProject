@@ -20,6 +20,7 @@ import {
 } from '#/api/bidding/certificate';
 
 import CopyText from '../../components/CopyText.vue';
+import AttrFilter from '../components/AttrFilter.vue';
 import { fmtDateTime } from '../format';
 import LifecycleApply from '../modules/lifecycle-apply.vue';
 import MaterialCheck from '../modules/material-check.vue';
@@ -284,33 +285,14 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
     />
 
     <div class="ct-panel">
-      <div class="ct-filter">
-        <a-select
-          v-model:value="query.bizDomain"
-          :options="domainFilters"
-          placeholder="对象域"
-          style="width: 160px"
-          allow-clear
-        />
-        <a-select
-          v-model:value="query.lifecycleType"
-          :options="typeFilters"
-          placeholder="流程类型"
-          style="width: 140px"
-          allow-clear
-        />
-        <a-select
-          v-model:value="query.status"
-          :options="statusFilters"
-          placeholder="流程状态"
-          style="width: 150px"
-          allow-clear
-        />
-        <a-input v-model:value="query.applyNo" placeholder="申请单号（精确）" style="width: 200px" allow-clear @press-enter="load" />
-        <a-input-number v-model:value="query.bizId" :min="1" placeholder="对象主键 bizId" style="width: 160px" />
-        <a-button type="primary" @click="load">查询</a-button>
-        <a-button @click="resetQuery">重置</a-button>
-      </div>
+      <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+        <AttrFilter v-model="query.bizDomain" label="对象域" :options="domainFilters" />
+        <AttrFilter v-model="query.lifecycleType" label="流程类型" :options="typeFilters" />
+        <AttrFilter v-model="query.status" label="流程状态" :options="statusFilters" />
+        <AttrFilter label="申请单号（精确）"><a-input v-model:value="query.applyNo" placeholder="申请单号（精确）" style="width: 200px" allow-clear @press-enter="load" /></AttrFilter>
+        <AttrFilter label="对象主键 bizId"><a-input-number v-model:value="query.bizId" :min="1" placeholder="对象主键 bizId" style="width: 160px" /></AttrFilter>
+            <div class="mt-2 flex flex-wrap items-center gap-2"><a-button type="primary" @click="load">查询</a-button> <a-button @click="resetQuery">重置</a-button></div>
+          </div>
       <div class="ct-panel-b">
         <a-table
           class="ct-table"
