@@ -17,7 +17,10 @@ public class ClassStudentImportRespVO {
     @Schema(description = "成功新增学员数（已在班自动跳过，不计入）", example = "18")
     private Integer successCount;
 
-    @Schema(description = "失败行（未匹配到系统账号等）")
+    @Schema(description = "自动创建的系统账号数（仅勾选自动建号时可能大于 0）", example = "0")
+    private Integer createdUserCount;
+
+    @Schema(description = "失败行（手机号为空/格式不正确/未找到系统账号等）")
     private List<FailRow> failRows;
 
     @Data
