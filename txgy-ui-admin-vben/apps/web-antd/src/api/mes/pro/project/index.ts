@@ -64,8 +64,23 @@ export namespace MesProProjectApi {
     confirmedCount?: number; // 已确认(进行中)工单数
     finishedCount?: number; // 已完成工单数
     canceledCount?: number; // 已取消工单数
+    issuedCount?: number; // 已下发工单数
+    inProductionCount?: number; // 生产中工单数
     quantityTotal?: number; // 生产数量合计
     quantityProducedTotal?: number; // 已完成生产数量合计
+    progress?: number; // 项目完成度百分比
+  }
+
+  /** MES 项目生产统计详情（工单进度 + 报工汇总） */
+  export interface ProjectStatisticsDetail extends ProjectStatistics {
+    feedbackTotal?: number; // 报工单总数
+    feedbackPrepareCount?: number; // 草稿报工单数
+    feedbackApprovingCount?: number; // 审核中报工单数
+    feedbackFinishedCount?: number; // 已完成报工单数
+    feedbackQuantityTotal?: number; // 报工数量合计
+    qualifiedQuantityTotal?: number; // 合格品数量合计
+    unqualifiedQuantityTotal?: number; // 不合格品数量合计
+    qualifyRate?: number; // 合格率百分比
   }
 }
 
@@ -108,6 +123,13 @@ export function exportProject(params: any) {
 export function getProjectStatistics(projectId: number) {
   return requestClient.get<MesProProjectApi.ProjectStatistics>(
     `/mes/pro/project/statistics?projectId=${projectId}`,
+  );
+}
+
+/** 获得项目的生产统计详情（工单进度 + 报工汇总） */
+export function getProjectStatisticsDetail(projectId: number) {
+  return requestClient.get<MesProProjectApi.ProjectStatisticsDetail>(
+    `/mes/pro/project/statistics-detail?projectId=${projectId}`,
   );
 }
 
