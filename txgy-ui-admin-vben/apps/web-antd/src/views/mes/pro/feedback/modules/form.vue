@@ -232,6 +232,7 @@ const [Modal, modalApi] = useVbenModal({
       formType.value === 'approve' || formType.value === 'detail',
     );
     modalApi.setState({
+      confirmText: '保存',
       showConfirmButton:
         formType.value !== 'detail' && formType.value !== 'approve',
     });

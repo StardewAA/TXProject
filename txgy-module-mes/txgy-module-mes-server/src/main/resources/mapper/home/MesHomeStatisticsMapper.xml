@@ -153,6 +153,59 @@
         GROUP BY status
     </select>
 
+    <!-- 统计近 N 天报工汇总（按报工人维度，排除草稿） -->
+    <select id="selectFeedbackUserSummary" resultType="java.util.Map">
+        SELECT COUNT(DISTINCT feedback_user_id) AS userCount,
+               IFNULL(SUM(feedback_quantity), 0) AS totalQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+    </select>
+
+    <!-- 统计近 N 天报工人产出 TOP N（按合格品数量降序） -->
+    <select id="selectFeedbackUserTopList" resultType="java.util.Map">
+        SELECT feedback_user_id AS feedbackUserId,
+               COUNT(*) AS recordCount,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+          AND feedback_user_id IS NOT NULL
+        GROUP BY feedback_user_id
+        ORDER BY qualifiedQuantity DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 统计近 N 天完成的工单交付情况（按完成时间，需求日期为交付基准） -->
+    <select id="selectDeliverySummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN request_date IS NULL OR finish_date &lt;= request_date THEN 1 ELSE 0 END), 0) AS onTimeCount,
+               IFNULL(SUM(CASE WHEN request_date IS NOT NULL AND finish_date &gt; request_date THEN 1 ELSE 0 END), 0) AS overdueCount,
+               IFNULL(AVG(CASE WHEN request_date IS NOT NULL AND finish_date &gt; request_date
+                                    THEN DATEDIFF(finish_date, request_date) END), 0) AS avgOverdueDays
+        FROM mes_pro_work_order
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@FINISHED.status}
+          AND finish_date &gt;= #{beginTime}
+          AND finish_date &lt; #{endTime}
+    </select>
+
+    <!-- 统计在制超期工单数（已过需求日期但尚未完成，用于交付风险预警） -->
+    <select id="selectOverdueOpenCount" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM mes_pro_work_order
+        WHERE deleted = 0
+          AND status NOT IN (${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@FINISHED.status},
+                            ${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@CANCELED.status})
+          AND request_date IS NOT NULL
+          AND request_date &lt; NOW()
+    </select>
+
     <!-- 统计缺陷数量汇总（近 N 天，按等级） -->
     <select id="selectDefectSummary" resultType="java.util.Map">
         SELECT COUNT(*) AS recordCount,
