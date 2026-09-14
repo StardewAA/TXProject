@@ -74,8 +74,6 @@ export function transcodeColor(status?: number) {
 export const TAG_DIMENSION_OPTIONS = [
   { label: '工种', value: 'work_type' },
   { label: '课程', value: 'course' },
-  { label: '安全', value: 'safety' },
-  { label: '工艺', value: 'process' },
 ] as const;
 
 /** 资源分类类型 */
