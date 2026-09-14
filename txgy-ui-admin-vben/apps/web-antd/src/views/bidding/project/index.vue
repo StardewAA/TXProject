@@ -21,6 +21,7 @@ import {
   type ProjectApi,
   saveProject,
   traceProject,
+  traceTenderProject,
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
@@ -198,6 +199,33 @@ async function openTrace(r: ProjectApi.Project) {
 }
 
 /** 数据集字段：只列出有值的项（null 表示该数据集未覆盖此字段） */
+/** 追溯层级由**后端出参**决定（ProjectTraceRespVO.queryType），前端不另设状态，避免两处口径打架 */
+const traceIsTender = computed(() => trace.value?.queryType === 'TENDER_PROJECT');
+/** 招标项目层的自身信息：从同一出参的 tenderProjects 里按 queryCode 取（无 queryCode 时取首条） */
+const tenderSelf = computed(() => {
+  const list = trace.value?.tenderProjects ?? [];
+  const code = trace.value?.queryCode ?? '';
+  return list.find((t) => (t.tenderProjectCode ?? '') === code) ?? list[0];
+});
+const traceTitle = computed(() =>
+  traceIsTender.value ? '招标项目全景追溯 · ' + (trace.value?.queryCode ?? '') : '项目全景追溯',
+);
+/** 招标项目本级追溯：招标项目 → 项目/标段 + 公告/外部公告/备案/关注/主体 + 统计（与项目级同一出参 VO） */
+async function openTenderTrace(tenderProjectCode: string): Promise<void> {
+  traceLoading.value = true;
+  try {
+    trace.value = await traceTenderProject(tenderProjectCode);
+  } catch {
+    // 静默：失败由请求层提示
+  } finally {
+    traceLoading.value = false;
+  }
+}
+/** 下钻后返回项目级追溯（用当前行重取，保持抽屉不关） */
+function backToProjectTrace(): void {
+  if (currentRow.value) void openTrace(currentRow.value);
+}
+
 const fieldEntries = computed(() => {
   const f = (trace.value?.project?.fields ?? currentRow.value?.fields ?? {}) as Record<string, unknown>;
   return Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '');
@@ -378,8 +406,11 @@ function confirmDelete(r: ProjectApi.Project) {
     </div>
 
     <!-- 追溯抽屉：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 -->
-    <a-drawer v-model:open="traceOpen" class="bid-ind" :width="1000" title="项目全景追溯" destroy-on-close>
+    <a-drawer v-model:open="traceOpen" class="bid-ind" :width="1000" :title="traceTitle" destroy-on-close>
       <a-spin :spinning="traceLoading">
+        <div v-if="traceIsTender" class="mb-2">
+          <a class="text-xs text-blue-600" @click="backToProjectTrace">‹ 返回项目级追溯</a>
+        </div>
         <template v-if="trace">
           <div class="ct-panel-meta mb-3">
             查询：{{ trace.queryCode || currentRow?.projectCode }}（{{ trace.queryType || 'PROJECT' }}）
@@ -398,8 +429,20 @@ function confirmDelete(r: ProjectApi.Project) {
             </a-descriptions-item>
           </a-descriptions>
 
-          <div class="ct-panel-t mb-2">项目基本信息</div>
-          <a-descriptions :column="2" size="small" bordered class="mb-3">
+          <template v-if="traceIsTender">
+            <div class="ct-panel-t mb-2">招标项目基本信息</div>
+            <a-descriptions :column="2" size="small" bordered class="mb-3">
+              <a-descriptions-item label="招标项目编号">{{ trace.queryCode || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="名称">{{ tenderSelf?.tenderProjectName || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="招标方式">{{ tenderSelf?.tenderMode || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="招标人">{{ tenderSelf?.tendererName || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="所属项目">{{ tenderSelf?.projectCode || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="管理态">{{ tenderSelf?.state || '—' }}</a-descriptions-item>
+            </a-descriptions>
+          </template>
+
+          <div v-if="!traceIsTender" class="ct-panel-t mb-2">项目基本信息</div>
+          <a-descriptions v-if="!traceIsTender" :column="2" size="small" bordered class="mb-3">
             <a-descriptions-item label="项目编号">{{ trace.project?.projectCode || '—' }}</a-descriptions-item>
             <a-descriptions-item label="项目名称">{{ trace.project?.projectName || '—' }}</a-descriptions-item>
             <a-descriptions-item label="地区编码">{{ trace.project?.regionCode || '—' }}</a-descriptions-item>
@@ -410,13 +453,13 @@ function confirmDelete(r: ProjectApi.Project) {
             <a-descriptions-item label="管理态">{{ trace.project?.state || '—' }}</a-descriptions-item>
           </a-descriptions>
 
-          <div class="ct-panel-t mb-2">数据集字段（ProjectVO）</div>
-          <a-descriptions v-if="fieldEntries.length" :column="2" size="small" bordered class="mb-3">
+          <div v-if="!traceIsTender" class="ct-panel-t mb-2">数据集字段（ProjectVO）</div>
+          <a-descriptions v-if="!traceIsTender && fieldEntries.length" :column="2" size="small" bordered class="mb-3">
             <a-descriptions-item v-for="[k, v] in fieldEntries" :key="k" :label="k">
               {{ typeof v === 'object' ? JSON.stringify(v) : v }}
             </a-descriptions-item>
           </a-descriptions>
-          <div v-else class="ct-tip mb-3">该记录未带数据集字段（fields 为空）</div>
+          <div v-else-if="!traceIsTender" class="ct-tip mb-3">该记录未带数据集字段（fields 为空）</div>
 
           <div class="ct-panel-t mb-2">关联招标项目（{{ trace.tenderProjects?.length ?? 0 }}）</div>
           <a-table
@@ -426,12 +469,18 @@ function confirmDelete(r: ProjectApi.Project) {
               { title: '名称', dataIndex: 'tenderProjectName', key: 'name' },
               { title: '招标方式', dataIndex: 'tenderMode', key: 'mode', width: 120 },
               { title: '招标人', dataIndex: 'tendererName', key: 'tenderer', width: 200 },
+              { title: '操作', key: 'op', width: 110 },
             ]"
             :data-source="trace.tenderProjects ?? []"
             :pagination="false"
             row-key="id"
             size="small"
           >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'op'">
+                <a class="text-xs text-blue-600" @click="openTenderTrace(record.tenderProjectCode)">本级追溯</a>
+              </template>
+            </template>
             <template #emptyText><div class="ct-empty">无关联招标项目</div></template>
           </a-table>
 

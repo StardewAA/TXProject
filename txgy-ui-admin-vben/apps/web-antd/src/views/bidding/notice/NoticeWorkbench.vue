@@ -30,7 +30,7 @@ import { Button, Drawer, Input, message, Modal, Radio, Select, Space, Switch, Ta
 
 import { NoticeApi } from '#/api/bidding/notice';
 import { createNotice, deleteNotice, fetchNoticeDetail, fetchNoticePage, fetchNoticeTypeMeta, publishNotice, reindexAllNotices, reindexNotices, syncNoticePublic, unpublishNotice, updateNotice } from '#/api/bidding/notice';
-import { getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
+import { getBidSectionByCode, getBidSectionPage, getTenderProjectPage, type ProjectApi } from '#/api/bidding/project';
 import { fetchSubjectProfile } from '#/api/bidding/subject';
 import { fmtDateTime } from '#/utils/datetime';
 import { fmtBytes } from '#/utils/format';
@@ -270,11 +270,28 @@ function bidSectionLabel(r: ProjectApi.BidSection): string {
   const name = r.bidSectionName ?? '';
   return code ? code + (name ? ' · ' + name : '') : name || '（未命名标段）';
 }
-/** 选招标项目：带 TENDER_PROJECT_CODE，并清掉不属于该项目的标段选择 */
-function applyTenderProject(code: string): void {
+/** 选招标项目：带 TENDER_PROJECT_CODE，并清掉不属于该项目的标段选择
+ *
+ * 2026-09-14 修正一处**会丢用户数据**的缺陷：原实现只在 `sections.value`（首屏 500 条）里判断归属，
+ * 于是"已选标段不在已加载页"时会被**静默剔除**（保存即丢）。现改为：不在列表内的编号先用
+ * `getBidSectionByCode` 逐个反查真实归属，再决定去留；查不到（已删除）才剔除。 */
+async function applyTenderProject(code: string): Promise<void> {
   const tp = tenderProjects.value.find((t) => (t.tenderProjectCode ?? '') === code);
+  const unknown = selectedSectionCodes.value.filter(
+    (sc) => !sections.value.some((s) => (s.bidSectionCode ?? '') === sc),
+  );
+  const resolved = await Promise.all(
+    unknown.map(async (sc) => {
+      try {
+        return await getBidSectionByCode(sc);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const pool = [...sections.value, ...resolved.filter((s): s is ProjectApi.BidSection => !!s)];
   const kept = selectedSectionCodes.value.filter((sc) =>
-    sections.value.some((s) => (s.bidSectionCode ?? '') === sc && (s.tenderProjectCode ?? '') === code),
+    pool.some((s) => (s.bidSectionCode ?? '') === sc && (s.tenderProjectCode ?? '') === code),
   );
   const next: Record<string, string> = { ...payloadValues.value, TENDER_PROJECT_CODE: code, BID_SECTION_CODES: kept.join(';') };
   if (kept.length) next.NOTICE_BID_NUM = String(kept.length);
