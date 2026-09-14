@@ -1,13 +1,7 @@
-export function fmtDt(v?: null | number | string): string {
-  if (v == null || v === '') return '—';
-  let d: Date;
-  if (typeof v === 'number') d = new Date(v);
-  else if (/^\d{13}$/.test(String(v).trim())) d = new Date(Number(v));
-  else d = new Date(String(v).replace(' ', 'T'));
-  if (Number.isNaN(+d)) return String(v);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
-}
+import { fmtDateTime } from '#/utils/datetime';
+
+/** 采集域时间展示：委托 utils/datetime 的唯一实现（口径 'YYYY-MM-DD HH:mm:ss' / 空值 '—'） */
+export const fmtDt = (v?: null | number | string): string => fmtDateTime(v, '—');
 
 export type TagOf = { color: string; text: string; };
 

@@ -33,7 +33,31 @@ import {
 } from '#/api/bidding/subject';
 import { requestClient } from '#/api/request';
 
+import { useCertMeta } from '../certificate/useCertMeta';
+import { eligibleReasonText } from '../subject/labels';
+import InfoCell from './modules/InfoCell.vue';
+import SpinWrap from './modules/SpinWrap.vue';
+
 const createMessage = message;
+
+/* ===== 主体类型文案与选项：**字典优先、SUBJECT_TYPE_LABEL 兜底** =====
+ * 用户硬约束「状态码、枚举值必须支持动态配置」——字典是主路径；兜底保证拿不到字典时仍是中文。
+ * 为什么选项要**过滤 AGENCY**：SubjectTypeEnum 注释写明 AGENCY 是"扩展位：本期未落地，预留枚举防止脏数据入库"，
+ * 放进授权下拉等于允许用户产出后端未支持的数据（前端不臆测未落地取值）；待后端确认落地后再放开。
+ * 说明：本页此前有三处硬编码（映射表、筛选下拉内联 option、授权单选内联 options），一并收口到这里。 */
+const { dictLabel, dictOptions } = useCertMeta();
+
+function subjectTypeLabel(v?: string) {
+  if (!v) return '';
+  const byDict = dictLabel('subject_type', v);
+  return byDict === v ? SubjectApi.SUBJECT_TYPE_LABEL[v] || v : byDict;
+}
+
+const subjectTypeOptions = computed(() => {
+  const byDict = dictOptions('subject_type').filter((o) => o.value !== 'AGENCY');
+  if (byDict.length > 0) return byDict;
+  return Object.entries(SubjectApi.SUBJECT_TYPE_LABEL).map(([value, label]) => ({ label, value }));
+});
 
 /* ============ 台账数据 ============
  * 业务：管理端展示已授权主体台账（契约 Task2「管理端应显示已授权的投标人」）。
@@ -132,7 +156,7 @@ function toggleStatus(row: SubjectApi.AuthRow, checked: boolean) {
   if (cur === target) return;
   Modal.confirm({
     title: checked ? '授权（核发主体资格）' : '撤销授权（不再具备资格）',
-    content: (checked ? '授权' : '撤销授权') + '「' + row.tenantName + '」（' + (SubjectApi.SUBJECT_TYPE_LABEL[row.subjectType || ''] || row.subjectType) + '）？' + (checked ? '授权后该企业可参与投标/招标（仍需档案完善）。' : '撤销后该企业不具备主体资格，发布/投标将被资格门拒绝（106_031）；留痕可查，可再次授权。'),
+    content: (checked ? '授权' : '撤销授权') + '「' + row.tenantName + '」（' + subjectTypeLabel(row.subjectType) + '）？' + (checked ? '授权后该企业可参与投标/招标（仍需档案完善）。' : '撤销后该企业不具备主体资格，发布/投标将被资格门拒绝（106_031）；留痕可查，可再次授权。'),
     okText: checked ? '授权' : '撤销授权',
     okButtonProps: checked ? {} : { danger: true },
     cancelText: '取消',
@@ -153,7 +177,6 @@ const elOpen = ref(false);
 const elLoading = ref(false);
 const elData = ref<SubjectApi.Eligibility>();
 const elRow = ref<SubjectApi.AuthRow>();
-const reasonLabel: Record<string, string> = { NOT_AUTHORIZED: '未授权', AUTH_DISABLED: '授权已撤销', PROFILE_MISSING: '档案缺失', PROFILE_INCOMPLETE: '档案不完善' };
 async function openEligibility(row: SubjectApi.AuthRow) {
   elRow.value = row;
   elData.value = undefined;
@@ -169,32 +192,6 @@ async function openEligibility(row: SubjectApi.AuthRow) {
 }
 
 onMounted(load);
-</script>
-
-<script lang="ts">
-/* 页面基础工具组件（Spin 包裹 + 键值信息格）：与法规/契约无涉，仅 UI 组装 */
-import { defineComponent, h } from 'vue';
-
-import { Spin } from 'ant-design-vue';
-
-const SpinWrap = defineComponent({
-  name: 'SpinWrap',
-  props: { loading: Boolean },
-  setup(props, { slots }) {
-    return () => h(Spin, { spinning: props.loading }, () => slots.default?.());
-  },
-});
-const InfoCell = defineComponent({
-  name: 'InfoCell',
-  props: { label: String, value: { type: String, default: '' } },
-  setup(props) {
-    return () => h('div', { class: 'rounded border border-border bg-muted/50 p-2' }, [
-      h('div', { class: 'text-muted-foreground' }, props.label),
-      h('div', { class: 'font-medium text-foreground' }, props.value || '—'),
-    ]);
-  },
-});
-export default { components: { SpinWrap, InfoCell } };
 </script>
 
 <template>
@@ -220,8 +217,9 @@ export default { components: { SpinWrap, InfoCell } };
 <!-- 筛选台：主体类型 / 授权状态 / 企业名；授权状态按“已授权 / 未授权（已撤销）”展示 -->
     <div class="ind-filterbar">
       <Select v-model:value="filters.subjectType" placeholder="主体类型" allow-clear style="width: 130px">
-        <Select.Option value="BIDDER">投标人</Select.Option>
-        <Select.Option value="TENDERER">招标人</Select.Option>
+        <Select.Option v-for="opt in subjectTypeOptions" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </Select.Option>
       </Select>
       <Select v-model:value="filters.authStatus" placeholder="授权状态" allow-clear style="width: 150px">
         <Select.Option value="ENABLED">已授权</Select.Option>
@@ -241,7 +239,7 @@ export default { components: { SpinWrap, InfoCell } };
           </template>
           <!-- 主体类型：投标人 BIDDER / 招标人 TENDERER（企业扮演的角色，一家企业可同时两种） -->
           <template v-else-if="column.key === 'type'">
-            <Tag color="blue">{{ SubjectApi.SUBJECT_TYPE_LABEL[record.subjectType] || record.subjectType }}</Tag>
+            <Tag color="blue">{{ subjectTypeLabel(record.subjectType) }}</Tag>
           </template>
           <!-- 授权状态 + 授权/撤销授权开关 -->
           <template v-else-if="column.key === 'authStatus'">
@@ -289,7 +287,7 @@ export default { components: { SpinWrap, InfoCell } };
         </div>
         <div>
           <div class="mb-1 text-xs font-medium text-muted-foreground">主体类型 *</div>
-          <Radio.Group v-model:value="authForm.subjectType" option-type="button" :options="[{ label: '投标人 BIDDER', value: 'BIDDER' }, { label: '招标人 TENDERER', value: 'TENDERER' }]" />
+          <Radio.Group v-model:value="authForm.subjectType" option-type="button" :options="subjectTypeOptions" />
         </div>
         <div>
           <div class="mb-1 text-xs font-medium text-muted-foreground">备注</div>
@@ -315,7 +313,7 @@ export default { components: { SpinWrap, InfoCell } };
             <InfoCell label="撤销时间" :value="fmtT(elData.disableTime)" />
           </div>
           <div v-if="elData.reasonCodes?.length" class="rounded border border-destructive/30 bg-destructive/10 p-2">
-            原因：{{ elData.reasonCodes.map((r) => reasonLabel[r] || r).join('、') }}
+            原因：{{ eligibleReasonText(elData.reasonCodes) }}
             <span v-if="elData.missingRequiredNames?.length" class="ml-2">缺失：{{ elData.missingRequiredNames.join('、') }}</span>
           </div>
           <div class="pt-1 text-muted-foreground/60">资格 = 平台授权（ENABLED） ∧ 档案必填齐（信息不完整无法参与投标/发布；关注与订阅不受影响）</div>

@@ -517,7 +517,7 @@ onMounted(() => {
           <Radio.Group v-model:value="actReviewResult" option-type="button" :options="[{ label: '审核通过', value: 'APPROVED' }, { label: '审核不通过', value: 'REJECTED' }]" />
         </div>
         <div v-if="actKind === 'upload'">
-          <div class="mb-1 text-xs font-medium text-muted-foreground">标书文件名 *（招标方未接入，先手动登记；FileApi 就绪后改上传）</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">标书文件名 *（本事件仅登记文件名，不含文件本体）</div>
           <Input v-model:value="actDocName" placeholder="如 XX 项目投标文件.pdf" />
         </div>
         <div>

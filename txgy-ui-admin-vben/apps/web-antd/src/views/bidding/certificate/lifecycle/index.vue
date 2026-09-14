@@ -2,7 +2,7 @@
 /* 证件全生命周期台账（契约 §6.2 审核 / §6.3 生效 / §6.4 详情 / §6.5 分页 + §7 材料完备性自查入口）
  * 状态机：PENDING → REVIEWING → APPROVED → EFFECTIVE（可 REJECTED）；**审核通过 ≠ 已生效**，故"生效"独立成动作。
  * 权限：bidding:certificate:lifecycle:{query,apply,audit}、bidding:qualification:material:query */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -19,6 +19,7 @@ import {
   getCertLifecyclePage,
 } from '#/api/bidding/certificate';
 
+import CopyText from '../../components/CopyText.vue';
 import { fmtDateTime } from '../format';
 import LifecycleApply from '../modules/lifecycle-apply.vue';
 import MaterialCheck from '../modules/material-check.vue';
@@ -97,7 +98,7 @@ function resetQuery() {
 onMounted(load);
 
 const columns = [
-  { title: '申请单号', dataIndex: 'applyNo', key: 'applyNo', width: 190 },
+  { title: '申请单号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '申请单号' }),  dataIndex: 'applyNo', key: 'applyNo', width: 190 },
   { title: '作用对象', dataIndex: 'refName', key: 'ref', width: 230 },
   { title: '类型', dataIndex: 'lifecycleType', key: 'lifecycleType', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 110 },

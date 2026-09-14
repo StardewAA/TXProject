@@ -1,7 +1,7 @@
 <!--
   任务“纵向数据链”调试视图（TaskChainView，无外壳纯内容，供 console 任务详情 / task 独立页 / job 页点任务复用）：
   业务：按任务 ID 展示一条采集/接入链路从“请求来源”到“落库结果”的全过程原始数据（调试用途）：
-        请求 URL → 获取方式(CRAWLER/API+下载器/接口配置) → 原始载荷黑块(payload_json，含列表原文/全文) →
+        请求 URL → 列表驱动方式(CRAWLER/API)+正文形态(HTML/PDF)+下载器/接口配置 → 原始载荷黑块(payload_json，含列表原文/全文) →
         解析/映射 → 执行记录/产出；每个原始数据块提供「复制」「全屏」与顶部下拉切换数据源（全屏完整预览）。
   理由：用户口径——详情不是横向铺字段，而是纵向链：上面原数据、下面直到结束；UI 只需方便展示数据 +
         一个下拉支持全屏完整预览，复杂筛选不需要（黑块即可，重点是能看见、能调试）。
@@ -21,9 +21,11 @@ import { Button, message, Modal, Select, Tag } from 'ant-design-vue';
 
 import { fetchCrawlSourcePage, fetchCrawlTaskPage, getCrawlTask, retryCrawlTask } from '#/api/bidding/crawlExternal';
 import { getManagePage } from '#/api/bidding/noticeExternal';
+import { fmtBytes } from '#/utils/format';
 
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
+import { contentFormText, FETCH_TYPE_HINT, FETCH_TYPE_LABEL, fetchTypeText } from '../../labels';
 import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
@@ -51,7 +53,7 @@ const sameBatchLoading = ref(false);
 
 /** 展示用任务：回读优先，未回读用行字段 */
 const t = computed(() => full.value || props.task || ({} as CrawlExternalApi.TaskItem));
-/** 获取方式：源.fetchType，兜底按通道启发（CRAWLER）；API 源才展示 api_config 段 */
+/** 列表驱动方式：源.fetchType（**只表示列表怎么拿**，正文形态见 contentForm）；API 源才展示 api_config 段 */
 const fetchType = computed(() => {
   if (src.value?.fetchType) return src.value.fetchType;
   return 'CRAWLER';
@@ -145,10 +147,10 @@ const previewKey = ref<BlobKey>('payload');
 /** 可选数据源（只列有内容的） */
 const previewOptions = computed(() => {
   const opts: Array<{ label: string; value: BlobKey; }> = [];
-  if (t.value?.payloadJson) opts.push({ value: 'payload', label: '原始载荷 payload_json' });
-  if (isApi.value && src.value?.apiConfigJson) opts.push({ value: 'apiConfig', label: 'API 配置 api_config_json' });
-  opts.push({ value: 'taskFields', label: '任务全字段(JSON)' });
-  if (src.value) opts.push({ value: 'sourceFields', label: '源配置全字段(JSON)' });
+  if (t.value?.payloadJson) opts.push({ value: 'payload', label: '原始载荷（payload_json）— 技术视图' });
+  if (isApi.value && src.value?.apiConfigJson) opts.push({ value: 'apiConfig', label: 'API 配置（api_config_json）— 技术视图' });
+  opts.push({ value: 'taskFields', label: '任务全字段（JSON）— 技术视图' });
+  if (src.value) opts.push({ value: 'sourceFields', label: '信息源配置全字段（JSON）— 技术视图' });
   return opts;
 });
 const previewText = computed(() => {
@@ -198,7 +200,7 @@ async function findProduct() {
       const o = normUrl(row.origUrl);
       return o && (o === tUrl || o === pUrl);
     });
-    // 同源未按 URL 精确命中时：最近 20 条内标题兜底（爬取端与入库标题可能略有差异，仅展示候选供人工比对）
+    // 同源未按 URL 精确命中时：最近 20 条内标题兜底（采集端与入库标题可能略有差异，仅展示候选供人工比对）
     const titleHit = hit.length
       ? []
       : list.slice(0, 20).filter((row) => {
@@ -275,12 +277,9 @@ function openRawFile() {
   const u = payloadObj.value.rawFileUrl;
   if (u) window.open(u, '_blank');
 }
-/** 字节数可读化 */
-function fmtBytes(n: number | undefined): string {
-  if (n == null) return '';
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(1) + ' MB';
+/** 字节数可读化（空值留白：原始文件大小未知时不显示占位）——委托 #/utils/format 的统一口径 */
+function sizeText(n: number | undefined): string {
+  return fmtBytes(n, '');
 }
 </script>
 
@@ -288,10 +287,11 @@ function fmtBytes(n: number | undefined): string {
   <div v-if="loading && !full" class="tc-hint">任务明细回读中…</div>
   <div v-else-if="!t.id" class="tc-hint">（未选择任务）</div>
   <div v-else class="tc-chain">
-    <!-- 链头：任务定位（ID/获取方式/状态） -->
+    <!-- 链头：任务定位（ID/列表驱动方式+正文形态/状态） -->
     <div class="tc-head">
       <span class="tc-head-id">任务 #{{ String(t.id) }}</span>
-      <Tag :color="isApi ? 'purple' : 'blue'">{{ isApi ? 'API · 接口直取' : 'CRAWLER · 爬虫' }}</Tag>
+      <Tag :color="isApi ? 'purple' : 'blue'" :title="FETCH_TYPE_HINT">{{ fetchTypeText(isApi ? 'API' : 'CRAWLER') }}</Tag>
+      <Tag v-if="src?.contentForm" color="cyan" :title="FETCH_TYPE_HINT">{{ contentFormText(src.contentForm) }}</Tag>
       <Tag v-if="tagOf(TASK_STATUS_MAP, t.status)" :color="tagOf(TASK_STATUS_MAP, t.status)!.color">{{ tagOf(TASK_STATUS_MAP, t.status)!.text }}</Tag>
       <span class="ml-auto tc-ops">
         <Button v-if="allowRetry && t.status === 'FAILED'" danger size="small" :loading="retryBusy" @click="handleRetry">重试（attempt 归零）</Button>
@@ -314,7 +314,7 @@ function fmtBytes(n: number | undefined): string {
       <div class="ind-panel-b">
         <div v-if="srcLoading" class="tc-hint">源信息回读中…</div>
         <template v-else>
-          <div class="tc-kv"><span class="tc-k">获取方式</span><span class="tc-v">{{ isApi ? 'API · 接口直取(JSON)' : 'CRAWLER · 爬虫(列表HTML)' }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ` · ${ src.sourceName}` : '' }}）</span></span></div>
+          <div class="tc-kv"><span class="tc-k">{{ FETCH_TYPE_LABEL }}</span><span class="tc-v">{{ fetchTypeText(isApi ? 'API' : 'CRAWLER') }}<span v-if="src?.sourceCode" class="tc-sub">（源 {{ src.sourceCode }}{{ src.sourceName ? ` · ${ src.sourceName}` : '' }}）</span></span></div>
           <div v-if="!isApi" class="tc-kv"><span class="tc-k">下载器/通道</span><span class="tc-v mono">{{ t.channelCode || src?.channelCode || '—' }}</span></div>
           <div v-else class="tc-kv">
 <span class="tc-k">接口配置</span>
@@ -344,7 +344,7 @@ function fmtBytes(n: number | undefined): string {
             <span class="tc-v">
               <template v-if="payloadObj.rawFileUrl">
                 <a href="#" @click.prevent="openRawFile()">查看原文文件（FileApi 归档）</a>
-                <span class="tc-sub">{{ fmtBytes(payloadObj.rawSize) }}<template v-if="payloadObj.rawSha256"> · sha256 {{ String(payloadObj.rawSha256).slice(0, 16) }}…</template></span>
+                <span class="tc-sub">{{ sizeText(payloadObj.rawSize) }}<template v-if="payloadObj.rawSha256"> · sha256 {{ String(payloadObj.rawSha256).slice(0, 16) }}…</template></span>
               </template>
               <span v-else>（本任务无原文文件引用——归档由后端在列表阶段完成，见 05 契约 §四）</span>
             </span>

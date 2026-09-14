@@ -3,13 +3,14 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { fetchCrawlParserList } from '#/api/bidding/crawlExternal';
 
+import { CHANNEL_LABEL, channelText, CONTENT_FORM_LABEL, contentFormText, FETCH_TYPE_HINT, FETCH_TYPE_LABEL, FETCH_TYPE_OPTIONS, fetchTypeText, INTERVAL_LABEL, intervalText, MIN_INTERVAL_SECONDS } from '../labels';
 import { fmtDt } from '../shared';
 
 /** 顶部检索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
-    { fieldName: 'sourceName', label: '源名称', component: 'Input', componentProps: { placeholder: '模糊检索', allowClear: true } },
-    { fieldName: 'sourceCode', label: '源 code', component: 'Input', componentProps: { placeholder: '精确匹配', allowClear: true } },
+    { fieldName: 'sourceName', label: '信息源名称', component: 'Input', componentProps: { placeholder: '模糊检索', allowClear: true } },
+    { fieldName: 'sourceCode', label: '信息源代码', component: 'Input', componentProps: { placeholder: '精确匹配', allowClear: true } },
     { fieldName: 'enabled', label: '状态', component: 'Select', componentProps: { options: [{ label: '已启用', value: true }, { label: '停用', value: false }], allowClear: true, placeholder: '全部' } },
   ];
 }
@@ -24,7 +25,7 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
     },
     {
       fieldName: 'sourceName',
-      label: '源名称',
+      label: '信息源名称',
       component: 'Input',
       componentProps: { placeholder: '如：中国采购与招标网' },
       rules: 'required',
@@ -52,14 +53,14 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
     },
     {
       fieldName: 'fetchType',
-      label: '获取方式',
+      label: FETCH_TYPE_LABEL,
+      help: FETCH_TYPE_HINT,
       component: 'Select',
       componentProps: {
         options: [
-          { label: 'CRAWLER · 爬虫（列表 HTML / 逐条下载）', value: 'CRAWLER' },
-          { label: 'API · 接口直取（JSON 列表 + 字段映射）', value: 'API' },
+          ...FETCH_TYPE_OPTIONS.map((o) => ({ ...o })),
         ],
-        placeholder: '默认 CRAWLER（存量兼容）',
+        placeholder: '默认 CRAWLER（存量兼容）；只管列表怎么拿，正文形态另见「正文形态」列',
       },
       // 05-外部信息获取改造-前端跟进 §三：fetchType=CRAWLER/API；后端缺省 CRAWLER
     },
@@ -106,9 +107,15 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
     },
     {
       fieldName: 'fetchIntervalSeconds',
-      label: '抓取间隔（秒）',
+      label: INTERVAL_LABEL,
       component: 'InputNumber',
-      componentProps: { min: 120, max: 604800, addonAfter: '秒', placeholder: '默认 3600；下限 120（后端强校验）' },
+      componentProps: {
+        min: MIN_INTERVAL_SECONDS,
+        max: 604800,
+        addonAfter: '秒',
+        // 提示写清归属：这个值同时约束"列表轮询"与"原文下载"（见 labels.ts 文件头）
+        placeholder: '默认 3600；下限 120（后端强校验）—— 列表轮询与原文下载共用此值',
+      },
     },
     {
       fieldName: 'robotsOk',
@@ -128,17 +135,18 @@ export function useFormSchema(isEdit: boolean): VbenFormSchema[] {
 /** 表格列 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
-    { field: 'sourceCode', title: '源 code', width: 120, showOverflow: true },
-    { field: 'sourceName', title: '源名称', minWidth: 150, showOverflow: true },
+    { field: 'sourceCode', title: '信息源代码', width: 130, showOverflow: true },
+    { field: 'sourceName', title: '信息源名称', minWidth: 150, showOverflow: true },
     { field: 'baseUrl', title: '入口站点', minWidth: 200, showOverflow: true },
-    { field: 'fetchType', title: '获取方式', width: 130, formatter: ({ cellValue }) => (cellValue === 'API' ? 'API · 直取' : cellValue === 'CRAWLER' ? 'CRAWLER · 爬虫' : '—') },
-    { field: 'channelCode', title: '下载通道', width: 110 },
+    { field: 'fetchType', title: FETCH_TYPE_LABEL, width: 170, formatter: ({ cellValue }) => fetchTypeText(cellValue as null | string) },
+    { field: 'channelCode', title: CHANNEL_LABEL, width: 170, formatter: ({ cellValue }) => channelText(cellValue as null | string) },
+    { field: 'contentForm', title: CONTENT_FORM_LABEL, width: 170, formatter: ({ cellValue }) => contentFormText(cellValue as null | string) },
     { field: 'enabled', title: '启用(/go 白名单)', width: 170, slots: { default: 'col_enabled' } },
     {
       field: 'fetchIntervalSeconds',
-      title: '抓取间隔',
-      width: 110,
-      formatter: ({ cellValue }) => (cellValue == null ? '—' : String(cellValue) + ' s'),
+      title: INTERVAL_LABEL,
+      width: 130,
+      formatter: ({ cellValue }) => intervalText(cellValue as null | number),
     },
     { field: 'remark', title: '备注', minWidth: 140, showOverflow: true },
     {

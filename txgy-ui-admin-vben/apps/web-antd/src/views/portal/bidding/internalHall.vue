@@ -3,24 +3,43 @@
   数据源：真实接口 /bidding/notice/public/list（@PermitAll，仅 PUBLISHED + 社会公开）或内置 Mock
 -->
 <script lang="ts" setup>
+import type { InternalNoticeItem } from './types';
+
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { fetchInternalNotices } from './api';
 import { biddingConfig } from './config';
 import { fmtDate } from './format';
-import type { InternalNoticeItem } from './types';
 
 const router = useRouter();
 const loading = ref(false);
 const errorMsg = ref('');
 const keyword = ref('');
 const typeFilter = ref('');
+const scopeFilter = ref<'' | 'internal' | 'public'>('');
+const timeDays = ref(0);
+const projectCode = ref('');
 const rows = ref<InternalNoticeItem[]>([]);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 10;
 const totalPages = ref(1);
+// 可见范围筛选：两类公告（仅本租户 / 对社会公开）混在同一大厅里，只靠行内小标记辨认不够用，
+// 用户需要能"只看内部""只看对外"（08 §4 的 internalFlag 语义，后端 NoticePageReqVO 直接支持）。
+const SCOPE_FILTERS: Array<{ label: string; value: '' | 'internal' | 'public' }> = [
+  { label: '全部可见范围', value: '' },
+  { label: '仅本租户', value: 'internal' },
+  { label: '对社会公开', value: 'public' },
+];
+// 发布时间快捷区间：只发下界（publishTimeStart），不发上界——宁可比目标范围多取几条，
+// 也不要因本机与服务端的时钟/时区偏差把刚发布的公告挡在门外。
+const TIME_FILTERS: Array<{ days: number; label: string }> = [
+  { days: 0, label: '全部时间' },
+  { days: 7, label: '最近 7 天' },
+  { days: 30, label: '最近 30 天' },
+];
+
 const TYPE_FILTERS: Array<{ label: string; value: string }> = [
   { label: '全部类型', value: '' },
   { label: '招标公告', value: 'TENDER_NOTICE' },
@@ -45,6 +64,12 @@ async function load(): Promise<void> {
       pageSize,
       keyword: keyword.value.trim() || undefined,
       noticeType: typeFilter.value || undefined,
+      // 可见范围 → internalFlag（true=仅本租户，false=对社会公开，不传=全部）
+      internalFlag: scopeFilter.value === '' ? undefined : scopeFilter.value === 'internal',
+      // 后端 NoticePageReqVO.projectCode（精确匹配）
+      projectCode: projectCode.value.trim() || undefined,
+      // 后端 NoticePageReqVO.publishTimeStart（@DateTimeFormat，'yyyy-MM-dd HH:mm:ss'）
+      publishTimeStart: publishTimeStartOf(timeDays.value),
     });
     if (seq !== loadSeq) return;
     rows.value = res.list || [];
@@ -68,6 +93,26 @@ function pickType(v: string): void {
   pageNo.value = 1;
   void load();
 }
+function pickScope(v: '' | 'internal' | 'public'): void {
+  scopeFilter.value = v;
+  pageNo.value = 1;
+  void load();
+}
+function pickTime(days: number): void {
+  timeDays.value = days;
+  pageNo.value = 1;
+  void load();
+}
+/**
+ * 近 N 天的起始时刻，按后端 @DateTimeFormat 口径输出 'yyyy-MM-dd HH:mm:ss'（**查询参数是字符串，不是毫秒**；
+ * 毫秒只用于 JSON 体与出参）。用本地时间构造：与用户在界面上看到的"7 天前"一致。
+ */
+function publishTimeStartOf(days: number): string | undefined {
+  if (!days) return undefined;
+  const d = new Date(Date.now() - days * 86_400_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 function open(id: number | string): void {
   router.push('/portal/bidding/internal-detail/' + String(id)).catch(() => {});
 }
@@ -90,7 +135,9 @@ onMounted(() => void load());
       · 电子招标投标办法（八部委令第20号，部门规章/政府文件）第9条——市场主体免费注册登录、获取依法公开的招标投标信息；
       · 招标投标法 第16条（法律）——公开招标应当发布招标公告（公告公开性的上位依据）。
     后端契约：08-公告公示前端交付-业务口径说明.md §4（internalFlag=false 对外/true 仅企业内部）；
-      GET /bidding/notice/public/page、/public/detail（跨租户只放行 PUBLISHED+非内部+到发布时间+SOCIAL，08 §8）。
+      GET /bidding/notice/public/list、/public/detail（跨租户只放行 PUBLISHED+非内部+到发布时间+SOCIAL，08 §8）。
+    筛选能力（对齐后端 NoticePageReqVO，前端只发它声明的字段）：keyword / noticeType / internalFlag /
+      projectCode / publishTimeStart（近 N 天取本地时间下界，'yyyy-MM-dd HH:mm:ss'）。
 -->
 
   <div class="bidding-page bid-ind">
@@ -129,12 +176,44 @@ onMounted(() => void load());
           <span v-if="biddingConfig.useMock" class="mock-tag">演示 Mock 数据</span>
         </div>
         <div class="kwline">
-          <input v-model="keyword" placeholder="关键词（标题 / 项目 / 发布单位 / 编号）" @keyup.enter="search" />
+          <input v-model="keyword" placeholder="关键词（标题 / 项目 / 发布单位）" @keyup.enter="search" />
+          <input v-model="projectCode" placeholder="项目编号（精确）" @keyup.enter="search" />
           <button class="btn primary" @click="search">搜索</button>
         </div>
       </div>
 
+      <!-- 可见范围：internalFlag=true 仅本租户 / false 对社会公开 / 不选=全部（两类混排时的主要痛点） -->
       <div class="chip-row">
+        <span class="chip-label">可见范围</span>
+        <span
+          v-for="f in SCOPE_FILTERS"
+          :key="f.value"
+          class="chip kbd-btn"
+          role="button"
+          tabindex="0"
+          :class="{ on: scopeFilter === f.value }"
+          @click="pickScope(f.value)"
+          @keydown.enter.prevent="pickScope(f.value)"
+        >{{ f.label }}</span>
+      </div>
+
+      <!-- 发布时间：只做下界（见 publishTimeStartOf 注释） -->
+      <div class="chip-row">
+        <span class="chip-label">发布时间</span>
+        <span
+          v-for="f in TIME_FILTERS"
+          :key="f.days"
+          class="chip kbd-btn"
+          role="button"
+          tabindex="0"
+          :class="{ on: timeDays === f.days }"
+          @click="pickTime(f.days)"
+          @keydown.enter.prevent="pickTime(f.days)"
+        >{{ f.label }}</span>
+      </div>
+
+      <div class="chip-row">
+        <span class="chip-label">公告类型</span>
         <span
           v-for="f in TYPE_FILTERS"
           :key="f.value"
@@ -155,6 +234,9 @@ onMounted(() => void load());
           <div class="row-title">
             <span class="tt">{{ r.title }}</span>
             <span class="tag-type">{{ r.noticeTypeName || r.noticeType }}</span>
+            <!-- 可见范围：internalFlag=true 仅本租户可见（08 §4）；false/未给=对外社会公开。
+                 两类公告都在这一个大厅里，不给标记的话用户无从判断"这条会不会对社会公开"。 -->
+            <span v-if="r.internalFlag === true" class="tag-scope" title="仅本企业租户可见，不对社会公开">仅本租户</span>
           </div>
           <div class="row-meta">
             <span class="pub">{{ r.publisherName }}</span>
@@ -210,6 +292,9 @@ onMounted(() => void load());
 .row-title .tt { font-weight: 600; color: hsl(var(--foreground)); }
 .tag-type { font-size: 11px; color: hsl(var(--primary)); background: hsl(var(--primary) / 8%); border: 1px solid hsl(var(--primary) / 30%); border-radius: 4px; padding: 1px 6px; }
 .row-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.chip-label { align-self: center; margin-right: 2px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.tag-scope { font-size: 11px; color: var(--ind-warn); background: hsl(var(--warning) / 12%); border: 1px solid hsl(var(--warning) / 40%); border-radius: 4px; padding: 1px 6px; }
+
 .row-meta .code { font-family: ui-monospace, monospace; }
 .row-meta .time { color: hsl(var(--muted-foreground)); }
 .status { color: var(--ind-ok); }

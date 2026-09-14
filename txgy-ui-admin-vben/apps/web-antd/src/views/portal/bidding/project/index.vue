@@ -9,16 +9,19 @@ import { useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Popconfirm, Table, Tag } from 'ant-design-vue';
 
-import { deleteProject, getProjectPage, saveProject, type ProjectApi } from '#/api/bidding/project';
+import { deleteProject, getProjectPage, type ProjectApi, saveProject } from '#/api/bidding/project';
 
 import AttachmentList from '../../../bidding/vo/AttachmentList.vue';
-import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { loadAttachments } from '../../../bidding/vo/attachmentStore';
+import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { PROJECT_DEF } from '../../../bidding/vo/entityForms';
+import { usePortalCan } from '../access';
 
 import './panel.css';
 
 const router = useRouter();
+/* 判权口径见 ../access.ts（未下发权限码时放行，与后台一致） */
+const { can } = usePortalCan();
 
 const loading = ref(false);
 const rows = ref<ProjectApi.Project[]>([]);
@@ -28,10 +31,10 @@ const pageSize = ref(10);
 const query = reactive<{ projectCode: string; projectName: string }>({ projectCode: '', projectName: '' });
 
 const editorOpen = ref(false);
-const editing = ref<ProjectApi.Project | null>(null);
+const editing = ref<null | ProjectApi.Project>(null);
 
 const attDrawerOpen = ref(false);
-const attOwner = ref<ProjectApi.Project | null>(null);
+const attOwner = ref<null | ProjectApi.Project>(null);
 const attList = computed(() => (attOwner.value ? loadAttachments('project', attOwner.value.projectCode) : []));
 
 async function load(): Promise<void> {
@@ -107,7 +110,8 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
         </p>
       </div>
       <div class="pn-acts">
-        <Button type="primary" @click="createProject">创建项目</Button>
+        <Button v-if="can('bidding:project:create')" type="primary" @click="createProject">创建项目</Button>
+        <span v-else class="pn-dim">无创建权限（bidding:project:create）：可浏览现有项目，创建请联系管理员开通</span>
         <Button @click="load">刷新</Button>
       </div>
     </div>
@@ -133,7 +137,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
             pageSize,
             total,
             showSizeChanger: true,
-            showTotal: (t: number) => '共 ' + t + ' 条',
+            showTotal: (t: number) => `共 ${ t } 条`,
             onChange: (p: number, ps: number) => { pageNo = p; pageSize = ps; load(); },
           }"
         >
@@ -176,7 +180,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
     <EntityFormModal v-model:open="editorOpen" :def="PROJECT_DEF" :record="editing" :save="doSave" @saved="load" />
 
     <!-- 附件查看 -->
-    <Drawer v-model:open="attDrawerOpen" :title="'项目附件 · ' + (attOwner?.projectCode ?? '')" :width="760">
+    <Drawer v-model:open="attDrawerOpen" :title="`项目附件 · ${ attOwner?.projectCode ?? ''}`" :width="760">
       <div class="pn-tip">
         项目实体后端暂未提供附件持久化接口：附件明细保存在本地（按项目编号），GUID 已按规范写入 payload.ATTACHMENT_CODE。
         上传与预览均可用；后端提供附件集接口后改为按实体读取。

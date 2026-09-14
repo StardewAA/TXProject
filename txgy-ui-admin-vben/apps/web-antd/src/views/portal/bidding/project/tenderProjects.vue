@@ -8,17 +8,20 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Popconfirm, Table, Tag } from 'ant-design-vue';
 
-import { getProjectByCode, getTenderProjectPage, saveTenderProject, type ProjectApi, deleteTenderProject } from '#/api/bidding/project';
+import { deleteTenderProject, getProjectByCode, getTenderProjectPage, type ProjectApi, saveTenderProject } from '#/api/bidding/project';
 
 import AttachmentList from '../../../bidding/vo/AttachmentList.vue';
-import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { loadAttachments } from '../../../bidding/vo/attachmentStore';
+import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { TENDER_PROJECT_DEF } from '../../../bidding/vo/entityForms';
+import { usePortalCan } from '../access';
 
 import './panel.css';
 
 const route = useRoute();
 const router = useRouter();
+/* 判权口径见 ../access.ts（未下发权限码时放行，与后台一致） */
+const { can } = usePortalCan();
 const projectCode = computed(() => String(route.params.projectCode ?? ''));
 
 const loading = ref(false);
@@ -30,11 +33,11 @@ const query = reactive<{ tenderProjectCode: string; tenderProjectName: string }>
 const projectName = ref('');
 
 const editorOpen = ref(false);
-const editing = ref<ProjectApi.TenderProject | null>(null);
+const editing = ref<null | ProjectApi.TenderProject>(null);
 const preset = computed<Record<string, string>>(() => ({ PROJECT_CODE: projectCode.value }));
 
 const attDrawerOpen = ref(false);
-const attOwner = ref<ProjectApi.TenderProject | null>(null);
+const attOwner = ref<null | ProjectApi.TenderProject>(null);
 const attList = computed(() => (attOwner.value ? loadAttachments('tenderProject', attOwner.value.tenderProjectCode) : []));
 
 async function load(): Promise<void> {
@@ -110,7 +113,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
     <div class="pn-crumb">
       <a @click="router.push('/portal/bidding/projects')">项目</a>
       <span>/</span>
-      <span class="pn-cur">{{ projectCode }}{{ projectName ? ' · ' + projectName : '' }}</span>
+      <span class="pn-cur">{{ projectCode }}{{ projectName ? ` · ${ projectName}` : '' }}</span>
       <span>/</span>
       <span>招标项目</span>
     </div>
@@ -119,13 +122,14 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
       <div>
         <h1 class="pn-title">招标项目</h1>
         <p class="pn-sub">
-          当前项目：<b>{{ projectCode }}</b>{{ projectName ? '（' + projectName + '）' : '' }}。
+          当前项目：<b>{{ projectCode }}</b>{{ projectName ? `（${ projectName }）` : '' }}。
           一个项目可建多个招标项目；字段照录 VO 规范 TenderProjectVO（28 项），新建时自动带入归属项目编号，可挂多个附件。
           点击招标项目行进入其下的标段（包）。
         </p>
       </div>
       <div class="pn-acts">
-        <Button type="primary" @click="create">创建招标项目</Button>
+        <Button v-if="can('bidding:project:create')" type="primary" @click="create">创建招标项目</Button>
+        <span v-else class="pn-dim">无创建权限（bidding:project:create）：可浏览现有招标项目，创建请联系管理员开通</span>
         <Button @click="load">刷新</Button>
       </div>
     </div>
@@ -150,7 +154,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
             pageSize,
             total,
             showSizeChanger: true,
-            showTotal: (t: number) => '共 ' + t + ' 条',
+            showTotal: (t: number) => `共 ${ t } 条`,
             onChange: (p: number, ps: number) => { pageNo = p; pageSize = ps; load(); },
           }"
         >
@@ -189,7 +193,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
 
     <EntityFormModal v-model:open="editorOpen" :def="TENDER_PROJECT_DEF" :record="editing" :preset="preset" :save="doSave" @saved="load" />
 
-    <Drawer v-model:open="attDrawerOpen" :title="'招标项目附件 · ' + (attOwner?.tenderProjectCode ?? '')" :width="760">
+    <Drawer v-model:open="attDrawerOpen" :title="`招标项目附件 · ${ attOwner?.tenderProjectCode ?? ''}`" :width="760">
       <div class="pn-tip">招标项目附件：上传/预览可用，GUID 按规范写入 ATTACHMENT_CODE；后端附件集接口就绪后改为按实体读取。</div>
       <AttachmentList :list="attList" title="本招标项目附件" />
     </Drawer>

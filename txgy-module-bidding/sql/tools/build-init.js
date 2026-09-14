@@ -2,49 +2,43 @@
 /**
  * 初始状态包拼装脚本（配合 build-init-from-db.js 使用）
  *
- * 作用：① 从既有 master-bidding-sync.sql 中原样抽取全部 CREATE TABLE 语句（不改写 DDL）；
- *   ② 用 sql/.tmp/ 下由 build-init-from-db.js 导出的菜单/授权/采集源/闸位种子，重排为
- *   「结构 + 最小启动数据」的初始状态包；③ 把业务数据类种子归档到 history/，不入包。
+ * 作用：
+ *   ① 从既有 sql/master-bidding-sync.sql 中原样抽取全部 CREATE TABLE 语句（不改写 DDL，避免结构漂移）；
+ *   ② 用 sql/.tmp/ 下由 build-init-from-db.js 从开发库导出的种子（菜单/角色授权/采集源/闸位）重排初始状态包；
+ *   ③ 段序固定为：表结构 → 采集源 → 闸位 → 菜单 → 授权。
+ *      为什么这个顺序：mysql 客户端遇到第一个错误就中止；菜单属 system 服务库，目标库没有 system_menu 时
+ *      菜单段必然报错——把爬虫必需项（采集源/闸位）排在菜单之前，菜单失败也不会拖垮爬虫。
  *
- * 用法（模块根目录）：node sql/tools/build-init-from-db.js && node sql/tools/build-init.js
+ * 用法（在模块根目录执行）：
+ *   node sql/tools/build-init-from-db.js && node sql/tools/build-init.js
+ *
+ * 说明：被剔除的业务数据种子（主体授权 / AI 链路 / 演示公告）是一次性归档产物，
+ *   已落在 sql/history/2026-09-11-master-sync-removed-seeds.sql，本脚本不再改动它。
  */
 const fs = require('fs');
 const path = require('path');
 // 统一按模块根目录解析相对路径（脚本可从任意工作目录调用）
 process.chdir(path.join(__dirname, '..', '..'));
+
 const M = 'sql/master-bidding-sync.sql';
 const raw = fs.readFileSync(M, 'utf8');
 const L = raw.split(/\r?\n/);
-
-// 备份原包（防手误）
-// 原包备份由 git 版本控制承担（本脚本会覆盖 master-bidding-sync.sql）
 
 // 1) 抽取全部 CREATE TABLE 语句（到分号结尾），保持原顺序
 const ddls = [];
 const names = [];
 for (let i = 0; i < L.length; i++) {
-  if (/^\s*CREATE TABLE IF NOT EXISTS/i.test(L[i])) { … }
+  if (/^\s*CREATE TABLE IF NOT EXISTS/i.test(L[i])) {
+    let j = i;
+    while (j < L.length && !/;\s*$/.test(L[j])) j++;
+    ddls.push(L.slice(i, j + 1).join('\n'));
+    names.push((L[i].match(/CREATE TABLE IF NOT EXISTS\s+`?([A-Za-z0-9_]+)`?/i) || [])[1]);
+    i = j;
+  }
 }
+if (ddls.length === 0) { throw new Error('未从 ' + M + ' 抽到任何 CREATE TABLE，已中止（避免生成空结构包）'); }
 
-// 2) 归档被剔除的种子段落（原 §⑤~§⑧：主体授权 / AI 链路 / 演示公告 / AI 启用）
-const removed = L.slice(548, 693).join('\n').replace(/\s+$/, '');
-const archive = [
-'-- ============================================================================',
-'-- 【已归档】原 master-bidding-sync.sql 中被剔除的种子数据（2026-09-11 整理）',
-'-- 剔除原因：用户口径「不要数据，只要结构和最基础的数据（爬虫能启动 + 菜单能进），',
-'--   不需要任务和公告的数据」——下列内容属业务数据/凭据，不属于「初始状态」。',
-'-- 保留方式：原样归档，供确需时人工取用；不在初始状态包内自动执行。',
-'--   原 §⑤ 主体授权与档案（tenant 1 招标人发布门 / 延河热力）',
-'--   原 §⑥ AI 链路配置（ai_chat_role 角色 20 / ai_model 66 / ai_api_key 28）',
-'--   原 §⑦ 演示公告 5 条（ACTIVE）',
-'--   原 §⑧ AI 链路启用状态（目标态 UPDATE）',
-'-- 注意：AI 渠道密钥属凭据，不入初始包；新环境按《部署与启动方式》单独配置。',
-'-- ============================================================================',
-'',
-removed,
-''].join('\n');
-
-// 3) 开发库导出的当前目标态种子
+// 2) 开发库导出的当前目标态种子
 const menu = fs.readFileSync('sql/.tmp/menu.sql', 'utf8').trim();
 const rolemenu = fs.readFileSync('sql/.tmp/rolemenu.sql', 'utf8').trim();
 const source = fs.readFileSync('sql/.tmp/source.sql', 'utf8').trim();
@@ -53,20 +47,29 @@ const gate = fs.readFileSync('sql/.tmp/gate.sql', 'utf8').trim();
 const out = [
 '-- ============================================================================',
 '-- bidding 模块「初始状态」SQL 包（表结构 + 最小启动数据；幂等，可重复执行）',
-'-- 生成时间：2026-09-11（表结构取自原同步包；菜单/采集源按开发库当前目标态导出）',
+'-- 生成时间：见 git 提交（表结构取自包内既有 DDL；菜单/采集源按开发库当前目标态导出）',
 '-- 用途：新环境/新库一键初始化 —— 建表 → 菜单可见 → 爬虫可启动，即可投入使用。',
 '--',
-'-- 包含：',
+'-- 包含（**顺序有讲究**：爬虫必需项排在菜单之前）：',
 '--   ① 业务表结构 ' + ddls.length + ' 张（CREATE TABLE IF NOT EXISTS；字段语义见模块设计文档）',
-'--   ② 菜单 6735~6776（招投标及其子菜单/按钮权限 37 条）+ 角色挂载 135 条',
-'--   ③ 采集源配置 3 条（EBIDDING / QYZB / GX —— 爬虫启动所需的最小数据）',
-'--   ④ 原文下载限速闸位 GLOBAL 单行（合规频控；缺行时程序亦会自愈补建）',
+'--   ② 采集源配置（EBIDDING / QYZB / GX —— 爬虫启动所需的最小数据）',
+'--   ③ 原文下载限速闸位 GLOBAL 单行（合规频控 2 分钟/次；缺行时程序亦会自愈补建）',
+'--   ④ 菜单 6735~6776（招投标及其子菜单/按钮权限，属 system 服务库）',
+'--   ⑤ 角色菜单授权（system_role_menu，同上）',
+'--',
+'-- 为什么这个顺序（2026-09-11 事故复盘）：mysql 客户端**遇到第一个错误就中止**执行。旧版把限速闸/审计表',
+'--   排在菜单段之后，目标库若没有 system_menu（菜单属 system 服务库），菜单段报错即中止 → 闸位表没建 →',
+'--   爬虫每个任务都在闸位处抛错、退避后进死信、下一轮再造新任务 = 「无限重试」。现在：全部表结构集中在 ①，',
+'--   爬虫必需的两段（②③）排在菜单（④⑤）之前——即使菜单段因库不同而失败，爬虫仍然可用。',
+'--   库表缺失时应用启动会打 ERROR 并**自动停掉爬虫调度**（BiddingSchemaHealthCheck），不再空转重试。',
 '--',
 '-- 不包含（用户口径 2026-09-11「不要数据…不需要任务和公告的数据」）：',
 '--   采集任务/批次、公告/附件、主体授权与档案、AI 渠道与密钥、演示公告等业务数据与凭据；',
 '--   原包中相关种子已归档到 sql/history/2026-09-11-master-sync-removed-seeds.sql（不在本包内执行）。',
 '--',
 '-- 执行：mysql -uroot -p123456 --default-character-set=utf8mb4 ruoyi-vue-pro < master-bidding-sync.sql',
+'--   若目标库没有 system_menu（菜单在 system 服务库）：本包会在 ④ 处报错中止，但前 ①②③ 已生效（爬虫可用），',
+'--   随后把 ④⑤ 在 system 库单独执行即可；也可用 mysql --force 继续执行到结束。',
 '-- 幂等：结构 IF NOT EXISTS、数据 INSERT IGNORE；包内无 DROP / TRUNCATE / DELETE，',
 '--   重复执行不改变既有行，也不清空任何业务数据。',
 '-- ============================================================================',
@@ -77,38 +80,35 @@ const out = [
 '',
 ddls.join('\n\n'),
 '',
-'-- ========== ② 菜单（招投标 6735 及子菜单/按钮，37 条；INSERT IGNORE = 已存在则保持现状） ==========',
-'',
-menu,
-'',
-'-- ========== ③ 角色菜单授权（system_role_menu，135 条） ==========',
-'',
-rolemenu,
-'',
-'-- ========== ④ 采集源配置（3 条：爬虫启动的最小数据） ==========',
+'-- ========== ② 采集源配置（爬虫启动的最小数据；ENABLED/栏目模板见 JSON 配置列） ==========',
 '',
 source,
 '',
-'-- ========== ⑤ 原文下载限速闸位（GLOBAL 单行，合规频控 2 分钟/次） ==========',
+'-- ========== ③ 原文下载限速闸位（GLOBAL 单行，合规频控 2 分钟/次） ==========',
 '',
 gate,
 '',
+'-- ========== ④ 菜单（招投标 6735 及子菜单/按钮；INSERT IGNORE = 已存在则保持现状） ==========',
+'-- 注意：system_menu 属 system 服务库；若本库没有该表，本段会报错中止（前面 ①②③ 已生效）。',
+'',
+menu,
+'',
+'-- ========== ⑤ 角色菜单授权（system_role_menu） ==========',
+'',
+rolemenu,
+'',
 '/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;',
 '',
-'-- ========== 校验（期望：结构 ' + ddls.length + ' / 菜单 37 / 授权 135 / 采集源 3 / 闸位 1） ==========',
+'-- ========== 校验（期望：结构 ' + ddls.length + ' / 采集源 3 / 闸位 1 / 菜单 37 / 授权 135） ==========',
 "SELECT COUNT(*) AS tables_ok FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN (" +
-  names.map(function (n) { return "'" + n + "'"; }).join(', ') + ");",
-"SELECT COUNT(*) AS menus_ok FROM system_menu WHERE id BETWEEN 6735 AND 6799;",
-"SELECT COUNT(*) AS role_menus_ok FROM system_role_menu WHERE menu_id BETWEEN 6735 AND 6799;",
+  names.map(function (n) { return "'" + n + "'"; }).join(', ') + ');',
 "SELECT COUNT(*) AS sources_ok FROM bidding_fetch_source;",
 "SELECT COUNT(*) AS gate_ok FROM bidding_crawl_download_gate;",
+"SELECT COUNT(*) AS menus_ok FROM system_menu WHERE id BETWEEN 6735 AND 6799;",
+"SELECT COUNT(*) AS role_menus_ok FROM system_role_menu WHERE menu_id BETWEEN 6735 AND 6799;",
 ''
 ].join('\n');
 
 fs.writeFileSync(M, out, 'utf8');
-fs.writeFileSync('sql/history/2026-09-11-master-sync-removed-seeds.sql', archive, 'utf8');
 console.log('新包：' + out.split('\n').length + ' 行 / ' + Buffer.byteLength(out) + ' 字节');
 console.log('表结构 ' + ddls.length + ' 张: ' + names.join(', '));
-console.log('归档种子：' + archive.split('\n').length + ' 行');
-
-[…5ln elided; re-read needed ranges with sql/.tmp/build-init.js:13-19]

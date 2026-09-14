@@ -54,7 +54,7 @@ const CERT_FIELDS = [
   { label: '颁发机构代码', value: 'issuingAuthorityCode' },
   { label: '颁发日期', value: 'issueDate' },
   { label: '有效期起', value: 'validFrom' },
-  { label: '有效期止', value: 'validTo' },
+  { label: '有效期至', value: 'validTo' },
   { label: '电子证照标识', value: 'eCertIdent' },
   { label: '备注', value: 'remark' },
 ];
@@ -225,7 +225,7 @@ function precheck(): string {
     const valid = (form.changes ?? []).filter((c) => c.fieldName);
     if (valid.length === 0) return '变更流程必须至少提交一项字段变更';
   }
-  if (form.lifecycleType === T_RENEW && !form.newValidTo) return '续期必须填写续期后的有效期止';
+  if (form.lifecycleType === T_RENEW && !form.newValidTo) return '续期必须填写续期后的有效期至';
   if (form.lifecycleType === T_RENEW && !form.renewalType) return '请选择续期方式';
   if (form.lifecycleType === T_REVOKE && !form.revokeType) return '请选择注销吊销方式';
   if (form.lifecycleType === T_ANNUAL && (!form.reviewYear || !form.reviewDate)) return '年检必须填写年度与年检日期';
@@ -392,7 +392,7 @@ async function submit() {
           <a-date-picker v-model:value="form.newValidFrom" class="w-full mb-3" value-format="YYYY-MM-DD" />
         </a-col>
         <a-col :span="8">
-          <div class="ct-lb"><span class="ct-ast">*</span>新有效期止</div>
+          <div class="ct-lb"><span class="ct-ast">*</span>新有效期至</div>
           <a-date-picker v-model:value="form.newValidTo" class="w-full mb-3" value-format="YYYY-MM-DD" />
         </a-col>
         <a-col :span="8">

@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlJobMapper;
 import cn.iocoder.txgy.module.bidding.dal.mysql.externalfetch.CrawlSourceMapper;
 import cn.iocoder.txgy.module.bidding.service.externalfetch.fetch.CrawlSourceRunner;
+import cn.iocoder.txgy.module.bidding.service.externalfetch.schema.BiddingSchemaGuard;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -34,6 +35,9 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     /** 调度开关（默认关；联调用人工触发，生产开启后按源间隔轮询） */
     @Value("${bidding.crawl.scheduler.enabled:false}")
     private boolean schedulerEnabled;
+
+    /** 库表自检未通过时的提示是否已打过（避免 30s tick 刷屏，状态变化只提示一次） */
+    private volatile boolean schemaDisabledLogged = false;
 
     /** 默认轮询间隔（秒）：源未配置 fetch_interval_seconds 时使用（≥120 防封） */
     private static final int DEFAULT_INTERVAL_SECONDS = 300;
@@ -158,6 +162,10 @@ public class CrawlRunServiceImpl implements CrawlRunService {
      *  （缺省 60 天可配）；之后（有断点）→ 增量小窗口 lookbackDays。 */
     @Override
     public CrawlRunRespVO runNow(String sourceCode, String triggerType) {
+        // 库表自检未通过 → 直接拒绝并说明原因（好过让用户拿到一串 BadSqlGrammar 堆栈）
+        if (!BiddingSchemaGuard.isCrawlSchemaReady()) {
+            throw new IllegalStateException("采集暂不可用：" + BiddingSchemaGuard.crawlUnavailableReason());
+        }
         // 源级互斥（进程内）：同一源并发 runNow（人工 run 撞调度 tick）串行化，先到先跑、后到跳过
         synchronized (sourceLocks.computeIfAbsent(sourceCode, k -> new Object())) {
             return doRunNow(sourceCode, triggerType);
@@ -223,6 +231,17 @@ public class CrawlRunServiceImpl implements CrawlRunService {
     @Scheduled(fixedDelay = 30_000)
     public void scheduledScan() {
         if (!schedulerEnabled) {
+            return;
+        }
+        // 库表自检未通过（缺限速闸/审计/任务等关键表）→ 停调度，不再造新任务。
+        // 原因：缺表时每个任务都会在闸位处抛错 → 3 次退避后进死信 → 下一轮调度再造新任务，
+        //   表现为"任务反复重试且毫无进展"，还会持续刷死信与日志。规范依据：《招投标模块开发规范》§4.4。
+        if (!BiddingSchemaGuard.isCrawlSchemaReady()) {
+            if (!schemaDisabledLogged) {
+                schemaDisabledLogged = true;
+                log.error("[crawl][scheduledScan] 已停止爬虫调度：{}（修复后重启即可恢复）",
+                        BiddingSchemaGuard.crawlUnavailableReason());
+            }
             return;
         }
         try {

@@ -223,8 +223,15 @@ const details: Record<string, NoticeExternalDetail> = {
 
 function quickStart(quick?: string): string | undefined {
   if (!quick || quick === '全部时间') return undefined;
-  const map: Record<string, number> = { 近7天: 7, 近1个月: 30, 近3个月: 90, 今年以来: 365 };
-  return iso(now - (map[quick] ?? 7) * DAY);
+  /* 与 api.ts 的 quickToBegin **同口径**（本函数是 Mock 版实现，此前两处不同步）：
+   *   · 标签逐字一致 —— 2026-09-14 界面统一为「最近 7 天 / 最近 30 天 / 最近 90 天」后，旧键名会让 Mock 全部落到兜底值；
+   *   · 「今年以来」= 自然年 1 月 1 日（旧版按 365 天回溯 = "去年今天"，真实实现已修并注释说明，Mock 此前没跟上）；
+   *   · 未识别标签返回 undefined（旧版兜底成 7 天，会静默改变筛选语义）。 */
+  if (quick === '今年以来') return iso(new Date(new Date().getFullYear(), 0, 1).getTime());
+  const map: Record<string, number> = { '最近 7 天': 7, '最近 30 天': 30, '最近 90 天': 90 };
+  const days = map[quick];
+  if (!days) return undefined;
+  return iso(now - days * DAY);
 }
 
 /**
@@ -386,9 +393,9 @@ function seedTimeline(): MockTimelineRec[] {
 }
 
 /** 关注存储（模块级单例：跨页面（详情关注 ↔ 我的关注列表）共享状态） */
-const followStore: { rows: MockFollowRec[]; events: MockTimelineRec[] } = (() => {
+const followStore: { events: MockTimelineRec[]; rows: MockFollowRec[]; } = (() => {
   const saved = (globalThis as Record<string, unknown>).__bidding_mock_follow;
-  if (saved) return saved as { rows: MockFollowRec[]; events: MockTimelineRec[] };
+  if (saved) return saved as { events: MockTimelineRec[]; rows: MockFollowRec[]; };
   const store = { rows: followSeedRows(), events: seedTimeline() };
   (globalThis as Record<string, unknown>).__bidding_mock_follow = store;
   return store;
@@ -599,7 +606,7 @@ const internalList: InternalNoticeItem[] = [
     id: 7001,
     noticeCode: 'BID-ENT-2026-0001',
     noticeType: 'TENDER_NOTICE',
-    noticeTypeName: INTERNAL_TYPE_LABEL['TENDER_NOTICE'],
+    noticeTypeName: INTERNAL_TYPE_LABEL.TENDER_NOTICE,
     title: '榆林炼油厂 2026 年大修消缺项目防腐保温工程施工招标公告（本平台发布）',
     projectCode: 'DYZB2026-LY-DX001',
     projectName: '炼油厂 2026 年大修消缺防腐保温工程',
@@ -613,7 +620,7 @@ const internalList: InternalNoticeItem[] = [
     id: 7002,
     noticeCode: 'BID-ENT-2026-0002',
     noticeType: 'WIN_RESULT_PUBLICITY',
-    noticeTypeName: INTERNAL_TYPE_LABEL['WIN_RESULT_PUBLICITY'],
+    noticeTypeName: INTERNAL_TYPE_LABEL.WIN_RESULT_PUBLICITY,
     title: '杨凌 LNG 储罐防腐保温保冷项目中标结果公示（本平台发布）',
     projectCode: 'DYZB2026-YL-LNG001',
     projectName: '杨凌 LNG 储罐防腐保温保冷项目',
@@ -667,6 +674,19 @@ export function mockInternalPage(params: Record<string, unknown>): PageResult<In
   }
   const nt = String(params.noticeType ?? '');
   if (nt) rows = rows.filter((r) => r.noticeType === nt);
+  // 以下三项与真实接口口径保持一致（internalFlag / projectCode / publishTimeStart 下界），
+  // 演示模式（useMock）下筛选也必须真的生效——否则"筛了没反应"会被误判成前端 bug。
+  if (params.internalFlag !== undefined && params.internalFlag !== null && params.internalFlag !== '') {
+    const want = params.internalFlag === true || params.internalFlag === 'true';
+    rows = rows.filter((r) => (r.internalFlag === true) === want);
+  }
+  const pc = String(params.projectCode ?? '').trim().toLowerCase();
+  if (pc) rows = rows.filter((r) => String(r.projectCode ?? '').toLowerCase() === pc);
+  const from = String(params.publishTimeStart ?? '').trim();
+  if (from) {
+    const t = Date.parse(from.replace(' ', 'T'));
+    if (!Number.isNaN(t)) rows = rows.filter((r) => toMs(String(r.publishTime)) >= t);
+  }
   rows.sort((a, b) => toMs(String(b.publishTime)) - toMs(String(a.publishTime)));
   const pageNo = Math.max(1, Number(params.pageNo ?? 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(params.pageSize ?? 10) || 10));

@@ -3,13 +3,14 @@
   数据源：公开详情（@PermitAll，仅 PUBLISHED+社会公开；payload 已 SOCIAL 裁剪）
 -->
 <script lang="ts" setup>
+import type { InternalNoticeDetail } from './types';
+
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import NoticeHtmlView from '#/views/bidding/notice/NoticeHtmlView.vue';
 
 import { fetchInternalNoticeDetail } from './api';
-import type { InternalNoticeDetail } from './types';
 
 const route = useRoute();
 const router = useRouter();

@@ -12,6 +12,8 @@ import { computed, ref, watch } from 'vue';
 
 import { Button, Input, message, Tag, Upload } from 'ant-design-vue';
 
+import { fmtBytes } from '#/utils/format';
+
 import {
   attachmentCodeOf,
   type AttachmentRecord,
@@ -120,7 +122,7 @@ function copyCode(): void {
           <Input :value="a.name" class="ap-name" placeholder="附件名称（ATTACHMENT_NAME）" :disabled="disabled" @change="(e) => patch(a, 'name', String((e.target as HTMLInputElement).value ?? ''))" />
           <div class="ap-file">
             <span class="ap-file-n">{{ a.fileName }}</span>
-            <span class="ap-file-t">{{ a.type || '—' }}<template v-if="a.size"> · {{ (a.size / 1024).toFixed(0) }} KB</template><template v-if="a.fileId !== undefined"> · file_id {{ a.fileId }}</template></span>
+            <span class="ap-file-t">{{ a.type || '—' }}<template v-if="a.size"> · {{ fmtBytes(a.size) }}</template><template v-if="a.fileId !== undefined"> · 文件 ID {{ a.fileId }}</template></span>
           </div>
           <div class="ap-url" :title="a.url">
             <span class="ap-url-t">URL 由上传自动写入</span>

@@ -9,21 +9,24 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Button, message, Table, Tag } from 'ant-design-vue';
 
-import { traceBidSection, type ProjectApi } from '#/api/bidding/project';
 /* NoticeApi 同时含类型与常量（NOTICE_TYPES），按值导入 */
 import { fetchNoticeDetail, NoticeApi } from '#/api/bidding/notice';
+import { type ProjectApi, traceBidSection } from '#/api/bidding/project';
 
 import PdfPreview from '../../../bidding/vo/PdfPreview.vue';
+import { usePortalCan } from '../access';
 import NoticeCreateModal from './NoticeCreateModal.vue';
 
 import './panel.css';
 
 const route = useRoute();
 const router = useRouter();
+/* 判权口径见 ../access.ts（未下发权限码时放行，与后台一致） */
+const { can } = usePortalCan();
 const bidSectionCode = computed(() => String(route.params.bidSectionCode ?? ''));
 
 const loading = ref(false);
-const trace = ref<ProjectApi.Trace | null>(null);
+const trace = ref<null | ProjectApi.Trace>(null);
 const rows = computed<ProjectApi.TraceNotice[]>(() => trace.value?.notices ?? []);
 const sectionName = computed(() => {
   const s = trace.value?.sections?.find((x) => x.bidSectionCode === bidSectionCode.value);
@@ -98,11 +101,11 @@ function backToSections(): void {
     <div class="pn-crumb">
       <a @click="router.push('/portal/bidding/projects')">项目</a>
       <span>/</span>
-      <a @click="router.push('/portal/bidding/projects/' + encodeURIComponent(projectCode) + '/tender-projects')">{{ projectCode || '…' }}</a>
+      <a @click="router.push(`/portal/bidding/projects/${ encodeURIComponent(projectCode) }/tender-projects`)">{{ projectCode || '…' }}</a>
       <span>/</span>
       <a @click="backToSections">{{ tenderProjectCode || '…' }}</a>
       <span>/</span>
-      <span class="pn-cur">{{ bidSectionCode }}{{ sectionName ? ' · ' + sectionName : '' }}</span>
+      <span class="pn-cur">{{ bidSectionCode }}{{ sectionName ? ` · ${ sectionName}` : '' }}</span>
       <span>/</span>
       <span>公告</span>
     </div>
@@ -111,13 +114,14 @@ function backToSections(): void {
       <div>
         <h1 class="pn-title">公告 / 公示</h1>
         <p class="pn-sub">
-          当前标段：<b>{{ bidSectionCode }}</b>{{ sectionName ? '（' + sectionName + '）' : '' }}。
+          当前标段：<b>{{ bidSectionCode }}</b>{{ sectionName ? `（${ sectionName }）` : '' }}。
           公告对"标段"发布，四类数据集字段不同：招标公告 / 变更公告 / 中标候选人公示 / 中标结果公示。
           点「创建公告」先选类型，再按类型加载对应的专属字段表；公告可挂多个附件（按类型对应采集项）。
         </p>
       </div>
       <div class="pn-acts">
-        <Button type="primary" @click="createOpen = true">创建公告</Button>
+        <Button v-if="can('bidding:notice:create')" type="primary" @click="createOpen = true">创建公告</Button>
+        <span v-else class="pn-dim">无创建权限（bidding:notice:create）：可查看该标段已发布公告，创建请联系管理员开通</span>
         <Button @click="load">刷新</Button>
       </div>
     </div>

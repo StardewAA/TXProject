@@ -648,6 +648,7 @@ curl -X POST http://127.0.0.1:48110/admin-api/bidding/notice-external/reindex
 | Nacos 容器启动数分钟后退出（137 / OOMKilled） | 镜像默认堆大，容器 cgroup 限额小 | 用 `deploy-bidding-local.override.yml`（已固定 `JVM_XMS=256m/JVM_XMX=512m`） |
 | 服务注册到错误命名空间 / 配置拉不到 | 本地应为 public | `-Dspring.cloud.nacos.*.namespace=`（置空） |
 | 编译报找不到 `...-api` 里的类/方法 | 本地仓库里的 api 快照过期 | `mvn -o -pl txgy-module-bidding-api install -DskipTests` |
+| **`Table 'ruoyi-vue-pro.bidding_crawl_download_gate' doesn't exist`**（任务卡住反复重试） | ① 用的是**旧版** `master-bidding-sync.sql`——限速闸/审计表 2026-09-10 才并入主包；② 或旧包把这两张表排在菜单段之后，目标库没有 `system_menu` 时菜单段报错、`mysql` **遇错即中止**，后面的表都没建 | 执行 `sql/master-bidding-sync.sql`（幂等）；程序侧已加兜底：启动自检 `BiddingSchemaHealthCheck` 会打 ERROR 说明缺哪些表，**并自动停掉爬虫调度**（不再空转重试），补表后重启即可 |
 | 重新打包报文件被占用 | Windows 下运行中的 jar/进程锁 target | 先停 48110 上的进程（`Stop-Process`）再打包 |
 | 下载"看起来同时在跑" | ①消费端每 30s 尝试取闸位，未到点立即回 PENDING；②失败任务的 started/finished 同秒 | 看审计表相邻 `create_time`，**间隔 ≥120s 即合规** |
 | 采集结果里出现 SKIPPED | robots 禁止（规则跳过） | 正常合规行为：不占额度、不重试；如需采集需站点许可 |

@@ -10,15 +10,20 @@
   附件：downloadUrl=FileApi 签名下载；INFECTED 后端不下发链接（页面显示已拦截），PENDING 显示扫描中。
 -->
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useAppConfig } from '@vben/hooks';
+import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
 
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { biddingConfig } from './config';
+import { useAppConfig } from '@vben/hooks';
+
+import { fmtBytes } from '#/utils/format';
+
+import CopyText from '../../bidding/components/CopyText.vue';
+import { buildExternalNoticePdfUrl } from '../../bidding/noticeExternal/pdfUrl';
 import { fetchNoticeDetail, followTarget, isFollowed, openOrigUrl, unfollowTarget } from './api';
-import { blocksToHtml, cleanT, fmtDT, fmtDate, prettyNoticeHtml, toCleanList } from './format';
-import type { NoticeBodyBlock, NoticeExternalDetail } from './types';
+import { biddingConfig } from './config';
+import { blocksToHtml, cleanT, fmtDate, fmtDT, prettyNoticeHtml, toCleanList } from './format';
 
 const route = useRoute();
 const router = useRouter();
@@ -28,7 +33,7 @@ const errorMsg = ref('');
 const detail = ref<NoticeExternalDetail | null>(null);
 
 /** 关注状态：idle=探测中 / followed / unfollowed / unavailable（未登录或无权限时不展示按钮并给提示） */
-const followState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const followState = ref<'followed' | 'idle' | 'unavailable' | 'unfollowed'>('idle');
 const followBusy = ref(false);
 const followHint = ref('');
 
@@ -49,7 +54,7 @@ function hintOf(e: unknown): string {
 }
 /** 登录态错误判定：ApiError.code === 401/403（api.ts authedFetch 统一抛出；其余业务/网络错误不在此列） */
 function isAuthError(e: unknown): boolean {
-  const code = (e as { code?: number } | null | undefined)?.code;
+  const code = (e as null | undefined | { code?: number })?.code;
   return code === 401 || code === 403;
 }
 /** 未登录/无权限：去管理端登录页（login.vue 的 resolveRedirectPath 支持 /portal/ 前缀回跳当前详情） */
@@ -99,7 +104,7 @@ async function toggleFollow(): Promise<void> {
   }
 }
 /** 项目级次级关注（跟踪该招标项目；targetType=PROJECT + targetKey=projectKey，BR-1/01 §3） */
-const projFollowState = ref<'idle' | 'followed' | 'unfollowed' | 'unavailable'>('idle');
+const projFollowState = ref<'followed' | 'idle' | 'unavailable' | 'unfollowed'>('idle');
 const projFollowBusy = ref(false);
 const projFollowHint = ref('');
 
@@ -147,7 +152,7 @@ async function toggleProjFollow(): Promise<void> {
 
 /** 兜底：未捕获的运行时/异步错误显示到页面上，便于定位（开发辅助） */
 const pageError = ref('');
-function onUnhandled(e: PromiseRejectionEvent | ErrorEvent): void {
+function onUnhandled(e: ErrorEvent | PromiseRejectionEvent): void {
   const reason = e instanceof PromiseRejectionEvent ? e.reason : e.error;
   const msg =
     reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason ?? e);
@@ -183,9 +188,9 @@ const sections = computed<SecTrack[]>(() => {
     }))
     .filter((s) => !!s.key);
 });
-type SecState = 'idle' | 'followed' | 'unfollowed' | 'unavailable';
-const sectionFollows = ref<Record<string, { state: SecState; busy: boolean; hint: string }>>({});
-function secStateOf(s: SecTrack): { state: SecState; busy: boolean; hint: string } {
+type SecState = 'followed' | 'idle' | 'unavailable' | 'unfollowed';
+const sectionFollows = ref<Record<string, { busy: boolean; hint: string; state: SecState; }>>({});
+function secStateOf(s: SecTrack): { busy: boolean; hint: string; state: SecState; } {
   return sectionFollows.value[s.key] || { state: 'idle', busy: false, hint: '' };
 }
 async function probeSectionFollows(): Promise<void> {
@@ -258,13 +263,8 @@ const isPdf = computed(() => !hasBodyHtml.value && detail.value?.contentType ===
    ② detail.pdfDownloadUrl（FileApi 签名地址，回填后可用）优先于①。
    理由：此前只等 pdfDownloadUrl 回填，导致 contentType=PDF 的公告长期显示"源文件整理中"、无法预览。 */
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-const pdfFrameUrl = computed(() => {
-  const signed = cleanT(detail.value?.pdfDownloadUrl);
-  if (signed) return signed;
-  const nid = id.value;
-  if (!nid) return '';
-  return apiURL.replace(/\/$/, '') + '/bidding/notice-external/pdf?id=' + encodeURIComponent(nid);
-});
+// 解析口径见 views/bidding/noticeExternal/pdfUrl.ts（单一真源，后台审核详情共用，避免再次分叉）
+const pdfFrameUrl = computed(() => buildExternalNoticePdfUrl(apiURL, id.value, detail.value?.pdfDownloadUrl));
 const canPreviewPdf = computed(() => !!pdfFrameUrl.value);
 /** 附件区是否没有任何可下载链接（FileApi 签名地址尚未回填 / 数据源无附件样例，R6） */
 const noRealDownload = computed(
@@ -274,7 +274,7 @@ const noRealDownload = computed(
 const metaPairs = computed(() => {
   const d = detail.value;
   if (!d) return [];
-  const pairs: Array<{ k: string; v: string }> = [];
+  const pairs: Array<{ copy?: boolean; k: string; v: string }> = [];
   const issuer = cleanT(d.issuerName);
   if (issuer) pairs.push({ k: '发布单位', v: issuer });
   if (fmtDT(d.publishTime)) pairs.push({ k: '发布时间', v: fmtDT(d.publishTime) });
@@ -283,10 +283,11 @@ const metaPairs = computed(() => {
   const proj = cleanT(d.projectName);
   const pKey = cleanT(d.projectKey);
   if (proj) pairs.push({ k: '关联项目', v: proj });
-  if (pKey) pairs.push(proj ? { k: '项目编号', v: pKey } : { k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
+  // 项目编号 / 投标人拿去搜索或对外引用时都要原样复制 → 带一键复制（CopyText 的失败提示口径见组件注释）
+  if (pKey) pairs.push(proj ? { copy: true, k: '项目编号', v: pKey } : { copy: true, k: '关联项目', v: pKey }); // BR-1：键存在即展示（有名称时编号单列）
   const srcName = cleanT(d.sourceName);
   const srcCode = cleanT(d.sourceCode);
-  if (srcCode || srcName) pairs.push({ k: '来源', v: [srcCode, srcName].filter(Boolean).join(' · ') });
+  if (srcCode || srcName) pairs.push({ copy: Boolean(srcCode), k: '来源', v: [srcCode, srcName].filter(Boolean).join(' · ') }); // 有来源编码时才可复制（只有名称时复制意义不大）
   const nType = cleanT(d.noticeTypeRaw);
   if (nType) pairs.push({ k: '公告性质', v: nType });
   if (d.legalFlag === 'Y') pairs.push({ k: '依法必招', v: '是' });
@@ -316,11 +317,7 @@ const tagList = computed(() => {
 const fmtSize = (n?: number) =>
   n == null
     ? ''
-    : n >= 1024 * 1024
-      ? `${(n / 1024 / 1024).toFixed(1)} MB`
-      : n >= 1024
-        ? `${Math.round(n / 1024)} KB`
-        : `${n} B`;
+    : fmtBytes(n);
 
 const virusText = (v?: string) =>
   v === 'CLEAN' ? { text: '已扫描 CLEAN', bad: false } : v === 'PENDING' ? { text: '扫描中 PENDING', bad: false } : v === 'INFECTED' ? { text: '文件含病毒 · 已拦截', bad: true } : { text: '', bad: false };
@@ -399,12 +396,16 @@ onBeforeUnmount(() => {
             :class="{ active: followState === 'followed', need: followState === 'unavailable' }"
             :disabled="followBusy"
             @click="toggleFollow()"
-          >{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : followState === 'unavailable' ? '＋ 关注 · 需登录' : '＋ 关注' }}</button>
+          >
+{{ followState === 'followed' ? '已关注 ✓' : followBusy ? '处理中…' : followState === 'unavailable' ? '＋ 关注 · 需登录' : '＋ 关注' }}
+</button>
           <button
             v-if="followState === 'unavailable'"
             class="go-orig ghost"
             @click="goLogin()"
-          >去登录</button>
+          >
+去登录
+</button>
           <a
             v-if="detail.origUrl"
             class="go-orig"
@@ -418,7 +419,11 @@ onBeforeUnmount(() => {
       </div>
       <h1>{{ detail.title }}</h1>
       <div class="meta">
-        <span v-for="p in metaPairs" :key="p.k"><b>{{ p.k }}</b>{{ p.v }}</span>
+        <span v-for="p in metaPairs" :key="p.k">
+          <b>{{ p.k }}</b>
+          <CopyText v-if="p.copy" :label="p.k" :text="p.v" />
+          <template v-else>{{ p.v }}</template>
+        </span>
       </div>
       <!-- BR-1：detail.projectKey 存在 → 项目级次级关注（跟踪该招标项目）；未登录/无权限时不展示按钮只给提示 -->
       <div v-if="projectKeyVal" class="track-row">
@@ -430,7 +435,9 @@ onBeforeUnmount(() => {
           :class="{ active: projFollowState === 'followed', need: projFollowState === 'unavailable' }"
           :disabled="projFollowBusy"
           @click="toggleProjFollow()"
-        >{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}</button>
+        >
+{{ projFollowState === 'followed' ? '已关注该项目 ✓' : projFollowBusy ? '处理中…' : projFollowState === 'unavailable' ? '＋ 跟踪该项目 · 需登录' : '＋ 跟踪该项目' }}
+</button>
         <button v-if="projFollowState === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
         <span v-if="projFollowHint" class="follow-note">跟踪：{{ projFollowHint }}（浏览不受影响）</span>
       </div>
@@ -447,7 +454,9 @@ onBeforeUnmount(() => {
               :class="{ active: secStateOf(s).state === 'followed', need: secStateOf(s).state === 'unavailable' }"
               :disabled="secStateOf(s).busy"
               @click="toggleSectionFollow(s)"
-            >{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}</button>
+            >
+{{ secStateOf(s).state === 'followed' ? '已关注该标段 ✓' : secStateOf(s).busy ? '处理中…' : secStateOf(s).state === 'unavailable' ? '＋ 关注该标段 · 需登录' : '＋ 关注该标段' }}
+</button>
             <button v-if="secStateOf(s).state === 'unavailable'" class="go-orig ghost" @click="goLogin()">去登录</button>
             <span v-if="secStateOf(s).hint" class="follow-note">标段：{{ secStateOf(s).hint }}</span>
           </div>
@@ -472,7 +481,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div v-else class="pdf-empty">
-          源文件整理中——PDF 归档尚未回填，暂不提供预览/下载（04-契约 §1：勿直开 origUrl 代替 PDF）
+          无法定位该公告的 PDF：缺少公告 id（字节流代理需要 id）且签名地址未回填，暂不提供预览/下载。
+          <div class="sub">
+            说明：只要公告 id 存在，本页会自动走后端字节流代理 /bidding/notice-external/pdf；此处为两条路径都不可用。
+          </div>
           <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
         </div>
       </div>

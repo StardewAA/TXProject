@@ -8,17 +8,20 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Button, Drawer, Input, message, Table, Tag } from 'ant-design-vue';
 
-import { getBidSectionPage, getTenderProjectByCode, saveBidSection, type ProjectApi } from '#/api/bidding/project';
+import { getBidSectionPage, getTenderProjectByCode, type ProjectApi, saveBidSection } from '#/api/bidding/project';
 
 import AttachmentList from '../../../bidding/vo/AttachmentList.vue';
-import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { loadAttachments } from '../../../bidding/vo/attachmentStore';
+import EntityFormModal from '../../../bidding/vo/EntityFormModal.vue';
 import { BID_SECTION_DEF } from '../../../bidding/vo/entityForms';
+import { usePortalCan } from '../access';
 
 import './panel.css';
 
 const route = useRoute();
 const router = useRouter();
+/* 判权口径见 ../access.ts（未下发权限码时放行，与后台一致） */
+const { can } = usePortalCan();
 const projectCode = computed(() => String(route.params.projectCode ?? ''));
 const tenderProjectCode = computed(() => String(route.params.tenderProjectCode ?? ''));
 
@@ -31,11 +34,11 @@ const query = reactive<{ bidSectionCode: string; bidSectionName: string }>({ bid
 const tenderProjectName = ref('');
 
 const editorOpen = ref(false);
-const editing = ref<ProjectApi.BidSection | null>(null);
+const editing = ref<null | ProjectApi.BidSection>(null);
 const preset = computed<Record<string, string>>(() => ({ TENDER_PROJECT_CODE: tenderProjectCode.value }));
 
 const attDrawerOpen = ref(false);
-const attOwner = ref<ProjectApi.BidSection | null>(null);
+const attOwner = ref<null | ProjectApi.BidSection>(null);
 const attList = computed(() => (attOwner.value ? loadAttachments('bidSection', attOwner.value.bidSectionCode) : []));
 
 async function load(): Promise<void> {
@@ -104,9 +107,9 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
     <div class="pn-crumb">
       <a @click="router.push('/portal/bidding/projects')">项目</a>
       <span>/</span>
-      <a @click="router.push('/portal/bidding/projects/' + encodeURIComponent(projectCode) + '/tender-projects')">{{ projectCode }}</a>
+      <a @click="router.push(`/portal/bidding/projects/${ encodeURIComponent(projectCode) }/tender-projects`)">{{ projectCode }}</a>
       <span>/</span>
-      <span class="pn-cur">{{ tenderProjectCode }}{{ tenderProjectName ? ' · ' + tenderProjectName : '' }}</span>
+      <span class="pn-cur">{{ tenderProjectCode }}{{ tenderProjectName ? ` · ${ tenderProjectName}` : '' }}</span>
       <span>/</span>
       <span>标段（包）</span>
     </div>
@@ -115,13 +118,14 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
       <div>
         <h1 class="pn-title">标段（包）</h1>
         <p class="pn-sub">
-          当前招标项目：<b>{{ tenderProjectCode }}</b>{{ tenderProjectName ? '（' + tenderProjectName + '）' : '' }}。
+          当前招标项目：<b>{{ tenderProjectCode }}</b>{{ tenderProjectName ? `（${ tenderProjectName }）` : '' }}。
           一个招标项目可拆多个标段；字段照录 VO 规范 BidSectionVO（28 项），新建时自动带入归属招标项目编号，可挂多个附件。
           <b>点击标段行进入该标段的公告列表，并在那里创建公告</b>。
         </p>
       </div>
       <div class="pn-acts">
-        <Button type="primary" @click="create">创建标段</Button>
+        <Button v-if="can('bidding:bid-section:create')" type="primary" @click="create">创建标段</Button>
+        <span v-else class="pn-dim">无创建权限（bidding:bid-section:create）：可浏览现有标段，创建请联系管理员开通</span>
         <Button @click="load">刷新</Button>
       </div>
     </div>
@@ -146,7 +150,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
             pageSize,
             total,
             showSizeChanger: true,
-            showTotal: (t: number) => '共 ' + t + ' 条',
+            showTotal: (t: number) => `共 ${ t } 条`,
             onChange: (p: number, ps: number) => { pageNo = p; pageSize = ps; load(); },
           }"
         >
@@ -183,7 +187,7 @@ async function doSave(data: Record<string, unknown>): Promise<unknown> {
 
     <EntityFormModal v-model:open="editorOpen" :def="BID_SECTION_DEF" :record="editing" :preset="preset" :save="doSave" @saved="load" />
 
-    <Drawer v-model:open="attDrawerOpen" :title="'标段附件 · ' + (attOwner?.bidSectionCode ?? '')" :width="760">
+    <Drawer v-model:open="attDrawerOpen" :title="`标段附件 · ${ attOwner?.bidSectionCode ?? ''}`" :width="760">
       <div class="pn-tip">标段附件：招标文件、资格预审文件、控制价文件等可按采集项挂多个；GUID 按规范写入 ATTACHMENT_CODE。</div>
       <AttachmentList :list="attList" title="本标段附件" />
     </Drawer>
