@@ -25,6 +25,7 @@ import { useAccessStore } from '@vben/stores';
 import { message, Modal } from 'ant-design-vue';
 
 import { type CertificateApi, getMaterialCompleteness } from '#/api/bidding/certificate';
+import { getPersonnelProfilePage } from '#/api/bidding/personnel';
 import {
   approveQualificationRenew,
   changePermitStatus,
@@ -465,6 +466,25 @@ const elementIds = reactive<{ entId: number; qualId: number }>({ entId: 0, qualI
 const staffForm = reactive<QualificationApi.StaffSaveReq>({ entId: 0, personName: '', qualId: 0 });
 const perfForm = reactive<QualificationApi.PerformanceSaveReq>({ entId: 0, projectName: '', qualId: 0 });
 const assetForm = reactive<QualificationApi.AssetSaveReq>({ entId: 0, name: '' });
+/* 资质人员姓名：**优先从员工档案选**（本模块已有员工档案，手打易与档案对不上），
+ * 但保留手填能力——资质申报里的"拟聘人员"可能尚未建档，故用 AutoComplete 而非 Select。
+ * 注：后端 StaffSaveReqVO 只有 personName（无 personId），所以这里只回填姓名，不伪造关联 ID。 */
+const personNameOptions = ref<Array<{ label: string; value: string }>>([]);
+let personNameLoaded = false;
+async function loadPersonNameOptions(): Promise<void> {
+  if (personNameLoaded) return;
+  personNameLoaded = true;
+  try {
+    const res = await getPersonnelProfilePage({ pageNo: 1, pageSize: 200 });
+    personNameOptions.value = (res?.list ?? [])
+      .map((p) => p.personName)
+      .filter((n): n is string => !!n)
+      .map((n) => ({ label: n, value: n }));
+  } catch {
+    personNameOptions.value = [];
+    personNameLoaded = false; // 失败允许下次重试
+  }
+}
 
 function openElement(row: QualificationApi.Qualification) {
   Object.assign(elementIds, { entId: row.entId, qualId: row.id });
@@ -520,15 +540,15 @@ function toEvidenceJson(text?: string) {
 
 async function submitElement() {
   if (elementTab.value === 'staff' && !staffForm.personName?.trim()) {
-    message.warning('人员姓名必填');
+    message.warning('人员姓名不能为空');
     return;
   }
   if (elementTab.value === 'performance' && !perfForm.projectName?.trim()) {
-    message.warning('项目名称必填');
+    message.warning('项目名称不能为空');
     return;
   }
   if (elementTab.value === 'asset' && !assetForm.name?.trim()) {
-    message.warning('资产/装备名称必填');
+    message.warning('资产/装备名称不能为空');
     return;
   }
   elementSaving.value = true;
@@ -587,7 +607,7 @@ function openPermit() {
 
 async function submitPermit() {
   if (!permitForm.entId || !permitForm.permitNo?.trim()) {
-    message.warning('企业主体 id 与安全生产许可证编号必填');
+    message.warning('企业主体与安全生产许可证编号不能为空');
     return;
   }
   permitSaving.value = true;
@@ -716,7 +736,7 @@ function openStandard() {
 
 async function submitStandard() {
   if (!stdForm.qualSerial || !stdForm.qualCategory || !stdForm.qualGrade || !stdForm.stdVersion) {
-    message.warning('序列 / 类别 / 等级 / 标准版本为必填');
+    message.warning('序列 / 类别 / 等级 / 标准版本不能为空');
     return;
   }
   stdSaving.value = true;
@@ -2097,7 +2117,15 @@ onMounted(() => {
           <a-form layout="vertical">
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="姓名（必填）"><a-input v-model:value="staffForm.personName" /></a-form-item>
+                <a-form-item label="姓名（必填）">
+                  <a-auto-complete
+                    v-model:value="staffForm.personName"
+                    :options="personNameOptions"
+                    placeholder="从员工档案选择，或直接输入（拟聘人员）"
+                    allow-clear
+                    @focus="loadPersonNameOptions"
+                  />
+                </a-form-item>
               </a-col>
               <a-col :span="12">
                 <a-form-item label="岗位角色">

@@ -535,11 +535,11 @@ function openProfileEdit(row: PersonnelProfileApi.Profile) {
 
 async function submitProfile() {
   if (!profileForm.entId) {
-    message.warning('企业主体 id（entId）必填');
+    message.warning('企业主体不能为空');
     return;
   }
   if (!profileForm.personName?.trim()) {
-    message.warning('姓名必填');
+    message.warning('姓名不能为空');
     return;
   }
   profileSaving.value = true;
@@ -759,15 +759,15 @@ function openRecordCreate() {
 
 async function submitRecord() {
   if (recordType.value === 'training' && !trainingForm.trainingName?.trim()) {
-    message.warning('培训名称必填');
+    message.warning('培训名称不能为空');
     return;
   }
   if (recordType.value === 'socialSecurity' && !socialForm.payMonth?.trim()) {
-    message.warning('缴费月份（yyyy-MM）必填');
+    message.warning('缴费月份不能为空（yyyy-MM）');
     return;
   }
   if (recordType.value === 'laborContract' && !contractForm.contractNo?.trim()) {
-    message.warning('合同编号必填');
+    message.warning('合同编号不能为空');
     return;
   }
   recSaving.value = true;

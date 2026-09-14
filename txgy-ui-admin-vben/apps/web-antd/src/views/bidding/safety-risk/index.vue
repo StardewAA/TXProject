@@ -76,7 +76,7 @@ const multiResult = ref<null | SafetyPermitApi.MultiPostCheck>(null);
 
 async function doMultiCheck() {
   if (!multiForm.personId || !multiForm.primaryPost || !multiForm.secondaryPost) {
-    message.warning('人员 id、主岗、兼任岗均为必填');
+    message.warning('人员、主岗、兼任岗不能为空');
     return;
   }
   if (multiForm.primaryPost === multiForm.secondaryPost) {

@@ -152,7 +152,7 @@ async function submitRollback() {
     return;
   }
   if (!rollbackForm.changeReason.trim()) {
-    message.warning('回滚原因必填');
+    message.warning('回滚原因不能为空');
     return;
   }
   rollbackSaving.value = true;
