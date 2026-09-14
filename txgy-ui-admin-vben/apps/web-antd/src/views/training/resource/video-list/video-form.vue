@@ -4,6 +4,7 @@ import type { TrainingResourceApi } from '../api';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
   Button,
@@ -272,6 +273,7 @@ const [Modal, modalApi] = useVbenModal({
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
           上传视频文件（短视频 / 录播，MP4 ≤4GB）
+          <span class="text-blue-500">· 时长将自动识别填入</span>
         </div>
         <Upload
           accept=".mp4,.mov"
@@ -288,6 +290,13 @@ const [Modal, modalApi] = useVbenModal({
             {{ (selectedFile.size / 1024 / 1024).toFixed(1) }} MB
           </span>
           <Button size="small" type="text" danger @click="clearFile">移除</Button>
+        </div>
+        <div
+          v-if="!detectFailed && !autoDetected"
+          class="mt-2 flex items-center gap-1 rounded bg-blue-50 px-3 py-2 text-xs text-blue-600 dark:bg-blue-950 dark:text-blue-300"
+        >
+          <IconifyIcon icon="lucide:wand-sparkles" class="size-4 shrink-0" />
+          选择视频后，系统将自动读取视频元数据并填入时长，无需手动输入；仅当无法识别时才需手动补充。
         </div>
       </div>
 
@@ -316,6 +325,7 @@ const [Modal, modalApi] = useVbenModal({
         <div class="flex-1">
           <div class="mb-1 flex items-center gap-2 text-sm text-gray-600">
             <span>视频时长（秒）</span>
+            <span class="text-xs text-gray-400">（自动识别为主，手动填写为备选）</span>
             <Tag v-if="!editing && detecting" color="processing" class="!m-0 !text-xs">
               自动识别中…
             </Tag>
@@ -323,7 +333,7 @@ const [Modal, modalApi] = useVbenModal({
               已自动识别
             </Tag>
             <Tag v-else-if="!editing && detectFailed" color="warning" class="!m-0 !text-xs">
-              识别失败，请手动填写
+              识别失败，请手动填写（备选）
             </Tag>
           </div>
           <InputNumber
