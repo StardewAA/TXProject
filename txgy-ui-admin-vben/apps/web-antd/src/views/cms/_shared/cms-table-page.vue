@@ -5,6 +5,8 @@ import { Page } from '@vben/common-ui';
 
 import { Button, Input, Space, Table, Tag, message } from 'ant-design-vue';
 
+import './cms-glass-theme.css';
+
 defineOptions({ name: 'CmsTablePage' });
 
 const props = withDefaults(
@@ -78,7 +80,9 @@ const filteredRows = computed(() => {
   const value = keyword.value.toLowerCase();
   return props.rows.filter((row) =>
     Object.values(row).some((item) =>
-      String(item ?? '').toLowerCase().includes(value),
+      String(item ?? '')
+        .toLowerCase()
+        .includes(value),
     ),
   );
 });
@@ -94,8 +98,8 @@ function handlePrimary() {
 
 <template>
   <Page>
-    <div class="cms-page">
-      <div class="cms-heading">
+    <div class="cms-glass-page cms-page">
+      <div class="cms-glass-hero cms-heading">
         <div>
           <p v-if="eyebrow" class="cms-eyebrow">{{ eyebrow }}</p>
           <h1>{{ title }}</h1>
@@ -106,11 +110,7 @@ function handlePrimary() {
       </div>
 
       <div v-if="stats && stats.length" class="cms-stats">
-        <div
-          v-for="item in stats"
-          :key="item.label"
-          class="cms-stat-item"
-        >
+        <div v-for="item in stats" :key="item.label" class="cms-stat-item">
           <strong>{{ item.value }}</strong>
           <span>{{ item.label }}</span>
         </div>
@@ -134,7 +134,9 @@ function handlePrimary() {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'cms-status'">
-            <Tag :color="props.statusMeta[record[props.statusField]] || 'default'">
+            <Tag
+              :color="props.statusMeta[record[props.statusField]] || 'default'"
+            >
               {{ record[props.statusField] || '-' }}
             </Tag>
           </template>
@@ -166,55 +168,69 @@ function handlePrimary() {
 
 .cms-heading {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
   gap: 16px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .cms-eyebrow {
   margin: 0 0 6px;
-  color: #1d4ed8;
   font-size: 13px;
   font-weight: 600;
+  color: #1d4ed8;
 }
 
 h1 {
   margin: 0;
-  color: #111827;
   font-size: 24px;
   line-height: 32px;
+  color: #111827;
 }
 
 .cms-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .cms-stat-item {
+  position: relative;
   display: flex;
-  min-height: 84px;
-  padding: 14px 18px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
   flex-direction: column;
   justify-content: center;
+  min-height: 104px;
+  padding: 18px 20px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 66%);
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 17px;
+  box-shadow:
+    0 14px 35px rgb(43 70 105 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 88%);
+  backdrop-filter: blur(18px);
 }
 
 .cms-stat-item strong {
-  color: #111827;
-  font-size: 24px;
+  font-size: 26px;
+  font-weight: 680;
   line-height: 32px;
+  color: #1a3153;
 }
 
 .cms-stat-item span {
   margin-top: 4px;
-  color: #6b7280;
-  font-size: 13px;
+  font-size: 12px;
+  color: #7d8ba0;
 }
 
 .cms-toolbar {
   display: flex;
+  padding: 14px;
+  background: rgb(255 255 255 / 56%);
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 15px;
+  box-shadow: 0 12px 30px rgb(44 70 105 / 6%);
+  backdrop-filter: blur(16px);
 }
 
 .cms-search {
@@ -223,8 +239,8 @@ h1 {
 
 @media (max-width: 900px) {
   .cms-heading {
-    align-items: stretch;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .cms-stats {
