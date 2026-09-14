@@ -10,6 +10,7 @@ import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
 import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
+import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
 import cn.iocoder.txgy.module.system.api.permission.RoleApi;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;

@@ -62,4 +62,9 @@ public interface WmsInventoryService {
      */
     void changeInventory(WmsInventoryChangeReqDTO reqDTO);
 
+    /**
+     * 将当前 WMS 库存余额全量刷新到 ERP 产品库存镜像。
+     */
+    void refreshErpInventoryMirror();
+
 }

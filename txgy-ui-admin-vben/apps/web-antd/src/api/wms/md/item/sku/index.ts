@@ -10,6 +10,7 @@ export namespace WmsItemSkuApi {
     itemId?: number;
     itemCode?: string;
     itemName?: string;
+    materialType?: string;
     categoryId?: number;
     categoryName?: string;
     unit?: string;
