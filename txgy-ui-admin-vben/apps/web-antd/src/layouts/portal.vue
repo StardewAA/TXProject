@@ -2,7 +2,8 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { useUserStore } from '@vben/stores';
+import { LOGIN_PATH } from '@vben/constants';
+import { useAccessStore, useUserStore } from '@vben/stores';
 
 import txgyLogo from '#/assets/imgs/logo.png';
 import { useAuthStore } from '#/store';
@@ -11,6 +12,15 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const authStore = useAuthStore();
+const accessStore = useAccessStore();
+
+/** 是否已登录：公告页（meta.ignoreAccess）免登录可看，头部必须能匿名渲染，不能假设有 userInfo。 */
+const isLoggedIn = computed(() => Boolean(accessStore.accessToken));
+
+/** 匿名访客点「登录」：带 redirect 回当前页。 */
+function goLogin() {
+  router.push({ path: LOGIN_PATH, query: { redirect: encodeURIComponent(route.fullPath) } });
+}
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
@@ -60,10 +70,13 @@ async function handleLogout() {
       </nav>
 
       <div class="portal-user">
-        <span class="portal-user-name">{{ displayName }}</span>
-        <button class="portal-logout" type="button" @click="handleLogout">
-          退出登录
-        </button>
+        <template v-if="isLoggedIn">
+          <span class="portal-user-name">{{ displayName }}</span>
+          <button class="portal-logout" type="button" @click="handleLogout">
+            退出登录
+          </button>
+        </template>
+        <button v-else class="portal-logout" type="button" @click="goLogin">登录</button>
       </div>
     </header>
 

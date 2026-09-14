@@ -60,8 +60,14 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
-    // 员工端门户是静态路由，但仍必须登录后才能访问。
+    // 员工端门户：标注 meta.ignoreAccess 的公开页（招标投标 · 公告大厅/公告详情/本平台发布公告）免登录可查；
+    // 其余门户页（首页/我要找工作/云培训学院/个人中心/我的关注/公告发布）仍必须登录后才能访问。
+    // 依据：招标公告和公示信息发布管理办法（发改委令第10号）第12条——发布媒介须免费提供并允许公众查阅公告公示完整信息；
+    //      后端 /notice-external/page|detail|go|pdf 与 /notice/public/* 均 @PermitAll + @TenantIgnore（模块 README §9.2）。
     if (to.path === '/portal' || to.path.startsWith('/portal/')) {
+      if (to.meta.ignoreAccess === true) {
+        return true;
+      }
       if (!accessStore.accessToken) {
         return {
           path: LOGIN_PATH,

@@ -233,13 +233,15 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'PortalBidding',
         path: 'bidding',
         component: () => import('#/views/portal/bidding/index.vue'),
-        meta: { title: '招标投标', hideInMenu: true },
+        /** 免登录（meta.ignoreAccess）：公告大厅为公开页，任何人可查 */
+        meta: { title: '招标投标', hideInMenu: true, ignoreAccess: true },
       },
       {
         name: 'PortalBiddingDetail',
         path: 'bidding/detail/:id',
         component: () => import('#/views/portal/bidding/detail.vue'),
-        meta: { title: '公告详情', hideInMenu: true },
+        /** 免登录（meta.ignoreAccess）：公告详情随大厅公开 */
+        meta: { title: '公告详情', hideInMenu: true, ignoreAccess: true },
       },
       {
         name: 'PortalBiddingSubscription',
@@ -257,13 +259,15 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'PortalBiddingInternalHall',
         path: 'bidding/internal-hall',
         component: () => import('#/views/portal/bidding/internalHall.vue'),
-        meta: { title: '本平台发布', hideInMenu: true },
+        /** 免登录（meta.ignoreAccess）：本平台已发布公告同属公开信息 */
+        meta: { title: '本平台发布', hideInMenu: true, ignoreAccess: true },
       },
       {
         name: 'PortalBiddingInternalDetail',
         path: 'bidding/internal-detail/:id',
         component: () => import('#/views/portal/bidding/internalDetail.vue'),
-        meta: { title: '本平台公告详情', hideInMenu: true },
+        /** 免登录（meta.ignoreAccess）：本平台公告详情随大厅公开 */
+        meta: { title: '本平台公告详情', hideInMenu: true, ignoreAccess: true },
       },
       {
         name: 'PortalBiddingPublish',
