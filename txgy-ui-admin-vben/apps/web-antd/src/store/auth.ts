@@ -107,11 +107,14 @@ export const useAuthStore = defineStore('auth', () => {
           onSuccess
             ? await onSuccess?.()
             : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
+                params.loginType === 'enterprise' &&
+                  userInfo.homePath?.startsWith('/portal/')
+                  ? preferences.app.defaultHomePath
+                  : userInfo.homePath || preferences.app.defaultHomePath,
               );
         }
 
-        if (userInfo?.nickname) {
+        if (!isPersonalAuthentication && userInfo?.nickname) {
           notification.success({
             description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
             duration: 3,

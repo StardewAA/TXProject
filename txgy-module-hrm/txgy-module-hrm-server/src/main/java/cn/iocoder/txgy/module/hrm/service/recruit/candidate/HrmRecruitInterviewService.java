@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.hrm.service.recruit.candidate;
 
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewEvaluationReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 
@@ -107,5 +108,9 @@ public interface HrmRecruitInterviewService {
      * @param reqVO 招聘面试结果信息
      */
     void updateRecruitInterviewResult(HrmRecruitInterviewResultReqVO reqVO);
+
+    void startRecruitInterview(Long id);
+
+    void evaluateRecruitInterview(HrmRecruitInterviewEvaluationReqVO reqVO);
 
 }

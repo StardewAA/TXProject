@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitOfferService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -58,6 +59,8 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
     private HrmPersonalResumeService personalResumeService;
     @MockitoBean
     private HrmRecruitChatService chatService;
+    @MockitoBean
+    private HrmRecruitOfferService offerService;
 
     @Test
     public void testCreatePortalApplication_routesToPostTenant() {
