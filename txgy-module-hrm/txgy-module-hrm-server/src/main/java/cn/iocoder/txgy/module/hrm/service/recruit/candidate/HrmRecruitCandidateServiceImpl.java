@@ -467,4 +467,19 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
         return recruitCandidateMapper.selectByMobile(mobile);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markRecruitCandidateSubmitted(Long candidateId, Long postId) {
+        HrmRecruitCandidateDO candidate = recruitCandidateMapper.selectByIdForUpdate(candidateId);
+        if (candidate == null) {
+            throw exception(RECRUIT_CANDIDATE_NOT_EXISTS);
+        }
+        recruitCandidateMapper.updateById(new HrmRecruitCandidateDO()
+                .setId(candidateId)
+                .setPostId(postId)
+                .setStatus(HrmRecruitCandidateStatusEnum.NEW.getStatus())
+                .setStageNumber(0)
+                .setStatusUpdateTime(LocalDateTime.now()));
+    }
+
 }

@@ -26,6 +26,9 @@ txgy-ui-go-view-master
 .image
 docker-compose*.yml
 deploy/mysql/backup
+deploy/local/jars
+deploy/local/*.sql
+deploy/**/*.log
 
 # Misc
 *.md

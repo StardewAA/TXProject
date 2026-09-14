@@ -18,6 +18,7 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitApplic
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitApplicationMapper;
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
+import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
@@ -51,6 +52,8 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
     private HrmRecruitResumeService resumeService;
     @Resource
     private HrmPersonalResumeService personalResumeService;
+    @Resource
+    private HrmRecruitChatService chatService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -98,6 +101,13 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void enterInterview(HrmRecruitApplicationStatusReqVO reqVO) {
+        HrmRecruitApplicationDO application = getApplication(reqVO.getId());
+        if (HrmRecruitApplicationStatusEnum.INTERVIEWING.getStatus().equals(application.getStatus())) {
+            return;
+        }
+        if (HrmRecruitApplicationStatusEnum.SUBMITTED.getStatus().equals(application.getStatus())) {
+            transition(reqVO, HrmRecruitApplicationStatusEnum.SCREENING, "START_SCREENING", false);
+        }
         transition(reqVO, HrmRecruitApplicationStatusEnum.INTERVIEWING, "ENTER_INTERVIEW", false);
     }
 
@@ -191,6 +201,9 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
     private Long createPortalApplicationInTenant(Long applicantUserId, HrmPortalRecruitApplyReqVO reqVO,
                                                  Long targetTenantId) {
         postService.validateRecruitPostPublished(reqVO.getPostId());
+        if (!chatService.hasApplyQualification(applicantUserId, reqVO.getPostId())) {
+            throw exception(RECRUIT_CHAT_APPLY_NOT_QUALIFIED);
+        }
         HrmRecruitCandidateDO candidate = candidateService.getRecruitCandidateByMobile(reqVO.getMobile());
         if (candidate == null) {
             candidate = new HrmRecruitCandidateDO();
@@ -232,6 +245,8 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
                 .setStatusUpdateTime(LocalDateTime.now()).setVersion(0);
         application.setTenantId(targetTenantId);
         applicationMapper.insert(application);
+        candidateService.markRecruitCandidateSubmitted(candidate.getId(), reqVO.getPostId());
+        chatService.markApplicationSubmitted(applicantUserId, reqVO.getPostId(), candidate.getId(), application.getId());
         writeLog(application, null, application.getStatus(), "PORTAL_CREATE", null);
         return application.getId();
     }
@@ -302,6 +317,7 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
                 || (current == HrmRecruitApplicationStatusEnum.SCREENING && target == HrmRecruitApplicationStatusEnum.ELIMINATED)
                 || (current == HrmRecruitApplicationStatusEnum.SCREENING && target == HrmRecruitApplicationStatusEnum.WITHDRAWN)
                 || (current == HrmRecruitApplicationStatusEnum.INTERVIEWING && target == HrmRecruitApplicationStatusEnum.PASSED)
+                || (current == HrmRecruitApplicationStatusEnum.PASSED && target == HrmRecruitApplicationStatusEnum.INTERVIEWING)
                 || (current == HrmRecruitApplicationStatusEnum.INTERVIEWING && target == HrmRecruitApplicationStatusEnum.ELIMINATED)
                 || (current == HrmRecruitApplicationStatusEnum.INTERVIEWING && target == HrmRecruitApplicationStatusEnum.WITHDRAWN)
                 || (current == HrmRecruitApplicationStatusEnum.PASSED && target == HrmRecruitApplicationStatusEnum.OFFER_APPROVING)
