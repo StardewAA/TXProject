@@ -28,18 +28,28 @@
       powershell -ExecutionPolicy Bypass -File deploy\rebuild-frontend.ps1 `
           -ContainerName deploy-frontend-1 -HostPort 5173
 
+      # -InPlace: replace the static files INSIDE the running container instead of
+      # creating a new one. Use this when the frontend container is owned by docker
+      # compose (or by someone else) and must NOT be recreated. Only the nginx html
+      # directory is swapped, then nginx is reloaded:
+      powershell -ExecutionPolicy Bypass -File deploy\rebuild-frontend.ps1 `
+          -InPlace -ContainerName deploy-frontend-1 -HostPort 5173
+
     PORT CONFLICT BEHAVIOUR:
       The publish step fails loudly when the target port is already published by
       another container, instead of silently reporting success against the OLD
       container. If that happens, stop the other container or pass a different
-      -ContainerName / -HostPort.
+      -ContainerName / -HostPort. -InPlace never publishes a port, so it is immune
+      to this problem.
 #>
 param(
     [switch]$BuildOnly,
+    [switch]$InPlace,
     [int]$HeapMb = 4096,
     [string]$ContainerName = 'txgy-frontend',
     [int]$HostPort = 5173,
-    [string]$Network = 'txgy-dev'
+    [string]$Network = 'txgy-dev',
+    [string]$HtmlRoot = '/usr/share/nginx/html'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,19 +160,22 @@ if ($BuildOnly) {
     exit 0
 }
 
-# ---------- 4. smoke test on a spare port ----------
-Step "4/5 smoke test on port $smokePort"
-& docker rm -f fe-smoke 2>&1 | Out-Null
-# Invoke-Native is used instead of a bare call on purpose: under
-# $ErrorActionPreference='Stop' a bare call turns docker's stderr into a terminating
-# error, which would skip the friendly message below.
-$smokeExit = Invoke-Native -Exe 'docker' -Arguments @('run', '-d', '--name', 'fe-smoke', '--network', $Network, '-p', "${smokePort}:80", $imageNew)
-if ($smokeExit -ne 0) {
+# ---------- 4. smoke test on a spare port (skipped when -InPlace) ----------
+# -InPlace never creates a container, so the spare-port smoke run is pointless there.
+if (-not $InPlace) {
+    Step "4/5 smoke test on port $smokePort"
     & docker rm -f fe-smoke 2>&1 | Out-Null
-    throw ("smoke container failed to start (exit=$smokeExit). Port $smokePort is probably " +
-           "already in use on this machine; free it or pass a different -HostPort.")
+    # Invoke-Native is used instead of a bare call on purpose: under
+    # $ErrorActionPreference='Stop' a bare call turns docker's stderr into a terminating
+    # error, which would skip the friendly message below.
+    $smokeExit = Invoke-Native -Exe 'docker' -Arguments @('run', '-d', '--name', 'fe-smoke', '--network', $Network, '-p', "${smokePort}:80", $imageNew)
+    if ($smokeExit -ne 0) {
+        & docker rm -f fe-smoke 2>&1 | Out-Null
+        throw ("smoke container failed to start (exit=$smokeExit). Port $smokePort is probably " +
+               "already in use on this machine; free it or pass a different -HostPort.")
+    }
+    Start-Sleep -Seconds 6
 }
-Start-Sleep -Seconds 6
 
 function Test-Frontend([string]$Base) {
     for ($i = 1; $i -le 12; $i++) {
@@ -175,6 +188,52 @@ function Test-Frontend([string]$Base) {
         }
     }
     return $false
+}
+
+# ---------- 4/5 + 5/5 (in-place) ----------
+# Swap the static files inside the ALREADY RUNNING container. The container is not
+# recreated, so whoever owns it (compose, a teammate, another script) keeps ownership
+# and the host port binding is untouched. The image built in step 3 is unused here but
+# is still produced, so a rollback target exists.
+if ($InPlace) {
+    $staging = '/tmp/fe-dist-staging'
+
+    Step "4/5 stage the new dist into $ContainerName"
+    $state = (& docker ps --filter "name=^/$ContainerName$" --format '{{.State}}' 2>&1 | Out-String).Trim()
+    if ($state -ne 'running') {
+        throw "-InPlace needs an already RUNNING container named '$ContainerName' (state='$state'). Pass -ContainerName <name>."
+    }
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('exec', $ContainerName, 'sh', '-c', "test -d $HtmlRoot")
+    if ($ex -ne 0) { throw "container '$ContainerName' has no directory $HtmlRoot; pass -HtmlRoot <path>." }
+
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('exec', $ContainerName, 'sh', '-c', "rm -rf $staging && mkdir -p $staging")
+    if ($ex -ne 0) { throw "cannot prepare $staging inside '$ContainerName' (exit=$ex)." }
+
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('cp', "$distDir\.", "${ContainerName}:$staging/")
+    if ($ex -ne 0) { throw "docker cp into '$ContainerName' FAILED (exit=$ex)." }
+
+    # $HtmlRoot is only wiped after the staged copy is verified, so a failed copy can
+    # never leave the site empty.
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('exec', $ContainerName, 'sh', '-c', "test -f $staging/index.html")
+    if ($ex -ne 0) { throw "staged copy has no index.html; $HtmlRoot was left untouched." }
+
+    Step "5/5 swap $HtmlRoot and reload nginx"
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('exec', $ContainerName, 'sh', '-c', "rm -rf $HtmlRoot/* && cp -r $staging/. $HtmlRoot/ && rm -rf $staging")
+    if ($ex -ne 0) { throw "swap into $HtmlRoot FAILED (exit=$ex); inspect the container manually." }
+
+    $ex = Invoke-Native -Exe 'docker' -Arguments @('exec', $ContainerName, 'nginx', '-s', 'reload')
+    if ($ex -ne 0) { throw "nginx -s reload FAILED (exit=$ex) in '$ContainerName'." }
+
+    if (Test-Frontend "http://localhost:$HostPort") {
+        Ok "in-place update done: http://localhost:$HostPort (container '$ContainerName' was NOT recreated)"
+    } else {
+        Warn "post-update probe FAILED. Check: docker logs --tail 50 $ContainerName"
+        exit 1
+    }
+
+    Remove-Item $ctxDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "`ndone."
+    exit 0
 }
 
 if (-not (Test-Frontend "http://localhost:$smokePort")) {
