@@ -2,12 +2,16 @@ package cn.iocoder.txgy.module.system.api.user;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.txgy.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.txgy.module.infra.api.config.ConfigApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
+import cn.iocoder.txgy.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import cn.iocoder.txgy.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.txgy.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.txgy.module.system.service.dept.DeptService;
@@ -21,8 +25,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.USER_IMPORT_INIT_PASSWORD;
+import static cn.iocoder.txgy.module.system.service.user.AdminUserServiceImpl.USER_INIT_PASSWORD_KEY;
 
 @RestController // 提供 RESTful API 接口，给 Feign 调用
 @Validated
@@ -32,6 +39,8 @@ public class AdminUserApiImpl implements AdminUserApi {
     private AdminUserService userService;
     @Resource
     private DeptService deptService;
+    @Resource
+    private ConfigApi configApi;
 
     @Override
     @DataPermission(enable = false) // 忽略数据权限，避免因为过滤，导致无法查询用户。类似：https://github.com/YunaiV/ruoyi-vue-pro/issues/1051
@@ -59,6 +68,27 @@ public class AdminUserApiImpl implements AdminUserApi {
     @DataPermission(enable = false)
     public CommonResult<AdminUserRespDTO> getUserByMobile(String mobile) {
         return success(BeanUtils.toBean(userService.getUserByMobile(mobile), AdminUserRespDTO.class));
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public CommonResult<List<AdminUserRespDTO>> getUserListByMobile(String mobile) {
+        return success(BeanUtils.toBean(userService.getUserListByMobile(mobile), AdminUserRespDTO.class));
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public CommonResult<Long> createUser(AdminUserCreateReqDTO reqDTO) {
+        UserSaveReqVO reqVO = BeanUtils.toBean(reqDTO, UserSaveReqVO.class);
+        // 未指定密码时，沿用系统「初始密码」配置，保证与用户管理的导入行为一致
+        if (StrUtil.isBlank(reqVO.getPassword())) {
+            String initPassword = configApi.getConfigValueByKey(USER_INIT_PASSWORD_KEY).getCheckedData();
+            if (StrUtil.isBlank(initPassword)) {
+                throw exception(USER_IMPORT_INIT_PASSWORD);
+            }
+            reqVO.setPassword(initPassword);
+        }
+        return success(userService.createUser(reqVO));
     }
 
     @Override
