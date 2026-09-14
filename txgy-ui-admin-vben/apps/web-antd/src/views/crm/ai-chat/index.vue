@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import { computed, nextTick, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { message } from 'ant-design-vue';
 
-import { mockAiReply, type TableResult } from './mock';
+import { mockAiReply, type BizType, type TableResult } from './mock';
 
 interface ChatMessage {
   id: number;
@@ -35,6 +35,7 @@ const activeSession = computed(() =>
 
 const examples = [
   '帮我查找名字叫张三的客户信息',
+  '今日待办要联系的客户有哪些',
   '列出本月所有商机',
   '查看待办事项',
   '查询客户公海',
@@ -105,6 +106,10 @@ async function send(text?: string) {
     const reply = await withTimeout(mockAiReply(content), 30000);
     assistant.loading = false;
     assistant.text = reply?.text ?? '';
+    if (reply?.degraded) {
+      assistant.text +=
+        '\n\n（提示：AI 意图识别未生效，本次使用关键词匹配，请检查千问接口配置）';
+    }
     if (reply?.table) {
       assistant.table = reply.table;
     }
@@ -124,9 +129,28 @@ function onEnter(e: KeyboardEvent) {
   send();
 }
 
-function copyRow(_row: Record<string, any>, text: string) {
-  // 仅供展示，不实际复制
-  message.success(`已识别到：${text}`);
+const router = useRouter();
+
+/** 业务类型 → 详情页路由名 */
+const ROUTE_BY_BIZ: Record<string, string> = {
+  business: 'CrmBusinessDetail',
+  clue: 'CrmClueDetail',
+  contact: 'CrmContactDetail',
+  contract: 'CrmContractDetail',
+  customer: 'CrmCustomerDetail',
+  product: 'CrmProductDetail',
+  receivable: 'CrmReceivableDetail',
+  receivablePlan: 'CrmReceivablePlanDetail',
+};
+
+/** 点击表格行：跳转到对应业务对象的详情页（统计表没有 bizType，不响应） */
+function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
+  const id = row?.id;
+  const routeName = bizType ? ROUTE_BY_BIZ[bizType] : undefined;
+  if (!id || !routeName) {
+    return;
+  }
+  router.push({ name: routeName, params: { id } });
 }
 </script>
 
@@ -244,8 +268,12 @@ function copyRow(_row: Record<string, any>, text: string) {
                         <tr
                           v-for="(row, ri) in m.table.rows"
                           :key="ri"
-                          class="border-t border-border transition hover:bg-accent/40"
-                          @click="copyRow(row, String(row[m.table.columns[0].dataIndex]))"
+                          :class="[
+                            'border-t border-border transition hover:bg-accent/40',
+                            m.table.bizType ? 'cursor-pointer' : '',
+                          ]"
+                          :title="m.table.bizType ? '点击查看详情' : ''"
+                          @click="openDetail(m.table.bizType, row)"
                         >
                           <td
                             v-for="col in m.table.columns"
@@ -317,7 +345,7 @@ function copyRow(_row: Record<string, any>, text: string) {
             </button>
           </div>
           <div class="mt-1 text-[11px] text-muted-foreground">
-            由通义千问大模型理解意图，CRM 数据来自前端模拟（演示用）。
+            由通义千问理解意图，数据实时来自 CRM 各业务模块的真实接口。
           </div>
         </div>
       </section>

@@ -23,9 +23,9 @@
       return '请选择商品规格';
     }
     let str = '';
-    props.sku.properties.forEach(property => {
+    (Array.isArray(props.sku?.properties) ? props.sku.properties : []).forEach(property => {
       str += property.propertyName + ':' + property.valueName + ' ';
     });
-    return str;
+    return str || '请选择商品规格';
   });
 </script>

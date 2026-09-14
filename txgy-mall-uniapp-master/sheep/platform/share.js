@@ -4,6 +4,7 @@ import $router from '@/sheep/router';
 import $url from '@/sheep/url';
 import BrokerageApi from '@/sheep/api/trade/brokerage';
 import { SharePageEnum } from '@/sheep/helper/const';
+import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
 
 // #ifdef H5
 import $wxsdk from '@/sheep/libs/sdk-h5-weixin';
@@ -180,6 +181,10 @@ const decryptSpm = async (spm) => {
 
 // 绑定推广员
 const bindBrokerageUser = async (val = undefined) => {
+  // 简化营销模式不启用分销，避免登录/分享时调用未接入的推广员接口。
+  if (isSimpleMarketingEnabled()) {
+    return;
+  }
   try {
     const shareId = val || uni.getStorageSync('shareId');
     if (!shareId) {

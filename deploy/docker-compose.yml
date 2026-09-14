@@ -1,4 +1,6 @@
-﻿# 后端服务公共环境变量单独一个锚点。
+
+
+# 后端服务公共环境变量单独一个锚点。
 # 【重要】compose 里 `environment` 是整体替换、不是深合并：服务块只要自己写了
 # environment，就完全丢掉锚点里的环境（DB/Nacos/Redis 地址全没了，容器会退回连
 # 127.0.0.1 并疯狂重启）。因此服务块必须写成：
@@ -16,8 +18,13 @@ x-backend-env: &backend-env
   SPRING_DATA_REDIS_HOST: redis
   # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
   RESOURCE_UPLOAD_DIR: /app/uploads
+  # 关闭登录行为验证码，便于本地联调；生产环境请移除或置 true
+  TXGY_CAPTCHA_ENABLE: "false"
 
 # 后端服务公共锚点：只放依赖/健康检查/网络；env 走上面的 *backend-env。
+
+
+
 x-backend-service: &backend-service
   depends_on:
     mysql:
@@ -27,7 +34,16 @@ x-backend-service: &backend-service
     nacos:
       condition: service_healthy
   environment:
-    <<: *backend-env
+    SERVER_PORT: 48080
+    SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+    SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    SPRING_DATA_REDIS_HOST: redis
+    # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
+    RESOURCE_UPLOAD_DIR: /app/uploads
+    TXGY_CAPTCHA_ENABLE: "false" # 关闭登录行为验证码，便于本地联调；生产环境请移除或置 true
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:$${SERVER_PORT}/actuator/health"]
     interval: 15s
@@ -41,13 +57,14 @@ x-backend-service: &backend-service
 services:
   mysql:
     image: mysql:8.4
+    restart: unless-stopped
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
@@ -62,8 +79,9 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -76,11 +94,13 @@ services:
 
   nacos:
     image: nacos/nacos-server:v3.0.3
+    restart: unless-stopped
     environment:
       MODE: standalone
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      NACOS_SERVER_IP: 127.0.0.1
       TZ: ${TZ}
     ports:
       - "8848:8848"
@@ -132,13 +152,13 @@ services:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
-  # member: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-member/txgy-module-member-server
+  member:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-member/txgy-module-member-server
 
   bpm:
     <<: *backend-service
@@ -151,13 +171,10 @@ services:
   pay:
     <<: *backend-service
     build:
-      context: ./jars/pay
-      dockerfile: Dockerfile.runtime
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: app.jar
-    environment:
-      <<: *backend-env
-      JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
+        MODULE_PATH: txgy-module-pay/txgy-module-pay-server
 
   report:
     <<: *backend-service
@@ -170,56 +187,53 @@ services:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
 
-  # mp: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mp/txgy-module-mp-server
+  mp:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mp/txgy-module-mp-server
 
-  # product: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-product-server
+  product:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-product-server
 
-  # trade: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-trade-server
+  trade:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-trade-server
 
-  # promotion: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+  promotion:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
 
-  # statistics: # 已停用：与 MES AI 开发无关
-  #   <<: *backend-service
-  #   build:
-  #     context: ..
-  #     dockerfile: deploy/backend/Dockerfile
-  #     args:
-  #       MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
+  statistics:
+    <<: *backend-service
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
+      args:
+        MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
 
   crm:
     <<: *backend-service
     build:
-      context: ./jars/crm
-      dockerfile: Dockerfile.runtime
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: app.jar
-    environment:
-      <<: *backend-env
-      JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
+        MODULE_PATH: txgy-module-crm/txgy-module-crm-server
 
   erp:
     <<: *backend-service
@@ -300,17 +314,6 @@ services:
       args:
         MODULE_PATH: txgy-module-fms/txgy-module-fms-server
 
-  training:
-    <<: *backend-service
-    build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
-      args:
-        MODULE_PATH: txgy-module-training/txgy-module-training-server
-    # 资源中心上传文件持久化（工作目录 /app，upload-dir 默认 ./uploads）
-    volumes:
-      - training-uploads:/app/uploads
-
   frontend:
     build:
       context: ..
@@ -333,7 +336,6 @@ volumes:
   mysql-data:
   redis-data:
   nacos-data:
-  training-uploads:
 
 networks:
   txgy-dev:

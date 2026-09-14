@@ -83,7 +83,10 @@ const [Form, formApi] = useVbenForm({
 /** 重新挂载 schema 并按表单态控制底部确认按钮 */
 function applySchema() {
   formApi.setState({ schema: useFormSchema(formType.value, formApi) });
-  modalApi.setState({ showConfirmButton: isEditable.value });
+  modalApi.setState({
+    confirmText: '保存',
+    showConfirmButton: isEditable.value,
+  });
 }
 
 /** 查看工单条码 */
@@ -280,7 +283,7 @@ const [Modal, modalApi] = useVbenModal({
           title="确认要完成工单编制吗？确认后将不能更改。"
           @confirm="handleConfirm"
         >
-          <Button type="primary">确认</Button>
+          <Button type="primary">确认工单</Button>
         </Popconfirm>
         <Popconfirm
           v-if="isFinish"

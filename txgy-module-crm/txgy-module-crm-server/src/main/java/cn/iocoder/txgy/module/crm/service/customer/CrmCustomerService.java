@@ -78,6 +78,15 @@ public interface CrmCustomerService {
     List<CrmCustomerDO> getCustomerList(Collection<Long> ids);
 
     /**
+     * 获得相似客户列表：同客户类别（下游/上游）+ 同行业，用于业务对比与拓展
+     *
+     * @param customerId 当前客户编号
+     * @param limit      返回数量，默认 10
+     * @return 相似客户列表
+     */
+    List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit);
+
+    /**
      * 获得客户 Map
      *
      * @param ids 客户编号数组
@@ -169,6 +178,15 @@ public interface CrmCustomerService {
      * @return 导入结果
      */
     CrmCustomerImportRespVO importCustomerList(List<CrmCustomerImportExcelVO> importCustomers, CrmCustomerImportReqVO importReqVO);
+
+    /**
+     * 查重：根据手机号、名称匹配已存在的客户、线索、联系人
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   名称（客户名 / 线索名 / 联系人姓名），精确匹配
+     * @return 查重结果
+     */
+    CrmDuplicateCheckRespVO checkDuplicate(String mobile, String name);
 
     // ==================== 公海相关操作 ====================
 

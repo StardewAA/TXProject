@@ -1,12 +1,11 @@
 import DiyApi from '@/sheep/api/promotion/diy';
-import { getTenantByWebsite } from '@/sheep/api/infra/tenant';
 import { getTenantId } from '@/sheep/request';
 import { defineStore } from 'pinia';
 import $platform from '@/sheep/platform';
 import $router from '@/sheep/router';
 import user from './user';
 import sys from './sys';
-import { baseUrl, h5Url } from '@/sheep/config';
+import { baseUrl, h5Url, tenantId } from '@/sheep/config';
 
 const app = defineStore('app', {
   state: () => ({
@@ -14,7 +13,7 @@ const app = defineStore('app', {
     info: {
       // 应用信息
       name: '', // 商城名称
-      logo: '', // logo
+      logo: '/static/mall-logo.png', // logo
       version: '', // 版本号
       copyright: '', // 版权信息 I
       copytime: '', // 版权信息 II
@@ -72,7 +71,7 @@ const app = defineStore('app', {
       if (true) {
         this.info = {
           name: '芋道商城',
-          logo: 'https://static.iocoder.cn/ruoyi-vue-pro-logo.png',
+          logo: '/static/mall-logo.png',
           version: '2026.07',
           copyright: '全部开源，个人与企业可 100% 免费使用',
           copytime: 'Copyright© 2018-2025',
@@ -138,7 +137,8 @@ const adaptTenant = async () => {
   let newTenantId = null;
 
   try {
-    // 2.1 情况一：H5：根据 url 参数、域名来获取新的租户ID
+    // 2.1 情况一：H5：默认使用商城平台公共租户，仅允许显式 URL 参数切换。
+    // 不再按 localhost/域名解析企业租户，避免普通注册用户被归入企业租户。
     // #ifdef H5
     // H5 环境下的处理逻辑
     if (window?.location) {
@@ -146,21 +146,13 @@ const adaptTenant = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       newTenantId = urlParams.get('tenantId');
 
-      // 如果 URL 参数中没有，则通过 host 获取
-      if (!newTenantId && window.location.host) {
-        const { data } = await getTenantByWebsite(window.location.host);
-        newTenantId = data?.id;
-      }
+      newTenantId = newTenantId || tenantId;
     }
     // #endif
 
-    // 2.2 情况二：微信小程序：小程序环境下的处理逻辑 - 根据 appId 获取租户
+    // 2.2 情况二：微信小程序：默认使用商城平台公共租户。
     // #ifdef MP
-    const appId = uni.getAccountInfoSync()?.miniProgram?.appId;
-    if (appId) {
-      const { data } = await getTenantByWebsite(appId);
-      newTenantId = data?.id;
-    }
+    newTenantId = tenantId;
     // #endif
 
     // 3. 如果是新租户（不相等），则进行切换

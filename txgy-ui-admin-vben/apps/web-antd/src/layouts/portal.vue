@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useUserStore } from '@vben/stores';
 
+import txgyLogo from '#/assets/imgs/logo.png';
 import { useAuthStore } from '#/store';
 
 const router = useRouter();
@@ -13,7 +14,7 @@ const authStore = useAuthStore();
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
-  { label: '招聘应聘', path: '/portal/recruit' },
+  { label: '我要找工作', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
   { label: '个人中心', path: '/portal/profile' },
@@ -22,9 +23,9 @@ const navItems = [
 const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
 );
-
-/** 招投标域（含 project 子页）跟随平台主题（深浅色自适应）；其余门户页为固定浅色设计，锁定浅色避免脱节。 */
-const isBidding = computed(() => route.path.startsWith('/portal/bidding'));
+const isRecruitPortal = computed(() =>
+  route.path.startsWith('/portal/recruit') || route.path.startsWith('/portal/profile/recruit'),
+);
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(`${path}/`);
@@ -36,10 +37,13 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="portal-shell" :class="{ 'portal-light': !isBidding }">
+  <div
+    class="portal-shell portal-light"
+    :class="{ 'portal-shell--recruit': isRecruitPortal }"
+  >
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
-        <span class="portal-brand-mark">防</span>
+        <img :src="txgyLogo" alt="天信管业" class="portal-brand-logo" />
         <span>防腐保温智慧平台</span>
       </div>
 
@@ -63,7 +67,13 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="portal-main">
+    <main
+      class="portal-main"
+      :class="{
+        'portal-main--training': route.path.startsWith('/portal/training'),
+        'portal-main--recruit': isRecruitPortal,
+      }"
+    >
       <RouterView />
     </main>
 
@@ -73,13 +83,14 @@ async function handleLogout() {
 
 <style scoped>
 .portal-shell {
+  position: relative;
   min-height: 100vh;
   background: hsl(var(--background-deep));
   color: hsl(var(--foreground));
 }
 
-/* 非招投标门户页（首页/招聘/培训/个人中心）为固定浅色设计：锁定浅色主题变量，
-   避免深色模式下外壳变深、与页面自身浅色内容脱节；招投标域（/portal/bidding）不锁定、跟随平台主题。 */
+/* 所有门户页（首页/招聘/培训/招投标/个人中心）统一固定浅色设计：锁定浅色主题变量，
+   避免深色模式下外壳变深、与页面自身浅色内容脱节。 */
 .portal-light {
   --background: 0 0% 100%;
   --background-deep: 216 20.11% 95.47%;
@@ -91,6 +102,10 @@ async function handleLogout() {
   --primary: 212 100% 45%;
   --primary-foreground: 0 0% 98%;
   --destructive: 359.33 100% 65.1%;
+}
+
+.portal-shell--recruit {
+  background: #f4f6f8;
 }
 
 .portal-header {
@@ -114,17 +129,10 @@ async function handleLogout() {
   font-weight: 650;
 }
 
-.portal-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-size: 16px;
-  font-weight: 700;
+.portal-brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .portal-nav {
@@ -149,7 +157,7 @@ async function handleLogout() {
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: hsl(var(--primary));
+  color: #d86616;
 }
 
 .portal-nav button.active::after {
@@ -158,7 +166,7 @@ async function handleLogout() {
   bottom: 0;
   left: 14px;
   height: 2px;
-  background: hsl(var(--primary));
+  background: linear-gradient(90deg, #ef8b35, #d86616);
   content: '';
 }
 
@@ -192,6 +200,27 @@ async function handleLogout() {
   min-height: calc(100vh - 112px);
   margin: 0 auto;
   padding: 32px 0 48px;
+}
+
+.portal-main--training {
+  width: calc(100% - 64px);
+  max-width: none;
+  margin-right: 32px;
+  margin-left: 32px;
+  padding-top: 32px;
+}
+
+.portal-main--recruit { position: relative; }
+
+.portal-shell--recruit :deep(.ant-btn-primary) {
+  border-color: #d86616;
+  background: linear-gradient(135deg, #ef8b35, #d86616);
+  box-shadow: 0 6px 14px rgb(216 102 22 / 18%);
+}
+
+.portal-shell--recruit :deep(.ant-btn-primary:hover) {
+  border-color: #b94e13;
+  background: linear-gradient(135deg, #d86616, #b94e13);
 }
 
 .portal-footer {

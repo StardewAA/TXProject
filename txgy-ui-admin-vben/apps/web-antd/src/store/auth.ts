@@ -46,6 +46,16 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       let loginResult: AuthApi.LoginResult;
       loginLoading.value = true;
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      accessStore.clearVisitTenantId();
+      accessStore.setIsAccessChecked(false);
+      userStore.$reset();
+      if (type === 'register' || params.loginType === 'personal') {
+        accessStore.setTenantId(0);
+      } else if (type === 'username' && params.tenantId != null) {
+        accessStore.setTenantId(Number(params.tenantId));
+      }
       switch (type) {
         case 'mobile': {
           loginResult = await smsLogin(params as AuthApi.SmsLoginParams);
@@ -67,6 +77,16 @@ export const useAuthStore = defineStore('auth', () => {
 
       // 如果成功获取到 accessToken
       if (accessToken) {
+        // 个人登录和个人注册固定属于后端保留的 tenant_id=0。
+        // 认证页可能仍保留上一位企业用户的租户选择；在请求权限信息前
+        // 先覆盖该状态，避免新个人账号带着旧 tenant-id 被后端判为越权。
+        const isPersonalAuthentication =
+          (type === 'register' && params.registerType === 'personal') ||
+          (type === 'username' && params.loginType === 'personal');
+        if (isPersonalAuthentication) {
+          accessStore.setTenantId(0);
+          accessStore.clearVisitTenantId();
+        }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
 
@@ -87,11 +107,14 @@ export const useAuthStore = defineStore('auth', () => {
           onSuccess
             ? await onSuccess?.()
             : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
+                params.loginType === 'enterprise' &&
+                  userInfo.homePath?.startsWith('/portal/')
+                  ? preferences.app.defaultHomePath
+                  : userInfo.homePath || preferences.app.defaultHomePath,
               );
         }
 
-        if (userInfo?.nickname) {
+        if (!isPersonalAuthentication && userInfo?.nickname) {
           notification.success({
             description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
             duration: 3,
@@ -99,6 +122,16 @@ export const useAuthStore = defineStore('auth', () => {
           });
         }
       }
+    } catch (error) {
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      accessStore.clearVisitTenantId();
+      accessStore.setIsAccessChecked(false);
+      accessStore.setAccessCodes([]);
+      accessStore.setAccessMenus([]);
+      accessStore.setAccessRoutes([]);
+      userStore.$reset();
+      throw error;
     } finally {
       loginLoading.value = false;
     }

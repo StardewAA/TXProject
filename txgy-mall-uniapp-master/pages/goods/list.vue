@@ -7,6 +7,13 @@
     :defaultSearch="state.keyword"
     @search="onSearch"
   >
+    <view v-if="state.shopId" class="shop-banner">
+      <view v-if="state.shopLoading">正在加载店铺…</view>
+      <view v-else-if="state.shopError">店铺不存在、已停用或暂时无法访问</view>
+      <template v-else-if="state.shop"><view class="shop-title">{{ state.shop.name }}</view><view class="shop-description">{{ state.shop.introduction || '企业材料供应店铺' }}</view><view class="shop-tip">店内搜索 · 共 {{ state.pagination.total }} 款商品</view></template>
+      <view class="shop-directory-link" @tap="sheep.$router.go('/pages/shop/list')">查看全部店铺 ›</view>
+    </view>
+    <view v-if="state.shopError && !state.invalidShopId" class="shop-retry" @tap="loadShop">重新加载店铺</view>
     <!-- 筛选 -->
     <su-sticky bgColor="#fff">
       <view class="ss-flex">
@@ -59,6 +66,7 @@
           class=""
           size="lg"
           :data="item"
+          :show-shop-name="true"
           :topRadius="10"
           :bottomRadius="10"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
@@ -76,6 +84,7 @@
             class="goods-md-box"
             size="md"
             :data="item"
+            :show-shop-name="true"
             :topRadius="10"
             :bottomRadius="10"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
@@ -95,6 +104,7 @@
             :topRadius="10"
             :bottomRadius="10"
             :data="item"
+            :show-shop-name="true"
             @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
             @getHeight="mountMasonry($event, 'right')"
           >
@@ -113,12 +123,15 @@
       }"
       @tap="loadMore"
     />
-    <s-empty v-if="state.pagination.total === 0" icon="/static/soldout-empty.png" text="暂无商品" />
+    <view v-if="state.loadStatus === 'loading' && !state.pagination.total" class="shop-retry">正在加载商品…</view>
+    <view v-else-if="state.listError" class="shop-retry" @tap="getList">商品加载失败，点击重试</view>
+    <s-empty v-else-if="state.pagination.total === 0 && !state.shopLoading && !state.shopError" icon="/static/soldout-empty.png" :text="state.shopId ? (state.keyword ? '本店没有匹配的商品' : '本店暂无在售商品') : '暂无商品'" />
   </s-layout>
 </template>
 
 <script setup>
-  import { reactive, ref } from 'vue';
+  import { reactive } from 'vue';
+  import ShopApi from '@/sheep/api/product/shop';
   import { onLoad, onReachBottom } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
   import { concat } from 'lodash-es';
@@ -128,7 +141,7 @@
   import { appendSettlementProduct } from '@/sheep/hooks/useGoods';
 
   const sys_navBar = sheep.$platform.navbar;
-  const emits = defineEmits(['close', 'change']);
+  const userStore = sheep.$store('user');
 
   const state = reactive({
     pagination: {
@@ -145,6 +158,12 @@
     iconStatus: false, // true - 单列布局；false - 双列布局
     keyword: '',
     categoryId: 0,
+    shopId: 0,
+    shop: null,
+    shopLoading: false,
+    shopError: false,
+    invalidShopId: false,
+    listError: false,
     tabList: [
       {
         name: '综合推荐',
@@ -171,7 +190,7 @@
       },
       {
         name: '新品优先',
-        value: 'createTime',
+        sort: 'createTime',
         order: false,
       },
     ],
@@ -182,6 +201,7 @@
 
   // 加载瀑布流
   let count = 0;
+  let requestId = 0;
   let leftHeight = 0;
   let rightHeight = 0;
 
@@ -206,6 +226,7 @@
 
   // 清空列表
   function emptyList() {
+    requestId++;
     resetPagination(state.pagination);
     state.leftGoodsList = [];
     state.rightGoodsList = [];
@@ -267,43 +288,97 @@
   };
 
   async function getList() {
+    if (state.shopLoading || state.shopError) return;
+    const currentRequest = ++requestId;
+    state.listError = false;
     state.loadStatus = 'loading';
-    const { code, data } = await SpuApi.getSpuPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-      sortField: state.currentSort,
-      sortAsc: state.currentOrder,
-      categoryId: state.categoryId,
-      keyword: state.keyword,
-    });
-    if (code !== 0) {
-      return;
-    }
-    // 拼接结算信息（营销）
-    await OrderApi.getSettlementProduct(data.list.map((item) => item.id).join(',')).then((res) => {
-      if (res.code !== 0) {
+    try {
+      const response = await SpuApi.getSpuPage({
+        pageNo: state.pagination.pageNo,
+        pageSize: state.pagination.pageSize,
+        sortField: state.currentSort,
+        sortAsc: state.currentOrder,
+        categoryId: state.categoryId,
+        keyword: state.keyword,
+        shopId: state.shopId || undefined,
+      });
+      if (currentRequest !== requestId) return;
+      // request 在网络异常时会返回 false，不能直接解构，否则会导致页面白屏。
+      if (!response || response.code !== 0) {
+        state.listError = true;
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
         return;
       }
-      appendSettlementProduct(data.list, res.data);
-    });
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
-    mountMasonry();
+      const pageData = response.data || {};
+      const pageList = Array.isArray(pageData.list) ? pageData.list.filter((item) => item?.id) : [];
+
+      // 营销结算信息仅对已登录用户请求。匿名接口在部分旧服务中会触发用户信息调用，
+      // 商品列表本身不应因该附加请求失败而中断。
+      if (userStore.isLogin && pageList.length) {
+        try {
+          const settlement = await OrderApi.getSettlementProduct(
+            pageList.map((item) => item.id).join(','),
+          );
+          if (settlement?.code === 0) {
+            appendSettlementProduct(pageList, settlement.data);
+          }
+        } catch (error) {
+          console.warn('加载商品营销价格失败，使用基础商品信息', error);
+        }
+      }
+
+      if (currentRequest !== requestId) return;
+      state.pagination.list = concat(state.pagination.list, pageList);
+      const total = Number(pageData.total);
+      state.pagination.total = Number.isFinite(total) && total >= 0 ? total : state.pagination.list.length;
+      state.loadStatus =
+        state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      if (pageList.length) {
+        mountMasonry();
+      }
+    } catch (error) {
+      if (currentRequest !== requestId) return;
+      state.listError = true;
+      console.warn('加载商品列表失败', error);
+      state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+    }
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (state.shopLoading || state.shopError || state.listError) return;
+    if (state.loadStatus === 'noMore' || state.loadStatus === 'loading') {
       return;
     }
     state.pagination.pageNo++;
     getList(state.currentSort, state.currentOrder);
   }
 
-  onLoad((options) => {
-    state.categoryId = options.categoryId;
-    state.keyword = options.keyword;
+  async function loadShop() {
+    if (state.invalidShopId || state.shopLoading) return;
+    state.shopLoading = true;
+    state.shopError = false;
+    emptyList();
+    try {
+      const result = await ShopApi.get(state.shopId);
+      if (result?.code !== 0 || !result.data?.id) throw new Error('店铺不可用');
+      state.shop = result.data;
+    } catch { state.shopError = true; state.shop = null; }
+    finally { state.shopLoading = false; }
+    if (!state.shopError) await getList();
+  }
+
+  onLoad((options = {}) => {
+    const categoryId = Number(options.categoryId);
+    state.categoryId = Number.isFinite(categoryId) && categoryId > 0 ? categoryId : 0;
+    state.keyword = options.keyword || '';
+    if (options.shopId !== undefined) {
+      const shopId = Number(options.shopId);
+      state.shopId = Number.isSafeInteger(shopId) && shopId > 0 ? shopId : -1;
+      if (state.shopId === -1) { state.shopError = true; state.invalidShopId = true; return; }
+      loadShop();
+      return;
+    }
     getList(state.currentSort, state.currentOrder);
   });
 
@@ -314,6 +389,8 @@
 </script>
 
 <style lang="scss" scoped>
+  .shop-banner { margin: 20rpx; padding: 30rpx; border-radius: 18rpx; background: linear-gradient(120deg, #153f44, #147d6b); color: white; font-size: 26rpx; }
+  .shop-title { font-size: 34rpx; font-weight: 600; }.shop-description { margin-top: 16rpx; line-height: 1.7; color: #d2e5dc; font-size: 24rpx; }.shop-tip { margin-top: 20rpx; color: #c0ded0; font-size: 23rpx; }.shop-directory-link { margin-top: 20rpx; font-size: 24rpx; }.shop-retry { padding: 30rpx; text-align: center; color: #147d6b; font-size: 26rpx; }
   .goods-list-box {
     width: 50%;
     box-sizing: border-box;

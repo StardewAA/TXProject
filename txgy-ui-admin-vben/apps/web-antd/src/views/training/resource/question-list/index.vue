@@ -8,7 +8,14 @@ import { Page, useVbenModal } from '@vben/common-ui';
 
 import { useAccessStore } from '@vben/stores';
 
-import { Button, message, Modal, Select, Tag } from 'ant-design-vue';
+import {
+  Button,
+  message,
+  Modal,
+  Select,
+  Tag,
+  TreeSelect,
+} from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { $t } from '#/locales';
@@ -18,6 +25,7 @@ import {
   deleteQuestion,
   getQuestion,
   getQuestionPage,
+  getResourceCategoryTree,
   getResourceTagList,
   importQuestions,
 } from '../api';
@@ -41,6 +49,43 @@ const tagId = ref<number | undefined>();
 async function loadTags() {
   const list = await getResourceTagList();
   tagOptions.value = list.map((item) => ({ label: item.name, value: item.id }));
+}
+
+// 分类筛选（资源分类 question 类型，支持三级）
+const categoryOptions = ref<any[]>([]);
+const categoryId = ref<number | undefined>();
+const categoryNameMap = ref<Map<number, string>>(new Map());
+
+function buildCategoryTree(
+  nodes?: TrainingResourceApi.CategoryNode[],
+): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
+function collectCategoryNames(
+  nodes?: TrainingResourceApi.CategoryNode[],
+  map = new Map<number, string>(),
+) {
+  nodes?.forEach((node) => {
+    if (node.id !== undefined) {
+      map.set(node.id, node.name || '');
+    }
+    collectCategoryNames(node.children, map);
+  });
+  return map;
+}
+
+async function loadCategories() {
+  const tree = await getResourceCategoryTree('question');
+  categoryOptions.value = buildCategoryTree(tree) || [];
+  categoryNameMap.value = collectCategoryNames(tree);
 }
 
 function handleSearch() {
@@ -112,6 +157,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         slots: { default: 'difficulty' },
       },
       {
+        field: 'categoryId',
+        title: '分类',
+        minWidth: 140,
+        showOverflow: true,
+        slots: { default: 'category' },
+      },
+      {
         field: 'answer',
         title: '答案',
         width: 130,
@@ -154,6 +206,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             tagId: tagId.value,
+            categoryId: categoryId.value,
             ...formValues,
           });
         },
@@ -297,6 +350,7 @@ function buildActions(row: TrainingResourceApi.Question) {
 }
 
 loadTags();
+loadCategories();
 </script>
 
 <template>
@@ -313,8 +367,17 @@ loadTags();
       @change="handleImportFile"
     />
 
-    <!-- 标签筛选 -->
+    <!-- 分类 / 标签筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
+      <TreeSelect
+        v-model:value="categoryId"
+        class="!w-64"
+        :allow-clear="true"
+        tree-default-expand-all
+        placeholder="全部分类（支持三级）"
+        :tree-data="categoryOptions"
+        @change="handleSearch"
+      />
       <Select
         v-model:value="tagId"
         class="!w-56"
@@ -363,6 +426,9 @@ loadTags();
         >
           {{ difficultyText(row.difficulty) }}
         </Tag>
+      </template>
+      <template #category="{ row }">
+        <span>{{ categoryNameMap.get(row.categoryId) || '-' }}</span>
       </template>
       <template #tags="{ row }">
         <template v-if="row.tagNames">
@@ -433,6 +499,10 @@ loadTags();
         </div>
         <div v-if="detail.analysis">
           <span class="text-gray-500">解析：</span>{{ detail.analysis }}
+        </div>
+        <div v-if="detail.categoryId">
+          <span class="text-gray-500">分类：</span>
+          {{ categoryNameMap.get(detail.categoryId) || '-' }}
         </div>
         <div v-if="detail.tagNames">
           <span class="text-gray-500">标签：</span>

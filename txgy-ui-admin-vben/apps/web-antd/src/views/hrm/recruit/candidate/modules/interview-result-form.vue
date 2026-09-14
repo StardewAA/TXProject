@@ -45,12 +45,13 @@ const [Modal, modalApi] = useVbenModal({
       ? HrmRecruitInterviewResult.CANCELED
       : values.result;
     const canceled = result === HrmRecruitInterviewResult.CANCELED;
+    const requiresReason = canceled || result === HrmRecruitInterviewResult.ABSENT;
     try {
       await updateRecruitInterviewResult({
         id: interviewId.value,
         result,
-        evaluate: canceled ? '' : values.evaluate,
-        cancelReason: canceled ? values.cancelReason : '',
+        evaluate: requiresReason ? '' : values.evaluate,
+        cancelReason: requiresReason ? values.cancelReason : '',
       });
       // 关闭并提示
       await modalApi.close();

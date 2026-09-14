@@ -85,7 +85,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       throw new Error('Refresh token is null!');
     }
     const resp = await refreshTokenApi(refreshToken);
-    const newToken = resp?.data?.data?.accessToken;
+    const newToken = resp?.data?.data?.accessToken ?? resp?.data?.accessToken;
     // add by 芋艿：这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中，刷新令牌失败！！！
     if (!newToken) {
       throw resp.data;
@@ -109,11 +109,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         : formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       // 添加租户编号
-      config.headers['tenant-id'] = tenantEnable
-        ? accessStore.tenantId
-        : undefined;
+      config.headers['tenant-id'] = tenantEnable ? accessStore.tenantId : undefined;
       // 只有登录时，才设置 visit-tenant-id 访问租户
-      config.headers['visit-tenant-id'] = tenantEnable
+      config.headers['visit-tenant-id'] = tenantEnable && accessStore.accessToken && !isAuthenticationEntry(config.url)
         ? accessStore.visitTenantId
         : undefined;
       if (isPersonalRegister(config)) {

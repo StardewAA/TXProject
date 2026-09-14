@@ -7,6 +7,8 @@ import { useVbenForm, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
+import ClueQuickParse from '../../../clue/modules/ClueQuickParse.vue';
+import { dateToTs } from '#/utils/crm/clue-parse';
 import {
   createReceivablePlan,
   getReceivablePlan,
@@ -14,10 +16,30 @@ import {
 } from '#/api/crm/receivable/plan';
 import { $t } from '#/locales';
 
+import CustomerInfoCard from '#/views/crm/components/customer-info-card.vue';
+
 import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<CrmReceivablePlanApi.Plan>();
+/** 当前选中的客户编号：用于展示"客户信息速览"卡片 */
+const currentCustomerId = ref<number>();
+
+/** 识别结果回填回款计划 */
+async function onQuickParse(payload: { fields: any }) {
+  const fields = payload.fields ?? {};
+  const apply: Record<string, any> = {};
+  if (fields.customerId) apply.customerId = fields.customerId;
+  if (fields.contractId) apply.contractId = fields.contractId;
+  if (fields.price != null) apply.price = fields.price;
+  const ts = dateToTs(fields.returnTime);
+  if (ts != null) apply.returnTime = ts;
+  if (fields.returnType != null) apply.returnType = fields.returnType;
+  if (fields.remindDays != null) apply.remindDays = fields.remindDays;
+  if (fields.ownerUserId) apply.ownerUserId = fields.ownerUserId;
+  if (fields.remark) apply.remark = fields.remark;
+  await formApi.setValues(apply);
+}
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['回款计划'])
@@ -34,6 +56,10 @@ const [Form, formApi] = useVbenForm({
   layout: 'horizontal',
   schema: useFormSchema(),
   showDefaultActions: false,
+  // 选中客户后展示"客户信息速览"卡片（一键引用）
+  handleValuesChange(values) {
+    currentCustomerId.value = values.customerId;
+  },
 });
 
 const [Modal, modalApi] = useVbenModal({
@@ -83,6 +109,8 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse mode="plan" class="mx-4" @apply="onQuickParse" />
+    <CustomerInfoCard :customer-id="currentCustomerId" />
     <Form class="mx-4" />
   </Modal>
 </template>

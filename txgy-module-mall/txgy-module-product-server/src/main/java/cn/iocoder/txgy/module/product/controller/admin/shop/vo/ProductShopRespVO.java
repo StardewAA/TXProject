@@ -11,6 +11,8 @@ public class ProductShopRespVO {
 
     private Long id;
     private Long enterpriseId;
+    private String enterpriseName;
+    private Long tenantId;
     private String name;
     private String logoUrl;
     private String contactName;

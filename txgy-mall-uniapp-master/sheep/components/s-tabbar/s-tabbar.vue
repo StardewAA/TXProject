@@ -1,5 +1,5 @@
 <template>
-  <view class="u-page__item" v-if="tabbar?.items?.length > 0">
+  <view class="u-page__item" v-if="tabbarItems.length > 0">
     <su-tabbar
       :value="path"
       :fixed="true"
@@ -11,7 +11,7 @@
       :customStyle="tabbarStyle"
     >
       <su-tabbar-item
-        v-for="(item, index) in tabbar.items"
+        v-for="(item, index) in tabbarItems"
         :key="item.text"
         :text="item.text"
         :name="item.url"
@@ -23,10 +23,10 @@
         @click="sheep.$router.go(item.url)"
       >
         <template v-slot:active-icon>
-          <image class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)"></image>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)" :label="item.text" />
         </template>
         <template v-slot:inactive-icon>
-          <image class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.iconUrl)"></image>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.iconUrl)" :label="item.text" style="filter: grayscale(1); opacity: .65" />
         </template>
       </su-tabbar-item>
     </su-tabbar>
@@ -37,10 +37,13 @@
   import { computed, unref } from 'vue';
   import sheep from '@/sheep';
   import SuTabbar from '@/sheep/ui/su-tabbar/su-tabbar.vue';
+  import { filterMarketingMenuItems } from '@/sheep/helper/simplified-marketing';
 
   const tabbar = computed(() => {
     return sheep.$store('app').template.basic?.tabbar;
   });
+  // 基础 tabbar 也可能来自旧装修数据，统一过滤已下线的复杂营销入口。
+  const tabbarItems = computed(() => filterMarketingMenuItems(tabbar.value?.items));
 
   const tabbarStyle = computed(() => {
     const backgroundStyle = tabbar.value.style;
@@ -56,9 +59,9 @@
   });
 
   const getTabbarCenter = (index) => {
-    if (unref(tabbar).mode !== 2) return false;
-    return unref(tabbar).items % 2 > 0
-      ? Math.ceil(unref(tabbar).items.length / 2) === index + 1
+    if (unref(tabbar)?.mode !== 2) return false;
+    return tabbarItems.value.length % 2 > 0
+      ? Math.ceil(tabbarItems.value.length / 2) === index + 1
       : false;
   };
 

@@ -16,6 +16,7 @@ import cn.iocoder.txgy.framework.common.biz.system.oauth2.OAuth2TokenCommonApi;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCreateReqDTO;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenRespDTO;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
+import cn.iocoder.txgy.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
 import cn.iocoder.txgy.module.system.api.social.SocialUserApi;
 import cn.iocoder.txgy.module.system.api.social.dto.SocialUserBindReqDTO;
@@ -50,6 +51,8 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Resource
     private MemberUserService userService;
     @Resource
+    private cn.iocoder.txgy.module.member.dal.mysql.user.MemberUserMapper memberUserMapper;
+    @Resource
     private SmsCodeApi smsCodeApi;
     @Resource
     private LoginLogApi loginLogApi;
@@ -74,6 +77,25 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
         // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, openid);
+    }
+
+    @Override
+    @Transactional
+    public AppAuthLoginRespVO register(AppAuthRegisterReqVO reqVO) {
+        String clientIp = getClientIP();
+        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO()
+                .setMobile(reqVO.getMobile())
+                .setCode(reqVO.getCode())
+                .setScene(SmsSceneEnum.MEMBER_LOGIN.getScene())
+                .setUsedIp(clientIp)).checkError();
+        MemberUserDO user = userService.registerUser(reqVO.getMobile(), reqVO.getPassword(),
+                reqVO.getNickname(), clientIp, getTerminal());
+        if (reqVO.getMemberIdentity() != null) {
+            user.setMemberIdentity(reqVO.getMemberIdentity());
+            memberUserMapper.updateById(new MemberUserDO().setId(user.getId())
+                    .setMemberIdentity(reqVO.getMemberIdentity()));
+        }
+        return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, null);
     }
 
     @Override

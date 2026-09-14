@@ -23,8 +23,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: useGridColumns(), height: 'auto', keepSource: true,
     proxyConfig: { ajax: { query: async (_page, formValues) => {
       const items = await getShopList();
-      const filtered = items.filter((item) => (!formValues.name || item.name?.includes(formValues.name)) && (!formValues.enterpriseId || item.enterpriseId === formValues.enterpriseId) && (formValues.status === undefined || formValues.status === null || item.status === formValues.status));
-      return { items: filtered, total: filtered.length };
+      const filtered = items.filter((item) => (!formValues.name || item.name?.includes(formValues.name)) && (!formValues.enterpriseId || item.enterpriseId === formValues.enterpriseId) && (formValues.status === undefined || formValues.status === null || formValues.status === '' || item.status === formValues.status));
+      return { list: filtered, total: filtered.length };
     } } },
     rowConfig: { keyField: 'id', isHover: true }, toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions<MallShopApi.Shop>,

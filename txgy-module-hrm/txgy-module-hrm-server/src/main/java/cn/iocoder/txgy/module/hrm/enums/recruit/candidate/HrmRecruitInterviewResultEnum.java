@@ -18,7 +18,8 @@ public enum HrmRecruitInterviewResultEnum implements ArrayValuable<Integer> {
     UNFINISHED(1, "面试未完成"),
     PASS(2, "面试通过"),
     NOT_PASS(3, "面试未通过"),
-    CANCEL(4, "面试取消");
+    CANCEL(4, "面试取消"),
+    ABSENT(5, "面试缺席");
 
     public static final Integer[] ARRAYS = Arrays.stream(values())
             .map(HrmRecruitInterviewResultEnum::getResult).toArray(Integer[]::new);

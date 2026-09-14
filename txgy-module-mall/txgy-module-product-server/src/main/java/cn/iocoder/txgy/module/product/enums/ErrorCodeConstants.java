@@ -15,6 +15,9 @@ public interface ErrorCodeConstants {
     ErrorCode SHOP_DISABLED = new ErrorCode(1_008_009_002, "店铺已停用");
     ErrorCode SHOP_MANAGER_USER_EXISTS = new ErrorCode(1_008_009_003, "该后台账号已绑定其他店铺");
 
+    // ========== WMS 只读查询 1-008-011-000 ==========
+    ErrorCode WMS_ITEM_NOT_EXISTS = new ErrorCode(1_008_011_000, "WMS 商品不存在");
+
     // ========== 企业入驻 1-008-010-000 ============
     ErrorCode ENTERPRISE_NOT_EXISTS = new ErrorCode(1_008_010_000, "企业不存在");
     ErrorCode ENTERPRISE_CREDIT_CODE_EXISTS = new ErrorCode(1_008_010_001, "统一社会信用代码已存在");

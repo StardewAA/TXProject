@@ -8,6 +8,8 @@ import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { Button, Card, Col, message, Row, Statistic, Table, TabPane, Tabs } from 'ant-design-vue';
 
+import PageHeaderBar from '../../components/page-header-bar.vue';
+
 defineOptions({ name: 'TrainingPlatformDashboard' });
 
 const exportLoading = ref(false);
@@ -78,23 +80,15 @@ onMounted(() => {
 <template>
   <Page>
     <div class="flex flex-col gap-4 pb-4">
-      <section
-        class="relative overflow-hidden rounded-2xl px-6 py-7 text-white shadow-sm md:px-9"
-        style="background: linear-gradient(125deg, #0f172a 0%, #1e293b 44%, #111827 115%)"
+      <PageHeaderBar
+        crumb="云培训学院 / 模块 09 / 95（仅超级管理员）"
+        title="全平台看板与治理"
+        description="平台级汇总统计与治理配置。跨租户真实查询将在后续迭代接入。"
       >
-        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <div class="mb-2 text-sm text-white/75">云培训学院 / 模块 09 / 95（仅超级管理员）</div>
-            <h1 class="m-0 text-2xl font-semibold md:text-3xl">全平台看板与治理</h1>
-            <p class="mb-0 mt-3 text-sm leading-6 text-white/80">
-              平台级汇总统计与治理配置。跨租户真实查询将在后续迭代接入。
-            </p>
-          </div>
-          <div class="flex shrink-0 items-center gap-3">
-            <Button :loading="exportLoading" ghost @click="handleExport"> 导出 </Button>
-          </div>
-        </div>
-      </section>
+        <template #actions>
+          <Button :loading="exportLoading" size="small" @click="handleExport"> 导出 </Button>
+        </template>
+      </PageHeaderBar>
 
       <Tabs v-model:active-key="tabKey">
         <TabPane key="dashboard" tab="全平台大数据看板">

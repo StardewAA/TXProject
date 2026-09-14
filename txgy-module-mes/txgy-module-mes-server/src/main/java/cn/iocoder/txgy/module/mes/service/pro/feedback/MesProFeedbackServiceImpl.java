@@ -4,6 +4,8 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.workstation.MesMdWorkstationDO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackSaveReqVO;
@@ -32,6 +34,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
@@ -45,8 +48,16 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesProFeedbackServiceImpl implements MesProFeedbackService {
 
+    /**
+     * 报工审批流程定义 Key（与 bpm-server 的 MesFeedbackStatusListener 保持一致）
+     */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-feedback-approval";
+
     @Resource
     private MesProFeedbackMapper feedbackMapper;
+
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
 
     @Resource
     private MesProWorkOrderService workOrderService;
@@ -110,13 +121,32 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void submitFeedback(Long id) {
         // 1. 校验存在 + 草稿状态
-        validateFeedbackStatusPrepare(id);
+        MesProFeedbackDO feedback = validateFeedbackStatusPrepare(id);
 
         // 2. 更新状态为审批中（报工人和报工时间由表单保存时确定，提交不覆盖）
         feedbackMapper.updateById(new MesProFeedbackDO().setId(id)
                 .setStatus(MesProFeedbackStatusEnum.APPROVING.getStatus()));
+
+        // 3. 首次报工自动置位"生产中"（v2.2 状态机决策②，幂等）
+        workOrderService.markInProductionIfIssued(feedback.getWorkOrderId());
+
+        // 4. 发起 BPM 审批流程（参照 ERP submitSaleOrder 模板），审批结果由
+        //    bpm-server 的 MesFeedbackStatusListener 转发回 MES，经任务表异步消费
+        Map<String, Object> variables = Map.of(
+                "feedbackCode", feedback.getCode(),
+                "workOrderId", feedback.getWorkOrderId(),
+                "feedbackQuantity", feedback.getFeedbackQuantity());
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
+                        feedback.getFeedbackUserId(),
+                        new BpmProcessInstanceCreateReqDTO()
+                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                                .setBusinessKey(String.valueOf(id))
+                                .setVariables(variables)).getCheckedData();
+        feedbackMapper.updateById(new MesProFeedbackDO().setId(id)
+                .setProcessInstanceId(processInstanceId));
     }
 
     @Override

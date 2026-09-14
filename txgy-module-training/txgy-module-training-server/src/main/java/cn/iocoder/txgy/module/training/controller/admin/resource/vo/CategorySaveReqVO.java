@@ -20,11 +20,14 @@ public class CategorySaveReqVO {
     @NotEmpty(message = "分类名称不能为空")
     private String name;
 
-    @Schema(description = "父分类 ID（0=根，仅支持二级）")
+    @Schema(description = "父分类 ID（0=根，最多支持三级）")
     private Long parentId;
 
     @Schema(description = "排序")
     private Integer sort;
+
+    @Schema(description = "分类编码（导入课程分类时传入；新增时为空则由后端生成）")
+    private String code;
 
     @Schema(description = "是否启用：true 启用 false 停用")
     private Boolean status;

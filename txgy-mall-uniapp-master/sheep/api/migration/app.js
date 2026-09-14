@@ -6,7 +6,7 @@ export default {
   mplive: {
     getRoomList: (ids) =>
       request({
-        url: 'app/mplive/getRoomList',
+        url: '/app/mplive/getRoomList',
         method: 'GET',
         params: {
           ids: ids.join(','),
@@ -14,7 +14,7 @@ export default {
       }),
     getMpLink: () =>
       request({
-        url: 'app/mplive/getMpLink',
+        url: '/app/mplive/getMpLink',
         method: 'GET',
       }),
   },

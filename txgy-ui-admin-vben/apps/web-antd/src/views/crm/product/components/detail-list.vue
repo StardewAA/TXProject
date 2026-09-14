@@ -11,6 +11,7 @@ import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getBusiness } from '#/api/crm/business';
 import { getContract } from '#/api/crm/contract';
 import { BizTypeEnum } from '#/api/crm/permission';
+import { getQuotation } from '#/api/crm/quotation';
 
 import { useDetailListColumns } from './data';
 
@@ -28,7 +29,7 @@ const totalProductPrice = ref(0);
 /** 构建产品列表表格 */
 const [Grid] = useVbenVxeGrid({
   gridOptions: {
-    columns: useDetailListColumns(props.bizType === BizTypeEnum.CRM_BUSINESS),
+    columns: useDetailListColumns(props.bizType),
     height: 600,
     pagerConfig: {
       enabled: false,
@@ -39,7 +40,9 @@ const [Grid] = useVbenVxeGrid({
           const data =
             props.bizType === BizTypeEnum.CRM_BUSINESS
               ? await getBusiness(props.bizId)
-              : await getContract(props.bizId);
+              : props.bizType === BizTypeEnum.CRM_CONTRACT
+                ? await getContract(props.bizId)
+                : await getQuotation(props.bizId);
           discountPercent.value = data.discountPercent;
           totalProductPrice.value = data.totalProductPrice;
           return data.products;

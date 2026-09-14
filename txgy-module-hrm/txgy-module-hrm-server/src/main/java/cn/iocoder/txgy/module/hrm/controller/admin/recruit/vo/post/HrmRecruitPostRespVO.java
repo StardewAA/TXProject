@@ -86,6 +86,12 @@ public class HrmRecruitPostRespVO {
     @Schema(description = "职位类型名称", example = "研发")
     private String postTypeName;
 
+    @Schema(description = "发布渠道编号", example = "1024")
+    private Long channelId;
+
+    @Schema(description = "发布渠道名称", example = "BOSS直聘")
+    private String channelName;
+
     @Schema(description = "职位状态", example = "1")
     private Integer status;
 

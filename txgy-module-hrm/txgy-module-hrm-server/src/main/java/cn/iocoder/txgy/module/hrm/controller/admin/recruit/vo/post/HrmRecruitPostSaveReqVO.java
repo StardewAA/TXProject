@@ -111,6 +111,10 @@ public class HrmRecruitPostSaveReqVO {
     @DiffLogField(name = "职位类型编号")
     private Long postTypeId;
 
+    @Schema(description = "发布渠道编号", example = "1024")
+    @DiffLogField(name = "发布渠道")
+    private Long channelId;
+
     @AssertTrue(message = "薪资范围不正确")
     @JsonIgnore
     public boolean isSalaryRangeValid() {
