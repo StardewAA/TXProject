@@ -279,7 +279,12 @@ export function useFormSchema(
         componentProps: (values) => ({
           disabled: isHeaderReadonly || !values.workOrderId,
           placeholder: values.workOrderId ? '请选择任务' : '请先选择工单',
-          statuses: [MesProTaskStatusEnum.PREPARE],
+          // 报工对象应为已排产的任务：排产后任务状态为"已确认"，生产中为"生产中"；
+          // 原先固定为 PREPARE（草稿）会把已排产任务全部过滤掉，导致跨工单误选草稿任务
+          statuses: [
+            MesProTaskStatusEnum.CONFIRMED,
+            MesProTaskStatusEnum.PRODUCING,
+          ],
           workOrderId: values.workOrderId,
           workstationId: values.workstationId,
         }),
