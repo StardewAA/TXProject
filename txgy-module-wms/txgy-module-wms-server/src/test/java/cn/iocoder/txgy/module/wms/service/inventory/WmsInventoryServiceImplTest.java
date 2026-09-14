@@ -1,22 +1,29 @@
 package cn.iocoder.txgy.module.wms.service.inventory;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.erp.api.wms.ErpWmsCallbackApi;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryHistoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryHistoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemSkuMapper;
+import cn.iocoder.txgy.module.wms.dal.mysql.md.warehouse.WmsWarehouseMapper;
 import cn.iocoder.txgy.module.wms.enums.order.WmsOrderTypeEnum;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryCheckReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import jakarta.annotation.Resource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -39,6 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @Import({WmsInventoryServiceImpl.class, WmsInventoryHistoryServiceImpl.class})
@@ -55,11 +66,28 @@ public class WmsInventoryServiceImplTest extends BaseDbUnitTest {
     private WmsItemMapper itemMapper;
     @Resource
     private WmsItemSkuMapper skuMapper;
+    @Resource
+    private WmsWarehouseMapper warehouseMapper;
 
     @MockitoBean
     private WmsItemSkuService itemSkuService;
     @MockitoBean
     private WmsItemService itemService;
+    @MockitoBean
+    private ErpWmsCallbackApi erpWmsCallbackApi;
+
+    @BeforeEach
+    public void setUp() {
+        TenantContextHolder.setTenantId(2005L);
+        createWarehouse(100L, "WH-100", "测试仓库 100");
+        createWarehouse(200L, "WH-200", "测试仓库 200");
+        createWarehouse(300L, "WH-300", "测试仓库 300");
+    }
+
+    @AfterEach
+    public void tearDown() {
+        TenantContextHolder.clear();
+    }
 
     @Test
     public void testChangeInventory_createInventory() {
@@ -87,6 +115,7 @@ public class WmsInventoryServiceImplTest extends BaseDbUnitTest {
         assertEquals(reqDTO.getOrderId(), history.getOrderId());
         assertEquals(reqDTO.getOrderNo(), history.getOrderNo());
         assertEquals(reqDTO.getOrderType(), history.getOrderType());
+        org.mockito.Mockito.verifyNoInteractions(erpWmsCallbackApi);
     }
 
     @Test
@@ -452,6 +481,22 @@ public class WmsInventoryServiceImplTest extends BaseDbUnitTest {
         assertEquals(0, new BigDecimal("5.00").compareTo(histories.get(0).getAfterQuantity()));
         assertEquals(0, new BigDecimal("5.00").compareTo(histories.get(0).getQuantity()));
         assertEquals(0, new BigDecimal("500.00").compareTo(histories.get(0).getTotalPrice()));
+        org.mockito.Mockito.verifyNoInteractions(erpWmsCallbackApi);
+    }
+
+    @Test
+    public void testRefreshErpInventoryMirror_rejectsUnsupportedOperation() {
+        // mock 数据
+        WmsItemDO item = createItem("ITEM-001", "红富士苹果");
+        WmsItemSkuDO sku = createSku(item.getId(), "SKU-001", "10kg 箱装");
+        inventoryMapper.insert(createInventory(sku.getId(), 100L, "8.00"));
+
+        // 调用
+        assertServiceException(() -> inventoryService.refreshErpInventoryMirror(),
+                cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_FEATURE_NOT_ENABLED);
+
+        // 断言：现有 WMS 库存余额会按逻辑仓库镜像给 ERP
+        org.mockito.Mockito.verifyNoInteractions(erpWmsCallbackApi);
     }
 
     @Test
@@ -624,6 +669,15 @@ public class WmsInventoryServiceImplTest extends BaseDbUnitTest {
                 .build();
         skuMapper.insert(sku);
         return sku;
+    }
+
+    private void createWarehouse(Long id, String code, String name) {
+        WmsWarehouseDO warehouse = WmsWarehouseDO.builder()
+                .id(id)
+                .code(code)
+                .name(name)
+                .build();
+        warehouseMapper.insert(warehouse);
     }
 
     private void mockItemSkuAndItem(WmsItemDO item, WmsItemSkuDO sku) {

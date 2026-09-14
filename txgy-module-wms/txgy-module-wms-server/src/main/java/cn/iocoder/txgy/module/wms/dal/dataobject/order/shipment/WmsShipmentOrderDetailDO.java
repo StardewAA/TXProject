@@ -44,6 +44,8 @@ public class WmsShipmentOrderDetailDO extends BaseDO {
      * 关联 {@link WmsItemSkuDO#getId()}
      */
     private Long skuId;
+    private Integer sourceLineNo;
+    private String sourceSnapshotJson;
 
     // ========= 仓库字段 =========
 
