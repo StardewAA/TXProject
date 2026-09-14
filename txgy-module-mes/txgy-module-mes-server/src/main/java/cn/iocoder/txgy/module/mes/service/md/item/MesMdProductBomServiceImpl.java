@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.mes.service.md.item;
 
+import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -69,6 +70,18 @@ public class MesMdProductBomServiceImpl implements MesMdProductBomService {
         // 校验不能自引用
         if (reqVO.getItemId().equals(reqVO.getBomItemId())) {
             throw exception(MD_PRODUCT_BOM_SELF_REFERENCE);
+        }
+        // 校验唯一性
+        validateBomUnique(reqVO.getId(), reqVO.getItemId(), reqVO.getBomItemId());
+    }
+
+    private void validateBomUnique(Long id, Long itemId, Long bomItemId) {
+        MesMdProductBomDO existing = productBomMapper.selectByUnique(itemId, bomItemId);
+        if (existing == null) {
+            return;
+        }
+        if (ObjUtil.notEqual(existing.getId(), id)) {
+            throw exception(MD_PRODUCT_BOM_DUPLICATE);
         }
     }
 
