@@ -23,7 +23,9 @@ import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -59,7 +61,12 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     private WmsInventoryService inventoryService;
     @Resource
     private WmsItemSkuService itemSkuService;
+    @Resource
     private BpmProcessInstanceApi processInstanceApi;
+    @Resource
+    private PlatformTransactionManager transactionManager;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.integration.WmsShortageService shortageService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,6 +82,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         shipmentOrderMapper.insert(order);
         // 2.2 插入出库单明细
         shipmentOrderDetailService.createShipmentOrderDetailList(order.getId(), createReqVO);
+        if (order.getSourceModule() != null) shortageService.check(order.getId());
         return order.getId();
     }
 
@@ -82,7 +90,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void updateShipmentOrder(WmsShipmentOrderSaveReqVO updateReqVO) {
         // 1. 校验出库单保存数据
-        validateShipmentOrderEditable(updateReqVO.getId());
+        WmsShipmentOrderDO current = validateShipmentOrderEditable(updateReqVO.getId());
+        protectSourceShipment(current, updateReqVO);
         validateShipmentOrderSaveData(updateReqVO);
 
         // 2.1 更新出库单
@@ -107,9 +116,10 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
                 && ObjectUtil.notEqual(order.getStatus(), WmsOrderStatusEnum.CANCELED.getStatus())) {
             throw exception(SHIPMENT_ORDER_STATUS_NOT_DELETABLE);
         }
-        validateApprovalEditable(order);
+        validateApprovalCancellable(order);
 
         // 2.1 删除出库单
+        if (order.getSourceModule() != null) shortageService.cancel(id);
         shipmentOrderMapper.deleteById(id);
         // 2.2 删除出库单明细
         shipmentOrderDetailService.deleteShipmentOrderDetailListByOrderId(id);
@@ -120,36 +130,31 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     public void completeShipmentOrder(Long id) {
         // 1.1 校验存在，且草稿
         WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        if (order.getSourceModule() != null && Integer.valueOf(2).equals(order.getExecutionStatus())) {
+            throw exception(SHIPMENT_ORDER_APPROVAL_NOT_APPROVED);
+        }
         if (ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
             throw exception(SHIPMENT_ORDER_APPROVAL_NOT_APPROVED);
         }
+        shipmentOrderDetailService.validateShipmentOrderDetailListExists(id);
         completeApprovedShipmentOrder(order);
     }
 
     private void completeApprovedShipmentOrder(WmsShipmentOrderDO order) {
-        // 1.2 校验出库单明细存在
-        List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
-                .validateShipmentOrderDetailListExists(order.getId());
-        itemSkuService.validateItemSkuListItemEnabled(details.stream()
-                .map(WmsShipmentOrderDetailDO::getSkuId).toList());
-
-        // 2. 完成出库单
-        if (shipmentOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(),
-                new WmsShipmentOrderDO().setStatus(WmsOrderStatusEnum.FINISHED.getStatus())) == 0) {
-            throw exception(SHIPMENT_ORDER_STATUS_NOT_PREPARE);
-        }
-
-        // 3. 扣减库存
-        changeInventory(order, details);
+        executeShipmentInventory(order);
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class,
+            noRollbackFor = cn.iocoder.txgy.module.wms.service.integration.WmsShortageService.ShortageBlockedException.class)
     public String submitShipmentOrderApproval(Long userId, Long id) {
         WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
         validateApprovalEditable(order);
         List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
                 .validateShipmentOrderDetailListExists(id);
+        if (order.getSourceModule() != null && shortageService.check(id)) {
+            throw new cn.iocoder.txgy.module.wms.service.integration.WmsShortageService.ShortageBlockedException();
+        }
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("orderId", order.getId());
@@ -188,14 +193,51 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         }
     }
 
+    /**
+     * 使用同一连接上的保存点，使库存、流水和执行状态共同提交或回滚。
+     * 执行失败回滚到保存点后，外层事务保留审批结果及失败信息。
+     */
+    private void executeShipmentInventory(WmsShipmentOrderDO order) {
+        try {
+            TransactionTemplate template = new TransactionTemplate(transactionManager);
+            template.setPropagationBehaviorName("PROPAGATION_NESTED");
+            template.executeWithoutResult(status -> {
+                List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
+                        .validateShipmentOrderDetailListExists(order.getId());
+                itemSkuService.validateItemSkuListItemEnabled(details.stream()
+                        .map(WmsShipmentOrderDetailDO::getSkuId).toList());
+                if (shipmentOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(),
+                    new WmsShipmentOrderDO().setStatus(WmsOrderStatusEnum.FINISHED.getStatus())
+                            .setExecutionStatus(1).setExecutionTime(LocalDateTime.now()).setExecutionError(null)) == 0) {
+                    throw exception(SHIPMENT_ORDER_STATUS_NOT_PREPARE);
+                }
+                changeInventory(order, details);
+            });
+        } catch (RuntimeException ex) {
+            shipmentOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(),
+                    new WmsShipmentOrderDO().setExecutionStatus(2).setExecutionTime(LocalDateTime.now())
+                            .setExecutionError(truncateExecutionError(ex)));
+            if (order.getSourceModule() != null) shortageService.check(order.getId());
+        }
+    }
+
+    private static String truncateExecutionError(RuntimeException ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            message = ex.getClass().getSimpleName();
+        }
+        return message.length() <= 512 ? message : message.substring(0, 512);
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelShipmentOrder(Long id) {
         // 1. 校验存在，且草稿
         WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
-        validateApprovalEditable(order);
+        validateApprovalCancellable(order);
 
         // 2. 作废出库单
+        if (order.getSourceModule() != null) shortageService.cancel(id);
         if (shipmentOrderMapper.updateByIdAndStatus(id, WmsOrderStatusEnum.PREPARE.getStatus(),
                 new WmsShipmentOrderDO().setStatus(WmsOrderStatusEnum.CANCELED.getStatus())) == 0) {
             throw exception(SHIPMENT_ORDER_STATUS_NOT_PREPARE);
@@ -231,6 +273,35 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         if (reqVO.getMerchantId() != null) {
             merchantService.validateCustomerMerchantExists(reqVO.getMerchantId());
         }
+    }
+
+    private void protectSourceShipment(WmsShipmentOrderDO current, WmsShipmentOrderSaveReqVO req) {
+        req.setSourceModule(current.getSourceModule()).setBusinessChainNo(current.getBusinessChainNo());
+        if (current.getSourceModule() == null) return;
+        if (!java.util.Objects.equals(current.getNo(), req.getNo())
+                || !java.util.Objects.equals(current.getType(), req.getType())
+                || !java.util.Objects.equals(current.getWarehouseId(), req.getWarehouseId())
+                || !java.util.Objects.equals(current.getBizOrderNo(), req.getBizOrderNo())
+                || !java.util.Objects.equals(current.getMerchantId(), req.getMerchantId())) {
+            throw new IllegalArgumentException("来源出库单不得修改单号、类型、仓库及来源关联");
+        }
+        var old = shipmentOrderDetailService.getShipmentOrderDetailList(current.getId());
+        if (req.getDetails() == null || old.size() != req.getDetails().size())
+            throw new IllegalArgumentException("来源出库明细不可增删");
+        var byId = old.stream().collect(java.util.stream.Collectors.toMap(WmsShipmentOrderDetailDO::getId, d -> d));
+        for (var detail : req.getDetails()) {
+            var original = byId.remove(detail.getId());
+            if (original == null || !java.util.Objects.equals(original.getSkuId(), detail.getSkuId())
+                    || detail.getQuantity() == null || original.getQuantity().compareTo(detail.getQuantity()) != 0
+                    || !sameAmount(original.getPrice(), detail.getPrice())
+                    || !sameAmount(original.getTotalPrice(), detail.getTotalPrice()))
+                throw new IllegalArgumentException("来源出库SKU、数量及金额不可修改");
+            detail.setSourceLineNo(original.getSourceLineNo()).setSourceSnapshotJson(original.getSourceSnapshotJson());
+        }
+    }
+
+    private static boolean sameAmount(BigDecimal left, BigDecimal right) {
+        return left == null ? right == null : right != null && left.compareTo(right) == 0;
     }
 
     private void validateShipmentOrderNoUnique(Long id, String no) {
@@ -269,7 +340,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     }
 
     private WmsShipmentOrderDO validateShipmentOrderExists(Long id) {
-        WmsShipmentOrderDO order = id == null ? null : shipmentOrderMapper.selectById(id);
+        WmsShipmentOrderDO order = id == null ? null : shipmentOrderMapper.selectByIdForUpdate(id);
         if (order == null) {
             throw exception(SHIPMENT_ORDER_NOT_EXISTS);
         }
@@ -303,6 +374,12 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         if (ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
             throw exception(SHIPMENT_ORDER_APPROVAL_NOT_EDITABLE);
         }
+    }
+
+    private void validateApprovalCancellable(WmsShipmentOrderDO order) {
+        if (order.getSourceModule() != null && Integer.valueOf(2).equals(order.getExecutionStatus())
+                && ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) return;
+        validateApprovalEditable(order);
     }
 
     /**

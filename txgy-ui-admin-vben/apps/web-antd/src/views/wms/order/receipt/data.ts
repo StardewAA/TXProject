@@ -166,7 +166,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       fixed: 'left',
       slots: { default: 'no' },
       title: '单号/业务单号',
-      width: 260,
+      align: 'left',
+      width: 380,
     },
     {
       align: 'center',
@@ -284,7 +285,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'totalPrice',
       label: '总金额',
-      render: (val) => formatPrice(val) || '-',
+      render: (val, data) => data?.details?.some((line: { totalPrice?: number }) => line.totalPrice == null) ? '未提供完整金额' : formatPrice(val) || '未提供',
     },
     {
       field: 'createTime',
@@ -422,6 +423,7 @@ export function getDetailFooter({
         return formatSumQuantity(data, (detail) => detail.quantity);
       }
       if (column.field === 'totalPrice') {
+        if (data.some(detail => detail.totalPrice == null)) return '未提供完整金额';
         return formatSumPrice(data, (detail) => detail.totalPrice);
       }
       return '';

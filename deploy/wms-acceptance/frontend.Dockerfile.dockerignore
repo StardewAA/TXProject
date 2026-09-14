@@ -1,0 +1,9 @@
+**
+!deploy/
+!deploy/wms-acceptance/
+!deploy/wms-acceptance/nginx.conf
+!txgy-ui-admin-vben/
+!txgy-ui-admin-vben/apps/
+!txgy-ui-admin-vben/apps/web-antd/
+!txgy-ui-admin-vben/apps/web-antd/dist/
+!txgy-ui-admin-vben/apps/web-antd/dist/**

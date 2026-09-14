@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS wms_shortage_event (
+ tenant_id BIGINT NOT NULL,
+ event_id VARCHAR(36) NOT NULL,
+ event_version INT NOT NULL,
+ order_id BIGINT NOT NULL,
+ line_id BIGINT NOT NULL,
+ target_system VARCHAR(8) NOT NULL,
+ shortage_status VARCHAR(16) NOT NULL,
+ payload TEXT NOT NULL,
+ notification_status VARCHAR(32) NOT NULL,
+ attempts INT NOT NULL DEFAULT 0,
+ last_error VARCHAR(512) NOT NULL DEFAULT '',
+ next_attempt_time TIMESTAMP NULL,
+ last_sent_time TIMESTAMP NULL,
+ succeeded_time TIMESTAMP NULL,
+ created_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (tenant_id,event_id,event_version),
+ UNIQUE (tenant_id,order_id,line_id,event_version),
+ INDEX idx_wms_shortage_due (notification_status,next_attempt_time,created_time)
+);
