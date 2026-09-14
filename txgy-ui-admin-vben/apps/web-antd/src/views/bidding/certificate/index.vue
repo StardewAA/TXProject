@@ -18,6 +18,7 @@ import {
   runCertAlertDispatch,
   runCertAlertScan,
 } from '#/api/bidding/certificate';
+import { getPersonnelCertPage, type PersonnelCertApi } from '#/api/bidding/personnel';
 
 import { fmtDate, fmtDateTime } from './format';
 import CertFiles from './modules/cert-files.vue';
@@ -120,18 +121,113 @@ async function loadHistory() {
 
 const expiringDays = computed(() => configNumber('cert.expiring.window.days', 60));
 
+/* ===== 证照范围：企业证照 / 员工证书 / 全部（用户 2026-09-14："找不到全的，包括企业证照和个人证照"） =====
+ * · 企业证照：走 certificate/page（服务端分页，保留原有行操作：详情/编辑/验真/文件/生命周期）；
+ * · 员工证书：走 personnel-certificate/page（同样的关键字可传 certName/certNo；**状态字典不同**
+ *   —— 企业用 cert_status、员工用 person_cert_status，故员工侧不转发状态筛选，避免把两套码混用）；
+ * · 全部：两侧各取前 200 条在前端合并（服务端没有跨域合并接口），**本地分页**并显式提示上限，
+ *   只读展示（不提供行操作，行操作仍回到各自的专属页）。
+ * 这是"一处看全"的折中实现；真正的跨域合并分页需后端出接口，已记入契约。 */
+type UnifiedRow = {
+  holder: string;
+  key: string;
+  name: string;
+  source: '企业证照' | '员工证书';
+  statusText: string;
+  typeText: string;
+  validTo: string;
+};
+const scope = ref<'ALL' | 'ORG' | 'PERSON'>('ORG');
+const unifiedRows = ref<UnifiedRow[]>([]);
+/** ALL 模式的合并结果（本地分页用） */
+const mergedRows = ref<UnifiedRow[]>([]);
+const MERGE_CAP = 200;
+
+function orgToUnified(r: CertificateApi.Certificate): UnifiedRow {
+  return {
+    holder: r.holderName ?? '—',
+    key: 'ORG-' + String(r.id),
+    name: r.certName ?? '—',
+    source: '企业证照',
+    statusText: dictLabel('cert_status', r.certStatus) || (r.certStatus ?? '—'),
+    typeText: dictLabel('cert_type', r.certType) || (r.certType ?? '—'),
+    validTo: r.validTo ? fmtDate(r.validTo) : '长期',
+  };
+}
+function personToUnified(r: PersonnelCertApi.Cert): UnifiedRow {
+  return {
+    holder: r.personName ?? '—',
+    key: 'PER-' + String(r.id),
+    name: r.certName ?? '—',
+    source: '员工证书',
+    statusText: dictLabel('person_cert_status', r.certStatus) || (r.certStatus ?? '—'),
+    typeText: dictLabel('person_cert_type', r.certType) || (r.certType ?? '—'),
+    validTo: r.validTo ? fmtDate(r.validTo) : '长期',
+  };
+}
+const unifiedColumns = computed(() => {
+  const base = [
+    { dataIndex: 'name', key: 'name', title: '证照 / 证书', width: 260 },
+    { dataIndex: 'typeText', key: 'type', title: '类型', width: 140 },
+    { dataIndex: 'holder', key: 'holder', title: '持证主体 / 员工', width: 180 },
+    { dataIndex: 'validTo', key: 'validTo', title: '有效期至', width: 130 },
+    { dataIndex: 'statusText', key: 'status', title: '状态', width: 130 },
+  ];
+  return scope.value === 'ALL'
+    ? [...base, { dataIndex: 'source', key: 'source', title: '来源', width: 110 }]
+    : base;
+});
+/** 切范围：回第 1 页重查 */
+function onScopeChange(): void {
+  query.pageNo = 1;
+  void load();
+}
+
 async function load() {
   loading.value = true;
   try {
-    const page = await getCertificatePage({ ...query });
-    rows.value = page.list ?? [];
-    total.value = page.total ?? 0;
+    if (scope.value === 'ORG') {
+      const page = await getCertificatePage({ ...query });
+      rows.value = page.list ?? [];
+      total.value = page.total ?? 0;
+      return;
+    }
+    if (scope.value === 'PERSON') {
+      const page = await getPersonnelCertPage({
+        certName: query.certName,
+        certNo: query.certNo,
+        pageNo: query.pageNo,
+        pageSize: query.pageSize,
+      });
+      unifiedRows.value = (page.list ?? []).map(personToUnified);
+      total.value = page.total ?? 0;
+      return;
+    }
+    // ALL：两侧各取前 200 条合并，本地分页（上限显式提示，不假装是全量）
+    const [org, per] = await Promise.all([
+      getCertificatePage({ ...query, pageNo: 1, pageSize: MERGE_CAP }),
+      getPersonnelCertPage({ certName: query.certName, certNo: query.certNo, pageNo: 1, pageSize: MERGE_CAP }),
+    ]);
+    mergedRows.value = [...(org.list ?? []).map(orgToUnified), ...(per.list ?? []).map(personToUnified)].sort((a, b) =>
+      a.validTo.localeCompare(b.validTo),
+    );
+    total.value = mergedRows.value.length;
+    const start = (query.pageNo - 1) * query.pageSize;
+    unifiedRows.value = mergedRows.value.slice(start, start + query.pageSize);
   } catch {
     rows.value = [];
+    unifiedRows.value = [];
+    mergedRows.value = [];
     total.value = 0;
   } finally {
     loading.value = false;
   }
+}
+
+/** 筛选变化 → 回第 1 页重查（前台样式的文字选项点一下即筛） */
+function applyFilter(): void {
+  query.pageNo = 1;
+  void load();
 }
 
 function resetQuery() {
@@ -344,70 +440,69 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
     </div>
 
     <div class="ct-panel">
-      <div class="ct-filter">
-        <a-input
-          v-model:value="query.certName"
-          placeholder="证照名称（模糊）"
-          style="width: 190px"
-          allow-clear
-          @press-enter="load"
+      <!-- 筛选：**前台样式**（左侧属性名 + 右侧文字选项）；枚举项点一下即筛，文本框回车或点查询 -->
+      <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+        <AttrFilter
+          v-model="scope"
+          label="证照范围"
+          :allow-all="false"
+          :options="[
+            { label: '企业证照', value: 'ORG' },
+            { label: '员工证书', value: 'PERSON' },
+            { label: '全部（企业+个人）', value: 'ALL' },
+          ]"
+          @change="onScopeChange"
         />
-        <a-input
-          v-model:value="query.certNo"
-          placeholder="证书编号（精确）"
-          style="width: 180px"
-          allow-clear
-          @press-enter="load"
-        />
-        <a-select
-          v-if="typeFilters.length > 0"
-          v-model:value="query.certType"
-          :options="typeFilters"
-          placeholder="证照大类"
-          style="width: 160px"
-          allow-clear
-          show-search
-          option-filter-prop="label"
-        />
-        <a-input
-          v-else
-          v-model:value="query.certType"
-          placeholder="证照大类 code"
-          style="width: 160px"
-          allow-clear
-          @press-enter="load"
-        />
-        <a-select
-          v-model:value="query.certStatus"
-          :options="statusFilters"
-          placeholder="台账状态"
-          style="width: 150px"
-          allow-clear
-        />
-        <a-input
-          v-model:value="query.holderName"
-          placeholder="持证主体（模糊）"
-          style="width: 170px"
-          allow-clear
-          @press-enter="load"
-        />
-        <a-select
-          v-model:value="query.verificationStatus"
-          :options="verifyFilters"
-          placeholder="验真状态"
-          style="width: 150px"
-          allow-clear
-        />
-        <a-button type="primary" @click="load">查询</a-button>
-        <a-button @click="resetQuery">重置</a-button>
-        <span class="ct-ml">
-          编号掩码
-          <a-switch v-model:checked="maskNo" size="small" />
-        </span>
+        <AttrFilter label="证照名称">
+          <a-input v-model:value="query.certName" placeholder="模糊匹配，回车查询" style="width: 240px" allow-clear @press-enter="applyFilter" />
+        </AttrFilter>
+        <AttrFilter label="证书编号">
+          <a-input v-model:value="query.certNo" placeholder="精确匹配，回车查询" style="width: 240px" allow-clear @press-enter="applyFilter" />
+        </AttrFilter>
+        <AttrFilter v-if="typeFilters.length > 0" v-model="query.certType" label="证照大类" :options="typeFilters" @change="applyFilter" />
+        <AttrFilter v-else label="证照大类">
+          <a-input v-model:value="query.certType" placeholder="大类 code（字典未下发时手填）" style="width: 240px" allow-clear @press-enter="applyFilter" />
+        </AttrFilter>
+        <AttrFilter v-model="query.certStatus" label="台账状态" :options="statusFilters" @change="applyFilter" />
+        <AttrFilter label="持证主体">
+          <a-input v-model:value="query.holderName" placeholder="模糊匹配，回车查询" style="width: 240px" allow-clear @press-enter="applyFilter" />
+        </AttrFilter>
+        <AttrFilter v-model="query.verificationStatus" label="验真状态" :options="verifyFilters" @change="applyFilter" />
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <a-button type="primary" @click="applyFilter">查询</a-button>
+          <a-button @click="resetQuery">重置</a-button>
+          <span class="ml-auto text-xs text-muted-foreground">编号掩码 <a-switch v-model:checked="maskNo" size="small" /></span>
+        </div>
       </div>
 
       <div class="ct-panel-b">
+        <!-- 非「企业证照」范围：统一只读表（企业+员工证书；行操作仍在各自专属页） -->
+        <template v-if="scope !== 'ORG'">
+          <div class="mb-2 text-xs text-muted-foreground">
+            <template v-if="scope === 'PERSON'">员工证书（按员工档案维度；状态/类型用 person_cert_* 字典）</template>
+            <template v-else>合并视图：企业证照 + 员工证书，各取前 {{ MERGE_CAP }} 条后按有效期排序（本地分页，非全量）</template>
+          </div>
+          <a-table
+            class="ct-table"
+            :columns="unifiedColumns"
+            :data-source="unifiedRows"
+            :loading="loading"
+            :pagination="{
+              current: query.pageNo,
+              pageSize: query.pageSize,
+              showSizeChanger: true,
+              total,
+              onChange: (p: number, s: number) => { query.pageNo = p; query.pageSize = s; load(); },
+            }"
+            row-key="key"
+            size="small"
+          >
+            <template #emptyText><div class="ct-empty">该范围内暂无证照</div></template>
+          </a-table>
+        </template>
+
         <a-table
+          v-else
           class="ct-table"
           :columns="columns"
           :data-source="rows"
