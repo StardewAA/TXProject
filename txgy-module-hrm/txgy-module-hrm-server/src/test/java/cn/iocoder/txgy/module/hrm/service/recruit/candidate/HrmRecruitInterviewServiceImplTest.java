@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitInterviewResultEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
 import jakarta.annotation.Resource;
@@ -66,6 +67,8 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
     @MockitoBean
     private HrmEmployeeService employeeService;
     @MockitoBean
+    private HrmRecruitApplicationService recruitApplicationService;
+    @MockitoBean
     private NotifyMessageSendApi notifyMessageSendApi;
 
     @Test
@@ -91,7 +94,7 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
         // 断言
         assertNotNull(interviewId);
         HrmRecruitInterviewDO interview = recruitInterviewMapper.selectById(interviewId);
-        assertPojoEquals(reqVO, interview, "id", "stageNumber");
+        assertPojoEquals(reqVO, interview, "id", "stageNumber", "roundNo");
         assertEquals(firstInterview.getStageNumber() + 1, interview.getStageNumber());
         assertEquals(HrmRecruitInterviewResultEnum.UNFINISHED.getResult(), interview.getResult());
         verify(recruitCandidateService).updateRecruitCandidateInterview(candidateId, 2);
@@ -526,7 +529,7 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
 
     @SafeVarargs
     private static HrmRecruitInterviewDO randomRecruitInterviewDO(Consumer<HrmRecruitInterviewDO>... consumers) {
-        Consumer<HrmRecruitInterviewDO> consumer = o -> o.setType(1).setStageNumber(1)
+        Consumer<HrmRecruitInterviewDO> consumer = o -> o.setApplicationId(null).setType(1).setStageNumber(1).setRoundNo(1)
                 .setOtherInterviewEmployeeIds(emptyList())
                 .setResult(HrmRecruitInterviewResultEnum.UNFINISHED.getResult());
         return randomPojo(HrmRecruitInterviewDO.class, ArrayUtils.append(consumer, consumers));
@@ -535,7 +538,7 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
     @SafeVarargs
     private static HrmRecruitInterviewSaveReqVO randomRecruitInterviewSaveReqVO(
             Consumer<HrmRecruitInterviewSaveReqVO>... consumers) {
-        Consumer<HrmRecruitInterviewSaveReqVO> consumer = o -> o.setId(null).setType(1).setStageNumber(null)
+        Consumer<HrmRecruitInterviewSaveReqVO> consumer = o -> o.setId(null).setApplicationId(null).setType(1).setStageNumber(null)
                 .setOtherInterviewEmployeeIds(singletonList(randomLongId()));
         return randomPojo(HrmRecruitInterviewSaveReqVO.class, ArrayUtils.append(consumer, consumers));
     }

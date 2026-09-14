@@ -14,8 +14,11 @@ $frontendDist = Join-Path $vbenDir 'apps\web-antd\dist\index.html'
 
 Set-Location -LiteralPath $rootDir
 
-$env:DOCKER_BUILDKIT = '1'
-$env:COMPOSE_DOCKER_CLI_BUILD = '1'
+# The runtime image context is small and contains no source build. Disable
+# BuildKit here because this checkout path contains non-ASCII characters and
+# the Docker Desktop Windows frontend can fail while transferring its session.
+$env:DOCKER_BUILDKIT = '0'
+$env:COMPOSE_DOCKER_CLI_BUILD = '0'
 
 $env:COREPACK_NPM_REGISTRY = 'https://registry.npmmirror.com'
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
@@ -32,6 +35,31 @@ function Invoke-Compose {
         throw "docker compose $($Arguments -join ' ') failed (exit=$LASTEXITCODE)"
     }
 }
+
+$hrmPomDirectory = Join-Path $rootDir 'txgy-module-hrm'
+$hrmServerTarget = Join-Path $hrmPomDirectory 'txgy-module-hrm-server\target'
+Write-Host 'Building the HRM server from its Maven aggregate.' -ForegroundColor Cyan
+Push-Location -LiteralPath $hrmPomDirectory
+try {
+    & mvn -B -ntp -s (Join-Path $rootDir 'deploy\local\settings.xml') `
+        '-Dmaven.test.skip=true' -pl 'txgy-module-hrm-server' -am package
+    if ($LASTEXITCODE -ne 0) {
+        throw "HRM backend jar build failed (exit=$LASTEXITCODE)"
+    }
+} finally {
+    Pop-Location
+}
+$hrmJar = Get-ChildItem -LiteralPath $hrmServerTarget -Filter '*.jar' |
+    Where-Object { $_.Name -notlike '*.original' } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if (-not $hrmJar) {
+    throw "HRM backend jar was not found in $hrmServerTarget"
+}
+$runtimeHrmJar = Join-Path $deployDir 'local\jars\hrm.jar'
+New-Item -ItemType Directory -Path (Split-Path -Parent $runtimeHrmJar) -Force | Out-Null
+Copy-Item -LiteralPath $hrmJar.FullName -Destination $runtimeHrmJar -Force
+Write-Host "Runtime jar ready: $runtimeHrmJar" -ForegroundColor Green
 
 Write-Host 'Building web-antd on the host before creating the lightweight frontend image.' -ForegroundColor Cyan
 Push-Location -LiteralPath $vbenDir
@@ -53,7 +81,7 @@ if ($NoCache) {
 }
 $buildArguments += @('hrm', 'frontend')
 
-Write-Host 'Building HRM backend and web-antd frontend from the current working tree.' -ForegroundColor Cyan
+Write-Host 'Building runtime images for HRM and web-antd.' -ForegroundColor Cyan
 Invoke-Compose $buildArguments
 
 if ($BuildOnly) {

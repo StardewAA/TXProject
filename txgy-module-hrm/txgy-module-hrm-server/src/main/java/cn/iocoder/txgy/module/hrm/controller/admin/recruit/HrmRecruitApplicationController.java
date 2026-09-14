@@ -62,6 +62,18 @@ public class HrmRecruitApplicationController {
         applicationService.startScreening(reqVO); return success(true);
     }
 
+    @PutMapping("/pass-screening")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:application:screen')")
+    public CommonResult<Boolean> passScreening(@Valid @RequestBody HrmRecruitApplicationStatusReqVO reqVO) {
+        applicationService.passScreening(reqVO); return success(true);
+    }
+
+    @PutMapping("/reject-resume")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:application:eliminate')")
+    public CommonResult<Boolean> rejectResume(@Valid @RequestBody HrmRecruitApplicationStatusReqVO reqVO) {
+        applicationService.rejectResume(reqVO); return success(true);
+    }
+
     @PutMapping("/eliminate")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:application:eliminate')")
     public CommonResult<Boolean> eliminate(@Valid @RequestBody HrmRecruitApplicationStatusReqVO reqVO) {
