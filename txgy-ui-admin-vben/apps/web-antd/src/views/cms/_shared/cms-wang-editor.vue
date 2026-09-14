@@ -30,7 +30,8 @@ onMounted(async () => {
   editor = new WangEditor(toolbarElement.value, textElement.value);
   editor.config.height = props.height;
   editor.config.zIndex = 100;
-  editor.config.placeholder = '粘贴或编辑完整原文，保留条号、标题、列表与段落。';
+  editor.config.placeholder =
+    '粘贴或编辑完整原文，保留条号、标题、列表与段落。';
   editor.config.pasteFilterStyle = false;
   editor.config.pasteIgnoreImg = true;
   editor.config.menus = [
@@ -78,19 +79,39 @@ onBeforeUnmount(() => {
 <style scoped>
 .cms-wang-editor {
   overflow: hidden;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-  background: #fff;
+  background: rgb(255 255 255 / 66%);
+  border: 1px solid rgb(116 144 182 / 24%);
+  border-radius: 15px;
+  box-shadow:
+    0 12px 30px rgb(32 62 101 / 6%),
+    inset 0 1px 0 rgb(255 255 255 / 82%);
+  backdrop-filter: blur(14px);
 }
+
 .editor-toolbar {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgb(116 144 182 / 16%);
 }
+
 .cms-wang-editor :deep(.w-e-toolbar),
 .cms-wang-editor :deep(.w-e-text-container) {
+  background: transparent !important;
   border: 0 !important;
 }
+
+.cms-wang-editor :deep(.w-e-toolbar) {
+  background: rgb(237 244 252 / 64%) !important;
+}
+
 .cms-wang-editor :deep(.w-e-text) {
-  color: #1f2937;
   line-height: 1.75;
+  color: #253750;
+}
+
+.cms-wang-editor :deep(.w-e-menu) {
+  border-radius: 7px;
+}
+
+.cms-wang-editor :deep(.w-e-menu:hover) {
+  background: rgb(216 233 252 / 72%) !important;
 }
 </style>

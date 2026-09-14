@@ -2,7 +2,17 @@
 import { onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
-import { Alert, Button, Card, Modal, Spin, Table, Tabs, Tag, message } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Card,
+  Modal,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  message,
+} from 'ant-design-vue';
 
 import type { CmsKnowledgeItem } from '#/api/cms/knowledge';
 import {
@@ -12,6 +22,7 @@ import {
   reindexCmsKnowledge,
 } from '#/api/cms/knowledge';
 import PublicationSubmit from '../review/parts/submit/index.vue';
+import '../_shared/cms-glass-theme.css';
 
 defineOptions({ name: 'CmsPublishManagement' });
 
@@ -42,7 +53,10 @@ async function refresh() {
   loading.value = true;
   error.value = '';
   try {
-    [rows.value, archives.value] = await Promise.all([listCmsKnowledge(), listCmsArchives()]);
+    [rows.value, archives.value] = await Promise.all([
+      listCmsKnowledge(),
+      listCmsArchives(),
+    ]);
   } catch (exception) {
     console.error(exception);
     error.value = '读取待发布知识库失败，请检查 CMS 服务和权限。';
@@ -75,7 +89,9 @@ async function reindex() {
   loading.value = true;
   try {
     const result = await reindexCmsKnowledge();
-    message.success(`索引重建完成：关键词 ${result.keywordChunks} 条，向量 ${result.vectorChunks} 条。`);
+    message.success(
+      `索引重建完成：关键词 ${result.keywordChunks} 条，向量 ${result.vectorChunks} 条。`,
+    );
   } finally {
     loading.value = false;
   }
@@ -86,8 +102,8 @@ onMounted(refresh);
 
 <template>
   <Page>
-    <div class="publish-page">
-      <header>
+    <div class="cms-glass-page publish-page">
+      <header class="cms-glass-hero">
         <div>
           <p>CMS 系统 · 发布管理</p>
           <h1>内容发布与归档</h1>
@@ -95,11 +111,20 @@ onMounted(refresh);
         </div>
         <div class="header-actions">
           <Button @click="refresh">刷新</Button>
-          <Button v-access:code="['cms:knowledge:reindex']" :loading="loading" @click="reindex">重建检索索引</Button>
+          <Button
+            v-access:code="['cms:knowledge:reindex']"
+            :loading="loading"
+            @click="reindex"
+            >重建检索索引</Button
+          >
         </div>
       </header>
 
-      <Alert message="所有发布内容必须经过异步 AI 初审和管理员人工复核，人工批准后才进入检索知识库。" show-icon type="info" />
+      <Alert
+        message="所有发布内容必须经过异步 AI 初审和管理员人工复核，人工批准后才进入检索知识库。"
+        show-icon
+        type="info"
+      />
       <Alert v-if="error" :message="error" show-icon type="error" />
 
       <Tabs v-model:active-key="activeTab" type="card">
@@ -107,37 +132,63 @@ onMounted(refresh);
           <PublicationSubmit embedded />
         </Tabs.TabPane>
         <Tabs.TabPane key="published" tab="已发布内容">
-      <Card title="已发布内容">
-        <Spin :spinning="loading">
-          <Table :columns="columns" :data-source="rows" row-key="reviewId" :pagination="{ pageSize: 10 }">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'title'">
-                <strong>{{ record.title }}</strong>
-                <div><a :href="record.sourceUrl" rel="noopener noreferrer" target="_blank">官方来源</a></div>
-              </template>
-              <template v-else-if="column.key === 'validity'">
-                <Tag>{{ validityNames[record.validity] || record.validity }}</Tag>
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <Button
-                  v-access:code="['cms:knowledge:delete']"
-                  danger
-                  type="link"
-                  :loading="operatingId === record.reviewId"
-                  @click="confirmArchive(record)"
-                >归档</Button>
-              </template>
-            </template>
-          </Table>
-        </Spin>
-      </Card>
+          <Card title="已发布内容">
+            <Spin :spinning="loading">
+              <Table
+                :columns="columns"
+                :data-source="rows"
+                row-key="reviewId"
+                :pagination="{ pageSize: 10 }"
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'title'">
+                    <strong>{{ record.title }}</strong>
+                    <div>
+                      <a
+                        :href="record.sourceUrl"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                        >官方来源</a
+                      >
+                    </div>
+                  </template>
+                  <template v-else-if="column.key === 'validity'">
+                    <Tag>{{
+                      validityNames[record.validity] || record.validity
+                    }}</Tag>
+                  </template>
+                  <template v-else-if="column.key === 'action'">
+                    <Button
+                      v-access:code="['cms:knowledge:delete']"
+                      danger
+                      type="link"
+                      :loading="operatingId === record.reviewId"
+                      @click="confirmArchive(record)"
+                      >归档</Button
+                    >
+                  </template>
+                </template>
+              </Table>
+            </Spin>
+          </Card>
         </Tabs.TabPane>
         <Tabs.TabPane key="archive" tab="归档库">
           <Card title="归档内容（保留历史，不参与检索）">
-            <Table :columns="columns.filter((item) => item.key !== 'action')" :data-source="archives" row-key="reviewId" :pagination="{ pageSize: 10 }">
+            <Table
+              :columns="columns.filter((item) => item.key !== 'action')"
+              :data-source="archives"
+              row-key="reviewId"
+              :pagination="{ pageSize: 10 }"
+            >
               <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'title'"><strong>{{ record.title }}</strong></template>
-                <template v-else-if="column.key === 'validity'"><Tag>{{ validityNames[record.validity] || record.validity }}</Tag></template>
+                <template v-if="column.key === 'title'"
+                  ><strong>{{ record.title }}</strong></template
+                >
+                <template v-else-if="column.key === 'validity'"
+                  ><Tag>{{
+                    validityNames[record.validity] || record.validity
+                  }}</Tag></template
+                >
               </template>
             </Table>
           </Card>
@@ -148,10 +199,19 @@ onMounted(refresh);
 </template>
 
 <style scoped>
-.publish-page { display: grid; gap: 16px; }
-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-header p { margin: 0 0 6px; color: #2563eb; font-size: 13px; font-weight: 700; }
-header h1 { margin: 0; color: #0f172a; font-size: 28px; }
-header span { display: block; margin-top: 8px; color: #64748b; }
-.header-actions { display: flex; gap: 8px; }
+.header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 9px;
+}
+
+@media (max-width: 720px) {
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions :deep(.ant-btn) {
+    flex: 1;
+  }
+}
 </style>

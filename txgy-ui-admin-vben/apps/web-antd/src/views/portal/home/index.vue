@@ -75,20 +75,54 @@ const services = [
 <style scoped>
 .portal-page {
   display: grid;
-  gap: 24px;
+  gap: 26px;
 }
 
 .welcome-banner {
-  padding: 32px 36px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  position: relative;
+  min-height: 228px;
+  padding: 42px 46px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 0%, rgb(201 169 97 / 22%), transparent 34%),
+    linear-gradient(125deg, #14243f, #1a2b4a 62%, #2c4470);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 26px;
+  box-shadow: 0 26px 64px rgb(26 43 74 / 20%);
+}
+
+.welcome-banner::before {
+  position: absolute;
+  top: -118px;
+  right: -36px;
+  width: 300px;
+  height: 300px;
+  content: '';
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 48px rgb(255 255 255 / 3%),
+    0 0 0 96px rgb(255 255 255 / 2%);
+}
+
+.welcome-banner > * {
+  position: relative;
+  z-index: 1;
 }
 
 .eyebrow {
-  margin: 0 0 8px;
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
+  display: inline-flex;
+  padding: 7px 12px;
+  margin: 0 0 18px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #dfc48a;
+  letter-spacing: 0.08em;
+  background: rgb(255 255 255 / 9%);
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
 }
 
 h1,
@@ -98,22 +132,31 @@ p {
 }
 
 h1 {
-  margin-bottom: 8px;
-  color: #111827;
-  font-size: 32px;
-  line-height: 1.25;
+  margin-bottom: 10px;
+  font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif;
+  font-size: 38px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
 .welcome-banner > p:last-child {
   margin-bottom: 0;
-  color: #4b5563;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgb(229 239 252 / 72%);
 }
 
 .section-block {
-  padding: 24px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  padding: 28px;
+  background: rgb(255 253 248 / 68%);
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 21px;
+  box-shadow:
+    0 18px 48px rgb(44 70 105 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 90%);
+  backdrop-filter: blur(20px) saturate(135%);
 }
 
 .section-heading {
@@ -125,69 +168,80 @@ h1 {
 
 .section-heading h2 {
   margin-bottom: 0;
-  color: #111827;
-  font-size: 18px;
+  font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif;
+  font-size: 19px;
+  font-weight: 650;
+  color: #1a2b4a;
 }
 
 .section-heading span {
-  color: #9ca3af;
   font-size: 13px;
+  color: #9ca3af;
 }
 
 .service-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .service-item {
+  position: relative;
   display: flex;
-  min-height: 160px;
-  padding: 20px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: inherit;
-  cursor: pointer;
   flex-direction: column;
   align-items: flex-start;
+  min-height: 176px;
+  padding: 22px;
+  overflow: hidden;
+  color: inherit;
   text-align: left;
+  cursor: pointer;
+  background: rgb(255 255 255 / 58%);
+  border: 1px solid rgb(121 149 185 / 17%);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 88%);
   transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .service-item:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 4px 14px rgb(37 99 235 / 10%);
+  border-color: rgb(201 169 97 / 48%);
+  box-shadow: 0 16px 32px rgb(26 43 74 / 11%);
+  transform: translateY(-4px);
 }
 
 .service-title {
-  color: #1f2937;
+  font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif;
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 680;
+  color: #1a2b4a;
 }
 
 .service-description {
   margin-top: 10px;
-  color: #6b7280;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #78869a;
 }
 
 .service-link {
-  margin-top: auto;
   padding-top: 18px;
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 650;
+  color: #a88840;
 }
 
 .empty-state {
-  padding: 32px 16px;
-  border: 1px dashed #d1d5db;
-  color: #9ca3af;
-  font-size: 14px;
+  padding: 30px 16px;
+  font-size: 12px;
+  color: #96a2b3;
   text-align: center;
+  background: rgb(244 248 252 / 46%);
+  border: 1px dashed rgb(112 145 187 / 27%);
+  border-radius: 14px;
 }
 
 @media (max-width: 760px) {
@@ -197,6 +251,12 @@ h1 {
 
   .service-grid {
     grid-template-columns: 1fr;
+  }
+
+  .welcome-banner {
+    min-height: 200px;
+    padding: 34px 26px;
+    border-radius: 21px;
   }
 }
 

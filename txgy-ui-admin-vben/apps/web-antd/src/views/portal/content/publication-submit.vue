@@ -29,6 +29,7 @@ import {
   editorHtmlToPlainText,
   plainTextToEditorHtml,
 } from '../../cms/_shared/rich-text';
+import '../../cms/_shared/cms-glass-theme.css';
 
 const metadata = reactive<ReviewMetadata>({
   documentNo: '',
@@ -103,14 +104,22 @@ async function parseUrl() {
     text.value = plainTextToEditorHtml(result.text);
     mode.value = 'text';
     parseWarning.value = result.warning || '';
-    message.success(result.llmExtracted ? '元数据已智能提取，请确认补全。' : '网页正文已解析，请确认补全元数据。');
+    message.success(
+      result.llmExtracted
+        ? '元数据已智能提取，请确认补全。'
+        : '网页正文已解析，请确认补全元数据。',
+    );
   } finally {
     busy.value = false;
   }
 }
 
 async function submit() {
-  if (!metadata.title.trim() || !metadata.issuer.trim() || !metadata.sourceUrl.trim()) {
+  if (
+    !metadata.title.trim() ||
+    !metadata.issuer.trim() ||
+    !metadata.sourceUrl.trim()
+  ) {
     message.warning('请填写标题、发布机关和官方原文链接。');
     return;
   }
@@ -136,7 +145,10 @@ async function submit() {
     if (mode.value === 'file' && file.value) {
       await submitPublicationFile(cleanMetadata(), file.value);
     } else {
-      const duplicate = await checkPublicationDuplicate(cleanMetadata(), plainText);
+      const duplicate = await checkPublicationDuplicate(
+        cleanMetadata(),
+        plainText,
+      );
       if (duplicate.duplicate) {
         message.error(`提交已阻止：${duplicate.reason || '内容重复'}`);
         return;
@@ -154,9 +166,16 @@ async function submit() {
 
 function reviewLabel(row: Record<string, any>) {
   const item = row as PublicationSubmission;
-  return ({
-    AI_REVIEWING: 'AI 初审中', PENDING_MANUAL: '待人工复核', APPROVED: '人工通过', REJECTED: '人工驳回',
-  } as Record<string, string>)[item.report.workflowStatus] || item.report.workflowStatus;
+  return (
+    (
+      {
+        AI_REVIEWING: 'AI 初审中',
+        PENDING_MANUAL: '待人工复核',
+        APPROVED: '人工通过',
+        REJECTED: '人工驳回',
+      } as Record<string, string>
+    )[item.report.workflowStatus] || item.report.workflowStatus
+  );
 }
 
 function reviewColor(row: Record<string, any>) {
@@ -170,7 +189,7 @@ onMounted(refresh);
 </script>
 
 <template>
-  <div class="publication-panel">
+  <div class="cms-glass-page publication-panel">
     <Alert
       message="企业提交的内容是发布申请，不会直接对外发布。管理员完成来源、效力、规范性和质量审查后，才能执行发布。"
       show-icon
@@ -178,9 +197,17 @@ onMounted(refresh);
     />
     <Card title="提交发布申请">
       <div class="fields">
-        <label>文档标题<Input v-model:value="metadata.title" :maxlength="300" /></label>
-        <label>文号 / 标准编号<Input v-model:value="metadata.documentNo" :maxlength="100" /></label>
-        <label>发布机关<Input v-model:value="metadata.issuer" :maxlength="200" /></label>
+        <label
+          >文档标题<Input v-model:value="metadata.title" :maxlength="300"
+        /></label>
+        <label
+          >文号 / 标准编号<Input
+            v-model:value="metadata.documentNo"
+            :maxlength="100"
+        /></label>
+        <label
+          >发布机关<Input v-model:value="metadata.issuer" :maxlength="200"
+        /></label>
         <label>
           官方原文链接
           <div class="source-url-field">
@@ -193,26 +220,50 @@ onMounted(refresh);
             <Button :loading="busy" @click="parseUrl">智能解析</Button>
           </div>
         </label>
-        <label>文档类型<Select v-model:value="metadata.kind" :options="kindOptions" /></label>
-        <label>申报效力<Select v-model:value="metadata.validity" :options="validityOptions" /></label>
-        <label>实施日期<input v-model="metadata.effectiveDate" type="date" /></label>
-        <label>最后有效日期<input v-model="metadata.expiryDate" type="date" /></label>
+        <label
+          >文档类型<Select v-model:value="metadata.kind" :options="kindOptions"
+        /></label>
+        <label
+          >申报效力<Select
+            v-model:value="metadata.validity"
+            :options="validityOptions"
+        /></label>
+        <label
+          >实施日期<input v-model="metadata.effectiveDate" type="date"
+        /></label>
+        <label
+          >最后有效日期<input v-model="metadata.expiryDate" type="date"
+        /></label>
       </div>
-      <Checkbox v-model:checked="metadata.historical">作为历史资料申报</Checkbox>
+      <Checkbox v-model:checked="metadata.historical"
+        >作为历史资料申报</Checkbox
+      >
       <div class="body-input">
         <Select
           v-model:value="mode"
-          :options="[{ label: '上传文件', value: 'file' }, { label: '手动录入', value: 'text' }]"
+          :options="[
+            { label: '上传文件', value: 'file' },
+            { label: '手动录入', value: 'text' },
+          ]"
         />
         <CmsFilePicker v-if="mode === 'file'" v-model="file" />
-        <Alert v-if="parseWarning" :message="parseWarning" show-icon type="warning" />
+        <Alert
+          v-if="parseWarning"
+          :message="parseWarning"
+          show-icon
+          type="warning"
+        />
         <CmsWangEditor v-if="mode === 'text'" v-model="text" :height="360" />
       </div>
-      <Button type="primary" :loading="busy" @click="submit">提交审查并申请发布</Button>
+      <Button type="primary" :loading="busy" @click="submit"
+        >提交审查并申请发布</Button
+      >
     </Card>
 
     <Card title="我的发布申请">
-      <template #extra><Button :disabled="loading" @click="refresh">刷新</Button></template>
+      <template #extra
+        ><Button :disabled="loading" @click="refresh">刷新</Button></template
+      >
       <Spin :spinning="loading">
         <Table
           :columns="columns"
@@ -221,14 +272,24 @@ onMounted(refresh);
           :pagination="{ pageSize: 10 }"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'title'">{{ record.report.metadata.title }}</template>
-            <template v-else-if="column.key === 'createdAt'">{{ record.report.createdAt }}</template>
+            <template v-if="column.key === 'title'">{{
+              record.report.metadata.title
+            }}</template>
+            <template v-else-if="column.key === 'createdAt'">{{
+              record.report.createdAt
+            }}</template>
             <template v-else-if="column.key === 'review'">
               <Tag :color="reviewColor(record)">{{ reviewLabel(record) }}</Tag>
             </template>
             <template v-else-if="column.key === 'published'">
               <Tag :color="record.published ? 'green' : 'default'">
-                {{ record.published ? '已发布' : record.report.workflowStatus === 'REJECTED' ? '已驳回' : '未发布' }}
+                {{
+                  record.published
+                    ? '已发布'
+                    : record.report.workflowStatus === 'REJECTED'
+                      ? '已驳回'
+                      : '未发布'
+                }}
               </Tag>
             </template>
           </template>
@@ -239,12 +300,45 @@ onMounted(refresh);
 </template>
 
 <style scoped>
-.publication-panel { display: grid; gap: 16px; }
-.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-label { display: grid; gap: 6px; color: #334155; font-size: 13px; }
-label > input { min-height: 32px; padding: 4px 10px; border: 1px solid #d9d9d9; border-radius: 6px; }
-.body-input { display: grid; gap: 10px; margin: 16px 0; }
-.body-input :deep(.ant-select) { width: 180px; }
-.source-url-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-@media (max-width: 800px) { .fields { grid-template-columns: 1fr; } }
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 18px;
+  margin-bottom: 18px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: #44546b;
+}
+
+label > input {
+  min-height: 34px;
+  padding: 4px 10px;
+}
+
+.body-input {
+  display: grid;
+  gap: 12px;
+  padding-top: 3px;
+  margin: 18px 0;
+}
+
+.body-input :deep(.ant-select) {
+  width: 180px;
+}
+
+.source-url-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+@media (max-width: 800px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
