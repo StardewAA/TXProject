@@ -174,10 +174,10 @@ watch(open, (v) => onOpen(v));
     @update:open="onOpen($event as boolean)"
   >
     <div class="mb-2 flex items-center justify-between">
-      <div class="text-xs text-gray-500">
+      <div class="text-xs text-muted-foreground">
         启用后按轮询间隔（≥120s）周期采集，产生“定时任务”任务条；同源 120s 内不可重复触发（防封频控）。
       </div>
-      <a class="text-xs text-blue-600" @click="openCreate">+ 新增信息源</a>
+      <a class="text-xs text-primary" @click="openCreate">+ 新增信息源</a>
     </div>
     <Table
       :data-source="rows"
@@ -223,7 +223,7 @@ watch(open, (v) => onOpen(v));
       </template>
     </Table>
     <div class="mt-2 text-right">
-      <a v-if="total > pageNo * pageSize" class="text-xs text-blue-600" @click="pageNo++; void load()">
+      <a v-if="total > pageNo * pageSize" class="text-xs text-primary" @click="pageNo++; void load()">
         加载更多（共 {{ total }}）
       </a>
     </div>

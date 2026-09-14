@@ -189,12 +189,12 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal class="w-[1180px] bid-ind">
     <div class="max-h-[76vh] overflow-auto px-2 py-1">
-      <div v-if="loading" class="py-16 text-center text-gray-400">加载中…</div>
-      <div v-else-if="errorMsg" class="py-10 text-center text-red-500">{{ errorMsg }}</div>
+      <div v-if="loading" class="py-16 text-center text-muted-foreground">加载中…</div>
+      <div v-else-if="errorMsg" class="py-10 text-center text-destructive">{{ errorMsg }}</div>
       <div v-else-if="detail">
         <!-- 顶部状态行 -->
         <div class="mb-2 flex flex-wrap items-center gap-2">
-          <span class="text-base font-bold text-gray-800">{{ detail.title || '（无标题）' }}</span>
+          <span class="text-base font-bold text-foreground">{{ detail.title || '（无标题）' }}</span>
         </div>
         <div class="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
           <template v-if="tag(STATUS_MAP, detail.status)">
@@ -208,9 +208,9 @@ const [Modal, modalApi] = useVbenModal({
           </template>
           <Tag v-if="detail.contentType">{{ CONTENT_TYPE_MAP[detail.contentType] || detail.contentType }}</Tag>
           <Tag v-if="detail.noticeTypeRaw">{{ detail.noticeTypeRaw }}</Tag>
-          <span v-if="detail.industryConfidence != null" class="text-gray-400">置信度 {{ (detail.industryConfidence * 100).toFixed(0) }}%</span>
+          <span v-if="detail.industryConfidence != null" class="text-muted-foreground">置信度 {{ (detail.industryConfidence * 100).toFixed(0) }}%</span>
         </div>
-        <div class="mb-2 flex gap-1 border-b border-gray-100">
+        <div class="mb-2 flex gap-1 border-b border-border">
           <button class="fb-tab" :class="{ on: tab === 'look' }" @click="tab = 'look'">前台观感（发布后）</button>
           <button class="fb-tab" :class="{ on: tab === 'data' }" @click="tab = 'data'">审核数据 / 净化原文</button>
         </div>
@@ -251,38 +251,38 @@ const [Modal, modalApi] = useVbenModal({
 
         <!-- ============ 页签2：审核数据 / 净化原文 ============ -->
         <div v-show="tab === 'data'">
-          <div class="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 rounded border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600">
-            <div><b class="text-gray-400">发布单位：</b>{{ empty(detail.issuerName) }}</div>
-            <div><b class="text-gray-400">来源：</b>{{ empty(detail.sourceName) }}<span v-if="detail.sourceCode" class="ml-1 text-gray-400">({{ detail.sourceCode }})</span></div>
-            <div><b class="text-gray-400">发布时间：</b>{{ fmtT(detail.publishTime) }}</div>
-            <div><b class="text-gray-400">生效期：</b>{{ fmtT(detail.effectiveFrom) }} ~ {{ fmtT(detail.effectiveTo) }}</div>
-            <div><b class="text-gray-400">关联项目：</b>{{ empty(detail.projectName) }}<span v-if="detail.projectKey" class="ml-1 text-gray-400">({{ detail.projectKey }})</span></div>
-            <div><b class="text-gray-400">标段：</b>{{ empty(detail.bidSectionCodes) }}</div>
-            <div><b class="text-gray-400">抓取：</b>{{ detail.fetchCount ?? 0 }} 次<template v-if="detail.lastFetchTime">，最近 {{ fmtT(detail.lastFetchTime) }}</template></div>
-            <div><b class="text-gray-400">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-blue-600 underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
+          <div class="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 rounded border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+            <div><b class="text-muted-foreground">发布单位：</b>{{ empty(detail.issuerName) }}</div>
+            <div><b class="text-muted-foreground">来源：</b>{{ empty(detail.sourceName) }}<span v-if="detail.sourceCode" class="ml-1 text-muted-foreground">({{ detail.sourceCode }})</span></div>
+            <div><b class="text-muted-foreground">发布时间：</b>{{ fmtT(detail.publishTime) }}</div>
+            <div><b class="text-muted-foreground">生效期：</b>{{ fmtT(detail.effectiveFrom) }} ~ {{ fmtT(detail.effectiveTo) }}</div>
+            <div><b class="text-muted-foreground">关联项目：</b>{{ empty(detail.projectName) }}<span v-if="detail.projectKey" class="ml-1 text-muted-foreground">({{ detail.projectKey }})</span></div>
+            <div><b class="text-muted-foreground">标段：</b>{{ empty(detail.bidSectionCodes) }}</div>
+            <div><b class="text-muted-foreground">抓取：</b>{{ detail.fetchCount ?? 0 }} 次<template v-if="detail.lastFetchTime">，最近 {{ fmtT(detail.lastFetchTime) }}</template></div>
+            <div><b class="text-muted-foreground">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-primary underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
           </div>
-          <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
+          <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
             PDF 原文件：{{ detail.pdfSize ? `${Math.round(detail.pdfSize / 1024) } KB` : '大小未知' }}
             <template v-if="detail.pdfDownloadUrl">｜<a :href="detail.pdfDownloadUrl" target="_blank" rel="noopener noreferrer" class="underline">下载/预览</a></template>
-            <div v-if="detail.extractionSummary" class="mt-1 text-gray-500">抽取摘要：{{ detail.extractionSummary }}</div>
+            <div v-if="detail.extractionSummary" class="mt-1 text-muted-foreground">抽取摘要：{{ detail.extractionSummary }}</div>
           </div>
-          <div class="mb-1 flex items-center gap-2 text-xs text-gray-400">
+          <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
             <span>净化正文（manage/get 下发 jsoup 白名单净化版 contentHtmlSafe）</span>
             <template v-if="tag(BODY_MAP, detail.bodyBlocksStatus)">
               <Tag :color="tag(BODY_MAP, detail.bodyBlocksStatus)!.color" style="font-size: 11px">正文：{{ tag(BODY_MAP, detail.bodyBlocksStatus)!.text }}</Tag>
             </template>
-            <span v-if="detail.bodyParserCode" class="text-gray-400">策略：{{ detail.bodyParserCode === 'AI_FALLBACK' ? 'AI 兜底排版' : '原文结构化' }}</span>
+            <span v-if="detail.bodyParserCode" class="text-muted-foreground">策略：{{ detail.bodyParserCode === 'AI_FALLBACK' ? 'AI 兜底排版' : '原文结构化' }}</span>
           </div>
-          <div v-if="hasBody" class="rounded border border-gray-200 p-4" v-dompurify-html="detail.contentHtmlSafe"></div>
-          <div v-else class="rounded border border-dashed border-gray-200 p-6 text-center text-xs text-gray-400">该公告无净化正文（非 HTML 或正文为空），详见上方原文/附件。</div>
-          <div v-if="detail.attachments?.length" class="mt-3 text-xs text-gray-500">
-            <div class="mb-1 font-bold text-gray-400">附件（{{ detail.attachments.length }}）</div>
+          <div v-if="hasBody" class="rounded border border-border p-4" v-dompurify-html="detail.contentHtmlSafe"></div>
+          <div v-else class="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">该公告无净化正文（非 HTML 或正文为空），详见上方原文/附件。</div>
+          <div v-if="detail.attachments?.length" class="mt-3 text-xs text-muted-foreground">
+            <div class="mb-1 font-bold text-muted-foreground">附件（{{ detail.attachments.length }}）</div>
             <div v-for="a in detail.attachments" :key="a.id" class="flex items-center gap-2 py-0.5">
               <span>{{ a.name }}</span>
               <Tag v-if="a.virusStatus === 'INFECTED'" color="red" style="font-size: 11px">含病毒已拦截</Tag>
               <Tag v-else-if="a.virusStatus === 'PENDING'" style="font-size: 11px">扫描中</Tag>
-              <a v-if="a.downloadUrl && a.virusStatus !== 'INFECTED'" :href="a.downloadUrl" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">下载</a>
-              <span v-else-if="a.virusStatus !== 'INFECTED'" class="text-gray-400">（文件服务签名地址归档回填后可下载）</span>
+              <a v-if="a.downloadUrl && a.virusStatus !== 'INFECTED'" :href="a.downloadUrl" target="_blank" rel="noopener noreferrer" class="text-primary underline">下载</a>
+              <span v-else-if="a.virusStatus !== 'INFECTED'" class="text-muted-foreground">（文件服务签名地址归档回填后可下载）</span>
             </div>
           </div>
         </div>
@@ -292,22 +292,24 @@ const [Modal, modalApi] = useVbenModal({
 </template>
 
 <style>
-/* 管理预览内“前台观感”公文容器（门户 .docx 同款；fb- 前缀避免污染全局） */
-.fb-tab { padding: 6px 14px; font-size: 13px; color: #7a8591; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; }
-.fb-tab.on { color: #17539a; font-weight: 600; border-bottom-color: #17539a; }
-.fb-preview-head { background: #fff; border: 1px solid #e2e6eb; border-bottom: none; padding: 12px 18px; }
-.fb-preview-banner { background: #eef4fb; border: 1px solid #d4e2f2; color: #17539a; font-size: 11.5px; padding: 5px 10px; border-radius: 4px; margin-bottom: 10px; }
+/* 管理预览内“前台观感”公文容器（fb- 前缀避免污染全局）
+ * 说明：壳层（页签/头/操作区）走平台主题 token；.fb-docx 纸张保持浅色公文观感
+ *      —— 该页签预览的正是「门户（固定浅色站点）发布后的真实样式」，故纸张不做深色化。 */
+.fb-tab { padding: 6px 14px; font-size: 13px; color: hsl(var(--muted-foreground)); background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; }
+.fb-tab.on { color: hsl(var(--primary)); font-weight: 600; border-bottom-color: hsl(var(--primary)); }
+.fb-preview-head { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-bottom: none; padding: 12px 18px; }
+.fb-preview-banner { background: hsl(var(--primary) / 8%); border: 1px solid hsl(var(--primary) / 25%); color: hsl(var(--primary)); font-size: 11.5px; padding: 5px 10px; border-radius: 4px; margin-bottom: 10px; }
 .fb-preview-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .fb-preview-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.fb-preview-tag { display: inline-flex; padding: 0 8px; border-radius: 4px; font-size: 11px; line-height: 1.7; background: #e6eef8; color: #174a86; }
+.fb-preview-tag { display: inline-flex; padding: 0 8px; border-radius: 4px; font-size: 11px; line-height: 1.7; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
 .fb-preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
-.fb-follow-btn { font-size: 12px; font-weight: 700; color: #176b44; border: 1px solid #a9d6bd; background: #e5f2ea; border-radius: 4px; padding: 3px 12px; cursor: default; }
-.fb-follow-btn.disabled { color: #8a97a4; border: 1px dashed #d3dae1; background: #fafbfc; }
-.fb-orig-btn { font-size: 12px; font-weight: 700; color: #17539a; border: 1px solid #c4d7ec; background: #eef4fb; border-radius: 4px; padding: 3px 12px; text-decoration: none; cursor: default; }
-.fb-preview-title { margin: 10px 0; font-size: 17px; line-height: 1.5; color: #1e2832; }
-.fb-preview-meta { display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: 12px; color: #44505c; border-top: 1px solid #eceff3; padding-top: 8px; }
-.fb-preview-meta b { font-weight: 400; color: #7a8591; margin-right: 4px; }
-.fb-body-area { background: #f3f5f7; border: 1px solid #e2e6eb; padding: 14px 18px; }
+.fb-follow-btn { font-size: 12px; font-weight: 600; color: var(--ind-ok); border: 1px solid hsl(var(--success) / 45%); background: hsl(var(--success) / 10%); border-radius: 4px; padding: 3px 12px; cursor: default; }
+.fb-follow-btn.disabled { color: hsl(var(--muted-foreground)); border: 1px dashed hsl(var(--border)); background: hsl(var(--muted) / 40%); }
+.fb-orig-btn { font-size: 12px; font-weight: 600; color: hsl(var(--primary)); border: 1px solid hsl(var(--primary) / 30%); background: hsl(var(--primary) / 8%); border-radius: 4px; padding: 3px 12px; text-decoration: none; cursor: default; }
+.fb-preview-title { margin: 10px 0; font-size: 17px; line-height: 1.5; color: hsl(var(--foreground)); }
+.fb-preview-meta { display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: 12px; color: hsl(var(--muted-foreground)); border-top: 1px solid hsl(var(--border)); padding-top: 8px; }
+.fb-preview-meta b { font-weight: 400; color: hsl(var(--muted-foreground)); margin-right: 4px; }
+.fb-body-area { background: hsl(var(--muted) / 40%); border: 1px solid hsl(var(--border)); padding: 14px 18px; }
 .fb-docx { background: #fff; border: 1px solid #d9d3c4; width: min(900px, 100%); margin: 0 auto; padding: 40px 60px 44px; font-family: 'FangSong_GB2312', '仿宋', 'FangSong', 'STFangsong', '华文仿宋', 'SimSun', serif; font-size: 17px; line-height: 2; color: #1c1c1c; }
 .fb-docx h1, .fb-docx h2, .fb-docx h3, .fb-docx h4, .fb-docx h5, .fb-docx h6 { font-family: 'SimHei', '黑体', 'Microsoft YaHei', sans-serif; font-weight: 700; color: #161616; margin: 20px 0 2px; line-height: 1.8; }
 .fb-docx h1 { font-size: 24px; }
@@ -322,10 +324,10 @@ const [Modal, modalApi] = useVbenModal({
 .fb-docx ol, .fb-docx ul { padding-left: 2.8em; margin: 4px 0; }
 .fb-docx li { margin: 3px 0; text-indent: 0; }
 .fb-docx p[align='right'], .fb-docx .sign { text-indent: 0; }
-.fb-pdf-empty { background: #fff; border: 1px solid #d9dfe5; padding: 50px 20px; text-align: center; color: #7a8591; font-size: 13px; }
-.fb-pdf-empty .sub { margin-top: 6px; color: #9aa4af; font-size: 12px; }
-.fb-slim { background: #fff; border: 1px solid #f0dcb8; padding: 24px 20px; text-align: center; }
-.fb-slim p { color: #8a5a00; font-size: 13px; margin: 0 0 12px; }
-.fb-primary-btn { border-radius: 4px; padding: 6px 22px; font-size: 13px; font-weight: 600; color: #fff; background: #17539a; text-decoration: none; display: inline-block; cursor: default; }
-.fb-preview-note { color: #9aa4af; font-size: 11.5px; margin-top: 8px; }
+.fb-pdf-empty { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 50px 20px; text-align: center; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.fb-pdf-empty .sub { margin-top: 6px; color: hsl(var(--muted-foreground) / 70%); font-size: 12px; }
+.fb-slim { background: hsl(var(--warning) / 8%); border: 1px solid hsl(var(--warning) / 40%); border-radius: var(--radius); padding: 24px 20px; text-align: center; }
+.fb-slim p { color: var(--ind-warn); font-size: 13px; margin: 0 0 12px; }
+.fb-primary-btn { border-radius: var(--radius); padding: 6px 22px; font-size: 13px; font-weight: 600; color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); text-decoration: none; display: inline-block; cursor: default; }
+.fb-preview-note { color: hsl(var(--muted-foreground)); font-size: 11.5px; margin-top: 8px; }
 </style>

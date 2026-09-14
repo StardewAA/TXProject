@@ -2,26 +2,27 @@
  * 同款位置：console 任务页签 / 测试页签 / 批次抽屉「该批爬虫任务」、
  *          任务纵向数据链「同批任务」、批次详情「该批爬虫任务」、信息源详情「该批爬虫任务」。
  * 列口径（与任务页签一致）：状态 · 时间 · 任务 # · URL / 来源 · 消息 / 明细；行点击进详情。
- * 原先这些位置各用各的行式样式（ind-row / jd-row / sd-task / tc-sib），已于 2026-09-10 统一为本文件。 */
-.fp-tbl { border: 1.5px solid var(--ind-line, #d8dde3); border-radius: 8px; overflow: hidden; background: #fff; }
-.fp-tr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #eceff2; transition: background .12s; }
+ * 原先这些位置各用各的行式样式（ind-row / jd-row / sd-task / tc-sib），已于 2026-09-10 统一为本文件。
+ * 配色：走平台主题 token（深浅色自适应，2026-09-11）。 */
+.fp-tbl { border: 1px solid hsl(var(--border)); border-radius: var(--radius); overflow: hidden; background: hsl(var(--card)); }
+.fp-tr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); transition: background .12s; }
 .fp-tr:last-child { border-bottom: none; }
-.fp-th { background: #f4f6f8; color: var(--ind-sub-text, #667085); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.fp-th { background: hsl(var(--muted) / 60%); color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
 .fp-row-click { cursor: pointer; }
-.fp-row-click:hover { background: #f6f1e6; }
+.fp-row-click:hover { background: hsl(var(--accent)); }
 /* 选中行（就地展开过程/切换任务时的当前项） */
-.fp-row-on { background: var(--ind-row-active, #e6f4ff); }
+.fp-row-on { background: hsl(var(--primary) / 8%); }
 .fp-td { font-size: 13px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fp-td.flex-1 { flex: 1 1 0%; min-width: 0; }
 .fp-td.w-status { width: 128px; flex: none; display: flex; gap: 4px; }
-.fp-td.w-time { width: 128px; flex: none; color: var(--ind-ink-text, #1f2937); font-weight: 600; }
-.fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9aa3ad; }
-.fp-td.w-msg { width: 260px; flex: none; color: var(--ind-sub-text, #667085); }
-.fp-td.w-parser { width: 140px; flex: none; color: var(--ind-ink-text, #1f2937); font-weight: 600; }
-.fp-td.fp-url { color: #1f2937; font-weight: 600; }
+.fp-td.w-time { width: 128px; flex: none; color: hsl(var(--foreground)); font-weight: 500; }
+.fp-td.w-id { width: 96px; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: hsl(var(--muted-foreground)); }
+.fp-td.w-msg { width: 260px; flex: none; color: hsl(var(--muted-foreground)); }
+.fp-td.w-parser { width: 140px; flex: none; color: hsl(var(--foreground)); font-weight: 500; }
+.fp-td.fp-url { color: hsl(var(--foreground)); font-weight: 500; }
 .fp-td.fp-msg { font-size: 12.5px; }
 .fp-sortable { cursor: pointer; user-select: none; }
-.fp-sortable:hover { color: #1d4ed8; }
+.fp-sortable:hover { color: hsl(var(--primary)); }
 /* 窄容器（抽屉/详情内嵌）自适应：窄于 760px 时收窄固定列，避免挤压 URL 列 */
 @media (max-width: 760px) {
   .fp-td.w-time { width: 104px; }

@@ -448,22 +448,22 @@ onMounted(() => {
 
 <style scoped>
 .bidding-page {
-  background: #f3f5f7;
+  background: hsl(var(--background-deep));
   min-height: 100%;
 }
 /* 键盘可达性：可点击 span/div 聚焦时的可见焦点环（不改视觉样式，仅 :focus-visible 生效） */
 .kbd-btn:focus-visible {
-  outline: 2px solid #17539a;
+  outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
 }
 .main-nav {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  background: #d3dae1;
+  background: hsl(var(--border));
   gap: 1px;
 }
 .nav-item {
-  background: #fbfcfd;
+  background: hsl(var(--muted) / 40%);
   padding: 14px 12px;
   display: flex;
   flex-direction: column;
@@ -474,37 +474,37 @@ onMounted(() => {
   text-align: center;
 }
 .nav-item:hover {
-  background: #eef4fb;
+  background: hsl(var(--primary) / 8%);
 }
 .nav-item.on {
-  background: #fff;
-  box-shadow: inset 0 -3px 0 #17539a;
+  background: hsl(var(--card));
+  box-shadow: inset 0 -3px 0 hsl(var(--primary));
 }
 .nav-item .ic {
   font-size: 20px;
-  color: #17539a;
+  color: hsl(var(--primary));
   line-height: 1;
 }
 .nav-item .n-name {
   font-size: 13.5px;
   font-weight: 700;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .nav-item.on .n-name {
-  color: #17539a;
+  color: hsl(var(--primary));
 }
 .nav-item .n-sub {
   font-size: 11px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .nav-item .flag {
   position: absolute;
   top: 6px;
   right: 10px;
   font-size: 10px;
-  color: #5f6b7a;
-  border: 1px solid #d3dae1;
-  background: #fff;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   border-radius: 3px;
   padding: 0 5px;
   line-height: 1.5;
@@ -521,15 +521,15 @@ onMounted(() => {
 }
 .kw input {
   flex: 1;
-  border: 1px solid #c4ccd4;
+  border: 1px solid hsl(var(--border));
   border-radius: 4px;
   padding: 9px 14px;
   font-size: 14px;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   outline: none;
 }
 .kw input:focus {
-  border-color: #17539a;
+  border-color: hsl(var(--primary));
 }
 .btn {
   border-radius: 4px;
@@ -538,16 +538,16 @@ onMounted(() => {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  background: #17539a;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
 }
 .btn.sm {
   padding: 5px 16px;
   font-size: 12.5px;
 }
 .qarea {
-  background: #fff;
-  border: 1px solid #d9dfe5;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   margin: 8px 20px 4px;
   padding: 8px 16px;
@@ -556,7 +556,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   padding: 7px 0;
-  border-bottom: 1px dashed #eceff3;
+  border-bottom: 1px dashed hsl(var(--border));
   line-height: 1.9;
 }
 .qrow:last-child {
@@ -566,7 +566,7 @@ onMounted(() => {
   flex: none;
   width: 90px;
   font-size: 13px;
-  color: #33404c;
+  color: hsl(var(--foreground));
   font-weight: 800;
 }
 .qopts {
@@ -578,55 +578,55 @@ onMounted(() => {
 }
 .opt {
   font-size: 13px;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
   padding: 1px 13px;
   cursor: pointer;
   white-space: nowrap;
   border-radius: 3px;
 }
 .opt:hover {
-  color: #17539a;
-  background: #eef4fb;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 8%);
 }
 .opt.on {
-  background: #17539a;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   font-weight: 600;
 }
 .opt.custom {
-  border: 1px dashed #b9c3cd;
-  color: #5d6a77;
+  border: 1px dashed hsl(var(--border));
+  color: hsl(var(--muted-foreground));
   margin-left: 6px;
 }
 .opt.custom:hover {
-  border-color: #17539a;
-  color: #17539a;
-  background: #fff;
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+  background: hsl(var(--card));
 }
 .cust-line {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 6px 0 4px 90px;
-  background: #f7f9fb;
-  border: 1px dashed #c9d2db;
+  background: hsl(var(--muted) / 40%);
+  border: 1px dashed hsl(var(--border));
   border-radius: 4px;
   padding: 6px 10px;
   flex-wrap: wrap;
 }
 .input {
-  border: 1px solid #cfd6dd;
+  border: 1px solid hsl(var(--border));
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12.5px;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .tilde {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .cust-note {
   font-size: 11.5px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .catalog {
   margin: 10px 20px 4px;
@@ -642,33 +642,33 @@ onMounted(() => {
   font-weight: 800;
 }
 .cat-head small {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 .table-card {
-  border: 1px solid #e0e4e9;
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: hsl(var(--card));
 }
 .nrow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 150px 88px;
   gap: 8px;
   padding: 0 12px;
-  border-bottom: 1px solid #eceff3;
+  border-bottom: 1px solid hsl(var(--border));
   cursor: pointer;
   align-items: center;
   min-height: 54px;
 }
 .nrow:hover {
-  background: #f5f8fc;
+  background: hsl(var(--primary) / 5%);
 }
 .nrow.head {
-  background: #f3f5f8;
+  background: hsl(var(--background-deep));
   cursor: default;
   font-size: 12px;
-  color: #5d6a77;
+  color: hsl(var(--muted-foreground));
   font-weight: 700;
 }
 .nrow:last-child {
@@ -677,13 +677,13 @@ onMounted(() => {
 .n-title {
   font-size: 13.5px;
   font-weight: 700;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .nrow:not(.head):hover .n-title {
-  color: #17539a;
+  color: hsl(var(--primary));
   text-decoration: underline;
 }
 .n-tags {
@@ -701,28 +701,28 @@ onMounted(() => {
   white-space: nowrap;
 }
 .tag.t {
-  background: #e6eef8;
-  color: #174a86;
+  background: hsl(var(--primary) / 8%);
+  color: hsl(var(--primary));
 }
 .tag.m {
-  background: #eef1f4;
-  color: #44505c;
+  background: hsl(var(--muted) / 60%);
+  color: hsl(var(--muted-foreground));
 }
 .tag.a {
-  background: #fdf0e5;
-  color: #9a4508;
+  background: hsl(var(--warning) / 12%);
+  color: var(--ind-warn);
 }
 .tag.g {
-  background: #e5f2ea;
-  color: #176b44;
+  background: hsl(var(--success) / 12%);
+  color: var(--ind-ok);
 }
 .tag.o {
-  background: #fff;
-  color: #5d6a77;
-  border: 1px solid #d3dae1;
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
 }
 .n-main {
-  color: #5d6a77;
+  color: hsl(var(--muted-foreground));
   font-size: 11.5px;
   display: flex;
   flex-direction: column;
@@ -737,21 +737,21 @@ onMounted(() => {
 }
 .n-time {
   font-size: 12px;
-  color: #33404c;
+  color: hsl(var(--foreground));
   white-space: nowrap;
 }
 .loading-line,
 .empty-box {
   padding: 42px 12px;
   text-align: center;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
 /* 翻页/切筛选时的细加载条：旧列表数据保持渲染，不整屏替换 */
 .list-loading-bar {
   height: 4px;
   width: 40%;
-  background: #17539a;
+  background: hsl(var(--primary));
   animation: loadbar-swing 1.1s ease-in-out infinite alternate;
 }
 @keyframes loadbar-swing {
@@ -763,8 +763,8 @@ onMounted(() => {
   }
 }
 .empty-box.error {
-  color: #b42318;
-  background: #fef4f2;
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 8%);
 }
 .pager {
   display: flex;
@@ -772,7 +772,7 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   padding: 12px 2px 18px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
   flex-wrap: wrap;
 }
@@ -780,18 +780,18 @@ onMounted(() => {
   min-width: 26px;
   height: 26px;
   border-radius: 4px;
-  border: 1px solid #d3dae1;
-  background: #fff;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   display: grid;
   place-items: center;
   font-size: 12px;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
 }
 .pg.on {
-  background: #17539a;
-  color: #fff;
-  border-color: #17539a;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
 }
 .pg.off {
   opacity: 0.45;
@@ -803,8 +803,8 @@ onMounted(() => {
   cursor: default;
 }
 .pg:not(.on):not(.off):not(.dot):hover {
-  border-color: #17539a;
-  color: #17539a;
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
 }
 .sum {
   margin-left: 10px;

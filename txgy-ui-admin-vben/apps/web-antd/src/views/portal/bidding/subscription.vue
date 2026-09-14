@@ -424,7 +424,7 @@ onMounted(() => {
 
 <style scoped>
 .sub-page {
-  background: #f3f5f7;
+  background: hsl(var(--background-deep));
   min-height: 100%;
   padding: 16px 20px 30px;
 }
@@ -436,79 +436,79 @@ onMounted(() => {
 }
 .back {
   font-size: 13px;
-  color: #17539a;
+  color: hsl(var(--primary));
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid #c4d7ec;
-  background: #eef4fb;
+  border: 1px solid hsl(var(--primary) / 30%);
+  background: hsl(var(--primary) / 8%);
   border-radius: 4px;
   padding: 5px 12px;
 }
 .sep {
-  color: #c6cdd5;
+  color: hsl(var(--border));
 }
 .crumb {
   font-size: 15px;
   font-weight: 800;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .crumb-sub {
   font-size: 12px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .filter-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-  background: #fff;
-  border: 1px solid #d9dfe5;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   padding: 8px 14px;
   margin-bottom: 10px;
 }
 .opt {
   font-size: 13px;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
   padding: 2px 12px;
   cursor: pointer;
   border-radius: 3px;
 }
 .opt.on {
-  background: #17539a;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   font-weight: 600;
 }
 .sum {
   margin-left: auto;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 .msg-box {
   padding: 30px 12px;
   text-align: center;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
 .msg-box.error {
-  color: #b42318;
-  background: #fef4f2;
-  border-color: #f3c9c3;
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 8%);
+  border-color: hsl(var(--destructive) / 35%);
 }
 .empty-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   padding: 46px 20px;
   text-align: center;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
   font-size: 14px;
 }
 .empty-panel .tip {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12.5px;
   line-height: 1.8;
 }
@@ -519,13 +519,13 @@ onMounted(() => {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  background: #17539a;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   margin-top: 8px;
 }
 .card-list {
-  background: #fff;
-  border: 1px solid #e0e4e9;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   overflow: hidden;
 }
@@ -535,17 +535,17 @@ onMounted(() => {
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
-  border-bottom: 1px solid #eceff3;
+  border-bottom: 1px solid hsl(var(--border));
   cursor: pointer;
 }
 .frow:hover {
-  background: #f5f8fc;
+  background: hsl(var(--primary) / 5%);
 }
 .frow.head {
-  background: #f3f5f8;
+  background: hsl(var(--background-deep));
   cursor: default;
   font-size: 12px;
-  color: #5d6a77;
+  color: hsl(var(--muted-foreground));
   font-weight: 700;
 }
 .frow:last-child {
@@ -563,17 +563,17 @@ onMounted(() => {
 .f-text {
   font-size: 13.5px;
   font-weight: 700;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   word-break: break-all;
 }
 .f-text.unread {
-  color: #17539a;
+  color: hsl(var(--primary));
 }
 .f-meta {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 11.5px;
   margin-top: 3px;
 }
@@ -583,25 +583,25 @@ onMounted(() => {
   border-radius: 3px;
   font-size: 11px;
   line-height: 1.8;
-  background: #eef1f4;
-  color: #44505c;
+  background: hsl(var(--muted) / 60%);
+  color: hsl(var(--muted-foreground));
   white-space: nowrap;
 }
 .chip.t {
-  background: #e6eef8;
-  color: #174a86;
+  background: hsl(var(--primary) / 8%);
+  color: hsl(var(--primary));
 }
 .chip.s {
-  background: #e5f2ea;
-  color: #176b44;
+  background: hsl(var(--success) / 12%);
+  color: var(--ind-ok);
 }
 .chip.b {
-  background: #fdf0e5;
-  color: #9a4508;
+  background: hsl(var(--warning) / 12%);
+  color: var(--ind-warn);
 }
 .chip.off {
-  background: #fdf0ef;
-  color: #b42318;
+  background: hsl(var(--destructive) / 8%);
+  color: hsl(var(--destructive));
 }
 .f-unread {
   text-align: center;
@@ -613,13 +613,13 @@ onMounted(() => {
   height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: #d92d20;
-  color: #fff;
+  background: hsl(var(--destructive));
+  color: hsl(var(--primary-foreground));
   font-size: 12px;
   font-weight: 700;
 }
 .none {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .f-act {
   display: flex;
@@ -628,23 +628,23 @@ onMounted(() => {
 }
 .mini {
   font-size: 12px;
-  color: #44505c;
-  border: 1px solid #d3dae1;
-  background: #fff;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   border-radius: 4px;
   padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
 }
 .mini.primary {
-  color: #17539a;
-  border-color: #c4d7ec;
-  background: #eef4fb;
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 30%);
+  background: hsl(var(--primary) / 8%);
   font-weight: 600;
 }
 .mini.danger {
-  color: #b42318;
-  border-color: #efc7c2;
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 35%);
 }
 .mini:disabled {
   opacity: 0.5;
@@ -656,25 +656,25 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   padding: 12px 2px 8px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 .pg {
   min-width: 26px;
   height: 26px;
   border-radius: 4px;
-  border: 1px solid #d3dae1;
-  background: #fff;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   display: grid;
   place-items: center;
   font-size: 12px;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
 }
 .pg.on {
-  background: #17539a;
-  color: #fff;
-  border-color: #17539a;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
 }
 .pg.off {
   opacity: 0.45;
@@ -689,8 +689,8 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  background: #fff;
-  border: 1px solid #e0e4e9;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   padding: 14px 16px;
   margin-bottom: 10px;
@@ -705,17 +705,17 @@ onMounted(() => {
 .tl-name {
   font-size: 15px;
   font-weight: 800;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   word-break: break-all;
 }
 .tl-meta {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
   margin-left: 4px;
 }
 .tl-list {
-  background: #fff;
-  border: 1px solid #e0e4e9;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   overflow: hidden;
 }
@@ -725,13 +725,13 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid #eceff3;
+  border-bottom: 1px solid hsl(var(--border));
 }
 .tl-row:last-child {
   border-bottom: 0;
 }
 .tl-row.unread {
-  background: #f3f7fd;
+  background: hsl(var(--primary) / 5%);
 }
 .tl-tags {
   display: flex;
@@ -740,18 +740,18 @@ onMounted(() => {
   gap: 6px;
 }
 .unread-chip {
-  background: #d92d20;
-  color: #fff;
+  background: hsl(var(--destructive));
+  color: hsl(var(--primary-foreground));
 }
 .tl-time {
   margin-left: 2px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 11.5px;
 }
 .tl-text {
   margin-top: 5px;
   font-size: 13.5px;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   line-height: 1.7;
   word-break: break-all;
 }
@@ -762,7 +762,7 @@ onMounted(() => {
 }
 /* 键盘可达性：可点击 span/div（筛选 tab、列表行、分页）聚焦可见 */
 .kbd-btn:focus-visible {
-  outline: 2px solid #17539a;
+  outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
 }
 /* 小屏响应式：操作列去掉固定 220px，列表行/时间线纵向堆叠 */

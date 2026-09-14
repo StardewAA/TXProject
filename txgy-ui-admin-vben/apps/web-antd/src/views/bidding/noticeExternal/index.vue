@@ -435,12 +435,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
   padding: 1px 6px;
   font-size: 12px;
   line-height: 20px;
-  color: #17539a;
+  color: hsl(var(--primary));
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
 }
 .cx-more-btn:hover {
-  color: #1f6fd6;
+  color: hsl(var(--primary) / 80%);
 }
 </style>

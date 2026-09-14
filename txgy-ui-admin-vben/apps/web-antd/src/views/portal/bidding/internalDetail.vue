@@ -58,8 +58,8 @@ onMounted(() => void load());
 
 <style scoped>
 .bidding-page { max-width: 880px; margin: 0 auto; padding: 16px 16px 48px; }
-.back { border: none; background: none; color: #1d4ed8; font-size: 13px; cursor: pointer; margin-bottom: 10px; }
-.hint { color: #9ca3af; text-align: center; padding: 60px 0; font-size: 13px; }
-.err { color: #dc2626; padding: 30px 0; font-size: 13px; text-align: center; }
-.paper { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 26px 32px; }
+.back { border: none; background: none; color: hsl(var(--primary)); font-size: 13px; cursor: pointer; margin-bottom: 10px; }
+.hint { color: hsl(var(--muted-foreground)); text-align: center; padding: 60px 0; font-size: 13px; }
+.err { color: hsl(var(--destructive)); padding: 30px 0; font-size: 13px; text-align: center; }
+.paper { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 10px; padding: 26px 32px; }
 </style>

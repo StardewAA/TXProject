@@ -20,15 +20,15 @@ const router = useRouter();
 
 <style scoped>
 .ph-page {
-  background: #f3f5f7;
+  background: hsl(var(--background-deep));
   min-height: 100%;
   padding: 40px 22px;
 }
 .ph-card {
   max-width: 560px;
   margin: 0 auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   padding: 48px 32px;
   text-align: center;
@@ -36,21 +36,21 @@ const router = useRouter();
 .ph-card h1 {
   margin: 0 0 12px;
   font-size: 20px;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .ph-card p {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 13.5px;
   line-height: 1.8;
   margin: 0 0 22px;
 }
 .back {
   font-size: 13px;
-  color: #17539a;
+  color: hsl(var(--primary));
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid #c4d7ec;
-  background: #eef4fb;
+  border: 1px solid hsl(var(--primary) / 30%);
+  background: hsl(var(--primary) / 8%);
   border-radius: 4px;
   padding: 6px 14px;
 }

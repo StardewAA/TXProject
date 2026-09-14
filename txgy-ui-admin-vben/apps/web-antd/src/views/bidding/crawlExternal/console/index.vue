@@ -664,7 +664,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <span class="ml-auto fp-nav">
           <Button size="small" :disabled="detailCursorIdx <= 0" @click="stepTask(-1)">▲ 上一条</Button>
           <Button size="small" class="ml-2" :disabled="detailCursorIdx < 0 || detailCursorIdx >= tRows.length - 1" @click="stepTask(1)">下一条 ▼</Button>
-          <span v-if="detailCursorIdx >= 0" class="ml-3 text-xs font-semibold text-gray-500">本列表 {{ detailCursorIdx + 1 }} / {{ tTotal }}</span>
+          <span v-if="detailCursorIdx >= 0" class="ml-3 text-xs font-semibold text-muted-foreground">本列表 {{ detailCursorIdx + 1 }} / {{ tTotal }}</span>
         </span>
       </div>
       <div v-if="detailTaskLoading" class="fp-loading">详情回读中…</div>
@@ -691,9 +691,9 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <Dropdown>
           <Button size="large" :loading="!!runCodeBusy" :disabled="runBusy || sources.length === 0">立即获取 ▾</Button>
           <template #overlay>
-            <div class="rounded-md border border-gray-300 bg-white py-1 shadow-lg">
-              <div class="px-4 py-2 text-xs font-semibold text-gray-500">选择信息源（受 120s 频控）</div>
-              <div v-for="src in sources" :key="src.id" class="cursor-pointer px-4 py-2 text-sm font-medium text-gray-800 hover:bg-orange-50" @click="onRunMenu(src)">
+            <div class="rounded-md border border-border bg-card py-1 shadow-lg">
+              <div class="px-4 py-2 text-xs font-semibold text-muted-foreground">选择信息源（受 120s 频控）</div>
+              <div v-for="src in sources" :key="src.id" class="cursor-pointer px-4 py-2 text-sm font-medium text-foreground hover:bg-accent" @click="onRunMenu(src)">
                 {{ src.sourceName || src.sourceCode }}
               </div>
             </div>
@@ -743,8 +743,8 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <!-- B. 已选源：该源任务条（筛选 + 共 N 条 + 分页 + 行列表） -->
         <template v-else>
           <div class="mb-3 flex flex-wrap items-center gap-2">
-            <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
-            <span class="text-sm font-extrabold text-gray-700">{{ curSource.sourceName || curSource.sourceCode }}</span>
+            <a class="text-sm font-bold text-primary" href="#" @click.prevent="backToSourceWall()">‹ 返回信息源</a>
+            <span class="text-sm font-extrabold text-foreground">{{ curSource.sourceName || curSource.sourceCode }}</span>
             <Tag :color="curSource.fetchType === 'API' ? 'purple' : 'blue'">{{ curSource.fetchType === 'API' ? 'API · 直取' : 'CRAWLER · 爬虫' }}</Tag>
           </div>
 
@@ -755,7 +755,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             <input v-model="tFilter.url" placeholder="URL 关键字" class="fp-url-input" @keyup.enter="applyTaskFilter" />
             <Button size="small" @click="applyTaskFilter">查询</Button>
             <Button size="small" @click="tFilter = { status: undefined, channelCode: undefined, url: undefined }; applyTaskFilter()">重置</Button>
-            <span class="ml-auto text-xs font-semibold text-gray-500">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
+            <span class="ml-auto text-xs font-semibold text-muted-foreground">共 {{ tTotal }} 条任务 · 每页 {{ tPageSize }}</span>
           </div>
 
           <div v-if="tRowsLoading" class="ind-empty">加载中…</div>
@@ -820,7 +820,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </div>
           </div>
           <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
-            <span class="text-xs font-medium text-gray-500">本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）<a class="ml-3 text-blue-700 font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a></span>
+            <span class="text-xs font-medium text-muted-foreground">本地留档最多 {{ MANUAL_STORE_MAX }} 条（超出丢最旧）<a class="ml-3 text-primary font-bold" href="#" @click.prevent="clearManualRuns()">清空留档</a></span>
             <Pagination v-model:current="manualPage" :total="manualTotal" :page-size="manualPageSize" :show-total="pagiShowTotal" show-size-changer :page-size-options="['20', '50', '100']" @change="manualPageChange" />
           </div>
         </template>
@@ -882,7 +882,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 
         <div class="grid grid-cols-3 max-lg:grid-cols-1 gap-3">
           <!-- ① 源 -->
-          <div class="p-4 border border-dashed border-gray-300 rounded">
+          <div class="p-4 border border-dashed border-border rounded">
             <div class="ind-sec-t"><span>①</span> 源 · 输入</div>
             <div class="ind-kv" style="grid-template-columns: 1fr;">
               <div class="kv"><span class="k">输入口径</span><span class="v">{{ processManual.inputType || '—' }}{{ processManual.fileName ? ` · ${ processManual.fileName}` : '' }}</span></div>
@@ -891,12 +891,12 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </div>
           </div>
           <!-- ② 提取内容 -->
-          <div class="p-4 border border-dashed border-gray-300 rounded">
+          <div class="p-4 border border-dashed border-border rounded">
             <div class="ind-sec-t"><span>②</span> 提取内容</div>
             <div class="ind-kv" style="grid-template-columns: 1fr;">
               <div v-for="[k, v] in kvOf(processManual)" :key="`k${ k}`" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
             </div>
-            <div v-if="extractedOf(processManual).length" class="mt-3 border-t border-dashed border-gray-300 pt-2">
+            <div v-if="extractedOf(processManual).length" class="mt-3 border-t border-dashed border-border pt-2">
               <div class="ind-sec-t"><span>字段</span> 抽取字段</div>
               <div class="ind-kv" style="grid-template-columns: 1fr;">
                 <div v-for="[k, v] in extractedOf(processManual)" :key="`e${ k}`" class="kv"><span class="k">{{ k }}</span><span class="v truncate" :title="v">{{ v }}</span></div>
@@ -907,7 +907,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </div>
           </div>
           <!-- ③ 渲染内容 -->
-          <div class="p-4 border border-dashed border-gray-300 rounded">
+          <div class="p-4 border border-dashed border-border rounded">
             <div class="ind-sec-t"><span>③</span> 渲染后的内容</div>
             <div class="ind-doc" v-html="renderHtmlOf(processManual)"></div>
           </div>
@@ -916,36 +916,36 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
         <div class="ind-panel">
           <div class="ind-panel-h"><span class="ind-panel-t">过程步骤</span></div>
           <div class="ind-panel-b">
-            <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+            <div class="mt-1 space-y-1 text-sm font-medium text-foreground">
               <div>1. 注入原始输入（HTML/JSON/文件）→ 成功（手动录入无网络下载）</div>
               <div>2. 解析（parserCode={{ processManual.parserCode || '—' }}）→ {{ processManual.status === 'FAILED' ? '失败' : '成功' }}</div>
               <div>3. 渲染（契约 render_html 未落地 → 前端兜底公文化排版 builtBy=FRONTEND_FALLBACK）</div>
             </div>
             <div v-if="processManual.resp?.meta && Object.keys(processManual.resp.meta).length" class="mt-3">
               <div class="ind-sec-t"><span>OBS</span> 解析观测（meta）</div>
-              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+              <div class="mt-1 space-y-1 text-sm font-medium text-foreground">
                 <div v-for="(mv, mk) in processManual.resp.meta" :key="String(mk)" class="flex gap-2">
-                  <span class="w-48 shrink-0 truncate text-gray-500" :title="String(mk)">{{ mk }}</span>
+                  <span class="w-48 shrink-0 truncate text-muted-foreground" :title="String(mk)">{{ mk }}</span>
                   <span class="truncate">{{ mv }}</span>
                 </div>
               </div>
             </div>
             <div v-if="processManual.resp?.warnings?.length" class="mt-3">
               <div class="ind-sec-t"><span>WARN</span> 告警（warnings）</div>
-              <div class="mt-1 space-y-1 text-sm font-medium text-amber-700">
+              <div class="mt-1 space-y-1 text-sm font-medium text-amber-600 dark:text-amber-400">
                 <div v-for="(w, i) in processManual.resp.warnings" :key="i">• {{ w }}</div>
               </div>
             </div>
             <div v-if="processManual.resp?.entries?.length" class="mt-3">
               <div class="ind-sec-t"><span>LIST</span> 列表条目（列表页输入时）</div>
-              <div class="mt-1 space-y-1 text-sm font-medium text-gray-700">
+              <div class="mt-1 space-y-1 text-sm font-medium text-foreground">
                 <div v-for="(en, i) in processManual.resp.entries.slice(0, 10)" :key="i">• {{ en.title }}</div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div v-else class="text-sm font-semibold text-gray-500">加载中…</div>
+      <div v-else class="text-sm font-semibold text-muted-foreground">加载中…</div>
     </Drawer>
 
     <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染，不嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
@@ -980,8 +980,8 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
                 <div class="k-note">fetchCrawlTaskPage({ jobId, pageNo: 1, pageSize: 200 })</div>
               </div>
             </div>
-            <div v-if="jobTasksLoading" class="text-xs font-semibold text-orange-600">任务加载中…</div>
-            <div v-else-if="!jobTasks.length" class="text-sm font-medium text-gray-500">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
+            <div v-if="jobTasksLoading" class="text-xs font-semibold text-amber-600 dark:text-amber-400">任务加载中…</div>
+            <div v-else-if="!jobTasks.length" class="text-sm font-medium text-muted-foreground">该批暂无任务行（批次落库见 crawl-batch 契约）</div>
             <div v-else class="fp-tbl">
               <div class="fp-tr fp-th">
                 <span class="fp-td w-status">状态</span>
@@ -1016,7 +1016,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
             </span>
           </div>
           <div class="ind-panel-b">
-            <div v-if="selJobTaskLoading" class="mb-2 text-xs font-semibold text-orange-600">详情回读中…</div>
+            <div v-if="selJobTaskLoading" class="mb-2 text-xs font-semibold text-amber-600 dark:text-amber-400">详情回读中…</div>
             <Descriptions :column="2" size="small" bordered>
               <Descriptions.Item label="状态">{{ tagOf(TASK_STATUS_MAP, selJobTaskFull?.status || selJobTask.status)?.text || selJobTask.status || '—' }}</Descriptions.Item>
               <Descriptions.Item label="源">{{ selJobTaskFull?.sourceCode || selJobTask.sourceCode || '—' }}</Descriptions.Item>
@@ -1027,7 +1027,7 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
               <Descriptions.Item label="开始 / 完成">{{ fmtDt(selJobTaskFull?.startedAt || selJobTask.startedAt) }} / {{ fmtDt(selJobTaskFull?.finishedAt || selJobTask.finishedAt) }}</Descriptions.Item>
               <Descriptions.Item label="消息 / 错误" :span="2">{{ selJobTaskFull?.message || selJobTask.message || '—' }}</Descriptions.Item>
             </Descriptions>
-            <div class="mt-3 text-xs font-medium text-amber-700">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
+            <div class="mt-3 text-xs font-medium text-amber-600 dark:text-amber-400">下载器/解析器/中间文件与逐步时间线将在 TaskRunVO 落库后完整呈现（steps_json + logs + raw/extract/render）。</div>
           </div>
         </div>
       </div>
@@ -1040,55 +1040,27 @@ const extractedOf = (r: ManualRun): Array<[string, string]> => {
 </template>
 
 <style scoped>
-/* ========== 整页三级导航（信息源→任务条→整页详情） 2026-09-10 ========== */
-.fp-page { min-height: calc(100vh - 140px); background: var(--ind-paper); border: 2px solid var(--ind-line); border-top: 3px solid var(--ind-ink); padding: 14px; }
-.fp-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 1px solid var(--ind-line); border-radius: 6px; }
-.fp-title { font-size: 16px; font-weight: 800; color: var(--ind-ink-text); }
+/* 说明：.ind-*（面板/选项卡/空态等）已收敛到全局皮肤 bid-indust.css，本页只保留 fp-* 局部样式 */
+.fp-page { min-height: calc(100vh - 140px); padding: 14px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
+.fp-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
+.fp-title { font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
 .fp-nav { display: flex; align-items: center; }
-.fp-loading { margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #c2571a; }
-.fp-guide { margin-bottom: 12px; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: #5b4a1f; background: #fdf6e3; border: 1px solid #e8d9a8; border-left: 4px solid #c9a227; border-radius: 4px; }
+.fp-loading { margin-bottom: 10px; font-size: 13px; font-weight: 500; color: hsl(var(--primary)); }
+.fp-guide { margin-bottom: 12px; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: hsl(var(--muted-foreground)); background: hsl(var(--muted) / 40%); border: 1px solid hsl(var(--border)); border-left: 3px solid hsl(var(--primary)); border-radius: var(--radius); }
 .fp-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 12px; }
-.fp-src { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: #fff; border: 1.5px solid var(--ind-line); border-radius: 8px; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .12s; }
-.fp-src:hover { border-color: #1d4ed8; box-shadow: 0 4px 12px rgba(29, 78, 216, .12); transform: translateY(-1px); }
+.fp-src { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .12s; }
+.fp-src:hover { border-color: hsl(var(--primary) / 50%); box-shadow: 0 4px 12px rgb(0 0 0 / 8%); transform: translateY(-1px); }
 .fp-src-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.fp-src-code { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--ind-weak-text); }
-.fp-src-name { font-size: 15px; font-weight: 800; color: var(--ind-ink-text); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fp-src-meta { font-size: 12.5px; font-weight: 600; color: var(--ind-sub-text); }
-.fp-src-go { margin-top: auto; align-self: flex-end; font-size: 13px; font-weight: 800; color: #1d4ed8; }
+.fp-src-code { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.fp-src-name { font-size: 15px; font-weight: 600; color: hsl(var(--foreground)); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-src-meta { font-size: 12.5px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+.fp-src-go { margin-top: auto; align-self: flex-end; font-size: 13px; font-weight: 500; color: hsl(var(--primary)); }
 .fp-row { display: block; }
-.fp-row-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: #9aa3ad; margin-right: 2px; }
-.fp-row-sub { font-size: 13px; font-weight: 600; color: var(--ind-sub-text); }
-.fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: #1f2937; background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; outline: none; transition: border-color .15s; }
-.fp-url-input:focus { border-color: #1d4ed8; }
-.fp-url-input::placeholder { color: #9aa3ad; }
+.fp-row-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-right: 2px; }
+.fp-row-sub { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+.fp-url-input { height: 30px; padding: 0 10px; font-size: 13px; color: hsl(var(--foreground)); background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px; outline: none; transition: border-color .15s; }
+.fp-url-input:focus { border-color: hsl(var(--primary)); }
+.fp-url-input::placeholder { color: hsl(var(--muted-foreground)); }
 /* 表格化任务条 .fp-tbl / .fp-tr / .fp-td 等样式已抽到 ../taskbar.css，多组件共用（任务页签/测试页签/批次抽屉/数据链同批/批次详情/信息源详情），勿在本文件重复定义。 */
-
-/* 工业选项卡（自绘，无 antd Tabs 依赖，更贴合线稿/工业语言） */
-.ind-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 3px solid var(--ind-line); margin-top: 4px; }
-.ind-tab { appearance: none; background: #eceff2; border: 2px solid var(--ind-line); border-bottom: none; border-radius: 4px 4px 0 0;
-  font-size: 15px; font-weight: 700; color: #4b5563; padding: 10px 20px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
-.ind-tab:hover { background: #f6f1e6; }
-.ind-tab.on { background: var(--ind-paper); color: var(--ind-ink-text); padding-bottom: 11px; margin-bottom: -2px; position: relative; }
-.ind-tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 4px; background: var(--ind-orange); }
-.ind-tab .cnt { font-size: 12px; font-weight: 800; background: var(--ind-ink); color: #fff; border-radius: 10px; padding: 0 8px; line-height: 18px; }
-.ind-tab.on .cnt { background: var(--ind-orange); }
-.ind-tab-body { background: var(--ind-paper); border: 2px solid var(--ind-line); border-top: none; padding: 16px; }
-.ind-empty { border: 2px dashed #c7ccd3; background: #fbfbfc; color: var(--ind-weak-text); text-align: center;
-  font-size: 14.5px; font-weight: 500; padding: 36px 20px; }
-.ind-sec-t { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 800; color: var(--ind-ink-text); margin-bottom: 9px; }
-.ind-sec-t span { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
-  background: var(--ind-ink); color: var(--ind-orange); border-radius: 2px; font-size: 11.5px; font-weight: 800; letter-spacing: .5px; }
-.ind-doc-extra { max-height: 300px; overflow: auto; }
-
-/* ---------- 两档视图（克制概览 → 详情档）交互反馈：详情入口链接 / 卡片·行 hover 与选中态 ---------- */
-.ind-card-click { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-.ind-card-click:hover { border-color: var(--ind-line); box-shadow: 0 3px 10px rgba(20, 28, 38, .09); }
-.cd-link { font-size: 13.5px; font-weight: 800; color: #1d4ed8; white-space: nowrap; }
-.cd-link:hover { text-decoration: underline; }
-.ind-card-b .cd-abs { font-size: 13px; font-weight: 600; color: var(--ind-sub-text); }
-.ind-dl-row { cursor: pointer; transition: background .12s; border-radius: 3px; }
-.ind-dl-row:hover { background: #f6f1e6; }
-.ind-dl-row.on { background: #fdf3dc; }
-.ind-kpi .k-unit { font-size: 15px; font-weight: 800; color: var(--ind-weak-text); }
 </style>
 

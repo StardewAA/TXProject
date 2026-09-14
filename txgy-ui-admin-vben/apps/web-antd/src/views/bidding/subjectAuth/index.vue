@@ -188,9 +188,9 @@ const InfoCell = defineComponent({
   name: 'InfoCell',
   props: { label: String, value: { type: String, default: '' } },
   setup(props) {
-    return () => h('div', { class: 'rounded border border-gray-100 bg-gray-50 p-2' }, [
-      h('div', { class: 'text-gray-400' }, props.label),
-      h('div', { class: 'font-medium text-gray-700' }, props.value || '—'),
+    return () => h('div', { class: 'rounded border border-border bg-muted/50 p-2' }, [
+      h('div', { class: 'text-muted-foreground' }, props.label),
+      h('div', { class: 'font-medium text-foreground' }, props.value || '—'),
     ]);
   },
 });
@@ -231,13 +231,13 @@ export default { components: { SpinWrap, InfoCell } };
       <Button type="primary" ghost @click="onSearch">查询</Button>
     </div>
 
-    <div class="rounded-md border border-gray-200 bg-white">
+    <div class="rounded-md border border-border bg-card">
       <Table :data-source="rows" :loading="loading" :pagination="false" row-key="id" size="middle">
         <template #bodyCell="{ column, record }">
           <!-- 企业 = 基座租户（主体名称快照 + 租户号） -->
           <template v-if="column.key === 'tenant'">
-            <div class="font-medium text-gray-800">{{ record.tenantName || '（无名称快照）' }}</div>
-            <div class="font-mono text-xs text-gray-400">租户 #{{ record.tenantId }}</div>
+            <div class="font-medium text-foreground">{{ record.tenantName || '（无名称快照）' }}</div>
+            <div class="font-mono text-xs text-muted-foreground">租户 #{{ record.tenantId }}</div>
           </template>
           <!-- 主体类型：投标人 BIDDER / 招标人 TENDERER（企业扮演的角色，一家企业可同时两种） -->
           <template v-else-if="column.key === 'type'">
@@ -260,19 +260,19 @@ export default { components: { SpinWrap, InfoCell } };
           <template v-else-if="column.key === 'profile'">
             <template v-if="record.profileExists">
               <Tag :color="record.profileComplete ? 'green' : 'orange'">{{ record.profileComplete ? '档案已完善' : '已授权未完善' }}</Tag>
-              <div v-if="!record.profileComplete && record.missingRequiredNames?.length" class="text-xs text-gray-400">缺：{{ record.missingRequiredNames.join('、') }}</div>
+              <div v-if="!record.profileComplete && record.missingRequiredNames?.length" class="text-xs text-muted-foreground">缺：{{ record.missingRequiredNames.join('、') }}</div>
             </template>
             <Tag v-else color="red">未建档</Tag>
           </template>
           <template v-else-if="column.key === 'time'">{{ fmtT(record.authorizeTime) }}</template>
           <!-- 操作：资格核验（看授权+完善度与不满足原因） -->
           <template v-else-if="column.key === 'action'">
-            <a class="text-xs text-blue-600" @click="openEligibility(record as SubjectApi.AuthRow)">资格核验</a>
+            <a class="text-xs text-primary" @click="openEligibility(record as SubjectApi.AuthRow)">资格核验</a>
           </template>
         </template>
-        <template #emptyText><div class="py-8 text-xs text-gray-300">尚无授权记录 — 点右上「授权主体」为已入驻企业（基座租户）核发主体资格</div></template>
+        <template #emptyText><div class="py-8 text-xs text-muted-foreground/60">尚无授权记录 — 点右上「授权主体」为已入驻企业（基座租户）核发主体资格</div></template>
       </Table>
-      <div class="flex items-center justify-end gap-2 px-3 py-2 text-xs text-gray-400">
+      <div class="flex items-center justify-end gap-2 px-3 py-2 text-xs text-muted-foreground">
         <span>共 {{ total }} 条</span>
         <Button size="small" :disabled="pageNo <= 1" @click="goPrev">上一页</Button>
         <span>{{ pageNo }} / {{ pages }}</span>
@@ -284,15 +284,15 @@ export default { components: { SpinWrap, InfoCell } };
     <Modal v-model:open="authOpen" title="授权主体（核发企业主体资格）" :footer="null" width="480">
       <div class="space-y-3">
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">被授权企业（基座租户）*</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">被授权企业（基座租户）*</div>
           <Select v-model:value="authForm.tenantId" placeholder="从基座现有租户中选择" style="width: 100%" :options="tenantOptions" show-search option-filter-prop="label" />
         </div>
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">主体类型 *</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">主体类型 *</div>
           <Radio.Group v-model:value="authForm.subjectType" option-type="button" :options="[{ label: '投标人 BIDDER', value: 'BIDDER' }, { label: '招标人 TENDERER', value: 'TENDERER' }]" />
         </div>
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">备注</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">备注</div>
           <Input.TextArea v-model:value="authForm.remark" :rows="2" />
         </div>
         <div class="text-right"><Space><Button @click="authOpen = false">取消</Button><Button type="primary" :loading="authSaving" @click="doAuthorize">授权</Button></Space></div>
@@ -304,9 +304,9 @@ export default { components: { SpinWrap, InfoCell } };
     <Drawer v-model:open="elOpen" :title="`${elRow?.tenantName || '企业' } 资格状态`" :width="520">
       <SpinWrap :loading="elLoading">
         <div v-if="elData" class="space-y-2 text-xs">
-          <div class="rounded-md border p-3" :class="elData.eligible ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'">
-            <div class="text-sm font-semibold" :class="elData.eligible ? 'text-green-700' : 'text-orange-700'">{{ elData.eligible ? '具备参与资格' : '暂不具备参与资格' }}（{{ elData.subjectType === 'TENDERER' ? '招标人' : '投标人' }}）</div>
-            <div class="mt-1 text-gray-600">{{ elData.message }}</div>
+          <div class="rounded-md border p-3" :class="elData.eligible ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'">
+            <div class="text-sm font-semibold" :class="elData.eligible ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">{{ elData.eligible ? '具备参与资格' : '暂不具备参与资格' }}（{{ elData.subjectType === 'TENDERER' ? '招标人' : '投标人' }}）</div>
+            <div class="mt-1 text-muted-foreground">{{ elData.message }}</div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <InfoCell label="授权状态" :value="elData.authStatus === 'ENABLED' ? '已授权' : elData.authStatus === 'DISABLED' ? '未授权' : '未授权'" />
@@ -314,13 +314,13 @@ export default { components: { SpinWrap, InfoCell } };
             <InfoCell label="授权时间" :value="fmtT(elData.authorizeTime)" />
             <InfoCell label="撤销时间" :value="fmtT(elData.disableTime)" />
           </div>
-          <div v-if="elData.reasonCodes?.length" class="rounded border border-red-100 bg-red-50 p-2">
+          <div v-if="elData.reasonCodes?.length" class="rounded border border-destructive/30 bg-destructive/10 p-2">
             原因：{{ elData.reasonCodes.map((r) => reasonLabel[r] || r).join('、') }}
             <span v-if="elData.missingRequiredNames?.length" class="ml-2">缺失：{{ elData.missingRequiredNames.join('、') }}</span>
           </div>
-          <div class="pt-1 text-gray-300">资格 = 平台授权（ENABLED） ∧ 档案必填齐（信息不完整无法参与投标/发布；关注与订阅不受影响）</div>
+          <div class="pt-1 text-muted-foreground/60">资格 = 平台授权（ENABLED） ∧ 档案必填齐（信息不完整无法参与投标/发布；关注与订阅不受影响）</div>
         </div>
-        <div v-else-if="!elLoading" class="text-xs text-gray-300">查询无结果（后端 106 错误码会在此展示）</div>
+        <div v-else-if="!elLoading" class="text-xs text-muted-foreground/60">查询无结果（后端 106 错误码会在此展示）</div>
       </SpinWrap>
     </Drawer>
   </div>

@@ -81,7 +81,13 @@ const fmtBytes = (n?: null | number): string => {
 /** 公告生命周期文案/色板（管理端可见草稿/撤下/归档；大厅只读只展示 PUBLISHED）。
  * 契约：08 §3 状态机 DRAFT→PUBLISHED→UNPUBLISHED→(再发布)；ARCHIVED=归档终态；管理态字段仅管理端详情下发。 */
 const statusText: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', UNPUBLISHED: '已撤下', ARCHIVED: '已归档' };
-const statusColor: Record<string, string> = { DRAFT: '#909399', PUBLISHED: '#16a34a', UNPUBLISHED: '#ea580c', ARCHIVED: '#2563eb' };
+/** 状态色板走组件变量（--nh-st-*）：管理端随深浅色切换，门户内锁定浅色见样式块。 */
+const statusColor: Record<string, string> = {
+  DRAFT: 'var(--nh-st-draft)',
+  PUBLISHED: 'var(--nh-st-published)',
+  UNPUBLISHED: 'var(--nh-st-unpublished)',
+  ARCHIVED: 'var(--nh-st-archived)',
+};
 
 /* L3 招标文件获取指引：仅当 payload 含获取字段时渲染（DOC_GET_START/END_TIME、FILE_RECEIVE_ADDRESS、
  * TENDER_DOC_GET_METHOD、NOMINAL_FEE——键名中的星号为“通配”示意，非代码通配符）。
@@ -188,26 +194,58 @@ const publicReadable = computed(() => !props.detail?.internalFlag && props.detai
 </template>
 
 <style scoped>
-.nhtml { font-size: 13px; color: #1f2937; }
-.nh-head { padding-bottom: 10px; border-bottom: 2px solid #1d4ed8; margin-bottom: 14px; }
-.nh-ttl { font-size: 17px; font-weight: 700; line-height: 1.5; color: #111827; }
-.nh-meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; color: #6b7280; font-size: 12px; }
-.pill { border: 1px solid #c7d7f7; color: #1d4ed8; background: #eff4ff; border-radius: 4px; padding: 0 7px; line-height: 18px; }
+/* 默认跟随平台主题（管理端详情）；门户（.portal-shell，固定浅色站点）内由下方覆盖块锁浅色 */
+.nhtml {
+  --nh-fg: hsl(var(--foreground));
+  --nh-strong: hsl(var(--foreground));
+  --nh-muted: hsl(var(--muted-foreground));
+  --nh-border: hsl(var(--border));
+  --nh-accent: hsl(var(--primary));
+  --nh-accent-soft: hsl(var(--primary) / 8%);
+  --nh-accent-border: hsl(var(--primary) / 25%);
+  --nh-head-bg: hsl(var(--muted) / 50%);
+  --nh-warn-fg: var(--ind-warn, #b45309);
+  --nh-warn-bg: var(--ind-warn-bg, #fef3c7);
+  --nh-warn-border: var(--ind-warn-border, #fde68a);
+  --nh-st-draft: #909399;
+  --nh-st-published: #16a34a;
+  --nh-st-unpublished: #ea580c;
+  --nh-st-archived: #2563eb;
+  font-size: 13px;
+  color: var(--nh-fg);
+}
+/* 深色模式：状态徽标取亮色变体，保证在深底上的可读性。
+ * 注意：整条选择器必须写进 :global()——写成「:global(.dark) .nhtml」时后者会被编译丢掉。 */
+:global(.dark .nhtml) {
+  --nh-warn-fg: #fbbf24;
+  --nh-warn-bg: hsl(var(--warning) / 15%);
+  --nh-warn-border: hsl(var(--warning) / 35%);
+  --nh-st-draft: #9ca3af;
+  --nh-st-published: #4ade80;
+  --nh-st-unpublished: #fb923c;
+  --nh-st-archived: #60a5fa;
+}
+/* 说明：2026-09-11 起门户招投标页同样跟随平台主题，原先「门户内锁浅色」的
+ * :global(.portal-shell .nhtml) 覆盖块已移除；非招投标门户页的浅色锁定见 layouts/portal.vue（.portal-light）。 */
+.nh-head { padding-bottom: 10px; border-bottom: 2px solid var(--nh-accent); margin-bottom: 14px; }
+.nh-ttl { font-size: 17px; font-weight: 700; line-height: 1.5; color: var(--nh-strong); }
+.nh-meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; color: var(--nh-muted); font-size: 12px; }
+.pill { padding: 0 7px; line-height: 18px; color: var(--nh-accent); background: var(--nh-accent-soft); border: 1px solid var(--nh-accent-border); border-radius: 4px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nh-sec { margin-top: 14px; }
-.nh-sec-t { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 6px; border-left: 3px solid #1d4ed8; padding-left: 7px; }
+.nh-sec-t { margin-bottom: 6px; padding-left: 7px; font-size: 13px; font-weight: 600; color: var(--nh-strong); border-left: 3px solid var(--nh-accent); }
 .nh-tbl { width: 100%; border-collapse: collapse; }
-.nh-tbl td { border: 1px solid #eef0f3; padding: 6px 9px; vertical-align: top; line-height: 1.6; word-break: break-all; }
-.nh-tbl td.nh-k { width: 46%; min-width: 180px; color: #4b5563; background: #fafbfc; font-size: 12px; }
-.nh-tbl td.nh-v { color: #111827; }
-.nh-uk { margin-left: 6px; font-size: 10px; color: #b45309; background: #fef3c7; border-radius: 3px; padding: 0 4px; }
-.nh-body { white-space: pre-wrap; line-height: 1.95; font-size: 13.5px; }
-.nh-none { color: #9ca3af; font-size: 12px; padding: 6px 0; }
-.nh-note { margin-top: 6px; font-size: 11px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 4px; padding: 5px 9px; }
+.nh-tbl td { padding: 6px 9px; vertical-align: top; line-height: 1.6; word-break: break-all; border: 1px solid var(--nh-border); }
+.nh-tbl td.nh-k { width: 46%; min-width: 180px; font-size: 12px; color: var(--nh-muted); background: var(--nh-head-bg); }
+.nh-tbl td.nh-v { color: var(--nh-strong); }
+.nh-uk { margin-left: 6px; padding: 0 4px; font-size: 10px; color: var(--nh-warn-fg); background: var(--nh-warn-bg); border-radius: 3px; }
+.nh-body { font-size: 13.5px; line-height: 1.95; white-space: pre-wrap; }
+.nh-none { padding: 6px 0; font-size: 12px; color: var(--nh-muted); }
+.nh-note { margin-top: 6px; padding: 5px 9px; font-size: 11px; color: var(--nh-warn-fg); background: var(--nh-warn-bg); border: 1px solid var(--nh-warn-border); border-radius: 4px; }
 .nh-files { list-style: none; margin: 0; padding: 0; }
-.nh-file { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border: 1px solid #eef0f3; border-radius: 6px; padding: 7px 10px; margin-bottom: 6px; font-size: 12px; }
-.nh-file .doc { font-weight: 600; color: #1f2937; }
-.nh-file .meta { color: #9ca3af; }
-.nh-file .dl { color: #1d4ed8; text-decoration: none; }
-.nh-file .tip { color: #b45309; font-size: 11px; }
+.nh-file { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 7px 10px; margin-bottom: 6px; font-size: 12px; border: 1px solid var(--nh-border); border-radius: var(--radius); }
+.nh-file .doc { font-weight: 600; color: var(--nh-strong); }
+.nh-file .meta { color: var(--nh-muted); }
+.nh-file .dl { color: var(--nh-accent); text-decoration: none; }
+.nh-file .tip { font-size: 11px; color: var(--nh-warn-fg); }
 </style>
