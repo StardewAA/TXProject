@@ -345,15 +345,25 @@ export function useLineFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
     },
     {
+      // 隐藏字段：库存记录的批次编号，缺它会导致后端校验 batchId 不一致（批次物料无法拣货）
+      fieldName: 'batchId',
+      component: 'Input',
+      dependencies: {
+        triggerFields: [''],
+        show: () => false,
+      },
+    },
+    {
       fieldName: 'materialStockId',
       label: '库存物资',
       component: markRaw(WmMaterialStockSelect),
       componentProps: {
-        // 选择库存物资后，自动回填物料、批次号、仓库位置和最大可出库数量
+        // 选择库存物资后，自动回填物料、批次编号/批次号、仓库位置和最大可出库数量
         onChange: async (stock?: MesWmMaterialStockApi.MaterialStock) => {
           await formApi?.setValues({
             areaId: stock?.areaId,
             batchCode: stock?.batchCode,
+            batchId: stock?.batchId,
             itemId: stock?.itemId,
             locationId: stock?.locationId,
             quantityMax: stock?.quantity,

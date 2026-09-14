@@ -1,6 +1,8 @@
 package cn.iocoder.txgy.module.wms.service.order.check;
 
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.module.wms.controller.admin.order.check.vo.detail.WmsCheckOrderDetailSaveReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.order.check.vo.order.WmsCheckOrderSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.order.check.WmsCheckOrderDO;
@@ -55,6 +57,36 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
     private WmsItemSkuService itemSkuService;
     @MockitoBean
     private WmsInventoryService inventoryService;
+    @MockitoBean
+    private BpmProcessInstanceApi processInstanceApi;
+
+
+    @Test
+    public void unapprovedOrderCannotComplete() {
+        WmsCheckOrderDO order = createCheckOrder(100L);
+        checkOrderMapper.insert(order);
+        checkOrderDetailMapper.insert(createCheckOrderDetail(order.getId(), 200L, 100L, "10.00", "7.00"));
+        org.junit.jupiter.api.Assertions.assertThrows(cn.iocoder.txgy.framework.common.exception.ServiceException.class,
+                () -> checkOrderService.completeCheckOrder(order.getId()));
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(), checkOrderMapper.selectById(order.getId()).getStatus());
+    }
+
+    @Test
+    public void staleFinalCallbackDoesNotExecuteApprovedCheck() {
+        WmsCheckOrderDO order = createCheckOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.RUNNING.getStatus())
+                .setProcessInstanceId("current-process");
+        checkOrderMapper.insert(order);
+        checkOrderDetailMapper.insert(createCheckOrderDetail(order.getId(), 200L, 100L, "10.00", "7.00"));
+
+        checkOrderService.updateCheckOrderApprovalStatus(order.getId(), "stale-process",
+                BpmProcessInstanceStatusEnum.APPROVE.getStatus(), "stale");
+
+        WmsCheckOrderDO saved = checkOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.RUNNING.getStatus(), saved.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(), saved.getStatus());
+        verify(inventoryService, never()).checkInventory(any());
+    }
 
     @Test
     public void testCreateCheckOrder_calculateTotals() {
@@ -109,7 +141,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         Long warehouseId = 100L;
         Long skuId = 200L;
-        WmsCheckOrderDO order = createCheckOrder(warehouseId);
+        WmsCheckOrderDO order = createCheckOrder(warehouseId)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
         checkOrderDetailMapper.insert(createCheckOrderDetail(order.getId(), skuId, warehouseId,
                 "10.00", "7.00"));
@@ -140,7 +173,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCompleteCheckOrder_zeroDifference() {
         // mock 数据
-        WmsCheckOrderDO order = createCheckOrder(100L);
+        WmsCheckOrderDO order = createCheckOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
         checkOrderDetailMapper.insert(createCheckOrderDetail(order.getId(), 200L, 100L,
                 "10.00", "10.00"));
@@ -160,7 +194,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         Long warehouseId = 100L;
         Long skuId = 200L;
-        WmsCheckOrderDO order = createCheckOrder(warehouseId);
+        WmsCheckOrderDO order = createCheckOrder(warehouseId)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
         checkOrderDetailMapper.insert(createNewInventoryCheckOrderDetail(order.getId(), skuId, warehouseId,
                 "0.00", "5.00"));
@@ -184,7 +219,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         Long warehouseId = 100L;
         Long skuId = 200L;
-        WmsCheckOrderDO order = createCheckOrder(warehouseId);
+        WmsCheckOrderDO order = createCheckOrder(warehouseId)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
         checkOrderDetailMapper.insert(createNewInventoryCheckOrderDetail(order.getId(), skuId, warehouseId,
                 "0.00", "5.00"));
@@ -200,7 +236,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCompleteCheckOrder_detailRequired() {
         // mock 数据
-        WmsCheckOrderDO order = createCheckOrder(100L);
+        WmsCheckOrderDO order = createCheckOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
 
         // 调用，并断言
@@ -212,7 +249,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCompleteCheckOrder_duplicateComplete() {
         // mock 数据
-        WmsCheckOrderDO order = createCheckOrder(100L);
+        WmsCheckOrderDO order = createCheckOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         checkOrderMapper.insert(order);
         checkOrderDetailMapper.insert(createCheckOrderDetail(order.getId(), 200L, 100L,
                 "10.00", "7.00"));
@@ -291,6 +329,8 @@ public class WmsCheckOrderServiceImplTest extends BaseDbUnitTest {
                 .setNo("PK202605120001")
                 .setOrderTime(LocalDateTime.of(2026, 5, 12, 0, 0))
                 .setStatus(WmsOrderStatusEnum.PREPARE.getStatus())
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.NOT_START.getStatus())
+                .setExecutionStatus(0)
                 .setWarehouseId(warehouseId)
                 .setTotalQuantity(new BigDecimal("-3.00"))
                 .setTotalPrice(new BigDecimal("300.00"))

@@ -55,6 +55,11 @@
             <artifactId>txgy-spring-boot-starter-biz-tenant</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-biz-data-permission</artifactId>
+        </dependency>
+
         <!-- Web 相关 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

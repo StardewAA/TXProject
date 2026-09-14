@@ -48,6 +48,10 @@ public class QuestionDO extends TenantBaseDO {
      */
     private Integer difficulty;
     /**
+     * 所属分类 ID（资源分类 question 类型，支持三级）
+     */
+    private Long categoryId;
+    /**
      * 状态：1 启用 2 停用
      */
     private Integer status;

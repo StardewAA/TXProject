@@ -54,7 +54,7 @@ public interface ErrorCodeConstants {
     ErrorCode RESOURCE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_006_002, "已存在同类型下同名分类");
     ErrorCode RESOURCE_CATEGORY_HAS_CHILDREN = new ErrorCode(1_061_006_003, "该分类存在子分类，禁止删除（请先删除子分类）");
     ErrorCode RESOURCE_CATEGORY_HAS_RESOURCE = new ErrorCode(1_061_006_004, "该分类下仍存在资源，禁止删除（请先转移或删除资源）");
-    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持一级父分类，不支持三级及以上层级");
+    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持选择一级、二级分类，不支持四级及以上层级");
 
     // ========== 资源中心-文档（document resource）1-061-007-000 ==========
     ErrorCode DOCUMENT_NOT_EXISTS = new ErrorCode(1_061_007_000, "文档资源不存在");

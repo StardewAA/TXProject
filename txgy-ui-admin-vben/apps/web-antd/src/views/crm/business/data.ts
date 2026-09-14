@@ -5,7 +5,10 @@ import { useUserStore } from '@vben/stores';
 import { erpPriceMultiply } from '@vben/utils';
 
 import { z } from '#/adapter/form';
-import { getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
+import {
+  getBusinessStatusSimpleList,
+  getBusinessStatusTypeSimpleList,
+} from '#/api/crm/business/status';
 import { getCustomerSimpleList } from '#/api/crm/customer';
 import { getSimpleUserList } from '#/api/system/user';
 
@@ -91,6 +94,31 @@ export function useFormSchema(): VbenFormSchema[] {
         disabled: (values) => values.id,
       },
       rules: 'required',
+    },
+    {
+      fieldName: 'statusId',
+      label: '商机阶段',
+      component: 'Select',
+      dependencies: {
+        triggerFields: ['id', 'statusTypeId'],
+        show: (values) => !values.id,
+        async componentProps(values) {
+          if (!values.statusTypeId) {
+            return {
+              options: [],
+              placeholder: '请先选择商机状态组',
+            };
+          }
+          const list = await getBusinessStatusSimpleList(values.statusTypeId);
+          return {
+            options: list.map((item) => ({
+              label: `${item.name}（赢单率：${item.percent}%）`,
+              value: item.id,
+            })),
+            placeholder: '请选择商机阶段',
+          };
+        },
+      },
     },
     {
       fieldName: 'dealTime',
@@ -269,7 +297,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 130,
+      width: 190,
       fixed: 'right',
       slots: { default: 'actions' },
     },

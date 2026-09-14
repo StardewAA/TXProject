@@ -10,8 +10,9 @@ COPY . .
 
 ARG MODULE_PATH
 
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn --settings /opt/maven/settings-mirror.xml -pl "${MODULE_PATH}" -am -Dmaven.test.skip=true package
+RUN test -n "${MODULE_PATH}" \
+    && mvn -B -ntp --settings /opt/maven/settings-mirror.xml \
+        -pl "${MODULE_PATH}" -am -Dmaven.test.skip=true package
 
 RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
     && test -f /app.jar
@@ -31,5 +32,10 @@ WORKDIR /app
 COPY --from=builder /app.jar /app/app.jar
 
 ENV JAVA_OPTS=""
+
+EXPOSE 48080
+
+HEALTHCHECK --interval=20s --timeout=5s --retries=15 --start-period=90s \
+    CMD curl --fail --silent http://127.0.0.1:48080/actuator/health || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

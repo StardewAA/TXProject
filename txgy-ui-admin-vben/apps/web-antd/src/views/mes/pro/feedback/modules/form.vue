@@ -194,6 +194,7 @@ const [Modal, modalApi] = useVbenModal({
     // 详情整表禁用，避免误改未提交的字段
     formApi.setDisabled(formType.value === 'detail');
     modalApi.setState({
+      confirmText: '保存',
       showConfirmButton: formType.value !== 'detail',
     });
     if (!data?.id) {

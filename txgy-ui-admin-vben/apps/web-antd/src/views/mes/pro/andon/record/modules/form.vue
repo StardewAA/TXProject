@@ -132,7 +132,10 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<{ formType: FormType; id?: number }>();
     formType.value = data.formType;
     formApi.setState({ schema: useFormSchema(formType.value, formApi) });
-    modalApi.setState({ showConfirmButton: formType.value === 'create' });
+    modalApi.setState({
+      confirmText: '保存',
+      showConfirmButton: formType.value === 'create',
+    });
     if (formType.value === 'create') {
       // 新增时，发起人默认为当前用户
       await formApi.setValues({ userId: userStore.userInfo?.id });

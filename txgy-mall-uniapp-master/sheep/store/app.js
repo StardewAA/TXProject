@@ -13,7 +13,7 @@ const app = defineStore('app', {
     info: {
       // 应用信息
       name: '', // 商城名称
-      logo: '', // logo
+      logo: '/static/mall-logo.png', // logo
       version: '', // 版本号
       copyright: '', // 版权信息 I
       copytime: '', // 版权信息 II
@@ -71,7 +71,7 @@ const app = defineStore('app', {
       if (true) {
         this.info = {
           name: '芋道商城',
-          logo: 'https://static.iocoder.cn/ruoyi-vue-pro-logo.png',
+          logo: '/static/mall-logo.png',
           version: '2026.07',
           copyright: '全部开源，个人与企业可 100% 免费使用',
           copytime: 'Copyright© 2018-2025',

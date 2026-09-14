@@ -30,6 +30,7 @@ import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermi
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.crm.service.quotation.CrmQuotationService;
 import cn.iocoder.txgy.module.crm.service.customer.bo.CrmCustomerCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.CrmOwnerRecordService;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
@@ -90,6 +91,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @Resource
     @Lazy
     private CrmContractService contractService;
+    @Resource
+    @Lazy
+    private CrmQuotationService quotationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -100,12 +104,18 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     private CrmContactMapper contactMapper;
 
     @Override
+    public List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit) {
+        CrmCustomerDO current = validateCustomerExists(customerId);
+        return customerMapper.selectSimilarList(current, limit);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerSaveReqVO createReqVO, Long userId) {
         createReqVO.setId(null);
-        // 1. 负责人：以表单选择为准；未选择时默认当前登录人
+        // 1. 确定负责人：优先取表单选择的负责人，未选择时兜底为当前登录用户
         Long ownerUserId = createReqVO.getOwnerUserId() != null ? createReqVO.getOwnerUserId() : userId;
         createReqVO.setOwnerUserId(ownerUserId);
         // 2. 校验拥有客户是否到达上限
@@ -115,16 +125,11 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         CrmCustomerDO customer = initCustomer(createReqVO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 4. 创建数据权限：负责人拥有 OWNER
+        // 4. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
                 .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
-        // 5. 若创建人不是负责人，保留其读/写权限，避免创建后丢失可见性
-        if (!ownerUserId.equals(userId)) {
-            permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                    .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.WRITE.getLevel()));
-        }
 
-        // 6. 记录操作日志上下文
+        // 5. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -297,15 +302,17 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerCreateReqBO createReqBO, Long userId) {
-        // 1. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqBO, userId);
+        // 1. 确定负责人：优先取传入的负责人（如线索负责人），未指定时兜底为当前操作人
+        Long ownerUserId = createReqBO.getOwnerUserId() != null ? createReqBO.getOwnerUserId() : userId;
+        // 2. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqBO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 2. 创建数据权限
+        // 3. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
+                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
 
-        // 3. 记录操作日志上下文
+        // 4. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -634,6 +641,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         }
         if (contractService.getContractCountByCustomerId(id) > 0) {
             throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_CONTRACT.getName());
+        }
+        if (quotationService.getQuotationCountByCustomerId(id) > 0) {
+            throw exception(CUSTOMER_DELETE_FAIL_HAVE_REFERENCE, CrmBizTypeEnum.CRM_QUOTATION.getName());
         }
     }
 

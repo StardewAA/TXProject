@@ -135,34 +135,99 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招聘应聘', hideInMenu: true },
       },
       {
+        name: 'PortalRecruitDetail',
+        path: 'recruit/detail',
+        component: () => import('#/views/portal/recruit/detail.vue'),
+        meta: { title: '职位详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalRecruitMessages',
+        path: 'recruit/messages',
+        redirect: { name: 'PortalRecruit', query: { section: 'messages' } },
+        meta: { title: '招聘沟通', hideInMenu: true },
+      },
+      {
+        name: 'PortalRecruitProfileSetup',
+        path: 'recruit/profile-setup',
+        redirect: { name: 'PortalRecruit' },
+        meta: { title: '在线简历', hideInMenu: true },
+      },
+      {
+        // 云培训学院：带左侧 F1~F10 模块导航的父容器，具体内容由子路由在右侧渲染
         name: 'PortalTraining',
         path: 'training',
         component: () => import('#/views/portal/training/index.vue'),
+        redirect: '/portal/training/workbench',
         meta: { title: '云培训学院', hideInMenu: true },
+        children: [
+          {
+            name: 'PortalTrainingWorkbench',
+            path: 'workbench',
+            component: () => import('#/views/portal/training/workbench/index.vue'),
+            meta: { title: '学习工作台', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingCourses',
+            path: 'courses',
+            component: () => import('#/views/portal/training/courses/index.vue'),
+            meta: { title: '课程中心', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingLearning',
+            path: 'learning',
+            component: () => import('#/views/portal/training/learning/index.vue'),
+            meta: { title: '我的学习', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingVr',
+            path: 'vr',
+            component: () => import('#/views/portal/training/vr/index.vue'),
+            meta: { title: 'VR 实操训练', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExam',
+            path: 'exam',
+            component: () => import('#/views/portal/training/exam/index.vue'),
+            meta: { title: '考试与证书', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingLive',
+            path: 'live',
+            component: () => import('#/views/portal/training/live/index.vue'),
+            meta: { title: '直播大厅', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingTasks',
+            path: 'tasks',
+            component: () => import('#/views/portal/training/tasks/index.vue'),
+            meta: { title: '培训任务与上岗', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingProfile',
+            path: 'profile',
+            component: () => import('#/views/portal/training/profile/index.vue'),
+            meta: { title: '个人档案与成长', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingCooperation',
+            path: 'cooperation',
+            component: () => import('#/views/portal/training/cooperation/index.vue'),
+            meta: { title: '校企合作专区', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingContest',
+            path: 'contest',
+            component: () => import('#/views/portal/training/contest/index.vue'),
+            meta: { title: '创新大赛专区', hideInMenu: true },
+          },
+        ],
       },
       {
-        name: 'PortalTrainingLearning',
-        path: 'training/learning',
-        component: () => import('#/views/portal/training/learning/index.vue'),
-        meta: { title: '我的学习', hideInMenu: true },
-      },
-      {
+        // 在线学习为全屏播放页，独立于培训学院容器（不显示 F1~F10 侧栏）
         name: 'PortalTrainingStudy',
         path: 'training/study',
         component: () => import('#/views/portal/training/learning/study.vue'),
         meta: { title: '在线学习', hideInMenu: true },
-      },
-      {
-        name: 'PortalTrainingLive',
-        path: 'training/live',
-        component: () => import('#/views/portal/training/live/index.vue'),
-        meta: { title: '直播大厅', hideInMenu: true },
-      },
-      {
-        name: 'PortalTrainingProfile',
-        path: 'training/profile',
-        component: () => import('#/views/portal/training/profile/index.vue'),
-        meta: { title: '学习档案', hideInMenu: true },
       },
       {
         name: 'PortalBidding',
@@ -171,10 +236,189 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招标投标', hideInMenu: true },
       },
       {
+        name: 'PortalBiddingDetail',
+        path: 'bidding/detail/:id',
+        component: () => import('#/views/portal/bidding/detail.vue'),
+        meta: { title: '公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSubscription',
+        path: 'bidding/subscription',
+        component: () => import('#/views/portal/bidding/subscription.vue'),
+        meta: { title: '我的关注', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProfile',
+        path: 'bidding/profile',
+        component: () => import('#/views/portal/bidding/profile.vue'),
+        meta: { title: '个人中心（投标人）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalHall',
+        path: 'bidding/internal-hall',
+        component: () => import('#/views/portal/bidding/internalHall.vue'),
+        meta: { title: '本平台发布', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalDetail',
+        path: 'bidding/internal-detail/:id',
+        component: () => import('#/views/portal/bidding/internalDetail.vue'),
+        meta: { title: '本平台公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingPublish',
+        path: 'bidding/publish',
+        /** 门户自有页面（此前直挂管理端组件 views/bidding/notice/index.vue，靠 route.path 猜身份） */
+        component: () => import('#/views/portal/bidding/publish.vue'),
+        meta: { title: '公告发布（企业前台）', hideInMenu: true },
+      },
+      /** 【2026-09-14 口径收敛】原先这 4 条前台路由承载"项目 → 招标项目 → 标段（包） → 公告"的企业数据生产动线
+       *  （创建/删除项目、创建公告，接口 /bidding/project|tender-project|bid-section）。按用户口径
+       *  "前台是个人工作台，企业在后台、个人在前台"，该动线属企业产出数据，已在后台提供
+       *  （views/bidding/project|notice）。现 4 条路由统一指向 enterpriseMoved.vue：
+       *  **老书签进来能看懂去哪儿，而不是 404、也不是静默继续可用**。
+       *  回退方式：把下面 4 个 component 换回 '#/views/portal/bidding/project/*.vue'（页面文件均未删除）。
+       *  路由名与路径保持不变，避免其它引用断链。 */
+      {
+        name: 'PortalBiddingProjects',
+        path: 'bidding/projects',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '项目公告管理', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectTenderProjects',
+        path: 'bidding/projects/:projectCode/tender-projects',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '招标项目', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectBidSections',
+        path: 'bidding/projects/:projectCode/tender-projects/:tenderProjectCode/sections',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '标段（包）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSectionNotices',
+        path: 'bidding/sections/:bidSectionCode/notices',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '公告 / 公示', hideInMenu: true },
+      },
+      {
         name: 'PortalProfile',
         path: 'profile',
         component: () => import('#/views/portal/profile/index.vue'),
         meta: { title: '个人中心', hideInMenu: true },
+      },
+      {
+        name: 'PortalProfileRecruit',
+        path: 'profile/recruit',
+        component: () => import('#/views/portal/profile/recruit.vue'),
+        meta: { title: '应聘记录', hideInMenu: true },
+      },
+    ],
+  },
+  {
+    // 培训管理后台。远端 master 引入了 views/training/* 全套 Vue 页面，但未注册路由，
+    // 故此处手动补齐 /training 父路由以打通菜单与面包屑（默认进入考试总览）。
+    component: BasicLayout,
+    meta: {
+      title: '培训管理',
+    },
+    name: 'Training',
+    path: '/training',
+    redirect: '/training/exam/overview',
+    children: [
+      {
+        name: 'TrainingExam',
+        path: 'exam',
+        component: () => import('#/views/training/exam/index.vue'),
+        redirect: '/training/exam/overview',
+        meta: { title: '考试与认证', hideInMenu: true },
+        children: [
+          {
+            path: 'overview',
+            name: 'TrainingExamOverview',
+            component: () =>
+              import('#/views/training/exam/overview/index.vue'),
+            meta: { title: '总览', icon: 'lucide:layout-dashboard' },
+          },
+          {
+            path: 'questions',
+            name: 'TrainingExamQuestions',
+            component: () =>
+              import('#/views/training/exam/questions/index.vue'),
+            meta: { title: '题库与审核', icon: 'lucide:list-checks' },
+          },
+          {
+            path: 'papers',
+            name: 'TrainingExamPapers',
+            component: () =>
+              import('#/views/training/exam/papers/index.vue'),
+            meta: { title: '试卷管理', icon: 'lucide:file-text' },
+          },
+          {
+            path: 'schedules',
+            name: 'TrainingExamSchedules',
+            component: () =>
+              import('#/views/training/exam/schedules/index.vue'),
+            meta: { title: '考试安排', icon: 'lucide:calendar' },
+          },
+          {
+            path: 'grading',
+            name: 'TrainingExamGrading',
+            component: () =>
+              import('#/views/training/exam/grading/index.vue'),
+            meta: { title: '阅卷与成绩', icon: 'lucide:check-square' },
+          },
+          {
+            path: 'certificates',
+            name: 'TrainingExamCertificates',
+            component: () =>
+              import('#/views/training/exam/certificates/index.vue'),
+            meta: { title: '证书管理', icon: 'lucide:award' },
+          },
+          {
+            path: 'myexams',
+            name: 'TrainingExamMyExams',
+            component: () =>
+              import('#/views/training/exam/myexams/index.vue'),
+            meta: { title: '我的考试', icon: 'lucide:clipboard-list' },
+          },
+          {
+            path: 'mycerts',
+            name: 'TrainingExamMyCerts',
+            component: () =>
+              import('#/views/training/exam/mycerts/index.vue'),
+            meta: { title: '我的证书', icon: 'lucide:badge-check' },
+          },
+          {
+            path: 'wrong',
+            name: 'TrainingExamWrong',
+            component: () =>
+              import('#/views/training/exam/wrong/index.vue'),
+            meta: { title: '错题复盘', icon: 'lucide:rotate-ccw' },
+          },
+          {
+            path: 'issuers',
+            name: 'TrainingExamIssuers',
+            component: () =>
+              import('#/views/training/exam/issuers/index.vue'),
+            meta: { title: '联合认证', icon: 'lucide:handshake' },
+          },
+        ],
+      },
+      {
+        path: 'resource/doc-list',
+        name: 'TrainingResourceDocList',
+        component: () =>
+          import('#/views/training/resource/doc-list/index.vue'),
+        meta: { title: '文档资源库', hideInMenu: true },
+      },
+      {
+        path: 'live/hall',
+        name: 'TrainingLiveHall',
+        component: () => import('#/views/training/live/live-hall.vue'),
+        meta: { title: '直播大厅', hideInMenu: true },
       },
     ],
   },

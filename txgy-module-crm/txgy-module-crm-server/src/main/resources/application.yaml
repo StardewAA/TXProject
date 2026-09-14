@@ -102,6 +102,14 @@ txgy:
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.crm
+  # CRM AI 助手（意图识别）：密钥保存在后端，前端只调 /crm/ai/classify-intent
+  # 部署时通过环境变量注入 DASHSCOPE_API_KEY，避免密钥进入代码仓库与浏览器
+  crm:
+    ai:
+      enabled: ${CRM_AI_ENABLED:true}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model: ${DASHSCOPE_MODEL:qwen-plus}
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

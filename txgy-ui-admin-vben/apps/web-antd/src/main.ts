@@ -1,4 +1,5 @@
 import './offline-icons';
+import './bid-indust.css';
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 

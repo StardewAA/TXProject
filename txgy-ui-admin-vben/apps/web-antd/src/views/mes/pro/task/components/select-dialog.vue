@@ -135,10 +135,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
+          // 外部传入的工单/工位过滤强制生效（如报工场景必须选当前工单的任务），
+          // 未传入时回退到用户在弹窗内的筛选
+          const { workOrderId, workstationId, ...restFormValues } = formValues;
           return await getTaskPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            ...formValues,
+            ...restFormValues,
+            workOrderId: externalWorkOrderId.value ?? workOrderId,
+            workstationId: externalWorkstationId.value ?? workstationId,
             statuses: props.statuses,
           });
         },

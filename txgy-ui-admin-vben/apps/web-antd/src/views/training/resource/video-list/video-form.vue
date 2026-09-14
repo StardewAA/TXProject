@@ -4,6 +4,7 @@ import type { TrainingResourceApi } from '../api';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
 import {
   Button,
@@ -52,22 +53,76 @@ const DEFINITION_OPTIONS = [
 ];
 const selectedFile = ref<File | null>(null);
 const uploading = ref(false);
+// 时长自动识别状态：detecting 识别中 / autoDetected 已自动填入 / detectFailed 识别失败需手动
+const detecting = ref(false);
+const autoDetected = ref(false);
+const detectFailed = ref(false);
+
+/**
+ * 浏览器原生读取视频元数据，自动填入时长（秒）。
+ * 原理：Blob URL + video.preload='metadata'，仅加载 moov 头，不上传/不读全文件。
+ * MOV（HEVC 等编码）或损坏文件可能解析失败，此时降级为手动填写。
+ */
+function detectDuration(file: File) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement('video');
+  detecting.value = true;
+  autoDetected.value = false;
+  detectFailed.value = false;
+  const cleanup = () => {
+    URL.revokeObjectURL(url);
+    detecting.value = false;
+  };
+  video.preload = 'metadata';
+  video.onloadedmetadata = () => {
+    cleanup();
+    const d = video.duration;
+    if (Number.isFinite(d) && d > 0) {
+      durationSeconds.value = Math.round(d);
+      autoDetected.value = true;
+    } else {
+      detectFailed.value = true;
+      message.warning('无法自动读取该视频时长，请手动填写');
+    }
+  };
+  video.onerror = () => {
+    cleanup();
+    detectFailed.value = true;
+    message.warning('无法自动读取该视频时长，请手动填写');
+  };
+  video.src = url;
+}
+
+function formatDuration(seconds?: number) {
+  if (!seconds || seconds <= 0) {
+    return '';
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0
+    ? `${h}时${String(m).padStart(2, '0')}分${String(s).padStart(2, '0')}秒`
+    : m > 0
+      ? `${m}分${String(s).padStart(2, '0')}秒`
+      : `${s}秒`;
+}
 
 const categoryOptions = ref<any[]>([]);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('video');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 const getTitle = computed(() => {
@@ -82,11 +137,17 @@ function pickFile(file: File) {
     return false;
   }
   selectedFile.value = file;
+  // 自动读取视频时长并填入，摒弃手动添加
+  detectDuration(file);
   return false; // 阻止自动上传，点击确定后统一提交
 }
 
 function clearFile() {
   selectedFile.value = null;
+  detecting.value = false;
+  autoDetected.value = false;
+  detectFailed.value = false;
+  durationSeconds.value = undefined;
 }
 
 async function handleConfirm() {
@@ -146,6 +207,9 @@ const [Modal, modalApi] = useVbenModal({
       videoType.value = 2;
       definition.value = '720P';
       selectedFile.value = null;
+      detecting.value = false;
+      autoDetected.value = false;
+      detectFailed.value = false;
       return;
     }
     loadCategories();
@@ -209,6 +273,7 @@ const [Modal, modalApi] = useVbenModal({
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
           上传视频文件（短视频 / 录播，MP4 ≤4GB）
+          <span class="text-blue-500">· 时长将自动识别填入</span>
         </div>
         <Upload
           accept=".mp4,.mov"
@@ -225,6 +290,13 @@ const [Modal, modalApi] = useVbenModal({
             {{ (selectedFile.size / 1024 / 1024).toFixed(1) }} MB
           </span>
           <Button size="small" type="text" danger @click="clearFile">移除</Button>
+        </div>
+        <div
+          v-if="!detectFailed && !autoDetected"
+          class="mt-2 flex items-center gap-1 rounded bg-blue-50 px-3 py-2 text-xs text-blue-600 dark:bg-blue-950 dark:text-blue-300"
+        >
+          <IconifyIcon icon="lucide:wand-sparkles" class="size-4 shrink-0" />
+          选择视频后，系统将自动读取视频元数据并填入时长，无需手动输入；仅当无法识别时才需手动补充。
         </div>
       </div>
 
@@ -251,13 +323,31 @@ const [Modal, modalApi] = useVbenModal({
 
       <div class="flex gap-4">
         <div class="flex-1">
-          <div class="mb-1 text-sm text-gray-600">视频时长（秒）</div>
+          <div class="mb-1 flex items-center gap-2 text-sm text-gray-600">
+            <span>视频时长（秒）</span>
+            <span class="text-xs text-gray-400">（自动识别为主，手动填写为备选）</span>
+            <Tag v-if="!editing && detecting" color="processing" class="!m-0 !text-xs">
+              自动识别中…
+            </Tag>
+            <Tag v-else-if="!editing && autoDetected" color="success" class="!m-0 !text-xs">
+              已自动识别
+            </Tag>
+            <Tag v-else-if="!editing && detectFailed" color="warning" class="!m-0 !text-xs">
+              识别失败，请手动填写（备选）
+            </Tag>
+          </div>
           <InputNumber
             v-model:value="durationSeconds"
             class="w-full"
             :min="0"
-            placeholder="选填，如 1800"
+            :disabled="!editing && autoDetected"
+            :placeholder="
+              !editing && detectFailed ? '自动识别失败，请手动填写，如 1800' : '选填，如 1800'
+            "
           />
+          <div v-if="!editing && autoDetected" class="mt-1 text-xs text-gray-400">
+            系统已根据视频元数据自动填入：{{ formatDuration(durationSeconds) }}
+          </div>
         </div>
       </div>
 

@@ -16,6 +16,7 @@ export namespace WmsItemApi {
     unit?: string;
     brandId?: number;
     brandName?: string;
+    materialType?: string;
     remark?: string;
     status?: number;
     skus?: WmsItemSkuApi.ItemSku[];
