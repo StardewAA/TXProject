@@ -126,6 +126,30 @@ def install(ctx):
         walk(tree, [])
         return ok(result)
 
+    @app.get("/api/course-exams")
+    def course_exams(actor: Actor = Depends(current_user)):
+        """课程管理（模块二）配置的结课考试，供「考试安排」展示各门课程的结课考试。"""
+        try:
+            rows = platform_get("/training/course/exam-plan-list", actor.token, actor.tenant_id) or []
+        except HTTPException as error:
+            if getattr(error, "status_code", None) == 403:
+                rows = []
+            else:
+                raise
+        result = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            result.append({
+                "course_id": item.get("courseId"),
+                "course_name": item.get("courseName"),
+                "exam_id": item.get("examId"),
+                "exam_start_time": item.get("examStartTime"),
+                "exam_end_time": item.get("examEndTime"),
+                "status": item.get("status"),
+            })
+        return ok(result)
+
     class ClassIn(BaseModel):
         name: str = Field(min_length=2,max_length=200)
         user_ids: list[int] = Field(min_length=1)

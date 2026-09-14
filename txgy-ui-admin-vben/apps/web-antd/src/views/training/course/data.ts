@@ -16,6 +16,13 @@ export const COURSE_LEVEL_OPTIONS = [
   { label: '高级', value: 3 },
 ] as const;
 
+/** 业务标签（模块二 新增课程：业务标签分三种） */
+export const COURSE_BIZ_TAG_OPTIONS = [
+  { label: '岗前培训', value: '岗前培训' },
+  { label: '复工强制', value: '复工强制' },
+  { label: '持证上岗', value: '持证上岗' },
+] as const;
+
 /**
  * 成长等级（六级人才成长体系 training_growth_level 字典，与后台「成长等级维护」保持一致，
  * 二级子模块 23 课程成长等级标记/模块九人才成长统计引用）
@@ -64,11 +71,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
       fieldName: 'title',
-      label: '课程标题',
+      label: '课程名称',
       component: 'Input',
       componentProps: {
         allowClear: true,
-        placeholder: '请输入课程标题',
+        placeholder: '请输入课程名称',
       },
     },
     {
@@ -121,9 +128,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
       field: 'title',
-      title: '课程标题',
+      title: '课程名称',
       minWidth: 220,
       showOverflow: true,
+      slots: { default: 'title' },
     },
     {
       field: 'code',
