@@ -126,6 +126,9 @@ public interface ErrorCodeConstants {
     ErrorCode PLAN_STUDENT_SCOPE_CONDITION_REQUIRED = new ErrorCode(1_061_013_005, "请先选择参与对象筛选条件（部门或岗位），或为培训班配置参训对象筛选");
     ErrorCode PLAN_STUDENT_SCOPE_NO_MATCH = new ErrorCode(1_061_013_006, "按当前参与对象筛选条件未匹配到可加入的学员");
     ErrorCode PLAN_STUDENT_SCOPE_QUERY_FAILED = new ErrorCode(1_061_013_007, "按参与对象筛选查询系统用户失败，请稍后重试");
+    ErrorCode PLAN_STUDENT_LIMIT_EXCEEDED = new ErrorCode(1_061_013_008, "单个培训班在班学员上限 {} 人，当前已 {} 人，本次最多还可加入 {} 人");
+    ErrorCode PLAN_CLASS_STUDENT_FULL = new ErrorCode(1_061_013_009, "培训班在班学员已达上限 {} 人，请先移出部分学员后再收录");
+    ErrorCode PLAN_STUDENT_SCOPE_NO_ADDABLE = new ErrorCode(1_061_013_010, "按当前参与对象筛选条件没有可收录的人员（命中人员可能均已在班）");
 
     // ========== 督促提醒（remind）1-061-014-000 ==========
     ErrorCode PLAN_REMIND_NO_TARGET = new ErrorCode(1_061_014_000, "没有可督促的未完成学员");

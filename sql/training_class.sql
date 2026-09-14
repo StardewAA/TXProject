@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `training_class_student` (
   `user_id`     bigint      NOT NULL COMMENT '学员用户ID（引用 system_users，登录用户即工人/员工）',
   `user_name`   varchar(64) DEFAULT NULL COMMENT '学员姓名快照',
   `dept_name`   varchar(100) DEFAULT NULL COMMENT '部门/班组快照',
-  `source`      tinyint     NOT NULL DEFAULT 1 COMMENT '加入来源：1手动添加 2Excel批量导入 3按参与对象筛选',
+  `source`      tinyint     NOT NULL DEFAULT 1 COMMENT '加入来源：1手动添加 2Excel批量导入 3按参与对象筛选 4随机收录',
   `status`      tinyint     NOT NULL DEFAULT 0 COMMENT '状态：0在班 1已移除',
   `join_time`   datetime    DEFAULT NULL COMMENT '入班时间',
   `removed_time` datetime   DEFAULT NULL COMMENT '移除时间',

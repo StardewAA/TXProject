@@ -137,11 +137,38 @@ export namespace TrainingPlanApi {
     matchedCount?: number;
     inClassCount?: number;
     addableCount?: number;
+    /** 培训班当前在班人数 */
+    inClassTotal?: number;
+    /** 在班学员上限 */
+    maxSize?: number;
+    /** 剩余可收录名额 */
+    remaining?: number;
     users?: {
       userId?: number;
       nickname?: string;
       deptName?: string;
       inClass?: boolean;
+    }[];
+  }
+
+  /** 随机收录请求（按参与对象筛选条件随机抽取） */
+  export interface ClassStudentRandomAdd extends ClassStudentScope {
+    /** 随机收录人数；不传或小于等于 0 时按剩余名额尽量填满 */
+    count?: number;
+  }
+
+  /** 随机收录结果 */
+  export interface ClassStudentRandomAddResult {
+    addedCount?: number;
+    matchedCount?: number;
+    addableCount?: number;
+    inClassCount?: number;
+    maxSize?: number;
+    remaining?: number;
+    users?: {
+      userId?: number;
+      nickname?: string;
+      deptName?: string;
     }[];
   }
 }
@@ -327,6 +354,16 @@ export function addClassStudentsByScope(
 ) {
   return requestClient.post<number>(
     '/training/plan/class/student/add-by-scope',
+    data,
+  );
+}
+
+/** 随机收录学员（按参与对象筛选条件随机抽取，单个培训班在班学员上限 50 人） */
+export function randomAddClassStudents(
+  data: TrainingPlanApi.ClassStudentRandomAdd,
+) {
+  return requestClient.post<TrainingPlanApi.ClassStudentRandomAddResult>(
+    '/training/plan/class/student/random-add',
     data,
   );
 }

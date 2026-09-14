@@ -30,6 +30,15 @@ public class ClassStudentScopePreviewRespVO {
     @Schema(description = "可加入人数（命中人员 - 已在班）", example = "8")
     private Integer addableCount;
 
+    @Schema(description = "培训班当前在班人数", example = "32")
+    private Integer inClassTotal;
+
+    @Schema(description = "在班学员上限", example = "50")
+    private Integer maxSize;
+
+    @Schema(description = "剩余可收录名额（上限 - 在班人数）", example = "18")
+    private Integer remaining;
+
     @Schema(description = "命中人员明细")
     private List<User> users;
 

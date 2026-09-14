@@ -48,7 +48,12 @@ public class ClassStudentServiceImpl {
     private DeptApi deptApi;
 
     /**
-     * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选
+     * 单个培训班在班学员上限（随机收录 / 手动添加 / Excel 导入 / 按参与对象筛选统一受限）
+     */
+    public static final Integer MAX_STUDENT_SIZE = 50;
+
+    /**
+     * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选 4 随机收录
      */
     private static final Integer SOURCE_MANUAL = 1;
     private static final Integer SOURCE_IMPORT = 2;
@@ -76,12 +81,19 @@ public class ClassStudentServiceImpl {
         List<ClassStudentDO> all = classStudentMapper.selectListByClassId(reqVO.getClassId(), null);
         Map<Long, ClassStudentDO> userIndex = all.stream()
                 .collect(Collectors.toMap(ClassStudentDO::getUserId, item -> item, (a, b) -> a));
+        // 在班学员上限校验：超出上限则整体失败回滚，避免班级规模失控（恢复在班的学员同样占用名额）
+        int inClassCount = (int) userIndex.values().stream()
+                .filter(item -> Objects.equals(item.getStatus(), 0)).count();
         int added = 0;
         for (Long userId : reqVO.getUserIds()) {
             AdminUserRespDTO user = userMap.get(userId);
             ClassStudentDO exist = userIndex.get(userId);
             if (exist != null && Objects.equals(exist.getStatus(), 0)) {
                 continue; // 已在班，幂等跳过
+            }
+            if (inClassCount + added >= MAX_STUDENT_SIZE) {
+                throw exception(PLAN_STUDENT_LIMIT_EXCEEDED, MAX_STUDENT_SIZE, inClassCount,
+                        MAX_STUDENT_SIZE - inClassCount);
             }
             if (exist != null && Objects.equals(exist.getStatus(), 1)) {
                 // 曾被移除 → 恢复在班，并重新生成学习任务；同步刷新姓名/部门/来源快照

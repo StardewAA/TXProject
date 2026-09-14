@@ -9,6 +9,7 @@ import { downloadFileFromBlobPart, handleTree } from '@vben/utils';
 import {
   Button,
   Input,
+  InputNumber,
   message,
   Modal,
   Popconfirm,
@@ -33,6 +34,7 @@ import {
   getStudentImportTemplate,
   importClassStudents,
   previewClassScope,
+  randomAddClassStudents,
   removeClassStudent,
 } from './api';
 import ClassBar from './class-bar.vue';
@@ -310,6 +312,70 @@ async function handleAddByScope() {
   }
 }
 
+// ========== 随机收录人员（按参与对象条件随机抽取；在班学员上限 50 人） ==========
+/** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
+const CLASS_MAX_STUDENT = 50;
+const randomVisible = ref(false);
+const randomDeptIds = ref<number[]>([]);
+const randomPostIds = ref<number[]>([]);
+const randomIncludeChildDept = ref(true);
+const randomCount = ref<number>(1);
+const randomLoading = ref(false);
+const randomResult = ref<TrainingPlanApi.ClassStudentRandomAddResult>();
+const randomColumns = [
+  { title: '学员姓名', dataIndex: 'nickname', key: 'nickname', width: 140 },
+  { title: '部门/班组', dataIndex: 'deptName', key: 'deptName' },
+];
+
+/** 当前在班人数（用于展示「在班 X/50」与剩余名额） */
+const inClassTotalCount = computed(() => activeUserIds.value.size);
+/** 剩余可收录名额 */
+const remainingQuota = computed(() =>
+  Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value),
+);
+
+/** 打开随机收录弹窗：默认回显培训班配置条件，随机人数默认填满剩余名额 */
+async function openRandomModal() {
+  const scope = parseTargetCondition(currentClass.value?.targetCondition);
+  randomDeptIds.value = scope.deptIds;
+  randomPostIds.value = scope.postIds;
+  randomIncludeChildDept.value = scope.includeChildDept;
+  randomCount.value = remainingQuota.value > 0 ? remainingQuota.value : 1;
+  randomResult.value = undefined;
+  randomVisible.value = true;
+  await loadScopeOptions();
+}
+
+async function handleRandomAdd() {
+  const classId = currentClass.value?.id;
+  if (!classId) {
+    return;
+  }
+  if (randomDeptIds.value.length === 0 && randomPostIds.value.length === 0) {
+    message.warning('请先选择参训部门或参训岗位');
+    return;
+  }
+  randomLoading.value = true;
+  try {
+    const result = await randomAddClassStudents({
+      classId,
+      deptIds: randomDeptIds.value,
+      includeChildDept: randomIncludeChildDept.value,
+      postIds: randomPostIds.value,
+      count: randomCount.value,
+    });
+    randomResult.value = result;
+    message.success(
+      `已随机收录 ${result?.addedCount ?? 0} 名学员（在班 ${
+        result?.inClassCount ?? 0
+      }/${result?.maxSize ?? CLASS_MAX_STUDENT} 人）`,
+    );
+    await Promise.all([loadStudents(), loadActiveIds()]);
+  } finally {
+    randomLoading.value = false;
+  }
+}
+
 // ========== 表格列 ==========
 const columns = [
   { title: '学员姓名', dataIndex: 'userName', key: 'userName', width: 140 },
@@ -337,6 +403,15 @@ const columns = [
         <Button :disabled="!writable" @click="openScopeModal">
           按参与对象筛选加入
         </Button>
+        <Button
+          :disabled="!writable || remainingQuota === 0"
+          @click="openRandomModal"
+        >
+          随机收录人员
+        </Button>
+        <Tag :color="remainingQuota === 0 ? 'red' : 'blue'">
+          在班 {{ inClassTotalCount }}/{{ CLASS_MAX_STUDENT }}
+        </Tag>
         <Input
           v-model:value="query.userName"
           allow-clear
@@ -373,6 +448,7 @@ const columns = [
           <template v-if="column.key === 'source'">
             <Tag v-if="record.source === 2" color="processing">批量导入</Tag>
             <Tag v-else-if="record.source === 3" color="success">按对象筛选</Tag>
+            <Tag v-else-if="record.source === 4" color="warning">随机收录</Tag>
             <Tag v-else>手动添加</Tag>
           </template>
           <template v-if="column.key === 'action'">
@@ -536,7 +612,11 @@ const columns = [
       <div v-if="scopePreview" class="mb-2 text-xs text-gray-600">
         命中 {{ scopePreview.matchedCount ?? 0 }} 人，其中已在班
         {{ scopePreview.inClassCount ?? 0 }} 人，可加入
-        {{ scopePreview.addableCount ?? 0 }} 人
+        {{ scopePreview.addableCount ?? 0 }} 人；培训班在班
+        {{ scopePreview.inClassTotal ?? 0 }}/{{
+          scopePreview.maxSize ?? CLASS_MAX_STUDENT
+        }}
+        人，剩余名额 {{ scopePreview.remaining ?? 0 }} 人
       </div>
       <Table
         :columns="scopeColumns"
@@ -564,6 +644,96 @@ const columns = [
           >
             确认加入
           </Button>
+        </Space>
+      </div>
+    </Modal>
+
+    <!-- 随机收录人员弹窗 -->
+    <Modal
+      v-model:open="randomVisible"
+      title="随机收录参与人员"
+      :footer="null"
+      width="720px"
+    >
+      <div class="mb-3 rounded bg-gray-50 p-2 text-xs text-gray-500">
+        <p>
+          1. 按<strong>部门</strong> /
+          <strong>岗位</strong>限定收录范围（默认取「培训班管理」中配置的参训部门、参训岗位），系统从符合条件且未在班的人员中<strong>随机抽取</strong>。
+        </p>
+        <p>
+          2. 单个培训班在班学员上限
+          <strong>{{ CLASS_MAX_STUDENT }}</strong> 人，当前在班
+          <strong>{{ inClassTotalCount }}</strong> 人，剩余名额
+          <strong>{{ remainingQuota }}</strong> 人；随机人数超过剩余名额时按剩余名额收录。
+        </p>
+      </div>
+      <Space class="mb-3" wrap>
+        <TreeSelect
+          v-model:value="randomDeptIds"
+          :tree-data="deptTree"
+          :field-names="{ label: 'name', value: 'id', children: 'children' }"
+          :max-tag-count="2"
+          allow-clear
+          multiple
+          placeholder="按部门圈选（可多选）"
+          style="min-width: 240px"
+          tree-checkable
+        />
+        <span class="text-xs text-gray-600">包含下级部门</span>
+        <Switch v-model:checked="randomIncludeChildDept" size="small" />
+        <Select
+          v-model:value="randomPostIds"
+          :max-tag-count="2"
+          :options="postOptions"
+          allow-clear
+          mode="multiple"
+          option-filter-prop="label"
+          placeholder="按岗位圈选（可多选）"
+          show-search
+          style="min-width: 200px"
+        />
+        <span class="text-xs text-gray-600">随机人数</span>
+        <InputNumber
+          v-model:value="randomCount"
+          :max="remainingQuota > 0 ? remainingQuota : 1"
+          :min="1"
+          :precision="0"
+          style="width: 110px"
+        />
+        <Button
+          :disabled="remainingQuota === 0"
+          :loading="randomLoading"
+          type="primary"
+          @click="handleRandomAdd"
+        >
+          开始随机收录
+        </Button>
+      </Space>
+      <div v-if="randomResult" class="mt-2">
+        <div class="mb-2 text-xs text-gray-600">
+          本次随机收录
+          <strong>{{ randomResult.addedCount ?? 0 }}</strong> 人（命中
+          {{ randomResult.matchedCount ?? 0 }} 人、可收录
+          {{ randomResult.addableCount ?? 0 }} 人），收录后在班
+          {{ randomResult.inClassCount ?? 0 }}/{{
+            randomResult.maxSize ?? CLASS_MAX_STUDENT
+          }} 人
+        </div>
+        <Table
+          :columns="randomColumns"
+          :data-source="randomResult.users ?? []"
+          :pagination="false"
+          :scroll="{ y: 240 }"
+          row-key="userId"
+          size="small"
+        />
+      </div>
+      <div v-else class="mt-2 text-xs text-gray-400">
+        点击「开始随机收录」后，本次随机抽取的名单将在此展示（已在班学员不会重复收录）。
+      </div>
+      <div class="mt-3 text-right">
+        <Space>
+          <Button @click="randomVisible = false">完成</Button>
         </Space>
       </div>
     </Modal>

@@ -7,6 +7,8 @@ import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentAddR
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportExcelVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentPageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopePreviewRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopeReqVO;
@@ -60,6 +62,13 @@ public class PlanClassStudentController {
     @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
     public CommonResult<Integer> addStudentsByScope(@Valid @RequestBody ClassStudentScopeReqVO reqVO) {
         return success(classStudentScopeService.addStudentsByScope(reqVO));
+    }
+
+    @PostMapping("/random-add")
+    @Operation(summary = "随机收录学员（按参与对象筛选条件随机抽取人员入班；单个培训班在班学员上限 50 人）")
+    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
+    public CommonResult<ClassStudentRandomAddRespVO> randomAddStudents(@Valid @RequestBody ClassStudentRandomAddReqVO reqVO) {
+        return success(classStudentScopeService.randomAddStudents(reqVO));
     }
 
     @DeleteMapping("/remove")
