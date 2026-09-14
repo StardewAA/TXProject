@@ -59,12 +59,12 @@ const groups: TableGroup[] = [
 </template>
 
 <style>
-/* 四张公告表共享线稿样式（前缀 tbl4，注意组件外唯一） */
+/* 四张公告表共享样式（前缀 tbl4，注意组件外唯一）—— 配色走平台主题 token */
 .tbl4 { display: flex; flex-direction: column; gap: 10px; }
-.tbl4-sec { border: 1px solid #e4e7ea; background: #fbfcfc; padding: 10px 12px 2px; }
-.tbl4-sec-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #eceff1; padding-bottom: 6px; }
-.tbl4-sec-t { font-size: 14px; font-weight: 700; color: #303a46; }
-.tbl4-sec-hint { font-size: 12.5px; color: #8a949e; }
+.tbl4-sec { padding: 10px 12px 2px; background: hsl(var(--muted) / 30%); border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
+.tbl4-sec-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 6px; }
+.tbl4-sec-t { font-size: 14px; font-weight: 600; color: hsl(var(--foreground)); }
+.tbl4-sec-hint { font-size: 12.5px; color: hsl(var(--muted-foreground)); }
 .tbl4-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 11px; padding-bottom: 8px; }
 .tbl4-grid > .pc-cell.pc-wide { grid-column: 1 / -1; }
 </style>

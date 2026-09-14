@@ -461,32 +461,32 @@ function fmtBytes(n: number | undefined): string {
 </template>
 
 <style scoped>
-.tc-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 10px 2px; }
-.tc-prod { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1.5px solid var(--ind-line, #d8dde3); border-radius: 3px; margin-bottom: 6px; background: #fff; font-size: 13px; }
-.tc-prod-title { flex: 1; min-width: 0; font-weight: 600; color: var(--ind-ink-text, #1f2937); }
+.tc-hint { color: hsl(var(--muted-foreground)); font-size: 13px; padding: 10px 2px; }
+.tc-prod { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid hsl(var(--border)); border-radius: var(--radius); margin-bottom: 6px; background: hsl(var(--card)); font-size: 13px; }
+.tc-prod-title { flex: 1; min-width: 0; font-weight: 600; color: hsl(var(--foreground)); }
 .tc-prod-tags { display: flex; gap: 4px; flex: none; }
-.tc-prod-go { flex: none; font-weight: 700; }
+.tc-prod-go { flex: none; font-weight: 600; }
 .tc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.tc-head-id { font-size: 16px; font-weight: 800; color: var(--ind-ink-text, #1f2937); }
+.tc-head-id { font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
 .tc-ops { margin-left: auto; }
 /* 段容器复用工作台线稿面板（bid-indust.css 全局 .bid-ind .ind-panel 家族）：
  *   边框/纸面/圆角由 .ind-panel 提供，段头底纹与内边距由 .ind-panel-h / .ind-panel-b 提供，
  *   这里只保留段间距与段头排版，避免自有样式与全局面板样式分叉（任务详情与批次详情/抽屉面板同观感）。 */
 .tc-step { margin-bottom: 10px; }
-.tc-step-t { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; color: var(--ind-ink-text, #1f2937); }
+.tc-step-t { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: hsl(var(--foreground)); }
 .tc-kv { display: flex; gap: 10px; padding: 3px 0; font-size: 13px; }
-.tc-k { flex-shrink: 0; width: 108px; color: var(--ind-weak-text, #6b7280); }
+.tc-k { flex-shrink: 0; width: 108px; color: hsl(var(--muted-foreground)); }
 .tc-v { min-width: 0; }
-.tc-sub { color: #94a3b8; font-size: 12px; margin-left: 8px; }
+.tc-sub { color: hsl(var(--muted-foreground)); font-size: 12px; margin-left: 8px; }
 .tc-apitxt { display: block; white-space: pre-wrap; word-break: break-all; }
-.tc-blob { background: #0b1220; color: #d1e4ff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: 4px; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+.tc-blob { background: hsl(var(--muted)); color: hsl(var(--foreground)); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: var(--radius); max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
 .pv-blob { max-height: none; border-radius: 0; }
-.tc-blob-empty { border: 1px dashed #cbd5e1; border-radius: 4px; padding: 16px; color: #94a3b8; font-size: 12.5px; background: #f8fafc; }
-.tc-act { color: #2563eb; font-size: 12px; margin-left: auto; text-decoration: none; }
+.tc-blob-empty { border: 1px dashed hsl(var(--border)); border-radius: var(--radius); padding: 16px; color: hsl(var(--muted-foreground)); font-size: 12.5px; background: hsl(var(--muted) / 40%); }
+.tc-act { color: hsl(var(--primary)); font-size: 12px; margin-left: auto; text-decoration: none; }
 .tc-act + .tc-act { margin-left: 6px; }
 .tc-batch { display: flex; flex-direction: column; gap: 2px; }
 /* 同批任务行改用统一任务条样式（../taskbar.css 的 .fp-tbl） */
-.pv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: #fff; z-index: 1; }
+.pv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); position: sticky; top: 0; background: hsl(var(--card)); z-index: 1; }
 .pv-sel { width: 260px; }
 .d-block { display: block; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }

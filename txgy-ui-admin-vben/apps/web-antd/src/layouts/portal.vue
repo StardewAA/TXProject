@@ -24,6 +24,9 @@ const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
 );
 
+/** 招投标域（含 project 子页）跟随平台主题（深浅色自适应）；其余门户页为固定浅色设计，锁定浅色避免脱节。 */
+const isBidding = computed(() => route.path.startsWith('/portal/bidding'));
+
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(`${path}/`);
 }
@@ -34,7 +37,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="portal-shell">
+  <div class="portal-shell" :class="{ 'portal-light': !isBidding }">
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
         <span class="portal-brand-mark">防</span>
@@ -72,8 +75,23 @@ async function handleLogout() {
 <style scoped>
 .portal-shell {
   min-height: 100vh;
-  background: #f4f6f8;
-  color: #1f2937;
+  background: hsl(var(--background-deep));
+  color: hsl(var(--foreground));
+}
+
+/* 非招投标门户页（首页/招聘/培训/个人中心）为固定浅色设计：锁定浅色主题变量，
+   避免深色模式下外壳变深、与页面自身浅色内容脱节；招投标域（/portal/bidding）不锁定、跟随平台主题。 */
+.portal-light {
+  --background: 0 0% 100%;
+  --background-deep: 216 20.11% 95.47%;
+  --foreground: 210 6% 21%;
+  --card: 0 0% 100%;
+  --border: 240 5.9% 90%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --primary: 212 100% 45%;
+  --primary-foreground: 0 0% 98%;
+  --destructive: 359.33 100% 65.1%;
 }
 
 .portal-header {
@@ -81,8 +99,8 @@ async function handleLogout() {
   align-items: center;
   min-height: 64px;
   padding: 0 36px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   gap: 32px;
 }
 
@@ -91,7 +109,7 @@ async function handleLogout() {
   align-items: center;
   flex-shrink: 0;
   gap: 10px;
-  color: #111827;
+  color: hsl(var(--foreground));
   cursor: pointer;
   font-size: 16px;
   font-weight: 650;
@@ -104,8 +122,8 @@ async function handleLogout() {
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  background: #2563eb;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   font-size: 16px;
   font-weight: 700;
 }
@@ -124,7 +142,7 @@ async function handleLogout() {
   padding: 0 14px;
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-size: 14px;
   white-space: nowrap;
@@ -132,7 +150,7 @@ async function handleLogout() {
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: #1d4ed8;
+  color: hsl(var(--primary));
 }
 
 .portal-nav button.active::after {
@@ -141,7 +159,7 @@ async function handleLogout() {
   bottom: 0;
   left: 14px;
   height: 2px;
-  background: #2563eb;
+  background: hsl(var(--primary));
   content: '';
 }
 
@@ -154,20 +172,20 @@ async function handleLogout() {
 }
 
 .portal-user-name {
-  color: #374151;
+  color: hsl(var(--foreground));
   font-size: 14px;
 }
 
 .portal-logout {
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-size: 13px;
 }
 
 .portal-logout:hover {
-  color: #dc2626;
+  color: hsl(var(--destructive));
 }
 
 .portal-main {
@@ -179,7 +197,7 @@ async function handleLogout() {
 
 .portal-footer {
   padding: 20px 24px;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
   text-align: center;
 }

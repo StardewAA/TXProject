@@ -308,7 +308,7 @@ defineExpose({ openSource });
 .sd-muted { font-weight: 500; font-size: 12px; color: var(--ind-weak-text, #6b7280); }
 .sd-hint { color: var(--ind-weak-text, #6b7280); font-size: 13px; padding: 12px 4px; }
 .sd-urls { display: flex; flex-direction: column; gap: 4px; }
-.sd-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: #f6f8fa; border: 1px solid #e5e7eb; padding: 4px 8px; border-radius: 4px; }
+.sd-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: hsl(var(--muted) / 50%); border: 1px solid hsl(var(--border)); padding: 4px 8px; border-radius: 4px; }
 /* 批次行与批内任务行均已改用统一任务条样式（../../taskbar.css 的 .fp-tbl） */
-.sd-json { background: #0b1220; color: #d1e4ff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: 4px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+.sd-json { background: hsl(var(--muted)); color: hsl(var(--foreground)); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: var(--radius); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
 </style>

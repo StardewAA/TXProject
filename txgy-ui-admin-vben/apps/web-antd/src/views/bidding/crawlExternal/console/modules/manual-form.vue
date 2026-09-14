@@ -176,22 +176,22 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal title="手动录入（生成测试任务）" class="w-2/3 bid-ind">
-    <div class="mb-2 text-xs text-gray-500">
+    <div class="mb-2 text-xs text-muted-foreground">
       粘贴 HTML/JSON 源代码，或上传文件（.html/.htm/.json/.pdf）。提交后走真实下载→解析管线，
       结果即刻生成一条“测试任务”任务条：源（原文）· 提取内容 · 渲染内容 · 过程。
     </div>
     <div class="mb-3 flex items-center gap-2">
-      <span class="text-sm text-gray-600">输入口径：</span>
+      <span class="text-sm text-muted-foreground">输入口径：</span>
       <Radio.Group v-model:value="inputType" :options="[{ label: 'HTML 源代码', value: 'HTML' }, { label: 'JSON 原文', value: 'JSON' }, { label: '上传文件', value: 'FILE' }]" option-type="button" />
     </div>
 
     <div v-if="inputType !== 'FILE'" class="mb-2">
-      <div class="mb-1 text-xs font-medium text-gray-600">源代码 / 原文内容</div>
+      <div class="mb-1 text-xs font-medium text-muted-foreground">源代码 / 原文内容</div>
       <Input.TextArea v-model:value="content" :rows="8" placeholder="将浏览器“查看源代码”全选复制粘贴于此，或粘贴页面接口返回的 JSON 原文…" />
     </div>
 
     <div v-else class="mb-2">
-      <div class="mb-1 text-xs font-medium text-gray-600">上传文件（PDF/HTML/JSON）</div>
+      <div class="mb-1 text-xs font-medium text-muted-foreground">上传文件（PDF/HTML/JSON）</div>
       <Upload.Dragger :max-count="1" accept=".html,.htm,.json,.pdf" :before-upload="(f: File) => { file = f; return false; }" :file-list="[]">
         <p class="ant-upload-text">{{ file ? `${file.name }（${ file.size } 字节）` : '点击或拖拽文件到此处' }}</p>
         <p class="ant-upload-hint">PDF 需含文字层（扫描件将解析失败并如实标记）；HTML/JSON 文件同文本口径。</p>
@@ -200,7 +200,7 @@ const [Modal, modalApi] = useVbenModal({
 
     <div class="grid grid-cols-2 gap-3">
       <div>
-        <div class="mb-1 text-xs font-medium text-gray-600">解析器</div>
+        <div class="mb-1 text-xs font-medium text-muted-foreground">解析器</div>
         <Select
           v-model:value="parserCode"
           :options="parserCodeOptions"
@@ -210,19 +210,19 @@ const [Modal, modalApi] = useVbenModal({
           allow-clear
           style="width: 100%"
         />
-        <div v-if="usingFallbackCatalog" class="mt-1 text-[11px] leading-4 text-amber-700">
+        <div v-if="usingFallbackCatalog" class="mt-1 text-[11px] leading-4 text-amber-600 dark:text-amber-400">
           解析器清单接口不可用，当前为内置清单（{{ PARSER_FALLBACK.length }} 个）；如站点已新增解析器，请检查账号权限 bidding:crawl-source:query。
         </div>
-        <div v-else class="mt-1 text-[11px] leading-4 text-gray-400">
+        <div v-else class="mt-1 text-[11px] leading-4 text-muted-foreground">
           共 {{ parserCatalog.length }} 个解析器；与当前口径不匹配的项已置灰。
         </div>
       </div>
       <div>
-        <div class="mb-1 text-xs font-medium text-gray-600">归属信息源（可选，MANUAL 直测）</div>
+        <div class="mb-1 text-xs font-medium text-muted-foreground">归属信息源（可选，MANUAL 直测）</div>
         <Select v-model:value="sourceCode" :options="props.sourceOptions || []" placeholder="不选=手动直测，不入源" allow-clear style="width: 100%" />
       </div>
       <div class="col-span-2">
-        <div class="mb-1 text-xs font-medium text-gray-600">来源页 URL（可选，用于附件相对链接绝对化与站点上下文提示）</div>
+        <div class="mb-1 text-xs font-medium text-muted-foreground">来源页 URL（可选，用于附件相对链接绝对化与站点上下文提示）</div>
         <Input v-model:value="url" placeholder="https://…" allow-clear />
       </div>
     </div>

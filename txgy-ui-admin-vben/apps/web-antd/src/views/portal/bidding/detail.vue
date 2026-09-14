@@ -527,14 +527,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail-page {
-  background: #f3f5f7;
+  background: hsl(var(--background-deep));
   min-height: 100%;
   padding: 0 0 30px;
 }
 .err-banner {
-  background: #fef2f0;
-  border-bottom: 1px solid #f2b8b0;
-  color: #b42318;
+  background: hsl(var(--destructive) / 8%);
+  border-bottom: 1px solid hsl(var(--destructive) / 35%);
+  color: hsl(var(--destructive));
   font-size: 12.5px;
   padding: 8px 22px;
 }
@@ -543,32 +543,32 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 14px;
   padding: 10px 22px;
-  background: #fff;
-  border-bottom: 1px solid #e2e6eb;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
 }
 .back {
   font-size: 13px;
-  color: #17539a;
+  color: hsl(var(--primary));
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid #c4d7ec;
-  background: #eef4fb;
+  border: 1px solid hsl(var(--primary) / 30%);
+  background: hsl(var(--primary) / 8%);
   border-radius: 4px;
   padding: 4px 12px;
 }
 .back:hover {
-  background: #e2ecf8;
+  background: hsl(var(--primary) / 15%);
 }
 .sep {
-  color: #cfd6dd;
+  color: hsl(var(--border));
 }
 .crumb {
   font-size: 12.5px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .head-card {
-  background: #fff;
-  border-bottom: 1px solid #e2e6eb;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
   padding: 14px 22px;
 }
 .tags {
@@ -582,27 +582,27 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   font-size: 11.5px;
   line-height: 1.7;
-  background: #e6eef8;
-  color: #174a86;
+  background: hsl(var(--primary) / 8%);
+  color: hsl(var(--primary));
 }
 .head-card h1 {
   margin: 8px 0 10px;
   font-size: 19px;
   line-height: 1.5;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .meta {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 22px;
   font-size: 12.5px;
-  color: #44505c;
-  border-top: 1px solid #eceff3;
+  color: hsl(var(--muted-foreground));
+  border-top: 1px solid hsl(var(--border));
   padding-top: 9px;
 }
 .meta b {
   font-weight: 400;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   margin-right: 4px;
 }
 .body-area {
@@ -611,21 +611,21 @@ onBeforeUnmount(() => {
 .sec {
   font-size: 14px;
   margin: 0 0 8px;
-  color: #1e2832;
+  color: hsl(var(--foreground));
   padding-left: 8px;
-  border-left: 3px solid #17539a;
+  border-left: 3px solid hsl(var(--primary));
 }
 /* ===== 公文渲染容器：正文样式 ===== */
 .docx {
-  background: #fff;
-  border: 1px solid #d9d3c4;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   width: min(900px, 100%);
   margin: 0 auto;
   padding: 56px 80px 50px;
   font-family: '仿宋_GB2312', 'FangSong_GB2312', '仿宋', 'FangSong', 'STFangsong', '华文仿宋', 'SimSun', serif;
   font-size: 18px;
   line-height: 2;
-  color: #1c1c1c;
+  color: hsl(var(--foreground));
 }
 .docx :deep(h1),
 .docx :deep(h2),
@@ -635,7 +635,7 @@ onBeforeUnmount(() => {
 .docx :deep(h6) {
   font-family: '黑体', 'SimHei', 'Microsoft YaHei', sans-serif;
   font-weight: 700;
-  color: #161616;
+  color: hsl(var(--foreground));
   margin: 24px 0 2px;
   line-height: 1.8;
 }
@@ -675,7 +675,7 @@ onBeforeUnmount(() => {
 }
 .docx :deep(th),
 .docx :deep(td) {
-  border: 1px solid #333;
+  border: 1px solid hsl(var(--border));
   padding: 5px 12px;
   text-align: center;
   font-family: inherit;
@@ -683,7 +683,7 @@ onBeforeUnmount(() => {
 .docx :deep(th) {
   font-family: '黑体', 'SimHei', sans-serif;
   font-weight: 700;
-  background: #f7f5ef;
+  background: hsl(var(--muted) / 60%);
 }
 .docx :deep(img) {
   max-width: 100%;
@@ -696,12 +696,12 @@ onBeforeUnmount(() => {
   padding-left: 3em;
 }
 .docx :deep(a) {
-  color: #17539a;
+  color: hsl(var(--primary));
 }
 /* ===== PDF 组件 ===== */
 .pdf-panel {
-  background: #fff;
-  border: 1px solid #d9dfe5;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 4px;
 }
 .pdf-frame-wrap {
@@ -715,24 +715,24 @@ onBeforeUnmount(() => {
 .pdf-empty {
   padding: 60px 20px;
   text-align: center;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
 .pdf-empty .sub {
   margin-top: 6px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 /* ===== 仅简略信息 ===== */
 .slim-box {
-  background: #fff;
-  border: 1px solid #f0dcb8;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--warning) / 40%);
   border-radius: 6px;
   padding: 28px 24px;
   text-align: center;
 }
 .slim-box p {
-  color: #8a5a00;
+  color: var(--ind-warn);
   font-size: 13.5px;
   margin: 0 0 16px;
 }
@@ -743,13 +743,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  background: #17539a;
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
 }
 /* ===== 下载区：仅下划线文字 ===== */
 .dl-card {
-  background: #fff;
-  border: 1px solid #e0e4e9;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   padding: 2px 14px;
 }
@@ -758,7 +758,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 18px;
   padding: 9px 2px;
-  border-bottom: 1px solid #eceff3;
+  border-bottom: 1px solid hsl(var(--border));
   font-size: 13px;
 }
 .dl-row:last-child {
@@ -766,55 +766,55 @@ onBeforeUnmount(() => {
 }
 .fn {
   font-weight: 600;
-  color: #1e2832;
+  color: hsl(var(--foreground));
 }
 .fs {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 .st {
   font-size: 12px;
-  color: #176b44;
+  color: var(--ind-ok);
 }
 .st.bad {
-  color: #b42318;
+  color: hsl(var(--destructive));
 }
 .spacer {
   flex: 1;
 }
 .dl-link {
-  color: #17539a;
+  color: hsl(var(--primary));
   text-decoration: underline;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 .dl-link.dim {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   cursor: not-allowed;
 }
 .blocked {
-  color: #b42318;
+  color: hsl(var(--destructive));
   font-size: 12px;
 }
 .foot-note {
   margin: 4px 22px 0;
   font-size: 11.5px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .state-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   padding: 60px 20px;
   text-align: center;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
   font-size: 13.5px;
   margin: 40px auto;
   max-width: 560px;
 }
 .state-card .err {
-  color: #b42318;
+  color: hsl(var(--destructive));
 }
 .state-card .back {
   margin-top: 14px;
@@ -857,9 +857,9 @@ onBeforeUnmount(() => {
   margin-top: 2px;
   font-size: 12.5px;
   font-weight: 700;
-  color: #17539a;
-  border: 1px solid #c4d7ec;
-  background: #eef4fb;
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 30%);
+  background: hsl(var(--primary) / 8%);
   border-radius: 4px;
   padding: 4px 12px;
   cursor: pointer;
@@ -867,24 +867,24 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .go-orig:hover {
-  background: #e2ecf8;
+  background: hsl(var(--primary) / 15%);
 }
 .go-orig.need {
   border-style: dashed;
-  color: #5f6b7a;
-  background: #fafbfc;
-  border-color: #d3dae1;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 40%);
+  border-color: hsl(var(--border));
 }
 .go-orig.need:hover {
-  background: #eef1f4;
+  background: hsl(var(--muted) / 60%);
 }
 .go-orig.ghost {
-  border: 1px solid #d3dae1;
-  background: #fff;
-  color: #5f6b7a;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
 }
 .go-orig.ghost:hover {
-  background: #f3f5f7;
+  background: hsl(var(--background-deep));
 }
 
 
@@ -896,9 +896,9 @@ onBeforeUnmount(() => {
   flex: none;
 }
 .go-orig.active {
-  background: #e5f2ea;
-  border-color: #a9d6bd;
-  color: #176b44;
+  background: hsl(var(--success) / 12%);
+  border-color: hsl(var(--success) / 45%);
+  color: var(--ind-ok);
 }
 .go-orig:disabled {
   opacity: 0.6;
@@ -907,7 +907,7 @@ onBeforeUnmount(() => {
 .follow-note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .track-row.secs {
   align-items: flex-start;
@@ -932,16 +932,16 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed #e3e8ee;
+  border-top: 1px dashed hsl(var(--border));
   font-size: 12.5px;
-  color: #44505c;
+  color: hsl(var(--muted-foreground));
 }
 .track-label {
-  color: #5f6b7a;
+  color: hsl(var(--muted-foreground));
 }
 .track-key {
   font-weight: 700;
-  color: #17539a;
+  color: hsl(var(--primary));
   font-family: Consolas, Menlo, monospace;
 }
 

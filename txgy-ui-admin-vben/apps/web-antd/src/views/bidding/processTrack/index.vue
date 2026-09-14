@@ -373,7 +373,7 @@ onMounted(() => {
 
     <!-- 列表 -->
     <Empty v-if="!tracks.length" description="还没有投标流程 — 点右上「新建意向」建档（可从我的关注选择或手动填写）" />
-    <div v-else-if="!filtered.length" class="rounded-md border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-400">
+    <div v-else-if="!filtered.length" class="rounded-md border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
       当前筛选条件下无记录
     </div>
     <article
@@ -385,23 +385,23 @@ onMounted(() => {
         <Tag :color="stateTag(t.currentState).color">{{ stateTag(t.currentState).text }}</Tag>
         <span class="it-title">{{ t.projectName }}</span>
         <Tag v-if="t.projectCode" class="font-mono text-xs">{{ t.projectCode }}</Tag>
-        <span v-if="t.issuerName" class="text-xs text-gray-400">{{ t.issuerName }}</span>
+        <span v-if="t.issuerName" class="text-xs text-muted-foreground">{{ t.issuerName }}</span>
         <span class="flex-1"></span>
         <!-- 行操作：按状态 -->
         <template v-if="t.currentState === 'INTENTION'">
-          <a class="text-xs text-blue-600" @click="openAct('register', t)">报名投标</a>
-          <a class="text-xs text-red-500" @click="openAct('cancel', t)">取消投标</a>
+          <a class="text-xs text-primary" @click="openAct('register', t)">报名投标</a>
+          <a class="text-xs text-destructive" @click="openAct('cancel', t)">取消投标</a>
         </template>
         <template v-else-if="t.currentState === 'QUALIFICATION_REVIEW'">
-          <a class="text-xs text-green-600" @click="openAct('review', t, 'APPROVED')">审核通过</a>
-          <a class="text-xs text-red-500" @click="openAct('review', t, 'REJECTED')">审核不通过</a>
+          <a class="text-xs text-emerald-600 dark:text-emerald-400" @click="openAct('review', t, 'APPROVED')">审核通过</a>
+          <a class="text-xs text-destructive" @click="openAct('review', t, 'REJECTED')">审核不通过</a>
         </template>
         <template v-else-if="t.currentState === 'PENDING_BID'">
-          <a class="text-xs text-blue-600" @click="openAct('upload', t)">上传标书</a>
-          <a class="text-xs text-red-500" @click="openAct('cancel', t)">取消投标</a>
+          <a class="text-xs text-primary" @click="openAct('upload', t)">上传标书</a>
+          <a class="text-xs text-destructive" @click="openAct('cancel', t)">取消投标</a>
         </template>
-        <a class="text-xs text-blue-600" @click="detailId = t.id; detailOpen = true">详情</a>
-        <a class="text-xs text-gray-400" @click="removeTrack(t)">删除</a>
+        <a class="text-xs text-primary" @click="detailId = t.id; detailOpen = true">详情</a>
+        <a class="text-xs text-muted-foreground" @click="removeTrack(t)">删除</a>
       </div>
       <div class="it-sub mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
         <span>意向：{{ fmtT(t.intentionTime) }}</span>
@@ -409,57 +409,57 @@ onMounted(() => {
         <span v-if="t.pendingBidTime">待投标：{{ fmtT(t.pendingBidTime) }}</span>
         <span v-if="t.biddedTime">已投标：{{ fmtT(t.biddedTime) }}</span>
         <span v-if="t.terminatedTime">结束：{{ fmtT(t.terminatedTime) }}</span>
-        <span v-if="t.events.length" class="truncate text-gray-300">最近：{{ EVENT_TEXT[t.events[0]!.eventType] }}</span>
+        <span v-if="t.events.length" class="truncate text-muted-foreground/60">最近：{{ EVENT_TEXT[t.events[0]!.eventType] }}</span>
       </div>
       <div v-if="t.currentState === 'QUALIFICATION_REVIEW' && t.reviewReason" class="mt-1 text-xs text-amber-600">审核说明：{{ t.reviewReason }}</div>
-      <div v-if="t.documentName" class="mt-1 text-xs text-gray-500">标书：{{ t.documentName }}{{ t.documentSize ? `（${ t.documentSize } KB）` : '' }}</div>
+      <div v-if="t.documentName" class="mt-1 text-xs text-muted-foreground">标书：{{ t.documentName }}{{ t.documentSize ? `（${ t.documentSize } KB）` : '' }}</div>
     </article>
 </div>
 
     <!-- 详情抽屉 -->
     <Drawer v-model:open="detailOpen" :title="detail ? detail.projectName : '流程详情'" :width="560">
       <template v-if="detail">
-        <div class="mb-2 text-xs text-gray-500">
+        <div class="mb-2 text-xs text-muted-foreground">
           <span v-if="detail.projectCode" class="mr-3 font-mono">{{ detail.projectCode }}</span>
           <span v-if="detail.issuerName">{{ detail.issuerName }}</span>
           <span v-if="detail.remark" class="ml-3">备注：{{ detail.remark }}</span>
         </div>
         <!-- 流程步骤 -->
-        <div class="mb-4 rounded-md border border-gray-100 p-3">
-          <div class="mb-2 text-xs font-semibold text-gray-500">流程进度</div>
+        <div class="mb-4 rounded-md border border-border p-3">
+          <div class="mb-2 text-xs font-semibold text-muted-foreground">流程进度</div>
           <div class="flex items-start">
             <template v-for="(s, i) in STEP_ORDER" :key="s">
               <div class="flex flex-1 flex-col items-center text-center">
                 <div
                   class="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white"
-                  :class="stepState(detail, i) === 'done' ? 'bg-green-500' : stepState(detail, i) === 'process' ? 'bg-blue-500' : 'bg-gray-200 text-gray-400'"
+                  :class="stepState(detail, i) === 'done' ? 'bg-emerald-500' : stepState(detail, i) === 'process' ? 'bg-primary' : 'bg-muted text-muted-foreground'"
                 >
                   {{ stepState(detail, i) === 'done' ? '✓' : i + 1 }}
                 </div>
-                <div class="mt-1 text-xs" :class="stepState(detail, i) === 'wait' ? 'text-gray-300' : 'text-gray-600'">{{ STATE_TEXT[s] }}</div>
-                <div class="mt-0.5 text-[11.5px] text-gray-400">
+                <div class="mt-1 text-xs" :class="stepState(detail, i) === 'wait' ? 'text-muted-foreground/60' : 'text-muted-foreground'">{{ STATE_TEXT[s] }}</div>
+                <div class="mt-0.5 text-[11.5px] text-muted-foreground">
                   {{ fmtT(i === 0 ? detail.intentionTime : i === 1 ? detail.registerTime : i === 2 ? detail.pendingBidTime : detail.biddedTime) }}
                 </div>
               </div>
-              <div v-if="i < STEP_ORDER.length - 1" class="mt-3 h-0.5 flex-1 rounded" :class="stepState(detail, i) === 'done' ? 'bg-green-400' : 'bg-gray-200'"></div>
+              <div v-if="i < STEP_ORDER.length - 1" class="mt-3 h-0.5 flex-1 rounded" :class="stepState(detail, i) === 'done' ? 'bg-emerald-500' : 'bg-muted'"></div>
             </template>
           </div>
-          <div v-if="detail.currentState === 'TERMINATED'" class="mt-2 text-center text-xs" :class="detail.reviewResult === 'REJECTED' ? 'text-red-500' : 'text-gray-400'">
+          <div v-if="detail.currentState === 'TERMINATED'" class="mt-2 text-center text-xs" :class="detail.reviewResult === 'REJECTED' ? 'text-destructive' : 'text-muted-foreground'">
             {{ detail.reviewResult === 'REJECTED' ? '审核不通过，流程结束' : '已取消投标' }}
             <span v-if="detail.reviewReason">：{{ detail.reviewReason }}</span>
           </div>
-          <div v-else-if="detail.currentState === 'QUALIFICATION_REVIEW'" class="mt-2 text-center text-xs text-orange-500">资质审核中 — 请手动标记审核结果</div>
+          <div v-else-if="detail.currentState === 'QUALIFICATION_REVIEW'" class="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">资质审核中 — 请手动标记审核结果</div>
         </div>
         <!-- 操作历史 -->
-        <div class="rounded-md border border-gray-100 p-3">
-          <div class="mb-2 text-xs font-semibold text-gray-500">操作历史（事件留痕）</div>
-          <div v-if="!detail.events.length" class="text-xs text-gray-300">暂无事件</div>
+        <div class="rounded-md border border-border p-3">
+          <div class="mb-2 text-xs font-semibold text-muted-foreground">操作历史（事件留痕）</div>
+          <div v-if="!detail.events.length" class="text-xs text-muted-foreground/60">暂无事件</div>
           <div v-for="(e, idx) in detail.events" :key="e.id" class="flex gap-3 py-1 text-xs">
-            <div class="w-32 shrink-0 text-gray-400">{{ fmtT(e.occurredAt) }}</div>
+            <div class="w-32 shrink-0 text-muted-foreground">{{ fmtT(e.occurredAt) }}</div>
             <div class="flex-1">
-              <span class="text-gray-700">{{ EVENT_TEXT[e.eventType] || e.eventType }}</span>
-              <span v-if="e.operationDesc" class="ml-2 text-gray-400">{{ e.operationDesc }}</span>
-              <div v-if="idx === 0 && detail.events.length > 1" class="text-[10px] text-gray-200">↑ 最新</div>
+              <span class="text-foreground">{{ EVENT_TEXT[e.eventType] || e.eventType }}</span>
+              <span v-if="e.operationDesc" class="ml-2 text-muted-foreground">{{ e.operationDesc }}</span>
+              <div v-if="idx === 0 && detail.events.length > 1" class="text-[10px] text-muted-foreground/60">↑ 最新</div>
             </div>
           </div>
         </div>
@@ -470,7 +470,7 @@ onMounted(() => {
     <Modal v-model:open="formOpen" title="新建意向（建档）" :footer="null" width="560">
       <div class="space-y-3">
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">从我的关注选择（可选，自动带入项目名/发布单位）</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">从我的关注选择（可选，自动带入项目名/发布单位）</div>
           <Select
             v-model:value="fFollowKey"
             placeholder="暂无关注时可跳过，直接手动填写下方信息"
@@ -484,20 +484,20 @@ onMounted(() => {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">项目名称 *</div>
+            <div class="mb-1 text-xs font-medium text-muted-foreground">项目名称 *</div>
             <Input v-model:value="fProjectName" placeholder="如：XX 光伏 EPC 总承包" />
           </div>
           <div>
-            <div class="mb-1 text-xs font-medium text-gray-600">项目编号（跟踪键）</div>
+            <div class="mb-1 text-xs font-medium text-muted-foreground">项目编号（跟踪键）</div>
             <Input v-model:value="fProjectCode" placeholder="如 DYZB2025-11-G141" />
           </div>
         </div>
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">发布单位</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">发布单位</div>
           <Input v-model:value="fIssuer" placeholder="手动填写（无招标方数据时）" />
         </div>
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">备注</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">备注</div>
           <Input.TextArea v-model:value="fRemark" :rows="2" placeholder="意向说明（可选）" />
         </div>
         <div class="text-right">
@@ -513,15 +513,15 @@ onMounted(() => {
     <Modal v-model:open="actOpen" :title="actTitle" :footer="null" width="480">
       <div class="space-y-3">
         <div v-if="actKind === 'review'" class="flex items-center gap-3">
-          <div class="text-xs font-medium text-gray-600">审核结果：</div>
+          <div class="text-xs font-medium text-muted-foreground">审核结果：</div>
           <Radio.Group v-model:value="actReviewResult" option-type="button" :options="[{ label: '审核通过', value: 'APPROVED' }, { label: '审核不通过', value: 'REJECTED' }]" />
         </div>
         <div v-if="actKind === 'upload'">
-          <div class="mb-1 text-xs font-medium text-gray-600">标书文件名 *（招标方未接入，先手动登记；FileApi 就绪后改上传）</div>
+          <div class="mb-1 text-xs font-medium text-muted-foreground">标书文件名 *（招标方未接入，先手动登记；FileApi 就绪后改上传）</div>
           <Input v-model:value="actDocName" placeholder="如 XX 项目投标文件.pdf" />
         </div>
         <div>
-          <div class="mb-1 text-xs font-medium text-gray-600">
+          <div class="mb-1 text-xs font-medium text-muted-foreground">
             {{ actKind === 'register' ? '备注' : actKind === 'upload' ? '备注' : actKind === 'cancel' ? '取消原因 *' : '审核说明 *' }}
           </div>
           <Input.TextArea v-model:value="actReason" :rows="2" :placeholder="actKind === 'cancel' ? '如 资质不满足/预算调整' : '如 资料齐全，通过 / 社保记录缺失，不通过'" />

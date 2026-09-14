@@ -509,8 +509,8 @@ onMounted(() => { load(); void fetchKpiCounts(); });
   <div class="bid-ind ind-page">
     <div class="ind-stripes"></div>
     <div v-if="inPortal" class="ind-backbar">
-      <a class="text-sm font-bold text-blue-700" href="#" @click.prevent="goBackHall()">‹ 返回本平台发布</a>
-      <span class="text-xs text-gray-400">门户 · 企业前台发布（当前登录租户自营公告）</span>
+      <a class="text-sm font-bold text-primary" href="#" @click.prevent="goBackHall()">‹ 返回本平台发布</a>
+      <span class="text-xs text-muted-foreground">门户 · 企业前台发布（当前登录租户自营公告）</span>
     </div>
 
     <!-- 页头：石墨墨色面板（沉稳基调）+ 主操作 -->
@@ -648,28 +648,28 @@ onMounted(() => { load(); void fetchKpiCounts(); });
           <div class="nw-sect-h"><span class="nw-sect-no">1</span>标题与辨识<span class="nw-sect-ast">* 为必填</span></div>
           <div class="grid grid-cols-2 gap-3">
             <div class="col-span-2">
-              <div class="mb-1 text-xs font-semibold text-gray-700">公告名称（标题）*</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">公告名称（标题）*</div>
               <Input v-model:value="form.title" placeholder="如 榆林炼油厂 2026 大修消缺项目施工招标公告" />
             </div>
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">公告类型 *</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">公告类型 *</div>
               <Select v-model:value="form.noticeType" style="width: 100%">
                 <Select.Option v-for="t in NoticeApi.NOTICE_TYPES" :key="t.code" :value="t.code">{{ t.label }}</Select.Option>
               </Select>
             </div>
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">发布单位</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">发布单位</div>
               <Input v-model:value="form.publisherName" placeholder="本企业名称快照（可留空由后端取）" />
             </div>
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">公开范围</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">公开范围</div>
               <Select v-model:value="form.publicLevel" style="width: 100%">
                 <Select.Option value="SOCIAL">社会公开（大厅可见）</Select.Option>
                 <Select.Option value="GOVERNMENT">政府公开</Select.Option>
               </Select>
             </div>
             <div class="flex items-end pb-1">
-              <div class="flex items-center gap-2 text-xs text-gray-600"><Switch v-model:checked="form.internalFlag" size="small" /> 企业内部公告（仅本租户可见，不进入大厅）</div>
+              <div class="flex items-center gap-2 text-xs text-muted-foreground"><Switch v-model:checked="form.internalFlag" size="small" /> 企业内部公告（仅本租户可见，不进入大厅）</div>
             </div>
           </div>
         </div>
@@ -682,7 +682,7 @@ onMounted(() => { load(); void fetchKpiCounts(); });
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">招标项目（TENDER_PROJECT_CODE）</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">招标项目（TENDER_PROJECT_CODE）</div>
               <Select
                 :value="payloadValues.TENDER_PROJECT_CODE || undefined"
                 class="w-full"
@@ -697,13 +697,13 @@ onMounted(() => { load(); void fetchKpiCounts(); });
               </Select>
             </div>
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">项目编号（表单字段 projectCode）</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">项目编号（表单字段 projectCode）</div>
               <Input v-model:value="form.projectCode" placeholder="随招标项目自动带出" />
             </div>
             <div class="col-span-2">
-              <div class="mb-1 text-xs font-semibold text-gray-700">
+              <div class="mb-1 text-xs font-semibold text-foreground">
                 相关标段（包）（BID_SECTION_CODES，多选，半角分号分隔）
-                <span class="ml-2 font-normal text-gray-400">公告标段（包）数量 NOTICE_BID_NUM 按选择个数自动写入</span>
+                <span class="ml-2 font-normal text-muted-foreground">公告标段（包）数量 NOTICE_BID_NUM 按选择个数自动写入</span>
               </div>
               <Select
                 mode="multiple"
@@ -716,9 +716,9 @@ onMounted(() => { load(); void fetchKpiCounts(); });
                   {{ bidSectionLabel(s) }}
                 </Select.Option>
               </Select>
-              <div class="mt-1 text-xs text-gray-500">
+              <div class="mt-1 text-xs text-muted-foreground">
                 已选 {{ selectedSectionCodes.length }} 个标段<template v-if="payloadValues.NOTICE_BID_NUM"> · NOTICE_BID_NUM={{ payloadValues.NOTICE_BID_NUM }}</template>
-                <span v-if="!chainTenderProjects.length" class="ml-2 text-orange-500">尚无招标项目草稿：请到「招投标业务链（VO 设计稿）」按 项目 → 招标项目 → 标段 顺序建立</span>
+                <span v-if="!chainTenderProjects.length" class="ml-2 text-amber-600 dark:text-amber-400">尚无招标项目草稿：请到「招投标业务链（VO 设计稿）」按 项目 → 招标项目 → 标段 顺序建立</span>
               </div>
             </div>
           </div>
@@ -729,19 +729,19 @@ onMounted(() => { load(); void fetchKpiCounts(); });
           <div class="nw-sect-h"><span class="nw-sect-no">3</span>正文与版式<span class="nw-sect-sub">发布前必填；实质变更自动追加版本</span></div>
           <div class="grid grid-cols-1 gap-3">
             <div>
-              <div class="mb-1 text-xs font-semibold text-gray-700">公告正文（全文）</div>
+              <div class="mb-1 text-xs font-semibold text-foreground">公告正文（全文）</div>
               <Input.TextArea v-model:value="form.content" :rows="6" placeholder="公告正文全文…" />
             </div>
             <div class="nw-pdf-row">
-              <div class="mb-1 flex flex-wrap items-center gap-3 text-xs font-semibold text-gray-700">
+              <div class="mb-1 flex flex-wrap items-center gap-3 text-xs font-semibold text-foreground">
                 <span>公告版式文件（PDF，发布前必填）— 文件服务上传，保存只带 file_id；URL 由业务系统按可见性签发</span>
                 <Upload :show-upload-list="false" accept=".pdf" :before-upload="onPdfBeforeUpload">
                   <Button size="small" :loading="pdfUploading">{{ form.pdfFileId !== undefined ? '重新上传 PDF' : '上传 PDF' }}</Button>
                 </Upload>
               </div>
-              <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-gray-500">
+              <div v-if="form.pdfFileId !== undefined || pdfFileName" class="text-xs text-muted-foreground">
                 file_id #{{ form.pdfFileId ?? '—' }}<template v-if="pdfFileName"> · {{ pdfFileName }}</template><template v-if="pdfSize"> · {{ fmtBytes(pdfSize) }}</template>
-                <span v-if="form.pdfFileId !== undefined" class="ml-2 text-orange-500">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
+                <span v-if="form.pdfFileId !== undefined" class="ml-2 text-amber-600 dark:text-amber-400">（{{ form.internalFlag || form.publicLevel === 'GOVERNMENT' ? '限定可见' : '社会公开公告可免费查阅' }}）</span>
                 <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="ml-2">查看已上传文件</a>
                 <Button
                   v-if="pdfUrl || form.pdfFileId !== undefined"
@@ -776,7 +776,7 @@ onMounted(() => { load(); void fetchKpiCounts(); });
             <ChangeNoticeTable v-else-if="form.noticeType === 'CHANGE_NOTICE'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
             <CandidatePublicityTable v-else-if="form.noticeType === 'WIN_CANDIDATE_PUBLICITY'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
             <ResultPublicityTable v-else-if="form.noticeType === 'WIN_RESULT_PUBLICITY'" :type-meta="currentTypeMeta" v-model:values="payloadValues" />
-            <div class="mt-2 text-xs text-gray-500">公告名称与正文已在上方第 1、3 节填写，保存时自动并入权威字段（NOTICE_NAME/NOTICE_CONTENT 等）；报送平台参数由系统/平台维护，不在表单中。</div>
+            <div class="mt-2 text-xs text-muted-foreground">公告名称与正文已在上方第 1、3 节填写，保存时自动并入权威字段（NOTICE_NAME/NOTICE_CONTENT 等）；报送平台参数由系统/平台维护，不在表单中。</div>
           </div>
         </div>
 
@@ -809,16 +809,16 @@ onMounted(() => { load(); void fetchKpiCounts(); });
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
           <Tag :color="statusTag(detail.status).color">{{ statusTag(detail.status).text }}</Tag>
           <Tag color="blue">{{ typeName(detail) }}</Tag>
-          <span class="text-gray-400">{{ detail.noticeCode }}</span>
-          <span class="text-gray-400">版本 v{{ detail.contentVersion ?? '—' }}</span>
+          <span class="text-muted-foreground">{{ detail.noticeCode }}</span>
+          <span class="text-muted-foreground">版本 v{{ detail.contentVersion ?? '—' }}</span>
         </div>
-        <div class="mb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+        <div class="mb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <div>项目：{{ detail.projectCode || '—' }} {{ detail.projectName || '' }}</div>
           <div>发布单位：{{ detail.publisherName || '—' }}</div>
           <div>发布时间：{{ fmtT(detail.publishTime) }}</div>
           <div>公开级别：{{ detail.publicLevel || '—' }}<span v-if="detail.internalFlag">（内部）</span></div>
         </div>
-        <div class="rounded-md border border-gray-100 p-3">
+        <div class="rounded-md border border-border p-3">
           <NoticeHtmlView :detail="detail" :show-head="false" />
         </div>
       </template>
@@ -839,22 +839,22 @@ onMounted(() => { load(); void fetchKpiCounts(); });
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   user-select: none;
 }
-.nw-kpi-tap:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(20, 28, 38, .1); }
+.nw-kpi-tap:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgb(0 0 0 / 8%); }
 .nw-kpi-tap.nw-kpi-on {
-  border-color: var(--ind-orange);
-  box-shadow: 0 0 0 1.5px var(--ind-orange) inset, 0 3px 10px rgba(232, 135, 30, .14);
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 1.5px hsl(var(--primary)) inset;
 }
-.nw-kpi-tap.nw-kpi-on .k-label { color: var(--ind-orange); }
-.nw-kpi-empty { padding: 8px 2px; font-size: 13px; color: var(--ind-weak-text); }
+.nw-kpi-tap.nw-kpi-on .k-label { color: hsl(var(--primary)); }
+.nw-kpi-empty { padding: 8px 2px; font-size: 13px; color: hsl(var(--muted-foreground)); }
 
 /* 栏目二 台账表壳：标题条 + 内联筛选 + 表格 + 表尾 */
 .nw-table-shell { margin-top: 14px; }
 .nw-shell-head {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 10px 14px; border-bottom: 1.5px solid var(--ind-line); background: #f4f5f7;
+  padding: 10px 14px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--muted) / 50%);
 }
-.nw-shell-title { font-size: 15px; font-weight: 800; color: var(--ind-ink-text); }
-.nw-shell-meta { margin-left: 10px; font-size: 12.5px; font-weight: 500; color: var(--ind-weak-text); }
+.nw-shell-title { font-size: 15px; font-weight: 600; color: hsl(var(--foreground)); }
+.nw-shell-meta { margin-left: 10px; font-size: 12.5px; font-weight: 400; color: hsl(var(--muted-foreground)); }
 .nw-inline-filter {
   margin-bottom: 0 !important; padding: 4px 6px !important;
   box-shadow: none !important; background: transparent !important;
@@ -866,44 +866,44 @@ onMounted(() => { load(); void fetchKpiCounts(); });
 .nw-title-cell { min-width: 260px; }
 .nw-title-text { font-weight: 600; color: var(--ind-ink-text); line-height: 1.45; }
 .nw-title-sub { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ind-weak-text); }
-.nw-title-sub .nw-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a93a0; }
-.nw-type-text { color: var(--ind-sub-text); font-weight: 500; }
-.nw-time { font-variant-numeric: tabular-nums; color: var(--ind-sub-text); }
-.nw-readonly { color: #b6bec7; font-size: 12.5px; }
+.nw-title-sub .nw-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: hsl(var(--muted-foreground)); }
+.nw-type-text { color: hsl(var(--muted-foreground)); font-weight: 400; }
+.nw-time { font-variant-numeric: tabular-nums; color: hsl(var(--muted-foreground)); }
+.nw-readonly { color: hsl(var(--muted-foreground) / 70%); font-size: 12.5px; }
 
 /* 行操作按钮保持紧凑 */
 .nw-act { padding: 0 6px !important; }
 .nw-act-primary { padding: 0 10px !important; }
-.nw-act-warn { padding: 0 6px !important; color: #d97706 !important; }
-.nw-act-warn:hover { color: #b45309 !important; }
+.nw-act-warn { padding: 0 6px !important; color: var(--ind-warn) !important; }
+.nw-act-warn:hover { color: var(--ind-warn) !important; opacity: .8; }
 
 /* 空态 */
 .nw-empty { padding: 34px 0 30px; text-align: center; }
-.nw-empty-title { font-size: 15px; font-weight: 700; color: #8a93a0; }
-.nw-empty-sub { margin-top: 6px; font-size: 12.5px; color: #b6bec7; }
+.nw-empty-title { font-size: 15px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.nw-empty-sub { margin-top: 6px; font-size: 12.5px; color: hsl(var(--muted-foreground) / 70%); }
 
 /* 表尾分页条 */
 .nw-pager {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-  padding: 10px 14px; border-top: 1.5px solid var(--ind-line); background: #fafbfc;
+  padding: 10px 14px; border-top: 1px solid hsl(var(--border)); background: hsl(var(--muted) / 40%);
 }
-.nw-pager-total { font-size: 12.5px; color: var(--ind-weak-text); }
-.nw-pager-total b { color: var(--ind-ink-text); font-variant-numeric: tabular-nums; }
+.nw-pager-total { font-size: 12.5px; color: hsl(var(--muted-foreground)); }
+.nw-pager-total b { color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
 .nw-pager-btns { display: flex; gap: 8px; }
 
 /* 弹窗分节表单 */
 .nw-modal-body { max-height: 72vh; overflow-y: auto; padding-right: 6px; }
-.nw-form-sect { margin-bottom: 16px; padding: 14px 14px 4px; border: 1.5px solid var(--ind-line-soft); border-left: 4px solid var(--ind-ink); border-radius: 3px; background: #fff; }
-.nw-sect-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; font-weight: 800; color: var(--ind-ink-text); }
+.nw-form-sect { margin-bottom: 16px; padding: 14px 14px 4px; border: 1px solid hsl(var(--border)); border-left: 3px solid hsl(var(--primary)); border-radius: var(--radius); background: hsl(var(--card)); }
+.nw-sect-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; font-weight: 600; color: hsl(var(--foreground)); }
 .nw-sect-no {
   display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-  background: var(--ind-ink); color: #fff; font-size: 11.5px; font-weight: 800; border-radius: 2px; letter-spacing: .5px;
+  background: hsl(var(--primary) / 10%); color: hsl(var(--primary)); font-size: 11.5px; font-weight: 600; border-radius: 4px; letter-spacing: .5px;
 }
-.nw-sect-ast { font-size: 11.5px; font-weight: 600; color: var(--ind-orange); }
-.nw-sect-sub { font-size: 12px; font-weight: 500; color: var(--ind-weak-text); margin-left: 2px; }
-.nw-pdf-row { background: #faf7f0; border: 1px dashed #d6c7a8; border-radius: 3px; padding: 10px 12px; }
-.nw-modal-foot { display: flex; justify-content: flex-end; border-top: 1.5px solid var(--ind-line-soft); padding-top: 12px; }
+.nw-sect-ast { font-size: 11.5px; font-weight: 500; color: var(--ind-warn); }
+.nw-sect-sub { font-size: 12px; font-weight: 400; color: hsl(var(--muted-foreground)); margin-left: 2px; }
+.nw-pdf-row { background: hsl(var(--warning) / 8%); border: 1px dashed hsl(var(--warning) / 45%); border-radius: var(--radius); padding: 10px 12px; }
+.nw-modal-foot { display: flex; justify-content: flex-end; border-top: 1px solid hsl(var(--border)); padding-top: 12px; }
 
 /* 详情抽屉正文轻边框 */
-.nw-detail-doc { border: 1px solid var(--ind-line-soft); }
+.nw-detail-doc { border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
 </style>

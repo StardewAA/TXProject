@@ -55,14 +55,13 @@ function nowIso(): string {
 <style scoped>
 .pc-cell { min-width: 0; display: flex; flex-direction: column; }
 .pc-cell.pc-wide { grid-column: 1 / -1; }
-.pc-lb { font-size: 13.5px; font-weight: 600; color: #2e3947; margin: 0 0 5px; letter-spacing: .2px; display: flex; align-items: center; gap: 4px; }
-.pc-ast { color: #d93025; }
+.pc-lb { margin: 0 0 5px; display: flex; gap: 4px; align-items: center; font-size: 13.5px; font-weight: 500; color: hsl(var(--foreground)); }
+.pc-ast { color: hsl(var(--destructive)); }
 .pc-ctl, .pc-line { width: 100%; }
 .pc-line { display: flex; gap: 6px; align-items: center; }
 .pc-in { width: 100%; font-size: 13.5px; }
-:deep(.ant-input), :deep(.ant-select-selector), :deep(.ant-input-affix-wrapper) { border: 1px solid #c9cfd6; border-radius: 3px; font-size: 13.5px; font-family: 'Ubuntu','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
-:deep(.ant-input:focus), :deep(.ant-input-focused), :deep(.ant-select-focused .ant-select-selector) { border-color: #2b6cb0; box-shadow: none; }
-:deep(.ant-input:hover), :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) { border-color: #2b6cb0; }
-.pc-now { border: 1px solid #c9cfd6; border-radius: 3px; color: #2b6cb0; font-size: 12.5px; height: 30px; padding: 0 10px; background: #f7f9fb; white-space: nowrap; }
-.pc-rm { margin-top: 3px; font-size: 12px; color: #6b7681; line-height: 1.5; }
+/* 输入控件边框/聚焦态交给 antd 主题（对齐平台其它模块），仅保留字号与字体 */
+:deep(.ant-input), :deep(.ant-select-selector), :deep(.ant-input-affix-wrapper) { font-size: 13.5px; font-family: 'Ubuntu','PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
+.pc-now { font-size: 12.5px; height: 30px; padding: 0 10px; white-space: nowrap; }
+.pc-rm { margin-top: 3px; font-size: 12px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
 </style>

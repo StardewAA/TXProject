@@ -229,7 +229,7 @@ onMounted(loadAll);
 
       <div v-if="loaded" class="form-panel">
         <div class="ind-sect" style="margin-top:0">基本档案 · 法人基本信息 <small>表89 字段口径</small></div>
-        <div class="mb-3 text-sm font-medium text-gray-500">USCC 按 GB 32100-2015 校验；行政区划按 GB/T 2260（6 位市级）；必填：单位名称/信用代码/法定代表人/类别/区划/联系人/电话</div>
+        <div class="mb-3 text-sm font-medium text-muted-foreground">USCC 按 GB 32100-2015 校验；行政区划按 GB/T 2260（6 位市级）；必填：单位名称/信用代码/法定代表人/类别/区划/联系人/电话</div>
         <div class="grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-3">
           <div>
             <div class="form-lbl">单位名称 *</div>
@@ -305,23 +305,23 @@ onMounted(loadAll);
       </div>
 
       <Card v-if="!loaded && !loading" class="mt-3">
-        <div class="text-xs text-gray-400">档案加载失败或无数据？刷新重试；本页为“企业自维护”入口（权限 bidding:subject:query/update）。</div>
+        <div class="text-xs text-muted-foreground">档案加载失败或无数据？刷新重试；本页为“企业自维护”入口（权限 bidding:subject:query/update）。</div>
       </Card>
     </Spin>
     </div>
 </div>
 </template>
 <style scoped>
-/* 上传区（线稿风：白底细边、直角、提示字清晰） */
+/* 上传区（线稿风：白底细边、直角、提示字清晰）—— 配色走平台主题 token（2026-09-11） */
 .lic-drag :deep(.ant-upload-drag) {
-  border: 1px dashed #c9cfd6;
-  border-radius: 3px;
-  background: #fbfcfd;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 40%);
   padding: 10px 8px;
 }
-.lic-drag :deep(.ant-upload-drag:hover) { border-color: #2b6cb0; background: #f7fbff; }
-.lic-drag-t { margin: 0; font-size: 13px; font-weight: 600; color: #2e3947; }
-.lic-drag-h { margin: 4px 0 0; font-size: 11.5px; color: #8a949e; line-height: 1.6; }
+.lic-drag :deep(.ant-upload-drag:hover) { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 5%); }
+.lic-drag-t { margin: 0; font-size: 13px; font-weight: 600; color: hsl(var(--foreground)); }
+.lic-drag-h { margin: 4px 0 0; font-size: 11.5px; color: hsl(var(--muted-foreground)); line-height: 1.6; }
 .lic-info {
   display: flex;
   align-items: center;
@@ -329,11 +329,11 @@ onMounted(loadAll);
   gap: 8px;
   margin-top: 6px;
   font-size: 12.5px;
-  color: #2e3947;
+  color: hsl(var(--foreground));
 }
-.lic-ok { color: #15803d; font-weight: 700; }
+.lic-ok { color: var(--ind-ok); font-weight: 600; }
 .lic-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lic-id { font-size: 11px; color: #8a949e; background: #f6f8fa; border: 1px solid #e3e8ed; border-radius: 2px; padding: 0 4px; }
-.lic-del { color: #cf1322; cursor: pointer; }
-.lic-hint { margin-top: 6px; font-size: 11.5px; color: #8a949e; }
+.lic-id { font-size: 11px; color: hsl(var(--muted-foreground)); background: hsl(var(--muted) / 50%); border: 1px solid hsl(var(--border)); border-radius: 4px; padding: 0 4px; }
+.lic-del { color: hsl(var(--destructive)); cursor: pointer; }
+.lic-hint { margin-top: 6px; font-size: 11.5px; color: hsl(var(--muted-foreground)); }
 </style>
