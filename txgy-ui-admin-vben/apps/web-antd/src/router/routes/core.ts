@@ -236,12 +236,6 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '招标投标', hideInMenu: true },
       },
       {
-        name: 'PortalProfile',
-        path: 'profile',
-        component: () => import('#/views/portal/profile/index.vue'),
-        meta: { title: '个人中心', hideInMenu: true },
-      },
-      {
         name: 'PortalProfileRecruit',
         path: 'profile/recruit',
         component: () => import('#/views/portal/profile/recruit.vue'),

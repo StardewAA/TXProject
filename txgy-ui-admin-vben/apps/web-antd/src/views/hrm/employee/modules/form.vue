@@ -273,7 +273,7 @@ const [Modal, modalApi] = useVbenModal({
           </template>
         </Form>
       </Tabs.TabPane>
-      <Tabs.TabPane key="entry" tab="入职信息">
+      <Tabs.TabPane key="entry" tab="入职信息" :force-render="true">
         <EntryForm class="mx-4 mt-2">
           <template #leaderEmployeeId>
             <EmployeeSelect

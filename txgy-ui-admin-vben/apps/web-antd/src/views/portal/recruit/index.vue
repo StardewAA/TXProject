@@ -71,7 +71,51 @@ const navUserName = computed(() => {
 });
 const favoritePostIds = ref<number[]>([]);
 const subnavScrolled = ref(false);
-const selectedHomeCategory = ref<'technology' | number>();
+type HomeIndustryKey =
+  | 'administration'
+  | 'engineering'
+  | 'finance'
+  | 'manufacturing'
+  | 'procurement'
+  | 'quality'
+  | 'research'
+  | 'sales'
+  | 'tender'
+  | 'cost';
+
+const homeIndustries: Array<{ key: HomeIndustryKey; label: string; keywords: string[] }> = [
+  { key: 'manufacturing', label: '生产制造', keywords: ['生产', '操作工', '防腐', '保温', '设备维修', '焊工', '铆工', '管工', '油漆工', '喷砂工', '普工', '力工'] },
+  { key: 'engineering', label: '工程项目', keywords: ['项目', '施工', '工程', '技术员'] },
+  { key: 'research', label: '技术研发', keywords: ['研发', '探测', '工程师', '技术负责人'] },
+  { key: 'sales', label: '销售业务', keywords: ['销售', '市场', '业务'] },
+  { key: 'administration', label: '行政人事', keywords: ['行政', '人事'] },
+  { key: 'finance', label: '财务会计', keywords: ['财务', '会计', '出纳'] },
+  { key: 'procurement', label: '采购物流', keywords: ['采购', '材料', '库管', '物流', '仓储'] },
+  { key: 'quality', label: '质量安全', keywords: ['质检', '质量', '安全'] },
+  { key: 'tender', label: '招标资料', keywords: ['招标', '投标', '资料'] },
+  { key: 'cost', label: '造价预算', keywords: ['预算', '造价'] },
+];
+const selectedHomeIndustry = ref<HomeIndustryKey | 'all'>('all');
+
+const standardRecruitPostTypeNames = new Set([
+  '防腐工', '保温工', '喷砂工', '油漆工', '管工', '铆工', '焊工', '架子工', '电工', '瓦工',
+  '钢筋工', '木工', '缝纫工', '普工/力工', '项目经理', '项目副经理', '技术负责人/工程师',
+  '施工员', '施工队长/工长', '预算员/造价员', '安全员', '质检员', '试验/检测员', '资料员',
+  '材料员/库管', '设备维修工', '机械设备管理员', '市场业务经理', '投标专员', '采购员',
+  '财务会计', '行政人事专员', '防腐保温管理（校招管培方向）',
+]);
+
+function normalizePortalRecruitPostTypes(
+  types: HrmPortalRecruitApi.PostType[],
+) {
+  const uniqueTypes = new Map<string, HrmPortalRecruitApi.PostType>();
+  for (const type of types) {
+    if (standardRecruitPostTypeNames.has(type.name) && !uniqueTypes.has(type.name)) {
+      uniqueTypes.set(type.name, type);
+    }
+  }
+  return [...uniqueTypes.values()];
+}
 
 const showAllPosts = computed(() => route.query.view === 'list');
 const requestedSection = computed<'companies' | 'home' | 'jobs' | 'messages' | 'resume' | 'user'>(() => {
@@ -86,17 +130,10 @@ const activeSection = computed(() => {
 });
 const previewPosts = computed(() => displayPosts.value.slice(0, 9));
 const homePreviewPosts = computed(() => {
-  let result = displayPosts.value;
-  if (selectedHomeCategory.value === 'technology') {
-    result = result.filter((post) =>
-      [post.postName, post.postTypeName, post.description]
-        .filter(Boolean)
-        .join(' ')
-        .includes('技术'),
-    );
-  } else if (typeof selectedHomeCategory.value === 'number') {
-    result = result.filter((post) => post.postTypeId === selectedHomeCategory.value);
-  }
+  const result = displayPosts.value.filter((post) => {
+    if (selectedHomeIndustry.value === 'all') return true;
+    return getHomeIndustry(post) === selectedHomeIndustry.value;
+  });
   return result.slice(0, 9);
 });
 
@@ -205,8 +242,17 @@ function selectPostType(id?: number) {
   refreshPosts();
 }
 
-function selectHomeCategory(category: 'technology' | number) {
-  selectedHomeCategory.value = category;
+function getHomeIndustry(post: HrmPortalRecruitApi.Post): HomeIndustryKey | undefined {
+  const searchableText = [post.postName, post.postTypeName]
+    .filter(Boolean)
+    .join('');
+  return homeIndustries.find((industry) =>
+    industry.keywords.some((keyword) => searchableText.includes(keyword)),
+  )?.key;
+}
+
+function selectHomeIndustry(industry: HomeIndustryKey) {
+  selectedHomeIndustry.value = industry;
 }
 
 function isProfileActionSection(section: string): section is 'messages' | 'resume' | 'user' {
@@ -371,7 +417,10 @@ function resetFilters() {
 async function loadPosts() {
   loading.value = true;
   try {
-    const result = await getPortalRecruitPostPage(postPage);
+    const result = await getPortalRecruitPostPage({
+      ...postPage,
+      pageSize: activeSection.value === 'home' ? 100 : postPage.pageSize,
+    });
     posts.value = result.list || [];
     postTotal.value = result.total || 0;
     selectedPost.value = posts.value[0];
@@ -413,7 +462,7 @@ onMounted(async () => {
     loadPosts(),
     getPortalRecruitPostTypeList()
       .then((result) => {
-        postTypes.value = result || [];
+        postTypes.value = normalizePortalRecruitPostTypes(result || []);
       })
       .catch(() => {
         postTypes.value = [];
@@ -530,8 +579,15 @@ onUnmounted(() => {
         <div v-if="activeSection === 'home'" class="home-jobs-heading">
           <h2>热招职位</h2>
           <div class="home-job-categories">
-            <button :class="{ active: selectedHomeCategory === 'technology' }" type="button" @click="selectHomeCategory('technology')">技术</button>
-            <button v-for="type in postTypes.slice(0, 8)" :key="type.id" :class="{ active: selectedHomeCategory === type.id }" type="button" @click="selectHomeCategory(type.id)">{{ type.name }}</button>
+            <button
+              v-for="industry in homeIndustries"
+              :key="industry.key"
+              :class="{ active: selectedHomeIndustry === industry.key }"
+              type="button"
+              @click="selectHomeIndustry(industry.key)"
+            >
+              {{ industry.label }}
+            </button>
           </div>
         </div>
         <section v-if="activeSection === 'jobs'" class="filter-panel">
@@ -868,7 +924,7 @@ onUnmounted(() => {
   background: transparent;
   color: #875222;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   transition: color 180ms ease, background-color 180ms ease;
 }
 
@@ -1737,21 +1793,42 @@ onUnmounted(() => {
 
 .recruit-banner-grid { gap: 18px; }
 .banner-card { min-height: 204px; border-radius: 20px; box-shadow: 0 14px 30px rgb(23 52 61 / 9%); }
-.banner-primary { background: linear-gradient(120deg, #1b5560, #287c7c); }
-.banner-secondary { background: linear-gradient(120deg, #fff9ef, #f4e6d4); }
+.banner-primary { background: linear-gradient(120deg, #fff4ea, #f7cfa7); }
+.banner-secondary { background: linear-gradient(120deg, #fffdf6, #efe2cf); }
+.banner-primary { color: #5d341d; background: linear-gradient(120deg, #fff4ea, #f7cfa7); }
+.banner-primary button { background: #fff; color: #c85e18; }
 .banner-card h2 { letter-spacing: -.035em; }
 .banner-card p { font-size: 15px; line-height: 1.6; }
 .banner-card button { transition: transform .18s ease, background-color .18s ease; }
 .banner-card button:hover { transform: translateY(-2px); }
 
 .home-jobs-heading { padding: 18px 0 20px; border-bottom-color: var(--recruit-line); }
-.home-jobs-heading h2 { color: var(--recruit-ink); font-size: 28px; }
-.home-job-categories { gap: 10px; }
-.home-job-categories button { border: 1px solid transparent; color: #6a7d82; background: transparent; }
+.home-jobs-heading {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+}
+.home-jobs-heading h2 {
+  width: 100%;
+  color: var(--recruit-ink);
+  font-size: 28px;
+}
+.home-job-categories {
+  width: 100%;
+  gap: 10px;
+}
+.home-job-categories button {
+  padding: 5px 25px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  background: #fff;
+  color: #806956;
+  cursor: pointer;
+  font-size: 13px;
+}
 .home-job-categories button:hover, .home-job-categories button.active { border-color: #b9e2da; color: #16756f; background: #edf7f5; }
 
 .home-job-grid { gap: 18px; }
-.home-job-grid .post-card { min-height: 214px; border: 1px solid var(--recruit-line); border-radius: 16px; background: #fff; box-shadow: 0 8px 20px rgb(23 52 61 / 6%); }
+.home-job-grid .post-card { min-height: 160px; border: 1px solid var(--recruit-line); border-radius: 16px; background: #fff; box-shadow: 0 8px 20px rgb(23 52 61 / 6%); }
 .home-job-grid .post-card:hover { border-color: #9ed4cc; box-shadow: 0 16px 30px rgb(23 52 61 / 11%); transform: translateY(-4px); }
 .home-job-grid .post-title { color: var(--recruit-ink); font-size: 18px; }
 .home-job-grid .post-salary-top { color: var(--recruit-accent); font-weight: 800; }
@@ -1777,6 +1854,55 @@ onUnmounted(() => {
 .search-post-topline b, .search-detail-actions strong { color: var(--recruit-accent); }
 .search-detail-actions .ant-btn-primary { border-color: var(--recruit-accent); background: var(--recruit-accent); }
 .search-detail-actions .ant-btn-primary:hover { border-color: #df7c43; background: #df7c43; }
+
+.recruit-page > .recruit-hero,
+.recruit-page > .recruit-banner-grid,
+.recruit-page > .recruit-tabs {
+  grid-column: 1 / -1;
+  width: 100vw;
+  margin-left: calc((100% - 100vw) / 2);
+  box-sizing: border-box;
+}
+.recruit-page > .recruit-banner-grid,
+.recruit-page > .recruit-tabs {
+  padding-right: max(16px, calc((100vw - 1180px) / 2));
+  padding-left: max(16px, calc((100vw - 1180px) / 2));
+}
+.recruit-page > .recruit-tabs {
+  width: min(1180px, calc(100vw - 32px));
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: 0;
+  padding-left: 0;
+}
+.recruit-page > .recruit-hero {
+  width: min(1180px, calc(100vw - 32px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.recruit-hero {
+  background-color: #fff9ef;
+  background-image: linear-gradient(120deg, #fffaf3, #f0d4b3);
+  box-shadow: 0 22px 44px rgb(183 92 24 / 12%);
+}
+.hero-copy h1 { color: #5d341d; }
+.eyebrow { color: #d86616; }
+.hero-note { color: #806956; }
+.hero-orbit { border-color: rgb(216 134 54 / 38%); }
+.hero-profile-card,
+.hero-role-card {
+  border-color: rgb(216 134 54 / 24%);
+  background: rgb(255 255 255 / 72%);
+  box-shadow: 0 16px 30px rgb(183 92 24 / 10%);
+  backdrop-filter: none;
+}
+.hero-profile-card b, .hero-role-card b { color: #5d341d; }
+.hero-profile-card small, .hero-role-card span { color: #806956; }
+.hero-profile-card i { color: #d86616; }
+.quick-searches { color: #806956; }
+.quick-searches button { color: #a95520; background: rgb(255 255 255 / 72%); }
+.quick-searches button:hover, .quick-searches button:focus-visible { color: #fff; background: #d86616; }
 
 @media (max-width: 640px) {
   .recruit-hero { min-height: 0; padding: 34px 22px 26px; border-radius: 18px; }

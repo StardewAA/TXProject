@@ -30,6 +30,9 @@ public interface HrmRecruitChatService {
     /** 将正式投递记录绑定到对应会话，供企业候选人列表即时查询。 */
     void markApplicationSubmitted(Long candidateUserId, Long postId, Long candidateId, Long applicationId);
 
+    /** 将招聘沟通中的求职者手动转为候选人。 */
+    Long convertConversationToCandidate(Long hrUserId, Long conversationId);
+
     /** 将超过默认等待时限且尚未获得招聘方回复的会话置为沟通失败。 */
     int expireWaitingConversations(java.time.LocalDateTime now);
 }

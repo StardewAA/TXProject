@@ -18,6 +18,13 @@ public interface HrmRecruitPostTypeMapper extends BaseMapperX<HrmRecruitPostType
                 .orderByAsc(HrmRecruitPostTypeDO::getId));
     }
 
+    default List<Long> selectIdsByName(String name) {
+        return selectList(new LambdaQueryWrapperX<HrmRecruitPostTypeDO>()
+                .eq(HrmRecruitPostTypeDO::getName, name)
+                .eq(HrmRecruitPostTypeDO::getStatus, 0))
+                .stream().map(HrmRecruitPostTypeDO::getId).toList();
+    }
+
     default HrmRecruitPostTypeDO selectByNameAndParentId(String name, Long parentId) {
         return selectOne(new LambdaQueryWrapperX<HrmRecruitPostTypeDO>()
                 .eq(HrmRecruitPostTypeDO::getName, name)
