@@ -100,3 +100,15 @@ export function exportTask(params: any) {
 export function getGanttTaskList(params: any) {
   return requestClient.get<any[]>('/mes/pro/task/gantt-list', { params });
 }
+
+/** 按班组聚合任务负载（任务数、排产数量、已生产数量） */
+export function getTeamTaskLoad() {
+  return requestClient.get<
+    {
+      teamId: number;
+      taskCount: number;
+      quantityTotal: number;
+      producedTotal: number;
+    }[]
+  >('/mes/pro/task/team-load');
+}

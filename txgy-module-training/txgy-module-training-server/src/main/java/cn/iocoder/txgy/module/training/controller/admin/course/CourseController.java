@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.training.controller.admin.course;
 
+import cn.hutool.core.date.DatePattern;
+import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -19,6 +21,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,10 +108,31 @@ public class CourseController {
     }
 
     @GetMapping("/exam-options")
-    @Operation(summary = "结课考试试卷下拉（占位：模块三试卷中心未接入，返回空列表）")
+    @Operation(summary = "结课考试试卷下拉（对接模块三「考试与认证」试卷中心）")
     @PreAuthorize("@ss.hasPermission('training:course:query')")
     public CommonResult<List<Map<String, Object>>> getExamOptions() {
         return success(courseExternalApiService.listExamOptions());
+    }
+
+    @GetMapping("/exam-plan-list")
+    @Operation(summary = "课程结课考试计划列表（供模块三「考试与认证」展示课程考试）")
+    @PreAuthorize("@ss.hasPermission('training:course:query')")
+    public CommonResult<List<Map<String, Object>>> getExamPlanList() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (CourseDO course : courseService.getExamPlanList()) {
+            Map<String, Object> plan = new LinkedHashMap<>();
+            plan.put("courseId", course.getId());
+            plan.put("courseName", course.getTitle());
+            plan.put("categoryId", course.getCategoryId());
+            plan.put("examId", course.getExamId());
+            plan.put("examStartTime", course.getExamStartTime() == null ? null
+                    : LocalDateTimeUtil.format(course.getExamStartTime(), DatePattern.NORM_DATETIME_PATTERN));
+            plan.put("examEndTime", course.getExamEndTime() == null ? null
+                    : LocalDateTimeUtil.format(course.getExamEndTime(), DatePattern.NORM_DATETIME_PATTERN));
+            plan.put("status", course.getStatus());
+            result.add(plan);
+        }
+        return success(result);
     }
 
 }

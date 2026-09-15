@@ -83,5 +83,10 @@ training:
     timeout-ms: ${TRAINING_AI_TIMEOUT_MS:60000}
     max-text-length: ${TRAINING_AI_MAX_TEXT_LENGTH:12000}
     max-questions: ${TRAINING_AI_MAX_QUESTIONS:30}
+  # 模块三「考试与认证」对接（课程结课考试：试卷下拉 / 课程考试计划）
+  exam:
+    enabled: ${TRAINING_EXAM_ENABLED:true}
+    base-url: ${TRAINING_EXAM_BASE_URL:http://training-exam:8000}
+    timeout-ms: ${TRAINING_EXAM_TIMEOUT_MS:10000}
 
 debug: false
