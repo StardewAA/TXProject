@@ -257,6 +257,8 @@ async function replyCustomers(
   q: string,
   hintName?: string | null,
   customerType?: null | number,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
@@ -268,6 +270,7 @@ async function replyCustomers(
 
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getCustomerPage(params);
   let rows: any[] = res.list || [];
 
@@ -377,12 +380,15 @@ async function replyPool(): Promise<AiReply> {
 async function replyClues(
   q = '',
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   // 注意：有名称时必须交给后端过滤。只取前 100 条再在前端筛，数据一多就会「搜不到」
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getCluePage(params);
   const all: any[] = res.list || [];
   const rows = filterByName(all, name, [
@@ -426,12 +432,15 @@ async function replyClues(
 async function replyBusinesses(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getBusinessPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -477,9 +486,10 @@ async function replyBusinesses(
   };
 }
 
-async function replyTodos(q = ''): Promise<AiReply> {
-  // 用户提到「下属/团队」时按「下属负责的」视角查（sceneType=3），否则用默认视角
-  const sceneType = /下属|团队|他们/.test(q) ? 3 : undefined;
+async function replyTodos(q = '', scopeSceneType?: number): Promise<AiReply> {
+  // 大模型识别出的范围优先；降级模式下再从问题关键词判断（sceneType=3=下属负责的）
+  const sceneType =
+    scopeSceneType ?? (/下属|团队|他们/.test(q) ? 3 : undefined);
   const baseQuery: Record<string, any> = { pageNo: 1, pageSize: 20 };
   if (sceneType) {
     baseQuery.sceneType = sceneType;
@@ -579,11 +589,14 @@ async function replyTodos(q = ''): Promise<AiReply> {
 async function replyContacts(
   q = '',
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const name = pickName(hintName, q);
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getContactPage(params);
   const all: any[] = res.list || [];
   const rows = filterByName(all, name, [
@@ -625,6 +638,8 @@ async function replyContacts(
 async function replyContracts(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -632,6 +647,7 @@ async function replyContracts(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getContractPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -679,6 +695,8 @@ async function replyContracts(
 async function replyReceivables(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -686,6 +704,7 @@ async function replyReceivables(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getReceivablePage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -732,6 +751,8 @@ async function replyReceivables(
 async function replyReceivablePlans(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -739,6 +760,7 @@ async function replyReceivablePlans(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
   const res = await getReceivablePlanPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -910,26 +932,28 @@ async function getLocalTable(
   q: string,
   hintName?: string | null,
   customerType?: null | number,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply | null> {
   switch (intent) {
     case 'customer':
-      return await replyCustomers(q, hintName, customerType);
+      return await replyCustomers(q, hintName, customerType, sceneType);
     case 'pool':
       return await replyPool();
     case 'clue':
-      return await replyClues(q, hintName);
+      return await replyClues(q, hintName, sceneType);
     case 'business':
-      return await replyBusinesses(q, hintName);
+      return await replyBusinesses(q, hintName, sceneType);
     case 'todo':
-      return await replyTodos(q);
+      return await replyTodos(q, sceneType);
     case 'contact':
-      return await replyContacts(q, hintName);
+      return await replyContacts(q, hintName, sceneType);
     case 'contract':
-      return await replyContracts(q, hintName);
+      return await replyContracts(q, hintName, sceneType);
     case 'receivable':
-      return await replyReceivables(q, hintName);
+      return await replyReceivables(q, hintName, sceneType);
     case 'receivablePlan':
-      return await replyReceivablePlans(q, hintName);
+      return await replyReceivablePlans(q, hintName, sceneType);
     case 'product':
       return await replyProducts();
     default:
@@ -1007,20 +1031,19 @@ export async function mockAiReply(
         };
       }
 
-      // 2. 归属范围（我的下属 / 我的团队）还原进查询串，
-      //    复用各业务查询里既有的范围判断（sceneType=3），不额外改各查询函数签名。
-      //    注意：mine（我本人）是系统默认范围，无需改写
-      const effectiveQuery =
-        (cls.scope === 'subordinate' || cls.scope === 'team') &&
-        !/下属|团队/.test(q)
-          ? `${q} 下属`
-          : q;
+      // 2. 数据范围显式传给查询接口（sceneType）：
+      //    mine=我负责的(1)、subordinate=下属负责的(3)、team=不限定（默认权限范围，含我+下属）。
+      //    「我负责的」必须显式传 1：不传时后端返回权限范围内的全部数据，
+      //    对领导来说会混入下属的客户，文案「您名下」就与数据对不上了
+      const sceneType =
+        cls.scope === 'mine' ? 1 : cls.scope === 'subordinate' ? 3 : undefined;
 
       const local = await getLocalTable(
         cls.intent,
-        effectiveQuery,
+        q,
         cls.name,
         cls.customerType,
+        sceneType,
       );
       if (local) {
         let text = local.text;
