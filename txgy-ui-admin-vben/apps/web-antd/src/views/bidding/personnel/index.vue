@@ -1886,6 +1886,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
       />
       <div class="ct-lb">事由</div>
       <a-textarea v-model:value="statusReason" :rows="2" placeholder="吊销/注销建议填写" />
+      <div class="ct-tip">目标状态由后端状态机校验：非法流转（如待办直接生效）会被拒绝并自动刷新；吊销 / 注销 / 退回请务必填写事由留痕。</div>
     </a-modal>
   </div>
 </template>

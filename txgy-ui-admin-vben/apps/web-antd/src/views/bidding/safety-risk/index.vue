@@ -452,6 +452,7 @@ onMounted(() => {
                 <a-descriptions-item label="校验时间">{{ fmtDateTime(multiResult.checkedAt) }}</a-descriptions-item>
               </a-descriptions>
             </div>
+            <div v-else class="ct-empty">输入人员 id 与 主岗/兼任岗 后点「校验」：重复任职校验会落库留痕</div>
           </div>
         </div>
       </a-col>
@@ -490,6 +491,7 @@ onMounted(() => {
                 <a-descriptions-item label="评估时间">{{ fmtDateTime(personRisk.personRiskEvaluatedAt) }}</a-descriptions-item>
               </a-descriptions>
             </div>
+            <div v-else class="ct-empty">输入人员 id 查询：给出 12 个月岗位变更次数与风险标签（未评估 ≠ 正常）</div>
           </div>
         </div>
       </a-col>
