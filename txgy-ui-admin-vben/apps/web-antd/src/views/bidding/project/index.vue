@@ -10,13 +10,12 @@ import { computed, h, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
-import { useVbenModal } from '@vben/common-ui';
 import { useAccessStore } from '@vben/stores';
 
 import { message, Modal } from 'ant-design-vue';
 
 import { FILING_STATUS_OPTIONS, type FilingApi, receiveFilingResult, submitFiling } from '#/api/bidding/filing';
-import { fetchNoticeDetail, type NoticeApi } from '#/api/bidding/notice';
+import { fetchNoticeDetail } from '#/api/bidding/notice';
 import {
   deleteProject,
   getProject,
@@ -25,15 +24,12 @@ import {
   saveProject,
   traceBidSection,
   traceProject,
-  traceTenderProject,
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
 import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
-import DetailModal from '../noticeExternal/modules/detail.vue';
-import NoticeHtmlView from '../notice/NoticeHtmlView.vue';
 import TraceLevelPanel, { type TraceLevel } from './TraceLevelPanel.vue';
 
 import '../certificate/cert.css';
@@ -188,19 +184,19 @@ const columns = [
   { title: '操作', key: 'action', width: 270, fixed: 'right' as const },
 ];
 
-/* ===== 追溯抽屉栈（层叠下钻：L1 项目 → L2 招标项目 → L3 标段） =====
- * 定稿口径（2026-09-14）：抽屉保留并**可层叠拉出下级抽屉**（逐层内缩 + 去遮罩），
- * 同时行内「详情 ↗」打开**通用实体详情页**（/bidding/entity/:type/:code，登记/编辑/发布在那里做）。
- * 栈语义：push 一层、关闭只关当前层、上层保留；L3 标段层取 traceBidSection 的关联内部公告。 */
+/* ===== 层级抽屉栈（项目 → 标段 → 公告，最多 3 层） =====
+ * 定稿口径（2026-09-15）：扁平化下钻，抽屉可层叠（宽度 600/700/800 + 仅顶层遮罩），
+ * 栈语义：push 一层、关闭只关当前层（及以上）、下层保留；
+ * L3 公告层取 fetchNoticeDetail；抽屉内不做编辑，行内「详情 ↗」打开通用实体详情页。 */
 let levelSeq = 0;
 const stack = ref<TraceLevel[]>([]);
+const MAX_LEVELS = 3;
 
-async function fetchTraceFor(t: TraceLevel['queryType'], code: string) {
-  if (t === 'PROJECT') return traceProject(code);
-  if (t === 'TENDER_PROJECT') return traceTenderProject(code);
-  return traceBidSection(code);
-}
 async function pushLevel(type: TraceLevel['queryType'], code: string, label: string): Promise<void> {
+  if (stack.value.length >= MAX_LEVELS) {
+    message.warning(`层级最多 ${MAX_LEVELS} 层（项目 → 标段 → 公告）`);
+    return;
+  }
   const level: TraceLevel = {
     key: levelSeq++,
     queryType: type,
@@ -208,32 +204,39 @@ async function pushLevel(type: TraceLevel['queryType'], code: string, label: str
     label,
     open: true,
     trace: null,
+    notice: null,
     loading: true,
   };
   stack.value.push(level);
   try {
-    level.trace = await fetchTraceFor(type, code);
+    if (type === 'NOTICE') {
+      level.notice = await fetchNoticeDetail(code);
+    } else if (type === 'PROJECT') {
+      level.trace = await traceProject(code);
+    } else {
+      level.trace = await traceBidSection(code);
+    }
   } catch {
-    level.trace = null;
+    /* 取数失败留空，面板显示兜底 */
   } finally {
     level.loading = false;
   }
 }
-/** 打开项目级追溯（列表行「追溯」） */
+/** 打开项目层（列表行「查看项目」） */
 function openTrace(r: ProjectApi.Project): void {
   void pushLevel('PROJECT', r.projectCode, r.projectName || r.projectCode);
 }
-/** 抽屉行「拉出下级」 */
-function onDrill(v: { code: string; label: string; type: 'BID_SECTION' | 'TENDER_PROJECT' }): void {
+/** 抽屉行「拉出下级」（标段 → 公告） */
+function onDrill(v: { code: string; label: string; type: 'BID_SECTION' | 'NOTICE' }): void {
   void pushLevel(v.type, v.code, v.label);
 }
-/** 关闭当前层（含其上所有层）——只关自己、上层保留 = 栈语义 */
+/** 关闭当前层（含其上所有层），下层保留 = 栈语义 */
 function closeLevel(key: number): void {
   const i = stack.value.findIndex((l) => l.key === key);
   if (i >= 0) {
     const l = stack.value[i];
     if (l) l.open = false;
-    stack.value.splice(i); // 关闭本层及其上所有层
+    stack.value.splice(i);
   }
 }
 function onDrawerUpdate(key: number, open: boolean): void {
@@ -241,39 +244,8 @@ function onDrawerUpdate(key: number, open: boolean): void {
 }
 
 /* ===== 通用实体详情页（/bidding/entity/:type/:code，登记/编辑/发布在那里做，不限实体） ===== */
-function openEntityDetail(v: { code: string; type: 'BID_SECTION' | 'PROJECT' | 'TENDER_PROJECT' }): void {
+function openEntityDetail(v: { code: string; type: 'BID_SECTION' | 'NOTICE' | 'PROJECT' }): void {
   void router.push(`/bidding/entity/${v.type}/${encodeURIComponent(v.code)}`);
-}
-
-/* ===== 公告详情弹窗（内部公告：附件 / 版式 PDF，NoticeHtmlView 渲染） ===== */
-const noticeDetailOpen = ref(false);
-const noticeDetailLoading = ref(false);
-const noticeDetail = ref<NoticeApi.Detail | null>(null);
-async function openNoticeDetail(row: ProjectApi.TraceNotice): Promise<void> {
-  if (row.id === undefined) return;
-  noticeDetailOpen.value = true;
-  noticeDetailLoading.value = true;
-  noticeDetail.value = null;
-  try {
-    noticeDetail.value = await fetchNoticeDetail(row.id);
-  } catch {
-    noticeDetail.value = null;
-  } finally {
-    noticeDetailLoading.value = false;
-  }
-}
-
-/* ===== 外部公告预览（复用 noticeExternal DetailModal，需审核权限 bidding:notice-external:update） ===== */
-const [ExternalDetail, externalDetailModalApi] = useVbenModal({
-  connectedComponent: DetailModal,
-  destroyOnClose: true,
-});
-function openExternalDetail(row: ProjectApi.TraceExternalNotice): void {
-  if (!can('bidding:notice-external:update')) {
-    message.warning('无外部公告审核权限（bidding:notice-external:update），无法预览');
-    return;
-  }
-  externalDetailModalApi.setData(row as never).open();
 }
 
 /* ===== 新建 / 编辑 ===== */
@@ -429,7 +401,7 @@ v-model="query.state" label="管理态" :options="[
             <template v-else-if="column.key === 'createTime'">{{ fmtDateTime(record.createTime) }}</template>
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
-                <a @click="openTrace(record)">追溯</a>
+                <a @click="openTrace(record)">查看项目</a>
                 <a class="text-blue-600" @click="openEntityDetail({ type: 'PROJECT', code: record.projectCode })">详情 ↗</a>
                 <a v-if="can('bidding:filing:create')" @click="openFiling(record)">提交备案</a>
                 <a v-if="can('bidding:filing:update')" @click="openReceipt()">登记回执</a>
@@ -445,56 +417,26 @@ v-model="query.state" label="管理态" :options="[
       </div>
     </div>
 
-    <!-- 追溯抽屉栈：层叠下钻（L1 项目 → L2 招标项目 → L3 标段），逐层内缩 24px + 去遮罩（有层级感）+ 栈语义（关只关当前层，上层保留） -->
+    <!-- 层级抽屉栈：项目 → 标段 → 公告（最多 3 层），宽度 600/700/800 逐层叠加 + 仅顶层遮罩 + 层级面包屑 -->
     <a-drawer
       v-for="(level, i) in stack"
       :key="level.key"
       :open="level.open"
       class="bid-ind"
-      :width="1000 - 24 * i"
-      :mask="i === 0"
+      :width="600 + 100 * i"
+      :mask="i === stack.length - 1"
       :title="level.label || level.queryCode"
       @update:open="(v: boolean) => onDrawerUpdate(level.key, v)"
     >
       <TraceLevelPanel
         :level="level"
         :is-top="i === stack.length - 1"
+        :crumbs="stack.slice(0, i + 1).map((l) => l.label || l.queryCode)"
         @drill="onDrill"
         @detail="openEntityDetail"
-        @notice="openNoticeDetail"
-        @external="openExternalDetail"
         @close="closeLevel(level.key)"
       />
     </a-drawer>
-
-    <!-- 内部公告详情弹窗（NoticeHtmlView：版式 PDF / 附件 / 招标文件获取指引）。点击 L3 标段/任一层「关联公告」行弹出 -->
-    <a-modal
-      v-model:open="noticeDetailOpen"
-      :title="noticeDetail?.title || '公告详情'"
-      :width="900"
-      :footer="null"
-      destroy-on-close
-    >
-      <a-spin :spinning="noticeDetailLoading">
-        <template v-if="noticeDetail">
-          <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span v-if="noticeDetail.noticeCode" class="mono">{{ noticeDetail.noticeCode }}</span>
-            <span v-if="noticeDetail.noticeTypeName">{{ noticeDetail.noticeTypeName }}</span>
-            <span v-if="noticeDetail.status">{{ noticeDetail.status }}</span>
-            <span v-if="noticeDetail.publisherName">{{ noticeDetail.publisherName }}</span>
-            <span v-if="noticeDetail.publishTime">发布时间 {{ fmtDateTime(noticeDetail.publishTime) }}</span>
-          </div>
-          <div class="rounded-md border border-border p-3">
-            <NoticeHtmlView :detail="noticeDetail" :show-head="false" />
-          </div>
-        </template>
-        <div v-else-if="!noticeDetailLoading" class="ct-empty">未取到公告详情</div>
-      </a-spin>
-    </a-modal>
-
-    <!-- 外部公告预览（复用 noticeExternal DetailModal：净化正文 / PDF / 附件病毒状态 / 前台观感；审核权限由 openExternalDetail 判权） -->
-    <ExternalDetail />
-
 
     <!-- 提交备案（项目编号随行带入；filingType 为业务约定文本） -->
     <a-modal
@@ -594,42 +536,42 @@ v-model="query.state" label="管理态" :options="[
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="项目编号" name="projectCode">
-              <a-input v-model:value="form.projectCode" placeholder="唯一编号，用于与公告/标段关联" />
+              <a-input v-model:value="form.projectCode" :disabled="isEdit" placeholder="系统关联用唯一编号；登记后不可改，如由系统分配则免录" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="项目名称" name="projectName">
-              <a-input v-model:value="form.projectName" />
+              <a-input v-model:value="form.projectName" placeholder="如：某输气管线防腐保温工程" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="地区编码" name="regionCode"><a-input v-model:value="form.regionCode" /></a-form-item>
+            <a-form-item label="地区编码" name="regionCode"><a-input v-model:value="form.regionCode" placeholder="GB/T 2260 行政区划代码，如 610111" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="法人" name="legalPerson"><a-input v-model:value="form.legalPerson" /></a-form-item>
+            <a-form-item label="法人" name="legalPerson"><a-input v-model:value="form.legalPerson" placeholder="法定代表人姓名" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="行业分类" name="industriesType"><a-input v-model:value="form.industriesType" /></a-form-item>
+            <a-form-item label="行业分类" name="industriesType"><a-input v-model:value="form.industriesType" placeholder="行业类别（GB/T 4754-2017）" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="投资代码" name="investProjectCode">
-              <a-input v-model:value="form.investProjectCode" />
+              <a-input v-model:value="form.investProjectCode" placeholder="投资项目统一代码" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="审批部门" name="approvalDeptName">
-              <a-input v-model:value="form.approvalDeptName" />
+              <a-input v-model:value="form.approvalDeptName" placeholder="审批部门名称" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="审批文号" name="approvalDocNo"><a-input v-model:value="form.approvalDocNo" /></a-form-item>
+            <a-form-item label="审批文号" name="approvalDocNo"><a-input v-model:value="form.approvalDocNo" placeholder="审批文号" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="资金来源" name="fundSource"><a-input v-model:value="form.fundSource" /></a-form-item>
+            <a-form-item label="资金来源" name="fundSource"><a-input v-model:value="form.fundSource" placeholder="资金来源（无字典时手工填写）" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="出资规模" name="contributionScale">
-              <a-input v-model:value="form.contributionScale" />
+              <a-input v-model:value="form.contributionScale" placeholder="出资比例，如 60%" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -645,11 +587,11 @@ v-model="query.state" label="管理态" :options="[
           </a-col>
           <a-col :span="24">
             <a-form-item label="项目规模" name="projectScale">
-              <a-textarea v-model:value="form.projectScale" :rows="2" />
+              <a-textarea v-model:value="form.projectScale" :rows="2" placeholder="项目规模描述" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="备注" name="remark"><a-textarea v-model:value="form.remark" :rows="2" /></a-form-item>
+            <a-form-item label="备注" name="remark"><a-textarea v-model:value="form.remark" :rows="2" placeholder="备注" /></a-form-item>
           </a-col>
         </a-row>
       </a-form>
