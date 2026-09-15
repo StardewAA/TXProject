@@ -7,19 +7,23 @@
  *   · fields 为 ProjectVO 数据集全量字段（key=规范英文名），详情按原样列出，不硬编码字段名清单；
  *   · 追溯（trace）一次取回：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 + 统计。 */
 import { computed, h, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
+import { useVbenModal } from '@vben/common-ui';
 import { useAccessStore } from '@vben/stores';
 
 import { message, Modal } from 'ant-design-vue';
 
 import { FILING_STATUS_OPTIONS, type FilingApi, receiveFilingResult, submitFiling } from '#/api/bidding/filing';
+import { fetchNoticeDetail, type NoticeApi } from '#/api/bidding/notice';
 import {
   deleteProject,
   getProject,
   getProjectPage,
   type ProjectApi,
   saveProject,
+  traceBidSection,
   traceProject,
   traceTenderProject,
 } from '#/api/bidding/project';
@@ -28,14 +32,19 @@ import { fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
 import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
+import DetailModal from '../noticeExternal/modules/detail.vue';
+import NoticeHtmlView from '../notice/NoticeHtmlView.vue';
+import TraceLevelPanel, { type TraceLevel } from './TraceLevelPanel.vue';
 
 import '../certificate/cert.css';
 
+const router = useRouter();
+
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-/* 字典：追溯抽屉里的状态/类型一律走字典（dictLabel/dictTag 自带回落——字典未下发时回显原码、空值给"—"），
- * 避免把中文枚举硬编码在前端（用户硬约束：状态码/枚举值必须支持动态配置）。 */
-const { dictLabel, dictOptions, dictTag } = useCertMeta();
+/* 字典：备案状态下拉等走字典（dictOptions——字典未下发时回显原码、空值给"—"）。
+ * 追溯抽屉内状态/类型字典（dictLabel/dictTag）已随面板内容迁至 TraceLevelPanel.vue。 */
+const { dictOptions } = useCertMeta();
 
 /** 权限判定：权限码未下发时放行（最终由后端 @PreAuthorize 裁决），避免界面被锁死 */
 function can(code: string): boolean {
@@ -176,61 +185,96 @@ const columns = [
   { title: '法定代表人', dataIndex: 'legalPerson', key: 'legalPerson', width: 130 },
   { title: '状态', dataIndex: 'state', key: 'state', width: 100 },
   { title: '登记时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
-  { title: '操作', key: 'action', width: 210, fixed: 'right' as const },
+  { title: '操作', key: 'action', width: 270, fixed: 'right' as const },
 ];
 
-/* ===== 详情 / 追溯（一次 trace 拿全关联，避免按域多次请求） ===== */
-const traceOpen = ref(false);
-const traceLoading = ref(false);
-const trace = ref<null | ProjectApi.Trace>(null);
-const currentRow = ref<null | ProjectApi.Project>(null);
+/* ===== 追溯抽屉栈（层叠下钻：L1 项目 → L2 招标项目 → L3 标段） =====
+ * 定稿口径（2026-09-14）：抽屉保留并**可层叠拉出下级抽屉**（逐层内缩 + 去遮罩），
+ * 同时行内「详情 ↗」打开**通用实体详情页**（/bidding/entity/:type/:code，登记/编辑/发布在那里做）。
+ * 栈语义：push 一层、关闭只关当前层、上层保留；L3 标段层取 traceBidSection 的关联内部公告。 */
+let levelSeq = 0;
+const stack = ref<TraceLevel[]>([]);
 
-async function openTrace(r: ProjectApi.Project) {
-  currentRow.value = r;
-  traceOpen.value = true;
-  traceLoading.value = true;
-  trace.value = null;
+async function fetchTraceFor(t: TraceLevel['queryType'], code: string) {
+  if (t === 'PROJECT') return traceProject(code);
+  if (t === 'TENDER_PROJECT') return traceTenderProject(code);
+  return traceBidSection(code);
+}
+async function pushLevel(type: TraceLevel['queryType'], code: string, label: string): Promise<void> {
+  const level: TraceLevel = {
+    key: levelSeq++,
+    queryType: type,
+    queryCode: code,
+    label,
+    open: true,
+    trace: null,
+    loading: true,
+  };
+  stack.value.push(level);
   try {
-    trace.value = await traceProject(r.projectCode);
+    level.trace = await fetchTraceFor(type, code);
   } catch {
-    trace.value = null;
+    level.trace = null;
   } finally {
-    traceLoading.value = false;
+    level.loading = false;
+  }
+}
+/** 打开项目级追溯（列表行「追溯」） */
+function openTrace(r: ProjectApi.Project): void {
+  void pushLevel('PROJECT', r.projectCode, r.projectName || r.projectCode);
+}
+/** 抽屉行「拉出下级」 */
+function onDrill(v: { code: string; label: string; type: 'BID_SECTION' | 'TENDER_PROJECT' }): void {
+  void pushLevel(v.type, v.code, v.label);
+}
+/** 关闭当前层（含其上所有层）——只关自己、上层保留 = 栈语义 */
+function closeLevel(key: number): void {
+  const i = stack.value.findIndex((l) => l.key === key);
+  if (i >= 0) {
+    const l = stack.value[i];
+    if (l) l.open = false;
+    stack.value.splice(i); // 关闭本层及其上所有层
+  }
+}
+function onDrawerUpdate(key: number, open: boolean): void {
+  if (!open) closeLevel(key);
+}
+
+/* ===== 通用实体详情页（/bidding/entity/:type/:code，登记/编辑/发布在那里做，不限实体） ===== */
+function openEntityDetail(v: { code: string; type: 'BID_SECTION' | 'PROJECT' | 'TENDER_PROJECT' }): void {
+  void router.push(`/bidding/entity/${v.type}/${encodeURIComponent(v.code)}`);
+}
+
+/* ===== 公告详情弹窗（内部公告：附件 / 版式 PDF，NoticeHtmlView 渲染） ===== */
+const noticeDetailOpen = ref(false);
+const noticeDetailLoading = ref(false);
+const noticeDetail = ref<NoticeApi.Detail | null>(null);
+async function openNoticeDetail(row: ProjectApi.TraceNotice): Promise<void> {
+  if (row.id === undefined) return;
+  noticeDetailOpen.value = true;
+  noticeDetailLoading.value = true;
+  noticeDetail.value = null;
+  try {
+    noticeDetail.value = await fetchNoticeDetail(row.id);
+  } catch {
+    noticeDetail.value = null;
+  } finally {
+    noticeDetailLoading.value = false;
   }
 }
 
-/** 数据集字段：只列出有值的项（null 表示该数据集未覆盖此字段） */
-/** 追溯层级由**后端出参**决定（ProjectTraceRespVO.queryType），前端不另设状态，避免两处口径打架 */
-const traceIsTender = computed(() => trace.value?.queryType === 'TENDER_PROJECT');
-/** 招标项目层的自身信息：从同一出参的 tenderProjects 里按 queryCode 取（无 queryCode 时取首条） */
-const tenderSelf = computed(() => {
-  const list = trace.value?.tenderProjects ?? [];
-  const code = trace.value?.queryCode ?? '';
-  return list.find((t) => (t.tenderProjectCode ?? '') === code) ?? list[0];
+/* ===== 外部公告预览（复用 noticeExternal DetailModal，需审核权限 bidding:notice-external:update） ===== */
+const [ExternalDetail, externalDetailModalApi] = useVbenModal({
+  connectedComponent: DetailModal,
+  destroyOnClose: true,
 });
-const traceTitle = computed(() =>
-  traceIsTender.value ? '招标项目全景追溯 · ' + (trace.value?.queryCode ?? '') : '项目全景追溯',
-);
-/** 招标项目本级追溯：招标项目 → 项目/标段 + 公告/外部公告/备案/关注/主体 + 统计（与项目级同一出参 VO） */
-async function openTenderTrace(tenderProjectCode: string): Promise<void> {
-  traceLoading.value = true;
-  try {
-    trace.value = await traceTenderProject(tenderProjectCode);
-  } catch {
-    // 静默：失败由请求层提示
-  } finally {
-    traceLoading.value = false;
+function openExternalDetail(row: ProjectApi.TraceExternalNotice): void {
+  if (!can('bidding:notice-external:update')) {
+    message.warning('无外部公告审核权限（bidding:notice-external:update），无法预览');
+    return;
   }
+  externalDetailModalApi.setData(row as never).open();
 }
-/** 下钻后返回项目级追溯（用当前行重取，保持抽屉不关） */
-function backToProjectTrace(): void {
-  if (currentRow.value) void openTrace(currentRow.value);
-}
-
-const fieldEntries = computed(() => {
-  const f = (trace.value?.project?.fields ?? currentRow.value?.fields ?? {}) as Record<string, unknown>;
-  return Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '');
-});
 
 /* ===== 新建 / 编辑 ===== */
 const formOpen = ref(false);
@@ -386,6 +430,7 @@ v-model="query.state" label="管理态" :options="[
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
                 <a @click="openTrace(record)">追溯</a>
+                <a class="text-blue-600" @click="openEntityDetail({ type: 'PROJECT', code: record.projectCode })">详情 ↗</a>
                 <a v-if="can('bidding:filing:create')" @click="openFiling(record)">提交备案</a>
                 <a v-if="can('bidding:filing:update')" @click="openReceipt()">登记回执</a>
                 <a v-if="can('bidding:project:update')" @click="onEdit(record)">编辑</a>
@@ -400,277 +445,56 @@ v-model="query.state" label="管理态" :options="[
       </div>
     </div>
 
-    <!-- 追溯抽屉：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 -->
-    <a-drawer v-model:open="traceOpen" class="bid-ind" :width="1000" :title="traceTitle" destroy-on-close>
-      <a-spin :spinning="traceLoading">
-        <div v-if="traceIsTender" class="mb-2">
-          <a class="text-xs text-blue-600" @click="backToProjectTrace">‹ 返回项目级追溯</a>
-        </div>
-        <template v-if="trace">
-          <div class="ct-panel-meta mb-3">
-            查询：{{ trace.queryCode || currentRow?.projectCode }}（{{ trace.queryType || 'PROJECT' }}）
+    <!-- 追溯抽屉栈：层叠下钻（L1 项目 → L2 招标项目 → L3 标段），逐层内缩 24px + 去遮罩（有层级感）+ 栈语义（关只关当前层，上层保留） -->
+    <a-drawer
+      v-for="(level, i) in stack"
+      :key="level.key"
+      :open="level.open"
+      class="bid-ind"
+      :width="1000 - 24 * i"
+      :mask="i === 0"
+      :title="level.label || level.queryCode"
+      @update:open="(v: boolean) => onDrawerUpdate(level.key, v)"
+    >
+      <TraceLevelPanel
+        :level="level"
+        :is-top="i === stack.length - 1"
+        @drill="onDrill"
+        @detail="openEntityDetail"
+        @notice="openNoticeDetail"
+        @external="openExternalDetail"
+        @close="closeLevel(level.key)"
+      />
+    </a-drawer>
+
+    <!-- 内部公告详情弹窗（NoticeHtmlView：版式 PDF / 附件 / 招标文件获取指引）。点击 L3 标段/任一层「关联公告」行弹出 -->
+    <a-modal
+      v-model:open="noticeDetailOpen"
+      :title="noticeDetail?.title || '公告详情'"
+      :width="900"
+      :footer="null"
+      destroy-on-close
+    >
+      <a-spin :spinning="noticeDetailLoading">
+        <template v-if="noticeDetail">
+          <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span v-if="noticeDetail.noticeCode" class="mono">{{ noticeDetail.noticeCode }}</span>
+            <span v-if="noticeDetail.noticeTypeName">{{ noticeDetail.noticeTypeName }}</span>
+            <span v-if="noticeDetail.status">{{ noticeDetail.status }}</span>
+            <span v-if="noticeDetail.publisherName">{{ noticeDetail.publisherName }}</span>
+            <span v-if="noticeDetail.publishTime">发布时间 {{ fmtDateTime(noticeDetail.publishTime) }}</span>
           </div>
-          <!-- 统计原先用 v-for 直出后端键名（tenderProjectCount：3），中文标签后才可用；
-               后端一次聚合 6 个域的计数与最近动态，正是本抽屉"一屏看清"要用的那一行。 -->
-          <a-descriptions v-if="trace.stats" :column="4" size="small" bordered class="mb-3">
-            <a-descriptions-item label="关联招标项目">{{ trace.stats.tenderProjectCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="关联标段">{{ trace.stats.sectionCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="内部公告">{{ trace.stats.noticeCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="外部公告">{{ trace.stats.externalNoticeCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="备案记录">{{ trace.stats.filingCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="关注项">{{ trace.stats.followCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="各域最近动态" :span="4">
-              {{ fmtDateTime(trace.stats.latestDynamicTime) }}
-            </a-descriptions-item>
-          </a-descriptions>
-
-          <template v-if="traceIsTender">
-            <div class="ct-panel-t mb-2">招标项目基本信息</div>
-            <a-descriptions :column="2" size="small" bordered class="mb-3">
-              <a-descriptions-item label="招标项目编号">{{ trace.queryCode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="名称">{{ tenderSelf?.tenderProjectName || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="招标方式">{{ tenderSelf?.tenderMode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="招标人">{{ tenderSelf?.tendererName || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="所属项目">{{ tenderSelf?.projectCode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="管理态">{{ tenderSelf?.state || '—' }}</a-descriptions-item>
-            </a-descriptions>
-          </template>
-
-          <div v-if="!traceIsTender" class="ct-panel-t mb-2">项目基本信息</div>
-          <a-descriptions v-if="!traceIsTender" :column="2" size="small" bordered class="mb-3">
-            <a-descriptions-item label="项目编号">{{ trace.project?.projectCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="项目名称">{{ trace.project?.projectName || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="地区编码">{{ trace.project?.regionCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="法人">{{ trace.project?.legalPerson || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="投资代码">{{ trace.project?.investProjectCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="审批文号">{{ trace.project?.approvalDocNo || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="登记时间">{{ fmtDateTime(trace.project?.createTime) }}</a-descriptions-item>
-            <a-descriptions-item label="管理态">{{ trace.project?.state || '—' }}</a-descriptions-item>
-          </a-descriptions>
-
-          <div v-if="!traceIsTender" class="ct-panel-t mb-2">数据集字段（ProjectVO）</div>
-          <a-descriptions v-if="!traceIsTender && fieldEntries.length" :column="2" size="small" bordered class="mb-3">
-            <a-descriptions-item v-for="[k, v] in fieldEntries" :key="k" :label="k">
-              {{ typeof v === 'object' ? JSON.stringify(v) : v }}
-            </a-descriptions-item>
-          </a-descriptions>
-          <div v-else-if="!traceIsTender" class="ct-tip mb-3">该记录未带数据集字段（fields 为空）</div>
-
-          <div class="ct-panel-t mb-2">关联招标项目（{{ trace.tenderProjects?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '招标项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '招标项目编号' }), dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
-              { title: '名称', dataIndex: 'tenderProjectName', key: 'name' },
-              { title: '招标方式', dataIndex: 'tenderMode', key: 'mode', width: 120 },
-              { title: '招标人', dataIndex: 'tendererName', key: 'tenderer', width: 200 },
-              { title: '操作', key: 'op', width: 110 },
-            ]"
-            :data-source="trace.tenderProjects ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'op'">
-                <a class="text-xs text-blue-600" @click="openTenderTrace(record.tenderProjectCode)">本级追溯</a>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联招标项目</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关联标段（{{ trace.sections?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '标段编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '标段编号' }), dataIndex: 'bidSectionCode', key: 'code', width: 200 },
-              { title: '名称', dataIndex: 'bidSectionName', key: 'name' },
-              { title: '所属招标项目', dataIndex: 'tenderProjectCode', key: 'tp', width: 200 },
-              { title: '合同估算价', dataIndex: 'contractReckonPrice', key: 'price', width: 130 },
-            ]"
-            :data-source="trace.sections ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #emptyText><div class="ct-empty">无关联标段</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关联公告（{{ trace.notices?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table"
-            :columns="[
-              { title: '公告编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '公告编号' }), dataIndex: 'noticeCode', key: 'code', width: 200 },
-              { title: '标题', dataIndex: 'title', key: 'title' },
-              { title: '类型', dataIndex: 'noticeTypeName', key: 'type', width: 130 },
-              { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 170 },
-            ]"
-            :data-source="trace.notices ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联公告</div></template>
-          </a-table>
-
-          <!-- 以下四张清单后端一直在返回，此前只有一行条数（"追溯"却看不到记录）。
-               原文按本仓外链约定只给可复制文本 + 可达性标记，不直接给 <a>（外链需走 /go 白名单）。 -->
-          <div class="ct-panel-t mb-2">外部公告（{{ trace.externalNotices?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '标题', dataIndex: 'title', key: 'title' },
-              { title: '信息源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
-              { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 130 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
-              { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 120 },
-              { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 160 },
-              { title: '原文', key: 'origUrl', width: 90 },
-            ]"
-            :data-source="trace.externalNotices ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
-              <template v-else-if="column.key === 'contentType'">
-                {{ dictLabel('notice_external_content_type', record.contentType) }}
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="dictTag('notice_external_status', record.status).color">
-                  {{ dictTag('notice_external_status', record.status).label }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'auditStatus'">
-                <a-tag :color="dictTag('notice_external_audit_status', record.auditStatus).color">
-                  {{ dictTag('notice_external_audit_status', record.auditStatus).label }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'origUrl'">
-                <span v-if="record.origUrl" class="mono" :title="record.origUrl" style="cursor: text">
-                  {{ record.available ? '可达（可复制）' : '平台内不可达' }}
-                </span>
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联外部公告</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">备案记录（{{ trace.filings?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '备案类型', dataIndex: 'filingType', key: 'filingType', width: 140 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 140 },
-              { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 170 },
-              { title: '项目编号', dataIndex: 'projectCode', key: 'projectCode', width: 200 },
-              { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'tenderProjectCode' },
-            ]"
-            :data-source="trace.filings ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'submitTime'">{{ fmtDateTime(record.submitTime) }}</template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="dictTag('filing_status', record.status).color">
-                  {{ dictTag('filing_status', record.status).label }}
-                </a-tag>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联备案</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关注项（{{ trace.follows?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '名称', dataIndex: 'displayName', key: 'displayName' },
-              { title: '关注类型', dataIndex: 'followType', key: 'followType', width: 120 },
-              { title: '状态', dataIndex: 'followStatus', key: 'followStatus', width: 110 },
-              { title: '最近动态', dataIndex: 'latestDynamicTime', key: 'latestDynamicTime', width: 170 },
-              { title: '未读', dataIndex: 'unreadCount', key: 'unreadCount', width: 90 },
-            ]"
-            :data-source="trace.follows ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'latestDynamicTime'">
-                {{ fmtDateTime(record.latestDynamicTime) }}
-              </template>
-              <template v-else-if="column.key === 'unreadCount'">
-                <a-badge
-                  v-if="Number(record.unreadCount ?? 0) > 0"
-                  :count="record.unreadCount"
-                  :overflow-count="99"
-                />
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关注项</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">参与主体（{{ trace.subjects?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table"
-            :columns="[
-              { title: '来源', dataIndex: 'source', key: 'source', width: 190 },
-              { title: '主体角色', dataIndex: 'subjectRole', key: 'subjectRole', width: 120 },
-              { title: '主体名称', dataIndex: 'subjectName', key: 'subjectName' },
-              { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 130 },
-              { title: '证件号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '证件号' }), dataIndex: 'code', key: 'code', width: 190 },
-              { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 120 },
-              { title: '档案完备', dataIndex: 'profileComplete', key: 'profileComplete', width: 100 },
-            ]"
-            :data-source="trace.subjects ?? []"
-            :pagination="false"
-            row-key="code"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'profileComplete'">
-                <a-tag :color="record.profileComplete ? 'green' : 'orange'">
-                  {{ record.profileComplete ? '完备' : '缺项' }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'source'">
-                {{ dictLabel('trace_subject_source', record.source) }}
-              </template>
-              <template v-else-if="column.key === 'subjectRole'">
-                {{ dictLabel('subject_type', record.subjectRole) }}
-              </template>
-              <template v-else-if="column.key === 'codeType'">
-                <!-- tenderer_code_type 无后端枚举可对齐（外部标准码），故按原码展示，见字典脚本"不登记"说明 -->
-                {{ record.codeType || '—' }}
-              </template>
-              <template v-else-if="column.key === 'authStatus'">
-                <a-tag v-if="record.authStatus" :color="dictTag('subject_auth_status', record.authStatus).color">
-                  {{ dictTag('subject_auth_status', record.authStatus).label }}
-                </a-tag>
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无参与主体</div></template>
-          </a-table>
-
-          <div class="ct-tip mt-3">
-            说明：状态与类型均取自字典（filing_status / subject_auth_status / subject_type /
-            trace_subject_source / notice_external_status / notice_external_audit_status /
-            notice_external_content_type），可在后台动态调整文案；字典未下发时回显原码，不会空白。
-            「证件类型」（tenderer_code_type）取值来自外部标准码、模块内无枚举可对齐，故按原码展示。
-            「原文」按本仓外链约定只给可复制文本，不直接给链接；平台内可达性由后端 available（ACTIVE 才可达）判定。
+          <div class="rounded-md border border-border p-3">
+            <NoticeHtmlView :detail="noticeDetail" :show-head="false" />
           </div>
         </template>
-        <div v-else-if="!traceLoading" class="ct-empty">未取到追溯数据</div>
+        <div v-else-if="!noticeDetailLoading" class="ct-empty">未取到公告详情</div>
       </a-spin>
-    </a-drawer>
+    </a-modal>
+
+    <!-- 外部公告预览（复用 noticeExternal DetailModal：净化正文 / PDF / 附件病毒状态 / 前台观感；审核权限由 openExternalDetail 判权） -->
+    <ExternalDetail />
+
 
     <!-- 提交备案（项目编号随行带入；filingType 为业务约定文本） -->
     <a-modal

@@ -37,7 +37,19 @@ const coreRoutes: RouteRecordRaw[] = [
     name: 'Root',
     path: '/',
     redirect: preferences.app.defaultHomePath,
-    children: [],
+    children: [
+      /**
+       * 通用实体详情页（静态路由，不挂菜单，与 /portal 同机制）：
+       * 项目台账抽屉/列表行「详情 ↗」打开；:type ∈ PROJECT|TENDER_PROJECT|BID_SECTION|NOTICE|NOTICE_EXTERNAL。
+       * 承载登记/编辑/发布（原工作台能力），不限实体类型；见 views/bidding/entityDetail/index.vue。
+       */
+      {
+        name: 'BiddingEntityDetail',
+        path: 'bidding/entity/:type/:code',
+        component: () => import('#/views/bidding/entityDetail/index.vue'),
+        meta: { title: '实体详情', hideInMenu: true, hideInTab: true },
+      },
+    ],
   },
   {
     component: AuthPageLayout,

@@ -329,7 +329,7 @@ function deleteCurrentManual(): void {
   dropManualRun(processManual.value.id);
   processOpen.value = false;
 }
-/* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层展开） ----------
+/* ---------- 详情档（任务/批次“两档视图”之舒张层，Drawer 900 就地分层；2026-09-14 口径修订：允许嵌套 Drawer） ----------
  * 业务：概览卡/行克制收敛后，点整卡或「详情 ▸」进入详情档铺开分层——
  *       任务详情 = 概要 → 同批任务(该行有 jobId 时) → 过程；批次详情 = 批次概要 → 该批采集任务 N 条(KPI+克制行) → 选中任务过程。
  * 理由：查看过程/重试/批内任务下钻等操作收进详情档，列表不再跳 tab（旧 drillJob 已被批次抽屉取代），
@@ -527,7 +527,7 @@ async function loadJobTasks(j: CrawlExternalApi.JobItem): Promise<void> {
   }
 }
 
-/** 批次详情层3：选中任务 → 就地回读该任务过程明细（同抽屉第二区域展开） */
+/** 批次详情层3：选中任务 → 就地回读该任务过程明细（同抽屉第二区域展开；2026-09-14 口径修订：允许嵌套 Drawer） */
 async function pickJobTask(t: CrawlExternalApi.TaskItem): Promise<void> {
   if (selJobTask.value && selJobTask.value.id === t.id) {
     selJobTask.value = undefined; // 再次点击同一条 → 收起
@@ -1046,7 +1046,7 @@ const incompleteOf = (r: ManualRun) =>
       <div v-else class="text-sm font-semibold text-muted-foreground">加载中…</div>
     </Drawer>
 
-    <!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染展开；打开方=①任务卡详情 / ④批次行详情） -->
+<!-- 详情档抽屉（任务/批次两档视图之“舒张”层：宽 900 就地渲染；2026-09-14 口径修订：允许嵌套 Drawer；打开方=①任务卡详情 / ④批次行详情） -->
     <Drawer v-model:open="detailOpen" class="bid-ind" :width="900" :title="detailTitle">
       <!-- ===== 批次详情：层1 批次概要 → 层2 该批爬虫任务 N 条（KPI 卡+克制行） → 层3 选中任务过程（同抽屉第二区域） ===== -->
       <div v-if="detailKind === 'job' && detailJob" class="space-y-3">
@@ -1104,7 +1104,7 @@ const incompleteOf = (r: ManualRun) =>
           </div>
         </div>
 
-        <!-- 层3：选中任务 → 该任务过程（getCrawlTask 详情 Descriptions，放同抽屉内第二区域展开） -->
+<!-- 层3：选中任务 → 该任务过程（getCrawlTask 详情 Descriptions，放同抽屉内第二区域；2026-09-14 口径修订：允许嵌套 Drawer） -->
         <div v-if="selJobTask" class="ind-panel">
           <div class="ind-panel-h">
             <span class="ind-panel-t">任务过程</span>
