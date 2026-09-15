@@ -1337,6 +1337,7 @@ watch(activeKey, (k) => {
       </div>
       <div class="ct-actions">
         <a-select
+          v-if="subjectOptions.length > 1"
           v-model:value="query.entId"
           :loading="subjectLoading"
           :options="subjectOptions"
@@ -1948,7 +1949,7 @@ watch(activeKey, (k) => {
         </div>
       </a-tab-pane>
 
-      <a-tab-pane key="review" tab="⑥ 平台审查">
+      <a-tab-pane v-if="can('bidding:qualification:platform-review')" key="review" tab="⑥ 平台审查">
         <div class="ct-panel">
           <div class="ct-panel-t">企业资质 · 平台人工审查</div>
           <a-alert type="info" show-icon class="mb-3">

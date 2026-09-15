@@ -360,7 +360,7 @@ function confirmScan() {
 function confirmDispatch() {
   Modal.confirm({
     title: '手动派发通知发件箱',
-    content: '把 PENDING/FAILED 到点的通知立刻投递（已发送记录不会重复发送）。',
+    content: '把处于「待投递 / 投递失败」状态的到期通知立即投递（已发送记录不会重复发送）。',
     okText: '立即派发',
     cancelText: '取消',
     async onOk() {

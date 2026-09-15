@@ -374,6 +374,7 @@ onMounted(() => {
       </div>
       <div class="ct-actions">
         <a-select
+          v-if="subjectOptions.length > 1"
           v-model:value="entId"
           :loading="subjectLoading"
           :options="subjectOptions"
