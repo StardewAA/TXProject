@@ -9,14 +9,9 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.framework.translate.core.TranslateUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.product.vo.product.CrmProductPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.product.vo.product.CrmProductRespVO;
-import cn.iocoder.txgy.module.crm.controller.admin.product.vo.product.CrmProductSaveReqVO;
-import cn.iocoder.txgy.module.crm.controller.admin.product.vo.product.CrmProductWmsSyncRespVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.product.CrmProductDO;
 import cn.iocoder.txgy.module.crm.enums.product.CrmProductStatusEnum;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
-import cn.iocoder.txgy.module.crm.service.product.CrmProductWmsSyncService;
-import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
-import org.dromara.core.trans.anno.TransMethodResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,67 +37,31 @@ public class CrmProductController {
 
     @Resource
     private CrmProductService productService;
-    @Resource
-    private CrmProductWmsSyncService productWmsSyncService;
-    @Resource
-    private AdminUserApi adminUserApi;
-
-    @PostMapping("/create")
-    @Operation(summary = "创建产品")
-    @PreAuthorize("@ss.hasPermission('crm:product:create')")
-    public CommonResult<Long> createProduct(@Valid @RequestBody CrmProductSaveReqVO createReqVO) {
-        return success(productService.createProduct(createReqVO));
-    }
-
-    @PutMapping("/update")
-    @Operation(summary = "更新产品")
-    @PreAuthorize("@ss.hasPermission('crm:product:update')")
-    public CommonResult<Boolean> updateProduct(@Valid @RequestBody CrmProductSaveReqVO updateReqVO) {
-        productService.updateProduct(updateReqVO);
-        return success(true);
-    }
-
-    @DeleteMapping("/delete")
-    @Operation(summary = "删除产品")
-    @Parameter(name = "id", description = "编号", required = true)
-    @PreAuthorize("@ss.hasPermission('crm:product:delete')")
-    public CommonResult<Boolean> deleteProduct(@RequestParam("id") Long id) {
-        productService.deleteProduct(id);
-        return success(true);
-    }
 
     @GetMapping("/get")
-    @Operation(summary = "获得产品")
-    @Parameter(name = "id", description = "编号", required = true, example = "1024")
+    @Operation(summary = "获得产品", description = "实时读取 WMS 仓库库存；WMS 不存在该产品时返回空")
+    @Parameter(name = "id", description = "编号，即 WMS 规格编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('crm:product:query')")
-    @TransMethodResult
     public CommonResult<CrmProductRespVO> getProduct(@RequestParam("id") Long id) {
         CrmProductDO product = productService.getProduct(id);
         return success(BeanUtils.toBean(product, CrmProductRespVO.class));
     }
 
     @GetMapping("/simple-list")
-    @Operation(summary = "获得产品精简列表", description = "只包含被开启的产品，主要用于前端的下拉选项")
+    @Operation(summary = "获得产品精简列表", description = "实时读取 WMS 仓库库存，只包含被开启的产品，主要用于前端的下拉选项")
     public CommonResult<List<CrmProductRespVO>> getProductSimpleList() {
         List<CrmProductDO> list = productService.getProductListByStatus(CrmProductStatusEnum.ENABLE.getStatus());
         return success(convertList(list, product -> new CrmProductRespVO().setId(product.getId()).setName(product.getName())
-                .setUnit(product.getUnit()).setNo(product.getNo()).setPrice(product.getPrice())));
+                .setUnit(product.getUnit()).setNo(product.getNo()).setPrice(product.getPrice())
+                .setStockQuantity(product.getStockQuantity())));
     }
 
     @GetMapping("/page")
-    @Operation(summary = "获得产品分页")
+    @Operation(summary = "获得产品分页", description = "实时读取 WMS 仓库库存；WMS 新增、修改、删除后立即生效")
     @PreAuthorize("@ss.hasPermission('crm:product:query')")
-    @TransMethodResult
     public CommonResult<PageResult<CrmProductRespVO>> getProductPage(@Valid CrmProductPageReqVO pageVO) {
         PageResult<CrmProductDO> pageResult = productService.getProductPage(pageVO);
         return success(BeanUtils.toBean(pageResult, CrmProductRespVO.class));
-    }
-
-    @PostMapping("/sync-from-wms")
-    @Operation(summary = "从 WMS 同步产品", description = "读取 WMS 商品与规格并导入 CRM 产品管理；只读取 WMS 数据，不修改 WMS 库存")
-    @PreAuthorize("@ss.hasPermission('crm:product:sync')")
-    public CommonResult<CrmProductWmsSyncRespVO> syncProductFromWms() {
-        return success(productWmsSyncService.syncFromWms());
     }
 
     @GetMapping("/export-excel")

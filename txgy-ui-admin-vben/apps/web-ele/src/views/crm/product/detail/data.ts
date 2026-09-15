@@ -7,18 +7,16 @@ import { erpPriceInputFormatter } from '@vben/utils';
 
 import { DictTag } from '#/components/dict-tag';
 
-/** 详情页的字段 */
+/** 详情页的字段（数据实时取自 WMS 仓库库存） */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
-      field: 'categoryName',
-      label: '产品类别',
+      field: 'stockQuantity',
+      label: 'WMS 库存数量',
     },
     {
-      field: 'unit',
-      label: '产品单位',
-      render: (val) =>
-        h(DictTag, { type: DICT_TYPE.CRM_PRODUCT_UNIT, value: val }),
+      field: 'unitName',
+      label: '单位',
     },
     {
       field: 'price',
@@ -32,7 +30,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
   ];
 }
 
-/** 详情页的基础字段 */
+/** 详情页的基础字段（数据实时取自 WMS 仓库库存） */
 export function useDetailBaseSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -49,12 +47,12 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
       render: (val) => erpPriceInputFormatter(val),
     },
     {
-      field: 'description',
-      label: '产品描述',
+      field: 'stockQuantity',
+      label: 'WMS 库存数量',
     },
     {
-      field: 'categoryName',
-      label: '产品类型',
+      field: 'description',
+      label: '产品描述',
     },
     {
       field: 'status',
@@ -63,10 +61,20 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
         h(DictTag, { type: DICT_TYPE.CRM_PRODUCT_STATUS, value: val }),
     },
     {
-      field: 'unit',
-      label: '产品单位',
-      render: (val) =>
-        h(DictTag, { type: DICT_TYPE.CRM_PRODUCT_UNIT, value: val }),
+      field: 'unitName',
+      label: '单位',
+    },
+    {
+      field: 'wmsItemId',
+      label: 'WMS 商品编号',
+    },
+    {
+      field: 'wmsSkuId',
+      label: 'WMS 规格编号',
+    },
+    {
+      field: 'wmsSkuCode',
+      label: 'WMS 规格编码',
     },
   ];
 }

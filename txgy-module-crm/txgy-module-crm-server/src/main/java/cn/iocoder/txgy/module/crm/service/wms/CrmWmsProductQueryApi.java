@@ -7,10 +7,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.List;
+
 /**
- * CRM 读取 WMS 商品的只读接口契约。
+ * CRM 读取 WMS 商品（仓库库存）的只读接口契约。
  *
- * <p>对应 WMS 交付的 {@code GET /admin-api/wms/crm/products/page}。
+ * <p>对应 WMS 交付的 {@code GET /admin-api/wms/crm/products/page}、{@code /get}、{@code /list}。
  * tenant-id 由 {@code TenantRequestInterceptor} 按当前租户上下文自动透传，Authorization 由配置注入。
  * 该接口只读：不新增、修改、冻结、扣减或调整 WMS 库存。</p>
  */
@@ -23,6 +25,15 @@ public interface CrmWmsProductQueryApi {
                                                                  @RequestParam("pageSize") Integer pageSize,
                                                                  @RequestParam(value = "materialCode", required = false) String materialCode,
                                                                  @RequestParam(value = "materialName", required = false) String materialName,
-                                                                 @RequestParam(value = "skuCode", required = false) String skuCode);
+                                                                 @RequestParam(value = "skuCode", required = false) String skuCode,
+                                                                 @RequestParam(value = "skuId", required = false) Long skuId);
+
+    @GetMapping("/admin-api/wms/crm/products/get")
+    CommonResult<CrmWmsProductSkuDTO> getProduct(@RequestHeader("Authorization") String authorization,
+                                                 @RequestParam("skuId") Long skuId);
+
+    @GetMapping("/admin-api/wms/crm/products/list")
+    CommonResult<List<CrmWmsProductSkuDTO>> getProductList(@RequestHeader("Authorization") String authorization,
+                                                           @RequestParam("skuIds") List<Long> skuIds);
 
 }

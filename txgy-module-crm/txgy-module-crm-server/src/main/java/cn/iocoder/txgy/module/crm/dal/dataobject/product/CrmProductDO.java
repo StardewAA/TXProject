@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.txgy.module.crm.enums.DictTypeConstants;
 import cn.iocoder.txgy.module.crm.enums.product.CrmProductStatusEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -88,5 +89,17 @@ public class CrmProductDO extends BaseDO {
      * 关联 {@link cn.iocoder.txgy.module.crm.enums.product.CrmProductDataSourceEnum}
      */
     private Integer dataSource;
+
+    /**
+     * WMS 仓库库存数量（非数据库字段，实时取自 WMS，按所有仓库汇总）
+     */
+    @TableField(exist = false)
+    private BigDecimal stockQuantity;
+
+    /**
+     * WMS 原始单位名称（非数据库字段，实时取自 WMS）
+     */
+    @TableField(exist = false)
+    private String unitName;
 
 }
