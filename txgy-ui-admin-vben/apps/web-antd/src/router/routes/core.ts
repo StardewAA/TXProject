@@ -311,7 +311,6 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'PortalProfile',
         path: 'profile',
-        component: () => import('#/views/portal/profile/index.vue'),
         meta: { title: '个人中心', hideInMenu: true },
       },
       {
