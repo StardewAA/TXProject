@@ -879,6 +879,16 @@ function remainTag(r: PersonnelCertApi.Cert) {
   if (d <= expiringDaysCfg.value) return { color: 'orange', label: `临期 ${d} 天` };
   return { color: 'green', label: `剩余 ${d} 天` };
 }
+
+/** 到期/预警标签悬浮说明（增强暗示）：解释剩余天数、预警窗口与配置来源 */
+function expiringHint(r: PersonnelCertApi.Cert): string {
+  const d = r.remainingDays;
+  if (d === undefined || d === null) return '';
+  const w = expiringDaysCfg.value;
+  if (d < 0) return `已过期 ${Math.abs(d)} 天：证书已不在有效期内，不可用于配证 / 申报，请尽快更新`;
+  if (d <= w) return `临期 ${d} 天：距到期不足预警窗口（阈值 ${w} 天，取配置 personnel.cert.expiring.window.days），请安排续期`;
+  return `剩余 ${d} 天：状态正常（预警阈值 ${w} 天，取配置 personnel.cert.expiring.window.days）`;
+}
 </script>
 
 <template>
@@ -1035,7 +1045,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   {{ record.startDate || '—' }} ~ {{ record.endDate || '—' }}
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">该员工暂无培训记录</div></template>
+              <template #emptyText><div class="ct-empty">该员工暂无培训记录：创建培训记录后这里会显示</div></template>
             </a-table>
 
             <a-table
@@ -1081,7 +1091,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   {{ record.startDate || '—' }} ~ {{ record.endDate || '（无固定期限）' }}
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">该员工暂无劳动合同记录</div></template>
+              <template #emptyText><div class="ct-empty">该员工暂无劳动合同记录：登记劳动合同后这里会显示</div></template>
             </a-table>
           </div>
         </div>
@@ -1141,7 +1151,9 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 </template>
                 <template v-else-if="column.key === 'validity'">
                   <div>{{ record.validFrom || '—' }} ~ {{ record.validTo || '长期' }}</div>
-                  <a-tag v-if="remainTag(record)" :color="remainTag(record)!.color">{{ remainTag(record)!.label }}</a-tag>
+                  <a-tooltip v-if="remainTag(record)" :title="expiringHint(record)">
+                    <a-tag :color="remainTag(record)!.color">{{ remainTag(record)!.label }}</a-tag>
+                  </a-tooltip>
                   <a-tag v-if="reviewTag(record)" :color="reviewTag(record)!.color">{{ reviewTag(record)!.label }}</a-tag>
                 </template>
                 <template v-else-if="column.key === 'certStatus'">
@@ -1166,7 +1178,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   </a-space>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无员工证书数据</div></template>
+              <template #emptyText><div class="ct-empty">暂无员工证书数据：按筛选条件查询，或先为员工建档证书</div></template>
             </a-table>
           </div>
         </div>
@@ -1213,7 +1225,9 @@ function remainTag(r: PersonnelCertApi.Cert) {
               <ul v-if="board.length" class="ct-tl">
                 <li v-for="b in board" :key="b.id">
                   <div class="tl-t">
-                    <a-tag :color="remainTag(b)?.color">{{ remainTag(b)?.label }}</a-tag>
+                    <a-tooltip v-if="remainTag(b)" :title="expiringHint(b)">
+                      <a-tag :color="remainTag(b)!.color">{{ remainTag(b)!.label }}</a-tag>
+                    </a-tooltip>
                     <b>{{ b.personName || `员工 #${b.personId}` }}</b>
                     <span>{{ b.certName || dictLabel('person_cert_type', b.certType) }}</span>
                     <span class="ct-id">{{ b.certNo || '' }}</span>
@@ -1323,7 +1337,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 row-key="code"
                 size="small"
               >
-                <template #emptyText><div class="ct-empty">暂无下限配置</div></template>
+                <template #emptyText><div class="ct-empty">暂无下限配置：需先在配置中心设置法定办理/复审提前期下限后重新加载</div></template>
               </a-table>
             </a-spin>
           </div>
@@ -1744,7 +1758,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 </a-tag>
               </template>
             </template>
-            <template #emptyText><div class="ct-empty">该员工暂无证书</div></template>
+            <template #emptyText><div class="ct-empty">该员工暂无证书：可先为该员工建档证书</div></template>
           </a-table>
         </template>
         <div v-else class="ct-empty">正在读取概览…</div>

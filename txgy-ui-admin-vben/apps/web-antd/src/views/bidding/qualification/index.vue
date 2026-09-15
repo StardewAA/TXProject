@@ -1185,6 +1185,7 @@ const platformReviewNotice = ref('');
 const platformReviewDetailOpen = ref(false);
 const platformReviewDetailLoading = ref(false);
 const platformReviewDetail = ref<null | QualificationApi.PlatformReviewDetail>(null);
+const platformReviewRetryRow = ref<null | QualificationApi.PlatformReviewRow>(null);
 
 /** 后端未实现（404）与业务错误分开呈现：前者提示"待后端实现"，后者给原始 msg */
 function reviewErrorText(error: any): string {
@@ -1211,6 +1212,7 @@ async function loadPlatformReview(): Promise<void> {
 }
 
 async function openPlatformReview(row: QualificationApi.PlatformReviewRow): Promise<void> {
+  platformReviewRetryRow.value = row;
   platformReviewDetailOpen.value = true;
   platformReviewDetailLoading.value = true;
   platformReviewDetail.value = null;
@@ -1222,6 +1224,12 @@ async function openPlatformReview(row: QualificationApi.PlatformReviewRow): Prom
   } finally {
     platformReviewDetailLoading.value = false;
   }
+}
+
+/** 详情加载失败重试（接口未实现时 reviewErrorText 已给出「待后端实现」说明） */
+async function retryPlatformReview(): Promise<void> {
+  const row = platformReviewRetryRow.value;
+  if (row) await openPlatformReview(row);
 }
 
 /** 通过（基座写法：Modal.confirm；version 原样回传，乐观锁契约 §0.7） */
@@ -1688,7 +1696,7 @@ watch(activeKey, (k) => {
                   </a-tag>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无核查记录</div></template>
+              <template #emptyText><div class="ct-empty">暂无核查记录：在「① 台账」行点「达标核查」后产生留痕</div></template>
             </a-table>
           </div>
         </div>
@@ -1915,10 +1923,10 @@ watch(activeKey, (k) => {
                     </template>
                     <template v-else-if="column.key === 'validTo'">{{ record.validTo || '长期' }}</template>
                   </template>
-                  <template #emptyText><div class="ct-empty">无逐项明细</div></template>
+                  <template #emptyText><div class="ct-empty">无逐项明细：自查未返回逐项结果，可重新执行「自查」</div></template>
                 </a-table>
               </template>
-              <div v-else class="ct-empty">输入企业主体 id 后点「自查」，返回身份类 / 资质类 / 实力类三档结论</div>
+              <div v-else class="ct-empty">企业主体由「主体档案」自动带出：点「自查」返回身份类 / 资质类 / 实力类三档结论</div>
             </a-spin>
           </div>
         </div>
@@ -2082,6 +2090,7 @@ watch(activeKey, (k) => {
             </template>
             <template #emptyText><div class="ct-empty">暂无文件（或接口待后端实现：契约缺口 A3）</div></template>
           </a-table>
+          <div class="ct-panel-meta mt-2">文件当前仅展示上传元信息；预览 / 下载待后端实现（契约缺口 A3）</div>
 
           <div class="ct-panel-t mt-3 mb-2">审查结论</div>
           <div class="flex flex-wrap items-center gap-2">
@@ -2094,7 +2103,12 @@ watch(activeKey, (k) => {
             </span>
           </div>
         </template>
-        <div v-else class="ct-empty">{{ platformReviewNotice || PLATFORM_REVIEW_PENDING }}</div>
+        <div v-else class="ct-empty">
+          {{ platformReviewNotice || PLATFORM_REVIEW_PENDING }}
+          <div class="mt-2">
+            <a-button v-if="platformReviewRetryRow" size="small" @click="retryPlatformReview">重试加载</a-button>
+          </div>
+        </div>
       </a-spin>
     </a-drawer>
 

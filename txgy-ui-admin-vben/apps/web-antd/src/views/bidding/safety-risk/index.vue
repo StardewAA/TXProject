@@ -551,7 +551,7 @@ onMounted(() => {
                 </a-button>
               </template>
             </template>
-            <template #emptyText><div class="ct-empty">窗口内无关键岗位变更</div></template>
+            <template #emptyText><div class="ct-empty">窗口内无关键岗位变更：该窗口内暂无任职 / 变更记录，可「登记任职/变更」后刷新</div></template>
           </a-table>
         </template>
         <div v-else class="ct-empty">输入项目 id 后查询：逐岗位给出窗口内变更次数、阈值与是否超限</div>
