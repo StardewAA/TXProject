@@ -484,59 +484,6 @@ export namespace QualificationApi {
     version: number;
     remark?: string;
   }
-
-  /* ===== ⑥ 平台审查（企业资质人工审查）=====
-     后端接口**待实现**：形态以 docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md
-     缺口 A2/A3/A4 为准。用户口径：企业资质由平台人工审查，审查通过后才能被其他接口调用；
-     员工证照由租户企业自己录入和审查（不在此处）。 */
-
-  /** 审查队列入参（缺口 A2） */
-  export interface PlatformReviewPageReq extends PageParam {
-    /** 企业主体；与本页页首主体联动 */
-    entId?: number;
-    /** 企业名称 / 统一社会信用代码模糊 */
-    keyword?: string;
-    qualStatus?: string;
-  }
-
-  /** 审查队列行：**必须能看出是哪个企业**（用户口径） */
-  export interface PlatformReviewRow {
-    id: number;
-    /** 乐观锁：通过/驳回时必须原样回传 */
-    version?: number;
-    entId?: number;
-    entName?: string;
-    entUscc?: string;
-    qualSerial?: string;
-    qualCategory?: string;
-    qualGrade?: string;
-    certNo?: string;
-    submitTime?: number | string;
-    qualStatus?: string;
-  }
-
-  /** 审查详情：企业信息 + 录入信息 + 文件（缺口 A3） */
-  export interface PlatformReviewDetail extends PlatformReviewRow {
-    issuingAuthority?: string;
-    issueDate?: string;
-    validTo?: null | string;
-    remark?: string;
-    files?: Array<{
-      fileCategory?: string;
-      fileId?: number | string;
-      fileName?: string;
-      fileSize?: number;
-      sha256?: string;
-      uploadTime?: number | string;
-    }>;
-  }
-
-  /** 审查动作（缺口 A4）：驳回必填 remark，通过可不填 */
-  export interface PlatformReviewActionReq {
-    qualId: number;
-    version: number;
-    remark?: string;
-  }
 }
 
 /** 写接口统一静默：错误由调用方按 §0.4 呈现（code/msg/traceId/fieldErrors） */
@@ -686,32 +633,3 @@ export function runQualificationAlertScan() {
   return requestClient.post<number>('/bidding/qualification-alert-run/scan', undefined, SILENT);
 }
 
-/* ================= ⑥ 平台审查（企业资质人工审查；后端待实现） =================
-   接口形态见 docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md
-   缺口 A2/A3/A4。前端先接好，后端就绪即生效；调不到时页面显示"待后端实现"空状态，不白屏。 */
-
-/** 审查队列分页（缺口 A2）：平台视角，**含企业名称与统一社会信用代码** */
-export function getPlatformReviewPage(params: QualificationApi.PlatformReviewPageReq) {
-  return requestClient.get<PageResult<QualificationApi.PlatformReviewRow>>(
-    '/bidding/qualification/platform-review/page',
-    { params },
-  );
-}
-
-/** 审查详情（缺口 A3）：企业信息 + 录入信息 + 文件 */
-export function getPlatformReviewDetail(id: number | string) {
-  return requestClient.get<QualificationApi.PlatformReviewDetail>(
-    '/bidding/qualification/platform-review/get',
-    { params: { id } },
-  );
-}
-
-/** 审查通过（缺口 A4）：走 version 乐观锁，通过后资质才可被其他接口引用 */
-export function approvePlatformReview(payload: QualificationApi.PlatformReviewActionReq) {
-  return requestClient.post<boolean>('/bidding/qualification/platform-review/approve', payload, SILENT);
-}
-
-/** 审查驳回（缺口 A4）：remark 必填（驳回理由要留痕） */
-export function rejectPlatformReview(payload: QualificationApi.PlatformReviewActionReq) {
-  return requestClient.post<boolean>('/bidding/qualification/platform-review/reject', payload, SILENT);
-}

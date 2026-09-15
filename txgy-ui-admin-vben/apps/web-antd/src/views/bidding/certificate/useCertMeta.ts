@@ -82,6 +82,8 @@ const CONTRACT_LABELS: Record<string, Record<string, string>> = {
   safety_risk_flag: { NORMAL: '正常', YELLOW: '黄色预警', RED: '红色预警', INVALID: '失效', FREQUENT: '频繁预警' },
   person_risk_flag: { NORMAL: '正常', ABNORMAL: '一年异常', FREQUENT: '频繁异常' },
   review_result: { '1': '通过', '0': '不通过' },
+  review_task_status: { PENDING: '待审查', APPROVED: '已通过', REJECTED: '已驳回' },
+  review_biz_type: { QUALIFICATION: '企业资质', CERTIFICATE: '证照', PERSON_CERT: '员工证书' },
 };
 
 export interface DictTag {
