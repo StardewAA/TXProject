@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { CourseAuditLog, TrainingCourseApi } from '../api';
 
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 
 import {
   Button,
@@ -101,12 +101,9 @@ async function loadCourseOptions() {
 }
 
 async function loadLogs() {
-  if (!logQuery.courseId) {
-    message.warning('请先选择课程');
-    return;
-  }
   logLoading.value = true;
   try {
+    // courseId 不传时返回全部课程的审核日志（课程下拉为可选筛选）
     const res = await getAuditLogPage({ ...logQuery });
     logList.value = res?.list ?? [];
     logTotal.value = Number(res?.total ?? 0);
@@ -122,6 +119,13 @@ function viewLogs(row: TrainingCourseApi.Course) {
 }
 
 const activeTab = ref('queue');
+
+// 切到日志 Tab 时自动加载（首次打开页面即有数据，课程为可选筛选）
+watch(activeTab, (tab) => {
+  if (tab === 'logs' && logList.value.length === 0) {
+    loadLogs();
+  }
+});
 
 onMounted(() => {
   loadQueue();
@@ -192,8 +196,9 @@ onMounted(() => {
             v-model:value="logQuery.courseId"
             class="!w-96"
             show-search
+            allow-clear
             option-filter-prop="label"
-            placeholder="请选择课程"
+            placeholder="全部课程（可选筛选）"
             :options="courseOptions"
           />
           <Button type="primary" ghost :loading="logLoading" @click="loadLogs">
