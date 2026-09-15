@@ -266,7 +266,7 @@ export function useFormSchema(): VbenFormSchema[] {
         childrenField: 'children',
         placeholder: '请选择职位分类',
         allowClear: true,
-        treeDefaultExpandAll: true,
+        treeDefaultExpandAll: false,
       },
     },
     {

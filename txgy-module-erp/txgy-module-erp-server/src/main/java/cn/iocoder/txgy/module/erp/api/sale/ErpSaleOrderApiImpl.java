@@ -1,16 +1,14 @@
 package cn.iocoder.txgy.module.erp.api.sale;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderItemRespDTO;
 import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderRespDTO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
-import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductUnitDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderItemDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.product.ErpProductMapper;
-import cn.iocoder.txgy.module.erp.dal.mysql.product.ErpProductUnitMapper;
-import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderMapper;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
 import cn.iocoder.txgy.module.erp.service.sale.ErpSaleOrderService;
@@ -20,11 +18,8 @@ import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -45,11 +40,7 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
     @Resource
     private ErpSaleOrderMapper saleOrderMapper;
     @Resource
-    private ErpSaleOrderItemMapper saleOrderItemMapper;
-    @Resource
-    private ErpProductMapper productMapper;
-    @Resource
-    private ErpProductUnitMapper productUnitMapper;
+    private ErpProductMapper erpProductMapper;
     @Resource
     private ErpCustomerService customerService;
     @Resource
@@ -98,8 +89,26 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
                 dto.setSaleUserName(user.getNickname());
             }
         }
-        // 组装订单行明细（含产品名称与单位名称，避免下游反向依赖 ERP 内部结构）
-        dto.setItems(buildSaleOrderItems(saleOrder.getId()));
+        // 组装明细行（供 MES 按订单行生成生产工单）
+        List<ErpSaleOrderItemDO> itemDOList = saleOrderService.getSaleOrderItemListByOrderId(saleOrder.getId());
+        if (CollUtil.isNotEmpty(itemDOList)) {
+            List<ErpSaleOrderItemRespDTO> itemDTOList = new ArrayList<>();
+            for (ErpSaleOrderItemDO itemDO : itemDOList) {
+                ErpSaleOrderItemRespDTO itemDTO = new ErpSaleOrderItemRespDTO();
+                itemDTO.setId(itemDO.getId());
+                itemDTO.setProductId(itemDO.getProductId());
+                itemDTO.setProductUnitId(itemDO.getProductUnitId());
+                itemDTO.setCount(itemDO.getCount());
+                ErpProductDO product = erpProductMapper.selectById(itemDO.getProductId());
+                if (product != null) {
+                    itemDTO.setProductName(product.getName());
+                    itemDTO.setProductBarCode(product.getBarCode());
+                    itemDTO.setMaterialCode(product.getMaterialCode());
+                }
+                itemDTOList.add(itemDTO);
+            }
+            dto.setItems(itemDTOList);
+        }
         return dto;
     }
 

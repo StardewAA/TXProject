@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
+import AiRobotIcon from './components/ai-robot-icon.vue';
 import { mockAiReply, type BizType, type TableResult } from './mock';
 
 interface ChatMessage {
@@ -76,6 +77,23 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/** 最多带最近 6 条消息给模型：够理解「那他们呢」这类追问，又不至于挤占上下文 */
+const HISTORY_LIMIT = 6;
+/** 单条历史的截断长度，助手回复里可能带很长的摘要 */
+const HISTORY_TEXT_LIMIT = 200;
+
+/** 把当前会话最近几轮问答拼成上下文，供模型理解追问、补充条件 */
+function buildHistory(session: Session): string {
+  return session.messages
+    .filter((m) => !m.loading && m.text.trim())
+    .slice(-HISTORY_LIMIT)
+    .map(
+      (m) =>
+        `${m.role === 'user' ? '用户' : '助手'}：${m.text.slice(0, HISTORY_TEXT_LIMIT)}`,
+    )
+    .join('\n');
+}
+
 async function send(text?: string) {
   const content = (text ?? inputText.value).trim();
   if (!content || sending.value) return;
@@ -83,6 +101,8 @@ async function send(text?: string) {
     createSession();
   }
   const session = activeSession.value!;
+  // 追问要基于上一轮的查询范围继续筛选，因此先取历史，再放入本轮问题
+  const history = buildHistory(session);
   session.messages.push({ id: msgSeq++, role: 'user', text: content });
   inputText.value = '';
 
@@ -103,7 +123,7 @@ async function send(text?: string) {
   await scrollToBottom();
 
   try {
-    const reply = await withTimeout(mockAiReply(content), 30000);
+    const reply = await withTimeout(mockAiReply(content, history), 30000);
     assistant.loading = false;
     assistant.text = reply?.text ?? '';
     if (reply?.degraded) {
@@ -308,7 +328,7 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
           v-else
           class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
         >
-          <div class="text-4xl">🤖</div>
+          <AiRobotIcon :size="88" class="text-primary" />
           <div class="text-base font-medium text-foreground">CRM 智能助手</div>
           <div class="max-w-md text-sm text-muted-foreground">
             用自然语言向我提问，例如查询客户、线索、商机、待办等。我会调用通义千问
@@ -339,9 +359,16 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
             <button
               class="h-[44px] shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               :disabled="sending || !inputText.trim()"
+              :title="
+                sending
+                  ? '正在等待 AI 回复，请稍候'
+                  : !inputText.trim()
+                    ? '请先输入问题'
+                    : ''
+              "
               @click="send"
             >
-              发送
+              {{ sending ? '思考中…' : '发送' }}
             </button>
           </div>
           <div class="mt-1 text-[11px] text-muted-foreground">

@@ -1,4 +1,10 @@
--- Flowable 表名大小写修复：删除残缺的大写表，将完整的小写表改名为大写
+-- Flowable 表名大小写修复：删除残缺的大写表，将完整的小写表改名为大写（ACT_* / FLW_*）
+-- !!! 仅限【新库初始化】执行 !!!
+-- 本脚本会无条件 DROP 全部大写 ACT_*/FLW_* 表，再 RENAME 小写表。
+-- 对已归一化（表名已为大写）的库执行时，会先删掉可用的大写表、随后因小写表不存在
+-- 而报错中断，反而把库弄坏（若已有流程实例将造成数据丢失）。
+-- 已初始化的库如需修复 FLW_* 大小写，请改用幂等脚本：
+--   deploy/mysql/repair/2026-09-14-bpm-flowable-flw-uppercase-fix.sql
 DROP TABLE IF EXISTS `ACT_EVT_LOG`;
 DROP TABLE IF EXISTS `ACT_GE_BYTEARRAY`;
 DROP TABLE IF EXISTS `ACT_GE_PROPERTY`;
@@ -24,6 +30,12 @@ DROP TABLE IF EXISTS `ACT_RU_SUSPENDED_JOB`;
 DROP TABLE IF EXISTS `ACT_RU_TASK`;
 DROP TABLE IF EXISTS `ACT_RU_TIMER_JOB`;
 DROP TABLE IF EXISTS `ACT_RU_VARIABLE`;
+DROP TABLE IF EXISTS `FLW_CHANNEL_DEFINITION`;
+DROP TABLE IF EXISTS `FLW_EVENT_DEFINITION`;
+DROP TABLE IF EXISTS `FLW_EVENT_DEPLOYMENT`;
+DROP TABLE IF EXISTS `FLW_EVENT_RESOURCE`;
+DROP TABLE IF EXISTS `FLW_RU_BATCH`;
+DROP TABLE IF EXISTS `FLW_RU_BATCH_PART`;
 RENAME TABLE `act_evt_log` TO `ACT_EVT_LOG`;
 RENAME TABLE `act_ge_bytearray` TO `ACT_GE_BYTEARRAY`;
 RENAME TABLE `act_ge_property` TO `ACT_GE_PROPERTY`;
@@ -63,4 +75,10 @@ RENAME TABLE `act_ru_suspended_job` TO `ACT_RU_SUSPENDED_JOB`;
 RENAME TABLE `act_ru_task` TO `ACT_RU_TASK`;
 RENAME TABLE `act_ru_timer_job` TO `ACT_RU_TIMER_JOB`;
 RENAME TABLE `act_ru_variable` TO `ACT_RU_VARIABLE`;
+RENAME TABLE `flw_channel_definition` TO `FLW_CHANNEL_DEFINITION`;
+RENAME TABLE `flw_event_definition` TO `FLW_EVENT_DEFINITION`;
+RENAME TABLE `flw_event_deployment` TO `FLW_EVENT_DEPLOYMENT`;
+RENAME TABLE `flw_event_resource` TO `FLW_EVENT_RESOURCE`;
+RENAME TABLE `flw_ru_batch` TO `FLW_RU_BATCH`;
+RENAME TABLE `flw_ru_batch_part` TO `FLW_RU_BATCH_PART`;
 

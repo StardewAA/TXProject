@@ -1,0 +1,12 @@
+# bpm 服务 jar-only 镜像：复用本机 Maven 构建产物（deploy/backend/bpm-app.jar）
+# 构建：docker build -f deploy/backend/Dockerfile.bpm-jar -t deploy-bpm:latest .
+# 基础镜像 deploy-mes-base:latest 含 JDK25 运行时 + curl（healthcheck 依赖）
+FROM deploy-mes-base:latest
+
+WORKDIR /app
+
+COPY deploy/backend/bpm-app.jar /app/app.jar
+
+ENV JAVA_OPTS=""
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

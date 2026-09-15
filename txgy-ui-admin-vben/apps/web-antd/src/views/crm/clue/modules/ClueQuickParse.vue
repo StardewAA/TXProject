@@ -18,6 +18,7 @@ import { getSimpleUserList } from '#/api/system/user';
 
 import {
   parseClue,
+  parseContact,
   parseContract,
   parseBusiness,
   parseReceivable,
@@ -41,9 +42,19 @@ const emit = defineEmits<{
   apply: [payload: { fields: any }];
 }>();
 
-// mode: clue=线索/通用；contract=合同（提取合同名、客户、商机、日期、产品与金额）
+// mode: clue=线索/通用；contact=联系人（姓名取人名，公司名放 customerName）；
+//       contract=合同（提取合同名、客户、商机、日期、产品与金额）
 const props = withDefaults(
-  defineProps<{ mode?: 'clue' | 'contract' | 'business' | 'receivable' | 'product' | 'plan' }>(),
+  defineProps<{
+    mode?:
+      | 'clue'
+      | 'contact'
+      | 'contract'
+      | 'business'
+      | 'receivable'
+      | 'product'
+      | 'plan';
+  }>(),
   { mode: 'clue' },
 );
 
@@ -495,17 +506,20 @@ async function handleRecognize() {
     const parsed: any =
       isContract
         ? await parseContract(text, imageDataUrls)
-        : props.mode === 'business'
-          ? await parseBusiness(text, imageDataUrls)
-          : props.mode === 'receivable'
-            ? await parseReceivable(text, imageDataUrls)
-            : props.mode === 'product'
-              ? await parseProduct(text, imageDataUrls)
-              : props.mode === 'plan'
-                ? await parseReceivablePlan(text, imageDataUrls)
-                : await parseClue(text, imageDataUrls);
+        : props.mode === 'contact'
+          ? await parseContact(text, imageDataUrls)
+          : props.mode === 'business'
+            ? await parseBusiness(text, imageDataUrls)
+            : props.mode === 'receivable'
+              ? await parseReceivable(text, imageDataUrls)
+              : props.mode === 'product'
+                ? await parseProduct(text, imageDataUrls)
+                : props.mode === 'plan'
+                  ? await parseReceivablePlan(text, imageDataUrls)
+                  : await parseClue(text, imageDataUrls);
     const fields: any = parsed.fields ?? {};
-    const aiError = parsed.error;
+    // parseClue / parseContact 用 aiError 命名，其余解析函数用 error，这里统一兼容
+    const aiError = parsed.aiError ?? parsed.error;
 
     // 客户匹配：商机/回款/合同/回款计划取 customerName，线索取 name；产品不需要
     if (props.mode !== 'product') {

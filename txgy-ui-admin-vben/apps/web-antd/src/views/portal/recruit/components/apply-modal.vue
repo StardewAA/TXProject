@@ -20,6 +20,7 @@ import { getUserProfile } from '#/api/system/user/profile';
 const props = defineProps<{
   open: boolean;
   post?: HrmPortalRecruitApi.Post;
+  chatOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -279,9 +280,13 @@ async function submitApplication() {
   }
   applySubmitting.value = true;
   try {
-    await createPortalRecruitApplication(applyForm);
+    if (!props.chatOnly) {
+      await createPortalRecruitApplication(applyForm);
+    }
     emit('submitted', { ...applyForm });
-    message.success('应聘投递成功，可在个人中心查看进度');
+    message.success(
+      props.chatOnly ? '简历已发送，等待招聘方处理' : '应聘投递成功，可在应聘记录查看进度',
+    );
     modalOpen.value = false;
   } catch (error: any) {
     message.error(error?.message || '投递失败');
@@ -311,7 +316,7 @@ watch(
   >
     <div v-if="resumeLoading" class="resume-loading">
       <a-spin />
-      <span>正在读取个人中心的简历…</span>
+      <span>正在读取在线简历…</span>
     </div>
     <div v-else-if="resumePickerMode" class="resume-picker">
       <div class="apply-intro">
@@ -398,7 +403,7 @@ watch(
             class="saved-resume-select"
             :value="applyForm.resumeFileUrl"
             allow-clear
-            placeholder="优先选择个人中心已保存的简历"
+            placeholder="优先选择在线简历中已保存的简历"
             @change="handleSavedResumeChange"
           >
             <a-select-option

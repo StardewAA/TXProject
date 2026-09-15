@@ -143,6 +143,14 @@ export function markAdminRecruitChatRead(conversationId: number) {
   );
 }
 
+export function convertAdminRecruitChatConversationToCandidate(conversationId: number) {
+  return requestClient.post<number>(
+    '/hrm/recruit/chat/conversation/convert-candidate',
+    undefined,
+    { params: { conversationId } },
+  );
+}
+
 export function deleteAdminRecruitChatConversation(id: number) {
   return requestClient.delete<boolean>('/hrm/recruit/chat/conversation/delete', {
     params: { id },

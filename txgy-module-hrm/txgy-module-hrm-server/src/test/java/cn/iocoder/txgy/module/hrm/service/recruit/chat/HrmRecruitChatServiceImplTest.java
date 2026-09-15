@@ -1,22 +1,30 @@
 package cn.iocoder.txgy.module.hrm.service.recruit.chat;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.HrmPortalRecruitChatSendReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateSaveReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatMessageDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatConversationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatConversationMapper;
+import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatMessageMapper;
 import cn.iocoder.txgy.module.hrm.enums.recruit.chat.HrmRecruitChatStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
+import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
@@ -32,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @Import(HrmRecruitChatServiceImpl.class)
 public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
@@ -40,6 +49,8 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
     private HrmRecruitChatServiceImpl chatService;
     @Resource
     private HrmRecruitChatConversationMapper conversationMapper;
+    @Resource
+    private HrmRecruitChatMessageMapper messageMapper;
 
     @MockitoBean
     private HrmRecruitPostService postService;
@@ -47,6 +58,10 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
     private HrmEmployeeService employeeService;
     @MockitoBean
     private HrmPersonalResumeService personalResumeService;
+    @MockitoBean
+    private HrmRecruitCandidateService candidateService;
+    @MockitoBean
+    private HrmRecruitResumeService recruitResumeService;
     @MockitoBean
     private AdminUserApi adminUserApi;
 
@@ -103,6 +118,62 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
         var conversation = chatService.openConversation(candidateUserId, post.getId());
 
         assertEquals(2, conversation.getCandidateWorkTime());
+    }
+
+    @Test
+    public void testConvertConversationToCandidate_createsCandidateAndResumeIdempotently() {
+        Long candidateUserId = randomLongId();
+        Long hrUserId = randomLongId();
+        Long postId = randomLongId();
+        Long tenantId = randomLongId();
+        HrmRecruitChatConversationDO conversation = new HrmRecruitChatConversationDO()
+                .setPostId(postId)
+                .setCandidateUserId(candidateUserId)
+                .setHrUserId(hrUserId)
+                .setStatus(HrmRecruitChatStatusEnum.QUALIFIED.getStatus());
+        conversation.setTenantId(tenantId);
+        TenantUtils.execute(tenantId, () -> conversationMapper.insert(conversation));
+        HrmRecruitChatMessageDO resumeMessage = new HrmRecruitChatMessageDO()
+                .setConversationId(conversation.getId())
+                .setSenderUserId(candidateUserId)
+                .setContentType(2)
+                .setContent("项目经理简历|project-manager.pdf|https://files.example.com/project-manager.pdf");
+        resumeMessage.setTenantId(tenantId);
+        TenantUtils.execute(tenantId, () -> messageMapper.insert(resumeMessage));
+
+        AdminUserRespDTO candidateUser = new AdminUserRespDTO()
+                .setId(candidateUserId).setNickname("求职者张三").setMobile("13800138000")
+                .setEmail("zhangsan@example.com").setSex(1);
+        HrmPersonalResumeDO profile = new HrmPersonalResumeDO()
+                .setTitle("求职资料（系统）")
+                .setContent("{\"name\":\"张三\",\"gender\":1,\"birthMonth\":\"1995-01\","
+                        + "\"workTime\":5,\"education\":\"本科\",\"school\":\"测试大学\","
+                        + "\"company\":\"测试科技\"}");
+        when(adminUserApi.getUserIgnoreTenant(candidateUserId)).thenReturn(CommonResult.success(candidateUser));
+        when(personalResumeService.getResumeList(candidateUserId)).thenReturn(List.of(profile));
+        when(candidateService.getRecruitCandidateByMobile(candidateUser.getMobile())).thenReturn(null);
+        when(candidateService.createRecruitCandidate(org.mockito.ArgumentMatchers.any())).thenReturn(7001L);
+        when(recruitResumeService.createRecruitResume(org.mockito.ArgumentMatchers.any())).thenReturn(8001L);
+
+        Long candidateId = chatService.convertConversationToCandidate(hrUserId, conversation.getId());
+
+        assertEquals(7001L, candidateId);
+        assertEquals(7001L, conversationMapper.selectById(conversation.getId()).getCandidateId());
+        ArgumentCaptor<HrmRecruitCandidateSaveReqVO> candidateCaptor =
+                ArgumentCaptor.forClass(HrmRecruitCandidateSaveReqVO.class);
+        verify(candidateService).createRecruitCandidate(candidateCaptor.capture());
+        assertEquals("张三", candidateCaptor.getValue().getName());
+        assertEquals(postId, candidateCaptor.getValue().getPostId());
+        assertEquals(5, candidateCaptor.getValue().getEducation());
+        ArgumentCaptor<HrmRecruitResumeSaveReqVO> resumeCaptor =
+                ArgumentCaptor.forClass(HrmRecruitResumeSaveReqVO.class);
+        verify(recruitResumeService).createRecruitResume(resumeCaptor.capture());
+        assertEquals(7001L, resumeCaptor.getValue().getCandidateId());
+        assertEquals("project-manager.pdf", resumeCaptor.getValue().getFileName());
+
+        assertEquals(7001L, chatService.convertConversationToCandidate(hrUserId, conversation.getId()));
+        verify(candidateService).createRecruitCandidate(org.mockito.ArgumentMatchers.any());
+        verify(recruitResumeService).createRecruitResume(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.training.service.plan;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.system.api.dept.DeptApi;
+import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
@@ -45,15 +47,25 @@ public class ClassStudentServiceImpl {
     private StudentTaskMapper studentTaskMapper;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private DeptApi deptApi;
+
+    /**
+     * 单个培训班在班学员上限（手动添加 / Excel 导入 / 按参与对象筛选 / 导入指定班级统一受限）
+     */
+    public static final Integer MAX_STUDENT_SIZE = 50;
+
+    /**
+     * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选 5 导入并指定班级
+     */
+    private static final Integer SOURCE_MANUAL = 1;
+    private static final Integer SOURCE_IMPORT = 2;
+    private static final Integer SOURCE_IMPORT_ALLOCATE = 5;
 
     /**
      * 手机号格式：11 位、以 1 开头
      */
     private static final Pattern MOBILE_PATTERN = Pattern.compile("^1\\d{10}$");
-    /**
-     * 学员加入来源：2 批量导入（1 手动添加）
-     */
-    private static final Integer SOURCE_IMPORT = 2;
 
     // ========== 学员管理 ==========
 
@@ -72,22 +84,34 @@ public class ClassStudentServiceImpl {
         if (CollUtil.isEmpty(courses)) {
             throw exception(PLAN_STUDENT_COURSE_REQUIRED);
         }
-        // 3. 查询用户昵称快照（容错：RPC 失败则降级为空）
+        // 3. 查询用户昵称 / 部门快照（容错：RPC 失败则降级为空）
         Map<Long, AdminUserRespDTO> userMap = fetchUserMap(reqVO.getUserIds());
+        Map<Long, String> deptNameMap = fetchDeptNameMap(userMap.values());
         List<ClassStudentDO> all = classStudentMapper.selectListByClassId(reqVO.getClassId(), null);
         Map<Long, ClassStudentDO> userIndex = all.stream()
                 .collect(Collectors.toMap(ClassStudentDO::getUserId, item -> item, (a, b) -> a));
+        // 在班学员上限校验：超出上限则整体失败回滚，避免班级规模失控（恢复在班的学员同样占用名额）
+        int inClassCount = (int) userIndex.values().stream()
+                .filter(item -> Objects.equals(item.getStatus(), 0)).count();
         int added = 0;
         for (Long userId : reqVO.getUserIds()) {
+            AdminUserRespDTO user = userMap.get(userId);
             ClassStudentDO exist = userIndex.get(userId);
             if (exist != null && Objects.equals(exist.getStatus(), 0)) {
                 continue; // 已在班，幂等跳过
             }
+            if (inClassCount + added >= MAX_STUDENT_SIZE) {
+                throw exception(PLAN_STUDENT_LIMIT_EXCEEDED, MAX_STUDENT_SIZE, inClassCount,
+                        MAX_STUDENT_SIZE - inClassCount);
+            }
             if (exist != null && Objects.equals(exist.getStatus(), 1)) {
-                // 曾被移除 → 恢复在班，并重新生成学习任务
+                // 曾被移除 → 恢复在班，并重新生成学习任务；同步刷新姓名/部门/来源快照
                 ClassStudentDO restore = new ClassStudentDO();
                 restore.setId(exist.getId());
                 restore.setStatus(0);
+                restore.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                restore.setDeptName(fetchDeptName(user, deptNameMap));
+                restore.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 restore.setJoinTime(LocalDateTime.now());
                 restore.setRemovedTime(null);
                 restore.setRemovedReason(null);
@@ -96,8 +120,9 @@ public class ClassStudentServiceImpl {
                 ClassStudentDO student = new ClassStudentDO();
                 student.setClassId(reqVO.getClassId());
                 student.setUserId(userId);
-                student.setUserName(Optional.ofNullable(userMap.get(userId)).map(AdminUserRespDTO::getNickname).orElse(null));
-                student.setSource(reqVO.getSource() == null ? 1 : reqVO.getSource());
+                student.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                student.setDeptName(fetchDeptName(user, deptNameMap));
+                student.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 student.setStatus(0);
                 student.setJoinTime(LocalDateTime.now());
                 classStudentMapper.insert(student);
@@ -202,7 +227,7 @@ public class ClassStudentServiceImpl {
                 createdUserCount++;
             }
         }
-        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「批量导入」
+        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「Excel 批量导入」
         int added = 0;
         if (CollUtil.isNotEmpty(userIdSet)) {
             ClassStudentAddReqVO reqVO = new ClassStudentAddReqVO();
@@ -215,6 +240,135 @@ public class ClassStudentServiceImpl {
         respVO.setSuccessCount(added);
         respVO.setCreatedUserCount(createdUserCount);
         respVO.setFailRows(failRows);
+        return respVO;
+    }
+
+    /**
+     * 解析 Excel 学员名单（按【手机号】匹配系统账号，不落库），供人工为每位学员指定要加入的培训班
+     *
+     * @param rows Excel 数据行（姓名 / 手机号）
+     * @return 匹配成功的学员名单 + 失败行明细
+     */
+    public ClassStudentImportParseRespVO parseImportRows(List<ClassStudentImportExcelVO> rows) {
+        List<ClassStudentImportRespVO.FailRow> failRows = new ArrayList<>();
+        List<ClassStudentImportParseRespVO.ImportUser> parsedUsers = new ArrayList<>();
+        Map<Long, AdminUserRespDTO> userMap = new LinkedHashMap<>();
+        int rowNumber = 1; // 第 1 行为表头，数据从第 2 行起
+        for (ClassStudentImportExcelVO row : rows) {
+            rowNumber++;
+            String mobile = StrUtil.trimToNull(row.getMobile());
+            if (mobile == null) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, null, "手机号为空"));
+                continue;
+            }
+            AdminUserRespDTO user;
+            try {
+                user = adminUserApi.getUserByMobile(mobile).getCheckedData();
+            } catch (Throwable ex) {
+                log.warn("[parseImportRows][按手机号查询用户失败，忽略该行] mobile={}", mobile, ex);
+                user = null;
+            }
+            if (user == null || user.getId() == null) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile, "未找到对应系统账号"));
+                continue;
+            }
+            ClassStudentImportParseRespVO.ImportUser item = new ClassStudentImportParseRespVO.ImportUser();
+            item.setRowNumber(rowNumber);
+            item.setUserId(user.getId());
+            item.setMobile(mobile);
+            parsedUsers.add(item);
+            userMap.putIfAbsent(user.getId(), user);
+        }
+        // 补齐姓名 / 部门快照（RPC 失败降级为空，不影响名单展示）
+        Map<Long, String> deptNameMap = fetchDeptNameMap(userMap.values());
+        for (ClassStudentImportParseRespVO.ImportUser item : parsedUsers) {
+            AdminUserRespDTO user = userMap.get(item.getUserId());
+            item.setUserName(user == null ? null : user.getNickname());
+            item.setDeptName(fetchDeptName(user, deptNameMap));
+        }
+        ClassStudentImportParseRespVO respVO = new ClassStudentImportParseRespVO();
+        respVO.setMatchedCount(parsedUsers.size());
+        respVO.setUsers(parsedUsers);
+        respVO.setFailRows(failRows);
+        return respVO;
+    }
+
+    /**
+     * 按人工指定的「学员 → 培训班」明细批量入班（导入名单后手动选班入班）
+     *
+     * <p>入班规则：
+     * <ol>
+     *   <li>仅处理已指定培训班的学员；未指定培训班的学员不入班（前端不提交即可）；</li>
+     *   <li>同一学员在同一培训班仅入班一次（明细重复时自动去重）；</li>
+     *   <li>目标培训班需存在、可维护学员（草稿 / 进行中）且已绑定课程，否则整体失败回滚；</li>
+     *   <li>单个培训班在班学员上限 {@link #MAX_STUDENT_SIZE} 人，超出时整体失败回滚并提示剩余名额。</li>
+     * </ol>
+     *
+     * @param reqVO 入班明细
+     * @return 各班入班结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ClassStudentImportAllocateRespVO importAndAllocate(ClassStudentImportAllocateReqVO reqVO) {
+        // 1. 按培训班聚合明细（同一学员在同一培训班去重，保持提交顺序；跨培训班不去重）
+        Map<Long, LinkedHashSet<Long>> classUserMap = new LinkedHashMap<>();
+        for (ClassStudentImportAllocateReqVO.Item item : reqVO.getItems()) {
+            if (item == null || item.getUserId() == null || item.getClassId() == null) {
+                continue;
+            }
+            classUserMap.computeIfAbsent(item.getClassId(), key -> new LinkedHashSet<>()).add(item.getUserId());
+        }
+        if (classUserMap.isEmpty()) {
+            throw exception(PLAN_STUDENT_IMPORT_ALLOC_EMPTY);
+        }
+        // 2. 批量获取用户姓名 / 部门快照（用于入班结果展示）
+        List<Long> allUserIds = classUserMap.values().stream()
+                .flatMap(Collection::stream).distinct().collect(Collectors.toList());
+        Map<Long, AdminUserRespDTO> userMap = fetchUserMap(allUserIds);
+        Map<Long, String> deptNameMap = fetchDeptNameMap(userMap.values());
+        // 3. 逐班校验（状态 / 课程 / 名额）并落库
+        List<ClassStudentImportAllocateRespVO.ClassResult> classResults = new ArrayList<>();
+        int successCount = 0;
+        for (Map.Entry<Long, LinkedHashSet<Long>> entry : classUserMap.entrySet()) {
+            Long classId = entry.getKey();
+            List<Long> userIds = new ArrayList<>(entry.getValue());
+            ClassDO classDO = classService.exists(classId);
+            if (!classService.isEditableForStudent(classDO)) {
+                throw exception(PLAN_STUDENT_IMPORT_ALLOC_CLASS_NOT_ALLOWED, classDO.getName(),
+                        getStatusName(classDO.getStatus()));
+            }
+            if (CollUtil.isEmpty(classCourseMapper.selectListByClassId(classId))) {
+                throw exception(PLAN_STUDENT_COURSE_REQUIRED);
+            }
+            Set<Long> inClassUserIds = classStudentMapper.selectListByClassId(classId, 0).stream()
+                    .map(ClassStudentDO::getUserId).collect(Collectors.toCollection(LinkedHashSet::new));
+            int beforeCount = inClassUserIds.size();
+            long addableCount = userIds.stream().filter(userId -> !inClassUserIds.contains(userId)).count();
+            if (beforeCount + addableCount > MAX_STUDENT_SIZE) {
+                throw exception(PLAN_STUDENT_IMPORT_ALLOC_LIMIT_EXCEEDED, classDO.getName(), MAX_STUDENT_SIZE,
+                        beforeCount, Math.max(0, MAX_STUDENT_SIZE - beforeCount));
+            }
+            // 4. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「导入并指定班级」
+            ClassStudentAddReqVO addReqVO = new ClassStudentAddReqVO();
+            addReqVO.setClassId(classId);
+            addReqVO.setUserIds(userIds);
+            addReqVO.setSource(SOURCE_IMPORT_ALLOCATE);
+            int added = addStudents(addReqVO);
+            successCount += added;
+            ClassStudentImportAllocateRespVO.ClassResult classResult = new ClassStudentImportAllocateRespVO.ClassResult();
+            classResult.setClassId(classId);
+            classResult.setClassName(classDO.getName());
+            classResult.setBeforeCount(beforeCount);
+            classResult.setAddedCount(added);
+            classResult.setAfterCount(beforeCount + added);
+            classResult.setRemaining(Math.max(0, MAX_STUDENT_SIZE - beforeCount - added));
+            classResult.setUsers(userIds.stream()
+                    .map(userId -> buildAllocateUser(userId, userMap, deptNameMap)).collect(Collectors.toList()));
+            classResults.add(classResult);
+        }
+        ClassStudentImportAllocateRespVO respVO = new ClassStudentImportAllocateRespVO();
+        respVO.setSuccessCount(successCount);
+        respVO.setMaxSize(MAX_STUDENT_SIZE);
+        respVO.setClassResults(classResults);
         return respVO;
     }
 
@@ -455,6 +609,41 @@ public class ClassStudentServiceImpl {
             log.warn("[fetchUserMap][获取用户信息失败，降级 userName 为空] userIds={}", userIds, ex);
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * 批量获取用户所属部门名称（用于部门/班组快照）；RPC 异常时降级为空，不影响主流程
+     */
+    private Map<Long, String> fetchDeptNameMap(Collection<AdminUserRespDTO> users) {
+        Set<Long> deptIds = users.stream().map(AdminUserRespDTO::getDeptId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (CollUtil.isEmpty(deptIds)) {
+            return Collections.emptyMap();
+        }
+        try {
+            return deptApi.getDeptList(deptIds).getCheckedData().stream()
+                    .collect(Collectors.toMap(DeptRespDTO::getId, DeptRespDTO::getName, (a, b) -> a));
+        } catch (Throwable ex) {
+            log.warn("[fetchDeptNameMap][获取部门信息失败，降级 deptName 为空] deptIds={}", deptIds, ex);
+            return Collections.emptyMap();
+        }
+    }
+
+    private String fetchDeptName(AdminUserRespDTO user, Map<Long, String> deptNameMap) {
+        return user == null || user.getDeptId() == null ? null : deptNameMap.get(user.getDeptId());
+    }
+
+    /**
+     * 组装入班学员展示信息（姓名 / 部门快照，RPC 降级时为空）
+     */
+    private ClassStudentImportAllocateRespVO.User buildAllocateUser(Long userId, Map<Long, AdminUserRespDTO> userMap,
+                                                                    Map<Long, String> deptNameMap) {
+        ClassStudentImportAllocateRespVO.User user = new ClassStudentImportAllocateRespVO.User();
+        user.setUserId(userId);
+        AdminUserRespDTO userDTO = userMap.get(userId);
+        user.setUserName(userDTO == null ? null : userDTO.getNickname());
+        user.setDeptName(fetchDeptName(userDTO, deptNameMap));
+        return user;
     }
 
     private String getStatusName(Integer status) {

@@ -82,7 +82,8 @@ const [TaskGrid, taskGridApi] = useVbenVxeGrid({
 
 function refreshStats() {
   // 汇总当前学员的合格学时与各任务最近一次成绩
-  getRecordPage({ keyword: studentName.value, pageNo: 1, pageSize: 500 }).then((result) => {
+  // 后端分页每页条数上限为 200，超出会报「每页条数最大值为 200」
+  getRecordPage({ keyword: studentName.value, pageNo: 1, pageSize: 200 }).then((result) => {
     const records = result.list;
     totalHours.value = records.reduce((sum, row) => sum + (row.gainedHours ?? 0), 0);
     const map: Record<string, number> = {};

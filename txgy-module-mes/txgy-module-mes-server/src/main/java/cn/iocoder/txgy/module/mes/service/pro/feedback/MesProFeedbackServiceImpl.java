@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.workstation.MesMdWorkstationDO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackSaveReqVO;
@@ -19,6 +20,7 @@ import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productproduce.MesWmProductP
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
+import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
@@ -26,6 +28,8 @@ import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.service.wm.itemconsume.MesWmItemConsumeService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceLineService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -58,6 +62,10 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
 
     @Resource
     private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private MesMdItemService itemService;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Resource
     private MesProWorkOrderService workOrderService;
@@ -134,11 +142,18 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
         workOrderService.markInProductionIfIssued(feedback.getWorkOrderId());
 
         // 4. 发起 BPM 审批流程（参照 ERP submitSaleOrder 模板），审批结果由
-        //    bpm-server 的 MesFeedbackStatusListener 转发回 MES，经任务表异步消费
+        //    bpm-server 的 MesFeedbackStatusListener 转发回 MES，经任务表异步消费。
+        //    流程变量与《MES报工单接入BPM审批-待确认问题回复》第 6 条的变量清单对齐
+        MesProWorkOrderDO workOrder = workOrderService.getWorkOrder(feedback.getWorkOrderId());
+        MesMdItemDO item = itemService.getItem(feedback.getItemId());
+        AdminUserRespDTO worker = feedback.getFeedbackUserId() == null ? null
+                : adminUserApi.getUser(feedback.getFeedbackUserId()).getCheckedData();
         Map<String, Object> variables = Map.of(
-                "feedbackCode", feedback.getCode(),
-                "workOrderId", feedback.getWorkOrderId(),
-                "feedbackQuantity", feedback.getFeedbackQuantity());
+                "feedbackId", String.valueOf(id),
+                "workOrderCode", workOrder != null && workOrder.getCode() != null ? workOrder.getCode() : "",
+                "itemCode", item != null && item.getCode() != null ? item.getCode() : "",
+                "quantity", feedback.getFeedbackQuantity(),
+                "workerName", worker != null && worker.getNickname() != null ? worker.getNickname() : "");
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
                         feedback.getFeedbackUserId(),
                         new BpmProcessInstanceCreateReqDTO()

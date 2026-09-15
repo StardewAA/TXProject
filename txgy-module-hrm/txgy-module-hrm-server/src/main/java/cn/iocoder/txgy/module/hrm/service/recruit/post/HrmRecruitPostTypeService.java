@@ -48,6 +48,9 @@ public interface HrmRecruitPostTypeService {
      */
     List<HrmRecruitPostTypeDO> getRecruitPostTypeList(Integer status);
 
+    /** 获得所有租户中同名的启用职位类型编号，用于门户跨企业筛选。 */
+    List<Long> getRecruitPostTypeIdsByName(String name);
+
     /**
      * 获得指定编号的招聘职位类型列表
      *
