@@ -111,11 +111,16 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         try {
             smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(userId, templateCode, params)).checkError();
         } catch (RuntimeException ex) {
-            // WMS 审批结果必须独立于附属短信服务；库存/状态回调异常仍由原事务传播。
-            if (!"wms_receipt_approval".equals(processKey) && !"wms_shipment_approval".equals(processKey)) {
+            // 业务回写必须独立于附属短信服务；库存/状态回调异常仍由原事务传播。
+            // 结果短信默认发给流程发起人（报工人/经办人），这类账号常常没有维护手机号；
+            // 一旦抛出就会导致审批人无法通过或驳回，业务单据永久停在"审批中"。
+            // 因此凡是"审批结果由各自 Listener 回写业务单据"的流程，一律降级为 best-effort。
+            if (!"wms_receipt_approval".equals(processKey)
+                    && !"wms_shipment_approval".equals(processKey)
+                    && !"mes-feedback-approval".equals(processKey)) {
                 throw ex;
             }
-            log.error("[sendProcessResultSms][WMS 结果短信失败，processKey={}, instanceId={}, templateCode={}]",
+            log.error("[sendProcessResultSms][结果短信失败，已降级为 best-effort，processKey={}, instanceId={}, templateCode={}]",
                     processKey, instanceId, templateCode, ex);
         }
     }
