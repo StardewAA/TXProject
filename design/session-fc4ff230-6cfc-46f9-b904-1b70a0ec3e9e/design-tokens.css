@@ -1,0 +1,51 @@
+/* ipw-theme:start */
+:root {
+  /* ===== 背景 / 表面 ===== */
+  --ipw-color-bg: #f3f5f7;
+  --ipw-color-surface: #ffffff;
+  --ipw-color-sunken: #f3f5f8;
+
+  /* ===== 文本 ===== */
+  --ipw-color-text: #1e2832;
+  --ipw-color-heading: #1e2832;
+  --ipw-color-muted: #7a8591;
+  --ipw-color-faint: #9aa4af;
+
+  /* ===== 线框 ===== */
+  --ipw-color-border: #e0e4e9;
+  --ipw-color-border-strong: #d3dae1;
+
+  /* ===== 品牌色（门户现状：深蓝） ===== */
+  --ipw-color-primary: #17539a;
+  --ipw-color-primary-strong: #103f75;
+  --ipw-color-primary-soft: #eef4fb;
+  --ipw-color-on-primary: #ffffff;
+
+  /* ===== 语义色 ===== */
+  --ipw-color-secondary: #e6eef8;
+  --ipw-color-accent: #9a4508;
+  --ipw-color-success: #176b44;
+  --ipw-color-success-soft: #e5f2ea;
+  --ipw-color-danger: #b42318;
+  --ipw-color-danger-soft: #fef4f2;
+  --ipw-color-warning: #9a6b00;
+  --ipw-color-warning-soft: #fdf0e5;
+
+  /* ===== 字体 ===== */
+  --ipw-font-display: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --ipw-font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --ipw-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* ===== 尺寸 / 间距 ===== */
+  --ipw-content-width: 1280px;
+  --ipw-page-padding: 20px;
+  --ipw-section-space: 14px;
+  --ipw-radius-sm: 4px;
+  --ipw-radius-md: 6px;
+  --ipw-radius-lg: 8px;
+  --ipw-card-radius: 6px;
+  --ipw-card-shadow: none;
+  --ipw-card-shadow-hover: 0 4px 14px rgb(16 30 54 / 8%);
+  --ipw-focus-ring: 0 0 0 3px rgb(23 83 154 / 18%);
+}
+/* ipw-theme:end */

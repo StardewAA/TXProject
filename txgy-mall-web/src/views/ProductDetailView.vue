@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { productApi } from '@/api/mall'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { skuImage } from '@/utils/sku-image'
 import type { Product, ProductSku, Shop } from '@/types/mall'
 import { formatMoney, normalizeImage, productImage, propertyText, sanitizeRichHtml } from '@/utils/format'
 
@@ -25,6 +26,7 @@ const displayStock = computed(() => selectedSku.value?.stock ?? product.value?.s
 const safeDescription = computed(() => sanitizeRichHtml(product.value?.description))
 const detailImage = computed(() => productImage(product.value?.id, product.value?.picUrl))
 const galleryImages = computed(() => [...new Set([
+  skuImage(product.value?.id,product.value?.picUrl,selectedSku.value?.picUrl),
   detailImage.value,
   ...(product.value?.sliderPicUrls || []).map(normalizeImage),
 ].filter(Boolean))])
@@ -48,6 +50,7 @@ async function load() {
 
 function selectSku(sku: ProductSku) {
   selectedSku.value = sku
+  selectedImage.value = ''
   if (quantity.value > sku.stock) quantity.value = Math.max(1, sku.stock)
 }
 
@@ -93,7 +96,7 @@ onMounted(load)
         <div class="goods-info">
           <h1>{{ product.name }}</h1><p class="intro">{{ product.introduction }}</p>
           <div class="price-box"><span>平台价格</span><strong>¥{{ formatMoney(displayPrice) }}</strong><del v-if="product.marketPrice">¥{{ formatMoney(product.marketPrice) }}</del></div>
-          <dl><dt>所属店铺</dt><dd>{{ shop?.name || product.shopName || '店铺信息加载失败' }}</dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
+          <dl><dt>所属店铺</dt><dd><RouterLink v-if="product.shopId" :to="`/shops/${product.shopId}`" class="store-detail-link">{{ shop?.name || product.shopName || '查看店铺' }} ↗</RouterLink><span v-else>{{ product.shopName || '暂无店铺信息' }}</span></dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
           <div v-if="product.skus?.length" class="sku-area"><label>规格选择</label><div><button v-for="sku in product.skus" :key="sku.id" :class="{ active: selectedSku?.id === sku.id, disabled: sku.stock <= 0 }" :disabled="sku.stock <= 0" @click="selectSku(sku)">{{ propertyText(sku.properties) || `规格 ${sku.id}` }}</button></div></div>
           <div class="quantity"><label>采购数量</label><el-input-number v-model="quantity" :min="1" :max="Math.max(1, displayStock)" /><span>当前可售 {{ displayStock }}</span></div>
           <div class="goods-actions"><el-button size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(false)">{{ displayStock > 0 ? '加入购物车' : '暂时售罄' }}</el-button><el-button type="primary" size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(true)">立即采购</el-button><button class="favorite" @click="toggleFavorite">{{ product.favorite ? '★ 已收藏' : '☆ 收藏商品' }}</button></div>

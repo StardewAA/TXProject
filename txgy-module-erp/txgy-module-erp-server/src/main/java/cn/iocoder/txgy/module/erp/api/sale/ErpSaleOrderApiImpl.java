@@ -1,9 +1,14 @@
 package cn.iocoder.txgy.module.erp.api.sale;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderItemRespDTO;
 import cn.iocoder.txgy.module.erp.api.sale.dto.ErpSaleOrderRespDTO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderItemDO;
+import cn.iocoder.txgy.module.erp.dal.mysql.product.ErpProductMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderMapper;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
 import cn.iocoder.txgy.module.erp.service.sale.ErpSaleOrderService;
@@ -12,6 +17,9 @@ import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -31,6 +39,8 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
     private ErpSaleOrderService saleOrderService;
     @Resource
     private ErpSaleOrderMapper saleOrderMapper;
+    @Resource
+    private ErpProductMapper erpProductMapper;
     @Resource
     private ErpCustomerService customerService;
     @Resource
@@ -79,7 +89,59 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
                 dto.setSaleUserName(user.getNickname());
             }
         }
+        // 组装明细行（供 MES 按订单行生成生产工单）
+        List<ErpSaleOrderItemDO> itemDOList = saleOrderService.getSaleOrderItemListByOrderId(saleOrder.getId());
+        if (CollUtil.isNotEmpty(itemDOList)) {
+            List<ErpSaleOrderItemRespDTO> itemDTOList = new ArrayList<>();
+            for (ErpSaleOrderItemDO itemDO : itemDOList) {
+                ErpSaleOrderItemRespDTO itemDTO = new ErpSaleOrderItemRespDTO();
+                itemDTO.setId(itemDO.getId());
+                itemDTO.setProductId(itemDO.getProductId());
+                itemDTO.setProductUnitId(itemDO.getProductUnitId());
+                itemDTO.setCount(itemDO.getCount());
+                ErpProductDO product = erpProductMapper.selectById(itemDO.getProductId());
+                if (product != null) {
+                    itemDTO.setProductName(product.getName());
+                    itemDTO.setProductBarCode(product.getBarCode());
+                    itemDTO.setMaterialCode(product.getMaterialCode());
+                }
+                itemDTOList.add(itemDTO);
+            }
+            dto.setItems(itemDTOList);
+        }
         return dto;
+    }
+
+    private List<ErpSaleOrderItemRespDTO> buildSaleOrderItems(Long orderId) {
+        List<ErpSaleOrderItemDO> items = saleOrderItemMapper.selectList(
+                ErpSaleOrderItemDO::getOrderId, orderId);
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        // 批量组装产品名称与单位名称
+        Map<Long, ErpProductDO> productMap = productMapper.selectByIds(
+                        items.stream().map(ErpSaleOrderItemDO::getProductId)
+                                .filter(Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(ErpProductDO::getId, Function.identity()));
+        Map<Long, ErpProductUnitDO> unitMap = productUnitMapper.selectByIds(
+                        items.stream().map(ErpSaleOrderItemDO::getProductUnitId)
+                                .filter(Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(ErpProductUnitDO::getId, Function.identity()));
+        return items.stream().map(item -> {
+            ErpSaleOrderItemRespDTO itemDto = new ErpSaleOrderItemRespDTO();
+            itemDto.setProductId(item.getProductId());
+            itemDto.setCount(item.getCount());
+            itemDto.setTotalPrice(item.getTotalPrice());
+            ErpProductDO product = productMap.get(item.getProductId());
+            if (product != null) {
+                itemDto.setProductName(product.getName());
+            }
+            ErpProductUnitDO unit = unitMap.get(item.getProductUnitId());
+            if (unit != null) {
+                itemDto.setProductUnitName(unit.getName());
+            }
+            return itemDto;
+        }).collect(Collectors.toList());
     }
 
 }

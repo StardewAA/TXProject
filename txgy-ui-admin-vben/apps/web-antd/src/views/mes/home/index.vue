@@ -16,12 +16,15 @@ import AlertPanel from './modules/alert-panel.vue';
 import AndonAnalysis from './modules/andon-analysis.vue';
 import CheckMaintenAnalysis from './modules/check-mainten-analysis.vue';
 import DefectAnalysis from './modules/defect-analysis.vue';
+import DeliveryAnalysis from './modules/delivery-analysis.vue';
+import FeedbackUserAnalysis from './modules/feedback-user-analysis.vue';
 import KpiCards from './modules/kpi-cards.vue';
 import MachineryStatusChart from './modules/machinery-status-chart.vue';
 import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
 import Shortcuts from './modules/shortcuts.vue';
+import TodoPanel from './modules/todo-panel.vue';
 import WorkOrderChart from './modules/work-order-chart.vue';
 
 const router = useRouter();
@@ -56,6 +59,13 @@ onMounted(() => {
 
     <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
     <AiAssistant />
+
+    <!-- 我的待办任务：报工等单据审批统一在「工作流程-待办任务」处理，首页直达 -->
+    <Row :gutter="16" class="mb-4">
+      <Col :lg="24" :md="24" :sm="24" :xl="24" :xs="24" class="mb-4">
+        <TodoPanel @navigate="handleNavigate" />
+      </Col>
+    </Row>
 
     <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">
@@ -98,12 +108,22 @@ onMounted(() => {
     </Row>
 
     <!-- 第七行：点检保养执行 + 不良缺陷分析 -->
-    <Row :gutter="16">
+    <Row :gutter="16" class="mb-4">
       <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
         <CheckMaintenAnalysis />
       </Col>
       <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
         <DefectAnalysis />
+      </Col>
+    </Row>
+
+    <!-- 第八行：生产交付达成 + 人员报工产出 -->
+    <Row :gutter="16">
+      <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
+        <DeliveryAnalysis />
+      </Col>
+      <Col :lg="12" :md="24" :sm="24" :xl="12" :xs="24" class="mb-4">
+        <FeedbackUserAnalysis />
       </Col>
     </Row>
   </Page>

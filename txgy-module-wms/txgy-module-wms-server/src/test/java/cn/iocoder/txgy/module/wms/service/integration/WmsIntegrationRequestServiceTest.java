@@ -11,6 +11,10 @@ import org.springframework.context.annotation.Import;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_REQUEST_DUPLICATE_CONFLICT;
@@ -53,6 +57,51 @@ class WmsIntegrationRequestServiceTest extends BaseDbUnitTest {
             assertServiceException(() -> service.execute("MATERIAL", request("request-2", "PIPE-002"),
                     () -> response("request-2", "PIPE-002")), INTEGRATION_REQUEST_DUPLICATE_CONFLICT);
         });
+    }
+
+    @Test
+    void missingRequestResultIsRejected() {
+        TenantUtils.execute(2005L, () -> assertServiceException(
+                () -> service.getResult("missing-request"),
+                cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_REQUEST_NOT_EXISTS));
+    }
+
+    @Test
+    void concurrentDuplicateDeliveryExecutesActionOnlyOnce() throws Exception {
+        AtomicInteger executions = new AtomicInteger();
+        CountDownLatch firstActionStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirstAction = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<WmsIntegrationRequestRespDTO> first = executor.submit(() -> TenantUtils.execute(2005L,
+                    () -> service.execute("MATERIAL", request("request-concurrent", "PIPE-001"), () -> {
+                        executions.incrementAndGet();
+                        firstActionStarted.countDown();
+                        try {
+                            releaseFirstAction.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(e);
+                        }
+                        return response("request-concurrent", "PIPE-001");
+                    })));
+            firstActionStarted.await();
+            Future<WmsIntegrationRequestRespDTO> duplicate = executor.submit(() -> TenantUtils.execute(2005L,
+                    () -> service.execute("MATERIAL", request("request-concurrent", "PIPE-001"), () -> {
+                        executions.incrementAndGet();
+                        return response("request-concurrent", "WRONG");
+                    })));
+            releaseFirstAction.countDown();
+
+            assertEquals("PIPE-001", first.get().getAggregateNo());
+            assertEquals("PIPE-001", duplicate.get().getAggregateNo());
+            assertEquals(1, executions.get());
+            TenantUtils.execute(2005L, () -> assertEquals("SUCCESS",
+                    service.getResult("request-concurrent").getProcessingStatus()));
+        } finally {
+            releaseFirstAction.countDown();
+            executor.shutdownNow();
+        }
     }
 
     private static WmsMaterialUpsertReqDTO request(String requestId, String materialCode) {

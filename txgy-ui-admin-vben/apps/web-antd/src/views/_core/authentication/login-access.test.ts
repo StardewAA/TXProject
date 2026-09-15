@@ -12,21 +12,39 @@ describe('hasBackendAccess', () => {
     ).toBe(false);
   });
 
-  it('sends enterprise users to the backend even when no menu has been granted yet', () => {
+  it('keeps enterprise users without backend access in the portal', () => {
     expect(
       hasBackendAccess({
         loginType: 'enterprise',
         menus: [],
         permissions: [],
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('keeps the backend entry independent from the amount of granted permissions', () => {
+  it('allows HRM management permissions to enter the backend', () => {
     expect(
       hasBackendAccess({
         loginType: 'enterprise',
         permissions: ['hrm:recruit:post:query'],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not treat portal-only permissions as backend access', () => {
+    expect(
+      hasBackendAccess({
+        loginType: 'enterprise',
+        permissions: ['hrm:portal:query', 'hrm:portal:employee:update'],
+      }),
+    ).toBe(false);
+  });
+
+  it('allows an explicitly managed account without menu data', () => {
+    expect(
+      hasBackendAccess({
+        loginType: 'enterprise',
+        user: { isManagement: true },
       }),
     ).toBe(true);
   });

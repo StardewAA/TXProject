@@ -10,10 +10,15 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectI
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectFeedbackStatisticsRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMilestoneMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
@@ -56,6 +61,10 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     private MesProProjectMapper projectMapper;
     @Resource
     private MesProWorkOrderMapper workOrderMapper;
+    @Resource
+    private MesProFeedbackMapper feedbackMapper;
+    @Resource
+    private MesProProjectMilestoneMapper milestoneMapper;
     @Resource
     private AdminUserApi adminUserApi;
 
@@ -190,6 +199,42 @@ public class MesProProjectServiceImpl implements MesProProjectService {
                 ? new MesProProjectStatisticsRespVO() : statisticsList.get(0);
         statistics.setProjectId(projectId);
         return statistics;
+    }
+
+    @Override
+    public MesProProjectStatisticsDetailRespVO getProjectStatisticsDetail(Long projectId) {
+        // 1. 校验项目存在，并查询工单维度统计（含完成度）
+        validateProjectExists(projectId);
+        List<MesProProjectStatisticsRespVO> statisticsList =
+                workOrderMapper.selectProjectStatistics(Collections.singleton(projectId));
+        MesProProjectStatisticsDetailRespVO detail = CollUtil.isEmpty(statisticsList)
+                ? new MesProProjectStatisticsDetailRespVO()
+                : BeanUtils.toBean(statisticsList.get(0), MesProProjectStatisticsDetailRespVO.class);
+        detail.setProjectId(projectId);
+        // 2. 查询报工维度统计（报工单状态分布、报工数量、合格率）
+        List<MesProProjectFeedbackStatisticsRespVO> feedbackList =
+                feedbackMapper.selectFeedbackStatisticsByProjectIds(Collections.singleton(projectId));
+        if (CollUtil.isNotEmpty(feedbackList)) {
+            MesProProjectFeedbackStatisticsRespVO feedback = feedbackList.get(0);
+            detail.setFeedbackTotal(feedback.getFeedbackTotal());
+            detail.setFeedbackPrepareCount(feedback.getFeedbackPrepareCount());
+            detail.setFeedbackApprovingCount(feedback.getFeedbackApprovingCount());
+            detail.setFeedbackFinishedCount(feedback.getFeedbackFinishedCount());
+            detail.setFeedbackQuantityTotal(feedback.getFeedbackQuantityTotal());
+            detail.setQualifiedQuantityTotal(feedback.getQualifiedQuantityTotal());
+            detail.setUnqualifiedQuantityTotal(feedback.getUnqualifiedQuantityTotal());
+            detail.setQualifyRate(feedback.getQualifyRate());
+        }
+        return detail;
+    }
+
+    @Override
+    public List<MesProProjectMilestoneAlertRespVO> getMilestoneAlerts() {
+        List<MesProProjectMilestoneAlertRespVO> alerts = milestoneMapper.selectAlertList();
+        // 计算预警级别：已超期 → overdue；未超期（3 天内到期）→ warning
+        alerts.forEach(alert -> alert.setLevel(
+                alert.getDaysLeft() != null && alert.getDaysLeft() < 0 ? "overdue" : "warning"));
+        return alerts;
     }
 
     /**

@@ -23,6 +23,7 @@ public interface QuestionMapper extends BaseMapperX<QuestionDO> {
                 .likeIfPresent(QuestionDO::getStem, reqVO.getKeyword())
                 .eqIfPresent(QuestionDO::getQtype, reqVO.getQtype())
                 .eqIfPresent(QuestionDO::getDifficulty, reqVO.getDifficulty())
+                .eqIfPresent(QuestionDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(QuestionDO::getStatus, reqVO.getStatus())
                 .inIfPresent(QuestionDO::getId, reqVO.getQuestionIds())
                 .orderByDesc(QuestionDO::getId));

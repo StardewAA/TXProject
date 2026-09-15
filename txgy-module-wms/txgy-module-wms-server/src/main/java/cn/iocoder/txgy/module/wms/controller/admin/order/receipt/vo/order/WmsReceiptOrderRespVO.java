@@ -20,6 +20,11 @@ public class WmsReceiptOrderRespVO {
 
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
+    private Boolean simulation;
+    private String notificationStatus;
+    private String notificationError;
+    private Integer notificationAttempts;
+    private LocalDateTime nextNotificationTime;
 
     @Schema(description = "入库单号", requiredMode = Schema.RequiredMode.REQUIRED, example = "RK202605110001")
     @ExcelProperty("入库单号")
@@ -38,10 +43,21 @@ public class WmsReceiptOrderRespVO {
     @ExcelProperty(value = "入库状态", converter = DictConvert.class)
     @DictFormat(DictTypeConstants.ORDER_STATUS)
     private Integer status;
+    private Integer approvalStatus;
+    private String processInstanceId;
+    private LocalDateTime approvalTime;
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
 
     @Schema(description = "业务单号", example = "PO202605110001")
     @ExcelProperty("业务单号")
     private String bizOrderNo;
+    @Schema(description = "集成来源模块")
+    private String sourceModule;
+    @Schema(description = "业务链编号")
+    private String businessChainNo;
 
     @Schema(description = "供应商编号", example = "1024")
     private Long merchantId;

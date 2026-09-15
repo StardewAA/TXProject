@@ -36,7 +36,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -49,6 +55,15 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 @Validated
 @Slf4j
 public class HrmPortalRecruitController {
+    private static final Set<String> STANDARD_ROOT_NAMES = Set.of(
+            "一线施工技工", "项目技术与管理人员", "后勤与质量保障岗", "市场与行政岗", "其他");
+    private static final Set<String> STANDARD_LEAF_NAMES = Set.of(
+            "防腐工", "保温工", "喷砂工", "油漆工", "管工", "铆工", "焊工", "架子工", "电工", "瓦工",
+            "钢筋工", "木工", "缝纫工", "普工/力工", "项目经理", "项目副经理", "技术负责人/工程师",
+            "施工员", "施工队长/工长", "预算员/造价员", "安全员", "质检员", "试验/检测员", "资料员",
+            "材料员/库管", "设备维修工", "机械设备管理员", "市场业务经理", "投标专员", "采购员",
+            "财务会计", "行政人事专员", "防腐保温管理（校招管培方向）");
+
     @Resource private HrmRecruitPostService postService;
     @Resource private HrmRecruitPostTypeService postTypeService;
     @Resource private HrmRecruitApplicationService applicationService;
@@ -74,8 +89,45 @@ public class HrmPortalRecruitController {
     @PermitAll
     @TenantIgnore
     public CommonResult<List<HrmPortalRecruitPostTypeRespVO>> postTypeList() {
-        return success(TenantUtils.executeIgnore(() -> convertList(postTypeService.getRecruitPostTypeList(0),
-                item -> BeanUtils.toBean(item, HrmPortalRecruitPostTypeRespVO.class))));
+        return success(TenantUtils.executeIgnore(() -> buildStandardPostTypeCatalog(
+                postTypeService.getRecruitPostTypeList(0))));
+    }
+
+    private List<HrmPortalRecruitPostTypeRespVO> buildStandardPostTypeCatalog(
+            List<HrmRecruitPostTypeDO> postTypes) {
+        Map<Long, HrmRecruitPostTypeDO> typeMap = new LinkedHashMap<>();
+        postTypes.forEach(type -> typeMap.put(type.getId(), type));
+        Map<String, HrmRecruitPostTypeDO> roots = new LinkedHashMap<>();
+        postTypes.stream()
+                .filter(type -> Objects.equals(type.getParentId(), 0L)
+                        && STANDARD_ROOT_NAMES.contains(type.getName()))
+                .sorted(Comparator.comparing(HrmRecruitPostTypeDO::getSort,
+                                Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(HrmRecruitPostTypeDO::getId))
+                .forEach(type -> roots.putIfAbsent(type.getName(), type));
+
+        List<HrmPortalRecruitPostTypeRespVO> result = new ArrayList<>();
+        for (HrmRecruitPostTypeDO root : roots.values()) {
+            result.add(BeanUtils.toBean(root, HrmPortalRecruitPostTypeRespVO.class));
+            Map<String, HrmRecruitPostTypeDO> leaves = new LinkedHashMap<>();
+            postTypes.stream()
+                    .filter(type -> STANDARD_LEAF_NAMES.contains(type.getName()))
+                    .filter(type -> {
+                        HrmRecruitPostTypeDO parent = typeMap.get(type.getParentId());
+                        return parent != null && root.getName().equals(parent.getName());
+                    })
+                    .sorted(Comparator.comparing(HrmRecruitPostTypeDO::getSort,
+                                    Comparator.nullsLast(Integer::compareTo))
+                            .thenComparing(HrmRecruitPostTypeDO::getId))
+                    .forEach(type -> leaves.putIfAbsent(type.getName(), type));
+            leaves.values().forEach(leaf -> {
+                HrmPortalRecruitPostTypeRespVO response =
+                        BeanUtils.toBean(leaf, HrmPortalRecruitPostTypeRespVO.class);
+                response.setParentId(root.getId());
+                result.add(response);
+            });
+        }
+        return result;
     }
 
     @GetMapping("/post/get")
@@ -138,9 +190,17 @@ public class HrmPortalRecruitController {
         HrmRecruitApplicationStatusEnum status = HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
         vo.setStatusName(status == null ? null : status.getName());
         if (application.getResumeId() != null) {
-            var resume = TenantUtils.executeIgnore(
-                    () -> resumeService.getAuthorizedRecruitResume(application.getResumeId()));
-            vo.setResumeFileName(resume.getFileName()).setResumeFileUrl(resume.getFileUrl());
+            // 简历附件授权失败不应让整页应聘记录查询失败；记录本身仍需正常展示。
+            try {
+                var resume = TenantUtils.executeIgnore(
+                        () -> resumeService.getAuthorizedRecruitResume(application.getResumeId()));
+                if (resume != null) {
+                    vo.setResumeFileName(resume.getFileName()).setResumeFileUrl(resume.getFileUrl());
+                }
+            } catch (RuntimeException ex) {
+                log.warn("[buildApplication][applicationId({}) resumeId({}) 简历授权失败，跳过附件信息]",
+                        application.getId(), application.getResumeId(), ex);
+            }
         }
         List<HrmRecruitInterviewDO> interviews = TenantUtils.executeIgnore(
                 () -> interviewMapper.selectListByApplicationId(application.getId()));
@@ -154,8 +214,8 @@ public class HrmPortalRecruitController {
     /**
      * 查询岗位咨询联系人对应的系统用户。
      *
-     * <p>优先使用岗位配置的招聘负责人；历史岗位可能没有配置负责人，此时退回到岗位创建人，
-     * 以保证求职者仍能联系发布该岗位的 HR。公开岗位接口需要跨租户读取职位，故所有用户查询
+     * <p>优先使用岗位发布 HR；历史岗位可能没有可用的 HR 发布账号，此时退回到岗位配置的招聘负责人，
+     * 以保证求职者仍能联系招聘方。公开岗位接口需要跨租户读取职位，故所有用户查询
      * 均必须使用岗位所属租户，且负责人档案或系统用户服务异常时不能影响职位列表/详情的正常浏览。</p>
      */
     private AdminUserRespDTO getPostOwnerUser(HrmRecruitPostDO post) {
@@ -163,36 +223,37 @@ public class HrmPortalRecruitController {
             return null;
         }
         Long tenantId = post.getTenantId();
-        if (post.getOwnerEmployeeId() != null) {
+        Long creatorUserId = NumberUtil.isNumber(post.getCreator())
+                ? NumberUtil.parseLong(post.getCreator()) : null;
+        if (creatorUserId != null) {
             try {
-                HrmEmployeeDO owner = TenantUtils.execute(tenantId,
-                        () -> employeeService.getEmployee(post.getOwnerEmployeeId()));
-                if (owner != null && owner.getUserId() != null) {
-                    AdminUserRespDTO ownerUser = TenantUtils.execute(tenantId,
-                            () -> adminUserApi.getUserIgnoreTenant(owner.getUserId()).getCheckedData());
-                    if (ownerUser != null) {
-                        return ownerUser;
-                    }
+                AdminUserRespDTO creator = TenantUtils.execute(tenantId,
+                        () -> adminUserApi.getUserIgnoreTenant(creatorUserId).getCheckedData());
+                if (creator != null) {
+                    return creator;
                 }
             } catch (RuntimeException ex) {
-                log.warn("[getPostOwnerUser][postId({}) tenantId({}) ownerEmployeeId({}) 查询招聘负责人失败，"
-                                + "尝试回退到岗位创建人]",
-                        post.getId(), tenantId, post.getOwnerEmployeeId(), ex);
+                log.warn("[getPostOwnerUser][postId({}) tenantId({}) creator({}) 查询岗位发布 HR 失败，"
+                                + "尝试回退到招聘负责人]",
+                        post.getId(), tenantId, post.getCreator(), ex);
             }
         }
 
-        Long creatorUserId = NumberUtil.isNumber(post.getCreator())
-                ? NumberUtil.parseLong(post.getCreator()) : null;
-        if (creatorUserId == null) {
+        if (post.getOwnerEmployeeId() == null) {
             return null;
         }
         try {
+            HrmEmployeeDO owner = TenantUtils.execute(tenantId,
+                    () -> employeeService.getEmployee(post.getOwnerEmployeeId()));
+            if (owner == null || owner.getUserId() == null) {
+                return null;
+            }
             return TenantUtils.execute(tenantId,
-                    () -> adminUserApi.getUserIgnoreTenant(creatorUserId).getCheckedData());
+                    () -> adminUserApi.getUserIgnoreTenant(owner.getUserId()).getCheckedData());
         } catch (RuntimeException ex) {
-            log.warn("[getPostOwnerUser][postId({}) tenantId({}) creator({}) 查询岗位创建人失败，"
+            log.warn("[getPostOwnerUser][postId({}) tenantId({}) ownerEmployeeId({}) 查询招聘负责人失败，"
                             + "跳过 IM 联系人信息]",
-                    post.getId(), tenantId, post.getCreator(), ex);
+                    post.getId(), tenantId, post.getOwnerEmployeeId(), ex);
             return null;
         }
     }

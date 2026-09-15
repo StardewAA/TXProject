@@ -78,6 +78,7 @@ public class WmsItemSkuController {
         // 拼接 VO
         return BeanUtils.toBean(list, WmsItemSkuRespVO.class, vo -> MapUtils.findAndThen(itemMap, vo.getItemId(), item -> {
             vo.setItemCode(item.getCode()).setItemName(item.getName()).setUnit(item.getUnit())
+                    .setMaterialType(item.getMaterialType())
                     .setCategoryId(item.getCategoryId()).setBrandId(item.getBrandId());
             MapUtils.findAndThen(categoryMap, item.getCategoryId(), category ->
                     vo.setCategoryName(category.getName()));

@@ -1,197 +1,582 @@
 <script lang="ts" setup>
+import { nextTick, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useUserStore } from '@vben/stores';
+import txgyLogo from '#/assets/imgs/txgy-logo.png';
+
+type DispatchTarget = {
+  description: string;
+  label: string;
+  path: string;
+};
+
+type DispatchMessage = {
+  action?: DispatchTarget;
+  role: 'assistant' | 'user';
+  text: string;
+};
 
 const router = useRouter();
-const userStore = useUserStore();
+const input = ref('');
+const messages = ref<DispatchMessage[]>([]);
+const threadRef = ref<HTMLElement>();
 
-const services = [
+const dispatchTargets: DispatchTarget[] = [
   {
-    title: '招聘应聘',
-    description: '查看已发布岗位、在线投递并跟进招聘进度。',
+    description: '浏览职位、查看企业并投递简历',
+    label: '我要找工作',
     path: '/portal/recruit',
   },
   {
-    title: '云培训学院',
-    description: '浏览企业课程、学习计划和培训记录。',
+    description: '检索已发布法规，或提交内容申请审查发布。',
+    label: 'CMS系统',
+    path: '/portal/content',
+  },
+  {
+    description: '进入课程、考试和学习任务',
+    label: '云培训学院',
     path: '/portal/training',
   },
   {
-    title: '招标投标',
-    description: '了解项目公告、投标流程和合作机会。',
+    description: '查看公告、项目和投标机会',
+    label: '招标投标',
     path: '/portal/bidding',
   },
 ];
+
+function findDispatchTarget(value: string) {
+  if (/(职位|招聘|求职|简历|应聘|工作|企业)/u.test(value)) {
+    return dispatchTargets[0];
+  }
+
+  if (/(法规|内容|CMS|政策|发布|审查)/u.test(value)) {
+    return dispatchTargets[1];
+  }
+
+  if (/(培训|课程|考试|学习|证书)/u.test(value)) {
+    return dispatchTargets[2];
+  }
+
+  if (/(招标|投标|项目|公告)/u.test(value)) {
+    return dispatchTargets[3];
+  }
+
+  return undefined;
+}
+
+async function scrollThreadToBottom() {
+  await nextTick();
+
+  threadRef.value?.scrollTo({
+    behavior: 'smooth',
+    top: threadRef.value.scrollHeight,
+  });
+}
+
+function submit() {
+  const value = input.value.trim();
+
+  if (!value) {
+    return;
+  }
+
+  const action = findDispatchTarget(value);
+
+  messages.value.push({
+    role: 'user',
+    text: value,
+  });
+
+  messages.value.push({
+    action,
+    role: 'assistant',
+    text: action
+      ? `我帮你找到「${action.label}」，这里可以${action.description}。`
+      : '我可以帮你进入招聘、CMS、培训或招投标页面。换一种说法告诉我你的目标吧。',
+  });
+
+  input.value = '';
+  void scrollThreadToBottom();
+}
+
+function handleInputKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    submit();
+  }
+}
+
+function openTarget(path: string) {
+  void router.push(path);
+}
 </script>
 
 <template>
-  <div class="portal-page">
-    <section class="welcome-banner">
-      <p class="eyebrow">员工服务中心</p>
-      <h1>
-        欢迎回来，{{
-          userStore.userInfo?.nickname || userStore.userInfo?.username || '用户'
-        }}
-      </h1>
-      <p>从这里快速访问平台服务，查看与你相关的工作信息。</p>
-    </section>
-
-    <section class="section-block">
-      <div class="section-heading">
-        <h2>常用服务</h2>
-        <span>快速入口</span>
+  <div class="dispatch-page">
+    <section
+      class="dispatch-stage"
+      :class="{ 'dispatch-stage--thread': messages.length }"
+    >
+      <div v-if="!messages.length" class="dispatch-welcome">
+        <img :src="txgyLogo" alt="天信管业" class="dispatch-logo" />
+        <h1>有什么可以帮忙的？</h1>
       </div>
-      <div class="service-grid">
-        <button
-          v-for="service in services"
-          :key="service.path"
-          class="service-item"
-          type="button"
-          @click="router.push(service.path)"
+
+      <div v-else ref="threadRef" class="dispatch-thread" aria-live="polite">
+        <div class="thread-title">
+          <span class="thread-avatar">分</span>
+          <div>
+            <strong>平台分流助手</strong>
+            <span>帮你找到下一步</span>
+          </div>
+        </div>
+
+        <div
+          v-for="(message, index) in messages"
+          :key="`${message.role}-${index}`"
+          :class="['dispatch-message', `dispatch-message--${message.role}`]"
         >
-          <span class="service-title">{{ service.title }}</span>
-          <span class="service-description">{{ service.description }}</span>
-          <span class="service-link">进入服务 →</span>
-        </button>
-      </div>
-    </section>
+          <div v-if="message.role === 'assistant'" class="message-avatar">
+            分
+          </div>
 
-    <section class="section-block">
-      <div class="section-heading">
-        <h2>我的待办</h2>
-        <span>近期事项</span>
+          <div class="message-body">
+            <p>{{ message.text }}</p>
+
+            <button
+              v-if="message.action"
+              class="message-action"
+              type="button"
+              @click="openTarget(message.action.path)"
+            >
+              {{ message.action.label }}
+              <span>→</span>
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="empty-state">当前暂无待办事项</div>
+
+      <div class="dispatch-composer">
+        <span class="composer-leading attachment-control">
+          <button
+            aria-describedby="attachment-help"
+            aria-label="添加图片或文档"
+            class="composer-tool"
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path
+                d="m8.5 12.5 5.8-5.8a3 3 0 0 1 4.2 4.2l-7.7 7.7a5 5 0 0 1-7.1-7.1l8-8a3.5 3.5 0 0 1 5 5l-7.4 7.4a2 2 0 0 1-2.8-2.8l6.4-6.4"
+              />
+            </svg>
+          </button>
+
+          <span id="attachment-help" class="attachment-popover" role="tooltip">
+            <strong>添加图片或文档</strong>
+            <small>支持 PDF、DOCX、TXT、MD、XLSX、PPTX、JPG/JPEG、PNG</small>
+          </span>
+        </span>
+
+        <textarea
+          v-model="input"
+          aria-label="告诉平台你想做什么"
+          placeholder="有问题，随便问"
+          rows="1"
+          @keydown="handleInputKeydown"
+        />
+
+        <div class="composer-trailing">
+          <button
+            disabled
+            aria-label="发送功能暂未开放"
+            class="dispatch-composer-submit"
+            title="发送功能暂未开放"
+            type="submit"
+          >
+            ↑
+          </button>
+        </div>
+      </div>
+
+      <button
+        v-if="messages.length"
+        class="dispatch-reset"
+        type="button"
+        @click="messages = []"
+      >
+        开始新的分流
+      </button>
     </section>
   </div>
 </template>
 
 <style scoped>
-.portal-page {
-  display: grid;
-  gap: 24px;
-}
-
-.welcome-banner {
-  padding: 32px 36px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 8px;
-  color: #111827;
-  font-size: 32px;
-  line-height: 1.25;
-}
-
-.welcome-banner > p:last-child {
-  margin-bottom: 0;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.section-block {
-  padding: 24px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-}
-
-.section-heading {
+.dispatch-page {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 18px;
-}
-
-.section-heading h2 {
-  margin-bottom: 0;
-  color: #111827;
-  font-size: 18px;
-}
-
-.section-heading span {
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.service-item {
-  display: flex;
-  min-height: 160px;
-  padding: 20px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: inherit;
-  cursor: pointer;
+  width: 100%;
+  height: calc(100vh - 64px);
+  min-height: calc(100vh - 64px);
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+  align-items: center;
+  overflow: hidden;
+  padding: 0;
+  background: #fff;
 }
 
-.service-item:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 4px 14px rgb(37 99 235 / 10%);
+.dispatch-stage {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 64px);
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 0 24px;
 }
 
-.service-title {
-  color: #1f2937;
-  font-size: 16px;
-  font-weight: 650;
+.dispatch-stage--thread {
+  display: grid;
+  min-height: 610px;
+  align-content: stretch;
+  justify-items: stretch;
+  padding: 34px 38px 24px;
+  border: 1px solid #e8eceb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgb(28 67 62 / 7%);
 }
 
-.service-description {
-  margin-top: 10px;
-  color: #6b7280;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.service-link {
-  margin-top: auto;
-  padding-top: 18px;
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.empty-state {
-  padding: 32px 16px;
-  border: 1px dashed #d1d5db;
-  color: #9ca3af;
-  font-size: 14px;
+.dispatch-welcome {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  justify-items: center;
+  pointer-events: none;
   text-align: center;
+  transform: translate(-50%, -50%);
 }
 
-@media (max-width: 760px) {
-  h1 {
-    font-size: 26px;
+.dispatch-logo {
+  position: absolute;
+  top: calc(50% - 153px);
+  left: 50%;
+  width: 82px;
+  height: 82px;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+
+.dispatch-welcome h1 {
+  position: absolute;
+  top: calc(50% - 32px);
+  left: 50%;
+  margin: 0;
+  color: #111827;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.dispatch-composer {
+  display: flex;
+  width: min(640px, calc(100% - 32px));
+  min-height: 56px;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid #e2e6e9;
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(25 35 45 / 7%);
+}
+
+.dispatch-composer textarea {
+  min-height: 42px;
+  flex: 1;
+  padding: 10px 4px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #17343d;
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+}
+
+.dispatch-composer textarea::placeholder {
+  color: #b1bfbc;
+}
+
+.composer-trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.composer-tool {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #71817f;
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.composer-tool:hover,
+.composer-tool:focus-visible {
+  background: #f1f5f4;
+  color: #17343d;
+}
+
+.composer-leading {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.composer-tool svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.attachment-control {
+  position: relative;
+}
+
+.attachment-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: -8px;
+  z-index: 2;
+  display: grid;
+  width: 238px;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #e1e8e6;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(23 52 61 / 14%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.attachment-control:hover .attachment-popover,
+.attachment-control:focus-within .attachment-popover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.attachment-popover strong {
+  color: #17343d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.attachment-popover small {
+  color: #71817f;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dispatch-composer-submit {
+  display: grid;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f27b32;
+  color: #fff;
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.dispatch-composer-submit:hover:not(:disabled) {
+  background: #df6421;
+  transform: translateY(-1px);
+}
+
+.dispatch-composer-submit:disabled {
+  background: #e3e7e9;
+  color: #a5b0b4;
+  cursor: not-allowed;
+}
+
+.dispatch-stage--thread .dispatch-composer {
+  margin-top: 28px;
+}
+
+.dispatch-thread {
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px 28px;
+}
+
+.thread-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.thread-avatar,
+.message-avatar {
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #173f46;
+  color: #a8e2d6;
+  font-weight: 800;
+}
+
+.thread-avatar {
+  width: 38px;
+  height: 38px;
+}
+
+.thread-title strong,
+.thread-title span {
+  display: block;
+}
+
+.thread-title strong {
+  color: #17343d;
+  font-size: 15px;
+}
+
+.thread-title span {
+  margin-top: 3px;
+  color: #91a19d;
+  font-size: 12px;
+}
+
+.dispatch-message {
+  display: flex;
+  max-width: 82%;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.dispatch-message--user {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.message-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.message-body {
+  padding: 13px 16px;
+  border-radius: 14px;
+  background: #f1f7f5;
+  color: #36504e;
+  line-height: 1.65;
+}
+
+.dispatch-message--user .message-body {
+  background: #173f46;
+  color: #fff;
+}
+
+.message-body p {
+  margin: 0;
+}
+
+.message-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 13px;
+  padding: 9px 12px;
+  border: 1px solid #b5ddd4;
+  border-radius: 8px;
+  background: #fff;
+  color: #16756f;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.message-action:hover {
+  border-color: #16756f;
+}
+
+.dispatch-reset {
+  justify-self: center;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: #16756f;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .dispatch-page {
+    height: calc(100vh - 156px);
+    min-height: calc(100vh - 156px);
+    padding: 14px 12px 38px;
   }
 
-  .service-grid {
-    grid-template-columns: 1fr;
+  .dispatch-stage,
+  .dispatch-stage--thread {
+    min-height: 520px;
+    padding: 42px 18px 22px;
+    border-radius: 18px;
+  }
+
+  .dispatch-logo {
+    top: calc(50% - 138px);
+    width: 72px;
+    height: 72px;
+  }
+
+  .dispatch-composer {
+    padding-left: 14px;
+  }
+
+  .dispatch-message {
+    max-width: 94%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-composer-submit,
+  .attachment-popover {
+    transition: none;
   }
 }
 </style>

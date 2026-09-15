@@ -63,7 +63,7 @@ import static cn.iocoder.txgy.module.system.enums.LogRecordConstants.*;
 @Slf4j
 public class AdminUserServiceImpl implements AdminUserService {
 
-    static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
+    public static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
 
     static final String USER_REGISTER_ENABLED_KEY = "system.user.register-enabled";
 
@@ -308,6 +308,12 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public AdminUserDO getUserByMobile(String mobile) {
         return userMapper.selectByMobile(mobile);
+    }
+
+    @Override
+    @DataPermission(enable = false) // 忽略数据权限：按手机号匹配用户属于系统级匹配，避免因部门数据权限过滤而漏查
+    public List<AdminUserDO> getUserListByMobile(String mobile) {
+        return userMapper.selectListByMobile(mobile);
     }
 
     @Override

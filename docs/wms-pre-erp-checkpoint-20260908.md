@@ -20,3 +20,13 @@
 - 尝试运行出库审批与库存只读相关 Maven 测试，构建在 Java 版本检查阶段停止：项目要求 JDK 25，当前命令环境使用 JDK 21，现有 JAVA_HOME 也未指向可用的 JDK 25。测试尚未运行，不能认定通过。
 - 后续需使用 JDK 25 运行测试，并验证 BPM 回调、租户权限、审批并发与实际数据库迁移，再开展 ERP v0.2 联调。
 - 本机环境配置、数据库备份和历史初始化库的本地调整不属于本次业务提交，继续保留在本机。
+
+## ERP/WMS 主数据升级顺序（2026-09-08）
+
+1. 备份 ERP 与 WMS 数据库。
+2. 执行 `deploy/mysql/repair/erp_wms_integration_v0_2.sql`，建立 v0.2 基础字段和 ERP 出站记录表。
+3. 先执行并检查 `deploy/mysql/upgrade/20260908-wms-erp-master-data.sql` 文件开头的三组预检查询；存在空编码或重复编码时先处理数据。
+4. 继续执行该升级脚本，建立 WMS 幂等请求账本、企业分角色版本、仓库唯一索引及 ERP 仓库同步状态字段。
+5. ERP 与 WMS 同进程部署时保持默认 `txgy.integration.wms.mode=mock`；远程联调环境设置为 `remote`，并确保 Feign 的 WMS 服务名能够从注册中心解析。
+
+ERP 新建或修改仓库后先显示 `PENDING`，WMS 确认后变为 `SUCCESS` 并保存权威编码和版本；失败时显示 `FAILED` 和错误原因。未达到 `SUCCESS` 的仓库不能进入依赖真实库存的跨模块流程。

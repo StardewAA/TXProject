@@ -1,3 +1,30 @@
+
+
+# 后端服务公共环境变量单独一个锚点。
+# 【重要】compose 里 `environment` 是整体替换、不是深合并：服务块只要自己写了
+# environment，就完全丢掉锚点里的环境（DB/Nacos/Redis 地址全没了，容器会退回连
+# 127.0.0.1 并疯狂重启）。因此服务块必须写成：
+#     environment:
+#       <<: *backend-env      # 先并入公共变量
+#       JAVA_OPTS: ...        # 再覆盖/追加自己的
+x-backend-env: &backend-env
+  SERVER_PORT: 48080
+  TZ: ${TZ}
+  SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
+  SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  SPRING_DATA_REDIS_HOST: redis
+  # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
+  RESOURCE_UPLOAD_DIR: /app/uploads
+  # 关闭登录行为验证码，便于本地联调；生产环境请移除或置 true
+  TXGY_CAPTCHA_ENABLE: "false"
+
+# 后端服务公共锚点：只放依赖/健康检查/网络；env 走上面的 *backend-env。
+
+
+
 x-backend-service: &backend-service
   depends_on:
     mysql:
@@ -7,6 +34,7 @@ x-backend-service: &backend-service
     nacos:
       condition: service_healthy
   environment:
+    TZ: ${TZ}
     SERVER_PORT: 48080
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
@@ -73,6 +101,7 @@ services:
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      NACOS_SERVER_IP: 127.0.0.1
       TZ: ${TZ}
     ports:
       - "8848:8848"
@@ -92,28 +121,37 @@ services:
   gateway:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/gateway
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-gateway
+        JAR_FILE: app.jar
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx320m -XX:MaxMetaspaceSize=224m -XX:+UseG1GC -XX:MaxRAMPercentage=32
     ports:
       - "48080:48080"
 
   system:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/system
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-system/txgy-module-system-server
+        JAR_FILE: app.jar
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   infra:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/infra
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-infra/txgy-module-infra-server
+        JAR_FILE: app.jar
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   member:
     <<: *backend-service
@@ -142,10 +180,13 @@ services:
   report:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/report
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-report/txgy-module-report-server
+        JAR_FILE: app.jar
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
 
   mp:
     <<: *backend-service
@@ -238,18 +279,25 @@ services:
   im:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/im
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-im/txgy-module-im-server
+        JAR_FILE: app.jar
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
 
   ai:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/ai
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-ai/txgy-module-ai-server
+        JAR_FILE: app.jar
+    # ai 的 jar 最大（419MB），构建器与向量库相关类较多，元空间给宽一些
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   hrm:
     <<: *backend-service

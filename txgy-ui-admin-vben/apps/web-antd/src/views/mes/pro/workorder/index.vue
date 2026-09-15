@@ -95,6 +95,29 @@ async function handleIssue(row: MesProWorkOrderApi.WorkOrder) {
   handleRefresh();
 }
 
+/**
+ * 工单是否可"完成"
+ * 对齐后端 MesProWorkOrderServiceImpl#finishWorkOrder：已确认/已下发/生产中 均可完成
+ */
+function canFinish(row: MesProWorkOrderApi.WorkOrder) {
+  return (
+    row.status === MesProWorkOrderStatusEnum.CONFIRMED ||
+    row.status === MesProWorkOrderStatusEnum.ISSUED ||
+    row.status === MesProWorkOrderStatusEnum.IN_PRODUCTION
+  );
+}
+
+/**
+ * 工单是否可"取消"
+ * 对齐后端 MesProWorkOrderServiceImpl#cancelWorkOrder：已确认可随时取消；
+ * 已下发仅限下发后 24 小时内且无报工记录（是否超时/有无报工由后端校验并返回明确提示）
+ */
+function canCancel(row: MesProWorkOrderApi.WorkOrder) {
+  return (
+    row.status === MesProWorkOrderStatusEnum.CONFIRMED ||
+    row.status === MesProWorkOrderStatusEnum.ISSUED
+  );
+}
 
 /** 查看工单条码 */
 function handleBarcode(row: MesProWorkOrderApi.WorkOrder) {
@@ -234,7 +257,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: '完成',
               type: 'link',
               auth: ['mes:pro-work-order:update'],
-              ifShow: row.status === MesProWorkOrderStatusEnum.CONFIRMED,
+              ifShow: canFinish(row),
               onClick: handleFinish.bind(null, row),
             },
             {
@@ -242,7 +265,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               danger: true,
               auth: ['mes:pro-work-order:update'],
-              ifShow: row.status === MesProWorkOrderStatusEnum.CONFIRMED,
+              ifShow: canCancel(row),
               popConfirm: {
                 title: '确认要取消该工单吗？取消后不可恢复。',
                 confirm: handleCancel.bind(null, row),

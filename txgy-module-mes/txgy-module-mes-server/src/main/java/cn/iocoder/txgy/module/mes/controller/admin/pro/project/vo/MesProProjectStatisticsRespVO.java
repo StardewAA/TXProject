@@ -27,10 +27,19 @@ public class MesProProjectStatisticsRespVO {
     @Schema(description = "已取消工单数", example = "1")
     private Integer canceledCount;
 
+    @Schema(description = "已下发工单数", example = "1")
+    private Integer issuedCount;
+
+    @Schema(description = "生产中工单数", example = "1")
+    private Integer inProductionCount;
+
     @Schema(description = "生产数量合计", example = "1000.00")
     private BigDecimal quantityTotal;
 
     @Schema(description = "已完成生产数量合计", example = "600.00")
     private BigDecimal quantityProducedTotal;
+
+    @Schema(description = "项目完成度百分比（已生产/计划生产，不含已取消工单）", example = "60.0")
+    private BigDecimal progress;
 
 }

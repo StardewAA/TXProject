@@ -42,7 +42,7 @@ CREATE TEMPORARY TABLE tmp_course_parent_code (
     parent_code VARCHAR(64) DEFAULT NULL,
     name        VARCHAR(100) NOT NULL,
     sort        INT NOT NULL DEFAULT 0
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO tmp_course_parent_code (course_id, course_code, parent_id, parent_code, name, sort)
 SELECT c.id,
@@ -64,7 +64,7 @@ CREATE TEMPORARY TABLE tmp_rc_id (
     code VARCHAR(64) NOT NULL,
     id   BIGINT NOT NULL,
     PRIMARY KEY (type, code)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------- doc ----------
 INSERT INTO training_category (type, name, code, parent_id, sort, creator)

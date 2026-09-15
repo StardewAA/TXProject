@@ -1,0 +1,20 @@
+#!/bin/sh
+# 提交前跑一遍招投标门禁（10 项，零依赖，通常 < 10 秒）。
+# 启用（每仓库一次）：git config core.hooksPath .githooks
+# 跳过（确有需要）：git commit --no-verify
+#
+# 只对"可能影响门禁"的改动触发：SQL 脚本、前端 bidding 域、后端 bidding 控制器/DO、
+# 以及门禁脚本自身。其它改动（如纯文档）直接放行，避免拖慢日常提交。
+set -e
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+echo "$changed" | grep -qE '^(txgy-module-bidding/sql/|txgy-module-bidding/txgy-module-bidding-server/src/main/java/cn/iocoder/txgy/module/bidding/|txgy-ui-admin-vben/apps/web-antd/src/(api|views)/bidding/)' || exit 0
+
+echo "[pre-commit] 检测到招投标相关改动，运行门禁…"
+node txgy-module-bidding/sql/tools/check-all.js || {
+  echo ""
+  echo "[pre-commit] 门禁未通过，提交已中止。"
+  echo "  · 逐项失败含义与修复方向：txgy-module-bidding/sql/tools/README-自检脚本.md"
+  echo "  · 查看完整输出：cd txgy-module-bidding && node sql/tools/check-all.js --verbose"
+  echo "  · 确需跳过：git commit --no-verify"
+  exit 1
+}

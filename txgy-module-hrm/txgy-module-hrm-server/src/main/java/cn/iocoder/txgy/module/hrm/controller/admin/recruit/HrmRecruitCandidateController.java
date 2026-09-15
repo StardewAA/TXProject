@@ -25,6 +25,7 @@ import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInt
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitApplicationMapper;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
@@ -271,8 +272,15 @@ public class HrmRecruitCandidateController {
             });
             MapUtils.findAndThen(recruitChannelMap, vo.getChannelId(),
                     channel -> vo.setChannelName(channel.getName()));
-            MapUtils.findAndThen(recruitApplicationMap, vo.getId(),
-                    application -> vo.setApplicationId(application.getId()));
+            MapUtils.findAndThen(recruitApplicationMap, vo.getId(), application -> {
+                vo.setApplicationId(application.getId())
+                        .setApplicationStatus(application.getStatus());
+                HrmRecruitApplicationStatusEnum applicationStatus =
+                        HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
+                if (applicationStatus != null) {
+                    vo.setApplicationStatusName(applicationStatus.getName());
+                }
+            });
             // 2.2 拼接面试信息
             if (HrmRecruitCandidateStatusEnum.INTERVIEW_RELATED_STATUSES.contains(vo.getStatus())) {
                 HrmRecruitInterviewDO currentInterview = vo.getApplicationId() == null

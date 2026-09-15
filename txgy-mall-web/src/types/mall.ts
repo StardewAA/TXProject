@@ -13,6 +13,7 @@ export interface TokenResult {
 }
 
 export interface UserProfile {
+  memberIdentity?: 'buyer' | 'supplier'
   id?: Identifier
   nickname?: string
   mobile?: string
@@ -86,6 +87,10 @@ export interface Shop {
   id: Identifier
   name: string
   logo?: string
+  logoUrl?: string
+  introduction?: string
+  contactName?: string
+  contactMobile?: string
 }
 
 export interface CouponTemplate {
@@ -153,6 +158,11 @@ export interface TradeOrder {
 }
 
 export interface AfterSale {
+  returnReceiverName?: string
+  returnReceiverMobile?: string
+  returnAddress?: string
+  auditReason?: string
+  receiveReason?: string
   id: Identifier
   no?: string
   status: number

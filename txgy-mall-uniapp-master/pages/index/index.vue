@@ -10,7 +10,7 @@
     <view class="mall-home">
       <view class="home-hero">
         <view class="hero-brand">
-          <view class="brand-mark">防腐</view>
+          <image class="brand-mark" src="/static/mall-logo.png" mode="aspectFit" />
           <view>
             <view class="brand-name">防腐保温材料商城</view>
             <view class="brand-subtitle">工程材料一站采购 · 质保可追溯</view>
@@ -22,6 +22,7 @@
           <text>保温保冷</text>
           <text>施工辅材</text>
         </view>
+        <button class="industry-primary hero-purchase" @tap="openCategory()">开始选购材料 <text>→</text></button>
       </view>
 
       <view class="search-bar" @tap="openSearch">
@@ -30,26 +31,32 @@
         <text class="search-action">搜索</text>
       </view>
 
+      <view class="quick-actions">
+        <button @tap="openCategory()"><text class="quick-symbol">▦</text><text>材料分类</text><text class="quick-caption">按用途找材料</text></button>
+        <button @tap="sheep.$router.go('/pages/index/cart')"><text class="quick-symbol">＋</text><text>采购清单</text><text class="quick-caption">查看购物车</text></button>
+        <button @tap="sheep.$router.go('/pages/order/list')"><text class="quick-symbol">≡</text><text>我的订单</text><text class="quick-caption">跟进采购进度</text></button>
+      </view>
+
       <view class="service-strip">
-        <view class="service-item">
+        <view class="service-item" @tap="sheep.$router.go('/pages/shop/list')">
           <text class="service-icon">厂</text>
           <view>
-            <text class="service-title">厂家直供</text>
-            <text class="service-desc">工程采购更省心</text>
+            <text class="service-title">企业店铺</text>
+            <text class="service-desc">查看供货方信息</text>
           </view>
         </view>
         <view class="service-item">
           <text class="service-icon">溯</text>
           <view>
-            <text class="service-title">批次可追溯</text>
-            <text class="service-desc">质保资料随货提供</text>
+            <text class="service-title">规格选型</text>
+            <text class="service-desc">核对材质与尺寸</text>
           </view>
         </view>
         <view class="service-item">
           <text class="service-icon">价</text>
           <view>
-            <text class="service-title">工程专属价</text>
-            <text class="service-desc">按项目灵活报价</text>
+            <text class="service-title">采购优惠</text>
+            <text class="service-desc">以活动规则为准</text>
           </view>
         </view>
       </view>
@@ -80,11 +87,16 @@
         </scroll-view>
       </view>
 
+      <view class="section-block shop-section">
+        <view class="section-heading"><view><text class="section-title">按店铺选购</text><text class="section-subtitle">走进供应企业，查看主营材料</text></view><text class="section-more" @tap="sheep.$router.go('/pages/shop/list')">全部店铺 ›</text></view>
+        <s-shop-showcase ref="shopShowcase" :limit="3" />
+      </view>
+
       <view class="section-block product-section">
         <view class="section-heading">
           <view>
             <text class="section-title">工程常用材料</text>
-            <text class="section-subtitle">来自产品档案总览的可售商品</text>
+            <text class="section-subtitle">按规格选型，为工程备好材料</text>
           </view>
           <text class="section-more" @tap="openCategory()">查看全部 ›</text>
         </view>
@@ -116,14 +128,24 @@
               <text class="product-stock" :class="{ 'product-stock-empty': product.stock <= 0 }">
                 {{ product.stock > 0 ? `库存 ${product.stock}` : '暂时缺货' }}
               </text>
+              <button class="material-select" :disabled="product.stock <= 0" @tap.stop="openProduct(product)"><text>{{ product.stock > 0 ? '选规格 · 去采购' : '暂时缺货' }}</text><text aria-hidden="true">＋</text></button>
             </view>
           </view>
         </view>
       </view>
 
+      <view class="selection-guide">
+        <text class="guide-kicker">MATERIAL GUIDE / 选材指南</text>
+        <view class="guide-title">采购前，先核对这三件事</view>
+        <view class="guide-row"><text>01</text><view><text>明确使用工况</text><text>室内或室外、使用温度、腐蚀环境</text></view></view>
+        <view class="guide-row"><text>02</text><view><text>核对规格与单位</text><text>材质、口径、厚度，及每件对应的计量单位</text></view></view>
+        <view class="guide-row"><text>03</text><view><text>确认数量与收货信息</text><text>下单前核对库存、收货地址与订单金额</text></view></view>
+        <button class="guide-action" @tap="openCategory()">按分类查看材料 →</button>
+      </view>
+
       <view class="catalog-note">
         <text>{{ catalogSource === 'api' ? '库存与价格来自商城实时商品接口' : '当前为本地档案展示，接口恢复后自动同步' }}</text>
-        <text>商品详情、购物车和订单使用同一套商城业务接口</text>
+        <text>选购前请核对规格与单位，成交金额以结算页为准</text>
       </view>
     </view>
   </s-layout>
@@ -148,6 +170,7 @@
   });
 
   const popularCategories = mallCategories.slice(0, 8);
+  const shopShowcase = ref();
   const products = ref(mallProducts);
   const catalogSource = ref('local');
   const featuredProducts = computed(() =>
@@ -232,7 +255,7 @@
   onPullDownRefresh(async () => {
     try {
       // 管理后台新增/修改商品后，允许用户端通过下拉刷新立即同步。
-      await loadCatalog(true);
+      await Promise.allSettled([loadCatalog(true), shopShowcase.value?.refresh()]);
     } finally {
       uni.stopPullDownRefresh();
     }
@@ -262,16 +285,16 @@
 
   .brand-mark {
     width: 74rpx;
-    height: 74rpx;
+    height: 90rpx;
     margin-right: 18rpx;
-    border-radius: 20rpx;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #0f766e;
     font-size: 24rpx;
     font-weight: 700;
-    background: #d9f99d;
+    background: transparent;
   }
 
   .brand-name {
@@ -611,4 +634,25 @@
   .catalog-note text {
     display: block;
   }
+  .home-hero { position: relative; overflow: hidden; background: linear-gradient(125deg, #102f40, #167564); }
+  .home-hero::after { content: ''; position: absolute; width: 230rpx; height: 230rpx; right: -95rpx; bottom: -80rpx; border: 30rpx solid rgba(255,255,255,.08); border-radius: 50%; pointer-events: none; }
+  .industry-primary { min-height: 84rpx; display: flex; align-items: center; justify-content: space-between; border-radius: 14rpx; font-size: 26rpx; font-weight: 600; }
+  .hero-purchase { margin: 30rpx 0 0; width: 300rpx; padding: 0 24rpx; color: #123e35; background: #c9eee0; }
+  .hero-purchase::after, .quick-actions button::after, .material-select::after, .guide-action::after { border: none; }
+  .quick-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin: 26rpx 0; }
+  .quick-actions button { margin: 0; padding: 22rpx 8rpx; border-radius: 18rpx; background: #fff; border: 1rpx solid #dfebe7; line-height: 1.6; color: #183b42; font-size: 25rpx; font-weight: 600; }
+  .quick-actions text { display: block; }
+  .quick-actions .quick-symbol { margin: 0 auto 8rpx; background: #e9f5ef; border-radius: 12rpx; width: 58rpx; height: 58rpx; font-size: 36rpx; color: #177660; }
+  .quick-actions .quick-caption { font-size: 19rpx; font-weight: 400; color: #697f7b; margin-top: 5rpx; }
+  .material-select { width: 100%; min-height: 72rpx; margin-top: 20rpx; padding: 0 16rpx; display: flex; align-items: center; justify-content: space-between; gap: 6rpx; background: #157762; color: #fff; font-size: 22rpx; font-weight: 600; line-height: 1.5; border-radius: 12rpx; }
+  .material-select[disabled] { background: #edf1f2; color: #7b8b91; }
+  .material-select:active, .hero-purchase:active, .guide-action:active { opacity: .8; }
+  .selection-guide { margin-top: 28rpx; padding: 30rpx; border-radius: 22rpx; background: #edf5f1; border: 1rpx solid #d3e5dc; }
+  .guide-kicker { color: #49776b; font-size: 18rpx; letter-spacing: 2rpx; }
+  .guide-title { font-size: 32rpx; font-weight: 700; color: #193d35; margin: 12rpx 0 24rpx; }
+  .guide-row { display: flex; align-items: flex-start; gap: 20rpx; padding: 18rpx 0; }
+  .guide-row > text { color: #28765f; font-size: 30rpx; font-weight: 700; }
+  .guide-row view text { display: block; font-size: 25rpx; color: #24483d; }
+  .guide-row view text + text { margin-top: 6rpx; font-size: 21rpx; line-height: 1.7; color: #60796f; }
+  .guide-action { margin-top: 20rpx; background: #fff; color: #17694f; border-radius: 12rpx; font-size: 25rpx; min-height: 80rpx; }
 </style>

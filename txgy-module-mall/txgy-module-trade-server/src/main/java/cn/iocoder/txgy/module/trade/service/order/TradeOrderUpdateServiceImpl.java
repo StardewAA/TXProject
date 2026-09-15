@@ -346,11 +346,15 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_PAY)
     public void updateOrderPaid(Long id, Long payOrderId) {
         // 1.1 校验订单是否存在
-        TradeOrderDO order = validateOrderExists(id);
+        // 回调与前端主动同步必须读取同一行的最新已提交状态，避免并发重复执行后置处理。
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
+        if (order == null) {
+            throw exception(ORDER_NOT_FOUND);
+        }
         // 1.2 校验订单已支付
         if (!TradeOrderStatusEnum.isUnpaid(order.getStatus()) || order.getPayStatus()) {
             // 特殊：支付单号相同，直接返回，说明重复回调
-            if (ObjectUtil.equals(order.getPayOrderId(), payOrderId)) {
+            if (Boolean.TRUE.equals(order.getPayStatus()) && ObjectUtil.equals(order.getPayOrderId(), payOrderId)) {
                 log.warn("[updateOrderPaid][order({}) 已支付，且支付单号相同({})，直接返回]", order, payOrderId);
                 return;
             }

@@ -16,6 +16,11 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface WmsShipmentOrderMapper extends BaseMapperX<WmsShipmentOrderDO> {
 
+    default WmsShipmentOrderDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapper<WmsShipmentOrderDO>()
+                .eq(WmsShipmentOrderDO::getId, id).last("FOR UPDATE"));
+    }
+
     default PageResult<WmsShipmentOrderDO> selectPage(WmsShipmentOrderPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<WmsShipmentOrderDO>()
                 .likeIfPresent(WmsShipmentOrderDO::getNo, reqVO.getNo())

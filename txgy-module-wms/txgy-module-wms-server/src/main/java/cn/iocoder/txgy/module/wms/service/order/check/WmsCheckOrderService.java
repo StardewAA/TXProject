@@ -41,6 +41,8 @@ public interface WmsCheckOrderService {
      * @param id 编号
      */
     void completeCheckOrder(Long id);
+    String submitCheckOrderApproval(Long userId, Long id);
+    void updateCheckOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason);
 
     /**
      * 作废盘库单

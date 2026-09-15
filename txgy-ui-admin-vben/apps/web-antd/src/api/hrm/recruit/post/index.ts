@@ -30,6 +30,8 @@ export namespace HrmRecruitPostApi {
     emergencyLevel?: number; // 紧急程度
     postTypeId?: number; // 职位类型编号
     postTypeName?: string; // 职位类型名称
+    channelId?: number; // 发布渠道编号
+    channelName?: string; // 发布渠道名称
     status?: number; // 职位状态
     stopReason?: string; // 状态变更原因
     hasEntryNum?: number; // 已入职人数

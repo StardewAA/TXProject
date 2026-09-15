@@ -86,6 +86,8 @@ const HIDDEN_MALL_PROMOTION_COMPONENT_PARTS = [
   'mall/trade/brokerage/',
 ];
 
+const HIDDEN_HRM_EMPLOYEE_PORTAL_RECRUIT_MENU_ID = 1645;
+
 function normalizeMenuPath(value: unknown): string {
   const withoutQuery = String(value ?? '').split(/[?#]/, 1)[0] ?? '';
   return withoutQuery
@@ -164,6 +166,45 @@ function isHiddenMallPromotionMenu(
   // Path/component aliases are unambiguous activity identifiers. Names are
   // scoped to the mall context to avoid hiding an unrelated module's page.
   return hiddenPath || hiddenComponent || (hiddenName && inMallPromotion);
+}
+
+function isHiddenHrmEmployeePortalRecruitMenu(
+  menu: AppRouteRecordRaw,
+  parentPaths: string[],
+): boolean {
+  const menuWithId = menu as AppRouteRecordRaw & { id?: number };
+  const normalizedPath = normalizeMenuPath(menu.path);
+  const isEmployeePortal = parentPaths.some(
+    (parentPath) =>
+      parentPath === 'portal' || parentPath.endsWith('/portal'),
+  );
+  return (
+    menuWithId.id === HIDDEN_HRM_EMPLOYEE_PORTAL_RECRUIT_MENU_ID ||
+    (isEmployeePortal &&
+      normalizedPath === 'recruit' &&
+      String(menu.name ?? '').trim() === '招聘应聘')
+  );
+}
+
+function filterHrmEmployeePortalRecruitMenus(
+  menus: AppRouteRecordRaw[],
+  parentPaths: string[] = [],
+): AppRouteRecordRaw[] {
+  return menus.reduce<AppRouteRecordRaw[]>((result, menu) => {
+    if (isHiddenHrmEmployeePortalRecruitMenu(menu, parentPaths)) {
+      return result;
+    }
+
+    const nextMenu = { ...menu };
+    if (Array.isArray(nextMenu.children)) {
+      nextMenu.children = filterHrmEmployeePortalRecruitMenus(
+        nextMenu.children,
+        [...parentPaths, normalizeMenuPath(nextMenu.path)],
+      );
+    }
+    result.push(nextMenu);
+    return result;
+  }, []);
 }
 
 /** Remove deferred promotion entries while preserving the rest of the menu. */
@@ -246,9 +287,9 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
         JSON.stringify(accessMenus),
       ) as AppRouteRecordRaw[];
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
-      injectAiChatMenu(menus);
+      injectAiChatMenu(menus, accessStore.accessCodes);
       return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(menus),
+        filterMallPromotionMenus(filterHrmEmployeePortalRecruitMenus(menus)),
       );
     },
     // 可以指定没有权限跳转403页面
@@ -264,8 +305,17 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
  * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
  * 若未找到则挂载为顶级菜单，保证功能可见。
  */
-function injectAiChatMenu(menus: AppRouteRecordRaw[]) {
+function injectAiChatMenu(
+  menus: AppRouteRecordRaw[],
+  permissions: unknown[] | null | undefined,
+) {
   const crmParent = findMenu(menus, (m) => m?.path === '/crm');
+  const hasCrmPermission = (permissions ?? []).some((permission) =>
+    String(permission ?? '').startsWith('crm:'),
+  );
+  if (!hasCrmPermission) {
+    return;
+  }
   const item = {
     id: 990_001,
     name: 'AI对话助手',

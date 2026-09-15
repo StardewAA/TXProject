@@ -28,6 +28,12 @@ export namespace HrmRecruitInterviewApi {
     evaluate?: string; // 面试评价
     cancelReason?: string; // 取消原因
   }
+
+  export interface EvaluationReq {
+    id: number;
+    decision: 'FAIL' | 'FINAL_PASS' | 'NEXT_ROUND';
+    evaluate?: string;
+  }
 }
 
 /** 查询招聘面试详情 */
@@ -66,6 +72,14 @@ export function updateRecruitInterviewResult(
     '/hrm/recruit/interview/update-result',
     data,
   );
+}
+
+export function startRecruitInterview(id: number) {
+  return requestClient.put<boolean>(`/hrm/recruit/interview/start?id=${id}`);
+}
+
+export function evaluateRecruitInterview(data: HrmRecruitInterviewApi.EvaluationReq) {
+  return requestClient.put<boolean>('/hrm/recruit/interview/evaluate', data);
 }
 
 /** 删除招聘面试 */

@@ -41,7 +41,7 @@ export const useDictStore = defineStore('core-dict', {
       labelField: string = 'label',
       valueField: string = 'value',
     ) {
-      api(params).then((dicts) => {
+      return api(params).then((dicts) => {
         const dictCacheData: Dict = {};
         dicts.forEach((dict) => {
           dictCacheData[dict.dictType] = dicts

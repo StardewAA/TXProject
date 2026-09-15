@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewRespVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewEvaluationReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
@@ -70,6 +71,23 @@ public class HrmRecruitInterviewController {
     @PreAuthorize("@ss.hasPermission('hrm:recruit:interview:update')")
     public CommonResult<Boolean> updateRecruitInterviewResult(@Valid @RequestBody HrmRecruitInterviewResultReqVO reqVO) {
         recruitInterviewService.updateRecruitInterviewResult(reqVO);
+        return success(true);
+    }
+
+    @PutMapping("/start")
+    @Operation(summary = "开始面试")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:interview:update')")
+    public CommonResult<Boolean> startRecruitInterview(@RequestParam("id") Long id) {
+        recruitInterviewService.startRecruitInterview(id);
+        return success(true);
+    }
+
+    @PutMapping("/evaluate")
+    @Operation(summary = "面试评估")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:interview:update')")
+    public CommonResult<Boolean> evaluateRecruitInterview(
+            @Valid @RequestBody HrmRecruitInterviewEvaluationReqVO reqVO) {
+        recruitInterviewService.evaluateRecruitInterview(reqVO);
         return success(true);
     }
 
