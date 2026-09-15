@@ -27,6 +27,7 @@ import { message, Modal } from 'ant-design-vue';
 import { type CertificateApi, getMaterialCompleteness } from '#/api/bidding/certificate';
 import { getPersonnelProfilePage } from '#/api/bidding/personnel';
 import {
+  approvePlatformReview,
   approveQualificationRenew,
   changePermitStatus,
   createQualification,
@@ -35,6 +36,8 @@ import {
   createQualificationStaff,
   createQualificationStandard,
   createSafetyPermit,
+  getPlatformReviewDetail,
+  getPlatformReviewPage,
   getQualification,
   getQualificationAlertPage,
   getQualificationApplyPage,
@@ -48,12 +51,14 @@ import {
   getStandardPage,
   handleQualificationAlert,
   QualificationApi,
+  rejectPlatformReview,
   rejectQualificationRenew,
   runComplianceReview,
   runQualificationAlertScan,
   submitQualificationRenew,
 } from '#/api/bidding/qualification';
 import { APPLY_STATUS_OPTIONS, APPLY_TYPE_OPTIONS } from '#/api/bidding/qualification';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
@@ -113,8 +118,15 @@ async function load() {
     loading.value = false;
   }
 }
+/** 切换企业主体 → 回第 1 页重查，并同步材料完备性页签的主体（主体是所有资质查询的必填入参） */
+function onSubjectChange(): void {
+  query.pageNo = 1;
+  completenessQuery.entId = query.entId;
+  void load();
+  void loadApplies();
+}
 function resetQuery() {
-  query.entId = undefined;
+  // 企业主体由「主体档案」自动带出，是查询必填上下文；重置筛选项时不清空它
   query.qualSerial = undefined;
   query.qualStatus = undefined;
   query.keyword = undefined;
@@ -362,7 +374,7 @@ const itemColumns = [
 async function loadCompleteness(silent = false) {
   const entId = completenessQuery.entId ?? query.entId;
   if (!entId) {
-    if (!silent) message.warning('请先在顶部填写企业主体 id（entId）');
+    if (!silent) message.warning('未取到企业主体：请先在「主体档案」完善企业档案（统一社会信用代码），系统会自动带出');
     return;
   }
   completenessLoading.value = true;
@@ -388,6 +400,31 @@ const formOpen = ref(false);
 const saving = ref(false);
 const formRef = ref();
 const createdId = ref<null | number>(null);
+/* ===== 录入方式：本期仅「手工录入」可用，其余方式留位 =====
+   用户口径：后续可能有其他录入方式，需要把位置空出来；
+   契约请求 §4：source_channel 由后端注册预留值，本期后端固定 MANUAL、前端不传值。
+   后端就绪后：把对应 code 从"暂未开放"移出即可启用本项，无需改结构。 */
+const RESERVED_ENTRY_CHANNELS = ['API', 'IMPORT', 'OFFICIAL_SYNC'];
+const entryChannel = ref('MANUAL');
+const entryChannelOptions = computed(() => {
+  const options: { disabled?: boolean; label: string; value: string }[] = [
+    { label: '手工录入', value: 'MANUAL' },
+  ];
+  const dict = dictOptions('source_channel') as { label?: unknown; value?: unknown }[];
+  for (const item of dict) {
+    const value = String(item.value ?? '');
+    if (!value || value === 'MANUAL' || options.some((o) => o.value === value)) continue;
+    options.push({ disabled: true, label: String(item.label ?? value) + '（暂未开放）', value });
+  }
+  // 字典尚未注册预留值时，用占位项保证"位置"可见（不自造中文枚举，仅提示待后端注册）
+  if (dict.length === 0) {
+    for (const code of RESERVED_ENTRY_CHANNELS) {
+      options.push({ disabled: true, label: code + '（暂未开放，待后端注册字典）', value: code });
+    }
+  }
+  return options;
+});
+
 const form = reactive<QualificationApi.SaveReq>({
   entId: undefined as unknown as number,
   qualSerial: 'CONSTRUCTION',
@@ -1087,9 +1124,175 @@ watch(
   },
 );
 
+/* ===== 企业主体：不让用户手填 id =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 是唯一键）；
+   主体档案 GET /bidding/subject/profile/get 返回本租户该角色档案（含 id/subjectName/uscc），
+   故前端用接口值自动带出，不再提供"企业主体 id"输入框。
+   缺口 B：后端若提供 GET /bidding/subject/profile/list（多主体选项），只需改本函数 —— 见
+   docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md §3 */
+const subjectLoading = ref(false);
+const subjectOptions = ref<{ label: string; value: number }[]>([]);
+
+/** 本租户企业主体候选：投标人 / 招标人 两套档案各取一次，取到才作为选项（取不到不显示，不自造） */
+async function loadSubjectOptions(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    const list: { label: string; value: number }[] = [];
+    for (const subjectType of ['BIDDER', 'TENDERER']) {
+      const profile = await fetchSubjectProfile(subjectType).catch(() => null);
+      if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+        list.push({
+          label: profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName,
+          value: Number(profile.id),
+        });
+      }
+    }
+    subjectOptions.value = list;
+    // 台账筛选 / 材料完备性 / 新建表单统一用同一主体，避免用户手填 id（多主体默认首个，仍可切换）
+    const first = list[0];
+    if (first && !query.entId) {
+      query.entId = first.value;
+      completenessQuery.entId = first.value;
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
   void loadApplies();
+  void loadSubjectOptions();
+});
+
+/* ================= ⑥ 平台审查（企业资质人工审查） =================
+   用户口径（2026-09-20）：企业资质由**平台人工审查**，审查通过后才能被其他接口调用；
+   员工证照由租户企业自己录入和审查（不在本页，走 personnel 的 change-status）。
+   现状：后端接口**尚未实现**——前端按契约把界面接好，接口不可用时显示"待后端实现"空状态，
+   不白屏、不刷屏报错。契约：docs/电子证照前前端契约/
+   《后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md》缺口 A2/A3/A4。 */
+const PLATFORM_REVIEW_PENDING = '该接口待后端实现（见契约 缺口 A2/A3/A4）';
+const platformReviewQuery = reactive<QualificationApi.PlatformReviewPageReq>({
+  pageNo: 1,
+  pageSize: 10,
+  keyword: undefined,
+  qualStatus: undefined,
+});
+const platformReviewLoading = ref(false);
+const platformReviewRows = ref<QualificationApi.PlatformReviewRow[]>([]);
+const platformReviewTotal = ref(0);
+const platformReviewNotice = ref('');
+const platformReviewDetailOpen = ref(false);
+const platformReviewDetailLoading = ref(false);
+const platformReviewDetail = ref<null | QualificationApi.PlatformReviewDetail>(null);
+const platformReviewCurrent = ref<null | QualificationApi.PlatformReviewRow>(null);
+const platformReviewActing = ref(false);
+const platformReviewRemark = ref('');
+
+/** 后端未实现（404）与业务错误分开呈现：前者提示"待后端实现"，后者给原始 msg */
+function reviewErrorText(error: any): string {
+  const status = error?.status ?? error?.response?.status;
+  const code = error?.code ?? error?.response?.data?.code;
+  if (status === 404 || code === 404) return PLATFORM_REVIEW_PENDING;
+  return String(error?.msg ?? error?.message ?? '加载失败');
+}
+
+async function loadPlatformReview(): Promise<void> {
+  platformReviewLoading.value = true;
+  platformReviewNotice.value = '';
+  try {
+    const page = await getPlatformReviewPage({ ...platformReviewQuery });
+    platformReviewRows.value = page.list ?? [];
+    platformReviewTotal.value = page.total ?? 0;
+  } catch (error: any) {
+    platformReviewRows.value = [];
+    platformReviewTotal.value = 0;
+    platformReviewNotice.value = reviewErrorText(error);
+  } finally {
+    platformReviewLoading.value = false;
+  }
+}
+
+async function openPlatformReview(row: QualificationApi.PlatformReviewRow): Promise<void> {
+  platformReviewCurrent.value = row;
+  platformReviewDetailOpen.value = true;
+  platformReviewDetailLoading.value = true;
+  platformReviewDetail.value = null;
+  platformReviewRemark.value = '';
+  try {
+    platformReviewDetail.value = await getPlatformReviewDetail(row.id);
+  } catch (error: any) {
+    platformReviewDetail.value = null;
+    platformReviewNotice.value = reviewErrorText(error);
+  } finally {
+    platformReviewDetailLoading.value = false;
+  }
+}
+
+/** 通过 / 驳回：version 原样回传（乐观锁，契约 §0.7）；驳回理由必填（留痕） */
+async function actPlatformReview(pass: boolean): Promise<void> {
+  const target = platformReviewDetail.value ?? platformReviewCurrent.value;
+  if (!target) return;
+  const version = target.version;
+  if (version === undefined || version === null) {
+    message.warning('缺少 version（乐观锁），请重新打开详情后再操作');
+    return;
+  }
+  if (!pass && !platformReviewRemark.value.trim()) {
+    message.warning('驳回必须填写理由（会留痕）');
+    return;
+  }
+  platformReviewActing.value = true;
+  try {
+    const payload: QualificationApi.PlatformReviewActionReq = {
+      qualId: target.id,
+      remark: platformReviewRemark.value.trim() || undefined,
+      version,
+    };
+    if (pass) {
+      await approvePlatformReview(payload);
+      message.success('已通过审查：该资质才可被其他接口引用');
+    } else {
+      await rejectPlatformReview(payload);
+      message.success('已驳回，理由已留痕');
+    }
+    platformReviewDetailOpen.value = false;
+    await loadPlatformReview();
+  } catch (error: any) {
+    message.error(reviewErrorText(error));
+  } finally {
+    platformReviewActing.value = false;
+  }
+}
+
+const platformReviewColumns = [
+  { title: '企业名称', dataIndex: 'entName', key: 'entName', width: 190 },
+  { title: '统一社会信用代码', dataIndex: 'entUscc', key: 'entUscc', width: 185 },
+  { title: '资质（序列 / 类别 / 等级）', key: 'qual', width: 240 },
+  { title: '证书编号', dataIndex: 'certNo', key: 'certNo', width: 165 },
+  { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 165 },
+  { title: '状态', dataIndex: 'qualStatus', key: 'qualStatus', width: 115 },
+  { title: '操作', key: 'action', width: 85 },
+];
+
+/** 审查队列翻页（分页参数为可选，故用显式函数避免模板内联类型推断问题） */
+function onReviewPageChange(pageNo: number, pageSize: number): void {
+  platformReviewQuery.pageNo = pageNo;
+  platformReviewQuery.pageSize = pageSize;
+  void loadPlatformReview();
+}
+
+const platformReviewFileColumns = [
+  { title: '类别', dataIndex: 'fileCategory', key: 'fileCategory', width: 130 },
+  { title: '文件名', dataIndex: 'fileName', key: 'fileName' },
+  { title: '大小(KB)', dataIndex: 'fileSize', key: 'fileSize', width: 110 },
+  { title: '上传时间', dataIndex: 'uploadTime', key: 'uploadTime', width: 165 },
+];
+
+watch(activeKey, (k) => {
+  if (k === 'review' && platformReviewRows.value.length === 0 && !platformReviewNotice.value) {
+    void loadPlatformReview();
+  }
 });
 </script>
 
@@ -1109,7 +1312,15 @@ onMounted(() => {
         <div class="ct-sub">资质台账 · 延续申报审批 · 标准与要素台账 · 安许证与预警 · 完备性自查</div>
       </div>
       <div class="ct-actions">
-        <a-input-number v-model:value="query.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" />
+        <a-select
+          v-model:value="query.entId"
+          :loading="subjectLoading"
+          :options="subjectOptions"
+          allow-clear
+          placeholder="自动带出，可切换"
+          style="width: 260px"
+          @change="onSubjectChange"
+        />
         <a-button v-if="can('bidding:qualification:material:query')" :loading="completenessLoading" @click="loadCompleteness()">
           材料完备性自查
         </a-button>
@@ -1177,7 +1388,7 @@ onMounted(() => {
               临近到期 {{ completeness.expiringItems?.length ?? 0 }} 项
             </a-tag>
           </a-space>
-          <div v-else class="ct-empty">填入企业主体 id 后点「自查」：返回身份类 / 资质类 / 实力类三档结论</div>
+          <div v-else class="ct-empty">企业主体由「主体档案」自动带出；点「自查」返回身份类 / 资质类 / 实力类三档结论</div>
         </a-spin>
       </div>
     </div>
@@ -1608,7 +1819,7 @@ onMounted(() => {
       <a-tab-pane key="material" tab="⑤ 完备性明细与扫描">
         <div class="ct-panel">
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
-            <AttrFilter label="企业主体"><a-input-number v-model:value="completenessQuery.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" /></AttrFilter>
+            <AttrFilter label="企业主体"><a-select v-model:value="completenessQuery.entId" :loading="subjectLoading" :options="subjectOptions" allow-clear placeholder="自动带出，可切换" style="width: 260px" /></AttrFilter>
             <AttrFilter label="核验基准日（可空=今天）">
 <a-date-picker
               v-model:value="completenessQuery.asOf"
@@ -1712,7 +1923,146 @@ onMounted(() => {
           </div>
         </div>
       </a-tab-pane>
+
+      <a-tab-pane key="review" tab="⑥ 平台审查">
+        <div class="ct-panel">
+          <div class="ct-panel-t">企业资质 · 平台人工审查</div>
+          <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
+            <AttrFilter label="关键字">
+              <a-input
+                v-model:value="platformReviewQuery.keyword"
+                placeholder="企业名称 / 统一社会信用代码"
+                style="width: 240px"
+                allow-clear
+                @press-enter="loadPlatformReview"
+              />
+            </AttrFilter>
+            <AttrFilter v-model="platformReviewQuery.qualStatus" label="资质状态" :options="dictOptions('qual_status')" />
+            <a-button type="primary" :loading="platformReviewLoading" @click="loadPlatformReview">查询</a-button>
+            <span class="ct-panel-meta">
+              审查队列跨企业（不跟随页首主体，按企业名称/统一社会信用代码筛选）；通过后该资质才可被其他接口引用（员工证照由租户企业自审，不在此处）
+            </span>
+          </div>
+
+          <a-alert v-if="platformReviewNotice" :message="platformReviewNotice" type="warning" show-icon class="mb-3" />
+
+          <a-table
+            :columns="platformReviewColumns"
+            :data-source="platformReviewRows"
+            :loading="platformReviewLoading"
+            :pagination="false"
+            row-key="id"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'qual'">
+                {{ [record.qualSerial, record.qualCategory, record.qualGrade].filter(Boolean).join(' / ') || '—' }}
+              </template>
+              <template v-else-if="column.key === 'submitTime'">
+                {{ record.submitTime ? fmtDateTime(record.submitTime) : '—' }}
+              </template>
+              <template v-else-if="column.key === 'qualStatus'">
+                {{ textOf('qual_status', record.qualStatus) }}
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button type="link" size="small" @click="openPlatformReview(record)">查看</a-button>
+              </template>
+            </template>
+            <template #emptyText>
+              <div class="ct-empty">
+                {{ platformReviewNotice || '暂无待审资质（或接口待后端实现：契约缺口 A2）' }}
+              </div>
+            </template>
+          </a-table>
+          <div class="mt-3 flex justify-end">
+            <a-pagination
+              :current="platformReviewQuery.pageNo ?? 1"
+              :page-size="platformReviewQuery.pageSize ?? 10"
+              :total="platformReviewTotal"
+              size="small"
+              show-size-changer
+              @change="onReviewPageChange"
+            />
+          </div>
+        </div>
+      </a-tab-pane>
     </a-tabs>
+
+    <!-- ⑥ 平台审查 · 详情（企业信息 + 录入信息 + 文件 + 通过/驳回） -->
+    <a-drawer
+      v-model:open="platformReviewDetailOpen"
+      class="bid-ind"
+      :width="820"
+      title="平台审查 · 详情"
+      destroy-on-close
+    >
+      <a-spin :spinning="platformReviewDetailLoading">
+        <template v-if="platformReviewDetail">
+          <a-descriptions :column="2" bordered size="small" title="企业信息">
+            <a-descriptions-item label="企业名称">{{ platformReviewDetail.entName ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="统一社会信用代码">{{ platformReviewDetail.entUscc ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="企业主体 id">{{ platformReviewDetail.entId ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="提交时间">
+              {{ platformReviewDetail.submitTime ? fmtDateTime(platformReviewDetail.submitTime) : '—' }}
+            </a-descriptions-item>
+          </a-descriptions>
+
+          <a-descriptions :column="2" bordered size="small" class="mt-3" title="资质录入信息">
+            <a-descriptions-item label="资质序列">{{ textOf('qual_serial', platformReviewDetail.qualSerial) }}</a-descriptions-item>
+            <a-descriptions-item label="资质类别">{{ platformReviewDetail.qualCategory ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="资质等级">{{ platformReviewDetail.qualGrade ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="证书编号">{{ platformReviewDetail.certNo ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="发证/许可机关">{{ platformReviewDetail.issuingAuthority ?? '—' }}</a-descriptions-item>
+            <a-descriptions-item label="有效期至">{{ platformReviewDetail.validTo ? fmtDate(platformReviewDetail.validTo) : '长期' }}</a-descriptions-item>
+            <a-descriptions-item label="状态">{{ textOf('qual_status', platformReviewDetail.qualStatus) }}</a-descriptions-item>
+            <a-descriptions-item label="备注">{{ platformReviewDetail.remark ?? '—' }}</a-descriptions-item>
+          </a-descriptions>
+
+          <div class="ct-panel-t mt-3">证照文件</div>
+          <a-table
+            :columns="platformReviewFileColumns"
+            :data-source="platformReviewDetail.files ?? []"
+            :pagination="false"
+            row-key="fileId"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'fileCategory'">
+                {{ textOf('file_category', record.fileCategory) }}
+              </template>
+              <template v-else-if="column.key === 'fileSize'">
+                {{ record.fileSize ? Math.round(Number(record.fileSize) / 1024) : '—' }}
+              </template>
+              <template v-else-if="column.key === 'uploadTime'">
+                {{ record.uploadTime ? fmtDateTime(record.uploadTime) : '—' }}
+              </template>
+            </template>
+            <template #emptyText><div class="ct-empty">暂无文件（或接口待后端实现：契约缺口 A3）</div></template>
+          </a-table>
+
+          <div class="ct-panel-t mt-3">审查意见</div>
+          <a-textarea
+            v-model:value="platformReviewRemark"
+            :rows="3"
+            :maxlength="512"
+            show-count
+            placeholder="驳回时必填（留痕）；通过可不填"
+          />
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <template v-if="can('bidding:qualification:platform-review')">
+              <a-button type="primary" :loading="platformReviewActing" @click="actPlatformReview(true)">
+                通过（通过后才可被其他接口引用）
+              </a-button>
+              <a-button danger :loading="platformReviewActing" @click="actPlatformReview(false)">驳回</a-button>
+            </template>
+            <span v-else class="ct-panel-meta">
+              无审查权限（bidding:qualification:platform-review）——该权限点待后端注册，仅平台审查角色可操作
+            </span>
+          </div>
+        </template>
+        <div v-else class="ct-empty">{{ platformReviewNotice || PLATFORM_REVIEW_PENDING }}</div>
+      </a-spin>
+    </a-drawer>
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="detailOpen" class="bid-ind" :width="820" title="资质详情" destroy-on-close>
@@ -1866,7 +2216,20 @@ onMounted(() => {
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="企业主体" name="entId">
-              <a-input-number v-model:value="form.entId" :min="1" style="width: 100%" />
+              <a-select
+                v-model:value="form.entId"
+                :loading="subjectLoading"
+                :options="subjectOptions"
+                placeholder="自动带出（取自主体档案），可切换"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item
+              label="录入方式"
+              extra="本期仅支持「手工录入」；其他录入方式已留位，后端就绪后启用（见 后端变更请求 §4）"
+            >
+              <a-select v-model:value="entryChannel" :options="entryChannelOptions" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="8">

@@ -217,8 +217,10 @@ async function load() {
       a.validTo.localeCompare(b.validTo),
     );
     total.value = mergedRows.value.length;
-    const start = (query.pageNo - 1) * query.pageSize;
-    unifiedRows.value = mergedRows.value.slice(start, start + query.pageSize);
+    const pageNo = query.pageNo ?? 1;
+    const pageSize = query.pageSize ?? MERGE_CAP;
+    const start = (pageNo - 1) * pageSize;
+    unifiedRows.value = mergedRows.value.slice(start, start + pageSize);
   } catch {
     rows.value = [];
     unifiedRows.value = [];

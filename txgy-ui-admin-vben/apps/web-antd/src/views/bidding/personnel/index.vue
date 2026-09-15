@@ -42,6 +42,7 @@ import {
   updatePersonnelProfile,
 } from '#/api/bidding/personnel';
 import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
@@ -96,7 +97,7 @@ function resetQuery() {
   Object.assign(query, {
     pageNo: 1,
     personId: undefined,
-    entId: undefined,
+    // 企业主体由「主体档案」自动带出（证书台账页签查询上下文的必填项），重置筛选项时不清空
     certType: undefined,
     certNo: undefined,
     certStatus: undefined,
@@ -506,6 +507,45 @@ function applyProfileFilter(): void {
   void loadProfiles();
 }
 
+/* ===== 企业主体：不让用户手填 id =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 是唯一键）；
+   主体档案 GET /bidding/subject/profile/get 返回本租户该角色的档案（含 id/subjectName/uscc），
+   故前端直接用接口值带出，不提供"企业主体 id"输入框。
+   缺口 B：若后端后续提供 GET /bidding/subject/profile/list（本租户多主体选项），
+   则把本函数改为读该接口即可，页面无需再改 —— 见
+   docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md §3 */
+const subjectLoading = ref(false);
+const subjectOptions = ref<{ label: string; value: number }[]>([]);
+
+/** 本租户企业主体候选：投标人 / 招标人 两套档案各取一次，取到才作为选项（取不到不显示，不自造） */
+async function loadSubjectOptions(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    const list: { label: string; value: number }[] = [];
+    for (const subjectType of ['BIDDER', 'TENDERER']) {
+      const profile = await fetchSubjectProfile(subjectType).catch(() => null);
+      if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+        list.push({
+          label: profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName,
+          value: Number(profile.id),
+        });
+      }
+    }
+    subjectOptions.value = list;
+    // 自动带出：筛选与新建表单都使用同一主体，避免用户手填 id（多主体时默认首个，仍可切换）
+    const first = list[0];
+    if (first && !profileQuery.entId) {
+      profileQuery.entId = first.value; // 员工档案页签筛选
+      profileForm.entId = first.value; // 新建员工档案：随主体自动带出，用户不必填
+    }
+    if (first && !query.entId) {
+      query.entId = first.value; // 证书台账页签筛选
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
+
 function openProfileCreate() {
   resetProfileForm();
   profileFormOpen.value = true;
@@ -806,6 +846,7 @@ onMounted(() => {
   void load();
   syncBoardDays();
   void loadFloors();
+  void loadSubjectOptions();
 });
 
 const certTypeOptions = computed(() => dictOptions('person_cert_type'));
@@ -873,7 +914,15 @@ function remainTag(r: PersonnelCertApi.Cert) {
           <!-- 筛选：**前台样式**（左侧属性名 + 右侧文字选项） -->
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter label="企业主体">
-              <a-input-number v-model:value="profileQuery.entId" :min="1" placeholder="企业主体 id" style="width: 200px" />
+              <a-select
+                v-model:value="profileQuery.entId"
+                :loading="subjectLoading"
+                :options="subjectOptions"
+                allow-clear
+                placeholder="自动带出，可切换"
+                style="width: 260px"
+                @change="applyProfileFilter"
+              />
             </AttrFilter>
             <AttrFilter label="姓名">
               <a-input v-model:value="profileQuery.personName" placeholder="模糊匹配，回车查询" style="width: 200px" allow-clear @press-enter="applyProfileFilter" />
@@ -1042,7 +1091,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
         <div class="ct-panel">
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter label="员工 ID"><a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" /></AttrFilter>
-            <AttrFilter label="企业 ID"><a-input-number v-model:value="query.entId" :min="1" placeholder="企业 ID" style="width: 130px" /></AttrFilter>
+            <AttrFilter label="企业主体"><a-select v-model:value="query.entId" :loading="subjectLoading" :options="subjectOptions" allow-clear placeholder="自动带出，可切换" style="width: 200px" /></AttrFilter>
             <AttrFilter v-model="query.certType" label="证书类型" :options="certTypeOptions" />
             <AttrFilter v-model="query.certStatus" label="状态" :options="certStatusOptions" />
             <AttrFilter label="证书编号（精确）"><a-input v-model:value="query.certNo" placeholder="证书编号（精确）" style="width: 170px" allow-clear /></AttrFilter>
