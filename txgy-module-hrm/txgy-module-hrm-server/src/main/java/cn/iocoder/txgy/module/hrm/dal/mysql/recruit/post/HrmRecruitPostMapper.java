@@ -38,7 +38,8 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
                   AND publisher_user.tenant_id = hrm_recruit_post.tenant_id
                   AND (CONCAT(publisher_user.id, '') = hrm_recruit_post.creator
                        OR publisher_user.username = hrm_recruit_post.creator)
-                  AND (LOWER(publisher_role.code) LIKE '%hr%'
+                  AND (LOWER(publisher_role.code) = 'super_admin'
+                       OR LOWER(publisher_role.code) LIKE '%hr%'
                        OR LOWER(publisher_role.name) LIKE '%hr%'
                        OR publisher_role.name LIKE '%人力%'
                        OR publisher_role.name LIKE '%人事%')
@@ -117,6 +118,7 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
                 .eqIfPresent("dept_id", reqVO.getDeptId())
                 .eqIfPresent("owner_employee_id", reqVO.getOwnerEmployeeId())
                 .eqIfPresent("post_type_id", reqVO.getPostTypeId())
+                .inIfPresent("post_type_id", reqVO.getPostTypeIds())
                 .betweenIfPresent("create_time", reqVO.getCreateTime());
         if (Boolean.TRUE.equals(reqVO.getSalaryNegotiable())) {
             query.and(true, wrapper -> wrapper

@@ -36,7 +36,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -49,6 +55,15 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 @Validated
 @Slf4j
 public class HrmPortalRecruitController {
+    private static final Set<String> STANDARD_ROOT_NAMES = Set.of(
+            "一线施工技工", "项目技术与管理人员", "后勤与质量保障岗", "市场与行政岗", "其他");
+    private static final Set<String> STANDARD_LEAF_NAMES = Set.of(
+            "防腐工", "保温工", "喷砂工", "油漆工", "管工", "铆工", "焊工", "架子工", "电工", "瓦工",
+            "钢筋工", "木工", "缝纫工", "普工/力工", "项目经理", "项目副经理", "技术负责人/工程师",
+            "施工员", "施工队长/工长", "预算员/造价员", "安全员", "质检员", "试验/检测员", "资料员",
+            "材料员/库管", "设备维修工", "机械设备管理员", "市场业务经理", "投标专员", "采购员",
+            "财务会计", "行政人事专员", "防腐保温管理（校招管培方向）");
+
     @Resource private HrmRecruitPostService postService;
     @Resource private HrmRecruitPostTypeService postTypeService;
     @Resource private HrmRecruitApplicationService applicationService;
@@ -74,8 +89,45 @@ public class HrmPortalRecruitController {
     @PermitAll
     @TenantIgnore
     public CommonResult<List<HrmPortalRecruitPostTypeRespVO>> postTypeList() {
-        return success(TenantUtils.executeIgnore(() -> convertList(postTypeService.getRecruitPostTypeList(0),
-                item -> BeanUtils.toBean(item, HrmPortalRecruitPostTypeRespVO.class))));
+        return success(TenantUtils.executeIgnore(() -> buildStandardPostTypeCatalog(
+                postTypeService.getRecruitPostTypeList(0))));
+    }
+
+    private List<HrmPortalRecruitPostTypeRespVO> buildStandardPostTypeCatalog(
+            List<HrmRecruitPostTypeDO> postTypes) {
+        Map<Long, HrmRecruitPostTypeDO> typeMap = new LinkedHashMap<>();
+        postTypes.forEach(type -> typeMap.put(type.getId(), type));
+        Map<String, HrmRecruitPostTypeDO> roots = new LinkedHashMap<>();
+        postTypes.stream()
+                .filter(type -> Objects.equals(type.getParentId(), 0L)
+                        && STANDARD_ROOT_NAMES.contains(type.getName()))
+                .sorted(Comparator.comparing(HrmRecruitPostTypeDO::getSort,
+                                Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(HrmRecruitPostTypeDO::getId))
+                .forEach(type -> roots.putIfAbsent(type.getName(), type));
+
+        List<HrmPortalRecruitPostTypeRespVO> result = new ArrayList<>();
+        for (HrmRecruitPostTypeDO root : roots.values()) {
+            result.add(BeanUtils.toBean(root, HrmPortalRecruitPostTypeRespVO.class));
+            Map<String, HrmRecruitPostTypeDO> leaves = new LinkedHashMap<>();
+            postTypes.stream()
+                    .filter(type -> STANDARD_LEAF_NAMES.contains(type.getName()))
+                    .filter(type -> {
+                        HrmRecruitPostTypeDO parent = typeMap.get(type.getParentId());
+                        return parent != null && root.getName().equals(parent.getName());
+                    })
+                    .sorted(Comparator.comparing(HrmRecruitPostTypeDO::getSort,
+                                    Comparator.nullsLast(Integer::compareTo))
+                            .thenComparing(HrmRecruitPostTypeDO::getId))
+                    .forEach(type -> leaves.putIfAbsent(type.getName(), type));
+            leaves.values().forEach(leaf -> {
+                HrmPortalRecruitPostTypeRespVO response =
+                        BeanUtils.toBean(leaf, HrmPortalRecruitPostTypeRespVO.class);
+                response.setParentId(root.getId());
+                result.add(response);
+            });
+        }
+        return result;
     }
 
     @GetMapping("/post/get")

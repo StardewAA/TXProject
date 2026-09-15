@@ -415,9 +415,10 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    public void testGetPortalRecruitPostPage_hidesNonHrPublishers() {
+    public void testGetPortalRecruitPostPage_hidesNonHrPublishersButAllowsSuperAdmin() {
         insertHrPublisher(10101L, 101L, "hr-one");
         insertTenantAdminPublisher(20201L, 202L, "tenant-admin");
+        insertSuperAdminPublisher(30301L, 303L, "super-admin");
         HrmRecruitPostDO hrPost = randomRecruitPostDO(o -> {
             o.setTenantId(101L);
             o.setCreator("10101");
@@ -428,20 +429,21 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
             o.setCreator("20201");
             o.setPostName("租户管理员发布岗位");
         });
-        HrmRecruitPostDO seedPost = randomRecruitPostDO(o -> {
+        HrmRecruitPostDO superAdminPost = randomRecruitPostDO(o -> {
             o.setTenantId(303L);
-            o.setCreator("seed");
-            o.setPostName("种子岗位");
+            o.setCreator("30301");
+            o.setPostName("超级管理员发布岗位");
         });
         recruitPostMapper.insert(hrPost);
         recruitPostMapper.insert(tenantAdminPost);
-        recruitPostMapper.insert(seedPost);
+        recruitPostMapper.insert(superAdminPost);
 
         PageResult<HrmRecruitPostDO> pageResult = recruitPostService.getPortalRecruitPostPage(
                 new HrmRecruitPostPageReqVO());
 
-        assertEquals(1L, pageResult.getTotal());
-        assertEquals(hrPost.getId(), pageResult.getList().get(0).getId());
+        assertEquals(2L, pageResult.getTotal());
+        assertEquals(new HashSet<>(asList(hrPost.getId(), superAdminPost.getId())),
+                convertSet(pageResult.getList(), HrmRecruitPostDO::getId));
     }
 
     @Test
@@ -504,6 +506,18 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
 
         assertServiceException(() -> recruitPostService.getPortalRecruitPostPublished(tenantAdminPost.getId()),
                 RECRUIT_POST_NOT_EXISTS);
+    }
+
+    @Test
+    public void testGetPortalRecruitPostPublished_allowsSuperAdminPublisher() {
+        insertSuperAdminPublisher(60601L, 606L, "super-admin");
+        HrmRecruitPostDO superAdminPost = randomRecruitPostDO(o -> o
+                .setTenantId(606L).setCreator("60601"));
+        recruitPostMapper.insert(superAdminPost);
+
+        HrmRecruitPostDO result = recruitPostService.getPortalRecruitPostPublished(superAdminPost.getId());
+
+        assertEquals(superAdminPost.getId(), result.getId());
     }
 
     @Test
@@ -641,6 +655,10 @@ public class HrmRecruitPostServiceImplTest extends BaseDbUnitTest {
 
     private void insertTenantAdminPublisher(Long userId, Long tenantId, String username) {
         insertPublisher(userId, tenantId, username, userId + 100000L, "tenant_admin");
+    }
+
+    private void insertSuperAdminPublisher(Long userId, Long tenantId, String username) {
+        insertPublisher(userId, tenantId, username, userId + 100000L, "super_admin");
     }
 
     private void insertPublisher(Long userId, Long tenantId, String username, Long roleId, String roleCode) {

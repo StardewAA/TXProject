@@ -182,6 +182,11 @@ public class HrmRecruitPostTypeServiceImpl implements HrmRecruitPostTypeService 
     }
 
     @Override
+    public List<Long> getRecruitPostTypeIdsByName(String name) {
+        return recruitPostTypeMapper.selectIdsByName(name);
+    }
+
+    @Override
     public List<HrmRecruitPostTypeDO> getRecruitPostTypeListByIds(Collection<Long> ids) {
         if (CollUtil.isEmpty(ids)) {
             return Collections.emptyList();
