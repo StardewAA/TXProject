@@ -8,6 +8,7 @@ import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesFeedbackStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.OutsourceIssueStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ReturnVendorStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ProductSalesStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.WmItemReceiptStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
@@ -77,6 +78,12 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "outsourceIssueStatusListener")
     public OutsourceIssueStatusListener outsourceIssueStatusListener() {
         return new OutsourceIssueStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "returnVendorStatusListener")
+    public ReturnVendorStatusListener returnVendorStatusListener() {
+        return new ReturnVendorStatusListener();
     }
 
     @Bean
