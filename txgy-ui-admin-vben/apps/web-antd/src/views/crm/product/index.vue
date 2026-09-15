@@ -2,18 +2,20 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmProductApi } from '#/api/crm/product';
 
+import { h } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, message } from 'ant-design-vue';
+import { Button, message, notification } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteProduct,
   exportProduct,
   getProductPage,
+  syncProductFromWms,
 } from '#/api/crm/product';
 import { $t } from '#/locales';
 
@@ -36,6 +38,42 @@ function handleRefresh() {
 async function handleExport() {
   const data = await exportProduct(await gridApi.formApi.getValues());
   downloadFileFromBlobPart({ fileName: '产品.xls', source: data });
+}
+
+/** 从 WMS 同步产品 */
+async function handleSyncFromWms() {
+  const hideLoading = message.loading({
+    content: '正在从 WMS 同步产品，请稍候...',
+    duration: 0,
+  });
+  try {
+    const result = await syncProductFromWms();
+    if (result.skipped) {
+      message.warning(result.message ?? '本次同步已跳过');
+      return;
+    }
+    message.success(
+      `同步完成：拉取 ${result.total} 个规格，新增 ${result.created}，更新 ${result.updated}，` +
+        `无变化 ${result.unchanged}，编码冲突 ${result.conflict}，失败 ${result.failed}`,
+    );
+    // 编码冲突、失败等明细
+    if (result.messages && result.messages.length > 0) {
+      notification.warning({
+        message: 'WMS 同步明细',
+        description: () =>
+          h(
+            'div',
+            result.messages!.map((item) =>
+              h('div', { style: 'margin-bottom: 4px' }, item),
+            ),
+          ),
+        duration: 8,
+      });
+    }
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
 }
 
 /** 打开详情 */
@@ -112,6 +150,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['crm:product:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '从 WMS 同步',
+              type: 'primary',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['crm:product:sync'],
+              popConfirm: {
+                title:
+                  '将从 WMS 读取进仓商品与规格并导入产品管理（不会修改 WMS 数据），是否继续？',
+                confirm: handleSyncFromWms,
+              },
             },
             {
               label: $t('ui.actionTitle.export'),

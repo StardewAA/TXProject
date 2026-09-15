@@ -36,7 +36,7 @@ public class WmsItemDO extends BaseDO {
     private Boolean qualityRequired;
     /** ERP 主数据版本 */
     private Long sourceVersion;
-    /** 启用状态 */
+    /** 状态：0 启用，1 停用 */
     private Integer status;
     /**
      * 商品名称
@@ -62,8 +62,6 @@ public class WmsItemDO extends BaseDO {
      * 备注
      */
     private String remark;
-    /** 状态：0 启用，1 停用 */
-    private Integer status;
     /** 当前有效质检报告编号 */
     private Long currentQualityReportId;
 
