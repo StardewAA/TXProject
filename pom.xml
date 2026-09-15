@@ -14,7 +14,6 @@
         <!-- Server 主项目 -->
         <module>txgy-server</module>
         <!--  各种 module 拓展 -->
-        <module>txgy-module-training</module>
         <module>txgy-module-system</module>
         <module>txgy-module-infra</module>
         <module>txgy-module-member</module>
