@@ -2,6 +2,9 @@ package cn.iocoder.txgy.module.wms.service.order.check;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -23,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -36,6 +41,7 @@ import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.*;
 @Service
 @Validated
 public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
+    public static final String PROCESS_KEY = "wms_check_approval";
 
     @Resource
     private WmsCheckOrderMapper checkOrderMapper;
@@ -45,6 +51,8 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
     private WmsWarehouseService warehouseService;
     @Resource
     private WmsInventoryService inventoryService;
+    @Resource
+    private BpmProcessInstanceApi processInstanceApi;
     @Resource
     private WmsItemSkuService itemSkuService;
 
@@ -56,7 +64,7 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
 
         // 2.1 插入盘库单
         WmsCheckOrderDO order = BeanUtils.toBean(createReqVO, WmsCheckOrderDO.class);
-        order.setStatus(WmsOrderStatusEnum.PREPARE.getStatus());
+        order.setStatus(WmsOrderStatusEnum.PREPARE.getStatus()).setApprovalStatus(BpmProcessInstanceStatusEnum.NOT_START.getStatus()).setExecutionStatus(0);
         fillCheckOrderTotal(order, createReqVO);
         checkOrderMapper.insert(order);
         // 2.2 插入盘库单明细
@@ -105,6 +113,7 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
     public void completeCheckOrder(Long id) {
         // 1.1 校验存在，且草稿
         WmsCheckOrderDO order = validateCheckOrderPrepare(id);
+        if (ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) throw exception(CHECK_ORDER_APPROVAL_NOT_APPROVED);
         // 1.2 校验盘库单明细存在
         List<WmsCheckOrderDetailDO> details = checkOrderDetailService.validateCheckOrderDetailListExists(id);
         itemSkuService.validateItemSkuListItemEnabled(details.stream()
@@ -118,6 +127,37 @@ public class WmsCheckOrderServiceImpl implements WmsCheckOrderService {
 
         // 3. 盘点库存
         inventoryService.checkInventory(buildCheckInventoryReqDTO(order, details));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String submitCheckOrderApproval(Long userId, Long id) {
+        WmsCheckOrderDO order = validateCheckOrderPrepare(id); validateApprovalEditable(order);
+        List<WmsCheckOrderDetailDO> details = checkOrderDetailService.validateCheckOrderDetailListExists(id);
+        HashMap<String,Object> vars = new HashMap<>(); vars.put("orderId", id); vars.put("orderNo", order.getNo()); vars.put("warehouseId", order.getWarehouseId()); vars.put("detailCount", details.size());
+        String processId = processInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY).setBusinessKey(String.valueOf(id)).setVariables(vars)).getCheckedData();
+        checkOrderMapper.updateById(new WmsCheckOrderDO().setId(id).setProcessInstanceId(processId).setApprovalStatus(BpmProcessInstanceStatusEnum.RUNNING.getStatus()).setApprovalTime(null).setApprovalReason(null));
+        return processId;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateCheckOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason) {
+        if (!BpmProcessInstanceStatusEnum.isProcessEndStatus(status)) return;
+        WmsCheckOrderDO order = validateCheckOrderExists(id);
+        if (ObjectUtil.notEqual(order.getProcessInstanceId(), processInstanceId) || ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.RUNNING.getStatus())) return;
+        int changed = checkOrderMapper.updateApprovalResultIfRunning(id, processInstanceId, BpmProcessInstanceStatusEnum.RUNNING.getStatus(), new WmsCheckOrderDO().setApprovalStatus(status).setApprovalTime(LocalDateTime.now()).setApprovalReason(reason));
+        if (changed > 0 && ObjectUtil.equal(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            List<WmsCheckOrderDetailDO> details = checkOrderDetailService.validateCheckOrderDetailListExists(order.getId());
+            if (checkOrderMapper.updateByIdAndStatus(order.getId(), WmsOrderStatusEnum.PREPARE.getStatus(), new WmsCheckOrderDO().setStatus(WmsOrderStatusEnum.FINISHED.getStatus()).setExecutionStatus(1).setExecutionTime(LocalDateTime.now()).setExecutionError(null)) > 0) {
+                inventoryService.checkInventory(buildCheckInventoryReqDTO(order, details));
+            }
+        }
+    }
+
+    private void validateApprovalEditable(WmsCheckOrderDO order) {
+        if (ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.RUNNING.getStatus())) throw exception(CHECK_ORDER_APPROVAL_RUNNING);
+        if (ObjectUtil.equal(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.APPROVE.getStatus())) throw exception(CHECK_ORDER_APPROVAL_NOT_EDITABLE);
     }
 
     @Override

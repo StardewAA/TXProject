@@ -5,10 +5,14 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskPageReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskTeamLoadRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProcessDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.task.MesProTaskDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -20,6 +24,18 @@ import java.util.List;
  */
 @Mapper
 public interface MesProTaskMapper extends BaseMapperX<MesProTaskDO> {
+
+    /**
+     * 按班组聚合任务负载（任务数、排产数量、已生产数量）
+     *
+     * @return 各班组的任务负载
+     */
+    @Select("SELECT team_id AS teamId, COUNT(*) AS taskCount, " +
+            "IFNULL(SUM(quantity), 0) AS quantityTotal, " +
+            "IFNULL(SUM(produced_quantity), 0) AS producedTotal " +
+            "FROM mes_pro_task WHERE deleted = 0 AND team_id IS NOT NULL " +
+            "GROUP BY team_id")
+    List<MesProTaskTeamLoadRespVO> selectTeamTaskLoad();
 
     default PageResult<MesProTaskDO> selectPage(MesProTaskPageReqVO reqVO) {
         MPJLambdaWrapperX<MesProTaskDO> query = new MPJLambdaWrapperX<>();

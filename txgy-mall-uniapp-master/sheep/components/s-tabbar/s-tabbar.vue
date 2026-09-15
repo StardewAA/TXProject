@@ -23,10 +23,10 @@
         @click="sheep.$router.go(item.url)"
       >
         <template v-slot:active-icon>
-          <image class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)"></image>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.activeIconUrl)" :label="item.text" />
         </template>
         <template v-slot:inactive-icon>
-          <image class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.iconUrl)"></image>
+<s-menu-icon class="u-page__item__slot-icon" :src="sheep.$url.cdn(item.iconUrl)" :label="item.text" style="filter: grayscale(1); opacity: .65" />
         </template>
       </su-tabbar-item>
     </su-tabbar>

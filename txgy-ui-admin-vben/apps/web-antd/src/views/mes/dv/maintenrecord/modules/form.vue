@@ -118,7 +118,10 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<{ formType: FormType; id?: number }>();
     formType.value = data.formType;
     formApi.setDisabled(formType.value === 'detail');
-    modalApi.setState({ showConfirmButton: formType.value !== 'detail' });
+    modalApi.setState({
+      confirmText: '保存',
+      showConfirmButton: formType.value !== 'detail',
+    });
     if (!data?.id) {
       await formApi.setFieldValue('userId', userStore.userInfo?.id);
       return;

@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.hrm.dal.mysql.recruit.post;
 import cn.hutool.core.map.MapUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.framework.ip.core.Area;
+import cn.iocoder.txgy.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.QueryWrapperX;
@@ -11,11 +13,38 @@ import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Mapper
 public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
+
+    String PORTAL_HR_PUBLISHER_EXISTS_SQL = """
+            EXISTS (
+                SELECT 1
+                FROM system_users publisher_user
+                JOIN system_user_role publisher_user_role
+                  ON publisher_user_role.user_id = publisher_user.id
+                 AND publisher_user_role.tenant_id = publisher_user.tenant_id
+                 AND publisher_user_role.deleted = 0
+                JOIN system_role publisher_role
+                  ON publisher_role.id = publisher_user_role.role_id
+                 AND publisher_role.tenant_id = publisher_user.tenant_id
+                 AND publisher_role.deleted = 0
+                 AND publisher_role.status = 0
+                WHERE publisher_user.deleted = 0
+                  AND publisher_user.status = 0
+                  AND publisher_user.tenant_id = hrm_recruit_post.tenant_id
+                  AND (CONCAT(publisher_user.id, '') = hrm_recruit_post.creator
+                       OR publisher_user.username = hrm_recruit_post.creator)
+                  AND (LOWER(publisher_role.code) = 'super_admin'
+                       OR LOWER(publisher_role.code) LIKE '%hr%'
+                       OR LOWER(publisher_role.name) LIKE '%hr%'
+                       OR publisher_role.name LIKE '%人力%'
+                       OR publisher_role.name LIKE '%人事%')
+            )
+            """;
 
     default long selectCountByPostTypeId(Long postTypeId) {
         return selectCount(new LambdaQueryWrapperX<HrmRecruitPostDO>()
@@ -26,6 +55,19 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
         return selectPage(reqVO, buildQueryWrapper(reqVO)
                 .eqIfPresent("status", reqVO.getStatus())
                 .orderByDesc("id"));
+    }
+
+    default PageResult<HrmRecruitPostDO> selectPortalPage(HrmRecruitPostPageReqVO reqVO) {
+        return selectPage(reqVO, buildQueryWrapper(reqVO)
+                .eqIfPresent("status", reqVO.getStatus())
+                .apply(PORTAL_HR_PUBLISHER_EXISTS_SQL)
+                .orderByDesc("id"));
+    }
+
+    default HrmRecruitPostDO selectPortalById(Long id) {
+        return selectOne(new QueryWrapperX<HrmRecruitPostDO>()
+                .eq("id", id)
+                .apply(PORTAL_HR_PUBLISHER_EXISTS_SQL));
     }
 
     default Map<Integer, Long> selectCountMapByStatus(HrmRecruitPostPageReqVO reqVO) {
@@ -62,18 +104,71 @@ public interface HrmRecruitPostMapper extends BaseMapperX<HrmRecruitPostDO> {
                 .set(updateObj.getInterviewEmployeeIds() == null, HrmRecruitPostDO::getInterviewEmployeeIds, null)
                 .set(updateObj.getDescription() == null, HrmRecruitPostDO::getDescription, null)
                 .set(updateObj.getEmergencyLevel() == null, HrmRecruitPostDO::getEmergencyLevel, null)
-                .set(updateObj.getPostTypeId() == null, HrmRecruitPostDO::getPostTypeId, null));
+                .set(updateObj.getPostTypeId() == null, HrmRecruitPostDO::getPostTypeId, null)
+                .set(updateObj.getChannelId() == null, HrmRecruitPostDO::getChannelId, null));
     }
 
     private QueryWrapperX<HrmRecruitPostDO> buildQueryWrapper(HrmRecruitPostPageReqVO reqVO) {
-        return new QueryWrapperX<HrmRecruitPostDO>()
+        QueryWrapperX<HrmRecruitPostDO> query = new QueryWrapperX<HrmRecruitPostDO>()
                 .likeIfPresent("post_name", reqVO.getPostName())
                 .eqIfPresent("job_nature", reqVO.getJobNature())
-                .eqIfPresent("area_id", reqVO.getAreaId())
+                .inIfPresent("area_id", getAreaAndDescendantIds(reqVO.getAreaId()))
+                .eqIfPresent("work_time", reqVO.getWorkTime())
+                .eqIfPresent("education_require", reqVO.getEducationRequire())
                 .eqIfPresent("dept_id", reqVO.getDeptId())
                 .eqIfPresent("owner_employee_id", reqVO.getOwnerEmployeeId())
                 .eqIfPresent("post_type_id", reqVO.getPostTypeId())
+                .inIfPresent("post_type_id", reqVO.getPostTypeIds())
                 .betweenIfPresent("create_time", reqVO.getCreateTime());
+        if (Boolean.TRUE.equals(reqVO.getSalaryNegotiable())) {
+            query.and(true, wrapper -> wrapper
+                    .eq("min_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                    .or()
+                    .eq("max_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE));
+        } else {
+            if (reqVO.getSalaryMin() != null) {
+                query.and(true, wrapper -> wrapper
+                        .eq("min_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                        .or()
+                        .ge("max_salary", reqVO.getSalaryMin()));
+            }
+            if (reqVO.getSalaryMax() != null) {
+                query.and(true, wrapper -> wrapper
+                        .eq("max_salary", HrmRecruitPostDO.SALARY_NEGOTIABLE_VALUE)
+                        .or()
+                        .le("min_salary", reqVO.getSalaryMax()));
+            }
+        }
+        return query;
+    }
+
+    /**
+     * 按地区树展开筛选范围：省份包含其下市、区县；城市包含其下区县；区县仅匹配自身。
+     */
+    private List<Integer> getAreaAndDescendantIds(Integer areaId) {
+        if (areaId == null) {
+            return null;
+        }
+        Area area = AreaUtils.getArea(areaId);
+        if (area == null) {
+            return List.of(areaId);
+        }
+        List<Integer> areaIds = new ArrayList<>();
+        collectAreaAndDescendantIds(area, areaIds);
+        return areaIds;
+    }
+
+    private void collectAreaAndDescendantIds(Area area, List<Integer> areaIds) {
+        if (area == null || area.getId() == null) {
+            return;
+        }
+        areaIds.add(area.getId());
+        if (area.getChildren() == null) {
+            return;
+        }
+        for (Area child : area.getChildren()) {
+            collectAreaAndDescendantIds(child, areaIds);
+        }
     }
 
 }

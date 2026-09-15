@@ -1,0 +1,25 @@
+/* 前台「项目公告管理」层级页共享样式（项目 → 招标项目 → 标段 → 公告）
+ * 线稿清爽风：白底细边、直角、方正圆润字体、提示字大而清晰、选中无整体高亮。 */
+.pn { padding: 16px 18px 26px; max-width: 1360px; margin: 0 auto; }
+.pn-crumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; color: #6b7681; margin-bottom: 10px; }
+.pn-crumb a { color: #2b6cb0; }
+.pn-crumb .pn-cur { color: #2e3947; font-weight: 600; }
+.pn-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.pn-title { font-size: 20px; font-weight: 800; color: #232b36; margin: 0; letter-spacing: .3px; }
+.pn-sub { margin: 6px 0 0; font-size: 12.5px; line-height: 1.7; color: #5b6672; max-width: 900px; }
+.pn-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pn-card { background: #fff; border: 1px solid #d9dfe5; }
+.pn-card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: #f7f9fb; border-bottom: 1px solid #d9dfe5; }
+.pn-card-t { font-size: 13.5px; font-weight: 700; color: #2e3947; }
+.pn-card-b { padding: 10px 12px; }
+.pn-code { font-size: 12.5px; color: #2e3947; font-weight: 600; letter-spacing: .02em; }
+.pn-name { font-size: 12.5px; color: #2e3947; }
+.pn-dim { font-size: 12px; color: #8a949e; }
+.pn-link { color: #2b6cb0; }
+.pn-empty { padding: 26px 0; text-align: center; color: #9aa4af; font-size: 12.5px; }
+.pn-tip { font-size: 12.5px; line-height: 1.7; color: #5b6672; background: #f7f9fb; border: 1px solid #e4e8ec; padding: 8px 11px; margin-bottom: 10px; }
+.pn-trace { margin-bottom: 12px; }
+.pn-table :where(.ant-table-thead > tr > th) { background: #f7f9fb !important; font-size: 12.5px; font-weight: 700; color: #2e3947; }
+.pn-table :where(.ant-table-tbody > tr > td) { font-size: 12.5px; }
+.pn-table :where(.ant-table-tbody > tr:hover > td) { background: #f9fbfd; }
+.pn-att { margin-top: 6px; }

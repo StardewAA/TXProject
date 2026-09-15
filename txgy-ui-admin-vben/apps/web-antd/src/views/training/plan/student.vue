@@ -8,6 +8,7 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 
 import {
   Button,
+  Checkbox,
   Input,
   message,
   Modal,
@@ -166,6 +167,8 @@ const importVisible = ref(false);
 const importFile = ref<File>();
 const importing = ref(false);
 const importResult = ref<TrainingPlanApi.ImportStudentResult>();
+/** 未匹配到系统账号时，是否自动创建学员账号（登录名=手机号、昵称=姓名） */
+const autoCreateUser = ref(false);
 /** 导入失败明细弹窗 */
 const failDetailVisible = ref(false);
 const failColumns = [
@@ -195,11 +198,14 @@ async function handleImport() {
     const result = await importClassStudents(
       currentClass.value.id,
       importFile.value,
+      autoCreateUser.value,
     );
     importResult.value = result;
     const failCount = result?.failRows?.length ?? 0;
+    const createdCount = result?.createdUserCount ?? 0;
     message.success(
       `导入完成：成功新增 ${result?.successCount ?? 0} 人` +
+        (createdCount ? `，自动创建账号 ${createdCount} 个` : '') +
         (failCount ? `，失败 ${failCount} 行` : ''),
     );
     importVisible.value = false;
@@ -331,10 +337,21 @@ const columns = [
       width="640px"
     >
       <div class="mb-3 rounded bg-gray-50 p-2 text-xs text-gray-500">
-        <p>1. 先下载导入模板，在模板中按行填写学员<strong>手机号</strong>（系统账号按手机号匹配）。</p>
+        <p>
+          1. 先下载导入模板，在模板中按行填写学员<strong>姓名</strong>与<strong>手机号</strong>（系统账号按手机号匹配）。
+        </p>
         <p>
           2. 选择填写好的 Excel 文件后点击「开始导入」，成功学员将自动加入班级并生成学习任务。
         </p>
+        <p>
+          3.
+          若学员尚未开通系统账号：勾选下方「自动创建学员账号」后，系统将按「登录名=手机号、昵称=姓名」自动开户（初始密码为系统配置的初始密码）；不勾选则仅在失败明细中提示。
+        </p>
+      </div>
+      <div class="mb-2">
+        <Checkbox v-model:checked="autoCreateUser">
+          自动创建学员账号（名册中存在、平台尚未开户的学员）
+        </Checkbox>
       </div>
       <Space class="mb-3" wrap>
         <Upload

@@ -119,6 +119,19 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_025, "职位类型必须选择叶子节点");
     ErrorCode RECRUIT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_027, "招聘简历版本不存在");
 
+    // ========== 招聘沟通 1-050-200-060 ==========
+    ErrorCode RECRUIT_CHAT_CONVERSATION_NOT_EXISTS = new ErrorCode(1_050_200_060, "招聘沟通会话不存在");
+    ErrorCode RECRUIT_CHAT_NOT_PARTICIPANT = new ErrorCode(1_050_200_061, "无权查看该招聘沟通会话");
+    ErrorCode RECRUIT_CHAT_SELF_NOT_ALLOWED = new ErrorCode(1_050_200_062, "不能与自己发起招聘沟通");
+    ErrorCode RECRUIT_CHAT_OWNER_NOT_EXISTS = new ErrorCode(1_050_200_063, "该职位暂未配置可沟通的招聘负责人");
+    ErrorCode RECRUIT_CHAT_ENDED = new ErrorCode(1_050_200_064, "该招聘沟通已结束");
+    ErrorCode RECRUIT_CHAT_APPLY_NOT_QUALIFIED = new ErrorCode(1_050_200_065, "需等待招聘方回复后才能投递简历");
+    ErrorCode RECRUIT_CHAT_END_REASON_REQUIRED = new ErrorCode(1_050_200_066, "结束沟通必须填写原因");
+    ErrorCode RECRUIT_CHAT_CANDIDATE_FIRST = new ErrorCode(1_050_200_067, "需等待求职者先发起沟通");
+    ErrorCode RECRUIT_CHAT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_068, "请先等待求职者发送简历");
+    ErrorCode RECRUIT_CHAT_CANDIDATE_PROFILE_INCOMPLETE =
+            new ErrorCode(1_050_200_069, "求职者资料不完整，暂时无法转为候选人");
+
     // ========== 招聘应聘流程 1-050-200-020 ==========
     ErrorCode RECRUIT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_020, "招聘应聘记录不存在");
     ErrorCode RECRUIT_APPLICATION_DUPLICATE = new ErrorCode(1_050_200_021, "该候选人存在同职位进行中的应聘");

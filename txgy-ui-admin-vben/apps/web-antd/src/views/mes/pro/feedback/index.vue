@@ -4,7 +4,6 @@ import type { MesProFeedbackApi } from '#/api/mes/pro/feedback';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { MesProFeedbackStatusEnum } from '@vben/constants';
-import { useUserStore } from '@vben/stores';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Button, message } from 'ant-design-vue';
@@ -16,12 +15,10 @@ import {
   getFeedbackPage,
 } from '#/api/mes/pro/feedback';
 import { $t } from '#/locales';
+import { router } from '#/router';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
-
-const userStore = useUserStore();
-const currentUserId = userStore.userInfo?.id; // 当前登录用户 ID，用于审批人权限判断
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -48,9 +45,14 @@ function handleSubmit(row: MesProFeedbackApi.Feedback) {
   formModalApi.setData({ formType: 'submit', id: row.id }).open();
 }
 
-/** 审批生产报工 */
-function handleApprove(row: MesProFeedbackApi.Feedback) {
-  formModalApi.setData({ formType: 'approve', id: row.id }).open();
+/**
+ * 跳转 BPM 待办处理报工审批
+ *
+ * 报工审批已接入 BPM 流程引擎，MES 侧不再提供直连审批入口，
+ * 审批人统一在「工作流程 - 待办任务」中处理（见《报工审批 BPM 接入设计方案》6.2）
+ */
+function handleGoBpmTodo() {
+  router.push({ name: 'BpmTodoTask' });
 }
 
 /** 详情生产报工 */
@@ -155,13 +157,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleSubmit.bind(null, row),
             },
             {
-              label: $t('common.approve'),
+              label: '去 BPM 待办',
               type: 'link',
-              auth: ['mes:pro-feedback:approve'],
-              ifShow: () =>
-                row.status === MesProFeedbackStatusEnum.APPROVING &&
-                row.approveUserId === currentUserId,
-              onClick: handleApprove.bind(null, row),
+              auth: ['bpm:task:query'],
+              ifShow: () => row.status === MesProFeedbackStatusEnum.APPROVING,
+              onClick: handleGoBpmTodo,
             },
             {
               label: $t('common.delete'),

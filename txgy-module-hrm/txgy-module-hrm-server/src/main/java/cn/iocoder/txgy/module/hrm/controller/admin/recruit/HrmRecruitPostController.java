@@ -14,11 +14,13 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPos
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostTypeDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostTypeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.config.HrmRecruitChannelService;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,6 +67,8 @@ public class HrmRecruitPostController {
     private HrmEmployeeService employeeService;
     @Resource
     private HrmRecruitPostTypeService recruitPostTypeService;
+    @Resource
+    private HrmRecruitChannelService recruitChannelService;
 
     @Resource
     private DeptApi deptApi;
@@ -161,6 +165,8 @@ public class HrmRecruitPostController {
         // 1.3 职位类型信息
         Map<Long, HrmRecruitPostTypeDO> postTypeMap = recruitPostTypeService.getRecruitPostTypeMap(
                 convertSet(list, HrmRecruitPostDO::getPostTypeId));
+        Map<Long, HrmRecruitChannelDO> channelMap = recruitChannelService.getRecruitChannelMap(
+                convertSet(list, HrmRecruitPostDO::getChannelId));
         // 1.4 已入职人数
         Map<Long, Long> joinedCountMap = recruitCandidateService.getJoinedCandidateCountMap(
                 convertSet(list, HrmRecruitPostDO::getId));
@@ -175,6 +181,8 @@ public class HrmRecruitPostController {
                             ? employeeMap.get(employeeId).getName() : null));
             MapUtils.findAndThen(postTypeMap, vo.getPostTypeId(),
                     postType -> vo.setPostTypeName(postType.getName()));
+            MapUtils.findAndThen(channelMap, vo.getChannelId(),
+                    channel -> vo.setChannelName(channel.getName()));
             fillRecruitPostProgress(vo, joinedCountMap.getOrDefault(vo.getId(), 0L));
         });
     }

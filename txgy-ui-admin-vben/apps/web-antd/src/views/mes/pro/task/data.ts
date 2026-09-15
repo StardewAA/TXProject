@@ -8,6 +8,7 @@ import { markRaw } from 'vue';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { getTeamList } from '#/api/mes/cal/team';
 import { getRangePickerDefaultProps } from '#/utils';
 import { MdClientSelect } from '#/views/mes/md/client/components';
 import { MdItemSelect } from '#/views/mes/md/item/components';
@@ -386,6 +387,18 @@ export function useTaskFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
         placeholder: '请选择工作站',
       },
       rules: 'selectRequired',
+    },
+    {
+      fieldName: 'teamId',
+      label: '班组',
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        placeholder: '请选择班组（联动排班）',
+        api: getTeamList,
+        labelField: 'name',
+        valueField: 'id',
+      },
     },
     {
       fieldName: 'quantity',

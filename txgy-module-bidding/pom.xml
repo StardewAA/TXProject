@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>txgy</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modules>
+        <module>txgy-module-bidding-api</module>
+        <module>txgy-module-bidding-server</module>
+    </modules>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>txgy-module-bidding</artifactId>
+    <packaging>pom</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>
+        bidding 包下，公共资源交易招投标业务（公共资源交易平台系统数据规范 V2.0 / 陕西省 V2.0 适配）。
+        交换层 VO（api/vo）与代码集（api/enums）以《VO数据对象规范（国家V2.0模版·陕西适配全量版）》为准；
+        企业后台 / 监管 / 公共服务大厅业务按 docs/双层VO设计说明.md 分层实现。
+    </description>
+
+</project>

@@ -63,6 +63,8 @@ public class CourseServiceImpl implements CourseService {
         // 回填版本链根 ID（同族根 = 自身）
         course.setRootId(course.getId());
         courseMapper.updateById(course);
+        // 资源所属：新增课程时一并绑定模块一的文档/视频资源（支持多文档、多视频）
+        syncMediaList(course.getId(), createReqVO.getMediaList());
         return course.getId();
     }
 
@@ -76,6 +78,8 @@ public class CourseServiceImpl implements CourseService {
         }
         CourseDO updateObj = BeanUtils.toBean(updateReqVO, CourseDO.class);
         courseMapper.updateById(updateObj);
+        // 资源所属：仅当请求显式携带 mediaList 时做增量同步，避免清空既有媒资
+        syncMediaList(course.getId(), updateReqVO.getMediaList());
     }
 
     @Override
@@ -109,6 +113,14 @@ public class CourseServiceImpl implements CourseService {
     @Override
     public CourseDO getCourse(Long id) {
         return courseMapper.selectById(id);
+    }
+
+    @Override
+    public List<CourseDO> getExamPlanList() {
+        return courseMapper.selectList(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<CourseDO>()
+                .eq(CourseDO::getIsCurrent, true)
+                .isNotNull(CourseDO::getExamId)
+                .orderByDesc(CourseDO::getId));
     }
 
     // ========== 审核状态机 ==========
@@ -413,14 +425,77 @@ public class CourseServiceImpl implements CourseService {
         update.setDurationMinutes(attrReqVO.getDurationMinutes());
         update.setIndustry(attrReqVO.getIndustry());
         update.setApplicablePosts(attrReqVO.getApplicablePosts());
+        update.setLearnDomainCodes(attrReqVO.getLearnDomainCodes());
         update.setOwnerFlag(attrReqVO.getOwnerFlag());
         update.setBizTags(attrReqVO.getBizTags());
         update.setIsRequired(attrReqVO.getIsRequired());
         update.setIsComposite(attrReqVO.getIsComposite());
         update.setCompositeTags(attrReqVO.getCompositeTags());
         update.setExamId(attrReqVO.getExamId());
+        update.setExamStartTime(attrReqVO.getExamStartTime());
+        update.setExamEndTime(attrReqVO.getExamEndTime());
         courseMapper.updateById(update);
         insertAuditLog(course.getId(), "UPDATE_ATTR", course.getStatus(), course.getStatus(), "业务属性配置");
+    }
+
+    /**
+     * 资源所属：按「媒资类型 + 资源引用 ID（优先）/ URL」增量同步课程媒资绑定
+     *
+     * <p>新增课程场景 {@code mediaList} 为新增课程表单里勾选的模块一（资源中心）文档/视频；
+     * 编辑课程场景仅当请求显式携带 {@code mediaList} 时才同步，未携带（null）时保持原绑定不变。</p>
+     *
+     * @param courseId  课程 ID
+     * @param mediaList 待绑定的媒资列表，null 表示不同步；空数组表示解绑全部
+     */
+    private void syncMediaList(Long courseId, List<CourseMediaSaveReqVO> mediaList) {
+        if (mediaList == null) {
+            return;
+        }
+        List<CourseMediaDO> existing = courseMediaMapper.selectListByCourseId(courseId);
+        Set<String> keepKeys = new HashSet<>();
+        int sort = 0;
+        for (CourseMediaSaveReqVO item : mediaList) {
+            if (item == null || item.getMediaType() == null) {
+                continue;
+            }
+            validateMediaType(item.getMediaType());
+            String key = mediaBizKey(item.getMediaType(), item.getMediaRefId(), item.getUrl());
+            if (!keepKeys.add(key)) {
+                // 同一资源重复勾选：幂等忽略
+                continue;
+            }
+            CourseMediaDO same = existing.stream()
+                    .filter(media -> key.equals(mediaBizKey(media.getMediaType(), media.getMediaRefId(), media.getUrl())))
+                    .findFirst().orElse(null);
+            if (same != null) {
+                CourseMediaDO sortUpdate = new CourseMediaDO();
+                sortUpdate.setId(same.getId());
+                sortUpdate.setSort(sort++);
+                courseMediaMapper.updateById(sortUpdate);
+                continue;
+            }
+            CourseMediaDO media = BeanUtils.toBean(item, CourseMediaDO.class);
+            media.setId(null);
+            media.setCourseId(courseId);
+            media.setSort(sort++);
+            normalizeMediaUrl(media);
+            courseMediaMapper.insert(media);
+        }
+        // 本次未勾选的既有媒资：解除绑定（不删除资源中心原始素材）
+        for (CourseMediaDO media : existing) {
+            if (!keepKeys.contains(mediaBizKey(media.getMediaType(), media.getMediaRefId(), media.getUrl()))) {
+                courseMediaMapper.deleteById(media.getId());
+            }
+        }
+        refreshCourseMediaStat(courseId);
+    }
+
+    /**
+     * 媒资业务主键：优先使用资源引用 ID，其次回退到访问地址
+     */
+    private String mediaBizKey(Integer mediaType, String mediaRefId, String url) {
+        String refPart = StrUtil.isNotBlank(mediaRefId) ? "ref:" + mediaRefId : "url:" + StrUtil.nullToEmpty(url);
+        return mediaType + "#" + refPart;
     }
 
     /**

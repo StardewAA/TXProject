@@ -50,10 +50,16 @@ public class WmsShipmentOrderRespVO {
 
     @Schema(description = "审批结果原因")
     private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
+    private Boolean simulation;
 
     @Schema(description = "业务单号", example = "SO202605110001")
     @ExcelProperty("业务单号")
     private String bizOrderNo;
+    private String sourceModule;
+    private String businessChainNo;
 
     @Schema(description = "客户编号", example = "1024")
     private Long merchantId;

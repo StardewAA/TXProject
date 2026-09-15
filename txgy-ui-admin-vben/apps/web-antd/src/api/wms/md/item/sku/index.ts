@@ -10,6 +10,7 @@ export namespace WmsItemSkuApi {
     itemId?: number;
     itemCode?: string;
     itemName?: string;
+    materialType?: string;
     categoryId?: number;
     categoryName?: string;
     unit?: string;
@@ -24,6 +25,10 @@ export namespace WmsItemSkuApi {
     netWeight?: number;
     costPrice?: number;
     sellingPrice?: number;
+    packageSpec?: string;
+    boxSpec?: string;
+    palletSpec?: string;
+    minPackageUnit?: string;
     createTime?: Date;
     itemStatus?: number;
   }

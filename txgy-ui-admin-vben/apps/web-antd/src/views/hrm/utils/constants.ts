@@ -88,6 +88,35 @@ export const HrmRecruitCandidateStatus = {
   JOINED: 8, // 已入职
 } as const;
 
+/** 招聘应聘状态（对齐 HRM 招聘应聘状态机） */
+export const HrmRecruitApplicationStatus = {
+  SUBMITTED: 'SUBMITTED',
+  SCREENING: 'SCREENING',
+  RESUME_REJECTED: 'RESUME_REJECTED',
+  SCREENING_PASSED: 'SCREENING_PASSED',
+  PENDING_INTERVIEW: 'PENDING_INTERVIEW',
+  INTERVIEW_SCHEDULED: 'INTERVIEW_SCHEDULED',
+  INTERVIEWING: 'INTERVIEWING',
+  INTERVIEW_EVALUATING: 'INTERVIEW_EVALUATING',
+  NEXT_INTERVIEW: 'NEXT_INTERVIEW',
+  INTERVIEW_CANCELED: 'INTERVIEW_CANCELED',
+  INTERVIEW_ABSENT: 'INTERVIEW_ABSENT',
+  INTERVIEW_REJECTED: 'INTERVIEW_REJECTED',
+  FINAL_INTERVIEW_PASSED: 'FINAL_INTERVIEW_PASSED',
+  PENDING_OFFER: 'PENDING_OFFER',
+  OFFER_APPROVING: 'OFFER_APPROVING',
+  OFFER_SENT: 'OFFER_SENT',
+  OFFER_REJECTED: 'OFFER_REJECTED',
+  OFFER_EXPIRED: 'OFFER_EXPIRED',
+  PENDING_ONBOARD: 'PENDING_ONBOARD',
+  ONBOARDED: 'ONBOARDED',
+  ELIMINATED: 'ELIMINATED',
+  WITHDRAWN: 'WITHDRAWN',
+} as const;
+
+export type HrmRecruitApplicationStatusValue =
+  (typeof HrmRecruitApplicationStatus)[keyof typeof HrmRecruitApplicationStatus];
+
 /** 招聘候选人状态取值 */
 export type HrmRecruitCandidateStatusValue =
   (typeof HrmRecruitCandidateStatus)[keyof typeof HrmRecruitCandidateStatus];
@@ -103,6 +132,15 @@ export const HrmRecruitCandidateEducation = {
   DOCTOR: 7, // 博士
 } as const;
 
+export const HrmRecruitCandidateEducationOptions = [
+  { label: '学历不限', value: 1 },
+  { label: '高中及以上', value: 2 },
+  { label: '大专及以上', value: 3 },
+  { label: '本科及以上', value: 4 },
+  { label: '硕士及以上', value: 5 },
+  { label: '博士', value: 6 },
+] as const;
+
 /** 招聘面试方式枚举（对齐后端字典 hrm_recruit_interview_type） */
 export const HrmRecruitInterviewType = {
   ONSITE: 1, // 现场面试
@@ -116,6 +154,7 @@ export const HrmRecruitInterviewResult = {
   PASS: 2, // 通过
   NOT_PASS: 3, // 未通过
   CANCELED: 4, // 取消
+  ABSENT: 5, // 缺席
 } as const;
 
 /** 员工入职状态枚举（对齐后端 HrmEmployeeEntryStatusEnum） */

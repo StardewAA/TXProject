@@ -47,6 +47,7 @@ import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSetByFlatMap;
+import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - WMS 入库单")
 @RestController
@@ -74,6 +75,11 @@ public class WmsReceiptOrderController {
     @Operation(summary = "创建入库单")
     @PreAuthorize("@ss.hasPermission('wms:receipt-order:create')")
     public CommonResult<Long> createReceiptOrder(@Valid @RequestBody WmsReceiptOrderSaveReqVO createReqVO) {
+        if (createReqVO.getSourceModule() != null || createReqVO.getBusinessChainNo() != null
+                || (createReqVO.getDetails() != null && createReqVO.getDetails().stream().anyMatch(
+                detail -> detail.getSourceLineNo() != null || detail.getSourceSnapshotJson() != null))) {
+            throw new IllegalArgumentException("外部来源单据请使用专用申请接口");
+        }
         return success(receiptOrderService.createReceiptOrder(createReqVO));
     }
 
@@ -101,6 +107,13 @@ public class WmsReceiptOrderController {
     public CommonResult<Boolean> completeReceiptOrder(@RequestParam("id") Long id) {
         receiptOrderService.completeReceiptOrder(id);
         return success(true);
+    }
+
+    @RequestMapping(value = "/submit-approval", method = {RequestMethod.POST, RequestMethod.PUT})
+    @Operation(summary = "提交入库审批")
+    @PreAuthorize("@ss.hasPermission('wms:receipt-order:submit-approval')")
+    public CommonResult<String> submitReceiptOrderApproval(@RequestParam("id") Long id) {
+        return success(receiptOrderService.submitReceiptOrderApproval(getLoginUserId(), id));
     }
 
     @PutMapping("/cancel")

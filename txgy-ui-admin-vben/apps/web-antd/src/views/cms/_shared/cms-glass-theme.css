@@ -1,0 +1,440 @@
+.cms-glass-page {
+  --cms-ink: #1c1c1e;
+  --cms-muted: #6b6b6e;
+  --cms-primary: #1a2b4a;
+  --cms-primary-dark: #243a63;
+  --cms-gold: #c9a961;
+  --cms-line: rgb(98 89 67 / 15%);
+  --cms-glass: rgb(255 253 248 / 70%);
+  --cms-glass-strong: rgb(255 253 248 / 86%);
+  --cms-shadow: 0 22px 60px rgb(26 43 74 / 10%);
+
+  position: relative;
+  display: grid;
+  gap: 22px;
+  isolation: isolate;
+}
+
+.cms-glass-page::before,
+.cms-glass-page::after {
+  position: fixed;
+  z-index: -1;
+  width: 420px;
+  height: 420px;
+  pointer-events: none;
+  content: '';
+  border-radius: 50%;
+  filter: blur(10px);
+}
+
+.cms-glass-page::before {
+  top: 90px;
+  right: 4%;
+  background: radial-gradient(circle, rgb(201 169 97 / 16%), transparent 68%);
+}
+
+.cms-glass-page::after {
+  bottom: -120px;
+  left: 8%;
+  background: radial-gradient(circle, rgb(54 79 119 / 12%), transparent 68%);
+}
+
+.cms-glass-hero {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 156px;
+  padding: 30px 34px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 91% 5%, rgb(201 169 97 / 18%), transparent 34%),
+    linear-gradient(128deg, rgb(25 42 72 / 96%), rgb(36 58 99 / 90%));
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 18px;
+  box-shadow:
+    var(--cms-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 90%);
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
+.cms-glass-hero::before {
+  position: absolute;
+  top: -85px;
+  right: -48px;
+  width: 240px;
+  height: 240px;
+  pointer-events: none;
+  content: '';
+  border: 1px solid rgb(201 169 97 / 15%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 42px rgb(201 169 97 / 5%),
+    0 0 0 84px rgb(201 169 97 / 3%);
+}
+
+.cms-glass-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.cms-glass-kicker,
+.cms-glass-hero p:first-child {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 9px;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--cms-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.cms-glass-kicker::before,
+.cms-glass-hero p:first-child::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  content: '';
+  background: var(--cms-gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(201 169 97 / 13%);
+}
+
+.cms-glass-hero h1 {
+  margin: 0;
+  font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif;
+  font-size: clamp(25px, 2.2vw, 32px);
+  font-weight: 680;
+  line-height: 1.25;
+  color: #fff;
+  letter-spacing: 0.025em;
+}
+
+.cms-glass-hero h1 + span,
+.cms-glass-hero h1 + p {
+  display: block;
+  max-width: 760px;
+  margin: 9px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: rgb(255 255 255 / 64%);
+}
+
+.cms-glass-page > .ant-alert,
+.cms-glass-page .publication-panel > .ant-alert {
+  background: rgb(255 252 242 / 72%);
+  border: 1px solid rgb(201 169 97 / 20%);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgb(50 93 145 / 6%);
+  backdrop-filter: blur(16px);
+}
+
+.cms-glass-page .ant-card,
+.cms-glass-content .ant-card {
+  overflow: hidden;
+  background: var(--cms-glass) !important;
+  border: 1px solid rgb(255 255 255 / 78%) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 18px 48px rgb(44 70 105 / 9%),
+    inset 0 1px 0 rgb(255 255 255 / 88%);
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
+.cms-glass-page .ant-card-head,
+.cms-glass-content .ant-card-head {
+  min-height: 58px;
+  background: rgb(255 255 255 / 22%);
+  border-bottom-color: rgb(120 146 181 / 15%);
+}
+
+.cms-glass-page .ant-card-head-title,
+.cms-glass-content .ant-card-head-title {
+  font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--cms-ink);
+}
+
+.cms-glass-page .ant-card-body,
+.cms-glass-content .ant-card-body {
+  padding: 24px;
+}
+
+.cms-glass-page .ant-tabs-nav,
+.cms-glass-content .ant-tabs-nav {
+  margin-bottom: 18px;
+}
+
+.cms-glass-page .ant-tabs-nav::before,
+.cms-glass-content .ant-tabs-nav::before {
+  border-bottom-color: rgb(112 140 178 / 14%);
+}
+
+.cms-glass-page .ant-tabs-tab,
+.cms-glass-content .ant-tabs-tab {
+  font-weight: 520;
+  color: #77746d;
+}
+
+.cms-glass-page .ant-tabs-tab-active .ant-tabs-tab-btn,
+.cms-glass-content .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--cms-primary) !important;
+  text-shadow: none;
+}
+
+.cms-glass-page .ant-tabs-ink-bar,
+.cms-glass-content .ant-tabs-ink-bar {
+  height: 3px !important;
+  background: linear-gradient(90deg, #b9923f, #dfc48a);
+  border-radius: 999px;
+}
+
+.cms-glass-page .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  background: rgb(236 242 250 / 55%);
+  border-color: transparent;
+  border-radius: 10px 10px 0 0 !important;
+}
+
+.cms-glass-page .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
+  background: rgb(255 255 255 / 76%);
+  border-color: rgb(255 255 255 / 82%);
+}
+
+.cms-glass-page .ant-input,
+.cms-glass-page .ant-input-affix-wrapper,
+.cms-glass-page .ant-select-selector,
+.cms-glass-content .ant-input,
+.cms-glass-content .ant-input-affix-wrapper,
+.cms-glass-content .ant-select-selector,
+.cms-glass-page input[type='date'] {
+  background: rgb(255 254 250 / 72%) !important;
+  border-color: rgb(116 105 80 / 22%) !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 1px 2px rgb(32 55 86 / 3%) !important;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.cms-glass-page .ant-input:hover,
+.cms-glass-page .ant-input:focus,
+.cms-glass-page .ant-input-affix-wrapper:hover,
+.cms-glass-page .ant-input-affix-wrapper-focused,
+.cms-glass-page .ant-select-focused .ant-select-selector,
+.cms-glass-content .ant-input:hover,
+.cms-glass-content .ant-input:focus,
+.cms-glass-content .ant-input-affix-wrapper:hover,
+.cms-glass-content .ant-input-affix-wrapper-focused,
+.cms-glass-content .ant-select-focused .ant-select-selector {
+  background: rgb(255 255 255 / 84%) !important;
+  border-color: rgb(169 136 64 / 58%) !important;
+  box-shadow: 0 0 0 3px rgb(201 169 97 / 10%) !important;
+}
+
+.cms-glass-page .ant-btn,
+.cms-glass-content .ant-btn {
+  font-weight: 550;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.cms-glass-page .ant-btn-primary,
+.cms-glass-content .ant-btn-primary {
+  background: linear-gradient(135deg, #1a2b4a, #2a436e);
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgb(26 43 74 / 20%);
+}
+
+.cms-glass-page .ant-btn-primary:hover,
+.cms-glass-content .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #243a63, #355281);
+  box-shadow: 0 10px 23px rgb(26 43 74 / 27%);
+  transform: translateY(-1px);
+}
+
+.cms-glass-page .ant-table-wrapper,
+.cms-glass-content .ant-table-wrapper {
+  overflow: hidden;
+  background: rgb(255 255 255 / 42%);
+  border: 1px solid rgb(119 146 181 / 14%);
+  border-radius: 14px;
+}
+
+.cms-glass-page .ant-table,
+.cms-glass-content .ant-table,
+.cms-glass-page .ant-table-container,
+.cms-glass-content .ant-table-container,
+.cms-glass-page .ant-table-cell,
+.cms-glass-content .ant-table-cell {
+  background: transparent !important;
+}
+
+.cms-glass-page .ant-table-thead > tr > th,
+.cms-glass-content .ant-table-thead > tr > th {
+  font-size: 12px;
+  font-weight: 650;
+  color: #545048;
+  background: rgb(239 236 228 / 66%) !important;
+  border-bottom-color: rgb(119 146 181 / 15%);
+}
+
+.cms-glass-page .ant-table-tbody > tr > td,
+.cms-glass-content .ant-table-tbody > tr > td {
+  border-bottom-color: rgb(119 146 181 / 11%);
+}
+
+.cms-glass-page .ant-table-tbody > tr:hover > td,
+.cms-glass-content .ant-table-tbody > tr:hover > td {
+  background: rgb(237 246 255 / 66%) !important;
+}
+
+.cms-glass-page .ant-tag,
+.cms-glass-content .ant-tag {
+  padding-inline: 9px;
+  border-radius: 999px;
+}
+
+.cms-glass-page label {
+  font-weight: 520;
+  color: #40516a;
+}
+
+.dark .cms-glass-page {
+  --cms-ink: #18243a;
+  --cms-muted: #58677d;
+  --cms-line: rgb(79 98 124 / 17%);
+  --cms-glass: rgb(255 253 248 / 94%);
+  --cms-glass-strong: rgb(255 255 255 / 98%);
+  --cms-shadow: 0 22px 60px rgb(26 43 74 / 12%);
+
+  color: var(--cms-ink);
+  color-scheme: light;
+}
+
+.dark .cms-glass-hero {
+  background:
+    radial-gradient(circle at 92% 4%, rgb(35 120 224 / 24%), transparent 38%),
+    linear-gradient(125deg, rgb(14 28 48 / 82%), rgb(14 45 77 / 66%));
+  border-color: rgb(126 169 224 / 16%);
+  box-shadow:
+    var(--cms-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.dark .cms-glass-page .ant-card,
+.dark .cms-glass-content .ant-card {
+  color: #26364d;
+  background: rgb(255 253 248 / 94%) !important;
+  border-color: rgb(255 255 255 / 88%) !important;
+  box-shadow:
+    var(--cms-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 96%);
+}
+
+.dark .cms-glass-page .ant-card-head,
+.dark .cms-glass-content .ant-card-head {
+  color: #18243a;
+  background: rgb(249 246 238 / 78%);
+  border-bottom-color: rgb(93 111 137 / 16%);
+}
+
+.dark .cms-glass-page .ant-card-head-title,
+.dark .cms-glass-content .ant-card-head-title,
+.dark .cms-glass-page .ant-tabs-tab,
+.dark .cms-glass-content .ant-tabs-tab {
+  color: #536178;
+}
+
+.dark .cms-glass-content .ant-tabs-tab-active .ant-tabs-tab-btn,
+.dark .cms-glass-page .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #1a2b4a !important;
+}
+
+.dark .cms-glass-page .ant-input,
+.dark .cms-glass-page .ant-input-affix-wrapper,
+.dark .cms-glass-page .ant-select-selector,
+.dark .cms-glass-content .ant-input,
+.dark .cms-glass-content .ant-input-affix-wrapper,
+.dark .cms-glass-content .ant-select-selector,
+.dark .cms-glass-page input[type='date'] {
+  color: #26364d !important;
+  background: rgb(255 255 255 / 94%) !important;
+  border-color: rgb(96 112 135 / 24%) !important;
+}
+
+.dark .cms-glass-page .ant-input::placeholder,
+.dark .cms-glass-content .ant-input::placeholder {
+  color: #8a94a3 !important;
+}
+
+.dark .cms-glass-page .ant-select-selection-item,
+.dark .cms-glass-page .ant-select-selection-placeholder,
+.dark .cms-glass-content .ant-select-selection-item,
+.dark .cms-glass-content .ant-select-selection-placeholder,
+.dark .cms-glass-page label,
+.dark .cms-glass-content label {
+  color: #35465f;
+}
+
+.dark .cms-glass-page .ant-select-arrow,
+.dark .cms-glass-content .ant-select-arrow {
+  color: #69768a;
+}
+
+.dark .cms-glass-page .ant-tabs-tab,
+.dark .cms-glass-content .ant-tabs-tab {
+  color: #667085;
+}
+
+.dark .cms-glass-page .ant-checkbox-wrapper,
+.dark .cms-glass-content .ant-checkbox-wrapper,
+.dark .cms-glass-page .ant-pagination,
+.dark .cms-glass-content .ant-pagination {
+  color: #34445c;
+}
+
+.dark .cms-glass-page .ant-table-wrapper,
+.dark .cms-glass-content .ant-table-wrapper {
+  color: #26364d;
+  background: rgb(255 255 255 / 72%);
+  border-color: rgb(96 112 135 / 15%);
+}
+
+.dark .cms-glass-page .ant-table-thead > tr > th,
+.dark .cms-glass-content .ant-table-thead > tr > th {
+  color: #3d4d64;
+  background: rgb(239 236 228 / 82%) !important;
+}
+
+.dark .cms-glass-page .ant-table-tbody > tr > td,
+.dark .cms-glass-content .ant-table-tbody > tr > td {
+  color: #35465f;
+}
+
+.dark .cms-glass-page .ant-table-tbody > tr:hover > td,
+.dark .cms-glass-content .ant-table-tbody > tr:hover > td {
+  background: rgb(237 246 255 / 78%) !important;
+}
+
+@media (max-width: 760px) {
+  .cms-glass-page {
+    gap: 16px;
+  }
+
+  .cms-glass-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 0;
+    padding: 24px 21px;
+    border-radius: 19px;
+  }
+
+  .cms-glass-page .ant-card-body,
+  .cms-glass-content .ant-card-body {
+    padding: 18px;
+  }
+}

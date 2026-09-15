@@ -49,8 +49,8 @@ export namespace AuthApi {
     username: string;
     password: string;
     captchaVerification: string;
-    /** 注册入口类型，后端可据此区分企业/个人账号 */
-    registerType?: 'enterprise' | 'personal';
+    /** 注册入口类型；公开注册仅支持个人账号 */
+    registerType?: 'personal';
   }
 
   /** 重置密码接口参数 */

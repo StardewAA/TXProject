@@ -85,8 +85,13 @@ public class MesProFeedbackSaveReqVO {
     @NotNull(message = "报工时间不能为空")
     private LocalDateTime feedbackTime;
 
-    @Schema(description = "审核人编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
-    @NotNull(message = "审核人不能为空")
+    /**
+     * 审核人编号
+     *
+     * 报工审批已接入 BPM 流程引擎（流程 Key：mes-feedback-approval），
+     * 审批人由流程节点指派，前端不再录入该字段；保留仅为兼容历史数据与既有 API 调用方。
+     */
+    @Schema(description = "审核人编号（审批人由 BPM 流程节点指派，前端不再录入）", example = "1")
     private Long approveUserId;
 
     @Schema(description = "备注", example = "备注")

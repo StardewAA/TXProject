@@ -24,7 +24,29 @@ public interface HrmRecruitApplicationService {
 
     void startScreening(HrmRecruitApplicationStatusReqVO reqVO);
 
+    void passScreening(HrmRecruitApplicationStatusReqVO reqVO);
+
+    void rejectResume(HrmRecruitApplicationStatusReqVO reqVO);
+
     void enterInterview(HrmRecruitApplicationStatusReqVO reqVO);
+
+    void markInterviewScheduled(Long id);
+
+    void markInterviewStarted(Long id);
+
+    void markInterviewEvaluating(Long id);
+
+    void markInterviewCanceled(Long id, String reason);
+
+    void markInterviewAbsent(Long id, String reason);
+
+    void markInterviewRejected(Long id, String reason);
+
+    void markNextInterview(Long id, String reason);
+
+    void markFinalInterviewPassed(Long id);
+
+    void markPendingOffer(Long id);
 
     /** 面试通过后推进应聘状态。 */
     void markInterviewPassed(Long id);
@@ -36,6 +58,8 @@ public interface HrmRecruitApplicationService {
 
     void markOfferApproving(Long id);
     void markOfferRejected(Long id);
+
+    void markOfferExpired(Long id, String reason);
 
     void markPendingOnboard(Long id);
     void markOnboarded(Long id, Long employeeId);

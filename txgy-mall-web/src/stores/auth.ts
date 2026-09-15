@@ -39,7 +39,7 @@ export const useAuthStore = defineStore('mall-auth', () => {
     }
   }
 
-  async function register(data: { mobile: string; password: string; code: string; nickname: string; agree: true }) {
+  async function register(data: { mobile: string; password: string; code: string; nickname: string; agree: true; memberIdentity: 'buyer' | 'supplier' }) {
     loading.value = true
     try {
       applyToken(await authApi.register(data))
