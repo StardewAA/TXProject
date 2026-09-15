@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="MES">
+  <process id="mes-feedback-approval" name="生产报工审批" isExecutable="true">
+    <startEvent id="start" name="提交报工审批"/>
+    <sequenceFlow id="toApproval" sourceRef="start" targetRef="feedbackApproval"/>
+    <userTask id="feedbackApproval" name="报工审批">
+      <extensionElements>
+        <flowable:candidateStrategy>30</flowable:candidateStrategy>
+        <flowable:candidateParam>__APPROVER_USER_ID__</flowable:candidateParam>
+        <flowable:approveType>1</flowable:approveType>
+        <flowable:assignStartUserHandlerType>1</flowable:assignStartUserHandlerType>
+        <flowable:rejectHandlerType>1</flowable:rejectHandlerType>
+      </extensionElements>
+    </userTask>
+    <!--
+      审批超时催办：非中断边界定时器（cancelActivity=false，不影响审批本身）。
+      - boundaryEventType=1   用户任务超时（BpmBoundaryEventTypeEnum.USER_TASK_TIMEOUT）
+      - timeoutHandlerType=1  自动提醒（BpmUserTaskTimeoutHandlerTypeEnum.REMINDER），
+                              仅发提醒，不做"自动同意/自动拒绝"
+      - timeCycle=R3/PT24H    每 24 小时提醒一次，最多 3 次（R<n>/PT<时长> 为 yudao 建模器约定）
+      注意：扩展元素名必须与 BpmnModelConstants 常量完全一致（小写开头），
+            BpmnModelUtils.parseBoundaryEventExtensionElement 按原名精确查找。
+    -->
+    <boundaryEvent id="feedbackApprovalTimeout" name="审批超时提醒" attachedToRef="feedbackApproval" cancelActivity="false">
+      <extensionElements>
+        <flowable:boundaryEventType>1</flowable:boundaryEventType>
+        <flowable:timeoutHandlerType>1</flowable:timeoutHandlerType>
+      </extensionElements>
+      <timerEventDefinition>
+        <timeCycle>R3/PT24H</timeCycle>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <sequenceFlow id="toTimeoutEnd" sourceRef="feedbackApprovalTimeout" targetRef="timeoutEnd"/>
+    <endEvent id="timeoutEnd" name="提醒结束"/>
+    <sequenceFlow id="toEnd" sourceRef="feedbackApproval" targetRef="end"/>
+    <endEvent id="end" name="审批结束"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="mes-feedback-approval">
+      <bpmndi:BPMNShape id="startShape" bpmnElement="start"><dc:Bounds x="100" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="approvalShape" bpmnElement="feedbackApproval"><dc:Bounds x="210" y="98" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="timeoutShape" bpmnElement="feedbackApprovalTimeout"><dc:Bounds x="270" y="160" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="timeoutEndShape" bpmnElement="timeoutEnd"><dc:Bounds x="430" y="250" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endShape" bpmnElement="end"><dc:Bounds x="410" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="approvalEdge" bpmnElement="toApproval"><di:waypoint x="136" y="138"/><di:waypoint x="210" y="138"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="timeoutEdge" bpmnElement="toTimeoutEnd"><di:waypoint x="288" y="196"/><di:waypoint x="288" y="268"/><di:waypoint x="430" y="268"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="endEdge" bpmnElement="toEnd"><di:waypoint x="330" y="138"/><di:waypoint x="410" y="138"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

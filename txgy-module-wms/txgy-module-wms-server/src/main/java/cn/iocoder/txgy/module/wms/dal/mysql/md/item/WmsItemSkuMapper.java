@@ -22,6 +22,10 @@ import java.util.List;
 @Mapper
 public interface WmsItemSkuMapper extends BaseMapperX<WmsItemSkuDO> {
 
+    default WmsItemSkuDO selectByCode(String code) {
+        return selectOne(WmsItemSkuDO::getCode, code);
+    }
+
     /**
      * 按 SKU 维度分页查询，支持商品 / 品牌 / 分类多表联查筛选。
      *
@@ -40,6 +44,7 @@ public interface WmsItemSkuMapper extends BaseMapperX<WmsItemSkuDO> {
                 .likeIfPresent(WmsItemSkuDO::getName, reqVO.getName())
                 .likeIfPresent(WmsItemSkuDO::getBarCode, reqVO.getBarCode())
                 .eqIfPresent(WmsItemDO::getStatus, reqVO.getItemStatus())
+                .eqIfPresent(WmsItemDO::getMaterialType, reqVO.getMaterialType())
                 .orderByDesc(WmsItemSkuDO::getId);
         return selectJoinPage(reqVO, WmsItemSkuDO.class, query);
     }

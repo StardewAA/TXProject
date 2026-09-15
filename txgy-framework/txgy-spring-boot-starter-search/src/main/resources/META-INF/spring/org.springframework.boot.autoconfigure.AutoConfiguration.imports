@@ -1,0 +1,2 @@
+cn.iocoder.txgy.framework.search.config.RedisSearchAutoConfiguration
+cn.iocoder.txgy.framework.search.config.SearchBackendAutoConfiguration

@@ -1,0 +1,2 @@
+FROM txgy-gateway:latest
+COPY txgy-gateway.jar /app/app.jar

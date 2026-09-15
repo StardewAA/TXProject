@@ -6,13 +6,18 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryHistoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryMapper;
+import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemMapper;
+import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemSkuMapper;
+import cn.iocoder.txgy.module.wms.dal.mysql.md.warehouse.WmsWarehouseMapper;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryCheckReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemService;
@@ -25,10 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -55,6 +62,12 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
     private WmsItemSkuService itemSkuService;
     @Resource
     private WmsItemService itemService;
+    @Resource
+    private WmsItemSkuMapper itemSkuMapper;
+    @Resource
+    private WmsItemMapper itemMapper;
+    @Resource
+    private WmsWarehouseMapper warehouseMapper;
 
     @Override
     public PageResult<WmsInventoryDO> getInventoryPage(WmsInventoryPageReqVO pageReqVO) {
@@ -85,6 +98,7 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
 
         // 1. 逐条复核账面库存，并计算库存调整和库存流水
         List<WmsInventoryDO> updateInventories = new ArrayList<>(reqDTO.getItems().size());
+        List<WmsInventoryDO> changedInventories = new ArrayList<>(reqDTO.getItems().size());
         List<WmsInventoryHistoryDO> histories = new ArrayList<>(reqDTO.getItems().size());
         for (WmsInventoryCheckReqDTO.Item item : reqDTO.getItems()) {
             // 1.1 锁定或创建库存余额行
@@ -96,6 +110,9 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
                 continue;
             }
             updateInventories.add(new WmsInventoryDO().setId(inventory.getId()).setQuantity(afterQuantity));
+            changedInventories.add(new WmsInventoryDO()
+                    .setId(inventory.getId()).setSkuId(inventory.getSkuId()).setWarehouseId(inventory.getWarehouseId())
+                    .setQuantity(afterQuantity));
             histories.add(buildInventoryHistory(reqDTO, item, beforeQuantity, afterQuantity));
         }
 
@@ -125,6 +142,11 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
             histories.add(buildInventoryHistory(reqDTO, item, resultMap.get(item)));
         }
         inventoryHistoryService.createInventoryHistoryList(histories);
+    }
+
+    @Override
+    public void refreshErpInventoryMirror() {
+        throw exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_FEATURE_NOT_ENABLED);
     }
 
     /**
@@ -293,5 +315,7 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
         return exception(INVENTORY_QUANTITY_NOT_ENOUGH, itemDO.getName(), skuDO.getName(),
                 item.getWarehouseId(), beforeQuantity, item.getQuantity());
     }
+
+
 
 }

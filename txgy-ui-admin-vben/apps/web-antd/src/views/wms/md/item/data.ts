@@ -10,6 +10,7 @@ import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
 import { getItemBrandSimpleList } from '#/api/wms/md/item/brand';
+import { materialTypeLabel } from '#/views/wms/utils/material-type';
 
 import { WmsItemBrandSelect } from './brand/components';
 import { WmsItemCategorySelect } from './category/components';
@@ -76,6 +77,18 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       fieldName: 'brandId',
       label: '商品品牌',
       component: markRaw(WmsItemBrandSelect),
+    },
+    {
+      fieldName: 'materialType',
+      label: '物料类型',
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: '原材料', value: 'RAW_MATERIAL' },
+          { label: '成品', value: 'FINISHED_GOODS' },
+        ],
+        placeholder: '请选择物料类型',
+      },
     },
     // ========== 管理开关 ==========
     {
@@ -347,6 +360,14 @@ export function useGridColumns(
       field: 'brandName',
       title: '品牌',
       minWidth: 110,
+    },
+    {
+      field: 'materialType',
+      title: '物料类型',
+      width: 110,
+      align: 'center',
+      formatter: ({ cellValue }) =>
+        materialTypeLabel(cellValue as string | undefined),
     },
     {
       field: 'batchManage',

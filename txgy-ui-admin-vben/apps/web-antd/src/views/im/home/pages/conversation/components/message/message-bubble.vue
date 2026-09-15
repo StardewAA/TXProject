@@ -66,8 +66,8 @@ const isCard = computed(() => props.type === ImContentType.CARD);
 const isMerge = computed(() => props.type === ImContentType.MERGE);
 const isMaterial = computed(() => props.type === ImContentType.MATERIAL);
 
-/** 媒体上传中：uploadProgress 非 null 即视为上传中 */
-const isUploading = computed(() => props.uploadProgress !== null);
+/** 媒体上传中：uploadProgress 为有效数字（0-100）时视为上传中 */
+const isUploading = computed(() => typeof props.uploadProgress === 'number');
 const uploadProgress = computed(() => props.uploadProgress ?? 0);
 const uploadProgressText = computed(() => `${uploadProgress.value}%`);
 

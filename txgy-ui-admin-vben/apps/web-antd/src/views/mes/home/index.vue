@@ -24,6 +24,7 @@ import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
 import Shortcuts from './modules/shortcuts.vue';
+import TodoPanel from './modules/todo-panel.vue';
 import WorkOrderChart from './modules/work-order-chart.vue';
 
 const router = useRouter();
@@ -58,6 +59,13 @@ onMounted(() => {
 
     <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
     <AiAssistant />
+
+    <!-- 我的待办任务：报工等单据审批统一在「工作流程-待办任务」处理，首页直达 -->
+    <Row :gutter="16" class="mb-4">
+      <Col :lg="24" :md="24" :sm="24" :xl="24" :xs="24" class="mb-4">
+        <TodoPanel @navigate="handleNavigate" />
+      </Col>
+    </Row>
 
     <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">

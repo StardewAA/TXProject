@@ -43,9 +43,16 @@ import { useGridColumns, useGridFormSchema } from './data';
 import ShipmentOrderDetail from './modules/detail.vue';
 import ShipmentOrderForm from './modules/form.vue';
 import ShipmentOrderPrint from './modules/print.vue';
+import SimulateOrder from '../shared/simulate.vue';
+
+const [SimulateModal, simulateModalApi] = useVbenModal({
+  connectedComponent: SimulateOrder,
+  destroyOnClose: true,
+});
 
 defineOptions({ name: 'WmsShipmentOrder' });
 
+const approvalLabels: Record<number, string> = { '-1': '待提交', 1: '审批中', 2: '已通过', 3: '已拒绝', 4: '已取消' };
 const printRef = ref<InstanceType<typeof ShipmentOrderPrint>>();
 const detailMap = reactive<
   Record<number, WmsShipmentOrderDetailApi.ShipmentOrderDetail[]>
@@ -185,6 +192,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
       padding: true,
     },
     height: 'auto',
+    showOverflow: false,
+    virtualYConfig: { enabled: false },
     keepSource: true,
     proxyConfig: {
       ajax: {
@@ -230,9 +239,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
     <FormModal @success="handleRefresh" />
     <DetailModal />
+    <SimulateModal @success="handleRefresh" />
     <ShipmentOrderPrint ref="printRef" />
 
-    <Grid table-title="出库单列表">
+    <Grid class="wms-order-list" table-title="出库单列表">
       <template #expand_content="{ row }">
         <VxeTable
           :data="getExpandedDetails(row)"
@@ -284,6 +294,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
+              label: '模拟 ERP / MES 出库',
+              type: 'primary',
+              auth: ['wms:shipment-order:create'],
+              onClick: () => simulateModalApi.setData({ direction: 'shipment' }).open(),
+            },
+            {
               label: $t('ui.actionTitle.export'),
               type: 'primary',
               icon: ACTION_ICON.DOWNLOAD,
@@ -296,10 +312,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #no="{ row }">
         <div>
           单号：
-          <a class="text-primary" @click="handleDetail(row)">{{ row.no }}</a>
+          <a class="text-primary break-all" :title="row.no" @click="handleDetail(row)">{{ row.no }}</a>
         </div>
-        <div v-if="row.bizOrderNo" class="text-xs text-gray-500">
+        <div v-if="row.bizOrderNo" class="break-all text-sm text-gray-500">
           业务：{{ row.bizOrderNo }}
+        </div>
+        <div>
+          审批：{{ approvalLabels[row.approvalStatus ?? -1] || '待提交' }} /
+          执行：{{ row.executionStatus === 1 ? '已出库' : row.executionStatus === 2 ? '执行失败' : '待执行' }}
         </div>
       </template>
       <template #quantityAmount="{ row }">
@@ -359,3 +379,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </Grid>
   </Page>
 </template>
+
+<style scoped>
+.wms-order-list :deep(.vxe-body--column .vxe-cell) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+</style>

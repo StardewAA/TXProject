@@ -23,6 +23,8 @@ export namespace TrainingCourseApi {
     industry?: string;
     /** 适用岗位/工种（JSON 数组） */
     applicablePosts?: string;
+    /** 学习域/课程组编码（按适用岗位工种自动匹配，逗号分隔；* 表示全域） */
+    learnDomainCodes?: string;
     /** 资源归属标识 */
     ownerFlag?: string;
     bizTags?: string;
@@ -31,7 +33,12 @@ export namespace TrainingCourseApi {
     isComposite?: boolean;
     /** 复合课程子模块标签（JSON 数组） */
     compositeTags?: string;
+    /** 结课考试试卷 ID（模块三「考试与认证」） */
     examId?: number;
+    /** 结课考试开始时间 */
+    examStartTime?: string;
+    /** 结课考试结束时间 */
+    examEndTime?: string;
     lecturer?: string;
     lecturerBrief?: string;
     mediaType?: number;
@@ -265,9 +272,44 @@ export function updateCourseBusinessAttributes(
   return requestClient.put(`/training/course/business-attributes?id=${id}`, data);
 }
 
-/** 结课考试试卷下拉（占位） */
+/** 结课考试试卷下拉（对接模块三「考试与认证」试卷中心） */
 export function getExamOptions() {
-  return requestClient.get<any[]>('/training/course/exam-options');
+  return requestClient.get<CourseExamOption[]>(
+    '/training/course/exam-options',
+  );
+}
+
+/** 课程结课考试计划（模块三「考试与认证」展示课程考试） */
+export function getCourseExamPlanList() {
+  return requestClient.get<CourseExamPlan[]>(
+    '/training/course/exam-plan-list',
+  );
+}
+
+/** 结课考试试卷选项 */
+export interface CourseExamOption {
+  id?: number;
+  name?: string;
+  /** 试卷状态：draft 草稿 / published 已发布 */
+  status?: string;
+  examType?: string;
+  totalScore?: number;
+  passScore?: number;
+  durationMin?: number;
+  questionCount?: number;
+  courseName?: string;
+  courseId?: number;
+}
+
+/** 课程结课考试计划 */
+export interface CourseExamPlan {
+  courseId?: number;
+  courseName?: string;
+  categoryId?: number;
+  examId?: number;
+  examStartTime?: string;
+  examEndTime?: string;
+  status?: number;
 }
 
 /** 修改课程分类 */

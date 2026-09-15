@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useUserStore } from '@vben/stores';
 
-import txgyLogo from '#/assets/imgs/txgy-logo.png';
+import txgyLogo from '#/assets/imgs/logo.png';
 import { useAuthStore } from '#/store';
 
 const router = useRouter();
@@ -14,6 +14,7 @@ const authStore = useAuthStore();
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
+  { label: 'CMS系统', path: '/portal/content' },
   { label: '我要找工作', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
@@ -22,8 +23,11 @@ const navItems = [
 const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
 );
-const isRecruitPortal = computed(() =>
-  route.path.startsWith('/portal/recruit') || route.path.startsWith('/portal/profile/recruit'),
+
+const isRecruitPortal = computed(
+  () =>
+    route.path.startsWith('/portal/recruit') ||
+    route.path.startsWith('/portal/profile/recruit'),
 );
 
 function isActive(path: string) {
@@ -36,7 +40,10 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div :class="{ 'portal-shell--recruit': isRecruitPortal }" class="portal-shell">
+  <div
+    class="portal-shell portal-light"
+    :class="{ 'portal-shell--recruit': isRecruitPortal }"
+  >
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
         <img :src="txgyLogo" alt="天信管业" class="portal-brand-logo" />
@@ -82,8 +89,21 @@ async function handleLogout() {
 .portal-shell {
   position: relative;
   min-height: 100vh;
-  background: #f4f6f8;
-  color: #1f2937;
+  background: hsl(var(--background-deep));
+  color: hsl(var(--foreground));
+}
+
+.portal-light {
+  --background: 0 0% 100%;
+  --background-deep: 216 20.11% 95.47%;
+  --foreground: 210 6% 21%;
+  --card: 0 0% 100%;
+  --border: 240 5.9% 90%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --primary: 212 100% 45%;
+  --primary-foreground: 0 0% 98%;
+  --destructive: 359.33 100% 65.1%;
 }
 
 .portal-shell--recruit {
@@ -95,8 +115,8 @@ async function handleLogout() {
   align-items: center;
   min-height: 64px;
   padding: 0 36px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
   gap: 32px;
 }
 
@@ -105,7 +125,7 @@ async function handleLogout() {
   align-items: center;
   flex-shrink: 0;
   gap: 10px;
-  color: #111827;
+  color: hsl(var(--foreground));
   cursor: pointer;
   font-size: 16px;
   font-weight: 650;
@@ -131,7 +151,7 @@ async function handleLogout() {
   padding: 0 14px;
   border: 0;
   background: transparent;
-  color: #111827;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-size: 15px;
   white-space: nowrap;
@@ -139,7 +159,7 @@ async function handleLogout() {
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: #111827;
+  color: #d86616;
 }
 
 .portal-nav button.active::after {
@@ -161,20 +181,20 @@ async function handleLogout() {
 }
 
 .portal-user-name {
-  color: #111827;
-  font-size: 15px;
+  color: hsl(var(--foreground));
+  font-size: 14px;
 }
 
 .portal-logout {
   border: 0;
   background: transparent;
-  color: #111827;
+  color: hsl(var(--muted-foreground));
   cursor: pointer;
   font-size: 14px;
 }
 
 .portal-logout:hover {
-  color: #dc2626;
+  color: hsl(var(--destructive));
 }
 
 .portal-main {
@@ -203,7 +223,9 @@ async function handleLogout() {
   display: none;
 }
 
-.portal-main--recruit { position: relative; }
+.portal-main--recruit {
+  position: relative;
+}
 
 .portal-shell--recruit :deep(.ant-btn-primary) {
   border-color: #d86616;
@@ -218,7 +240,7 @@ async function handleLogout() {
 
 .portal-footer {
   padding: 20px 24px;
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
   text-align: center;
 }

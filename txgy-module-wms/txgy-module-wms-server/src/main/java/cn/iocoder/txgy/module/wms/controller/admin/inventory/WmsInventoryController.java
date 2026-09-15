@@ -26,6 +26,7 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,6 +78,14 @@ public class WmsInventoryController {
     public CommonResult<List<WmsInventoryRespVO>> getInventoryList(@Valid WmsInventoryListReqVO listReqVO) {
         List<WmsInventoryDO> list = inventoryService.getInventoryList(listReqVO);
         return success(buildInventoryRespVOList(list));
+    }
+
+    @PostMapping("/refresh-erp-mirror")
+    @Operation(summary = "将当前 WMS 库存余额刷新到 ERP 产品库存")
+    @PreAuthorize("@ss.hasPermission('wms:inventory:query')")
+    public CommonResult<Boolean> refreshErpInventoryMirror() {
+        inventoryService.refreshErpInventoryMirror();
+        return success(true);
     }
 
     // ==================== 拼接 VO ====================

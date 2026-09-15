@@ -24,6 +24,13 @@ spring:
         webflux:
           # 路由配置项，对应 RouteDefinition 数组
           routes:
+            ## bidding-server 服务
+            - id: bidding-admin-api # 路由的编号
+              uri: grayLb://bidding-server
+              predicates:
+                - Path=/admin-api/bidding/**
+              filters:
+                  - RewritePath=/admin-api/bidding/v3/api-docs, /v3/api-docs
             ## system-server 服务
             - id: system-admin-api # 路由的编号
               uri: grayLb://system-server
@@ -169,6 +176,32 @@ spring:
                 - Path=/admin-api/crm/**
               filters:
                 - RewritePath=/admin-api/crm/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            ## bidding-server 服务（招投标）
+            - id: bidding-admin-api # 路由的编号
+              uri: grayLb://bidding-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/bidding/**
+              filters:
+                - RewritePath=/admin-api/bidding/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+            - id: bidding-app-api # 路由的编号（门户/大厅）
+              uri: grayLb://bidding-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/app-api/bidding/**
+              filters:
+                - RewritePath=/app-api/bidding/v3/api-docs, /v3/api-docs
+            ## cms-server 服务（法规检索、发布与审核）
+            - id: cms-admin-api
+              uri: grayLb://cms-server
+              predicates:
+                - Path=/admin-api/cms/**
+              filters:
+                - RewritePath=/admin-api/cms/v3/api-docs, /v3/api-docs
+            - id: cms-app-api
+              uri: grayLb://cms-server
+              predicates:
+                - Path=/app-api/cms/**
+              filters:
+                - RewritePath=/app-api/cms/v3/api-docs, /v3/api-docs
             ## ai-server 服务
             - id: ai-admin-api # 路由的编号
               uri: grayLb://ai-server
@@ -222,20 +255,13 @@ spring:
                 - Path=/admin-api/fms/**
               filters:
                 - RewritePath=/admin-api/fms/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
-            ## training-server 云培训学院服务 - 学员端（portal 包控制器未按 admin-api 前缀注册，需剥离一级前缀）
-            - id: training-portal-api # 路由的编号
-              uri: grayLb://training-server
+            ## bidding-server 服务（外部公告 notice-external 审核等；txgy_bidding 独立工程）
+            - id: bidding-admin-api # 路由的编号
+              uri: grayLb://bidding-server
               predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
-                - Path=/admin-api/training/portal/**
+                - Path=/admin-api/bidding/**
               filters:
-                - StripPrefix=1 # 学员端控制器映射为 /training/portal/**，剥离 /admin-api 后转发
-            ## training-server 云培训学院服务
-            - id: training-admin-api # 路由的编号
-              uri: grayLb://training-server
-              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
-                - Path=/admin-api/training/**
-              filters:
-                - RewritePath=/admin-api/training/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
+                - RewritePath=/admin-api/bidding/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
           x-forwarded:
             prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
           default-filters:
@@ -253,6 +279,9 @@ knife4j:
   gateway:
     enabled: true
     routes:
+      - name: bidding-server
+        service-name: bidding-server
+        url: /admin-api/bidding/v3/api-docs
       - name: system-server
         service-name: system-server
         url: /admin-api/system/v3/api-docs
@@ -310,9 +339,9 @@ knife4j:
       - name: fms-server
         service-name: fms-server
         url: /admin-api/fms/v3/api-docs
-      - name: training-server
-        service-name: training-server
-        url: /admin-api/training/v3/api-docs
+      - name: bidding-server
+        service-name: bidding-server
+        url: /admin-api/bidding/v3/api-docs
 
 --- #################### OPENLAB BS相关配置 ####################
 

@@ -28,6 +28,11 @@ const dispatchTargets: DispatchTarget[] = [
     path: '/portal/recruit',
   },
   {
+    description: '检索已发布法规，或提交内容申请审查发布。',
+    label: 'CMS系统',
+    path: '/portal/content',
+  },
+  {
     description: '进入课程、考试和学习任务',
     label: '云培训学院',
     path: '/portal/training',
@@ -43,17 +48,25 @@ function findDispatchTarget(value: string) {
   if (/(职位|招聘|求职|简历|应聘|工作|企业)/u.test(value)) {
     return dispatchTargets[0];
   }
-  if (/(培训|课程|考试|学习|证书)/u.test(value)) {
+
+  if (/(法规|内容|CMS|政策|发布|审查)/u.test(value)) {
     return dispatchTargets[1];
   }
-  if (/(招标|投标|项目|公告)/u.test(value)) {
+
+  if (/(培训|课程|考试|学习|证书)/u.test(value)) {
     return dispatchTargets[2];
   }
+
+  if (/(招标|投标|项目|公告)/u.test(value)) {
+    return dispatchTargets[3];
+  }
+
   return undefined;
 }
 
 async function scrollThreadToBottom() {
   await nextTick();
+
   threadRef.value?.scrollTo({
     behavior: 'smooth',
     top: threadRef.value.scrollHeight,
@@ -62,17 +75,26 @@ async function scrollThreadToBottom() {
 
 function submit() {
   const value = input.value.trim();
-  if (!value) return;
+
+  if (!value) {
+    return;
+  }
 
   const action = findDispatchTarget(value);
-  messages.value.push({ role: 'user', text: value });
+
+  messages.value.push({
+    role: 'user',
+    text: value,
+  });
+
   messages.value.push({
     action,
     role: 'assistant',
     text: action
       ? `我帮你找到「${action.label}」，这里可以${action.description}。`
-      : '我可以帮你进入招聘、培训或招投标页面。换一种说法告诉我你的目标吧。',
+      : '我可以帮你进入招聘、CMS、培训或招投标页面。换一种说法告诉我你的目标吧。',
   });
+
   input.value = '';
   void scrollThreadToBottom();
 }
@@ -108,6 +130,7 @@ function openTarget(path: string) {
             <span>帮你找到下一步</span>
           </div>
         </div>
+
         <div
           v-for="(message, index) in messages"
           :key="`${message.role}-${index}`"
@@ -116,8 +139,10 @@ function openTarget(path: string) {
           <div v-if="message.role === 'assistant'" class="message-avatar">
             分
           </div>
+
           <div class="message-body">
             <p>{{ message.text }}</p>
+
             <button
               v-if="message.action"
               class="message-action"
@@ -145,18 +170,21 @@ function openTarget(path: string) {
               />
             </svg>
           </button>
+
           <span id="attachment-help" class="attachment-popover" role="tooltip">
             <strong>添加图片或文档</strong>
             <small>支持 PDF、DOCX、TXT、MD、XLSX、PPTX、JPG/JPEG、PNG</small>
           </span>
         </span>
+
         <textarea
           v-model="input"
           aria-label="告诉平台你想做什么"
-          @keydown="handleInputKeydown"
           placeholder="有问题，随便问"
           rows="1"
+          @keydown="handleInputKeydown"
         />
+
         <div class="composer-trailing">
           <button
             disabled
@@ -188,11 +216,11 @@ function openTarget(path: string) {
   width: 100%;
   height: calc(100vh - 64px);
   min-height: calc(100vh - 64px);
+  flex-direction: column;
+  align-items: center;
   overflow: hidden;
   padding: 0;
   background: #fff;
-  flex-direction: column;
-  align-items: center;
 }
 
 .dispatch-stage {
@@ -201,9 +229,9 @@ function openTarget(path: string) {
   width: 100%;
   height: 100%;
   min-height: calc(100vh - 64px);
-  padding: 26px 0 24px;
   flex-direction: column;
   align-items: center;
+  padding: 26px 0 24px;
 }
 
 .dispatch-stage--thread {
@@ -222,9 +250,9 @@ function openTarget(path: string) {
   position: absolute;
   top: 50%;
   left: 50%;
+  display: grid;
   width: 100%;
   height: 100%;
-  display: grid;
   justify-items: center;
   pointer-events: none;
   text-align: center;
@@ -295,17 +323,14 @@ function openTarget(path: string) {
 
 .composer-tool {
   display: grid;
+  width: 38px;
   height: 38px;
   place-items: center;
   border: 0;
+  border-radius: 50%;
   background: transparent;
   color: #71817f;
   cursor: pointer;
-}
-
-.composer-tool {
-  width: 38px;
-  border-radius: 50%;
   font-size: 24px;
   font-weight: 300;
   line-height: 1;

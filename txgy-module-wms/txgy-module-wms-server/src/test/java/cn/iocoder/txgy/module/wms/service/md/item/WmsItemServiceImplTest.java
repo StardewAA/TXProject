@@ -88,7 +88,7 @@ class WmsItemServiceImplTest extends BaseDbUnitTest {
     }
 
     private WmsItemDO createItem() {
-        WmsItemDO item = new WmsItemDO().setCode("ITEM-DELETE-" + System.nanoTime())
+        WmsItemDO item = new WmsItemDO().setCode("IT-" + Long.toUnsignedString(System.nanoTime(), 36))
                 .setName("删除测试商品-" + System.nanoTime()).setCategoryId(1L).setUnit("件")
                 .setStatus(CommonStatusEnum.ENABLE.getStatus());
         itemMapper.insert(item);

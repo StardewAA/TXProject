@@ -64,6 +64,7 @@ const getTitle = computed(() => {
     : $t('ui.actionTitle.create', ['出库单']);
 });
 
+const sourceLocked = computed(() => !!formData.value.sourceModule);
 const isPrepareOrder = computed(() => {
   return (
     !formData.value?.id ||
@@ -269,7 +270,7 @@ function validateDetails(required = false) {
       detail.availableQuantity !== undefined &&
       detail.quantity > detail.availableQuantity
     ) {
-      message.error(`第 ${index + 1} 行明细出库数量不能大于可用库存`);
+      message.error(`第 ${index + 1} 行明细出库数量不能大于账面库存`);
       return false;
     }
   }
@@ -383,6 +384,7 @@ const [Modal, modalApi] = useVbenModal({
         currentWarehouseId.value = order.warehouseId;
         setDetails(orderDetails);
         // 设置到 values
+        formApi.setState({ commonConfig: { componentProps: { disabled: sourceLocked.value || !isPrepareOrder.value } } });
         await formApi.setValues(formData.value);
         await nextTick();
         originalSubmitData.value = await buildSubmitData();
@@ -400,6 +402,7 @@ const [Modal, modalApi] = useVbenModal({
     };
     currentWarehouseId.value = undefined;
     setDetails([]);
+    formApi.setState({ commonConfig: { componentProps: { disabled: false } } });
     await formApi.setValues(formData.value);
     await nextTick();
     originalSubmitData.value = await buildSubmitData();
@@ -425,6 +428,7 @@ const [Modal, modalApi] = useVbenModal({
             :actions="[
               {
                 label: '添加商品',
+                disabled: sourceLocked || !isPrepareOrder,
                 onClick: handleAddDetail,
                 type: 'primary',
               },
@@ -459,7 +463,7 @@ const [Modal, modalApi] = useVbenModal({
           </VxeColumn>
           <VxeColumn
             field="availableQuantity"
-            title="可用库存"
+            title="账面库存"
             align="right"
             width="120"
           >
@@ -471,6 +475,7 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.quantity"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="QUANTITY_PRECISION"
@@ -484,11 +489,12 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.price"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="PRICE_PRECISION"
                 class="!w-full"
-                placeholder="单价"
+                :placeholder="sourceLocked ? '来源未提供' : '单价'"
                 @change="handleDetailPriceChange(row)"
               />
             </template>
@@ -497,11 +503,12 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.totalPrice"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="PRICE_PRECISION"
                 class="!w-full"
-                placeholder="金额"
+                :placeholder="sourceLocked ? '来源未提供' : '金额'"
                 @change="handleDetailTotalPriceChange(row)"
               />
             </template>
@@ -512,6 +519,7 @@ const [Modal, modalApi] = useVbenModal({
                 :actions="[
                   {
                     label: '删除',
+                    disabled: sourceLocked || !isPrepareOrder,
                     type: 'link',
                     danger: true,
                     onClick: handleDeleteDetail.bind(null, row),

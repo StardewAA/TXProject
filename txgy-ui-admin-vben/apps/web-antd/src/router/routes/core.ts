@@ -8,7 +8,7 @@ import { $t } from '#/locales';
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
 const PortalLayout = () => import('#/layouts/portal.vue');
-/** 全局404页面 */
+
 const fallbackNotFoundRoute: RouteRecordRaw = {
   component: () => import('#/views/_core/fallback/not-found.vue'),
   meta: {
@@ -21,13 +21,7 @@ const fallbackNotFoundRoute: RouteRecordRaw = {
   path: '/:path(.*)*',
 };
 
-/** 基本路由，这些路由是必须存在的 */
 const coreRoutes: RouteRecordRaw[] = [
-  /**
-   * 根路由
-   * 使用基础布局，作为所有页面的父级容器，子级就不必配置BasicLayout。
-   * 此路由必须存在，且不应修改
-   */
   {
     component: BasicLayout,
     meta: {
@@ -129,6 +123,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '首页', hideInMenu: true },
       },
       {
+        name: 'PortalContent',
+        path: 'content',
+        component: () => import('#/views/portal/content/index.vue'),
+        meta: { title: 'CMS系统', hideInMenu: true },
+      },
+      {
         name: 'PortalRecruit',
         path: 'recruit',
         component: () => import('#/views/portal/recruit/index.vue'),
@@ -153,7 +153,6 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '在线简历', hideInMenu: true },
       },
       {
-        // 云培训学院：带左侧 F1~F10 模块导航的父容器，具体内容由子路由在右侧渲染
         name: 'PortalTraining',
         path: 'training',
         component: () => import('#/views/portal/training/index.vue'),
@@ -163,19 +162,22 @@ const coreRoutes: RouteRecordRaw[] = [
           {
             name: 'PortalTrainingWorkbench',
             path: 'workbench',
-            component: () => import('#/views/portal/training/workbench/index.vue'),
+            component: () =>
+              import('#/views/portal/training/workbench/index.vue'),
             meta: { title: '学习工作台', hideInMenu: true },
           },
           {
             name: 'PortalTrainingCourses',
             path: 'courses',
-            component: () => import('#/views/portal/training/courses/index.vue'),
+            component: () =>
+              import('#/views/portal/training/courses/index.vue'),
             meta: { title: '课程中心', hideInMenu: true },
           },
           {
             name: 'PortalTrainingLearning',
             path: 'learning',
-            component: () => import('#/views/portal/training/learning/index.vue'),
+            component: () =>
+              import('#/views/portal/training/learning/index.vue'),
             meta: { title: '我的学习', hideInMenu: true },
           },
           {
@@ -187,46 +189,52 @@ const coreRoutes: RouteRecordRaw[] = [
           {
             name: 'PortalTrainingExam',
             path: 'exam',
-            component: () => import('#/views/portal/training/exam/index.vue'),
+            component: () =>
+              import('#/views/portal/training/exam/index.vue'),
             meta: { title: '考试与证书', hideInMenu: true },
           },
           {
             name: 'PortalTrainingLive',
             path: 'live',
-            component: () => import('#/views/portal/training/live/index.vue'),
+            component: () =>
+              import('#/views/portal/training/live/index.vue'),
             meta: { title: '直播大厅', hideInMenu: true },
           },
           {
             name: 'PortalTrainingTasks',
             path: 'tasks',
-            component: () => import('#/views/portal/training/tasks/index.vue'),
+            component: () =>
+              import('#/views/portal/training/tasks/index.vue'),
             meta: { title: '培训任务与上岗', hideInMenu: true },
           },
           {
             name: 'PortalTrainingProfile',
             path: 'profile',
-            component: () => import('#/views/portal/training/profile/index.vue'),
+            component: () =>
+              import('#/views/portal/training/profile/index.vue'),
             meta: { title: '个人档案与成长', hideInMenu: true },
           },
           {
             name: 'PortalTrainingCooperation',
             path: 'cooperation',
-            component: () => import('#/views/portal/training/cooperation/index.vue'),
+            component: () =>
+              import('#/views/portal/training/cooperation/index.vue'),
             meta: { title: '校企合作专区', hideInMenu: true },
           },
           {
             name: 'PortalTrainingContest',
             path: 'contest',
-            component: () => import('#/views/portal/training/contest/index.vue'),
+            component: () =>
+              import('#/views/portal/training/contest/index.vue'),
             meta: { title: '创新大赛专区', hideInMenu: true },
           },
         ],
       },
       {
-        // 在线学习为全屏播放页，独立于培训学院容器（不显示 F1~F10 侧栏）
         name: 'PortalTrainingStudy',
         path: 'training/study',
-        component: () => import('#/views/portal/training/learning/study.vue'),
+        component: () =>
+          import('#/views/portal/training/learning/study.vue'),
         meta: { title: '在线学习', hideInMenu: true },
       },
       {
@@ -234,6 +242,77 @@ const coreRoutes: RouteRecordRaw[] = [
         path: 'bidding',
         component: () => import('#/views/portal/bidding/index.vue'),
         meta: { title: '招标投标', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingDetail',
+        path: 'bidding/detail/:id',
+        component: () => import('#/views/portal/bidding/detail.vue'),
+        meta: { title: '公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSubscription',
+        path: 'bidding/subscription',
+        component: () => import('#/views/portal/bidding/subscription.vue'),
+        meta: { title: '我的关注', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProfile',
+        path: 'bidding/profile',
+        component: () => import('#/views/portal/bidding/profile.vue'),
+        meta: { title: '个人中心（投标人）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalHall',
+        path: 'bidding/internal-hall',
+        component: () => import('#/views/portal/bidding/internalHall.vue'),
+        meta: { title: '本平台发布', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalDetail',
+        path: 'bidding/internal-detail/:id',
+        component: () =>
+          import('#/views/portal/bidding/internalDetail.vue'),
+        meta: { title: '本平台公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingPublish',
+        path: 'bidding/publish',
+        component: () => import('#/views/portal/bidding/publish.vue'),
+        meta: { title: '公告发布（企业前台）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjects',
+        path: 'bidding/projects',
+        component: () =>
+          import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '项目公告管理', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectTenderProjects',
+        path: 'bidding/projects/:projectCode/tender-projects',
+        component: () =>
+          import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '招标项目', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectBidSections',
+        path: 'bidding/projects/:projectCode/tender-projects/:tenderProjectCode/sections',
+        component: () =>
+          import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '标段（包）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSectionNotices',
+        path: 'bidding/sections/:bidSectionCode/notices',
+        component: () =>
+          import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '公告 / 公示', hideInMenu: true },
+      },
+      {
+        name: 'PortalProfile',
+        path: 'profile',
+        component: () => import('#/views/portal/profile/index.vue'),
+        meta: { title: '个人中心', hideInMenu: true },
       },
       {
         name: 'PortalProfileRecruit',
@@ -244,8 +323,6 @@ const coreRoutes: RouteRecordRaw[] = [
     ],
   },
   {
-    // 培训管理后台。远端 master 引入了 views/training/* 全套 Vue 页面，但未注册路由，
-    // 故此处手动补齐 /training 父路由以打通菜单与面包屑（默认进入考试总览）。
     component: BasicLayout,
     meta: {
       title: '培训管理',

@@ -41,6 +41,8 @@ public interface WmsReceiptOrderService {
      * @param id 编号
      */
     void completeReceiptOrder(Long id);
+    String submitReceiptOrderApproval(Long userId, Long id);
+    void updateReceiptOrderApprovalStatus(Long id, String processInstanceId, Integer status, String reason);
 
     /**
      * 作废入库单

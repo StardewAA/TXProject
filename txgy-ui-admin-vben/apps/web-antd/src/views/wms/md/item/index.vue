@@ -55,6 +55,7 @@ function buildItemSkuRows(items: WmsItemApi.Item[]) {
       unit: item.unit,
       brandId: item.brandId,
       brandName: item.brandName,
+      materialType: item.materialType,
       // 【4-2 商品档案总览】新增列
       batchManage: item.batchManage,
       shelfLifeManage: item.shelfLifeManage,
@@ -137,6 +138,7 @@ function handleSpanMethod({
     'categoryName',
     'unit',
     'brandName',
+    'materialType',
     'batchManage',
     'shelfLife',
     'dangerousGoods',
