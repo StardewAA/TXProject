@@ -21,6 +21,11 @@ const services = [
     path: '/portal/recruit',
   },
   {
+    title: 'CMS系统',
+    description: '检索已发布法规，或提交内容申请审查发布。',
+    path: '/portal/content',
+  },
+  {
     title: '云培训学院',
     description: '浏览企业课程、学习计划和培训记录。',
     path: '/portal/training',

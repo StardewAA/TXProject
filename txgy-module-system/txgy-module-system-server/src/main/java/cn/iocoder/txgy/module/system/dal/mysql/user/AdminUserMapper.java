@@ -25,6 +25,13 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         return selectOne(AdminUserDO::getMobile, mobile);
     }
 
+    /**
+     * 按手机号查询用户数组。历史数据存在同号多账号的情况，此处返回列表避免 selectOne 抛 TooManyResultsException
+     */
+    default List<AdminUserDO> selectListByMobile(String mobile) {
+        return selectList(AdminUserDO::getMobile, mobile);
+    }
+
     default PageResult<AdminUserDO> selectPage(UserPageReqVO reqVO, Collection<Long> deptIds, Collection<Long> userIds) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AdminUserDO>()
                 .likeIfPresent(AdminUserDO::getUsername, reqVO.getUsername())
