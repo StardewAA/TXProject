@@ -1185,9 +1185,6 @@ const platformReviewNotice = ref('');
 const platformReviewDetailOpen = ref(false);
 const platformReviewDetailLoading = ref(false);
 const platformReviewDetail = ref<null | QualificationApi.PlatformReviewDetail>(null);
-const platformReviewCurrent = ref<null | QualificationApi.PlatformReviewRow>(null);
-const platformReviewActing = ref(false);
-const platformReviewRemark = ref('');
 
 /** 后端未实现（404）与业务错误分开呈现：前者提示"待后端实现"，后者给原始 msg */
 function reviewErrorText(error: any): string {
@@ -1214,11 +1211,9 @@ async function loadPlatformReview(): Promise<void> {
 }
 
 async function openPlatformReview(row: QualificationApi.PlatformReviewRow): Promise<void> {
-  platformReviewCurrent.value = row;
   platformReviewDetailOpen.value = true;
   platformReviewDetailLoading.value = true;
   platformReviewDetail.value = null;
-  platformReviewRemark.value = '';
   try {
     platformReviewDetail.value = await getPlatformReviewDetail(row.id);
   } catch (error: any) {
@@ -1229,40 +1224,68 @@ async function openPlatformReview(row: QualificationApi.PlatformReviewRow): Prom
   }
 }
 
-/** 通过 / 驳回：version 原样回传（乐观锁，契约 §0.7）；驳回理由必填（留痕） */
-async function actPlatformReview(pass: boolean): Promise<void> {
-  const target = platformReviewDetail.value ?? platformReviewCurrent.value;
-  if (!target) return;
-  const version = target.version;
-  if (version === undefined || version === null) {
-    message.warning('缺少 version（乐观锁），请重新打开详情后再操作');
+/** 通过（基座写法：Modal.confirm；version 原样回传，乐观锁契约 §0.7） */
+function confirmApproveReview(row: QualificationApi.PlatformReviewRow) {
+  if (row.version === undefined || row.version === null) {
+    message.warning('该资质缺少 version（乐观锁），请刷新后重试');
     return;
   }
-  if (!pass && !platformReviewRemark.value.trim()) {
-    message.warning('驳回必须填写理由（会留痕）');
+  Modal.confirm({
+    title: `通过平台审查 #${row.id}`,
+    okText: '通过',
+    content: '通过后该资质才可被其他接口引用；请确认已查看企业录入信息与文件。',
+    async onOk() {
+      try {
+        await approvePlatformReview({ qualId: row.id, remark: undefined, version: row.version as number });
+        message.success('已通过审查：该资质才可被其他接口引用');
+        platformReviewDetailOpen.value = false;
+        await loadPlatformReview();
+      } catch (error: any) {
+        message.error(reviewErrorText(error));
+        throw new Error('approve failed');
+      }
+    },
+  });
+}
+
+/** 驳回（基座写法：Modal.confirm + 危险色 + 理由必填留痕） */
+function confirmRejectReview(row: QualificationApi.PlatformReviewRow) {
+  if (row.version === undefined || row.version === null) {
+    message.warning('该资质缺少 version（乐观锁），请刷新后重试');
     return;
   }
-  platformReviewActing.value = true;
-  try {
-    const payload: QualificationApi.PlatformReviewActionReq = {
-      qualId: target.id,
-      remark: platformReviewRemark.value.trim() || undefined,
-      version,
-    };
-    if (pass) {
-      await approvePlatformReview(payload);
-      message.success('已通过审查：该资质才可被其他接口引用');
-    } else {
-      await rejectPlatformReview(payload);
-      message.success('已驳回，理由已留痕');
-    }
-    platformReviewDetailOpen.value = false;
-    await loadPlatformReview();
-  } catch (error: any) {
-    message.error(reviewErrorText(error));
-  } finally {
-    platformReviewActing.value = false;
-  }
+  let remark = '';
+  Modal.confirm({
+    title: `驳回企业资质 #${row.id}`,
+    okText: '驳回',
+    content: () =>
+      // 驳回理由必填：后端 remark 可空，但业务上必须留痕
+      h('textarea', {
+        class: 'ant-input',
+        placeholder: '驳回理由（必填，将写入 remark）',
+        rows: 3,
+        style: 'width:100%',
+        onInput: (e: any) => {
+          remark = e.target.value;
+        },
+      }),
+    okType: 'danger',
+    async onOk() {
+      if (!remark.trim()) {
+        message.warning('请填写驳回理由');
+        throw new Error('remark required');
+      }
+      try {
+        await rejectPlatformReview({ qualId: row.id, remark: remark.trim(), version: row.version as number });
+        message.success('已驳回，理由已留痕');
+        platformReviewDetailOpen.value = false;
+        await loadPlatformReview();
+      } catch (error: any) {
+        message.error(reviewErrorText(error));
+        throw new Error('reject failed');
+      }
+    },
+  });
 }
 
 const platformReviewColumns = [
@@ -1272,15 +1295,8 @@ const platformReviewColumns = [
   { title: '证书编号', dataIndex: 'certNo', key: 'certNo', width: 165 },
   { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 165 },
   { title: '状态', dataIndex: 'qualStatus', key: 'qualStatus', width: 115 },
-  { title: '操作', key: 'action', width: 85 },
+  { title: '操作', key: 'action', width: 150 },
 ];
-
-/** 审查队列翻页（分页参数为可选，故用显式函数避免模板内联类型推断问题） */
-function onReviewPageChange(pageNo: number, pageSize: number): void {
-  platformReviewQuery.pageNo = pageNo;
-  platformReviewQuery.pageSize = pageSize;
-  void loadPlatformReview();
-}
 
 const platformReviewFileColumns = [
   { title: '类别', dataIndex: 'fileCategory', key: 'fileCategory', width: 130 },
@@ -1932,7 +1948,7 @@ watch(activeKey, (k) => {
               <a-input
                 v-model:value="platformReviewQuery.keyword"
                 placeholder="企业名称 / 统一社会信用代码"
-                style="width: 240px"
+                style="width: 200px"
                 allow-clear
                 @press-enter="loadPlatformReview"
               />
@@ -1946,43 +1962,50 @@ watch(activeKey, (k) => {
 
           <a-alert v-if="platformReviewNotice" :message="platformReviewNotice" type="warning" show-icon class="mb-3" />
 
-          <a-table
-            :columns="platformReviewColumns"
-            :data-source="platformReviewRows"
-            :loading="platformReviewLoading"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'qual'">
-                {{ [record.qualSerial, record.qualCategory, record.qualGrade].filter(Boolean).join(' / ') || '—' }}
+          <div class="ct-panel-b">
+            <a-table
+              class="ct-table"
+              :columns="platformReviewColumns"
+              :data-source="platformReviewRows"
+              :loading="platformReviewLoading"
+              :pagination="{
+                current: platformReviewQuery.pageNo,
+                pageSize: platformReviewQuery.pageSize,
+                total: platformReviewTotal,
+                showSizeChanger: true,
+                showTotal: (t: number) => `共 ${t} 条`,
+              }"
+              :scroll="{ x: 1150 }"
+              row-key="id"
+              size="middle"
+              @change="(p: any) => { platformReviewQuery.pageNo = p.current; platformReviewQuery.pageSize = p.pageSize; void loadPlatformReview(); }"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'qual'">
+                  {{ [record.qualSerial, record.qualCategory, record.qualGrade].filter(Boolean).join(' / ') || '—' }}
+                </template>
+                <template v-else-if="column.key === 'submitTime'">
+                  {{ record.submitTime ? fmtDateTime(record.submitTime) : '—' }}
+                </template>
+                <template v-else-if="column.key === 'qualStatus'">
+                  <a-tag :color="tagOf('qual_status', record.qualStatus).color">
+                    {{ tagOf('qual_status', record.qualStatus).label }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <a-space size="small">
+                    <a @click="openPlatformReview(record)">详情</a>
+                    <a v-if="can('bidding:qualification:platform-review')" @click="confirmApproveReview(record)">通过</a>
+                    <a v-if="can('bidding:qualification:platform-review')" @click="confirmRejectReview(record)">驳回</a>
+                  </a-space>
+                </template>
               </template>
-              <template v-else-if="column.key === 'submitTime'">
-                {{ record.submitTime ? fmtDateTime(record.submitTime) : '—' }}
+              <template #emptyText>
+                <div class="ct-empty">
+                  {{ platformReviewNotice || '暂无待审资质（或接口待后端实现：契约缺口 A2）' }}
+                </div>
               </template>
-              <template v-else-if="column.key === 'qualStatus'">
-                {{ textOf('qual_status', record.qualStatus) }}
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-button type="link" size="small" @click="openPlatformReview(record)">查看</a-button>
-              </template>
-            </template>
-            <template #emptyText>
-              <div class="ct-empty">
-                {{ platformReviewNotice || '暂无待审资质（或接口待后端实现：契约缺口 A2）' }}
-              </div>
-            </template>
-          </a-table>
-          <div class="mt-3 flex justify-end">
-            <a-pagination
-              :current="platformReviewQuery.pageNo ?? 1"
-              :page-size="platformReviewQuery.pageSize ?? 10"
-              :total="platformReviewTotal"
-              size="small"
-              show-size-changer
-              @change="onReviewPageChange"
-            />
+            </a-table>
           </div>
         </div>
       </a-tab-pane>
@@ -1998,7 +2021,8 @@ watch(activeKey, (k) => {
     >
       <a-spin :spinning="platformReviewDetailLoading">
         <template v-if="platformReviewDetail">
-          <a-descriptions :column="2" bordered size="small" title="企业信息">
+          <div class="ct-panel-t mb-2">企业信息</div>
+          <a-descriptions :column="2" size="small" bordered class="mb-3">
             <a-descriptions-item label="企业名称">{{ platformReviewDetail.entName ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="统一社会信用代码">{{ platformReviewDetail.entUscc ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="企业主体 id">{{ platformReviewDetail.entId ?? '—' }}</a-descriptions-item>
@@ -2007,24 +2031,30 @@ watch(activeKey, (k) => {
             </a-descriptions-item>
           </a-descriptions>
 
-          <a-descriptions :column="2" bordered size="small" class="mt-3" title="资质录入信息">
+          <div class="ct-panel-t mt-3 mb-2">资质录入信息</div>
+          <a-descriptions :column="2" size="small" bordered class="mb-3">
             <a-descriptions-item label="资质序列">{{ textOf('qual_serial', platformReviewDetail.qualSerial) }}</a-descriptions-item>
             <a-descriptions-item label="资质类别">{{ platformReviewDetail.qualCategory ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="资质等级">{{ platformReviewDetail.qualGrade ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="证书编号">{{ platformReviewDetail.certNo ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="发证/许可机关">{{ platformReviewDetail.issuingAuthority ?? '—' }}</a-descriptions-item>
             <a-descriptions-item label="有效期至">{{ platformReviewDetail.validTo ? fmtDate(platformReviewDetail.validTo) : '长期' }}</a-descriptions-item>
-            <a-descriptions-item label="状态">{{ textOf('qual_status', platformReviewDetail.qualStatus) }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="tagOf('qual_status', platformReviewDetail.qualStatus).color">
+                {{ tagOf('qual_status', platformReviewDetail.qualStatus).label }}
+              </a-tag>
+            </a-descriptions-item>
             <a-descriptions-item label="备注">{{ platformReviewDetail.remark ?? '—' }}</a-descriptions-item>
           </a-descriptions>
 
           <div class="ct-panel-t mt-3">证照文件</div>
           <a-table
+            class="ct-table"
             :columns="platformReviewFileColumns"
             :data-source="platformReviewDetail.files ?? []"
             :pagination="false"
             row-key="fileId"
-            size="small"
+            size="middle"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'fileCategory'">
@@ -2040,20 +2070,11 @@ watch(activeKey, (k) => {
             <template #emptyText><div class="ct-empty">暂无文件（或接口待后端实现：契约缺口 A3）</div></template>
           </a-table>
 
-          <div class="ct-panel-t mt-3">审查意见</div>
-          <a-textarea
-            v-model:value="platformReviewRemark"
-            :rows="3"
-            :maxlength="512"
-            show-count
-            placeholder="驳回时必填（留痕）；通过可不填"
-          />
-          <div class="mt-3 flex flex-wrap items-center gap-2">
+          <div class="ct-panel-t mt-3 mb-2">审查结论</div>
+          <div class="flex flex-wrap items-center gap-2">
             <template v-if="can('bidding:qualification:platform-review')">
-              <a-button type="primary" :loading="platformReviewActing" @click="actPlatformReview(true)">
-                通过（通过后才可被其他接口引用）
-              </a-button>
-              <a-button danger :loading="platformReviewActing" @click="actPlatformReview(false)">驳回</a-button>
+              <a-button type="primary" @click="confirmApproveReview(platformReviewDetail)">通过</a-button>
+              <a-button danger @click="confirmRejectReview(platformReviewDetail)">驳回</a-button>
             </template>
             <span v-else class="ct-panel-meta">
               无审查权限（bidding:qualification:platform-review）——该权限点待后端注册，仅平台审查角色可操作
