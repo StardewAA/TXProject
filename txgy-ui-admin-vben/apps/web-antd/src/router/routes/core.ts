@@ -129,6 +129,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '首页', hideInMenu: true },
       },
       {
+        name: 'PortalContent',
+        path: 'content',
+        component: () => import('#/views/portal/content/index.vue'),
+        meta: { title: 'CMS系统', hideInMenu: true },
+      },
+      {
         name: 'PortalRecruit',
         path: 'recruit',
         component: () => import('#/views/portal/recruit/index.vue'),
@@ -143,13 +149,13 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'PortalRecruitMessages',
         path: 'recruit/messages',
-        component: () => import('#/views/portal/recruit/messages.vue'),
+        redirect: { name: 'PortalRecruit', query: { section: 'messages' } },
         meta: { title: '招聘沟通', hideInMenu: true },
       },
       {
         name: 'PortalRecruitProfileSetup',
         path: 'recruit/profile-setup',
-        redirect: { name: 'PortalRecruit', query: { section: 'resume' } },
+        redirect: { name: 'PortalRecruit' },
         meta: { title: '在线简历', hideInMenu: true },
       },
       {
@@ -234,6 +240,74 @@ const coreRoutes: RouteRecordRaw[] = [
         path: 'bidding',
         component: () => import('#/views/portal/bidding/index.vue'),
         meta: { title: '招标投标', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingDetail',
+        path: 'bidding/detail/:id',
+        component: () => import('#/views/portal/bidding/detail.vue'),
+        meta: { title: '公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSubscription',
+        path: 'bidding/subscription',
+        component: () => import('#/views/portal/bidding/subscription.vue'),
+        meta: { title: '我的关注', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProfile',
+        path: 'bidding/profile',
+        component: () => import('#/views/portal/bidding/profile.vue'),
+        meta: { title: '个人中心（投标人）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalHall',
+        path: 'bidding/internal-hall',
+        component: () => import('#/views/portal/bidding/internalHall.vue'),
+        meta: { title: '本平台发布', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingInternalDetail',
+        path: 'bidding/internal-detail/:id',
+        component: () => import('#/views/portal/bidding/internalDetail.vue'),
+        meta: { title: '本平台公告详情', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingPublish',
+        path: 'bidding/publish',
+        /** 门户自有页面（此前直挂管理端组件 views/bidding/notice/index.vue，靠 route.path 猜身份） */
+        component: () => import('#/views/portal/bidding/publish.vue'),
+        meta: { title: '公告发布（企业前台）', hideInMenu: true },
+      },
+      /** 【2026-09-14 口径收敛】原先这 4 条前台路由承载"项目 → 招标项目 → 标段（包） → 公告"的企业数据生产动线
+       *  （创建/删除项目、创建公告，接口 /bidding/project|tender-project|bid-section）。按用户口径
+       *  "前台是个人工作台，企业在后台、个人在前台"，该动线属企业产出数据，已在后台提供
+       *  （views/bidding/project|notice）。现 4 条路由统一指向 enterpriseMoved.vue：
+       *  **老书签进来能看懂去哪儿，而不是 404、也不是静默继续可用**。
+       *  回退方式：把下面 4 个 component 换回 '#/views/portal/bidding/project/*.vue'（页面文件均未删除）。
+       *  路由名与路径保持不变，避免其它引用断链。 */
+      {
+        name: 'PortalBiddingProjects',
+        path: 'bidding/projects',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '项目公告管理', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectTenderProjects',
+        path: 'bidding/projects/:projectCode/tender-projects',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '招标项目', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingProjectBidSections',
+        path: 'bidding/projects/:projectCode/tender-projects/:tenderProjectCode/sections',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '标段（包）', hideInMenu: true },
+      },
+      {
+        name: 'PortalBiddingSectionNotices',
+        path: 'bidding/sections/:bidSectionCode/notices',
+        component: () => import('#/views/portal/bidding/enterpriseMoved.vue'),
+        meta: { title: '公告 / 公示', hideInMenu: true },
       },
       {
         name: 'PortalProfile',

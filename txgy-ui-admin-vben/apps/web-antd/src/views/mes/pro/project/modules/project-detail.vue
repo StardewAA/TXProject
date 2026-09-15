@@ -43,8 +43,10 @@ import {
   getProject,
   getProjectFileList,
   getProjectStatistics,
+  getProjectStatisticsDetail,
   unbindWorkOrders,
 } from '#/api/mes/pro/project';
+import { getGanttTaskList } from '#/api/mes/pro/task';
 import {
   createProjectMember,
   deleteProjectMember,
@@ -60,6 +62,7 @@ import { getWorkOrderPage } from '#/api/mes/pro/workorder';
 import WorkOrderForm from '#/views/mes/pro/workorder/modules/form.vue';
 
 import BindWorkOrder from './bind-work-order.vue';
+import { GanttChart } from '#/views/mes/pro/task/components';
 
 defineOptions({ name: 'MesProProjectDetail' });
 
@@ -69,6 +72,9 @@ const open = ref(false); // 弹窗是否打开
 const projectId = ref<number>(); // 项目编号
 const project = ref<MesProProjectApi.Project>(); // 项目信息
 const statistics = ref<MesProProjectApi.ProjectStatistics>(); // 进度统计
+const statisticsDetail =
+  ref<MesProProjectApi.ProjectStatisticsDetail>(); // 生产统计详情（工单进度 + 报工汇总）
+const ganttTasks = ref<any[]>([]); // 项目甘特图数据（工单+任务时间线）
 const bindWorkOrderRef = ref<InstanceType<typeof BindWorkOrder>>(); // 挂接工单弹窗
 
 /** 有效工单数（总-已取消） */
@@ -177,6 +183,13 @@ async function loadData() {
   }
   project.value = await getProject(projectId.value);
   statistics.value = await getProjectStatistics(projectId.value);
+  statisticsDetail.value = await getProjectStatisticsDetail(projectId.value);
+  // 加载项目甘特图数据（工单+任务时间线）
+  try {
+    ganttTasks.value = await getGanttTaskList({ projectId: projectId.value });
+  } catch {
+    ganttTasks.value = [];
+  }
   await loadMembers();
   await loadMilestones();
   await loadFiles();
@@ -597,11 +610,61 @@ defineExpose({ open: openModal });
           <Tag color="processing">
             进行中：{{ statistics?.confirmedCount ?? 0 }}
           </Tag>
+          <Tag color="blue">
+            已下发：{{ statistics?.issuedCount ?? 0 }}
+          </Tag>
+          <Tag color="cyan">
+            生产中：{{ statistics?.inProductionCount ?? 0 }}
+          </Tag>
           <Tag color="success">已完成：{{ statistics?.finishedCount ?? 0 }}</Tag>
           <Tag color="default">
             已取消：{{ statistics?.canceledCount ?? 0 }}
           </Tag>
         </Space>
+      </div>
+      <!-- 报工汇总 -->
+      <div class="mb-3 rounded-md bg-card p-3">
+        <div class="mb-1 text-sm font-medium">报工汇总</div>
+        <div class="mb-2 text-sm">
+          报工总量：{{ statisticsDetail?.feedbackQuantityTotal ?? 0 }}
+          &nbsp;&nbsp;|&nbsp;&nbsp; 合格：{{
+            statisticsDetail?.qualifiedQuantityTotal ?? 0
+          }}
+          &nbsp;&nbsp;|&nbsp;&nbsp; 不合格：{{
+            statisticsDetail?.unqualifiedQuantityTotal ?? 0
+          }}
+          &nbsp;&nbsp;|&nbsp;&nbsp; 合格率：{{
+            statisticsDetail?.qualifyRate ?? 0
+          }}%
+        </div>
+        <Progress
+          :percent="Number(statisticsDetail?.qualifyRate ?? 0)"
+          :stroke-color="{ '0%': '#faad14', '100%': '#52c41a' }"
+          class="mb-2"
+        />
+        <Space wrap>
+          <Tag>报工单：{{ statisticsDetail?.feedbackTotal ?? 0 }}</Tag>
+          <Tag>草稿：{{ statisticsDetail?.feedbackPrepareCount ?? 0 }}</Tag>
+          <Tag color="processing">
+            审核中：{{ statisticsDetail?.feedbackApprovingCount ?? 0 }}
+          </Tag>
+          <Tag color="success">
+            已完成：{{ statisticsDetail?.feedbackFinishedCount ?? 0 }}
+          </Tag>
+        </Space>
+      </div>
+      <!-- 生产排程甘特图 -->
+      <div class="mb-3 rounded-md bg-card p-3">
+        <div class="mb-2 text-sm font-medium">生产排程甘特图</div>
+        <GanttChart
+          v-if="ganttTasks.length > 0"
+          :height="300"
+          :readonly="true"
+          :tasks="ganttTasks"
+        />
+        <div v-else class="py-4 text-center text-gray-400">
+          项目下暂无排产任务
+        </div>
       </div>
       <!-- 参与成员 -->
       <div class="mb-3 rounded-md bg-card p-3">

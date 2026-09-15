@@ -14,6 +14,7 @@
         <module>txgy-spring-boot-starter-env</module>
         <module>txgy-spring-boot-starter-mybatis</module>
         <module>txgy-spring-boot-starter-redis</module>
+        <module>txgy-spring-boot-starter-search</module>
         <module>txgy-spring-boot-starter-web</module>
         <module>txgy-spring-boot-starter-security</module>
         <module>txgy-spring-boot-starter-websocket</module>

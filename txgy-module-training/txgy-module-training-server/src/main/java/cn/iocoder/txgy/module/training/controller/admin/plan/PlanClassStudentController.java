@@ -104,12 +104,14 @@ public class PlanClassStudentController {
     @PostMapping("/import")
     @Operation(summary = "Excel 批量导入学员（按手机号匹配系统账号，自动生成学习任务）")
     @Parameter(name = "classId", description = "培训班 ID", required = true, example = "1")
+    @Parameter(name = "autoCreateUser", description = "未匹配到系统账号时，是否自动创建学员账号（登录名=手机号）", example = "false")
     @Parameter(name = "file", description = "Excel 文件", required = true)
     @PreAuthorize("@ss.hasPermission('training:plan:student:import')")
     public CommonResult<ClassStudentImportRespVO> importStudent(@RequestParam("classId") Long classId,
+                                                                @RequestParam(value = "autoCreateUser", required = false, defaultValue = "false") Boolean autoCreateUser,
                                                                 @RequestParam("file") MultipartFile file) throws Exception {
         List<ClassStudentImportExcelVO> list = ExcelUtils.read(file, ClassStudentImportExcelVO.class);
-        return success(classStudentService.importStudents(classId, list));
+        return success(classStudentService.importStudents(classId, list, autoCreateUser));
     }
 
     @PostMapping("/import-parse")

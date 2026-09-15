@@ -9,6 +9,11 @@ import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
 
+const warehouseTypes = [
+  { label: '原材料仓', value: 'RAW_MATERIAL' },
+  { label: '成品仓', value: 'FINISHED_GOODS' },
+];
+
 /** 新增/修改仓库的表单 */
 export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
   return [
@@ -51,6 +56,13 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
           { default: () => '生成' },
         );
       },
+    },
+    {
+      fieldName: 'warehouseType',
+      label: '仓库类型',
+      component: 'Select',
+      componentProps: { options: warehouseTypes, placeholder: '请选择仓库类型' },
+      rules: z.enum(['RAW_MATERIAL', 'FINISHED_GOODS']),
     },
     {
       fieldName: 'sort',
@@ -111,6 +123,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'code',
       title: '仓库编号',
       minWidth: 140,
+    },
+    {
+      field: 'warehouseType',
+      title: '仓库类型',
+      minWidth: 130,
+      formatter: ({ cellValue }) => warehouseTypes.find(type => type.value === cellValue)?.label ?? '未分类',
     },
     {
       field: 'remark',

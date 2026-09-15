@@ -13,6 +13,20 @@ export namespace WmsReceiptOrderDetailApi {
     warehouseId?: number;
     warehouseName?: string;
     quantity?: number;
+    actualQuantity?: number;
+    qualifiedQuantity?: number;
+    unqualifiedQuantity?: number;
+    qualityImages?: string[];
+    qualityRemark?: string;
+    qualityRequiredSnapshot?: boolean | null;
+    sourceSnapshot?: {
+      materialNameSnapshot?: string;
+      specificationSnapshot?: string;
+      unitNameSnapshot?: string;
+      batchNo?: string;
+      qualityRequiredSnapshot?: boolean | null;
+      attachments?: { url?: string; name?: string; fileUrl?: string; fileName?: string }[];
+    };
     price?: number;
     totalPrice?: number;
     createTime?: Date;

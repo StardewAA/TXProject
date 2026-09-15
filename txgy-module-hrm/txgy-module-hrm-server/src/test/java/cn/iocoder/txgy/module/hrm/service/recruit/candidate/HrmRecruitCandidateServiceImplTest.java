@@ -26,6 +26,7 @@ import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateSta
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitInterviewResultEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -87,6 +88,8 @@ public class HrmRecruitCandidateServiceImplTest extends BaseDbUnitTest {
     private HrmRecruitInterviewService recruitInterviewService;
     @MockitoBean
     private HrmEmployeeService employeeService;
+    @MockitoBean
+    private HrmRecruitApplicationService recruitApplicationService;
 
     @Test
     public void testCreateRecruitCandidate_success() {

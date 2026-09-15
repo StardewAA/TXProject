@@ -3,7 +3,7 @@ import type { VbenFormSchema } from '@vben/common-ui';
 
 import type { AuthApi } from '#/api/core/auth';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { AuthenticationLogin, Verification, z } from '@vben/common-ui';
@@ -11,6 +11,7 @@ import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { useAccessStore, useUserStore } from '@vben/stores';
 import { preferences } from '@vben/preferences';
+import { message } from 'ant-design-vue';
 
 import {
   checkCaptcha,
@@ -40,10 +41,17 @@ const captchaType = 'blockPuzzle';
 const tenantList = ref<AuthApi.TenantResult[]>([]);
 
 function handleLoginTypeChange(type: LoginType) {
+  const prev = loginType.value;
   loginType.value = type;
   if (type === 'personal') {
     // 个人账号固定使用后端保留的 tenant_id=0，不能沿用登录页初始化的企业租户。
     loginRef.value?.getFormApi().setFieldValue('tenantId', undefined);
+    return;
+  }
+  // 切回企业登录：tenantId 已被个人分支清空，且 fetchTenantList 只在 onMounted 执行过一次，
+  // 若不再解析一次，企业登录将永久缺少租户 id（租户下拉为空、请求头不带 tenant-id）。
+  if (prev !== 'enterprise') {
+    void nextTick(() => fetchTenantList());
   }
 }
 
@@ -78,6 +86,20 @@ async function fetchTenantList() {
   } catch (error) {
     console.error('获取租户列表失败:', error);
   }
+}
+
+/** 登录请求发出前固定租户，避免列表尚未加载时签发 tenantId=0 的令牌。 */
+async function ensureLoginTenant(values: Record<string, any>) {
+  if (!tenantEnable) return;
+  if (!tenantList.value.length) await fetchTenantList();
+  const selected = Number(
+    values.tenantId || accessStore.tenantId || tenantList.value[0]?.id,
+  );
+  if (!Number.isInteger(selected) || selected <= 0) {
+    message.error('无法确定登录租户，请刷新页面后重新登录。');
+    throw new Error('Login tenant is unavailable');
+  }
+  accessStore.setTenantId(selected);
 }
 
 /** 管理权限由后端用户信息和角色决定，兼容不同版本的字段命名。 */
@@ -135,8 +157,13 @@ function resolveRedirectPath() {
   ) {
     const backendRedirect =
       redirect && !redirect.startsWith('/portal/') ? redirect : '';
+    const configuredHomePath = userInfo?.homePath;
+    const enterpriseHomePath =
+      configuredHomePath && !configuredHomePath.startsWith('/portal/')
+        ? configuredHomePath
+        : '';
     return (
-      backendRedirect || userInfo?.homePath || preferences.app.defaultHomePath
+      backendRedirect || enterpriseHomePath || preferences.app.defaultHomePath
     );
   }
 
@@ -144,6 +171,7 @@ function resolveRedirectPath() {
 }
 
 async function handleLogin(values: any) {
+  await ensureLoginTenant(values);
   if (captchaEnable) {
     verifyRef.value.show();
     return;
@@ -159,10 +187,12 @@ async function handleLogin(values: any) {
 
 async function handleVerifySuccess({ captchaVerification }: any) {
   try {
+    const values = await loginRef.value.getFormApi().getValues();
+    await ensureLoginTenant(values);
     await authStore.authLogin(
       'username',
       {
-        ...(await loginRef.value.getFormApi().getValues()),
+        ...values,
         captchaVerification,
         loginType: loginType.value,
       },

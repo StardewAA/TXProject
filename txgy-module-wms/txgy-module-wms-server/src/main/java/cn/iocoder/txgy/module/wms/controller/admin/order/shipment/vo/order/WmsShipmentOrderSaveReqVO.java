@@ -37,6 +37,8 @@ public class WmsShipmentOrderSaveReqVO {
     @Schema(description = "业务单号", example = "SO202605110001")
     @Size(max = 64, message = "业务单号长度不能超过 64 个字符")
     private String bizOrderNo;
+    private String sourceModule;
+    private String businessChainNo;
 
     @Schema(description = "客户编号", example = "1024")
     private Long merchantId;

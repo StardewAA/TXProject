@@ -12,6 +12,9 @@ import lombok.ToString;
 @ToString(callSuper = true)
 public class WmsItemSkuPageReqVO extends PageParam {
 
+    @Schema(description = "物料类型：RAW_MATERIAL原材料、FINISHED_GOODS成品；不传则不限制")
+    private String materialType;
+
     @Schema(description = "商品编号", example = "I00000001")
     private String itemCode;
 

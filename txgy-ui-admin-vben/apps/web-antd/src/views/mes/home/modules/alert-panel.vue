@@ -43,6 +43,14 @@ const alertItems = computed(() => [
     label: '待排产工单',
     routeName: 'MesProWorkOrder',
   },
+  {
+    count: props.summary.milestoneAlertCount,
+    desc: '3 天内到期 / 已超期的项目里程碑',
+    icon: 'lucide:flag',
+    iconClass: 'bg-purple-50 text-purple-500',
+    label: '里程碑预警',
+    routeName: 'MesProProject',
+  },
 ]);
 </script>
 
