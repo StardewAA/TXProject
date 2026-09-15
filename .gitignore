@@ -80,6 +80,9 @@ deploy/backup_*.sql
 # 环境变量
 .env
 **/.env
+# 例外：前端应用命名空间必须入库（缺失会导致登录态存储 key 为 undefined-*，
+# 重开浏览器无法恢复登录态、菜单空白）
+!txgy-ui-admin-vben/apps/web-antd/.env
 
 /txgy-ui-app/unpackage/
 .DS_Store
