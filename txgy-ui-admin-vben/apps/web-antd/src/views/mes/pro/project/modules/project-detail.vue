@@ -560,6 +560,9 @@ defineExpose({ open: openModal });
         <Descriptions.Item label="优先级">
           {{ project.priority ? priorityText[project.priority] : '-' }}
         </Descriptions.Item>
+        <Descriptions.Item label="生产进度">
+          {{ project.progress !== null && project.progress !== undefined ? `${project.progress}%` : '-' }}
+        </Descriptions.Item>
         <Descriptions.Item label="负责人">
           {{ project.owner || '-' }}
         </Descriptions.Item>

@@ -277,6 +277,13 @@ export function useGridColumns(): VxeTableGridOptions<MesProProjectApi.Project>[
       },
     },
     {
+      field: 'progress',
+      title: '生产进度',
+      width: 120,
+      formatter: ({ cellValue }) =>
+        cellValue === null || cellValue === undefined ? '—' : `${cellValue}%`,
+    },
+    {
       field: 'priority',
       title: '优先级',
       width: 100,

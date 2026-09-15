@@ -20,12 +20,16 @@ import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectSyncTaskMap
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.route.MesProRouteProductMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderSaveReqVO;
+import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteService;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import jakarta.annotation.Resource;
@@ -89,8 +93,10 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     @Resource
     private MesMdItemMapper itemMapper;
     @Resource
+    @Lazy
     private MesProWorkOrderService workOrderService;
     @Resource
+    @Lazy
     private MesProTaskService taskService;
     @Resource
     private MesProRouteProductService routeProductService;
@@ -102,14 +108,6 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     private MesProRouteProcessService routeProcessService;
     @Resource
     private ErpSaleOrderApi erpSaleOrderApi;
-    @Resource
-    @Lazy
-    private MesProWorkOrderService workOrderService;
-    @Resource
-    @Lazy
-    private MesProTaskService taskService;
-    @Resource
-    private MesMdItemMapper itemMapper;
     @Resource
     private MesMdAutoCodeRecordService autoCodeRecordService;
 
