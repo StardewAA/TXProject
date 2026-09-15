@@ -350,13 +350,13 @@ const [Modal, modalApi] = useVbenModal({
       <!-- 实操问答 / 案例分析 -->
       <div v-else-if="isQaOrCase">
         <div class="mb-1 text-sm text-gray-600">
-          标准答案（评分要点） <span class="text-red-500">*</span>
+          答案 <span class="text-red-500">*</span>
         </div>
         <Input.TextArea
           v-model:value="qaAnswer"
           :rows="4"
           :maxlength="2000"
-          placeholder="请输入标准答案 / 评分要点"
+          placeholder="请输入参考答案 / 评分要点"
         />
       </div>
 
