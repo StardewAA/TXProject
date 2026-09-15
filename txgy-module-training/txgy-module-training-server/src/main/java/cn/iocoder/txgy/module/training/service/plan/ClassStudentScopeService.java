@@ -8,8 +8,6 @@ import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentAddReqVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddReqVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopePreviewRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopeReqVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.plan.ClassDO;
@@ -21,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -44,10 +41,9 @@ import static cn.iocoder.txgy.module.training.enums.ErrorCodeConstants.*;
 public class ClassStudentScopeService {
 
     /**
-     * 学员加入来源：3 按参与对象筛选 4 随机收录
+     * 学员加入来源：3 按参与对象筛选
      */
     private static final Integer SOURCE_SCOPE = 3;
-    private static final Integer SOURCE_RANDOM = 4;
 
     @Resource
     private ClassServiceImpl classService;
@@ -117,61 +113,6 @@ public class ClassStudentScopeService {
         addReqVO.setUserIds(result.users().stream().map(AdminUserRespDTO::getId).collect(Collectors.toList()));
         addReqVO.setSource(SOURCE_SCOPE);
         return classStudentService.addStudents(addReqVO);
-    }
-
-    /**
-     * 随机收录学员：按参与对象筛选条件随机抽取人员入班（自动生成「课程 × 学员」学习任务）
-     *
-     * 单个培训班在班学员上限 50 人：收录人数默认按剩余名额尽量填满，超出剩余名额时自动裁剪；
-     * 已在班学员不占用随机名额，可收录人员为「命中人员 - 已在班」。
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public ClassStudentRandomAddRespVO randomAddStudents(ClassStudentRandomAddReqVO reqVO) {
-        // 1. 解析筛选条件（入参为空回退培训班已配置条件）并匹配系统用户
-        ScopeResult result = resolveScope(reqVO);
-        // 2. 统计在班人数与剩余名额
-        Set<Long> inClassUserIds = classStudentMapper.selectListByClassId(reqVO.getClassId(), 0).stream()
-                .map(ClassStudentDO::getUserId).collect(Collectors.toSet());
-        int inClassCount = inClassUserIds.size();
-        int remaining = ClassStudentServiceImpl.MAX_STUDENT_SIZE - inClassCount;
-        if (remaining <= 0) {
-            throw exception(PLAN_CLASS_STUDENT_FULL, ClassStudentServiceImpl.MAX_STUDENT_SIZE);
-        }
-        // 3. 可收录候选人员 = 命中人员 - 已在班
-        List<AdminUserRespDTO> candidates = result.users().stream()
-                .filter(user -> !inClassUserIds.contains(user.getId()))
-                .collect(Collectors.toList());
-        if (CollUtil.isEmpty(candidates)) {
-            throw exception(PLAN_STUDENT_SCOPE_NO_ADDABLE);
-        }
-        // 4. 随机抽取：默认尽量填满剩余名额，指定人数超过剩余名额时自动裁剪
-        int expect = reqVO.getCount() == null || reqVO.getCount() <= 0 ? remaining : reqVO.getCount();
-        int pickSize = Math.min(Math.min(expect, candidates.size()), remaining);
-        Collections.shuffle(candidates, ThreadLocalRandom.current());
-        List<AdminUserRespDTO> picked = candidates.subList(0, pickSize);
-        // 5. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「随机收录」
-        ClassStudentAddReqVO addReqVO = new ClassStudentAddReqVO();
-        addReqVO.setClassId(reqVO.getClassId());
-        addReqVO.setUserIds(picked.stream().map(AdminUserRespDTO::getId).collect(Collectors.toList()));
-        addReqVO.setSource(SOURCE_RANDOM);
-        int added = classStudentService.addStudents(addReqVO);
-        // 6. 组装结果，便于前端提示与教务留痕核对
-        Map<Long, String> deptNameMap = fetchDeptNameMap(picked);
-        ClassStudentRandomAddRespVO respVO = new ClassStudentRandomAddRespVO();
-        respVO.setAddedCount(added);
-        respVO.setMatchedCount(result.users().size());
-        respVO.setAddableCount(candidates.size());
-        respVO.setInClassCount(inClassCount + added);
-        respVO.setMaxSize(ClassStudentServiceImpl.MAX_STUDENT_SIZE);
-        respVO.setRemaining(Math.max(0, remaining - added));
-        respVO.setUsers(picked.stream().map(user -> {
-            ClassStudentRandomAddRespVO.User item = new ClassStudentRandomAddRespVO.User();
-            item.setUserId(user.getId());
-            item.setNickname(user.getNickname());
-            item.setDeptName(deptNameMap.get(user.getDeptId()));
-            return item;
-        }).collect(Collectors.toList()));
-        return respVO;
     }
 
     // ========== 私有方法 ==========

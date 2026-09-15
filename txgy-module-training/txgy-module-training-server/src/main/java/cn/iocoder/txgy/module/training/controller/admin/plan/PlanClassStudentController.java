@@ -4,11 +4,12 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentAddReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportAllocateReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportAllocateRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportExcelVO;
+import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportParseRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentImportRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentPageReqVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddReqVO;
-import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRandomAddRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopePreviewRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.ClassStudentScopeReqVO;
@@ -64,13 +65,6 @@ public class PlanClassStudentController {
         return success(classStudentScopeService.addStudentsByScope(reqVO));
     }
 
-    @PostMapping("/random-add")
-    @Operation(summary = "随机收录学员（按参与对象筛选条件随机抽取人员入班；单个培训班在班学员上限 50 人）")
-    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:add', 'training:plan:student')")
-    public CommonResult<ClassStudentRandomAddRespVO> randomAddStudents(@Valid @RequestBody ClassStudentRandomAddReqVO reqVO) {
-        return success(classStudentScopeService.randomAddStudents(reqVO));
-    }
-
     @DeleteMapping("/remove")
     @Operation(summary = "移出学员（保留历史记录，学习任务作废）")
     @Parameter(name = "classId", description = "培训班 ID", required = true, example = "1")
@@ -116,6 +110,24 @@ public class PlanClassStudentController {
                                                                 @RequestParam("file") MultipartFile file) throws Exception {
         List<ClassStudentImportExcelVO> list = ExcelUtils.read(file, ClassStudentImportExcelVO.class);
         return success(classStudentService.importStudents(classId, list));
+    }
+
+    @PostMapping("/import-parse")
+    @Operation(summary = "解析 Excel 学员名单（按手机号匹配系统账号，不落库，供人工指定培训班）")
+    @Parameter(name = "file", description = "Excel 文件", required = true)
+    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:import', 'training:plan:student:add', 'training:plan:student')")
+    public CommonResult<ClassStudentImportParseRespVO> parseImportFile(@RequestParam("file") MultipartFile file)
+            throws Exception {
+        List<ClassStudentImportExcelVO> list = ExcelUtils.read(file, ClassStudentImportExcelVO.class);
+        return success(classStudentService.parseImportRows(list));
+    }
+
+    @PostMapping("/import-allocate")
+    @Operation(summary = "按人工指定的「学员 → 培训班」明细批量入班（自动生成学习任务；已在班自动跳过）")
+    @PreAuthorize("@ss.hasAnyPermissions('training:plan:student:import', 'training:plan:student:add', 'training:plan:student')")
+    public CommonResult<ClassStudentImportAllocateRespVO> importAndAllocate(
+            @Valid @RequestBody ClassStudentImportAllocateReqVO reqVO) {
+        return success(classStudentService.importAndAllocate(reqVO));
     }
 
 }

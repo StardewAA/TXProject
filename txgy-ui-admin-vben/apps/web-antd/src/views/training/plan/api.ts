@@ -114,9 +114,9 @@ export namespace TrainingPlanApi {
   export interface ImportStudentResult {
     successCount?: number;
     failRows?: {
-      rowNumber?: number;
       mobile?: string;
       reason?: string;
+      rowNumber?: number;
     }[];
   }
 
@@ -144,31 +144,60 @@ export namespace TrainingPlanApi {
     /** 剩余可收录名额 */
     remaining?: number;
     users?: {
-      userId?: number;
-      nickname?: string;
       deptName?: string;
       inClass?: boolean;
+      nickname?: string;
+      userId?: number;
     }[];
   }
 
-  /** 随机收录请求（按参与对象筛选条件随机抽取） */
-  export interface ClassStudentRandomAdd extends ClassStudentScope {
-    /** 随机收录人数；不传或小于等于 0 时按剩余名额尽量填满 */
-    count?: number;
+  /** 导入名单解析出的学员（供人工指定培训班） */
+  export interface ImportParseUser {
+    rowNumber?: number;
+    userId?: number;
+    userName?: string;
+    mobile?: string;
+    deptName?: string;
   }
 
-  /** 随机收录结果 */
-  export interface ClassStudentRandomAddResult {
-    addedCount?: number;
+  /** 导入名单解析结果（不落库） */
+  export interface ImportParseResult {
     matchedCount?: number;
-    addableCount?: number;
-    inClassCount?: number;
+    users?: ImportParseUser[];
+    failRows?: {
+      mobile?: string;
+      reason?: string;
+      rowNumber?: number;
+    }[];
+  }
+
+  /** 入班明细（一名学员 + 一个目标培训班） */
+  export interface ImportAllocateItem {
+    userId?: number;
+    classId?: number;
+  }
+
+  /** 入班学员（结果展示） */
+  export interface AllocateUser {
+    userId?: number;
+    userName?: string;
+    deptName?: string;
+  }
+
+  /** 手动指定培训班入班结果 */
+  export interface ImportAllocateResult {
+    /** 实际入班人次（已在班自动跳过） */
+    successCount?: number;
+    /** 单班在班学员上限 */
     maxSize?: number;
-    remaining?: number;
-    users?: {
-      userId?: number;
-      nickname?: string;
-      deptName?: string;
+    classResults?: {
+      addedCount?: number;
+      afterCount?: number;
+      beforeCount?: number;
+      classId?: number;
+      className?: string;
+      remaining?: number;
+      users?: AllocateUser[];
     }[];
   }
 }
@@ -358,12 +387,25 @@ export function addClassStudentsByScope(
   );
 }
 
-/** 随机收录学员（按参与对象筛选条件随机抽取，单个培训班在班学员上限 50 人） */
-export function randomAddClassStudents(
-  data: TrainingPlanApi.ClassStudentRandomAdd,
+/** 培训班全量（批量导入指定班级下拉使用，由前端按状态筛选可入班班级） */
+export function getAllClasses() {
+  return fetchAllPages<TrainingPlanApi.Class>(getClassPage, {});
+}
+
+/** 解析 Excel 学员名单（按手机号匹配系统账号，不落库；供人工指定培训班） */
+export function parseClassStudentsImport(file: File) {
+  return requestClient.upload<TrainingPlanApi.ImportParseResult>(
+    '/training/plan/class/student/import-parse',
+    { file },
+  );
+}
+
+/** 按人工指定的「学员 → 培训班」明细批量入班 */
+export function allocateClassStudents(
+  items: TrainingPlanApi.ImportAllocateItem[],
 ) {
-  return requestClient.post<TrainingPlanApi.ClassStudentRandomAddResult>(
-    '/training/plan/class/student/random-add',
-    data,
+  return requestClient.post<TrainingPlanApi.ImportAllocateResult>(
+    '/training/plan/class/student/import-allocate',
+    { items },
   );
 }

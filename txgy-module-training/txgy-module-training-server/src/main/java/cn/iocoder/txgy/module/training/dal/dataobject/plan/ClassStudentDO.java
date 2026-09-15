@@ -43,7 +43,7 @@ public class ClassStudentDO extends TenantBaseDO {
      */
     private String deptName;
     /**
-     * 加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选 4 随机收录
+     * 加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选 5 导入并指定班级
      */
     private Integer source;
     /**
