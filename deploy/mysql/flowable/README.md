@@ -52,6 +52,35 @@ WHERE NAME_ IN ('schema.version','common.schema.version','eventregistry.schema.v
 -- 三个版本行都应存在，VALUE_ = '8.0.0.0'
 ```
 
+## 租户隔离（重要！）
+
+Flowable 的流程定义**按租户隔离**（`ACT_RE_PROCDEF.TENANT_ID_`）。
+在 A 租户创建的流程，B 租户提交审批时会报「流程定义不存在」。
+
+本地环境业务数据（客户/报价/商机）在 **租户 2012**，因此流程定义也必须在 2012 下部署。
+
+若流程定义建在了错误租户，按下列表把 `TENANT_ID_` / `tenant_id` 改过来（改完重启 BPM 清缓存）：
+
+```sql
+UPDATE ACT_RE_PROCDEF         SET TENANT_ID_ = '2012' WHERE KEY_ = '流程标识';
+UPDATE ACT_RE_DEPLOYMENT      SET TENANT_ID_ = '2012' WHERE ID_ = '部署id';
+UPDATE ACT_RE_MODEL           SET TENANT_ID_ = '2012' WHERE KEY_ = '流程标识';
+UPDATE bpm_process_definition_info SET tenant_id = 2012 WHERE process_definition_id LIKE '流程标识%';
+UPDATE bpm_process_definition_ext  SET tenant_id = 2012 WHERE process_definition_id LIKE '流程标识%';
+UPDATE bpm_task_assign_rule        SET tenant_id = 2012 WHERE process_definition_id LIKE '流程标识%';
+```
+
+> 更简单稳妥的做法：直接用目标租户的账号登录管理后台，在
+> **工作流程 → 流程模型 → 新建** 里创建并部署，就不会有租户问题。
+
+## CRM 报价审批流程（crm-quotation-audit）
+
+报价单提交审批依赖该流程定义，缺失时会报「流程定义不存在」。
+审批链：发起人 → 审批（候选人策略 36 = 发起人自己，便于自测）→ 结束。
+
+正式环境建议把审批节点改为「发起人部门负责人」(37) 或「指定角色」(10)，
+在管理后台 **工作流程 → 流程模型 → 报价单审批 → 修改** 中调整即可，无需改代码。
+
 ## 启动 BPM 服务
 
 表结构初始化完成后，BPM 服务启动时用 `false`（仅校验版本、不改表），
