@@ -49,6 +49,16 @@ public interface CrmProductCategoryService {
     CrmProductCategoryDO getProductCategory(Long id);
 
     /**
+     * 获得根分类编号，不存在时创建
+     *
+     * <p>供 WMS 产品同步等系统流程使用，避免同步功能因为没有分类而不可用。</p>
+     *
+     * @param name 根分类名称
+     * @return 分类编号
+     */
+    Long getOrCreateRootCategoryId(String name);
+
+    /**
      * 获得产品分类列表
      *
      * @param listReqVO 列表请求
