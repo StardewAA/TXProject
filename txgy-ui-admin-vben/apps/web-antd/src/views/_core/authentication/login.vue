@@ -80,45 +80,6 @@ async function fetchTenantList() {
   }
 }
 
-/** 管理权限由后端用户信息和角色决定，兼容不同版本的字段命名。 */
-function hasManagementAccess() {
-  const userInfo = userStore.userInfo as Record<string, any> | null;
-  if (!userInfo) {
-    return false;
-  }
-
-  const managementFlags = [
-    userInfo.isAdmin,
-    userInfo.isManagement,
-    userInfo.isManager,
-    userInfo.admin,
-    userInfo.management,
-  ];
-  if (managementFlags.some((value) => value === true || value === 1)) {
-    return true;
-  }
-
-  const roles = [
-    ...(userStore.userRoles ?? []),
-    ...((userInfo.roles as string[] | undefined) ?? []),
-  ];
-  if (
-    roles.some((role) =>
-      /(admin|administrator|manager|manage|super|tenant)/i.test(String(role)),
-    )
-  ) {
-    return true;
-  }
-
-  const accessCodes = accessStore.accessCodes ?? [];
-  const hasManageCode = accessCodes.some((code) =>
-    /(^|:)(admin|manage|permission|tenant)(:|$)/i.test(String(code)),
-  );
-  // CRM 业务账号（销售/经理等，拥有 crm:* 权限）：登录后进入 CRM 管理界面，而不是门户/云培训
-  const hasCrmCode = accessCodes.some((code) => code.startsWith('crm:'));
-  return hasManageCode || hasCrmCode;
-}
-
 function resolveRedirectPath() {
   const redirect =
     typeof route.query.redirect === 'string'
@@ -129,6 +90,8 @@ function resolveRedirectPath() {
   if (
     hasBackendAccess({
       loginType: loginType.value,
+      user: userInfo,
+      roles: userStore.userRoles,
       menus: accessStore.accessMenus,
       permissions: accessStore.accessCodes,
     })

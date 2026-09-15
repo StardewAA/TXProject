@@ -42,9 +42,8 @@ export default defineConfig(async (configEnv) => {
           },
           '/admin-api': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            // mock代理目标地址
-            target: 'http://localhost:48080/admin-api',
+            // 保留 /admin-api 前缀，转发到本机网关。
+            target: 'http://127.0.0.1:48080',
             ws: true,
           },
           // 千问（通义千问 / DashScope）OpenAI 兼容接口代理：

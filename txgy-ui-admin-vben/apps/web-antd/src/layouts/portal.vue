@@ -17,7 +17,6 @@ const navItems = [
   { label: '我要找工作', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
-  { label: '个人中心', path: '/portal/profile' },
 ];
 
 const displayName = computed(
@@ -64,7 +63,14 @@ async function handleLogout() {
       </div>
     </header>
 
-    <main class="portal-main" :class="{ 'portal-main--training': route.path.startsWith('/portal/training'), 'portal-main--recruit': isRecruitPortal }">
+    <main
+      class="portal-main"
+      :class="{
+        'portal-main--home': route.path.startsWith('/portal/home'),
+        'portal-main--training': route.path.startsWith('/portal/training'),
+        'portal-main--recruit': isRecruitPortal,
+      }"
+    >
       <RouterView />
     </main>
 
@@ -125,15 +131,15 @@ async function handleLogout() {
   padding: 0 14px;
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: #111827;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
 }
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: #d86616;
+  color: #111827;
 }
 
 .portal-nav button.active::after {
@@ -155,16 +161,16 @@ async function handleLogout() {
 }
 
 .portal-user-name {
-  color: #374151;
-  font-size: 14px;
+  color: #111827;
+  font-size: 15px;
 }
 
 .portal-logout {
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: #111827;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .portal-logout:hover {
@@ -184,6 +190,17 @@ async function handleLogout() {
   margin-right: 32px;
   margin-left: 32px;
   padding-top: 32px;
+}
+
+.portal-main.portal-main--home {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  margin: 0;
+  padding: 0;
+}
+
+.portal-main.portal-main--home + .portal-footer {
+  display: none;
 }
 
 .portal-main--recruit { position: relative; }

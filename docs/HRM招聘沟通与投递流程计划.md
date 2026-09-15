@@ -98,7 +98,7 @@ Offer已发出 --> Offer已失效
 
 - 候选人详情 `apps/web-antd/src/views/hrm/recruit/candidate/detail/index.vue` 内嵌「沟通」Tab：会话摘要、消息时间线、发送/结束、资格状态及跳转投递。
 - 新增独立「招聘沟通」列表页：按会话状态、候选人、职位、更新时间筛选，支持进入候选人详情并定位沟通 Tab。
-- 个人端 HRM 应聘页面允许完整开发与改造；`web-ele` 仅在需要保持 HRM 功能一致时同步，部署验收以 `web-antd` 为准。
+- 个人端 HRM 应聘页面允许完整开发与改造；发送简历消息不自动进入候选人名单，由企业端招聘沟通操作栏手动转为候选人；`web-ele` 仅在需要保持 HRM 功能一致时同步，部署验收以 `web-antd` 为准。
 - 门户 `portal/recruit/messages.vue` 增加资格/投递状态展示，沿用现有会话接口，不重复建设 IM 基础能力。
 
 ## 四、DDL、唯一性与测试

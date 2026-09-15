@@ -8,6 +8,7 @@ import { useUserStore } from '@vben/stores';
 import { message } from 'ant-design-vue';
 
 import { getPortalRecruitPostTypeList, type HrmPortalRecruitApi } from '#/api/hrm/portal/recruit';
+import { getHrmRecruitFilePreviewUrl } from '#/api/hrm/portal/recruit/file-url';
 import { createPortalResume, RECRUIT_PROFILE_TITLE } from '#/api/hrm/portal/resume';
 import { uploadFile } from '#/api/infra/file';
 
@@ -71,6 +72,7 @@ const simpleEducation = computed(() => ['初中及以下', '高中'].includes(fo
 const parentTypes = computed(() => postTypes.value.filter((item) => !item.parentId));
 const childTypes = computed(() => postTypes.value.filter((item) => item.parentId === activePostParent.value));
 const current = computed(() => steps[step.value - 1]!);
+const avatarPreviewUrl = computed(() => getHrmRecruitFilePreviewUrl(form.avatar));
 
 function validateStep() {
   const valid = [
@@ -188,7 +190,7 @@ async function finish() {
 
         <section v-else-if="step === 5" class="form-stack compact"><label>用 1～2 句话介绍自己<a-textarea v-model:value="form.strengths" :maxlength="200" :rows="8" show-count placeholder="例如：5 年防腐保温工程经验，熟悉施工组织、质量验收与现场协调。" /></label></section>
 
-        <section v-else class="avatar-step"><div class="avatar-preview"><img v-if="form.avatar" :src="form.avatar" alt="头像" /><IconifyIcon v-else icon="lucide:user-round" /></div><input ref="avatarInput" hidden type="file" accept="image/*" @change="handleAvatar" /><a-button type="primary" @click="avatarInput?.click()">上传头像</a-button><p>选择一张清晰的正面职业照，支持 JPG、PNG，大小不超过 5MB</p></section>
+        <section v-else class="avatar-step"><div class="avatar-preview"><img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="头像" /><IconifyIcon v-else icon="lucide:user-round" /></div><input ref="avatarInput" hidden type="file" accept="image/*" @change="handleAvatar" /><a-button type="primary" @click="avatarInput?.click()">上传头像</a-button><p>选择一张清晰的正面职业照，支持 JPG、PNG，大小不超过 5MB</p></section>
 
         <footer class="setup-actions"><button v-if="step === 4" class="skip" type="button" @click="skipWork">跳过此步骤 <IconifyIcon icon="lucide:chevron-right" /></button><span v-else></span><div><a-button v-if="step > 1" @click="previous">上一步</a-button><a-button v-if="step < 6" type="primary" @click="next">下一步</a-button><a-button v-else type="primary" :loading="submitting" @click="finish">完成</a-button></div></footer>
       </main>

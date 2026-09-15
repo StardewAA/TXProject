@@ -39,6 +39,14 @@ public class HrmAdminRecruitChatController {
     public CommonResult<List<HrmPortalRecruitChatMessageRespVO>> messages(@RequestParam Long conversationId, @RequestParam(required=false) Long minId, @RequestParam(required=false) Integer limit) { return success(chatService.getMessageList(getLoginUserId(), conversationId, minId, limit)); }
     @PutMapping("/conversation/read")
     public CommonResult<Boolean> read(@RequestParam Long conversationId) { chatService.markRead(getLoginUserId(), conversationId); return success(true); }
+
+    @PostMapping("/conversation/convert-candidate")
+    @Operation(summary = "将招聘沟通转为候选人")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:chat:convert-candidate')")
+    public CommonResult<Long> convertCandidate(@RequestParam Long conversationId) {
+        return success(chatService.convertConversationToCandidate(getLoginUserId(), conversationId));
+    }
+
     @PutMapping("/conversation/end")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:chat:end')")
     public CommonResult<Boolean> end(@Valid @RequestBody HrmPortalRecruitChatEndReqVO req) { chatService.endConversation(getLoginUserId(), req.getConversationId(), req.getReason()); return success(true); }
