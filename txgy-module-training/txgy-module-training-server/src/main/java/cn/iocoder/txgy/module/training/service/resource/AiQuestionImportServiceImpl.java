@@ -230,7 +230,8 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
                 + "[{\"qtype\":1,\"stem\":\"题干\",\"options\":[{\"key\":\"A\",\"text\":\"...\",\"isCorrect\":true}],"
                 + "\"answer\":\"A\",\"analysis\":\"解析\",\"difficulty\":2}]\n"
                 + "规则：qtype 取值 1单选 2多选 3判断 4实操问答 5案例分析；选项使用 A/B/C/D；"
-                + "判断题 options 固定为 正确/错误 两项；difficulty 取值 1易 2中 3难；最多提取 "
+                + "判断题 qtype=3、answer 固定为「对」或「错」、options 留空数组；"
+                + "difficulty 取值 1易 2中 3难；最多提取 "
                 + aiProperties.getMaxQuestions() + " 题。";
     }
 

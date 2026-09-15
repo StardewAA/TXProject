@@ -262,7 +262,9 @@ const [Modal, modalApi] = useVbenModal({
       tagIds.value = detail.tagIds || [];
       categoryId.value = detail.categoryId;
       if (qtype.value === 3) {
-        judgeAnswer.value = detail.answer || '对';
+        // 归一化：AI 导入可能存"正确/错误"，统一为表单的"对/错"
+        const raw = detail.answer || '对';
+        judgeAnswer.value = raw.includes('错') ? '错' : '对';
       } else if (qtype.value === 4 || qtype.value === 5) {
         qaAnswer.value = detail.answer || '';
       } else {
