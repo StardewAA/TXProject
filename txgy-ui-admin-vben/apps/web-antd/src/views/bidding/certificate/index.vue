@@ -504,7 +504,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
             row-key="key"
             size="small"
           >
-            <template #emptyText><div class="ct-empty">该范围内暂无证照</div></template>
+            <template #emptyText><div class="ct-empty">该范围内暂无证照：可调整筛选条件，或点右上「证照建档」录入</div></template>
           </a-table>
         </template>
 

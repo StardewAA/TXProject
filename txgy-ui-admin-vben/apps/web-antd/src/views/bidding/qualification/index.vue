@@ -1489,7 +1489,7 @@ watch(activeKey, (k) => {
                   </a-space>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无资质记录：填企业主体 id 查询，或点右上「资质建档」</div></template>
+              <template #emptyText><div class="ct-empty">暂无资质记录：先在页首确认/选择企业主体（由主体档案自动带出），或点右上「资质建档」录入</div></template>
             </a-table>
           </div>
         </div>
@@ -1943,6 +1943,13 @@ watch(activeKey, (k) => {
       <a-tab-pane key="review" tab="⑥ 平台审查">
         <div class="ct-panel">
           <div class="ct-panel-t">企业资质 · 平台人工审查</div>
+          <a-alert type="info" show-icon class="mb-3">
+            <template #message>审查流程：查看企业信息 → 核对录入信息与证照文件 → 通过 / 驳回</template>
+            <template #description>
+              企业资质由平台人工审查，<b>通过后该资质才可被其他接口引用</b>（配证 / 申报类接口）；
+              驳回需填写理由并留痕。员工证照由租户企业自行录入与审查，不在此队列。
+            </template>
+          </a-alert>
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter label="关键字">
               <a-input
@@ -1994,9 +2001,15 @@ watch(activeKey, (k) => {
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-space size="small">
-                    <a @click="openPlatformReview(record)">详情</a>
-                    <a v-if="can('bidding:qualification:platform-review')" @click="confirmApproveReview(record)">通过</a>
-                    <a v-if="can('bidding:qualification:platform-review')" @click="confirmRejectReview(record)">驳回</a>
+                    <a-tooltip title="查看企业信息、录入信息与证照文件">
+                      <a @click="openPlatformReview(record)">详情</a>
+                    </a-tooltip>
+                    <a-tooltip title="通过后该资质才可被其他接口引用">
+                      <a v-if="can('bidding:qualification:platform-review')" @click="confirmApproveReview(record)">通过</a>
+                    </a-tooltip>
+                    <a-tooltip title="驳回需填写理由，留痕可追溯">
+                      <a v-if="can('bidding:qualification:platform-review')" @click="confirmRejectReview(record)">驳回</a>
+                    </a-tooltip>
                   </a-space>
                 </template>
               </template>

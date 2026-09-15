@@ -362,7 +362,7 @@ const statusFilters = computed(() => dictOptions('lifecycle_status'));
             </template>
           </template>
           <template #emptyText>
-            <div class="ct-empty">暂无流程记录</div>
+            <div class="ct-empty">暂无流程记录：先发起「变更 / 续期 / 注销吊销 / 年检」申请，审批通过并生效后这里才会显示流转</div>
           </template>
         </a-table>
       </div>

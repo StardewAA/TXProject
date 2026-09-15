@@ -1089,6 +1089,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="list" tab="③ 员工证书">
         <div class="ct-panel">
+          <div class="ct-tip">员工证照由租户企业自行录入与审查：录入 → 自审（通过 / 退回）→ 生效；平台审查只针对企业资质，员工证照无平台入口。</div>
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter label="员工 ID"><a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" /></AttrFilter>
             <AttrFilter label="企业主体"><a-select v-model:value="query.entId" :loading="subjectLoading" :options="subjectOptions" allow-clear placeholder="自动带出，可切换" style="width: 200px" /></AttrFilter>
