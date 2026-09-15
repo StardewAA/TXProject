@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesFeedbackStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ProductSalesStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.WmItemReceiptStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
@@ -63,6 +64,12 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "wmItemReceiptStatusListener")
     public WmItemReceiptStatusListener wmItemReceiptStatusListener() {
         return new WmItemReceiptStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "productSalesStatusListener")
+    public ProductSalesStatusListener productSalesStatusListener() {
+        return new ProductSalesStatusListener();
     }
 
     @Bean
