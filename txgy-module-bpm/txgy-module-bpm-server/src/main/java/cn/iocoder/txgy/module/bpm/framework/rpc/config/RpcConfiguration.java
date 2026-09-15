@@ -53,6 +53,12 @@ public class RpcConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "erpSaleOrderStatusListener")
+    public ErpSaleOrderStatusListener erpSaleOrderStatusListener() {
+        return new ErpSaleOrderStatusListener();
+    }
+
+    @Bean
     @ConditionalOnMissingBean(name = "mesFeedbackStatusListener")
     public MesFeedbackStatusListener mesFeedbackStatusListener() {
         return new MesFeedbackStatusListener();
