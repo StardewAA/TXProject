@@ -24,54 +24,27 @@ const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const tenantEnable = isTenantEnable();
 const apiEncrypt = createApiEncrypt(import.meta.env);
 
-function getRequestPath(url?: string) {
-  return (url || '').split('?')[0] ?? '';
-}
-
-function isAuthenticationEntry(url?: string) {
-  const path = getRequestPath(url);
-  return (
-    path.endsWith('/system/auth/login') ||
-    path.endsWith('/system/auth/register')
-  );
-}
-
-function isPersonalRegister(config: { data?: unknown; url?: string }) {
-  if (!getRequestPath(config.url).endsWith('/system/auth/register')) {
-    return false;
-  }
-  if (!config.data || typeof config.data !== 'object') {
-    return false;
-  }
-  return (config.data as { registerType?: string }).registerType === 'personal';
-}
-
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
     ...options,
     baseURL,
   });
-  let reAuthing = false;
 
   /**
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
-    if (reAuthing) return;
-    reAuthing = true;
     console.warn('Access token or refresh token is invalid or expired. ');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
-    accessStore.setRefreshToken(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      try { await authStore.logout(); } catch { /* token 已失效，忽略退出请求错误 */ }
-      window.location.href = '/#/auth/login';
+      await authStore.logout();
     }
   }
 
@@ -85,7 +58,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       throw new Error('Refresh token is null!');
     }
     const resp = await refreshTokenApi(refreshToken);
-    const newToken = resp?.data?.data?.accessToken ?? resp?.data?.accessToken;
+    const newToken = resp?.data?.data?.accessToken;
     // add by 芋艿：这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中，刷新令牌失败！！！
     if (!newToken) {
       throw resp.data;
@@ -103,22 +76,15 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
 
-      // 登录/注册是公开认证入口，忽略旧会话令牌，避免旧租户上下文干扰新认证。
-      config.headers.Authorization = isAuthenticationEntry(config.url)
-        ? undefined
-        : formatToken(accessStore.accessToken);
+      config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
-      // 添加租户编号
-      config.headers['tenant-id'] = tenantEnable ? accessStore.tenantId : undefined;
-      // 只有登录时，才设置 visit-tenant-id 访问租户
-      config.headers['visit-tenant-id'] = tenantEnable && accessStore.accessToken && !isAuthenticationEntry(config.url)
-        ? accessStore.visitTenantId
-        : undefined;
-      if (isPersonalRegister(config)) {
-        // 个人注册固定落在后端保留的 tenant_id=0，不允许携带企业租户或访问租户。
-        config.headers['tenant-id'] = undefined;
-        config.headers['visit-tenant-id'] = undefined;
-      }
+      // 租户编号：登录时由登录页根据手动输入的租户名解析并写入 accessStore；
+      // 未设置时回退到 .env 的默认租户（VITE_APP_DEFAULT_TENANT_ID），保证多租户头不缺失
+      const tenantId =
+        accessStore.tenantId ||
+        Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
+      config.headers['tenant-id'] = String(tenantId);
+      config.headers['visit-tenant-id'] = String(tenantId);
 
       // 是否 API 加密
       if ((config.headers || {}).isEncrypt) {
@@ -227,32 +193,11 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
-      // 门户中的可选企业数据允许为空，不应触发全局错误弹窗。
-      if (error?.config?.headers?.['X-Silent-Error'] === 'true') {
-        return;
-      }
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
       const responseData = error?.response?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
-      // 开发者日志（仅 DEV 打印，避免生产刷屏）：任何走 requestClient 的请求失败都能在控制台定位，
-      // 含方法/URL/后端响应体(code+msg)/HTTP 状态；注意不打印 error.config（含 Authorization/租户头）。
-      if (import.meta.env.DEV) {
-        const method = String(error?.config?.method ?? 'GET').toUpperCase();
-        const url = error?.config?.url ?? '';
-        const httpStatus = error?.response?.status ?? '';
-        const bizCode = error?.data?.code ?? responseData?.code ?? '';
-        console.error(
-          '[api 请求失败]',
-          method,
-          url,
-          'http=' + httpStatus,
-          'code=' + bizCode,
-          'msg=' + (responseData?.msg ?? error?.message ?? msg),
-          { responseBody: responseData },
-        );
-      }
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
         return;
@@ -273,14 +218,12 @@ export const baseRequestClient = new RequestClient({ baseURL: apiURL });
 baseRequestClient.addRequestInterceptor({
   fulfilled: (config) => {
     const accessStore = useAccessStore();
-    // 添加租户编号
-    config.headers['tenant-id'] = tenantEnable
-      ? accessStore.tenantId
-      : undefined;
-    // 只有登录时，才设置 visit-tenant-id 访问租户
-    config.headers['visit-tenant-id'] = tenantEnable
-      ? accessStore.visitTenantId
-      : undefined;
+    // 租户编号：优先取登录页解析后的租户，未设置时回退默认租户，避免多租户头缺失
+    const tenantId =
+      accessStore.tenantId ||
+      Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
+    config.headers['tenant-id'] = String(tenantId);
+    config.headers['visit-tenant-id'] = String(tenantId);
     return config;
   },
 });

@@ -14,6 +14,7 @@ import cn.iocoder.txgy.module.ai.framework.ai.config.TxgyAiProperties;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.baichuan.BaiChuanChatModel;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.doubao.DouBaoChatModel;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.hunyuan.HunYuanChatModel;
+import cn.iocoder.txgy.module.ai.framework.ai.core.model.local.LocalHashingEmbeddingModel;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.midjourney.api.MidjourneyApi;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.minimax.MiniMaxChatModel;
 import cn.iocoder.txgy.module.ai.framework.ai.core.model.moonshot.MoonshotChatModel;
@@ -273,6 +274,9 @@ public class AiModelFactoryImpl implements AiModelFactory {
                     return buildAzureOpenAiEmbeddingModel(apiKey, url, model);
                 case OLLAMA:
                     return buildOllamaEmbeddingModel(url, model);
+                case LOCAL:
+                    // 本地哈希向量模型：无需外部 API，纯内存计算，适合离线知识库场景
+                    return new LocalHashingEmbeddingModel();
                 default:
                     throw new IllegalArgumentException(StrUtil.format("未知平台({})", platform));
             }
