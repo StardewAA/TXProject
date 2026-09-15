@@ -359,9 +359,16 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
             <button
               class="h-[44px] shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               :disabled="sending || !inputText.trim()"
+              :title="
+                sending
+                  ? '正在等待 AI 回复，请稍候'
+                  : !inputText.trim()
+                    ? '请先输入问题'
+                    : ''
+              "
               @click="send"
             >
-              发送
+              {{ sending ? '思考中…' : '发送' }}
             </button>
           </div>
           <div class="mt-1 text-[11px] text-muted-foreground">

@@ -70,5 +70,23 @@ public class CrmProductDO extends BaseDO {
      * 关联 AdminUserDO 的 id 字段
      */
     private Long ownerUserId;
+    /**
+     * WMS 商品编号（外部标识，不是 CRM 产品编号）
+     */
+    private Long wmsItemId;
+    /**
+     * WMS 规格编号（外部标识，WMS 同步的幂等键）
+     */
+    private Long wmsSkuId;
+    /**
+     * WMS 规格编码
+     */
+    private String wmsSkuCode;
+    /**
+     * 数据来源
+     *
+     * 关联 {@link cn.iocoder.txgy.module.crm.enums.product.CrmProductDataSourceEnum}
+     */
+    private Integer dataSource;
 
 }
