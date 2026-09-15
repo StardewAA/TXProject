@@ -129,6 +129,12 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '首页', hideInMenu: true },
       },
       {
+        name: 'PortalContent',
+        path: 'content',
+        component: () => import('#/views/portal/content/index.vue'),
+        meta: { title: 'CMS系统', hideInMenu: true },
+      },
+      {
         name: 'PortalRecruit',
         path: 'recruit',
         component: () => import('#/views/portal/recruit/index.vue'),
