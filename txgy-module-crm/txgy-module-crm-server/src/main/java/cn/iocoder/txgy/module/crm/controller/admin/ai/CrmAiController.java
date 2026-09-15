@@ -37,7 +37,7 @@ public class CrmAiController {
     @PreAuthorize("@ss.hasPermission('crm:customer:query')")
     public CommonResult<CrmAiClassifyRespVO> classifyIntent(@Valid @RequestBody CrmAiClassifyReqVO reqVO) {
         return success(CrmAiClassifyRespVO.builder()
-                .content(crmAiIntentClient.classify(reqVO.getQuery()))
+                .content(crmAiIntentClient.classify(reqVO.getQuery(), reqVO.getHistory()))
                 .build());
     }
 
