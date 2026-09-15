@@ -42,9 +42,8 @@ export default defineConfig(async (configEnv) => {
           },
           '/admin-api': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            // mock代理目标地址
-            target: 'http://localhost:48080/admin-api',
+            // 保留 /admin-api 前缀，转发到本机网关。
+            target: 'http://127.0.0.1:48080',
             ws: true,
           },
           // 招投标门户（外部公告域 notice-external）本地联调：bidding 模块尚在 48110 直跑、未注册网关，

@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.crm.service.product;
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.product.vo.category.CrmProductCategoryCreateReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.product.vo.category.CrmProductCategoryListReqVO;
@@ -123,6 +124,20 @@ public class CrmProductCategoryServiceImpl implements CrmProductCategoryService 
     @Override
     public CrmProductCategoryDO getProductCategory(Long id) {
         return productCategoryMapper.selectById(id);
+    }
+
+    @Override
+    public Long getOrCreateRootCategoryId(String name) {
+        if (StrUtil.isBlank(name)) {
+            throw exception(PRODUCT_CATEGORY_NOT_EXISTS);
+        }
+        CrmProductCategoryDO category = productCategoryMapper.selectByParentIdAndName(PARENT_ID_NULL, name);
+        if (category != null) {
+            return category.getId();
+        }
+        CrmProductCategoryDO createObj = new CrmProductCategoryDO().setName(name).setParentId(PARENT_ID_NULL);
+        productCategoryMapper.insert(createObj);
+        return createObj.getId();
     }
 
     @Override

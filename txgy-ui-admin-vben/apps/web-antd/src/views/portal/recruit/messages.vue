@@ -8,7 +8,6 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 import { Modal as AntModal, message } from 'ant-design-vue';
 
 import {
-  createPortalRecruitApplication,
   acceptPortalRecruitOffer,
   getPortalRecruitApplicationPage,
   getPortalRecruitPost,
@@ -23,6 +22,7 @@ import {
   openRecruitChatConversation,
   sendRecruitChatMessage,
 } from '#/api/hrm/portal/recruit/chat';
+import { getHrmRecruitChatAttachment } from '#/api/hrm/portal/recruit/chat-attachment';
 import {
   getPortalResumeList,
   type HrmPortalResumeApi,
@@ -232,20 +232,6 @@ function recruiterPosition(item: HrmPortalRecruitChatApi.Conversation) {
   return postDetails.value[item.postId]?.postName || item.postName || '招聘职位';
 }
 
-function resumeMeta(content: string) {
-  const [title, fileName, fileUrl] = content.split('|');
-  return { title: title || '简历', fileName, fileUrl };
-}
-
-function imageMeta(content: string) {
-  const [prefix, encodedName, fileUrl] = content.split('|');
-  if (prefix !== '__HRM_IMAGE__' || !fileUrl) return undefined;
-  return {
-    fileName: encodedName ? decodeURIComponent(encodedName) : '聊天图片',
-    fileUrl,
-  };
-}
-
 function showStamp(index: number) {
   const current = messages.value[index];
   if (!current?.sendTime) return false;
@@ -321,11 +307,6 @@ function openApplicationModal(conversationId: number) {
   applicationConversationId.value = conversation.id;
   applicationPostId.value = conversation.postId;
   applyModalOpen.value = true;
-}
-
-function markApplicationSubmitted(conversationId: number) {
-  const conversation = conversations.value.find((item) => item.id === conversationId);
-  if (conversation) conversation.applicationStatus = 'SUBMITTED';
 }
 
 function viewPost() {
@@ -734,10 +715,9 @@ async function sendResume() {
       openApplicationModal(conversationId);
       return;
     }
-    await createPortalRecruitApplication(data);
-    markApplicationSubmitted(conversationId);
-    await sendResumeMessage(data, conversationId);
-    message.success('简历已直接投递，可在个人中心查看进度');
+    if (await sendResumeMessage(data, conversationId)) {
+      message.success('简历已发送，等待招聘方处理');
+    }
   } catch (error: any) {
     message.error(error?.message || '投递失败');
   } finally {
@@ -757,15 +737,14 @@ const applicationPost = computed<HrmPortalRecruitApi.Post | undefined>(() => {
 async function sendResumeMessage(
   data: HrmPortalRecruitApi.ApplyReq,
   conversationId?: number,
-) {
+): Promise<boolean> {
   const targetConversationId =
     conversationId || applicationConversationId.value || activeId.value;
-  if (!targetConversationId || !data.resumeFileUrl) return;
+  if (!targetConversationId || !data.resumeFileUrl) return false;
   const conversation = conversations.value.find(
     (item) => item.id === targetConversationId,
   );
-  if (!conversation) return;
-  if (data.postId !== conversation.postId) return;
+  if (!conversation || data.postId !== conversation.postId) return false;
   try {
     const content = [
       data.resumeFileName || '简历',
@@ -778,13 +757,14 @@ async function sendResumeMessage(
       content,
     });
     if (activeId.value === targetConversationId) messages.value.push(created);
-    conversation.applicationStatus = 'SUBMITTED';
     await nextTick();
     if (activeId.value === targetConversationId && conversationPane.value) {
       conversationPane.value.scrollTop = conversationPane.value.scrollHeight;
     }
+    return true;
   } catch (error: any) {
-    message.warning(error?.message || '简历已投递，但沟通消息发送失败');
+    message.warning(error?.message || '简历发送失败');
+    return false;
   }
 }
 
@@ -793,7 +773,6 @@ async function handleApplicationSubmitted(data: HrmPortalRecruitApi.ApplyReq) {
   if (!conversationId) return;
   resumeSending.value = true;
   try {
-    markApplicationSubmitted(conversationId);
     await sendResumeMessage(data, conversationId);
   } finally {
     resumeSending.value = false;
@@ -1000,27 +979,27 @@ onUnmounted(() => {
             <div v-if="showStamp(index)" class="date">{{ formatTime(item.sendTime) }}</div>
             <div class="bubble" :class="item.mine ? 'mine' : 'theirs'">
               <a
-                v-if="item.contentType === 2"
+                v-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'resume'"
                 class="resume-card"
-                :href="resumeMeta(item.content).fileUrl || undefined"
+                :href="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl"
                 target="_blank"
                 rel="noreferrer"
               >
                 <span class="resume-icon">📄</span>
                 <span>
-                  <b>{{ resumeMeta(item.content).title }}</b>
-                  <em>{{ resumeMeta(item.content).fileName || '附件简历' }}</em>
+                  <b>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.title }}</b>
+                  <em>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName }}</em>
                 </span>
               </a>
-              <template v-else-if="imageMeta(item.content)">
+              <template v-else-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'image'">
                 <a
                   class="image-card"
-                  :href="imageMeta(item.content)?.fileUrl"
+                  :href="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <img :src="imageMeta(item.content)?.fileUrl" :alt="imageMeta(item.content)?.fileName" />
-                  <span>{{ imageMeta(item.content)?.fileName }}</span>
+                  <img :src="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl" :alt="getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName" />
+                  <span>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName }}</span>
                 </a>
               </template>
               <template v-else>{{ item.content }}</template>
@@ -1067,6 +1046,7 @@ onUnmounted(() => {
     <RecruitApplyModal
       v-model:open="applyModalOpen"
       :post="applicationPost"
+      :chat-only="true"
       @submitted="handleApplicationSubmitted"
     />
   </div>

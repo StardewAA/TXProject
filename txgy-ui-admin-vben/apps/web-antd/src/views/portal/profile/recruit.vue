@@ -18,6 +18,7 @@ import {
   type HrmPortalResumeApi,
   uploadPortalResume,
 } from '#/api/hrm/portal/resume';
+import { getHrmRecruitFilePreviewUrl } from '#/api/hrm/portal/recruit/file-url';
 import { uploadFile } from '#/api/infra/file';
 import { requestClient } from '#/api/request';
 
@@ -49,9 +50,28 @@ const applicationStages = [
   { key: 'screening', label: '初选通过' },
   { key: 'interview', label: '安排面试' },
   { key: 'reinterview', label: '安排复试' },
-  { key: 'offer', label: '发 Offer' },
+  { key: 'offer', label: '发放录用通知' },
   { key: 'onboard', label: '转为员工' },
 ] as const;
+const applicationStatusLabels: Record<string, string> = {
+  ELIMINATED: '已淘汰',
+  INTERVIEWING: '面试中',
+  OFFER_APPROVING: '录用审批中',
+  OFFER_SENT: '已发放录用通知',
+  ONBOARDED: '已入职',
+  PASSED: '面试通过',
+  PENDING_ONBOARD: '待入职',
+  SCREENING: '筛选中',
+  SUBMITTED: '已投递',
+  WITHDRAWN: '已撤回',
+};
+const offerStatusLabels: Record<string, string> = {
+  APPROVED: '审批通过',
+  CANCELED: '已取消',
+  REJECTED: '审批未通过',
+  SENT: '已发放',
+  WAITING: '等待处理',
+};
 
 const careerProfile = computed<Record<string, any>>(() => {
   const resume = resumes.value.find((item) => item.title === '求职资料（系统）');
@@ -71,6 +91,7 @@ const navUserName = computed(() => {
   return /^1\d{10}$/.test(name) ? `${name.slice(0, 3)}****${name.slice(-4)}` : name;
 });
 const profileMeta = computed(() => [careerProfile.value.education, careerProfile.value.school, careerProfile.value.major].filter(Boolean).join(' · ') || '求职资料待完善');
+const profileAvatarUrl = computed(() => getHrmRecruitFilePreviewUrl(careerProfile.value.avatar));
 
 const visibleResumes = computed(() => {
   const attachments = resumes.value.filter((resume) => resume.resumeType === 1);
@@ -154,19 +175,27 @@ function isApplicationTerminal(application: HrmPortalRecruitApi.Application) {
 }
 
 function getApplicationStageNote(application: HrmPortalRecruitApi.Application) {
-  if (application.status === 'ELIMINATED') return '已淘汰';
-  if (application.status === 'WITHDRAWN') return '已撤回';
-  return application.statusName || '招聘方处理中';
+  return getApplicationStatusLabel(application);
+}
+
+function getApplicationStatusLabel(application: HrmPortalRecruitApi.Application) {
+  const label = application.statusName?.trim();
+  if (label) return label.replace(/\bOffer\b/gi, '录用通知');
+  return applicationStatusLabels[application.status] || '招聘方处理中';
+}
+
+function getOfferStatusLabel(status?: string) {
+  return offerStatusLabels[status || ''] || '处理中';
 }
 
 function validateResumeFile(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (!extension || !ACCEPTED_RESUME_EXTENSIONS.includes(extension)) {
-    message.warning('仅支持 PDF、DOC、DOCX 格式的简历');
+    message.warning('仅支持常见文档格式的简历');
     return false;
   }
   if (file.size > MAX_RESUME_SIZE) {
-    message.warning('简历文件不能超过 10MB');
+    message.warning('简历文件不能超过 10 兆');
     return false;
   }
   return true;
@@ -285,14 +314,14 @@ onMounted(async () => {
     </nav>
 
     <section class="profile-summary">
-      <div class="profile-avatar"><img v-if="careerProfile.avatar" :src="careerProfile.avatar" alt="个人头像" /><IconifyIcon v-else icon="lucide:user-round" /></div>
-      <div class="profile-identity"><p class="section-eyebrow">MY CAREER PROFILE</p><h1>{{ profileName }}</h1><p>{{ profileMeta }}</p><span>{{ careerProfile.employmentStatus || '求职状态待确认' }}</span></div>
+      <div class="profile-avatar"><img v-if="profileAvatarUrl" :src="profileAvatarUrl" alt="个人头像" /><IconifyIcon v-else icon="lucide:user-round" /></div>
+      <div class="profile-identity"><p class="section-eyebrow">我的职业资料</p><h1>{{ profileName }}</h1><p>{{ profileMeta }}</p><span>{{ careerProfile.employmentStatus || '求职状态待确认' }}</span></div>
       <div class="profile-expectation"><small>期望职位</small><strong>{{ careerProfile.postTypeName || '暂未设置' }}</strong><p>{{ careerProfile.city || '工作城市待确认' }}</p></div>
        <a-button @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历</a-button>
     </section>
 
     <section class="recruit-workspace-hero">
-      <div><p class="section-eyebrow">APPLICATION CENTER</p><h2>我的招聘进度</h2><p>简历、岗位投递和招聘进度，在这里集中管理。</p></div>
+      <div><p class="section-eyebrow">应聘中心</p><h2>我的招聘进度</h2><p>简历、岗位投递和招聘进度，在这里集中管理。</p></div>
       <div class="recruit-hero-stats">
         <div><strong>{{ applicationTotal }}</strong><span>次投递</span></div>
       </div>
@@ -303,7 +332,7 @@ onMounted(async () => {
         <section class="recruit-panel">
           <div class="section-heading">
             <div>
-              <p class="section-eyebrow">RESUME LIBRARY</p>
+              <p class="section-eyebrow">简历资料库</p>
               <h2>我的简历</h2>
               <p>上传简历附件，投递岗位时可直接使用。</p>
             </div>
@@ -316,7 +345,7 @@ onMounted(async () => {
           <div class="resume-upload-box">
             <div class="upload-title">
               <span><IconifyIcon icon="lucide:cloud-upload" /></span>
-              <div><strong>上传简历附件</strong><small>支持 PDF / DOC / DOCX，不超过 10MB</small></div>
+              <div><strong>上传简历附件</strong><small>支持常见文档格式，单个不超过 10 兆</small></div>
             </div>
             <div class="upload-form-row">
               <a-input v-model:value="uploadForm.title" placeholder="给简历起个标题，例如：项目经理简历" />
@@ -348,14 +377,14 @@ onMounted(async () => {
 </section>
 
     <section v-if="showApplicationPanel" class="recruit-panel application-panel">
-      <div class="section-heading"><div><p class="section-eyebrow">APPLICATION HISTORY</p><h2>我的应聘记录</h2><p>跟进每一次投递、面试安排和 Offer 状态。</p></div><span class="history-total">共 {{ applicationTotal }} 条记录</span></div>
+      <div class="section-heading"><div><p class="section-eyebrow">应聘记录</p><h2>我的应聘记录</h2><p>跟进每一次投递、面试安排和录用通知状态。</p></div><span class="history-total">共 {{ applicationTotal }} 条记录</span></div>
       <div v-if="applicationLoading" class="loading-list"><a-skeleton v-for="item in 3" :key="item" active :paragraph="{ rows: 2 }" /></div>
       <div v-else-if="!applications.length" class="empty-state"><IconifyIcon icon="lucide:clipboard-list" /><strong>暂无应聘记录</strong><p>去岗位机会中挑选一份适合你的工作吧</p><a-button type="link" @click="router.push('/portal/recruit')">去浏览岗位</a-button></div>
       <div v-else class="application-list">
         <article v-for="application in applications" :key="application.id" class="application-card">
           <div class="application-card-header">
             <div class="application-item-main">
-              <div class="application-title"><strong>{{ application.postName || '招聘职位' }}</strong><a-tag :color="application.status === 'ELIMINATED' ? 'error' : application.status === 'WITHDRAWN' ? 'default' : 'processing'">{{ application.statusName || application.status }}</a-tag></div>
+              <div class="application-title"><strong>{{ application.postName || '招聘职位' }}</strong><a-tag :color="application.status === 'ELIMINATED' ? 'error' : application.status === 'WITHDRAWN' ? 'default' : 'processing'">{{ getApplicationStatusLabel(application) }}</a-tag></div>
               <p>投递于 {{ formatDate(application.createTime) }}</p>
             </div>
             <div class="application-actions"><a-button type="link" @click="showApplication(application)">查看详情</a-button><a-button v-if="['SUBMITTED', 'SCREENING', 'INTERVIEWING'].includes(application.status)" type="link" danger @click="withdrawApplication(application)">撤回应聘</a-button></div>
@@ -373,8 +402,8 @@ onMounted(async () => {
 
     <a-modal v-model:open="applicationModalOpen" title="应聘进度" :footer="null" width="680px" wrap-class-name="recruit-application-modal">
       <template v-if="selectedApplication">
-        <a-descriptions :column="2" bordered><a-descriptions-item label="职位">{{ selectedApplication.postName }}</a-descriptions-item><a-descriptions-item label="当前状态">{{ selectedApplication.statusName || selectedApplication.status }}</a-descriptions-item><a-descriptions-item label="投递时间">{{ formatDate(selectedApplication.createTime) }}</a-descriptions-item><a-descriptions-item label="简历">{{ selectedApplication.resumeFileName || '-' }}</a-descriptions-item></a-descriptions>
-        <a-timeline class="timeline"><a-timeline-item color="green">已投递：{{ formatDate(selectedApplication.createTime) }}</a-timeline-item><a-timeline-item v-for="interview in selectedApplication.interviews || []" :key="interview.id" color="blue">第 {{ interview.stageNumber || 1 }} 轮面试：{{ formatDate(interview.interviewTime) }}，{{ interview.address || '线上' }}</a-timeline-item><a-timeline-item v-if="selectedApplication.offer" color="green">Offer：{{ selectedApplication.offer.approvalStatus || '处理中' }}</a-timeline-item></a-timeline>
+        <a-descriptions :column="2" bordered><a-descriptions-item label="职位">{{ selectedApplication.postName }}</a-descriptions-item><a-descriptions-item label="当前状态">{{ getApplicationStatusLabel(selectedApplication) }}</a-descriptions-item><a-descriptions-item label="投递时间">{{ formatDate(selectedApplication.createTime) }}</a-descriptions-item><a-descriptions-item label="简历">{{ selectedApplication.resumeFileName || '-' }}</a-descriptions-item></a-descriptions>
+        <a-timeline class="timeline"><a-timeline-item color="green">已投递：{{ formatDate(selectedApplication.createTime) }}</a-timeline-item><a-timeline-item v-for="interview in selectedApplication.interviews || []" :key="interview.id" color="blue">第 {{ interview.stageNumber || 1 }} 轮面试：{{ formatDate(interview.interviewTime) }}，{{ interview.address || '线上' }}</a-timeline-item><a-timeline-item v-if="selectedApplication.offer" color="green">录用通知：{{ getOfferStatusLabel(selectedApplication.offer.approvalStatus) }}</a-timeline-item></a-timeline>
       </template>
     </a-modal>
   </div>
@@ -390,21 +419,21 @@ onMounted(async () => {
 .recruit-workspace-page > * { grid-column: 2; min-width: 0; }
 .recruit-workspace-page > .recruit-subnav { grid-column: 1 / -1; }
 .recruit-subnav { display:flex; align-items:center; gap:26px; min-height:54px; padding:0 24px; border-block:1px solid rgb(238 225 211 / 90%); background:rgb(255 255 255 / 82%); box-shadow:0 8px 20px rgb(183 92 24 / 7%); backdrop-filter:blur(16px) saturate(115%); -webkit-backdrop-filter:blur(16px) saturate(115%); }
-.recruit-nav-links,.recruit-nav-account{display:flex;align-items:center}.recruit-nav-links{gap:24px}.recruit-nav-account{margin-left:auto;gap:22px}.recruit-subnav button{position:relative;display:inline-flex;height:52px;align-items:center;gap:7px;padding:0 4px;border:0;background:transparent;color:#875222;cursor:pointer;font-size:14px}.recruit-subnav button:hover,.recruit-subnav button.active{color:var(--recruit-accent)}.recruit-account-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.profile-summary{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(180px,auto) auto;align-items:center;gap:20px;padding:24px 28px;border:1px solid #f0dac1;border-radius:12px;background:#fffdfa;box-shadow:0 8px 24px rgb(183 92 24 / 8%)}.profile-avatar{display:grid;width:68px;height:68px;overflow:hidden;place-items:center;border-radius:50%;background:#fff0df;color:#d86616;font-size:36px}.profile-avatar img{width:100%;height:100%;object-fit:cover}.profile-identity h1{margin:0;color:#4a2916;font-size:24px}.profile-identity>p:not(.section-eyebrow){margin:5px 0;color:#806956;font-size:13px}.profile-identity>span{display:inline-block;padding:4px 9px;border-radius:4px;background:#fff0df;color:#c85e18;font-size:12px}.profile-expectation{padding-left:24px;border-left:1px solid #f0dac1}.profile-expectation small{display:block;color:#a48268}.profile-expectation strong{display:block;margin-top:7px;color:#5d341d}.profile-expectation p{margin:5px 0 0;color:#806956;font-size:12px}
+ .recruit-nav-links,.recruit-nav-account{display:flex;align-items:center}.recruit-nav-links{gap:24px}.recruit-nav-account{margin-left:auto;gap:22px}.recruit-subnav button{position:relative;display:inline-flex;height:52px;align-items:center;gap:7px;padding:0 4px;border:0;background:transparent;color:#875222;cursor:pointer;font-size:15px}.recruit-subnav button:hover,.recruit-subnav button.active{color:var(--recruit-accent)}.recruit-account-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .profile-summary{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(180px,auto) auto;align-items:center;gap:20px;padding:24px 28px;border:1px solid #f0dac1;border-radius:12px;background:#fffdfa;box-shadow:0 8px 24px rgb(183 92 24 / 8%)}.profile-avatar{display:grid;width:68px;height:68px;overflow:hidden;place-items:center;border-radius:50%;background:#fff0df;color:#d86616;font-size:36px}.profile-avatar img{width:100%;height:100%;object-fit:cover}.profile-identity h1{margin:0;color:#4a2916;font-size:25px}.profile-identity>p:not(.section-eyebrow){margin:5px 0;color:#806956;font-size:14px}.profile-identity>span{display:inline-block;padding:5px 10px;border-radius:4px;background:#fff0df;color:#c85e18;font-size:13px}.profile-expectation{padding-left:24px;border-left:1px solid #f0dac1}.profile-expectation small{display:block;color:#a48268;font-size:13px}.profile-expectation strong{display:block;margin-top:7px;color:#5d341d;font-size:17px}.profile-expectation p{margin:5px 0 0;color:#806956;font-size:14px}
 .recruit-workspace-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 30px 34px; border: 1px solid #f2d4ad; background: linear-gradient(115deg, #fff6e8, #fffdf9); }
-.section-eyebrow { margin: 0 0 7px; color: #d86616; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
-.recruit-workspace-hero h2 { margin: 0; color: #0f172a; font-size: 24px; }
-.recruit-workspace-hero p:last-child { margin: 8px 0 0; color: #64748b; font-size: 14px; }
+ .section-eyebrow { margin: 0 0 7px; color: #d86616; font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+ .recruit-workspace-hero h2 { margin: 0; color: #0f172a; font-size: 25px; }
+ .recruit-workspace-hero p:last-child { margin: 8px 0 0; color: #64748b; font-size: 15px; }
 .recruit-hero-stats { display: flex; gap: 28px; }
 .recruit-hero-stats div { display: grid; gap: 4px; min-width: 60px; text-align: center; }
 .recruit-hero-stats strong { color: #d86616; font-size: 25px; }
-.recruit-hero-stats span { color: #64748b; font-size: 12px; }
+ .recruit-hero-stats span { color: #64748b; font-size: 14px; }
 .recruit-content-grid { display: block; }
 .recruit-panel { padding: 24px; border: 1px solid #f0dac1; background: #fffdfa; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-.section-heading h2 { margin: 0; color: #0f172a; font-size: 21px; }
-.section-heading p:last-child { margin: 7px 0 0; color: #94a3b8; font-size: 13px; }
+ .section-heading h2 { margin: 0; color: #0f172a; font-size: 23px; }
+ .section-heading p:last-child { margin: 7px 0 0; color: #94a3b8; font-size: 14px; }
 .resume-sort-select { width: 104px; }
 .recruit-workspace-page :deep(.ant-input),
 .recruit-workspace-page :deep(.ant-input-affix-wrapper),
@@ -413,6 +442,7 @@ onMounted(async () => {
   border-color: #cbd5e1 !important;
   background: #fff !important;
   color: #0f172a !important;
+  font-size: 14px;
 }
 .recruit-workspace-page :deep(.ant-input::placeholder),
 .recruit-workspace-page :deep(.ant-select-selection-placeholder) {
@@ -492,31 +522,31 @@ onMounted(async () => {
 .upload-title { display: flex; align-items: center; gap: 10px; }
 .upload-title > span { display: grid; width: 34px; height: 34px; place-items: center; color: #d86616; background: #fff0df; font-size: 17px; }
 .upload-title div { display: grid; gap: 3px; }
-.upload-title strong { color: #334155; font-size: 14px; }
-.upload-title small { color: #94a3b8; font-size: 12px; }
+ .upload-title strong { color: #334155; font-size: 16px; }
+ .upload-title small { color: #94a3b8; font-size: 14px; }
 .upload-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .file-dropzone { display: grid; min-height: 82px; place-items: center; align-content: center; gap: 4px; border: 1px dashed #efb36a; color: #d86616; background: #fff4e5; cursor: pointer; text-align: center; }
 .file-dropzone:hover, .file-dropzone.has-file { border-color: #d86616; background: #fff0df; }
 .file-dropzone input { display: none; }
-.file-dropzone strong { max-width: 90%; overflow: hidden; color: #334155; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.file-dropzone small { color: #64748b; font-size: 12px; }
+ .file-dropzone strong { max-width: 90%; overflow: hidden; color: #334155; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+ .file-dropzone small { color: #64748b; font-size: 14px; }
 .upload-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .loading-list { display: grid; gap: 12px; }
 .empty-state { display: grid; min-height: 150px; place-items: center; align-content: center; gap: 7px; color: #94a3b8; text-align: center; }
 .empty-state > svg { color: #bfdbfe; font-size: 28px; }
-.empty-state strong { color: #64748b; font-size: 14px; }
-.empty-state p { margin: 0; font-size: 12px; }
+ .empty-state strong { color: #64748b; font-size: 16px; }
+ .empty-state p { margin: 0; font-size: 14px; }
 .resume-list, .application-list { display: grid; gap: 12px; }
 .resume-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px; border: 1px solid #eef2f7; }
 .resume-icon { display: grid; width: 34px; height: 34px; place-items: center; color: #2563eb; background: #eff6ff; }
 .resume-copy { min-width: 0; }
 .resume-copy > div, .application-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.resume-copy strong, .application-title strong { color: #334155; font-size: 14px; }
-.resume-copy p, .application-item-main p { margin: 5px 0 0; color: #94a3b8; font-size: 12px; }
-.resume-side { display: grid; gap: 6px; color: #94a3b8; font-size: 11px; text-align: right; }
+ .resume-copy strong, .application-title strong { color: #334155; font-size: 15px; }
+ .resume-copy p, .application-item-main p { margin: 5px 0 0; color: #94a3b8; font-size: 14px; }
+ .resume-side { display: grid; gap: 6px; color: #94a3b8; font-size: 13px; text-align: right; }
 .resume-side a { color: #2563eb; }
 .application-panel { margin-top: 0; }
-.history-total { color: #94a3b8; font-size: 12px; }
+ .history-total { color: #94a3b8; font-size: 14px; }
 .application-card { display: grid; gap: 18px; padding: 18px; border: 1px solid #dbe5f0; background: #fff; box-shadow: 0 4px 14px rgb(15 23 42 / 4%); }
 .application-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .application-item-main { min-width: 0; }
@@ -524,7 +554,7 @@ onMounted(async () => {
 .application-progress-step { position: relative; display: grid; gap: 8px; min-width: 0; color: #94a3b8; }
 .application-progress-step::before { position: absolute; top: 14px; right: calc(50% + 16px); left: calc(-50% + 16px); height: 2px; background: #e2e8f0; content: ''; }
 .application-progress-step:first-child::before { display: none; }
-.application-progress-marker { position: relative; z-index: 1; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #cbd5e1; border-radius: 50%; background: #fff; color: #94a3b8; font-size: 11px; }
+ .application-progress-marker { position: relative; z-index: 1; display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #cbd5e1; border-radius: 50%; background: #fff; color: #94a3b8; font-size: 13px; }
 .application-progress-step.reached { color: #d86616; }
 .application-progress-step.reached::before { background: #efb36a; }
 .application-progress-step.reached .application-progress-marker { border-color: #ef8b35; background: #fff0df; color: #d86616; }
@@ -532,9 +562,11 @@ onMounted(async () => {
 .application-progress-step.eliminated { color: #b91c1c; }
 .application-progress-step.eliminated .application-progress-marker { border-color: #f87171; background: #fef2f2; color: #b91c1c; }
 .application-progress-step div { display: grid; gap: 3px; }
-.application-progress-step strong { color: inherit; font-size: 12px; }
-.application-progress-step small { color: inherit; font-size: 11px; }
-.application-actions { display: flex; gap: 3px; }
+ .application-progress-step strong { color: inherit; font-size: 14px; }
+ .application-progress-step small { color: inherit; font-size: 13px; }
+ .application-actions { display: flex; gap: 3px; }
+ .application-actions :deep(.ant-btn) { font-size: 14px; }
+ :global(.recruit-application-modal .ant-descriptions-item-label), :global(.recruit-application-modal .ant-descriptions-item-content), :global(.recruit-application-modal .ant-timeline-item-content) { font-size: 14px; }
 .application-pagination { margin-top: 18px; text-align: center; }
 .timeline { margin-top: 22px; }
 @media (max-width: 900px) { .recruit-content-grid { grid-template-columns: 1fr; } }

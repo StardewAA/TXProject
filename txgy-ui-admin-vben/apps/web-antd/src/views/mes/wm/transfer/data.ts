@@ -427,6 +427,8 @@ export function useLineFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       label: '选择库存',
       component: markRaw(WmMaterialStockSelect),
       componentProps: {
+        // 调拨可能从任意仓（含虚拟线边仓）调出，不过滤虚拟仓
+        virtualFilter: 'all',
         // 选择库存后，自动回填物料/仓库位置/批次/数量
         onChange: async (stock?: MesWmMaterialStockApi.MaterialStock) => {
           await formApi?.setValues({

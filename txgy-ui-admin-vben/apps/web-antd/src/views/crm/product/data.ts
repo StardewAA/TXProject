@@ -181,6 +181,20 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 120,
     },
     {
+      field: 'wmsSkuCode',
+      title: 'WMS 规格编码',
+      minWidth: 140,
+    },
+    {
+      field: 'dataSource',
+      title: '数据来源',
+      minWidth: 110,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.CRM_PRODUCT_DATA_SOURCE },
+      },
+    },
+    {
       field: 'price',
       title: '价格（元）',
       formatter: 'formatAmount2',

@@ -28,6 +28,16 @@ public interface CrmProductMapper extends BaseMapperX<CrmProductDO> {
         return selectOne(CrmProductDO::getNo, no);
     }
 
+    /**
+     * 按 WMS 规格编号查询已同步的产品，用于同步幂等
+     *
+     * @param wmsSkuId WMS 规格编号
+     * @return 产品
+     */
+    default CrmProductDO selectByWmsSkuId(Long wmsSkuId) {
+        return selectOne(CrmProductDO::getWmsSkuId, wmsSkuId);
+    }
+
     default Long selectCountByCategoryId(Long categoryId) {
         return selectCount(CrmProductDO::getCategoryId, categoryId);
     }
