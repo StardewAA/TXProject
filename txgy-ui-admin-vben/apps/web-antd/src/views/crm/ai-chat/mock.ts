@@ -125,8 +125,10 @@ function labelOf(
 /** 去掉名称前后的动词、助词与请求语，得到纯净的实体名 */
 function cleanEntityName(raw: string): string {
   let v = String(raw ?? '').trim();
+  // 注意：这里不能把单独的「下」当成前缀动词剥离，
+  // 否则「我的下属所有客户」会被削成「属所有」，进而被误当成客户名
   v = v.replace(
-    /^(?:(?:帮我|帮忙|请|麻烦|你|我|想|要|查一下|查一查|看一下|看下|看看|查找|查询|搜索|检索|列出|显示|展示|查看|了解|介绍|关于|查|找|搜|看|下|的|是|那个|这个))+\s*/g,
+    /^(?:(?:帮我|帮忙|请|麻烦|你|我|想|要|查一下|查一查|看一下|看下|看看|查找|查询|搜索|检索|列出|显示|展示|查看|了解|介绍|关于|查|找|搜|看|的|是|那个|这个))+\s*/g,
     '',
   );
   // 反复剥离尾部请求语与助词（如“张三的客户信息”→“张三”），保留“公司/厂”等实体后缀
@@ -145,7 +147,11 @@ function cleanEntityName(raw: string): string {
 function isGenericName(v: string): boolean {
   const GENERIC_WORDS =
     '所有|全部|全部数据|本月|这个月|当月|最近|近期|今天|今日|昨天|本周|上周|今年|去年|记录|数据|列表|详情|信息|情况|客户|商机|合同|回款|线索|联系人|产品|一下|下|的|是|哪些|什么|看|查|找|搜|了解|介绍|关于';
-  return new RegExp(`^(?:${GENERIC_WORDS})+$`).test(v);
+  if (new RegExp(`^(?:${GENERIC_WORDS})+$`).test(v)) {
+    return true;
+  }
+  // 范围指代词只用来描述「谁的数据」，不可能是业务对象名称，一律拦截
+  return /下属|团队|本组|手下|我们组|本人|当前用户/.test(v);
 }
 
 /** 从自然语言中提取实体名称（客户/公司/联系人/合同等） */
@@ -200,11 +206,20 @@ function extractName(q: string): string | null {
   return null;
 }
 
-/** 优先使用大模型提取的名称，缺失时退回本地正则提取 */
+/**
+ * 取本次查询要用的实体名称。
+ *
+ * 三种情况必须区分开，否则会把范围指代词误当成业务对象名：
+ * - hintName 有值：用大模型识别出的名称；
+ * - hintName 为 null：大模型明确判断问题里没有具体名称（如「我的下属所有客户」），
+ *   此时绝不能再退回本地正则去猜，否则会猜出「属所有」这种脏名字；
+ * - hintName 为 undefined：压根没走大模型（降级为关键词匹配），才用本地正则兜底。
+ */
 function pickName(
   hintName: string | null | undefined,
   q: string,
 ): string | null {
+  if (hintName === null) return null;
   const h = hintName ? String(hintName).trim() : '';
   if (h) return h;
   return extractName(q);
