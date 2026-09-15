@@ -61,6 +61,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
+      type: 'checkbox',
+      width: 50,
+      fixed: 'left',
+    },
+    {
       title: '客户名称',
       field: 'name',
       minWidth: 160,
@@ -156,6 +161,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '创建人',
       field: 'creatorName',
       minWidth: 100,
+    },
+    {
+      title: '操作',
+      field: 'actions',
+      fixed: 'right',
+      width: 160,
+      slots: { default: 'actions' },
     },
   ];
 }

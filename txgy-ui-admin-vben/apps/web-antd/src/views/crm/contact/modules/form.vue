@@ -67,7 +67,17 @@ async function onQuickParse(payload: { fields: ParsedClue }) {
     apply[key] = v;
   }
   await formApi.setValues(apply);
-  message.success('识别完成，请核对信息并补选所属客户后保存');
+  // customerId 由识别组件按「所属客户名称」自动匹配；未匹配到时提示人工补选
+  const companyName = String(fields?.customerName ?? '').trim();
+  if (apply.customerId) {
+    message.success(
+      `识别完成${companyName ? `，已自动关联客户「${companyName}」` : ''}，请核对后保存`,
+    );
+  } else {
+    message.success(
+      `识别完成，请核对信息并补选所属客户后保存${companyName ? `（识别到公司：${companyName}）` : ''}`,
+    );
+  }
 }
 
 const [Modal, modalApi] = useVbenModal({
@@ -113,7 +123,7 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
-    <ClueQuickParse class="mx-4" @apply="onQuickParse" />
+    <ClueQuickParse mode="contact" class="mx-4" @apply="onQuickParse" />
     <Form class="mx-4" />
   </Modal>
 </template>

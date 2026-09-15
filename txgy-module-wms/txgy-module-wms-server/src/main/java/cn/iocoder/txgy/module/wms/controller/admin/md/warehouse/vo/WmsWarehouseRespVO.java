@@ -24,6 +24,10 @@ public class WmsWarehouseRespVO {
     @ExcelProperty("仓库名称")
     private String name;
 
+    @Schema(description = "仓库类型")
+    @ExcelProperty("仓库类型")
+    private String warehouseType;
+
     @Schema(description = "备注", example = "备注")
     @ExcelProperty("备注")
     private String remark;

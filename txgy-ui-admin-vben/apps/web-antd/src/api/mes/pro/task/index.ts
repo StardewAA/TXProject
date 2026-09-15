@@ -74,6 +74,13 @@ export function createTask(data: MesProTaskApi.Task) {
   return requestClient.post('/mes/pro/task/create', data);
 }
 
+/** 按工艺路线自动拆分生成任务（返回生成数量） */
+export function autoGenerateTasksByRoute(workOrderId: number) {
+  return requestClient.post<number>(
+    `/mes/pro/task/auto-generate-by-route?workOrderId=${workOrderId}`,
+  );
+}
+
 /** 修改生产任务 */
 export function updateTask(data: MesProTaskApi.Task) {
   return requestClient.put('/mes/pro/task/update', data);
@@ -92,4 +99,16 @@ export function exportTask(params: any) {
 /** 查询甘特图任务列表（非分页） */
 export function getGanttTaskList(params: any) {
   return requestClient.get<any[]>('/mes/pro/task/gantt-list', { params });
+}
+
+/** 按班组聚合任务负载（任务数、排产数量、已生产数量） */
+export function getTeamTaskLoad() {
+  return requestClient.get<
+    {
+      teamId: number;
+      taskCount: number;
+      quantityTotal: number;
+      producedTotal: number;
+    }[]
+  >('/mes/pro/task/team-load');
 }

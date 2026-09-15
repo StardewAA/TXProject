@@ -45,6 +45,7 @@ import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSetByFlatMap;
+import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - WMS 盘库单")
 @RestController
@@ -97,6 +98,12 @@ public class WmsCheckOrderController {
     public CommonResult<Boolean> completeCheckOrder(@RequestParam("id") Long id) {
         checkOrderService.completeCheckOrder(id);
         return success(true);
+    }
+
+    @PutMapping("/submit-approval")
+    @Operation(summary = "提交盘库审批")
+    public CommonResult<String> submitCheckOrderApproval(@RequestParam("id") Long id) {
+        return success(checkOrderService.submitCheckOrderApproval(getLoginUserId(), id));
     }
 
     @PutMapping("/cancel")

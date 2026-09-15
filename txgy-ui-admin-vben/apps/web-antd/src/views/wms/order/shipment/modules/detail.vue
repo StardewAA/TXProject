@@ -19,6 +19,7 @@ import {
 } from '#/views/wms/utils/format';
 
 import { getDetailFooter, useDetailSchema } from '../data';
+import ExecutionDetail from '../bpm-detail.vue';
 
 interface DetailRow extends WmsShipmentOrderDetailApi.ShipmentOrderDetail {
   totalPrice?: number;
@@ -74,6 +75,7 @@ const [Modal, modalApi] = useVbenModal({
     :show-confirm-button="false"
   >
     <div class="mx-4 space-y-4">
+      <ExecutionDetail :id="detailData.id" @navigate="modalApi.close()" />
       <Descriptions :data="detailData" />
       <VxeTable
         :data="detailRows"

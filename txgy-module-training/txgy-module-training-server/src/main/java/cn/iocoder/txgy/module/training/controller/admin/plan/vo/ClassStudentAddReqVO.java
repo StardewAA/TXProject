@@ -19,4 +19,7 @@ public class ClassStudentAddReqVO {
     @NotEmpty(message = "请选择要添加的学员")
     private List<Long> userIds;
 
+    @Schema(description = "加入来源：1 手动添加，2 批量导入；不传默认 1", example = "1")
+    private Integer source;
+
 }

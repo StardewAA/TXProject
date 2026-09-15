@@ -11,6 +11,8 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectR
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
@@ -106,6 +108,22 @@ public class MesProProjectController {
     public CommonResult<MesProProjectStatisticsRespVO> getProjectStatistics(
             @RequestParam("projectId") Long projectId) {
         return success(projectService.getProjectStatistics(projectId));
+    }
+
+    @GetMapping("/statistics-detail")
+    @Operation(summary = "获得项目的生产统计详情（工单进度 + 报工汇总）")
+    @Parameter(name = "projectId", description = "项目编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:query')")
+    public CommonResult<MesProProjectStatisticsDetailRespVO> getProjectStatisticsDetail(
+            @RequestParam("projectId") Long projectId) {
+        return success(projectService.getProjectStatisticsDetail(projectId));
+    }
+
+    @GetMapping("/milestone-alerts")
+    @Operation(summary = "获得里程碑到期预警列表（未完成且 3 天内到期 / 已超期）")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:query')")
+    public CommonResult<List<MesProProjectMilestoneAlertRespVO>> getMilestoneAlerts() {
+        return success(projectService.getMilestoneAlerts());
     }
 
     @PutMapping("/refresh-status")

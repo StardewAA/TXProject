@@ -33,6 +33,45 @@ public class WmsReceiptOrderDetailServiceImplTest extends BaseDbUnitTest {
 
     @MockitoBean
     private WmsItemSkuService itemSkuService;
+    @MockitoBean
+    private cn.iocoder.txgy.module.wms.service.md.item.WmsItemService itemService;
+
+    @Test
+    public void manualReceiptCapturesMaterialQualityAndCannotOverrideIt() {
+        org.mockito.Mockito.when(itemSkuService.validateItemSkuExistsAndItemEnabled(1001L)).thenReturn(new cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO().setId(1001L).setItemId(50L));
+        org.mockito.Mockito.when(itemService.getItem(50L)).thenReturn(new cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO().setId(50L).setQualityRequired(true));
+        var line = createReceiptOrderDetailReqVO(null, 1001L, "2.00").setQualityRequiredSnapshot(false);
+        receiptOrderDetailService.createReceiptOrderDetailList(10L, createReceiptOrderReqVO(line));
+        var saved = receiptOrderDetailMapper.selectListByOrderId(10L).get(0);
+        assertEquals(true, saved.getQualityRequiredSnapshot());
+        org.mockito.Mockito.when(itemService.getItem(50L)).thenReturn(new cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO().setId(50L).setQualityRequired(false));
+        line.setId(saved.getId()).setQualityImages(List.of("https://example.test/check.jpg")).setActualQuantity(new BigDecimal("2")).setQualifiedQuantity(BigDecimal.ONE).setUnqualifiedQuantity(BigDecimal.ONE);
+        receiptOrderDetailService.updateReceiptOrderDetailList(10L, createReceiptOrderReqVO(line));
+        saved = receiptOrderDetailMapper.selectById(saved.getId());
+        assertEquals(true, saved.getQualityRequiredSnapshot());
+        assertEquals(List.of("https://example.test/check.jpg"), saved.getQualityImages());
+    }
+
+    @Test
+    public void clearingAcceptanceQuantitiesRemovesPreviouslySavedValues() {
+        Long orderId = 10L;
+        WmsReceiptOrderDetailDO detail = createReceiptOrderDetail(orderId, 1001L, "10.00")
+                .setActualQuantity(new BigDecimal("10.00"))
+                .setQualifiedQuantity(new BigDecimal("8.00"))
+                .setUnqualifiedQuantity(new BigDecimal("2.00"))
+                .setQualityRequiredSnapshot(false);
+        receiptOrderDetailMapper.insert(detail);
+
+        var cleared = createReceiptOrderDetailReqVO(detail.getId(), 1001L, "10.00");
+        receiptOrderDetailService.updateReceiptOrderDetailList(orderId, createReceiptOrderReqVO(cleared));
+
+        WmsReceiptOrderDetailDO saved = receiptOrderDetailMapper.selectById(detail.getId());
+        assertNull(saved.getActualQuantity(), "清空实际数量应写入数据库，不能沿用旧验收值");
+        assertNull(saved.getQualifiedQuantity(), "清空合格数量应写入数据库");
+        assertNull(saved.getUnqualifiedQuantity(), "清空不合格数量应写入数据库");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> WmsReceiptOrderDetailServiceImpl.validateAcceptanceQuantities(saved, true));
+    }
 
     @Test
     public void testCreateReceiptOrderDetailList_success() {

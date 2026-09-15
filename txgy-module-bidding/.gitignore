@@ -1,0 +1,46 @@
+# 本仓库为 txgy-module-bidding 的独立仓库（从父仓库 txgycloud 拆出）
+# 说明：2026-09-13 因多个 AI 并行改动同一父仓库、互相暂存/提交造成冲突，故本模块单独建仓。
+# 父仓库侧需执行（见 README-git-独立仓库.md）：git rm -r --cached txgy-module-bidding && 在父 .gitignore 加入 txgy-module-bidding/
+
+# Maven / 构建产物
+target/
+**/target/
+*.jar
+*.war
+*.class
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# 日志与临时
+*.log
+logs/
+.tmp/
+sql/.tmp/
+*.tmp
+
+# 数据/索引备份（含业务数据，禁止入库；2026-09-11 清库前备份）
+sql/.backup/
+.backup/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 过程性草稿与调试产物（2026-09-20 整理：中间稿/调试输出，不入库）
+千问中间脚本和文件存放位置/
+.tmp_debug/
+cp.txt
+**/.~lock.*#
+.tsc-*.txt
+
+# 业务附件：34MB 招标公告/文件/中标公示（PDF/DOCX/XLSX/RAR），入库与否待业务确认；
+# 需要入库时删掉下面这一行即可。
+docs/招投标版块数据提供/

@@ -23,6 +23,7 @@ import { refreshTokenApi } from './core';
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const tenantEnable = isTenantEnable();
 const apiEncrypt = createApiEncrypt(import.meta.env);
+const TENANT_ACCESS_DENIED_MESSAGE = '您无权访问该租户的数据';
 
 function getRequestPath(url?: string) {
   return (url || '').split('?')[0] ?? '';
@@ -52,6 +53,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     baseURL,
   });
   let reAuthing = false;
+  let tenantReAuthenticationInProgress = false;
 
   /**
    * 重新认证逻辑
@@ -72,6 +74,25 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     } else {
       try { await authStore.logout(); } catch { /* token 已失效，忽略退出请求错误 */ }
       window.location.href = '/#/auth/login';
+    }
+  }
+
+  /**
+   * 旧会话的 token 租户与当前选择的租户不一致时，清除整个会话，
+   * 避免并发请求持续弹出租户越权提示。
+   */
+  async function doTenantReAuthenticate() {
+    const accessStore = useAccessStore();
+    if (tenantReAuthenticationInProgress || !accessStore.accessToken) {
+      return;
+    }
+    tenantReAuthenticationInProgress = true;
+    try {
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      await useAuthStore().logout();
+    } finally {
+      tenantReAuthenticationInProgress = false;
     }
   }
 
@@ -161,6 +182,20 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     },
   });
 
+  // 租户错配不是普通业务报错：清理旧会话并返回登录页，让新 token 绑定正确租户。
+  client.addResponseInterceptor({
+    fulfilled: async (response) => {
+      const responseData = response.data as any;
+      if (
+        responseData?.code === 403 &&
+        responseData?.msg === TENANT_ACCESS_DENIED_MESSAGE
+      ) {
+        await doTenantReAuthenticate();
+      }
+      return response;
+    },
+  });
+
   // add by 芋艿：对应 https://t.zsxq.com/SHqWw 反馈
   // 处理 Blob 响应中的业务错误（如 401）：后端把「账号未登录」包成 HTTP 200 + body {code: 401, msg: ...}，
   // download 强制 responseType: 'blob' 后被 axios 包成 application/json 的 Blob，defaultResponseInterceptor 走
@@ -236,8 +271,33 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const responseData = error?.response?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
+      // 开发者日志（仅 DEV 打印，避免生产刷屏）：任何走 requestClient 的请求失败都能在控制台定位，
+      // 含方法/URL/后端响应体(code+msg)/HTTP 状态；注意不打印 error.config（含 Authorization/租户头）。
+      if (import.meta.env.DEV) {
+        const method = String(error?.config?.method ?? 'GET').toUpperCase();
+        const url = error?.config?.url ?? '';
+        const httpStatus = error?.response?.status ?? '';
+        const bizCode = error?.data?.code ?? responseData?.code ?? '';
+        console.error(
+          '[api 请求失败]',
+          method,
+          url,
+          'http=' + httpStatus,
+          'code=' + bizCode,
+          'msg=' + (responseData?.msg ?? error?.message ?? msg),
+          { responseBody: responseData },
+        );
+      }
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
+        return;
+      }
+      // 租户错配已由上面的拦截器统一清理会话，不再对并发请求重复弹窗。
+      if (
+        (error?.data?.code === 403 || responseData?.code === 403) &&
+        (error?.data?.msg === TENANT_ACCESS_DENIED_MESSAGE ||
+          responseData?.msg === TENANT_ACCESS_DENIED_MESSAGE)
+      ) {
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示
