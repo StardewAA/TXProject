@@ -1,7 +1,7 @@
 <!--
   采集批次详情档（两档视图之“舒张”层，独立 Grid 页配套）：
   业务：采集批次列表只留克制检索行；点「详情」进入本档——批次概要 → 该批爬虫任务 N 条(KPI+克制行) →
-        选中任务过程区域（getCrawlTask Descriptions 就地展开，不嵌套 Drawer）。
+选中任务过程区域（getCrawlTask Descriptions 就地展开；2026-09-14 口径修订：允许嵌套 Drawer）。
   理由：后端异步队列化(2026-09-10 设计)后 RUNNING 批次=消费中，task 全程可见，批次下钻是该批完整行迹入口；
         与 console/source 同口径“克制行 + 整页分层”。
   后端契约：crawl-job page/get=04-全链路 §5.10/5.11；批次下钻任务=携 jobId 调 crawl-task/page 见 crawl-batch §三.1；

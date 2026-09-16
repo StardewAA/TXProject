@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalFilterOptionsRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
@@ -42,6 +43,16 @@ public interface NoticeExternalService {
      * @return 管理列表行
      */
     PageResult<NoticeExternalManageRespVO> getManagePage(NoticeExternalManagePageReqVO reqVO);
+
+    /**
+     * 管理端筛选选项（来源站 / 公告类型下拉数据源）。
+     *
+     * <p>来源站取自采集源配置（bidding_fetch_source，名称以配置为准）；公告类型取公告表 notice_type_raw 去重。
+     * 供审核页搜索表单用 ApiSelect 动态填充下拉，避免前端硬编码（对应「严禁硬编码枚举」约束）。
+     *
+     * @return 来源站选项 + 公告类型去重值
+     */
+    NoticeExternalFilterOptionsRespVO getManageFilterOptions();
 
     /**
      * 管理详情（BR-7，审核预览）：全状态返回（NEW/ACTIVE/INACTIVE/ARCHIVED 均可读），

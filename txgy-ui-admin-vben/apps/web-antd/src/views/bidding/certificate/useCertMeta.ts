@@ -60,6 +60,31 @@ const TAG_COLOR: Record<string, string> = {
   info: 'blue',
   default: 'default',
 };
+/** 契约字典中文兜底（《电子证照模块-前端接口契约》§3.1~§3.11）。
+ * 后端字典优先；仅在字典缺失或缺项时使用，避免界面直接显示英文 code。
+ */
+const CONTRACT_LABELS: Record<string, Record<string, string>> = {
+  cert_status: { ACTIVE: '正常', EXPIRING_SOON: '即将到期', EXPIRED: '已过期', SUSPENDED: '暂扣', REVOKED: '吊销', CANCELLED: '注销' },
+  verification_status: { UNVERIFIED: '未验真', VERIFYING: '验真中', VERIFIED: '已验真', INVALID: '验真无效' },
+  file_category: { ORIGINAL: '原件', COPY: '加注件', CHANGE_PAGE: '变更页', RENEWAL_PAGE: '延续页', E_CERT: '电子证照' },
+  lifecycle_type: { CHANGE: '变更', RENEW: '续期', REVOKE: '注销吊销', ANNUAL: '年检' },
+  lifecycle_status: { PENDING: '待办', REVIEWING: '审核中', APPROVED: '已通过', EFFECTIVE: '已生效', REJECTED: '已驳回' },
+  biz_domain: { CERT: '证照', PERSON_CERT: '员工证书', ENTERPRISE_QUAL: '企业资质', SAFETY_PERMIT: '安许证' },
+  qual_status: { VALID: '正常', EXPIRING_SOON: '即将到期', EXPIRED: '已过期', PENDING_RENEW: '延续中', LIMITED: '限制', REVOKED: '吊销' },
+  qual_apply_status: { DRAFT: '草稿', SUBMITTED: '已提交', ACCEPTED: '已受理', REVIEWING: '审核中', APPROVED: '已批准', PUBLISHED: '公示中', ISSUED: '已办结', REJECTED: '已退回' },
+  safety_permit_status: { VALID: '正常', EXPIRING_SOON: '即将到期', EXPIRED: '已过期', SUSPENDED: '暂扣', REVOKED: '吊销' },
+  person_cert_status: { VALID: '正常', EXPIRING_SOON: '即将到期', EXPIRED: '已过期', SUSPENDED: '暂扣', REVOKED: '吊销', CANCELLED: '注销' },
+  person_cert_type: { ID_CARD: '身份证', EDUCATION_CERT: '学历证', DEGREE_CERT: '学位证', TITLE_CERT: '职称证', REG_PRACTICE_CERT: '注册执业证', SAFETY_ASSESS_CERT: '安全考核证', SKILL_CERT: '技能证', TRAINING_CERT: '培训证', OTHER: '其他' },
+  revoke_type: { REVOKE: '吊销', CANCEL: '注销', SUSPEND: '暂扣', RESTORE: '恢复' },
+  renewal_type: { RENEW: '延续', REISSUE: '补换证' },
+  material_result: { PASS: '齐备', RISK: '部分缺失或临近到期', FAIL: '必备材料缺失' },
+  material_status: { READY: '齐备', EXPIRING: '临近到期', MISSING: '缺失', EXPIRED: '已过期' },
+  safety_risk_flag: { NORMAL: '正常', YELLOW: '黄色预警', RED: '红色预警', INVALID: '失效', FREQUENT: '频繁预警' },
+  person_risk_flag: { NORMAL: '正常', ABNORMAL: '一年异常', FREQUENT: '频繁异常' },
+  review_result: { '1': '通过', '0': '不通过' },
+  review_task_status: { PENDING: '待审查', APPROVED: '已通过', REJECTED: '已驳回' },
+  review_biz_type: { QUALIFICATION: '企业资质', CERTIFICATE: '证照', PERSON_CERT: '员工证书' },
+};
 
 export interface DictTag {
   label: string;
@@ -76,17 +101,19 @@ export function useCertMeta() {
   }
   /** 下拉选项（antd Select :options 直接可用） */
   function dictOptions(key: string): Array<{ label: string; value: string }> {
-    return dictItems(key).map((i) => ({ label: i.label, value: i.value }));
+    const items = dictItems(key);
+    if (items.length > 0) return items.map((i) => ({ label: i.label, value: i.value }));
+    return Object.entries(CONTRACT_LABELS[key] ?? {}).map(([value, label]) => ({ label, value }));
   }
-  /** 中文名（未知值回显原值，避免空白） */
+  /** 中文名：后端字典优先，契约中文兜底，未知值才回显原值 */
   function dictLabel(key: string, value?: null | string): string {
     if (!value) return '—';
-    return dicts.value[key]?.find((i) => i.value === value)?.label ?? value;
+    return dicts.value[key]?.find((i) => i.value === value)?.label ?? CONTRACT_LABELS[key]?.[value] ?? value;
   }
   /** 标签（label + 颜色 + 是否终态） */
   function dictTag(key: string, value?: null | string): DictTag {
     const hit = value ? dicts.value[key]?.find((i) => i.value === value) : undefined;
-    if (!hit) return { label: value || '—', color: 'default', terminal: false };
+    if (!hit) return { label: (value && CONTRACT_LABELS[key]?.[value]) || value || '—', color: 'default', terminal: false };
     return { label: hit.label, color: TAG_COLOR[hit.tagType] ?? 'default', terminal: hit.terminal === true };
   }
   /** 是否终态（终态禁止再流转，用于禁用状态操作项） */

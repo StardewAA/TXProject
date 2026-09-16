@@ -96,6 +96,8 @@ public interface ErrorCodeConstants {
             new ErrorCode(1_050_200_014, "只能操作候选人当前轮次的面试");
     ErrorCode RECRUIT_INTERVIEW_RESULT_INVALID =
             new ErrorCode(1_050_200_015, "当前面试状态或面试结果不允许提交");
+    ErrorCode RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED =
+            new ErrorCode(1_050_200_031, "招聘面试最多安排三轮");
 
     // ========== 招聘渠道 1-050-200-003 ==========
     ErrorCode RECRUIT_CHANNEL_NOT_EXISTS = new ErrorCode(1_050_200_003, "招聘渠道不存在");
@@ -141,6 +143,8 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_OFFER_NOT_EXISTS = new ErrorCode(1_050_200_024, "招聘 Offer 不存在");
     ErrorCode RECRUIT_OFFER_STATE_INVALID = new ErrorCode(1_050_200_025, "招聘 Offer 状态不允许该操作");
     ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_026, "该应聘已存在有效 Offer");
+    ErrorCode RECRUIT_OFFER_POST_MISMATCH = new ErrorCode(1_050_200_032, "Offer 职位必须与应聘职位一致");
+    ErrorCode RECRUIT_OFFER_DATA_INVALID = new ErrorCode(1_050_200_033, "Offer 薪资、有效期或入职日期不合法");
 
     // ========== 考勤组 1-050-300-002 ==========
     ErrorCode ATTENDANCE_GROUP_NOT_EXISTS = new ErrorCode(1_050_300_002, "考勤组不存在");

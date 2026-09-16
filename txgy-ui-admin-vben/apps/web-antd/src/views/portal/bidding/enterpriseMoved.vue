@@ -13,12 +13,12 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
-/** 前台保留的个人视角入口 */
+/** 前台保留的个人视角入口（2026-09-15 口径：公告大厅/标书制作/合规审查/投标流程管理） */
 const KEPT = [
   { label: '公告大厅', desc: '查询 · 中标公示 · 详情', path: '/portal/bidding' },
-  { label: '本平台发布', desc: '招标人公告浏览', path: '/portal/bidding/internal-hall' },
-  { label: '我的关注', desc: '关注的公告/项目 · 动态提醒', path: '/portal/bidding/subscription' },
-  { label: '个人中心', desc: '自身信息 · 实名认证', path: '/portal/bidding/profile' },
+  { label: '标书制作', desc: '编制 · 上传投标文件', path: '/portal/bidding/bid-document' },
+  { label: '合规审查', desc: '公告 · 标书合规核验', path: '/portal/bidding/compliance' },
+  { label: '投标流程管理', desc: '意向 · 待投标 · 已投标', path: '/portal/bidding/process' },
 ];
 
 /** 已迁到后台的功能（企业级） */
@@ -68,7 +68,7 @@ function go(path: string): void {
       </div>
       <div class="mv-actions">
         <button class="mv-btn primary" @click="go('/portal/bidding')">返回公告大厅</button>
-        <button class="mv-btn" @click="go('/portal/bidding/subscription')">查看我的关注</button>
+        <button class="mv-btn" @click="go('/portal/bidding/process')">前往投标流程管理</button>
       </div>
     </div>
   </div>

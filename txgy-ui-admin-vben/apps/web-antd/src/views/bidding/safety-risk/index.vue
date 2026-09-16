@@ -31,6 +31,7 @@ import {
   getProjectKeyPostChanges,
   type SafetyPermitApi,
 } from '#/api/bidding/safetyPermit';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
@@ -65,6 +66,37 @@ const KEY_POST_OPTIONS = [
 ];
 
 const entId = ref<number | undefined>(undefined);
+
+/* ===== 企业主体：由「主体档案」自动带出 =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 唯一键）；
+   原实现让使用者手填"企业主体 id"，属"用户不可能知道的字段"，改为接口带出。
+   缺口 B：后端若提供 GET /bidding/subject/profile/list（多主体选项），只需改本函数 —— 见
+   docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md §3 */
+const subjectLoading = ref(false);
+const subjectOptions = ref<{ label: string; value: number }[]>([]);
+
+async function loadSubjectOptions(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    const list: { label: string; value: number }[] = [];
+    for (const subjectType of ['BIDDER', 'TENDERER']) {
+      const profile = await fetchSubjectProfile(subjectType).catch(() => null);
+      if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+        list.push({
+          label: profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName,
+          value: Number(profile.id),
+        });
+      }
+    }
+    subjectOptions.value = list;
+    const first = list[0];
+    if (first && entId.value === undefined) {
+      entId.value = first.value;
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
 
 /* ===== ② 多岗兼任校验 ===== */
 const multiForm = reactive<{ personId?: number; primaryPost?: string; secondaryPost?: string }>({
@@ -325,7 +357,11 @@ const keyPostColumns = [
 ];
 
 onMounted(() => {
-  /* 首屏不自动请求：entId 由使用者填写（与证照域其它页一致，避免无谓 403） */
+  /* 企业主体自动带出（原为使用者手填 id）；安全许可域接口按 entId 查询，
+     取不到主体时不发起请求，避免无谓 403 */
+  void loadSubjectOptions();
+  /* 项目下拉预加载：原 loadProjects 无人调用导致「或按项目名称搜索」下拉恒为空 */
+  void loadProjects();
 });
 </script>
 
@@ -337,8 +373,16 @@ onMounted(() => {
         <div class="ct-sub">A/B/C 类人员配备风险 · 重算与宽限 · 多岗兼任 · 人员风险 · 项目关键岗位变更</div>
       </div>
       <div class="ct-actions">
-        <a-input-number v-model:value="entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" />
-        <span class="ct-panel-meta">填入后下方风险卡片自动加载</span>
+        <a-select
+          v-if="subjectOptions.length > 1"
+          v-model:value="entId"
+          :loading="subjectLoading"
+          :options="subjectOptions"
+          allow-clear
+          placeholder="自动带出，可切换"
+          style="width: 260px"
+        />
+        <span class="ct-panel-meta">企业主体由「主体档案」自动带出，选中后下方风险卡片自动加载</span>
       </div>
     </div>
 
@@ -409,6 +453,7 @@ onMounted(() => {
                 <a-descriptions-item label="校验时间">{{ fmtDateTime(multiResult.checkedAt) }}</a-descriptions-item>
               </a-descriptions>
             </div>
+            <div v-else class="ct-empty">输入人员 id 与 主岗/兼任岗 后点「校验」：重复任职校验会落库留痕</div>
           </div>
         </div>
       </a-col>
@@ -447,6 +492,7 @@ onMounted(() => {
                 <a-descriptions-item label="评估时间">{{ fmtDateTime(personRisk.personRiskEvaluatedAt) }}</a-descriptions-item>
               </a-descriptions>
             </div>
+            <div v-else class="ct-empty">输入人员 id 查询：给出 12 个月岗位变更次数与风险标签（未评估 ≠ 正常）</div>
           </div>
         </div>
       </a-col>
@@ -506,7 +552,7 @@ onMounted(() => {
                 </a-button>
               </template>
             </template>
-            <template #emptyText><div class="ct-empty">窗口内无关键岗位变更</div></template>
+            <template #emptyText><div class="ct-empty">窗口内无关键岗位变更：该窗口内暂无任职 / 变更记录，可「登记任职/变更」后刷新</div></template>
           </a-table>
         </template>
         <div v-else class="ct-empty">输入项目 id 后查询：逐岗位给出窗口内变更次数、阈值与是否超限</div>

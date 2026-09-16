@@ -632,3 +632,4 @@ export function createSafetyPermit(data: QualificationApi.PermitCreateReq) {
 export function runQualificationAlertScan() {
   return requestClient.post<number>('/bidding/qualification-alert-run/scan', undefined, SILENT);
 }
+

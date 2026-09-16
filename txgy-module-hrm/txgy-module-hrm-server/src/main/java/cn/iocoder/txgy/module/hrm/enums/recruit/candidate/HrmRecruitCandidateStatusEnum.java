@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.hrm.enums.recruit.candidate;
 import cn.hutool.core.util.ArrayUtil;
 import cn.iocoder.txgy.framework.common.core.ArrayValuable;
 import cn.iocoder.txgy.framework.common.util.collection.SetUtils;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -85,6 +86,27 @@ public enum HrmRecruitCandidateStatusEnum implements ArrayValuable<Integer> {
 
     public static HrmRecruitCandidateStatusEnum valueOf(Integer status) {
         return ArrayUtil.firstMatch(item -> item.getStatus().equals(status), values());
+    }
+
+    public static Integer fromApplicationStatus(String applicationStatus) {
+        HrmRecruitApplicationStatusEnum status = HrmRecruitApplicationStatusEnum.valueOfStatus(applicationStatus);
+        if (status == null) {
+            return null;
+        }
+        return switch (status) {
+            case SUBMITTED, SCREENING -> NEW.getStatus();
+            case SCREENING_PASSED -> PRIMARY_PASS.getStatus();
+            case PENDING_INTERVIEW, INTERVIEW_SCHEDULED, INTERVIEWING, INTERVIEW_EVALUATING,
+                    NEXT_INTERVIEW, INTERVIEW_CANCELED, INTERVIEW_ABSENT -> INTERVIEW.getStatus();
+            case FINAL_INTERVIEW_PASSED, PASSED, PENDING_OFFER, OFFER_APPROVING -> INTERVIEW_PASS.getStatus();
+            case OFFER_SENT -> OFFER_SENT.getStatus();
+            case PENDING_ONBOARD -> PENDING_ENTRY.getStatus();
+            case ONBOARDED -> JOINED.getStatus();
+            case RESUME_REJECTED, INTERVIEW_REJECTED, OFFER_REJECTED, OFFER_WITHDRAWN, OFFER_EXPIRED,
+                    OFFER_CANDIDATE_REJECTED, ELIMINATED ->
+                    ELIMINATED.getStatus();
+            case WITHDRAWN -> null;
+        };
     }
 
 }
