@@ -96,7 +96,8 @@ function close(): void {
 
 <style scoped>
 .pv { min-height: 420px; }
-.pv-frame { width: 100%; height: 70vh; border: 1px solid #d9dfe5; }
+/* 右侧留白：PDF 查看器自带纵向滚动条，贴住外层滚动条会出现两条并排、拖不动的滚动条 */
+.pv-frame { width: calc(100% - 14px); height: 70vh; border: 1px solid #d9dfe5; }
 .pv-img { max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; border: 1px solid #d9dfe5; }
 .pv-bar { margin-top: 8px; display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
 .pv-url { color: #8a949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }

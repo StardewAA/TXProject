@@ -42,6 +42,46 @@ export function tagOf(map: Record<string, TagOf>, v?: string): null | TagOf {
   return c ? { text: c.text, color: c.color } : null;
 }
 
+/**
+ * 错误 → 可读文本（采集域统一取后端 msg）。
+ * 背景：请求器在业务 code 非 0 时抛普通对象（Object.assign({}, response)），
+ * 旧写法 e instanceof Error ? e.message : String(e) 会显示 "[object Object]"
+ * （见 task-chain 段6 产出定位缺陷修复）。此处递归取 msg，兜底 JSON 截断，绝不回显对象字面量。
+ */
+export function crawlErrMsg(error: unknown): string {
+  const pick = (v: unknown, depth: number): string => {
+    if (v == null) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (v instanceof Error) return v.message || '';
+    if (depth > 3) return '';
+    if (typeof v === 'object') {
+      const o = v as Record<string, unknown>;
+      for (const k of ['msg', 'message', 'errorMsg', 'errorMessage']) {
+        const s = pick(o[k], depth + 1);
+        if (s) return s;
+      }
+      if (o.response && typeof o.response === 'object') {
+        const s = pick((o.response as Record<string, unknown>).data, depth + 1);
+        if (s) return s;
+      }
+      if (o.data && typeof o.data === 'object') {
+        const s = pick((o.data as Record<string, unknown>).msg, depth + 1);
+        if (s) return s;
+      }
+      try {
+        const j = JSON.stringify(v);
+        return j && j.length <= 120 ? j : j ? j.slice(0, 117) + '…' : '';
+      } catch {
+        return '';
+      }
+    }
+    return String(v);
+  };
+  const s = pick(error, 0);
+  return s || '接口异常';
+}
+
 /** 批次汇总 JSON → 总/成/败 摘要（解析失败回原文截断） */
 export function jobSummaryText(summaryJson?: string): string {
   if (!summaryJson) return '—';

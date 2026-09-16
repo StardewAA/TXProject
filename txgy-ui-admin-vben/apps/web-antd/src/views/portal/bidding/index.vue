@@ -20,6 +20,8 @@ import { classifyResultRaw, fetchNoticePage, RESULT_TYPE_MERGE } from './api';
 import { biddingConfig } from './config';
 import { fmtDate, fmtDT } from './format';
 
+import ModuleNav from './components/ModuleNav.vue';
+
 const router = useRouter();
 
 /** 内容形态（界面标签 ↔ 接口 code） */
@@ -220,11 +222,6 @@ function goDetail(id: number | string): void {
     /* 导航被取消/重复导航：忽略 */
   });
 }
-function goNav(path: string): void {
-  router.push(path).catch(() => {
-    /* 导航被取消/重复导航：忽略 */
-  });
-}
 
 onMounted(() => {
   void load();
@@ -246,29 +243,8 @@ onMounted(() => {
 -->
 
   <div class="bidding-page bid-ind">
-    <!-- 本项目主导航（大图标+文字 → 跳转子页；外部平台顶栏不在本项目范围） -->
-    <div class="main-nav">
-      <div class="nav-item on kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding')" @keydown.enter.prevent="goNav('/portal/bidding')">
-        <span class="ic">≡</span>
-        <div class="n-name">公告大厅</div>
-        <div class="n-sub">查询 · 中标公示 · 详情</div>
-      </div>
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/internal-hall')" @keydown.enter.prevent="goNav('/portal/bidding/internal-hall')">
-        <span class="ic">◈</span>
-        <div class="n-name">本平台发布</div>
-        <div class="n-sub">招标人公告 · 大厅公开</div>
-      </div>
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/subscription')" @keydown.enter.prevent="goNav('/portal/bidding/subscription')">
-        <span class="ic">✦</span>
-        <div class="n-name">我的关注</div>
-        <div class="n-sub">关注的公告/项目 · 动态提醒</div>
-      </div>
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/profile')" @keydown.enter.prevent="goNav('/portal/bidding/profile')">
-        <span class="flag">二期</span><span class="ic">◎</span>
-        <div class="n-name">个人中心</div>
-        <div class="n-sub">自身信息 · 实名认证</div>
-      </div>
-    </div>
+    <!-- 招投标前台模块导航（公告大厅不再占按钮位，本页即公告大厅落地页） -->
+    <ModuleNav />
 
     <!-- ① 关键词：全文检索（keyword → ES：标题/项目名/编号/正文，R5） -->
     <div class="kwbar">
@@ -456,59 +432,6 @@ onMounted(() => {
 .kbd-btn:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
-}
-.main-nav {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  background: hsl(var(--border));
-  gap: 1px;
-}
-.nav-item {
-  background: hsl(var(--muted) / 40%);
-  padding: 14px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  position: relative;
-  text-align: center;
-}
-.nav-item:hover {
-  background: hsl(var(--primary) / 8%);
-}
-.nav-item.on {
-  background: hsl(var(--card));
-  box-shadow: inset 0 -3px 0 hsl(var(--primary));
-}
-.nav-item .ic {
-  font-size: 20px;
-  color: hsl(var(--primary));
-  line-height: 1;
-}
-.nav-item .n-name {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: hsl(var(--foreground));
-}
-.nav-item.on .n-name {
-  color: hsl(var(--primary));
-}
-.nav-item .n-sub {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-}
-.nav-item .flag {
-  position: absolute;
-  top: 6px;
-  right: 10px;
-  font-size: 10px;
-  color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  border-radius: 3px;
-  padding: 0 5px;
-  line-height: 1.5;
 }
 .kwbar {
   display: flex;

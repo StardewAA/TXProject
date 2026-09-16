@@ -5,11 +5,13 @@ package cn.iocoder.txgy.module.bidding.service.noticeexternal;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalFilterOptionsRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalPageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalRespVO;
+import cn.iocoder.txgy.module.bidding.dal.dataobject.externalfetch.CrawlSourceDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalAttachmentDO;
 import cn.iocoder.txgy.module.bidding.dal.dataobject.noticeexternal.NoticeExternalDO;
 import cn.iocoder.txgy.module.bidding.dal.mysql.noticeexternal.NoticeExternalAttachmentMapper;
@@ -32,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -252,6 +255,30 @@ public class NoticeExternalServiceImpl implements NoticeExternalService {
         IPage<NoticeExternalDO> page = noticeExternalMapper.selectPage(
                 Page.of(reqVO.getPageNo(), reqVO.getPageSize()), wrapper);
         return new PageResult<>(page.getRecords().stream().map(this::toManageRespVO).toList(), page.getTotal());
+    }
+
+    @Override
+    public NoticeExternalFilterOptionsRespVO getManageFilterOptions() {
+        NoticeExternalFilterOptionsRespVO resp = new NoticeExternalFilterOptionsRespVO();
+        // 来源站：取采集源配置（bidding_fetch_source）——名称以配置为准；公告表 source_name 只是快照，可能滞后/为空。
+        // 下拉提交的仍是 sourceCode（manage/page 按 sourceCode 精确过滤）。
+        List<NoticeExternalFilterOptionsRespVO.SourceOption> sourceOptions = new ArrayList<>();
+        for (CrawlSourceDO src : crawlSourceMapper.selectList(
+                new LambdaQueryWrapper<CrawlSourceDO>()
+                        .select(CrawlSourceDO::getSourceCode, CrawlSourceDO::getSourceName)
+                        .orderByAsc(CrawlSourceDO::getSourceCode))) {
+            if (!StringUtils.hasText(src.getSourceCode())) {
+                continue;
+            }
+            NoticeExternalFilterOptionsRespVO.SourceOption option = new NoticeExternalFilterOptionsRespVO.SourceOption();
+            option.setCode(src.getSourceCode());
+            option.setName(StringUtils.hasText(src.getSourceName()) ? src.getSourceName() : src.getSourceCode());
+            sourceOptions.add(option);
+        }
+        resp.setSources(sourceOptions);
+        // 公告类型：notice_type_raw 去重（自由文本，无枚举/字典；仅作下拉选项，不参与检索）
+        resp.setNoticeTypes(noticeExternalMapper.selectDistinctNoticeTypeRaw());
+        return resp;
     }
 
     @Override
