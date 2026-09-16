@@ -70,6 +70,25 @@ export function transcodeColor(status?: number) {
   return TRANSCODE_STATUS_OPTIONS.find((item) => item.value === status)?.color;
 }
 
+/** 转码任务状态（0待转码 1转码中 2成功 3失败 4跳过） */
+export const TRANSCODE_TASK_STATUS_OPTIONS = [
+  { label: '待转码', value: 0, color: 'default' },
+  { label: '转码中', value: 1, color: 'processing' },
+  { label: '成功', value: 2, color: 'success' },
+  { label: '失败', value: 3, color: 'error' },
+  { label: '跳过', value: 4, color: 'warning' },
+] as const;
+
+export function transcodeTaskText(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.label;
+}
+
+export function transcodeTaskColor(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.color;
+}
+
 /** 标签维度 */
 export const TAG_DIMENSION_OPTIONS = [
   { label: '工种', value: 'work_type' },

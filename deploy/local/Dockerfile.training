@@ -1,0 +1,19 @@
+# 云培训学院服务镜像：在既有 dev 镜像基础上更新 jar，并内置 ffmpeg 供视频异步转码使用。
+# 构建上下文：deploy/local（jars/training.jar 由主机 Maven 构建后复制到此）
+# 说明：仓库 .dockerignore 排除 **/target，因此 jar 需先复制到 deploy/local/jars 下。
+FROM txgy-local-training:dev
+
+USER root
+
+# ffmpeg：视频上传成功后按 360P / 480P / 720P 异步转码
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY jars/training.jar /app/app.jar
+
+WORKDIR /app
+
+ENV SERVER_PORT=48080
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
