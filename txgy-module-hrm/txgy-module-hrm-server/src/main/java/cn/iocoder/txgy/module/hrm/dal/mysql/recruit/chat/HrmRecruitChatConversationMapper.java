@@ -32,6 +32,13 @@ public interface HrmRecruitChatConversationMapper extends BaseMapperX<HrmRecruit
                 .last("LIMIT 1"));
     }
 
+    default HrmRecruitChatConversationDO selectByApplicationId(Long applicationId) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitChatConversationDO>()
+                .eq(HrmRecruitChatConversationDO::getApplicationId, applicationId)
+                .orderByDesc(HrmRecruitChatConversationDO::getId)
+                .last("LIMIT 1"));
+    }
+
     default List<HrmRecruitChatConversationDO> selectWaitingBefore(java.time.LocalDateTime deadline) {
         return selectList(new LambdaQueryWrapperX<HrmRecruitChatConversationDO>()
                 .eq(HrmRecruitChatConversationDO::getStatus, HrmRecruitChatStatusEnum.WAITING.getStatus())
@@ -58,6 +65,13 @@ public interface HrmRecruitChatConversationMapper extends BaseMapperX<HrmRecruit
                         .or()
                         .eq(HrmRecruitChatConversationDO::getHrUserId, userId))
                 .orderByDesc(HrmRecruitChatConversationDO::getLastTime)
+                .orderByDesc(HrmRecruitChatConversationDO::getId));
+    }
+
+    default List<HrmRecruitChatConversationDO> selectListByCandidateUserId(Long candidateUserId) {
+        return selectList(new LambdaQueryWrapperX<HrmRecruitChatConversationDO>()
+                .eq(HrmRecruitChatConversationDO::getCandidateUserId, candidateUserId)
+                .isNotNull(HrmRecruitChatConversationDO::getCandidateId)
                 .orderByDesc(HrmRecruitChatConversationDO::getId));
     }
 }
