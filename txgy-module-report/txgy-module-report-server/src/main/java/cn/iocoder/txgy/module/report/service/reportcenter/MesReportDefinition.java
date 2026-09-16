@@ -103,6 +103,89 @@ public enum MesReportDefinition {
                     ColumnDef.of("qualified_quantity", "合格数量"),
                     ColumnDef.of("unqualified_quantity", "不合格数量"),
                     ColumnDef.of("feedback_time", "报工时间")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 工序产出汇总表（P0 #3）
+     */
+    PROCESS_OUTPUT("mes_process_output", "工序产出汇总表", "按工序汇总报工数量、合格数量与合格率",
+            List.of(ColumnDef.of("process_name", "工序"),
+                    ColumnDef.of("work_order_count", "工单数"),
+                    ColumnDef.of("record_count", "报工笔数"),
+                    ColumnDef.of("feedback_quantity", "报工数量"),
+                    ColumnDef.of("qualified_quantity", "合格数量"),
+                    ColumnDef.of("unqualified_quantity", "不合格数量"),
+                    ColumnDef.of("pass_rate", "合格率(%)")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 质量检验合格率表（P0 #4：IQC/IPQC/OQC/RQC 统一口径）
+     */
+    QC_PASS_RATE("mes_qc_pass_rate", "质量检验合格率表", "来料/过程/出货/退货四类检验单的合格率与检验结果",
+            List.of(ColumnDef.of("qc_type", "检验类型"),
+                    ColumnDef.of("qc_code", "检验单号"),
+                    ColumnDef.of("item_name", "物料名称"),
+                    ColumnDef.of("partner_name", "供应商/工单/客户/批次"),
+                    ColumnDef.of("check_quantity", "检验数量"),
+                    ColumnDef.of("qualified_quantity", "合格数量"),
+                    ColumnDef.of("unqualified_quantity", "不合格数量"),
+                    ColumnDef.of("pass_rate", "合格率(%)"),
+                    ColumnDef.of("check_result_name", "检验结果"),
+                    ColumnDef.of("status_name", "单据状态"),
+                    ColumnDef.of("inspect_date", "检验日期")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 库存收发存汇总表（P0 #6）
+     */
+    WM_STOCK_FLOW("mes_wm_stock_flow", "库存收发存汇总表", "当前在库余量与期间入库/出库（采购、产品、杂项、领料）",
+            List.of(ColumnDef.of("item_code", "物料编码"),
+                    ColumnDef.of("item_name", "物料名称"),
+                    ColumnDef.of("in_quantity", "期间入库数量"),
+                    ColumnDef.of("out_quantity", "期间出库数量"),
+                    ColumnDef.of("stock_quantity", "当前在库数量")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 出入库明细台账（P0 #7）
+     */
+    WM_INOUT_LEDGER("mes_wm_inout_ledger", "出入库明细台账", "采购/产品/杂项入库与领料/杂项出库逐单明细，含单据状态",
+            List.of(ColumnDef.of("doc_type", "单据类型"),
+                    ColumnDef.of("doc_code", "单据编号"),
+                    ColumnDef.of("doc_date", "单据日期"),
+                    ColumnDef.of("item_code", "物料编码"),
+                    ColumnDef.of("item_name", "物料名称"),
+                    ColumnDef.of("quantity", "数量"),
+                    ColumnDef.of("status_name", "单据状态")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 采购订单执行表（P0 #8）
+     */
+    ERP_PURCHASE_EXECUTION("erp_purchase_execution", "采购订单执行表", "采购订单的下单量、已入库、已退货与执行率",
+            List.of(ColumnDef.of("order_no", "采购订单号"),
+                    ColumnDef.of("supplier_name", "供应商"),
+                    ColumnDef.of("order_date", "下单日期"),
+                    ColumnDef.of("total_count", "订单数量"),
+                    ColumnDef.of("in_count", "已入库数量"),
+                    ColumnDef.of("return_count", "已退货数量"),
+                    ColumnDef.of("total_price", "订单金额"),
+                    ColumnDef.of("execution_rate", "入库执行率(%)"),
+                    ColumnDef.of("status_name", "订单状态")),
+            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
+
+    /**
+     * 销售发货与回款表（P0 #9）
+     */
+    ERP_SALE_SHIPMENT_RECEIPT("erp_sale_shipment_receipt", "销售发货与回款表", "销售出库金额、已收款与未收款（欠款）",
+            List.of(ColumnDef.of("out_no", "出库单号"),
+                    ColumnDef.of("customer_name", "客户"),
+                    ColumnDef.of("out_date", "出库日期"),
+                    ColumnDef.of("total_count", "出库数量"),
+                    ColumnDef.of("total_price", "出库金额"),
+                    ColumnDef.of("receipt_price", "已收款金额"),
+                    ColumnDef.of("receivable_amount", "未收款金额"),
+                    ColumnDef.of("status_name", "单据状态")),
             List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期")));
 
     /**
