@@ -10,21 +10,20 @@ import { evaluateRecruitInterview } from '#/api/hrm/recruit/interview';
 const emit = defineEmits(['success']);
 const interviewId = ref(0);
 
-const [Form, formApi] = useVbenForm({
-  commonConfig: { componentProps: { class: 'w-full' }, labelWidth: 100 },
-  layout: 'horizontal',
-  schema: [
+function createEvaluationSchema(allowNextRound = true) {
+  const decisionOptions = [
+    ...(allowNextRound ? [{ label: '进入下一轮', value: 'NEXT_ROUND' }] : []),
+    { label: '终面通过', value: 'FINAL_PASS' },
+    { label: '面试淘汰', value: 'FAIL' },
+  ];
+  return [
     {
       fieldName: 'decision',
       label: '评估决定',
       component: 'RadioGroup',
       rules: 'required',
       componentProps: {
-        options: [
-          { label: '进入下一轮', value: 'NEXT_ROUND' },
-          { label: '终面通过', value: 'FINAL_PASS' },
-          { label: '面试淘汰', value: 'FAIL' },
-        ],
+        options: decisionOptions,
       },
     },
     {
@@ -34,7 +33,13 @@ const [Form, formApi] = useVbenForm({
       rules: 'required',
       componentProps: { rows: 5, maxlength: 255, showCount: true },
     },
-  ],
+  ];
+}
+
+const [Form, formApi] = useVbenForm({
+  commonConfig: { componentProps: { class: 'w-full' }, labelWidth: 100 },
+  layout: 'horizontal',
+  schema: createEvaluationSchema(),
   showDefaultActions: false,
 });
 
@@ -62,9 +67,12 @@ const [Modal, modalApi] = useVbenModal({
       interviewId.value = 0;
       return;
     }
-    const data = modalApi.getData<{ id: number }>();
+    const data = modalApi.getData<{ allowNextRound?: boolean; id: number }>();
     if (!data?.id) return;
     interviewId.value = data.id;
+    formApi.setState({
+      schema: createEvaluationSchema(data.allowNextRound !== false),
+    });
     await formApi.setValues({ decision: undefined, evaluate: '' });
   },
 });

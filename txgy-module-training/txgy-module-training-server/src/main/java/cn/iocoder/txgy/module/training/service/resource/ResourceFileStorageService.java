@@ -85,6 +85,51 @@ public class ResourceFileStorageService {
     }
 
     /**
+     * 暂存上传文件（异步流程：先落临时目录，后台线程再归位到正式目录），返回临时相对路径
+     */
+    public String storeTemp(MultipartFile file, String subDir, String ext) {
+        String relPath = subDir + "/tmp/" + IdUtil.fastSimpleUUID() + "." + ext;
+        File target = FileUtil.file(rootDir, relPath);
+        try {
+            FileUtil.mkParentDirs(target);
+            file.transferTo(target);
+        } catch (IOException e) {
+            log.error("[storeTemp][暂存资源文件失败, relPath({}), target({})]", relPath, target.getAbsolutePath(), e);
+            throw new IORuntimeException(e);
+        }
+        return relPath;
+    }
+
+    /**
+     * 将临时文件移动到正式相对路径（同分区 rename，开销极小）
+     *
+     * @param tempRelPath   临时相对路径
+     * @param targetRelPath 正式相对路径
+     * @return 正式相对路径
+     */
+    public String moveTo(String tempRelPath, String targetRelPath) {
+        File source = FileUtil.file(rootDir, tempRelPath);
+        File target = FileUtil.file(rootDir, targetRelPath);
+        FileUtil.mkParentDirs(target);
+        FileUtil.move(source, target, true);
+        return targetRelPath;
+    }
+
+    /**
+     * 生成正式存储相对路径：{subDir}/{yyyyMM}/{uuid}.{ext}
+     */
+    public String buildRelPath(String subDir, String ext) {
+        return subDir + "/" + DateUtil.format(new Date(), "yyyyMM") + "/" + IdUtil.fastSimpleUUID() + "." + ext;
+    }
+
+    /**
+     * 取相对路径对应的物理文件（不校验存在性，供转码等场景使用）
+     */
+    public File getFile(String relPath) {
+        return FileUtil.file(rootDir, relPath);
+    }
+
+    /**
      * 根据相对路径取文件；文件不存在返回 null
      */
     public File loadFile(String relPath) {
