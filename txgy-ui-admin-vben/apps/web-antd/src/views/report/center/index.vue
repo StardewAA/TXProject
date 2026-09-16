@@ -89,11 +89,14 @@ function buildParams(report: ReportCenterApi.Report) {
   return params;
 }
 
-/** 卡片内分页：后端一次返回全量行，切片仅作用于本卡片表格 */
+/** 卡片内分页：后端一次返回全量行，切片仅作用于本卡片表格；pageSize <= 0 表示全部 */
 function pagedRows(code: string) {
   const card = cards[code];
   if (!card) {
     return [];
+  }
+  if (card.pageSize <= 0) {
+    return card.rows;
   }
   const start = (card.page - 1) * card.pageSize;
   return card.rows.slice(start, start + card.pageSize);
@@ -281,6 +284,7 @@ onMounted(loadReports);
                       { label: '6条/页', value: 6 },
                       { label: '10条/页', value: 10 },
                       { label: '20条/页', value: 20 },
+                      { label: '全部/页', value: 0 },
                     ]"
                     size="small"
                     style="width: 96px"
@@ -288,6 +292,7 @@ onMounted(loadReports);
                   />
                 </div>
                 <a-pagination
+                  v-if="(cards[report.code]?.pageSize ?? 0) > 0"
                   :current="cards[report.code]?.page"
                   :page-size="cards[report.code]?.pageSize"
                   :show-size-changer="false"
