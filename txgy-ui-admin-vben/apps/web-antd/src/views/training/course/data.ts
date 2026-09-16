@@ -99,19 +99,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'isRequired',
-      label: '必修/选修',
-      component: 'Select',
-      componentProps: {
-        allowClear: true,
-        placeholder: '全部',
-        options: [
-          { label: '必修', value: true },
-          { label: '选修', value: false },
-        ],
-      },
-    },
-    {
       fieldName: 'code',
       label: '课程编码',
       component: 'Input',
@@ -150,30 +137,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '级别',
       width: 80,
       slots: { default: 'level' },
-    },
-    {
-      field: 'isRequired',
-      title: '必修',
-      width: 70,
-      align: 'center',
-      slots: { default: 'isRequired' },
-    },
-    {
-      field: 'isComposite',
-      title: '复合',
-      width: 70,
-      align: 'center',
-      slots: { default: 'isComposite' },
-    },
-    {
-      field: 'credit',
-      title: '学分',
-      width: 80,
-    },
-    {
-      field: 'lecturer',
-      title: '主讲教师',
-      width: 100,
     },
     {
       field: 'status',
