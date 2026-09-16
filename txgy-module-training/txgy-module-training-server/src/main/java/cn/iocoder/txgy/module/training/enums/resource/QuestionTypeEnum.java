@@ -15,7 +15,9 @@ public enum QuestionTypeEnum {
     MULTIPLE(2, "multiple", "多选题"),
     JUDGE(3, "judge", "判断题"),
     QA(4, "qa", "实操问答"),
-    CASE(5, "case", "案例分析");
+    CASE(5, "case", "案例分析"),
+    FILL_BLANK(6, "fill_blank", "填空题"),
+    SHORT_ANSWER(7, "short_answer", "简答题");
 
     private final Integer type;
     private final String code;
