@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { TrainingPlanApi } from '../api';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -11,8 +11,11 @@ import { getClassCourseList } from '../api';
 import {
   CLASS_STATUS_OPTIONS,
   CLASS_TYPE_TEXT,
+  formatTargetPosts,
+  parseTargetCondition,
   targetConditionSummary,
 } from '../data';
+import { loadPostOptions } from '../post-options';
 
 defineOptions({ name: 'TrainingPlanClassDetail' });
 
@@ -30,6 +33,33 @@ async function loadDetail(classId: number) {
   courseList.value = await getClassCourseList(classId);
 }
 
+/** 岗位 ID → 岗位名称（用于回显参训岗位） */
+const postNameMap = ref<Map<number, string>>(new Map());
+
+async function loadPostNames() {
+  if (postNameMap.value.size > 0) {
+    return;
+  }
+  const options = await loadPostOptions();
+  postNameMap.value = new Map(options.map((item) => [item.value, item.label]));
+}
+
+/** 参训岗位（按岗位圈选参训人员）：回显岗位名称 */
+const scopePostNames = computed(() => {
+  const scope = parseTargetCondition(currentClass.value?.targetCondition);
+  if (scope.postIds.length === 0) {
+    return '';
+  }
+  return scope.postIds
+    .map((id) => postNameMap.value.get(id) ?? `#${id}`)
+    .join('、');
+});
+
+/** 定岗（结业后岗位） */
+const targetPostNames = computed(() =>
+  formatTargetPosts(currentClass.value?.targetPosts),
+);
+
 const [ModalWrap, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -41,6 +71,8 @@ const [ModalWrap, modalApi] = useVbenModal({
     currentClass.value = data;
     loading.value = true;
     try {
+      // 岗位名称映射（回显参训岗位用），失败不影响详情展示
+      await loadPostNames().catch(() => undefined);
       if (data?.id) {
         await loadDetail(data.id);
       }
@@ -118,8 +150,11 @@ const courseColumns = [
         <Descriptions.Item label="参训对象筛选条件" :span="2">
           {{ targetConditionSummary(currentClass.targetCondition) }}
         </Descriptions.Item>
-        <Descriptions.Item label="参训岗位" :span="2">
-          {{ currentClass.targetPosts || '-' }}
+        <Descriptions.Item label="参训岗位（按岗位圈选）" :span="2">
+          {{ scopePostNames || '-' }}
+        </Descriptions.Item>
+        <Descriptions.Item label="定岗（结业后岗位）" :span="2">
+          {{ targetPostNames || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="备注" :span="2">
           {{ currentClass.remark || '-' }}

@@ -240,6 +240,19 @@ export function buildTargetCondition(
   });
 }
 
+/** 定岗（结业后岗位，targetPosts 为 JSON 数组字符串）展示文本 */
+export function formatTargetPosts(text?: string): string {
+  if (!text) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.join('、') : String(parsed);
+  } catch {
+    return text;
+  }
+}
+
 /** 参训对象筛选条件摘要（详情展示用） */
 export function targetConditionSummary(condition?: string): string {
   const scope = parseTargetCondition(condition);
