@@ -309,6 +309,11 @@ const coreRoutes: RouteRecordRaw[] = [
         meta: { title: '公告 / 公示', hideInMenu: true },
       },
       {
+        name: 'PortalProfile',
+        path: 'profile',
+        meta: { title: '个人中心', hideInMenu: true },
+      },
+      {
         name: 'PortalProfileRecruit',
         path: 'profile/recruit',
         component: () => import('#/views/portal/profile/recruit.vue'),

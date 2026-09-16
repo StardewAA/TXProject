@@ -33,6 +33,7 @@
         <module>txgy-module-hrm</module>
         <module>txgy-module-fms</module>
         <module>txgy-module-bidding</module>
+        <module>txgy-module-training</module>
     </modules>
 
     <name>${project.artifactId}</name>

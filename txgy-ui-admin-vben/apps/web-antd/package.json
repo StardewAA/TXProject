@@ -63,6 +63,7 @@
     "fast-xml-parser": "catalog:",
     "highlight.js": "catalog:",
     "livekit-client": "catalog:",
+    "mammoth": "^1.12.3",
     "pdfjs-dist": "catalog:",
     "pinia": "catalog:",
     "steady-xml": "catalog:",

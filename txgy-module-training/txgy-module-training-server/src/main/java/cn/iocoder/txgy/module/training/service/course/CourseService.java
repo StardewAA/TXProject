@@ -28,13 +28,6 @@ public interface CourseService {
 
     CourseDO getCourse(Long id);
 
-    /**
-     * 课程结课考试计划列表（供模块三「考试与认证」展示当前租户的课程结课考试）
-     *
-     * @return 已配置结课考试试卷的当前生效版本课程
-     */
-    List<CourseDO> getExamPlanList();
-
     // ========== 审核状态机 ==========
 
     void submit(Long courseId);
