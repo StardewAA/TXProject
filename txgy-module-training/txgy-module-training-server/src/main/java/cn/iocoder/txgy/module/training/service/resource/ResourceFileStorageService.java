@@ -78,6 +78,13 @@ public class ResourceFileStorageService {
     }
 
     /**
+     * 获取资源文件存储根目录（绝对路径）
+     */
+    public File getRootDir() {
+        return rootDir;
+    }
+
+    /**
      * 暂存上传文件（异步流程：先落临时目录，后台线程再归位到正式目录），返回临时相对路径
      */
     public String storeTemp(MultipartFile file, String subDir, String ext) {
