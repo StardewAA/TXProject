@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.hrm.controller.admin.recruit;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferSaveReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferOnboardReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferApprovalCallbackReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitOfferDO;
 import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitOfferService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,15 +48,27 @@ public class HrmRecruitOfferController {
     public CommonResult<Boolean> approvalCallback(@RequestParam("id") Long id,
                                                    @RequestParam("processInstanceId") String processInstanceId,
                                                    @RequestParam("approvalVersion") Integer approvalVersion,
-                                                   @RequestParam("approved") @NotNull Boolean approved) {
-        offerService.approvalCallback(id, processInstanceId, approvalVersion, approved);
+                                                   @RequestParam("approved") @NotNull Boolean approved,
+                                                   @RequestParam(value = "reason", required = false) String reason) {
+        offerService.approvalCallback(id, processInstanceId, approvalVersion, approved, reason);
+        return success(true);
+    }
+
+    @PostMapping("/bpm-callback")
+    @Operation(summary = "BPM 回调 Offer 审批结果")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
+    public CommonResult<Boolean> bpmCallback(
+            @Valid @RequestBody HrmRecruitOfferApprovalCallbackReqVO reqVO) {
+        offerService.approvalCallback(reqVO.getOfferId(), reqVO.getProcessInstanceId(),
+                reqVO.getApprovalVersion(), reqVO.getApproved(), reqVO.getReason());
         return success(true);
     }
 
     @PutMapping("/withdraw")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:withdraw')")
-    public CommonResult<Boolean> withdraw(@RequestParam("id") Long id) {
-        offerService.withdraw(id); return success(true);
+    public CommonResult<Boolean> withdraw(@RequestParam("id") Long id,
+                                          @RequestParam(value = "reason", required = false) String reason) {
+        offerService.withdraw(id, reason); return success(true);
     }
 
     @PutMapping("/send")

@@ -138,12 +138,14 @@ public class AdminUserApiImpl implements AdminUserApi {
     }
 
     @Override
+    @DataPermission(enable = false) // 忽略数据权限：按部门/岗位圈选参训人员属于系统级匹配，避免因数据权限漏查
     public CommonResult<List<AdminUserRespDTO>> getUserListByDeptIds(Collection<Long> deptIds) {
         List<AdminUserDO> users = userService.getUserListByDeptIds(deptIds);
         return success(BeanUtils.toBean(users, AdminUserRespDTO.class));
     }
 
     @Override
+    @DataPermission(enable = false) // 忽略数据权限：按部门/岗位圈选参训人员属于系统级匹配，避免因数据权限漏查
     public CommonResult<List<AdminUserRespDTO>> getUserListByPostIds(Collection<Long> postIds) {
         List<AdminUserDO> users = userService.getUserListByPostIds(postIds);
         return success(BeanUtils.toBean(users, AdminUserRespDTO.class));

@@ -1,31 +1,32 @@
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from 'vue';
 
-import { message } from 'ant-design-vue';
 import { IconifyIcon } from '@vben/icons';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { uploadFile } from '#/api/infra/file';
-import {
-  getPortalResumeList,
-  type HrmPortalResumeApi,
-} from '#/api/hrm/portal/resume';
+import { message } from 'ant-design-vue';
+
 import {
   createPortalRecruitApplication,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
 import { getRecruitChatConversationList } from '#/api/hrm/portal/recruit/chat';
+import {
+  getPortalResumeList,
+  type HrmPortalResumeApi,
+} from '#/api/hrm/portal/resume';
+import { uploadFile } from '#/api/infra/file';
 import { getUserProfile } from '#/api/system/user/profile';
 
 const props = defineProps<{
+  chatOnly?: boolean;
   open: boolean;
   post?: HrmPortalRecruitApi.Post;
-  chatOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean];
   submitted: [data: HrmPortalRecruitApi.ApplyReq];
+  'update:open': [value: boolean];
 }>();
 
 const modalOpen = computed({
@@ -57,9 +58,10 @@ const savedResumeOptions = computed(() =>
 );
 
 const resumePickerMode = computed(() => savedResumeOptions.value.length > 1);
-const modalTitle = computed(() =>
-  resumePickerMode.value ? '选择投递简历' : '在线投递',
-);
+const modalTitle = computed(() => {
+  if (props.chatOnly) return resumePickerMode.value ? '选择发送简历' : '发送简历';
+  return resumePickerMode.value ? '选择投递简历' : '在线投递';
+});
 
 const educationValueMap: Record<string, number> = {
   初中及以下: 3,
@@ -213,7 +215,7 @@ async function handleResumeUpload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
   const extension = file.name.split('.').pop()?.toLowerCase();
-  if (!extension || !['pdf', 'doc', 'docx'].includes(extension)) {
+  if (!extension || !['doc', 'docx', 'pdf'].includes(extension)) {
     message.warning('仅支持 PDF、DOC、DOCX 格式的简历');
     return;
   }
@@ -285,7 +287,9 @@ async function submitApplication() {
     }
     emit('submitted', { ...applyForm });
     message.success(
-      props.chatOnly ? '简历已发送，等待招聘方处理' : '应聘投递成功，可在应聘记录查看进度',
+      props.chatOnly
+        ? '简历已发送，等待 HR 手动转为候选人'
+        : '应聘投递成功，可在应聘记录查看进度',
     );
     modalOpen.value = false;
   } catch (error: any) {
@@ -625,6 +629,182 @@ watch(
 :global(.recruit-apply-modal .ant-btn-primary:hover) {
   border-color: #c85e18;
   background: #c85e18;
+}
+
+.apply-intro {
+  border: 1px solid #c8e7eb;
+  border-radius: 8px;
+  background: #f5fbfc;
+  color: #496b7a;
+}
+
+.resume-loading {
+  color: #5f7f87;
+}
+
+.resume-picker .apply-intro {
+  border-color: #c8e7eb;
+  background: #f5fbfc;
+  color: #496b7a;
+}
+
+.resume-option {
+  border-color: #d7e9ed;
+  background: #fff;
+  color: #2f5d73;
+}
+
+.resume-option:hover,
+.resume-option.selected {
+  border-color: #74cbd2;
+  background: #eaf3ff;
+  box-shadow: 0 5px 14px rgb(18 63 73 / 10%);
+}
+
+.resume-option-icon {
+  background: #e8f7f8;
+  color: #0f8f8c;
+}
+
+.resume-option-copy strong {
+  color: #123f49;
+}
+
+.resume-option-copy small,
+.resume-picker-tip,
+.resume-contact-field span {
+  color: #7593a0;
+}
+
+.resume-option-check {
+  border-color: #b9dfe5;
+}
+
+.resume-option.selected .resume-option-check {
+  border-color: #0f8f8c;
+  background: #0f8f8c;
+}
+
+.resume-contact-field label {
+  color: #2f5d73;
+}
+
+.apply-upload {
+  border-color: #74cbd2;
+  background: #e8f7f8;
+  color: #0f8f8c;
+}
+
+.apply-upload:hover {
+  border-color: #0f8f8c;
+  background: #eaf3ff;
+}
+
+.apply-upload span {
+  color: #496b7a;
+}
+
+:global(.recruit-apply-modal .ant-modal-content),
+:global(.recruit-apply-modal .ant-modal-header),
+:global(.recruit-apply-modal .ant-modal-body),
+:global(.recruit-apply-modal .ant-modal-footer) {
+  background: #fff !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-content) {
+  border-color: #cfe4e8;
+  box-shadow: 0 20px 56px rgb(18 63 73 / 18%);
+}
+
+:global(.recruit-apply-modal .ant-modal-title) {
+  color: #123f49 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-close) {
+  color: #5f7f87 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-close:hover) {
+  color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.recruit-apply-modal .ant-form-item-label > label),
+:global(.recruit-apply-modal .ant-radio-wrapper) {
+  color: #496b7a !important;
+}
+
+:global(.recruit-apply-modal .ant-input),
+:global(.recruit-apply-modal .ant-input-affix-wrapper),
+:global(.recruit-apply-modal .ant-select-selector) {
+  border-color: #cfe4e8 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #123f49 !important;
+  box-shadow: none !important;
+}
+
+:global(.recruit-apply-modal .ant-input:hover),
+:global(.recruit-apply-modal .ant-input:focus),
+:global(.recruit-apply-modal .ant-input-affix-wrapper:hover),
+:global(.recruit-apply-modal .ant-input-affix-wrapper-focused),
+:global(.recruit-apply-modal .ant-select:hover .ant-select-selector),
+:global(.recruit-apply-modal .ant-select-focused .ant-select-selector) {
+  border-color: #74cbd2 !important;
+  box-shadow: 0 0 0 2px rgb(47 128 237 / 12%) !important;
+}
+
+:global(.recruit-apply-modal .ant-input::placeholder),
+:global(.recruit-apply-modal .ant-select-selection-placeholder) {
+  color: #86a6ae !important;
+}
+
+:global(.recruit-apply-modal .ant-select-selection-item),
+:global(.recruit-apply-modal .ant-select-arrow) {
+  color: #2f80ed !important;
+}
+
+:global(.recruit-apply-modal .ant-radio-inner) {
+  border-color: #9bb8c4;
+  background: #fff;
+}
+
+:global(.recruit-apply-modal .ant-radio-checked .ant-radio-inner) {
+  border-color: #2f80ed;
+}
+
+:global(.recruit-apply-modal .ant-radio-inner::after) {
+  background: #2f80ed;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer) {
+  border-top-color: #e6f1f3;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-default) {
+  border-color: #b9dfe5 !important;
+  background: #fff !important;
+  color: #2f5d73 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-default:hover) {
+  border-color: #74cbd2 !important;
+  background: #e8f7f8 !important;
+  color: #0f777d !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-primary),
+:global(.recruit-apply-modal .ant-btn-primary) {
+  border-color: #0f8f8c !important;
+  background: linear-gradient(135deg, #0f9f9b, #2f80ed) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 16px rgb(15 143 140 / 18%);
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-primary:hover),
+:global(.recruit-apply-modal .ant-btn-primary:hover) {
+  border-color: #0b777c !important;
+  background: linear-gradient(135deg, #0b8587, #2563c7) !important;
 }
 
 @media (max-width: 640px) {

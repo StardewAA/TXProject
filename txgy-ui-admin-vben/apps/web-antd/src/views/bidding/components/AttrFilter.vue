@@ -22,16 +22,19 @@ const props = withDefaults(
     allowAll?: boolean;
     /** 左侧属性名（**必须写清在筛什么**——此前若干筛选项只有 placeholder 暗示，用户看不出字段含义） */
     label: string;
-    modelValue?: number | string;
-    /** 可选项；为空时渲染默认插槽 */
-    options?: Array<{ label: string; value: number | string }>;
+    modelValue?: boolean | number | string;
+    /** 可选项；为空时渲染默认插槽（boolean 用于"是/否"这类二值筛选，如预警"处理状态"） */
+    options?: Array<{ label: string; value: boolean | number | string }>;
   }>(),
   { allowAll: true, allLabel: '全部', modelValue: undefined, options: () => [] },
 );
 
-const emit = defineEmits<{ change: []; 'update:modelValue': [number | string | undefined] }>();
+const emit = defineEmits<{
+  change: [];
+  'update:modelValue': [boolean | number | string | undefined];
+}>();
 
-function pick(v?: number | string): void {
+function pick(v?: boolean | number | string): void {
   emit('update:modelValue', v);
   emit('change');
 }

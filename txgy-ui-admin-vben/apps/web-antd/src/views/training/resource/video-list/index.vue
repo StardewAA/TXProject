@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingResourceApi } from '../api';
 
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -11,6 +11,7 @@ import {
   InputNumber,
   message,
   Modal,
+  Progress,
   Switch,
   Tag,
   TreeSelect,
@@ -24,9 +25,12 @@ import {
   changeVideoStatus,
   deleteVideo,
   getResourceCategoryTree,
+  getTranscodeCapability,
   getVideoDefinitionOptions,
   getVideoPage,
+  getVideoTranscodeTasks,
   markVideoTranscodeSuccess,
+  retryVideoTranscode,
   setVideoCreditHours,
 } from '../api';
 import {
@@ -36,6 +40,8 @@ import {
   statusColor,
   statusText,
   transcodeColor,
+  transcodeTaskColor,
+  transcodeTaskText,
   transcodeText,
 } from '../constants';
 import VideoFormContent from './video-form.vue';
@@ -130,7 +136,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 300,
+        width: 380,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -220,6 +226,75 @@ async function handleSaveCredit() {
   handleSearch();
 }
 
+// ========== 转码任务进度（异步上传后轮询）==========
+const tasksVisible = ref(false);
+const taskRow = ref<TrainingResourceApi.VideoResource>();
+const taskList = ref<TrainingResourceApi.VideoTranscodeTask[]>([]);
+const capability = ref<TrainingResourceApi.TranscodeCapability>();
+let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+async function loadTasks(videoId: number) {
+  try {
+    taskList.value = (await getVideoTranscodeTasks(videoId)) ?? [];
+  } catch {
+    taskList.value = [];
+  }
+}
+
+async function handleOpenTasks(row: TrainingResourceApi.VideoResource) {
+  taskRow.value = row;
+  tasksVisible.value = true;
+  await loadTasks(row.id!);
+}
+
+async function handleRetryTranscode(row: TrainingResourceApi.VideoResource) {
+  await retryVideoTranscode(row.id!);
+  message.success('已重新提交转码任务');
+  handleSearch();
+  startPolling();
+}
+
+/** 异步转码期间轮询列表，全部进入终态后自动停止 */
+function startPolling() {
+  let times = 0;
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    times += 1;
+    await gridApi.query();
+    const rows =
+      ((gridApi as any)?.grid?.getData?.() as
+        | TrainingResourceApi.VideoResource[]
+        | undefined) ?? [];
+    const running = rows.some(
+      (item) => item.transcodeStatus === 1 || item.transcodeStatus === 2,
+    );
+    if (!running || times >= 120) {
+      stopPolling();
+    }
+  }, 5000);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+function handleUploadSuccess() {
+  handleSearch();
+  startPolling();
+}
+
+onMounted(() => {
+  getTranscodeCapability()
+    .then((res) => {
+      capability.value = res;
+    })
+    .catch(() => undefined);
+});
+onUnmounted(stopPolling);
+
 // ========== 转码标记 ==========
 async function handleMarkTranscode(row: TrainingResourceApi.VideoResource) {
   await markVideoTranscodeSuccess(row.id!);
@@ -260,12 +335,27 @@ function buildActions(row: TrainingResourceApi.VideoResource) {
       onClick: () => handleOpenCredit(row),
     },
   ];
+  actions.push({
+    label: '转码详情',
+    type: 'link',
+    onClick: () => handleOpenTasks(row),
+  });
   if (row.transcodeStatus !== 3) {
+    actions.push({
+      label: '重新转码',
+      type: 'link',
+      popConfirm: {
+        title: '重新生成 360P / 480P / 720P 转码任务？',
+        confirm: () => handleRetryTranscode(row),
+      },
+    });
+  }
+  if (row.transcodeStatus === 0 || row.transcodeStatus === 4) {
     actions.push({
       label: '标记转码',
       type: 'link',
       popConfirm: {
-        title: '当前无转码引擎，手动标记转码成功？',
+        title: '转码引擎不可用时，手动标记转码成功（仅占位）？',
         confirm: () => handleMarkTranscode(row),
       },
     });
@@ -320,7 +410,7 @@ loadCategories();
 
 <template>
   <Page auto-content-height>
-    <VideoFormModal @success="handleSearch" />
+    <VideoFormModal @success="handleUploadSuccess" />
 
     <!-- 分类 / 归档 筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
@@ -337,7 +427,9 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="视频资源库（MP4/MOV ≤4GB，上传即上线）">
+    <Grid
+      :table-title="`视频资源库（MP4/MOV ≤4GB，异步上传 + 自动转码 360P/480P/720P${capability?.ffmpegAvailable ? '' : '（当前环境未检测到 ffmpeg）'}）`"
+    >
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -355,9 +447,21 @@ loadCategories();
         <Tag color="purple">{{ (row.fileType || '').toUpperCase() }}</Tag>
       </template>
       <template #transcode="{ row }">
-        <Tag :color="transcodeColor(row.transcodeStatus) || 'default'">
-          {{ transcodeText(row.transcodeStatus) }}
-        </Tag>
+        <div class="flex flex-col gap-1">
+          <Tag :color="transcodeColor(row.transcodeStatus) || 'default'">
+            {{ transcodeText(row.transcodeStatus) }}
+            <span v-if="row.transcodeStatus === 2">…</span>
+          </Tag>
+          <Button
+            v-if="row.transcodeStatus === 1 || row.transcodeStatus === 2"
+            size="small"
+            type="link"
+            class="!px-0 !text-xs"
+            @click="handleOpenTasks(row)"
+          >
+            查看进度
+          </Button>
+        </div>
       </template>
       <template #status="{ row }">
         <Tag :color="statusColor(row.status) || 'default'">
@@ -400,6 +504,64 @@ loadCategories();
         controls
         autoplay
       />
+    </Modal>
+
+    <!-- 转码任务详情 -->
+    <Modal
+      v-model:open="tasksVisible"
+      :title="`转码任务 - ${taskRow?.title || ''}`"
+      width="640"
+      :footer="null"
+      destroy-on-close
+    >
+      <div
+        v-if="capability && !capability.ffmpegAvailable"
+        class="mb-3 rounded bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
+      >
+        当前运行环境未检测到 ffmpeg，无法执行转码；视频仍按原始清晰度播放。
+      </div>
+      <div v-if="!taskList.length" class="py-6 text-center text-sm text-gray-400">
+        暂无转码任务（源清晰度不高于 360P 时无需生成转码任务）
+      </div>
+      <div v-else class="flex flex-col gap-3">
+        <div
+          v-for="item in taskList"
+          :key="item.id"
+          class="rounded border p-3"
+        >
+          <div class="mb-2 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <Tag color="blue">{{ item.definition }}</Tag>
+              <Tag :color="transcodeTaskColor(item.status) || 'default'">
+                {{ transcodeTaskText(item.status) }}
+              </Tag>
+            </div>
+            <span class="text-xs text-gray-400">
+              {{ item.fileSize ? formatFileSize(item.fileSize) : '' }}
+            </span>
+          </div>
+          <Progress
+            :percent="item.progress ?? 0"
+            size="small"
+            :status="item.status === 3 ? 'exception' : undefined"
+          />
+          <div v-if="item.errorMsg" class="mt-2 text-xs text-red-500">
+            {{ item.errorMsg }}
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button size="small" @click="loadTasks(taskRow?.id ?? 0)">
+            刷新
+          </Button>
+          <Button
+            size="small"
+            type="primary"
+            @click="taskRow && handleRetryTranscode(taskRow)"
+          >
+            重新转码
+          </Button>
+        </div>
+      </div>
     </Modal>
 
     <!-- 学时配置弹窗 -->

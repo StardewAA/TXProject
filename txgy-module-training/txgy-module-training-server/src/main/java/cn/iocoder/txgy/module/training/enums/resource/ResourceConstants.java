@@ -58,6 +58,22 @@ public final class ResourceConstants {
     public static final java.util.List<String> DEFINITION_ORDER = Arrays.asList(
             DEFINITION_2160P, DEFINITION_1080P, DEFINITION_720P, DEFINITION_480P, DEFINITION_360P);
 
+    /**
+     * 清晰度对应的画面高度（像素），用于转码缩放与"源清晰度不足则跳过"的判断
+     */
+    public static final java.util.Map<String, Integer> DEFINITION_HEIGHT = java.util.Map.of(
+            DEFINITION_2160P, 2160,
+            DEFINITION_1080P, 1080,
+            DEFINITION_720P, 720,
+            DEFINITION_480P, 480,
+            DEFINITION_360P, 360);
+
+    /**
+     * 默认转码目标清晰度（需求：360P / 480P / 720P）
+     */
+    public static final java.util.List<String> DEFAULT_TRANSCODE_DEFINITIONS = Arrays.asList(
+            DEFINITION_360P, DEFINITION_480P, DEFINITION_720P);
+
     // ========== 对象类型（target_type / resource_type）==========
     public static final String TARGET_DOCUMENT = "document";
     public static final String TARGET_VIDEO = "video";

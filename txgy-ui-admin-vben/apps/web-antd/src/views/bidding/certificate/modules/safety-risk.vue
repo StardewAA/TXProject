@@ -326,7 +326,7 @@ function chainOk(idx: number): boolean {
               <a-tag :color="chainOk(index) ? 'green' : 'red'">{{ chainOk(index) ? '连续' : '断裂' }}</a-tag>
             </template>
           </template>
-          <template #emptyText><div class="ct-empty">暂无快照</div></template>
+          <template #emptyText><div class="ct-empty">暂无快照：执行试算 / 重算后产生</div></template>
         </a-table>
       </a-spin>
     </a-drawer>

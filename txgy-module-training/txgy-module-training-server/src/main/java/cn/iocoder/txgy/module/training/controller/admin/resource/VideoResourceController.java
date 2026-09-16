@@ -5,12 +5,16 @@ import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.TranscodeCapabilityRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoDefinitionRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoPageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoTranscodeTaskRespVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoUploadRespVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoResourceDO;
 import cn.iocoder.txgy.module.training.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.training.service.resource.ResourceFileStorageService;
 import cn.iocoder.txgy.module.training.service.resource.VideoResourceService;
+import cn.iocoder.txgy.module.training.service.resource.VideoTranscodeTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,20 +45,46 @@ public class VideoResourceController {
     private VideoResourceService videoService;
     @Resource
     private ResourceFileStorageService fileStorage;
+    @Resource
+    private VideoTranscodeTaskService transcodeTaskService;
 
     @PostMapping("/upload")
-    @Operation(summary = "上传视频（短视频/录播，MP4/MOV ≤4GB，成功即上线，记录原始清晰度）")
+    @Operation(summary = "异步上传视频（短视频/录播，MP4/MOV ≤4GB，成功即上线，后台按 360P/480P/720P 转码）")
     @PreAuthorize("@ss.hasPermission('training:resource-video:create')")
-    public CommonResult<Long> uploadVideo(@RequestParam("file") MultipartFile file,
-                                          @RequestParam("title") String title,
-                                          @RequestParam(value = "categoryId", required = false) Long categoryId,
-                                          @RequestParam(value = "coverUrl", required = false) String coverUrl,
-                                          @RequestParam(value = "tags", required = false) String tags,
-                                          @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
-                                          @RequestParam(value = "videoType", required = false) Integer videoType,
-                                          @RequestParam(value = "definition", required = false) String definition) {
+    public CommonResult<VideoUploadRespVO> uploadVideo(@RequestParam("file") MultipartFile file,
+                                                       @RequestParam("title") String title,
+                                                       @RequestParam(value = "categoryId", required = false) Long categoryId,
+                                                       @RequestParam(value = "coverUrl", required = false) String coverUrl,
+                                                       @RequestParam(value = "tags", required = false) String tags,
+                                                       @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+                                                       @RequestParam(value = "videoType", required = false) Integer videoType,
+                                                       @RequestParam(value = "definition", required = false) String definition) {
         return success(videoService.uploadVideo(file, title, categoryId, coverUrl, tags,
                 durationSeconds, videoType, definition));
+    }
+
+    @GetMapping("/transcode/tasks")
+    @Operation(summary = "查询视频转码任务列表（前端轮询进度）")
+    @Parameter(name = "videoId", description = "视频资源 ID", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('training:resource-video:query')")
+    public CommonResult<List<VideoTranscodeTaskRespVO>> getTranscodeTasks(@RequestParam("videoId") Long videoId) {
+        return success(transcodeTaskService.getTaskList(videoId));
+    }
+
+    @PostMapping("/transcode/retry")
+    @Operation(summary = "重新转码（失败或未生成任务时重建 360P/480P/720P 任务）")
+    @Parameter(name = "videoId", description = "视频资源 ID", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('training:resource-video:update')")
+    public CommonResult<Boolean> retryTranscode(@RequestParam("videoId") Long videoId) {
+        transcodeTaskService.retryTranscode(videoId);
+        return success(true);
+    }
+
+    @GetMapping("/transcode/capability")
+    @Operation(summary = "查询转码能力（是否开启、ffmpeg 是否可用、目标清晰度）")
+    @PreAuthorize("@ss.hasPermission('training:resource-video:query')")
+    public CommonResult<TranscodeCapabilityRespVO> getTranscodeCapability() {
+        return success(transcodeTaskService.getCapability());
     }
 
     @GetMapping("/page")
@@ -143,18 +173,31 @@ public class VideoResourceController {
     // ========== 视频播放（支持 HTTP Range，匿名可访问） ==========
 
     @GetMapping("/play")
-    @Operation(summary = "视频播放流（支持 Range 拖动播放）")
+    @Operation(summary = "视频播放流（支持 Range 拖动播放，可按 definition 播放指定清晰度）")
     @PermitAll
     @TenantIgnore
     public void playVideo(@RequestParam("id") Long id,
+                          @RequestParam(value = "definition", required = false) String definition,
                           HttpServletRequest request, HttpServletResponse response) throws Exception {
         VideoResourceDO video = videoService.getVideo(id);
-        File file = fileStorage.loadFile(video.getFilePath());
+        // 指定清晰度时优先播放转码产物（无产物时回退原始文件）
+        File file = null;
+        String fileType = video.getFileType();
+        if (StrUtil.isNotBlank(definition)) {
+            String path = transcodeTaskService.resolvePlayPath(id, definition);
+            if (StrUtil.isNotBlank(path)) {
+                file = fileStorage.loadFile(path);
+                fileType = "mp4";
+            }
+        }
+        if (file == null) {
+            file = fileStorage.loadFile(video.getFilePath());
+        }
         if (file == null || !file.exists()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.RESOURCE_FILE_NOT_FOUND);
         }
         long length = file.length();
-        response.setContentType(ResourceFileStorageService.contentTypeOf(video.getFileType()));
+        response.setContentType(ResourceFileStorageService.contentTypeOf(fileType));
         response.setHeader("Accept-Ranges", "bytes");
         response.setHeader("Cache-Control", "public, max-age=3600");
 
