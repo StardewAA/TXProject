@@ -166,7 +166,14 @@ async function handleUpdateDealStatus(): Promise<boolean | undefined> {
 
 /** 加载数据 */
 onMounted(() => {
-  customerId.value = Number(route.params.id);
+  // 路由参数兜底：非法 id（如 /crm/customer/detail/id）会得到 NaN，提示并退回列表
+  const id = Number(route.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    message.warning('参数错误，客户不能为空！');
+    handleBack();
+    return;
+  }
+  customerId.value = id;
   loadCustomerDetail();
 });
 </script>
