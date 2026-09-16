@@ -23,6 +23,7 @@ import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteService;
@@ -89,10 +90,6 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     @Resource
     private MesMdItemMapper itemMapper;
     @Resource
-    private MesProWorkOrderService workOrderService;
-    @Resource
-    private MesProTaskService taskService;
-    @Resource
     private MesProRouteProductService routeProductService;
     @Resource
     private MesProRouteProductMapper routeProductMapper;
@@ -108,8 +105,6 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     @Resource
     @Lazy
     private MesProTaskService taskService;
-    @Resource
-    private MesMdItemMapper itemMapper;
     @Resource
     private MesMdAutoCodeRecordService autoCodeRecordService;
 
