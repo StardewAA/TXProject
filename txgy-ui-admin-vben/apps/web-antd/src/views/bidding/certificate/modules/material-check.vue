@@ -15,7 +15,7 @@ import {
   getMaterialCompleteness,
 } from '#/api/bidding/certificate';
 
-import AttrFilter from '../components/AttrFilter.vue';
+import AttrFilter from '../../components/AttrFilter.vue';
 import { useCertMeta } from '../useCertMeta';
 
 const { dictLabel, dictOptions, dictTag } = useCertMeta();
