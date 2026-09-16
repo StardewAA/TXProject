@@ -189,13 +189,17 @@ services:
   report:
     <<: *backend-service
     build:
-      context: ./jars/report
-      dockerfile: Dockerfile.runtime
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: app.jar
+        MODULE_PATH: txgy-module-report/txgy-module-report-server
     environment:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
+      # 报表只读数据源：仅 SELECT 权限的独立账号，避免报表大查询与写入风险
+      REPORT_DB_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      REPORT_DB_USERNAME: ${REPORT_DB_USERNAME:-report_ro}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD}
 
   mp:
     <<: *backend-service
