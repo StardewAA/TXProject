@@ -7,6 +7,7 @@
  *   · fields 为 ProjectVO 数据集全量字段（key=规范英文名），详情按原样列出，不硬编码字段名清单；
  *   · 追溯（trace）一次取回：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 + 统计。 */
 import { computed, h, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -14,28 +15,32 @@ import { useAccessStore } from '@vben/stores';
 import { message, Modal } from 'ant-design-vue';
 
 import { FILING_STATUS_OPTIONS, type FilingApi, receiveFilingResult, submitFiling } from '#/api/bidding/filing';
+import { fetchNoticeDetail } from '#/api/bidding/notice';
 import {
   deleteProject,
   getProject,
   getProjectPage,
   type ProjectApi,
   saveProject,
+  traceBidSection,
   traceProject,
-  traceTenderProject,
 } from '#/api/bidding/project';
 
 import { fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
 import AttrFilter from '../components/AttrFilter.vue';
 import CopyText from '../components/CopyText.vue';
+import TraceLevelPanel, { type TraceLevel } from './TraceLevelPanel.vue';
 
 import '../certificate/cert.css';
 
+const router = useRouter();
+
 const { hasAccessByCodes } = useAccess();
 const accessStore = useAccessStore();
-/* 字典：追溯抽屉里的状态/类型一律走字典（dictLabel/dictTag 自带回落——字典未下发时回显原码、空值给"—"），
- * 避免把中文枚举硬编码在前端（用户硬约束：状态码/枚举值必须支持动态配置）。 */
-const { dictLabel, dictOptions, dictTag } = useCertMeta();
+/* 字典：备案状态下拉等走字典（dictOptions——字典未下发时回显原码、空值给"—"）。
+ * 追溯抽屉内状态/类型字典（dictLabel/dictTag）已随面板内容迁至 TraceLevelPanel.vue。 */
+const { dictOptions } = useCertMeta();
 
 /** 权限判定：权限码未下发时放行（最终由后端 @PreAuthorize 裁决），避免界面被锁死 */
 function can(code: string): boolean {
@@ -176,61 +181,72 @@ const columns = [
   { title: '法定代表人', dataIndex: 'legalPerson', key: 'legalPerson', width: 130 },
   { title: '状态', dataIndex: 'state', key: 'state', width: 100 },
   { title: '登记时间', dataIndex: 'createTime', key: 'createTime', width: 170 },
-  { title: '操作', key: 'action', width: 210, fixed: 'right' as const },
+  { title: '操作', key: 'action', width: 270, fixed: 'right' as const },
 ];
 
-/* ===== 详情 / 追溯（一次 trace 拿全关联，避免按域多次请求） ===== */
-const traceOpen = ref(false);
-const traceLoading = ref(false);
-const trace = ref<null | ProjectApi.Trace>(null);
-const currentRow = ref<null | ProjectApi.Project>(null);
+/* ===== 层级抽屉栈（项目 → 标段 → 公告，最多 3 层） =====
+ * 定稿口径（2026-09-15）：扁平化下钻，抽屉可层叠（宽度 600/700/800 + 仅顶层遮罩），
+ * 栈语义：push 一层、关闭只关当前层（及以上）、下层保留；
+ * L3 公告层取 fetchNoticeDetail；抽屉内不做编辑，行内「详情 ↗」打开通用实体详情页。 */
+let levelSeq = 0;
+const stack = ref<TraceLevel[]>([]);
+const MAX_LEVELS = 3;
 
-async function openTrace(r: ProjectApi.Project) {
-  currentRow.value = r;
-  traceOpen.value = true;
-  traceLoading.value = true;
-  trace.value = null;
+async function pushLevel(type: TraceLevel['queryType'], code: string, label: string): Promise<void> {
+  if (stack.value.length >= MAX_LEVELS) {
+    message.warning(`层级最多 ${MAX_LEVELS} 层（项目 → 标段 → 公告）`);
+    return;
+  }
+  const level: TraceLevel = {
+    key: levelSeq++,
+    queryType: type,
+    queryCode: code,
+    label,
+    open: true,
+    trace: null,
+    notice: null,
+    loading: true,
+  };
+  stack.value.push(level);
   try {
-    trace.value = await traceProject(r.projectCode);
+    if (type === 'NOTICE') {
+      level.notice = await fetchNoticeDetail(code);
+    } else if (type === 'PROJECT') {
+      level.trace = await traceProject(code);
+    } else {
+      level.trace = await traceBidSection(code);
+    }
   } catch {
-    trace.value = null;
+    /* 取数失败留空，面板显示兜底 */
   } finally {
-    traceLoading.value = false;
+    level.loading = false;
   }
 }
-
-/** 数据集字段：只列出有值的项（null 表示该数据集未覆盖此字段） */
-/** 追溯层级由**后端出参**决定（ProjectTraceRespVO.queryType），前端不另设状态，避免两处口径打架 */
-const traceIsTender = computed(() => trace.value?.queryType === 'TENDER_PROJECT');
-/** 招标项目层的自身信息：从同一出参的 tenderProjects 里按 queryCode 取（无 queryCode 时取首条） */
-const tenderSelf = computed(() => {
-  const list = trace.value?.tenderProjects ?? [];
-  const code = trace.value?.queryCode ?? '';
-  return list.find((t) => (t.tenderProjectCode ?? '') === code) ?? list[0];
-});
-const traceTitle = computed(() =>
-  traceIsTender.value ? '招标项目全景追溯 · ' + (trace.value?.queryCode ?? '') : '项目全景追溯',
-);
-/** 招标项目本级追溯：招标项目 → 项目/标段 + 公告/外部公告/备案/关注/主体 + 统计（与项目级同一出参 VO） */
-async function openTenderTrace(tenderProjectCode: string): Promise<void> {
-  traceLoading.value = true;
-  try {
-    trace.value = await traceTenderProject(tenderProjectCode);
-  } catch {
-    // 静默：失败由请求层提示
-  } finally {
-    traceLoading.value = false;
+/** 打开项目层（列表行「查看项目」） */
+function openTrace(r: ProjectApi.Project): void {
+  void pushLevel('PROJECT', r.projectCode, r.projectName || r.projectCode);
+}
+/** 抽屉行「拉出下级」（标段 → 公告） */
+function onDrill(v: { code: string; label: string; type: 'BID_SECTION' | 'NOTICE' }): void {
+  void pushLevel(v.type, v.code, v.label);
+}
+/** 关闭当前层（含其上所有层），下层保留 = 栈语义 */
+function closeLevel(key: number): void {
+  const i = stack.value.findIndex((l) => l.key === key);
+  if (i >= 0) {
+    const l = stack.value[i];
+    if (l) l.open = false;
+    stack.value.splice(i);
   }
 }
-/** 下钻后返回项目级追溯（用当前行重取，保持抽屉不关） */
-function backToProjectTrace(): void {
-  if (currentRow.value) void openTrace(currentRow.value);
+function onDrawerUpdate(key: number, open: boolean): void {
+  if (!open) closeLevel(key);
 }
 
-const fieldEntries = computed(() => {
-  const f = (trace.value?.project?.fields ?? currentRow.value?.fields ?? {}) as Record<string, unknown>;
-  return Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '');
-});
+/* ===== 通用实体详情页（/bidding/entity/:type/:code，登记/编辑/发布在那里做，不限实体） ===== */
+function openEntityDetail(v: { code: string; type: 'BID_SECTION' | 'NOTICE' | 'PROJECT' }): void {
+  void router.push(`/bidding/entity/${v.type}/${encodeURIComponent(v.code)}`);
+}
 
 /* ===== 新建 / 编辑 ===== */
 const formOpen = ref(false);
@@ -385,7 +401,8 @@ v-model="query.state" label="管理态" :options="[
             <template v-else-if="column.key === 'createTime'">{{ fmtDateTime(record.createTime) }}</template>
             <template v-else-if="column.key === 'action'">
               <a-space size="small">
-                <a @click="openTrace(record)">追溯</a>
+                <a @click="openTrace(record)">查看项目</a>
+                <a class="text-blue-600" @click="openEntityDetail({ type: 'PROJECT', code: record.projectCode })">详情 ↗</a>
                 <a v-if="can('bidding:filing:create')" @click="openFiling(record)">提交备案</a>
                 <a v-if="can('bidding:filing:update')" @click="openReceipt()">登记回执</a>
                 <a v-if="can('bidding:project:update')" @click="onEdit(record)">编辑</a>
@@ -400,276 +417,25 @@ v-model="query.state" label="管理态" :options="[
       </div>
     </div>
 
-    <!-- 追溯抽屉：项目 → 招标项目 → 标段 + 公告/外部公告/备案/关注/主体 -->
-    <a-drawer v-model:open="traceOpen" class="bid-ind" :width="1000" :title="traceTitle" destroy-on-close>
-      <a-spin :spinning="traceLoading">
-        <div v-if="traceIsTender" class="mb-2">
-          <a class="text-xs text-blue-600" @click="backToProjectTrace">‹ 返回项目级追溯</a>
-        </div>
-        <template v-if="trace">
-          <div class="ct-panel-meta mb-3">
-            查询：{{ trace.queryCode || currentRow?.projectCode }}（{{ trace.queryType || 'PROJECT' }}）
-          </div>
-          <!-- 统计原先用 v-for 直出后端键名（tenderProjectCount：3），中文标签后才可用；
-               后端一次聚合 6 个域的计数与最近动态，正是本抽屉"一屏看清"要用的那一行。 -->
-          <a-descriptions v-if="trace.stats" :column="4" size="small" bordered class="mb-3">
-            <a-descriptions-item label="关联招标项目">{{ trace.stats.tenderProjectCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="关联标段">{{ trace.stats.sectionCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="内部公告">{{ trace.stats.noticeCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="外部公告">{{ trace.stats.externalNoticeCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="备案记录">{{ trace.stats.filingCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="关注项">{{ trace.stats.followCount ?? 0 }}</a-descriptions-item>
-            <a-descriptions-item label="各域最近动态" :span="4">
-              {{ fmtDateTime(trace.stats.latestDynamicTime) }}
-            </a-descriptions-item>
-          </a-descriptions>
-
-          <template v-if="traceIsTender">
-            <div class="ct-panel-t mb-2">招标项目基本信息</div>
-            <a-descriptions :column="2" size="small" bordered class="mb-3">
-              <a-descriptions-item label="招标项目编号">{{ trace.queryCode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="名称">{{ tenderSelf?.tenderProjectName || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="招标方式">{{ tenderSelf?.tenderMode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="招标人">{{ tenderSelf?.tendererName || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="所属项目">{{ tenderSelf?.projectCode || '—' }}</a-descriptions-item>
-              <a-descriptions-item label="管理态">{{ tenderSelf?.state || '—' }}</a-descriptions-item>
-            </a-descriptions>
-          </template>
-
-          <div v-if="!traceIsTender" class="ct-panel-t mb-2">项目基本信息</div>
-          <a-descriptions v-if="!traceIsTender" :column="2" size="small" bordered class="mb-3">
-            <a-descriptions-item label="项目编号">{{ trace.project?.projectCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="项目名称">{{ trace.project?.projectName || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="地区编码">{{ trace.project?.regionCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="法人">{{ trace.project?.legalPerson || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="投资代码">{{ trace.project?.investProjectCode || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="审批文号">{{ trace.project?.approvalDocNo || '—' }}</a-descriptions-item>
-            <a-descriptions-item label="登记时间">{{ fmtDateTime(trace.project?.createTime) }}</a-descriptions-item>
-            <a-descriptions-item label="管理态">{{ trace.project?.state || '—' }}</a-descriptions-item>
-          </a-descriptions>
-
-          <div v-if="!traceIsTender" class="ct-panel-t mb-2">数据集字段（ProjectVO）</div>
-          <a-descriptions v-if="!traceIsTender && fieldEntries.length" :column="2" size="small" bordered class="mb-3">
-            <a-descriptions-item v-for="[k, v] in fieldEntries" :key="k" :label="k">
-              {{ typeof v === 'object' ? JSON.stringify(v) : v }}
-            </a-descriptions-item>
-          </a-descriptions>
-          <div v-else-if="!traceIsTender" class="ct-tip mb-3">该记录未带数据集字段（fields 为空）</div>
-
-          <div class="ct-panel-t mb-2">关联招标项目（{{ trace.tenderProjects?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '招标项目编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '招标项目编号' }), dataIndex: 'tenderProjectCode', key: 'code', width: 200 },
-              { title: '名称', dataIndex: 'tenderProjectName', key: 'name' },
-              { title: '招标方式', dataIndex: 'tenderMode', key: 'mode', width: 120 },
-              { title: '招标人', dataIndex: 'tendererName', key: 'tenderer', width: 200 },
-              { title: '操作', key: 'op', width: 110 },
-            ]"
-            :data-source="trace.tenderProjects ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'op'">
-                <a class="text-xs text-blue-600" @click="openTenderTrace(record.tenderProjectCode)">本级追溯</a>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联招标项目</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关联标段（{{ trace.sections?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '标段编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '标段编号' }), dataIndex: 'bidSectionCode', key: 'code', width: 200 },
-              { title: '名称', dataIndex: 'bidSectionName', key: 'name' },
-              { title: '所属招标项目', dataIndex: 'tenderProjectCode', key: 'tp', width: 200 },
-              { title: '合同估算价', dataIndex: 'contractReckonPrice', key: 'price', width: 130 },
-            ]"
-            :data-source="trace.sections ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #emptyText><div class="ct-empty">无关联标段</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关联公告（{{ trace.notices?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table"
-            :columns="[
-              { title: '公告编号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '公告编号' }), dataIndex: 'noticeCode', key: 'code', width: 200 },
-              { title: '标题', dataIndex: 'title', key: 'title' },
-              { title: '类型', dataIndex: 'noticeTypeName', key: 'type', width: 130 },
-              { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 170 },
-            ]"
-            :data-source="trace.notices ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联公告</div></template>
-          </a-table>
-
-          <!-- 以下四张清单后端一直在返回，此前只有一行条数（"追溯"却看不到记录）。
-               原文按本仓外链约定只给可复制文本 + 可达性标记，不直接给 <a>（外链需走 /go 白名单）。 -->
-          <div class="ct-panel-t mb-2">外部公告（{{ trace.externalNotices?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '标题', dataIndex: 'title', key: 'title' },
-              { title: '信息源', dataIndex: 'sourceName', key: 'sourceName', width: 150 },
-              { title: '内容类型', dataIndex: 'contentType', key: 'contentType', width: 130 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
-              { title: '审核', dataIndex: 'auditStatus', key: 'auditStatus', width: 120 },
-              { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 160 },
-              { title: '原文', key: 'origUrl', width: 90 },
-            ]"
-            :data-source="trace.externalNotices ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'publishTime'">{{ fmtDateTime(record.publishTime) }}</template>
-              <template v-else-if="column.key === 'contentType'">
-                {{ dictLabel('notice_external_content_type', record.contentType) }}
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="dictTag('notice_external_status', record.status).color">
-                  {{ dictTag('notice_external_status', record.status).label }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'auditStatus'">
-                <a-tag :color="dictTag('notice_external_audit_status', record.auditStatus).color">
-                  {{ dictTag('notice_external_audit_status', record.auditStatus).label }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'origUrl'">
-                <span v-if="record.origUrl" class="mono" :title="record.origUrl" style="cursor: text">
-                  {{ record.available ? '可达（可复制）' : '平台内不可达' }}
-                </span>
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联外部公告</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">备案记录（{{ trace.filings?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '备案类型', dataIndex: 'filingType', key: 'filingType', width: 140 },
-              { title: '状态', dataIndex: 'status', key: 'status', width: 140 },
-              { title: '提交时间', dataIndex: 'submitTime', key: 'submitTime', width: 170 },
-              { title: '项目编号', dataIndex: 'projectCode', key: 'projectCode', width: 200 },
-              { title: '招标项目编号', dataIndex: 'tenderProjectCode', key: 'tenderProjectCode' },
-            ]"
-            :data-source="trace.filings ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'submitTime'">{{ fmtDateTime(record.submitTime) }}</template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="dictTag('filing_status', record.status).color">
-                  {{ dictTag('filing_status', record.status).label }}
-                </a-tag>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关联备案</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">关注项（{{ trace.follows?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table mb-3"
-            :columns="[
-              { title: '名称', dataIndex: 'displayName', key: 'displayName' },
-              { title: '关注类型', dataIndex: 'followType', key: 'followType', width: 120 },
-              { title: '状态', dataIndex: 'followStatus', key: 'followStatus', width: 110 },
-              { title: '最近动态', dataIndex: 'latestDynamicTime', key: 'latestDynamicTime', width: 170 },
-              { title: '未读', dataIndex: 'unreadCount', key: 'unreadCount', width: 90 },
-            ]"
-            :data-source="trace.follows ?? []"
-            :pagination="false"
-            row-key="id"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'latestDynamicTime'">
-                {{ fmtDateTime(record.latestDynamicTime) }}
-              </template>
-              <template v-else-if="column.key === 'unreadCount'">
-                <a-badge
-                  v-if="Number(record.unreadCount ?? 0) > 0"
-                  :count="record.unreadCount"
-                  :overflow-count="99"
-                />
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无关注项</div></template>
-          </a-table>
-
-          <div class="ct-panel-t mb-2">参与主体（{{ trace.subjects?.length ?? 0 }}）</div>
-          <a-table
-            class="ct-table"
-            :columns="[
-              { title: '来源', dataIndex: 'source', key: 'source', width: 190 },
-              { title: '主体角色', dataIndex: 'subjectRole', key: 'subjectRole', width: 120 },
-              { title: '主体名称', dataIndex: 'subjectName', key: 'subjectName' },
-              { title: '证件类型', dataIndex: 'codeType', key: 'codeType', width: 130 },
-              { title: '证件号', customRender: ({ text }: { text?: null | number | string }) => h(CopyText, { text, label: '证件号' }), dataIndex: 'code', key: 'code', width: 190 },
-              { title: '授权状态', dataIndex: 'authStatus', key: 'authStatus', width: 120 },
-              { title: '档案完备', dataIndex: 'profileComplete', key: 'profileComplete', width: 100 },
-            ]"
-            :data-source="trace.subjects ?? []"
-            :pagination="false"
-            row-key="code"
-            size="small"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'profileComplete'">
-                <a-tag :color="record.profileComplete ? 'green' : 'orange'">
-                  {{ record.profileComplete ? '完备' : '缺项' }}
-                </a-tag>
-              </template>
-              <template v-else-if="column.key === 'source'">
-                {{ dictLabel('trace_subject_source', record.source) }}
-              </template>
-              <template v-else-if="column.key === 'subjectRole'">
-                {{ dictLabel('subject_type', record.subjectRole) }}
-              </template>
-              <template v-else-if="column.key === 'codeType'">
-                <!-- tenderer_code_type 无后端枚举可对齐（外部标准码），故按原码展示，见字典脚本"不登记"说明 -->
-                {{ record.codeType || '—' }}
-              </template>
-              <template v-else-if="column.key === 'authStatus'">
-                <a-tag v-if="record.authStatus" :color="dictTag('subject_auth_status', record.authStatus).color">
-                  {{ dictTag('subject_auth_status', record.authStatus).label }}
-                </a-tag>
-                <span v-else>—</span>
-              </template>
-            </template>
-            <template #emptyText><div class="ct-empty">无参与主体</div></template>
-          </a-table>
-
-          <div class="ct-tip mt-3">
-            说明：状态与类型均取自字典（filing_status / subject_auth_status / subject_type /
-            trace_subject_source / notice_external_status / notice_external_audit_status /
-            notice_external_content_type），可在后台动态调整文案；字典未下发时回显原码，不会空白。
-            「证件类型」（tenderer_code_type）取值来自外部标准码、模块内无枚举可对齐，故按原码展示。
-            「原文」按本仓外链约定只给可复制文本，不直接给链接；平台内可达性由后端 available（ACTIVE 才可达）判定。
-          </div>
-        </template>
-        <div v-else-if="!traceLoading" class="ct-empty">未取到追溯数据</div>
-      </a-spin>
+    <!-- 层级抽屉栈：项目 → 标段 → 公告（最多 3 层），宽度 600/700/800 逐层叠加 + 仅顶层遮罩 + 层级面包屑 -->
+    <a-drawer
+      v-for="(level, i) in stack"
+      :key="level.key"
+      :open="level.open"
+      class="bid-ind"
+      :width="600 + 100 * i"
+      :mask="i === stack.length - 1"
+      :title="level.label || level.queryCode"
+      @update:open="(v: boolean) => onDrawerUpdate(level.key, v)"
+    >
+      <TraceLevelPanel
+        :level="level"
+        :is-top="i === stack.length - 1"
+        :crumbs="stack.slice(0, i + 1).map((l) => l.label || l.queryCode)"
+        @drill="onDrill"
+        @detail="openEntityDetail"
+        @close="closeLevel(level.key)"
+      />
     </a-drawer>
 
     <!-- 提交备案（项目编号随行带入；filingType 为业务约定文本） -->
@@ -770,42 +536,42 @@ v-model="query.state" label="管理态" :options="[
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="项目编号" name="projectCode">
-              <a-input v-model:value="form.projectCode" placeholder="唯一编号，用于与公告/标段关联" />
+              <a-input v-model:value="form.projectCode" :disabled="isEdit" placeholder="系统关联用唯一编号；登记后不可改，如由系统分配则免录" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="项目名称" name="projectName">
-              <a-input v-model:value="form.projectName" />
+              <a-input v-model:value="form.projectName" placeholder="如：某输气管线防腐保温工程" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="地区编码" name="regionCode"><a-input v-model:value="form.regionCode" /></a-form-item>
+            <a-form-item label="地区编码" name="regionCode"><a-input v-model:value="form.regionCode" placeholder="GB/T 2260 行政区划代码，如 610111" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="法人" name="legalPerson"><a-input v-model:value="form.legalPerson" /></a-form-item>
+            <a-form-item label="法人" name="legalPerson"><a-input v-model:value="form.legalPerson" placeholder="法定代表人姓名" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="行业分类" name="industriesType"><a-input v-model:value="form.industriesType" /></a-form-item>
+            <a-form-item label="行业分类" name="industriesType"><a-input v-model:value="form.industriesType" placeholder="行业类别（GB/T 4754-2017）" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="投资代码" name="investProjectCode">
-              <a-input v-model:value="form.investProjectCode" />
+              <a-input v-model:value="form.investProjectCode" placeholder="投资项目统一代码" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="审批部门" name="approvalDeptName">
-              <a-input v-model:value="form.approvalDeptName" />
+              <a-input v-model:value="form.approvalDeptName" placeholder="审批部门名称" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="审批文号" name="approvalDocNo"><a-input v-model:value="form.approvalDocNo" /></a-form-item>
+            <a-form-item label="审批文号" name="approvalDocNo"><a-input v-model:value="form.approvalDocNo" placeholder="审批文号" /></a-form-item>
           </a-col>
           <a-col :span="8">
-            <a-form-item label="资金来源" name="fundSource"><a-input v-model:value="form.fundSource" /></a-form-item>
+            <a-form-item label="资金来源" name="fundSource"><a-input v-model:value="form.fundSource" placeholder="资金来源（无字典时手工填写）" /></a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="出资规模" name="contributionScale">
-              <a-input v-model:value="form.contributionScale" />
+              <a-input v-model:value="form.contributionScale" placeholder="出资比例，如 60%" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -821,11 +587,11 @@ v-model="query.state" label="管理态" :options="[
           </a-col>
           <a-col :span="24">
             <a-form-item label="项目规模" name="projectScale">
-              <a-textarea v-model:value="form.projectScale" :rows="2" />
+              <a-textarea v-model:value="form.projectScale" :rows="2" placeholder="项目规模描述" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="备注" name="remark"><a-textarea v-model:value="form.remark" :rows="2" /></a-form-item>
+            <a-form-item label="备注" name="remark"><a-textarea v-model:value="form.remark" :rows="2" placeholder="备注" /></a-form-item>
           </a-col>
         </a-row>
       </a-form>

@@ -9,12 +9,9 @@ import { useVbenModal } from '@vben/common-ui';
 
 import {
   Button,
-  DatePicker,
   Input,
-  InputNumber,
   message,
   Select,
-  Switch,
   Table,
   Tag,
   TreeSelect,
@@ -53,27 +50,18 @@ const examOptions = ref<{ label: string; value: number }[]>([]);
 const editingId = ref<number>();
 const code = ref('');
 const title = ref('');
-const coverUrl = ref('');
 const level = ref<number | undefined>();
 const courseLevel = ref<string | undefined>();
 /** 所属分类（课程分类树：域-组-课 三级） */
 const categoryId = ref<number | undefined>();
-const credit = ref<number | undefined>();
-const durationMinutes = ref<number | undefined>();
 /** 适用岗位/工种（多选，来源：基础数据 → 岗位工种） */
 const applicablePosts = ref<string[]>([]);
 /** 学习域/课程组编码（按适用岗位工种自动匹配回填） */
 const learnDomainCodes = ref('');
-const ownerFlag = ref('');
-const lecturer = ref('');
-const lecturerBrief = ref('');
 /** 业务标签：岗前培训 / 复工强制 / 持证上岗 */
 const bizTags = ref<string[]>([]);
-const isRequired = ref(false);
-const isComposite = ref(false);
-const compositeTags = ref('');
+/** 结课考试（对接模块三考试与认证）：学完即考 */
 const examId = ref<number | undefined>();
-const examRange = ref<string[] | undefined>();
 const sort = ref<number | undefined>();
 const summary = ref('');
 const saving = ref(false);
@@ -282,34 +270,19 @@ async function handleConfirm() {
     message.warning('课程名称不能为空');
     return;
   }
-  if (examId.value && (!examRange.value || examRange.value.length !== 2)) {
-    message.warning('已选择结课考试试卷，请同时设置结课考试时间');
-    return;
-  }
   saving.value = true;
   try {
     const payload: Partial<TrainingCourseApi.Course> & Record<string, any> = {
       id: editingId.value,
       code: code.value?.trim() || undefined,
       title: title.value.trim(),
-      coverUrl: coverUrl.value?.trim() || undefined,
       level: level.value,
       courseLevel: courseLevel.value,
       categoryId: categoryId.value,
-      credit: credit.value,
-      durationMinutes: durationMinutes.value,
       applicablePosts: JSON.stringify(applicablePosts.value),
       learnDomainCodes: learnDomainCodes.value || undefined,
-      ownerFlag: ownerFlag.value?.trim() || undefined,
-      lecturer: lecturer.value?.trim() || undefined,
-      lecturerBrief: lecturerBrief.value?.trim() || undefined,
       bizTags: JSON.stringify(bizTags.value),
-      isRequired: isRequired.value,
-      isComposite: isComposite.value,
-      compositeTags: compositeTags.value?.trim() || undefined,
       examId: examId.value,
-      examStartTime: examRange.value?.[0],
-      examEndTime: examRange.value?.[1],
       sort: sort.value,
       summary: summary.value?.trim() || undefined,
       mediaList: buildMediaList(),
@@ -327,23 +300,13 @@ function resetForm() {
   editingId.value = undefined;
   code.value = '';
   title.value = '';
-  coverUrl.value = '';
   level.value = undefined;
   courseLevel.value = undefined;
   categoryId.value = undefined;
-  credit.value = undefined;
-  durationMinutes.value = undefined;
   applicablePosts.value = [];
   learnDomainCodes.value = '';
-  ownerFlag.value = '';
-  lecturer.value = '';
-  lecturerBrief.value = '';
   bizTags.value = [];
-  isRequired.value = false;
-  isComposite.value = false;
-  compositeTags.value = '';
   examId.value = undefined;
-  examRange.value = undefined;
   sort.value = undefined;
   summary.value = '';
   pickedDocs.value = [];
@@ -369,25 +332,13 @@ const [Modal, modalApi] = useVbenModal({
     const detail = await getCourse(data.id);
     code.value = detail.code || '';
     title.value = detail.title || '';
-    coverUrl.value = detail.coverUrl || '';
     level.value = detail.level;
     courseLevel.value = detail.courseLevel;
     categoryId.value = detail.categoryId;
-    credit.value = detail.credit;
-    durationMinutes.value = detail.durationMinutes;
     applicablePosts.value = parseJsonArray(detail.applicablePosts);
     learnDomainCodes.value = detail.learnDomainCodes || '';
-    ownerFlag.value = detail.ownerFlag || '';
-    lecturer.value = detail.lecturer || '';
-    lecturerBrief.value = detail.lecturerBrief || '';
     bizTags.value = parseJsonArray(detail.bizTags);
-    isRequired.value = Boolean(detail.isRequired);
-    isComposite.value = Boolean(detail.isComposite);
-    compositeTags.value = detail.compositeTags || '';
     examId.value = detail.examId;
-    if (detail.examStartTime && detail.examEndTime) {
-      examRange.value = [detail.examStartTime, detail.examEndTime];
-    }
     sort.value = detail.sort;
     summary.value = detail.summary || '';
     // 资源所属回显：文档/视频拆分展示，图片与 VR 媒资保留原样
@@ -443,12 +394,6 @@ const [Modal, modalApi] = useVbenModal({
         <Input v-model:value="title" class="flex-1" :maxlength="200" placeholder="请输入课程名称" />
       </div>
 
-      <!-- 封面 -->
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">封面地址</span>
-        <Input v-model:value="coverUrl" class="flex-1" placeholder="https://…（资源中心媒资地址）" />
-      </div>
-
       <!-- 课程级别 -->
       <div class="flex items-center gap-2">
         <span class="w-32 text-right text-sm text-gray-600">课程级别</span>
@@ -491,16 +436,6 @@ const [Modal, modalApi] = useVbenModal({
         />
       </div>
 
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">课程学分</span>
-        <InputNumber v-model:value="credit" class="flex-1" :min="0" :precision="2" placeholder="请输入学分" />
-      </div>
-
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">总时长(分钟)</span>
-        <InputNumber v-model:value="durationMinutes" class="flex-1" :min="0" placeholder="请输入课程总时长" />
-      </div>
-
       <!-- 适用岗位/工种 + 学习域/课程组联动 -->
       <div class="flex items-start gap-2">
         <span class="w-32 pt-1 text-right text-sm text-gray-600">适用岗位/工种</span>
@@ -526,11 +461,6 @@ const [Modal, modalApi] = useVbenModal({
             依据岗位工种表配置的学习域/课程组自动匹配（多岗位取并集，出现全域则记为全域）。
           </div>
         </div>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">资源归属</span>
-        <Input v-model:value="ownerFlag" class="flex-1" placeholder="如 DEPT_AI_FACTORY（资源中心 owner_flag 快照）" />
       </div>
 
       <!-- 资源所属：模块一文档/视频 -->
@@ -585,16 +515,6 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">主讲教师</span>
-        <Input v-model:value="lecturer" class="flex-1" placeholder="请输入主讲教师" />
-      </div>
-
-      <div class="flex items-start gap-2">
-        <span class="w-32 pt-1 text-right text-sm text-gray-600">讲师简介</span>
-        <Input.TextArea v-model:value="lecturerBrief" class="flex-1" :rows="2" placeholder="请输入讲师简介" />
-      </div>
-
       <!-- 业务标签（三种） -->
       <div class="flex items-start gap-2">
         <span class="w-32 pt-1 text-right text-sm text-gray-600">业务标签</span>
@@ -610,18 +530,6 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">是否必修</span>
-        <Switch v-model:checked="isRequired" />
-        <span class="ml-8 text-right text-sm text-gray-600">复合课程</span>
-        <Switch v-model:checked="isComposite" />
-      </div>
-
-      <div v-if="isComposite" class="flex items-center gap-2">
-        <span class="w-32 text-right text-sm text-gray-600">复合子模块标签</span>
-        <Input v-model:value="compositeTags" class="flex-1" placeholder='JSON 数组，如 ["管道安装","防腐保温"]' />
-      </div>
-
       <!-- 结课考试：对接模块三 -->
       <div class="flex items-start gap-2">
         <span class="w-32 pt-1 text-right text-sm text-gray-600">结课考试</span>
@@ -633,15 +541,8 @@ const [Modal, modalApi] = useVbenModal({
             :options="examOptions"
             placeholder="选择模块三「考试与认证」中的试卷（未发布试卷会标注草稿）"
           />
-          <DatePicker.RangePicker
-            v-model:value="examRange as any"
-            class="w-full"
-            show-time
-            value-format="YYYY-MM-DD HH:mm:ss"
-            :placeholder="['结课考试开始时间', '结课考试结束时间']"
-          />
           <div class="text-xs text-gray-400">
-            选定试卷与考试时间后，本门课的结课考试会同步展现在模块三「考试与认证」的考试安排中。
+            学员完成本门课程学习后，即可参加所选的结课考试；考试在模块三「考试与认证」中统一安排与判分。
           </div>
         </div>
       </div>

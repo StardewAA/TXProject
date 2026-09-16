@@ -19,14 +19,18 @@ import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCan
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatConversationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatMessageDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.candidate.HrmRecruitCandidateMapper;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatConversationMapper;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatMessageMapper;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.hutool.json.JSONObject;
@@ -43,6 +47,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +76,7 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
 
     private static final int WAITING_REPLY_TIMEOUT_DAYS = 10;
     private static final String TIMEOUT_END_REASON = "招聘方超过10天未回复";
+    private static final DateTimeFormatter INTERVIEW_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @Resource private HrmRecruitChatConversationMapper conversationMapper;
     @Resource private HrmRecruitChatMessageMapper messageMapper;
@@ -81,6 +87,7 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
     @Resource private HrmPersonalResumeService personalResumeService;
     @Resource private HrmRecruitResumeService recruitResumeService;
     @Resource private AdminUserApi adminUserApi;
+    @Resource @Lazy private HrmRecruitApplicationService applicationService;
     @Resource @Lazy private HrmRecruitChatService chatServiceProxy;
 
     @Override
@@ -277,7 +284,7 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
     @Transactional(rollbackFor = Exception.class)
     public Long convertConversationToCandidate(Long hrUserId, Long conversationId) {
         HrmRecruitChatConversationDO conversation = getRequiredHrConversation(hrUserId, conversationId);
-        if (conversation.getCandidateId() != null) {
+        if (conversation.getCandidateId() != null && conversation.getApplicationId() != null) {
             return conversation.getCandidateId();
         }
 
@@ -301,17 +308,24 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
             throw exception(RECRUIT_CHAT_RESUME_NOT_EXISTS);
         }
 
-        AdminUserRespDTO candidateUser = TenantUtils.execute(tenantId,
-                () -> adminUserApi.getUserIgnoreTenant(conversation.getCandidateUserId()).getCheckedData());
-        JSONObject profile = getCandidateProfile(conversation.getCandidateUserId());
-        String mobile = firstNotBlank(profile == null ? null : profile.getStr("mobile"),
-                candidateUser == null ? null : candidateUser.getMobile());
-        if (StrUtil.isBlank(mobile)) {
-            throw exception(RECRUIT_CHAT_CANDIDATE_PROFILE_INCOMPLETE);
+        AdminUserRespDTO candidateUser = null;
+        JSONObject profile = null;
+        String mobile = null;
+        if (conversation.getCandidateId() == null) {
+            candidateUser = TenantUtils.execute(tenantId,
+                    () -> adminUserApi.getUserIgnoreTenant(conversation.getCandidateUserId()).getCheckedData());
+            profile = getCandidateProfile(conversation.getCandidateUserId());
+            mobile = firstNotBlank(profile == null ? null : profile.getStr("mobile"),
+                    candidateUser == null ? null : candidateUser.getMobile());
+            if (StrUtil.isBlank(mobile)) {
+                throw exception(RECRUIT_CHAT_CANDIDATE_PROFILE_INCOMPLETE);
+            }
         }
 
-        HrmRecruitCandidateDO candidate = TenantUtils.execute(tenantId,
-                () -> candidateService.getRecruitCandidateByMobile(mobile));
+        String candidateMobile = mobile;
+        HrmRecruitCandidateDO candidate = conversation.getCandidateId() == null
+                ? TenantUtils.execute(tenantId, () -> candidateService.getRecruitCandidateByMobile(candidateMobile))
+                : new HrmRecruitCandidateDO().setId(conversation.getCandidateId());
         if (candidate == null) {
             HrmRecruitCandidateSaveReqVO candidateReq = new HrmRecruitCandidateSaveReqVO()
                     .setName(firstNotBlank(profile == null ? null : profile.getStr("name"),
@@ -332,16 +346,58 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
         }
 
         HrmRecruitCandidateDO finalCandidate = candidate;
-        TenantUtils.execute(tenantId, () -> recruitResumeService.createRecruitResume(
-                new HrmRecruitResumeSaveReqVO()
-                        .setCandidateId(finalCandidate.getId())
-                        .setFileName(resumeFileName)
-                        .setFileUrl(resumeFileUrl)
-                        .setRemark("招聘沟通发送的简历")));
+        HrmRecruitApplicationDO currentApplication = TenantUtils.execute(tenantId,
+                () -> applicationService.getLatestRecruitApplicationByCandidateAndPost(
+                        finalCandidate.getId(), conversation.getPostId()));
+        Long applicationId = currentApplication != null
+                && HrmRecruitApplicationStatusEnum.PROCESSING_STATUSES.contains(currentApplication.getStatus())
+                ? currentApplication.getId() : null;
+        if (applicationId == null) {
+            Long resumeId = TenantUtils.execute(tenantId, () -> recruitResumeService.createRecruitResume(
+                    new HrmRecruitResumeSaveReqVO()
+                            .setCandidateId(finalCandidate.getId())
+                            .setFileName(resumeFileName)
+                            .setFileUrl(resumeFileUrl)
+                            .setRemark("招聘沟通发送的简历")));
+            applicationId = TenantUtils.execute(tenantId, () -> applicationService.createApplicationFromRecruitChat(
+                    conversation.getCandidateUserId(), finalCandidate.getId(), conversation.getPostId(), resumeId));
+        }
         HrmRecruitChatConversationDO update = new HrmRecruitChatConversationDO()
-                .setId(conversation.getId()).setCandidateId(finalCandidate.getId());
+                .setId(conversation.getId()).setCandidateId(finalCandidate.getId())
+                .setApplicationId(applicationId)
+                .setApplicationStatus(HrmRecruitChatApplicationStatusEnum.SUBMITTED.getStatus());
         TenantUtils.execute(tenantId, () -> conversationMapper.updateById(update));
         return finalCandidate.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void sendInterviewArrangedNotification(Long applicationId, HrmRecruitInterviewDO interview) {
+        if (applicationId == null || interview == null) {
+            return;
+        }
+        HrmRecruitChatConversationDO conversation = TenantUtils.executeIgnore(
+                () -> conversationMapper.selectByApplicationId(applicationId));
+        if (conversation == null || conversation.getHrUserId() == null) {
+            return;
+        }
+        String interviewTime = interview.getInterviewTime() == null
+                ? "待确认" : INTERVIEW_TIME_FORMATTER.format(interview.getInterviewTime());
+        String address = StrUtil.blankToDefault(interview.getAddress(), "线上面试");
+        String content = "面试安排通知：第 " + (interview.getStageNumber() == null ? "1" : interview.getStageNumber())
+                + " 轮，时间：" + interviewTime + "，地点：" + address;
+        if (StrUtil.isNotBlank(interview.getRemark())) {
+            content += "，备注：" + interview.getRemark();
+        }
+        try {
+            sendMessage(conversation.getHrUserId(), new HrmPortalRecruitChatSendReqVO()
+                    .setConversationId(conversation.getId())
+                    .setContentType(1)
+                    .setContent(content));
+        } catch (RuntimeException ex) {
+            log.warn("[sendInterviewArrangedNotification][applicationId({}) conversationId({}) 通知发送失败]",
+                    applicationId, conversation.getId(), ex);
+        }
     }
 
     @Override
@@ -391,7 +447,11 @@ public class HrmRecruitChatServiceImpl implements HrmRecruitChatService {
     }
 
     private HrmRecruitChatConversationDO getRequiredHrConversation(Long hrUserId, Long conversationId) {
-        HrmRecruitChatConversationDO conversation = getRequiredConversation(hrUserId, conversationId);
+        HrmRecruitChatConversationDO conversation = TenantUtils.executeIgnore(
+                () -> conversationMapper.selectByIdForUpdate(conversationId));
+        if (conversation == null) {
+            throw exception(RECRUIT_CHAT_CONVERSATION_NOT_EXISTS);
+        }
         if (!hrUserId.equals(conversation.getHrUserId())) {
             throw exception(RECRUIT_CHAT_NOT_PARTICIPANT);
         }

@@ -115,7 +115,7 @@ const nodes = computed<TimelineNode[]>(() => {
             </div>
           </li>
         </ul>
-        <div v-else class="ct-empty">暂无生命周期记录</div>
+        <div v-else class="ct-empty">暂无生命周期记录：该证照尚未发起变更 / 续期 / 注销 / 年检流程</div>
       </a-spin>
     </div>
   </div>

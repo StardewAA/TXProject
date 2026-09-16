@@ -111,7 +111,7 @@ const [MediaModal, mediaModal] = useVbenModal({
 });
 
 function handleMedia(row: TrainingCourseApi.Course) {
-  mediaModal.setData(row.id).open();
+  mediaModal.setData({ id: row.id }).open();
 }
 
 // ========== 删除 ==========
