@@ -8,11 +8,7 @@ import { useVbenModal } from '@vben/common-ui';
 import { Descriptions, Table, Tag } from 'ant-design-vue';
 
 import { getClassCourseList } from '../api';
-import {
-  CLASS_STATUS_OPTIONS,
-  CLASS_TYPE_TEXT,
-  targetConditionSummary,
-} from '../data';
+import { CLASS_STATUS_OPTIONS, CLASS_TYPE_TEXT } from '../data';
 
 defineOptions({ name: 'TrainingPlanClassDetail' });
 
@@ -85,9 +81,6 @@ const courseColumns = [
               : '-'
           }}
         </Descriptions.Item>
-        <Descriptions.Item label="关联项目">
-          {{ currentClass.projectName || currentClass.projectId || '-' }}
-        </Descriptions.Item>
         <Descriptions.Item label="状态">
           <Tag
             :color="
@@ -115,14 +108,8 @@ const courseColumns = [
         <Descriptions.Item label="绑定课程">
           {{ courseList.length }} 门
         </Descriptions.Item>
-        <Descriptions.Item label="参训对象筛选条件" :span="2">
-          {{ targetConditionSummary(currentClass.targetCondition) }}
-        </Descriptions.Item>
-        <Descriptions.Item label="参训岗位" :span="2">
+        <Descriptions.Item label="定岗" :span="2">
           {{ currentClass.targetPosts || '-' }}
-        </Descriptions.Item>
-        <Descriptions.Item label="备注" :span="2">
-          {{ currentClass.remark || '-' }}
         </Descriptions.Item>
       </Descriptions>
 

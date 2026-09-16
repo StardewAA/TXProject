@@ -107,6 +107,20 @@ export function useGridFormSchema(): VbenFormSchema[] {
         placeholder: '请输入课程编码',
       },
     },
+    {
+      fieldName: 'versionScope',
+      label: '版本范围',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        placeholder: '默认仅当前版本',
+        options: [
+          { label: '仅当前版本（默认）', value: 'current' },
+          { label: '全部版本（含历史）', value: 'all' },
+          { label: '仅历史版本', value: 'history' },
+        ],
+      },
+    },
   ];
 }
 
@@ -153,8 +167,9 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'version',
       title: '版本',
-      width: 70,
+      width: 120,
       align: 'center',
+      slots: { default: 'version' },
     },
     {
       field: 'mediaCount',

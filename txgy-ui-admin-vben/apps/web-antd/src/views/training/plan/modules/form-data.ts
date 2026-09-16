@@ -1,10 +1,5 @@
 import type { VbenFormSchema } from '#/adapter/form';
 
-import { handleTree } from '@vben/utils';
-
-import { getSimpleDeptList } from '#/api/system/dept';
-import { getSimplePostList } from '#/api/system/post';
-
 import { CLASS_TYPE_OPTIONS } from '../data';
 
 /** 常用岗位（定岗-四定之一，也可手工输入）
@@ -104,24 +99,6 @@ export function useFormSchema(
       },
     },
     {
-      fieldName: 'projectId',
-      label: '工程项目编号',
-      component: 'Input',
-      componentProps: {
-        placeholder: '关联项目编号（岗前/复工培训用于上岗资格核查）',
-        maxlength: 64,
-      },
-    },
-    {
-      fieldName: 'projectName',
-      label: '工程项目名称',
-      component: 'Input',
-      componentProps: {
-        placeholder: '关联项目名称，可空',
-        maxlength: 200,
-      },
-    },
-    {
       fieldName: 'courseIds',
       label: '绑定课程(定课)',
       component: 'Select',
@@ -163,58 +140,6 @@ export function useFormSchema(
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
         placeholder: '选择培训截止时间（开班必须设置）',
-      },
-    },
-    {
-      fieldName: 'scopeDeptIds',
-      label: '参训部门',
-      component: 'ApiTreeSelect',
-      componentProps: {
-        allowClear: true,
-        api: async () => handleTree(await getSimpleDeptList()),
-        labelField: 'name',
-        valueField: 'id',
-        childrenField: 'children',
-        multiple: true,
-        treeCheckable: true,
-        showCheckedStrategy: 'SHOW_PARENT',
-        treeDefaultExpandAll: true,
-        placeholder: '按部门圈选参训人员（可多选）',
-      },
-    },
-    {
-      fieldName: 'scopeIncludeChildDept',
-      label: '含下级部门',
-      component: 'Switch',
-      defaultValue: true,
-      componentProps: {
-        checkedChildren: '是',
-        unCheckedChildren: '否',
-      },
-    },
-    {
-      fieldName: 'scopePostIds',
-      label: '参训岗位',
-      component: 'ApiSelect',
-      componentProps: {
-        allowClear: true,
-        api: async () =>
-          (await getSimplePostList()).filter((item) => item.status === 0),
-        labelField: 'name',
-        valueField: 'id',
-        mode: 'multiple',
-        optionFilterProp: 'label',
-        placeholder: '按系统岗位圈选参训人员（可多选）',
-      },
-    },
-    {
-      fieldName: 'remark',
-      label: '备注',
-      component: 'InputTextArea',
-      componentProps: {
-        placeholder: '备注，可空',
-        maxlength: 500,
-        rows: 2,
       },
     },
   ];

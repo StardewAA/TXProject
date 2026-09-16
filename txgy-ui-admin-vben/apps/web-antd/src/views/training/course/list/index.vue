@@ -70,11 +70,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
+          const { versionScope, ...rest } = formValues ?? {};
+          // 版本范围：默认仅当前版本；「全部版本」不传 isCurrent；「仅历史版本」传 false
+          const versionParams =
+            versionScope === 'all'
+              ? {}
+              : { isCurrent: versionScope === 'history' ? false : true };
           return await getCoursePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            isCurrent: true,
-            ...formValues,
+            ...versionParams,
+            ...rest,
           });
         },
       },
@@ -617,6 +623,13 @@ function buildActions(row: TrainingCourseApi.Course) {
         <a class="text-blue-600 hover:underline" @click="handleShowDetail(row)">
           {{ row.title }}
         </a>
+      </template>
+
+      <template #version="{ row }">
+        <Tag color="blue">v{{ row.version ?? 1 }}</Tag>
+        <Tag :color="row.isCurrent ? 'success' : 'default'">
+          {{ row.isCurrent ? '当前' : '历史' }}
+        </Tag>
       </template>
 
       <template #level="{ row }">

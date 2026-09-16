@@ -161,6 +161,7 @@ onMounted(() => {
           :columns="[
             { title: '课程名称', dataIndex: 'title', key: 'title' },
             { title: '课程编码', dataIndex: 'code', key: 'code', width: 150 },
+            { title: '版本', key: 'version', width: 120, align: 'center' },
             { title: '讲师', dataIndex: 'lecturer', key: 'lecturer', width: 120 },
             { title: '状态', key: 'status', width: 110, align: 'center' },
             { title: '提交时间', dataIndex: 'submittedAt', key: 'submittedAt', width: 180 },
@@ -175,7 +176,13 @@ onMounted(() => {
           "
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'status'">
+            <template v-if="column.key === 'version'">
+              <Tag color="blue">v{{ record.version ?? 1 }}</Tag>
+              <Tag :color="record.isCurrent ? 'success' : 'default'">
+                {{ record.isCurrent ? '当前版本' : '历史版本' }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'status'">
               <Tag color="orange">{{ statusText(record.status) }}</Tag>
             </template>
             <template v-else-if="column.key === 'actions'">
