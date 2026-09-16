@@ -19,6 +19,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
  */
 public interface HrmRecruitInterviewService {
 
+    int MAX_INTERVIEW_ROUNDS = 3;
+
     /**
      * 创建招聘面试
      *
@@ -101,6 +103,8 @@ public interface HrmRecruitInterviewService {
      * @param eliminateReason 淘汰原因
      */
     void finishCurrentRecruitInterviewForElimination(Long candidateId, String eliminateReason);
+
+    void finishCurrentRecruitInterviewForElimination(Long applicationId, Long candidateId, String eliminateReason);
 
     /**
      * 更新招聘面试结果
