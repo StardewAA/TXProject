@@ -150,17 +150,28 @@ def install(ctx):
             })
         return ok(result)
 
+    def platform_page_rows(path, actor, page_size=200, max_pages=5):
+        """分页拉取平台列表数据（平台单页上限为 200 条，超过会返回 400）。"""
+        rows = []
+        for page_no in range(1, max_pages + 1):
+            try:
+                data = platform_get(f"{path}?pageNo={page_no}&pageSize={page_size}", actor.token, actor.tenant_id) or {}
+            except HTTPException as error:
+                if getattr(error, "status_code", None) == 403:
+                    break
+                raise
+            page_rows = [x for x in (data.get("list") or []) if isinstance(x, dict)]
+            rows.extend(page_rows)
+            total = int(data.get("total") or 0)
+            if len(page_rows) < page_size or (total and len(rows) >= total):
+                break
+        return rows
+
     @app.get("/api/courses")
     def course_options(actor: Actor = Depends(current_user)):
         """课程管理中已有的课程，供试卷「关联课程」下拉使用。"""
-        try:
-            data = platform_get("/training/course/page?pageNo=1&pageSize=500", actor.token, actor.tenant_id) or {}
-        except HTTPException as error:
-            if getattr(error, "status_code", None) == 403: data = {}
-            else: raise
         result = []
-        for item in data.get("list") or []:
-            if not isinstance(item, dict): continue
+        for item in platform_page_rows("/training/course/page", actor):
             name = str(item.get("title") or item.get("name") or "").strip()
             if not name: continue
             result.append({"id": item.get("id"), "name": name, "code": item.get("code")})
@@ -174,13 +185,8 @@ def install(ctx):
     @app.get("/api/job-certs")
     def job_cert_options(actor: Actor = Depends(current_user)):
         """考试通过发放的工种资格证选项：来自工种资格证表。"""
-        try:
-            data = platform_get("/training/job-cert/page?pageNo=1&pageSize=200", actor.token, actor.tenant_id) or {}
-        except HTTPException as error:
-            if getattr(error, "status_code", None) == 403: data = {}
-            else: raise
         result = []
-        for item in data.get("list") or []:
+        for item in platform_page_rows("/training/job-cert/page", actor):
             if not isinstance(item, dict): continue
             name = str(item.get("certName") or "").strip()
             if not name: continue
@@ -208,7 +214,7 @@ def install(ctx):
     def update_question(qid:int,body:QuestionIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher"))):
         """编辑试题：同步更新资源中心（模块一）考试题库中的试题。"""
         payload=question_payload(body,actor);payload["id"]=qid
-        platform_post("/training/question/update",actor.token,actor.tenant_id,payload)
+        platform_put("/training/question/update",actor.token,actor.tenant_id,payload)
         row=db.scalar(select(Question).where(Question.platform_id==qid))
         if row is not None:
             row.q_type=body.q_type;row.stem=body.stem
@@ -231,8 +237,8 @@ def install(ctx):
         p=db.get(Paper,pid)
         if not p or p.status!="draft":raise HTTPException(409,"仅草稿试卷可修改参数")
         data=body.model_dump()
-        data["work_types"]=json.dumps(body.work_types,ensure_ascii=False)
-        data["cert_names"]=json.dumps(body.cert_names,ensure_ascii=False)
+        data["work_types"]=json.dumps(name_list(body.work_types),ensure_ascii=False)
+        data["cert_names"]=json.dumps(name_list(body.cert_names),ensure_ascii=False)
         if not data.get("course_name") and body.course_id:
             data["course_name"]=platform_course_name(actor,body.course_id)
         for key,value in data.items():setattr(p,key,value)

@@ -272,16 +272,26 @@ def platform_get(path, token, tenant_id):
     return payload.get("data")
 
 
-def platform_post(path, token, tenant_id, body: dict | None = None):
-    """调用平台的写接口（创建/更新/停用试题等）。"""
+def platform_request(method, path, token, tenant_id, body: dict | None = None):
+    """调用平台的写接口（新增用 POST、更新用 PUT）。"""
     try:
-        r = httpx.post(PLATFORM_URL + path, json=body if body is not None else {}, headers={"Authorization": token, "tenant-id": str(tenant_id)}, timeout=15)
+        r = httpx.request(method, PLATFORM_URL + path, json=body if body is not None else {}, headers={"Authorization": token, "tenant-id": str(tenant_id)}, timeout=15)
         payload = r.json()
     except (httpx.HTTPError, ValueError):
         raise HTTPException(503, "平台服务暂时不可用")
     if r.status_code != 200 or payload.get("code") != 0:
-        raise HTTPException(422, payload.get("message") or "平台接口调用失败")
+        raise HTTPException(422, payload.get("msg") or payload.get("message") or "平台接口调用失败")
     return payload.get("data")
+
+
+def platform_post(path, token, tenant_id, body: dict | None = None):
+    """调用平台的 POST 写接口（创建/停用试题等）。"""
+    return platform_request("POST", path, token, tenant_id, body)
+
+
+def platform_put(path, token, tenant_id, body: dict | None = None):
+    """调用平台的 PUT 写接口（更新试题）。"""
+    return platform_request("PUT", path, token, tenant_id, body)
 
 
 def current_user(authorization: str = Header(""), tenant_id: int = Header(...)):
@@ -651,6 +661,16 @@ def platform_course_name(actor, course_id: int | None) -> str:
     return ""
 
 
+def name_list(values: list[str] | None) -> list[str]:
+    """去重去空白的名称列表（工种/资格证可能存在同名项）。"""
+    result = []
+    for value in values or []:
+        text = str(value or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
 def paper_view(p: Paper):
     return {"id": p.id, "name": p.name, "exam_type": p.exam_type, "status": p.status, "total_score": p.total_score, "pass_score": p.pass_score, "duration_min": p.duration_min, "question_count": len(p.questions), "retry_limit": p.retry_limit, "anti_switch": p.anti_switch, "cert_enabled": p.cert_enabled, "cert_type": p.cert_type, "course_name": p.course_name, "course_id": p.course_id, "work_types": parse(p.work_types, []), "cert_names": parse(p.cert_names, []), "score_limit": PAPER_TOTAL_LIMIT}
 
@@ -663,8 +683,8 @@ def list_papers(db: Session = Depends(db_session), actor: Actor = Depends(requir
 @app.post("/api/papers")
 def create_paper(body: PaperIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
     data = body.model_dump()
-    data["work_types"] = json.dumps(body.work_types, ensure_ascii=False)
-    data["cert_names"] = json.dumps(body.cert_names, ensure_ascii=False)
+    data["work_types"] = json.dumps(name_list(body.work_types), ensure_ascii=False)
+    data["cert_names"] = json.dumps(name_list(body.cert_names), ensure_ascii=False)
     if not data.get("course_name") and body.course_id:
         data["course_name"] = platform_course_name(actor, body.course_id)
     p = Paper(**data, created_by=actor.id); db.add(p); db.commit(); return ok({"id": p.id}, "试卷草稿已创建")
