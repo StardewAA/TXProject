@@ -22,6 +22,21 @@ CLASS_STATUS_OPTIONS.forEach((item) => {
   statusColorMap[item.value] = item.color as string;
 });
 
+/** 后端日期字段为毫秒时间戳，统一格式化为 YYYY-MM-DD HH:mm */
+function formatDateTime(value?: null | number | string) {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value).slice(0, 16);
+  }
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
 async function loadDetail(classId: number) {
   courseList.value = await getClassCourseList(classId);
 }
@@ -97,10 +112,10 @@ const courseColumns = [
           </Tag>
         </Descriptions.Item>
         <Descriptions.Item label="开班时间">
-          {{ currentClass.startTime || '-' }}
+          {{ formatDateTime(currentClass.startTime) }}
         </Descriptions.Item>
         <Descriptions.Item label="截止时间">
-          {{ currentClass.deadline || '-' }}
+          {{ formatDateTime(currentClass.deadline) }}
         </Descriptions.Item>
         <Descriptions.Item label="在班学员">
           {{ currentClass.studentCount ?? 0 }} 人
