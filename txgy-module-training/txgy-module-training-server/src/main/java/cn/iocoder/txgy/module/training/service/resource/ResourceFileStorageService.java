@@ -78,6 +78,13 @@ public class ResourceFileStorageService {
     }
 
     /**
+     * 获取资源文件存储根目录（绝对路径）
+     */
+    public File getRootDir() {
+        return rootDir;
+    }
+
+    /**
      * 根据相对路径取文件；文件不存在返回 null
      */
     public File loadFile(String relPath) {
