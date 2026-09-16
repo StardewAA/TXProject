@@ -1,10 +1,8 @@
 package cn.iocoder.txgy.module.training.service.resource;
 
-import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionItemVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionImportReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionParseRespVO;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 /**
  * 试题 AI 智能导入 Service（文档 → 试题）
@@ -23,10 +21,11 @@ public interface AiQuestionImportService {
     AiQuestionParseRespVO parseDocument(MultipartFile file);
 
     /**
-     * 确认导入：将预览试题批量落库
+     * 确认导入：将预览试题批量落库，整批统一归入指定分类并打上指定标签
      *
+     * @param reqVO 试题列表 + 所属分类 + 标签集合
      * @return 成功导入的试题数量
      */
-    int importQuestions(List<AiQuestionItemVO> items);
+    int importQuestions(AiQuestionImportReqVO reqVO);
 
 }

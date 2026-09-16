@@ -1,0 +1,12 @@
+# AI 服务运行时镜像：复用本机 Maven 构建产物（jars/ai/app.jar）
+# 用法：mvn 构建产物复制为 deploy/jars/ai/app.jar，然后 docker compose up -d ai
+FROM deploy-mes-base:latest
+
+WORKDIR /app
+
+ARG JAR_FILE=app.jar
+COPY ${JAR_FILE} /app/app.jar
+
+ENV JAVA_OPTS=""
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

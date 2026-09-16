@@ -189,6 +189,19 @@ spring:
                 - Path=/app-api/bidding/**
               filters:
                 - RewritePath=/app-api/bidding/v3/api-docs, /v3/api-docs
+            ## cms-server 服务（法规检索、发布与审核）
+            - id: cms-admin-api
+              uri: grayLb://cms-server
+              predicates:
+                - Path=/admin-api/cms/**
+              filters:
+                - RewritePath=/admin-api/cms/v3/api-docs, /v3/api-docs
+            - id: cms-app-api
+              uri: grayLb://cms-server
+              predicates:
+                - Path=/app-api/cms/**
+              filters:
+                - RewritePath=/app-api/cms/v3/api-docs, /v3/api-docs
             ## ai-server 服务
             - id: ai-admin-api # 路由的编号
               uri: grayLb://ai-server

@@ -87,7 +87,6 @@ deploy/backup_*.sql
 
 ######################################################################
 # 部署产物与工具缓存（不入库）
-/deploy/jars/
 /deploy/mysql/init.d/
 /.dsh-vision-router/
 /.preview_tmp/
@@ -113,3 +112,8 @@ uploads/
 # MES 后端构建产物（仅本地部署用，禁止入库）
 deploy/backend/app.jar
 deploy/backend/erp-app.jar
+
+# 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
+/data/cms-import/
+deploy/backend/bpm-app.jar
+/deploy/jars/**/app.jar

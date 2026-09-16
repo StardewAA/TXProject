@@ -55,7 +55,8 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <Card title="合同配置设置">
-      <Form class="w-1/4" />
+      <!-- 同 poolConfig：w-1/4 + labelWidth=120 会把「提前 X 天提醒」的输入框压扁 -->
+      <Form class="w-full max-w-md" />
     </Card>
   </Page>
 </template>

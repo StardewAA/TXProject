@@ -128,6 +128,9 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_CHAT_APPLY_NOT_QUALIFIED = new ErrorCode(1_050_200_065, "需等待招聘方回复后才能投递简历");
     ErrorCode RECRUIT_CHAT_END_REASON_REQUIRED = new ErrorCode(1_050_200_066, "结束沟通必须填写原因");
     ErrorCode RECRUIT_CHAT_CANDIDATE_FIRST = new ErrorCode(1_050_200_067, "需等待求职者先发起沟通");
+    ErrorCode RECRUIT_CHAT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_068, "请先等待求职者发送简历");
+    ErrorCode RECRUIT_CHAT_CANDIDATE_PROFILE_INCOMPLETE =
+            new ErrorCode(1_050_200_069, "求职者资料不完整，暂时无法转为候选人");
 
     // ========== 招聘应聘流程 1-050-200-020 ==========
     ErrorCode RECRUIT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_020, "招聘应聘记录不存在");

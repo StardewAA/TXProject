@@ -24,17 +24,20 @@ function goLogin() {
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
+  { label: 'CMS系统', path: '/portal/content' },
   { label: '我要找工作', path: '/portal/recruit' },
   { label: '云培训学院', path: '/portal/training' },
   { label: '招标投标', path: '/portal/bidding' },
-  { label: '个人中心', path: '/portal/profile' },
 ];
 
 const displayName = computed(
   () => userStore.userInfo?.nickname || userStore.userInfo?.username || '用户',
 );
-const isRecruitPortal = computed(() =>
-  route.path.startsWith('/portal/recruit') || route.path.startsWith('/portal/profile/recruit'),
+
+const isRecruitPortal = computed(
+  () =>
+    route.path.startsWith('/portal/recruit') ||
+    route.path.startsWith('/portal/profile/recruit'),
 );
 
 function isActive(path: string) {
@@ -83,6 +86,7 @@ async function handleLogout() {
     <main
       class="portal-main"
       :class="{
+        'portal-main--home': route.path.startsWith('/portal/home'),
         'portal-main--training': route.path.startsWith('/portal/training'),
         'portal-main--recruit': isRecruitPortal,
       }"
@@ -102,8 +106,6 @@ async function handleLogout() {
   color: hsl(var(--foreground));
 }
 
-/* 所有门户页（首页/招聘/培训/招投标/个人中心）统一固定浅色设计：锁定浅色主题变量，
-   避免深色模式下外壳变深、与页面自身浅色内容脱节。 */
 .portal-light {
   --background: 0 0% 100%;
   --background-deep: 216 20.11% 95.47%;
@@ -164,7 +166,7 @@ async function handleLogout() {
   background: transparent;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
 }
 
@@ -201,7 +203,7 @@ async function handleLogout() {
   background: transparent;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .portal-logout:hover {
@@ -223,7 +225,20 @@ async function handleLogout() {
   padding-top: 32px;
 }
 
-.portal-main--recruit { position: relative; }
+.portal-main.portal-main--home {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  margin: 0;
+  padding: 0;
+}
+
+.portal-main.portal-main--home + .portal-footer {
+  display: none;
+}
+
+.portal-main--recruit {
+  position: relative;
+}
 
 .portal-shell--recruit :deep(.ant-btn-primary) {
   border-color: #d86616;

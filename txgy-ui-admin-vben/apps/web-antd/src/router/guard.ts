@@ -155,10 +155,15 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
     userStore.setUserRoles(userRoles);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo?.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+    const isAuthenticationTransition = from.path === LOGIN_PATH;
+    const redirectPath = (
+      isAuthenticationTransition
+        ? to.fullPath
+        : (from.query.redirect ??
+          (to.path === preferences.app.defaultHomePath
+            ? userInfo?.homePath || preferences.app.defaultHomePath
+            : to.fullPath))
+    ) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

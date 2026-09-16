@@ -1,0 +1,16 @@
+# bpm 服务 jar-only 镜像：复用已编译的 fat jar（deploy/local/jars/bpm.jar）。
+#
+# 为什么基于 deploy-mes:latest 而不是裸 eclipse-temurin:25-jre：
+#   deploy/docker-compose.yml 的 *backend-service 锚点用 `curl ... /actuator/health` 做
+#   健康检查，而裸 JRE 镜像不含 curl，容器会永久 unhealthy。deploy-mes:latest 是
+#   「JDK25 + curl」的基础镜像，deploy/backend/Dockerfile.pay-jar 也是同样的用法。
+#
+# 用法（context 必须是 deploy/local，jar 才在上下文内）：
+#   docker build -f deploy/local/Dockerfile.bpm-jar -t deploy-bpm:latest deploy/local
+FROM deploy-mes:latest
+
+WORKDIR /app
+
+COPY jars/bpm.jar /app/app.jar
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

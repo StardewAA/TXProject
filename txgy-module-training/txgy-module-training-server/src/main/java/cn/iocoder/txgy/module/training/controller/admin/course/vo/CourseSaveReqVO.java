@@ -1,19 +1,11 @@
 package cn.iocoder.txgy.module.training.controller.admin.course.vo;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-import tools.jackson.databind.annotation.JsonDeserialize;
-import tools.jackson.databind.ext.javatime.deser.LocalDateTimeDeserializer;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-
-import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
-import static cn.iocoder.txgy.framework.common.util.date.DateUtils.TIME_ZONE_DEFAULT;
 
 @Schema(description = "管理后台 - 课程新增/修改 Request VO")
 @Data
@@ -62,10 +54,6 @@ public class CourseSaveReqVO {
     @Schema(description = "适用岗位/工种（JSON 数组）", example = "[\"管道工\",\"防腐工\"]")
     private String applicablePosts;
 
-    @Schema(description = "学习域/课程组编码（按适用岗位工种自动匹配，逗号分隔；* 表示全域）", example = "A,B01,B02")
-    @Size(max = 255, message = "学习域/课程组长度不能超过 255 个字符")
-    private String learnDomainCodes;
-
     @Schema(description = "资源归属标识（资源中心 owner_flag 快照）", example = "DEPT_AI_FACTORY")
     private String ownerFlag;
 
@@ -81,21 +69,8 @@ public class CourseSaveReqVO {
     @Schema(description = "复合课程子模块标签（JSON 数组）", example = "[\"管道安装\",\"防腐保温\"]")
     private String compositeTags;
 
-    @Schema(description = "关联结课考试试卷 ID（模块三试卷）", example = "1")
+    @Schema(description = "关联结课考试试卷 ID（模块三预留）", example = "1")
     private Long examId;
-
-    @Schema(description = "结课考试开始时间（yyyy-MM-dd HH:mm:ss）", example = "2026-10-01 09:00:00")
-    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND, timezone = TIME_ZONE_DEFAULT)
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    private LocalDateTime examStartTime;
-
-    @Schema(description = "结课考试结束时间（yyyy-MM-dd HH:mm:ss）", example = "2026-10-01 11:00:00")
-    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND, timezone = TIME_ZONE_DEFAULT)
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    private LocalDateTime examEndTime;
-
-    @Schema(description = "资源所属：模块一文档/视频资源绑定列表（新增/编辑课程时一并保存）")
-    private List<CourseMediaSaveReqVO> mediaList;
 
     @Schema(description = "主讲教师", example = "张工")
     private String lecturer;

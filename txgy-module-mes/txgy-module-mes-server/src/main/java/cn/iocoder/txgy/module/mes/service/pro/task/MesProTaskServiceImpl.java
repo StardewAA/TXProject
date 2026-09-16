@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.service.pro.task;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskPageReqVO;
@@ -9,6 +10,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskSaveReq
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskTeamLoadRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.unitmeasure.MesMdUnitMeasureDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.workstation.MesMdWorkstationDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.process.MesProProcessDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProcessDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProductDO;
@@ -27,6 +29,7 @@ import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +55,7 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.PRO_WORK_ORDER
  *
  * @author OPENLAB BS
  */
+@Slf4j
 @Service
 @Validated
 public class MesProTaskServiceImpl implements MesProTaskService {
@@ -119,6 +123,14 @@ public class MesProTaskServiceImpl implements MesProTaskService {
         }
         routeProcesses.sort(Comparator.comparing(
                 rp -> rp.getSort() == null ? Integer.MAX_VALUE : rp.getSort()));
+        // 2.1 解析默认工位：任务表 workstation_id 非空约束，取第一个启用工位兜底
+        List<MesMdWorkstationDO> workstations =
+                workstationService.getWorkstationListByStatus(CommonStatusEnum.ENABLE.getStatus());
+        MesMdWorkstationDO defaultWorkstation = CollUtil.getFirst(workstations);
+        if (defaultWorkstation == null) {
+            log.warn("[autoGenerateTasksByRoute][工单({}) 无启用工位，跳过任务拆分]", workOrderId);
+            return 0;
+        }
         // 3. 幂等处理：已有任务的工序自动跳过，重复调用只补缺失工序
         List<MesProTaskDO> existingTasks = taskMapper.selectList(MesProTaskDO::getWorkOrderId, workOrderId);
         Set<Long> existingProcessIds = convertSet(existingTasks, MesProTaskDO::getProcessId);
@@ -142,6 +154,7 @@ public class MesProTaskServiceImpl implements MesProTaskService {
                     .setProcessId(routeProcess.getProcessId())
                     .setItemId(workOrder.getProductId())
                     .setQuantity(workOrder.getQuantity())
+                    .setWorkstationId(defaultWorkstation.getId())
                     .setStartTime(cursor)
                     .setDuration(1)
                     .setEndTime(cursor.plusHours(8))

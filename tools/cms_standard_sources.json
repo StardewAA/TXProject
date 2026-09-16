@@ -1,0 +1,6 @@
+[
+  {"key":"gbt23257-2017","file":"oleObject1.pdf","document_no":"GB/T 23257-2017","title":"埋地钢质管道聚乙烯防腐层","category":"钢质管道3PE防腐","pages":41,"extraction":"windows-ocr","review_status":"PENDING_OCR_REVIEW"},
+  {"key":"gbt8923-1-2011","file":"oleObject2.pdf","document_no":"GB/T 8923.1-2011","title":"涂覆涂料前钢材表面处理 表面清洁度的目视评定 第1部分：未涂覆过的钢材表面和全面清除原有涂层后的钢材表面的锈蚀等级和处理等级","category":"钢质管道3PE防腐／通用表面处理","note":"通用表面处理标准，并非3PE专用；包含目视评定图片，文字识别不能替代图片。","pages":30,"extraction":"windows-ocr","review_status":"PENDING_OCR_REVIEW"},
+  {"key":"gbt39636-2020","file":"oleObject3.pdf","document_no":"GB/T 39636-2020","title":"钢质管道熔结环氧粉末外涂层技术规范","category":"钢质管道环氧粉末喷涂防腐","note":"正式名称按PDF封面使用“钢质”，不是“钢制”。","pages":40,"extraction":"pdf-text","review_status":"PENDING_TABLE_REVIEW"},
+  {"key":"gbt50538-2020","file":"oleObject4.pdf","document_no":"GB/T 50538-2020","title":"埋地钢质管道防腐保温层技术标准","category":"钢质管道夹克防腐保温","pages":83,"extraction":"windows-ocr","review_status":"PENDING_OCR_REVIEW"}
+]

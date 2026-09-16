@@ -74,6 +74,15 @@ public class CrmProductRespVO implements VO {
     @ExcelProperty("创建人")
     private String creatorName;
 
+    @Schema(description = "数据来源", example = "2")
+    @ExcelProperty(value = "数据来源", converter = DictConvert.class)
+    @DictFormat(DictTypeConstants.CRM_PRODUCT_DATA_SOURCE)
+    private Integer dataSource;
+
+    @Schema(description = "WMS 规格编码", example = "DEMO-PIPE-20")
+    @ExcelProperty("WMS 规格编码")
+    private String wmsSkuCode;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;

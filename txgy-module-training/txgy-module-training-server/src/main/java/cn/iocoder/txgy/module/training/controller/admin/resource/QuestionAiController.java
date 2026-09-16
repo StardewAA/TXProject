@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.training.controller.admin.resource;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
-import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionItemVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionImportReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionParseRespVO;
 import cn.iocoder.txgy.module.training.service.resource.AiQuestionImportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,8 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -45,10 +43,10 @@ public class QuestionAiController {
     }
 
     @PostMapping("/import")
-    @Operation(summary = "确认导入：将解析后的试题批量入库")
+    @Operation(summary = "确认导入：将解析后的试题批量入库（可整批指定所属分类与标签）")
     @PreAuthorize("@ss.hasPermission('training:resource-question:create')")
-    public CommonResult<Integer> importQuestions(@RequestBody List<AiQuestionItemVO> items) {
-        return success(aiQuestionImportService.importQuestions(items));
+    public CommonResult<Integer> importQuestions(@RequestBody AiQuestionImportReqVO reqVO) {
+        return success(aiQuestionImportService.importQuestions(reqVO));
     }
 
 }
