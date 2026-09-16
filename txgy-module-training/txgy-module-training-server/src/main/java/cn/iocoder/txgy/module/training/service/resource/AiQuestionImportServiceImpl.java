@@ -229,8 +229,10 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         return "你是培训考试命题助手。请从用户提供的资料中提取试题，严格按以下 JSON 数组格式输出，不要输出任何解释性文字：\n"
                 + "[{\"qtype\":1,\"stem\":\"题干\",\"options\":[{\"key\":\"A\",\"text\":\"...\",\"isCorrect\":true}],"
                 + "\"answer\":\"A\",\"analysis\":\"解析\",\"difficulty\":2}]\n"
-                + "规则：qtype 取值 1单选 2多选 3判断 4实操问答 5案例分析；选项使用 A/B/C/D；"
+                + "规则：qtype 取值 1单选 2多选 3判断 4实操问答 5案例分析 6填空 7简答；选项使用 A/B/C/D；"
                 + "判断题 qtype=3、answer 固定为「对」或「错」、options 留空数组；"
+                + "填空题 qtype=6、answer 多个空用竖线|分隔、options 留空数组；"
+                + "简答/实操问答/案例分析 qtype=4/5/7、answer 为参考答案文本、options 留空数组；"
                 + "difficulty 取值 1易 2中 3难；最多提取 "
                 + aiProperties.getMaxQuestions() + " 题。";
     }
