@@ -303,7 +303,7 @@ onMounted(loadCompanies);
             <span v-else>{{ selectedCompany?.name.slice(0, 2) }}</span>
           </div>
           <div class="company-detail-heading">
-            <span class="company-detail-eyebrow">企业招聘档案 / OPEN ROLES</span>
+            <span class="company-detail-eyebrow">企业招聘档案</span>
             <h2>{{ selectedCompany?.name }}</h2>
             <div class="company-detail-meta">
               <span :class="{ muted: !selectedCompany?.posts.length }"><i></i>{{ selectedCompany?.posts.length ? '正在招聘' : '暂无公开职位' }}</span>
@@ -311,7 +311,6 @@ onMounted(loadCompanies);
               <span v-if="selectedCompanyCities.length">{{ selectedCompanyCities.slice(0, 2).join(' · ') }}</span>
             </div>
           </div>
-          <span class="company-detail-mark" aria-hidden="true">TX<span>HR</span></span>
         </header>
 
         <div class="company-detail-toolbar">
