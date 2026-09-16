@@ -150,6 +150,43 @@ def install(ctx):
             })
         return ok(result)
 
+    @app.get("/api/courses")
+    def course_options(actor: Actor = Depends(current_user)):
+        """课程管理中已有的课程，供试卷「关联课程」下拉使用。"""
+        try:
+            data = platform_get("/training/course/page?pageNo=1&pageSize=500", actor.token, actor.tenant_id) or {}
+        except HTTPException as error:
+            if getattr(error, "status_code", None) == 403: data = {}
+            else: raise
+        result = []
+        for item in data.get("list") or []:
+            if not isinstance(item, dict): continue
+            name = str(item.get("title") or item.get("name") or "").strip()
+            if not name: continue
+            result.append({"id": item.get("id"), "name": name, "code": item.get("code")})
+        return ok(result)
+
+    @app.get("/api/work-types")
+    def work_type_options(actor: Actor = Depends(current_user)):
+        """工种选项：与资源中心「标签管理」中的工种一致。"""
+        return ok(platform_tag_options(actor, "work_type"))
+
+    @app.get("/api/job-certs")
+    def job_cert_options(actor: Actor = Depends(current_user)):
+        """考试通过发放的工种资格证选项：来自工种资格证表。"""
+        try:
+            data = platform_get("/training/job-cert/page?pageNo=1&pageSize=200", actor.token, actor.tenant_id) or {}
+        except HTTPException as error:
+            if getattr(error, "status_code", None) == 403: data = {}
+            else: raise
+        result = []
+        for item in data.get("list") or []:
+            if not isinstance(item, dict): continue
+            name = str(item.get("certName") or "").strip()
+            if not name: continue
+            result.append({"id": item.get("id"), "name": name, "job_name": item.get("jobName"), "job_code": item.get("jobCode"), "required": item.get("isRequired")})
+        return ok(result)
+
     class ClassIn(BaseModel):
         name: str = Field(min_length=2,max_length=200)
         user_ids: list[int] = Field(min_length=1)
@@ -169,29 +206,36 @@ def install(ctx):
 
     @app.put("/api/questions/{qid}")
     def update_question(qid:int,body:QuestionIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher"))):
-        q=db.get(Question,qid)
-        if not q:raise HTTPException(404,"试题不存在")
-        if actor.role=="teacher" and q.creator_id!=actor.id: raise HTTPException(403,"只能编辑自己的试题")
-        if q.status=="pending":raise HTTPException(409,"待审核试题不能编辑")
-        for key in ["q_type","stem","analysis","difficulty"]:setattr(q,key,getattr(body,key))
-        q.options=json.dumps(body.options,ensure_ascii=False);q.answer=json.dumps(body.answer,ensure_ascii=False);q.tags=json.dumps(body.tags,ensure_ascii=False)
-        q.status="draft";db.commit();return ok(question_view(q,True),"已保存草稿，需重新提交审核")
-
-    @app.get("/api/questions/{qid}/reviews")
-    def reviews(qid:int,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer"))):
-        return ok([{"action":r.action,"opinion":r.opinion,"operator":db.get(User,r.operator_id).name,"created_at":r.created_at} for r in db.scalars(select(QuestionReview).where(QuestionReview.question_id==qid).order_by(QuestionReview.id.desc()))])
+        """编辑试题：同步更新资源中心（模块一）考试题库中的试题。"""
+        payload=question_payload(body,actor);payload["id"]=qid
+        platform_post("/training/question/update",actor.token,actor.tenant_id,payload)
+        row=db.scalar(select(Question).where(Question.platform_id==qid))
+        if row is not None:
+            row.q_type=body.q_type;row.stem=body.stem
+            row.options=json.dumps(body.options,ensure_ascii=False) if body.options else None
+            row.answer=json.dumps(body.answer,ensure_ascii=False);row.analysis=body.analysis
+            row.tags=json.dumps(body.tags,ensure_ascii=False);row.difficulty=body.difficulty
+            db.commit()
+        return ok(message="试题已更新到资源中心考试题库")
 
     @app.get("/api/papers/{pid}")
     def paper_detail(pid:int,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer"))):
         p=db.get(Paper,pid)
         if not p:raise HTTPException(404,"试卷不存在")
-        return ok({"id":p.id,"questions":[{**question_view(db.get(Question,x.question_id),True),"score":x.score} for x in sorted(p.questions,key=lambda x:x.sort_no)]})
+        return ok({"id":p.id,"score_limit":PAPER_TOTAL_LIMIT,"course_id":p.course_id,"course_name":p.course_name,
+                   "work_types":parse(p.work_types,[]),"cert_names":parse(p.cert_names,[]),
+                   "questions":[{**question_view(db.get(Question,x.question_id),True),"score":x.score} for x in sorted(p.questions,key=lambda x:x.sort_no)]})
 
     @app.put("/api/papers/{pid}")
     def update_paper(pid:int,body:PaperIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher"))):
         p=db.get(Paper,pid)
         if not p or p.status!="draft":raise HTTPException(409,"仅草稿试卷可修改参数")
-        for key,value in body.model_dump().items():setattr(p,key,value)
+        data=body.model_dump()
+        data["work_types"]=json.dumps(body.work_types,ensure_ascii=False)
+        data["cert_names"]=json.dumps(body.cert_names,ensure_ascii=False)
+        if not data.get("course_name") and body.course_id:
+            data["course_name"]=platform_course_name(actor,body.course_id)
+        for key,value in data.items():setattr(p,key,value)
         db.commit();return ok()
 
     @app.put("/api/papers/{pid}/questions")
