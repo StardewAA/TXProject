@@ -33,6 +33,8 @@ interface CardState {
   columns: any[];
   page: number;
   pageSize: number;
+  /** 表格区是否收起（收起后数据保留，展开即看） */
+  collapsed: boolean;
 }
 
 function ensureCard(code: string): CardState {
@@ -43,7 +45,8 @@ function ensureCard(code: string): CardState {
       rows: [],
       columns: [],
       page: 1,
-      pageSize: 10,
+      pageSize: 6,
+      collapsed: false,
     };
   }
   return cards[code];
@@ -132,7 +135,7 @@ async function handleExport(report: ReportCenterApi.Report) {
   }
 }
 
-/** 查询数据并展示在当前卡片内部下方 */
+/** 查询数据并展示在当前卡片内部下方（查询后自动展开） */
 async function handleView(report: ReportCenterApi.Report) {
   const card = ensureCard(report.code);
   card.loading = true;
@@ -151,6 +154,7 @@ async function handleView(report: ReportCenterApi.Report) {
       minWidth: 120,
     }));
     card.page = 1;
+    card.collapsed = false;
     if (data.rowCount === 0) {
       message.info(`${report.name}：查询成功，暂无数据`);
     }
@@ -159,6 +163,12 @@ async function handleView(report: ReportCenterApi.Report) {
   } finally {
     card.loading = false;
   }
+}
+
+/** 收起 / 展开卡片内表格（数据保留，仅切换显示） */
+function handleToggle(code: string) {
+  const card = ensureCard(code);
+  card.collapsed = !card.collapsed;
 }
 
 /** 分页切换（仅作用于本卡片） */
@@ -236,34 +246,52 @@ onMounted(loadReports);
             </div>
           </div>
 
-          <!-- 卡片下半部：查询后在本卡片内展示表格 + 独立分页 -->
+          <!-- 卡片下半部：查询后在本卡片内展示表格（可收起/展开）+ 独立分页 -->
           <div
             v-if="cards[report.code]?.rows.length > 0 || cards[report.code]?.loading"
             class="rc-card-table"
           >
-            <a-table
-              :columns="cards[report.code]?.columns"
-              :data-source="pagedRows(report.code)"
-              :loading="cards[report.code]?.loading"
-              :pagination="false"
-              :row-key="(_record: any, index: number) => String(index)"
-              :scroll="{ x: 'max-content' }"
-              size="small"
-            />
-            <div class="rc-table-footer">
+            <div class="rc-table-bar">
               <span class="rc-total">
                 共 {{ cards[report.code]?.rows.length ?? 0 }} 行
               </span>
-              <a-pagination
-                :current="cards[report.code]?.page"
-                :page-size="cards[report.code]?.pageSize"
-                :page-size-options="['10', '20']"
-                :show-size-changer="true"
-                :total="cards[report.code]?.rows.length ?? 0"
+              <a-button
                 size="small"
-                @change="(page: number) => handlePageChange(report.code, page)"
-                @showSizeChange="(current: number, size: number) => handlePageSizeChange(report.code, current, size)"
+                type="link"
+                @click="handleToggle(report.code)"
+              >
+                {{ cards[report.code]?.collapsed ? '展开 ▾' : '收起 ▴' }}
+              </a-button>
+            </div>
+            <template v-if="!cards[report.code]?.collapsed">
+              <a-table
+                :columns="cards[report.code]?.columns"
+                :data-source="pagedRows(report.code)"
+                :loading="cards[report.code]?.loading"
+                :pagination="false"
+                :row-key="(_record: any, index: number) => String(index)"
+                :scroll="{ x: 'max-content' }"
+                size="small"
               />
+              <div class="rc-table-footer">
+                <a-pagination
+                  :current="cards[report.code]?.page"
+                  :page-size="cards[report.code]?.pageSize"
+                  :page-size-options="['6', '10', '20']"
+                  :show-size-changer="true"
+                  :total="cards[report.code]?.rows.length ?? 0"
+                  size="small"
+                  @change="(page: number) => handlePageChange(report.code, page)"
+                  @showSizeChange="(current: number, size: number) => handlePageSizeChange(report.code, current, size)"
+                />
+              </div>
+            </template>
+            <div
+              v-else
+              class="rc-collapsed-tip"
+              @click="handleToggle(report.code)"
+            >
+              已收起，点击展开查看数据
             </div>
           </div>
           <div
@@ -379,8 +407,16 @@ onMounted(loadReports);
 /* 卡片内嵌表格区 */
 .rc-card-table {
   margin-top: 16px;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px dashed #e3e9f0;
+}
+
+/* 表格工具条：行数居左、收起/展开居右 */
+.rc-table-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
 .rc-table-footer {
@@ -394,6 +430,19 @@ onMounted(loadReports);
 .rc-total {
   font-size: 12px;
   color: #7b8794;
+}
+
+/* 收起后的提示行（整行可点击展开） */
+.rc-collapsed-tip {
+  padding: 10px 0 2px;
+  font-size: 13px;
+  color: #7b8794;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rc-collapsed-tip:hover {
+  color: #2f5480;
 }
 
 /* 表头蓝灰底，稳重层级 */
