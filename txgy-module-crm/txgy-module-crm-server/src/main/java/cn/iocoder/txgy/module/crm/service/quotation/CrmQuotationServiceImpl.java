@@ -33,6 +33,7 @@ import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
@@ -292,14 +293,24 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
         }
 
         // 2. 创建报价单审批流程实例
+        //    注意：当「审批人与提交人为同一人」且节点配置为自动通过时，BPM 会在创建流程实例的过程中就直接
+        //    审批通过，并【同步】远程回调本服务的 updateQuotationAuditStatus，把审批状态更新为「已通过」。
+        //    因此必须等流程实例创建完成（即回调已落库）后，再回写本单据的状态，否则会把回调写入的终态覆盖掉。
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
                 .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id))).getCheckedData();
 
-        // 3. 更新报价单工作流编号与审批状态
-        quotationMapper.updateById(new CrmQuotationDO().setId(id).setProcessInstanceId(processInstanceId)
-                .setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()));
+        // 3. 回写报价单的工作流编号（仅更新该字段，不会覆盖回调写入的审批状态）
+        quotationMapper.updateById(new CrmQuotationDO().setId(id).setProcessInstanceId(processInstanceId));
 
-        // 4. 记录日志
+        // 4. 更新审批状态为「审批中」：使用条件更新，仅在仍为「草稿」时才更新
+        //    为什么用条件更新而不是先查询再判断？因为本事务的快照早于第 2 步的远程回调，
+        //    普通查询会读到旧的「草稿」，从而把回调写入的「已通过」又覆盖回「审批中」。
+        quotationMapper.update(new CrmQuotationDO().setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()),
+                new LambdaUpdateWrapper<CrmQuotationDO>()
+                        .eq(CrmQuotationDO::getId, id)
+                        .eq(CrmQuotationDO::getAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus()));
+
+        // 5. 记录日志
         LogRecordContext.putVariable("quotationName", quotation.getName());
     }
 
@@ -307,11 +318,18 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
     public void updateQuotationAuditStatus(Long id, Integer bpmResult) {
         // 1.1 校验报价单是否存在
         CrmQuotationDO quotation = validateQuotationExists(id);
-        // 1.2 只有审批中，可以更新审批结果
-        if (ObjUtil.notEqual(quotation.getAuditStatus(), CrmAuditStatusEnum.PROCESS.getStatus())) {
-            log.error("[updateQuotationAuditStatus][报价单({}) 不处于审批中，无法更新审批结果({})]",
-                    quotation.getId(), bpmResult);
-            throw exception(QUOTATION_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS);
+        // 1.2 仅「草稿」「审批中」允许更新审批结果：
+        //     - 审批中：常规场景，即人工审批完成后回调本接口
+        //     - 草稿：「审批人与提交人为同一人」自动通过时，BPM 在创建流程实例的过程中就会回调本接口，
+        //             此时 submitQuotation 还没把状态回写为「审批中」（该事务甚至尚未提交），必须放行，
+        //             否则回调会被丢弃，报价单将永久停留在「审批中」而无法转为合同
+        //     - 其他：已是终态，直接忽略，保证回调的幂等性
+        Integer currentAuditStatus = quotation.getAuditStatus();
+        if (ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.PROCESS.getStatus())
+                && ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus())) {
+            log.warn("[updateQuotationAuditStatus][报价单({}) 已处于终态({})，忽略审批结果({})]",
+                    quotation.getId(), currentAuditStatus, bpmResult);
+            return;
         }
 
         // 2. 更新报价单审批结果
@@ -346,8 +364,14 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
                 .setDiscountPercent(quotation.getDiscountPercent())
                 .setRemark(quotation.getRemark());
         List<CrmQuotationProductDO> quotationProducts = quotationProductMapper.selectListByQuotationId(id);
-        contractReqVO.setProducts(convertList(quotationProducts, item -> new CrmContractSaveReqVO.Product(
-                item.getProductId(), item.getProductPrice(), item.getQuotationPrice(), item.getCount().intValue())));
+        contractReqVO.setProducts(convertList(quotationProducts, item -> {
+            CrmContractSaveReqVO.Product product = new CrmContractSaveReqVO.Product();
+            product.setProductId(item.getProductId());
+            product.setProductPrice(item.getProductPrice());
+            product.setContractPrice(item.getQuotationPrice());
+            product.setCount(item.getCount().intValue());
+            return product;
+        }));
 
         // 3. 创建合同（合同编号：沿用报价金额等数据）
         Long contractId = contractService.createContract(contractReqVO, userId);
