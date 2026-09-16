@@ -83,5 +83,17 @@ training:
     timeout-ms: ${TRAINING_AI_TIMEOUT_MS:60000}
     max-text-length: ${TRAINING_AI_MAX_TEXT_LENGTH:12000}
     max-questions: ${TRAINING_AI_MAX_QUESTIONS:30}
+  # 视频转码：异步上传成功后由后台线程池调用 ffmpeg 生成多清晰度（默认 360P/480P/720P）
+  # 运行环境需安装 ffmpeg（镜像内已内置，也可通过 ffmpeg-path 指定自定义路径）
+  video:
+    transcode:
+      enabled: ${TRAINING_VIDEO_TRANSCODE_ENABLED:true}
+      ffmpeg-path: ${TRAINING_VIDEO_TRANSCODE_FFMPEG_PATH:ffmpeg}
+      target-definitions: ${TRAINING_VIDEO_TRANSCODE_TARGETS:360P,480P,720P}
+      pool-size: ${TRAINING_VIDEO_TRANSCODE_POOL_SIZE:2}
+      timeout-minutes: ${TRAINING_VIDEO_TRANSCODE_TIMEOUT_MINUTES:180}
+      output-dir: video/transcode
+      max-retry: 1
+      preset: veryfast
 
 debug: false
