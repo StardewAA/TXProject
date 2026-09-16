@@ -53,6 +53,12 @@ public class ReportDatasetDO extends TenantBaseDO {
      */
     private String paramDefinitions;
     /**
+     * 列标签 JSON 数组（简单模式自动生成）
+     *
+     * 结构：[{field,label}]；报表中心据此输出中文表头
+     */
+    private String columnLabels;
+    /**
      * 租户过滤列名
      *
      * 填写后由服务端强制追加等值条件（值为当前租户编号），前端无法覆盖

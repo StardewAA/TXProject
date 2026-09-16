@@ -18,9 +18,15 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import SimpleForm from './modules/simple-form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [SimpleFormModal, simpleFormModalApi] = useVbenModal({
+  connectedComponent: SimpleForm,
   destroyOnClose: true,
 });
 
@@ -29,9 +35,14 @@ function handleRefresh() {
   gridApi.query();
 }
 
-/** 创建数据集 */
+/** 创建数据集（SQL 模式） */
 function handleCreate() {
   formModalApi.setData(null).open();
+}
+
+/** 创建数据集（简单模式，无需写 SQL） */
+function handleCreateSimple() {
+  simpleFormModalApi.setData(null).open();
 }
 
 /** 编辑数据集 */
@@ -155,6 +166,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <SimpleFormModal @success="handleRefresh" />
 
     <a-drawer
       v-model:open="previewOpen"
@@ -216,6 +228,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #toolbar-tools>
         <TableAction
           :actions="[
+            {
+              label: '简单模式新建',
+              auth: ['report:dataset:create'],
+              onClick: handleCreateSimple,
+            },
             {
               label: $t('ui.actionTitle.create', ['数据集']),
               type: 'primary',

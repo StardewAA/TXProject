@@ -30,5 +30,15 @@ public interface ErrorCodeConstants {
     ErrorCode DATASET_PARAM_NAME_INVALID = new ErrorCode(1_003_001_014, "参数名不合法：{}");
     ErrorCode DATASET_TENANT_COLUMN_REQUIRED = new ErrorCode(1_003_001_015, "必须声明租户过滤列（tenant_id），报表数据集不允许跨租户取数");
     ErrorCode DATASET_RAW_SQL_TENANT_REQUIRED = new ErrorCode(1_003_001_016, "自定义 SQL 必须显式包含 tenant_id 条件，不允许跨租户查询");
+    ErrorCode DATASET_CODE_REQUIRED = new ErrorCode(1_003_001_017, "数据集编码不能为空");
+
+    // ========== 报表中心模块 1-003-002-000 ==========
+    ErrorCode REPORT_CENTER_NOT_OPEN = new ErrorCode(1_003_002_000, "该报表未在报表中心开放");
+    ErrorCode REPORT_CENTER_DATASET_MISSING = new ErrorCode(1_003_002_001, "报表数据源未配置或已停用，请联系管理员");
+    ErrorCode REPORT_CENTER_EXPORT_FAILED = new ErrorCode(1_003_002_002, "报表导出失败：{}");
+
+    // ========== 数据集简单模式 1-003-001-018 起 ==========
+    ErrorCode DATASET_SIMPLE_TABLE_INVALID = new ErrorCode(1_003_001_018, "数据表不在白名单目录内：{}");
+    ErrorCode DATASET_SIMPLE_FIELD_INVALID = new ErrorCode(1_003_001_019, "所选字段不在该表的可选列内");
 
 }

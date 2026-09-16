@@ -80,19 +80,20 @@ public final class ReportSqlGuard {
         // 1. 参数化渲染
         List<Object> args = new ArrayList<>();
         String sql = render(rawSql, definitions, params, args);
-        // 2. 包装：租户条件 + 行数上限（多取一行，用于识别超限）
-        StringBuilder wrapped = new StringBuilder("SELECT * FROM (").append(sql).append(") ").append(WRAPPER_ALIAS);
+        // 2. 行数上限放在内层（多取一行用于识别超限）：
+        //    内层带 LIMIT 会强制物化，从而保证内层 ORDER BY 在外层包装后仍然有效
+        String limited = sql + " LIMIT " + (maxRows + 1);
+        // 3. 包装：租户条件由服务端强制追加
+        StringBuilder wrapped = new StringBuilder("SELECT * FROM (").append(limited).append(") ").append(WRAPPER_ALIAS);
         if (StrUtil.isNotBlank(tenantColumn)) {
             wrapped.append(" WHERE ").append(WRAPPER_ALIAS).append('.').append(tenantColumn).append(" = ?");
             args.add(tenantId);
         }
-        wrapped.append(" LIMIT ?");
-        args.add(maxRows + 1);
         return new PreparedSql(wrapped.toString(), args);
     }
 
     /**
-     * 准备原始 SQL（大屏逃生通道）：仅做只读校验与行数包装，不做参数化
+     * 准备原始 SQL（大屏逃生通道）：仅做只读校验与行数限制，不做参数化
      */
     public static PreparedSql prepareRaw(String rawSql, int maxRows) {
         validateSql(rawSql);
@@ -100,8 +101,8 @@ public final class ReportSqlGuard {
         if (!rawSql.toLowerCase().contains("tenant_id")) {
             throw exception(DATASET_RAW_SQL_TENANT_REQUIRED);
         }
-        return new PreparedSql("SELECT * FROM (" + rawSql + ") " + WRAPPER_ALIAS + " LIMIT ?",
-                new ArrayList<>(List.of(maxRows + 1)));
+        return new PreparedSql("SELECT * FROM (" + rawSql + " LIMIT " + (maxRows + 1) + ") " + WRAPPER_ALIAS,
+                new ArrayList<>());
     }
 
     /**

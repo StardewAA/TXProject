@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.report.enums.ErrorCodeConstants.*;
@@ -65,6 +66,8 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
         ReportDatasetDO dataset = BeanUtils.toBean(reqVO, ReportDatasetDO.class);
         dataset.setParamDefinitions(JsonUtils.toJsonString(
                 reqVO.getParams() == null ? Collections.emptyList() : reqVO.getParams()));
+        dataset.setColumnLabels(JsonUtils.toJsonString(
+                reqVO.getColumnLabelList() == null ? Collections.emptyList() : reqVO.getColumnLabelList()));
         dataset.setMaxRows(effectiveMaxRows(reqVO.getMaxRows()));
         dataset.setTimeoutSeconds(effectiveTimeoutSeconds(reqVO.getTimeoutSeconds()));
         dataset.setTenantId(null); // 由租户插件自动填充为当前租户
@@ -80,6 +83,8 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
         ReportDatasetDO updateObj = BeanUtils.toBean(reqVO, ReportDatasetDO.class);
         updateObj.setParamDefinitions(JsonUtils.toJsonString(
                 reqVO.getParams() == null ? Collections.emptyList() : reqVO.getParams()));
+        updateObj.setColumnLabels(JsonUtils.toJsonString(
+                reqVO.getColumnLabelList() == null ? Collections.emptyList() : reqVO.getColumnLabelList()));
         updateObj.setMaxRows(effectiveMaxRows(reqVO.getMaxRows()));
         updateObj.setTimeoutSeconds(effectiveTimeoutSeconds(reqVO.getTimeoutSeconds()));
         datasetMapper.updateById(updateObj);
@@ -135,6 +140,87 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
                 maxRows, currentTenantId());
         return executeAndAudit(preparedSql, dataset.getId(), dataset.getCode(), "dataset",
                 reqVO.getParams(), maxRows, timeoutSeconds);
+    }
+
+    @Override
+    public Long createSimpleDataset(SimpleDatasetReqVO reqVO) {
+        // 1. 校验白名单表与字段
+        ReportTableCatalog.TableDef table = ReportTableCatalog.get(
+                StrUtil.blankToDefault(reqVO.getTableName(), ""));
+        if (table == null) {
+            throw exception(DATASET_SIMPLE_TABLE_INVALID, StrUtil.blankToDefault(reqVO.getTableName(), ""));
+        }
+        List<String> fields = reqVO.getFields() == null
+                ? Collections.emptyList()
+                : reqVO.getFields().stream().distinct().collect(Collectors.toList());
+        if (fields.isEmpty()) {
+            throw exception(DATASET_SIMPLE_FIELD_INVALID);
+        }
+        java.util.Map<String, ReportTableCatalog.ColumnDef> columnMap = new java.util.LinkedHashMap<>();
+        table.columns().forEach(column -> columnMap.put(column.field(), column));
+        for (String field : fields) {
+            if (!columnMap.containsKey(field)) {
+                throw exception(DATASET_SIMPLE_FIELD_INVALID);
+            }
+        }
+        String dateField = StrUtil.trimToNull(reqVO.getDateField());
+        if (dateField != null) {
+            ReportTableCatalog.ColumnDef dateColumn = columnMap.get(dateField);
+            if (dateColumn == null || !dateColumn.isDate()) {
+                throw exception(DATASET_SIMPLE_FIELD_INVALID);
+            }
+        }
+        // 2. 生成 SQL：自动带租户列（供服务端强制过滤）与删除标记
+        String select = fields.stream().map(field -> field + " AS " + field)
+                .collect(Collectors.joining(", "));
+        StringBuilder sql = new StringBuilder("SELECT tenant_id AS tenant_id, ").append(select)
+                .append(" FROM ").append(table.table()).append(" WHERE deleted = 0");
+        List<ReportDatasetParamVO> params = new ArrayList<>();
+        if (dateField != null) {
+            sql.append(" AND ").append(dateField).append(" >= ${startDate}")
+                    .append(" AND ").append(dateField).append(" < DATE_ADD(${endDate}, INTERVAL 1 DAY)");
+            params.add(newParam("startDate", "开始日期", "2000-01-01"));
+            params.add(newParam("endDate", "结束日期", "2099-12-31"));
+        }
+        sql.append(" ORDER BY ").append(dateField != null ? dateField : "id").append(" DESC");
+        // 3. 组装并保存（复用全部治理：SQL 只读校验 / 租户强制列 / 行数上限 / 审计）
+        ReportDatasetSaveReqVO saveReqVO = new ReportDatasetSaveReqVO();
+        saveReqVO.setCode(StrUtil.blankToDefault(reqVO.getCode(), "r" + System.currentTimeMillis()));
+        saveReqVO.setName(StrUtil.blankToDefault(reqVO.getName(), table.label() + "报表"));
+        saveReqVO.setCategory(StrUtil.blankToDefault(reqVO.getCategory(), "MES"));
+        saveReqVO.setSqlText(sql.toString());
+        saveReqVO.setParams(params);
+        saveReqVO.setColumnLabelList(fields.stream()
+                .map(field -> new ReportDatasetColumnLabelVO(field, columnMap.get(field).label()))
+                .collect(Collectors.toList()));
+        saveReqVO.setTenantColumn("tenant_id");
+        saveReqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        saveReqVO.setOwner(StrUtil.blankToDefault(reqVO.getOwner(), ""));
+        saveReqVO.setRemark(StrUtil.blankToDefault(reqVO.getRemark(), "简单模式创建"));
+        return createDataset(saveReqVO);
+    }
+
+    private ReportDatasetParamVO newParam(String name, String label, String defaultValue) {
+        ReportDatasetParamVO param = new ReportDatasetParamVO();
+        param.setName(name);
+        param.setLabel(label);
+        param.setType("date");
+        param.setRequired(false);
+        param.setDefaultValue(defaultValue);
+        return param;
+    }
+
+    @Override
+    public ReportDatasetDO getEnabledDataset(String code) {
+        return getEnabledDatasetByCode(code);
+    }
+
+    @Override
+    public List<Map<String, Object>> queryRows(String code, Map<String, Object> params) {
+        ReportDatasetExecuteReqVO reqVO = new ReportDatasetExecuteReqVO();
+        reqVO.setCode(code);
+        reqVO.setParams(params);
+        return executeDataset(reqVO).getSource();
     }
 
     @Override
@@ -247,6 +333,7 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
     private ReportDatasetRespVO convert(ReportDatasetDO dataset) {
         ReportDatasetRespVO respVO = BeanUtils.toBean(dataset, ReportDatasetRespVO.class);
         respVO.setParams(parseParams(dataset.getParamDefinitions()));
+        respVO.setColumnLabelList(parseColumnLabels(dataset.getColumnLabels()));
         return respVO;
     }
 
@@ -259,6 +346,20 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
             return params == null ? Collections.emptyList() : params;
         } catch (Exception ex) {
             log.warn("[parseParams][参数定义解析失败：{}]", paramDefinitions, ex);
+            return Collections.emptyList();
+        }
+    }
+
+    private List<ReportDatasetColumnLabelVO> parseColumnLabels(String columnLabels) {
+        if (StrUtil.isBlank(columnLabels)) {
+            return Collections.emptyList();
+        }
+        try {
+            List<ReportDatasetColumnLabelVO> labels =
+                    JsonUtils.parseArray(columnLabels, ReportDatasetColumnLabelVO.class);
+            return labels == null ? Collections.emptyList() : labels;
+        } catch (Exception ex) {
+            log.warn("[parseColumnLabels][列标签解析失败：{}]", columnLabels, ex);
             return Collections.emptyList();
         }
     }

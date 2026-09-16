@@ -39,6 +39,10 @@ public class ReportDatasetSaveReqVO {
     @Valid
     private List<ReportDatasetParamVO> params;
 
+    @Schema(description = "列标签（简单模式自动生成；报表中心据此输出中文表头）")
+    @Valid
+    private List<ReportDatasetColumnLabelVO> columnLabelList;
+
     @Schema(description = "租户过滤列名（填写后服务端强制等值过滤）", example = "tenant_id")
     private String tenantColumn;
 

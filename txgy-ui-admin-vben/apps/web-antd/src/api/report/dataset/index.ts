@@ -45,6 +45,32 @@ export namespace ReportDatasetApi {
     rowCount: number; // 返回行数
     durationMs: number; // 查询耗时（毫秒）
   }
+
+  /** 简单模式目录列 */
+  export interface CatalogColumn {
+    field: string; // 字段名
+    label: string; // 中文显示名
+    isDate: boolean; // 是否时间列（可作为日期筛选条件）
+  }
+
+  /** 简单模式目录表 */
+  export interface CatalogTable {
+    table: string; // 表名
+    label: string; // 中文表名
+    columns: CatalogColumn[]; // 可选列
+  }
+
+  /** 简单模式创建参数（选表勾字段，SQL 由服务端生成） */
+  export interface SimpleDatasetReq {
+    code?: string; // 数据集编码（留空自动生成）
+    name: string; // 数据集名称
+    category?: string; // 分类（域），默认 MES
+    tableName: string; // 白名单表名
+    fields: string[]; // 勾选的字段
+    dateField?: string; // 日期筛选列（可选）
+    owner?: string; // 责任人
+    remark?: string; // 备注
+  }
 }
 
 /** 查询数据集分页 */
@@ -90,4 +116,16 @@ export function executeDataset(code: string, params?: Record<string, any>) {
     '/report/dataset/execute',
     { code, params },
   );
+}
+
+/** 获得简单模式白名单目录（可选表与列） */
+export function getSimpleCatalog() {
+  return requestClient.get<ReportDatasetApi.CatalogTable[]>(
+    '/report/dataset/simple/catalog',
+  );
+}
+
+/** 简单模式创建数据集（选表勾字段，SQL 由服务端自动生成） */
+export function createSimpleDataset(data: ReportDatasetApi.SimpleDatasetReq) {
+  return requestClient.post('/report/dataset/simple', data);
 }

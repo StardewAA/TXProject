@@ -8,7 +8,7 @@
 --   2. report_dataset_execute_log 数据集执行审计日志
 --   3. 菜单与权限（数据集管理 6800~6805、自定义 SQL 高危权限 6806）
 --   4. 只读数据库账号 report_ro（报表查询专用，仅 SELECT）
---   5. 平台级种子数据集（报工明细台账、库存汇总）
+--   5. 平台级种子数据集（MES 域：报工明细台账；其余 MES 报表数据集见 20260916b 脚本）
 -- 说明：幂等，可重复执行；菜单使用 6800 段（6800~6850 已确认空闲）。
 -- =====================================================================
 
@@ -118,14 +118,14 @@ INSERT INTO `report_dataset`
 (`id`, `code`, `name`, `category`, `sql_text`, `param_definitions`, `tenant_column`, `max_rows`, `timeout_seconds`,
  `status`, `owner`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 VALUES (1, 'mes_feedback_detail', '生产报工明细台账', 'MES',
-        'SELECT f.tenant_id AS tenant_id, f.code AS feedback_code, w.code AS work_order_code, p.name AS process_name, ws.name AS workstation_name, i.code AS item_code, i.name AS item_name, f.feedback_quantity, f.qualified_quantity, f.unqualified_quantity, f.feedback_time, f.status FROM mes_pro_feedback f LEFT JOIN mes_pro_work_order w ON w.id = f.work_order_id LEFT JOIN mes_pro_process p ON p.id = f.process_id LEFT JOIN mes_md_workstation ws ON ws.id = f.workstation_id LEFT JOIN mes_md_item i ON i.id = f.item_id WHERE f.deleted = 0',
-        '[{"name":"statusList","label":"报工状态","type":"string","required":false,"defaultValue":"2,3,4"},{"name":"startTime","label":"开始时间","type":"datetime","required":false,"defaultValue":""},{"name":"endTime","label":"结束时间","type":"datetime","required":false,"defaultValue":""}]',
-        'tenant_id', 5000, 30, 0, '刘洋', '报工台账报表数据源；tenant_id 必须出现在 SELECT 列表中，供服务端强制租户过滤', 'admin', NOW(), 'admin', NOW(), b'0', 0),
-       (2, 'mes_stock_summary', '库存汇总表（按仓库/物料）', 'WMS',
-        'SELECT s.tenant_id AS tenant_id, wh.code AS warehouse_code, wh.name AS warehouse_name, i.code AS item_code, i.name AS item_name, SUM(s.quantity) AS stock_quantity, MAX(s.update_time) AS last_update_time FROM mes_wm_material_stock s LEFT JOIN mes_wm_warehouse wh ON wh.id = s.warehouse_id LEFT JOIN mes_md_item i ON i.id = s.item_id WHERE s.deleted = 0 GROUP BY s.tenant_id, wh.code, wh.name, i.code, i.name',
-        '[]', 'tenant_id', 5000, 30, 0, '刘洋', '库存报表数据源；tenant_id 必须出现在 SELECT 列表中，供服务端强制租户过滤', 'admin', NOW(), 'admin', NOW(), b'0', 0)
-ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `category` = VALUES(`category`), `sql_text` = VALUES(`sql_text`),
+        'SELECT f.tenant_id AS tenant_id, f.code AS feedback_code, w.code AS work_order_code, p.name AS process_name, ws.name AS workstation_name, i.code AS item_code, i.name AS item_name, f.feedback_quantity, f.qualified_quantity, f.unqualified_quantity, DATE_FORMAT(f.feedback_time, ''%Y-%m-%d %H:%i:%s'') AS feedback_time, f.status FROM mes_pro_feedback f LEFT JOIN mes_pro_work_order w ON w.id = f.work_order_id LEFT JOIN mes_pro_process p ON p.id = f.process_id LEFT JOIN mes_md_workstation ws ON ws.id = f.workstation_id LEFT JOIN mes_md_item i ON i.id = f.item_id WHERE f.deleted = 0 AND f.status IN (2, 3, 4) AND f.feedback_time >= ${startDate} AND f.feedback_time < DATE_ADD(${endDate}, INTERVAL 1 DAY)',
+        '[{"name":"startDate","label":"开始日期","type":"date","required":false,"defaultValue":"2000-01-01"},{"name":"endDate","label":"结束日期","type":"date","required":false,"defaultValue":"2099-12-31"}]',
+        'tenant_id', 5000, 30, 0, '刘洋', '报工台账报表数据源；tenant_id 必须出现在 SELECT 列表中，供服务端强制租户过滤', 'admin', NOW(), 'admin', NOW(), b'0', 0)
+ON DUPLICATE KEY UPDATE `code` = VALUES(`code`), `name` = VALUES(`name`), `category` = VALUES(`category`),
+                        `sql_text` = VALUES(`sql_text`),
                         `param_definitions` = VALUES(`param_definitions`), `tenant_column` = VALUES(`tenant_column`),
-                        `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0';
+                        `max_rows` = VALUES(`max_rows`), `timeout_seconds` = VALUES(`timeout_seconds`),
+                        `status` = VALUES(`status`), `owner` = VALUES(`owner`), `remark` = VALUES(`remark`),
+                        `updater` = 'admin', `update_time` = NOW();
 
 COMMIT;

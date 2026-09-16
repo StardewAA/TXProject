@@ -33,6 +33,9 @@ public class ReportDatasetRespVO {
     @Schema(description = "参数定义")
     private List<ReportDatasetParamVO> params;
 
+    @Schema(description = "列标签（简单模式自动生成）")
+    private List<ReportDatasetColumnLabelVO> columnLabelList;
+
     @Schema(description = "租户过滤列名")
     private String tenantColumn;
 
