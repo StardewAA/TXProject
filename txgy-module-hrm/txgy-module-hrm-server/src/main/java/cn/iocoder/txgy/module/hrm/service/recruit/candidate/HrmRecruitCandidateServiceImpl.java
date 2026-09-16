@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecru
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateUpdateStatusReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
@@ -113,6 +114,9 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void updateRecruitCandidate(HrmRecruitCandidateSaveReqVO updateReqVO) {
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExists(updateReqVO.getId());
+        if (recruitApplicationService.getCurrentRecruitApplicationByCandidateId(updateReqVO.getId()) != null) {
+            updateReqVO.setPostId(recruitCandidate.getPostId()).setChannelId(recruitCandidate.getChannelId());
+        }
         validateMobileUnique(updateReqVO.getMobile(), updateReqVO.getId());
         // 1.2 校验招聘职位是否存在
         recruitPostService.validateRecruitPostPublished(updateReqVO.getPostId());
@@ -147,6 +151,9 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void deleteRecruitCandidate(Long id) {
         // 1. 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExistsForUpdate(id);
+        if (recruitApplicationService.getCurrentRecruitApplicationByCandidateId(id) != null) {
+            throw exception(RECRUIT_CANDIDATE_DELETE_STATUS_INVALID);
+        }
         if (notEqualsAny(recruitCandidate.getStatus(), HrmRecruitCandidateStatusEnum.NEW.getStatus(),
                 HrmRecruitCandidateStatusEnum.PRIMARY_PASS.getStatus(),
                 HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus(),
@@ -229,6 +236,11 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void updateRecruitCandidateStatus(HrmRecruitCandidateUpdateStatusReqVO reqVO) {
         // 1. 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExistsForUpdate(reqVO.getId());
+        if (recruitApplicationService.getCurrentRecruitApplicationByCandidateId(reqVO.getId()) != null) {
+            HrmRecruitCandidateStatusEnum targetStatus = HrmRecruitCandidateStatusEnum.valueOf(reqVO.getStatus());
+            throw exception(RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID,
+                    targetStatus == null ? reqVO.getStatus() : targetStatus.getName());
+        }
         if (Objects.equals(recruitCandidate.getStatus(), reqVO.getStatus())) {
             LogRecordContext.putVariable("recruitCandidate", recruitCandidate);
             return;
@@ -294,6 +306,35 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
         recruitCandidateMapper.updateById(new HrmRecruitCandidateDO().setId(id)
                 .setStatus(HrmRecruitCandidateStatusEnum.JOINED.getStatus()).setEntryTime(entryTime)
                 .setStatusUpdateTime(LocalDateTime.now()));
+
+        HrmRecruitApplicationDO application = recruitApplicationService
+                .getCurrentRecruitApplicationByCandidateId(id);
+        if (application != null && application.getEmployeeId() != null
+                && HrmRecruitApplicationStatusEnum.PENDING_ONBOARD.getStatus().equals(application.getStatus())) {
+            recruitApplicationService.markOnboarded(application.getId(), application.getEmployeeId());
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmRecruitCandidateEntry(Long applicationId, Long candidateId, Long employeeId,
+                                              LocalDateTime entryTime) {
+        HrmRecruitCandidateDO candidate = validateRecruitCandidateExistsForUpdate(candidateId);
+        HrmRecruitApplicationDO application = recruitApplicationService.getApplication(applicationId);
+        if (application == null || !Objects.equals(application.getCandidateId(), candidateId)
+                || !Objects.equals(application.getEmployeeId(), employeeId)
+                || !HrmRecruitApplicationStatusEnum.PENDING_ONBOARD.getStatus().equals(application.getStatus())) {
+            throw exception(RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID,
+                    HrmRecruitCandidateStatusEnum.JOINED.getName());
+        }
+        if (ObjUtil.notEqual(candidate.getStatus(), HrmRecruitCandidateStatusEnum.PENDING_ENTRY.getStatus())) {
+            throw exception(RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID,
+                    HrmRecruitCandidateStatusEnum.JOINED.getName());
+        }
+        recruitCandidateMapper.updateById(new HrmRecruitCandidateDO().setId(candidateId)
+                .setStatus(HrmRecruitCandidateStatusEnum.JOINED.getStatus()).setEntryTime(entryTime)
+                .setStatusUpdateTime(LocalDateTime.now()));
+        recruitApplicationService.markOnboarded(applicationId, employeeId);
     }
 
     @Override
@@ -302,6 +343,10 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void updateRecruitCandidatePost(HrmRecruitCandidateUpdatePostReqVO reqVO) {
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExists(reqVO.getId());
+        if (recruitApplicationService.getCurrentRecruitApplicationByCandidateId(reqVO.getId()) != null) {
+            throw exception(RECRUIT_CANDIDATE_STATUS_TRANSITION_INVALID,
+                    HrmRecruitCandidateStatusEnum.NEW.getName());
+        }
         // 1.2 校验招聘职位是否存在
         HrmRecruitPostDO recruitPost = recruitPostService.validateRecruitPostPublished(reqVO.getPostId());
 
@@ -344,6 +389,9 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public void eliminateRecruitCandidate(HrmRecruitCandidateUpdateEliminateReqVO reqVO) {
         // 1. 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExistsForUpdate(reqVO.getId());
+        if (recruitApplicationService.getCurrentRecruitApplicationByCandidateId(reqVO.getId()) != null) {
+            throw exception(RECRUIT_CANDIDATE_ELIMINATE_STATUS_INVALID);
+        }
         if (!HrmRecruitCandidateStatusEnum.ELIMINATE_STATUSES.contains(recruitCandidate.getStatus())) {
             throw exception(RECRUIT_CANDIDATE_ELIMINATE_STATUS_INVALID);
         }
@@ -377,7 +425,18 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     public Long convertRecruitCandidateToEmployee(HrmRecruitCandidateEntryReqVO reqVO) {
         // 1.1 校验候选人是否存在
         HrmRecruitCandidateDO recruitCandidate = validateRecruitCandidateExistsForUpdate(reqVO.getCandidateId());
-        if (!HrmRecruitCandidateStatusEnum.CONVERT_EMPLOYEE_STATUSES.contains(recruitCandidate.getStatus())) {
+        HrmRecruitApplicationDO application = reqVO.getApplicationId() == null ? null
+                : recruitApplicationService.getApplication(reqVO.getApplicationId());
+        if (reqVO.getApplicationId() != null && (application == null
+                || !Objects.equals(application.getCandidateId(), recruitCandidate.getId()))) {
+            throw exception(RECRUIT_CANDIDATE_CONVERT_STATUS_INVALID);
+        }
+        if (application != null && !HrmRecruitApplicationStatusEnum.PENDING_ONBOARD.getStatus()
+                .equals(application.getStatus())) {
+            throw exception(RECRUIT_CANDIDATE_CONVERT_STATUS_INVALID);
+        }
+        if (application == null && !HrmRecruitCandidateStatusEnum.CONVERT_EMPLOYEE_STATUSES
+                .contains(recruitCandidate.getStatus())) {
             throw exception(RECRUIT_CANDIDATE_CONVERT_STATUS_INVALID);
         }
         // 1.2 校验候选人是否已转为员工
@@ -385,7 +444,8 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
             throw exception(EMPLOYEE_CANDIDATE_CONVERTED);
         }
         // 1.3 校验招聘职位是否存在
-        recruitPostService.validateRecruitPostExists(recruitCandidate.getPostId());
+        recruitPostService.validateRecruitPostExists(application == null
+                ? recruitCandidate.getPostId() : application.getPostId());
 
         // 2. 创建员工
         HrmEmployeeSaveReqVO employeeReqVO = BeanUtils.toBean(reqVO, HrmEmployeeSaveReqVO.class)
@@ -401,13 +461,12 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
                         : HrmRecruitCandidateStatusEnum.PENDING_ENTRY.getStatus())
                 .setEntryTime(reqVO.getEntryTime()).setStatusUpdateTime(LocalDateTime.now()));
 
-        // 员工档案创建成功后同步当前岗位应聘记录，避免后台候选人页仍显示“待入职”。
-        HrmRecruitApplicationDO application = recruitApplicationService.getLatestRecruitApplicationByCandidateAndPost(
-                recruitCandidate.getId(), recruitCandidate.getPostId());
-        if (application != null && !HrmRecruitApplicationStatusEnum.ONBOARDED.getStatus().equals(application.getStatus())
-                && !HrmRecruitApplicationStatusEnum.ELIMINATED.getStatus().equals(application.getStatus())
-                && !HrmRecruitApplicationStatusEnum.WITHDRAWN.getStatus().equals(application.getStatus())) {
-            recruitApplicationService.markOnboarded(application.getId(), employeeId);
+        if (application != null) {
+            if (HrmEmployeeEntryStatusEnum.ACTIVE.getStatus().equals(employeeReqVO.getEntryStatus())) {
+                recruitApplicationService.markOnboarded(application.getId(), employeeId);
+            } else {
+                recruitApplicationService.linkEmployeeForOnboard(application.getId(), employeeId);
+            }
         }
 
         // 4. 记录操作日志上下文
@@ -470,16 +529,47 @@ public class HrmRecruitCandidateServiceImpl implements HrmRecruitCandidateServic
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void markRecruitCandidateSubmitted(Long candidateId, Long postId) {
+        syncRecruitCandidateProjection(candidateId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void syncRecruitCandidateProjection(Long candidateId) {
         HrmRecruitCandidateDO candidate = recruitCandidateMapper.selectByIdForUpdate(candidateId);
         if (candidate == null) {
             throw exception(RECRUIT_CANDIDATE_NOT_EXISTS);
         }
-        recruitCandidateMapper.updateById(new HrmRecruitCandidateDO()
-                .setId(candidateId)
-                .setPostId(postId)
-                .setStatus(HrmRecruitCandidateStatusEnum.NEW.getStatus())
-                .setStageNumber(0)
-                .setStatusUpdateTime(LocalDateTime.now()));
+        HrmRecruitApplicationDO application = recruitApplicationService
+                .getCurrentRecruitApplicationByCandidateId(candidateId);
+        if (application == null) {
+            return;
+        }
+        Integer status = HrmRecruitCandidateStatusEnum.fromApplicationStatus(application.getStatus());
+        if (status == null) {
+            return;
+        }
+        Integer stageNumber = candidate.getStageNumber();
+        if (isInterviewStatus(application.getStatus())) {
+            HrmRecruitInterviewDO interview = recruitInterviewService
+                    .getLatestRecruitInterviewByApplicationId(application.getId());
+            stageNumber = interview == null ? 0 : interview.getStageNumber();
+        } else if (!HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus().equals(status)) {
+            stageNumber = 0;
+        }
+        recruitCandidateMapper.updateById(new HrmRecruitCandidateDO().setId(candidateId)
+                .setStatus(status).setStageNumber(stageNumber).setStatusUpdateTime(LocalDateTime.now()));
+    }
+
+    private boolean isInterviewStatus(String applicationStatus) {
+        HrmRecruitApplicationStatusEnum status = HrmRecruitApplicationStatusEnum.valueOfStatus(applicationStatus);
+        if (status == null) {
+            return false;
+        }
+        return switch (status) {
+            case PENDING_INTERVIEW, INTERVIEW_SCHEDULED, INTERVIEWING, INTERVIEW_EVALUATING,
+                    NEXT_INTERVIEW, INTERVIEW_CANCELED, INTERVIEW_ABSENT -> true;
+            default -> false;
+        };
     }
 
 }

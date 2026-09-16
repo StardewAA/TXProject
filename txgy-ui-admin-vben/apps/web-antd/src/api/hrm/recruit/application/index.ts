@@ -40,3 +40,11 @@ export function rejectRecruitApplicationResume(id: number, reason: string) {
 export function enterRecruitApplicationInterview(id: number) {
   return requestClient.put<boolean>('/hrm/recruit/application/enter-interview', { id });
 }
+
+export function skipRecruitApplicationInterview(id: number) {
+  return requestClient.put<boolean>(`/hrm/recruit/application/skip-interview?id=${id}`);
+}
+
+export function eliminateRecruitApplication(id: number, reason: string) {
+  return requestClient.put<boolean>('/hrm/recruit/application/eliminate', { id, reason });
+}
