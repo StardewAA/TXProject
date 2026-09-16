@@ -67,7 +67,7 @@ const [Modal, modalApi] = useVbenModal({
 
 async function loadList() {
   const data = modalApi.getData<{ id: number }>();
-  if (!data) {
+  if (!data?.id) {
     return;
   }
   courseId.value = data.id;

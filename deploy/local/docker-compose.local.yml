@@ -51,7 +51,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       TZ: ${TZ}
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -177,7 +177,11 @@ services:
         JAR_FILE: jars/bpm.jar
     environment:
       <<: *txgy-env
-      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+      # 本地表结构已手工初始化（ACT_* 全套 + schema.version=8.0.0.0），
+      # application.yaml 的 database-schema-update: false 因 Nacos import 的处理顺序会覆盖 profile 文件，
+      # 环境变量的 relaxed binding 在 Spring Boot 4 下又无法映射中划线属性，
+      # 因此用 JVM 系统属性（-D，kebab-case 精确匹配，优先级最高）显式声明
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC -Dflowable.database-schema-update=false
     mem_limit: 800m
 
   hrm:
@@ -232,6 +236,28 @@ services:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
       # CRM AI 助手（意图识别）在后端调用千问，密钥从 .env 注入，不进代码仓库
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      # 「从 WMS 同步」走本地直读同库 WMS 表，无需 WMS 只读令牌。
+      # 注意：application.yaml 里 txgy.* 段声明在 spring.config.import 之后，
+      # 处理顺序晚于 profile 文件，会覆盖 application-local.yaml 的 mode=mock，
+      # 因此这里用环境变量（优先级最高）显式指定，否则会走 remote 模式并报
+      # 「txgy.integration.wms.crm-product.authorization 未配置」。
+      CRM_WMS_PRODUCT_MODE: mock
+    mem_limit: 850m
+
+  # WMS：CRM 进仓产品同步的数据来源，前端库存统计等页面依赖它，缺失时网关会报
+  # 「Unable to find instance for wms-server」。
+  wms:
+    <<: *txgy-service
+    container_name: txgy-wms
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/wms.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
     mem_limit: 850m
 
@@ -248,6 +274,21 @@ services:
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
     mem_limit: 850m
 
+  # 管理后台前端（vben dist）静态托管 + /admin-api 反向代理到网关。
+  # nginx 使用 resolver + 变量实现动态 DNS 解析：业务容器重建后 IP 变化时不会复用旧地址
+  # （静态解析的旧 IP 若被其它容器复用，请求会绕过网关，接口返回 401「账号未登录」）。
+  ui:
+    image: nginx:1.27-alpine
+    container_name: txgy-ui-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ../../txgy-ui-admin-vben/apps/web-antd/dist:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 128m
   frontend:
     container_name: txgy-frontend
     image: ${FRONTEND_IMAGE:-local-frontend:latest}

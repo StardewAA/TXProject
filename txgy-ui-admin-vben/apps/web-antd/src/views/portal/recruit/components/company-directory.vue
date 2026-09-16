@@ -303,7 +303,7 @@ onMounted(loadCompanies);
             <span v-else>{{ selectedCompany?.name.slice(0, 2) }}</span>
           </div>
           <div class="company-detail-heading">
-            <span class="company-detail-eyebrow">企业招聘档案 / OPEN ROLES</span>
+            <span class="company-detail-eyebrow">企业招聘档案</span>
             <h2>{{ selectedCompany?.name }}</h2>
             <div class="company-detail-meta">
               <span :class="{ muted: !selectedCompany?.posts.length }"><i></i>{{ selectedCompany?.posts.length ? '正在招聘' : '暂无公开职位' }}</span>
@@ -311,7 +311,6 @@ onMounted(loadCompanies);
               <span v-if="selectedCompanyCities.length">{{ selectedCompanyCities.slice(0, 2).join(' · ') }}</span>
             </div>
           </div>
-          <span class="company-detail-mark" aria-hidden="true">TX<span>HR</span></span>
         </header>
 
         <div class="company-detail-toolbar">
@@ -530,4 +529,73 @@ onMounted(loadCompanies);
 @media (prefers-reduced-motion: reduce) {
   .filter-options button, .company-card, .company-detail-post, .company-detail-post-reward :deep(svg), :global(.company-detail-modal .ant-modal-close) { transition: none; }
 }
+
+.company-directory {
+  --company-accent: #0f8f8c;
+  --company-ink: #123f49;
+  --company-muted: #5f7f87;
+  --company-soft: #e8f7f8;
+  --company-line: #d7e9ed;
+  color: var(--company-ink);
+  background: #fff;
+}
+
+.company-directory-intro {
+  border-color: var(--company-line);
+  background: linear-gradient(120deg, #f5fbfc 0%, #fff 62%, #eaf3ff 100%);
+}
+.company-directory-intro::after { border-color: #9bdce1; box-shadow: 0 0 0 22px rgb(155 220 225 / 34%), 0 0 0 44px rgb(155 220 225 / 14%); }
+.company-intro-label,
+.company-directory-stats strong,
+.company-detail-eyebrow,
+.company-detail-kicker,
+.company-detail-meta > span:first-child { color: #0f8f8c; }
+.company-intro-label i { background: #0f8f8c; box-shadow: 0 0 0 4px #d5f1f3; }
+.company-intro-copy h1,
+.company-detail-heading h2,
+.company-detail-post strong { color: #123f49; }
+.company-directory-stats { border-color: var(--company-line); box-shadow: 0 8px 25px rgb(18 63 73 / 7%); }
+.company-directory-stats > i { background: var(--company-line); }
+.company-filters,
+.company-results { border-color: var(--company-line); }
+.company-search { border-color: #0f8f8c; }
+.search-scope { border-right-color: var(--company-line); background: #f5fbfc; }
+.search-scope select { color: #0f8f8c; }
+.search-submit,
+.company-sort button.active { background: linear-gradient(135deg, #0f9f9b, #2f80ed); }
+.filter-label { color: #4f7079; }
+.filter-options button.active { color: #0f8f8c; background: #e8f7f8; }
+.filter-options button:hover { color: #0f8f8c; background: #eaf6ff; }
+.company-results { background: linear-gradient(180deg, #f3fbfc 0%, #fff 80%); }
+.company-sort { border-color: var(--company-line); }
+.company-card { border-color: var(--company-line); box-shadow: 0 5px 15px rgb(18 63 73 / 4%); }
+.company-card::before { background: #b9e7ee; }
+.company-card:hover { border-color: #7ccbd2; box-shadow: 0 8px 22px rgb(15 143 140 / 12%); }
+.company-card:hover::before { background: linear-gradient(90deg, #0f8f8c, #2f80ed); }
+.company-monogram,
+.company-tags .hiring-tag { border-color: #b9e7ee; color: #0f8f8c; background: #e8f7f8; }
+.company-hot-post,
+.company-no-post { border-top-color: var(--company-line); background: linear-gradient(90deg, #f5fbfc, #fff); }
+.hot-name { color: #0f8f8c; }
+.company-pagination :deep(.ant-pagination-item-active) { border-color: #0f8f8c; background: #0f8f8c; }
+.company-detail-header { border-bottom-color: var(--company-line); background: linear-gradient(118deg, #eaf6ff 0%, #f5fbfc 60%, #fff 100%); }
+.company-detail-header::after { border-color: #9bdce1; box-shadow: 0 0 0 17px rgb(155 220 225 / 34%), 0 0 0 34px rgb(155 220 225 / 14%); }
+.company-detail-monogram { border-color: #b9e7ee; color: #0f8f8c; background: #e8f7f8; box-shadow: 0 9px 17px rgb(15 143 140 / 10%); }
+.company-detail-meta > span:first-child i { background: #0f8f8c; box-shadow: 0 0 0 3px #d5f1f3; }
+.company-detail-post { border-top-color: var(--company-line); color: #123f49; }
+.company-detail-post:hover { background: #eaf6ff; color: #123f49; }
+.company-detail-post-reward { color: #0f8f8c; }
+.company-directory button:focus-visible,
+.company-directory a:focus-visible,
+.company-detail a:focus-visible { outline-color: #2f80ed; }
+:global(.company-detail-modal .ant-modal-content) { border-color: var(--company-line); background: #fff; box-shadow: 0 26px 80px rgb(18 63 73 / 18%); }
+:global(.company-detail-modal .ant-modal-close:hover) { color: #0f8f8c; background: #e8f7f8; }
+.company-directory .search-submit,
+.company-directory .company-sort button.active { background: linear-gradient(135deg, #0f9f9b, #2f80ed); }
+.company-directory .company-monogram,
+.company-directory .company-tags .hiring-tag { border-color: #b9e7ee; color: #0f8f8c; background: #e8f7f8; }
+.company-directory .company-hot-post,
+.company-directory .company-no-post { color: #5f7f87; }
+.company-directory .hot-salary,
+.company-directory .company-detail-post-reward b { color: #dc3545; }
 </style>

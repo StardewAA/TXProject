@@ -126,6 +126,7 @@ const CRM_DICT = {
   CRM_PERMISSION_LEVEL: 'crm_permission_level', // CRM 数据权限的级别
   CRM_PRODUCT_STATUS: 'crm_product_status', // CRM 商品状态
   CRM_PRODUCT_UNIT: 'crm_product_unit', // CRM 产品单位
+  CRM_PRODUCT_DATA_SOURCE: 'crm_product_data_source', // CRM 产品数据来源
   CRM_RECEIVABLE_RETURN_TYPE: 'crm_receivable_return_type', // CRM 回款的还款方式
   CRM_AFTER_SALE_WARRANTY_STATUS: 'crm_after_sale_warranty_status', // CRM 售后的质保状态
   CRM_AFTER_SALE_VISIT_PLAN_TYPE: 'crm_after_sale_visit_plan_type', // CRM 售后的回访计划类型

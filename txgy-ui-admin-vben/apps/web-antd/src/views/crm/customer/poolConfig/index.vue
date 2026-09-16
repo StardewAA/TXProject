@@ -63,7 +63,9 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <Card title="客户公海规则设置">
-      <Form class="w-1/4" />
+      <!-- 不要用 w-1/4：labelWidth=120 会占满 25% 宽度，
+           导致 InputNumber 加上「天不跟进或/天未成交」等后缀后输入框被压成几十像素 -->
+      <Form class="w-full max-w-md" />
     </Card>
   </Page>
 </template>

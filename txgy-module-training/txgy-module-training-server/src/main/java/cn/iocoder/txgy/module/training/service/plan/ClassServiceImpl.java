@@ -92,15 +92,17 @@ public class ClassServiceImpl {
     @Transactional(rollbackFor = Exception.class)
     public void deleteClass(Long id) {
         ClassDO classDO = validateClassExists(id);
-        if (!ClassStatusEnum.DRAFT.getStatus().equals(classDO.getStatus())) {
+        // 草稿（尚未开班）与已结束（已完成 / 已取消）允许删除；进行中的班仍在学习周期内，不允许删除
+        boolean deletable = ClassStatusEnum.DRAFT.getStatus().equals(classDO.getStatus())
+                || ClassStatusEnum.CANCELED.getStatus().equals(classDO.getStatus())
+                || ClassStatusEnum.FINISHED.getStatus().equals(classDO.getStatus());
+        if (!deletable) {
             throw exception(PLAN_CLASS_STATUS_NOT_ALLOW_DELETE, getStatusName(classDO.getStatus()));
         }
         // 连带清理：课程绑定、学员绑定、学员学习任务（均逻辑删除，保留历史审计）
         classCourseMapper.deleteByClassId(id);
-        studentTaskMapper.delete(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<StudentTaskDO>()
-                .eq(StudentTaskDO::getClassId, id));
-        classStudentMapper.delete(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<ClassStudentDO>()
-                .eq(ClassStudentDO::getClassId, id));
+        studentTaskMapper.deleteByClassId(id);
+        classStudentMapper.deleteByClassId(id);
         classMapper.deleteById(id);
     }
 

@@ -403,6 +403,157 @@ export async function parseClue(
   return { fields: rb, aiError };
 }
 
+/* ----------------------------- 联系人专属识别 ----------------------------- */
+
+export interface ParsedContact {
+  /** 联系人姓名（必须是「人」的姓名，不能是公司名） */
+  name?: string;
+  mobile?: string;
+  telephone?: string;
+  wechat?: string;
+  qq?: string;
+  email?: string;
+  /** 所属客户 / 公司名称，用于匹配系统已有客户 */
+  customerName?: string;
+  remark?: string;
+}
+
+function buildContactPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：本次输入可能包含【图片】（如名片、聊天截图）。请先对图片做 OCR 识别其中文字，再结合文字一起提取字段。'
+    : '';
+  return `你是一个 CRM「联系人」信息提取助手。${imageHint}请从下面的资料文本（及可能的图片）中提取「联系人」的结构化字段，并以 JSON 格式只输出结果（不要包含任何解释，也不要使用 markdown 代码块标记）。
+
+重要约束（必须严格遵守）：
+- 这是「联系人」表单，name 字段必须提取【人】的姓名（如 张三、李工、王经理、张总），绝对不要把公司名 / 单位名填进 name。
+- 公司名 / 单位名一律填到 customerName 字段。
+- 若资料中只出现公司名、没有任何人名，则 name 输出 null，把公司名填到 customerName。
+- 职务、部门等信息填到 remark，不要混进 name。
+- 严禁臆造：资料中未出现的内容一律输出 null，不要猜测。
+- 无法确定的字段输出 null。
+
+可提取字段及取值约束：
+- name: 联系人姓名（人的名字，通常 2~10 个字符；不含公司名、不含职务）
+- customerName: 联系人所属客户 / 公司名称（字符串）
+- mobile: 手机号（11 位数字字符串）
+- telephone: 电话 / 座机（字符串）
+- wechat: 微信号（字符串）
+- qq: QQ 号（字符串）
+- email: 邮箱（字符串）
+- remark: 职务 / 部门等补充说明（字符串），可为 null
+
+只输出 JSON，例如：{"name":"张三","customerName":"某某保温材料有限公司","mobile":"13800138000","telephone":"010-88886666","wechat":"zs001","qq":null,"email":null,"remark":"采购部经理"}
+
+资料文本如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+async function aiParseContact(
+  text: string,
+  images: string[],
+): Promise<{ fields: Partial<ParsedContact> | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) {
+    return { fields: null };
+  }
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildContactPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content }],
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const j: any = await resp.json();
+        if (j?.error?.message) {
+          detail = j.error.message;
+        }
+      } catch {
+        // 忽略
+      }
+      return { fields: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) {
+      return { fields: null, error: 'AI 返回内容无法解析为 JSON' };
+    }
+    const out: Partial<ParsedContact> = {};
+    const setStr = (k: keyof ParsedContact, v: any) => {
+      if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+        (out as any)[k] = `${v}`.trim();
+      }
+    };
+    setStr('name', json.name);
+    setStr('customerName', json.customerName);
+    setStr('mobile', json.mobile);
+    setStr('telephone', json.telephone);
+    setStr('wechat', json.wechat);
+    setStr('qq', json.qq);
+    setStr('email', json.email);
+    setStr('remark', json.remark);
+    return { fields: out };
+  } catch (e: any) {
+    return { fields: null, error: e?.message ?? 'AI 调用异常' };
+  }
+}
+
+/**
+ * 联系人专属识别主入口：优先 AI 提取（文本 + 图片），无 AI 或失败时回退到规则解析。
+ * 与线索识别的关键差异：name 提取的是「人」的姓名，公司名单独放在 customerName。
+ */
+export async function parseContact(
+  text: string,
+  images: string[] = [],
+): Promise<ParseResult> {
+  const rb = parseClueText(text);
+  let aiError: string | undefined;
+  try {
+    const ai = await aiParseContact(text, images);
+    aiError = ai.error;
+    if (ai.fields && Object.keys(ai.fields).length) {
+      return { fields: ai.fields as ParsedClue, aiError };
+    }
+  } catch {
+    // 忽略，使用规则解析结果
+  }
+  // 规则解析兜底：只保留联系人相关字段。
+  // 注意：parseClueText 提取的 name 通常是「公司名」，若明显是公司名则移到 customerName，
+  //      避免联系人姓名被误填成公司名。
+  const rawName = String(rb.name ?? '').trim();
+  const looksLikeCompany =
+    !!rawName &&
+    /(公司|集团|厂|中心|店|院|所|企业|有限|股份|工程|实业)/.test(rawName);
+  const fallback: any = {
+    name: looksLikeCompany ? undefined : rawName,
+    customerName: looksLikeCompany ? rawName : undefined,
+    mobile: rb.mobile,
+    telephone: rb.telephone,
+    wechat: rb.wechat,
+    email: rb.email,
+    qq: rb.qq,
+    remark: rb.remark,
+  };
+  return { fields: fallback, aiError };
+}
+
 
 /* ----------------------------- 合同专属识别 ----------------------------- */
 

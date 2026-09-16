@@ -68,6 +68,7 @@
     "highlight.js": "catalog:",
     "mammoth": "^1.12.2",
     "livekit-client": "catalog:",
+    "mammoth": "^1.12.3",
     "pdfjs-dist": "catalog:",
     "pinia": "catalog:",
     "steady-xml": "catalog:",
@@ -84,6 +85,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/file-saver": "^2.0.7"
-  }
+    "@types/file-saver": "^2.0.7",
+    "wangeditor": "4.7.15"
+  },
 }

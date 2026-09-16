@@ -190,3 +190,80 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
   ];
 }
+
+/** 参训对象筛选条件（部门 + 岗位），存储于 training_class.target_condition */
+export interface TargetScope {
+  deptIds: number[];
+  includeChildDept: boolean;
+  postIds: number[];
+}
+
+/** 解析 targetCondition（兼容旧的手工 JSON：解析失败视为未配置） */
+export function parseTargetCondition(condition?: string): TargetScope {
+  const empty: TargetScope = {
+    deptIds: [],
+    includeChildDept: true,
+    postIds: [],
+  };
+  if (!condition) {
+    return empty;
+  }
+  try {
+    const parsed = JSON.parse(condition) as Partial<TargetScope>;
+    return {
+      deptIds: Array.isArray(parsed?.deptIds) ? parsed.deptIds : [],
+      includeChildDept: parsed?.includeChildDept !== false,
+      postIds: Array.isArray(parsed?.postIds) ? parsed.postIds : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** 组装 targetCondition（部门与岗位均未选择时不落库） */
+export function buildTargetCondition(
+  raw: Record<string, any>,
+): string | undefined {
+  const deptIds: number[] = Array.isArray(raw?.scopeDeptIds)
+    ? raw.scopeDeptIds
+    : [];
+  const postIds: number[] = Array.isArray(raw?.scopePostIds)
+    ? raw.scopePostIds
+    : [];
+  if (deptIds.length === 0 && postIds.length === 0) {
+    return undefined;
+  }
+  return JSON.stringify({
+    deptIds,
+    includeChildDept: raw.scopeIncludeChildDept !== false,
+    postIds,
+  });
+}
+
+/** 定岗（结业后岗位，targetPosts 为 JSON 数组字符串）展示文本 */
+export function formatTargetPosts(text?: string): string {
+  if (!text) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.join('、') : String(parsed);
+  } catch {
+    return text;
+  }
+}
+
+/** 参训对象筛选条件摘要（详情展示用） */
+export function targetConditionSummary(condition?: string): string {
+  const scope = parseTargetCondition(condition);
+  const parts: string[] = [];
+  if (scope.deptIds.length > 0) {
+    parts.push(
+      `部门 ${scope.deptIds.length} 个（${scope.includeChildDept ? '含下级' : '不含下级'}）`,
+    );
+  }
+  if (scope.postIds.length > 0) {
+    parts.push(`岗位 ${scope.postIds.length} 个`);
+  }
+  return parts.length > 0 ? parts.join('，') : '-';
+}

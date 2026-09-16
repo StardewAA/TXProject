@@ -140,6 +140,21 @@ export function getManagePage(params: NoticeExternalApi.ManagePageParams) {
   );
 }
 
+/** 管理端筛选选项（来源站 / 公告类型下拉数据源；后端从数据库去重读取，前端 ApiSelect 动态填充，不硬编码） */
+export interface ManageFilterOptions {
+  /** 来源站选项（code=来源站 code，name=来源站名称） */
+  sources?: Array<{ code?: string; name?: string }>;
+  /** 公告类型（外站自述类型原文去重） */
+  noticeTypes?: string[];
+}
+
+/** 契约：GET /bidding/notice-external/manage/filter-options —— 来源站 + 公告类型下拉选项；权限 bidding:notice-external:update */
+export function getManageFilterOptions() {
+  return requestClient.get<ManageFilterOptions>(
+    '/bidding/notice-external/manage/filter-options',
+  );
+}
+
 /** 契约：GET /bidding/notice-external/manage/operate-log/page —— 外部公告操作日志分页（谁上传/谁审查/AI 何时审；数据来自平台 system_operate_log，不另建表）；权限 bidding:notice-external:update；依据 NoticeExternalController#operateLogPage */
 export function getOperateLogPage(params: {
   /** 公告主键（必传；后端 @RequestParam noticeId） */

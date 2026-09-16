@@ -28,6 +28,8 @@ import { Input, message, Radio, Select, Upload } from 'ant-design-vue';
 
 import { crawlParserTest, fetchCrawlParserList } from '#/api/bidding/crawlExternal';
 
+import { crawlErrMsg } from '../../shared';
+
 const props = defineProps<{ sourceOptions?: Array<{ label: string; value: string }> }>();
 const emit = defineEmits(['parsed']);
 
@@ -155,7 +157,7 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.close();
       emit('parsed', resp, { inputType: inputType.value, fileName: file.value?.name });
     } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
+      message.error(crawlErrMsg(e));
     } finally {
       running.value = false;
       modalApi.unlock();

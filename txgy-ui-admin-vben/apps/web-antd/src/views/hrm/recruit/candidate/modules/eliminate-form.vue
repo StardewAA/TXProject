@@ -5,6 +5,7 @@ import { useVbenForm, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
+import { eliminateRecruitApplication } from '#/api/hrm/recruit/application';
 import { eliminateRecruitCandidate } from '#/api/hrm/recruit/candidate';
 import { $t } from '#/locales';
 import { executeBatch } from '#/views/hrm/utils/batch';
@@ -14,6 +15,7 @@ import { useEliminateFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const batchMode = ref(false);
 const candidateIds = ref<number[]>([]);
+const applicationId = ref<number>();
 const getTitle = computed(() =>
   batchMode.value ? '批量淘汰候选人' : '淘汰候选人',
 );
@@ -69,11 +71,15 @@ const [Modal, modalApi] = useVbenModal({
           return;
         }
       } else {
-        await eliminateRecruitCandidate({
-          id: candidateIds.value[0]!,
-          eliminate,
-          remark: values.remark,
-        });
+        if (applicationId.value) {
+          await eliminateRecruitApplication(applicationId.value, eliminate);
+        } else {
+          await eliminateRecruitCandidate({
+            id: candidateIds.value[0]!,
+            eliminate,
+            remark: values.remark,
+          });
+        }
         message.success($t('ui.actionMessage.operationSuccess'));
       }
       // 关闭并提示
@@ -87,10 +93,12 @@ const [Modal, modalApi] = useVbenModal({
     if (!isOpen) {
       batchMode.value = false;
       candidateIds.value = [];
+      applicationId.value = undefined;
       return;
     }
     // 加载数据
     const data = modalApi.getData<{
+      applicationId?: number;
       ids: number | number[];
       name?: string;
     }>();
@@ -100,6 +108,7 @@ const [Modal, modalApi] = useVbenModal({
     const isBatch = Array.isArray(data.ids);
     batchMode.value = isBatch;
     candidateIds.value = Array.isArray(data.ids) ? [...data.ids] : [data.ids];
+    applicationId.value = data.applicationId;
     await formApi.setValues({
       candidateLabel: isBatch
         ? `已选择 ${candidateIds.value.length} 人`

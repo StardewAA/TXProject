@@ -24,7 +24,7 @@ import { ProTaskSelect } from '#/views/mes/pro/task/components';
 import { ProWorkOrderSelect } from '#/views/mes/pro/workorder/components';
 
 /** 生产报工表单类型 */
-export type FormType = 'approve' | 'create' | 'detail' | 'submit' | 'update';
+export type FormType = 'create' | 'detail' | 'submit' | 'update';
 
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -145,7 +145,6 @@ export function useGridColumns(): VxeTableGridOptions<MesProFeedbackApi.Feedback
       width: 180,
       formatter: 'formatDateTime',
     },
-    { field: 'approveUserNickname', title: '审核人', width: 100 },
     {
       field: 'status',
       title: '状态',
@@ -165,10 +164,10 @@ export function useGridColumns(): VxeTableGridOptions<MesProFeedbackApi.Feedback
 }
 
 /**
- * 新增/编辑/提交/审批/详情生产报工的表单
+ * 新增/编辑/提交/详情生产报工的表单
  *
  * - create / update：录入报工主体信息和数量
- * - submit / approve / detail：主体字段只读
+ * - submit / detail：主体字段只读
  *
  * 数量区域根据 `checkFlag` 和 `unqualifiedQuantity` 动态显示：
  * - 非质检工序：报工数量 = 合格 + 不良；不良 > 0 时再展开工废/料废/其他废品
@@ -178,7 +177,7 @@ export function useFormSchema(
   formType: FormType,
   formApi?: VbenFormApi,
 ): VbenFormSchema[] {
-  const isHeaderReadonly = ['approve', 'detail', 'submit'].includes(formType);
+  const isHeaderReadonly = ['detail', 'submit'].includes(formType);
   return [
     {
       fieldName: 'id',
@@ -551,20 +550,6 @@ export function useFormSchema(
       rules: 'selectRequired',
     },
     {
-      fieldName: 'feedbackTime',
-      label: '报工时间',
-      component: 'DatePicker',
-      componentProps: {
-        class: 'w-full',
-        disabled: isHeaderReadonly,
-        format: 'YYYY-MM-DD HH:mm:ss',
-        placeholder: '请选择报工时间',
-        showTime: true,
-        valueFormat: 'x',
-      },
-      rules: 'required',
-    },
-    {
       fieldName: 'approveUserId',
       label: '审核人',
       component: 'ApiSelect',
@@ -577,6 +562,20 @@ export function useFormSchema(
         valueField: 'id',
       },
       rules: 'selectRequired',
+    },
+    {
+      fieldName: 'feedbackTime',
+      label: '报工时间',
+      component: 'DatePicker',
+      componentProps: {
+        class: 'w-full',
+        disabled: isHeaderReadonly,
+        format: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择报工时间',
+        showTime: true,
+        valueFormat: 'x',
+      },
+      rules: 'required',
     },
     {
       fieldName: 'remark',

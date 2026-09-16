@@ -64,7 +64,8 @@ async function loadHistory(studentName?: string) {
   const name = studentName ?? historyStudent.value;
   historyLoading.value = true;
   try {
-    const result = await getRecordPage({ keyword: name, pageNo: 1, pageSize: 500 });
+    // 后端分页每页条数上限为 200，超出会报「每页条数最大值为 200」
+    const result = await getRecordPage({ keyword: name, pageNo: 1, pageSize: 200 });
     historyRows.value = result.list;
   } finally {
     historyLoading.value = false;

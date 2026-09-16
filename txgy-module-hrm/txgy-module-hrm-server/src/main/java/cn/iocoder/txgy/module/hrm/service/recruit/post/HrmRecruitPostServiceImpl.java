@@ -132,6 +132,20 @@ public class HrmRecruitPostServiceImpl implements HrmRecruitPostService {
     public PageResult<HrmRecruitPostDO> getPortalRecruitPostPage(HrmRecruitPostPageReqVO pageReqVO) {
         // 门户只公开已发布且由 HR 账号创建的职位，不能由调用方传入暂停或关闭状态绕过可见范围。
         pageReqVO.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        if (pageReqVO.getPostTypeId() != null) {
+            Long selectedPostTypeId = pageReqVO.getPostTypeId();
+            List<Long> postTypeIds = TenantUtils.executeIgnore(() -> {
+                var selectedPostType = recruitPostTypeService.getRecruitPostType(selectedPostTypeId);
+                if (selectedPostType == null) {
+                    return Collections.singletonList(selectedPostTypeId);
+                }
+                List<Long> ids = recruitPostTypeService
+                        .getRecruitPostTypeIdsByName(selectedPostType.getName());
+                return ids.isEmpty() ? Collections.singletonList(selectedPostTypeId) : ids;
+            });
+            pageReqVO.setPostTypeId(null);
+            pageReqVO.setPostTypeIds(postTypeIds);
+        }
         return TenantUtils.executeIgnore(() -> recruitPostMapper.selectPortalPage(pageReqVO));
     }
 

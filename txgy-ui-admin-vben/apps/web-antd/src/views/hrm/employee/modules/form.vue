@@ -42,6 +42,7 @@ const createFieldVisibleMap = ref<Record<number, Set<string>>>({});
 const leaderEmployeeId = ref<number>();
 const userId = ref<number>();
 const candidateId = ref<number>();
+const applicationId = ref<number>();
 
 function normalizeDatePickerValues(
   values: Partial<HrmEmployeeApi.Employee>,
@@ -166,11 +167,14 @@ const [Modal, modalApi] = useVbenModal({
         message.success($t('ui.actionMessage.createSuccess'));
       } else if (formType.value === 'candidate') {
         await convertRecruitCandidateToEmployee(
-          submitData as HrmRecruitCandidateApi.EntryReq,
+          { ...submitData, applicationId: applicationId.value } as HrmRecruitCandidateApi.EntryReq,
         );
         message.success($t('ui.actionMessage.createSuccess'));
       } else if (formType.value === 'confirm') {
-        await confirmEmployeeEntry(submitData);
+        await confirmEmployeeEntry({
+          ...submitData,
+          applicationId: applicationId.value,
+        } as HrmEmployeeApi.Employee);
         message.success('已确认入职');
       } else if (formType.value === 'rehire') {
         await rehireEmployee({ ...submitData, employeeId: values.id });
@@ -190,6 +194,7 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     const data = modalApi.getData<{
+      applicationId?: number;
       defaultData?: Partial<HrmEmployeeApi.Employee>;
       id?: number;
       type?: string;
@@ -211,6 +216,7 @@ const [Modal, modalApi] = useVbenModal({
       leaderEmployeeId.value = undefined;
       userId.value = undefined;
       candidateId.value = undefined;
+      applicationId.value = data?.applicationId;
       if (data?.id) {
         const employee = await getEmployee(data.id);
         await formApi.setValues(normalizeDatePickerValues(employee));
@@ -255,6 +261,7 @@ const [Modal, modalApi] = useVbenModal({
         leaderEmployeeId.value = data.defaultData.leaderEmployeeId;
         userId.value = data.defaultData.userId;
         candidateId.value = data.defaultData.candidateId;
+        applicationId.value = (data.defaultData as HrmRecruitCandidateApi.EntryReq).applicationId;
       }
     } finally {
       modalApi.unlock();
@@ -273,7 +280,7 @@ const [Modal, modalApi] = useVbenModal({
           </template>
         </Form>
       </Tabs.TabPane>
-      <Tabs.TabPane key="entry" tab="入职信息">
+      <Tabs.TabPane key="entry" tab="入职信息" :force-render="true">
         <EntryForm class="mx-4 mt-2">
           <template #leaderEmployeeId>
             <EmployeeSelect

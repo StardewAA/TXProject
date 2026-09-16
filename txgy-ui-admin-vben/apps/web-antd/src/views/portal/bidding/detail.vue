@@ -721,6 +721,8 @@ onBeforeUnmount(() => {
 }
 .pdf-frame-wrap {
   height: 720px;
+  /* 右侧留白：让 iframe 内 PDF 查看器的滚动条与外层滚动条分开 */
+  padding-right: 14px;
 }
 .pdf-frame {
   width: 100%;

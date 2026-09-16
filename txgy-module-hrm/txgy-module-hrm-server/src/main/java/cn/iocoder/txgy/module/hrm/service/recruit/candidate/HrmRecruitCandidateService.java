@@ -91,8 +91,11 @@ public interface HrmRecruitCandidateService {
     /** 按联系方式查找候选人，用于门户重复投递时复用人才档案。 */
     HrmRecruitCandidateDO getRecruitCandidateByMobile(String mobile);
 
-    /** 门户正式投递后，将候选人绑定到本次岗位并回到招聘流程起点。 */
+    /** 门户正式投递后刷新候选人兼容状态投影。 */
     void markRecruitCandidateSubmitted(Long candidateId, Long postId);
+
+    /** 按当前应聘记录刷新候选人兼容状态投影。 */
+    void syncRecruitCandidateProjection(Long candidateId);
 
     /**
      * 锁定并校验招聘候选人是否存在
@@ -141,6 +144,9 @@ public interface HrmRecruitCandidateService {
      * @param entryTime 实际入职时间
      */
     void confirmRecruitCandidateEntry(Long id, LocalDateTime entryTime);
+
+    void confirmRecruitCandidateEntry(Long applicationId, Long candidateId, Long employeeId,
+                                      LocalDateTime entryTime);
 
     /**
      * 更新招聘候选人的招聘职位

@@ -9,6 +9,7 @@ import cn.hutool.json.JSONUtil;
 import cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.module.training.config.AiModelProperties;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionImportReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionItemVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.AiQuestionParseRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.QuestionSaveReqVO;
@@ -114,7 +115,8 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
     }
 
     @Override
-    public int importQuestions(List<AiQuestionItemVO> items) {
+    public int importQuestions(AiQuestionImportReqVO reqVO) {
+        List<AiQuestionItemVO> items = reqVO == null ? null : reqVO.getItems();
         if (items == null || items.isEmpty()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.QUESTION_AI_RESULT_EMPTY);
         }
@@ -123,16 +125,19 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
             if (item == null || StrUtil.isBlank(item.getStem())) {
                 continue;
             }
-            QuestionSaveReqVO reqVO = new QuestionSaveReqVO();
-            reqVO.setQtype(item.getQtype() == null ? 1 : item.getQtype());
-            reqVO.setStem(StrUtil.trim(item.getStem()));
-            reqVO.setAnswer(StrUtil.trimToEmpty(item.getAnswer()));
-            reqVO.setAnalysis(StrUtil.trimToEmpty(item.getAnalysis()));
-            reqVO.setDifficulty(item.getDifficulty() == null ? 2 : item.getDifficulty());
+            QuestionSaveReqVO saveReqVO = new QuestionSaveReqVO();
+            saveReqVO.setQtype(item.getQtype() == null ? 1 : item.getQtype());
+            saveReqVO.setStem(StrUtil.trim(item.getStem()));
+            saveReqVO.setAnswer(StrUtil.trimToEmpty(item.getAnswer()));
+            saveReqVO.setAnalysis(StrUtil.trimToEmpty(item.getAnalysis()));
+            saveReqVO.setDifficulty(item.getDifficulty() == null ? 2 : item.getDifficulty());
             if (item.getOptions() != null && !item.getOptions().isEmpty()) {
-                reqVO.setOptionsJson(JSONUtil.toJsonStr(item.getOptions()));
+                saveReqVO.setOptionsJson(JSONUtil.toJsonStr(item.getOptions()));
             }
-            questionService.createQuestion(reqVO);
+            // 整批统一：所属分类与标签与「新增试题」保持同一套数据
+            saveReqVO.setCategoryId(reqVO.getCategoryId());
+            saveReqVO.setTagIds(reqVO.getTagIds());
+            questionService.createQuestion(saveReqVO);
             success++;
         }
         return success;
@@ -224,8 +229,11 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         return "你是培训考试命题助手。请从用户提供的资料中提取试题，严格按以下 JSON 数组格式输出，不要输出任何解释性文字：\n"
                 + "[{\"qtype\":1,\"stem\":\"题干\",\"options\":[{\"key\":\"A\",\"text\":\"...\",\"isCorrect\":true}],"
                 + "\"answer\":\"A\",\"analysis\":\"解析\",\"difficulty\":2}]\n"
-                + "规则：qtype 取值 1单选 2多选 3判断 4实操问答 5案例分析；选项使用 A/B/C/D；"
-                + "判断题 options 固定为 正确/错误 两项；difficulty 取值 1易 2中 3难；最多提取 "
+                + "规则：qtype 取值 1单选 2多选 3判断 4实操问答 5案例分析 6填空 7简答；选项使用 A/B/C/D；"
+                + "判断题 qtype=3、answer 固定为「对」或「错」、options 留空数组；"
+                + "填空题 qtype=6、answer 多个空用竖线|分隔、options 留空数组；"
+                + "简答/实操问答/案例分析 qtype=4/5/7、answer 为参考答案文本、options 留空数组；"
+                + "difficulty 取值 1易 2中 3难；最多提取 "
                 + aiProperties.getMaxQuestions() + " 题。";
     }
 

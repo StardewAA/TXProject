@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 销售订单 Response DTO
@@ -50,7 +51,7 @@ public class ErpSaleOrderRespDTO {
     @Schema(description = "备注")
     private String remark;
 
-@Schema(description = "订单行明细列表")
-private java.util.List<ErpSaleOrderItemRespDTO> items;
+    @Schema(description = "销售订单明细行列表，供 MES 按订单行生成生产工单")
+    private List<ErpSaleOrderItemRespDTO> items;
 
 }
