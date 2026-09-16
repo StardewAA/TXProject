@@ -23,7 +23,6 @@ import {
 } from 'ant-design-vue';
 
 import { getSimpleDeptList } from '#/api/system/dept';
-import { getSimplePostList } from '#/api/system/post';
 import { getSimpleUserList } from '#/api/system/user';
 
 import {
@@ -38,6 +37,7 @@ import {
 } from './api';
 import ClassBar from './class-bar.vue';
 import { parseTargetCondition } from './data';
+import { loadPostOptions } from './post-options';
 
 defineOptions({ name: 'TrainingPlanStudent' });
 
@@ -259,10 +259,8 @@ async function loadScopeOptions() {
   }
   if (postOptions.value.length === 0) {
     try {
-      const posts = await getSimplePostList();
-      postOptions.value = (posts ?? [])
-        .filter((item) => item.status === 0)
-        .map((item) => ({ label: item.name, value: item.id! }));
+      // 与培训班「参训岗位」保持同一数据源：培训业务岗位工种 + 其他系统岗位
+      postOptions.value = await loadPostOptions();
     } catch {
       postOptions.value = [];
     }

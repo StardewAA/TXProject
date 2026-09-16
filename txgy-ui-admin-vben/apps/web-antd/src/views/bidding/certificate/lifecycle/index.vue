@@ -21,6 +21,7 @@ import {
 
 import AttrFilter from '../../components/AttrFilter.vue';
 import CopyText from '../../components/CopyText.vue';
+import AttrFilter from '../../components/AttrFilter.vue';
 import { fmtDateTime } from '../format';
 import LifecycleApply from '../modules/lifecycle-apply.vue';
 import MaterialCheck from '../modules/material-check.vue';

@@ -1,10 +1,8 @@
 <script lang="ts" setup>
 import type { VbenFormSchema } from '@vben/common-ui';
 
-import type { AuthApi } from '#/api/core/auth';
-
-import { computed, nextTick, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { AuthenticationLogin, Verification, z } from '@vben/common-ui';
 import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
@@ -17,30 +15,34 @@ import {
   checkCaptcha,
   getCaptcha,
   getTenantByWebsite,
-  getTenantSimpleList,
+  getTenantIdByName,
   socialAuthRedirect,
 } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
-import { hasBackendAccess, type LoginType } from './login-access';
 
 defineOptions({ name: 'Login' });
 
-const route = useRoute();
-const router = useRouter();
+const { query } = useRoute();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const userStore = useUserStore();
 
 const tenantEnable = isTenantEnable();
-const captchaEnable = isCaptchaEnable();
+// 临时关闭登录验证码（后端接口正常，但前端 Verification 组件渲染异常）
+const captchaEnable = false;
 
-const loginType = ref<LoginType>('enterprise');
 const loginRef = ref();
 const verifyRef = ref();
-const captchaType = 'blockPuzzle';
 
-const tenantList = ref<AuthApi.TenantResult[]>([]);
+const captchaType = 'blockPuzzle'; // 验证码类型：'blockPuzzle' | 'clickWord'
 
+/**
+ * 页面初始化：根据当前域名自动识别租户。
+ * 域名绑定租户时自动填入租户名；否则留空，由用户手动输入。
+ */
+async function fetchTenantInfo() {
+   await fetchTenantList();
+}
 function handleLoginTypeChange(type: LoginType) {
   const previousType = loginType.value;
   loginType.value = type;
@@ -68,7 +70,10 @@ async function fetchTenantList() {
     const websiteTenant = await websiteTenantPromise;
 
     if (websiteTenant?.id) {
-      tenantId = websiteTenant.id;
+      accessStore.setTenantId(websiteTenant.id);
+      loginRef.value
+        .getFormApi()
+        .setFieldValue('tenantName', websiteTenant.name);
     }
 
     if (!tenantId && accessStore.tenantId) {
@@ -87,7 +92,7 @@ async function fetchTenantList() {
       ?.getFormApi()
       .setFieldValue('tenantId', tenantId?.toString());
   } catch (error) {
-    console.error('获取租户列表失败:', error);
+    console.error('获取租户信息失败:', error);
   }
 }
 
@@ -142,10 +147,12 @@ function resolveRedirectPath() {
       backendRedirect || enterpriseHomePath || preferences.app.defaultHomePath
     );
   }
-
-  return redirect.startsWith('/portal/') ? redirect : '/portal/home';
+  // tenantName 仅用于解析租户编号，不随登录参数提交后端
+  const { tenantName, ...loginParams } = values;
+  await authStore.authLogin('username', loginParams);
 }
 
+/** 处理登录 */
 async function handleLogin(values: any) {
   await ensureLoginTenant(values);
 
@@ -188,7 +195,7 @@ async function handleVerifySuccess({
       },
     );
   } catch (error) {
-    console.error('登录验证失败:', error);
+    console.error('Error in handleLogin:', error);
   }
 }
 
@@ -200,7 +207,11 @@ async function handleThirdLogin(type: number) {
   }
 
   try {
-    const redirectUri = `${location.origin}/auth/social-login?${encodeURIComponent(
+    // 计算 redirectUri
+    // tricky: type、redirect 需要先 encode 一次，否则钉钉回调会丢失。配合 social-login.vue#getUrlValue() 使用
+    const redirectUri = `${
+      location.origin
+    }/auth/social-login?${encodeURIComponent(
       `type=${type}&redirect=${redirect || '/'}`,
     )}`;
 
@@ -210,22 +221,19 @@ async function handleThirdLogin(type: number) {
   }
 }
 
-onMounted(fetchTenantList);
+/** 组件挂载时根据域名识别租户 */
+onMounted(() => {
+  fetchTenantInfo();
+});
 
 const formSchema = computed((): VbenFormSchema[] => {
-  const schema: VbenFormSchema[] = [];
-
-  if (loginType.value === 'enterprise') {
-    schema.push({
-      component: 'VbenSelect',
+  return [
+    {
+      component: 'VbenInput',
       componentProps: {
-        options: tenantList.value.map((item) => ({
-          label: item.name,
-          value: item.id.toString(),
-        })),
-        placeholder: $t('authentication.tenantTip'),
+        placeholder: $t('authentication.tenantInputTip'),
       },
-      fieldName: 'tenantId',
+      fieldName: 'tenantName',
       label: $t('authentication.tenant'),
       rules: z.string().min(1, {
         message: $t('authentication.tenantTip'),
@@ -266,31 +274,12 @@ const formSchema = computed((): VbenFormSchema[] => {
         })
         .default(import.meta.env.VITE_APP_DEFAULT_PASSWORD),
     },
-  );
-
-  return schema;
+  ];
 });
 </script>
 
 <template>
-  <div class="login-container">
-    <div class="login-type-tabs" role="tablist" aria-label="登录类型">
-      <button
-        v-for="item in [
-          { key: 'enterprise', label: '企业登录' },
-          { key: 'personal', label: '个人登录' },
-        ]"
-        :key="item.key"
-        :aria-selected="loginType === item.key"
-        class="login-type-tab"
-        role="tab"
-        type="button"
-        @click="handleLoginTypeChange(item.key as LoginType)"
-      >
-        {{ item.label }}
-      </button>
-    </div>
-
+  <div>
     <AuthenticationLogin
       ref="loginRef"
       :form-schema="formSchema"
@@ -298,10 +287,9 @@ const formSchema = computed((): VbenFormSchema[] => {
       @submit="handleLogin"
       @third-login="handleThirdLogin"
     />
-
     <Verification
-      v-if="captchaEnable"
       ref="verifyRef"
+      v-if="captchaEnable"
       :captcha-type="captchaType"
       :check-captcha-api="checkCaptcha"
       :get-captcha-api="getCaptcha"

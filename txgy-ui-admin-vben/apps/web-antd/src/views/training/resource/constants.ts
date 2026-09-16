@@ -23,6 +23,8 @@ export const QUESTION_TYPE_OPTIONS = [
   { label: '判断', value: 3 },
   { label: '实操问答', value: 4 },
   { label: '案例分析', value: 5 },
+  { label: '填空', value: 6 },
+  { label: '简答', value: 7 },
 ] as const;
 
 export const QUESTION_TYPE_TEXT: Record<number, string> = {
@@ -31,6 +33,8 @@ export const QUESTION_TYPE_TEXT: Record<number, string> = {
   3: '判断',
   4: '实操问答',
   5: '案例分析',
+  6: '填空',
+  7: '简答',
 };
 
 export const QUESTION_TYPE_COLOR: Record<number, string> = {
@@ -39,6 +43,8 @@ export const QUESTION_TYPE_COLOR: Record<number, string> = {
   3: 'green',
   4: 'orange',
   5: 'volcano',
+  6: 'purple',
+  7: 'magenta',
 };
 
 /** 难度 */

@@ -92,6 +92,15 @@ public class AiKnowledgeSegmentController {
         return success(true);
     }
 
+    @PutMapping("/reindex")
+    @Operation(summary = "重建知识库向量索引") // 用于 SimpleVectorStore 内存向量丢失/批量导入分段后，一键重新向量化
+    @Parameter(name = "knowledgeId", description = "知识库编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('ai:knowledge:update')")
+    public CommonResult<Boolean> reindexKnowledgeSegment(@RequestParam("knowledgeId") Long knowledgeId) {
+        segmentService.reindexKnowledgeSegmentByKnowledgeId(knowledgeId);
+        return success(true);
+    }
+
     @GetMapping("/split")
     @Operation(summary = "切片内容")
     @Parameters({
