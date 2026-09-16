@@ -1,9 +1,10 @@
 -- =====================================================================
--- 2026-09-16 报表体系 P0-2：核心模板数据集（第二批 6 张，凑齐 P0 十张）
+-- 2026-09-16 报表体系 P0-2：核心模板数据集（新增 4 张 + 下线 2 张误登记）
 -- 背景：P0-1 已登记 5 个 MES 数据集（生产日报/工单完工/不良统计/物料耗用/设备统计，
 --       id 1,3,4,5,6,7），加上报工明细台账后覆盖 P0 清单 #1/#2/#5/#10。
---       本脚本补齐剩余 6 张：工序产出、质检合格率、库存收发存、出入库台账、
---       采购订单执行、销售发货与回款。
+--       本脚本补齐 MES/WMS 域 4 张：工序产出、质检合格率、库存收发存、出入库台账。
+--       P0 清单 #8/#9（采购执行/销售回款）属 ERP 域含金额，按 20260916b 决策
+--       不入 MES 报表中心，由 ERP 负责人登记；此前误登记的 id 12/13 在此软删。
 -- 口径来源（均以 DO/枚举为准）：
 --   工单状态   MesProWorkOrderStatusEnum   0草稿 1已确认 2已完成 3已取消 10已下发 11生产中
 --   报工状态   MesProFeedbackStatusEnum    0草稿 2审批中 3待检验 4已完成
@@ -65,27 +66,7 @@ VALUES
  '[{"name":"startDate","label":"开始日期","type":"date","required":false,"defaultValue":"2000-01-01"},{"name":"endDate","label":"结束日期","type":"date","required":false,"defaultValue":"2099-12-31"}]',
  'tenant_id', 5000, 30, 0, '刘洋', '出入库台账：采购/产品/杂项入库 + 领料/杂项出库，含单据状态（P0 #7）',
  'admin', NOW(), 'admin', NOW(), b'0', 0,
- '[{"field":"doc_type","label":"单据类型"},{"field":"doc_code","label":"单据编号"},{"field":"doc_date","label":"单据日期"},{"field":"item_code","label":"物料编码"},{"field":"item_name","label":"物料名称"},{"field":"quantity","label":"数量"},{"field":"status_name","label":"单据状态"}]'),
-
--- ---------------------------------------------------------------------
--- 12. 采购订单执行表（P0 #8：ERP，单量/金额/入库执行率）
--- ---------------------------------------------------------------------
-(12, 'erp_purchase_execution', '采购订单执行表', 'ERP',
- 'SELECT o.tenant_id AS tenant_id, o.no AS order_no, sup.name AS supplier_name, DATE_FORMAT(o.order_time, ''%Y-%m-%d'') AS order_date, o.total_count AS total_count, o.in_count AS in_count, o.return_count AS return_count, o.total_price AS total_price, ROUND(CASE WHEN o.total_count > 0 THEN o.in_count / o.total_count * 100 ELSE 0 END, 2) AS execution_rate, CASE o.status WHEN 0 THEN ''草稿'' WHEN 10 THEN ''审批中'' WHEN 20 THEN ''审批通过'' WHEN 30 THEN ''审批驳回'' WHEN 40 THEN ''已撤销'' ELSE ''其他'' END AS status_name FROM erp_purchase_order o LEFT JOIN erp_supplier sup ON sup.id = o.supplier_id AND sup.deleted = 0 WHERE o.deleted = 0 AND o.order_time >= ${startDate} AND o.order_time < DATE_ADD(${endDate}, INTERVAL 1 DAY) ORDER BY o.order_time DESC',
- '[{"name":"startDate","label":"开始日期","type":"date","required":false,"defaultValue":"2000-01-01"},{"name":"endDate","label":"结束日期","type":"date","required":false,"defaultValue":"2099-12-31"}]',
- 'tenant_id', 5000, 30, 0, '刘洋', '采购执行：订单量/已入库/已退货/金额/执行率（P0 #8）',
- 'admin', NOW(), 'admin', NOW(), b'0', 0,
- '[{"field":"order_no","label":"采购订单号"},{"field":"supplier_name","label":"供应商"},{"field":"order_date","label":"下单日期"},{"field":"total_count","label":"订单数量"},{"field":"in_count","label":"已入库数量"},{"field":"return_count","label":"已退货数量"},{"field":"total_price","label":"订单金额"},{"field":"execution_rate","label":"入库执行率(%)"},{"field":"status_name","label":"订单状态"}]'),
-
--- ---------------------------------------------------------------------
--- 13. 销售发货与回款表（P0 #9：ERP，出库金额/已收款/欠款）
--- ---------------------------------------------------------------------
-(13, 'erp_sale_shipment_receipt', '销售发货与回款表', 'ERP',
- 'SELECT o.tenant_id AS tenant_id, o.no AS out_no, c.name AS customer_name, DATE_FORMAT(o.out_time, ''%Y-%m-%d'') AS out_date, o.total_count AS total_count, o.total_price AS total_price, IFNULL(o.receipt_price, 0) AS receipt_price, o.total_price - IFNULL(o.receipt_price, 0) AS receivable_amount, CASE o.status WHEN 0 THEN ''草稿'' WHEN 10 THEN ''审批中'' WHEN 20 THEN ''审批通过'' WHEN 30 THEN ''审批驳回'' WHEN 40 THEN ''已撤销'' ELSE ''其他'' END AS status_name FROM erp_sale_out o LEFT JOIN erp_customer c ON c.id = o.customer_id AND c.deleted = 0 WHERE o.deleted = 0 AND o.out_time >= ${startDate} AND o.out_time < DATE_ADD(${endDate}, INTERVAL 1 DAY) ORDER BY o.out_time DESC',
- '[{"name":"startDate","label":"开始日期","type":"date","required":false,"defaultValue":"2000-01-01"},{"name":"endDate","label":"结束日期","type":"date","required":false,"defaultValue":"2099-12-31"}]',
- 'tenant_id', 5000, 30, 0, '刘洋', '销售回款：出库金额/已收款/欠款（P0 #9）',
- 'admin', NOW(), 'admin', NOW(), b'0', 0,
- '[{"field":"out_no","label":"出库单号"},{"field":"customer_name","label":"客户"},{"field":"out_date","label":"出库日期"},{"field":"total_count","label":"出库数量"},{"field":"total_price","label":"出库金额"},{"field":"receipt_price","label":"已收款金额"},{"field":"receivable_amount","label":"未收款金额"},{"field":"status_name","label":"单据状态"}]')
+ '[{"field":"doc_type","label":"单据类型"},{"field":"doc_code","label":"单据编号"},{"field":"doc_date","label":"单据日期"},{"field":"item_code","label":"物料编码"},{"field":"item_name","label":"物料名称"},{"field":"quantity","label":"数量"},{"field":"status_name","label":"单据状态"}]')
 
 ON DUPLICATE KEY UPDATE `code` = VALUES(`code`), `name` = VALUES(`name`), `category` = VALUES(`category`),
                         `sql_text` = VALUES(`sql_text`), `param_definitions` = VALUES(`param_definitions`),
@@ -93,5 +74,20 @@ ON DUPLICATE KEY UPDATE `code` = VALUES(`code`), `name` = VALUES(`name`), `categ
                         `timeout_seconds` = VALUES(`timeout_seconds`), `status` = VALUES(`status`),
                         `owner` = VALUES(`owner`), `remark` = VALUES(`remark`), `column_labels` = VALUES(`column_labels`),
                         `deleted` = b'0', `updater` = 'admin', `update_time` = NOW();
+
+-- ---------------------------------------------------------------------
+-- 说明：P0 清单 #8 采购订单执行表 / #9 销售发货与回款表属 ERP 域（含金额），
+--       按 20260916b 决策「报表体系收敛 MES 域，WMS/ERP 域由对应模块负责人自行登记」，
+--       不在 MES 报表中心登记。此前误登记的 id 12/13 在此软删下线；
+--       SQL 口径（ErpAuditStatus 中文映射等）已验证可用，ERP 负责人可直接复用：
+--         12 采购执行：erp_purchase_order JOIN erp_supplier，in_count/return_count/total_price/执行率
+--         13 销售回款：erp_sale_out JOIN erp_customer，total_price/receipt_price/欠款=total-receipt
+-- ---------------------------------------------------------------------
+
+-- 软删下线此前误登记的两张 ERP 金额类数据集（幂等）
+UPDATE `report_dataset`
+SET `deleted` = b'1', `updater` = 'admin', `update_time` = NOW()
+WHERE `id` IN (12, 13)
+  AND `code` IN ('erp_purchase_execution', 'erp_sale_shipment_receipt');
 
 COMMIT;

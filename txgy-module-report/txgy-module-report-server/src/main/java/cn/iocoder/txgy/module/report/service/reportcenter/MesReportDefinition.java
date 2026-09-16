@@ -157,36 +157,9 @@ public enum MesReportDefinition {
                     ColumnDef.of("item_name", "物料名称"),
                     ColumnDef.of("quantity", "数量"),
                     ColumnDef.of("status_name", "单据状态")),
-            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
-
-    /**
-     * 采购订单执行表（P0 #8）
-     */
-    ERP_PURCHASE_EXECUTION("erp_purchase_execution", "采购订单执行表", "采购订单的下单量、已入库、已退货与执行率",
-            List.of(ColumnDef.of("order_no", "采购订单号"),
-                    ColumnDef.of("supplier_name", "供应商"),
-                    ColumnDef.of("order_date", "下单日期"),
-                    ColumnDef.of("total_count", "订单数量"),
-                    ColumnDef.of("in_count", "已入库数量"),
-                    ColumnDef.of("return_count", "已退货数量"),
-                    ColumnDef.of("total_price", "订单金额"),
-                    ColumnDef.of("execution_rate", "入库执行率(%)"),
-                    ColumnDef.of("status_name", "订单状态")),
-            List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期"))),
-
-    /**
-     * 销售发货与回款表（P0 #9）
-     */
-    ERP_SALE_SHIPMENT_RECEIPT("erp_sale_shipment_receipt", "销售发货与回款表", "销售出库金额、已收款与未收款（欠款）",
-            List.of(ColumnDef.of("out_no", "出库单号"),
-                    ColumnDef.of("customer_name", "客户"),
-                    ColumnDef.of("out_date", "出库日期"),
-                    ColumnDef.of("total_count", "出库数量"),
-                    ColumnDef.of("total_price", "出库金额"),
-                    ColumnDef.of("receipt_price", "已收款金额"),
-                    ColumnDef.of("receivable_amount", "未收款金额"),
-                    ColumnDef.of("status_name", "单据状态")),
             List.of(ParamDef.of("startDate", "开始日期"), ParamDef.of("endDate", "结束日期")));
+    // 注意：P0 清单 #8 采购执行 / #9 销售回款属 ERP 域（含金额），按 20260916b 决策
+    // 「报表体系收敛 MES 域」不在 MES 报表中心登记，由 ERP 负责人按需自建。
 
     /**
      * 数据集编码（对应 report_dataset.code）
