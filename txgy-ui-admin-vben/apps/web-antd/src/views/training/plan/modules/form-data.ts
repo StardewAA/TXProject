@@ -3,9 +3,9 @@ import type { VbenFormSchema } from '#/adapter/form';
 import { handleTree } from '@vben/utils';
 
 import { getSimpleDeptList } from '#/api/system/dept';
-import { getSimplePostList } from '#/api/system/post';
 
 import { CLASS_TYPE_OPTIONS } from '../data';
+import { loadPostOptions } from '../post-options';
 
 /** 常用岗位（定岗-四定之一，也可手工输入）
  *  数据来源：云培训学院-岗位工种表.xlsx（56 项，按序列 OP/TC/QC/MG/SP 排序）
@@ -198,13 +198,11 @@ export function useFormSchema(
       component: 'ApiSelect',
       componentProps: {
         allowClear: true,
-        api: async () =>
-          (await getSimplePostList()).filter((item) => item.status === 0),
-        labelField: 'name',
-        valueField: 'id',
+        // 培训业务岗位工种（已同步为系统岗位）+ 其他系统岗位，支持名称/编码搜索
+        api: loadPostOptions,
         mode: 'multiple',
         optionFilterProp: 'label',
-        placeholder: '按系统岗位圈选参训人员（可多选）',
+        placeholder: '按岗位圈选参训人员（可多选，支持岗位名称/编码搜索）',
       },
     },
     {
