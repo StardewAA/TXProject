@@ -252,9 +252,6 @@ onMounted(loadReports);
             class="rc-card-table"
           >
             <div class="rc-table-bar">
-              <span class="rc-total">
-                共 {{ cards[report.code]?.rows.length ?? 0 }} 行
-              </span>
               <a-button
                 size="small"
                 type="link"
@@ -274,15 +271,28 @@ onMounted(loadReports);
                 size="small"
               />
               <div class="rc-table-footer">
+                <div class="rc-page-left">
+                  <span class="rc-total">
+                    共 {{ cards[report.code]?.rows.length ?? 0 }} 条记录
+                  </span>
+                  <a-select
+                    :value="cards[report.code]?.pageSize"
+                    :options="[
+                      { label: '6条/页', value: 6 },
+                      { label: '10条/页', value: 10 },
+                      { label: '20条/页', value: 20 },
+                    ]"
+                    size="small"
+                    style="width: 96px"
+                    @change="(size: number) => handlePageSizeChange(report.code, cards[report.code]?.page ?? 1, size)"
+                  />
+                </div>
                 <a-pagination
                   :current="cards[report.code]?.page"
                   :page-size="cards[report.code]?.pageSize"
-                  :page-size-options="['6', '10', '20']"
-                  :show-size-changer="true"
+                  :show-size-changer="false"
                   :total="cards[report.code]?.rows.length ?? 0"
-                  size="small"
                   @change="(page: number) => handlePageChange(report.code, page)"
-                  @showSizeChange="(current: number, size: number) => handlePageSizeChange(report.code, current, size)"
                 />
               </div>
             </template>
@@ -411,25 +421,32 @@ onMounted(loadReports);
   border-top: 1px dashed #e3e9f0;
 }
 
-/* 表格工具条：行数居左、收起/展开居右 */
+/* 表格工具条：收起/展开居右 */
 .rc-table-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 6px;
 }
 
+/* 分页条：总记录+条/页居左，页码居右 */
 .rc-table-footer {
   display: flex;
   gap: 16px;
   align-items: center;
-  justify-content: flex-end;
-  margin-top: 10px;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.rc-page-left {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .rc-total {
-  font-size: 12px;
-  color: #7b8794;
+  font-size: 13px;
+  color: #4e5d6c;
 }
 
 /* 收起后的提示行（整行可点击展开） */
