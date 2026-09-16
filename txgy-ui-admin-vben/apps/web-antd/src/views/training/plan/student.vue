@@ -75,9 +75,14 @@ async function loadStudents() {
   if (!currentClass.value?.id) {
     rows.value = [];
     total.value = 0;
+    loading.value = false;
     return;
   }
   loading.value = true;
+  // 兜底：请求异常或长时间挂起时也确保 loading 关闭，避免页面永久转圈
+  const guardTimer = setTimeout(() => {
+    loading.value = false;
+  }, 8000);
   try {
     const data = await getClassStudentPage({
       pageNo: pageNo.value,
@@ -87,7 +92,11 @@ async function loadStudents() {
     });
     rows.value = data?.list ?? [];
     total.value = data?.total ?? 0;
+  } catch {
+    rows.value = [];
+    total.value = 0;
   } finally {
+    clearTimeout(guardTimer);
     loading.value = false;
   }
 }
@@ -377,7 +386,6 @@ const columns = [
         size="small"
         :columns="columns"
         :data-source="rows"
-        :loading="loading"
         :pagination="{
           current: pageNo,
           pageSize,

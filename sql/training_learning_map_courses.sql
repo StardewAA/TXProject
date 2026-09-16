@@ -174,3 +174,13 @@ UNION ALL
 WHERE NOT EXISTS (
   SELECT 1 FROM training_course tc WHERE tc.code = v.code AND tc.deleted = b'0' AND tc.tenant_id = 1
 );
+
+-- ---------------------------------------------------------------------------
+-- 版本链根回填（必做）：root_id 为空会导致「课程管理 → 版本管理」查询不到版本
+-- 新插入的种子课程为 v1，版本族根指向自身；幂等，可重复执行
+-- ---------------------------------------------------------------------------
+UPDATE training_course
+SET root_id = id
+WHERE deleted = 0
+  AND root_id IS NULL
+  AND version = 1;
