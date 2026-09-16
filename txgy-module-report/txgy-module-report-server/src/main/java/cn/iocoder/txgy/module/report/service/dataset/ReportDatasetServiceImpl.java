@@ -170,8 +170,10 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
                 throw exception(DATASET_SIMPLE_FIELD_INVALID);
             }
         }
-        // 2. 生成 SQL：自动带租户列（供服务端强制过滤）与删除标记
-        String select = fields.stream().map(field -> field + " AS " + field)
+        // 2. 生成 SQL：自动带租户列（供服务端强制过滤）与删除标记；时间列格式化为可读文本
+        String select = fields.stream().map(field -> columnMap.get(field).isDate()
+                        ? "DATE_FORMAT(" + field + ", '%Y-%m-%d %H:%i:%s') AS " + field
+                        : field + " AS " + field)
                 .collect(Collectors.joining(", "));
         StringBuilder sql = new StringBuilder("SELECT tenant_id AS tenant_id, ").append(select)
                 .append(" FROM ").append(table.table()).append(" WHERE deleted = 0");
