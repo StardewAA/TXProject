@@ -23,6 +23,7 @@ import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
+import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.service.wm.itemconsume.MesWmItemConsumeService;
@@ -82,6 +83,9 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     private MesWmProductProduceService productProduceService;
     @Resource
     private MesWmProductProduceLineService produceLineService;
+    @Resource
+    @Lazy // 避免循环依赖
+    private MesProProjectService projectService;
 
     @Override
     public Long createFeedback(MesProFeedbackSaveReqVO createReqVO) {
@@ -259,6 +263,11 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
         // 3. 更新工单的已生产数量
         workOrderService.updateProducedQuantity(feedback.getWorkOrderId(),
                 feedback.getFeedbackQuantity());
+        // 4. P0 报工进度回写：数量变化后刷新项目的生产进度与状态
+        MesProWorkOrderDO workOrder = workOrderService.getWorkOrder(feedback.getWorkOrderId());
+        if (workOrder != null && workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
     }
 
     // ==================== 校验方法 ====================

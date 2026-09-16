@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.dal.dataobject.pro.project;
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.txgy.module.mes.enums.DictTypeConstants;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -55,6 +56,13 @@ public class MesProProjectDO extends BaseDO {
      * 字典 {@link DictTypeConstants#MES_PRO_PROJECT_STATUS}
      */
     private Integer status;
+    /**
+     * 生产进度百分比（0-100）
+     *
+     * 口径：SUM(工单已生产数量) / SUM(工单计划数量，不含已取消)，与工单统计 SQL 一致。
+     * 由报工审批通过 / 工单完工 / 工单取消 / 挂接解绑工单时自动回写（refreshProjectStatus）。
+     */
+    private BigDecimal progress;
     /**
      * 项目优先级
      *
