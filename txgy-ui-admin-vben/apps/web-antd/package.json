@@ -66,7 +66,6 @@
     "fast-xml-parser": "catalog:",
     "file-saver": "^2.0.5",
     "highlight.js": "catalog:",
-    "mammoth": "^1.12.2",
     "livekit-client": "catalog:",
     "mammoth": "^1.12.3",
     "pdfjs-dist": "catalog:",
@@ -82,10 +81,10 @@
     "vue3-print-nb": "catalog:",
     "vue3-signature": "catalog:",
     "vuedraggable": "catalog:",
+    "wangeditor": "4.7.15",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/file-saver": "^2.0.7",
-    "wangeditor": "4.7.15"
-  },
+    "@types/file-saver": "^2.0.7"
+  }
 }
