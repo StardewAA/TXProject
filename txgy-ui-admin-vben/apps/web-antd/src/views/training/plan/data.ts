@@ -140,13 +140,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'type' },
     },
     {
-      field: 'projectName',
-      title: '关联项目',
-      minWidth: 150,
-      showOverflow: true,
-      formatter: ({ cellValue }) => cellValue || '-',
-    },
-    {
       field: 'courseCount',
       title: '课程',
       width: 70,

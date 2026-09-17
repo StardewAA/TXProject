@@ -82,6 +82,25 @@ function setupAccessGuard(router: Router) {
           replace: true,
         };
       }
+
+      if (!userStore.userInfo) {
+        try {
+          await authStore.fetchUserInfo();
+        } catch {
+          accessStore.setAccessToken(null);
+          accessStore.setRefreshToken(null);
+          accessStore.setTenantId(null);
+          accessStore.clearVisitTenantId();
+          accessStore.setIsAccessChecked(false);
+          userStore.$reset();
+          return {
+            path: LOGIN_PATH,
+            query: { redirect: encodeURIComponent(to.fullPath) },
+            replace: true,
+          };
+        }
+      }
+
       return true;
     }
 
@@ -111,6 +130,17 @@ function setupAccessGuard(router: Router) {
         };
       }
       return to;
+    }
+
+    if (
+      accessStore.tenantId === 0 &&
+      to.path !== '/portal' &&
+      !to.path.startsWith('/portal/')
+    ) {
+      return {
+        path: '/portal/home',
+        replace: true,
+      };
     }
 
     // 是否已经生成过动态路由

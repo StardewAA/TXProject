@@ -64,13 +64,26 @@ public interface CrmContactService {
     void updateOwnerUserIdByCustomerId(Long customerId, Long ownerUserId);
 
     /**
+     * 更新指定客户的联系人的负责人（跳过数据权限校验）
+     *
+     * <p>供内部/系统调用使用，例如「客户自动掉入公海」定时任务：此时没有登录用户，
+     * 或操作人并非该客户的负责人，走带数据权限校验的
+     * {@link #updateOwnerUserIdByCustomerId(Long, Long)} 会被拒绝。</p>
+     *
+     * @param customerId  客户编号
+     * @param ownerUserId 用户编号
+     */
+    void updateOwnerUserIdByCustomerIdIgnorePermission(Long customerId, Long ownerUserId);
+
+    /**
      * 更新联系人相关跟进信息
      *
      * @param id                 编号
+     * @param contactTime        实际跟进时间（本次实际联系客户的时间）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateContactFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateContactFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 更新联系人的下次联系时间
