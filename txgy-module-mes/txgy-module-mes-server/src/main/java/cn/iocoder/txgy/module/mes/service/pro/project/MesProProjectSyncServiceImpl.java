@@ -25,6 +25,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOr
 import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderSourceTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderTypeEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteService;
@@ -103,6 +104,12 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     private MesProRouteProcessService routeProcessService;
     @Resource
     private ErpSaleOrderApi erpSaleOrderApi;
+    @Resource
+    @Lazy
+    private MesProWorkOrderService workOrderService;
+    @Resource
+    @Lazy
+    private MesProTaskService taskService;
     @Resource
     private MesMdAutoCodeRecordService autoCodeRecordService;
 
