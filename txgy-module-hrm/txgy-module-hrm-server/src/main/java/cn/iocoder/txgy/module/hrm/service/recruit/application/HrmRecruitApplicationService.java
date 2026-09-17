@@ -13,6 +13,9 @@ public interface HrmRecruitApplicationService {
 
     Long createApplication(HrmRecruitApplicationCreateReqVO reqVO);
 
+    /** HR 从招聘沟通手动转为候选人后创建门户可见的应聘记录。 */
+    Long createApplicationFromRecruitChat(Long applicantUserId, Long candidateId, Long postId, Long resumeId);
+
     PageResult<HrmRecruitApplicationDO> getApplicationPage(HrmRecruitApplicationPageReqVO reqVO);
 
     HrmRecruitApplicationDO getApplication(Long id);
@@ -22,6 +25,8 @@ public interface HrmRecruitApplicationService {
      */
     HrmRecruitApplicationDO getLatestRecruitApplicationByCandidateAndPost(Long candidateId, Long postId);
 
+    HrmRecruitApplicationDO getCurrentRecruitApplicationByCandidateId(Long candidateId);
+
     void startScreening(HrmRecruitApplicationStatusReqVO reqVO);
 
     void passScreening(HrmRecruitApplicationStatusReqVO reqVO);
@@ -29,6 +34,8 @@ public interface HrmRecruitApplicationService {
     void rejectResume(HrmRecruitApplicationStatusReqVO reqVO);
 
     void enterInterview(HrmRecruitApplicationStatusReqVO reqVO);
+
+    void skipInterview(Long id);
 
     void markInterviewScheduled(Long id);
 
@@ -58,10 +65,16 @@ public interface HrmRecruitApplicationService {
 
     void markOfferApproving(Long id);
     void markOfferRejected(Long id);
+    void markOfferRejected(Long id, String reason);
+
+    void markOfferWithdrawn(Long id, String reason);
 
     void markOfferExpired(Long id, String reason);
 
+    void markOfferCandidateRejected(Long id, String reason);
+
     void markPendingOnboard(Long id);
+    void linkEmployeeForOnboard(Long id, Long employeeId);
     void markOnboarded(Long id, Long employeeId);
 
     void eliminate(HrmRecruitApplicationStatusReqVO reqVO);

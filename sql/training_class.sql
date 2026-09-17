@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `training_class_student` (
   `user_id`     bigint      NOT NULL COMMENT '学员用户ID（引用 system_users，登录用户即工人/员工）',
   `user_name`   varchar(64) DEFAULT NULL COMMENT '学员姓名快照',
   `dept_name`   varchar(100) DEFAULT NULL COMMENT '部门/班组快照',
-  `source`      tinyint     NOT NULL DEFAULT 1 COMMENT '加入来源：1手动添加 2按对象筛选批量导入',
+  `source`      tinyint     NOT NULL DEFAULT 1 COMMENT '加入来源：1手动添加 2Excel批量导入 3按参与对象筛选 5导入并指定班级',
   `status`      tinyint     NOT NULL DEFAULT 0 COMMENT '状态：0在班 1已移除',
   `join_time`   datetime    DEFAULT NULL COMMENT '入班时间',
   `removed_time` datetime   DEFAULT NULL COMMENT '移除时间',
@@ -171,3 +171,10 @@ SELECT '培训任务未完成提醒', 'TRAIN_CLASS_STUDY_REMIND', '云培训学�
        'admin', NOW(), 'admin', NOW(), b'0'
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM `system_notify_template` WHERE `code` = 'TRAIN_CLASS_STUDY_REMIND' AND `deleted` = b'0');
+
+-- ----------------------------------------------------------------------
+-- 7. 增量：学员加入来源新增 5「导入并指定班级」（批量导入学员后手动指定要加入的培训班）
+--    幂等：直接 MODIFY 列注释，可重复执行
+-- ----------------------------------------------------------------------
+ALTER TABLE `training_class_student`
+  MODIFY COLUMN `source` tinyint NOT NULL DEFAULT 1 COMMENT '加入来源：1手动添加 2Excel批量导入 3按参与对象筛选 5导入并指定班级';

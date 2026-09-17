@@ -141,6 +141,7 @@ DROP TABLE IF EXISTS `crm_after_sale_visit_record`;
 CREATE TABLE `crm_after_sale_visit_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号，主键自增',
   `task_id` bigint DEFAULT NULL COMMENT '关联回访任务编号，手动登记可为空',
+  `status` tinyint NOT NULL DEFAULT '2' COMMENT '记录状态：1=待填写 2=已填写',
   `warranty_id` bigint NOT NULL COMMENT '质保档案编号',
   `customer_id` bigint NOT NULL COMMENT '客户编号（冗余）',
   `contract_id` bigint NOT NULL COMMENT '合同编号（冗余）',

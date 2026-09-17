@@ -42,6 +42,7 @@ import {
   updatePersonnelProfile,
 } from '#/api/bidding/personnel';
 import { checkMultiPost, getPersonnelRisk, type SafetyPermitApi } from '#/api/bidding/safetyPermit';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import SafetyRisk from '../certificate/modules/safety-risk.vue';
@@ -96,7 +97,7 @@ function resetQuery() {
   Object.assign(query, {
     pageNo: 1,
     personId: undefined,
-    entId: undefined,
+    // 企业主体由「主体档案」自动带出（证书台账页签查询上下文的必填项），重置筛选项时不清空
     certType: undefined,
     certNo: undefined,
     certStatus: undefined,
@@ -506,6 +507,45 @@ function applyProfileFilter(): void {
   void loadProfiles();
 }
 
+/* ===== 企业主体：不让用户手填 id =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 是唯一键）；
+   主体档案 GET /bidding/subject/profile/get 返回本租户该角色的档案（含 id/subjectName/uscc），
+   故前端直接用接口值带出，不提供"企业主体 id"输入框。
+   缺口 B：若后端后续提供 GET /bidding/subject/profile/list（本租户多主体选项），
+   则把本函数改为读该接口即可，页面无需再改 —— 见
+   docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md §3 */
+const subjectLoading = ref(false);
+const subjectOptions = ref<{ label: string; value: number }[]>([]);
+
+/** 本租户企业主体候选：投标人 / 招标人 两套档案各取一次，取到才作为选项（取不到不显示，不自造） */
+async function loadSubjectOptions(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    const list: { label: string; value: number }[] = [];
+    for (const subjectType of ['BIDDER', 'TENDERER']) {
+      const profile = await fetchSubjectProfile(subjectType).catch(() => null);
+      if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+        list.push({
+          label: profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName,
+          value: Number(profile.id),
+        });
+      }
+    }
+    subjectOptions.value = list;
+    // 自动带出：筛选与新建表单都使用同一主体，避免用户手填 id（多主体时默认首个，仍可切换）
+    const first = list[0];
+    if (first && !profileQuery.entId) {
+      profileQuery.entId = first.value; // 员工档案页签筛选
+      profileForm.entId = first.value; // 新建员工档案：随主体自动带出，用户不必填
+    }
+    if (first && !query.entId) {
+      query.entId = first.value; // 证书台账页签筛选
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
+
 function openProfileCreate() {
   resetProfileForm();
   profileFormOpen.value = true;
@@ -806,6 +846,7 @@ onMounted(() => {
   void load();
   syncBoardDays();
   void loadFloors();
+  void loadSubjectOptions();
 });
 
 const certTypeOptions = computed(() => dictOptions('person_cert_type'));
@@ -837,6 +878,16 @@ function remainTag(r: PersonnelCertApi.Cert) {
   if (d < 0) return { color: 'red', label: `已过期 ${Math.abs(d)} 天` };
   if (d <= expiringDaysCfg.value) return { color: 'orange', label: `临期 ${d} 天` };
   return { color: 'green', label: `剩余 ${d} 天` };
+}
+
+/** 到期/预警标签悬浮说明（增强暗示）：解释剩余天数、预警窗口与配置来源 */
+function expiringHint(r: PersonnelCertApi.Cert): string {
+  const d = r.remainingDays;
+  if (d === undefined || d === null) return '';
+  const w = expiringDaysCfg.value;
+  if (d < 0) return `已过期 ${Math.abs(d)} 天：证书已不在有效期内，不可用于配证 / 申报，请尽快更新`;
+  if (d <= w) return `临期 ${d} 天：距到期不足预警窗口（阈值 ${w} 天，取配置 personnel.cert.expiring.window.days），请安排续期`;
+  return `剩余 ${d} 天：状态正常（预警阈值 ${w} 天，取配置 personnel.cert.expiring.window.days）`;
 }
 </script>
 
@@ -872,8 +923,16 @@ function remainTag(r: PersonnelCertApi.Cert) {
         <div class="ct-panel">
           <!-- 筛选：**前台样式**（左侧属性名 + 右侧文字选项） -->
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
-            <AttrFilter label="企业主体">
-              <a-input-number v-model:value="profileQuery.entId" :min="1" placeholder="企业主体 id" style="width: 200px" />
+            <AttrFilter v-if="subjectOptions.length > 1" label="企业主体">
+              <a-select
+                v-model:value="profileQuery.entId"
+                :loading="subjectLoading"
+                :options="subjectOptions"
+                allow-clear
+                placeholder="自动带出，可切换"
+                style="width: 260px"
+                @change="applyProfileFilter"
+              />
             </AttrFilter>
             <AttrFilter label="姓名">
               <a-input v-model:value="profileQuery.personName" placeholder="模糊匹配，回车查询" style="width: 200px" allow-clear @press-enter="applyProfileFilter" />
@@ -986,7 +1045,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   {{ record.startDate || '—' }} ~ {{ record.endDate || '—' }}
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">该员工暂无培训记录</div></template>
+              <template #emptyText><div class="ct-empty">该员工暂无培训记录：创建培训记录后这里会显示</div></template>
             </a-table>
 
             <a-table
@@ -1032,7 +1091,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   {{ record.startDate || '—' }} ~ {{ record.endDate || '（无固定期限）' }}
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">该员工暂无劳动合同记录</div></template>
+              <template #emptyText><div class="ct-empty">该员工暂无劳动合同记录：登记劳动合同后这里会显示</div></template>
             </a-table>
           </div>
         </div>
@@ -1040,9 +1099,10 @@ function remainTag(r: PersonnelCertApi.Cert) {
 
       <a-tab-pane key="list" tab="③ 员工证书">
         <div class="ct-panel">
+          <div class="ct-tip">员工证照由租户企业自行录入与审查：录入 → 自审（通过 / 退回）→ 生效；平台审查只针对企业资质，员工证照无平台入口。</div>
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter label="员工 ID"><a-input-number v-model:value="query.personId" :min="1" placeholder="员工 ID" style="width: 130px" /></AttrFilter>
-            <AttrFilter label="企业 ID"><a-input-number v-model:value="query.entId" :min="1" placeholder="企业 ID" style="width: 130px" /></AttrFilter>
+            <AttrFilter v-if="subjectOptions.length > 1" label="企业主体"><a-select v-model:value="query.entId" :loading="subjectLoading" :options="subjectOptions" allow-clear placeholder="自动带出，可切换" style="width: 200px" /></AttrFilter>
             <AttrFilter v-model="query.certType" label="证书类型" :options="certTypeOptions" />
             <AttrFilter v-model="query.certStatus" label="状态" :options="certStatusOptions" />
             <AttrFilter label="证书编号（精确）"><a-input v-model:value="query.certNo" placeholder="证书编号（精确）" style="width: 170px" allow-clear /></AttrFilter>
@@ -1091,7 +1151,9 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 </template>
                 <template v-else-if="column.key === 'validity'">
                   <div>{{ record.validFrom || '—' }} ~ {{ record.validTo || '长期' }}</div>
-                  <a-tag v-if="remainTag(record)" :color="remainTag(record)!.color">{{ remainTag(record)!.label }}</a-tag>
+                  <a-tooltip v-if="remainTag(record)" :title="expiringHint(record)">
+                    <a-tag :color="remainTag(record)!.color">{{ remainTag(record)!.label }}</a-tag>
+                  </a-tooltip>
                   <a-tag v-if="reviewTag(record)" :color="reviewTag(record)!.color">{{ reviewTag(record)!.label }}</a-tag>
                 </template>
                 <template v-else-if="column.key === 'certStatus'">
@@ -1116,7 +1178,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                   </a-space>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无员工证书数据</div></template>
+              <template #emptyText><div class="ct-empty">暂无员工证书数据：按筛选条件查询，或先为员工建档证书</div></template>
             </a-table>
           </div>
         </div>
@@ -1163,7 +1225,9 @@ function remainTag(r: PersonnelCertApi.Cert) {
               <ul v-if="board.length" class="ct-tl">
                 <li v-for="b in board" :key="b.id">
                   <div class="tl-t">
-                    <a-tag :color="remainTag(b)?.color">{{ remainTag(b)?.label }}</a-tag>
+                    <a-tooltip v-if="remainTag(b)" :title="expiringHint(b)">
+                      <a-tag :color="remainTag(b)!.color">{{ remainTag(b)!.label }}</a-tag>
+                    </a-tooltip>
                     <b>{{ b.personName || `员工 #${b.personId}` }}</b>
                     <span>{{ b.certName || dictLabel('person_cert_type', b.certType) }}</span>
                     <span class="ct-id">{{ b.certNo || '' }}</span>
@@ -1273,7 +1337,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 row-key="code"
                 size="small"
               >
-                <template #emptyText><div class="ct-empty">暂无下限配置</div></template>
+                <template #emptyText><div class="ct-empty">暂无下限配置：需先在配置中心设置法定办理/复审提前期下限后重新加载</div></template>
               </a-table>
             </a-spin>
           </div>
@@ -1694,7 +1758,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
                 </a-tag>
               </template>
             </template>
-            <template #emptyText><div class="ct-empty">该员工暂无证书</div></template>
+            <template #emptyText><div class="ct-empty">该员工暂无证书：可先为该员工建档证书</div></template>
           </a-table>
         </template>
         <div v-else class="ct-empty">正在读取概览…</div>
@@ -1836,6 +1900,7 @@ function remainTag(r: PersonnelCertApi.Cert) {
       />
       <div class="ct-lb">事由</div>
       <a-textarea v-model:value="statusReason" :rows="2" placeholder="吊销/注销建议填写" />
+      <div class="ct-tip">目标状态由后端状态机校验：非法流转（如待办直接生效）会被拒绝并自动刷新；吊销 / 注销 / 退回请务必填写事由留痕。</div>
     </a-modal>
   </div>
 </template>

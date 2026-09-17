@@ -142,9 +142,11 @@ public class MesWmProductSalesDetailController {
             MapUtils.findAndThen(areaMap, vo.getAreaId(),
                     area -> vo.setAreaName(area.getName()));
         });
-        // 3. P2 环保戳回填：按批次把污染状态/去向/标记带回明细行
-        Map<Long, MesWmBatchDO> batchMap = CollectionUtils.convertMap(
-                batchMapper.selectByIds(convertSet(list, MesWmProductSalesDetailDO::getBatchId)), MesWmBatchDO::getId);
+        // 3. P2 环保戳回填：按批次把污染状态/去向/标记带回明细行（明细均无批次号时跳过查询，避免 IN () 语法错误）
+        java.util.Set<Long> batchIds = convertSet(list, MesWmProductSalesDetailDO::getBatchId);
+        Map<Long, MesWmBatchDO> batchMap = CollUtil.isEmpty(batchIds)
+                ? Collections.emptyMap()
+                : CollectionUtils.convertMap(batchMapper.selectByIds(batchIds), MesWmBatchDO::getId);
         respList.forEach(vo -> MapUtils.findAndThen(batchMap, vo.getBatchId(), batch -> {
             vo.setPollutionStatus(batch.getPollutionStatus());
             vo.setPollutionLocation(batch.getPollutionLocation());

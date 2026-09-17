@@ -30,7 +30,8 @@ public interface ErrorCodeConstants {
 
     // ========== API 聊天消息 1-040-004-000 ==========
     ErrorCode CHAT_MESSAGE_NOT_EXIST = new ErrorCode(1_040_004_000, "消息不存在!");
-    ErrorCode CHAT_STREAM_ERROR = new ErrorCode(1_040_004_001, "对话生成异常!");
+    // 注：流式中途异常的前端提示语。流中断发生在模型输出阶段时使用（区别于接口层异常的 SSE_UNKNOWN_ERROR_MESSAGE）
+    ErrorCode CHAT_STREAM_ERROR = new ErrorCode(1_040_004_001, "对话生成中断，请稍后重试");
 
     // ========== API 绘画 1-040-005-000 ==========
     ErrorCode IMAGE_NOT_EXISTS = new ErrorCode(1_040_005_000, "图片不存在!");

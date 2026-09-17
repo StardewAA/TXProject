@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeBodyStructureRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalAiExtractRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalDetailRespVO;
+import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalFilterOptionsRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageDetailRespVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManagePageReqVO;
 import cn.iocoder.txgy.module.bidding.controller.admin.noticeexternal.vo.NoticeExternalManageRespVO;
@@ -82,6 +83,13 @@ public class NoticeExternalController {
     @Operation(summary = "外部公告管理分页（审核/运营列表：全状态/审核态，行内含抽取/AI/结构化状态，供行内操作选中）")
     public CommonResult<PageResult<NoticeExternalManageRespVO>> managePage(@Valid NoticeExternalManagePageReqVO reqVO) {
         return success(noticeExternalService.getManagePage(reqVO));
+    }
+
+    @GetMapping("/manage/filter-options")
+    @PreAuthorize("@ss.hasPermission('bidding:notice-external:update')")
+    @Operation(summary = "外部公告管理端筛选选项（来源站 + 公告类型下拉数据源，数据库去重读取，避免前端硬编码）")
+    public CommonResult<NoticeExternalFilterOptionsRespVO> manageFilterOptions() {
+        return success(noticeExternalService.getManageFilterOptions());
     }
 
     @GetMapping("/go")

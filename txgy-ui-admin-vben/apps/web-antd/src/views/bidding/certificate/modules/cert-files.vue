@@ -88,7 +88,7 @@ async function onPick(file: File) {
     return false;
   }
   if (!fileCategory.value) {
-    message.warning('请先选择文件类别（字典 file_category）');
+    message.warning('请先选择文件类别（原件 / 加注件 / 变更页 / 延续页 / 电子证照）');
     return false;
   }
   if (allowFormats.value.length > 0) {
@@ -176,7 +176,7 @@ const columns = [
           :options="categories"
           size="small"
           style="width: 150px"
-          placeholder="文件类别"
+          placeholder="请选择文件类别"
           :disabled="categories.length === 0"
         />
         <a-upload
@@ -193,7 +193,7 @@ const columns = [
     <div class="ct-panel-b">
       <div v-if="allowFormats.length || maxMb" class="ct-tip mb-2">
         允许格式：{{ allowFormats.length ? allowFormats.join(' / ') : '（未配置 cert.file.allow.formats）' }}；单文件上限
-        {{ maxMb }} MB。阈值取自配置接口 §1.2。
+        {{ maxMb }} MB。阈值取自配置接口 §1.2。文件格式由系统自动校验，文件类别（原件 / 加注件 / 变更页 / 延续页 / 电子证照）需手动选择后再上传。
       </div>
 
       <!-- §3.1④ 加注件（file_category=COPY）法定元数据：必填，否则拒绝登记 -->

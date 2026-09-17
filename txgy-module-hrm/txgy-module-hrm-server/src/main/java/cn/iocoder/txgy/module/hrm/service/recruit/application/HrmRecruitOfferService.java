@@ -9,7 +9,10 @@ public interface HrmRecruitOfferService {
     HrmRecruitOfferDO get(Long id);
     void submit(Long id);
     void approvalCallback(Long id, String processInstanceId, Integer approvalVersion, boolean approved);
+    void approvalCallback(Long id, String processInstanceId, Integer approvalVersion,
+                          boolean approved, String reason);
     void withdraw(Long id);
+    void withdraw(Long id, String reason);
     void expire(Long id, String reason);
     void send(Long id);
     void confirm(Long id);

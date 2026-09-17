@@ -346,7 +346,8 @@ const [Modal, modalApi] = useVbenModal({
 .fb-preview-meta b { font-weight: 400; color: hsl(var(--muted-foreground)); margin-right: 4px; }
 .fb-body-area { background: hsl(var(--muted) / 40%); border: 1px solid hsl(var(--border)); padding: 14px 18px; }
 /* PDF 内嵌预览（审核人在"前台观感"页签必须能看到最终版式件，否则会盲审） */
-.fb-pdf-panel { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); padding: 8px; }
+/* 右侧留白同上：避免内嵌 PDF 滚动条与外层滚动条贴在一起 */
+.fb-pdf-panel { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); padding: 8px; padding-right: 20px; }
 .fb-pdf-frame { width: 100%; height: 640px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
 .fb-pdf-actions { display: flex; gap: 14px; align-items: center; padding: 6px 2px 0; font-size: 12px; }
 .fb-pdf-actions a { color: hsl(var(--primary)); text-decoration: underline; }

@@ -48,10 +48,11 @@ public interface CrmBusinessService {
      * 更新商机相关跟进信息
      *
      * @param id                 编号
+     * @param contactTime        实际跟进时间（本次实际联系客户的时间）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateBusinessFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateBusinessFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 更新商机的下次联系时间
