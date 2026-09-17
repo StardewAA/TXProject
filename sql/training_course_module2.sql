@@ -9,31 +9,12 @@
 -- ======================================================================
 
 -- ----------------------------------------------------------------------
--- 1. 课程分类：按文档 21 补齐 13 类行业分类（已存在同名分类则跳过，不覆盖历史数据）
---    文档要求分类：行业新规政策、国标规范解读、防腐工艺教程、保温施工工法、
---    材料选型知识、生产操作规范、质检检验教程、安全环保实操、高危作业培训、
---    招投标合规、项目管理、职业素养、持证上岗专项课程
+-- 1. 课程分类：原「13 类行业分类」种子（行业新规政策、国标规范解读、防腐工艺教程、
+--    保温施工工法、材料选型知识、生产操作规范、质检检验教程、安全环保实操、
+--    高危作业培训、招投标合规、项目管理、职业素养、持证上岗专项课程）已删除：
+--    - 后台（盛安租户 tenant_id=2014）中对应分类已清理；
+--    - 此处不再自动初始化，避免拉取项目并重新执行本脚本时重复生成这些分类。
 -- ----------------------------------------------------------------------
-INSERT INTO `training_course_category` (`name`, `code`, `sort`, `remark`, `creator`)
-SELECT * FROM (
-  SELECT '行业新规政策' AS name, 'industry-policy' AS code, 101 AS sort, '行业最新法规、政策解读类课程' AS remark, 'seed' AS creator
-  UNION ALL SELECT '国标规范解读', 'national-standard', 102, '国家标准、行业规范条文解读课程', 'seed'
-  UNION ALL SELECT '防腐工艺教程', 'anticorrosion-tech', 103, '防腐施工工艺与质量控制课程', 'seed'
-  UNION ALL SELECT '保温施工工法', 'insulation-method', 104, '保温层施工工法与验收课程', 'seed'
-  UNION ALL SELECT '材料选型知识', 'material-selection', 105, '防腐保温材料选型与性能课程', 'seed'
-  UNION ALL SELECT '生产操作规范', 'production-sop', 106, '生产现场标准化操作规范课程', 'seed'
-  UNION ALL SELECT '质检检验教程', 'quality-inspection', 107, '质量检验、检测方法与判定课程', 'seed'
-  UNION ALL SELECT '安全环保实操', 'safety-env-practice', 108, '安全与环保现场实操课程', 'seed'
-  UNION ALL SELECT '高危作业培训', 'high-risk-work', 109, '高处、动火、受限空间等高危作业培训', 'seed'
-  UNION ALL SELECT '招投标合规', 'bidding-compliance', 110, '招投标流程与合规管理课程', 'seed'
-  UNION ALL SELECT '项目管理', 'project-mgmt', 111, '工程项目进度、成本、合同管理课程', 'seed'
-  UNION ALL SELECT '职业素养', 'professional-quality', 112, '职业道德、沟通协作等素养课程', 'seed'
-  UNION ALL SELECT '持证上岗专项课程', 'certification-special', 113, '特种作业、岗位持证专项培训', 'seed'
-) AS t
-WHERE NOT EXISTS (
-  SELECT 1 FROM `training_course_category` c
-  WHERE c.`name` = t.`name` AND c.`deleted` = b'0'
-);
 
 -- ----------------------------------------------------------------------
 -- 2. 课程管理侧边栏二级子菜单（父菜单 41003 课程管理）
