@@ -29,9 +29,11 @@
         <module>txgy-module-wms</module>
         <module>txgy-module-im</module>
         <module>txgy-module-ai</module>
+        <module>txgy-module-cms</module>
         <module>txgy-module-hrm</module>
         <module>txgy-module-fms</module>
         <module>txgy-module-bidding</module>
+        <module>txgy-module-training</module>
     </modules>
 
     <name>${project.artifactId}</name>

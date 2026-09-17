@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingPlanApi } from './api';
+
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { useRouter } from 'vue-router';
 
@@ -26,6 +27,7 @@ import {
 } from './data';
 import ClassDetailContent from './modules/class-detail.vue';
 import FormModalContent from './modules/form.vue';
+import ImportAllocateContent from './modules/import-allocate.vue';
 
 defineOptions({ name: 'TrainingPlan' });
 
@@ -93,6 +95,16 @@ const [DetailModal, detailModal] = useVbenModal({
 
 function handleView(row: TrainingPlanApi.Class) {
   detailModal.setData(row).open();
+}
+
+// ========== 批量导入学员并手动指定培训班 ==========
+const [ImportAllocateModal, importAllocateModal] = useVbenModal({
+  connectedComponent: ImportAllocateContent,
+  destroyOnClose: true,
+});
+
+function handleImportAllocate() {
+  importAllocateModal.open();
 }
 
 // ========== 子模块跳转（3-2 ~ 3-5 由独立菜单承载） ==========
@@ -208,6 +220,18 @@ function buildActions(row: TrainingPlanApi.Class) {
         },
       },
     );
+  } else if (status === 2 || status === 3) {
+    // 已结束（已完成 / 已取消）：允许删除清理
+    actions.push({
+      label: '删除',
+      type: 'link',
+      danger: true,
+      icon: ACTION_ICON.DELETE,
+      popConfirm: {
+        title: '确认删除该培训班？删除后不可恢复',
+        confirm: () => handleDelete(row),
+      },
+    });
   }
   return actions;
 }
@@ -217,6 +241,7 @@ function buildActions(row: TrainingPlanApi.Class) {
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <DetailModal />
+    <ImportAllocateModal @success="handleRefresh" />
 
     <Grid table-title="培训班管理（模块三 · 3-1 培训班创建）">
       <template #toolbar-tools>
@@ -227,6 +252,10 @@ function buildActions(row: TrainingPlanApi.Class) {
               type: 'primary',
               icon: ACTION_ICON.ADD,
               onClick: handleCreate,
+            },
+            {
+              label: '批量导入学员并指定培训班',
+              onClick: handleImportAllocate,
             },
           ]"
         />

@@ -29,8 +29,10 @@ public enum HrmRecruitApplicationStatusEnum {
     PASSED("PASSED", "面试通过"),
     OFFER_APPROVING("OFFER_APPROVING", "Offer审批中"),
     OFFER_SENT("OFFER_SENT", "Offer已发出"),
-    OFFER_REJECTED("OFFER_REJECTED", "Offer已拒绝"),
+    OFFER_REJECTED("OFFER_REJECTED", "Offer审批未通过"),
+    OFFER_WITHDRAWN("OFFER_WITHDRAWN", "Offer已撤回"),
     OFFER_EXPIRED("OFFER_EXPIRED", "Offer已失效"),
+    OFFER_CANDIDATE_REJECTED("OFFER_CANDIDATE_REJECTED", "求职者已拒绝Offer"),
     PENDING_ONBOARD("PENDING_ONBOARD", "待入职"),
     ONBOARDED("ONBOARDED", "已入职"),
     ELIMINATED("ELIMINATED", "已淘汰"),
@@ -44,9 +46,9 @@ public enum HrmRecruitApplicationStatusEnum {
     private final String name;
 
     public boolean isTerminal() {
-        return this == RESUME_REJECTED || this == INTERVIEW_CANCELED
-                || this == INTERVIEW_ABSENT || this == INTERVIEW_REJECTED
-                || this == OFFER_REJECTED || this == OFFER_EXPIRED
+        return this == RESUME_REJECTED || this == INTERVIEW_REJECTED
+                || this == OFFER_REJECTED || this == OFFER_WITHDRAWN || this == OFFER_EXPIRED
+                || this == OFFER_CANDIDATE_REJECTED
                 || this == ONBOARDED || this == ELIMINATED || this == WITHDRAWN;
     }
 

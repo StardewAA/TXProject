@@ -78,6 +78,7 @@ $hrmRecruitmentScripts = @(
     (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-group-one.sql'),
     (Join-Path $rootDir 'sql\2026-09-03-hrm-recruit-groups-integration.sql'),
     (Join-Path $rootDir 'sql\2026-09-09-qinchuan-hrm-recruit-200.sql'),
+    (Join-Path $rootDir 'sql\2026-09-15-hrm-recruit-post-type-all-tenants.sql'),
     (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat.sql'),
     (Join-Path $rootDir 'sql\2026-09-11-hrm-recruit-chat-qualify.sql'),
     (Join-Path $rootDir 'sql\2026-09-12-hrm-recruit-chat-menu.sql'),

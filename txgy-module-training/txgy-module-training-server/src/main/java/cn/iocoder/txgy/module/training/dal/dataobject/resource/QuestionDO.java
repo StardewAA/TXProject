@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 /**
  * 试题 DO
  *
- * 对应表 training_question（单选/多选/判断/实操问答/案例分析）
+ * 对应表 training_question（单选/多选/判断/实操问答/案例分析/填空/简答）
  *
  * @author 云培训学院课题小组
  */

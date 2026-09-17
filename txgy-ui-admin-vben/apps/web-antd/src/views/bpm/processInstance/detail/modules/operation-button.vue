@@ -33,6 +33,7 @@ import {
   FormItem,
   Image,
   message,
+  Popconfirm,
   Popover,
   Select,
   SelectOption,
@@ -56,6 +57,10 @@ import {
   signDeleteTask,
   transferTask,
 } from '#/api/bpm/task';
+import {
+  createContractByQuotation,
+  getQuotation,
+} from '#/api/crm/quotation';
 import { setConfAndFields2 } from '#/components/form-create';
 import { FileUpload } from '#/components/upload';
 import { $t } from '#/locales';
@@ -666,6 +671,77 @@ async function handleReCreate() {
   });
 }
 
+/** 报价单审批流程的 processDefinition key */
+const QUOTATION_AUDIT_PROCESS_KEY = 'crm-quotation-audit';
+/** 已生成的合同编号（用于判断是否已转为合同） */
+const quotationContractId = ref<number | null>(null);
+
+/** 是否展示"一键转为合同"按钮：仅报价单审批流程且审批已通过且尚未生成合同时展示 */
+const showCreateContract = computed(() => {
+  return (
+    props.processDefinition?.key === QUOTATION_AUDIT_PROCESS_KEY &&
+    props.processInstance?.status === BpmProcessInstanceStatus.APPROVE &&
+    quotationContractId.value === null
+  );
+});
+
+/** 加载报价单信息，用于判断是否已经生成过合同（防重复生成） */
+async function loadQuotationInfo() {
+  // 仅报价单审批流程且审批已通过时，才需要查询报价单是否已有合同
+  if (
+    props.processDefinition?.key === QUOTATION_AUDIT_PROCESS_KEY &&
+    props.processInstance?.status === BpmProcessInstanceStatus.APPROVE &&
+    props.processInstance?.businessKey
+  ) {
+    try {
+      const data = await getQuotation(
+        Number(props.processInstance.businessKey),
+      );
+      quotationContractId.value = data.contractId ?? null;
+    } catch {
+      quotationContractId.value = null;
+    }
+  } else {
+    quotationContractId.value = null;
+  }
+}
+
+/** 一键转为合同：将已审批通过的报价单直接生成合同，并跳转到合同详情 */
+async function handleCreateContract() {
+  const businessKey = props.processInstance?.businessKey;
+  if (!businessKey) {
+    return;
+  }
+  const hideLoading = message.loading({
+    content: '生成合同中...',
+    duration: 0,
+  });
+  try {
+    const contractId = await createContractByQuotation(Number(businessKey));
+    message.success('转为合同成功');
+    await router.push({
+      name: 'CrmContractDetail',
+      params: { id: contractId },
+    });
+  } finally {
+    hideLoading();
+  }
+}
+
+// 监听流程实例/定义变化，刷新报价单合同生成状态
+watch(
+  () => [
+    props.processInstance?.id,
+    props.processInstance?.status,
+    props.processInstance?.businessKey,
+    props.processDefinition?.key,
+  ],
+  () => {
+    loadQuotationInfo();
+  },
+  { immediate: true },
+);
+
 /** 获取减签人员标签 */
 function getDeleteSignUserLabel(task: any): string {
   const deptName = task?.assigneeUser?.deptName || task?.ownerUser?.deptName;
@@ -699,6 +775,8 @@ async function handlerDeleteSign() {
 /** 重新加载数据 */
 function reload() {
   emit('success');
+  // 审批状态/报价单可能变化，刷新合同生成状态
+  loadQuotationInfo();
 }
 
 /** 任务是否为处理中状态 */
@@ -1617,6 +1695,19 @@ defineExpose({ loadTodoTask });
       >
         <IconifyIcon :size="14" icon="lucide:refresh-cw" /> 再次提交
       </Button>
+
+      <!-- 【一键转为合同】 按钮：报价单审批通过后，可将已审批通过的报价单直接转为合同 -->
+      <Popconfirm
+        v-if="showCreateContract"
+        title="确认将已审批通过的报价单转为合同？"
+        ok-text="确认"
+        cancel-text="取消"
+        @confirm="handleCreateContract"
+      >
+        <Button type="primary">
+          <IconifyIcon :size="14" icon="lucide:file-text" /> 一键转为合同
+        </Button>
+      </Popconfirm>
     </Space>
   </div>
 

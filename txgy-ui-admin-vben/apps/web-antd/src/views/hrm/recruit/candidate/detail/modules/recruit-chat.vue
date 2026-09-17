@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import { message } from 'ant-design-vue';
 
+import { getHrmRecruitChatAttachment } from '#/api/hrm/portal/recruit/chat-attachment';
 import { requestClient } from '#/api/request';
 import type { HrmPortalRecruitChatApi } from '#/api/hrm/portal/recruit/chat';
 
@@ -26,7 +27,7 @@ const selectedConversation = computed(() =>
 
 function statusText(status?: number) {
   if (status === 1) return '等待招聘方回复';
-  if (status === 2) return '招聘方已回复';
+  if (status === 2) return '求职方已回复';
   if (status === 3) return '沟通失败';
   return '等待回复';
 }
@@ -194,7 +195,29 @@ onUnmounted(() => {
           <div v-if="!messages.length" class="chat-empty">求职者还没有发送消息</div>
           <div v-for="item in messages" :key="item.id" class="message-row" :class="{ mine: item.mine }">
             <div class="message-bubble">
-              <template v-if="item.contentType === 2">📄 简历：{{ item.content.split('|')[0] || '附件简历' }}</template>
+              <a
+                v-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'resume'"
+                class="message-file"
+                :href="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span class="message-file-icon">📄</span>
+                <span class="message-file-copy">
+                  <b>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.title }}</b>
+                  <em>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName }}</em>
+                </span>
+              </a>
+              <a
+                v-else-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'image'"
+                class="message-image"
+                :href="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img :src="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl" :alt="getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName" />
+                <span>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName }}</span>
+              </a>
               <template v-else>{{ item.content }}</template>
               <small>{{ item.sendTime }}</small>
             </div>
@@ -232,6 +255,15 @@ onUnmounted(() => {
 .message-row.mine { justify-content: flex-end; }
 .message-bubble { max-width: 70%; padding: 10px 13px; border-radius: 8px; background: #fff; color: #334155; white-space: pre-wrap; word-break: break-word; box-shadow: 0 2px 5px rgb(15 23 42 / 5%); }
 .message-row.mine .message-bubble { background: #ffedd5; }
+.message-file { display: inline-flex; min-width: 230px; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+.message-file-icon { font-size: 24px; line-height: 1; }
+.message-file-copy { display: grid; min-width: 0; gap: 3px; }
+.message-file-copy b, .message-file-copy em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-file-copy b { color: #334155; font-weight: 600; }
+.message-file-copy em { color: #94a3b8; font-size: 12px; font-style: normal; }
+.message-image { display: inline-flex; max-width: 250px; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; }
+.message-image img { display: block; max-width: 250px; max-height: 190px; border-radius: 4px; object-fit: contain; }
+.message-image span { overflow: hidden; color: #94a3b8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .message-bubble small { display: block; margin-top: 5px; color: #94a3b8; font-size: 11px; }
 .reply-box { display: grid; gap: 10px; padding: 14px 22px; border-top: 1px solid #e2e8f0; }
 .reply-box .ant-btn { justify-self: end; }

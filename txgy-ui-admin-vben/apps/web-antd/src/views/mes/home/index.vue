@@ -25,6 +25,7 @@ import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
 import Shortcuts from './modules/shortcuts.vue';
+import TodoPanel from './modules/todo-panel.vue';
 import WorkOrderChart from './modules/work-order-chart.vue';
 
 const router = useRouter();

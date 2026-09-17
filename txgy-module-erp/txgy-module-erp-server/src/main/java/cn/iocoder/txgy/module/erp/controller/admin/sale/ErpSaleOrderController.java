@@ -33,8 +33,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -156,9 +158,16 @@ public class ErpSaleOrderController {
         // 1.3 客户信息
         Map<Long, ErpCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(pageResult.getList(), ErpSaleOrderDO::getCustomerId));
-        // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(pageResult.getList(), saleOrder -> Long.parseLong(saleOrder.getCreator())));
+        // 1.4 管理员信息（creator 可能为非数字账号（如 mock-acc），需容错解析）
+        Set<Long> creatorIds = new HashSet<>();
+        for (ErpSaleOrderDO saleOrder : pageResult.getList()) {
+            Long creatorId = parseUserId(saleOrder.getCreator());
+            if (creatorId != null) {
+                creatorIds.add(creatorId);
+            }
+        }
+        Map<Long, AdminUserRespDTO> userMap = CollUtil.isEmpty(creatorIds)
+                ? Map.of() : adminUserApi.getUserMap(creatorIds);
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpSaleOrderRespVO.class, saleOrder -> {
             saleOrder.setItems(BeanUtils.toBean(saleOrderItemMap.get(saleOrder.getId()), ErpSaleOrderRespVO.Item.class,
@@ -166,8 +175,25 @@ public class ErpSaleOrderController {
                             .setProductBarCode(product.getBarCode()).setProductUnitName(product.getUnitName()))));
             saleOrder.setProductNames(CollUtil.join(saleOrder.getItems(), "，", ErpSaleOrderRespVO.Item::getProductName));
             MapUtils.findAndThen(customerMap, saleOrder.getCustomerId(), supplier -> saleOrder.setCustomerName(supplier.getName()));
-            MapUtils.findAndThen(userMap, Long.parseLong(saleOrder.getCreator()), user -> saleOrder.setCreatorName(user.getNickname()));
+            Long creatorId = parseUserId(saleOrder.getCreator());
+            if (creatorId != null) {
+                MapUtils.findAndThen(userMap, creatorId, user -> saleOrder.setCreatorName(user.getNickname()));
+            }
         });
+    }
+
+    /**
+     * 容错解析创建人用户编号：非数字（如 mock 账号）返回 null
+     */
+    private Long parseUserId(String creator) {
+        if (creator == null || creator.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(creator);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

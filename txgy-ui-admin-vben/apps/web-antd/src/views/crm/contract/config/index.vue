@@ -20,7 +20,8 @@ const [Form, formApi] = useVbenForm({
   commonConfig: {
     labelWidth: 120,
   },
-  layout: 'horizontal',
+  wrapperClass: 'grid-cols-3',
+  layout: 'vertical',
   schema,
   handleSubmit,
 });
@@ -55,7 +56,7 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <Card title="合同配置设置">
-      <Form class="w-1/4" />
+      <Form class="mx-4" />
     </Card>
   </Page>
 </template>

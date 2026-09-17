@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.txgy.framework.security.config.SecurityProperties;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.system.controller.admin.auth.vo.*;
 import cn.iocoder.txgy.module.system.convert.auth.AuthConvert;
 import cn.iocoder.txgy.module.system.dal.dataobject.permission.MenuDO;
@@ -65,6 +66,7 @@ public class AuthController {
 
     @PostMapping("/login")
     @PermitAll
+    @TenantIgnore // 登录接口通过 tenantName 定位租户，无需在请求头传递 tenant-id
     @Operation(summary = "使用账号密码登录")
     public CommonResult<AuthLoginRespVO> login(@RequestBody @Valid AuthLoginReqVO reqVO) {
         return success(authService.login(reqVO));
@@ -91,6 +93,7 @@ public class AuthController {
     }
 
     @GetMapping("/get-permission-info")
+    @TenantIgnore // 获取权限信息无需租户上下文，登录时已确定租户
     @Operation(summary = "获取登录用户的权限信息")
     @DataPermission(enable = false) // 忽略数据权限，避免因为过滤，导致无法查询用户。类似：https://t.zsxq.com/LHnrp
     public CommonResult<AuthPermissionInfoRespVO> getPermissionInfo() {

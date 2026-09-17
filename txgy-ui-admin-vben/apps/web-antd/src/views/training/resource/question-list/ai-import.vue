@@ -1,19 +1,26 @@
 <script lang="ts" setup>
 import type { TrainingResourceApi } from '../api';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import {
   Button,
   Empty,
   Modal,
+  Select,
   Table,
   Tag,
+  TreeSelect,
   Upload,
   message,
 } from 'ant-design-vue';
 
-import { importQuestionsByAi, parseQuestionByAi } from '../api';
+import {
+  getResourceCategoryTree,
+  getResourceTagList,
+  importQuestionsByAi,
+  parseQuestionByAi,
+} from '../api';
 
 defineOptions({ name: 'TrainingResourceQuestionAiImport' });
 
@@ -26,6 +33,8 @@ const QTYPE_TEXT: Record<number, string> = {
   3: '判断',
   4: '实操问答',
   5: '案例分析',
+  6: '填空',
+  7: '简答',
 };
 const DIFFICULTY_TEXT: Record<number, string> = { 1: '易', 2: '中', 3: '难' };
 
@@ -35,7 +44,56 @@ const importing = ref(false);
 const result = ref<TrainingResourceApi.AiQuestionParseResult | null>(null);
 const items = ref<TrainingResourceApi.AiQuestionItem[]>([]);
 
+/** 所属分类（与新增试题一致：资源分类 question 类型，支持三级） */
+const categoryId = ref<number | undefined>();
+/** 标签（与新增试题一致：多选） */
+const tagIds = ref<number[]>([]);
+
 const parsed = computed(() => items.value.length > 0);
+
+// ========== 分类 / 标签选项（与新增试题表单同源） ==========
+
+const tagOptions = ref<any[]>([]);
+async function loadTags() {
+  const list = await getResourceTagList();
+  tagOptions.value = list.map((item) => ({
+    label: item.name,
+    value: item.id,
+  }));
+}
+
+const categoryOptions = ref<any[]>([]);
+function buildCategoryTree(
+  nodes?: TrainingResourceApi.CategoryNode[],
+): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
+async function loadCategories() {
+  const tree = await getResourceCategoryTree('question');
+  categoryOptions.value = buildCategoryTree(tree) || [];
+}
+
+watch(open, (val) => {
+  if (val) {
+    loadTags();
+    loadCategories();
+  } else {
+    // 关闭后重置
+    selectedFile.value = null;
+    result.value = null;
+    items.value = [];
+    categoryId.value = undefined;
+    tagIds.value = [];
+  }
+});
 
 function pickFile(file: File) {
   if (file.size > 20 * 1024 * 1024) {
@@ -83,7 +141,11 @@ async function handleImport() {
   }
   importing.value = true;
   try {
-    const count = await importQuestionsByAi(items.value);
+    const count = await importQuestionsByAi({
+      items: items.value,
+      categoryId: categoryId.value,
+      tagIds: tagIds.value,
+    });
     message.success(`成功导入 ${count ?? 0} 道试题`);
     open.value = false;
     emit('success');
@@ -134,6 +196,36 @@ async function handleImport() {
         <div class="mt-2 text-xs text-gray-400">
           系统将提取文档正文并交由 AI 大模型（DeepSeek / 豆包等）识别试题；
           未配置模型时自动按本地规则解析，导入前请核对结果。
+        </div>
+      </div>
+
+      <!-- 整批统一：所属分类 + 标签（与新增试题一致） -->
+      <div class="grid grid-cols-1 gap-4 rounded-md border border-gray-100 p-3 md:grid-cols-2">
+        <div>
+          <div class="mb-1 text-sm text-gray-600">
+            所属分类（整份文件的试题统一归入该分类）
+          </div>
+          <TreeSelect
+            v-model:value="categoryId"
+            class="w-full"
+            :allow-clear="true"
+            tree-default-expand-all
+            placeholder="请选择试题分类（与新增试题的分类一致）"
+            :tree-data="categoryOptions"
+          />
+        </div>
+        <div>
+          <div class="mb-1 text-sm text-gray-600">
+            标签（整份文件的试题统一打上该标签）
+          </div>
+          <Select
+            v-model:value="tagIds"
+            class="w-full"
+            mode="multiple"
+            :max-tag-count="3"
+            placeholder="请选择标签（与新增试题的标签一致）"
+            :options="tagOptions"
+          />
         </div>
       </div>
 

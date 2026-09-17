@@ -32,6 +32,67 @@ export namespace CrmContractApi {
     signUserId: number;
     signUserName: string;
     remark: string;
+    // ==================== 合同模板相关字段 ====================
+    /** 合同模板类型：1=采购合同，2=购销合同 */
+    templateType?: number;
+    signPlace?: string;
+    signDate?: Date;
+    projectNo?: string;
+    projectName?: string;
+    projectArea?: string;
+    attachmentCopies?: number;
+    attachmentPages?: number;
+    contractCopies?: number;
+    gpcName?: string;
+    /** 质量、交货与验收 */
+    qualityStandard?: string;
+    sampleDays?: number;
+    deliveryDays?: number;
+    deliveryArriveDays?: number;
+    installDays?: number;
+    deliveryDeadline?: Date;
+    firstAcceptDays?: number;
+    trialDays?: number;
+    finalAcceptDays?: number;
+    autoAcceptDays?: number;
+    maxRepairTimes?: number;
+    /** 付款方式 */
+    prepayAmount?: number;
+    prepayDays?: number;
+    prepayRatio?: number;
+    acceptPayDays?: number;
+    acceptPayRatio?: number;
+    acceptPayAmount?: number;
+    depositMonths?: number;
+    depositDays?: number;
+    depositAmount?: number;
+    depositRatio?: number;
+    /** 售后服务 */
+    warrantyYears?: number;
+    responseHours?: number;
+    repairHours?: number;
+    repairTimes?: number;
+    reportRepairDays?: number;
+    /** 甲方（采购人）信息 */
+    partyAName?: string;
+    partyALegalPerson?: string;
+    partyAAgent?: string;
+    partyAAddress?: string;
+    partyABankName?: string;
+    partyABankAccount?: string;
+    partyATel?: string;
+    partyAFax?: string;
+    /** 乙方（供应商）信息 */
+    partyBName?: string;
+    partyBLegalPerson?: string;
+    partyBAgent?: string;
+    partyBAddress?: string;
+    partyBBankName?: string;
+    partyBBankAccount?: string;
+    partyBTel?: string;
+    partyBFax?: string;
+    /** 违约责任条款（JSON） */
+    penaltyTerms?: string;
     createTime?: Date;
     creator: string;
     creatorName: string;
@@ -51,6 +112,13 @@ export namespace CrmContractApi {
     contractPrice: number;
     count: number;
     totalPrice: number;
+    /** 合同模板「一、合同货物」表格字段 */
+    spec?: string;
+    unit?: string;
+    /** 资金来源：1=预算内，2=预算外，3=其他 */
+    fundSource?: number;
+    accessories?: string;
+    deliveryPeriod?: string;
   }
 }
 
@@ -110,6 +178,11 @@ export function deleteContract(id: number) {
 /** 导出合同 */
 export function exportContract(params: any) {
   return requestClient.download('/crm/contract/export-excel', { params });
+}
+
+/** 生成合同 Word 文档 */
+export function exportContractWord(id: number) {
+  return requestClient.download(`/crm/contract/export-word?id=${id}`);
 }
 
 /** 提交审核 */

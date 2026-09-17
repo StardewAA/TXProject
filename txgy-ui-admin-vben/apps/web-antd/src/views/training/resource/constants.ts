@@ -23,6 +23,8 @@ export const QUESTION_TYPE_OPTIONS = [
   { label: '判断', value: 3 },
   { label: '实操问答', value: 4 },
   { label: '案例分析', value: 5 },
+  { label: '填空', value: 6 },
+  { label: '简答', value: 7 },
 ] as const;
 
 export const QUESTION_TYPE_TEXT: Record<number, string> = {
@@ -31,6 +33,8 @@ export const QUESTION_TYPE_TEXT: Record<number, string> = {
   3: '判断',
   4: '实操问答',
   5: '案例分析',
+  6: '填空',
+  7: '简答',
 };
 
 export const QUESTION_TYPE_COLOR: Record<number, string> = {
@@ -39,6 +43,8 @@ export const QUESTION_TYPE_COLOR: Record<number, string> = {
   3: 'green',
   4: 'orange',
   5: 'volcano',
+  6: 'purple',
+  7: 'magenta',
 };
 
 /** 难度 */
@@ -68,6 +74,25 @@ export function transcodeText(status?: number) {
 
 export function transcodeColor(status?: number) {
   return TRANSCODE_STATUS_OPTIONS.find((item) => item.value === status)?.color;
+}
+
+/** 转码任务状态（0待转码 1转码中 2成功 3失败 4跳过） */
+export const TRANSCODE_TASK_STATUS_OPTIONS = [
+  { label: '待转码', value: 0, color: 'default' },
+  { label: '转码中', value: 1, color: 'processing' },
+  { label: '成功', value: 2, color: 'success' },
+  { label: '失败', value: 3, color: 'error' },
+  { label: '跳过', value: 4, color: 'warning' },
+] as const;
+
+export function transcodeTaskText(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.label;
+}
+
+export function transcodeTaskColor(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.color;
 }
 
 /** 标签维度 */

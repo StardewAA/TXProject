@@ -52,8 +52,9 @@ const props = withDefaults(defineProps<{ mode?: 'admin' | 'portal' }>(), { mode:
  * 职责也就分不开（用户 2026-09-14 指出）。现在：
  *   · 管理端页面  views/bidding/notice/index.vue       → <NoticeWorkbench mode="admin" />
  *   · 门户发布页  views/portal/bidding/publish.vue     → <NoticeWorkbench mode="portal" />
- * 待办（需业务口径，不由前端擅定）：管理端应收敛为"管理前台"（全量/下架/留痕/运维），
- * 发布动作归前台；内部公告是否需"提交 → 审核"取决于后端是否补 PENDING_AUDIT/REJECTED 与 submit/approve/reject。 */
+ * 口径（用户已裁定）：发布动作归前台（门户 · 公告发布 = 企业经办人发布），管理端收敛为"管理前台"——
+ *   全量台账/下架/详情留痕/运维（索引重建、公开同步）；起草/编辑/发布/重新发布/删除 仅门户出现。
+ * 内部公告是否需"提交 → 审核"取决于后端是否补 PENDING_AUDIT/REJECTED 与 submit/approve/reject（待后端）。 */
 // 时间展示统一走 #/utils/datetime（本页原有一份本地 fmtT，与 noticeExternal/data.ts 的同名实现重复；
 // 两处空值口径还不一致：那边空串、这里 '—' —— 台账页要显式占位，故此处保留 '—'）
 const fmtT = (v?: null | number | string): string => fmtDateTime(v, '—');
@@ -578,7 +579,7 @@ async function doSync() {
         <div class="ind-sub">{{ inPortal ? '本企业（当前租户）内部公告：起草 → 发布 → 撤下 全生命周期。发布前需平台授权并完善主体档案；发布后订阅者将收到动态；修订需撤下后重新发布（历史版本保留）。' : '本企业内部公告（T 轨）。招标人发布门：创建/发布需平台授权并完善主体档案；发布后关注订阅者将收到动态。对外法律文书修订需撤下后重新发布（历史版本保留）。' }}</div>
       </div>
       <div class="ind-actions">
-        <Button type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
+        <Button v-if="inPortal" type="primary" size="large" @click="openCreate">＋ 新建公告（草稿）</Button>
         <!-- 运维动作**仅管理端**：门户发布工作台不出现（口径 2026-09-14：企业在后台、个人在前台；
              且这三个端点权限为 bidding:notice:update，而门户"撤下"用的也是该码 ⇒ 门户用户点得动，
              等于把平台级索引重建/公开同步暴露给了前台） -->
@@ -673,9 +674,10 @@ async function doSync() {
               <Space :size="4" wrap>
                 <Button size="small" type="link" class="nw-act" @click="openDetail(record as NoticeApi.Row)">详情</Button>
                 <template v-if="record.status === 'DRAFT' || record.status === 'UNPUBLISHED'">
-                  <Button size="small" type="link" class="nw-act" @click="openEdit(record as NoticeApi.Row)">编辑</Button>
-                  <Button size="small" type="primary" ghost class="nw-act-primary" @click="doPublish(record as NoticeApi.Row)">{{ record.status === 'DRAFT' ? '发布' : '重新发布' }}</Button>
-                  <Button size="small" type="link" danger @click="doDelete(record as NoticeApi.Row)">删除</Button>
+                  <Button v-if="inPortal" size="small" type="link" class="nw-act" @click="openEdit(record as NoticeApi.Row)">编辑</Button>
+                  <Button v-if="inPortal" size="small" type="primary" ghost class="nw-act-primary" @click="doPublish(record as NoticeApi.Row)">{{ record.status === 'DRAFT' ? '发布' : '重新发布' }}</Button>
+                  <Button v-if="inPortal" size="small" type="link" danger @click="doDelete(record as NoticeApi.Row)">删除</Button>
+                  <span v-else class="nw-readonly">待前台发布</span>
                 </template>
                 <template v-else-if="record.status === 'PUBLISHED'">
                   <Button size="small" type="link" class="nw-act-warn" @click="doUnpublish(record as NoticeApi.Row)">撤下</Button>
@@ -690,7 +692,7 @@ async function doSync() {
           <template #emptyText>
             <div class="nw-empty">
               <div class="nw-empty-title">暂无公告记录</div>
-              <div class="nw-empty-sub">点右上「新建公告」起草（发布前需主体档案完善 + 平台授权）</div>
+              <div class="nw-empty-sub">{{ inPortal ? '点右上「新建公告」起草（发布前需主体档案完善 + 平台授权）' : '发布动作在企业前台（门户 · 公告发布），本页只读留痕与下架/运维' }}</div>
             </div>
           </template>
         </Table>
