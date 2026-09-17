@@ -229,14 +229,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
-              label: '简单模式新建',
+              label: '新增报表',
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
               auth: ['report:dataset:create'],
               onClick: handleCreateSimple,
             },
             {
-              label: $t('ui.actionTitle.create', ['数据集']),
-              type: 'primary',
-              icon: ACTION_ICON.ADD,
+              label: '高级模式',
               auth: ['report:dataset:create'],
               onClick: handleCreate,
             },
