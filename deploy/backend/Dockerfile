@@ -18,8 +18,13 @@ RUN --mount=type=cache,target=/root/.m2 \
     && mvn -B -ntp --settings /opt/maven/settings-mirror.xml \
         -pl "${MODULE_PATH}" -am -Dmaven.test.skip=true package
 
-RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
-    && test -f /app.jar
+RUN set -eux; \
+    MAIN_JAR=$(find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1); \
+    echo "picked jar: ${MAIN_JAR}"; \
+    ls -l "${MAIN_JAR}"; \
+    cp "${MAIN_JAR}" /app.jar; \
+    ls -l /app.jar; \
+    test -s /app.jar
 
 FROM m.daocloud.io/docker.io/library/eclipse-temurin:25-jre
 
