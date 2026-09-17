@@ -2,10 +2,12 @@ package cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation;
 
 import cn.iocoder.txgy.module.crm.framework.operatelog.core.CrmBusinessParseFunction;
 import cn.iocoder.txgy.module.crm.framework.operatelog.core.CrmCustomerParseFunction;
+import cn.iocoder.txgy.module.crm.framework.operatelog.core.CrmQuotationTypeParseFunction;
 import cn.iocoder.txgy.module.crm.framework.operatelog.core.SysAdminUserParseFunction;
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,6 +26,10 @@ public class CrmQuotationSaveReqVO {
     @Schema(description = "报价编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "10430")
     private Long id;
 
+    @Schema(description = "报价类型：1=购销报价 2=采购报价", example = "1")
+    @DiffLogField(name = "报价类型", function = CrmQuotationTypeParseFunction.NAME)
+    private Integer quotationType;
+
     @Schema(description = "报价名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "防腐保温工程报价")
     @DiffLogField(name = "报价名称")
     @NotNull(message = "报价名称不能为空")
@@ -32,6 +38,21 @@ public class CrmQuotationSaveReqVO {
     @Schema(description = "客户编号", example = "18336")
     @DiffLogField(name = "客户", function = CrmCustomerParseFunction.NAME)
     private Long customerId;
+
+    @Schema(description = "供应商联系人（采购报价）", example = "张三")
+    @DiffLogField(name = "供应商联系人")
+    @Size(max = 64, message = "供应商联系人长度不能超过 64 个字符")
+    private String supplierContact;
+
+    @Schema(description = "供应商联系电话（采购报价）", example = "13800138000")
+    @DiffLogField(name = "供应商联系电话")
+    @Size(max = 64, message = "供应商联系电话长度不能超过 64 个字符")
+    private String supplierPhone;
+
+    @Schema(description = "供应商地址（采购报价）", example = "江苏省苏州市工业园区xx路1号")
+    @DiffLogField(name = "供应商地址")
+    @Size(max = 255, message = "供应商地址长度不能超过 255 个字符")
+    private String supplierAddress;
 
     @Schema(description = "客户名称(自填时使用)", example = "某新客户")
     @DiffLogField(name = "客户名称(自填)")

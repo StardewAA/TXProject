@@ -25,6 +25,7 @@ import cn.iocoder.txgy.module.crm.dal.mysql.contact.CrmContactMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.customer.CrmCustomerTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
@@ -108,6 +109,12 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     public List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit) {
         CrmCustomerDO current = validateCustomerExists(customerId);
         return customerMapper.selectSimilarList(current, limit);
+    }
+
+    @Override
+    public List<CrmCustomerDO> getSupplierSimpleList() {
+        // 供应商属于租户级共享主数据（供应商基础库），不做数据权限过滤，保证所有用户都能选到
+        return customerMapper.selectListByCustomerType(CrmCustomerTypeEnum.UPSTREAM.getType());
     }
 
     @Override

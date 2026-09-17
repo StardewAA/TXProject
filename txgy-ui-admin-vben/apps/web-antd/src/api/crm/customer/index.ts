@@ -9,6 +9,7 @@ export namespace CrmCustomerApi {
   export interface Customer {
     id: number; // 编号
     name: string; // 客户名称
+    contactName?: string; // 联系人
     followUpStatus: boolean; // 跟进状态
     contactLastTime: Date; // 最后跟进时间
     contactLastContent: string; // 最后跟进内容
@@ -44,6 +45,27 @@ export namespace CrmCustomerApi {
     ownerUserId?: number; // 负责人（不传则进入公海）
     file: File;
     updateSupport: boolean;
+  }
+
+  /** 供应商 Word 导入明细条目 */
+  export interface SupplierImportItem {
+    rowNo: number; // 行号
+    name?: string; // 供应商名称
+    rawContent?: string; // 原始行内容
+    reason?: string; // 原因
+  }
+
+  /** 供应商 Word 导入结果 */
+  export interface SupplierImportResult {
+    totalCount: number; // 识别到的条目总数
+    successCount: number; // 新增成功
+    updateCount: number; // 更新成功
+    duplicateCount: number; // 已存在（未更新）
+    failCount: number; // 解析失败
+    successNames?: string[];
+    updateNames?: string[];
+    duplicates?: SupplierImportItem[];
+    failures?: SupplierImportItem[];
   }
 
   /** 查重命中项 */
@@ -121,6 +143,42 @@ export function importCustomer(data: CrmCustomerApi.CustomerImportReqVO) {
 export function getCustomerSimpleList() {
   return requestClient.get<CrmCustomerApi.Customer[]>(
     '/crm/customer/simple-list',
+  );
+}
+
+/**
+ * 获取客户精简信息列表（可按客户类别过滤）
+ *
+ * @param customerType 客户类别：1=下游客户 2=上游供应商；不传则不过滤
+ */
+export function getCustomerSimpleListByType(customerType?: number) {
+  return requestClient.get<CrmCustomerApi.Customer[]>(
+    '/crm/customer/simple-list',
+    { params: { customerType } },
+  );
+}
+
+/**
+ * 获得供应商基础库（客户类别=上游供应商）精简列表
+ *
+ * 供应商属于租户级共享主数据，后端不做数据权限过滤，含联系人/电话/地址
+ */
+export function getSupplierSimpleList() {
+  return requestClient.get<CrmCustomerApi.Customer[]>(
+    '/crm/customer/supplier-simple-list',
+  );
+}
+
+/**
+ * 从 Word（.docx）导入供应商
+ *
+ * @param file 文档
+ * @param updateExisting 是否更新已存在的供应商（false=只新增，重复的跳过）
+ */
+export function importSupplierWord(file: File, updateExisting = false) {
+  return requestClient.upload<CrmCustomerApi.SupplierImportResult>(
+    '/crm/customer/import-supplier-word',
+    { file, updateExisting },
   );
 }
 

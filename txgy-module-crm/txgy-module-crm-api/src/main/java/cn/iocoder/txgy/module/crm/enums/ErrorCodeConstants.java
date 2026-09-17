@@ -70,6 +70,9 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_UPDATE_DEAL_STATUS_FAIL = new ErrorCode(1_020_006_015, "更新客户的成交状态失败，原因：已经是该状态，无需更新");
     ErrorCode CUSTOMER_FETCH_WEB_PAGE_FAIL = new ErrorCode(1_020_006_016, "网页抓取失败：{}");
     ErrorCode CRM_AI_CLASSIFY_FAIL = new ErrorCode(1_020_006_017, "AI 意图识别失败：{}");
+    ErrorCode SUPPLIER_IMPORT_FILE_EMPTY = new ErrorCode(1_020_006_018, "供应商导入失败，原因：上传文件为空");
+    ErrorCode SUPPLIER_IMPORT_PARSE_FAIL = new ErrorCode(1_020_006_019, "供应商导入失败，原因：文档解析失败（{}），请确认为 .docx 格式的 Word 文档");
+    ErrorCode SUPPLIER_IMPORT_NO_DATA = new ErrorCode(1_020_006_020, "供应商导入失败，原因：文档中未识别到供应商数据，请确认表格表头包含「供应商名称」列");
 
     // ========== 权限管理 1_020_007_000 ==========
     ErrorCode CRM_PERMISSION_NOT_EXISTS = new ErrorCode(1_020_007_000, "数据权限不存在");
@@ -118,6 +121,14 @@ public interface ErrorCodeConstants {
     ErrorCode QUOTATION_DELETE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_005, "删除报价失败，原因：报价已生成合同，不能删除");
     ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_NOT_APPROVE = new ErrorCode(1_020_014_006, "转为合同失败，原因：报价不是审批通过状态");
     ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_EXISTS = new ErrorCode(1_020_014_007, "转为合同失败，原因：报价已生成合同");
+    ErrorCode QUOTATION_TYPE_INVALID = new ErrorCode(1_020_014_008, "保存报价失败，原因：报价类型不正确");
+    ErrorCode QUOTATION_PURCHASE_SUPPLIER_REQUIRED = new ErrorCode(1_020_014_009, "保存报价失败，原因：采购报价必须选择上游供应商");
+    ErrorCode QUOTATION_PURCHASE_SUPPLIER_INVALID = new ErrorCode(1_020_014_010, "保存报价失败，原因：所选单位不是「上游供应商」，采购报价仅可选择上游供应商");
+    ErrorCode QUOTATION_PURCHASE_BUSINESS_NOT_ALLOWED = new ErrorCode(1_020_014_011, "保存报价失败，原因：采购报价不允许关联商机");
+    ErrorCode QUOTATION_SALES_CUSTOMER_REQUIRED = new ErrorCode(1_020_014_012, "保存报价失败，原因：购销报价必须选择客户");
+    ErrorCode QUOTATION_SALES_CUSTOMER_INVALID = new ErrorCode(1_020_014_013, "保存报价失败，原因：所选单位是「上游供应商」，购销报价请选择下游客户");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_RELATION_INVALID = new ErrorCode(1_020_014_014, "转为合同失败，原因：报价类型与往来单位不匹配");
+    ErrorCode QUOTATION_TYPE_UPDATE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_015, "更新报价失败，原因：报价已生成合同，不能修改报价类型");
 
     // ========== 商机管理 1_020_002_000 报价关联校验 ==========
     ErrorCode BUSINESS_DELETE_FAIL_QUOTATION_EXISTS = new ErrorCode(1_020_002_005, "商机已关联报价，不能删除");

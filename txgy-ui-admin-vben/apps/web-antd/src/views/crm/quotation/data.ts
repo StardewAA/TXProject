@@ -4,12 +4,21 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { reactive } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 import { erpPriceMultiply } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { getBusinessPage, getSimpleBusinessList } from '#/api/crm/business';
-import { getCustomerSimpleList } from '#/api/crm/customer';
+import {
+  getCustomerSimpleList,
+  getSupplierSimpleList,
+} from '#/api/crm/customer';
+
+/** 报价类型：1=购销报价（默认，关联客户+商机，审批通过后转购销合同） */
+export const QUOTATION_TYPE_SALES = 1;
+/** 报价类型：2=采购报价（仅可选择上游供应商，禁用客户/商机，审批通过后转采购合同） */
+export const QUOTATION_TYPE_PURCHASE = 2;
 import { getSimpleUserList } from '#/api/system/user';
 
 /** 赢单客户名称 -> 客户编号，提交时把已选客户还原为编号 */
@@ -68,6 +77,30 @@ export function cacheCustomerNameId(name?: string, id?: number) {
   }
 }
 
+/** 供应商基础库缓存：选中供应商后用于自动回填联系人 / 电话 / 地址 */
+const supplierMap = new Map<number, any>();
+/**
+ * 已知的供应商编号。
+ * 编辑回显时由表单先行写入，使联动逻辑不会用供应商档案覆盖报价单上已保存的联系人/电话/地址；
+ * 用户主动切换供应商（或清空后重选）时才会重新回填。
+ */
+let knownSupplierId: number | undefined;
+
+/** 由表单在回显 / 提交时调用，标记当前供应商编号 */
+export function setKnownSupplierId(id?: number) {
+  knownSupplierId = Number(id) || undefined;
+}
+
+/** 供应商下拉选项：加载「供应商基础库」并缓存档案，供自动回填使用 */
+async function loadSupplierOptions() {
+  const list: any[] = (await getSupplierSimpleList()) ?? [];
+  supplierMap.clear();
+  for (const item of list) {
+    supplierMap.set(item.id, item);
+  }
+  return list.map((item) => ({ label: item.name, value: item.id }));
+}
+
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   const userStore = useUserStore();
@@ -89,6 +122,34 @@ export function useFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '保存时自动生成',
         disabled: true,
+      },
+    },
+    {
+      fieldName: 'quotationType',
+      label: '报价类型',
+      component: 'Select',
+      rules: 'required',
+      defaultValue: QUOTATION_TYPE_SALES,
+      componentProps: {
+        options: getDictOptions(DICT_TYPE.CRM_QUOTATION_TYPE, 'number'),
+        placeholder: '请选择报价类型',
+      },
+      dependencies: {
+        triggerFields: ['quotationType'],
+        // 字段联动：切换报价类型时清空「另一条分支」的字段，避免脏数据影响转合同
+        trigger(values, form) {
+          if (Number(values.quotationType) === QUOTATION_TYPE_PURCHASE) {
+            // 采购报价：仅可选择供应商，清空客户与商机
+            form.setFieldValue('customerName', undefined);
+            form.setFieldValue('businessId', undefined);
+          } else {
+            // 购销报价：清空供应商及其带出的信息
+            form.setFieldValue('supplierId', undefined);
+            form.setFieldValue('supplierContact', undefined);
+            form.setFieldValue('supplierPhone', undefined);
+            form.setFieldValue('supplierAddress', undefined);
+          }
+        },
       },
     },
     {
@@ -120,7 +181,6 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'customerName',
       label: '客户名称',
       component: 'AutoComplete',
-      rules: 'required',
       componentProps: {
         options: wonCustomerOptions,
         // 展示下拉按钮，可点击选择赢单客户
@@ -132,6 +192,107 @@ export function useFormSchema(): VbenFormSchema[] {
         notFoundContent: '暂无赢单客户，可直接输入新客户名称',
         placeholder: '请选择赢单客户，或直接输入客户名称',
       },
+      dependencies: {
+        triggerFields: ['quotationType'],
+        // 采购报价：禁用客户字段
+        disabled: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE,
+        // 仅购销报价要求必填客户
+        rules: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE
+            ? null
+            : 'required',
+      },
+    },
+    {
+      fieldName: 'supplierId',
+      label: '供应商',
+      component: 'ApiSelect',
+      componentProps: {
+        // 供应商基础库（客户类别=上游供应商），含联系人/电话/地址
+        api: loadSupplierOptions,
+        // 支持输入关键词模糊检索供应商名称
+        showSearch: true,
+        optionFilterProp: 'label',
+        placeholder: '输入名称关键词可模糊检索供应商',
+        allowClear: true,
+      },
+      dependencies: {
+        triggerFields: ['quotationType', 'supplierId'],
+        // 仅采购报价展示供应商
+        show: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE,
+        // 仅采购报价要求必填供应商
+        rules: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE
+            ? 'required'
+            : null,
+        // 选中供应商后，自动回填 联系人 / 联系电话 / 地址
+        trigger(values, form) {
+          const supplierId = Number(values.supplierId) || undefined;
+          if (!supplierId) {
+            // 清空供应商时重置标记，便于再次选择同一供应商时能重新回填
+            knownSupplierId = undefined;
+            return;
+          }
+          if (supplierId === knownSupplierId) {
+            return; // 编辑回显或未发生变化，不覆盖已保存的信息
+          }
+          const supplier = supplierMap.get(supplierId);
+          if (!supplier) {
+            return; // 供应商档案尚未加载完成
+          }
+          knownSupplierId = supplierId;
+          form.setFieldValue('supplierContact', supplier.contactName ?? '');
+          form.setFieldValue(
+            'supplierPhone',
+            supplier.telephone || supplier.mobile || '',
+          );
+          form.setFieldValue('supplierAddress', supplier.detailAddress ?? '');
+        },
+      },
+    },
+    {
+      fieldName: 'supplierContact',
+      label: '供应商联系人',
+      component: 'Input',
+      componentProps: {
+        placeholder: '选择供应商后自动带出，可修改',
+        allowClear: true,
+      },
+      dependencies: {
+        triggerFields: ['quotationType'],
+        show: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE,
+      },
+    },
+    {
+      fieldName: 'supplierPhone',
+      label: '供应商联系电话',
+      component: 'Input',
+      componentProps: {
+        placeholder: '选择供应商后自动带出，可修改',
+        allowClear: true,
+      },
+      dependencies: {
+        triggerFields: ['quotationType'],
+        show: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE,
+      },
+    },
+    {
+      fieldName: 'supplierAddress',
+      label: '供应商地址',
+      component: 'Input',
+      componentProps: {
+        placeholder: '选择供应商后自动带出，可修改',
+        allowClear: true,
+      },
+      dependencies: {
+        triggerFields: ['quotationType'],
+        show: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE,
+      },
     },
     {
       fieldName: 'businessId',
@@ -142,9 +303,17 @@ export function useFormSchema(): VbenFormSchema[] {
         placeholder: '请选择商机',
       },
       dependencies: {
-        triggerFields: ['customerName'],
-        disabled: (values) => !getWonCustomerId(values.customerName),
+        triggerFields: ['customerName', 'quotationType'],
+        disabled: (values) =>
+          Number(values.quotationType) === QUOTATION_TYPE_PURCHASE ||
+          !getWonCustomerId(values.customerName),
         async componentProps(values) {
+          if (Number(values.quotationType) === QUOTATION_TYPE_PURCHASE) {
+            return {
+              options: [],
+              placeholder: '采购报价无需关联商机',
+            };
+          }
           const customerId = getWonCustomerId(values.customerName);
           if (!customerId) {
             return {
@@ -276,6 +445,16 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'quotationType',
+      label: '报价类型',
+      component: 'Select',
+      componentProps: {
+        options: getDictOptions(DICT_TYPE.CRM_QUOTATION_TYPE, 'number'),
+        placeholder: '请选择报价类型',
+        allowClear: true,
+      },
+    },
+    {
       fieldName: 'customerId',
       label: '客户',
       component: 'ApiSelect',
@@ -304,6 +483,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 160,
       fixed: 'left',
       slots: { default: 'name' },
+    },
+    {
+      title: '报价类型',
+      field: 'quotationType',
+      minWidth: 110,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.CRM_QUOTATION_TYPE },
+      },
     },
     {
       title: '客户名称',

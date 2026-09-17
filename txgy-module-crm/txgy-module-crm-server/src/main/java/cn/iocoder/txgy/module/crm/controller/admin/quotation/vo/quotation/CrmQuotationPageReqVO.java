@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageParam;
 import cn.iocoder.txgy.framework.common.validation.InEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.quotation.CrmQuotationTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -34,5 +35,9 @@ public class CrmQuotationPageReqVO extends PageParam {
     @Schema(description = "审批状态", example = "20")
     @InEnum(CrmAuditStatusEnum.class)
     private Integer auditStatus;
+
+    @Schema(description = "报价类型：1=购销报价 2=采购报价", example = "1")
+    @InEnum(CrmQuotationTypeEnum.class)
+    private Integer quotationType;
 
 }

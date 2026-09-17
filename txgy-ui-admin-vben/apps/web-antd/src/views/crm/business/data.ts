@@ -192,6 +192,16 @@ export function useFormSchema(): VbenFormSchema[] {
         },
       },
     },
+    {
+      fieldName: 'remark',
+      label: '备注',
+      component: 'Textarea',
+      componentProps: {
+        placeholder: '请输入备注',
+        rows: 4,
+      },
+      formItemClass: 'col-span-3',
+    },
   ];
 }
 

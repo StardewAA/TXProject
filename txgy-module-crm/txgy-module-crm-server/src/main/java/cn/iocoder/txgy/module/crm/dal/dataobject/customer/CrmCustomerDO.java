@@ -33,6 +33,10 @@ public class CrmCustomerDO extends BaseDO {
      * 客户名称
      */
     private String name;
+    /**
+     * 联系人
+     */
+    private String contactName;
 
     /**
      * 跟进状态

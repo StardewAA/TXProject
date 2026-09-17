@@ -128,6 +128,7 @@ const CRM_DICT = {
   CRM_PRODUCT_UNIT: 'crm_product_unit', // CRM 产品单位
   CRM_PRODUCT_DATA_SOURCE: 'crm_product_data_source', // CRM 产品数据来源
   CRM_RECEIVABLE_RETURN_TYPE: 'crm_receivable_return_type', // CRM 回款的还款方式
+  CRM_QUOTATION_TYPE: 'crm_quotation_type', // CRM 报价类型（购销报价/采购报价）
   CRM_AFTER_SALE_WARRANTY_STATUS: 'crm_after_sale_warranty_status', // CRM 售后的质保状态
   CRM_AFTER_SALE_VISIT_PLAN_TYPE: 'crm_after_sale_visit_plan_type', // CRM 售后的回访计划类型
   CRM_AFTER_SALE_VISIT_PLAN_STATUS: 'crm_after_sale_visit_plan_status', // CRM 售后的回访计划状态
