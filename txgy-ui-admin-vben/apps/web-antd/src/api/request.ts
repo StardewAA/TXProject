@@ -93,6 +93,16 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     return token ? `Bearer ${token}` : null;
   }
 
+  /**
+   * 是否为个人注册请求：个人注册固定落在后端保留的 tenant_id=0，
+   * 不允许携带企业租户（tenant-id）或访问租户（visit-tenant-id）。
+   * 注：该函数定义在合并中丢失（调用方为 !148 引入），此处按注册接口路径补回。
+   */
+  function isPersonalRegister(config: { url?: string }) {
+    const url = (config?.url || '').toLowerCase();
+    return url.includes('/system/auth/register');
+  }
+
   // 请求头处理
   client.addRequestInterceptor({
     fulfilled: async (config) => {

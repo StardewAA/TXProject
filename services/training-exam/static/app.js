@@ -2,7 +2,7 @@ import { editorActions } from './editors.js';
 export const state={session:null,token:'',tenant:0,mode:new URLSearchParams(location.search).get('mode')||'admin',embedded:new URLSearchParams(location.search).get('nav')==='0',data:{},active:'overview',attempt:null,pending:new Set(),drafts:{},errors:{}};
 export const $=(q,root=document)=>root.querySelector(q);
 export const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const types={single:'单选题',multi:'多选题',judge:'判断题',essay:'实操问答',case:'案例分析'};
+export const types={single:'单选题',multi:'多选题',judge:'判断题',essay:'实操问答',case:'案例分析',blank:'填空题',short:'简答题'};
 export const exams={course_exam:'结课考试',mock:'模拟考试',cert:'取证考试',qualification:'职业资格考试',enterprise:'企业定制'};
 export const certTypes={graduate:'结业证书',competence:'岗位能力认证',joint:'联合认证'};
 export const statusNames={draft:'草稿',pending:'待审核',approved:'已通过',rejected:'已驳回',disabled:'已停用',published:'已发布',scheduled:'已排考',not_open:'未开始',waiting:'可参加',doing:'进行中',in_progress:'答题中',submitted:'待阅卷',graded:'已出成绩',finished:'已完成',missed:'已结束',success:'同步成功',failed:'同步失败',valid:'有效'};

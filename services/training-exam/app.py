@@ -34,7 +34,7 @@ DB_URL = os.getenv("MODULE5_DB_URL", f"sqlite:///{(DATA / 'module5.db').as_posix
 # 试卷总分统一上限：整份试卷分值合计不可超过 100 分
 PAPER_TOTAL_LIMIT = 100
 # 资源中心（模块一）考试题库与本地题型的映射
-QTYPE_TO_PLATFORM = {"single": 1, "multi": 2, "judge": 3, "essay": 4, "case": 5}
+QTYPE_TO_PLATFORM = {"single": 1, "multi": 2, "judge": 3, "essay": 4, "case": 5, "blank": 6, "short": 7}
 QTYPE_FROM_PLATFORM = {v: k for k, v in QTYPE_TO_PLATFORM.items()}
 DIFF_TO_PLATFORM = {"easy": 1, "medium": 2, "hard": 3}
 DIFF_FROM_PLATFORM = {v: k for k, v in DIFF_TO_PLATFORM.items()}
@@ -397,6 +397,7 @@ def platform_question_view(item: dict, include_answer=False) -> dict:
         "id": item.get("id"),
         "platform_id": item.get("id"),
         "q_type": qtype,
+        "category_id": item.get("categoryId"),
         "stem": item.get("stem") or "",
         "options": options,
         "tags": {"tag_names": tag_names},
@@ -459,6 +460,32 @@ def resolve_tag_ids(actor, tags: dict | None) -> list[int]:
         return []
     lookup = {t["name"]: t["id"] for t in platform_tag_options(actor) if t["name"]}
     return [lookup[name] for name in names if name in lookup]
+
+
+def platform_category_options(actor) -> list[dict]:
+    """资源分类（question 类型）扁平化选项：[{id, name, path}]，供题库搜索「按所属分类」使用。"""
+    path = "/training/resource-category/tree?type=question"
+    try:
+        tree = platform_get(path, actor.token, actor.tenant_id) or []
+    except HTTPException:
+        return []
+    result: list[dict] = []
+
+    def walk(nodes, chain):
+        for node in nodes or []:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            if node.get("id") is not None:
+                result.append({
+                    "id": node["id"],
+                    "name": name,
+                    "path": " / ".join([*chain, name] if name else chain),
+                })
+            walk(node.get("children"), [*chain, name] if name else chain)
+
+    walk(tree, [])
+    return result
 
 
 def question_payload(body: QuestionIn, actor) -> dict:
@@ -628,7 +655,18 @@ def list_questions(status: str | None = None, q_type: str | None = None, keyword
     if keyword:
         lowered = keyword.lower()
         rows = [r for r in rows if lowered in (r["stem"] + json.dumps(r["tags"], ensure_ascii=False)).lower()]
+    # 附加分类路径（供「选题与分值」按所属分类搜索与列表展示）
+    category_map = {c["id"]: c for c in platform_category_options(actor)}
+    for row in rows:
+        cid = row.get("category_id")
+        row["category_name"] = category_map[cid]["path"] if cid in category_map else ""
     return ok(rows)
+
+
+@app.get("/api/question-categories")
+def question_category_options(actor: Actor = Depends(current_user)):
+    """资源分类（question 类型）选项，供试卷「选题与分值」按所属分类搜索使用。"""
+    return ok(platform_category_options(actor))
 
 
 @app.post("/api/questions")
