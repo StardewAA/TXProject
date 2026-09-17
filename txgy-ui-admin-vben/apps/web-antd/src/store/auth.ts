@@ -86,6 +86,18 @@ export const useAuthStore = defineStore('auth', () => {
         if (isPersonalAuthentication) {
           accessStore.setTenantId(0);
           accessStore.clearVisitTenantId();
+        } else {
+          // 企业登录：把「访问租户」初始化为本次登录租户，
+          // 否则顶部租户下拉永远显示占位符「请选择租户」且无法回显当前租户。
+          const loginTenantId =
+            params.tenantId != null ? Number(params.tenantId) : null;
+          if (
+            loginTenantId != null &&
+            Number.isInteger(loginTenantId) &&
+            loginTenantId > 0
+          ) {
+            accessStore.setVisitTenantId(loginTenantId);
+          }
         }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);

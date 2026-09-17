@@ -422,44 +422,47 @@ onMounted(loadCompanies);
 .company-pagination :deep(.ant-pagination-item-active) { border-color: #d86616; background: #d86616; }
 .company-pagination :deep(.ant-pagination-item-active a) { color: #fff; }
 .company-pagination :deep(.ant-pagination-disabled .ant-pagination-item-link) { color: #a8b7bd; }
-.company-detail { color: #3f2a1d; }
+.company-detail { color: #123f49; font-size: 16px; }
 .company-detail-header { position: relative; display: flex; align-items: center; gap: 18px; overflow: hidden; padding: 34px 40px 29px; border-bottom: 1px solid #f3dfcc; background: linear-gradient(118deg, #fff4e5 0%, #fffaf4 60%, #fffdfb 100%); }
 .company-detail-header::after { position: absolute; right: -42px; bottom: -86px; width: 205px; height: 205px; border: 1px solid #efc38f; border-radius: 50%; box-shadow: 0 0 0 17px #f7dfc655, 0 0 0 34px #f7dfc622; content: ''; }
-.company-detail-monogram { position: relative; z-index: 1; display: grid; width: 76px; height: 76px; flex-shrink: 0; place-items: center; overflow: hidden; border: 1px solid #f4bc79; border-radius: 19px; background: #fff0df; color: #c85e18; font-size: 25px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 9px 17px rgb(183 92 24 / 10%); }
+.company-detail-monogram { position: relative; z-index: 1; display: grid; width: 76px; height: 76px; flex-shrink: 0; place-items: center; overflow: hidden; border: 1px solid #f4bc79; border-radius: 19px; background: #fff0df; color: #123f49; font-size: 27px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 9px 17px rgb(183 92 24 / 10%); }
 .company-detail-monogram img { width: 100%; height: 100%; object-fit: contain; }
 .company-detail-monogram.muted { border-color: #e0e7e8; background: #f3f7f7; color: #6c8185; box-shadow: none; }
 .company-detail-heading { position: relative; z-index: 1; min-width: 0; }
-.company-detail-eyebrow { display: block; margin-bottom: 8px; color: #c85e18; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
-.company-detail-heading h2 { max-width: 570px; margin: 0; color: #3f2718; font-size: 24px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.company-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 11px; color: #907a6b; font-size: 12px; }
+.company-detail-eyebrow { display: block; margin-bottom: 8px; color: #123f49; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
+.company-detail-heading h2 { max-width: 570px; margin: 0; color: #123f49; font-size: 26px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.company-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 11px; color: #425d64; font-size: 14px; }
 .company-detail-meta > span { display: inline-flex; align-items: center; gap: 6px; }
-.company-detail-meta > span:first-child { color: #c85e18; font-weight: 700; }
+.company-detail-meta > span:first-child { color: #123f49; font-weight: 700; }
 .company-detail-meta > span:first-child i { width: 6px; height: 6px; border-radius: 50%; background: #e87522; box-shadow: 0 0 0 3px #f9dfc6; }
 .company-detail-meta > span:first-child.muted { color: #74878a; font-weight: 500; }
 .company-detail-meta > span:first-child.muted i { background: #9babad; box-shadow: 0 0 0 3px #e5eeee; }
-.company-detail-mark { position: relative; z-index: 1; display: grid; gap: 1px; margin: 0 4px 0 auto; color: #d98743; font-family: Georgia, 'Times New Roman', serif; font-size: 27px; font-weight: 700; line-height: .85; letter-spacing: .08em; opacity: .72; }
-.company-detail-mark span { margin-left: 13px; color: #e4ae79; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 9px; letter-spacing: .28em; }
 .company-detail-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 25px 40px 15px; }
-.company-detail-kicker { color: #c85e18; font-size: 11px; font-weight: 700; letter-spacing: .15em; }
-.company-detail-toolbar p { margin: 7px 0 0; color: #6f5b4e; font-size: 13px; }
-.company-detail-tip { display: inline-flex; align-items: center; gap: 6px; color: #ae927e; font-size: 11px; white-space: nowrap; }
+.company-detail-kicker { color: #123f49; font-size: 13px; font-weight: 700; letter-spacing: .15em; }
+.company-detail-toolbar p { margin: 7px 0 0; color: #425d64; font-size: 15px; }
+.company-detail-tip { display: inline-flex; align-items: center; gap: 6px; color: #425d64; font-size: 13px; white-space: nowrap; }
 .company-detail-tip :deep(svg) { width: 14px; height: 14px; }
 .company-detail-post-list { padding: 0 26px 8px; }
-.company-detail-post { display: grid; grid-template-columns: 39px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 73px; padding: 13px 14px; border-top: 1px solid #f1e5dc; border-radius: 10px; color: #3f2a1d; transition: background-color 160ms ease, transform 160ms ease; }
-.company-detail-post:hover { background: #fff6ed; color: #3f2a1d; transform: translateX(3px); }
-.company-detail-post-index { color: #ddb68e; font-family: Georgia, 'Times New Roman', serif; font-size: 17px; font-weight: 700; }
+.company-detail-post { display: grid; grid-template-columns: 39px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 73px; padding: 13px 14px; border-top: 1px solid #f1e5dc; border-radius: 10px; color: #123f49; transition: background-color 160ms ease, transform 160ms ease; }
+.company-detail-post:hover { background: #eaf6ff; color: #123f49; transform: translateX(3px); }
+.company-detail-post-index { color: #526d73; font-family: Georgia, 'Times New Roman', serif; font-size: 19px; font-weight: 700; }
 .company-detail-post-copy { min-width: 0; }
-.company-detail-post strong { display: block; color: #453126; font-size: 15px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
-.company-detail-post small { display: flex; align-items: center; min-width: 0; gap: 7px; margin-top: 6px; color: #9a8677; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.company-detail-post small :deep(svg) { width: 13px; height: 13px; flex-shrink: 0; color: #d98a47; }
+.company-detail-post strong { display: block; color: #123f49; font-size: 17px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.company-detail-post small { display: flex; align-items: center; min-width: 0; gap: 7px; margin-top: 6px; color: #425d64; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company-detail-post small :deep(svg) { width: 13px; height: 13px; flex-shrink: 0; color: #0f8f8c; }
 .company-detail-post small i { width: 3px; height: 3px; flex-shrink: 0; border-radius: 50%; background: #d9bba0; }
-.company-detail-post-reward { display: inline-flex; align-items: center; gap: 11px; color: #d86616; }
-.company-detail-post-reward b { flex-shrink: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
-.company-detail-post-reward :deep(svg) { width: 15px; height: 15px; color: #e1a16b; transition: transform 160ms ease; }
+.company-detail-post-reward { display: inline-flex; align-items: center; gap: 11px; color: #123f49; }
+.company-detail-post-reward b { flex-shrink: 0; color: #123f49; font-size: 16px; font-variant-numeric: tabular-nums; }
+.company-detail-post-reward :deep(svg) { width: 15px; height: 15px; color: #0f8f8c; transition: transform 160ms ease; }
 .company-detail-post:hover .company-detail-post-reward :deep(svg) { transform: translate(2px, -2px); }
 .company-detail .company-empty { min-height: 230px; margin: 0 26px 22px; border: 1px dashed #edcfb1; background: #fffaf5; }
-.company-detail .company-empty > :deep(svg) { color: #e39a5a; }
-.company-directory button:focus-visible, .company-directory a:focus-visible, .company-detail a:focus-visible { outline: 2px solid #d86616; outline-offset: -2px; }
+.company-detail .company-empty > :deep(svg) { color: #0f8f8c; }
+.company-detail .company-empty h3 { color: #123f49; font-size: 19px; }
+.company-detail .company-empty p { color: #425d64; font-size: 16px; }
+.company-detail .company-pagination { font-size: 16px; }
+.company-detail .company-pagination :deep(.ant-pagination-item a),
+.company-detail .company-pagination :deep(.ant-pagination-item-link) { font-size: 16px; }
+.company-directory button:focus-visible, .company-directory a:focus-visible, .company-detail a:focus-visible { outline: 2px solid #2f80ed; outline-offset: -2px; }
 @media (max-width: 1200px) {
   .company-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .clear-filters { align-self: flex-end; }
@@ -500,8 +503,8 @@ onMounted(loadCompanies);
 :global(.company-detail-modal .ant-modal) { max-width: calc(100vw - 24px); padding-bottom: 0; }
 :global(.company-detail-modal .ant-modal-content) { overflow: hidden; padding: 0; border: 1px solid #f1dfcf; border-radius: 24px; background: #fffdfb; box-shadow: 0 26px 80px rgb(76 42 18 / 22%); }
 :global(.company-detail-modal .ant-modal-body) { padding: 0; }
-:global(.company-detail-modal .ant-modal-close) { top: 16px; right: 16px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; color: #9e7e66; background: #ffffffbf; transition: color 160ms ease, background-color 160ms ease, transform 160ms ease; }
-:global(.company-detail-modal .ant-modal-close:hover) { color: #c85e18; background: #fff0df; transform: rotate(8deg); }
+:global(.company-detail-modal .ant-modal-close) { top: 16px; right: 16px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; color: #425d64; background: #ffffffbf; transition: color 160ms ease, background-color 160ms ease, transform 160ms ease; }
+:global(.company-detail-modal .ant-modal-close:hover) { color: #123f49; background: #e8f7f8; transform: rotate(8deg); }
 
 @media (max-width: 900px) {
   .company-directory-intro { align-items: flex-start; flex-direction: column; gap: 24px; }
@@ -516,10 +519,9 @@ onMounted(loadCompanies);
   .company-filters { padding: 18px 14px 17px; }
   .company-results { border-radius: 0 0 16px 16px; }
   .company-detail-header { align-items: flex-start; padding: 30px 24px 23px; }
-  .company-detail-monogram { width: 61px; height: 61px; border-radius: 15px; font-size: 20px; }
-  .company-detail-heading h2 { padding-right: 24px; font-size: 20px; }
-  .company-detail-eyebrow { font-size: 9px; }
-  .company-detail-mark { display: none; }
+  .company-detail-monogram { width: 61px; height: 61px; border-radius: 15px; font-size: 22px; }
+  .company-detail-heading h2 { padding-right: 24px; font-size: 22px; }
+  .company-detail-eyebrow { font-size: 11px; }
   .company-detail-toolbar { align-items: flex-start; flex-direction: column; gap: 9px; padding: 21px 24px 13px; }
   .company-detail-post-list { padding: 0 14px 8px; }
   .company-detail-post { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 12px 8px; }
@@ -549,7 +551,7 @@ onMounted(loadCompanies);
 .company-directory-stats strong,
 .company-detail-eyebrow,
 .company-detail-kicker,
-.company-detail-meta > span:first-child { color: #0f8f8c; }
+.company-detail-meta > span:first-child { color: #123f49; }
 .company-intro-label i { background: #0f8f8c; box-shadow: 0 0 0 4px #d5f1f3; }
 .company-intro-copy h1,
 .company-detail-heading h2,
@@ -580,11 +582,11 @@ onMounted(loadCompanies);
 .company-pagination :deep(.ant-pagination-item-active) { border-color: #0f8f8c; background: #0f8f8c; }
 .company-detail-header { border-bottom-color: var(--company-line); background: linear-gradient(118deg, #eaf6ff 0%, #f5fbfc 60%, #fff 100%); }
 .company-detail-header::after { border-color: #9bdce1; box-shadow: 0 0 0 17px rgb(155 220 225 / 34%), 0 0 0 34px rgb(155 220 225 / 14%); }
-.company-detail-monogram { border-color: #b9e7ee; color: #0f8f8c; background: #e8f7f8; box-shadow: 0 9px 17px rgb(15 143 140 / 10%); }
+.company-detail-monogram { border-color: #b9e7ee; color: #123f49; background: #e8f7f8; box-shadow: 0 9px 17px rgb(15 143 140 / 10%); }
 .company-detail-meta > span:first-child i { background: #0f8f8c; box-shadow: 0 0 0 3px #d5f1f3; }
 .company-detail-post { border-top-color: var(--company-line); color: #123f49; }
 .company-detail-post:hover { background: #eaf6ff; color: #123f49; }
-.company-detail-post-reward { color: #0f8f8c; }
+.company-detail-post-reward { color: #123f49; }
 .company-directory button:focus-visible,
 .company-directory a:focus-visible,
 .company-detail a:focus-visible { outline-color: #2f80ed; }
@@ -597,5 +599,5 @@ onMounted(loadCompanies);
 .company-directory .company-hot-post,
 .company-directory .company-no-post { color: #5f7f87; }
 .company-directory .hot-salary,
-.company-directory .company-detail-post-reward b { color: #dc3545; }
+.company-directory .company-detail-post-reward b { color: #123f49; }
 </style>

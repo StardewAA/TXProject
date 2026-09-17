@@ -197,6 +197,13 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode COLLABORATION_B_CONFIRM_ITEM_INVALID = new ErrorCode(1_030_900_007, "协作单 B 确认明细与接收明细不一致");
     ErrorCode COLLABORATION_B_TYPE_INVALID = new ErrorCode(1_030_900_008, "协同单类型不支持");
 
+    // ========== ERP/MES 跨模块集成 1-030-910-000 ==========
+    ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_030_910_000, "集成请求的租户编号与当前上下文不一致");
+    ErrorCode PRODUCTION_PROGRESS_SOURCE_INVALID = new ErrorCode(1_030_910_001, "生产进度回传的来源模块不合法（仅支持 MES）");
+    ErrorCode PRODUCTION_PROGRESS_QUANTITY_INVALID = new ErrorCode(1_030_910_002, "完工数量不能为空且不能为负数");
+    ErrorCode PRODUCTION_PROGRESS_MATERIAL_NOT_FOUND = new ErrorCode(1_030_910_003, "物料编码({})在 ERP 不存在，无法回写生产进度");
+    ErrorCode PRODUCTION_PROGRESS_ORDER_ITEM_NOT_FOUND = new ErrorCode(1_030_910_004, "销售订单中不存在物料({})的订单行，无法回写生产进度");
+
     // ========== ERP 采购申请（1-030-700-000） ==========
     ErrorCode PURCHASE_REQUEST_NOT_EXISTS = new ErrorCode(1_030_700_000, "采购申请不存在");
     ErrorCode PURCHASE_REQUEST_NO_EXISTS = new ErrorCode(1_030_700_001, "生成采购申请编号失败，请重新提交");
