@@ -8,6 +8,9 @@ import { initStores } from '@vben/stores';
 import '@vben/styles';
 import '@vben/styles/antd';
 
+// 统一弹窗 / 对话框视觉主题（宽度下限、留白、数据展示），需在 antd 样式之后引入
+import './styles/modal-theme.css';
+
 import { useTitle } from '@vueuse/core';
 
 import { $t, setupI18n } from '#/locales';

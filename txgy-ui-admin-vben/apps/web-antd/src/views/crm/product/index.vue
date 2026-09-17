@@ -54,7 +54,7 @@ async function handleSyncFromWms() {
     }
     message.success(
       `同步完成：拉取 ${result.total} 个规格，新增 ${result.created}，更新 ${result.updated}，` +
-        `无变化 ${result.unchanged}，编码冲突 ${result.conflict}，失败 ${result.failed}`,
+        `无变化 ${result.unchanged}，下架 ${result.offlined ?? 0}，编码冲突 ${result.conflict}，失败 ${result.failed}`,
     );
     // 编码冲突、失败等明细
     if (result.messages && result.messages.length > 0) {
