@@ -323,7 +323,7 @@ async function handleAddByScope() {
   }
 }
 
-// ========== 在班人数与名额（工具栏展示；「批量导入学员并指定培训班」入口在培训班管理列表页） ==========
+// ========== 在班人数与名额（工具栏展示） ==========
 /** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
 const CLASS_MAX_STUDENT = 50;
 
