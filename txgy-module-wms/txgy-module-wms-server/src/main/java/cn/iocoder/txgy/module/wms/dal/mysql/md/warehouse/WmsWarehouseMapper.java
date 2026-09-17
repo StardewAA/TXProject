@@ -21,6 +21,12 @@ public interface WmsWarehouseMapper extends BaseMapperX<WmsWarehouseDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<WmsWarehouseDO>()
                 .eqIfPresent(WmsWarehouseDO::getCode, reqVO.getCode())
                 .likeIfPresent(WmsWarehouseDO::getName, reqVO.getName())
+                .eqIfPresent(WmsWarehouseDO::getWarehouseType, reqVO.getWarehouseType())
+                .eqIfPresent(WmsWarehouseDO::getStatus, reqVO.getStatus())
+                .likeIfPresent(WmsWarehouseDO::getOrganizationName, reqVO.getOrganizationName())
+                .likeIfPresent(WmsWarehouseDO::getCity, reqVO.getCity())
+                .likeIfPresent(WmsWarehouseDO::getAddress, reqVO.getAddress())
+                .likeIfPresent(WmsWarehouseDO::getPrincipal, reqVO.getPrincipal())
                 .orderByAsc(WmsWarehouseDO::getSort)
                 .orderByDesc(WmsWarehouseDO::getId));
     }
