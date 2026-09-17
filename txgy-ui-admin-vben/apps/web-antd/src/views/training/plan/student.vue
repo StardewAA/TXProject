@@ -49,7 +49,7 @@ const rows = ref<TrainingPlanApi.ClassStudent[]>([]);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = ref(10);
-const query = ref<{ userName?: string; deptName?: string }>({});
+const query = ref<{ deptName?: string; userName?: string; }>({});
 /** 在班学员 ID 集合（用于添加弹窗去重） */
 const activeUserIds = ref<Set<number>>(new Set());
 
@@ -68,9 +68,14 @@ async function loadStudents() {
   if (!currentClass.value?.id) {
     rows.value = [];
     total.value = 0;
+    loading.value = false;
     return;
   }
   loading.value = true;
+  // 兜底：请求异常或长时间挂起时也确保 loading 关闭，避免页面永久转圈
+  const guardTimer = setTimeout(() => {
+    loading.value = false;
+  }, 8000);
   try {
     const data = await getClassStudentPage({
       pageNo: pageNo.value,
@@ -80,7 +85,11 @@ async function loadStudents() {
     });
     rows.value = data?.list ?? [];
     total.value = data?.total ?? 0;
+  } catch {
+    rows.value = [];
+    total.value = 0;
   } finally {
+    clearTimeout(guardTimer);
     loading.value = false;
   }
 }
@@ -216,6 +225,17 @@ async function handleImport() {
   }
 }
 
+// ========== 在班人数与名额（工具栏展示） ==========
+/** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
+const CLASS_MAX_STUDENT = 50;
+
+/** 当前在班人数（用于展示「在班 X/50」与剩余名额） */
+const inClassTotalCount = computed(() => activeUserIds.value.size);
+/** 剩余可加入名额 */
+const remainingQuota = computed(() =>
+  Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value),
+);
+
 // ========== 表格列 ==========
 const columns = [
   { title: '学员姓名', dataIndex: 'userName', key: 'userName', width: 140 },
@@ -240,6 +260,9 @@ const columns = [
         <Button :disabled="!writable" @click="importVisible = true">
           批量导入学员
         </Button>
+        <Tag :color="remainingQuota === 0 ? 'red' : 'blue'">
+          在班 {{ inClassTotalCount }}/{{ CLASS_MAX_STUDENT }}
+        </Tag>
         <Input
           v-model:value="query.userName"
           allow-clear
@@ -262,7 +285,6 @@ const columns = [
         size="small"
         :columns="columns"
         :data-source="rows"
-        :loading="loading"
         :pagination="{
           current: pageNo,
           pageSize,
@@ -275,6 +297,8 @@ const columns = [
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'source'">
             <Tag v-if="record.source === 2" color="processing">批量导入</Tag>
+            <Tag v-else-if="record.source === 3" color="success">按对象筛选</Tag>
+            <Tag v-else-if="record.source === 5" color="warning">导入分班</Tag>
             <Tag v-else>手动添加</Tag>
           </template>
           <template v-if="column.key === 'action'">
@@ -396,5 +420,6 @@ const columns = [
         size="small"
       />
     </Modal>
+
   </Page>
 </template>

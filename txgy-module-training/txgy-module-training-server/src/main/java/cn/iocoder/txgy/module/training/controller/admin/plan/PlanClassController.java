@@ -45,7 +45,7 @@ public class PlanClassController {
     }
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除培训班（仅草稿状态可删除，连带清理绑定）")
+    @Operation(summary = "删除培训班（草稿/已完成/已取消可删除，连带清理绑定）")
     @Parameter(name = "id", description = "培训班 ID", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('training:plan:delete')")
     public CommonResult<Boolean> deleteClass(@RequestParam("id") Long id) {

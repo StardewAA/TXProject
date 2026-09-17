@@ -20,7 +20,8 @@ const [Form, formApi] = useVbenForm({
   commonConfig: {
     labelWidth: 120,
   },
-  layout: 'horizontal',
+  wrapperClass: 'grid-cols-3',
+  layout: 'vertical',
   schema,
   handleSubmit,
 });
@@ -55,8 +56,7 @@ onMounted(() => {
 <template>
   <Page auto-content-height>
     <Card title="合同配置设置">
-      <!-- 同 poolConfig：w-1/4 + labelWidth=120 会把「提前 X 天提醒」的输入框压扁 -->
-      <Form class="w-full max-w-md" />
+      <Form class="mx-4" />
     </Card>
   </Page>
 </template>

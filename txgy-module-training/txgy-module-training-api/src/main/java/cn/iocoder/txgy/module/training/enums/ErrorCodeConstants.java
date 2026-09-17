@@ -105,7 +105,7 @@ public interface ErrorCodeConstants {
     ErrorCode PLAN_CLASS_NOT_EXISTS = new ErrorCode(1_061_012_000, "培训班不存在");
     ErrorCode PLAN_CLASS_NAME_DUPLICATE = new ErrorCode(1_061_012_001, "已存在同名培训班");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_UPDATE = new ErrorCode(1_061_012_002, "培训班当前状态【{}】不允许编辑");
-    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_DELETE = new ErrorCode(1_061_012_003, "培训班当前状态【{}】不允许删除，需先取消");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_DELETE = new ErrorCode(1_061_012_003, "培训班当前状态【{}】不允许删除，仅草稿 / 已完成 / 已取消可删除");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_START = new ErrorCode(1_061_012_004, "培训班当前状态【{}】不允许开班");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_FINISH = new ErrorCode(1_061_012_005, "培训班当前状态【{}】不允许结业");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_CANCEL = new ErrorCode(1_061_012_006, "培训班当前状态【{}】不允许取消");
@@ -123,6 +123,10 @@ public interface ErrorCodeConstants {
     ErrorCode PLAN_STUDENT_ALREADY_REMOVED = new ErrorCode(1_061_013_002, "学员已移出该培训班");
     ErrorCode PLAN_STUDENT_COURSE_REQUIRED = new ErrorCode(1_061_013_003, "培训班尚未绑定课程，无法添加学员（学员入班需自动生成学习任务）");
     ErrorCode PLAN_TASK_NOT_EXISTS = new ErrorCode(1_061_013_004, "学员学习任务不存在");
+    ErrorCode PLAN_STUDENT_SCOPE_CONDITION_REQUIRED = new ErrorCode(1_061_013_005, "请先选择参与对象筛选条件（部门或岗位），或为培训班配置参训对象筛选");
+    ErrorCode PLAN_STUDENT_SCOPE_NO_MATCH = new ErrorCode(1_061_013_006, "按当前参与对象筛选条件未匹配到可加入的学员");
+    ErrorCode PLAN_STUDENT_SCOPE_QUERY_FAILED = new ErrorCode(1_061_013_007, "按参与对象筛选查询系统用户失败，请稍后重试");
+    ErrorCode PLAN_STUDENT_LIMIT_EXCEEDED = new ErrorCode(1_061_013_008, "单个培训班在班学员上限 {} 人，当前已 {} 人，本次最多还可加入 {} 人");
 
     // ========== 督促提醒（remind）1-061-014-000 ==========
     ErrorCode PLAN_REMIND_NO_TARGET = new ErrorCode(1_061_014_000, "没有可督促的未完成学员");

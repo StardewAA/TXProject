@@ -154,7 +154,6 @@ const columns = [
         size="small"
         :columns="columns"
         :data-source="records"
-        :loading="loading"
         :pagination="{
           current: pageNo,
           pageSize,

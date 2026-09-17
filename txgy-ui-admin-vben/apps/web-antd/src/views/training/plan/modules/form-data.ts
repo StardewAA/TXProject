@@ -99,24 +99,6 @@ export function useFormSchema(
       },
     },
     {
-      fieldName: 'projectId',
-      label: '工程项目编号',
-      component: 'Input',
-      componentProps: {
-        placeholder: '关联项目编号（岗前/复工培训用于上岗资格核查）',
-        maxlength: 64,
-      },
-    },
-    {
-      fieldName: 'projectName',
-      label: '工程项目名称',
-      component: 'Input',
-      componentProps: {
-        placeholder: '关联项目名称，可空',
-        maxlength: 200,
-      },
-    },
-    {
       fieldName: 'courseIds',
       label: '绑定课程(定课)',
       component: 'Select',
@@ -158,26 +140,6 @@ export function useFormSchema(
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
         placeholder: '选择培训截止时间（开班必须设置）',
-      },
-    },
-    {
-      fieldName: 'targetCondition',
-      label: '参训对象筛选',
-      component: 'InputTextArea',
-      componentProps: {
-        placeholder: '筛选条件（JSON），如 {"posts":["管道工"],"dept":"管道一班"}，可空',
-        maxlength: 1000,
-        rows: 3,
-      },
-    },
-    {
-      fieldName: 'remark',
-      label: '备注',
-      component: 'InputTextArea',
-      componentProps: {
-        placeholder: '备注，可空',
-        maxlength: 500,
-        rows: 2,
       },
     },
   ];

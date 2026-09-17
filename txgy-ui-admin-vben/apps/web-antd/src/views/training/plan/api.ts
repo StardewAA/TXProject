@@ -116,11 +116,12 @@ export namespace TrainingPlanApi {
     /** 自动创建的系统账号数（仅勾选自动建号时可能大于 0） */
     createdUserCount?: number;
     failRows?: {
-      rowNumber?: number;
       mobile?: string;
       reason?: string;
+      rowNumber?: number;
     }[];
   }
+
 }
 
 /** 培训班分页 */
@@ -296,4 +297,9 @@ export function importClassStudents(
     `/training/plan/class/student/import?classId=${classId}&autoCreateUser=${autoCreateUser}`,
     { file },
   );
+}
+
+/** 培训班全量（班级下拉使用，由前端按状态筛选可入班班级） */
+export function getAllClasses() {
+  return fetchAllPages<TrainingPlanApi.Class>(getClassPage, {});
 }

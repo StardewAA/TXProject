@@ -42,6 +42,16 @@ public interface CrmProductMapper extends BaseMapperX<CrmProductDO> {
         return selectCount(CrmProductDO::getCategoryId, categoryId);
     }
 
+    /**
+     * 按数据来源查询产品，用于 WMS 同步后处理「WMS 中已不存在」的产品
+     *
+     * @param dataSource 数据来源
+     * @return 产品列表
+     */
+    default List<CrmProductDO> selectListByDataSource(Integer dataSource) {
+        return selectList(CrmProductDO::getDataSource, dataSource);
+    }
+
     default List<CrmProductDO> selectListByStatus(Integer status) {
         return selectList(CrmProductDO::getStatus, status);
     }

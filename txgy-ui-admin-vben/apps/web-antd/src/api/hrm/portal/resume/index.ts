@@ -41,6 +41,10 @@ export function createPortalResume(data: HrmPortalResumeApi.CreateReq) {
   return requestClient.post<number>('/hrm/portal/resume/create', data);
 }
 
+export function deletePortalResume(id: number) {
+  return requestClient.delete<boolean>(`/hrm/portal/resume/delete?id=${id}`);
+}
+
 export const RECRUIT_PROFILE_TITLE = '求职资料（系统）';
 
 export function getRecruitProfileResume() {

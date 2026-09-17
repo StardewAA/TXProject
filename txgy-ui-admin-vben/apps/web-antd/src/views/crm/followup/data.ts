@@ -43,9 +43,22 @@ export function useFormSchema(
       rules: 'required',
     },
     {
+      fieldName: 'followUpTime',
+      label: '实际跟进时间',
+      component: 'DatePicker',
+      help: '本次实际联系对方的时间，是「多久没跟进 / 掉入公海」的计时起点；补录历史跟进时请改成实际联系的日期',
+      componentProps: {
+        showTime: true,
+        format: 'YYYY-MM-DD HH:mm:ss',
+        valueFormat: 'x',
+        placeholder: '默认为当前时间',
+      },
+    },
+    {
       fieldName: 'nextTime',
       label: '下次联系时间',
       component: 'DatePicker',
+      help: '计划下一次联系对方的时间，仅用于【待办】的今天需联系 / 已逾期提醒，不影响公海回收计时',
       componentProps: {
         showTime: true,
         format: 'YYYY-MM-DD HH:mm:ss',
@@ -120,6 +133,11 @@ export function useGridColumns(
   bizType: number,
 ): VxeTableGridOptions['columns'] {
   return [
+    {
+      field: 'followUpTime',
+      title: '实际跟进时间',
+      formatter: 'formatDateTime',
+    },
     {
       field: 'createTime',
       title: '创建时间',

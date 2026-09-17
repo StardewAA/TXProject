@@ -550,6 +550,20 @@ export function useFormSchema(
       rules: 'selectRequired',
     },
     {
+      fieldName: 'approveUserId',
+      label: '审核人',
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: getSimpleUserList,
+        disabled: isHeaderReadonly,
+        labelField: 'nickname',
+        placeholder: '请选择审核人',
+        valueField: 'id',
+      },
+      rules: 'selectRequired',
+    },
+    {
       fieldName: 'feedbackTime',
       label: '报工时间',
       component: 'DatePicker',

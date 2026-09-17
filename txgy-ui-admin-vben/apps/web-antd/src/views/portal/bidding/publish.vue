@@ -6,7 +6,8 @@
   现在：门户拥有自己的页面与面向企业的说明文案，发布工作台以 <NoticeWorkbench mode="portal" /> 显式复用。
   范围：仅本企业（当前登录租户）内部公告 —— 起草 → 发布 → 撤下 → 归档；
         外部采集公告的审核/发布在管理端「外部公告管理」，本页不做。
-  待定口径（需业务确认，前端不擅定）：内部公告是否需要"提交 → 平台审核"才能发布。
+  口径（已裁定）：发布动作归前台（本页即发布入口）；管理端收敛为监管（全量/下架/留痕/运维）。
+  仅存疑：内部公告是否需要"提交 → 平台审核"才能发布 —— 取决于后端是否补 PENDING_AUDIT/REJECTED（待后端）。
 -->
 <script lang="ts" setup>
 import NoticeWorkbench from '#/views/bidding/notice/NoticeWorkbench.vue';

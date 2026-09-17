@@ -38,7 +38,7 @@ x-backend-service: &backend-service
     SERVER_PORT: 48080
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     SPRING_DATA_REDIS_HOST: redis
@@ -54,6 +54,12 @@ x-backend-service: &backend-service
   networks:
     - txgy-dev
   restart: unless-stopped
+  # 容器日志轮转：docker logs 仅保留最近 3×50MB，防止 dev-web-antd.log 这类文件无限增长
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "3"
 
 services:
   mysql:
@@ -115,6 +121,12 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+    mem_limit: 3072m # 内存上限，防止 Nacos 被宿主机 OOM 误杀（历史上被 SIGKILL 137 反复杀掉）
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - txgy-dev
 
@@ -160,6 +172,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-member/txgy-module-member-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   bpm:
     <<: *backend-service
@@ -168,6 +183,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-bpm/txgy-module-bpm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   pay:
     <<: *backend-service
@@ -176,17 +194,24 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-pay/txgy-module-pay-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   report:
     <<: *backend-service
     build:
-      context: ./jars/report
-      dockerfile: Dockerfile.runtime
+      context: ..
+      dockerfile: deploy/backend/Dockerfile
       args:
-        JAR_FILE: app.jar
+        MODULE_PATH: txgy-module-report/txgy-module-report-server
     environment:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
+      # 报表只读数据源：仅 SELECT 权限的独立账号，避免报表大查询与写入风险
+      REPORT_DB_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      REPORT_DB_USERNAME: ${REPORT_DB_USERNAME:-report_ro}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD}
 
   mp:
     <<: *backend-service
@@ -195,6 +220,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mp/txgy-module-mp-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   product:
     <<: *backend-service
@@ -203,6 +231,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-product-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   trade:
     <<: *backend-service
@@ -211,6 +242,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-trade-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   promotion:
     <<: *backend-service
@@ -219,6 +253,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   statistics:
     <<: *backend-service
@@ -227,6 +264,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   crm:
     <<: *backend-service
@@ -235,6 +275,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-crm/txgy-module-crm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   erp:
     <<: *backend-service
@@ -243,6 +286,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-erp/txgy-module-erp-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   iot:
     <<: *backend-service
@@ -251,6 +297,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-iot/txgy-module-iot-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   iot-gateway:
     <<: *backend-service
@@ -259,7 +308,14 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-iot/txgy-module-iot-gateway
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx320m -XX:MaxMetaspaceSize=224m -XX:+UseG1GC -XX:MaxRAMPercentage=32
 
+  # mes-server：注册服务名由 jar 内 application.yaml 的 spring.application.name=mes-server 决定
+  # （网关路由 lb://mes-server，必须严格一致）；继承 x-backend-service 的 depends_on（mysql/redis/nacos
+  # 均须 service_healthy 后才启动），因此 Nacos 未就绪时 mes 不会被拉起，避免历史报错
+  # "Unable to resolve host nacos / Unable to find instance for mes-server" 复现。
   mes:
     <<: *backend-service
     build:
@@ -267,6 +323,7 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mes/txgy-module-mes-server
+    mem_limit: 2048m # 与 slim 覆盖的 JAVA_OPTS -Xmx1024m 配套，单容器限高，防止拖垮整个 Docker VM
 
   wms:
     <<: *backend-service
@@ -275,6 +332,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   im:
     <<: *backend-service
@@ -306,6 +366,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   fms:
     <<: *backend-service
@@ -314,6 +377,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-fms/txgy-module-fms-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   frontend:
     build:

@@ -1,6 +1,7 @@
 param(
     [switch]$BuildOnly,
-    [switch]$NoCache
+    [switch]$NoCache,
+    [switch]$SkipFrontendBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,15 +62,19 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $runtimeHrmJar) -Force | 
 Copy-Item -LiteralPath $hrmJar.FullName -Destination $runtimeHrmJar -Force
 Write-Host "Runtime jar ready: $runtimeHrmJar" -ForegroundColor Green
 
-Write-Host 'Building web-antd on the host before creating the lightweight frontend image.' -ForegroundColor Cyan
-Push-Location -LiteralPath $vbenDir
-try {
-    & corepack pnpm@11.7.0 exec turbo build --filter=@vben/web-antd --concurrency=2
-    if ($LASTEXITCODE -ne 0) {
-        throw "web-antd build failed (exit=$LASTEXITCODE)"
+if ($SkipFrontendBuild) {
+    Write-Host 'Reusing the verified web-antd dist; frontend source build was skipped.' -ForegroundColor Yellow
+} else {
+    Write-Host 'Building web-antd on the host before creating the lightweight frontend image.' -ForegroundColor Cyan
+    Push-Location -LiteralPath $vbenDir
+    try {
+        & corepack pnpm@11.7.0 exec turbo build --filter=@vben/web-antd --concurrency=2
+        if ($LASTEXITCODE -ne 0) {
+            throw "web-antd build failed (exit=$LASTEXITCODE)"
+        }
+    } finally {
+        Pop-Location
     }
-} finally {
-    Pop-Location
 }
 if (-not (Test-Path -LiteralPath $frontendDist)) {
     throw "web-antd build completed without $frontendDist"

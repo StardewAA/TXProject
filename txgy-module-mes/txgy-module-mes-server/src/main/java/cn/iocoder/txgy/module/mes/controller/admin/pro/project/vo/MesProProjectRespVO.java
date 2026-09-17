@@ -8,6 +8,7 @@ import cn.idev.excel.annotation.ExcelProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Schema(description = "管理后台 - MES 项目 Response VO")
@@ -40,6 +41,10 @@ public class MesProProjectRespVO {
     @ExcelProperty(value = "项目状态", converter = DictConvert.class)
     @DictFormat(DictTypeConstants.MES_PRO_PROJECT_STATUS)
     private Integer status;
+
+    @Schema(description = "生产进度百分比（0-100，报工自动回写）", example = "35.5")
+    @ExcelProperty(value = "生产进度")
+    private BigDecimal progress;
 
     @Schema(description = "项目优先级", example = "3")
     @ExcelProperty(value = "项目优先级", converter = DictConvert.class)
