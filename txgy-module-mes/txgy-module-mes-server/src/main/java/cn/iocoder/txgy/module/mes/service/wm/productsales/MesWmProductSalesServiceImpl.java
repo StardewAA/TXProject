@@ -7,6 +7,9 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesSaveReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.productsales.vo.MesWmProductSalesShippingReqVO;
@@ -34,6 +37,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -48,8 +52,17 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
 
+    /**
+     * BPM 流程定义 Key：销售出库单审批
+     *
+     * 与 bpm-server 的 ProductSalesStatusListener.getProcessDefinitionKey 保持一致
+     */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-wm-product-sales-approval";
+
     @Resource
     private MesWmProductSalesMapper productSalesMapper;
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
 
     @Resource
     private MesWmProductSalesLineService productSalesLineService;
@@ -117,7 +130,7 @@ public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
     @Transactional(rollbackFor = Exception.class)
     public void submitProductSales(Long id) {
         // 校验存在 + 草稿状态
-        validateProductSalesExistsAndDraft(id);
+        MesWmProductSalesDO sales = validateProductSalesExistsAndDraft(id);
         // 校验至少有一条行
         List<MesWmProductSalesLineDO> lines = productSalesLineService.getProductSalesLineListBySalesId(id);
         if (CollUtil.isEmpty(lines)) {
@@ -130,7 +143,52 @@ public class MesWmProductSalesServiceImpl implements MesWmProductSalesService {
             }
         }
 
-        // 检查所有行的 oqcCheckFlag：如果有需要 OQC 检验的行，进入待检测状态
+        // 提交 → BPM审批中，发起工作流。审批结果由 bpm-server 的 ProductSalesStatusListener
+        // 转发回 MES，经 mes_wm_product_sales_approval_task 异步消费：
+        // 通过 → approveProductSales 按 OQC 标志分流；驳回 → rejectProductSales 退回草稿
+        productSalesMapper.updateById(new MesWmProductSalesDO()
+                .setId(id).setStatus(MesWmProductSalesStatusEnum.BPM_APPROVING.getStatus()));
+
+        Map<String, Object> variables = Map.of(
+                "salesId", String.valueOf(id),
+                "salesCode", sales.getCode() != null ? sales.getCode() : "",
+                "salesOrderCode", sales.getSalesOrderCode() != null ? sales.getSalesOrderCode() : "");
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
+                        SecurityFrameworkUtils.getLoginUserId(),
+                        new BpmProcessInstanceCreateReqDTO()
+                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                                .setBusinessKey(String.valueOf(id))
+                                .setVariables(variables)).getCheckedData();
+        productSalesMapper.updateById(new MesWmProductSalesDO()
+                .setId(id).setProcessInstanceId(processInstanceId));
+    }
+
+    @Override
+    public void approveProductSales(Long id) {
+        // 审批通过（BPM审批中 → 按 OQC 标志分流）
+        MesWmProductSalesDO sales = validateProductSalesExists(id);
+        if (ObjUtil.notEqual(MesWmProductSalesStatusEnum.BPM_APPROVING.getStatus(), sales.getStatus())) {
+            throw exception(WM_PRODUCT_SALES_NOT_PREPARE);
+        }
+        List<MesWmProductSalesLineDO> lines = productSalesLineService.getProductSalesLineListBySalesId(id);
+        routeAfterApproval(id, lines);
+    }
+
+    @Override
+    public void rejectProductSales(Long id) {
+        // 审批驳回（BPM审批中 → 草稿），可修改后重新提交（重新发起新流程实例）
+        MesWmProductSalesDO sales = validateProductSalesExists(id);
+        if (ObjUtil.notEqual(MesWmProductSalesStatusEnum.BPM_APPROVING.getStatus(), sales.getStatus())) {
+            throw exception(WM_PRODUCT_SALES_NOT_PREPARE);
+        }
+        productSalesMapper.updateById(new MesWmProductSalesDO()
+                .setId(id).setStatus(MesWmProductSalesStatusEnum.PREPARE.getStatus()));
+    }
+
+    /**
+     * 审批通过后的分流（原提交逻辑）：有 OQC 检验行 → 待检测；否则 → 待拣货
+     */
+    private void routeAfterApproval(Long id, List<MesWmProductSalesLineDO> lines) {
         boolean needOqc = CollectionUtils.anyMatch(lines,
                 line -> Boolean.TRUE.equals(line.getOqcCheckFlag()));
         if (needOqc) {

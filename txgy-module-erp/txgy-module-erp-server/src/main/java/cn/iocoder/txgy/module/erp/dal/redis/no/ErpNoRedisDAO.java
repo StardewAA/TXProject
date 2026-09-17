@@ -78,6 +78,19 @@ public class ErpNoRedisDAO {
     public static final String COST_RESULT_NO_PREFIX = "ZJJG";
 
     /**
+     * 客户统一编码 {@link cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO}
+     *
+     * 与 MES 编码规则 MD_CLIENT_CODE 的前缀保持一致，保证跨模块客户编码同源同格式
+     */
+    public static final String CUSTOMER_PARTNER_CODE_PREFIX = "CLI";
+    /**
+     * 供应商统一编码 {@link cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO}
+     *
+     * 与 MES 编码规则 MD_VENDOR_CODE 的前缀保持一致，保证跨模块供应商编码同源同格式
+     */
+    public static final String SUPPLIER_PARTNER_CODE_PREFIX = "VEN";
+
+    /**
      * 付款单 {@link cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinancePaymentDO}
      */
     public static final String FINANCE_PAYMENT_NO_PREFIX = "FKD";

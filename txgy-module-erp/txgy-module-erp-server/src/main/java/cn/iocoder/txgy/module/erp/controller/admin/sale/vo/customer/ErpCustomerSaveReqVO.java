@@ -14,8 +14,7 @@ public class ErpCustomerSaveReqVO {
     @Schema(description = "客户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "27520")
     private Long id;
 
-    @Schema(description = "跨模块统一客户编码", requiredMode = Schema.RequiredMode.REQUIRED, example = "CUST-0001")
-    @NotEmpty(message = "客户统一编码不能为空")
+    @Schema(description = "跨模块统一客户编码（由服务端自动生成，无需传入）", example = "CLI20260917000001")
     private String partnerCode;
 
     @Schema(description = "客户名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "张三")

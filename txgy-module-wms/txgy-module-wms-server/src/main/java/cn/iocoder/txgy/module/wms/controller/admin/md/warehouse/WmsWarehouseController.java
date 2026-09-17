@@ -11,6 +11,10 @@ import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseR
 import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
+import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
+import cn.hutool.core.util.NumberUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -35,6 +40,9 @@ public class WmsWarehouseController {
 
     @Resource
     private WmsWarehouseService warehouseService;
+
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @PostMapping("/create")
     @Operation(summary = "创建仓库")
@@ -66,7 +74,7 @@ public class WmsWarehouseController {
     @PreAuthorize("@ss.hasPermission('wms:warehouse:query')")
     public CommonResult<WmsWarehouseRespVO> getWarehouse(@RequestParam("id") Long id) {
         WmsWarehouseDO warehouse = warehouseService.getWarehouse(id);
-        return success(BeanUtils.toBean(warehouse, WmsWarehouseRespVO.class));
+        return success(buildWarehouseRespVO(warehouse));
     }
 
     @GetMapping("/page")
@@ -74,7 +82,11 @@ public class WmsWarehouseController {
     @PreAuthorize("@ss.hasPermission('wms:warehouse:query')")
     public CommonResult<PageResult<WmsWarehouseRespVO>> getWarehousePage(@Valid WmsWarehousePageReqVO pageReqVO) {
         PageResult<WmsWarehouseDO> pageResult = warehouseService.getWarehousePage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, WmsWarehouseRespVO.class));
+        List<WmsWarehouseDO> list = pageResult.getList();
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(list.stream()
+                .flatMap(warehouse -> java.util.stream.Stream.of(parseUserId(warehouse.getCreator()), parseUserId(warehouse.getUpdater())))
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        return success(new PageResult<>(list.stream().map(warehouse -> buildWarehouseRespVO(warehouse, userMap)).toList(), pageResult.getTotal()));
     }
 
     @GetMapping("/simple-list")
@@ -83,6 +95,25 @@ public class WmsWarehouseController {
     public CommonResult<List<WmsWarehouseRespVO>> getWarehouseSimpleList() {
         List<WmsWarehouseDO> list = warehouseService.getWarehouseList();
         return success(BeanUtils.toBean(list, WmsWarehouseRespVO.class));
+    }
+
+    private WmsWarehouseRespVO buildWarehouseRespVO(WmsWarehouseDO warehouse) {
+        if (warehouse == null) return null;
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(java.util.stream.Stream.of(
+                parseUserId(warehouse.getCreator()), parseUserId(warehouse.getUpdater()))
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        return buildWarehouseRespVO(warehouse, userMap);
+    }
+
+    private WmsWarehouseRespVO buildWarehouseRespVO(WmsWarehouseDO warehouse, Map<Long, AdminUserRespDTO> userMap) {
+        WmsWarehouseRespVO vo = BeanUtils.toBean(warehouse, WmsWarehouseRespVO.class);
+        MapUtils.findAndThen(userMap, parseUserId(vo.getCreator()), user -> vo.setCreatorName(user.getNickname()));
+        MapUtils.findAndThen(userMap, parseUserId(vo.getUpdater()), user -> vo.setUpdaterName(user.getNickname()));
+        return vo;
+    }
+
+    private Long parseUserId(String userId) {
+        return NumberUtil.parseLong(userId, null);
     }
 
     @GetMapping("/export-excel")

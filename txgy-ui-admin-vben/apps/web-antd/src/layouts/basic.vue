@@ -182,6 +182,11 @@ const tenantEnable = computed(
 async function handleGetTenantList() {
   if (tenantEnable.value) {
     tenants.value = await getSimpleTenantList();
+    // 兜底：历史会话（或登录流程未写入）可能没有「访问租户」，
+    // 用登录租户补齐，避免下拉长期停留在「请选择租户」占位符。
+    if (!accessStore.visitTenantId && accessStore.tenantId) {
+      accessStore.setVisitTenantId(accessStore.tenantId);
+    }
   }
 }
 

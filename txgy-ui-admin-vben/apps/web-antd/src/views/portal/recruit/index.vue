@@ -574,7 +574,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="portal-page recruit-page" :class="{ 'recruit-page--home': activeSection === 'home', 'recruit-page--jobs': activeSection === 'jobs' }">
+  <div class="portal-page recruit-page" :class="{ 'recruit-page--home': activeSection === 'home' }">
     <nav :class="{ 'is-scrolled': subnavScrolled }" class="recruit-subnav" aria-label="我要找工作导航">
       <div class="recruit-nav-links">
       <button :class="{ active: activeSection === 'home' }" type="button" @click="selectSection('home')">首页</button>
@@ -795,7 +795,7 @@ onUnmounted(() => {
           <article
             v-for="post in homePreviewPosts"
             :key="post.id"
-            class="post-card"
+            class="post-card home-job-card"
             role="link"
             tabindex="0"
             @click="router.push({ name: 'PortalRecruitDetail', query: { id: post.id } })"
@@ -813,40 +813,44 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="post-card-actions">
+              <span class="post-card-company">
+                <IconifyIcon icon="lucide:building-2" />
+                <span>{{ getPostCompanyName(post) }}</span>
+              </span>
               <span class="company-meta-detail">{{ post.postTypeName || '行业企业' }}</span>
             </div>
           </article>
         </div>
         <div v-else class="search-results-layout">
-          <div class="search-result-list">
-            <div class="search-result-heading">
-              <strong>搜索结果</strong>
-              <span>{{ formatPostTotal(postTotal) }}</span>
+            <div class="search-result-list">
+              <div class="search-result-heading">
+                <strong>搜索结果</strong>
+                <span>{{ formatPostTotal(postTotal) }}</span>
+              </div>
+                <article
+                  v-for="post in displayPosts"
+                  :key="post.id"
+                  class="search-post-card"
+                  :class="{ selected: selectedPost?.id === post.id }"
+                  @click="selectPost(post)"
+                >
+                  <div class="search-post-topline">
+                    <strong>{{ post.postName }}</strong>
+                    <b>{{ formatSalary(post) }}</b>
+                  </div>
+                  <div class="search-post-meta">
+                    <span>{{ formatLocation(post) }}</span>
+                    <span>{{ formatWorkTime(post.workTime) }}</span>
+                    <span>{{ formatEducation(post.educationRequire) }}</span>
+                  </div>
+                  <div class="search-post-company">
+                    {{ getPostCompanyName(post) }}
+                  </div>
+                  <button class="search-favorite" :class="{ active: isFavorite(post) }" type="button" @click.stop="toggleFavorite(post)">
+                    <IconifyIcon icon="lucide:star" /> {{ isFavorite(post) ? '已收藏' : '收藏' }}
+                  </button>
+                </article>
             </div>
-            <article
-              v-for="post in displayPosts"
-              :key="post.id"
-              class="search-post-card"
-              :class="{ selected: selectedPost?.id === post.id }"
-              @click="selectPost(post)"
-            >
-              <div class="search-post-topline">
-                <strong>{{ post.postName }}</strong>
-                <b>{{ formatSalary(post) }}</b>
-              </div>
-              <div class="search-post-meta">
-                <span>{{ formatLocation(post) }}</span>
-                <span>{{ formatWorkTime(post.workTime) }}</span>
-                <span>{{ formatEducation(post.educationRequire) }}</span>
-              </div>
-              <div class="search-post-company">
-                {{ getPostCompanyName(post) }}
-              </div>
-              <button class="search-favorite" :class="{ active: isFavorite(post) }" type="button" @click.stop="toggleFavorite(post)">
-                <IconifyIcon icon="lucide:star" /> {{ isFavorite(post) ? '已收藏' : '收藏' }}
-              </button>
-            </article>
-          </div>
           <article v-if="selectedPost" class="search-detail-card">
             <div class="search-detail-header">
               <div>
@@ -882,14 +886,6 @@ onUnmounted(() => {
             </section>
           </article>
         </div>
-        <a-button
-          v-if="activeSection === 'home' && !isSearchMode && !showAllPosts && postTotal > previewPosts.length"
-          class="show-more-posts"
-          type="default"
-          @click="showMorePosts"
-        >
-          查看更多
-        </a-button>
         <Pagination
           v-if="postTotal && (activeSection === 'jobs' || isSearchMode || showAllPosts)"
           :current="postPage.pageNo"
@@ -902,6 +898,14 @@ onUnmounted(() => {
           :show-total="formatPostTotal"
           @change="handlePostPageChange"
         />
+        <a-button
+          v-if="activeSection === 'home' && !isSearchMode && !showAllPosts && postTotal > previewPosts.length"
+          class="show-more-posts"
+          type="default"
+          @click="showMorePosts"
+        >
+          查看更多
+        </a-button>
       </a-tab-pane>
 </a-tabs>
 
@@ -1969,6 +1973,80 @@ onUnmounted(() => {
 .home-job-grid .post-card-actions { border-top-color: var(--recruit-line); background: #f7fbfa; }
 .company-meta-detail { color: #587178; }
 
+.home-job-card {
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 220px !important;
+  gap: 14px !important;
+  padding: 24px 22px 0 !important;
+}
+
+.home-job-card .post-card-main {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.home-job-card .post-title-row {
+  align-items: baseline;
+}
+
+.home-job-card .post-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-job-card .post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.home-job-card .post-tags span {
+  padding: 5px 10px;
+  border: 1px solid #d7e9ed;
+  border-radius: 6px;
+  color: #587178;
+  background: #f1f7f5;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.home-job-card .post-card-actions {
+  min-height: 54px;
+  margin-inline: -22px;
+  padding: 13px 22px;
+}
+
+.home-job-card .post-card-company {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: #425d64;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.home-job-card .post-card-company :deep(svg) {
+  flex: 0 0 auto;
+  color: var(--recruit-accent);
+  font-size: 17px;
+}
+
+.home-job-card .post-card-company > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-job-card .company-meta-detail {
+  flex: 0 0 auto;
+  color: #425d64;
+  font-size: 15px;
+}
+
 .service-section { padding-top: 24px; }
 .service-heading .section-kicker { font-size: 15px; }
 .service-heading h2 { color: var(--recruit-ink); }
@@ -2051,102 +2129,6 @@ onUnmounted(() => {
   background: radial-gradient(circle at 80% 3%, rgb(198 235 242 / 62%), transparent 26rem);
 }
 .recruit-page--home { margin-top: 0 !important; padding-bottom: 0 !important; }
-
-.recruit-page--jobs {
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100%;
-  min-height: 0;
-  margin-top: 0;
-  overflow: hidden;
-}
-
-:global(html:has(.recruit-page--jobs)),
-:global(body:has(.recruit-page--jobs)) {
-  overflow: hidden;
-}
-
-:global(.portal-shell--recruit:has(.recruit-page--jobs)) {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-
-:global(.portal-shell--recruit:has(.recruit-page--jobs) .portal-header) {
-  flex: 0 0 auto;
-}
-
-:global(.portal-shell--recruit:has(.recruit-page--jobs) .portal-main--recruit) {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-}
-
-.recruit-page--jobs > .recruit-tabs {
-  height: 100%;
-  min-height: 0;
-}
-
-.recruit-page--jobs .recruit-tabs :deep(.ant-tabs-content-holder) {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.recruit-page--jobs .recruit-tabs :deep(.ant-tabs-content),
-.recruit-page--jobs .recruit-tabs :deep(.ant-tabs-tabpane) {
-  height: 100%;
-  min-height: 0;
-}
-
-.recruit-page--jobs .recruit-tabs :deep(.ant-tabs-tabpane) {
-  display: flex;
-  flex-direction: column;
-}
-
-.recruit-page--jobs .search-results-layout {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.recruit-page--jobs .search-result-list,
-.recruit-page--jobs .search-detail-card {
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-color: #8bbcc3 transparent;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-}
-
-.recruit-page--jobs .search-result-list::-webkit-scrollbar,
-.recruit-page--jobs .search-detail-card::-webkit-scrollbar {
-  width: 10px;
-}
-
-.recruit-page--jobs .search-result-list::-webkit-scrollbar-thumb,
-.recruit-page--jobs .search-detail-card::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background: #8bbcc3;
-  background-clip: padding-box;
-}
-
-.recruit-page--jobs .search-result-list::-webkit-scrollbar-track,
-.recruit-page--jobs .search-detail-card::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-@media (max-width: 900px) {
-  .recruit-page--jobs .search-results-layout {
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-  }
-}
 
 .recruit-subnav {
   border-color: rgb(215 233 237 / 92%);

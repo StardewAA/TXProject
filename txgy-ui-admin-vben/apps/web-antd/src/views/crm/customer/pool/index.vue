@@ -12,6 +12,7 @@ import { Button, message, Modal, Select } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
+  autoPutCustomerPool,
   distributeCustomer,
   exportCustomer,
   getCustomerPage,
@@ -49,6 +50,25 @@ async function handleExport() {
 /** 查看客户详情 */
 function handleDetail(row: CrmCustomerApi.Customer) {
   push({ name: 'CrmCustomerDetail', params: { id: row.id } });
+}
+
+/** 立即执行一次「客户自动掉入公海」（按公海规则：未成交天数 / 未跟进天数） */
+async function handleAutoPutPool() {
+  const hideLoading = message.loading({
+    content: '正在按公海规则执行自动掉入...',
+    duration: 0,
+  });
+  try {
+    const count = await autoPutCustomerPool();
+    if (count > 0) {
+      message.success(`执行完成：本次有 ${count} 个客户掉入公海`);
+    } else {
+      message.info('执行完成：没有符合条件的客户需要掉入公海');
+    }
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
 }
 
 /** ==================== 公海领取 / 分配 ==================== */
@@ -207,6 +227,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'primary',
               auth: ['crm:customer:receive'],
               onClick: handleBatchReceive,
+            },
+            {
+              label: '执行自动掉入',
+              type: 'primary',
+              auth: ['crm:customer:update'],
+              popConfirm: {
+                title:
+                  '按公海规则（未成交天数 / 未跟进天数）把符合条件的客户放入公海，确认执行？',
+                confirm: handleAutoPutPool,
+              },
             },
           ]"
         />

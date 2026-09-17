@@ -8,6 +8,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.tm.tool.vo.MesTmToolSaveReqVO
 import cn.iocoder.txgy.module.mes.dal.dataobject.tm.tool.MesTmToolDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.tm.tool.MesTmToolMapper;
 import cn.iocoder.txgy.module.mes.enums.tm.MesTmMaintenTypeEnum;
+import cn.iocoder.txgy.module.mes.enums.tm.MesTmToolStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.BarcodeBizTypeEnum;
 import cn.iocoder.txgy.module.mes.service.wm.barcode.MesWmBarcodeService;
 import cn.iocoder.txgy.module.mes.service.wm.batch.MesWmBatchService;
@@ -63,7 +64,7 @@ public class MesTmToolServiceImpl implements MesTmToolService {
     @Override
     public void updateTool(MesTmToolSaveReqVO updateReqVO) {
         // 1.1 校验存在
-        validateToolExists(updateReqVO.getId());
+        MesTmToolDO dbTool = validateToolExists(updateReqVO.getId());
         // 1.2 校验数据
         validateToolSaveData(updateReqVO.getId(), updateReqVO);
 
@@ -75,7 +76,28 @@ public class MesTmToolServiceImpl implements MesTmToolService {
         }
         // 2.2 更新
         MesTmToolDO updateObj = BeanUtils.toBean(updateReqVO, MesTmToolDO.class);
+        // 2.3 状态为由单据驱动的派生字段，禁止台账编辑直接覆盖
+        updateObj.setStatus(dbTool.getStatus());
+        // 2.4 可用数量同步库存数量的调整差额，避免把页面旧值写回导致单据变动丢失
+        updateObj.setAvailableQuantity(calcAvailableQuantity(dbTool, updateReqVO.getQuantity()));
         toolMapper.updateById(updateObj);
+    }
+
+    /**
+     * 计算调整后的可用数量：新增传入不做干预，编辑时按「库存数量差额」同步增减
+     *
+     * @param dbTool     数据库中的工具记录
+     * @param newQuantity 新的库存数量
+     * @return 调整后的可用数量
+     */
+    private Integer calcAvailableQuantity(MesTmToolDO dbTool, Integer newQuantity) {
+        Integer oldQuantity = dbTool.getQuantity();
+        Integer availableQuantity = dbTool.getAvailableQuantity() == null ? 0 : dbTool.getAvailableQuantity();
+        if (newQuantity == null || oldQuantity == null) {
+            return availableQuantity;
+        }
+        int delta = newQuantity - oldQuantity;
+        return Math.max(0, availableQuantity + delta);
     }
 
     private void validateToolSaveData(Long id, MesTmToolSaveReqVO reqVO) {
@@ -96,12 +118,6 @@ public class MesTmToolServiceImpl implements MesTmToolService {
 
         // 删除
         toolMapper.deleteById(id);
-    }
-
-    private void validateToolExists(Long id) {
-        if (toolMapper.selectById(id) == null) {
-            throw exception(TM_TOOL_NOT_EXISTS);
-        }
     }
 
     private void validateToolCodeUnique(Long id, String code) {
@@ -143,6 +159,51 @@ public class MesTmToolServiceImpl implements MesTmToolService {
             return Collections.emptyList();
         }
         return toolMapper.selectByIds(ids);
+    }
+
+    @Override
+    public MesTmToolDO validateToolExists(Long id) {
+        MesTmToolDO tool = toolMapper.selectById(id);
+        if (tool == null) {
+            throw exception(TM_TOOL_NOT_EXISTS);
+        }
+        return tool;
+    }
+
+    @Override
+    public void decreaseAvailableQuantity(Long toolId, Integer quantity) {
+        MesTmToolDO tool = validateToolExists(toolId);
+        if (tool.getAvailableQuantity() < quantity) {
+            throw exception(TM_TOOL_AVAILABLE_QUANTITY_INSUFFICIENT);
+        }
+        toolMapper.updateById(new MesTmToolDO().setId(toolId)
+                .setAvailableQuantity(tool.getAvailableQuantity() - quantity));
+    }
+
+    @Override
+    public void increaseAvailableQuantity(Long toolId, Integer quantity) {
+        MesTmToolDO tool = validateToolExists(toolId);
+        toolMapper.updateById(new MesTmToolDO().setId(toolId)
+                .setAvailableQuantity(tool.getAvailableQuantity() + quantity));
+    }
+
+    @Override
+    public void updateToolStatus(Long toolId, Integer status) {
+        validateToolExists(toolId);
+        toolMapper.updateById(new MesTmToolDO().setId(toolId).setStatus(status));
+    }
+
+    @Override
+    public void scrapTool(Long toolId, Integer quantity) {
+        MesTmToolDO tool = validateToolExists(toolId);
+        if (tool.getAvailableQuantity() < quantity) {
+            throw exception(TM_TOOL_AVAILABLE_QUANTITY_INSUFFICIENT);
+        }
+        toolMapper.updateById(new MesTmToolDO().setId(toolId)
+                .setQuantity(tool.getQuantity() - quantity)
+                .setAvailableQuantity(tool.getAvailableQuantity() - quantity)
+                .setStatus(tool.getQuantity() - quantity <= 0
+                        ? MesTmToolStatusEnum.SCRAP.getStatus() : tool.getStatus()));
     }
 
 }

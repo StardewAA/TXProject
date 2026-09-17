@@ -249,6 +249,9 @@ public class CourseServiceImpl implements CourseService {
         CourseDO newCourse = BeanUtils.toBean(course, CourseDO.class);
         newCourse.setId(null);
         newCourse.setVersion((course.getVersion() == null ? 0 : course.getVersion()) + 1);
+        // 版本链根兜底：老数据 root_id 可能为空，此时以原课程自身作为族根，
+        // 否则新版本 root_id 为空会导致「版本管理」查询不到任何版本
+        newCourse.setRootId(course.getRootId() == null ? course.getId() : course.getRootId());
         newCourse.setIsCurrent(true);
         newCourse.setStatus(CourseStatusEnum.DRAFT.getStatus());
         newCourse.setCommentCount(0);
