@@ -133,8 +133,14 @@ function resolveRedirectPath() {
       redirect && !redirect.startsWith('/portal/') ? redirect : '';
 
     const configuredHomePath = userInfo?.homePath;
+    // 旧的 WMS 首页已下线，若后端仍返回该路径则回退到默认首页（WMS AI 首页）
+    const isLegacyWmsHome =
+      configuredHomePath === '/wms/home' ||
+      configuredHomePath === '/wms/home/index';
     const enterpriseHomePath =
-      configuredHomePath && !configuredHomePath.startsWith('/portal/')
+      configuredHomePath &&
+      !configuredHomePath.startsWith('/portal/') &&
+      !isLegacyWmsHome
         ? configuredHomePath
         : '';
 

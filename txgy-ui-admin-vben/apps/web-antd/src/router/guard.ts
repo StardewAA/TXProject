@@ -60,6 +60,11 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
+    // 旧 WMS 首页已下线，重定向到新的 AI 首页
+    if (to.path === '/wms/home') {
+      return { path: '/wms/ai-center', replace: true };
+    }
+
     // 员工端门户是静态路由，但仍必须登录后才能访问。
     if (to.path === '/portal' || to.path.startsWith('/portal/')) {
       if (!accessStore.accessToken) {
