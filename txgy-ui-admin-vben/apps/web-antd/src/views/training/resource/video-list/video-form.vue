@@ -181,8 +181,13 @@ async function handleConfirm() {
           data.append(key, String(value));
         }
       });
-      await uploadVideo(data);
-      message.success('视频上传成功，已上线');
+      const result = await uploadVideo(data);
+      message.success(
+        result?.message ||
+          (result?.taskCount
+            ? `上传成功，后台正在转码 ${result.taskCount} 个清晰度`
+            : '视频上传成功，已上线'),
+      );
     }
     modalApi.close();
     emit('success');
@@ -266,8 +271,8 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
       <div class="text-xs text-gray-400">
-        系统将按原始清晰度生成可切换的降级清晰度（720P 原始时会提供 480P /
-        360P 选项），转码完成后可在播放时选择更低清晰度以适应弱网环境。
+        上传后系统在后台异步生成 360P / 480P / 720P 转码版本（不高于上传时的原始清晰度），
+        进度可在列表中查看；转码完成后播放时可自由切换清晰度以适应弱网环境。
       </div>
 
       <div v-if="!editing">

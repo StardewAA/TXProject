@@ -87,7 +87,6 @@ deploy/backup_*.sql
 
 ######################################################################
 # 部署产物与工具缓存（不入库）
-/deploy/jars/
 /deploy/mysql/init.d/
 /.dsh-vision-router/
 /.preview_tmp/
@@ -102,6 +101,13 @@ txgy-ui-admin-vben/.exam-*.log
 
 # 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
 uploads/
+# 例外：云培训学院标准视频种子数据随项目分发，应用启动自动入库
+!deploy/uploads/
+!deploy/uploads/resource/
+!deploy/uploads/resource/video/
+!deploy/uploads/resource/video/seed/
+!deploy/uploads/resource/video/seed/*.mp4
+!deploy/uploads/resource/video/seed/*.mov
 
 ######################################################################
 # pnpm 本地内容寻址存储（仅本地缓存，禁止入库）
@@ -116,6 +122,5 @@ deploy/backend/erp-app.jar
 
 # 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
 /data/cms-import/
-
-# 个人工作日志（本地文档，不入库）
-docs/个人项目日志_*.docx
+deploy/backend/bpm-app.jar
+/deploy/jars/**/app.jar

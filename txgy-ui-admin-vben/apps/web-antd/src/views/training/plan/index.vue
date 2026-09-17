@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingPlanApi } from './api';
+
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { useRouter } from 'vue-router';
 
@@ -208,6 +209,18 @@ function buildActions(row: TrainingPlanApi.Class) {
         },
       },
     );
+  } else if (status === 2 || status === 3) {
+    // 已结束（已完成 / 已取消）：允许删除清理
+    actions.push({
+      label: '删除',
+      type: 'link',
+      danger: true,
+      icon: ACTION_ICON.DELETE,
+      popConfirm: {
+        title: '确认删除该培训班？删除后不可恢复',
+        confirm: () => handleDelete(row),
+      },
+    });
   }
   return actions;
 }

@@ -103,6 +103,11 @@ function openHistory(record?: CertificateApi.Certificate) {
   void loadHistory();
 }
 
+function reloadHistory() {
+  historyQuery.pageNo = 1;
+  void loadHistory();
+}
+
 async function loadHistory() {
   historyLoading.value = true;
   try {
@@ -212,8 +217,10 @@ async function load() {
       a.validTo.localeCompare(b.validTo),
     );
     total.value = mergedRows.value.length;
-    const start = (query.pageNo - 1) * query.pageSize;
-    unifiedRows.value = mergedRows.value.slice(start, start + query.pageSize);
+    const pageNo = query.pageNo ?? 1;
+    const pageSize = query.pageSize ?? MERGE_CAP;
+    const start = (pageNo - 1) * pageSize;
+    unifiedRows.value = mergedRows.value.slice(start, start + pageSize);
   } catch {
     rows.value = [];
     unifiedRows.value = [];
@@ -353,7 +360,7 @@ function confirmScan() {
 function confirmDispatch() {
   Modal.confirm({
     title: '手动派发通知发件箱',
-    content: '把 PENDING/FAILED 到点的通知立刻投递（已发送记录不会重复发送）。',
+    content: '把处于「待投递 / 投递失败」状态的到期通知立即投递（已发送记录不会重复发送）。',
     okText: '立即派发',
     cancelText: '取消',
     async onOk() {
@@ -497,7 +504,7 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
             row-key="key"
             size="small"
           >
-            <template #emptyText><div class="ct-empty">该范围内暂无证照</div></template>
+            <template #emptyText><div class="ct-empty">该范围内暂无证照：可调整筛选条件，或点右上「证照建档」录入</div></template>
           </a-table>
         </template>
 
@@ -684,31 +691,17 @@ const verifyFilters = computed(() => dictOptions('verification_status'));
       :title="historyCert ? `验真历史 · ${historyCert.certName}` : '验真历史 · 本租户全部留痕'"
     >
       <a-space class="mb-3" wrap>
-        <a-select
-          v-model:value="historyQuery.verifyChannel"
+        <AttrFilter
+          v-model="historyQuery.verifyChannel"
+          label="验真渠道"
           :options="historyChannelOptions"
-          allow-clear
-          placeholder="验真渠道"
-          style="width: 170px"
-          @change="
-            () => {
-              historyQuery.pageNo = 1;
-              loadHistory();
-            }
-          "
+          @change="reloadHistory"
         />
-        <a-select
-          v-model:value="historyQuery.verifyResult"
+        <AttrFilter
+          v-model="historyQuery.verifyResult"
+          label="验真结论"
           :options="historyResultOptions"
-          allow-clear
-          placeholder="验真结论"
-          style="width: 170px"
-          @change="
-            () => {
-              historyQuery.pageNo = 1;
-              loadHistory();
-            }
-          "
+          @change="reloadHistory"
         />
         <a-button @click="loadHistory">刷新</a-button>
         <span class="ct-panel-meta">共 {{ historyTotal }} 条留痕</span>

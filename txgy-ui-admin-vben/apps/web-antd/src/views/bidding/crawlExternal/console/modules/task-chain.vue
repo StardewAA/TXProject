@@ -26,7 +26,7 @@ import { fmtBytes } from '#/utils/format';
 import { AUDIT_MAP, STATUS_MAP as EXT_STATUS_MAP } from '../../../noticeExternal/data';
 import NoticeDetailModal from '../../../noticeExternal/modules/detail.vue';
 import { contentFormText, FETCH_TYPE_HINT, FETCH_TYPE_LABEL, fetchTypeText } from '../../labels';
-import { fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
+import { crawlErrMsg, fmtDt, tagOf, TASK_STATUS_MAP } from '../../shared';
 
 import '../../taskbar.css';
 
@@ -76,7 +76,7 @@ async function load() {
     if (got?.status === 'SUCCESS') void findProduct();
   } catch (e) {
     full.value = row;
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     loading.value = false;
   }
@@ -134,7 +134,7 @@ async function handleRetry() {
     message.success('已重新入队（attempt 归零）');
     await load();
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     retryBusy.value = false;
   }
@@ -211,7 +211,7 @@ async function findProduct() {
     productRows.value = hit.length ? hit : titleHit;
     productState.value = productRows.value.length ? 'found' : 'none';
   } catch (e) {
-    productErr.value = e instanceof Error ? e.message : String(e);
+    productErr.value = crawlErrMsg(e);
     productState.value = 'error';
   } finally {
     productLoading.value = false;

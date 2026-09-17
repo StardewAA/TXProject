@@ -4,6 +4,9 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -16,11 +19,13 @@ import cn.iocoder.txgy.module.crm.controller.admin.contract.vo.contract.CrmContr
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractConfigDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractProductDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.mysql.contract.CrmContractMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.contract.CrmContractProductMapper;
 import cn.iocoder.txgy.module.crm.dal.redis.no.CrmNoRedisDAO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.contract.CrmContractTemplateTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
@@ -31,7 +36,9 @@ import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
 import cn.iocoder.txgy.module.crm.service.receivable.CrmReceivableService;
+import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
@@ -43,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -114,6 +122,8 @@ public class CrmContractServiceImpl implements CrmContractService {
         // 2.1 插入合同
         CrmContractDO contract = BeanUtils.toBean(createReqVO, CrmContractDO.class).setNo(no);
         calculateTotalPrice(contract, contractProducts);
+        // 2.1.1 填充合同模板默认值（我方主体取配置、对方取客户档案、条款取配置默认值）
+        fillContractTemplateDefaults(contract, createReqVO.getCustomerId());
         contractMapper.insert(contract);
         // 2.2 插入合同关联商品
         if (CollUtil.isNotEmpty(contractProducts)) {
@@ -154,6 +164,8 @@ public class CrmContractServiceImpl implements CrmContractService {
         // 2.1 更新合同
         CrmContractDO updateObj = BeanUtils.toBean(updateReqVO, CrmContractDO.class);
         calculateTotalPrice(updateObj, contractProducts);
+        // 2.1.1 填充合同模板默认值
+        fillContractTemplateDefaults(updateObj, updateReqVO.getCustomerId());
         contractMapper.updateById(updateObj);
         // 2.2 更新合同关联商品
         updateContractProduct(updateReqVO.getId(), contractProducts);
@@ -178,6 +190,230 @@ public class CrmContractServiceImpl implements CrmContractService {
         if (CollUtil.isNotEmpty(diffList.get(2))) {
             contractProductMapper.deleteByIds(convertSet(diffList.get(2), CrmContractProductDO::getId));
         }
+    }
+
+    // ==================== 合同模板默认值填充 ====================
+
+    /**
+     * 填充合同模板相关字段的默认值，确保生成的合同不遗漏必填项
+     *
+     * 取值优先级：合同中已填写的值 > 我方主体配置 / 客户档案 > 合同配置默认值
+     *
+     * @param contract   合同
+     * @param customerId 客户编号
+     */
+    private void fillContractTemplateDefaults(CrmContractDO contract, Long customerId) {
+        if (contract.getTemplateType() == null) {
+            contract.setTemplateType(CrmContractTemplateTypeEnum.PURCHASE.getType());
+        }
+        CrmContractConfigDO config = contractConfigService.getContractConfig();
+        if (config != null) {
+            fillClauseDefaults(contract, config);
+            // 违约责任：未单独维护时，使用配置中的默认值
+            if (StrUtil.isBlank(contract.getPenaltyTerms())) {
+                contract.setPenaltyTerms(buildDefaultPenaltyTerms(contract.getTemplateType(), config));
+            }
+            // 我方主体信息：采购合同为甲方，购销合同为乙方
+            fillOurParty(contract, config);
+        }
+        // 对方主体信息兜底：使用客户名称
+        fillCustomerParty(contract, customerId);
+        // 付款金额：未填写时按合同总价与比例自动计算
+        calculatePayAmounts(contract);
+    }
+
+    private void fillClauseDefaults(CrmContractDO contract, CrmContractConfigDO config) {
+        if (StrUtil.isBlank(contract.getQualityStandard())) {
+            contract.setQualityStandard(config.getDefaultQualityStandard());
+        }
+        if (contract.getSampleDays() == null) {
+            contract.setSampleDays(config.getDefaultSampleDays());
+        }
+        if (contract.getDeliveryDays() == null) {
+            contract.setDeliveryDays(config.getDefaultDeliveryDays());
+        }
+        if (contract.getDeliveryArriveDays() == null) {
+            contract.setDeliveryArriveDays(config.getDefaultDeliveryArriveDays());
+        }
+        if (contract.getInstallDays() == null) {
+            contract.setInstallDays(config.getDefaultInstallDays());
+        }
+        if (contract.getFirstAcceptDays() == null) {
+            contract.setFirstAcceptDays(config.getDefaultFirstAcceptDays());
+        }
+        if (contract.getTrialDays() == null) {
+            contract.setTrialDays(config.getDefaultTrialDays());
+        }
+        if (contract.getFinalAcceptDays() == null) {
+            contract.setFinalAcceptDays(config.getDefaultFinalAcceptDays());
+        }
+        if (contract.getAutoAcceptDays() == null) {
+            contract.setAutoAcceptDays(config.getDefaultAutoAcceptDays());
+        }
+        if (contract.getMaxRepairTimes() == null) {
+            contract.setMaxRepairTimes(config.getDefaultMaxRepairTimes());
+        }
+        if (contract.getPrepayRatio() == null) {
+            contract.setPrepayRatio(config.getDefaultPrepayRatio());
+        }
+        if (contract.getPrepayDays() == null) {
+            contract.setPrepayDays(config.getDefaultPrepayDays());
+        }
+        if (contract.getAcceptPayRatio() == null) {
+            contract.setAcceptPayRatio(config.getDefaultAcceptPayRatio());
+        }
+        if (contract.getAcceptPayDays() == null) {
+            contract.setAcceptPayDays(config.getDefaultAcceptPayDays());
+        }
+        if (contract.getDepositRatio() == null) {
+            contract.setDepositRatio(config.getDefaultDepositRatio());
+        }
+        if (contract.getDepositMonths() == null) {
+            contract.setDepositMonths(config.getDefaultDepositMonths());
+        }
+        if (contract.getDepositDays() == null) {
+            contract.setDepositDays(config.getDefaultDepositDays());
+        }
+        if (contract.getWarrantyYears() == null) {
+            contract.setWarrantyYears(config.getDefaultWarrantyYears());
+        }
+        if (contract.getResponseHours() == null) {
+            contract.setResponseHours(config.getDefaultResponseHours());
+        }
+        if (contract.getRepairHours() == null) {
+            contract.setRepairHours(config.getDefaultRepairHours());
+        }
+        if (contract.getRepairTimes() == null) {
+            contract.setRepairTimes(config.getDefaultRepairTimes());
+        }
+        if (contract.getReportRepairDays() == null) {
+            contract.setReportRepairDays(config.getDefaultReportRepairDays());
+        }
+        if (contract.getContractCopies() == null) {
+            contract.setContractCopies(config.getDefaultContractCopies());
+        }
+        if (StrUtil.isBlank(contract.getGpcName())) {
+            contract.setGpcName(config.getDefaultGpcName());
+        }
+    }
+
+    private void fillOurParty(CrmContractDO contract, CrmContractConfigDO config) {
+        if (StrUtil.isBlank(config.getOurCompanyName())) {
+            return;
+        }
+        boolean isPurchase = !ObjUtil.equal(contract.getTemplateType(),
+                CrmContractTemplateTypeEnum.SALES.getType());
+        if (isPurchase) {
+            if (StrUtil.isBlank(contract.getPartyAName())) {
+                contract.setPartyAName(config.getOurCompanyName());
+            }
+            if (StrUtil.isBlank(contract.getPartyALegalPerson())) {
+                contract.setPartyALegalPerson(config.getOurLegalPerson());
+            }
+            if (StrUtil.isBlank(contract.getPartyAAgent())) {
+                contract.setPartyAAgent(config.getOurAgent());
+            }
+            if (StrUtil.isBlank(contract.getPartyAAddress())) {
+                contract.setPartyAAddress(config.getOurAddress());
+            }
+            if (StrUtil.isBlank(contract.getPartyABankName())) {
+                contract.setPartyABankName(config.getOurBankName());
+            }
+            if (StrUtil.isBlank(contract.getPartyABankAccount())) {
+                contract.setPartyABankAccount(config.getOurBankAccount());
+            }
+            if (StrUtil.isBlank(contract.getPartyATel())) {
+                contract.setPartyATel(config.getOurTel());
+            }
+            if (StrUtil.isBlank(contract.getPartyAFax())) {
+                contract.setPartyAFax(config.getOurFax());
+            }
+        } else {
+            if (StrUtil.isBlank(contract.getPartyBName())) {
+                contract.setPartyBName(config.getOurCompanyName());
+            }
+            if (StrUtil.isBlank(contract.getPartyBLegalPerson())) {
+                contract.setPartyBLegalPerson(config.getOurLegalPerson());
+            }
+            if (StrUtil.isBlank(contract.getPartyBAgent())) {
+                contract.setPartyBAgent(config.getOurAgent());
+            }
+            if (StrUtil.isBlank(contract.getPartyBAddress())) {
+                contract.setPartyBAddress(config.getOurAddress());
+            }
+            if (StrUtil.isBlank(contract.getPartyBBankName())) {
+                contract.setPartyBBankName(config.getOurBankName());
+            }
+            if (StrUtil.isBlank(contract.getPartyBBankAccount())) {
+                contract.setPartyBBankAccount(config.getOurBankAccount());
+            }
+            if (StrUtil.isBlank(contract.getPartyBTel())) {
+                contract.setPartyBTel(config.getOurTel());
+            }
+            if (StrUtil.isBlank(contract.getPartyBFax())) {
+                contract.setPartyBFax(config.getOurFax());
+            }
+        }
+    }
+
+    private void fillCustomerParty(CrmContractDO contract, Long customerId) {
+        if (customerId == null) {
+            return;
+        }
+        boolean isPurchase = !ObjUtil.equal(contract.getTemplateType(),
+                CrmContractTemplateTypeEnum.SALES.getType());
+        String existName = isPurchase ? contract.getPartyBName() : contract.getPartyAName();
+        if (StrUtil.isNotBlank(existName)) {
+            return;
+        }
+        CrmCustomerDO customer = customerService.getCustomer(customerId);
+        if (customer == null) {
+            return;
+        }
+        if (isPurchase) {
+            contract.setPartyBName(customer.getName());
+        } else {
+            contract.setPartyAName(customer.getName());
+        }
+    }
+
+    private String buildDefaultPenaltyTerms(Integer templateType, CrmContractConfigDO config) {
+        JSONObject json = JSONUtil.createObj();
+        if (ObjUtil.equal(templateType, CrmContractTemplateTypeEnum.SALES.getType())) {
+            json.set("sBuyerLateRatio", config.getSBuyerLateRatio());
+            json.set("sBuyerBreachRatio", config.getSBuyerBreachRatio());
+            json.set("sSellerLateRatio", config.getSSellerLateRatio());
+            json.set("sSellerBreachRatio", config.getSSellerBreachRatio());
+        } else {
+            json.set("pBuyerRejectRatio", config.getPBuyerRejectRatio());
+            json.set("pBuyerOverdueWan", config.getPBuyerOverdueWan());
+            json.set("pBuyerOverdueDays", config.getPBuyerOverdueDays());
+            json.set("pSellerQuality", config.getPSellerQuality());
+            json.set("pSellerOverdueWan", config.getPSellerOverdueWan());
+            json.set("pSellerOverdueDays", config.getPSellerOverdueDays());
+            json.set("pSellerCompensate", config.getPSellerCompensate());
+            json.set("pSellerReplaceDays", config.getPSellerReplaceDays());
+            json.set("pSellerTerminate", config.getPSellerTerminate());
+            json.set("pSellerDefect", config.getPSellerDefect());
+        }
+        return json.toString();
+    }
+
+    private void calculatePayAmounts(CrmContractDO contract) {
+        BigDecimal total = contract.getTotalPrice() == null ? BigDecimal.ZERO : contract.getTotalPrice();
+        if (contract.getPrepayAmount() == null && contract.getPrepayRatio() != null) {
+            contract.setPrepayAmount(calcAmountByRatio(total, contract.getPrepayRatio()));
+        }
+        if (contract.getAcceptPayAmount() == null && contract.getAcceptPayRatio() != null) {
+            contract.setAcceptPayAmount(calcAmountByRatio(total, contract.getAcceptPayRatio()));
+        }
+        if (contract.getDepositAmount() == null && contract.getDepositRatio() != null) {
+            contract.setDepositAmount(calcAmountByRatio(total, contract.getDepositRatio()));
+        }
+    }
+
+    private static BigDecimal calcAmountByRatio(BigDecimal total, BigDecimal ratio) {
+        return total.multiply(ratio).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -274,12 +510,14 @@ public class CrmContractServiceImpl implements CrmContractService {
     @LogRecord(type = CRM_CONTRACT_TYPE, subType = CRM_CONTRACT_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CONTRACT_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CONTRACT, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateContractFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
+    public void updateContractFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
+                                       String contactLastContent) {
         // 1. 校验存在
         CrmContractDO contract = validateContractExists(id);
 
-        // 2. 更新联系人的跟进信息
-        contractMapper.updateById(new CrmContractDO().setId(id).setContactLastTime(LocalDateTime.now()));
+        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
+        contractMapper.updateById(new CrmContractDO().setId(id)
+                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(contract.getContactLastTime(), contactTime)));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("contractName", contract.getName());
@@ -297,14 +535,24 @@ public class CrmContractServiceImpl implements CrmContractService {
         }
 
         // 2. 创建合同审批流程实例
+        //    注意：当「审批人与提交人为同一人」且节点配置为自动通过时，BPM 会在创建流程实例的过程中就直接
+        //    审批通过，并【同步】远程回调本服务的 updateContractAuditStatus，把审批状态更新为「已通过」。
+        //    因此必须等流程实例创建完成（即回调已落库）后，再回写本单据的状态，否则会把回调写入的终态覆盖掉。
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
                 .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id))).getCheckedData();
 
-        // 3. 更新合同工作流编号
-        contractMapper.updateById(new CrmContractDO().setId(id).setProcessInstanceId(processInstanceId)
-                .setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()));
+        // 3. 回写合同的工作流编号（仅更新该字段，不会覆盖回调写入的审批状态）
+        contractMapper.updateById(new CrmContractDO().setId(id).setProcessInstanceId(processInstanceId));
 
-        // 3. 记录日志
+        // 4. 更新审批状态为「审批中」：使用条件更新，仅在仍为「草稿」时才更新
+        //    为什么用条件更新而不是先查询再判断？因为本事务的快照早于第 2 步的远程回调，
+        //    普通查询会读到旧的「草稿」，从而把回调写入的「已通过」又覆盖回「审批中」。
+        contractMapper.update(new CrmContractDO().setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()),
+                new LambdaUpdateWrapper<CrmContractDO>()
+                        .eq(CrmContractDO::getId, id)
+                        .eq(CrmContractDO::getAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus()));
+
+        // 5. 记录日志
         LogRecordContext.putVariable("contractName", contract.getName());
     }
 
@@ -312,11 +560,18 @@ public class CrmContractServiceImpl implements CrmContractService {
     public void updateContractAuditStatus(Long id, Integer bpmResult) {
         // 1.1 校验合同是否存在
         CrmContractDO contract = validateContractExists(id);
-        // 1.2 只有审批中，可以更新审批结果
-        if (ObjUtil.notEqual(contract.getAuditStatus(), CrmAuditStatusEnum.PROCESS.getStatus())) {
-            log.error("[updateContractAuditStatus][contract({}) 不处于审批中，无法更新审批结果({})]",
-                    contract.getId(), bpmResult);
-            throw exception(CONTRACT_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS);
+        // 1.2 仅「草稿」「审批中」允许更新审批结果：
+        //     - 审批中：常规场景，即人工审批完成后回调本接口
+        //     - 草稿：「审批人与提交人为同一人」自动通过时，BPM 在创建流程实例的过程中就会回调本接口，
+        //             此时 submitContract 还没把状态回写为「审批中」（该事务甚至尚未提交），必须放行，
+        //             否则回调会被丢弃，合同将永久停留在「审批中」
+        //     - 其他：已是终态，直接忽略，保证回调的幂等性
+        Integer currentAuditStatus = contract.getAuditStatus();
+        if (ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.PROCESS.getStatus())
+                && ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus())) {
+            log.warn("[updateContractAuditStatus][contract({}) 已处于终态({})，忽略审批结果({})]",
+                    contract.getId(), currentAuditStatus, bpmResult);
+            return;
         }
 
         // 2. 更新合同审批结果

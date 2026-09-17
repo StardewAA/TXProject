@@ -7,16 +7,10 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import tools.jackson.databind.annotation.JsonDeserialize;
-import tools.jackson.databind.ext.javatime.deser.LocalDateTimeDeserializer;
 
 import java.time.LocalDateTime;
-
-import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
-import static cn.iocoder.txgy.framework.common.util.date.DateUtils.TIME_ZONE_DEFAULT;
 
 /**
  * 课程 DO
@@ -96,10 +90,6 @@ public class CourseDO extends TenantBaseDO {
      */
     private String applicablePosts;
     /**
-     * 学习域/课程组编码（按适用岗位工种自动匹配，逗号分隔；* 表示全域）
-     */
-    private String learnDomainCodes;
-    /**
      * 资源归属标识（对外部资源中心 owner_flag 的快照）
      */
     private String ownerFlag;
@@ -120,24 +110,9 @@ public class CourseDO extends TenantBaseDO {
      */
     private String compositeTags;
     /**
-     * 关联结课考试试卷 ID（模块三「考试与认证」试卷）
+     * 关联结课考试试卷 ID（模块三预留）
      */
     private Long examId;
-    /**
-     * 结课考试开始时间（模块三考试安排联动）
-     *
-     * <p>显式声明日期格式：框架默认将 LocalDateTime 序列化为时间戳，
-     * 而结课考试时间需与前端 RangePicker、模块三考试安排以字符串交互。</p>
-     */
-    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND, timezone = TIME_ZONE_DEFAULT)
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    private LocalDateTime examStartTime;
-    /**
-     * 结课考试结束时间（模块三考试安排联动）
-     */
-    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND, timezone = TIME_ZONE_DEFAULT)
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    private LocalDateTime examEndTime;
     /**
      * 主讲教师
      */

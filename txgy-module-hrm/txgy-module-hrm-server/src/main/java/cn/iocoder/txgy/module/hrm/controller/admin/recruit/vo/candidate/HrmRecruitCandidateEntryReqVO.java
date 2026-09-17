@@ -12,6 +12,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class HrmRecruitCandidateEntryReqVO extends HrmEmployeeSaveReqVO {
 
+    @Schema(description = "应聘记录编号；新流程入职必须提供", example = "1024")
+    private Long applicationId;
+
     @AssertTrue(message = "候选人编号不能为空")
     @JsonIgnore
     public boolean isCandidateIdValid() {

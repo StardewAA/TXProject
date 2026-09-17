@@ -87,6 +87,13 @@ public class HrmRecruitApplicationController {
         applicationService.enterInterview(reqVO); return success(true);
     }
 
+    @PutMapping("/skip-interview")
+    @Operation(summary = "免面试通过")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:application:interview')")
+    public CommonResult<Boolean> skipInterview(@RequestParam("id") Long id) {
+        applicationService.skipInterview(id); return success(true);
+    }
+
     @PutMapping("/withdraw")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:application:withdraw')")
     public CommonResult<Boolean> withdraw(@Valid @RequestBody HrmRecruitApplicationStatusReqVO reqVO) {

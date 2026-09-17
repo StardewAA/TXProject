@@ -120,6 +120,13 @@ export async function getTenantByWebsite(website: string) {
   return response?.data?.data ?? response?.data ?? null;
 }
 
+/** 使用租户名，获得租户编号（登录页手动输入租户名时使用） */
+export async function getTenantIdByName(name: string) {
+  return requestClient.get<null | number>(
+    `/system/tenant/get-id-by-name?name=${encodeURIComponent(name)}`,
+  );
+}
+
 /** 获取验证码 */
 export async function getCaptcha(data: any) {
   return baseRequestClient.post('/system/captcha/get', data);

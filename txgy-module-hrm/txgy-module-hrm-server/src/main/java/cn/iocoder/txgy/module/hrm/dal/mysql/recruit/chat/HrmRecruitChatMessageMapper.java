@@ -11,6 +11,14 @@ import java.util.List;
 @Mapper
 public interface HrmRecruitChatMessageMapper extends BaseMapperX<HrmRecruitChatMessageDO> {
 
+    default HrmRecruitChatMessageDO selectLatestResumeByConversationId(Long conversationId) {
+        return selectOne(new LambdaQueryWrapperX<HrmRecruitChatMessageDO>()
+                .eq(HrmRecruitChatMessageDO::getConversationId, conversationId)
+                .eq(HrmRecruitChatMessageDO::getContentType, 2)
+                .orderByDesc(HrmRecruitChatMessageDO::getId)
+                .last("LIMIT 1"));
+    }
+
     default List<HrmRecruitChatMessageDO> selectListByConversation(Long conversationId, Long minId, Integer limit) {
         int size = limit == null || limit <= 0 ? 50 : Math.min(limit, 200);
         if (minId != null) {

@@ -12,11 +12,23 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import PermissionModal from './modules/permission.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+/** MES 数据权限配置弹窗 */
+const [PermissionFormModal, permissionModalApi] = useVbenModal({
+  connectedComponent: PermissionModal,
+  destroyOnClose: true,
+});
+
+/** 打开角色的 MES 数据权限配置 */
+function handlePermission(row: AiModelChatRoleApi.ChatRole) {
+  permissionModalApi.setData({ roleId: row.id }).open();
+}
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -85,6 +97,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <DocAlert title="AI 对话聊天" url="https://doc.iocoder.cn/ai/chat/" />
     </template>
     <FormModal @success="handleRefresh" />
+    <PermissionFormModal />
     <Grid table-title="聊天角色列表">
       <template #toolbar-tools>
         <TableAction
@@ -108,6 +121,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.EDIT,
               auth: ['ai:chat-role:update'],
               onClick: handleEdit.bind(null, row),
+            },
+            {
+              label: '权限配置',
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['ai:chat-role-permission:update'],
+              onClick: handlePermission.bind(null, row),
             },
             {
               label: $t('common.delete'),

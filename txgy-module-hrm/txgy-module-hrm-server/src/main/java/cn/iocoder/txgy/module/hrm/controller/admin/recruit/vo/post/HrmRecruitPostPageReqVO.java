@@ -8,6 +8,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
 
@@ -48,6 +49,9 @@ public class HrmRecruitPostPageReqVO extends PageParam {
 
     @Schema(description = "职位类型编号", example = "100")
     private Long postTypeId;
+
+    @Schema(hidden = true)
+    private List<Long> postTypeIds;
 
     @Schema(description = "职位状态", example = "1")
     private Integer status;

@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.training.framework.rpc.config;
 
+import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -14,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration(value = "trainingRpcConfiguration", proxyBeanMethods = false)
 @EnableFeignClients(clients = {
-        NotifyMessageSendApi.class, AdminUserApi.class
+        NotifyMessageSendApi.class, AdminUserApi.class, DeptApi.class
 })
 public class RpcConfiguration {
 }
