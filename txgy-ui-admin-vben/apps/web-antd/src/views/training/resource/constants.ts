@@ -101,6 +101,23 @@ export const TAG_DIMENSION_OPTIONS = [
   { label: '课程', value: 'course' },
 ] as const;
 
+/** 文档业务分类（新增文档时下拉可选，覆盖培训/工艺/安全/管理等场景） */
+export const DOC_BIZ_CATEGORY_OPTIONS = [
+  '行业新规政策',
+  '国标规范解读',
+  '防腐工艺教程',
+  '保温施工工法',
+  '材料选型知识',
+  '生产操作规范',
+  '质检检验教程',
+  '安全环保实操',
+  '高危作业培训',
+  '招投标合规',
+  '项目管理',
+  '职业素养',
+  '持证上岗专项课程',
+].map((item) => ({ label: item, value: item }));
+
 /** 资源分类类型 */
 export const CATEGORY_TYPE_OPTIONS = [
   { label: '文档分类', value: 'doc' },

@@ -6,9 +6,7 @@ import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { useAccessStore } from '@vben/stores';
 import {
-  Button,
   message,
   Modal,
   Select,
@@ -34,7 +32,6 @@ import {
   QUESTION_TYPE_OPTIONS,
   QUESTION_TYPE_TEXT,
 } from '../constants';
-import AiImportModal from './ai-import.vue';
 import QuestionFormContent from './question-form.vue';
 
 defineOptions({ name: 'TrainingResourceQuestionList' });
@@ -188,7 +185,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 220,
+        width: 280,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -225,13 +222,6 @@ function handleCreate() {
 
 function handleEdit(row: TrainingResourceApi.Question) {
   questionFormModal.setData(row.id).open();
-}
-
-// ========== AI 智能导入（文档 → 试题）==========
-const aiImportVisible = ref(false);
-
-function handleAiImport() {
-  aiImportVisible.value = true;
 }
 
 // ========== 详情弹窗 ==========
@@ -309,7 +299,6 @@ loadCategories();
 <template>
   <Page auto-content-height>
     <QuestionFormModal @success="handleSearch" />
-    <AiImportModal v-model:open="aiImportVisible" @success="handleSearch" />
 
     <!-- 分类 / 标签筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
@@ -334,9 +323,6 @@ loadCategories();
 
     <Grid table-title="考试题库（单选/多选/判断/实操问答/案例分析）">
       <template #toolbar-tools>
-        <Button class="mr-2" type="primary" ghost @click="handleAiImport">
-          AI 智能导入
-        </Button>
         <TableAction
           :actions="[
             {

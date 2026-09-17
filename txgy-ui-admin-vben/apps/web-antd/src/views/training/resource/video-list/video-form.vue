@@ -33,8 +33,6 @@ const editing = ref(false);
 const editingId = ref<number>();
 const title = ref('');
 const categoryId = ref<number | undefined>();
-const coverUrl = ref('');
-const tags = ref('');
 const durationSeconds = ref<number | undefined>();
 // 视频类型：1 短视频 2 录播
 const videoType = ref<number>(2);
@@ -164,8 +162,6 @@ async function handleConfirm() {
     const base = {
       title: title.value.trim(),
       categoryId: categoryId.value,
-      coverUrl: coverUrl.value.trim() || undefined,
-      tags: tags.value.trim() || undefined,
       durationSeconds: durationSeconds.value,
       videoType: videoType.value,
       definition: definition.value,
@@ -206,8 +202,6 @@ const [Modal, modalApi] = useVbenModal({
       editingId.value = undefined;
       title.value = '';
       categoryId.value = undefined;
-      coverUrl.value = '';
-      tags.value = '';
       durationSeconds.value = undefined;
       videoType.value = 2;
       definition.value = '720P';
@@ -224,8 +218,6 @@ const [Modal, modalApi] = useVbenModal({
       editingId.value = data.id;
       title.value = data.title || '';
       categoryId.value = data.categoryId;
-      coverUrl.value = data.coverUrl || '';
-      tags.value = data.tags || '';
       durationSeconds.value = data.durationSeconds;
       videoType.value = data.videoType ?? 2;
       definition.value = data.definition ?? '720P';
@@ -317,15 +309,6 @@ const [Modal, modalApi] = useVbenModal({
         />
       </div>
 
-      <div>
-        <div class="mb-1 text-sm text-gray-600">封面图地址</div>
-        <Input
-          v-model:value="coverUrl"
-          :maxlength="500"
-          placeholder="选填：封面图片 URL"
-        />
-      </div>
-
       <div class="flex gap-4">
         <div class="flex-1">
           <div class="mb-1 flex items-center gap-2 text-sm text-gray-600">
@@ -356,14 +339,6 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
 
-      <div>
-        <div class="mb-1 text-sm text-gray-600">标签</div>
-        <Input
-          v-model:value="tags"
-          :maxlength="200"
-          placeholder="多个标签用逗号分隔，如：高处作业,实操示范"
-        />
-      </div>
     </div>
   </Modal>
 </template>
