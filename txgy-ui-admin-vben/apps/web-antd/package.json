@@ -16,8 +16,9 @@
   },
   "type": "module",
   "scripts": {
-    "build": "pnpm vite build --mode production",
+    "build": "pnpm gen:icons && pnpm vite build --mode production",
     "build:analyze": "pnpm vite build --mode analyze",
+    "gen:icons": "node ../../scripts/generate-offline-icons.mjs",
     "dev": "pnpm vite --mode development",
     "preview": "vite preview",
     "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vue-tsc --noEmit --skipLibCheck"
