@@ -146,7 +146,7 @@ export function useFormSchema(
     },
     {
       fieldName: 'availableQuantity',
-      label: '可用数量',
+      label: '可用数量（单据自动更新）',
       component: 'InputNumber',
       componentProps: {
         class: '!w-full',
@@ -158,7 +158,7 @@ export function useFormSchema(
     },
     {
       fieldName: 'status',
-      label: '状态',
+      label: '状态（单据自动流转）',
       component: 'Select',
       componentProps: {
         disabled: true,
