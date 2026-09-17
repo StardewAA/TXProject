@@ -2,11 +2,12 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingResourceApi } from '../api';
 
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { message, Switch, Tag, TreeSelect } from 'ant-design-vue';
+import { Modal, message, Spin, Switch, Tag, TreeSelect } from 'ant-design-vue';
+import mammoth from 'mammoth/mammoth.browser';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { $t } from '#/locales';
@@ -34,19 +35,20 @@ const categoryOptions = ref<any[]>([]);
 const categoryId = ref<number | undefined>();
 const includeArchived = ref(false);
 
+function buildCategoryTree(nodes?: TrainingResourceApi.CategoryNode[]): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
 async function loadCategories() {
   const tree = await getResourceCategoryTree('doc');
-  categoryOptions.value = tree.map((node) => {
-    const children = (node.children || []).map((child) => ({
-      title: child.name,
-      value: child.id,
-    }));
-    return {
-      title: node.name,
-      value: node.id,
-      children: children.length ? children : undefined,
-    };
-  });
+  categoryOptions.value = buildCategoryTree(tree) || [];
 }
 
 function handleSearch() {
@@ -86,6 +88,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '大小',
         width: 110,
         formatter: ({ cellValue }) => formatFileSize(cellValue),
+      },
+      {
+        field: 'pageCount',
+        title: '页数',
+        width: 80,
+        align: 'center',
+        formatter: ({ cellValue }) =>
+          cellValue === null || cellValue === undefined ? '-' : cellValue,
       },
       { field: 'estMinutes', title: '预估(分)', width: 90, align: 'center' },
       { field: 'viewCount', title: '预览数', width: 80, align: 'center' },
@@ -143,10 +153,69 @@ function handleEdit(row: TrainingResourceApi.DocumentResource) {
   docFormModal.setData(row).open();
 }
 
-// ========== 预览（预览即计数） ==========
+// ========== 预览（页内弹窗，不下载） ==========
+/** 办公文档（Word/WPS）：前端渲染预览；PDF/图片：iframe 内联直出 */
+const OFFICE_EXTS = ['doc', 'docx', 'wps'];
+
+const previewState = ref<{
+  open: boolean;
+  title: string;
+  fileType: string;
+  url: string;
+  office: boolean;
+  loading: boolean;
+  error: string;
+}>({
+  open: false,
+  title: '',
+  fileType: '',
+  url: '',
+  office: false,
+  loading: false,
+  error: '',
+});
+const docxContainer = ref<HTMLDivElement>();
+
+async function renderOfficePreview() {
+  previewState.value.loading = true;
+  previewState.value.error = '';
+  try {
+    // 预览接口匿名可访问，直接取文件流
+    const res = await fetch(previewState.value.url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    await nextTick(); // 等待弹窗容器挂载
+    const el = docxContainer.value;
+    if (!el) return;
+    el.innerHTML = '';
+    // docx → HTML 前端渲染（mammoth）
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    el.innerHTML = result.value || '<p style="color:#999">文档内容为空</p>';
+  } catch {
+    previewState.value.error =
+      '该文档格式暂不支持在线预览（老版 .doc / .wps 需下载后查看）';
+  } finally {
+    previewState.value.loading = false;
+  }
+}
+
 function handlePreview(row: TrainingResourceApi.DocumentResource) {
-  window.open(buildDocumentPreviewUrl(row.id!), '_blank');
+  const ext = (row.fileType || '').toLowerCase();
+  previewState.value = {
+    open: true,
+    title: row.title || row.fileName || '文档预览',
+    fileType: ext,
+    url: buildDocumentPreviewUrl(row.id!),
+    office: OFFICE_EXTS.includes(ext),
+    loading: OFFICE_EXTS.includes(ext),
+    error: '',
+  };
   reportDocumentReading(row.id!).catch(() => {});
+  if (OFFICE_EXTS.includes(ext)) {
+    renderOfficePreview();
+  }
 }
 
 // ========== 状态流转 ==========
@@ -233,6 +302,36 @@ loadCategories();
   <Page auto-content-height>
     <DocFormModal @success="handleSearch" />
 
+    <!-- 页内预览弹窗：PDF/图片 iframe 直出；Word/WPS 前端渲染 -->
+    <Modal
+      v-model:open="previewState.open"
+      :title="`预览 - ${previewState.title}`"
+      :width="960"
+      :footer="null"
+    >
+      <div v-if="previewState.loading" class="py-16 text-center">
+        <Spin size="large" />
+        <div class="mt-3 text-gray-400">文档加载中，请稍候…</div>
+      </div>
+      <div
+        v-if="previewState.error"
+        class="py-16 text-center text-gray-500"
+      >
+        {{ previewState.error }}
+      </div>
+      <iframe
+        v-if="!previewState.office && !previewState.loading && !previewState.error"
+        :src="previewState.url"
+        class="h-[72vh] w-full rounded border-0 bg-white"
+        :title="previewState.title"
+      />
+      <div
+        v-show="previewState.office && !previewState.loading && !previewState.error"
+        ref="docxContainer"
+        class="docx-preview-box h-[72vh] overflow-auto rounded bg-white p-6"
+      />
+    </Modal>
+
     <!-- 分类 / 归档 筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <TreeSelect
@@ -248,7 +347,9 @@ loadCategories();
       <Switch v-model:checked="includeArchived" @change="handleSearch" />
     </div>
 
-    <Grid table-title="文档资源库（PDF/图片 ≤50MB，上传即上线）">
+    <Grid
+      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，上传即上线，自动识别页数）"
+    >
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -276,3 +377,21 @@ loadCategories();
     </Grid>
   </Page>
 </template>
+
+<style scoped>
+.docx-preview-box {
+  color: #333 !important;
+}
+.docx-preview-box :deep(*) {
+  color: #333 !important;
+  background-color: transparent !important;
+}
+.docx-preview-box :deep(table) {
+  border-collapse: collapse;
+}
+.docx-preview-box :deep(td),
+.docx-preview-box :deep(th) {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+}
+</style>

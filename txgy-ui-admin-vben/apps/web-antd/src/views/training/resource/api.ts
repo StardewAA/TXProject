@@ -9,8 +9,10 @@ export namespace TrainingResourceApi {
   export interface CategoryNode {
     id?: number;
     parentId?: number;
+    code?: string;
     name?: string;
     sort?: number;
+    level?: number;
     children?: CategoryNode[];
   }
 
@@ -20,7 +22,7 @@ export namespace TrainingResourceApi {
     /** 分类类型：doc 文档 / video 视频 / question 试题 */
     type?: string;
     name?: string;
-    /** 父分类 ID（0=根，仅支持二级） */
+    /** 父分类 ID（0=根，最多支持三级） */
     parentId?: number;
     sort?: number;
   }
@@ -43,6 +45,8 @@ export namespace TrainingResourceApi {
     filePath?: string;
     fileType?: string;
     fileSize?: number;
+    /** 文档总页数（上传时自动识别） */
+    pageCount?: number;
     bizCategory?: string;
     tags?: string;
     estMinutes?: number;
@@ -84,8 +88,8 @@ export namespace TrainingResourceApi {
 
   /** 试题 */
   export interface Question {
-    id?: number;
-    /** 题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 */
+    id?: number | string;
+    /** 题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 6 填空 7 简答 */
     qtype?: number;
     stem?: string;
     optionsJson?: string;
@@ -93,12 +97,22 @@ export namespace TrainingResourceApi {
     analysis?: string;
     /** 难度：1 易 2 中 3 难 */
     difficulty?: number;
+    /** 所属分类 ID（资源分类 question 类型，支持三级） */
+    categoryId?: number;
     /** 状态：1 启用 2 停用 */
     status?: number;
     creatorName?: string;
     tagIds?: number[];
     tagNames?: string;
     createTime?: string;
+  }
+
+  /** 文档页数识别结果 */
+  export interface DocumentPageCount {
+    pageCount?: number;
+    estMinutes?: number;
+    minutesPerPage?: number;
+    precise?: boolean;
   }
 
   /** 操作日志 */
@@ -111,6 +125,45 @@ export namespace TrainingResourceApi {
     targetId?: number;
     detail?: string;
     createTime?: string;
+  }
+
+  /** 视频异步上传结果 */
+  export interface VideoUploadResult {
+    videoId?: number;
+    /** 是否异步处理（后台转码中） */
+    async?: boolean;
+    /** 生成的转码任务数 */
+    taskCount?: number;
+    targetDefinitions?: string[];
+    message?: string;
+  }
+
+  /** 视频转码任务 */
+  export interface VideoTranscodeTask {
+    id?: number;
+    videoId?: number;
+    /** 目标清晰度 */
+    definition?: string;
+    /** 目标画面高度 */
+    height?: number;
+    /** 任务状态：0 待转码 1 转码中 2 成功 3 失败 4 跳过 */
+    status?: number;
+    statusName?: string;
+    /** 进度百分比 */
+    progress?: number;
+    fileSize?: number;
+    errorMsg?: string;
+    startTime?: string;
+    endTime?: string;
+  }
+
+  /** 转码能力探测结果 */
+  export interface TranscodeCapability {
+    enabled?: boolean;
+    ffmpegAvailable?: boolean;
+    ffmpegVersion?: string;
+    targetDefinitions?: string[];
+    poolSize?: number;
   }
 
   /** 视频清晰度选项（弱网可切换低清晰度） */
@@ -219,6 +272,17 @@ export function uploadDocument(data: FormData) {
   });
 }
 
+/** 识别文档页数（自动换算预估阅读时长 = 页数 × 10 分钟/页） */
+export function countDocumentPages(file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<TrainingResourceApi.DocumentPageCount>(
+    '/training/document/page-count',
+    data,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+}
+
 /** 修改文档元数据 */
 export function updateDocument(params: Record<string, any>) {
   return requestClient.put<boolean>('/training/document/update', undefined, {
@@ -259,11 +323,36 @@ export function getVideoPage(params: PageParam & Record<string, any>) {
   );
 }
 
-/** 上传视频（multipart） */
+/** 异步上传视频（multipart，返回视频ID与转码任务信息） */
 export function uploadVideo(data: FormData) {
-  return requestClient.post<number>('/training/video/upload', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  return requestClient.post<TrainingResourceApi.VideoUploadResult>(
+    '/training/video/upload',
+    data,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
+  );
+}
+
+/** 查询视频转码任务列表（轮询进度） */
+export function getVideoTranscodeTasks(videoId: number) {
+  return requestClient.get<TrainingResourceApi.VideoTranscodeTask[]>(
+    `/training/video/transcode/tasks?videoId=${videoId}`,
+  );
+}
+
+/** 重新转码（失败/未生成任务时重建 360P/480P/720P 任务） */
+export function retryVideoTranscode(videoId: number) {
+  return requestClient.post<boolean>(
+    `/training/video/transcode/retry?videoId=${videoId}`,
+  );
+}
+
+/** 查询转码能力（是否开启、ffmpeg 是否可用） */
+export function getTranscodeCapability() {
+  return requestClient.get<TrainingResourceApi.TranscodeCapability>(
+    '/training/video/transcode/capability',
+  );
 }
 
 /** 修改视频元数据 */
@@ -297,9 +386,10 @@ export function deleteVideo(id: number) {
   return requestClient.delete<boolean>(`/training/video/delete?id=${id}`);
 }
 
-/** 视频播放地址（Range 流） */
-export function buildVideoPlayUrl(id: number) {
-  return `/admin-api/training/video/play?id=${id}`;
+/** 视频播放地址（Range 流，可按清晰度播放转码产物） */
+export function buildVideoPlayUrl(id: number, definition?: string) {
+  const base = `/admin-api/training/video/play?id=${id}`;
+  return definition ? `${base}&definition=${definition}` : base;
 }
 
 // ========== 考试题库 ==========
@@ -313,7 +403,7 @@ export function getQuestionPage(params: PageParam & Record<string, any>) {
 }
 
 /** 试题详情 */
-export function getQuestion(id: number) {
+export function getQuestion(id: number | string) {
   return requestClient.get<TrainingResourceApi.Question>(
     `/training/question/get?id=${id}`,
   );
@@ -366,9 +456,16 @@ export function parseQuestionByAi(file: File) {
   );
 }
 
-/** 确认导入 AI 识别的试题 */
-export function importQuestionsByAi(items: TrainingResourceApi.AiQuestionItem[]) {
-  return requestClient.post<number>('/training/question/ai/import', items);
+/** AI 试题导入确认参数（整批统一分类与标签） */
+export interface AiQuestionImportReq {
+  items: TrainingResourceApi.AiQuestionItem[];
+  categoryId?: number;
+  tagIds?: number[];
+}
+
+/** 确认导入 AI 识别的试题（整批统一归入所选分类、打上所选标签） */
+export function importQuestionsByAi(data: AiQuestionImportReq) {
+  return requestClient.post<number>('/training/question/ai/import', data);
 }
 
 // ========== 视频清晰度 ==========
@@ -387,5 +484,12 @@ export function getOperationLogPage(params: PageParam & Record<string, any>) {
   return requestClient.get<PageResult<TrainingResourceApi.OperationLog>>(
     '/training/resource-log/page',
     { params },
+  );
+}
+
+/** 资源中心统计（文档/视频/试题规模与关键状态） */
+export function getResourceCenterStats() {
+  return requestClient.get<Record<string, number>>(
+    '/training/resource-center/stats',
   );
 }

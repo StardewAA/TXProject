@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.ai.controller.admin.chat;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
@@ -15,6 +17,7 @@ import cn.iocoder.txgy.module.ai.dal.dataobject.chat.AiChatMessageDO;
 import cn.iocoder.txgy.module.ai.dal.dataobject.knowledge.AiKnowledgeDocumentDO;
 import cn.iocoder.txgy.module.ai.dal.dataobject.knowledge.AiKnowledgeSegmentDO;
 import cn.iocoder.txgy.module.ai.dal.dataobject.model.AiChatRoleDO;
+import cn.iocoder.txgy.module.ai.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.ai.service.chat.AiChatConversationService;
 import cn.iocoder.txgy.module.ai.service.chat.AiChatMessageService;
 import cn.iocoder.txgy.module.ai.service.knowledge.AiKnowledgeDocumentService;
@@ -24,17 +27,21 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static cn.iocoder.txgy.framework.common.pojo.CommonResult.error;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.*;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -44,6 +51,9 @@ import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtil
 @RequestMapping("/ai/chat/message")
 @Slf4j
 public class AiChatMessageController {
+
+    /** [SSE 修复] 流式未知异常统一提示话术：对外隐藏英文堆栈/系统细节 */
+    private static final String SSE_UNKNOWN_ERROR_MESSAGE = "数据查询接口异常，请稍后重试";
 
     @Resource
     private AiChatMessageService chatMessageService;
@@ -64,8 +74,31 @@ public class AiChatMessageController {
 
     @Operation(summary = "发送消息（流式）", description = "流式返回，响应较快")
     @PostMapping(value = "/send-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(@Valid @RequestBody AiChatMessageSendReqVO sendReqVO) {
-        return chatMessageService.sendChatMessageStream(sendReqVO, getLoginUserId());
+    public Flux<CommonResult<AiChatMessageSendRespVO>> sendChatMessageStream(@Valid @RequestBody AiChatMessageSendReqVO sendReqVO,
+            HttpServletResponse response) {
+        // ===== [SSE 修复 1] 强制 SSE 标准响应头（在 Flux 写流前同步设置，流内异常也始终保持）=====
+        // 保证前端 fetchEventSource 拿到的永远是 text/event-stream，
+        // 而不是被代理/异常处理改写后的 application/json
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE); // Content-Type: text/event-stream
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache"); // Cache-Control: no-cache
+        response.setHeader("X-Content-Type-Options", "nosniff"); // X-Content-Type-Options: nosniff
+        Long userId = getLoginUserId();
+        // ===== [SSE 修复 2] Flux.defer 延迟执行 + 异常转 SSE 错误帧，规避全局异常 JSON 拦截 =====
+        // 原实现 sendChatMessageStream 中的对话/模型校验、权限检查、数据库预查询等"同步段"
+        // 若抛异常，会被全局异常处理器包装成 JSON（Content-Type: application/json）返回，
+        // 导致前端报 "Expected content-type to be text/event-stream, Actual: application/json"。
+        // 此处延迟到订阅期执行，使同步异常变为 Flux 的 error signal，
+        // 并由 onErrorResume 以 SSE 错误帧（data: {"code":..,"msg":".."}）推送给前端
+        return Flux.defer(() -> chatMessageService.sendChatMessageStream(sendReqVO, userId))
+                // 已知业务异常（越权/对话不存在/模型未配置等）：透出后端具体原因
+                .onErrorResume(ServiceException.class, ex -> Flux.just(error(ex.getCode(),
+                        StrUtil.blankToDefault(ex.getMessage(), "请求失败，请稍后重试"))))
+                // 未知异常：隐藏内部细节，按约定话术提示，避免英文堆栈暴露给用户
+                .onErrorResume(Exception.class, ex -> {
+                    log.error("[sendChatMessageStream][userId({}) 发送 SSE 流异常]", userId, ex);
+                    return Flux.just(error(ErrorCodeConstants.CHAT_STREAM_ERROR.getCode(), SSE_UNKNOWN_ERROR_MESSAGE));
+                });
     }
 
     @Operation(summary = "获得指定对话的消息列表")

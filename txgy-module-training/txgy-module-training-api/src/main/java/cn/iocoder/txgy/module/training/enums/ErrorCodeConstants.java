@@ -54,7 +54,7 @@ public interface ErrorCodeConstants {
     ErrorCode RESOURCE_CATEGORY_NAME_EXISTS = new ErrorCode(1_061_006_002, "已存在同类型下同名分类");
     ErrorCode RESOURCE_CATEGORY_HAS_CHILDREN = new ErrorCode(1_061_006_003, "该分类存在子分类，禁止删除（请先删除子分类）");
     ErrorCode RESOURCE_CATEGORY_HAS_RESOURCE = new ErrorCode(1_061_006_004, "该分类下仍存在资源，禁止删除（请先转移或删除资源）");
-    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持一级父分类，不支持三级及以上层级");
+    ErrorCode RESOURCE_CATEGORY_PARENT_INVALID = new ErrorCode(1_061_006_005, "父分类不合法：仅支持选择一级、二级分类，不支持四级及以上层级");
 
     // ========== 资源中心-文档（document resource）1-061-007-000 ==========
     ErrorCode DOCUMENT_NOT_EXISTS = new ErrorCode(1_061_007_000, "文档资源不存在");
@@ -81,6 +81,7 @@ public interface ErrorCodeConstants {
     ErrorCode QUESTION_STATUS_CHANGE_INVALID = new ErrorCode(1_061_009_004, "试题当前状态不允许执行该操作");
     ErrorCode QUESTION_IMPORT_EMPTY = new ErrorCode(1_061_009_005, "导入文件为空或不含有效数据行");
     ErrorCode QUESTION_IMPORT_PARSE_ERROR = new ErrorCode(1_061_009_006, "导入文件解析失败，请使用系统下载的标准 Excel 模板");
+    ErrorCode QUESTION_IMPORT_HEADER_INVALID = new ErrorCode(1_061_009_013, "未识别到导入表头，请使用【下载模板】的 Excel 格式（表头行需包含“题型”“题干”列）");
     // AI 智能导入（文档 → 试题）
     ErrorCode QUESTION_AI_NOT_CONFIGURED = new ErrorCode(1_061_009_007, "未配置 AI 大模型（请联系管理员配置模型服务地址与密钥）");
     ErrorCode QUESTION_AI_DOC_TYPE_INVALID = new ErrorCode(1_061_009_008, "AI 导入仅支持 PDF / Word(doc,docx) / WPS(wps) 文档");
@@ -104,7 +105,7 @@ public interface ErrorCodeConstants {
     ErrorCode PLAN_CLASS_NOT_EXISTS = new ErrorCode(1_061_012_000, "培训班不存在");
     ErrorCode PLAN_CLASS_NAME_DUPLICATE = new ErrorCode(1_061_012_001, "已存在同名培训班");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_UPDATE = new ErrorCode(1_061_012_002, "培训班当前状态【{}】不允许编辑");
-    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_DELETE = new ErrorCode(1_061_012_003, "培训班当前状态【{}】不允许删除，需先取消");
+    ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_DELETE = new ErrorCode(1_061_012_003, "培训班当前状态【{}】不允许删除，仅草稿 / 已完成 / 已取消可删除");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_START = new ErrorCode(1_061_012_004, "培训班当前状态【{}】不允许开班");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_FINISH = new ErrorCode(1_061_012_005, "培训班当前状态【{}】不允许结业");
     ErrorCode PLAN_CLASS_STATUS_NOT_ALLOW_CANCEL = new ErrorCode(1_061_012_006, "培训班当前状态【{}】不允许取消");
@@ -122,6 +123,10 @@ public interface ErrorCodeConstants {
     ErrorCode PLAN_STUDENT_ALREADY_REMOVED = new ErrorCode(1_061_013_002, "学员已移出该培训班");
     ErrorCode PLAN_STUDENT_COURSE_REQUIRED = new ErrorCode(1_061_013_003, "培训班尚未绑定课程，无法添加学员（学员入班需自动生成学习任务）");
     ErrorCode PLAN_TASK_NOT_EXISTS = new ErrorCode(1_061_013_004, "学员学习任务不存在");
+    ErrorCode PLAN_STUDENT_SCOPE_CONDITION_REQUIRED = new ErrorCode(1_061_013_005, "请先选择参与对象筛选条件（部门或岗位），或为培训班配置参训对象筛选");
+    ErrorCode PLAN_STUDENT_SCOPE_NO_MATCH = new ErrorCode(1_061_013_006, "按当前参与对象筛选条件未匹配到可加入的学员");
+    ErrorCode PLAN_STUDENT_SCOPE_QUERY_FAILED = new ErrorCode(1_061_013_007, "按参与对象筛选查询系统用户失败，请稍后重试");
+    ErrorCode PLAN_STUDENT_LIMIT_EXCEEDED = new ErrorCode(1_061_013_008, "单个培训班在班学员上限 {} 人，当前已 {} 人，本次最多还可加入 {} 人");
 
     // ========== 督促提醒（remind）1-061-014-000 ==========
     ErrorCode PLAN_REMIND_NO_TARGET = new ErrorCode(1_061_014_000, "没有可督促的未完成学员");

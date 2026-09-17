@@ -1,0 +1,27 @@
+name: 招投标门禁（bidding gates）
+
+# 10 项静态自检：结构 / 纯净性 / DO↔SQL / 菜单↔页面 / 字典 / 接口接线 / 权限码 / 一键包镜像
+# 零依赖：脚本只用 Node 内置模块，直接 node 跑，不需要 npm install
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  gates:
+    name: 10 项自检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 运行门禁
+        run: node txgy-module-bidding/sql/tools/check-all.js
+      - name: 失败时提示（同一命令可在本地复现）
+        if: failure()
+        run: |
+          echo "::error::门禁未通过。本地复现：cd txgy-module-bidding && node sql/tools/check-all.js --verbose"
+          echo "各门禁的失败含义与修复方向见 txgy-module-bidding/sql/tools/README-自检脚本.md"

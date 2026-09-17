@@ -15,4 +15,6 @@ public interface HrmPersonalResumeService {
     List<HrmPersonalResumeDO> getResumeList(Long userId);
 
     HrmPersonalResumeDO getResume(Long userId, Long id);
+
+    boolean deleteUploadResume(Long userId, Long id);
 }

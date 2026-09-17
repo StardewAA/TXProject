@@ -38,4 +38,8 @@ public class WmsItemCategorySaveReqVO {
     @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
+    @Schema(description = "存储说明", example = "密封避光，存储温度5-35℃")
+    @Size(max = 500, message = "存储说明长度不能超过 500 个字符")
+    private String storageDescription;
+
 }

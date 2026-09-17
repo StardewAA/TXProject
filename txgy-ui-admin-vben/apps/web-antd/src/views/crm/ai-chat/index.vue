@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { computed, nextTick, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { message } from 'ant-design-vue';
 
-import { mockAiReply, type TableResult } from './mock';
+import AiRobotIcon from './components/ai-robot-icon.vue';
+import { mockAiReply, type BizType, type TableResult } from './mock';
 
 interface ChatMessage {
   id: number;
@@ -35,6 +36,7 @@ const activeSession = computed(() =>
 
 const examples = [
   '帮我查找名字叫张三的客户信息',
+  '今日待办要联系的客户有哪些',
   '列出本月所有商机',
   '查看待办事项',
   '查询客户公海',
@@ -75,6 +77,23 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/** 最多带最近 6 条消息给模型：够理解「那他们呢」这类追问，又不至于挤占上下文 */
+const HISTORY_LIMIT = 6;
+/** 单条历史的截断长度，助手回复里可能带很长的摘要 */
+const HISTORY_TEXT_LIMIT = 200;
+
+/** 把当前会话最近几轮问答拼成上下文，供模型理解追问、补充条件 */
+function buildHistory(session: Session): string {
+  return session.messages
+    .filter((m) => !m.loading && m.text.trim())
+    .slice(-HISTORY_LIMIT)
+    .map(
+      (m) =>
+        `${m.role === 'user' ? '用户' : '助手'}：${m.text.slice(0, HISTORY_TEXT_LIMIT)}`,
+    )
+    .join('\n');
+}
+
 async function send(text?: string) {
   const content = (text ?? inputText.value).trim();
   if (!content || sending.value) return;
@@ -82,6 +101,8 @@ async function send(text?: string) {
     createSession();
   }
   const session = activeSession.value!;
+  // 追问要基于上一轮的查询范围继续筛选，因此先取历史，再放入本轮问题
+  const history = buildHistory(session);
   session.messages.push({ id: msgSeq++, role: 'user', text: content });
   inputText.value = '';
 
@@ -102,9 +123,13 @@ async function send(text?: string) {
   await scrollToBottom();
 
   try {
-    const reply = await withTimeout(mockAiReply(content), 30000);
+    const reply = await withTimeout(mockAiReply(content, history), 30000);
     assistant.loading = false;
     assistant.text = reply?.text ?? '';
+    if (reply?.degraded) {
+      assistant.text +=
+        '\n\n（提示：AI 意图识别未生效，本次使用关键词匹配，请检查千问接口配置）';
+    }
     if (reply?.table) {
       assistant.table = reply.table;
     }
@@ -124,9 +149,28 @@ function onEnter(e: KeyboardEvent) {
   send();
 }
 
-function copyRow(_row: Record<string, any>, text: string) {
-  // 仅供展示，不实际复制
-  message.success(`已识别到：${text}`);
+const router = useRouter();
+
+/** 业务类型 → 详情页路由名 */
+const ROUTE_BY_BIZ: Record<string, string> = {
+  business: 'CrmBusinessDetail',
+  clue: 'CrmClueDetail',
+  contact: 'CrmContactDetail',
+  contract: 'CrmContractDetail',
+  customer: 'CrmCustomerDetail',
+  product: 'CrmProductDetail',
+  receivable: 'CrmReceivableDetail',
+  receivablePlan: 'CrmReceivablePlanDetail',
+};
+
+/** 点击表格行：跳转到对应业务对象的详情页（统计表没有 bizType，不响应） */
+function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
+  const id = row?.id;
+  const routeName = bizType ? ROUTE_BY_BIZ[bizType] : undefined;
+  if (!id || !routeName) {
+    return;
+  }
+  router.push({ name: routeName, params: { id } });
 }
 </script>
 
@@ -244,8 +288,12 @@ function copyRow(_row: Record<string, any>, text: string) {
                         <tr
                           v-for="(row, ri) in m.table.rows"
                           :key="ri"
-                          class="border-t border-border transition hover:bg-accent/40"
-                          @click="copyRow(row, String(row[m.table.columns[0].dataIndex]))"
+                          :class="[
+                            'border-t border-border transition hover:bg-accent/40',
+                            m.table.bizType ? 'cursor-pointer' : '',
+                          ]"
+                          :title="m.table.bizType ? '点击查看详情' : ''"
+                          @click="openDetail(m.table.bizType, row)"
                         >
                           <td
                             v-for="col in m.table.columns"
@@ -280,7 +328,7 @@ function copyRow(_row: Record<string, any>, text: string) {
           v-else
           class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
         >
-          <div class="text-4xl">🤖</div>
+          <AiRobotIcon :size="88" class="text-primary" />
           <div class="text-base font-medium text-foreground">CRM 智能助手</div>
           <div class="max-w-md text-sm text-muted-foreground">
             用自然语言向我提问，例如查询客户、线索、商机、待办等。我会调用通义千问
@@ -311,13 +359,20 @@ function copyRow(_row: Record<string, any>, text: string) {
             <button
               class="h-[44px] shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
               :disabled="sending || !inputText.trim()"
+              :title="
+                sending
+                  ? '正在等待 AI 回复，请稍候'
+                  : !inputText.trim()
+                    ? '请先输入问题'
+                    : ''
+              "
               @click="send"
             >
-              发送
+              {{ sending ? '思考中…' : '发送' }}
             </button>
           </div>
           <div class="mt-1 text-[11px] text-muted-foreground">
-            由通义千问大模型理解意图，CRM 数据来自前端模拟（演示用）。
+            由通义千问理解意图，数据实时来自 CRM 各业务模块的真实接口。
           </div>
         </div>
       </section>

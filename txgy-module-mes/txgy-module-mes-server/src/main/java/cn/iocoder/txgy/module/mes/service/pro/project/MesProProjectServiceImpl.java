@@ -10,10 +10,15 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectI
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectFeedbackStatisticsRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
+import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMilestoneMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProProjectStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
@@ -25,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -56,6 +62,10 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     private MesProProjectMapper projectMapper;
     @Resource
     private MesProWorkOrderMapper workOrderMapper;
+    @Resource
+    private MesProFeedbackMapper feedbackMapper;
+    @Resource
+    private MesProProjectMilestoneMapper milestoneMapper;
     @Resource
     private AdminUserApi adminUserApi;
 
@@ -192,6 +202,42 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         return statistics;
     }
 
+    @Override
+    public MesProProjectStatisticsDetailRespVO getProjectStatisticsDetail(Long projectId) {
+        // 1. 校验项目存在，并查询工单维度统计（含完成度）
+        validateProjectExists(projectId);
+        List<MesProProjectStatisticsRespVO> statisticsList =
+                workOrderMapper.selectProjectStatistics(Collections.singleton(projectId));
+        MesProProjectStatisticsDetailRespVO detail = CollUtil.isEmpty(statisticsList)
+                ? new MesProProjectStatisticsDetailRespVO()
+                : BeanUtils.toBean(statisticsList.get(0), MesProProjectStatisticsDetailRespVO.class);
+        detail.setProjectId(projectId);
+        // 2. 查询报工维度统计（报工单状态分布、报工数量、合格率）
+        List<MesProProjectFeedbackStatisticsRespVO> feedbackList =
+                feedbackMapper.selectFeedbackStatisticsByProjectIds(Collections.singleton(projectId));
+        if (CollUtil.isNotEmpty(feedbackList)) {
+            MesProProjectFeedbackStatisticsRespVO feedback = feedbackList.get(0);
+            detail.setFeedbackTotal(feedback.getFeedbackTotal());
+            detail.setFeedbackPrepareCount(feedback.getFeedbackPrepareCount());
+            detail.setFeedbackApprovingCount(feedback.getFeedbackApprovingCount());
+            detail.setFeedbackFinishedCount(feedback.getFeedbackFinishedCount());
+            detail.setFeedbackQuantityTotal(feedback.getFeedbackQuantityTotal());
+            detail.setQualifiedQuantityTotal(feedback.getQualifiedQuantityTotal());
+            detail.setUnqualifiedQuantityTotal(feedback.getUnqualifiedQuantityTotal());
+            detail.setQualifyRate(feedback.getQualifyRate());
+        }
+        return detail;
+    }
+
+    @Override
+    public List<MesProProjectMilestoneAlertRespVO> getMilestoneAlerts() {
+        List<MesProProjectMilestoneAlertRespVO> alerts = milestoneMapper.selectAlertList();
+        // 计算预警级别：已超期 → overdue；未超期（3 天内到期）→ warning
+        alerts.forEach(alert -> alert.setLevel(
+                alert.getDaysLeft() != null && alert.getDaysLeft() < 0 ? "overdue" : "warning"));
+        return alerts;
+    }
+
     /**
      * 获得项目的工单统计 Map（key 为项目编号），供列表批量拼接使用
      *
@@ -209,13 +255,15 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     }
 
     /**
-     * 按工单进度自动流转项目状态
+     * 按工单进度自动流转项目状态，并回写生产进度百分比
      *
      * 规则：
-     * 1. 已暂停 / 已取消（人工状态）与已完成（终态）不参与自动流转
-     * 2. 挂接工单后：未开始 -> 进行中
-     * 3. 工单全部完工或取消：-> 已完成
-     * 4. 工单全部解绑：进行中 -> 未开始
+     * 1. 生产进度：SUM(工单已生产数量) / SUM(工单计划数量，不含已取消)，随工单数量变化实时回写
+     *    （人工状态与终态同样回写进度，但状态不参与自动流转）
+     * 2. 已暂停 / 已取消（人工状态）与已完成（终态）不参与状态自动流转
+     * 3. 挂接工单后：未开始 -> 进行中
+     * 4. 工单全部完工或取消：-> 已完成
+     * 5. 工单全部解绑：进行中 -> 未开始
      *
      * @param projectId 项目编号
      */
@@ -226,16 +274,24 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         if (project == null) {
             return;
         }
-        // 1. 人工状态与终态不参与自动流转
-        if (MesProProjectStatusEnum.isClosed(project.getStatus())
-                || MesProProjectStatusEnum.isManual(project.getStatus())) {
-            return;
-        }
-        // 2. 统计项目下的工单
+        // 1. 统计项目下的工单（含进度百分比）
         List<MesProProjectStatisticsRespVO> statisticsList =
                 workOrderMapper.selectProjectStatistics(Collections.singleton(projectId));
         MesProProjectStatisticsRespVO statistics = CollUtil.isEmpty(statisticsList)
                 ? null : statisticsList.get(0);
+        // 2. 生产进度回写：有工单取统计值；工单全部解绑则归零
+        BigDecimal newProgress = statistics == null
+                ? BigDecimal.ZERO : statistics.getProgress();
+        if (newProgress != null && ObjUtil.notEqual(newProgress, project.getProgress())) {
+            projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                    .eq(MesProProjectDO::getId, projectId)
+                    .set(MesProProjectDO::getProgress, newProgress));
+        }
+        // 3. 人工状态与终态不参与状态自动流转（进度已回写）
+        if (MesProProjectStatusEnum.isClosed(project.getStatus())
+                || MesProProjectStatusEnum.isManual(project.getStatus())) {
+            return;
+        }
         Integer newStatus = null;
         if (statistics == null) {
             // 3. 无关联工单：进行中回退为未开始

@@ -69,6 +69,9 @@ public interface ErrorCodeConstants {
     ErrorCode RECEIPT_ORDER_DETAIL_NOT_EXISTS = new ErrorCode(1_060_200_007, "入库单明细不存在");
     ErrorCode RECEIPT_ORDER_ITEM_QUALITY_NOT_QUALIFIED = new ErrorCode(1_060_200_008,
             "以下商品质检未合格，不可完成入库：{}");
+    ErrorCode RECEIPT_ORDER_APPROVAL_RUNNING = new ErrorCode(1_060_200_009, "入库单正在审批中，请勿重复提交");
+    ErrorCode RECEIPT_ORDER_APPROVAL_NOT_APPROVED = new ErrorCode(1_060_200_010, "入库单尚未审批通过，不能完成入库");
+    ErrorCode RECEIPT_ORDER_APPROVAL_NOT_EDITABLE = new ErrorCode(1_060_200_011, "入库单正在审批或已经审批通过，不能修改");
 
     // ========== WMS 出库单 1-060-201-000 ==========
     ErrorCode SHIPMENT_ORDER_NOT_EXISTS = new ErrorCode(1_060_201_000, "出库单不存在");
@@ -98,6 +101,9 @@ public interface ErrorCodeConstants {
     ErrorCode CHECK_ORDER_STATUS_NOT_DELETABLE = new ErrorCode(1_060_203_005, "盘库单状态不是草稿或已作废，不能删除");
     ErrorCode CHECK_ORDER_DETAIL_NOT_EXISTS = new ErrorCode(1_060_203_006, "盘库单明细不存在");
     ErrorCode CHECK_ORDER_INVENTORY_CHANGED = new ErrorCode(1_060_203_007, "盘库单库存已变化，请重新加载库存后再完成");
+    ErrorCode CHECK_ORDER_APPROVAL_RUNNING = new ErrorCode(1_060_203_008, "盘库单正在审批中，请勿重复提交");
+    ErrorCode CHECK_ORDER_APPROVAL_NOT_APPROVED = new ErrorCode(1_060_203_009, "盘库单尚未审批通过，不能完成盘库");
+    ErrorCode CHECK_ORDER_APPROVAL_NOT_EDITABLE = new ErrorCode(1_060_203_010, "盘库单正在审批或已经审批通过，不能修改");
 
     // ========== WMS 库存 1-060-300-000 ==========
     ErrorCode INVENTORY_QUANTITY_NOT_ENOUGH = new ErrorCode(1_060_300_000,
@@ -126,5 +132,10 @@ public interface ErrorCodeConstants {
     ErrorCode INTEGRATION_REQUEST_NOT_EXISTS = new ErrorCode(1_060_900_018, "幂等请求不存在");
     ErrorCode INTEGRATION_MASTER_DATA_MAPPING_CONFLICT = new ErrorCode(1_060_900_019,
             "主数据存在无法自动确认的存量映射");
+    ErrorCode PARTNER_TYPE_INVALID = new ErrorCode(1_060_900_020, "客户或供应商类型无效");
+    ErrorCode INTEGRATION_STATUS_INVALID = new ErrorCode(1_060_900_021, "主数据启用状态无效");
+    ErrorCode INTEGRATION_FEATURE_NOT_ENABLED = new ErrorCode(1_060_900_022, "WMS 集成功能尚未启用");
+    ErrorCode INTEGRATION_RECEIPT_REQUEST_INVALID = new ErrorCode(1_060_900_023, "采购入库申请无效：{}");
+    ErrorCode INTEGRATION_SOURCE_ORDER_CONFLICT = new ErrorCode(1_060_900_024, "来源入库单已受理，但业务内容或业务链不一致");
 
 }

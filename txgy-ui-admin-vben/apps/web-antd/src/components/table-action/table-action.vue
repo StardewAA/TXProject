@@ -73,7 +73,7 @@ const getDropdownList = computed(() => {
 /** Space 组件的 size */
 const spaceSize = computed(() => {
   const actions = unref(getActions);
-  return actions?.some((item: ActionItem) => item.type === 'link') ? 0 : 8;
+  return actions?.some((item: ActionItem) => item.type === 'link') ? 4 : 8;
 });
 
 /** 获取 PopConfirm 属性 */

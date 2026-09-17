@@ -67,8 +67,10 @@ public interface MesProWorkOrderMapper extends BaseMapperX<MesProWorkOrderDO> {
             "SELECT project_id AS projectId, COUNT(*) AS workOrderTotal, " +
             "SUM(status = 0) AS prepareCount, SUM(status = 1) AS confirmedCount, " +
             "SUM(status = 2) AS finishedCount, SUM(status = 3) AS canceledCount, " +
+            "SUM(status = 10) AS issuedCount, SUM(status = 11) AS inProductionCount, " +
             "IFNULL(SUM(quantity), 0) AS quantityTotal, " +
-            "IFNULL(SUM(quantity_produced), 0) AS quantityProducedTotal " +
+            "IFNULL(SUM(quantity_produced), 0) AS quantityProducedTotal, " +
+            "ROUND(IFNULL(SUM(quantity_produced), 0) / NULLIF(SUM(CASE WHEN status != 3 THEN quantity END), 0) * 100, 1) AS progress " +
             "FROM mes_pro_work_order WHERE deleted = 0 AND project_id IN " +
             "<foreach collection='projectIds' item='projectId' open='(' separator=',' close=')'>#{projectId}</foreach> " +
             "GROUP BY project_id" +

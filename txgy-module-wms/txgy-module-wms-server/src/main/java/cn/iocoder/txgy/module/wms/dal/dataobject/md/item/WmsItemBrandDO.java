@@ -34,5 +34,25 @@ public class WmsItemBrandDO extends BaseDO {
      * 品牌名称
      */
     private String name;
+    /**
+     * 关联商品分类编号
+     *
+     * 关联 {@link WmsItemCategoryDO#getId()}
+     */
+    private Long categoryId;
+    /**
+     * 主要供应商编号
+     *
+     * 关联 {@link cn.iocoder.txgy.module.wms.dal.dataobject.md.merchant.WmsMerchantDO#getId()}
+     */
+    private Long supplierId;
+    /**
+     * 品牌说明
+     */
+    private String description;
+    /**
+     * 资质文件地址，多个以逗号分隔
+     */
+    private String qualificationFiles;
 
 }

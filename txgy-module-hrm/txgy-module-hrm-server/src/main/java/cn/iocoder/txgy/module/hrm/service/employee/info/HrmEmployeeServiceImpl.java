@@ -220,8 +220,13 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
 
         // 3. 同步招聘候选人状态
         if (employee.getCandidateId() != null) {
-            recruitCandidateService.confirmRecruitCandidateEntry(
-                    employee.getCandidateId(), updateObj.getEntryTime());
+            if (reqVO.getApplicationId() != null) {
+                recruitCandidateService.confirmRecruitCandidateEntry(reqVO.getApplicationId(),
+                        employee.getCandidateId(), employee.getId(), updateObj.getEntryTime());
+            } else {
+                recruitCandidateService.confirmRecruitCandidateEntry(
+                        employee.getCandidateId(), updateObj.getEntryTime());
+            }
         }
 
         // 4. 记录操作日志上下文

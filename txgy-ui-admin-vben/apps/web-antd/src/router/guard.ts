@@ -3,7 +3,7 @@ import type { Router } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
 import { $t } from '@vben/locales';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useDictStore, useUserStore } from '@vben/stores';
+import { resetAllStores, useAccessStore, useDictStore, useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -55,27 +55,57 @@ function setupAccessGuard(router: Router) {
     const authStore = useAuthStore();
     const dictStore = useDictStore();
 
-    // 员工端门户是静态路由，但仍必须登录后才能访问。
+    if (to.path === LOGIN_PATH || to.path === '/auth/register') {
+      resetAllStores();
+      return true;
+    }
+
+    // 员工端门户：标注 meta.ignoreAccess 的公开页（招标投标 · 公告大厅/公告详情/本平台发布公告）免登录可查；
+    // 其余门户页（首页/我要找工作/云培训学院/个人中心/我的关注/公告发布）仍必须登录后才能访问。
+    // 依据：招标公告和公示信息发布管理办法（发改委令第10号）第12条——发布媒介须免费提供并允许公众查阅公告公示完整信息；
+    //      后端 /notice-external/page|detail|go|pdf 与 /notice/public/* 均 @PermitAll + @TenantIgnore（模块 README §9.2）。
     if (to.path === '/portal' || to.path.startsWith('/portal/')) {
+      if (to.meta.ignoreAccess === true) {
+        return true;
+      }
       if (!accessStore.accessToken) {
+        // 匿名访客点到「需登录」的门户页（首页/我要找工作/云培训学院/个人中心/我的关注/公告发布等）：
+        // 先明确提示「需登录」再跳登录页（原先只静默跳转，用户不知道发生了什么）；登录后按 redirect 回到原页。
+        // key 固定 → 连续点击只更新同一条提示，不叠加一屏。
+        message.warning({
+          content: '该页面需要登录后访问，正在跳转登录页…',
+          key: 'portal-need-login',
+        });
         return {
           path: LOGIN_PATH,
           query: { redirect: encodeURIComponent(to.fullPath) },
           replace: true,
         };
       }
+
+      if (!userStore.userInfo) {
+        try {
+          await authStore.fetchUserInfo();
+        } catch {
+          accessStore.setAccessToken(null);
+          accessStore.setRefreshToken(null);
+          accessStore.setTenantId(null);
+          accessStore.clearVisitTenantId();
+          accessStore.setIsAccessChecked(false);
+          userStore.$reset();
+          return {
+            path: LOGIN_PATH,
+            query: { redirect: encodeURIComponent(to.fullPath) },
+            replace: true,
+          };
+        }
+      }
+
       return true;
     }
 
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
-      if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
-        );
-      }
       return true;
     }
 
@@ -102,13 +132,26 @@ function setupAccessGuard(router: Router) {
       return to;
     }
 
+    if (
+      accessStore.tenantId === 0 &&
+      to.path !== '/portal' &&
+      !to.path.startsWith('/portal/')
+    ) {
+      return {
+        path: '/portal/home',
+        replace: true,
+      };
+    }
+
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
       return true;
     }
 
     // 加载字典数据（不阻塞加载）
-    dictStore.setDictCacheByApi(getSimpleDictDataList);
+    void dictStore.setDictCacheByApi(getSimpleDictDataList).catch((error) => {
+      console.warn('加载字典失败', error);
+    });
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表
@@ -142,10 +185,15 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
     userStore.setUserRoles(userRoles);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo?.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+    const isAuthenticationTransition = from.path === LOGIN_PATH;
+    const redirectPath = (
+      isAuthenticationTransition
+        ? to.fullPath
+        : (from.query.redirect ??
+          (to.path === preferences.app.defaultHomePath
+            ? userInfo?.homePath || preferences.app.defaultHomePath
+            : to.fullPath))
+    ) as string;
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

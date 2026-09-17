@@ -2,12 +2,12 @@ package cn.iocoder.txgy.module.crm.dal.mysql.customer;
 
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerPageReqVO;
-import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
@@ -20,6 +20,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,6 +30,23 @@ import java.util.List;
  */
 @Mapper
 public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
+
+    /**
+     * 查询相似客户：同客户类别 + 同行业（按编号倒序，最多 limit 条）
+     *
+     * @param current 当前客户
+     * @param limit   返回数量
+     * @return 相似客户列表
+     */
+    default List<CrmCustomerDO> selectSimilarList(CrmCustomerDO current, Integer limit) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        query.ne(CrmCustomerDO::getId, current.getId());
+        query.eqIfPresent(CrmCustomerDO::getCustomerType, current.getCustomerType());
+        query.eqIfPresent(CrmCustomerDO::getIndustryId, current.getIndustryId());
+        query.orderByDesc(CrmCustomerDO::getId);
+        query.last("LIMIT " + (limit == null || limit <= 0 ? 10 : Math.min(limit, 50)));
+        return selectList(query);
+    }
 
     default Long selectCountByLockStatusAndOwnerUserId(Boolean lockStatus, Long ownerUserId) {
         return selectCount(new LambdaUpdateWrapper<CrmCustomerDO>()
@@ -86,6 +104,28 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default CrmCustomerDO selectByCustomerName(String name) {
         return selectOne(CrmCustomerDO::getName, name);
+    }
+
+    /**
+     * 查重：根据手机号、客户名称查询匹配的客户（包含公海客户）
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   客户名称，精确匹配
+     * @return 客户列表，最多 5 条
+     */
+    default List<CrmCustomerDO> selectListByDuplicate(String mobile, String name) {
+        LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
+        if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {
+            query.and(w -> w.eq(CrmCustomerDO::getMobile, mobile).or().eq(CrmCustomerDO::getName, name));
+        } else if (StrUtil.isNotBlank(mobile)) {
+            query.eq(CrmCustomerDO::getMobile, mobile);
+        } else if (StrUtil.isNotBlank(name)) {
+            query.eq(CrmCustomerDO::getName, name);
+        } else {
+            return Collections.emptyList();
+        }
+        query.orderByDesc(CrmCustomerDO::getId).last("LIMIT 5");
+        return selectList(query);
     }
 
     default PageResult<CrmCustomerDO> selectPutPoolRemindCustomerPage(CrmCustomerPageReqVO pageReqVO,
@@ -185,8 +225,8 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
             CrmPermissionUtils.appendPermissionCondition(query, CrmBizTypeEnum.CRM_CUSTOMER.getType(),
                     CrmCustomerDO::getId, ownerUserId, CrmSceneTypeEnum.OWNER.getType());
         }
-        // 未跟进
-        query.eq(CrmClueDO::getFollowUpStatus, false);
+        // 未跟进（注意：这里统计的是客户，字段要取 CrmCustomerDO）
+        query.eq(CrmCustomerDO::getFollowUpStatus, false);
         return selectCount(query);
     }
 

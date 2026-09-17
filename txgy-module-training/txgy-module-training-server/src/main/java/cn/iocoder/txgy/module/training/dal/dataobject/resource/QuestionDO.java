@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 /**
  * 试题 DO
  *
- * 对应表 training_question（单选/多选/判断/实操问答/案例分析）
+ * 对应表 training_question（单选/多选/判断/实操问答/案例分析/填空/简答）
  *
  * @author 云培训学院课题小组
  */
@@ -47,6 +47,10 @@ public class QuestionDO extends TenantBaseDO {
      * 难度：1 易 2 中 3 难
      */
     private Integer difficulty;
+    /**
+     * 所属分类 ID（资源分类 question 类型，支持三级）
+     */
+    private Long categoryId;
     /**
      * 状态：1 启用 2 停用
      */

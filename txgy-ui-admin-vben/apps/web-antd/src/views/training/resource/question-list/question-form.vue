@@ -12,11 +12,18 @@ import {
   Radio,
   Select,
   Tag,
+  TreeSelect,
 } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
-import { createQuestion, getQuestion, getResourceTagList, updateQuestion } from '../api';
+import {
+  createQuestion,
+  getQuestion,
+  getResourceCategoryTree,
+  getResourceTagList,
+  updateQuestion,
+} from '../api';
 import {
   QUESTION_DIFFICULTY_OPTIONS,
   QUESTION_TYPE_OPTIONS,
@@ -27,7 +34,7 @@ defineOptions({ name: 'TrainingResourceQuestionForm' });
 const emit = defineEmits(['success']);
 
 // 表单状态
-const editingId = ref<number>();
+const editingId = ref<number | string>();
 const qtype = ref<number>(1);
 const stem = ref('');
 const optionSlots = ref<{ key: string; text: string }[]>([
@@ -40,9 +47,13 @@ const correctSingle = ref<string>('A');
 const correctMulti = ref<string[]>([]);
 const judgeAnswer = ref<string>('对');
 const qaAnswer = ref<string>('');
+/** 填空题答案（按空位顺序，与题干中的 ____ 一一对应） */
+const fillBlankAnswers = ref<string[]>(['']);
 const analysis = ref<string>('');
 const difficulty = ref<number>(2);
 const tagIds = ref<number[]>([]);
+/** 所属分类 ID（资源分类 question 类型，支持三级） */
+const categoryId = ref<number | undefined>();
 const saving = ref(false);
 
 const tagOptions = ref<any[]>([]);
@@ -54,9 +65,31 @@ async function loadTags() {
   }));
 }
 
+const categoryOptions = ref<any[]>([]);
+function buildCategoryTree(
+  nodes?: TrainingResourceApi.CategoryNode[],
+): any[] | undefined {
+  if (!nodes?.length) {
+    return undefined;
+  }
+  return nodes.map((node) => ({
+    title: node.name,
+    value: node.id,
+    children: buildCategoryTree(node.children),
+  }));
+}
+
+async function loadCategories() {
+  const tree = await getResourceCategoryTree('question');
+  categoryOptions.value = buildCategoryTree(tree) || [];
+}
+
 const isChoice = computed(() => qtype.value === 1 || qtype.value === 2);
 const isJudge = computed(() => qtype.value === 3);
 const isQaOrCase = computed(() => qtype.value === 4 || qtype.value === 5);
+const isFillBlank = computed(() => qtype.value === 6);
+const isShortAnswer = computed(() => qtype.value === 7);
+const isSubjective = computed(() => isQaOrCase.value || isShortAnswer.value);
 
 const nonEmptyKeys = computed(() =>
   optionSlots.value.filter((opt) => opt.text.trim()).map((opt) => opt.key),
@@ -71,6 +104,7 @@ const getTitle = computed(() => {
 watch(qtype, () => {
   correctSingle.value = 'A';
   correctMulti.value = [];
+  fillBlankAnswers.value = [''];
 });
 
 function toggleMulti(key: string, checked: boolean) {
@@ -154,7 +188,14 @@ async function handleConfirm() {
     message.warning('请选择正确答案');
     return;
   }
-  if (isQaOrCase.value && !qaAnswer.value.trim()) {
+  if (isFillBlank.value) {
+    const hasAnswer = fillBlankAnswers.value.some((a) => a.trim());
+    if (!hasAnswer) {
+      message.warning('请至少填写一个空的答案');
+      return;
+    }
+  }
+  if (isSubjective.value && !qaAnswer.value.trim()) {
     message.warning('请填写标准答案');
     return;
   }
@@ -165,6 +206,7 @@ async function handleConfirm() {
       qtype: qtype.value,
       stem: stem.value.trim(),
       difficulty: difficulty.value,
+      categoryId: categoryId.value,
       analysis: analysis.value.trim(),
       tagIds: tagIds.value,
       answer: '',
@@ -176,6 +218,12 @@ async function handleConfirm() {
       payload.answer = answer;
     } else if (isJudge.value) {
       payload.answer = judgeAnswer.value;
+    } else if (isFillBlank.value) {
+      // 填空题：多个空的答案用竖线 | 按顺序分隔，空答案跳过
+      payload.answer = fillBlankAnswers.value
+        .map((a) => a.trim())
+        .filter((a) => a)
+        .join('|');
     } else {
       payload.answer = qaAnswer.value.trim();
     }
@@ -212,14 +260,19 @@ const [Modal, modalApi] = useVbenModal({
       correctMulti.value = [];
       judgeAnswer.value = '对';
       qaAnswer.value = '';
+      fillBlankAnswers.value = [''];
       analysis.value = '';
       difficulty.value = 2;
       tagIds.value = [];
+      categoryId.value = undefined;
       return;
     }
     loadTags();
-    const data = modalApi.getData<number>();
-    if (data) {
+    loadCategories();
+    const data = modalApi.getData<number | string>();
+    // 注意：vben modal 的 getData 在未 setData 时返回 {}（truthy），
+    // 必须显式判断为数字或字符串（编辑时传入的题目 ID，后端 Long 类型前端序列化为字符串）
+    if (data != null && (typeof data === 'number' || typeof data === 'string')) {
       editingId.value = data;
       const detail = await getQuestion(data);
       qtype.value = detail.qtype || 1;
@@ -227,9 +280,18 @@ const [Modal, modalApi] = useVbenModal({
       analysis.value = detail.analysis || '';
       difficulty.value = detail.difficulty || 2;
       tagIds.value = detail.tagIds || [];
+      categoryId.value = detail.categoryId;
       if (qtype.value === 3) {
-        judgeAnswer.value = detail.answer || '对';
-      } else if (qtype.value === 4 || qtype.value === 5) {
+        // 归一化：AI 导入可能存"正确/错误"，统一为表单的"对/错"
+        const raw = detail.answer || '对';
+        judgeAnswer.value = raw.includes('错') ? '错' : '对';
+      } else if (qtype.value === 6) {
+        // 填空题：答案用竖线 | 分隔，按空位顺序加载
+        const raw = detail.answer || '';
+        fillBlankAnswers.value = raw
+          ? raw.split('|').map((a: string) => a.trim())
+          : [''];
+      } else if (qtype.value === 4 || qtype.value === 5 || qtype.value === 7) {
         qaAnswer.value = detail.answer || '';
       } else {
         loadChoiceFromJson(detail.optionsJson);
@@ -250,6 +312,19 @@ const [Modal, modalApi] = useVbenModal({
           题型 <span class="text-red-500">*</span>
         </div>
         <Radio.Group v-model:value="qtype" :options="QUESTION_TYPE_OPTIONS" />
+      </div>
+
+      <!-- 所属分类（支持三级） -->
+      <div>
+        <div class="mb-1 text-sm text-gray-600">所属分类</div>
+        <TreeSelect
+          v-model:value="categoryId"
+          class="w-full"
+          :allow-clear="true"
+          tree-default-expand-all
+          placeholder="请选择试题分类（分类与标签 → 资源分类中维护，支持三级）"
+          :tree-data="categoryOptions"
+        />
       </div>
 
       <!-- 题干 -->
@@ -300,16 +375,50 @@ const [Modal, modalApi] = useVbenModal({
         </Radio.Group>
       </div>
 
-      <!-- 实操问答 / 案例分析 -->
-      <div v-else-if="isQaOrCase">
+      <!-- 填空题 -->
+      <div v-else-if="isFillBlank">
+        <div class="mb-1 flex items-center justify-between">
+          <span class="text-sm text-gray-600">
+            答案（按题干中 ____ 顺序填写，多个空可增删）
+          </span>
+          <a
+            class="text-xs text-blue-500 hover:text-blue-600"
+            @click="fillBlankAnswers.push('')"
+          >
+            + 增加空位
+          </a>
+        </div>
+        <div
+          v-for="(_, idx) in fillBlankAnswers"
+          :key="idx"
+          class="mb-2 flex items-center gap-2"
+        >
+          <Tag color="purple">空{{ idx + 1 }}</Tag>
+          <Input
+            v-model:value="fillBlankAnswers[idx]"
+            :maxlength="500"
+            placeholder="请输入该空的标准答案"
+          />
+          <span
+            v-if="fillBlankAnswers.length > 1"
+            class="cursor-pointer text-xs text-red-400 hover:text-red-500"
+            @click="fillBlankAnswers.splice(idx, 1)"
+          >
+            删除
+          </span>
+        </div>
+      </div>
+
+      <!-- 实操问答 / 案例分析 / 简答 -->
+      <div v-else-if="isSubjective">
         <div class="mb-1 text-sm text-gray-600">
-          标准答案（评分要点） <span class="text-red-500">*</span>
+          答案 <span class="text-red-500">*</span>
         </div>
         <Input.TextArea
           v-model:value="qaAnswer"
           :rows="4"
           :maxlength="2000"
-          placeholder="请输入标准答案 / 评分要点"
+          placeholder="请输入参考答案 / 评分要点"
         />
       </div>
 

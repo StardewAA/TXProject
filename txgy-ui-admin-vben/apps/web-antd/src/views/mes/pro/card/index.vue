@@ -148,53 +148,55 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </Button>
       </template>
       <template #actions="{ row }">
-        <TableAction
-          :actions="[
-            {
-              label: $t('common.edit'),
-              type: 'link',
-              icon: ACTION_ICON.EDIT,
-              auth: ['mes:pro-card:update'],
-              ifShow: row.status === MesProCardStatusEnum.PREPARE,
-              onClick: handleEdit.bind(null, row),
-            },
-            {
-              label: $t('common.delete'),
-              type: 'link',
-              danger: true,
-              icon: ACTION_ICON.DELETE,
-              auth: ['mes:pro-card:delete'],
-              ifShow: row.status === MesProCardStatusEnum.PREPARE,
-              popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', [row.code]),
-                confirm: handleDelete.bind(null, row),
+        <div class="flex items-center justify-center gap-2">
+          <TableAction
+            :actions="[
+              {
+                label: $t('common.edit'),
+                type: 'link',
+                icon: ACTION_ICON.EDIT,
+                auth: ['mes:pro-card:update'],
+                ifShow: row.status === MesProCardStatusEnum.PREPARE,
+                onClick: handleEdit.bind(null, row),
               },
-            },
-            {
-              label: '完成',
-              type: 'link',
-              auth: ['mes:pro-card:finish'],
-              ifShow: row.status === MesProCardStatusEnum.CONFIRMED,
-              onClick: handleFinish.bind(null, row),
-            },
-            {
-              label: '取消',
-              type: 'link',
-              danger: true,
-              auth: ['mes:pro-card:update'],
-              ifShow: row.status === MesProCardStatusEnum.CONFIRMED,
-              popConfirm: {
-                title: '确认取消该流转卡？取消后不可恢复。',
-                confirm: handleCancel.bind(null, row),
+              {
+                label: $t('common.delete'),
+                type: 'link',
+                danger: true,
+                icon: ACTION_ICON.DELETE,
+                auth: ['mes:pro-card:delete'],
+                ifShow: row.status === MesProCardStatusEnum.PREPARE,
+                popConfirm: {
+                  title: $t('ui.actionMessage.deleteConfirm', [row.code]),
+                  confirm: handleDelete.bind(null, row),
+                },
               },
-            },
-          ]"
-        />
-        <PrinterLabel
-          :biz-code="row.code"
-          :biz-id="row.id"
-          biz-type="PROCARD"
-        />
+              {
+                label: '完成',
+                type: 'link',
+                auth: ['mes:pro-card:finish'],
+                ifShow: row.status === MesProCardStatusEnum.CONFIRMED,
+                onClick: handleFinish.bind(null, row),
+              },
+              {
+                label: '取消',
+                type: 'link',
+                danger: true,
+                auth: ['mes:pro-card:update'],
+                ifShow: row.status === MesProCardStatusEnum.CONFIRMED,
+                popConfirm: {
+                  title: '确认取消该流转卡？取消后不可恢复。',
+                  confirm: handleCancel.bind(null, row),
+                },
+              },
+            ]"
+          />
+          <PrinterLabel
+            :biz-code="row.code"
+            :biz-id="row.id"
+            biz-type="PROCARD"
+          />
+        </div>
       </template>
     </Grid>
   </Page>

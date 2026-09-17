@@ -13,7 +13,7 @@
         absolute="rightTop"
         size="small"
       >
-        <image class="item-icon" :src="sheep.$url.static(item.icon)" mode="aspectFit" />
+<s-menu-icon class="item-icon" :label="item.title" />
       </uni-badge>
       <view class="menu-title ss-m-t-28">{{ item.title }}</view>
     </view>

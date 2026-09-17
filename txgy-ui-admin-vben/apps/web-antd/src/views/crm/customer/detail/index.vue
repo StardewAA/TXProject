@@ -30,6 +30,7 @@ import { FollowUp } from '#/views/crm/followup';
 import { PermissionList, TransferForm } from '#/views/crm/permission';
 import { ReceivableDetailsList } from '#/views/crm/receivable/components';
 import { ReceivablePlanDetailsList } from '#/views/crm/receivable/plan/components';
+import SimilarCustomerCard from '#/views/crm/customer/components/similar-customer-card.vue';
 
 import Form from '../modules/form.vue';
 import { useDetailSchema } from './data';
@@ -165,7 +166,14 @@ async function handleUpdateDealStatus(): Promise<boolean | undefined> {
 
 /** 加载数据 */
 onMounted(() => {
-  customerId.value = Number(route.params.id);
+  // 路由参数兜底：非法 id（如 /crm/customer/detail/id）会得到 NaN，提示并退回列表
+  const id = Number(route.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    message.warning('参数错误，客户不能为空！');
+    handleBack();
+    return;
+  }
+  customerId.value = id;
   loadCustomerDetail();
 });
 </script>
@@ -241,6 +249,9 @@ onMounted(() => {
     </template>
     <Card class="min-h-[10%]">
       <Descriptions :data="customer" />
+    </Card>
+    <Card class="mt-4">
+      <SimilarCustomerCard :customer-id="customerId" />
     </Card>
     <Card class="mt-4 min-h-[60%]">
       <Tabs>

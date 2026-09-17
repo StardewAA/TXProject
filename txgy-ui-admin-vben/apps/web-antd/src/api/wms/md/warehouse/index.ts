@@ -8,7 +8,7 @@ export namespace WmsWarehouseApi {
     id?: number;
     code?: string;
     name?: string;
-    warehouseType?: string;
+    warehouseType?: 'RAW_MATERIAL' | 'FINISHED_GOODS';
     status?: number;
     organizationName?: string;
     city?: string;

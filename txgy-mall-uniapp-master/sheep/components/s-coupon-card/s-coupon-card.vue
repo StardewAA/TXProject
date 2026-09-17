@@ -4,7 +4,7 @@
 		<view class="menu-item ss-flex-col ss-row-center ss-col-center" v-for="item in props.list" :key="item.title"
 			@tap="sheep.$router.go(item.path, { type: item.type })"
 			:class="item.type === 'all' ? 'menu-wallet' : 'ss-flex-1'">
-			<image class="item-icon" :src="sheep.$url.static(item.icon)" mode="aspectFit"></image>
+<s-menu-icon class="item-icon" :src="sheep.$url.static(item.icon)" :label="item.title" />
 			<view class="menu-title ss-m-t-28">{{ item.title }}</view>
 		</view>
 	</view>

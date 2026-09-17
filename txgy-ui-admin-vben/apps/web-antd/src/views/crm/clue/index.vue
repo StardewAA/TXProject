@@ -11,11 +11,17 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { Button, message, Tabs } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteClue, exportClue, getCluePage } from '#/api/crm/clue';
+import {
+  deleteClue,
+  exportClue,
+  getCluePage,
+  transformClue,
+} from '#/api/crm/clue';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import ImportForm from './modules/import-form.vue';
 
 const { push } = useRouter();
 const sceneType = ref('1');
@@ -24,6 +30,16 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+const [ImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportForm,
+  destroyOnClose: true,
+});
+
+/** 批量导入线索（Excel） */
+function handleImport() {
+  importModalApi.open();
+}
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -60,6 +76,28 @@ async function handleDelete(row: CrmClueApi.Clue) {
     message.success($t('ui.actionMessage.deleteSuccess', [row.name]));
     handleRefresh();
   } catch {
+    hideLoading();
+  }
+}
+
+/** 线索直接转化为客户（列表操作，无需进入详情页） */
+async function handleTransform(row: CrmClueApi.Clue) {
+  if (row.transformStatus) {
+    message.warning('该线索已转化，不能重复转化');
+    return;
+  }
+  const hideLoading = message.loading({
+    content: `正在将【${row.name}】转化为客户...`,
+    duration: 0,
+  });
+  try {
+    await transformClue(row.id!);
+    message.success(`线索【${row.name}】已转化为客户`);
+    handleRefresh();
+  } catch (e: any) {
+    // 后端在“已转化”等情况下会返回具体错误信息
+    message.error(e?.message ?? '转化为客户失败，请稍后重试');
+  } finally {
     hideLoading();
   }
 }
@@ -146,6 +184,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['crm:clue:export'],
               onClick: handleExport,
             },
+            {
+              label: '批量导入',
+              type: 'primary',
+              auth: ['crm:clue:import'],
+              onClick: handleImport,
+            },
           ]"
         />
       </template>
@@ -165,6 +209,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleEdit.bind(null, row),
             },
             {
+              label: '转客户',
+              type: 'link',
+              auth: ['crm:clue:update'],
+              ifShow: !row.transformStatus,
+              popConfirm: {
+                title: `确认将线索【${row.name}】转化为客户？`,
+                confirm: handleTransform.bind(null, row),
+              },
+            },
+            {
               label: $t('common.delete'),
               type: 'link',
               danger: true,
@@ -179,5 +233,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
     </Grid>
+    <ImportModal @success="handleRefresh" />
   </Page>
 </template>

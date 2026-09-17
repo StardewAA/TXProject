@@ -14,6 +14,7 @@ const cartStore = useCartStore()
 const isRegister = computed(() => route.name === 'register')
 const form = reactive({ mobile: '', nickname: '', password: '', confirmPassword: '', code: '', agree: false })
 const sending = ref(false)
+const memberIdentity = ref<'buyer' | 'supplier'>('buyer')
 const countdown = ref(0)
 const smsTestCode = String(import.meta.env.VITE_SMS_TEST_CODE || '').trim()
 
@@ -44,8 +45,10 @@ async function submit() {
     if (form.password !== form.confirmPassword) return ElMessage.warning('两次输入的密码不一致')
     if (!form.code) return ElMessage.warning('请输入短信验证码')
     if (!form.agree) return ElMessage.warning('请先同意用户协议和隐私政策')
-    await authStore.register({ mobile: form.mobile, nickname: form.nickname.trim(), password: form.password, code: form.code, agree: true })
-    ElMessage.success('注册成功，账号已归属商城租户 1')
+    await authStore.register({ mobile: form.mobile, nickname: form.nickname.trim(), password: form.password, code: form.code, agree: true, memberIdentity: memberIdentity.value })
+    ElMessage.success('账号注册成功，请完善企业信息并提交审核')
+    await router.replace('/enterprise/profile')
+    return
   } else {
     await authStore.login({ mobile: form.mobile, password: form.password })
     ElMessage.success('登录成功')
@@ -64,6 +67,7 @@ async function submit() {
         <h2>{{ isRegister ? '注册商城账号' : '会员登录' }}</h2>
         <p>{{ isRegister ? '注册后可在 PC 与移动端使用同一账号' : '使用移动端相同的手机号和密码登录' }}</p>
         <el-form label-position="top" @submit.prevent="submit">
+          <el-form-item v-if="isRegister" label="会员身份" required><el-radio-group v-model="memberIdentity"><el-radio value="buyer">我是采购商</el-radio><el-radio value="supplier">我是供应商</el-radio></el-radio-group></el-form-item>
           <el-form-item label="手机号"><el-input v-model="form.mobile" maxlength="11" size="large" placeholder="请输入手机号" /></el-form-item>
           <el-form-item v-if="isRegister" label="用户昵称"><el-input v-model="form.nickname" maxlength="30" size="large" placeholder="请输入用户昵称" /></el-form-item>
           <el-form-item v-if="isRegister" label="短信验证码"><div class="code-field"><div class="code-row"><el-input v-model="form.code" maxlength="6" size="large" placeholder="请输入验证码" /><el-button size="large" :disabled="countdown > 0" :loading="sending" @click="sendCode">{{ countdown ? `${countdown}s` : '发送验证码' }}</el-button></div><small v-if="smsTestCode">本地联调环境固定验证码：{{ smsTestCode }}；正式环境将发送真实短信。</small></div></el-form-item>

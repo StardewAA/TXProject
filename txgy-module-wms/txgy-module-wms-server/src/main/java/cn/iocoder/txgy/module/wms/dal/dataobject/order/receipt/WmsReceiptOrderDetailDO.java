@@ -15,7 +15,7 @@ import java.math.BigDecimal;
  *
  * @author OPENLAB BS
  */
-@TableName("wms_receipt_order_detail")
+@TableName(value = "wms_receipt_order_detail", autoResultMap = true)
 @KeySequence("wms_receipt_order_detail_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -38,6 +38,11 @@ public class WmsReceiptOrderDetailDO extends BaseDO {
      * 关联 {@link WmsReceiptOrderDO#getId()}
      */
     private Long orderId;
+    /** 来源单据明细行号。 */
+    private Integer sourceLineNo;
+    /** 创建时收到的来源明细 JSON；仅插入，后续编辑不得覆盖。 */
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private String sourceSnapshotJson;
     /**
      * 商品 SKU 编号
      *
@@ -60,6 +65,17 @@ public class WmsReceiptOrderDetailDO extends BaseDO {
      * 入库数量
      */
     private BigDecimal quantity;
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
+    private BigDecimal actualQuantity;
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
+    private BigDecimal qualifiedQuantity;
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
+    private BigDecimal unqualifiedQuantity;
+    @com.baomidou.mybatisplus.annotation.TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private java.util.List<String> qualityImages;
+    private String qualityRemark;
+    @com.baomidou.mybatisplus.annotation.TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
+    private Boolean qualityRequiredSnapshot;
     /**
      * 单价
      */

@@ -25,11 +25,13 @@ import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermi
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactBusinessService;
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.crm.service.quotation.CrmQuotationService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
+import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -70,6 +72,9 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     @Resource
     @Lazy // 延迟加载，避免循环依赖
     private CrmContractService contractService;
+    @Resource
+    @Lazy // 延迟加载，避免循环依赖
+    private CrmQuotationService quotationService;
     @Resource
     private CrmCustomerService customerService;
     @Resource
@@ -153,13 +158,14 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_BUSINESS_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateBusinessFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
+    public void updateBusinessFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
+                                       String contactLastContent) {
         // 1. 校验存在
         CrmBusinessDO business = validateBusinessExists(id);
 
-        // 2. 更新联系人的跟进信息
+        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
         businessMapper.updateById(new CrmBusinessDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(LocalDateTime.now()));
+                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(business.getContactLastTime(), contactTime)));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("businessName", business.getName());
@@ -269,6 +275,8 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
         CrmBusinessDO business = validateBusinessExists(id);
         // 1.2 校验是否关联合同
         validateContractExists(id);
+        // 1.3 校验是否关联报价单
+        validateQuotationExists(id);
 
         // 删除商机
         businessMapper.deleteById(id);
@@ -288,6 +296,17 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     private void validateContractExists(Long businessId) {
         if (contractService.getContractCountByBusinessId(businessId) > 0) {
             throw exception(BUSINESS_DELETE_FAIL_CONTRACT_EXISTS);
+        }
+    }
+
+    /**
+     * 删除校验报价单是否关联商机
+     *
+     * @param businessId 商机编号
+     */
+    private void validateQuotationExists(Long businessId) {
+        if (quotationService.getQuotationCountByBusinessId(businessId) > 0) {
+            throw exception(BUSINESS_DELETE_FAIL_QUOTATION_EXISTS);
         }
     }
 

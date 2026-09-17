@@ -23,7 +23,8 @@ public class WmsWarehouseSaveReqVO {
     @NotEmpty(message = "仓库名称不能为空")
     private String name;
 
-    @Schema(description = "仓库类型", example = "RAW_MATERIAL")
+    @Schema(description = "仓库类型：RAW_MATERIAL 原材料仓、FINISHED_GOODS 成品仓", example = "RAW_MATERIAL")
+    @Pattern(regexp = "RAW_MATERIAL|FINISHED_GOODS", message = "仓库类型必须为原材料仓或成品仓")
     private String warehouseType;
 
     @Schema(description = "仓库状态", example = "0")

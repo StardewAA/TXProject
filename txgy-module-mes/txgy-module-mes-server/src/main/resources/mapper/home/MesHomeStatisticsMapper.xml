@@ -50,6 +50,215 @@
                         ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairStatusEnum@APPROVING.status})
     </select>
 
+    <!-- 按质检类型统计合格率（近 N 天，仅已完成检验单；IQC/IPQC/OQC/RQC 四表 UNION ALL） -->
+    <select id="selectQcPassRateGroupByType" resultType="java.util.Map">
+        SELECT 'IQC' AS qcType,
+               COUNT(*) AS docCount,
+               IFNULL(SUM(check_quantity), 0) AS checkQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity,
+               IFNULL(SUM(CASE WHEN check_result = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcCheckResultEnum@PASS.type} THEN 1 ELSE 0 END), 0) AS passDocCount
+        FROM mes_qc_iqc
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@FINISHED.status}
+          AND inspect_date &gt;= #{beginTime}
+          AND inspect_date &lt; #{endTime}
+        UNION ALL
+        SELECT 'IPQC' AS qcType,
+               COUNT(*) AS docCount,
+               IFNULL(SUM(check_quantity), 0) AS checkQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity,
+               IFNULL(SUM(CASE WHEN check_result = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcCheckResultEnum@PASS.type} THEN 1 ELSE 0 END), 0) AS passDocCount
+        FROM mes_qc_ipqc
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@FINISHED.status}
+          AND inspect_date &gt;= #{beginTime}
+          AND inspect_date &lt; #{endTime}
+        UNION ALL
+        SELECT 'OQC' AS qcType,
+               COUNT(*) AS docCount,
+               IFNULL(SUM(check_quantity), 0) AS checkQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity,
+               IFNULL(SUM(CASE WHEN check_result = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcCheckResultEnum@PASS.type} THEN 1 ELSE 0 END), 0) AS passDocCount
+        FROM mes_qc_oqc
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@FINISHED.status}
+          AND inspect_date &gt;= #{beginTime}
+          AND inspect_date &lt; #{endTime}
+        UNION ALL
+        SELECT 'RQC' AS qcType,
+               COUNT(*) AS docCount,
+               IFNULL(SUM(check_quantity), 0) AS checkQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity,
+               IFNULL(SUM(CASE WHEN check_result = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcCheckResultEnum@PASS.type} THEN 1 ELSE 0 END), 0) AS passDocCount
+        FROM mes_qc_rqc
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum@FINISHED.status}
+          AND inspect_date &gt;= #{beginTime}
+          AND inspect_date &lt; #{endTime}
+    </select>
+
+    <!-- 统计安灯呼叫汇总（近 N 天） -->
+    <select id="selectAndonSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN status = ${@cn.iocoder.txgy.module.mes.enums.pro.MesProAndonStatusEnum@HANDLED.status} THEN 1 ELSE 0 END), 0) AS handledCount,
+               IFNULL(AVG(TIMESTAMPDIFF(MINUTE, create_time, handle_time)), 0) AS avgHandleMinutes
+        FROM mes_pro_andon_record
+        WHERE deleted = 0
+          AND create_time &gt;= #{beginTime}
+          AND create_time &lt; #{endTime}
+    </select>
+
+    <!-- 按级别统计安灯呼叫数量（近 N 天） -->
+    <select id="selectAndonCountGroupByLevel" resultType="java.util.Map">
+        SELECT level, COUNT(*) AS count
+        FROM mes_pro_andon_record
+        WHERE deleted = 0
+          AND create_time &gt;= #{beginTime}
+          AND create_time &lt; #{endTime}
+        GROUP BY level
+    </select>
+
+    <!-- 统计安灯呼叫原因 TOP N（近 N 天） -->
+    <select id="selectAndonTopReasons" resultType="java.util.Map">
+        SELECT IFNULL(reason, '其他') AS reason, COUNT(*) AS count
+        FROM mes_pro_andon_record
+        WHERE deleted = 0
+          AND create_time &gt;= #{beginTime}
+          AND create_time &lt; #{endTime}
+        GROUP BY reason
+        ORDER BY count DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 统计维修工单汇总（近 N 天，按报修日期） -->
+    <select id="selectRepairSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN status = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairStatusEnum@FINISHED.status} THEN 1 ELSE 0 END), 0) AS finishedCount,
+               IFNULL(SUM(CASE WHEN result = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairResultEnum@PASS.result} THEN 1 ELSE 0 END), 0) AS passCount,
+               IFNULL(SUM(CASE WHEN result = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvRepairResultEnum@FAIL.result} THEN 1 ELSE 0 END), 0) AS failCount,
+               IFNULL(AVG(TIMESTAMPDIFF(HOUR, require_date, finish_date)), 0) AS avgRepairHours
+        FROM mes_dv_repair
+        WHERE deleted = 0
+          AND require_date &gt;= #{beginTime}
+          AND require_date &lt; #{endTime}
+    </select>
+
+    <!-- 按状态统计维修工单数量（近 N 天，按报修日期） -->
+    <select id="selectRepairCountGroupByStatus" resultType="java.util.Map">
+        SELECT status, COUNT(*) AS count
+        FROM mes_dv_repair
+        WHERE deleted = 0
+          AND require_date &gt;= #{beginTime}
+          AND require_date &lt; #{endTime}
+        GROUP BY status
+    </select>
+
+    <!-- 统计近 N 天报工汇总（按报工人维度，排除草稿） -->
+    <select id="selectFeedbackUserSummary" resultType="java.util.Map">
+        SELECT COUNT(DISTINCT feedback_user_id) AS userCount,
+               IFNULL(SUM(feedback_quantity), 0) AS totalQuantity,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+    </select>
+
+    <!-- 统计近 N 天报工人产出 TOP N（按合格品数量降序） -->
+    <select id="selectFeedbackUserTopList" resultType="java.util.Map">
+        SELECT feedback_user_id AS feedbackUserId,
+               COUNT(*) AS recordCount,
+               IFNULL(SUM(qualified_quantity), 0) AS qualifiedQuantity
+        FROM mes_pro_feedback
+        WHERE deleted = 0
+          AND status != ${@cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum@PREPARE.status}
+          AND feedback_time &gt;= #{beginTime}
+          AND feedback_time &lt; #{endTime}
+          AND feedback_user_id IS NOT NULL
+        GROUP BY feedback_user_id
+        ORDER BY qualifiedQuantity DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 统计近 N 天完成的工单交付情况（按完成时间，需求日期为交付基准） -->
+    <select id="selectDeliverySummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN request_date IS NULL OR finish_date &lt;= request_date THEN 1 ELSE 0 END), 0) AS onTimeCount,
+               IFNULL(SUM(CASE WHEN request_date IS NOT NULL AND finish_date &gt; request_date THEN 1 ELSE 0 END), 0) AS overdueCount,
+               IFNULL(AVG(CASE WHEN request_date IS NOT NULL AND finish_date &gt; request_date
+                                    THEN DATEDIFF(finish_date, request_date) END), 0) AS avgOverdueDays
+        FROM mes_pro_work_order
+        WHERE deleted = 0
+          AND status = ${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@FINISHED.status}
+          AND finish_date &gt;= #{beginTime}
+          AND finish_date &lt; #{endTime}
+    </select>
+
+    <!-- 统计在制超期工单数（已过需求日期但尚未完成，用于交付风险预警） -->
+    <select id="selectOverdueOpenCount" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM mes_pro_work_order
+        WHERE deleted = 0
+          AND status NOT IN (${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@FINISHED.status},
+                            ${@cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum@CANCELED.status})
+          AND request_date IS NOT NULL
+          AND request_date &lt; NOW()
+    </select>
+
+    <!-- 统计缺陷数量汇总（近 N 天，按等级） -->
+    <select id="selectDefectSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS recordCount,
+               IFNULL(SUM(quantity), 0) AS totalQuantity,
+               IFNULL(SUM(CASE WHEN level = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcDefectLevelEnum@CRITICAL.type} THEN quantity ELSE 0 END), 0) AS criticalQuantity,
+               IFNULL(SUM(CASE WHEN level = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcDefectLevelEnum@MAJOR.type} THEN quantity ELSE 0 END), 0) AS majorQuantity,
+               IFNULL(SUM(CASE WHEN level = ${@cn.iocoder.txgy.module.mes.enums.qc.MesQcDefectLevelEnum@MINOR.type} THEN quantity ELSE 0 END), 0) AS minorQuantity
+        FROM mes_qc_defect_record
+        WHERE deleted = 0
+          AND create_time &gt;= #{beginTime}
+          AND create_time &lt; #{endTime}
+    </select>
+
+    <!-- 统计缺陷 TOP N（近 N 天，按缺陷描述聚合数量） -->
+    <select id="selectDefectTopList" resultType="java.util.Map">
+        SELECT name, IFNULL(SUM(quantity), 0) AS quantity
+        FROM mes_qc_defect_record
+        WHERE deleted = 0
+          AND create_time &gt;= #{beginTime}
+          AND create_time &lt; #{endTime}
+        GROUP BY name
+        ORDER BY quantity DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 统计点检保养方案（全量） -->
+    <select id="selectCheckPlanSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN status = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvCheckPlanStatusEnum@ENABLED.status} THEN 1 ELSE 0 END), 0) AS enabledCount
+        FROM mes_dv_check_plan
+        WHERE deleted = 0
+    </select>
+
+    <!-- 统计点检记录（近 N 天，按点检时间） -->
+    <select id="selectCheckRecordSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN status = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvCheckRecordStatusEnum@FINISHED.status} THEN 1 ELSE 0 END), 0) AS finishedCount
+        FROM mes_dv_check_record
+        WHERE deleted = 0
+          AND check_time &gt;= #{beginTime}
+          AND check_time &lt; #{endTime}
+    </select>
+
+    <!-- 统计设备保养记录（近 N 天，按保养时间） -->
+    <select id="selectMaintenRecordSummary" resultType="java.util.Map">
+        SELECT COUNT(*) AS totalCount,
+               IFNULL(SUM(CASE WHEN status = ${@cn.iocoder.txgy.module.mes.enums.dv.MesDvMaintenRecordStatusEnum@SUBMITTED.status} THEN 1 ELSE 0 END), 0) AS submittedCount
+        FROM mes_dv_mainten_record
+        WHERE deleted = 0
+          AND mainten_time &gt;= #{beginTime}
+          AND mainten_time &lt; #{endTime}
+    </select>
+
     <!-- 按天聚合报工产量 -->
     <select id="selectDailyFeedbackTrend" resultType="java.util.Map">
         SELECT DATE_FORMAT(feedback_time, '%Y-%m-%d')    AS date,

@@ -1,9 +1,15 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { message } from 'ant-design-vue';
 
-import { getCustomerPage } from '#/api/crm/customer';
+import {
+  checkDuplicate,
+  fetchWebPage,
+  getCustomerPage,
+  type CrmCustomerApi,
+} from '#/api/crm/customer';
 import { getBusinessPage } from '#/api/crm/business';
 import { getBusinessStatusTypeSimpleList } from '#/api/crm/business/status';
 import { getContractSimpleList } from '#/api/crm/contract';
@@ -12,6 +18,7 @@ import { getSimpleUserList } from '#/api/system/user';
 
 import {
   parseClue,
+  parseContact,
   parseContract,
   parseBusiness,
   parseReceivable,
@@ -35,23 +42,45 @@ const emit = defineEmits<{
   apply: [payload: { fields: any }];
 }>();
 
-// mode: clue=线索/通用；contract=合同（提取合同名、客户、商机、日期、产品与金额）
+// mode: clue=线索/通用；contact=联系人（姓名取人名，公司名放 customerName）；
+//       contract=合同（提取合同名、客户、商机、日期、产品与金额）
 const props = withDefaults(
-  defineProps<{ mode?: 'clue' | 'contract' | 'business' | 'receivable' | 'product' | 'plan' }>(),
+  defineProps<{
+    mode?:
+      | 'clue'
+      | 'contact'
+      | 'contract'
+      | 'business'
+      | 'receivable'
+      | 'product'
+      | 'plan';
+  }>(),
   { mode: 'clue' },
 );
 
-type ActiveTab = 'file' | 'image' | 'text';
+type ActiveTab = 'file' | 'image' | 'text' | 'web';
 
 /** 合同文件识别入口仅对合同表单开放，其它模块的界面与交互保持不变 */
 const isContractMode = computed(() => props.mode === 'contract');
+/** 网页链接识别入口：线索 / 客户 / 客户公海 三个入口都复用 clue 模式 */
+const isWebTabVisible = computed(() => props.mode === 'clue');
 /** 单次提交给视觉模型的图片上限（含 PDF 渲染出的页面），防止请求体过大 */
 const MAX_OCR_IMAGES = 6;
+
+const router = useRouter();
 
 const collapsed = ref(false);
 const activeTab = ref<ActiveTab>('text');
 const content = ref('');
 const loading = ref(false);
+/** 企业网页链接（「网页链接」识别用） */
+const webUrl = ref('');
+/** 查重命中的系统已有记录 */
+const duplicateItems = ref<CrmCustomerApi.DuplicateCheckItem[]>([]);
+/** 查重结果弹窗是否可见 */
+const duplicateVisible = ref(false);
+/** 查重弹窗中待合并 / 待回填的表单字段 */
+let pendingFields: any = null;
 const images = ref<{ file: File; url: string }[]>([]);
 /** 待识别的合同文件（PDF / 图片） */
 const contractFiles = ref<ContractFileItem[]>([]);
@@ -226,6 +255,15 @@ function onPaste(e: ClipboardEvent) {
     collectPastedFiles(dt);
     return;
   }
+  // 网页链接识别模式：粘贴内容作为网址填入，且不切换标签
+  // （否则会被下面的通用逻辑塞进「粘贴文本」并自动切走标签）
+  if (activeTab.value === 'web') {
+    const text = dt.getData('text/plain')?.trim();
+    if (text) {
+      webUrl.value = text;
+    }
+    return;
+  }
   let handled = false;
   let hasImage = false;
   let hasText = false;
@@ -253,6 +291,15 @@ function onPaste(e: ClipboardEvent) {
       activeTab.value = 'image';
     } else if (hasText && !hasImage) {
       activeTab.value = 'text';
+      // 粘贴的是单个网址时，提醒用户可以直接用「网页链接识别」抓取工商信息
+      if (
+        isWebTabVisible.value &&
+        /^https?:\/\/\S+$/i.test(content.value.trim())
+      ) {
+        message.info(
+          '检测到网址：可切换到「网页链接识别」，由系统自动抓取该网页上的公司信息',
+        );
+      }
     }
   }
 }
@@ -292,6 +339,7 @@ function clearAll() {
   images.value = [];
   clearContractFiles();
   content.value = '';
+  webUrl.value = '';
   fileProgress.value = '';
   // 文件识别模式下清空后保留当前标签，方便继续上传下一份合同；文本/图片模式行为不变
   if (activeTab.value !== 'file') {
@@ -350,7 +398,20 @@ async function collectContractFiles(
 async function handleRecognize() {
   const isImageMode = activeTab.value === 'image';
   const isFileMode = activeTab.value === 'file';
-  if (!isImageMode && !isFileMode && !content.value.trim()) {
+  let isWebMode = activeTab.value === 'web';
+  // 兜底：若用户把网址粘进了「粘贴文本」，自动改成网页抓取，避免被当成普通文本解析
+  if (
+    !isWebMode &&
+    !isImageMode &&
+    !isFileMode &&
+    isWebTabVisible.value &&
+    /^https?:\/\/\S+$/i.test(content.value.trim())
+  ) {
+    webUrl.value = content.value.trim();
+    activeTab.value = 'web';
+    isWebMode = true;
+  }
+  if (!isImageMode && !isFileMode && !isWebMode && !content.value.trim()) {
     message.warning('请先粘贴文本');
     return;
   }
@@ -362,11 +423,22 @@ async function handleRecognize() {
     message.warning('请先上传合同文件（PDF / 图片）');
     return;
   }
+  if (isWebMode && !webUrl.value.trim()) {
+    message.warning('请先粘贴企业网页链接');
+    return;
+  }
+  // 网页正文必须靠 AI 理解，未配置 AI 时规则解析会把导航文字当成公司名，直接拦住
+  if (isWebMode && !aiReady.value) {
+    message.warning(
+      '网页内容需要 AI 解析：请先点右上角「AI 配置」填写 Base URL 与模型',
+    );
+    return;
+  }
 
   loading.value = true;
   fileProgress.value = '';
   try {
-    let text = isImageMode || isFileMode ? '' : content.value;
+    let text = isImageMode || isFileMode || isWebMode ? '' : content.value;
     let imageDataUrls: string[] = [];
     // 文件相关的异常 / 降级提示
     const fileWarnings: string[] = [];
@@ -391,26 +463,63 @@ async function handleRecognize() {
         return;
       }
     }
+    // 网页链接：由后端代理抓取正文（绕开浏览器跨域限制），再交给大模型提取工商信息
+    if (isWebMode) {
+      try {
+        const page: any = await fetchWebPage(webUrl.value.trim());
+        const body = String(page?.content ?? '').trim();
+        if (!body) {
+          message.error(
+            '未能从该网页读取到内容（部分网页由 JS 动态渲染），请改用「粘贴文本」方式',
+          );
+          return;
+        }
+        // 网页场景专用引导：告诉模型要找的是「页面主体公司」，
+        // 否则按默认 prompt（提取客户资料）会认为页面里没有客户公司名而全部返回 null
+        text = [
+          '以下内容是从企业官方网站抓取的页面文本。该页面的主体公司就是本次要录入的客户/线索，',
+          '请提取该公司的名称、联系电话、手机、地址、邮箱、联系人等信息。',
+          '请忽略页面上的导航菜单、栏目名称、合作方链接、其他公司名称、广告与版权信息。',
+          `网页标题：${page?.title ?? ''}`,
+          '网页正文：',
+          body,
+        ].join('\n');
+        if (body.replace(/\s/g, '').length < 100) {
+          message.warning(
+            '该网页正文内容较少（可能是纯前端渲染的页面），识别结果可能不完整，建议改用「粘贴文本」',
+          );
+        }
+      } catch (e: any) {
+        message.error(
+          `网页抓取失败：${e?.message ?? '请确认链接能正常打开，或改用手动粘贴'}`,
+        );
+        return;
+      }
+    }
 
     const aiReadyFlag = aiReady.value;
     // 需要「未配置 AI」提示的场景：图片识别，或文件识别产生了待 OCR 图片
-    const needAi = isImageMode || (isFileMode && imageDataUrls.length > 0);
+    const needAi =
+      isImageMode || isWebMode || (isFileMode && imageDataUrls.length > 0);
     const isContract = props.mode === 'contract';
     // 按当前模块选用专属解析 schema
     const parsed: any =
       isContract
         ? await parseContract(text, imageDataUrls)
-        : props.mode === 'business'
-          ? await parseBusiness(text, imageDataUrls)
-          : props.mode === 'receivable'
-            ? await parseReceivable(text, imageDataUrls)
-            : props.mode === 'product'
-              ? await parseProduct(text, imageDataUrls)
-              : props.mode === 'plan'
-                ? await parseReceivablePlan(text, imageDataUrls)
-                : await parseClue(text, imageDataUrls);
+        : props.mode === 'contact'
+          ? await parseContact(text, imageDataUrls)
+          : props.mode === 'business'
+            ? await parseBusiness(text, imageDataUrls)
+            : props.mode === 'receivable'
+              ? await parseReceivable(text, imageDataUrls)
+              : props.mode === 'product'
+                ? await parseProduct(text, imageDataUrls)
+                : props.mode === 'plan'
+                  ? await parseReceivablePlan(text, imageDataUrls)
+                  : await parseClue(text, imageDataUrls);
     const fields: any = parsed.fields ?? {};
-    const aiError = parsed.error;
+    // parseClue / parseContact 用 aiError 命名，其余解析函数用 error，这里统一兼容
+    const aiError = parsed.aiError ?? parsed.error;
 
     // 客户匹配：商机/回款/合同/回款计划取 customerName，线索取 name；产品不需要
     if (props.mode !== 'product') {
@@ -565,6 +674,24 @@ async function handleRecognize() {
     // 图片仅用于识别信息，不作为附件保存
     emit('apply', { fields });
 
+    // 智能查重：线索 / 客户 / 联系人场景下，按手机号、名称比对系统已有数据，避免重复新建脏数据
+    if (props.mode === 'clue') {
+      try {
+        const mobile = String(fields?.mobile ?? '').trim();
+        const name = String(fields?.name ?? '').trim();
+        if (mobile || name) {
+          const res: any = await checkDuplicate({ mobile, name });
+          if (res?.duplicated && res.items?.length) {
+            duplicateItems.value = res.items;
+            pendingFields = fields;
+            duplicateVisible.value = true;
+          }
+        }
+      } catch {
+        // 查重失败不阻塞回填
+      }
+    }
+
     // 文件相关的异常 / 降级提示优先展示，让用户明确知道哪些文件未被完整识别
     if (fileWarnings.length > 0) {
       message.warning(
@@ -590,6 +717,50 @@ async function handleRecognize() {
     loading.value = false;
   }
 }
+
+/** 合并查重命中的记录信息（仅补齐表单空白字段，不覆盖已填内容） */
+function mergeDuplicate() {
+  const fields: any = pendingFields ?? {};
+  const first = duplicateItems.value[0];
+  if (first) {
+    if (!fields.name && first.name) {
+      fields.name = first.name;
+    }
+    if (!fields.mobile && first.mobile) {
+      fields.mobile = first.mobile;
+    }
+    // 命中的是客户时，关联客户编号，便于后续挂到已有客户下
+    if (first.bizType === 'customer' && first.id && !fields.customerId) {
+      fields.customerId = first.id;
+    }
+  }
+  emit('apply', { fields });
+  duplicateVisible.value = false;
+  message.success('已合并已有记录的信息，请核对后保存');
+}
+
+/** 忽略查重结果，按识别结果继续新建 */
+function ignoreDuplicate() {
+  duplicateVisible.value = false;
+}
+
+/** 打开查重命中的记录详情（新标签页，避免丢失当前表单已填内容） */
+function openDuplicate(item: CrmCustomerApi.DuplicateCheckItem) {
+  const routeNameMap: Record<string, string> = {
+    customer: 'CrmCustomerDetail',
+    clue: 'CrmClueDetail',
+  };
+  const routeName = routeNameMap[item.bizType];
+  if (!routeName) {
+    message.info(
+      `${item.bizTypeName}「${item.name ?? ''}」请在对应列表页搜索查看`,
+    );
+    return;
+  }
+  const href = router.resolve({ name: routeName, params: { id: item.id } })
+    .href;
+  window.open(href, '_blank');
+}
 </script>
 
 <template>
@@ -610,7 +781,7 @@ async function handleRecognize() {
         <div>
           <div class="text-base font-medium leading-tight">一键识别</div>
           <p class="mt-0.5 text-xs text-muted-foreground">
-            粘贴微信聊天/名片/邮件文本自动填入；粘贴或拖入名片照片可 OCR 识别图中文字
+            粘贴微信聊天/名片/邮件文本自动填入；粘贴或拖入名片照片可 OCR 识别图中文字；也可粘贴企业官网链接自动抓取工商信息
           </p>
         </div>
       </div>
@@ -688,6 +859,14 @@ async function handleRecognize() {
         >
           合同文件识别
         </a-button>
+        <a-button
+          v-if="isWebTabVisible"
+          :type="activeTab === 'web' ? 'primary' : 'default'"
+          size="small"
+          @click="activeTab = 'web'"
+        >
+          网页链接识别
+        </a-button>
         <a-tag v-if="aiReady" color="green" class="ml-auto">AI 已启用</a-tag>
         <a-tag v-else color="orange" class="ml-auto">AI 未配置</a-tag>
       </div>
@@ -744,7 +923,7 @@ async function handleRecognize() {
       </template>
 
       <!-- 方案三：合同文件识别（仅合同表单） -->
-      <template v-else>
+      <template v-else-if="activeTab === 'file'">
         <div
           class="rounded border border-dashed border-border bg-muted/20 p-4"
           @dragover.prevent
@@ -813,6 +992,37 @@ async function handleRecognize() {
         </div>
       </template>
 
+      <!-- 方案四：网页链接识别（线索 / 客户 / 客户公海） -->
+      <template v-else>
+        <a-textarea
+          v-model:value="webUrl"
+          :rows="2"
+          placeholder="粘贴企业官网「关于我们 / 联系我们」页或官网首页的链接，例如 https://www.abc.com/about"
+        />
+        <div class="mt-2 space-y-1 rounded border border-border bg-muted/20 p-2">
+          <p class="text-xs">
+            <span class="text-green-600">✓ 推荐这样填</span>
+            <span class="text-muted-foreground">
+              ：页面上能看到「公司全称、联系电话、地址、邮箱」的链接。
+              优先用「关于我们 / 联系我们 / 公司简介」页，或企业官网首页（底部一般有公司全称、电话、地址、备案号）。
+            </span>
+          </p>
+          <p class="text-xs">
+            <span class="text-red-500">✗ 不要这样填</span>
+            <span class="text-muted-foreground">
+              ：百度/搜狗等搜索页、行业门户与资讯列表页、新闻详情页、需登录才能看的页面。
+              这类页面本身没有企业信息，识别不出结果是正常现象。
+            </span>
+          </p>
+          <p class="text-xs">
+            <span class="text-muted-foreground">
+              网页内容由系统抓取后交给 AI 提取，请先完成右上角「AI 配置」；
+              若页面文字是脚本动态加载的（打开后内容一闪才出现），可能抓不到，请改用「粘贴文本」。
+            </span>
+          </p>
+        </div>
+      </template>
+
       <!-- 操作按钮 -->
       <div class="mt-3 flex items-center gap-2">
         <a-button type="primary" :loading="loading" @click="handleRecognize">
@@ -821,5 +1031,47 @@ async function handleRecognize() {
         <a-button @click="clearAll">清空</a-button>
       </div>
     </template>
+
+    <!-- 智能查重结果弹窗：识别完成后自动比对系统已有数据 -->
+    <a-modal
+      v-model:open="duplicateVisible"
+      :footer="null"
+      :width="640"
+      title="检测到系统里可能已存在相同数据"
+    >
+      <p class="mb-2 text-xs text-muted-foreground">
+        以下记录与本次识别的手机号或名称一致，建议先查看，避免重复新建脏数据。
+      </p>
+      <div class="max-h-72 space-y-2 overflow-y-auto">
+        <div
+          v-for="(item, i) in duplicateItems"
+          :key="`${item.bizType}-${item.id}-${i}`"
+          class="flex items-center gap-3 rounded border border-border bg-muted/20 px-3 py-2"
+        >
+          <a-tag color="orange">{{ item.bizTypeName }}</a-tag>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm">
+              {{ item.name || '（未填写名称）' }}
+              <span class="ml-2 text-xs text-muted-foreground">
+                {{ item.mobile || '无手机号' }}
+              </span>
+            </div>
+            <div class="text-xs text-muted-foreground">
+              {{ item.matchReason || '信息一致' }}
+              <span v-if="item.bizType === 'customer' && item.inPool">
+                · 公海客户
+              </span>
+            </div>
+          </div>
+          <a-button type="link" size="small" @click="openDuplicate(item)">
+            打开原有记录
+          </a-button>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <a-button @click="ignoreDuplicate">忽略，继续新建</a-button>
+        <a-button type="primary" @click="mergeDuplicate">合并信息</a-button>
+      </div>
+    </a-modal>
   </div>
 </template>

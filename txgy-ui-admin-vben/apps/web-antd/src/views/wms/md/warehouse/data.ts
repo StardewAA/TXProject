@@ -10,6 +10,11 @@ import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
 
+const warehouseTypes = [
+  { label: '原材料仓', value: 'RAW_MATERIAL' },
+  { label: '成品仓', value: 'FINISHED_GOODS' },
+];
+
 /** 新增/修改仓库的表单 */
 export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
   return [
@@ -57,14 +62,8 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       fieldName: 'warehouseType',
       label: '仓库类型',
       component: 'Select',
-      componentProps: {
-        options: [
-          { label: '原料仓', value: 'RAW_MATERIAL' },
-          { label: '成品仓', value: 'FINISHED_GOODS' },
-        ],
-        placeholder: '请选择仓库类型',
-      },
-      rules: z.string().default('RAW_MATERIAL'),
+      componentProps: { options: warehouseTypes, placeholder: '请选择仓库类型' },
+      rules: z.enum(['RAW_MATERIAL', 'FINISHED_GOODS']).default('RAW_MATERIAL'),
     },
     {
       fieldName: 'status',
@@ -221,9 +220,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'warehouseType',
       title: '仓库类型',
-      minWidth: 110,
-      formatter: ({ cellValue }) =>
-        cellValue === 'FINISHED_GOODS' ? '成品仓' : cellValue === 'RAW_MATERIAL' ? '原料仓' : cellValue || '-',
+    {
+      field: 'warehouseType',
+      title: '仓库类型',
+      minWidth: 130,
+      formatter: ({ cellValue }) => warehouseTypes.find(type => type.value === cellValue)?.label ?? '未分类',
     },
     {
       field: 'status',

@@ -1,6 +1,9 @@
 package cn.iocoder.txgy.module.crm.service.clue;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportExcelVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueImportRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmCluePageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.clue.vo.CrmClueTransferReqVO;
@@ -8,6 +11,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import jakarta.validation.Valid;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 线索 Service 接口
@@ -35,10 +39,11 @@ public interface CrmClueService {
      * 更新线索相关的跟进信息
      *
      * @param id 编号
+     * @param contactTime 实际跟进时间（本次实际联系客户的时间）
      * @param contactNextTime 下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateClueFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateClueFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 删除线索
@@ -87,5 +92,14 @@ public interface CrmClueService {
      * @return 数量
      */
     Long getFollowClueCount(Long userId);
+
+    /**
+     * 批量导入线索
+     *
+     * @param importClues 导入线索列表
+     * @param importReqVO 导入请求
+     * @return 导入结果
+     */
+    CrmClueImportRespVO importClueList(List<CrmClueImportExcelVO> importClues, CrmClueImportReqVO importReqVO);
 
 }

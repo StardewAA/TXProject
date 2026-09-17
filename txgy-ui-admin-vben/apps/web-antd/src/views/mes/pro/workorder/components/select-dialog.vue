@@ -141,11 +141,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
+          // 用户在弹窗内主动选择的工单状态优先于外部传入的默认 status 过滤
+          // （否则 props.status 硬覆盖用户筛选，已下发/生产中的工单永远无法被选中）
+          const { status: userStatus, ...restFormValues } = formValues;
           return await getWorkOrderPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            ...formValues,
-            ...(props.status === undefined ? {} : { status: props.status }),
+            ...restFormValues,
+            status: userStatus ?? props.status,
             ...(props.type === undefined ? {} : { type: props.type }),
           });
         },

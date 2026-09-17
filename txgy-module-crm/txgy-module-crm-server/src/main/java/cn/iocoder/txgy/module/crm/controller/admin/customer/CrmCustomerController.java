@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerPoolConfigService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
+import cn.iocoder.txgy.module.crm.util.CrmWebPageUtils;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -114,6 +115,47 @@ public class CrmCustomerController {
             return null;
         }
         return buildCustomerDetailList(singletonList(customer)).get(0);
+    }
+
+    @GetMapping("/check-duplicate")
+    @Operation(summary = "查重：根据手机号、名称匹配已存在的客户、线索、联系人")
+    @Parameter(name = "mobile", description = "手机号", example = "13800138000")
+    @Parameter(name = "name", description = "名称", example = "天信管业")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmDuplicateCheckRespVO> checkDuplicate(@RequestParam(value = "mobile", required = false) String mobile,
+                                                                @RequestParam(value = "name", required = false) String name) {
+        return success(customerService.checkDuplicate(mobile, name));
+    }
+
+    @GetMapping("/fetch-web-page")
+    @Operation(summary = "抓取网页正文（用于网页链接一键识别）")
+    @Parameter(name = "url", description = "网页地址", required = true, example = "https://www.example.com")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmWebPageFetchRespVO> fetchWebPage(@RequestParam("url") String url) {
+        CrmWebPageUtils.WebPage page = CrmWebPageUtils.fetch(url);
+        return success(CrmWebPageFetchRespVO.builder()
+                .url(url).title(page.getTitle()).content(page.getContent()).build());
+    }
+
+    @GetMapping("/similar-list")
+    @Operation(summary = "获得相似客户列表", description = "按客户类别与行业推荐相似客户，便于业务对比与拓展")
+    @Parameter(name = "customerId", description = "客户编号", required = true, example = "1024")
+    @Parameter(name = "limit", description = "返回数量", example = "10")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<List<CrmCustomerRespVO>> getSimilarCustomerList(@RequestParam("customerId") Long customerId,
+                                                                       @RequestParam(value = "limit", required = false, defaultValue = "10") Integer limit) {
+        List<CrmCustomerDO> list = customerService.getSimilarCustomerList(customerId, limit);
+        if (CollUtil.isEmpty(list)) {
+            return success(java.util.Collections.emptyList());
+        }
+        // 填充负责人姓名
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                convertSet(list, CrmCustomerDO::getOwnerUserId));
+        return success(convertList(list, customer -> {
+            CrmCustomerRespVO vo = BeanUtils.toBean(customer, CrmCustomerRespVO.class);
+            MapUtils.findAndThen(userMap, customer.getOwnerUserId(), user -> vo.setOwnerUserName(user.getNickname()));
+            return vo;
+        }));
     }
 
     @GetMapping("/page")
@@ -294,6 +336,14 @@ public class CrmCustomerController {
     public CommonResult<Boolean> putCustomerPool(@RequestParam("id") Long id) {
         customerService.putCustomerPool(id);
         return success(true);
+    }
+
+    @PostMapping("/auto-put-pool")
+    @Operation(summary = "触发一次客户自动掉入公海",
+            description = "按公海规则（未成交天数 / 未跟进天数）把符合条件的客户放入公海；与定时任务同一套逻辑，便于立即执行与验收")
+    @PreAuthorize("@ss.hasPermission('crm:customer:update')")
+    public CommonResult<Integer> autoPutCustomerPool() {
+        return success(customerService.autoPutCustomerPool());
     }
 
     @PutMapping("/receive")

@@ -24,3 +24,27 @@ export function getRecruitApplicationPage(params: PageParam & { candidateId: num
     { params },
   );
 }
+
+export function startRecruitApplicationScreening(id: number) {
+  return requestClient.put<boolean>('/hrm/recruit/application/start-screening', { id });
+}
+
+export function passRecruitApplicationScreening(id: number) {
+  return requestClient.put<boolean>('/hrm/recruit/application/pass-screening', { id });
+}
+
+export function rejectRecruitApplicationResume(id: number, reason: string) {
+  return requestClient.put<boolean>('/hrm/recruit/application/reject-resume', { id, reason });
+}
+
+export function enterRecruitApplicationInterview(id: number) {
+  return requestClient.put<boolean>('/hrm/recruit/application/enter-interview', { id });
+}
+
+export function skipRecruitApplicationInterview(id: number) {
+  return requestClient.put<boolean>(`/hrm/recruit/application/skip-interview?id=${id}`);
+}
+
+export function eliminateRecruitApplication(id: number, reason: string) {
+  return requestClient.put<boolean>('/hrm/recruit/application/eliminate', { id, reason });
+}

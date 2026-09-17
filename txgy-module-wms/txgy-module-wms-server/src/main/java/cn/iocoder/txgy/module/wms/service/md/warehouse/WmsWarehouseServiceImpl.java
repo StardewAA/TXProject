@@ -2,8 +2,10 @@ package cn.iocoder.txgy.module.wms.service.md.warehouse;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehousePageReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
@@ -17,11 +19,14 @@ import cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.*;
@@ -55,25 +60,34 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
     private WmsCheckOrderService checkOrderService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Long createWarehouse(WmsWarehouseSaveReqVO createReqVO) {
         // 校验数据
         validateWarehouseSaveData(createReqVO);
 
         // 插入
-        WmsWarehouseDO warehouse = BeanUtils.toBean(createReqVO, WmsWarehouseDO.class);
+        WmsWarehouseDO warehouse = BeanUtils.toBean(createReqVO, WmsWarehouseDO.class)
+                .setWarehouseType(createReqVO.getWarehouseType() == null ? "RAW_MATERIAL" : createReqVO.getWarehouseType())
+                .setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setDataVersion(1L);
         warehouseMapper.insert(warehouse);
         return warehouse.getId();
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateWarehouse(WmsWarehouseSaveReqVO updateReqVO) {
         // 校验存在
-        validateWarehouseExists(updateReqVO.getId());
+        WmsWarehouseDO current = validateWarehouseExists(updateReqVO.getId());
         // 校验数据
         validateWarehouseSaveData(updateReqVO);
 
         // 更新
-        WmsWarehouseDO updateObj = BeanUtils.toBean(updateReqVO, WmsWarehouseDO.class);
+        WmsWarehouseDO updateObj = BeanUtils.toBean(updateReqVO, WmsWarehouseDO.class)
+                .setWarehouseType(updateReqVO.getWarehouseType() != null ? updateReqVO.getWarehouseType()
+                        : current.getWarehouseType() == null ? "RAW_MATERIAL" : current.getWarehouseType())
+                .setStatus(current.getStatus() == null ? CommonStatusEnum.ENABLE.getStatus() : current.getStatus())
+                .setDataVersion(current.getDataVersion() == null ? 1L : current.getDataVersion() + 1);
         warehouseMapper.updateById(updateObj);
     }
 
@@ -173,5 +187,7 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
         }
         return warehouseMapper.selectByIds(ids);
     }
+
+
 
 }

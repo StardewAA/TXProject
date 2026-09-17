@@ -7,9 +7,12 @@ import { ref } from 'vue';
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import {
+  Descriptions,
+  DescriptionsItem,
   Input,
   message,
   Modal,
+  Spin,
   Table,
   Tag,
 } from 'ant-design-vue';
@@ -20,8 +23,12 @@ import { $t } from '#/locales';
 import {
   approveCourse,
   deleteCourse,
+  getCourse,
+  getCourseCategoryTree,
+  getCourseMediaList,
   getCoursePage,
   getCourseVersionList,
+  getExamOptions,
   offlineCourse,
   onlineCourse,
   publishCourseVersion,
@@ -63,11 +70,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
+          const { versionScope, ...rest } = formValues ?? {};
+          // 版本范围：默认仅当前版本；「全部版本」不传 isCurrent；「仅历史版本」传 false
+          const versionParams =
+            versionScope === 'all'
+              ? {}
+              : { isCurrent: versionScope === 'history' ? false : true };
           return await getCoursePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            isCurrent: true,
-            ...formValues,
+            ...versionParams,
+            ...rest,
           });
         },
       },
@@ -104,7 +117,7 @@ const [MediaModal, mediaModal] = useVbenModal({
 });
 
 function handleMedia(row: TrainingCourseApi.Course) {
-  mediaModal.setData(row.id).open();
+  mediaModal.setData({ id: row.id }).open();
 }
 
 // ========== 删除 ==========
@@ -201,6 +214,96 @@ function versionStatusText(status?: number) {
   const found = COURSE_STATUS_OPTIONS.find((item) => item.value === status);
   return found ? found.label : String(status ?? '');
 }
+
+// ========== 课程详情弹窗（点击课程名称触发） ==========
+const detailState = ref<{
+  visible: boolean;
+  loading: boolean;
+  course: TrainingCourseApi.Course | null;
+  mediaList: TrainingCourseApi.CourseMedia[];
+  categoryPath: string;
+  examName: string;
+  postList: string[];
+  bizTagList: string[];
+}>({
+  visible: false,
+  loading: false,
+  course: null,
+  mediaList: [],
+  categoryPath: '',
+  examName: '',
+  postList: [],
+  bizTagList: [],
+});
+
+function parseArrayField(raw?: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 在分类树中递归查找分类全路径（域 / 课程组 / 课程） */
+function findCategoryPath(
+  nodes: TrainingCourseApi.CourseCategory[] | undefined,
+  id?: number,
+  trail: string[] = [],
+): string {
+  if (!nodes || !id) {
+    return '';
+  }
+  for (const node of nodes) {
+    const next = [...trail, node.name || ''];
+    if (node.id === id) {
+      return next.filter(Boolean).join(' / ');
+    }
+    const found = findCategoryPath(node.children, id, next);
+    if (found) {
+      return found;
+    }
+  }
+  return '';
+}
+
+async function handleShowDetail(row: TrainingCourseApi.Course) {
+  detailState.value = {
+    visible: true,
+    loading: true,
+    course: row,
+    mediaList: [],
+    categoryPath: '',
+    examName: '',
+    postList: [],
+    bizTagList: [],
+  };
+  try {
+    const [detail, mediaList, tree, examOptions] = await Promise.all([
+      getCourse(row.id!),
+      getCourseMediaList(row.id!).catch(() => []),
+      getCourseCategoryTree().catch(() => []),
+      getExamOptions().catch(() => []),
+    ]);
+    detailState.value.course = detail;
+    detailState.value.mediaList = mediaList;
+    detailState.value.categoryPath = findCategoryPath(tree, detail.categoryId);
+    detailState.value.examName =
+      examOptions.find((item) => item.id === detail.examId)?.name ||
+      (detail.examId ? `试卷 #${detail.examId}` : '');
+    detailState.value.postList = parseArrayField(detail.applicablePosts);
+    detailState.value.bizTagList = parseArrayField(detail.bizTags);
+  } finally {
+    detailState.value.loading = false;
+  }
+}
+
+const detailMediaColumns = [
+  { title: '类型', dataIndex: 'mediaType', key: 'mediaType', width: 100 },
+  { title: '名称', dataIndex: 'name', key: 'name', minWidth: 200 },
+  { title: '引用ID', dataIndex: 'mediaRefId', key: 'mediaRefId', width: 100 },
+  { title: '时长(秒)', dataIndex: 'durationSeconds', key: 'durationSeconds', width: 100 },
+];
 
 // ========== 操作按钮（按状态机分支） ==========
 function buildActions(row: TrainingCourseApi.Course) {
@@ -394,6 +497,114 @@ function buildActions(row: TrainingCourseApi.Course) {
       </Table>
     </Modal>
 
+    <!-- 课程详情弹窗：点击课程名称弹出课程全部信息 -->
+    <Modal
+      v-model:open="detailState.visible"
+      :title="`课程详情 - ${detailState.course?.title || ''}`"
+      :footer="null"
+      class="w-3/4"
+    >
+      <Spin :spinning="detailState.loading">
+        <Descriptions bordered size="small" :column="2" class="mt-2">
+          <DescriptionsItem label="课程名称">
+            {{ detailState.course?.title || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="课程编码">
+            {{ detailState.course?.code || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="课程级别">
+            {{
+              detailState.course?.level != null
+                ? COURSE_LEVEL_TEXT[detailState.course.level] || '-'
+                : '-'
+            }}
+          </DescriptionsItem>
+          <DescriptionsItem label="成长等级">
+            {{
+              detailState.course?.courseLevel
+                ? GROWTH_LEVEL_TEXT[detailState.course.courseLevel] ||
+                  detailState.course.courseLevel
+                : '-'
+            }}
+          </DescriptionsItem>
+          <DescriptionsItem label="所属分类">
+            {{ detailState.categoryPath || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="课程状态">
+            {{
+              COURSE_STATUS_OPTIONS.find(
+                (item) => item.value === detailState.course?.status,
+              )?.label || '-'
+            }}
+          </DescriptionsItem>
+          <DescriptionsItem label="适用岗位/工种">
+            <template v-if="detailState.postList.length > 0">
+              <Tag
+                v-for="post in detailState.postList"
+                :key="post"
+                color="blue"
+                class="mb-1"
+              >
+                {{ post }}
+              </Tag>
+            </template>
+            <span v-else class="text-gray-400">-</span>
+          </DescriptionsItem>
+          <DescriptionsItem label="学习域/课程组">
+            {{ detailState.course?.learnDomainCodes || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="业务标签">
+            <template v-if="detailState.bizTagList.length > 0">
+              <Tag
+                v-for="tag in detailState.bizTagList"
+                :key="tag"
+                color="gold"
+                class="mb-1"
+              >
+                {{ tag }}
+              </Tag>
+            </template>
+            <span v-else class="text-gray-400">-</span>
+          </DescriptionsItem>
+          <DescriptionsItem label="结课考试试卷">
+            {{ detailState.examName || '未设置' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="排序">
+            {{ detailState.course?.sort ?? '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="课程简介" :span="2">
+            {{ detailState.course?.summary || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="版本 / 当前生效" :span="2">
+            版本 {{ detailState.course?.version ?? '-' }} /
+            <Tag v-if="detailState.course?.isCurrent" color="success">
+              当前生效
+            </Tag>
+            <span v-else class="text-gray-400">历史版本</span>
+          </DescriptionsItem>
+        </Descriptions>
+
+        <div class="mt-4 mb-1 font-medium">资源所属（模块一：资源中心）</div>
+        <Table
+          v-if="detailState.mediaList.length > 0"
+          row-key="id"
+          size="small"
+          :columns="detailMediaColumns"
+          :data-source="detailState.mediaList"
+          :pagination="false"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'mediaType'">
+              <Tag color="blue">
+                {{ COURSE_MEDIA_TYPE_TEXT[record.mediaType] || record.mediaType }}
+              </Tag>
+            </template>
+          </template>
+        </Table>
+        <div v-else class="text-sm text-gray-400">暂未绑定任何资源</div>
+      </Spin>
+    </Modal>
+
     <Grid table-title="课程管理（模块二：核心-难）">
       <template #toolbar-tools>
         <TableAction
@@ -408,6 +619,19 @@ function buildActions(row: TrainingCourseApi.Course) {
         />
       </template>
 
+      <template #title="{ row }">
+        <a class="text-blue-600 hover:underline" @click="handleShowDetail(row)">
+          {{ row.title }}
+        </a>
+      </template>
+
+      <template #version="{ row }">
+        <Tag color="blue">v{{ row.version ?? 1 }}</Tag>
+        <Tag :color="row.isCurrent ? 'success' : 'default'">
+          {{ row.isCurrent ? '当前' : '历史' }}
+        </Tag>
+      </template>
+
       <template #level="{ row }">
         <span>
           {{ row.level != null ? (COURSE_LEVEL_TEXT[row.level] || '-') : '-' }}
@@ -417,14 +641,6 @@ function buildActions(row: TrainingCourseApi.Course) {
         <Tag v-if="row.courseLevel" color="processing">
           {{ GROWTH_LEVEL_TEXT[row.courseLevel] || row.courseLevel }}
         </Tag>
-        <span v-else class="text-gray-400">-</span>
-      </template>
-      <template #isRequired="{ row }">
-        <Tag v-if="row.isRequired" color="orange">必修</Tag>
-        <span v-else class="text-gray-400">选修</span>
-      </template>
-      <template #isComposite="{ row }">
-        <Tag v-if="row.isComposite" color="purple">复合</Tag>
         <span v-else class="text-gray-400">-</span>
       </template>
       <template #status="{ row }">
