@@ -60,6 +60,11 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
+    // 旧 WMS 首页已下线，重定向到新的 AI 首页
+    if (to.path === '/wms/home') {
+      return { path: '/wms/ai-center', replace: true };
+    }
+
     // 员工端门户：标注 meta.ignoreAccess 的公开页（招标投标 · 公告大厅/公告详情/本平台发布公告）免登录可查；
     // 其余门户页（首页/我要找工作/云培训学院/个人中心/我的关注/公告发布）仍必须登录后才能访问。
     // 依据：招标公告和公示信息发布管理办法（发改委令第10号）第12条——发布媒介须免费提供并允许公众查阅公告公示完整信息；
