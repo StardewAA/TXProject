@@ -369,7 +369,7 @@ function injectAiChatMenu(
     componentName: 'CrmAiChat',
     path: 'ai-chat',
     component: 'views/crm/ai-chat/index.vue',
-    icon: 'tabler:robot',
+    icon: 'crmai:avatar',
     meta: {},
     visible: true,
     // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）
