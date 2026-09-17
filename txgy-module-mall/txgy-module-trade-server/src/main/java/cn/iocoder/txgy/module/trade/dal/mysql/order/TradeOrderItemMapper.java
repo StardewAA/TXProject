@@ -28,6 +28,13 @@ public interface TradeOrderItemMapper extends BaseMapperX<TradeOrderItemDO> {
         return selectList(TradeOrderItemDO::getOrderId, orderId);
     }
 
+    /** Current reads after the parent order lock; stable order avoids item-lock inversion. */
+    default List<TradeOrderItemDO> selectListByOrderIdForUpdate(Long orderId) {
+        return selectList(new LambdaQueryWrapperX<TradeOrderItemDO>()
+                .eq(TradeOrderItemDO::getOrderId, orderId)
+                .orderByAsc(TradeOrderItemDO::getId).last("FOR UPDATE"));
+    }
+
     default List<TradeOrderItemDO> selectListByOrderId(Collection<Long> orderIds) {
         return selectList(TradeOrderItemDO::getOrderId, orderIds);
     }

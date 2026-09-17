@@ -1,16 +1,15 @@
 /**
  * 商城商品档案运行时适配。
  *
- * mall-catalog.js 保存 ERP 展示元数据；本模块从商城 APP 接口读取租户 1
- * 的真实 SPU，并将接口字段合并到 ERP 元数据上。接口暂不可用时返回本地
- * 档案，保证首页和分类页仍可打开，待接口恢复后可通过 force 刷新。
+ * 按受控商城入口缓存真实接口结果。空商城保持空态，失败不回填旧租户商品。
  */
 import CategoryApi from '@/sheep/api/product/category';
 import SpuApi from '@/sheep/api/product/spu';
 import { mallCategories, mallProducts } from './mall-catalog';
+import { ensureTenantReady, getControlledTenantId } from '@/sheep/helper/tenant-runtime';
 
-let catalogCache = null;
-let catalogPromise = null;
+const catalogCaches = new Map();
+const catalogPromises = new Map();
 
 const categoryByApiId = new Map(
   [
@@ -60,9 +59,11 @@ function resolveCategoryKey(spu, localProduct) {
   return categoryByApiId.get(Number(spu?.categoryId)) || '';
 }
 
-function normalizeProduct(spu) {
-  const localProduct = findLocalProduct(spu) || {};
-  const categoryKey = resolveCategoryKey(spu, localProduct);
+function normalizeProduct(spu, tenant, categories) {
+  // The bundled ERP metadata belongs to the historical tenant 1 only.
+  const localProduct = tenant === '1' ? findLocalProduct(spu) || {} : {};
+  const categoryKey = categories.find(c => Number(c.apiId) === Number(spu.categoryId))?.key
+    || (tenant === '1' ? resolveCategoryKey(spu, localProduct) : '');
   return {
     ...localProduct,
     id: spu.id,
@@ -84,22 +85,13 @@ function normalizeProduct(spu) {
   };
 }
 
-function normalizeFallbackProducts() {
-  return mallProducts.map((product) => ({
-    ...product,
-    id: product.id || 0,
-    stock: Number(product.stock ?? 0),
-    source: 'local',
-  }));
-}
-
-function normalizeApiCategories(categories = []) {
+function normalizeApiCategories(categories = [], tenant) {
   const apiNameById = new Map(categories.map((item) => [Number(item.id), item.name]));
   return mallCategories.map((category) => ({
     ...category,
     apiId:
-      [...categoryByApiId.entries()].find(([, key]) => key === category.key)?.[0] ||
       [...apiNameById.entries()].find(([, name]) => name === category.name)?.[0] ||
+      (tenant === '1' ? [...categoryByApiId.entries()].find(([, key]) => key === category.key)?.[0] : null) ||
       null,
   }));
 }
@@ -107,23 +99,23 @@ function normalizeApiCategories(categories = []) {
 /**
  * 加载商城用户端商品档案。
  * @param {boolean} force 是否忽略缓存重新请求
- * @returns {Promise<{products: Array, categories: Array, source: 'api'|'local'}>}
+ * @returns {Promise<{products: Array, categories: Array, source: 'api'}>}
  */
 export async function loadMallCatalog(force = false) {
-  if (catalogCache && !force) {
-    return catalogCache;
-  }
-  if (catalogPromise && !force) {
-    return catalogPromise;
-  }
+  await ensureTenantReady();
+  const tenant = getControlledTenantId();
+  if (catalogCaches.has(tenant) && !force) return catalogCaches.get(tenant);
+  if (catalogPromises.has(tenant) && !force) return catalogPromises.get(tenant);
 
-  catalogPromise = Promise.allSettled([
+  const pending = Promise.allSettled([
     SpuApi.getSpuPage({ pageNo: 1, pageSize: 100 }),
     CategoryApi.getCategoryList(),
   ])
     .then(([spuResult, categoryResult]) => {
       const spuResponse = spuResult.status === 'fulfilled' ? spuResult.value : null;
       const categoryResponse = categoryResult.status === 'fulfilled' ? categoryResult.value : null;
+      if (getControlledTenantId() !== tenant) throw new Error('商城已变化，请刷新商品');
+      if (spuResponse?.code !== 0 || !Array.isArray(spuResponse.data?.list)) throw new Error('商品暂无法加载');
       const apiProducts = spuResponse?.code === 0 && Array.isArray(spuResponse.data?.list)
         ? spuResponse.data.list.filter((item) => item?.id)
         : [];
@@ -131,37 +123,23 @@ export async function loadMallCatalog(force = false) {
         ? categoryResponse.data
         : [];
 
-      if (apiProducts.length === 0) {
-        catalogCache = {
-          products: normalizeFallbackProducts(),
-          categories: normalizeApiCategories(apiCategories),
-          source: 'local',
-        };
-        return catalogCache;
-      }
-
       // 按接口顺序展示，便于后台新增商品后用户端立即可见；ERP 元数据只负责
       // 分类、单位和规格等展示补充，不覆盖接口价格、库存和图片。
-      catalogCache = {
-        products: apiProducts.map(normalizeProduct),
-        categories: normalizeApiCategories(apiCategories),
+      const categories = normalizeApiCategories(apiCategories, tenant);
+      const catalog = {
+        products: apiProducts.map(spu => normalizeProduct(spu, tenant, categories)),
+        categories,
         source: 'api',
       };
-      return catalogCache;
-    })
-    .catch(() => {
-      catalogCache = {
-        products: normalizeFallbackProducts(),
-        categories: normalizeApiCategories(),
-        source: 'local',
-      };
-      return catalogCache;
+      if (catalogPromises.get(tenant) === pending) catalogCaches.set(tenant, catalog);
+      return catalog;
     })
     .finally(() => {
-      catalogPromise = null;
+      if (catalogPromises.get(tenant) === pending) catalogPromises.delete(tenant);
     });
 
-  return catalogPromise;
+  catalogPromises.set(tenant, pending);
+  return pending;
 }
 
 export function getCatalogCategoryKeyByName(name) {

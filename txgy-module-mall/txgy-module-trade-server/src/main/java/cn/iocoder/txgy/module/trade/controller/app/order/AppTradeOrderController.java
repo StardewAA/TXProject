@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
 import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
+import cn.iocoder.txgy.module.trade.service.order.TradeOrderPaymentDeadlineService;
 import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import com.google.common.collect.Maps;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +43,8 @@ import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtil
 @Validated
 @Slf4j
 public class AppTradeOrderController {
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
 
     @Resource
     private TradeOrderUpdateService tradeOrderUpdateService;
@@ -56,6 +59,10 @@ public class AppTradeOrderController {
 
     @Resource
     private TradeOrderProperties tradeOrderProperties;
+    @Resource
+    private TradeOrderPaymentDeadlineService paymentDeadline;
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.delivery.TradeOrderLogisticsService logistics;
 
     @GetMapping("/settlement")
     @Operation(summary = "获得订单结算信息")
@@ -102,7 +109,7 @@ public class AppTradeOrderController {
         }
         // 1.2 sync 仅在等待支付
         if (Boolean.TRUE.equals(sync)
-                && TradeOrderStatusEnum.isUnpaid(order.getStatus()) && !order.getPayStatus()) {
+                && TradeOrderStatusEnum.isUnpaid(order.getStatus()) && !order.getPayStatus() && order.getPayOrderId() != null) {
             tradeOrderUpdateService.syncOrderPayStatusQuietly(order.getId(), order.getPayOrderId());
             // 重新查询，因为同步后，可能会有变化
             order = tradeOrderQueryService.getOrder(id);
@@ -114,7 +121,10 @@ public class AppTradeOrderController {
         DeliveryExpressDO express = order.getLogisticsId() != null && order.getLogisticsId() > 0 ?
                 deliveryExpressService.getDeliveryExpress(order.getLogisticsId()) : null;
         // 2.3 最终组合
-        return success(TradeOrderConvert.INSTANCE.convert02(order, orderItems, tradeOrderProperties, express));
+        var response = TradeOrderConvert.INSTANCE.convert02(order, orderItems, tradeOrderProperties, express);
+        response.setErpInventory(erpInventory.list(order.getId()));
+        paymentDeadline.fill(order, response, true);
+        return success(response);
     }
 
     @GetMapping("/get-express-track-list")
@@ -123,6 +133,12 @@ public class AppTradeOrderController {
     public CommonResult<List<AppOrderExpressTrackRespDTO>> getOrderExpressTrackList(@RequestParam("id") Long id) {
         return success(TradeOrderConvert.INSTANCE.convertList02(
                 tradeOrderQueryService.getExpressTrackList(id, getLoginUserId())));
+    }
+
+    @GetMapping("/get-logistics")
+    @Operation(summary = "获得本人订单只读物流摘要")
+    public CommonResult<AppTradeOrderLogisticsRespVO> getLogistics(@RequestParam("id") Long id) {
+        return success(logistics.getForBuyer(id, getLoginUserId()));
     }
 
     @GetMapping("/page")
@@ -134,7 +150,12 @@ public class AppTradeOrderController {
         List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(
                 convertSet(pageResult.getList(), TradeOrderDO::getId));
         // 最终组合
-        return success(TradeOrderConvert.INSTANCE.convertPage02(pageResult, orderItems));
+        var response = TradeOrderConvert.INSTANCE.convertPage02(pageResult, orderItems);
+        // 转换保持相同顺序；新单列表无需逐笔调用支付服务，旧待支付单保守核实历史期限。
+        for (int i = 0; i < pageResult.getList().size(); i++) {
+            paymentDeadline.fill(pageResult.getList().get(i), response.getList().get(i), false);
+        }
+        return success(response);
     }
 
     @GetMapping("/get-count")

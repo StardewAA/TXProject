@@ -8,6 +8,15 @@
     :navbarStyle="template.navigationBar || {}"
     onShareAppMessage
   >
+    <s-order-workbench v-if="sheep.$store('user').isLogin" :workbench="workbench" />
+    <view v-if="sheep.$store('user').isLogin" class="enterprise-entry" @tap="sheep.$router.go('/pages/user/enterprise-profile')">企业资料与资质审核 ›</view>
+    <view v-if="sheep.$store('user').isLogin" class="enterprise-entry" @tap="sheep.$router.go('/pages/chat/service', { scope: 'PLATFORM', shopId: 0 })">平台自助 / 人工客服 ›</view>
+    <view v-if="customer.visible.value" class="customer-affiliation">
+      <view class="customer-title">客户服务归属</view>
+      <view class="customer-message">{{ customer.message.value }}</view>
+      <view class="customer-hint">仅说明为您提供服务的企业，不代表企业认证、员工身份或采购／销售权限。</view>
+      <button v-if="customer.retryable.value" size="mini" :disabled="customer.state.loading" @tap="customer.refresh">重新查询</button>
+    </view>
     <template v-if="hasTemplate">
       <s-block
         v-for="(item, index) in templateComponents"
@@ -44,8 +53,18 @@
 
 <script setup>
   import { computed } from 'vue';
-  import { onShow, onPageScroll, onPullDownRefresh } from '@dcloudio/uni-app';
+  import { onShow, onReady, onPageScroll, onPullDownRefresh } from '@dcloudio/uni-app';
+  import { showAuthModal } from '@/sheep/hooks/useModal';
   import sheep from '@/sheep';
+  import { useOrderWorkbench } from '@/sheep/hooks/useOrderWorkbench';
+  import { useCustomerAffiliation } from '@/sheep/hooks/useCustomerAffiliation';
+  const workbench = useOrderWorkbench();
+  const customer = useCustomerAffiliation();
+  onReady(() => {
+    // #ifdef H5
+    if (new URLSearchParams(window.location.search).get('mallRegistration') === '1' && !sheep.$store('user').isLogin) showAuthModal('register');
+    // #endif
+  });
 
   // 隐藏原生tabBar
   uni.hideTabBar({
@@ -110,6 +129,11 @@
 </script>
 
 <style lang="scss" scoped>
+  .customer-affiliation, .enterprise-entry { margin: 20rpx; padding: 26rpx; border: 1rpx solid #dce8e5; border-radius: 20rpx; background: #fff; }
+  .customer-title { font-size: 30rpx; font-weight: 700; color: #173d37; margin-bottom: 16rpx; }
+  .customer-message { font-size: 28rpx; overflow-wrap: anywhere; margin-bottom: 12rpx; }
+  .customer-hint { font-size: 24rpx; line-height: 1.7; color: #64748b; }
+  .customer-affiliation button { margin-top: 16rpx; color: #0f766e; }
   .mall-user-page {
     min-height: calc(100vh - 88rpx);
     padding: 24rpx 20rpx calc(120rpx + env(safe-area-inset-bottom));

@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.member.dal.mysql.address.MemberAddressMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 
 import jakarta.annotation.Resource;
 import java.util.List;
@@ -31,14 +32,15 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAddress(Long userId, AppAddressCreateReqVO createReqVO) {
+        MemberAddressDO address = AddressConvert.INSTANCE.convert(createReqVO);
+        AddressLocationPolicy.apply(createReqVO, null, address);
         // 如果添加的是默认收件地址，则将原默认地址修改为非默认
         if (Boolean.TRUE.equals(createReqVO.getDefaultStatus())) {
             List<MemberAddressDO> addresses = memberAddressMapper.selectListByUserIdAndDefaulted(userId, true);
-            addresses.forEach(address -> memberAddressMapper.updateById(new MemberAddressDO().setId(address.getId()).setDefaultStatus(false)));
+            addresses.forEach(existing -> memberAddressMapper.updateById(new MemberAddressDO().setId(existing.getId()).setDefaultStatus(false)));
         }
 
         // 插入
-        MemberAddressDO address = AddressConvert.INSTANCE.convert(createReqVO);
         address.setUserId(userId);
         memberAddressMapper.insert(address);
         // 返回
@@ -49,7 +51,9 @@ public class AddressServiceImpl implements AddressService {
     @Transactional(rollbackFor = Exception.class)
     public void updateAddress(Long userId, AppAddressUpdateReqVO updateReqVO) {
         // 校验存在,校验是否能够操作
-        validAddressExists(userId, updateReqVO.getId());
+        MemberAddressDO original = validAddressExists(userId, updateReqVO.getId());
+        MemberAddressDO updateObj = AddressConvert.INSTANCE.convert(updateReqVO);
+        AddressLocationPolicy.apply(updateReqVO, original, updateObj);
 
         // 如果修改的是默认收件地址，则将原默认地址修改为非默认
         if (Boolean.TRUE.equals(updateReqVO.getDefaultStatus())) {
@@ -59,8 +63,20 @@ public class AddressServiceImpl implements AddressService {
         }
 
         // 更新
-        MemberAddressDO updateObj = AddressConvert.INSTANCE.convert(updateReqVO);
-        memberAddressMapper.updateById(updateObj);
+        // Explicit SET null is essential: MyBatis' default strategy skips null values.
+        memberAddressMapper.update(new MemberAddressDO(), new LambdaUpdateWrapper<MemberAddressDO>()
+                .eq(MemberAddressDO::getId, original.getId()).eq(MemberAddressDO::getUserId, userId)
+                .set(MemberAddressDO::getName, updateObj.getName())
+                .set(MemberAddressDO::getMobile, updateObj.getMobile())
+                .set(MemberAddressDO::getAreaId, updateObj.getAreaId())
+                .set(MemberAddressDO::getDetailAddress, updateObj.getDetailAddress())
+                .set(MemberAddressDO::getDefaultStatus, updateObj.getDefaultStatus())
+                .set(MemberAddressDO::getLongitude, updateObj.getLongitude())
+                .set(MemberAddressDO::getLatitude, updateObj.getLatitude())
+                .set(MemberAddressDO::getCoordSystem, updateObj.getCoordSystem())
+                .set(MemberAddressDO::getLocationSource, updateObj.getLocationSource())
+                .set(MemberAddressDO::getLocationPrecision, updateObj.getLocationPrecision())
+                .set(MemberAddressDO::getLocationConfirmedAt, updateObj.getLocationConfirmedAt()));
     }
 
     @Override
@@ -71,11 +87,12 @@ public class AddressServiceImpl implements AddressService {
         memberAddressMapper.deleteById(id);
     }
 
-    private void validAddressExists(Long userId, Long id) {
+    private MemberAddressDO validAddressExists(Long userId, Long id) {
         MemberAddressDO addressDO = getAddress(userId, id);
         if (addressDO == null) {
             throw exception(ADDRESS_NOT_EXISTS);
         }
+        return addressDO;
     }
 
     @Override

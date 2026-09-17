@@ -41,6 +41,11 @@ x-backend-service: &backend-service
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    # 本地配置中保留了 lazy slave 数据源；Docker 内首次触发读库时也必须指向 mysql，
+    # 否则会连接容器自身的 127.0.0.1 并占满请求线程，表现为订单、购物车和后台栏目超时。
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     SPRING_DATA_REDIS_HOST: redis
     # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
     RESOURCE_UPLOAD_DIR: /app/uploads

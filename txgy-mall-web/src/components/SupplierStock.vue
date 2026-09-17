@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { formatDate } from '@/utils/format'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useAccountMessageBox } from '@/composables/useAccountOperation'
+const ElMessageBox = useAccountMessageBox()
 import { supplierApi, type SupplierSku } from '@/api/supplier'
 import { supplierStockApi, type StockAdjust, type StockEntry } from '@/api/supplier-stock'
 const props=defineProps<{shopId:number;spuId:number;disabled?:boolean}>()

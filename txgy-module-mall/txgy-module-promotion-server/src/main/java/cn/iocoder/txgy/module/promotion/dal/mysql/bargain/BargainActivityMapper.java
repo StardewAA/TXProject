@@ -65,7 +65,8 @@ public interface BargainActivityMapper extends BaseMapperX<BargainActivityDO> {
         return selectPage(pageReqVO, new LambdaQueryWrapperX<BargainActivityDO>()
                 .eq(BargainActivityDO::getStatus, status)
                 .le(BargainActivityDO::getStartTime, now)
-                .ge(BargainActivityDO::getEndTime, now));
+                .ge(BargainActivityDO::getEndTime, now)
+                .orderByDesc(BargainActivityDO::getId));
     }
 
     /**

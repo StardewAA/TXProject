@@ -57,6 +57,8 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     private ProductWmsInventoryAdapter productWmsInventoryAdapter;
     @Resource
     private ProductWmsReadonlyQueryAdapter productWmsReadonlyQueryAdapter;
+    @Resource
+    private org.springframework.jdbc.core.JdbcTemplate wmsReadonlyJdbc;
 
     @Override
     public void deleteSku(Long id) {
@@ -155,8 +157,15 @@ public class ProductSkuServiceImpl implements ProductSkuService {
 
     @Override
     public void createSkuList(Long spuId, List<ProductSkuSaveReqVO> skuCreateReqList) {
+        validateNewSkuMappings(skuCreateReqList);
         List<ProductSkuDO> skus = BeanUtils.toBean(skuCreateReqList, ProductSkuDO.class, sku -> sku.setSpuId(spuId).setSalesCount(0));
         productSkuMapper.insertBatch(skus);
+    }
+    public static void validateNewSkuMappings(List<ProductSkuSaveReqVO> skus) {
+        if (CollUtil.isEmpty(skus)) return; // 数量由原有 SKU 完整性校验处理。
+        if (skus.stream().anyMatch(s -> s == null || s.getWmsSkuId() != null || s.getWmsWarehouseId() != null))
+            throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                    "新增或复制商品不能继承WMS/ERP映射，请清空物料/仓库编号；真实映射须另行授权配置");
     }
 
     @Override
@@ -188,10 +197,9 @@ public class ProductSkuServiceImpl implements ProductSkuService {
         }
         skuDOList.stream().filter(sku -> sku.getProperties() != null)
                 .forEach(sku -> sku.getProperties().forEach(property -> {
-                    if (property.getPropertyId().equals(propertyId)) {
-                        property.setPropertyName(propertyName);
-                        updateSkus.add(sku);
-                    }
+                    if (property.getPropertyId().equals(propertyId) && !Objects.equals(property.getPropertyName(), propertyName))
+                        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                                "该规格已用于商品，不能通过字典重命名绕过商品审核；请保留历史规格并新建规格");
                 }));
         if (CollUtil.isEmpty(updateSkus)) {
             return 0;
@@ -210,13 +218,11 @@ public class ProductSkuServiceImpl implements ProductSkuService {
         if (CollUtil.isEmpty(skuDOList)) {
             return 0;
         }
-        skuDOList.stream()
-                .filter(sku -> sku.getProperties() != null)
+        skuDOList.stream().filter(sku -> sku.getProperties() != null)
                 .forEach(sku -> sku.getProperties().forEach(property -> {
-                    if (property.getValueId().equals(propertyValueId)) {
-                        property.setValueName(propertyValueName);
-                        updateSkus.add(sku);
-                    }
+                    if (property.getValueId().equals(propertyValueId) && !Objects.equals(property.getValueName(), propertyValueName))
+                        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                                "该规格值已用于商品，不能通过字典重命名绕过商品审核；请保留历史规格并新建规格值");
                 }));
         if (CollUtil.isEmpty(updateSkus)) {
             return 0;
@@ -229,99 +235,64 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSkuList(Long spuId, List<ProductSkuSaveReqVO> skus) {
-        // 构建属性与 SKU 的映射关系;
-        Map<String, Long> existsSkuMap = convertMap(productSkuMapper.selectListBySpuId(spuId),
-                ProductSkuConvert.INSTANCE::buildPropertyKey, ProductSkuDO::getId);
-
-        // 拆分三个集合，新插入的、需要更新的、需要删除的
-        List<ProductSkuDO> insertSkus = new ArrayList<>();
-        List<ProductSkuDO> updateSkus = new ArrayList<>();
-        List<ProductSkuDO> allUpdateSkus = BeanUtils.toBean(skus, ProductSkuDO.class, sku -> sku.setSpuId(spuId));
-        allUpdateSkus.forEach(sku -> {
-            String propertiesKey = ProductSkuConvert.INSTANCE.buildPropertyKey(sku);
-            // 1、找得到的，进行更新
-            Long existsSkuId = existsSkuMap.remove(propertiesKey);
-            if (existsSkuId != null) {
-                sku.setId(existsSkuId);
-                updateSkus.add(sku);
-                return;
-            }
-            // 2、找不到，进行插入
-            sku.setSpuId(spuId);
-            insertSkus.add(sku);
-        });
-
-        // 执行最终的批量操作
-        if (CollUtil.isNotEmpty(insertSkus)) {
-            productSkuMapper.insertBatch(insertSkus);
+        var existing = productSkuMapper.selectListBySpuId(spuId);
+        var byKey = existing.stream().collect(Collectors.toMap(ProductSkuServiceImpl::reviewPropertyKey, s -> s));
+        if (existing.size() != skus.size()) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "不得新增、删除或重建已有商品SKU，请保留规格编号及历史关联");
+        for (var input : skus) {
+            var candidate = BeanUtils.toBean(input, ProductSkuDO.class);
+            var original = byKey.remove(reviewPropertyKey(candidate));
+            if (original == null) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "不得修改已有SKU规格结构");
+            if ((input.getWmsSkuId() != null && !Objects.equals(input.getWmsSkuId(), original.getWmsSkuId()))
+                    || (input.getWmsWarehouseId() != null && !Objects.equals(input.getWmsWarehouseId(), original.getWmsWarehouseId())))
+                throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "商品编辑不得修改WMS/ERP物料映射");
+            // 明确白名单，不写库存/销量/映射/规格，不靠空字段更新策略碰运气。
+            var patch = new ProductSkuDO().setId(original.getId()).setPrice(input.getPrice())
+                    .setMarketPrice(input.getMarketPrice()).setCostPrice(input.getCostPrice()).setBarCode(input.getBarCode())
+                    .setPicUrl(input.getPicUrl()).setWeight(input.getWeight()).setVolume(input.getVolume())
+                    .setFirstBrokeragePrice(input.getFirstBrokeragePrice()).setSecondBrokeragePrice(input.getSecondBrokeragePrice());
+            if (productSkuMapper.updateById(patch) != 1) throw new IllegalStateException("商品SKU保存失败");
         }
-        if (CollUtil.isNotEmpty(updateSkus)) {
-            updateSkus.forEach(sku -> productSkuMapper.updateById(sku));
-        }
-        if (CollUtil.isNotEmpty(existsSkuMap)) {
-            productSkuMapper.deleteByIds(existsSkuMap.values());
-        }
+    }
+    private static String reviewPropertyKey(ProductSkuDO s) {
+        if (CollUtil.isEmpty(s.getProperties())) return "";
+        return s.getProperties().stream().sorted(Comparator.comparing(ProductSkuDO.Property::getPropertyId))
+                .map(p -> p.getPropertyId() + ":" + p.getValueId()).collect(Collectors.joining("|"));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSkuStock(ProductSkuUpdateStockReqDTO updateStockReqDTO) {
-        // 更新 SKU 库存
-        updateStockReqDTO.getItems().forEach(item -> {
-            if (item.getIncrCount() > 0) {
-                productSkuMapper.updateStockIncr(item.getId(), item.getIncrCount());
-            } else if (item.getIncrCount() < 0) {
-                int updateStockIncr = productSkuMapper.updateStockDecr(item.getId(), item.getIncrCount());
-                if (updateStockIncr == 0) {
-                    throw exception(SKU_STOCK_NOT_ENOUGH);
-                }
-            }
-        });
-
-        // 更新 SPU 库存
-        List<ProductSkuDO> skus = productSkuMapper.selectByIds(
-                convertSet(updateStockReqDTO.getItems(), ProductSkuUpdateStockReqDTO.Item::getId));
-        Map<Long, Integer> spuStockIncrCounts = ProductSkuConvert.INSTANCE.convertSpuStockMap(
-                updateStockReqDTO.getItems(), skus);
-        productSpuService.updateSpuStock(spuStockIncrCounts);
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reserveSkuStock(ProductSkuStockLockReqDTO reqDTO) {
-        StockFulfillment fulfillment = resolveStockFulfillment(reqDTO);
-        if (CollUtil.isNotEmpty(fulfillment.wmsItems())) {
-            productWmsInventoryAdapter.reserve(reqDTO.getOrderNo(), fulfillment.wmsItems());
-        }
-        updateLocalSkuStock(fulfillment.localItems(), -1);
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void releaseSkuStock(ProductSkuStockLockReqDTO reqDTO) {
-        StockFulfillment fulfillment = resolveStockFulfillment(reqDTO);
-        if (CollUtil.isNotEmpty(fulfillment.wmsItems())) {
-            productWmsInventoryAdapter.release(reqDTO.getOrderNo(), fulfillment.wmsItems());
-        }
-        updateLocalSkuStock(fulfillment.localItems(), 1);
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void outboundSkuStock(ProductSkuStockLockReqDTO reqDTO) {
-        StockFulfillment fulfillment = resolveStockFulfillment(reqDTO);
-        if (CollUtil.isNotEmpty(fulfillment.wmsItems())) {
-            productWmsInventoryAdapter.outbound(reqDTO.getOrderNo(), fulfillment.wmsItems());
-        }
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void inboundReturnSkuStock(String returnNo, ProductSkuStockLockReqDTO reqDTO) {
-        StockFulfillment fulfillment = resolveStockFulfillment(reqDTO);
-        if (CollUtil.isNotEmpty(fulfillment.wmsItems())) {
-            productWmsInventoryAdapter.inboundReturn(returnNo, reqDTO.getOrderNo(), fulfillment.wmsItems());
-        }
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     @Override
@@ -331,7 +302,17 @@ public class ProductSkuServiceImpl implements ProductSkuService {
 
     @Override
     public List<ProductWmsSkuSummaryDTO> getWmsSkuSummary(Long itemId) {
-        return productWmsReadonlyQueryAdapter.getSkuSummary(itemId);
+        if (itemId == null || itemId <= 0) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400, "WMS商品编号无效");
+        Long tenant = cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getRequiredTenantId();
+        Set<Long> visible = new HashSet<>(wmsReadonlyJdbc.queryForList(
+                "SELECT DISTINCT s.wms_sku_id FROM product_sku s JOIN product_spu p ON p.id=s.spu_id AND p.tenant_id=s.tenant_id "
+                        + "WHERE s.tenant_id=? AND s.deleted=0 AND p.deleted=0 AND p.status=1 AND s.wms_sku_id IS NOT NULL",
+                Long.class, tenant));
+        if (visible.isEmpty()) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(404, "未关联可展示的商城商品");
+        var result = productWmsReadonlyQueryAdapter.getSkuSummary(itemId).stream()
+                .filter(sku -> visible.contains(sku.getSkuId())).toList();
+        if (result.isEmpty()) throw new cn.iocoder.txgy.framework.common.exception.ServiceException(404, "未关联可展示的商城商品");
+        return result;
     }
 
     @Override
@@ -352,32 +333,8 @@ public class ProductSkuServiceImpl implements ProductSkuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int syncWmsStockCache(Collection<Long> spuIds) {
-        Set<Long> changedSpuIds = new HashSet<>();
-        int changedSkuCount = 0;
-        for (ProductSkuDO sku : productSkuMapper.selectListWithWmsMapping(spuIds)) {
-            ProductWmsInventoryAdapter.InventorySnapshot snapshot = productWmsInventoryAdapter.getSnapshot(
-                    sku.getWmsSkuId(), sku.getWmsWarehouseId());
-            // WMS 尚未建库存时不把商品库存误清零，由对账报告提示人工补齐映射或 WMS 库存。
-            if (!snapshot.exists() || Objects.equals(sku.getStock(), snapshot.availableStock())) {
-                continue;
-            }
-            productSkuMapper.updateStockCache(sku.getId(), snapshot.availableStock());
-            changedSpuIds.add(sku.getSpuId());
-            changedSkuCount++;
-        }
-        if (CollUtil.isNotEmpty(changedSpuIds)) {
-            Map<Long, Integer> spuStockCounts = new HashMap<>();
-            for (Long spuId : changedSpuIds) {
-                int stock = productSkuMapper.selectListBySpuId(spuId).stream()
-                        .map(ProductSkuDO::getStock)
-                        .filter(Objects::nonNull)
-                        .mapToInt(Integer::intValue)
-                        .sum();
-                spuStockCounts.put(spuId, stock);
-            }
-            productSpuService.syncSpuStock(spuStockCounts);
-        }
-        return changedSkuCount;
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧库存写入入口已停用，请通过ERP库存履约处理");
     }
 
     private ProductWmsStockReconciliationDTO reconcileWmsStock(ProductSkuDO sku) {

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useAccountMessageBox } from '@/composables/useAccountOperation'
+const ElMessageBox = useAccountMessageBox()
 import type { ImportRow, InquiryItem } from '@/api/inquiry'
 import { planInquiryImport, type DuplicatePolicy } from '@/utils/inquiry-import'
 import { checkInquiryCategory, type InquiryCategoryOption } from '@/utils/inquiry-category'

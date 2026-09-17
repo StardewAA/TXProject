@@ -28,13 +28,38 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'loginName',
+      label: '登录名',
+      component: 'Input',
+      componentProps: {
+        disabled: true,
+        placeholder: '原手机号账号未设置登录名',
+      },
+    },
+    {
+      fieldName: 'contactMobile',
+      label: '联系手机',
+      help: '未验证的联系信息，不能用于登录或找回密码',
+      component: 'Input',
+      componentProps: {
+        disabled: true,
+        placeholder: '未填写',
+      },
+    },
+    {
       fieldName: 'mobile',
       label: '手机号',
       component: 'Input',
       componentProps: {
         placeholder: '请输入手机号',
       },
-      rules: 'required',
+      dependencies: {
+        triggerFields: ['loginName'],
+        disabled: (values) => Boolean(values.loginName),
+        rules: (values) => values.loginName
+          ? z.string().nullable().optional()
+          : 'required',
+      },
     },
     {
       fieldName: 'email',
@@ -257,6 +282,16 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'mobile',
       title: '手机号',
       minWidth: 120,
+    },
+    {
+      field: 'loginName',
+      title: '登录名',
+      minWidth: 160,
+    },
+    {
+      field: 'contactMobile',
+      title: '联系手机（未验证）',
+      minWidth: 180,
     },
     {
       field: 'email',

@@ -6,7 +6,7 @@ defineProps<{ product: Product }>()
 </script>
 
 <template>
-  <RouterLink class="product-card" :to="`/goods/${product.id}`">
+  <MallLink class="product-card" :to="`/goods/${product.id}`">
     <div class="product-card__image">
       <img v-if="productImage(product.id, product.picUrl)" :src="productImage(product.id, product.picUrl)" :alt="product.name" loading="lazy" />
       <span v-else>暂无商品图片</span>
@@ -22,7 +22,7 @@ defineProps<{ product: Product }>()
       <small>{{ product.shopName || '店铺信息以详情为准' }}</small>
       <div class="product-card__footer"><span>查看规格与详情</span><b aria-hidden="true">↗</b></div>
     </div>
-  </RouterLink>
+  </MallLink>
 </template>
 
 <style scoped>

@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressCreateReqVO;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressRespVO;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressUpdateReqVO;
+import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressLocationCapabilityRespVO;
 import cn.iocoder.txgy.module.member.convert.address.AddressConvert;
 import cn.iocoder.txgy.module.member.dal.dataobject.address.MemberAddressDO;
 import cn.iocoder.txgy.module.member.service.address.AddressService;
@@ -28,6 +29,12 @@ public class AppAddressController {
 
     @Resource
     private AddressService addressService;
+
+    @GetMapping("/location-capability")
+    @Operation(summary = "地址地图能力；未配置时使用手工地址")
+    public CommonResult<AppAddressLocationCapabilityRespVO> getLocationCapability() {
+        return success(new AppAddressLocationCapabilityRespVO());
+    }
 
     @PostMapping("/create")
     @Operation(summary = "创建用户收件地址")

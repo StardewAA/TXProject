@@ -1,6 +1,10 @@
 import request from '@/sheep/request';
 
 const AddressApi = {
+  getLocationCapability: () => request({
+    url: '/member/address/location-capability', method: 'GET',
+    custom: { auth: true, showLoading: false, showError: false },
+  }),
   // 获得用户收件地址列表
   getAddressList: () => {
     return request({

@@ -164,4 +164,10 @@ public interface PayOrderService {
      */
     int expireOrder();
 
+    /** 只处理调用方应用的指定到期订单；渠道未明确关闭时保持待核实。 */
+    boolean expireOrder(Long id, String appKey, String merchantOrderId);
+
+    /** 业务主动取消：校验应用归属，仅所有支付尝试已明确关闭后关闭本地支付单，不要求已到期。 */
+    boolean closeOrder(Long id, String appKey, String merchantOrderId);
+
 }

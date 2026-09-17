@@ -44,6 +44,7 @@
 
 <script>
   import { chooseAndUploadFile, uploadCloudFiles } from './choose-and-upload-file.js';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
   import { get_extname, get_files_and_is_max, get_file_data } from './utils.js';
   import uploadImage from './upload-image.vue';
   import uploadFile from './upload-file.vue';
@@ -245,6 +246,7 @@
         return this.limit;
       },
     },
+    setup() { return { tenantTask: useTenantTask() }; },
     created() {
       if (this.driver === 'local') {
         uniCloud.chooseAndUploadFile = chooseAndUploadFile;
@@ -349,9 +351,12 @@
        * 选择文件并上传
        */
       async chooseFiles() {
+        const current = this.tenantTask.capture();
+        if (!current()) return;
         const _extname = get_extname(this.fileExtname);
         // 获取后缀
         await chooseAndUploadFile({
+          isCurrent: current,
           type: this.fileMediatype,
           compressed: false,
           sizeType: this.sizeType,
@@ -364,10 +369,10 @@
           },
         })
           .then((result) => {
-            this.setSuccessAndError(result);
+            if (current()) this.setSuccessAndError(result);
           })
           .catch((err) => {
-            console.log('选择失败', err);
+            if (current() && !String(err?.errMsg || '').includes('cancel')) uni.showToast({title: err.message || '上传失败，请重试', icon:'none'});
           });
       },
 
@@ -376,6 +381,8 @@
        * @param {Object} res
        */
       async chooseFileCallback(res) {
+        const current = this.tenantTask.capture();
+        if (!current()) return [];
         const _extname = get_extname(this.fileExtname);
         const is_one =
           (Number(this.limitLength) === 1 && this.disablePreview && !this.disabled) ||
@@ -396,6 +403,7 @@
           if (this.limitLength - this.files.length <= 0) break;
           files[i].uuid = Date.now();
           let filedata = await get_file_data(files[i], this.fileMediatype);
+          if (!current()) return [];
           filedata.progress = 0;
           filedata.status = 'ready';
           this.files.push(filedata);
@@ -420,13 +428,15 @@
        * @param {Object} e
        */
       uploadFiles(files) {
+        const current = this.tenantTask.capture();
+        if (!current()) return Promise.resolve([]);
         files = [].concat(files);
         return uploadCloudFiles
           .call(this, files, 5, (res) => {
             this.setProgress(res, res.index, true);
-          })
+          }, current)
           .then((result) => {
-            this.setSuccessAndError(result);
+            if (current()) this.setSuccessAndError(result);
             return result;
           })
           .catch((err) => {
@@ -438,6 +448,8 @@
        * 成功或失败
        */
       async setSuccessAndError(res, fn) {
+        const current = this.tenantTask.capture();
+        if (!current()) return;
         let successData = [];
         let errorData = [];
         let tempFilePath = [];
@@ -459,7 +471,9 @@
             this.files[index].fileID = item.url;
             const reg = /cloud:\/\/([\w.]+\/?)\S*/;
             if (reg.test(item.url)) {
-              this.files[index].url = await this.getTempFileURL(item.url);
+              const url = await this.getTempFileURL(item.url);
+              if (!current()) return;
+              this.files[index].url = url;
             } else {
               this.files[index].url = item.url;
             }

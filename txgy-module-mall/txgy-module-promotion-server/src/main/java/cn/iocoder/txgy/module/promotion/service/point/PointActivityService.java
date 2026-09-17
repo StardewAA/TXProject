@@ -51,6 +51,12 @@ public interface PointActivityService {
      */
     void updatePointStockIncr(Long id, Long skuId, Integer count);
 
+    /** 只读返库预检；成功不代表已返库，真正执行时仍需重新校验。 */
+    void validatePointStockReturn(Long activityId, Long skuId, Integer count, Long orderItemId);
+
+    /** 以租户和订单项为业务唯一键幂等返库。 */
+    void returnPointStock(Long activityId, Long skuId, Integer count, Long orderItemId);
+
     /**
      * 关闭积分商城活动
      *

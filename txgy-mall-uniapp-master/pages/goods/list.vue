@@ -12,8 +12,10 @@
       <view v-else-if="state.shopError">店铺不存在、已停用或暂时无法访问</view>
       <template v-else-if="state.shop"><view class="shop-title">{{ state.shop.name }}</view><view class="shop-description">{{ state.shop.introduction || '企业材料供应店铺' }}</view><view class="shop-tip">店内搜索 · 共 {{ state.pagination.total }} 款商品</view></template>
       <view class="shop-directory-link" @tap="sheep.$router.go('/pages/shop/list')">查看全部店铺 ›</view>
+      <button v-if="state.shop && !state.shopError && !state.shopLoading" size="mini" @tap="sheep.$router.go('/pages/chat/service', { scope: 'SHOP', shopId: state.shopId })">联系本店客服</button>
     </view>
     <view v-if="state.shopError && !state.invalidShopId" class="shop-retry" @tap="loadShop">重新加载店铺</view>
+    <s-comparison-bar />
     <!-- 筛选 -->
     <su-sticky bgColor="#fff">
       <view class="ss-flex">
@@ -71,6 +73,7 @@
           :bottomRadius="10"
           @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
         />
+        <button size="mini" @tap="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格加入对比</button>
       </view>
     </view>
     <!-- 情况二：双列布局 -->
@@ -91,7 +94,7 @@
             @getHeight="mountMasonry($event, 'left')"
           >
             <template v-slot:cart>
-              <button class="ss-reset-button cart-btn" />
+              <button size="mini" @tap.stop="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格对比</button>
             </template>
           </s-goods-column>
         </view>
@@ -109,7 +112,7 @@
             @getHeight="mountMasonry($event, 'right')"
           >
             <template v-slot:cart>
-              <button class="ss-reset-button cart-btn" />
+              <button size="mini" @tap.stop="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格对比</button>
             </template>
           </s-goods-column>
         </view>

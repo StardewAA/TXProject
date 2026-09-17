@@ -43,6 +43,9 @@ public interface ProductSpuService {
      */
     void deleteSpu(Long id);
 
+    /** 公开经营删除入口，必须在行锁内校验客户端读取的版本。 */
+    void deleteSpu(Long id, Long expectedVersion);
+
     /**
      * 获得商品 SPU
      *

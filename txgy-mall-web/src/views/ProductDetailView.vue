@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import { productApi } from '@/api/mall'
+import { ensureAccountSession } from '@/api/http'
+import { checkoutDraft } from '@/utils/checkout-draft'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { useComparisonStore } from '@/stores/comparison'
+import { getTenantContext } from '@/utils/tenant-context'
 import { skuImage } from '@/utils/sku-image'
 import type { Product, ProductSku, Shop } from '@/types/mall'
 import { formatMoney, normalizeImage, productImage, propertyText, sanitizeRichHtml } from '@/utils/format'
@@ -14,6 +18,10 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
+const comparison = useComparisonStore()
+const compareSkuChosen = ref(false)
+const comparing = ref(false)
+let loadGeneration = 0, active = true
 const product = ref<Product | null>(null)
 const shop = ref<Shop | null>(null)
 const comments = ref<Array<Record<string, unknown>>>([])
@@ -34,24 +42,43 @@ const selectedImage = ref('')
 const activeImage = computed(() => selectedImage.value || galleryImages.value[0] || '')
 
 async function load() {
+  const generation = ++loadGeneration, id = String(route.params.id), epoch = getTenantContext().epoch
+  const current = () => active && generation === loadGeneration && id === String(route.params.id) && epoch === getTenantContext().epoch
   loading.value = true
+  product.value = null; selectedSku.value = null; shop.value = null; comments.value = []; compareSkuChosen.value = false; quantity.value = 1
   try {
-    const data = await productApi.getDetail(String(route.params.id))
+    const data = await productApi.getDetail(id)
+    if (!current()) return
+    if (String(data.id) !== id) throw new Error('商品详情与当前选择不一致')
     product.value = data
     selectedImage.value = ''
     selectedSku.value = data.skus?.find((sku) => Number(sku.stock) > 0) || data.skus?.[0] || null
+    compareSkuChosen.value = data.skus?.length === 1
     shop.value = null
     if (data.shopId) {
-      try { shop.value = await productApi.getShop(data.shopId) } catch { shop.value = null }
+      try { const value = await productApi.getShop(data.shopId); if (current()) shop.value = value } catch { if (current()) shop.value = null }
     }
-    try { comments.value = (await productApi.getComments({ spuId: data.id, pageNo: 1, pageSize: 5, type: 0 })).list || [] } catch { comments.value = [] }
-  } finally { loading.value = false }
+    if (!current()) return
+    try { const value = await productApi.getComments({ spuId: data.id, pageNo: 1, pageSize: 5, type: 0 }); if (current()) comments.value = value.list || [] } catch { if (current()) comments.value = [] }
+  } catch { if (current()) product.value = null }
+  finally { if (current()) loading.value = false }
 }
 
 function selectSku(sku: ProductSku) {
   selectedSku.value = sku
+  compareSkuChosen.value = true
   selectedImage.value = ''
   if (quantity.value > sku.stock) quantity.value = Math.max(1, sku.stock)
+}
+
+async function addToComparison() {
+  if (comparing.value) return
+  if (!selectedSku.value || !compareSkuChosen.value) return ElMessage.warning('请先点击选择需要对比的实际规格，不会自动使用最低价规格')
+  const owner = comparison.ownerKey(), id = String(route.params.id)
+  comparing.value = true
+  try { await comparison.add(selectedSku.value.id); if (active && owner === comparison.ownerKey() && id === String(route.params.id)) ElMessage.success('已加入对比，可从顶部或右下角查看') }
+  catch (reason) { if (active && owner === comparison.ownerKey()) ElMessage.warning(reason instanceof Error ? reason.message : '加入对比失败') }
+  finally { if (active && owner === comparison.ownerKey()) comparing.value = false }
 }
 
 async function addToCart(goCheckout = false) {
@@ -61,7 +88,8 @@ async function addToCart(goCheckout = false) {
   adding.value = true
   try {
     if (goCheckout) {
-      sessionStorage.setItem('mall-checkout-items', JSON.stringify([{ skuId: selectedSku.value.id, count: quantity.value }]))
+      await ensureAccountSession()
+      checkoutDraft.save([{ skuId: selectedSku.value.id, count: quantity.value }])
       await router.push('/checkout')
     } else {
       await cartStore.add(selectedSku.value.id, quantity.value)
@@ -80,12 +108,15 @@ async function toggleFavorite() {
 }
 
 watch(() => route.params.id, load)
+function contextChanged() { comparing.value = false; void load() }
+window.addEventListener('mall:tenant-context-updated', contextChanged)
+onBeforeUnmount(() => { active = false; loadGeneration++; window.removeEventListener('mall:tenant-context-updated', contextChanged) })
 onMounted(load)
 </script>
 
 <template>
   <div class="container page-section">
-    <div class="breadcrumbs"><RouterLink to="/">首页</RouterLink><span>›</span><RouterLink to="/goods">商品列表</RouterLink><span>›</span><span>{{ product?.name || '商品详情' }}</span></div>
+    <div class="breadcrumbs"><MallLink to="/">首页</MallLink><span>›</span><MallLink to="/goods">商品列表</MallLink><span>›</span><span>{{ product?.name || '商品详情' }}</span></div>
     <div v-if="loading" class="panel loading-box"><el-skeleton :rows="10" animated /></div>
     <template v-else-if="product">
       <section class="goods-main panel">
@@ -96,10 +127,12 @@ onMounted(load)
         <div class="goods-info">
           <h1>{{ product.name }}</h1><p class="intro">{{ product.introduction }}</p>
           <div class="price-box"><span>平台价格</span><strong>¥{{ formatMoney(displayPrice) }}</strong><del v-if="product.marketPrice">¥{{ formatMoney(product.marketPrice) }}</del></div>
-          <dl><dt>所属店铺</dt><dd><RouterLink v-if="product.shopId" :to="`/shops/${product.shopId}`" class="store-detail-link">{{ shop?.name || product.shopName || '查看店铺' }} ↗</RouterLink><span v-else>{{ product.shopName || '暂无店铺信息' }}</span></dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
+          <dl><dt>所属店铺</dt><dd><MallLink v-if="product.shopId" :to="`/shops/${product.shopId}`" class="store-detail-link">{{ shop?.name || product.shopName || '查看店铺' }} ↗</MallLink><span v-else>{{ product.shopName || '暂无店铺信息' }}</span></dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd><dt>配送说明</dt><dd>配送范围与费用以订单结算为准</dd></dl>
           <div v-if="product.skus?.length" class="sku-area"><label>规格选择</label><div><button v-for="sku in product.skus" :key="sku.id" :class="{ active: selectedSku?.id === sku.id, disabled: sku.stock <= 0 }" :disabled="sku.stock <= 0" @click="selectSku(sku)">{{ propertyText(sku.properties) || `规格 ${sku.id}` }}</button></div></div>
           <div class="quantity"><label>采购数量</label><el-input-number v-model="quantity" :min="1" :max="Math.max(1, displayStock)" /><span>当前可售 {{ displayStock }}</span></div>
           <div class="goods-actions"><el-button size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(false)">{{ displayStock > 0 ? '加入购物车' : '暂时售罄' }}</el-button><el-button type="primary" size="large" :loading="adding" :disabled="displayStock <= 0" @click="addToCart(true)">立即采购</el-button><button class="favorite" @click="toggleFavorite">{{ product.favorite ? '★ 已收藏' : '☆ 收藏商品' }}</button></div>
+          <div class="compare-actions"><el-button :loading="comparing" :disabled="comparison.saving || comparison.loading" @click="addToComparison">加入对比</el-button><MallLink to="/compare">查看对比（{{ comparison.count }} / 4）</MallLink><small v-if="!compareSkuChosen">请先点击选择上方实际规格</small></div>
+          <p><MallLink v-if="product.shopId" :to="{ path: `/member/customer-service/shop/${product.shopId}`, query: { resourceType: 'PRODUCT', resourceId: product.id } }">联系店铺客服 · 商品咨询 →</MallLink><MallLink v-else to="/member/customer-service/scoped">明确选择平台客服咨询 →</MallLink></p>
         </div>
       </section>
       <section class="goods-detail panel page-section">
@@ -126,4 +159,5 @@ dl { display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 16px 8px; pad
 .goods-actions { display: flex; align-items: center; gap: 12px; margin-top: 30px; }.goods-actions :deep(.el-button) { min-width: 140px; }.favorite { margin-left: 8px; border: 0; background: transparent; color: #68757e; }
 .goods-detail { min-height: 240px; padding: 0 30px 40px; }.detail-title { padding: 20px 0; border-bottom: 2px solid var(--brand); font-size: 19px; font-weight: 700; }.rich-content { padding: 28px 10px; line-height: 1.8; overflow: hidden; }.rich-content :deep(img) { max-width: 100%; }.empty-detail { padding: 80px; text-align: center; color: var(--muted); }.comment-list article { padding: 22px 8px; border-bottom: 1px solid var(--line); }.comment-list header { display: flex; gap: 18px; align-items: center; }.comment-list p { line-height: 1.7; }.comment-list small { color: var(--muted); }.comment-images { display: flex; gap: 10px; margin-top: 12px; }.comment-images img { width: 82px; height: 82px; object-fit: cover; }.comment-list blockquote { margin: 14px 0 0; padding: 12px; background: #f7f8f9; color: #59666f; }
 .product-intro-image { max-width: 920px; margin: 30px auto 0; padding: 28px; background: #f7f8f8; text-align: center; }.product-intro-image img { max-width: 100%; max-height: 720px; object-fit: contain; }
+.compare-actions{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:22px}.compare-actions small{color:var(--muted)}
 </style>

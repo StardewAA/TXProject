@@ -70,6 +70,11 @@ public class PayOrderExtensionDO extends BaseDO {
      */
     private Integer status;
     /**
+     * 请求发送状态，参见 PayOrderSubmitStateEnum。null 为历史未核实尝试。
+     * PREPARED/UNKNOWN 不得仅凭渠道“订单不存在/关闭”就认定可以取消。
+     */
+    private Integer submitState;
+    /**
      * 支付渠道的额外参数
      *
      * 参见 <a href="https://www.pingxx.com/api/支付渠道%20extra%20参数说明.html">参数说明</>

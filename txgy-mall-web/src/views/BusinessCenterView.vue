@@ -14,44 +14,45 @@ onMounted(async()=>{try{row.value=await enterpriseApi.mine();if(row.value?.statu
    <div class="sidebar-heading"><span>{{sales?'SUPPLIER CENTER':'PURCHASING CENTER'}}</span><h2>{{sales?'销售中心':'采购中心'}}</h2></div>
    <nav :aria-label="sales?'销售中心导航':'采购中心导航'">
     <template v-if="sales">
-     <RouterLink class="current" to="/sales" aria-current="page">销售工作台</RouterLink>
+     <MallLink class="current" to="/sales" aria-current="page">销售工作台</MallLink>
      <div class="menu-group">商品与店铺</div>
      <template v-if="loaded && shops.length">
       <div v-for="shop in shops" :key="shop.id" class="shop-menu">
        <div class="shop-name">{{shop.name}}</div>
-       <RouterLink :to="`/sales/shops/${shop.id}/products/new`">发布商品</RouterLink>
-       <RouterLink :to="`/sales/shops/${shop.id}/products`">管理商品</RouterLink>
-       <RouterLink :to="`/shops/${shop.id}`">查看店铺</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/settings`">店铺资料与退货地址</RouterLink>
+       <MallLink :to="`/sales/shops/${shop.id}/products/new`">发布商品</MallLink>
+       <MallLink :to="`/sales/shops/${shop.id}/products`">管理商品</MallLink>
+       <MallLink :to="`/sales/shops/${shop.id}/customer-service`">店铺客服（须独立授权）</MallLink>
+       <MallLink :to="`/shops/${shop.id}`">查看店铺</MallLink><MallLink :to="`/sales/shops/${shop.id}/settings`">店铺资料与退货地址</MallLink>
       </div>
      </template>
      <template v-else><span class="unavailable" aria-disabled="true">发布商品 <small>待授权</small></span><span class="unavailable" aria-disabled="true">管理商品 <small>待授权</small></span></template>
      <div class="menu-group">销售业务</div>
-     <template v-if="loaded && shops.length"><div v-for="shop in shops" :key="shop.id"><RouterLink :to="`/sales/shops/${shop.id}/orders`">销售订单</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/after-sales`">销售售后处理</RouterLink></div></template>
+     <template v-if="loaded && shops.length"><div v-for="shop in shops" :key="shop.id"><MallLink :to="`/sales/shops/${shop.id}/orders`">销售订单</MallLink><MallLink :to="`/sales/shops/${shop.id}/after-sales`">销售售后处理</MallLink></div></template>
      <template v-else><span class="unavailable" aria-disabled="true">销售订单 <small>待授权</small></span><span class="unavailable" aria-disabled="true">销售售后处理 <small>待授权</small></span></template>
-     <RouterLink v-for="shop in shops" :key="`settlement-${shop.id}`" :to="`/sales/shops/${shop.id}/settlements`">{{shop.name}} · 店铺结算</RouterLink>
+     <MallLink v-for="shop in shops" :key="`settlement-${shop.id}`" :to="`/sales/shops/${shop.id}/settlements`">{{shop.name}} · 店铺结算</MallLink>
     </template>
     <template v-else>
-     <RouterLink class="current" to="/purchase" aria-current="page">采购工作台</RouterLink>
+     <MallLink class="current" to="/purchase" aria-current="page">采购工作台</MallLink>
      <div class="menu-group">采购需求</div>
-     <RouterLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</RouterLink>
-     <RouterLink to="/purchase/inquiries">管理询价单</RouterLink>
-     <RouterLink to="/goods">选购商品</RouterLink>
-     <RouterLink to="/cart">采购清单 / 购物车</RouterLink>
+     <MallLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</MallLink>
+     <MallLink to="/purchase/inquiries">管理询价单</MallLink>
+     <MallLink to="/goods">选购商品</MallLink>
+     <MallLink to="/cart">采购清单 / 购物车</MallLink>
      <div class="menu-group">采购交易</div>
-     <RouterLink to="/purchase/orders">采购订单与收货</RouterLink>
-     <RouterLink to="/purchase/after-sales">采购售后</RouterLink>
-     <RouterLink to="/purchase/addresses">收货地址</RouterLink>
+     <MallLink to="/purchase/orders">采购订单与收货</MallLink>
+     <MallLink to="/purchase/after-sales">采购售后</MallLink>
+     <MallLink to="/purchase/addresses">收货地址</MallLink>
     </template>
     <div class="menu-group">企业账户</div>
-    <RouterLink to="/enterprise/profile">企业资料与认证</RouterLink>
+    <MallLink to="/enterprise/profile">企业资料与认证</MallLink>
    </nav>
-   <div class="center-switch"><RouterLink v-if="sales" to="/purchase">切换到采购中心 →</RouterLink><RouterLink v-else-if="row?.identity==='supplier'" to="/sales">切换到销售中心 →</RouterLink></div>
+   <div class="center-switch"><MallLink v-if="sales" to="/purchase">切换到采购中心 →</MallLink><MallLink v-else-if="row?.identity==='supplier'" to="/sales">切换到销售中心 →</MallLink></div>
   </aside>
   <main class="panel"><h1>{{sales?'企业销售工作台':'企业采购工作台'}}</h1><p>{{row?.name||'请先完善企业资料'}}</p>
    <el-alert v-if="!loaded" title="正在加载企业身份，加载失败请刷新重试" :closable="false"/>
    <el-alert v-else-if="row?.status!==1" title="企业尚未审核通过，请完善资料或等待后台审核" type="warning" :closable="false"/>
-   <template v-else-if="sales"><el-alert v-if="!shops.length" title="销售权限未开通：须为供应商身份，且由后台关联启用店铺" type="warning" :closable="false"/><template v-else><el-alert title="企业认证已通过，以下为已关联店铺" type="success" :closable="false"/><div v-for="shop in shops" :key="shop.id" class="shop"><h3>{{shop.name}}</h3><BusinessSummary :shop-id="Number(shop.id)"/><div class="shortcuts"><RouterLink :to="'/shops/'+shop.id">查看店铺</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/products`">管理商品</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/products/new`">发布商品</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/orders`">销售订单</RouterLink><RouterLink :to="`/sales/shops/${shop.id}/after-sales`">售后处理</RouterLink></div></div><p>商品和销售订单使用专用会员授权接口。供应商可审核售后和验收退货，实际退款仍由平台处理，店铺结算提供账单核对与确认，真实自动打款未接通。</p></template></template>
-   <template v-else><BusinessSummary/><el-alert title="企业注册与资质认证成功，当前账号为企业采购人员" type="success" :closable="false"/><div class="shortcuts"><RouterLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</RouterLink><RouterLink to="/purchase/inquiries">管理询价单</RouterLink><RouterLink to="/goods">选购商品</RouterLink><RouterLink to="/cart">采购清单</RouterLink><RouterLink to="/purchase/orders">采购订单与收货</RouterLink><RouterLink to="/purchase/after-sales">退款售后</RouterLink></div></template>
+   <template v-else-if="sales"><el-alert v-if="!shops.length" title="销售权限未开通：须为供应商身份，且由后台关联启用店铺" type="warning" :closable="false"/><template v-else><el-alert title="企业认证已通过，以下为已关联店铺" type="success" :closable="false"/><div v-for="shop in shops" :key="shop.id" class="shop"><h3>{{shop.name}}</h3><BusinessSummary :shop-id="Number(shop.id)"/><div class="shortcuts"><MallLink :to="'/shops/'+shop.id">查看店铺</MallLink><MallLink :to="`/sales/shops/${shop.id}/products`">管理商品</MallLink><MallLink :to="`/sales/shops/${shop.id}/products/new`">发布商品</MallLink><MallLink :to="`/sales/shops/${shop.id}/orders`">销售订单</MallLink><MallLink :to="`/sales/shops/${shop.id}/after-sales`">售后处理</MallLink></div></div><p>商品和销售订单使用专用会员授权接口。供应商可审核售后和验收退货，实际退款仍由平台处理，店铺结算提供账单核对与确认，真实自动打款未接通。</p></template></template>
+   <template v-else><BusinessSummary/><el-alert title="企业注册与资质认证成功，当前账号为企业采购人员" type="success" :closable="false"/><div class="shortcuts"><MallLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</MallLink><MallLink to="/purchase/inquiries">管理询价单</MallLink><MallLink to="/goods">选购商品</MallLink><MallLink to="/cart">采购清单</MallLink><MallLink to="/purchase/orders">采购订单与收货</MallLink><MallLink to="/purchase/after-sales">退款售后</MallLink></div></template>
    <p v-if="!sales">询价提交仅保存在商城，真实 ERP、供应商报价及转订单尚未对接。</p>
    <p v-else>仅可经营后台明确授权的店铺；灰色菜单为待开发功能，暂不开放操作。</p>
   </main>

@@ -44,11 +44,23 @@
         <view class="ss-font-30">{{ formatOrderStatus(state.orderInfo) }}</view>
       </view>
       <view class="ss-font-26 ss-m-x-20 ss-m-b-70">
-        {{ formatOrderStatusDescription(state.orderInfo) }}
+        {{ state.orderInfo.status === 0 ? paymentState.text : formatOrderStatusDescription(state.orderInfo) }}
       </view>
     </view>
 
+    <view v-if="state.orderInfo.status === 0 || !confirmed" class="ss-m-20 ss-flex ss-row-between">
+      <text v-if="!confirmed && !syncing">订单状态暂未确认，请刷新后重试</text>
+      <button class="ss-reset-button" :disabled="syncing" @tap="refresh">刷新订单状态</button>
+    </view>
     <!-- 收货地址 -->
+    <view v-if="state.orderInfo.erpInventory?.length" style="margin:24rpx;padding:24rpx;background:#fff8e8;border-radius:12rpx">
+      <view style="font-weight:bold">ERP 库存处理（WMS 仅供查询）</view>
+      <view v-for="entry in state.orderInfo.erpInventory" :key="entry.id" style="margin-top:16rpx">
+        <text>{{ entry.mode === 'mock' ? '【模拟测试】' : '【ERP处理】' }}{{ ({RESERVE:'库存预占',RELEASE:'释放预占',OUTBOUND:'出库',RETURN:'退货入库'})[entry.operation] }}：
+          {{ ({PENDING:'待 ERP 确认',CONFIRMED:'已确认',REJECTED:'处理失败'})[entry.status] }}</text>
+        <view>{{ entry.message }}</view>
+      </view>
+    </view>
     <view class="order-address-box" v-if="state.orderInfo.receiverAreaId > 0">
       <view class="ss-flex ss-col-center">
         <text class="address-username">
@@ -59,6 +71,7 @@
       <view class="address-detail">
         {{ state.orderInfo.receiverAreaName }} {{ state.orderInfo.receiverDetailAddress }}
       </view>
+      <view v-if="receiverLocation" class="address-detail">{{ receiverLocation }}</view>
     </view>
 
     <view
@@ -160,6 +173,7 @@
         <view class="notice-item">
           <text class="title">店铺：</text>
           <text class="detail">{{ state.orderInfo.shopName || '平台自营' }}</text>
+          <button v-if="state.orderInfo.id" size="mini" @tap="contactService">{{ state.orderInfo.shopId > 0 ? '联系店铺客服' : '联系平台客服' }}</button>
         </view>
         <view class="notice-item">
           <text class="title">支付方式：</text>
@@ -222,7 +236,8 @@
         </button>
         <button
           class="ss-reset-button pay-btn ui-BG-Main-Gradient"
-          v-if="state.orderInfo.buttons?.includes('pay')"
+          v-if="state.orderInfo.buttons?.includes('pay') && state.orderInfo.payOrderId"
+          :disabled="!canPay"
           @tap="onPay(state.orderInfo.payOrderId)"
         >
           继续支付
@@ -240,7 +255,7 @@
         </button>
         <button
           class="ss-reset-button cancel-btn"
-          v-if="state.orderInfo.buttons?.includes('express')"
+          v-if="state.orderInfo.deliveryType === 1 && state.orderInfo.id"
           @tap="onExpress(state.orderInfo.id)"
         >
           查看物流
@@ -266,8 +281,10 @@
 
 <script setup>
   import sheep from '@/sheep';
-  import { onLoad, onShow } from '@dcloudio/uni-app';
-  import { reactive, ref, watch } from 'vue';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
+  import { onLoad } from '@dcloudio/uni-app';
+  import { computed, reactive, ref, watch } from 'vue';
+  import { locationSummary } from '@/sheep/helper/fulfillment-view.mjs';
   import { isEmpty } from 'lodash-es';
   import {
     fen2yuan,
@@ -279,6 +296,8 @@
   import DeliveryApi from '@/sheep/api/trade/delivery';
   import PayOrderApi from '@/sheep/api/pay/order';
   import PickUpVerify from '@/pages/order/pickUpVerify.vue';
+  import { usePaymentDeadline } from '@/sheep/hooks/usePaymentDeadline';
+  import { monotonicNow, orderPaymentState, stampPaymentClock } from '@/sheep/helper/payment-deadline.mjs';
 
   const statusBarHeight = sheep.$platform.device.statusBarHeight * 2;
   const headerBg = sheep.$url.css('/static/img/shop/order/order_bg.png');
@@ -286,6 +305,14 @@
   const state = reactive({
     orderInfo: {},
   });
+  const { now, active, syncing, confirmed, refresh } = usePaymentDeadline(
+    (time) => [orderPaymentState(state.orderInfo, time)],
+    () => state.orderInfo.id ? getOrderDetail(state.orderInfo.id) : false,
+  );
+  const paymentState = computed(() => orderPaymentState(state.orderInfo, now.value));
+  const receiverLocation = computed(() => locationSummary(state.orderInfo, 'receiver'));
+  const contactService = () => sheep.$router.go('/pages/chat/service', chatEntry(state.orderInfo.shopId, 'ORDER', state.orderInfo.id));
+  const canPay = computed(() => active.value && !syncing.value && confirmed.value && paymentState.value.canPay);
 
   // 订单详情接口在网络异常或历史数据不完整时可能返回空字段。先归一化数组和金额，
   // 确保详情页模板不会因 properties/items/buttons 缺失而中断渲染。
@@ -340,13 +367,15 @@
   };
 
   // 去支付
-  function onPay(payOrderId) {
-    if (!payOrderId) {
-      sheep.$helper.toast('支付订单不存在');
+  async function onPay(payOrderId) {
+    if (!payOrderId || !canPay.value) {
+      sheep.$helper.toast(paymentState.value.text || '请刷新订单后重试');
       return;
     }
+    if (!(await refresh()) || !canPay.value) return;
     sheep.$router.go('/pages/pay/index', {
-      id: payOrderId,
+      id: state.orderInfo.payOrderId,
+      tradeOrderId: state.orderInfo.id,
     });
   }
 
@@ -471,13 +500,21 @@
   }
 
   const pickUpVerifyRef = ref();
+  let detailRequest;
 
-  async function getOrderDetail(id) {
+  function getOrderDetail(id) {
+    if (detailRequest) return detailRequest;
+    detailRequest = loadOrderDetail(id).finally(() => { detailRequest = undefined; });
+    return detailRequest;
+  }
+
+  async function loadOrderDetail(id) {
     if (!id) {
       sheep.$helper.toast('订单不存在');
       return false;
     }
     // 对详情数据进行适配
+    const requestedAt = monotonicNow();
     try {
       let res;
       if (state.comeinType === 'wechat') {
@@ -489,11 +526,10 @@
         res = await OrderApi.getOrderDetail(id);
       }
       if (res?.code !== 0 || !res.data) {
-        sheep.$router.back();
         return false;
       }
 
-      state.orderInfo = normalizeOrderDetail(res.data);
+      state.orderInfo = stampPaymentClock(normalizeOrderDetail(res.data), monotonicNow(), requestedAt);
       handleOrderButtons(state.orderInfo);
       // 配送方式：门店自提
       if (state.orderInfo.pickUpStoreId) {
@@ -514,18 +550,9 @@
       return true;
     } catch (error) {
       console.warn('加载订单详情失败', error);
-      sheep.$router.back();
       return false;
     }
   }
-
-  onShow(async () => {
-    // onShow 中获取订单列表,保证跳转后页面为最新状态
-    // 有几率在 onLoad 完成 state.orderInfo.id 赋值前进入 onShow
-    if (state.orderInfo.id) {
-      await getOrderDetail(state.orderInfo.id);
-    }
-  });
 
   onLoad(async (options = {}) => {
     let id = 0;
@@ -547,9 +574,9 @@
       }
     }
     state.orderInfo.id = id;
-    // 完成 state.orderInfo.id 赋值后加载一次detail，但有几率与 onShow 重复可能导致 detail 会加载两次。
+    // onLoad 与 onShow 共享单一请求，恢复页面时重新校准服务端时钟。
     if (id) {
-      await getOrderDetail(id);
+      await refresh();
     } else {
       sheep.$helper.toast('订单不存在');
     }
