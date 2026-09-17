@@ -88,6 +88,15 @@ public interface CrmCustomerService {
     List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit);
 
     /**
+     * 获得供应商基础库（客户类别=上游供应商）列表
+     *
+     * <p>供应商属于租户级共享主数据，供报价单等下拉选择，因此不做数据权限过滤。
+     *
+     * @return 供应商列表（按名称升序）
+     */
+    List<CrmCustomerDO> getSupplierSimpleList();
+
+    /**
      * 获得客户 Map
      *
      * @param ids 客户编号数组

@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuo
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuotationSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuotationTransferReqVO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.quotation.CrmQuotationDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.quotation.CrmQuotationProductDO;
 import cn.iocoder.txgy.module.crm.dal.mysql.quotation.CrmQuotationMapper;
@@ -23,6 +24,8 @@ import cn.iocoder.txgy.module.crm.dal.mysql.quotation.CrmQuotationProductMapper;
 import cn.iocoder.txgy.module.crm.dal.redis.no.CrmNoRedisDAO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.customer.CrmCustomerTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.quotation.CrmQuotationTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
@@ -98,11 +101,15 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
     public Long createQuotation(CrmQuotationSaveReqVO createReqVO, Long userId) {
         // 1.1 校验产品项的有效性
         List<CrmQuotationProductDO> quotationProducts = validateQuotationProducts(createReqVO.getProducts());
-        // 1.2 若手动填写了客户名称且未选择客户，则自动创建客户
+        // 1.2 规范化报价类型（为空时默认「购销报价」）
+        normalizeQuotationType(createReqVO, null);
+        // 1.3 购销报价：若手动填写了客户名称且未选择客户，则自动创建客户
         resolveCustomerId(createReqVO, createReqVO.getOwnerUserId(), userId);
-        // 1.3 校验关联字段
+        // 1.4 校验关联字段
         validateRelationDataExists(createReqVO);
-        // 1.4 生成序号
+        // 1.5 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+        validateQuotationTypeRelation(createReqVO);
+        // 1.6 生成序号
         String no = noRedisDAO.generate(CrmNoRedisDAO.QUOTATION_NO_PREFIX);
         if (quotationMapper.selectByNo(no) != null) {
             throw exception(QUOTATION_NO_EXISTS);
@@ -143,12 +150,16 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
                 CrmAuditStatusEnum.PROCESS.getStatus())) {
             throw exception(QUOTATION_UPDATE_FAIL_NOT_DRAFT);
         }
-        // 1.3 若手动填写了客户名称且未选择客户，则自动创建客户
+        // 1.3 规范化报价类型（为空时沿用原值）
+        normalizeQuotationType(updateReqVO, oldQuotation);
+        // 1.4 购销报价：若手动填写了客户名称且未选择客户，则自动创建客户
         resolveCustomerId(updateReqVO, oldQuotation.getOwnerUserId(), userId);
-        // 1.4 校验产品项的有效性
+        // 1.5 校验产品项的有效性
         List<CrmQuotationProductDO> quotationProducts = validateQuotationProducts(updateReqVO.getProducts());
-        // 1.5 校验关联字段
+        // 1.6 校验关联字段
         validateRelationDataExists(updateReqVO);
+        // 1.7 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+        validateQuotationTypeRelation(updateReqVO);
 
         // 2.1 更新报价单
         CrmQuotationDO updateObj = BeanUtils.toBean(updateReqVO, CrmQuotationDO.class);
@@ -187,11 +198,79 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
      * @param userId      操作人编号
      */
     private void resolveCustomerId(CrmQuotationSaveReqVO reqVO, Long ownerUserId, Long userId) {
+        // 采购报价必须显式选择「上游供应商」，不支持「自填名称自动建客户」
+        if (CrmQuotationTypeEnum.isPurchase(reqVO.getQuotationType())) {
+            reqVO.setCustomerName(null);
+            return;
+        }
         if (reqVO.getCustomerId() == null && StrUtil.isNotBlank(reqVO.getCustomerName())) {
             Long customerId = customerService.createCustomer(
-                    new CrmCustomerSaveReqVO().setName(reqVO.getCustomerName()).setOwnerUserId(ownerUserId),
+                    // 购销报价的往来单位是「下游客户」
+                    new CrmCustomerSaveReqVO().setName(reqVO.getCustomerName())
+                            .setCustomerType(CrmCustomerTypeEnum.DOWNSTREAM.getType())
+                            .setOwnerUserId(ownerUserId),
                     userId);
             reqVO.setCustomerId(customerId);
+        }
+    }
+
+    /**
+     * 规范化报价类型：为空时取「原值」，仍为空则默认「购销报价」
+     *
+     * @param reqVO       请求
+     * @param oldQuotation 原报价单（新增时为 null）
+     */
+    private void normalizeQuotationType(CrmQuotationSaveReqVO reqVO, CrmQuotationDO oldQuotation) {
+        if (reqVO.getQuotationType() == null) {
+            reqVO.setQuotationType(oldQuotation != null && oldQuotation.getQuotationType() != null
+                    ? oldQuotation.getQuotationType() : CrmQuotationTypeEnum.SALES.getType());
+        }
+        if (CrmQuotationTypeEnum.getByType(reqVO.getQuotationType()) == null) {
+            throw exception(QUOTATION_TYPE_INVALID);
+        }
+        // 已生成合同的报价单，不允许再修改报价类型，避免转出的合同类型与报价类型不一致
+        if (oldQuotation != null && oldQuotation.getContractId() != null
+                && ObjUtil.notEqual(oldQuotation.getQuotationType(), reqVO.getQuotationType())) {
+            throw exception(QUOTATION_TYPE_UPDATE_FAIL_HAS_CONTRACT);
+        }
+    }
+
+    /**
+     * 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+     *
+     * 采购报价：必须选择「上游供应商」，且不允许关联商机；
+     * 购销报价：必须选择「客户」，且不能选择「上游供应商」。
+     *
+     * @param reqVO 请求
+     */
+    private void validateQuotationTypeRelation(CrmQuotationSaveReqVO reqVO) {
+        // 情况一：采购报价
+        if (CrmQuotationTypeEnum.isPurchase(reqVO.getQuotationType())) {
+            if (reqVO.getCustomerId() == null) {
+                throw exception(QUOTATION_PURCHASE_SUPPLIER_REQUIRED);
+            }
+            if (reqVO.getBusinessId() != null) {
+                throw exception(QUOTATION_PURCHASE_BUSINESS_NOT_ALLOWED);
+            }
+            CrmCustomerDO supplier = customerService.getCustomer(reqVO.getCustomerId());
+            if (supplier == null) {
+                throw exception(CUSTOMER_NOT_EXISTS);
+            }
+            if (!CrmCustomerTypeEnum.isUpstream(supplier.getCustomerType())) {
+                throw exception(QUOTATION_PURCHASE_SUPPLIER_INVALID);
+            }
+            return;
+        }
+        // 情况二：购销报价
+        if (reqVO.getCustomerId() == null) {
+            throw exception(QUOTATION_SALES_CUSTOMER_REQUIRED);
+        }
+        CrmCustomerDO customer = customerService.getCustomer(reqVO.getCustomerId());
+        if (customer == null) {
+            throw exception(CUSTOMER_NOT_EXISTS);
+        }
+        if (CrmCustomerTypeEnum.isUpstream(customer.getCustomerType())) {
+            throw exception(QUOTATION_SALES_CUSTOMER_INVALID);
         }
     }
 
@@ -355,8 +434,21 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
         }
 
         // 2. 组装合同创建请求
+        // 2.1 校验往来单位与报价类型匹配：
+        //     购销报价(1) → 购销合同(2)，我方为乙方（向客户销售）
+        //     采购报价(2) → 采购合同(1)，我方为甲方（向供应商采购）
+        Integer quotationType = quotation.getQuotationType() == null
+                ? CrmQuotationTypeEnum.SALES.getType() : quotation.getQuotationType();
+        if (quotation.getCustomerId() == null) {
+            throw exception(CrmQuotationTypeEnum.isPurchase(quotationType)
+                    ? QUOTATION_PURCHASE_SUPPLIER_REQUIRED : QUOTATION_SALES_CUSTOMER_REQUIRED);
+        }
+        if (CrmQuotationTypeEnum.isPurchase(quotationType) && quotation.getBusinessId() != null) {
+            throw exception(QUOTATION_CREATE_CONTRACT_FAIL_RELATION_INVALID);
+        }
         CrmContractSaveReqVO contractReqVO = new CrmContractSaveReqVO()
                 .setName(quotation.getName())
+                .setTemplateType(CrmQuotationTypeEnum.toContractTemplateType(quotationType))
                 .setCustomerId(quotation.getCustomerId())
                 .setBusinessId(quotation.getBusinessId())
                 .setOwnerUserId(quotation.getOwnerUserId())

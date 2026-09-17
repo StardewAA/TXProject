@@ -35,6 +35,15 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'contactName',
+      label: '联系人',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入联系人',
+        allowClear: true,
+      },
+    },
+    {
       fieldName: 'source',
       label: '客户来源',
       component: 'Select',

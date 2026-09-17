@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation;
 
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
+import cn.iocoder.txgy.framework.excel.core.annotations.DictFormat;
+import cn.iocoder.txgy.framework.excel.core.convert.DictConvert;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -28,12 +30,29 @@ public class CrmQuotationRespVO {
     @ExcelProperty("报价单号")
     private String no;
 
+    @Schema(description = "报价类型：1=购销报价 2=采购报价", example = "1")
+    @ExcelProperty(value = "报价类型", converter = DictConvert.class)
+    @DictFormat(cn.iocoder.txgy.module.crm.enums.DictTypeConstants.CRM_QUOTATION_TYPE)
+    private Integer quotationType;
+
     @Schema(description = "客户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "18336")
     @ExcelProperty("客户编号")
     private Long customerId;
     @Schema(description = "客户名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "张三")
     @ExcelProperty("客户名称")
     private String customerName;
+
+    @Schema(description = "供应商联系人（采购报价）", example = "张三")
+    @ExcelProperty("供应商联系人")
+    private String supplierContact;
+
+    @Schema(description = "供应商联系电话（采购报价）", example = "13800138000")
+    @ExcelProperty("供应商联系电话")
+    private String supplierPhone;
+
+    @Schema(description = "供应商地址（采购报价）", example = "江苏省苏州市工业园区xx路1号")
+    @ExcelProperty("供应商地址")
+    private String supplierAddress;
 
     @Schema(description = "商机编号", example = "10864")
     @ExcelProperty("商机编号")
