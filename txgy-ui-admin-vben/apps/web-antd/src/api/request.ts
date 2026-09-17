@@ -129,8 +129,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         ? undefined
         : formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
-      // 添加租户编号
-      config.headers['tenant-id'] = tenantEnable ? accessStore.tenantId : undefined;
+      // 添加租户编号（未登录时默认用租户1，避免登录页租户列表为空）
+      config.headers['tenant-id'] = tenantEnable ? (accessStore.tenantId ?? 1) : undefined;
       // 只有登录时，才设置 visit-tenant-id 访问租户
       config.headers['visit-tenant-id'] = tenantEnable && accessStore.accessToken && !isAuthenticationEntry(config.url)
         ? accessStore.visitTenantId
