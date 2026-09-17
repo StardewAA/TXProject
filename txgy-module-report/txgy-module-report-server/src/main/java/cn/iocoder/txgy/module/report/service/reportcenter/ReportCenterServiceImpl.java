@@ -8,7 +8,10 @@ import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterQuer
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterReportRespVO;
 import cn.iocoder.txgy.module.report.controller.admin.dataset.vo.ReportDatasetColumnLabelVO;
 import cn.iocoder.txgy.module.report.dal.dataobject.dataset.ReportDatasetDO;
+import cn.iocoder.txgy.module.report.dal.dataobject.dataset.ReportDatasetExecuteLogDO;
+import cn.iocoder.txgy.module.report.dal.mysql.dataset.ReportDatasetExecuteLogMapper;
 import cn.iocoder.txgy.module.report.service.dataset.ReportDatasetService;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -40,8 +43,20 @@ public class ReportCenterServiceImpl implements ReportCenterService {
 
     private static final DateTimeFormatter FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm");
 
+    /**
+     * 「常用」统计窗口（天）
+     */
+    private static final int FREQUENT_DAYS = 30;
+
+    /**
+     * 自助创建的数据集所属分组
+     */
+    private static final String GROUP_CUSTOM = "自定义";
+
     @Resource
     private ReportDatasetService datasetService;
+    @Resource
+    private ReportDatasetExecuteLogMapper executeLogMapper;
 
     @Override
     public List<ReportCenterReportRespVO> getReportList() {
@@ -50,6 +65,8 @@ public class ReportCenterServiceImpl implements ReportCenterService {
                 datasetService.getEnabledDatasetList();
         Set<String> curatedCodes = new HashSet<>();
         List<ReportCenterReportRespVO> list = new ArrayList<>();
+        // 近 30 天查询次数：供前端「常用」分组排序
+        Map<String, Integer> queryCounts = loadQueryCounts();
         // 1. 精选定义（带状态中文映射等增强）
         for (MesReportDefinition definition : MesReportDefinition.values()) {
             curatedCodes.add(definition.getCode());
@@ -69,6 +86,11 @@ public class ReportCenterServiceImpl implements ReportCenterService {
             respVO.setParams(definition.getParams().stream()
                     .map(param -> new ReportCenterReportRespVO.Param(param.name(), param.label()))
                     .collect(Collectors.toList()));
+            respVO.setGroups(definition.getGroups());
+            respVO.setColumnLabels(definition.getColumns().stream()
+                    .map(MesReportDefinition.ColumnDef::label)
+                    .collect(Collectors.toList()));
+            respVO.setQueryCount(queryCounts.getOrDefault(definition.getCode(), 0));
             list.add(respVO);
         }
         // 2. 简单模式自助创建的数据集（带中文列标签，且未与精选定义重复）也进入报表中心
@@ -83,9 +105,68 @@ public class ReportCenterServiceImpl implements ReportCenterService {
             generic.setParams(vo.getParams().stream()
                     .map(param -> new ReportCenterReportRespVO.Param(param.getName(), param.getLabel()))
                     .collect(Collectors.toList()));
+            generic.setGroups(List.of(GROUP_CUSTOM));
+            generic.setColumnLabels(vo.getColumnLabelList().stream()
+                    .map(ReportDatasetColumnLabelVO::getLabel)
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.toList()));
+            generic.setQueryCount(queryCounts.getOrDefault(vo.getCode(), 0));
             list.add(generic);
         }
         return list;
+    }
+
+    /**
+     * 统计近 {@link #FREQUENT_DAYS} 天各数据集的成功查询次数
+     *
+     * 供前端「常用」分组排序。统计失败不影响报表清单返回，按 0 处理。
+     */
+    private Map<String, Integer> loadQueryCounts() {
+        try {
+            QueryWrapper<ReportDatasetExecuteLogDO> wrapper = new QueryWrapper<>();
+            wrapper.select("dataset_code", "COUNT(*) AS query_count")
+                    .eq("source", "dataset")
+                    .eq("success", true)
+                    .ge("create_time", LocalDateTime.now().minusDays(FREQUENT_DAYS))
+                    .groupBy("dataset_code");
+            List<Map<String, Object>> rows = executeLogMapper.selectMaps(wrapper);
+            Map<String, Integer> counts = new HashMap<>(rows.size());
+            for (Map<String, Object> row : rows) {
+                String code = asString(row, "dataset_code");
+                Integer count = asInteger(row, "query_count");
+                if (StrUtil.isNotBlank(code) && count != null) {
+                    counts.put(code, count);
+                }
+            }
+            return counts;
+        } catch (Exception ex) {
+            log.warn("[loadQueryCounts][常用报表统计失败，按 0 处理]", ex);
+            return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * 从 selectMaps 结果中取字符串（兼容不同驱动的列名大小写）
+     */
+    private String asString(Map<String, Object> row, String key) {
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(key) && entry.getValue() != null) {
+                return String.valueOf(entry.getValue());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从 selectMaps 结果中取整数（兼容不同驱动的列名大小写）
+     */
+    private Integer asInteger(Map<String, Object> row, String key) {
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(key) && entry.getValue() instanceof Number) {
+                return ((Number) entry.getValue()).intValue();
+            }
+        }
+        return null;
     }
 
     @Override
