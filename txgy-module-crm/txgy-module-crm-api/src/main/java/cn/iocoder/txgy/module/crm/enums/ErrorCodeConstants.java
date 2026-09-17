@@ -70,6 +70,9 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_UPDATE_DEAL_STATUS_FAIL = new ErrorCode(1_020_006_015, "更新客户的成交状态失败，原因：已经是该状态，无需更新");
     ErrorCode CUSTOMER_FETCH_WEB_PAGE_FAIL = new ErrorCode(1_020_006_016, "网页抓取失败：{}");
     ErrorCode CRM_AI_CLASSIFY_FAIL = new ErrorCode(1_020_006_017, "AI 意图识别失败：{}");
+
+    // ========== CRM AI 文件（图片 / 文档）识别 1-020-006-021 ==========
+    ErrorCode CRM_AI_EXTRACT_FAIL = new ErrorCode(1_020_006_021, "文件识别失败：{}");
     ErrorCode SUPPLIER_IMPORT_FILE_EMPTY = new ErrorCode(1_020_006_018, "供应商导入失败，原因：上传文件为空");
     ErrorCode SUPPLIER_IMPORT_PARSE_FAIL = new ErrorCode(1_020_006_019, "供应商导入失败，原因：文档解析失败（{}），请确认为 .docx 格式的 Word 文档");
     ErrorCode SUPPLIER_IMPORT_NO_DATA = new ErrorCode(1_020_006_020, "供应商导入失败，原因：文档中未识别到供应商数据，请确认表格表头包含「供应商名称」列");

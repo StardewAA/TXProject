@@ -10,6 +10,8 @@ import { addCollection } from '@iconify/vue';
 import { getIconData } from '@iconify/utils';
 import type { IconifyJSON } from '@iconify/types';
 
+import { CRM_AI_AVATAR_BODY } from '#/assets/icons/crm-ai-avatar';
+
 import antDesign from '@iconify/json/json/ant-design.json';
 import ep from '@iconify/json/json/ep.json';
 import fa from '@iconify/json/json/fa.json';
@@ -76,3 +78,14 @@ registerPartial(antDesign as unknown as IconifyJSON, [
 registerPartial(materialSymbols as unknown as IconifyJSON, ['refresh-rounded']);
 registerPartial(ri as unknown as IconifyJSON, ['dingding-fill']);
 registerPartial(tabler as unknown as IconifyJSON, ['arrows-minimize']);
+
+// 3) 项目自有图标：CRM AI 助手（蓝绿渐变圆形机器人头像）
+//    侧边栏菜单「AI对话助手」使用 crmai:avatar，避免运行时请求外部图标 API
+addCollection({
+  prefix: 'crmai',
+  icons: {
+    avatar: { body: CRM_AI_AVATAR_BODY },
+  },
+  width: 96,
+  height: 96,
+} as unknown as IconifyJSON);
