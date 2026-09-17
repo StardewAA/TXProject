@@ -47,6 +47,12 @@ public class MesWorkOrderCreateReqDTO extends MesIntegrationBaseReqDTO {
     private LocalDateTime requestDate;
 
     /**
+     * 数据版本号（ERP 侧单据版本，用于幂等与覆盖判断）
+     */
+    @NotNull(message = "dataVersion 不能为空")
+    private Long dataVersion;
+
+    /**
      * 客户编码（可选，MES 侧回填 clientId）
      */
     private String customerCode;
