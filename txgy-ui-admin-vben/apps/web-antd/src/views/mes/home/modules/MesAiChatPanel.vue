@@ -37,9 +37,9 @@ import {
   type BlankDocFormState,
 } from './blankDocSchema';
 // 【新增模块：导入解析】Word/Excel/粘贴文本 → 识别单据 → 提取字段填充模板
+// （注：附件文件改走后端统一抽取，前端 parseDocFromFile 退役，仅保留粘贴文本解析）
 import {
   looksLikeDocText,
-  parseDocFromFile,
   parseDocFromText,
   type DocParseResult,
 } from './mesDocImport';
@@ -336,68 +336,41 @@ function pushParseResult(result: DocParseResult) {
   scrollToBottom();
 }
 
-/** 【新增：导入解析】处理上传的 Word/Excel/Txt 文件 + 图片（图片走视觉识别 → 直接录入） */
-async function handleImportFile(e: Event) {
+/**
+ * 【交互改造】待发送附件：📎 选择后先挂在输入框上方（不立即处理），
+ * 由用户输入意图（或点快捷意图按钮）后，发送时才统一上传并交给后端处理
+ */
+const pendingFiles = ref<
+  Array<{ file: File; kind: 'image' | 'doc'; preview?: string }>
+>([]);
+
+/** 附件按钮点击：选择文件 → 挂到待发送区 */
+function handleImportFile(e: Event) {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = Array.from(input.files ?? []);
   input.value = ''; // 允许重复选择同一个文件
-  if (!file) return;
-  // 【新增：图片录入】图片先上传到文件服务，再携带附件 URL 发送，
-  // 由后端视觉模型识别「字段:值」并调用录入工具写库（用户要求：根据图片直接添加）
-  if (file.type.startsWith('image/')) {
-    messages.value.push({
-      role: 'user',
-      content: `📷 上传图片：${file.name}`,
-      time: formatTime(),
+  for (const file of files) {
+    const kind: 'image' | 'doc' = file.type.startsWith('image/')
+      ? 'image'
+      : 'doc';
+    pendingFiles.value.push({
+      file,
+      kind,
+      preview: kind === 'image' ? URL.createObjectURL(file) : undefined,
     });
-    scrollToBottom();
-    try {
-      const url = (await uploadFile({ file })) as unknown as string;
-      if (!url) throw new Error('上传返回为空');
-      inputText.value = '请根据图片中的单据信息，提取字段并录入对应的业务单据';
-      await handleSend([url]);
-    } catch {
-      messages.value.push({
-        role: 'assistant',
-        content: '❌ 图片上传失败，请重试或直接以文字描述单据内容。',
-        time: formatTime(),
-      });
-      scrollToBottom();
-    }
-    return;
   }
-  // 展示用户动作 + "解析中"占位
-  messages.value.push({
-    role: 'user',
-    content: `📎 上传文件：${file.name}`,
-    time: formatTime(),
-  });
-  const aiMsg: {
-    content: string;
-    docConfirm?: boolean;
-    docKey?: string;
-    docState?: BlankDocFormState;
-    role: 'assistant' | 'user';
-    time: string;
-  } = { role: 'assistant', content: '', time: formatTime() };
-  messages.value.push(aiMsg);
-  streaming.value = true;
-  scrollToBottom();
-  const result = await parseDocFromFile(file);
-  if (result.ok && result.schema && result.state) {
-    const missingHint =
-      result.missing && result.missing.length > 0
-        ? `\n（未提取到、将留空待填：${result.missing.join('、')}）`
-        : '';
-    aiMsg.content = `✅ 已识别【${result.schema.title}】，提取到以下信息：\n${result.summary}${missingHint}\n\n确认无误后，点击下方按钮打开单据预览：`;
-    aiMsg.docConfirm = true;
-    aiMsg.docKey = result.schema.key;
-    aiMsg.docState = result.state;
-  } else {
-    aiMsg.content = `❌ 无法识别单据：${result.reason ?? '内容格式无法解析'}。\n请检查文件/文本格式后重试；或直接粘贴文本（每行"字段：值"）。`;
-  }
-  streaming.value = false;
-  scrollToBottom();
+}
+
+/** 移除待发送附件（同时释放预览 URL） */
+function removePendingFile(index: number) {
+  const item = pendingFiles.value[index];
+  if (item?.preview) URL.revokeObjectURL(item.preview);
+  pendingFiles.value.splice(index, 1);
+}
+
+/** 快捷意图：点击后填入输入框，用户可修改后发送 */
+function applyQuickIntent(text: string) {
+  inputText.value = text;
 }
 
 /** 【新增：导入解析】处理粘贴的单据文本（在 handleSend 中调用） */
@@ -583,19 +556,54 @@ const conversationId = ref<string>('');
 /** 发送消息：流式接收；权限拦截在后端，越权返回拒绝话术直接渲染 */
 async function handleSend(attachmentUrls?: string[]) {
   const content = inputText.value?.trim();
-  // 输入为空、未就绪、正在接收时禁止发送
-  if (!content || streaming.value || !conversationReady.value) return;
+  // 输入为空、未就绪、正在接收时禁止发送（有挂起附件时也要求写明意图）
+  if (!content || streaming.value || !conversationReady.value) {
+    if (!content && pendingFiles.value.length > 0 && !streaming.value) {
+      message.warning('请先输入你想对附件做什么，例如：根据图片录入工单');
+    }
+    return;
+  }
   // 图片录入流程传入的附件（@click 直接调用时首参是事件对象，需过滤）
   const urls = Array.isArray(attachmentUrls) ? attachmentUrls : undefined;
 
   inputText.value = ''; // 发送后清空输入框
-  messages.value.push({ role: 'user', content, time: formatTime() });
+  // 【附件】待发送附件统一在此上传：图片 → 后端视觉识别；文档 → 后端抽取文本
+  let pendingUrls: string[] | undefined = urls;
+  const pendingNames: string[] = [];
+  if (pendingFiles.value.length > 0) {
+    streaming.value = true; // 上传期间锁定发送按钮
+    try {
+      for (const item of pendingFiles.value) {
+        const up = (await uploadFile({ file: item.file })) as unknown as string;
+        if (!up) throw new Error('上传返回为空');
+        pendingUrls = pendingUrls ?? [];
+        pendingUrls.push(up);
+        pendingNames.push(item.file.name);
+      }
+      pendingFiles.value.forEach((item) => {
+        if (item.preview) URL.revokeObjectURL(item.preview);
+      });
+      pendingFiles.value = [];
+    } catch {
+      message.error('附件上传失败，请检查网络后重试');
+      streaming.value = false;
+      return;
+    }
+  }
+  messages.value.push({
+    role: 'user',
+    content: pendingNames.length > 0 ? `${content}\n📎 附件：${pendingNames.join('、')}` : content,
+    time: formatTime(),
+  });
+  // 带附件的请求统一交给后端处理（视觉识别/文本抽取 + 意图理解），
+  // 不走前端的查询澄清/预填/引导等本地意图分支，避免附件请求被劫持
+  const hasAttachments = (pendingUrls?.length ?? 0) > 0;
 
   // 【单据模板分支（已收窄）】仅当用户明确索要"模板/空白单"时才本地生成模板链接；
   // "添加/创建/录入 + 工单" 等带真实字段的请求一律放行到后端——
   // 由 AI 调用录入 Function 工具直接写入 MES 真实数据库（用户要求：直接入库，不要 Word 模板）
   const docSchema = matchDocIntent(content);
-  if (docSchema && /(模板|空白|样例|示例单)/.test(content)) {
+  if (!hasAttachments && docSchema && /(模板|空白|样例|示例单)/.test(content)) {
     messages.value.push({
       role: 'assistant',
       content: `已为您生成${docSchema.title}模板，点击下方链接查看：`,
@@ -607,7 +615,7 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：模糊工单查询澄清】"我想查看工单"等无具体条件的查询 → 先反问，不直接倾倒全表
-  if (matchVagueWorkOrderQuery(content)) {
+  if (!hasAttachments && matchVagueWorkOrderQuery(content)) {
     messages.value.push({
       role: 'assistant',
       content:
@@ -621,7 +629,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D1】安灯异常上报：口述异常 → 草稿确认弹窗（提交走既有接口）
   const andonDraft = matchAndonReport(content);
-  if (andonDraft) {
+  if (!hasAttachments && andonDraft) {
     messages.value.push({
       role: 'assistant',
       content: '收到，我帮你起草了安灯呼叫单。请确认异常原因、等级与工位后提交：',
@@ -635,7 +643,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D2】质检预填：命中"质检/检验预填 + 任务编号" → 过程检验单确认流程
   const qcCode = matchQcPrefill(content);
-  if (qcCode) {
+  if (!hasAttachments && qcCode) {
     messages.value.push({
       role: 'assistant',
       content: `✅ 已定位任务「${qcCode}」，即将为您预填过程检验单（检验数量默认为已生产数量，可修改）。确认无误后点击下方按钮：`,
@@ -648,14 +656,14 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：任务包 D3】出入库操作引导（不影响纯数据查询）
-  if (matchWmsGuide(content)) {
+  if (!hasAttachments && matchWmsGuide(content)) {
     handleWmsGuide();
     return;
   }
 
   // 【新增：任务包 B】报工智能填单：命中"报工/填单/预填 + 任务编号" → 预填确认流程
   const prefillCode = matchFeedbackPrefill(content);
-  if (prefillCode) {
+  if (!hasAttachments && prefillCode) {
     handleFeedbackPrefillIntent(prefillCode);
     return;
   }
@@ -663,7 +671,7 @@ async function handleSend(attachmentUrls?: string[]) {
   // 【新增】只说了单据名词（如"生产工单"）：意图不明确，先反问澄清，
   // 不擅自猜测是要查询数据还是生成模板，避免答非所问
   const ambiguousNoun = matchAmbiguousDoc(content);
-  if (ambiguousNoun) {
+  if (!hasAttachments && ambiguousNoun) {
     messages.value.push({
       role: 'assistant',
       content: `您提到「${ambiguousNoun}」，想做什么呢？可点击下方选项快速操作，也可以直接补充说明，例如"查询已完成的生产工单"。`,
@@ -676,7 +684,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：导入解析】粘贴的单据文本（含"字段：值"多行/表格标题）→ 解析填充；
   // 疑问句不劫持，继续走后端问答
-  if (handlePastedDocText(content)) {
+  if (!hasAttachments && handlePastedDocText(content)) {
     scrollToBottom();
     return;
   }
@@ -749,7 +757,7 @@ async function handleSend(attachmentUrls?: string[]) {
               : '（无返回内容，请重新提问）'),
         );
       },
-      urls, // 【图片录入】图片附件 URL：后端视觉模型识别后由 AI 提取字段录入
+      pendingUrls, // 【附件】挂起附件上传后的 URL：图片走视觉识别、文档走文本抽取
     );
   } catch (e: any) {
     // 连接建立阶段即抛错（鉴权失败/网络异常/服务不可用等）
@@ -1146,6 +1154,64 @@ onBeforeUnmount(() => {
 
       <!-- 输入区：白色圆角输入卡片 + 底部操作行 -->
       <div class="mes-ai-input">
+        <!-- 【交互改造】待发送附件区：📎 选择后先挂这里，用户输入意图后发送时才上传处理 -->
+        <div v-if="pendingFiles.length > 0" class="mes-ai-pending">
+          <div class="mes-ai-pending__files">
+            <span
+              v-for="(item, idx) in pendingFiles"
+              :key="`${item.file.name}-${idx}`"
+              class="mes-ai-pending__chip"
+            >
+              <img
+                v-if="item.preview"
+                :src="item.preview"
+                alt=""
+                class="mes-ai-pending__thumb"
+              />
+              <IconifyIcon
+                v-else
+                icon="lucide:file-text"
+                :size="14"
+                class="mes-ai-pending__icon"
+              />
+              <span class="mes-ai-pending__name" :title="item.file.name">
+                {{ item.file.name }}
+              </span>
+              <span
+                class="mes-ai-pending__remove"
+                title="移除"
+                @click="removePendingFile(idx)"
+              >×</span>
+            </span>
+          </div>
+          <!-- 快捷意图：点击填入输入框，用户可修改后发送 -->
+          <div class="mes-ai-pending__intents">
+            <template v-if="pendingFiles.some((f) => f.kind === 'image')">
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('根据图片中的单据信息，提取字段并录入对应的业务单据')"
+              >根据图片录入单据 →</Button>
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('识别图片中的字段内容')"
+              >识别图片字段 →</Button>
+            </template>
+            <template v-if="pendingFiles.some((f) => f.kind === 'doc')">
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('根据文档内容提取单据字段并录入 MES 系统')"
+              >根据文档录入单据 →</Button>
+              <Button
+                size="small"
+                class="mes-ai-pending__intent"
+                @click="applyQuickIntent('详细总结文档内容')"
+              >总结文档内容 →</Button>
+            </template>
+          </div>
+        </div>
         <TextArea
           v-model:value="inputText"
           :auto-size="{ minRows: 2, maxRows: 6 }"
@@ -1158,7 +1224,7 @@ onBeforeUnmount(() => {
             <!-- 【新增：导入解析】附件按钮：上传 Word/Excel，自动识别单据并填充 -->
             <span
               class="mes-ai-icon-btn mes-ai-attach"
-              title="导入 Word/Excel，自动识别单据并填充预览"
+              title="上传图片 / Word / Excel：先添加到输入框上方，输入你的意图后发送"
               @click="fileInputRef?.click()"
             >
               <IconifyIcon icon="lucide:paperclip" :size="14" />
@@ -1179,6 +1245,7 @@ onBeforeUnmount(() => {
           ref="fileInputRef"
           accept=".docx,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.bmp"
           class="mes-ai-file-input"
+          multiple
           type="file"
           @change="handleImportFile"
         />
@@ -1411,7 +1478,8 @@ onBeforeUnmount(() => {
   line-height: inherit;
 }
 
-/* AI 回复 Markdown 内容排版（黑字） */
+/* ========== AI 回复 Markdown 排版美化（紧凑、清晰） ========== */
+/* 段落：小间距，避免大面积留白 */
 .mes-ai-md :deep(p) {
   margin: 0 0 6px;
   color: #1f2937;
@@ -1421,19 +1489,132 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
+/* 列表：序号与内容紧凑同行，条目间距小 */
 .mes-ai-md :deep(ul),
 .mes-ai-md :deep(ol) {
-  margin: 0 0 6px;
-  padding-left: 18px;
+  padding-left: 20px;
+  margin: 2px 0 8px;
   color: #1f2937;
 }
 
+.mes-ai-md :deep(li) {
+  padding: 1px 0;
+  margin: 0;
+}
+
+.mes-ai-md :deep(li:not(:last-child)) {
+  margin-bottom: 3px;
+}
+
+/* 关键修复：li 内嵌段落不再另起一行与大间距，与序号保持同行紧凑排版 */
+.mes-ai-md :deep(li > p) {
+  display: inline;
+  margin: 0;
+}
+
+/* 加粗文字：深色加粗突出 */
+.mes-ai-md :deep(strong) {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* 标题：小尺寸加粗 + 上下小间距（气泡内不需要大标题） */
+.mes-ai-md :deep(h1),
+.mes-ai-md :deep(h2),
+.mes-ai-md :deep(h3),
+.mes-ai-md :deep(h4) {
+  font-weight: 600;
+  color: #111827;
+  margin: 8px 0 4px;
+}
+
+.mes-ai-md :deep(h1:first-child),
+.mes-ai-md :deep(h2:first-child),
+.mes-ai-md :deep(h3:first-child),
+.mes-ai-md :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+/* 行内代码 */
 .mes-ai-md :deep(code) {
   padding: 1px 4px;
   font-size: 12px;
   color: #1f2937;
   background: #f3f4f6;
   border-radius: 4px;
+}
+
+/* 代码块 */
+.mes-ai-md :deep(pre) {
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.mes-ai-md :deep(pre code) {
+  padding: 0;
+  background: transparent;
+}
+
+/* 引用块：左侧蓝色竖线 */
+.mes-ai-md :deep(blockquote) {
+  padding: 4px 10px;
+  margin: 4px 0 8px;
+  color: #4b5563;
+  background: #f8fafc;
+  border-left: 3px solid #1677ff;
+  border-radius: 0 6px 6px 0;
+}
+
+.mes-ai-md :deep(blockquote p) {
+  margin: 0;
+}
+
+/* 表格：细边框 + 表头浅底 + 斑马纹（库存/工单等结构化数据更易读） */
+.mes-ai-md :deep(table) {
+  width: 100%;
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+  border-collapse: collapse;
+}
+
+.mes-ai-md :deep(th),
+.mes-ai-md :deep(td) {
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+}
+
+.mes-ai-md :deep(th) {
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.mes-ai-md :deep(tr:nth-child(2n) td) {
+  background: #fafafa;
+}
+
+/* 分隔线 */
+.mes-ai-md :deep(hr) {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px dashed #e5e7eb;
+}
+
+/* 链接 */
+.mes-ai-md :deep(a) {
+  color: #1677ff;
+  text-decoration: none;
+}
+
+.mes-ai-md :deep(a:hover) {
+  text-decoration: underline;
 }
 
 /* "正在思考"加载动画 */
@@ -1493,6 +1674,82 @@ onBeforeUnmount(() => {
   padding: 10px 12px 8px;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
+}
+
+/* ========== 待发送附件区：chip + 快捷意图（挂在输入框上方） ========== */
+.mes-ai-pending {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.mes-ai-pending__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mes-ai-pending__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.mes-ai-pending__thumb {
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.mes-ai-pending__icon {
+  flex-shrink: 0;
+  margin-right: 4px;
+  color: #6b7280;
+}
+
+.mes-ai-pending__name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-ai-pending__remove {
+  padding: 0 4px;
+  margin-left: 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.mes-ai-pending__remove:hover {
+  color: #ef4444;
+}
+
+.mes-ai-pending__intents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mes-ai-pending__intent {
+  font-size: 12px;
+  color: #1677ff;
+  background: #ffffff;
+  border-color: #bfdbfe;
+  border-radius: 8px;
 }
 
 /* 输入卡片：白底圆角，文字黑色，聚焦高亮蓝边 */

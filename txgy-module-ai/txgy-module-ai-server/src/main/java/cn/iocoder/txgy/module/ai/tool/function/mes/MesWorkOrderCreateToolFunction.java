@@ -232,25 +232,30 @@ public class MesWorkOrderCreateToolFunction
 
     /**
      * 在本租户档案表内把关键词解析为唯一记录编号：
-     * 编码精确 → 名称精确 → 名称模糊；无匹配或多匹配都抛出带候选信息的原因，由模型告知用户
+     * 编码/名称精确 → 忽略空格比较（图片识别/人工录入常带多余空格）→ 名称模糊；
+     * 无匹配或多匹配都抛出带候选信息的原因，由模型告知用户
      */
     private Long resolveSingleton(Long tenantId, String table, String keyword, String label, List<String> nameCols) {
-        // 1) 编码/名称精确匹配
+        // 忽略空格（半角/全角）后的关键词，用于与 REPLACE(name,' ','') 比较
+        String kwNorm = keyword.replaceAll("[\\s　]+", "");
+        // 1) 编码/名称精确匹配（含忽略空格的名称精确）
         List<Map<String, Object>> exact = jdbcTemplate.queryForList(
                 "SELECT id, code, name FROM " + table
-                        + " WHERE tenant_id = ? AND deleted = 0 AND (code = ? OR name = ?) LIMIT 2",
-                tenantId, keyword, keyword);
+                        + " WHERE tenant_id = ? AND deleted = 0 AND (code = ? OR name = ?"
+                        + " OR REPLACE(name, ' ', '') = ?) LIMIT 2",
+                tenantId, keyword, keyword, kwNorm);
         if (exact.size() == 1) {
             return ((Number) exact.get(0).get("id")).longValue();
         }
         if (exact.size() > 1) {
             throw new IllegalArgumentException(label + "「" + keyword + "」在本租户存在多条同名记录，请提供唯一的编码");
         }
-        // 2) 名称模糊匹配兜底
+        // 2) 名称模糊匹配兜底（比较双方都忽略空格）
         List<Map<String, Object>> fuzzy = jdbcTemplate.queryForList(
                 "SELECT id, code, name FROM " + table
-                        + " WHERE tenant_id = ? AND deleted = 0 AND name LIKE ? LIMIT 6",
-                tenantId, "%" + keyword + "%");
+                        + " WHERE tenant_id = ? AND deleted = 0"
+                        + " AND REPLACE(name, ' ', '') LIKE CONCAT('%', ?, '%') LIMIT 6",
+                tenantId, kwNorm);
         if (fuzzy.isEmpty()) {
             throw new IllegalArgumentException("在本租户档案中未找到" + label + "「" + keyword + "」，请核对名称或编码");
         }
