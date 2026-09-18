@@ -265,9 +265,9 @@ export function getDocumentPage(params: PageParam & Record<string, any>) {
   );
 }
 
-/** 上传文档（multipart，file + 元数据） */
-export function uploadDocument(data: FormData) {
-  return requestClient.post<number>('/training/document/upload', data, {
+/** 上传 / 批量上传文档（multipart，files[] + 元数据），返回新文档 ID 列表 */
+export function uploadDocuments(data: FormData) {
+  return requestClient.post<number[]>('/training/document/upload', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 }
