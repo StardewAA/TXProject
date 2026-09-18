@@ -9,6 +9,9 @@ import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.*;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
 import cn.iocoder.txgy.module.crm.dal.mysql.statistics.CrmStatisticsFunnelMapper;
 import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessEndStatusEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessLostReasonEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStageEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
@@ -19,10 +22,15 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 
 /**
  * CRM 销售漏斗分析 Service 实现类
@@ -80,6 +88,57 @@ public class CrmStatisticsFunnelServiceImpl implements CrmStatisticsFunnelServic
 
         // 2. 获得统计数据
         return funnelMapper.selectBusinessSummaryListGroupByStatus(reqVO);
+    }
+
+    @Override
+    public List<CrmStatisticsBusinessSummaryRespVO> getBusinessSummaryByStage(CrmStatisticsFunnelReqVO reqVO) {
+        Map<Integer, String> labels = new LinkedHashMap<>();
+        Arrays.stream(CrmBusinessStageEnum.values()).forEach(item -> labels.put(item.getStage(), item.getName()));
+        return fillBusinessSummary(doBusinessSummary(reqVO, funnelMapper::selectBusinessSummaryGroupByStage), labels);
+    }
+
+    @Override
+    public List<CrmStatisticsBusinessSummaryRespVO> getBusinessSummaryByState(CrmStatisticsFunnelReqVO reqVO) {
+        Map<Integer, String> labels = new LinkedHashMap<>();
+        Arrays.stream(CrmBusinessStateEnum.values()).forEach(item -> labels.put(item.getState(), item.getName()));
+        return fillBusinessSummary(doBusinessSummary(reqVO, funnelMapper::selectBusinessSummaryGroupByState), labels);
+    }
+
+    @Override
+    public List<CrmStatisticsBusinessSummaryRespVO> getBusinessLostReasonSummary(CrmStatisticsFunnelReqVO reqVO) {
+        Map<Integer, String> labels = new LinkedHashMap<>();
+        Arrays.stream(CrmBusinessLostReasonEnum.values()).forEach(item -> labels.put(item.getReason(), item.getName()));
+        return fillBusinessSummary(doBusinessSummary(reqVO, funnelMapper::selectBusinessLostReasonSummary), labels);
+    }
+
+    /**
+     * 商机汇总类统计的公共入口：补充用户编号数组并做空判断
+     */
+    private List<CrmStatisticsBusinessSummaryRespVO> doBusinessSummary(
+            CrmStatisticsFunnelReqVO reqVO,
+            Function<CrmStatisticsFunnelReqVO, List<CrmStatisticsBusinessSummaryRespVO>> query) {
+        reqVO.setUserIds(getUserIds(reqVO));
+        if (CollUtil.isEmpty(reqVO.getUserIds())) {
+            return Collections.emptyList();
+        }
+        return query.apply(reqVO);
+    }
+
+    /**
+     * 补齐维度：没有数据的维度返回 0，保证漏斗 / 柱状图 / 饼图的维度完整、顺序稳定
+     */
+    private static List<CrmStatisticsBusinessSummaryRespVO> fillBusinessSummary(
+            List<CrmStatisticsBusinessSummaryRespVO> list, Map<Integer, String> labels) {
+        Map<Integer, CrmStatisticsBusinessSummaryRespVO> map = convertMap(list,
+                CrmStatisticsBusinessSummaryRespVO::getKey);
+        return convertList(labels.entrySet(), entry -> {
+            CrmStatisticsBusinessSummaryRespVO vo = map.get(entry.getKey());
+            if (vo == null) {
+                vo = new CrmStatisticsBusinessSummaryRespVO().setKey(entry.getKey())
+                        .setCount(0L).setTotalPrice(BigDecimal.ZERO);
+            }
+            return vo.setLabel(entry.getValue());
+        });
     }
 
     @Override

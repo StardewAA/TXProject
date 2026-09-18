@@ -136,6 +136,16 @@ public interface ErrorCodeConstants {
     // ========== 商机管理 1_020_002_000 报价关联校验 ==========
     ErrorCode BUSINESS_DELETE_FAIL_QUOTATION_EXISTS = new ErrorCode(1_020_002_005, "商机已关联报价，不能删除");
 
+    // ========== 商机管理 1_020_002_000 标准化阶段（阶段/状态组/赢单/输单） ==========
+    ErrorCode BUSINESS_UPDATE_FAIL_CLOSED = new ErrorCode(1_020_002_006, "更新商机失败，原因：商机已关闭（已赢单/已丢单），关键字段不可修改");
+    ErrorCode BUSINESS_STAGE_INVALID = new ErrorCode(1_020_002_007, "保存商机失败，原因：商机阶段不正确");
+    ErrorCode BUSINESS_WIN_FAIL_CLOSED = new ErrorCode(1_020_002_008, "赢单失败，原因：商机已关闭（当前状态：{}）");
+    ErrorCode BUSINESS_LOSE_FAIL_CLOSED = new ErrorCode(1_020_002_009, "输单失败，原因：商机已关闭（当前状态：{}）");
+    ErrorCode BUSINESS_STATE_INVALID = new ErrorCode(1_020_002_010, "更新商机状态组失败，原因：状态组不正确");
+    ErrorCode BUSINESS_UPDATE_STATE_FAIL_SAME = new ErrorCode(1_020_002_011, "更新商机状态组失败，原因：已经是该状态组");
+    ErrorCode BUSINESS_UPDATE_STATE_FAIL_NOT_SUPPORT = new ErrorCode(1_020_002_012, "更新商机状态组失败，原因：不允许直接设置为已赢单/已丢单，请使用「赢单」「输单」按钮");
+    ErrorCode BUSINESS_UPDATE_STATUS_FAIL_USE_BUTTON = new ErrorCode(1_020_002_013, "更新商机状态失败，原因：赢单/输单请使用「赢单」「输单」按钮操作");
+
     // ========== 业绩目标配置 1_020_011_000 ==========
     ErrorCode PERFORMANCE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_011_000, "业绩目标配置不存在");
     ErrorCode PERFORMANCE_CONFIG_EXISTS = new ErrorCode(1_020_011_001, "该对象当前年份的业绩目标配置已存在");

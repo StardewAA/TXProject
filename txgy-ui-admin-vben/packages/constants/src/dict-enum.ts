@@ -116,6 +116,9 @@ const CRM_DICT = {
   CRM_AUDIT_STATUS: 'crm_audit_status', // CRM 审批状态
   CRM_BIZ_TYPE: 'crm_biz_type', // CRM 业务类型
   CRM_BUSINESS_END_STATUS_TYPE: 'crm_business_end_status_type', // CRM 商机结束状态类型
+  CRM_BUSINESS_STAGE: 'crm_business_stage', // CRM 商机阶段（标准化 5 阶段，不含赢单/输单）
+  CRM_BUSINESS_STATE: 'crm_business_state', // CRM 商机状态组（未开始/进行中/已赢单/已丢单，只读派生）
+  CRM_BUSINESS_LOST_REASON: 'crm_business_lost_reason', // CRM 商机丢单原因
   CRM_CUSTOMER_INDUSTRY: 'crm_customer_industry', // CRM 客户所属行业（合并：下游+上游，用于展示）
   CRM_CUSTOMER_CATEGORY: 'crm_customer_category', // CRM 客户类别（下游客户/上游供应商）
   CRM_CUSTOMER_INDUSTRY_DOWNSTREAM: 'crm_customer_industry_downstream', // CRM 下游客户行业
