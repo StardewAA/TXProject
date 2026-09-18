@@ -9,6 +9,11 @@ export function getRequiredMaterialType(orderType: string): string {
   if (['PRODUCTION_RECEIPT', 'SALE_SHIPMENT'].includes(orderType)) return 'FINISHED_GOODS';
   throw new Error('业务类型不支持');
 }
+export function getWarehouseMismatchMessage(orderType: string, warehouseType?: string): string | undefined {
+  const requiredType = getRequiredMaterialType(orderType);
+  if (warehouseType === requiredType) return undefined;
+  return `当前业务需要${requiredType === 'RAW_MATERIAL' ? '原材料仓' : '成品仓'}，请选择匹配的业务仓库`;
+}
 export function buildReceiptSelection(sku: WmsItemSkuApi.ItemSku, orderType: string): SimulationDetail {
   const requiredType = getRequiredMaterialType(orderType);
   if (!sku.id || sku.materialType !== requiredType) {

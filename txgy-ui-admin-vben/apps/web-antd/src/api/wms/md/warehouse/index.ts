@@ -12,6 +12,10 @@ export namespace WmsWarehouseApi {
     remark?: string;
     sort?: number;
     createTime?: Date;
+    managerUserId?: number;
+    managerName?: string;
+    memberUserIds?: number[];
+    memberCount?: number;
   }
 }
 

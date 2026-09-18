@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Schema(description = "管理后台 - WMS 仓库 Response VO")
 @Data
@@ -39,5 +40,17 @@ public class WmsWarehouseRespVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
+
+    @Schema(description = "仓库负责人用户编号")
+    private Long managerUserId;
+
+    @Schema(description = "仓库负责人姓名")
+    private String managerName;
+
+    @Schema(description = "仓库员工用户编号集合")
+    private Set<Long> memberUserIds;
+
+    @Schema(description = "仓库员工数量")
+    private Integer memberCount;
 
 }

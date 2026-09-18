@@ -26,4 +26,4 @@ txgy:
   security:
     mock-enable: true
   access-log:
-    enable: false
+    enable: true

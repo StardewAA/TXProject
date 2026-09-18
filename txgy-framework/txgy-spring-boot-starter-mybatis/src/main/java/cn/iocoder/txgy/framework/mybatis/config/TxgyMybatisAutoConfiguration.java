@@ -36,6 +36,11 @@ import java.util.concurrent.TimeUnit;
         lazyInitialization = "${mybatis.lazy-initialization:false}") // Mapper 懒加载，目前仅用于单元测试
 public class TxgyMybatisAutoConfiguration {
 
+    @Bean
+    public cn.iocoder.txgy.framework.mybatis.core.interceptor.WorkTraceInterceptor workTraceInterceptor() {
+        return new cn.iocoder.txgy.framework.mybatis.core.interceptor.WorkTraceInterceptor();
+    }
+
     static {
         // 动态 SQL 智能优化支持本地缓存加速解析，更完善的租户复杂 XML 动态 SQL 支持，静态注入缓存
         JsqlParserGlobal.setJsqlParseCache(new JdkSerialCaffeineJsqlParseCache(

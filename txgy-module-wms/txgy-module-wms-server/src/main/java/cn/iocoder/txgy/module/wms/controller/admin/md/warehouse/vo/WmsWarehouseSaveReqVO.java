@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.Set;
+
 @Schema(description = "管理后台 - WMS 仓库新增/修改 Request VO")
 @Data
 public class WmsWarehouseSaveReqVO {
@@ -32,5 +34,11 @@ public class WmsWarehouseSaveReqVO {
 
     @Schema(description = "备注", example = "备注")
     private String remark;
+
+    @Schema(description = "仓库负责人用户编号")
+    private Long managerUserId;
+
+    @Schema(description = "仓库员工用户编号集合")
+    private Set<Long> memberUserIds;
 
 }

@@ -11,6 +11,8 @@ import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseR
 import cn.iocoder.txgy.module.wms.controller.admin.md.warehouse.vo.WmsWarehouseSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +37,10 @@ public class WmsWarehouseController {
 
     @Resource
     private WmsWarehouseService warehouseService;
+    @Resource
+    private WmsWarehousePersonnelService warehousePersonnelService;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @PostMapping("/create")
     @Operation(summary = "创建仓库")
@@ -66,7 +72,7 @@ public class WmsWarehouseController {
     @PreAuthorize("@ss.hasPermission('wms:warehouse:query')")
     public CommonResult<WmsWarehouseRespVO> getWarehouse(@RequestParam("id") Long id) {
         WmsWarehouseDO warehouse = warehouseService.getWarehouse(id);
-        return success(BeanUtils.toBean(warehouse, WmsWarehouseRespVO.class));
+        return success(enrichPersonnel(BeanUtils.toBean(warehouse, WmsWarehouseRespVO.class)));
     }
 
     @GetMapping("/page")
@@ -74,7 +80,9 @@ public class WmsWarehouseController {
     @PreAuthorize("@ss.hasPermission('wms:warehouse:query')")
     public CommonResult<PageResult<WmsWarehouseRespVO>> getWarehousePage(@Valid WmsWarehousePageReqVO pageReqVO) {
         PageResult<WmsWarehouseDO> pageResult = warehouseService.getWarehousePage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, WmsWarehouseRespVO.class));
+        PageResult<WmsWarehouseRespVO> result = BeanUtils.toBean(pageResult, WmsWarehouseRespVO.class);
+        result.getList().forEach(this::enrichPersonnel);
+        return success(result);
     }
 
     @GetMapping("/simple-list")
@@ -82,7 +90,9 @@ public class WmsWarehouseController {
     @PreAuthorize("@ss.hasPermission('wms:warehouse:query')")
     public CommonResult<List<WmsWarehouseRespVO>> getWarehouseSimpleList() {
         List<WmsWarehouseDO> list = warehouseService.getWarehouseList();
-        return success(BeanUtils.toBean(list, WmsWarehouseRespVO.class));
+        List<WmsWarehouseRespVO> result = BeanUtils.toBean(list, WmsWarehouseRespVO.class);
+        result.forEach(this::enrichPersonnel);
+        return success(result);
     }
 
     @GetMapping("/export-excel")
@@ -95,6 +105,17 @@ public class WmsWarehouseController {
         List<WmsWarehouseDO> list = warehouseService.getWarehousePage(pageReqVO).getList();
         ExcelUtils.write(response, "仓库.xls", "数据", WmsWarehouseRespVO.class,
                 BeanUtils.toBean(list, WmsWarehouseRespVO.class));
+    }
+
+    private WmsWarehouseRespVO enrichPersonnel(WmsWarehouseRespVO warehouse) {
+        warehouse.setManagerUserId(warehousePersonnelService.getManagerUserId(warehouse.getId()));
+        if (warehouse.getManagerUserId() != null) {
+            var manager = adminUserApi.getUser(warehouse.getManagerUserId()).getCheckedData();
+            warehouse.setManagerName(manager == null ? null : manager.getNickname());
+        }
+        warehouse.setMemberUserIds(warehousePersonnelService.getMemberUserIds(warehouse.getId()));
+        warehouse.setMemberCount(warehouse.getMemberUserIds().size());
+        return warehouse;
     }
 
 }

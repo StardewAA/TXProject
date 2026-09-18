@@ -40,6 +40,11 @@ function handleEdit(row: WmsWarehouseApi.Warehouse) {
   formModalApi.setData(row).open();
 }
 
+/** 查看仓库详情（仅查询权限） */
+function handleDetail(row: WmsWarehouseApi.Warehouse) {
+  formModalApi.setData({ ...row, readonly: true }).open();
+}
+
 /** 删除仓库 */
 async function handleDelete(row: WmsWarehouseApi.Warehouse) {
   const hideLoading = message.loading({
@@ -126,6 +131,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '详情',
+              type: 'link',
+              auth: ['wms:warehouse:query'],
+              onClick: handleDetail.bind(null, row),
+            },
             {
               label: $t('common.edit'),
               type: 'link',
