@@ -174,7 +174,7 @@ public class MesSetPollutionCheckServiceImpl implements MesSetPollutionCheckServ
 
     @Override
     public MesSetPollutionCheckAiRespVO prescreenPollutionCheck(MesSetPollutionCheckSaveReqVO reqVO) {
-        PrescreenResult result = pollutionCheckAiService.prescreen(reqVO.getItemName());
+        PrescreenResult result = pollutionCheckAiService.prescreen(reqVO.getItemName(), reqVO.getItemSpec(), reqVO.getStage());
         return BeanUtils.toBean(result, MesSetPollutionCheckAiRespVO.class);
     }
 
@@ -228,7 +228,8 @@ public class MesSetPollutionCheckServiceImpl implements MesSetPollutionCheckServ
      * AI 初筛回填（未复核状态只应持有 AI 预分类）
      */
     private void applyAiPrescreen(MesSetPollutionCheckDO pollutionCheck) {
-        PrescreenResult result = pollutionCheckAiService.prescreen(pollutionCheck.getItemName());
+        PrescreenResult result = pollutionCheckAiService.prescreen(
+                pollutionCheck.getItemName(), pollutionCheck.getItemSpec(), pollutionCheck.getStage());
         pollutionCheck.setAiResult(result.getAiResult());
         pollutionCheck.setAiConfidence(result.getAiConfidence());
         pollutionCheck.setAiReason(result.getAiReason());

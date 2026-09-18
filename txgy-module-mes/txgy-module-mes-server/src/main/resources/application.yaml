@@ -102,6 +102,11 @@ txgy:
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.mes
+  pollution-ai: # 污染判定 AI 初筛(DeepSeek)：api-key 只放本地 application-local.yaml，勿提交仓库
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      model: deepseek-chat
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

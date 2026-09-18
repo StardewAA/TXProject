@@ -58,6 +58,18 @@ export const DISPOSITION_MAP: Record<string, string> = Object.fromEntries(
   DISPOSITION_OPTIONS.map((item) => [item.value, item.label]),
 );
 
+/** 去向/库位选项(隔离暂存区/受控区/处置区/回用区/排放口) */
+export const LOCATION_OPTIONS = [
+  { label: '危废暂存间A-01', value: '危废暂存间A-01' },
+  { label: '危废暂存间A-06', value: '危废暂存间A-06' },
+  { label: '危废暂存间B-05', value: '危废暂存间B-05' },
+  { label: '危废暂存间C-03', value: '危废暂存间C-03' },
+  { label: '成品受控区C-02', value: '成品受控区C-02' },
+  { label: '处置作业区D-02', value: '处置作业区D-02' },
+  { label: '回用暂存区E-01', value: '回用暂存区E-01' },
+  { label: '合规排放口F-02', value: '合规排放口F-02' },
+];
+
 /** 新增/修改污染判定的表单（AI 初筛字段由后端回填，无需录入） */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -173,10 +185,11 @@ export function useReviewFormSchema(): VbenFormSchema[] {
     {
       fieldName: 'location',
       label: '去向/库位',
-      component: 'Input',
+      component: 'Select',
       componentProps: {
+        options: LOCATION_OPTIONS,
         allowClear: true,
-        placeholder: '如：A-污染管控区-01',
+        placeholder: '请选择去向/库位',
       },
     },
     {
