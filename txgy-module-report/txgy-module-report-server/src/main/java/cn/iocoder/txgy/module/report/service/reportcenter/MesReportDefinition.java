@@ -24,7 +24,7 @@ public enum MesReportDefinition {
     /**
      * 生产日报
      */
-    PRODUCTION_DAILY("mes_daily_production", "生产日报", "按日期、工单、工序汇总的报工数量与合格情况", List.of("生产"),
+    PRODUCTION_DAILY("mes_daily_production", "生产日报", "按日期、工单、工序汇总的报工数量与合格情况",
             List.of(ColumnDef.of("report_date", "日期"),
                     ColumnDef.of("work_order_code", "工单号"),
                     ColumnDef.of("process_name", "工序"),
@@ -37,7 +37,7 @@ public enum MesReportDefinition {
     /**
      * 工单完工报表
      */
-    WORK_ORDER_COMPLETION("mes_work_order_completion", "工单完工报表", "工单计划量、已生产量与完成进度", List.of("生产"),
+    WORK_ORDER_COMPLETION("mes_work_order_completion", "工单完工报表", "工单计划量、已生产量与完成进度",
             List.of(ColumnDef.of("work_order_code", "工单号"),
                     ColumnDef.of("work_order_name", "工单名称"),
                     ColumnDef.of("item_code", "物料编码"),
@@ -54,7 +54,7 @@ public enum MesReportDefinition {
     /**
      * 不良品统计
      */
-    DEFECT_SUMMARY("mes_defect_summary", "不良品统计", "按物料、工序汇总的不良品与工废料废数量", List.of("品质"),
+    DEFECT_SUMMARY("mes_defect_summary", "不良品统计", "按物料、工序汇总的不良品与工废料废数量",
             List.of(ColumnDef.of("item_code", "物料编码"),
                     ColumnDef.of("item_name", "物料名称"),
                     ColumnDef.of("process_name", "工序"),
@@ -67,7 +67,7 @@ public enum MesReportDefinition {
     /**
      * 物料耗用报表
      */
-    MATERIAL_CONSUMPTION("mes_material_consumption", "物料耗用报表", "生产领料消耗：按工单、物料汇总", List.of("生产", "库存"),
+    MATERIAL_CONSUMPTION("mes_material_consumption", "物料耗用报表", "生产领料消耗：按工单、物料汇总",
             List.of(ColumnDef.of("work_order_code", "工单号"),
                     ColumnDef.of("process_name", "工序"),
                     ColumnDef.of("consume_date", "领料日期"),
@@ -79,7 +79,7 @@ public enum MesReportDefinition {
     /**
      * 设备运行与维修统计
      */
-    MACHINERY_EFFICIENCY("mes_machinery_efficiency", "设备运行与维修统计", "设备状态、维修次数与维修工时（完整 OEE 待接入设备运行时长）", List.of("设备"),
+    MACHINERY_EFFICIENCY("mes_machinery_efficiency", "设备运行与维修统计", "设备状态、维修次数与维修工时（完整 OEE 待接入设备运行时长）",
             List.of(ColumnDef.of("machinery_code", "设备编码"),
                     ColumnDef.of("machinery_name", "设备名称"),
                     ColumnDef.of("status", "设备状态", Map.of("1", "停机", "2", "生产中", "3", "维护中")),
@@ -92,7 +92,7 @@ public enum MesReportDefinition {
     /**
      * 生产报工明细台账
      */
-    FEEDBACK_DETAIL("mes_feedback_detail", "生产报工明细台账", "逐笔报工明细：谁、在哪个工位、报了哪个工序多少数量", List.of("生产"),
+    FEEDBACK_DETAIL("mes_feedback_detail", "生产报工明细台账", "逐笔报工明细：谁、在哪个工位、报了哪个工序多少数量",
             List.of(ColumnDef.of("feedback_code", "报工单号"),
                     ColumnDef.of("work_order_code", "工单号"),
                     ColumnDef.of("process_name", "工序"),
@@ -108,7 +108,7 @@ public enum MesReportDefinition {
     /**
      * 工序产出汇总表（P0 #3）
      */
-    PROCESS_OUTPUT("mes_process_output", "工序产出汇总表", "按工序汇总报工数量、合格数量与合格率", List.of("生产"),
+    PROCESS_OUTPUT("mes_process_output", "工序产出汇总表", "按工序汇总报工数量、合格数量与合格率",
             List.of(ColumnDef.of("process_name", "工序"),
                     ColumnDef.of("work_order_count", "工单数"),
                     ColumnDef.of("record_count", "报工笔数"),
@@ -121,7 +121,7 @@ public enum MesReportDefinition {
     /**
      * 质量检验合格率表（P0 #4：IQC/IPQC/OQC/RQC 统一口径）
      */
-    QC_PASS_RATE("mes_qc_pass_rate", "质量检验合格率表", "来料/过程/出货/退货四类检验单的合格率与检验结果", List.of("品质"),
+    QC_PASS_RATE("mes_qc_pass_rate", "质量检验合格率表", "来料/过程/出货/退货四类检验单的合格率与检验结果",
             List.of(ColumnDef.of("qc_type", "检验类型"),
                     ColumnDef.of("qc_code", "检验单号"),
                     ColumnDef.of("item_name", "物料名称"),
@@ -138,7 +138,7 @@ public enum MesReportDefinition {
     /**
      * 库存收发存汇总表（P0 #6）
      */
-    WM_STOCK_FLOW("mes_wm_stock_flow", "库存收发存汇总表", "当前在库余量与期间入库/出库（采购、产品、杂项、领料）", List.of("库存"),
+    WM_STOCK_FLOW("mes_wm_stock_flow", "库存收发存汇总表", "当前在库余量与期间入库/出库（采购、产品、杂项、领料）",
             List.of(ColumnDef.of("item_code", "物料编码"),
                     ColumnDef.of("item_name", "物料名称"),
                     ColumnDef.of("in_quantity", "期间入库数量"),
@@ -149,7 +149,7 @@ public enum MesReportDefinition {
     /**
      * 出入库明细台账（P0 #7）
      */
-    WM_INOUT_LEDGER("mes_wm_inout_ledger", "出入库明细台账", "采购/产品/杂项入库与领料/杂项出库逐单明细，含单据状态", List.of("库存"),
+    WM_INOUT_LEDGER("mes_wm_inout_ledger", "出入库明细台账", "采购/产品/杂项入库与领料/杂项出库逐单明细，含单据状态",
             List.of(ColumnDef.of("doc_type", "单据类型"),
                     ColumnDef.of("doc_code", "单据编号"),
                     ColumnDef.of("doc_date", "单据日期"),
@@ -174,13 +174,6 @@ public enum MesReportDefinition {
      */
     private final String description;
     /**
-     * 业务分组（生产/品质/设备/库存等）
-     *
-     * 支持多归属：同一张报表可同时出现在多个分组下
-     * （例如「物料耗用报表」既属生产也属库存）。
-     */
-    private final List<String> groups;
-    /**
      * 导出列定义（顺序即 Excel 列顺序）
      */
     private final List<ColumnDef> columns;
@@ -189,12 +182,11 @@ public enum MesReportDefinition {
      */
     private final List<ParamDef> params;
 
-    MesReportDefinition(String code, String name, String description, List<String> groups,
+    MesReportDefinition(String code, String name, String description,
                         List<ColumnDef> columns, List<ParamDef> params) {
         this.code = code;
         this.name = name;
         this.description = description;
-        this.groups = groups;
         this.columns = columns;
         this.params = params;
     }

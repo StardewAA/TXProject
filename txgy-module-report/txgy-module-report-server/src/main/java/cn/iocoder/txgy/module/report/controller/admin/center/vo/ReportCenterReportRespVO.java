@@ -28,15 +28,6 @@ public class ReportCenterReportRespVO {
     @Schema(description = "可筛选参数")
     private List<Param> params;
 
-    @Schema(description = "业务分组（支持多归属，如 [\"生产\",\"库存\"]）", example = "[\"生产\"]")
-    private List<String> groups;
-
-    @Schema(description = "列中文标签（供前端搜索索引）", example = "[\"工单号\",\"计划数量\"]")
-    private List<String> columnLabels;
-
-    @Schema(description = "近 30 天查询次数（供「常用」排序）", example = "12")
-    private Integer queryCount;
-
     /**
      * 报表筛选参数
      */

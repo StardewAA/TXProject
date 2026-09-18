@@ -13,9 +13,6 @@ export namespace ReportCenterApi {
     name: string; // 报表名称
     description: string; // 报表用途说明
     params: Param[]; // 可筛选参数
-    groups: string[]; // 业务分组（支持多归属，如 ["生产","库存"]）
-    columnLabels: string[]; // 列中文标签（供搜索索引）
-    queryCount: number; // 近 30 天查询次数（「常用」排序用）
   }
 
   /** 报表数据 */
