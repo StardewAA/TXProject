@@ -18,7 +18,8 @@ public enum CrmAfterSaleVisitCycleEnum implements ArrayValuable<Integer> {
     QUARTER(1, "每季度"),
     HALF_YEAR(2, "每半年"),
     YEAR(3, "每年"),
-    BEFORE_EXPIRE(4, "质保到期前重点回访");
+    BEFORE_EXPIRE(4, "质保到期前重点回访"),
+    MONTH(5, "每月");
 
     private final Integer type;
     private final String name;

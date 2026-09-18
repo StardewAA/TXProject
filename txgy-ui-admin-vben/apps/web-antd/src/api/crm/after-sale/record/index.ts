@@ -7,6 +7,10 @@ export namespace CrmAfterSaleVisitRecordApi {
   export interface VisitRecord {
     id?: number;
     taskId?: number;
+    /** 关联任务的业务编号（在当前质保档案范围内从 1 开始独立编号） */
+    taskBizNo?: number;
+    /** 关联任务状态：1=待处理 2=已完成 3=已逾期 */
+    taskStatus?: number;
     /** 记录状态：1=待填写 2=已填写 */
     status?: number;
     warrantyId?: number;

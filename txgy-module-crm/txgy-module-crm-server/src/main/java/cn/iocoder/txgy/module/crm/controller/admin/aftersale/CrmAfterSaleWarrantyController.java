@@ -73,20 +73,37 @@ public class CrmAfterSaleWarrantyController {
     @Parameter(name = "id", description = "编号", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:query')")
     public CommonResult<CrmAfterSaleWarrantyRespVO> getWarranty(@RequestParam("id") Long id) {
-        return success(BeanUtils.toBean(warrantyService.getWarranty(id), CrmAfterSaleWarrantyRespVO.class));
+        CrmAfterSaleWarrantyRespVO warranty = BeanUtils.toBean(warrantyService.getWarranty(id),
+                CrmAfterSaleWarrantyRespVO.class);
+        // 与分页接口保持一致：带出合同、客户名称与剩余天数，供详情页展示
+        fillWarrantyExtraInfo(List.of(warranty));
+        return success(warranty);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得质保档案分页")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:query')")
     public CommonResult<PageResult<CrmAfterSaleWarrantyRespVO>> getWarrantyPage(@Valid CrmAfterSaleWarrantyPageReqVO pageReqVO) {
-        PageResult<CrmAfterSaleWarrantyDO> pageResult = warrantyService.getWarrantyPage(pageReqVO);
+        // expiryType = 即将到期 时用于待办「质保即将到期」，归属范围按当前登录人（本人 + 下属）过滤
+        PageResult<CrmAfterSaleWarrantyDO> pageResult = warrantyService.getWarrantyPage(pageReqVO, getLoginUserId());
         PageResult<CrmAfterSaleWarrantyRespVO> respPage = BeanUtils.toBean(pageResult, CrmAfterSaleWarrantyRespVO.class);
         if (CollUtil.isEmpty(respPage.getList())) {
             return success(respPage);
         }
-        // 拼接关联的合同、客户名称
-        List<CrmAfterSaleWarrantyRespVO> list = respPage.getList();
+        // 拼接关联的合同、客户名称与剩余天数
+        fillWarrantyExtraInfo(respPage.getList());
+        return success(respPage);
+    }
+
+    /**
+     * 填充质保档案的扩展展示字段：合同编号/名称、客户名称与质保剩余天数
+     *
+     * <p>分页与详情（/get）接口共用，保证各入口展示口径一致
+     */
+    private void fillWarrantyExtraInfo(List<CrmAfterSaleWarrantyRespVO> list) {
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
         Map<Long, CrmContractDO> contractMap = contractService.getContractMap(
                 list.stream().map(CrmAfterSaleWarrantyRespVO::getContractId).toList());
         Map<Long, CrmCustomerDO> customerMap = customerService.getCustomerMap(
@@ -102,7 +119,13 @@ public class CrmAfterSaleWarrantyController {
                 warranty.setRemainDays(ChronoUnit.DAYS.between(LocalDate.now(), warranty.getWarrantyEndDate()));
             }
         });
-        return success(respPage);
+    }
+
+    @GetMapping("/remind-count")
+    @Operation(summary = "获得「质保即将到期」待办数量（实时查询，不落库）")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:query')")
+    public CommonResult<Long> getWarrantyRemindCount() {
+        return success(warrantyService.getWarrantyRemindCount(getLoginUserId()));
     }
 
 }

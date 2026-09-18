@@ -61,10 +61,22 @@ public interface CrmAfterSaleWarrantyService {
     /**
      * 获得质保档案分页
      *
+     * <p>当 pageReqVO.expiryType = 即将到期（1）时，按「待办：质保即将到期」口径实时查询：
+     * 质保状态 = 质保中 + 售后责任人在（本人 + 下属）范围内 + 质保到期日在提前提醒天数内
+     *
      * @param pageReqVO 分页查询
+     * @param userId    当前登录用户编号（待办归属过滤使用）
      * @return 质保档案分页
      */
-    PageResult<CrmAfterSaleWarrantyDO> getWarrantyPage(CrmAfterSaleWarrantyPageReqVO pageReqVO);
+    PageResult<CrmAfterSaleWarrantyDO> getWarrantyPage(CrmAfterSaleWarrantyPageReqVO pageReqVO, Long userId);
+
+    /**
+     * 获得「质保即将到期」待办数量（实时查询，与分页查询同一口径，不落库）
+     *
+     * @param userId 当前登录用户编号
+     * @return 待办数量
+     */
+    Long getWarrantyRemindCount(Long userId);
 
     /**
      * 获得质保档案列表

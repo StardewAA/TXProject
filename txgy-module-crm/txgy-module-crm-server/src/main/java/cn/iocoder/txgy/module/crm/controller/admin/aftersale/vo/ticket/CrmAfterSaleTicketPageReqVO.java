@@ -17,6 +17,13 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @ToString(callSuper = true)
 public class CrmAfterSaleTicketPageReqVO extends PageParam {
 
+    /**
+     * 提醒类型 - 工单超时预警（待办「工单超时预警」使用）
+     *
+     * <p>实时查询口径：工单未闭环（待处理 / 处理中），且创建日期距今 ≥ 售后设置「工单超时预警天数」
+     */
+    public static final Integer REMIND_TYPE_OVERDUE = 1;
+
     @Schema(description = "工单编号", example = "AT2026090710200001")
     private String no;
 
@@ -44,5 +51,8 @@ public class CrmAfterSaleTicketPageReqVO extends PageParam {
     @Schema(description = "创建时间区间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime[] createTime;
+
+    @Schema(description = "提醒类型：1=工单超时预警（未闭环，且创建日期距今 ≥ 超时预警天数）；为空表示全部", example = "1")
+    private Integer remindType;
 
 }
