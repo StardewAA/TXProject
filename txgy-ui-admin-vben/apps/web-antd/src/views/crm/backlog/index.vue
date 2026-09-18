@@ -17,8 +17,11 @@ import {
 } from '#/api/crm/customer';
 import { getAuditReceivableCount } from '#/api/crm/receivable';
 import { getReceivablePlanRemindCount } from '#/api/crm/receivable/plan';
+import { getAfterSaleVisitTaskRemindCount } from '#/api/crm/after-sale/task';
+import { getAfterSaleTicketOverdueCount } from '#/api/crm/after-sale/ticket';
+import { getAfterSaleWarrantyRemindCount } from '#/api/crm/after-sale/warranty';
 
-import { useLeftSides } from './data';
+import { BACKLOG_SOURCE, useLeftSides } from './data';
 import ClueFollowList from './modules/clue-follow-list.vue';
 import ContractAuditList from './modules/contract-audit-list.vue';
 import ContractRemindList from './modules/contract-remind-list.vue';
@@ -27,6 +30,9 @@ import CustomerPutPoolRemindList from './modules/customer-put-pool-remind-list.v
 import CustomerTodayContactList from './modules/customer-today-contact-list.vue';
 import ReceivableAuditList from './modules/receivable-audit-list.vue';
 import ReceivablePlanRemindList from './modules/receivable-plan-remind-list.vue';
+import TicketOverdueList from './modules/ticket-overdue-list.vue';
+import VisitTaskRemindList from './modules/visit-task-remind-list.vue';
+import WarrantyExpiryList from './modules/warranty-expiry-list.vue';
 
 const leftMenu = ref('customerTodayContact');
 
@@ -38,6 +44,9 @@ const contractAuditCount = ref(0);
 const contractRemindCount = ref(0);
 const receivableAuditCount = ref(0);
 const receivablePlanRemindCount = ref(0);
+const warrantyExpiryCount = ref(0);
+const visitTaskRemindCount = ref(0);
+const ticketOverdueCount = ref(0);
 
 const leftSides = useLeftSides(
   customerTodayContactCount,
@@ -48,6 +57,9 @@ const leftSides = useLeftSides(
   contractRemindCount,
   receivableAuditCount,
   receivablePlanRemindCount,
+  warrantyExpiryCount,
+  visitTaskRemindCount,
+  ticketOverdueCount,
 );
 
 const currentComponent = computed(() => {
@@ -60,6 +72,9 @@ const currentComponent = computed(() => {
     customerFollow: CustomerFollowList,
     customerPutPoolRemind: CustomerPutPoolRemindList,
     receivablePlanRemind: ReceivablePlanRemindList,
+    [BACKLOG_SOURCE.WARRANTY]: WarrantyExpiryList,
+    [BACKLOG_SOURCE.VISIT]: VisitTaskRemindList,
+    [BACKLOG_SOURCE.WORK_ORDER]: TicketOverdueList,
   } as const;
   return components[leftMenu.value as keyof typeof components];
 });
@@ -79,6 +94,9 @@ async function getCount() {
   contractRemindCount.value = await getRemindContractCount();
   receivableAuditCount.value = await getAuditReceivableCount();
   receivablePlanRemindCount.value = await getReceivablePlanRemindCount();
+  warrantyExpiryCount.value = await getAfterSaleWarrantyRemindCount();
+  visitTaskRemindCount.value = await getAfterSaleVisitTaskRemindCount();
+  ticketOverdueCount.value = await getAfterSaleTicketOverdueCount();
 }
 
 /** 激活时 */

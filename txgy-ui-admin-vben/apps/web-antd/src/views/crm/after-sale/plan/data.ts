@@ -4,7 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
-import { getAfterSaleWarrantyOptions } from '#/api/crm/after-sale/warranty';
+import { getCustomerSimpleList } from '#/api/crm/customer';
 import { getSimpleUserList } from '#/api/system/user';
 
 /** 新增/修改的表单 */
@@ -31,14 +31,29 @@ export function useFormSchema(): VbenFormSchema[] {
     },
     {
       component: 'ApiSelect',
-      fieldName: 'warrantyId',
-      label: '关联质保档案',
+      fieldName: 'customerId',
+      label: '客户名称',
       rules: 'required',
       componentProps: {
-        api: getAfterSaleWarrantyOptions,
-        labelField: 'label',
-        valueField: 'value',
-        placeholder: '请选择关联质保档案',
+        api: getCustomerSimpleList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择客户名称',
+        allowClear: true,
+        showSearch: true,
+        optionFilterProp: 'label',
+      },
+    },
+    {
+      component: 'Select',
+      fieldName: 'warrantyId',
+      label: '质保档案',
+      rules: 'required',
+      // 选项由表单页按「客户名称」联动查询后回填（仅质保中）；未选客户时置空并禁用
+      componentProps: {
+        options: [],
+        disabled: true,
+        placeholder: '请先选择客户名称',
         allowClear: true,
         showSearch: true,
         optionFilterProp: 'label',

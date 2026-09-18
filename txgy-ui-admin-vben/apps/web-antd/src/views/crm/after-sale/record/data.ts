@@ -4,11 +4,27 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import dayjs from 'dayjs';
+
 import { getAfterSaleWarrantyOptions } from '#/api/crm/after-sale/warranty';
 import { getCustomerSimpleList } from '#/api/crm/customer';
 
-/** 新增/修改的表单 */
-export function useFormSchema(): VbenFormSchema[] {
+/**
+ * 新增/修改的表单
+ *
+ * @param getAcceptDateTs 关联质保档案的完工验收日期（毫秒时间戳）取值函数，
+ *                        用于限制"回访时间"的可选范围（不早于验收日期、不晚于今天）
+ */
+export function useFormSchema(
+  getAcceptDateTs?: () => number | undefined,
+  /**
+   * 「关联任务编号」是否锁定（置灰不可编辑）：
+   * 1）编辑已有回访记录时锁定，避免改绑任务；
+   * 2）由任务列表「填写回访记录」跳转填写时锁定。
+   * 仅「回访记录模块内新增」时允许选择。
+   */
+  isTaskLocked?: () => boolean,
+): VbenFormSchema[] {
   return [
     {
       component: 'Input',
@@ -35,13 +51,32 @@ export function useFormSchema(): VbenFormSchema[] {
     },
     {
       component: 'InputNumber',
-      fieldName: 'taskId',
+      fieldName: 'taskBizNo',
       label: '关联任务编号',
+      // 业务编号：在「所属质保档案」范围内独立编号（从 1 开始），选择质保档案后自动带出
+      dependencies: {
+        triggerFields: ['warrantyId'],
+        componentProps() {
+          return {
+            // 编辑已有记录 / 由任务跳转填写时锁定（仅可查看）
+            disabled: isTaskLocked?.() ?? false,
+          };
+        },
+      },
       componentProps: {
         class: '!w-full',
-        min: 0,
+        min: 1,
         precision: 0,
-        placeholder: '任务回访时填写，手动登记可留空',
+        placeholder: '选择质保档案后自动带出，可修改',
+      },
+    },
+    {
+      // 提交给后端的任务主键：由「关联任务编号」按质保档案反查得到，不在界面直接暴露
+      component: 'Input',
+      fieldName: 'taskId',
+      dependencies: {
+        triggerFields: [''],
+        show: () => false,
       },
     },
     {
@@ -63,8 +98,23 @@ export function useFormSchema(): VbenFormSchema[] {
       componentProps: {
         showTime: true,
         placeholder: '留空则为当前时间',
-        valueFormat: 'YYYY-MM-DD HH:mm:ss',
+        // 后端返回的时间为毫秒时间戳（与合同等模块一致），此处需用 'x' 才能正确回显，
+        // 否则加载已有记录时会出现 Invalid Date
+        valueFormat: 'x',
         format: 'YYYY-MM-DD HH:mm:ss',
+        // 选择时即限制范围：不能晚于今天，也不能早于项目完工验收日期
+        disabledDate: (current: any) => {
+          if (!current) {
+            return false;
+          }
+          if (current.isAfter(dayjs().endOf('day'))) {
+            return true;
+          }
+          const acceptTs = getAcceptDateTs?.();
+          return Boolean(
+            acceptTs && current.isBefore(dayjs(acceptTs).startOf('day')),
+          );
+        },
       },
     },
     {
@@ -175,6 +225,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '质保编号',
       minWidth: 160,
       fixed: 'left',
+    },
+    {
+      field: 'taskBizNo',
+      title: '关联任务编号',
+      minWidth: 120,
     },
     {
       field: 'projectName',

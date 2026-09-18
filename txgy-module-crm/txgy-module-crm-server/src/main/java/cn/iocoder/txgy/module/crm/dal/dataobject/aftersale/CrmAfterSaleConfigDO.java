@@ -47,9 +47,22 @@ public class CrmAfterSaleConfigDO extends BaseDO {
      */
     private Integer taskRemindDays;
     /**
-     * 回访任务逾期判定天数
+     * 回访任务逾期判定天数（即「窗口期天数」）
+     *
+     * <p>窗口期截止日期 = 计划回访日期(task_date) + 本值，按当前配置**实时计算**，改配置立即对存量任务生效：
+     * <ul>
+     *   <li>窗口期内：计划回访日期 ≤ 今天 ≤ 窗口期截止日期，任务状态正常；</li>
+     *   <li>已逾期：今天 &gt; 窗口期截止日期，任务标记「已逾期」，仍允许补录。</li>
+     * </ul>
      */
     private Integer taskOverdueDays;
+    /**
+     * 是否允许提前提交回访记录
+     *
+     * <p>false（默认）= 不允许：今天 &lt; 计划回访日期时禁止提交回访记录（硬时间锁）；
+     * true = 允许：不受计划回访日期限制，可提前回访，仅保留逾期提醒。
+     */
+    private Boolean allowEarlyVisit;
     /**
      * 工单超时未处理预警天数
      */

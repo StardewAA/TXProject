@@ -94,20 +94,58 @@ public class CrmAfterSaleVisitTaskController {
     @Parameter(name = "id", description = "编号", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
     public CommonResult<CrmAfterSaleVisitTaskRespVO> getVisitTask(@RequestParam("id") Long id) {
-        return success(BeanUtils.toBean(visitTaskService.getVisitTask(id), CrmAfterSaleVisitTaskRespVO.class));
+        CrmAfterSaleVisitTaskRespVO task = BeanUtils.toBean(visitTaskService.getVisitTask(id),
+                CrmAfterSaleVisitTaskRespVO.class);
+        // 与分页接口保持一致：带出质保、客户、合同、处理人昵称、窗口期与回访记录信息
+        fillTaskExtraInfo(List.of(task));
+        return success(task);
+    }
+
+    @GetMapping("/simple-list")
+    @Operation(summary = "获得回访任务精简列表（按质保档案，供回访记录表单绑定任务）")
+    @Parameter(name = "warrantyId", description = "质保档案编号", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
+    public CommonResult<List<CrmAfterSaleVisitTaskRespVO>> getVisitTaskSimpleList(@RequestParam("warrantyId") Long warrantyId) {
+        List<CrmAfterSaleVisitTaskRespVO> list = BeanUtils.toBean(
+                visitTaskService.getVisitTaskListByWarrantyId(warrantyId), CrmAfterSaleVisitTaskRespVO.class);
+        // 窗口期截止日期：按当前售后设置实时计算（改配置立即生效），不使用任务上的快照值
+        list.forEach(task -> task.setWindowEndDate(visitTaskService.calcWindowEndDate(task.getTaskDate())));
+        return success(list);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得回访任务分页")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
     public CommonResult<PageResult<CrmAfterSaleVisitTaskRespVO>> getVisitTaskPage(@Valid CrmAfterSaleVisitTaskPageReqVO pageReqVO) {
-        PageResult<CrmAfterSaleVisitTaskDO> pageResult = visitTaskService.getVisitTaskPage(pageReqVO);
+        // remindType = 临期 时用于待办「回访任务临期」，归属范围按当前登录人（本人 + 下属）过滤
+        PageResult<CrmAfterSaleVisitTaskDO> pageResult = visitTaskService.getVisitTaskPage(pageReqVO, getLoginUserId());
         PageResult<CrmAfterSaleVisitTaskRespVO> respPage = BeanUtils.toBean(pageResult, CrmAfterSaleVisitTaskRespVO.class);
         if (CollUtil.isEmpty(respPage.getList())) {
             return success(respPage);
         }
-        // 拼接质保、客户、合同与处理人昵称
-        List<CrmAfterSaleVisitTaskRespVO> list = respPage.getList();
+        // 拼接质保、客户、合同、处理人昵称等展示字段
+        fillTaskExtraInfo(respPage.getList());
+        return success(respPage);
+    }
+
+    @GetMapping("/remind-count")
+    @Operation(summary = "获得「回访任务临期」待办数量（实时查询，不落库）")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
+    public CommonResult<Long> getVisitTaskRemindCount() {
+        return success(visitTaskService.getVisitTaskRemindCount(getLoginUserId()));
+    }
+
+    /**
+     * 填充回访任务的扩展展示字段
+     *
+     * <p>包含：质保编号 / 工程项目名称、合同名称、客户名称、处理人昵称、
+     * 窗口期截止日期（按当前售后设置实时计算，不使用任务上的快照值）与关联回访记录信息；
+     * 分页与详情接口共用，保证各入口展示口径一致。
+     */
+    private void fillTaskExtraInfo(List<CrmAfterSaleVisitTaskRespVO> list) {
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
         Map<Long, CrmAfterSaleWarrantyDO> warrantyMap = warrantyService.getWarrantyMap(
                 convertSet(list, CrmAfterSaleVisitTaskRespVO::getWarrantyId));
         Map<Long, CrmContractDO> contractMap = contractService.getContractMap(
@@ -127,6 +165,8 @@ public class CrmAfterSaleVisitTaskController {
                     customer -> task.setCustomerName(customer.getName()));
             MapUtils.findAndThen(userMap, task.getAssigneeUserId(),
                     user -> task.setAssigneeNickname(user.getNickname()));
+            // 窗口期截止日期：按当前售后设置实时计算（改配置立即生效），不使用任务上的快照值
+            task.setWindowEndDate(visitTaskService.calcWindowEndDate(task.getTaskDate()));
             // 任务完成后会自动生成一条回访记录，这里带出记录编号与状态，前端可直接跳转填写
             CrmAfterSaleVisitRecordDO record = visitRecordMapper.selectOneByTaskId(task.getId());
             task.setHasRecord(record != null);
@@ -135,7 +175,6 @@ public class CrmAfterSaleVisitTaskController {
                 task.setRecordStatus(record.getStatus());
             }
         });
-        return success(respPage);
     }
 
 }

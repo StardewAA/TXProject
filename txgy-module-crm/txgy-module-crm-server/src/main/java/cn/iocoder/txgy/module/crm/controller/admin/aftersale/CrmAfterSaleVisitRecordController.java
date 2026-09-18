@@ -6,13 +6,16 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visitrecord.CrmAfterSaleVisitRecordPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visitrecord.CrmAfterSaleVisitRecordRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visitrecord.CrmAfterSaleVisitRecordSaveReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitRecordDO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitTaskDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitTaskMapper;
 import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleVisitRecordService;
 import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleWarrantyService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
@@ -33,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
@@ -44,6 +48,8 @@ public class CrmAfterSaleVisitRecordController {
 
     @Resource
     private CrmAfterSaleVisitRecordService visitRecordService;
+    @Resource
+    private CrmAfterSaleVisitTaskMapper visitTaskMapper;
     @Resource
     private CrmAfterSaleWarrantyService warrantyService;
     @Resource
@@ -125,6 +131,19 @@ public class CrmAfterSaleVisitRecordController {
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertCreatorIds(list));
         list.forEach(record -> MapUtils.findAndThen(userMap, parseCreatorId(record),
                 user -> record.setCreatorNickname(user.getNickname())));
+        // 关联任务的业务编号与状态（在所属质保档案范围内独立编号，供列表展示「关联任务编号」）
+        List<Long> taskIds = list.stream().map(CrmAfterSaleVisitRecordRespVO::getTaskId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (CollUtil.isNotEmpty(taskIds)) {
+            Map<Long, CrmAfterSaleVisitTaskDO> taskMap = convertMap(
+                    visitTaskMapper.selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                            .in(CrmAfterSaleVisitTaskDO::getId, taskIds)),
+                    CrmAfterSaleVisitTaskDO::getId);
+            list.forEach(record -> MapUtils.findAndThen(taskMap, record.getTaskId(), task -> {
+                record.setTaskBizNo(task.getBizNo());
+                record.setTaskStatus(task.getStatus());
+            }));
+        }
         return success(respPage);
     }
 

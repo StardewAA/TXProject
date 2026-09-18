@@ -9,7 +9,10 @@ export namespace CrmAfterSaleConfigApi {
     autoVisitCycleType?: number;
     autoVisitCycleValue?: number;
     taskRemindDays?: number;
+    /** 回访任务逾期判定天数（窗口期天数：窗口期截止日期 = 计划回访日期 + 本值） */
     taskOverdueDays?: number;
+    /** 是否允许提前提交回访记录：false=不允许（未到计划回访日期禁止提交） */
+    allowEarlyVisit?: boolean;
     ticketOverdueDays?: number;
   }
 }
