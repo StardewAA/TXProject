@@ -136,16 +136,14 @@ public class MesQueryToolConfiguration {
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
                 args.add(keyword);
-                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符，null 时也必须全部绑定
-                args.add(keyword != null ? like(keyword) : null);
-                args.add(keyword);
+                // 每组 (? IS NULL OR col LIKE ?) 有两个占位符：先绑 IS NULL 检查值，再绑 LIKE 值
                 args.add(keyword != null ? like(keyword) : null);
                 args.add(keyword);
                 args.add(keyword != null ? like(keyword) : null);
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
-                String sql = "SELECT f.code AS 报工单号, f.name AS 名称, IFNULL(wo.code,'') AS 所属工单, IFNULL(it.name,'') AS 物料,"
+                String sql = "SELECT f.code AS 报工单号, IFNULL(wo.code,'') AS 所属工单, IFNULL(it.name,'') AS 物料,"
                         + " f.feedback_quantity + 0 AS 报工数量, f.qualified_quantity + 0 AS 合格数量, f.unqualified_quantity + 0 AS 不合格数量,"
                         + " IFNULL(f.feedback_time,'') AS 报工时间,"
                         + " CASE f.status WHEN 0 THEN '草稿' WHEN 2 THEN '审批中' WHEN 3 THEN '待检验' WHEN 4 THEN '已完成' ELSE CONCAT('状态码', f.status) END AS 状态"
@@ -153,7 +151,7 @@ public class MesQueryToolConfiguration {
                         + " LEFT JOIN mes_pro_work_order wo ON wo.id = f.work_order_id"
                         + " LEFT JOIN mes_md_item it ON it.id = f.item_id"
                         + " WHERE f.tenant_id = ? AND f.deleted = 0"
-                        + keywordOrFilter("f.code", "f.name", "it.name")
+                        + keywordOrFilter("f.code", "it.name")
                         + " AND (? IS NULL OR f.status = ?)"
                         + " ORDER BY f.id DESC LIMIT ?";
                 return jdbcTemplate.queryForList(sql, args.toArray());
