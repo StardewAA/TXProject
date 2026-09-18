@@ -46,7 +46,7 @@ export default defineConfig(async (configEnv) => {
           },
           '/training-exam': {
             changeOrigin: true,
-            target: 'http://127.0.0.1:5173', // 考试与认证（宿主 exam-proxy，保留 /training-exam 前缀）
+            target: 'http://127.0.0.1:8000', // 考试与认证（Docker 容器 training-exam，保留 /training-exam 前缀）
             ws: true,
           },
           '/admin-api/system': {
