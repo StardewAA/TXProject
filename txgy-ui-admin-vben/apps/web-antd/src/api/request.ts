@@ -15,6 +15,7 @@ import { useAccessStore } from '@vben/stores';
 import { createApiEncrypt } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
+import { formatWmsErrorMessage } from '#/api/wms/error-message';
 
 import { useAuthStore } from '#/store';
 
@@ -262,7 +263,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示
-      message.error(errorMessage || msg);
+      const displayMessage = formatWmsErrorMessage(errorMessage || msg);
+      if (displayMessage.includes('请选择匹配的业务仓库')) {
+        message.error({ content: displayMessage, key: 'wms-warehouse-type-mismatch' });
+      } else {
+        message.error(displayMessage);
+      }
     }),
   );
 

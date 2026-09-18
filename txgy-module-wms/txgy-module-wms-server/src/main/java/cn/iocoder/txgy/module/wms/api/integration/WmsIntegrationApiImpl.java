@@ -169,7 +169,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         String materialType = "MES".equals(request.getSourceModule()) ? "RAW_MATERIAL" : "FINISHED_GOODS";
         var warehouse = warehouseMapper.selectByCode(request.getItems().getFirst().getWarehouseCode());
         if (warehouse == null) throw exception(WAREHOUSE_NOT_EXISTS);
-        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "仓库类型必须为 " + materialType);
+        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "当前业务需要" + warehouseTypeLabel(materialType) + "，请选择匹配的业务仓库");
         var merchant = request.getPartnerCode() == null || request.getPartnerCode().isBlank()
                 ? null : merchantMapper.selectByCode(request.getPartnerCode());
         if (validText(request.getPartnerCode(), 64) && merchant == null) throw exception(MERCHANT_NOT_EXISTS);
@@ -221,7 +221,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
             if (warehouse == null) warehouse = item.getWarehouseCode();
             requireReceipt(Objects.equals(warehouse, item.getWarehouseCode()), "同一申请只能包含一个仓库");
             requireReceipt(validText(item.getMaterialCode(), 20) && validText(item.getSkuCode(), 64), "物料和 SKU 编码不能为空");
-            requireReceipt(materialType.equals(item.getMaterialType()), "物料类型必须为 " + materialType);
+            requireReceipt(materialType.equals(item.getMaterialType()), "当前业务需要" + warehouseTypeLabel(materialType) + "对应的物料");
             requireReceipt(validText(item.getMaterialNameSnapshot(), 255) && validText(item.getUnitCode(), 64)
                     && validText(item.getUnitNameSnapshot(), 64), "物料名称和单位快照不能为空");
             java.math.BigDecimal quantity = item.getRequiredQuantity();
@@ -253,6 +253,10 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         return value != null && !value.isBlank() && value.length() <= max;
     }
 
+    private static String warehouseTypeLabel(String materialType) {
+        return "RAW_MATERIAL".equals(materialType) ? "原材料仓" : "成品仓";
+    }
+
     private static void requireReceipt(boolean condition, String reason) {
         if (!condition) throw exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_RECEIPT_REQUEST_INVALID, reason);
     }
@@ -265,7 +269,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
             throw exception(WAREHOUSE_NOT_EXISTS);
         }
         String materialType = "PURCHASE_RECEIPT".equals(request.getOrderType()) ? "RAW_MATERIAL" : "FINISHED_GOODS";
-        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "仓库类型必须为 " + materialType);
+        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "当前业务需要" + warehouseTypeLabel(materialType) + "，请选择匹配的业务仓库");
         WmsMerchantDO merchant = request.getPartnerCode() == null || request.getPartnerCode().isBlank()
                 ? null : merchantMapper.selectByCode(request.getPartnerCode());
         if (request.getPartnerCode() != null && !request.getPartnerCode().isBlank() && merchant == null) {

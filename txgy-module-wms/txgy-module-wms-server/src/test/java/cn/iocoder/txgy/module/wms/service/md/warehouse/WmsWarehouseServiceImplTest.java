@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.wms.service.order.check.WmsCheckOrderService;
 import cn.iocoder.txgy.module.wms.service.order.movement.WmsMovementOrderService;
 import cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderService;
 import cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService;
+import cn.iocoder.txgy.module.wms.service.permission.WmsWarehouseAccessService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
@@ -59,6 +60,10 @@ public class WmsWarehouseServiceImplTest extends BaseDbUnitTest {
     private WmsMovementOrderService movementOrderService;
     @MockitoBean
     private WmsCheckOrderService checkOrderService;
+    @MockitoBean
+    private WmsWarehousePersonnelService warehousePersonnelService;
+    @MockitoBean
+    private WmsWarehouseAccessService warehouseAccessService;
     @MockitoBean
     private ErpWmsCallbackApi erpWmsCallbackApi;
 
