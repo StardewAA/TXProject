@@ -2289,10 +2289,19 @@ async function classifyIntentWithQwen(
     // 由后端转发大模型：密钥保存在服务端，前端接触不到；
     // 也不再依赖 Vite 开发代理，打包部署后同样可用。
     // history 用于多轮追问：让模型在上一轮的查询范围上继续叠加条件
-    const res: any = await requestClient.post('/crm/ai/classify-intent', {
-      query,
-      history: history ?? '',
-    });
+    //
+    // X-Silent-Error：意图识别只是「可选增强」。AI 未配置（txgy.crm.ai.api-key 为空，
+    // 见 application.yaml 的 DASHSCOPE_API_KEY）或大模型临时不可用时，这里会静默降级为
+    // 关键词匹配，由 mockAiReply 返回 degraded 标记在对话流里说明；不应再弹全局红色报错，
+    // 否则用户会以为整个助手坏了。
+    const res: any = await requestClient.post(
+      '/crm/ai/classify-intent',
+      {
+        query,
+        history: history ?? '',
+      },
+      { headers: { 'X-Silent-Error': 'true' } },
+    );
     const content: string = res?.content ?? '';
     return parseJsonSafe<QwenClassify>(content);
   } catch {

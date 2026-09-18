@@ -182,9 +182,14 @@ public interface CrmBusinessService {
      */
     default String getBusinessStatusName(Integer endStatus, CrmBusinessStatusDO status) {
         if (endStatus != null) {
-            return CrmBusinessEndStatusEnum.fromStatus(endStatus).getName();
+            // 注意：endStatus 可能为 0 等历史/非法值（枚举只定义 1/2/3），此处需兜底，
+            // 否则 fromStatus(...) 返回 null 会抛空指针，导致商机列表整体 500
+            CrmBusinessEndStatusEnum endStatusEnum = CrmBusinessEndStatusEnum.fromStatus(endStatus);
+            if (endStatusEnum != null) {
+                return endStatusEnum.getName();
+            }
         }
-        return status.getName();
+        return status == null ? null : status.getName();
     }
 
     /**

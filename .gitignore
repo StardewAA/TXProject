@@ -117,3 +117,8 @@ deploy/backend/erp-app.jar
 /data/cms-import/
 deploy/backend/bpm-app.jar
 /deploy/jars/**/app.jar
+
+# 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
+.docker-local/
+# 独立编排初始化用的整库 dump（本地生成，不入库）
+deploy/mysql/standalone/001-*.sql
