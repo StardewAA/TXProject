@@ -1,0 +1,35 @@
+FROM maven:3.9-eclipse-temurin-25 AS builder
+
+WORKDIR /workspace
+
+COPY . .
+
+# 单体模式（txgy-server 聚合所有业务模块）的构建要点：
+#
+# 各 txgy-module-*-server 模块都配置了 spring-boot-maven-plugin 的 repackage，
+# 产物是 Spring Boot 可执行 jar，业务类位于 BOOT-INF/classes 下。
+# 若直接 `mvn package`，这些可执行 jar 会被嵌套进 txgy-server 的 fat jar，
+# Spring 的组件扫描读不到其中的类，启动会报：
+#   No qualifying bean of type 'cn.iocoder.txgy.framework.common.biz.*.XxxCommonApi'
+#
+# 因此分两步：
+#   1) 全量 install，并跳过 repackage —— 产出普通 jar 并安装到本地仓库；
+#   2) 仅对 txgy-server 打包，让其重新 repackage，依赖从本地仓库取到普通 jar。
+RUN mvn -B -ntp -Dmaven.test.skip=true -Dspring-boot.repackage.skip=true install
+RUN mvn -B -ntp -pl txgy-server -Dmaven.test.skip=true package
+
+RUN cp txgy-server/target/txgy-server.jar /app.jar
+
+FROM eclipse-temurin:25-jre
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app.jar /app/app.jar
+
+ENV JAVA_OPTS=""
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

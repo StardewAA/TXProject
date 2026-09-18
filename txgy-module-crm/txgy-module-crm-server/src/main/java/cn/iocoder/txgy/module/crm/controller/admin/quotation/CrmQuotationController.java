@@ -335,7 +335,7 @@ public class CrmQuotationController {
             // 2.1 设置客户信息
             findAndThen(customerMap, quotationVO.getCustomerId(), customer -> quotationVO.setCustomerName(customer.getName()));
             // 2.2 设置用户信息
-            findAndThen(userMap, Long.parseLong(quotationVO.getCreator()), user -> quotationVO.setCreatorName(user.getNickname()));
+            findAndThen(userMap, NumberUtils.parseLong(quotationVO.getCreator()), user -> quotationVO.setCreatorName(user.getNickname()));
             MapUtils.findAndThen(userMap, quotationVO.getOwnerUserId(), user -> {
                 quotationVO.setOwnerUserName(user.getNickname());
                 MapUtils.findAndThen(deptMap, user.getDeptId(), dept -> quotationVO.setOwnerUserDeptName(dept.getName()));

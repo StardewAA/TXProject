@@ -102,10 +102,17 @@ export function getCustomerPage(params: PageParam) {
   );
 }
 
-/** 查询客户详情 */
-export function getCustomer(id: number) {
+/**
+ * 查询客户详情
+ *
+ * @param id 客户编号
+ * @param silent 为 true 时不弹全局错误提示。用于「客户信息速览」这类可选增强，
+ *               避免客户无数据权限时（CRM_PERMISSION_DENIED）弹出误导性报错。
+ */
+export function getCustomer(id: number, silent = false) {
   return requestClient.get<CrmCustomerApi.Customer>(
     `/crm/customer/get?id=${id}`,
+    silent ? { headers: { 'X-Silent-Error': 'true' } } : {},
   );
 }
 

@@ -15,6 +15,9 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessStatusDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessStatusTypeDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.product.CrmProductDO;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessLostReasonEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStageEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessStatusService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
@@ -89,6 +92,41 @@ public class CrmBusinessController {
     @PreAuthorize("@ss.hasPermission('crm:business:update')")
     public CommonResult<Boolean> updateBusinessStatus(@Valid @RequestBody CrmBusinessUpdateStatusReqVO updateStatusReqVO) {
         businessService.updateBusinessStatus(updateStatusReqVO);
+        return success(true);
+    }
+
+    @PutMapping("/update-stage")
+    @Operation(summary = "推进商机阶段", description = "仅未关闭商机可推进；商机状态组与预估赢单率自动派生")
+    @Parameter(name = "id", description = "商机编号", required = true, example = "1024")
+    @Parameter(name = "stage", description = "商机阶段：1商机待评估 2初步接洽 3需求确认 4方案评估 5商务谈判", required = true, example = "3")
+    @PreAuthorize("@ss.hasPermission('crm:business:update')")
+    public CommonResult<Boolean> updateBusinessStage(@RequestParam("id") Long id, @RequestParam("stage") Integer stage) {
+        businessService.updateBusinessStage(id, stage);
+        return success(true);
+    }
+
+    @PutMapping("/win")
+    @Operation(summary = "商机赢单", description = "签约日期、签约金额必填；成功后状态组=已赢单、预估赢单率=100，关键字段只读")
+    @PreAuthorize("@ss.hasPermission('crm:business:update')")
+    public CommonResult<Boolean> winBusiness(@Valid @RequestBody CrmBusinessWinReqVO reqVO) {
+        businessService.winBusiness(reqVO, getLoginUserId());
+        return success(true);
+    }
+
+    @PutMapping("/lose")
+    @Operation(summary = "商机输单", description = "丢单原因必填、丢单备注选填；成功后状态组=已丢单、预估赢单率=0，关键字段只读")
+    @PreAuthorize("@ss.hasPermission('crm:business:update')")
+    public CommonResult<Boolean> loseBusiness(@Valid @RequestBody CrmBusinessLoseReqVO reqVO) {
+        businessService.loseBusiness(reqVO, getLoginUserId());
+        return success(true);
+    }
+
+    @PutMapping("/update-state")
+    @Operation(summary = "调整商机状态组（仅管理员）",
+            description = "商机状态组为只读派生字段；本接口仅支持重新开启/纠正为「未开始」「进行中」，关闭请使用赢单/输单按钮")
+    @PreAuthorize("@ss.hasPermission('crm:business:modify-state')")
+    public CommonResult<Boolean> updateBusinessState(@Valid @RequestBody CrmBusinessUpdateStateReqVO reqVO) {
+        businessService.updateBusinessState(reqVO, getLoginUserId());
         return success(true);
     }
 
@@ -204,9 +242,10 @@ public class CrmBusinessController {
         // 1.1 获取客户列表
         Map<Long, CrmCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(list, CrmBusinessDO::getCustomerId));
-        // 1.2 获取创建人、负责人列表
+        // 1.2 获取创建人、负责人、关闭操作人列表
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertListByFlatMap(list,
-                contact -> Stream.of(NumberUtils.parseLong(contact.getCreator()), contact.getOwnerUserId())));
+                contact -> Stream.of(NumberUtils.parseLong(contact.getCreator()), contact.getOwnerUserId(),
+                        contact.getClosedBy())));
         Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(convertSet(userMap.values(), AdminUserRespDTO::getDeptId));
         // 1.3 获得商机状态组
         Map<Long, CrmBusinessStatusTypeDO> statusTypeMap = businessStatusTypeService.getBusinessStatusTypeMap(
@@ -224,10 +263,16 @@ public class CrmBusinessController {
                 businessVO.setOwnerUserName(user.getNickname());
                 MapUtils.findAndThen(deptMap, user.getDeptId(), dept -> businessVO.setOwnerUserDeptName(dept.getName()));
             });
-            // 2.3 设置商机状态
+            // 2.3 设置商机状态（历史字段：可配置状态组 + 阶段）
             MapUtils.findAndThen(statusTypeMap, businessVO.getStatusTypeId(), statusType -> businessVO.setStatusTypeName(statusType.getName()));
             MapUtils.findAndThen(statusMap, businessVO.getStatusId(), status -> businessVO.setStatusName(
                     businessService.getBusinessStatusName(businessVO.getEndStatus(), status)));
+            // 2.4 设置标准化后的「商机阶段 / 商机状态组 / 丢单原因」名称
+            businessVO.setStageName(CrmBusinessStageEnum.getNameByStage(businessVO.getStage()));
+            businessVO.setBusinessStateName(CrmBusinessStateEnum.getNameByState(businessVO.getBusinessState()));
+            businessVO.setLostReasonName(CrmBusinessLostReasonEnum.getNameByReason(businessVO.getLostReason()));
+            // 2.5 设置关闭操作人名称
+            MapUtils.findAndThen(userMap, businessVO.getClosedBy(), user -> businessVO.setClosedByName(user.getNickname()));
         });
     }
 

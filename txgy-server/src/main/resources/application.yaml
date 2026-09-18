@@ -222,6 +222,16 @@ spring:
           enabled: false # TODO @芋艿：有 bug https://github.com/spring-projects/spring-ai/issues/4917 需要官方修复
 
 txgy:
+  # CRM AI 助手（意图识别）：属性前缀 txgy.crm.ai 声明在 CRM 模块的 application.yaml 里，
+  # 但单体模式只加载本文件（各模块自带的 yaml 不会被加载），
+  # 所以必须在这里显式声明一次；否则 CrmAiProperties 永远绑定不到 api-key，
+  # /admin-api/crm/ai/classify-intent 恒定返回「AI 未配置，请检查 txgy.crm.ai 配置项」。
+  crm:
+    ai:
+      enabled: ${CRM_AI_ENABLED:true}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model: ${DASHSCOPE_MODEL:qwen-plus}
   ai:
     doubao: # 字节豆包
       enable: true

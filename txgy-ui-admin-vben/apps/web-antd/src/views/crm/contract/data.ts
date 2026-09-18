@@ -76,7 +76,8 @@ export function useFormSchema(): VbenFormSchema[] {
             return;
           }
           try {
-            const contacts = await getContactListByCustomer(customerId);
+            // 可选增强：客户无数据权限时静默降级，不弹全局错误提示
+            const contacts = await getContactListByCustomer(customerId, true);
             const mainContact =
               contacts?.find((item) => item.master) ?? contacts?.[0];
             if (mainContact) {

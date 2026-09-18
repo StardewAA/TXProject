@@ -43,13 +43,26 @@ def i(row, k, default=None):
         return default
 
 
-# CSV user_id -> 固邦实际用户 id（导入时按顺序生成 910111..910120）
-csv_uids = [i(r, "user_id") for r in read("02_组织_用户.csv")]
+# CSV user_id -> 固邦实际用户 id
+# 说明：历史版本脚本按 id=910111+序号 生成用户；当前 import_to_gubang_2012.py 按「用户名=手机号」创建，
+#      id 由自增生成。因此这里优先按 username=mobile 精确匹配（并取最新一条），再按 mobile，最后兜底旧方案。
 user_map = {}
-for idx, uid in enumerate(csv_uids):
-    cur.execute("SELECT id FROM system_users WHERE tenant_id=%s AND id=%s AND deleted=0",
-                (TENANT, 910111 + idx))
-    got = cur.fetchone()
+for idx, r in enumerate(read("02_组织_用户.csv")):
+    uid = i(r, "user_id")
+    mobile = s(r, "mobile")
+    got = None
+    if mobile:
+        cur.execute("SELECT id FROM system_users WHERE tenant_id=%s AND username=%s AND deleted=0 "
+                    "ORDER BY id DESC LIMIT 1", (TENANT, mobile))
+        got = cur.fetchone()
+    if not got and mobile:
+        cur.execute("SELECT id FROM system_users WHERE tenant_id=%s AND mobile=%s AND deleted=0 "
+                    "ORDER BY id DESC LIMIT 1", (TENANT, mobile))
+        got = cur.fetchone()
+    if not got:
+        cur.execute("SELECT id FROM system_users WHERE tenant_id=%s AND id=%s AND deleted=0",
+                    (TENANT, 910111 + idx))
+        got = cur.fetchone()
     if got:
         user_map[uid] = got[0]
 print("用户映射:", user_map)

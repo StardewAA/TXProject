@@ -1,57 +1,71 @@
 <script lang="ts" setup>
 import type { CrmBusinessApi } from '#/api/crm/business';
-import type { CrmBusinessStatusApi } from '#/api/crm/business/status';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 
 import { message, Select, SelectOption } from 'ant-design-vue';
 
-import { updateBusinessStatus } from '#/api/crm/business';
-import { getBusinessStatusSimpleList } from '#/api/crm/business/status';
+import { updateBusinessStage } from '#/api/crm/business';
 import { $t } from '#/locales';
 
 const emit = defineEmits(['success']);
 
 /** 当前操作的商机 */
 const business = ref<CrmBusinessApi.Business>();
-/** 商机所属状态组下的阶段列表 */
-const statusList = ref<CrmBusinessStatusApi.BusinessStatusType[]>([]);
-/** 选中的阶段编号 */
-const selectedStatusId = ref<number>();
+/** 选中的商机阶段（1~5） */
+const selectedStage = ref<number>();
 
-/** 根据阶段名称推导结束状态：1-赢单，2-输单 */
-function resolveEndStatus(name?: string): number | undefined {
-  if (name === '赢单') {
-    return 1;
+/** 商机阶段字典（标准化 5 个阶段，不含赢单/输单） */
+const stageOptions = getDictOptions(DICT_TYPE.CRM_BUSINESS_STAGE, 'number');
+/** 阶段 → 预估赢单率（与后端 CrmBusinessStageEnum 保持一致） */
+const stagePercents: Record<number, number> = {
+  1: 5,
+  2: 10,
+  3: 40,
+  4: 60,
+  5: 70,
+};
+
+/** 当前阶段名称 */
+const currentStageLabel = computed(
+  () =>
+    stageOptions.find(
+      (item: any) => Number(item.value) === Number(business.value?.stage),
+    )?.label ?? '未设置',
+);
+
+/** 目标阶段的预估赢单率与状态组提示 */
+const targetHint = computed(() => {
+  const stage = Number(selectedStage.value);
+  if (!stage) {
+    return '';
   }
-  if (name === '输单') {
-    return 2;
-  }
-  return undefined;
-}
+  return `预估赢单率 ${stagePercents[stage]}%，商机状态组自动变为「${
+    stage === 1 ? '未开始' : '进行中'
+  }」`;
+});
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
-    if (!selectedStatusId.value) {
-      message.warning('请选择商机阶段');
-      return;
-    }
     const row = business.value;
     if (!row?.id) {
       return;
     }
-    const target = statusList.value.find(
-      (item) => item.id === selectedStatusId.value,
-    );
+    if (!selectedStage.value) {
+      message.warning('请选择商机阶段');
+      return;
+    }
+    if (Number(selectedStage.value) === Number(row.stage)) {
+      message.warning('商机已处于该阶段');
+      return;
+    }
     modalApi.lock();
     try {
-      await updateBusinessStatus({
-        id: row.id,
-        statusId: selectedStatusId.value,
-        endStatus: resolveEndStatus(target?.name),
-      });
+      await updateBusinessStage(row.id, Number(selectedStage.value));
       await modalApi.close();
       emit('success');
       message.success($t('ui.actionMessage.operationSuccess'));
@@ -59,11 +73,10 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
-  async onOpenChange(isOpen: boolean) {
+  onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       business.value = undefined;
-      statusList.value = [];
-      selectedStatusId.value = undefined;
+      selectedStage.value = undefined;
       return;
     }
     const data = modalApi.getData<CrmBusinessApi.Business>();
@@ -71,19 +84,7 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     business.value = data;
-    // 已结束的商机不预选阶段
-    selectedStatusId.value =
-      data.endStatus === null || data.endStatus === undefined
-        ? data.statusId
-        : undefined;
-    modalApi.lock();
-    try {
-      statusList.value = await getBusinessStatusSimpleList(
-        data.statusTypeId ?? 0,
-      );
-    } finally {
-      modalApi.unlock();
-    }
+    selectedStage.value = data.stage;
   },
 });
 </script>
@@ -92,27 +93,27 @@ const [Modal, modalApi] = useVbenModal({
   <Modal title="更改商机阶段" class="w-2/5">
     <div class="mx-4">
       <div class="mb-3 text-sm text-gray-500">
-        商机：{{ business?.name }}（当前阶段：{{ business?.statusName || '未设置' }}）
+        商机：{{ business?.name }}（当前阶段：{{ currentStageLabel }}）
       </div>
       <Select
-        v-model:value="selectedStatusId"
+        v-model:value="selectedStage"
         class="w-full"
         placeholder="请选择商机阶段"
         allow-clear
       >
         <SelectOption
-          v-for="item in statusList"
-          :key="item.id"
-          :value="item.id"
+          v-for="item in stageOptions"
+          :key="item.value"
+          :value="item.value"
         >
-          {{ item.name }}
-          <span v-if="item.percent !== null && item.percent !== undefined">
-            （赢单率：{{ item.percent }}%）
-          </span>
+          {{ item.label }}（预估赢单率：{{ stagePercents[Number(item.value)] }}%）
         </SelectOption>
       </Select>
+      <div v-if="targetHint" class="mt-2 text-xs text-gray-400">
+        选择后：{{ targetHint }}
+      </div>
       <div class="mt-2 text-xs text-gray-400">
-        提示：选择「赢单 / 输单」会同时结束该商机，结束后不可再更改阶段。
+        提示：赢单 / 输单请使用列表中的「赢单」「输单」按钮；商机关闭后不可再更改阶段。
       </div>
     </div>
   </Modal>
