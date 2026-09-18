@@ -36,11 +36,10 @@ export default defineConfig(async (configEnv) => {
         // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
         host: true,
         proxy: {
-          // 优先直连本地服务端口，绕过 gateway 对 Nacos 注册中心（grayLb://）的依赖
+          // Docker 联调统一走本地网关；独立微服务端口未映射到宿主机时仍可正常访问。
           '/admin-api/training': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48094/admin-api', // 云培训学院服务
+            target: 'http://127.0.0.1:48080',
             ws: true,
           },
           '/training-exam': {
@@ -51,14 +50,12 @@ export default defineConfig(async (configEnv) => {
           },
           '/admin-api/system': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48081/admin-api', // 系统服务（登录/用户/权限/菜单）
+            target: 'http://127.0.0.1:48080',
             ws: true,
           },
           '/admin-api/infra': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48081/admin-api', // 基础设施服务（文件/配置等）
+            target: 'http://127.0.0.1:48080',
             ws: true,
           },
           '/admin-api': {
