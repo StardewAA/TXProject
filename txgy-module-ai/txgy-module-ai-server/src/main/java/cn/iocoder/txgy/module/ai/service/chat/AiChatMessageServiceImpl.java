@@ -619,7 +619,15 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         }
         // 1.1.3 MES 业务引导意图：概念/流程询问 → 按「系统使用向导」给出操作引导（真实菜单路径）
         if (isMesGuideIntent(sendReqVO.getContent())) {
-            chatMessages.add(new SystemMessage(MES_GUIDE_TEMPLATE));
+            // 泛指提问（如"上面的信息在哪里看到"）时，从最近对话中提取具体业务对象，
+            // 让向导按该对象给出菜单路径，而不是按泛指名词泛泛而谈
+            String guideNoun = extractRecentMesNoun(sendReqVO.getContent(), messages);
+            String guidePrompt = StrUtil.isBlank(guideNoun)
+                    ? MES_GUIDE_TEMPLATE
+                    : "【上下文提示】用户本轮使用「上面的信息/数据」等泛指提问，其指向的业务对象是「"
+                      + guideNoun + "」（来自最近一轮对话/查询）。请按该对象对应的菜单路径与字段说明回答在哪里查看/操作。\n"
+                      + MES_GUIDE_TEMPLATE;
+            chatMessages.add(new SystemMessage(guidePrompt));
         }
 
         // 1.2 权限约束 SystemMessage（需求核心）：注入「用户权限 + MES 业务上下文 + 强制约束规则」。
@@ -1088,11 +1096,43 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                     }
                     boolean conceptQuestion = content.matches("(?s).*(是什么|是啥|什么意思|含义|定义|作用|用途|怎么填|如何填|怎么建|如何建|怎么新增|如何新增|怎么创建|如何创建|怎么录|如何录|新建流程|新增流程|创建流程|录入流程|操作步骤|操作流程|怎么操作|如何操作|怎么办理|如何办理|在哪维护|在哪里维护|在哪设置|在哪里设置|在哪配置|在哪|在哪里|哪儿|菜单|入口|步骤).*")
                             || content.matches("(?s).*(流程|步骤|向导|教程).{0,6}$");
-                    boolean mesNoun = content.matches("(?s).*(工单|任务|报工|检验|IPQC|ipqc|质检|物料|产品|客户|供应商|仓库|库位|库区|库存|车间|工位|工序|班组|排班|设备|安灯|计量单位|档案|工艺|仓|线边).*");
+                    boolean mesNoun = content.matches("(?s).*(工单|任务|报工|检验|IPQC|ipqc|质检|物料|产品|客户|供应商|仓库|库位|库区|库存|车间|工位|工序|班组|排班|设备|安灯|计量单位|档案|工艺|仓|线边|信息|数据|内容|结果|页面).*");
                     // 数据查询特征：明确想看数据内容（而不是找功能入口）时走业务查询
                     boolean dataQueryFlavor = content.matches("(?s).*(查询|多少|有哪些|几个|库存情况|清单|列表|余额|明细|记录).*");
                     return conceptQuestion && mesNoun && !dataQueryFlavor;
                 }
+
+    /**
+     * 引导模式的业务对象提取：本轮提问使用泛指（信息/数据/内容等）时，
+     * 从最近 6 轮对话里找回具体业务名词（如「生产工单」），供向导给出精确菜单路径；
+     * 本轮已是具体名词（或历史中也没找到）时返回 null，向导按通用结构回答
+     */
+    private String extractRecentMesNoun(String currentContent, List<AiChatMessageDO> historyMessages) {
+        java.util.regex.Pattern nounPattern = java.util.regex.Pattern.compile(
+                "生产工单|生产任务|生产报工|过程检验|来料检验|出货检验|检验单|工单|任务|报工|物料|库存|客户|供应商"
+                        + "|车间|工位|工序|班组|设备|仓库|库位|库区|安灯|计量单位");
+        java.util.regex.Matcher cur = nounPattern.matcher(
+                currentContent == null ? "" : currentContent);
+        if (cur.find()) {
+            // 本轮已含具体业务名词，向导模板自行处理
+            return null;
+        }
+        if (CollUtil.isEmpty(historyMessages)) {
+            return null;
+        }
+        int start = Math.max(0, historyMessages.size() - 6);
+        for (int i = historyMessages.size() - 1; i >= start; i--) {
+            String content = historyMessages.get(i).getContent();
+            if (StrUtil.isBlank(content)) {
+                continue;
+            }
+            java.util.regex.Matcher m = nounPattern.matcher(content);
+            if (m.find()) {
+                return m.group();
+            }
+        }
+        return null;
+    }
 
     /**
      * 多轮补字段延续：最近几轮历史中出现过录入意图，则本轮延续录入模式
