@@ -39,6 +39,7 @@ const isRecruitPortal = computed(
     route.path.startsWith('/portal/recruit') ||
     route.path.startsWith('/portal/profile/recruit'),
 );
+const isTrainingPortal = computed(() => route.path.startsWith('/portal/training'));
 
 const isRecruitHome = computed(() => {
   if (route.path !== '/portal/recruit') return false;
@@ -60,7 +61,10 @@ async function handleLogout() {
 <template>
   <div
     class="portal-shell portal-light"
-    :class="{ 'portal-shell--recruit': isRecruitPortal }"
+    :class="{
+      'portal-shell--recruit': isRecruitPortal,
+      'portal-shell--training': isTrainingPortal,
+    }"
   >
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
@@ -227,11 +231,44 @@ async function handleLogout() {
 }
 
 .portal-main--training {
-  width: calc(100% - 64px);
-  max-width: none;
-  margin-right: 32px;
-  margin-left: 32px;
-  padding-top: 32px;
+  width: min(1320px, calc(100% - 120px));
+  max-width: 1320px;
+  margin-right: auto;
+  margin-left: auto;
+  padding: 0 0 48px;
+}
+
+.portal-shell--training {
+  background: #fff;
+}
+
+.portal-shell--training .portal-header {
+  min-height: 72px;
+  padding-right: max(48px, calc((100% - 1320px) / 2));
+  padding-left: max(48px, calc((100% - 1320px) / 2));
+  gap: 18px;
+}
+
+.portal-shell--training .portal-brand {
+  gap: 8px;
+  font-size: 15px;
+}
+
+.portal-shell--training .portal-brand-logo {
+  width: 32px;
+  height: 32px;
+}
+
+.portal-shell--training .portal-nav button {
+  min-width: 74px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.portal-shell--training .portal-user { gap: 9px; }
+
+.portal-shell--training .portal-footer {
+  display: none;
 }
 
 .portal-main.portal-main--home {

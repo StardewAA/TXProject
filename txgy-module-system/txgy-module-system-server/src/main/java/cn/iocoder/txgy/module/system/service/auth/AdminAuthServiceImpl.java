@@ -126,7 +126,11 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 认证 URL 对缺少租户的请求已放行，这里补回租户有效性校验，避免禁用/过期租户绕过过滤器。
         tenantFrameworkService.validTenant(tenantId);
 
-        return doLogin(reqVO);
+        // 登录 Controller 使用了 @TenantIgnore，以便个人账号和企业账号共用入口。
+        // 企业认证时必须显式恢复所选租户上下文，否则用户名查询会跨租户命中同名账号。
+        final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+        TenantUtils.execute(tenantId, () -> result[0] = doLogin(reqVO));
+        return result[0];
     }
 
     private AuthLoginRespVO doLogin(AuthLoginReqVO reqVO) {

@@ -4,14 +4,18 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCommentPageReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCommentSaveReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CoursePageReqVO;
 import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseRespVO;
+import cn.iocoder.txgy.module.training.controller.admin.course.vo.CourseCategoryRespVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseCommentDO;
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseDO;
 import cn.iocoder.txgy.module.training.enums.course.CourseStatusEnum;
 import cn.iocoder.txgy.module.training.service.course.CourseService;
+import cn.iocoder.txgy.module.training.service.course.CourseCategoryService;
 import cn.iocoder.txgy.module.training.service.course.external.CourseExternalApiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,6 +27,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+
+import java.util.List;
 
 /**
  * 学员端（Portal）课程接口
@@ -38,8 +44,13 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 @Validated
 public class PortalCourseController {
 
+    /** 个人学员（tenant_id=0）读取集团统一维护的课程目录。 */
+    private static final Long PLATFORM_CATALOG_TENANT_ID = 1L;
+
     @Resource
     private CourseService courseService;
+    @Resource
+    private CourseCategoryService courseCategoryService;
     @Resource
     private CourseExternalApiService courseExternalApiService;
 
@@ -49,8 +60,15 @@ public class PortalCourseController {
     public CommonResult<PageResult<CourseRespVO>> getCoursePage(@Validated CoursePageReqVO pageReqVO) {
         pageReqVO.setStatus(CourseStatusEnum.ON_SHELF.getStatus());
         pageReqVO.setIsCurrent(Boolean.TRUE);
-        PageResult<CourseDO> pageResult = courseService.getCoursePage(pageReqVO);
+        PageResult<CourseDO> pageResult = executeInCatalogTenant(() -> courseService.getCoursePage(pageReqVO));
         return success(BeanUtils.toBean(pageResult, CourseRespVO.class));
+    }
+
+    @GetMapping("/category-tree")
+    @Operation(summary = "学员端课程分类树")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<List<CourseCategoryRespVO>> getCategoryTree() {
+        return success(executeInCatalogTenant(() -> courseCategoryService.getCategoryTree()));
     }
 
     @GetMapping("/get")
@@ -58,8 +76,20 @@ public class PortalCourseController {
     @Parameter(name = "id", description = "课程 ID", required = true, example = "1")
     @PreAuthorize("isAuthenticated()")
     public CommonResult<CourseRespVO> getCourse(@RequestParam("id") Long id) {
-        CourseDO course = courseService.getCourse(id);
+        CourseDO course = executeInCatalogTenant(() -> courseService.getCourse(id));
         return success(BeanUtils.toBean(course, CourseRespVO.class));
+    }
+
+    private <T> T executeInCatalogTenant(java.util.concurrent.Callable<T> callable) {
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId != null && tenantId == 0L) {
+            return TenantUtils.execute(PLATFORM_CATALOG_TENANT_ID, callable);
+        }
+        try {
+            return callable.call();
+        } catch (Exception exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     @GetMapping("/comment/page")
