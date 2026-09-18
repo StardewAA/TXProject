@@ -35,6 +35,15 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'contactName',
+      label: '联系人',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入联系人',
+        allowClear: true,
+      },
+    },
+    {
       fieldName: 'source',
       label: '客户来源',
       component: 'Select',
@@ -108,13 +117,37 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'customerType',
+      label: '客户类别',
+      component: 'Select',
+      defaultValue: 1,
+      componentProps: {
+        options: getDictOptions(DICT_TYPE.CRM_CUSTOMER_CATEGORY, 'number'),
+        placeholder: '请选择客户类别（下游客户 / 上游供应商）',
+      },
+    },
+    {
       fieldName: 'industryId',
       label: '客户行业',
       component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.CRM_CUSTOMER_INDUSTRY, 'number'),
-        placeholder: '请选择客户行业',
-        allowClear: true,
+      dependencies: {
+        // 按客户类别切换行业字典：下游=downstream，上游=upstream
+        triggerFields: ['customerType'],
+        componentProps(values) {
+          const isUpstream = Number(values.customerType) === 2;
+          return {
+            options: getDictOptions(
+              isUpstream
+                ? DICT_TYPE.CRM_CUSTOMER_INDUSTRY_UPSTREAM
+                : DICT_TYPE.CRM_CUSTOMER_INDUSTRY_DOWNSTREAM,
+              'number',
+            ),
+            placeholder: isUpstream
+              ? '请选择上游供应商行业'
+              : '请选择下游客户行业',
+            allowClear: true,
+          };
+        },
       },
     },
     {
@@ -297,6 +330,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       cellRender: {
         name: 'CellDict',
         props: { type: DICT_TYPE.CRM_CUSTOMER_LEVEL },
+      },
+    },
+    {
+      field: 'customerType',
+      title: '客户类别',
+      minWidth: 110,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.CRM_CUSTOMER_CATEGORY },
       },
     },
     {

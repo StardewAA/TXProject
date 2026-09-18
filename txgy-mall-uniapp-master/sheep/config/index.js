@@ -33,7 +33,9 @@ if (typeof baseUrl === 'undefined') {
 export const apiPath = import.meta.env.SHOPRO_API_PATH;
 export const staticUrl = import.meta.env.SHOPRO_STATIC_URL;
 export const tenantId = import.meta.env.SHOPRO_TENANT_ID;
-export const websocketPath = import.meta.env.SHOPRO_WEBSOCKET_PATH;
+// WebSocket 默认由网关暴露在 /infra/ws。保留环境变量覆盖能力，避免未配置时拼出
+// "undefined" 导致 uni.connectSocket 连接到错误地址。
+export const websocketPath = import.meta.env.SHOPRO_WEBSOCKET_PATH || '/infra/ws';
 export const h5Url = import.meta.env.SHOPRO_H5_URL;
 
 export default {

@@ -1,6 +1,8 @@
 package cn.iocoder.txgy.module.wms.service.order.shipment;
 
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.detail.WmsShipmentOrderDetailSaveReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDO;
@@ -27,6 +29,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
+import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_DETAIL_REQUIRED;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_STATUS_NOT_DELETABLE;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_STATUS_NOT_PREPARE;
@@ -36,8 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@Import({WmsShipmentOrderServiceImpl.class, WmsShipmentOrderDetailServiceImpl.class})
+@Import({WmsShipmentOrderServiceImpl.class, WmsShipmentOrderDetailServiceImpl.class,
+        cn.iocoder.txgy.module.wms.service.integration.WmsShortageService.class,
+        cn.iocoder.txgy.module.wms.service.integration.WmsShortageTestConfiguration.class})
 public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
 
     @Resource
@@ -56,6 +62,77 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
     private WmsItemSkuService itemSkuService;
     @MockitoBean
     private WmsInventoryService inventoryService;
+    @MockitoBean
+    private BpmProcessInstanceApi processInstanceApi;
+
+
+    @Test
+    public void sourceShipmentCannotChangeRequestedQuantity() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L).setSourceModule("ERP").setBizOrderNo("SO-SOURCE");
+        shipmentOrderMapper.insert(order);
+        var detail = createShipmentOrderDetail(order.getId(), 200L, 100L);
+        shipmentOrderDetailMapper.insert(detail);
+        var req = createShipmentOrderSaveReqVO(order.getId(),
+                createShipmentOrderDetailReqVO(detail.getId(), 200L, "3", "20", "40"));
+        req.setBizOrderNo("SO-SOURCE");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> shipmentOrderService.updateShipmentOrder(req));
+        assertEquals(0, new BigDecimal("2").compareTo(shipmentOrderDetailMapper.selectById(detail.getId()).getQuantity()));
+    }
+
+    @Test
+    public void executionStateAndInventoryShareTransaction() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L).setApprovalStatus(2);
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            assertEquals(1, shipmentOrderMapper.selectById(order.getId()).getExecutionStatus(),
+                    "execution claim must participate in the inventory transaction");
+            return null;
+        }).when(inventoryService).changeInventory(any());
+        shipmentOrderService.completeShipmentOrder(order.getId());
+        assertEquals(1, shipmentOrderMapper.selectById(order.getId()).getExecutionStatus());
+    }
+
+    @Test
+    public void finalApprovalSurvivesExecutionRollback() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L)
+                .setApprovalStatus(1).setProcessInstanceId("durable-process");
+        shipmentOrderMapper.insert(order);
+        WmsShipmentOrderDetailDO detail = createShipmentOrderDetail(order.getId(), 200L, 100L);
+        shipmentOrderDetailMapper.insert(detail);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            shipmentOrderDetailMapper.updateById(new WmsShipmentOrderDetailDO().setId(detail.getId())
+                    .setQuantity(new BigDecimal("999")));
+            throw new IllegalStateException("inventory unavailable");
+        }).when(inventoryService).changeInventory(any());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                shipmentOrderService.updateShipmentOrderApprovalStatus(order.getId(), "durable-process", 2, "approved"));
+        WmsShipmentOrderDO saved = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(2, saved.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(), saved.getStatus());
+        assertEquals(2, saved.getExecutionStatus());
+        assertNotNull(saved.getExecutionTime());
+        assertEquals("inventory unavailable", saved.getExecutionError());
+        assertEquals(0, new BigDecimal("2").compareTo(shipmentOrderDetailMapper.selectById(detail.getId()).getQuantity()));
+    }
+
+    @Test
+    public void staleFinalCallbackDoesNotExecuteShipment() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.RUNNING.getStatus())
+                .setProcessInstanceId("current-process");
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+
+        shipmentOrderService.updateShipmentOrderApprovalStatus(order.getId(), "stale-process",
+                BpmProcessInstanceStatusEnum.APPROVE.getStatus(), "stale");
+
+        WmsShipmentOrderDO saved = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.RUNNING.getStatus(), saved.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.PREPARE.getStatus(), saved.getStatus());
+        verify(inventoryService, never()).changeInventory(any());
+    }
 
     @Test
     public void testCreateShipmentOrder_calculateTotal() {
@@ -103,7 +180,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         Long warehouseId = 100L;
         Long skuId = 200L;
-        WmsShipmentOrderDO order = createShipmentOrder(warehouseId);
+        WmsShipmentOrderDO order = createShipmentOrder(warehouseId)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         shipmentOrderMapper.insert(order);
         shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), skuId, warehouseId));
 
@@ -131,7 +209,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCompleteShipmentOrder_detailRequired() {
         // mock 数据
-        WmsShipmentOrderDO order = createShipmentOrder(100L);
+        WmsShipmentOrderDO order = createShipmentOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         shipmentOrderMapper.insert(order);
 
         // 调用，并断言
@@ -143,7 +222,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCompleteShipmentOrder_duplicateComplete() {
         // mock 数据
-        WmsShipmentOrderDO order = createShipmentOrder(100L);
+        WmsShipmentOrderDO order = createShipmentOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
         shipmentOrderMapper.insert(order);
         shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
 
@@ -170,6 +250,33 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
         assertNotNull(dbOrder);
         assertEquals(WmsOrderStatusEnum.CANCELED.getStatus(), dbOrder.getStatus());
         verify(inventoryService, never()).changeInventory(any());
+    }
+
+    @Test
+    public void testSubmitAndApproveShipmentOrder_success() {
+        WmsShipmentOrderDO order = createShipmentOrder(100L)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.NOT_START.getStatus());
+        shipmentOrderMapper.insert(order);
+        shipmentOrderDetailMapper.insert(createShipmentOrderDetail(order.getId(), 200L, 100L));
+        when(processInstanceApi.createProcessInstance(any(), any())).thenReturn(success("process-1"));
+
+        String processInstanceId = shipmentOrderService.submitShipmentOrderApproval(10L, order.getId());
+        assertEquals("process-1", processInstanceId);
+        WmsShipmentOrderDO runningOrder = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.RUNNING.getStatus(), runningOrder.getApprovalStatus());
+        assertEquals("process-1", runningOrder.getProcessInstanceId());
+
+        shipmentOrderService.updateShipmentOrderApprovalStatus(order.getId(), "process-1",
+                BpmProcessInstanceStatusEnum.APPROVE.getStatus(), "同意");
+        WmsShipmentOrderDO approvedOrder = shipmentOrderMapper.selectById(order.getId());
+        assertEquals(BpmProcessInstanceStatusEnum.APPROVE.getStatus(), approvedOrder.getApprovalStatus());
+        assertEquals(WmsOrderStatusEnum.FINISHED.getStatus(), approvedOrder.getStatus());
+        verify(inventoryService).changeInventory(any());
+
+        // 重复回调不得重复扣减库存
+        shipmentOrderService.updateShipmentOrderApprovalStatus(order.getId(), "process-1",
+                BpmProcessInstanceStatusEnum.APPROVE.getStatus(), "重复回调");
+        verify(inventoryService).changeInventory(any());
     }
 
     @Test
@@ -221,6 +328,8 @@ public class WmsShipmentOrderServiceImplTest extends BaseDbUnitTest {
                 .setType(WmsShipmentOrderTypeEnum.SALE.getType())
                 .setOrderTime(LocalDateTime.of(2026, 5, 12, 0, 0))
                 .setStatus(WmsOrderStatusEnum.PREPARE.getStatus())
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.NOT_START.getStatus())
+                .setExecutionStatus(0)
                 .setWarehouseId(warehouseId)
                 .setTotalQuantity(new BigDecimal("2.00"))
                 .setTotalPrice(new BigDecimal("20.00"));

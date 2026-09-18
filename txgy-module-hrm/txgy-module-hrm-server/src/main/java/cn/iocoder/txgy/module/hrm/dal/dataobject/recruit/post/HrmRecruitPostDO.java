@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.framework.mybatis.core.type.LongListTypeHandler;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
@@ -34,7 +34,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmRecruitPostDO extends BaseDO {
+public class HrmRecruitPostDO extends TenantBaseDO {
 
     /**
      * 薪资 - 面议值
@@ -160,6 +160,8 @@ public class HrmRecruitPostDO extends BaseDO {
      * 关联 {@link HrmRecruitPostTypeDO#getId()}
      */
     private Long postTypeId;
+    /** 发布渠道编号 */
+    private Long channelId;
     /**
      * 职位状态
      *

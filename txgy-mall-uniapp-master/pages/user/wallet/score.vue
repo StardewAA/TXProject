@@ -100,7 +100,7 @@
   const state = reactive({
     currentTab: 0,
     pagination: {
-      list: 0,
+      list: [],
       total: 0,
       pageSize: 6,
       pageNo: 1,
@@ -108,6 +108,7 @@
     loadStatus: '',
     date: [],
     today: '',
+    loading: false,
   });
 
   const tabMaps = [
@@ -134,20 +135,24 @@
   });
 
   async function getLogList() {
+    if (state.loading) return;
+    state.loading = true;
     state.loadStatus = 'loading';
-    let { code, data } = await PointApi.getPointRecordPage({
+    try {
+      let { code, data } = await PointApi.getPointRecordPage({
       pageNo: state.pagination.pageNo,
       pageSize: state.pagination.pageSize,
       addStatus: state.currentTab > 0 ? tabMaps[state.currentTab].value : undefined,
       'createTime[0]': state.date[0] + ' 00:00:00',
       'createTime[1]': state.date[1] + ' 23:59:59',
-    });
-    if (code !== 0) {
-      return;
-    }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      });
+      if (code === 0) {
+        const list = Array.isArray(data?.list) ? data.list : [];
+        state.pagination.list = concat(state.pagination.list, list);
+        state.pagination.total = Number(data?.total) || 0;
+        state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      } else state.loadStatus = 'more';
+    } finally { state.loading = false; }
   }
 
   onLoad(() => {
@@ -170,7 +175,7 @@
   }
 
   function onLoadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (state.loading || state.loadStatus === 'noMore') {
       return;
     }
     state.pagination.pageNo++;

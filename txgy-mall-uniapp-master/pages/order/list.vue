@@ -1,14 +1,20 @@
 <!-- 订单列表 -->
 <template>
   <s-layout title="我的订单">
+    <s-order-workbench :workbench="workbench" />
+    <view class="state-scope ss-p-x-20">当前状态订单数量 · 待评价为已完成中的辅助筛选，不重复计入总数</view>
     <su-sticky bgColor="#fff">
       <su-tabs
         :list="tabMaps"
-        :scrollable="false"
+        :scrollable="true"
         @change="onTabsChange"
         :current="state.currentTab"
       />
     </su-sticky>
+    <view v-if="!confirmed && !syncing" class="ss-m-20 ss-flex ss-row-between">
+      <text>订单状态暂未确认，请刷新后重试</text>
+      <button class="ss-reset-button" @tap="refresh">刷新订单状态</button>
+    </view>
     <s-empty v-if="state.pagination.total === 0" icon="/static/order-empty.png" text="暂无订单" />
     <view v-if="state.pagination.total > 0">
       <view
@@ -18,16 +24,20 @@
         @tap="onOrderDetail(order.id)"
       >
         <view class="order-card-header ss-flex ss-col-center ss-row-between ss-p-x-20">
-          <view class="order-no">订单号：{{ order.no }}</view>
+          <view class="order-no"><text v-if="unreadForOrder(workbench.state.summary, order.id).length" class="new-order">新</text>订单号：{{ order.no }}</view>
           <view class="order-state ss-font-26" :class="formatOrderColor(order)">
             {{ formatOrderStatus(order) }}
           </view>
+        </view>
+        <view class="order-shop-name ss-p-x-20">店铺：{{ order.shopName }}</view>
+        <view v-if="order.status === 0" class="payment-deadline ss-p-x-20">
+          {{ paymentState(order).text }}
         </view>
         <view class="border-bottom" v-for="item in order.items" :key="item.id">
           <s-goods-item
             :img="item.picUrl"
             :title="item.spuName"
-            :skuText="item.properties.map((property) => property.valueName).join(' ')"
+            :skuText="(item.properties || []).map((property) => property.valueName).join(' ')"
             :price="item.price"
             :num="item.count"
           />
@@ -95,9 +105,10 @@
               删除订单
             </button>
             <button
-              v-if="order.buttons.includes('pay')"
+              v-if="order.buttons.includes('pay') && order.payOrderId"
               class="tool-btn ss-reset-button ui-BG-Main-Gradient"
-              @tap.stop="onPay(order.payOrderId)"
+              :disabled="!canPay(order)"
+              @tap.stop="onPay(order)"
             >
               继续支付
             </button>
@@ -119,7 +130,7 @@
 </template>
 
 <script setup>
-  import { reactive } from 'vue';
+  import { computed, reactive } from 'vue';
   import { onLoad, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app';
   import {
     fen2yuan,
@@ -131,6 +142,10 @@
   import { concat, isEmpty } from 'lodash-es';
   import OrderApi from '@/sheep/api/trade/order';
   import { resetPagination } from '@/sheep/helper/utils';
+  import { usePaymentDeadline } from '@/sheep/hooks/usePaymentDeadline';
+  import { monotonicNow, orderPaymentState, stampPaymentClock } from '@/sheep/helper/payment-deadline.mjs';
+  import { useOrderWorkbench } from '@/sheep/hooks/useOrderWorkbench';
+  import { initialOrderTab, orderTabQuery, tabsWithCounts, unreadForOrder } from '@/sheep/helper/order-workbench.mjs';
 
   // 数据
   const state = reactive({
@@ -143,42 +158,72 @@
     },
     loadStatus: '',
   });
+  const { now, active, syncing, confirmed, refresh } = usePaymentDeadline(
+    (time) => state.pagination.list.map((order) => orderPaymentState(order, time)),
+    () => getOrderList(true),
+  );
+  const paymentState = (order) => orderPaymentState(order, now.value);
+  const canPay = (order) => active.value && !syncing.value && confirmed.value && paymentState(order).canPay;
+  const workbench = useOrderWorkbench(() => ({ orderIds: state.pagination.list.map(order => order.id).slice(0, 100).join(',') || undefined }));
+  const tabMaps = computed(() => tabsWithCounts(workbench.state.summary));
 
-  const tabMaps = [
-    {
-      name: '全部',
-    },
-    {
-      name: '待付款',
-      value: 0,
-    },
-    {
-      name: '待发货',
-      value: 10,
-    },
-    {
-      name: '待收货',
-      value: 20,
-    },
-    {
-      name: '待评价',
-      value: 30,
-    },
-  ];
+  // 接口异常或历史数据可能缺少 items/properties/buttons；统一补齐后再交给模板和按钮处理，
+  // 避免一条脏数据导致整个订单列表渲染失败。
+  function normalizeOrder(order) {
+    const source = order && typeof order === 'object' ? order : {};
+    const items = Array.isArray(source.items)
+      ? source.items.filter(Boolean).map((item) => ({
+          ...item,
+          properties: Array.isArray(item.properties) ? item.properties : [],
+          count: Number(item.count) || 0,
+          price: Number(item.price) || 0,
+        }))
+      : [];
+    const status = Number(source.status);
+    const itemShopNames = [
+      ...new Set(items.map((item) => String(item.shopName || '').trim()).filter(Boolean)),
+    ];
+    const shopName = String(source.shopName || '').trim();
+    return {
+      ...source,
+      status: Number.isFinite(status) ? status : source.status,
+      items,
+      // 列表接口通常直接返回订单店铺；兼容旧数据时从订单项推断，最后回退平台自营。
+      shopName:
+        shopName ||
+        (itemShopNames.length === 1
+          ? itemShopNames[0]
+          : itemShopNames.length > 1
+          ? '多店铺订单'
+          : '平台自营'),
+      buttons: Array.isArray(source.buttons) ? source.buttons : [],
+      productCount: Number(source.productCount) || items.reduce((sum, item) => sum + item.count, 0),
+      payPrice: Number(source.payPrice) || 0,
+    };
+  }
 
   // 切换选项卡
-  function onTabsChange(e) {
-    if (state.currentTab === e.index) {
+  function onTabsChange(e = {}) {
+    if (syncing.value || state.loadStatus === 'loading') return;
+    const index = Number(e.index);
+    if (!Number.isInteger(index) || index < 0 || index >= tabMaps.value.length) {
+      return;
+    }
+    if (state.currentTab === index) {
       return;
     }
     // 重头加载代码
     resetPagination(state.pagination);
-    state.currentTab = e.index;
-    getOrderList();
+    state.currentTab = index;
+    void refresh();
   }
 
   // 订单详情
-  function onOrderDetail(id) {
+  async function onOrderDetail(id) {
+    if (!id) {
+      return;
+    }
+    if (!await workbench.readOrder(id)) return;
     sheep.$router.go('/pages/order/detail', {
       id,
     });
@@ -192,9 +237,17 @@
   }
 
   // 继续支付
-  function onPay(payOrderId) {
+  async function onPay(order) {
+    if (!canPay(order)) {
+      sheep.$helper.toast(paymentState(order).text || '请刷新订单后重试');
+      return;
+    }
+    if (!(await refresh())) return;
+    const latest = state.pagination.list.find((item) => item.id === order.id);
+    if (!latest || !canPay(latest)) return;
     sheep.$router.go('/pages/pay/index', {
-      id: payOrderId,
+      id: latest.payOrderId,
+      tradeOrderId: latest.id,
     });
   }
 
@@ -230,10 +283,14 @@
           return;
         }
         // 正常的确认收货流程
-        const { code } = await OrderApi.receiveOrder(order.id);
-        if (code === 0) {
-          resetPagination(state.pagination);
-          await getOrderList();
+        try {
+          const response = await OrderApi.receiveOrder(order.id);
+          if (response?.code === 0) {
+            resetPagination(state.pagination);
+            await getOrderList();
+          }
+        } catch (error) {
+          console.warn('确认收货失败', error);
         }
       },
     });
@@ -287,13 +344,20 @@
         if (!res.confirm) {
           return;
         }
-        const { code } = await OrderApi.cancelOrder(orderId);
-        if (code === 0) {
+        try {
+          const response = await OrderApi.cancelOrder(orderId);
+          if (response?.code !== 0) {
+            return;
+          }
           // 修改数据的状态
           let index = state.pagination.list.findIndex((order) => order.id === orderId);
-          const orderInfo = state.pagination.list[index];
-          orderInfo.status = 40;
-          handleOrderButtons(orderInfo);
+          if (index >= 0) {
+            const orderInfo = state.pagination.list[index];
+            orderInfo.status = 40;
+            handleOrderButtons(orderInfo);
+          }
+        } catch (error) {
+          console.warn('取消订单失败', error);
         }
       },
     });
@@ -306,11 +370,19 @@
       content: '确定要删除订单吗?',
       success: async function (res) {
         if (res.confirm) {
-          const { code } = await OrderApi.deleteOrder(orderId);
-          if (code === 0) {
+          try {
+            const response = await OrderApi.deleteOrder(orderId);
+            if (response?.code !== 0) {
+              return;
+            }
             // 删除数据
             let index = state.pagination.list.findIndex((order) => order.id === orderId);
-            state.pagination.list.splice(index, 1);
+            if (index >= 0) {
+              state.pagination.list.splice(index, 1);
+              state.pagination.total = Math.max(0, state.pagination.total - 1);
+            }
+          } catch (error) {
+            console.warn('删除订单失败', error);
           }
         }
       },
@@ -318,33 +390,51 @@
   }
 
   // 获取订单列表
-  async function getOrderList() {
+  async function getOrderList(reload = false) {
+    if (state.loadStatus === 'loading') return false;
     state.loadStatus = 'loading';
-    let { code, data } = await OrderApi.getOrderPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-      status: tabMaps[state.currentTab].value,
-      commentStatus: tabMaps[state.currentTab].value === 30 ? false : null,
-    });
-    if (code !== 0) {
-      return;
+    const requestedAt = monotonicNow();
+    try {
+      const pageNumbers = reload
+        ? Array.from({ length: state.pagination.pageNo }, (_, index) => index + 1)
+        : [state.pagination.pageNo];
+      const responses = await Promise.all(pageNumbers.map((pageNo) => OrderApi.getOrderPage({
+          pageNo,
+          pageSize: state.pagination.pageSize,
+          ...orderTabQuery(state.currentTab),
+        })));
+      if (responses.some((response) => !response || response.code !== 0)) {
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+        return false;
+      }
+      const pageData = responses[0].data || {};
+      const pageList = responses.flatMap((response) => Array.isArray(response.data?.list) ? response.data.list : [])
+        .filter(Boolean).map((order) => {
+            const normalized = stampPaymentClock(normalizeOrder(order), monotonicNow(), requestedAt);
+            handleOrderButtons(normalized);
+            return normalized;
+          });
+      state.pagination.list = reload ? pageList : concat(state.pagination.list, pageList);
+      const total = Number(pageData.total);
+      state.pagination.total =
+        Number.isFinite(total) && total >= 0 ? total : state.pagination.list.length;
+      state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      return true;
+    } catch (error) {
+      console.warn('加载订单列表失败', error);
+      state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+      return false;
     }
-    data.list.forEach((order) => handleOrderButtons(order));
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
   }
 
-  onLoad(async (options) => {
-    if (options.type) {
-      state.currentTab = options.type;
-    }
-    await getOrderList();
+  onLoad(async (options = {}) => {
+    state.currentTab = initialOrderTab(options);
+    await refresh();
   });
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (syncing.value || state.loadStatus === 'noMore' || state.loadStatus === 'loading') {
       return;
     }
     state.pagination.pageNo++;
@@ -357,16 +447,22 @@
   });
 
   // 下拉刷新
-  onPullDownRefresh(() => {
+  onPullDownRefresh(async () => {
+    if (syncing.value || state.loadStatus === 'loading') { uni.stopPullDownRefresh(); return; }
     resetPagination(state.pagination);
-    getOrderList();
-    setTimeout(function () {
+    try {
+      await refresh();
+    } finally {
       uni.stopPullDownRefresh();
-    }, 800);
+    }
   });
 </script>
 
 <style lang="scss" scoped>
+  .state-scope { color: #687d83; font-size: 23rpx; margin-bottom: 14rpx; }
+  .new-order { display: inline-block; font-size: 22rpx; color: #754507; background: #fff0da; border: 1rpx solid #d6a45d; border-radius: 5rpx; padding: 0 8rpx; margin-right: 8rpx; }
+  .payment-deadline { padding-bottom: 16rpx; color: #a56a24; font-size: 24rpx; line-height: 1.6; }
+  .tool-btn[disabled] { opacity: .5; }
   .score-img {
     width: 36rpx;
     height: 36rpx;
@@ -421,6 +517,12 @@
   }
 
   .order-list-card-box {
+    .order-shop-name {
+      padding-bottom: 14rpx;
+      color: #666;
+      font-size: 24rpx;
+    }
+
     .order-card-header {
       height: 80rpx;
 

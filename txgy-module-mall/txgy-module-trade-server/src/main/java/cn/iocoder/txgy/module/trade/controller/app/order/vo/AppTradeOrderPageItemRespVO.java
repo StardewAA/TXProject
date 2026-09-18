@@ -3,13 +3,21 @@ package cn.iocoder.txgy.module.trade.controller.app.order.vo;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemRespVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Schema(description = "用户 App - 订单交易的分页项 Response VO")
 @Data
-public class AppTradeOrderPageItemRespVO {
+@EqualsAndHashCode(callSuper = true)
+public class AppTradeOrderPageItemRespVO extends AppTradeOrderPaymentRespVO {
+
+    @Schema(description = "订单店铺编号；平台自营或多店铺订单为 0，订单项保留实际店铺编号。", example = "1")
+    private Long shopId;
+
+    @Schema(description = "订单店铺名称快照；多店铺订单为“多店铺”", example = "测试1111")
+    private String shopName;
 
     @Schema(description = "订单编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;

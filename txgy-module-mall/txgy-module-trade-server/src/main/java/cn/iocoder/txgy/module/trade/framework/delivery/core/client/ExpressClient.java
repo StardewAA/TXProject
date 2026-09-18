@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.trade.framework.delivery.core.client;
 
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackRespDTO;
+import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressSnapshotRespDTO;
 
 import java.util.List;
 
@@ -19,5 +20,9 @@ public interface ExpressClient {
      */
     // TODO @jason：返回字段可以参考 https://doc.youzanyun.com/detail/API/0/5 响应的 data
     List<ExpressTrackRespDTO> getExpressTrackList(ExpressTrackQueryReqDTO reqDTO);
+
+    default ExpressSnapshotRespDTO getSnapshot(ExpressTrackQueryReqDTO reqDTO) {
+        return new ExpressSnapshotRespDTO().setEvents(getExpressTrackList(reqDTO));
+    }
 
 }

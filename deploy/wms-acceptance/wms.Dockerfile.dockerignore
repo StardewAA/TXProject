@@ -1,0 +1,5 @@
+**
+!txgy-module-wms/
+!txgy-module-wms/txgy-module-wms-server/
+!txgy-module-wms/txgy-module-wms-server/target/
+!txgy-module-wms/txgy-module-wms-server/target/txgy-module-wms-server.jar

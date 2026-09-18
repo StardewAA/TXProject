@@ -19,6 +19,7 @@ import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +54,11 @@ public class TradeOrderDO extends BaseDO {
      * 例如说，1146347329394184195
      */
     private String no;
+    /** 店铺编号；平台自营和多店铺订单均使用 0，订单项保留实际店铺归属 */
+    private Long shopId;
+    private String shopName;
+    /** 店铺 Logo 快照；对应 trade_order.shop_logo_url。 */
+    private String shopLogoUrl;
     /**
      * 订单类型
      *
@@ -134,6 +140,12 @@ public class TradeOrderDO extends BaseDO {
      * 对接 pay-module-biz 支付服务的支付订单编号，即 PayOrderDO 的 id 编号
      */
     private Long payOrderId;
+    /** 支付时限秒数快照；为空表示沿用存量订单规则，不能按新规则续期。 */
+    private Long payExpireSeconds;
+    /** ERP 首次确认可付款后确定的支付截止时间，支付重试不得顺延。 */
+    private LocalDateTime payExpireTime;
+    /** 下单时确定的 ERP 等待截止时间；支付计时生效后只保留作审计。 */
+    private LocalDateTime erpWaitExpireTime;
     /**
      * 是否已支付
      *
@@ -235,6 +247,13 @@ public class TradeOrderDO extends BaseDO {
      * 收件人详细地址
      */
     private String receiverDetailAddress;
+    /** Immutable member-address snapshot; subsequent address-book changes never update an order. */
+    private BigDecimal receiverLongitude;
+    private BigDecimal receiverLatitude;
+    private String receiverCoordSystem;
+    private String receiverLocationSource;
+    private String receiverLocationPrecision;
+    private LocalDateTime receiverLocationConfirmedAt;
 
     /**
      * 自提门店编号

@@ -45,17 +45,19 @@
                 @tap.stop="onSelect(item.spuId)"
               />
             </label>
+            <view v-if="collectionUnavailable(item)" class="unavailable-product">
+              <view class="unavailable-title">商品暂不可购买</view>
+              <view class="unavailable-reason">{{ collectionUnavailableReason(item) }}</view>
+              <view class="unavailable-help">仍可通过“编辑”取消收藏，不展示待审价格和内容。</view>
+            </view>
             <s-goods-item
+              v-else
               :title="item.spuName"
               :img="item.picUrl"
               :price="item.price"
               priceColor="#FF3000"
               :titleWidth="400"
-              @tap="
-                sheep.$router.go('/pages/goods/index', {
-                  id: item.spuId,
-                })
-              "
+              @tap="openGoods(item)"
             />
           </view>
         </view>
@@ -105,8 +107,13 @@
   import { concat } from 'lodash-es';
   import FavoriteApi from '@/sheep/api/product/favorite';
   import { resetPagination } from '@/sheep/helper/utils';
+  import { collectionCanOpen, collectionUnavailable, collectionUnavailableReason } from '@/sheep/helper/collection-product.mjs';
 
   const sys_navBar = sheep.$platform.navbar;
+  function openGoods(item) {
+    if (state.editMode || !collectionCanOpen(item)) return;
+    sheep.$router.go('/pages/goods/index', { id: item.spuId });
+  }
 
   const state = reactive({
     pagination: {
@@ -124,16 +131,24 @@
 
   async function getData() {
     state.loadStatus = 'loading';
-    const { code, data } = await FavoriteApi.getFavoritePage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-    });
-    if (code !== 0) {
-      return;
+    try {
+      const response = await FavoriteApi.getFavoritePage({
+        pageNo: state.pagination.pageNo,
+        pageSize: state.pagination.pageSize,
+      });
+      if (response?.code !== 0) {
+        state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
+        return;
+      }
+      const pageData = response.data || {};
+      const pageList = Array.isArray(pageData.list) ? pageData.list.filter(Boolean) : [];
+      state.pagination.list = concat(state.pagination.list, pageList);
+      const total = Number(pageData.total);
+      state.pagination.total = Number.isFinite(total) && total >= 0 ? total : state.pagination.list.length;
+      state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+    } catch (error) {
+      state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
     }
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
   }
 
   // 单选选中
@@ -157,12 +172,16 @@
   };
 
   async function onCancel() {
-    if (!state.selectedCollectList) {
+    if (!state.selectedCollectList.length) {
       return;
     }
     // 取消收藏
     for (const spuId of state.selectedCollectList) {
-      await FavoriteApi.deleteFavorite(spuId);
+      try {
+        await FavoriteApi.deleteFavorite(spuId);
+      } catch (error) {
+        // 继续处理其余收藏项，最后重新拉取列表。
+      }
     }
 
     // 清空选择 + 重新加载
@@ -175,7 +194,7 @@
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus === 'noMore') {
+    if (state.loadStatus === 'noMore' || state.loadStatus === 'loading') {
       return;
     }
     state.pagination.pageNo++;
@@ -192,6 +211,10 @@
 </script>
 
 <style lang="scss" scoped>
+  .unavailable-product { flex: 1; min-width: 0; padding: 30rpx; background: #f5f7f8; border-radius: 10rpx; }
+  .unavailable-title { color: #475569; font-size: 30rpx; font-weight: 600; }
+  .unavailable-reason { color: #64748b; font-size: 26rpx; margin-top: 18rpx; line-height: 1.6; word-break: break-all; }
+  .unavailable-help { color: #94a3b8; font-size: 22rpx; margin-top: 12rpx; }
   .cart-box {
     .cart-header {
       height: 70rpx;

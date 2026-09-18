@@ -1,0 +1,141 @@
+# 本地一键启动（单体模式）
+#
+# 与 deploy/docker-compose.yml（微服务全套，20+ JVM）不同，本文件采用「单体模式」：
+# 只启动 1 个 JVM（txgy-server，内含全部业务模块），功能完整且资源占用低。
+#
+# 用法（在 deploy 目录下执行）：
+#   docker compose -f docker-compose.standalone.yml up -d --build
+#   docker compose -f docker-compose.standalone.yml logs -f server
+#   docker compose -f docker-compose.standalone.yml down
+#
+# 访问地址：
+#   管理后台：http://localhost:5173
+#   后端接口：http://localhost:48081/doc.html
+#
+# 注意：宿主机端口已避开本机已占用端口（3306 本机 MySQL、6379/48080 其它容器），
+#       容器内部仍使用标准端口 3306 / 6379 / 48080。
+
+name: txgy-local
+
+x-server-env: &server-env
+  TZ: ${TZ}
+  SPRING_PROFILES_ACTIVE: local
+  SERVER_PORT: 48080
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
+  SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: 6379
+  # CRM AI 助手（意图识别）：密钥从 deploy/.env 注入，不进代码仓库。
+  # 留空时 /crm/ai/classify-intent 返回「AI 未配置」，前端自动降级为关键词匹配。
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+  DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+  DASHSCOPE_MODEL: ${DASHSCOPE_MODEL:-qwen-plus}
+  CRM_AI_ENABLED: ${CRM_AI_ENABLED:-true}
+  # 说明：环境变量优先级高于 yaml，这里等价覆盖 AI 模块的 spring.autoconfigure.exclude。
+  # 额外排除了 Redis 向量库自动配置，因为 redis:7-alpine 不含 RediSearch，初始化会失败。
+  SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.ai.vectorstore.qdrant.autoconfigure.QdrantVectorStoreAutoConfiguration,org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration,org.springframework.ai.vectorstore.redis.autoconfigure.RedisVectorStoreAutoConfiguration,org.dromara.trans.config.TransServiceConfig,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeVideoAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration,com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAsyncToolCallingManagerAutoConfiguration
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: txgy-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max_allowed_packet=256M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 挂载已提交到仓库的单体库初始化脚本（单库 ruoyi-vue-pro，含表结构+种子数据），
+      # 放在 deploy/mysql/standalone 以保证 git clone 后可一键复现；不再依赖被 .gitignore 忽略的 .docker-local/
+      - ../deploy/mysql/standalone:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    networks:
+      - txgy-local
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: txgy-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-local
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/backend/Dockerfile.standalone
+    image: txgy-server:local
+    container_name: txgy-server
+    environment:
+      <<: *server-env
+      JAVA_OPTS: -Xms1g -Xmx3g -Duser.timezone=Asia/Shanghai -Djava.security.egd=file:/dev/./urandom
+    ports:
+      - "48081:48080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:48080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 240s
+    networks:
+      - txgy-local
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      # 单模式前端镜像：nginx 上游指向单体后端 server:48080（团队规范）
+      dockerfile: deploy/frontend/Dockerfile.single
+    image: txgy-frontend:local
+    container_name: txgy-frontend
+    environment:
+      TZ: ${TZ}
+    ports:
+      - "5173:80"
+    depends_on:
+      server:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - txgy-local
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  txgy-local:
+    name: txgy-local

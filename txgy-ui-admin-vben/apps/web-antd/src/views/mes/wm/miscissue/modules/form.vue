@@ -151,7 +151,10 @@ const [Modal, modalApi] = useVbenModal({
     formApi.setDisabled(
       formType.value === 'detail' || formType.value === 'finish',
     );
-    modalApi.setState({ showConfirmButton: isEditable.value });
+    modalApi.setState({
+      confirmText: '保存',
+      showConfirmButton: isEditable.value,
+    });
     if (data?.id) {
       modalApi.lock();
       try {

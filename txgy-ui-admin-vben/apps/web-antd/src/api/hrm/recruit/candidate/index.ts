@@ -14,6 +14,11 @@ export namespace HrmRecruitCandidateApi {
     age?: number; // 年龄
     email?: string; // 邮箱
     postId?: number; // 应聘职位编号
+    applicationId?: number; // 当前岗位应聘记录编号
+    applicationStatus?: string; // 当前岗位应聘流程状态
+    applicationStatusName?: string; // 当前岗位应聘流程状态名称
+    offerId?: number; // 当前岗位 Offer 编号
+    offerApprovalStatus?: string; // 当前岗位 Offer 审批状态
     postName?: string; // 应聘职位名称
     postStatus?: number; // 应聘职位状态
     deptId?: number; // 用人部门编号
@@ -32,7 +37,6 @@ export namespace HrmRecruitCandidateApi {
     eliminate?: string; // 淘汰原因
     statusUpdateTime?: Date; // 状态更新时间
     entryTime?: Date | number; // 入职时间
-    resumeUrls: string[]; // 简历附件地址数组
     interviewId?: number; // 当前面试编号
     interviewType?: number; // 面试方式
     interviewEmployeeId?: number; // 主面试官员工编号
@@ -47,6 +51,23 @@ export namespace HrmRecruitCandidateApi {
     creatorName?: string; // 创建人名称
     createTime?: Date; // 创建时间
     updateTime?: Date; // 更新时间
+  }
+
+  /** 招聘候选人新增/修改数据 */
+  export interface RecruitCandidateSave {
+    id?: number; // 候选人编号
+    name: string; // 候选人姓名
+    mobile: string; // 手机号码
+    sex: number; // 性别
+    age?: number; // 年龄
+    email?: string; // 邮箱
+    postId: number; // 应聘职位编号
+    workTime?: number; // 工作年限
+    education: number; // 学历
+    graduateSchool?: string; // 毕业院校
+    latestWorkPlace?: string; // 最近工作单位
+    channelId?: number; // 招聘渠道编号
+    remark?: string; // 备注
   }
 
   /** 候选人状态统计 */
@@ -83,6 +104,7 @@ export namespace HrmRecruitCandidateApi {
   /** 转员工 */
   export interface EntryReq extends HrmEmployeeApi.Employee {
     candidateId: number;
+    applicationId?: number;
   }
 }
 
@@ -98,6 +120,13 @@ export function getRecruitCandidatePage(params: PageParam) {
 export function getRecruitCandidate(id: number) {
   return requestClient.get<HrmRecruitCandidateApi.RecruitCandidate>(
     `/hrm/recruit/candidate/get?id=${id}`,
+  );
+}
+
+/** 查询招聘候选人编辑数据 */
+export function getRecruitCandidateForUpdate(id: number) {
+  return requestClient.get<HrmRecruitCandidateApi.RecruitCandidateSave>(
+    `/hrm/recruit/candidate/get-for-update?id=${id}`,
   );
 }
 
@@ -121,14 +150,14 @@ export function getCleanRecruitCandidateIdList(
 
 /** 新增招聘候选人 */
 export function createRecruitCandidate(
-  data: HrmRecruitCandidateApi.RecruitCandidate,
+  data: HrmRecruitCandidateApi.RecruitCandidateSave,
 ) {
   return requestClient.post<number>('/hrm/recruit/candidate/create', data);
 }
 
 /** 修改招聘候选人 */
 export function updateRecruitCandidate(
-  data: HrmRecruitCandidateApi.RecruitCandidate,
+  data: HrmRecruitCandidateApi.RecruitCandidateSave,
 ) {
   return requestClient.put<boolean>('/hrm/recruit/candidate/update', data);
 }

@@ -14,6 +14,7 @@ import cn.iocoder.txgy.module.promotion.convert.combination.CombinationActivityC
 import cn.iocoder.txgy.module.promotion.dal.dataobject.combination.CombinationActivityDO;
 import cn.iocoder.txgy.module.promotion.dal.dataobject.combination.CombinationProductDO;
 import cn.iocoder.txgy.module.promotion.service.combination.CombinationActivityService;
+import cn.iocoder.txgy.module.promotion.service.price.PublicProductVisibility;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,20 +42,21 @@ public class AppCombinationActivityController {
     private CombinationActivityService activityService;
 
     @Resource
-    private ProductSpuApi spuApi;
+    private PublicProductVisibility visibility;
 
     @GetMapping("/page")
     @Operation(summary = "获得拼团活动分页")
     @PermitAll
     public CommonResult<PageResult<AppCombinationActivityRespVO>> getCombinationActivityPage(PageParam pageParam) {
-        PageResult<CombinationActivityDO> pageResult = activityService.getCombinationActivityPage(pageParam);
+        var visible = visibility.page(pageParam, activityService::getCombinationActivityPage, CombinationActivityDO::getSpuId);
+        PageResult<CombinationActivityDO> pageResult = visible.page();
         if (CollUtil.isEmpty(pageResult.getList())) {
             return success(PageResult.empty(pageResult.getTotal()));
         }
         // 拼接返回
         List<CombinationProductDO> productList = activityService.getCombinationProductListByActivityIds(
                 convertList(pageResult.getList(), CombinationActivityDO::getId));
-        List<ProductSpuRespDTO> spuList = spuApi.getSpuList(convertList(pageResult.getList(), CombinationActivityDO::getSpuId)).getCheckedData();
+        List<ProductSpuRespDTO> spuList = visible.spus();
         return success(CombinationActivityConvert.INSTANCE.convertAppPage(pageResult, productList, spuList));
     }
 
@@ -66,13 +68,15 @@ public class AppCombinationActivityController {
         // 1. 获得开启的活动列表
         List<CombinationActivityDO> activityList = activityService.getCombinationActivityListByIds(ids);
         activityList.removeIf(activity -> CommonStatusEnum.isDisable(activity.getStatus()));
+        var visible = visibility.filter(activityList, CombinationActivityDO::getSpuId);
+        activityList = visible.list();
         if (CollUtil.isEmpty(activityList)) {
             return success(Collections.emptyList());
         }
         // 2. 拼接返回
         List<CombinationProductDO> productList = activityService.getCombinationProductListByActivityIds(
                 convertList(activityList, CombinationActivityDO::getId));
-        List<ProductSpuRespDTO> spuList = spuApi.getSpuList(convertList(activityList, CombinationActivityDO::getSpuId)).getCheckedData();
+        List<ProductSpuRespDTO> spuList = visible.spus();
         return success(CombinationActivityConvert.INSTANCE.convertAppList(activityList, productList, spuList));
     }
 
@@ -84,7 +88,8 @@ public class AppCombinationActivityController {
         // 1. 获取活动
         CombinationActivityDO activity = activityService.getCombinationActivity(id);
         if (activity == null
-                || ObjectUtil.equal(activity.getStatus(), CommonStatusEnum.DISABLE.getStatus())) {
+                || ObjectUtil.equal(activity.getStatus(), CommonStatusEnum.DISABLE.getStatus())
+                || !visibility.isSaleable(activity.getSpuId())) {
             return success(null);
         }
 

@@ -4,6 +4,7 @@ export namespace HrmRecruitInterviewApi {
   /** 招聘面试 */
   export interface RecruitInterview {
     id?: number; // 面试编号
+    applicationId?: number; // 应聘记录编号
     candidateId?: number; // 候选人编号
     type?: number; // 面试方式
     stageNumber?: number; // 面试轮次
@@ -26,6 +27,12 @@ export namespace HrmRecruitInterviewApi {
     result: number; // 面试结果
     evaluate?: string; // 面试评价
     cancelReason?: string; // 取消原因
+  }
+
+  export interface EvaluationReq {
+    id: number;
+    decision: 'FAIL' | 'FINAL_PASS' | 'NEXT_ROUND';
+    evaluate?: string;
   }
 }
 
@@ -65,6 +72,14 @@ export function updateRecruitInterviewResult(
     '/hrm/recruit/interview/update-result',
     data,
   );
+}
+
+export function startRecruitInterview(id: number) {
+  return requestClient.put<boolean>(`/hrm/recruit/interview/start?id=${id}`);
+}
+
+export function evaluateRecruitInterview(data: HrmRecruitInterviewApi.EvaluationReq) {
+  return requestClient.put<boolean>('/hrm/recruit/interview/evaluate', data);
 }
 
 /** 删除招聘面试 */

@@ -1,8 +1,12 @@
 package cn.iocoder.txgy.module.mes.service.pro.project;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 
@@ -107,6 +111,21 @@ public interface MesProProjectService {
     MesProProjectStatisticsRespVO getProjectStatistics(Long projectId);
 
     /**
+     * 获得项目的生产统计详情（工单进度 + 报工汇总）
+     *
+     * @param projectId 项目编号
+     * @return 统计详情
+     */
+    MesProProjectStatisticsDetailRespVO getProjectStatisticsDetail(Long projectId);
+
+    /**
+     * 获得里程碑到期预警列表（未完成且 3 天内到期 / 已超期）
+     *
+     * @return 预警列表，按计划完成时间升序
+     */
+    List<MesProProjectMilestoneAlertRespVO> getMilestoneAlerts();
+
+    /**
      * 获得项目的工单统计 Map（key 为项目编号），供列表批量拼接使用
      *
      * @param projectIds 项目编号数组
@@ -126,5 +145,28 @@ public interface MesProProjectService {
      * @param projectId 项目编号
      */
     void refreshProjectStatus(Long projectId);
+
+    /**
+     * 恢复项目：仅“已暂停”状态可恢复为“进行中”
+     *
+     * @param id 项目编号
+     */
+    void resumeProject(Long id);
+
+    /**
+     * 强制结项：任意非取消状态强制流转为“已完成”
+     *
+     * @param id 项目编号
+     */
+    void forceCloseProject(Long id);
+
+    /**
+     * 批量导入项目
+     *
+     * @param importList     导入项目列表
+     * @param updateSupport 是否支持覆盖更新
+     * @return 导入结果
+     */
+    MesProProjectImportRespVO importProjectList(List<MesProProjectImportExcelVO> importList, boolean updateSupport);
 
 }

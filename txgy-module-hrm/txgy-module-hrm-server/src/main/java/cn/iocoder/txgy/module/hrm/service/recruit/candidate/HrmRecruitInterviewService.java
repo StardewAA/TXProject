@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.hrm.service.recruit.candidate;
 
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewEvaluationReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 
@@ -17,6 +18,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
  * @author OPENLAB BS
  */
 public interface HrmRecruitInterviewService {
+
+    int MAX_INTERVIEW_ROUNDS = 3;
 
     /**
      * 创建招聘面试
@@ -47,6 +50,9 @@ public interface HrmRecruitInterviewService {
      * @return 招聘面试
      */
     HrmRecruitInterviewDO getRecruitInterview(Long id);
+
+    /** 获得指定应聘记录的最新面试。 */
+    HrmRecruitInterviewDO getLatestRecruitInterviewByApplicationId(Long applicationId);
 
     /**
      * 获得候选人的招聘面试列表
@@ -98,11 +104,17 @@ public interface HrmRecruitInterviewService {
      */
     void finishCurrentRecruitInterviewForElimination(Long candidateId, String eliminateReason);
 
+    void finishCurrentRecruitInterviewForElimination(Long applicationId, Long candidateId, String eliminateReason);
+
     /**
      * 更新招聘面试结果
      *
      * @param reqVO 招聘面试结果信息
      */
     void updateRecruitInterviewResult(HrmRecruitInterviewResultReqVO reqVO);
+
+    void startRecruitInterview(Long id);
+
+    void evaluateRecruitInterview(HrmRecruitInterviewEvaluationReqVO reqVO);
 
 }

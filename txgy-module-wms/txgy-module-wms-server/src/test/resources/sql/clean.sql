@@ -1,3 +1,5 @@
+DELETE FROM "wms_integration_request";
+DELETE FROM wms_shortage_event;
 DELETE FROM "wms_check_order_detail";
 DELETE FROM "wms_check_order";
 DELETE FROM "wms_movement_order_detail";
@@ -14,4 +16,5 @@ DELETE FROM "wms_item";
 DELETE FROM "wms_item_category";
 DELETE FROM "wms_item_brand";
 DELETE FROM "wms_warehouse";
+DELETE FROM "wms_warehouse_user";
 DELETE FROM "wms_merchant";

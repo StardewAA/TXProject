@@ -30,8 +30,10 @@ export namespace HrmRecruitPostApi {
     emergencyLevel?: number; // 紧急程度
     postTypeId?: number; // 职位类型编号
     postTypeName?: string; // 职位类型名称
+    channelId?: number; // 发布渠道编号
+    channelName?: string; // 发布渠道名称
     status?: number; // 职位状态
-    stopReason?: string; // 停止原因
+    stopReason?: string; // 状态变更原因
     hasEntryNum?: number; // 已入职人数
     recruitSchedule?: number; // 招聘进度百分比
     createTime?: Date; // 创建时间
@@ -39,15 +41,15 @@ export namespace HrmRecruitPostApi {
 
   /** 职位状态统计 */
   export interface StatusCount {
-    status: number; // 候选人状态
-    count: number; // 候选人数量
+    status: number; // 职位状态
+    count: number; // 职位数量
   }
 
   /** 职位状态修改 */
   export interface StatusReq {
-    id: number; // 候选人编号
-    status: number; // 候选人状态
-    stopReason?: string; // 停止原因
+    id: number; // 职位编号
+    status: number; // 职位状态
+    stopReason?: string; // 状态变更原因
   }
 }
 

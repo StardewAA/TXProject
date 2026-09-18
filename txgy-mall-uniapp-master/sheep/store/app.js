@@ -1,6 +1,5 @@
 import DiyApi from '@/sheep/api/promotion/diy';
-import { getTenantByWebsite } from '@/sheep/api/infra/tenant';
-import { getTenantId } from '@/sheep/request';
+import { ensureTenantReady, getTenantBootstrapStatus } from '@/sheep/helper/tenant-runtime';
 import { defineStore } from 'pinia';
 import $platform from '@/sheep/platform';
 import $router from '@/sheep/router';
@@ -10,11 +9,12 @@ import { baseUrl, h5Url } from '@/sheep/config';
 
 const app = defineStore('app', {
   state: () => ({
+    tenantBootstrap: { status: 'loading', confirmed: false },
     paramsForTabbar: {}, // 为全局tabbar跳转传参用。原因是 tabbar 无法传参，只能通过全局状态传递
     info: {
       // 应用信息
       name: '', // 商城名称
-      logo: '', // logo
+      logo: '/static/mall-logo.png', // logo
       version: '', // 版本号
       copyright: '', // 版权信息 I
       copytime: '', // 版权信息 II
@@ -63,7 +63,11 @@ const app = defineStore('app', {
       }
 
       // 加载租户
-      await adaptTenant();
+      if (!await adaptTenant()) return false;
+      this.tenantBootstrap = getTenantBootstrapStatus();
+      if (this.tenantBootstrap.status === 'unavailable') {
+        uni.showToast({ title: '商城配置暂无法核验，当前仅提供原商城入口', icon: 'none' });
+      }
 
       // 加载装修配置
       await adaptTemplate(this.template, templateId);
@@ -72,7 +76,7 @@ const app = defineStore('app', {
       if (true) {
         this.info = {
           name: '芋道商城',
-          logo: 'https://static.iocoder.cn/ruoyi-vue-pro-logo.png',
+          logo: '/static/mall-logo.png',
           version: '2026.07',
           copyright: '全部开源，个人与企业可 100% 免费使用',
           copytime: 'Copyright© 2018-2025',
@@ -121,74 +125,39 @@ const app = defineStore('app', {
       this.paramsForTabbar = {};
     },
   },
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        key: 'app-store',
-      },
-    ],
-  },
+  // Templates and share metadata must be loaded for this entry, never hydrated from another tenant.
 });
 
 /** 初始化租户编号 */
 const adaptTenant = async () => {
-  // 1. 获取当前租户 ID
-  const oldTenantId = getTenantId();
-  let newTenantId = null;
-
   try {
-    // 2.1 情况一：H5：根据 url 参数、域名来获取新的租户ID
-    // #ifdef H5
-    // H5 环境下的处理逻辑
-    if (window?.location) {
-      // 优先从 URL 查询参数获取 tenantId
-      const urlParams = new URLSearchParams(window.location.search);
-      newTenantId = urlParams.get('tenantId');
-
-      // 如果 URL 参数中没有，则通过 host 获取
-      if (!newTenantId && window.location.host) {
-        const { data } = await getTenantByWebsite(window.location.host);
-        newTenantId = data?.id;
-      }
-    }
-    // #endif
-
-    // 2.2 情况二：微信小程序：小程序环境下的处理逻辑 - 根据 appId 获取租户
-    // #ifdef MP
-    const appId = uni.getAccountInfoSync()?.miniProgram?.appId;
-    if (appId) {
-      const { data } = await getTenantByWebsite(appId);
-      newTenantId = data?.id;
-    }
-    // #endif
-
-    // 3. 如果是新租户（不相等），则进行切换
-    // noinspection EqualityComparisonWithCoercionJS
-    if (newTenantId && newTenantId != oldTenantId) {
-      // 清理掉登录用户的 token
-      const userStore = user();
-      userStore.setToken();
-
-      // 设置新的 tenantId 到本地存储
-      uni.setStorageSync('tenant-id', newTenantId);
-      console.log('租户 ID 已更新:', `${oldTenantId} -> ${newTenantId}`);
-    }
+    await ensureTenantReady();
+    return true;
   } catch (error) {
-    console.error('adaptTenant 执行失败:', error);
+    uni.showModal({ title: '商城入口暂不可用', content: error.message, showCancel: false });
+    return false;
   }
 };
 
 /** 初始化装修模版 */
 const adaptTemplate = async (appTemplate, templateId) => {
-  const { data: diyTemplate } = templateId
-    ? // 查询指定模板，一般是预览时使用
-      await DiyApi.getDiyTemplate(templateId)
-    : await DiyApi.getUsedDiyTemplate();
-  // 模板不存在
+  let response;
+  try {
+    response = templateId
+      ? // 查询指定模板，一般是预览时使用
+        await DiyApi.getDiyTemplate(templateId)
+      : await DiyApi.getUsedDiyTemplate();
+  } catch (error) {
+    console.warn('商城装修模板加载失败，将使用空模板继续运行:', error);
+  }
+
+  const diyTemplate = response?.data;
+  // 模板不存在或接口暂不可用时，使用空模板，避免首页直接跳转错误页。
   if (!diyTemplate) {
-    $router.error('TemplateError');
-    return;
+    console.warn('未找到已启用的商城装修模板');
+    appTemplate.home = { style: {}, data: [], components: [] };
+    appTemplate.user = { style: {}, data: [], components: [] };
+    return false;
   }
 
   const tabBar = diyTemplate?.property?.tabBar;

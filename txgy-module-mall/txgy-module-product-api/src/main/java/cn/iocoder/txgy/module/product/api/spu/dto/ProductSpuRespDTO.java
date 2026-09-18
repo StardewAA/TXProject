@@ -5,8 +5,6 @@ import lombok.Data;
 
 import java.util.List;
 
-// TODO @LeeYan9: ProductSpuRespDTO
-
 /**
  * 商品 SPU 信息 Response DTO
  *
@@ -21,18 +19,17 @@ public class ProductSpuRespDTO {
      */
     private Long id;
 
+    /**
+     * 所属店铺编号；为空时代表平台自营商品
+     */
+    private Long shopId;
+
     // ========== 基本信息 =========
 
     /**
      * 商品名称
      */
     private String name;
-    /**
-     * 单位
-     *
-     * 对应 product_unit 数据字典
-     */
-    private Integer unit;
 
     /**
      * 商品分类编号
@@ -49,6 +46,9 @@ public class ProductSpuRespDTO {
      * 枚举 {@link ProductSpuStatusEnum}
      */
     private Integer status;
+
+    /** 服务端统一可售判定；内部历史查询仍返回商品，不把下架误判为删除。 */
+    private Boolean saleable = false;
 
     // ========== SKU 相关字段 =========
 
@@ -110,3 +110,4 @@ public class ProductSpuRespDTO {
     private Boolean subCommissionType;
 
 }
+

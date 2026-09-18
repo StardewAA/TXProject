@@ -18,14 +18,34 @@ import {
 } from '#/api/crm/business';
 import { $t } from '#/locales';
 
-import { useGridColumns, useGridFormSchema } from './data';
+import { isBusinessClosed, useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import LoseForm from './modules/lose-form.vue';
+import StageForm from './modules/stage-form.vue';
+import WinForm from './modules/win-form.vue';
 
 const { push } = useRouter();
 const sceneType = ref('1');
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [StageModal, stageModalApi] = useVbenModal({
+  connectedComponent: StageForm,
+  destroyOnClose: true,
+});
+
+/** 赢单弹窗：签约日期、签约金额必填 */
+const [WinModal, winModalApi] = useVbenModal({
+  connectedComponent: WinForm,
+  destroyOnClose: true,
+});
+
+/** 输单弹窗：丢单原因必填、丢单备注选填 */
+const [LoseModal, loseModalApi] = useVbenModal({
+  connectedComponent: LoseForm,
   destroyOnClose: true,
 });
 
@@ -58,6 +78,21 @@ function handleCreate() {
 /** 编辑商机 */
 function handleEdit(row: CrmBusinessApi.Business) {
   formModalApi.setData(row).open();
+}
+
+/** 更改商机阶段 */
+function handleChangeStage(row: CrmBusinessApi.Business) {
+  stageModalApi.setData(row).open();
+}
+
+/** 商机赢单 */
+function handleWin(row: CrmBusinessApi.Business) {
+  winModalApi.setData(row).open();
+}
+
+/** 商机输单 */
+function handleLose(row: CrmBusinessApi.Business) {
+  loseModalApi.setData(row).open();
 }
 
 /** 删除商机 */
@@ -131,6 +166,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <StageModal @success="handleRefresh" />
+    <WinModal @success="handleRefresh" />
+    <LoseModal @success="handleRefresh" />
     <Grid>
       <template #toolbar-actions>
         <Tabs class="w-full" @change="handleChangeSceneType">
@@ -173,9 +211,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
+              label: '赢单',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleWin.bind(null, row),
+            },
+            {
+              label: '输单',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleLose.bind(null, row),
+            },
+            {
+              label: '更改阶段',
+              type: 'link',
+              auth: ['crm:business:update'],
+              ifShow: () => !isBusinessClosed(row.businessState),
+              onClick: handleChangeStage.bind(null, row),
+            },
+            {
               label: $t('common.edit'),
               type: 'link',
               icon: ACTION_ICON.EDIT,
+              ifShow: () => !isBusinessClosed(row.businessState),
               auth: ['crm:business:update'],
               onClick: handleEdit.bind(null, row),
             },

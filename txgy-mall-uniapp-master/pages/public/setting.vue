@@ -3,7 +3,7 @@
     <view class="header-box ss-flex-col ss-row-center ss-col-center">
       <image
         class="logo-img ss-m-b-46"
-        :src="sheep.$url.cdn(appInfo.logo)"
+        :src="appInfo.logo"
         mode="aspectFit"
       ></image>
       <view class="name ss-m-b-24">{{ appInfo.name }}</view>

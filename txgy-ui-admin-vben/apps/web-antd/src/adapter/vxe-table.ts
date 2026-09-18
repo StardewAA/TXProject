@@ -158,6 +158,7 @@ setupVbenVxeTable({
         }
         // 使用 DictTag 组件替代原来的实现
         return h(DictTag, {
+          color: props.colorMap?.[String(row[column.field])],
           type: props.type,
           value: row[column.field]?.toString(),
         });

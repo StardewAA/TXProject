@@ -11,6 +11,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.module.member.api.address.MemberAddressApi;
@@ -25,6 +26,8 @@ import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.pay.enums.refund.PayRefundStatusEnum;
 import cn.iocoder.txgy.module.product.api.comment.ProductCommentApi;
 import cn.iocoder.txgy.module.product.api.comment.dto.ProductCommentCreateReqDTO;
+import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.dto.CombinationRecordRespDTO;
 import cn.iocoder.txgy.module.promotion.enums.combination.CombinationRecordStatusEnum;
@@ -71,7 +74,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -92,6 +97,16 @@ import static cn.iocoder.txgy.module.trade.enums.MessageTemplateConstants.WXA_OR
 @Service
 @Slf4j
 public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
+
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchJournal workbenchJournal;
+
+    private void workbenchChanged(Long orderId) {
+        // 生产启动强制注入；直接构造的历史单测未启用待办基础设施。
+        if (workbenchJournal != null) workbenchJournal.changed(orderId);
+    }
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
 
     @Resource
     private TradeOrderMapper tradeOrderMapper;
@@ -121,6 +136,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Resource
     private ProductCommentApi productCommentApi;
     @Resource
+    private ProductShopApi productShopApi;
+    @Resource
     public SocialClientApi socialClientApi;
     @Resource
     public PayRefundApi payRefundApi;
@@ -129,6 +146,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
     @Resource
     private TradeOrderProperties tradeOrderProperties;
+    @Resource
+    private TradeOrderPaymentDeadlineService paymentDeadline;
 
     // =================== Order ===================
 
@@ -189,6 +208,15 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         // 1.2 构建订单
         TradeOrderDO order = buildTradeOrder(userId, createReqVO, calculateRespBO);
         List<TradeOrderItemDO> orderItems = buildTradeOrderItems(order, calculateRespBO);
+        // 平台自营也参与分组，避免自营和商家混合订单被错误归为单店铺订单。
+        orderItems.forEach(item -> item.setShopId(item.getShopId() == null ? 0L : item.getShopId()));
+        Set<Long> orderShopIds = convertSet(orderItems, TradeOrderItemDO::getShopId);
+        if (orderShopIds.size() == 1) {
+            order.setShopId(orderShopIds.iterator().next());
+        }
+        // 订单和订单项都保存店铺快照。后续店铺名称变更或列表跨服务查询时，
+        // 仍能稳定显示下单时的归属；查询失败时使用可识别的降级名称，不阻断下单。
+        fillShopSnapshots(order, orderItems);
 
         // 2. 订单创建前的逻辑
         tradeOrderHandlers.forEach(handler -> handler.beforeOrderCreate(order, orderItems));
@@ -216,6 +244,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         order.setGiveCouponTemplateCounts(calculateRespBO.getGiveCouponTemplateCounts());
         // 支付 + 退款信息
         order.setAdjustPrice(0).setPayStatus(false);
+        paymentDeadline.initialize(order, LocalDateTime.now());
         order.setRefundStatus(TradeOrderRefundStatusEnum.NONE.getStatus()).setRefundPrice(0);
         // 物流信息
         order.setDeliveryType(createReqVO.getDeliveryType());
@@ -224,6 +253,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             Assert.notNull(address, "地址({}) 不能为空", createReqVO.getAddressId()); // 价格计算时，已经计算
             order.setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
                     .setReceiverAreaId(address.getAreaId()).setReceiverDetailAddress(address.getDetailAddress());
+            TradeOrderAddressSnapshot.copy(address, order);
         } else if (Objects.equals(createReqVO.getDeliveryType(), DeliveryTypeEnum.PICK_UP.getType())) {
             order.setReceiverName(createReqVO.getReceiverName()).setReceiverMobile(createReqVO.getReceiverMobile());
             order.setPickUpVerifyCode(RandomUtil.randomNumbers(8)); // 随机一个核销码，长度为 8 位
@@ -234,6 +264,52 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     private List<TradeOrderItemDO> buildTradeOrderItems(TradeOrderDO tradeOrderDO,
                                                         TradePriceCalculateRespBO calculateRespBO) {
         return TradeOrderConvert.INSTANCE.convertList(tradeOrderDO, calculateRespBO);
+    }
+
+    private void fillShopSnapshots(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        Map<Long, ProductShopRespDTO> shopMap = new HashMap<>();
+        for (TradeOrderItemDO item : orderItems) {
+            Long shopId = item.getShopId() == null ? 0L : item.getShopId();
+            item.setShopId(shopId);
+            if (shopId == 0L) {
+                item.setShopName("平台自营");
+                continue;
+            }
+            ProductShopRespDTO shop = shopMap.computeIfAbsent(shopId, this::getShopSafely);
+            item.setShopName(resolveShopName(shopId, shop));
+        }
+
+        if (order.getShopId() == null) {
+            // 生产库 trade_order.shop_id 为 NOT NULL DEFAULT 0。
+            // 多店铺订单用 0 占位，店铺名称快照保留“多店铺”，避免插入 NULL 失败；
+            // 订单项仍保存各自真实店铺编号，履约分组不受影响。
+            order.setShopId(0L);
+            order.setShopName("多店铺");
+            return;
+        }
+        Long shopId = order.getShopId();
+        if (shopId == 0L) {
+            order.setShopName("平台自营");
+            order.setShopLogoUrl(null);
+            return;
+        }
+        ProductShopRespDTO shop = shopMap.computeIfAbsent(shopId, this::getShopSafely);
+        order.setShopName(resolveShopName(shopId, shop));
+        order.setShopLogoUrl(shop == null ? null : shop.getLogoUrl());
+    }
+
+    private ProductShopRespDTO getShopSafely(Long shopId) {
+        try {
+            CommonResult<ProductShopRespDTO> result = productShopApi.getShop(shopId);
+            return result == null ? null : result.getCheckedData();
+        } catch (RuntimeException ex) {
+            log.warn("[fillShopSnapshots][shopId({}) 查询店铺失败]", shopId, ex);
+            return null;
+        }
+    }
+
+    private String resolveShopName(Long shopId, ProductShopRespDTO shop) {
+        return shop != null && StrUtil.isNotBlank(shop.getName()) ? shop.getName() : "店铺 " + shopId;
     }
 
     /**
@@ -258,7 +334,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
         // 3. 生成预支付
         // 特殊情况：积分兑换时，可能支付金额为零
-        if (order.getPayPrice() > 0) {
+        if (order.getPayPrice() > 0 && erpInventory.paymentReady(order.getId())) {
             createPayOrder(order, orderItems);
         }
 
@@ -269,14 +345,50 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     }
 
     private void createPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        workbenchChanged(order.getId());
+        LocalDateTime proposedDeadline = paymentDeadline.startPayment(order, LocalDateTime.now());
         // 创建支付单，用于后续的支付
         PayOrderCreateReqDTO payOrderCreateReqDTO = TradeOrderConvert.INSTANCE.convert(
                 order, orderItems, tradeOrderProperties);
         Long payOrderId = payOrderApi.createOrder(payOrderCreateReqDTO).getCheckedData();
 
-        // 更新到交易单上
-        tradeOrderMapper.updateById(new TradeOrderDO().setId(order.getId()).setPayOrderId(payOrderId));
         order.setPayOrderId(payOrderId);
+        // 远程支付创建可能成功而本地事务回滚。重试必须复用那张支付单的原期限，不能重置。
+        PayOrderRespDTO payOrder = paymentDeadline.getVerifiedPayOrder(order);
+        if (payOrder.getExpireTime().isAfter(proposedDeadline)) {
+            throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                    "支付截止与订单期限不一致，请核实原支付单");
+        }
+        order.setPayExpireTime(payOrder.getExpireTime());
+        tradeOrderMapper.updateById(new TradeOrderDO().setId(order.getId()).setPayOrderId(payOrderId)
+                .setPayExpireTime(order.getPayExpireTime()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void continueAfterErpReservation(Long id) {
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
+        if (order == null || !TradeOrderStatusEnum.isUnpaid(order.getStatus())
+                || Boolean.TRUE.equals(order.getPayStatus())) return;
+        LocalDateTime now = LocalDateTime.now();
+        if (paymentDeadline.isErpWaitExpired(order, now)) {
+            // 不一致数据已有支付编号但缺少支付期限时，不能跳过资金核实直接取消。
+            if (order.getPayOrderId() != null) return;
+            // 即使扫描尚未执行，迟到的 ERP 确认也不能复活支付窗口；取消后沿用 ERP 释放。
+            cancelOrder0(order, TradeOrderCancelTypeEnum.ERP_WAIT_TIMEOUT);
+            return;
+        }
+        if (!erpInventory.paymentReady(id)) return;
+        if (order.getPayOrderId() == null && order.getPayPrice() > 0) {
+            if (!paymentDeadline.isNewRule(order)) {
+                LocalDateTime legacyDeadline = paymentDeadline.legacyDeadlineWithoutPayOrder(order);
+                if (legacyDeadline == null || !now.isBefore(legacyDeadline)) {
+                    cancelOrder0(order, TradeOrderCancelTypeEnum.PAY_TIMEOUT);
+                    return;
+                }
+            }
+            createPayOrder(order, tradeOrderItemMapper.selectListByOrderId(id));
+        }
     }
 
     @Override
@@ -284,11 +396,15 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_PAY)
     public void updateOrderPaid(Long id, Long payOrderId) {
         // 1.1 校验订单是否存在
-        TradeOrderDO order = validateOrderExists(id);
+        // 回调与前端主动同步必须读取同一行的最新已提交状态，避免并发重复执行后置处理。
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
+        if (order == null) {
+            throw exception(ORDER_NOT_FOUND);
+        }
         // 1.2 校验订单已支付
         if (!TradeOrderStatusEnum.isUnpaid(order.getStatus()) || order.getPayStatus()) {
             // 特殊：支付单号相同，直接返回，说明重复回调
-            if (ObjectUtil.equals(order.getPayOrderId(), payOrderId)) {
+            if (Boolean.TRUE.equals(order.getPayStatus()) && ObjectUtil.equals(order.getPayOrderId(), payOrderId)) {
                 log.warn("[updateOrderPaid][order({}) 已支付，且支付单号相同({})，直接返回]", order, payOrderId);
                 return;
             }
@@ -319,6 +435,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
     @Override
     public void syncOrderPayStatusQuietly(Long id, Long payOrderId) {
+        if (payOrderId == null) return;
         PayOrderRespDTO payOrder = payOrderApi.getOrder(payOrderId).getCheckedData();
         if (payOrder == null) {
             return;
@@ -391,6 +508,12 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             // 2.2 无需发货
             updateOrderObj.setLogisticsId(0L).setLogisticsNo("");
         }
+        // 提交并持久化 ERP 出库请求；待确认时正常返回，订单仍为待发货。
+        var erpRequest = erpInventory.request(order,
+                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.OUTBOUND, "DELIVERY",
+                tradeOrderItemMapper.selectListByOrderId(order.getId()),
+                updateOrderObj.getLogisticsId(), updateOrderObj.getLogisticsNo());
+        if (!erpRequest.confirmed()) return;
         // 执行更新
         updateOrderObj.setStatus(TradeOrderStatusEnum.DELIVERED.getStatus()).setDeliveryTime(LocalDateTime.now());
         int updateCount = tradeOrderMapper.updateByIdAndStatus(order.getId(), order.getStatus(), updateOrderObj);
@@ -439,7 +562,13 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
      * @return 交易订单
      */
     private TradeOrderDO validateOrderDeliverable(Long id) {
-        TradeOrderDO order = validateOrderExists(id);
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
+        if (order == null) throw exception(ORDER_NOT_FOUND);
+        if (!TradeOrderStatusEnum.isUndelivered(order.getStatus()) || !Boolean.TRUE.equals(order.getPayStatus()))
+            throw exception(ORDER_DELIVERY_FAIL_STATUS_NOT_UNDELIVERED);
+        if (tradeOrderItemMapper.selectListByOrderId(id).stream()
+                .anyMatch(item -> !Objects.equals(item.getAfterSaleStatus(), TradeOrderItemAfterSaleStatusEnum.NONE.getStatus())))
+            throw exception(ORDER_DELIVERY_FAIL_REFUND_STATUS_NOT_NONE);
         // 1. 校验订单是否未发货
         if (ObjectUtil.notEqual(TradeOrderRefundStatusEnum.NONE.getStatus(), order.getRefundStatus())) {
             throw exception(ORDER_DELIVERY_FAIL_REFUND_STATUS_NOT_NONE);
@@ -554,8 +683,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_CANCEL)
     public void cancelOrderByMember(Long userId, Long id) {
         // 1.1 校验存在
-        TradeOrderDO order = tradeOrderMapper.selectOrderByIdAndUserId(id, userId);
-        if (order == null) {
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
+        if (order == null || !Objects.equals(order.getUserId(), userId)) {
             throw exception(ORDER_NOT_FOUND);
         }
         // 1.2 校验状态
@@ -563,11 +692,23 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             throw exception(ORDER_CANCEL_FAIL_STATUS_NOT_UNPAID);
         }
         // 1.3 校验是否支持延迟（不允许取消）
-        if (TradeOrderStatusEnum.isUnpaid(order.getStatus())) {
-            PayOrderRespDTO payOrder = payOrderApi.getOrder(order.getPayOrderId()).getCheckedData();
-            if (payOrder != null && PayOrderStatusEnum.isSuccess(payOrder.getStatus())) {
+        if (order.getPayOrderId() != null) {
+            PayOrderRespDTO payOrder = paymentDeadline.getVerifiedPayOrder(order);
+            if (PayOrderStatusEnum.isSuccessOrRefund(payOrder.getStatus())) {
                 log.warn("[cancelOrderByMember][order({}) 支付单已支付（支付回调延迟），不支持取消]", order.getId());
                 throw exception(ORDER_CANCEL_FAIL_STATUS_NOT_UNPAID);
+            }
+            // A live payment tab must stop accepting money before inventory/points are released.
+            // Unknown or in-flight channel results are not evidence of cancellation.
+            if (!PayOrderStatusEnum.isClosed(payOrder.getStatus())) {
+                if (!Boolean.TRUE.equals(payOrderApi.closeOrder(order.getPayOrderId(),
+                        tradeOrderProperties.getPayAppKey(), String.valueOf(order.getId())).getCheckedData())) {
+                    throw exception(ORDER_CANCEL_PAYMENT_UNCONFIRMED);
+                }
+                payOrder = paymentDeadline.getVerifiedPayOrder(order);
+                if (!PayOrderStatusEnum.isClosed(payOrder.getStatus())) {
+                    throw exception(ORDER_CANCEL_PAYMENT_UNCONFIRMED);
+                }
             }
         }
 
@@ -577,22 +718,20 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
     @Override
     public int cancelOrderBySystem() {
-        // 1. 查询过期的待支付订单
-        LocalDateTime expireTime = minusTime(tradeOrderProperties.getPayExpireTime());
-        List<TradeOrderDO> orders = tradeOrderMapper.selectListByStatusAndCreateTimeLt(
-                TradeOrderStatusEnum.UNPAID.getStatus(), expireTime);
-        if (CollUtil.isEmpty(orders)) {
-            return 0;
-        }
-
-        // 2. 遍历执行，逐个取消
+        // 游标分批查询：新单使用两个持久化期限，旧单逐笔核实真实支付期限，不批量回填。
+        LocalDateTime scanTime = LocalDateTime.now();
+        long afterId = 0L;
         int count = 0;
-        for (TradeOrderDO order : orders) {
-            try {
-                getSelf().cancelOrderBySystem(order);
-                count++;
-            } catch (Throwable e) {
-                log.error("[cancelOrderBySystem][order({}) 过期订单异常]", order.getId(), e);
+        while (true) {
+            List<TradeOrderDO> orders = tradeOrderMapper.selectPaymentTimeoutCandidates(scanTime, afterId, 200);
+            if (CollUtil.isEmpty(orders)) break;
+            for (TradeOrderDO order : orders) {
+                afterId = order.getId();
+                try {
+                    if (getSelf().cancelOrderBySystem(order)) count++;
+                } catch (Throwable e) {
+                    log.error("[cancelOrderBySystem][order({}) 过期订单异常，保留状态等待重试]", order.getId(), e);
+                }
             }
         }
         return count;
@@ -605,17 +744,34 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
      */
     @Transactional(rollbackFor = Exception.class)
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.SYSTEM_CANCEL)
-    public void cancelOrderBySystem(TradeOrderDO order) {
-        // 校验是否支持延迟（不允许取消）
-        if (TradeOrderStatusEnum.isUnpaid(order.getStatus())) {
-            PayOrderRespDTO payOrder = payOrderApi.getOrder(order.getPayOrderId()).getCheckedData();
-            if (payOrder != null && PayOrderStatusEnum.isSuccess(payOrder.getStatus())) {
-                log.warn("[cancelOrderBySystem][order({}) 支付单已支付（支付回调延迟），不支持取消]", order.getId());
-                return;
+    public boolean cancelOrderBySystem(TradeOrderDO candidate) {
+        // 与 ERP 确认、支付回调争用同一行锁；不能依据扫描时的陈旧状态取消。
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(candidate.getId());
+        if (order == null || !TradeOrderStatusEnum.isUnpaid(order.getStatus())
+                || Boolean.TRUE.equals(order.getPayStatus())) return false;
+        LocalDateTime now = LocalDateTime.now();
+        if (paymentDeadline.isErpWaitExpired(order, now) && order.getPayOrderId() == null) {
+            cancelOrder0(order, TradeOrderCancelTypeEnum.ERP_WAIT_TIMEOUT);
+            return true;
+        }
+        if (order.getPayOrderId() == null) {
+            if (paymentDeadline.isNewRule(order)) return false;
+            LocalDateTime legacyDeadline = paymentDeadline.legacyDeadlineWithoutPayOrder(order);
+            if (legacyDeadline == null || now.isBefore(legacyDeadline)) return false;
+        } else {
+            PayOrderRespDTO pay = paymentDeadline.getVerifiedPayOrder(order);
+            if (PayOrderStatusEnum.isSuccessOrRefund(pay.getStatus()) || now.isBefore(pay.getExpireTime())) return false;
+            if (!PayOrderStatusEnum.isClosed(pay.getStatus())) {
+                // 支付服务核实所有渠道；WAITING/未知/请求失败不能当作未扣款完成取消。
+                var closed = payOrderApi.expireOrder(order.getPayOrderId(), tradeOrderProperties.getPayAppKey(),
+                        String.valueOf(order.getId()));
+                if (closed == null || !Boolean.TRUE.equals(closed.getCheckedData())) return false;
+                pay = paymentDeadline.getVerifiedPayOrder(order);
+                if (!PayOrderStatusEnum.isClosed(pay.getStatus())) return false;
             }
         }
-
         cancelOrder0(order, TradeOrderCancelTypeEnum.PAY_TIMEOUT);
+        return true;
     }
 
     /**
@@ -625,6 +781,10 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
      * @param cancelType 取消类型
      */
     private void cancelOrder0(TradeOrderDO order, TradeOrderCancelTypeEnum cancelType) {
+        // 先完成所有只读预检，避免已知历史活动商品缺失时先远程返积分、再在后续步骤失败。
+        // 预检不能替代远程服务的持久化幂等，预检后出现超时/并发仍必须能安全重试。
+        List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderId(order.getId());
+        tradeOrderHandlers.forEach(handler -> handler.beforeCancelOrder(order, orderItems));
         // 1. 更新 TradeOrderDO 状态为已取消
         int updateCount = tradeOrderMapper.updateByIdAndStatus(order.getId(), order.getStatus(),
                 new TradeOrderDO().setStatus(TradeOrderStatusEnum.CANCELED.getStatus())
@@ -634,7 +794,6 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         }
 
         // 2. 执行 TradeOrderHandler 的后置处理
-        List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderId(order.getId());
         tradeOrderHandlers.forEach(handler -> handler.afterCancelOrder(order, orderItems));
 
         // 3. 增加订单日志
@@ -654,12 +813,15 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         if (refundPrice < order.getPayPrice()) {
             return;
         }
+        // The refund caller already holds the parent lock. A normal RR snapshot can still
+        // show another refunded item as NONE and compensate it again under an order-level key.
+        List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderIdForUpdate(order.getId());
+        tradeOrderHandlers.forEach(handler -> handler.beforeCancelOrder(order, orderItems));
         tradeOrderMapper.updateById(new TradeOrderDO().setId(order.getId())
                 .setStatus(TradeOrderStatusEnum.CANCELED.getStatus())
                 .setCancelType(TradeOrderCancelTypeEnum.AFTER_SALE_CLOSE.getType()).setCancelTime(LocalDateTime.now()));
 
         // 2. 执行 TradeOrderHandler 的后置处理
-        List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderId(order.getId());
         tradeOrderHandlers.forEach(handler -> handler.afterCancelOrder(order, orderItems));
     }
 
@@ -749,7 +911,9 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         }
 
         // 更新
-        tradeOrderMapper.updateById(TradeOrderConvert.INSTANCE.convert(reqVO));
+        // Admin text-address changes have no verified point. Clear the old snapshot explicitly.
+        int changed = tradeOrderMapper.updateAddressAndClearLocation(TradeOrderConvert.INSTANCE.convert(reqVO), order.getStatus());
+        if (changed == 0) throw exception(ORDER_UPDATE_ADDRESS_FAIL_STATUS_NOT_DELIVERED);
 
         // 记录订单日志
         TradeOrderLogUtils.setOrderInfo(order.getId(), order.getStatus(), order.getStatus());
@@ -797,6 +961,10 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             throw exception(ORDER_PICK_UP_FAIL_NOT_VERIFY_USER);
         }
 
+        var erpRequest = erpInventory.request(order,
+                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.OUTBOUND, "PICKUP",
+                tradeOrderItemMapper.selectListByOrderId(order.getId()), null, null);
+        if (!erpRequest.confirmed()) return;
         receiveOrder0(order);
     }
 
@@ -812,23 +980,46 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateOrderItemWhenAfterSaleSuccess(Long id, Integer refundPrice) {
-        // 1.1 更新订单项
+        // The hint identifies the parent only. It may establish an old MySQL RR snapshot;
+        // all business decisions below must therefore use current reads under order -> item locks.
+        TradeOrderItemDO hint = tradeOrderItemMapper.selectById(id);
+        if (hint == null) throw exception(ORDER_ITEM_NOT_FOUND);
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(hint.getOrderId());
+        if (order == null) throw exception(ORDER_NOT_FOUND);
+        List<TradeOrderItemDO> currentItems = tradeOrderItemMapper.selectListByOrderIdForUpdate(order.getId());
+        TradeOrderItemDO orderItem = currentItems.stream().filter(item -> Objects.equals(item.getId(), id))
+                .findFirst().orElseThrow(() -> exception(ORDER_ITEM_NOT_FOUND));
+        if (!Objects.equals(orderItem.getAfterSaleStatus(), TradeOrderItemAfterSaleStatusEnum.APPLY.getStatus()))
+            throw exception(ORDER_ITEM_UPDATE_AFTER_SALE_STATUS_FAIL);
+        if (refundPrice == null || refundPrice < 0 || orderItem.getPayPrice() == null
+                || refundPrice > orderItem.getPayPrice() || order.getRefundPrice() == null
+                || order.getRefundPrice() < 0 || order.getPayPrice() == null
+                || order.getRefundPoint() == null || order.getRefundPoint() < 0
+                || orderItem.getUsePoint() == null || orderItem.getUsePoint() < 0)
+            throw exception(AFTER_SALE_CREATE_FAIL_REFUND_PRICE_ERROR);
+        // Validate aggregate bounds before any remote compensation is invoked.
+        int orderRefundPrice = Math.addExact(order.getRefundPrice(), refundPrice);
+        int orderRefundPoint = Math.addExact(order.getRefundPoint(), orderItem.getUsePoint());
+        if (orderRefundPrice > order.getPayPrice()) throw exception(AFTER_SALE_CREATE_FAIL_REFUND_PRICE_ERROR);
+
+        // 1.1 Only the winning application may run compensation; duplicate callbacks do not add again.
         updateOrderItemAfterSaleStatus(id, TradeOrderItemAfterSaleStatusEnum.APPLY.getStatus(),
                 TradeOrderItemAfterSaleStatusEnum.SUCCESS.getStatus(), null);
+        orderItem.setAfterSaleStatus(TradeOrderItemAfterSaleStatusEnum.SUCCESS.getStatus());
         // 1.2 执行 TradeOrderHandler 的后置处理
-        TradeOrderItemDO orderItem = tradeOrderItemMapper.selectById(id);
-        TradeOrderDO order = tradeOrderMapper.selectById(orderItem.getOrderId());
+        tradeOrderHandlers.forEach(handler -> handler.beforeCancelOrderItem(order, orderItem));
         tradeOrderHandlers.forEach(handler -> handler.afterCancelOrderItem(order, orderItem));
 
         // 2.1 更新订单的退款金额、积分
-        Integer orderRefundPrice = order.getRefundPrice() + refundPrice;
-        Integer orderRefundPoint = order.getRefundPoint() + orderItem.getUsePoint();
-        Integer refundStatus = isAllOrderItemAfterSaleSuccess(order.getId()) ?
+        Integer refundStatus = currentItems.stream().allMatch(item -> Objects.equals(item.getAfterSaleStatus(),
+                TradeOrderItemAfterSaleStatusEnum.SUCCESS.getStatus())) ?
                 TradeOrderRefundStatusEnum.ALL.getStatus() // 如果都售后成功，则需要取消订单
                 : TradeOrderRefundStatusEnum.PART.getStatus();
         tradeOrderMapper.updateById(new TradeOrderDO().setId(order.getId())
                 .setRefundStatus(refundStatus)
                 .setRefundPrice(orderRefundPrice).setRefundPoint(orderRefundPoint));
+        // Cancellation handlers must see the aggregate just persisted, not the pre-refund object.
+        order.setRefundStatus(refundStatus).setRefundPrice(orderRefundPrice).setRefundPoint(orderRefundPoint);
         // 2.2 如果全部退款，则进行取消订单
         getSelf().cancelOrderByAfterSale(order, orderRefundPrice);
     }
@@ -885,6 +1076,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
         // 2. 创建评价
         Long commentId = createOrderItemComment0(orderItem, createReqVO);
+        workbenchChanged(order.getId());
 
         // 3. 如果订单项都评论了，则更新订单评价状态
         List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderId(order.getId());
@@ -995,6 +1187,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Transactional(rollbackFor = Exception.class)
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.SYSTEM_COMMENT)
     public void createOrderItemCommentBySystemBySystem(TradeOrderDO order) {
+        workbenchChanged(order.getId());
         // 1. 查询未评论的订单项
         List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderIdAndCommentStatus(
                 order.getId(), Boolean.FALSE);

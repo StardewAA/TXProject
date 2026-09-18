@@ -6,6 +6,7 @@ export namespace MallSpuApi {
   /** 商品 SPU */
   export interface Spu {
     id?: number; // 商品编号
+    shopId?: number; // 所属企业店铺
     name?: string; // 商品名称
     categoryId?: number; // 商品分类
     keyword?: string; // 关键字
@@ -33,6 +34,12 @@ export namespace MallSpuApi {
     createTime?: Date; // 商品创建时间
     status?: number; // 商品状态
     browseCount?: number; // 浏览量
+    reviewStatus?: number | null; // null 仅表示历史过渡，不能当作审核通过
+    contentVersion?: number;
+    approvedVersion?: number | null;
+    submissionId?: string | null;
+    reviewRemark?: string;
+    expectedVersion?: number; // 暂保留后台维护的非试点店铺保存必须携带版本
   }
 
   /** 商品 SKU */
@@ -66,7 +73,61 @@ export namespace MallSpuApi {
   export interface SpuStatusUpdateReqVO {
     id: number; // 商品编号
     status: number; // 商品状态
+    expectedVersion: number;
   }
+
+  export interface ReviewPolicy {
+    adminWriteEnabled: boolean;
+    adminWriteLockedShopIds?: number[];
+    legacyStrategy: string;
+    reviewEnabled: boolean;
+  }
+
+  export interface ReviewRecord {
+    id: number;
+    spuId: number;
+    shopId?: number;
+    contentVersion: number;
+    submissionId?: string | null;
+    action: string;
+    actorType: number; // 1 会员，2 后台账号
+    actorId?: number;
+    remark?: string;
+    snapshot: string;
+    createTime: string | number;
+  }
+
+  export interface ReviewDecision {
+    id: number;
+    expectedVersion: number;
+    submissionId: string;
+    approved: boolean;
+    reason: string;
+  }
+}
+
+/** 后台经营写入策略；加载失败时页面保持只读。 */
+export function getSpuReviewPolicy() {
+  return requestClient.get<MallSpuApi.ReviewPolicy>('/product/spu-review/policy');
+}
+
+export function getSpuReviewHistory(id: number) {
+  return requestClient.get<MallSpuApi.ReviewRecord[]>('/product/spu-review/history', {
+    params: { id },
+  });
+}
+
+export function decideSpuReview(data: MallSpuApi.ReviewDecision) {
+  return requestClient.post<boolean>('/product/spu-review/decision', data);
+}
+
+/** 非试点店铺临时后台经营入口，试点店铺由服务端拒绝。 */
+export function submitSpuReview(data: { id: number; expectedVersion: number }) {
+  return requestClient.post<boolean>('/product/spu-review/submit', data);
+}
+
+export function withdrawSpuReview(data: { id: number; expectedVersion: number; submissionId: string }) {
+  return requestClient.post<boolean>('/product/spu-review/withdraw', data);
 }
 
 /** 获得商品 SPU 列表 */
@@ -109,8 +170,14 @@ export function getSpuDetailList(ids: number[]) {
 }
 
 /** 删除商品 SPU */
-export function deleteSpu(id: number) {
-  return requestClient.delete(`/product/spu/delete?id=${id}`);
+export function deleteSpu(id: number, expectedVersion: number) {
+  if (!Number.isSafeInteger(id) || id <= 0
+    || !Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
+    throw new Error('商品编号或内容版本无效，请刷新后重试。');
+  }
+  return requestClient.delete('/product/spu/delete', {
+    params: { id, expectedVersion },
+  });
 }
 
 /** 导出商品 SPU Excel */

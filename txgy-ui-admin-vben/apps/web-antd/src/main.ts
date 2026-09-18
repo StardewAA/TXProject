@@ -1,4 +1,5 @@
 import './offline-icons';
+import './bid-indust.css';
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
@@ -12,7 +13,10 @@ async function initApplication() {
   // 用于区分不同项目的偏好设置以及存储数据的key前缀以及其他一些需要隔离的数据
   const env = import.meta.env.PROD ? 'prod' : 'dev';
   const appVersion = import.meta.env.VITE_APP_VERSION;
-  const namespace = `${import.meta.env.VITE_APP_NAMESPACE}-${appVersion}-${env}`;
+  // VITE_APP_NAMESPACE 未配置时使用默认值，避免存储 key 前缀变成 undefined-*
+  // （前缀为 undefined 会导致重开浏览器后登录态无法恢复、菜单空白）
+  const appNamespace = import.meta.env.VITE_APP_NAMESPACE || 'vben-web-antd';
+  const namespace = `${appNamespace}-${appVersion}-${env}`;
 
   // app偏好设置初始化
   await initPreferences({

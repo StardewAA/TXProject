@@ -15,14 +15,24 @@ import cn.iocoder.txgy.module.promotion.enums.common.PromotionTypeEnum;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeProductSettlementRespVO;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateReqBO;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateRespBO;
+import cn.iocoder.txgy.module.trade.framework.marketing.config.TradeMarketingProperties;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeBargainActivityPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeCombinationActivityPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeCouponPriceCalculator;
 import cn.iocoder.txgy.module.trade.service.price.calculator.TradeDiscountActivityPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradePointActivityPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradePointGiveCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradePointUsePriceCalculator;
 import cn.iocoder.txgy.module.trade.service.price.calculator.TradePriceCalculator;
 import cn.iocoder.txgy.module.trade.service.price.calculator.TradePriceCalculatorHelper;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeRewardActivityPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeSeckillActivityPriceCalculator;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +40,7 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.*;
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_NOT_EXISTS;
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_STOCK_NOT_ENOUGH;
+import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.PRICE_CALCULATE_MARKETING_NOT_SUPPORTED;
 import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.PRICE_CALCULATE_PAY_PRICE_ILLEGAL;
 
 /**
@@ -56,9 +67,15 @@ public class TradePriceServiceImpl implements TradePriceService {
 
     @Resource
     private TradeDiscountActivityPriceCalculator discountActivityPriceCalculator;
+    @Resource
+    private TradeMarketingProperties marketingProperties;
 
     @Override
     public TradePriceCalculateRespBO calculateOrderPrice(TradePriceCalculateReqBO calculateReqBO) {
+        // 简单营销模式只允许普通折扣、满额优惠和普通订单积分抵扣。
+        // 先校验请求中的活动标识，避免复杂活动被当成普通订单创建。
+        validateMarketingRequest(calculateReqBO);
+
         // 1.1 获得商品 SKU 数组
         List<ProductSkuRespDTO> skuList = checkSkuList(calculateReqBO);
         // 1.2 获得商品 SPU 数组
@@ -67,7 +84,11 @@ public class TradePriceServiceImpl implements TradePriceService {
         // 2.1 计算价格
         TradePriceCalculateRespBO calculateRespBO = TradePriceCalculatorHelper
                 .buildCalculateResp(calculateReqBO, spuList, skuList);
-        priceCalculators.forEach(calculator -> calculator.calculate(calculateReqBO, calculateRespBO));
+        priceCalculators.forEach(calculator -> {
+            if (isCalculatorEnabled(calculator)) {
+                calculator.calculate(calculateReqBO, calculateRespBO);
+            }
+        });
         // 2.2  如果最终支付金额小于等于 0，则抛出业务异常
         if (calculateReqBO.getPointActivityId() == null // 积分订单，允许支付金额为 0
                 && calculateRespBO.getPrice().getPayPrice() <= 0) {
@@ -78,11 +99,70 @@ public class TradePriceServiceImpl implements TradePriceService {
         return calculateRespBO;
     }
 
+    /**
+     * 校验简单营销模式下的订单请求。
+     *
+     * <p>复杂活动的 API 仍然保留，便于后续恢复；当前模式下明确返回业务错误，
+     * 不允许活动参数被忽略后以原价下单，避免用户看到的价格与订单价格不一致。</p>
+     */
+    private void validateMarketingRequest(TradePriceCalculateReqBO reqBO) {
+        if (marketingProperties.isSimpleMode()
+                && (hasMarketingId(reqBO.getSeckillActivityId())
+                || hasMarketingId(reqBO.getBargainRecordId())
+                || hasMarketingId(reqBO.getCombinationActivityId())
+                || hasMarketingId(reqBO.getCombinationHeadId())
+                || hasMarketingId(reqBO.getPointActivityId()))) {
+            throw exception(PRICE_CALCULATE_MARKETING_NOT_SUPPORTED);
+        }
+        if (!marketingProperties.isCouponEnabled() && hasMarketingId(reqBO.getCouponId())) {
+            throw exception(PRICE_CALCULATE_MARKETING_NOT_SUPPORTED);
+        }
+        if (!marketingProperties.isPointDeductEnabled()) {
+            // pointStatus 是必填字段，关闭积分抵扣时改为 false，兼容旧客户端默认传 true。
+            reqBO.setPointStatus(false);
+        }
+    }
+
+    /** 兼容旧客户端将未选择的活动编号传为 0 的情况。 */
+    private boolean hasMarketingId(Long id) {
+        return id != null && id > 0;
+    }
+
+    /**
+     * 判断单个价格计算器是否在当前营销配置下启用。
+     */
+    private boolean isCalculatorEnabled(TradePriceCalculator calculator) {
+        if (calculator instanceof TradeBargainActivityPriceCalculator
+                || calculator instanceof TradeCombinationActivityPriceCalculator
+                || calculator instanceof TradeSeckillActivityPriceCalculator
+                || calculator instanceof TradePointActivityPriceCalculator) {
+            // 复杂活动只有退出简单模式后才允许参与价格计算。
+            return !marketingProperties.isSimpleMode();
+        }
+        if (calculator instanceof TradeDiscountActivityPriceCalculator) {
+            return marketingProperties.isDiscountEnabled();
+        }
+        if (calculator instanceof TradeRewardActivityPriceCalculator) {
+            return marketingProperties.isRewardEnabled();
+        }
+        if (calculator instanceof TradeCouponPriceCalculator) {
+            return marketingProperties.isCouponEnabled();
+        }
+        if (calculator instanceof TradePointUsePriceCalculator) {
+            return marketingProperties.isPointDeductEnabled();
+        }
+        if (calculator instanceof TradePointGiveCalculator) {
+            return marketingProperties.isPointGiveEnabled();
+        }
+        // 运费和未来的非营销计算器继续执行。
+        return true;
+    }
+
     private List<ProductSkuRespDTO> checkSkuList(TradePriceCalculateReqBO reqBO) {
         // 获得商品 SKU 数组
         Map<Long, Integer> skuIdCountMap = convertMap(reqBO.getItems(),
                 TradePriceCalculateReqBO.Item::getSkuId, TradePriceCalculateReqBO.Item::getCount);
-        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(skuIdCountMap.keySet()).getCheckedData();
+        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(skuIdCountMap.keySet());
 
         // 校验商品 SKU
         skus.forEach(sku -> {
@@ -104,16 +184,21 @@ public class TradePriceServiceImpl implements TradePriceService {
     @Override
     public List<AppTradeProductSettlementRespVO> calculateProductPrice(Long userId, List<Long> spuIds) {
         // 1.1 获得 SPU 与 SKU 的映射
-        List<ProductSkuRespDTO> allSkuList = productSkuApi.getSkuListBySpuId(spuIds).getCheckedData();
+        List<ProductSkuRespDTO> allSkuList = productSkuApi.getSkuListBySpuId(spuIds);
         Map<Long, List<ProductSkuRespDTO>> spuIdAndSkuListMap = convertMultiMap(allSkuList, ProductSkuRespDTO::getSpuId);
         // 1.2 获得会员等级
         MemberLevelRespDTO level = discountActivityPriceCalculator.getMemberLevel(userId);
         // 1.3 获得限时折扣活动
-        Map<Long, DiscountProductRespDTO> skuIdAndDiscountMap = convertMap(
-                discountActivityApi.getMatchDiscountProductListBySkuIds(convertSet(allSkuList, ProductSkuRespDTO::getId)).getCheckedData(),
-                DiscountProductRespDTO::getSkuId);
+        Map<Long, DiscountProductRespDTO> skuIdAndDiscountMap = marketingProperties.isDiscountEnabled()
+                ? convertMap(
+                        discountActivityApi.getMatchDiscountProductListBySkuIds(
+                                convertSet(allSkuList, ProductSkuRespDTO::getId)).getCheckedData(),
+                        DiscountProductRespDTO::getSkuId)
+                : Collections.emptyMap();
         // 1.4 获得满减送活动
-       List<RewardActivityMatchRespDTO> rewardActivityMap = rewardActivityApi.getMatchRewardActivityListBySpuIds(spuIds).getCheckedData();
+        List<RewardActivityMatchRespDTO> rewardActivityMap = marketingProperties.isRewardEnabled()
+                ? rewardActivityApi.getMatchRewardActivityListBySpuIds(spuIds).getCheckedData()
+                : Collections.emptyList();
 
         // 2. 价格计算
         return convertList(spuIds, spuId -> {
@@ -127,9 +212,11 @@ public class TradePriceServiceImpl implements TradePriceService {
                         .setPayPrice(sku.getPrice()).setCount(1);
                 // 计算限时折扣的优惠价格
                 DiscountProductRespDTO discountProduct = skuIdAndDiscountMap.get(sku.getId());
-                Integer discountPrice = discountActivityPriceCalculator.calculateActivityPrice(discountProduct, orderItem);
+                Integer discountPrice = marketingProperties.isDiscountEnabled()
+                        ? discountActivityPriceCalculator.calculateActivityPrice(discountProduct, orderItem) : 0;
                 // 计算 VIP 优惠金额
-                Integer vipPrice = discountActivityPriceCalculator.calculateVipPrice(level, orderItem);
+                Integer vipPrice = marketingProperties.isDiscountEnabled()
+                        ? discountActivityPriceCalculator.calculateVipPrice(level, orderItem) : 0;
                 if (discountPrice <= 0 && vipPrice <= 0) {
                     return skuVO;
                 }

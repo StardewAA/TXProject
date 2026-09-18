@@ -164,6 +164,9 @@
         >
           {{ data.title || data.name }}
         </view>
+        <view v-if="showShopName && data.shopName" class="md-goods-shop ss-line-1 ss-m-t-8">
+          店铺：{{ data.shopName }}
+        </view>
         <view
           v-if="goodsFields.subtitle?.show || goodsFields.introduction?.show"
           class="md-goods-subtitle ss-m-t-16 ss-line-1"
@@ -277,6 +280,9 @@
             :style="[{ color: titleColor }]"
           >
             {{ data.title || data.name }}
+          </view>
+          <view v-if="showShopName && data.shopName" class="lg-goods-shop ss-line-1 ss-m-t-8">
+            店铺：{{ data.shopName }}
           </view>
           <view
             v-if="goodsFields.subtitle?.show || goodsFields.introduction?.show"
@@ -592,6 +598,10 @@
       type: String,
       default: '',
     },
+    showShopName: {
+      type: Boolean,
+      default: false,
+    },
     buttonShow: {
       type: Boolean,
       default: true,
@@ -678,19 +688,24 @@
         scrollOffset: true,
       });
       view.exec((data) => {
-        console.log(data, 'data');
-        let totalHeight = 0;
-        const goodsPriceCard = data[0];
-        defaultImgWidth.value = data[0].width;
-
-        if (props.data.image_wh && Number(props.data.image_wh.w)) {
-          totalHeight =
-            (goodsPriceCard.width / props.data.image_wh.w) * props.data.image_wh.h +
-            goodsPriceCard.height;
-        } else {
-          totalHeight = goodsPriceCard.width + goodsPriceCard.height;
+        const goodsPriceCard = Array.isArray(data) ? data[0] : null;
+        const cardWidth = Number(goodsPriceCard?.width);
+        const cardHeight = Number(goodsPriceCard?.height);
+        if (!goodsPriceCard || !Number.isFinite(cardWidth) || !Number.isFinite(cardHeight)) {
+          // 组件被快速销毁或尚未完成布局时，查询结果可能为空。
+          // 仍通知瀑布流继续处理，避免异步回调抛错导致整个 DIY 页面白屏。
+          emits('getHeight', 0);
+          return;
         }
-        emits('getHeight', totalHeight);
+        let totalHeight = 0;
+        defaultImgWidth.value = cardWidth;
+
+        if (props.data?.image_wh && Number(props.data.image_wh.w)) {
+          totalHeight = (cardWidth / props.data.image_wh.w) * props.data.image_wh.h + cardHeight;
+        } else {
+          totalHeight = cardWidth + cardHeight;
+        }
+        emits('getHeight', Number.isFinite(totalHeight) ? totalHeight : 0);
       });
     }
   }
@@ -754,7 +769,7 @@
   .goods-img {
     width: 100%;
     height: 100%;
-    background-color: #f5f5f5;
+    background-color: #f8fafc;
   }
 
   .price-unit {
@@ -766,22 +781,23 @@
     font-size: 24rpx;
     transform: scale(0.8);
     margin-left: 0rpx;
-    color: #c4c4c4;
+    color: #94a3b8;
   }
 
   .activity-tag {
     font-size: 20rpx;
-    color: #ff0000;
+    color: #ef4444;
     line-height: 30rpx;
     padding: 0 10rpx;
-    border: 1px solid rgba(#ff0000, 0.25);
-    border-radius: 4px;
+    border: 1px solid rgba(239, 68, 68, 0.16);
+    border-radius: 10rpx;
+    background: rgba(239, 68, 68, 0.06);
     flex-shrink: 0;
   }
 
   .goods-origin-price {
     font-size: 20rpx;
-    color: #c4c4c4;
+    color: #94a3b8;
     line-height: 36rpx;
     text-decoration: line-through;
   }
@@ -789,55 +805,73 @@
   // xs
   .xs-goods-card {
     overflow: hidden;
-    // max-width: 375rpx;
-    background-color: $white;
+    border-radius: 24rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
     position: relative;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 
     .xs-img-box {
       width: 128rpx;
       height: 128rpx;
       margin-right: 20rpx;
+      border-radius: 18rpx;
+      background: #f8fafc;
     }
 
     .xs-goods-title {
       font-size: 26rpx;
-      color: #333;
-      font-weight: 500;
+      color: #1f2937;
+      font-weight: 600;
     }
 
     .xs-goods-price {
       font-size: 30rpx;
-      color: $red;
+      color: #ef4444;
+    }
+
+    &:active {
+      transform: translateY(2rpx) scale(0.995);
     }
   }
 
   // sm
   .sm-goods-card {
     overflow: hidden;
-    // width: 223rpx;
-    // width: 100%;
-    background-color: $white;
+    border-radius: 24rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
     position: relative;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 
     .sm-img-box {
-      // width: 228rpx;
       width: 100%;
       height: 208rpx;
+      background: #f8fafc;
     }
 
     .sm-goods-content {
-      padding: 20rpx 16rpx;
+      padding: 22rpx 18rpx;
       box-sizing: border-box;
     }
 
     .sm-goods-title {
       font-size: 26rpx;
-      color: #333;
+      color: #1f2937;
+      font-weight: 600;
     }
 
     .sm-goods-price {
       font-size: 30rpx;
-      color: $red;
+      color: #ef4444;
+    }
+
+    &:active {
+      transform: translateY(2rpx) scale(0.995);
     }
   }
 
@@ -847,45 +881,61 @@
     width: 100%;
     position: relative;
     z-index: 1;
-    background-color: $white;
-    position: relative;
+    border-radius: 28rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 
     .md-img-box {
       width: 100%;
+      background: #f8fafc;
     }
 
     .md-goods-title {
       font-size: 26rpx;
-      color: #333;
+      color: #1f2937;
       width: 100%;
+      font-weight: 600;
+    }
+
+    .md-goods-shop {
+      font-size: 22rpx;
+      color: #64748b;
     }
 
     .md-goods-subtitle {
       font-size: 24rpx;
       font-weight: 400;
-      color: #999999;
+      color: #94a3b8;
     }
 
     .md-goods-price {
       font-size: 30rpx;
-      color: $red;
+      color: #ef4444;
       line-height: 36rpx;
     }
 
     .cart-box {
       width: 54rpx;
       height: 54rpx;
-      background: linear-gradient(90deg, #fe8900, #ff5e00);
+      background: linear-gradient(90deg, #fb923c, #f97316);
       border-radius: 50%;
       position: absolute;
       bottom: 50rpx;
       right: 20rpx;
       z-index: 2;
+      box-shadow: 0 12rpx 24rpx rgba(249, 115, 22, 0.24);
 
       .cart-icon {
         width: 30rpx;
         height: 30rpx;
       }
+    }
+
+    &:active {
+      transform: translateY(2rpx) scale(0.995);
     }
   }
 
@@ -894,34 +944,45 @@
     overflow: hidden;
     position: relative;
     z-index: 1;
-    background-color: $white;
+    border-radius: 28rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
     height: 280rpx;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 
     .lg-img-box {
       width: 280rpx;
       height: 280rpx;
       margin-right: 20rpx;
+      background: #f8fafc;
     }
 
     .lg-goods-title {
       font-size: 28rpx;
-      font-weight: 500;
-      color: #333333;
+      font-weight: 600;
+      color: #1f2937;
       // line-height: 36rpx;
       // width: 410rpx;
+    }
+
+    .lg-goods-shop {
+      font-size: 22rpx;
+      color: #64748b;
     }
 
     .lg-goods-subtitle {
       font-size: 24rpx;
       font-weight: 400;
-      color: #999999;
+      color: #94a3b8;
       // line-height: 30rpx;
       // width: 410rpx;
     }
 
     .lg-goods-price {
       font-size: 30rpx;
-      color: $red;
+      color: #ef4444;
       line-height: 36rpx;
     }
 
@@ -932,14 +993,19 @@
       z-index: 2;
       width: 120rpx;
       height: 50rpx;
-      background: linear-gradient(90deg, #fe8900, #ff5e00);
+      background: linear-gradient(90deg, #fb923c, #f97316);
       border-radius: 25rpx;
       font-size: 24rpx;
       color: #ffffff;
+      box-shadow: 0 12rpx 24rpx rgba(249, 115, 22, 0.24);
     }
 
     .tag-box {
       width: 100%;
+    }
+
+    &:active {
+      transform: translateY(2rpx) scale(0.995);
     }
   }
 
@@ -950,7 +1016,11 @@
     position: relative;
     z-index: 1;
     width: 100%;
-    background-color: $white;
+    border-radius: 28rpx;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+    border: 1rpx solid rgba(148, 163, 184, 0.14);
+    box-shadow: var(--ui-Surface-shadow);
 
     .sl-goods-content {
       padding: 20rpx 20rpx;

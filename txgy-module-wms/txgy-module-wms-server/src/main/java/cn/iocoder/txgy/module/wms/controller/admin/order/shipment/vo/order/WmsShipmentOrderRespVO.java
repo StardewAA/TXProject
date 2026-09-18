@@ -39,9 +39,27 @@ public class WmsShipmentOrderRespVO {
     @DictFormat(DictTypeConstants.ORDER_STATUS)
     private Integer status;
 
+    @Schema(description = "审批状态：-1 未提交，1 审批中，2 已通过，3 已拒绝，4 已取消", example = "1")
+    private Integer approvalStatus;
+
+    @Schema(description = "BPM 流程实例编号")
+    private String processInstanceId;
+
+    @Schema(description = "审批完成时间")
+    private LocalDateTime approvalTime;
+
+    @Schema(description = "审批结果原因")
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
+    private Boolean simulation;
+
     @Schema(description = "业务单号", example = "SO202605110001")
     @ExcelProperty("业务单号")
     private String bizOrderNo;
+    private String sourceModule;
+    private String businessChainNo;
 
     @Schema(description = "客户编号", example = "1024")
     private Long merchantId;

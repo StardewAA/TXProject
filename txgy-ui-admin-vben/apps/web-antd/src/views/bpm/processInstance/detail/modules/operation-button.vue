@@ -33,6 +33,7 @@ import {
   FormItem,
   Image,
   message,
+  Popconfirm,
   Popover,
   Select,
   SelectOption,
@@ -49,6 +50,7 @@ import {
   approveTask,
   copyTask,
   delegateTask,
+  getDelegateCandidates,
   getTaskListByReturn,
   rejectTask,
   returnTask,
@@ -56,6 +58,10 @@ import {
   signDeleteTask,
   transferTask,
 } from '#/api/bpm/task';
+import {
+  createContractByQuotation,
+  getQuotation,
+} from '#/api/crm/quotation';
 import { setConfAndFields2 } from '#/components/form-create';
 import { FileUpload } from '#/components/upload';
 import { $t } from '#/locales';
@@ -97,6 +103,23 @@ const popOverVisible: any = ref({
   deleteSign: false,
 }); // 气泡卡是否展示
 const returnList = ref([] as any); // 退回节点
+const approvalCandidates = ref<number[]>([]);
+const isWmsApproval = computed(() =>
+  ['wms_receipt_approval', 'wms_shipment_approval'].includes(
+    props.processDefinition?.key,
+  ),
+);
+const approvalUserOptions = computed(() => {
+  const seen = new Set<number>();
+  const users = isWmsApproval.value
+    ? props.userOptions.filter(user => user.id !== undefined && approvalCandidates.value.includes(user.id))
+    : props.userOptions;
+  return users.filter(user => {
+    if (user.id === undefined || seen.has(user.id)) return false;
+    seen.add(user.id);
+    return true;
+  });
+});
 const APPROVAL_ATTACHMENT_FILE_TYPES = [
   'doc',
   'docx',
@@ -246,7 +269,7 @@ const deleteSignFormRule: Record<string, Rule[]> = reactive({
 
 const returnFormRef = ref<FormInstance>(); // 退回表单
 const returnForm = reactive({
-  targetTaskDefinitionKey: undefined,
+  targetTaskDefinitionKey: undefined as string | undefined,
   returnReason: '',
 });
 const returnFormRule: Record<string, Rule[]> = reactive({
@@ -282,6 +305,18 @@ watch(
 
 /** 弹出气泡卡 */
 async function openPopover(type: string) {
+  if (['copy', 'transfer', 'delegate', 'addSign'].includes(type)
+    && ['wms_receipt_approval', 'wms_shipment_approval'].includes(props.processDefinition?.key)) {
+    approvalCandidates.value = await getDelegateCandidates(runningTask.value.id);
+    copyForm.copyUserIds = [];
+    transferForm.assigneeUserId = undefined;
+    delegateForm.delegateUserId = undefined;
+    addSignForm.addSignUserIds = [];
+    if (!approvalUserOptions.value.length) {
+      message.warning('当前没有拥有此流程审批权限的可选审批人');
+      return;
+    }
+  }
   if (type === 'approve') {
     // 校验流程表单
     const valid = await validateNormalForm();
@@ -297,6 +332,9 @@ async function openPopover(type: string) {
       message.warning('当前没有可退回的节点');
       return;
     }
+    returnForm.targetTaskDefinitionKey = returnList.value.length === 1
+      ? returnList.value[0].taskDefinitionKey
+      : undefined;
   }
   Object.keys(popOverVisible.value).forEach((item) => {
     if (popOverVisible.value[item]) popOverVisible.value[item] = item === type;
@@ -659,12 +697,97 @@ async function handleCancel() {
 
 /** 处理再次提交 */
 async function handleReCreate() {
+  const wmsRoute = props.processDefinition?.key === 'wms_receipt_approval'
+    ? '/wms/receipt'
+    : props.processDefinition?.key === 'wms_shipment_approval'
+      ? '/wms/shipment'
+      : undefined;
+  if (wmsRoute) {
+    const businessKey = props.processInstance?.businessKey;
+    if (!businessKey || !/^\d+$/.test(businessKey)) {
+      message.error('关联的 WMS 单据编号无效，无法重新发起');
+      return;
+    }
+    await router.push({ path: wmsRoute, query: { restartId: businessKey } });
+    return;
+  }
   // 跳转发起流程界面
   await router.push({
     name: 'BpmProcessInstanceCreate',
     query: { processInstanceId: props.processInstance?.id },
   });
 }
+
+/** 报价单审批流程的 processDefinition key */
+const QUOTATION_AUDIT_PROCESS_KEY = 'crm-quotation-audit';
+/** 已生成的合同编号（用于判断是否已转为合同） */
+const quotationContractId = ref<number | null>(null);
+
+/** 是否展示"一键转为合同"按钮：仅报价单审批流程且审批已通过且尚未生成合同时展示 */
+const showCreateContract = computed(() => {
+  return (
+    props.processDefinition?.key === QUOTATION_AUDIT_PROCESS_KEY &&
+    props.processInstance?.status === BpmProcessInstanceStatus.APPROVE &&
+    quotationContractId.value === null
+  );
+});
+
+/** 加载报价单信息，用于判断是否已经生成过合同（防重复生成） */
+async function loadQuotationInfo() {
+  // 仅报价单审批流程且审批已通过时，才需要查询报价单是否已有合同
+  if (
+    props.processDefinition?.key === QUOTATION_AUDIT_PROCESS_KEY &&
+    props.processInstance?.status === BpmProcessInstanceStatus.APPROVE &&
+    props.processInstance?.businessKey
+  ) {
+    try {
+      const data = await getQuotation(
+        Number(props.processInstance.businessKey),
+      );
+      quotationContractId.value = data.contractId ?? null;
+    } catch {
+      quotationContractId.value = null;
+    }
+  } else {
+    quotationContractId.value = null;
+  }
+}
+
+/** 一键转为合同：将已审批通过的报价单直接生成合同，并跳转到合同详情 */
+async function handleCreateContract() {
+  const businessKey = props.processInstance?.businessKey;
+  if (!businessKey) {
+    return;
+  }
+  const hideLoading = message.loading({
+    content: '生成合同中...',
+    duration: 0,
+  });
+  try {
+    const contractId = await createContractByQuotation(Number(businessKey));
+    message.success('转为合同成功');
+    await router.push({
+      name: 'CrmContractDetail',
+      params: { id: contractId },
+    });
+  } finally {
+    hideLoading();
+  }
+}
+
+// 监听流程实例/定义变化，刷新报价单合同生成状态
+watch(
+  () => [
+    props.processInstance?.id,
+    props.processInstance?.status,
+    props.processInstance?.businessKey,
+    props.processDefinition?.key,
+  ],
+  () => {
+    loadQuotationInfo();
+  },
+  { immediate: true },
+);
 
 /** 获取减签人员标签 */
 function getDeleteSignUserLabel(task: any): string {
@@ -699,6 +822,8 @@ async function handlerDeleteSign() {
 /** 重新加载数据 */
 function reload() {
   emit('success');
+  // 审批状态/报价单可能变化，刷新合同生成状态
+  loadQuotationInfo();
 }
 
 /** 任务是否为处理中状态 */
@@ -1136,7 +1261,7 @@ defineExpose({ loadTodoTask });
                   class="w-full"
                 >
                   <SelectOption
-                    v-for="item in userOptions"
+                    v-for="item in approvalUserOptions"
                     :key="item.id"
                     :label="item.nickname"
                     :value="item.id"
@@ -1181,6 +1306,7 @@ defineExpose({ loadTodoTask });
         trigger="click"
         v-if="
           runningTask &&
+          !isWmsApproval &&
           isHandleTaskStatus() &&
           isShowButton(BpmTaskOperationButtonTypeEnum.TRANSFER)
         "
@@ -1206,7 +1332,7 @@ defineExpose({ loadTodoTask });
                   style="width: 100%"
                 >
                   <SelectOption
-                    v-for="item in userOptions"
+                    v-for="item in approvalUserOptions"
                     :key="item.id"
                     :label="item.nickname"
                     :value="item.id"
@@ -1279,7 +1405,7 @@ defineExpose({ loadTodoTask });
                   style="width: 100%"
                 >
                   <SelectOption
-                    v-for="item in userOptions"
+                    v-for="item in approvalUserOptions"
                     :key="item.id"
                     :label="item.nickname"
                     :value="item.id"
@@ -1353,7 +1479,7 @@ defineExpose({ loadTodoTask });
                   style="width: 100%"
                 >
                   <SelectOption
-                    v-for="item in userOptions"
+                    v-for="item in approvalUserOptions"
                     :key="item.id"
                     :label="item.nickname"
                     :value="item.id"
@@ -1497,7 +1623,9 @@ defineExpose({ loadTodoTask });
               label-width="100px"
             >
               <FormItem label="退回节点" name="targetTaskDefinitionKey">
+                <div v-if="returnList.length === 1">{{ returnList[0]?.name }}</div>
                 <Select
+                  v-else
                   v-model:value="returnForm.targetTaskDefinitionKey"
                   :allow-clear="true"
                   style="width: 100%"
@@ -1617,6 +1745,19 @@ defineExpose({ loadTodoTask });
       >
         <IconifyIcon :size="14" icon="lucide:refresh-cw" /> 再次提交
       </Button>
+
+      <!-- 【一键转为合同】 按钮：报价单审批通过后，可将已审批通过的报价单直接转为合同 -->
+      <Popconfirm
+        v-if="showCreateContract"
+        title="确认将已审批通过的报价单转为合同？"
+        ok-text="确认"
+        cancel-text="取消"
+        @confirm="handleCreateContract"
+      >
+        <Button type="primary">
+          <IconifyIcon :size="14" icon="lucide:file-text" /> 一键转为合同
+        </Button>
+      </Popconfirm>
     </Space>
   </div>
 

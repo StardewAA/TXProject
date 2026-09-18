@@ -141,7 +141,7 @@ txgy:
   security:
     mock-enable: true
   access-log: # 访问日志的配置项
-    enable: false
+    enable: true
 
 # ERP 图片/PDF 识别服务。默认使用容器内 Tesseract，中文语言包为 chi_sim+eng。
 # 如需切换回外部结构化 OCR，将 provider 改为 http 并填写 ocr-endpoint。

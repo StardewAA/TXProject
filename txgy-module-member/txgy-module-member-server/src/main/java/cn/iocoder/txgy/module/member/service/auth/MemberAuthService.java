@@ -13,6 +13,11 @@ import jakarta.validation.Valid;
  */
 public interface MemberAuthService {
 
+    /** Internal: tenant-bound image challenge has already been consumed. */
+    AppAuthLoginRespVO registerWithVerifiedImage(cn.iocoder.txgy.module.member.controller.app.tenant.vo.AppMallImageAuthReqVO.Register request);
+
+    AppAuthLoginRespVO loginWithAccountPassword(String account, String password);
+
     /**
      * 手机 + 密码登录
      *
@@ -20,6 +25,17 @@ public interface MemberAuthService {
      * @return 登录结果
      */
     AppAuthLoginRespVO login(@Valid AppAuthLoginReqVO reqVO);
+
+    /**
+     * 手机号注册并自动登录
+     */
+    AppAuthLoginRespVO register(@Valid AppAuthRegisterReqVO reqVO);
+
+    /** Internal only: caller MUST atomically consume a tenant-bound REGISTER challenge first. */
+    AppAuthLoginRespVO registerWithVerifiedMobile(AppAuthRegisterReqVO reqVO);
+
+    /** Internal only: tenant-bound SMS_LOGIN challenge already consumed; never auto-register. */
+    AppAuthLoginRespVO loginWithVerifiedMobile(String mobile);
 
     /**
      * 基于 token 退出登录

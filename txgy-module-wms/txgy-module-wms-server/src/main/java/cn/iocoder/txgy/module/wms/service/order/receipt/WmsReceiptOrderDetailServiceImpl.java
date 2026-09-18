@@ -35,6 +35,8 @@ public class WmsReceiptOrderDetailServiceImpl implements WmsReceiptOrderDetailSe
     private WmsReceiptOrderDetailMapper receiptOrderDetailMapper;
     @Resource
     private WmsItemSkuService itemSkuService;
+    @Resource
+    private cn.iocoder.txgy.module.wms.service.md.item.WmsItemService itemService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -53,6 +55,13 @@ public class WmsReceiptOrderDetailServiceImpl implements WmsReceiptOrderDetailSe
         // 第一步，对比新老数据，获得添加、修改、删除的列表
         List<WmsReceiptOrderDetailDO> oldList = receiptOrderDetailMapper.selectListByOrderId(orderId);
         List<WmsReceiptOrderDetailDO> list = buildReceiptOrderDetailList(reqVO);
+        for (WmsReceiptOrderDetailDO detail : list) {
+            oldList.stream().filter(old -> java.util.Objects.equals(old.getId(), detail.getId())
+                    && java.util.Objects.equals(old.getSkuId(), detail.getSkuId())).findFirst().ifPresent(old -> {
+                detail.setQualityRequiredSnapshot(old.getQualityRequiredSnapshot());
+                detail.setSourceLineNo(old.getSourceLineNo()).setSourceSnapshotJson(old.getSourceSnapshotJson());
+            });
+        }
         List<WmsReceiptOrderDetailDO> newList = CollUtil.isEmpty(list) ? ListUtil.of() : list;
         List<List<WmsReceiptOrderDetailDO>> diffList = diffList(oldList, newList, // id 不同，就认为是不同的记录
                 (oldVal, newVal) -> ObjectUtil.equal(oldVal.getId(), newVal.getId()));
@@ -112,13 +121,35 @@ public class WmsReceiptOrderDetailServiceImpl implements WmsReceiptOrderDetailSe
         }
         return convertList(reqVO.getDetails(), detail -> {
             // 校验 SKU 存在
-            itemSkuService.validateItemSkuExists(detail.getSkuId());
+            var sku = itemSkuService.validateItemSkuExistsAndItemEnabled(detail.getSkuId());
             // 构建对象
             WmsReceiptOrderDetailDO detailDO = BeanUtils.toBean(detail, WmsReceiptOrderDetailDO.class)
                     .setWarehouseId(reqVO.getWarehouseId());
+            if (detail.getSourceSnapshotJson() != null) {
+                var source = cn.iocoder.txgy.framework.common.util.json.JsonUtils.parseObject(detail.getSourceSnapshotJson(),
+                        cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO.class);
+                detailDO.setQualityRequiredSnapshot(source.getQualityRequiredSnapshot());
+            } else {
+                var item = sku == null ? null : itemService.getItem(sku.getItemId());
+                detailDO.setQualityRequiredSnapshot(item == null ? null : item.getQualityRequired());
+            }
+            detailDO.setQualityImages(detail.getQualityImages() == null ? java.util.List.of() : detail.getQualityImages());
+            validateAcceptanceQuantities(detailDO, false);
             fillDetailTotalPrice(detailDO);
             return detailDO;
         });
+    }
+
+    static void validateAcceptanceQuantities(WmsReceiptOrderDetailDO detail, boolean required) {
+        var actual = detail.getActualQuantity(); var qualified = detail.getQualifiedQuantity(); var unqualified = detail.getUnqualifiedQuantity();
+        if (!required && actual == null && qualified == null && unqualified == null) return;
+        if (actual == null || qualified == null || unqualified == null || detail.getQuantity() == null
+                || actual.signum() < 0 || qualified.signum() < 0 || unqualified.signum() < 0
+                || actual.compareTo(detail.getQuantity()) > 0 || qualified.compareTo(actual) > 0
+                || actual.compareTo(qualified.add(unqualified)) != 0
+                || actual.stripTrailingZeros().scale() > 2 || qualified.stripTrailingZeros().scale() > 2 || unqualified.stripTrailingZeros().scale() > 2) {
+            throw new IllegalArgumentException("验收数量须非负、最多两位小数，实际数=合格数+不合格数，且不得超过申请数");
+        }
     }
 
     private static void fillDetailTotalPrice(WmsReceiptOrderDetailDO detail) {

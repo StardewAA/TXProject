@@ -45,12 +45,12 @@
 <!--            <artifactId>txgy-module-report-server</artifactId>-->
 <!--            <version>${revision}</version>-->
 <!--        </dependency>-->
-        <!-- 工作流。默认注释，保证编译速度 -->
-<!--        <dependency>-->
-<!--            <groupId>cn.iocoder.cloud</groupId>-->
-<!--            <artifactId>txgy-module-bpm-server</artifactId>-->
-<!--            <version>${revision}</version>-->
-<!--        </dependency>-->
+        <!-- 工作流。HRM / CRM 均依赖其 BpmProcessInstanceApi 实现，单体部署必须启用 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-bpm-server</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <!-- 支付服务。默认注释，保证编译速度 -->
 <!--        <dependency>-->
 <!--            <groupId>cn.iocoder.cloud</groupId>-->
@@ -87,12 +87,13 @@
 <!--            <version>${revision}</version>-->
 <!--        </dependency>-->
 
-        <!-- CRM 相关模块。默认注释，保证编译速度 -->
-<!--        <dependency>-->
-<!--            <groupId>cn.iocoder.cloud</groupId>-->
-<!--            <artifactId>txgy-module-crm-server</artifactId>-->
-<!--            <version>${revision}</version>-->
-<!--        </dependency>-->
+        <!-- CRM 相关模块。单体部署必须启用：否则 txgy-server 不编译 CRM，
+             所有 /admin-api/crm/** 请求会被兜底路由拦截并返回 501「模块已禁用」 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-crm-server</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- ERP 相关模块。默认注释，保证编译速度 -->
 <!--        <dependency>-->

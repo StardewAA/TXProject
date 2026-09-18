@@ -55,6 +55,8 @@
   import { closeAuthModal } from '@/sheep/hooks/useModal';
   import FileApi from '@/sheep/api/infra/file';
   import UserApi from '@/sheep/api/member/user';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  const task = useTenantTask();
 
   const props = defineProps({
     agreeStatus: {
@@ -91,12 +93,16 @@
     if (!tempUrl) {
       return;
     }
-    let { data } = await FileApi.uploadFile(tempUrl);
-    state.model.avatar = data;
+    const current = task.capture();
+    try {
+      const { data } = await FileApi.uploadFile(tempUrl, '', undefined, current);
+      if (current()) state.model.avatar = data;
+    } catch (error) { if (current()) sheep.$helper.toast(error.message || '头像上传失败，请重试'); }
   }
 
   // 确认授权
   async function onConfirm() {
+    if (!task.current()) return;
     const { model } = state;
     const { nickname, avatar } = model;
     if (!nickname) {

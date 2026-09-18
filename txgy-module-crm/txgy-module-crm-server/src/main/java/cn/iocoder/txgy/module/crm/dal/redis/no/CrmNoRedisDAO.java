@@ -29,6 +29,11 @@ public class CrmNoRedisDAO {
      */
     public static final String RECEIVABLE_PREFIX = "HK";
 
+    /**
+     * 报价 {@link cn.iocoder.txgy.module.crm.dal.dataobject.quotation.CrmQuotationDO}
+     */
+    public static final String QUOTATION_NO_PREFIX = "BJ";
+
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 

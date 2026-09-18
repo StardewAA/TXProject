@@ -47,6 +47,48 @@ const userAvatar = computed(
 
 const { list } = toRefs(props); // 定义 emits
 
+/**
+ * 解析消息 content 中的 <think>...</think> 标签：
+ * 将思考过程拆分到 reasoningContent（渲染为「已深度思考」折叠面板），
+ * 剩余部分作为正式回答内容展示。
+ *
+ * 兼容流式输出中间态：
+ * - <think> 已出现但 </think> 未到达 → 标签后的内容全部视为思考中
+ * - 非 assistant 消息（user/system）不做处理
+ */
+function splitThinkMessage(
+  message: AiChatMessageApi.ChatMessage,
+): AiChatMessageApi.ChatMessage {
+  if (message.type === 'user') {
+    return message;
+  }
+  const content = message.content || '';
+  if (!content.includes('<think>')) {
+    return message;
+  }
+  const startIdx = content.indexOf('<think>');
+  const endIdx = content.indexOf('</think>');
+  if (endIdx === -1) {
+    // 流式中间态：思考过程尚未结束
+    const reasoning = content.slice(startIdx + 7).trim();
+    return {
+      ...message,
+      reasoningContent: reasoning || message.reasoningContent || '',
+      content: '',
+    } as AiChatMessageApi.ChatMessage;
+  }
+  const reasoning = content.slice(startIdx + 7, endIdx).trim();
+  const answer = content.slice(endIdx + 8).trim();
+  return {
+    ...message,
+    reasoningContent: reasoning,
+    content: answer,
+  } as AiChatMessageApi.ChatMessage;
+}
+
+/** 展示用消息列表：assistant 消息先经过 <think> 解析 */
+const displayList = computed(() => list.value.map(splitThinkMessage));
+
 // ============ 处理对话滚动 ==============
 
 /** 滚动到底部 */
@@ -116,7 +158,7 @@ onMounted(async () => {
 <template>
   <div ref="messageContainer" class="relative h-full overflow-y-auto">
     <div
-      v-for="(item, index) in list"
+      v-for="(item, index) in displayList"
       :key="index"
       class="mt-12 flex flex-col overflow-y-hidden px-5"
     >
@@ -140,6 +182,7 @@ onMounted(async () => {
             <MessageReasoning
               :reasoning-content="item.reasoningContent || ''"
               :content="item.content || ''"
+              :duration-seconds="(item as any).reasoningSeconds"
             />
             <MarkdownView
               class="text-sm text-gray-600"

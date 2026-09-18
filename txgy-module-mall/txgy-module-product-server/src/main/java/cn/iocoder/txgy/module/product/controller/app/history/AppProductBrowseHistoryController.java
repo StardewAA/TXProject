@@ -36,6 +36,7 @@ public class AppProductBrowseHistoryController {
     private ProductBrowseHistoryService productBrowseHistoryService;
     @Resource
     private ProductSpuService productSpuService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @DeleteMapping(value = "/delete")
     @Operation(summary = "删除商品浏览记录")
@@ -59,16 +60,21 @@ public class AppProductBrowseHistoryController {
                 .setUserDeleted(false); // 排除用户已删除的（隐藏的）
         PageResult<ProductBrowseHistoryDO> pageResult = productBrowseHistoryService.getBrowseHistoryPage(pageReqVO);
         if (CollUtil.isEmpty(pageResult.getList())) {
-            return success(PageResult.empty());
+            return success(PageResult.empty(pageResult.getTotal()));
         }
 
         // 得到商品 spu 信息
         Set<Long> spuIds = convertSet(pageResult.getList(), ProductBrowseHistoryDO::getSpuId);
-        Map<Long, ProductSpuDO> spuMap = convertMap(productSpuService.getSpuList(spuIds), ProductSpuDO::getId);
+        Map<Long, ProductSpuDO> spuMap = convertMap(productSpuService.getSpuList(spuIds).stream().filter(java.util.Objects::nonNull).toList(), ProductSpuDO::getId);
         return success(BeanUtils.toBean(pageResult, AppProductBrowseHistoryRespVO.class,
-                vo -> Optional.ofNullable(spuMap.get(vo.getSpuId()))
-                        .ifPresent(spu -> vo.setSpuName(spu.getName()).setPicUrl(spu.getPicUrl()).setPrice(spu.getPrice())
-                                .setSalesCount(spu.getSalesCount()).setStock(spu.getStock()))));
+                vo -> {
+                    var spu = spuMap.get(vo.getSpuId()); boolean saleable = reviewService.saleable(spu);
+                    vo.setSaleable(saleable);
+                    if (saleable) vo.setSpuName(spu.getName()).setPicUrl(spu.getPicUrl()).setPrice(spu.getPrice())
+                            .setSalesCount(spu.getSalesCount()).setStock(spu.getStock());
+                    else vo.setSpuName("商品暂不可购买").setPicUrl("").setPrice(null).setSalesCount(null).setStock(null)
+                            .setUnavailableReason("商品已下架或正在审核");
+                }));
     }
 
 }

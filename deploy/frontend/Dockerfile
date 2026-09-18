@@ -2,11 +2,17 @@ FROM node:22-bookworm-slim AS builder
 
 WORKDIR /workspace/txgy-ui-admin-vben
 
+# lefthook prepare 脚本需要 git
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
 COPY txgy-ui-admin-vben/ ./
 
-RUN pnpm install --frozen-lockfile
+# lefthook prepare 需要 git 仓库（.git 被 .dockerignore 排除，需初始化）
+RUN git init -q
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --no-frozen-lockfile
 
 ENV NODE_OPTIONS=--max-old-space-size=2048
 ENV VITE_BASE_URL=

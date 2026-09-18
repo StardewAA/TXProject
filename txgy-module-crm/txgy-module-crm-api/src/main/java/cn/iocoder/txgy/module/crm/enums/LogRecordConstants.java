@@ -95,6 +95,15 @@ public interface LogRecordConstants {
     String CRM_BUSINESS_FOLLOW_UP_SUCCESS = "商机跟进【{{#businessName}}】";
     String CRM_BUSINESS_UPDATE_STATUS_SUB_TYPE = "更新商机状态";
     String CRM_BUSINESS_UPDATE_STATUS_SUCCESS = "更新了商机【{{#businessName}}】的状态从【{{#oldStatusName}}】变更为了【{{#newStatusName}}】";
+    // 商机标准化阶段方案：阶段推进 / 赢单 / 输单 / 管理员调整状态组
+    String CRM_BUSINESS_UPDATE_STAGE_SUB_TYPE = "变更商机阶段";
+    String CRM_BUSINESS_UPDATE_STAGE_SUCCESS = "将商机【{{#businessName}}】的阶段从【{{#oldStageName}}】变更为【{{#newStageName}}】";
+    String CRM_BUSINESS_WIN_SUB_TYPE = "商机赢单";
+    String CRM_BUSINESS_WIN_SUCCESS = "将商机【{{#businessName}}】标记为赢单，签约日期【{{#signDate}}】，签约金额【{{#signAmount}}】";
+    String CRM_BUSINESS_LOSE_SUB_TYPE = "商机输单";
+    String CRM_BUSINESS_LOSE_SUCCESS = "将商机【{{#businessName}}】标记为丢单，丢单原因【{{#lostReasonName}}】，丢单备注【{{#lostRemark}}】";
+    String CRM_BUSINESS_UPDATE_STATE_SUB_TYPE = "调整商机状态组";
+    String CRM_BUSINESS_UPDATE_STATE_SUCCESS = "管理员将商机【{{#businessName}}】的状态组从【{{#oldStateName}}】调整为【{{#newStateName}}】，说明【{{#reason}}】";
 
     // ======================= CRM_CONTRACT_CONFIG 合同配置 =======================
 
@@ -117,6 +126,22 @@ public interface LogRecordConstants {
     String CRM_CONTRACT_SUBMIT_SUCCESS = "提交合同【{{#contractName}}】审批成功";
     String CRM_CONTRACT_FOLLOW_UP_SUB_TYPE = "合同跟进";
     String CRM_CONTRACT_FOLLOW_UP_SUCCESS = "合同跟进【{{#contractName}}】";
+
+    // ======================= CRM_QUOTATION 报价 =======================
+
+    String CRM_QUOTATION_TYPE = "CRM 报价";
+    String CRM_QUOTATION_CREATE_SUB_TYPE = "创建报价";
+    String CRM_QUOTATION_CREATE_SUCCESS = "创建了报价{{#quotation.name}}";
+    String CRM_QUOTATION_UPDATE_SUB_TYPE = "更新报价";
+    String CRM_QUOTATION_UPDATE_SUCCESS = "更新了报价【{{#quotationName}}】: {_DIFF{#updateReqVO}}";
+    String CRM_QUOTATION_DELETE_SUB_TYPE = "删除报价";
+    String CRM_QUOTATION_DELETE_SUCCESS = "删除了报价【{{#quotationName}}】";
+    String CRM_QUOTATION_TRANSFER_SUB_TYPE = "转移报价";
+    String CRM_QUOTATION_TRANSFER_SUCCESS = "将报价【{{#quotation.name}}】的负责人从【{getAdminUserById{#quotation.ownerUserId}}】变更为了【{getAdminUserById{#reqVO.newOwnerUserId}}】";
+    String CRM_QUOTATION_SUBMIT_SUB_TYPE = "提交报价审批";
+    String CRM_QUOTATION_SUBMIT_SUCCESS = "提交报价【{{#quotationName}}】审批成功";
+    String CRM_QUOTATION_CREATE_CONTRACT_SUB_TYPE = "报价生成合同";
+    String CRM_QUOTATION_CREATE_CONTRACT_SUCCESS = "由报价【{{#quotationName}}】生成了合同";
 
     // ======================= CRM_PRODUCT 产品 =======================
 

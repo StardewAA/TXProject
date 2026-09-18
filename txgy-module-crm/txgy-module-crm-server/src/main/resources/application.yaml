@@ -102,6 +102,32 @@ txgy:
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.crm
+  # CRM AI 助手（意图识别）：密钥保存在后端，前端只调 /crm/ai/classify-intent
+  # 部署时通过环境变量注入 DASHSCOPE_API_KEY，避免密钥进入代码仓库与浏览器
+  crm:
+    ai:
+      enabled: ${CRM_AI_ENABLED:true}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model: ${DASHSCOPE_MODEL:qwen-plus}
+      vision-model: ${DASHSCOPE_VISION_MODEL:qwen-vl-plus}
+      extract-timeout: ${CRM_AI_EXTRACT_TIMEOUT:60000}
+  # CRM 产品管理对接 WMS（进仓产品）的同步配置
+  # mode=remote：调用 WMS 的 GET /admin-api/wms/crm/products/page（正式对接方式）
+  # mode=mock：直接读取同库 WMS 表，供本地联调使用（application-local.yaml 已开启）
+  # remote 模式必须注入 WMS_READONLY_AUTHORIZATION，建议使用仅具备商品查询权限的专用账号（令牌只放在后端）
+  integration:
+    wms:
+      crm-product:
+        mode: ${CRM_WMS_PRODUCT_MODE:remote}
+        authorization: ${WMS_READONLY_AUTHORIZATION:}
+        tenant-id: ${CRM_WMS_PRODUCT_TENANT_ID:0} # 0 表示不限制租户
+        page-size: ${CRM_WMS_PRODUCT_PAGE_SIZE:200}
+        default-category-id: ${CRM_WMS_PRODUCT_CATEGORY_ID:0} # 0 表示按默认分类名查找或创建
+        default-category-name: ${CRM_WMS_PRODUCT_CATEGORY_NAME:WMS 同步产品}
+        default-owner-user-id: ${CRM_WMS_PRODUCT_OWNER_USER_ID:1}
+        default-unit: ${CRM_WMS_PRODUCT_UNIT:1} # 单位字典匹配不到时的兜底值，1=个
+        default-price: ${CRM_WMS_PRODUCT_PRICE:0}
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

@@ -6,10 +6,11 @@ import { handleTree } from '@vben/utils';
 
 import { getSimpleBrandList } from '#/api/mall/product/brand';
 import { getCategoryList } from '#/api/mall/product/category';
+import { getShopList } from '#/api/mall/product/shop';
 import { getSimpleTemplateList } from '#/api/mall/trade/delivery/expressTemplate';
 
 /** 基础设置的表单 */
-export function useInfoFormSchema(): VbenFormSchema[] {
+export function useInfoFormSchema(lockedShopIds: number[] = []): VbenFormSchema[] {
   return [
     {
       fieldName: 'id',
@@ -42,6 +43,21 @@ export function useInfoFormSchema(): VbenFormSchema[] {
         placeholder: '请选择商品分类',
       },
       rules: 'required',
+    },
+    {
+      fieldName: 'shopId',
+      label: '所属店铺',
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => (await getShopList()).map((shop) => ({
+          ...shop,
+          disabled: lockedShopIds.includes(shop.id ?? 0),
+        })),
+        labelField: 'name',
+        valueField: 'id',
+        allowClear: true,
+        placeholder: '请选择非试点店铺；试点店铺请使用销售中心',
+      },
     },
     {
       fieldName: 'brandId',

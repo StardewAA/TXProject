@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import lombok.*;
 
 import java.util.List;
@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * 商品 SKU DO
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 @TableName(value = "product_sku", autoResultMap = true)
 @KeySequence("product_sku_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
@@ -42,7 +42,7 @@ public class ProductSkuDO extends BaseDO {
     /**
      * 属性数组，JSON 格式
      */
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<Property> properties;
     /**
      * 商品价格，单位：分
@@ -68,6 +68,14 @@ public class ProductSkuDO extends BaseDO {
      * 库存
      */
     private Integer stock;
+    /**
+     * WMS 物料 SKU 编号。与仓库编号同时配置时，商城库存以 WMS 可售库存为准。
+     */
+    private Long wmsSkuId;
+    /**
+     * WMS 仓库编号。与物料 SKU 编号同时配置时生效。
+     */
+    private Long wmsWarehouseId;
     /**
      * 商品重量，单位：kg 千克
      */

@@ -5,12 +5,13 @@ import type { DescriptionItemSchema } from '#/components/description';
 
 import { h, markRaw } from 'vue';
 
-import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
+import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { formatDate, handleTree } from '@vben/utils';
 
-import { getRecruitPostTypeList } from '#/api/hrm/recruit/post/type';
 import { getSimpleDeptList } from '#/api/system/dept';
+import { getRecruitChannelSimpleList } from '#/api/hrm/recruit/channel';
+import { getRecruitPostTypeList } from '#/api/hrm/recruit/post/type';
 import { AreaCascader } from '#/components/area';
 import { DictTag } from '#/components/dict-tag';
 import EmployeeSelect from '#/views/hrm/employee/components/employee-select.vue';
@@ -19,7 +20,9 @@ import {
   HrmEmployeeEntryStatus,
   HrmRecruitEmergencyLevel,
   HrmRecruitJobNature,
+  HrmRecruitJobNatureOptions,
   HrmRecruitPostEducation,
+  HrmRecruitPostEducationOptions,
   HrmRecruitPostStatus,
   HrmRecruitSalaryUnit,
   HrmRecruitWorkTime,
@@ -32,6 +35,9 @@ import {
   formatRecruitPostSalary,
   formatRecruitPostSchedule,
 } from '#/views/hrm/utils/format';
+
+const optionLabel = (options: readonly { label: string; value: number }[], value: unknown) =>
+  options.find((item) => item.value === Number(value))?.label ?? '-';
 
 import AgeRangeField from './modules/age-range-field.vue';
 import SalaryRangeField from './modules/salary-range-field.vue';
@@ -50,11 +56,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'jobNature',
-      label: '工作性质',
+      label: '职位类型',
       component: 'Select',
       componentProps: {
-        options: getDictOptions(DICT_TYPE.HRM_RECRUIT_JOB_NATURE, 'number'),
-        placeholder: '请选择工作性质',
+        options: HrmRecruitJobNatureOptions,
+        placeholder: '请选择职位类型',
         allowClear: true,
       },
     },
@@ -108,12 +114,9 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitPostApi.RecruitP
     { field: 'deptName', title: '用人部门', minWidth: 120 },
     {
       field: 'jobNature',
-      title: '工作性质',
+      title: '职位类型',
       width: 100,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.HRM_RECRUIT_JOB_NATURE },
-      },
+      formatter: ({ cellValue }) => optionLabel(HrmRecruitJobNatureOptions, cellValue),
     },
     {
       field: 'areaName',
@@ -138,19 +141,13 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitPostApi.RecruitP
       field: 'workTime',
       title: '工作经验',
       width: 110,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.HRM_RECRUIT_WORK_TIME },
-      },
+      formatter: ({ cellValue }) => cellValue === 0 || cellValue === null || cellValue === undefined ? '不限' : `${cellValue} 年`,
     },
     {
       field: 'educationRequire',
       title: '学历要求',
       width: 120,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.HRM_RECRUIT_POST_EDUCATION },
-      },
+      formatter: ({ cellValue }) => optionLabel(HrmRecruitPostEducationOptions, cellValue),
     },
     {
       field: 'minSalary',
@@ -182,6 +179,7 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitPostApi.RecruitP
     },
     { field: 'ownerEmployeeName', title: '招聘负责人', minWidth: 120 },
     { field: 'postTypeName', title: '职位类型', minWidth: 120 },
+    { field: 'channelName', title: '发布渠道', minWidth: 120 },
     {
       field: 'interviewEmployeeNames',
       title: '面试官',
@@ -247,13 +245,40 @@ export function useFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'jobNature',
-      label: '工作性质',
+      label: '职位类型',
       component: 'Select',
       rules: 'required',
       defaultValue: HrmRecruitJobNature.FULL_TIME,
       componentProps: {
-        options: getDictOptions(DICT_TYPE.HRM_RECRUIT_JOB_NATURE, 'number'),
-        placeholder: '请选择工作性质',
+        options: HrmRecruitJobNatureOptions,
+        placeholder: '请选择职位类型',
+        allowClear: true,
+      },
+    },
+    {
+      fieldName: 'postTypeId',
+      label: '职位分类',
+      component: 'ApiTreeSelect',
+      componentProps: {
+        api: async () => handleTree(await getRecruitPostTypeList()),
+        labelField: 'name',
+        valueField: 'id',
+        childrenField: 'children',
+        placeholder: '请选择职位分类',
+        allowClear: true,
+        treeDefaultExpandAll: false,
+      },
+    },
+    {
+      fieldName: 'channelId',
+      label: '发布渠道',
+      component: 'ApiSelect',
+      rules: 'required',
+      componentProps: {
+        api: getRecruitChannelSimpleList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择发布渠道',
         allowClear: true,
       },
     },
@@ -289,13 +314,16 @@ export function useFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'workTime',
-      label: '工作经验',
-      component: 'Select',
-      defaultValue: HrmRecruitWorkTime.UNLIMITED,
+      label: '工作年限',
+      component: 'InputNumber',
+      defaultValue: HrmRecruitWorkTime.UNLIMITED - 1,
       componentProps: {
-        options: getDictOptions(DICT_TYPE.HRM_RECRUIT_WORK_TIME, 'number'),
-        placeholder: '请选择工作经验',
+        min: 0,
+        max: 99,
+        precision: 0,
+        placeholder: '请输入工作年限（年）',
         allowClear: true,
+        class: 'w-full',
       },
     },
     {
@@ -304,7 +332,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       defaultValue: HrmRecruitPostEducation.UNLIMITED,
       componentProps: {
-        options: getDictOptions(DICT_TYPE.HRM_RECRUIT_POST_EDUCATION, 'number'),
+        options: HrmRecruitPostEducationOptions,
         placeholder: '请选择学历要求',
         allowClear: true,
       },
@@ -399,23 +427,6 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'postTypeId',
-      label: '职位类型',
-      component: 'ApiTreeSelect',
-      componentProps: {
-        api: async () =>
-          handleTree(
-            await getRecruitPostTypeList({ status: CommonStatusEnum.ENABLE }),
-          ),
-        labelField: 'name',
-        valueField: 'id',
-        childrenField: 'children',
-        placeholder: '请选择职位类型',
-        allowClear: true,
-        treeDefaultExpandAll: true,
-      },
-    },
-    {
       fieldName: 'interviewEmployeeIds',
       label: '面试官',
       component: markRaw(EmployeeSelect),
@@ -443,16 +454,16 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 停止招聘表单 */
+/** 职位状态变更表单 */
 export function useStopFormSchema(): VbenFormSchema[] {
   return [
     {
       fieldName: 'stopReason',
-      label: '停止原因',
+      label: '状态变更原因',
       component: 'Textarea',
       rules: 'required',
       componentProps: {
-        placeholder: '例如：岗位暂停',
+        placeholder: '请输入状态变更原因',
         maxlength: 255,
         rows: 3,
         showCount: true,
@@ -468,11 +479,11 @@ export function useHeaderSchema(): DescriptionItemSchema[] {
     { field: 'deptName', label: '用人部门' },
     {
       field: 'jobNature',
-      label: '工作性质',
+      label: '职位类型',
       render: (val) =>
         val === undefined || val === null
           ? '-'
-          : h(DictTag, { type: DICT_TYPE.HRM_RECRUIT_JOB_NATURE, value: val }),
+          : optionLabel(HrmRecruitJobNatureOptions, val),
     },
     { field: 'areaName', label: '工作城市' },
     { field: 'ownerEmployeeName', label: '招聘负责人' },
@@ -492,11 +503,11 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
     { field: 'deptName', label: '用人部门' },
     {
       field: 'jobNature',
-      label: '工作性质',
+      label: '职位类型',
       render: (val) =>
         val === undefined || val === null
           ? '-'
-          : h(DictTag, { type: DICT_TYPE.HRM_RECRUIT_JOB_NATURE, value: val }),
+          : optionLabel(HrmRecruitJobNatureOptions, val),
     },
     { field: 'areaName', label: '工作城市' },
     {
@@ -512,11 +523,11 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
     { field: 'reason', label: '招聘原因', span: 2 },
     {
       field: 'workTime',
-      label: '工作经验',
+      label: '工作年限',
       render: (val) =>
         val === undefined || val === null
           ? '-'
-          : h(DictTag, { type: DICT_TYPE.HRM_RECRUIT_WORK_TIME, value: val }),
+          : val === 0 ? '不限' : `${val} 年`,
     },
     {
       field: 'educationRequire',
@@ -524,10 +535,7 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
       render: (val) =>
         val === undefined || val === null
           ? '-'
-          : h(DictTag, {
-              type: DICT_TYPE.HRM_RECRUIT_POST_EDUCATION,
-              value: val,
-            }),
+          : optionLabel(HrmRecruitPostEducationOptions, val),
     },
     {
       field: 'minSalary',
@@ -559,6 +567,7 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
     },
     { field: 'ownerEmployeeName', label: '招聘负责人' },
     { field: 'postTypeName', label: '职位类型' },
+    { field: 'channelName', label: '发布渠道' },
     {
       field: 'interviewEmployeeNames',
       label: '面试官',
@@ -576,9 +585,11 @@ export function useBasicInfoSchema(): DescriptionItemSchema[] {
     },
     {
       field: 'stopReason',
-      label: '停止原因',
+      label: '状态变更原因',
       span: 2,
-      show: (values) => values.status === HrmRecruitPostStatus.STOPPED,
+      show: (values) =>
+        values.status === HrmRecruitPostStatus.PAUSED ||
+        values.status === HrmRecruitPostStatus.CLOSED,
     },
     {
       field: 'createTime',

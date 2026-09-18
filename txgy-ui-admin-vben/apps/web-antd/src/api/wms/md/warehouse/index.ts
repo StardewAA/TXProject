@@ -8,9 +8,25 @@ export namespace WmsWarehouseApi {
     id?: number;
     code?: string;
     name?: string;
+    warehouseType?: 'RAW_MATERIAL' | 'FINISHED_GOODS';
+    status?: number;
+    organizationName?: string;
+    city?: string;
+    address?: string;
+    principal?: string;
+    principalPhone?: string;
     remark?: string;
     sort?: number;
     createTime?: Date;
+    managerUserId?: number;
+    managerName?: string;
+    memberUserIds?: number[];
+    memberCount?: number;
+    creator?: string;
+    creatorName?: string;
+    updateTime?: Date;
+    updater?: string;
+    updaterName?: string;
   }
 }
 

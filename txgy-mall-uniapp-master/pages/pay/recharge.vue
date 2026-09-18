@@ -70,6 +70,7 @@
   const state = reactive({
     recharge_money: '', // 输入的充值金额
     packageList: [],
+    loading: false,
   });
 
   // 点击卡片，选择充值金额
@@ -83,28 +84,28 @@
     if (code !== 0) {
       return;
     }
-    state.packageList = data;
+    state.packageList = Array.isArray(data) ? data : [];
   }
 
   // 发起支付
   async function onConfirm() {
-    const { code, data } = await PayWalletApi.createWalletRecharge({
-      packageId: state.packageList.find((item) => fen2yuan(item.payPrice) === state.recharge_money)
-        ?.id,
-      payPrice: state.recharge_money * 100,
-    });
-    if (code !== 0) {
-      return;
-    }
-    // #ifdef MP
-    sheep.$platform
-      .useProvider('wechat')
-      .subscribeMessage(WxaSubscribeTemplate.PAY_WALLET_RECHARGER_SUCCESS);
-    // #endif
-    sheep.$router.go('/pages/pay/index', {
-      id: data.payOrderId,
-      orderType: 'recharge',
-    });
+    const amount = Number(state.recharge_money);
+    if (state.loading || !Number.isFinite(amount) || amount <= 0) return;
+    state.loading = true;
+    try {
+      const selected = state.packageList.find((item) => fen2yuan(item.payPrice) === state.recharge_money);
+      const { code, data } = await PayWalletApi.createWalletRecharge({
+        packageId: selected?.id,
+        payPrice: Math.round(amount * 100),
+      });
+      if (code !== 0 || !data?.payOrderId) return;
+      // #ifdef MP
+      sheep.$platform
+        .useProvider('wechat')
+        .subscribeMessage(WxaSubscribeTemplate.PAY_WALLET_RECHARGER_SUCCESS);
+      // #endif
+      sheep.$router.go('/pages/pay/index', { id: data.payOrderId, orderType: 'recharge' });
+    } finally { state.loading = false; }
   }
 
   onLoad(() => {

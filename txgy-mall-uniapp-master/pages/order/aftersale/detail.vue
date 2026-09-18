@@ -1,7 +1,7 @@
 <!-- 售后详情 -->
 <template>
-  <s-layout title="售后详情" :navbar="!isEmpty(state.info) && state.loading ? 'inner' : 'normal'">
-    <view class="content_box" v-if="!isEmpty(state.info) && state.loading">
+  <s-layout title="售后详情" :navbar="state.loaded && !isEmpty(state.info) ? 'inner' : 'normal'">
+    <view class="content_box" v-if="state.loaded && !isEmpty(state.info)">
       <!-- 步骤条 -->
       <view
         class="steps-box ss-flex"
@@ -64,11 +64,12 @@
       </view>
       <!-- 服务商品 -->
       <view class="order-shop">
+        <view class="shop-name">店铺：{{ state.info.shopName || '平台自营' }}</view>
         <s-goods-item
           :img="state.info.picUrl"
           :title="state.info.spuName"
           :titleWidth="480"
-          :skuText="state.info.properties.map((property) => property.valueName).join(' ')"
+          :skuText="(state.info.properties || []).map((property) => property.valueName).join(' ')"
           :num="state.info.count"
         />
       </view>
@@ -103,15 +104,16 @@
 
     <!-- 操作区 -->
     <s-empty
-      v-if="isEmpty(state.info) && state.loading"
+      v-if="state.loaded && isEmpty(state.info)"
       icon="/static/order-empty.png"
       text="暂无该订单售后详情"
     />
-    <su-fixed bottom placeholder bg="bg-white" v-if="!isEmpty(state.info)">
+    <su-fixed bottom placeholder bg="bg-white" v-if="state.loaded && !isEmpty(state.info)">
       <view class="foot_box">
         <button
           class="ss-reset-button btn"
           v-if="state.info.buttons?.includes('cancel')"
+          :disabled="state.cancelling"
           @tap="onApply(state.info.id)"
         >
           取消申请
@@ -125,9 +127,9 @@
         </button>
         <button
           class="ss-reset-button contcat-btn btn"
-          @tap="sheep.$router.go('/pages/chat/index')"
+          @tap="sheep.$router.go('/pages/chat/service', chatEntry(state.info.shopId, 'ORDER', state.info.orderId))"
         >
-          联系客服
+          {{ state.info.shopId > 0 ? '联系店铺客服' : '联系平台客服' }}
         </button>
       </view>
     </su-fixed>
@@ -136,6 +138,7 @@
 
 <script setup>
   import sheep from '@/sheep';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
   import { onLoad } from '@dcloudio/uni-app';
   import { reactive } from 'vue';
   import { isEmpty } from 'lodash-es';
@@ -152,6 +155,8 @@
     id: 0, // 售后编号
     info: {}, // 收货信息
     loading: false,
+    loaded: false,
+    cancelling: false,
     active: 0, // 在 list 的激活位置
     list: [
       {
@@ -167,6 +172,9 @@
   });
 
   function onApply(id) {
+    if (state.cancelling || !id) {
+      return;
+    }
     uni.showModal({
       title: '提示',
       content: '确定要取消此申请吗？',
@@ -174,9 +182,17 @@
         if (!res.confirm) {
           return;
         }
-        const { code } = await AfterSaleApi.cancelAfterSale(id);
-        if (code === 0) {
-          await getDetail(id);
+        state.cancelling = true;
+        try {
+          const response = await AfterSaleApi.cancelAfterSale(id);
+          if (response?.code === 0) {
+            await getDetail(id);
+          }
+        } catch (error) {
+          console.warn('取消售后申请失败', error);
+          sheep.$helper.toast('取消售后申请失败');
+        } finally {
+          state.cancelling = false;
         }
       },
     });
@@ -184,38 +200,75 @@
 
   // 复制
   const onCopy = () => {
-    sheep.$helper.copyText(state.info.no);
+    if (state.info?.no) {
+      sheep.$helper.copyText(state.info.no);
+    }
   };
 
   async function getDetail(id) {
-    state.loading = true;
-    const { code, data } = await AfterSaleApi.getAfterSale(id);
-    if (code !== 0) {
+    if (!id) {
       state.info = null;
+      state.loaded = true;
       return;
     }
-    state.info = data;
-    handleAfterSaleButtons(state.info);
+    state.loading = true;
+    state.loaded = false;
+    state.info = {};
+    try {
+      const response = await AfterSaleApi.getAfterSale(id);
+      if (response?.code !== 0 || !response.data || typeof response.data !== 'object') {
+        state.info = null;
+        state.active = 0;
+        return;
+      }
+      const source = response.data;
+      state.info = {
+        ...source,
+        // Long 编号保留原始值，状态及金额字段统一成可比较的数字
+        id: source.id,
+        status: Number(source.status),
+        way: Number(source.way),
+        shopName: String(source.shopName || '').trim() || '平台自营',
+        properties: Array.isArray(source.properties) ? source.properties : [],
+        buttons: Array.isArray(source.buttons) ? source.buttons : [],
+        refundPrice: Number(source.refundPrice) || 0,
+        count: Number(source.count) || 0,
+      };
+      handleAfterSaleButtons(state.info);
 
-    // 处理时间轴
-    if ([10].includes(state.info.status)) {
+      // 处理时间轴
+      if ([10].includes(state.info.status)) {
+        state.active = 0;
+      } else if ([20, 30].includes(state.info.status)) {
+        state.active = 1;
+      } else if ([40, 50].includes(state.info.status)) {
+        state.active = 2;
+      } else if ([61, 62, 63].includes(state.info.status)) {
+        state.active = 2;
+      } else {
+        state.active = 0;
+      }
+    } catch (error) {
+      console.warn('加载售后详情失败', error);
+      state.info = null;
       state.active = 0;
-    } else if ([20, 30].includes(state.info.status)) {
-      state.active = 1;
-    } else if ([40, 50].includes(state.info.status)) {
-      state.active = 2;
-    } else if ([61, 62, 63].includes(state.info.status)) {
-      state.active = 2;
+    } finally {
+      state.loading = false;
+      state.loaded = true;
     }
   }
 
-  onLoad((options) => {
-    if (!options.id) {
+  onLoad((options = {}) => {
+    const id = String(options.id || '').trim();
+    if (!/^\d+$/.test(id) || /^0+$/.test(id)) {
       sheep.$helper.toast(`缺少订单信息，请检查`);
+      state.info = null;
+      state.loaded = true;
       return;
     }
-    state.id = options.id;
-    getDetail(options.id);
+    // Long 类型编号可能超过 JS 安全整数范围，按字符串传递
+    state.id = id;
+    getDetail(id);
   });
 </script>
 
@@ -323,6 +376,12 @@
     padding: 20rpx;
     background-color: #fff;
     margin: 0 20rpx 20rpx 20rpx;
+
+    .shop-name {
+      margin-bottom: 12rpx;
+      color: #666;
+      font-size: 24rpx;
+    }
   }
 
   // 服务内容

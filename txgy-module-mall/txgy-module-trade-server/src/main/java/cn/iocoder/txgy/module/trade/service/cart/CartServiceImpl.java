@@ -20,6 +20,7 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_NOT_EXISTS;
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_STOCK_NOT_ENOUGH;
+import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SPU_NOT_ENABLE;
 import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.CARD_ITEM_NOT_FOUND;
 import static java.util.Collections.emptyList;
 
@@ -143,7 +144,7 @@ public class CartServiceImpl implements CartService {
 
         // 查询 SPU、SKU 列表
         List<ProductSpuRespDTO> spus = productSpuApi.getSpuList(convertSet(carts, CartDO::getSpuId)).getCheckedData();
-        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(convertSet(carts, CartDO::getSkuId)).getCheckedData();
+        List<ProductSkuRespDTO> skus = productSkuApi.getSkuList(convertSet(carts, CartDO::getSkuId));
 
         // 如果 SPU 被删除，则删除购物车对应的商品。延迟删除
         // 为什么不是 SKU 被删除呢？因为 SKU 被删除时，还可以通过 SPU 选择其它 SKU
@@ -183,9 +184,15 @@ public class CartServiceImpl implements CartService {
      * @return 商品 SKU
      */
     private ProductSkuRespDTO checkProductSku(Long skuId, Integer count) {
-        ProductSkuRespDTO sku = productSkuApi.getSku(skuId).getCheckedData();
+        ProductSkuRespDTO sku = productSkuApi.getSku(skuId);
         if (sku == null) {
             throw exception(SKU_NOT_EXISTS);
+        }
+        // 购物车入口同样核对当前审核版本，不能只凭 SKU 存在就加入待审/下架商品。
+        List<ProductSpuRespDTO> spus = productSpuApi.validateSpuList(List.of(sku.getSpuId())).getCheckedData();
+        if (spus == null || spus.stream().noneMatch(spu -> Objects.equals(spu.getId(), sku.getSpuId())
+                && Boolean.TRUE.equals(spu.getSaleable()))) {
+            throw exception(SPU_NOT_ENABLE, sku.getSpuId());
         }
         if (count > sku.getStock()) {
             throw exception(SKU_STOCK_NOT_ENOUGH);

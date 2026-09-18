@@ -88,6 +88,38 @@ export const HrmRecruitCandidateStatus = {
   JOINED: 8, // 已入职
 } as const;
 
+/** 招聘应聘状态（对齐 HRM 招聘应聘状态机） */
+export const HrmRecruitApplicationStatus = {
+  SUBMITTED: 'SUBMITTED',
+  SCREENING: 'SCREENING',
+  RESUME_REJECTED: 'RESUME_REJECTED',
+  SCREENING_PASSED: 'SCREENING_PASSED',
+  PENDING_INTERVIEW: 'PENDING_INTERVIEW',
+  INTERVIEW_SCHEDULED: 'INTERVIEW_SCHEDULED',
+  INTERVIEWING: 'INTERVIEWING',
+  INTERVIEW_EVALUATING: 'INTERVIEW_EVALUATING',
+  NEXT_INTERVIEW: 'NEXT_INTERVIEW',
+  INTERVIEW_CANCELED: 'INTERVIEW_CANCELED',
+  INTERVIEW_ABSENT: 'INTERVIEW_ABSENT',
+  INTERVIEW_REJECTED: 'INTERVIEW_REJECTED',
+  FINAL_INTERVIEW_PASSED: 'FINAL_INTERVIEW_PASSED',
+  PENDING_OFFER: 'PENDING_OFFER',
+  OFFER_APPROVING: 'OFFER_APPROVING',
+  OFFER_SENT: 'OFFER_SENT',
+  OFFER_REJECTED: 'OFFER_REJECTED',
+  OFFER_WITHDRAWN: 'OFFER_WITHDRAWN',
+  OFFER_EXPIRED: 'OFFER_EXPIRED',
+  OFFER_CANDIDATE_REJECTED: 'OFFER_CANDIDATE_REJECTED',
+  PENDING_ONBOARD: 'PENDING_ONBOARD',
+  ONBOARDED: 'ONBOARDED',
+  PASSED: 'PASSED',
+  ELIMINATED: 'ELIMINATED',
+  WITHDRAWN: 'WITHDRAWN',
+} as const;
+
+export type HrmRecruitApplicationStatusValue =
+  (typeof HrmRecruitApplicationStatus)[keyof typeof HrmRecruitApplicationStatus];
+
 /** 招聘候选人状态取值 */
 export type HrmRecruitCandidateStatusValue =
   (typeof HrmRecruitCandidateStatus)[keyof typeof HrmRecruitCandidateStatus];
@@ -103,6 +135,15 @@ export const HrmRecruitCandidateEducation = {
   DOCTOR: 7, // 博士
 } as const;
 
+export const HrmRecruitCandidateEducationOptions = [
+  { label: '学历不限', value: 1 },
+  { label: '高中及以上', value: 2 },
+  { label: '大专及以上', value: 3 },
+  { label: '本科及以上', value: 4 },
+  { label: '硕士及以上', value: 5 },
+  { label: '博士', value: 6 },
+] as const;
+
 /** 招聘面试方式枚举（对齐后端字典 hrm_recruit_interview_type） */
 export const HrmRecruitInterviewType = {
   ONSITE: 1, // 现场面试
@@ -116,7 +157,10 @@ export const HrmRecruitInterviewResult = {
   PASS: 2, // 通过
   NOT_PASS: 3, // 未通过
   CANCELED: 4, // 取消
+  ABSENT: 5, // 缺席
 } as const;
+
+export const HRM_RECRUIT_MAX_INTERVIEW_ROUNDS = 3;
 
 /** 员工入职状态枚举（对齐后端 HrmEmployeeEntryStatusEnum） */
 export const HrmEmployeeEntryStatus = {
@@ -706,8 +750,9 @@ export const HrmEmployeeFileGroups = [
 
 /** 招聘职位状态枚举（对齐后端 HrmRecruitPostStatusEnum） */
 export const HrmRecruitPostStatus = {
-  STOPPED: 0, // 停止招聘
-  RECRUITING: 1, // 招聘中
+  PAUSED: 0, // 已暂停
+  PUBLISHED: 1, // 已发布
+  CLOSED: 2, // 已关闭
 } as const;
 
 /** 招聘职位状态取值 */
@@ -720,6 +765,12 @@ export const HrmRecruitJobNature = {
   INTERNSHIP: 2, // 实习
   PART_TIME: 3, // 兼职
 } as const;
+
+export const HrmRecruitJobNatureOptions = [
+  { label: '全职', value: HrmRecruitJobNature.FULL_TIME },
+  { label: '实习', value: HrmRecruitJobNature.INTERNSHIP },
+  { label: '兼职', value: HrmRecruitJobNature.PART_TIME },
+] as const;
 
 /** 招聘工作经验枚举（对齐 hrm_recruit_work_time 字典） */
 export const HrmRecruitWorkTime = {
@@ -740,6 +791,15 @@ export const HrmRecruitPostEducation = {
   MASTER_AND_ABOVE: 5, // 硕士及以上
   DOCTOR: 6, // 博士
 } as const;
+
+export const HrmRecruitPostEducationOptions = [
+  { label: '不限', value: HrmRecruitPostEducation.UNLIMITED },
+  { label: '高中及以上', value: HrmRecruitPostEducation.HIGH_SCHOOL_AND_ABOVE },
+  { label: '大专及以上', value: HrmRecruitPostEducation.COLLEGE_AND_ABOVE },
+  { label: '本科及以上', value: HrmRecruitPostEducation.BACHELOR_AND_ABOVE },
+  { label: '硕士及以上', value: HrmRecruitPostEducation.MASTER_AND_ABOVE },
+  { label: '博士', value: HrmRecruitPostEducation.DOCTOR },
+] as const;
 
 /** 招聘薪资单位枚举（对齐 hrm_recruit_salary_unit 字典） */
 export const HrmRecruitSalaryUnit = {

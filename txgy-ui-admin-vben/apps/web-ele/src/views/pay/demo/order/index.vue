@@ -6,16 +6,20 @@ import { useRouter } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 
-import { ElLoading, ElMessage } from 'element-plus';
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getDemoOrderPage, refundDemoOrder } from '#/api/pay/demo/order';
+import { getDemoOrderPage } from '#/api/pay/demo/order';
 
 import { useGridColumns } from './data';
 import Form from './modules/form.vue';
+import RefundForm from './modules/refund-form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [RefundModal, refundModalApi] = useVbenModal({
+  connectedComponent: RefundForm,
   destroyOnClose: true,
 });
 
@@ -42,18 +46,9 @@ function handlePay(row: DemoOrderApi.Order) {
   });
 }
 
-/** 退款按钮操作 */
-async function handleRefund(row: DemoOrderApi.Order) {
-  const loadingInstance = ElLoading.service({
-    text: '退款中，请稍后...',
-  });
-  try {
-    await refundDemoOrder(row.id as number);
-    ElMessage.success('发起退款成功！');
-    handleRefresh();
-  } finally {
-    loadingInstance.close();
-  }
+/** 退款按钮操作：打开退款原因弹窗 */
+function handleRefund(row: DemoOrderApi.Order) {
+  refundModalApi.setData({ id: row.id }).open();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -135,14 +130,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               link: true,
               icon: ACTION_ICON.EDIT,
               ifShow: row.payStatus && !row.payRefundId,
-              popConfirm: {
-                title: '确定发起退款吗？',
-                confirm: handleRefund.bind(null, row),
-              },
+              onClick: handleRefund.bind(null, row),
             },
           ]"
         />
       </template>
     </Grid>
+    <RefundModal @success="handleRefresh" />
   </Page>
 </template>

@@ -1,233 +1,88 @@
-<!-- 物流追踪 -->
+<!-- Text logistics is authoritative; no simulated vehicle map or fabricated delivery events. -->
 <template>
   <s-layout title="物流追踪">
-    <view class="log-wrap">
-      <!-- 商品信息 -->
-      <view class="log-card ss-flex ss-m-20 ss-r-10" v-if="goodsImages.length > 0">
-        <uni-swiper-dot :info="goodsImages" :current="state.current" mode="round">
-          <swiper class="swiper-box">
-            <swiper-item v-for="(item, index) in goodsImages" :key="index">
-              <image class="log-card-img" :src="sheep.$url.static(item.image)" />
-            </swiper-item>
-          </swiper>
-        </uni-swiper-dot>
-        <view class="log-card-msg">
-          <!-- TODO 芋艿：【物流】优化点：展示状态 -->
-          <!--          <view class="ss-flex ss-m-b-8">-->
-          <!--            <view>物流状态：</view>-->
-          <!--            <view class="warning-color">{{ state.info.status_text }}</view>-->
-          <!--          </view>-->
-          <view class="ss-m-b-8">快递单号：{{ state.info.logisticsNo }}</view>
-          <view>快递公司：{{ state.info.logisticsName }}</view>
+    <view v-if="state.expired" class="log-card">登录账号已变化，请返回订单列表重新进入。</view>
+    <view v-else class="log-wrap">
+      <view class="log-card">
+        <view class="title">运单信息</view>
+        <view v-if="state.info">快递公司：{{ state.info.carrierName || '暂未登记' }}</view>
+        <view v-if="state.info">快递单号：{{ state.info.trackingNo || '暂未登记' }}</view>
+        <view v-if="state.info && state.info.transportStatus !== 'UNKNOWN'">运输状态：{{ state.info.transportStatusLabel }}</view>
+        <view v-if="state.loading">正在查询物流信息…</view>
+        <view v-if="state.error" class="notice" role="alert">{{ state.error }}</view>
+        <view v-if="state.info" class="notice">{{ state.info.message }}</view>
+        <view v-if="state.info?.updatedTime" class="muted">数据更新时间：{{ formatTime(state.info.updatedTime) }}</view>
+        <view v-if="state.info?.cached" class="muted">当前为缓存结果，刷新不会保证产生新的承运商轨迹。</view>
+        <view v-if="state.info?.stale" class="notice">轨迹可能过期，请稍后重试或联系店铺核实。</view>
+        <button size="mini" :disabled="state.loading || remaining > 0" @tap="load">
+          {{ remaining > 0 ? `${remaining} 秒后可刷新` : state.error ? '重试查询' : '刷新物流' }}
+        </button>
+      </view>
+      <view v-if="state.info?.events.length" class="log-card">
+        <view class="title">文字轨迹</view>
+        <view v-for="(event, index) in state.info.events" :key="`${event.time}-${index}`" class="event">
+          <view>{{ event.statusLabel }}</view>
+          <view class="content">{{ event.content }}</view>
+          <view class="muted">{{ formatTime(event.time) }}</view>
         </view>
       </view>
-
-      <!-- 物流轨迹 -->
-      <view class="log-content ss-m-20 ss-r-10">
-        <view
-          class="log-content-box ss-flex"
-          v-for="(item, index) in state.tracks"
-          :key="item.title"
-        >
-          <view class="log-icon ss-flex-col ss-col-center ss-m-r-20">
-            <text class="cicon-title" />
-            <view v-if="state.tracks.length - 1 !== index" class="line" />
-          </view>
-          <view class="log-content-msg">
-            <!-- TODO 芋艿：【物流】优化点：展示状态 -->
-            <!--            <view class="log-msg-title ss-m-b-20">-->
-            <!--              {{ item.status_text }}-->
-            <!--            </view>-->
-            <!--            <view class="log-msg-desc ss-m-b-16">{{ item.content }}</view>-->
-            <view class="log-msg-desc ss-m-b-16">
-              <highlight-number :content="item.content" @phone-click="handlePhoneClick" />
-              <!--              <rich-text :nodes="item.content"></rich-text>-->
-            </view>
-            <view class="log-msg-date ss-m-b-40">
-              {{ sheep.$helper.timeFormat(item.time, 'yyyy-mm-dd hh:MM:ss') }}
-            </view>
-          </view>
-        </view>
+      <view class="log-card muted">
+        <view>地图轨迹暂未开通，当前展示已核实的运单和文字信息；暂无点位时不显示模拟路线。</view>
+        <view class="boundary">物流签收不等于买家确认收货；退货送达也不等于入库验收或退款完成。</view>
+        <s-service-entry resource-type="ORDER" :resource-id="state.id" label="联系订单客服核实物流" />
       </view>
     </view>
   </s-layout>
 </template>
 
 <script setup>
-  import sheep from '@/sheep';
-  import { onLoad } from '@dcloudio/uni-app';
-  import { computed, reactive } from 'vue';
+  import { onLoad, onShow, onHide } from '@dcloudio/uni-app';
+  import { computed, reactive, onScopeDispose } from 'vue';
   import OrderApi from '@/sheep/api/trade/order';
-  import HighlightNumber from '@/pages/components/HighlightNumberText.vue';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  import { normalizeLogistics, createLatestTask, fulfillmentTime } from '@/sheep/helper/fulfillment-view.mjs';
 
-  const state = reactive({
-    info: [],
-    tracks: [],
+  const state = reactive({ id: '', info: null, error: '', loading: false, expired: false, nextRefresh: 0, now: Date.now() });
+  const task = useTenantTask(() => { state.expired = true; state.info = null; state.error = ''; state.loading = false; });
+  const latest = createLatestTask(task.current);
+  const remaining = computed(() => Math.max(0, Math.ceil((state.nextRefresh - state.now) / 1000)));
+  let timer;
+  function stop() { clearInterval(timer); timer = null; }
+  function tick() { state.now = Date.now(); }
+  const formatTime = fulfillmentTime;
+  async function load() {
+    tick();
+    if (!task.current() || !state.id || state.loading || remaining.value > 0) return;
+    const current = latest.begin();
+    state.loading = true; state.error = '';
+    try {
+      const response = await OrderApi.getLogistics(state.id);
+      if (!current()) return;
+      if (response?.code !== 0) throw new Error('unavailable');
+      state.info = normalizeLogistics(response.data, state.id);
+      state.nextRefresh = Date.now() + state.info.refreshAfterSeconds * 1000;
+    } catch {
+      if (!current()) return;
+      state.info = null; state.error = '物流信息加载失败，请重试；若仍失败，请确认登录账号及订单权限。';
+    } finally { if (current()) state.loading = false; }
+  }
+  onLoad(options => {
+    const id = String(options?.id || '');
+    if (!/^[1-9]\d*$/.test(id)) { state.error = '订单编号不正确，请返回订单列表重新进入。'; return; }
+    state.id = id; load();
   });
-
-  const goodsImages = computed(() => {
-    let array = [];
-    if (state.info.items) {
-      state.info.items.forEach((item) => {
-        array.push({
-          image: item.picUrl,
-        });
-      });
-    }
-    return array;
-  });
-
-  async function getExpressDetail(id) {
-    const { data } = await OrderApi.getOrderExpressTrackList(id);
-    state.tracks = data;
-  }
-
-  async function getOrderDetail(id) {
-    const { data } = await OrderApi.getOrderDetail(id);
-    state.info = data;
-  }
-
-  onLoad((options) => {
-    getExpressDetail(options.id);
-    getOrderDetail(options.id);
-  });
-
-  function handlePhoneClick(data) {
-    handleClick(data);
-  }
-
-  function handleClick(data) {
-    const phoneNumber = data.phoneNumber;
-
-    if (!phoneNumber) return;
-
-    // 获取当前平台
-    const platform = uni.getSystemInfoSync().platform.toLowerCase();
-
-    if (platform === 'devtools') {
-      uni.showToast({ title: '真机才可拨打电话', icon: 'none' });
-      handleCopy(phoneNumber);
-      return;
-    }
-
-    if (platform === 'wechat') {
-      uni.showToast({ title: '请手动拨打', icon: 'none' });
-      handleCopy(phoneNumber);
-      return;
-    }
-
-    uni.makePhoneCall({
-      phoneNumber: phoneNumber,
-      success: () => {
-        console.log('拨打电话成功');
-      },
-      fail: (err) => {
-        console.error('拨打电话失败', err);
-        uni.showToast({ title: '拨号失败，请手动拨打', icon: 'none' });
-        handleCopy(phoneNumber);
-      },
-    });
-  }
-  function handleCopy(text) {
-    uni.setClipboardData({
-      data: text,
-      success: () => {
-        uni.showToast({ title: '已复制到剪贴板', icon: 'success' });
-      },
-      fail: () => {
-        uni.showToast({ title: '复制失败', icon: 'none' });
-      },
-    });
-  }
+  onShow(() => { tick(); stop(); timer = setInterval(tick, 1000); if (state.id && !state.info && !state.loading) load(); });
+  onHide(() => { latest.invalidate(); task.invalidate(); state.loading = false; stop(); });
+  onScopeDispose(stop);
 </script>
 
-<style lang="scss" scoped>
-  .highlight {
-    color: red; /* 高亮颜色 */
-    font-weight: bold;
-  }
-
-  .swiper-box {
-    width: 200rpx;
-    height: 200rpx;
-  }
-
-  .log-card {
-    border-top: 2rpx solid rgba(#dfdfdf, 0.5);
-    padding: 20rpx;
-    background: #fff;
-    margin-bottom: 20rpx;
-
-    .log-card-img {
-      width: 200rpx;
-      height: 200rpx;
-      margin-right: 20rpx;
-    }
-
-    .log-card-msg {
-      font-size: 28rpx;
-      font-weight: 500;
-      width: 490rpx;
-      color: #333333;
-
-      .warning-color {
-        color: #999;
-      }
-    }
-  }
-
-  .log-content {
-    padding: 34rpx 20rpx 0rpx 20rpx;
-    background: #fff;
-
-    .log-content-box {
-      align-items: stretch;
-    }
-
-    .log-icon {
-      height: inherit;
-
-      .cicon-title {
-        color: #ccc;
-        font-size: 40rpx;
-      }
-
-      .activity-color {
-        color: #f0c785;
-        font-size: 40rpx;
-      }
-
-      .info-color {
-        color: #ccc;
-        font-size: 40rpx;
-      }
-
-      .line {
-        width: 1px;
-        height: 100%;
-        background: #d8d8d8;
-      }
-    }
-
-    .log-content-msg {
-      .log-msg-title {
-        font-size: 28rpx;
-        font-weight: bold;
-        color: #333333;
-      }
-
-      .log-msg-desc {
-        font-size: 24rpx;
-        font-weight: 400;
-        color: #333333;
-        line-height: 36rpx;
-      }
-
-      .log-msg-date {
-        font-size: 24rpx;
-        font-weight: 500;
-        color: #000000;
-      }
-    }
-  }
+<style scoped lang="scss">
+  .log-wrap { padding: 20rpx; }
+  .log-card { margin: 0 0 20rpx; padding: 28rpx; background: white; border-radius: 12rpx; line-height: 1.8; font-size: 28rpx; overflow-wrap: anywhere; }
+  .title { font-size: 32rpx; font-weight: bold; margin-bottom: 16rpx; }
+  .notice { margin: 20rpx 0; padding: 16rpx; background: #f1f7f5; color: #31574f; }
+  .muted { color: #666; font-size: 24rpx; }
+  .event { padding: 20rpx 0 20rpx 24rpx; border-left: 4rpx solid #208879; border-bottom: 1rpx solid #eee; }
+  .content { margin: 8rpx 0; }
+  .boundary { margin-top: 14rpx; }
 </style>

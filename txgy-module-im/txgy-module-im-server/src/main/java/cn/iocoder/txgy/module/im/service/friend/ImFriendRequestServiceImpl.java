@@ -14,6 +14,7 @@ import cn.iocoder.txgy.module.im.dal.dataobject.friend.ImFriendRequestDO;
 import cn.iocoder.txgy.module.im.dal.mysql.friend.ImFriendRequestMapper;
 import cn.iocoder.txgy.module.im.enums.friend.ImFriendRequestHandleResultEnum;
 import cn.iocoder.txgy.module.im.enums.friend.ImFriendStateEnum;
+import cn.iocoder.txgy.module.im.enums.friend.ImFriendAddSourceEnum;
 import cn.iocoder.txgy.module.im.enums.ImContentTypeEnum;
 import cn.iocoder.txgy.module.im.enums.ImConversationTypeEnum;
 import cn.iocoder.txgy.module.im.framework.config.ImProperties;
@@ -72,7 +73,12 @@ public class ImFriendRequestServiceImpl implements ImFriendRequestService {
             throw exception(FRIEND_ADD_SELF);
         }
         // 1.2 校验对方存在且启用
-        adminUserApi.validateUser(toUserId);
+        // 招聘门户允许候选人与企业 HR 跨租户建立 IM 联系，仅在此专用申请链路忽略租户过滤。
+        if (Objects.equals(reqVO.getAddSource(), ImFriendAddSourceEnum.RECRUITMENT.getSource())) {
+            adminUserApi.validateUserListIgnoreTenant(List.of(toUserId)).getCheckedData();
+        } else {
+            adminUserApi.validateUser(toUserId);
+        }
         // 1.3 已是好友 / 被对方拉黑：直接报错（state 一次拿到双向状态，省两次单边查询）
         // 错误码与 ImFriendService#validateFriend 不同（语义为「申请被拒」），故保留 inline
         Integer state = friendService.getFriendState(fromUserId, toUserId);
@@ -244,6 +250,17 @@ public class ImFriendRequestServiceImpl implements ImFriendRequestService {
     @Override
     public PageResult<ImFriendRequestDO> getFriendRequestPage(ImFriendRequestManagerPageReqVO reqVO) {
         return friendRequestMapper.selectPage(reqVO);
+    }
+
+    @Override
+    public void deleteFriendRequestByManager(Long id) {
+        // 1. 校验存在（逻辑删除后 selectById 返回 null，天然幂等拦截重复删除）
+        ImFriendRequestDO request = friendRequestMapper.selectById(id);
+        if (request == null) {
+            throw exception(FRIEND_REQUEST_NOT_EXISTS);
+        }
+        // 2. 管理端治理动作：逻辑删除申请记录本身；双方已建立的好友关系不受影响
+        friendRequestMapper.deleteById(id);
     }
 
     /**

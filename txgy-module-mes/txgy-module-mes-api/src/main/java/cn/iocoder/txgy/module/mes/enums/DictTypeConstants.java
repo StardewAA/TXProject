@@ -30,6 +30,9 @@ public interface DictTypeConstants {
     String MES_PRO_TASK_STATUS = "mes_pro_task_status"; // MES 任务状态
     String MES_PRO_PROJECT_STATUS = "mes_pro_project_status"; // MES 项目状态
     String MES_PRO_PROJECT_SOURCE_TYPE = "mes_pro_project_source_type"; // MES 项目来源类型（销售订单/库存备库/其他）
+    String MES_PRO_PROJECT_PRIORITY = "mes_pro_project_priority"; // MES 项目优先级（1紧急 2高 3中 4低）
+    String MES_PRO_PROJECT_MEMBER_ROLE = "mes_pro_project_member_role"; // MES 项目成员角色（1项目经理 2生产负责 3技术负责 4质检负责 5其他）
+    String MES_PRO_PROJECT_MILESTONE_STATUS = "mes_pro_project_milestone_status"; // MES 项目里程碑状态（0未开始 1进行中 2已完成）
 
     // ========== 仓储条码与管理 (WM) ==========
     String MES_BARCODE_FORMAT = "mes_barcode_format"; // MES 条码格式
@@ -102,4 +105,8 @@ public interface DictTypeConstants {
     // ========== 工具管理 (TM) ==========
     String MES_TM_TOOL_STATUS = "mes_tm_tool_status"; // MES 工具状态
     String MES_TM_MAINTEN_TYPE = "mes_tm_mainten_type"; // MES 保养维护类型
+    String MES_TM_TOOL_ISSUE_STATUS = "mes_tm_tool_issue_status"; // MES 工具领用单状态
+    String MES_TM_TOOL_RETURN_STATUS = "mes_tm_tool_return_status"; // MES 工具归还单状态
+    String MES_TM_TOOL_REPAIR_STATUS = "mes_tm_tool_repair_status"; // MES 工具维修单状态
+    String MES_TM_TOOL_SCRAP_STATUS = "mes_tm_tool_scrap_status"; // MES 工具报废单状态
 }

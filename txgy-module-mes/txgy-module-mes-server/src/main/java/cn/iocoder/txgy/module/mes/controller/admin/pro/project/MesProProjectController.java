@@ -9,15 +9,21 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportExcelVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectImportRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectMilestoneAlertRespVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsDetailRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.project.vo.MesProProjectStatisticsRespVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.project.MesProProjectDO;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -104,6 +110,22 @@ public class MesProProjectController {
         return success(projectService.getProjectStatistics(projectId));
     }
 
+    @GetMapping("/statistics-detail")
+    @Operation(summary = "获得项目的生产统计详情（工单进度 + 报工汇总）")
+    @Parameter(name = "projectId", description = "项目编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:query')")
+    public CommonResult<MesProProjectStatisticsDetailRespVO> getProjectStatisticsDetail(
+            @RequestParam("projectId") Long projectId) {
+        return success(projectService.getProjectStatisticsDetail(projectId));
+    }
+
+    @GetMapping("/milestone-alerts")
+    @Operation(summary = "获得里程碑到期预警列表（未完成且 3 天内到期 / 已超期）")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:query')")
+    public CommonResult<List<MesProProjectMilestoneAlertRespVO>> getMilestoneAlerts() {
+        return success(projectService.getMilestoneAlerts());
+    }
+
     @PutMapping("/refresh-status")
     @Operation(summary = "按工单进度重算项目状态")
     @Parameter(name = "projectId", description = "项目编号", required = true, example = "1024")
@@ -129,6 +151,48 @@ public class MesProProjectController {
     public CommonResult<Boolean> unbindWorkOrders(@RequestBody List<Long> workOrderIds) {
         projectService.unbindWorkOrders(workOrderIds);
         return success(true);
+    }
+
+    @PostMapping("/resume")
+    @Operation(summary = "恢复项目（已暂停 -> 进行中）")
+    @Parameter(name = "id", description = "项目编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:update')")
+    public CommonResult<Boolean> resumeProject(@RequestParam("id") Long id) {
+        projectService.resumeProject(id);
+        return success(true);
+    }
+
+    @PutMapping("/force-close")
+    @Operation(summary = "强制结项（任意非取消状态 -> 已完成）")
+    @Parameter(name = "id", description = "项目编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:update')")
+    public CommonResult<Boolean> forceCloseProject(@RequestParam("id") Long id) {
+        projectService.forceCloseProject(id);
+        return success(true);
+    }
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得项目导入模板")
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:import')")
+    public void getImportTemplate(HttpServletResponse response) throws IOException {
+        List<MesProProjectImportExcelVO> list = List.of(MesProProjectImportExcelVO.builder()
+                .code("PRJ20260901001").name("示例防腐保温工程").sourceType(1).status(0)
+                .priority(3).owner("张三").dept("生产管理部").remark("示例数据").build());
+        ExcelUtils.write(response, "项目管理导入模板.xls", "项目列表", MesProProjectImportExcelVO.class, list);
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入项目 Excel")
+    @Parameters({
+            @Parameter(name = "file", description = "Excel 文件", required = true),
+            @Parameter(name = "updateSupport", description = "是否支持覆盖更新", example = "true")
+    })
+    @PreAuthorize("@ss.hasPermission('mes:pro-project:import')")
+    public CommonResult<MesProProjectImportRespVO> importProjectExcel(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "updateSupport", required = false, defaultValue = "false") Boolean updateSupport) throws Exception {
+        List<MesProProjectImportExcelVO> list = ExcelUtils.read(file, MesProProjectImportExcelVO.class);
+        return success(projectService.importProjectList(list, updateSupport));
     }
 
     // ==================== 私有方法 ====================

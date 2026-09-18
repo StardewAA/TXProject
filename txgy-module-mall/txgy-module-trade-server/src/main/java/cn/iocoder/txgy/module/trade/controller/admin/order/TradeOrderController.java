@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderLogDO;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderLogService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
+import cn.iocoder.txgy.module.trade.service.order.TradeOrderShopSplitter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +39,10 @@ import static cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils.getLogin
 @Validated
 @Slf4j
 public class TradeOrderController {
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchPresentation workbenchPresentation;
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
 
     @Resource
     private TradeOrderUpdateService tradeOrderUpdateService;
@@ -67,7 +72,14 @@ public class TradeOrderController {
         List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(
                 convertSet(pageResult.getList(), TradeOrderDO::getId));
         // 最终组合
-        return success(TradeOrderConvert.INSTANCE.convertPage(pageResult, orderItems, userMap));
+        var response=TradeOrderConvert.INSTANCE.convertPage(pageResult, orderItems, userMap);
+        var erps=erpInventory.listByOrderIds(pageResult.getList().stream().map(TradeOrderDO::getId).toList());
+        for(int i=0;i<pageResult.getList().size();i++) {
+            var order=pageResult.getList().get(i);
+            workbenchPresentation.fill(order,orderItems.stream().filter(item->Objects.equals(item.getOrderId(),order.getId())).toList(),
+                    erps.getOrDefault(order.getId(),List.of()),response.getList().get(i));
+        }
+        return success(response);
     }
 
     @GetMapping("/summary")
@@ -95,7 +107,17 @@ public class TradeOrderController {
         MemberUserRespDTO brokerageUser = order.getBrokerageUserId() != null ?
                 memberUserApi.getUser(order.getBrokerageUserId()).getCheckedData() : null;
         List<TradeOrderLogDO> orderLogs = tradeOrderLogService.getOrderLogListByOrderId(id);
-        return success(TradeOrderConvert.INSTANCE.convert(order, orderItems, orderLogs, user, brokerageUser));
+        var response = TradeOrderConvert.INSTANCE.convert(order, orderItems, orderLogs, user, brokerageUser);
+        response.setErpInventory(erpInventory.list(order.getId()));
+        workbenchPresentation.fill(order,orderItems,response.getErpInventory(),response);
+        return success(response);
+    }
+
+    @GetMapping("/get-shop-orders")
+    @Operation(summary = "按店铺分组查看订单商品和金额")
+    @PreAuthorize("@ss.hasPermission('trade:order:query')")
+    public CommonResult<List<TradeOrderShopRespVO>> getShopOrders(@RequestParam("id") Long id) {
+        return success(TradeOrderShopSplitter.split(tradeOrderQueryService.getOrderItemListByOrderId(id)));
     }
 
     @GetMapping("/get-express-track-list")

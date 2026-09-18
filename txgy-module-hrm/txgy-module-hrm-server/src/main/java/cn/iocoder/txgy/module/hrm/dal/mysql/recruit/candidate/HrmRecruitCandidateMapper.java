@@ -25,6 +25,12 @@ import java.util.Map;
 @Mapper
 public interface HrmRecruitCandidateMapper extends BaseMapperX<HrmRecruitCandidateDO> {
 
+    default HrmRecruitCandidateDO selectByMobile(String mobile) {
+        return selectLastOne(new LambdaQueryWrapperX<HrmRecruitCandidateDO>()
+                .eq(HrmRecruitCandidateDO::getMobile, mobile)
+                .orderByAsc(HrmRecruitCandidateDO::getId));
+    }
+
     default HrmRecruitCandidateDO selectByIdForUpdate(Long id) {
         return selectOneForUpdate(HrmRecruitCandidateDO::getId, id);
     }
@@ -39,8 +45,26 @@ public interface HrmRecruitCandidateMapper extends BaseMapperX<HrmRecruitCandida
                 .set(updateObj.getGraduateSchool() == null, HrmRecruitCandidateDO::getGraduateSchool, null)
                 .set(updateObj.getLatestWorkPlace() == null, HrmRecruitCandidateDO::getLatestWorkPlace, null)
                 .set(updateObj.getChannelId() == null, HrmRecruitCandidateDO::getChannelId, null)
-                .set(updateObj.getRemark() == null, HrmRecruitCandidateDO::getRemark, null)
-                .set(updateObj.getResumeUrls() == null, HrmRecruitCandidateDO::getResumeUrls, null));
+                .set(updateObj.getRemark() == null, HrmRecruitCandidateDO::getRemark, null));
+    }
+
+    default int updateFromPersonalProfile(Collection<Long> candidateIds, String name, String mobile,
+                                          Integer sex, Integer age, String email, Integer workTime,
+                                          Integer education, String graduateSchool, String latestWorkPlace) {
+        if (candidateIds == null || candidateIds.isEmpty()) {
+            return 0;
+        }
+        return update(new LambdaUpdateWrapper<HrmRecruitCandidateDO>()
+                .in(HrmRecruitCandidateDO::getId, candidateIds)
+                .set(HrmRecruitCandidateDO::getName, name)
+                .set(HrmRecruitCandidateDO::getMobile, mobile)
+                .set(HrmRecruitCandidateDO::getSex, sex)
+                .set(HrmRecruitCandidateDO::getAge, age)
+                .set(HrmRecruitCandidateDO::getEmail, email)
+                .set(HrmRecruitCandidateDO::getWorkTime, workTime)
+                .set(HrmRecruitCandidateDO::getEducation, education)
+                .set(HrmRecruitCandidateDO::getGraduateSchool, graduateSchool)
+                .set(HrmRecruitCandidateDO::getLatestWorkPlace, latestWorkPlace));
     }
 
     default PageResult<HrmRecruitCandidateDO> selectPage(HrmRecruitCandidatePageReqVO reqVO) {

@@ -13,6 +13,7 @@ const SignInApi = {
     return request({
       url: '/member/sign-in/record/get-summary',
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
   // 签到
@@ -20,6 +21,7 @@ const SignInApi = {
     return request({
       url: '/member/sign-in/record/create',
       method: 'POST',
+      custom: { auth: true },
     });
   },
   // 获得签到记录分页
@@ -30,6 +32,7 @@ const SignInApi = {
     return request({
       url: `/member/sign-in/record/page?${queryString}`,
       method: 'GET',
+      custom: { auth: true, showLoading: false },
     });
   },
 };

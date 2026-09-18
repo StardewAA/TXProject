@@ -6,6 +6,7 @@ export namespace MallSpuApi {
   /** 商品 SPU */
   export interface Spu {
     id?: number; // 商品编号
+    shopId?: number; // 所属企业店铺
     name?: string; // 商品名称
     categoryId?: number; // 商品分类
     keyword?: string; // 关键字

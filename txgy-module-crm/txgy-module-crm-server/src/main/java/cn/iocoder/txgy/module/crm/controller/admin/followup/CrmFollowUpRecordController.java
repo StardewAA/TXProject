@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.crm.controller.admin.followup;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
+import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.followup.vo.CrmFollowUpRecordPageReqVO;
@@ -97,7 +98,7 @@ public class CrmFollowUpRecordController {
                 convertSetByFlatMap(pageResult.getList(), item -> item.getBusinessIds().stream()));
         // 1.2 查询用户
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(pageResult.getList(), item -> Long.valueOf(item.getCreator())));
+                convertSet(pageResult.getList(), item -> NumberUtils.parseLong(item.getCreator())));
         // 2. 拼接数据
         PageResult<CrmFollowUpRecordRespVO> voPageResult = BeanUtils.toBean(pageResult, CrmFollowUpRecordRespVO.class, record -> {
             // 2.1 设置联系人和商机信息
@@ -107,7 +108,7 @@ public class CrmFollowUpRecordController {
             record.getBusinessIds().forEach(id -> MapUtils.findAndThen(businessMap, id, business ->
                     record.getBusinesses().add(new CrmBusinessRespVO().setId(business.getId()).setName(business.getName()))));
             // 2.2 设置用户信息
-            MapUtils.findAndThen(userMap, Long.valueOf(record.getCreator()), user -> record.setCreatorName(user.getNickname()));
+            MapUtils.findAndThen(userMap, NumberUtils.parseLong(record.getCreator()), user -> record.setCreatorName(user.getNickname()));
         });
         return success(voPageResult);
     }

@@ -16,7 +16,14 @@
         @onConfirm="onConfirm"
       />
 
-      <!-- 3. 忘记密码 resetPassword-->
+      <!-- 3. 注册账号 register -->
+      <register
+        v-if="authType === 'register'"
+        :agreeStatus="state.protocol"
+        @onConfirm="onConfirm"
+      />
+
+      <!-- 4. 忘记密码 resetPassword-->
       <reset-password v-if="authType === 'resetPassword'" />
 
       <!-- 4. 绑定手机号 changeMobile -->
@@ -30,7 +37,7 @@
 
       <!-- 7. 第三方登录 -->
       <view
-        v-if="['accountLogin', 'smsLogin'].includes(authType)"
+        v-if="['accountLogin', 'smsLogin', 'register'].includes(authType)"
         class="auto-login-box ss-flex ss-flex-col ss-row-center ss-col-center"
       >
         <!-- 7.1 微信小程序的快捷登录 -->
@@ -88,7 +95,7 @@
 
       <!-- 用户协议的勾选 -->
       <view
-        v-if="['accountLogin', 'smsLogin'].includes(authType)"
+        v-if="['accountLogin', 'smsLogin', 'register'].includes(authType)"
         class="agreement-box ss-flex ss-flex-col ss-col-center"
         :class="{ shake: currentProtocol }"
       >
@@ -142,6 +149,7 @@
   import sheep from '@/sheep';
   import accountLogin from './components/account-login.vue';
   import smsLogin from './components/sms-login.vue';
+  import register from './components/register.vue';
   import resetPassword from './components/reset-password.vue';
   import changeMobile from './components/change-mobile.vue';
   import changePassword from './components/change-password.vue';
@@ -230,6 +238,8 @@
 
 <style lang="scss" scoped>
   @import './index.scss';
+
+  .login-wrap { max-height: 86vh; overflow-y: auto; box-sizing: border-box; }
 
   .shake {
     animation: shake 0.05s linear 4 alternate;

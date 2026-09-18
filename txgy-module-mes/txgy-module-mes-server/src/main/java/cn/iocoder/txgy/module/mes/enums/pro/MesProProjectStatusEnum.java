@@ -62,4 +62,40 @@ public enum MesProProjectStatusEnum {
         return statusEnum == PAUSED || statusEnum == CANCELED;
     }
 
+    /**
+     * 判断当前状态是否允许流转到目标状态（编辑保存时的状态变更校验）
+     *
+     * 规则：
+     * 1. 已完成 / 已取消为终态，不允许再变更为其他状态
+     * 2. 未开始 -> 进行中 / 已暂停 / 已取消
+     * 3. 进行中 -> 已完成 / 已暂停 / 已取消
+     * 4. 已暂停 -> 进行中（恢复）/ 已取消（结项请走强制结项）
+     *
+     * @param current 当前状态
+     * @param target  目标状态
+     * @return 是否允许流转
+     */
+    public static boolean canTransferTo(Integer current, Integer target) {
+        if (current == null || target == null || current.equals(target)) {
+            return true;
+        }
+        MesProProjectStatusEnum currentEnum = valueOfStatus(current);
+        if (currentEnum == null || valueOfStatus(target) == null) {
+            return false;
+        }
+        switch (currentEnum) {
+            case NOT_STARTED:
+                return target.equals(PROCESSING.status) || target.equals(PAUSED.status)
+                        || target.equals(CANCELED.status);
+            case PROCESSING:
+                return target.equals(FINISHED.status) || target.equals(PAUSED.status)
+                        || target.equals(CANCELED.status);
+            case PAUSED:
+                return target.equals(PROCESSING.status) || target.equals(CANCELED.status);
+            default:
+                // 已完成 / 已取消为终态，不允许变更
+                return false;
+        }
+    }
+
 }

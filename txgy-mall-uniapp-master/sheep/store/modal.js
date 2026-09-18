@@ -2,13 +2,15 @@ import { defineStore } from 'pinia';
 
 const modal = defineStore('modal', {
   state: () => ({
-    auth: '', // 授权弹框 accountLogin|smsLogin|resetPassword|changeMobile|changePassword|changeUsername
+    auth: '', // 授权弹框 accountLogin|smsLogin|register|resetPassword|changeMobile|changePassword|changeUsername
     share: false, // 分享弹框
+    sharePoster: false, // 直接打开分享二维码海报
     menu: false, // 快捷菜单弹框
     advHistory: [], // 广告弹框记录
     lastTimer: {
       // 短信验证码计时器，为了防止刷新请求做了持久化
       smsLogin: 0,
+      register: 0,
       changeMobile: 0,
       resetPassword: 0,
       changePassword: 0,

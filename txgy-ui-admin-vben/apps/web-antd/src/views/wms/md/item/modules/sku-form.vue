@@ -41,6 +41,10 @@ function buildEmptySku(): SkuRow {
     netWeight: undefined,
     costPrice: undefined,
     sellingPrice: undefined,
+    packageSpec: undefined,
+    boxSpec: undefined,
+    palletSpec: undefined,
+    minPackageUnit: undefined,
   };
 }
 
@@ -80,7 +84,7 @@ function validate() {
   for (let index = 0; index < tableData.value.length; index += 1) {
     const row = tableData.value[index];
     if (!row?.name) {
-      throw new Error(`第 ${index + 1} 行：规格名称不能为空`);
+      throw new Error(`第 ${index + 1} 行：规格型号不能为空`);
     }
   }
 }
@@ -107,7 +111,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: [
       {
         field: 'name',
-        title: '规格名称',
+        title: '规格型号',
         minWidth: 180,
         slots: { default: 'name' },
       },
@@ -134,6 +138,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '成本价/销售价',
         width: 200,
         slots: { default: 'price' },
+      },
+      {
+        field: 'packaging',
+        title: '仓储包装',
+        width: 320,
+        slots: { default: 'packaging' },
       },
       {
         field: 'actions',
@@ -171,11 +181,11 @@ defineExpose({
 <template>
   <div>
     <div class="mb-3 flex items-center justify-between">
-      <span class="text-sm font-semibold">规格</span>
+      <span class="text-sm font-semibold">规格型号</span>
       <TableAction
         :actions="[
           {
-            label: '新增规格',
+            label: '新增规格型号',
             type: 'primary',
             onClick: handleAddSku,
           },
@@ -188,7 +198,7 @@ defineExpose({
           v-model:value="row.name"
           class="w-full"
           :maxlength="255"
-          placeholder="请输入规格名称"
+          placeholder="请输入规格型号"
         />
       </template>
       <template #codeBarCode="{ row }">
@@ -280,6 +290,36 @@ defineExpose({
             :precision="PRICE_PRECISION"
             class="!w-full"
             placeholder="销售价"
+          />
+        </div>
+      </template>
+      <template #packaging="{ row }">
+        <div class="flex flex-col gap-2 py-1">
+          <Input
+            v-model:value="row.packageSpec"
+            class="w-full"
+            :maxlength="255"
+            placeholder="最小包装说明"
+          />
+          <div class="flex gap-1">
+            <Input
+              v-model:value="row.boxSpec"
+              class="w-1/2"
+              :maxlength="100"
+              placeholder="箱装数量"
+            />
+            <Input
+              v-model:value="row.palletSpec"
+              class="w-1/2"
+              :maxlength="100"
+              placeholder="托盘装载量"
+            />
+          </div>
+          <Input
+            v-model:value="row.minPackageUnit"
+            class="w-full"
+            :maxlength="20"
+            placeholder="最小包装单位"
           />
         </div>
       </template>

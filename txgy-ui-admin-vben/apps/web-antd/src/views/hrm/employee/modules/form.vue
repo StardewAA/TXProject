@@ -2,9 +2,10 @@
 import type { HrmEmployeeApi } from '#/api/hrm/employee';
 import type { HrmRecruitCandidateApi } from '#/api/hrm/recruit/candidate';
 
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import { useVbenForm, useVbenModal } from '@vben/common-ui';
+import { toTimestampPickerValue } from '@vben/utils';
 
 import { message, Tabs } from 'ant-design-vue';
 
@@ -41,6 +42,20 @@ const createFieldVisibleMap = ref<Record<number, Set<string>>>({});
 const leaderEmployeeId = ref<number>();
 const userId = ref<number>();
 const candidateId = ref<number>();
+const applicationId = ref<number>();
+
+function normalizeDatePickerValues(
+  values: Partial<HrmEmployeeApi.Employee>,
+) {
+  return {
+    ...values,
+    birthday: toTimestampPickerValue(values.birthday),
+    entryTime: toTimestampPickerValue(values.entryTime),
+    regularTime: toTimestampPickerValue(values.regularTime),
+    leaveTime: toTimestampPickerValue(values.leaveTime),
+    companyAgeStartTime: toTimestampPickerValue(values.companyAgeStartTime),
+  };
+}
 
 const modalTitle = computed(() => {
   if (formType.value === 'confirm') return '确认入职';
@@ -152,11 +167,14 @@ const [Modal, modalApi] = useVbenModal({
         message.success($t('ui.actionMessage.createSuccess'));
       } else if (formType.value === 'candidate') {
         await convertRecruitCandidateToEmployee(
-          submitData as HrmRecruitCandidateApi.EntryReq,
+          { ...submitData, applicationId: applicationId.value } as HrmRecruitCandidateApi.EntryReq,
         );
         message.success($t('ui.actionMessage.createSuccess'));
       } else if (formType.value === 'confirm') {
-        await confirmEmployeeEntry(submitData);
+        await confirmEmployeeEntry({
+          ...submitData,
+          applicationId: applicationId.value,
+        } as HrmEmployeeApi.Employee);
         message.success('已确认入职');
       } else if (formType.value === 'rehire') {
         await rehireEmployee({ ...submitData, employeeId: values.id });
@@ -176,6 +194,7 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     const data = modalApi.getData<{
+      applicationId?: number;
       defaultData?: Partial<HrmEmployeeApi.Employee>;
       id?: number;
       type?: string;
@@ -183,23 +202,25 @@ const [Modal, modalApi] = useVbenModal({
     formType.value = data?.type || 'create';
     activeTab.value = 'personal';
     modalApi.setState({ title: modalTitle.value });
-    const defaults = createDefaultEmployeeFormData();
-    await formApi.resetForm();
-    await entryFormApi.resetForm();
-    await formApi.setValues(defaults);
-    await entryFormApi.setValues(defaults);
-    leaderEmployeeId.value = undefined;
-    userId.value = undefined;
-    candidateId.value = undefined;
     modalApi.lock();
     try {
       if (formType.value !== 'update') {
         await loadCreateFieldConfig();
+        await nextTick();
       }
+      const defaults = createDefaultEmployeeFormData();
+      await formApi.resetForm();
+      await entryFormApi.resetForm();
+      await formApi.setValues(normalizeDatePickerValues(defaults));
+      await entryFormApi.setValues(normalizeDatePickerValues(defaults));
+      leaderEmployeeId.value = undefined;
+      userId.value = undefined;
+      candidateId.value = undefined;
+      applicationId.value = data?.applicationId;
       if (data?.id) {
         const employee = await getEmployee(data.id);
-        await formApi.setValues(employee);
-        await entryFormApi.setValues(employee);
+        await formApi.setValues(normalizeDatePickerValues(employee));
+        await entryFormApi.setValues(normalizeDatePickerValues(employee));
         leaderEmployeeId.value = employee.leaderEmployeeId;
         userId.value = employee.userId;
         candidateId.value = employee.candidateId;
@@ -210,28 +231,37 @@ const [Modal, modalApi] = useVbenModal({
           );
           if (!employee.entryTime || Number(employee.entryTime) > Date.now()) {
             const entryTime = Date.now();
-            await entryFormApi.setFieldValue('entryTime', entryTime);
+            await entryFormApi.setFieldValue(
+              'entryTime',
+              toTimestampPickerValue(entryTime),
+            );
             await entryFormApi.setFieldValue('regularTime', undefined);
-            await entryFormApi.setFieldValue('companyAgeStartTime', entryTime);
+            await entryFormApi.setFieldValue(
+              'companyAgeStartTime',
+              toTimestampPickerValue(entryTime),
+            );
           }
         } else if (formType.value === 'rehire') {
           const entryTime = Date.now();
-          await entryFormApi.setValues({
-            entryStatus: HrmEmployeeEntryStatus.ACTIVE,
-            entryTime,
-            companyAgeStartTime: entryTime,
-            regularTime: undefined,
-            leaveTime: undefined,
-            probation: HRM_EMPLOYEE_NO_PROBATION_MONTHS,
-          });
+          await entryFormApi.setValues(
+            normalizeDatePickerValues({
+              entryStatus: HrmEmployeeEntryStatus.ACTIVE,
+              entryTime,
+              companyAgeStartTime: entryTime,
+              regularTime: undefined,
+              leaveTime: undefined,
+              probation: HRM_EMPLOYEE_NO_PROBATION_MONTHS,
+            }),
+          );
         }
       } else if (data?.defaultData) {
         const merged = { ...defaults, ...data.defaultData };
-        await formApi.setValues(merged);
-        await entryFormApi.setValues(merged);
+        await formApi.setValues(normalizeDatePickerValues(merged));
+        await entryFormApi.setValues(normalizeDatePickerValues(merged));
         leaderEmployeeId.value = data.defaultData.leaderEmployeeId;
         userId.value = data.defaultData.userId;
         candidateId.value = data.defaultData.candidateId;
+        applicationId.value = (data.defaultData as HrmRecruitCandidateApi.EntryReq).applicationId;
       }
     } finally {
       modalApi.unlock();
@@ -250,7 +280,7 @@ const [Modal, modalApi] = useVbenModal({
           </template>
         </Form>
       </Tabs.TabPane>
-      <Tabs.TabPane key="entry" tab="入职信息">
+      <Tabs.TabPane key="entry" tab="入职信息" :force-render="true">
         <EntryForm class="mx-4 mt-2">
           <template #leaderEmployeeId>
             <EmployeeSelect

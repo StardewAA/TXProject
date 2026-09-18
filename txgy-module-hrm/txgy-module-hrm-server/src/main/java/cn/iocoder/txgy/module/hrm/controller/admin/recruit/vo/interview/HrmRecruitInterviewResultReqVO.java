@@ -34,7 +34,8 @@ public class HrmRecruitInterviewResultReqVO {
     @JsonIgnore
     public boolean isResultValid() {
         return equalsAny(result, null, HrmRecruitInterviewResultEnum.PASS.getResult(),
-                HrmRecruitInterviewResultEnum.NOT_PASS.getResult(), HrmRecruitInterviewResultEnum.CANCEL.getResult());
+                HrmRecruitInterviewResultEnum.NOT_PASS.getResult(), HrmRecruitInterviewResultEnum.CANCEL.getResult(),
+                HrmRecruitInterviewResultEnum.ABSENT.getResult());
     }
 
 }

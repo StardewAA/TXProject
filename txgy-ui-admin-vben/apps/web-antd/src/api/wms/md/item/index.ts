@@ -16,7 +16,9 @@ export namespace WmsItemApi {
     unit?: string;
     brandId?: number;
     brandName?: string;
+    materialType?: string;
     remark?: string;
+    status?: number;
     skus?: WmsItemSkuApi.ItemSku[];
     initialQualityReport?: QualityReport;
     currentQualityReport?: QualityReport;
@@ -57,6 +59,11 @@ export function updateItem(data: WmsItemApi.Item) {
 /** 删除商品 */
 export function deleteItem(id: number) {
   return requestClient.delete(`/wms/item/delete?id=${id}`);
+}
+
+/** 修改商品状态 */
+export function updateItemStatus(id: number, status: number) {
+  return requestClient.put(`/wms/item/update-status?id=${id}&status=${status}`);
 }
 
 /** 导出商品 */

@@ -9,6 +9,7 @@ import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.infra.controller.admin.logger.vo.apiaccesslog.ApiAccessLogPageReqVO;
 import cn.iocoder.txgy.module.infra.dal.dataobject.logger.ApiAccessLogDO;
 import cn.iocoder.txgy.module.infra.dal.mysql.logger.ApiAccessLogMapper;
+import cn.iocoder.txgy.module.infra.service.worklog.WorkLogService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,12 @@ public class ApiAccessLogServiceImpl implements ApiAccessLogService {
     @Resource
     private ApiAccessLogMapper apiAccessLogMapper;
 
+    @Resource
+    private WorkLogService workLogService;
+
     @Override
     public void createApiAccessLog(ApiAccessLogCreateReqDTO createDTO) {
+        workLogService.capture(createDTO);
         ApiAccessLogDO apiAccessLog = BeanUtils.toBean(createDTO, ApiAccessLogDO.class);
         apiAccessLog.setRequestParams(StrUtils.maxLength(apiAccessLog.getRequestParams(), REQUEST_PARAMS_MAX_LENGTH));
         apiAccessLog.setResultMsg(StrUtils.maxLength(apiAccessLog.getResultMsg(), RESULT_MSG_MAX_LENGTH));

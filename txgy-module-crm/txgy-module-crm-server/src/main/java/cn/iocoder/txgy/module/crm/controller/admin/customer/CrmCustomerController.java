@@ -17,6 +17,8 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerPoolConfigDO;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerPoolConfigService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
+import cn.iocoder.txgy.module.crm.service.customer.CrmSupplierImportService;
+import cn.iocoder.txgy.module.crm.util.CrmWebPageUtils;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -31,6 +33,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -40,10 +43,12 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.pojo.PageParam.PAGE_SIZE_NONE;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.*;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.SUPPLIER_IMPORT_FILE_EMPTY;
 import static java.util.Collections.singletonList;
 
 @Tag(name = "管理后台 - CRM 客户")
@@ -56,6 +61,8 @@ public class CrmCustomerController {
     private CrmCustomerService customerService;
     @Resource
     private CrmCustomerPoolConfigService customerPoolConfigService;
+    @Resource
+    private CrmSupplierImportService supplierImportService;
 
     @Resource
     private DeptApi deptApi;
@@ -114,6 +121,47 @@ public class CrmCustomerController {
             return null;
         }
         return buildCustomerDetailList(singletonList(customer)).get(0);
+    }
+
+    @GetMapping("/check-duplicate")
+    @Operation(summary = "查重：根据手机号、名称匹配已存在的客户、线索、联系人")
+    @Parameter(name = "mobile", description = "手机号", example = "13800138000")
+    @Parameter(name = "name", description = "名称", example = "天信管业")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmDuplicateCheckRespVO> checkDuplicate(@RequestParam(value = "mobile", required = false) String mobile,
+                                                                @RequestParam(value = "name", required = false) String name) {
+        return success(customerService.checkDuplicate(mobile, name));
+    }
+
+    @GetMapping("/fetch-web-page")
+    @Operation(summary = "抓取网页正文（用于网页链接一键识别）")
+    @Parameter(name = "url", description = "网页地址", required = true, example = "https://www.example.com")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<CrmWebPageFetchRespVO> fetchWebPage(@RequestParam("url") String url) {
+        CrmWebPageUtils.WebPage page = CrmWebPageUtils.fetch(url);
+        return success(CrmWebPageFetchRespVO.builder()
+                .url(url).title(page.getTitle()).content(page.getContent()).build());
+    }
+
+    @GetMapping("/similar-list")
+    @Operation(summary = "获得相似客户列表", description = "按客户类别与行业推荐相似客户，便于业务对比与拓展")
+    @Parameter(name = "customerId", description = "客户编号", required = true, example = "1024")
+    @Parameter(name = "limit", description = "返回数量", example = "10")
+    @PreAuthorize("@ss.hasPermission('crm:customer:query')")
+    public CommonResult<List<CrmCustomerRespVO>> getSimilarCustomerList(@RequestParam("customerId") Long customerId,
+                                                                       @RequestParam(value = "limit", required = false, defaultValue = "10") Integer limit) {
+        List<CrmCustomerDO> list = customerService.getSimilarCustomerList(customerId, limit);
+        if (CollUtil.isEmpty(list)) {
+            return success(java.util.Collections.emptyList());
+        }
+        // 填充负责人姓名
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                convertSet(list, CrmCustomerDO::getOwnerUserId));
+        return success(convertList(list, customer -> {
+            CrmCustomerRespVO vo = BeanUtils.toBean(customer, CrmCustomerRespVO.class);
+            MapUtils.findAndThen(userMap, customer.getOwnerUserId(), user -> vo.setOwnerUserName(user.getNickname()));
+            return vo;
+        }));
     }
 
     @GetMapping("/page")
@@ -222,13 +270,17 @@ public class CrmCustomerController {
     }
 
     @GetMapping(value = "/simple-list")
-    @Operation(summary = "获取客户精简信息列表", description = "只包含有读权限的客户，主要用于前端的下拉选项")
-    public CommonResult<List<CrmCustomerRespVO>> getCustomerSimpleList() {
+    @Operation(summary = "获取客户精简信息列表", description = "只包含有读权限的客户，主要用于前端的下拉选项；可按客户类别过滤（1=下游客户 2=上游供应商）")
+    @Parameter(name = "customerType", description = "客户类别：1=下游客户 2=上游供应商；不传则不过滤", example = "2")
+    public CommonResult<List<CrmCustomerRespVO>> getCustomerSimpleList(
+            @RequestParam(value = "customerType", required = false) Integer customerType) {
         CrmCustomerPageReqVO reqVO = new CrmCustomerPageReqVO();
         reqVO.setPageSize(PAGE_SIZE_NONE); // 不分页
+        reqVO.setCustomerType(customerType); // 客户类别过滤（报价单「供应商」下拉传 2）
         List<CrmCustomerDO> list = customerService.getCustomerPage(reqVO, getLoginUserId()).getList();
-        return success(convertList(list, customer -> // 只返回 id、name 精简字段
-                new CrmCustomerRespVO().setId(customer.getId()).setName(customer.getName())));
+        return success(convertList(list, customer -> // 只返回 id、name、customerType 精简字段
+                new CrmCustomerRespVO().setId(customer.getId()).setName(customer.getName())
+                        .setCustomerType(customer.getCustomerType())));
     }
 
     @GetMapping("/export-excel")
@@ -269,6 +321,33 @@ public class CrmCustomerController {
         return success(customerService.importCustomerList(list, importReqVO));
     }
 
+    @PostMapping("/import-supplier-word")
+    @Operation(summary = "从 Word 导入供应商", description = "解析 .docx 文档表格中的供应商信息，导入到供应商基础库（上游供应商客户）")
+    @PreAuthorize("@ss.hasPermission('crm:customer:create')")
+    public CommonResult<CrmSupplierImportRespVO> importSupplierWord(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "updateExisting", required = false, defaultValue = "false") Boolean updateExisting)
+            throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw exception(SUPPLIER_IMPORT_FILE_EMPTY);
+        }
+        return success(supplierImportService.importSupplierWord(file.getBytes(),
+                Boolean.TRUE.equals(updateExisting), getLoginUserId()));
+    }
+
+    @GetMapping("/supplier-simple-list")
+    @Operation(summary = "获得供应商精简列表",
+            description = "供应商基础库（客户类别=上游供应商）的全量数据，含联系人/电话/地址，供报价单等下拉选择")
+    public CommonResult<List<CrmCustomerRespVO>> getSupplierSimpleList() {
+        List<CrmCustomerDO> list = customerService.getSupplierSimpleList();
+        return success(convertList(list, customer -> new CrmCustomerRespVO()
+                .setId(customer.getId()).setName(customer.getName())
+                .setContactName(customer.getContactName())
+                .setMobile(customer.getMobile()).setTelephone(customer.getTelephone())
+                .setDetailAddress(customer.getDetailAddress())
+                .setCustomerType(customer.getCustomerType())));
+    }
+
     @PutMapping("/transfer")
     @Operation(summary = "转移客户")
     @PreAuthorize("@ss.hasPermission('crm:customer:update')")
@@ -294,6 +373,14 @@ public class CrmCustomerController {
     public CommonResult<Boolean> putCustomerPool(@RequestParam("id") Long id) {
         customerService.putCustomerPool(id);
         return success(true);
+    }
+
+    @PostMapping("/auto-put-pool")
+    @Operation(summary = "触发一次客户自动掉入公海",
+            description = "按公海规则（未成交天数 / 未跟进天数）把符合条件的客户放入公海；与定时任务同一套逻辑，便于立即执行与验收")
+    @PreAuthorize("@ss.hasPermission('crm:customer:update')")
+    public CommonResult<Integer> autoPutCustomerPool() {
+        return success(customerService.autoPutCustomerPool());
     }
 
     @PutMapping("/receive")

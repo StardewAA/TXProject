@@ -9,7 +9,10 @@
         </view>
         <view class="head-title ss-m-r-40 head-title-animation">账号登录</view>
       </view>
-      <view class="head-subtitle">如果未设置过密码，请点击忘记密码</view>
+      <view class="head-subtitle">{{ loginNameEnabled ? '使用登录名或已绑定的原手机号登录' : '使用原手机号和密码登录' }}</view>
+      <view class="register-link" @tap="showAuthModal('register')">没有账号？立即注册</view>
+      <view v-if="authError" @tap="retryAuth">{{ authError }}</view>
+      <view v-else-if="!authAvailable">认证服务准备中或暂未开放</view>
     </view>
 
     <!-- 表单项 -->
@@ -21,8 +24,8 @@
       labelWidth="140"
       labelAlign="center"
     >
-      <uni-forms-item name="mobile" label="账号">
-        <uni-easyinput placeholder="请输入账号" v-model="state.model.mobile" :inputBorder="false">
+      <uni-forms-item name="account" label="账号">
+        <uni-easyinput :placeholder="loginNameEnabled ? '登录名 / 原手机号' : '请输入原手机号'" v-model="state.model.account" maxlength="20" :inputBorder="false">
           <template v-slot:right>
             <button class="ss-reset-button forgot-btn" @tap="showAuthModal('resetPassword')">
               忘记密码
@@ -39,7 +42,7 @@
           :inputBorder="false"
         >
           <template v-slot:right>
-            <button class="ss-reset-button login-btn-start" @tap="accountLoginSubmit">登录</button>
+            <button class="ss-reset-button login-btn-start" :disabled="!authAvailable || submitting" @tap="accountLoginSubmit">登录</button>
           </template>
         </uni-easyinput>
       </uni-forms-item>
@@ -50,9 +53,9 @@
 <script setup>
   import { ref, reactive, unref } from 'vue';
   import sheep from '@/sheep';
-  import { mobile, password } from '@/sheep/validate/form';
   import { showAuthModal, closeAuthModal } from '@/sheep/hooks/useModal';
-  import AuthUtil from '@/sheep/api/member/auth';
+  import { useMallAuthForm, mallLoginPassword as password } from '@/sheep/hooks/useMallAuthForm';
+  import { normalizeLoginName } from '@/sheep/helper/image-registration.mjs';
 
   const accountLoginRef = ref(null);
 
@@ -68,23 +71,30 @@
   // 数据
   const state = reactive({
     model: {
-      mobile: '', // 账号
+      account: '', // 登录名或原手机号
       password: '', // 密码
     },
     rules: {
-      mobile,
+      account: { rules: [{ required: true, errorMessage: '请输入账号' }, { validateFunction: (rule, value, data, callback) => {
+        if (/^1[3-9]\d{9}$/.test(value?.trim())) return true;
+        if (loginNameEnabled.value) {
+          try { normalizeLoginName(value); return true; } catch (error) { callback(error.message); return false; }
+        }
+        callback('当前商城请使用原手机号登录'); return false;
+      } }] },
       password,
     },
   });
+
+  const { error: authError, available: authAvailable, loginNameEnabled, submitting, refresh: retryAuth,
+    submit: submitAuth } = useMallAuthForm(state.model, 'PASSWORD_LOGIN');
 
   // 账号登录
   async function accountLoginSubmit() {
     // 表单验证
     const validate = await unref(accountLoginRef)
       .validate()
-      .catch((error) => {
-        console.log('error: ', error);
-      });
+      .catch(() => null);
     if (!validate) return;
 
     // 检查协议状态
@@ -99,13 +109,24 @@
     }
 
     // 提交数据
-    const { code, data } = await AuthUtil.login(state.model);
-    if (code === 0) {
-      closeAuthModal();
+    try {
+      const result = await submitAuth('login', { ...state.model });
+      if (result?.code === 0) {
+        closeAuthModal();
+      }
+    } catch (error) {
+      // request 层已展示错误提示，避免网络异常导致授权弹窗报错。
     }
   }
 </script>
 
 <style lang="scss" scoped>
   @import '../index.scss';
+
+  .register-link {
+    margin-top: 18rpx;
+    color: var(--ui-BG-Main);
+    font-size: 26rpx;
+    text-align: right;
+  }
 </style>

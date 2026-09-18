@@ -12,6 +12,8 @@ public class AppFavoriteRespVO {
 
     @Schema(description = "商品 SPU 编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "29502")
     private Long spuId;
+    private Boolean saleable;
+    private String unavailableReason;
 
     // ========== 商品相关字段 ==========
 

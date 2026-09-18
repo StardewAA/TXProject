@@ -64,7 +64,7 @@
   /**
    * 分享弹窗
    */
-  import { ref, unref, reactive, computed } from 'vue';
+  import { ref, unref, reactive, computed, watch } from 'vue';
   import sheep from '@/sheep';
   import canvasPoster from './canvas-poster/index.vue';
   import { closeShareModal, showAuthModal } from '@/sheep/hooks/useModal';
@@ -84,6 +84,18 @@
     showShareGuide: false, // H5 的指引
     showPosterModal: false, // 海报弹窗
   });
+
+  // 个人中心二维码按钮直接展示海报，避免先弹出分享选项
+  watch(() => sheep.$store('modal').sharePoster, (value) => {
+    if (!value) return;
+    sheep.$store('modal').$patch({ sharePoster: false });
+    if (!sheep.$store('user').isLogin) {
+      showAuthModal('accountLogin');
+      return;
+    }
+    unref(SharePosterRef).getPoster();
+    state.showPosterModal = true;
+  }, { immediate: true });
 
   // 操作 ②：生成海报分享
   const onShareByPoster = () => {

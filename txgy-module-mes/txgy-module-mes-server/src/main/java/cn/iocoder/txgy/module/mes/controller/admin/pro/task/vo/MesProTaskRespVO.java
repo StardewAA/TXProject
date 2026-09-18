@@ -31,6 +31,9 @@ public class MesProTaskRespVO {
     @Schema(description = "工作站编号", example = "1")
     private Long workstationId;
 
+    @Schema(description = "所属班组编号", example = "1")
+    private Long teamId;
+
     @Schema(description = "工作站编码", example = "WS-001")
     private String workstationCode;
 

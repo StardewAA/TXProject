@@ -7,10 +7,12 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.product.controller.app.spu.vo.AppProductSpuDetailRespVO;
 import cn.iocoder.txgy.module.product.controller.app.spu.vo.AppProductSpuPageReqVO;
 import cn.iocoder.txgy.module.product.controller.app.spu.vo.AppProductSpuRespVO;
+import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.txgy.module.product.enums.spu.ProductSpuStatusEnum;
 import cn.iocoder.txgy.module.product.service.history.ProductBrowseHistoryService;
+import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import cn.iocoder.txgy.module.product.service.sku.ProductSkuService;
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,13 +49,16 @@ public class AppProductSpuController {
     private ProductSkuService productSkuService;
     @Resource
     private ProductBrowseHistoryService productBrowseHistoryService;
+    @Resource
+    private ProductShopService productShopService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @GetMapping("/list-by-ids")
     @Operation(summary = "获得商品 SPU 列表")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PermitAll
     public CommonResult<List<AppProductSpuRespVO>> getSpuList(@RequestParam("ids") Set<Long> ids) {
-        List<ProductSpuDO> list = productSpuService.getSpuList(ids);
+        List<ProductSpuDO> list = productSpuService.getSpuList(ids).stream().filter(reviewService::saleable).toList();
         if (CollUtil.isEmpty(list)) {
             return success(Collections.emptyList());
         }
@@ -61,6 +66,7 @@ public class AppProductSpuController {
         // 拼接返回
         list.forEach(spu -> spu.setSalesCount(spu.getSalesCount() + spu.getVirtualSalesCount()));
         List<AppProductSpuRespVO> voList = BeanUtils.toBean(list, AppProductSpuRespVO.class);
+        fillShopInfo(voList, list);
         return success(voList);
     }
 
@@ -76,6 +82,7 @@ public class AppProductSpuController {
         // 拼接返回
         pageResult.getList().forEach(spu -> spu.setSalesCount(spu.getSalesCount() + spu.getVirtualSalesCount()));
         PageResult<AppProductSpuRespVO> voPageResult = BeanUtils.toBean(pageResult, AppProductSpuRespVO.class);
+        fillShopInfo(voPageResult.getList(), pageResult.getList());
         return success(voPageResult);
     }
 
@@ -89,8 +96,8 @@ public class AppProductSpuController {
         if (spu == null) {
             throw exception(SPU_NOT_EXISTS);
         }
-        if (!ProductSpuStatusEnum.isEnable(spu.getStatus())) {
-            throw exception(SPU_NOT_ENABLE, spu.getName());
+        if (!reviewService.saleable(spu)) {
+            throw exception(SPU_NOT_ENABLE, "编号 " + spu.getId());
         }
         // 获得商品 SKU
         List<ProductSkuDO> skus = productSkuService.getSkuListBySpuId(spu.getId());
@@ -104,7 +111,34 @@ public class AppProductSpuController {
         spu.setSalesCount(spu.getSalesCount() + spu.getVirtualSalesCount());
         AppProductSpuDetailRespVO spuVO = BeanUtils.toBean(spu, AppProductSpuDetailRespVO.class)
                 .setSkus(BeanUtils.toBean(skus, AppProductSpuDetailRespVO.Sku.class));
+        fillShopInfo(spuVO, spu.getShopId());
         return success(spuVO);
+    }
+
+    private void fillShopInfo(AppProductSpuDetailRespVO spuVO, Long shopId) {
+        spuVO.setShopId(shopId);
+        if (shopId == null || shopId == 0L) {
+            spuVO.setShopName("平台自营");
+            return;
+        }
+        ProductShopDO shop = productShopService.getShop(shopId);
+        spuVO.setShopName(shop != null ? shop.getName() : "店铺 " + shopId);
+    }
+
+    private void fillShopInfo(List<AppProductSpuRespVO> voList, List<ProductSpuDO> spuList) {
+        for (int i = 0; i < voList.size(); i++) {
+            fillShopInfo(voList.get(i), spuList.get(i).getShopId());
+        }
+    }
+
+    private void fillShopInfo(AppProductSpuRespVO spuVO, Long shopId) {
+        spuVO.setShopId(shopId);
+        if (shopId == null || shopId == 0L) {
+            spuVO.setShopName("平台自营");
+            return;
+        }
+        ProductShopDO shop = productShopService.getShop(shopId);
+        spuVO.setShopName(shop != null ? shop.getName() : "店铺 " + shopId);
     }
 
 }

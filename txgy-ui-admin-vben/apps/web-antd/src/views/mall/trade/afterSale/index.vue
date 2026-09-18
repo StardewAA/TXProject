@@ -2,32 +2,70 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallAfterSaleApi } from '#/api/mall/trade/afterSale';
 
-import { onMounted, ref } from 'vue';
+import { onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { DocAlert, Page } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
+import { useAccessStore } from '@vben/stores';
 
 import { Button, Image, Tabs, Tag } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getAfterSalePage } from '#/api/mall/trade/afterSale';
+import { getAfterSaleCount, getAfterSalePage } from '#/api/mall/trade/afterSale';
+
+import TradeTodoPanel from '../components/TradeTodoPanel.vue';
+import { commonFilters, countText, pageFilters } from '../components/workbench-model';
 
 import { useGridColumns, useGridFormSchema } from './data';
 
 const { push } = useRouter();
+const access = useAccessStore();
+const currentScope = () => `${access.tenantId}:${access.visitTenantId}:${access.accessToken}`;
+const todoPanel = ref<InstanceType<typeof TradeTodoPanel>>();
+const afterSaleIds = ref<number[]>([]);
+const filters = ref<Record<string, unknown>>({});
+const counts = ref<Record<string, number>>();
+const countsFailed = ref(false);
+let countVersion = 0;
+let countController: AbortController | undefined;
+async function refreshCounts() {
+  countController?.abort();
+  countController = new AbortController();
+  const version = ++countVersion;
+  try {
+    const data = await getAfterSaleCount(commonFilters(filters.value), countController.signal);
+    if (version !== countVersion) return;
+    counts.value = data;
+    countsFailed.value = false;
+  } catch { if (version === countVersion) countsFailed.value = true; }
+}
+function onSnapshot(_snapshot: unknown, failed: boolean) {
+  if (!_snapshot) { cancelCounts(); counts.value = undefined; countsFailed.value = false; return; }
+  if (failed) countsFailed.value = true;
+  else void refreshCounts();
+}
+function cancelCounts() { countVersion++; countController?.abort(); }
+onDeactivated(cancelCounts);
+onUnmounted(cancelCounts);
 
 const statusTabs = ref([
   {
     label: '全部',
-    value: '0',
+    value: 'all',
   },
 ]);
 const statusTab = ref(statusTabs.value[0]!.value);
 
 /** 处理退款 */
-function handleOpenAfterSaleDetail(row: MallAfterSaleApi.AfterSale) {
+async function handleOpenAfterSaleDetail(row: MallAfterSaleApi.AfterSale) {
+  const scope = currentScope();
+  const entries = todoPanel.value?.rowEvents(row.id, 'AFTER_SALE') || [];
+  if (entries.length) {
+    try { await todoPanel.value?.markRead(entries); } catch { /* 已读失败保留提醒，仍允许查看真实详情。 */ }
+  }
+  if (scope !== currentScope()) return;
   push({ name: 'TradeAfterSaleDetail', params: { id: row.id } });
 }
 
@@ -39,7 +77,7 @@ function handleOpenOrderDetail(row: MallAfterSaleApi.AfterSale) {
 /** 切换售后状态 */
 function handleChangeStatus(key: number | string) {
   statusTab.value = key.toString();
-  gridApi.query();
+  gridApi.reload();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -56,13 +94,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          return await getAfterSalePage({
+          filters.value = commonFilters(formValues);
+          void refreshCounts();
+          const result = await getAfterSalePage({
+            ...pageFilters(formValues, statusTab.value),
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            status:
-              statusTab.value === '0' ? undefined : Number(statusTab.value),
-            ...formValues,
           });
+          afterSaleIds.value = result.list.flatMap((row) => row.id ? [row.id] : []);
+          return result;
         },
       },
     },
@@ -97,8 +137,11 @@ onMounted(() => {
       />
     </template>
 
+    <TradeTodoPanel ref="todoPanel" :after-sale-ids="afterSaleIds" @snapshot="onSnapshot" />
     <Grid>
       <template #toolbar-actions>
+        <div class="w-full min-w-0">
+        <div class="mb-2">当前筛选售后数量（独立于主订单总数）<span v-if="countsFailed"> · 暂无法更新统计，请刷新重试</span></div>
         <Tabs
           v-model:active-key="statusTab"
           class="w-full"
@@ -107,9 +150,17 @@ onMounted(() => {
           <Tabs.TabPane
             v-for="tab in statusTabs"
             :key="tab.value"
-            :tab="tab.label"
+            :tab="`${tab.label} (${countText(counts?.[tab.value], countsFailed)})`"
           />
         </Tabs>
+        </div>
+      </template>
+      <template #afterSaleNo="{ row }">
+        <Tag v-if="todoPanel?.rowEvents(row.id, 'AFTER_SALE').length" color="orange">新 · 未读</Tag>{{ row.no }}
+      </template>
+      <template #processing="{ row }">
+        <div>{{ row.processBlockReason || (row.processable ? '可按授权处理' : '查看当前售后进度') }}</div>
+        <Tag v-if="row.erpStatus" class="mt-1">ERP {{ row.erpStatus }}</Tag>
       </template>
       <template #orderNo="{ row }">
         <Button type="link" @click="handleOpenOrderDetail(row)">
@@ -144,8 +195,9 @@ onMounted(() => {
         <TableAction
           :actions="[
             {
-              label: '处理退款',
+              label: '查看 / 处理',
               type: 'link',
+              auth: ['trade:after-sale:query'],
               onClick: handleOpenAfterSaleDetail.bind(null, row),
             },
           ]"

@@ -14,6 +14,7 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteContract,
   exportContract,
+  exportContractWord,
   getContractPage,
   submitContract,
 } from '#/api/crm/contract';
@@ -71,6 +72,23 @@ async function handleDelete(row: CrmContractApi.Contract) {
     await deleteContract(row.id!);
     message.success($t('ui.actionMessage.deleteSuccess', [row.name]));
     handleRefresh();
+  } finally {
+    hideLoading();
+  }
+}
+
+/** 生成合同 Word 文档 */
+async function handleExportWord(row: CrmContractApi.Contract) {
+  const hideLoading = message.loading({
+    content: '合同生成中...',
+    duration: 0,
+  });
+  try {
+    const data = await exportContractWord(row.id!);
+    downloadFileFromBlobPart({
+      fileName: `${row.name}.docx`,
+      source: data,
+    });
   } finally {
     hideLoading();
   }
@@ -223,6 +241,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['crm:contract:update'],
               onClick: handleEdit.bind(null, row),
               ifShow: row.auditStatus === 0,
+            },
+            {
+              label: '生成合同',
+              type: 'link',
+              icon: ACTION_ICON.DOWNLOAD,
+              auth: ['crm:contract:export'],
+              onClick: handleExportWord.bind(null, row),
             },
             {
               label: '提交审核',

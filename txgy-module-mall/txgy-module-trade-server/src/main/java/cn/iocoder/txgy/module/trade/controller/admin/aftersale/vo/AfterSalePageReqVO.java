@@ -20,6 +20,7 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 public class AfterSalePageReqVO extends PageParam {
+    private Long shopId;
 
     @Schema(description = "用户编号", example = "1024")
     private Long userId;

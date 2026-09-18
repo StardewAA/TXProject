@@ -89,6 +89,10 @@ export const delegateTask = async (data: any) => {
   return await requestClient.put('/bpm/task/delegate', data);
 };
 
+export const getDelegateCandidates = async (taskId: string): Promise<number[]> => {
+  return await requestClient.get<number[]>('/bpm/task/delegate-candidates', { params: { taskId } });
+};
+
 /** 转派任务 */
 export const transferTask = async (data: any) => {
   return await requestClient.put('/bpm/task/transfer', data);

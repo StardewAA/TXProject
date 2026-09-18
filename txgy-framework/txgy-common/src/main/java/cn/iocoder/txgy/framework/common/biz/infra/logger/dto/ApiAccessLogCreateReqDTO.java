@@ -13,6 +13,13 @@ import java.time.LocalDateTime;
 @Data
 public class ApiAccessLogCreateReqDTO {
 
+    /** Actor display name at the time of the request; optional for older services. */
+    private String userName;
+    /** Redacted request-local business row changes. */
+    private String changes;
+    /** Effective, server-authorized business tenant before visit context is restored. */
+    private Long auditTenantId;
+
     /**
      * 链路追踪编号
      */

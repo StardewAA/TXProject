@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.promotion.controller.admin.bargain.vo.activity.Bar
 import cn.iocoder.txgy.module.promotion.convert.bargain.BargainActivityConvert;
 import cn.iocoder.txgy.module.promotion.dal.dataobject.bargain.BargainActivityDO;
 import cn.iocoder.txgy.module.promotion.dal.mysql.bargain.BargainActivityMapper;
+import cn.iocoder.txgy.module.promotion.service.price.PublicProductVisibility;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ import java.util.Set;
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.anyMatch;
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_NOT_EXISTS;
+import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SPU_NOT_ENABLE;
 import static cn.iocoder.txgy.module.promotion.enums.ErrorCodeConstants.*;
 
 /**
@@ -41,6 +43,9 @@ public class BargainActivityServiceImpl implements BargainActivityService {
 
     @Resource
     private ProductSkuApi productSkuApi;
+
+    @Resource
+    private PublicProductVisibility visibility;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -119,7 +124,7 @@ public class BargainActivityServiceImpl implements BargainActivityService {
     }
 
     private void validateSku(Long skuId) {
-        ProductSkuRespDTO sku = productSkuApi.getSku(skuId).getCheckedData();
+        ProductSkuRespDTO sku = productSkuApi.getSku(skuId);
         if (sku == null) {
             throw exception(SKU_NOT_EXISTS);
         }
@@ -171,6 +176,9 @@ public class BargainActivityServiceImpl implements BargainActivityService {
         }
         if (!LocalDateTimeUtils.isBetween(activity.getStartTime(), activity.getEndTime())) {
             throw exception(BARGAIN_ACTIVITY_TIME_END);
+        }
+        if (!visibility.isSaleable(activity.getSpuId())) {
+            throw exception(SPU_NOT_ENABLE, activity.getSpuId());
         }
         return activity;
     }

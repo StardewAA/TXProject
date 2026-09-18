@@ -4,11 +4,13 @@ import type { MallDeliveryPickUpStoreApi } from '#/api/mall/trade/delivery/pickU
 
 import { markRaw } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { DeliveryTypeEnum, DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { convertToInteger, formatToFraction } from '@vben/utils';
+import { convertToInteger, fenToYuan, formatToFraction } from '@vben/utils';
 
 import { getSimpleDeliveryExpressList } from '#/api/mall/trade/delivery/express';
+import { getShopList } from '#/api/mall/product/shop';
 import { getSimpleDeliveryPickUpStoreList } from '#/api/mall/trade/delivery/pickUpStore';
 import { AreaCascader } from '#/components/area';
 import { getRangePickerDefaultProps } from '#/utils';
@@ -19,18 +21,28 @@ getSimpleDeliveryPickUpStoreList().then((data) => {
   pickUpStoreList = data;
 });
 
+/**
+ * 交易接口的金额字段统一以分返回。列表直接在列 formatter 中做一次
+ * 分转元，避免依赖全局 formatter 注册状态，也避免把已经转换过的值再次
+ * 除以 100。
+ */
+function formatFenAmount(value: unknown): string {
+  const fen = typeof value === 'number' ? value : Number(value ?? 0);
+  return `${fenToYuan(Number.isFinite(fen) ? fen : 0)} 元`;
+}
+
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
+  const { hasAccessByCodes } = useAccess();
+  const shopOptionsAllowed = hasAccessByCodes(['product:shop:query']);
   return [
     {
-      fieldName: 'status',
-      label: '订单状态',
-      component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.TRADE_ORDER_STATUS, 'number'),
-        placeholder: '请选择订单状态',
-        allowClear: true,
-      },
+      fieldName: 'shopId',
+      label: shopOptionsAllowed ? '所属店铺' : '店铺编号',
+      component: shopOptionsAllowed ? 'ApiSelect' : 'InputNumber',
+      componentProps: shopOptionsAllowed
+        ? { api: getShopList, labelField: 'name', valueField: 'id', allowClear: true, showSearch: true, optionFilterProp: 'label', placeholder: '全部授权店铺' }
+        : { min: 0, precision: 0, placeholder: '按店铺编号筛选' },
     },
     {
       fieldName: 'payChannelCode',
@@ -169,6 +181,20 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
       title: '订单号',
       fixed: 'left',
       minWidth: 180,
+      slots: { default: 'orderNo' },
+    },
+    {
+      field: 'shopName',
+      title: '店铺',
+      minWidth: 140,
+      formatter: ({ row }) =>
+        row.shopName ||
+        row.items?.find((item: { shopName?: string }) => item.shopName)?.shopName ||
+        (row.shopId === 0
+          ? '平台自营'
+          : row.shopId
+            ? `店铺 ${row.shopId}`
+            : '平台自营'),
     },
     {
       field: 'createTime',
@@ -212,7 +238,7 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
     {
       field: 'payPrice',
       title: '实际支付',
-      formatter: 'formatAmount2',
+      formatter: ({ cellValue }) => formatFenAmount(cellValue),
       minWidth: 180,
     },
     {
@@ -249,6 +275,12 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
         props: { type: DICT_TYPE.TRADE_ORDER_STATUS },
       },
       minWidth: 80,
+    },
+    {
+      field: 'deliveryBlockReason',
+      title: '履约处理进度',
+      minWidth: 200,
+      slots: { default: 'processing' },
     },
     {
       title: '操作',

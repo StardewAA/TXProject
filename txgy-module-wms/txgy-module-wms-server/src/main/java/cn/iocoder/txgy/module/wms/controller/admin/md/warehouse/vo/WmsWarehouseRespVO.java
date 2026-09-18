@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Schema(description = "管理后台 - WMS 仓库 Response VO")
 @Data
@@ -24,6 +25,33 @@ public class WmsWarehouseRespVO {
     @ExcelProperty("仓库名称")
     private String name;
 
+    @Schema(description = "仓库类型", example = "RAW_MATERIAL")
+    @ExcelProperty("仓库类型")
+    private String warehouseType;
+
+    @Schema(description = "仓库状态", example = "0")
+    @ExcelProperty("仓库状态")
+    private Integer status;
+
+    @Schema(description = "所属组织/部门", example = "供应链部")
+    @ExcelProperty("所属组织/部门")
+    private String organizationName;
+
+    @Schema(description = "所在城市", example = "上海市")
+    @ExcelProperty("所在城市")
+    private String city;
+
+    @Schema(description = "仓库地址", example = "浦东新区张江路 100 号")
+    @ExcelProperty("仓库地址")
+    private String address;
+
+    @Schema(description = "负责人", example = "张三")
+    @ExcelProperty("负责人")
+    private String principal;
+
+    @Schema(description = "负责人联系电话", example = "13800138000")
+    private String principalPhone;
+
     @Schema(description = "备注", example = "备注")
     @ExcelProperty("备注")
     private String remark;
@@ -35,5 +63,17 @@ public class WmsWarehouseRespVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
+
+    @Schema(description = "仓库负责人用户编号")
+    private Long managerUserId;
+
+    @Schema(description = "仓库负责人姓名")
+    private String managerName;
+
+    @Schema(description = "仓库员工用户编号集合")
+    private Set<Long> memberUserIds;
+
+    @Schema(description = "仓库员工数量")
+    private Integer memberCount;
 
 }

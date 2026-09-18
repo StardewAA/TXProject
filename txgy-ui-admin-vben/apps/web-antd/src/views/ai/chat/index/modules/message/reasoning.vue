@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -10,7 +10,8 @@ const props = defineProps<{
   reasoningContent?: string;
 }>();
 
-const isExpanded = ref(true); // 默认展开
+// 默认折叠：仅在「思考中」（有思考内容但正文还没出来）时自动展开
+const isExpanded = ref(false);
 
 /** 判断是否应该显示组件 */
 const shouldShowComponent = computed(() => {
@@ -32,6 +33,20 @@ const titleText = computed(() => {
 function toggleExpanded() {
   isExpanded.value = !isExpanded.value;
 }
+
+// 流式输出时自动切换展开状态：
+// - 思考中（有思考内容、正文为空）→ 自动展开，方便实时查看思考过程
+// - 正文开始输出 → 自动折叠，突出最终答案
+watch(
+  () => [props.reasoningContent, props.content],
+  () => {
+    if (props.reasoningContent && !props.content) {
+      isExpanded.value = true;
+    } else if (props.content) {
+      isExpanded.value = false;
+    }
+  },
+);
 </script>
 
 <template>

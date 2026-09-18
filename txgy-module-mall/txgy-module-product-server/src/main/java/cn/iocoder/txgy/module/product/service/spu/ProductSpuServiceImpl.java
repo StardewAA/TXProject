@@ -19,6 +19,7 @@ import cn.iocoder.txgy.module.product.enums.spu.ProductSpuStatusEnum;
 import cn.iocoder.txgy.module.product.service.brand.ProductBrandService;
 import cn.iocoder.txgy.module.product.service.category.ProductCategoryService;
 import cn.iocoder.txgy.module.product.service.sku.ProductSkuService;
+import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import com.google.common.collect.Maps;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
@@ -36,7 +37,7 @@ import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.*;
 /**
  * 商品 SPU Service 实现类
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 @Service
 @Validated
@@ -52,24 +53,35 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     private ProductBrandService brandService;
     @Resource
     private ProductCategoryService categoryService;
+    @Resource
+    private ProductShopService shopService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSpu(ProductSpuSaveReqVO createReqVO) {
+        checkAdminWrite(createReqVO.getShopId());
+        if (createReqVO.getShopId() == null || createReqVO.getShopId() <= 0)
+            throw cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService.invalid("新增商品须选择有效店铺");
         // 校验分类、品牌
         validateCategory(createReqVO.getCategoryId());
         brandService.validateProductBrand(createReqVO.getBrandId());
+        validateShop(createReqVO.getShopId());
         // 校验 SKU
         List<ProductSkuSaveReqVO> skuSaveReqList = createReqVO.getSkus();
+        cn.iocoder.txgy.module.product.service.sku.ProductSkuServiceImpl.validateNewSkuMappings(skuSaveReqList);
         productSkuService.validateSkuList(skuSaveReqList, createReqVO.getSpecType());
 
         ProductSpuDO spu = BeanUtils.toBean(createReqVO, ProductSpuDO.class);
+        spu.setId(null).setStatus(0).setReviewStatus(0).setContentVersion(1L).setApprovedVersion(null)
+                .setSubmissionId(null).setReviewRemark(null).setSalesCount(0).setBrowseCount(0);
         // 初始化 SPU 中 SKU 相关属性
         initSpuFromSkus(spu, skuSaveReqList);
         // 插入 SPU
         productSpuMapper.insert(spu);
         // 插入 SKU
         productSkuService.createSkuList(spu.getId(), skuSaveReqList);
+        reviewService.created(spu.getId());
         // 返回
         return spu.getId();
     }
@@ -78,20 +90,29 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Transactional(rollbackFor = Exception.class)
     public void updateSpu(ProductSpuSaveReqVO updateReqVO) {
         // 校验 SPU 是否存在
-        ProductSpuDO spu = validateSpuExists(updateReqVO.getId());
+        ProductSpuDO spu = reviewService.lock(updateReqVO.getId());
+        checkAdminWrite(spu.getShopId());
+        String before = reviewService.beforeEdit(spu, updateReqVO.getExpectedVersion());
+        if (!Objects.equals(spu.getShopId(), updateReqVO.getShopId()) || !Objects.equals(spu.getSpecType(), updateReqVO.getSpecType()))
+            throw cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService.invalid("不得通过商品编辑更换店铺或重建已有规格");
         // 校验分类、品牌
         validateCategory(updateReqVO.getCategoryId());
         brandService.validateProductBrand(updateReqVO.getBrandId());
+        validateShop(updateReqVO.getShopId());
         // 校验SKU
         List<ProductSkuSaveReqVO> skuSaveReqList = updateReqVO.getSkus();
         productSkuService.validateSkuList(skuSaveReqList, updateReqVO.getSpecType());
 
         // 更新 SPU
-        ProductSpuDO updateObj = BeanUtils.toBean(updateReqVO, ProductSpuDO.class).setStatus(spu.getStatus());
-        initSpuFromSkus(updateObj, skuSaveReqList);
+        ProductSpuDO updateObj = BeanUtils.toBean(updateReqVO, ProductSpuDO.class).setStatus(null)
+                .setSalesCount(null).setBrowseCount(null).setStock(null);
+        updateObj.setPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getPrice))
+                .setMarketPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getMarketPrice))
+                .setCostPrice(getMinValue(skuSaveReqList, ProductSkuSaveReqVO::getCostPrice));
         productSpuMapper.updateById(updateObj);
         // 批量更新 SKU
         productSkuService.updateSkuList(updateObj.getId(), updateReqVO.getSkus());
+        reviewService.finishEdit(spu, before);
     }
 
     /**
@@ -112,7 +133,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         spu.setStock(getSumValue(skus, ProductSkuSaveReqVO::getStock, Math::addExact));
         // 若是 spu 已有状态则不处理
         if (spu.getStatus() == null) {
-            spu.setStatus(ProductSpuStatusEnum.ENABLE.getStatus()); // 默认状态为上架
+            spu.setStatus(ProductSpuStatusEnum.DISABLE.getStatus()); // 新商品审核后由商家主动上架
             spu.setSalesCount(0); // 默认商品销量
             spu.setBrowseCount(0); // 默认商品浏览量
         }
@@ -131,6 +152,15 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         }
     }
 
+    /**
+     * 店铺为空时，商品归属平台自营；有值时必须是启用店铺。
+     */
+    private void validateShop(Long shopId) {
+        if (shopId != null) {
+            shopService.validateEnabledShop(shopId);
+        }
+    }
+
     @Override
     public List<ProductSpuDO> validateSpuList(Collection<Long> ids) {
         if (CollUtil.isEmpty(ids)) {
@@ -145,8 +175,8 @@ public class ProductSpuServiceImpl implements ProductSpuService {
             if (spu == null) {
                 throw exception(SPU_NOT_EXISTS);
             }
-            if (!ProductSpuStatusEnum.isEnable(spu.getStatus())) {
-                throw exception(SPU_NOT_ENABLE, spu.getName());
+            if (!reviewService.saleable(spu)) {
+                throw exception(SPU_NOT_ENABLE, "编号 " + spu.getId());
             }
         });
         return list;
@@ -160,10 +190,21 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSpu(Long id) {
-        // 校验存在
-        validateSpuExists(id);
+        // 兼容既有可信内部调用；公开 Controller 只能使用带 expectedVersion 的重载。
+        deleteLocked(reviewService.lock(id));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSpu(Long id, Long expectedVersion) {
+        var current = reviewService.lock(id);
+        cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.expect(current, expectedVersion);
+        deleteLocked(current);
+    }
+
+    private void deleteLocked(ProductSpuDO spuDO) {
+        checkAdminWrite(spuDO.getShopId());
         // 校验商品状态不是回收站不能删除
-        ProductSpuDO spuDO = productSpuMapper.selectById(id);
         // 判断 SPU 状态是否为回收站
         if (ObjectUtil.notEqual(spuDO.getStatus(), ProductSpuStatusEnum.RECYCLE.getStatus())) {
             throw exception(SPU_NOT_RECYCLE);
@@ -171,9 +212,9 @@ public class ProductSpuServiceImpl implements ProductSpuService {
         // TODO 芋艿：【可选】参与活动中的商品，不允许删除？？？
 
         // 删除 SPU
-        productSpuMapper.deleteById(id);
+        productSpuMapper.deleteById(spuDO.getId());
         // 删除关联的 SKU
-        productSkuService.deleteSkuBySpuId(id);
+        productSkuService.deleteSkuBySpuId(spuDO.getId());
     }
 
     private ProductSpuDO validateSpuExists(Long id) {
@@ -234,7 +275,7 @@ public class ProductSpuServiceImpl implements ProductSpuService {
             categoryIds.addAll(convertList(categoryChildren, ProductCategoryDO::getId));
         }
         // 分页查询
-        return productSpuMapper.selectPage(pageReqVO, categoryIds);
+        return productSpuMapper.selectPage(pageReqVO, categoryIds, reviewService::applySaleableQuery);
     }
 
     @Override
@@ -244,15 +285,36 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     }
 
     @Override
+    public void syncSpuStock(Map<Long, Integer> stockCounts) {
+        stockCounts.forEach(productSpuMapper::updateStockCache);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSpuStatus(ProductSpuUpdateStatusReqVO updateReqVO) {
         // 校验存在
-        validateSpuExists(updateReqVO.getId());
+        var current = reviewService.lock(updateReqVO.getId());
+        checkAdminWrite(current.getShopId());
+        cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.expect(current, updateReqVO.getExpectedVersion());
+        if (Objects.equals(current.getStatus(), -1) && !Objects.equals(updateReqVO.getStatus(), -1)) {
+            if (!Objects.equals(updateReqVO.getStatus(), 0))
+                throw cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService.invalid("恢复商品只能成为草稿，须重新审核后上架");
+            reviewService.restoreDraft(current); return;
+        }
+        if (Objects.equals(current.getReviewStatus(), 10) && Objects.equals(updateReqVO.getStatus(), -1))
+            throw cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService.invalid("请先撤回审核再回收商品");
+        if (Objects.equals(updateReqVO.getStatus(), 1)) reviewService.requireApprovedForListing(current);
         // TODO 芋艿：【可选】参与活动中的商品，不允许下架？？？
 
         // 更新状态
-        ProductSpuDO productSpuDO = productSpuMapper.selectById(updateReqVO.getId()).setStatus(updateReqVO.getStatus());
+        ProductSpuDO productSpuDO = new ProductSpuDO().setId(updateReqVO.getId()).setStatus(updateReqVO.getStatus());
         productSpuMapper.updateById(productSpuDO);
+    }
+
+    private void checkAdminWrite(Long shopId) {
+        var user = cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUser();
+        if (user != null && Objects.equals(user.getUserType(), cn.iocoder.txgy.framework.common.enums.UserTypeEnum.ADMIN.getValue()))
+            reviewService.requireAdminWrite(shopId);
     }
 
     @Override
@@ -278,3 +340,4 @@ public class ProductSpuServiceImpl implements ProductSpuService {
     }
 
 }
+

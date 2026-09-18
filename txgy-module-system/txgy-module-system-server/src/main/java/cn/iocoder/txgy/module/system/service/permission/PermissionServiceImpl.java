@@ -7,6 +7,7 @@ import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.txgy.module.system.dal.dataobject.permission.MenuDO;
 import cn.iocoder.txgy.module.system.dal.dataobject.permission.RoleDO;
@@ -196,6 +197,8 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Cacheable(value = RedisKeyConstants.MENU_ROLE_ID_LIST, key = "#menuId")
+    @TenantIgnore // 权限校验按菜单编号查询角色集合，必须与请求租户无关；否则在“非用户所属租户”上下文下会查到空，
+                  // 导致权限校验被判定为无权限，并经本地缓存污染后续请求。
     public Set<Long> getMenuRoleIdListByMenuIdFromCache(Long menuId) {
         return convertSet(roleMenuMapper.selectListByMenuId(menuId), RoleMenuDO::getRoleId);
     }
@@ -234,6 +237,9 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
+    @TenantIgnore // 该缓存为租户全局缓存（见 RedisKeyConstants.USER_ROLE_ID_LIST），但底层查询按当前租户过滤；
+                  // 若请求在“非用户所属租户”上下文下执行（例如前端轮询未带租户头导致落到默认租户），
+                  // 会把空角色集写入全局缓存，污染该用户所有后续请求。这里跳过租户过滤，始终返回用户真实角色。
     public Set<Long> getUserRoleIdListByUserId(Long userId) {
         return convertSet(userRoleMapper.selectListByUserId(userId), UserRoleDO::getRoleId);
     }
@@ -241,7 +247,7 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     @Cacheable(value = RedisKeyConstants.USER_ROLE_ID_LIST, key = "#userId")
     public Set<Long> getUserRoleIdListByUserIdFromCache(Long userId) {
-        return getUserRoleIdListByUserId(userId);
+        return getSelf().getUserRoleIdListByUserId(userId);
     }
 
     @Override

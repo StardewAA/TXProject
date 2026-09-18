@@ -33,6 +33,10 @@ public class CrmCustomerDO extends BaseDO {
      * 客户名称
      */
     private String name;
+    /**
+     * 联系人
+     */
+    private String contactName;
 
     /**
      * 跟进状态
@@ -119,6 +123,13 @@ public class CrmCustomerDO extends BaseDO {
      * 对应字典 {@link DictTypeConstants#CRM_CUSTOMER_SOURCE}
      */
     private Integer source;
+    /**
+     * 客户类别
+     *
+     * 1=下游客户(采购方)；2=上游供应商
+     * 对应字典 {@link DictTypeConstants#CRM_CUSTOMER_CATEGORY}
+     */
+    private Integer customerType;
     /**
      * 备注
      */

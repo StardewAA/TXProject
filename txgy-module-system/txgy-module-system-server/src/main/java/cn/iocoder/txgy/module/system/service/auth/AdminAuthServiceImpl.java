@@ -8,6 +8,9 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.txgy.framework.common.util.validation.ValidationUtils;
 import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.service.TenantFrameworkService;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.system.api.logger.dto.LoginLogCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
 import cn.iocoder.txgy.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
@@ -41,7 +44,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception0;
 import static cn.iocoder.txgy.framework.common.util.servlet.ServletUtils.getClientIP;
+import static cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST;
 import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.*;
 
 /**
@@ -52,6 +57,9 @@ import static cn.iocoder.txgy.module.system.enums.ErrorCodeConstants.*;
 @Service
 @Slf4j
 public class AdminAuthServiceImpl implements AdminAuthService {
+
+    /** 无租户个人用户使用的保留租户编号。 */
+    private static final Long PERSONAL_TENANT_ID = 0L;
 
     @Resource
     private AdminUserService userService;
@@ -69,6 +77,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private CaptchaService captchaService;
     @Resource
     private SmsCodeApi smsCodeApi;
+    @Resource
+    private TenantFrameworkService tenantFrameworkService;
 
     /**
      * 验证码的开关，默认为 true
@@ -100,6 +110,30 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     public AuthLoginRespVO login(AuthLoginReqVO reqVO) {
         // 校验验证码
         validateCaptcha(reqVO);
+
+        // 个人账号固定在保留租户 0 内认证，避免在所有企业租户中按账号匹配。
+        if (reqVO.isPersonalLogin()) {
+            final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+            TenantUtils.execute(PERSONAL_TENANT_ID, () -> result[0] = doLogin(reqVO));
+            return result[0];
+        }
+
+        // 旧客户端未传 loginType 时按企业登录处理，企业登录必须有明确的租户上下文。
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId == null) {
+            throw exception0(BAD_REQUEST.getCode(), "企业登录需要传递租户编号");
+        }
+        // 认证 URL 对缺少租户的请求已放行，这里补回租户有效性校验，避免禁用/过期租户绕过过滤器。
+        tenantFrameworkService.validTenant(tenantId);
+
+        // 登录 Controller 使用了 @TenantIgnore，以便个人账号和企业账号共用入口。
+        // 企业认证时必须显式恢复所选租户上下文，否则用户名查询会跨租户命中同名账号。
+        final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+        TenantUtils.execute(tenantId, () -> result[0] = doLogin(reqVO));
+        return result[0];
+    }
+
+    private AuthLoginRespVO doLogin(AuthLoginReqVO reqVO) {
 
         // 使用账号密码，进行登录
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword());
@@ -278,10 +312,28 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 1. 校验验证码
         validateCaptcha(registerReqVO);
 
-        // 2. 校验用户名是否已存在
+        // 2. 个人账号固定注册在保留租户 0，与个人密码登录保持同一数据边界。
+        if (registerReqVO.isPersonalRegister()) {
+            final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+            TenantUtils.execute(PERSONAL_TENANT_ID, () -> {
+                AdminUserDO user = userService.registerUser(registerReqVO);
+                result[0] = createTokenAfterLoginSuccess(user, registerReqVO.getUsername(),
+                        LoginLogTypeEnum.LOGIN_USERNAME);
+            });
+            return result[0];
+        }
+
+        // 3. 企业账号沿用当前租户注册流程。注册 URL 为支持个人注册而忽略租户过滤，
+        //    因此这里补回企业租户的存在性校验，避免缺少或失效租户时写入数据。
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId == null) {
+            throw exception0(BAD_REQUEST.getCode(), "企业注册需要传递租户编号");
+        }
+        tenantFrameworkService.validTenant(tenantId);
+
         AdminUserDO user = userService.registerUser(registerReqVO);
 
-        // 3. 创建 Token 令牌，记录登录日志
+        // 4. 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ModelCategoryInfo } from '#/api/bpm/model';
 
-import { onActivated, reactive, ref, useTemplateRef, watch } from 'vue';
+import { onActivated, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Page, useVbenModal } from '@vben/common-ui';
@@ -91,6 +91,9 @@ async function getList() {
 }
 
 /** 初始化 */
+onMounted(() => {
+  getList();
+});
 onActivated(() => {
   getList();
 });

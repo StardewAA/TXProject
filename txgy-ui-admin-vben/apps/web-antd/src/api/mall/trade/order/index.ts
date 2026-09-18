@@ -7,6 +7,9 @@ export namespace MallOrderApi {
   export interface Order {
     id?: number; // 订单编号
     no?: string; // 订单流水号
+    shopId?: number; // 单店铺订单的店铺编号；多店铺订单为空
+    shopName?: string; // 店铺名称快照
+    shopLogoUrl?: string; // 店铺 Logo 快照
     createTime?: Date; // 下单时间
     type?: number; // 订单类型
     terminal?: number; // 订单来源
@@ -14,6 +17,11 @@ export namespace MallOrderApi {
     userIp?: string; // 用户 IP
     userRemark?: string; // 用户备注
     status?: number; // 订单状态
+    deliverable?: boolean; // 服务端判定当前是否可发货，不根据主状态猜测
+    deliveryBlockReason?: string;
+    erpStatus?: string;
+    pickupable?: boolean;
+    pickupBlockReason?: string;
     productCount?: number; // 购买的商品数量
     finishTime?: Date; // 订单完成时间
     cancelTime?: Date; // 订单取消时间
@@ -70,6 +78,8 @@ export namespace MallOrderApi {
     userId?: number; // 用户编号
     orderId?: number; // 订单编号
     spuId?: number; // 商品 SPU 编号
+    shopId?: number; // 履约店铺编号
+    shopName?: string; // 店铺名称快照
     spuName?: string; // 商品 SPU 名称
     skuId?: number; // 商品 SKU 编号
     picUrl?: string; // 商品图片
@@ -161,6 +171,21 @@ export function getOrder(id: number) {
   return requestClient.get<MallOrderApi.Order>(
     `/trade/order/get-detail?id=${id}`,
   );
+}
+
+export interface OrderShopGroup {
+  shopId?: number;
+  shopName?: string;
+  itemIds?: number[];
+  productCount?: number;
+  totalPrice?: number;
+  deliveryPrice?: number;
+  payPrice?: number;
+}
+
+/** 按店铺读取订单项分组（用于商家履约视图） */
+export function getOrderShopGroups(id: number) {
+  return requestClient.get<OrderShopGroup[]>(`/trade/order/get-shop-orders?id=${id}`);
 }
 
 /** 查询交易订单物流详情 */

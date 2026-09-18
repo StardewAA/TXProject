@@ -1,5 +1,6 @@
 <!-- 待回款提醒 -->
 <script lang="ts" setup>
+import { useUserStore } from '@vben/stores';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmReceivablePlanApi } from '#/api/crm/receivable/plan';
 
@@ -14,7 +15,7 @@ import { getReceivablePlanPage } from '#/api/crm/receivable/plan';
 import Form from '#/views/crm/receivable/modules/form.vue';
 import { useGridColumns } from '#/views/crm/receivable/plan/data';
 
-import { RECEIVABLE_REMIND_TYPE } from '../data';
+import { RECEIVABLE_REMIND_TYPE, SCENE_TYPES } from '../data';
 
 const { push } = useRouter();
 
@@ -38,6 +39,11 @@ function handleCreateReceivable(row: CrmReceivablePlanApi.Plan) {
   formModalApi.setData({ plan: row }).open();
 }
 
+const userStore = useUserStore();
+const isManager =
+  userStore.userRoles?.some(
+    (r) => r === 'tenant_admin' || r === 'crm_admin',
+  ) ?? false;
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -50,6 +56,13 @@ const [Grid] = useVbenVxeGrid({
           options: RECEIVABLE_REMIND_TYPE,
         },
         defaultValue: RECEIVABLE_REMIND_TYPE[0]!.value,
+      },
+      {
+        fieldName: 'sceneType',
+        label: '归属',
+        component: 'Select',
+        componentProps: { allowClear: true, options: SCENE_TYPES },
+        defaultValue: isManager ? 3 : 1,
       },
     ],
   },

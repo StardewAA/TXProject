@@ -3,12 +3,14 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { h, markRaw } from 'vue';
 
-import { generateWmsCode } from '@vben/constants';
+import { useAccess } from '@vben/access';
+import { CommonStatusEnum, generateWmsCode } from '@vben/constants';
 
 import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
 import { getItemBrandSimpleList } from '#/api/wms/md/item/brand';
+import { materialTypeLabel } from '#/views/wms/utils/material-type';
 
 import { WmsItemBrandSelect } from './brand/components';
 import { WmsItemCategorySelect } from './category/components';
@@ -77,6 +79,202 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       component: markRaw(WmsItemBrandSelect),
     },
     {
+      fieldName: 'materialType',
+      label: '物料类型',
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: '原材料', value: 'RAW_MATERIAL' },
+          { label: '成品', value: 'FINISHED_GOODS' },
+        ],
+        placeholder: '请选择物料类型',
+      },
+    },
+    // ========== 管理开关 ==========
+    {
+      fieldName: 'batchManage',
+      label: '批次管理',
+      component: 'Switch',
+      componentProps: {
+        checkedValue: true,
+        unCheckedValue: false,
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+      defaultValue: false,
+      help: '启用后该商品按批次入库、出库与追溯',
+    },
+    {
+      fieldName: 'shelfLifeManage',
+      label: '保质期管理',
+      component: 'Switch',
+      componentProps: {
+        checkedValue: true,
+        unCheckedValue: false,
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+      defaultValue: false,
+    },
+    {
+      fieldName: 'serialNumberManage',
+      label: '序列号管理',
+      component: 'Switch',
+      componentProps: {
+        checkedValue: true,
+        unCheckedValue: false,
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+      defaultValue: false,
+    },
+    {
+      fieldName: 'dangerousGoods',
+      label: '危险品标识',
+      component: 'Switch',
+      componentProps: {
+        checkedValue: true,
+        unCheckedValue: false,
+        checkedChildren: '危险品',
+        unCheckedChildren: '普通商品',
+      },
+      defaultValue: false,
+    },
+    // ========== 批次管理扩展字段（批次管理=是 时展开）==========
+    {
+      fieldName: 'batchNumberRule',
+      label: '批次号规则',
+      component: 'Input',
+      componentProps: {
+        maxLength: 255,
+        placeholder: '如：供应商编号+生产日期，如 XS20260210',
+      },
+      formItemClass: 'col-span-2',
+      dependencies: {
+        triggerFields: ['batchManage'],
+        show: (values) => !!values.batchManage,
+      },
+    },
+    {
+      fieldName: 'expirationRule',
+      label: '有效期计算',
+      component: 'Input',
+      componentProps: {
+        maxLength: 255,
+        placeholder: '如：生产日期 + 24个月',
+      },
+      formItemClass: 'col-span-2',
+      dependencies: {
+        triggerFields: ['batchManage', 'shelfLifeManage'],
+        show: (values) => !!values.batchManage || !!values.shelfLifeManage,
+      },
+    },
+    {
+      fieldName: 'shelfLifeMonths',
+      label: '保质期(月)',
+      component: 'InputNumber',
+      componentProps: {
+        class: 'w-full',
+        min: 0,
+        precision: 0,
+        placeholder: '请输入保质期月数',
+      },
+      dependencies: {
+        triggerFields: ['shelfLifeManage'],
+        show: (values) => !!values.shelfLifeManage,
+      },
+    },
+    {
+      fieldName: 'expiryWarningDays',
+      label: '到期预警(天)',
+      component: 'InputNumber',
+      componentProps: {
+        class: 'w-full',
+        min: 0,
+        precision: 0,
+        placeholder: '默认 30',
+      },
+      defaultValue: 30,
+      dependencies: {
+        triggerFields: ['shelfLifeManage'],
+        show: (values) => !!values.shelfLifeManage,
+      },
+    },
+    {
+      fieldName: 'expiredOutboundBlocked',
+      label: '过期禁出库',
+      component: 'Switch',
+      componentProps: {
+        checkedValue: true,
+        unCheckedValue: false,
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+      defaultValue: true,
+      dependencies: {
+        triggerFields: ['shelfLifeManage'],
+        show: (values) => !!values.shelfLifeManage,
+      },
+    },
+    // ========== 包装 ==========
+    {
+      fieldName: 'packageSpec',
+      label: '包装规格',
+      component: 'Input',
+      componentProps: {
+        maxLength: 255,
+        placeholder: '如：20kg/组（主剂16kg+固化剂4kg）',
+      },
+    },
+    {
+      fieldName: 'boxSpec',
+      label: '箱规',
+      component: 'Input',
+      componentProps: {
+        maxLength: 255,
+        placeholder: '如：1组/箱',
+      },
+    },
+    {
+      fieldName: 'palletSpec',
+      label: '托盘规格',
+      component: 'Input',
+      componentProps: {
+        maxLength: 255,
+        placeholder: '如：20组/托盘（400kg）',
+      },
+    },
+    {
+      fieldName: 'minPackageUnit',
+      label: '最小包装单位',
+      component: 'Input',
+      componentProps: {
+        maxLength: 32,
+        placeholder: '如：组',
+      },
+    },
+    // ========== 存储 ==========
+    {
+      fieldName: 'storageCondition',
+      label: '存储条件',
+      component: 'Textarea',
+      componentProps: {
+        maxLength: 500,
+        rows: 2,
+        placeholder: '如：密封避光，防止固化剂受潮',
+      },
+      formItemClass: 'col-span-2',
+    },
+    {
+      fieldName: 'temperatureRequirement',
+      label: '温度要求',
+      component: 'Input',
+      componentProps: {
+        maxLength: 64,
+        placeholder: '如：5-35℃',
+      },
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -127,39 +325,95 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
-export function useGridColumns(): VxeTableGridOptions['columns'] {
+/** 列表的字段（对应【4-2 商品档案总览】） */
+export function useGridColumns(
+  onStatusChange?: (
+    newStatus: number,
+    row: any,
+  ) => PromiseLike<boolean | undefined>,
+): VxeTableGridOptions['columns'] {
+  const { hasAccessByCodes } = useAccess();
+
   return [
     {
+      field: 'itemCode',
+      title: '商品编号',
+      width: 130,
+    },
+    {
       field: 'itemInfo',
-      title: '商品信息',
-      minWidth: 220,
+      title: '商品名称',
+      minWidth: 180,
       slots: { default: 'itemInfo' },
     },
     {
-      field: 'skuInfo',
-      title: '规格信息',
-      minWidth: 180,
-      slots: { default: 'skuInfo' },
-    },
-    {
-      field: 'priceInfo',
-      title: '金额(元)',
+      field: 'categoryName',
+      title: '商品分类',
       minWidth: 140,
-      slots: { default: 'priceInfo' },
     },
     {
-      field: 'weightInfo',
-      title: '重量(kg)',
-      minWidth: 140,
-      slots: { default: 'weightInfo' },
+      field: 'unit',
+      title: '单位',
+      width: 80,
     },
     {
-      field: 'dimensionInfo',
-      title: '长宽高(cm)',
-      minWidth: 180,
-      align: 'right',
-      slots: { default: 'dimensionInfo' },
+      field: 'brandName',
+      title: '品牌',
+      minWidth: 110,
+    },
+    {
+      field: 'materialType',
+      title: '物料类型',
+      width: 110,
+      align: 'center',
+      formatter: ({ cellValue }) =>
+        materialTypeLabel(cellValue as string | undefined),
+    },
+    {
+      field: 'batchManage',
+      title: '批次管理',
+      width: 100,
+      align: 'center',
+      slots: { default: 'batchManage' },
+    },
+    {
+      field: 'shelfLife',
+      title: '保质期',
+      width: 90,
+      align: 'center',
+      slots: { default: 'shelfLife' },
+    },
+    {
+      field: 'dangerousGoods',
+      title: '危险品标识',
+      width: 110,
+      align: 'center',
+      slots: { default: 'dangerousGoods' },
+    },
+    {
+      field: 'temperatureRequirement',
+      title: '温度要求',
+      width: 110,
+    },
+    {
+      field: 'storageCondition',
+      title: '存储条件',
+      minWidth: 160,
+    },
+    {
+      field: 'status',
+      title: '状态',
+      width: 110,
+      align: 'center',
+      cellRender: {
+        attrs: { beforeChange: onStatusChange },
+        name: 'CellSwitch',
+        props: {
+          checkedValue: CommonStatusEnum.ENABLE,
+          disabled: !hasAccessByCodes(['wms:item:update']),
+          unCheckedValue: CommonStatusEnum.DISABLE,
+        },
+      },
     },
     {
       field: 'actions',
@@ -194,11 +448,11 @@ export function useSkuSelectGridFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'name',
-      label: '规格名称',
+      label: '规格型号',
       component: 'Input',
       componentProps: {
         allowClear: true,
-        placeholder: '请输入规格名称',
+        placeholder: '请输入规格型号',
       },
     },
     {

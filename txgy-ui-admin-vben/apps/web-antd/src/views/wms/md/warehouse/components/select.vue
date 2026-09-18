@@ -3,19 +3,19 @@ import type { SelectValue } from 'ant-design-vue/es/select';
 
 import type { WmsWarehouseApi } from '#/api/wms/md/warehouse';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { Select } from 'ant-design-vue';
 
-import { getWarehouseSimpleList } from '#/api/wms/md/warehouse';
+import { getWarehouse, getWarehouseSimpleList } from '#/api/wms/md/warehouse';
 
 defineOptions({ name: 'WmsWarehouseSelect', inheritAttrs: false });
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     allowClear?: boolean;
     disabled?: boolean;
-    modelValue?: number;
+    modelValue?: number | string;
     placeholder?: string;
   }>(),
   {
@@ -38,6 +38,10 @@ const options = computed(() =>
   warehouseList.value
     .filter((warehouse) => warehouse.id !== undefined)
     .map((warehouse) => ({
+      disabled:
+        warehouse.status !== undefined &&
+        warehouse.status !== 0 &&
+        warehouse.id !== Number(props.modelValue),
       label: warehouse.name,
       value: warehouse.id,
     })),
@@ -58,14 +62,42 @@ async function getList() {
   loading.value = true;
   try {
     warehouseList.value = await getWarehouseSimpleList();
+    await ensureSelectedWarehouse(props.modelValue);
   } finally {
     loading.value = false;
+  }
+}
+
+/** 编辑草稿单据时，允许回显已绑定的关闭仓库，但不将其作为新选项。 */
+async function ensureSelectedWarehouse(id?: number | string) {
+  const warehouseId = Number(id);
+  if (
+    !Number.isFinite(warehouseId) ||
+    warehouseList.value.some((warehouse) => warehouse.id === warehouseId)
+  ) {
+    return;
+  }
+  try {
+    const warehouse = await getWarehouse(warehouseId);
+    if (warehouse?.id) {
+      warehouseList.value = [...warehouseList.value, warehouse];
+    }
+  } catch {
+    // 保留原有表单行为，查询失败时由 Select 显示原始值。
   }
 }
 
 onMounted(() => {
   getList();
 });
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    void ensureSelectedWarehouse(value);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

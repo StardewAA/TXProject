@@ -23,14 +23,17 @@ import { getDeliveryPickUpStore } from '#/api/mall/trade/delivery/pickUpStore';
 import {
   getExpressTrackList,
   getOrder,
+  getOrderShopGroups,
   pickUpOrder,
 } from '#/api/mall/trade/order';
 import { useDescription } from '#/components/description';
 import { DictTag } from '#/components/dict-tag';
 import { TableAction } from '#/components/table-action';
 
+import { canDeliver } from '../../components/workbench-model';
 import AddressForm from '../modules/address-form.vue';
 import DeliveryForm from '../modules/delivery-form.vue';
+import ErpInventory from '../modules/erp-inventory.vue';
 import PriceForm from '../modules/price-form.vue';
 import RemarkForm from '../modules/remark-form.vue';
 import {
@@ -56,6 +59,7 @@ const order = ref<MallOrderApi.Order>({
 });
 const deliveryExpressList = ref<MallDeliveryExpressApi.DeliveryExpress[]>([]);
 const expressTrackList = ref<any[]>([]);
+const shopGroups = ref<Awaited<ReturnType<typeof getOrderShopGroups>>>([]);
 const pickUpStore = ref<
   MallDeliveryPickUpStoreApi.DeliveryPickUpStore | undefined
 >();
@@ -172,6 +176,7 @@ async function getDetail() {
       return;
     }
     order.value = res;
+    shopGroups.value = await getOrderShopGroups(orderId.value);
     productGridApi.setGridOptions({ data: res.items || [] });
     operateLogGridApi.setGridOptions({ data: res.logs || [] });
 
@@ -221,7 +226,7 @@ const handlePickUp = async () => {
   });
   try {
     await pickUpOrder(order.value.id!);
-    message.success('核销成功');
+    message.success('核销请求已提交，出库待 ERP 确认后才能完成');
     await getDetail();
   } finally {
     hideLoading();
@@ -243,6 +248,7 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height :title="order.no" :loading="loading">
+    <ErpInventory v-if="orderId" :order-id="orderId" />
     <template #extra>
       <TableAction
         :actions="[
@@ -254,25 +260,27 @@ onMounted(async () => {
           },
           {
             label: '调整价格',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleUpdatePrice,
             ifShow: order.status === TradeOrderStatusEnum.UNPAID.status,
           },
           {
             label: '备注',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleRemark,
           },
           {
             label: '发货',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleDelivery,
-            ifShow:
-              order.status === TradeOrderStatusEnum.UNDELIVERED.status &&
-              order.deliveryType === DeliveryTypeEnum.EXPRESS.type,
+            ifShow: canDeliver(order),
           },
           {
             label: '修改地址',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleUpdateAddress,
             ifShow:
@@ -281,10 +289,12 @@ onMounted(async () => {
           },
           {
             label: '核销',
+            auth: ['trade:order:pick-up'],
             type: 'primary',
             onClick: handlePickUp,
             ifShow:
               order.status === TradeOrderStatusEnum.UNDELIVERED.status &&
+              order.pickupable === true &&
               order.deliveryType === DeliveryTypeEnum.PICK_UP.type,
           },
         ]"
@@ -306,6 +316,18 @@ onMounted(async () => {
       <OrderStatusDescriptions :data="order" />
     </div>
     <!-- 商品信息 -->
+    <div class="mb-4">
+      <a-card title="店铺履约分组" :bordered="false">
+        <a-table :data-source="shopGroups" :pagination="false" row-key="shopId" size="small">
+          <a-table-column title="店铺" key="shopName">
+            <template #default="{ record }">{{ record.shopName || (record.shopId === 0 ? '平台自营' : `店铺 ${record.shopId}`) }}</template>
+          </a-table-column>
+          <a-table-column title="商品数量" data-index="productCount" />
+          <a-table-column title="商品金额（元）" key="totalPrice"><template #default="{ record }">{{ ((record.totalPrice || 0) / 100).toFixed(2) }}</template></a-table-column>
+          <a-table-column title="实付金额（元）" key="payPrice"><template #default="{ record }">{{ ((record.payPrice || 0) / 100).toFixed(2) }}</template></a-table-column>
+        </a-table>
+      </a-card>
+    </div>
     <div class="mb-4">
       <ProductGrid table-title="商品信息">
         <template #spuName="{ row }">

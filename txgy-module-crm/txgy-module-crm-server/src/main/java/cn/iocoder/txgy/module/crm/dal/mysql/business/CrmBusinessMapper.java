@@ -7,6 +7,7 @@ import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsFunnelReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -51,7 +52,19 @@ public interface CrmBusinessMapper extends BaseMapperX<CrmBusinessDO> {
         // 拼接自身的查询条件
         query.selectAll(CrmBusinessDO.class)
                 .likeIfPresent(CrmBusinessDO::getName, pageReqVO.getName())
-                .orderByDesc(CrmBusinessDO::getId);
+                .eqIfPresent(CrmBusinessDO::getStage, pageReqVO.getStage())
+                .eqIfPresent(CrmBusinessDO::getBusinessState, pageReqVO.getBusinessState());
+        // 销售看板：仅未开始 / 进行中
+        if (Boolean.TRUE.equals(pageReqVO.getOpenOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.NOT_STARTED.getState(),
+                    CrmBusinessStateEnum.IN_PROGRESS.getState());
+        }
+        // 归档视图：仅已赢单 / 已丢单
+        if (Boolean.TRUE.equals(pageReqVO.getClosedOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.WON.getState(),
+                    CrmBusinessStateEnum.LOST.getState());
+        }
+        query.orderByDesc(CrmBusinessDO::getId);
         return selectJoinPage(pageReqVO, CrmBusinessDO.class, query);
     }
 

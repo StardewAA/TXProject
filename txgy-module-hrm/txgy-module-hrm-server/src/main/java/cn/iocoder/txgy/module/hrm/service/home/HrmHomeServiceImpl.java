@@ -336,7 +336,7 @@ public class HrmHomeServiceImpl implements HrmHomeService {
         LocalDateTime[] recentSixMonthTimes = new LocalDateTime[]{currentTime.minusMonths(6), currentTime};
         RecruitSurvey survey = new RecruitSurvey();
         survey.setRecruitingPostCount(recruitPostService.getRecruitPostStatusCount(new HrmRecruitPostPageReqVO())
-                .getOrDefault(HrmRecruitPostStatusEnum.RECRUITING.getStatus(), 0L));
+                .getOrDefault(HrmRecruitPostStatusEnum.PUBLISHED.getStatus(), 0L));
         Map<Integer, Long> candidateStatusCount = recruitCandidateService.getRecruitCandidateStatusCount(new HrmRecruitCandidatePageReqVO());
         survey.setCandidateInProcessCount(sum(candidateStatusCount.entrySet(), entry ->
                 HrmRecruitCandidateStatusEnum.PROCESSING_STATUSES.contains(entry.getKey()) ? entry.getValue() : 0L));

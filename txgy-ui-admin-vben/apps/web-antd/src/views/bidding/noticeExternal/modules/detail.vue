@@ -1,0 +1,376 @@
+<!--
+  外部公告管理预览（BR-7 manage/get：全状态可读，审核/运营“读完正文再操作”用）
+  两个页签：
+    1) 审核数据 / 净化原文 —— 字段详情 + 净化正文(contentHtmlSafe) + 附件/病毒状态 + PDF 摘要
+    2) 前台观感 —— 审核通过发布后，用户在前台看到的样子：
+       复用门户真实渲染语义（portal/bidding/format.ts 的 blocksToHtml/prettyNoticeHtml + 公文 .docx 样式），
+       正文优先结构化块(bodyBlocksStatus=SUCCESS → bodyBlocksJson)，回退净化正文；
+       头部 tags/meta/关注按钮 均按门户详情布局示意。
+  四要素注释（补充）：
+  对应业务：外部公告管理列表（views/bidding/noticeExternal）行操作「预览」所开管理详情弹窗 —— 审核/运营
+    "读完正文再操作"（对 NEW 行先审阅净化正文再 approve/reject/take-down）；页签1=审核数据与净化原文，
+    页签2=审核通过发布后在招投标大厅前台的观感（与门户详情同渲染语义）。
+  实现理由：BR-7（P4 前置）要求 manage/get 全状态返回净化正文/结构化块/PDF/附件病毒状态，审核页不读完正文
+    不应误操作；正文优先结构化块（bodyBlocksStatus=SUCCESS → bodyBlocksJson），回退 contentHtmlSafe
+    （后端 jsoup 净化），前端文本一律先转义、HTML 走 v-dompurify 二次净化，防存储型 XSS 载荷下发前台。
+  法规依据：招标公告和公示信息发布管理办法（国家发展改革委令第10号，2017）第12条【部门规章/政府文件】
+    （允许公众免费查阅公告公示完整信息）、第13条【部门规章】（免费提供信息归类与检索服务）——
+    外部采集公告审核后即按免费查阅/归类口径对公众公开，审核动作保证公开内容准确可溯。
+  关联契约：GET /bidding/notice-external/manage/get?id=（BR-7 管理详情预览，权限 bidding:notice-external:update，
+    出参 NoticeExternalManageDetailRespVO：管理行字段 + contentHtmlSafe/bodyBlocksJson/pdf*/extraction*/附件病毒状态）与
+    manage/page（管理分页行）；见 docs/前端规范-全域接口说明/01-接口逐一说明与设计依据.md §2（2.2/2.11）与
+    docs/外部公告-前端对接/01-接口契约.md §2；前端函数 getManageDetail 见 apps/web-antd/src/api/bidding/noticeExternal，
+    对账见 06-bidding前端契约接口完全对照.md。
+-->
+<script lang="ts" setup>
+import type { NoticeExternalApi } from '#/api/bidding/noticeExternal';
+import type { NoticeBodyBlock } from '#/views/portal/bidding/types';
+
+import { computed, ref } from 'vue';
+
+import { useVbenModal } from '@vben/common-ui';
+import { useAppConfig } from '@vben/hooks';
+
+import { Tag } from 'ant-design-vue';
+
+import { getManageDetail } from '#/api/bidding/noticeExternal';
+import { fmtBytes, fmtRatioPercent } from '#/utils/format';
+import {
+  blocksToHtml,
+  cleanT,
+  fmtDT,
+  prettyNoticeHtml,
+} from '#/views/portal/bidding/format';
+
+import {
+  AUDIT_MAP,
+  BODY_MAP,
+  CONTENT_TYPE_MAP,
+  INDUSTRY_MAP,
+  STATUS_MAP,
+} from '../data';
+import { buildExternalNoticePdfDownloadUrl, buildExternalNoticePdfPreviewUrl } from '../pdfUrl';
+
+const detail = ref<NoticeExternalApi.ManageDetail | null>(null);
+
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+/* PDF 地址走**单一真源**解析，与门户详情同口径。此前本页只认 pdfDownloadUrl，导致**审核人在"前台观感"里看不到 PDF**、
+ * 只看到一句"源文件整理中（尚未回填）"——而同一公告在门户已能预览（审核看不到最终件属功能缺陷）。 */
+/* 预览 / 下载**两个地址**（拆分理由见 pdfUrl.ts 文件头）：
+ *   · pdfPreviewUrl：iframe src 与"新窗口打开"用 —— 代理优先（inline，浏览器能直接渲染）；
+ *   · pdfSaveUrl：仅"下载"用 —— 签名地址优先 + download 属性触发另存。
+ * 此前只解析一个"可访问地址"且签名地址优先，导致 iframe 指向下载型 URL ⇒ 点进 PDF 公告直接下载、看不到内容。 */
+const pdfPreviewUrl = computed(() =>
+  buildExternalNoticePdfPreviewUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
+);
+const pdfSaveUrl = computed(() =>
+  buildExternalNoticePdfDownloadUrl(apiURL, detail.value?.id, detail.value?.pdfDownloadUrl),
+);
+const loading = ref(false);
+const errorMsg = ref('');
+/** 页签：data=审核数据/原文；look=前台观感 */
+const tab = ref<'data' | 'look'>('look');
+
+const tag = (map: Record<string, { color: string; text: string; }>, v?: string) => {
+  const c = v ? map[v] : undefined;
+  return c ? { text: c.text, color: c.color } : null;
+};
+
+const hasBody = computed(() => !!detail.value?.contentHtmlSafe);
+/** 时间格式化（epoch 毫秒 / ISO 字符串都兼容；空值显示 —） */
+const p2t = (n: number) => String(n).padStart(2, '0');
+const fmtT = (v?: null | number | string): string => {
+  if (v == null || v === '') return '—';
+  let d: Date;
+  if (typeof v === 'number') d = new Date(v);
+  else if (/^\d{13}$/.test(String(v).trim())) d = new Date(Number(v));
+  else d = new Date(String(v).replace(' ', 'T'));
+  if (Number.isNaN(+d)) return String(v).slice(0, 19).replace('T', ' ');
+  return `${d.getFullYear()}-${p2t(d.getMonth() + 1)}-${p2t(d.getDate())} ${p2t(d.getHours())}:${p2t(d.getMinutes())}`;
+};
+const empty = (v?: string) => (v ? v : '—');
+
+/** 外链一律经 /go 中转打开（04-契约 §2：源站/附件 origDownloadUrl 不得直开 window.open/a[href]，防开放重定向；go 对启用采集源域名白名单校验）。
+ * 实现理由：管理预览与门户同语义——origUrl 为目标站壳页，非 PDF 本身；中转失败(400 拒绝)时浏览器落在 go 错误响应上，不在本页报错。 */
+function openGo(url?: null | string): void {
+  if (!url) return;
+  const base = (import.meta.env.VITE_GLOB_API_URL as string) || '/admin-api';
+  const go = base.replace(/\/$/, '') + '/bidding/notice-external/go?url=' + encodeURIComponent(url);
+  window.open(go, '_blank', 'noopener,noreferrer');
+}
+
+function parseBlocks(raw?: string): NoticeBodyBlock[] | null {
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? (arr as NoticeBodyBlock[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 去掉与标题完全重复的首个块级标题（门户同款 trimLeadHeading 简化版） */
+function trimLead(blocks: NoticeBodyBlock[] | null, title?: string): NoticeBodyBlock[] {
+  if (!blocks?.length) return [];
+  const first = blocks[0];
+  if (!first || first.type !== 'heading' || !first.text || first.level > 2) return blocks;
+  const norm = (x: string) => x.replace(/\s+/g, '').replace(/[/／]/g, '');
+  const tn = norm(cleanT(title));
+  return tn && norm(first.text) === tn ? blocks.slice(1) : blocks;
+}
+
+/** 前台观感正文 HTML：结构化块优先 → 净化正文智能排版（与门户 detail 同语义） */
+const viewHtml = computed(() => {
+  const d = detail.value;
+  if (!d) return '';
+  if (d.bodyBlocksStatus === 'SUCCESS') {
+    const h = blocksToHtml(trimLead(parseBlocks(d.bodyBlocksJson), d.title));
+    if (h) return h;
+  }
+  return prettyNoticeHtml(d.contentHtmlSafe, d.title);
+});
+const hasViewBody = computed(() => !!viewHtml.value);
+
+/** 前台观感是否按 PDF 呈现（无正文块/HTML 时） */
+const viewIsPdf = computed(
+  () => !hasViewBody.value && detail.value?.contentType === 'PDF',
+);
+
+const viewTags = computed(() => {
+  const d = detail.value;
+  if (!d) return [] as string[];
+  const tags: string[] = [];
+  if (d.noticeTypeRaw) tags.push(d.noticeTypeRaw);
+  const ct = d.contentType ? CONTENT_TYPE_MAP[d.contentType] || d.contentType : '';
+  if (ct) tags.push(ct);
+  if (d.industryFlag === 'BELONGS') tags.push('行业相关');
+  if (d.industryFlag === 'UNCERTAIN') tags.push('行业未知');
+  if (d.legalFlag === 'Y') tags.push('依法必招');
+  const src = cleanT(d.sourceName);
+  if (src) tags.push('来源：' + src);
+  return tags;
+});
+
+const viewMeta = computed(() => {
+  const d = detail.value;
+  if (!d) return [] as Array<{ k: string; v: string }>;
+  const pairs: Array<{ k: string; v: string }> = [];
+  const issuer = cleanT(d.issuerName);
+  if (issuer) pairs.push({ k: '发布单位', v: issuer });
+  if (fmtDT(d.publishTime)) pairs.push({ k: '发布时间', v: fmtDT(d.publishTime) });
+  const eff = [d.effectiveFrom, d.effectiveTo]
+    .map(fmtT)
+    .filter((x) => x && x !== '—')
+    .join(' ~ ');
+  if (eff) pairs.push({ k: '生效期', v: eff });
+  const proj = cleanT(d.projectName);
+  const pKey = cleanT(d.projectKey);
+  if (proj) pairs.push({ k: '关联项目', v: proj });
+  if (pKey) pairs.push(proj ? { k: '项目编号', v: pKey } : { k: '关联项目', v: pKey });
+  const src = [cleanT(d.sourceCode), cleanT(d.sourceName)].filter(Boolean).join(' · ');
+  if (src) pairs.push({ k: '来源', v: src });
+  return pairs;
+});
+
+/** 前台观感顶部“关注”按钮为示意（管理预览无登录态；真实以 ACTIVE 发布后的登录用户为准） */
+const viewCanFollow = computed(() => detail.value?.status === 'ACTIVE');
+
+const [Modal, modalApi] = useVbenModal({
+  title: '外部公告 · 管理预览',
+  showConfirmButton: false,
+  onOpenChange: async (isOpen: boolean) => {
+    if (!isOpen) {
+      detail.value = null;
+      errorMsg.value = '';
+      tab.value = 'look';
+      return;
+    }
+    const row = modalApi.getData<NoticeExternalApi.ManageItem>();
+    if (!row?.id) {
+      return;
+    }
+    loading.value = true;
+    errorMsg.value = '';
+    tab.value = 'look';
+    try {
+      detail.value = await getManageDetail(row.id);
+    } catch (e) {
+      errorMsg.value = e instanceof Error ? e.message : String(e);
+    } finally {
+      loading.value = false;
+    }
+  },
+});
+</script>
+
+<template>
+  <Modal class="w-[1180px] bid-ind">
+    <div class="max-h-[76vh] overflow-auto px-2 py-1">
+      <div v-if="loading" class="py-16 text-center text-muted-foreground">加载中…</div>
+      <div v-else-if="errorMsg" class="py-10 text-center text-destructive">{{ errorMsg }}</div>
+      <div v-else-if="detail">
+        <!-- 顶部状态行 -->
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <span class="text-base font-bold text-foreground">{{ detail.title || '（无标题）' }}</span>
+        </div>
+        <div class="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+          <template v-if="tag(STATUS_MAP, detail.status)">
+            <Tag :color="tag(STATUS_MAP, detail.status)!.color">{{ tag(STATUS_MAP, detail.status)!.text }}</Tag>
+          </template>
+          <template v-if="tag(AUDIT_MAP, detail.auditStatus)">
+            <Tag :color="tag(AUDIT_MAP, detail.auditStatus)!.color">{{ tag(AUDIT_MAP, detail.auditStatus)!.text }}</Tag>
+          </template>
+          <template v-if="tag(INDUSTRY_MAP, detail.industryFlag)">
+            <Tag :color="tag(INDUSTRY_MAP, detail.industryFlag)!.color">行业：{{ tag(INDUSTRY_MAP, detail.industryFlag)!.text }}</Tag>
+          </template>
+          <Tag v-if="detail.contentType">{{ CONTENT_TYPE_MAP[detail.contentType] || detail.contentType }}</Tag>
+          <Tag v-if="detail.noticeTypeRaw">{{ detail.noticeTypeRaw }}</Tag>
+          <span v-if="detail.industryConfidence != null" class="text-muted-foreground">置信度 {{ fmtRatioPercent(detail.industryConfidence) }}</span>
+        </div>
+        <div class="mb-2 flex gap-1 border-b border-border">
+          <button class="fb-tab" :class="{ on: tab === 'look' }" @click="tab = 'look'">前台观感（发布后）</button>
+          <button class="fb-tab" :class="{ on: tab === 'data' }" @click="tab = 'data'">审核数据 / 净化原文</button>
+        </div>
+
+        <!-- ============ 页签1：前台观感（复用门户公文渲染） ============ -->
+        <div v-show="tab === 'look'">
+          <div class="fb-preview-head">
+            <div class="fb-preview-banner">前台观感预览：按门户公告详情渲染语义展示“审核通过并发布后用户看到的样式”（ACTIVE+SOCIAL 后对公开用户可见）。</div>
+            <div class="fb-preview-top">
+              <div class="fb-preview-tags">
+                <span v-for="t in viewTags" :key="t" class="fb-preview-tag">{{ t }}</span>
+              </div>
+              <div class="fb-preview-actions">
+                <button class="fb-follow-btn" :class="{ disabled: !viewCanFollow }" disabled>
+                  {{ viewCanFollow ? '＋ 关注' : '审核通过后开放关注' }}
+                </button>
+                <a v-if="detail.origUrl" class="fb-orig-link" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
+              </div>
+            </div>
+            <div class="fb-preview-title">{{ detail.title }}</div>
+            <div class="fb-preview-meta">
+              <span v-for="p in viewMeta" :key="p.k"><b>{{ p.k }}</b>{{ p.v }}</span>
+            </div>
+          </div>
+          <div class="fb-body-area">
+            <div v-if="hasViewBody" class="fb-docx" v-dompurify-html="viewHtml"></div>
+            <div v-else-if="viewIsPdf" class="fb-pdf-panel">
+              <template v-if="pdfPreviewUrl">
+                <!-- 预览：内嵌查看器（地址为 inline 型） -->
+                <iframe class="fb-pdf-frame" :src="pdfPreviewUrl" title="公告 PDF 预览"></iframe>
+                <div class="fb-pdf-actions">
+                  <a :href="pdfPreviewUrl" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+                  <a v-if="pdfSaveUrl" :href="pdfSaveUrl" download rel="noopener">下载</a>
+                  <span class="hint">
+                    {{ detail.id ? '预览来源：平台字节流代理（application/pdf + inline）' : '预览来源：FileApi 签名地址（无公告 id，代理不可用）' }}
+                  </span>
+                </div>
+              </template>
+              <div v-else class="fb-pdf-empty">
+                无法预览：既无 pdf_download_url，也取不到公告 id（字节流代理需要 id）。
+                <div v-if="detail.extractionStatus" class="sub">抽取状态：{{ detail.extractionStatus }}</div>
+              </div>
+            </div>
+            <div v-else class="fb-slim">
+              <p>该公告仅有简略信息（标题、发布单位、发布时间见上方），无正文、无文件。</p>
+              <a v-if="detail.origUrl" class="fb-orig-link" href="#" @click.prevent="openGo(detail.origUrl)">查看原文 ↗</a>
+            </div>
+          </div>
+          <div class="fb-preview-note">正文渲染优先级（与门户一致）：bodyBlocksStatus=SUCCESS → 结构化块（黑体标题/仿宋缩进段落/带框表格/列表）；否则回退净化正文智能排版；HTML 公告发布后同时提供右上“查看原文”（origUrl 经 /go 白名单中转）。</div>
+        </div>
+
+        <!-- ============ 页签2：审核数据 / 净化原文 ============ -->
+        <div v-show="tab === 'data'">
+          <div class="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 rounded border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+            <div><b class="text-muted-foreground">发布单位：</b>{{ empty(detail.issuerName) }}</div>
+            <div><b class="text-muted-foreground">来源：</b>{{ empty(detail.sourceName) }}<span v-if="detail.sourceCode" class="ml-1 text-muted-foreground">({{ detail.sourceCode }})</span></div>
+            <div><b class="text-muted-foreground">发布时间：</b>{{ fmtT(detail.publishTime) }}</div>
+            <div><b class="text-muted-foreground">生效期：</b>{{ fmtT(detail.effectiveFrom) }} ~ {{ fmtT(detail.effectiveTo) }}</div>
+            <div><b class="text-muted-foreground">关联项目：</b>{{ empty(detail.projectName) }}<span v-if="detail.projectKey" class="ml-1 text-muted-foreground">({{ detail.projectKey }})</span></div>
+            <div><b class="text-muted-foreground">标段：</b>{{ empty(detail.bidSectionCodes) }}</div>
+            <div><b class="text-muted-foreground">抓取：</b>{{ detail.fetchCount ?? 0 }} 次<template v-if="detail.lastFetchTime">，最近 {{ fmtT(detail.lastFetchTime) }}</template></div>
+            <div><b class="text-muted-foreground">原文：</b><a v-if="detail.origUrl" href="#" @click.prevent="openGo(detail.origUrl)" class="text-primary underline">源站链接 ↗（/go 中转）</a><span v-else>—</span></div>
+          </div>
+          <div v-if="detail.contentType === 'PDF'" class="mb-3 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+            PDF 原文件：{{ fmtBytes(detail.pdfSize, '大小未知') }}
+            <template v-if="pdfPreviewUrl">
+              ｜<a :href="pdfPreviewUrl" target="_blank" rel="noopener noreferrer" class="underline">预览</a>
+              <a v-if="pdfSaveUrl" :href="pdfSaveUrl" download rel="noopener" class="ml-2 underline">下载</a>
+            </template>
+            <div v-if="detail.extractionSummary" class="mt-1 text-muted-foreground">抽取摘要：{{ detail.extractionSummary }}</div>
+          </div>
+          <div class="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>净化正文（manage/get 下发 jsoup 白名单净化版 contentHtmlSafe）</span>
+            <template v-if="tag(BODY_MAP, detail.bodyBlocksStatus)">
+              <Tag :color="tag(BODY_MAP, detail.bodyBlocksStatus)!.color" style="font-size: 11px">正文：{{ tag(BODY_MAP, detail.bodyBlocksStatus)!.text }}</Tag>
+            </template>
+            <span v-if="detail.bodyParserCode" class="text-muted-foreground">策略：{{ detail.bodyParserCode === 'AI_FALLBACK' ? 'AI 兜底排版' : '原文结构化' }}</span>
+          </div>
+          <div v-if="hasBody" class="rounded border border-border p-4" v-dompurify-html="detail.contentHtmlSafe"></div>
+          <div v-else class="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">该公告无净化正文（非 HTML 或正文为空），详见上方原文/附件。</div>
+          <div v-if="detail.attachments?.length" class="mt-3 text-xs text-muted-foreground">
+            <div class="mb-1 font-bold text-muted-foreground">附件（{{ detail.attachments.length }}）</div>
+            <div v-for="a in detail.attachments" :key="a.id" class="flex items-center gap-2 py-0.5">
+              <span>{{ a.name }}</span>
+              <Tag v-if="a.virusStatus === 'INFECTED'" color="red" style="font-size: 11px">含病毒已拦截</Tag>
+              <Tag v-else-if="a.virusStatus === 'PENDING'" style="font-size: 11px">扫描中</Tag>
+              <a v-if="a.downloadUrl && a.virusStatus !== 'INFECTED'" :href="a.downloadUrl" target="_blank" rel="noopener noreferrer" class="text-primary underline">下载</a>
+              <span v-else-if="a.virusStatus !== 'INFECTED'" class="text-muted-foreground">（文件服务签名地址归档回填后可下载）</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Modal>
+</template>
+
+<style>
+/* 管理预览内“前台观感”公文容器（fb- 前缀避免污染全局）
+ * 说明：壳层（页签/头/操作区）走平台主题 token；.fb-docx 纸张保持浅色公文观感
+ *      —— 该页签预览的正是「门户（固定浅色站点）发布后的真实样式」，故纸张不做深色化。 */
+.fb-tab { padding: 6px 14px; font-size: 13px; color: hsl(var(--muted-foreground)); background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; }
+.fb-tab.on { color: hsl(var(--primary)); font-weight: 600; border-bottom-color: hsl(var(--primary)); }
+.fb-preview-head { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-bottom: none; padding: 12px 18px; }
+.fb-preview-banner { background: hsl(var(--primary) / 8%); border: 1px solid hsl(var(--primary) / 25%); color: hsl(var(--primary)); font-size: 11.5px; padding: 5px 10px; border-radius: 4px; margin-bottom: 10px; }
+.fb-preview-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.fb-preview-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.fb-preview-tag { display: inline-flex; padding: 0 8px; border-radius: 4px; font-size: 11px; line-height: 1.7; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+.fb-preview-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.fb-follow-btn { font-size: 12px; font-weight: 600; color: var(--ind-ok); border: 1px solid hsl(var(--success) / 45%); background: hsl(var(--success) / 10%); border-radius: 4px; padding: 3px 12px; cursor: default; }
+.fb-follow-btn.disabled { color: hsl(var(--muted-foreground)); border: 1px dashed hsl(var(--border)); background: hsl(var(--muted) / 40%); }
+/* 「查看原文」是**链接**不是按钮（用户口径）；并修掉旧类 cursor: default 的错（看着像按钮却不出手型）。 */
+.fb-orig-link { font-size: 12px; font-weight: 600; color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.fb-orig-link:hover { color: hsl(var(--primary) / 80%); }
+.fb-preview-title { margin: 10px 0; font-size: 17px; line-height: 1.5; color: hsl(var(--foreground)); }
+.fb-preview-meta { display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: 12px; color: hsl(var(--muted-foreground)); border-top: 1px solid hsl(var(--border)); padding-top: 8px; }
+.fb-preview-meta b { font-weight: 400; color: hsl(var(--muted-foreground)); margin-right: 4px; }
+.fb-body-area { background: hsl(var(--muted) / 40%); border: 1px solid hsl(var(--border)); padding: 14px 18px; }
+/* PDF 内嵌预览（审核人在"前台观感"页签必须能看到最终版式件，否则会盲审） */
+/* 右侧留白同上：避免内嵌 PDF 滚动条与外层滚动条贴在一起 */
+.fb-pdf-panel { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); padding: 8px; padding-right: 20px; }
+.fb-pdf-frame { width: 100%; height: 640px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
+.fb-pdf-actions { display: flex; gap: 14px; align-items: center; padding: 6px 2px 0; font-size: 12px; }
+.fb-pdf-actions a { color: hsl(var(--primary)); text-decoration: underline; }
+.fb-pdf-actions .hint { color: hsl(var(--muted-foreground)); }
+
+.fb-docx { background: #fff; border: 1px solid #d9d3c4; width: min(900px, 100%); margin: 0 auto; padding: 40px 60px 44px; font-family: 'FangSong_GB2312', '仿宋', 'FangSong', 'STFangsong', '华文仿宋', 'SimSun', serif; font-size: 17px; line-height: 2; color: #1c1c1c; }
+.fb-docx h1, .fb-docx h2, .fb-docx h3, .fb-docx h4, .fb-docx h5, .fb-docx h6 { font-family: 'SimHei', '黑体', 'Microsoft YaHei', sans-serif; font-weight: 700; color: #161616; margin: 20px 0 2px; line-height: 1.8; }
+.fb-docx h1 { font-size: 24px; }
+.fb-docx h2 { font-size: 20px; }
+.fb-docx p { margin: 0; text-indent: 2em; text-align: justify; }
+.fb-docx p.doc-para { margin: 0 0 2px; }
+.fb-docx h1.doc-title { text-align: center; font-size: 21px; margin: 0 0 14px; }
+.fb-docx table { border-collapse: collapse; width: auto; min-width: 60%; max-width: 100%; margin: 12px auto; font-size: 14px; }
+.fb-docx caption { font-family: 'SimHei', '黑体', sans-serif; font-size: 14px; font-weight: 700; padding: 5px 0; caption-side: top; }
+.fb-docx th, .fb-docx td { border: 1px solid #333; padding: 4px 12px; text-align: center; font-family: inherit; }
+.fb-docx th { font-family: 'SimHei', '黑体', sans-serif; font-weight: 700; background: #f7f5ef; }
+.fb-docx ol, .fb-docx ul { padding-left: 2.8em; margin: 4px 0; }
+.fb-docx li { margin: 3px 0; text-indent: 0; }
+.fb-docx p[align='right'], .fb-docx .sign { text-indent: 0; }
+.fb-pdf-empty { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); padding: 50px 20px; text-align: center; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.fb-pdf-empty .sub { margin-top: 6px; color: hsl(var(--muted-foreground) / 70%); font-size: 12px; }
+.fb-slim { background: hsl(var(--warning) / 8%); border: 1px solid hsl(var(--warning) / 40%); border-radius: var(--radius); padding: 24px 20px; text-align: center; }
+.fb-slim p { color: var(--ind-warn); font-size: 13px; margin: 0 0 12px; }
+.fb-primary-btn { border-radius: var(--radius); padding: 6px 22px; font-size: 13px; font-weight: 600; color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); text-decoration: none; display: inline-block; cursor: default; }
+.fb-preview-note { color: hsl(var(--muted-foreground)); font-size: 11.5px; margin-top: 8px; }
+</style>

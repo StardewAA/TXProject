@@ -3,6 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallAfterSaleApi } from '#/api/mall/trade/afterSale';
 import type { MallOrderApi } from '#/api/mall/trade/order';
 
+import ErpInventory from '../../order/modules/erp-inventory.vue';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -161,7 +162,7 @@ async function handleReceive() {
   });
   try {
     await receiveAfterSale(afterSale.value.id!);
-    message.success($t('ui.actionMessage.operationSuccess'));
+    message.success('退货入库请求已提交，等待 ERP 确认');
     await getDetail();
   } finally {
     hideLoading();
@@ -215,6 +216,7 @@ onMounted(() => {
 
 <template>
   <Page auto-content-height :title="afterSale.no" :loading="loading">
+    <ErpInventory v-if="afterSale.orderId" :order-id="afterSale.orderId" />
     <template #extra>
       <TableAction
         :actions="[
@@ -226,35 +228,40 @@ onMounted(() => {
           },
           {
             label: '同意售后',
+            auth: ['trade:after-sale:agree'],
             type: 'primary',
             onClick: handleAgree,
-            ifShow: afterSale.status === 10,
+            ifShow: afterSale.status === 10 && afterSale.processable === true,
           },
           {
             label: '拒绝售后',
+            auth: ['trade:after-sale:disagree'],
             type: 'primary',
             danger: true,
             onClick: handleDisagree,
-            ifShow: afterSale.status === 10,
+            ifShow: afterSale.status === 10 && afterSale.processable === true,
           },
           {
             label: '确认收货',
+            auth: ['trade:after-sale:receive'],
             type: 'primary',
             onClick: handleReceive,
-            ifShow: afterSale.status === 30,
+            ifShow: afterSale.status === 30 && afterSale.processable === true,
           },
           {
             label: '拒绝收货',
+            auth: ['trade:after-sale:receive'],
             type: 'primary',
             danger: true,
             onClick: handleRefuse,
-            ifShow: afterSale.status === 30,
+            ifShow: afterSale.status === 30 && afterSale.processable === true,
           },
           {
             label: '确认退款',
+            auth: ['trade:after-sale:refund'],
             type: 'primary',
             onClick: handleRefund,
-            ifShow: afterSale.status === 40,
+            ifShow: afterSale.status === 40 && afterSale.processable === true,
           },
         ]"
       />

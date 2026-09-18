@@ -3,15 +3,20 @@ package cn.iocoder.txgy.module.hrm.service.recruit.candidate;
 import cn.iocoder.txgy.framework.common.util.collection.ArrayUtils;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewEvaluationReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.candidate.HrmRecruitInterviewMapper;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitInterviewResultEnum;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
+import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
 import jakarta.annotation.Resource;
@@ -34,6 +39,7 @@ import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.*;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_NOT_EXISTS;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_NOT_EXISTS;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_FINISHED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_NOT_CURRENT;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_RESULT_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_STATE_INVALID;
@@ -66,6 +72,10 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
     @MockitoBean
     private HrmEmployeeService employeeService;
     @MockitoBean
+    private HrmRecruitApplicationService recruitApplicationService;
+    @MockitoBean
+    private HrmRecruitChatService recruitChatService;
+    @MockitoBean
     private NotifyMessageSendApi notifyMessageSendApi;
 
     @Test
@@ -91,12 +101,79 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
         // 断言
         assertNotNull(interviewId);
         HrmRecruitInterviewDO interview = recruitInterviewMapper.selectById(interviewId);
-        assertPojoEquals(reqVO, interview, "id", "stageNumber");
+        assertPojoEquals(reqVO, interview, "id", "stageNumber", "roundNo");
         assertEquals(firstInterview.getStageNumber() + 1, interview.getStageNumber());
         assertEquals(HrmRecruitInterviewResultEnum.UNFINISHED.getResult(), interview.getResult());
         verify(recruitCandidateService).updateRecruitCandidateInterview(candidateId, 2);
         verify(employeeService).validateEmployeeListByEntryStatus(
                 anyCollection(), eq(HrmEmployeeEntryStatusEnum.ACTIVE.getStatus()));
+    }
+
+    @Test
+    public void testCreateRecruitInterview_applicationUsesApplicationStatus() {
+        Long candidateId = randomLongId();
+        Long applicationId = randomLongId();
+        HrmRecruitInterviewSaveReqVO reqVO = randomRecruitInterviewSaveReqVO(o -> o
+                .setApplicationId(applicationId).setCandidateId(candidateId));
+        when(recruitApplicationService.getApplication(applicationId))
+                .thenReturn(new HrmRecruitApplicationDO().setId(applicationId).setCandidateId(candidateId)
+                        .setApplicantUserId(randomLongId())
+                        .setStatus(HrmRecruitApplicationStatusEnum.PENDING_INTERVIEW.getStatus()));
+        when(recruitCandidateService.validateRecruitCandidateExistsForUpdate(candidateId))
+                .thenReturn(randomPojo(HrmRecruitCandidateDO.class, o -> o.setId(candidateId)
+                        .setStatus(HrmRecruitCandidateStatusEnum.NEW.getStatus())));
+        when(employeeService.getEmployeeMap(anyCollection())).thenReturn(emptyMap());
+
+        recruitInterviewService.createRecruitInterview(reqVO);
+
+        verify(recruitApplicationService).markInterviewScheduled(applicationId);
+        verify(recruitChatService).sendInterviewArrangedNotification(eq(applicationId), any(HrmRecruitInterviewDO.class));
+        verify(recruitCandidateService, never()).updateRecruitCandidateInterview(anyLong(), anyInt());
+    }
+
+    @Test
+    public void testCreateRecruitInterview_maxRoundsExceeded() {
+        Long candidateId = randomLongId();
+        HrmRecruitInterviewDO thirdInterview = randomRecruitInterviewDO(o -> o
+                .setCandidateId(candidateId).setStageNumber(HrmRecruitInterviewService.MAX_INTERVIEW_ROUNDS)
+                .setRoundNo(HrmRecruitInterviewService.MAX_INTERVIEW_ROUNDS)
+                .setResult(HrmRecruitInterviewResultEnum.PASS.getResult()));
+        recruitInterviewMapper.insert(thirdInterview);
+        HrmRecruitInterviewSaveReqVO reqVO = randomRecruitInterviewSaveReqVO(o -> o
+                .setCandidateId(candidateId).setStageNumber(null));
+        when(recruitCandidateService.validateRecruitCandidateExistsForUpdate(candidateId))
+                .thenReturn(randomPojo(HrmRecruitCandidateDO.class, o -> o
+                        .setId(candidateId).setStatus(HrmRecruitCandidateStatusEnum.INTERVIEW_PASS.getStatus())
+                        .setStageNumber(HrmRecruitInterviewService.MAX_INTERVIEW_ROUNDS)));
+
+        assertServiceException(() -> recruitInterviewService.createRecruitInterview(reqVO),
+                RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED);
+        assertEquals(1L, recruitInterviewMapper.selectCount());
+    }
+
+    @Test
+    public void testEvaluateRecruitInterview_afterMaxRoundsCannotEnterNextRound() {
+        Long candidateId = randomLongId();
+        Long applicationId = randomLongId();
+        HrmRecruitInterviewDO thirdInterview = randomRecruitInterviewDO(o -> o
+                .setApplicationId(applicationId).setCandidateId(candidateId)
+                .setStageNumber(HrmRecruitInterviewService.MAX_INTERVIEW_ROUNDS)
+                .setRoundNo(HrmRecruitInterviewService.MAX_INTERVIEW_ROUNDS));
+        recruitInterviewMapper.insert(thirdInterview);
+        when(recruitCandidateService.validateRecruitCandidateExistsForUpdate(candidateId))
+                .thenReturn(currentInterviewCandidate(thirdInterview));
+        when(recruitApplicationService.getApplication(applicationId))
+                .thenReturn(new HrmRecruitApplicationDO().setId(applicationId)
+                        .setStatus(HrmRecruitApplicationStatusEnum.INTERVIEW_EVALUATING.getStatus()));
+
+        HrmRecruitInterviewEvaluationReqVO reqVO = new HrmRecruitInterviewEvaluationReqVO()
+                .setId(thirdInterview.getId()).setDecision("NEXT_ROUND").setEvaluate("继续观察");
+
+        assertServiceException(() -> recruitInterviewService.evaluateRecruitInterview(reqVO),
+                RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED);
+        assertEquals(HrmRecruitInterviewResultEnum.UNFINISHED.getResult(),
+                recruitInterviewMapper.selectById(thirdInterview.getId()).getResult());
+        verify(recruitApplicationService, never()).markNextInterview(anyLong(), anyString());
     }
 
     @Test
@@ -395,6 +472,26 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testFinishCurrentRecruitInterviewForElimination_usesApplicationScope() {
+        Long candidateId = randomLongId();
+        Long applicationId = randomLongId();
+        HrmRecruitInterviewDO target = randomRecruitInterviewDO(o -> o
+                .setApplicationId(applicationId).setCandidateId(candidateId));
+        HrmRecruitInterviewDO otherApplication = randomRecruitInterviewDO(o -> o
+                .setApplicationId(randomLongId()).setCandidateId(candidateId));
+        recruitInterviewMapper.insert(target);
+        recruitInterviewMapper.insert(otherApplication);
+
+        recruitInterviewService.finishCurrentRecruitInterviewForElimination(
+                applicationId, candidateId, "岗位不匹配");
+
+        assertEquals(HrmRecruitInterviewResultEnum.NOT_PASS.getResult(),
+                recruitInterviewMapper.selectById(target.getId()).getResult());
+        assertEquals(HrmRecruitInterviewResultEnum.UNFINISHED.getResult(),
+                recruitInterviewMapper.selectById(otherApplication.getId()).getResult());
+    }
+
+    @Test
     public void testUpdateRecruitInterviewResult_pass() {
         testUpdateRecruitInterviewResult(HrmRecruitInterviewResultEnum.PASS.getResult(),
                 HrmRecruitCandidateStatusEnum.INTERVIEW_PASS.getStatus());
@@ -526,7 +623,7 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
 
     @SafeVarargs
     private static HrmRecruitInterviewDO randomRecruitInterviewDO(Consumer<HrmRecruitInterviewDO>... consumers) {
-        Consumer<HrmRecruitInterviewDO> consumer = o -> o.setType(1).setStageNumber(1)
+        Consumer<HrmRecruitInterviewDO> consumer = o -> o.setApplicationId(null).setType(1).setStageNumber(1).setRoundNo(1)
                 .setOtherInterviewEmployeeIds(emptyList())
                 .setResult(HrmRecruitInterviewResultEnum.UNFINISHED.getResult());
         return randomPojo(HrmRecruitInterviewDO.class, ArrayUtils.append(consumer, consumers));
@@ -535,7 +632,7 @@ public class HrmRecruitInterviewServiceImplTest extends BaseDbUnitTest {
     @SafeVarargs
     private static HrmRecruitInterviewSaveReqVO randomRecruitInterviewSaveReqVO(
             Consumer<HrmRecruitInterviewSaveReqVO>... consumers) {
-        Consumer<HrmRecruitInterviewSaveReqVO> consumer = o -> o.setId(null).setType(1).setStageNumber(null)
+        Consumer<HrmRecruitInterviewSaveReqVO> consumer = o -> o.setId(null).setApplicationId(null).setType(1).setStageNumber(null)
                 .setOtherInterviewEmployeeIds(singletonList(randomLongId()));
         return randomPojo(HrmRecruitInterviewSaveReqVO.class, ArrayUtils.append(consumer, consumers));
     }

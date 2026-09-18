@@ -60,4 +60,28 @@ public class CrmContractProductDO extends BaseDO {
      */
     private BigDecimal totalPrice;
 
+    // ==================== 合同模板「一、合同货物」表格字段 ====================
+    /**
+     * 规格型号
+     */
+    private String spec;
+    /**
+     * 单位
+     */
+    private String unit;
+    /**
+     * 资金来源
+     *
+     * 1=预算内，2=预算外，3=其他
+     */
+    private Integer fundSource;
+    /**
+     * 随机配件
+     */
+    private String accessories;
+    /**
+     * 交货期
+     */
+    private String deliveryPeriod;
+
 }

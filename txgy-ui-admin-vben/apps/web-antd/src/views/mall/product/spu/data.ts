@@ -1,16 +1,22 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { MallSpuApi } from '#/api/mall/product/spu';
 
 import { handleTree, treeToString } from '@vben/utils';
 
 import { getCategoryList } from '#/api/mall/product/category';
+import { getShopList } from '#/api/mall/product/shop';
 import { getRangePickerDefaultProps } from '#/utils';
+
+import { reviewStatusOptions, reviewStatusText } from './review-model';
 
 /** 关联数据 */
 let categoryList: any[] = [];
+let shopList: any[] = [];
 getCategoryList({}).then((data) => {
   categoryList = handleTree(data, 'id', 'parentId', 'children');
+});
+getShopList().then((data) => {
+  shopList = data;
 });
 
 /** 列表的搜索表单 */
@@ -37,6 +43,28 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'shopId',
+      label: '所属店铺',
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => shopList,
+        labelField: 'name',
+        valueField: 'id',
+        allowClear: true,
+        placeholder: '请选择所属店铺',
+      },
+    },
+    {
+      fieldName: 'reviewStatus',
+      label: '审核状态',
+      component: 'Select',
+      componentProps: {
+        options: reviewStatusOptions,
+        allowClear: true,
+        placeholder: '全部审核状态（含历史过渡）',
+      },
+    },
+    {
       fieldName: 'createTime',
       label: '创建时间',
       component: 'RangePicker',
@@ -49,12 +77,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 }
 
 /** 列表的字段 */
-export function useGridColumns(
-  onStatusChange?: (
-    newStatus: number,
-    row: MallSpuApi.Spu,
-  ) => PromiseLike<boolean | undefined>,
-): VxeTableGridOptions['columns'] {
+export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
       field: 'id',
@@ -85,19 +108,31 @@ export function useGridColumns(
       },
     },
     {
+      field: 'shopId',
+      title: '所属店铺',
+      minWidth: 150,
+      formatter: ({ cellValue }) => {
+        return shopList.find((item) => item.id === cellValue)?.name
+          ?? (cellValue ? `店铺 #${cellValue}（信息不可用）` : '未关联店铺');
+      },
+    },
+    {
       field: 'status',
       title: '销售状态',
       minWidth: 100,
-      cellRender: {
-        attrs: { beforeChange: onStatusChange },
-        name: 'CellSwitch',
-        props: {
-          checkedValue: 1,
-          checkedChildren: '上架',
-          unCheckedValue: 0,
-          unCheckedChildren: '下架',
-        },
-      },
+      formatter: ({ cellValue }) => (cellValue === 1 ? '上架' : cellValue === 0 ? '下架' : cellValue === -1 ? '回收站' : '未知'),
+    },
+    {
+      field: 'reviewStatus',
+      title: '审核状态',
+      minWidth: 170,
+      formatter: ({ cellValue }) => reviewStatusText(cellValue),
+    },
+    {
+      field: 'contentVersion',
+      title: '内容版本',
+      minWidth: 100,
+      formatter: ({ cellValue }) => cellValue == null ? '历史版本' : `V${cellValue}`,
     },
     {
       field: 'price',
@@ -150,7 +185,7 @@ export function useGridColumns(
     },
     {
       title: '操作',
-      width: 300,
+      width: 390,
       fixed: 'right',
       slots: { default: 'actions' },
     },

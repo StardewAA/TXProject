@@ -9,7 +9,6 @@ import {
   DICT_TYPE,
   MesAutoCodeRuleCode,
   MesProTaskStatusEnum,
-  MesProWorkOrderStatusEnum,
 } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
@@ -25,7 +24,7 @@ import { ProTaskSelect } from '#/views/mes/pro/task/components';
 import { ProWorkOrderSelect } from '#/views/mes/pro/workorder/components';
 
 /** 生产报工表单类型 */
-export type FormType = 'approve' | 'create' | 'detail' | 'submit' | 'update';
+export type FormType = 'create' | 'detail' | 'submit' | 'update';
 
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -146,7 +145,6 @@ export function useGridColumns(): VxeTableGridOptions<MesProFeedbackApi.Feedback
       width: 180,
       formatter: 'formatDateTime',
     },
-    { field: 'approveUserNickname', title: '审核人', width: 100 },
     {
       field: 'status',
       title: '状态',
@@ -166,10 +164,10 @@ export function useGridColumns(): VxeTableGridOptions<MesProFeedbackApi.Feedback
 }
 
 /**
- * 新增/编辑/提交/审批/详情生产报工的表单
+ * 新增/编辑/提交/详情生产报工的表单
  *
  * - create / update：录入报工主体信息和数量
- * - submit / approve / detail：主体字段只读
+ * - submit / detail：主体字段只读
  *
  * 数量区域根据 `checkFlag` 和 `unqualifiedQuantity` 动态显示：
  * - 非质检工序：报工数量 = 合格 + 不良；不良 > 0 时再展开工废/料废/其他废品
@@ -179,7 +177,7 @@ export function useFormSchema(
   formType: FormType,
   formApi?: VbenFormApi,
 ): VbenFormSchema[] {
-  const isHeaderReadonly = ['approve', 'detail', 'submit'].includes(formType);
+  const isHeaderReadonly = ['detail', 'submit'].includes(formType);
   return [
     {
       fieldName: 'id',
@@ -250,7 +248,9 @@ export function useFormSchema(
       componentProps: {
         disabled: isHeaderReadonly,
         placeholder: '请选择工单',
-        status: MesProWorkOrderStatusEnum.CONFIRMED,
+        // 报工对象为「已下发/生产中」的工单，不设 status 硬过滤：
+        // 选择器内部会以 props.status 覆盖用户所选筛选，若固定为「已确认」，
+        // 已下发/生产中的工单将永远无法选中（首次及后续工序报工均被阻断）
         // 工单变更：清空任务及任务带出的产品信息、数量区域控制位
         onChange: async () => {
           await formApi?.setValues({
@@ -278,7 +278,12 @@ export function useFormSchema(
         componentProps: (values) => ({
           disabled: isHeaderReadonly || !values.workOrderId,
           placeholder: values.workOrderId ? '请选择任务' : '请先选择工单',
-          statuses: [MesProTaskStatusEnum.PREPARE],
+          // 报工对象应为已排产的任务：排产后任务状态为"已确认"，生产中为"生产中"；
+          // 原先固定为 PREPARE（草稿）会把已排产任务全部过滤掉，导致跨工单误选草稿任务
+          statuses: [
+            MesProTaskStatusEnum.CONFIRMED,
+            MesProTaskStatusEnum.PRODUCING,
+          ],
           workOrderId: values.workOrderId,
           workstationId: values.workstationId,
         }),
@@ -545,20 +550,6 @@ export function useFormSchema(
       rules: 'selectRequired',
     },
     {
-      fieldName: 'feedbackTime',
-      label: '报工时间',
-      component: 'DatePicker',
-      componentProps: {
-        class: 'w-full',
-        disabled: isHeaderReadonly,
-        format: 'YYYY-MM-DD HH:mm:ss',
-        placeholder: '请选择报工时间',
-        showTime: true,
-        valueFormat: 'x',
-      },
-      rules: 'required',
-    },
-    {
       fieldName: 'approveUserId',
       label: '审核人',
       component: 'ApiSelect',
@@ -571,6 +562,20 @@ export function useFormSchema(
         valueField: 'id',
       },
       rules: 'selectRequired',
+    },
+    {
+      fieldName: 'feedbackTime',
+      label: '报工时间',
+      component: 'DatePicker',
+      componentProps: {
+        class: 'w-full',
+        disabled: isHeaderReadonly,
+        format: 'YYYY-MM-DD HH:mm:ss',
+        placeholder: '请选择报工时间',
+        showTime: true,
+        valueFormat: 'x',
+      },
+      rules: 'required',
     },
     {
       fieldName: 'remark',

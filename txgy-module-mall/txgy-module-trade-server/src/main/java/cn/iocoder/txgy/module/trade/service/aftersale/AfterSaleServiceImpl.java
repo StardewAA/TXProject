@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
 import cn.iocoder.txgy.module.pay.api.refund.PayRefundApi;
@@ -13,6 +14,8 @@ import cn.iocoder.txgy.module.pay.api.refund.dto.PayRefundRespDTO;
 import cn.iocoder.txgy.module.pay.enums.refund.PayRefundStatusEnum;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.dto.CombinationRecordRespDTO;
+import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.promotion.enums.combination.CombinationRecordStatusEnum;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSaleDisagreeReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.aftersale.vo.AfterSalePageReqVO;
@@ -48,6 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString;
@@ -62,6 +68,18 @@ import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.*;
 @Service
 @Validated
 public class AfterSaleServiceImpl implements AfterSaleService {
+
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchJournal workbenchJournal;
+
+    private void workbenchChanged(Long orderId) {
+        if (workbenchJournal != null) workbenchJournal.changed(orderId);
+    }
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
+
+    @Resource
+    private cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper settlementOrderLock;
 
     @Resource
     @Lazy // 延迟加载，避免循环依赖
@@ -82,26 +100,83 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     private CombinationRecordApi combinationRecordApi;
 
     @Resource
+    private ProductShopApi productShopApi;
+
+    @Resource
     private TradeOrderProperties tradeOrderProperties;
 
     @Override
     public PageResult<AfterSaleDO> getAfterSalePage(AfterSalePageReqVO pageReqVO) {
-        return tradeAfterSaleMapper.selectPage(pageReqVO);
+        PageResult<AfterSaleDO> page = tradeAfterSaleMapper.selectPage(pageReqVO);
+        enrichShopNames(page.getList());
+        return page;
     }
 
     @Override
     public PageResult<AfterSaleDO> getAfterSalePage(Long userId, AppAfterSalePageReqVO pageReqVO) {
-        return tradeAfterSaleMapper.selectPage(userId, pageReqVO);
+        PageResult<AfterSaleDO> page = tradeAfterSaleMapper.selectPage(userId, pageReqVO);
+        enrichShopNames(page.getList());
+        return page;
     }
 
     @Override
     public AfterSaleDO getAfterSale(Long userId, Long id) {
-        return tradeAfterSaleMapper.selectByIdAndUserId(id, userId);
+        AfterSaleDO afterSale = tradeAfterSaleMapper.selectByIdAndUserId(id, userId);
+        enrichShopName(afterSale);
+        return afterSale;
     }
 
     @Override
     public AfterSaleDO getAfterSale(Long id) {
-        return tradeAfterSaleMapper.selectById(id);
+        AfterSaleDO afterSale = tradeAfterSaleMapper.selectById(id);
+        enrichShopName(afterSale);
+        return afterSale;
+    }
+
+    /**
+     * 售后表只保存 shop_id。响应前补齐名称，避免管理端把企业店铺显示成“店铺 1”。
+     * 店铺不存在或店铺服务暂时不可用时保留可识别的降级文案，不影响售后列表查询。
+     */
+    private void enrichShopNames(List<AfterSaleDO> afterSales) {
+        if (afterSales == null || afterSales.isEmpty()) {
+            return;
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (AfterSaleDO afterSale : afterSales) {
+            if (afterSale == null) {
+                continue;
+            }
+            Long shopId = afterSale.getShopId();
+            if (shopId == null || shopId == 0L) {
+                afterSale.setShopName("平台自营");
+                continue;
+            }
+            if (!names.containsKey(shopId)) {
+                names.put(shopId, resolveShopName(shopId));
+            }
+            afterSale.setShopName(names.get(shopId));
+        }
+    }
+
+    private void enrichShopName(AfterSaleDO afterSale) {
+        if (afterSale == null) {
+            return;
+        }
+        Long shopId = afterSale.getShopId();
+        afterSale.setShopName(shopId == null || shopId == 0L ? "平台自营" : resolveShopName(shopId));
+    }
+
+    private String resolveShopName(Long shopId) {
+        try {
+            CommonResult<ProductShopRespDTO> result = productShopApi.getShop(shopId);
+            ProductShopRespDTO shop = result == null ? null : result.getCheckedData();
+            if (shop != null && shop.getName() != null && !shop.getName().isBlank()) {
+                return shop.getName();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("[enrichShopName][shopId({}) 查询店铺失败]", shopId, ex);
+        }
+        return "店铺 " + shopId;
     }
 
     @Override
@@ -110,6 +185,12 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     public Long createAfterSale(Long userId, AppAfterSaleCreateReqVO createReqVO) {
         // 第一步，前置校验
         TradeOrderItemDO tradeOrderItem = validateOrderItemApplicable(userId, createReqVO);
+
+        // Serialize new after-sale applications with settlement's final order check.
+        // The tenant interceptor still applies; never lock an arbitrary client-supplied order.
+        settlementOrderLock.selectOne(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, tradeOrderItem.getOrderId()).last("FOR UPDATE"));
+        tradeOrderItem = validateOrderItemApplicable(userId, createReqVO);
 
         // 第二步，存储售后订单
         AfterSaleDO afterSale = createAfterSale(createReqVO, tradeOrderItem);
@@ -172,6 +253,13 @@ public class AfterSaleServiceImpl implements AfterSaleService {
                                         TradeOrderItemDO orderItem) {
         // 创建售后单
         AfterSaleDO afterSale = AfterSaleConvert.INSTANCE.convert(createReqVO, orderItem);
+        // 售后单保存订单项的店铺快照，列表和退款处理页无需再根据已变更的商品反查归属。
+        // 兼容历史订单：早期订单项没有店铺快照，数据库 shop_id 又是非空字段。
+        Long shopId = orderItem.getShopId() == null ? 0L : orderItem.getShopId();
+        String shopName = StrUtil.isBlank(orderItem.getShopName())
+                ? (shopId == 0L ? "平台自营" : "店铺 " + shopId)
+                : orderItem.getShopName();
+        afterSale.setShopId(shopId).setShopName(shopName);
         afterSale.setNo(tradeNoRedisDAO.generate(TradeNoRedisDAO.AFTER_SALE_NO_PREFIX));
         afterSale.setStatus(AfterSaleStatusEnum.APPLY.getStatus());
         // 标记是售中还是售后
@@ -183,6 +271,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 更新交易订单项的售后状态
         tradeOrderUpdateService.updateOrderItemWhenAfterSaleCreate(orderItem.getId(), afterSale.getId());
+        if(workbenchJournal!=null)workbenchJournal.changed(afterSale.getOrderId(),cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchModels.Action.DELIVERY);
 
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), null,
@@ -251,6 +340,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (updateCount == 0) {
             throw exception(AFTER_SALE_UPDATE_STATUS_FAIL);
         }
+        if (workbenchJournal != null) workbenchChanged(tradeAfterSaleMapper.selectById(id).getOrderId());
     }
 
     @Override
@@ -286,6 +376,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     public void receiveAfterSale(Long userId, Long id) {
         // 校验售后单存在，并状态为已退货
         AfterSaleDO afterSale = validateAfterSaleReceivable(id);
+
+        var erpOrder = tradeOrderQueryService.getOrder(afterSale.getOrderId());
+        var erpItem = new cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO()
+                .setSkuId(afterSale.getSkuId()).setCount(afterSale.getCount());
+        var erpRequest = erpInventory.request(erpOrder,
+                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.RETURN,
+                String.valueOf(id), java.util.List.of(erpItem), null, null);
+        if (!erpRequest.confirmed()) return;
 
         // 更新售后单的状态
         updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.BUYER_DELIVERY.getStatus(), new AfterSaleDO()
@@ -356,20 +454,24 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         Integer newStatus;
         if (ObjUtil.equals(afterSale.getRefundPrice(), 0)) {
             // 特殊：退款为 0 的订单，直接标记为完成（积分商城）。关联案例：https://t.zsxq.com/AQEvL
-            updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
-                    .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
+            completeAfterSaleRefund(afterSale);
             newStatus = AfterSaleStatusEnum.COMPLETE.getStatus();
         } else {
-            // 发起退款单。注意，需要在事务提交后，再进行发起，避免重复发起
-            createPayRefund(userIp, afterSale);
-            newStatus = afterSale.getStatus();  // 特殊：这里状态不变，而是最终 updateAfterSaleRefunded 处理！！！
+            // 已经存在退款单时，只同步支付结果，避免用户重复点击后再次创建退款单。
+            Long payRefundId = afterSale.getPayRefundId();
+            if (payRefundId == null) {
+                payRefundId = createPayRefund(userIp, afterSale);
+            }
+            // 模拟支付、余额支付会同步返回成功。此时立即完成售后；其它渠道仍由异步通知完成。
+            newStatus = syncAfterSaleRefundResult(afterSale, payRefundId)
+                    ? AfterSaleStatusEnum.COMPLETE.getStatus() : afterSale.getStatus();
         }
 
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), newStatus);
     }
 
-    private void createPayRefund(String userIp, AfterSaleDO afterSale) {
+    private Long createPayRefund(String userIp, AfterSaleDO afterSale) {
         // 创建退款单
         PayRefundCreateReqDTO createReqDTO = AfterSaleConvert.INSTANCE.convert(userIp, afterSale, tradeOrderProperties)
                 .setUserId(afterSale.getUserId()).setUserType(UserTypeEnum.MEMBER.getValue())
@@ -378,6 +480,8 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 更新售后单的退款单号
         tradeAfterSaleMapper.updateById(new AfterSaleDO().setId(afterSale.getId()).setPayRefundId(payRefundId));
+        workbenchChanged(afterSale.getOrderId());
+        return payRefundId;
     }
 
     @Override
@@ -389,6 +493,11 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (afterSale == null) {
             throw exception(AFTER_SALE_NOT_FOUND);
         }
+        // 支付平台可能重复通知。已经完成且退款单一致时直接返回，保证回调幂等。
+        if (ObjectUtil.equal(afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus())
+                && ObjectUtil.equal(afterSale.getPayRefundId(), payRefundId)) {
+            return;
+        }
         if (ObjectUtil.notEqual(afterSale.getStatus(), AfterSaleStatusEnum.WAIT_REFUND.getStatus())) {
             throw exception(AFTER_SALE_REFUND_FAIL_STATUS_NOT_WAIT_REFUND);
         }
@@ -398,21 +507,39 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 3. 处理退款结果
         if (PayRefundStatusEnum.isSuccess(payRefund.getStatus())) {
-            // 【情况一：退款成功】
-            updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
-                .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
-
-            // 记录售后日志
-            AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), AfterSaleStatusEnum.COMPLETE.getStatus());
-
-            // 更新交易订单项的售后状态为【已完成】
-            tradeOrderUpdateService.updateOrderItemWhenAfterSaleSuccess(afterSale.getOrderItemId(), afterSale.getRefundPrice());
+            completeAfterSaleRefund(afterSale);
             // 【情况二：退款失败】
         } else if (PayRefundStatusEnum.isFailure(payRefund.getStatus())) {
             // 记录售后日志
             AfterSaleLogUtils.setAfterSaleOperateType(AfterSaleOperateTypeEnum.SYSTEM_REFUND_FAIL);
             AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(), afterSale.getStatus());
         }
+    }
+
+    /**
+     * 同步支付服务中的退款结果。用于同步完成的退款渠道，以及修复通知暂时不可达时的状态滞后。
+     */
+    private boolean syncAfterSaleRefundResult(AfterSaleDO afterSale, Long payRefundId) {
+        PayRefundRespDTO payRefund = payRefundApi.getRefund(payRefundId).getCheckedData();
+        if (payRefund == null || (!PayRefundStatusEnum.isSuccess(payRefund.getStatus())
+                && !PayRefundStatusEnum.isFailure(payRefund.getStatus()))) {
+            return false;
+        }
+        validatePayRefund(afterSale, payRefundId);
+        if (PayRefundStatusEnum.isSuccess(payRefund.getStatus())) {
+            completeAfterSaleRefund(afterSale);
+            return true;
+        }
+        AfterSaleLogUtils.setAfterSaleOperateType(AfterSaleOperateTypeEnum.SYSTEM_REFUND_FAIL);
+        return false;
+    }
+
+    private void completeAfterSaleRefund(AfterSaleDO afterSale) {
+        updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.WAIT_REFUND.getStatus(), new AfterSaleDO()
+                .setStatus(AfterSaleStatusEnum.COMPLETE.getStatus()).setRefundTime(LocalDateTime.now()));
+        AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), afterSale.getStatus(),
+                AfterSaleStatusEnum.COMPLETE.getStatus());
+        tradeOrderUpdateService.updateOrderItemWhenAfterSaleSuccess(afterSale.getOrderItemId(), afterSale.getRefundPrice());
     }
 
     /**

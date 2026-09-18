@@ -6,7 +6,9 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
 
@@ -24,6 +26,21 @@ public class HrmRecruitPostPageReqVO extends PageParam {
     @Schema(description = "工作城市地区编号", example = "310115")
     private Integer areaId;
 
+    @Schema(description = "工作经验要求", example = "3")
+    private Integer workTime;
+
+    @Schema(description = "学历要求", example = "4")
+    private Integer educationRequire;
+
+    @Schema(description = "薪资筛选最低值（月薪或年薪原始值）", example = "5000")
+    private BigDecimal salaryMin;
+
+    @Schema(description = "薪资筛选最高值（月薪或年薪原始值）", example = "10000")
+    private BigDecimal salaryMax;
+
+    @Schema(description = "是否只看面议岗位", example = "false")
+    private Boolean salaryNegotiable;
+
     @Schema(description = "部门编号", example = "100")
     private Long deptId;
 
@@ -32,6 +49,9 @@ public class HrmRecruitPostPageReqVO extends PageParam {
 
     @Schema(description = "职位类型编号", example = "100")
     private Long postTypeId;
+
+    @Schema(hidden = true)
+    private List<Long> postTypeIds;
 
     @Schema(description = "职位状态", example = "1")
     private Integer status;

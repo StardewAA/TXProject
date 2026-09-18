@@ -39,6 +39,11 @@
             <artifactId>txgy-module-bpm-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-infra-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- 业务组件 -->
         <dependency>
@@ -48,6 +53,11 @@
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-biz-tenant</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-biz-data-permission</artifactId>
         </dependency>
 
         <!-- Web 相关 -->

@@ -35,6 +35,11 @@ public class CrmCustomerSaveReqVO {
     @NotEmpty(message = "客户名称不能为空")
     private String name;
 
+    @Schema(description = "联系人", example = "张三")
+    @DiffLogField(name = "联系人")
+    @Size(max = 64, message = "联系人长度不能超过 64 个字符")
+    private String contactName;
+
     @Schema(description = "下次联系时间")
     @DiffLogField(name = "下次联系时间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
@@ -91,6 +96,10 @@ public class CrmCustomerSaveReqVO {
     @Schema(description = "客户来源", example = "3")
     @DiffLogField(name = "客户来源", function = CrmCustomerSourceParseFunction.NAME)
     private Integer source;
+
+    @Schema(description = "客户类别(1=下游客户 2=上游供应商)", example = "1")
+    @DiffLogField(name = "客户类别")
+    private Integer customerType;
 
     @Schema(description = "备注", example = "随便")
     @DiffLogField(name = "备注")

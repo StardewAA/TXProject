@@ -5,6 +5,21 @@ import $wxsdk from '@/sheep/libs/sdk-h5-weixin';
 import { getRootUrl } from '@/sheep/helper';
 import PayOrderApi from '@/sheep/api/pay/order';
 
+function parseJsonContent(content) {
+  if (content && typeof content === 'object') {
+    return content;
+  }
+  if (typeof content !== 'string' || !content.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(content);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 /**
  * 支付
  *
@@ -18,115 +33,142 @@ export default class SheepPay {
     this.payment = payment;
     this.id = id;
     this.orderType = orderType;
-    this.payAction();
+    // Expose the existing async initiation so the cashier can suppress duplicate submissions.
+    this.pending = this.payAction();
   }
 
   payAction() {
     const payAction = {
       WechatOfficialAccount: {
         wechat: () => {
-          this.wechatOfficialAccountPay();
+          return this.wechatOfficialAccountPay();
         },
         alipay: () => {
-          this.redirectPay(); // 现在公众号可以直接跳转支付宝页面
+          return this.redirectPay(); // 现在公众号可以直接跳转支付宝页面
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       WechatMiniProgram: {
         wechat: () => {
-          this.wechatMiniProgramPay();
+          return this.wechatMiniProgramPay();
         },
         alipay: () => {
-          this.copyPayLink();
+          return this.copyPayLink();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       App: {
         wechat: () => {
-          this.wechatAppPay();
+          return this.wechatAppPay();
         },
         alipay: () => {
-          this.alipay();
+          return this.alipay();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       H5: {
         wechat: () => {
-          this.wechatWapPay();
+          return this.wechatWapPay();
         },
         alipay: () => {
-          this.redirectPay();
+          return this.redirectPay();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
     };
-    return payAction[sheep.$platform.name][this.payment]();
+    const platformActions = payAction[sheep.$platform.name];
+    const action = platformActions?.[this.payment];
+    if (!action) {
+      sheep.$helper.toast('当前平台暂不支持该支付方式');
+      return Promise.resolve(false);
+    }
+    return action();
   }
 
   // 预支付
-  prepay(channel) {
-    return new Promise(async (resolve, reject) => {
-      let data = {
-        id: this.id,
-        channelCode: channel,
-        channelExtras: {},
-      };
+  async prepay(channel) {
+    if (!channel) {
+      return { code: 1, data: null, msg: '支付渠道不能为空' };
+    }
+
+    const data = {
+      id: this.id,
+      channelCode: channel,
+      channelExtras: {},
+    };
+
+    try {
       // 特殊逻辑：微信公众号、小程序支付时，必须传入 openid
       if (['wx_pub', 'wx_lite'].includes(channel)) {
-        const openid = await sheep.$platform.useProvider('wechat').getOpenid(true);
+        const wechat = sheep.$platform.useProvider('wechat');
+        const openid = wechat ? await wechat.getOpenid(true) : null;
         // 如果获取不到 openid，微信无法发起支付，此时需要引导
         if (!openid) {
           this.bindWeixin();
-          return;
+          return { code: 1, data: null, msg: '请先绑定微信再使用微信支付' };
         }
         data.channelExtras.openid = openid;
       }
-      // 发起预支付 API 调用
-      PayOrderApi.submitOrder(data).then((res) => {
-        // 成功时
-        res.code === 0 && resolve(res);
-        // 失败时
-        if (res.code !== 0 && res.msg.indexOf('无效的openid') >= 0) {
-          // 特殊逻辑：微信公众号、小程序支付时，必须传入 openid 不正确的情况
-          if (
-            res.msg.indexOf('无效的openid') >= 0 || // 获取的 openid 不正确时，或者随便输入了个 openid
-            res.msg.indexOf('下单账号与支付账号不一致') >= 0
-          ) {
-            // https://developers.weixin.qq.com/community/develop/doc/00008c53c347804beec82aed051c00
-            this.bindWeixin();
-          }
+
+      // 发起预支付 API 调用。request 在网络异常时会返回 false，统一转换为可消费的结果，
+      // 避免收银台一直等待一个永远不会 resolve 的 Promise。
+      const response = await PayOrderApi.submitOrder(data);
+      const res =
+        response && typeof response === 'object'
+          ? response
+          : { code: 1, data: null, msg: '支付请求失败' };
+
+      if (res.code !== 0) {
+        const message = String(res.msg || '');
+        // 特殊逻辑：微信公众号、小程序支付时，必须传入正确的 openid
+        if (message.includes('无效的openid') || message.includes('下单账号与支付账号不一致')) {
+          // https://developers.weixin.qq.com/community/develop/doc/00008c53c347804beec82aed051c00
+          this.bindWeixin();
         }
-      });
-    });
+      }
+      return res;
+    } catch (error) {
+      // getOpenid 或支付接口抛出异常时，也要让所有支付调用方正常结束
+      return {
+        code: 1,
+        data: null,
+        msg: error?.msg || error?.message || '支付请求失败',
+      };
+    }
   }
   // #ifdef H5
   // 微信公众号 JSSDK 支付
   async wechatOfficialAccountPay() {
     let { code, data } = await this.prepay('wx_pub');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
+      if (code === 0) sheep.$helper.toast('获取微信支付信息失败');
       return;
     }
-    const payConfig = JSON.parse(data.displayContent);
+    const payConfig = parseJsonContent(data.displayContent);
+    if (!payConfig) {
+      sheep.$helper.toast('微信支付参数无效');
+      return;
+    }
     $wxsdk.wxpay(payConfig, {
       success: () => {
         this.payResult('success');
@@ -148,19 +190,46 @@ export default class SheepPay {
 
   // 浏览器微信 H5 支付 TODO 芋艿：待接入（注意：H5 支付是给普通浏览器，不是微信公众号的支付，绝大多数人用不到，可以忽略）
   async wechatWapPay() {
-    const { error, data } = await this.prepay();
-    if (error === 0) {
-      const redirect_url = `${getRootUrl()}pages/pay/result?id=${this.id}&payment=${
-        this.payment
-      }&orderType=${this.orderType}`;
-      location.href = `${data.pay_data.h5_url}&redirect_url=${encodeURIComponent(redirect_url)}`;
+    const { code, data } = await this.prepay(getWeixinPayChannelCode());
+    if (code !== 0 || !data) {
+      return;
     }
+
+    // WxWapPayClient 返回的是 displayContent 字符串（微信 mweb_url），兼容旧版
+    // 返回的 pay_data.h5_url 结构，避免前后端升级时再次出现白屏/无跳转。
+    let h5Url = data.displayContent;
+    if (typeof h5Url === 'string') {
+      try {
+        const parsed = JSON.parse(h5Url);
+        h5Url =
+          parsed?.h5_url ||
+          parsed?.h5Url ||
+          parsed?.mweb_url ||
+          parsed?.mwebUrl ||
+          parsed?.url ||
+          (typeof parsed === 'string' ? parsed : undefined);
+      } catch (error) {
+        // displayContent 本身就是 URL 时无需解析
+      }
+    }
+    h5Url = h5Url || data.pay_data?.h5_url || data.pay_data?.h5Url;
+    if (!h5Url) {
+      sheep.$helper.toast('获取微信支付链接失败');
+      return;
+    }
+
+    const redirect_url = `${getRootUrl()}pages/pay/result?id=${this.id}&payment=${
+      this.payment
+    }&orderType=${this.orderType}`;
+    const separator = String(h5Url).includes('?') ? '&' : '?';
+    location.href = `${h5Url}${separator}redirect_url=${encodeURIComponent(redirect_url)}`;
   }
 
   // 支付链接(支付宝 wap 支付)
   async redirectPay() {
     let { code, data } = await this.prepay('alipay_wap');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
+      if (code === 0) sheep.$helper.toast('获取支付宝支付链接失败');
       return;
     }
     location.href = data.displayContent;
@@ -172,11 +241,16 @@ export default class SheepPay {
   async wechatMiniProgramPay() {
     // let that = this;
     let { code, data } = await this.prepay('wx_lite');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
+      if (code === 0) sheep.$helper.toast('获取微信支付信息失败');
       return;
     }
     // 调用微信小程序支付
-    const payConfig = JSON.parse(data.displayContent);
+    const payConfig = parseJsonContent(data.displayContent);
+    if (!payConfig) {
+      sheep.$helper.toast('微信支付参数无效');
+      return;
+    }
     uni.requestPayment({
       provider: 'wxpay',
       timeStamp: payConfig.timeStamp,
@@ -199,20 +273,21 @@ export default class SheepPay {
 
   // 余额支付
   async walletPay() {
-    const { code } = await this.prepay('wallet');
-    code === 0 && this.payResult('success');
+    const response = await this.prepay('wallet');
+    response?.code === 0 && this.payResult('success');
   }
 
   // 模拟支付
   async mockPay() {
-    const { code } = await this.prepay('mock');
-    code === 0 && this.payResult('success');
+    const response = await this.prepay('mock');
+    response?.code === 0 && this.payResult('success');
   }
 
   // 支付宝复制链接支付（通过支付宝 wap 支付实现）
   async copyPayLink() {
     let { code, data } = await this.prepay('alipay_wap');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
+      if (code === 0) sheep.$helper.toast('获取支付宝支付链接失败');
       return;
     }
     // 引入 showModal 点击确认：复制链接；
@@ -232,7 +307,8 @@ export default class SheepPay {
   async alipay() {
     let that = this;
     const { code, data } = await this.prepay('alipay_app');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
+      if (code === 0) sheep.$helper.toast('获取支付宝支付信息失败');
       return;
     }
 
@@ -257,7 +333,7 @@ export default class SheepPay {
   async wechatAppPay() {
     // 获取预支付信息
     const { code, data } = await this.prepay('wx_app');
-    if (code !== 0) {
+    if (code !== 0 || !data?.displayContent) {
       sheep.$helper.toast('获取支付信息失败');
       return;
     }
@@ -265,7 +341,11 @@ export default class SheepPay {
     // App 微信支付与小程序的参数结构不同：Android、iOS 必须通过 orderInfo 传递，且键名需全小写
     // 后端微信支付 V2、V3 返回的字段命名不一致，因此在此统一转换
     // 参考：https://uniapp.dcloud.net.cn/api/plugins/payment.html#%E5%BE%AE%E4%BF%A1app%E6%94%AF%E4%BB%98
-    const payConfig = JSON.parse(data.displayContent);
+    const payConfig = parseJsonContent(data.displayContent);
+    if (!payConfig) {
+      sheep.$helper.toast('微信支付参数无效');
+      return;
+    }
     const orderInfo = {
       appid: payConfig.appid || payConfig.appId,
       partnerid: payConfig.partnerid || payConfig.partnerId,
@@ -305,6 +385,8 @@ export default class SheepPay {
 }
 
 export function getPayMethods(channels) {
+  // 后端返回 Set 序列化后的数组；网络异常或空响应时按没有可用渠道处理
+  const channelList = Array.isArray(channels) ? channels : [];
   const payMethods = [
     {
       icon: '/static/img/shop/pay/wechat.png',
@@ -342,9 +424,10 @@ export function getPayMethods(channels) {
   // 1. 处理【微信支付】
   const wechatMethod = payMethods[0];
   if (
-    (platform === 'WechatOfficialAccount' && channels.includes('wx_pub')) ||
-    (platform === 'WechatMiniProgram' && channels.includes('wx_lite')) ||
-    (platform === 'App' && channels.includes('wx_app'))
+    (platform === 'WechatOfficialAccount' && channelList.includes('wx_pub')) ||
+    (platform === 'WechatMiniProgram' && channelList.includes('wx_lite')) ||
+    (platform === 'App' && channelList.includes('wx_app')) ||
+    (platform === 'H5' && channelList.includes('wx_wap'))
   ) {
     wechatMethod.disabled = false;
   }
@@ -352,22 +435,22 @@ export function getPayMethods(channels) {
   // 2. 处理【支付宝支付】
   const alipayMethod = payMethods[1];
   if (
-    (platform === 'H5' && channels.includes('alipay_wap')) ||
-    (platform === 'WechatOfficialAccount' && channels.includes('alipay_wap')) ||
-    (platform === 'WechatMiniProgram' && channels.includes('alipay_wap')) ||
-    (platform === 'App' && channels.includes('alipay_app'))
+    (platform === 'H5' && channelList.includes('alipay_wap')) ||
+    (platform === 'WechatOfficialAccount' && channelList.includes('alipay_wap')) ||
+    (platform === 'WechatMiniProgram' && channelList.includes('alipay_wap')) ||
+    (platform === 'App' && channelList.includes('alipay_app'))
   ) {
     alipayMethod.disabled = false;
   }
   // 3. 处理【余额支付】
   const walletMethod = payMethods[2];
-  if (channels.includes('wallet')) {
+  if (channelList.includes('wallet')) {
     walletMethod.disabled = false;
   }
   // 4. 处理【苹果支付】TODO 芋艿：未来接入
   // 5. 处理【模拟支付】
   const mockMethod = payMethods[4];
-  if (channels.includes('mock')) {
+  if (channelList.includes('mock')) {
     mockMethod.disabled = false;
   }
   return payMethods;

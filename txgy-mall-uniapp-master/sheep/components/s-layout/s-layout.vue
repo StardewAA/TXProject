@@ -24,6 +24,12 @@
         :showLeftButton="showLeftButton"
       />
       <view class="page-body" :style="[bgBody]">
+        <s-tenant-entry />
+        <view v-if="userStore.sessionError" class="session-recovery">
+          <view>{{ userStore.sessionError }}</view>
+          <button v-if="userStore.isLogin" size="mini" @tap="userStore.retrySession()">重新核验</button>
+          <button size="mini" @tap="userStore.logout()">清除旧会话</button>
+        </view>
         <!-- 顶部导航栏-情况3：沉浸式头部 -->
         <su-inner-navbar v-if="navbar === 'inner'" :title="title" />
         <view
@@ -62,6 +68,10 @@
    * 模板组件 - 提供页面公共组件，属性，方法
    */
   import { computed, onMounted } from 'vue';
+  import { onShow } from '@dcloudio/uni-app';
+  import { stampTenantUrl } from '@/sheep/helper/tenant-runtime';
+  onMounted(stampTenantUrl);
+  onShow(stampTenantUrl);
   import sheep from '@/sheep';
   import { isEmpty } from 'lodash-es';
   // #ifdef MP-WEIXIN
@@ -233,14 +243,43 @@
 </script>
 
 <style lang="scss" scoped>
+  .session-recovery {
+    padding: 20rpx; background: #fff7e6; color: #7a4b00;
+    button { margin: 12rpx 12rpx 0 0; }
+  }
   .page-app {
     position: relative;
     color: var(--ui-TC);
-    background-color: var(--ui-BG-1) !important;
+    background: var(--ui-App-bg);
     z-index: 2;
     display: flex;
     width: 100%;
     height: 100vh;
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    &::before {
+      background:
+        radial-gradient(circle at 10% 0%, rgba(59, 130, 246, 0.16), transparent 28%),
+        radial-gradient(circle at 92% 12%, rgba(14, 165, 233, 0.12), transparent 26%),
+        radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.1), transparent 30%);
+      opacity: 0.95;
+    }
+
+    &::after {
+      height: 280rpx;
+      top: auto;
+      bottom: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.08));
+      opacity: 0.9;
+    }
 
     .page-main {
       position: absolute;
@@ -249,12 +288,14 @@
       min-height: 100%;
       display: flex;
       flex-direction: column;
+      background: rgba(255, 255, 255, 0.02);
 
       .page-body {
         width: 100%;
         position: relative;
         z-index: 1;
         flex: 1;
+        padding-bottom: calc(env(safe-area-inset-bottom) + 24rpx);
       }
 
       .page-img {

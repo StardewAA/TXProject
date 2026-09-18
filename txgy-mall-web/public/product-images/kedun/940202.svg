@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7faf9"/><stop offset="1" stop-color="#dfe8e5"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#94a3b8"/><stop offset=".45" stop-color="#f8fafc"/><stop offset="1" stop-color="#64748b"/></linearGradient>
+  <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M0 0h34v34H0z" fill="#f8fafc"/><path d="M0 0l34 34M34 0L0 34" stroke="#146c94" stroke-width="3"/></pattern>
+  <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-opacity=".18"/></filter>
+</defs>
+<rect width="1000" height="1000" rx="54" fill="url(#bg)"/>
+<path d="M0 0h1000v24H0z" fill="#146c94"/>
+<g filter="url(#shadow)"><ellipse cx="500" cy="330" rx="205" ry="54" fill="#e8edf0" stroke="#146c94" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><path d="M295 330v300c0 72 410 72 410 0V330" fill="#f8fafc" stroke="#146c94" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><path d="M340 440h320v125H340z" fill="#146c94" opacity=".9"/><path d="M390 315c0-115 220-115 220 0" fill="none" stroke="#146c94" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/></g>
+<rect x="70" y="770" width="860" height="165" rx="24" fill="#fff" opacity=".96"/>
+<text x="105" y="838" fill="#172126" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="44" font-weight="700">脂肪族聚氨酯面漆</text>
+<text x="105" y="895" fill="#146c94" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="600">规格：20kg/组</text>
+<text x="895" y="895" text-anchor="end" fill="#64748b" font-family="Arial, sans-serif" font-size="22">SKU 940202</text>
+</svg>

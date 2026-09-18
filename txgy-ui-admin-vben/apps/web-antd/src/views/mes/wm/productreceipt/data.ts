@@ -257,6 +257,15 @@ export function useLineGridColumns(
 export function useLineFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
   return [
     {
+      // 隐藏字段：库存记录的批次编号，缺它会导致后端校验 batchId 不一致（批次物料无法拣货）
+      fieldName: 'batchId',
+      component: 'Input',
+      dependencies: {
+        triggerFields: [''],
+        show: () => false,
+      },
+    },
+    {
       fieldName: 'materialStockId',
       label: '库存记录',
       component: markRaw(WmMaterialStockSelect),

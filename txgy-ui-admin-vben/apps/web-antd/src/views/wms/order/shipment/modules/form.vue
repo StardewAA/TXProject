@@ -19,10 +19,10 @@ import { useVbenForm } from '#/adapter/form';
 import { TableAction, VxeColumn, VxeTable } from '#/adapter/vxe-table';
 import {
   cancelShipmentOrder,
-  completeShipmentOrder,
   createShipmentOrder,
   getShipmentOrder,
   getShipmentOrderDetailListByOrderId,
+  submitShipmentOrderApproval,
   updateShipmentOrder,
 } from '#/api/wms/order/shipment';
 import { $t } from '#/locales';
@@ -64,19 +64,33 @@ const getTitle = computed(() => {
     : $t('ui.actionTitle.create', ['出库单']);
 });
 
+const sourceLocked = computed(() => !!formData.value.sourceModule);
 const isPrepareOrder = computed(() => {
   return (
     !formData.value?.id ||
     (formData.value.status !== undefined &&
-      OrderUpdateStatusList.includes(formData.value.status))
+      OrderUpdateStatusList.includes(formData.value.status) &&
+      ![1, 2].includes(formData.value.approvalStatus ?? -1))
   );
 });
 const isSavedPrepareOrder = computed(() => {
   return (
     !!formData.value?.id &&
     formData.value.status !== undefined &&
-    OrderUpdateStatusList.includes(formData.value.status)
+    OrderUpdateStatusList.includes(formData.value.status) &&
+    ![1, 2].includes(formData.value.approvalStatus ?? -1)
   );
+});
+
+const approvalStatusText = computed(() => {
+  const labels: Record<number, string> = {
+    [-1]: '未提交',
+    1: '审批中',
+    2: '已通过',
+    3: '已拒绝',
+    4: '已取消',
+  };
+  return labels[formData.value.approvalStatus ?? -1] || '未提交';
 });
 
 const [Form, formApi] = useVbenForm({
@@ -256,7 +270,7 @@ function validateDetails(required = false) {
       detail.availableQuantity !== undefined &&
       detail.quantity > detail.availableQuantity
     ) {
-      message.error(`第 ${index + 1} 行明细出库数量不能大于可用库存`);
+      message.error(`第 ${index + 1} 行明细出库数量不能大于账面库存`);
       return false;
     }
   }
@@ -288,23 +302,23 @@ async function buildSubmitData(): Promise<WmsShipmentOrderApi.ShipmentOrder> {
   };
 }
 
-/** 完成出库 */
-async function handleFormComplete() {
+/** 保存最新内容并提交审批 */
+async function handleSubmitApproval() {
   const { valid } = await formApi.validate();
   if (!valid || !validateDetails(true) || !formData.value?.id) {
     return;
   }
-  await confirm('确认完成出库？完成后将更新库存。');
+  await confirm('确认提交出库审批？审批期间将不能修改单据。');
   modalApi.lock();
   try {
     const data = await buildSubmitData();
     if (!isEqual(data, originalSubmitData.value)) {
       await updateShipmentOrder(data);
     }
-    await completeShipmentOrder(formData.value.id);
+    await submitShipmentOrderApproval(formData.value.id);
     await modalApi.close();
     emit('success');
-    message.success('出库成功');
+    message.success('已提交审批');
   } finally {
     modalApi.unlock();
   }
@@ -370,6 +384,7 @@ const [Modal, modalApi] = useVbenModal({
         currentWarehouseId.value = order.warehouseId;
         setDetails(orderDetails);
         // 设置到 values
+        formApi.setState({ commonConfig: { componentProps: { disabled: sourceLocked.value || !isPrepareOrder.value } } });
         await formApi.setValues(formData.value);
         await nextTick();
         originalSubmitData.value = await buildSubmitData();
@@ -387,6 +402,7 @@ const [Modal, modalApi] = useVbenModal({
     };
     currentWarehouseId.value = undefined;
     setDetails([]);
+    formApi.setState({ commonConfig: { componentProps: { disabled: false } } });
     await formApi.setValues(formData.value);
     await nextTick();
     originalSubmitData.value = await buildSubmitData();
@@ -398,6 +414,12 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-3/4" :show-confirm-button="isPrepareOrder">
     <div class="mx-4">
+      <div v-if="formData.id" class="mb-3 text-sm text-gray-500">
+        审批状态：{{ approvalStatusText }}
+        <span v-if="formData.approvalReason">
+          （{{ formData.approvalReason }}）
+        </span>
+      </div>
       <Form />
       <div class="mt-4">
         <div class="mb-3 flex items-center justify-between">
@@ -406,6 +428,7 @@ const [Modal, modalApi] = useVbenModal({
             :actions="[
               {
                 label: '添加商品',
+                disabled: sourceLocked || !isPrepareOrder,
                 onClick: handleAddDetail,
                 type: 'primary',
               },
@@ -440,7 +463,7 @@ const [Modal, modalApi] = useVbenModal({
           </VxeColumn>
           <VxeColumn
             field="availableQuantity"
-            title="可用库存"
+            title="账面库存"
             align="right"
             width="120"
           >
@@ -452,6 +475,7 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.quantity"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="QUANTITY_PRECISION"
@@ -465,11 +489,12 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.price"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="PRICE_PRECISION"
                 class="!w-full"
-                placeholder="单价"
+                :placeholder="sourceLocked ? '来源未提供' : '单价'"
                 @change="handleDetailPriceChange(row)"
               />
             </template>
@@ -478,11 +503,12 @@ const [Modal, modalApi] = useVbenModal({
             <template #default="{ row }">
               <InputNumber
                 v-model:value="row.totalPrice"
+                :disabled="sourceLocked || !isPrepareOrder"
                 :controls="false"
                 :min="0"
                 :precision="PRICE_PRECISION"
                 class="!w-full"
-                placeholder="金额"
+                :placeholder="sourceLocked ? '来源未提供' : '金额'"
                 @change="handleDetailTotalPriceChange(row)"
               />
             </template>
@@ -493,6 +519,7 @@ const [Modal, modalApi] = useVbenModal({
                 :actions="[
                   {
                     label: '删除',
+                    disabled: sourceLocked || !isPrepareOrder,
                     type: 'link',
                     danger: true,
                     onClick: handleDeleteDetail.bind(null, row),
@@ -509,10 +536,10 @@ const [Modal, modalApi] = useVbenModal({
         <TableAction
           :actions="[
             {
-              label: '完成出库',
+              label: '提交审批',
               type: 'primary',
-              auth: ['wms:shipment-order:complete'],
-              onClick: handleFormComplete,
+              auth: ['wms:shipment-order:submit-approval'],
+              onClick: handleSubmitApproval,
             },
             {
               label: '作废',

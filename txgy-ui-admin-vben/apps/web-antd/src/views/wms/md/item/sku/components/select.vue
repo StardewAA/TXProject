@@ -4,10 +4,13 @@ import type { WmsItemSkuApi } from '#/api/wms/md/item/sku';
 
 import { nextTick, ref } from 'vue';
 
+import { CommonStatusEnum } from '@vben/constants';
+
 import { message, Modal } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getItemSkuPage } from '#/api/wms/md/item/sku';
+import { materialTypeLabel } from '#/views/wms/utils/material-type';
 import {
   formatDimensionText,
   formatPrice,
@@ -20,6 +23,8 @@ import {
 } from '../../data';
 
 defineOptions({ name: 'WmsItemSkuSelect' });
+defineProps<{ showMaterialType?: boolean }>();
+const materialType = ref<string>();
 
 const emit = defineEmits<{
   change: [list: WmsItemSkuApi.ItemSku[]];
@@ -33,7 +38,8 @@ const disabledSelectedIds = ref<Set<number>>(new Set());
 
 /** 判断 SKU 是否可勾选，已传入的业务明细 SKU 需要禁选 */
 function isRowSelectable({ row }: { row: WmsItemSkuApi.ItemSku }) {
-  return row.id === undefined || !disabledSelectedIds.value.has(row.id);
+  return (row.id === undefined || !disabledSelectedIds.value.has(row.id)) &&
+    (!materialType.value || row.materialType === materialType.value);
 }
 
 /** 单选模式下同步 VXE 勾选状态，避免跨页残留多选 */
@@ -104,6 +110,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            itemStatus: CommonStatusEnum.ENABLE,
+            materialType: materialType.value,
           });
         },
       },
@@ -126,8 +134,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
 /** 打开 SKU 选择弹窗 */
 async function openModal(
   selectedIds?: number[],
-  options?: { multiple?: boolean; preselectDisabled?: boolean },
+  options?: { multiple?: boolean; preselectDisabled?: boolean; materialType?: string },
 ) {
+  materialType.value = options?.materialType;
   open.value = true;
   multiple.value = options?.multiple ?? true;
   selectedRows.value = [];
@@ -151,7 +160,7 @@ async function closeModal() {
 /** 确认选择并返回新增的 SKU 列表 */
 function handleConfirm() {
   const list = selectedRows.value.filter(
-    (sku) => sku.id !== undefined && !disabledSelectedIds.value.has(sku.id),
+    (sku) => sku.id !== undefined && isRowSelectable({ row: sku }),
   );
   if (list.length === 0) {
     message.warning('请至少选择一条数据');
@@ -173,10 +182,12 @@ defineExpose({ open: openModal });
     @ok="handleConfirm"
     @cancel="closeModal"
   >
+    <p v-if="materialType" class="mb-3">当前业务仅显示物料类型为“{{ materialTypeLabel(materialType) }}”的商品。</p>
     <Grid table-title="商品 SKU 列表">
       <template #itemInfo="{ row }">
         <div class="flex flex-col gap-1 py-1 leading-5">
           <div>{{ row.itemName || '-' }}</div>
+          <div v-if="showMaterialType">物料类型：{{ materialTypeLabel(row.materialType) }}</div>
           <div v-if="row.itemCode" class="text-xs text-gray-500">
             商品编号：{{ row.itemCode }}
           </div>

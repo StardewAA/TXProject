@@ -48,10 +48,11 @@ public interface CrmCustomerService {
      * 更新客户相关的跟进信息
      *
      * @param id                 编号
+     * @param contactTime        实际跟进时间（本次实际联系客户的时间，公海回收计时以此为准）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateCustomerFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateCustomerFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 删除客户
@@ -76,6 +77,24 @@ public interface CrmCustomerService {
      * @author ljlleo
      */
     List<CrmCustomerDO> getCustomerList(Collection<Long> ids);
+
+    /**
+     * 获得相似客户列表：同客户类别（下游/上游）+ 同行业，用于业务对比与拓展
+     *
+     * @param customerId 当前客户编号
+     * @param limit      返回数量，默认 10
+     * @return 相似客户列表
+     */
+    List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit);
+
+    /**
+     * 获得供应商基础库（客户类别=上游供应商）列表
+     *
+     * <p>供应商属于租户级共享主数据，供报价单等下拉选择，因此不做数据权限过滤。
+     *
+     * @return 供应商列表（按名称升序）
+     */
+    List<CrmCustomerDO> getSupplierSimpleList();
 
     /**
      * 获得客户 Map
@@ -169,6 +188,15 @@ public interface CrmCustomerService {
      * @return 导入结果
      */
     CrmCustomerImportRespVO importCustomerList(List<CrmCustomerImportExcelVO> importCustomers, CrmCustomerImportReqVO importReqVO);
+
+    /**
+     * 查重：根据手机号、名称匹配已存在的客户、线索、联系人
+     *
+     * @param mobile 手机号，精确匹配
+     * @param name   名称（客户名 / 线索名 / 联系人姓名），精确匹配
+     * @return 查重结果
+     */
+    CrmDuplicateCheckRespVO checkDuplicate(String mobile, String name);
 
     // ==================== 公海相关操作 ====================
 

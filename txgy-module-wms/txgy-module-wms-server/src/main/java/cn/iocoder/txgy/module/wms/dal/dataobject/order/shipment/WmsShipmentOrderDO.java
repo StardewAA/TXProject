@@ -55,9 +55,35 @@ public class WmsShipmentOrderDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 审批状态
+     */
+    private Integer approvalStatus;
+    /**
+     * BPM 流程实例编号
+     */
+    private String processInstanceId;
+    /**
+     * 审批完成时间
+     */
+    private LocalDateTime approvalTime;
+    /**
+     * 审批结果原因
+     */
+    private String approvalReason;
+    private Integer executionStatus;
+    private LocalDateTime executionTime;
+    private String executionError;
+    /**
      * 业务订单号
      */
     private String bizOrderNo;
+    private Boolean simulation;
+    private String notificationStatus;
+    private String notificationError;
+    private Integer notificationAttempts;
+    private LocalDateTime nextNotificationTime;
+    private String sourceModule;
+    private String businessChainNo;
     /**
      * 客户编号
      *

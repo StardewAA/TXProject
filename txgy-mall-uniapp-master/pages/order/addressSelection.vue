@@ -74,23 +74,44 @@
 </template>
 
 <script setup>
-  import { computed } from 'vue';
+  import { computed, onScopeDispose } from 'vue';
   import sheep from '@/sheep';
   import { isEmpty } from 'lodash-es';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
 
   const props = defineProps({
+    disabled: Boolean,
     modelValue: {
       type: Object,
       default() {},
     },
   });
   const emits = defineEmits(['update:modelValue']);
+  let activeSelection;
+  function clearSelection() {
+    if (activeSelection) uni.$off(activeSelection.name, activeSelection.handler);
+    activeSelection = undefined;
+  }
+  const task = useTenantTask(clearSelection);
+  onScopeDispose(clearSelection);
+  defineExpose({ cancelSelection: clearSelection });
 
   // computed 解决父子组件双向数据同步
   const state = computed({
     get() {
-      return new Proxy(props.modelValue, {
+      // 接口或页面恢复过程中可能暂时得到 null；Proxy 不能代理 null/undefined，
+      // 这里统一使用空对象，避免结算页初始化直接白屏。
+      const raw =
+        props.modelValue && typeof props.modelValue === 'object' ? props.modelValue : {};
+      const source = {
+        ...raw,
+        addressInfo:
+          raw.addressInfo && typeof raw.addressInfo === 'object' ? raw.addressInfo : {},
+        pickUpInfo: raw.pickUpInfo && typeof raw.pickUpInfo === 'object' ? raw.pickUpInfo : {},
+      };
+      return new Proxy(source, {
         set(obj, name, val) {
+          if (!task.current() || props.disabled) return true;
           emits('update:modelValue', {
             ...obj,
             [name]: val,
@@ -100,26 +121,35 @@
       });
     },
     set(val) {
+      if (!task.current() || props.disabled) return;
       emits('update:modelValue', val);
     },
   });
 
   // 选择地址
   function onSelectAddress() {
+    if (!task.current() || props.disabled) return;
+    clearSelection();
+    const current = task.capture(), deliveryType = state.value.deliveryType;
     let emitName = 'SELECT_ADDRESS';
     let addressPage = '/pages/user/address/list?type=select';
     if (state.value.deliveryType === 2) {
       emitName = 'SELECT_PICK_UP_INFO';
       addressPage = '/pages/user/goods_details_store/index';
     }
-    uni.$once(emitName, (e) => {
-      changeConsignee(e.addressInfo);
-    });
+    const handler = (e) => {
+      if (activeSelection?.handler !== handler) return;
+      clearSelection();
+      if (current() && !props.disabled && state.value.deliveryType === deliveryType) changeConsignee(e?.addressInfo);
+    };
+    activeSelection = { name: emitName, handler };
+    uni.$once(emitName, handler);
     sheep.$router.go(addressPage);
   }
 
   // 更改收货人地址&计算订单信息
   async function changeConsignee(addressInfo = {}) {
+    if (!task.current() || props.disabled) return;
     if (!isEmpty(addressInfo)) {
       if (state.value.deliveryType === 1) {
         state.value.addressInfo = addressInfo;
@@ -132,6 +162,8 @@
 
   // 收货方式切换
   const switchDeliveryType = (type) => {
+    if (!task.current() || props.disabled) return;
+    clearSelection();
     state.value.deliveryType = type;
   };
 </script>

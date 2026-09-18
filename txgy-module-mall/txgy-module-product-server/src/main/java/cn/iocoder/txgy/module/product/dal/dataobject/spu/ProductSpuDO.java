@@ -10,7 +10,7 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import lombok.*;
 
 import java.util.List;
@@ -18,7 +18,7 @@ import java.util.List;
 /**
  * 商品 SPU DO
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 @TableName(value = "product_spu", autoResultMap = true)
 @KeySequence("product_spu_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
@@ -35,6 +35,18 @@ public class ProductSpuDO extends BaseDO {
      */
     @TableId
     private Long id;
+
+    /**
+     * 所属店铺编号；平台自营商品使用平台默认店铺
+     */
+    private Long shopId;
+
+    /** null 表示历史未纳管，不表示审核通过。 */
+    private Integer reviewStatus;
+    private Long contentVersion;
+    private Long approvedVersion;
+    private String submissionId;
+    private String reviewRemark;
 
     // ========== 基本信息 =========
 
@@ -74,7 +86,7 @@ public class ProductSpuDO extends BaseDO {
     /**
      * 商品轮播图
      */
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<String> sliderPicUrls;
 
     /**
@@ -169,3 +181,4 @@ public class ProductSpuDO extends BaseDO {
      */
     private Integer browseCount;
 }
+

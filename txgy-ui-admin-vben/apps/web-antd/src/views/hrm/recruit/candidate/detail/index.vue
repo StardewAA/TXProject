@@ -22,7 +22,9 @@ import Form from '../modules/form.vue';
 import Header from './modules/header.vue';
 import Info from './modules/info.vue';
 import InterviewList from './modules/interview-list.vue';
-import MaterialFiles from './modules/material-files.vue';
+import ResumeVersions from './modules/resume-versions.vue';
+import ApplicationList from './modules/application-list.vue';
+import RecruitChat from './modules/recruit-chat.vue';
 
 defineOptions({ name: 'HrmRecruitCandidateDetail' });
 
@@ -119,11 +121,17 @@ onMounted(() => {
         <Tabs.TabPane key="detail" tab="详细资料">
           <Info :candidate="candidate" />
         </Tabs.TabPane>
-        <Tabs.TabPane key="file" tab="材料附件" :force-render="false">
-          <MaterialFiles :candidate="candidate" />
+        <Tabs.TabPane key="resume" tab="简历版本" :force-render="false">
+          <ResumeVersions :candidate-id="candidateId" />
         </Tabs.TabPane>
         <Tabs.TabPane key="interview" tab="面试记录" :force-render="false">
           <InterviewList :interview-list="interviewList" />
+        </Tabs.TabPane>
+        <Tabs.TabPane key="application" tab="应聘记录" :force-render="false">
+          <ApplicationList :candidate-id="candidateId" />
+        </Tabs.TabPane>
+        <Tabs.TabPane key="chat" tab="招聘沟通" :force-render="false">
+          <RecruitChat :candidate-id="candidateId" />
         </Tabs.TabPane>
         <Tabs.TabPane key="operateLog" tab="操作日志">
           <OperateLog :log-list="logList" />

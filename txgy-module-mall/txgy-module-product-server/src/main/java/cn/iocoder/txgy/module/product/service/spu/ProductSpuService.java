@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * 商品 SPU Service 接口
  *
- * @author OPENLAB BS
+ * @author 芋道源码
  */
 public interface ProductSpuService {
 
@@ -42,6 +42,9 @@ public interface ProductSpuService {
      * @param id 编号
      */
     void deleteSpu(Long id);
+
+    /** 公开经营删除入口，必须在行锁内校验客户端读取的版本。 */
+    void deleteSpu(Long id, Long expectedVersion);
 
     /**
      * 获得商品 SPU
@@ -110,6 +113,9 @@ public interface ProductSpuService {
      */
     void updateSpuStock(Map<Long, Integer> stockIncrCounts);
 
+    /** 对账修复时直接同步 SPU 缓存库存，不改变销量。 */
+    void syncSpuStock(Map<Long, Integer> stockCounts);
+
     /**
      * 更新 SPU 状态
      *
@@ -154,3 +160,4 @@ public interface ProductSpuService {
     void updateBrowseCount(Long id, int incrCount);
 
 }
+

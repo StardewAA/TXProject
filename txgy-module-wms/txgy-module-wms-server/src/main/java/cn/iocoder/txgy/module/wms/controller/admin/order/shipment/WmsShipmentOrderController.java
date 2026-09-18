@@ -47,6 +47,7 @@ import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSetByFlatMap;
+import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - WMS 出库单")
 @RestController
@@ -74,6 +75,11 @@ public class WmsShipmentOrderController {
     @Operation(summary = "创建出库单")
     @PreAuthorize("@ss.hasPermission('wms:shipment-order:create')")
     public CommonResult<Long> createShipmentOrder(@Valid @RequestBody WmsShipmentOrderSaveReqVO createReqVO) {
+        if (createReqVO.getSourceModule() != null || createReqVO.getBusinessChainNo() != null
+                || (createReqVO.getDetails() != null && createReqVO.getDetails().stream().anyMatch(
+                detail -> detail.getSourceLineNo() != null || detail.getSourceSnapshotJson() != null))) {
+            throw new IllegalArgumentException("外部来源单据请使用专用申请接口");
+        }
         return success(shipmentOrderService.createShipmentOrder(createReqVO));
     }
 
@@ -101,6 +107,18 @@ public class WmsShipmentOrderController {
     public CommonResult<Boolean> completeShipmentOrder(@RequestParam("id") Long id) {
         shipmentOrderService.completeShipmentOrder(id);
         return success(true);
+    }
+
+    @PostMapping("/submit-approval")
+    @Operation(summary = "提交出库单审批")
+    @Parameter(name = "id", description = "编号", required = true)
+    @PreAuthorize("@ss.hasPermission('wms:shipment-order:submit-approval')")
+    public CommonResult<String> submitShipmentOrderApproval(@RequestParam("id") Long id) {
+        try {
+            return success(shipmentOrderService.submitShipmentOrderApproval(getLoginUserId(), id));
+        } catch (cn.iocoder.txgy.module.wms.service.integration.WmsShortageService.ShortageBlockedException shortage) {
+            return CommonResult.error(1060300000, shortage.getMessage());
+        }
     }
 
     @PutMapping("/cancel")

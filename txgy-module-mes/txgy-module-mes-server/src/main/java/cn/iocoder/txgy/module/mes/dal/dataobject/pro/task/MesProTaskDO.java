@@ -57,6 +57,11 @@ public class MesProTaskDO extends BaseDO {
      * 关联 {@link MesMdWorkstationDO#getId()}
      */
     private Long workstationId;
+
+    /**
+     * 所属班组编号（关联 mes_cal_team.id，排产时指定，打通排班与生产任务）
+     */
+    private Long teamId;
     /**
      * 工艺路线编号
      *

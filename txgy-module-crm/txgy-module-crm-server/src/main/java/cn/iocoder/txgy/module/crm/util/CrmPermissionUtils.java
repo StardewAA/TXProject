@@ -37,6 +37,35 @@ public class CrmPermissionUtils {
     }
 
     /**
+     * 校验用户是否是 CRM 管理员或租户管理员
+     */
+    public static boolean isCrmOrTenantAdmin() {
+        PermissionCommonApi permissionApi = SpringUtil.getBean(PermissionCommonApi.class);
+        return permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.CRM_ADMIN.getCode()).getCheckedData()
+                || permissionApi.hasAnyRoles(getLoginUserId(), RoleCodeEnum.TENANT_ADMIN.getCode()).getCheckedData();
+    }
+
+    /**
+     * 判断用户是否有下属（主管/经理），待办将按其下属范围统计
+     */
+    public static boolean hasSubordinate(Long userId) {
+        AdminUserApi adminUserApi = SpringUtil.getBean(AdminUserApi.class);
+        return CollUtil.isNotEmpty(adminUserApi.getUserListBySubordinate(userId).getCheckedData());
+    }
+
+    /**
+     * 校验用户是否是管理员（超级管理员/租户管理员/CRM 管理员，任一即可）
+     *
+     * @param userId 用户编号
+     * @return 是/否
+     */
+    public static boolean isAdminUser(Long userId) {
+        PermissionCommonApi permissionApi = SpringUtil.getBean(PermissionCommonApi.class);
+        return permissionApi.hasAnyRoles(userId, RoleCodeEnum.SUPER_ADMIN.getCode(),
+                RoleCodeEnum.TENANT_ADMIN.getCode(), RoleCodeEnum.CRM_ADMIN.getCode()).getCheckedData();
+    }
+
+    /**
      * 构造 CRM 数据类型数据【分页】查询条件
      *
      * @param query     连表查询对象
@@ -53,16 +82,18 @@ public class CrmPermissionUtils {
         if (CrmSceneTypeEnum.isOwner(sceneType)) {
             query.eq(ownerUserIdField, userId);
         }
-        // 场景二：我参与的数据（我有读或写权限，并且不是负责人）
+        // 场景二：我参与的数据（我负责的 + 我有读或写权限的，即「我负责的」必然包含在「我参与的」内）
         if (CrmSceneTypeEnum.isInvolved(sceneType)) {
             if (CrmPermissionUtils.isCrmAdmin()) { // 特殊逻辑：如果是超管，直接查询所有，不过滤数据权限
                 return;
             }
-            query.innerJoin(CrmPermissionDO.class, on -> on.eq(CrmPermissionDO::getBizType, bizType)
+            query.leftJoin(CrmPermissionDO.class, on -> on.eq(CrmPermissionDO::getBizType, bizType)
                     .eq(CrmPermissionDO::getBizId, bizId)
                     .in(CrmPermissionDO::getLevel, CrmPermissionLevelEnum.READ.getLevel(), CrmPermissionLevelEnum.WRITE.getLevel())
                     .eq(CrmPermissionDO::getUserId,userId));
-            query.ne(ownerUserIdField, userId);
+            // 我负责的（owner_user_id = 我）或者我是团队成员（存在我的读/写权限行）
+            query.and(wrapper -> wrapper.eq(ownerUserIdField, userId)
+                    .or().isNotNull(CrmPermissionDO::getId));
         }
         // 场景三：下属负责的数据（下属是负责人）
         if (CrmSceneTypeEnum.isSubordinate(sceneType)) {

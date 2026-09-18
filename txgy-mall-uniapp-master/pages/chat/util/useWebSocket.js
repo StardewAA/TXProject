@@ -1,5 +1,6 @@
 import { onBeforeUnmount, reactive, ref } from 'vue';
-import { baseUrl, websocketPath } from '@/sheep/config';
+import { baseUrl, websocketPath, tenantId } from '@/sheep/config';
+import { getControlledTenantId, captureTenantOperation, isTenantOperationCurrent } from '@/sheep/helper/tenant-runtime';
 import { copyValueToTarget } from '@/sheep/helper/utils';
 import { getRefreshToken } from '@/sheep/request';
 
@@ -9,12 +10,13 @@ import { getRefreshToken } from '@/sheep/request';
  * @return {{options: *}}
  */
 export function useWebSocket(opt) {
+  const owner = captureTenantOperation();
   const options = reactive({
     url: (baseUrl + websocketPath).replace('http', 'ws') + '?token=' + getRefreshToken(), // ws 地址
     isReconnecting: false, // 正在重新连接
     reconnectInterval: 3000, // 重连间隔，单位毫秒
     heartBeatInterval: 5000, // 心跳间隔，单位毫秒
-    pingTimeoutDuration: 1000, // 超过这个时间，后端没有返回pong，则判定后端断线了。
+    pingTimeoutDuration: 5000, // 给网关转发和服务启动预留时间，避免误判断线。
     heartBeatTimer: null, // 心跳计时器
     destroy: false, // 是否销毁
     pingTimeout: null, // 心跳检测定时器
@@ -28,6 +30,7 @@ export function useWebSocket(opt) {
   const initEventListeners = () => {
     // 监听 WebSocket 连接打开事件
     SocketTask.value.onOpen(() => {
+      if (options.destroy || !isTenantOperationCurrent(owner)) return;
       console.log('WebSocket 连接成功');
       // 连接成功时触发
       options.onConnected();
@@ -36,6 +39,7 @@ export function useWebSocket(opt) {
     });
     // 监听 WebSocket 接受到服务器的消息事件
     SocketTask.value.onMessage((res) => {
+      if (options.destroy || !isTenantOperationCurrent(owner)) return;
       try {
         if (res.data === 'pong') {
           // 收到心跳重置心跳超时检查
@@ -131,6 +135,8 @@ export function useWebSocket(opt) {
   };
 
   const initSocket = () => {
+    // Foreign-entry realtime transport is not accepted yet; never send its token through the legacy socket.
+    if (!isTenantOperationCurrent(owner) || getControlledTenantId() !== String(tenantId)) { options.destroy = true; return; }
     options.destroy = false;
     copyValueToTarget(options, opt);
     SocketTask.value = uni.connectSocket({
@@ -141,9 +147,12 @@ export function useWebSocket(opt) {
     initEventListeners();
   };
 
+  const sessionChanged = () => { if (!isTenantOperationCurrent(owner)) close(); };
+  uni.$on('mall:session-changed', sessionChanged);
   initSocket();
 
   onBeforeUnmount(() => {
+    uni.$off('mall:session-changed', sessionChanged);
     close();
   });
   return { options };

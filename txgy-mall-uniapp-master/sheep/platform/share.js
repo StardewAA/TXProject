@@ -4,6 +4,9 @@ import $router from '@/sheep/router';
 import $url from '@/sheep/url';
 import BrokerageApi from '@/sheep/api/trade/brokerage';
 import { SharePageEnum } from '@/sheep/helper/const';
+import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
+import { getControlledTenantId, tenantTokenKey } from '@/sheep/helper/tenant-runtime';
+import { tenantShareLink } from '@/sheep/helper/tenant-navigation.mjs';
 
 // #ifdef H5
 import $wxsdk from '@/sheep/libs/sdk-h5-weixin';
@@ -52,7 +55,7 @@ const getShareInfo = (
   // 配置分享链接地址
   shareInfo.link = buildSpmLink(query, shareConfig.linkAddress);
   // 配置页面地址带参数
-  shareInfo.path = buildSpmPath();
+  shareInfo.path = buildSpmPath(query);
 
   // 配置页面转发参数
   if (shareConfig.methods.includes('forward')) {
@@ -72,7 +75,7 @@ const buildSpmQuery = (params) => {
   const user = $store('user');
   let shareId = '0'; // 设置分享者用户ID
   if (typeof params.shareId === 'undefined') {
-    if (user.isLogin) {
+    if (user.isLogin && /^[1-9]\d*$/.test(String(user.userInfo.id))) {
       shareId = user.userInfo.id;
     }
   }
@@ -87,10 +90,11 @@ const buildSpmQuery = (params) => {
   let platform = platformMap.indexOf($platform.name) + 1;
   let from = '1';
   if (typeof params.from !== 'undefined') {
-    from = platformMap.indexOf(params.from) + 1;
+    from = fromMap.indexOf(params.from) + 1;
   }
   // spmParams = ...  可按需扩展
-  return `spm=${shareId}.${page}.${query}.${platform}.${from}`;
+  const scoped = '&tenantId=' + getControlledTenantId();
+  return `spm=${shareId}.${page}.${query}.${platform}.${from}` + scoped;
 };
 
 // 构造页面分享参数: 所有的分享都先到首页进行 spm 参数解析
@@ -103,7 +107,12 @@ const buildSpmPath = (query) => {
 
 // 构造分享链接
 const buildSpmLink = (query, linkAddress = '') => {
+  // #ifdef H5
+  return tenantShareLink(linkAddress, new URLSearchParams(query).get('spm'), getControlledTenantId(), window.location.origin);
+  // #endif
+  // #ifndef H5
   return `${linkAddress}?${query}`;
+  // #endif
 };
 
 // 解析Spm
@@ -165,7 +174,7 @@ const decryptSpm = async (spm) => {
   shareParams.from = fromMap[shareParamsArray[4] - 1];
   if (shareParams.shareId !== 0) {
     // 记录分享者编号
-    uni.setStorageSync('shareId', shareParams.shareId);
+    uni.setStorageSync(tenantTokenKey('shareId'), shareParams.shareId);
     // 已登录 绑定推广员
     if (!!user.isLogin) {
       await bindBrokerageUser(shareParams.shareId);
@@ -180,8 +189,12 @@ const decryptSpm = async (spm) => {
 
 // 绑定推广员
 const bindBrokerageUser = async (val = undefined) => {
+  // 简化营销模式不启用分销，避免登录/分享时调用未接入的推广员接口。
+  if (isSimpleMarketingEnabled()) {
+    return;
+  }
   try {
-    const shareId = val || uni.getStorageSync('shareId');
+    const shareId = val || uni.getStorageSync(tenantTokenKey('shareId'));
     if (!shareId) {
       return;
     }
@@ -189,7 +202,7 @@ const bindBrokerageUser = async (val = undefined) => {
     const { data } = await BrokerageApi.bindBrokerageUser({ bindUserId: shareId });
     // 绑定成功后清除缓存
     if (data) {
-      uni.removeStorageSync('shareId');
+      uni.removeStorageSync(tenantTokenKey('shareId'));
     }
   } catch (e) {
     console.error(e);

@@ -35,6 +35,10 @@ server:
   port: 48087
 
 logging:
+  level:
+    # The shared local-profile interceptor logs request bodies before controller validation.
+    # Keep audit metadata, but never print member authentication credentials to console logs.
+    cn.iocoder.txgy.framework.apilog.core.interceptor.ApiAccessLogInterceptor: WARN
   file:
     name: ${user.home}/logs/${spring.application.name}.log # 日志文件名，全路径
 
@@ -118,6 +122,31 @@ txgy:
   tenant: # 多租户相关配置项
     enable: true
     ignore-urls:
+      - /member/auth/register
     ignore-tables:
+
+mall:
+  registration:
+    platform-tenant-id: ${MALL_LEGACY_TENANT_ID:1}
+    picture-enabled: ${MALL_REGISTRATION_PICTURE_ENABLED:false}
+  tenant:
+    enabled: ${MALL_TENANT_DIRECTORY_ENABLED:false}
+    browse-preview-enabled: ${MALL_TENANT_BROWSE_PREVIEW_ENABLED:false}
+    scoped-entry-enabled: ${MALL_TENANT_SCOPED_ENTRY_ENABLED:false}
+    public-tenant-id: ${MALL_PUBLIC_TENANT_ID:3000}
+    platform-enterprise-id: ${MALL_PLATFORM_ENTERPRISE_ID:940400}
+    entries:
+      - tenant-id: 3000
+        name: 商城平台公共用户
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2009
+        name: 科盾防护科技股份有限公司
+        public-visible: true
+        registration-enabled: true
+    auth:
+      enabled: ${MALL_TENANT_AUTH_ENABLED:false}
+      hmac-secret: ${MALL_TENANT_AUTH_HMAC_SECRET:}
+      sms-template-code: ${MALL_TENANT_SMS_TEMPLATE_CODE:local-picture-registration}
 
 debug: false

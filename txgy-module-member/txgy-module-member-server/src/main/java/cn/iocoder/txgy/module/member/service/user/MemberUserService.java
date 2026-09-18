@@ -19,6 +19,10 @@ import java.util.List;
  */
 public interface MemberUserService {
 
+    /** Called only after consuming a server-side image registration challenge. */
+    MemberUserDO registerAccountUser(String loginName, String password, String nickname,
+                                    String contactMobile, String memberIdentity, String registerIp, Integer terminal);
+
     /**
      * 通过手机查询用户
      *
@@ -57,6 +61,12 @@ public interface MemberUserService {
      * @return 用户对象
      */
     MemberUserDO createUser(String nickname, String avtar, String registerIp, Integer terminal);
+
+    /**
+     * 使用手机号和密码注册用户。租户编号由当前租户上下文决定，不从请求参数接收。
+     */
+    MemberUserDO registerUser(@Mobile String mobile, String password, String nickname,
+                              String registerIp, Integer terminal);
 
     /**
      * 更新用户的最后登陆信息

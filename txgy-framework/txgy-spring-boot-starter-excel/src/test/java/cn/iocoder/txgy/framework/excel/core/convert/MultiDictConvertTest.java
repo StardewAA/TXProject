@@ -255,8 +255,16 @@ public class MultiDictConvertTest extends BaseMockitoUnitTest {
 
     private void mockDictDatas() {
         List<DictDataRespDTO> dictDatas = ListUtil.of(
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType(DICT_TYPE).setValue("1").setLabel("男")),
-                randomPojo(DictDataRespDTO.class, o -> o.setDictType(DICT_TYPE).setValue("2").setLabel("女"))
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType(DICT_TYPE);
+                    o.setValue("1");
+                    o.setLabel("男");
+                }),
+                randomPojo(DictDataRespDTO.class, o -> {
+                    o.setDictType(DICT_TYPE);
+                    o.setValue("2");
+                    o.setLabel("女");
+                })
         );
         when(dictDataApi.getDictDataList(eq(DICT_TYPE))).thenReturn(CommonResult.success(dictDatas));
     }

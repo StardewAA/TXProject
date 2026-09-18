@@ -3,9 +3,7 @@ package cn.iocoder.txgy.module.product.controller.admin.spu.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
@@ -37,6 +35,12 @@ public class ProductSkuSaveReqVO {
     @Schema(description = "库存", requiredMode = Schema.RequiredMode.REQUIRED, example = "200")
     @NotNull(message = "库存不能为空")
     private Integer stock;
+
+    @Schema(description = "WMS 物料 SKU 编号；和 WMS 仓库编号需同时填写", example = "1001")
+    private Long wmsSkuId;
+
+    @Schema(description = "WMS 仓库编号；和 WMS 物料 SKU 编号需同时填写", example = "1")
+    private Long wmsWarehouseId;
 
     @Schema(description = "商品重量,单位：kg 千克", example = "1.2")
     private Double weight;
@@ -74,3 +78,4 @@ public class ProductSkuSaveReqVO {
     }
 
 }
+

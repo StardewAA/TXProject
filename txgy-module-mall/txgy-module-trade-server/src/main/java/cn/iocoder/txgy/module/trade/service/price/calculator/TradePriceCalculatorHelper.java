@@ -51,7 +51,7 @@ public class TradePriceCalculatorHelper {
             // 商品项
             TradePriceCalculateRespBO.OrderItem orderItem = new TradePriceCalculateRespBO.OrderItem();
             result.getItems().add(orderItem);
-            orderItem.setSpuId(sku.getSpuId()).setSkuId(sku.getId())
+            orderItem.setSpuId(sku.getSpuId()).setShopId(spu.getShopId()).setSkuId(sku.getId())
                     .setCount(item.getCount()).setCartId(item.getCartId()).setSelected(item.getSelected());
             // sku 价格
             orderItem.setPrice(sku.getPrice()).setPayPrice(sku.getPrice() * item.getCount())

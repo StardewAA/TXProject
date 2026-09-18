@@ -33,6 +33,7 @@
 <script setup>
   import { reactive } from 'vue';
   import sheep from '@/sheep';
+  import { tenantTokenKey } from '@/sheep/helper/tenant-runtime';
   import { onLoad } from '@dcloudio/uni-app';
 
   const state = reactive({
@@ -62,7 +63,7 @@
     if (state.historyList.length >= 10) {
       state.historyList.length = 10;
     }
-    uni.setStorageSync('searchHistory', state.historyList);
+    uni.setStorageSync(tenantTokenKey('searchHistory'), state.historyList);
   }
 
   function onDelete() {
@@ -71,15 +72,15 @@
       content: '确认清除搜索历史吗？',
       success: function (res) {
         if (res.confirm) {
-          state.historyTag = [];
-          uni.removeStorageSync('searchHistory');
+          state.historyList = [];
+          uni.removeStorageSync(tenantTokenKey('searchHistory'));
         }
       },
     });
   }
 
   onLoad(() => {
-    state.historyList = uni.getStorageSync('searchHistory') || [];
+    state.historyList = uni.getStorageSync(tenantTokenKey('searchHistory')) || [];
   });
 </script>
 

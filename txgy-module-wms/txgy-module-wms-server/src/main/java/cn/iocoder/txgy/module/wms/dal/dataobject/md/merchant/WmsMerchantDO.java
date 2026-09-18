@@ -41,6 +41,14 @@ public class WmsMerchantDO extends BaseDO {
      * 枚举 {@link WmsMerchantTypeEnum}
      */
     private Integer type;
+    /** ERP 主数据版本 */
+    private Long sourceVersion;
+    /** ERP 客户主数据版本 */
+    private Long customerSourceVersion;
+    /** ERP 供应商主数据版本 */
+    private Long supplierSourceVersion;
+    /** 启用状态 */
+    private Integer status;
     /**
      * 级别
      */
@@ -73,6 +81,8 @@ public class WmsMerchantDO extends BaseDO {
      * Email
      */
     private String email;
+    /** 税号 */
+    private String taxNo;
     /**
      * 备注
      */

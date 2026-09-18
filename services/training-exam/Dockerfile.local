@@ -1,0 +1,9 @@
+FROM module-five-exam-certification-module-five:latest AS local
+USER root
+WORKDIR /app
+COPY app.py integration.py ./
+COPY static ./static
+RUN mkdir -p /app/data && chown -R 10001:10001 /app
+USER 10001
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" || exit 1
+CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8000","--workers","1"]

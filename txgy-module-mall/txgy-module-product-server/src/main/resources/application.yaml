@@ -101,9 +101,22 @@ xxl:
 --- #################### OPENLAB BS相关配置 ####################
 
 txgy:
+  product:
+    review:
+      review-enabled: true
+      # 非试点暂保留后台维护；试点名单由部署指定，不硬编码业务店铺。
+      admin-write-enabled: ${TXGY_PRODUCT_REVIEW_ADMIN_WRITE_ENABLED:true}
+      admin-write-locked-shop-ids: ${TXGY_PRODUCT_REVIEW_ADMIN_WRITE_LOCKED_SHOP_IDS:}
+      # 历史空审核状态不等于已批准；首次实际修改后不可再使用历史豁免。
+      legacy-strategy: ${TXGY_PRODUCT_REVIEW_LEGACY_STRATEGY:KEEP_EXISTING_UNMODIFIED}
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.product
+  integration:
+    wms:
+      readonly:
+        mode: mock # mock：本地直接读同库 WMS 表；remote：调用 /admin-api/wms/inventory/sku-summary
+        authorization: # remote 模式下使用的 WMS 只读账号 Authorization 头，示例：Bearer xxx
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址

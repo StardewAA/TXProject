@@ -48,18 +48,20 @@
                 @tap.stop="onSelect(item.spuId)"
               />
             </label>
+            <view v-if="collectionUnavailable(item)" class="unavailable-product">
+              <view class="unavailable-title">商品暂不可购买</view>
+              <view class="unavailable-reason">{{ collectionUnavailableReason(item) }}</view>
+              <view class="unavailable-help">仍可通过“编辑”删除足迹，不展示待审价格和内容。</view>
+            </view>
             <s-goods-item
+              v-else
               :title="item.spuName"
               :img="item.picUrl"
               :price="item.price"
               :skuText="item.introduction"
               priceColor="#FF3000"
               :titleWidth="400"
-              @tap="
-                sheep.$router.go('/pages/goods/index', {
-                  id: item.spuId,
-                })
-              "
+              @tap="openGoods(item)"
             >
             </s-goods-item>
           </view>
@@ -125,8 +127,13 @@
   import { concat } from 'lodash-es';
   import SpuHistoryApi from '@/sheep/api/product/history';
   import { cloneDeep } from '@/sheep/helper/utils';
+  import { collectionCanOpen, collectionUnavailable, collectionUnavailableReason } from '@/sheep/helper/collection-product.mjs';
 
   const sys_navBar = sheep.$platform.navbar;
+  function openGoods(item) {
+    if (state.editMode || !collectionCanOpen(item)) return;
+    sheep.$router.go('/pages/goods/index', { id: item.spuId });
+  }
   const pagination = {
     list: [],
     pageNo: 1,
@@ -139,21 +146,28 @@
     editMode: false,
     selectedSpuIdList: [],
     selectAll: false,
+    loading: false,
+    actionLoading: false,
   });
 
   async function getList() {
+    if (state.loading) return;
+    state.loading = true;
     state.loadStatus = 'loading';
-    const { code, data } = await SpuHistoryApi.getBrowseHistoryPage({
-      pageNo: state.pagination.pageNo,
-      pageSize: state.pagination.pageSize,
-    });
-    if (code !== 0) {
-      return;
+    try {
+      const { code, data } = await SpuHistoryApi.getBrowseHistoryPage({
+        pageNo: state.pagination.pageNo,
+        pageSize: state.pagination.pageSize,
+      });
+      if (code === 0) {
+        const list = Array.isArray(data?.list) ? data.list : [];
+        state.pagination.list = concat(state.pagination.list, list);
+        state.pagination.total = Number(data?.total) || 0;
+        state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
+      } else state.loadStatus = 'more';
+    } finally {
+      state.loading = false;
     }
-
-    state.pagination.list = concat(state.pagination.list, data.list);
-    state.pagination.total = data.total;
-    state.loadStatus = state.pagination.list.length < state.pagination.total ? 'more' : 'noMore';
   }
 
   // 单选选中
@@ -183,35 +197,38 @@
 
   // 删除足迹
   async function onDelete() {
-    if (state.selectedSpuIdList.length <= 0) {
+    if (state.actionLoading || state.selectedSpuIdList.length <= 0) {
       return;
     }
-
-    const { code } = await SpuHistoryApi.deleteBrowseHistory(state.selectedSpuIdList);
-    if (code === 0) {
-      reload();
-    }
+    state.actionLoading = true;
+    try {
+      const { code } = await SpuHistoryApi.deleteBrowseHistory(state.selectedSpuIdList);
+      if (code === 0) reload();
+    } finally { state.actionLoading = false; }
   }
 
   // 清空
   async function onClean() {
-    const { code } = await SpuHistoryApi.cleanBrowseHistory();
-    if (code === 0) {
-      reload();
-    }
+    if (state.actionLoading) return;
+    state.actionLoading = true;
+    try {
+      const { code } = await SpuHistoryApi.cleanBrowseHistory();
+      if (code === 0) reload();
+    } finally { state.actionLoading = false; }
   }
 
   function reload() {
     state.editMode = false;
     state.selectedSpuIdList = [];
     state.selectAll = false;
-    state.pagination = pagination;
+    state.pagination = cloneDeep(pagination);
+    state.loadStatus = '';
     getList();
   }
 
   // 加载更多
   function loadMore() {
-    if (state.loadStatus !== 'noMore') {
+    if (!state.loading && state.loadStatus !== 'noMore') {
       state.pagination.pageNo += 1;
       getList();
     }
@@ -227,6 +244,10 @@
 </script>
 
 <style lang="scss" scoped>
+  .unavailable-product { flex: 1; min-width: 0; padding: 30rpx; background: #f5f7f8; border-radius: 10rpx; }
+  .unavailable-title { color: #475569; font-size: 30rpx; font-weight: 600; }
+  .unavailable-reason { color: #64748b; font-size: 26rpx; margin-top: 18rpx; line-height: 1.6; word-break: break-all; }
+  .unavailable-help { color: #94a3b8; font-size: 22rpx; margin-top: 12rpx; }
   .cart-box {
     .cart-header {
       height: 70rpx;
