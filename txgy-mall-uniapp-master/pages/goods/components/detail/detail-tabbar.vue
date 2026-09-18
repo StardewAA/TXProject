@@ -69,6 +69,7 @@
   import sheep from '@/sheep';
   import { showAuthModal, showShareModal } from '@/sheep/hooks/useModal';
   import FavoriteApi from '@/sheep/api/product/favorite';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
 
   // 数据
   const state = reactive({});
@@ -140,9 +141,7 @@
   }
 
   const onChat = () => {
-    sheep.$router.go('/pages/chat/index', {
-      id: props.modelValue.id,
-    });
+    sheep.$router.go('/pages/chat/service', chatEntry(props.modelValue?.shopId, 'PRODUCT', props.modelValue?.id));
   };
 </script>
 

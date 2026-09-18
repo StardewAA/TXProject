@@ -5,13 +5,19 @@ import cn.iocoder.txgy.module.bpm.api.event.CrmQuotationStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.CrmReceivableStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.MesFeedbackStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.OutsourceIssueStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ReturnVendorStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ProductSalesStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.WmItemReceiptStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
 import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
 import cn.iocoder.txgy.module.system.api.permission.RoleApi;
+import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsSendApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.wms.api.warehouse.WmsWarehousePersonnelApi;
@@ -49,6 +55,42 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "mesSaleOrderStatusListener")
     public MesSaleOrderStatusListener mesSaleOrderStatusListener() {
         return new MesSaleOrderStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "erpSaleOrderStatusListener")
+    public ErpSaleOrderStatusListener erpSaleOrderStatusListener() {
+        return new ErpSaleOrderStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "wmItemReceiptStatusListener")
+    public WmItemReceiptStatusListener wmItemReceiptStatusListener() {
+        return new WmItemReceiptStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "productSalesStatusListener")
+    public ProductSalesStatusListener productSalesStatusListener() {
+        return new ProductSalesStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "outsourceIssueStatusListener")
+    public OutsourceIssueStatusListener outsourceIssueStatusListener() {
+        return new OutsourceIssueStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "returnVendorStatusListener")
+    public ReturnVendorStatusListener returnVendorStatusListener() {
+        return new ReturnVendorStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "mesFeedbackStatusListener")
+    public MesFeedbackStatusListener mesFeedbackStatusListener() {
+        return new MesFeedbackStatusListener();
     }
 
 }

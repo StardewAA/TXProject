@@ -1,13 +1,17 @@
 <template>
   <s-layout title="确认订单">
+    <view v-if="state.expired" class="ss-p-30">登录账号已变化，旧订单、地址和优惠券已清除，请从当前账号购物车重新结算。</view>
+    <view v-else-if="state.needsVerification || state.submitted" class="ss-p-30"><view>{{ state.submitted ? '订单已创建。' : '订单提交结果需要核实。' }}{{ state.recoveryError }} 请先到订单列表核实结果，不要重复提交；有意新增采购请从商品或购物车重新发起。</view><button size="mini" @tap="viewOrders">查看我的订单</button></view>
+    <template v-else>
+    <view v-if="state.error" class="ss-p-20" role="alert">{{ state.error }}</view>
+    <s-service-entry label="平台结算咨询（不代表任一店铺）" :disabled="state.submitting || state.loading" />
     <!-- 头部地址选择【配送地址】【自提地址】 -->
-    <AddressSelection v-model="addressState" />
+    <AddressSelection ref="addressSelection" :model-value="addressState" :disabled="state.submitting" @update:modelValue="onAddressChange" />
 
     <!-- 商品信息 -->
     <view class="order-card-box ss-m-b-14">
+      <view v-for="item in state.orderInfo.items" :key="item.skuId">
       <s-goods-item
-        v-for="item in state.orderInfo.items"
-        :key="item.skuId"
         :img="item.picUrl"
         :title="item.spuName"
         :skuText="(Array.isArray(item.properties) ? item.properties : []).map((property) => property.valueName).join(' ')"
@@ -15,6 +19,8 @@
         :num="item.count"
         marginBottom="10"
       />
+      <s-service-entry resource-type="PRODUCT" :resource-id="item.spuId" :disabled="state.submitting || state.loading" />
+      </view>
       <view class="order-item ss-flex ss-col-center ss-row-between ss-p-x-20 bg-white ss-r-10">
         <view class="item-title">订单备注</view>
         <view class="ss-flex ss-col-center">
@@ -22,6 +28,7 @@
             maxlength="20"
             placeholder="建议留言前先与商家沟通"
             v-model="state.orderPayload.remark"
+            :disabled="state.submitting"
             :inputBorder="false"
             :clearable="false"
           />
@@ -76,7 +83,7 @@
             <checkbox-group @change="changeIntegral" v-if="!state.orderPayload.pointActivityId">
               <checkbox
                 :checked="state.pointStatus"
-                :disabled="!state.orderInfo.totalPoint || state.orderInfo.totalPoint <= 0"
+                :disabled="state.submitting || state.loading || !state.orderInfo.totalPoint || state.orderInfo.totalPoint <= 0"
               />
             </checkbox-group>
           </view>
@@ -105,6 +112,7 @@
               maxlength="20"
               placeholder="请填写您的联系姓名"
               v-model="addressState.receiverName"
+              :disabled="state.submitting"
               :inputBorder="false"
               :clearable="false"
             />
@@ -120,6 +128,7 @@
               maxlength="20"
               placeholder="请填写您的联系电话"
               v-model="addressState.receiverMobile"
+              :disabled="state.submitting"
               :inputBorder="false"
               :clearable="false"
             />
@@ -131,7 +140,7 @@
           v-if="state.orderInfo.type === 0"
         >
           <view class="item-title">优惠券</view>
-          <view class="ss-flex ss-col-center" @tap="state.showCoupon = true">
+          <view class="ss-flex ss-col-center" @tap="openCoupon">
             <text class="item-value text-red" v-if="state.orderPayload.couponId > 0">
               -￥{{ fen2yuan(state.orderInfo.price.couponPrice) }}
             </text>
@@ -211,25 +220,29 @@
         </view>
         <button
           class="ss-reset-button ui-BG-Main-Gradient ss-r-40 submit-btn ui-Shadow-Main"
-          :disabled="state.submitting || state.loading"
+          :disabled="state.submitting || state.loading || !state.orderInfo.items.length || !Object.prototype.hasOwnProperty.call(state.orderInfo.price, 'payPrice')"
           @tap="onConfirm"
         >
           提交订单
         </button>
       </view>
     </su-fixed>
+    </template>
   </s-layout>
 </template>
 
 <script setup>
   import { reactive, ref, watch } from 'vue';
-  import { onLoad } from '@dcloudio/uni-app';
+  import { onLoad, onShow, onHide } from '@dcloudio/uni-app';
   import AddressSelection from '@/pages/order/addressSelection.vue';
   import sheep from '@/sheep';
   import OrderApi from '@/sheep/api/trade/order';
   import TradeConfigApi from '@/sheep/api/trade/config';
   import { fen2yuan } from '@/sheep/hooks/useGoods';
   import { DeliveryTypeEnum } from '@/sheep/helper/const';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  import { ensureAccountSession, tenantContext } from '@/sheep/helper/tenant-runtime';
+  import { openCheckoutIntent, validCheckoutIntent, legacyCheckoutIntent } from '@/sheep/helper/checkout-intent.mjs';
 
   const state = reactive({
     orderPayload: {},
@@ -244,6 +257,11 @@
     pointStatus: false, //是否使用积分
     submitting: false,
     loading: false,
+    expired: false,
+    needsVerification: false,
+    submitted: false,
+    recoveryError: '',
+    error: '',
   });
 
   let orderInfoRequestId = 0;
@@ -256,25 +274,47 @@
     receiverName: '', // 收件人名称
     receiverMobile: '', // 收件人手机
   });
+  const addressSelection = ref();
+  let visible = true, initialized = false;
+  let checkoutIntent;
+  const task = useTenantTask(() => {
+    state.expired = true; orderInfoRequestId++;
+    state.orderPayload = {}; state.orderInfo = { items: [], price: {} }; state.couponInfo = [];
+    state.showCoupon = false; state.showDiscount = false; state.pointStatus = false;
+    state.submitting = false; state.loading = false; state.error = '';
+    checkoutIntent = undefined; state.recoveryError = '';
+    addressState.value = { addressInfo: {}, pickUpInfo: {}, deliveryType: undefined, isPickUp: false, receiverName: '', receiverMobile: '' };
+  });
+  const canEdit = () => task.current() && !state.expired && !state.submitting && !state.needsVerification && !state.submitted;
+  function viewOrders() { if (task.current() && visible) sheep.$router.redirect('/pages/order/list'); }
+  function definiteRejection(value) { const code = Number(value?.code); return Number.isInteger(code) && (code >= 1000000000 || [400,401,403,404,409,422,429].includes(code)); }
+  function onAddressChange(value) { if (canEdit()) addressState.value = value; }
+  function openCoupon() { if (visible && canEdit() && !state.loading) state.showCoupon = true; }
+  onHide(() => { visible = false; task.invalidate(); orderInfoRequestId++; state.loading = false; state.showCoupon = false; state.showDiscount = false; if (state.submitting) state.needsVerification = true; });
+  onShow(() => { visible = true; addressSelection.value?.cancelSelection(); if (initialized && canEdit()) getOrderInfo(); });
 
   // ========== 积分 ==========
   /**
    * 使用积分抵扣
    */
   const changeIntegral = async () => {
+    if (!canEdit() || state.loading || !visible) return;
     state.pointStatus = !state.pointStatus;
     await getOrderInfo();
   };
 
   // 选择优惠券
   async function onSelectCoupon(couponId) {
+    if (!canEdit() || state.loading || !visible) return;
+    const current = task.capture();
     state.orderPayload.couponId = couponId;
     await getOrderInfo();
-    state.showCoupon = false;
+    if (current()) state.showCoupon = false;
   }
 
   // 提交订单
   function onConfirm() {
+    if (!canEdit() || state.loading || !visible) return;
     if (!Array.isArray(state.orderPayload?.items) || state.orderPayload.items.length === 0) {
       sheep.$helper.toast('订单商品信息不完整，请返回重试');
       return;
@@ -313,16 +353,22 @@
         return;
       }
     }
-    submitOrder();
+    return submitOrder();
   }
 
   // 创建订单&跳转
   async function submitOrder() {
-    if (state.submitting) return;
+    if (!canEdit() || state.loading || !visible) return;
+    const current = task.capture();
     state.submitting = true;
+    state.showCoupon = false; state.showDiscount = false;
+    const items = state.orderPayload.items.map(item => ({ ...item }));
+    let attempt;
     try {
+      if (!checkoutIntent) throw new Error('结算状态尚未核验，请从购物车重新进入');
+      attempt = checkoutIntent.begin();
       const response = await OrderApi.createOrder({
-        items: state.orderPayload.items,
+        items,
         couponId: state.orderPayload.couponId,
         remark: state.orderPayload.remark,
         deliveryType: addressState.value.deliveryType,
@@ -337,14 +383,20 @@
         pointActivityId: state.orderPayload.pointActivityId,
       });
       const orderId = response?.data?.id;
-      if (response?.code !== 0 || orderId === undefined || orderId === null || String(orderId) === '') {
-        sheep.$helper.toast(response?.msg || '订单创建失败，请稍后重试');
+      if (response?.code === 0 && /^[1-9]\d*$/.test(String(orderId ?? ''))) { try { attempt.created(); } catch {} }
+      if (definiteRejection(response)) { try { attempt.reject(); } catch {} }
+      if (!current() || !visible) return;
+      if (response?.code !== 0 || !/^[1-9]\d*$/.test(String(orderId ?? ''))) {
+        if (!definiteRejection(response) || checkoutIntent.state() !== 'DRAFT') state.needsVerification = true;
+        else sheep.$helper.toast(response?.msg || '订单未创建，请检查后重试');
         return;
       }
+      state.submitted = true;
       const data = response.data;
       // 更新购物车列表，如果来自购物车
-      if (state.orderPayload.items[0]?.cartId > 0) {
-        sheep.$store('cart').getList();
+      if (items[0]?.cartId > 0) {
+        // Secondary refresh cannot turn successful creation into a retryable failure.
+        try { Promise.resolve(sheep.$store('cart').getList()).catch(() => {}); } catch {}
       }
 
       // 跳转到支付页面
@@ -359,20 +411,25 @@
         });
       }
     } catch (error) {
-      // request 已负责提示接口错误，这里只保证页面不会因 false/null 响应崩溃。
+      let released = false;
+      if (definiteRejection(error) && attempt) { try { released = attempt.reject(); } catch {} }
+      if (current() && !state.submitted && !released) { state.needsVerification = true; state.recoveryError = error?.message || ''; }
       return;
     } finally {
-      state.submitting = false;
+      if (current()) state.submitting = false;
     }
   }
 
   // 检查库存 & 计算订单价格
   async function getOrderInfo() {
+    if (!canEdit()) return 1;
     if (!Array.isArray(state.orderPayload?.items) || state.orderPayload.items.length === 0) {
       return 1;
     }
     const requestId = ++orderInfoRequestId;
+    const current = task.capture();
     state.loading = true;
+    state.error = '';
     try {
       // 计算价格
       const response = await OrderApi.settlementOrder({
@@ -389,10 +446,12 @@
         seckillActivityId: state.orderPayload.seckillActivityId,
         pointActivityId: state.orderPayload.pointActivityId,
       });
+      if (!current() || requestId !== orderInfoRequestId) return 1;
       if (response?.code !== 0 || !response.data) {
         if (requestId !== orderInfoRequestId) return 1;
         state.orderInfo = { items: [], price: {} };
         state.couponInfo = [];
+        state.error = response?.msg || '订单金额计算失败，请检查配送地址后重试';
         return response?.code || 1;
       }
       if (requestId !== orderInfoRequestId) return 1;
@@ -419,13 +478,21 @@
       }
       return 0;
     } catch (error) {
+      if (current() && requestId === orderInfoRequestId) {
+        state.orderInfo = { items: [], price: {} }; state.couponInfo = [];
+        state.error = '订单金额计算失败，请检查配送地址后重试';
+      }
       return 1;
     } finally {
-      if (requestId === orderInfoRequestId) state.loading = false;
+      if (current() && requestId === orderInfoRequestId) state.loading = false;
     }
   }
 
   onLoad(async (options = {}) => {
+    if (!task.current()) return;
+    const current = task.capture();
+    try { await ensureAccountSession(); } catch { if (current()) { state.needsVerification = true; state.recoveryError = '当前账号暂无法核验，请重新登录后从购物车进入'; } return; }
+    if (!current()) return;
     // 解析参数
     const encodedData = options?.data;
     if (!encodedData) {
@@ -450,6 +517,15 @@
       if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) {
         throw new Error('invalid order payload');
       }
+      const owner = tenantContext.state();
+      if (!owner.accountTenantId || owner.accountTenantId !== owner.browseTenantId) throw new Error('账号不属于当前商城');
+      const intentId = options.checkoutIntent === undefined ? legacyCheckoutIntent(parsedPayload) : options.checkoutIntent;
+      if (!validCheckoutIntent(intentId)) throw new Error('结算标识不正确，请从购物车重新采购');
+      try {
+        checkoutIntent = openCheckoutIntent({ getItem: key => uni.getStorageSync(key) || null, setItem: (key,value) => uni.setStorageSync(key,value) }, intentId, { tenantId: owner.accountTenantId, memberId: owner.userId });
+        const status = checkoutIntent.state(); state.submitted = status === 'CREATED'; state.needsVerification = status === 'PENDING';
+        if (state.submitted || state.needsVerification) return;
+      } catch (error) { state.needsVerification = true; state.recoveryError = error?.message || '结算状态无法核验'; return; }
       state.orderPayload = parsedPayload;
       // Keep backend Long identifiers as strings across H5 and mini-program query parsing.
       if (Array.isArray(state.orderPayload.items)) {
@@ -476,17 +552,22 @@
     // 获取交易配置
     try {
       const response = await TradeConfigApi.getTradeConfig();
+      if (!current()) return;
       if (response?.code === 0 && response.data) {
         addressState.value.isPickUp = response.data.deliveryPickUpEnabled === true;
       }
     } catch (error) {
       // 默认保留快递配送；自提是否开启由后端结算结果再决定。
     }
+    if (!current()) return;
+    initialized = true;
 
     // 价格计算
     // 情况一：先自动选择“快递物流”
     addressState.value.deliveryType = DeliveryTypeEnum.EXPRESS.type;
-    let orderCode = await getOrderInfo();
+    const initialQuote = getOrderInfo(), initialQuoteId = orderInfoRequestId;
+    let orderCode = await initialQuote;
+    if (!current() || orderInfoRequestId !== initialQuoteId) return;
     if (orderCode === 0) {
       return;
     }
@@ -494,6 +575,7 @@
     if (addressState.value.isPickUp) {
       addressState.value.deliveryType = DeliveryTypeEnum.PICK_UP.type;
       let orderCode = await getOrderInfo();
+      if (!current()) return;
       if (orderCode === 0) {
         return;
       }
@@ -505,6 +587,7 @@
 
   // 使用 watch 监听地址和配送方式的变化
   watch(addressState, async (newAddress, oldAddress) => {
+    if (!canEdit()) return;
     if (!oldAddress) {
       return;
     }

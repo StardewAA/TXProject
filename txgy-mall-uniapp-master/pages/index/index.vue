@@ -8,6 +8,7 @@
     onShareAppMessage
   >
     <view class="mall-home">
+      <s-public-market-entry />
       <view class="home-hero">
         <view class="hero-brand">
           <image class="brand-mark" src="/static/mall-logo.png" mode="aspectFit" />
@@ -144,7 +145,7 @@
       </view>
 
       <view class="catalog-note">
-        <text>{{ catalogSource === 'api' ? '库存与价格来自商城实时商品接口' : '当前为本地档案展示，接口恢复后自动同步' }}</text>
+        <text>{{ catalogSource === 'api' ? (products.length ? '库存与价格来自商城实时商品接口' : '当前商城暂无可售商品') : catalogSource === 'loading' ? '正在加载商城商品' : '商品暂无法加载，请刷新重试' }}</text>
         <text>选购前请核对规格与单位，成交金额以结算页为准</text>
       </view>
     </view>
@@ -157,10 +158,8 @@
   import sheep from '@/sheep';
   import $share from '@/sheep/platform/share';
   import {
-    categoryProducts,
     getMallCategory,
     mallCategories,
-    mallProducts,
   } from '@/sheep/data/mall-catalog';
   import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
 
@@ -171,8 +170,8 @@
 
   const popularCategories = mallCategories.slice(0, 8);
   const shopShowcase = ref();
-  const products = ref(mallProducts);
-  const catalogSource = ref('local');
+  const products = ref([]);
+  const catalogSource = ref('loading');
   const featuredProducts = computed(() =>
     (Array.isArray(products.value) ? products.value : []).filter(Boolean).slice(0, 6),
   );
@@ -180,8 +179,7 @@
   const categoryProductCount = (categoryKey) =>
     (Array.isArray(products.value) ? products.value : []).filter(
       (product) => product?.categoryKey === categoryKey,
-    ).length ||
-    categoryProducts(categoryKey).length;
+    ).length;
   const categoryColor = (categoryKey) => getMallCategory(categoryKey)?.color || '#0f766e';
   const productGradient = (product) =>
     `linear-gradient(135deg, ${categoryColor(product?.categoryKey)} 0%, #0f172a 100%)`;
@@ -211,12 +209,11 @@
       const result = await loadMallCatalog(force);
       if (Array.isArray(result?.products)) {
         products.value = result.products.filter(Boolean);
-        catalogSource.value = result.source === 'api' ? 'api' : 'local';
+        catalogSource.value = 'api';
       }
     } catch (error) {
-      // 运行时接口异常时继续使用本地档案，首页不应白屏。
-      products.value = Array.isArray(products.value) ? products.value : mallProducts;
-      catalogSource.value = 'local';
+      products.value = [];
+      catalogSource.value = 'error';
     }
   }
 

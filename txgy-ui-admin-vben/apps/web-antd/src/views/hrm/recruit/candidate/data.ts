@@ -16,6 +16,7 @@ import { getRangePickerDefaultProps } from '#/utils';
 import EmployeeSelect from '#/views/hrm/employee/components/employee-select.vue';
 import {
   HrmEmployeeEntryStatus,
+  HrmRecruitCandidateEducationOptions,
   HrmRecruitCandidateStatus,
   HrmRecruitInterviewResult,
   HrmRecruitInterviewType,
@@ -129,11 +130,8 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Select',
       rules: 'required',
       componentProps: {
-        options: getDictOptions(
-          DICT_TYPE.HRM_RECRUIT_CANDIDATE_EDUCATION,
-          'number',
-        ),
-        placeholder: '请选择学历',
+        options: HrmRecruitCandidateEducationOptions,
+        placeholder: '学历要求',
         allowClear: true,
       },
     },
@@ -379,6 +377,17 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitCandidateApi.Rec
       width: 190,
       slots: { default: 'status' },
     },
+    {
+      field: 'applicationStatusName',
+      title: '应聘流程状态',
+      width: 150,
+    },
+    {
+      field: 'offerApprovalStatus',
+      title: 'Offer 状态',
+      width: 140,
+      slots: { default: 'offerStatus' },
+    },
     { field: 'mobile', title: '手机号码', width: 130 },
     {
       field: 'sex',
@@ -555,14 +564,11 @@ export function useInterviewFormSchema(): VbenFormSchema[] {
 export function useInterviewResultFormSchema(
   cancelMode: boolean,
 ): VbenFormSchema[] {
-  const resultOptions = getDictOptions(
-    DICT_TYPE.HRM_RECRUIT_INTERVIEW_RESULT,
-    'number',
-  ).filter(
-    (item) =>
-      item.value === HrmRecruitInterviewResult.PASS ||
-      item.value === HrmRecruitInterviewResult.NOT_PASS,
-  );
+  const resultOptions = [
+    { label: '通过', value: HrmRecruitInterviewResult.PASS },
+    { label: '没通过', value: HrmRecruitInterviewResult.NOT_PASS },
+    { label: '缺席', value: HrmRecruitInterviewResult.ABSENT },
+  ];
   return [
     {
       fieldName: 'result',
@@ -587,7 +593,9 @@ export function useInterviewResultFormSchema(
       dependencies: {
         triggerFields: ['result'],
         show: (values) =>
-          cancelMode || values.result === HrmRecruitInterviewResult.CANCELED,
+          cancelMode ||
+          values.result === HrmRecruitInterviewResult.CANCELED ||
+          values.result === HrmRecruitInterviewResult.ABSENT,
       },
       componentProps: {
         placeholder: '请输入取消原因',

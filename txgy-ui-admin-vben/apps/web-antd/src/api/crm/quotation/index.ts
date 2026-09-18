@@ -10,6 +10,15 @@ export namespace CrmQuotationApi {
     id?: number;
     name: string;
     no?: string;
+    quotationType?: number; // 报价类型：1=购销报价 2=采购报价
+    /** 采购报价的供应商（仅前端表单字段，提交时映射到 customerId） */
+    supplierId?: number;
+    /** 供应商联系人（采购报价，随供应商自动带出） */
+    supplierContact?: string;
+    /** 供应商联系电话（采购报价） */
+    supplierPhone?: string;
+    /** 供应商地址（采购报价） */
+    supplierAddress?: string;
     customerId: number;
     customerName?: string;
     businessId?: number;

@@ -7,6 +7,7 @@ import { Tabs } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import TeamView from './modules/team-view.vue';
+import TaskLoad from './modules/task-load.vue';
 import TypeView from './modules/type-view.vue';
 import UserView from './modules/user-view.vue';
 
@@ -35,6 +36,9 @@ const activeTab = ref<string>('type');
         </Tabs.TabPane>
         <Tabs.TabPane key="user" tab="按个人" force-render>
           <UserView />
+        </Tabs.TabPane>
+        <Tabs.TabPane key="task-load" tab="任务负载" force-render>
+          <TaskLoad />
         </Tabs.TabPane>
       </Tabs>
     </div>

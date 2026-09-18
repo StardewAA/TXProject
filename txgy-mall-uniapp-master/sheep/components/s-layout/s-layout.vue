@@ -24,6 +24,12 @@
         :showLeftButton="showLeftButton"
       />
       <view class="page-body" :style="[bgBody]">
+        <s-tenant-entry />
+        <view v-if="userStore.sessionError" class="session-recovery">
+          <view>{{ userStore.sessionError }}</view>
+          <button v-if="userStore.isLogin" size="mini" @tap="userStore.retrySession()">重新核验</button>
+          <button size="mini" @tap="userStore.logout()">清除旧会话</button>
+        </view>
         <!-- 顶部导航栏-情况3：沉浸式头部 -->
         <su-inner-navbar v-if="navbar === 'inner'" :title="title" />
         <view
@@ -62,6 +68,10 @@
    * 模板组件 - 提供页面公共组件，属性，方法
    */
   import { computed, onMounted } from 'vue';
+  import { onShow } from '@dcloudio/uni-app';
+  import { stampTenantUrl } from '@/sheep/helper/tenant-runtime';
+  onMounted(stampTenantUrl);
+  onShow(stampTenantUrl);
   import sheep from '@/sheep';
   import { isEmpty } from 'lodash-es';
   // #ifdef MP-WEIXIN
@@ -233,6 +243,10 @@
 </script>
 
 <style lang="scss" scoped>
+  .session-recovery {
+    padding: 20rpx; background: #fff7e6; color: #7a4b00;
+    button { margin: 12rpx 12rpx 0 0; }
+  }
   .page-app {
     position: relative;
     color: var(--ui-TC);

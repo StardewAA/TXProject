@@ -1,29 +1,47 @@
 <script lang="ts" setup>
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallOrderApi } from '#/api/mall/trade/order';
+import type { OrderStatusCounts, WorkbenchSummary } from '#/api/mall/trade/workbench';
 
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
-import {
-  DeliveryTypeEnum,
-  DICT_TYPE,
-  TradeOrderStatusEnum,
-} from '@vben/constants';
+import { DICT_TYPE } from '@vben/constants';
+import { useAccessStore } from '@vben/stores';
 import { fenToYuan } from '@vben/utils';
 
-import { Image, List, Tag } from 'ant-design-vue';
+import { Button, Image, List, Tabs, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getOrderPage } from '#/api/mall/trade/order';
 import { DictTag } from '#/components/dict-tag';
 import { $t } from '#/locales';
 
+import TradeTodoPanel from '../components/TradeTodoPanel.vue';
+import { canDeliver, commonFilters, countText, ORDER_STATUS_TABS, pageFilters } from '../components/workbench-model';
 import { useGridColumns, useGridFormSchema } from './data';
 import DeliveryForm from './modules/delivery-form.vue';
 import RemarkForm from './modules/remark-form.vue';
 
 const { push } = useRouter();
+const access = useAccessStore();
+const currentScope = () => `${access.tenantId}:${access.visitTenantId}:${access.accessToken}`;
+const activeStatus = ref('all');
+const filters = ref<Record<string, unknown>>({});
+const orderIds = ref<number[]>([]);
+const todoPanel = ref<InstanceType<typeof TradeTodoPanel>>();
+const counts = ref<OrderStatusCounts>();
+const countsFailed = ref(false);
+const countKeys: Record<string, keyof OrderStatusCounts> = { all: 'allCount', 0: 'unpaidCount', 10: 'undeliveredCount', 20: 'deliveredCount', 30: 'completedCount', 40: 'canceledCount' };
+function updateSnapshot(snapshot: WorkbenchSummary | undefined, failed: boolean) {
+  counts.value = snapshot?.orderStatusCounts;
+  countsFailed.value = failed;
+}
+async function changeStatus(key: number | string) {
+  activeStatus.value = String(key);
+  await gridApi.reload();
+}
 
 const [DeliveryFormModal, deliveryFormModalApi] = useVbenModal({
   connectedComponent: DeliveryForm,
@@ -38,10 +56,17 @@ const [RemarkFormModal, remarkFormModalApi] = useVbenModal({
 /** 刷新表格 */
 function handleRefresh() {
   gridApi.query();
+  void todoPanel.value?.refresh();
 }
 
 /** 详情 */
-function handleDetail(row: MallOrderApi.Order) {
+async function handleDetail(row: MallOrderApi.Order) {
+  const scope = currentScope();
+  const events = todoPanel.value?.rowEvents(row.id, 'ORDER') || [];
+  if (events.length) {
+    try { await todoPanel.value?.markRead(events); } catch { /* 已读失败不妨碍重新鉴权查看真实详情。 */ }
+  }
+  if (scope !== currentScope()) return;
   push({ name: 'TradeOrderDetail', params: { id: row.id } });
 }
 
@@ -71,11 +96,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          return await getOrderPage({
+          filters.value = commonFilters(formValues);
+          const result = await getOrderPage({
+            ...pageFilters(formValues, activeStatus.value),
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            ...formValues,
           });
+          orderIds.value = result.list.flatMap((row) => row.id ? [row.id] : []);
+          return result;
         },
       },
     },
@@ -106,7 +134,26 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <DeliveryFormModal @success="handleRefresh" />
     <RemarkFormModal @success="handleRefresh" />
+    <TradeTodoPanel ref="todoPanel" :filters="filters" :order-ids="orderIds" @snapshot="updateSnapshot" />
     <Grid table-title="订单列表">
+      <template #toolbar-actions>
+        <div class="w-full min-w-0">
+          <div class="mb-2 flex flex-wrap items-center gap-3">
+            <span>当前筛选结果 · 主状态订单数量</span>
+            <Button v-access:code="['trade:after-sale:query']" type="link" @click="push('/mall/trade/after-sale')">售后管理（独立事项）</Button>
+          </div>
+          <Tabs :active-key="activeStatus" @change="changeStatus">
+            <Tabs.TabPane v-for="tab in ORDER_STATUS_TABS" :key="tab.key" :tab="`${tab.label} (${countText(counts?.[countKeys[tab.key]!], countsFailed)})`" />
+          </Tabs>
+        </div>
+      </template>
+      <template #orderNo="{ row }">
+        <div><Tag v-if="todoPanel?.rowEvents(row.id, 'ORDER').length" color="orange">新 · 未读</Tag>{{ row.no }}</div>
+      </template>
+      <template #processing="{ row }">
+        <div>{{ row.deliveryType === 2 ? (row.pickupBlockReason || (row.pickupable ? '可按授权核销' : '查看自提进度')) : (row.deliveryBlockReason || (row.deliverable ? '可安排发货' : '按当前订单状态处理')) }}</div>
+        <Tag v-if="row.erpStatus" class="mt-1">ERP {{ row.erpStatus }}</Tag>
+      </template>
       <template #expand_content="{ row }">
         <List item-layout="vertical" :data-source="row.items">
           <template #renderItem="{ item }">
@@ -155,15 +202,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '发货',
               type: 'link',
-              ifShow: () =>
-                row.deliveryType === DeliveryTypeEnum.EXPRESS.type &&
-                (row.status === TradeOrderStatusEnum.UNDELIVERED.status ||
-                  row.status === TradeOrderStatusEnum.DELIVERED.status),
+              auth: ['trade:order:update'],
+              ifShow: () => canDeliver(row),
               onClick: handleDelivery.bind(null, row),
             },
             {
               label: '备注',
               type: 'link',
+              auth: ['trade:order:update'],
               onClick: handleRemark.bind(null, row),
             },
           ]"

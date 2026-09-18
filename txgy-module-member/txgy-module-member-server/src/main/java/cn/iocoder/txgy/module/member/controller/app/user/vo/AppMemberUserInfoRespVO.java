@@ -11,6 +11,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AppMemberUserInfoRespVO {
 
+    private String memberIdentity;
+    private String loginName;
+    /** Unverified contact, separate from the identity phone. */
+    private String contactMobile;
+
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Long id;
 

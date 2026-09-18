@@ -4,6 +4,7 @@ import type { WmsWarehouseApi } from '#/api/wms/md/warehouse';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { CommonStatusEnum } from '@vben/constants';
 
 import { message } from 'ant-design-vue';
 
@@ -93,7 +94,11 @@ const [Modal, modalApi] = useVbenModal({
       commonConfig: { disabled: readonly.value },
     });
     if (!data || !data.id) {
-      await formApi.setValues({ sort: 0 });
+      await formApi.setValues({
+        sort: 0,
+        status: CommonStatusEnum.ENABLE,
+        warehouseType: 'RAW_MATERIAL',
+      });
       return;
     }
     // 详情直接使用列表行数据，避免查询权限不足时再次请求 /get 导致 403。

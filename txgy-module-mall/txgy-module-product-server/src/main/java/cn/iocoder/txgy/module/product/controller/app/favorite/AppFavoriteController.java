@@ -32,10 +32,12 @@ public class AppFavoriteController {
     private ProductFavoriteService productFavoriteService;
     @Resource
     private ProductSpuService productSpuService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @PostMapping(value = "/create")
     @Operation(summary = "添加商品收藏")
     public CommonResult<Long> createFavorite(@RequestBody @Valid AppFavoriteReqVO reqVO) {
+        productSpuService.validateSpuList(List.of(reqVO.getSpuId()));
         return success(productFavoriteService.createFavorite(getLoginUserId(), reqVO.getSpuId()));
     }
 
@@ -51,17 +53,23 @@ public class AppFavoriteController {
     public CommonResult<PageResult<AppFavoriteRespVO>> getFavoritePage(AppFavoritePageReqVO reqVO) {
         PageResult<ProductFavoriteDO> favoritePage = productFavoriteService.getFavoritePage(getLoginUserId(), reqVO);
         if (CollUtil.isEmpty(favoritePage.getList())) {
-            return success(PageResult.empty());
+            return success(PageResult.empty(favoritePage.getTotal()));
         }
 
         // 得到商品 spu 信息
         List<ProductFavoriteDO> favorites = favoritePage.getList();
         List<Long> spuIds = convertList(favorites, ProductFavoriteDO::getSpuId);
-        List<ProductSpuDO> spus = productSpuService.getSpuList(spuIds);
+        List<ProductSpuDO> spus = productSpuService.getSpuList(spuIds).stream().filter(java.util.Objects::nonNull).toList();
 
         // 转换 VO 结果
         PageResult<AppFavoriteRespVO> pageResult = new PageResult<>(favoritePage.getTotal());
         pageResult.setList(ProductFavoriteConvert.INSTANCE.convertList(favorites, spus));
+        var spuMap = cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap(spus, ProductSpuDO::getId);
+        for (var row : pageResult.getList()) {
+            boolean saleable = reviewService.saleable(spuMap.get(row.getSpuId()));
+            row.setSaleable(saleable);
+            if (!saleable) row.setSpuName("商品暂不可购买").setPicUrl("").setPrice(null).setUnavailableReason("商品已下架或正在审核");
+        }
         return success(pageResult);
     }
 

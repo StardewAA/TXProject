@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.crm.controller.admin.contract;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
@@ -9,6 +10,7 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.contract.vo.contract.CrmContractPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.contract.vo.contract.CrmContractRespVO;
@@ -23,6 +25,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.product.CrmProductDO;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
 import cn.iocoder.txgy.module.crm.service.contact.CrmContactService;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.crm.service.contract.CrmContractWordService;
 import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
 import cn.iocoder.txgy.module.crm.service.receivable.CrmReceivableService;
@@ -72,6 +75,8 @@ public class CrmContractController {
     private CrmProductService productService;
     @Resource
     private CrmReceivableService receivableService;
+    @Resource
+    private CrmContractWordService contractWordService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -163,6 +168,25 @@ public class CrmContractController {
                 BeanUtils.toBean(pageResult.getList(), CrmContractRespVO.class));
     }
 
+    @GetMapping("/export-word")
+    @Operation(summary = "生成合同 Word 文档",
+            description = "按合同模板类型（采购合同/购销合同）输出 docx，自动带入系统中已填写的合同信息")
+    @Parameter(name = "id", description = "编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('crm:contract:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportContractWord(@RequestParam("id") Long id,
+                                   HttpServletResponse response) throws IOException {
+        byte[] content = contractWordService.generateContractWord(id);
+        // 文件名：合同名称 + 合同编号
+        CrmContractDO contract = contractService.getContract(id);
+        String filename = contract == null || StrUtil.isBlank(contract.getName())
+                ? "合同" : contract.getName();
+        if (contract != null && StrUtil.isNotBlank(contract.getNo())) {
+            filename = filename + "-" + contract.getNo();
+        }
+        ServletUtils.writeAttachment(response, filename + ".docx", content);
+    }
+
     @PutMapping("/transfer")
     @Operation(summary = "合同转移")
     @PreAuthorize("@ss.hasPermission('crm:contract:update')")
@@ -204,7 +228,7 @@ public class CrmContractController {
             // 2.1 设置客户信息
             findAndThen(customerMap, contractVO.getCustomerId(), customer -> contractVO.setCustomerName(customer.getName()));
             // 2.2 设置用户信息
-            findAndThen(userMap, Long.parseLong(contractVO.getCreator()), user -> contractVO.setCreatorName(user.getNickname()));
+            findAndThen(userMap, NumberUtils.parseLong(contractVO.getCreator()), user -> contractVO.setCreatorName(user.getNickname()));
             MapUtils.findAndThen(userMap, contractVO.getOwnerUserId(), user -> {
                 contractVO.setOwnerUserName(user.getNickname());
                 MapUtils.findAndThen(deptMap, user.getDeptId(), dept -> contractVO.setOwnerUserDeptName(dept.getName()));

@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuo
 import cn.iocoder.txgy.module.crm.controller.admin.customer.vo.customer.CrmCustomerSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuotationSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.quotation.vo.quotation.CrmQuotationTransferReqVO;
+import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.quotation.CrmQuotationDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.quotation.CrmQuotationProductDO;
 import cn.iocoder.txgy.module.crm.dal.mysql.quotation.CrmQuotationMapper;
@@ -23,6 +24,8 @@ import cn.iocoder.txgy.module.crm.dal.mysql.quotation.CrmQuotationProductMapper;
 import cn.iocoder.txgy.module.crm.dal.redis.no.CrmNoRedisDAO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.customer.CrmCustomerTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.quotation.CrmQuotationTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
@@ -33,6 +36,7 @@ import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
@@ -97,11 +101,15 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
     public Long createQuotation(CrmQuotationSaveReqVO createReqVO, Long userId) {
         // 1.1 校验产品项的有效性
         List<CrmQuotationProductDO> quotationProducts = validateQuotationProducts(createReqVO.getProducts());
-        // 1.2 若手动填写了客户名称且未选择客户，则自动创建客户
+        // 1.2 规范化报价类型（为空时默认「购销报价」）
+        normalizeQuotationType(createReqVO, null);
+        // 1.3 购销报价：若手动填写了客户名称且未选择客户，则自动创建客户
         resolveCustomerId(createReqVO, createReqVO.getOwnerUserId(), userId);
-        // 1.3 校验关联字段
+        // 1.4 校验关联字段
         validateRelationDataExists(createReqVO);
-        // 1.4 生成序号
+        // 1.5 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+        validateQuotationTypeRelation(createReqVO);
+        // 1.6 生成序号
         String no = noRedisDAO.generate(CrmNoRedisDAO.QUOTATION_NO_PREFIX);
         if (quotationMapper.selectByNo(no) != null) {
             throw exception(QUOTATION_NO_EXISTS);
@@ -142,12 +150,16 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
                 CrmAuditStatusEnum.PROCESS.getStatus())) {
             throw exception(QUOTATION_UPDATE_FAIL_NOT_DRAFT);
         }
-        // 1.3 若手动填写了客户名称且未选择客户，则自动创建客户
+        // 1.3 规范化报价类型（为空时沿用原值）
+        normalizeQuotationType(updateReqVO, oldQuotation);
+        // 1.4 购销报价：若手动填写了客户名称且未选择客户，则自动创建客户
         resolveCustomerId(updateReqVO, oldQuotation.getOwnerUserId(), userId);
-        // 1.4 校验产品项的有效性
+        // 1.5 校验产品项的有效性
         List<CrmQuotationProductDO> quotationProducts = validateQuotationProducts(updateReqVO.getProducts());
-        // 1.5 校验关联字段
+        // 1.6 校验关联字段
         validateRelationDataExists(updateReqVO);
+        // 1.7 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+        validateQuotationTypeRelation(updateReqVO);
 
         // 2.1 更新报价单
         CrmQuotationDO updateObj = BeanUtils.toBean(updateReqVO, CrmQuotationDO.class);
@@ -186,11 +198,79 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
      * @param userId      操作人编号
      */
     private void resolveCustomerId(CrmQuotationSaveReqVO reqVO, Long ownerUserId, Long userId) {
+        // 采购报价必须显式选择「上游供应商」，不支持「自填名称自动建客户」
+        if (CrmQuotationTypeEnum.isPurchase(reqVO.getQuotationType())) {
+            reqVO.setCustomerName(null);
+            return;
+        }
         if (reqVO.getCustomerId() == null && StrUtil.isNotBlank(reqVO.getCustomerName())) {
             Long customerId = customerService.createCustomer(
-                    new CrmCustomerSaveReqVO().setName(reqVO.getCustomerName()).setOwnerUserId(ownerUserId),
+                    // 购销报价的往来单位是「下游客户」
+                    new CrmCustomerSaveReqVO().setName(reqVO.getCustomerName())
+                            .setCustomerType(CrmCustomerTypeEnum.DOWNSTREAM.getType())
+                            .setOwnerUserId(ownerUserId),
                     userId);
             reqVO.setCustomerId(customerId);
+        }
+    }
+
+    /**
+     * 规范化报价类型：为空时取「原值」，仍为空则默认「购销报价」
+     *
+     * @param reqVO       请求
+     * @param oldQuotation 原报价单（新增时为 null）
+     */
+    private void normalizeQuotationType(CrmQuotationSaveReqVO reqVO, CrmQuotationDO oldQuotation) {
+        if (reqVO.getQuotationType() == null) {
+            reqVO.setQuotationType(oldQuotation != null && oldQuotation.getQuotationType() != null
+                    ? oldQuotation.getQuotationType() : CrmQuotationTypeEnum.SALES.getType());
+        }
+        if (CrmQuotationTypeEnum.getByType(reqVO.getQuotationType()) == null) {
+            throw exception(QUOTATION_TYPE_INVALID);
+        }
+        // 已生成合同的报价单，不允许再修改报价类型，避免转出的合同类型与报价类型不一致
+        if (oldQuotation != null && oldQuotation.getContractId() != null
+                && ObjUtil.notEqual(oldQuotation.getQuotationType(), reqVO.getQuotationType())) {
+            throw exception(QUOTATION_TYPE_UPDATE_FAIL_HAS_CONTRACT);
+        }
+    }
+
+    /**
+     * 校验报价类型与「往来单位（客户/供应商）+ 商机」的联动关系
+     *
+     * 采购报价：必须选择「上游供应商」，且不允许关联商机；
+     * 购销报价：必须选择「客户」，且不能选择「上游供应商」。
+     *
+     * @param reqVO 请求
+     */
+    private void validateQuotationTypeRelation(CrmQuotationSaveReqVO reqVO) {
+        // 情况一：采购报价
+        if (CrmQuotationTypeEnum.isPurchase(reqVO.getQuotationType())) {
+            if (reqVO.getCustomerId() == null) {
+                throw exception(QUOTATION_PURCHASE_SUPPLIER_REQUIRED);
+            }
+            if (reqVO.getBusinessId() != null) {
+                throw exception(QUOTATION_PURCHASE_BUSINESS_NOT_ALLOWED);
+            }
+            CrmCustomerDO supplier = customerService.getCustomer(reqVO.getCustomerId());
+            if (supplier == null) {
+                throw exception(CUSTOMER_NOT_EXISTS);
+            }
+            if (!CrmCustomerTypeEnum.isUpstream(supplier.getCustomerType())) {
+                throw exception(QUOTATION_PURCHASE_SUPPLIER_INVALID);
+            }
+            return;
+        }
+        // 情况二：购销报价
+        if (reqVO.getCustomerId() == null) {
+            throw exception(QUOTATION_SALES_CUSTOMER_REQUIRED);
+        }
+        CrmCustomerDO customer = customerService.getCustomer(reqVO.getCustomerId());
+        if (customer == null) {
+            throw exception(CUSTOMER_NOT_EXISTS);
+        }
+        if (CrmCustomerTypeEnum.isUpstream(customer.getCustomerType())) {
+            throw exception(QUOTATION_SALES_CUSTOMER_INVALID);
         }
     }
 
@@ -292,14 +372,24 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
         }
 
         // 2. 创建报价单审批流程实例
+        //    注意：当「审批人与提交人为同一人」且节点配置为自动通过时，BPM 会在创建流程实例的过程中就直接
+        //    审批通过，并【同步】远程回调本服务的 updateQuotationAuditStatus，把审批状态更新为「已通过」。
+        //    因此必须等流程实例创建完成（即回调已落库）后，再回写本单据的状态，否则会把回调写入的终态覆盖掉。
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
                 .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id))).getCheckedData();
 
-        // 3. 更新报价单工作流编号与审批状态
-        quotationMapper.updateById(new CrmQuotationDO().setId(id).setProcessInstanceId(processInstanceId)
-                .setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()));
+        // 3. 回写报价单的工作流编号（仅更新该字段，不会覆盖回调写入的审批状态）
+        quotationMapper.updateById(new CrmQuotationDO().setId(id).setProcessInstanceId(processInstanceId));
 
-        // 4. 记录日志
+        // 4. 更新审批状态为「审批中」：使用条件更新，仅在仍为「草稿」时才更新
+        //    为什么用条件更新而不是先查询再判断？因为本事务的快照早于第 2 步的远程回调，
+        //    普通查询会读到旧的「草稿」，从而把回调写入的「已通过」又覆盖回「审批中」。
+        quotationMapper.update(new CrmQuotationDO().setAuditStatus(CrmAuditStatusEnum.PROCESS.getStatus()),
+                new LambdaUpdateWrapper<CrmQuotationDO>()
+                        .eq(CrmQuotationDO::getId, id)
+                        .eq(CrmQuotationDO::getAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus()));
+
+        // 5. 记录日志
         LogRecordContext.putVariable("quotationName", quotation.getName());
     }
 
@@ -307,11 +397,18 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
     public void updateQuotationAuditStatus(Long id, Integer bpmResult) {
         // 1.1 校验报价单是否存在
         CrmQuotationDO quotation = validateQuotationExists(id);
-        // 1.2 只有审批中，可以更新审批结果
-        if (ObjUtil.notEqual(quotation.getAuditStatus(), CrmAuditStatusEnum.PROCESS.getStatus())) {
-            log.error("[updateQuotationAuditStatus][报价单({}) 不处于审批中，无法更新审批结果({})]",
-                    quotation.getId(), bpmResult);
-            throw exception(QUOTATION_UPDATE_AUDIT_STATUS_FAIL_NOT_PROCESS);
+        // 1.2 仅「草稿」「审批中」允许更新审批结果：
+        //     - 审批中：常规场景，即人工审批完成后回调本接口
+        //     - 草稿：「审批人与提交人为同一人」自动通过时，BPM 在创建流程实例的过程中就会回调本接口，
+        //             此时 submitQuotation 还没把状态回写为「审批中」（该事务甚至尚未提交），必须放行，
+        //             否则回调会被丢弃，报价单将永久停留在「审批中」而无法转为合同
+        //     - 其他：已是终态，直接忽略，保证回调的幂等性
+        Integer currentAuditStatus = quotation.getAuditStatus();
+        if (ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.PROCESS.getStatus())
+                && ObjUtil.notEqual(currentAuditStatus, CrmAuditStatusEnum.DRAFT.getStatus())) {
+            log.warn("[updateQuotationAuditStatus][报价单({}) 已处于终态({})，忽略审批结果({})]",
+                    quotation.getId(), currentAuditStatus, bpmResult);
+            return;
         }
 
         // 2. 更新报价单审批结果
@@ -337,8 +434,21 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
         }
 
         // 2. 组装合同创建请求
+        // 2.1 校验往来单位与报价类型匹配：
+        //     购销报价(1) → 购销合同(2)，我方为乙方（向客户销售）
+        //     采购报价(2) → 采购合同(1)，我方为甲方（向供应商采购）
+        Integer quotationType = quotation.getQuotationType() == null
+                ? CrmQuotationTypeEnum.SALES.getType() : quotation.getQuotationType();
+        if (quotation.getCustomerId() == null) {
+            throw exception(CrmQuotationTypeEnum.isPurchase(quotationType)
+                    ? QUOTATION_PURCHASE_SUPPLIER_REQUIRED : QUOTATION_SALES_CUSTOMER_REQUIRED);
+        }
+        if (CrmQuotationTypeEnum.isPurchase(quotationType) && quotation.getBusinessId() != null) {
+            throw exception(QUOTATION_CREATE_CONTRACT_FAIL_RELATION_INVALID);
+        }
         CrmContractSaveReqVO contractReqVO = new CrmContractSaveReqVO()
                 .setName(quotation.getName())
+                .setTemplateType(CrmQuotationTypeEnum.toContractTemplateType(quotationType))
                 .setCustomerId(quotation.getCustomerId())
                 .setBusinessId(quotation.getBusinessId())
                 .setOwnerUserId(quotation.getOwnerUserId())
@@ -346,8 +456,14 @@ public class CrmQuotationServiceImpl implements CrmQuotationService {
                 .setDiscountPercent(quotation.getDiscountPercent())
                 .setRemark(quotation.getRemark());
         List<CrmQuotationProductDO> quotationProducts = quotationProductMapper.selectListByQuotationId(id);
-        contractReqVO.setProducts(convertList(quotationProducts, item -> new CrmContractSaveReqVO.Product(
-                item.getProductId(), item.getProductPrice(), item.getQuotationPrice(), item.getCount().intValue())));
+        contractReqVO.setProducts(convertList(quotationProducts, item -> {
+            CrmContractSaveReqVO.Product product = new CrmContractSaveReqVO.Product();
+            product.setProductId(item.getProductId());
+            product.setProductPrice(item.getProductPrice());
+            product.setContractPrice(item.getQuotationPrice());
+            product.setCount(item.getCount().intValue());
+            return product;
+        }));
 
         // 3. 创建合同（合同编号：沿用报价金额等数据）
         Long contractId = contractService.createContract(contractReqVO, userId);

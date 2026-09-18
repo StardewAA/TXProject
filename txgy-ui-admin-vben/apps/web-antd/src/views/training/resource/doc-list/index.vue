@@ -2,11 +2,12 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { TrainingResourceApi } from '../api';
 
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { message, Switch, Tag, TreeSelect } from 'ant-design-vue';
+import { Modal, message, Spin, Switch, Tag, TreeSelect } from 'ant-design-vue';
+import mammoth from 'mammoth/mammoth.browser';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { $t } from '#/locales';
@@ -96,8 +97,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         formatter: ({ cellValue }) =>
           cellValue === null || cellValue === undefined ? '-' : cellValue,
       },
-      { field: 'estMinutes', title: '预估(分)', width: 90, align: 'center' },
-      { field: 'viewCount', title: '预览数', width: 80, align: 'center' },
+      {
+        field: 'estMinutes',
+        title: '预估阅读时长（分钟）',
+        width: 160,
+        align: 'center',
+        formatter: ({ cellValue }) =>
+          cellValue === null || cellValue === undefined ? '-' : cellValue,
+      },
       {
         field: 'status',
         title: '状态',
@@ -113,7 +120,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 240,
+        width: 310,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -152,10 +159,72 @@ function handleEdit(row: TrainingResourceApi.DocumentResource) {
   docFormModal.setData(row).open();
 }
 
-// ========== 预览（预览即计数） ==========
+// ========== 预览（页内弹窗，不下载） ==========
+/** 办公文档（Word/WPS）：前端渲染预览；PDF/图片：iframe 内联直出 */
+const OFFICE_EXTS = ['doc', 'docx', 'wps'];
+
+const previewState = ref<{
+  open: boolean;
+  title: string;
+  fileType: string;
+  url: string;
+  office: boolean;
+  loading: boolean;
+  error: string;
+}>({
+  open: false,
+  title: '',
+  fileType: '',
+  url: '',
+  office: false,
+  loading: false,
+  error: '',
+});
+const docxContainer = ref<HTMLDivElement>();
+
+async function renderOfficePreview() {
+  previewState.value.loading = true;
+  previewState.value.error = '';
+  try {
+    // 预览接口匿名可访问，直接取文件流
+    const res = await fetch(previewState.value.url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    await nextTick(); // 等待弹窗容器挂载
+    const el = docxContainer.value;
+    if (!el) return;
+    el.innerHTML = '';
+    // docx → HTML 前端渲染（mammoth）
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    // 用 A4 纸张容器承载正文（mammoth 只输出裸 HTML，缺少页面排版，需外层补纸张样式）
+    el.innerHTML = `<div class="docx-doc-page">${
+      result.value || '<p class="docx-empty">文档内容为空</p>'
+    }</div>`;
+  } catch {
+    previewState.value.error =
+      '该文档格式暂不支持在线预览（老版 .doc / .wps 需下载后查看）';
+  } finally {
+    previewState.value.loading = false;
+  }
+}
+
 function handlePreview(row: TrainingResourceApi.DocumentResource) {
-  window.open(buildDocumentPreviewUrl(row.id!), '_blank');
+  const ext = (row.fileType || '').toLowerCase();
+  previewState.value = {
+    open: true,
+    title: row.title || row.fileName || '文档预览',
+    fileType: ext,
+    url: buildDocumentPreviewUrl(row.id!),
+    office: OFFICE_EXTS.includes(ext),
+    loading: OFFICE_EXTS.includes(ext),
+    error: '',
+  };
   reportDocumentReading(row.id!).catch(() => {});
+  if (OFFICE_EXTS.includes(ext)) {
+    renderOfficePreview();
+  }
 }
 
 // ========== 状态流转 ==========
@@ -242,6 +311,36 @@ loadCategories();
   <Page auto-content-height>
     <DocFormModal @success="handleSearch" />
 
+    <!-- 页内预览弹窗：PDF/图片 iframe 直出；Word/WPS 前端渲染 -->
+    <Modal
+      v-model:open="previewState.open"
+      :title="`预览 - ${previewState.title}`"
+      :width="960"
+      :footer="null"
+    >
+      <div v-if="previewState.loading" class="py-16 text-center">
+        <Spin size="large" />
+        <div class="mt-3 text-gray-400">文档加载中，请稍候…</div>
+      </div>
+      <div
+        v-if="previewState.error"
+        class="py-16 text-center text-gray-500"
+      >
+        {{ previewState.error }}
+      </div>
+      <iframe
+        v-if="!previewState.office && !previewState.loading && !previewState.error"
+        :src="previewState.url"
+        class="h-[72vh] w-full rounded border-0 bg-white"
+        :title="previewState.title"
+      />
+      <div
+        v-show="previewState.office && !previewState.loading && !previewState.error"
+        ref="docxContainer"
+        class="docx-preview-box h-[72vh] overflow-auto rounded"
+      />
+    </Modal>
+
     <!-- 分类 / 归档 筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <TreeSelect
@@ -258,7 +357,7 @@ loadCategories();
     </div>
 
     <Grid
-      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，上传即上线，自动识别页数）"
+      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，支持一次上传多个，上传即上线，自动识别页数）"
     >
       <template #toolbar-tools>
         <TableAction
@@ -287,3 +386,90 @@ loadCategories();
     </Grid>
   </Page>
 </template>
+
+<style scoped>
+/* 预览容器：灰色底 + 居中 A4 白纸，还原 Word 阅读观感 */
+.docx-preview-box {
+  background-color: #f5f5f5;
+  padding: 16px;
+}
+.docx-preview-box :deep(.docx-doc-page) {
+  box-sizing: border-box;
+  max-width: 794px; /* A4 210mm @96dpi ≈ 794px */
+  margin: 0 auto;
+  padding: 48px 56px;
+  background-color: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  color: #333;
+  font-family:
+    'Microsoft YaHei', 'PingFang SC', SimSun, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.docx-preview-box :deep(.docx-doc-page img) {
+  max-width: 100%;
+  height: auto;
+}
+.docx-preview-box :deep(.docx-doc-page p) {
+  margin: 0 0 0.6em;
+  text-align: justify;
+}
+.docx-preview-box :deep(.docx-doc-page h1),
+.docx-preview-box :deep(.docx-doc-page h2),
+.docx-preview-box :deep(.docx-doc-page h3),
+.docx-preview-box :deep(.docx-doc-page h4),
+.docx-preview-box :deep(.docx-doc-page h5),
+.docx-preview-box :deep(.docx-doc-page h6) {
+  margin: 1.2em 0 0.6em;
+  color: #222;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.docx-preview-box :deep(.docx-doc-page h1) {
+  font-size: 24px;
+}
+.docx-preview-box :deep(.docx-doc-page h2) {
+  font-size: 20px;
+}
+.docx-preview-box :deep(.docx-doc-page h3) {
+  font-size: 17px;
+}
+.docx-preview-box :deep(.docx-doc-page h4),
+.docx-preview-box :deep(.docx-doc-page h5),
+.docx-preview-box :deep(.docx-doc-page h6) {
+  font-size: 15px;
+}
+.docx-preview-box :deep(.docx-doc-page ul),
+.docx-preview-box :deep(.docx-doc-page ol) {
+  margin: 0.6em 0;
+  padding-left: 1.8em;
+}
+.docx-preview-box :deep(.docx-doc-page li) {
+  margin: 0.2em 0;
+}
+.docx-preview-box :deep(.docx-doc-page table) {
+  width: 100%;
+  margin: 0.8em 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.docx-preview-box :deep(.docx-doc-page td),
+.docx-preview-box :deep(.docx-doc-page th) {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  word-break: break-all;
+  line-height: 1.6;
+}
+.docx-preview-box :deep(.docx-doc-page th) {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+.docx-preview-box :deep(.docx-doc-page a) {
+  color: #1677ff;
+}
+.docx-preview-box :deep(.docx-empty) {
+  color: #999;
+}
+</style>

@@ -33,6 +33,7 @@ public interface CrmQuotationMapper extends BaseMapperX<CrmQuotationDO> {
                 .eqIfPresent(CrmQuotationDO::getCustomerId, pageReqVO.getCustomerId())
                 .eqIfPresent(CrmQuotationDO::getBusinessId, pageReqVO.getBusinessId())
                 .eqIfPresent(CrmQuotationDO::getAuditStatus, pageReqVO.getAuditStatus())
+                .eqIfPresent(CrmQuotationDO::getQuotationType, pageReqVO.getQuotationType())
                 .orderByDesc(CrmQuotationDO::getId);
         return selectJoinPage(pageReqVO, CrmQuotationDO.class, query);
     }

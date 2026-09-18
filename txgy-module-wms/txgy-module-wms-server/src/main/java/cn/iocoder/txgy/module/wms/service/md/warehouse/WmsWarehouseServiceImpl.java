@@ -168,6 +168,15 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
     }
 
     @Override
+    public WmsWarehouseDO validateWarehouseEnabled(Long id) {
+        WmsWarehouseDO warehouse = validateWarehouseExists(id);
+        if (warehouse.getStatus() != null && warehouse.getStatus() != 0) {
+            throw exception(WAREHOUSE_NOT_ENABLED);
+        }
+        return warehouse;
+    }
+
+    @Override
     public WmsWarehouseDO getWarehouse(Long id) {
         return warehouseMapper.selectById(id);
     }

@@ -20,6 +20,7 @@ import cn.iocoder.txgy.module.crm.service.customer.CrmCustomerService;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
+import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -199,6 +200,19 @@ public class CrmContactServiceImpl implements CrmContactService {
     @Transactional(rollbackFor = Exception.class)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#customerId", level = CrmPermissionLevelEnum.OWNER)
     public void updateOwnerUserIdByCustomerId(Long customerId, Long ownerUserId) {
+        doUpdateOwnerUserIdByCustomerId(customerId, ownerUserId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateOwnerUserIdByCustomerIdIgnorePermission(Long customerId, Long ownerUserId) {
+        // 内部/系统调用：不校验当前登录用户对该客户的数据权限。
+        // 注意：这里直接调用同类私有方法，不经过 Spring 代理，因此 @CrmPermission 切面不会生效；
+        // 外部入口仍必须走 updateOwnerUserIdByCustomerId(...)，保持数据权限校验。
+        doUpdateOwnerUserIdByCustomerId(customerId, ownerUserId);
+    }
+
+    private void doUpdateOwnerUserIdByCustomerId(Long customerId, Long ownerUserId) {
         // 1. 校验存在
         List<CrmContactDO> contacts = contactMapper.selectListByCustomerId(customerId);
         if (CollUtil.isEmpty(contacts)) {
@@ -227,13 +241,15 @@ public class CrmContactServiceImpl implements CrmContactService {
     @LogRecord(type = CRM_CONTACT_TYPE, subType = CRM_CONTACT_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CONTACT_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CONTACT, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateContactFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
+    public void updateContactFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
+                                      String contactLastContent) {
         // 1. 校验存在
         CrmContactDO contact = validateContactExists(id);
 
-        // 2. 更新联系人的跟进信息
+        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
         contactMapper.updateById(new CrmContactDO().setId(id).setContactNextTime(contactNextTime)
-                .setContactLastTime(LocalDateTime.now()).setContactLastContent(contactLastContent));
+                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(contact.getContactLastTime(), contactTime))
+                .setContactLastContent(contactLastContent));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("contactName", contact.getName());

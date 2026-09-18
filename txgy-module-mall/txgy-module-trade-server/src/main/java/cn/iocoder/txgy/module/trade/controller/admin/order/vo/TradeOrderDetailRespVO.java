@@ -11,6 +11,7 @@ import java.util.List;
 @Schema(description = "管理后台 - 交易订单的详情 Response VO")
 @Data
 public class TradeOrderDetailRespVO extends TradeOrderBaseVO {
+    private java.util.List<cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Entry> erpInventory;
 
     /**
      * 订单项列表

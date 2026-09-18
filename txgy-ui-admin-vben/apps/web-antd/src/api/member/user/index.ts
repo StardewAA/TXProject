@@ -11,8 +11,10 @@ export namespace MemberUserApi {
     createTime?: number;
     loginDate?: number;
     loginIp?: string;
+    loginName?: null | string;
+    contactMobile?: null | string;
     mark?: string;
-    mobile?: string;
+    mobile?: null | string;
     email?: string;
     name?: string;
     nickname?: string;
@@ -61,7 +63,11 @@ export function getUser(id: number) {
 
 /** 修改会员用户 */
 export function updateUser(data: MemberUserApi.User) {
-  return requestClient.put('/member/user/update', data);
+  const editable = { ...data };
+  // Account names and unverified contacts are server-owned display fields.
+  delete editable.loginName;
+  delete editable.contactMobile;
+  return requestClient.put('/member/user/update', editable);
 }
 
 /** 修改会员用户等级 */

@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.crm.controller.admin.business.vo.business;
 
+import cn.iocoder.txgy.module.crm.framework.operatelog.core.CrmBusinessStageParseFunction;
 import cn.iocoder.txgy.module.crm.framework.operatelog.core.CrmCustomerParseFunction;
 import cn.iocoder.txgy.module.crm.framework.operatelog.core.SysAdminUserParseFunction;
 import com.mzt.logapi.starter.annotation.DiffLogField;
@@ -43,9 +44,11 @@ public class CrmBusinessSaveReqVO {
     @DiffLogField(name = "负责人", function = SysAdminUserParseFunction.NAME)
     private Long ownerUserId;
 
-    @Schema(description = "商机状态组编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "25714")
-    @DiffLogField(name = "商机状态组")
-    @NotNull(message = "商机状态组不能为空")
+    @Schema(description = "商机阶段：1商机待评估 2初步接洽 3需求确认 4方案评估 5商务谈判（不传默认商机待评估）", example = "1")
+    @DiffLogField(name = "商机阶段", function = CrmBusinessStageParseFunction.NAME)
+    private Integer stage;
+
+    @Schema(description = "商机状态组编号（历史字段：标准化后商机不再选择状态组，仅保留兼容）", example = "25714")
     private Long statusTypeId;
 
     @Schema(description = "预计成交日期")

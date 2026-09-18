@@ -15,6 +15,9 @@ public class ProductSpuSaveReqVO {
     @Schema(description = "商品编号", example = "1")
     private Long id;
 
+    /** 编辑必传；防止旧页面覆盖已审核的新版本。 */
+    private Long expectedVersion;
+
     @Schema(description = "所属企业店铺编号；为空表示平台自营商品", example = "1")
     private Long shopId;
 

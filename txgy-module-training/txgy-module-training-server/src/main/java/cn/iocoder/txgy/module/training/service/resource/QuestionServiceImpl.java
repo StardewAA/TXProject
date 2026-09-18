@@ -223,6 +223,8 @@ public class QuestionServiceImpl implements QuestionService {
                     {"单选", "高处作业时安全带应做到（　）？", "高挂低用", "低挂高用", "随意悬挂", "捆绑在吊物上", "A", "安全规范要求高挂低用。", "易", "高处作业"},
                     {"多选", "动火作业前必须确认（　）。", "作业票已审批", "配备灭火器材", "监护人在场", "天气情况", "A,B,C", "动火作业安全管理要求。", "中", "动火作业"},
                     {"判断", "进入受限空间作业前必须进行气体检测。", "", "", "", "", "对", "先通风、再检测、后作业。", "易", "受限空间"},
+                    {"填空", "防腐涂装表面处理常用的除锈等级有____和____两级。", "", "", "", "", "Sa2.5|Sa3", "喷射除锈常用等级，按顺序填写用竖线分隔。", "中", "防腐工艺"},
+                    {"简答", "简述高压无气喷涂的操作要点。", "", "", "", "", "调整压力、保持枪距、匀速移动、注意重叠率。", "按作业指导书评分要点给分。", "难", "喷涂工艺"},
                     {"实操问答", "简述防腐涂装作业前的表面处理流程。", "", "", "", "", "喷射除锈至 Sa2.5 级并除尘除潮", "按作业指导书评分。", "难", "防腐工艺"},
                     {"案例分析", "某储罐区检修时发生火灾，请分析可能原因。", "", "", "", "", "未办理动火票、未清理可燃物、监护缺失", "涉及动火审批、可燃物隔离、监护责任。", "难", "动火作业"}
             };
@@ -236,8 +238,9 @@ public class QuestionServiceImpl implements QuestionService {
             int noteRow = samples.length + 2;
             Row note = sheet.createRow(noteRow);
             Cell noteCell = note.createCell(0);
-            noteCell.setCellValue("填写说明：题型仅支持【单选/多选/判断/实操问答/案例分析】；难度仅支持【易/中/难】；"
+            noteCell.setCellValue("填写说明：题型仅支持【单选/多选/判断/实操问答/案例分析/填空/简答】；难度仅支持【易/中/难】；"
                     + "判断题答案填【对】或【错】；单选/多选答案填选项字母（多选用英文逗号分隔，如 A,B,C）；"
+                    + "填空题多个空的答案用竖线 | 按顺序分隔（如 答案1|答案2）；简答/实操问答/案例分析填参考答案文本；"
                     + "标签用英文或中文逗号分隔，不存在会自动创建。导入时请删除示例行。");
             sheet.addMergedRegion(new CellRangeAddress(noteRow, noteRow, 0, 9));
             workbook.write(out);
@@ -434,9 +437,9 @@ public class QuestionServiceImpl implements QuestionService {
                 }
                 question.setAnswer(normalized);
             }
-            default -> { // QA / CASE
+            default -> { // QA / CASE / FILL_BLANK / SHORT_ANSWER
                 if (StrUtil.isBlank(answer)) {
-                    throw new IllegalArgumentException("问答/案例分析题答案不能为空");
+                    throw new IllegalArgumentException("问答/案例/填空/简答题答案不能为空");
                 }
                 question.setAnswer(answer);
             }
@@ -455,8 +458,10 @@ public class QuestionServiceImpl implements QuestionService {
             case "判断" -> QuestionTypeEnum.JUDGE;
             case "实操问答" -> QuestionTypeEnum.QA;
             case "案例分析" -> QuestionTypeEnum.CASE;
+            case "填空", "填空题" -> QuestionTypeEnum.FILL_BLANK;
+            case "简答", "简答题", "问答" -> QuestionTypeEnum.SHORT_ANSWER;
             default -> throw new IllegalArgumentException("题型不合法：" + (StrUtil.isBlank(text) ? "空" : text)
-                    + "（仅支持 单选/多选/判断/实操问答/案例分析）");
+                    + "（仅支持 单选/多选/判断/实操问答/案例分析/填空/简答）");
         };
     }
 

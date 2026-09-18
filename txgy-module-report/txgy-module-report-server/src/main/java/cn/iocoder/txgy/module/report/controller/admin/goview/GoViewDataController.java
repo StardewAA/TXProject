@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.report.controller.admin.goview;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.module.report.controller.admin.dataset.vo.ReportDatasetExecuteReqVO;
 import cn.iocoder.txgy.module.report.controller.admin.goview.vo.data.GoViewDataGetBySqlReqVO;
 import cn.iocoder.txgy.module.report.controller.admin.goview.vo.data.GoViewDataRespVO;
 import cn.iocoder.txgy.module.report.service.goview.GoViewDataService;
@@ -31,9 +32,16 @@ public class GoViewDataController {
     @Resource
     private GoViewDataService goViewDataService;
 
+    @RequestMapping("/get-by-dataset")
+    @Operation(summary = "使用数据集查询数据", description = "推荐方式：按数据集编码 + 参数取数，租户条件由服务端强制注入")
+    @PreAuthorize("@ss.hasPermission('report:dataset:execute')")
+    public CommonResult<GoViewDataRespVO> getDataByDataset(@Valid @RequestBody ReportDatasetExecuteReqVO reqVO) {
+        return success(goViewDataService.getDataByDataset(reqVO.getCode(), reqVO.getParams()));
+    }
+
     @RequestMapping("/get-by-sql")
-    @Operation(summary = "使用 SQL 查询数据")
-    @PreAuthorize("@ss.hasPermission('report:go-view-data:get-by-sql')")
+    @Operation(summary = "使用 SQL 查询数据", description = "受限逃生通道：需要 report:dataset:raw-sql 权限，仅允许 SELECT，且受行数上限、超时与审计约束")
+    @PreAuthorize("@ss.hasPermission('report:dataset:raw-sql')")
     public CommonResult<GoViewDataRespVO> getDataBySQL(@Valid @RequestBody GoViewDataGetBySqlReqVO reqVO) {
         return success(goViewDataService.getDataBySQL(reqVO.getSql()));
     }

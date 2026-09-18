@@ -186,6 +186,7 @@ const [Modal, modalApi] = useVbenModal({
     formApi.setState({ schema: useFormSchema(data.formType, formApi) });
     formApi.setDisabled(isFormDisabled.value);
     modalApi.setState({
+      confirmText: '保存',
       showConfirmButton: ['create', 'update'].includes(formType.value),
     });
     if (!data?.id) {

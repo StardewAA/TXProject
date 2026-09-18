@@ -51,6 +51,7 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void updatePropertyValue(ProductPropertyValueSaveReqVO updateReqVO) {
         validatePropertyValueExists(updateReqVO.getId());
         // 校验名字唯一
@@ -62,9 +63,8 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
 
         // 更新
         ProductPropertyValueDO updateObj = BeanUtils.toBean(updateReqVO, ProductPropertyValueDO.class);
-        productPropertyValueMapper.updateById(updateObj);
-        // 更新 sku 相关属性
         productSkuService.updateSkuPropertyValue(updateObj.getId(), updateObj.getName());
+        productPropertyValueMapper.updateById(updateObj);
     }
 
     @Override

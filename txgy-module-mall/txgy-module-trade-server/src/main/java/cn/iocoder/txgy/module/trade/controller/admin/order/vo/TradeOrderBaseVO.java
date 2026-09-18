@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
  */
 @Data
 public class TradeOrderBaseVO {
+    private Boolean deliverable;
+    private String deliveryBlockReason;
+    private Boolean pickupable;
+    private String pickupBlockReason;
+    private String erpStatus;
 
     // ========== 订单基本信息 ==========
 

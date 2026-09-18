@@ -46,6 +46,16 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       let loginResult: AuthApi.LoginResult;
       loginLoading.value = true;
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      accessStore.clearVisitTenantId();
+      accessStore.setIsAccessChecked(false);
+      userStore.$reset();
+      if (type === 'register' || params.loginType === 'personal') {
+        accessStore.setTenantId(0);
+      } else if (type === 'username' && params.tenantId != null) {
+        accessStore.setTenantId(Number(params.tenantId));
+      }
       switch (type) {
         case 'mobile': {
           loginResult = await smsLogin(params as AuthApi.SmsLoginParams);
@@ -76,6 +86,18 @@ export const useAuthStore = defineStore('auth', () => {
         if (isPersonalAuthentication) {
           accessStore.setTenantId(0);
           accessStore.clearVisitTenantId();
+        } else {
+          // 企业登录：把「访问租户」初始化为本次登录租户，
+          // 否则顶部租户下拉永远显示占位符「请选择租户」且无法回显当前租户。
+          const loginTenantId =
+            params.tenantId != null ? Number(params.tenantId) : null;
+          if (
+            loginTenantId != null &&
+            Number.isInteger(loginTenantId) &&
+            loginTenantId > 0
+          ) {
+            accessStore.setVisitTenantId(loginTenantId);
+          }
         }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
@@ -97,11 +119,14 @@ export const useAuthStore = defineStore('auth', () => {
           onSuccess
             ? await onSuccess?.()
             : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
+                params.loginType === 'enterprise' &&
+                  userInfo.homePath?.startsWith('/portal/')
+                  ? preferences.app.defaultHomePath
+                  : userInfo.homePath || preferences.app.defaultHomePath,
               );
         }
 
-        if (userInfo?.nickname) {
+        if (!isPersonalAuthentication && userInfo?.nickname) {
           notification.success({
             description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
             duration: 3,
@@ -109,6 +134,16 @@ export const useAuthStore = defineStore('auth', () => {
           });
         }
       }
+    } catch (error) {
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      accessStore.clearVisitTenantId();
+      accessStore.setIsAccessChecked(false);
+      accessStore.setAccessCodes([]);
+      accessStore.setAccessMenus([]);
+      accessStore.setAccessRoutes([]);
+      userStore.$reset();
+      throw error;
     } finally {
       loginLoading.value = false;
     }

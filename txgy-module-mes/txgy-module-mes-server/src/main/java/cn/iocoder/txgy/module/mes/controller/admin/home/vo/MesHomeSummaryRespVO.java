@@ -58,4 +58,7 @@ public class MesHomeSummaryRespVO {
     @Schema(description = "未完成维修工单数", requiredMode = Schema.RequiredMode.REQUIRED, example = "2")
     private Long repairActiveCount;
 
+    @Schema(description = "里程碑预警数量（3 天内到期或已超期且未完成）", example = "2")
+    private Long milestoneAlertCount;
+
 }

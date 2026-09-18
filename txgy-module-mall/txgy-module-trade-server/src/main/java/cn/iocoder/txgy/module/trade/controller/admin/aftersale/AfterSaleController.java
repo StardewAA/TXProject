@@ -42,6 +42,12 @@ import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtil
 @Validated
 @Slf4j
 public class AfterSaleController {
+    @Resource private cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchPresentation workbenchPresentation;
+    @Resource private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
+
+    @GetMapping("/get-count")
+    @PreAuthorize("@ss.hasPermission('trade:after-sale:query')")
+    public CommonResult<Map<String,Long>> getCounts(@Valid AfterSalePageReqVO req) { return success(workbenchPresentation.afterSaleCounts(req)); }
 
     @Resource
     private AfterSaleService afterSaleService;
@@ -67,7 +73,12 @@ public class AfterSaleController {
         // 查询会员
         Map<Long, MemberUserRespDTO> memberUsers = memberUserApi.getUserMap(
                 convertSet(pageResult.getList(), AfterSaleDO::getUserId));
-        return success(AfterSaleConvert.INSTANCE.convertPage(pageResult, memberUsers));
+        var response=AfterSaleConvert.INSTANCE.convertPage(pageResult, memberUsers);
+        var erps=erpInventory.listByOrderIds(pageResult.getList().stream().map(AfterSaleDO::getOrderId).distinct().toList());
+        for(int i=0;i<pageResult.getList().size();i++) {
+            var sale=pageResult.getList().get(i);workbenchPresentation.fill(sale,erps.getOrDefault(sale.getOrderId(),List.of()),response.getList().get(i));
+        }
+        return success(response);
     }
 
     @GetMapping("/get-detail")
@@ -88,7 +99,9 @@ public class AfterSaleController {
         // 拼接数据
         MemberUserRespDTO user = memberUserApi.getUser(afterSale.getUserId()).getCheckedData();
         List<AfterSaleLogDO> logs = afterSaleLogService.getAfterSaleLogList(afterSale.getId());
-        return success(AfterSaleConvert.INSTANCE.convert(afterSale, order, orderItem, user, logs));
+        var response=AfterSaleConvert.INSTANCE.convert(afterSale, order, orderItem, user, logs);
+        workbenchPresentation.fill(afterSale,erpInventory.list(afterSale.getOrderId()),response);
+        return success(response);
     }
 
     @PutMapping("/agree")

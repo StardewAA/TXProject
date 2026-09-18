@@ -40,6 +40,18 @@ public class HrmRecruitCandidateRespVO {
     @Schema(description = "当前岗位应聘记录编号", example = "1024")
     private Long applicationId;
 
+    @Schema(description = "当前岗位应聘流程状态", example = "SCREENING_PASSED")
+    private String applicationStatus;
+
+    @Schema(description = "当前岗位应聘流程状态名称", example = "筛选通过")
+    private String applicationStatusName;
+
+    @Schema(description = "当前岗位 Offer 编号", example = "1024")
+    private Long offerId;
+
+    @Schema(description = "当前岗位 Offer 审批状态", example = "APPROVING")
+    private String offerApprovalStatus;
+
     @Schema(description = "应聘职位名称", example = "Java 开发工程师")
     private String postName;
 

@@ -198,7 +198,6 @@ const registerColumns = [
         size="small"
         :columns="columns"
         :data-source="filteredRows"
-        :loading="loading"
         :pagination="false"
       >
         <template #bodyCell="{ column, record }">

@@ -15,6 +15,9 @@ import cn.iocoder.txgy.module.system.api.logger.dto.LoginLogCreateReqDTO;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.OAuth2TokenCommonApi;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCreateReqDTO;
 import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenRespDTO;
+import cn.iocoder.txgy.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCheckRespDTO;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
 import cn.iocoder.txgy.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
@@ -51,6 +54,8 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Resource
     private MemberUserService userService;
     @Resource
+    private cn.iocoder.txgy.module.member.dal.mysql.user.MemberUserMapper memberUserMapper;
+    @Resource
     private SmsCodeApi smsCodeApi;
     @Resource
     private LoginLogApi loginLogApi;
@@ -60,9 +65,45 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     private SocialClientApi socialClientApi;
     @Resource
     private OAuth2TokenCommonApi oauth2TokenApi;
+    @Resource
+    private cn.iocoder.txgy.module.member.service.tenant.MallCustomerAffiliationService customerAffiliations;
+    @Resource
+    private cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy accountPolicy;
+    @Resource
+    private cn.iocoder.txgy.module.member.service.tenant.MallImageChallengeService imageChallenges;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AppAuthLoginRespVO registerWithVerifiedImage(cn.iocoder.txgy.module.member.controller.app.tenant.vo.AppMallImageAuthReqVO.Register body) {
+        if (!accountPolicy.isEnabled()) throw exception(MALL_TENANT_UNAVAILABLE);
+        MemberUserDO user = userService.registerAccountUser(body.getLoginName(), body.getPassword(), body.getNickname(),
+                body.getContactMobile(), body.getMemberIdentity(), getClientIP(), getTerminal());
+        customerAffiliations.bindRegistration(user.getId());
+        return createTokenAfterLoginSuccess(user, user.getLoginName(), LoginLogTypeEnum.LOGIN_MOBILE, null);
+    }
+
+    @Override
+    public AppAuthLoginRespVO loginWithAccountPassword(String account, String password) {
+        if (!accountPolicy.isEnabled()) throw exception(MALL_TENANT_UNAVAILABLE);
+        String normalized = account.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized.matches("1[3-9][0-9]{9}")) {
+            return createTokenAfterLoginSuccess(login0(normalized, password), normalized, LoginLogTypeEnum.LOGIN_MOBILE, null);
+        }
+        normalized = cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy.normalize(normalized);
+        MemberUserDO user = memberUserMapper.selectByLoginName(normalized);
+        if (user == null || !userService.isPasswordMatch(password, user.getPassword())) {
+            createLoginLog(user == null ? null : user.getId(), normalized, LoginLogTypeEnum.LOGIN_MOBILE, LoginResultEnum.BAD_CREDENTIALS);
+            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+        return createTokenAfterLoginSuccess(user, normalized, LoginLogTypeEnum.LOGIN_MOBILE, null);
+    }
 
     @Override
     public AppAuthLoginRespVO login(AppAuthLoginReqVO reqVO) {
+        if (accountPolicy.isEnabled()) {
+            var request = ServletUtils.getRequest();
+            imageChallenges.limitPasswordAttempts(reqVO.getMobile(), request == null ? "internal" : request.getRemoteAddr());
+        }
         // 使用手机 + 密码，进行登录。
         MemberUserDO user = login0(reqVO.getMobile(), reqVO.getPassword());
 
@@ -80,15 +121,37 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Override
     @Transactional
     public AppAuthLoginRespVO register(AppAuthRegisterReqVO reqVO) {
+        accountPolicy.rejectLegacyRegistration();
         String clientIp = getClientIP();
         smsCodeApi.useSmsCode(new SmsCodeUseReqDTO()
                 .setMobile(reqVO.getMobile())
                 .setCode(reqVO.getCode())
                 .setScene(SmsSceneEnum.MEMBER_LOGIN.getScene())
                 .setUsedIp(clientIp)).checkError();
+        return registerWithVerifiedMobile(reqVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AppAuthLoginRespVO registerWithVerifiedMobile(AppAuthRegisterReqVO reqVO) {
+        accountPolicy.rejectLegacyRegistration();
+        String clientIp = getClientIP();
         MemberUserDO user = userService.registerUser(reqVO.getMobile(), reqVO.getPassword(),
                 reqVO.getNickname(), clientIp, getTerminal());
+        if (reqVO.getMemberIdentity() != null) {
+            user.setMemberIdentity(reqVO.getMemberIdentity());
+            memberUserMapper.updateById(new MemberUserDO().setId(user.getId())
+                    .setMemberIdentity(reqVO.getMemberIdentity()));
+        }
+        customerAffiliations.bindRegistration(user.getId());
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, null);
+    }
+
+    @Override
+    public AppAuthLoginRespVO loginWithVerifiedMobile(String mobile) {
+        MemberUserDO user = userService.getUserByMobile(mobile);
+        if (user == null) throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        return createTokenAfterLoginSuccess(user, mobile, LoginLogTypeEnum.LOGIN_SMS, null);
     }
 
     @Override
@@ -99,7 +162,9 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         smsCodeApi.useSmsCode(AuthConvert.INSTANCE.convert(reqVO, SmsSceneEnum.MEMBER_LOGIN.getScene(), userIp)).checkError();
 
         // 获得获得注册用户
-        MemberUserDO user = userService.createUserIfAbsent(reqVO.getMobile(), userIp, getTerminal());
+        MemberUserDO user = accountPolicy.isEnabled() ? userService.getUserByMobile(reqVO.getMobile())
+                : userService.createUserIfAbsent(reqVO.getMobile(), userIp, getTerminal());
+        if (user == null) throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         Assert.notNull(user, "获取用户失败，结果为空");
 
         // 校验是否禁用
@@ -132,6 +197,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             user = userService.getUser(socialUser.getUserId());
         // 情况二：未绑定，注册用户 + 绑定用户
         } else {
+            accountPolicy.rejectLegacyRegistration();
             user = userService.createUser(socialUser.getNickname(), socialUser.getAvatar(), getClientIP(), getTerminal());
             socialUserApi.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
                     reqVO.getType(), reqVO.getCode(), reqVO.getState())).checkError();
@@ -155,8 +221,10 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         Assert.notNull(phoneNumberInfo, "获得手机信息失败，结果为空");
 
         // 获得获得注册用户
-        MemberUserDO user = userService.createUserIfAbsent(phoneNumberInfo.getPurePhoneNumber(),
-                getClientIP(), TerminalEnum.WECHAT_MINI_PROGRAM.getTerminal());
+        MemberUserDO user = accountPolicy.isEnabled() ? userService.getUserByMobile(phoneNumberInfo.getPurePhoneNumber())
+                : userService.createUserIfAbsent(phoneNumberInfo.getPurePhoneNumber(),
+                    getClientIP(), TerminalEnum.WECHAT_MINI_PROGRAM.getTerminal());
+        if (user == null) throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         Assert.notNull(user, "获取用户失败，结果为空");
         validateUserStatus(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL);
 
@@ -170,6 +238,17 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
     private AppAuthLoginRespVO createTokenAfterLoginSuccess(MemberUserDO user, String mobile,
                                                             LoginLogTypeEnum logType, String openid) {
+        // INSERT 的租户拦截器只改写 SQL，不回填新建用户对象，返回前读取实际账号归属。
+        if (user.getTenantId() == null) {
+            MemberUserDO persistedUser = userService.getUser(user.getId());
+            if (persistedUser == null || persistedUser.getTenantId() == null) {
+                throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            }
+            user.setTenantId(persistedUser.getTenantId());
+        }
+        if (!Objects.equals(user.getTenantId(), TenantContextHolder.getTenantId())) {
+            throw exception(AUTH_TENANT_MISMATCH);
+        }
         // 统一校验用户状态，避免登录方式增加后遗漏
         validateUserStatus(user, mobile, logType);
 
@@ -180,7 +259,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
                 .setUserId(user.getId()).setUserType(getUserType().getValue())
                 .setClientId(OAuth2ClientConstants.CLIENT_ID_DEFAULT)).getCheckedData();
         // 构建返回结果
-        return AuthConvert.INSTANCE.convert(accessTokenRespDTO, openid);
+        return AuthConvert.INSTANCE.convert(accessTokenRespDTO, openid).setTenantId(user.getTenantId());
     }
 
     private void validateUserStatus(MemberUserDO user, String mobile, LoginLogTypeEnum logType) {
@@ -275,9 +354,25 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
     @Override
     public AppAuthLoginRespVO refreshToken(String refreshToken) {
-        OAuth2AccessTokenRespDTO accessTokenDO = oauth2TokenApi.refreshAccessToken(refreshToken,
-                OAuth2ClientConstants.CLIENT_ID_DEFAULT).getCheckedData();
-        return AuthConvert.INSTANCE.convert(accessTokenDO, null);
+        // 现有 check 接口支持刷新令牌；必须在会撤销旧访问令牌的 refresh RPC 前校验。
+        OAuth2AccessTokenCheckRespDTO checked = oauth2TokenApi.checkAccessToken(refreshToken).getCheckedData();
+        if (checked == null || checked.getUserId() == null || checked.getTenantId() == null
+                || !Objects.equals(checked.getUserType(), UserTypeEnum.MEMBER.getValue())
+                || !Objects.equals(checked.getTenantId(), TenantContextHolder.getTenantId())) {
+            throw exception(AUTH_TENANT_MISMATCH);
+        }
+        MemberUserDO user = TenantUtils.execute(checked.getTenantId(), () -> userService.getUser(checked.getUserId()));
+        if (user == null || !Objects.equals(user.getId(), checked.getUserId())
+                || !Objects.equals(user.getTenantId(), checked.getTenantId())) {
+            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+        if (!CommonStatusEnum.isEnable(user.getStatus())) {
+            throw exception(AUTH_LOGIN_USER_DISABLED);
+        }
+        OAuth2AccessTokenRespDTO accessTokenDO = TenantUtils.execute(checked.getTenantId(),
+                () -> oauth2TokenApi.refreshAccessToken(refreshToken,
+                        OAuth2ClientConstants.CLIENT_ID_DEFAULT).getCheckedData());
+        return AuthConvert.INSTANCE.convert(accessTokenDO, null).setTenantId(checked.getTenantId());
     }
 
     private void createLogoutLog(Long userId) {
@@ -298,7 +393,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             return null;
         }
         MemberUserDO user = userService.getUser(userId);
-        return user != null ? user.getMobile() : null;
+        return user == null ? null : user.getLoginName() != null ? user.getLoginName() : user.getMobile();
     }
 
     private UserTypeEnum getUserType() {

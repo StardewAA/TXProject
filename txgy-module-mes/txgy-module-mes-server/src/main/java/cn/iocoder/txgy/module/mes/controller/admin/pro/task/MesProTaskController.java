@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.GanttDataRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskSaveReqVO;
+import cn.iocoder.txgy.module.mes.controller.admin.pro.task.vo.MesProTaskTeamLoadRespVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.workorder.vo.MesProWorkOrderPageReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.client.MesMdClientDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
@@ -80,6 +81,21 @@ public class MesProTaskController {
     @PreAuthorize("@ss.hasPermission('mes:pro-task:create')")
     public CommonResult<Long> createTask(@Valid @RequestBody MesProTaskSaveReqVO createReqVO) {
         return success(taskService.createTask(createReqVO));
+    }
+
+    @PostMapping("/auto-generate-by-route")
+    @Operation(summary = "按工艺路线自动拆分生成任务")
+    @Parameter(name = "workOrderId", description = "生产工单编号", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('mes:pro-task:create')")
+    public CommonResult<Integer> autoGenerateTasksByRoute(@RequestParam("workOrderId") Long workOrderId) {
+        return success(taskService.autoGenerateTasksByRoute(workOrderId));
+    }
+
+    @GetMapping("/team-load")
+    @Operation(summary = "按班组聚合任务负载（任务数、排产数量、已生产数量）")
+    @PreAuthorize("@ss.hasPermission('mes:pro-task:query')")
+    public CommonResult<List<MesProTaskTeamLoadRespVO>> getTeamTaskLoad() {
+        return success(taskService.getTeamTaskLoad());
     }
 
     @PutMapping("/update")

@@ -95,6 +95,15 @@ public interface LogRecordConstants {
     String CRM_BUSINESS_FOLLOW_UP_SUCCESS = "商机跟进【{{#businessName}}】";
     String CRM_BUSINESS_UPDATE_STATUS_SUB_TYPE = "更新商机状态";
     String CRM_BUSINESS_UPDATE_STATUS_SUCCESS = "更新了商机【{{#businessName}}】的状态从【{{#oldStatusName}}】变更为了【{{#newStatusName}}】";
+    // 商机标准化阶段方案：阶段推进 / 赢单 / 输单 / 管理员调整状态组
+    String CRM_BUSINESS_UPDATE_STAGE_SUB_TYPE = "变更商机阶段";
+    String CRM_BUSINESS_UPDATE_STAGE_SUCCESS = "将商机【{{#businessName}}】的阶段从【{{#oldStageName}}】变更为【{{#newStageName}}】";
+    String CRM_BUSINESS_WIN_SUB_TYPE = "商机赢单";
+    String CRM_BUSINESS_WIN_SUCCESS = "将商机【{{#businessName}}】标记为赢单，签约日期【{{#signDate}}】，签约金额【{{#signAmount}}】";
+    String CRM_BUSINESS_LOSE_SUB_TYPE = "商机输单";
+    String CRM_BUSINESS_LOSE_SUCCESS = "将商机【{{#businessName}}】标记为丢单，丢单原因【{{#lostReasonName}}】，丢单备注【{{#lostRemark}}】";
+    String CRM_BUSINESS_UPDATE_STATE_SUB_TYPE = "调整商机状态组";
+    String CRM_BUSINESS_UPDATE_STATE_SUCCESS = "管理员将商机【{{#businessName}}】的状态组从【{{#oldStateName}}】调整为【{{#newStateName}}】，说明【{{#reason}}】";
 
     // ======================= CRM_CONTRACT_CONFIG 合同配置 =======================
 

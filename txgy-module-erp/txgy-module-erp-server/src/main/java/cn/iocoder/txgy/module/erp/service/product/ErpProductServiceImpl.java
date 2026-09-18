@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductCategoryDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductUnitDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.product.ErpProductMapper;
+import cn.iocoder.txgy.module.erp.service.integration.ErpMesMasterDataSyncService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpWmsMasterDataSyncService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,8 @@ public class ErpProductServiceImpl implements ErpProductService {
     private ErpProductUnitService productUnitService;
     @Resource
     private ErpWmsMasterDataSyncService wmsMasterDataSyncService;
+    @Resource
+    private ErpMesMasterDataSyncService mesMasterDataSyncService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -53,6 +56,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         product.setSyncVersion(1L);
         productMapper.insert(product);
         wmsMasterDataSyncService.syncProductAfterCommit(product);
+        mesMasterDataSyncService.syncProductAfterCommit(product);
         // 返回
         return product.getId();
     }
@@ -72,6 +76,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         updateObj.setSyncVersion(oldProduct.getSyncVersion() == null ? 1L : oldProduct.getSyncVersion() + 1);
         productMapper.updateById(updateObj);
         wmsMasterDataSyncService.syncProductAfterCommit(updateObj);
+        mesMasterDataSyncService.syncProductAfterCommit(updateObj);
     }
 
     @Override
@@ -84,6 +89,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         product.setStatus(CommonStatusEnum.DISABLE.getStatus());
         product.setSyncVersion(product.getSyncVersion() == null ? 1L : product.getSyncVersion() + 1);
         wmsMasterDataSyncService.syncProductAfterCommit(product);
+        mesMasterDataSyncService.syncProductAfterCommit(product);
     }
 
     @Override

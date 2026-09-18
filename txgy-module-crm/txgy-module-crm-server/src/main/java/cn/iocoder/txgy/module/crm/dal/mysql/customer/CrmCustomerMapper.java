@@ -82,6 +82,7 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
                 .eqIfPresent(CrmCustomerDO::getIndustryId, pageReqVO.getIndustryId())
                 .eqIfPresent(CrmCustomerDO::getLevel, pageReqVO.getLevel())
                 .eqIfPresent(CrmCustomerDO::getSource, pageReqVO.getSource())
+                .eqIfPresent(CrmCustomerDO::getCustomerType, pageReqVO.getCustomerType())
                 .eqIfPresent(CrmCustomerDO::getFollowUpStatus, pageReqVO.getFollowUpStatus());
 
         // backlog 查询
@@ -104,6 +105,18 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
 
     default CrmCustomerDO selectByCustomerName(String name) {
         return selectOne(CrmCustomerDO::getName, name);
+    }
+
+    /**
+     * 按客户类别查询客户列表（供应商基础库下拉使用）
+     *
+     * @param customerType 客户类别：1=下游客户 2=上游供应商
+     * @return 客户列表（按名称升序）
+     */
+    default List<CrmCustomerDO> selectListByCustomerType(Integer customerType) {
+        return selectList(new LambdaQueryWrapperX<CrmCustomerDO>()
+                .eqIfPresent(CrmCustomerDO::getCustomerType, customerType)
+                .orderByAsc(CrmCustomerDO::getName));
     }
 
     /**

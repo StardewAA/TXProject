@@ -21,6 +21,12 @@ public interface ErrorCodeConstants {
     ErrorCode AUTH_LOGIN_USER_DISABLED = new ErrorCode(1_004_003_001, "登录失败，账号被禁用");
     ErrorCode AUTH_SOCIAL_USER_NOT_FOUND = new ErrorCode(1_004_003_005, "登录失败，解析不到三方登录信息");
     ErrorCode AUTH_MOBILE_USED = new ErrorCode(1_004_003_007, "手机号已经被使用");
+    ErrorCode AUTH_TENANT_MISMATCH = new ErrorCode(1_004_003_008, "账号与当前商城不匹配，请返回账号所属商城");
+    ErrorCode MALL_TENANT_UNAVAILABLE = new ErrorCode(1_004_003_009, "商城入口暂不可用，请稍后重试");
+    ErrorCode MALL_AUTH_LEGACY_DISABLED = new ErrorCode(1_004_003_010, "请使用商城新版认证入口，该旧入口已停用");
+    ErrorCode MALL_AUTH_CODE_INVALID = new ErrorCode(1_004_003_011, "验证码无效、已使用或已过期，请重新获取");
+    ErrorCode MALL_AUTH_RATE_LIMITED = new ErrorCode(1_004_003_012, "操作过于频繁，请稍后重试");
+    ErrorCode MALL_AUTH_SEND_FAILED = new ErrorCode(1_004_003_013, "验证码发送未确认，请稍后重新获取");
 
     // ========== 用户收件地址 1-004-004-000 ==========
     ErrorCode ADDRESS_NOT_EXISTS = new ErrorCode(1_004_004_000, "用户收件地址不存在");
@@ -34,6 +40,9 @@ public interface ErrorCodeConstants {
 
     //========== 积分记录 1-004-008-000 ==========
     ErrorCode POINT_RECORD_BIZ_NOT_SUPPORT = new ErrorCode(1_004_008_000, "用户积分记录业务类型不支持");
+    ErrorCode POINT_RECORD_REQUEST_INVALID = new ErrorCode(1_004_008_001, "积分变更参数不合法，请检查租户、用户、业务编号和积分方向");
+    ErrorCode POINT_RECORD_BIZ_CONFLICT = new ErrorCode(1_004_008_002, "该积分业务已经处理，重复请求的积分数量不一致");
+    ErrorCode POINT_RECORD_BALANCE_OVERFLOW = new ErrorCode(1_004_008_003, "积分变更后的余额超出支持范围");
 
     //========== 签到配置 1-004-009-000 ==========
     ErrorCode SIGN_IN_CONFIG_NOT_EXISTS = new ErrorCode(1_004_009_000, "签到天数规则不存在");

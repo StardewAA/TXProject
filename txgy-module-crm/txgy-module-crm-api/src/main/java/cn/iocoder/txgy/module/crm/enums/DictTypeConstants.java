@@ -16,8 +16,15 @@ public interface DictTypeConstants {
     String CRM_AUDIT_STATUS = "crm_audit_status"; // CRM 审批状态
     String CRM_PRODUCT_UNIT = "crm_product_unit"; // CRM 产品单位
     String CRM_PRODUCT_STATUS = "crm_product_status"; // CRM 产品状态
+    String CRM_PRODUCT_DATA_SOURCE = "crm_product_data_source"; // CRM 产品数据来源
     String CRM_FOLLOW_UP_TYPE = "crm_follow_up_type"; // CRM 跟进方式
     String CRM_RECEIVABLE_RETURN_TYPE = "crm_receivable_return_type"; // CRM 回款方式
+    String CRM_QUOTATION_TYPE = "crm_quotation_type"; // CRM 报价类型（购销报价/采购报价）
+
+    // ========== CRM 商机（标准化阶段方案） ==========
+    String CRM_BUSINESS_STAGE = "crm_business_stage"; // CRM 商机阶段（仅推进过程，不含赢单/输单）
+    String CRM_BUSINESS_STATE = "crm_business_state"; // CRM 商机状态组（只读派生：未开始/进行中/已赢单/已丢单）
+    String CRM_BUSINESS_LOST_REASON = "crm_business_lost_reason"; // CRM 商机丢单原因
 
     // ========== CRM 售后回访与质保管理 ==========
     String CRM_BUSINESS_SOURCE = "crm_business_source"; // CRM 商机来源

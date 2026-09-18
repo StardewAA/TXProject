@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewEvaluationReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewResultReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.interview.HrmRecruitInterviewSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
@@ -15,14 +16,17 @@ import cn.iocoder.txgy.module.hrm.enums.MessageTemplateConstants;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeEntryStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitInterviewResultEnum;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
+import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
 import jakarta.annotation.Resource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -45,6 +49,7 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 import static cn.iocoder.txgy.framework.common.util.object.ObjectUtils.notEqualsAny;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_CANCEL_REASON_REQUIRED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_FINISHED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_NOT_EXISTS;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_NOT_CURRENT;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_INTERVIEW_RESULT_INVALID;
@@ -72,6 +77,9 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
     @Resource
     private HrmRecruitApplicationService recruitApplicationService;
     @Resource
+    @Lazy
+    private HrmRecruitChatService recruitChatService;
+    @Resource
     private NotifyMessageSendApi notifyMessageSendApi;
 
     @Override
@@ -86,6 +94,9 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
             throw exception(RECRUIT_APPLICATION_NOT_EXISTS);
         }
         if (application != null) {
+            validateApplicationCanArrangeInterview(application);
+        }
+        if (application != null) {
             createReqVO.setCandidateId(application.getCandidateId());
         }
         if (createReqVO.getCandidateId() == null) {
@@ -93,7 +104,9 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         }
         HrmRecruitCandidateDO recruitCandidate = recruitCandidateService
                 .validateRecruitCandidateExistsForUpdate(createReqVO.getCandidateId());
-        validateCandidateCanArrangeInterview(recruitCandidate);
+        if (application == null) {
+            validateCandidateCanArrangeInterview(recruitCandidate);
+        }
         validateInterviewEmployees(createReqVO);
 
         // 2. 创建面试记录。候选人仍在当前面试轮次时，复用最近一条记录
@@ -101,8 +114,13 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         HrmRecruitInterviewDO latestInterview = createReqVO.getApplicationId() == null
                 ? recruitInterviewMapper.selectLatestByCandidateId(createReqVO.getCandidateId())
                 : recruitInterviewMapper.selectLatestByApplicationId(createReqVO.getApplicationId());
-        if (latestInterview != null && HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus()
-                .equals(recruitCandidate.getStatus())) {
+        boolean currentInterviewInProgress = latestInterview != null
+                && (application != null || HrmRecruitCandidateStatusEnum.INTERVIEW.getStatus()
+                .equals(recruitCandidate.getStatus()))
+                && (application == null || HrmRecruitApplicationStatusEnum.INTERVIEW_SCHEDULED.getStatus()
+                .equals(application.getStatus()) || HrmRecruitApplicationStatusEnum.INTERVIEWING.getStatus()
+                .equals(application.getStatus()));
+        if (currentInterviewInProgress) {
             validateCurrentInterview(recruitCandidate, latestInterview);
             if (notEqualsAny(latestInterview.getResult(), HrmRecruitInterviewResultEnum.UNFINISHED.getResult(),
                     HrmRecruitInterviewResultEnum.CANCEL.getResult())) {
@@ -116,17 +134,26 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         } else {
             int nextRound = latestInterview == null ? 1 : (latestInterview.getRoundNo() == null
                     ? latestInterview.getStageNumber() + 1 : latestInterview.getRoundNo() + 1);
+            if (nextRound > MAX_INTERVIEW_ROUNDS) {
+                throw exception(RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED);
+            }
             recruitInterview.setStageNumber(nextRound).setRoundNo(nextRound)
                     .setResult(HrmRecruitInterviewResultEnum.UNFINISHED.getResult());
             recruitInterviewMapper.insert(recruitInterview);
         }
 
-        // 3. 更新候选人的面试状态和轮次
-        recruitCandidateService.updateRecruitCandidateInterview(
-                recruitInterview.getCandidateId(), recruitInterview.getStageNumber());
+        // 3. 更新候选人的兼容状态和轮次
+        if (application == null) {
+            recruitCandidateService.updateRecruitCandidateInterview(
+                    recruitInterview.getCandidateId(), recruitInterview.getStageNumber());
+        }
+        if (recruitInterview.getApplicationId() != null) {
+            recruitApplicationService.markInterviewScheduled(recruitInterview.getApplicationId());
+        }
 
         // 4. 通知面试官
         sendRecruitInterviewArrangedMessage(recruitCandidate, recruitInterview);
+        recruitChatService.sendInterviewArrangedNotification(recruitInterview.getApplicationId(), recruitInterview);
 
         // 5. 记录操作日志上下文
         LogRecordContext.putVariable("recruitCandidate", recruitCandidate);
@@ -157,14 +184,19 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         HrmRecruitInterviewDO updateObj = BeanUtils.toBean(updateReqVO, HrmRecruitInterviewDO.class)
                 .setResult(HrmRecruitInterviewResultEnum.UNFINISHED.getResult());
         recruitInterviewMapper.updateRecruitInterviewArrangement(updateObj);
-        // 2.2 重新安排已取消的面试时，恢复候选人的面试状态和轮次
-        if (HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(recruitInterview.getResult())) {
+        if (recruitInterview.getApplicationId() != null) {
+            recruitApplicationService.markInterviewScheduled(recruitInterview.getApplicationId());
+        }
+        // 2.2 重新安排已取消的历史面试时，恢复候选人的面试状态和轮次
+        if (recruitInterview.getApplicationId() == null
+                && HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(recruitInterview.getResult())) {
             recruitCandidateService.updateRecruitCandidateInterview(
                     recruitInterview.getCandidateId(), recruitInterview.getStageNumber());
         }
 
         // 3. 通知面试官
         sendRecruitInterviewArrangedMessage(recruitCandidate, updateObj);
+        recruitChatService.sendInterviewArrangedNotification(recruitInterview.getApplicationId(), updateObj);
 
         // 4. 记录操作日志上下文
         LogRecordContext.putVariable(DiffParseFunction.OLD_OBJECT,
@@ -191,8 +223,12 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
 
         // 3. 删除当前面试时，根据剩余最近一轮修复候选人状态和轮次
         if (currentInterview) {
-            repairCandidateInterviewState(recruitCandidate.getId(),
-                    recruitInterviewMapper.selectLatestByCandidateId(recruitCandidate.getId()));
+            if (recruitInterview.getApplicationId() != null) {
+                recruitCandidateService.syncRecruitCandidateProjection(recruitCandidate.getId());
+            } else {
+                repairCandidateInterviewState(recruitCandidate.getId(),
+                        recruitInterviewMapper.selectLatestByCandidateId(recruitCandidate.getId()));
+            }
         }
     }
 
@@ -248,6 +284,24 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
     }
 
     @Override
+    public void finishCurrentRecruitInterviewForElimination(Long applicationId, Long candidateId,
+                                                             String eliminateReason) {
+        HrmRecruitInterviewDO latestInterview = recruitInterviewMapper.selectLatestByApplicationId(applicationId);
+        if (latestInterview == null || !Objects.equals(latestInterview.getCandidateId(), candidateId)) {
+            throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
+        }
+        if (Objects.equals(latestInterview.getResult(), HrmRecruitInterviewResultEnum.CANCEL.getResult())) {
+            return;
+        }
+        if (ObjUtil.notEqual(latestInterview.getResult(), HrmRecruitInterviewResultEnum.UNFINISHED.getResult())) {
+            throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
+        }
+        recruitInterviewMapper.updateRecruitInterviewResult(new HrmRecruitInterviewDO()
+                .setId(latestInterview.getId()).setResult(HrmRecruitInterviewResultEnum.NOT_PASS.getResult())
+                .setEvaluate(eliminateReason));
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = HRM_RECRUIT_CANDIDATE_TYPE, subType = HRM_RECRUIT_CANDIDATE_INTERVIEW_RESULT_SUB_TYPE,
             bizNo = "{{#recruitInterview.candidateId}}", success = HRM_RECRUIT_CANDIDATE_INTERVIEW_RESULT_SUCCESS)
@@ -263,18 +317,45 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
             throw exception(RECRUIT_INTERVIEW_RESULT_INVALID);
         }
         // 1.3 校验取消原因
-        if (HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(reqVO.getResult())
+        if ((HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(reqVO.getResult())
+                || HrmRecruitInterviewResultEnum.ABSENT.getResult().equals(reqVO.getResult()))
                 && StrUtil.isBlank(reqVO.getCancelReason())) {
             throw exception(RECRUIT_INTERVIEW_CANCEL_REASON_REQUIRED);
         }
+        if (recruitInterview.getApplicationId() != null) {
+            HrmRecruitApplicationDO application = recruitApplicationService
+                    .getApplication(recruitInterview.getApplicationId());
+            if (application == null
+                    || !HrmRecruitApplicationStatusEnum.INTERVIEWING.getStatus()
+                    .equals(application.getStatus())) {
+                throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
+            }
+        }
 
         // 2. 更新面试结果
-        boolean cancel = HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(reqVO.getResult());
-        reqVO.setEvaluate(cancel ? null : reqVO.getEvaluate());
-        reqVO.setCancelReason(cancel ? reqVO.getCancelReason() : null);
+        boolean noShowOrCancel = HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(reqVO.getResult())
+                || HrmRecruitInterviewResultEnum.ABSENT.getResult().equals(reqVO.getResult());
+        reqVO.setEvaluate(noShowOrCancel ? null : reqVO.getEvaluate());
+        reqVO.setCancelReason(noShowOrCancel ? reqVO.getCancelReason() : null);
         recruitInterviewMapper.updateRecruitInterviewResult(BeanUtils.toBean(reqVO, HrmRecruitInterviewDO.class));
 
-        // 3. 根据面试结果更新候选人状态；取消时仅刷新最后处理时间
+        // 3. 应聘流程使用细粒度状态；历史候选人流程继续沿用旧状态。
+        if (recruitInterview.getApplicationId() != null) {
+            if (HrmRecruitInterviewResultEnum.PASS.getResult().equals(reqVO.getResult())) {
+                recruitApplicationService.markInterviewEvaluating(recruitInterview.getApplicationId());
+            } else if (HrmRecruitInterviewResultEnum.CANCEL.getResult().equals(reqVO.getResult())) {
+                recruitApplicationService.markInterviewCanceled(recruitInterview.getApplicationId(), reqVO.getCancelReason());
+            } else if (HrmRecruitInterviewResultEnum.ABSENT.getResult().equals(reqVO.getResult())) {
+                recruitApplicationService.markInterviewAbsent(recruitInterview.getApplicationId(), reqVO.getCancelReason());
+            } else if (HrmRecruitInterviewResultEnum.NOT_PASS.getResult().equals(reqVO.getResult())) {
+                recruitApplicationService.markInterviewRejected(recruitInterview.getApplicationId(), reqVO.getEvaluate());
+            }
+            LogRecordContext.putVariable("recruitCandidate", recruitCandidate);
+            LogRecordContext.putVariable("recruitInterview", recruitInterview);
+            return;
+        }
+
+        // 4. 根据面试结果更新历史候选人状态；取消时仅刷新最后处理时间
         Integer candidateStatus = null;
         if (HrmRecruitInterviewResultEnum.PASS.getResult().equals(reqVO.getResult())) {
             candidateStatus = HrmRecruitCandidateStatusEnum.INTERVIEW_PASS.getStatus();
@@ -297,13 +378,68 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
                     recruitCandidate.getStatus(), recruitCandidate.getStageNumber());
         }
 
-        // 4. 记录操作日志上下文
+        // 5. 记录操作日志上下文
         LogRecordContext.putVariable("recruitCandidate", recruitCandidate);
         LogRecordContext.putVariable("recruitInterview", recruitInterview);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void startRecruitInterview(Long id) {
+        HrmRecruitInterviewDO interview = validateRecruitInterviewExists(id);
+        HrmRecruitCandidateDO candidate = recruitCandidateService
+                .validateRecruitCandidateExistsForUpdate(interview.getCandidateId());
+        validateCurrentInterview(candidate, interview);
+        if (notEqualsAny(interview.getResult(), HrmRecruitInterviewResultEnum.UNFINISHED.getResult())) {
+            throw exception(RECRUIT_INTERVIEW_RESULT_INVALID);
+        }
+        if (interview.getApplicationId() != null) {
+            recruitApplicationService.markInterviewStarted(interview.getApplicationId());
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void evaluateRecruitInterview(HrmRecruitInterviewEvaluationReqVO reqVO) {
+        HrmRecruitInterviewDO interview = validateRecruitInterviewExists(reqVO.getId());
+        HrmRecruitCandidateDO candidate = recruitCandidateService
+                .validateRecruitCandidateExistsForUpdate(interview.getCandidateId());
+        validateCurrentInterview(candidate, interview);
+        HrmRecruitApplicationDO application = interview.getApplicationId() == null
+                ? null : recruitApplicationService.getApplication(interview.getApplicationId());
+        if (application == null
+                || !HrmRecruitApplicationStatusEnum.INTERVIEW_EVALUATING.getStatus()
+                .equals(application.getStatus())) {
+            throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
+        }
+        if ("NEXT_ROUND".equals(reqVO.getDecision())
+                && interview.getStageNumber() != null
+                && interview.getStageNumber() >= MAX_INTERVIEW_ROUNDS) {
+            throw exception(RECRUIT_INTERVIEW_MAX_ROUNDS_EXCEEDED);
+        }
+        switch (reqVO.getDecision()) {
+            case "NEXT_ROUND" -> recruitApplicationService.markNextInterview(
+                    interview.getApplicationId(), reqVO.getEvaluate());
+            case "FINAL_PASS" -> recruitApplicationService.markFinalInterviewPassed(interview.getApplicationId());
+            case "FAIL" -> recruitApplicationService.markInterviewRejected(
+                    interview.getApplicationId(), reqVO.getEvaluate());
+            default -> throw exception(RECRUIT_INTERVIEW_RESULT_INVALID);
+        }
+    }
+
     private void validateCandidateCanArrangeInterview(HrmRecruitCandidateDO recruitCandidate) {
         if (!HrmRecruitCandidateStatusEnum.INTERVIEW_ARRANGE_STATUSES.contains(recruitCandidate.getStatus())) {
+            throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
+        }
+    }
+
+    private void validateApplicationCanArrangeInterview(HrmRecruitApplicationDO application) {
+        HrmRecruitApplicationStatusEnum status =
+                HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
+        if (status != HrmRecruitApplicationStatusEnum.SCREENING_PASSED
+                && status != HrmRecruitApplicationStatusEnum.PENDING_INTERVIEW
+                && status != HrmRecruitApplicationStatusEnum.NEXT_INTERVIEW
+                && status != HrmRecruitApplicationStatusEnum.PASSED) {
             throw exception(RECRUIT_INTERVIEW_STATE_INVALID);
         }
     }

@@ -104,21 +104,39 @@ export namespace TrainingPlanApi {
   export interface QualificationResult {
     userId?: number;
     userName?: string;
-    projectId?: string;
+    mobile?: string;
     qualified?: boolean;
+    /** 通过岗位（合格培训班配置的目标岗位，去重） */
+    passedPosts?: string[];
     items?: QualificationItem[];
     reason?: string;
+  }
+
+  /** 上岗资格核查历史记录 */
+  export interface QualificationRecord {
+    id?: number;
+    userId?: number;
+    userName?: string;
+    mobile?: string;
+    qualified?: boolean;
+    passedPosts?: string;
+    reason?: string;
+    detailJson?: string;
+    createTime?: string;
   }
 
   /** Excel 批量导入学员结果 */
   export interface ImportStudentResult {
     successCount?: number;
+    /** 自动创建的系统账号数（仅勾选自动建号时可能大于 0） */
+    createdUserCount?: number;
     failRows?: {
-      rowNumber?: number;
       mobile?: string;
       reason?: string;
+      rowNumber?: number;
     }[];
   }
+
 }
 
 /** 培训班分页 */
@@ -266,10 +284,40 @@ export function getRemindRecordPage(params: PageParam & Record<string, any>) {
 }
 
 /** 上岗资格核查 */
-export function checkQualification(userId: number, projectId: string) {
+export function checkQualification(data: {
+  userName: string;
+  mobile: string;
+}) {
   return requestClient.post<TrainingPlanApi.QualificationResult>(
     '/training/plan/class/qualification/check',
-    { userId, projectId },
+    data,
+  );
+}
+
+/** 上岗资格核查历史记录（分页） */
+export function getQualificationRecordPage(params: {
+  pageNo: number;
+  pageSize: number;
+  userName?: string;
+  mobile?: string;
+}) {
+  return requestClient.get<
+    PageResult<TrainingPlanApi.QualificationRecord>
+  >('/training/plan/class/qualification/record/page', { params });
+}
+
+/** 删除上岗资格核查历史记录 */
+export function deleteQualificationRecord(id: number) {
+  return requestClient.delete(
+    `/training/plan/class/qualification/record/delete?id=${id}`,
+  );
+}
+
+/** 批量删除上岗资格核查历史记录 */
+export function deleteQualificationRecordBatch(ids: number[]) {
+  return requestClient.post(
+    '/training/plan/class/qualification/record/batch-delete',
+    ids,
   );
 }
 
@@ -280,10 +328,23 @@ export function getStudentImportTemplate() {
   );
 }
 
-/** Excel 批量导入学员（按手机号匹配系统账号） */
-export function importClassStudents(classId: number, file: File) {
+/**
+ * Excel 批量导入学员（按手机号匹配系统账号）
+ *
+ * @param autoCreateUser 未匹配到系统账号时，是否按「登录名=手机号、昵称=姓名」自动创建学员账号
+ */
+export function importClassStudents(
+  classId: number,
+  file: File,
+  autoCreateUser = false,
+) {
   return requestClient.upload<TrainingPlanApi.ImportStudentResult>(
-    `/training/plan/class/student/import?classId=${classId}`,
+    `/training/plan/class/student/import?classId=${classId}&autoCreateUser=${autoCreateUser}`,
     { file },
   );
+}
+
+/** 培训班全量（班级下拉使用，由前端按状态筛选可入班班级） */
+export function getAllClasses() {
+  return fetchAllPages<TrainingPlanApi.Class>(getClassPage, {});
 }

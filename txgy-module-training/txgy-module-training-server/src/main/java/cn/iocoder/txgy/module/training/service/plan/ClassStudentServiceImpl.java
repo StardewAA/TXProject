@@ -3,7 +3,10 @@ package cn.iocoder.txgy.module.training.service.plan;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.system.api.dept.DeptApi;
+import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.training.controller.admin.plan.vo.*;
 import cn.iocoder.txgy.module.training.dal.dataobject.plan.*;
@@ -14,8 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -42,6 +47,24 @@ public class ClassStudentServiceImpl {
     private StudentTaskMapper studentTaskMapper;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private DeptApi deptApi;
+
+    /**
+     * 单个培训班在班学员上限（手动添加 / Excel 导入 / 按参与对象筛选 / 导入指定班级统一受限）
+     */
+    public static final Integer MAX_STUDENT_SIZE = 50;
+
+    /**
+     * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选
+     */
+    private static final Integer SOURCE_MANUAL = 1;
+    private static final Integer SOURCE_IMPORT = 2;
+
+    /**
+     * 手机号格式：11 位、以 1 开头
+     */
+    private static final Pattern MOBILE_PATTERN = Pattern.compile("^1\\d{10}$");
 
     // ========== 学员管理 ==========
 
@@ -60,22 +83,34 @@ public class ClassStudentServiceImpl {
         if (CollUtil.isEmpty(courses)) {
             throw exception(PLAN_STUDENT_COURSE_REQUIRED);
         }
-        // 3. 查询用户昵称快照（容错：RPC 失败则降级为空）
+        // 3. 查询用户昵称 / 部门快照（容错：RPC 失败则降级为空）
         Map<Long, AdminUserRespDTO> userMap = fetchUserMap(reqVO.getUserIds());
+        Map<Long, String> deptNameMap = fetchDeptNameMap(userMap.values());
         List<ClassStudentDO> all = classStudentMapper.selectListByClassId(reqVO.getClassId(), null);
         Map<Long, ClassStudentDO> userIndex = all.stream()
                 .collect(Collectors.toMap(ClassStudentDO::getUserId, item -> item, (a, b) -> a));
+        // 在班学员上限校验：超出上限则整体失败回滚，避免班级规模失控（恢复在班的学员同样占用名额）
+        int inClassCount = (int) userIndex.values().stream()
+                .filter(item -> Objects.equals(item.getStatus(), 0)).count();
         int added = 0;
         for (Long userId : reqVO.getUserIds()) {
+            AdminUserRespDTO user = userMap.get(userId);
             ClassStudentDO exist = userIndex.get(userId);
             if (exist != null && Objects.equals(exist.getStatus(), 0)) {
                 continue; // 已在班，幂等跳过
             }
+            if (inClassCount + added >= MAX_STUDENT_SIZE) {
+                throw exception(PLAN_STUDENT_LIMIT_EXCEEDED, MAX_STUDENT_SIZE, inClassCount,
+                        MAX_STUDENT_SIZE - inClassCount);
+            }
             if (exist != null && Objects.equals(exist.getStatus(), 1)) {
-                // 曾被移除 → 恢复在班，并重新生成学习任务
+                // 曾被移除 → 恢复在班，并重新生成学习任务；同步刷新姓名/部门/来源快照
                 ClassStudentDO restore = new ClassStudentDO();
                 restore.setId(exist.getId());
                 restore.setStatus(0);
+                restore.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                restore.setDeptName(fetchDeptName(user, deptNameMap));
+                restore.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 restore.setJoinTime(LocalDateTime.now());
                 restore.setRemovedTime(null);
                 restore.setRemovedReason(null);
@@ -84,8 +119,9 @@ public class ClassStudentServiceImpl {
                 ClassStudentDO student = new ClassStudentDO();
                 student.setClassId(reqVO.getClassId());
                 student.setUserId(userId);
-                student.setUserName(Optional.ofNullable(userMap.get(userId)).map(AdminUserRespDTO::getNickname).orElse(null));
-                student.setSource(1);
+                student.setUserName(Optional.ofNullable(user).map(AdminUserRespDTO::getNickname).orElse(null));
+                student.setDeptName(fetchDeptName(user, deptNameMap));
+                student.setSource(reqVO.getSource() == null ? SOURCE_MANUAL : reqVO.getSource());
                 student.setStatus(0);
                 student.setJoinTime(LocalDateTime.now());
                 classStudentMapper.insert(student);
@@ -126,10 +162,14 @@ public class ClassStudentServiceImpl {
     /**
      * Excel 批量导入学员（文档 3-2）：按【手机号】匹配系统账号，复用批量添加学员逻辑（自动生成学习任务）
      *
-     * @return 成功新增数 + 失败行明细
+     * @param classId        培训班 ID
+     * @param rows           Excel 数据行（姓名 + 手机号）
+     * @param autoCreateUser 未匹配到系统账号时，是否按「登录名=手机号、昵称=姓名」自动开户后入班
+     * @return 成功新增数 + 自动开户数 + 失败行明细
      */
     @Transactional(rollbackFor = Exception.class)
-    public ClassStudentImportRespVO importStudents(Long classId, List<ClassStudentImportExcelVO> rows) {
+    public ClassStudentImportRespVO importStudents(Long classId, List<ClassStudentImportExcelVO> rows,
+                                                   Boolean autoCreateUser) {
         // 1. 校验培训班可管理学员、已绑定课程（与手动添加保持一致）
         ClassDO classDO = classService.exists(classId);
         if (!classService.isEditableForStudent(classDO)) {
@@ -138,42 +178,118 @@ public class ClassStudentServiceImpl {
         if (CollUtil.isEmpty(classCourseMapper.selectListByClassId(classId))) {
             throw exception(PLAN_STUDENT_COURSE_REQUIRED);
         }
-        // 2. 逐行匹配手机号 → 系统账号（演示规模单行 RPC 足够，失败行仅提示不中断）
+        // 2. 逐行匹配手机号 → 系统账号（失败行仅提示不中断整体导入）
+        boolean allowCreateUser = Boolean.TRUE.equals(autoCreateUser);
         List<ClassStudentImportRespVO.FailRow> failRows = new ArrayList<>();
         Set<Long> userIdSet = new LinkedHashSet<>();
+        int createdUserCount = 0;
         int rowNumber = 1; // 第 1 行为表头，数据从第 2 行起
         for (ClassStudentImportExcelVO row : rows) {
             rowNumber++;
-            String mobile = StrUtil.trimToNull(row.getMobile());
-            if (mobile == null) {
-                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, null, "手机号为空"));
+            // 2.1 手机号规范化 + 基础校验，避免把「格式错误」混报为「未找到账号」
+            String mobile = normalizeMobile(row.getMobile());
+            if (StrUtil.isBlank(mobile)) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, row.getMobile(), "手机号为空"));
                 continue;
             }
-            AdminUserRespDTO user;
+            if (!MOBILE_PATTERN.matcher(mobile).matches()) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile, "手机号格式不正确（应为 11 位手机号）"));
+                continue;
+            }
+            // 2.2 查询系统账号：使用数组查询，历史数据同号多账号时不再抛错导致误报「未找到」
+            List<AdminUserRespDTO> users;
             try {
-                user = adminUserApi.getUserByMobile(mobile).getCheckedData();
+                users = adminUserApi.getUserListByMobile(mobile).getCheckedData();
             } catch (Throwable ex) {
-                log.warn("[importStudents][按手机号查询用户失败，忽略该行] mobile={}", mobile, ex);
-                user = null;
-            }
-            if (user == null || user.getId() == null) {
-                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile, "未找到对应系统账号"));
+                log.warn("[importStudents][查询系统账号失败] mobile={}", mobile, ex);
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile,
+                        "查询系统账号失败：" + ex.getMessage()));
                 continue;
             }
-            userIdSet.add(user.getId());
+            if (CollUtil.isNotEmpty(users)) {
+                if (users.size() > 1) {
+                    log.warn("[importStudents][手机号匹配到多个系统账号，取第一个] mobile={} userIds={}", mobile,
+                            users.stream().map(AdminUserRespDTO::getId).collect(Collectors.toList()));
+                }
+                userIdSet.add(users.get(0).getId());
+                continue;
+            }
+            // 2.3 未匹配到账号：按开关决定是否自动开户
+            if (!allowCreateUser) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile,
+                        "未找到对应系统账号（可在导入时勾选「自动创建学员账号」后重试）"));
+                continue;
+            }
+            Long createdUserId = createUserForImport(row, mobile, rowNumber, failRows);
+            if (createdUserId != null) {
+                userIdSet.add(createdUserId);
+                createdUserCount++;
+            }
         }
-        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过）
+        // 3. 复用批量添加学员逻辑（自动生成学习任务、已在班幂等跳过），来源标记为「Excel 批量导入」
         int added = 0;
         if (CollUtil.isNotEmpty(userIdSet)) {
             ClassStudentAddReqVO reqVO = new ClassStudentAddReqVO();
             reqVO.setClassId(classId);
             reqVO.setUserIds(new ArrayList<>(userIdSet));
+            reqVO.setSource(SOURCE_IMPORT);
             added = addStudents(reqVO);
         }
         ClassStudentImportRespVO respVO = new ClassStudentImportRespVO();
         respVO.setSuccessCount(added);
+        respVO.setCreatedUserCount(createdUserCount);
         respVO.setFailRows(failRows);
         return respVO;
+    }
+
+    /**
+     * 手机号规范化：去除空格/横线/括号，兼容 Excel 数字单元格读出的 {@code .0} 后缀与 {@code 1.38E+10} 科学计数法
+     *
+     * @param raw Excel 单元格原始值
+     * @return 规范化后的手机号；原始值为空时返回 {@code null}
+     */
+    static String normalizeMobile(String raw) {
+        String mobile = StrUtil.trimToNull(raw);
+        if (mobile == null) {
+            return null;
+        }
+        mobile = mobile.replaceAll("[\\s\\-()（）]", "");
+        if (mobile.endsWith(".0")) {
+            mobile = mobile.substring(0, mobile.length() - 2);
+        }
+        if (mobile.matches("^[\\d.]+[eE]\\+?\\d+$")) { // Excel 数字单元格可能被读成科学计数法
+            try {
+                mobile = new BigDecimal(mobile).toPlainString();
+            } catch (NumberFormatException ignored) {
+                // 保持原值，后续按「手机号格式不正确」提示
+            }
+        }
+        return mobile;
+    }
+
+    /**
+     * 为导入行自动创建系统账号：登录名 = 手机号，昵称 = 姓名（姓名为空时用手机号兜底）
+     *
+     * 单行失败仅记录原因，不中断整体导入
+     */
+    private Long createUserForImport(ClassStudentImportExcelVO row, String mobile, int rowNumber,
+                                     List<ClassStudentImportRespVO.FailRow> failRows) {
+        try {
+            AdminUserCreateReqDTO createReqDTO = new AdminUserCreateReqDTO()
+                    .setUsername(mobile)
+                    .setNickname(StrUtil.blankToDefault(StrUtil.trim(row.getName()), mobile))
+                    .setMobile(mobile);
+            Long userId = adminUserApi.createUser(createReqDTO).getCheckedData();
+            if (userId == null) {
+                failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile, "自动创建系统账号失败"));
+            }
+            return userId;
+        } catch (Throwable ex) {
+            log.warn("[createUserForImport][自动创建系统账号失败] mobile={} name={}", mobile, row.getName(), ex);
+            String reason = StrUtil.blankToDefault(ex.getMessage(), ex.getClass().getSimpleName());
+            failRows.add(new ClassStudentImportRespVO.FailRow(rowNumber, mobile, "自动创建系统账号失败：" + reason));
+            return null;
+        }
     }
 
     public PageResult<ClassStudentRespVO> getStudentPage(ClassStudentPageReqVO pageReqVO) {
@@ -363,6 +479,28 @@ public class ClassStudentServiceImpl {
             log.warn("[fetchUserMap][获取用户信息失败，降级 userName 为空] userIds={}", userIds, ex);
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * 批量获取用户所属部门名称（用于部门/班组快照）；RPC 异常时降级为空，不影响主流程
+     */
+    private Map<Long, String> fetchDeptNameMap(Collection<AdminUserRespDTO> users) {
+        Set<Long> deptIds = users.stream().map(AdminUserRespDTO::getDeptId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (CollUtil.isEmpty(deptIds)) {
+            return Collections.emptyMap();
+        }
+        try {
+            return deptApi.getDeptList(deptIds).getCheckedData().stream()
+                    .collect(Collectors.toMap(DeptRespDTO::getId, DeptRespDTO::getName, (a, b) -> a));
+        } catch (Throwable ex) {
+            log.warn("[fetchDeptNameMap][获取部门信息失败，降级 deptName 为空] deptIds={}", deptIds, ex);
+            return Collections.emptyMap();
+        }
+    }
+
+    private String fetchDeptName(AdminUserRespDTO user, Map<Long, String> deptNameMap) {
+        return user == null || user.getDeptId() == null ? null : deptNameMap.get(user.getDeptId());
     }
 
     private String getStatusName(Integer status) {

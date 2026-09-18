@@ -18,6 +18,7 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import MemberApplications from './modules/member-applications.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -158,6 +159,7 @@ async function del(row: MallEnterpriseApi.Enterprise) {
 
 <template>
   <Page auto-content-height>
+    <MemberApplications />
     <FormModal @success="refresh" />
     <Grid table-title="企业入驻审核">
       <template #toolbar-tools>

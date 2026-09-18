@@ -7,13 +7,16 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoDefinitionRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoPageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoUploadRespVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoResourceDO;
+import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoTranscodeTaskDO;
 import cn.iocoder.txgy.module.training.dal.mysql.resource.ResourceReferenceMapper;
 import cn.iocoder.txgy.module.training.dal.mysql.resource.VideoResourceMapper;
 import cn.iocoder.txgy.module.training.enums.ErrorCodeConstants;
 import cn.iocoder.txgy.module.training.enums.resource.ResourceConstants;
 import cn.iocoder.txgy.module.training.enums.resource.ResourceStatusEnum;
 import cn.iocoder.txgy.module.training.enums.resource.TranscodeStatusEnum;
+import cn.iocoder.txgy.module.training.enums.resource.TranscodeTaskStatusEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,7 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -43,6 +49,8 @@ public class VideoResourceServiceImpl implements VideoResourceService {
     private ResourceCategoryService categoryService;
     @Resource
     private OperationLogService operationLogService;
+    @Resource
+    private VideoTranscodeTaskService transcodeTaskService;
 
     @Override
     public PageResult<VideoResourceDO> getVideoPage(VideoPageReqVO reqVO) {
@@ -59,11 +67,14 @@ public class VideoResourceServiceImpl implements VideoResourceService {
     }
 
     @Override
-    public Long uploadVideo(MultipartFile file, String title, Long categoryId, String coverUrl,
-                            String tags, Integer durationSeconds, Integer videoType, String definition) {
+    public VideoUploadRespVO uploadVideo(MultipartFile file, String title, Long categoryId, String coverUrl,
+                                         String tags, Integer durationSeconds, Integer videoType, String definition) {
         String ext = validateFile(file);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_VIDEO);
-        String filePath = fileStorage.store(file, "video", ext);
+        Long uploaderId = SecurityFrameworkUtils.getLoginUserId();
+        String uploaderName = SecurityFrameworkUtils.getLoginUserNickname();
+        // 异步上传：请求线程只落临时文件并建单，文件归位与转码交给后台线程池
+        String tempPath = fileStorage.storeTemp(file, "video", ext);
         String finalDefinition = normalizeDefinition(definition);
         String finalVideoType = videoTypeName(normalizeVideoType(videoType));
         VideoResourceDO video = new VideoResourceDO();
@@ -71,25 +82,35 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         video.setCategoryId(categoryId);
         video.setCoverUrl(coverUrl);
         video.setFileName(file.getOriginalFilename());
-        video.setFilePath(filePath);
+        video.setFilePath(tempPath);
         video.setFileType(ext);
         video.setFileSize(file.getSize());
         video.setDurationSeconds(durationSeconds == null ? 0 : Math.max(0, durationSeconds));
         video.setVideoType(normalizeVideoType(videoType));
         video.setDefinition(finalDefinition);
-        video.setTranscodeStatus(TranscodeStatusEnum.NONE.getStatus());
+        video.setTranscodeStatus(TranscodeStatusEnum.PENDING.getStatus());
         video.setTags(tags);
         video.setStatus(ResourceStatusEnum.ONLINE.getStatus());
         video.setViewCount(0);
-        video.setUploaderId(SecurityFrameworkUtils.getLoginUserId());
-        video.setUploaderName(SecurityFrameworkUtils.getLoginUserNickname());
+        video.setUploaderId(uploaderId);
+        video.setUploaderName(uploaderName);
         videoMapper.insert(video);
         // 生成默认清晰度列表：原始清晰度 + 更低档位（未转码项暂复用原始播放地址）
         saveDefaultDefinitionOptions(video.getId(), finalDefinition);
+        int taskCount = transcodeTaskService.createTasks(video.getId(), finalDefinition, tempPath);
         operationLogService.createLog(ResourceConstants.ACTION_UPLOAD, ResourceConstants.TARGET_VIDEO,
                 video.getId(), "上传" + finalVideoType + "《" + title + "》，原始清晰度 " + finalDefinition
-                        + "，大小 " + formatSize(file.getSize()));
-        return video.getId();
+                        + "，大小 " + formatSize(file.getSize()) + "，生成转码任务 " + taskCount + " 个");
+        transcodeTaskService.submitTranscode(video.getId(), tempPath, uploaderId, uploaderName);
+        return VideoUploadRespVO.builder()
+                .videoId(video.getId())
+                .async(true)
+                .taskCount(taskCount)
+                .targetDefinitions(transcodeTaskService.getCapability().getTargetDefinitions())
+                .message(taskCount > 0
+                        ? "上传成功，后台正在转码（" + taskCount + " 个清晰度任务），可在列表查看进度"
+                        : "上传成功，当前清晰度无需转码")
+                .build();
     }
 
     @Override
@@ -162,6 +183,8 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         if (refCount != null && refCount > 0) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.VIDEO_REFERENCED_DELETE_FORBIDDEN);
         }
+        // 清理转码任务与转码产物（视频本体文件保留策略同原有逻辑）
+        transcodeTaskService.deleteTasksByVideoId(id);
         videoMapper.deleteById(id);
         operationLogService.createLog(ResourceConstants.ACTION_DELETE, ResourceConstants.TARGET_VIDEO,
                 id, "删除视频《" + video.getTitle() + "》");
@@ -206,7 +229,8 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         }
         VideoResourceDO update = new VideoResourceDO();
         update.setId(id);
-        update.setDefinitionOptions(JSONUtil.toJsonStr(valid));
+        // 保留转码任务产物：手动维护的清晰度地址覆盖列表中的同名档位
+        update.setDefinitionOptions(JSONUtil.toJsonStr(mergeTranscodedOptions(video, valid)));
         update.setTranscodeStatus(TranscodeStatusEnum.SUCCESS.getStatus());
         videoMapper.updateById(update);
         operationLogService.createLog(ResourceConstants.ACTION_TRANSCODE, ResourceConstants.TARGET_VIDEO,
@@ -249,6 +273,35 @@ public class VideoResourceServiceImpl implements VideoResourceService {
         update.setId(id);
         update.setDefinitionOptions(JSONUtil.toJsonStr(buildDefaultDefinitionOptions(id, definition)));
         videoMapper.updateById(update);
+    }
+
+    /**
+     * 手动保存清晰度列表时，补充已转码成功但未在列表中出现的档位
+     */
+    private List<VideoDefinitionRespVO> mergeTranscodedOptions(VideoResourceDO video,
+                                                               List<VideoDefinitionRespVO> manual) {
+        Map<String, VideoDefinitionRespVO> map = new LinkedHashMap<>();
+        for (VideoDefinitionRespVO item : manual) {
+            map.put(item.getDefinition().toUpperCase(), item);
+        }
+        for (VideoTranscodeTaskDO task : transcodeTaskService.getTaskDOList(video.getId())) {
+            if (!Objects.equals(task.getStatus(), TranscodeTaskStatusEnum.SUCCESS.getStatus())) {
+                continue;
+            }
+            map.putIfAbsent(task.getDefinition(), new VideoDefinitionRespVO(task.getDefinition(),
+                    buildPlayUrl(video.getId(), task.getDefinition()), true, false));
+        }
+        List<VideoDefinitionRespVO> list = new ArrayList<>(map.values());
+        list.sort(Comparator.comparingInt(item -> {
+            int idx = ResourceConstants.DEFINITION_ORDER.indexOf(item.getDefinition());
+            return idx < 0 ? 99 : idx;
+        }));
+        return list;
+    }
+
+    private String buildPlayUrl(Long id, String definition) {
+        String url = "/admin-api/training/video/play?id=" + id;
+        return StrUtil.isBlank(definition) ? url : url + "&definition=" + definition;
     }
 
     private List<VideoDefinitionRespVO> buildDefaultDefinitionOptions(Long id, String definition) {

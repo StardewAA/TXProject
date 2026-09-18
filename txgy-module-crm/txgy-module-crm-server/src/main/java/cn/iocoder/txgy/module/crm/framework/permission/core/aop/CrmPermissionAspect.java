@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.crm.framework.permission.core.aop;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.framework.common.util.spring.SpringExpressionUtils;
 import cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils;
 import cn.iocoder.txgy.module.crm.dal.dataobject.permission.CrmPermissionDO;
@@ -51,11 +52,23 @@ public class CrmPermissionAspect {
                 crmPermission.bizType()[0].getType() : (Integer) expressionValues.get(crmPermission.bizTypeValue()); // 模块类型
         // 1.2 处理兼容多个 bizId 的情况
         Object object = expressionValues.get(crmPermission.bizId()); // 模块数据编号
+        // 特殊：bizId 为空，说明本次调用不针对某条具体数据（例如列表查询未按业务过滤），无需校验数据权限。
+        // 若不处理，会因 object.toString() 空指针，导致列表接口整体 500。
+        if (object == null) {
+            return;
+        }
         Set<Long> bizIds = new HashSet<>();
         if (object instanceof Collection<?>) {
-            bizIds.addAll(convertSet((Collection<?>) object, item -> Long.parseLong(item.toString())));
+            bizIds.addAll(convertSet((Collection<?>) object, item -> NumberUtils.parseLong(item.toString())));
         } else {
-            bizIds.add(Long.parseLong(object.toString()));
+            Long bizId = NumberUtils.parseLong(object.toString());
+            if (bizId == null) {
+                return;
+            }
+            bizIds.add(bizId);
+        }
+        if (CollUtil.isEmpty(bizIds)) {
+            return;
         }
         Integer permissionLevel = crmPermission.level().getLevel(); // 需要的权限级别
 

@@ -15,6 +15,10 @@ export namespace HrmRecruitCandidateApi {
     email?: string; // 邮箱
     postId?: number; // 应聘职位编号
     applicationId?: number; // 当前岗位应聘记录编号
+    applicationStatus?: string; // 当前岗位应聘流程状态
+    applicationStatusName?: string; // 当前岗位应聘流程状态名称
+    offerId?: number; // 当前岗位 Offer 编号
+    offerApprovalStatus?: string; // 当前岗位 Offer 审批状态
     postName?: string; // 应聘职位名称
     postStatus?: number; // 应聘职位状态
     deptId?: number; // 用人部门编号
@@ -100,6 +104,7 @@ export namespace HrmRecruitCandidateApi {
   /** 转员工 */
   export interface EntryReq extends HrmEmployeeApi.Employee {
     candidateId: number;
+    applicationId?: number;
   }
 }
 

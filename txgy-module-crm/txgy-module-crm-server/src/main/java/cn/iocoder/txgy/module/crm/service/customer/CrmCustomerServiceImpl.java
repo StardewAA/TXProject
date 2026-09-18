@@ -25,6 +25,7 @@ import cn.iocoder.txgy.module.crm.dal.mysql.contact.CrmContactMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
+import cn.iocoder.txgy.module.crm.enums.customer.CrmCustomerTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
 import cn.iocoder.txgy.module.crm.service.business.CrmBusinessService;
@@ -37,6 +38,7 @@ import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmOwnerRecordCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
+import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import com.mzt.logapi.context.LogRecordContext;
@@ -110,23 +112,32 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     }
 
     @Override
+    public List<CrmCustomerDO> getSupplierSimpleList() {
+        // 供应商属于租户级共享主数据（供应商基础库），不做数据权限过滤，保证所有用户都能选到
+        return customerMapper.selectListByCustomerType(CrmCustomerTypeEnum.UPSTREAM.getType());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerSaveReqVO createReqVO, Long userId) {
         createReqVO.setId(null);
-        // 1. 校验拥有客户是否到达上限
-        validateCustomerExceedOwnerLimit(createReqVO.getOwnerUserId(), 1);
+        // 1. 确定负责人：优先取表单选择的负责人，未选择时兜底为当前登录用户
+        Long ownerUserId = createReqVO.getOwnerUserId() != null ? createReqVO.getOwnerUserId() : userId;
+        createReqVO.setOwnerUserId(ownerUserId);
+        // 2. 校验拥有客户是否到达上限
+        validateCustomerExceedOwnerLimit(ownerUserId, 1);
 
-        // 2. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqVO, userId);
+        // 3. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqVO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 3. 创建数据权限
+        // 4. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
+                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
 
-        // 4. 记录操作日志上下文
+        // 5. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -188,13 +199,19 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CUSTOMER_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateCustomerFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
+    public void updateCustomerFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
+                                       String contactLastContent) {
         // 1.1 校验存在
         CrmCustomerDO customer = validateCustomerExists(id);
 
         // 2. 更新客户的跟进信息
+        //    注意：contactLastTime 必须取「实际跟进时间」，它是「多久没跟进 → 掉入公海」的计时起点：
+        //    - 不能取当前时间：补录历史跟进（今天补录 9/1 的拜访）会把计时错误重置为今天，客户永远掉不进公海；
+        //    - 不能取 contactNextTime（下次联系时间）：那是业务计划时间，可能早于本次跟进；
+        //    - 取 max(已有值, 本次实际跟进时间)：补录历史不会把计时往回拨。
         customerMapper.updateById(new CrmCustomerDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(LocalDateTime.now()).setContactLastContent(contactLastContent));
+                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(customer.getContactLastTime(), contactTime))
+                .setContactLastContent(contactLastContent));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("customerName", customer.getName());
@@ -299,15 +316,17 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_CREATE_SUB_TYPE, bizNo = "{{#customer.id}}",
             success = CRM_CUSTOMER_CREATE_SUCCESS)
     public Long createCustomer(CrmCustomerCreateReqBO createReqBO, Long userId) {
-        // 1. 插入客户
-        CrmCustomerDO customer = initCustomer(createReqBO, userId);
+        // 1. 确定负责人：优先取传入的负责人（如线索负责人），未指定时兜底为当前操作人
+        Long ownerUserId = createReqBO.getOwnerUserId() != null ? createReqBO.getOwnerUserId() : userId;
+        // 2. 插入客户
+        CrmCustomerDO customer = initCustomer(createReqBO, ownerUserId);
         customerMapper.insert(customer);
 
-        // 2. 创建数据权限
+        // 3. 创建数据权限（以实际负责人为准，而非当前操作人）
         permissionService.createPermission(new CrmPermissionCreateReqBO().setBizType(CrmBizTypeEnum.CRM_CUSTOMER.getType())
-                .setBizId(customer.getId()).setUserId(userId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel())); // 设置当前操作的人为负责人
+                .setBizId(customer.getId()).setUserId(ownerUserId).setLevel(CrmPermissionLevelEnum.OWNER.getLevel()));
 
-        // 3. 记录操作日志上下文
+        // 4. 记录操作日志上下文
         LogRecordContext.putVariable("customer", customer);
         return customer.getId();
     }
@@ -511,7 +530,13 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @Override
     public int autoPutCustomerPool() {
         CrmCustomerPoolConfigDO poolConfig = customerPoolConfigService.getCustomerPoolConfig();
-        if (poolConfig == null || !poolConfig.getEnabled()) {
+        if (poolConfig == null || !Boolean.TRUE.equals(poolConfig.getEnabled())) {
+            return 0;
+        }
+        // 兜底：未配置天数时 LocalDateTime#minusDays(null) 拆箱会抛 NPE，这里直接跳过并告警，
+        // 避免定时任务整批失败（界面上有校验，但历史脏数据或绕过接口写库无法防护）
+        if (poolConfig.getContactExpireDays() == null || poolConfig.getDealExpireDays() == null) {
+            log.warn("[autoPutCustomerPool][公海规则未配置「未跟进天数」或「未成交天数」，本次跳过执行]");
             return 0;
         }
         // 1. 获得需要放到的客户列表
@@ -540,7 +565,9 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
                 .setBizId(customer.getId()).setPreOwnerUserId(customer.getOwnerUserId()).setPostOwnerUserId(null));
 
         // 2. 联系人的负责人，也要设置为 null。因为：因为领取后，负责人也要关联过来，这块和 receiveCustomer 是对应的
-        contactService.updateOwnerUserIdByCustomerId(customer.getId(), null);
+        //    注意：自动掉入公海是由定时任务/管理操作触发的，操作人往往不是该客户的负责人，
+        //    因此必须走「跳过数据权限校验」的方法，否则会被 @CrmPermission 拒绝导致整条事务回滚
+        contactService.updateOwnerUserIdByCustomerIdIgnorePermission(customer.getId(), null);
 
         // 3. 删除负责人数据权限
         // 注意：需要放在 contactService 后面，不然【客户】数据权限已经被删除，无法操作！

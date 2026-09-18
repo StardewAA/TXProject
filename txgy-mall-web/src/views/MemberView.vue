@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { useAccountOperation } from '@/composables/useAccountOperation'
+const operation = useAccountOperation()
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { infraApi, memberApi } from '@/api/mall'
 import MemberPage from '@/components/MemberPage.vue'
+import OrderWorkbench from '@/components/OrderWorkbench.vue'
+import CustomerAffiliation from '@/components/CustomerAffiliation.vue'
 import { useAuthStore } from '@/stores/auth'
 import { normalizeImage } from '@/utils/format'
 
@@ -37,7 +41,9 @@ async function selectAvatar(event: Event) {
   if (file.size > 5 * 1024 * 1024) return ElMessage.warning('头像图片不能超过 5 MB')
   uploading.value = true
   try {
-    form.avatar = await infraApi.uploadAvatar(file)
+    const avatar = await infraApi.uploadAvatar(file)
+    if (!operation.current()) return
+    form.avatar = avatar
     ElMessage.success('头像上传成功，请点击保存')
   } finally { uploading.value = false }
 }
@@ -46,7 +52,9 @@ async function save() {
   saving.value = true
   try {
     await memberApi.updateProfile(form)
+    if (!operation.current()) return
     await authStore.loadProfile()
+    if (!operation.current()) return
     editing.value = false
     ElMessage.success('资料已更新，移动端刷新后同步显示')
   } finally { saving.value = false }
@@ -55,16 +63,18 @@ async function save() {
 
 <template>
   <MemberPage title="采购工作台" description="管理采购、跟进订单，让工程备料更从容">
+    <OrderWorkbench :navigation-blocked="editing" />
     <div class="profile-card">
       <el-avatar :size="88" :src="authStore.profile?.avatar">{{ (authStore.profile?.nickname || '用户').slice(0, 1) }}</el-avatar>
       <div class="profile-info"><small>WELCOME BACK / 欢迎回来</small><h2>{{ authStore.profile?.nickname || '商城用户' }}</h2><p>手机号：{{ authStore.profile?.mobile || '-' }} <span>会员编号：{{ authStore.profile?.id || '-' }}</span></p><div class="profile-tag">工程材料采购 · PC / 移动端账户互通</div></div>
       <el-button @click="openEditor">编辑资料</el-button>
     </div>
-    <div class="workbench-heading"><h3>我的采购服务</h3><RouterLink to="/goods">继续选购材料 ↗</RouterLink></div>
+    <div class="workbench-heading"><h3>我的采购服务</h3><MallLink to="/goods">继续选购材料 ↗</MallLink></div>
+    <CustomerAffiliation />
     <div class="quick-grid">
-      <RouterLink v-for="item in shortcuts" :key="item.path" :to="'/member/' + item.path" :class="item.tone"><div class="shortcut-top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path :d="item.icon" /></svg><i>↗</i></div><b>{{ item.title }}</b><span>{{ item.text }}</span></RouterLink>
+      <MallLink v-for="item in shortcuts" :key="item.path" :to="'/member/' + item.path" :class="item.tone"><div class="shortcut-top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path :d="item.icon" /></svg><i>↗</i></div><b>{{ item.title }}</b><span>{{ item.text }}</span></MallLink>
     </div>
-    <section class="purchase-guide"><div><small>PROCUREMENT GUIDE</small><h3>每一次采购，都心中有数</h3><p>从选材到收货，关键事项一步不漏。</p><RouterLink to="/categories">浏览材料目录 →</RouterLink></div><ol><li><b>01</b><div><strong>选材前 · 确认工况</strong><p>核对材质、使用温度与规格单位</p></div></li><li><b>02</b><div><strong>下单时 · 核对信息</strong><p>确认数量、收货地址与结算金额</p></div></li><li><b>03</b><div><strong>收货后 · 验货留存</strong><p>核对到货材料，有问题及时联系售后</p></div></li></ol></section>
+    <section class="purchase-guide"><div><small>PROCUREMENT GUIDE</small><h3>每一次采购，都心中有数</h3><p>从选材到收货，关键事项一步不漏。</p><MallLink to="/categories">浏览材料目录 →</MallLink></div><ol><li><b>01</b><div><strong>选材前 · 确认工况</strong><p>核对材质、使用温度与规格单位</p></div></li><li><b>02</b><div><strong>下单时 · 核对信息</strong><p>确认数量、收货地址与结算金额</p></div></li><li><b>03</b><div><strong>收货后 · 验货留存</strong><p>核对到货材料，有问题及时联系售后</p></div></li></ol></section>
     <el-dialog v-model="editing" title="编辑会员资料" width="480px">
       <el-form label-position="top">
         <el-form-item label="昵称"><el-input v-model="form.nickname" maxlength="30" /></el-form-item>

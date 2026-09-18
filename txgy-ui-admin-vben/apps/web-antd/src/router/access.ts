@@ -86,6 +86,8 @@ const HIDDEN_MALL_PROMOTION_COMPONENT_PARTS = [
   'mall/trade/brokerage/',
 ];
 
+const HIDDEN_HRM_EMPLOYEE_PORTAL_RECRUIT_MENU_ID = 1645;
+
 function normalizeMenuPath(value: unknown): string {
   const withoutQuery = String(value ?? '').split(/[?#]/, 1)[0] ?? '';
   return withoutQuery
@@ -164,6 +166,45 @@ function isHiddenMallPromotionMenu(
   // Path/component aliases are unambiguous activity identifiers. Names are
   // scoped to the mall context to avoid hiding an unrelated module's page.
   return hiddenPath || hiddenComponent || (hiddenName && inMallPromotion);
+}
+
+function isHiddenHrmEmployeePortalRecruitMenu(
+  menu: AppRouteRecordRaw,
+  parentPaths: string[],
+): boolean {
+  const menuWithId = menu as AppRouteRecordRaw & { id?: number };
+  const normalizedPath = normalizeMenuPath(menu.path);
+  const isEmployeePortal = parentPaths.some(
+    (parentPath) =>
+      parentPath === 'portal' || parentPath.endsWith('/portal'),
+  );
+  return (
+    menuWithId.id === HIDDEN_HRM_EMPLOYEE_PORTAL_RECRUIT_MENU_ID ||
+    (isEmployeePortal &&
+      normalizedPath === 'recruit' &&
+      String(menu.name ?? '').trim() === '招聘应聘')
+  );
+}
+
+function filterHrmEmployeePortalRecruitMenus(
+  menus: AppRouteRecordRaw[],
+  parentPaths: string[] = [],
+): AppRouteRecordRaw[] {
+  return menus.reduce<AppRouteRecordRaw[]>((result, menu) => {
+    if (isHiddenHrmEmployeePortalRecruitMenu(menu, parentPaths)) {
+      return result;
+    }
+
+    const nextMenu = { ...menu };
+    if (Array.isArray(nextMenu.children)) {
+      nextMenu.children = filterHrmEmployeePortalRecruitMenus(
+        nextMenu.children,
+        [...parentPaths, normalizeMenuPath(nextMenu.path)],
+      );
+    }
+    result.push(nextMenu);
+    return result;
+  }, []);
 }
 
 /** Remove deferred promotion entries while preserving the rest of the menu. */
@@ -246,9 +287,11 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
         JSON.stringify(accessMenus),
       ) as AppRouteRecordRaw[];
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
-      injectAiChatMenu(menus);
+      injectAiChatMenu(menus, accessStore.accessCodes);
       return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(menus),
+        filterMallPromotionMenus(
+          filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
+        ),
       );
     },
     // 可以指定没有权限跳转403页面
@@ -260,19 +303,73 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
 }
 
 /**
+ * WMS 菜单改造：
+ * 1. 删除旧的「WMS 首页」/「分析页」菜单（旧首页组件 views/wms/home/index.vue）。
+ * 2. 把 AI 智能助手（/wms/ai-center）改名为「WMS 首页」，作为新的首页入口。
+ */
+function transformWmsMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
+  return menus.reduce<AppRouteRecordRaw[]>((result, menu) => {
+    const normalizedPath = normalizeMenuPath(menu.path);
+    const component = normalizeMenuPath(menu.component);
+    const name = String(menu.name ?? '').trim();
+    const title = String((menu.meta as Record<string, unknown>)?.title ?? '').trim();
+
+    // 1. 移除旧的 WMS 首页
+    const isOldWmsHome =
+      normalizedPath === 'wms/home' ||
+      component === 'views/wms/home/index.vue' ||
+      name === 'WMS 首页' ||
+      name === '分析页' ||
+      title === 'WMS 首页' ||
+      title === '分析页';
+    if (isOldWmsHome) {
+      return result;
+    }
+
+    // 2. 重命名 AI 智能助手为 WMS 首页
+    const isAiAssistant =
+      normalizedPath === 'wms/ai-center' ||
+      component === 'views/wms/ai/index.vue' ||
+      name === 'AI 智能助手' ||
+      title === 'AI 智能助手';
+    if (isAiAssistant) {
+      menu = { ...menu };
+      menu.name = 'WMS 首页';
+      menu.meta = { ...(menu.meta ?? {}), title: 'WMS 首页' };
+    }
+
+    if (Array.isArray(menu.children)) {
+      menu.children = transformWmsMenus(menu.children);
+    }
+
+    result.push(menu);
+    return result;
+  }, []);
+}
+
+/**
  * 在后端菜单中注入「AI对话助手」菜单项（前端演示用）。
  * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
  * 若未找到则挂载为顶级菜单，保证功能可见。
  */
-function injectAiChatMenu(menus: AppRouteRecordRaw[]) {
+function injectAiChatMenu(
+  menus: AppRouteRecordRaw[],
+  permissions: unknown[] | null | undefined,
+) {
   const crmParent = findMenu(menus, (m) => m?.path === '/crm');
+  const hasCrmPermission = (permissions ?? []).some((permission) =>
+    String(permission ?? '').startsWith('crm:'),
+  );
+  if (!hasCrmPermission) {
+    return;
+  }
   const item = {
     id: 990_001,
     name: 'AI对话助手',
     componentName: 'CrmAiChat',
     path: 'ai-chat',
     component: 'views/crm/ai-chat/index.vue',
-    icon: 'lucide:bot',
+    icon: 'crmai:avatar',
     meta: {},
     visible: true,
     // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）

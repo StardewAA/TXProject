@@ -91,7 +91,7 @@
           </view>
 
           <view class="integration-tip">
-            <text>{{ catalogSource === 'api' ? '点击商品进入详情，可选择规格并加入购物车' : '接口暂不可用，当前仅展示本地商品档案' }}</text>
+            <text>{{ catalogSource === 'api' ? '点击商品进入详情，可选择规格并加入购物车' : catalogSource === 'loading' ? '正在加载商城商品' : '商品暂无法加载，请刷新重试' }}</text>
           </view>
         </scroll-view>
       </view>
@@ -104,18 +104,16 @@
   import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
   import {
-    categoryProducts,
     getMallCategory,
     mallCategories,
-    mallProducts,
   } from '@/sheep/data/mall-catalog';
   import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
 
   const state = reactive({
     activeMenu: 0,
   });
-  const products = ref(mallProducts);
-  const catalogSource = ref('local');
+  const products = ref([]);
+  const catalogSource = ref('loading');
 
   const safeArea = sheep.$platform.device?.safeArea || {
     height: typeof window === 'undefined' ? 667 : window.innerHeight,
@@ -131,8 +129,7 @@
   const categoryProductCount = (categoryKey) =>
     (Array.isArray(products.value) ? products.value : []).filter(
       (product) => product?.categoryKey === categoryKey,
-    ).length ||
-    categoryProducts(categoryKey).length;
+    ).length;
   const categoryColor = (categoryKey) => getMallCategory(categoryKey)?.color || '#0f766e';
   const categoryGradient = (item) => {
     const color = typeof item === 'string' ? categoryColor(item) : item?.color || '#0f766e';
@@ -164,11 +161,11 @@
       const result = await loadMallCatalog(force);
       if (Array.isArray(result?.products)) {
         products.value = result.products.filter(Boolean);
-        catalogSource.value = result.source === 'api' ? 'api' : 'local';
+        catalogSource.value = 'api';
       }
     } catch (error) {
-      products.value = Array.isArray(products.value) ? products.value : mallProducts;
-      catalogSource.value = 'local';
+      products.value = [];
+      catalogSource.value = 'error';
     }
   }
 

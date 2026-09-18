@@ -179,6 +179,11 @@ const tenantEnable = computed(
 async function handleGetTenantList() {
   if (tenantEnable.value) {
     tenants.value = await getSimpleTenantList();
+    // 兜底：历史会话（或登录流程未写入）可能没有「访问租户」，
+    // 用登录租户补齐，避免下拉长期停留在「请选择租户」占位符。
+    if (!accessStore.visitTenantId && accessStore.tenantId) {
+      accessStore.setVisitTenantId(accessStore.tenantId);
+    }
   }
 }
 
@@ -188,8 +193,6 @@ async function handleTenantChange(tenant: SystemTenantApi.Tenant) {
     message.error('切换租户失败');
     return;
   }
-  // 当前后端租户隔离真正读取的是 tenant-id，这里要同步切换，visitTenantId 仅用于页面侧展示/记忆
-  accessStore.setTenantId(tenant.id as number);
   // 设置访问租户 ID
   accessStore.setVisitTenantId(tenant.id as number);
   // 关闭其他标签页，只保留当前页

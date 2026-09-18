@@ -10,20 +10,23 @@ import java.util.List;
 @Data
 public class QualificationRespVO {
 
-    @Schema(description = "人员 ID", example = "3001")
+    @Schema(description = "人员 ID（平台账号）", example = "3001")
     private Long userId;
 
     @Schema(description = "人员姓名", example = "张三")
     private String userName;
 
-    @Schema(description = "工程项目编号", example = "PROJ-2026-001")
-    private String projectId;
+    @Schema(description = "核查输入的手机号", example = "13800138000")
+    private String mobile;
 
     /**
      * true=可上岗 false=不可上岗
      */
     @Schema(description = "是否具备上岗资格", example = "true")
     private Boolean qualified;
+
+    @Schema(description = "通过岗位（合格培训班配置的目标岗位，去重）", example = "[\"管道工\",\"防腐工\"]")
+    private List<String> passedPosts;
 
     @Schema(description = "核查明细（岗前/复工等各类培训完成情况）")
     private List<QualificationItemVO> items;

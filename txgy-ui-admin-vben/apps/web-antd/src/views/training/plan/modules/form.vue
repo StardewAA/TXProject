@@ -71,16 +71,12 @@ const [Modal, modalApi] = useVbenModal({
         id: formData.value?.id,
         name: raw.name,
         type: raw.type,
-        projectId: raw.projectId || undefined,
-        projectName: raw.projectName || undefined,
         courseIds: raw.courseIds,
-        targetCondition: raw.targetCondition || undefined,
         targetPosts: Array.isArray(raw.targetPostsText)
           ? JSON.stringify(raw.targetPostsText)
           : undefined,
         startTime: raw.startTime || undefined,
         deadline: raw.deadline || undefined,
-        remark: raw.remark || undefined,
       };
       await (data.id ? updateClass(data) : createClass(data));
       await modalApi.close();

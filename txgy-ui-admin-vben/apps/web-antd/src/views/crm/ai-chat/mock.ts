@@ -10,10 +10,23 @@ import { getCustomerPage } from '#/api/crm/customer';
 import { getCluePage } from '#/api/crm/clue';
 import { getBusinessPage } from '#/api/crm/business';
 import { getContactPage } from '#/api/crm/contact';
-import { getContractPage } from '#/api/crm/contract';
+import { createContract, getContractPage } from '#/api/crm/contract';
 import { getReceivablePage } from '#/api/crm/receivable';
 import { getReceivablePlanPage } from '#/api/crm/receivable/plan';
 import { getProductPage } from '#/api/crm/product';
+import { createQuotation, getQuotationPage } from '#/api/crm/quotation';
+import { createAfterSaleVisitPlan } from '#/api/crm/after-sale/plan';
+import { createAfterSaleVisitTask } from '#/api/crm/after-sale/task';
+import {
+  createFollowUpRecord,
+  deleteFollowUpRecord,
+  getFollowUpRecordPage,
+} from '#/api/crm/followup';
+import { getAfterSaleTicketPage } from '#/api/crm/after-sale/ticket';
+import { getAfterSaleVisitPlanPage } from '#/api/crm/after-sale/plan';
+import { getAfterSaleVisitTaskPage } from '#/api/crm/after-sale/task';
+import { getAfterSaleVisitRecordPage } from '#/api/crm/after-sale/record';
+import { getAfterSaleWarrantyPage } from '#/api/crm/after-sale/warranty';
 import { getSimpleDictDataList } from '#/api/system/dict/data';
 import { requestClient } from '#/api/request';
 
@@ -40,6 +53,7 @@ export type BizType =
   | 'contract'
   | 'customer'
   | 'product'
+  | 'quotation'
   | 'receivable'
   | 'receivablePlan';
 
@@ -56,8 +70,35 @@ export interface TableResult {
 export interface AiReply {
   text: string;
   table?: TableResult;
+  /** 一句话查多个对象时的多表结果（如「报价单 + 售后工单 + 质保档案」），含 table 本身 */
+  tables?: TableResult[];
+  /** 写操作：待用户二次确认的操作卡片 */
+  action?: PendingAction;
   /** AI 意图识别不可用、已降级为关键词匹配 */
   degraded?: boolean;
+}
+
+/** 二次确认的写操作卡片 */
+export interface PendingAction {
+  type:
+    | 'todoCreate'
+    | 'todoComplete'
+    | 'todoReschedule'
+    | 'visitPlanCreate'
+    | 'visitTaskCreate'
+    | 'quotationCreate'
+    | 'contractCreate';
+  /** 卡片标题，如「新建待办」 */
+  title: string;
+  /** 待写入内容回显 */
+  fields: { label: string; value: string }[];
+  /** 执行所需数据 */
+  payload: Record<string, any>;
+  /**
+   * 需要用户先做选择的场景（如合同类型无法判定时），
+   * 点击按钮会把 value 合并进 payload 再执行，避免「一问多解」时猜错
+   */
+  choices?: { label: string; value: Record<string, any> }[];
 }
 
 function nowMonth(): string {
@@ -65,9 +106,19 @@ function nowMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function isCurrentMonth(dateStr: string | null | undefined): boolean {
-  if (!dateStr) return false;
-  return String(dateStr).startsWith(nowMonth());
+function isCurrentMonth(v: any): boolean {
+  if (!v) return false;
+  // 兼容毫秒时间戳：后端 LocalDateTime 以时间戳序列化（如 1789454512000），
+  // 直接 startsWith('2026-09') 永远匹配不上，会导致「本月」查询返回空
+  const n = Number(v);
+  if (Number.isFinite(n) && String(v).trim().length >= 12) {
+    const d = new Date(n);
+    if (!Number.isNaN(d.getTime())) {
+      const now = new Date();
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+  }
+  return String(v).startsWith(nowMonth());
 }
 
 function fmtMoney(n: number | null | undefined): string {
@@ -80,6 +131,14 @@ function fmtMoney(n: number | null | undefined): string {
 
 function fmtDate(v: any): string {
   if (!v) return '-';
+  // 兼容毫秒时间戳：后端 LocalDateTime 以毫秒时间戳序列化（如 1788226956000）
+  const n = Number(v);
+  if (Number.isFinite(n) && String(v).trim().length >= 12) {
+    const d = new Date(n);
+    if (!Number.isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
   return String(v).slice(0, 10);
 }
 
@@ -93,6 +152,16 @@ const DICT_TYPES = {
   PRODUCT_STATUS: 'crm_product_status',
   PRODUCT_UNIT: 'crm_product_unit',
   RETURN_TYPE: 'crm_receivable_return_type',
+  AFTER_SALE_TICKET_STATUS: 'crm_after_sale_ticket_status',
+  AFTER_SALE_TICKET_SOURCE: 'crm_after_sale_ticket_source',
+  AFTER_SALE_TICKET_PRIORITY: 'crm_after_sale_ticket_priority',
+  AFTER_SALE_VISIT_PLAN_TYPE: 'crm_after_sale_visit_plan_type',
+  AFTER_SALE_VISIT_PLAN_STATUS: 'crm_after_sale_visit_plan_status',
+  AFTER_SALE_VISIT_CYCLE: 'crm_after_sale_visit_cycle',
+  AFTER_SALE_VISIT_TASK_STATUS: 'crm_after_sale_visit_task_status',
+  AFTER_SALE_VISIT_TYPE: 'crm_after_sale_visit_type',
+  AFTER_SALE_SATISFACTION: 'crm_after_sale_satisfaction',
+  AFTER_SALE_WARRANTY_STATUS: 'crm_after_sale_warranty_status',
 };
 
 let dictPromise: Promise<Record<string, Record<string, string>>> | null = null;
@@ -125,8 +194,10 @@ function labelOf(
 /** 去掉名称前后的动词、助词与请求语，得到纯净的实体名 */
 function cleanEntityName(raw: string): string {
   let v = String(raw ?? '').trim();
+  // 注意：这里不能把单独的「下」当成前缀动词剥离，
+  // 否则「我的下属所有客户」会被削成「属所有」，进而被误当成客户名
   v = v.replace(
-    /^(?:(?:帮我|帮忙|请|麻烦|你|我|想|要|查一下|查一查|看一下|看下|看看|查找|查询|搜索|检索|列出|显示|展示|查看|了解|介绍|关于|查|找|搜|看|下|的|是|那个|这个))+\s*/g,
+    /^(?:(?:帮我|帮忙|请|麻烦|你|我|想|要|查一下|查一查|看一下|看下|看看|查找|查询|搜索|检索|列出|显示|展示|查看|了解|介绍|关于|查|找|搜|看|的|是|那个|这个))+\s*/g,
     '',
   );
   // 反复剥离尾部请求语与助词（如“张三的客户信息”→“张三”），保留“公司/厂”等实体后缀
@@ -145,7 +216,11 @@ function cleanEntityName(raw: string): string {
 function isGenericName(v: string): boolean {
   const GENERIC_WORDS =
     '所有|全部|全部数据|本月|这个月|当月|最近|近期|今天|今日|昨天|本周|上周|今年|去年|记录|数据|列表|详情|信息|情况|客户|商机|合同|回款|线索|联系人|产品|一下|下|的|是|哪些|什么|看|查|找|搜|了解|介绍|关于';
-  return new RegExp(`^(?:${GENERIC_WORDS})+$`).test(v);
+  if (new RegExp(`^(?:${GENERIC_WORDS})+$`).test(v)) {
+    return true;
+  }
+  // 范围指代词只用来描述「谁的数据」，不可能是业务对象名称，一律拦截
+  return /下属|团队|本组|手下|我们组|本人|当前用户/.test(v);
 }
 
 /** 从自然语言中提取实体名称（客户/公司/联系人/合同等） */
@@ -200,11 +275,20 @@ function extractName(q: string): string | null {
   return null;
 }
 
-/** 优先使用大模型提取的名称，缺失时退回本地正则提取 */
+/**
+ * 取本次查询要用的实体名称。
+ *
+ * 三种情况必须区分开，否则会把范围指代词误当成业务对象名：
+ * - hintName 有值：用大模型识别出的名称；
+ * - hintName 为 null：大模型明确判断问题里没有具体名称（如「我的下属所有客户」），
+ *   此时绝不能再退回本地正则去猜，否则会猜出「属所有」这种脏名字；
+ * - hintName 为 undefined：压根没走大模型（降级为关键词匹配），才用本地正则兜底。
+ */
 function pickName(
   hintName: string | null | undefined,
   q: string,
 ): string | null {
+  if (hintName === null) return null;
   const h = hintName ? String(hintName).trim() : '';
   if (h) return h;
   return extractName(q);
@@ -238,36 +322,107 @@ function filterByName<T>(
 
 /* ----------------------------- 各意图处理（真实接口） ----------------------------- */
 
+/**
+ * 计算有效归属范围（业务规则，必须严格区分，严禁混淆）
+ *
+ * 1. 「列出所有 XX / 全部 XX」    → 我负责的 + 下属负责的（管理者视角，不分 sceneType）
+ * 2. 「列出我的 XX / 我负责的 XX」→ 仅本人负责（sceneType = 1），坚决排除下属数据
+ * 3. 未指定归属（默认）           → 同「列出所有」：我负责的 + 下属负责的
+ * 4. 「我的下属 / 团队成员」      → 仅下属负责（sceneType = 3）
+ *
+ * 说明：模型给的 sceneType 不能直接使用 —— 它默认返回 mine，
+ * 会把「所有 XX」「未转化的线索」这类问法错误地缩到本人名下，导致下属数据整体消失。
+ * 越权访问仍由后端数据权限强制拦截，这里只负责把业务口径翻译成查询条件。
+ */
+function resolveScope(q: string, _sceneType?: number): number | undefined {
+  const isSubordinate =
+    /下属|下级|手下|团队成员|下属负责/.test(q);
+  const isTeam = /团队|我们组|我们部门|本组/.test(q);
+  // ②「我的」：排除同时提到下属/团队的情况（如「我的下属」应走下属口径）
+  if (/我的|我负责|我名下|本人|自己/.test(q) && !isSubordinate && !isTeam) {
+    return 1;
+  }
+  // ④「我的下属 / 团队成员」→ 仅下属
+  if (isSubordinate) {
+    return 3;
+  }
+  // ①③「所有 / 全部 / 未指定」→ 我负责的 + 下属负责的（不限定归属）
+  return undefined;
+}
+
+/** 归属范围的中文表述，用于回复与表格，保证文案与数据一致 */
+function scopeLabelOf(sceneType?: number): string {
+  if (sceneType === 1) return '我负责的';
+  if (sceneType === 3) return '下属负责的';
+  return '我负责的+下属负责的';
+}
+
 async function replyCustomers(
   q: string,
   hintName?: string | null,
+  customerType?: null | number,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
-  const isDownstream = /下游/.test(q);
+  // 客户类别：优先用模型解析出的值（1=下游客户，2=上游供应商）；
+  // 模型没给时，再沿用查询串里的「下游」关键词兜底
+  const typeFilter = customerType ?? (/下游/.test(q) ? 1 : null);
+  const typeLabel =
+    typeFilter === 1 ? '下游客户' : typeFilter === 2 ? '上游供应商' : '';
 
+  // 跟进口径：「需要跟进 / 待跟进的客户」= 跟进状态为待跟进（followUpStatus=false）
+  const needFollow =
+    /待跟进|需要跟进|需跟进|要跟进|需要被跟进|未跟进|没跟进|没有跟进/.test(q);
+  // 归属范围：所有/未指定 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const effectiveSceneType = resolveScope(q, sceneType);
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (effectiveSceneType) params.sceneType = effectiveSceneType;
+  if (needFollow) params.followUpStatus = false;
   const res = await getCustomerPage(params);
   let rows: any[] = res.list || [];
 
-  // 下游客户按行业 id 101-110 过滤（系统字典约定）
-  if (isDownstream) {
-    rows = rows.filter((c) => c.industryId >= 101 && c.industryId <= 110);
+  // 按客户类别过滤：新数据直接用 customerType 字段；
+  // 字段整体缺失时，回退到「下游客户行业 id 101-110」的旧字典约定
+  if (typeFilter) {
+    const hasField = rows.some(
+      (c) => c.customerType !== null && c.customerType !== undefined,
+    );
+    if (hasField) {
+      rows = rows.filter((c) => Number(c.customerType) === typeFilter);
+    } else {
+      const isInDownstreamIndustry = (c: any) =>
+        c.industryId >= 101 && c.industryId <= 110;
+      rows =
+        typeFilter === 1
+          ? rows.filter(isInDownstreamIndustry)
+          : rows.filter((c) => !isInDownstreamIndustry(c));
+    }
   }
   // 指定了客户名时只保留匹配项，绝不返回与问题无关的全量列表
   rows = filterByName(rows, name, [(c: any) => c.name]);
+  // 双保险：字段存在时再按同一规则兜一遍，杜绝条件未生效时返回全量
+  if (needFollow && rows.some((c: any) => typeof c.followUpStatus === 'boolean')) {
+    rows = rows.filter((c: any) => c.followUpStatus === false);
+  }
 
+  const scopeLabel = scopeLabelOf(effectiveSceneType);
   let text: string;
   if (rows.length === 0) {
-    text = isDownstream
-      ? '当前没有查询到下游客户记录。'
-      : name
-        ? `未找到名为「${name}」的客户，请确认客户名称是否正确。`
-        : '当前没有查询到客户记录。';
+    text = needFollow
+      ? `系统未查询到该数据：${scopeLabel}暂无待跟进的客户（可指定「我负责的」或「下属负责的」调整范围）。`
+      : typeLabel
+        ? `当前没有查询到${typeLabel}记录。`
+        : name
+          ? `未找到名为「${name}」的客户，请确认客户名称是否正确。`
+          : '当前没有查询到客户记录。';
+  } else if (needFollow) {
+    text = `当前共有 ${rows.length} 个${effectiveSceneType ? scopeLabel : ''}待跟进客户：`;
   } else {
-    text = isDownstream
-      ? `为您查询到 ${rows.length} 个下游客户：`
+    text = typeLabel
+      ? `为您查询到 ${rows.length} 个${typeLabel}：`
       : name
         ? `已为您找到 ${rows.length} 个名为「${name}」的客户：`
         : `为您查询到 ${rows.length} 个客户：`;
@@ -276,8 +431,8 @@ async function replyCustomers(
   return {
     text,
     table: {
-      title: isDownstream
-        ? '下游客户列表'
+      title: typeLabel
+        ? `${typeLabel}列表`
         : name
           ? `客户：${name}`
           : '客户列表',
@@ -285,6 +440,7 @@ async function replyCustomers(
       bizType: 'customer',
       columns: [
         { title: '客户名称', dataIndex: 'name', key: 'name' },
+        { title: '客户类别', dataIndex: 'customerType', key: 'customerType' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
         { title: '客户级别', dataIndex: 'level', key: 'level' },
         { title: '所属行业', dataIndex: 'industry', key: 'industry' },
@@ -294,6 +450,12 @@ async function replyCustomers(
       rows: rows.map((r) => ({
         id: r.id,
         name: r.name || '-',
+        customerType:
+          r.customerType === null || r.customerType === undefined
+            ? '-'
+            : Number(r.customerType) === 2
+              ? '上游供应商'
+              : '下游客户',
         mobile: r.mobile || '-',
         level: labelOf(maps, DICT_TYPES.LEVEL, r.level),
         industry: labelOf(maps, DICT_TYPES.INDUSTRY, r.industryId),
@@ -337,46 +499,99 @@ async function replyPool(): Promise<AiReply> {
 async function replyClues(
   q = '',
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
-  // 注意：有名称时必须交给后端过滤。只取前 100 条再在前端筛，数据一多就会「搜不到」
+  // 业务规则：「需要被跟进的线索」= 跟进状态为待跟进（未跟进）+ 转化状态为未转化
+  const needFollow =
+    /待跟进|需要跟进|需跟进|要跟进|需要被跟进|未跟进|没跟进|没有跟进/.test(q);
+  const noTransform =
+    /未转化|没转化|没有转化|尚未转化|未成交|没成交/.test(q);
+  // 归属范围：所有/未指定 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const effectiveSceneType = resolveScope(q, sceneType);
+
+  // 注意：过滤条件必须交给后端，否则只取前 100 条再筛，数据一多就会「查不到 / 查到全量」
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  if (effectiveSceneType) params.sceneType = effectiveSceneType;
+  if (needFollow) params.followUpStatus = false; // false = 待跟进（未跟进）
+  if (noTransform) params.transformStatus = false; // false = 未转化
   const res = await getCluePage(params);
-  const all: any[] = res.list || [];
-  const rows = filterByName(all, name, [
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
     (r: any) => r.name,
     (r: any) => r.customerName,
   ]);
-  return {
-    text:
+  // 双保险：字段存在时再按同一规则兜一遍，杜绝「条件没生效就把全量返回」的情况
+  if (needFollow && rows.some((r: any) => typeof r.followUpStatus === 'boolean')) {
+    rows = rows.filter((r: any) => r.followUpStatus === false);
+  }
+  if (
+    noTransform &&
+    rows.some((r: any) => typeof r.transformStatus === 'boolean')
+  ) {
+    rows = rows.filter((r: any) => r.transformStatus === false);
+  }
+
+  const byRule = needFollow && noTransform;
+  const scopeLabel = scopeLabelOf(effectiveSceneType);
+  const condLabel = [needFollow ? '待跟进' : '', noTransform ? '未转化' : '']
+    .filter(Boolean)
+    .join('、');
+  let text: string;
+  if (byRule) {
+    // 「需要被跟进的线索」：只说符合条件的数据，绝不在无结果时退回全量
+    text =
       rows.length === 0
-        ? name
-          ? `未找到与「${name}」相关的线索。`
-          : '当前没有查询到线索记录。'
-        : name
-          ? `已为您找到 ${rows.length} 条与「${name}」相关的线索：`
-          : `当前共有 ${rows.length} 条线索：`,
+        ? `当前暂无${scopeLabel}待跟进未转化线索。`
+        : `当前共有 ${rows.length} 条${scopeLabel}待跟进未转化线索（已排除已跟进、已转化数据）：`;
+  } else if (rows.length === 0) {
+    // 空结果必须说清「口径 + 条件」，否则用户会误以为系统里没有数据
+    text = condLabel
+      ? `系统未查询到该数据：${scopeLabel}没有${condLabel}的线索（可指定「我负责的」或「下属负责的」调整范围）。`
+      : name
+        ? `系统未查询到该数据：没有找到与「${name}」相关的线索。`
+        : `系统未查询到该数据：${scopeLabel}暂无线索记录。`;
+  } else if (name) {
+    text = `已为您找到 ${rows.length} 条与「${name}」相关的线索：`;
+  } else if (condLabel) {
+    // 未限定归属时不硬塞「权限范围内的」，读起来更自然
+    text = `当前共有 ${rows.length} 条${effectiveSceneType ? scopeLabel : ''}${condLabel}线索：`;
+  } else {
+    text = `当前共有 ${rows.length} 条线索：`;
+  }
+
+  return {
+    text,
     table: {
-      title: name ? `线索：${name}` : '线索列表',
+      title: name
+        ? `线索：${name}`
+        : byRule
+          ? '待跟进未转化线索'
+          : condLabel
+            ? `${condLabel}线索`
+            : '线索列表',
       source: 'CRM 线索管理 · 实查数据',
       bizType: 'clue',
       columns: [
         { title: '线索名称', dataIndex: 'name', key: 'name' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
-        { title: '所属行业', dataIndex: 'industry', key: 'industry' },
         { title: '客户来源', dataIndex: 'source', key: 'source' },
+        { title: '所属行业', dataIndex: 'industry', key: 'industry' },
         { title: '转化状态', dataIndex: 'transform', key: 'transform' },
+        { title: '跟进状态', dataIndex: 'follow', key: 'follow' },
         { title: '负责人', dataIndex: 'owner', key: 'owner' },
       ],
       rows: rows.map((r) => ({
         id: r.id,
         name: r.name || '-',
         mobile: r.mobile || '-',
-        industry: labelOf(maps, DICT_TYPES.INDUSTRY, r.industryId),
         source: labelOf(maps, DICT_TYPES.SOURCE, r.source),
+        industry: labelOf(maps, DICT_TYPES.INDUSTRY, r.industryId),
         transform: r.transformStatus ? '已转化' : '未转化',
+        follow: r.followUpStatus ? '已跟进' : '待跟进',
         owner: r.ownerUserName || r.ownerUserDeptName || '-',
       })),
     },
@@ -386,12 +601,17 @@ async function replyClues(
 async function replyBusinesses(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  // 归属范围：所有/默认 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const scope = resolveScope(q, sceneType);
+  if (scope) params.sceneType = scope;
   const res = await getBusinessPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -437,9 +657,10 @@ async function replyBusinesses(
   };
 }
 
-async function replyTodos(q = ''): Promise<AiReply> {
-  // 用户提到「下属/团队」时按「下属负责的」视角查（sceneType=3），否则用默认视角
-  const sceneType = /下属|团队|他们/.test(q) ? 3 : undefined;
+async function replyTodos(q = '', scopeSceneType?: number): Promise<AiReply> {
+  // 大模型识别出的范围优先；降级模式下再从问题关键词判断（sceneType=3=下属负责的）
+  const sceneType =
+    scopeSceneType ?? (/下属|团队|他们/.test(q) ? 3 : undefined);
   const baseQuery: Record<string, any> = { pageNo: 1, pageSize: 20 };
   if (sceneType) {
     baseQuery.sceneType = sceneType;
@@ -539,11 +760,16 @@ async function replyTodos(q = ''): Promise<AiReply> {
 async function replyContacts(
   q = '',
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const name = pickName(hintName, q);
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  // 归属范围：所有/默认 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const scope = resolveScope(q, sceneType);
+  if (scope) params.sceneType = scope;
   const res = await getContactPage(params);
   const all: any[] = res.list || [];
   const rows = filterByName(all, name, [
@@ -585,6 +811,8 @@ async function replyContacts(
 async function replyContracts(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -592,6 +820,9 @@ async function replyContracts(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  // 归属范围：所有/默认 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const scope = resolveScope(q, sceneType);
+  if (scope) params.sceneType = scope;
   const res = await getContractPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -639,6 +870,8 @@ async function replyContracts(
 async function replyReceivables(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -646,6 +879,9 @@ async function replyReceivables(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  // 归属范围：所有/默认 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const scope = resolveScope(q, sceneType);
+  if (scope) params.sceneType = scope;
   const res = await getReceivablePage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -692,6 +928,8 @@ async function replyReceivables(
 async function replyReceivablePlans(
   q: string,
   hintName?: string | null,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
@@ -699,6 +937,9 @@ async function replyReceivablePlans(
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
+  // 归属范围：所有/默认 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
+  const scope = resolveScope(q, sceneType);
+  if (scope) params.sceneType = scope;
   const res = await getReceivablePlanPage(params);
   let rows: any[] = res.list || [];
   if (month) {
@@ -770,14 +1011,1185 @@ async function replyProducts(): Promise<AiReply> {
   };
 }
 
+/* ------------------------- 报价 / 售后（真实接口） ------------------------- */
+
+/** 统一的无数据话术（严格遵循「系统未查询到该数据」约束，绝不编造） */
+function noDataText(name?: string | null): string {
+  return name
+    ? `系统未查询到该数据：没有找到与「${name}」相关的记录。`
+    : '系统未查询到该数据。';
+}
+
+/** 今天（本地时区）YYYY-MM-DD，用于回访任务的今日/逾期筛选 */
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** 按字典标签包含关键词过滤（不猜测状态数字，只按标签匹配，匹配不到时如实说明） */
+function filterRowsByLabel(
+  rows: Record<string, any>[],
+  maps: Record<string, Record<string, string>>,
+  dictType: string,
+  field: string,
+  keyword: string,
+): Record<string, any>[] {
+  const kw = keyword.trim();
+  if (!kw) return rows;
+  return rows.filter((r) => {
+    const label = String(maps[dictType]?.[String(r[field] ?? '')] ?? '');
+    return label !== '' && (label.includes(kw) || kw.includes(label));
+  });
+}
+
+/** 报价单查询（支持按客户名/单号/名称过滤） */
+async function replyQuotations(
+  q: string,
+  hintName?: string | null,
+  sceneType?: number,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const params: any = { pageNo: 1, pageSize: 100 };
+  if (name) params.name = name;
+  if (sceneType) params.sceneType = sceneType;
+  const res = await getQuotationPage(params);
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.name,
+    (r: any) => r.no,
+    (r: any) => r.customerName,
+  ]);
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : name
+          ? `已为您找到 ${rows.length} 张与「${name}」相关的报价单：`
+          : `共检索到 ${rows.length} 张报价单：`,
+    table: {
+      title: name ? `报价单：${name}` : '报价单列表',
+      source: 'CRM 报价管理 · 实查数据',
+      bizType: 'quotation',
+      columns: [
+        { title: '报价单号', dataIndex: 'no', key: 'no' },
+        { title: '报价名称', dataIndex: 'name', key: 'name' },
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '报价金额', dataIndex: 'amount', key: 'amount' },
+        { title: '报价日期', dataIndex: 'date', key: 'date' },
+        { title: '有效期至', dataIndex: 'validUntil', key: 'validUntil' },
+        { title: '审批状态', dataIndex: 'status', key: 'status' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        no: r.no || '-',
+        name: r.name || '-',
+        customer: r.customerName || '-',
+        amount: fmtMoney(r.totalPrice),
+        date: fmtDate(r.orderDate || r.createTime),
+        validUntil: fmtDate(r.validUntil),
+        status: labelOf(maps, DICT_TYPES.AUDIT_STATUS, r.auditStatus),
+      })),
+    },
+  };
+}
+
+/** 售后问题工单查询 */
+async function replyAfterSaleTickets(
+  q: string,
+  hintName?: string | null,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const res = await getAfterSaleTicketPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.no,
+    (r: any) => r.title,
+  ]);
+  // 「待处理 / 处理中」类筛选：按字典标签匹配，不猜测状态数字
+  const statusKw = /待处理|处理中|未完成|未关闭/.exec(q)?.[0];
+  if (statusKw) {
+    rows = filterRowsByLabel(
+      rows,
+      maps,
+      DICT_TYPES.AFTER_SALE_TICKET_STATUS,
+      'status',
+      statusKw,
+    );
+  }
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : statusKw
+          ? `共检索到 ${rows.length} 个「${statusKw}」的售后工单：`
+          : name
+            ? `已为您找到 ${rows.length} 个与「${name}」相关的售后工单：`
+            : `共检索到 ${rows.length} 个售后工单：`,
+    table: {
+      title: name ? `售后工单：${name}` : '售后问题工单',
+      source: 'CRM 售后管理 · 实查数据',
+      columns: [
+        { title: '工单编号', dataIndex: 'no', key: 'no' },
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '问题描述', dataIndex: 'title', key: 'title' },
+        { title: '优先级', dataIndex: 'priority', key: 'priority' },
+        { title: '状态', dataIndex: 'status', key: 'status' },
+        { title: '处理人', dataIndex: 'assignee', key: 'assignee' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        no: r.no || '-',
+        customer: r.customerName || '-',
+        title: r.title || r.problemType || '-',
+        priority: labelOf(
+          maps,
+          DICT_TYPES.AFTER_SALE_TICKET_PRIORITY,
+          r.priority,
+        ),
+        status: labelOf(maps, DICT_TYPES.AFTER_SALE_TICKET_STATUS, r.status),
+        assignee: r.assigneeNickname || '-',
+      })),
+    },
+  };
+}
+
+/** 售后回访计划查询 */
+async function replyVisitPlans(
+  q: string,
+  hintName?: string | null,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const res = await getAfterSaleVisitPlanPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.name,
+    (r: any) => r.projectName,
+    (r: any) => r.warrantyNo,
+  ]);
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : name
+          ? `已为您找到 ${rows.length} 个与「${name}」相关的回访计划：`
+          : `共检索到 ${rows.length} 个回访计划：`,
+    table: {
+      title: name ? `回访计划：${name}` : '售后回访计划',
+      source: 'CRM 售后管理 · 实查数据',
+      columns: [
+        { title: '计划名称', dataIndex: 'name', key: 'name' },
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '工程项目', dataIndex: 'project', key: 'project' },
+        { title: '质保编号', dataIndex: 'warrantyNo', key: 'warrantyNo' },
+        { title: '回访方式', dataIndex: 'visitType', key: 'visitType' },
+        { title: '状态', dataIndex: 'status', key: 'status' },
+        { title: '处理人', dataIndex: 'assignee', key: 'assignee' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        name: r.name || '-',
+        customer: r.customerName || '-',
+        project: r.projectName || '-',
+        warrantyNo: r.warrantyNo || '-',
+        visitType: labelOf(maps, DICT_TYPES.AFTER_SALE_VISIT_TYPE, r.visitType),
+        status: labelOf(
+          maps,
+          DICT_TYPES.AFTER_SALE_VISIT_PLAN_STATUS,
+          r.status,
+        ),
+        assignee: r.assigneeNickname || '-',
+      })),
+    },
+  };
+}
+
+/** 售后回访任务查询（支持 待回访/逾期/今日/本周 等口语筛选） */
+async function replyVisitTasks(
+  q: string,
+  hintName?: string | null,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const res = await getAfterSaleVisitTaskPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.projectName,
+    (r: any) => r.warrantyNo,
+    (r: any) => r.contractName,
+  ]);
+  const today = todayStr();
+  // 待回访 / 未完成：以是否已有完成时间判断，不猜测状态数字
+  if (/待回访|未完成|未回访/.test(q)) {
+    rows = rows.filter((r) => !r.finishTime);
+  }
+  // 逾期：任务日期早于今天且尚未完成
+  if (/逾期|超期/.test(q)) {
+    rows = rows.filter(
+      (r) => !r.finishTime && r.taskDate && fmtDate(r.taskDate) < today,
+    );
+  }
+  if (/今天|今日/.test(q)) {
+    rows = rows.filter((r) => fmtDate(r.taskDate) === today);
+  }
+  if (/明天|明日/.test(q)) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const t = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    rows = rows.filter((r) => fmtDate(r.taskDate) === t);
+  }
+  const filtered = /待回访|未完成|未回访|逾期|超期|今天|今日|明天|明日/.test(q);
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : filtered
+          ? `共检索到 ${rows.length} 个符合条件的回访任务：`
+          : name
+            ? `已为您找到 ${rows.length} 个与「${name}」相关的回访任务：`
+            : `共检索到 ${rows.length} 个回访任务：`,
+    table: {
+      title: name ? `回访任务：${name}` : '售后回访任务',
+      source: 'CRM 售后管理 · 实查数据',
+      columns: [
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '工程项目', dataIndex: 'project', key: 'project' },
+        { title: '质保编号', dataIndex: 'warrantyNo', key: 'warrantyNo' },
+        { title: '任务日期', dataIndex: 'taskDate', key: 'taskDate' },
+        { title: '状态', dataIndex: 'status', key: 'status' },
+        { title: '回访记录', dataIndex: 'record', key: 'record' },
+        { title: '处理人', dataIndex: 'assignee', key: 'assignee' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        customer: r.customerName || '-',
+        project: r.projectName || '-',
+        warrantyNo: r.warrantyNo || '-',
+        taskDate: fmtDate(r.taskDate),
+        status: labelOf(
+          maps,
+          DICT_TYPES.AFTER_SALE_VISIT_TASK_STATUS,
+          r.status,
+        ),
+        record: r.hasRecord ? '已登记' : '未登记',
+        assignee: r.assigneeNickname || '-',
+      })),
+    },
+  };
+}
+
+/** 售后回访记录查询 */
+async function replyVisitRecords(
+  q: string,
+  hintName?: string | null,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const res = await getAfterSaleVisitRecordPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.projectName,
+    (r: any) => r.warrantyNo,
+  ]);
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : name
+          ? `已为您找到 ${rows.length} 条与「${name}」相关的回访记录：`
+          : `共检索到 ${rows.length} 条回访记录：`,
+    table: {
+      title: name ? `回访记录：${name}` : '售后回访记录',
+      source: 'CRM 售后管理 · 实查数据',
+      columns: [
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '工程项目', dataIndex: 'project', key: 'project' },
+        { title: '质保编号', dataIndex: 'warrantyNo', key: 'warrantyNo' },
+        { title: '回访时间', dataIndex: 'visitTime', key: 'visitTime' },
+        { title: '回访方式', dataIndex: 'visitType', key: 'visitType' },
+        { title: '满意度', dataIndex: 'satisfaction', key: 'satisfaction' },
+        { title: '回访内容', dataIndex: 'content', key: 'content' },
+        { title: '记录人', dataIndex: 'creator', key: 'creator' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        customer: r.customerName || '-',
+        project: r.projectName || '-',
+        warrantyNo: r.warrantyNo || '-',
+        visitTime: fmtDate(r.visitTime || r.createTime),
+        visitType: labelOf(maps, DICT_TYPES.AFTER_SALE_VISIT_TYPE, r.visitType),
+        satisfaction: labelOf(
+          maps,
+          DICT_TYPES.AFTER_SALE_SATISFACTION,
+          r.satisfactionLevel,
+        ),
+        content: r.content || '-',
+        creator: r.creatorNickname || '-',
+      })),
+    },
+  };
+}
+
+/** 质保档案查询（支持 即将到期/已到期 筛选） */
+async function replyWarranties(
+  q: string,
+  hintName?: string | null,
+): Promise<AiReply> {
+  const maps = await loadDictMaps();
+  const name = pickName(hintName, q);
+  const res = await getAfterSaleWarrantyPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.projectName,
+    (r: any) => r.no,
+    (r: any) => r.contractNo,
+  ]);
+  if (/即将到期|快到期|临期|快要到期/.test(q)) {
+    rows = rows.filter(
+      (r) => r.remainDays != null && r.remainDays >= 0 && r.remainDays <= 30,
+    );
+  }
+  if (/已到期|过期|超期/.test(q)) {
+    rows = rows.filter((r) => r.remainDays != null && r.remainDays < 0);
+  }
+  const filtered = /即将到期|快到期|临期|快要到期|已到期|过期|超期/.test(q);
+  return {
+    text:
+      rows.length === 0
+        ? noDataText(name)
+        : filtered
+          ? `共检索到 ${rows.length} 条符合条件的质保档案：`
+          : name
+            ? `已为您找到 ${rows.length} 条与「${name}」相关的质保档案：`
+            : `共检索到 ${rows.length} 条质保档案：`,
+    table: {
+      title: name ? `质保档案：${name}` : '客户质保档案',
+      source: 'CRM 售后管理 · 实查数据',
+      columns: [
+        { title: '质保编号', dataIndex: 'no', key: 'no' },
+        { title: '客户', dataIndex: 'customer', key: 'customer' },
+        { title: '工程项目', dataIndex: 'project', key: 'project' },
+        { title: '合同编号', dataIndex: 'contractNo', key: 'contractNo' },
+        { title: '质保年限', dataIndex: 'years', key: 'years' },
+        { title: '质保到期', dataIndex: 'endDate', key: 'endDate' },
+        { title: '剩余时限', dataIndex: 'remain', key: 'remain' },
+        { title: '状态', dataIndex: 'status', key: 'status' },
+      ],
+      rows: rows.map((r) => ({
+        id: r.id,
+        no: r.no || '-',
+        customer: r.customerName || '-',
+        project: r.projectName || '-',
+        contractNo: r.contractNo || '-',
+        years: r.warrantyYears != null ? `${r.warrantyYears} 年` : '-',
+        endDate: fmtDate(r.warrantyEndDate),
+        remain:
+          r.remainDays == null
+            ? '-'
+            : r.remainDays < 0
+              ? `已过期 ${-r.remainDays} 天`
+              : `剩余 ${r.remainDays} 天`,
+        status: labelOf(
+          maps,
+          DICT_TYPES.AFTER_SALE_WARRANTY_STATUS,
+          r.status,
+        ),
+      })),
+    },
+  };
+}
+
 function replyHelp(): AiReply {
   return {
     text:
-      '我是 CRM 智能助手，所有数据均来自 CRM 系统真实接口。试试这样问我：\n' +
-      '· “帮我查找名字叫张三的客户信息”\n' +
-      '· “列出本月所有商机”\n' +
-      '· “查看待办事项”\n' +
-      '· “查询客户公海” / “列出所有线索” / “本月合同” / “回款计划” / “联系人” / “产品”',
+      '我是 CRM 智能助手，所有数据均来自 CRM 系统真实接口，查不到就如实说查不到。试试这样问我：\n' +
+      '· “帮我查找名字叫张三的客户信息” / “查询客户公海” / “列出本月所有商机”\n' +
+      '· “查看我的待办” / “今日要联系的客户”\n' +
+      '· “查询XX客户的历史报价单” / “列出待处理的售后工单”\n' +
+      '· “查询待回访任务” / “XX客户的质保档案” / “30天没有跟进的客户”\n\n' +
+      '业务规则速查：\n' +
+      '· 客户公海：超过公海配置的跟进时限未跟进的客户会自动回收进公海，公海客户所有人可认领；\n' +
+      '· 线索与客户：线索转化后才成为正式客户，两者编号体系不同，不能混为一谈；\n' +
+      '· 商机阶段：商机按状态组阶段推进，支持赢/输单结案；\n' +
+      '· 产品：产品主数据由 WMS 同步、CRM 侧只读，不能在 CRM 手工新增或修改产品；\n' +
+      '· 回款：回款计划到期未回款即为逾期，会进入回款提醒；\n' +
+      '· 待办：有截止时间，超时未完成会提醒；\n' +
+      '· 售后：质保档案登记质保期，回访计划按周期生成回访任务，任务完成后登记回访记录；\n' +
+      '· 报价：报价单走审批流，审批通过后可转合同。\n' +
+      '（各项时限以系统「售后设置 / 客户公海设置」中的实际配置为准，我也可以帮你查相关数据。）',
+  };
+}
+
+/* ----------------- 写操作（先解析生成确认卡，用户二次确认后才执行） ----------------- */
+
+/** 按名称解析客户：0 个 / 多个时返回提示文本，绝不替用户猜 */
+async function resolveCustomer(
+  hintName?: string | null,
+  q = '',
+): Promise<{ ok: boolean; customer?: any; text?: string }> {
+  const name = pickName(hintName, q);
+  if (!name) {
+    return { ok: false, text: '请告诉我客户名称，例如「给固邦建材新建待办」。' };
+  }
+  const res = await getCustomerPage({ name, pageNo: 1, pageSize: 50 } as any);
+  const list: any[] = res.list || [];
+  const exact = list.filter((c: any) => String(c.name || '') === name);
+  const hit = exact.length > 0 ? exact : filterByName(list, name, [(c: any) => c.name]);
+  if (hit.length === 0) {
+    return {
+      ok: false,
+      text: `系统未查询到该数据：没有找到名为「${name}」的客户，请确认名称是否正确。`,
+    };
+  }
+  if (hit.length > 1) {
+    return {
+      ok: false,
+      text:
+        `找到 ${hit.length} 个名称包含「${name}」的客户，请补充更完整的名称：\n` +
+        hit
+          .slice(0, 5)
+          .map((c: any) => `· ${c.name}`)
+          .join('\n'),
+    };
+  }
+  return { ok: true, customer: hit[0] };
+}
+
+/** 日期（YYYY-MM-DD）→ 当天 0 点毫秒时间戳（后端 LocalDateTime 以毫秒时间戳收发） */
+function dateToTs(date: string): number {
+  return new Date(`${date}T00:00:00`).getTime();
+}
+
+/** 查找「待办提醒」跟进记录（有下次联系时间），可按内容关键词与客户过滤 */
+async function findReminderFollowups(
+  keyword: string,
+  customerId?: number,
+): Promise<any[]> {
+  const res = await getFollowUpRecordPage({ pageNo: 1, pageSize: 100 } as any);
+  let rows: any[] = res.list || [];
+  rows = rows.filter((r: any) => r.nextTime);
+  if (customerId) {
+    rows = rows.filter((r: any) => r.bizType === 2 && r.bizId === customerId);
+  }
+  const kw = keyword.trim();
+  if (kw) {
+    rows = rows.filter((r: any) => String(r.content ?? '').includes(kw));
+  }
+  return rows;
+}
+
+function reminderFields(r: any): { label: string; value: string }[] {
+  return [
+    { label: '待办内容', value: String(r.content || '-') },
+    { label: '截止时间', value: fmtDate(r.nextTime) },
+  ];
+}
+
+async function planTodoCreate(q: string, cls: QwenClassify): Promise<AiReply> {
+  const content = String(cls.content ?? '').trim();
+  const date = String(cls.date ?? '').trim();
+  if (!content) return { text: '请补充待办内容，例如「电话回访质保情况」。' };
+  if (!date) return { text: '请补充截止时间，例如「3天后」或「9月20日」。' };
+  const cust = await resolveCustomer(cls.name, q);
+  if (!cust.ok) return { text: cust.text };
+  return {
+    text: '请确认以下待办内容，确认后我会为您创建（以跟进提醒方式记在客户名下）：',
+    action: {
+      type: 'todoCreate',
+      title: '新建待办',
+      fields: [
+        { label: '客户', value: cust.customer?.name ?? '-' },
+        { label: '待办内容', value: content },
+        { label: '截止时间', value: date },
+      ],
+      payload: {
+        customerId: cust.customer?.id,
+        customerName: cust.customer?.name,
+        content,
+        date,
+      },
+    },
+  };
+}
+
+/** 定位用户所指的那条待办提醒；0 条 / 多条时返回追问文本 */
+async function pickTodoTarget(
+  q: string,
+  cls: QwenClassify,
+): Promise<AiReply | { ok: true; row: any }> {
+  const kw = String(cls.content ?? '').trim();
+  let customerId: number | undefined;
+  if (cls.name) {
+    const cust = await resolveCustomer(cls.name);
+    if (!cust.ok) return { text: cust.text };
+    customerId = cust.customer?.id;
+  }
+  const rows = await findReminderFollowups(kw, customerId);
+  if (rows.length === 0) {
+    return { text: '系统未查询到该数据：没有找到符合条件的待办提醒。' };
+  }
+  if (rows.length > 1) {
+    return {
+      text:
+        `找到 ${rows.length} 条符合条件的待办，请补充更具体的内容关键词：\n` +
+        rows
+          .slice(0, 5)
+          .map(
+            (r) => `· ${String(r.content).slice(0, 30)}（截止 ${fmtDate(r.nextTime)}）`,
+          )
+          .join('\n'),
+    };
+  }
+  return { ok: true, row: rows[0] };
+}
+
+function isAiReply(x: any): x is AiReply {
+  return x && typeof x === 'object' && 'text' in x;
+}
+
+async function planTodoComplete(q: string, cls: QwenClassify): Promise<AiReply> {
+  const picked = await pickTodoTarget(q, cls);
+  if (isAiReply(picked)) return picked;
+  const r = picked.row;
+  return {
+    text: '请确认要标记完成以下待办（完成后将不再提醒）：',
+    action: {
+      type: 'todoComplete',
+      title: '标记待办完成',
+      fields: reminderFields(r),
+      payload: {
+        id: r.id,
+        bizType: r.bizType,
+        bizId: r.bizId,
+        type: r.type,
+        content: r.content,
+      },
+    },
+  };
+}
+
+async function planTodoReschedule(q: string, cls: QwenClassify): Promise<AiReply> {
+  const date = String(cls.date ?? '').trim();
+  if (!date) return { text: '请告诉我要改到哪一天，例如「改到9月20日」。' };
+  const picked = await pickTodoTarget(q, cls);
+  if (isAiReply(picked)) return picked;
+  const r = picked.row;
+  return {
+    text: `请确认把以下待办改期到 ${date}：`,
+    action: {
+      type: 'todoReschedule',
+      title: '待办改期',
+      fields: [...reminderFields(r), { label: '改期至', value: date }],
+      payload: {
+        id: r.id,
+        bizType: r.bizType,
+        bizId: r.bizId,
+        type: r.type,
+        content: r.content,
+        date,
+      },
+    },
+  };
+}
+
+/** 解析质保档案（按客户名/质保编号/工程名匹配）；0 条 / 多条时返回追问文本 */
+async function resolveWarranty(
+  hintName?: string | null,
+  q = '',
+): Promise<AiReply | { ok: true; row: any }> {
+  const name = pickName(hintName, q);
+  if (!name) {
+    return { text: '请告诉我客户名称或质保编号，例如「给固邦建材新建回访计划」。' };
+  }
+  const res = await getAfterSaleWarrantyPage({ pageNo: 1, pageSize: 100 });
+  let rows: any[] = res.list || [];
+  rows = filterByName(rows, name, [
+    (r: any) => r.customerName,
+    (r: any) => r.no,
+    (r: any) => r.projectName,
+  ]);
+  if (rows.length === 0) {
+    return {
+      text: `系统未查询到该数据：没有找到与「${name}」相关的质保档案，请确认后再试。`,
+    };
+  }
+  if (rows.length > 1) {
+    return {
+      text:
+        `找到 ${rows.length} 条质保档案，请补充质保编号以便确认：\n` +
+        rows
+          .slice(0, 5)
+          .map((r) => `· ${r.no || '-'}（${r.customerName || '-'}）`)
+          .join('\n'),
+    };
+  }
+  return { ok: true, row: rows[0] };
+}
+
+const VISIT_TYPE_MAP: Record<string, number> = { 电话: 1, 上门: 2, 微信: 3, 邮件: 4 };
+const VISIT_TYPE_LABEL: Record<number, string> = {
+  1: '电话',
+  2: '上门',
+  3: '微信',
+  4: '邮件',
+};
+const CYCLE_MAP: Record<string, number> = {
+  每季度: 1,
+  季度: 1,
+  每半年: 2,
+  半年: 2,
+  每年: 3,
+  年: 3,
+  到期前: 4,
+};
+const CYCLE_LABEL: Record<number, string> = {
+  1: '每季度',
+  2: '每半年',
+  3: '每年',
+  4: '质保到期前重点回访',
+};
+
+async function planVisitPlanCreate(q: string, cls: QwenClassify): Promise<AiReply> {
+  const w = await resolveWarranty(cls.name, q);
+  if (isAiReply(w)) return w;
+  const cycleKw = String(cls.cycle ?? '').trim();
+  const cycleType = cycleKw
+    ? (CYCLE_MAP[cycleKw] ?? (/到期/.test(cycleKw) ? 4 : 1))
+    : /到期/.test(q)
+      ? 4
+      : 1;
+  const cycleValue = cycleType === 4 ? 30 : 1;
+  const visitKw = String(cls.visitType ?? '').trim();
+  const visitType = VISIT_TYPE_MAP[visitKw] ?? 1;
+  return {
+    text: '请确认以下回访计划，确认后我会为您创建：',
+    action: {
+      type: 'visitPlanCreate',
+      title: '新建回访计划',
+      fields: [
+        { label: '质保编号', value: w.row.no || '-' },
+        { label: '客户', value: w.row.customerName || '-' },
+        { label: '回访周期', value: CYCLE_LABEL[cycleType] ?? '-' },
+        { label: '回访方式', value: VISIT_TYPE_LABEL[visitType] ?? '-' },
+      ],
+      payload: {
+        warrantyId: w.row.id,
+        warrantyNo: w.row.no,
+        planType: 1,
+        cycleType,
+        cycleValue,
+        visitType,
+        startDate: String(cls.date ?? '').trim() || undefined,
+      },
+    },
+  };
+}
+
+async function planVisitTaskCreate(q: string, cls: QwenClassify): Promise<AiReply> {
+  const date = String(cls.date ?? '').trim();
+  if (!date) return { text: '请告诉我回访任务执行日期，例如「9月20日」。' };
+  const w = await resolveWarranty(cls.name, q);
+  if (isAiReply(w)) return w;
+  return {
+    text: '请确认以下回访任务，确认后我会为您创建：',
+    action: {
+      type: 'visitTaskCreate',
+      title: '新建回访任务',
+      fields: [
+        { label: '质保编号', value: w.row.no || '-' },
+        { label: '客户', value: w.row.customerName || '-' },
+        { label: '执行日期', value: date },
+      ],
+      payload: {
+        warrantyId: w.row.id,
+        warrantyNo: w.row.no,
+        date,
+        remark: String(cls.content ?? '').trim() || undefined,
+      },
+    },
+  };
+}
+
+async function planQuotationCreate(q: string, cls: QwenClassify): Promise<AiReply> {
+  const name = pickName(cls.name, q);
+  if (!name) {
+    return { text: '请告诉我客户名称，例如「给固邦建材新建报价单」。' };
+  }
+  return {
+    text:
+      '创建报价单需要产品明细（产品名称、数量、单价）。您可以：\n' +
+      '1. 点击输入框右侧的 📷 按钮，上传报价图片，我会自动识别产品明细；\n' +
+      '2. 或直接在对话里补充产品清单，例如「产品：憎水岩棉板 x100，单价 1200」。',
+  };
+}
+
+/**
+ * 执行用户已二次确认的写操作
+ *
+ * @returns 执行结果文本（由调用方追加为助手消息）
+ */
+export async function executeAction(action: PendingAction): Promise<string> {
+  try {
+    const p = action.payload;
+    switch (action.type) {
+      case 'todoCreate': {
+        await createFollowUpRecord({
+          bizType: 2,
+          bizId: p.customerId,
+          type: 1,
+          content: p.content,
+          nextTime: dateToTs(p.date),
+          picUrls: [],
+          fileUrls: [],
+        } as any);
+        return `待办已创建：${p.customerName} · ${p.content}（截止 ${p.date}），可在「CRM → 待办事项」中查看。`;
+      }
+      case 'todoComplete': {
+        // 删除提醒跟进，再补一条「已完成」跟进（无未来提醒时间，自然退出待办列表）
+        await deleteFollowUpRecord(p.id);
+        await createFollowUpRecord({
+          bizType: p.bizType,
+          bizId: p.bizId,
+          type: p.type ?? 1,
+          content: `【已完成】${p.content}`,
+          nextTime: Date.now(),
+          picUrls: [],
+          fileUrls: [],
+        } as any);
+        return '待办已标记完成。';
+      }
+      case 'todoReschedule': {
+        await deleteFollowUpRecord(p.id);
+        await createFollowUpRecord({
+          bizType: p.bizType,
+          bizId: p.bizId,
+          type: p.type ?? 1,
+          content: p.content,
+          nextTime: dateToTs(p.date),
+          picUrls: [],
+          fileUrls: [],
+        } as any);
+        return `待办已改期至 ${p.date}。`;
+      }
+      case 'visitPlanCreate': {
+        const data: any = {
+          warrantyId: p.warrantyId,
+          planType: p.planType,
+          cycleType: p.cycleType,
+          cycleValue: p.cycleValue,
+          visitType: p.visitType,
+        };
+        if (p.startDate) data.startDate = p.startDate;
+        await createAfterSaleVisitPlan(data);
+        return `回访计划已创建：${p.warrantyNo || ''} · ${CYCLE_LABEL[p.cycleType] ?? ''} · ${VISIT_TYPE_LABEL[p.visitType] ?? ''}。`;
+      }
+      case 'visitTaskCreate': {
+        const data: any = { warrantyId: p.warrantyId, taskDate: dateToTs(p.date) };
+        if (p.remark) data.remark = p.remark;
+        await createAfterSaleVisitTask(data);
+        return `回访任务已创建：${p.warrantyNo || ''} · ${p.date}。`;
+      }
+      case 'quotationCreate': {
+        return await executeQuotationCreate(p);
+      }
+      case 'contractCreate': {
+        return await executeContractCreate(p);
+      }
+      default:
+        return '未知操作类型，已取消。';
+    }
+  } catch (e: any) {
+    const msg = String(e?.message ?? e ?? '');
+    if (/没有该操作权限|无权限|403/.test(msg)) {
+      return '您当前没有权限执行该操作，请联系管理员开通相应权限。';
+    }
+    return `执行失败：${msg || '请稍后再试'}`;
+  }
+}
+
+/** 产品明细 → 产品档案：匹配不上的如实列出，不计入单据 */
+async function resolveProducts(
+  rawProducts: any[],
+): Promise<{ items: any[]; missing: string[]; totalPrice: number }> {
+  const items: any[] = [];
+  const missing: string[] = [];
+  for (const it of rawProducts ?? []) {
+    const pname = String(it.productName ?? '').trim();
+    if (!pname) continue;
+    const res = await getProductPage({
+      pageNo: 1,
+      pageSize: 20,
+      name: pname,
+    } as any);
+    const list: any[] = res.list || [];
+    const hit =
+      list.find((x: any) => String(x.name) === pname) ??
+      filterByName(list, pname, [(x: any) => x.name])[0];
+    if (!hit) {
+      missing.push(pname);
+      continue;
+    }
+    const price = Number(it.price ?? hit.price ?? 0);
+    const count = Number(it.count ?? 1);
+    items.push({
+      productId: hit.id,
+      productName: hit.name,
+      productNo: hit.no,
+      productUnit: hit.unit,
+      productPrice: price,
+      quotationPrice: price,
+      count,
+      totalPrice: price * count,
+    });
+  }
+  return {
+    items,
+    missing,
+    totalPrice: items.reduce((s, it) => s + it.totalPrice, 0),
+  };
+}
+
+/** 依据图片识别结果创建报价单：解析客户与产品档案，匹配不上的如实告知 */
+async function executeQuotationCreate(p: any): Promise<string> {
+  const cust = await resolveCustomer(p.customerName ?? null, '');
+  if (!cust.ok) return `创建报价单失败：${cust.text}`;
+  const customer = cust.customer;
+  if (!customer?.ownerUserId) {
+    return '创建报价单失败：无法确定报价负责人（客户缺少负责人），请到客户详情页确认后再试。';
+  }
+  const { items, missing, totalPrice } = await resolveProducts(p.products ?? []);
+  if (items.length === 0) {
+    return `创建报价单失败：${
+      missing.length > 0
+        ? `以下产品在产品管理中未匹配到：${missing.join('、')}`
+        : '未识别到有效产品明细'
+    }。`;
+  }
+  const name = `${customer.name}-报价单-${todayStr()}`;
+  await createQuotation({
+    name,
+    customerId: customer.id,
+    ownerUserId: customer.ownerUserId,
+    orderDate: Date.now(),
+    discountPercent: 100,
+    totalPrice,
+    products: items,
+  } as any);
+  return (
+    `报价单已创建：${name}（共 ${items.length} 个产品，合计 ${fmtMoney(totalPrice)}）。` +
+    (missing.length > 0
+      ? `\n注意：以下产品未匹配到产品档案，未计入：${missing.join('、')}`
+      : '')
+  );
+}
+
+/**
+ * 依据图片识别结果创建合同
+ *
+ * 业务规则（两类合同我方身份相反，绝不能混）：
+ * - 采购合同(templateType=1)：我方是甲方（采购人），对方是**供应商**（客户类别=2 上游供应商）
+ * - 购销合同(templateType=2)：我方是乙方（供货方），对方是**客户**（客户类别=1 下游客户）
+ */
+async function executeContractCreate(p: any): Promise<string> {
+  // 用户在类型选择里选了「报价单（非合同单据）」：转走报价单创建逻辑
+  if (p.asQuotation === true) {
+    return await executeQuotationCreate({
+      customerName: p.counterpartyName ?? null,
+      products: p.products ?? [],
+    });
+  }
+  const contractType = Number(p.contractType ?? 0);
+  if (contractType !== 1 && contractType !== 2) {
+    return '请先选择合同类型（采购合同 / 购销合同）后再执行。';
+  }
+  const isPurchase = contractType === 1;
+  const label = isPurchase ? '采购合同' : '购销合同';
+  const partyLabel = isPurchase ? '供应商' : '客户';
+  const name = String(p.counterpartyName ?? '').trim();
+  if (!name) {
+    return `创建${label}失败：未识别到对方主体名称，请补充后再试。`;
+  }
+  // 采购 → 只认供应商（customerType=2）；购销 → 只认客户（customerType=1）
+  const wantType = isPurchase ? 2 : 1;
+  const res = await getCustomerPage({ name, pageNo: 1, pageSize: 50 } as any);
+  const matched = filterByName((res.list ?? []) as any[], name, [
+    (c: any) => c.name,
+  ]);
+  const byType = matched.filter((c: any) => Number(c.customerType) === wantType);
+  const unknownType = matched.filter(
+    (c: any) => c.customerType === null || c.customerType === undefined,
+  );
+  const hit = byType[0] ?? unknownType[0];
+  if (!hit) {
+    const hint =
+      matched.length > 0
+        ? `系统中存在名为「${name}」的档案，但客户类别不是「${isPurchase ? '上游供应商' : '下游客户'}」，请先核对该档案的客户类别。`
+        : `系统中未找到「${name}」，请先在客户管理中录入（客户类别=${partyLabel}）后再建单。`;
+    return `创建${label}失败：${hint}`;
+  }
+  if (!hit.ownerUserId) {
+    return `创建${label}失败：对方档案缺少负责人，无法确定合同负责人，请先补充后再试。`;
+  }
+  const { items, missing, totalPrice } = await resolveProducts(p.products ?? []);
+  const contractName = `${hit.name}-${label}-${todayStr()}`;
+  const data: any = {
+    name: contractName,
+    // 采购=供应商编号；购销=客户编号（本系统供应商同样存放在客户档案中，客户类别=上游供应商）
+    customerId: hit.id,
+    ownerUserId: hit.ownerUserId,
+    orderDate: Date.now(),
+    discountPercent: 100,
+    totalPrice,
+    templateType: contractType,
+    remark: '由 AI 助手依据上传图片识别创建',
+  };
+  // 对方主体写入对应的合同方：采购 → 乙方(供应商)；购销 → 甲方(客户)
+  if (isPurchase) {
+    data.partyBName = hit.name;
+    if (p.contactName) data.partyBAgent = p.contactName;
+    if (p.phone) data.partyBTel = p.phone;
+    if (p.address) data.partyBAddress = p.address;
+  } else {
+    data.partyAName = hit.name;
+    if (p.contactName) data.partyAAgent = p.contactName;
+    if (p.phone) data.partyATel = p.phone;
+    if (p.address) data.partyAAddress = p.address;
+  }
+  await createContract(data);
+  return (
+    `已创建${label}：${contractName}（${partyLabel}：${hit.name}` +
+    (items.length > 0
+      ? `，共 ${items.length} 个产品，合计 ${fmtMoney(totalPrice)}`
+      : '') +
+    '）。' +
+    (missing.length > 0
+      ? `\n注意：以下产品未匹配到产品档案，未计入：${missing.join('、')}`
+      : '')
+  );
+}
+
+/* ----------------------------- 图片 OCR 识别 ----------------------------- */
+
+/** 图片 OCR：调后端多模态识别接口，返回模型 JSON 原文 */
+export async function extractImageOcr(image: string, hint?: string): Promise<string> {
+  const res: any = await requestClient.post(
+    '/crm/ai/extract-image',
+    {
+      image,
+      hint: hint || undefined,
+    },
+    { timeout: 120_000 },
+  );
+  return res?.content ?? '';
+}
+
+/**
+ * 文档识别：上传 Word / PDF，后端抽取文本后交大模型识别
+ *
+ * 输出结构与图片识别完全一致，因此前端复用同一套确认卡与建单流程。
+ */
+export async function extractDocumentOcr(
+  fileName: string,
+  content: string,
+  hint?: string,
+): Promise<string> {
+  const res: any = await requestClient.post(
+    '/crm/ai/extract-file',
+    {
+      fileName,
+      content,
+      hint: hint || undefined,
+    },
+    { timeout: 120_000 },
+  );
+  return res?.content ?? '';
+}
+
+/**
+ * 把图片识别结果组装为回复
+ *
+ * 合同场景按系统规则区分两类（我方身份相反，绝不能把供应商识别成客户）：
+ * - 采购合同：我方=甲方（采购人），对方=**供应商** → 新建采购合同并关联供应商
+ * - 购销合同：我方=乙方（供货方），对方=**客户**   → 新建购销合同并关联客户
+ * 类型无法判定时，主动询问用户，不猜测。
+ */
+export async function buildOcrReply(raw: string): Promise<AiReply> {
+  const parsed = parseJsonSafe<any>(raw);
+  if (!parsed) {
+    return { text: '图片识别失败，未能提取到有效内容，请更换更清晰的图片后重试。' };
+  }
+  const docType = String(parsed.docType ?? 'unknown').toLowerCase();
+  const isPurchase = docType === 'purchase';
+  const isSales = docType === 'sales';
+  const typeBasis = String(parsed.typeBasis ?? '').toLowerCase();
+  const docTitle = String(parsed.docTitle ?? '').trim();
+  // 判定依据：不轻信模型的自我标注 —— 只有**标题原文里确实出现类型关键词**才直接建单，
+  // 标题为「合同」「协议」或没有标题时，一律转人工确认，避免把供应商建成客户
+  const typeByTitle =
+    /采购|购销|销售|供货|供应|订货|购买|销货/.test(docTitle);
+  const isContract = (isPurchase || isSales) && typeByTitle;
+  const counterparty = String(parsed.counterpartyName ?? '').trim();
+  const contactName = String(parsed.contactName ?? '').trim();
+  const phone = String(parsed.phone ?? '').trim();
+  const address = String(parsed.address ?? '').trim();
+  const remark = String(parsed.remark ?? '').trim();
+  const products: any[] = Array.isArray(parsed.products) ? parsed.products : [];
+
+  const lines: string[] = ['已识别图片内容：'];
+  if (isPurchase || isSales) {
+    lines.push(
+      `· 合同类型：${isPurchase ? '采购合同（我方为甲方·采购人）' : '购销合同（我方为乙方·供货方）'}${
+        typeByTitle ? '' : '（由甲乙方推断，待确认）'
+      }`,
+    );
+    lines.push(
+      `· 对方主体：${counterparty || '（未识别到）'}（${isPurchase ? '供应商' : '客户'}）`,
+    );
+    if (parsed.partyAName) lines.push(`· 甲方：${parsed.partyAName}`);
+    if (parsed.partyBName) lines.push(`· 乙方：${parsed.partyBName}`);
+  } else if (docType === 'quotation') {
+    lines.push('· 单据类型：报价单');
+    if (counterparty) lines.push(`· 客户：${counterparty}`);
+  } else if (counterparty) {
+    lines.push(`· 对方主体：${counterparty}`);
+  }
+  for (const [label, v] of [
+    ['联系人', contactName],
+    ['电话', phone],
+    ['地址', address],
+    ['备注', remark],
+  ] as [string, string][]) {
+    if (v) lines.push(`· ${label}：${v}`);
+  }
+
+  const table: TableResult | undefined =
+    products.length > 0
+      ? {
+          title: '识别到的产品明细',
+          source: '图片 OCR 识别 · 请核对后再确认',
+          columns: [
+            { title: '产品名称', dataIndex: 'name', key: 'name' },
+            { title: '数量', dataIndex: 'count', key: 'count' },
+            { title: '单位', dataIndex: 'unit', key: 'unit' },
+            { title: '单价', dataIndex: 'price', key: 'price' },
+          ],
+          rows: products.map((it, i) => ({
+            id: i,
+            name: it.productName || '-',
+            count: it.count ?? '-',
+            unit: it.unit || '-',
+            price: it.price != null ? fmtMoney(it.price) : '-',
+          })),
+        }
+      : undefined;
+
+  if (!counterparty && !contactName && !phone && !address && !remark && products.length === 0) {
+    return { text: '图片识别完成，但未提取到有效业务字段，请更换更清晰的图片后重试。' };
+  }
+
+  // ① 已判定为合同的：按类型直接生成建单确认卡（采购→供应商，购销→客户）
+  if (isContract) {
+    return {
+      text:
+        `${lines.join('\n')}\n\n核对无误后，请点击下方「确认执行」创建` +
+        `${isPurchase ? '采购合同（关联供应商）' : '购销合同（关联客户）'}。`,
+      table,
+      action: {
+        type: 'contractCreate',
+        title: `新建${isPurchase ? '采购' : '购销'}合同`,
+        fields: [
+          {
+            label: '合同类型',
+            value: isPurchase ? '采购合同（我方甲方）' : '购销合同（我方乙方）',
+          },
+          {
+            label: isPurchase ? '供应商' : '客户',
+            value: counterparty || '（识别失败，请补充）',
+          },
+          { label: '联系人', value: contactName || '-' },
+          { label: '电话', value: phone || '-' },
+          { label: '产品数', value: String(products.length) },
+        ],
+        payload: {
+          contractType: isPurchase ? 1 : 2,
+          counterpartyName: counterparty || null,
+          contactName: contactName || undefined,
+          phone: phone || undefined,
+          address: address || undefined,
+          products,
+        },
+      },
+    };
+  }
+
+  // ② 明确是报价单：新建报价单
+  if (docType === 'quotation') {
+    const reply: AiReply = { text: lines.join('\n'), table };
+    if (products.length > 0) {
+      reply.action = {
+        type: 'quotationCreate',
+        title: '新建报价单（依据图片识别结果）',
+        fields: [
+          { label: '客户', value: counterparty || '（识别失败，请补充）' },
+          { label: '产品数', value: String(products.length) },
+        ],
+        payload: { customerName: counterparty || null, products },
+      };
+      reply.text += '\n\n核对无误后，请点击下方「确认执行」创建报价单。';
+    }
+    return reply;
+  }
+
+  // ③ 兜底：类型未能「由标题确定」时主动询问，绝不自作判断把供应商当客户
+  const guessed = isPurchase ? '采购合同' : isSales ? '购销合同' : '';
+  return {
+    text:
+      `${lines.join('\n')}\n\n` +
+      (guessed
+        ? `图片未明确写出合同类型（初步判断可能为「${guessed}」）。\n`
+        : '') +
+      '识别到合同，请问这是购销合同（我方乙方）还是采购合同（我方甲方）？' +
+      '请点击下方对应类型，我会按所选类型关联客户或供应商建单。',
+    table,
+    action: {
+      type: 'contractCreate',
+      title: '请选择单据类型',
+      fields: [
+        {
+          label: '识别依据',
+          value: docTitle
+            ? `标题「${docTitle}」未写明采购/购销，需您确认`
+            : typeBasis === 'inferred'
+              ? '标题未写明类型，由甲乙方推断'
+              : '未能判断合同类型',
+        },
+        { label: '甲方', value: String(parsed.partyAName ?? '').trim() || '-' },
+        { label: '乙方', value: String(parsed.partyBName ?? '').trim() || '-' },
+        { label: '识别到的对方主体', value: counterparty || '（未识别到）' },
+        { label: '联系人', value: contactName || '-' },
+        { label: '电话', value: phone || '-' },
+        { label: '产品数', value: String(products.length) },
+      ],
+      payload: {
+        counterpartyName: counterparty || null,
+        contactName: contactName || undefined,
+        phone: phone || undefined,
+        address: address || undefined,
+        products,
+      },
+      choices: [
+        { label: '采购合同（我方甲方 → 供应商）', value: { contractType: 1 } },
+        { label: '购销合同（我方乙方 → 客户）', value: { contractType: 2 } },
+        { label: '报价单（非合同单据）', value: { asQuotation: true } },
+      ],
+    },
   };
 }
 
@@ -795,9 +2207,57 @@ interface QwenClassify {
     | 'receivable'
     | 'receivablePlan'
     | 'product'
+    | 'quotation'
+    | 'afterSale'
+    | 'visitPlan'
+    | 'visitTask'
+    | 'visitRecord'
+    | 'warranty'
+    | 'help'
+    | 'todoCreate'
+    | 'todoComplete'
+    | 'todoReschedule'
+    | 'visitPlanCreate'
+    | 'visitTaskCreate'
+    | 'quotationCreate'
     | 'unknown';
+  /** 一句话查询多个对象时的其余对象（最多 3 个，取值同 intent），如报价单+售后工单+质保档案 */
+  intents?: (null | string)[];
+  /** 写操作：截止/任务日期（YYYY-MM-DD 绝对日期） */
+  date?: null | string;
+  /** 写操作：待办内容或内容关键词 */
+  content?: null | string;
+  /** 写操作：回访周期原话（每季度/每半年/每年/到期前） */
+  cycle?: null | string;
+  /** 写操作：回访方式原话（电话/上门/微信/邮件） */
+  visitType?: null | string;
+  /** 用户提到的具体名称（客户名 / 公司名 / 线索名等） */
   name?: string | null;
+  /**
+   * 用户明确指定的人员姓名，如「张三的客户」中的张三。
+   * 注意：「我 / 我的下属 / 我的团队」这类代词由模型归入 scope，不会落到这里。
+   */
+  ownerName?: string | null;
+  /**
+   * 数据归属范围：
+   * mine=我负责的（默认）、subordinate=我的下属、team=我的团队（我 + 全部下属）
+   */
+  scope?: 'mine' | 'subordinate' | 'team' | null;
+  /** 客户状态类条件（成交 / 未成交 / 跟进中…） */
+  customerStatus?: string | null;
+  /** 商机阶段类条件 */
+  businessStage?: string | null;
+  /** 客户类别：1=下游客户，2=上游供应商 */
+  customerType?: null | number;
+  /** 时间范围原话（本月 / 上月 / 今年 / 近7天…） */
+  timeRange?: null | string;
   month?: boolean;
+  /** 是否要求按人员分组展示（如「我所有下属的客户」） */
+  groupByOwner?: boolean;
+  /** 问题过于笼统、缺少必要筛选条件，需要先向用户确认 */
+  needMoreInfo?: boolean;
+  /** needMoreInfo 为 true 时给出的追问话术 */
+  askMessage?: string | null;
   summary?: string;
 }
 
@@ -823,13 +2283,25 @@ function parseJsonSafe<T>(text: string): T | null {
 
 async function classifyIntentWithQwen(
   query: string,
+  history?: string,
 ): Promise<QwenClassify | null> {
   try {
     // 由后端转发大模型：密钥保存在服务端，前端接触不到；
-    // 也不再依赖 Vite 开发代理，打包部署后同样可用
-    const res: any = await requestClient.post('/crm/ai/classify-intent', {
-      query,
-    });
+    // 也不再依赖 Vite 开发代理，打包部署后同样可用。
+    // history 用于多轮追问：让模型在上一轮的查询范围上继续叠加条件
+    //
+    // X-Silent-Error：意图识别只是「可选增强」。AI 未配置（txgy.crm.ai.api-key 为空，
+    // 见 application.yaml 的 DASHSCOPE_API_KEY）或大模型临时不可用时，这里会静默降级为
+    // 关键词匹配，由 mockAiReply 返回 degraded 标记在对话流里说明；不应再弹全局红色报错，
+    // 否则用户会以为整个助手坏了。
+    const res: any = await requestClient.post(
+      '/crm/ai/classify-intent',
+      {
+        query,
+        history: history ?? '',
+      },
+      { headers: { 'X-Silent-Error': 'true' } },
+    );
     const content: string = res?.content ?? '';
     return parseJsonSafe<QwenClassify>(content);
   } catch {
@@ -841,34 +2313,83 @@ async function getLocalTable(
   intent: string,
   q: string,
   hintName?: string | null,
+  customerType?: null | number,
+  /** 数据范围：1=我负责的、3=下属负责的；不传=权限范围内全部 */
+  sceneType?: number,
+  /** 完整意图解析结果（写操作需要 date/content 等槽位） */
+  cls?: QwenClassify,
 ): Promise<AiReply | null> {
   switch (intent) {
     case 'customer':
-      return await replyCustomers(q, hintName);
+      return await replyCustomers(q, hintName, customerType, sceneType);
     case 'pool':
       return await replyPool();
     case 'clue':
-      return await replyClues(q, hintName);
+      return await replyClues(q, hintName, sceneType);
     case 'business':
-      return await replyBusinesses(q, hintName);
+      return await replyBusinesses(q, hintName, sceneType);
     case 'todo':
-      return await replyTodos(q);
+      return await replyTodos(q, sceneType);
     case 'contact':
-      return await replyContacts(q, hintName);
+      return await replyContacts(q, hintName, sceneType);
     case 'contract':
-      return await replyContracts(q, hintName);
+      return await replyContracts(q, hintName, sceneType);
     case 'receivable':
-      return await replyReceivables(q, hintName);
+      return await replyReceivables(q, hintName, sceneType);
     case 'receivablePlan':
-      return await replyReceivablePlans(q, hintName);
+      return await replyReceivablePlans(q, hintName, sceneType);
     case 'product':
       return await replyProducts();
+    case 'quotation':
+      return await replyQuotations(q, hintName, sceneType);
+    case 'afterSale':
+      return await replyAfterSaleTickets(q, hintName);
+    case 'visitPlan':
+      return await replyVisitPlans(q, hintName);
+    case 'visitTask':
+      return await replyVisitTasks(q, hintName);
+    case 'visitRecord':
+      return await replyVisitRecords(q, hintName);
+    case 'warranty':
+      return await replyWarranties(q, hintName);
+    case 'help':
+      return replyHelp();
+    case 'todoCreate':
+      return cls ? await planTodoCreate(q, cls) : null;
+    case 'todoComplete':
+      return cls ? await planTodoComplete(q, cls) : null;
+    case 'todoReschedule':
+      return cls ? await planTodoReschedule(q, cls) : null;
+    case 'visitPlanCreate':
+      return cls ? await planVisitPlanCreate(q, cls) : null;
+    case 'visitTaskCreate':
+      return cls ? await planVisitTaskCreate(q, cls) : null;
+    case 'quotationCreate':
+      return cls ? await planQuotationCreate(q, cls) : null;
     default:
       return null;
   }
 }
 
 /* ----------------------------- 意图分发 ----------------------------- */
+
+/**
+ * 基于已取回的数据做关键词过滤。
+ * 分页接口暂不支持「客户状态 / 商机阶段」这类条件，只能取回后再筛；
+ * 采用双向包含匹配，避免「已成交」与「成交」这类措辞差异导致漏筛。
+ */
+function filterRowsByKeyword(
+  rows: Record<string, any>[],
+  field: string,
+  keyword: string,
+): Record<string, any>[] {
+  const kw = keyword.trim();
+  if (!kw) return rows;
+  return rows.filter((r) => {
+    const v = String(r[field] ?? '').trim();
+    return v !== '' && (v.includes(kw) || kw.includes(v));
+  });
+}
 
 /**
  * 结果条数达到单次查询上限时补一句说明。
@@ -888,41 +2409,217 @@ function withLimitHint(reply: AiReply): AiReply {
 /**
  * 主入口：优先调用千问大模型做意图理解，再用 CRM 真实接口拉取数据；
  * 若千问不可用（网络/密钥问题），则回退到本地关键词识别，仍调用真实接口。
+ *
+ * @param query   用户本轮问题
+ * @param history 最近几轮对话记录，供模型理解「那他们呢」这类追问
  */
-export async function mockAiReply(query: string): Promise<AiReply> {
+export async function mockAiReply(
+  query: string,
+  history?: string,
+): Promise<AiReply> {
   const q = query.trim();
 
   try {
-    const cls = await classifyIntentWithQwen(q);
+    const cls = await classifyIntentWithQwen(q, history);
     if (cls) {
-      const local = await getLocalTable(cls.intent, q, cls.name);
+      // 0. 与 CRM 业务无关的问题（闲聊等）：礼貌说明即可，
+      //    不能被模型误设的 needMoreInfo 带着去反问「你要什么代码」
+      if (cls.intent === 'unknown') {
+        return {
+          text:
+            cls.summary?.trim() || '我仅提供 CRM 业务相关服务。',
+        };
+      }
+
+      // 1. 缺少关键筛选条件时先友好反问，既不返回全量数据，也不生硬报错
+      if (cls.needMoreInfo) {
+        return {
+          text:
+            (cls.askMessage ?? '').trim() ||
+            '这个问题范围有点大，方便再补充一下筛选条件吗？比如具体的名称、负责人员、所属范围或时间。',
+        };
+      }
+
+      // 2. 数据范围显式传给查询接口（sceneType）：
+      //    mine=我负责的(1)、subordinate=下属负责的(3)、team=不限定（默认权限范围，含我+下属）。
+      //    「我负责的」必须显式传 1：不传时后端返回权限范围内的全部数据，
+      //    对领导来说会混入下属的客户，文案「您名下」就与数据对不上了
+      const sceneType =
+        cls.scope === 'mine' ? 1 : cls.scope === 'subordinate' ? 3 : undefined;
+
+      const local = await getLocalTable(
+        cls.intent,
+        q,
+        cls.name,
+        cls.customerType,
+        sceneType,
+        cls,
+      );
       if (local) {
-        // 只有确实查到数据时才用千问的口头总结；
-        // 未查到时要保留真实提示（否则「未找到」会被总结语盖掉，看着像有数据）
+        // 写操作：返回待确认卡片，不走数据后处理与总结
+        if (local.action) {
+          return { text: local.text, action: local.action };
+        }
+        let text = local.text;
+
+        // 3. 人员条件：分页接口暂不支持按负责人查询，基于已取回的数据做过滤并如实说明
+        const ownerName = String(cls.ownerName ?? '').trim();
+        if (ownerName && local.table?.rows?.length) {
+          const rows = local.table.rows.filter((r: any) =>
+            String(r.owner ?? '').includes(ownerName),
+          );
+          local.table = { ...local.table, rows };
+          text =
+            rows.length > 0
+              ? `已为您筛选出负责人包含「${ownerName}」的 ${rows.length} 条记录：`
+              : `没有找到负责人为「${ownerName}」的记录，请确认人员姓名是否正确。`;
+        }
+
+        // 4. 状态类条件（客户状态 / 商机阶段）：分页接口暂不支持，同样取回后再筛。
+        //    若一条都匹配不上，则保留原数据并如实说明，
+        //    避免让用户误以为「系统里没有数据」
+        const statusKw = String(cls.customerStatus ?? '').trim();
+        const stageKw = String(cls.businessStage ?? '').trim();
+        const kwField =
+          cls.intent === 'customer' && statusKw
+            ? { field: 'deal', kw: statusKw }
+            : cls.intent === 'business' && stageKw
+              ? { field: 'stage', kw: stageKw }
+              : null;
+        if (kwField && local.table?.rows?.length) {
+          const before = local.table.rows.length;
+          const rows = filterRowsByKeyword(
+            local.table.rows,
+            kwField.field,
+            kwField.kw,
+          );
+          if (rows.length > 0) {
+            local.table = { ...local.table, rows };
+            text = `已按「${kwField.kw}」筛选，共 ${rows.length} 条：`;
+          } else {
+            text = `没有找到符合「${kwField.kw}」的记录，以下为该范围内的全部 ${before} 条数据：`;
+          }
+        }
+
+        // 5. 需要按人员分组时，先按负责人把同一个人的数据排在一起（表格内即形成分组观感）
+        if (cls.groupByOwner && (local.table?.rows?.length ?? 0) > 1) {
+          local.table = {
+            ...local.table,
+            rows: [...local.table.rows].sort((a: any, b: any) =>
+              String(a.owner ?? '').localeCompare(
+                String(b.owner ?? ''),
+                'zh-CN',
+              ),
+            ),
+          };
+        }
+
+        // 6. 文案一律以真实查询结果为准：
+        //    不再用千问的 summary 覆盖 —— 它不知道真实结果，曾出现「您名下」与实际范围不符、
+        //    编造客户名单等与表格对不上的情况；
+        //    空结果统一使用固定话术「当前暂无符合条件的数据。」，按名称精确查找时保留具体原因
         const hasRows = (local.table?.rows?.length ?? 0) > 0;
-        const text = hasRows ? cls.summary?.trim() || local.text : local.text;
+        if (!hasRows) {
+          const hasName = String(cls.name ?? '').trim();
+          if (!hasName) {
+            text = '当前暂无符合条件的数据。';
+          }
+        }
+        // 表格副标题带上归属范围，保证「我的」与「所有」两种口径在界面上可核对
+        if (local.table) {
+          const scopeText = scopeLabelOf(resolveScope(q, sceneType));
+          local.table = {
+            ...local.table,
+            source: `${local.table.source ?? ''} · 归属：${scopeText}`,
+          };
+        }
+
+        // 7. 一句话查多个对象（如「报价单 + 售后工单 + 质保档案」）：逐个追加表格
+        const extraIntents = (cls.intents ?? [])
+          .filter((x): x is string => Boolean(x) && x !== cls.intent)
+          .slice(0, 3);
+        if (extraIntents.length > 0) {
+          const tables: TableResult[] = [];
+          const texts: string[] = [text];
+          if (local.table) {
+            tables.push(local.table);
+          }
+          for (const it of extraIntents) {
+            try {
+              const r = await getLocalTable(
+                it,
+                q,
+                cls.name,
+                cls.customerType,
+                sceneType,
+              );
+              if (r?.table) {
+                const cnt = r.table.rows?.length ?? 0;
+                texts.push(
+                  cnt > 0
+                    ? r.text
+                    : `系统未查询到该数据（${r.table.title}）。`,
+                );
+                tables.push(r.table);
+              }
+            } catch {
+              // 单个对象查询失败不阻断整体回答
+            }
+          }
+          return withLimitHint({
+            text: texts.filter(Boolean).join('\n'),
+            table: tables[0],
+            tables: tables.length > 0 ? tables : undefined,
+          });
+        }
         return withLimitHint({ text, table: local.table });
       }
       if (cls.summary) {
         return { text: cls.summary };
       }
     }
-  } catch {
+  } catch (e: any) {
+    // 无权限：如实告知，不返回任何数据，也不降级重试
+    const msg = String(e?.message ?? e ?? '');
+    if (/没有该操作权限|无权限|403/.test(msg)) {
+      return {
+        text: '您当前没有权限查看该数据，请联系管理员开通相应权限。',
+      };
+    }
     // 落到下方关键词兜底
   }
 
   // 兜底：纯前端关键词识别（仍调用真实接口）。
   // 标记 degraded，让界面明确告知用户「AI 意图识别未生效」，而不是静默变笨
-  return { ...withLimitHint(await keywordMockReply(q)), degraded: true };
+  try {
+    return { ...withLimitHint(await keywordMockReply(q)), degraded: true };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e ?? '');
+    if (/没有该操作权限|无权限|403/.test(msg)) {
+      return {
+        text: '您当前没有权限查看该数据，请联系管理员开通相应权限。',
+      };
+    }
+    return {
+      text: '抱歉，处理您的请求时出错了，请稍后再试。',
+    };
+  }
 }
 
 async function keywordMockReply(query: string): Promise<AiReply> {
   const q = query.trim();
 
-  // 优先级：公海 > 客户 > 线索 > 商机 > 待办 > 联系人 > 合同 > 回款计划 > 回款 > 产品
+  // 优先级：公海 > 待办 > 质保/回访/售后/报价 > 客户 > 线索 > 商机 > 联系人 > 合同 > 回款计划 > 回款 > 产品
   if (/公海/.test(q)) return await replyPool();
   // 「待办」必须排在「客户」之前：像「今日待办要联系的客户」同时含两个词，应走待办明细
   if (/待办|todo|事项/.test(q)) return await replyTodos(q);
+  // 报价 / 售后同样必须排在「客户」之前：「XX客户的报价单」应走报价明细
+  if (/质保/.test(q)) return await replyWarranties(q);
+  if (/回访记录|历史回访/.test(q)) return await replyVisitRecords(q);
+  if (/回访计划/.test(q)) return await replyVisitPlans(q);
+  if (/回访任务|待回访/.test(q)) return await replyVisitTasks(q);
+  if (/售后|工单/.test(q)) return await replyAfterSaleTickets(q);
+  if (/报价/.test(q)) return await replyQuotations(q);
   if (/客户/.test(q) && !/公海/.test(q)) return await replyCustomers(q);
   if (/线索/.test(q)) return await replyClues(q);
   if (/商机|机会/.test(q)) return await replyBusinesses(q);

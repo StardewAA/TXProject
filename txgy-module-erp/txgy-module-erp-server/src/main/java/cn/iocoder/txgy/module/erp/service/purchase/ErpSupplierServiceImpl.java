@@ -7,6 +7,8 @@ import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.supplier.ErpSuppl
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.supplier.ErpSupplierSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.purchase.ErpSupplierMapper;
+import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
+import cn.iocoder.txgy.module.erp.service.integration.ErpMesMasterDataSyncService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpWmsMasterDataSyncService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -33,16 +35,38 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     private ErpSupplierMapper supplierMapper;
     @Resource
     private ErpWmsMasterDataSyncService wmsMasterDataSyncService;
+    @Resource
+    private ErpMesMasterDataSyncService mesMasterDataSyncService;
+
+    @Resource
+    private ErpNoRedisDAO noRedisDAO;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSupplier(ErpSupplierSaveReqVO createReqVO) {
-        validatePartnerCodeUnique(null, createReqVO.getPartnerCode());
         ErpSupplierDO supplier = BeanUtils.toBean(createReqVO, ErpSupplierDO.class);
+        // 统一编码由服务端生成，保证跨模块同源（MES/WMS 均消费该编码）
+        supplier.setPartnerCode(generatePartnerCode());
         supplier.setSyncVersion(1L);
         supplierMapper.insert(supplier);
         wmsMasterDataSyncService.syncSupplierAfterCommit(supplier);
+        mesMasterDataSyncService.syncSupplierAfterCommit(supplier);
         return supplier.getId();
+    }
+
+    /**
+     * 生成供应商统一编码，格式：VEN + yyyyMMdd + 6 位自增，例如 VEN20260917000001
+     *
+     * 与 MES 编码规则 MD_VENDOR_CODE 前缀保持一致；循环重试以规避 Redis 计数与落库数据不一致导致的重复
+     */
+    private String generatePartnerCode() {
+        for (int i = 0; i < 10; i++) {
+            String partnerCode = noRedisDAO.generate(ErpNoRedisDAO.SUPPLIER_PARTNER_CODE_PREFIX);
+            if (supplierMapper.selectByPartnerCode(partnerCode) == null) {
+                return partnerCode;
+            }
+        }
+        throw exception(SUPPLIER_PARTNER_CODE_DUPLICATE, "自动生成失败，请重试");
     }
 
     @Override
@@ -50,15 +74,18 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     public void updateSupplier(ErpSupplierSaveReqVO updateReqVO) {
         // 校验存在
         ErpSupplierDO oldSupplier = validateSupplierExists(updateReqVO.getId());
-        if (!Objects.equals(oldSupplier.getPartnerCode(), updateReqVO.getPartnerCode())) {
+        // 统一编码由服务端生成，不允许通过接口修改，始终沿用原编码
+        if (updateReqVO.getPartnerCode() != null
+                && !Objects.equals(oldSupplier.getPartnerCode(), updateReqVO.getPartnerCode())) {
             throw exception(SUPPLIER_PARTNER_CODE_IMMUTABLE);
         }
-        validatePartnerCodeUnique(updateReqVO.getId(), updateReqVO.getPartnerCode());
         // 更新
         ErpSupplierDO updateObj = BeanUtils.toBean(updateReqVO, ErpSupplierDO.class);
+        updateObj.setPartnerCode(oldSupplier.getPartnerCode());
         updateObj.setSyncVersion(oldSupplier.getSyncVersion() == null ? 1L : oldSupplier.getSyncVersion() + 1);
         supplierMapper.updateById(updateObj);
         wmsMasterDataSyncService.syncSupplierAfterCommit(updateObj);
+        mesMasterDataSyncService.syncSupplierAfterCommit(updateObj);
     }
 
     @Override
@@ -71,6 +98,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         supplier.setStatus(CommonStatusEnum.DISABLE.getStatus());
         supplier.setSyncVersion(supplier.getSyncVersion() == null ? 1L : supplier.getSyncVersion() + 1);
         wmsMasterDataSyncService.syncSupplierAfterCommit(supplier);
+        mesMasterDataSyncService.syncSupplierAfterCommit(supplier);
     }
 
     private ErpSupplierDO validateSupplierExists(Long id) {
@@ -79,13 +107,6 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             throw exception(SUPPLIER_NOT_EXISTS);
         }
         return supplier;
-    }
-
-    private void validatePartnerCodeUnique(Long id, String partnerCode) {
-        ErpSupplierDO supplier = supplierMapper.selectByPartnerCode(partnerCode);
-        if (supplier != null && !Objects.equals(supplier.getId(), id)) {
-            throw exception(SUPPLIER_PARTNER_CODE_DUPLICATE, partnerCode);
-        }
     }
 
     @Override

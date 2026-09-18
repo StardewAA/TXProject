@@ -34,6 +34,9 @@ import java.util.List;
 @AllArgsConstructor
 public class MemberUserDO extends TenantBaseDO {
 
+    /** 申请身份，不代表企业审核通过或具备销售权限。 */
+    private String memberIdentity;
+
     // ========== 账号信息 ==========
 
     /**
@@ -45,6 +48,10 @@ public class MemberUserDO extends TenantBaseDO {
      * 手机
      */
     private String mobile;
+    /** Normalized tenant-local account name; NULL for legacy accounts. */
+    private String loginName;
+    /** Unverified contact only. Never used for authentication or password recovery. */
+    private String contactMobile;
     /**
      * 邮箱
      */

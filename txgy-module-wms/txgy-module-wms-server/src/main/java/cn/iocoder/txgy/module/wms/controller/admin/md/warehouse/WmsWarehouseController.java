@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -39,6 +40,9 @@ public class WmsWarehouseController {
     private WmsWarehouseService warehouseService;
     @Resource
     private WmsWarehousePersonnelService warehousePersonnelService;
+    @Resource
+    private AdminUserApi adminUserApi;
+
     @Resource
     private AdminUserApi adminUserApi;
 
@@ -93,6 +97,25 @@ public class WmsWarehouseController {
         List<WmsWarehouseRespVO> result = BeanUtils.toBean(list, WmsWarehouseRespVO.class);
         result.forEach(this::enrichPersonnel);
         return success(result);
+    }
+
+    private WmsWarehouseRespVO buildWarehouseRespVO(WmsWarehouseDO warehouse) {
+        if (warehouse == null) return null;
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(java.util.stream.Stream.of(
+                parseUserId(warehouse.getCreator()), parseUserId(warehouse.getUpdater()))
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()));
+        return buildWarehouseRespVO(warehouse, userMap);
+    }
+
+    private WmsWarehouseRespVO buildWarehouseRespVO(WmsWarehouseDO warehouse, Map<Long, AdminUserRespDTO> userMap) {
+        WmsWarehouseRespVO vo = BeanUtils.toBean(warehouse, WmsWarehouseRespVO.class);
+        MapUtils.findAndThen(userMap, parseUserId(vo.getCreator()), user -> vo.setCreatorName(user.getNickname()));
+        MapUtils.findAndThen(userMap, parseUserId(vo.getUpdater()), user -> vo.setUpdaterName(user.getNickname()));
+        return vo;
+    }
+
+    private Long parseUserId(String userId) {
+        return NumberUtil.parseLong(userId, null);
     }
 
     @GetMapping("/export-excel")

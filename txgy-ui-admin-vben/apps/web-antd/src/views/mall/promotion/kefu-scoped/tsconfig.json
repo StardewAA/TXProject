@@ -1,0 +1,5 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "include": ["./**/*.ts", "./**/*.vue", "../../../../api/mall/promotion/kefu-scoped.ts"],
+  "exclude": ["./**/*.test.ts", "./**/*.config.ts"]
+}

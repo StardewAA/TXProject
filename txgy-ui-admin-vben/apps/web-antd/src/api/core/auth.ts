@@ -49,8 +49,8 @@ export namespace AuthApi {
     username: string;
     password: string;
     captchaVerification: string;
-    /** 注册入口类型，后端可据此区分企业/个人账号 */
-    registerType?: 'enterprise' | 'personal';
+    /** 注册入口类型；公开注册仅支持个人账号 */
+    registerType?: 'personal';
   }
 
   /** 重置密码接口参数 */
@@ -109,7 +109,8 @@ export async function getTenantSimpleList() {
   const response = await baseRequestClient.get<{
     data?: AuthApi.TenantResult[];
   }>(`/system/tenant/simple-list`);
-  return response?.data?.data ?? response?.data ?? [];
+  const data = response?.data?.data ?? response?.data;
+  return Array.isArray(data) ? data : [];
 }
 
 /** 使用租户域名，获得租户信息 */
@@ -117,7 +118,15 @@ export async function getTenantByWebsite(website: string) {
   const response = await baseRequestClient.get<{
     data?: null | AuthApi.TenantResult;
   }>(`/system/tenant/get-by-website?website=${website}`);
-  return response?.data?.data ?? response?.data ?? null;
+  const data = response?.data?.data ?? response?.data;
+  return data && typeof data === 'object' && 'id' in data ? data : null;
+}
+
+/** 使用租户名，获得租户编号（登录页手动输入租户名时使用） */
+export async function getTenantIdByName(name: string) {
+  return requestClient.get<null | number>(
+    `/system/tenant/get-id-by-name?name=${encodeURIComponent(name)}`,
+  );
 }
 
 /** 获取验证码 */

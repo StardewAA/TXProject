@@ -23,13 +23,23 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine, func, select
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 DATA.mkdir(exist_ok=True)
 DB_URL = os.getenv("MODULE5_DB_URL", f"sqlite:///{(DATA / 'module5.db').as_posix()}")
+
+# 试卷总分统一上限：整份试卷分值合计不可超过 100 分
+PAPER_TOTAL_LIMIT = 100
+# 资源中心（模块一）考试题库与本地题型的映射
+QTYPE_TO_PLATFORM = {"single": 1, "multi": 2, "judge": 3, "essay": 4, "case": 5, "blank": 6, "short": 7}
+QTYPE_FROM_PLATFORM = {v: k for k, v in QTYPE_TO_PLATFORM.items()}
+DIFF_TO_PLATFORM = {"easy": 1, "medium": 2, "hard": 3}
+DIFF_FROM_PLATFORM = {v: k for k, v in DIFF_TO_PLATFORM.items()}
+PLATFORM_PAGE_SIZE = 200
+PLATFORM_MAX_PAGES = 10
 
 
 
@@ -49,8 +59,14 @@ class User(Base):
 
 
 class Question(Base):
+    """试题。
+
+    组卷使用的题目来自模块一资源中心的考试题库，本地保存一份镜像快照
+    （platform_id 指向平台试题 ID），供排考快照、阅卷、错题本使用。
+    """
     __tablename__ = "questions"
     id: Mapped[int] = mapped_column(primary_key=True)
+    platform_id: Mapped[int | None] = mapped_column(Integer, index=True)
     q_type: Mapped[str] = mapped_column(String(20), index=True)
     stem: Mapped[str] = mapped_column(Text)
     options: Mapped[str | None] = mapped_column(Text)
@@ -90,6 +106,9 @@ class Paper(Base):
     cert_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     cert_type: Mapped[str] = mapped_column(String(20), default="graduate")
     course_name: Mapped[str] = mapped_column(String(200), default="")
+    # 适用工种（选项来自资源中心标签管理的工种）与考试通过发放的工种资格证
+    work_types: Mapped[str | None] = mapped_column(Text, default="[]")
+    cert_names: Mapped[str | None] = mapped_column(Text, default="[]")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     questions: Mapped[list[PaperQuestion]] = relationship(back_populates="paper", cascade="all, delete-orphan")
@@ -252,6 +271,29 @@ def platform_get(path, token, tenant_id):
         raise HTTPException(401 if payload.get("code") == 401 or r.status_code == 401 else 403, "登录已过期或没有访问权限")
     return payload.get("data")
 
+
+def platform_request(method, path, token, tenant_id, body: dict | None = None):
+    """调用平台的写接口（新增用 POST、更新用 PUT）。"""
+    try:
+        r = httpx.request(method, PLATFORM_URL + path, json=body if body is not None else {}, headers={"Authorization": token, "tenant-id": str(tenant_id)}, timeout=15)
+        payload = r.json()
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(503, "平台服务暂时不可用")
+    if r.status_code != 200 or payload.get("code") != 0:
+        raise HTTPException(422, payload.get("msg") or payload.get("message") or "平台接口调用失败")
+    return payload.get("data")
+
+
+def platform_post(path, token, tenant_id, body: dict | None = None):
+    """调用平台的 POST 写接口（创建/停用试题等）。"""
+    return platform_request("POST", path, token, tenant_id, body)
+
+
+def platform_put(path, token, tenant_id, body: dict | None = None):
+    """调用平台的 PUT 写接口（更新试题）。"""
+    return platform_request("PUT", path, token, tenant_id, body)
+
+
 def current_user(authorization: str = Header(""), tenant_id: int = Header(...)):
     if not authorization.startswith("Bearer ") or len(authorization)<10:
         raise HTTPException(401, "请先登录平台")
@@ -270,10 +312,22 @@ def current_user(authorization: str = Header(""), tenant_id: int = Header(...)):
     elif "training:exam:query" in permissions: role = "viewer"
     return Actor(id=user["id"], name=user.get("nickname") or user.get("username") or str(user["id"]), role=role, tenant_id=tenant_id, super_admin=super_admin, token=authorization)
 
+def ensure_columns(engine, table: str, columns: dict[str, str]):
+    """SQLite 轻量迁移：为历史库补充新增列（create_all 不会改已有表）。"""
+    with engine.connect() as conn:
+        existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+        for name, ddl in columns.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+        conn.commit()
+
+
 @lru_cache(maxsize=256)
 def tenant_engine(tenant_id):
     eng=create_engine(f"sqlite:///{(DATA / ('tenant-' + str(tenant_id) + '.db')).as_posix()}", connect_args={"check_same_thread": False, "timeout":30})
     Base.metadata.create_all(eng)
+    ensure_columns(eng, "questions", {"platform_id": "platform_id INTEGER"})
+    ensure_columns(eng, "papers", {"work_types": "work_types TEXT DEFAULT '[]'", "cert_names": "cert_names TEXT DEFAULT '[]'"})
     return eng
 
 def db_session(actor: Actor = Depends(current_user)):
@@ -303,6 +357,196 @@ def parse(value: str | None, fallback: Any = None):
         return json.loads(value) if value is not None else fallback
     except json.JSONDecodeError:
         return fallback
+
+
+def options_from_platform(raw) -> list[dict[str, str]]:
+    rows = raw if isinstance(raw, list) else (parse(raw, []) if isinstance(raw, str) else [])
+    result = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        if key:
+            result.append({"key": key, "text": str(item.get("text") or "")})
+    return result
+
+
+def platform_question_view(item: dict, include_answer=False) -> dict:
+    """把资源中心（模块一）考试题库的试题转换为本地视图结构。"""
+    qtype = QTYPE_FROM_PLATFORM.get(int(item.get("qtype") or 1), "single")
+    raw_answer = (item.get("answer") or "").strip()
+    raw_options = item.get("optionsJson")
+    if qtype in {"single", "multi"}:
+        options = options_from_platform(raw_options)
+        valid = {o["key"] for o in options}
+        keys = [k for k in [x.strip() for x in raw_answer.replace("，", ",").split(",")] if k in valid]
+        if not keys:  # 兼容答案缺失、仅标记 isCorrect 的历史数据
+            rows = raw_options if isinstance(raw_options, list) else parse(raw_options, [])
+            keys = [str(o.get("key")) for o in rows if isinstance(o, dict) and o.get("isCorrect") and str(o.get("key")) in valid]
+        answer, usable = keys, bool(keys) and len(options) >= 2
+    elif qtype == "judge":
+        options = None
+        answer = [not raw_answer.startswith("错")] if raw_answer else []
+        usable = bool(raw_answer)
+    else:
+        options = None
+        answer = {"points": raw_answer}
+        usable = bool(raw_answer)
+    tag_names = [x.strip() for x in (item.get("tagNames") or "").replace("，", ",").split(",") if x.strip()]
+    data = {
+        "id": item.get("id"),
+        "platform_id": item.get("id"),
+        "q_type": qtype,
+        "category_id": item.get("categoryId"),
+        "stem": item.get("stem") or "",
+        "options": options,
+        "tags": {"tag_names": tag_names},
+        "difficulty": DIFF_FROM_PLATFORM.get(int(item.get("difficulty") or 2), "medium"),
+        "status": "enabled" if int(item.get("status") or 1) == 1 else "disabled",
+        "analysis": item.get("analysis") or "",
+        "usable": usable,
+        "source": "platform",
+    }
+    if include_answer:
+        data["answer"] = answer
+    return data
+
+
+def platform_question_page(actor, qtype: int | None = None, difficulty: int | None = None, status: int | None = None) -> list[dict]:
+    """分页拉取资源中心考试题库（返回已转换的视图列表）。"""
+    rows: list[dict] = []
+    page = 1
+    while page <= PLATFORM_MAX_PAGES:
+        path = f"/training/question/page?pageNo={page}&pageSize={PLATFORM_PAGE_SIZE}"
+        if qtype:
+            path += f"&qtype={qtype}"
+        if difficulty:
+            path += f"&difficulty={difficulty}"
+        if status:
+            path += f"&status={status}"
+        data = platform_get(path, actor.token, actor.tenant_id) or {}
+        batch = data.get("list") or []
+        rows += [platform_question_view(x, True) for x in batch if isinstance(x, dict)]
+        if len(batch) < PLATFORM_PAGE_SIZE or page * PLATFORM_PAGE_SIZE >= int(data.get("total") or 0):
+            break
+        page += 1
+    return rows
+
+
+def platform_question_total(actor) -> int:
+    try:
+        data = platform_get("/training/question/page?pageNo=1&pageSize=1", actor.token, actor.tenant_id) or {}
+        return int(data.get("total") or 0)
+    except HTTPException:
+        return 0
+
+
+def platform_tag_options(actor, dimension: str | None = None) -> list[dict]:
+    path = "/training/resource-tag/list" + (f"?dimension={dimension}" if dimension else "")
+    try:
+        rows = platform_get(path, actor.token, actor.tenant_id) or []
+    except HTTPException:
+        return []
+    return [{"id": x.get("id"), "name": str(x.get("name") or "")} for x in rows if isinstance(x, dict)]
+
+
+def resolve_tag_ids(actor, tags: dict | None) -> list[int]:
+    """把标签名称解析为平台标签 ID（匹配不到的忽略）。"""
+    names: list[str] = []
+    for value in (tags or {}).values():
+        if isinstance(value, list):
+            names += [str(x).strip() for x in value if str(x).strip()]
+    if not names:
+        return []
+    lookup = {t["name"]: t["id"] for t in platform_tag_options(actor) if t["name"]}
+    return [lookup[name] for name in names if name in lookup]
+
+
+def platform_category_options(actor) -> list[dict]:
+    """资源分类（question 类型）扁平化选项：[{id, name, path}]，供题库搜索「按所属分类」使用。"""
+    path = "/training/resource-category/tree?type=question"
+    try:
+        tree = platform_get(path, actor.token, actor.tenant_id) or []
+    except HTTPException:
+        return []
+    result: list[dict] = []
+
+    def walk(nodes, chain):
+        for node in nodes or []:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            if node.get("id") is not None:
+                result.append({
+                    "id": node["id"],
+                    "name": name,
+                    "path": " / ".join([*chain, name] if name else chain),
+                })
+            walk(node.get("children"), [*chain, name] if name else chain)
+
+    walk(tree, [])
+    return result
+
+
+def question_payload(body: QuestionIn, actor) -> dict:
+    """把本地试题模型转换为平台（资源中心考试题库）创建/更新接口的入参。"""
+    payload = {
+        "qtype": QTYPE_TO_PLATFORM.get(body.q_type, 1),
+        "stem": body.stem,
+        "analysis": body.analysis or "",
+        "difficulty": DIFF_TO_PLATFORM.get(body.difficulty, 2),
+    }
+    if body.q_type in {"single", "multi"}:
+        chosen = [str(x) for x in body.answer] if isinstance(body.answer, list) else []
+        payload["optionsJson"] = json.dumps(
+            [{"key": o["key"], "text": o.get("text", ""), "isCorrect": o["key"] in chosen} for o in (body.options or [])],
+            ensure_ascii=False,
+        )
+        payload["answer"] = ",".join(chosen)
+    elif body.q_type == "judge":
+        payload["answer"] = "对" if (isinstance(body.answer, list) and body.answer and bool(body.answer[0])) else "错"
+    else:
+        payload["answer"] = (body.answer or {}).get("points", "") if isinstance(body.answer, dict) else str(body.answer or "")
+    tag_ids = resolve_tag_ids(actor, body.tags)
+    if tag_ids:
+        payload["tagIds"] = tag_ids
+    return payload
+
+
+def sync_platform_question(db: Session, actor, platform_qid: int) -> Question:
+    """把平台试题同步为本地镜像，供组卷、排考快照、阅卷、错题本使用。"""
+    qid = int(platform_qid)
+    item = platform_get(f"/training/question/get?id={qid}", actor.token, actor.tenant_id)
+    if not item:
+        raise HTTPException(404, "资源中心考试题库中不存在该试题")
+    view = platform_question_view(item, True)
+    if view["status"] != "enabled":
+        raise HTTPException(422, "该试题在资源中心考试题库中已停用，不能用于组卷")
+    if not view["usable"]:
+        raise HTTPException(422, "该试题缺少有效答案，不能用于组卷，请先在资源中心补全")
+    values = {
+        "q_type": view["q_type"],
+        "stem": view["stem"],
+        "options": json.dumps(view["options"], ensure_ascii=False) if view["options"] is not None else None,
+        "answer": json.dumps(view["answer"], ensure_ascii=False),
+        "analysis": view["analysis"],
+        "tags": json.dumps(view["tags"], ensure_ascii=False),
+        "difficulty": view["difficulty"],
+        "status": "enabled",
+    }
+    row = db.scalar(select(Question).where(Question.platform_id == qid))
+    if row is None:
+        row = Question(platform_id=qid, creator_id=actor.id, **values)
+        db.add(row)
+    else:
+        for key, value in values.items():
+            setattr(row, key, value)
+    db.flush()
+    return row
+
+
+def paper_total(paper: Paper) -> float:
+    return round(sum(q.score for q in paper.questions), 2)
 
 
 class QuestionIn(BaseModel):
@@ -345,6 +589,10 @@ class PaperIn(BaseModel):
     retry_limit: int = Field(0, ge=0)
     anti_switch: bool = True
     cert_enabled: bool = True
+    # 适用工种（可选，选项来自资源中心标签管理的工种）
+    work_types: list[str] = Field(default_factory=list)
+    # 考试通过发放的工种资格证（可选，选项来自工种资格证表）
+    cert_names: list[str] = Field(default_factory=list)
 
 
 class AutoPaperIn(PaperIn):
@@ -377,7 +625,7 @@ app = FastAPI(title="模块五 · 考试与认证", version="1.0.0")
 
 
 def question_view(q: Question, include_answer=False):
-    data = {"id": q.id, "q_type": q.q_type, "stem": q.stem, "options": parse(q.options), "tags": parse(q.tags, {}), "difficulty": q.difficulty, "status": q.status, "creator_id": q.creator_id, "analysis": q.analysis}
+    data = {"id": q.id, "platform_id": q.platform_id, "q_type": q.q_type, "stem": q.stem, "options": parse(q.options), "tags": parse(q.tags, {}), "difficulty": q.difficulty, "status": q.status, "creator_id": q.creator_id, "analysis": q.analysis, "source": "platform" if q.platform_id else "local"}
     if include_answer:
         data["answer"] = parse(q.answer)
     return data
@@ -386,66 +634,98 @@ def question_view(q: Question, include_answer=False):
 @app.get("/api/dashboard")
 def dashboard(db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
     counts = {}
-    for name, model in [("questions", Question), ("papers", Paper), ("schedules", ExamSchedule), ("attempts", ExamAttempt), ("certificates", Certificate)]:
+    for name, model in [("papers", Paper), ("schedules", ExamSchedule), ("attempts", ExamAttempt), ("certificates", Certificate)]:
         counts[name] = db.scalar(select(func.count()).select_from(model))
-    counts["pending_reviews"] = db.scalar(select(func.count()).select_from(Question).where(Question.status == "pending"))
+    # 题库统一来自资源中心（模块一）的考试题库
+    counts["questions"] = platform_question_total(actor)
     counts["pending_grading"] = db.scalar(select(func.count()).select_from(ExamAttempt).where(ExamAttempt.status == "submitted"))
     return ok(counts)
 
 
 @app.get("/api/questions")
-def list_questions(status: str | None = None, q_type: str | None = None, keyword: str | None = None, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher", "reviewer"))):
-    stmt = select(Question).order_by(Question.id.desc())
-    if status: stmt = stmt.where(Question.status == status)
-    if q_type: stmt = stmt.where(Question.q_type == q_type)
-    if keyword: stmt = stmt.where(Question.stem.contains(keyword))
-    return ok([question_view(q, True) for q in db.scalars(stmt)])
+def list_questions(status: str | None = None, q_type: str | None = None, keyword: str | None = None, difficulty: str | None = None, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
+    """题库查询：直接查询资源中心（模块一）的考试题库，只读。"""
+    platform_status = 1 if status == "enabled" else (2 if status == "disabled" else None)
+    rows = platform_question_page(
+        actor,
+        qtype=QTYPE_TO_PLATFORM.get(q_type) if q_type else None,
+        difficulty=DIFF_TO_PLATFORM.get(difficulty) if difficulty else None,
+        status=platform_status,
+    )
+    if keyword:
+        lowered = keyword.lower()
+        rows = [r for r in rows if lowered in (r["stem"] + json.dumps(r["tags"], ensure_ascii=False)).lower()]
+    # 附加分类路径（供「选题与分值」按所属分类搜索与列表展示）
+    category_map = {c["id"]: c for c in platform_category_options(actor)}
+    for row in rows:
+        cid = row.get("category_id")
+        row["category_name"] = category_map[cid]["path"] if cid in category_map else ""
+    return ok(rows)
+
+
+@app.get("/api/question-categories")
+def question_category_options(actor: Actor = Depends(current_user)):
+    """资源分类（question 类型）选项，供试卷「选题与分值」按所属分类搜索使用。"""
+    return ok(platform_category_options(actor))
 
 
 @app.post("/api/questions")
 def create_question(body: QuestionIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
-    q = Question(q_type=body.q_type, stem=body.stem, options=json.dumps(body.options, ensure_ascii=False) if body.options else None, answer=json.dumps(body.answer, ensure_ascii=False), analysis=body.analysis, tags=json.dumps(body.tags, ensure_ascii=False), difficulty=body.difficulty, status="draft", creator_id=actor.id)
-    db.add(q); db.commit(); return ok(question_view(q, True), "试题已创建")
-
-
-@app.post("/api/questions/{qid}/submit")
-def submit_question(qid: int, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
-    q = db.get(Question, qid)
-    if not q or q.status not in {"draft", "rejected"}: raise HTTPException(409, "当前状态不可提交")
-    if actor.role == "teacher" and q.creator_id != actor.id: raise HTTPException(403, "只能提交自己的试题")
-    q.status = "pending"; db.add(QuestionReview(question_id=q.id, action="submit", operator_id=actor.id)); db.commit(); return ok(message="已提交审核")
-
-
-@app.post("/api/questions/{qid}/approve")
-def approve_question(qid: int, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "reviewer"))):
-    q = db.get(Question, qid)
-    if not q or q.status != "pending": raise HTTPException(409, "仅待审核试题可通过")
-    q.status = "approved"; db.add(QuestionReview(question_id=q.id, action="approve", operator_id=actor.id)); db.commit(); return ok(message="审核已通过")
-
-
-@app.post("/api/questions/{qid}/reject")
-def reject_question(qid: int, opinion: str = Query(min_length=2), db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "reviewer"))):
-    q = db.get(Question, qid)
-    if not q or q.status != "pending": raise HTTPException(409, "仅待审核试题可驳回")
-    q.status = "rejected"; db.add(QuestionReview(question_id=q.id, action="reject", opinion=opinion, operator_id=actor.id)); db.commit(); return ok(message="已驳回")
+    """新增试题：写入资源中心考试题库，可在本页与模块一资源中心的考试题库中查到。"""
+    qid = platform_post("/training/question/create", actor.token, actor.tenant_id, question_payload(body, actor))
+    return ok({"id": qid, "platform_id": qid}, "试题已保存至资源中心考试题库")
 
 
 @app.post("/api/questions/{qid}/disable")
 def disable_question(qid: int, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
-    q = db.get(Question, qid)
-    if not q: raise HTTPException(404, "试题不存在")
-    if actor.role == "teacher" and q.creator_id != actor.id: raise HTTPException(403,"只能停用自己的试题")
+    """停用试题：同步停用资源中心考试题库中的对应试题。"""
+    q = db.scalar(select(Question).where(Question.platform_id == qid))
+    if not q:
+        raise HTTPException(404, "本地不存在该试题镜像")
+    platform_post(f"/training/question/status?id={qid}&action=DISABLE", actor.token, actor.tenant_id)
     q.status = "disabled"; db.commit(); return ok(message="试题已停用，既有考试快照不受影响")
+
+
+def platform_course_name(actor, course_id: int | None) -> str:
+    """按课程 ID 从课程管理取课程名称。"""
+    if not course_id:
+        return ""
+    try:
+        item = platform_get(f"/training/course/get?id={course_id}", actor.token, actor.tenant_id)
+    except HTTPException:
+        item = None
+    if isinstance(item, dict):
+        return str(item.get("title") or item.get("name") or "")
+    return ""
+
+
+def name_list(values: list[str] | None) -> list[str]:
+    """去重去空白的名称列表（工种/资格证可能存在同名项）。"""
+    result = []
+    for value in values or []:
+        text = str(value or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def paper_view(p: Paper):
+    return {"id": p.id, "name": p.name, "exam_type": p.exam_type, "status": p.status, "total_score": p.total_score, "pass_score": p.pass_score, "duration_min": p.duration_min, "question_count": len(p.questions), "retry_limit": p.retry_limit, "anti_switch": p.anti_switch, "cert_enabled": p.cert_enabled, "cert_type": p.cert_type, "course_name": p.course_name, "course_id": p.course_id, "work_types": parse(p.work_types, []), "cert_names": parse(p.cert_names, []), "score_limit": PAPER_TOTAL_LIMIT}
 
 
 @app.get("/api/papers")
 def list_papers(db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher", "reviewer", "viewer"))):
-    return ok([{"id": p.id, "name": p.name, "exam_type": p.exam_type, "status": p.status, "total_score": p.total_score, "pass_score": p.pass_score, "duration_min": p.duration_min, "question_count": len(p.questions), "retry_limit":p.retry_limit, "anti_switch":p.anti_switch, "cert_enabled":p.cert_enabled, "cert_type":p.cert_type, "course_name":p.course_name, "course_id":p.course_id} for p in db.scalars(select(Paper).order_by(Paper.id.desc()))])
+    return ok([paper_view(p) for p in db.scalars(select(Paper).order_by(Paper.id.desc()))])
 
 
 @app.post("/api/papers")
 def create_paper(body: PaperIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
-    p = Paper(**body.model_dump(), created_by=actor.id); db.add(p); db.commit(); return ok({"id": p.id}, "试卷草稿已创建")
+    data = body.model_dump()
+    data["work_types"] = json.dumps(name_list(body.work_types), ensure_ascii=False)
+    data["cert_names"] = json.dumps(name_list(body.cert_names), ensure_ascii=False)
+    if not data.get("course_name") and body.course_id:
+        data["course_name"] = platform_course_name(actor, body.course_id)
+    p = Paper(**data, created_by=actor.id); db.add(p); db.commit(); return ok({"id": p.id}, "试卷草稿已创建")
 
 
 @app.post("/api/papers/{pid}/questions")
@@ -454,13 +734,16 @@ def add_paper_questions(pid: int, items: list[dict[str, Any]], db: Session = Dep
     if not p or p.status != "draft": raise HTTPException(409, "仅草稿试卷可编辑")
     existing = {x.question_id for x in p.questions}
     for item in items:
-        q = db.get(Question, int(item["question_id"]))
-        if not q or q.status != "approved": raise HTTPException(422, f"试题 {item['question_id']} 未审核通过")
-        if q.id in existing: raise HTTPException(409, f"试题 {q.id} 重复")
-        if not math.isfinite(float(item["score"])) or float(item["score"])<=0: raise HTTPException(422,"分值必须大于零")
+        if not item.get("question_id") or not math.isfinite(float(item.get("score", 0))) or float(item["score"]) <= 0:
+            raise HTTPException(422, "分值必须大于零")
+        q = sync_platform_question(db, actor, item["question_id"])
+        if q.id in existing: raise HTTPException(409, f"试题 {q.platform_id or q.id} 重复")
         p.questions.append(PaperQuestion(question_id=q.id, sort_no=len(p.questions)+1, score=float(item["score"])))
         existing.add(q.id)
-    p.total_score = sum(x.score for x in p.questions); db.commit(); return ok({"id": p.id, "total_score": p.total_score})
+    db.flush()
+    total = paper_total(p)
+    if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前合计 {total:g} 分")
+    p.total_score = total; db.commit(); return ok({"id": p.id, "total_score": total, "score_limit": PAPER_TOTAL_LIMIT})
 
 
 def tag_match(qtags: dict, wanted: dict) -> bool:
@@ -469,34 +752,55 @@ def tag_match(qtags: dict, wanted: dict) -> bool:
 
 @app.post("/api/papers/auto-generate")
 def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
-    selected: list[tuple[Question, float]] = []
+    selected: list[tuple[dict, float]] = []
     shortages = []
     if not body.sections: raise HTTPException(422,"至少选择一种题型")
+    wanted = [str(x).strip() for x in (body.tags or {}).get("work_types", []) if str(x).strip()]
+    pool_by_type: dict[str, list[dict]] = {}
     seen = set()
     for section in body.sections:
         qt=section.get("q_type")
         if qt not in {"single","multi","judge","essay","case"} or qt in seen or int(section.get("count",0))<=0 or not math.isfinite(float(section.get("score_each",0))) or float(section.get("score_each",0))<=0: raise HTTPException(422,"抽题规则不合法：题型不可重复，数量和分值必须大于零")
         seen.add(qt)
-        pool = [q for q in db.scalars(select(Question).where(Question.status == "approved", Question.q_type == section["q_type"])) if (not body.difficulty or q.difficulty == body.difficulty) and tag_match(parse(q.tags, {}), body.tags)]
+        if qt not in pool_by_type:
+            pool_by_type[qt] = platform_question_page(actor, qtype=QTYPE_TO_PLATFORM[qt])
+        pool = [row for row in pool_by_type[qt]
+                if row["status"] == "enabled" and row["usable"]
+                and (not body.difficulty or row["difficulty"] == body.difficulty)
+                and (not wanted or set(row["tags"].get("tag_names", [])) & set(wanted))]
         count = int(section["count"])
-        if len(pool) < count: shortages.append({"q_type": section["q_type"], "need": count, "available": len(pool), "short": count-len(pool)})
-        else: selected.extend((q, float(section["score_each"])) for q in random.sample(pool, count))
+        if len(pool) < count: shortages.append({"q_type": qt, "need": count, "available": len(pool), "short": count-len(pool)})
+        else: selected.extend((row, float(section["score_each"])) for row in random.sample(pool, count))
     if shortages: raise HTTPException(422, detail={"message": "题库数量不足", "shortages": shortages})
-    total = sum(score for _, score in selected)
+    total = round(sum(score for _, score in selected), 2)
+    if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前规则合计 {total:g} 分")
     if body.pass_score > total: raise HTTPException(422, "及格分不能高于总分")
-    p = Paper(**body.model_dump(exclude={"sections", "tags", "difficulty"}), total_score=total, auto_rule=body.model_dump_json(), created_by=actor.id)
+    data = body.model_dump(exclude={"sections", "tags", "difficulty"})
+    data["work_types"] = json.dumps(body.work_types, ensure_ascii=False)
+    data["cert_names"] = json.dumps(body.cert_names, ensure_ascii=False)
+    if not data.get("course_name") and body.course_id:
+        data["course_name"] = platform_course_name(actor, body.course_id)
+    p = Paper(**data, total_score=total, auto_rule=body.model_dump_json(), created_by=actor.id)
     db.add(p); db.flush()
-    for i, (q, score) in enumerate(selected, 1): db.add(PaperQuestion(paper_id=p.id, question_id=q.id, sort_no=i, score=score))
-    db.commit(); return ok({"id": p.id, "total_score": total, "question_count": len(selected)}, "自动组卷完成")
+    for i, (row, score) in enumerate(selected, 1):
+        q = sync_platform_question(db, actor, row["platform_id"])
+        db.add(PaperQuestion(paper_id=p.id, question_id=q.id, sort_no=i, score=score))
+    db.flush()
+    real_total = paper_total(p)
+    if real_total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前合计 {real_total:g} 分")
+    p.total_score = real_total
+    db.commit(); return ok({"id": p.id, "total_score": real_total, "question_count": len(selected), "score_limit": PAPER_TOTAL_LIMIT}, "自动组卷完成")
 
 
 @app.post("/api/papers/{pid}/publish")
 def publish_paper(pid: int, db: Session = Depends(db_session), actor: Actor = Depends(require("admin", "teacher"))):
     p = db.get(Paper, pid)
     if not p or not p.questions: raise HTTPException(422, "试卷不能为空")
-    if any(db.get(Question,x.question_id).status != "approved" for x in p.questions): raise HTTPException(422,"试卷包含未审核通过或已停用题目")
-    p.total_score = sum(x.score for x in p.questions)
-    if p.pass_score > p.total_score: raise HTTPException(422, "及格分不能高于总分")
+    if any(db.get(Question,x.question_id).status != "enabled" for x in p.questions): raise HTTPException(422,"试卷包含已停用题目，请先在题库查询中移除")
+    total = paper_total(p)
+    if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前合计 {total:g} 分")
+    p.total_score = total
+    if p.pass_score > total: raise HTTPException(422, "及格分不能高于总分")
     p.status = "published"; db.commit(); return ok(message="试卷已发布")
 
 
@@ -531,7 +835,7 @@ def publish_schedule(sid: int, db: Session = Depends(db_session), actor: Actor =
     if not s: raise HTTPException(404, "计划不存在")
     p = db.get(Paper, s.paper_id)
     if s.status == "draft":
-        if any(db.get(Question,x.question_id).status != "approved" for x in p.questions): raise HTTPException(422,"试卷中有题目已停用或需重新审核")
+        if any(db.get(Question,x.question_id).status != "enabled" for x in p.questions): raise HTTPException(422,"试卷中有题目已停用，请先在题库查询中移除")
         for pq in sorted(p.questions, key=lambda x: x.sort_no):
             q = db.get(Question, pq.question_id)
             db.add(ExamInstanceQuestion(schedule_id=s.id, question_id=q.id, q_type=q.q_type, stem=q.stem, options=q.options, answer=q.answer, analysis=q.analysis, sort_no=pq.sort_no, score=pq.score))

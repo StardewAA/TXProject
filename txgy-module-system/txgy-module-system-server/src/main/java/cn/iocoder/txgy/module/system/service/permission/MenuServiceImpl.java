@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.system.controller.admin.permission.vo.menu.MenuListReqVO;
 import cn.iocoder.txgy.module.system.controller.admin.permission.vo.menu.MenuSaveVO;
@@ -189,6 +190,8 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Cacheable(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#permission")
+    @TenantIgnore // 该缓存为租户全局缓存，但底层菜单查询按当前租户过滤；
+                  // 跨租户上下文执行时会把空结果写入全局缓存，污染权限校验。跳过租户过滤，始终返回真实菜单映射。
     public List<Long> getMenuIdListByPermissionFromCache(String permission) {
         List<MenuDO> menus = menuMapper.selectListByPermission(permission);
         return convertList(menus, MenuDO::getId);

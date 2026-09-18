@@ -55,6 +55,9 @@ deploy/.env
 # 本地 Docker Compose 个性化覆盖（端口冲突规避等），不应入库
 deploy/docker-compose.override.yml
 
+# jar-only 镜像的构建输入（本机 mvn 编译产物，不应入库）
+deploy/backend/app.jar
+
 ######################################################################
 # 本地缓存与开发工具
 .codegraph/
@@ -65,6 +68,12 @@ _debug/
 ######################################################################
 # 前端依赖与构建产物
 node_modules/
+
+# 前端按需加载的图标集合（由 scripts/generate-offline-icons.mjs 生成，不入 git）
+/txgy-ui-admin-vben/apps/web-antd/public/iconify/
+# 本地构建验证产生的历史产物副本（dist/ 已忽略，这里是手工重命名留下的）
+/txgy-ui-admin-vben/apps/web-antd/dist.bak/
+/txgy-ui-admin-vben/apps/web-antd/dist.old/
 
 ######################################################################
 # 本地数据库整库备份
@@ -82,6 +91,14 @@ deploy/backup_*.sql
 .DS_Store
 **/.DS_Store
 
+######################################################################
+# 部署产物与工具缓存（不入库）
+/deploy/mysql/init.d/
+/.dsh-vision-router/
+/.preview_tmp/
+/design/.preview_tmp/
+lefthook.yml.*备份*
+/txgy-module-bidding/.git-backup-merged/
 # Local exam database and build verification logs
 services/training-exam/data/
 services/training-exam/__pycache__/
@@ -90,6 +107,13 @@ txgy-ui-admin-vben/.exam-*.log
 
 # 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
 uploads/
+# 例外：云培训学院标准视频种子数据随项目分发，应用启动自动入库
+!deploy/uploads/
+!deploy/uploads/resource/
+!deploy/uploads/resource/video/
+!deploy/uploads/resource/video/seed/
+!deploy/uploads/resource/video/seed/*.mp4
+!deploy/uploads/resource/video/seed/*.mov
 
 ######################################################################
 # pnpm 本地内容寻址存储（仅本地缓存，禁止入库）
@@ -97,3 +121,17 @@ uploads/
 # 镜像构建用的临时上下文
 .fe-image-context/
 .wms-image-context/
+
+# MES 后端构建产物（仅本地部署用，禁止入库）
+deploy/backend/app.jar
+deploy/backend/erp-app.jar
+
+# 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
+/data/cms-import/
+deploy/backend/bpm-app.jar
+/deploy/jars/**/app.jar
+
+# 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
+.docker-local/
+# 独立编排初始化用的整库 dump（本地生成，不入库）
+deploy/mysql/standalone/001-*.sql

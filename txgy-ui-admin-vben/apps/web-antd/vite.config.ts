@@ -36,16 +36,41 @@ export default defineConfig(async (configEnv) => {
         // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
         host: true,
         proxy: {
-          '/training-exam': {
-            target: 'http://localhost:5173',
+          // 说明：本地各微服务容器此前把 48081(system/infra)、48094(training)、8000(exam)
+          // 直接映射到宿主，故这里走直连绕过 gateway；现容器重建后这些宿主端口已不存在，
+          // 全部改回经本机 gateway（48080）转发，exam 走宿主上已暴露的 exam-proxy（5173）。
+          '/admin-api/training': {
             changeOrigin: true,
+            target: 'http://127.0.0.1:48080', // 云培训学院服务（经网关）
+            ws: true,
+          },
+          '/training-exam': {
+            changeOrigin: true,
+            target: 'http://127.0.0.1:5173', // 考试与认证（宿主 exam-proxy，保留 /training-exam 前缀）
+            ws: true,
+          },
+          '/admin-api/system': {
+            changeOrigin: true,
+            target: 'http://127.0.0.1:48080', // 系统服务（登录/用户/权限/菜单，经网关）
+            ws: true,
+          },
+          '/admin-api/infra': {
+            changeOrigin: true,
+            target: 'http://127.0.0.1:48080', // 基础设施服务（文件/配置等，经网关）
+            ws: true,
           },
           '/admin-api': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            // mock代理目标地址
-            target: 'http://localhost:48080/admin-api',
+            // 保留 /admin-api 前缀，转发到本机网关。
+            target: 'http://127.0.0.1:48080',
             ws: true,
+          },
+          // 招投标门户（外部公告域 notice-external）本地联调：bidding 模块尚在 48110 直跑、未注册网关，
+          // 走本地代理绕开 CORS / 网关 404；bidding 模块接入网关后可改回 /admin-api 直连并删掉此项。
+          '/bidding-api': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/bidding-api/, ''),
+            target: 'http://127.0.0.1:48110/admin-api',
           },
           // 千问（通义千问 / DashScope）OpenAI 兼容接口代理：
           // 前端同源调用 /api/ai/chat/completions，由 Vite 在服务端转发并注入密钥，避免跨域与密钥暴露。

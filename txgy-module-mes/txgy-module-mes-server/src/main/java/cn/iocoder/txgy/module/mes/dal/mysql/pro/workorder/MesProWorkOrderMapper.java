@@ -45,6 +45,19 @@ public interface MesProWorkOrderMapper extends BaseMapperX<MesProWorkOrderDO> {
         return selectOne(MesProWorkOrderDO::getCode, code);
     }
 
+    /**
+     * 按来源单号 + 产品物料查询工单，用于 ERP 推送建单的幂等判重
+     *
+     * @param orderSourceCode 来源单据编号（ERP 销售订单号）
+     * @param productId       产品物料编号
+     * @return 工单，不存在时返回 null
+     */
+    default MesProWorkOrderDO selectBySourceAndProduct(String orderSourceCode, Long productId) {
+        return selectOne(new LambdaQueryWrapperX<MesProWorkOrderDO>()
+                .eq(MesProWorkOrderDO::getOrderSourceCode, orderSourceCode)
+                .eq(MesProWorkOrderDO::getProductId, productId));
+    }
+
     default void updateProducedQuantity(Long id, BigDecimal incrQuantityProduced) {
         update(null, new LambdaUpdateWrapper<MesProWorkOrderDO>()
                 .eq(MesProWorkOrderDO::getId, id)
@@ -67,8 +80,10 @@ public interface MesProWorkOrderMapper extends BaseMapperX<MesProWorkOrderDO> {
             "SELECT project_id AS projectId, COUNT(*) AS workOrderTotal, " +
             "SUM(status = 0) AS prepareCount, SUM(status = 1) AS confirmedCount, " +
             "SUM(status = 2) AS finishedCount, SUM(status = 3) AS canceledCount, " +
+            "SUM(status = 10) AS issuedCount, SUM(status = 11) AS inProductionCount, " +
             "IFNULL(SUM(quantity), 0) AS quantityTotal, " +
-            "IFNULL(SUM(quantity_produced), 0) AS quantityProducedTotal " +
+            "IFNULL(SUM(quantity_produced), 0) AS quantityProducedTotal, " +
+            "ROUND(IFNULL(SUM(quantity_produced), 0) / NULLIF(SUM(CASE WHEN status != 3 THEN quantity END), 0) * 100, 1) AS progress " +
             "FROM mes_pro_work_order WHERE deleted = 0 AND project_id IN " +
             "<foreach collection='projectIds' item='projectId' open='(' separator=',' close=')'>#{projectId}</foreach> " +
             "GROUP BY project_id" +

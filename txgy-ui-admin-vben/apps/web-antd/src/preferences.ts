@@ -24,6 +24,12 @@ export const overridesPreferences = defineOverridesPreferences({
     accessMode: 'backend',
     name: '防腐保温智慧平台',
     enableRefreshToken: true,
+    /** 登录后默认进入 WMS AI 首页（原 WMS 首页已下线） */
+    defaultHomePath: '/wms/ai-center',
+  },
+  tabbar: {
+    /** 关闭顶部多标签页栏：页面切换靠左侧菜单，不再累积打开页签 */
+    enable: false,
   },
   logo: {
     /** 登录页 / 首页 LOGO */

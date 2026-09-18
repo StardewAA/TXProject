@@ -16,6 +16,13 @@ export const COURSE_LEVEL_OPTIONS = [
   { label: '高级', value: 3 },
 ] as const;
 
+/** 业务标签（模块二 新增课程：业务标签分三种） */
+export const COURSE_BIZ_TAG_OPTIONS = [
+  { label: '岗前培训', value: '岗前培训' },
+  { label: '复工强制', value: '复工强制' },
+  { label: '持证上岗', value: '持证上岗' },
+] as const;
+
 /**
  * 成长等级（六级人才成长体系 training_growth_level 字典，与后台「成长等级维护」保持一致，
  * 二级子模块 23 课程成长等级标记/模块九人才成长统计引用）
@@ -64,11 +71,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
       fieldName: 'title',
-      label: '课程标题',
+      label: '课程名称',
       component: 'Input',
       componentProps: {
         allowClear: true,
-        placeholder: '请输入课程标题',
+        placeholder: '请输入课程名称',
       },
     },
     {
@@ -92,25 +99,26 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'isRequired',
-      label: '必修/选修',
-      component: 'Select',
-      componentProps: {
-        allowClear: true,
-        placeholder: '全部',
-        options: [
-          { label: '必修', value: true },
-          { label: '选修', value: false },
-        ],
-      },
-    },
-    {
       fieldName: 'code',
       label: '课程编码',
       component: 'Input',
       componentProps: {
         allowClear: true,
         placeholder: '请输入课程编码',
+      },
+    },
+    {
+      fieldName: 'versionScope',
+      label: '版本范围',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        placeholder: '默认仅当前版本',
+        options: [
+          { label: '仅当前版本（默认）', value: 'current' },
+          { label: '全部版本（含历史）', value: 'all' },
+          { label: '仅历史版本', value: 'history' },
+        ],
       },
     },
   ];
@@ -121,9 +129,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
       field: 'title',
-      title: '课程标题',
+      title: '课程名称',
       minWidth: 220,
       showOverflow: true,
+      slots: { default: 'title' },
     },
     {
       field: 'code',
@@ -144,30 +153,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'level' },
     },
     {
-      field: 'isRequired',
-      title: '必修',
-      width: 70,
-      align: 'center',
-      slots: { default: 'isRequired' },
-    },
-    {
-      field: 'isComposite',
-      title: '复合',
-      width: 70,
-      align: 'center',
-      slots: { default: 'isComposite' },
-    },
-    {
-      field: 'credit',
-      title: '学分',
-      width: 80,
-    },
-    {
-      field: 'lecturer',
-      title: '主讲教师',
-      width: 100,
-    },
-    {
       field: 'status',
       title: '状态',
       width: 100,
@@ -182,8 +167,9 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'version',
       title: '版本',
-      width: 70,
+      width: 120,
       align: 'center',
+      slots: { default: 'version' },
     },
     {
       field: 'mediaCount',

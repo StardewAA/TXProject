@@ -13,6 +13,16 @@ import RoomPanel from './room-panel.vue';
 const props = defineProps<{ tab: string }>();
 
 const ctx=ref<LiveContext>();const scope=ref('mine');const keyword=ref('');const busy=ref(false);
+// 后端 rooms 的 mine 范围要求「认证讲师」；非讲师的企业管理员需降级为 enterprise，否则 1045060001
+function roomScope(){
+ const c=ctx.value;if(!c)return 'mine';
+ if(c.platform)return scope.value==='platform'?'platform':'mine';
+ if(c.teacher)return scope.value==='enterprise'?'enterprise':'mine';
+ if(c.enterprise)return 'enterprise';
+ return 'browse';
+}
+// 后端 stats 仅支持 mine/platform，非讲师且非平台管理员无法查看
+function statsAllowed(){const c=ctx.value;return !!c&&(!!c.platform||!!c.teacher);}
 const rooms=ref<LiveRow[]>([]);const profiles=ref<Profile[]>([]);const stats=ref<LiveRow[]>([]);
 const dates=reactive({from:'',to:''});const config=reactive({danmakuEnabled:true,micEnabled:false});
 const form=reactive({id:undefined as number|undefined,title:'',description:'',coverUrl:'',planStartAt:'',planEndAt:'',visibility:'enterprise',streamUrl:'',creditHours:1});const formOpen=ref(false);
@@ -24,10 +34,13 @@ const toInput=(value?:string|number)=>value?new Date(value).toISOString().slice(
 const toMillis=(value:string)=>new Date(value).getTime();
 const formatDate=(value?:string|number)=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'-';
 async function run(fn:()=>Promise<unknown>){if(busy.value)return;busy.value=true;try{await fn();}finally{busy.value=false;}}
-async function load(){ctx.value=await getLive('context');config.danmakuEnabled=!!ctx.value!.config.danmakuEnabled;config.micEnabled=!!ctx.value!.config.micEnabled;
- if(['room','enterprise','assist'].includes(props.tab))rooms.value=await getLive('rooms',{scope:props.tab==='enterprise'?'enterprise':props.tab==='assist'?'control':scope.value,keyword:keyword.value});
- if(props.tab==='profile')profiles.value=await getLive('profiles');
- if(props.tab==='stats')stats.value=await getLive('stats',{scope:scope.value,...dates});
+async function load(){
+ try{
+  ctx.value=await getLive('context');config.danmakuEnabled=!!ctx.value!.config.danmakuEnabled;config.micEnabled=!!ctx.value!.config.micEnabled;
+  if(['room','enterprise','assist'].includes(props.tab))rooms.value=await getLive('rooms',{scope:props.tab==='enterprise'?'enterprise':props.tab==='assist'?'control':roomScope(),keyword:keyword.value});
+  if(props.tab==='profile')profiles.value=await getLive('profiles');
+  if(props.tab==='stats'&&statsAllowed())stats.value=await getLive('stats',{scope:ctx.value!.platform&&scope.value==='platform'?'platform':'mine',...dates});
+ }catch(e:any){message.error(e?.message||'直播数据加载失败');}
 }
 function editRoom(r?:LiveRow){Object.assign(form,{id:r?.id,title:r?.title??'',description:r?.remark??'',coverUrl:r?.coverUrl??'',planStartAt:toInput(r?.planStartAt),planEndAt:toInput(r?.planEndAt),visibility:r?.visibility??'enterprise',streamUrl:r?.streamUrl??'',creditHours:r?.creditHours??1});formOpen.value=true;}
 async function saveRoom(){await postLive('room/save',{...form,planStartAt:toMillis(form.planStartAt),planEndAt:toMillis(form.planEndAt)});formOpen.value=false;message.success('已提交预告审核');await load();}

@@ -4,6 +4,9 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.workstation.MesMdWorkstationDO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.pro.feedback.vo.MesProFeedbackSaveReqVO;
@@ -17,13 +20,17 @@ import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productproduce.MesWmProductP
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.feedback.MesProFeedbackMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProFeedbackStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
+import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
+import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.service.wm.itemconsume.MesWmItemConsumeService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceLineService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -32,6 +39,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
@@ -45,8 +53,20 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesProFeedbackServiceImpl implements MesProFeedbackService {
 
+    /**
+     * 报工审批流程定义 Key（与 bpm-server 的 MesFeedbackStatusListener 保持一致）
+     */
+    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-feedback-approval";
+
     @Resource
     private MesProFeedbackMapper feedbackMapper;
+
+    @Resource
+    private BpmProcessInstanceApi bpmProcessInstanceApi;
+    @Resource
+    private MesMdItemService itemService;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Resource
     private MesProWorkOrderService workOrderService;
@@ -63,6 +83,9 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     private MesWmProductProduceService productProduceService;
     @Resource
     private MesWmProductProduceLineService produceLineService;
+    @Resource
+    @Lazy // 避免循环依赖
+    private MesProProjectService projectService;
 
     @Override
     public Long createFeedback(MesProFeedbackSaveReqVO createReqVO) {
@@ -110,6 +133,7 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void submitFeedback(Long id) {
         // 1. 校验存在 + 草稿状态
         MesProFeedbackDO feedback = validateFeedbackStatusPrepare(id);
@@ -120,6 +144,28 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
 
         // 3. 首次报工自动置位"生产中"（v2.2 状态机决策②，幂等）
         workOrderService.markInProductionIfIssued(feedback.getWorkOrderId());
+
+        // 4. 发起 BPM 审批流程（参照 ERP submitSaleOrder 模板），审批结果由
+        //    bpm-server 的 MesFeedbackStatusListener 转发回 MES，经任务表异步消费。
+        //    流程变量与《MES报工单接入BPM审批-待确认问题回复》第 6 条的变量清单对齐
+        MesProWorkOrderDO workOrder = workOrderService.getWorkOrder(feedback.getWorkOrderId());
+        MesMdItemDO item = itemService.getItem(feedback.getItemId());
+        AdminUserRespDTO worker = feedback.getFeedbackUserId() == null ? null
+                : adminUserApi.getUser(feedback.getFeedbackUserId()).getCheckedData();
+        Map<String, Object> variables = Map.of(
+                "feedbackId", String.valueOf(id),
+                "workOrderCode", workOrder != null && workOrder.getCode() != null ? workOrder.getCode() : "",
+                "itemCode", item != null && item.getCode() != null ? item.getCode() : "",
+                "quantity", feedback.getFeedbackQuantity(),
+                "workerName", worker != null && worker.getNickname() != null ? worker.getNickname() : "");
+        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
+                        feedback.getFeedbackUserId(),
+                        new BpmProcessInstanceCreateReqDTO()
+                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                                .setBusinessKey(String.valueOf(id))
+                                .setVariables(variables)).getCheckedData();
+        feedbackMapper.updateById(new MesProFeedbackDO().setId(id)
+                .setProcessInstanceId(processInstanceId));
     }
 
     @Override
@@ -217,6 +263,11 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
         // 3. 更新工单的已生产数量
         workOrderService.updateProducedQuantity(feedback.getWorkOrderId(),
                 feedback.getFeedbackQuantity());
+        // 4. P0 报工进度回写：数量变化后刷新项目的生产进度与状态
+        MesProWorkOrderDO workOrder = workOrderService.getWorkOrder(feedback.getWorkOrderId());
+        if (workOrder != null && workOrder.getProjectId() != null) {
+            projectService.refreshProjectStatus(workOrder.getProjectId());
+        }
     }
 
     // ==================== 校验方法 ====================

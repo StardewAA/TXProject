@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.pay.controller.admin.order;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.iocoder.txgy.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
@@ -42,6 +43,10 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 import static cn.iocoder.txgy.framework.common.util.servlet.ServletUtils.getClientIP;
 import static cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils.getLoginUserId;
 import static cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils.getLoginUserType;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST;
+import static cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN;
+import static cn.iocoder.txgy.module.pay.enums.ErrorCodeConstants.PAY_ORDER_NOT_FOUND;
 
 @Tag(name = "管理后台 - 支付订单")
 @RestController
@@ -93,7 +98,12 @@ public class PayOrderController {
 
     @PostMapping("/submit")
     @Operation(summary = "提交支付订单")
-    public CommonResult<PayOrderSubmitRespVO> submitPayOrder(@RequestBody PayOrderSubmitReqVO reqVO) {
+    public CommonResult<PayOrderSubmitRespVO> submitPayOrder(@Valid @RequestBody PayOrderSubmitReqVO reqVO) {
+        if (reqVO == null || reqVO.getId() == null || reqVO.getId() <= 0) throw exception(BAD_REQUEST);
+        PayOrderDO order = orderService.getOrder(reqVO.getId());
+        if (order == null) throw exception(PAY_ORDER_NOT_FOUND);
+        // 商城会员订单只能通过校验本人归属的 APP 入口支付，不允许后台入口绕过。
+        if (Objects.equals(order.getUserType(), UserTypeEnum.MEMBER.getValue())) throw exception(FORBIDDEN);
         // 1. 钱包支付事，需要额外传 user_id 和 user_type
         if (Objects.equals(reqVO.getChannelCode(), PayChannelEnum.WALLET.getCode())) {
             if (reqVO.getChannelExtras() == null) {

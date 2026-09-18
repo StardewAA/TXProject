@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 商城侧预留的 WMS 只读查询契约。
  *
- * <p>WMS 后续补齐文档接口后，直接对接该路径即可。</p>
+ * <p>WMS 已提供此接口。只授予调用账号查询权限，不通过本接口执行任何库存变更。</p>
  */
 @FeignClient(name = "wms-server")
 public interface ProductWmsReadonlyQueryApi {

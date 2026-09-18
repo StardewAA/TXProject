@@ -2,6 +2,9 @@ import $store from '@/sheep/store';
 import { showAuthModal, showShareModal } from '@/sheep/hooks/useModal';
 import { isNumber, isString, isEmpty, startsWith, isObject, isNil, clone } from 'lodash-es';
 import throttle from '@/sheep/helper/throttle';
+import { scopeLocalPath } from '@/sheep/helper/tenant-navigation.mjs';
+import { getControlledTenantId } from '@/sheep/helper/tenant-runtime';
+import { checkoutIntentId } from '@/sheep/helper/checkout-intent.mjs';
 import {
   isSimpleMarketingEnabled,
   isDisabledMarketingPath,
@@ -22,7 +25,13 @@ const _go = (
     // 判断跳转类型是 path ｜ 还是http
     if (startsWith(path, 'http')) {
       // #ifdef H5
-      window.location = path;
+      try {
+        const destination = new URL(path);
+        // External links are not mall API calls. Never append credentials or tenant to them.
+        window.location.assign(destination.origin === window.location.origin
+          ? scopeLocalPath(destination.pathname + destination.search + destination.hash, getControlledTenantId())
+          : destination.href);
+      } catch (error) { uni.showToast({ title: error.message || '链接无效', icon: 'none' }); }
       return;
       // #endif
       // #ifndef H5
@@ -77,10 +86,21 @@ const _go = (
     return;
   }
 
+  // A deliberate new purchase gets a new intent; refresh/back restores the URL's existing one.
+  // No token, personal data or authorization is encoded in this browser recovery identifier.
+  if (page === '/pages/order/confirm') {
+    query = paramsToQuery({ ...queryToParams(query || ''), checkoutIntent: checkoutIntentId() });
+  }
   url = page;
   if (!isEmpty(query)) {
     url += `?${query}`;
   }
+
+  // Validate before a tab route drops its query; conflicting aliases must not disappear.
+  // #ifdef H5
+  try { url = scopeLocalPath(url, getControlledTenantId()); }
+  catch (error) { uni.showToast({ title: error.message || '商城链接无效', icon: 'none' }); return; }
+  // #endif
 
   // 跳转底部导航
   if (TABBAR.includes(page)) {

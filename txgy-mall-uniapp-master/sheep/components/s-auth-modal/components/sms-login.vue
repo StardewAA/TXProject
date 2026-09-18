@@ -9,7 +9,9 @@
           账号登录
         </view>
       </view>
-      <view class="head-subtitle">未注册的手机号，验证后自动注册账号</view>
+      <view class="head-subtitle">{{ newProtocol ? '短信登录仅限已有账号，新用户请先注册' : '未注册的手机号，验证后自动注册账号' }}</view>
+      <view v-if="authError" @tap="retryAuth">{{ authError }}</view>
+      <view v-else-if="!authAvailable">认证服务准备中或暂未开放</view>
     </view>
 
     <!-- 表单项 -->
@@ -31,11 +33,11 @@
           <template v-slot:right>
             <button
               class="ss-reset-button code-btn code-btn-start"
-              :disabled="state.isMobileEnd || props.agreeStatus === false"
+              :disabled="!authAvailable || sending || countdown > 0 || props.agreeStatus === false"
               :class="{ 'code-btn-end': state.isMobileEnd || props.agreeStatus === false }"
               @tap="checkAgreementAndGetSmsCode"
             >
-              {{ getSmsTimer('smsLogin') }}
+              {{ codeText }}
             </button>
           </template>
         </uni-easyinput>
@@ -47,10 +49,10 @@
           v-model="state.model.code"
           :inputBorder="false"
           type="number"
-          maxlength="4"
+          maxlength="6"
         >
           <template v-slot:right>
-            <button class="ss-reset-button login-btn-start" @tap="smsLoginSubmit"> 登录 </button>
+            <button class="ss-reset-button login-btn-start" :disabled="!authAvailable || submitting" @tap="smsLoginSubmit"> 登录 </button>
           </template>
         </uni-easyinput>
       </uni-forms-item>
@@ -62,8 +64,8 @@
   import { ref, reactive, unref } from 'vue';
   import sheep from '@/sheep';
   import { code, mobile } from '@/sheep/validate/form';
-  import { showAuthModal, closeAuthModal, getSmsCode, getSmsTimer } from '@/sheep/hooks/useModal';
-  import AuthUtil from '@/sheep/api/member/auth';
+  import { showAuthModal, closeAuthModal } from '@/sheep/hooks/useModal';
+  import { useMallAuthForm } from '@/sheep/hooks/useMallAuthForm';
 
   const smsLoginRef = ref(null);
 
@@ -90,6 +92,9 @@
     },
   });
 
+  const { error: authError, available: authAvailable, newProtocol, codeText, countdown, sending, submitting,
+    refresh: retryAuth, send: sendAuthCode, submit: submitAuth } = useMallAuthForm(state.model, 'SMS_LOGIN');
+
   // 检查协议并获取验证码
   function checkAgreementAndGetSmsCode() {
     if (props.agreeStatus !== true) {
@@ -101,7 +106,7 @@
       }
       return;
     }
-    getSmsCode('smsLogin', state.model.mobile);
+    sendAuthCode();
   }
 
   // 短信登录
@@ -109,9 +114,7 @@
     // 参数校验
     const validate = await unref(smsLoginRef)
       .validate()
-      .catch((error) => {
-        console.log('error: ', error);
-      });
+      .catch(() => null);
     if (!validate) {
       return;
     }
@@ -127,7 +130,7 @@
     }
     // 提交数据
     try {
-      const result = await AuthUtil.smsLogin(state.model);
+      const result = await submitAuth('sms-login', { ...state.model });
       if (result?.code === 0) {
         closeAuthModal();
       }

@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 文档资源 Service 实现
  *
@@ -55,8 +58,23 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
     }
 
     @Override
-    public Long uploadDocument(MultipartFile file, String title, Long categoryId,
-                               String bizCategory, String tags, Integer estMinutes) {
+    public List<Long> uploadDocuments(List<MultipartFile> files, String title, Long categoryId,
+                                      String bizCategory, Integer estMinutes) {
+        if (files == null || files.isEmpty()) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.RESOURCE_FILE_EMPTY);
+        }
+        boolean multiple = files.size() > 1;
+        List<Long> ids = new ArrayList<>(files.size());
+        for (int i = 0; i < files.size(); i++) {
+            // 多文件时标题追加序号后缀，避免多条文档记录同名
+            String docTitle = multiple ? StrUtil.trim(title) + "(" + (i + 1) + ")" : StrUtil.trim(title);
+            ids.add(uploadOne(files.get(i), docTitle, categoryId, bizCategory, estMinutes));
+        }
+        return ids;
+    }
+
+    private Long uploadOne(MultipartFile file, String title, Long categoryId,
+                           String bizCategory, Integer estMinutes) {
         // 1. 校验
         String ext = validateFile(file);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_DOC);
@@ -66,7 +84,7 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         String filePath = fileStorage.store(file, "doc", ext);
         // 4. 落库（上传即上线，便于课程引用与即时预览）
         DocumentResourceDO document = new DocumentResourceDO();
-        document.setTitle(StrUtil.trim(title));
+        document.setTitle(title);
         document.setCategoryId(categoryId);
         document.setFileName(file.getOriginalFilename());
         document.setFilePath(filePath);
@@ -74,7 +92,6 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         document.setFileSize(file.getSize());
         document.setPageCount(pageInfo.getPageCount());
         document.setBizCategory(bizCategory);
-        document.setTags(tags);
         // 预估阅读时长 = 总页数 × 10 分钟/页；显式传入时以传入值为准
         document.setEstMinutes(estMinutes != null ? estMinutes : pageInfo.getEstMinutes());
         document.setStatus(ResourceStatusEnum.ONLINE.getStatus());
@@ -98,7 +115,7 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
 
     @Override
     public void updateDocument(Long id, String title, Long categoryId,
-                               String bizCategory, String tags, Integer estMinutes) {
+                               String bizCategory, Integer estMinutes) {
         DocumentResourceDO old = getDocument(id);
         categoryService.validateCategory(categoryId, ResourceConstants.TYPE_DOC);
         DocumentResourceDO update = new DocumentResourceDO();
@@ -106,7 +123,6 @@ public class DocumentResourceServiceImpl implements DocumentResourceService {
         update.setTitle(StrUtil.trim(title));
         update.setCategoryId(categoryId);
         update.setBizCategory(bizCategory);
-        update.setTags(tags);
         update.setEstMinutes(estMinutes);
         documentMapper.updateById(update);
         operationLogService.createLog(ResourceConstants.ACTION_UPDATE, ResourceConstants.TARGET_DOCUMENT,
