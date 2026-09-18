@@ -113,7 +113,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       // 租户编号：登录时由登录页根据手动输入的租户名解析并写入 accessStore；
       // 未设置时回退到 .env 的默认租户（VITE_APP_DEFAULT_TENANT_ID），保证多租户头不缺失
       const tenantId =
-        accessStore.tenantId ||
+        accessStore.tenantId ??
         Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
       config.headers['tenant-id'] = String(tenantId);
       config.headers['visit-tenant-id'] = String(tenantId);
@@ -279,7 +279,7 @@ baseRequestClient.addRequestInterceptor({
     const accessStore = useAccessStore();
     // 租户编号：优先取登录页解析后的租户，未设置时回退默认租户，避免多租户头缺失
     const tenantId =
-      accessStore.tenantId ||
+      accessStore.tenantId ??
       Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
     config.headers['tenant-id'] = String(tenantId);
     config.headers['visit-tenant-id'] = String(tenantId);

@@ -6,6 +6,7 @@ import { Button, Empty, Progress, Tag } from 'ant-design-vue';
 
 import { getMyCourses } from '../learning/api';
 import { TRAINING_LEVELS, useTrainingDirection } from '../use-training-direction';
+import AcademyHome from './academy-home.vue';
 
 defineOptions({ name: 'PortalTrainingWorkbench' });
 
@@ -71,7 +72,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="workbench">
+  <AcademyHome />
+  <div v-if="false" class="workbench">
     <section class="stats">
       <div class="stat stat--blue">
         <div class="stat-icon">
