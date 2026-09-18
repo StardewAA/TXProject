@@ -226,7 +226,7 @@ const handlePickUp = async () => {
   });
   try {
     await pickUpOrder(order.value.id!);
-    message.success('核销请求已提交，出库待 ERP 确认后才能完成');
+    message.success('核销请求已提交，出库确认后订单将自动更新');
     await getDetail();
   } finally {
     hideLoading();

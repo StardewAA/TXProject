@@ -48,6 +48,7 @@ public class OrderWorkbenchService {
             boolean queryAfterSales=security.hasPermission("trade:after-sale:query");
             if(!queryOrders && !queryAfterSales) throw denied();
             if(queryOrders) actions.add(Action.DELIVERY);
+            if(queryAfterSales) actions.add(Action.AFTER_AUDIT);
             if(queryAfterSales && security.hasPermission("trade:after-sale:refund")) actions.add(Action.PLATFORM_REFUND);
             if(queryOrders && security.hasPermission("trade:order:update")) actions.add(Action.ERP_EXCEPTION);
         }

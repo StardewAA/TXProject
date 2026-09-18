@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { logisticsMessages, normalizeLogistics, createLatestTask, normalizeLocationCapability,
-  manualMapMessage, locationSummary, clearAddressLocation, fulfillmentTime } from '../sheep/helper/fulfillment-view.mjs';
+  manualMapMessage, locationSummary, clearAddressLocation, fulfillmentTime, logisticsMapQuery,
+  logisticsMapQueries, logisticsReceiverPoint } from '../sheep/helper/fulfillment-view.mjs';
 
 for (const queryStatus of Object.keys(logisticsMessages)) {
   test(`logistics ${queryStatus} uses explicit truthful explanation and creates no events`, () => {
@@ -24,6 +25,18 @@ test('provider error can display cached stale events and server cooldown', () =>
     refreshAfterSeconds: 30, events: [{ content: '物流扫描信息', status: 'IN_TRANSIT' }] });
   assert.equal(value.events[0].statusLabel, '运输中'); assert.equal(value.refreshAfterSeconds, 30);
   assert.equal(value.stale, true); assert.equal(value.cached, true);
+});
+test('logistics map uses only provider place text, chronological unique nodes and a valid receiver snapshot', () => {
+  assert.equal(logisticsMapQuery('【上海市浦东新区】快件已发出'), '上海市浦东新区');
+  assert.equal(logisticsMapQuery('快件已到达西安市未央区分拨中心'), '西安市');
+  assert.equal(logisticsMapQuery('运输中，请耐心等待'), '');
+  assert.deepEqual(logisticsMapQueries([
+    {time:'2026-09-18 12:00:00',content:'到达北京市转运中心'},
+    {time:'2026-09-18 10:00:00',content:'【西安市未央区】已揽收'},
+    {time:'2026-09-18 13:00:00',content:'离开北京市分拨中心'},
+  ]).map(item => item.query), ['西安市未央区', '北京市']);
+  assert.deepEqual(logisticsReceiverPoint({receiverLongitude:108.9,receiverLatitude:34.3,receiverCoordSystem:'GCJ02'}), [108.9,34.3]);
+  assert.equal(logisticsReceiverPoint({receiverLongitude:108.9,receiverLatitude:34.3,receiverCoordSystem:'WGS84'}), null);
 });
 test('newer request, page hide, and account changes reject obsolete responses', () => {
   let active = true; const task = createLatestTask(() => active);

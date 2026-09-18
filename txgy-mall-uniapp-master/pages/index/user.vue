@@ -9,7 +9,10 @@
     onShareAppMessage
   >
     <s-order-workbench v-if="sheep.$store('user').isLogin" :workbench="workbench" />
-    <view v-if="sheep.$store('user').isLogin" class="enterprise-entry" @tap="sheep.$router.go('/pages/user/enterprise-profile')">企业资料与资质审核 ›</view>
+    <view v-if="sheep.$store('user').isLogin" class="enterprise-entry" @tap="sheep.$router.go('/pages/user/enterprise-profile')">
+      <view class="enterprise-entry-title">企业资料与资质审核 ›</view>
+      <view class="enterprise-entry-hint">移动端仅办理企业资料与审核，采购中心、销售中心请使用 PC 端</view>
+    </view>
     <view v-if="sheep.$store('user').isLogin" class="enterprise-entry" @tap="sheep.$router.go('/pages/chat/service', { scope: 'PLATFORM', shopId: 0 })">平台自助 / 人工客服 ›</view>
     <view v-if="customer.visible.value" class="customer-affiliation">
       <view class="customer-title">客户服务归属</view>
@@ -130,6 +133,8 @@
 
 <style lang="scss" scoped>
   .customer-affiliation, .enterprise-entry { margin: 20rpx; padding: 26rpx; border: 1rpx solid #dce8e5; border-radius: 20rpx; background: #fff; }
+  .enterprise-entry-title { font-size: 28rpx; font-weight: 700; color: #173d37; }
+  .enterprise-entry-hint { margin-top: 10rpx; font-size: 23rpx; line-height: 1.6; color: #64748b; }
   .customer-title { font-size: 30rpx; font-weight: 700; color: #173d37; margin-bottom: 16rpx; }
   .customer-message { font-size: 28rpx; overflow-wrap: anywhere; margin-bottom: 12rpx; }
   .customer-hint { font-size: 24rpx; line-height: 1.7; color: #64748b; }

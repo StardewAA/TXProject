@@ -53,6 +53,7 @@ declare module 'vue' {
     MallLink: typeof import('./components/MallLink.vue')['default']
     MemberPage: typeof import('./components/MemberPage.vue')['default']
     MemberSidebar: typeof import('./components/MemberSidebar.vue')['default']
+    OrderLogisticsMap: typeof import('./components/OrderLogisticsMap.vue')['default']
     OrderLogisticsPanel: typeof import('./components/OrderLogisticsPanel.vue')['default']
     OrderWorkbench: typeof import('./components/OrderWorkbench.vue')['default']
     OrderWorkbenchBadge: typeof import('./components/OrderWorkbenchBadge.vue')['default']

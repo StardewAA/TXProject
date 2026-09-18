@@ -87,4 +87,9 @@ class AddressLocationPolicyTest {
         assertTrue(json.contains("NOT_CONFIGURED"));assertTrue(json.contains("\"enabled\":false"));
         assertTrue(json.contains("\"manualInputEnabled\":true"));assertFalse(json.toLowerCase().contains("key"));
     }
+    @Test void configuredCapabilityOnlyPublishesProviderState() throws Exception {
+        String json=new ObjectMapper().writeValueAsString(new AppAddressLocationCapabilityRespVO(true,"AMAP"));
+        assertTrue(json.contains("READY"));assertTrue(json.contains("\"provider\":\"AMAP\""));
+        assertTrue(json.contains("\"enabled\":true"));assertFalse(json.toLowerCase().contains("key"));
+    }
 }

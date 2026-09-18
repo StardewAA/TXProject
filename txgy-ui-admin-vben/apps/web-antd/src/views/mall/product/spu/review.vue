@@ -201,7 +201,7 @@ onBeforeRouteUpdate(() => !busy.value);
           </div>
         </template>
         <template v-else-if="activeTab === 'sku'">
-          <p class="mb-3 text-sm text-gray-500">以下价格单位为元；快照不含实时库存和 WMS / ERP 映射，不会通过审核覆盖库存。</p>
+          <p class="mb-3 text-sm text-gray-500">以下价格单位为元；审核快照不含实时库存，审核操作不会覆盖库存。</p>
           <SkuList :key="selectedRecord.id" :is-detail="true" :hide-dynamic-stock="true" :prop-form-data="snapshotForSku" :property-list="propertyList" />
         </template>
         <Descriptions v-else-if="activeTab === 'delivery'" :column="2" bordered>

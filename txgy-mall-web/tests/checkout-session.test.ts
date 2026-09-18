@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { transpileModule, ScriptTarget, ModuleKind } from 'typescript'
 import { expect, it, vi } from 'vitest'
 import { openCheckoutIntent } from '../src/utils/checkout-intent.mjs'
+import { manualAddressPayload } from '../src/utils/fulfillment'
 
 const raw = readFileSync(new URL('../src/views/CheckoutView.vue', import.meta.url), 'utf8')
   .split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[^\n]+\r?\n/gm, '')
@@ -22,7 +23,7 @@ function harness() {
   const dependencies = { computed, reactive, ref, watch: () => {}, onMounted: (fn: () => Promise<void>) => { mounted = fn }, onBeforeUnmount: () => {},
     checkoutDraft: draft, getTenantContext: () => ({ epoch,accountTenantId:'1',accountUserId:'77' }), isCurrentTenantEpoch: (value: number) => value === epoch,openCheckoutIntent,localStorage,
     ElMessage: message, useRouter: () => router, memberApi: member, systemApi: { getAreaTree: vi.fn().mockResolvedValue([]) }, tradeApi: trade,
-    useCartStore: () => cart, useAccountOperation: () => ({ current: () => alive && epoch === 1 }), window: events }
+    useCartStore: () => cart, useAccountOperation: () => ({ current: () => alive && epoch === 1 }), manualAddressPayload, window: events }
   const page = new Function(...Object.keys(dependencies), code + ';checkoutIntent=openCheckoutIntent(localStorage,"'+intentId+'",{tenantId:"1",memberId:"77"});return {items,addresses,addressId,settlement,submitting,submitted,needsVerification,addressForm,addressDialog,savingAddress,submit,saveAddress,settle,openAddressDialog};')(...Object.values(dependencies))
   page.items.value = [{ skuId: 211, count: 1 }]; page.addressId.value = 1; page.settlement.value = { items: [{ skuId: 211, count: 1 }], price: { payPrice: 1000 } }
   Object.assign(page.addressForm, { name: '隔离收件人', mobile: '19900000000', areaId: 1, detailAddress: '隔离地址' })

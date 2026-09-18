@@ -9,7 +9,7 @@ import { useAccessStore } from '@vben/stores';
 
 import { Alert, Badge, Button, Drawer, Empty, Pagination, Select, Spin, Tag } from 'ant-design-vue';
 
-import { getWorkbenchPage, getWorkbenchSummary, readWorkbenchEvents } from '#/api/mall/trade/workbench';
+import { getWorkbenchPage, getWorkbenchSummary, readWorkbenchEvents, WORKBENCH_CHANGED_EVENT } from '#/api/mall/trade/workbench';
 
 import { commonFilters, countText, exactEventIds, nextBannerCount } from './workbench-model';
 
@@ -39,10 +39,11 @@ const scopeName = computed(() => `当前租户 ${access.visitTenantId ?? access.
 const actionOptions = computed(() => [
   { label: '全部事项', value: '' },
   ...(hasAccessByCodes(['trade:order:query']) ? [{ label: '待发货订单', value: 'DELIVERY' }] : []),
+  ...(hasAccessByCodes(['trade:after-sale:query']) ? [{ label: '新售后申请', value: 'AFTER_AUDIT' }] : []),
   ...(hasAccessByCodes(['trade:after-sale:refund']) ? [{ label: '待平台退款', value: 'PLATFORM_REFUND' }] : []),
-  ...(hasAccessByCodes(['trade:order:update']) ? [{ label: 'ERP 异常待核实', value: 'ERP_EXCEPTION' }] : []),
+  ...(hasAccessByCodes(['trade:order:update']) ? [{ label: '库存履约异常', value: 'ERP_EXCEPTION' }] : []),
 ]);
-const names: Partial<Record<TodoAction, string>> = { DELIVERY: '待发货订单', PLATFORM_REFUND: '待平台退款', ERP_EXCEPTION: 'ERP 异常待核实' };
+const names: Partial<Record<TodoAction, string>> = { DELIVERY: '待发货订单', AFTER_AUDIT: '新售后申请', PLATFORM_REFUND: '待平台退款', ERP_EXCEPTION: '库存履约异常' };
 
 function stop() {
   active = false;
@@ -97,6 +98,9 @@ function resume() {
   if (document.hidden) stop();
   else if (active) void refresh();
   else start();
+}
+function businessChanged() {
+  if (active) void refresh();
 }
 
 async function loadPage() {
@@ -157,6 +161,7 @@ onMounted(() => {
   pageEnabled = true;
   document.addEventListener('visibilitychange', resume);
   window.addEventListener('online', resume);
+  window.addEventListener(WORKBENCH_CHANGED_EVENT, businessChanged);
   start();
 });
 onActivated(() => { pageEnabled = true; start(); });
@@ -164,6 +169,7 @@ onDeactivated(() => { pageEnabled = false; stop(); });
 onUnmounted(() => {
   pageEnabled = false;
   stop(); document.removeEventListener('visibilitychange', resume); window.removeEventListener('online', resume);
+  window.removeEventListener(WORKBENCH_CHANGED_EVENT, businessChanged);
 });
 defineExpose({ refresh, rowEvents, markRead });
 </script>
@@ -182,8 +188,9 @@ defineExpose({ refresh, rowEvents, markRead });
     <div class="trade-todo-controls">
       <Button @click="openTodos()">待处理事项 {{ countText(summary?.pendingCount, failed) }}</Button>
       <Button v-access:code="['trade:order:query']" @click="openTodos('DELIVERY')">待发货提醒 {{ countText(summary?.todoCounts?.DELIVERY, failed) }}</Button>
+      <Button v-access:code="['trade:after-sale:query']" @click="openTodos('AFTER_AUDIT')">新售后申请 {{ countText(summary?.todoCounts?.AFTER_AUDIT, failed) }}</Button>
       <Button v-access:code="['trade:after-sale:refund']" @click="openTodos('PLATFORM_REFUND')">待平台退款 {{ countText(summary?.todoCounts?.PLATFORM_REFUND, failed) }}</Button>
-      <Button v-access:code="['trade:order:update']" @click="openTodos('ERP_EXCEPTION')">ERP 异常待核实 {{ countText(summary?.todoCounts?.ERP_EXCEPTION, failed) }}</Button>
+      <Button v-access:code="['trade:order:update']" @click="openTodos('ERP_EXCEPTION')">库存履约异常 {{ countText(summary?.todoCounts?.ERP_EXCEPTION, failed) }}</Button>
       <span class="trade-todo-hint">上次更新 {{ lastUpdate || '尚未获取' }} · 默认无声音</span>
     </div>
     <Alert v-if="newestCount > 0 && !failed" type="info" show-icon class="mt-3" :message="`刚刚新增 ${newestCount} 条待处理事项`">

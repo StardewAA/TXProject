@@ -33,11 +33,11 @@ watch(() => route.fullPath, load, { immediate: true })
 onBeforeUnmount(() => { generation++ })
 </script>
 <template>
-  <MemberPage :title="shop ? '店铺自助与人工客服' : '平台自助与人工客服'" description="固定问答来自已发布条目；人工坐席需独立授权，不自动承诺在线。">
+  <MemberPage :title="shop ? '店铺客服' : '平台客服'">
     <div v-if="loading" class="loading-box"><el-skeleton :rows="6" animated /></div>
     <section v-else-if="error" class="chat-state" role="alert"><h2>会话暂不可用</h2><p>{{ error }}</p><el-button @click="load">重新核验</el-button></section>
-    <section v-else-if="!enabled" class="chat-state" data-testid="kefu-disabled"><h2>店铺范围客服尚未开通</h2><p>{{ capability?.message || '正在准备独立坐席授权与接待能力。不会将你的消息自动发到旧平台或其他店铺。' }}</p><MallLink to="/member/customer-service">查看原平台客服入口与历史消息 →</MallLink></section>
-    <template v-else-if="thread"><p class="scope-note">{{ thread.session.scope === 'SHOP' ? `店铺 #${thread.session.shopId}` : '平台服务' }} · 会话归属已由服务端核验</p><KefuConversation :key="thread.session.id" :initial="thread" :resource="resource" @update="thread = $event"/><div v-if="thread.mode === 'CLOSED'" class="chat-state"><el-button @click="load">重新发起本店咨询</el-button></div></template>
+    <section v-else-if="!enabled" class="chat-state" data-testid="kefu-disabled"><h2>本店客服暂未开通</h2><p>您可以先浏览商品或查看订单，稍后再来咨询。</p><MallLink to="/member/customer-service">查看其他客服消息 →</MallLink></section>
+    <template v-else-if="thread"><KefuConversation :key="thread.session.id" :initial="thread" :resource="resource" @update="thread = $event"/><div v-if="thread.mode === 'CLOSED'" class="chat-state restart"><p>本次服务已结束</p><el-button type="primary" @click="load">再次咨询</el-button></div></template>
   </MemberPage>
 </template>
-<style scoped>.chat-state{text-align:center;padding:45px 25px;background:#f8faf9;line-height:1.8}.chat-state h2{font-size:20px}.chat-state p,.scope-note{color:#6b7b74;font-size:14px;line-height:1.8}.chat-state a{color:var(--brand)}</style>
+<style scoped>.chat-state{text-align:center;padding:45px 25px;background:#f7f9fc;line-height:1.8;border-radius:12px}.chat-state h2{font-size:20px}.chat-state p{color:#6b7685;font-size:14px;line-height:1.8}.chat-state a{color:var(--brand)}.chat-state.restart{padding:20px;background:#fff;border-radius:0 0 12px 12px}</style>

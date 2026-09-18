@@ -7,6 +7,34 @@ import user from './user';
 import sys from './sys';
 import { baseUrl, h5Url } from '@/sheep/config';
 
+const createDefaultTabbar = () => ({
+  mode: 1,
+  style: {
+    bgType: 'color',
+    bgColor: '#ffffff',
+    color: '#7c8795',
+    activeColor: '#0f766e',
+  },
+  badgeStyle: { backgroundColor: '#e74d2a', color: '#ffffff' },
+  items: [
+    { text: '首页', url: '/pages/index/index', iconUrl: '/static/icons/mall/home.svg', activeIconUrl: '/static/icons/mall/home.svg' },
+    { text: '分类', url: '/pages/index/category', iconUrl: '/static/icons/mall/grid.svg', activeIconUrl: '/static/icons/mall/grid.svg' },
+    { text: '采购清单', url: '/pages/index/cart', iconUrl: '/static/icons/mall/cart.svg', activeIconUrl: '/static/icons/mall/cart.svg' },
+    { text: '我的', url: '/pages/index/user', iconUrl: '/static/icons/mall/user.svg', activeIconUrl: '/static/icons/mall/user.svg' },
+  ],
+});
+
+const usableTabbar = (value) => {
+  const fallback = createDefaultTabbar();
+  if (!value || !Array.isArray(value.items) || value.items.length === 0) return fallback;
+  return {
+    ...fallback,
+    ...value,
+    style: { ...fallback.style, ...(value.style || {}) },
+    badgeStyle: { ...fallback.badgeStyle, ...(value.badgeStyle || {}) },
+  };
+};
+
 const app = defineStore('app', {
   state: () => ({
     tenantBootstrap: { status: 'loading', confirmed: false },
@@ -33,7 +61,8 @@ const app = defineStore('app', {
     },
     template: {
       // 店铺装修模板
-      basic: {}, // 基本信息
+      // 商城未配置装修模板时仍要保留四个核心导航入口。
+      basic: { tabbar: createDefaultTabbar() }, // 基本信息
       home: {
         // 首页模板
         style: {},
@@ -155,14 +184,15 @@ const adaptTemplate = async (appTemplate, templateId) => {
   // 模板不存在或接口暂不可用时，使用空模板，避免首页直接跳转错误页。
   if (!diyTemplate) {
     console.warn('未找到已启用的商城装修模板');
+    appTemplate.basic.tabbar = createDefaultTabbar();
     appTemplate.home = { style: {}, data: [], components: [] };
     appTemplate.user = { style: {}, data: [], components: [] };
     return false;
   }
 
-  const tabBar = diyTemplate?.property?.tabBar;
-  if (tabBar) {
-    appTemplate.basic.tabbar = tabBar;
+  const tabBar = usableTabbar(diyTemplate?.property?.tabBar);
+  appTemplate.basic.tabbar = tabBar;
+  if (diyTemplate?.property?.tabBar) {
     // TODO 商城装修没有对 tabBar 进行角标配置，测试角标需打开以下注释
     // appTemplate.basic.tabbar.items.forEach((tabBar) => {
     //   tabBar.dot = false

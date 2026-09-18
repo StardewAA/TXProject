@@ -81,17 +81,28 @@ public class KeFuChatService {
         if(repository.recentCount(session,actor,clock.millis()-60_000)>=60)
             throw new cn.iocoder.txgy.framework.common.exception.ServiceException(429,"发送过于频繁，请稍后再试");
         KeFuChatCardService.Card card=request.resourceType()==null?null:cards.build(session,actor,request.resourceType(),request.resourceId());
-        String text=card==null?request.text().trim():card.text();
+        // Resource cards are self-explanatory. Keeping their snapshot disclaimer in text_body
+        // rendered the same sentence once as a chat bubble and again inside the card.
+        String text=card==null?request.text().trim():"";
         Message message=repository.insert(session,actor,agent?"AGENT":"MEMBER",request.clientMessageId(),text,null,null,null,clock.millis(),card);
         List<Message> sent=new ArrayList<>();sent.add(message);
         // Under the same session row lock as claim/human/close. No delayed auto answer can race a takeover.
-        if(!agent && card==null && "WAITING".equals(session.state()) && !repository.human(session)) {
+        if(!agent && card!=null) {
+            sent.add(repository.insert(session,SELF_SERVICE,"FAQ","faq_"+request.clientMessageId(),
+                    resourceAcknowledgement(card.type()),null,null,null,clock.millis(),null));
+        } else if(!agent && "WAITING".equals(session.state()) && !repository.human(session)) {
             FaqMatch match=match(session,text);
             sent.add(repository.insert(session,SELF_SERVICE,match==null?"SYSTEM":"FAQ","faq_"+request.clientMessageId(),
                     match==null?"暂未找到匹配的常见问题。您可以转人工；无人值守时可留言，处理状态以本会话为准。":match.entry().answer(),
                     match==null?null:match.entry().id(),match==null?null:match.version(),match==null?null:match.scope(),clock.millis(),null));
         }
         return new SendResult(List.copyOf(sent),view(session,actor,agent));
+    }
+
+    private static String resourceAcknowledgement(String type) {
+        return "ORDER".equals(type)
+                ? "您好，已收到您发送的订单，请说明需要咨询的问题。"
+                : "您好，已收到您发送的商品，请说明需要咨询的规格、价格或库存问题。";
     }
     public KeFuChatModels.Thread read(Actor actor,ReadRequest request,boolean agent) {
         if(request==null || request.messageId()==null || request.messageId()<0 || request.messageId()>MAX_CURSOR)throw exception(INVALID);

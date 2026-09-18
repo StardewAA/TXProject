@@ -45,7 +45,7 @@ export function kefuModeLabel(thread: KefuThread) {
   if (thread.mode === 'CLOSED') return '本轮咨询已结束'
   if (thread.mode === 'HUMAN') return '人工已接待'
   if (thread.mode === 'WAITING_HUMAN') return thread.onlineAgents > 0 ? '等待人工接待，不保证即时回复' : '暂无在线坐席，可留言等待处理'
-  return '自助客服 · 固定问答（非 AI 大模型）'
+  return '在线咨询'
 }
 export function chatText(value: string) {
   const text = value.trim()

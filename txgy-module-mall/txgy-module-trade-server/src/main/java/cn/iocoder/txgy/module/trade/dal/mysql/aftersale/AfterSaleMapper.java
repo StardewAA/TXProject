@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collection;
+import java.util.List;
 
 @Mapper
 public interface AfterSaleMapper extends BaseMapperX<AfterSaleDO> {
@@ -49,6 +50,13 @@ public interface AfterSaleMapper extends BaseMapperX<AfterSaleDO> {
         return selectCount(new LambdaQueryWrapperX<AfterSaleDO>()
                 .eq(AfterSaleDO::getUserId, userId)
                 .in(AfterSaleDO::getStatus, statuses));
+    }
+
+    default List<AfterSaleDO> selectLatestByOrderItemIds(Long userId, Collection<Long> orderItemIds) {
+        return selectList(new LambdaQueryWrapperX<AfterSaleDO>()
+                .eq(AfterSaleDO::getUserId, userId)
+                .in(AfterSaleDO::getOrderItemId, orderItemIds)
+                .orderByDesc(AfterSaleDO::getId));
     }
 
 }

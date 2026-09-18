@@ -152,7 +152,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </template>
       <template #processing="{ row }">
         <div>{{ row.deliveryType === 2 ? (row.pickupBlockReason || (row.pickupable ? '可按授权核销' : '查看自提进度')) : (row.deliveryBlockReason || (row.deliverable ? '可安排发货' : '按当前订单状态处理')) }}</div>
-        <Tag v-if="row.erpStatus" class="mt-1">ERP {{ row.erpStatus }}</Tag>
+        <Tag v-if="row.erpStatus" class="mt-1">履约处理 {{ row.erpStatus }}</Tag>
       </template>
       <template #expand_content="{ row }">
         <List item-layout="vertical" :data-source="row.items">

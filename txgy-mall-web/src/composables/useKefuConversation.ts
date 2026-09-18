@@ -11,6 +11,7 @@ export function useKefuConversation(initial: KefuThread, agent: boolean) {
   const thread = ref(assertKefuThread(initial, scope, tenant, undefined, memberId)), messages = ref<KefuMessage[]>([])
   const input = ref(''), error = ref(''), sending = ref(false), loading = ref(false), failed = ref(false)
   const uncertain = ref(false), loadedCursor = ref('0'), acknowledging = ref(false)
+  const sentResourceKey = ref('')
   const sessionId = initial.session.id
   let cursor = '0', generation = 0, timer = 0, active = true, polling = false
   let pending: KefuSend | null = null
@@ -67,6 +68,7 @@ export function useKefuConversation(initial: KefuThread, agent: boolean) {
       if (!current(request)) return
       apply(response.thread)
       messages.value = mergeKefuMessages(messages.value, response.messages, sessionId, scope.scope === 'SHOP' ? scope.shopId : undefined)
+      if (payload.resourceType && payload.resourceId !== undefined) sentResourceKey.value = `${payload.resourceType}:${String(payload.resourceId)}`
       pending = null; uncertain.value = false; if (payload.text) input.value = ''
     } catch (reason) {
       if (current(request)) {
@@ -106,5 +108,5 @@ export function useKefuConversation(initial: KefuThread, agent: boolean) {
   document.addEventListener('visibilitychange', visibilityChanged)
   onBeforeUnmount(() => { active = false; generation++; window.clearTimeout(timer); document.removeEventListener('visibilitychange', visibilityChanged) })
   void refresh()
-  return { thread, messages, input, error, sending, loading, failed, uncertain, loadedCursor, acknowledging, acknowledge, retryPending, discardPending, send, sendResource, human, refresh }
+  return { thread, messages, input, error, sending, loading, failed, uncertain, sentResourceKey, loadedCursor, acknowledging, acknowledge, retryPending, discardPending, send, sendResource, human, refresh }
 }
