@@ -150,7 +150,8 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
             + "回答要求：\n"
             + "1. 条理清晰，按步骤 1/2/3 编号，与用户提问的名词保持一致，不要答非所问；\n"
             + "2. 只引用速查表中的菜单路径，系统没有的路径如实说明；\n"
-            + "3. 严禁生成 Word 文档、模板、下载链接、跳转页面。\n"
+            + "3. 本模式下禁止调用任何业务工具（既不要查询数据，也不要创建/录入任何档案或单据），只输出操作引导文本；\n"
+            + "4. 严禁生成 Word 文档、模板、下载链接、跳转页面。\n"
             + "===== 向导模式结束 =====";
 
     /**
@@ -661,7 +662,8 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                     .map(segment -> "<Reference>" + segment.getContent() + "</Reference>")
                     .collect(Collectors.joining("\n\n"));
             chatMessages.add(new UserMessage(String.format(KNOWLEDGE_USER_MESSAGE_TEMPLATE, reference)));
-        } else if (!bizQuestion && hasKnowledge(conversation.getRoleId())) {
+        } else if (!bizQuestion && !isMesGuideIntent(sendReqVO.getContent())
+        && hasKnowledge(conversation.getRoleId())) {
             // 角色绑定了知识库，但本次未检索到相关内容：明确告知 AI 数据来源口径
             chatMessages.add(new UserMessage("本次对话未从平台知识库中检索到与问题相关的内容。回答要求：\n" +
                     "- 如果基于联网搜索或通用知识回答，必须明确告知用户：「该问题在平台知识库中未检索到数据，本回答为联网搜索/通用知识，非平台库内数据」。\n" +
@@ -691,6 +693,11 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
 
         // 2.1 查询 tool 工具（第三层防护：按权限过滤，只注入已授权业务域对应的工具）
         List<ToolCallback> toolCallbacks = getToolCallbackListByRoleId(conversation.getRoleId(), permissionContext);
+        // [引导意图] 向导模式下移除全部工具：用户问的是概念/位置/流程，
+        // 只需按向导模板回答操作引导，避免模型自作主张查询数据或调用创建工具误写库
+        if (isMesGuideIntent(sendReqVO.getContent())) {
+            toolCallbacks.clear();
+        }
         Map<String,Object> toolContext = CollUtil.isNotEmpty(toolCallbacks) ? AiUtils.buildCommonToolContext()
                 : Map.of();
         // 2.2 构建 ChatOptions 对象
@@ -1081,7 +1088,7 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                     }
                     boolean conceptQuestion = content.matches("(?s).*(是什么|是啥|什么意思|含义|定义|作用|用途|怎么填|如何填|怎么建|如何建|怎么新增|如何新增|怎么创建|如何创建|怎么录|如何录|新建流程|新增流程|创建流程|录入流程|操作步骤|操作流程|怎么操作|如何操作|怎么办理|如何办理|在哪维护|在哪里维护|在哪设置|在哪里设置|在哪配置|在哪|在哪里|哪儿|菜单|入口|步骤).*")
                             || content.matches("(?s).*(流程|步骤|向导|教程).{0,6}$");
-                    boolean mesNoun = content.matches("(?s).*(工单|任务|报工|检验|IPQC|ipqc|质检|物料|产品|客户|供应商|仓库|库位|库区|库存|车间|工位|工序|班组|排班|设备|安灯|计量单位|档案|工艺).*");
+                    boolean mesNoun = content.matches("(?s).*(工单|任务|报工|检验|IPQC|ipqc|质检|物料|产品|客户|供应商|仓库|库位|库区|库存|车间|工位|工序|班组|排班|设备|安灯|计量单位|档案|工艺|仓|线边).*");
                     // 数据查询特征：明确想看数据内容（而不是找功能入口）时走业务查询
                     boolean dataQueryFlavor = content.matches("(?s).*(查询|多少|有哪些|几个|库存情况|清单|列表|余额|明细|记录).*");
                     return conceptQuestion && mesNoun && !dataQueryFlavor;

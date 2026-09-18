@@ -393,12 +393,183 @@ const messageListRef = ref<HTMLDivElement>();
 /** 流式中断控制器 */
 const abortController = ref<AbortController>();
 
-/** 面板尺寸：最大化时放大宽高，普通尺寸宽 380 / 高 min(720, 视口-32) */
-const panelStyle = computed(() =>
-  maximized.value
-    ? { width: 'min(560px, calc(100vw - 32px))', height: 'min(86vh, 860px)' }
-    : { height: 'min(720px, calc(100vh - 32px))', width: '380px' },
+/** ========== 悬浮球 / 面板拖拽定位 ==========
+ * 初始固定在视口右下角；用户可拖拽移动（悬浮球整体拖拽、面板按住标题栏拖拽），
+ * 拖拽后的位置存入 localStorage，刷新后恢复上次位置 */
+const FAB_SIZE = 52;
+const PANEL_WIDTH = 380;
+const PANEL_HEIGHT_FALLBACK = 720;
+
+function clampPos(x: number, y: number, w: number, h: number) {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - h)),
+  };
+}
+
+function loadPos(key: string, defX: number, defY: number) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Number.isFinite(p?.x) && Number.isFinite(p?.y)) {
+        return { x: p.x, y: p.y };
+      }
+    }
+  } catch {
+    /* 忽略反序列化失败，使用默认位置 */
+  }
+  return { x: defX, y: defY };
+}
+
+function savePos(key: string, pos: { x: number; y: number }) {
+  try {
+    localStorage.setItem(key, JSON.stringify(pos));
+  } catch {
+    /* 存储不可用时忽略 */
+  }
+}
+
+/** 悬浮球初始位置：右下角（right 20 / bottom 24） */
+const fabPos = ref(
+  loadPos(
+    'mes-ai-fab-pos',
+    window.innerWidth - FAB_SIZE - 20,
+    window.innerHeight - FAB_SIZE - 24,
+  ),
 );
+/** 面板初始位置：右下角（right 16 / top 20） */
+const panelPos = ref(
+  loadPos('mes-ai-panel-pos', window.innerWidth - PANEL_WIDTH - 16, 20),
+);
+/** 最大化停靠位置（默认右侧贴边、top 88，可拖拽后记忆） */
+const maxPos = ref(loadPos('mes-ai-max-pos', window.innerWidth - 488, 88));
+
+const fabStyle = computed(() => ({
+  left: `${fabPos.value.x}px`,
+  top: `${fabPos.value.y}px`,
+}));
+
+/** 面板尺寸：最大化默认停靠屏幕右侧（全高抽屉式，可拖拽后记忆），普通尺寸按拖拽位置定位 */
+const panelStyle = computed(() => {
+  if (maximized.value) {
+    const w = Math.min(480, window.innerWidth - 64);
+    const p = clampPos(maxPos.value.x, maxPos.value.y, w, window.innerHeight - 108);
+    return {
+      width: `${w}px`,
+      height: `${Math.round(window.innerHeight - p.y - 20)}px`,
+      left: `${p.x}px`,
+      top: `${p.y}px`,
+    };
+  }
+  return {
+    height: 'min(720px, calc(100vh - 32px))',
+    width: '380px',
+    left: `${panelPos.value.x}px`,
+    top: `${panelPos.value.y}px`,
+  };
+});
+
+/** 拖拽状态（模块级即可，同一时刻只拖一个元素） */
+interface DragState {
+  target: 'fab' | 'panel';
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+  moved: boolean;
+}
+let dragState: null | DragState = null;
+/** 上一次拖拽是否发生了移动（用于区分「拖拽」与「点击」） */
+let lastDragMoved = false;
+
+function onDragMove(e: MouseEvent) {
+  if (!dragState) return;
+  const dx = e.clientX - dragState.startX;
+  const dy = e.clientY - dragState.startY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+    dragState.moved = true;
+  }
+  const isFab = dragState.target === 'fab';
+  const isPanelMax = dragState.target === 'panel' && maximized.value;
+  const w = isFab ? FAB_SIZE : isPanelMax ? Math.min(480, window.innerWidth - 64) : PANEL_WIDTH;
+  const h = isFab
+    ? FAB_SIZE
+    : isPanelMax
+      ? window.innerHeight - 88
+      : Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32);
+  const p = clampPos(dragState.origX + dx, dragState.origY + dy, w, h);
+  if (isFab) {
+    fabPos.value = p;
+    savePos('mes-ai-fab-pos', p);
+  } else if (isPanelMax) {
+    maxPos.value = p;
+    savePos('mes-ai-max-pos', p);
+  } else {
+    panelPos.value = p;
+    savePos('mes-ai-panel-pos', p);
+  }
+}
+
+function onDragEnd() {
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
+  document.body.style.userSelect = '';
+  lastDragMoved = dragState?.moved ?? false;
+  dragState = null;
+}
+
+/** 拖拽入口：悬浮球整体 / 面板标题栏（最大化时同样可拖拽，位置独立记忆） */
+function onDragStart(e: MouseEvent, target: 'fab' | 'panel') {
+  const pos =
+    target === 'fab'
+      ? fabPos.value
+      : maximized.value
+        ? maxPos.value
+        : panelPos.value;
+  dragState = {
+    target,
+    startX: e.clientX,
+    startY: e.clientY,
+    origX: pos.x,
+    origY: pos.y,
+    moved: false,
+  };
+  lastDragMoved = false;
+  document.body.style.userSelect = 'none';
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('mouseup', onDragEnd);
+}
+
+/** 悬浮球点击：拖拽结束后未移动才视为点击展开 */
+function onFabClick() {
+  if (lastDragMoved) {
+    lastDragMoved = false;
+    return;
+  }
+  setExpanded(true);
+}
+
+// 视口尺寸变化时把两个元素拉回可视范围
+function clampAllToViewport() {
+  fabPos.value = clampPos(fabPos.value.x, fabPos.value.y, FAB_SIZE, FAB_SIZE);
+  if (maximized.value) {
+    const w = Math.min(480, window.innerWidth - 64);
+    maxPos.value = clampPos(
+      maxPos.value.x,
+      maxPos.value.y,
+      w,
+      window.innerHeight - 108,
+    );
+  } else {
+    panelPos.value = clampPos(
+      panelPos.value.x,
+      panelPos.value.y,
+      PANEL_WIDTH,
+      Math.min(PANEL_HEIGHT_FALLBACK, window.innerHeight - 32),
+    );
+  }
+}
 
 /** 时间戳轻量展示（HH:mm） */
 function formatTime(): string {
@@ -973,34 +1144,52 @@ onMounted(() => {
   document.body.classList.toggle('mes-ai-panel-open', expanded.value);
   initConversation();
   window.addEventListener('resize', handleWindowResize);
+  // 视口尺寸变化时把悬浮球/面板拉回可视范围
+  window.addEventListener('resize', clampAllToViewport);
 });
 
 onBeforeUnmount(() => {
   abortController.value?.abort();
   document.body.classList.remove('mes-ai-panel-open');
   window.removeEventListener('resize', handleWindowResize);
+  window.removeEventListener('resize', clampAllToViewport);
 });
 </script>
 
 <template>
-  <!-- 收起状态：右下角圆形悬浮按钮 -->
+  <!-- 收起状态：圆形悬浮按钮（可拖拽移动位置，点击展开） -->
   <Tooltip v-if="!expanded" title="MES 智能助手" placement="left">
-    <div class="mes-ai-fab" @click="setExpanded(true)">
+    <div
+      class="mes-ai-fab"
+      :style="fabStyle"
+      title="按住拖拽移动位置"
+      @mousedown="onDragStart($event, 'fab')"
+      @click="onFabClick"
+    >
       <IconifyIcon icon="lucide:bot" :size="26" />
     </div>
   </Tooltip>
 
-  <!-- 展开状态：完整对话面板（白底黑字） -->
+  <!-- 展开状态：完整对话面板（白底黑字，按住标题栏可拖拽移动） -->
   <transition name="mes-ai-slide">
-    <div v-show="expanded" class="mes-ai-panel" :style="panelStyle">
-      <!-- 头部：标题 + 最大化 / 新会话 / 最小化 -->
-      <div class="mes-ai-header">
+    <div
+      v-show="expanded"
+      class="mes-ai-panel"
+      :class="{ 'mes-ai-panel--max': maximized }"
+      :style="panelStyle"
+    >
+      <!-- 头部：标题（拖拽把手） + 最大化 / 新会话 / 最小化 -->
+      <div
+        class="mes-ai-header"
+        :class="{ 'mes-ai-header--draggable': !maximized }"
+        @mousedown="onDragStart($event, 'panel')"
+      >
         <div class="mes-ai-header__title">
           <IconifyIcon icon="lucide:bot" :size="18" class="mes-ai-primary" />
           <span>MES 智能助手</span>
           <span class="mes-ai-header__sub">{{ roleName }}</span>
         </div>
-        <div class="mes-ai-header__actions">
+        <div class="mes-ai-header__actions" @mousedown.stop>
           <Tooltip title="最大化/还原" placement="top">
             <span class="mes-ai-icon-btn" @click="toggleMaximized">
               <IconifyIcon
@@ -1273,8 +1462,6 @@ onBeforeUnmount(() => {
 /* ========== 面板：固定白底黑字（不随主题变化，保证清晰可读） ========== */
 .mes-ai-panel {
   position: fixed;
-  right: 16px;
-  bottom: 20px;
   z-index: 1200;
   display: flex;
   flex-direction: column;
@@ -1286,6 +1473,58 @@ onBeforeUnmount(() => {
   box-shadow: 0 6px 24px rgb(0 0 0 / 22%);
 }
 
+/* ========== 最大化状态专属美化 ========== */
+/* 更深的悬浮阴影 + 更大圆角，与页面内容形成清晰层次 */
+.mes-ai-panel--max {
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px rgb(15 23 42 / 28%),
+    0 2px 8px rgb(15 23 42 / 10%);
+}
+
+/* 标题栏加高加重，拖拽把手更明显 */
+.mes-ai-panel--max .mes-ai-header {
+  padding: 14px 20px;
+}
+
+.mes-ai-panel--max .mes-ai-header__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 消息区：大空间下的呼吸感 */
+.mes-ai-panel--max .mes-ai-messages {
+  padding: 18px 22px;
+}
+
+/* 气泡放宽（大屏下长回答不挤） */
+.mes-ai-panel--max .mes-ai-bubble {
+  max-width: 86%;
+  padding: 10px 14px;
+}
+
+/* 正文与回答字号微增 */
+.mes-ai-panel--max .mes-ai-bubble,
+.mes-ai-panel--max .mes-ai-md {
+  font-size: 13.5px;
+}
+
+/* 输入区加宽内边距，与消息区对齐 */
+.mes-ai-panel--max .mes-ai-input {
+  padding: 14px 20px 10px;
+}
+
+.mes-ai-panel--max .mes-ai-textarea {
+  min-height: 52px;
+}
+
+/* 快捷选项 chips 稍大 */
+.mes-ai-panel--max .mes-ai-option {
+  padding: 5px 14px;
+  font-size: 13px;
+  border-radius: 14px;
+}
+
 /* ========== 头部 ========== */
 .mes-ai-header {
   display: flex;
@@ -1295,6 +1534,12 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
+}
+
+/* 非最大化时标题栏作为拖拽把手 */
+.mes-ai-header--draggable {
+  cursor: move;
+  user-select: none;
 }
 
 .mes-ai-header__title {
@@ -1813,9 +2058,9 @@ onBeforeUnmount(() => {
 /* ========== 收起状态：右下角圆形悬浮按钮 ========== */
 .mes-ai-fab {
   position: fixed;
-  right: 20px;
-  bottom: 24px;
   z-index: 1200;
+  user-select: none;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
