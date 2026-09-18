@@ -120,6 +120,14 @@ public interface AdminUserService {
     AdminUserDO getUserByMobile(String mobile);
 
     /**
+     * 通过手机号获取用户数组。历史数据存在同号多账号，调用方需要容错时使用该方法
+     *
+     * @param mobile 手机号
+     * @return 用户数组
+     */
+    List<AdminUserDO> getUserListByMobile(String mobile);
+
+    /**
      * 获得用户分页列表
      *
      * @param reqVO 分页条件

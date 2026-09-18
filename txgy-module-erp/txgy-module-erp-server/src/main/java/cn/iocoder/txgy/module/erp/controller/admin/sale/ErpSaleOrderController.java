@@ -12,11 +12,13 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.order.ErpSaleOrderPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.order.ErpSaleOrderRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.order.ErpSaleOrderSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderItemDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
+import cn.iocoder.txgy.module.erp.service.sale.ErpSaleOrderPdfExporter;
 import cn.iocoder.txgy.module.erp.service.sale.ErpSaleOrderService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -27,14 +29,18 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
@@ -75,12 +81,15 @@ public class ErpSaleOrderController {
         return success(true);
     }
 
-    @PutMapping("/update-status")
-    @Operation(summary = "更新销售订单的状态")
-    @PreAuthorize("@ss.hasPermission('erp:sale-order:update-status')")
-    public CommonResult<Boolean> updateSaleOrderStatus(@RequestParam("id") Long id,
-                                                      @RequestParam("status") Integer status) {
-        saleOrderService.updateSaleOrderStatus(id, status);
+    @PutMapping("/reverse-approve")
+    @Operation(summary = "反审批销售订单")
+    @PreAuthorize("@ss.hasPermission('erp:sale-order:reverse-approve')")
+    @Parameter(name = "id", description = "销售订单编号", required = true)
+    @Parameter(name = "reason", description = "反审批原因", required = true)
+    public CommonResult<Boolean> reverseApproveSaleOrder(@RequestParam("id") Long id,
+                                                         @RequestParam("reason") @NotBlank(message = "反审批原因不能为空")
+                                                         @Size(max = 200, message = "反审批原因不能超过 200 个字符") String reason) {
+        saleOrderService.reverseApproveSaleOrder(id, getLoginUserId(), reason);
         return success(true);
     }
 
@@ -142,6 +151,19 @@ public class ErpSaleOrderController {
         ExcelUtils.write(response, "销售订单.xls", "数据", ErpSaleOrderRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出销售订单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:sale-order:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportSaleOrderPdf(@Valid ErpSaleOrderPageReqVO pageReqVO,
+                                   HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpSaleOrderRespVO> list = buildSaleOrderVOPageResult(
+                saleOrderService.getSaleOrderPage(pageReqVO)).getList();
+        // 与前端勾选的编号（pageReqVO.ids）联用：选中则只导选中单据，未选中则导出筛选结果
+        ErpSaleOrderPdfExporter.write(response, list);
+    }
+
     private PageResult<ErpSaleOrderRespVO> buildSaleOrderVOPageResult(PageResult<ErpSaleOrderDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -156,9 +178,16 @@ public class ErpSaleOrderController {
         // 1.3 客户信息
         Map<Long, ErpCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(pageResult.getList(), ErpSaleOrderDO::getCustomerId));
-        // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(pageResult.getList(), saleOrder -> Long.parseLong(saleOrder.getCreator())));
+        // 1.4 管理员信息（creator 可能为非数字账号（如 mock-acc），需容错解析）
+        Set<Long> creatorIds = new HashSet<>();
+        for (ErpSaleOrderDO saleOrder : pageResult.getList()) {
+            Long creatorId = parseUserId(saleOrder.getCreator());
+            if (creatorId != null) {
+                creatorIds.add(creatorId);
+            }
+        }
+        Map<Long, AdminUserRespDTO> userMap = CollUtil.isEmpty(creatorIds)
+                ? Map.of() : adminUserApi.getUserMapIgnoreTenant(creatorIds);
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpSaleOrderRespVO.class, saleOrder -> {
             saleOrder.setItems(BeanUtils.toBean(saleOrderItemMap.get(saleOrder.getId()), ErpSaleOrderRespVO.Item.class,
@@ -166,8 +195,25 @@ public class ErpSaleOrderController {
                             .setProductBarCode(product.getBarCode()).setProductUnitName(product.getUnitName()))));
             saleOrder.setProductNames(CollUtil.join(saleOrder.getItems(), "，", ErpSaleOrderRespVO.Item::getProductName));
             MapUtils.findAndThen(customerMap, saleOrder.getCustomerId(), supplier -> saleOrder.setCustomerName(supplier.getName()));
-            MapUtils.findAndThen(userMap, Long.parseLong(saleOrder.getCreator()), user -> saleOrder.setCreatorName(user.getNickname()));
+            Long creatorId = parseUserId(saleOrder.getCreator());
+            if (creatorId != null) {
+                MapUtils.findAndThen(userMap, creatorId, user -> saleOrder.setCreatorName(user.getNickname()));
+            }
         });
+    }
+
+    /**
+     * 容错解析创建人用户编号：非数字（如 mock 账号）返回 null
+     */
+    private Long parseUserId(String creator) {
+        if (creator == null || creator.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(creator);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

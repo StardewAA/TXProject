@@ -17,12 +17,14 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.enums.stock.ErpStockRecordBizTypeEnum;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpWmsBusinessDocumentService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockRecordService;
 import cn.iocoder.txgy.module.erp.service.stock.bo.ErpStockRecordCreateReqBO;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -47,6 +49,9 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
 
+    @Value("${txgy.integration.wms.mode:mock}")
+    private String wmsMode;
+
     @Resource
     private ErpPurchaseReturnMapper purchaseReturnMapper;
     @Resource
@@ -64,6 +69,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private ErpAccountService accountService;
     @Resource
     private ErpStockRecordService stockRecordService;
+    @Resource
+    private ErpWmsBusinessDocumentService wmsBusinessDocumentService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -175,12 +182,16 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         List<ErpPurchaseReturnItemDO> purchaseReturnItems = purchaseReturnItemMapper.selectListByReturnId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.PURCHASE_RETURN.getType()
                 : ErpStockRecordBizTypeEnum.PURCHASE_RETURN_CANCEL.getType();
+        // 说明：同采购入库 —— ERP 业务账不随 WMS 集成模式变化，去掉 remote 守卫
         purchaseReturnItems.forEach(purchaseReturnItem -> {
             BigDecimal count = approve ? purchaseReturnItem.getCount().negate() : purchaseReturnItem.getCount();
             stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
                     purchaseReturnItem.getProductId(), purchaseReturnItem.getWarehouseId(), count,
                     bizType, purchaseReturnItem.getReturnId(), purchaseReturnItem.getId(), purchaseReturn.getNo()));
         });
+        if (approve) {
+            wmsBusinessDocumentService.preparePurchaseReturnShipmentAfterCommit(id);
+        }
     }
 
     @Override

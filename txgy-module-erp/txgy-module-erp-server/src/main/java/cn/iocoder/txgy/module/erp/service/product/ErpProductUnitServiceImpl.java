@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.product;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.unit.ErpProductUnitPageReqVO;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -38,6 +40,7 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
     public Long createProductUnit(ErpProductUnitSaveReqVO createReqVO) {
         // 1. 校验名字唯一
         validateProductUnitNameUnique(null, createReqVO.getName());
+        validateProductUnitCodeUnique(null, createReqVO.getCode());
         // 2. 插入
         ErpProductUnitDO unit = BeanUtils.toBean(createReqVO, ErpProductUnitDO.class);
         productUnitMapper.insert(unit);
@@ -47,9 +50,13 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
     @Override
     public void updateProductUnit(ErpProductUnitSaveReqVO updateReqVO) {
         // 1.1 校验存在
-        validateProductUnitExists(updateReqVO.getId());
+        ErpProductUnitDO oldUnit = validateProductUnitExists(updateReqVO.getId());
+        if (!oldUnit.getCode().equals(updateReqVO.getCode())) {
+            throw exception(PRODUCT_UNIT_CODE_IMMUTABLE);
+        }
         // 1.2 校验名字唯一
         validateProductUnitNameUnique(updateReqVO.getId(), updateReqVO.getName());
+        validateProductUnitCodeUnique(updateReqVO.getId(), updateReqVO.getCode());
         // 2. 更新
         ErpProductUnitDO updateObj = BeanUtils.toBean(updateReqVO, ErpProductUnitDO.class);
         productUnitMapper.updateById(updateObj);
@@ -70,6 +77,14 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
         }
     }
 
+    @VisibleForTesting
+    void validateProductUnitCodeUnique(Long id, String code) {
+        ErpProductUnitDO unit = productUnitMapper.selectByCode(code);
+        if (unit != null && (id == null || !unit.getId().equals(id))) {
+            throw exception(PRODUCT_UNIT_CODE_DUPLICATE, code);
+        }
+    }
+
     @Override
     public void deleteProductUnit(Long id) {
         // 1.1 校验存在
@@ -82,10 +97,12 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
         productUnitMapper.deleteById(id);
     }
 
-    private void validateProductUnitExists(Long id) {
-        if (productUnitMapper.selectById(id) == null) {
+    private ErpProductUnitDO validateProductUnitExists(Long id) {
+        ErpProductUnitDO unit = productUnitMapper.selectById(id);
+        if (unit == null) {
             throw exception(PRODUCT_UNIT_NOT_EXISTS);
         }
+        return unit;
     }
 
     @Override
@@ -105,7 +122,10 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
 
     @Override
     public List<ErpProductUnitDO> getProductUnitList(Collection<Long> ids) {
-         return productUnitMapper.selectByIds(ids);
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
+        return productUnitMapper.selectByIds(ids);
     }
 
 }

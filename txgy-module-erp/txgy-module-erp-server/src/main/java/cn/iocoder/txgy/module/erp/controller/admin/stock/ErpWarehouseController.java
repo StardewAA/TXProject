@@ -10,6 +10,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehousePageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehouseRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehouseSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.service.stock.ErpWarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,7 +98,8 @@ public class ErpWarehouseController {
     public CommonResult<List<ErpWarehouseRespVO>> getWarehouseSimpleList() {
         List<ErpWarehouseDO> list = warehouseService.getWarehouseListByStatus(CommonStatusEnum.ENABLE.getStatus());
         return success(convertList(list, warehouse -> new ErpWarehouseRespVO().setId(warehouse.getId())
-                .setName(warehouse.getName()).setDefaultStatus(warehouse.getDefaultStatus())));
+                .setName(warehouse.getName()).setWmsWarehouseCode(warehouse.getWmsWarehouseCode())
+                .setDefaultStatus(warehouse.getDefaultStatus())));
     }
 
     @GetMapping("/export-excel")
@@ -111,6 +113,18 @@ public class ErpWarehouseController {
         // 导出 Excel
         ExcelUtils.write(response, "仓库.xls", "数据", ErpWarehouseRespVO.class,
                         BeanUtils.toBean(list, ErpWarehouseRespVO.class));
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出仓库 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:warehouse:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportWarehousePdf(@Valid ErpWarehousePageReqVO pageReqVO,
+                                   HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpWarehouseDO> list = warehouseService.getWarehousePage(pageReqVO).getList();
+        ErpPdfExportUtils.write(response, "仓库.pdf", "仓库列表",
+                ErpWarehouseRespVO.class, BeanUtils.toBean(list, ErpWarehouseRespVO.class));
     }
 
 }

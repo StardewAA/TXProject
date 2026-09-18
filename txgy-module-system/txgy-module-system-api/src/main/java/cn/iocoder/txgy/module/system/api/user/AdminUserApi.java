@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.system.api.user;
 import cn.hutool.core.convert.Convert;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.module.system.enums.ApiConstants;
 import org.dromara.core.trans.anno.AutoTrans;
@@ -13,6 +14,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.Collection;
@@ -34,9 +37,29 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Parameter(name = "id", description = "用户编号", example = "1", required = true)
     CommonResult<AdminUserRespDTO> getUser(@RequestParam("id") Long id);
 
+    /**
+     * 通过用户 ID 查询跨租户联系人信息。
+     * 仅用于 IM/招聘等需要建立跨租户联系的场景，普通业务仍使用 {@link #getUser(Long)}。
+     */
+    @GetMapping(PREFIX + "/get-ignore-tenant")
+    @Operation(summary = "通过用户 ID 查询跨租户联系人")
+    CommonResult<AdminUserRespDTO> getUserIgnoreTenant(@RequestParam("id") Long id);
+
     @GetMapping(PREFIX + "/get-by-mobile")
     @Operation(summary = "通过手机号查询用户")
     CommonResult<AdminUserRespDTO> getUserByMobile(@RequestParam("mobile") String mobile);
+
+    /**
+     * 通过手机号查询用户数组。
+     * 与 {@link #getUserByMobile(String)} 的区别：同号存在多个账号时返回列表而非抛错，避免调用方误判为「未找到」
+     */
+    @GetMapping(PREFIX + "/list-by-mobile")
+    @Operation(summary = "通过手机号查询用户数组（容忍同号多账号）")
+    CommonResult<List<AdminUserRespDTO>> getUserListByMobile(@RequestParam("mobile") String mobile);
+
+    @PostMapping(PREFIX + "/create")
+    @Operation(summary = "创建用户", description = "用于培训学员自动开户等场景；密码为空时使用系统「初始密码」配置")
+    CommonResult<Long> createUser(@RequestBody AdminUserCreateReqDTO reqDTO);
 
     @GetMapping(PREFIX + "/list-by-subordinate")
     @Operation(summary = "通过用户 ID 查询用户下属")
@@ -47,6 +70,10 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Operation(summary = "通过用户 ID 查询用户们")
     @Parameter(name = "ids", description = "部门编号数组", example = "1,2", required = true)
     CommonResult<List<AdminUserRespDTO>> getUserList(@RequestParam("ids") Collection<Long> ids);
+
+    @GetMapping(PREFIX + "/list-ignore-tenant")
+    @Operation(summary = "通过用户 ID 查询跨租户联系人们")
+    CommonResult<List<AdminUserRespDTO>> getUserListIgnoreTenant(@RequestParam("ids") Collection<Long> ids);
 
     @GetMapping(PREFIX + "/list-by-dept-id")
     @Operation(summary = "获得指定部门的用户数组")
@@ -89,6 +116,15 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Operation(summary = "校验用户们是否有效")
     @Parameter(name = "ids", description = "用户编号数组", example = "3,5", required = true)
     CommonResult<Boolean> validateUserList(@RequestParam("ids") Collection<Long> ids);
+
+    @GetMapping(PREFIX + "/valid-ignore-tenant")
+    @Operation(summary = "跨租户校验用户们是否有效")
+    CommonResult<Boolean> validateUserListIgnoreTenant(@RequestParam("ids") Collection<Long> ids);
+
+    default Map<Long, AdminUserRespDTO> getUserMapIgnoreTenant(Collection<Long> ids) {
+        List<AdminUserRespDTO> users = getUserListIgnoreTenant(ids).getCheckedData();
+        return CollectionUtils.convertMap(users, AdminUserRespDTO::getId);
+    }
 
     @Override
     @FeignIgnore

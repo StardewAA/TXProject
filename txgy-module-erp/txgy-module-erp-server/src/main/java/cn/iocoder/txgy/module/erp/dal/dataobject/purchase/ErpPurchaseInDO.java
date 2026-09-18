@@ -2,7 +2,9 @@ package cn.iocoder.txgy.module.erp.dal.dataobject.purchase;
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountDO;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -40,6 +42,13 @@ public class ErpPurchaseInDO extends BaseDO {
      * 枚举 {@link cn.iocoder.txgy.module.erp.enums.ErpAuditStatus}
      */
     private Integer status;
+    private String businessChainNo;
+    private String wmsStatus;
+    private String wmsOrderNo;
+    private Long wmsEventVersion;
+    /** WMS 失败原因；成功回写时需用 null 覆盖旧值，故 update 策略为 ALWAYS */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String wmsFailureReason;
     /**
      * 供应商编号
      *

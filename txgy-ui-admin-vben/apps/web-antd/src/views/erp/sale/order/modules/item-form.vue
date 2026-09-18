@@ -134,6 +134,8 @@ function handleAdd() {
     taxPrice: undefined,
     totalPrice: undefined,
     remark: undefined,
+    warehouseCode: undefined,
+    outCount: undefined,
   };
   tableData.value.push(newRow);
   // 通知父组件更新
@@ -224,7 +226,9 @@ onMounted(async () => {
 <template>
   <Grid class="w-full">
     <template #productId="{ row }">
+      <span v-if="disabled">{{ row.productName || '-' }}</span>
       <Select
+        v-else
         v-model:value="row.productId"
         :options="productOptions"
         :field-names="{ label: 'name', value: 'id' }"
@@ -253,6 +257,16 @@ onMounted(async () => {
         @change="handleRowChange(row)"
       />
       <span v-else>{{ erpPriceInputFormatter(row.productPrice) || '-' }}</span>
+    </template>
+    <template #warehouseCode="{ row }">
+      <Input
+        v-if="!disabled"
+        v-model:value="row.warehouseCode"
+        class="w-full"
+        placeholder="如 WH01"
+        @change="handleRowChange(row)"
+      />
+      <span v-else>{{ row.warehouseCode || '-' }}</span>
     </template>
     <template #remark="{ row }">
       <Input v-if="!disabled" v-model:value="row.remark" class="w-full" />

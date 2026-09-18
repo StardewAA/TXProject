@@ -29,4 +29,13 @@ public interface ErpSupplierMapper extends BaseMapperX<ErpSupplierDO> {
         return selectList(ErpSupplierDO::getStatus, status);
     }
 
+    default ErpSupplierDO selectByPartnerCode(String partnerCode) {
+        return selectOne(ErpSupplierDO::getPartnerCode, partnerCode);
+    }
+
+    /** 按绑定的登录用户编号反查供应商（供应商门户账号身份识别） */
+    default ErpSupplierDO selectByUserId(Long userId) {
+        return selectOne(ErpSupplierDO::getUserId, userId);
+    }
+
 }

@@ -30,8 +30,30 @@ public class ErpPurchaseOrderRespVO {
     @Schema(description = "BPM 流程实例编号")
     private String processInstanceId;
 
+    @Schema(description = "反审批原因")
+    private String reverseApproveReason;
+
+    @Schema(description = "来源类型")
+    private String sourceType;
+    @Schema(description = "来源业务编号")
+    private Long sourceId;
+    @Schema(description = "来源单号")
+    private String sourceNo;
+    @Schema(description = "全局业务链号")
+    private String businessChainNo;
+
     @Schema(description = "供应商编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1724")
     private Long supplierId;
+    @Schema(description = "供应商资信快照版本")
+    private Long supplierCreditSnapshotVersion;
+    @Schema(description = "供应商认证状态快照")
+    private String supplierCreditAuthStatus;
+    @Schema(description = "供应商资质状态快照")
+    private String supplierCreditQualificationStatus;
+    @Schema(description = "供应商风险等级快照")
+    private String supplierCreditRiskLevel;
+    @Schema(description = "供应商采购限制快照")
+    private String supplierCreditPurchaseLimitStatus;
     @Schema(description = "供应商名称", example = "OPENLAB BS")
     @ExcelProperty("供应商名称")
     private String supplierName;

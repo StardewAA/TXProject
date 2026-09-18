@@ -19,6 +19,7 @@ public interface ErpFinanceReceiptMapper extends BaseMapperX<ErpFinanceReceiptDO
 
     default PageResult<ErpFinanceReceiptDO> selectPage(ErpFinanceReceiptPageReqVO reqVO) {
         MPJLambdaWrapperX<ErpFinanceReceiptDO> query = new MPJLambdaWrapperX<ErpFinanceReceiptDO>()
+                .inIfPresent(ErpFinanceReceiptDO::getId, reqVO.getIds())
                 .likeIfPresent(ErpFinanceReceiptDO::getNo, reqVO.getNo())
                 .betweenIfPresent(ErpFinanceReceiptDO::getReceiptTime, reqVO.getReceiptTime())
                 .eqIfPresent(ErpFinanceReceiptDO::getCustomerId, reqVO.getCustomerId())

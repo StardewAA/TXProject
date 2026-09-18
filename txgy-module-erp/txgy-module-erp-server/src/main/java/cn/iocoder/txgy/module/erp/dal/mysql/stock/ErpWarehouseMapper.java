@@ -32,4 +32,8 @@ public interface ErpWarehouseMapper extends BaseMapperX<ErpWarehouseDO> {
         return selectList(ErpWarehouseDO::getStatus, status);
     }
 
+    default ErpWarehouseDO selectByWmsWarehouseCode(String wmsWarehouseCode) {
+        return selectOne(ErpWarehouseDO::getWmsWarehouseCode, wmsWarehouseCode);
+    }
+
 }

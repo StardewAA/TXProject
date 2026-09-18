@@ -20,6 +20,10 @@ public class ErpWarehouseRespVO {
     @ExcelProperty("仓库编号")
     private Long id;
 
+    @Schema(description = "WMS 权威仓库编码", example = "WH-XBHT-001")
+    @ExcelProperty("WMS 仓库编码")
+    private String wmsWarehouseCode;
+
     @Schema(description = "仓库名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "李四")
     @ExcelProperty("仓库名称")
     private String name;
@@ -39,6 +43,9 @@ public class ErpWarehouseRespVO {
     @Schema(description = "负责人", example = "芋头")
     @ExcelProperty("负责人")
     private String principal;
+
+    @Schema(description = "负责人用户编号", example = "1")
+    private Long principalUserId;
 
     @Schema(description = "仓储费，单位：元", example = "13973")
     @ExcelProperty("仓储费，单位：元")

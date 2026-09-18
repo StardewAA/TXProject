@@ -7,12 +7,13 @@ import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getAccountSimpleList } from '#/api/erp/finance/account';
 import {
   createPurchaseOrder,
+  exportPurchaseOrderPdf,
   getPurchaseOrder,
   updatePurchaseOrder,
 } from '#/api/erp/purchase/order';
@@ -76,6 +77,20 @@ function handleUpdateTotalPrice(totalPrice: number) {
   formApi.setValues({
     totalPrice,
   });
+}
+
+/** 一键导出当前单据 PDF（无需在列表中勾选） */
+async function handleExportPdf() {
+  const id = formData.value?.id;
+  if (!id) {
+    message.warning('单据未加载，无法导出');
+    return;
+  }
+  try {
+    await exportPurchaseOrderPdf({ ids: id });
+  } catch (error: any) {
+    message.error(error?.message || '导出 PDF 失败');
+  }
 }
 
 /** 创建或更新采购订单 */
@@ -168,6 +183,9 @@ const [Modal, modalApi] = useVbenModal({
           @update:discount-price="handleUpdateDiscountPrice"
           @update:total-price="handleUpdateTotalPrice"
         />
+      </template>
+      <template #exportPdf>
+        <Button type="primary" @click="handleExportPdf">导出PDF</Button>
       </template>
     </Form>
   </Modal>

@@ -11,7 +11,9 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.validation.ValidationUtils;
+import cn.iocoder.txgy.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.txgy.framework.datapermission.core.util.DataPermissionUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.infra.api.config.ConfigApi;
 import cn.iocoder.txgy.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import cn.iocoder.txgy.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
@@ -61,7 +63,7 @@ import static cn.iocoder.txgy.module.system.enums.LogRecordConstants.*;
 @Slf4j
 public class AdminUserServiceImpl implements AdminUserService {
 
-    static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
+    public static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
 
     static final String USER_REGISTER_ENABLED_KEY = "system.user.register-enabled";
 
@@ -129,13 +131,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (ObjUtil.notEqual(configApi.getConfigValueByKey(USER_REGISTER_ENABLED_KEY).getCheckedData(), "true")) {
             throw exception(USER_REGISTER_DISABLED);
         }
-        // 1.2 校验账户配合
-        tenantService.handleTenantInfo(tenant -> {
-            long count = userMapper.selectCount();
-            if (count >= tenant.getAccountCount()) {
-                throw exception(USER_COUNT_MAX, tenant.getAccountCount());
-            }
-        });
+        // 1.2 校验账户配额。个人用户使用保留租户 0，系统没有对应租户配额记录，跳过企业配额校验。
+        if (!Objects.equals(TenantContextHolder.getTenantId(), 0L)) {
+            tenantService.handleTenantInfo(tenant -> {
+                long count = userMapper.selectCount();
+                if (count >= tenant.getAccountCount()) {
+                    throw exception(USER_COUNT_MAX, tenant.getAccountCount());
+                }
+            });
+        }
         // 1.3 校验正确性
         validateUserForCreateOrUpdate(null, registerReqVO.getUsername(), null, null, null, null);
 
@@ -307,6 +311,12 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    @DataPermission(enable = false) // 忽略数据权限：按手机号匹配用户属于系统级匹配，避免因部门数据权限过滤而漏查
+    public List<AdminUserDO> getUserListByMobile(String mobile) {
+        return userMapper.selectListByMobile(mobile);
+    }
+
+    @Override
     public PageResult<AdminUserDO> getUserPage(UserPageReqVO reqVO) {
         // 如果有角色编号，查询角色对应的用户编号
         Set<Long> userIds = null;
@@ -380,6 +390,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    @DataPermission(enable = false) // 忽略数据权限：加好友等场景按租户全量用户搜索；否则"自定义部门"范围为空的角色搜不到任何用户，导致无法互加好友（类似 https://github.com/YunaiV/ruoyi-vue-pro/issues/1051）
     public List<AdminUserDO> getUserListByNickname(String nickname) {
         return userMapper.selectListByNickname(nickname);
     }

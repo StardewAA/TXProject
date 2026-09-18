@@ -64,3 +64,8 @@ export function deleteCustomer(id: number) {
 export function exportCustomer(params: any) {
   return requestClient.download('/erp/customer/export-excel', { params });
 }
+
+/** 导出客户 PDF */
+export function exportCustomerPdf(params: any) {
+  return requestClient.download('/erp/customer/export-pdf', { params });
+}
