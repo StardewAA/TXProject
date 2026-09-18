@@ -18,7 +18,6 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
-import cn.iocoder.txgy.module.erp.service.integration.ErpSaleMesIntegrationService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpSaleWmsIntegrationService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
@@ -72,8 +71,6 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private ErpApprovalNotificationService approvalNotificationService;
     @Resource
     private ErpSaleWmsIntegrationService saleWmsIntegrationService;
-    @Resource
-    private ErpSaleMesIntegrationService saleMesIntegrationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -183,7 +180,6 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         if (approve) {
             saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
-            saleMesIntegrationService.pushWorkOrdersAfterCommit(id);
         } else if (saleOrder.getReservationNo() != null) {
             saleWmsIntegrationService.prepareReservationReleaseAfterCommit(id, "ORDER_CHANGED", "销售订单反审批");
         }
@@ -224,7 +220,6 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id).setStatus(auditStatus));
         if (ErpAuditStatus.APPROVE.getStatus().equals(auditStatus)) {
             saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
-            saleMesIntegrationService.pushWorkOrdersAfterCommit(id);
         }
     }
 

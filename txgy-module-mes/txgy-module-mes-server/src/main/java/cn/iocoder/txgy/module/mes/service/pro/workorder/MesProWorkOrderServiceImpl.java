@@ -15,7 +15,6 @@ import cn.iocoder.txgy.module.mes.dal.mysql.pro.project.MesProProjectMapper;
 import cn.iocoder.txgy.module.mes.dal.mysql.pro.workorder.MesProWorkOrderMapper;
 import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.BarcodeBizTypeEnum;
-import cn.iocoder.txgy.module.mes.service.erp.integration.MesErpProductionProgressService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemBatchConfigService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
@@ -67,8 +66,6 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     private MesProRouteProductService routeProductService;
     @Resource
     private MesProFeedbackMapper feedbackMapper;
-    @Resource
-    private MesErpProductionProgressService erpProductionProgressService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -247,9 +244,6 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
         if (workOrder.getProjectId() != null) {
             projectService.refreshProjectStatus(workOrder.getProjectId());
         }
-
-        // 5. ERP 来源工单：回传完工进度到 ERP 销售订单行（事务提交后执行，失败不影响完工）
-        erpProductionProgressService.reportProgressAfterCommit(id);
     }
 
     @Override

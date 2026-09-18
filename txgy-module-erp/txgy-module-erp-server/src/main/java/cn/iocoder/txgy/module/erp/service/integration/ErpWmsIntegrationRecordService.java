@@ -20,19 +20,11 @@ public class ErpWmsIntegrationRecordService {
 
     public void createOutbound(String requestId, String aggregateType, String aggregateNo,
                                Long eventVersion, Object request) {
-        createOutbound(requestId, "ERP_TO_WMS", aggregateType, aggregateNo, eventVersion, request);
-    }
-
-    /**
-     * 通用出站记录：direction 由调用方指定（ERP_TO_WMS / ERP_TO_MES）。
-     */
-    public void createOutbound(String requestId, String direction, String aggregateType, String aggregateNo,
-                               Long eventVersion, Object request) {
         if (recordMapper.selectByRequestId(requestId) != null) {
             return;
         }
         recordMapper.insert(ErpWmsIntegrationRecordDO.builder()
-                .requestId(requestId).direction(direction)
+                .requestId(requestId).direction("ERP_TO_WMS")
                 .aggregateType(aggregateType).aggregateNo(aggregateNo)
                 .eventVersion(eventVersion).processingStatus(PENDING)
                 .requestPayload(JsonUtils.toJsonString(request)).retryCount(0).build());

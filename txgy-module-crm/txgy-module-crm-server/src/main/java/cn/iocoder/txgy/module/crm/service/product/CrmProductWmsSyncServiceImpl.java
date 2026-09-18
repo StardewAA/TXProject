@@ -24,9 +24,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.PRODUCT_CATEGORY_NOT_EXISTS;
@@ -92,56 +90,19 @@ public class CrmProductWmsSyncServiceImpl implements CrmProductWmsSyncService {
 
         Long categoryId = resolveCategoryId();
         int pageSize = resolvePageSize();
-        // 本次 WMS 返回的全部规格，用于识别「WMS 中已不存在」的历史同步产品
-        Set<Long> presentSkuIds = new HashSet<>();
         for (int pageNo = 1; pageNo <= MAX_PAGE_COUNT; pageNo++) {
             PageResult<CrmWmsProductSkuDTO> page = crmWmsProductReadAdapter.getProductPage(pageNo, pageSize);
             List<CrmWmsProductSkuDTO> skuList = page.getList();
             if (CollUtil.isEmpty(skuList)) {
                 break;
             }
-            skuList.forEach(sku -> {
-                if (sku.getSkuId() != null) {
-                    presentSkuIds.add(sku.getSkuId());
-                }
-                syncOneSku(sku, categoryId, result);
-            });
+            skuList.forEach(sku -> syncOneSku(sku, categoryId, result));
             // 已取完最后一页
             if (page.getTotal() != null && page.getTotal() <= (long) pageNo * pageSize) {
                 break;
             }
         }
-        // 兜底：WMS 侧删除/停用商品后不再返回该规格，需要把 CRM 里对应的同步产品置为下架
-        offlineMissingProducts(presentSkuIds, result);
         return result.setSyncTime(LocalDateTime.now());
-    }
-
-    /**
-     * 把「由 WMS 同步而来、但本次 WMS 未返回」的产品置为下架。
-     *
-     * <p>WMS 商品被删除（deleted=1）或停用（status=1）后，只读接口
-     * {@code GET /admin-api/wms/crm/products/page} 不再返回该规格，因此以「本次返回的规格集合」
-     * 为准：不在其中的 WMS 同步产品视为已在 WMS 中下架，避免 CRM 里残留已删除商品仍显示上架。</p>
-     *
-     * <p>仅处理 {@code data_source=2（WMS 同步）} 的产品，手工创建的产品不受影响。</p>
-     */
-    private void offlineMissingProducts(Set<Long> presentSkuIds, CrmProductWmsSyncRespVO result) {
-        List<CrmProductDO> syncedProducts = productMapper.selectListByDataSource(
-                CrmProductDataSourceEnum.WMS_SYNC.getDataSource());
-        for (CrmProductDO product : syncedProducts) {
-            // 仍在 WMS 中：状态由 syncOneSku 按 WMS 结果回写，这里跳过
-            if (product.getWmsSkuId() == null || presentSkuIds.contains(product.getWmsSkuId())) {
-                continue;
-            }
-            // 已经是下架状态，无需重复处理
-            if (!CrmProductStatusEnum.isEnable(product.getStatus())) {
-                continue;
-            }
-            productMapper.updateById(new CrmProductDO().setId(product.getId())
-                    .setStatus(CrmProductStatusEnum.DISABLE.getStatus()));
-            result.setOfflined(result.getOfflined() + 1);
-            log.info("[offlineMissingProducts][WMS 中已不存在的产品({}) 已置为下架]", product.getId());
-        }
     }
 
     private void syncOneSku(CrmWmsProductSkuDTO sku, Long categoryId, CrmProductWmsSyncRespVO result) {
@@ -214,13 +175,6 @@ public class CrmProductWmsSyncServiceImpl implements CrmProductWmsSyncService {
         }
         if (!CrmProductDataSourceEnum.isWmsSync(exists.getDataSource())) {
             updateObj.setDataSource(CrmProductDataSourceEnum.WMS_SYNC.getDataSource());
-            changed = true;
-        }
-        // WMS 同步来源的产品：WMS 仍返回该规格，说明商品在 WMS 中是启用状态，
-        // 状态跟随 WMS 恢复为上架（例如在 WMS 中停用后重新启用）
-        if (CrmProductDataSourceEnum.isWmsSync(exists.getDataSource())
-                && CrmProductStatusEnum.isDisable(exists.getStatus())) {
-            updateObj.setStatus(CrmProductStatusEnum.ENABLE.getStatus());
             changed = true;
         }
         return changed ? updateObj : null;

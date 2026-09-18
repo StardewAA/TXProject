@@ -20,7 +20,6 @@ public class WmsWarehouseUpsertReqDTO extends WmsIntegrationBaseReqDTO {
 
     private String address;
     private String principal;
-    private String principalPhone;
 
     @NotBlank(message = "status 不能为空")
     private String status;

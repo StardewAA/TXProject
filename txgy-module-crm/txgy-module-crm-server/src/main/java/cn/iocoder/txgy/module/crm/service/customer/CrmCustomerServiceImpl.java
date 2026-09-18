@@ -37,7 +37,6 @@ import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmOwnerRecordCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
-import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import com.mzt.logapi.context.LogRecordContext;
@@ -192,19 +191,13 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @LogRecord(type = CRM_CUSTOMER_TYPE, subType = CRM_CUSTOMER_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CUSTOMER_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CUSTOMER, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateCustomerFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
-                                       String contactLastContent) {
+    public void updateCustomerFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
         // 1.1 校验存在
         CrmCustomerDO customer = validateCustomerExists(id);
 
         // 2. 更新客户的跟进信息
-        //    注意：contactLastTime 必须取「实际跟进时间」，它是「多久没跟进 → 掉入公海」的计时起点：
-        //    - 不能取当前时间：补录历史跟进（今天补录 9/1 的拜访）会把计时错误重置为今天，客户永远掉不进公海；
-        //    - 不能取 contactNextTime（下次联系时间）：那是业务计划时间，可能早于本次跟进；
-        //    - 取 max(已有值, 本次实际跟进时间)：补录历史不会把计时往回拨。
         customerMapper.updateById(new CrmCustomerDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(customer.getContactLastTime(), contactTime))
-                .setContactLastContent(contactLastContent));
+                .setContactLastTime(LocalDateTime.now()).setContactLastContent(contactLastContent));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("customerName", customer.getName());
@@ -523,13 +516,7 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
     @Override
     public int autoPutCustomerPool() {
         CrmCustomerPoolConfigDO poolConfig = customerPoolConfigService.getCustomerPoolConfig();
-        if (poolConfig == null || !Boolean.TRUE.equals(poolConfig.getEnabled())) {
-            return 0;
-        }
-        // 兜底：未配置天数时 LocalDateTime#minusDays(null) 拆箱会抛 NPE，这里直接跳过并告警，
-        // 避免定时任务整批失败（界面上有校验，但历史脏数据或绕过接口写库无法防护）
-        if (poolConfig.getContactExpireDays() == null || poolConfig.getDealExpireDays() == null) {
-            log.warn("[autoPutCustomerPool][公海规则未配置「未跟进天数」或「未成交天数」，本次跳过执行]");
+        if (poolConfig == null || !poolConfig.getEnabled()) {
             return 0;
         }
         // 1. 获得需要放到的客户列表
@@ -558,9 +545,7 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
                 .setBizId(customer.getId()).setPreOwnerUserId(customer.getOwnerUserId()).setPostOwnerUserId(null));
 
         // 2. 联系人的负责人，也要设置为 null。因为：因为领取后，负责人也要关联过来，这块和 receiveCustomer 是对应的
-        //    注意：自动掉入公海是由定时任务/管理操作触发的，操作人往往不是该客户的负责人，
-        //    因此必须走「跳过数据权限校验」的方法，否则会被 @CrmPermission 拒绝导致整条事务回滚
-        contactService.updateOwnerUserIdByCustomerIdIgnorePermission(customer.getId(), null);
+        contactService.updateOwnerUserIdByCustomerId(customer.getId(), null);
 
         // 3. 删除负责人数据权限
         // 注意：需要放在 contactService 后面，不然【客户】数据权限已经被删除，无法操作！

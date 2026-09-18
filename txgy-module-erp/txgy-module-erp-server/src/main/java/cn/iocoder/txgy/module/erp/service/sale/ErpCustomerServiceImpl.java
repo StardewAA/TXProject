@@ -7,8 +7,6 @@ import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.customer.ErpCustomerP
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.customer.ErpCustomerSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpCustomerMapper;
-import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
-import cn.iocoder.txgy.module.erp.service.integration.ErpMesMasterDataSyncService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpWmsMasterDataSyncService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -22,8 +20,6 @@ import java.util.Objects;
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_NOT_ENABLE;
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_NOT_EXISTS;
-import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_PARTNER_CODE_DUPLICATE;
-import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_PARTNER_CODE_IMMUTABLE;
 
 /**
  * ERP 客户 Service 实现类
@@ -38,40 +34,18 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     private ErpCustomerMapper customerMapper;
     @Resource
     private ErpWmsMasterDataSyncService wmsMasterDataSyncService;
-    @Resource
-    private ErpMesMasterDataSyncService mesMasterDataSyncService;
-
-    @Resource
-    private ErpNoRedisDAO noRedisDAO;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createCustomer(ErpCustomerSaveReqVO createReqVO) {
-        ErpCustomerDO customer = BeanUtils.toBean(createReqVO, ErpCustomerDO.class);
-        // 统一编码由服务端生成，保证跨模块同源（MES/WMS 均消费该编码）
-        customer.setPartnerCode(generatePartnerCode());
-        customer.setSyncVersion(1L);
+        validatePartnerCodeUnique(null, createReqVO.getPartnerCode());
         // 插入
+        ErpCustomerDO customer = BeanUtils.toBean(createReqVO, ErpCustomerDO.class);
+        customer.setSyncVersion(1L);
         customerMapper.insert(customer);
         wmsMasterDataSyncService.syncCustomerAfterCommit(customer);
-        mesMasterDataSyncService.syncCustomerAfterCommit(customer);
         // 返回
         return customer.getId();
-    }
-
-    /**
-     * 生成客户统一编码，格式：CLI + yyyyMMdd + 6 位自增，例如 CLI20260917000001
-     *
-     * 与 MES 编码规则 MD_CLIENT_CODE 前缀保持一致；循环重试以规避 Redis 计数与落库数据不一致导致的重复
-     */
-    private String generatePartnerCode() {
-        for (int i = 0; i < 10; i++) {
-            String partnerCode = noRedisDAO.generate(ErpNoRedisDAO.CUSTOMER_PARTNER_CODE_PREFIX);
-            if (customerMapper.selectByPartnerCode(partnerCode) == null) {
-                return partnerCode;
-            }
-        }
-        throw exception(CUSTOMER_PARTNER_CODE_DUPLICATE, "自动生成失败，请重试");
     }
 
     @Override
@@ -79,18 +53,15 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     public void updateCustomer(ErpCustomerSaveReqVO updateReqVO) {
         // 校验存在
         ErpCustomerDO oldCustomer = validateCustomerExists(updateReqVO.getId());
-        // 统一编码由服务端生成，不允许通过接口修改，始终沿用原编码
-        if (updateReqVO.getPartnerCode() != null
-                && !Objects.equals(oldCustomer.getPartnerCode(), updateReqVO.getPartnerCode())) {
-            throw exception(CUSTOMER_PARTNER_CODE_IMMUTABLE);
+        if (!Objects.equals(oldCustomer.getPartnerCode(), updateReqVO.getPartnerCode())) {
+            throw exception(cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_PARTNER_CODE_IMMUTABLE);
         }
+        validatePartnerCodeUnique(updateReqVO.getId(), updateReqVO.getPartnerCode());
         // 更新
         ErpCustomerDO updateObj = BeanUtils.toBean(updateReqVO, ErpCustomerDO.class);
-        updateObj.setPartnerCode(oldCustomer.getPartnerCode());
         updateObj.setSyncVersion(oldCustomer.getSyncVersion() == null ? 1L : oldCustomer.getSyncVersion() + 1);
         customerMapper.updateById(updateObj);
         wmsMasterDataSyncService.syncCustomerAfterCommit(updateObj);
-        mesMasterDataSyncService.syncCustomerAfterCommit(updateObj);
     }
 
     @Override
@@ -103,7 +74,6 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         customer.setStatus(CommonStatusEnum.DISABLE.getStatus());
         customer.setSyncVersion(customer.getSyncVersion() == null ? 1L : customer.getSyncVersion() + 1);
         wmsMasterDataSyncService.syncCustomerAfterCommit(customer);
-        mesMasterDataSyncService.syncCustomerAfterCommit(customer);
     }
 
     private ErpCustomerDO validateCustomerExists(Long id) {
@@ -112,6 +82,14 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
             throw exception(CUSTOMER_NOT_EXISTS);
         }
         return customer;
+    }
+
+    private void validatePartnerCodeUnique(Long id, String partnerCode) {
+        ErpCustomerDO customer = customerMapper.selectByPartnerCode(partnerCode);
+        if (customer != null && !Objects.equals(customer.getId(), id)) {
+            throw exception(cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.CUSTOMER_PARTNER_CODE_DUPLICATE,
+                    partnerCode);
+        }
     }
 
     @Override

@@ -3,8 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { h } from 'vue';
 
-import { CommonStatusEnum, DICT_TYPE, generateWmsCode } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
+import { generateWmsCode } from '@vben/constants';
 
 import { Button } from 'ant-design-vue';
 
@@ -63,54 +62,7 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       label: '仓库类型',
       component: 'Select',
       componentProps: { options: warehouseTypes, placeholder: '请选择仓库类型' },
-      rules: z.enum(['RAW_MATERIAL', 'FINISHED_GOODS']).default('RAW_MATERIAL'),
-    },
-    {
-      fieldName: 'status',
-      label: '仓库状态',
-      component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.COMMON_STATUS, 'number'),
-        placeholder: '请选择仓库状态',
-      },
-      rules: z.number().default(CommonStatusEnum.ENABLE),
-    },
-    {
-      fieldName: 'organizationName',
-      label: '所属组织/部门',
-      component: 'Input',
-      componentProps: { maxLength: 100, placeholder: '请输入所属组织/部门' },
-    },
-    {
-      fieldName: 'city',
-      label: '所在城市',
-      component: 'Input',
-      componentProps: { maxLength: 50, placeholder: '请输入所在城市' },
-    },
-    {
-      fieldName: 'address',
-      label: '仓库地址',
-      component: 'Input',
-      componentProps: { maxLength: 255, placeholder: '请输入仓库地址' },
-    },
-    {
-      fieldName: 'principal',
-      label: '负责人',
-      component: 'Input',
-      componentProps: { maxLength: 64, placeholder: '请输入负责人' },
-    },
-    {
-      fieldName: 'principalPhone',
-      label: '负责人联系电话',
-      component: 'Input',
-      componentProps: {
-        maxLength: 11,
-        placeholder: '请输入11位手机号码',
-        inputmode: 'numeric',
-      },
-      rules: z
-        .string()
-        .refine((value) => !value || /^1\d{10}$/.test(value), '请输入11位有效手机号码'),
+      rules: z.enum(['RAW_MATERIAL', 'FINISHED_GOODS']),
     },
     {
       fieldName: 'sort',
@@ -156,51 +108,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
         placeholder: '请输入仓库编号',
       },
     },
-    {
-      fieldName: 'warehouseType',
-      label: '仓库类型',
-      component: 'Select',
-      componentProps: {
-        allowClear: true,
-        options: [
-          { label: '原料仓', value: 'RAW_MATERIAL' },
-          { label: '成品仓', value: 'FINISHED_GOODS' },
-        ],
-      },
-    },
-    {
-      fieldName: 'status',
-      label: '仓库状态',
-      component: 'Select',
-      componentProps: {
-        allowClear: true,
-        options: getDictOptions(DICT_TYPE.COMMON_STATUS, 'number'),
-      },
-    },
-    {
-      fieldName: 'organizationName',
-      label: '所属组织/部门',
-      component: 'Input',
-      componentProps: { allowClear: true },
-    },
-    {
-      fieldName: 'city',
-      label: '所在城市',
-      component: 'Input',
-      componentProps: { allowClear: true },
-    },
-    {
-      fieldName: 'address',
-      label: '仓库地址',
-      component: 'Input',
-      componentProps: { allowClear: true },
-    },
-    {
-      fieldName: 'principal',
-      label: '负责人',
-      component: 'Input',
-      componentProps: { allowClear: true, placeholder: '请输入负责人' },
-    },
   ];
 }
 
@@ -224,33 +131,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       formatter: ({ cellValue }) => warehouseTypes.find(type => type.value === cellValue)?.label ?? '未分类',
     },
     {
-      field: 'status',
-      title: '仓库状态',
-      minWidth: 110,
-      cellRender: { name: 'CellDict', props: { type: DICT_TYPE.COMMON_STATUS } },
-    },
-    {
-      field: 'organizationName',
-      title: '所属组织/部门',
-      minWidth: 150,
-    },
-    {
-      field: 'city',
-      title: '所在城市',
-      minWidth: 110,
-    },
-    {
-      field: 'address',
-      title: '仓库地址',
-      minWidth: 220,
-      showOverflow: 'tooltip',
-    },
-    {
-      field: 'principal',
-      title: '负责人',
-      minWidth: 110,
-    },
-    {
       field: 'remark',
       title: '备注',
       minWidth: 220,
@@ -269,7 +149,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 240,
+      width: 160,
       fixed: 'right',
       slots: { default: 'actions' },
     },

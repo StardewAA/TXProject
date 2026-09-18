@@ -41,7 +41,8 @@ public class MesTmToolSaveReqVO {
     @NotNull(message = "数量不能为空")
     private Integer quantity;
 
-    @Schema(description = "可用数量，仅新增时生效；修改时服务端忽略，由领用/归还等单据驱动", example = "1")
+    @Schema(description = "可用数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @NotNull(message = "可用数量不能为空")
     private Integer availableQuantity;
 
     @Schema(description = "保养维护类型", example = "1")
@@ -53,7 +54,8 @@ public class MesTmToolSaveReqVO {
     @Schema(description = "下次保养日期", example = "2024-06-01 00:00:00")
     private LocalDateTime nextMaintenDate;
 
-    @Schema(description = "状态，仅新增时生效；修改时服务端忽略，由领用/归还/维修/报废单据驱动流转", example = "1")
+    @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @NotNull(message = "状态不能为空")
     private Integer status;
 
     @Schema(description = "备注", example = "备注")

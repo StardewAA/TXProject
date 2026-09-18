@@ -31,7 +31,6 @@ import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
-import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -158,14 +157,13 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_BUSINESS_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateBusinessFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
-                                       String contactLastContent) {
+    public void updateBusinessFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
         // 1. 校验存在
         CrmBusinessDO business = validateBusinessExists(id);
 
-        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
+        // 2. 更新联系人的跟进信息
         businessMapper.updateById(new CrmBusinessDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(business.getContactLastTime(), contactTime)));
+                .setContactLastTime(LocalDateTime.now()));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("businessName", business.getName());

@@ -90,44 +90,4 @@ public interface MesTmToolService {
         return convertMap(getToolList(ids), MesTmToolDO::getId);
     }
 
-    /**
-     * 校验工具存在
-     *
-     * @param id 编号
-     * @return 工具
-     */
-    MesTmToolDO validateToolExists(Long id);
-
-    /**
-     * 减少工具可用数量（领用）
-     *
-     * @param toolId   工具ID
-     * @param quantity 数量
-     */
-    void decreaseAvailableQuantity(Long toolId, Integer quantity);
-
-    /**
-     * 增加工具可用数量（归还）
-     *
-     * @param toolId   工具ID
-     * @param quantity 数量
-     */
-    void increaseAvailableQuantity(Long toolId, Integer quantity);
-
-    /**
-     * 更新工具状态
-     *
-     * @param toolId 工具ID
-     * @param status 目标状态
-     */
-    void updateToolStatus(Long toolId, Integer status);
-
-    /**
-     * 报废工具：减少数量和可用数量
-     *
-     * @param toolId   工具ID
-     * @param quantity 报废数量
-     */
-    void scrapTool(Long toolId, Integer quantity);
-
 }

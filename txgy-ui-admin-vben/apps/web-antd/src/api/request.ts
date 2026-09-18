@@ -107,11 +107,6 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
       config.headers['tenant-id'] = String(tenantId);
       config.headers['visit-tenant-id'] = String(tenantId);
-      if (isPersonalRegister(config)) {
-        // 个人注册固定落在后端保留的 tenant_id=0，不允许携带企业租户或访问租户。
-        config.headers['tenant-id'] = undefined;
-        config.headers['visit-tenant-id'] = undefined;
-      }
 
       // 是否 API 加密
       if ((config.headers || {}).isEncrypt) {

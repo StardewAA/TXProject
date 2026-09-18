@@ -62,8 +62,8 @@ async function handleChange(id: number | undefined) {
         }}
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent class="w-56 p-0 pb-1">
-      <DropdownMenuGroup class="max-h-80 overflow-y-auto">
+    <DropdownMenuContent class="w-40 p-0 pb-1">
+      <DropdownMenuGroup>
         <DropdownMenuItem
           v-for="tenant in tenants"
           :key="tenant.id"

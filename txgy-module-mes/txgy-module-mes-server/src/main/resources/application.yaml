@@ -118,10 +118,3 @@ txgy:
     ignore-urls:
 
 debug: false
-
---- # MES↔WMS 集成配置
-mes:
-  wms:
-    base-url: http://wms:48080 # WMS 内部服务地址（联调/正式由部署环境提供）
-    integration:
-      enabled: false # WMS 部署并完成配置后开启，开启前定时任务不发送任何请求

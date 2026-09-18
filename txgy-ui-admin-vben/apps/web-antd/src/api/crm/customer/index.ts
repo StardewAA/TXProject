@@ -149,11 +149,6 @@ export function receiveCustomer(ids: number[]) {
   });
 }
 
-/** 触发一次客户自动掉入公海，返回本次掉入的客户数 */
-export function autoPutCustomerPool() {
-  return requestClient.post<number>('/crm/customer/auto-put-pool');
-}
-
 /** 分配公海给对应负责人 */
 export function distributeCustomer(ids: number[], ownerUserId: number) {
   return requestClient.put('/crm/customer/distribute', { ids, ownerUserId });

@@ -24,7 +24,6 @@ import cn.iocoder.txgy.module.crm.service.followup.bo.CrmFollowUpCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
-import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -190,15 +189,13 @@ public class CrmClueServiceImpl implements CrmClueService {
     @LogRecord(type = CRM_CLUE_TYPE, subType = CRM_CLUE_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CLUE_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CLUE, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateClueFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
-                                   String contactLastContent) {
+    public void updateClueFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
         // 校验线索是否存在
         CrmClueDO oldClue = validateClueExists(id);
 
-        // 更新线索（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
+        // 更新线索
         clueMapper.updateById(new CrmClueDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(oldClue.getContactLastTime(), contactTime))
-                .setContactLastContent(contactLastContent));
+                .setContactLastTime(LocalDateTime.now()).setContactLastContent(contactLastContent));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("clueName", oldClue.getName());

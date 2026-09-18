@@ -95,9 +95,8 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <!-- 宽度交给弹窗主题统一兜底（不足 760px 时自动放宽），这里只声明期望的舒适宽度 -->
-  <Modal :title="getTitle" class="w-[min(960px,94vw)]">
-    <ClueQuickParse :key="modalKey" @apply="onQuickParse" />
-    <Form />
+  <Modal :title="getTitle" class="w-2/5">
+    <ClueQuickParse :key="modalKey" class="mx-4" @apply="onQuickParse" />
+    <Form class="mx-4" />
   </Modal>
 </template>

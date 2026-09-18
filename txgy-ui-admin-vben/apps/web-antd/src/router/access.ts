@@ -289,9 +289,7 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
       injectAiChatMenu(menus, accessStore.accessCodes);
       return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
-        ),
+        filterMallPromotionMenus(filterHrmEmployeePortalRecruitMenus(menus)),
       );
     },
     // 可以指定没有权限跳转403页面
@@ -300,51 +298,6 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     layoutMap,
     pageMap,
   });
-}
-
-/**
- * WMS 菜单改造：
- * 1. 删除旧的「WMS 首页」/「分析页」菜单（旧首页组件 views/wms/home/index.vue）。
- * 2. 把 AI 智能助手（/wms/ai-center）改名为「WMS 首页」，作为新的首页入口。
- */
-function transformWmsMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
-  return menus.reduce<AppRouteRecordRaw[]>((result, menu) => {
-    const normalizedPath = normalizeMenuPath(menu.path);
-    const component = normalizeMenuPath(menu.component);
-    const name = String(menu.name ?? '').trim();
-    const title = String((menu.meta as Record<string, unknown>)?.title ?? '').trim();
-
-    // 1. 移除旧的 WMS 首页
-    const isOldWmsHome =
-      normalizedPath === 'wms/home' ||
-      component === 'views/wms/home/index.vue' ||
-      name === 'WMS 首页' ||
-      name === '分析页' ||
-      title === 'WMS 首页' ||
-      title === '分析页';
-    if (isOldWmsHome) {
-      return result;
-    }
-
-    // 2. 重命名 AI 智能助手为 WMS 首页
-    const isAiAssistant =
-      normalizedPath === 'wms/ai-center' ||
-      component === 'views/wms/ai/index.vue' ||
-      name === 'AI 智能助手' ||
-      title === 'AI 智能助手';
-    if (isAiAssistant) {
-      menu = { ...menu };
-      menu.name = 'WMS 首页';
-      menu.meta = { ...(menu.meta ?? {}), title: 'WMS 首页' };
-    }
-
-    if (Array.isArray(menu.children)) {
-      menu.children = transformWmsMenus(menu.children);
-    }
-
-    result.push(menu);
-    return result;
-  }, []);
 }
 
 /**

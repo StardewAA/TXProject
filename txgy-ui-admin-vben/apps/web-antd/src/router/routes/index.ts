@@ -4,13 +4,6 @@ import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 
-/** 旧 WMS 首页已下线，访问旧地址重定向到新的 AI 首页 */
-const wmsHomeRedirectRoute: RouteRecordRaw = {
-  meta: { hideInMenu: true, title: 'WMS 首页' },
-  path: '/wms/home',
-  redirect: '/wms/ai-center',
-};
-
 const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
   eager: true,
 });
@@ -33,7 +26,6 @@ const externalRoutes: RouteRecordRaw[] = [];
 const routes: RouteRecordRaw[] = [
   ...coreRoutes,
   ...externalRoutes,
-  wmsHomeRedirectRoute,
   fallbackNotFoundRoute,
 ];
 

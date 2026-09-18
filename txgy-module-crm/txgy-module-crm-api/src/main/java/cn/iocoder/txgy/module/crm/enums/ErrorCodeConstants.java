@@ -107,7 +107,6 @@ public interface ErrorCodeConstants {
     // ========== 跟进记录 1_020_013_000 ==========
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
-    ErrorCode FOLLOW_UP_RECORD_TIME_FUTURE = new ErrorCode(1_020_013_002, "实际跟进时间不能晚于当前时间");
 
     // ========== 报价 1_020_014_000 ==========
     ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");

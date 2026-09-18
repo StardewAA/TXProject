@@ -255,19 +255,6 @@ spring:
                 - Path=/admin-api/fms/**
               filters:
                 - RewritePath=/admin-api/fms/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
-            ## training-server 服务（云培训学院）
-            - id: training-admin-api # 路由的编号
-              uri: grayLb://training-server
-              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
-                - Path=/admin-api/training/**
-              filters:
-                - RewritePath=/admin-api/training/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
-            - id: training-app-api # 路由的编号（门户/学员端）
-              uri: grayLb://training-server
-              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
-                - Path=/app-api/training/**
-              filters:
-                - RewritePath=/app-api/training/v3/api-docs, /v3/api-docs # 配置，保证转发到 /v3/api-docs
             ## bidding-server 服务（外部公告 notice-external 审核等；txgy_bidding 独立工程）
             - id: bidding-admin-api # 路由的编号
               uri: grayLb://bidding-server

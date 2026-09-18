@@ -6,9 +6,6 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
-import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
-import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.returnvendor.vo.MesWmReturnVendorPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.returnvendor.vo.MesWmReturnVendorSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.returnvendor.MesWmReturnVendorDO;
@@ -28,7 +25,6 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -41,17 +37,8 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesWmReturnVendorServiceImpl implements MesWmReturnVendorService {
 
-    /**
-     * BPM 流程定义 Key：采购退货单审批
-     *
-     * 与 bpm-server 的 ReturnVendorStatusListener.getProcessDefinitionKey 保持一致
-     */
-    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-wm-return-vendor-approval";
-
     @Resource
     private MesWmReturnVendorMapper returnVendorMapper;
-    @Resource
-    private BpmProcessInstanceApi bpmProcessInstanceApi;
 
     @Resource
     private MesWmReturnVendorLineService returnVendorLineService;
@@ -114,53 +101,16 @@ public class MesWmReturnVendorServiceImpl implements MesWmReturnVendorService {
     @Transactional(rollbackFor = Exception.class)
     public void submitReturnVendor(Long id) {
         // 校验存在 + 草稿状态
-        MesWmReturnVendorDO returnVendor = validateReturnVendorExistsAndPrepare(id);
+        validateReturnVendorExistsAndPrepare(id);
         // 校验至少有一条行
         List<MesWmReturnVendorLineDO> lines = returnVendorLineService.getReturnVendorLineListByReturnId(id);
         if (CollUtil.isEmpty(lines)) {
             throw exception(WM_RETURN_VENDOR_NO_LINE);
         }
 
-        // 提交 → BPM审批中，发起工作流。审批结果由 bpm-server 的 ReturnVendorStatusListener
-        // 转发回 MES，经 mes_wm_return_vendor_approval_task 异步消费：
-        // 通过 → approveReturnVendor 进入"待拣货"；驳回 → rejectReturnVendor 退回草稿
-        returnVendorMapper.updateById(new MesWmReturnVendorDO()
-                .setId(id).setStatus(MesWmReturnVendorStatusEnum.BPM_APPROVING.getStatus()));
-
-        Map<String, Object> variables = Map.of(
-                "returnId", String.valueOf(id),
-                "returnCode", returnVendor.getCode() != null ? returnVendor.getCode() : "",
-                "purchaseOrderCode", returnVendor.getPurchaseOrderCode() != null ? returnVendor.getPurchaseOrderCode() : "");
-        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
-                        SecurityFrameworkUtils.getLoginUserId(),
-                        new BpmProcessInstanceCreateReqDTO()
-                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
-                                .setBusinessKey(String.valueOf(id))
-                                .setVariables(variables)).getCheckedData();
-        returnVendorMapper.updateById(new MesWmReturnVendorDO()
-                .setId(id).setProcessInstanceId(processInstanceId));
-    }
-
-    @Override
-    public void approveReturnVendor(Long id) {
-        // 审批通过（BPM审批中 → 待拣货），后续拣货/退货流程不变
-        MesWmReturnVendorDO returnVendor = validateReturnVendorExists(id);
-        if (ObjUtil.notEqual(MesWmReturnVendorStatusEnum.BPM_APPROVING.getStatus(), returnVendor.getStatus())) {
-            throw exception(WM_RETURN_VENDOR_STATUS_INVALID);
-        }
+        // 提交（草稿 -> 待拣货）
         returnVendorMapper.updateById(new MesWmReturnVendorDO()
                 .setId(id).setStatus(MesWmReturnVendorStatusEnum.APPROVING.getStatus()));
-    }
-
-    @Override
-    public void rejectReturnVendor(Long id) {
-        // 审批驳回（BPM审批中 → 草稿），可修改后重新提交（重新发起新流程实例）
-        MesWmReturnVendorDO returnVendor = validateReturnVendorExists(id);
-        if (ObjUtil.notEqual(MesWmReturnVendorStatusEnum.BPM_APPROVING.getStatus(), returnVendor.getStatus())) {
-            throw exception(WM_RETURN_VENDOR_STATUS_INVALID);
-        }
-        returnVendorMapper.updateById(new MesWmReturnVendorDO()
-                .setId(id).setStatus(MesWmReturnVendorStatusEnum.PREPARE.getStatus()));
     }
 
     @Override
