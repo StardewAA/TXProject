@@ -835,7 +835,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '操作',
       field: 'actions',
       fixed: 'right',
-      minWidth: 130,
+      // 需要容纳「编辑 / 生成合同 / 提交审核 / 查看审批 / 删除」多个按钮，宽度过窄会被裁切
+      minWidth: 260,
       slots: { default: 'actions' },
     },
   ];
