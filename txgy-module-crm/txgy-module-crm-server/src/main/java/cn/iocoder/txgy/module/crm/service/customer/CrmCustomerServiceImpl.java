@@ -212,6 +212,8 @@ public class CrmCustomerServiceImpl implements CrmCustomerService {
         customerMapper.updateById(new CrmCustomerDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
                 .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(customer.getContactLastTime(), contactTime))
                 .setContactLastContent(contactLastContent));
+        // 累计跟进次数 +1（SQL 自增，避免并发下相互覆盖）
+        customerMapper.updateFollowUpCountById(id, 1);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("customerName", customer.getName());
