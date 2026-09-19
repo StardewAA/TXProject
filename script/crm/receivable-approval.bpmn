@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CRM 回款审批流程定义
+
+  用途：回款单（crm_receivable）提交审批时使用，流程 key 必须与后端
+        CrmReceivableServiceImpl.BPM_PROCESS_DEFINITION_KEY = 'crm-receivable-audit' 保持一致。
+  部署：见同目录 Initialize-ReceivableApproval.ps1
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="CRM">
+  <process id="crm-receivable-audit" name="CRM 回款审批" isExecutable="true">
+    <startEvent id="start" name="提交回款审批"/>
+    <sequenceFlow id="toApproval" sourceRef="start" targetRef="receivableApproval"/>
+    <userTask id="receivableApproval" name="回款审批">
+      <extensionElements>
+        <flowable:candidateStrategy>30</flowable:candidateStrategy>
+        <flowable:candidateParam>__APPROVER_USER_ID__</flowable:candidateParam>
+        <flowable:approveType>1</flowable:approveType>
+        <flowable:assignStartUserHandlerType>1</flowable:assignStartUserHandlerType>
+        <flowable:rejectHandlerType>1</flowable:rejectHandlerType>
+      </extensionElements>
+    </userTask>
+    <sequenceFlow id="toEnd" sourceRef="receivableApproval" targetRef="end"/>
+    <endEvent id="end" name="审批结束"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="crm-receivable-audit">
+      <bpmndi:BPMNShape id="startShape" bpmnElement="start"><dc:Bounds x="100" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="approvalShape" bpmnElement="receivableApproval"><dc:Bounds x="210" y="98" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endShape" bpmnElement="end"><dc:Bounds x="410" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="approvalEdge" bpmnElement="toApproval"><di:waypoint x="136" y="138"/><di:waypoint x="210" y="138"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="endEdge" bpmnElement="toEnd"><di:waypoint x="330" y="138"/><di:waypoint x="410" y="138"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
