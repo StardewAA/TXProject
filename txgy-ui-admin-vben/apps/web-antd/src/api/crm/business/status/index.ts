@@ -24,27 +24,22 @@ export namespace CrmBusinessStatusApi {
   }
 }
 
-/** 默认商机状态 */
-export const DEFAULT_STATUSES = [
-  {
-    endStatus: 1,
-    key: '结束',
-    name: '赢单',
-    percent: 100,
-  },
-  {
-    endStatus: 2,
-    key: '结束',
-    name: '输单',
-    percent: 0,
-  },
-  {
-    endStatus: 3,
-    key: '结束',
-    name: '无效',
-    percent: 0,
-  },
+/**
+ * 标准商机阶段（与后端 CrmBusinessStageEnum 保持一致）
+ *
+ * 说明：商机阶段已标准化为固定 5 阶段；赢单/输单不再是阶段，
+ * 改由商机列表的「赢单」「输单」按钮驱动（只改商机状态组），因此这里不再包含结束阶段。
+ */
+export const STANDARD_STAGES = [
+  { name: '商机待评估', percent: 5 },
+  { name: '初步接洽', percent: 10 },
+  { name: '需求确认', percent: 40 },
+  { name: '方案评估', percent: 60 },
+  { name: '商务谈判', percent: 70 },
 ] satisfies CrmBusinessStatusApi.BusinessStatusType[];
+
+/** 默认商机状态：阶段已标准化，不再追加「赢单/输单/无效」固定结束行 */
+export const DEFAULT_STATUSES: CrmBusinessStatusApi.BusinessStatusType[] = [];
 
 /** 查询商机状态组列表 */
 export function getBusinessStatusPage(params: PageParam) {
