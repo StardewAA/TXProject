@@ -30,6 +30,19 @@ public interface CrmBusinessMapper extends BaseMapperX<CrmBusinessDO> {
                 .set(CrmBusinessDO::getOwnerUserId, ownerUserId));
     }
 
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * @param id    商机编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
+
     default PageResult<CrmBusinessDO> selectPageByCustomerId(CrmBusinessPageReqVO pageReqVO) {
         return selectPage(pageReqVO, new LambdaQueryWrapperX<CrmBusinessDO>()
                 .eq(CrmBusinessDO::getCustomerId, pageReqVO.getCustomerId()) // 指定客户编号

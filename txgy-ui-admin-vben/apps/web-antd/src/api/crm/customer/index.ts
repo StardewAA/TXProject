@@ -11,6 +11,7 @@ export namespace CrmCustomerApi {
     name: string; // 客户名称
     contactName?: string; // 联系人
     followUpStatus: boolean; // 跟进状态
+    followUpCount?: number; // 累计跟进次数（每写一次跟进 +1，删除跟进 -1）
     contactLastTime: Date; // 最后跟进时间
     contactLastContent: string; // 最后跟进内容
     contactNextTime: Date; // 下次联系时间
