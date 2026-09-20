@@ -32,9 +32,17 @@ import {
   QUESTION_TYPE_OPTIONS,
   QUESTION_TYPE_TEXT,
 } from '../constants';
+import AiImportModal from './ai-import.vue';
 import QuestionFormContent from './question-form.vue';
 
 defineOptions({ name: 'TrainingResourceQuestionList' });
+
+// ========== AI 智能导入（文档 → 试题）==========
+const aiImportVisible = ref(false);
+
+function handleAiImport() {
+  aiImportVisible.value = true;
+}
 
 // 标签筛选（独立于搜索表单）
 const tagOptions = ref<any[]>([]);
@@ -321,8 +329,13 @@ loadCategories();
       />
     </div>
 
+    <AiImportModal v-model:open="aiImportVisible" @success="handleSearch" />
+
     <Grid table-title="考试题库（单选/多选/判断/实操问答/案例分析）">
       <template #toolbar-tools>
+        <Button class="mr-2" type="primary" ghost @click="handleAiImport">
+          AI 智能导入
+        </Button>
         <TableAction
           :actions="[
             {
