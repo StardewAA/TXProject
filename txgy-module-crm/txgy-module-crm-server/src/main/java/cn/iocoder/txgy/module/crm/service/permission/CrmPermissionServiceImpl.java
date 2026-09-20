@@ -320,11 +320,39 @@ public class CrmPermissionServiceImpl implements CrmPermissionService {
         return permissionMapper.selectListByBizTypeAndUserId(bizType, userId);
     }
 
+    /**
+     * 判断用户是否拥有指定级别的数据权限
+     *
+     * <p>权限级别语义为「OWNER > WRITE > READ」：负责人拥有全部权限，
+     * 需要只读时「只读 / 读写」都算通过，需要读写时必须是「读写」。
+     *
+     * <p>注意：口径必须与 {@code CrmPermissionAspect#isUserPermissionValid} 保持一致，
+     * 否则会出现「切面放行、手动校验拒绝」的矛盾（例如负责人查自己数据的详情被拒）。
+     */
     @Override
     public boolean hasPermission(Integer bizType, Long bizId, Long userId, CrmPermissionLevelEnum level) {
         List<CrmPermissionDO> permissionList = permissionMapper.selectByBizTypeAndBizId(bizType, bizId);
-        return anyMatch(permissionList, permission ->
-                ObjUtil.equal(permission.getUserId(), userId) && ObjUtil.equal(permission.getLevel(), level.getLevel()));
+        CrmPermissionDO userPermission = CollUtil.findOne(permissionList,
+                permission -> ObjUtil.equal(permission.getUserId(), userId));
+        if (userPermission == null) {
+            return false;
+        }
+        // 1. 负责人：拥有全部权限
+        if (CrmPermissionLevelEnum.isOwner(userPermission.getLevel())) {
+            return true;
+        }
+        Integer needLevel = level.getLevel();
+        Integer userLevel = userPermission.getLevel();
+        // 2. 需要只读：只读 / 读写均可
+        if (CrmPermissionLevelEnum.isRead(needLevel)) {
+            return CrmPermissionLevelEnum.isRead(userLevel) || CrmPermissionLevelEnum.isWrite(userLevel);
+        }
+        // 3. 需要读写：必须是读写
+        if (CrmPermissionLevelEnum.isWrite(needLevel)) {
+            return CrmPermissionLevelEnum.isWrite(userLevel);
+        }
+        // 4. 需要负责人：仅负责人（步骤 1 已返回）
+        return false;
     }
 
     public CrmPermissionDO hasAnyPermission(Integer bizType, Long bizId, Long userId) {
