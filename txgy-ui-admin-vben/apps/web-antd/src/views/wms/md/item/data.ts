@@ -12,8 +12,33 @@ import { z } from '#/adapter/form';
 import { getItemBrandSimpleList } from '#/api/wms/md/item/brand';
 import { materialTypeLabel } from '#/views/wms/utils/material-type';
 
+import { WmsSwitchGroup } from './components';
 import { WmsItemBrandSelect } from './brand/components';
 import { WmsItemCategorySelect } from './category/components';
+
+/** 管理开关字段名（在表单里合并为一个对象字段，见 useFormSchema 注释） */
+export const MANAGE_FIELDS = [
+  'batchManage',
+  'shelfLifeManage',
+  'serialNumberManage',
+  'dangerousGoods',
+] as const;
+
+/** 管理开关默认值 */
+export const MANAGE_DEFAULTS: Record<string, boolean> = {
+  batchManage: false,
+  shelfLifeManage: false,
+  serialNumberManage: false,
+  dangerousGoods: false,
+};
+
+/** 管理开关的行内配置 */
+const MANAGE_ITEMS = [
+  { field: 'batchManage', label: '批次管理', help: '启用后该商品按批次入库、出库与追溯' },
+  { field: 'shelfLifeManage', label: '保质期管理' },
+  { field: 'serialNumberManage', label: '序列号管理' },
+  { field: 'dangerousGoods', label: '危险品', checkedChildren: '危险品', unCheckedChildren: '普通商品' },
+];
 
 /** 新增/修改商品的表单 */
 export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
@@ -91,54 +116,18 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
     },
     // ========== 管理开关 ==========
+    // 4 个开关合并成一个对象字段 manage，由 WmsSwitchGroup 横排渲染。
+    // 若各自占一个表单项，双栏布局下右侧会留下大片空白。
+    // 依赖判断统一用 manage.xxx（dependencies 支持点号路径）。
     {
-      fieldName: 'batchManage',
-      label: '批次管理',
-      component: 'Switch',
+      fieldName: 'manage',
+      label: '管理方式',
+      component: markRaw(WmsSwitchGroup),
       componentProps: {
-        checkedValue: true,
-        unCheckedValue: false,
-        checkedChildren: '是',
-        unCheckedChildren: '否',
+        items: MANAGE_ITEMS,
       },
-      defaultValue: false,
-      help: '启用后该商品按批次入库、出库与追溯',
-    },
-    {
-      fieldName: 'shelfLifeManage',
-      label: '保质期管理',
-      component: 'Switch',
-      componentProps: {
-        checkedValue: true,
-        unCheckedValue: false,
-        checkedChildren: '是',
-        unCheckedChildren: '否',
-      },
-      defaultValue: false,
-    },
-    {
-      fieldName: 'serialNumberManage',
-      label: '序列号管理',
-      component: 'Switch',
-      componentProps: {
-        checkedValue: true,
-        unCheckedValue: false,
-        checkedChildren: '是',
-        unCheckedChildren: '否',
-      },
-      defaultValue: false,
-    },
-    {
-      fieldName: 'dangerousGoods',
-      label: '危险品标识',
-      component: 'Switch',
-      componentProps: {
-        checkedValue: true,
-        unCheckedValue: false,
-        checkedChildren: '危险品',
-        unCheckedChildren: '普通商品',
-      },
-      defaultValue: false,
+      formItemClass: 'col-span-2',
+      defaultValue: { ...MANAGE_DEFAULTS },
     },
     // ========== 批次管理扩展字段（批次管理=是 时展开）==========
     {
@@ -151,8 +140,8 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
       formItemClass: 'col-span-2',
       dependencies: {
-        triggerFields: ['batchManage'],
-        show: (values) => !!values.batchManage,
+        triggerFields: ['manage.batchManage'],
+        show: (values) => !!values.manage?.batchManage,
       },
     },
     {
@@ -165,8 +154,9 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
       formItemClass: 'col-span-2',
       dependencies: {
-        triggerFields: ['batchManage', 'shelfLifeManage'],
-        show: (values) => !!values.batchManage || !!values.shelfLifeManage,
+        triggerFields: ['manage.batchManage', 'manage.shelfLifeManage'],
+        show: (values) =>
+          !!values.manage?.batchManage || !!values.manage?.shelfLifeManage,
       },
     },
     {
@@ -180,8 +170,8 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
         placeholder: '请输入保质期月数',
       },
       dependencies: {
-        triggerFields: ['shelfLifeManage'],
-        show: (values) => !!values.shelfLifeManage,
+        triggerFields: ['manage.shelfLifeManage'],
+        show: (values) => !!values.manage?.shelfLifeManage,
       },
     },
     {
@@ -196,8 +186,8 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
       defaultValue: 30,
       dependencies: {
-        triggerFields: ['shelfLifeManage'],
-        show: (values) => !!values.shelfLifeManage,
+        triggerFields: ['manage.shelfLifeManage'],
+        show: (values) => !!values.manage?.shelfLifeManage,
       },
     },
     {
@@ -212,8 +202,8 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       },
       defaultValue: true,
       dependencies: {
-        triggerFields: ['shelfLifeManage'],
-        show: (values) => !!values.shelfLifeManage,
+        triggerFields: ['manage.shelfLifeManage'],
+        show: (values) => !!values.manage?.shelfLifeManage,
       },
     },
     // ========== 包装 ==========
