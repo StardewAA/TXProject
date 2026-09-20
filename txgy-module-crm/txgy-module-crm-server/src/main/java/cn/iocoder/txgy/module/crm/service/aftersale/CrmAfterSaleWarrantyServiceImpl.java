@@ -50,6 +50,17 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
      */
     private static final String WARRANTY_NO_PREFIX = "WB";
 
+    /**
+     * 懒同步的最小间隔（毫秒）：30 秒内最多触发一次状态自动流转，避免高频查询频繁写库
+     */
+    private static final long AUTO_SYNC_INTERVAL_MS = 30_000L;
+
+    /**
+     * 上次懒同步时间戳（毫秒）；0 表示尚未同步过
+     */
+    private static final java.util.concurrent.atomic.AtomicLong LAST_AUTO_SYNC_AT =
+            new java.util.concurrent.atomic.AtomicLong(0L);
+
     @Resource
     private CrmAfterSaleWarrantyMapper warrantyMapper;
     @Resource
@@ -144,6 +155,8 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
 
     @Override
     public CrmAfterSaleWarrantyDO getWarranty(Long id) {
+        // 懒同步：详情页同样展示最新状态
+        autoSyncStatusIfNeeded();
         return warrantyMapper.selectById(id);
     }
 
@@ -158,6 +171,8 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
 
     @Override
     public PageResult<CrmAfterSaleWarrantyDO> getWarrantyPage(CrmAfterSaleWarrantyPageReqVO pageReqVO, Long userId) {
+        // 0. 懒同步：读取前按需触发一次状态自动流转，保证列表展示的状态始终是最新的
+        autoSyncStatusIfNeeded();
         // 待办「质保即将到期」：实时按售后设置判定，不预生成任何待办数据
         if (CrmAfterSaleWarrantyPageReqVO.EXPIRY_TYPE_ABOUT_TO_EXPIRE.equals(pageReqVO.getExpiryType())) {
             return warrantyMapper.selectPageByExpiry(pageReqVO, resolveRemindServiceUserIds(userId),
@@ -168,8 +183,48 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
 
     @Override
     public Long getWarrantyRemindCount(Long userId) {
+        // 懒同步：待办数量同样基于最新状态
+        autoSyncStatusIfNeeded();
         return warrantyMapper.selectCountByExpiry(resolveRemindServiceUserIds(userId),
                 LocalDate.now(), resolveWarrantyWarnDays());
+    }
+
+    /**
+     * 懒同步：在读取质保数据前按需触发一次状态自动流转（默认 30 秒内只执行一次）
+     *
+     * <p><b>为什么需要</b>：定时任务每天 02:00 才执行一次，用户在「当天刚过期 / 刚导入数据 /
+     * 刚调整到期日」时打开页面，会看到「已过到期日但状态仍是质保中」的过期数据，
+     * 需要人工点「刷新状态」才能修正 —— 这与「用户无需手动操作即可看到最新状态」相冲突。
+     *
+     * <p><b>做法</b>：所有质保读取入口（分页 / 详情 / 待办数量）在查询前先做一次自动流转，
+     * 并用时间戳限流（{@link #AUTO_SYNC_INTERVAL_MS}），避免高频查询导致频繁写库。
+     * 于是：
+     * <ul>
+     *   <li>用户打开列表 → 状态已经是按今天算好的最新值；</li>
+     *   <li>状态变化时的关联同步（停用回访计划、取消超期未完成任务、发送到期通知）也一并完成；</li>
+     *   <li>定时任务退化为「兜底 + 主动推送通知」的角色，不再是状态正确性的唯一依赖。</li>
+     * </ul>
+     *
+     * <p><b>容错</b>：同步失败只记录日志，绝不影响正常的查询返回（读接口不能因为写失败而不可用）。
+     */
+    private void autoSyncStatusIfNeeded() {
+        long now = System.currentTimeMillis();
+        long last = LAST_AUTO_SYNC_AT.get();
+        if (now - last < AUTO_SYNC_INTERVAL_MS) {
+            return;
+        }
+        // 竞争失败（别的线程刚同步过）时直接返回，避免并发重复写
+        if (!LAST_AUTO_SYNC_AT.compareAndSet(last, now)) {
+            return;
+        }
+        try {
+            int count = autoUpdateWarrantyStatus();
+            if (count > 0) {
+                log.info("[autoSyncStatusIfNeeded][懒同步：自动流转质保状态 {} 条]", count);
+            }
+        } catch (Exception ex) {
+            log.error("[autoSyncStatusIfNeeded][懒同步失败，不影响查询]", ex);
+        }
     }
 
     /**
