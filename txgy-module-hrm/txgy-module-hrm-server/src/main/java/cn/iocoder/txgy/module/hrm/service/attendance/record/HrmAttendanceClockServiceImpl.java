@@ -42,6 +42,7 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_GROUP_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NON_MANUAL_MODIFY_FORBIDDEN;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NOT_ALLOWED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NOT_EXISTS;
@@ -49,6 +50,8 @@ import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLO
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_POINT_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_POINT_OUT_OF_RANGE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_REST_DAY;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_TIME_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_WIFI_INVALID;
 
@@ -259,6 +262,32 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
         List<LocalDate> candidateDates = Arrays.asList(attendanceDate, attendanceDate.minusDays(1));
         if (candidateDates.stream().noneMatch(candidateDate ->
                 isAttendanceClockTimeValid(reqVO, candidateDate))) {
+            // 区分失败原因，避免员工/HR 只能看到「不在员工班次窗口内」而无法定位问题：
+            // 1）员工压根没匹配到考勤组（常见于新入职员工未加入考勤组，或员工没有部门）
+            if (attendanceGroupService.getMyAttendanceGroup(reqVO.getEmployeeId()) == null) {
+                throw exception(ATTENDANCE_CLOCK_GROUP_NOT_EXISTS);
+            }
+            // 2）考勤组匹配到了，但两个候选考勤日都取不到班次 → 休息日，或班次未配置上下班时间
+            boolean hasShift = candidateDates.stream().anyMatch(candidateDate ->
+                    attendanceGroupService.getEmployeeAttendanceShift(
+                            reqVO.getEmployeeId(), candidateDate.atStartOfDay()) != null);
+            if (!hasShift) {
+                throw exception(ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE);
+            }
+            if (candidateDates.stream().anyMatch(candidateDate -> {
+                HrmAttendanceGroupDO.Shift shift = attendanceGroupService.getEmployeeAttendanceShift(
+                        reqVO.getEmployeeId(), candidateDate.atStartOfDay());
+                return shift != null
+                        && (shift.getStartTime() == null || shift.getEndTime() == null);
+            })) {
+                throw exception(ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE);
+            }
+            // 3）考勤日期本身是休息日（班次落在前一日夜班时上面已放行），
+            //    明确告诉 HR「当天没班次」，而不是笼统地说「不在班次窗口内」
+            if (attendanceGroupService.getEmployeeAttendanceShift(
+                    reqVO.getEmployeeId(), attendanceDate.atStartOfDay()) == null) {
+                throw exception(ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST, attendanceDate);
+            }
             throw exception(ATTENDANCE_CLOCK_TIME_INVALID);
         }
     }

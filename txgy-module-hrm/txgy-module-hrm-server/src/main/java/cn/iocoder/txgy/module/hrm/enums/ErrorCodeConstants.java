@@ -113,12 +113,14 @@ public interface ErrorCodeConstants {
     // ========== 招聘职位类型 1-050-200-004 ==========
     ErrorCode RECRUIT_POST_TYPE_NOT_EXISTS = new ErrorCode(1_050_200_004, "招聘职位类型不存在");
     ErrorCode RECRUIT_POST_TYPE_PARENT_ERROR = new ErrorCode(1_050_200_019, "父职位类型不能是自身或下属节点");
-    ErrorCode RECRUIT_POST_TYPE_PARENT_NOT_EXISTS = new ErrorCode(1_050_200_020, "父职位类型不存在");
-    ErrorCode RECRUIT_POST_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_200_021, "同级职位类型名称已存在");
-    ErrorCode RECRUIT_POST_TYPE_HAS_CHILDREN = new ErrorCode(1_050_200_022, "职位类型存在子类型，不能删除");
-    ErrorCode RECRUIT_POST_TYPE_USED = new ErrorCode(1_050_200_023, "职位类型已被职位使用，不能删除");
-    ErrorCode RECRUIT_POST_TYPE_DISABLED = new ErrorCode(1_050_200_024, "职位类型已停用");
-    ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_025, "职位类型必须选择叶子节点");
+    // 注意：职位类型早前占用了 020~025，与「应聘记录 / 招聘 Offer」段冲突导致报错文案串台，
+    // 现整体迁移到 070~075 的独立号段；变更仅影响文案映射，不涉及业务语义。
+    ErrorCode RECRUIT_POST_TYPE_PARENT_NOT_EXISTS = new ErrorCode(1_050_200_070, "父职位类型不存在");
+    ErrorCode RECRUIT_POST_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_200_071, "同级职位类型名称已存在");
+    ErrorCode RECRUIT_POST_TYPE_HAS_CHILDREN = new ErrorCode(1_050_200_072, "职位类型存在子类型，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_USED = new ErrorCode(1_050_200_073, "职位类型已被职位使用，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_DISABLED = new ErrorCode(1_050_200_074, "职位类型已停用");
+    ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_075, "职位类型必须选择叶子节点");
     ErrorCode RECRUIT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_027, "招聘简历版本不存在");
 
     // ========== 个人简历版本 1-050-200-034 ==========
@@ -181,7 +183,7 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_APPLICATION_REASON_REQUIRED = new ErrorCode(1_050_200_023, "该操作必须填写原因");
     ErrorCode RECRUIT_OFFER_NOT_EXISTS = new ErrorCode(1_050_200_024, "招聘 Offer 不存在");
     ErrorCode RECRUIT_OFFER_STATE_INVALID = new ErrorCode(1_050_200_025, "招聘 Offer 状态不允许该操作");
-    ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_026, "该应聘已存在有效 Offer");
+    ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_076, "该应聘已存在有效 Offer");
     ErrorCode RECRUIT_OFFER_POST_MISMATCH = new ErrorCode(1_050_200_032, "Offer 职位必须与应聘职位一致");
     ErrorCode RECRUIT_OFFER_DATA_INVALID = new ErrorCode(1_050_200_033, "Offer 薪资、有效期或入职日期不合法");
 
@@ -202,6 +204,13 @@ public interface ErrorCodeConstants {
     ErrorCode ATTENDANCE_CLOCK_POINT_OUT_OF_RANGE = new ErrorCode(1_050_300_039,
             "当前定位距最近打卡点 {} 米，超出该点有效打卡半径 {} 米");
     ErrorCode ATTENDANCE_CLOCK_PHOTO_REQUIRED = new ErrorCode(1_050_300_040, "打卡必须上传现场照片");
+    ErrorCode ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE = new ErrorCode(1_050_300_044,
+            "该日期没有可用班次（休息日或班次时间未配置），无法打卡/补录");
+    ErrorCode ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE = new ErrorCode(1_050_300_045,
+            "考勤组班次未配置上下班时间，请在「考勤组设置」中补全班次");
+    ErrorCode ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST = new ErrorCode(1_050_300_046,
+            "考勤日期 {} 无班次（休息日），无法补录；如需按前一日夜班补录，请确认应打卡时间与"
+                    + "实际打卡时间都落在该夜班窗口内");
     ErrorCode ATTENDANCE_CLOCK_WIFI_INVALID = new ErrorCode(1_050_300_037, "未连接指定的考勤 WiFi");
     ErrorCode ATTENDANCE_CLOCK_GROUP_NOT_EXISTS = new ErrorCode(1_050_300_038, "未匹配到考勤组，无法打卡");
 
@@ -213,6 +222,12 @@ public interface ErrorCodeConstants {
     ErrorCode ATTENDANCE_LEAVE_NOT_EXISTS = new ErrorCode(1_050_300_030, "请假申请不存在");
     ErrorCode ATTENDANCE_LEAVE_TIME_CONFLICT = new ErrorCode(1_050_300_031, "请假时间与已有申请重叠");
     ErrorCode ATTENDANCE_LEAVE_STATUS_INVALID = new ErrorCode(1_050_300_032, "只有审批中的请假申请可以取消");
+    ErrorCode ATTENDANCE_LEAVE_APPROVE_STATUS_INVALID = new ErrorCode(1_050_300_041,
+            "只有审批中的请假申请可以审批");
+    ErrorCode ATTENDANCE_LEAVE_APPROVAL_REASON_REQUIRED = new ErrorCode(1_050_300_042,
+            "驳回请假申请时必须填写驳回原因");
+    ErrorCode ATTENDANCE_LEAVE_WORKFLOW_APPROVAL = new ErrorCode(1_050_300_043,
+            "该请假申请走的是工作流审批，请在「审批进度」中处理");
 
     // ========== 薪资配置 1-050-400-000 ==========
     ErrorCode SALARY_CONFIG_NOT_EXISTS = new ErrorCode(1_050_400_000, "薪资配置不存在");
@@ -230,7 +245,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALARY_OPTION_CODE_OCCUPIED = new ErrorCode(1_050_400_029,
             "薪资项编码 {} 已被历史或自定义数据占用，请先完成数据迁移");
     ErrorCode SALARY_OPTION_STANDARD_CANNOT_MODIFY =
-            new ErrorCode(1_050_400_029, "标准薪资项不允许修改或删除");
+            new ErrorCode(1_050_400_032, "标准薪资项不允许修改或删除");
 
     // ========== 薪资计税规则 1-050-400-005 ==========
     ErrorCode SALARY_TAX_RULE_NOT_EXISTS = new ErrorCode(1_050_400_005, "计税规则不存在");
@@ -247,7 +262,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALARY_PENDING_CHANGE_RECORD_EXISTS = new ErrorCode(1_050_400_016, "员工存在待生效的定薪调薪记录");
     ErrorCode SALARY_CHANGE_RECORD_STATUS_INVALID = new ErrorCode(1_050_400_017, "当前定薪调薪记录状态不允许执行该操作");
     ErrorCode SALARY_CHANGE_EFFECT_DATE_INVALID =
-            new ErrorCode(1_050_400_030, "调薪生效日期不能为空，且不能早于最近工资月份");
+            new ErrorCode(1_050_400_033, "调薪生效日期不能为空，且不能早于最近工资月份");
 
     // ========== 月度工资表 1-050-400-008 ==========
     ErrorCode SALARY_MONTH_RECORD_NOT_EXISTS = new ErrorCode(1_050_400_008, "月度工资表不存在");
