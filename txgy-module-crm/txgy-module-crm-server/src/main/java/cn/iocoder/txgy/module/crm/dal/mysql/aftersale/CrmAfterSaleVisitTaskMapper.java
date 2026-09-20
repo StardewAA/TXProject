@@ -44,9 +44,15 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
      * <ul>
      *   <li>任务状态 = 待处理（完成 / 逾期 / 删除后条件不再命中，刷新即消失）；</li>
      *   <li>处理人 ∈ 归属范围（当前登录人本人 + 其下属）；</li>
-     *   <li>计划回访日期 ∈ [今天, 今天 + 售后设置「任务临期提醒提前天数」]。</li>
+     *   <li>计划回访日期 ≤ 今天 + 售后设置「任务临期提醒提前天数」
+     *       （提醒触发点 = 计划回访日期 - 提前提醒天数，到点即进入待办）。</li>
      * </ul>
      * 按计划回访日期升序，最紧急的排在最前。
+     *
+     * <p>⚠️ 这里刻意用 {@code le} 而不是 {@code between(今天, 今天+天数)}：
+     * 「计划回访日期已过、但仍在窗口期内」的待处理任务同样需要提醒（越拖越接近逾期），
+     * 用 between 会把它们排除在待办之外，导致这类任务一路拖到窗口期结束被标记逾期 ——
+     * 这也与定时提醒 {@code selectListByStatusAndRemindNotSent} 的口径保持一致。
      *
      * @param reqVO           分页查询
      * @param assigneeUserIds 归属范围（本人 + 下属负责的任务处理人）
@@ -62,7 +68,7 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
         return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
                 .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
                 .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
-                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days))
+                .le(CrmAfterSaleVisitTaskDO::getTaskDate, today.plusDays(days))
                 .orderByAsc(CrmAfterSaleVisitTaskDO::getTaskDate));
     }
 
@@ -77,7 +83,7 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
         return selectCount(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
                 .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
                 .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
-                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days)));
+                .le(CrmAfterSaleVisitTaskDO::getTaskDate, today.plusDays(days)));
     }
 
     default List<CrmAfterSaleVisitTaskDO> selectListByStatusAndDateLe(Integer status, LocalDate date) {
