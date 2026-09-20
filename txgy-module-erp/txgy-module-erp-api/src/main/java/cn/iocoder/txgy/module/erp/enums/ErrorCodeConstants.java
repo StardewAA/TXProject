@@ -286,15 +286,6 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode COST_RESULT_CONVERT_NO_MAPPED_ITEM = new ErrorCode(1_030_720_009, "造价结果没有已完成物料映射的明细，无法转销售订单");
 
     // ========== ERP/WMS 跨模块集成 1-030-900-000 ==========
-    ErrorCode COLLABORATION_B_DUPLICATE = new ErrorCode(1_030_900_000, "协作单 B 已接收");
-    ErrorCode COLLABORATION_B_STATE_INVALID = new ErrorCode(1_030_900_001, "协作单 B 状态不允许当前操作");
-    ErrorCode WMS_CALLBACK_ORDER_NOT_EXISTS = new ErrorCode(1_030_900_002, "WMS 回调对应的 ERP 单据不存在");
-    ErrorCode WMS_CALLBACK_STATE_STALE = new ErrorCode(1_030_900_003, "WMS 回调版本或状态已过期");
-    ErrorCode COLLABORATION_B_CONFIRM_REQUIRED = new ErrorCode(1_030_900_004, "协作单 B 尚未业务确认");
-    ErrorCode COLLABORATION_B_ALREADY_CONFIRMED = new ErrorCode(1_030_900_005, "协作单 B 已完成业务确认");
-    ErrorCode COLLABORATION_B_NOT_EXISTS = new ErrorCode(1_030_900_006, "协作单 B 不存在");
-    ErrorCode COLLABORATION_B_CONFIRM_ITEM_INVALID = new ErrorCode(1_030_900_007, "协作单 B 确认明细与接收明细不一致");
-    ErrorCode COLLABORATION_B_TYPE_INVALID = new ErrorCode(1_030_900_008, "协同单类型不支持");
 
     // ========== ERP/MES 跨模块集成 1-030-910-000 ==========
     ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_030_910_000, "集成请求的租户编号与当前上下文不一致");
@@ -304,37 +295,9 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode PRODUCTION_PROGRESS_ORDER_ITEM_NOT_FOUND = new ErrorCode(1_030_910_004, "销售订单中不存在物料({})的订单行，无法回写生产进度");
 
     // ========== ERP 采购申请（1-030-700-000） ==========
-    ErrorCode PURCHASE_REQUEST_NOT_EXISTS = new ErrorCode(1_030_700_000, "采购申请不存在");
-    ErrorCode PURCHASE_REQUEST_NO_EXISTS = new ErrorCode(1_030_700_001, "生成采购申请编号失败，请重新提交");
-    ErrorCode PURCHASE_REQUEST_UPDATE_FAIL_STATUS = new ErrorCode(1_030_700_002, "采购申请({})当前状态无法修改");
-    ErrorCode PURCHASE_REQUEST_DELETE_FAIL_STATUS = new ErrorCode(1_030_700_003, "采购申请({})当前状态无法删除");
-    ErrorCode PURCHASE_REQUEST_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_700_004, "采购申请({})当前状态无法提交审批");
-    ErrorCode PURCHASE_REQUEST_CONVERT_FAIL_STATUS = new ErrorCode(1_030_700_005, "采购申请({})未审批通过，无法转询价");
-    ErrorCode PURCHASE_REQUEST_ITEM_COUNT_INVALID = new ErrorCode(1_030_700_006, "采购申请明细数量必须大于零");
 
     // ========== ERP 询价与定标（1-030-710-000） ==========
-    ErrorCode INQUIRY_NOT_EXISTS = new ErrorCode(1_030_710_000, "询价单不存在");
-    ErrorCode INQUIRY_NO_EXISTS = new ErrorCode(1_030_710_001, "生成询价单编号失败，请重新提交");
-    ErrorCode INQUIRY_UPDATE_FAIL_STATUS = new ErrorCode(1_030_710_002, "询价单({})当前状态无法修改");
-    ErrorCode INQUIRY_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_710_003, "询价单({})当前状态无法提交审批");
-    ErrorCode INQUIRY_PUBLISH_FAIL_STATUS = new ErrorCode(1_030_710_004, "询价单({})未审批通过，无法发布");
-    ErrorCode INQUIRY_CLOSE_FAIL_STATUS = new ErrorCode(1_030_710_005, "询价单({})当前状态无法截止报价");
-    ErrorCode INQUIRY_DEADLINE_INVALID = new ErrorCode(1_030_710_006, "报价截止时间必须晚于当前时间");
-    ErrorCode INQUIRY_QUOTE_NOT_EXISTS = new ErrorCode(1_030_710_007, "报价不存在");
-    ErrorCode INQUIRY_QUOTE_STATUS_INVALID = new ErrorCode(1_030_710_008, "当前询价状态不允许维护报价");
-    ErrorCode INQUIRY_QUOTE_DUPLICATE = new ErrorCode(1_030_710_009, "供应商当前报价版本已经存在");
-    ErrorCode AWARD_SELECTION_INVALID = new ErrorCode(1_030_710_010, "每条询价明细必须且只能选择一个中标报价");
-    ErrorCode AWARD_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_710_011, "询价单({})当前状态无法提交定标审批");
-    ErrorCode AWARD_CONFIRM_FAIL_STATUS = new ErrorCode(1_030_710_012, "询价单({})定标尚未审批通过");
-    ErrorCode AWARD_ALREADY_CONFIRMED = new ErrorCode(1_030_710_013, "询价单({})已经生成采购订单");
 
     // ========== ERP 造价结果（1-030-720-000） ==========
-    ErrorCode COST_RESULT_NOT_EXISTS = new ErrorCode(1_030_720_000, "造价结果不存在");
-    ErrorCode COST_RESULT_NO_EXISTS = new ErrorCode(1_030_720_001, "生成造价结果编号失败，请重新提交");
-    ErrorCode COST_RESULT_VERSION_DUPLICATE = new ErrorCode(1_030_720_002, "项目当前造价版本已经存在");
-    ErrorCode COST_RESULT_UPDATE_FAIL_STATUS = new ErrorCode(1_030_720_003, "造价结果({})当前状态无法修改");
-    ErrorCode COST_RESULT_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_720_004, "造价结果({})当前状态无法提交审批");
-    ErrorCode COST_RESULT_MAPPING_INCOMPLETE = new ErrorCode(1_030_720_005, "造价结果仍有未完成映射的材料");
-    ErrorCode COST_RESULT_CONVERT_FAIL_STATUS = new ErrorCode(1_030_720_006, "造价结果({})未审批通过，无法转换");
 
 }
