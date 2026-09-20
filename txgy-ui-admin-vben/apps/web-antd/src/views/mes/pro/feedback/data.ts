@@ -15,7 +15,6 @@ import { getDictOptions } from '@vben/hooks';
 import { Button } from 'ant-design-vue';
 
 import { generateAutoCode } from '#/api/mes/md/autocode/record';
-import { getRouteProcessByRouteAndProcess } from '#/api/mes/pro/route/process';
 import { getSimpleUserList } from '#/api/system/user';
 import { getRangePickerDefaultProps } from '#/utils';
 import { MdItemSelect } from '#/views/mes/md/item/components';
@@ -294,6 +293,7 @@ export function useFormSchema(
           if (!task) {
             return;
           }
+          // 任务详情里已派生 checkFlag，直接用它来决定数量区域展示，避免额外查询失败导致误判
           await formApi?.setValues({
             itemCode: task.itemCode,
             itemId: task.itemId,
@@ -303,22 +303,8 @@ export function useFormSchema(
             routeId: task.routeId,
             unitMeasureName: task.unitMeasureName,
             workstationId: task.workstationId,
+            checkFlag: task.checkFlag ?? true,
           });
-          // 工艺路线工序的 checkFlag 决定数量区域展示
-          if (task.routeId && task.processId) {
-            try {
-              const routeProcess = await getRouteProcessByRouteAndProcess(
-                task.routeId,
-                task.processId,
-              );
-              await formApi?.setFieldValue(
-                'checkFlag',
-                routeProcess?.checkFlag ?? false,
-              );
-            } catch {
-              await formApi?.setFieldValue('checkFlag', true);
-            }
-          }
         },
       },
       rules: 'selectRequired',

@@ -194,7 +194,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: '提交审批',
               type: 'link',
               icon: ACTION_ICON.AUDIT,
-              auth: ['erp:approval:submit'],
+              // TODO 联调临时放开权限校验（erp:approval:submit），联调结束后恢复
               ifShow: () => [0, 30, 40].includes(row.status),
               popConfirm: {
                 title: `确认将${row.no}提交到审批管理吗？`,

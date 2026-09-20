@@ -52,13 +52,13 @@ export default defineConfig(async (configEnv) => {
           '/admin-api/system': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48081/admin-api', // 系统服务（登录/用户/权限/菜单）
+            target: 'http://127.0.0.1:48080/admin-api', // 系统服务（登录/用户/权限/菜单），走本机网关
             ws: true,
           },
           '/admin-api/infra': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48081/admin-api', // 基础设施服务（文件/配置等）
+            target: 'http://127.0.0.1:48080/admin-api', // 基础设施服务（文件/配置等），走本机网关
             ws: true,
           },
           '/admin-api': {

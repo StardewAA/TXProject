@@ -151,4 +151,29 @@ public interface MesProWorkOrderService {
      */
     Long getWorkOrderCountByVendorId(Long vendorId);
 
+    /**
+     * 回写 WMS 领料出库集成结果（供 MES↔WMS 集成结果处理器调用）
+     *
+     * @param id                  工单编号
+     * @param wmsShipmentOrderNo  WMS 领料出库单号（可能为 null）
+     * @param wmsShipmentStatus   WMS 领料状态
+     */
+    void updateWmsShipmentResult(Long id, String wmsShipmentOrderNo, Integer wmsShipmentStatus);
+
+    /**
+     * 回写 WMS 完工入库集成结果（供 MES↔WMS 集成结果处理器调用）
+     *
+     * @param id                 工单编号
+     * @param wmsReceiptOrderNo  WMS 完工入库单号（可能为 null）
+     * @param wmsReceiptStatus   WMS 入库状态
+     */
+    void updateWmsReceiptResult(Long id, String wmsReceiptOrderNo, Integer wmsReceiptStatus);
+
+    /**
+     * 缺料采购入库后恢复生产工单：取消旧领料集成任务并重新向 WMS 申请领料（设计 7.2）
+     *
+     * @param code 工单编码
+     */
+    void resumeWorkOrder(String code);
+
 }

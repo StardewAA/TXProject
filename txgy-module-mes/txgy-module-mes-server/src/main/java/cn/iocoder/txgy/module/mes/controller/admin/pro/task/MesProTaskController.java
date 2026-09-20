@@ -164,7 +164,9 @@ public class MesProTaskController {
         // 2.2 组装甘特图数据
         List<GanttDataRespVO> ganttData = new java.util.ArrayList<>();
         for (MesProWorkOrderDO workOrder : workOrders) {
-            // 2.2.a 工单 -> project 行
+            List<MesProTaskDO> woTasks = taskMap.getOrDefault(workOrder.getId(), Collections.emptyList());
+            // 2.2.a 工单 -> project 行（需带上任务的时间范围：前端会过滤掉无日期的行，
+            //       工单行缺失日期会导致子任务 parent 悬空、甘特图整棵树渲染为空）
             MesMdItemDO item = itemMap.get(workOrder.getProductId());
             String productName = item != null ? item.getName() : "";
             GanttDataRespVO woData = new GanttDataRespVO()
@@ -179,10 +181,13 @@ public class MesProTaskController {
             if (ObjUtil.notEqual(workOrder.getParentId(), MesProWorkOrderDO.PARENT_ID_NULL)) {
                 woData.setParent(MesBizTypeConstants.PRO_WORKORDER + "_" + workOrder.getParentId());
             }
+            woTasks.stream().map(MesProTaskDO::getStartTime).filter(java.util.Objects::nonNull)
+                    .min(java.time.LocalDateTime::compareTo).ifPresent(woData::setStartDate);
+            woTasks.stream().map(MesProTaskDO::getEndTime).filter(java.util.Objects::nonNull)
+                    .max(java.time.LocalDateTime::compareTo).ifPresent(woData::setEndDate);
             ganttData.add(woData);
 
             // 2.2.b 任务 -> task 行
-            List<MesProTaskDO> woTasks = taskMap.getOrDefault(workOrder.getId(), Collections.emptyList());
             for (MesProTaskDO task : woTasks) {
                 MesMdWorkstationDO ws = workstationMap.get(task.getWorkstationId());
                 MesProProcessDO proc = processMap.get(task.getProcessId());

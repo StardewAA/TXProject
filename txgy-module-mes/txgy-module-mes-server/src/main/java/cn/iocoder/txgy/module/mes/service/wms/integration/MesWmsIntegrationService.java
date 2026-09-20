@@ -36,4 +36,7 @@ public interface MesWmsIntegrationService {
     /** 查询某业务单据的最新集成任务 */
     MesWmsIntegrationTaskDO getTaskBySourceOrder(MesWmsIntegrationOrderTypeEnum orderType, Long sourceOrderId);
 
+    /** 取消（物理删除）某业务单据的集成任务，便于重新创建（如缺料恢复领料） */
+    void cancelTask(MesWmsIntegrationOrderTypeEnum orderType, Long sourceOrderId);
+
 }
