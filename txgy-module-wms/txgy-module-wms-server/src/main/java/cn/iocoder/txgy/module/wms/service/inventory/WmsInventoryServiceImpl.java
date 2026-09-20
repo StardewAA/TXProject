@@ -9,12 +9,14 @@ import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryRiskSummaryRespVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryHistoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemSkuDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.warehouse.WmsWarehouseDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryMapper;
+import cn.iocoder.txgy.module.wms.dal.mysql.inventory.WmsInventoryHistoryMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemSkuMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.warehouse.WmsWarehouseMapper;
@@ -31,6 +33,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -56,6 +59,9 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
     private WmsInventoryMapper inventoryMapper;
 
     @Resource
+    private WmsInventoryHistoryMapper inventoryHistoryMapper;
+
+    @Resource
     private WmsInventoryHistoryService inventoryHistoryService;
 
     @Resource
@@ -77,6 +83,56 @@ public class WmsInventoryServiceImpl implements WmsInventoryService {
     @Override
     public List<WmsInventoryDO> getInventoryList(WmsInventoryListReqVO listReqVO) {
         return inventoryMapper.selectList(listReqVO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WmsInventoryRiskSummaryRespVO getRiskSummary() {
+        List<WmsInventoryDO> inventories = inventoryMapper.selectList(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<WmsInventoryDO>());
+        WmsInventoryRiskSummaryRespVO result = new WmsInventoryRiskSummaryRespVO();
+        List<WmsInventoryRiskSummaryRespVO.RiskItem> warnings = new ArrayList<>();
+        List<WmsInventoryRiskSummaryRespVO.RiskItem> risks = new ArrayList<>();
+        Map<Long, WmsItemSkuDO> skuMap = itemSkuService.getItemSkuMap(convertSet(inventories, WmsInventoryDO::getSkuId));
+        Map<Long, WmsItemDO> itemMap = itemService.getItemMap(convertSet(skuMap.values(), WmsItemSkuDO::getItemId));
+        Map<Long, WmsWarehouseDO> warehouseMap = warehouseMapper.selectBatchIds(convertSet(inventories, WmsInventoryDO::getWarehouseId))
+                .stream().collect(java.util.stream.Collectors.toMap(WmsWarehouseDO::getId, v -> v));
+        for (WmsInventoryDO inventory : inventories) {
+            BigDecimal quantity = inventory.getQuantity() == null ? BigDecimal.ZERO : inventory.getQuantity();
+            WmsItemSkuDO sku = skuMap.get(inventory.getSkuId());
+            WmsItemDO item = sku == null ? null : itemMap.get(sku.getItemId());
+            WmsWarehouseDO warehouse = warehouseMap.get(inventory.getWarehouseId());
+            WmsInventoryRiskSummaryRespVO.RiskItem risk = new WmsInventoryRiskSummaryRespVO.RiskItem();
+            risk.setItemId(sku == null ? null : sku.getItemId());
+            risk.setItemCode(item == null ? null : item.getCode());
+            risk.setItemName(item == null ? null : item.getName());
+            risk.setSkuId(inventory.getSkuId());
+            risk.setSkuCode(sku == null ? null : sku.getCode());
+            risk.setSkuName(sku == null ? null : sku.getName());
+            risk.setWarehouseId(inventory.getWarehouseId());
+            risk.setWarehouseName(warehouse == null ? null : warehouse.getName());
+            risk.setQuantity(quantity);
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                risk.setLevel("danger");
+                risk.setLabel("库存不足");
+                risk.setReason("当前库存为 0 或负数");
+                warnings.add(risk);
+                continue;
+            }
+            WmsInventoryHistoryDO outbound = inventoryHistoryMapper.selectLatestOutbound(inventory.getSkuId(), inventory.getWarehouseId());
+            if (outbound != null && outbound.getCreateTime() != null) {
+                int days = (int) ChronoUnit.DAYS.between(outbound.getCreateTime().toLocalDate(), LocalDateTime.now().toLocalDate());
+                if (days >= 30) {
+                    risk.setLevel("warning");
+                    risk.setLabel("连续 " + days + " 天未出库");
+                    risk.setReason("当前仍有库存，最近一次出库后长期未动销");
+                    risk.setDaysSinceOutbound(days);
+                    risks.add(risk);
+                }
+            }
+        }
+        result.setInventoryWarnings(warnings);
+        result.setInventoryRisks(risks);
+        return result;
     }
 
     @Override
