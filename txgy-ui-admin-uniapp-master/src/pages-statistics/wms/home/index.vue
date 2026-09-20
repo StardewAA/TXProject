@@ -2,7 +2,7 @@
   <view class="yd-page-container">
     <!-- 顶部导航栏 -->
     <wd-navbar
-      title="WMS 首页"
+      title="仓储首页"
       left-arrow placeholder safe-area-inset-top fixed
       @click-left="handleBack"
     />
@@ -14,7 +14,7 @@
           <view class="flex items-center justify-between border-b border-b-[#f0f0f0] px-24rpx py-20rpx">
             <view>
               <view class="text-30rpx text-[#333] font-semibold">
-                WMS 首页
+                仓储首页
               </view>
               <view class="mt-4rpx text-24rpx text-[#999]">
                 单据工作台 / 库存概览

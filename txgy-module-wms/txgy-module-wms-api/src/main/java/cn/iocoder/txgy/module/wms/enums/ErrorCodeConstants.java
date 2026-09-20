@@ -13,6 +13,7 @@ public interface ErrorCodeConstants {
     ErrorCode WAREHOUSE_NOT_EXISTS = new ErrorCode(1_060_100_000, "仓库不存在");
     ErrorCode WAREHOUSE_NAME_DUPLICATE = new ErrorCode(1_060_100_001, "仓库名称重复");
     ErrorCode WAREHOUSE_CODE_DUPLICATE = new ErrorCode(1_060_100_002, "仓库编号重复");
+    ErrorCode WAREHOUSE_NOT_ENABLED = new ErrorCode(1_060_100_003, "仓库未启用");
     ErrorCode WAREHOUSE_HAS_ORDER = new ErrorCode(1_060_100_004, "删除失败！仓库已被{}使用！");
     ErrorCode WAREHOUSE_HAS_INVENTORY = new ErrorCode(1_060_100_005, "删除失败！仓库已存在库存余额！");
     ErrorCode WAREHOUSE_MANAGER_REQUIRED = new ErrorCode(1_060_100_006, "该仓库尚未配置负责人，请先完成仓库人员配置");

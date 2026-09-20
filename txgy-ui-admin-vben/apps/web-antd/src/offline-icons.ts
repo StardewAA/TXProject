@@ -14,6 +14,7 @@
  */
 import { addCollection, setCustomIconsLoader } from '@iconify/vue';
 import type { IconifyJSON } from '@iconify/types';
+import { subsetIconCollection } from './utils/iconify-subset.mjs';
 
 import { CRM_AI_AVATAR_BODY } from '#/assets/icons/crm-ai-avatar';
 import {
@@ -70,22 +71,8 @@ async function fetchCollection(prefix: string): Promise<IconifyJSON | null> {
 
 /** 从完整集合中裁剪出本次需要的图标（含别名依赖的父图标） */
 function pickIcons(data: IconifyJSON, names: string[]): IconifyJSON | null {
-  const icons: Record<string, unknown> = {};
-  for (const name of names) {
-    if (data.icons?.[name]) {
-      icons[name] = data.icons[name];
-    } else if (data.aliases?.[name]) {
-      const alias = data.aliases[name] as { parent?: string };
-      icons[name] = alias;
-      if (alias.parent && data.icons?.[alias.parent]) {
-        icons[alias.parent] = data.icons[alias.parent];
-      }
-    }
-  }
-  if (Object.keys(icons).length === 0) {
-    return null;
-  }
-  return { ...data, aliases: undefined, icons: icons as IconifyJSON['icons'] };
+  const subset = subsetIconCollection(data, names);
+  return Object.keys(subset.icons).length ? subset : null;
 }
 
 offlineIconPrefixes.forEach((prefix) => {

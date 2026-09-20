@@ -7,7 +7,10 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.brand.WmsItemBrandPageReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.md.item.vo.brand.WmsItemBrandSaveReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemBrandDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemCategoryDO;
+import cn.iocoder.txgy.module.wms.dal.dataobject.md.merchant.WmsMerchantDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.md.item.WmsItemBrandMapper;
+import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -15,6 +18,10 @@ import org.springframework.validation.annotation.Validated;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.ITEM_BRAND_CODE_DUPLICATE;
@@ -35,6 +42,10 @@ public class WmsItemBrandServiceImpl implements WmsItemBrandService {
     private WmsItemBrandMapper brandMapper;
     @Resource
     private WmsItemService itemService;
+    @Resource
+    private WmsItemCategoryService categoryService;
+    @Resource
+    private WmsMerchantService merchantService;
 
     @Override
     public Long createItemBrand(WmsItemBrandSaveReqVO createReqVO) {
@@ -113,12 +124,40 @@ public class WmsItemBrandServiceImpl implements WmsItemBrandService {
 
     @Override
     public WmsItemBrandDO getItemBrand(Long id) {
-        return brandMapper.selectById(id);
+        WmsItemBrandDO brand = brandMapper.selectById(id);
+        enrichDisplayNames(brand == null ? Collections.emptyList() : List.of(brand));
+        return brand;
     }
 
     @Override
     public PageResult<WmsItemBrandDO> getItemBrandPage(WmsItemBrandPageReqVO pageReqVO) {
-        return brandMapper.selectPage(pageReqVO);
+        PageResult<WmsItemBrandDO> pageResult = brandMapper.selectPage(pageReqVO);
+        enrichDisplayNames(pageResult.getList());
+        return pageResult;
+    }
+
+    private void enrichDisplayNames(List<WmsItemBrandDO> brands) {
+        if (CollUtil.isEmpty(brands)) {
+            return;
+        }
+        Set<Long> categoryIds = brands.stream().map(WmsItemBrandDO::getCategoryId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> supplierIds = brands.stream().map(WmsItemBrandDO::getSupplierId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, WmsItemCategoryDO> categories = categoryIds.isEmpty()
+                ? Collections.emptyMap() : categoryService.getItemCategoryMap(categoryIds);
+        Map<Long, WmsMerchantDO> suppliers = supplierIds.isEmpty()
+                ? Collections.emptyMap() : merchantService.getMerchantMap(supplierIds);
+        brands.forEach(brand -> {
+            WmsItemCategoryDO category = categories.get(brand.getCategoryId());
+            if (category != null) {
+                brand.setCategoryName(category.getName());
+            }
+            WmsMerchantDO supplier = suppliers.get(brand.getSupplierId());
+            if (supplier != null) {
+                brand.setSupplierName(supplier.getName());
+            }
+        });
     }
 
     @Override
