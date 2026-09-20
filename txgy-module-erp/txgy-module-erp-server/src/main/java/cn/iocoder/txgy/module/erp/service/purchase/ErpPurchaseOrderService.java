@@ -35,12 +35,13 @@ public interface ErpPurchaseOrderService {
     void updatePurchaseOrder(@Valid ErpPurchaseOrderSaveReqVO updateReqVO);
 
     /**
-     * 更新采购订单的状态
+     * 反审批采购订单（审批中 / 已审批 → 草稿），并联动取消 BPM 在途流程实例
      *
      * @param id 编号
-     * @param status 状态
+     * @param userId 操作人编号
+     * @param reason 反审批原因
      */
-    void updatePurchaseOrderStatus(Long id, Integer status);
+    void reverseApprovePurchaseOrder(Long id, Long userId, String reason);
 
     /** 提交采购订单审批 */
     void submitPurchaseOrder(Long id, Long userId);
@@ -78,6 +79,14 @@ public interface ErpPurchaseOrderService {
      * @return 采购订单
      */
     ErpPurchaseOrderDO getPurchaseOrder(Long id);
+
+    /**
+     * 按采购订单号获得采购订单。
+     *
+     * @param no 采购订单号
+     * @return 采购订单
+     */
+    ErpPurchaseOrderDO getPurchaseOrderByNo(String no);
 
     /**
      * 校验采购订单，已经审核通过

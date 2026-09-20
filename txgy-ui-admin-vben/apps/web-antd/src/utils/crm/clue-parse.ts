@@ -555,6 +555,686 @@ export async function parseContact(
 }
 
 
+/* ----------------------------- 联系人多人识别 ----------------------------- */
+
+/** 多联系人识别结果中的单条联系人 */
+export interface ParsedContactItem {
+  /** 姓名（人） */
+  name?: string;
+  /** 所属公司 / 单位名称 */
+  customerName?: string;
+  mobile?: string;
+  telephone?: string;
+  email?: string;
+  wechat?: string;
+  qq?: string;
+  /** 职位 */
+  post?: string;
+  detailAddress?: string;
+  remark?: string;
+}
+
+/** 多联系人识别结果 */
+export interface ParseContactsResult {
+  /** 识别到的全部联系人（不会只返回第一个） */
+  contacts: ParsedContactItem[];
+  /** 解析来源：ai=大模型，rule=规则拆分 */
+  source: 'ai' | 'rule';
+  /** 是否自动拆分可靠；false 表示需要用户手动分割文本 */
+  splittable: boolean;
+  /** 拆分依据 / 提示文案 */
+  splitHint?: string;
+  aiError?: string;
+}
+
+/** 手机号（用于判断一段文本里到底有几个联系人） */
+const CN_MOBILE_G = /1[3-9]\d{9}/g;
+/** 座机 / 400 电话 */
+const CN_TELEPHONE_G = /(?:0\d{2,3}-?\d{7,8})|(?:400-?\d{3}-?\d{4})/g;
+
+/** 一段文本里出现的联系方式个数（手机 + 座机），用于判断「到底有几个联系人」 */
+export function countContactAnchors(text: string): number {
+  const mobiles = text.match(CN_MOBILE_G) ?? [];
+  const tels = text.match(CN_TELEPHONE_G) ?? [];
+  return mobiles.length + tels.length;
+}
+
+function hasContactAnchor(s: string): boolean {
+  return /1[3-9]\d{9}/.test(s) || /(?:0\d{2,3}-?\d{7,8})|(?:400-?\d{3}-?\d{4})/.test(s);
+}
+
+/**
+ * 从一段文本里提取「人名」。
+ *
+ * 优先级：带标签的（姓名/联系人：） → 2~4 个汉字且不像公司名、不像职位词、不是字段名。
+ */
+export function extractContactName(block: string): string | undefined {
+  const labeled = block.match(
+    /(?:姓名|联系人姓名|联系人|名字|称呼)\s*[:：]\s*([\u4e00-\u9fa5·]{2,6})/,
+  );
+  if (labeled?.[1]) {
+    return labeled[1].trim();
+  }
+  const COMPANY_WORD = /(公司|集团|厂|中心|店|院|所|企业|有限|股份|工程|实业|大队|支队|供应站)/;
+  const POST_WORD =
+    /^(经理|主管|总监|主任|部长|厂长|总工|工程师|科长|处长|局长|队长|董事长|总经理|副总|业务员|销售|采购|技术|项目|负责人|书记|站长)/;
+  const FIELD_WORD =
+    /^(电话|手机|手机号|邮箱|地址|微信|公司|职务|职位|岗位|联系人|姓名|备注|传真|详情)$/;
+  const candidates = block.match(/[\u4e00-\u9fa5]{2,4}/g) ?? [];
+  for (const c of candidates) {
+    if (COMPANY_WORD.test(c)) continue;
+    if (POST_WORD.test(c)) continue;
+    if (FIELD_WORD.test(c)) continue;
+    return c;
+  }
+  return undefined;
+}
+
+/** 解析单个联系人文本块 → 一条联系人字段 */
+export function parseContactBlock(
+  block: string,
+  fallbackCompany?: string,
+): ParsedContactItem {
+  const item: ParsedContactItem = {};
+  const text = (block ?? '').trim();
+  if (!text) {
+    return item;
+  }
+  const mobile = text.match(/1[3-9]\d{9}/);
+  if (mobile) item.mobile = mobile[0];
+  const tel = text.match(/(?:0\d{2,3}-?\d{7,8})|(?:400-?\d{3}-?\d{4})/);
+  if (tel) item.telephone = tel[0];
+  const email = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (email) item.email = email[0];
+  const qq = text.match(/(?:QQ|qq|Qq)\s*[:：]?\s*(\d{5,12})/);
+  if (qq?.[1]) item.qq = qq[1];
+  const wechat = text.match(
+    /(?:微信|微信号|wx|WeChat)\s*[:：]?\s*([A-Za-z0-9_-]{5,20})/i,
+  );
+  if (wechat?.[1]) item.wechat = wechat[1];
+  const post = text.match(/(?:职务|职位|岗位)\s*[:：]\s*([^\s,，;；\n]{2,20})/);
+  if (post?.[1]) item.post = post[1].trim();
+
+  // 公司名（含常见后缀）
+  const comp = text.match(
+    /[\u4e00-\u9fa5A-Za-z0-9（）()]{2,30}?(?:股份有限公司|有限公司|集团|公司|厂|研究院|研究所|中心|供应站|大队)/,
+  );
+  if (comp) {
+    item.customerName = comp[0].trim();
+  } else if (fallbackCompany) {
+    item.customerName = fallbackCompany;
+  }
+
+  const name = extractContactName(text);
+  if (name && name !== item.customerName) {
+    item.name = name;
+  }
+
+  const addr = text.match(
+    /[\u4e00-\u9fa5]{2,10}(?:省|市|区|县|镇|乡|路|街道?|号|栋|楼|室|大厦|广场|工业园)[^。\n]{0,40}/,
+  );
+  if (addr) item.detailAddress = addr[0].trim();
+  return item;
+}
+
+/** 拆分是否可靠：每一块都能拿到姓名或联系方式 */
+function blocksLookReliable(blocks: string[]): boolean {
+  return blocks.every((b) => !!extractContactName(b) || hasContactAnchor(b));
+}
+
+/** 按手机号 / 座机锚点切分（同一行 / 同一段里写了多个人时使用） */
+function splitByAnchor(text: string): string[] {
+  const re = /1[3-9]\d{9}|(?:0\d{2,3}-?\d{7,8})|(?:400-?\d{3}-?\d{4})/g;
+  const idxs: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    idxs.push(m.index);
+  }
+  if (idxs.length < 2) {
+    return [text.trim()];
+  }
+  const blocks: string[] = [];
+  let start = 0;
+  for (let i = 1; i < idxs.length; i++) {
+    const cut = idxs[i]!;
+    blocks.push(text.slice(start, cut));
+    start = cut;
+  }
+  blocks.push(text.slice(start));
+  return blocks
+    .map((s) => s.replace(/^[\s,，;；、]+/, '').trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * 把可能含多个联系人的文本切成「单联系人」文本块。
+ *
+ * 依次尝试：编号列表 → 空行分段 → 逐行 → 手机号锚点；
+ * 全都失败且文本里确实有多个联系方式时，返回 splittable=false，由用户手动分割（需求兜底）。
+ */
+export function splitContactBlocks(text: string): {
+  blocks: string[];
+  hint: string;
+  reliable: boolean;
+} {
+  const raw = (text ?? '').replace(/\r\n?/g, '\n').trim();
+  if (!raw) {
+    return { blocks: [], hint: '', reliable: false };
+  }
+  const clean = (arr: string[]) =>
+    arr.map((s) => s.trim()).filter((s) => s.length > 0);
+
+  // 1) 编号列表：1. / 1、 / 1) / 一、 / ①
+  const numbered = clean(
+    raw.split(
+      /(?:^|\n)\s*(?:\d{1,2}\s*[.、)）]|[一二三四五六七八九十]{1,2}\s*[、.]|[①②③④⑤⑥⑦⑧⑨⑩])\s*/,
+    ),
+  );
+  if (numbered.length >= 2) {
+    return {
+      blocks: numbered,
+      hint: '按编号拆分',
+      reliable: blocksLookReliable(numbered),
+    };
+  }
+
+  // 2) 空行分段
+  const byBlank = clean(raw.split(/\n\s*\n/));
+  if (byBlank.length >= 2) {
+    return {
+      blocks: byBlank,
+      hint: '按空行拆分',
+      reliable: blocksLookReliable(byBlank),
+    };
+  }
+
+  // 3) 逐行（至少两行带联系方式，避免把一个人的多行资料拆散）
+  const lines = clean(raw.split('\n'));
+  if (lines.length >= 2 && lines.filter(hasContactAnchor).length >= 2) {
+    return {
+      blocks: lines,
+      hint: '按行拆分',
+      reliable: blocksLookReliable(lines),
+    };
+  }
+
+  // 4) 手机号锚点切分（同一行里写了多个人）
+  //    注意：必须出现「≥2 个手机号」才按锚点拆。
+  //    否则「一个人同时留了手机 + 座机」会被误拆成两条联系人。
+  const mobileCount = (raw.match(/1[3-9]\d{9}/g) ?? []).length;
+  if (mobileCount >= 2) {
+    const byAnchor = shiftTrailingNameToNext(mergeWeakBlocks(splitByAnchor(raw)));
+    if (byAnchor.length >= 2) {
+      return { blocks: byAnchor, hint: '按手机号位置拆分', reliable: true };
+    }
+    return {
+      blocks: [raw],
+      hint: `检测到 ${mobileCount} 个手机号但无法自动拆分`,
+      reliable: false,
+    };
+  }
+  // 5) 座机锚点切分（少数场景：一行里用座机写了多个人）
+  const telCount = (raw.match(CN_TELEPHONE_G) ?? []).length;
+  if (telCount >= 2) {
+    const byAnchor = shiftTrailingNameToNext(mergeWeakBlocks(splitByAnchor(raw)));
+    if (byAnchor.length >= 2) {
+      return { blocks: byAnchor, hint: '按电话位置拆分', reliable: true };
+    }
+    return {
+      blocks: [raw],
+      hint: `检测到 ${telCount} 个电话但无法自动拆分`,
+      reliable: false,
+    };
+  }
+  // 6) 判定为「单人资料」：只有 1 个（或 0 个）手机号，直接当一条处理。
+  //    这样「某人有手机 + 座机」不会被误判为需要手动分割
+  return { blocks: [raw], hint: '', reliable: true };
+}
+
+/**
+ * 把「既没有姓名、也没有手机号」的碎片块并入上一块。
+ *
+ * 场景：按手机号锚点切分后，末尾可能残留「010-88887777 前台」这类只有座机的碎片，
+ * 它其实属于上一个人，不应单独成为一条联系人。
+ */
+function mergeWeakBlocks(blocks: string[]): string[] {
+  const out: string[] = [];
+  for (const b of blocks) {
+    const weak = !extractContactName(b) && !/1[3-9]\d{9}/.test(b);
+    if (weak && out.length > 0) {
+      out[out.length - 1] = `${out[out.length - 1]} ${b}`.trim();
+    } else {
+      out.push(b);
+    }
+  }
+  return out;
+}
+
+/** 公司名匹配（用于判断一个块里是否「挤进了两个公司名」） */
+const COMPANY_NAME_G =
+  /[\u4e00-\u9fa5A-Za-z0-9（）()]{2,30}?(?:股份有限公司|有限公司|集团|公司|厂|研究院|研究所|中心|供应站|大队)/g;
+
+/**
+ * 修正「按手机号位置切分」产生的名称错位。
+ *
+ * 场景：`长庆第三采气厂 13891115504 榆林炼油厂 13891119908`
+ * 以手机号位置切分后，前一块里会同时出现两个公司名（第二个其实属于下一条），
+ * 导致下一条只剩手机号、没有名称。这里把前一块末尾多出来的公司名挪到下一条开头。
+ */
+function shiftTrailingNameToNext(blocks: string[]): string[] {
+  for (let i = 0; i < blocks.length - 1; i++) {
+    const cur = blocks[i]!;
+    const names = cur.match(COMPANY_NAME_G) ?? [];
+    if (names.length < 2) {
+      continue;
+    }
+    const last = names[names.length - 1]!;
+    const pos = cur.lastIndexOf(last);
+    if (pos <= 0) {
+      continue;
+    }
+    blocks[i] = cur.slice(0, pos).trim();
+    blocks[i + 1] = `${last} ${blocks[i + 1]!}`.trim();
+  }
+  return blocks.filter((b) => b.length > 0);
+}
+
+/** 多联系人 AI 提取的提示词：强调「必须提取全部联系人」 */
+function buildContactsPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：本次输入可能包含【图片】（如名片、通讯录截图、聊天记录）。请先对图片做 OCR，识别其中全部文字，再提取字段。'
+    : '';
+  return `你是 CRM 联系人信息提取助手。${imageHint}
+请从下面的资料中提取【全部联系人】（可能只有 1 个人，也可能有 2 个及以上），以 JSON 返回，只输出 JSON，不要解释，不要 markdown 代码块。
+
+输出格式：
+{"contacts":[{"name":"","customerName":"","mobile":"","telephone":"","wechat":"","qq":"","email":"","post":"","detailAddress":"","remark":""}]}
+
+重要约束（必须遵守）：
+1. 必须提取资料中出现的【每一个人】，严禁只提取第一个而漏掉其他人；
+2. 每个人对应数组里的一个对象，顺序与资料中出现顺序一致；
+3. 严禁臆造，也【严禁把上一个人的信息复制给下一个人】：该人没有的字段输出 null；
+4. name 填「人的姓名」，customerName 填「所属公司 / 单位名称」，两者不要混淆；
+5. 手机号 mobile 为 11 位（1 开头）；固定电话 telephone 形如 010-88886666、400-123-4567；
+6. 同一段资料里多人共享同一公司时，每个人的 customerName 都要填；
+7. 即使资料里只有一个人，也要返回只含一个元素的数组。
+
+资料文本如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+async function aiParseContacts(
+  text: string,
+  images: string[],
+): Promise<{ contacts: ParsedContactItem[] | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) {
+    return { contacts: null };
+  }
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildContactsPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content }],
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const j: any = await resp.json();
+        if (j?.error?.message) {
+          detail = j.error.message;
+        }
+      } catch {
+        // 忽略
+      }
+      return { contacts: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) {
+      return { contacts: null, error: 'AI 返回内容无法解析为 JSON' };
+    }
+    // 兼容：模型可能返回 {contacts:[...]}，也可能直接返回数组或单个对象
+    let arr: any[] = [];
+    if (Array.isArray(json.contacts)) {
+      arr = json.contacts;
+    } else if (Array.isArray(json)) {
+      arr = json;
+    } else if (json.name || json.mobile) {
+      arr = [json];
+    }
+    const contacts: ParsedContactItem[] = [];
+    for (const raw of arr) {
+      if (!raw || typeof raw !== 'object') continue;
+      const item: ParsedContactItem = {};
+      const setStr = (k: keyof ParsedContactItem, v: any) => {
+        if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+          item[k] = `${v}`.trim() as any;
+        }
+      };
+      setStr('name', raw.name);
+      setStr('customerName', raw.customerName);
+      setStr('mobile', raw.mobile);
+      setStr('telephone', raw.telephone);
+      setStr('wechat', raw.wechat);
+      setStr('qq', raw.qq);
+      setStr('email', raw.email);
+      setStr('post', raw.post);
+      setStr('detailAddress', raw.detailAddress);
+      setStr('remark', raw.remark);
+      // 过滤掉完全空的占位对象
+      if (Object.keys(item).length > 0) {
+        contacts.push(item);
+      }
+    }
+    return { contacts };
+  } catch (e: any) {
+    return { contacts: null, error: e?.message ?? 'AI 调用异常' };
+  }
+}
+
+/**
+ * 联系人「多人识别」主入口。
+ *
+ * 策略：
+ *  1. AI 返回 ≥2 人 → 直接采用（最准）；
+ *  2. AI 只返回 1 人、但规则能拆出 ≥2 块 → 用规则结果，并用 AI 结果补全第一人
+ *     （对应需求「严禁只提取第一个联系人」的兜底）；
+ *  3. AI 完全失败 / 未配置 → 用规则拆分结果；
+ *  4. 规则也拆不开且文本里有多个联系方式 → splittable=false，前端提示手动分割。
+ */
+export async function parseContacts(
+  text: string,
+  images: string[] = [],
+): Promise<ParseContactsResult> {
+  const split = splitContactBlocks(text);
+  const ruleContacts = split.blocks.map((b) => parseContactBlock(b));
+
+  let aiError: string | undefined;
+  let aiContacts: ParsedContactItem[] = [];
+  try {
+    const ai = await aiParseContacts(text, images);
+    aiError = ai.error;
+    aiContacts = ai.contacts ?? [];
+  } catch (e: any) {
+    aiError = e?.message ?? 'AI 调用异常';
+  }
+
+  // 1) AI 识别出多人：直接采用
+  if (aiContacts.length >= 2) {
+    return {
+      contacts: aiContacts,
+      source: 'ai',
+      splittable: true,
+      splitHint: split.hint,
+      aiError,
+    };
+  }
+
+  // 2) AI 只有 1 人，但文本结构显示有多人：以规则拆分为主，AI 结果补全第一条
+  if (aiContacts.length === 1 && ruleContacts.length >= 2) {
+    const merged = [...ruleContacts];
+    merged[0] = { ...merged[0], ...aiContacts[0] };
+    return {
+      contacts: merged,
+      source: 'rule',
+      splittable: split.reliable,
+      splitHint: `${split.hint || '按文本结构拆分'}；AI 仅识别出 1 人，已按文本结构补全为 ${merged.length} 人`,
+      aiError,
+    };
+  }
+
+  // 3) AI 只识别出 1 人，文本也只有 1 人：用 AI 结果
+  if (aiContacts.length === 1) {
+    return {
+      contacts: aiContacts,
+      source: 'ai',
+      splittable: true,
+      splitHint: split.hint,
+      aiError,
+    };
+  }
+
+  // 4) 完全回退到规则拆分
+  const contacts = ruleContacts.length > 0 ? ruleContacts : [{}];
+  return {
+    contacts,
+    source: 'rule',
+    splittable: split.reliable,
+    splitHint: split.hint,
+    aiError,
+  };
+}
+
+
+/* --------------------------- 线索 / 客户多人识别 --------------------------- */
+
+/** 多线索（或客户）识别结果 */
+export interface ParseCluesResult {
+  /** 识别到的全部线索 / 客户（不会只返回第一个） */
+  items: ParsedClue[];
+  /** 解析来源：ai=大模型，rule=规则拆分 */
+  source: 'ai' | 'rule';
+  /** 是否自动拆分可靠；false 表示需要用户手动分割文本 */
+  splittable: boolean;
+  /** 拆分依据 / 提示文案 */
+  splitHint?: string;
+  aiError?: string;
+}
+
+/** 单块文本 → 线索 / 客户字段（规则提取，复用 parseClueText 的正则能力） */
+export function parseClueBlock(block: string): ParsedClue {
+  return parseClueText(block);
+}
+
+/** 多线索 AI 提取的提示词：强调「必须提取全部客户，且不要串信息」 */
+function buildCluesPrompt(text: string, hasImage: boolean): string {
+  const imageHint = hasImage
+    ? '注意：本次输入可能包含【图片】（如名片、企业名录截图、聊天记录）。请先对图片做 OCR，识别其中全部文字，再提取字段。'
+    : '';
+  return `你是 CRM 客户 / 线索信息提取助手。${imageHint}
+请从下面的资料中提取【全部客户（或线索）】（可能只有 1 个，也可能有 2 个及以上），以 JSON 返回，只输出 JSON，不要解释，不要 markdown 代码块。
+
+输出格式：
+{"items":[{"name":"","mobile":"","telephone":"","wechat":"","qq":"","email":"","industryId":null,"level":null,"source":null,"detailAddress":"","remark":""}]}
+
+重要约束（必须遵守）：
+1. 必须提取资料中出现的【每一个客户 / 单位】，严禁只提取第一个而漏掉后面的；
+2. 每个客户对应数组里的一个对象，顺序与资料中的出现顺序一致；
+3. 严禁臆造，也【严禁把上一个客户的信息复制给下一个】：该客户没有的字段输出 null；
+4. name 必须是资料中真实出现的公司 / 单位名称，不要填人名；
+5. 手机号 mobile 为 11 位（1 开头）；固定电话 telephone 形如 010-88886666、400-123-4567；
+6. 同一段资料里若出现多个公司，各自独立成一条，不要合并；
+7. 即使资料里只有一个客户，也要返回只含一个元素的数组。
+
+资料文本如下：
+"""
+${text || '（无文本，请从图片中识别）'}
+"""`;
+}
+
+async function aiParseClues(
+  text: string,
+  images: string[],
+): Promise<{ items: ParsedClue[] | null; error?: string }> {
+  const { enabled, baseUrl, apiKey, model } = getAiClueConfig();
+  if (!enabled || !baseUrl || !apiKey || !model) {
+    return { items: null };
+  }
+  try {
+    const content: any[] = [
+      { type: 'text', text: buildCluesPrompt(text, images.length > 0) },
+    ];
+    for (const img of images) {
+      content.push({ type: 'image_url', image_url: { url: img } });
+    }
+    const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content }],
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const j: any = await resp.json();
+        if (j?.error?.message) {
+          detail = j.error.message;
+        }
+      } catch {
+        // 忽略
+      }
+      return { items: null, error: detail };
+    }
+    const data: any = await resp.json();
+    const contentText: string = data?.choices?.[0]?.message?.content ?? '';
+    const json = extractJson(contentText);
+    if (!json) {
+      return { items: null, error: 'AI 返回内容无法解析为 JSON' };
+    }
+    // 兼容：模型可能返回 {items:[...]}、数组、或单个对象
+    let arr: any[] = [];
+    if (Array.isArray(json.items)) {
+      arr = json.items;
+    } else if (Array.isArray(json.contacts)) {
+      arr = json.contacts;
+    } else if (Array.isArray(json)) {
+      arr = json;
+    } else if (json.name || json.mobile) {
+      arr = [json];
+    }
+    const items: ParsedClue[] = [];
+    for (const raw of arr) {
+      if (!raw || typeof raw !== 'object') continue;
+      const item: any = {};
+      const setStr = (k: string, v: any) => {
+        if (v !== undefined && v !== null && `${v}`.trim() !== '') {
+          item[k] = `${v}`.trim();
+        }
+      };
+      setStr('name', raw.name);
+      setStr('mobile', raw.mobile);
+      setStr('telephone', raw.telephone);
+      setStr('wechat', raw.wechat);
+      setStr('qq', raw.qq);
+      setStr('email', raw.email);
+      setStr('detailAddress', raw.detailAddress);
+      setStr('remark', raw.remark);
+      // 行业 / 级别 / 来源：数字枚举，非法值直接丢弃
+      const setNum = (k: string, v: any) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) {
+          item[k] = n;
+        }
+      };
+      setNum('industryId', raw.industryId);
+      setNum('level', raw.level);
+      setNum('source', raw.source);
+      if (Object.keys(item).length > 0) {
+        items.push(item);
+      }
+    }
+    return { items };
+  } catch (e: any) {
+    return { items: null, error: e?.message ?? 'AI 调用异常' };
+  }
+}
+
+/**
+ * 线索 / 客户「多人识别」主入口。
+ *
+ * 与 {@link parseContacts} 同一套拆分策略（编号 / 空行 / 逐行 / 手机号锚点），
+ * 差别只在字段语义：name 是「客户 / 单位名称」，不含「所属客户」这类关联字段。
+ *
+ * @param text   粘贴的文本（或 OCR 出来的文本）
+ * @param images 图片 dataURL（有 AI 配置时交给视觉模型一起识别）
+ */
+export async function parseClues(
+  text: string,
+  images: string[] = [],
+): Promise<ParseCluesResult> {
+  const split = splitContactBlocks(text);
+  const ruleItems = split.blocks.map((b) => parseClueBlock(b));
+
+  let aiError: string | undefined;
+  let aiItems: ParsedClue[] = [];
+  try {
+    const ai = await aiParseClues(text, images);
+    aiError = ai.error;
+    aiItems = ai.items ?? [];
+  } catch (e: any) {
+    aiError = e?.message ?? 'AI 调用异常';
+  }
+
+  // 1) AI 识别出多条：直接采用
+  if (aiItems.length >= 2) {
+    return {
+      items: aiItems,
+      source: 'ai',
+      splittable: true,
+      splitHint: split.hint,
+      aiError,
+    };
+  }
+
+  // 2) AI 只有 1 条，但文本结构显示有多条：以规则拆分为主，AI 结果补全第一条
+  if (aiItems.length === 1 && ruleItems.length >= 2) {
+    const merged = [...ruleItems];
+    merged[0] = { ...merged[0], ...aiItems[0] };
+    return {
+      items: merged,
+      source: 'rule',
+      splittable: split.reliable,
+      splitHint: `${split.hint || '按文本结构拆分'}；AI 仅识别出 1 条，已按文本结构补全为 ${merged.length} 条`,
+      aiError,
+    };
+  }
+
+  // 3) AI 只识别出 1 条，文本也只有 1 条
+  if (aiItems.length === 1) {
+    return {
+      items: aiItems,
+      source: 'ai',
+      splittable: true,
+      splitHint: split.hint,
+      aiError,
+    };
+  }
+
+  // 4) 完全回退到规则拆分
+  const items = ruleItems.length > 0 ? ruleItems : [{}];
+  return {
+    items,
+    source: 'rule',
+    splittable: split.reliable,
+    splitHint: split.hint,
+    aiError,
+  };
+}
+
+
 /* ----------------------------- 合同专属识别 ----------------------------- */
 
 export interface ParsedContractProduct {

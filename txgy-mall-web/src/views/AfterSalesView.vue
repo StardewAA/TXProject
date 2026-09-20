@@ -140,7 +140,7 @@ onUnmounted(() => {requestVersion+=1;window.removeEventListener('focus', refresh
         <div class="after-actions">
           <b>{{ item.statusName || statusNames[item.status] || `状态 ${item.status}` }}</b>
           <span>退款金额 ¥{{ formatMoney(item.refundPrice) }}</span>
-          <MallLink v-if="item.shopId && item.orderId" :to="{ path: `/member/customer-service/shop/${item.shopId}`, query: { resourceType: 'ORDER', resourceId: item.orderId } }">售后沟通（关联本人订单）</MallLink><MallLink v-else :to="buyerTo('/member/orders')">从关联订单联系商家</MallLink>
+          <template v-if="[62, 63].includes(item.status)"><MallLink v-if="item.shopId && item.orderId" :to="{ path: `/member/customer-service/shop/${item.shopId}`, query: { resourceType: 'ORDER', resourceId: item.orderId } }">联系店铺协商</MallLink><MallLink v-if="item.orderId" :to="{ path: '/member/customer-service/scoped', query: { resourceType: 'ORDER', resourceId: item.orderId } }">联系平台客服</MallLink></template><MallLink v-else-if="item.shopId && item.orderId" :to="{ path: `/member/customer-service/shop/${item.shopId}`, query: { resourceType: 'ORDER', resourceId: item.orderId } }">售后沟通（关联本人订单）</MallLink><MallLink v-else :to="buyerTo('/member/orders')">从关联订单联系商家</MallLink>
           <el-button v-if="rowNotices(item.id).length" @click="workbench.read(rowNotices(item.id)).catch(()=>{})">此提醒标为已读</el-button>
           <el-button v-if="item.status === 20" type="primary" @click="openDelivery(item)">填写退货物流</el-button>
           <el-button v-if="[10, 20].includes(item.status)" @click="cancel(item)">取消售后</el-button>

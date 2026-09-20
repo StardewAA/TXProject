@@ -71,6 +71,10 @@ class OrderWorkbenchServiceTest {
         when(security.hasPermission("trade:order:query")).thenReturn(false);assertEquals(0,summary(Role.ADMIN,null).todoCounts().get(Action.DELIVERY));}
     @Test void refundBelongsToAuthorizedPlatformNotSupplier(){order(1,7,1,20);sale(11,1,40);login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());login(1,1,2);assertEquals(1,summary(Role.ADMIN,null).todoCounts().get(Action.PLATFORM_REFUND));
         when(security.hasPermission("trade:after-sale:refund")).thenReturn(false);assertEquals(0,summary(Role.ADMIN,null).pendingCount());}
+    @Test void newAfterSaleRequestUpdatesAuthorizedAdminUnread(){order(1,7,1,20);sale(11,1,10);login(1,1,2);
+        var result=summary(Role.ADMIN,null);assertEquals(1,result.unreadCount());assertEquals(1,result.todoCounts().get(Action.AFTER_AUDIT));
+        assertEquals("新售后退款申请待审核",result.entries().getFirst().reason());
+        when(security.hasPermission("trade:after-sale:query")).thenReturn(false);assertEquals(0,summary(Role.ADMIN,null).pendingCount());}
     @Test void refundRequestAlreadySubmittedIsNotAnotherRefundTodo(){order(1,7,1,20);sale(11,1,40);jdbc.update("UPDATE trade_after_sale SET pay_refund_id=888 WHERE id=11");login(1,1,2);assertEquals(0,summary(Role.ADMIN,null).pendingCount());}
     @Test void afterSaleSpecialistSeesOnlyAuthorizedRefundWithoutOrderCounts(){order(1,7,1,20);sale(11,1,40);login(1,1,2);
         when(security.hasPermission("trade:order:query")).thenReturn(false);

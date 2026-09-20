@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Schema(description = "管理后台 - ERP 结算账户新增/修改 Request VO")
 @Data
 public class ErpAccountSaveReqVO {
@@ -32,5 +34,8 @@ public class ErpAccountSaveReqVO {
     @Schema(description = "排序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "排序不能为空")
     private Integer sort;
+
+    @Schema(description = "期初余额，仅创建时生效", example = "10000")
+    private BigDecimal balance;
 
 }

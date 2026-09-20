@@ -44,14 +44,14 @@ public class KeFuChatCardService {
                 throw exception(FORBIDDEN);
             }
             long shop = validateShop(session, product.getShopId(), true);
-            return new Card(type, resourceId, shop, product.getName(), "商品信息快照，以商品详情实时信息为准",
+            return new Card(type, resourceId, shop, product.getName(), "",
                     resourceId, null, safeImage(product.getPicUrl()), nonNegative(product.getPrice()), product.getStatus());
         }
         var order = orders.getServiceCard(resourceId, buyer.id(), tenant).getCheckedData();
         if (order == null || !Objects.equals(order.getId(), resourceId) || !Objects.equals(order.getTenantId(), tenant)
                 || !Objects.equals(order.getUserId(), buyer.id())) throw exception(FORBIDDEN);
         long shop = validateShop(session, order.getShopId(), false);
-        return new Card(type, resourceId, shop, "订单 " + order.getNo(), "本人订单快照，不包含收货地址、手机号或支付凭据",
+        return new Card(type, resourceId, shop, "订单 " + order.getNo(), "",
                 null, resourceId, null, nonNegative(order.getPayPrice()), order.getStatus());
     }
 

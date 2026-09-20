@@ -32,10 +32,16 @@ public class CrmAfterSaleConfigSaveReqVO {
     @Min(value = 0, message = "回访任务临期提醒提前天数不能小于 0")
     private Integer taskRemindDays;
 
-    @Schema(description = "回访任务逾期判定天数", requiredMode = Schema.RequiredMode.REQUIRED, example = "3")
+    @Schema(description = "回访任务逾期判定天数（窗口期天数：窗口期截止日期 = 计划回访日期 + 本值）",
+            requiredMode = Schema.RequiredMode.REQUIRED, example = "3")
     @NotNull(message = "回访任务逾期判定天数不能为空")
-    @Min(value = 1, message = "回访任务逾期判定天数不能小于 1")
+    @Min(value = 0, message = "回访任务逾期判定天数不能小于 0")
     private Integer taskOverdueDays;
+
+    @Schema(description = "是否允许提前提交回访记录：false=不允许（未到计划回访日期禁止提交）",
+            requiredMode = Schema.RequiredMode.REQUIRED, example = "false")
+    @NotNull(message = "是否允许提前提交回访记录不能为空")
+    private Boolean allowEarlyVisit;
 
     @Schema(description = "工单超时未处理预警天数", requiredMode = Schema.RequiredMode.REQUIRED, example = "7")
     @NotNull(message = "工单超时未处理预警天数不能为空")

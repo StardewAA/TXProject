@@ -9,6 +9,7 @@ import { memberApi, systemApi, type AreaNode } from '@/api/mall'
 import EmptyState from '@/components/EmptyState.vue'
 import MemberPage from '@/components/MemberPage.vue'
 import AddressMapDialog from '@/components/AddressMapDialog.vue'
+import type { AddressMapSelection } from '@/components/AddressMapDialog.vue'
 import type { Address } from '@/types/mall'
 import { addressLocationText, addressTextChanged, hasAddressLocation, manualAddressPayload } from '@/utils/fulfillment'
 
@@ -20,6 +21,7 @@ const saving = ref(false)
 const mapDialog = ref(false)
 const original = ref<Address | null>(null)
 const clearLocation = ref(false)
+const locationPicked = ref(false)
 const form = reactive<Address>({ id: 0, name: '', mobile: '', areaId: undefined, detailAddress: '', defaultStatus: false })
 const locationChanged = computed(() => hasAddressLocation(original.value) && addressTextChanged(form, original.value))
 let editorGeneration = 0
@@ -35,6 +37,7 @@ function open(item?: Address) {
   editorGeneration += 1
   original.value = item ? { ...item } : null
   clearLocation.value = false
+  locationPicked.value = false
   // Reset optional fields too: a new address must not inherit the last editor's coordinates.
   Object.assign(form, { id: 0, name: '', mobile: '', areaId: undefined, areaName: undefined, detailAddress: '', defaultStatus: false,
     longitude: null, latitude: null, coordSystem: null, locationSource: null, locationPrecision: null, locationConfirmedAt: null }, item || {})
@@ -46,7 +49,7 @@ async function save() {
   if (!form.name.trim() || !/^1\d{10}$/.test(form.mobile.trim()) || !form.areaId || !form.detailAddress.trim()) return ElMessage.warning('请完整填写收货地址')
   const generation = editorGeneration
   const current = () => operation.current() && generation === editorGeneration && dialog.value
-  const payload = manualAddressPayload(form, original.value, clearLocation.value)
+  const payload = manualAddressPayload(form, locationPicked.value ? null : original.value, clearLocation.value)
   saving.value = true
   try {
     if (form.id) await memberApi.updateAddress({ ...payload, id: form.id })
@@ -56,6 +59,22 @@ async function save() {
     dialog.value = false
     await load()
   } finally { if (operation.current()) saving.value = false }
+}
+
+function applyMapSelection(selection: AddressMapSelection) {
+  Object.assign(form, {
+    ...(selection.areaId ? { areaId: selection.areaId } : {}),
+    ...(selection.areaName ? { areaName: selection.areaName } : {}),
+    ...(selection.formattedAddress ? { detailAddress: selection.formattedAddress } : {}),
+    longitude: selection.longitude,
+    latitude: selection.latitude,
+    coordSystem: 'GCJ02',
+    locationSource: 'MAP_PICKER',
+    locationPrecision: selection.locationPrecision || 'ADDRESS',
+    locationConfirmed: true,
+  })
+  clearLocation.value = false
+  locationPicked.value = true
 }
 
 async function remove(id: string | number) {
@@ -100,7 +119,7 @@ onMounted(async () => {
       </el-form>
       <template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
     </el-dialog>
-    <AddressMapDialog v-model="mapDialog" :location="form" />
+    <AddressMapDialog v-model="mapDialog" :location="form" :address-text="[form.areaName, form.detailAddress].filter(Boolean).join(' ')" @picked="applyMapSelection" />
   </MemberPage>
 </template>
 

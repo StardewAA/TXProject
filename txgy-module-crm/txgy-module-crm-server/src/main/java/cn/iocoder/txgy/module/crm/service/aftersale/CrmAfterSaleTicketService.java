@@ -76,9 +76,21 @@ public interface CrmAfterSaleTicketService {
     /**
      * 获得问题工单分页
      *
+     * <p>当 pageReqVO.remindType = 工单超时预警（1）时，按「待办：工单超时预警」口径实时查询：
+     * 工单未闭环（待处理 / 处理中）+ 处理人在（本人 + 下属）范围内 + 创建日期距今 ≥ 超时预警天数
+     *
      * @param pageReqVO 分页查询
+     * @param userId    当前登录用户编号（待办归属过滤使用）
      * @return 问题工单分页
      */
-    PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO);
+    PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO, Long userId);
+
+    /**
+     * 获得「工单超时预警」待办数量（实时查询，与分页查询同一口径，不落库）
+     *
+     * @param userId 当前登录用户编号
+     * @return 待办数量
+     */
+    Long getTicketOverdueCount(Long userId);
 
 }

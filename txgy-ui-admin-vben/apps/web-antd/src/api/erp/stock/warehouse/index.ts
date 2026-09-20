@@ -11,6 +11,8 @@ export namespace ErpWarehouseApi {
     sort: number; // 排序
     remark: string; // 备注
     principal: string; // 负责人
+    principalUserId?: number; // 负责人账号，用于调拨确认和通知
+    wmsWarehouseCode?: string; // WMS 权威仓库编码
     warehousePrice: number; // 仓储费，单位：元
     truckagePrice: number; // 搬运费，单位：元
     status: number; // 开启状态
@@ -68,4 +70,9 @@ export function deleteWarehouse(id: number) {
 /** 导出仓库 Excel */
 export function exportWarehouse(params: any) {
   return requestClient.download('/erp/warehouse/export-excel', { params });
+}
+
+/** 导出仓库 PDF */
+export function exportWarehousePdf(params: any) {
+  return requestClient.download('/erp/warehouse/export-pdf', { params });
 }

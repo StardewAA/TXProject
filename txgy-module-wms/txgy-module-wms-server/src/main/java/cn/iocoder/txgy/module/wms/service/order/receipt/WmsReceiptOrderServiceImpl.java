@@ -20,6 +20,7 @@ import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
 import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,8 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
     private WmsReceiptOrderDetailService receiptOrderDetailService;
     @Resource
     private WmsWarehouseService warehouseService;
+    @Resource
+    private WmsWarehousePersonnelService warehousePersonnelService;
     @Resource
     private WmsMerchantService merchantService;
     @Resource
@@ -133,6 +136,8 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
     public String submitReceiptOrderApproval(Long userId, Long id) {
         WmsReceiptOrderDO order = validateReceiptOrderPrepare(id);
         validateApprovalEditable(order);
+        warehousePersonnelService.validateConfigured(order.getWarehouseId());
+        warehousePersonnelService.validateMember(order.getWarehouseId(), userId);
         List<WmsReceiptOrderDetailDO> details = receiptOrderDetailService.validateReceiptOrderDetailListExists(id);
         validateAcceptance(details);
         itemSkuService.validateItemSkuListItemEnabled(details.stream().map(WmsReceiptOrderDetailDO::getSkuId).toList());
@@ -140,6 +145,7 @@ public class WmsReceiptOrderServiceImpl implements WmsReceiptOrderService {
         variables.put("orderId", id);
         variables.put("orderNo", order.getNo());
         variables.put("warehouseId", order.getWarehouseId());
+        variables.put("wmsWarehouseManagerUserId", warehousePersonnelService.getManagerUserId(order.getWarehouseId()));
         variables.put("detailCount", details.size());
         String processId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)

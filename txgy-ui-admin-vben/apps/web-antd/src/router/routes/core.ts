@@ -203,7 +203,7 @@ const coreRoutes: RouteRecordRaw[] = [
             path: 'exam',
             component: () =>
               import('#/views/portal/training/exam/index.vue'),
-            meta: { title: '考试与证书', hideInMenu: true },
+            meta: { title: '云培训学院考试系统', hideInMenu: true },
           },
           {
             name: 'PortalTrainingLive',

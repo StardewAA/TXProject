@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.returns.ErpSaleReturnPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.returns.ErpSaleReturnRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.returns.ErpSaleReturnSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleReturnDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleReturnItemDO;
@@ -134,6 +135,19 @@ public class ErpSaleReturnController {
         ExcelUtils.write(response, "销售退货.xls", "数据", ErpSaleReturnRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出销售退货 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:sale-return:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportSaleReturnPdf(@Valid ErpSaleReturnPageReqVO pageReqVO,
+                                    HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpSaleReturnRespVO> list = buildSaleReturnVOPageResult(
+                saleReturnService.getSaleReturnPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "销售退货.pdf", "销售退货列表",
+                ErpSaleReturnRespVO.class, list);
+    }
+
     private PageResult<ErpSaleReturnRespVO> buildSaleReturnVOPageResult(PageResult<ErpSaleReturnDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -149,7 +163,7 @@ public class ErpSaleReturnController {
         Map<Long, ErpCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(pageResult.getList(), ErpSaleReturnDO::getCustomerId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), saleReturn -> Long.parseLong(saleReturn.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpSaleReturnRespVO.class, saleReturn -> {

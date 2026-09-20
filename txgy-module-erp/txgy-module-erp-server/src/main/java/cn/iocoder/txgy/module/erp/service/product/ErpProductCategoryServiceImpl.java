@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.product;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.category.ErpProductCategoryListReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.category.ErpProductCategorySaveReqVO;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -143,6 +145,9 @@ public class ErpProductCategoryServiceImpl implements ErpProductCategoryService 
 
     @Override
     public List<ErpProductCategoryDO> getProductCategoryList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
         return erpProductCategoryMapper.selectByIds(ids);
     }
 

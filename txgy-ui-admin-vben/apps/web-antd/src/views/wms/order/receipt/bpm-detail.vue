@@ -12,6 +12,7 @@ import {
 import { getInventoryList } from '#/api/wms/inventory';
 import { useDescription } from '#/components/description';
 import { useDetailSchema } from './data';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
 const props = defineProps<{ id?: number | string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const router = useRouter();
@@ -22,14 +23,11 @@ const loading = ref(false);
 const inventory = ref<Record<number, number>>();
 const inventoryLoading = ref(false);
 const onCurrentApproval = computed(() =>
-  route.path === '/bpm/process-instance/detail' &&
+  route.name === 'WmsApprovalDetail' &&
   route.query.id === order.value.processInstanceId
 );
 async function viewApproval() {
-  await router.push({
-    path: '/bpm/process-instance/detail',
-    query: { id: order.value.processInstanceId },
-  });
+  await router.push(buildApprovalDetailLocation('WmsApprovalDetail', order.value.processInstanceId!));
   emit('navigate');
 }
 async function queryInventory() {

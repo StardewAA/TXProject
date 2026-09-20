@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 /**
  * ERP 结算账户 DO
  *
@@ -52,5 +54,9 @@ public class ErpAccountDO extends BaseDO {
      * 是否默认
      */
     private Boolean defaultStatus;
+    /**
+     * 当前余额
+     */
+    private BigDecimal balance;
 
 }

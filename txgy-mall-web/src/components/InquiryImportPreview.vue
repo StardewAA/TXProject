@@ -25,7 +25,7 @@ async function confirm(){
  <section class="inquiry-import-preview">
   <p>现有 {{plan.existingCount}} 行 · Excel {{rows.length}} 行 · 重复 {{plan.duplicateCount}} 行 · 本次新增 {{plan.additions.length}} 行 · 跳过 {{plan.skippedCount}} 行 · 加入后 {{plan.total}} 行</p>
   <fieldset :disabled="confirming||disabled"><legend>重复行处理</legend><label><input v-model="policy" type="radio" value="skip"/> 跳过重复（保留现有明细 / 文件首行）</label><label><input v-model="policy" type="radio" value="keep"/> 保留全部（不合并数量）</label></fieldset>
-  <el-alert title="仅识别SKU或名称/编码及分类、规格、单位一致的重复行。数量或备注不同也会标注，请核对后决定是否跳过；不自动换算单位或匹配ERP分类。" :closable="false"/>
+  <el-alert title="仅识别SKU或名称/编码及分类、规格、单位一致的重复行。数量或备注不同也会标注，请核对后决定是否跳过；系统不会自动换算单位。" :closable="false"/>
   <el-alert v-if="plan.errorCount" type="error" :title="`${plan.errorCount}行存在错误，请修正Excel并重新上传；不静默丢弃错误行`" :closable="false"/>
   <el-alert v-if="plan.total>200" type="error" title="加入后超过200行，请减少文件行数或选择跳过重复" :closable="false"/>
   <el-table :data="plan.rows" max-height="470" empty-text="没有可导入行">

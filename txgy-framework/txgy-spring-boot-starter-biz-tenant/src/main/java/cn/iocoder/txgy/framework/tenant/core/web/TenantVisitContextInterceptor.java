@@ -28,6 +28,7 @@ public class TenantVisitContextInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        request.setAttribute("work_trace_tenant_id", TenantContextHolder.getTenantId());
         // 如果和当前租户编号一致，则直接跳过
         Long visitTenantId = WebFrameworkUtils.getVisitTenantId(request);
         if (visitTenantId == null) {
@@ -50,6 +51,7 @@ public class TenantVisitContextInterceptor implements HandlerInterceptor {
         // 【重点】切换租户编号
         loginUser.setVisitTenantId(visitTenantId);
         TenantContextHolder.setTenantId(visitTenantId);
+        request.setAttribute("work_trace_tenant_id", visitTenantId);
         return true;
     }
 

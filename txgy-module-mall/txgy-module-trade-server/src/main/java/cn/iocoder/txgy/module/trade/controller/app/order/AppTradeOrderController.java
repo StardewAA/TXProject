@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.trade.controller.app.order;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.pay.api.notify.dto.PayOrderNotifyReqDTO;
+import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
+import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.*;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemCommentCreateReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemRespVO;
@@ -10,6 +12,7 @@ import cn.iocoder.txgy.module.trade.convert.order.TradeOrderConvert;
 import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.aftersale.AfterSaleDO;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.framework.order.config.TradeOrderProperties;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
@@ -63,6 +67,8 @@ public class AppTradeOrderController {
     private TradeOrderPaymentDeadlineService paymentDeadline;
     @Resource
     private cn.iocoder.txgy.module.trade.service.delivery.TradeOrderLogisticsService logistics;
+    @Resource
+    private ProductShopApi productShopApi;
 
     @GetMapping("/settlement")
     @Operation(summary = "获得订单结算信息")
@@ -122,6 +128,8 @@ public class AppTradeOrderController {
                 deliveryExpressService.getDeliveryExpress(order.getLogisticsId()) : null;
         // 2.3 最终组合
         var response = TradeOrderConvert.INSTANCE.convert02(order, orderItems, tradeOrderProperties, express);
+        fillDispatchOrigin(response);
+        fillLatestAfterSales(response.getItems());
         response.setErpInventory(erpInventory.list(order.getId()));
         paymentDeadline.fill(order, response, true);
         return success(response);
@@ -151,11 +159,46 @@ public class AppTradeOrderController {
                 convertSet(pageResult.getList(), TradeOrderDO::getId));
         // 最终组合
         var response = TradeOrderConvert.INSTANCE.convertPage02(pageResult, orderItems);
+        fillLatestAfterSales(response.getList().stream().flatMap(row -> row.getItems().stream()).toList());
         // 转换保持相同顺序；新单列表无需逐笔调用支付服务，旧待支付单保守核实历史期限。
         for (int i = 0; i < pageResult.getList().size(); i++) {
             paymentDeadline.fill(pageResult.getList().get(i), response.getList().get(i), false);
         }
         return success(response);
+    }
+
+    private void fillDispatchOrigin(AppTradeOrderDetailRespVO response) {
+        if (response.getShopId() == null || response.getShopId() <= 0) {
+            return;
+        }
+        try {
+            CommonResult<ProductShopRespDTO> result = productShopApi.getShop(response.getShopId());
+            if (result != null && result.isSuccess() && result.getData() != null) {
+                response.setDispatchOriginAddress(result.getData().getDispatchAddress());
+            }
+        } catch (Exception exception) {
+            // 发货地仅用于预计路线，商品服务短暂不可用不能影响订单详情主链路。
+            log.warn("读取订单店铺发货地址失败，orderId={}, shopId={}", response.getId(), response.getShopId(), exception);
+        }
+    }
+
+    private void fillLatestAfterSales(List<AppTradeOrderItemRespVO> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        Map<Long, AfterSaleDO> latest = afterSaleService.getLatestAfterSales(getLoginUserId(),
+                items.stream().map(AppTradeOrderItemRespVO::getId).filter(Objects::nonNull).toList());
+        for (AppTradeOrderItemRespVO item : items) {
+            AfterSaleDO afterSale = latest.get(item.getId());
+            if (afterSale == null) {
+                continue;
+            }
+            String reason = afterSale.getAuditReason() != null && !afterSale.getAuditReason().isBlank()
+                    ? afterSale.getAuditReason() : afterSale.getReceiveReason();
+            item.setLatestAfterSaleId(afterSale.getId())
+                    .setLatestAfterSaleStatus(afterSale.getStatus())
+                    .setLatestAfterSaleReason(reason);
+        }
     }
 
     @GetMapping("/get-count")

@@ -55,7 +55,7 @@ it('uncertain send cannot be replaced by new text, card or human request without
 it('cards require explicit send, carry only reference fields and preserve draft text', async () => {
   const state = useKefuConversation(initial(), false); await vi.advanceTimersByTimeAsync(0); expect(mocks.api.send).not.toHaveBeenCalled(); state.input.value = '保留草稿'
   const resource = { resourceType: 'PRODUCT' as const, resourceId: '10' }; mocks.api.send.mockRejectedValueOnce(new Error('连接中断')); await state.sendResource(resource); await state.retryPending()
-  expect(mocks.api.send.mock.calls[0]?.[0]).toEqual(mocks.api.send.mock.calls[1]?.[0]); expect(mocks.api.send.mock.calls[0]?.[0].text).toBeUndefined(); expect(state.input.value).toBe('保留草稿')
+  expect(mocks.api.send.mock.calls[0]?.[0]).toEqual(mocks.api.send.mock.calls[1]?.[0]); expect(mocks.api.send.mock.calls[0]?.[0].text).toBeUndefined(); expect(state.input.value).toBe('保留草稿'); expect(state.sentResourceKey.value).toBe('PRODUCT:10')
 })
 it('human request uses version and shows offline留言 only from confirmed thread', async () => {
   const state = useKefuConversation(initial(), false); await vi.advanceTimersByTimeAsync(0); await state.human(); await state.human()

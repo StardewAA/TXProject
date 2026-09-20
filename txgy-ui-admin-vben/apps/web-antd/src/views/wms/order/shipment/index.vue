@@ -3,7 +3,8 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { WmsShipmentOrderApi } from '#/api/wms/order/shipment';
 import type { WmsShipmentOrderDetailApi } from '#/api/wms/order/shipment/detail';
 
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import {
@@ -51,6 +52,7 @@ const [SimulateModal, simulateModalApi] = useVbenModal({
 });
 
 defineOptions({ name: 'WmsShipmentOrder' });
+const route = useRoute();
 
 const approvalLabels: Record<number, string> = { '-1': '待提交', 1: '审批中', 2: '已通过', 3: '已拒绝', 4: '已取消' };
 const printRef = ref<InstanceType<typeof ShipmentOrderPrint>>();
@@ -91,6 +93,12 @@ function handleCreate() {
 function handleEdit(row: WmsShipmentOrderApi.ShipmentOrder) {
   formModalApi.setData({ id: row.id!, formType: 'update' }).open();
 }
+
+watch(() => route.query.restartId, (value) => {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  formModalApi.setData({ id, formType: 'update' }).open();
+}, { immediate: true });
 
 /** 查看出库单详情 */
 function handleDetail(row: WmsShipmentOrderApi.ShipmentOrder) {

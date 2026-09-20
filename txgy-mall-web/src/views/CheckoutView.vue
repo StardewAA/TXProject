@@ -9,10 +9,13 @@ import { useRouter } from 'vue-router'
 import { memberApi, systemApi, tradeApi, type AreaNode, type SettlementItem } from '@/api/mall'
 import EmptyState from '@/components/EmptyState.vue'
 import ServiceEntry from '@/components/ServiceEntry.vue'
+import AddressMapDialog from '@/components/AddressMapDialog.vue'
+import type { AddressMapSelection } from '@/components/AddressMapDialog.vue'
 import { useCartStore } from '@/stores/cart'
 import { useAccountOperation } from '@/composables/useAccountOperation'
 import type { Address, Identifier } from '@/types/mall'
 import { formatMoney, normalizeImage, propertyText } from '@/utils/format'
+import { addressLocationText, manualAddressPayload } from '@/utils/fulfillment'
 
 interface SettlementView {
   items?: Array<Record<string, unknown>>
@@ -38,6 +41,7 @@ const needsVerification = ref(false)
 const recoveryError = ref('')
 let checkoutIntent: CheckoutIntent | undefined
 const addressDialog = ref(false)
+const addressMapDialog = ref(false)
 const savingAddress = ref(false)
 const areaTree = ref<AreaNode[]>([])
 const addressForm = reactive<Address>({ id: 0, name: '', mobile: '', areaId: undefined, detailAddress: '', defaultStatus: false })
@@ -49,10 +53,11 @@ let settlementRequest = 0
 function discardStaleDraft() {
   if (isCurrentTenantEpoch(ownerEpoch)) return
   settlementRequest++; items.value = []; addresses.value = []; settlement.value = null
-  addressDialog.value = false; addressId.value = undefined; couponId.value = undefined; remark.value = ''
+  addressDialog.value = false; addressMapDialog.value = false; addressId.value = undefined; couponId.value = undefined; remark.value = ''
   submitted.value = false; needsVerification.value = false
   recoveryError.value = ''; checkoutIntent = undefined
-  Object.assign(addressForm, { id:0, name:'', mobile:'', areaId:undefined, detailAddress:'', defaultStatus:false })
+  Object.assign(addressForm, { id:0, name:'', mobile:'', areaId:undefined, detailAddress:'', defaultStatus:false,
+    longitude:null, latitude:null, coordSystem:null, locationSource:null, locationPrecision:null, locationConfirmed:false })
 }
 window.addEventListener('mall:token-updated', discardStaleDraft)
 onBeforeUnmount(() => window.removeEventListener('mall:token-updated', discardStaleDraft))
@@ -115,12 +120,23 @@ async function submit() {
 
 async function openAddressDialog() {
   if (!operation.current() || savingAddress.value) return
-  Object.assign(addressForm, { id: 0, name: '', mobile: '', areaId: undefined, detailAddress: '', defaultStatus: addresses.value.length === 0 })
+  Object.assign(addressForm, { id: 0, name: '', mobile: '', areaId: undefined, detailAddress: '', defaultStatus: addresses.value.length === 0,
+    longitude: null, latitude: null, coordSystem: null, locationSource: null, locationPrecision: null, locationConfirmed: false })
   addressDialog.value = true
   if (!areaTree.value.length) {
     const tree = await systemApi.getAreaTree()
     if (operation.current()) areaTree.value = tree
   }
+}
+
+function applyMapSelection(selection: AddressMapSelection) {
+  Object.assign(addressForm, {
+    ...(selection.areaId ? { areaId: selection.areaId } : {}),
+    ...(selection.areaName ? { areaName: selection.areaName } : {}),
+    ...(selection.formattedAddress ? { detailAddress: selection.formattedAddress } : {}),
+    longitude: selection.longitude, latitude: selection.latitude, coordSystem: 'GCJ02',
+    locationSource: 'MAP_PICKER', locationPrecision: selection.locationPrecision || 'ADDRESS', locationConfirmed: true,
+  })
 }
 
 async function saveAddress() {
@@ -130,10 +146,7 @@ async function saveAddress() {
   }
   savingAddress.value = true
   try {
-    const id = await memberApi.createAddress({
-      name: addressForm.name.trim(), mobile: addressForm.mobile, areaId: addressForm.areaId,
-      detailAddress: addressForm.detailAddress.trim(), defaultStatus: Boolean(addressForm.defaultStatus),
-    })
+    const id = await memberApi.createAddress(manualAddressPayload(addressForm))
     if (!operation.current()) return
     addressId.value = id
     addressDialog.value = false
@@ -204,11 +217,13 @@ onMounted(async () => {
         <div class="checkout-total"><span>应付金额</span><strong>{{ price.payPrice === undefined ? '待结算' : `¥${formatMoney(payablePrice)}` }}</strong></div>
         <el-button type="primary" size="large" :loading="submitting" :disabled="loading || price.payPrice === undefined" @click="submit">提交订单</el-button>
       </section>
-      <el-dialog v-model="addressDialog" title="新增收货地址" width="560px"><el-form label-position="top"><div class="form-row"><el-form-item label="收货人"><el-input v-model="addressForm.name" /></el-form-item><el-form-item label="手机号"><el-input v-model="addressForm.mobile" maxlength="11" /></el-form-item></div><el-form-item label="省/市/区"><el-cascader v-model="addressForm.areaId" :options="areaTree" :props="{ value: 'id', label: 'name', emitPath: false }" filterable clearable style="width: 100%" /></el-form-item><el-form-item label="详细地址"><el-input v-model="addressForm.detailAddress" type="textarea" maxlength="120" /></el-form-item><el-checkbox v-model="addressForm.defaultStatus">设为默认地址</el-checkbox></el-form><template #footer><el-button @click="addressDialog = false">取消</el-button><el-button type="primary" :loading="savingAddress" @click="saveAddress">保存并使用</el-button></template></el-dialog>
+      <el-dialog v-model="addressDialog" title="新增收货地址" width="560px"><el-form label-position="top"><div class="form-row"><el-form-item label="收货人"><el-input v-model="addressForm.name" /></el-form-item><el-form-item label="手机号"><el-input v-model="addressForm.mobile" maxlength="11" /></el-form-item></div><el-form-item label="省/市/区"><el-cascader v-model="addressForm.areaId" :options="areaTree" :props="{ value: 'id', label: 'name', emitPath: false }" filterable clearable style="width: 100%" /></el-form-item><el-form-item label="详细地址"><el-input v-model="addressForm.detailAddress" type="textarea" maxlength="120" /></el-form-item><el-form-item label="地图点位（可选）"><div><el-button @click="addressMapDialog = true">地图选点</el-button><p class="address-location">{{ addressLocationText(addressForm) }}</p></div></el-form-item><el-checkbox v-model="addressForm.defaultStatus">设为默认地址</el-checkbox></el-form><template #footer><el-button @click="addressDialog = false">取消</el-button><el-button type="primary" :loading="savingAddress" @click="saveAddress">保存并使用</el-button></template></el-dialog>
+      <AddressMapDialog v-model="addressMapDialog" :location="addressForm" :address-text="[addressForm.areaName, addressForm.detailAddress].filter(Boolean).join(' ')" @picked="applyMapSelection" />
     </template>
   </div>
 </template>
 
 <style scoped lang="scss">
 .checkout-page { max-width: 1220px; }.checkout-section { margin-bottom: 18px; padding: 24px; }.checkout-section h2 { margin: 0; font-size: 18px; }.checkout-section__title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }.address-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }.address-list button { position: relative; min-height: 110px; padding: 18px; border: 1px solid var(--line); border-radius: 5px; background: white; text-align: left; }.address-list button.active { border: 2px solid var(--brand); background: #fffaf7; }.address-list strong, .address-list span { display: block; }.address-list span { margin-top: 12px; color: var(--muted); line-height: 1.5; }.address-list i { position: absolute; right: 0; bottom: 0; padding: 3px 8px; background: var(--brand); color: white; font-size: 11px; font-style: normal; }.settlement-items > div { display: grid; grid-template-columns: 70px 1fr 180px 140px; gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }.settlement-image { width: 64px; height: 64px; background: #f5f5f5; }.settlement-image img { width: 100%; height: 100%; object-fit: cover; }.settlement-items small { display: block; margin-top: 7px; color: var(--muted); }.checkout-summary { width: 100%; margin: 0; padding: 26px 30px; border-top: 3px solid var(--brand); box-shadow: 0 8px 22px rgba(31,42,54,.08); }.checkout-summary > div { width: 430px; display: flex; justify-content: space-between; margin: 0 0 14px auto; color: var(--muted); }.checkout-summary b { color: var(--ink); }.checkout-total { align-items: baseline; padding-top: 18px; border-top: 1px solid var(--line); }.checkout-total strong { color: #df421f; font-size: 28px; }.checkout-summary :deep(.el-button) { display: block; width: 260px; margin: 18px 0 0 auto; }.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.address-location { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 </style>

@@ -31,6 +31,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
+    { field: 'id', title: '店铺编号', width: 120 },
     { field: 'name', title: '店铺名称', minWidth: 180 },
     { field: 'enterpriseName', title: '企业名称', minWidth: 180 },
     { field: 'enterpriseId', title: '企业编号', width: 110 },

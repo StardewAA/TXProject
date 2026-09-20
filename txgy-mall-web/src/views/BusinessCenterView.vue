@@ -53,7 +53,7 @@ onMounted(async()=>{try{row.value=await enterpriseApi.mine();if(row.value?.statu
    <el-alert v-else-if="row?.status!==1" title="企业尚未审核通过，请完善资料或等待后台审核" type="warning" :closable="false"/>
    <template v-else-if="sales"><el-alert v-if="!shops.length" title="销售权限未开通：须为供应商身份，且由后台关联启用店铺" type="warning" :closable="false"/><template v-else><el-alert title="企业认证已通过，以下为已关联店铺" type="success" :closable="false"/><div v-for="shop in shops" :key="shop.id" class="shop"><h3>{{shop.name}}</h3><BusinessSummary :shop-id="Number(shop.id)"/><div class="shortcuts"><MallLink :to="'/shops/'+shop.id">查看店铺</MallLink><MallLink :to="`/sales/shops/${shop.id}/products`">管理商品</MallLink><MallLink :to="`/sales/shops/${shop.id}/products/new`">发布商品</MallLink><MallLink :to="`/sales/shops/${shop.id}/orders`">销售订单</MallLink><MallLink :to="`/sales/shops/${shop.id}/after-sales`">售后处理</MallLink></div></div><p>商品和销售订单使用专用会员授权接口。供应商可审核售后和验收退货，实际退款仍由平台处理，店铺结算提供账单核对与确认，真实自动打款未接通。</p></template></template>
    <template v-else><BusinessSummary/><el-alert title="企业注册与资质认证成功，当前账号为企业采购人员" type="success" :closable="false"/><div class="shortcuts"><MallLink to="/purchase/inquiries/new">发布询价单 / Excel 导入</MallLink><MallLink to="/purchase/inquiries">管理询价单</MallLink><MallLink to="/goods">选购商品</MallLink><MallLink to="/cart">采购清单</MallLink><MallLink to="/purchase/orders">采购订单与收货</MallLink><MallLink to="/purchase/after-sales">退款售后</MallLink></div></template>
-   <p v-if="!sales">询价提交仅保存在商城，真实 ERP、供应商报价及转订单尚未对接。</p>
+   <p v-if="!sales">询价提交后可在采购中心继续查看和管理。</p>
    <p v-else>仅可经营后台明确授权的店铺；灰色菜单为待开发功能，暂不开放操作。</p>
   </main>
  </div>

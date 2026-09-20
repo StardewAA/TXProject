@@ -16,6 +16,7 @@ import cn.iocoder.txgy.module.wms.service.order.check.WmsCheckOrderService;
 import cn.iocoder.txgy.module.wms.service.order.movement.WmsMovementOrderService;
 import cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderService;
 import cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService;
+import cn.iocoder.txgy.module.wms.service.permission.WmsWarehouseAccessService;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -42,6 +44,10 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
 
     @Resource
     private WmsWarehouseMapper warehouseMapper;
+    @Resource
+    private WmsWarehousePersonnelService warehousePersonnelService;
+    @Resource
+    private WmsWarehouseAccessService warehouseAccessService;
 
     @Resource
     @Lazy // 延迟加载，避免循环依赖
@@ -71,6 +77,9 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
                 .setStatus(CommonStatusEnum.ENABLE.getStatus())
                 .setDataVersion(1L);
         warehouseMapper.insert(warehouse);
+        if (createReqVO.getManagerUserId() != null) {
+            warehousePersonnelService.replacePersonnel(warehouse.getId(), createReqVO.getManagerUserId(), createReqVO.getMemberUserIds());
+        }
         return warehouse.getId();
     }
 
@@ -89,6 +98,9 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
                 .setStatus(current.getStatus() == null ? CommonStatusEnum.ENABLE.getStatus() : current.getStatus())
                 .setDataVersion(current.getDataVersion() == null ? 1L : current.getDataVersion() + 1);
         warehouseMapper.updateById(updateObj);
+        if (updateReqVO.getManagerUserId() != null) {
+            warehousePersonnelService.replacePersonnel(updateReqVO.getId(), updateReqVO.getManagerUserId(), updateReqVO.getMemberUserIds());
+        }
     }
 
     private void validateWarehouseSaveData(WmsWarehouseSaveReqVO reqVO) {
@@ -125,6 +137,7 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
 
         // 删除
         warehouseMapper.deleteById(id);
+        warehousePersonnelService.clearPersonnel(id);
     }
 
     private void validateWarehouseUnused(Long id) {
@@ -170,14 +183,19 @@ public class WmsWarehouseServiceImpl implements WmsWarehouseService {
 
     @Override
     public PageResult<WmsWarehouseDO> getWarehousePage(WmsWarehousePageReqVO pageReqVO) {
-        return warehouseMapper.selectPage(pageReqVO);
+        PageResult<WmsWarehouseDO> result = warehouseMapper.selectPage(pageReqVO);
+        if (warehouseAccessService.hasGlobalAccess()) return result;
+        Set<Long> ids = warehouseAccessService.getReadableWarehouseIds();
+        List<WmsWarehouseDO> filtered = result.getList().stream().filter(row -> ids.contains(row.getId())).toList();
+        return new PageResult<>(filtered, (long) filtered.size());
     }
 
     @Override
     public List<WmsWarehouseDO> getWarehouseList() {
-        return warehouseMapper.selectSimpleList().stream()
-                .filter(warehouse -> warehouse.getStatus() == null || warehouse.getStatus() == 0)
-                .toList();
+        List<WmsWarehouseDO> list = warehouseMapper.selectSimpleList();
+        if (warehouseAccessService.hasGlobalAccess()) return list;
+        Set<Long> ids = warehouseAccessService.getReadableWarehouseIds();
+        return list.stream().filter(row -> ids.contains(row.getId())).toList();
     }
 
     @Override

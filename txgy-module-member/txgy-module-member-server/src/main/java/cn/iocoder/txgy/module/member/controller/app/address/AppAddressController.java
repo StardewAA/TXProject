@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
@@ -30,10 +31,15 @@ public class AppAddressController {
     @Resource
     private AddressService addressService;
 
+    @Value("${mall.address-map.enabled:false}")
+    private boolean addressMapEnabled;
+    @Value("${mall.address-map.provider:NONE}")
+    private String addressMapProvider;
+
     @GetMapping("/location-capability")
     @Operation(summary = "地址地图能力；未配置时使用手工地址")
     public CommonResult<AppAddressLocationCapabilityRespVO> getLocationCapability() {
-        return success(new AppAddressLocationCapabilityRespVO());
+        return success(new AppAddressLocationCapabilityRespVO(addressMapEnabled, addressMapProvider));
     }
 
     @PostMapping("/create")

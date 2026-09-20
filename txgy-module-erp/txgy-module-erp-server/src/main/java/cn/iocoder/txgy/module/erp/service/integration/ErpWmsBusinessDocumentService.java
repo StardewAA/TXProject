@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.integration;
 
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWmsExecutionCallbackReqDTO;
@@ -18,6 +19,7 @@ import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpCustomerMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleReturnItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleReturnMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.stock.ErpWarehouseMapper;
+import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.infra.api.file.FileApi;
 import cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationAcceptedRespDTO;
@@ -37,7 +39,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 import static cn.iocoder.txgy.module.wms.enums.integration.WmsIntegrationConstants.SOURCE_ERP;
+import static cn.iocoder.txgy.module.wms.enums.integration.WmsIntegrationConstants.MATERIAL_RAW;
 
 /** ERP 采购入库、客户退货和采购退货的 WMS 提交与结果回调。 */
 @Service
@@ -73,6 +78,117 @@ public class ErpWmsBusinessDocumentService {
         prepareAfterCommit(id, PURCHASE_RECEIPT, document.getNo(), document.getOrderNo(),
                 document.getBusinessChainNo(), document.getWmsEventVersion(), supplier.getPartnerCode(),
                 document.getFileUrl(), items, true);
+    }
+
+    /**
+     * 手动申请入库到 WMS（按钮触发）。
+     *
+     * <p>适用于「审批自动推送」开关关闭的场景，用户在 ERP 采购入库单详情页点按钮主动申请。
+     * 实施约束（与 {@link #preparePurchaseReceiptAfterCommit} 区别）：</p>
+     * <ol>
+     *   <li>校验入库单 {@code status == APPROVE(20)}；</li>
+     *   <li>校验入库单 {@code wmsStatus ∈ \{null, "NOT_SUBMITTED", "FAILED"\}}（避免重复申请）；</li>
+     *   <li>校验所有明细 {@code product.materialType == "RAW_MATERIAL"}（WMS 强制要求）；</li>
+     *   <li>构造请求时强制覆盖每个 item 的 {@code warehouseCode} 为目标仓库的 {@code wmsWarehouseCode}
+     *       （WMS validateOrder L221-222 强制"同一申请只能包含一个仓库"）；</li>
+     *   <li>Controller 立即返回 {@code WmsIntegrationAcceptedRespDTO\{accepted:true, businessStatus:"SUBMIT_PENDING"\}}，
+     *       事务后异步调 {@link #send} 真正发出 RPC。</li>
+     * </ol>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public WmsIntegrationAcceptedRespDTO applyInboundToWms(Long purchaseInId, Long targetErpWarehouseId, String remark) {
+        // 1. 校验入库单：必须已审批
+        ErpPurchaseInDO document = purchaseInMapper.selectById(purchaseInId);
+        if (document == null) {
+            throw exception(PURCHASE_IN_NOT_EXISTS);
+        }
+        if (!ErpAuditStatus.APPROVE.getStatus().equals(document.getStatus())) {
+            throw exception(PURCHASE_IN_NOT_APPROVE);
+        }
+        // 1.2 校验 wms_status：null / NOT_SUBMITTED / FAILED 才允许重新申请
+        String currentWmsStatus = document.getWmsStatus();
+        if (currentWmsStatus != null
+                && !"NOT_SUBMITTED".equals(currentWmsStatus) && !"FAILED".equals(currentWmsStatus)) {
+            throw exception(PURCHASE_IN_WMS_ALREADY_SUBMITTED, document.getNo());
+        }
+
+        // 2. 校验目标 ERP 仓库：必须已配置 wmsWarehouseCode 且启用
+        ErpWarehouseDO targetWarehouse = warehouseMapper.selectById(targetErpWarehouseId);
+        if (targetWarehouse == null) {
+            throw exception(WAREHOUSE_NOT_EXISTS);
+        }
+        if (CommonStatusEnum.isDisable(targetWarehouse.getStatus())) {
+            throw exception(WAREHOUSE_NOT_ENABLE, targetWarehouse.getName());
+        }
+        String targetWmsCode = targetWarehouse.getWmsWarehouseCode();
+        if (targetWmsCode == null || targetWmsCode.isBlank()) {
+            throw exception(WAREHOUSE_WMS_CODE_NOT_CONFIGURED, targetWarehouse.getName());
+        }
+
+        // 3. 加载明细并校验：所有物料必须为 RAW_MATERIAL
+        ErpSupplierDO supplier = requireDocument(supplierMapper.selectById(document.getSupplierId()), "供应商");
+        List<ErpPurchaseInItemDO> purchaseInItems = purchaseInItemMapper.selectListByInId(purchaseInId);
+        if (purchaseInItems == null || purchaseInItems.isEmpty()) {
+            throw new IllegalStateException("采购入库单 " + document.getNo() + " 明细为空，无法申请入库到 WMS");
+        }
+        // 4. 构造 WmsOrderRequestDTO（强制覆盖每个 item 的 warehouseCode 为目标仓库的 wmsWarehouseCode）
+        List<WmsIntegrationDocumentItemDTO> itemDtos = new ArrayList<>(purchaseInItems.size());
+        for (int index = 0; index < purchaseInItems.size(); index++) {
+            ErpPurchaseInItemDO source = purchaseInItems.get(index);
+            ErpProductDO product = requireDocument(productMapper.selectById(source.getProductId()), "商品");
+            ErpProductUnitDO unit = requireDocument(unitMapper.selectById(product.getUnitId()), "商品单位");
+            if (!MATERIAL_RAW.equals(product.getMaterialType())) {
+                throw exception(PURCHASE_IN_MATERIAL_NOT_RAW, document.getNo());
+            }
+            itemDtos.add(new WmsIntegrationDocumentItemDTO().setLineNo(index + 1)
+                    .setSourceLineNo(index + 1).setMaterialCode(requireValue(product.getMaterialCode(), "统一物料编码"))
+                    .setSkuCode(product.getMaterialCode() + "-DEFAULT")
+                    .setMaterialType(requireValue(product.getMaterialType(), "物料类型"))
+                    .setMaterialNameSnapshot(product.getName()).setSpecificationSnapshot(product.getStandard())
+                    .setUnitCode(requireValue(unit.getCode(), "统一单位编码")).setUnitNameSnapshot(unit.getName())
+                    // 强制覆盖：WMS 要求同一申请只能包含一个仓库
+                    .setWarehouseCode(targetWmsCode)
+                    .setRequiredQuantity(source.getCount()).setQualityRequiredSnapshot(product.getQualityRequired()));
+        }
+
+        // 5. 落出站幂等记录 + 更新入库单 wms_status=SUBMIT_PENDING
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        long eventVersion = document.getWmsEventVersion() == null ? 1L : document.getWmsEventVersion() + 1;
+        String businessChainNo = document.getBusinessChainNo() != null
+                ? document.getBusinessChainNo() : "BC-" + document.getNo();
+        WmsOrderRequestDTO request = new WmsOrderRequestDTO().setBusinessChainNo(businessChainNo)
+                .setSourceOrderNo(document.getNo()).setOriginalOrderNo(document.getOrderNo())
+                .setPartnerCode(requireValue(supplier.getPartnerCode(), "往来企业统一编码"))
+                .setOrderType(PURCHASE_RECEIPT).setEventVersion(eventVersion)
+                .setItems(itemDtos);
+        request.setRequestId(UUID.randomUUID().toString());
+        request.setTenantId(tenantId);
+        request.setSourceModule(SOURCE_ERP);
+        request.setOccurredAt(LocalDateTime.now());
+        recordService.createOutbound(request.getRequestId(), PURCHASE_RECEIPT, document.getNo(), eventVersion, request);
+        updateDocument(purchaseInId, PURCHASE_RECEIPT, businessChainNo, "SUBMIT_PENDING", null,
+                document.getWmsEventVersion(), null);
+
+        // 6. 事务后异步真正发送 RPC（失败由 send 回写 FAILED 状态供用户重试）
+        Runnable sender = () -> TenantUtils.execute(tenantId, () -> {
+            if (remark != null && !remark.isBlank()) {
+                log.info("[applyInboundToWms][purchaseInId({}) 用户备注: {}]", purchaseInId, remark);
+            }
+            send(purchaseInId, PURCHASE_RECEIPT, request);
+        });
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            sender.run();
+        } else {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { sender.run(); }
+            });
+        }
+
+        // 7. 立即返回，前端提示"已提交，WMS 处理中"
+        return new WmsIntegrationAcceptedRespDTO().setAccepted(true)
+                .setRequestId(request.getRequestId())
+                .setBusinessStatus("SUBMIT_PENDING")
+                .setProcessedVersion(eventVersion);
     }
 
     public void prepareCustomerReturnReceiptAfterCommit(Long id) {

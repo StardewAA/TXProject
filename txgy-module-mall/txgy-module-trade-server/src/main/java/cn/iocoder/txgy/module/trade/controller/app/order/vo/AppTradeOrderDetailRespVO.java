@@ -129,6 +129,9 @@ public class AppTradeOrderDetailRespVO extends AppTradeOrderPaymentRespVO {
     private String receiverLocationPrecision;
     private LocalDateTime receiverLocationConfirmedAt;
 
+    @Schema(description = "订单店铺登记的发货地址，仅用于本人订单预计物流路线")
+    private String dispatchOriginAddress;
+
     @Schema(description = "自提门店编号", example = "1088")
     private Long pickUpStoreId;
 

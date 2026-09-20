@@ -3,6 +3,7 @@
   <s-layout
     title="防腐保温商城"
     navbar="normal"
+    tenantEntry
     tabbar="/pages/index/index"
     :bgStyle="{ color: '#f4f7fb' }"
     onShareAppMessage
@@ -157,10 +158,7 @@
   import { computed, ref } from 'vue';
   import sheep from '@/sheep';
   import $share from '@/sheep/platform/share';
-  import {
-    getMallCategory,
-    mallCategories,
-  } from '@/sheep/data/mall-catalog';
+  import { getMallCategory } from '@/sheep/data/mall-catalog';
   import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
 
   // 隐藏原生 tabBar，使用商城自定义 tabBar。
@@ -168,10 +166,11 @@
     fail: () => {},
   });
 
-  const popularCategories = mallCategories.slice(0, 8);
   const shopShowcase = ref();
   const products = ref([]);
+  const catalogCategories = ref([]);
   const catalogSource = ref('loading');
+  const popularCategories = computed(() => catalogCategories.value.slice(0, 8));
   const featuredProducts = computed(() =>
     (Array.isArray(products.value) ? products.value : []).filter(Boolean).slice(0, 6),
   );
@@ -180,7 +179,10 @@
     (Array.isArray(products.value) ? products.value : []).filter(
       (product) => product?.categoryKey === categoryKey,
     ).length;
-  const categoryColor = (categoryKey) => getMallCategory(categoryKey)?.color || '#0f766e';
+  const categoryColor = (categoryKey) =>
+    catalogCategories.value.find((category) => category.key === categoryKey)?.color ||
+    getMallCategory(categoryKey)?.color ||
+    '#0f766e';
   const productGradient = (product) =>
     `linear-gradient(135deg, ${categoryColor(product?.categoryKey)} 0%, #0f172a 100%)`;
   const formatPrice = (price) => {
@@ -209,6 +211,7 @@
       const result = await loadMallCatalog(force);
       if (Array.isArray(result?.products)) {
         products.value = result.products.filter(Boolean);
+        catalogCategories.value = Array.isArray(result?.categories) ? result.categories.filter(Boolean) : [];
         catalogSource.value = 'api';
       }
     } catch (error) {

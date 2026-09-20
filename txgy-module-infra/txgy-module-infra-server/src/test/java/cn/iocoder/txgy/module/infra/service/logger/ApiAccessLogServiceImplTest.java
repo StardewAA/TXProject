@@ -24,6 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Import(ApiAccessLogServiceImpl.class)
 public class ApiAccessLogServiceImplTest extends BaseDbUnitTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private cn.iocoder.txgy.module.infra.service.worklog.WorkLogService workLogService;
+
     @Resource
     private ApiAccessLogServiceImpl apiAccessLogService;
 

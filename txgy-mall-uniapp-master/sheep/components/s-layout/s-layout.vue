@@ -24,7 +24,7 @@
         :showLeftButton="showLeftButton"
       />
       <view class="page-body" :style="[bgBody]">
-        <s-tenant-entry />
+        <s-tenant-entry v-if="tenantEntry" />
         <view v-if="userStore.sessionError" class="session-recovery">
           <view>{{ userStore.sessionError }}</view>
           <button v-if="userStore.isLogin" size="mini" @tap="userStore.retrySession()">重新核验</button>
@@ -79,6 +79,10 @@
   // #endif
 
   const props = defineProps({
+    tenantEntry: {
+      type: Boolean,
+      default: false,
+    },
     title: {
       type: String,
       default: '',

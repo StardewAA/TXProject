@@ -26,6 +26,13 @@ public class ErpInquirySaveReqVO {
     private String paymentTerm;
     private String fileUrl;
     private String remark;
+    /**
+     * 受邀供应商编号列表。
+     *
+     * <p>为空表示「不限受邀范围」（历史行为：所有供应商都可报价），
+     * 非空时只有名单内的供应商能报价、也只有他们能在供应商视角看到该询价单。</p>
+     */
+    private List<Long> supplierIds;
     @Valid
     @NotEmpty(message = "询价明细不能为空")
     private List<Item> items;

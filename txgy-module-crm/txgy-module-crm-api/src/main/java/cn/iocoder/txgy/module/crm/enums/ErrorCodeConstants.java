@@ -169,6 +169,8 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_VISIT_PLAN_UPDATE_FAIL_NOT_ENABLE = new ErrorCode(1_020_016_003, "更新回访计划失败，原因：计划已生成回访任务，不可编辑周期配置");
     ErrorCode AFTER_SALE_VISIT_PLAN_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_016_004, "删除回访计划失败，原因：计划已生成回访任务，不允许删除");
     ErrorCode AFTER_SALE_VISIT_PLAN_DATE_RANGE_INVALID = new ErrorCode(1_020_016_005, "回访计划的生效结束日期不能早于生效开始日期");
+    ErrorCode AFTER_SALE_VISIT_PLAN_WARRANTY_EXISTS = new ErrorCode(1_020_016_006, "该质保档案已绑定回访计划，不能重复创建");
+    ErrorCode AFTER_SALE_VISIT_PLAN_START_DATE_BEFORE_ACCEPT_DATE = new ErrorCode(1_020_016_007, "回访计划开始日期不能早于关联质保档案的完工日期");
 
     // ========== 售后回访任务 1_020_017_000 ==========
     ErrorCode AFTER_SALE_VISIT_TASK_NOT_EXISTS = new ErrorCode(1_020_017_000, "回访任务不存在");
@@ -177,11 +179,16 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_VISIT_TASK_WARRANTY_NOT_EXISTS = new ErrorCode(1_020_017_003, "回访任务关联的质保档案不存在");
     ErrorCode AFTER_SALE_VISIT_TASK_DELETE_FAIL_FINISH = new ErrorCode(1_020_017_004, "删除回访任务失败，原因：任务已完成，不允许删除");
     ErrorCode AFTER_SALE_VISIT_TASK_UPDATE_FAIL_FINISH = new ErrorCode(1_020_017_005, "更新回访任务失败，原因：任务已完成，不允许编辑");
+    ErrorCode AFTER_SALE_VISIT_TASK_FINISH_FAIL_RECORD_NOT_FILLED = new ErrorCode(1_020_017_006, "完成回访任务失败，原因：关联的回访记录尚未填写完成");
+    ErrorCode AFTER_SALE_VISIT_TASK_NOT_ARRIVED = new ErrorCode(1_020_017_007, "提交回访记录失败，原因：未到计划回访日期（{}），暂不允许提交回访");
 
     // ========== 售后回访记录 1_020_018_000 ==========
     ErrorCode AFTER_SALE_VISIT_RECORD_NOT_EXISTS = new ErrorCode(1_020_018_000, "回访记录不存在");
     ErrorCode AFTER_SALE_VISIT_RECORD_DELETE_DENIED = new ErrorCode(1_020_018_001, "删除回访记录失败，原因：没有权限");
     ErrorCode AFTER_SALE_VISIT_RECORD_OPERATE_DENIED = new ErrorCode(1_020_018_002, "回访记录操作失败，原因：不是登记人本人，且没有管理员权限");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TIME_FUTURE = new ErrorCode(1_020_018_003, "回访时间不能晚于今天");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TIME_BEFORE_ACCEPT = new ErrorCode(1_020_018_004, "回访时间不能早于项目完工验收日期");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TASK_EXISTS = new ErrorCode(1_020_018_005, "该回访任务已存在回访记录，请直接编辑原记录");
 
     // ========== 售后问题工单 1_020_019_000 ==========
     ErrorCode AFTER_SALE_TICKET_NOT_EXISTS = new ErrorCode(1_020_019_000, "问题工单不存在");

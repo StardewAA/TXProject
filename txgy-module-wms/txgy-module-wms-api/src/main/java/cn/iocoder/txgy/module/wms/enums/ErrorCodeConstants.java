@@ -15,7 +15,11 @@ public interface ErrorCodeConstants {
     ErrorCode WAREHOUSE_CODE_DUPLICATE = new ErrorCode(1_060_100_002, "仓库编号重复");
     ErrorCode WAREHOUSE_HAS_ORDER = new ErrorCode(1_060_100_004, "删除失败！仓库已被{}使用！");
     ErrorCode WAREHOUSE_HAS_INVENTORY = new ErrorCode(1_060_100_005, "删除失败！仓库已存在库存余额！");
-    ErrorCode WAREHOUSE_NOT_ENABLED = new ErrorCode(1_060_100_006, "仓库已关闭，无法用于出入库业务");
+    ErrorCode WAREHOUSE_MANAGER_REQUIRED = new ErrorCode(1_060_100_006, "该仓库尚未配置负责人，请先完成仓库人员配置");
+    ErrorCode WAREHOUSE_MEMBER_REQUIRED = new ErrorCode(1_060_100_007, "该仓库尚未配置员工，请先完成仓库人员配置");
+    ErrorCode WAREHOUSE_USER_INVALID = new ErrorCode(1_060_100_008, "仓库人员必须是仓储物流部的启用用户");
+    ErrorCode WAREHOUSE_USER_NOT_MEMBER = new ErrorCode(1_060_100_009, "您不是该仓库员工，无法执行此操作");
+    ErrorCode WAREHOUSE_MANAGER_INVALID = new ErrorCode(1_060_100_010, "仓库负责人必须是拥有仓库管理员角色的启用用户");
 
     // ========== WMS 基础数据-商品分类 1-060-102-000 ==========
     ErrorCode ITEM_CATEGORY_NOT_EXISTS = new ErrorCode(1_060_102_000, "商品分类不存在");

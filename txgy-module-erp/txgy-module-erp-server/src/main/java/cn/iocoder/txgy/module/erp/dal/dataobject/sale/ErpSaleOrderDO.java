@@ -59,6 +59,23 @@ public class ErpSaleOrderDO extends BaseDO {
     /** WMS 失败或驳回原因 */
     private String wmsFailureReason;
     /**
+     * 反审批原因
+     */
+    private String reverseApproveReason;
+    /** 全局业务链编号 */
+    /** 来源类型（COST_RESULT = 由造价结果转换生成） */
+    private String sourceType;
+    /** 来源编号（造价结果编号） */
+    private Long sourceId;
+    /** 来源单号 */
+    private String sourceNo;
+    /** WMS 仓储履约状态 */
+    /** WMS 库存判断编号 */
+    /** WMS 库存预留编号 */
+    /** WMS 销售出库单号 */
+    /** 最后处理的 WMS 事件版本 */
+    /** WMS 失败或驳回原因 */
+    /**
      * 客户编号
      *
      * 关联 {@link ErpCustomerDO#getId()}

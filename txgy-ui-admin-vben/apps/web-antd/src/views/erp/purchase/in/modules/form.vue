@@ -9,7 +9,7 @@ import { computed, ref } from 'vue';
 import { useVbenModal } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
-import { message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getAccountSimpleList } from '#/api/erp/finance/account';
@@ -21,6 +21,7 @@ import {
 
 import { useFormSchema } from '../data';
 import ItemForm from './item-form.vue';
+import ApplyWmsModal from './apply-wms-modal.vue';
 import PurchaseOrderSelect from './purchase-order-select.vue';
 
 const emit = defineEmits(['success']);
@@ -200,6 +201,35 @@ const [Modal, modalApi] = useVbenModal({
     }
   },
 });
+
+/** 申请入库到 WMS 子弹窗 */
+const [ApplyInboundWmsModal, applyInboundWmsModalApi] = useVbenModal({
+  connectedComponent: ApplyWmsModal,
+  destroyOnClose: true,
+});
+
+/** 详情态下显示「申请入库到 WMS」按钮：仅入库单已审批 + WMS 状态未提交或失败 */
+const showApplyInboundToWmsButton = computed(() => {
+  if (formType.value !== 'detail') return false;
+  if (formData.value.status !== 20) return false;
+  const s = formData.value.wmsStatus;
+  return !s || s === 'NOT_SUBMITTED' || s === 'FAILED';
+});
+
+/** 打开申请入库到 WMS 弹窗 */
+function handleOpenApplyInboundToWms() {
+  applyInboundWmsModalApi
+    .setData({
+      purchaseIn: {
+        id: formData.value.id,
+        no: formData.value.no,
+        inTime: formData.value.inTime,
+        totalCount: formData.value.totalCount,
+        items: formData.value.items,
+      },
+    })
+    .open();
+}
 </script>
 
 <template>
@@ -209,6 +239,24 @@ const [Modal, modalApi] = useVbenModal({
     :close-on-click-modal="false"
     :show-confirm-button="formType !== 'detail'"
   >
+    <div
+      v-if="showApplyInboundToWmsButton"
+      class="mx-3 mb-3 flex items-center justify-between rounded bg-orange-50 p-3"
+    >
+      <div class="text-sm text-orange-700">
+        WMS 推送状态：{{ formData?.wmsStatus || '未推送' }}
+        <span v-if="formData?.wmsFailureReason">
+          （失败原因：{{ formData.wmsFailureReason }}）</span
+        >
+      </div>
+      <Button
+        type="primary"
+        danger
+        @click="handleOpenApplyInboundToWms"
+      >
+        申请入库到 WMS
+      </Button>
+    </div>
     <Form class="mx-3">
       <template #items>
         <ItemForm
@@ -230,5 +278,7 @@ const [Modal, modalApi] = useVbenModal({
         />
       </template>
     </Form>
+    <!-- 申请入库到 WMS 子弹窗 -->
+    <ApplyInboundWmsModal @success="emit('success')" />
   </Modal>
 </template>

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { Button, Empty, Progress, Table, Tag, message } from 'ant-design-vue';
 
@@ -8,8 +7,6 @@ import ExamWorkspace from '../../../training/components/exam-workspace.vue';
 import { getMyCourses, getMySummary } from '../learning/api';
 
 defineOptions({ name: 'PortalTrainingExam' });
-
-const router = useRouter();
 
 const examVisible = ref(false);
 const loading = ref(false);
@@ -69,9 +66,6 @@ onMounted(load);
           证书信息与个人学习档案、校企联合认证互通。
         </p>
       </div>
-      <Button type="primary" @click="router.push('/portal/training/learning')">
-        去完成课程
-      </Button>
     </section>
 
     <section class="stats">

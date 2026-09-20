@@ -53,4 +53,9 @@ public class MesWorkOrderCreateReqDTO extends MesIntegrationBaseReqDTO {
 
     private String remark;
 
+    /**
+     * 数据版本（ERP 侧传入销售订单行项编号），用于集成出站记录去重与幂等
+     */
+    private Long dataVersion;
+
 }

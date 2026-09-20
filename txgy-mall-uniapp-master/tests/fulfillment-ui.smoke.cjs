@@ -87,7 +87,7 @@ async function fixture(name, options = {}) {
   await mkdir(output, { recursive: true }); await new Promise(ready => server.listen(0, '127.0.0.1', ready));
   origin = 'http://127.0.0.1:' + server.address().port; browser = await chromium.launch({ headless: true, channel: 'msedge' });
   try {
-    for (const [queryStatus, text] of [['ERP_PENDING', '发货申请等待 ERP 确认'], ['NOT_CONFIGURED', '物流查询暂未开通'], ['NO_EVENTS', '暂未获取详细物流轨迹']]) {
+    for (const [queryStatus, text] of [['ERP_PENDING', '发货申请处理中'], ['NOT_CONFIGURED', '物流查询暂未开通'], ['NO_EVENTS', '暂未获取详细物流轨迹']]) {
       const test = await fixture(queryStatus, { queryStatus });
       await test.page.goto(origin + '/pages/order/express/log?id=55&tenantId=1', { waitUntil: 'networkidle' });
       await test.page.getByText(text, { exact: false }).waitFor().catch(async error => { console.log(JSON.stringify({ text: await test.page.locator('body').innerText(), errors: test.errors, calls: test.calls.map(x => x.path) })); throw error; });

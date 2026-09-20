@@ -65,7 +65,7 @@ const [Modal, modalApi] = useVbenModal({
       // 关闭并提示
       await modalApi.close();
       emit('success');
-      message.success('发货请求已提交，请核对 ERP 处理结果和订单状态');
+      message.success('发货请求已提交，请稍后查看订单状态');
     } finally {
       modalApi.unlock();
     }

@@ -42,7 +42,17 @@ export namespace CrmAfterSaleTicketApi {
   /** 分页查询参数 */
   export interface PageReq extends PageParam, Partial<Ticket> {
     createTime?: string[];
+    /** 提醒类型：1=工单超时预警（待办使用，实时查询且限本人及下属负责） */
+    remindType?: number;
   }
+}
+
+/** 提醒类型：1=工单超时预警（待办「工单超时预警」使用，与后端 REMIND_TYPE_OVERDUE 保持一致） */
+export const AFTER_SALE_TICKET_REMIND_TYPE_OVERDUE = 1;
+
+/** 获得「工单超时预警」待办数量（实时查询，不落库） */
+export function getAfterSaleTicketOverdueCount() {
+  return requestClient.get<number>('/crm/after-sale/ticket/remind-count');
 }
 
 /** 查询问题工单分页 */

@@ -475,7 +475,7 @@ function openDetail(bizType: BizType | undefined, row: Record<string, any>) {
               <!-- 文本 -->
               <template v-else>
                 <p
-                  v-for="(line, i) in m.text.split('\n')"
+                  v-for="(line, i) in m.text ? m.text.split('\n') : []"
                   :key="i"
                   class="whitespace-pre-wrap"
                 >

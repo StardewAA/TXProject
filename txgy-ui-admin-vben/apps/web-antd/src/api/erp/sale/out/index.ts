@@ -95,3 +95,10 @@ export function exportSaleOut(params: any) {
     params,
   });
 }
+
+/** 导出销售出库 PDF */
+export function exportSaleOutPdf(params: any) {
+  return requestClient.download('/erp/sale-out/export-pdf', {
+    params,
+  });
+}

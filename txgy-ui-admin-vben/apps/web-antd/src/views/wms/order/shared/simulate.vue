@@ -3,7 +3,7 @@ import type { WmsItemSkuApi } from '#/api/wms/md/item/sku';
 import type { WmsWarehouseApi } from '#/api/wms/md/warehouse';
 import type { InventorySelectRow } from '#/views/wms/inventory/components';
 import { computed, ref } from 'vue';
-import { buildSimulationRequest, buildShipmentSelection, buildReceiptSelection, getRequiredMaterialType, getShipmentWarehouses, getSimulationBusinessTypes, type SimulationDetail, type SimulationDirection } from './simulation';
+import { buildSimulationRequest, buildShipmentSelection, buildReceiptSelection, getRequiredMaterialType, getWarehouseMismatchMessage, getShipmentWarehouses, getSimulationBusinessTypes, type SimulationDetail, type SimulationDirection } from './simulation';
 import { materialTypeLabel } from '#/views/wms/utils/material-type';
 import { formatPrice, multiplyPrice } from '#/views/wms/utils/format';
 import { confirm, useVbenModal } from '@vben/common-ui';
@@ -28,7 +28,8 @@ const warehouseOptions = computed(() => shipmentWarehouses.value.map(w => ({ val
 const selectedWarehouseName = computed(() => shipmentWarehouses.value.find(w => w.id === warehouseId.value)?.name);
 const skuSelect = ref<InstanceType<typeof WmsItemSkuSelect>>();
 const inventorySelect = ref<InstanceType<typeof WmsInventorySelect>>();
-async function changeOrderType(value: string) {
+async function changeOrderType(value: unknown) {
+  if (typeof value !== 'string') return;
   if (value === orderType.value) return;
   if (direction.value === 'shipment') {
     if (details.value.length) await confirm('切换出库业务类型将清空已选仓库及商品，是否继续？');
@@ -40,7 +41,8 @@ async function changeOrderType(value: string) {
   }
   orderType.value = value;
 }
-async function changeWarehouse(value?: number) {
+async function changeWarehouse(value: unknown) {
+  if (value !== undefined && typeof value !== 'number') return;
   if (value === warehouseId.value) return;
   if (details.value.length) await confirm('切换出库仓库将清空已选商品，是否继续？');
   details.value = [];
@@ -82,12 +84,10 @@ const [Modal, modalApi] = useVbenModal({
       warehouseId.value = undefined;
       sourceOrderNo.value = `TEST-${Date.now()}`;
       details.value = [];
-      if (direction.value === 'shipment') {
-        warehouses.value = [];
-        loadingWarehouses.value = true;
-        try { warehouses.value = await getWarehouseSimpleList(); }
-        finally { loadingWarehouses.value = false; }
-      }
+      warehouses.value = [];
+      loadingWarehouses.value = true;
+      try { warehouses.value = await getWarehouseSimpleList(); }
+      finally { loadingWarehouses.value = false; }
     }
   },
   async onConfirm() {
@@ -104,6 +104,12 @@ const [Modal, modalApi] = useVbenModal({
       (!shipmentWarehouses.value.some(w => w.id === warehouseId.value) ||
        details.value.some(row => row.warehouseId !== warehouseId.value))) {
       message.warning('出库仓库或商品与当前业务不匹配，请重新选择');
+      return;
+    }
+    const selectedWarehouse = warehouses.value.find(w => w.id === warehouseId.value);
+    const mismatchMessage = getWarehouseMismatchMessage(orderType.value, selectedWarehouse?.warehouseType);
+    if (mismatchMessage) {
+      message.warning(mismatchMessage);
       return;
     }
     modalApi.lock();

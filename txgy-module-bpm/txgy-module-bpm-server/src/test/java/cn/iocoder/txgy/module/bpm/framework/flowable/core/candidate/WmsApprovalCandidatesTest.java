@@ -25,7 +25,7 @@ class WmsApprovalCandidatesTest {
         jdbc.execute("CREATE TABLE system_tenant_package(id BIGINT PRIMARY KEY, menu_ids VARCHAR(500), status INT DEFAULT 0, deleted INT DEFAULT 0)");
         jdbc.execute("CREATE TABLE system_tenant(id BIGINT PRIMARY KEY, package_id BIGINT, status INT DEFAULT 0, deleted INT DEFAULT 0)");
         jdbc.execute("CREATE TABLE system_users(id BIGINT PRIMARY KEY, tenant_id BIGINT, status INT DEFAULT 0, deleted INT DEFAULT 0)");
-        jdbc.execute("CREATE TABLE system_role(id BIGINT PRIMARY KEY, tenant_id BIGINT, status INT DEFAULT 0, deleted INT DEFAULT 0)");
+        jdbc.execute("CREATE TABLE system_role(id BIGINT PRIMARY KEY, tenant_id BIGINT, code VARCHAR(100), status INT DEFAULT 0, deleted INT DEFAULT 0)");
         jdbc.execute("CREATE TABLE system_user_role(user_id BIGINT, role_id BIGINT, tenant_id BIGINT, deleted INT DEFAULT 0)");
         jdbc.execute("CREATE TABLE system_role_menu(role_id BIGINT, menu_id BIGINT, tenant_id BIGINT, deleted INT DEFAULT 0)");
         jdbc.update("INSERT INTO system_menu(id,permission,type) VALUES (1,'wms:receipt-order:approve-warehouse',3),(2,'wms:shipment-order:approve-supervisor',3),(3,'wms:receipt-order:submit-approval',3)");
@@ -53,12 +53,34 @@ class WmsApprovalCandidatesTest {
         assertEquals(Set.of(11L), candidates.resolve("wms_receipt_approval"));
         assertEquals(Set.of(12L), candidates.resolve("wms_shipment_approval"));
     }
+    @Test void delegateCandidatesIncludeEveryShipmentApprovalRoleButExcludeSubmitOnly() {
+        jdbc.update("INSERT INTO system_menu(id,permission,type) VALUES (4,'wms:shipment-order:approve-decision',3)");
+        jdbc.update("UPDATE system_tenant_package SET menu_ids='[1,2,3,4]' WHERE id=100");
+        grant(14,104,10,4);
+        assertEquals(Set.of(11L), candidates.resolveDelegateUsers("wms_receipt_approval"));
+        assertEquals(Set.of(12L,14L), candidates.resolveDelegateUsers("wms_shipment_approval"));
+        assertFalse(candidates.resolveDelegateUsers("wms_shipment_approval").contains(13L));
+    }
     @Test void anyRoleGrantWorksAndChangesApplyToNextResolution() {
         assertEquals(Set.of(11L), candidates.resolve("wms_receipt_approval"));
         jdbc.update("INSERT INTO system_role_menu(role_id,menu_id,tenant_id) VALUES(102,1,10)");
         assertEquals(Set.of(11L,12L), candidates.resolve("wms_receipt_approval"));
         jdbc.update("UPDATE system_role_menu SET deleted=1 WHERE role_id=101");
         assertEquals(Set.of(12L), candidates.resolve("wms_receipt_approval"));
+    }
+    @Test void activeSuperAdminIsAnApprovalCandidateWithoutExplicitMenuGrant() {
+        jdbc.update("INSERT INTO system_users(id,tenant_id) VALUES(18,10)");
+        jdbc.update("INSERT INTO system_role(id,tenant_id,code) VALUES(108,10,'super_admin')");
+        jdbc.update("INSERT INTO system_user_role(user_id,role_id,tenant_id) VALUES(18,108,10)");
+        assertEquals(Set.of(11L,18L), candidates.resolve("wms_receipt_approval"));
+        assertEquals(Set.of(12L,18L), candidates.resolve("wms_shipment_approval"));
+    }
+    @Test void activeTenantAdminIsAnApprovalCandidateWithoutExplicitMenuGrant() {
+        jdbc.update("INSERT INTO system_users(id,tenant_id) VALUES(19,10)");
+        jdbc.update("INSERT INTO system_role(id,tenant_id,code) VALUES(109,10,'tenant_admin')");
+        jdbc.update("INSERT INTO system_user_role(user_id,role_id,tenant_id) VALUES(19,109,10)");
+        assertEquals(Set.of(11L,19L), candidates.resolve("wms_receipt_approval"));
+        assertEquals(Set.of(12L,19L), candidates.resolve("wms_shipment_approval"));
     }
     @Test void deduplicatesUsersAcrossRoles() {
         jdbc.update("INSERT INTO system_user_role(user_id,role_id,tenant_id) VALUES(11,103,10)");

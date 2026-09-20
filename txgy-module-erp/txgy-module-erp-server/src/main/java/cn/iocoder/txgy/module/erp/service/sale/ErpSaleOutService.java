@@ -98,5 +98,15 @@ public interface ErpSaleOutService {
      */
     List<ErpSaleOutItemDO> getSaleOutItemListByOutIds(Collection<Long> outIds);
 
+    /**
+     * 获得指定销售订单的销售出库单列表
+     *
+     * <p>用于 WMS 发货回传时判断是否已存在出库单，避免重复生成导致销售数据重复计数。</p>
+     *
+     * @param orderId 销售订单编号
+     * @return 销售出库单列表
+     */
+    List<ErpSaleOutDO> getSaleOutListByOrderId(Long orderId);
+
 
 }
