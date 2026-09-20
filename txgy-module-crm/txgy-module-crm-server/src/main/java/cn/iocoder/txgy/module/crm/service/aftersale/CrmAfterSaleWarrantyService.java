@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.crm.service.aftersale;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import jakarta.validation.Valid;
@@ -32,9 +33,20 @@ public interface CrmAfterSaleWarrantyService {
     /**
      * 更新质保档案
      *
+     * <p><b>质保状态自动重算</b>：编辑保存时，若「完工验收日期 / 质保年限 / 质保到期日期」发生变化，
+     * 会按最新到期日重新判定质保状态（有效 / 即将到期 / 已到期终止），无需等到每日 02:00 定时任务，
+     * 也无需人工点「立即刷新」。
+     *
+     * <p><b>与自动流转的差异</b>：自动流转是单向的（已到期终止不回退），
+     * 但「到期日被人工延长」正是需要回退的场景，因此编辑保存允许从「已到期终止」回退为有效状态。
+     *
+     * <p><b>并发保护</b>：状态写入采用 CAS（以读取时的原状态为条件），
+     * 若期间被他人修改则抛 {@code AFTER_SALE_WARRANTY_UPDATE_CONFLICT}，整个事务回滚。
+     *
      * @param updateReqVO 更新信息
+     * @return 状态重算结果（是否变更、原状态、新状态、提示文案）
      */
-    void updateWarranty(@Valid CrmAfterSaleWarrantySaveReqVO updateReqVO);
+    CrmAfterSaleWarrantyUpdateRespVO updateWarranty(@Valid CrmAfterSaleWarrantySaveReqVO updateReqVO);
 
     /**
      * 删除质保档案

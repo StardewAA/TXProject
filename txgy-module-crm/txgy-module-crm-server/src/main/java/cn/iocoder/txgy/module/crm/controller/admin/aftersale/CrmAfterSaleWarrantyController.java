@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfte
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
@@ -56,11 +57,13 @@ public class CrmAfterSaleWarrantyController {
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新质保档案")
+    @Operation(summary = "更新质保档案",
+            description = "保存时若「完工验收日期 / 质保年限 / 质保到期日期」发生变化，"
+                    + "会按最新到期日自动重算质保状态（质保中 / 即将到期 / 已到期终止），"
+                    + "并把重算结果放在响应里供前端实时展示；到期日被延长时允许从「已到期终止」回退为有效状态。")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
-    public CommonResult<Boolean> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
-        warrantyService.updateWarranty(updateReqVO);
-        return success(true);
+    public CommonResult<CrmAfterSaleWarrantyUpdateRespVO> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
+        return success(warrantyService.updateWarranty(updateReqVO));
     }
 
     @PostMapping("/refresh-status")

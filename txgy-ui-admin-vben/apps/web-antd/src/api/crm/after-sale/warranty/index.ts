@@ -56,6 +56,32 @@ export namespace CrmAfterSaleWarrantyApi {
     /** 质保到期日期 */
     warrantyEndDate?: string;
   }
+
+  /**
+   * 更新质保档案的响应：保存后质保状态自动重算的结果
+   *
+   * 编辑时若「完工验收日期 / 质保年限 / 质保到期日期」发生变化，后端会按最新到期日
+   * 重算质保状态（质保中 / 即将到期 / 已到期终止），并把结果放在这里供界面实时展示。
+   */
+  export interface UpdateResp {
+    /** 本次保存是否触发了质保状态变更 */
+    statusChanged?: boolean;
+    /** 变更前的质保状态 */
+    oldStatus?: number;
+    /** 变更后的质保状态（最终落库值） */
+    status?: number;
+    /** 重算后的质保到期日期 */
+    warrantyEndDate?: string;
+    /** 状态变更说明，可直接用于提示用户 */
+    message?: string;
+    /**
+     * 是否需要人工确认
+     *
+     * 状态由「已到期终止」回退为有效状态时为 true：
+     * 此前因到期被停用的回访计划不会自动恢复，需要用户人工确认是否重新启用。
+     */
+    needManualConfirm?: boolean;
+  }
 }
 
 /** 到期类型：1=即将到期（待办「质保即将到期」使用，与后端 EXPIRY_TYPE_ABOUT_TO_EXPIRE 保持一致） */
@@ -108,11 +134,19 @@ export async function getAfterSaleWarrantyContractStatus(
   );
 }
 
-/** 修改质保档案 */
+/**
+ * 修改质保档案
+ *
+ * 返回值为保存后质保状态的自动重算结果（是否变更、原状态、新状态、提示文案），
+ * 调用方应据此提示用户，让状态变化实时可见。
+ */
 export function updateAfterSaleWarranty(
   data: CrmAfterSaleWarrantyApi.Warranty,
 ) {
-  return requestClient.put('/crm/after-sale/warranty/update', data);
+  return requestClient.put<CrmAfterSaleWarrantyApi.UpdateResp>(
+    '/crm/after-sale/warranty/update',
+    data,
+  );
 }
 
 /** 删除质保档案 */
@@ -122,6 +156,12 @@ export function deleteAfterSaleWarranty(id: number) {
 
 /** 质保档案状态：1=质保中（与后端 CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY 保持一致） */
 export const AFTER_SALE_WARRANTY_STATUS_IN_WARRANTY = 1;
+
+/** 质保档案状态：2=即将到期（与后端 CrmAfterSaleWarrantyStatusEnum.EXPIRING 保持一致） */
+export const AFTER_SALE_WARRANTY_STATUS_EXPIRING = 2;
+
+/** 质保档案状态：3=已到期终止（与后端 CrmAfterSaleWarrantyStatusEnum.EXPIRED 保持一致） */
+export const AFTER_SALE_WARRANTY_STATUS_EXPIRED = 3;
 
 /** 质保档案下拉选项 */
 export interface WarrantyOption {

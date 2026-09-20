@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleWarrantyStatusEnum;
@@ -104,6 +105,42 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
 
     default List<CrmAfterSaleWarrantyDO> selectListByIds(Collection<Long> ids) {
         return selectBatchIds(ids);
+    }
+
+    /**
+     * 质保状态流转（CAS：Compare-And-Set）
+     *
+     * <p><b>为什么不能用 updateById</b>：编辑档案时是「先读出原状态 → 计算目标状态 → 写回」，
+     * 两个用户同时编辑同一条档案时，后写的一方会基于过期快照覆盖对方的判断（丢失更新）。
+     * 这里把「读到的原状态」作为 WHERE 条件，只有状态仍是自己看到的那份才允许更新。
+     *
+     * @param id         质保档案编号
+     * @param fromStatus 期望的原状态（读取时看到的快照值）
+     * @param toStatus   目标状态
+     * @return 实际更新行数；0 表示状态已被他人并发修改，调用方应提示用户刷新后重试
+     */
+    default int updateStatusCas(Long id, Integer fromStatus, Integer toStatus) {
+        // entity 非空：让 MyBatis-Plus 的自动填充（updater / update_time）正常生效
+        CrmAfterSaleWarrantyDO updateObj = new CrmAfterSaleWarrantyDO();
+        updateObj.setStatus(toStatus);
+        return update(updateObj, new LambdaUpdateWrapper<CrmAfterSaleWarrantyDO>()
+                .eq(CrmAfterSaleWarrantyDO::getId, id)
+                .eq(CrmAfterSaleWarrantyDO::getStatus, fromStatus));
+    }
+
+    /**
+     * 清空「最近一次到期提醒发送日期」
+     *
+     * <p>用于「已到期终止」被回退为有效状态的场景：此前发出过到期提醒，该字段已被回写，
+     * 若不清空，延长到期日之后系统会认为「已经提醒过」而不再提醒，形成静默漏提醒。
+     *
+     * @param id 质保档案编号
+     * @return 更新行数
+     */
+    default int clearRemindSentDate(Long id) {
+        return update(null, new LambdaUpdateWrapper<CrmAfterSaleWarrantyDO>()
+                .eq(CrmAfterSaleWarrantyDO::getId, id)
+                .set(CrmAfterSaleWarrantyDO::getRemindSentDate, null));
     }
 
     // ========== 待办：质保即将到期（实时查询，不落库） ==========
