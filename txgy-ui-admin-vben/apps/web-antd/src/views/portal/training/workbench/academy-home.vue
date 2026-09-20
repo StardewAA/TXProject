@@ -140,7 +140,10 @@ function goCourses(category = '') {
     </section>
 
     <section class="module-gateway" aria-label="云培训学院功能入口" @mouseleave="previewPath = null">
-      <nav class="module-gateway-nav">
+      <nav
+        class="module-gateway-nav"
+        :style="{ gridTemplateColumns: `repeat(${TRAINING_MODULES.length}, minmax(0, 1fr))` }"
+      >
         <button
           v-for="item in TRAINING_MODULES"
           :key="item.path"
@@ -294,7 +297,7 @@ function goCourses(category = '') {
 .course-cover > span { z-index: 1; top: 9px; left: 9px; background: rgb(22 39 51 / 80%); }
 .course-body h3 { color: #3c444b; font-weight: 550; }
 .module-gateway { margin-top: 22px; overflow: hidden; background: #fff; border: 1px solid #edf0f2; border-radius: 7px; box-shadow: 0 3px 12px rgb(31 43 52 / 3%); }
-.module-gateway-nav { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); padding: 0 8px; }
+.module-gateway-nav { display: grid; padding: 0 8px; }
 .module-gateway-nav button { position: relative; min-width: 0; height: 42px; padding: 0 2px; color: #5c646b; background: transparent; border: 0; cursor: pointer; font-size: 11px; font-weight: 510; white-space: nowrap; }
 .module-gateway-nav button:hover, .module-gateway-nav button:focus-visible, .module-gateway-nav button.active { color: #dc722a; background: #fff9f4; }
 .module-gateway-nav button.active::after { position: absolute; right: 16px; bottom: 0; left: 16px; height: 2px; background: #eb792a; content: ''; }
