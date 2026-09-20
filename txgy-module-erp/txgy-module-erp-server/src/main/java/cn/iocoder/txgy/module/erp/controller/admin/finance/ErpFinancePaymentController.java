@@ -6,18 +6,22 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
+import cn.iocoder.txgy.framework.common.util.http.HttpUtils;
 import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.payment.ErpFinancePaymentPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.payment.ErpFinancePaymentRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.payment.ErpFinancePaymentSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinancePaymentDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinancePaymentItemDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.finance.ErpFinancePaymentPdfExporter;
 import cn.iocoder.txgy.module.erp.service.finance.ErpFinancePaymentService;
+import cn.iocoder.txgy.module.erp.service.finance.ErpFinancePaymentPdfService;
 import cn.iocoder.txgy.module.erp.service.purchase.ErpSupplierService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
@@ -48,6 +52,8 @@ public class ErpFinancePaymentController {
 
     @Resource
     private ErpFinancePaymentService financePaymentService;
+    @Resource
+    private ErpFinancePaymentPdfService financePaymentPdfService;
     @Resource
     private ErpSupplierService supplierService;
     @Resource
@@ -123,6 +129,30 @@ public class ErpFinancePaymentController {
         ExcelUtils.write(response, "付款单.xls", "数据", ErpFinancePaymentRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出付款单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:finance-payment:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportFinancePaymentPdf(@Valid ErpFinancePaymentPageReqVO pageReqVO,
+                                        HttpServletResponse response) throws IOException {
+        if (pageReqVO.getId() != null) {
+            ErpFinancePaymentDO payment = financePaymentService.getFinancePayment(pageReqVO.getId());
+            if (payment == null) {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "付款单不存在");
+                return;
+            }
+            ErpFinancePaymentRespVO paymentVO = buildFinancePaymentVOPageResult(
+                    new PageResult<>(List.of(payment), 1L)).getList().get(0);
+            ErpFinancePaymentPdfExporter.write(response, List.of(paymentVO));
+            return;
+        }
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpFinancePaymentRespVO> list = buildFinancePaymentVOPageResult(
+                financePaymentService.getFinancePaymentPage(pageReqVO)).getList();
+        // 与前端勾选的编号（pageReqVO.ids）联用：选中则只导选中单据，未选中则导出筛选结果
+        ErpFinancePaymentPdfExporter.write(response, list);
+    }
+
     private PageResult<ErpFinancePaymentRespVO> buildFinancePaymentVOPageResult(PageResult<ErpFinancePaymentDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -138,7 +168,7 @@ public class ErpFinancePaymentController {
         Map<Long, ErpAccountDO> accountMap = accountService.getAccountMap(
                 convertSet(pageResult.getList(), ErpFinancePaymentDO::getAccountId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertListByFlatMap(pageResult.getList(),
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(convertListByFlatMap(pageResult.getList(),
                 contact -> Stream.of(NumberUtils.parseLong(contact.getCreator()), contact.getFinanceUserId())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpFinancePaymentRespVO.class, payment -> {

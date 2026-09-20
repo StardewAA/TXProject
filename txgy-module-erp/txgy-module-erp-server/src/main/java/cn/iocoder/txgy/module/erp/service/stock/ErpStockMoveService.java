@@ -40,6 +40,12 @@ public interface ErpStockMoveService {
      */
     void updateStockMoveStatus(Long id, Integer status);
 
+    /** 调出仓库负责人确认。此时不变更库存。 */
+    void confirmSource(Long id, Long userId);
+
+    /** 调入仓库负责人确认。双方确认后原子变更调出、调入库存。 */
+    void confirmTarget(Long id, Long userId);
+
     /**
      * 删除库存调拨单
      *

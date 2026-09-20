@@ -9,11 +9,13 @@ import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.move.ErpStockMoveSav
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockMoveDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockMoveItemDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.stock.ErpStockMoveItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.stock.ErpStockMoveMapper;
 import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.enums.stock.ErpStockRecordBizTypeEnum;
+import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.stock.bo.ErpStockRecordCreateReqBO;
 import jakarta.annotation.Resource;
@@ -22,10 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -43,6 +48,10 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.*;
 @Validated
 public class ErpStockMoveServiceImpl implements ErpStockMoveService {
 
+    private static final int STATUS_WAIT_SOURCE = 10;
+    private static final int STATUS_WAIT_TARGET = 15;
+    private static final int STATUS_COMPLETED = 20;
+
     @Resource
     private ErpStockMoveMapper stockMoveMapper;
     @Resource
@@ -57,12 +66,15 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
     private ErpWarehouseService warehouseService;
     @Resource
     private ErpStockRecordService stockRecordService;
+    @Resource
+    private ErpApprovalNotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createStockMove(ErpStockMoveSaveReqVO createReqVO) {
         // 1.1 校验出库项的有效性
         List<ErpStockMoveItemDO> stockMoveItems = validateStockMoveItems(createReqVO.getItems());
+        MoveWarehouseContext warehouseContext = buildWarehouseContext(stockMoveItems);
         // 1.2 生成调拨单号，并校验唯一性
         String no = noRedisDAO.generate(ErpNoRedisDAO.STOCK_MOVE_NO_PREFIX);
         if (stockMoveMapper.selectByNo(no) != null) {
@@ -71,13 +83,15 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
 
         // 2.1 插入出库单
         ErpStockMoveDO stockMove = BeanUtils.toBean(createReqVO, ErpStockMoveDO.class, in -> in
-                .setNo(no).setStatus(ErpAuditStatus.PROCESS.getStatus())
+                .setNo(no).setStatus(STATUS_WAIT_SOURCE)
                 .setTotalCount(getSumValue(stockMoveItems, ErpStockMoveItemDO::getCount, BigDecimal::add))
                 .setTotalPrice(getSumValue(stockMoveItems, ErpStockMoveItemDO::getTotalPrice, BigDecimal::add, BigDecimal.ZERO)));
         stockMoveMapper.insert(stockMove);
         // 2.2 插入出库单项
         stockMoveItems.forEach(o -> o.setMoveId(stockMove.getId()));
         stockMoveItemMapper.insertBatch(stockMoveItems);
+        notifyWarehouseManagers(stockMove, warehouseContext,
+                "已发起，等待调出仓库负责人确认，库存尚未变动");
         return stockMove.getId();
     }
 
@@ -86,11 +100,12 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
     public void updateStockMove(ErpStockMoveSaveReqVO updateReqVO) {
         // 1.1 校验存在
         ErpStockMoveDO stockMove = validateStockMoveExists(updateReqVO.getId());
-        if (ErpAuditStatus.APPROVE.getStatus().equals(stockMove.getStatus())) {
+        if (!Integer.valueOf(STATUS_WAIT_SOURCE).equals(stockMove.getStatus())) {
             throw exception(STOCK_MOVE_UPDATE_FAIL_APPROVE, stockMove.getNo());
         }
         // 1.2 校验出库项的有效性
         List<ErpStockMoveItemDO> stockMoveItems = validateStockMoveItems(updateReqVO.getItems());
+        buildWarehouseContext(stockMoveItems); // 双确认依赖双方仓库负责人，保存时即阻止无负责人数据
 
         // 2.1 更新出库单
         ErpStockMoveDO updateObj = BeanUtils.toBean(updateReqVO, ErpStockMoveDO.class, in -> in
@@ -108,26 +123,24 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
         // 1.1 校验存在
         ErpStockMoveDO stockMove = validateStockMoveExists(id);
         // 1.2 校验状态
-        if (stockMove.getStatus().equals(status)) {
+        if (approve || !Integer.valueOf(STATUS_COMPLETED).equals(stockMove.getStatus())
+                || !Integer.valueOf(STATUS_WAIT_SOURCE).equals(status)) {
             throw exception(approve ? STOCK_MOVE_APPROVE_FAIL : STOCK_MOVE_PROCESS_FAIL);
         }
 
         // 2. 更新状态
-        int updateCount = stockMoveMapper.updateByIdAndStatus(id, stockMove.getStatus(),
-                new ErpStockMoveDO().setStatus(status));
+        int updateCount = stockMoveMapper.resetConfirmationByIdAndStatus(id, stockMove.getStatus(), status);
         if (updateCount == 0) {
             throw exception(approve ? STOCK_MOVE_APPROVE_FAIL : STOCK_MOVE_PROCESS_FAIL);
         }
 
         // 3. 变更库存
         List<ErpStockMoveItemDO> stockMoveItems = stockMoveItemMapper.selectListByMoveId(id);
-        Integer fromBizType = approve ? ErpStockRecordBizTypeEnum.MOVE_OUT.getType()
-                : ErpStockRecordBizTypeEnum.MOVE_OUT_CANCEL.getType();
-        Integer toBizType = approve ? ErpStockRecordBizTypeEnum.MOVE_IN.getType()
-                : ErpStockRecordBizTypeEnum.MOVE_IN_CANCEL.getType();
+        Integer fromBizType = ErpStockRecordBizTypeEnum.MOVE_OUT_CANCEL.getType();
+        Integer toBizType = ErpStockRecordBizTypeEnum.MOVE_IN_CANCEL.getType();
         stockMoveItems.forEach(stockMoveItem -> {
-            BigDecimal fromCount = approve ? stockMoveItem.getCount().negate() : stockMoveItem.getCount();
-            BigDecimal toCount = approve ? stockMoveItem.getCount() : stockMoveItem.getCount().negate();
+            BigDecimal fromCount = stockMoveItem.getCount();
+            BigDecimal toCount = stockMoveItem.getCount().negate();
             stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
                     stockMoveItem.getProductId(), stockMoveItem.getFromWarehouseId(), fromCount,
                     fromBizType, stockMoveItem.getMoveId(), stockMoveItem.getId(), stockMove.getNo()));
@@ -135,7 +148,109 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
                     stockMoveItem.getProductId(), stockMoveItem.getToWarehouseId(), toCount,
                     toBizType, stockMoveItem.getMoveId(), stockMoveItem.getId(), stockMove.getNo()));
         });
+        notifyWarehouseManagers(stockMove, buildWarehouseContext(stockMoveItems),
+                "已反确认，原库存变动已冲销，调拨重新等待确认");
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmSource(Long id, Long userId) {
+        ErpStockMoveDO stockMove = validateStockMoveExists(id);
+        if (!Integer.valueOf(STATUS_WAIT_SOURCE).equals(stockMove.getStatus())) {
+            throw exception(STOCK_MOVE_CONFIRM_STATUS_INVALID);
+        }
+        List<ErpStockMoveItemDO> items = stockMoveItemMapper.selectListByMoveId(id);
+        MoveWarehouseContext context = buildWarehouseContext(items);
+        if (!context.sourceManagerIds().contains(userId)) {
+            throw exception(STOCK_MOVE_CONFIRM_USER_INVALID);
+        }
+        int updated = stockMoveMapper.updateByIdAndStatus(id, STATUS_WAIT_SOURCE,
+                new ErpStockMoveDO().setStatus(STATUS_WAIT_TARGET)
+                        .setSourceConfirmedBy(userId).setSourceConfirmedAt(LocalDateTime.now()));
+        if (updated == 0) {
+            throw exception(STOCK_MOVE_CONFIRM_STATUS_INVALID);
+        }
+        notifyWarehouseManagers(stockMove, context,
+                "调出仓库已确认，等待调入仓库负责人确认，库存尚未变动");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmTarget(Long id, Long userId) {
+        ErpStockMoveDO stockMove = validateStockMoveExists(id);
+        if (!Integer.valueOf(STATUS_WAIT_TARGET).equals(stockMove.getStatus())) {
+            throw exception(STOCK_MOVE_CONFIRM_STATUS_INVALID);
+        }
+        List<ErpStockMoveItemDO> items = stockMoveItemMapper.selectListByMoveId(id);
+        MoveWarehouseContext context = buildWarehouseContext(items);
+        if (!context.targetManagerIds().contains(userId)) {
+            throw exception(STOCK_MOVE_CONFIRM_USER_INVALID);
+        }
+        int updated = stockMoveMapper.updateByIdAndStatus(id, STATUS_WAIT_TARGET,
+                new ErpStockMoveDO().setStatus(STATUS_COMPLETED)
+                        .setTargetConfirmedBy(userId).setTargetConfirmedAt(LocalDateTime.now()));
+        if (updated == 0) {
+            throw exception(STOCK_MOVE_CONFIRM_STATUS_INVALID);
+        }
+        changeStock(items, stockMove, true);
+        notifyWarehouseManagers(stockMove, context,
+                "双方确认完成，库存已完成调出和调入变更");
+    }
+
+    private void changeStock(List<ErpStockMoveItemDO> items, ErpStockMoveDO move, boolean approve) {
+        Integer fromBizType = approve ? ErpStockRecordBizTypeEnum.MOVE_OUT.getType()
+                : ErpStockRecordBizTypeEnum.MOVE_OUT_CANCEL.getType();
+        Integer toBizType = approve ? ErpStockRecordBizTypeEnum.MOVE_IN.getType()
+                : ErpStockRecordBizTypeEnum.MOVE_IN_CANCEL.getType();
+        items.forEach(item -> {
+            BigDecimal fromCount = approve ? item.getCount().negate() : item.getCount();
+            BigDecimal toCount = approve ? item.getCount() : item.getCount().negate();
+            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(item.getProductId(),
+                    item.getFromWarehouseId(), fromCount, fromBizType, item.getMoveId(), item.getId(), move.getNo()));
+            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(item.getProductId(),
+                    item.getToWarehouseId(), toCount, toBizType, item.getMoveId(), item.getId(), move.getNo()));
+        });
+    }
+
+    private MoveWarehouseContext buildWarehouseContext(List<ErpStockMoveItemDO> items) {
+        Set<Long> sourceIds = convertSet(items, ErpStockMoveItemDO::getFromWarehouseId);
+        Set<Long> targetIds = convertSet(items, ErpStockMoveItemDO::getToWarehouseId);
+        Set<Long> allIds = new LinkedHashSet<>(sourceIds);
+        allIds.addAll(targetIds);
+        Map<Long, ErpWarehouseDO> warehouses = warehouseService.getWarehouseMap(allIds);
+        Set<Long> sourceManagers = getManagerIds(sourceIds, warehouses);
+        Set<Long> targetManagers = getManagerIds(targetIds, warehouses);
+        return new MoveWarehouseContext(sourceManagers, targetManagers,
+                joinWarehouseNames(sourceIds, warehouses), joinWarehouseNames(targetIds, warehouses));
+    }
+
+    private Set<Long> getManagerIds(Set<Long> warehouseIds, Map<Long, ErpWarehouseDO> warehouses) {
+        Set<Long> result = new LinkedHashSet<>();
+        for (Long warehouseId : warehouseIds) {
+            ErpWarehouseDO warehouse = warehouses.get(warehouseId);
+            if (warehouse == null || warehouse.getPrincipalUserId() == null) {
+                throw exception(STOCK_MOVE_WAREHOUSE_MANAGER_MISSING,
+                        warehouse != null ? warehouse.getName() : warehouseId);
+            }
+            result.add(warehouse.getPrincipalUserId());
+        }
+        return result;
+    }
+
+    private String joinWarehouseNames(Set<Long> ids, Map<Long, ErpWarehouseDO> warehouses) {
+        return ids.stream().map(warehouses::get).map(ErpWarehouseDO::getName).distinct()
+                .reduce((left, right) -> left + "、" + right).orElse("-");
+    }
+
+    private void notifyWarehouseManagers(ErpStockMoveDO move, MoveWarehouseContext context, String action) {
+        Set<Long> recipients = new LinkedHashSet<>(context.sourceManagerIds());
+        recipients.addAll(context.targetManagerIds());
+        notificationService.sendStockMoveAfterCommit(recipients, move.getNo(), move.getId(), action,
+                context.sourceWarehouseNames(), context.targetWarehouseNames());
+    }
+
+    private record MoveWarehouseContext(Set<Long> sourceManagerIds, Set<Long> targetManagerIds,
+                                        String sourceWarehouseNames, String targetWarehouseNames) {}
 
     private List<ErpStockMoveItemDO> validateStockMoveItems(List<ErpStockMoveSaveReqVO.Item> list) {
         // 1.1 校验产品存在
@@ -179,7 +294,7 @@ public class ErpStockMoveServiceImpl implements ErpStockMoveService {
             return;
         }
         stockMoves.forEach(stockMove -> {
-            if (ErpAuditStatus.APPROVE.getStatus().equals(stockMove.getStatus())) {
+            if (!Integer.valueOf(STATUS_WAIT_SOURCE).equals(stockMove.getStatus())) {
                 throw exception(STOCK_MOVE_DELETE_FAIL_APPROVE, stockMove.getNo());
             }
         });

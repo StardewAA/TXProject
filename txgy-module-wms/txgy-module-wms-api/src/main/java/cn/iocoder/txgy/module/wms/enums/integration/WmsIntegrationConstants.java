@@ -6,6 +6,7 @@ public final class WmsIntegrationConstants {
     }
 
     public static final String SOURCE_ERP = "ERP";
+    public static final String SOURCE_WMS = "WMS";
 
     public static final String MATERIAL_RAW = "RAW_MATERIAL";
     public static final String MATERIAL_FINISHED = "FINISHED_GOODS";

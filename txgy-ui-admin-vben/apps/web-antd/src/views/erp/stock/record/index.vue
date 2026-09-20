@@ -5,9 +5,13 @@ import type { ErpStockRecordApi } from '#/api/erp/stock/record';
 import { DocAlert, Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { exportStockRecord, getStockRecordPage } from '#/api/erp/stock/record';
-import { $t } from '#/locales';
+import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
+import {
+  exportStockRecord,
+  exportStockRecordPdf,
+  getStockRecordPage,
+} from '#/api/erp/stock/record';
 
 import { useGridColumns, useGridFormSchema } from './data';
 
@@ -15,9 +19,15 @@ import { useGridColumns, useGridFormSchema } from './data';
 defineOptions({ name: 'ErpStockRecord' });
 
 /** 导出库存明细 */
-async function handleExport() {
-  const data = await exportStockRecord(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '产品库存明细.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportStockRecordPdf(await gridApi.formApi.getValues())
+      : await exportStockRecord(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '产品库存明细.pdf' : '产品库存明细.xls',
+    source: data,
+  });
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -62,16 +72,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <Grid table-title="产品库存明细列表">
       <template #toolbar-tools>
-        <TableAction
-          :actions="[
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:stock-record:export'],
-              onClick: handleExport,
-            },
-          ]"
+        <ErpExportButton
+          :auth="['erp:stock-record:export']"
+          :export-handler="handleExport"
         />
       </template>
     </Grid>

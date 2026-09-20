@@ -35,6 +35,47 @@ export namespace ErpStockCheckApi {
     stockCount?: number; // 账面库存
     remark?: string; // 备注
   }
+
+  /** 盘点单三方比对明细行 */
+  export interface ComparisonLine {
+    itemId?: number;
+    productId?: number;
+    productCode?: string; // 统一物料编码
+    productName?: string;
+    productUnitName?: string;
+    warehouseId?: number;
+    warehouseName?: string;
+    wmsWarehouseCode?: string; // 为空表示该仓库未映射到 WMS
+    bookCount?: number; // ① ERP 账面（实时）
+    snapshotBookCount?: number; // ① ERP 账面（盘点单快照）
+    actualCount?: number; // ② ERP 实盘
+    wmsCount?: number | null; // ③ WMS 实物，null = 无镜像数据
+    wmsSyncTime?: string; // WMS 镜像同步时间
+    checkDiff?: number; // 盘点盈亏 = 实盘 - 账面快照
+    bookDrift?: number; // 盘点期间账面变动
+    wmsVsActual?: number | null; // WMS 需调整量
+    wmsVsBook?: number | null; // 账实差
+    mirrorAvailable?: boolean;
+    wmsAdjustRequired?: boolean;
+    bookDriftDetected?: boolean;
+    remark?: string;
+  }
+
+  /** 盘点单三方比对结果 */
+  export interface Comparison {
+    checkId?: number;
+    checkNo?: string;
+    checkTime?: string;
+    status?: number;
+    totalLines?: number;
+    checkDiffLineCount?: number;
+    mirrorCoveredLineCount?: number;
+    wmsAdjustLineCount?: number;
+    bookDriftLineCount?: number;
+    /** 为 false 时说明尚无 WMS 镜像，三方降级为两方 */
+    mirrorAvailable?: boolean;
+    lines?: ComparisonLine[];
+  }
 }
 
 /** 查询库存盘点单分页 */
@@ -85,4 +126,19 @@ export function exportStockCheck(params: any) {
   return requestClient.download('/erp/stock-check/export-excel', {
     params,
   });
+}
+
+/** 导出库存盘点单 PDF */
+export function exportStockCheckPdf(params: any) {
+  return requestClient.download('/erp/stock-check/export-pdf', {
+    params,
+  });
+}
+
+/** 获得盘点单三方比对（ERP 账面 / ERP 实盘 / WMS 实物） */
+export function getStockCheckComparison(checkId: number) {
+  return requestClient.get<ErpStockCheckApi.Comparison>(
+    '/erp/stock-check/comparison',
+    { params: { checkId } },
+  );
 }

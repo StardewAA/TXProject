@@ -4,11 +4,13 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountRecordDO;
 import jakarta.validation.Valid;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 
@@ -98,5 +100,10 @@ public interface ErpAccountService {
      * @return 结算账户分页
      */
     PageResult<ErpAccountDO> getAccountPage(ErpAccountPageReqVO pageReqVO);
+
+    void recordBalanceChange(Long accountId, String bizType, Long bizId, String bizNo,
+                             BigDecimal changeAmount, String remark);
+
+    List<ErpAccountRecordDO> getAccountRecordList(Long accountId);
 
 }

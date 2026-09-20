@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.inquiry;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -14,9 +15,13 @@ public class ErpInquiryRespVO {
     private String purchaseRequestNo;
     private Integer status;
     private String processInstanceId;
+    @Schema(description = "询价反审批原因")
+    private String reverseApproveReason;
     private Integer businessStatus;
     private Integer awardStatus;
     private String awardProcessInstanceId;
+    @Schema(description = "定标反审批原因")
+    private String awardReverseApproveReason;
     private String title;
     private Integer inquiryMode;
     private LocalDateTime deadline;
@@ -35,6 +40,17 @@ public class ErpInquiryRespVO {
     private String productNames;
     private List<Item> items;
     private List<Quote> quotes;
+    /** 受邀供应商名单；为空表示不限受邀范围 */
+    private List<InvitedSupplier> invitedSuppliers;
+
+    @Data
+    public static class InvitedSupplier {
+        private Long supplierId;
+        private String supplierName;
+        /** 报价状态：0-未报价，20-已报价 */
+        private Integer quoteStatus;
+        private LocalDateTime invitedAt;
+    }
 
     @Data
     public static class Item {

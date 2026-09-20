@@ -189,9 +189,12 @@ public class ErpSaleOutServiceImpl implements ErpSaleOutService {
                 : ErpStockRecordBizTypeEnum.SALE_OUT_CANCEL.getType();
         saleOutItems.forEach(saleOutItem -> {
             BigDecimal count = approve ? saleOutItem.getCount().negate() : saleOutItem.getCount();
-            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
+            ErpStockRecordCreateReqBO stockRecordBO = new ErpStockRecordCreateReqBO(
                     saleOutItem.getProductId(), saleOutItem.getWarehouseId(), count,
-                    bizType, saleOutItem.getOutId(), saleOutItem.getId(), saleOut.getNo()));
+                    bizType, saleOutItem.getOutId(), saleOutItem.getId(), saleOut.getNo());
+            // 归属：销售出库的责任人 = 单据上的销售员（绩效归因依据）
+            stockRecordBO.setSourceUserId(saleOut.getSaleUserId());
+            stockRecordService.createStockRecord(stockRecordBO);
         });
     }
 
@@ -311,6 +314,11 @@ public class ErpSaleOutServiceImpl implements ErpSaleOutService {
             return Collections.emptyList();
         }
         return saleOutItemMapper.selectListByOutIds(outIds);
+    }
+
+    @Override
+    public List<ErpSaleOutDO> getSaleOutListByOrderId(Long orderId) {
+        return saleOutMapper.selectListByOrderId(orderId);
     }
 
 }

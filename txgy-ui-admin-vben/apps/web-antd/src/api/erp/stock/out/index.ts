@@ -84,3 +84,10 @@ export function exportStockOut(params: any) {
     params,
   });
 }
+
+/** 导出其它出库单 PDF */
+export function exportStockOutPdf(params: any) {
+  return requestClient.download('/erp/stock-out/export-pdf', {
+    params,
+  });
+}

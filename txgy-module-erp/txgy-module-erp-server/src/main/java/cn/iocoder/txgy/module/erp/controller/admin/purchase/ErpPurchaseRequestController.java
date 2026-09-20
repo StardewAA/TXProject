@@ -17,6 +17,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +55,15 @@ public class ErpPurchaseRequestController {
     @PreAuthorize("@ss.hasPermission('erp:purchase-request:submit')")
     public CommonResult<Boolean> submit(@RequestParam("id") Long id) { requestService.submitPurchaseRequest(id, getLoginUserId()); return success(true); }
 
+    @PutMapping("/reverse-approve") @Operation(summary = "反审批采购申请")
+    @PreAuthorize("@ss.hasPermission('erp:purchase-request:reverse-approve')")
+    public CommonResult<Boolean> reverseApprove(@RequestParam("id") Long id,
+                                                @RequestParam("reason") @NotBlank(message = "反审批原因不能为空")
+                                                @Size(max = 200, message = "反审批原因不能超过 200 个字符") String reason) {
+        requestService.reverseApprovePurchaseRequest(id, getLoginUserId(), reason);
+        return success(true);
+    }
+
     @GetMapping("/get") @Operation(summary = "获得采购申请")
     @PreAuthorize("@ss.hasPermission('erp:purchase-request:query')")
     public CommonResult<ErpPurchaseRequestRespVO> get(@RequestParam("id") Long id) {
@@ -68,7 +79,7 @@ public class ErpPurchaseRequestController {
         List<ErpPurchaseRequestItemDO> items = requestService.getItemListByRequestIds(convertSet(result.getList(), ErpPurchaseRequestDO::getId));
         Map<Long, List<ErpPurchaseRequestItemDO>> itemMap = convertMultiMap(items, ErpPurchaseRequestItemDO::getRequestId);
         Map<Long, ErpProductRespVO> productMap = productService.getProductVOMap(convertSet(items, ErpPurchaseRequestItemDO::getProductId));
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertSet(result.getList(), r -> Long.parseLong(r.getCreator())));
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(convertSet(result.getList(), r -> Long.parseLong(r.getCreator())));
         return success(BeanUtils.toBean(result, ErpPurchaseRequestRespVO.class, vo -> {
             fillItems(vo, itemMap.get(vo.getId()), productMap);
             MapUtils.findAndThen(userMap, Long.parseLong(vo.getCreator()), user -> vo.setCreatorName(user.getNickname()));

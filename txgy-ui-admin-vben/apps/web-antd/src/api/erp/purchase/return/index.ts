@@ -96,3 +96,10 @@ export function exportPurchaseReturn(params: any) {
     params,
   });
 }
+
+/** 导出采购退货 PDF */
+export function exportPurchaseReturnPdf(params: any) {
+  return requestClient.download('/erp/purchase-return/export-pdf', {
+    params,
+  });
+}
