@@ -3,7 +3,6 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { HrmSalarySlipSendRecordApi } from '#/api/hrm/salary/slip/send-record';
 
 import { useRouter } from 'vue-router';
-
 import { confirm, DocAlert, Page } from '@vben/common-ui';
 
 import { Button, message } from 'ant-design-vue';
@@ -115,5 +114,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
     </Grid>
+
   </Page>
 </template>

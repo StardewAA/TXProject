@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.salary.employee;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.salary.config.HrmSalaryOptionDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.salary.employee.HrmSalaryChangeReasonEnum;
 import cn.iocoder.txgy.module.hrm.enums.salary.employee.HrmSalaryChangeRecordStatusEnum;
@@ -35,7 +35,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmSalaryChangeRecordDO extends BaseDO {
+public class HrmSalaryChangeRecordDO extends TenantBaseDO {
 
     /**
      * 编号

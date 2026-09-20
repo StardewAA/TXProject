@@ -8,7 +8,6 @@ import { useVbenForm, useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 
 import {
-  createRecruitCandidate,
   getRecruitCandidateForUpdate,
   updateRecruitCandidate,
 } from '#/api/hrm/recruit/candidate';
@@ -18,9 +17,8 @@ import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<HrmRecruitCandidateApi.RecruitCandidateSave>();
-const getTitle = computed(() =>
-  formData.value?.id ? '编辑候选人' : '新建候选人',
-);
+// 候选人只能由求职者在招聘门户投递产生，后台只保留「编辑」能力
+const getTitle = computed(() => '编辑候选人');
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -46,9 +44,7 @@ const [Modal, modalApi] = useVbenModal({
     const data =
       (await formApi.getValues()) as HrmRecruitCandidateApi.RecruitCandidateSave;
     try {
-      await (formData.value?.id
-        ? updateRecruitCandidate(data)
-        : createRecruitCandidate(data));
+      await updateRecruitCandidate(data);
       // 关闭并提示
       await modalApi.close();
       emit('success');
@@ -64,10 +60,7 @@ const [Modal, modalApi] = useVbenModal({
     }
     // 加载数据
     const data = modalApi.getData<HrmRecruitCandidateApi.RecruitCandidateSave>();
-    if (!data?.id) {
-      await formApi.setValues({ sex: 1 });
-      return;
-    }
+    if (!data?.id) return;
     modalApi.lock();
     try {
       formData.value = await getRecruitCandidateForUpdate(data.id);

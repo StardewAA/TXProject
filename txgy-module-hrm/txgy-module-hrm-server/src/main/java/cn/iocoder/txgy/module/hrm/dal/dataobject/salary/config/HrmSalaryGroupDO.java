@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.salary.config;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -31,7 +31,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmSalaryGroupDO extends BaseDO {
+public class HrmSalaryGroupDO extends TenantBaseDO {
 
     /**
      * 默认月计薪天数

@@ -64,6 +64,22 @@ def install(ctx):
         response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
         return response
 
+    # 兼容 /training-exam 前缀：管理端以 /training-exam/* 反代本服务（vite 代理或网关），
+    # 代理剥前缀失败时（如 vite 重启后 rewrite 未生效）本中间件兜底剥前缀，页面/API/静态资源均可访问。
+    @app.middleware("http")
+    async def strip_training_exam_prefix(request, call_next):
+        path = request.scope.get("path", "")
+        if path == "/training-exam":
+            request.scope["path"] = "/"
+            request.scope["raw_path"] = b"/"
+        elif path.startswith("/training-exam/"):
+            stripped = path[len("/training-exam"):]
+            request.scope["path"] = stripped
+            raw = request.scope.get("raw_path")
+            if raw and raw.decode("utf-8", "ignore").startswith("/training-exam/"):
+                request.scope["raw_path"] = raw[len(b"/training-exam"):]
+        return await call_next(request)
+
     async def expire_attempts():
         while True:
             for path in DATA.glob("tenant-*.db"):

@@ -231,13 +231,29 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     }
 
     private List<ErpPurchaseOrderItemDO> validatePurchaseOrderItems(List<ErpPurchaseOrderSaveReqVO.Item> list) {
+        if (CollUtil.isEmpty(list)) {
+            throw exception(PURCHASE_ORDER_ITEM_NOT_EMPTY);
+        }
+        for (ErpPurchaseOrderSaveReqVO.Item item : list) {
+            if (item.getCount() == null || item.getCount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw exception(PURCHASE_ORDER_ITEM_COUNT_INVALID);
+            }
+            if (item.getProductPrice() == null || item.getProductPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                throw exception(PURCHASE_ORDER_ITEM_PRICE_INVALID);
+            }
+        }
         // 1. 校验产品存在
         List<ErpProductDO> productList = productService.validProductList(
                 convertSet(list, ErpPurchaseOrderSaveReqVO.Item::getProductId));
         Map<Long, ErpProductDO> productMap = convertMap(productList, ErpProductDO::getId);
         // 2. 转化为 ErpPurchaseOrderItemDO 列表
         return convertList(list, o -> BeanUtils.toBean(o, ErpPurchaseOrderItemDO.class, item -> {
-            item.setProductUnitId(productMap.get(item.getProductId()).getUnitId());
+            ErpProductDO product = productMap.get(item.getProductId());
+            if (product.getUnitId() == null) {
+                throw exception(PURCHASE_ORDER_PRODUCT_UNIT_NOT_EXISTS);
+            }
+            // 产品单位以产品主数据为准，避免客户端传入旧单位造成口径不一致。
+            item.setProductUnitId(product.getUnitId());
             item.setTotalPrice(MoneyUtils.priceMultiply(item.getProductPrice(), item.getCount()));
             if (item.getTotalPrice() == null) {
                 return;

@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.employee;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.config.HrmInsuranceSchemeDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +28,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmInsuranceEmployeeInfoDO extends BaseDO {
+public class HrmInsuranceEmployeeInfoDO extends TenantBaseDO {
 
     @TableId
     private Long id;

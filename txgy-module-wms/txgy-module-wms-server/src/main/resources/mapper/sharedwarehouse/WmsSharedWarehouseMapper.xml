@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.iocoder.txgy.module.wms.dal.mysql.sharedwarehouse.WmsSharedWarehouseMapper">
+
+    <sql id="warehouseSourceCondition">
+        <if test="code != null and code != ''">
+            AND w.code = #{code}
+        </if>
+        <if test="name != null and name != ''">
+            AND w.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="sourceSystem == 'MALL'">
+            AND EXISTS (
+                SELECT 1
+                FROM wms_inventory i
+                INNER JOIN product_sku ps ON ps.wms_sku_id = i.sku_id
+                    AND ps.wms_warehouse_id = i.warehouse_id AND ps.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0
+            )
+        </if>
+        <if test="sourceSystem == 'ERP'">
+            AND EXISTS (
+                SELECT 1
+                FROM wms_inventory i
+                INNER JOIN wms_item_sku ws ON ws.id = i.sku_id AND ws.deleted = 0
+                INNER JOIN erp_product ep ON ep.bar_code = ws.bar_code AND ep.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0
+            )
+        </if>
+    </sql>
+
+    <select id="selectWarehousePage"
+            resultType="cn.iocoder.txgy.module.wms.dal.dataobject.sharedwarehouse.WmsSharedWarehouseQueryDO">
+        SELECT w.id AS warehouseId,
+               w.code AS warehouseCode,
+               w.name AS warehouseName,
+               CONCAT_WS(',',
+                   'WMS',
+                   IF(EXISTS (
+                       SELECT 1
+                       FROM wms_inventory i
+                       INNER JOIN product_sku ps ON ps.wms_sku_id = i.sku_id
+                           AND ps.wms_warehouse_id = i.warehouse_id AND ps.deleted = 0
+                       WHERE i.warehouse_id = w.id AND i.deleted = 0
+                   ), 'MALL', NULL),
+                   IF(EXISTS (
+                       SELECT 1
+                       FROM wms_inventory i
+                       INNER JOIN wms_item_sku ws ON ws.id = i.sku_id AND ws.deleted = 0
+                       INNER JOIN erp_product ep ON ep.bar_code = ws.bar_code AND ep.deleted = 0
+                       WHERE i.warehouse_id = w.id AND i.deleted = 0
+                   ), 'ERP', NULL)
+               ) AS sourceSystems,
+               (SELECT COUNT(DISTINCT i.sku_id)
+                FROM wms_inventory i
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS wmsSkuCount,
+               (SELECT COUNT(DISTINCT ps.id)
+                FROM wms_inventory i
+                INNER JOIN product_sku ps ON ps.wms_sku_id = i.sku_id
+                    AND ps.wms_warehouse_id = i.warehouse_id AND ps.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS mallSkuCount,
+               (SELECT COUNT(DISTINCT ep.id)
+                FROM wms_inventory i
+                INNER JOIN wms_item_sku ws ON ws.id = i.sku_id AND ws.deleted = 0
+                INNER JOIN erp_product ep ON ep.bar_code = ws.bar_code AND ep.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS erpProductCount,
+               (SELECT COALESCE(SUM(i.quantity), 0)
+                FROM wms_inventory i
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS physicalQuantity,
+               (SELECT GROUP_CONCAT(DISTINCT ew.name ORDER BY ew.name SEPARATOR ',')
+                FROM erp_warehouse ew
+                WHERE ew.name = w.name AND ew.deleted = 0) AS relatedErpWarehouseNames,
+               w.remark AS remark
+        FROM wms_warehouse w
+        WHERE w.deleted = 0
+        <include refid="warehouseSourceCondition"/>
+        ORDER BY w.sort ASC, w.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="selectWarehouseList"
+            resultType="cn.iocoder.txgy.module.wms.dal.dataobject.sharedwarehouse.WmsSharedWarehouseQueryDO">
+        SELECT w.id AS warehouseId,
+               w.code AS warehouseCode,
+               w.name AS warehouseName,
+               CONCAT_WS(',',
+                   'WMS',
+                   IF(EXISTS (
+                       SELECT 1
+                       FROM wms_inventory i
+                       INNER JOIN product_sku ps ON ps.wms_sku_id = i.sku_id
+                           AND ps.wms_warehouse_id = i.warehouse_id AND ps.deleted = 0
+                       WHERE i.warehouse_id = w.id AND i.deleted = 0
+                   ), 'MALL', NULL),
+                   IF(EXISTS (
+                       SELECT 1
+                       FROM wms_inventory i
+                       INNER JOIN wms_item_sku ws ON ws.id = i.sku_id AND ws.deleted = 0
+                       INNER JOIN erp_product ep ON ep.bar_code = ws.bar_code AND ep.deleted = 0
+                       WHERE i.warehouse_id = w.id AND i.deleted = 0
+                   ), 'ERP', NULL)
+               ) AS sourceSystems,
+               (SELECT COUNT(DISTINCT i.sku_id)
+                FROM wms_inventory i
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS wmsSkuCount,
+               (SELECT COUNT(DISTINCT ps.id)
+                FROM wms_inventory i
+                INNER JOIN product_sku ps ON ps.wms_sku_id = i.sku_id
+                    AND ps.wms_warehouse_id = i.warehouse_id AND ps.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS mallSkuCount,
+               (SELECT COUNT(DISTINCT ep.id)
+                FROM wms_inventory i
+                INNER JOIN wms_item_sku ws ON ws.id = i.sku_id AND ws.deleted = 0
+                INNER JOIN erp_product ep ON ep.bar_code = ws.bar_code AND ep.deleted = 0
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS erpProductCount,
+               (SELECT COALESCE(SUM(i.quantity), 0)
+                FROM wms_inventory i
+                WHERE i.warehouse_id = w.id AND i.deleted = 0) AS physicalQuantity,
+               (SELECT GROUP_CONCAT(DISTINCT ew.name ORDER BY ew.name SEPARATOR ',')
+                FROM erp_warehouse ew
+                WHERE ew.name = w.name AND ew.deleted = 0) AS relatedErpWarehouseNames,
+               w.remark AS remark
+        FROM wms_warehouse w
+        WHERE w.deleted = 0
+        <include refid="warehouseSourceCondition"/>
+        ORDER BY w.sort ASC, w.id DESC
+    </select>
+
+    <select id="selectWarehouseCount" resultType="long">
+        SELECT COUNT(*)
+        FROM (
+            SELECT w.id
+            FROM wms_warehouse w
+            WHERE w.deleted = 0
+            <include refid="warehouseSourceCondition"/>
+        ) t
+    </select>
+
+    <sql id="mallSkuJoin">
+        LEFT JOIN (
+            SELECT wms_sku_id, wms_warehouse_id, MIN(id) AS mallSkuId
+            FROM product_sku
+            WHERE deleted = 0 AND wms_sku_id IS NOT NULL AND wms_warehouse_id IS NOT NULL
+            GROUP BY wms_sku_id, wms_warehouse_id
+        ) mall_mapping ON mall_mapping.wms_sku_id = i.sku_id
+            AND mall_mapping.wms_warehouse_id = i.warehouse_id
+        LEFT JOIN product_sku ps ON ps.id = mall_mapping.mallSkuId AND ps.deleted = 0
+        LEFT JOIN product_spu spu ON spu.id = ps.spu_id AND spu.deleted = 0
+    </sql>
+
+    <sql id="erpProductJoin">
+        LEFT JOIN (
+            SELECT bar_code, MIN(id) AS erpProductId
+            FROM erp_product
+            WHERE deleted = 0 AND bar_code IS NOT NULL AND bar_code != ''
+            GROUP BY bar_code
+        ) erp_mapping ON erp_mapping.bar_code = ws.bar_code
+        LEFT JOIN erp_product ep ON ep.id = erp_mapping.erpProductId AND ep.deleted = 0
+    </sql>
+
+    <sql id="productConditions">
+        WHERE i.deleted = 0
+          AND ws.deleted = 0
+          AND wi.deleted = 0
+          AND i.warehouse_id = #{warehouseId}
+        <if test="itemName != null and itemName != ''">
+            AND wi.name LIKE CONCAT('%', #{itemName}, '%')
+        </if>
+        <if test="sourceSystem == 'MALL'">
+            AND ps.id IS NOT NULL
+        </if>
+        <if test="sourceSystem == 'ERP'">
+            AND ep.id IS NOT NULL
+        </if>
+    </sql>
+
+    <select id="selectProductPage"
+            resultType="cn.iocoder.txgy.module.wms.dal.dataobject.sharedwarehouse.WmsSharedWarehouseProductQueryDO">
+        SELECT i.warehouse_id AS warehouseId,
+               w.name AS warehouseName,
+               ws.id AS wmsSkuId,
+               ws.name AS wmsSkuName,
+               wi.id AS wmsItemId,
+               wi.name AS wmsItemName,
+               ws.bar_code AS barCode,
+               i.quantity AS physicalQuantity,
+               ps.id AS mallSkuId,
+               spu.id AS mallSpuId,
+               spu.name AS mallSpuName,
+               ps.stock AS mallCachedStock,
+               ep.id AS erpProductId,
+               ep.name AS erpProductName
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+        INNER JOIN wms_item_sku ws ON ws.id = i.sku_id
+        INNER JOIN wms_item wi ON wi.id = ws.item_id
+        <include refid="mallSkuJoin"/>
+        <include refid="erpProductJoin"/>
+        <include refid="productConditions"/>
+        ORDER BY wi.id ASC, ws.id ASC, i.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="selectProductCount" resultType="long">
+        SELECT COUNT(*)
+        FROM wms_inventory i
+        INNER JOIN wms_warehouse w ON w.id = i.warehouse_id AND w.deleted = 0
+        INNER JOIN wms_item_sku ws ON ws.id = i.sku_id
+        INNER JOIN wms_item wi ON wi.id = ws.item_id
+        <include refid="mallSkuJoin"/>
+        <include refid="erpProductJoin"/>
+        <include refid="productConditions"/>
+    </select>
+
+</mapper>

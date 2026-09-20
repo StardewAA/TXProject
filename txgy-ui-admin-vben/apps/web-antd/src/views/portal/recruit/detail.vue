@@ -219,6 +219,9 @@ onMounted(async () => {
         </div>
         <div class="detail-actions">
           <a-button class="detail-chat-button" @click="openChat">立即沟通</a-button>
+          <p class="detail-flow-hint">
+            投递流程：先与 HR 沟通 → HR 回复后发送简历 → 即可完成投递
+          </p>
         </div>
       </header>
 
@@ -380,8 +383,16 @@ onMounted(async () => {
 
 .detail-actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   align-items: center;
+}
+
+.detail-flow-hint {
+  margin: 0;
+  color: var(--el-text-color-secondary, #8a969f);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .detail-chat-button {

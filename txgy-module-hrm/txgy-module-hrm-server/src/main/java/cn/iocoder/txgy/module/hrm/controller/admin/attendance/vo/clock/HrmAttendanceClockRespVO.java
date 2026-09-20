@@ -85,6 +85,10 @@ public class HrmAttendanceClockRespVO {
     @Schema(description = "WiFi MAC 地址", example = "00:11:22:33:44:55")
     private String mac;
 
+    @Schema(description = "打卡现场照片（人脸/工地照）地址")
+    @ExcelProperty(value = "现场照片", index = 13)
+    private String photoUrl;
+
     @Schema(description = "备注", example = "手工补卡")
     @ExcelProperty(value = "备注", index = 12)
     private String remark;

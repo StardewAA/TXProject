@@ -1,15 +1,23 @@
 package cn.iocoder.txgy.module.hrm.service.employee.employment;
 
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.hrm.controller.admin.employee.vo.contract.HrmEmployeeContractSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.employment.HrmEmployeeContractDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.company.HrmCompanyProfileDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.contract.HrmContractTemplateDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitOfferDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.employee.employment.HrmEmployeeContractMapper;
+import cn.iocoder.txgy.module.hrm.service.company.HrmCompanyProfileService;
+import cn.iocoder.txgy.module.hrm.service.contract.HrmContractTemplateService;
 import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeContractTypeEnum;
+import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeContractStatusEnum;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -30,12 +38,23 @@ import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class HrmEmployeeContractServiceImpl implements HrmEmployeeContractService {
 
     @Resource
     private HrmEmployeeContractMapper contractMapper;
     @Resource
     private HrmEmployeeService employeeService;
+    @Resource
+    private HrmContractTemplateService contractTemplateService;
+    @Resource
+    private HrmCompanyProfileService companyProfileService;
+
+    @Override
+    public List<HrmEmployeeContractDO> getExpireWarningList(int warnDays) {
+        int days = warnDays <= 0 ? 30 : warnDays;
+        return contractMapper.selectExpireWarningList(days);
+    }
 
     @Override
     @LogRecord(type = HRM_EMPLOYEE_TYPE, subType = HRM_EMPLOYEE_CONTRACT_CREATE_SUB_TYPE,
@@ -116,6 +135,89 @@ public class HrmEmployeeContractServiceImpl implements HrmEmployeeContractServic
     @Override
     public Long getExpireEmployeeCountInMonth(LocalDateTime[] endTimes) {
         return contractMapper.selectCountByEndTimeBetween(endTimes);
+    }
+
+    @Override
+    public Long createDraftForOffer(HrmRecruitOfferDO offer) {
+        // 1. 幂等：同一 Offer 只生成一份草稿
+        HrmEmployeeContractDO exists = contractMapper.selectBySourceOfferId(offer.getId());
+        if (exists != null) {
+            return exists.getId();
+        }
+
+        // 2. 选择默认启用模板，合同类型跟随模板；未配置模板时不阻断 Offer 发放
+        HrmContractTemplateDO template = contractTemplateService.getDefaultEnabledTemplate();
+        if (template == null) {
+            log.warn("[createDraftForOffer][Offer({}) 未配置启用的合同模板，跳过合同草稿生成]", offer.getId());
+            return null;
+        }
+
+        // 3. 生成合同草稿：员工尚未建档，employeeId 为空，入职后回写
+        HrmCompanyProfileDO company = companyProfileService.getDefaultProfile();
+        HrmEmployeeContractDO contract = new HrmEmployeeContractDO()
+                .setNo("HT-" + offer.getOfferNo())
+                .setType(template.getContractType())
+                .setTemplateId(template.getId())
+                .setSourceOfferId(offer.getId())
+                .setStatus(HrmEmployeeContractStatusEnum.NOT_PERFORMED.getStatus())
+                .setSignCompany(company != null ? company.getName() : null)
+                .setStartTime(offer.getPlannedOnboardDate() != null
+                        ? offer.getPlannedOnboardDate().atStartOfDay() : null)
+                .setPayAmount(offer.getSalaryAmount())
+                .setExpireRemind(true)
+                .setSort(0)
+                .setRemark("由 Offer " + offer.getOfferNo() + " 自动生成");
+        contractMapper.insert(contract);
+        return contract.getId();
+    }
+
+    @Override
+    public void bindEmployeeByOfferId(Long sourceOfferId, Long employeeId, LocalDateTime entryTime) {
+        HrmEmployeeContractDO contract = contractMapper.selectBySourceOfferId(sourceOfferId);
+        if (contract == null) {
+            return;
+        }
+        HrmEmployeeContractDO update = new HrmEmployeeContractDO()
+                .setId(contract.getId()).setEmployeeId(employeeId);
+        if (contract.getStartTime() == null && entryTime != null) {
+            update.setStartTime(getDayBeginTime(entryTime));
+        }
+        contractMapper.updateById(update);
+        // 记录操作日志上下文（合同绑定员工）
+        LogRecordContext.putVariable("contract", contract);
+    }
+
+    @Override
+    public HrmEmployeeContractDO getContractBySourceOfferId(Long sourceOfferId) {
+        if (sourceOfferId == null) {
+            return null;
+        }
+        return contractMapper.selectBySourceOfferId(sourceOfferId);
+    }
+
+    @Override
+    public void markGeneratedFile(Long id, String fileUrl, String remarkAppend) {
+        HrmEmployeeContractDO contract = validateContractExists(id);
+        HrmEmployeeContractDO update = new HrmEmployeeContractDO().setId(id)
+                .setFileUrls(java.util.Collections.singletonList(fileUrl));
+        if (StrUtil.isNotBlank(remarkAppend)) {
+            String remark = StrUtil.blankToDefault(contract.getRemark(), "");
+            update.setRemark(StrUtil.sub(remark + "；" + remarkAppend, 0, 500));
+        }
+        contractMapper.updateById(update);
+    }
+
+    @Override
+    public void applyTemplateByEmploymentType(Long sourceOfferId, Long contractTemplateId) {
+        HrmEmployeeContractDO contract = getContractBySourceOfferId(sourceOfferId);
+        if (contract == null || contractTemplateId == null) {
+            return;
+        }
+        // 模板不存在时直接报错，避免转员工后拿到一份渲染不出内容的合同
+        HrmContractTemplateDO template = contractTemplateService.validateTemplateExists(contractTemplateId);
+        contractMapper.updateById(new HrmEmployeeContractDO().setId(contract.getId())
+                .setTemplateId(template.getId())
+                .setType(template.getContractType()));
     }
 
 }

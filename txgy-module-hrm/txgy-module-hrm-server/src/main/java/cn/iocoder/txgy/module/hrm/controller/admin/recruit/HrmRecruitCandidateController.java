@@ -68,6 +68,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSetByFlatMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.getFirst;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_CREATE_FORBIDDEN;
 
 @Tag(name = "管理后台 - HRM 招聘候选人")
 @RestController
@@ -96,10 +98,13 @@ public class HrmRecruitCandidateController {
     private AdminUserApi adminUserApi;
 
     @PostMapping("/create")
-    @Operation(summary = "创建招聘候选人")
+    @Operation(summary = "创建招聘候选人（已停用）",
+            description = "候选人只能由求职者在招聘门户投递职位时自动产生，后台不再支持手工新增；"
+                    + "如需补充简历来源，请走「招聘沟通 → 转为候选人」或在门户投递")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:candidate:create')")
     public CommonResult<Long> createRecruitCandidate(@Valid @RequestBody HrmRecruitCandidateSaveReqVO createReqVO) {
-        return success(recruitCandidateService.createRecruitCandidate(createReqVO));
+        // 后台手工新增的候选人没有应聘记录，无法发 Offer / 安排面试，属于脏数据来源，直接拒绝
+        throw exception(RECRUIT_CANDIDATE_CREATE_FORBIDDEN);
     }
 
     @PutMapping("/update")

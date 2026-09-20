@@ -48,6 +48,13 @@ const [Modal, modalApi] = useVbenModal({
     // 提交表单
     const data =
       (await formApi.getValues()) as SystemMailAccountApi.MailAccount;
+    // 密码（授权码）不再随查询接口返回，编辑时必然为空；
+    // 新增场景必须显式填写，否则不知道该账号用什么授权码发信。
+    if (!formData.value?.id && !data.password) {
+      modalApi.unlock();
+      message.error('新增邮箱账号时，密码（授权码）不能为空');
+      return;
+    }
     try {
       await (formData.value?.id
         ? updateMailAccount(data)
