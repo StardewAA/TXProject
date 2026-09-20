@@ -154,6 +154,12 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
     }
 
     @Override
+    public CommonResult<WmsIntegrationAcceptedRespDTO> createMallShipment(WmsOrderRequestDTO request) {
+        validateOrder(request, "MALL", "SALE_SHIPMENT", "FINISHED_GOODS");
+        return createExternalShipment(request);
+    }
+
+    @Override
     public CommonResult<WmsIntegrationAcceptedRespDTO> createProductionShipment(WmsOrderRequestDTO request) {
         validateOrder(request, "MES", "PRODUCTION_SHIPMENT", "RAW_MATERIAL");
         return createExternalShipment(request);
@@ -203,7 +209,9 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         requireReceipt(source.equals(request.getSourceModule()) && type.equals(request.getOrderType()),
                 "此接口只接受 " + source + " " + type);
         requireReceipt(validText(request.getRequestId(), 64) && !request.getRequestId().startsWith("B:"), "requestId 无效");
-        requireReceipt(validText(request.getSourceOrderNo(), 56), "来源单号不能为空且不能超过 56 字符");
+        int sourceOrderNoMaxLength = 64 - ("WMS-" + source + "-").length();
+        requireReceipt(validText(request.getSourceOrderNo(), sourceOrderNoMaxLength),
+                "来源单号不能为空且不能超过 " + sourceOrderNoMaxLength + " 字符");
         requireReceipt(validText(request.getBusinessChainNo(), 64), "业务链编号不能为空且不能超过 64 字符");
         requireReceipt(request.getOccurredAt() != null && request.getEventVersion() != null && request.getEventVersion() > 0,
                 "业务时间及正整数事件版本不能为空");
@@ -365,12 +373,22 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                 .setResultCode(0).setResultData(data).setUpdatedAt(order.getUpdateTime()));
     }
 
+    @Override
+    public CommonResult<WmsIntegrationRequestRespDTO> getMallOrderExecution(Long tenantId, String sourceOrderNo) {
+        validateTenant(tenantId);
+        return shipmentExecution(sourceOrderNo, "SALE_SHIPMENT", "MALL");
+    }
+
     private CommonResult<WmsIntegrationRequestRespDTO> shipmentExecution(String sourceNo, String type) {
+        String source = "SALE_SHIPMENT".equals(type) ? "ERP" : "MES";
+        return shipmentExecution(sourceNo, type, source);
+    }
+
+    private CommonResult<WmsIntegrationRequestRespDTO> shipmentExecution(String sourceNo, String type, String source) {
         requireReceipt(validText(sourceNo, 56), "来源单号不能为空且不能超过 56 字符");
         var q = new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderPageReqVO();
         q.setBizOrderNo(sourceNo);
         q.setPageSize(cn.iocoder.txgy.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
-        String source = "SALE_SHIPMENT".equals(type) ? "ERP" : "MES";
         var order = shipmentOrderService.getShipmentOrderPage(q).getList().stream()
                 .filter(row -> sourceNo.equals(row.getBizOrderNo()) && source.equals(row.getSourceModule()))
                 .findFirst().orElseThrow(() -> exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_NOT_EXISTS));

@@ -8,16 +8,22 @@ class WmsShipmentExecutionServiceTest {
     private WmsShipmentExecutionService service;
     private cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderMapper orders;
     private cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderDetailMapper details;
+    private cn.iocoder.txgy.module.wms.dal.mysql.integration.WmsIntegrationRequestMapper requests;
     private cn.iocoder.txgy.module.erp.api.wms.ErpWmsCallbackApi erp;
+    private cn.iocoder.txgy.module.trade.api.wms.TradeWmsCallbackApi mall;
     @org.junit.jupiter.api.BeforeEach void setup() {
         service = new WmsShipmentExecutionService();
         orders = org.mockito.Mockito.mock(cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderMapper.class);
         details = org.mockito.Mockito.mock(cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderDetailMapper.class);
+        requests = org.mockito.Mockito.mock(cn.iocoder.txgy.module.wms.dal.mysql.integration.WmsIntegrationRequestMapper.class);
         erp = org.mockito.Mockito.mock(cn.iocoder.txgy.module.erp.api.wms.ErpWmsCallbackApi.class);
+        mall = org.mockito.Mockito.mock(cn.iocoder.txgy.module.trade.api.wms.TradeWmsCallbackApi.class);
         // Only the database and remote HTTP boundary are mocked.
         org.springframework.test.util.ReflectionTestUtils.setField(service, "orderMapper", orders);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "detailMapper", details);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "requestMapper", requests);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "erp", erp);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "mall", mall);
         cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.setTenantId(2005L);
     }
     @org.junit.jupiter.api.AfterEach void cleanup() { cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.clear(); }
@@ -59,6 +65,36 @@ class WmsShipmentExecutionServiceTest {
         assertEquals(new java.math.BigDecimal("7"), requests.get(1).getItems().getFirst().getActualQuantity());
         assertEquals(2, order.getNotificationAttempts());
     }
+    @Test void mallShipmentUsesMallCallbackWithOriginalRequestId() {
+        var order = new WmsShipmentOrderDO().setId(2L).setNo("WMS-MALL-MALL-ORDER-1")
+                .setBizOrderNo("MALL-ORDER-1").setBusinessChainNo("MALL-CHAIN-1")
+                .setSourceModule("MALL").setExecutionStatus(1)
+                .setExecutionTime(java.time.LocalDateTime.of(2026, 9, 20, 10, 0));
+        org.mockito.Mockito.when(orders.selectByIdForUpdate(2L)).thenReturn(order);
+        org.mockito.Mockito.when(requests.selectSourceRequest("SALE_SHIPMENT_CREATE", order.getNo()))
+                .thenReturn(new cn.iocoder.txgy.module.wms.dal.dataobject.integration.WmsIntegrationRequestDO()
+                        .setRequestId("mall-outbound-request-1").setProcessedEventVersion(3L));
+        org.mockito.Mockito.when(details.selectListByOrderId(2L)).thenReturn(java.util.List.of(
+                new cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDetailDO()
+                        .setSourceSnapshotJson("{\"lineNo\":1,\"sourceLineNo\":11,\"materialCode\":\"FG-1\",\"skuCode\":\"FG-1-STD\"}")
+                        .setSourceLineNo(11).setQuantity(new java.math.BigDecimal("3"))));
+        org.mockito.Mockito.when(mall.callbackExecutionResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(cn.iocoder.txgy.framework.common.pojo.CommonResult.success(true));
+
+        assertTrue(service.retryNotification(2L));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                cn.iocoder.txgy.module.trade.api.wms.dto.TradeWmsExecutionCallbackReqDTO.class);
+        org.mockito.Mockito.verify(mall).callbackExecutionResult(captor.capture());
+        var callback = captor.getValue();
+        assertEquals("mall-outbound-request-1", callback.getRequestId());
+        assertEquals(3L, callback.getEventVersion());
+        assertEquals("MALL-ORDER-1", callback.getSourceOrderNo());
+        assertEquals("WMS-MALL-MALL-ORDER-1", callback.getWmsOrderNo());
+        assertEquals("COMPLETED", callback.getExecutionStatus());
+        assertEquals(new java.math.BigDecimal("3"), callback.getItems().getFirst().getActualQuantity());
+        org.mockito.Mockito.verifyNoInteractions(erp);
+    }
     @Test void automaticRetryWaitsButManualRetryCanProceed() {
         var order = new WmsShipmentOrderDO().setId(1L).setSourceModule("ERP").setExecutionStatus(1)
                 .setNotificationStatus("FAILED").setNextNotificationTime(java.time.LocalDateTime.now().plusMinutes(10));
@@ -90,6 +126,10 @@ class WmsShipmentExecutionServiceTest {
     @Test void draftIsNotReportedAsDelivered() {
         assertEquals("WAITING_EXECUTION", WmsShipmentExecutionService.notificationStatus(
                 new WmsShipmentOrderDO().setSourceModule("ERP").setExecutionStatus(0)));
+    }
+    @Test void executedMallOrderWithoutDeliveryMarkerRemainsPending() {
+        assertEquals("PENDING", WmsShipmentExecutionService.notificationStatus(
+                new WmsShipmentOrderDO().setSourceModule("MALL").setExecutionStatus(1)));
     }
 }
 
