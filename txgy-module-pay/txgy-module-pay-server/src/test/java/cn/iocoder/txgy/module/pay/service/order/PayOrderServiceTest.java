@@ -35,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.*;
 import static cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString;
@@ -54,8 +55,20 @@ import static org.mockito.Mockito.*;
  *
  * @author 芋艿
  */
-@Import({PayOrderServiceImpl.class, PayNoRedisDAO.class})
+@Import({PayOrderServiceImpl.class, PayOrderLifecycleService.class, PayNoRedisDAO.class})
 public class PayOrderServiceTest extends BaseDbAndRedisUnitTest {
+
+    /** New enum column must use a legal fixture value; align dates with SQL timestamp precision. */
+    @SafeVarargs
+    private static <T> T randomPojo(Class<T> type, Consumer<T>... customizers) {
+        T value = cn.iocoder.txgy.framework.test.core.util.RandomUtils.randomPojo(type);
+        if (value instanceof PayOrderExtensionDO attempt) attempt.setSubmitState(1);
+        for (Consumer<T> customizer : customizers) customizer.accept(value);
+        if (value instanceof PayOrderDO order && order.getExpireTime() != null) {
+            order.setExpireTime(order.getExpireTime().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+        }
+        return value;
+    }
 
     @Resource
     private PayOrderServiceImpl orderService;
@@ -261,6 +274,48 @@ public class PayOrderServiceTest extends BaseDbAndRedisUnitTest {
 
         // 调用, 并断言异常
         assertServiceException(() -> orderService.submitOrder(reqVO, userIp), PAY_ORDER_NOT_FOUND);
+    }
+
+    @Test
+    public void testSubmitOrder_externalFailureKeepsCommittedUnknownAttempt() {
+        PayOrderDO order = randomPojo(PayOrderDO.class, o -> o.setStatus(0).setAppId(1L)
+                .setExpireTime(LocalDateTime.now().plusHours(1)));
+        orderMapper.insert(order);
+        PayClient<?> client = prepareSubmitClient();
+        when(client.unifiedOrder(any())).thenAnswer(call -> {
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            PayOrderExtensionDO persisted = orderExtensionMapper.selectOne(null);
+            assertEquals(0, persisted.getSubmitState());
+            throw new IllegalStateException("Synthetic channel timeout");
+        });
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> orderService.submitOrder(new PayOrderSubmitReqVO().setId(order.getId())
+                        .setChannelCode(PayChannelEnum.ALIPAY_APP.getCode()), "127.0.0.1"));
+        PayOrderExtensionDO persisted = orderExtensionMapper.selectOne(null);
+        assertEquals(0, persisted.getStatus());
+        assertEquals(2, persisted.getSubmitState());
+        assertEquals(0, orderMapper.selectById(order.getId()).getStatus());
+    }
+
+    @Test
+    public void testSubmitOrder_emptyResponseAlsoKeepsUnknownAttempt() {
+        PayOrderDO order = randomPojo(PayOrderDO.class, o -> o.setStatus(0).setAppId(1L)
+                .setExpireTime(LocalDateTime.now().plusHours(1)));
+        orderMapper.insert(order);
+        prepareSubmitClient(); // default null response; not equivalent to channel closed
+        orderService.submitOrder(new PayOrderSubmitReqVO().setId(order.getId())
+                .setChannelCode(PayChannelEnum.ALIPAY_APP.getCode()), "127.0.0.1");
+        assertEquals(2, orderExtensionMapper.selectOne(null).getSubmitState());
+    }
+
+    private PayClient<?> prepareSubmitClient() {
+        when(appService.validPayApp(1L)).thenReturn(new PayAppDO().setId(1L));
+        when(channelService.validPayChannel(1L, PayChannelEnum.ALIPAY_APP.getCode()))
+                .thenReturn(new PayChannelDO().setId(10L).setCode(PayChannelEnum.ALIPAY_APP.getCode()));
+        PayClient<?> client = mock(PayClient.class);
+        doReturn(client).when(channelService).getPayClient(10L);
+        return client;
     }
 
     @Test
@@ -1078,7 +1133,7 @@ public class PayOrderServiceTest extends BaseDbAndRedisUnitTest {
         orderMapper.insert(order);
         // mock 数据（PayOrderExtensionDO 等待中）
         PayOrderExtensionDO orderExtension = randomPojo(PayOrderExtensionDO.class,
-                o -> o.setStatus(PayOrderStatusEnum.WAITING.getStatus())
+                o -> o.setStatus(PayOrderStatusEnum.WAITING.getStatus()).setSubmitState(1)
                         .setOrderId(order.getId()).setNo("P110")
                         .setChannelId(10L));
         orderExtensionMapper.insert(orderExtension);
@@ -1087,7 +1142,7 @@ public class PayOrderServiceTest extends BaseDbAndRedisUnitTest {
         when(channelService.getPayClient(eq(10L))).thenReturn(client);
         // mock 方法（PayClient 关闭返回）
         PayOrderRespDTO respDTO = randomPojo(PayOrderRespDTO.class,
-                o -> o.setStatus(PayOrderStatusEnum.CLOSED.getStatus()));
+                o -> o.setStatus(PayOrderStatusEnum.CLOSED.getStatus()).setChannelErrorCode(null).setChannelErrorMsg(null));
         when(client.getOrder(eq("P110"))).thenReturn(respDTO);
 
         // 调用
@@ -1096,7 +1151,7 @@ public class PayOrderServiceTest extends BaseDbAndRedisUnitTest {
         assertEquals(count, 1);
         // 断言 extension 变化
         orderExtension.setStatus(PayOrderStatusEnum.CLOSED.getStatus())
-                .setChannelNotifyData(toJsonString(respDTO));
+                .setChannelNotifyData(toJsonString(respDTO)).setChannelErrorCode(null).setChannelErrorMsg(null);
         assertPojoEquals(orderExtension, orderExtensionMapper.selectOne(null),
                 "updateTime", "updater");
         // 断言 order 变化

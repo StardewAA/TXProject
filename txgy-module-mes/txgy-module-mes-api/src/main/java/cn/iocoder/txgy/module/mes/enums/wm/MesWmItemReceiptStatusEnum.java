@@ -23,6 +23,13 @@ public enum MesWmItemReceiptStatusEnum implements ArrayValuable<Integer> {
      */
     PREPARE(MesOrderStatusConstants.PREPARE, "草稿"),
     /**
+     * BPM 审批中
+     *
+     * 对应 MesWmItemReceiptService#submitItemReceipt 方法：
+     * 提交后发起 BPM 流程，审批通过自动进入"待上架"，驳回退回草稿
+     */
+    BPM_APPROVING(MesOrderStatusConstants.BPM_APPROVING, "BPM审批中"),
+    /**
      * 待上架
      *
      * 对应 MesWmItemReceiptService#submitItemReceipt 方法

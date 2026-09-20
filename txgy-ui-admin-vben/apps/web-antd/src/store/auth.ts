@@ -86,6 +86,27 @@ export const useAuthStore = defineStore('auth', () => {
         if (isPersonalAuthentication) {
           accessStore.setTenantId(0);
           accessStore.clearVisitTenantId();
+        } else {
+          // 企业登录：把「访问租户」初始化为本次登录租户，
+          // 否则顶部租户下拉永远显示占位符「请选择租户」且无法回显当前租户。
+          const loginTenantId =
+            params.tenantId != null ? Number(params.tenantId) : null;
+          if (
+            loginTenantId != null &&
+            Number.isInteger(loginTenantId) &&
+            loginTenantId > 0
+          ) {
+            accessStore.setVisitTenantId(loginTenantId);
+          }
+        }
+        // 企业登录：以后端返回的「账号实际所属租户」为准，自动纠正登录时选错的租户，
+        // 避免出现"选了租户 A、账号却属于租户 B"导致的权限 403
+        if (
+          !isPersonalAuthentication &&
+          loginResult.tenantId !== null &&
+          loginResult.tenantId !== undefined
+        ) {
+          accessStore.setTenantId(Number(loginResult.tenantId));
         }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
@@ -102,6 +123,17 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
+          // 会话过期后重新登录（弹窗模式）：统一回到默认页面，
+          // 而不是停留在令牌失效前的当前页面。
+          const isPersonal =
+            params.loginType === 'personal' ||
+            (type === 'register' && params.registerType === 'personal');
+          const expiredHomePath = isPersonal
+            ? '/portal/home'
+            : userInfo.homePath && !userInfo.homePath.startsWith('/portal/')
+              ? userInfo.homePath
+              : preferences.app.defaultHomePath;
+          await router.replace(expiredHomePath);
         } else {
           // oxlint-disable-next-line no-unused-expressions
           onSuccess

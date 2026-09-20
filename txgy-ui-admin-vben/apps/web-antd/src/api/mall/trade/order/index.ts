@@ -17,6 +17,11 @@ export namespace MallOrderApi {
     userIp?: string; // 用户 IP
     userRemark?: string; // 用户备注
     status?: number; // 订单状态
+    deliverable?: boolean; // 服务端判定当前是否可发货，不根据主状态猜测
+    deliveryBlockReason?: string;
+    erpStatus?: string;
+    pickupable?: boolean;
+    pickupBlockReason?: string;
     productCount?: number; // 购买的商品数量
     finishTime?: Date; // 订单完成时间
     cancelTime?: Date; // 订单取消时间

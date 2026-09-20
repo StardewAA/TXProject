@@ -1,16 +1,26 @@
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { message, Modal } from 'ant-design-vue';
+import { Cascader, message, Modal } from 'ant-design-vue';
 
 import {
   getPortalRecruitPostTypeList,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
+import { getHrmRecruitFilePreviewUrl } from '#/api/hrm/portal/recruit/file-url';
 import {
   createPortalResume,
+  deletePortalResume,
   getPortalResumeList,
   RECRUIT_PROFILE_TITLE,
   type HrmPortalResumeApi,
@@ -18,6 +28,33 @@ import {
 } from '#/api/hrm/portal/resume';
 import { uploadFile } from '#/api/infra/file';
 import { requestClient } from '#/api/request';
+import { getAreaTree, type SystemAreaApi } from '#/api/system/area';
+import { AreaCascader } from '#/components/area';
+
+import MonthPicker from './components/month-picker.vue';
+import ResumeAiPanel from './components/resume-ai-panel.vue';
+import {
+  buildResumeVersionIdempotencyKey,
+  createPortalResumeVersion,
+  getPortalResumeVersionList,
+  type HrmPortalResumeVersionApi,
+} from '#/api/hrm/portal/resume-version';
+import {
+  isUnhandledResumeToolRequest,
+  type ResumeToolRequest,
+} from './components/resume-tools';
+
+/**
+ * 父级（index.vue 右上角简历工具菜单）传入的动作请求。
+ * 由 nonce 保证同一次点击只被消费一次，属性残留不会反复打开弹窗。
+ */
+const props = defineProps<{
+  pendingAction?: ResumeToolRequest;
+}>();
+
+const emit = defineEmits<{
+  actionHandled: [];
+}>();
 
 type Identity = 'student' | 'worker';
 
@@ -82,6 +119,11 @@ type PositionOption = {
   name: string;
 };
 
+type AreaTreeNode = SystemAreaApi.Area & {
+  children?: AreaTreeNode[];
+  disabled?: boolean;
+};
+
 const sectionItems = [
   { id: 'personal', label: '个人信息', caption: '联系方式与状态', icon: 'lucide:user-round' },
   { id: 'strengths', label: '个人优势', caption: '一句话介绍自己', icon: 'lucide:sparkles' },
@@ -90,13 +132,6 @@ const sectionItems = [
   { id: 'project', label: '项目经历', caption: '代表性成果', icon: 'lucide:folder-kanban' },
   { id: 'education', label: '教育经历', caption: '学历与在校经历', icon: 'lucide:graduation-cap' },
   { id: 'skills', label: '专业技能', caption: '能力关键词', icon: 'lucide:badge-check' },
-] as const;
-
-const cityOptions = [
-  '北京', '上海', '广州', '深圳', '杭州', '南京', '苏州', '成都', '重庆',
-  '西安', '武汉', '郑州', '天津', '青岛', '济南', '合肥', '厦门', '福州',
-  '长沙', '南昌', '太原', '石家庄', '呼和浩特', '沈阳', '大连', '长春',
-  '哈尔滨', '昆明', '贵阳', '兰州', '银川', '乌鲁木齐', '延安', '榆林',
 ] as const;
 
 const industryOptions = [
@@ -136,30 +171,35 @@ const fallbackPositions: PositionOption[] = [
 const workerStatusOptions = ['离职-随时到岗', '在职-考虑机会', '在职-月内到岗'];
 const studentStatusOptions = ['离校-随时到岗', '在校-考虑机会', '在校-月内到岗'];
 const now = new Date();
-const birthMonthOptions = Array.from({ length: now.getFullYear() - 1959 }, (_, yearIndex) => {
-  const year = now.getFullYear() - yearIndex;
-  return Array.from({ length: 12 }, (_, monthIndex) => {
-    const month = String(monthIndex + 1).padStart(2, '0');
-    return { label: `${year}年${month}月`, value: `${year}-${month}` };
-  });
-}).flat();
-const yearOptions = Array.from({ length: now.getFullYear() - 1979 + 6 }, (_, index) => now.getFullYear() + 5 - index);
+const birthMonthMinYear = 1960;
+const birthMonthMaxYear = now.getFullYear();
 const skillSuggestions = ['办公软件', '工程制图', '项目管理', '施工组织', '质量验收', '沟通协调'];
 const MAX_RESUME_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_RESUME_EXTENSIONS = ['pdf', 'doc', 'docx'];
 
+type ResumeSectionId = (typeof sectionItems)[number]['id'];
+
 const loading = ref(true);
 const submitting = ref(false);
 const uploadSubmitting = ref(false);
-const activeSection = ref<(typeof sectionItems)[number]['id']>('personal');
+const activeSection = ref<ResumeSectionId>('personal');
 const lastSavedAt = ref('');
+let sectionSyncFrame: number | undefined;
 const postTypes = ref<HrmPortalRecruitApi.PostType[]>([]);
 const attachments = ref<HrmPortalResumeApi.Resume[]>([]);
 const uploadModalOpen = ref(false);
+/** 附件管理面板已从在线简历页移到「简历」下拉入口，按需弹出 */
+const attachmentsModalOpen = ref(false);
 const uploadInput = ref<HTMLInputElement>();
 const selectedUploadFile = ref<File>();
 const uploadForm = reactive({ title: '', remark: '' });
 const positionValue = ref('');
+const domicileAreaId = ref<number>();
+const areaTree = ref<AreaTreeNode[]>([]);
+const expectedCityAreaIds = ref<Array<number | undefined>>([]);
+const expectedCityPickerPath = ref<number[]>([]);
+const expectedCityPickerOpen = ref(false);
+const expectedCitySearchValue = ref('');
 const experienceModalOpen = ref(false);
 const experienceIndex = ref(-1);
 const projectModalOpen = ref(false);
@@ -171,6 +211,30 @@ const editingProject = ref(createProjectExperience());
 const editingEducation = ref(createEducationExperience());
 
 const form = reactive<ResumeForm>(createDefaultForm());
+
+const areaFieldNames = {
+  children: 'children',
+  label: 'name',
+  value: 'id',
+};
+
+function applyAreaSelectableLevels(
+  tree: AreaTreeNode[],
+  selectableLevels: number[],
+  depth = 1,
+): AreaTreeNode[] {
+  return tree.map((area) => ({
+    ...area,
+    disabled: !selectableLevels.includes(depth),
+    children: area.children?.length
+      ? applyAreaSelectableLevels(area.children, selectableLevels, depth + 1)
+      : undefined,
+  }));
+}
+
+const expectedCityAreaOptions = computed(() =>
+  applyAreaSelectableLevels(areaTree.value, [1, 2, 3]),
+);
 
 const statusOptions = computed(() =>
   form.identity === 'student' ? studentStatusOptions : workerStatusOptions,
@@ -226,6 +290,113 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
 }
 
+function normalizeBirthMonth(value: unknown) {
+  const birthMonth = asString(value).trim();
+  const match = birthMonth.match(/^(\d{4})\s*(?:年|-|\/|\.)\s*(\d{1,2})\s*月?$/);
+  if (!match) return birthMonth;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12 ? `${match[1]}-${String(month).padStart(2, '0')}` : birthMonth;
+}
+
+function findAreaPath(tree: AreaTreeNode[], areaId?: number): AreaTreeNode[] | undefined {
+  if (areaId === undefined) return undefined;
+  for (const area of tree) {
+    if (area.id === areaId) return [area];
+    const childPath = area.children?.length ? findAreaPath(area.children, areaId) : undefined;
+    if (childPath) return [area, ...childPath];
+  }
+}
+
+function findAreaIdByName(tree: AreaTreeNode[], name: string): number | undefined {
+  const normalizedName = name.replace(/特别行政区|自治区|省|市|区|县/g, '').trim();
+  for (const area of tree) {
+    const normalizedAreaName = area.name.replace(/特别行政区|自治区|省|市|区|县/g, '').trim();
+    if ((area.name === name || normalizedAreaName === normalizedName) && area.id !== undefined) return area.id;
+    const childId = area.children?.length ? findAreaIdByName(area.children, name) : undefined;
+    if (childId !== undefined) return childId;
+  }
+}
+
+function getAreaNamePath(areaId?: number) {
+  return findAreaPath(areaTree.value, areaId)?.map((area) => area.name) || [];
+}
+
+function getDomicileLookupName(value: string) {
+  const parts = value.split(/\s*[\/／、,，]\s*/).map((part) => part.trim()).filter(Boolean);
+  return parts.at(-1) || value.trim();
+}
+
+function syncDomicileArea(areaId?: number) {
+  const matchedAreaId = areaId ?? findAreaIdByName(areaTree.value, getDomicileLookupName(form.domicile));
+  domicileAreaId.value = matchedAreaId;
+  const areaNamePath = getAreaNamePath(matchedAreaId);
+  if (areaNamePath.length) form.domicile = areaNamePath.join(' / ');
+}
+
+function handleDomicileChange(areaId?: number) {
+  domicileAreaId.value = areaId;
+  const areaNamePath = getAreaNamePath(areaId);
+  form.domicile = areaNamePath.join(' / ');
+}
+
+function syncExpectedCityAreas(areaIds: unknown) {
+  const storedAreaIds = Array.isArray(areaIds) ? areaIds : [];
+  expectedCityAreaIds.value = form.expectedCities.map((city, index) => {
+    const storedAreaId = Number(storedAreaIds[index]);
+    const matchedAreaId = Number.isInteger(storedAreaId) && findAreaPath(areaTree.value, storedAreaId)
+      ? storedAreaId
+      : findAreaIdByName(areaTree.value, getDomicileLookupName(city));
+    const areaNamePath = getAreaNamePath(matchedAreaId);
+    if (areaNamePath.length) form.expectedCities[index] = areaNamePath.join(' / ');
+    return matchedAreaId;
+  });
+}
+
+function handleExpectedCityChange(areaId?: number) {
+  if (areaId === undefined) return;
+  if (expectedCityAreaIds.value.some((selectedAreaId) => selectedAreaId === areaId)) {
+    message.info('该期望工作城市已选择');
+    return;
+  }
+  if (form.expectedCities.length >= 3) {
+    message.info('期望工作城市最多选择 3 个');
+    return;
+  }
+  const areaNamePath = getAreaNamePath(areaId);
+  if (!areaNamePath.length) return;
+  form.expectedCities.push(areaNamePath.join(' / '));
+  expectedCityAreaIds.value.push(areaId);
+}
+
+function clearExpectedCityPicker() {
+  expectedCityPickerPath.value = [];
+  expectedCitySearchValue.value = '';
+}
+
+function handleExpectedCitySearch(value: string) {
+  expectedCitySearchValue.value = value;
+}
+
+function handleExpectedCityPathChange(value: unknown) {
+  const path = Array.isArray(value) ? value : [];
+  const leafValue = path.at(-1);
+  const areaId = typeof leafValue === 'number' ? leafValue : Number(leafValue);
+  if (!path.length || Number.isNaN(areaId)) return;
+  expectedCityPickerOpen.value = false;
+  clearExpectedCityPicker();
+  handleExpectedCityChange(areaId);
+}
+
+function handleExpectedCityPopupVisibleChange(open: boolean) {
+  expectedCityPickerOpen.value = open;
+  if (!open) clearExpectedCityPicker();
+}
+
+function removeExpectedCity(index: number) {
+  form.expectedCities.splice(index, 1);
+  expectedCityAreaIds.value.splice(index, 1);
+}
+
 function normalizeWorkExperience(value: unknown): WorkExperience {
   const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return {
@@ -272,7 +443,7 @@ function normalizeProfile(value: Record<string, unknown>): ResumeForm {
   const employmentStatus = asString(value.employmentStatus);
   return {
     ...defaults,
-    name: asString(value.name), birthMonth: asString(value.birthMonth), mobile: asString(value.mobile || value.phone), email: asString(value.email), identity,
+    name: asString(value.name), birthMonth: normalizeBirthMonth(value.birthMonth), mobile: asString(value.mobile || value.phone), email: asString(value.email), identity,
     employmentStatus: identityStatuses.includes(employmentStatus) ? employmentStatus : identityStatuses[2]!, domicile: asString(value.domicile), strengths: asString(value.strengths),
     jobType: asString(value.jobType) || 'fulltime', expectedPostId: typeof value.expectedPostId === 'number' ? value.expectedPostId : typeof value.postTypeId === 'number' ? value.postTypeId : undefined,
     expectedPostName: asString(value.expectedPostName || value.postTypeName), industry: asString(value.industry || value.expectedIndustry), salary: asString(value.salary) || 'all', expectedCities,
@@ -300,9 +471,23 @@ async function loadResume() {
   try {
     const [resumes, types] = await Promise.all([getPortalResumeList(), getPortalRecruitPostTypeList()]);
     postTypes.value = types || [];
+    try {
+      areaTree.value = (await getAreaTree()) as AreaTreeNode[];
+    } catch (error) {
+      console.warn('[OnlineResume] 加载户籍地区失败', error);
+    }
     attachments.value = (resumes || []).filter((resume) => resume.resumeType === 1);
+    // 记录在线简历草稿编号，固化版本时作为来源
+    onlineDraftId.value = (resumes || []).find(
+      (resume) =>
+        resume.resumeType === 2 &&
+        [RECRUIT_PROFILE_TITLE, '在线简历'].includes(resume.title),
+    )?.id;
     const profile = readOnlineProfile(resumes || []);
     if (profile) Object.assign(form, normalizeProfile(profile));
+    const profileAreaId = profile && typeof profile.domicileAreaId === 'number' ? profile.domicileAreaId : undefined;
+    syncDomicileArea(profileAreaId);
+    syncExpectedCityAreas(profile?.expectedCityAreaIds);
     syncPositionValue();
   } catch (error) {
     console.warn('[OnlineResume] 加载在线简历失败', error);
@@ -333,10 +518,7 @@ function formatAttachmentDate(value?: string) {
 }
 
 function getResumeFileUrl(fileUrl?: string) {
-  if (!fileUrl) return '';
-  return fileUrl.includes('/infra/file/') && fileUrl.includes('/preview/')
-    ? fileUrl.replace('/preview/', '/get/')
-    : fileUrl;
+  return getHrmRecruitFilePreviewUrl(fileUrl);
 }
 
 async function previewAttachment(fileUrl?: string) {
@@ -359,8 +541,148 @@ async function previewAttachment(fileUrl?: string) {
   }
 }
 
+function handleAttachmentAction(
+  action: string | number,
+  resume: HrmPortalResumeApi.Resume,
+) {
+  if (String(action) === 'preview') {
+    void previewAttachment(resume.fileUrl);
+    return;
+  }
+  if (String(action) !== 'delete') return;
+
+  Modal.confirm({
+    title: '删除附件简历',
+    content: `确定删除“${resume.title}”吗？删除后无法恢复。`,
+    okText: '删除',
+    cancelText: '取消',
+    okType: 'danger',
+    async onOk() {
+      try {
+        const deleted = await deletePortalResume(resume.id);
+        if (!deleted) throw new Error('附件不存在或已删除');
+        attachments.value = attachments.value.filter((item) => item.id !== resume.id);
+        message.success('附件简历已删除');
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : '';
+        message.error(reason || '删除失败，请稍后重试');
+        throw error;
+      }
+    },
+  });
+}
+
+function handleAttachmentMenuClick(
+  event: { key: string | number },
+  resume: HrmPortalResumeApi.Resume,
+) {
+  handleAttachmentAction(event.key, resume);
+}
+
 function openUploadModal() {
   uploadModalOpen.value = true;
+}
+
+/** 「简历」下拉里的「附件管理」入口：打开附件管理面板 */
+function openAttachmentsModal() {
+  attachmentsModalOpen.value = true;
+}
+
+/* ===== 个人简历版本 ===== */
+
+/** 当前在线简历草稿编号，作为固化版本的来源 */
+const onlineDraftId = ref<number>();
+const versionPanelOpen = ref(false);
+const versionLoading = ref(false);
+const versionSaving = ref(false);
+const resumeVersions = ref<HrmPortalResumeVersionApi.Version[]>([]);
+
+async function loadResumeVersions() {
+  versionLoading.value = true;
+  try {
+    resumeVersions.value =
+      (await getPortalResumeVersionList(onlineDraftId.value)) || [];
+  } catch (error) {
+    console.warn('[OnlineResume] 加载简历版本失败', error);
+    resumeVersions.value = [];
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+async function openVersionPanel() {
+  versionPanelOpen.value = true;
+  await loadResumeVersions();
+}
+
+function formatVersionTime(value?: string) {
+  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
+}
+
+/**
+ * 把当前在线简历固化为新版本。
+ *
+ * 服务端按幂等键去重，因此重复点击不会生成多份版本；
+ * 固化只读取当前草稿内容，不会改动草稿本身。
+ */
+async function saveResumeVersion() {
+  if (versionSaving.value) return;
+  const content = JSON.stringify(serializeProfile());
+  if (!content || content === '{}') {
+    message.warning('请先完善在线简历后再保存版本');
+    return;
+  }
+  versionSaving.value = true;
+  try {
+    await createPortalResumeVersion({
+      sourceResumeId: onlineDraftId.value,
+      createType: 1,
+      changeSummary: `手动固化 ${new Date().toLocaleString('zh-CN')}`,
+      idempotencyKey: buildResumeVersionIdempotencyKey('manual'),
+    });
+    message.success('已保存为新的简历版本');
+    await loadResumeVersions();
+  } catch (error: any) {
+    message.error(error?.message || '保存简历版本失败');
+  } finally {
+    versionSaving.value = false;
+  }
+}
+
+/* ===== AI 简历助手 ===== */
+
+const aiPanelOpen = ref(false);
+
+function openAiPanel() {
+  aiPanelOpen.value = true;
+}
+
+/** AI 面板里点击「简历版本」链接：先关掉 AI 面板再打开版本面板，重新打开时版本列表会刷新 */
+function handleOpenVersionsFromAi() {
+  aiPanelOpen.value = false;
+  void openVersionPanel();
+}
+
+/** 已消费的动作请求 nonce，避免同一次请求被反复执行 */
+const handledResumeActionNonce = ref(0);
+
+function runPendingResumeAction() {
+  const request = props.pendingAction;
+  if (!isUnhandledResumeToolRequest(request, handledResumeActionNonce.value)) return;
+  handledResumeActionNonce.value = request.nonce;
+  if (request.action === 'upload') openAttachmentsModal();
+  if (request.action === 'edit') void focusResumeEditor();
+  if (request.action === 'version') void openVersionPanel();
+  if (request.action === 'ai') openAiPanel();
+  emit('actionHandled');
+}
+
+watch(() => props.pendingAction, runPendingResumeAction, { immediate: true });
+
+/** 简历页工具条里的「在线编辑」：等正文渲染完成后定位到第一段简历内容 */
+async function focusResumeEditor() {
+  await nextTick();
+  selectSection('personal');
 }
 
 function validateResumeFile(file: File) {
@@ -435,9 +757,51 @@ async function handleUploadResume() {
   }
 }
 
-function selectSection(id: (typeof sectionItems)[number]['id']) {
+/**
+ * 二级导航是 sticky 的，模块顶部必须停靠在它下方，否则会被导航盖住一部分。
+ * 高度随断点变化（窄屏会换行变高），所以运行时量取，不写死。
+ */
+function getSectionScrollOffset() {
+  const bar = document.querySelector('.recruit-subnav');
+  const height = bar ? bar.getBoundingClientRect().height : 0;
+  return height + 16;
+}
+
+function selectSection(id: ResumeSectionId) {
   activeSection.value = id;
-  document.getElementById(`resume-section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const target = document.getElementById(`resume-section-${id}`);
+  if (!target) return;
+  // 不用 scrollIntoView：它的落点由 CSS scroll-margin-top 决定，无法跟随
+  // 吸顶导航的实际高度，导致模块顶部被遮挡。
+  const top = target.getBoundingClientRect().top + window.scrollY - getSectionScrollOffset();
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
+
+/**
+ * 根据右侧模块在页面中的位置同步左侧目录，避免只在点击目录时更新高亮。
+ * 判定锚点必须与 selectSection 的落点一致（同一个吸顶偏移量），否则高亮
+ * 会和实际可见的模块错位。
+ */
+function syncActiveSectionFromScroll() {
+  if (sectionSyncFrame !== undefined) return;
+  sectionSyncFrame = window.requestAnimationFrame(() => {
+    sectionSyncFrame = undefined;
+    const anchor = getSectionScrollOffset() + 1;
+    let current: ResumeSectionId = sectionItems[0].id;
+    for (const item of sectionItems) {
+      const section = document.getElementById(`resume-section-${item.id}`);
+      if (section && section.getBoundingClientRect().top <= anchor) current = item.id;
+    }
+    // 最后一个模块在页面滚到底时也到不了锚点位置，会导致它永远高亮不到，
+    // 因此额外判断「已滚到底」直接选中最后一项（页面本身可滚动时才生效，
+    // 避免内容不足一屏时误判）。
+    const doc = document.documentElement;
+    const scrollable = doc.scrollHeight - window.innerHeight > 4;
+    if (scrollable && window.scrollY + window.innerHeight >= doc.scrollHeight - 4) {
+      current = sectionItems[sectionItems.length - 1]!.id;
+    }
+    if (activeSection.value !== current) activeSection.value = current;
+  });
 }
 
 function setIdentity(identity: Identity) {
@@ -449,15 +813,6 @@ function handlePositionChange(value: string) {
   const option = positionOptions.value.find((item) => String(item.id ?? item.name) === value);
   form.expectedPostId = option?.id;
   form.expectedPostName = option?.name || value;
-}
-
-function handleCitiesChange(values: string[]) {
-  if (values.length > 3) {
-    message.info('期望工作城市最多选择 3 个');
-    form.expectedCities = values.slice(0, 3);
-    return;
-  }
-  form.expectedCities = values;
 }
 
 function formatPeriod(start: string, end: string) {
@@ -535,6 +890,8 @@ function serializeProfile() {
   const firstEducation = form.educationExperiences[0];
   return {
     ...form,
+    domicileAreaId: domicileAreaId.value,
+    expectedCityAreaIds: expectedCityAreaIds.value,
     city: form.expectedCities.join('、'),
     postTypeId: form.expectedPostId,
     postTypeName: form.expectedPostName,
@@ -569,7 +926,19 @@ async function saveResume() {
   }
 }
 
-onMounted(loadResume);
+onMounted(async () => {
+  await loadResume();
+  await nextTick();
+  window.addEventListener('scroll', syncActiveSectionFromScroll, { passive: true });
+  window.addEventListener('resize', syncActiveSectionFromScroll, { passive: true });
+  syncActiveSectionFromScroll();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', syncActiveSectionFromScroll);
+  window.removeEventListener('resize', syncActiveSectionFromScroll);
+  if (sectionSyncFrame !== undefined) window.cancelAnimationFrame(sectionSyncFrame);
+});
 </script>
 
 <template>
@@ -594,7 +963,7 @@ onMounted(loadResume);
 
     <main class="resume-editor">
       <header class="resume-editor-header">
-        <div><p class="resume-breadcrumb">我要找工作 <span>/</span> 求职资料 <span>/</span> 在线简历</p><h1>把你的职业故事，写给下一个机会</h1><p class="resume-subtitle">完善在线简历，投递岗位时无需重复填写资料。</p></div>
+        <div><h1>把你的职业故事，写给下一个机会</h1><p class="resume-subtitle">完善在线简历，投递岗位时无需重复填写资料。</p></div>
         <div class="header-save-area"><span :class="['save-state', { saved: lastSavedAt }] "><i></i>{{ profileStatusLabel }}</span><a-button type="primary" :loading="submitting" @click="saveResume">保存简历</a-button></div>
       </header>
 
@@ -607,12 +976,12 @@ onMounted(loadResume);
           <div class="section-title-row"><div class="section-title"><span class="section-icon"><IconifyIcon icon="lucide:user-round" /></span><div><p>第一部分</p><h2>个人信息</h2><span>让招聘方快速了解你，并在合适的时候联系你。</span></div></div><span class="section-status" :class="{ done: completionItems.personal }">{{ completionItems.personal ? '已完善' : '待完善' }}</span></div>
           <div class="field-grid personal-grid">
             <label class="field required"><span>姓名</span><a-input v-model:value="form.name" maxlength="30" placeholder="请输入真实姓名" /></label>
-            <label class="field required"><span>出生年月</span><a-select v-model:value="form.birthMonth" show-search placeholder="请选择出生年月"><a-select-option v-for="item in birthMonthOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option></a-select></label>
+            <label class="field required"><span>出生年月</span><MonthPicker v-model="form.birthMonth" placeholder="请选择出生年月" :min-year="birthMonthMinYear" :max-year="birthMonthMaxYear" /></label>
             <label class="field required"><span>电话</span><a-input v-model:value="form.mobile" maxlength="20" placeholder="请输入常用联系电话" /></label>
             <label class="field"><span>邮箱 <small>选填</small></span><a-input v-model:value="form.email" maxlength="80" placeholder="用于接收招聘方联系邮件" /></label>
-            <label class="field required"><span>我的身份</span><a-select :value="form.identity" placeholder="请选择身份" @change="setIdentity"><a-select-option value="worker">职场人</a-select-option><a-select-option value="student">学生</a-select-option></a-select></label>
-            <label class="field required"><span>当前求职状态</span><a-select v-model:value="form.employmentStatus" placeholder="请选择当前状态"><a-select-option v-for="item in statusOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label>
-            <label class="field required personal-wide"><span>户籍地</span><a-select v-model:value="form.domicile" show-search placeholder="请选择户籍所在城市"><a-select-option v-for="city in cityOptions" :key="city" :value="city">{{ city }}</a-select-option></a-select></label>
+            <label class="field required"><span>我的身份</span><a-select :value="form.identity" popup-class-name="resume-select-dropdown" placeholder="请选择身份" @change="setIdentity"><a-select-option value="worker">职场人</a-select-option><a-select-option value="student">学生</a-select-option></a-select></label>
+            <label class="field required"><span>当前求职状态</span><a-select v-model:value="form.employmentStatus" popup-class-name="resume-select-dropdown" placeholder="请选择当前状态"><a-select-option v-for="item in statusOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label>
+            <label class="field required personal-wide"><span>户籍地</span><AreaCascader v-model="domicileAreaId" allow-clear class="domicile-area-cascader" :change-on-select="true" placeholder="请选择户籍所在地区" popup-class-name="recruit-filter-dropdown" :selectable-levels="[1, 2, 3]" show-search @update:model-value="handleDomicileChange" /></label>
           </div>
         </section>
 
@@ -624,11 +993,11 @@ onMounted(loadResume);
         <section id="resume-section-expectation" class="resume-section">
           <div class="section-title-row"><div class="section-title"><span class="section-icon"><IconifyIcon icon="lucide:compass" /></span><div><p>第三部分</p><h2>期望职位</h2><span>明确你的下一站，帮助岗位匹配更精准。</span></div></div><span class="section-status" :class="{ done: completionItems.expectation }">{{ completionItems.expectation ? '已完善' : '待完善' }}</span></div>
           <div class="field-grid expectation-grid">
-            <label class="field"><span>求职类型</span><a-select v-model:value="form.jobType"><a-select-option v-for="item in jobTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option></a-select></label>
-            <label class="field"><span>期望职位</span><a-select v-model:value="positionValue" show-search placeholder="请选择期望职位" @change="handlePositionChange"><a-select-option v-for="item in positionOptions" :key="item.id ?? item.name" :value="String(item.id ?? item.name)">{{ item.name }}</a-select-option></a-select></label>
-            <label class="field"><span>期望行业</span><a-select v-model:value="form.industry" show-search placeholder="请选择期望行业"><a-select-option v-for="item in industryOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label>
-            <label class="field"><span>薪资要求</span><a-select v-model:value="form.salary"><a-select-option v-for="item in salaryOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option></a-select></label>
-            <label class="field field-full"><span>期望工作城市 <small>最多选择 3 个城市</small></span><a-select :value="form.expectedCities" mode="multiple" :max-tag-count="3" show-search placeholder="请选择期望工作的城市" @change="handleCitiesChange"><a-select-option v-for="city in cityOptions" :key="city" :value="city">{{ city }}</a-select-option></a-select></label>
+            <label class="field"><span>求职类型</span><a-select v-model:value="form.jobType" popup-class-name="resume-select-dropdown"><a-select-option v-for="item in jobTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option></a-select></label>
+            <label class="field"><span>期望职位</span><a-select v-model:value="positionValue" popup-class-name="resume-select-dropdown" show-search placeholder="请选择期望职位" @change="handlePositionChange"><a-select-option v-for="item in positionOptions" :key="item.id ?? item.name" :value="String(item.id ?? item.name)">{{ item.name }}</a-select-option></a-select></label>
+            <label class="field"><span>期望行业</span><a-select v-model:value="form.industry" popup-class-name="resume-select-dropdown" show-search placeholder="请选择期望行业"><a-select-option v-for="item in industryOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label>
+            <label class="field"><span>薪资要求</span><a-select v-model:value="form.salary" popup-class-name="resume-select-dropdown"><a-select-option v-for="item in salaryOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option></a-select></label>
+            <div class="field field-full"><span>期望工作城市 <small>最多选择 3 个城市</small></span><div class="expected-cities-picker"><div v-if="form.expectedCities.length" class="expected-city-tags"><button v-for="(city, index) in form.expectedCities" :key="`${city}-${index}`" class="expected-city-tag" type="button" @click="removeExpectedCity(index)"><span>{{ city }}</span><IconifyIcon icon="lucide:x" /></button></div><Cascader v-model:value="expectedCityPickerPath" class="expected-city-cascader" :change-on-select="true" :disabled="form.expectedCities.length >= 3" :field-names="areaFieldNames" :options="expectedCityAreaOptions" :placeholder="form.expectedCities.length >= 3 ? '已选择 3 个城市' : '请选择期望工作的城市'" popup-class-name="recruit-filter-dropdown" :open="expectedCityPickerOpen" :search-value="expectedCitySearchValue" show-search @change="handleExpectedCityPathChange" @search="handleExpectedCitySearch" @dropdown-visible-change="handleExpectedCityPopupVisibleChange" /></div></div>
           </div>
         </section>
 
@@ -660,53 +1029,6 @@ onMounted(loadResume);
       </template>
     </main>
 
-    <aside class="resume-attachments-panel" aria-label="附件管理">
-      <div class="attachments-header">
-        <div>
-          <p>简历附件</p>
-          <h2>附件管理</h2>
-        </div>
-        <a-button class="attachments-add" type="text" aria-label="上传简历附件" @click="openUploadModal">
-          <IconifyIcon icon="lucide:plus" />
-        </a-button>
-      </div>
-
-      <div class="attachments-summary">
-        <span>简历附件</span>
-        <strong>{{ visibleAttachments.length }}</strong>
-        <small>支持常见文档格式 · 单个不超过 10 兆</small>
-      </div>
-
-      <div v-if="loading" class="attachments-loading">
-        <a-skeleton v-for="item in 2" :key="item" active :paragraph="{ rows: 2 }" />
-      </div>
-      <div v-else-if="!visibleAttachments.length" class="attachments-empty">
-        <span><IconifyIcon icon="lucide:file-plus-2" /></span>
-        <strong>还没有附件简历</strong>
-         <p>上传文档或扫描件简历，投递时即可直接使用。</p>
-        <a-button type="primary" ghost @click="openUploadModal">上传第一份简历</a-button>
-      </div>
-      <div v-else class="attachments-list">
-        <article v-for="resume in visibleAttachments" :key="resume.id" class="attachment-item">
-          <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-text" /></span>
-          <div class="attachment-copy">
-            <strong :title="resume.title">{{ resume.title }}</strong>
-            <small :title="resume.fileName || resume.title">{{ resume.fileName || '附件简历' }}</small>
-            <small>{{ formatAttachmentDate(resume.createTime) }}</small>
-          </div>
-          <a-button v-if="resume.fileUrl" class="attachment-preview" type="text" aria-label="预览简历" @click="previewAttachment(resume.fileUrl)">
-            <IconifyIcon icon="lucide:ellipsis-vertical" />
-          </a-button>
-        </article>
-      </div>
-
-      <button class="attachment-upload-cta" type="button" @click="openUploadModal">
-        <span class="attachment-upload-cta-icon"><IconifyIcon icon="lucide:upload-cloud" /></span>
-        <span><strong>添加附件简历</strong><small>让招聘方更快了解你</small></span>
-        <IconifyIcon class="attachment-upload-cta-arrow" icon="lucide:arrow-up-right" />
-      </button>
-    </aside>
-
     <a-modal
       v-model:open="uploadModalOpen"
       title="上传附件简历"
@@ -737,137 +1059,255 @@ onMounted(loadResume);
       </div>
     </a-modal>
 
+    <!-- 附件管理：原先固定挂在在线简历页右侧，现改为由「简历」下拉的入口按需弹出。
+         内容与样式沿用原来那块面板（已上传统计 / 附件列表 / 添加入口）。
+         标题行不再放「+」：它与下方的「添加附件简历」入口重复。 -->
+    <a-modal
+      v-model:open="attachmentsModalOpen"
+      title="附件管理"
+      :footer="null"
+      width="640px"
+      wrap-class-name="resume-attachments-modal"
+    >
+      <div class="attachments-modal-body">
+        <div class="attachments-summary">
+          <span>已上传</span>
+          <strong>{{ visibleAttachments.length }}</strong>
+          <small>支持常见文档格式 · 单个不超过 10 兆</small>
+        </div>
+
+        <div v-if="loading" class="attachments-loading">
+          <a-skeleton v-for="item in 2" :key="item" active :paragraph="{ rows: 2 }" />
+        </div>
+        <div v-else-if="!visibleAttachments.length" class="attachments-empty">
+          <span><IconifyIcon icon="lucide:file-plus-2" /></span>
+          <strong>还没有附件简历</strong>
+          <p>上传文档或扫描件简历，投递时即可直接使用。</p>
+          <a-button type="primary" ghost @click="openUploadModal">上传第一份简历</a-button>
+        </div>
+        <div v-else class="attachments-list">
+          <article v-for="resume in visibleAttachments" :key="resume.id" class="attachment-item">
+            <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-text" /></span>
+            <div class="attachment-copy">
+              <strong :title="resume.title">{{ resume.title }}</strong>
+              <small :title="resume.fileName || resume.title">{{ resume.fileName || '附件简历' }}</small>
+              <small>{{ formatAttachmentDate(resume.createTime) }}</small>
+            </div>
+            <a-dropdown overlay-class-name="resume-attachment-actions" placement="bottomRight" trigger="['click']">
+              <a-button class="attachment-preview" type="text" aria-label="附件操作">
+                <IconifyIcon icon="lucide:ellipsis-vertical" />
+              </a-button>
+              <template #overlay>
+                <a-menu @click="handleAttachmentMenuClick($event, resume)">
+                  <a-menu-item key="preview" :disabled="!resume.fileUrl">在线查看</a-menu-item>
+                  <a-menu-item key="delete" danger>删除</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </article>
+        </div>
+
+        <button class="attachment-upload-cta" type="button" @click="openUploadModal">
+          <span class="attachment-upload-cta-icon"><IconifyIcon icon="lucide:upload-cloud" /></span>
+          <span><strong>添加附件简历</strong><small>让招聘方更快了解你</small></span>
+          <IconifyIcon class="attachment-upload-cta-arrow" icon="lucide:arrow-up-right" />
+        </button>
+      </div>
+    </a-modal>
+
+    <ResumeAiPanel v-model:open="aiPanelOpen" @open-versions="handleOpenVersionsFromAi" />
+
+    <a-modal
+      v-model:open="versionPanelOpen"
+      title="简历版本"
+      :footer="null"
+      width="640px"
+      wrap-class-name="resume-version-modal"
+    >
+      <div class="version-panel">
+        <p class="version-panel-help">
+          版本是当前在线简历的固化副本，投递时可直接选用。保存版本不会改动你的在线简历，
+          之后继续编辑简历也不会影响已经保存的版本。
+        </p>
+
+        <div class="version-panel-actions">
+          <a-button
+            type="primary"
+            :loading="versionSaving"
+            @click="saveResumeVersion"
+          >
+            把当前简历保存为新版本
+          </a-button>
+          <a-button :loading="versionLoading" @click="loadResumeVersions">
+            刷新
+          </a-button>
+        </div>
+
+        <div v-if="versionLoading" class="version-panel-empty">正在加载版本…</div>
+        <div v-else-if="!resumeVersions.length" class="version-panel-empty">
+          还没有保存过版本。完善在线简历后点击上方按钮即可生成第一个版本。
+        </div>
+        <ul v-else class="version-list">
+          <li v-for="version in resumeVersions" :key="version.id" class="version-item">
+            <div class="version-item-main">
+              <strong>V{{ version.versionNo }}</strong>
+              <span class="version-item-summary">
+                {{ version.changeSummary || '未填写修改摘要' }}
+              </span>
+            </div>
+            <div class="version-item-meta">
+              <span>{{ formatVersionTime(version.createTime) }}</span>
+              <span v-if="version.status !== 0" class="version-item-invalid">已失效</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </a-modal>
+
     <a-modal v-model:open="experienceModalOpen" :title="experienceIndex >= 0 ? '编辑工作 / 实习经历' : '添加工作 / 实习经历'" width="720px" @ok="saveExperience">
-      <div class="modal-fields"><label class="field required"><span>公司名称</span><a-input v-model:value="editingExperience.company" placeholder="例如：北京华品博睿网络技术有限公司" /></label><label class="field"><span>所属行业</span><a-select v-model:value="editingExperience.industry" show-search placeholder="选择所属行业"><a-select-option v-for="item in industryOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field"><span>所属部门 <small>选填</small></span><a-input v-model:value="editingExperience.department" placeholder="例如：产品部" /></label><label class="field required"><span>职位名称</span><a-input v-model:value="editingExperience.position" placeholder="例如：项目经理" /></label><label class="field"><span>在职时间</span><div class="date-range"><a-input v-model:value="editingExperience.start" type="month" /><span>至</span><a-input v-model:value="editingExperience.end" type="month" placeholder="至今可留空" /></div></label><label class="field field-full"><span>工作内容</span><a-textarea v-model:value="editingExperience.description" :maxlength="3000" :rows="4" show-count placeholder="描述主要负责的工作内容、使用的方法和承担的职责。" /></label><label class="field field-full"><span>工作业绩 <small>选填</small></span><a-textarea v-model:value="editingExperience.achievements" :maxlength="1000" :rows="3" show-count placeholder="例如：优化施工流程，项目交付周期缩短 20%。" /></label></div>
+      <div class="modal-fields"><label class="field required"><span>公司名称</span><a-input v-model:value="editingExperience.company" placeholder="例如：北京华品博睿网络技术有限公司" /></label><label class="field"><span>所属行业</span><a-select v-model:value="editingExperience.industry" popup-class-name="resume-select-dropdown" show-search placeholder="选择所属行业"><a-select-option v-for="item in industryOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field"><span>所属部门 <small>选填</small></span><a-input v-model:value="editingExperience.department" placeholder="例如：产品部" /></label><label class="field required"><span>职位名称</span><a-input v-model:value="editingExperience.position" placeholder="例如：项目经理" /></label><label class="field field-full"><span>在职时间</span><div class="date-range"><MonthPicker v-model="editingExperience.start" placeholder="请选择入职时间" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /><span>至</span><MonthPicker v-model="editingExperience.end" placeholder="至今可留空" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /></div></label><label class="field field-full"><span>工作内容</span><a-textarea v-model:value="editingExperience.description" :maxlength="3000" :rows="4" show-count placeholder="描述主要负责的工作内容、使用的方法和承担的职责。" /></label><label class="field field-full"><span>工作业绩 <small>选填</small></span><a-textarea v-model:value="editingExperience.achievements" :maxlength="1000" :rows="3" show-count placeholder="例如：优化施工流程，项目交付周期缩短 20%。" /></label></div>
     </a-modal>
 
     <a-modal v-model:open="projectModalOpen" :title="projectIndex >= 0 ? '编辑项目经历' : '添加项目经历'" width="720px" @ok="saveProject">
-       <div class="modal-fields"><label class="field required"><span>项目名称</span><a-input v-model:value="editingProject.name" placeholder="例如：管道保温智能巡检项目" /></label><label class="field required"><span>项目角色</span><a-input v-model:value="editingProject.role" placeholder="例如：项目负责人 / 界面设计师" /></label><label class="field"><span>项目链接 <small>选填</small></span><a-input v-model:value="editingProject.link" placeholder="例如：项目官网或作品链接" /></label><label class="field"><span>项目时间</span><div class="date-range"><a-input v-model:value="editingProject.start" type="month" /><span>至</span><a-input v-model:value="editingProject.end" type="month" placeholder="至今可留空" /></div></label><label class="field field-full"><span>项目描述</span><a-textarea v-model:value="editingProject.description" :maxlength="3000" :rows="4" show-count placeholder="描述项目背景、目标和你负责的具体工作。" /></label><label class="field field-full"><span>项目业绩 <small>选填</small></span><a-textarea v-model:value="editingProject.achievements" :maxlength="1000" :rows="3" show-count placeholder="描述最终结果、数据变化或获得的认可。" /></label><label class="modal-checkbox"><a-checkbox v-model:checked="editingProject.highlight" /> 将此项目标记为重点项目</label></div>
+       <div class="modal-fields"><label class="field required"><span>项目名称</span><a-input v-model:value="editingProject.name" placeholder="例如：管道保温智能巡检项目" /></label><label class="field required"><span>项目角色</span><a-input v-model:value="editingProject.role" placeholder="例如：项目负责人 / 界面设计师" /></label><label class="field"><span>项目链接 <small>选填</small></span><a-input v-model:value="editingProject.link" placeholder="例如：项目官网或作品链接" /></label><label class="field"><span>项目时间</span><div class="date-range"><MonthPicker v-model="editingProject.start" placeholder="请选择开始时间" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /><span>至</span><MonthPicker v-model="editingProject.end" placeholder="至今可留空" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /></div></label><label class="field field-full"><span>项目描述</span><a-textarea v-model:value="editingProject.description" :maxlength="3000" :rows="4" show-count placeholder="描述项目背景、目标和你负责的具体工作。" /></label><label class="field field-full"><span>项目业绩 <small>选填</small></span><a-textarea v-model:value="editingProject.achievements" :maxlength="1000" :rows="3" show-count placeholder="描述最终结果、数据变化或获得的认可。" /></label><label class="modal-checkbox"><a-checkbox v-model:checked="editingProject.highlight" /> 将此项目标记为重点项目</label></div>
     </a-modal>
 
     <a-modal v-model:open="educationModalOpen" :title="educationIndex >= 0 ? '编辑教育经历' : '添加教育经历'" width="720px" @ok="saveEducation">
-      <div class="modal-fields"><label class="field"><span>学历</span><a-select v-model:value="editingEducation.degree"><a-select-option v-for="item in degreeOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field required"><span>学校名称</span><a-input v-model:value="editingEducation.school" placeholder="例如：北京大学" /></label><label class="field required"><span>专业</span><a-input v-model:value="editingEducation.major" placeholder="例如：计算机科学与技术" /></label><label class="field"><span>学校类型</span><a-select v-model:value="editingEducation.schoolType"><a-select-option v-for="item in schoolTypeOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field"><span>时间段</span><div class="date-range"><a-select v-model:value="editingEducation.start" placeholder="选择年份"><a-select-option v-for="year in yearOptions" :key="year" :value="String(year)">{{ year }}年</a-select-option></a-select><span>至</span><a-select v-model:value="editingEducation.end" placeholder="选择年份"><a-select-option v-for="year in yearOptions" :key="year" :value="String(year)">{{ year }}年</a-select-option></a-select></div></label><label class="field field-full"><span>在校经历 <small>选填</small></span><a-textarea v-model:value="editingEducation.experience" :maxlength="3000" :rows="4" show-count placeholder="例如：在校担任学生会部长，获得校级奖学金，主修课程包括……" /></label></div>
+       <div class="modal-fields"><label class="field"><span>学历</span><a-select v-model:value="editingEducation.degree" popup-class-name="resume-select-dropdown"><a-select-option v-for="item in degreeOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field required"><span>学校名称</span><a-input v-model:value="editingEducation.school" placeholder="例如：北京大学" /></label><label class="field required"><span>专业</span><a-input v-model:value="editingEducation.major" placeholder="例如：计算机科学与技术" /></label><label class="field"><span>学校类型</span><a-select v-model:value="editingEducation.schoolType" popup-class-name="resume-select-dropdown"><a-select-option v-for="item in schoolTypeOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field field-full"><span>时间段</span><div class="date-range"><MonthPicker v-model="editingEducation.start" placeholder="选择入学时间" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /><span>至</span><MonthPicker v-model="editingEducation.end" placeholder="选择毕业时间" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear() + 10" /></div></label><label class="field field-full"><span>在校经历 <small>选填</small></span><a-textarea v-model:value="editingEducation.experience" :maxlength="3000" :rows="4" show-count placeholder="例如：在校担任学生会部长，获得校级奖学金，主修课程包括……" /></label></div>
     </a-modal>
   </div>
 </template>
 
 <style scoped>
- .online-resume-page { --resume-ink: #3f2a1f; --resume-muted: #8d7668; --resume-line: #f1e4da; --resume-soft: #fff8f1; --resume-orange: #e47b32; --resume-orange-deep: #c45d1d; display: grid; grid-template-columns: 224px minmax(0, 1fr) 276px; gap: 24px; align-items: start; color: var(--resume-ink); }
+ .online-resume-page { --resume-ink: #111827; --resume-muted: #374151; --resume-line: #f1e4da; --resume-soft: #fff8f1; --resume-orange: #e47b32; --resume-orange-deep: #c45d1d; display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 24px; align-items: start; color: var(--resume-ink); font-size: 16px; }
 .resume-index-panel { position: sticky; top: 20px; display: grid; gap: 20px; padding: 20px 14px 16px; border: 1px solid var(--resume-line); border-radius: 16px; background: #fff; box-shadow: 0 12px 32px rgb(180 104 54 / 6%); }
 .resume-index-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px; }
-.brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: var(--resume-orange); color: #fff; font-size: 17px; font-weight: 700; }
+ .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: var(--resume-orange); color: #fff; font-size: 19px; font-weight: 700; }
 .resume-index-brand strong, .resume-index-brand small { display: block; }
-.resume-index-brand strong { font-size: 16px; }
- .resume-index-brand small { margin-top: 3px; color: #bca89a; font-size: 12px; letter-spacing: .08em; }
+ .resume-index-brand strong { font-size: 18px; }
+  .resume-index-brand small { margin-top: 3px; color: #111827; font-size: 14px; letter-spacing: .08em; }
 .completion-card { padding: 13px 12px; border-radius: 10px; background: var(--resume-soft); }
- .completion-card-top { display: flex; align-items: center; justify-content: space-between; color: var(--resume-muted); font-size: 14px; }
-.completion-card-top strong { color: var(--resume-orange-deep); font-size: 18px; }
+  .completion-card-top { display: flex; align-items: center; justify-content: space-between; color: var(--resume-muted); font-size: 16px; }
+ .completion-card-top strong { color: var(--resume-orange-deep); font-size: 20px; }
 .completion-track { height: 5px; margin: 10px 0 7px; overflow: hidden; border-radius: 3px; background: #f3e9e1; }
 .completion-track i { display: block; height: 100%; border-radius: inherit; background: var(--resume-orange); transition: width .25s ease; }
- .completion-card small { color: #b29e91; font-size: 12px; }
- .resume-index-nav > p { margin: 0 10px 4px; color: #c0aa9c; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+  .completion-card small { color: #111827; font-size: 14px; }
+  .resume-index-nav > p { margin: 0 10px 4px; color: #111827; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
 .resume-index-nav { display: grid; gap: 2px; }
 .resume-index-nav button { display: flex; width: 100%; min-height: 51px; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; text-align: left; transition: background .18s ease, transform .18s ease; }
 .resume-index-nav button:hover, .resume-index-nav button.active { background: #fff7f0; transform: translateX(2px); }
- .nav-number { width: 22px; color: #c7afa0; font-size: 12px; }
+  .nav-number { width: 22px; color: #111827; font-size: 14px; }
 .resume-index-nav button.active .nav-number { color: var(--resume-orange); font-weight: 700; }
 .nav-copy { display: grid; min-width: 0; gap: 3px; }
- .nav-copy strong { font-size: 14px; font-weight: 600; }
- .nav-copy small { color: #ae988a; font-size: 12px; }
+  .nav-copy strong { font-size: 16px; font-weight: 600; }
+  .nav-copy small { color: #111827; font-size: 14px; }
 .nav-done { margin-left: auto; color: var(--resume-orange); font-size: 14px; }
-.index-tip { display: flex; gap: 8px; padding: 12px 10px; border-top: 1px solid #f5eae2; color: #b28e77; }
+ .index-tip { display: flex; gap: 8px; padding: 12px 10px; border-top: 1px solid #f5eae2; color: #111827; }
 .index-tip :deep(svg) { flex: 0 0 auto; color: var(--resume-orange); font-size: 15px; }
- .index-tip p { margin: 0; font-size: 12px; line-height: 1.6; }
+  .index-tip p { margin: 0; font-size: 14px; line-height: 1.6; }
 .resume-editor { display: grid; gap: 16px; min-width: 0; }
 .resume-editor-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 7px 4px 5px; }
- .resume-breadcrumb { margin: 0 0 11px; color: #b8a397; font-size: 12px; }
-.resume-breadcrumb span { padding: 0 6px; color: #d6c6bc; }
-.resume-editor-header h1 { margin: 0; color: #39251c; font-size: 28px; letter-spacing: -.04em; line-height: 1.25; }
-.resume-subtitle { margin: 8px 0 0; color: var(--resume-muted); font-size: 13px; }
+  .resume-editor-header h1 { margin: 0; color: #111827; font-size: 30px; letter-spacing: -.04em; line-height: 1.25; }
+ .resume-subtitle { margin: 8px 0 0; color: var(--resume-muted); font-size: 15px; }
 .header-save-area { display: flex; flex-shrink: 0; align-items: center; gap: 14px; }
- .save-state { display: inline-flex; align-items: center; gap: 6px; color: #b09b8e; font-size: 12px; white-space: nowrap; }
+  .save-state { display: inline-flex; align-items: center; gap: 6px; color: #111827; font-size: 14px; white-space: nowrap; }
 .save-state i { width: 6px; height: 6px; border-radius: 50%; background: #c5b8b1; }
 .save-state.saved i { background: #6eae89; }
-.resume-editor :deep(.ant-btn-primary) { border-color: var(--resume-orange); background: var(--resume-orange); box-shadow: 0 7px 16px rgb(228 123 50 / 18%); }
-.resume-editor :deep(.ant-btn-primary:hover) { border-color: var(--resume-orange-deep); background: var(--resume-orange-deep); }
- .resume-notice { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 15px; border: 1px solid #f6e6d8; border-radius: 9px; background: #fffdfb; color: #9e8373; font-size: 13px; }
+.resume-editor :deep(.ant-btn-primary) { border-color: var(--resume-orange); background: var(--resume-orange); color: #fff !important; box-shadow: 0 7px 16px rgb(228 123 50 / 18%); }
+.resume-editor :deep(.ant-btn-primary:hover) { border-color: var(--resume-orange-deep); background: var(--resume-orange-deep); color: #fff !important; }
+  .resume-notice { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 15px; border: 1px solid #f6e6d8; border-radius: 9px; background: #fffdfb; color: #111827; font-size: 15px; }
 .resume-notice :deep(svg) { color: var(--resume-orange); font-size: 16px; }
 .resume-notice em { color: var(--resume-orange-deep); font-style: normal; }
 .resume-loading { display: grid; gap: 16px; padding: 24px; border: 1px solid var(--resume-line); border-radius: 12px; background: #fff; }
-.resume-section { scroll-margin-top: 24px; padding: 22px 24px 25px; border: 1px solid var(--resume-line); border-radius: 13px; background: #fff; box-shadow: 0 4px 15px rgb(180 104 54 / 3%); }
+.resume-section { scroll-margin-top: 76px; padding: 22px 24px 25px; border: 1px solid var(--resume-line); border-radius: 13px; background: #fff; box-shadow: 0 4px 15px rgb(180 104 54 / 3%); }
 .section-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .section-title { display: flex; align-items: flex-start; gap: 12px; }
 .section-icon { display: grid; width: 35px; height: 35px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--resume-soft); color: var(--resume-orange); font-size: 17px; }
- .section-title p { margin: 0 0 4px; color: #c1a99a; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
- .section-title h2 { margin: 0; color: #432d20; font-size: 20px; letter-spacing: -.02em; }
- .section-title h2 + span { display: block; margin-top: 5px; color: #a08a7c; font-size: 13px; }
- .section-status { padding: 5px 9px; border-radius: 5px; color: #b8a194; background: #fbf8f5; font-size: 12px; white-space: nowrap; }
+  .section-title p { margin: 0 0 4px; color: #111827; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
+  .section-title h2 { margin: 0; color: #111827; font-size: 22px; letter-spacing: -.02em; }
+  .section-title h2 + span { display: block; margin-top: 5px; color: #111827; font-size: 15px; }
+  .section-status { padding: 5px 9px; border-radius: 5px; color: #111827; background: #fbf8f5; font-size: 14px; white-space: nowrap; }
 .section-status.done { color: #628e74; background: #f2faf5; }
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
- .field { display: grid; min-width: 0; gap: 8px; color: #6e594c; font-size: 14px; }
-.field > span { color: #6c5649; font-weight: 600; }
+  .field { display: grid; min-width: 0; gap: 8px; color: #111827; font-size: 16px; }
+ .field > span { color: #111827; font-weight: 600; }
 .field > span::before { content: ''; }
 .field.required > span::before { margin-right: 4px; color: var(--resume-orange); content: '*'; }
- .field > span small { margin-left: 4px; color: #b7a297; font-size: 12px; font-weight: 400; }
+  .field > span small { margin-left: 4px; color: #111827; font-size: 14px; font-weight: 400; }
 .field-full, .personal-wide { grid-column: 1 / -1; }
- .resume-editor :deep(.ant-input), .resume-editor :deep(.ant-select-selector) { min-height: 40px; border-color: #eee1d8 !important; border-radius: 7px !important; background: #fffdfb !important; color: #493328; font-size: 14px; box-shadow: none !important; }
+  .resume-editor :deep(.ant-input), .resume-editor :deep(.ant-select-selector) { min-height: 40px; border-color: #eee1d8 !important; border-radius: 7px !important; background: #fffdfb !important; color: #111827; font-size: 16px; box-shadow: none !important; }
 .resume-editor :deep(.ant-input:hover), .resume-editor :deep(.ant-input:focus), .resume-editor :deep(.ant-select-focused .ant-select-selector), .resume-editor :deep(.ant-select-selector:hover) { border-color: #e9b78e !important; }
 .resume-editor :deep(textarea.ant-input) { min-height: 104px; padding: 11px 12px; line-height: 1.7; }
 .resume-editor :deep(.ant-select) { width: 100%; }
 .resume-editor :deep(.ant-select-selection-placeholder), .resume-editor :deep(.ant-input::placeholder) { color: #c1b1a8; }
+.resume-editor :deep(.domicile-area-cascader .ant-select-selector) { min-height: 40px; border-color: #cfe4e8 !important; border-radius: 7px !important; background: #fff !important; color: #123f49; }
+.resume-editor :deep(.domicile-area-cascader:hover .ant-select-selector), .resume-editor :deep(.domicile-area-cascader.ant-select-focused .ant-select-selector) { border-color: #74cbd2 !important; }
+.resume-editor :deep(.domicile-area-cascader .ant-select-selection-item) { color: #123f49; }
+.resume-editor :deep(.domicile-area-cascader .ant-select-selection-placeholder) { color: #86a6ae; }
+.expected-cities-picker { display: flex; min-height: 40px; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 8px; border: 1px solid #cfe4e8; border-radius: 7px; background: #fff; transition: border-color .18s ease, box-shadow .18s ease; }
+.expected-cities-picker:focus-within { border-color: #74cbd2; box-shadow: 0 0 0 2px rgb(116 203 210 / 14%); }
+.expected-city-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.expected-city-tag { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; padding: 4px 7px 4px 9px; border: 1px solid #dbe8ee; border-radius: 5px; background: #f4f8fa; color: #34515c; cursor: pointer; font: inherit; font-size: 13px; line-height: 20px; }
+.expected-city-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expected-city-tag :deep(svg) { flex: 0 0 auto; color: #86a6ae; font-size: 13px; }
+.expected-city-tag:hover { border-color: #74cbd2; background: #e8f7f8; color: #0f777d; }
+.expected-city-tag:hover :deep(svg) { color: #0f8f8c; }
+.resume-editor :deep(.expected-city-cascader) { width: auto; min-width: 190px; flex: 1 1 190px; }
+.resume-editor :deep(.expected-city-cascader .ant-select-selector) { min-height: 30px; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+.resume-editor :deep(.expected-city-cascader .ant-select-selection-placeholder) { color: #86a6ae; }
+.resume-editor :deep(.expected-city-cascader .ant-select-selection-search-input) { color: #123f49; }
 .expectation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
- .add-button { height: 32px; padding: 0 5px; color: var(--resume-orange-deep); font-size: 14px; }
+  .add-button { height: 32px; padding: 0 5px; color: var(--resume-orange-deep); font-size: 16px; }
 .add-button:hover { color: var(--resume-orange); }
 .add-button :deep(svg) { margin-right: 3px; }
-.empty-module { display: grid; justify-items: center; gap: 8px; padding: 26px 20px; border: 1px dashed #f0ded1; border-radius: 9px; background: #fffdfb; text-align: center; }
+ .empty-module { display: grid; justify-items: center; gap: 8px; padding: 26px 20px; border: 1px dashed #f0ded1; border-radius: 9px; background: #fffdfb; text-align: center; color: #111827; }
 .empty-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: var(--resume-soft); color: #da9360; font-size: 17px; }
- .empty-module strong { color: #705546; font-size: 15px; }
- .empty-module p { margin: 0 0 5px; color: #b09a8d; font-size: 13px; }
-.resume-editor :deep(.ant-btn-background-ghost) { border-color: #efbb92; color: var(--resume-orange-deep); background: #fffaf5; }
+  .empty-module strong { color: #111827; font-size: 17px; }
+  .empty-module p { margin: 0 0 5px; color: #111827; font-size: 15px; }
+.resume-editor :deep(.ant-btn-background-ghost) { border-color: #0f8f8c; color: #fff !important; background: linear-gradient(135deg, #0f9f9b, #2f80ed); }
 .entry-list { display: grid; gap: 10px; }
-.entry-card { padding: 16px 17px; border: 1px solid #f0e4db; border-radius: 9px; background: #fffdfa; }
+ .entry-card { padding: 16px 17px; border: 1px solid #f0e4db; border-radius: 9px; background: #fffdfa; color: #111827; }
 .entry-card:hover { border-color: #efc19e; }
 .entry-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .entry-card-top > div:first-child { display: grid; gap: 5px; min-width: 0; }
- .entry-card-top strong { color: #4c3528; font-size: 15px; }
- .entry-card-top strong em { margin-left: 5px; padding: 3px 5px; border-radius: 4px; color: #bc681f; background: #fff1e3; font-size: 11px; font-style: normal; font-weight: 500; }
- .entry-card-top span { color: #a28777; font-size: 13px; }
+  .entry-card-top strong { color: #111827; font-size: 17px; }
+  .entry-card-top strong em { margin-left: 5px; padding: 3px 5px; border-radius: 4px; color: #bc681f; background: #fff1e3; font-size: 13px; font-style: normal; font-weight: 500; }
+  .entry-card-top span { color: #111827; font-size: 15px; }
 .entry-card-top span i { font-style: normal; }
 .entry-card-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
- .entry-card-actions small { margin-right: 4px; color: #aa9284; font-size: 12px; }
-.entry-card-actions button { display: grid; width: 25px; height: 25px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #b79f91; cursor: pointer; }
+  .entry-card-actions small { margin-right: 4px; color: #111827; font-size: 14px; }
+ .entry-card-actions button { display: grid; width: 25px; height: 25px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #111827; cursor: pointer; }
 .entry-card-actions button:hover { background: var(--resume-soft); color: var(--resume-orange-deep); }
 .entry-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
- .entry-meta span { padding: 4px 8px; border-radius: 4px; color: #a88874; background: #fff5ed; font-size: 12px; }
- .entry-description, .entry-achievement { margin: 12px 0 0; color: #856f62; font-size: 13px; line-height: 1.75; white-space: pre-line; }
+  .entry-meta span { padding: 4px 8px; border-radius: 4px; color: #111827; background: #fff5ed; font-size: 14px; }
+  .entry-description, .entry-achievement { margin: 12px 0 0; color: #111827; font-size: 15px; line-height: 1.75; white-space: pre-line; }
 .entry-achievement { padding-top: 10px; border-top: 1px solid #f4eae4; }
 .entry-achievement b { margin-right: 8px; color: #bd6a2a; font-weight: 600; }
- .entry-link { display: block; margin-top: 9px; overflow: hidden; color: var(--resume-orange-deep); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .entry-link { display: block; margin-top: 9px; overflow: hidden; color: var(--resume-orange-deep); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .skill-suggestions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
- .skill-suggestions > span { color: #b09a8c; font-size: 12px; }
- .skill-suggestions button { padding: 5px 9px; border: 1px solid #f0e1d7; border-radius: 5px; background: #fff; color: #9c7966; cursor: pointer; font-size: 12px; }
+  .skill-suggestions > span { color: #111827; font-size: 14px; }
+  .skill-suggestions button { padding: 5px 9px; border: 1px solid #f0e1d7; border-radius: 5px; background: #fff; color: #111827; cursor: pointer; font-size: 14px; }
 .skill-suggestions button:hover { border-color: #edbd99; color: var(--resume-orange-deep); }
  .skill-suggestions button :deep(svg) { margin-right: 2px; font-size: 12px; }
- .resume-bottom-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 4px 14px; color: #aa978d; font-size: 12px; }
+  .resume-bottom-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 4px 14px; color: #111827; font-size: 14px; }
  .resume-bottom-actions > span { display: inline-flex; align-items: center; gap: 5px; }
  .resume-bottom-actions :deep(svg) { color: #75a184; font-size: 14px; }
- .resume-attachments-panel { position: sticky; top: 20px; display: grid; gap: 16px; min-width: 0; padding: 20px 16px 16px; border: 1px solid var(--resume-line); border-radius: 16px; background: #fff; box-shadow: 0 12px 32px rgb(180 104 54 / 6%); }
+ .attachments-modal-body { display: grid; gap: 16px; min-width: 0; }
  .attachments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 0 4px 14px; border-bottom: 1px solid #f5eae2; }
-  .attachments-header p { margin: 0 0 5px; color: #c1a99a; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
-  .attachments-header h2 { margin: 0; color: #432d20; font-size: 20px; }
+  .attachments-header h2 { margin: 0; color: #111827; font-size: 22px; }
  .attachments-add { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border-radius: 8px; color: var(--resume-orange-deep); }
  .attachments-add:hover { background: var(--resume-soft); color: var(--resume-orange); }
  .attachments-add :deep(svg) { font-size: 20px; }
  .attachments-summary { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; padding: 12px; border-radius: 10px; background: var(--resume-soft); }
-  .attachments-summary span { color: #856f62; font-size: 13px; }
- .attachments-summary strong { color: var(--resume-orange-deep); font-size: 20px; line-height: 1; }
-  .attachments-summary small { grid-column: 1 / -1; color: #b09a8d; font-size: 12px; line-height: 1.5; }
+   .attachments-summary span { color: #111827; font-size: 15px; }
+  .attachments-summary strong { color: var(--resume-orange-deep); font-size: 22px; line-height: 1; }
+   .attachments-summary small { grid-column: 1 / -1; color: #111827; font-size: 14px; line-height: 1.5; }
  .attachments-loading { display: grid; gap: 14px; }
  .attachments-empty { display: grid; justify-items: center; gap: 8px; padding: 18px 8px 20px; border: 1px dashed #f0ded1; border-radius: 9px; background: #fffdfb; text-align: center; }
  .attachments-empty > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: var(--resume-soft); color: #da9360; font-size: 18px; }
-  .attachments-empty strong { color: #705546; font-size: 15px; }
-  .attachments-empty p { margin: 0 0 4px; color: #b09a8d; font-size: 13px; line-height: 1.6; }
-  .attachments-empty :deep(.ant-btn) { height: 32px; padding-inline: 11px; font-size: 13px; }
+   .attachments-empty strong { color: #111827; font-size: 17px; }
+   .attachments-empty p { margin: 0 0 4px; color: #111827; font-size: 15px; line-height: 1.6; }
+   .attachments-empty :deep(.ant-btn) { height: 32px; padding-inline: 11px; font-size: 15px; }
  .attachments-list { display: grid; gap: 10px; }
  .attachment-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) 24px; align-items: center; gap: 9px; padding: 10px 7px; border-bottom: 1px solid #f5eae2; }
  .attachment-item:last-child { border-bottom: 0; }
@@ -876,32 +1316,424 @@ onMounted(loadResume);
  .attachment-file-icon.is-doc, .attachment-file-icon.is-docx { background: #5e91df; }
  .attachment-copy { display: grid; min-width: 0; gap: 3px; }
  .attachment-copy strong, .attachment-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .attachment-copy strong { color: #594033; font-size: 13px; font-weight: 600; }
-  .attachment-copy small { color: #ae988a; font-size: 12px; }
+   .attachment-copy strong { color: #111827; font-size: 15px; font-weight: 600; }
+   .attachment-copy small { color: #111827; font-size: 14px; }
  .attachment-preview { display: grid; width: 24px; height: 28px; place-items: center; padding: 0; color: #b8a194; }
  .attachment-preview:hover { color: var(--resume-orange-deep); background: var(--resume-soft); }
  .attachment-upload-cta { display: flex; align-items: center; gap: 9px; width: 100%; padding: 13px 10px; border: 1px solid #f2ddcd; border-radius: 11px; background: linear-gradient(135deg, #fff9f2, #fff5ea); color: inherit; cursor: pointer; text-align: left; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
  .attachment-upload-cta:hover { border-color: #efbd96; box-shadow: 0 8px 18px rgb(180 104 54 / 8%); transform: translateY(-1px); }
  .attachment-upload-cta-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: #ffe9d4; color: var(--resume-orange-deep); font-size: 15px; }
  .attachment-upload-cta > span:nth-child(2) { display: grid; min-width: 0; gap: 3px; }
-  .attachment-upload-cta strong { color: #694633; font-size: 14px; }
-  .attachment-upload-cta small { color: #b18e78; font-size: 12px; }
+   .attachment-upload-cta strong { color: #111827; font-size: 16px; }
+   .attachment-upload-cta small { color: #111827; font-size: 14px; }
  .attachment-upload-cta-arrow { margin-left: auto; color: #d69261; font-size: 14px; }
  .attachment-upload-form { display: grid; gap: 16px; padding: 4px 0 10px; }
-  .attachment-upload-help { margin: 0; padding: 10px 12px; border-radius: 7px; background: #fff8f1; color: #a17f6b; font-size: 13px; line-height: 1.6; }
+   .attachment-upload-help { margin: 0; padding: 10px 12px; border-radius: 7px; background: #fff8f1; color: #111827; font-size: 15px; line-height: 1.6; }
  .attachment-file-picker { display: grid; min-height: 116px; justify-items: center; align-content: center; gap: 5px; padding: 15px; border: 1px dashed #efbb92; border-radius: 9px; background: #fffaf5; color: var(--resume-orange); cursor: pointer; text-align: center; }
  .attachment-file-picker:hover, .attachment-file-picker.has-file { border-color: var(--resume-orange); background: var(--resume-soft); }
  .attachment-file-picker input { display: none; }
  .attachment-file-picker > svg { font-size: 25px; }
-  .attachment-file-picker strong { max-width: 90%; overflow: hidden; color: #684738; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-  .attachment-file-picker small { color: #ad9485; font-size: 12px; }
+   .attachment-file-picker strong { max-width: 90%; overflow: hidden; color: #111827; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+   .attachment-file-picker small { color: #111827; font-size: 14px; }
  .modal-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; padding: 8px 0 16px; }
 .modal-fields .field-full, .modal-checkbox { grid-column: 1 / -1; }
 .date-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 9px; }
- .date-range > span { color: #a28c7e; font-size: 13px; }
- .modal-checkbox { color: #80685a; font-size: 13px; }
- @media (max-width: 1180px) { .online-resume-page { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; } .resume-attachments-panel { grid-column: 2; position: static; } }
+  .date-range > span { color: #111827; font-size: 15px; }
+  .modal-checkbox { color: #111827; font-size: 15px; }
+ @media (max-width: 1180px) { .online-resume-page { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; } .resume-attachments-panel { position: static; } }
  @media (max-width: 1000px) { .resume-editor-header { align-items: flex-start; flex-direction: column; } .header-save-area { width: 100%; justify-content: space-between; } }
- @media (max-width: 760px) { .online-resume-page { display: block; } .resume-index-panel { position: static; margin-bottom: 16px; padding: 14px; } .resume-attachments-panel { margin-top: 16px; } .resume-index-nav { display: flex; overflow-x: auto; gap: 4px; padding-bottom: 2px; } .resume-index-nav > p, .index-tip { display: none; } .resume-index-nav button { min-width: 126px; min-height: 45px; } .nav-copy small, .nav-done { display: none; } .resume-editor-header h1 { font-size: 23px; } .resume-section { padding: 18px 16px 20px; } .field-grid, .expectation-grid, .modal-fields { grid-template-columns: 1fr; } .field-full, .personal-wide, .modal-fields .field-full, .modal-checkbox { grid-column: auto; } .section-title-row { align-items: flex-start; } .section-title h2 + span { max-width: 240px; line-height: 1.5; } .entry-card-top { gap: 10px; flex-direction: column; } .entry-card-actions { width: 100%; justify-content: space-between; } .entry-card-actions small { margin-right: auto; } .resume-bottom-actions { align-items: flex-start; flex-direction: column; } }
+  @media (max-width: 760px) { .online-resume-page { display: block; } .resume-index-panel { position: static; margin-bottom: 16px; padding: 14px; } .resume-attachments-panel { margin-top: 16px; } .resume-index-nav { display: flex; overflow-x: auto; gap: 4px; padding-bottom: 2px; } .resume-index-nav > p, .index-tip { display: none; } .resume-index-nav button { min-width: 126px; min-height: 45px; } .nav-copy small, .nav-done { display: none; } .resume-editor-header h1 { font-size: 25px; } .resume-section { padding: 18px 16px 20px; } .field-grid, .expectation-grid, .modal-fields { grid-template-columns: 1fr; } .field-full, .personal-wide, .modal-fields .field-full, .modal-checkbox { grid-column: auto; } .section-title-row { align-items: flex-start; } .section-title h2 + span { max-width: 240px; line-height: 1.5; } .entry-card-top { gap: 10px; flex-direction: column; } .entry-card-actions { width: 100%; justify-content: space-between; } .entry-card-actions small { margin-right: auto; } .resume-bottom-actions { align-items: flex-start; flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { .resume-index-nav button, .completion-track i { transition: none; } }
+
+.online-resume-page {
+  --resume-ink: #111827;
+  --resume-muted: #374151;
+  --resume-line: #d7e9ed;
+  --resume-soft: #e8f7f8;
+  --resume-orange: #0f8f8c;
+  --resume-orange-deep: #0f777d;
+  color: var(--resume-ink);
+}
+
+.resume-index-panel,
+.resume-section,
+.resume-attachments-panel { border-color: var(--resume-line); box-shadow: 0 12px 32px rgb(18 63 73 / 6%); }
+.brand-mark { background: #0f8f8c; }
+.completion-card,
+.section-icon,
+.attachments-summary,
+.empty-icon { background: #e8f7f8; }
+.completion-track { background: #e6f1f3; }
+/* 悬停态与选中态必须能区分：之前两者同色，用户分不清「鼠标划过」和「当前所在模块」，
+   容易误判成目录没跟随。选中额外加一条左侧强调条。 */
+.resume-index-nav button:hover { background: #f2f8fa; }
+.resume-index-nav button.active { background: #eaf3ff; box-shadow: inset 3px 0 0 #0f8f8c; }
+.resume-index-nav button.active .nav-number,
+.nav-done { color: #0f8f8c; }
+.resume-editor-header h1,
+.section-title h2,
+.attachments-header h2 { color: #123f49; }
+.resume-notice { border-color: #c8e7eb; background: #f5fbfc; color: #111827; }
+.resume-editor :deep(.ant-btn-primary) { border-color: #0f8f8c; background: linear-gradient(135deg, #0f9f9b, #2f80ed); color: #fff !important; box-shadow: 0 7px 16px rgb(15 143 140 / 18%); }
+.resume-editor :deep(.ant-btn-primary:hover) { border-color: #0b777c; background: linear-gradient(135deg, #0b8587, #2563c7); color: #fff !important; }
+.resume-editor :deep(.ant-input),
+.resume-editor :deep(.ant-select-selector) { border-color: #cfe4e8 !important; background: #fff !important; color: #111827; }
+.resume-editor :deep(.ant-input:hover),
+.resume-editor :deep(.ant-input:focus),
+.resume-editor :deep(.ant-select-focused .ant-select-selector),
+.resume-editor :deep(.ant-select-selector:hover) { border-color: #74cbd2 !important; }
+.resume-editor :deep(.ant-select-selection-placeholder),
+.resume-editor :deep(.ant-input::placeholder) { color: #86a6ae; }
+.section-status.done { color: #0f777d; background: #e8f7f8; }
+.empty-module,
+.attachments-empty { border-color: #b9dfe5; background: #f5fbfc; }
+.entry-card:hover { border-color: #8bd6dc; }
+.attachment-file-icon,
+.attachment-file-icon.is-pdf,
+.attachment-file-icon.is-doc,
+.attachment-file-icon.is-docx { background: #2f80ed; }
+.attachment-upload-cta { border-color: #b9dfe5; background: linear-gradient(135deg, #f5fbfc, #eaf3ff); }
+.attachment-upload-cta:hover { border-color: #74cbd2; box-shadow: 0 8px 18px rgb(15 143 140 / 8%); }
+.attachment-upload-cta-icon,
+.attachment-file-picker { color: #0f8f8c; background: #e8f7f8; }
+.attachment-file-picker { border-color: #74cbd2; }
+.attachment-file-picker:hover,
+.attachment-file-picker.has-file { border-color: #0f8f8c; background: #e8f7f8; }
+.online-resume-page .resume-index-nav > p,
+.online-resume-page .section-title p { color: #111827; }
+.online-resume-page .section-status { color: #111827; background: #f5fbfc; }
+.online-resume-page .section-status.done { color: #0f777d; background: #e8f7f8; }
+.online-resume-page .save-state,
+.online-resume-page .entry-card-top small { color: #111827; }
+.online-resume-page .empty-module strong,
+.online-resume-page .attachments-empty strong { color: #123f49; }
+
+/* 附件管理弹窗被 teleport 到 body，脱离门户的浅色主题，需要显式指定浅色，
+   与同页的简历上传弹窗保持同一套观感。 */
+:global(.resume-attachments-modal .ant-modal-content) {
+  overflow: hidden;
+  border: 1px solid #c8e7eb;
+  border-radius: 16px;
+  background: #fff !important;
+  box-shadow: 0 20px 56px rgb(18 63 73 / 18%);
+}
+
+:global(.resume-attachments-modal .ant-modal-header) {
+  margin-bottom: 0;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #e6f1f3;
+  background: #fff !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-title) {
+  color: #123f49 !important;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+:global(.resume-attachments-modal .ant-modal-close) {
+  color: #5f7f87 !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-close:hover) {
+  color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-body) {
+  padding: 18px 24px 24px;
+  background: #fff !important;
+}
+
+:global(.resume-upload-modal .ant-modal-content) {
+  overflow: hidden;
+  border: 1px solid #c8e7eb;
+  border-radius: 16px;
+  background: #fff !important;
+  box-shadow: 0 20px 56px rgb(18 63 73 / 18%);
+}
+
+:global(.resume-upload-modal .ant-modal-header) {
+  margin-bottom: 0;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #e6f1f3;
+  background: #fff !important;
+}
+
+:global(.resume-upload-modal .ant-modal-title) {
+  color: #123f49 !important;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+:global(.resume-upload-modal .ant-modal-close) {
+  color: #5f7f87 !important;
+}
+
+:global(.resume-upload-modal .ant-modal-close:hover) {
+  color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.resume-upload-modal .ant-modal-body) {
+  padding: 18px 24px 8px;
+  background: #fff !important;
+}
+
+:global(.resume-upload-modal .ant-modal-footer) {
+  margin-top: 0;
+  padding: 14px 24px 20px;
+  border-top: 1px solid #e6f1f3;
+  background: #f8fcfd !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-help) {
+  border: 1px solid #c8e7eb;
+  background: #f5fbfc !important;
+  color: #111827 !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-form .field > span) {
+  color: #123f49 !important;
+}
+
+:global(.resume-upload-modal .ant-btn),
+:global(.resume-upload-modal .ant-input),
+:global(.resume-upload-modal .ant-select-selector),
+:global(.resume-upload-modal .ant-checkbox-wrapper) {
+  font-size: 16px !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-form .field > span small) {
+  color: #7593a0 !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-form .ant-input) {
+  border-color: #cfe4e8 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #123f49 !important;
+  box-shadow: none !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-form .ant-input:hover),
+:global(.resume-upload-modal .attachment-upload-form .ant-input:focus) {
+  border-color: #74cbd2 !important;
+}
+
+:global(.resume-upload-modal .attachment-upload-form .ant-input::placeholder) {
+  color: #86a6ae !important;
+}
+
+:global(.resume-upload-modal .attachment-file-picker) {
+  border-color: #74cbd2 !important;
+  background: #e8f7f8 !important;
+  color: #0f8f8c !important;
+}
+
+:global(.resume-upload-modal .attachment-file-picker:hover),
+:global(.resume-upload-modal .attachment-file-picker.has-file) {
+  border-color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.resume-upload-modal .attachment-file-picker strong) {
+  color: #123f49 !important;
+}
+
+:global(.resume-upload-modal .attachment-file-picker small) {
+  color: #7593a0 !important;
+}
+
+:global(.resume-upload-modal .ant-modal-footer .ant-btn-default) {
+  border-color: #b9dfe5 !important;
+  background: #fff !important;
+  color: #2f5d73 !important;
+}
+
+:global(.resume-upload-modal .ant-modal-footer .ant-btn-default:hover) {
+  border-color: #74cbd2 !important;
+  background: #e8f7f8 !important;
+  color: #0f777d !important;
+}
+
+:global(.resume-upload-modal .ant-modal-footer .ant-btn-primary) {
+  border-color: #0f8f8c !important;
+  background: linear-gradient(135deg, #0f9f9b, #2f80ed) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 16px rgb(15 143 140 / 18%);
+}
+
+:global(.resume-upload-modal .ant-modal-footer .ant-btn-primary:hover) {
+  border-color: #0b777c !important;
+  background: linear-gradient(135deg, #0b8587, #2563c7) !important;
+  color: #fff !important;
+}
+
+:global(.resume-select-dropdown.ant-select-dropdown),
+:global(.resume-select-dropdown .ant-select-dropdown) {
+  padding: 6px !important;
+  border: 1px solid #cfe4e8 !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: 0 14px 30px rgb(18 63 73 / 14%) !important;
+}
+
+:global(.resume-select-dropdown .ant-select-item) {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #123f49 !important;
+  background: #fff !important;
+  font-size: 16px !important;
+  line-height: 20px;
+}
+
+:global(.resume-select-dropdown .ant-select-item-option-active) {
+  color: #0f777d !important;
+  background: #f0f8ff !important;
+}
+
+:global(.resume-select-dropdown .ant-select-item-option-selected) {
+  color: #0f777d !important;
+  background: #e8f7f8 !important;
+  font-weight: 600;
+}
+
+:global(.resume-select-dropdown .ant-select-item-option-selected.ant-select-item-option-active) {
+  background: #dff3f5 !important;
+}
+
+:global(.resume-select-dropdown .ant-select-item-option-state),
+:global(.resume-select-dropdown .ant-select-selection-search-input) {
+  color: #0f8f8c !important;
+}
+
+:global(.resume-select-dropdown .ant-select-item-empty) {
+  color: #7b929a !important;
+  background: #fff !important;
+}
+
+:global(.resume-attachment-actions.ant-dropdown),
+:global(.resume-attachment-actions .ant-dropdown-menu) {
+  border: 1px solid #cfe4e8 !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: 0 14px 30px rgb(18 63 73 / 14%) !important;
+}
+
+:global(.resume-attachment-actions .ant-dropdown-menu-item) {
+  color: #123f49 !important;
+  background: #fff !important;
+  font-size: 16px !important;
+}
+
+:global(.resume-attachment-actions .ant-dropdown-menu-item:hover) {
+  color: #0f777d !important;
+  background: #f0f8ff !important;
+}
+
+:global(.recruit-filter-dropdown.ant-cascader-menus),
+:global(.recruit-filter-dropdown .ant-cascader-menus),
+:global(.recruit-filter-dropdown .ant-cascader-menu) {
+  color: #334155 !important;
+  background: #fff !important;
+}
+
+:global(.recruit-filter-dropdown .ant-cascader-menu-item) {
+  color: #334155 !important;
+  background: #fff !important;
+}
+
+:global(.recruit-filter-dropdown .ant-cascader-menu-item:hover),
+:global(.recruit-filter-dropdown .ant-cascader-menu-item-active) {
+  color: #1d4ed8 !important;
+  background: #eff6ff !important;
+}
+
+/* ===== 简历版本面板 ===== */
+
+.version-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.version-panel-help {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #475569;
+  background: #f4fbf9;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.version-panel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.version-panel-empty {
+  padding: 26px 12px;
+  border: 1px dashed #d8e6e5;
+  border-radius: 10px;
+  color: #7d9299;
+  background: #fbfdfd;
+  font-size: 13px;
+  text-align: center;
+}
+
+.version-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e2edec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.version-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.version-item-main strong {
+  color: #0f766e;
+  font-size: 15px;
+}
+
+.version-item-summary {
+  overflow: hidden;
+  color: #475569;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-item-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  color: #8497a3;
+  font-size: 12px;
+}
+
+.version-item-invalid {
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: #b45309;
+  background: #fef3c7;
+}
 </style>

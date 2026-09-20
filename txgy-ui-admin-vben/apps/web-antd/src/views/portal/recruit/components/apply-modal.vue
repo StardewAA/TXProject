@@ -1,31 +1,38 @@
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from 'vue';
 
-import { message } from 'ant-design-vue';
 import { IconifyIcon } from '@vben/icons';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { uploadFile } from '#/api/infra/file';
-import {
-  getPortalResumeList,
-  type HrmPortalResumeApi,
-} from '#/api/hrm/portal/resume';
+import { message } from 'ant-design-vue';
+
 import {
   createPortalRecruitApplication,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
 import { getRecruitChatConversationList } from '#/api/hrm/portal/recruit/chat';
+import {
+  getPortalResumeList,
+  type HrmPortalResumeApi,
+} from '#/api/hrm/portal/resume';
+import {
+  getPortalResumeVersionList,
+  type HrmPortalResumeVersionApi,
+} from '#/api/hrm/portal/resume-version';
+import { uploadFile } from '#/api/infra/file';
 import { getUserProfile } from '#/api/system/user/profile';
 
+import PreSubmitCheck from './pre-submit-check.vue';
+
 const props = defineProps<{
+  chatOnly?: boolean;
   open: boolean;
   post?: HrmPortalRecruitApi.Post;
-  chatOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean];
   submitted: [data: HrmPortalRecruitApi.ApplyReq];
+  'update:open': [value: boolean];
 }>();
 
 const modalOpen = computed({
@@ -38,6 +45,7 @@ const userStore = useUserStore();
 const applySubmitting = ref(false);
 const applyFormRef = ref();
 const savedResumes = ref<HrmPortalResumeApi.Resume[]>([]);
+const resumeVersions = ref<HrmPortalResumeVersionApi.Version[]>([]);
 const resumeLoading = ref(false);
 const userProfile = ref<{ mobile?: string; phone?: string }>();
 const applyForm = reactive<HrmPortalRecruitApi.ApplyReq>({
@@ -56,10 +64,53 @@ const savedResumeOptions = computed(() =>
   ),
 );
 
-const resumePickerMode = computed(() => savedResumeOptions.value.length > 1);
-const modalTitle = computed(() =>
-  resumePickerMode.value ? '选择投递简历' : '在线投递',
-);
+/** 可投递的简历选项：已固化的在线简历版本优先，其后是附件简历 */
+interface ResumeChoice {
+  /** select 绑定值 */
+  value: string;
+  label: string;
+  kind: 'attachment' | 'version';
+  resumeId?: number;
+  resumeVersionId?: number;
+  fileName: string;
+  fileUrl?: string;
+}
+
+const resumeChoices = computed<ResumeChoice[]>(() => {
+  // 招聘沟通里「发送简历」走的是附件消息接口，只支持文件，
+  // 因此该场景不提供在线简历版本，避免选了之后消息发不出去。
+  const versionChoices: ResumeChoice[] = props.chatOnly
+    ? []
+    : resumeVersions.value.map((version) => ({
+        value: `version-${version.id}`,
+        label: `在线简历 V${version.versionNo}${
+          version.changeSummary ? `（${version.changeSummary}）` : ''
+        }`,
+        kind: 'version',
+        resumeVersionId: version.id,
+        fileName: `在线简历 V${version.versionNo}`,
+      }));
+  const attachmentChoices: ResumeChoice[] = savedResumeOptions.value.map(
+    (resume) => ({
+      value: `resume-${resume.id}`,
+      label: `${resume.title}${resume.fileName ? `（${resume.fileName}）` : ''}`,
+      kind: 'attachment',
+      resumeId: resume.id,
+      fileName: resume.fileName || resume.title,
+      fileUrl: resume.fileUrl || '',
+    }),
+  );
+  return [...versionChoices, ...attachmentChoices];
+});
+
+/** 当前选中的简历选项 */
+const selectedResumeChoice = ref<string>();
+
+const resumePickerMode = computed(() => resumeChoices.value.length > 1);
+const modalTitle = computed(() => {
+  if (props.chatOnly) return resumePickerMode.value ? '选择发送简历' : '发送简历';
+  return resumePickerMode.value ? '选择投递简历' : '在线投递';
+});
 
 const educationValueMap: Record<string, number> = {
   初中及以下: 3,
@@ -72,7 +123,7 @@ const educationValueMap: Record<string, number> = {
   博士: 7,
 };
 
-const mobilePattern = /^(\+?0?\d{2,4}-?)?\d{6,11}$/;
+const mobilePattern = /^1[3-9]\d{9}$/;
 
 function readProfile(resumes: HrmPortalResumeApi.Resume[]) {
   const profileResume = resumes.find(
@@ -160,60 +211,69 @@ async function prepareForm() {
     resumeFileName: '',
     resumeFileUrl: '',
     resumeId: undefined,
+    resumeVersionId: undefined,
     resumeRemark: '',
     sourceRemark: '',
   });
+  selectedResumeChoice.value = undefined;
 
   if (!accessStore.accessToken) {
     savedResumes.value = [];
+    resumeVersions.value = [];
     return;
   }
 
   resumeLoading.value = true;
   try {
-    const [resumeResult, profileResult] = await Promise.allSettled([
-      getPortalResumeList(),
-      getUserProfile(),
-    ]);
+    const [resumeResult, versionResult, profileResult] =
+      await Promise.allSettled([
+        getPortalResumeList(),
+        getPortalResumeVersionList(),
+        getUserProfile(),
+      ]);
     userProfile.value =
       profileResult.status === 'fulfilled' ? profileResult.value : undefined;
     if (resumeResult.status === 'rejected') throw resumeResult.reason;
     savedResumes.value = resumeResult.value || [];
+    // 版本加载失败不阻塞投递：仍可使用附件简历投递
+    resumeVersions.value =
+      versionResult.status === 'fulfilled'
+        ? (versionResult.value || []).filter(
+            (version) => version.status === 0,
+          )
+        : [];
     fillProfileFields(savedResumes.value);
-    const latestResume = savedResumeOptions.value[0];
-    if (latestResume) {
-      applyForm.resumeId = latestResume.id;
-      applyForm.resumeFileName = latestResume.fileName || latestResume.title;
-      applyForm.resumeFileUrl = latestResume.fileUrl || '';
-    }
+    // 默认选中最新一份可用简历：优先在线简历版本，其次附件简历
+    const firstChoice = resumeChoices.value[0];
+    if (firstChoice) applyResumeChoice(firstChoice.value);
   } catch (error) {
     savedResumes.value = [];
+    resumeVersions.value = [];
     console.warn('[PortalRecruit] 加载已保存简历失败', error);
   } finally {
     resumeLoading.value = false;
   }
 }
 
+/** 把选中的简历选项同步到投递表单；版本与附件互斥，避免服务端收到矛盾的简历来源 */
+function applyResumeChoice(value?: string) {
+  selectedResumeChoice.value = value;
+  const choice = resumeChoices.value.find((item) => item.value === value);
+  applyForm.resumeId = choice?.resumeId;
+  applyForm.resumeVersionId = choice?.resumeVersionId;
+  applyForm.resumeFileName = choice?.fileName || '';
+  applyForm.resumeFileUrl = choice?.fileUrl || '';
+}
+
 function handleSavedResumeChange(value?: string) {
-  if (!value) {
-    applyForm.resumeId = undefined;
-    applyForm.resumeFileName = '';
-    applyForm.resumeFileUrl = '';
-    return;
-  }
-  const resume = savedResumeOptions.value.find((item) => item.fileUrl === value);
-  if (resume) {
-    applyForm.resumeId = resume.id;
-    applyForm.resumeFileName = resume.fileName || resume.title;
-    applyForm.resumeFileUrl = resume.fileUrl || '';
-  }
+  applyResumeChoice(value);
 }
 
 async function handleResumeUpload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
   const extension = file.name.split('.').pop()?.toLowerCase();
-  if (!extension || !['pdf', 'doc', 'docx'].includes(extension)) {
+  if (!extension || !['doc', 'docx', 'pdf'].includes(extension)) {
     message.warning('仅支持 PDF、DOC、DOCX 格式的简历');
     return;
   }
@@ -222,9 +282,12 @@ async function handleResumeUpload(event: Event) {
     return;
   }
   const result = await uploadFile({ file, directory: 'hrm/recruit/resume' });
+  // 现场上传视为新的简历来源，清掉版本选择避免服务端收到两个来源
   applyForm.resumeFileName = file.name;
   applyForm.resumeFileUrl = result as string;
   applyForm.resumeId = undefined;
+  applyForm.resumeVersionId = undefined;
+  selectedResumeChoice.value = undefined;
   message.success('简历上传成功');
 }
 
@@ -259,15 +322,21 @@ async function ensureApplyQualification() {
 }
 
 async function submitApplication() {
-  if (!savedResumeOptions.value.length) {
+  if (!resumeChoices.value.length) {
     await applyFormRef.value?.validate();
   }
-  if (resumePickerMode.value && !applyForm.resumeId) {
+  if (resumePickerMode.value && !selectedResumeChoice.value) {
     message.warning('请选择要投递的简历');
     return;
   }
-  if (!applyForm.resumeFileUrl) {
-    message.warning('请先上传简历文件');
+  // 简历来源三选一：在线简历版本、已保存简历、现场上传附件
+  const hasResumeSource = Boolean(
+    applyForm.resumeVersionId ||
+      applyForm.resumeId ||
+      applyForm.resumeFileUrl,
+  );
+  if (!hasResumeSource) {
+    message.warning('请选择在线简历版本或上传简历文件');
     return;
   }
   applyForm.mobile = normalizeMobile(applyForm.mobile);
@@ -285,7 +354,9 @@ async function submitApplication() {
     }
     emit('submitted', { ...applyForm });
     message.success(
-      props.chatOnly ? '简历已发送，等待招聘方处理' : '应聘投递成功，可在应聘记录查看进度',
+      props.chatOnly
+        ? '简历已发送，等待 HR 手动转为候选人'
+        : '应聘投递成功，可在应聘记录查看进度',
     );
     modalOpen.value = false;
   } catch (error: any) {
@@ -399,19 +470,19 @@ watch(
         </div>
         <a-form-item label="简历文件" required>
           <a-select
-            v-if="savedResumeOptions.length"
+            v-if="resumeChoices.length"
             class="saved-resume-select"
-            :value="applyForm.resumeFileUrl"
+            :value="selectedResumeChoice"
             allow-clear
-            placeholder="优先选择在线简历中已保存的简历"
+            placeholder="选择在线简历版本或已保存的附件简历"
             @change="handleSavedResumeChange"
           >
             <a-select-option
-              v-for="resume in savedResumeOptions"
-              :key="resume.id"
-              :value="resume.fileUrl"
+              v-for="choice in resumeChoices"
+              :key="choice.value"
+              :value="choice.value"
             >
-              {{ resume.title }}{{ resume.fileName ? `（${resume.fileName}）` : '' }}
+              {{ choice.label }}
             </a-select-option>
           </a-select>
           <label class="apply-upload">
@@ -426,12 +497,25 @@ watch(
               @change="handleResumeUpload"
             />
           </label>
+          <p class="resume-source-hint">
+            {{
+              chatOnly
+                ? '沟通中发送简历需要附件文件，请选择或上传 PDF / DOC / DOCX。'
+                : '投递时会按所选简历在企业侧生成不可变快照，之后修改自己的简历不会影响这次投递。'
+            }}
+          </p>
         </a-form-item>
         <a-form-item label="补充说明">
           <a-textarea v-model:value="applyForm.sourceRemark" :rows="3" />
         </a-form-item>
       </a-form>
     </div>
+    <!-- A06 投递前检查：可选步骤，结论只作提醒，不禁用投递按钮 -->
+    <PreSubmitCheck
+      v-if="!chatOnly && applyForm.resumeVersionId && applyForm.postId"
+      :post-id="applyForm.postId"
+      :resume-version-id="applyForm.resumeVersionId"
+    />
   </a-modal>
 </template>
 
@@ -625,6 +709,193 @@ watch(
 :global(.recruit-apply-modal .ant-btn-primary:hover) {
   border-color: #c85e18;
   background: #c85e18;
+}
+
+.apply-intro {
+  border: 1px solid #c8e7eb;
+  border-radius: 8px;
+  background: #f5fbfc;
+  color: #496b7a;
+}
+
+.resume-loading {
+  color: #5f7f87;
+}
+
+.resume-picker .apply-intro {
+  border-color: #c8e7eb;
+  background: #f5fbfc;
+  color: #496b7a;
+}
+
+.resume-option {
+  border-color: #d7e9ed;
+  background: #fff;
+  color: #2f5d73;
+}
+
+.resume-option:hover,
+.resume-option.selected {
+  border-color: #74cbd2;
+  background: #eaf3ff;
+  box-shadow: 0 5px 14px rgb(18 63 73 / 10%);
+}
+
+.resume-option-icon {
+  background: #e8f7f8;
+  color: #0f8f8c;
+}
+
+.resume-option-copy strong {
+  color: #123f49;
+}
+
+.resume-option-copy small,
+.resume-picker-tip,
+.resume-contact-field span {
+  color: #7593a0;
+}
+
+.resume-option-check {
+  border-color: #b9dfe5;
+}
+
+.resume-option.selected .resume-option-check {
+  border-color: #0f8f8c;
+  background: #0f8f8c;
+}
+
+.resume-contact-field label {
+  color: #2f5d73;
+}
+
+.apply-upload {
+  border-color: #74cbd2;
+  background: #e8f7f8;
+  color: #0f8f8c;
+}
+
+.apply-upload:hover {
+  border-color: #0f8f8c;
+  background: #eaf3ff;
+}
+
+.apply-upload span {
+  color: #496b7a;
+}
+
+.saved-resume-select {
+  margin-bottom: 10px;
+}
+
+.resume-source-hint {
+  margin: 8px 0 0;
+  color: #7d9299;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+:global(.recruit-apply-modal .ant-modal-content),
+:global(.recruit-apply-modal .ant-modal-header),
+:global(.recruit-apply-modal .ant-modal-body),
+:global(.recruit-apply-modal .ant-modal-footer) {
+  background: #fff !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-content) {
+  border-color: #cfe4e8;
+  box-shadow: 0 20px 56px rgb(18 63 73 / 18%);
+}
+
+:global(.recruit-apply-modal .ant-modal-title) {
+  color: #123f49 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-close) {
+  color: #5f7f87 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-close:hover) {
+  color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.recruit-apply-modal .ant-form-item-label > label),
+:global(.recruit-apply-modal .ant-radio-wrapper) {
+  color: #496b7a !important;
+}
+
+:global(.recruit-apply-modal .ant-input),
+:global(.recruit-apply-modal .ant-input-affix-wrapper),
+:global(.recruit-apply-modal .ant-select-selector) {
+  border-color: #cfe4e8 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #123f49 !important;
+  box-shadow: none !important;
+}
+
+:global(.recruit-apply-modal .ant-input:hover),
+:global(.recruit-apply-modal .ant-input:focus),
+:global(.recruit-apply-modal .ant-input-affix-wrapper:hover),
+:global(.recruit-apply-modal .ant-input-affix-wrapper-focused),
+:global(.recruit-apply-modal .ant-select:hover .ant-select-selector),
+:global(.recruit-apply-modal .ant-select-focused .ant-select-selector) {
+  border-color: #74cbd2 !important;
+  box-shadow: 0 0 0 2px rgb(47 128 237 / 12%) !important;
+}
+
+:global(.recruit-apply-modal .ant-input::placeholder),
+:global(.recruit-apply-modal .ant-select-selection-placeholder) {
+  color: #86a6ae !important;
+}
+
+:global(.recruit-apply-modal .ant-select-selection-item),
+:global(.recruit-apply-modal .ant-select-arrow) {
+  color: #2f80ed !important;
+}
+
+:global(.recruit-apply-modal .ant-radio-inner) {
+  border-color: #9bb8c4;
+  background: #fff;
+}
+
+:global(.recruit-apply-modal .ant-radio-checked .ant-radio-inner) {
+  border-color: #2f80ed;
+}
+
+:global(.recruit-apply-modal .ant-radio-inner::after) {
+  background: #2f80ed;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer) {
+  border-top-color: #e6f1f3;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-default) {
+  border-color: #b9dfe5 !important;
+  background: #fff !important;
+  color: #2f5d73 !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-default:hover) {
+  border-color: #74cbd2 !important;
+  background: #e8f7f8 !important;
+  color: #0f777d !important;
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-primary),
+:global(.recruit-apply-modal .ant-btn-primary) {
+  border-color: #0f8f8c !important;
+  background: linear-gradient(135deg, #0f9f9b, #2f80ed) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 16px rgb(15 143 140 / 18%);
+}
+
+:global(.recruit-apply-modal .ant-modal-footer .ant-btn-primary:hover),
+:global(.recruit-apply-modal .ant-btn-primary:hover) {
+  border-color: #0b777c !important;
+  background: linear-gradient(135deg, #0b8587, #2563c7) !important;
 }
 
 @media (max-width: 640px) {

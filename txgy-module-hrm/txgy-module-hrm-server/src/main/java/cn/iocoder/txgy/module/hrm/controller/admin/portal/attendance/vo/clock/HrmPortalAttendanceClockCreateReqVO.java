@@ -34,4 +34,9 @@ public class HrmPortalAttendanceClockCreateReqVO {
     @Size(max = 50, message = "WiFi MAC 地址不能超过 50 个字符")
     private String mac;
 
+    @Schema(description = "打卡现场照片（人脸/工地照）地址",
+            example = "http://localhost:48080/admin-api/infra/file/4/get/xxx.jpg")
+    @Size(max = 512, message = "打卡照片地址不能超过 512 个字符")
+    private String photoUrl;
+
 }

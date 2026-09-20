@@ -2,7 +2,8 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { useUserStore } from '@vben/stores';
+import { LOGIN_PATH } from '@vben/constants';
+import { useAccessStore, useUserStore } from '@vben/stores';
 
 import txgyLogo from '#/assets/imgs/logo.png';
 import { useAuthStore } from '#/store';
@@ -11,6 +12,15 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const authStore = useAuthStore();
+const accessStore = useAccessStore();
+
+/** 是否已登录：公告页（meta.ignoreAccess）免登录可看，头部必须能匿名渲染，不能假设有 userInfo。 */
+const isLoggedIn = computed(() => Boolean(accessStore.accessToken));
+
+/** 匿名访客点「登录」：带 redirect 回当前页。 */
+function goLogin() {
+  router.push({ path: LOGIN_PATH, query: { redirect: encodeURIComponent(route.fullPath) } });
+}
 
 const navItems = [
   { label: '首页', path: '/portal/home' },
@@ -29,6 +39,15 @@ const isRecruitPortal = computed(
     route.path.startsWith('/portal/recruit') ||
     route.path.startsWith('/portal/profile/recruit'),
 );
+const isTrainingPortal = computed(() => route.path.startsWith('/portal/training'));
+
+const isRecruitHome = computed(() => {
+  if (route.path !== '/portal/recruit') return false;
+  const section = Array.isArray(route.query.section)
+    ? route.query.section[0]
+    : route.query.section;
+  return !section || section === 'home';
+});
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(`${path}/`);
@@ -42,7 +61,10 @@ async function handleLogout() {
 <template>
   <div
     class="portal-shell portal-light"
-    :class="{ 'portal-shell--recruit': isRecruitPortal }"
+    :class="{
+      'portal-shell--recruit': isRecruitPortal,
+      'portal-shell--training': isTrainingPortal,
+    }"
   >
     <header class="portal-header">
       <div class="portal-brand" @click="router.push('/portal/home')">
@@ -63,10 +85,13 @@ async function handleLogout() {
       </nav>
 
       <div class="portal-user">
-        <span class="portal-user-name">{{ displayName }}</span>
-        <button class="portal-logout" type="button" @click="handleLogout">
-          退出登录
-        </button>
+        <template v-if="isLoggedIn">
+          <span class="portal-user-name">{{ displayName }}</span>
+          <button class="portal-logout" type="button" @click="handleLogout">
+            退出登录
+          </button>
+        </template>
+        <button v-else class="portal-logout" type="button" @click="goLogin">登录</button>
       </div>
     </header>
 
@@ -76,12 +101,13 @@ async function handleLogout() {
         'portal-main--home': route.path.startsWith('/portal/home'),
         'portal-main--training': route.path.startsWith('/portal/training'),
         'portal-main--recruit': isRecruitPortal,
+        'portal-main--recruit-home': isRecruitHome,
       }"
     >
       <RouterView />
     </main>
 
-    <footer class="portal-footer">© 防腐保温智慧平台 · 员工服务中心</footer>
+    <footer v-if="!isRecruitHome" class="portal-footer">© 防腐保温智慧平台 · 员工服务中心</footer>
   </div>
 </template>
 
@@ -159,7 +185,7 @@ async function handleLogout() {
 
 .portal-nav button:hover,
 .portal-nav button.active {
-  color: #d86616;
+  color: #0f8f8c;
 }
 
 .portal-nav button.active::after {
@@ -168,7 +194,7 @@ async function handleLogout() {
   bottom: 0;
   left: 14px;
   height: 2px;
-  background: linear-gradient(90deg, #ef8b35, #d86616);
+  background: linear-gradient(90deg, #0f8f8c, #2f80ed);
   content: '';
 }
 
@@ -194,7 +220,7 @@ async function handleLogout() {
 }
 
 .portal-logout:hover {
-  color: hsl(var(--destructive));
+  color: #0f8f8c;
 }
 
 .portal-main {
@@ -205,11 +231,44 @@ async function handleLogout() {
 }
 
 .portal-main--training {
-  width: calc(100% - 64px);
-  max-width: none;
-  margin-right: 32px;
-  margin-left: 32px;
-  padding-top: 32px;
+  width: min(1320px, calc(100% - 120px));
+  max-width: 1320px;
+  margin-right: auto;
+  margin-left: auto;
+  padding: 0 0 48px;
+}
+
+.portal-shell--training {
+  background: #fff;
+}
+
+.portal-shell--training .portal-header {
+  min-height: 72px;
+  padding-right: max(48px, calc((100% - 1320px) / 2));
+  padding-left: max(48px, calc((100% - 1320px) / 2));
+  gap: 18px;
+}
+
+.portal-shell--training .portal-brand {
+  gap: 8px;
+  font-size: 15px;
+}
+
+.portal-shell--training .portal-brand-logo {
+  width: 32px;
+  height: 32px;
+}
+
+.portal-shell--training .portal-nav button {
+  min-width: 74px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.portal-shell--training .portal-user { gap: 9px; }
+
+.portal-shell--training .portal-footer {
+  display: none;
 }
 
 .portal-main.portal-main--home {
@@ -227,15 +286,28 @@ async function handleLogout() {
   position: relative;
 }
 
+.portal-main--recruit-home {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  margin: 0;
+  padding: 0;
+}
+
+.portal-main--recruit-home :deep(.recruit-page) {
+  flex: 1;
+  min-height: 100%;
+}
+
 .portal-shell--recruit :deep(.ant-btn-primary) {
-  border-color: #d86616;
-  background: linear-gradient(135deg, #ef8b35, #d86616);
-  box-shadow: 0 6px 14px rgb(216 102 22 / 18%);
+  border-color: #0f8f8c;
+  background: linear-gradient(135deg, #0f9f9b, #2f80ed);
+  box-shadow: 0 6px 14px rgb(15 143 140 / 18%);
 }
 
 .portal-shell--recruit :deep(.ant-btn-primary:hover) {
-  border-color: #b94e13;
-  background: linear-gradient(135deg, #d86616, #b94e13);
+  border-color: #0b777c;
+  background: linear-gradient(135deg, #0b8587, #2563c7);
 }
 
 .portal-footer {

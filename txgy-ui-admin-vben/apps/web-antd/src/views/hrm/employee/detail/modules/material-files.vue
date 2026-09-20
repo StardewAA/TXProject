@@ -5,9 +5,10 @@ import { onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
-import { Button, Card, Modal } from 'ant-design-vue';
+import { Button, Card, message, Modal } from 'ant-design-vue';
 
 import {
+  generateOnboardDocs,
   getEmployeeFileList,
   saveEmployeeFiles,
 } from '#/api/hrm/employee/file';
@@ -18,6 +19,7 @@ const emit = defineEmits(['success']);
 const { hasAccessByCodes } = useAccess();
 const loading = ref(false);
 const saving = ref(false);
+const generating = ref(false);
 const fileList = ref<HrmEmployeeFileApi.EmployeeFile[]>([]);
 const dialogVisible = ref(false);
 const dialogTitle = ref('');
@@ -61,9 +63,34 @@ async function saveFiles() {
   }
 }
 onMounted(getFileListData);
+
+/** 按模板一键生成「个人基本信息档案 / 入职档案登记表 / 岗前培训协议」并归档 */
+async function handleGenerateOnboardDocs() {
+  generating.value = true;
+  try {
+    const urls = await generateOnboardDocs(props.employeeId);
+    if (urls && urls.length > 0) {
+      message.success(`已生成 ${urls.length} 份员工档案文档并归档`);
+    } else {
+      message.warning('没有生成任何文档，请检查模板库里是否有对应的档案/培训协议模板');
+    }
+    await getFileListData();
+    emit('success');
+  } finally {
+    generating.value = false;
+  }
+}
 </script>
 <template>
   <div v-loading="loading">
+    <div v-if="canUpdate" class="mb-3 flex items-center justify-between">
+      <span class="text-muted-foreground text-xs">
+        转员工时系统会按模板自动生成员工专属档案文档；这里可以手动补生成一份。
+      </span>
+      <Button type="primary" :loading="generating" @click="handleGenerateOnboardDocs">
+        生成入职档案 / 培训协议
+      </Button>
+    </div>
     <Card
       v-for="group in HrmEmployeeFileGroups"
       :key="group.label"

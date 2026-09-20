@@ -25,6 +25,14 @@ public enum MesWmProductSalesStatusEnum implements ArrayValuable<Integer> {
      */
     PREPARE(MesOrderStatusConstants.PREPARE, "草稿"),
     /**
+     * BPM 审批中
+     *
+     * 对应 MesWmProductSalesService#submitProductSales 方法：
+     * 提交后发起 BPM 流程，审批通过后按 OQC 标志分流（待检测/待拣货），驳回退回草稿。
+     * 6 为本枚举专属状态值（10 已被 SHIPPING 占用），不进 MesOrderStatusConstants
+     */
+    BPM_APPROVING(6, "BPM审批中"),
+    /**
      * 待检测（需要 OQC 检验时），对接 qc 模块的 MesQcOqcDO 后续流程
      *
      * 对应 MesWmProductSalesService#submitProductSales 方法

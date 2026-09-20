@@ -6,6 +6,33 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
+const supplierCreditStatusText: Record<string, string> = {
+  APPROVED: '认证通过',
+  BLACKLISTED: '黑名单',
+  CANCELLED: '注销',
+  CRITICAL: '重大风险',
+  DRAFT: '草稿',
+  EXPIRED: '已到期',
+  EXPIRING_SOON: '即将到期',
+  FROZEN: '冻结',
+  HIGH: '高风险',
+  LIMITED: '部分受限',
+  LOW: '低风险',
+  MEDIUM: '中风险',
+  NONE: '无限制',
+  NORMAL: '正常',
+  PENDING: '待认证',
+  PENDING_REVIEW: '待复核',
+  REJECTED: '已驳回',
+  REVOKED: '已撤销',
+  VALID: '有效',
+  WARNING: '风险提醒',
+};
+
+function formatSupplierCreditStatus(value?: string) {
+  return value ? supplierCreditStatusText[value] || value : '-';
+}
+
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -15,6 +42,16 @@ export function useFormSchema(): VbenFormSchema[] {
       dependencies: {
         triggerFields: [''],
         show: () => false,
+      },
+    },
+    {
+      fieldName: 'partnerCode',
+      label: '统一编码',
+      component: 'Input',
+      // 由 ERP 服务端统一生成（VEN + 日期 + 流水），创建后不可修改
+      componentProps: {
+        disabled: true,
+        placeholder: '保存后由系统自动生成',
       },
     },
     {
@@ -131,6 +168,16 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'userId',
+      label: '绑定登录账号',
+      component: 'InputNumber',
+      componentProps: {
+        placeholder: '供应商门户账号的用户编号，留空表示未绑定',
+        min: 1,
+      },
+      help: '绑定后该账号登录时只能看到发给本供应商的询价单，且只能为本供应商报价',
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -180,6 +227,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
+      field: 'partnerCode',
+      title: '统一编码',
+      minWidth: 130,
+    },
+    {
       field: 'name',
       title: '供应商名称',
       minWidth: 150,
@@ -214,6 +266,30 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       },
     },
     {
+      field: 'authStatus',
+      title: '认证状态',
+      minWidth: 100,
+      formatter: ({ cellValue }) => formatSupplierCreditStatus(cellValue),
+    },
+    {
+      field: 'qualificationStatus',
+      title: '资质状态',
+      minWidth: 110,
+      formatter: ({ cellValue }) => formatSupplierCreditStatus(cellValue),
+    },
+    {
+      field: 'riskLevel',
+      title: '风险等级',
+      minWidth: 90,
+      formatter: ({ cellValue }) => formatSupplierCreditStatus(cellValue),
+    },
+    {
+      field: 'purchaseLimitStatus',
+      title: '采购限制',
+      minWidth: 110,
+      formatter: ({ cellValue }) => formatSupplierCreditStatus(cellValue),
+    },
+    {
       field: 'sort',
       title: '排序',
       minWidth: 80,
@@ -226,7 +302,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 130,
+      width: 220,
       fixed: 'right',
       slots: { default: 'actions' },
     },

@@ -51,6 +51,10 @@ public class ErpWarehouseDO extends BaseDO {
      */
     private String principal;
     /**
+     * 负责人用户编号，用于调拨确认鉴权和站内信通知
+     */
+    private Long principalUserId;
+    /**
      * 仓储费，单位：元
      */
     private BigDecimal warehousePrice;

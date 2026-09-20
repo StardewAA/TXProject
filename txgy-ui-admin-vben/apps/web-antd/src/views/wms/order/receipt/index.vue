@@ -3,7 +3,8 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { WmsReceiptOrderApi } from '#/api/wms/order/receipt';
 import type { WmsReceiptOrderDetailApi } from '#/api/wms/order/receipt/detail';
 
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { OrderDeleteStatusList, OrderStatusEnum, OrderUpdateStatusList } from '@vben/constants';
@@ -32,6 +33,7 @@ const [SimulateModal, simulateModalApi] = useVbenModal({
 });
 
 defineOptions({ name: 'WmsReceiptOrder' });
+const route = useRoute();
 
 const approvalLabels: Record<number, string> = {
   '-1': '草稿',
@@ -77,6 +79,12 @@ function handleCreate() {
 function handleEdit(row: WmsReceiptOrderApi.ReceiptOrder) {
   formModalApi.setData({ id: row.id!, formType: 'update' }).open();
 }
+
+watch(() => route.query.restartId, (value) => {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  formModalApi.setData({ id, formType: 'update' }).open();
+}, { immediate: true });
 
 /** 查看入库单详情 */
 function handleDetail(row: WmsReceiptOrderApi.ReceiptOrder) {

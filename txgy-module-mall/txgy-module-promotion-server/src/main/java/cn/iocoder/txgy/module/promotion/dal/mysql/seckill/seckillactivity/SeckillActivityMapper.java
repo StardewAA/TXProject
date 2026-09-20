@@ -71,7 +71,8 @@ public interface SeckillActivityMapper extends BaseMapperX<SeckillActivityDO> {
                 .eqIfPresent(SeckillActivityDO::getStatus, status)
                 .lt(SeckillActivityDO::getStartTime, dateTime)
                 .gt(SeckillActivityDO::getEndTime, dateTime)// 开始时间 < 指定时间 < 结束时间，也就是说获取指定时间段的活动
-                .apply(ObjectUtil.isNotNull(pageReqVO.getConfigId()), MyBatisUtils.findInSet("config_ids"), pageReqVO.getConfigId()));
+                .apply(ObjectUtil.isNotNull(pageReqVO.getConfigId()), MyBatisUtils.findInSet("config_ids"), pageReqVO.getConfigId())
+                .orderByDesc(SeckillActivityDO::getId));
     }
 
     default SeckillActivityDO selectBySpuIdAndStatusAndNow(Long spuId, Integer status) {

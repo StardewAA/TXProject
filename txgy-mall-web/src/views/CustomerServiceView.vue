@@ -45,8 +45,9 @@ onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template>
-  <MemberPage title="在线客服" description="消息与后台客服中心实时同步">
-    <div class="service-status"><i></i><div><b>平台客服</b><span>在线咨询商品、订单、配送及售后问题</span></div></div>
+  <MemberPage title="原平台客服" description="此处保留原平台会话；不代表店铺独立坐席在线。">
+    <p><MallLink to="/member/customer-service/scoped">查看新版平台自助与人工客服开通状态 →</MallLink></p>
+    <div class="service-status"><div><b>原平台咨询记录</b><span>不提供真实坐席在线状态；店铺业务请从对应商品或订单联系商家。</span></div></div>
     <div ref="messageBox" class="message-box" v-loading="loading">
       <div v-if="!loading && !messages.length" class="message-empty">暂无消息，发送第一条咨询吧</div>
       <article v-for="message in messages" :key="message.id" :class="{ mine: message.senderType === 1 }"><div><p>{{ contentText(message.content) }}</p><small>{{ message.senderType === 1 ? '我' : '平台客服' }} · {{ formatDate(message.createTime) }}</small></div></article>

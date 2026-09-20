@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.performance.config;
 
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.performance.plan.HrmPerformanceQuotaScoreTypeEnum;
 import cn.iocoder.txgy.module.hrm.enums.performance.config.HrmPerformanceQuotaTypeEnum;
 import cn.iocoder.txgy.module.hrm.enums.performance.config.HrmPerformanceScoreCalculationEnum;
@@ -34,7 +34,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmPerformanceAssessmentTemplateDO extends BaseDO {
+public class HrmPerformanceAssessmentTemplateDO extends TenantBaseDO {
 
     /**
      * 绩效考核模板编号

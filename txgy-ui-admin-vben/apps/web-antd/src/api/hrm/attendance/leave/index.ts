@@ -47,3 +47,12 @@ export function getAttendanceLeave(id: number) {
     `/hrm/attendance/leave/get?id=${id}`,
   );
 }
+
+/** 人工审批请假申请（通过 / 驳回） */
+export function approveAttendanceLeave(data: {
+  id: number;
+  approved: boolean;
+  reason?: string;
+}) {
+  return requestClient.put<boolean>('/hrm/attendance/leave/approve', data);
+}

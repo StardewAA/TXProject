@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAccountOperation } from '@/composables/useAccountOperation'
+const operation = useAccountOperation()
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -14,11 +16,13 @@ async function uploadLogo(event:Event){
  const localUrl=URL.createObjectURL(file)
  try{
   await new Promise<void>((resolve,reject)=>{const img=new Image();img.onload=()=>img.naturalWidth*img.naturalHeight<=25000000?resolve():reject(new Error('图片像素过大，请缩小后上传'));img.onerror=()=>reject(new Error('图片无法读取，请选择有效图片'));img.src=localUrl})
+  if(!operation.current()||currentVersion!==version||data.value!==current)return
   const url=await supplierShopApi.uploadLogo(file)
+  if(!operation.current())return
   if(currentVersion!==version||data.value!==current)return
   if(!/^https?:\/\//i.test(url)||url.length>512)throw new Error('上传返回的图片地址无效，请联系管理员检查文件存储配置')
   current.logoUrl=url;ElMessage.success('Logo上传成功，请保存店铺资料')
- }catch(error){ElMessage.error(error instanceof Error?error.message:'Logo上传失败，原图片未更改')}
+ }catch(error){if(operation.current())ElMessage.error(error instanceof Error?error.message:'Logo上传失败，原图片未更改')}
  finally{URL.revokeObjectURL(localUrl);uploading.value=false}
 }
 let version=0
@@ -32,7 +36,7 @@ async function save(){
 watch(()=>route.params.shopId,load,{immediate:true})
 </script>
 <template>
- <div class="container shop-settings"><RouterLink to="/sales">← 返回销售中心</RouterLink><h1>店铺资料与退货地址</h1>
+ <div class="container shop-settings"><MallLink to="/sales">← 返回销售中心</MallLink><h1>店铺资料与退货地址</h1>
   <el-alert title="公开资料会展示在商城店铺；退货资料仅用于售后，不会公开展示。同意退货时保存地址快照，之后修改不会影响已有快照。" :closable="false"/>
   <div v-loading="busy"><el-form v-if="data" label-position="top" :disabled="saving">
    <h2>公开店铺资料</h2><el-form-item label="店铺名称（必填）"><el-input v-model="data.name" maxlength="64"/></el-form-item>

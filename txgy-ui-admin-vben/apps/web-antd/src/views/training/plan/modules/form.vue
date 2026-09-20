@@ -12,7 +12,6 @@ import { $t } from '#/locales';
 
 import { getCoursePage } from '../../course/api';
 import { createClass, getClass, updateClass } from '../api';
-import { buildTargetCondition, parseTargetCondition } from '../data';
 import { useFormSchema } from './form-data';
 
 defineOptions({ name: 'TrainingPlanForm' });
@@ -72,16 +71,12 @@ const [Modal, modalApi] = useVbenModal({
         id: formData.value?.id,
         name: raw.name,
         type: raw.type,
-        projectId: raw.projectId || undefined,
-        projectName: raw.projectName || undefined,
         courseIds: raw.courseIds,
-        targetCondition: buildTargetCondition(raw),
         targetPosts: Array.isArray(raw.targetPostsText)
           ? JSON.stringify(raw.targetPostsText)
           : undefined,
         startTime: raw.startTime || undefined,
         deadline: raw.deadline || undefined,
-        remark: raw.remark || undefined,
       };
       await (data.id ? updateClass(data) : createClass(data));
       await modalApi.close();
@@ -115,14 +110,10 @@ const [Modal, modalApi] = useVbenModal({
           targetPostsText = [];
         }
       }
-      const scope = parseTargetCondition(detail.targetCondition);
       await formApi.setValues({
         ...detail,
         targetPostsText,
         courseIds: detail.courseIds,
-        scopeDeptIds: scope.deptIds,
-        scopeIncludeChildDept: scope.includeChildDept,
-        scopePostIds: scope.postIds,
       });
     } finally {
       modalApi.unlock();

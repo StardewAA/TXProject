@@ -220,11 +220,13 @@ export namespace TrainingLearnerApi {
   /** 学员端已上架课程（门户课程中心） */
   export interface PortalCourse {
     id?: number;
+    categoryId?: number;
     code?: string;
     title?: string;
     subtitle?: string;
     summary?: string;
     coverUrl?: string;
+    credit?: number;
     courseLevel?: string;
     durationMinutes?: number;
     lecturer?: string;
@@ -232,6 +234,20 @@ export namespace TrainingLearnerApi {
     mediaCount?: number;
     commentCount?: number;
     isRequired?: boolean;
+    status?: number;
+    createTime?: string;
+  }
+
+  /** 学员端课程分类（域-组-课三级树） */
+  export interface PortalCourseCategory {
+    id?: number;
+    parentId?: number;
+    level?: number;
+    name?: string;
+    code?: string;
+    status?: string;
+    sort?: number;
+    children?: PortalCourseCategory[];
   }
 
   /** VR 实训记录（模块六预留，当前后端返回空列表） */
@@ -405,11 +421,23 @@ export function getMyCheckins(courseId?: number) {
 
 /** 学员端已上架课程分页（门户课程中心） */
 export function getPortalCoursePage(
-  params: PageParam & { keyword?: string; categoryId?: number },
+  params: PageParam & {
+    categoryId?: number;
+    keyword?: string;
+    sortField?: 'credit' | 'latest';
+    sortOrder?: 'asc' | 'desc';
+  },
 ) {
   return requestClient.get<PageResult<TrainingLearnerApi.PortalCourse>>(
     '/training/portal/course/page',
     { params },
+  );
+}
+
+/** 学员端课程分类树 */
+export function getPortalCourseCategoryTree() {
+  return requestClient.get<TrainingLearnerApi.PortalCourseCategory[]>(
+    '/training/portal/course/category-tree',
   );
 }
 

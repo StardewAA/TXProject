@@ -33,6 +33,13 @@ type ProfileFilterState = {
 const conversations = ref<Conversation[]>([]);
 const selected = ref<Conversation>();
 const chatMessages = ref<ChatMessage[]>([]);
+const selectedHasResume = computed(() =>
+  chatMessages.value.some(
+    (item) =>
+      getHrmRecruitChatAttachment(item.content, item.contentType)?.type ===
+      'resume',
+  ),
+);
 const draft = ref('');
 const searchText = ref('');
 const activeFilter = ref<FilterKey>('all');
@@ -412,15 +419,18 @@ async function send() {
 }
 
 async function handleConvertToCandidate(item: Conversation) {
-  if (item.candidateId) return;
+  if (item.candidateId && item.applicationId) return;
+  const repairingApplication = Boolean(item.candidateId);
   try {
-    await confirm(`确定将“${candidateName(item)}”转为候选人吗？`);
+    await confirm(item.candidateId
+      ? `确定为“${candidateName(item)}”补建应聘记录吗？`
+      : `确定将“${candidateName(item)}”转为候选人吗？`);
     const candidateId = await convertAdminRecruitChatConversationToCandidate(item.id);
     item.candidateId = candidateId;
     if (selected.value?.id === item.id) {
       selected.value.candidateId = candidateId;
     }
-    message.success('已转为候选人');
+    message.success(repairingApplication ? '应聘记录已补建' : '已转为候选人并创建应聘记录');
     await loadConversations(true);
   } catch (error: any) {
     if (error?.msg || error?.code || error?.response) {
@@ -677,12 +687,12 @@ onUnmounted(() => {
                   <IconifyIcon icon="lucide:message-circle-more" />立即沟通
                 </button>
                 <button
-                  v-if="!item.candidateId"
+                  v-if="!item.candidateId || !item.applicationId"
                   class="convert-action"
                   type="button"
                   @click="handleConvertToCandidate(item)"
                 >
-                  <IconifyIcon icon="lucide:user-round-plus" />转为候选人
+                  <IconifyIcon icon="lucide:user-round-plus" />{{ item.candidateId ? '补建应聘记录' : '转为候选人' }}
                 </button>
                 <span v-else class="converted-action"><IconifyIcon icon="lucide:badge-check" />已转候选人</span>
                 <button
@@ -761,6 +771,7 @@ onUnmounted(() => {
           <div class="dialog-top-actions">
             <span v-if="selected.applicationStatus === 'SUBMITTED'" class="application-pill"><IconifyIcon icon="lucide:send" />已投递</span>
             <span v-else-if="selected.applicationStatus === 'READY_TO_SUBMIT'" class="application-pill ready"><IconifyIcon icon="lucide:file-check-2" />待投递</span>
+            <span v-if="!selected.candidateId && selectedHasResume" class="application-pill ready"><IconifyIcon icon="lucide:user-round-plus" />待 HR 手动转为候选人</span>
           </div>
         </header>
 
@@ -999,7 +1010,7 @@ onUnmounted(() => {
 .conversation-data-row:hover, .conversation-data-row.selected { background: var(--hrm-chat-hover-bg); }
 .conversation-data-row.selected { box-shadow: inset 2px 0 var(--hrm-chat-accent); }
 .conversation-data-row > div { min-width: 0; min-height: 0; padding: 0 14px; }
-.conversation-data-row > .row-action { position: sticky; z-index: 5; right: 0; min-width: 300px; box-sizing: border-box; border-left: 1px solid var(--hrm-chat-border-strong); background: var(--hrm-chat-panel-bg); box-shadow: -12px 0 18px -18px var(--hrm-chat-selection-shadow); }
+.conversation-data-row > .row-action { position: sticky; z-index: 1; right: 0; min-width: 300px; box-sizing: border-box; border-left: 1px solid var(--hrm-chat-border-strong); background: var(--hrm-chat-panel-bg); box-shadow: -12px 0 18px -18px var(--hrm-chat-selection-shadow); }
 .conversation-data-row:hover > .row-action, .conversation-data-row.selected > .row-action { background: var(--hrm-chat-hover-bg); }
 .candidate-cell { position: relative; display: flex; align-items: center; gap: 10px; }
 .selection-checkbox { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; border: 1px solid var(--hrm-chat-checkbox-border); border-radius: 3px; accent-color: var(--hrm-chat-accent); cursor: pointer; }

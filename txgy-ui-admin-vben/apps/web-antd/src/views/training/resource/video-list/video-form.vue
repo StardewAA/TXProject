@@ -33,8 +33,6 @@ const editing = ref(false);
 const editingId = ref<number>();
 const title = ref('');
 const categoryId = ref<number | undefined>();
-const coverUrl = ref('');
-const tags = ref('');
 const durationSeconds = ref<number | undefined>();
 // 视频类型：1 短视频 2 录播
 const videoType = ref<number>(2);
@@ -164,8 +162,6 @@ async function handleConfirm() {
     const base = {
       title: title.value.trim(),
       categoryId: categoryId.value,
-      coverUrl: coverUrl.value.trim() || undefined,
-      tags: tags.value.trim() || undefined,
       durationSeconds: durationSeconds.value,
       videoType: videoType.value,
       definition: definition.value,
@@ -181,8 +177,13 @@ async function handleConfirm() {
           data.append(key, String(value));
         }
       });
-      await uploadVideo(data);
-      message.success('视频上传成功，已上线');
+      const result = await uploadVideo(data);
+      message.success(
+        result?.message ||
+          (result?.taskCount
+            ? `上传成功，后台正在转码 ${result.taskCount} 个清晰度`
+            : '视频上传成功，已上线'),
+      );
     }
     modalApi.close();
     emit('success');
@@ -201,8 +202,6 @@ const [Modal, modalApi] = useVbenModal({
       editingId.value = undefined;
       title.value = '';
       categoryId.value = undefined;
-      coverUrl.value = '';
-      tags.value = '';
       durationSeconds.value = undefined;
       videoType.value = 2;
       definition.value = '720P';
@@ -219,8 +218,6 @@ const [Modal, modalApi] = useVbenModal({
       editingId.value = data.id;
       title.value = data.title || '';
       categoryId.value = data.categoryId;
-      coverUrl.value = data.coverUrl || '';
-      tags.value = data.tags || '';
       durationSeconds.value = data.durationSeconds;
       videoType.value = data.videoType ?? 2;
       definition.value = data.definition ?? '720P';
@@ -266,8 +263,8 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
       <div class="text-xs text-gray-400">
-        系统将按原始清晰度生成可切换的降级清晰度（720P 原始时会提供 480P /
-        360P 选项），转码完成后可在播放时选择更低清晰度以适应弱网环境。
+        上传后系统在后台异步生成 360P / 480P / 720P 转码版本（不高于上传时的原始清晰度），
+        进度可在列表中查看；转码完成后播放时可自由切换清晰度以适应弱网环境。
       </div>
 
       <div v-if="!editing">
@@ -312,15 +309,6 @@ const [Modal, modalApi] = useVbenModal({
         />
       </div>
 
-      <div>
-        <div class="mb-1 text-sm text-gray-600">封面图地址</div>
-        <Input
-          v-model:value="coverUrl"
-          :maxlength="500"
-          placeholder="选填：封面图片 URL"
-        />
-      </div>
-
       <div class="flex gap-4">
         <div class="flex-1">
           <div class="mb-1 flex items-center gap-2 text-sm text-gray-600">
@@ -351,14 +339,6 @@ const [Modal, modalApi] = useVbenModal({
         </div>
       </div>
 
-      <div>
-        <div class="mb-1 text-sm text-gray-600">标签</div>
-        <Input
-          v-model:value="tags"
-          :maxlength="200"
-          placeholder="多个标签用逗号分隔，如：高处作业,实操示范"
-        />
-      </div>
     </div>
   </Modal>
 </template>

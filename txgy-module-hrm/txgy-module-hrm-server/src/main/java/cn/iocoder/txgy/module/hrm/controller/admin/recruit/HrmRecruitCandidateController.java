@@ -19,11 +19,13 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecru
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateUpdateStatusReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitOfferDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitApplicationMapper;
+import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitOfferMapper;
 import cn.iocoder.txgy.module.hrm.enums.recruit.candidate.HrmRecruitCandidateStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
@@ -56,6 +58,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +68,8 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSetByFlatMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.getFirst;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CANDIDATE_CREATE_FORBIDDEN;
 
 @Tag(name = "管理后台 - HRM 招聘候选人")
 @RestController
@@ -84,6 +89,8 @@ public class HrmRecruitCandidateController {
     private HrmEmployeeService employeeService;
     @Resource
     private HrmRecruitApplicationMapper recruitApplicationMapper;
+    @Resource
+    private HrmRecruitOfferMapper recruitOfferMapper;
 
     @Resource
     private DeptApi deptApi;
@@ -91,10 +98,13 @@ public class HrmRecruitCandidateController {
     private AdminUserApi adminUserApi;
 
     @PostMapping("/create")
-    @Operation(summary = "创建招聘候选人")
+    @Operation(summary = "创建招聘候选人（已停用）",
+            description = "候选人只能由求职者在招聘门户投递职位时自动产生，后台不再支持手工新增；"
+                    + "如需补充简历来源，请走「招聘沟通 → 转为候选人」或在门户投递")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:candidate:create')")
     public CommonResult<Long> createRecruitCandidate(@Valid @RequestBody HrmRecruitCandidateSaveReqVO createReqVO) {
-        return success(recruitCandidateService.createRecruitCandidate(createReqVO));
+        // 后台手工新增的候选人没有应聘记录，无法发 Offer / 安排面试，属于脏数据来源，直接拒绝
+        throw exception(RECRUIT_CANDIDATE_CREATE_FORBIDDEN);
     }
 
     @PutMapping("/update")
@@ -214,25 +224,30 @@ public class HrmRecruitCandidateController {
         if (CollUtil.isEmpty(list)) {
             return Collections.emptyList();
         }
-        // 1.1 招聘职位、部门和招聘渠道信息
-        Map<Long, HrmRecruitPostDO> recruitPostMap = recruitPostService.getRecruitPostMap(
-                convertSet(list, HrmRecruitCandidateDO::getPostId));
-        Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
-                convertSet(recruitPostMap.values(), HrmRecruitPostDO::getDeptId));
-        Map<Long, HrmRecruitChannelDO> recruitChannelMap = recruitChannelService.getRecruitChannelMap(
-                convertSet(list, HrmRecruitCandidateDO::getChannelId));
-        // 以候选人的当前岗位匹配最新应聘记录，避免同一候选人投递多个岗位时串联面试。
+        Set<Long> candidateIds = convertSet(list, HrmRecruitCandidateDO::getId);
         Map<Long, HrmRecruitApplicationDO> recruitApplicationMap = new HashMap<>();
         List<HrmRecruitApplicationDO> applications = recruitApplicationMapper
-                .selectListByCandidateIdsAndPostIds(convertSet(list, HrmRecruitCandidateDO::getId),
-                        convertSet(list, HrmRecruitCandidateDO::getPostId));
-        Map<Long, Long> candidatePostMap = new HashMap<>();
-        list.forEach(candidate -> candidatePostMap.put(candidate.getId(), candidate.getPostId()));
+                .selectListByCandidateIds(candidateIds);
         applications.forEach(application -> {
-            if (java.util.Objects.equals(candidatePostMap.get(application.getCandidateId()), application.getPostId())) {
-                recruitApplicationMap.putIfAbsent(application.getCandidateId(), application);
+            HrmRecruitApplicationDO current = recruitApplicationMap.get(application.getCandidateId());
+            if (current == null || isPreferredApplication(application, current)) {
+                recruitApplicationMap.put(application.getCandidateId(), application);
             }
         });
+        Map<Long, HrmRecruitOfferDO> recruitOfferMap = new HashMap<>();
+        recruitOfferMapper.selectListByApplicationIds(convertSet(recruitApplicationMap.values(),
+                        HrmRecruitApplicationDO::getId))
+                .forEach(offer -> recruitOfferMap.put(offer.getApplicationId(), offer));
+
+        Set<Long> postIds = new HashSet<>(convertSet(list, HrmRecruitCandidateDO::getPostId));
+        postIds.addAll(convertSet(recruitApplicationMap.values(), HrmRecruitApplicationDO::getPostId));
+        Map<Long, HrmRecruitPostDO> recruitPostMap = recruitPostService.getRecruitPostMap(postIds);
+        Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
+                convertSet(recruitPostMap.values(), HrmRecruitPostDO::getDeptId));
+        Set<Long> channelIds = new HashSet<>(convertSet(list, HrmRecruitCandidateDO::getChannelId));
+        channelIds.addAll(convertSet(recruitApplicationMap.values(), HrmRecruitApplicationDO::getChannelId));
+        Map<Long, HrmRecruitChannelDO> recruitChannelMap = recruitChannelService.getRecruitChannelMap(
+                channelIds);
         Map<Long, HrmRecruitInterviewDO> applicationInterviewMap = new HashMap<>();
         recruitApplicationMap.forEach((candidateId, application) -> {
             HrmRecruitInterviewDO interview = recruitInterviewService
@@ -242,7 +257,6 @@ public class HrmRecruitCandidateController {
             }
         });
         // 1.2 当前面试和员工信息
-        Set<Long> candidateIds = convertSet(list, HrmRecruitCandidateDO::getId);
         Map<Long, HrmRecruitInterviewDO> recruitInterviewMap = recruitInterviewService
                 .getLatestRecruitInterviewMapByCandidateIds(candidateIds);
         Set<Long> employeeIds = convertSet(recruitPostMap.values(), HrmRecruitPostDO::getOwnerEmployeeId);
@@ -262,6 +276,30 @@ public class HrmRecruitCandidateController {
 
         // 2. 拼接响应
         return BeanUtils.toBean(list, HrmRecruitCandidateRespVO.class, vo -> {
+            HrmRecruitApplicationDO application = recruitApplicationMap.get(vo.getId());
+            if (application != null) {
+                vo.setApplicationId(application.getId())
+                        .setApplicationStatus(application.getStatus())
+                        .setPostId(application.getPostId());
+                if (application.getChannelId() != null) {
+                    vo.setChannelId(application.getChannelId());
+                }
+                HrmRecruitApplicationStatusEnum applicationStatus =
+                        HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
+                if (applicationStatus != null) {
+                    vo.setApplicationStatusName(applicationStatus.getName());
+                }
+                HrmRecruitOfferDO offer = recruitOfferMap.get(application.getId());
+                if (offer != null) {
+                    vo.setOfferId(offer.getId()).setOfferApprovalStatus(offer.getApprovalStatus());
+                }
+                Integer projectedStatus = HrmRecruitCandidateStatusEnum
+                        .fromApplicationStatus(application.getStatus());
+                if (projectedStatus != null) {
+                    vo.setStatus(projectedStatus);
+                }
+            }
+
             // 2.1 拼接招聘职位、部门和招聘渠道信息
             MapUtils.findAndThen(recruitPostMap, vo.getPostId(), post -> {
                 vo.setPostName(post.getPostName()).setPostStatus(post.getStatus())
@@ -272,34 +310,25 @@ public class HrmRecruitCandidateController {
             });
             MapUtils.findAndThen(recruitChannelMap, vo.getChannelId(),
                     channel -> vo.setChannelName(channel.getName()));
-            MapUtils.findAndThen(recruitApplicationMap, vo.getId(), application -> {
-                vo.setApplicationId(application.getId())
-                        .setApplicationStatus(application.getStatus());
-                HrmRecruitApplicationStatusEnum applicationStatus =
-                        HrmRecruitApplicationStatusEnum.valueOfStatus(application.getStatus());
-                if (applicationStatus != null) {
-                    vo.setApplicationStatusName(applicationStatus.getName());
-                }
-            });
             // 2.2 拼接面试信息
-            if (HrmRecruitCandidateStatusEnum.INTERVIEW_RELATED_STATUSES.contains(vo.getStatus())) {
-                HrmRecruitInterviewDO currentInterview = vo.getApplicationId() == null
-                        ? recruitInterviewMap.get(vo.getId())
-                        : applicationInterviewMap.get(vo.getId());
-                if (currentInterview != null) {
-                    HrmRecruitInterviewDO interview = currentInterview;
-                    vo.setInterviewId(interview.getId()).setInterviewType(interview.getType())
-                            .setInterviewEmployeeId(interview.getInterviewEmployeeId())
-                            .setOtherInterviewEmployeeIds(interview.getOtherInterviewEmployeeIds())
-                            .setInterviewTime(interview.getInterviewTime()).setInterviewAddress(interview.getAddress())
-                            .setInterviewResult(interview.getResult())
-                            .setOtherInterviewEmployeeNames(convertList(
-                                    convertList(interview.getOtherInterviewEmployeeIds(), employeeMap::get),
-                                    HrmEmployeeDO::getName));
-                    MapUtils.findAndThen(employeeMap, interview.getInterviewEmployeeId(),
-                            employee -> vo.setInterviewEmployeeName(employee.getName()));
-                }
-            } else {
+            HrmRecruitInterviewDO currentInterview = vo.getApplicationId() == null
+                    ? (HrmRecruitCandidateStatusEnum.INTERVIEW_RELATED_STATUSES.contains(vo.getStatus())
+                    ? recruitInterviewMap.get(vo.getId()) : null)
+                    : applicationInterviewMap.get(vo.getId());
+            if (currentInterview != null) {
+                HrmRecruitInterviewDO interview = currentInterview;
+                vo.setStageNumber(interview.getStageNumber())
+                        .setInterviewId(interview.getId()).setInterviewType(interview.getType())
+                        .setInterviewEmployeeId(interview.getInterviewEmployeeId())
+                        .setOtherInterviewEmployeeIds(interview.getOtherInterviewEmployeeIds())
+                        .setInterviewTime(interview.getInterviewTime()).setInterviewAddress(interview.getAddress())
+                        .setInterviewResult(interview.getResult())
+                        .setOtherInterviewEmployeeNames(convertList(
+                                convertList(interview.getOtherInterviewEmployeeIds(), employeeMap::get),
+                                HrmEmployeeDO::getName));
+                MapUtils.findAndThen(employeeMap, interview.getInterviewEmployeeId(),
+                        employee -> vo.setInterviewEmployeeName(employee.getName()));
+            } else if (vo.getApplicationId() == null) {
                 vo.setStageNumber(0);
             }
             // 2.3 拼接员工和创建人信息
@@ -307,6 +336,15 @@ public class HrmRecruitCandidateController {
             MapUtils.findAndThen(userMap, NumberUtil.parseLong(vo.getCreator()),
                     creator -> vo.setCreatorName(creator.getNickname()));
         });
+    }
+
+    private boolean isPreferredApplication(HrmRecruitApplicationDO candidate,
+                                           HrmRecruitApplicationDO current) {
+        boolean candidateProcessing = HrmRecruitApplicationStatusEnum.PROCESSING_STATUSES
+                .contains(candidate.getStatus());
+        boolean currentProcessing = HrmRecruitApplicationStatusEnum.PROCESSING_STATUSES
+                .contains(current.getStatus());
+        return candidateProcessing && !currentProcessing;
     }
 
 }

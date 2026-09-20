@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted,ref,watch } from 'vue'
 import { loadBusinessSummary,type SummaryMetric } from '@/api/business-summary'
+import OrderWorkbench from '@/components/OrderWorkbench.vue'
 const props=defineProps<{shopId?:number}>()
 const metrics=ref<SummaryMetric[]>([]),loading=ref(false),failed=ref(false),updated=ref('')
 let version=0
@@ -14,8 +15,9 @@ watch(()=>props.shopId,load,{immediate:true})
 onUnmounted(()=>{++version})
 </script>
 <template>
+ <OrderWorkbench :role="shopId===undefined?'BUYER':'SUPPLIER'" :shop-id="shopId" />
  <section class="business-summary" :aria-busy="loading">
-  <header><h2>{{shopId===undefined?'我的采购待办':'店铺经营待办'}}</h2><el-button :loading="loading" @click="load">刷新统计</el-button></header>
+  <header><h2>{{shopId===undefined?'我的采购状态统计':'店铺经营状态统计'}}</h2><el-button :loading="loading" @click="load">刷新统计</el-button></header>
   <p>{{shopId===undefined?'询价仅统计本人创建的单据；订单为本账号PC、移动端全部购物订单，不包含同企业其他人员。':'仅统计当前授权店铺。商品按SPU计数；订单沿用销售列表口径，历史混店订单交平台处理。待发货数量不代表每单都满足发货条件。'}}</p>
   <el-skeleton v-if="loading" :rows="3" animated/>
   <div v-else class="metrics"><div v-for="metric in metrics" :key="metric.key" class="metric" :data-metric="metric.key"><span>{{metric.label}}</span><strong>{{metric.value===null?'—':metric.value}}</strong><small v-if="metric.value===null">暂未取得数据</small></div></div>

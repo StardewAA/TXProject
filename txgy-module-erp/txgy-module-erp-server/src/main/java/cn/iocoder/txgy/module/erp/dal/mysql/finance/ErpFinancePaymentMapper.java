@@ -19,6 +19,7 @@ public interface ErpFinancePaymentMapper extends BaseMapperX<ErpFinancePaymentDO
 
     default PageResult<ErpFinancePaymentDO> selectPage(ErpFinancePaymentPageReqVO reqVO) {
         MPJLambdaWrapperX<ErpFinancePaymentDO> query = new MPJLambdaWrapperX<ErpFinancePaymentDO>()
+                .inIfPresent(ErpFinancePaymentDO::getId, reqVO.getIds())
                 .likeIfPresent(ErpFinancePaymentDO::getNo, reqVO.getNo())
                 .betweenIfPresent(ErpFinancePaymentDO::getPaymentTime, reqVO.getPaymentTime())
                 .eqIfPresent(ErpFinancePaymentDO::getSupplierId, reqVO.getSupplierId())

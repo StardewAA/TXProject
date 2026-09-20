@@ -6,6 +6,7 @@ import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
+import { getSimpleUserList } from '#/api/system/user';
 
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
@@ -69,11 +70,16 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'principal',
-      label: '负责人',
-      component: 'Input',
+      fieldName: 'principalUserId',
+      label: '负责人账号',
+      component: 'ApiSelect',
       componentProps: {
-        placeholder: '请输入负责人',
+        api: getSimpleUserList,
+        labelField: 'nickname',
+        valueField: 'id',
+        showSearch: true,
+        allowClear: true,
+        placeholder: '请选择负责调拨确认和接收通知的账号',
       },
     },
     {

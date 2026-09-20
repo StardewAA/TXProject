@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.config;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.insurance.config.HrmInsuranceProjectTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -27,7 +27,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmInsuranceSchemeProjectDO extends BaseDO {
+public class HrmInsuranceSchemeProjectDO extends TenantBaseDO {
 
     /**
      * 编号

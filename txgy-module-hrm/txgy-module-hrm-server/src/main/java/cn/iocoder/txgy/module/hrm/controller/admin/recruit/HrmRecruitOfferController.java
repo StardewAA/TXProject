@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.hrm.controller.admin.recruit;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferSaveReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferOnboardReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitOfferApprovalCallbackReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitOfferDO;
 import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitOfferService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,20 +43,41 @@ public class HrmRecruitOfferController {
         offerService.submit(id); return success(true);
     }
 
+    @PutMapping("/approve")
+    @Operation(summary = "Offer 人工审批（通过 / 驳回）")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
+    public CommonResult<Boolean> approve(@RequestParam("id") Long id,
+                                          @RequestParam("approved") Boolean approved,
+                                          @RequestParam(value = "reason", required = false) String reason) {
+        offerService.approve(id, approved, reason); return success(true);
+    }
+
     @PutMapping("/approval-callback")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
     public CommonResult<Boolean> approvalCallback(@RequestParam("id") Long id,
                                                    @RequestParam("processInstanceId") String processInstanceId,
                                                    @RequestParam("approvalVersion") Integer approvalVersion,
-                                                   @RequestParam("approved") @NotNull Boolean approved) {
-        offerService.approvalCallback(id, processInstanceId, approvalVersion, approved);
+                                                   @RequestParam("approved") @NotNull Boolean approved,
+                                                   @RequestParam(value = "reason", required = false) String reason) {
+        offerService.approvalCallback(id, processInstanceId, approvalVersion, approved, reason);
+        return success(true);
+    }
+
+    @PostMapping("/bpm-callback")
+    @Operation(summary = "BPM 回调 Offer 审批结果")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
+    public CommonResult<Boolean> bpmCallback(
+            @Valid @RequestBody HrmRecruitOfferApprovalCallbackReqVO reqVO) {
+        offerService.approvalCallback(reqVO.getOfferId(), reqVO.getProcessInstanceId(),
+                reqVO.getApprovalVersion(), reqVO.getApproved(), reqVO.getReason());
         return success(true);
     }
 
     @PutMapping("/withdraw")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:withdraw')")
-    public CommonResult<Boolean> withdraw(@RequestParam("id") Long id) {
-        offerService.withdraw(id); return success(true);
+    public CommonResult<Boolean> withdraw(@RequestParam("id") Long id,
+                                          @RequestParam(value = "reason", required = false) String reason) {
+        offerService.withdraw(id, reason); return success(true);
     }
 
     @PutMapping("/send")
@@ -74,5 +96,21 @@ public class HrmRecruitOfferController {
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:onboard')")
     public CommonResult<Long> onboard(@Valid @RequestBody HrmRecruitOfferOnboardReqVO reqVO) {
         return success(offerService.onboard(reqVO));
+    }
+
+    @PutMapping("/resend-contract-notice")
+    @Operation(summary = "重新生成劳务合同文件并再次发送待签署通知")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:onboard')")
+    public CommonResult<Boolean> resendContractNotice(@RequestParam("offerId") Long offerId) {
+        offerService.resendContractNotice(offerId);
+        return success(true);
+    }
+
+    @PutMapping("/resend-offer-notice")
+    @Operation(summary = "重新发送 Offer 录用通知邮件（带录用通知书 PDF 附件）")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:send')")
+    public CommonResult<Boolean> resendOfferNotice(@RequestParam("offerId") Long offerId) {
+        offerService.resendOfferNotice(offerId);
+        return success(true);
     }
 }

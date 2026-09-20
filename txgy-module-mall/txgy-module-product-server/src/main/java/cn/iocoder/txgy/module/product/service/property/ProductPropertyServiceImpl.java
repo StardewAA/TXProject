@@ -68,9 +68,9 @@ public class ProductPropertyServiceImpl implements ProductPropertyService {
 
         // 更新
         ProductPropertyDO updateObj = BeanUtils.toBean(updateReqVO, ProductPropertyDO.class);
-        productPropertyMapper.updateById(updateObj);
-        // 更新 sku 相关属性
+        // 先检查使用中的商品快照；拒绝时不先改字典，也不批量覆盖 SKU 动态数据。
         productSkuService.updateSkuProperty(updateObj.getId(), updateObj.getName());
+        productPropertyMapper.updateById(updateObj);
     }
 
     @Override

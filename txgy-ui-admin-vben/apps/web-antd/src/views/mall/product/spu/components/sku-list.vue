@@ -7,7 +7,7 @@ import type {
   RuleConfig,
 } from '#/views/mall/product/spu/components';
 
-import { ref, watch } from 'vue';
+import { ref, toRefs, watch } from 'vue';
 
 import {
   copyValueToTarget,
@@ -29,6 +29,8 @@ const props = withDefaults(
     isBatch?: boolean; // 是否作为批量操作组件
     isComponent?: boolean; // 是否作为 sku 选择组件
     isDetail?: boolean; // 是否作为 sku 详情组件
+    hideDynamicStock?: boolean; // 审核快照不包含实时库存
+    readonlyStock?: boolean; // 经营资料编辑不改写库存流水
     propertyList?: PropertyAndValues[];
     propFormData?: MallSpuApi.Spu;
     ruleConfig?: RuleConfig[];
@@ -39,6 +41,8 @@ const props = withDefaults(
     ruleConfig: () => [],
     isBatch: false,
     isDetail: false,
+    hideDynamicStock: false,
+    readonlyStock: false,
     isComponent: false,
     isActivityComponent: false,
   },
@@ -48,7 +52,7 @@ const emit = defineEmits<{
   (e: 'selectionChange', value: MallSpuApi.Sku[]): void;
 }>();
 
-const { isBatch, isDetail, isComponent, isActivityComponent } = props;
+const { isBatch, isDetail, isComponent, isActivityComponent } = toRefs(props);
 
 const formData: Ref<MallSpuApi.Spu | undefined> = ref<MallSpuApi.Spu>();
 const tableHeaders = ref<{ label: string; prop: string }[]>([]);
@@ -79,9 +83,12 @@ const skuList = ref<MallSpuApi.Sku[]>([createEmptySku()]);
 
 /** 批量添加 */
 function batchAdd() {
+  if (props.isDetail) return;
   validateProperty();
   formData.value!.skus!.forEach((item: MallSpuApi.Sku) => {
+    const originalStock = item.stock;
     copyValueToTarget(item, skuList.value[0]);
+    if (props.readonlyStock) item.stock = originalStock;
   });
 }
 
@@ -99,6 +106,7 @@ function validateProperty() {
 
 /** 删除 SKU */
 function deleteSku(row: MallSpuApi.Sku) {
+  if (props.isDetail) return;
   const index = formData.value!.skus!.findIndex(
     (sku: MallSpuApi.Sku) =>
       JSON.stringify(sku.properties) === JSON.stringify(row.properties),
@@ -158,6 +166,7 @@ watch(
 
 /** 生成表数据 */
 function generateTableData(propertyList: PropertyAndValues[]) {
+  if (props.isDetail) return;
   const propertyValues = propertyList.map((item: PropertyAndValues) =>
     (item.values || []).map((v: { id: number; name: string }) => ({
       propertyId: item.id,
@@ -263,6 +272,9 @@ watch(
       prop: `name${index}`,
       label: item.name,
     }));
+
+    // 详情及审核快照只读，不能因属性回填差异重建 SKU。
+    if (props.isDetail) return;
 
     // 如果回显的 sku 属性和添加的属性一致则不处理
     if (validateData(propertyList)) {
@@ -380,7 +392,7 @@ defineExpose({
       </VxeColumn>
       <VxeColumn align="center" title="库存" width="168">
         <template #default="{ row }">
-          <InputNumber v-model:value="row.stock" :min="0" class="w-full" />
+          <InputNumber v-model:value="row.stock" :min="0" :disabled="readonlyStock" class="w-full" />
         </template>
       </VxeColumn>
       <VxeColumn align="center" title="重量(kg)" width="168">
@@ -519,7 +531,7 @@ defineExpose({
           {{ formatDetailMoney(row.costPrice) }}
         </template>
       </VxeColumn>
-      <VxeColumn align="center" title="库存" width="80">
+      <VxeColumn v-if="!hideDynamicStock" align="center" title="库存" width="80">
         <template #default="{ row }">
           {{ row.stock }}
         </template>

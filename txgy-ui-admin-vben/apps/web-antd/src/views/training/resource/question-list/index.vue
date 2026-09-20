@@ -6,10 +6,7 @@ import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { useAccessStore } from '@vben/stores';
-
 import {
-  Button,
   message,
   Modal,
   Select,
@@ -27,7 +24,6 @@ import {
   getQuestionPage,
   getResourceCategoryTree,
   getResourceTagList,
-  importQuestions,
 } from '../api';
 import {
   difficultyText,
@@ -41,7 +37,12 @@ import QuestionFormContent from './question-form.vue';
 
 defineOptions({ name: 'TrainingResourceQuestionList' });
 
-const accessStore = useAccessStore();
+// ========== AI 智能导入（文档 → 试题）==========
+const aiImportVisible = ref(false);
+
+function handleAiImport() {
+  aiImportVisible.value = true;
+}
 
 // 标签筛选（独立于搜索表单）
 const tagOptions = ref<any[]>([]);
@@ -192,7 +193,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 220,
+        width: 280,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -231,13 +232,6 @@ function handleEdit(row: TrainingResourceApi.Question) {
   questionFormModal.setData(row.id).open();
 }
 
-// ========== AI 智能导入（文档 → 试题）==========
-const aiImportVisible = ref(false);
-
-function handleAiImport() {
-  aiImportVisible.value = true;
-}
-
 // ========== 详情弹窗 ==========
 const detailVisible = ref(false);
 const detail = ref<TrainingResourceApi.Question>();
@@ -268,49 +262,6 @@ async function handleDelete(row: TrainingResourceApi.Question) {
   await deleteQuestion(row.id!);
   message.success($t('ui.actionMessage.deleteSuccess'));
   handleSearch();
-}
-
-// ========== Excel 导入 / 模板下载 ==========
-const importErrors = ref<{ rowNo: number; error: string }[]>([]);
-const importResultVisible = ref(false);
-
-function triggerImport() {
-  document.getElementById('question-import-file')?.click();
-}
-
-async function handleImportFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file) {
-    return;
-  }
-  const resp = await importQuestions(file);
-  const success = resp.successCount ?? 0;
-  const errors = resp.errors ?? [];
-  message.success(`批量导入完成：成功 ${success} 条，失败 ${errors.length} 条`);
-  if (errors.length > 0) {
-    importErrors.value = errors;
-    importResultVisible.value = true;
-  }
-  handleSearch();
-}
-
-async function handleDownloadTemplate() {
-  const resp = await fetch('/admin-api/training/question/import-template', {
-    headers: { Authorization: `Bearer ${accessStore.accessToken}` },
-  });
-  if (!resp.ok) {
-    message.error('模板下载失败，请重新登录后重试');
-    return;
-  }
-  const blob = await resp.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = '试题导入模板.xlsx';
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function buildActions(row: TrainingResourceApi.Question) {
@@ -356,16 +307,6 @@ loadCategories();
 <template>
   <Page auto-content-height>
     <QuestionFormModal @success="handleSearch" />
-    <AiImportModal v-model:open="aiImportVisible" @success="handleSearch" />
-
-    <!-- 隐藏的导入 input -->
-    <input
-      id="question-import-file"
-      class="hidden"
-      type="file"
-      accept=".xlsx"
-      @change="handleImportFile"
-    />
 
     <!-- 分类 / 标签筛选 -->
     <div class="mb-3 flex flex-wrap items-center gap-3">
@@ -388,13 +329,14 @@ loadCategories();
       />
     </div>
 
+    <AiImportModal v-model:open="aiImportVisible" @success="handleSearch" />
+
     <Grid table-title="考试题库（单选/多选/判断/实操问答/案例分析）">
       <template #toolbar-tools>
-        <Button class="mr-2" @click="handleDownloadTemplate">
-          下载导入模板
-        </Button>
-        <Button class="mr-2" @click="triggerImport">Excel 导入</Button>
-        <Button class="mr-2" type="primary" ghost @click="handleAiImport">
+        <Button
+          class="mr-2 border-none bg-gradient-to-r from-violet-500 to-indigo-500 font-medium text-white shadow-md hover:from-violet-600 hover:to-indigo-600"
+          @click="handleAiImport"
+        >
           AI 智能导入
         </Button>
         <TableAction
@@ -513,25 +455,6 @@ loadCategories();
           >
             {{ name }}
           </Tag>
-        </div>
-      </div>
-    </Modal>
-
-    <!-- 导入失败明细弹窗 -->
-    <Modal
-      v-model:open="importResultVisible"
-      title="导入失败明细"
-      :width="560"
-      :footer="null"
-    >
-      <div v-if="importErrors.length" class="max-h-[50vh] overflow-y-auto">
-        <div
-          v-for="item in importErrors"
-          :key="item.rowNo"
-          class="border-b border-gray-100 py-1 text-sm"
-        >
-          <Tag color="red">第 {{ item.rowNo }} 行</Tag>
-          {{ item.error }}
         </div>
       </div>
     </Modal>

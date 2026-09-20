@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.training.service.resource;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoDefinitionRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoPageReqVO;
+import cn.iocoder.txgy.module.training.controller.admin.resource.vo.VideoUploadRespVO;
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.VideoResourceDO;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,13 +22,16 @@ public interface VideoResourceService {
     VideoResourceDO getVideo(Long id);
 
     /**
-     * 上传视频（短视频 / 录播，MP4/MOV ≤500MB），成功即上线
+     * 上传视频（短视频 / 录播，MP4/MOV ≤4GB），成功即上线
+     *
+     * <p>异步上传：请求线程只负责接收文件并落临时目录、落库元数据与创建转码任务，
+     * 文件归位与 360P/480P/720P 转码均由后台线程池执行，接口立即返回。</p>
      *
      * @param videoType  视频类型：1 短视频 2 录播
      * @param definition 原始清晰度：2160P / 1080P / 720P / 480P / 360P
      */
-    Long uploadVideo(MultipartFile file, String title, Long categoryId, String coverUrl,
-                     String tags, Integer durationSeconds, Integer videoType, String definition);
+    VideoUploadRespVO uploadVideo(MultipartFile file, String title, Long categoryId, String coverUrl,
+                                  String tags, Integer durationSeconds, Integer videoType, String definition);
 
     /**
      * 更新视频元数据（含视频类型与原始清晰度）

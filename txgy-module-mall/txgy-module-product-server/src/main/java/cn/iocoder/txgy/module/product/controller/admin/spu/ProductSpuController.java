@@ -88,9 +88,10 @@ public class ProductSpuController {
     @Operation(summary = "删除商品 SPU")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('product:spu:delete')")
-    public CommonResult<Boolean> deleteSpu(@RequestParam("id") Long id) {
+    public CommonResult<Boolean> deleteSpu(@RequestParam("id") Long id,
+            @RequestParam("expectedVersion") @jakarta.validation.constraints.PositiveOrZero Long expectedVersion) {
         validateManagedSpu(productSpuService.getSpu(id));
-        productSpuService.deleteSpu(id);
+        productSpuService.deleteSpu(id, expectedVersion);
         return success(true);
     }
 

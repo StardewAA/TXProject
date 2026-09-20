@@ -11,6 +11,12 @@ export namespace ErpStockMoveApi {
     totalCount: number; // 合计数量
     totalPrice: number; // 合计金额，单位：元
     status: number; // 状态
+    sourceConfirmedBy?: number;
+    sourceConfirmedByName?: string;
+    sourceConfirmedAt?: Date;
+    targetConfirmedBy?: number;
+    targetConfirmedByName?: string;
+    targetConfirmedAt?: Date;
     remark: string; // 备注
     fileUrl?: string; // 附件
     fromWarehouseId?: number; // 来源仓库编号
@@ -73,6 +79,20 @@ export function updateStockMoveStatus(id: number, status: number) {
   });
 }
 
+/** 调出仓库负责人确认，库存暂不变化 */
+export function confirmStockMoveSource(id: number) {
+  return requestClient.put('/erp/stock-move/confirm-source', null, {
+    params: { id },
+  });
+}
+
+/** 调入仓库负责人确认，双方确认完成后库存原子变更 */
+export function confirmStockMoveTarget(id: number) {
+  return requestClient.put('/erp/stock-move/confirm-target', null, {
+    params: { id },
+  });
+}
+
 /** 删除库存调拨单 */
 export function deleteStockMove(ids: number[]) {
   return requestClient.delete('/erp/stock-move/delete', {
@@ -85,4 +105,9 @@ export function deleteStockMove(ids: number[]) {
 /** 导出库存调拨单 Excel */
 export function exportStockMove(params: any) {
   return requestClient.download('/erp/stock-move/export-excel', { params });
+}
+
+/** 导出库存调拨单 PDF */
+export function exportStockMovePdf(params: any) {
+  return requestClient.download('/erp/stock-move/export-pdf', { params });
 }

@@ -27,6 +27,10 @@ public class ErpCostResultDO extends BaseDO {
     private Integer costVersion;
     private Integer status;
     private String processInstanceId;
+    /**
+     * 反审批原因
+     */
+    private String reverseApproveReason;
     private Integer businessStatus;
     private Integer sourceType;
     private String currency;

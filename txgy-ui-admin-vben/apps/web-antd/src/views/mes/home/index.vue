@@ -11,7 +11,6 @@ import { Col, Row } from 'ant-design-vue';
 import { getHomeSummary } from '#/api/mes/home';
 
 import { defaultSummary } from './data';
-import AiAssistant from './modules/ai-assistant.vue';
 import AlertPanel from './modules/alert-panel.vue';
 import AndonAnalysis from './modules/andon-analysis.vue';
 import CheckMaintenAnalysis from './modules/check-mainten-analysis.vue';
@@ -19,7 +18,10 @@ import DefectAnalysis from './modules/defect-analysis.vue';
 import DeliveryAnalysis from './modules/delivery-analysis.vue';
 import FeedbackUserAnalysis from './modules/feedback-user-analysis.vue';
 import KpiCards from './modules/kpi-cards.vue';
+// 【合并 20260915】远程新增设备状态分布报表
 import MachineryStatusChart from './modules/machinery-status-chart.vue';
+// 【AI 智能助手】带业务意图/录入工具/图片识别的面板（替代远程基础版 ai-assistant.vue）
+import MesAiChatPanel from './modules/MesAiChatPanel.vue';
 import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
@@ -46,7 +48,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page>
+  <!-- mes-ai-avoid：面板展开时该容器自动右移避让（见 MesAiChatPanel 组件内的全局样式） -->
+  <Page content-class="mes-ai-avoid">
     <template #doc>
       <DocAlert
         title="MES 手册（功能开启）"
@@ -56,16 +59,6 @@ onMounted(() => {
 
     <!-- 第一行：核心 KPI 汇总卡片 -->
     <KpiCards :summary="summary" class="mb-4" @navigate="handleNavigate" />
-
-    <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
-    <AiAssistant />
-
-    <!-- 我的待办任务：报工等单据审批统一在「工作流程-待办任务」处理，首页直达 -->
-    <Row :gutter="16" class="mb-4">
-      <Col :lg="24" :md="24" :sm="24" :xl="24" :xs="24" class="mb-4">
-        <TodoPanel @navigate="handleNavigate" />
-      </Col>
-    </Row>
 
     <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">
@@ -126,5 +119,8 @@ onMounted(() => {
         <FeedbackUserAnalysis />
       </Col>
     </Row>
+
+    <!-- 右侧固定悬浮 AI 对话面板（权限拦截在后端完成） -->
+    <MesAiChatPanel />
   </Page>
 </template>

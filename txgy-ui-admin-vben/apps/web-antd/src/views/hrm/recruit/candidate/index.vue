@@ -15,17 +15,18 @@ import { Button, Dropdown, Menu, message, Tabs } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
+  enterRecruitApplicationInterview,
+  passRecruitApplicationScreening,
+  rejectRecruitApplicationResume,
+  skipRecruitApplicationInterview,
+  startRecruitApplicationScreening,
+} from '#/api/hrm/recruit/application';
+import {
   deleteRecruitCandidate,
   getRecruitCandidatePage,
   getRecruitCandidateStatusCount,
   updateRecruitCandidateStatus,
 } from '#/api/hrm/recruit/candidate';
-import {
-  enterRecruitApplicationInterview,
-  passRecruitApplicationScreening,
-  rejectRecruitApplicationResume,
-  startRecruitApplicationScreening,
-} from '#/api/hrm/recruit/application';
 import { getRecruitInterview, startRecruitInterview } from '#/api/hrm/recruit/interview';
 import { DictTag } from '#/components/dict-tag';
 import { $t } from '#/locales';
@@ -33,11 +34,12 @@ import EmployeeForm from '#/views/hrm/employee/modules/form.vue';
 import { executeBatch } from '#/views/hrm/utils/batch';
 import {
   HRM_RECRUIT_CANDIDATE_EMPLOYEE_EDUCATION_MAP,
+  HRM_RECRUIT_MAX_INTERVIEW_ROUNDS,
   HrmEmployeeEntryStatus,
   HrmEmployeeStatus,
   HrmEmployeeType,
-  HrmRecruitCandidateStatus,
   HrmRecruitApplicationStatus,
+  HrmRecruitCandidateStatus,
   HrmRecruitInterviewResult,
 } from '#/views/hrm/utils/constants';
 
@@ -46,10 +48,11 @@ import ChannelBatchForm from './modules/channel-batch-form.vue';
 import CleanForm from './modules/clean-form.vue';
 import EliminateForm from './modules/eliminate-form.vue';
 import Form from './modules/form.vue';
+import InterviewEvaluationForm from './modules/interview-evaluation-form.vue';
 import InterviewForm from './modules/interview-form.vue';
 import InterviewResultForm from './modules/interview-result-form.vue';
-import InterviewEvaluationForm from './modules/interview-evaluation-form.vue';
 import OfferForm from './modules/offer-form.vue';
+import OfferStatusForm from './modules/offer-status-form.vue';
 import PostBatchForm from './modules/post-batch-form.vue';
 import StatusBatchForm from './modules/status-batch-form.vue';
 
@@ -62,6 +65,18 @@ const { hasAccessByCodes } = useAccess();
 const activeStatus = ref('all');
 const statusCounts = ref<HrmRecruitCandidateApi.StatusCount[]>([]);
 const checkedIds = ref<number[]>([]);
+
+const offerApprovalStatusLabels: Record<string, string> = {
+  APPROVED: '审批通过',
+  APPROVING: '审批中',
+  CANDIDATE_REJECTED: '求职者拒绝',
+  CONFIRMED: '已接受',
+  DRAFT: '草稿',
+  EXPIRED: '已过期',
+  REJECTED: '审批未通过',
+  SENT: '已发送',
+  WITHDRAWN: '已撤回',
+};
 
 const statusTabOptions = computed(() => {
   const countMap: Record<number, number> = {};
@@ -98,6 +113,10 @@ function isActiveStatusIn(statuses: number[]) {
     activeStatusValue.value !== undefined &&
     statuses.includes(activeStatusValue.value)
   );
+}
+
+function offerApprovalStatusLabel(status?: string) {
+  return status ? offerApprovalStatusLabels[status] || status : '-';
 }
 
 const canBatchUpdateStatus = computed(() =>
@@ -194,6 +213,10 @@ const [OfferModal, offerModalApi] = useVbenModal({
   connectedComponent: OfferForm,
   destroyOnClose: true,
 });
+const [OfferStatusModal, offerStatusModalApi] = useVbenModal({
+  connectedComponent: OfferStatusForm,
+  destroyOnClose: true,
+});
 const [EmployeeFormModal, employeeFormModalApi] = useVbenModal({
   connectedComponent: EmployeeForm,
   destroyOnClose: true,
@@ -219,11 +242,6 @@ function handleStatusTabChange(key: number | string) {
   handleRefresh();
 }
 
-/** 新增 */
-function handleCreate() {
-  formModalApi.setData(null).open();
-}
-
 /** 编辑 */
 function handleEdit(row: HrmRecruitCandidateApi.RecruitCandidate) {
   formModalApi.setData(row).open();
@@ -239,6 +257,10 @@ function handleDetail(id?: number) {
 
 /** 安排面试 */
 function openInterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  if (!canArrangeInterview(candidate)) {
+    message.warning(`面试轮次已达上限（最多 ${HRM_RECRUIT_MAX_INTERVIEW_ROUNDS} 轮）`);
+    return;
+  }
   interviewModalApi
     .setData({
       type: 'create',
@@ -250,6 +272,10 @@ function openInterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
 
 /** 安排复试 */
 function openReinterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  if (!canArrangeInterview(candidate)) {
+    message.warning(`面试轮次已达上限（最多 ${HRM_RECRUIT_MAX_INTERVIEW_ROUNDS} 轮）`);
+    return;
+  }
   interviewModalApi
     .setData({
       type: 'create',
@@ -284,12 +310,22 @@ async function openInterviewResult(
 
 function openInterviewEvaluation(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   if (!candidate.interviewId) return;
-  interviewEvaluationModalApi.setData({ id: candidate.interviewId }).open();
+  interviewEvaluationModalApi
+    .setData({
+      id: candidate.interviewId,
+      allowNextRound: canArrangeInterview(candidate),
+    })
+    .open();
 }
 
 function openOfferForm(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   if (!candidate.applicationId || !candidate.postId) return;
   offerModalApi.setData({ applicationId: candidate.applicationId, postId: candidate.postId }).open();
+}
+
+function openOfferStatus(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  if (!candidate.offerId) return;
+  offerStatusModalApi.setData({ offerId: candidate.offerId }).open();
 }
 
 async function handleApplicationFlowAction(
@@ -304,9 +340,15 @@ async function handleApplicationFlowAction(
   } else if (command === 'reject-resume') {
     await rejectRecruitApplicationResume(candidate.applicationId, '简历不符合岗位要求');
   } else if (command === 'enter-interview') {
+    if (!canArrangeInterview(candidate)) {
+      message.warning(`面试轮次已达上限（最多 ${HRM_RECRUIT_MAX_INTERVIEW_ROUNDS} 轮）`);
+      return;
+    }
     await enterRecruitApplicationInterview(candidate.applicationId);
     openInterview(candidate);
     return;
+  } else if (command === 'skip-interview') {
+    await skipRecruitApplicationInterview(candidate.applicationId);
   } else if (command === 'start-interview' && candidate.interviewId) {
     await startRecruitInterview(candidate.interviewId);
   } else if (command === 'evaluate-interview') {
@@ -372,7 +414,9 @@ function openEliminateForm(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   if (!candidate.id) {
     return;
   }
-  eliminateModalApi.setData({ ids: candidate.id, name: candidate.name }).open();
+  eliminateModalApi
+    .setData({ ids: candidate.id, applicationId: candidate.applicationId, name: candidate.name })
+    .open();
 }
 
 /** 批量淘汰 */
@@ -393,6 +437,7 @@ function openEntryForm(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
       type: 'candidate',
       defaultData: {
         candidateId: candidate.id,
+        applicationId: candidate.applicationId,
         name: candidate.name,
         mobile: candidate.mobile,
         sex: candidate.sex,
@@ -425,13 +470,17 @@ function handleConfirmEntry(
     return;
   }
   employeeFormModalApi
-    .setData({ type: 'confirm', id: candidate.employeeId })
+    .setData({ type: 'confirm', id: candidate.employeeId, applicationId: candidate.applicationId })
     .open();
 }
 
 /** 一键清理 */
 function openCleanForm() {
   cleanModalApi.open();
+}
+
+function canArrangeInterview(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
+  return (candidate.stageNumber ?? 0) < HRM_RECRUIT_MAX_INTERVIEW_ROUNDS;
 }
 
 /** 获得候选人的主操作 */
@@ -450,26 +499,61 @@ function getPrimaryAction(
       candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_INTERVIEW ||
       candidate.applicationStatus === HrmRecruitApplicationStatus.NEXT_INTERVIEW
     ) {
-      return { command: 'enter-interview', label: '安排面试' };
+      return canArrangeInterview(candidate)
+        ? { command: 'enter-interview', label: '安排面试' }
+        : undefined;
     }
     if (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_SCHEDULED) {
       return { command: 'start-interview', label: '开始面试' };
+    }
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEWING) {
+      return candidate.interviewId
+        ? { command: 'interview-result', label: '登记结果' }
+        : undefined;
     }
     if (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_EVALUATING) {
       return { command: 'evaluate-interview', label: '面试评估' };
     }
     if (
-      candidate.applicationStatus === HrmRecruitApplicationStatus.FINAL_INTERVIEW_PASSED ||
-      candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_OFFER
+      candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_CANCELED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_ABSENT
     ) {
-      return { command: 'offer', label: '创建 Offer' };
+      return canArrangeInterview(candidate)
+        ? { command: 'interview-change', label: '重新安排' }
+        : undefined;
     }
+    if (
+      candidate.offerId &&
+      hasAccessByCodes(['hrm:recruit:offer:query'])
+    ) {
+      return { command: 'offer-status', label: '查看 Offer' };
+    }
+    if (
+      candidate.applicationStatus === HrmRecruitApplicationStatus.FINAL_INTERVIEW_PASSED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_OFFER ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.PASSED
+    ) {
+      return hasAccessByCodes(['hrm:recruit:offer:create'])
+        ? { command: 'offer', label: '创建 Offer' }
+        : undefined;
+    }
+    if (candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_ONBOARD) {
+      if (candidate.status === HrmRecruitCandidateStatus.PENDING_ENTRY && candidate.employeeId) {
+        return { command: 'confirm-entry', label: '确认入职' };
+      }
+      if (!candidate.employeeId) {
+        return { command: 'convert-employee', label: '转为员工' };
+      }
+    }
+    return undefined;
   }
   if (
     hasAccessByCodes(['hrm:recruit:interview:update']) &&
     candidate.status === HrmRecruitCandidateStatus.INTERVIEW &&
     candidate.interviewId &&
-    candidate.interviewResult === HrmRecruitInterviewResult.CANCELED
+    (candidate.interviewResult === HrmRecruitInterviewResult.CANCELED ||
+      candidate.interviewResult === HrmRecruitInterviewResult.ABSENT) &&
+    canArrangeInterview(candidate)
   ) {
     return { command: 'interview-change', label: '重新安排' };
   }
@@ -477,7 +561,7 @@ function getPrimaryAction(
     hasAccessByCodes(['hrm:recruit:interview:update']) &&
     candidate.status === HrmRecruitCandidateStatus.INTERVIEW &&
     candidate.interviewId &&
-    candidate.interviewResult !== HrmRecruitInterviewResult.CANCELED
+    candidate.interviewResult === HrmRecruitInterviewResult.UNFINISHED
   ) {
     return { command: 'interview-result', label: '登记结果' };
   }
@@ -509,12 +593,82 @@ function getPrimaryAction(
 
 /** 获得候选人的更多操作 */
 function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
-  const actions: Array<{ command: string; label: string }> = [];
+  const actions: Array<{
+    command: string;
+    label: string;
+    disabled?: boolean;
+    tooltip?: string;
+  }> = [];
+  if (candidate.applicationId) {
+    if (
+      hasAccessByCodes(['hrm:recruit:application:eliminate']) &&
+      candidate.applicationStatus &&
+      ![
+        HrmRecruitApplicationStatus.ELIMINATED,
+        HrmRecruitApplicationStatus.INTERVIEW_REJECTED,
+        HrmRecruitApplicationStatus.OFFER_CANDIDATE_REJECTED,
+        HrmRecruitApplicationStatus.OFFER_EXPIRED,
+        HrmRecruitApplicationStatus.OFFER_REJECTED,
+        HrmRecruitApplicationStatus.OFFER_SENT,
+        HrmRecruitApplicationStatus.OFFER_WITHDRAWN,
+        HrmRecruitApplicationStatus.ONBOARDED,
+        HrmRecruitApplicationStatus.PENDING_ONBOARD,
+        HrmRecruitApplicationStatus.RESUME_REJECTED,
+        HrmRecruitApplicationStatus.WITHDRAWN,
+      ].includes(candidate.applicationStatus as never)
+    ) {
+      actions.push({ command: 'application-eliminate', label: '淘汰本次应聘' });
+    }
+    if (
+      hasAccessByCodes(['hrm:recruit:application:eliminate']) &&
+      (candidate.applicationStatus === HrmRecruitApplicationStatus.SUBMITTED ||
+        candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING)
+    ) {
+      actions.push({ command: 'reject-resume', label: '简历淘汰' });
+    }
+    if (
+      hasAccessByCodes(['hrm:recruit:application:interview']) &&
+      (candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING_PASSED ||
+        candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_INTERVIEW)
+    ) {
+      actions.push({ command: 'skip-interview', label: '免面试通过' });
+    }
+    if (
+      hasAccessByCodes(['hrm:recruit:interview:update']) &&
+      candidate.status === HrmRecruitCandidateStatus.INTERVIEW &&
+      candidate.interviewId &&
+      candidate.interviewResult === HrmRecruitInterviewResult.UNFINISHED &&
+      (candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_SCHEDULED ||
+        candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEWING)
+    ) {
+      actions.push(
+        { command: 'interview-change', label: '更改面试安排' },
+        { command: 'interview-cancel', label: '取消面试' },
+      );
+    }
+    if (hasAccessByCodes(['hrm:recruit:offer:query']) && candidate.offerId) {
+      actions.push({ command: 'offer-status', label: '查看 Offer 状态' });
+    }
+    return actions;
+  }
   if (
-    hasAccessByCodes(['hrm:recruit:interview:update']) &&
+    hasAccessByCodes(['hrm:recruit:application:interview']) &&
+    candidate.applicationId &&
+    (candidate.applicationStatus === HrmRecruitApplicationStatus.SCREENING_PASSED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.PENDING_INTERVIEW)
+  ) {
+    actions.push({ command: 'skip-interview', label: '免面试通过' });
+  }
+  const canManageCurrentInterview =
     candidate.status === HrmRecruitCandidateStatus.INTERVIEW &&
     candidate.interviewId &&
-    candidate.interviewResult !== HrmRecruitInterviewResult.CANCELED
+    candidate.interviewResult === HrmRecruitInterviewResult.UNFINISHED &&
+    (!candidate.applicationId ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEW_SCHEDULED ||
+      candidate.applicationStatus === HrmRecruitApplicationStatus.INTERVIEWING);
+  if (
+    hasAccessByCodes(['hrm:recruit:interview:update']) &&
+    canManageCurrentInterview
   ) {
     actions.push(
       { command: 'interview-change', label: '更改面试安排' },
@@ -523,6 +677,8 @@ function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
   }
   if (
     hasAccessByCodes(['hrm:recruit:interview:create']) &&
+    !candidate.applicationId &&
+    canArrangeInterview(candidate) &&
     candidate.status === HrmRecruitCandidateStatus.INTERVIEW_PASS
   ) {
     actions.push({ command: 'reinterview', label: '安排复试' });
@@ -537,8 +693,25 @@ function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
     if (candidate.status === HrmRecruitCandidateStatus.NEW) {
       actions.push({ command: 'primary-pass', label: '初选通过' });
     }
-    if (candidate.status === HrmRecruitCandidateStatus.INTERVIEW_PASS) {
-      actions.push({ command: 'offer', label: '发 Offer' });
+    if (
+      candidate.status === HrmRecruitCandidateStatus.INTERVIEW_PASS &&
+      hasAccessByCodes(['hrm:recruit:offer:create'])
+    ) {
+      // 发 Offer 必须挂在一条应聘记录上（Offer 的薪资、职位、入职日期都取自应聘记录）。
+      // 后台手工新增的候选人不经过门户投递，没有 applicationId，点击必报
+      // 「应聘编号不能为空」，因此这里直接置灰并说明原因，避免无效点击。
+      if (candidate.applicationId) {
+        actions.push({ command: 'offer', label: '发 Offer' });
+      } else {
+        actions.push({
+          command: 'offer',
+          // 菜单项被禁用时 antd 不会触发 hover，tooltip 看不到，因此把原因写进文案
+          label: '发 Offer（该候选人无应聘记录）',
+          disabled: true,
+          tooltip:
+            '该候选人没有应聘记录，无法发 Offer。请让其在招聘门户投递职位，或在「招聘沟通」中把求职者转为候选人后再操作。',
+        });
+      }
     }
     if (candidate.status === HrmRecruitCandidateStatus.ELIMINATED) {
       actions.push({ command: 'restore', label: '恢复为新候选人' });
@@ -568,7 +741,7 @@ async function handlePrimaryAction(
   candidate: HrmRecruitCandidateApi.RecruitCandidate,
 ) {
   if (
-    ['start-screening', 'pass-screening', 'enter-interview', 'start-interview', 'evaluate-interview'].includes(command)
+    ['enter-interview', 'evaluate-interview', 'pass-screening', 'start-interview', 'start-screening'].includes(command)
   ) {
     await handleApplicationFlowAction(command, candidate);
     return;
@@ -593,6 +766,10 @@ async function handlePrimaryAction(
     openOfferForm(candidate);
     return;
   }
+  if (command === 'offer-status') {
+    openOfferStatus(candidate);
+    return;
+  }
   if (command === 'interview' && candidate.id) {
     openInterview(candidate);
   }
@@ -604,6 +781,14 @@ async function handleMoreCommand(
   candidate: HrmRecruitCandidateApi.RecruitCandidate,
 ) {
   if (command === 'reject-resume') {
+    await handleApplicationFlowAction(command, candidate);
+    return;
+  }
+  if (command === 'application-eliminate') {
+    openEliminateForm(candidate);
+    return;
+  }
+  if (command === 'skip-interview') {
     await handleApplicationFlowAction(command, candidate);
     return;
   }
@@ -726,6 +911,10 @@ function getRowDropDownActions(row: HrmRecruitCandidateApi.RecruitCandidate) {
     label: action.label,
     auth: [] as string[],
     danger: action.command === 'delete',
+    // 透传禁用态与说明：例如「发 Offer」在候选人没有应聘记录时必须置灰并给出原因，
+    // 否则用户点下去只会拿到后端「应聘编号不能为空」的报错。
+    disabled: action.disabled,
+    tooltip: action.tooltip,
     ...(action.command === 'delete'
       ? {
           popConfirm: {
@@ -876,6 +1065,7 @@ onMounted(async () => {
     <InterviewResultModal @success="handleRefresh" />
     <InterviewEvaluationModal @success="handleRefresh" />
     <OfferModal @success="handleRefresh" />
+    <OfferStatusModal @success="handleRefresh" />
     <EmployeeFormModal @success="handleRefresh" />
 
     <Grid class="candidate-grid">
@@ -899,13 +1089,6 @@ onMounted(async () => {
         <div class="flex shrink-0 flex-nowrap items-center gap-2">
           <TableAction
             :actions="[
-              {
-                label: '新增',
-                type: 'primary',
-                icon: ACTION_ICON.ADD,
-                auth: ['hrm:recruit:candidate:create'],
-                onClick: handleCreate,
-              },
               {
                 label: '一键清理',
                 type: 'primary',
@@ -973,6 +1156,9 @@ onMounted(async () => {
             )
           }}）
         </span>
+      </template>
+      <template #offerStatus="{ row }">
+        <span>{{ offerApprovalStatusLabel(row.offerApprovalStatus) }}</span>
       </template>
       <template #actions="{ row }">
         <TableAction

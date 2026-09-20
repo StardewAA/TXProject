@@ -16,8 +16,9 @@
   },
   "type": "module",
   "scripts": {
-    "build": "pnpm vite build --mode production",
+    "build": "pnpm gen:icons && pnpm vite build --mode production",
     "build:analyze": "pnpm vite build --mode analyze",
+    "gen:icons": "node ../../scripts/generate-offline-icons.mjs",
     "dev": "pnpm vite --mode development",
     "preview": "vite preview",
     "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vue-tsc --noEmit --skipLibCheck"
@@ -60,7 +61,11 @@
     "dayjs": "catalog:",
     "dhtmlx-gantt": "catalog:",
     "diagram-js": "catalog:",
+    "docx": "^9.5.0",
+    "docx-preview": "^0.3.4",
+    "element-plus": "^2.9.7",
     "fast-xml-parser": "catalog:",
+    "file-saver": "^2.0.5",
     "highlight.js": "catalog:",
     "livekit-client": "catalog:",
     "mammoth": "^1.12.3",
@@ -77,6 +82,10 @@
     "vue3-print-nb": "catalog:",
     "vue3-signature": "catalog:",
     "vuedraggable": "catalog:",
-    "wangeditor": "4.7.15"
+    "wangeditor": "4.7.15",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/file-saver": "^2.0.7"
   }
 }

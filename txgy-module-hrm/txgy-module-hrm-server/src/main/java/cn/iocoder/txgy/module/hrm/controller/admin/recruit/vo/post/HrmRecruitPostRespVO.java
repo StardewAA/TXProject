@@ -98,6 +98,15 @@ public class HrmRecruitPostRespVO {
     @Schema(description = "停止原因", example = "岗位暂停")
     private String stopReason;
 
+    @Schema(description = "关联用工需求单编号", example = "1")
+    private Long demandId;
+
+    @Schema(description = "关联用工需求单号", example = "REQ-20260918-001")
+    private String demandNo;
+
+    @Schema(description = "关联需求名称", example = "保温工用人需求")
+    private String demandName;
+
     @Schema(description = "已入职人数", example = "2")
     private Long hasEntryNum;
 

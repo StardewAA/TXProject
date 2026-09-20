@@ -77,4 +77,16 @@ public class ErpPurchaseOrderPageReqVO extends PageParam {
     @Schema(description = "是否可退货", example = "true")
     private Boolean returnEnable;
 
+    @Schema(description = "编号数组（导出选中记录时使用）", example = "1,2,3")
+    private Long[] ids;
+
+    @Schema(description = "来源类型", example = "AWARD_RESULT")
+    private String sourceType;
+
+    @Schema(description = "来源单号", example = "CGXJ20260909000001")
+    private String sourceNo;
+
+    @Schema(description = "业务链号", example = "INQUIRY-CGXJ20260909000001")
+    private String businessChainNo;
+
 }

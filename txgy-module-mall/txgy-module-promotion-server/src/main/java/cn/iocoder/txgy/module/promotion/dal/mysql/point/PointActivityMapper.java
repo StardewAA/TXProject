@@ -17,10 +17,15 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface PointActivityMapper extends BaseMapperX<PointActivityDO> {
 
+    default PointActivityDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapperX<PointActivityDO>()
+                .eq(PointActivityDO::getId, id).last("FOR UPDATE"));
+    }
+
     default PageResult<PointActivityDO> selectPage(PointActivityPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<PointActivityDO>()
                 .eqIfPresent(PointActivityDO::getStatus, reqVO.getStatus())
-                .orderByDesc(PointActivityDO::getSort));
+                .orderByDesc(PointActivityDO::getSort, PointActivityDO::getId));
     }
 
     /**
@@ -49,6 +54,8 @@ public interface PointActivityMapper extends BaseMapperX<PointActivityDO> {
         Assert.isTrue(count > 0);
         return update(null, new LambdaUpdateWrapper<PointActivityDO>()
                 .eq(PointActivityDO::getId, id)
+                .ge(PointActivityDO::getStock, 0)
+                .le(PointActivityDO::getStock, Integer.MAX_VALUE - count)
                 .setSql("stock = stock + " + count));
     }
 

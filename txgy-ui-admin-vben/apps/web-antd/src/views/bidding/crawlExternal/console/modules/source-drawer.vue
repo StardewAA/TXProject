@@ -34,6 +34,7 @@ import {
 } from '#/api/bidding/crawlExternal';
 
 import { CONTENT_FORM_LABEL, contentFormText, DETAIL_PARSER_LABEL, fetchTypeText, intervalText, LIST_PARSER_LABEL, parserText } from '../../labels';
+import { crawlErrMsg } from '../../shared';
 import SourceForm from '../../source/modules/form.vue';
 
 const emit = defineEmits(['changed']);
@@ -64,7 +65,7 @@ async function load() {
     rows.value = res.list || [];
     total.value = res.total || 0;
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     loading.value = false;
   }
@@ -88,7 +89,7 @@ async function toggleEnabled(row: CrawlExternalApi.SourceItem, checked: boolean)
     row.enabled = checked;
     emit('changed');
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     togglingId.value = undefined;
   }
@@ -125,7 +126,7 @@ async function runSource(row: CrawlExternalApi.SourceItem) {
     });
     emit('changed');
   } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e));
+    message.error(crawlErrMsg(e));
   } finally {
     runCode.value = undefined;
   }
@@ -146,7 +147,7 @@ function removeSource(row: CrawlExternalApi.SourceItem) {
         emit('changed');
         await load();
       } catch (e) {
-        message.error(e instanceof Error ? e.message : String(e));
+        message.error(crawlErrMsg(e));
       }
     },
   });

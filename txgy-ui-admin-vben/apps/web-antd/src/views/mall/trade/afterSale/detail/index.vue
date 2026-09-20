@@ -3,6 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallAfterSaleApi } from '#/api/mall/trade/afterSale';
 import type { MallOrderApi } from '#/api/mall/trade/order';
 
+import ErpInventory from '../../order/modules/erp-inventory.vue';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -21,6 +22,7 @@ import {
   refundAfterSale,
   refuseAfterSale,
 } from '#/api/mall/trade/afterSale';
+import { notifyWorkbenchChanged } from '#/api/mall/trade/workbench';
 import { useDescription } from '#/components/description';
 import { DictTag } from '#/components/dict-tag';
 import { TableAction } from '#/components/table-action';
@@ -140,6 +142,7 @@ async function handleAgree() {
   });
   try {
     await agreeAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -152,6 +155,11 @@ function handleDisagree() {
   disagreeModalApi.setData({ afterSale: afterSale.value }).open();
 }
 
+async function handleAfterSaleChanged() {
+  notifyWorkbenchChanged();
+  await getDetail();
+}
+
 /** 确认收货 */
 async function handleReceive() {
   await confirm('是否确认收货？');
@@ -161,7 +169,8 @@ async function handleReceive() {
   });
   try {
     await receiveAfterSale(afterSale.value.id!);
-    message.success($t('ui.actionMessage.operationSuccess'));
+    notifyWorkbenchChanged();
+    message.success('退货入库请求已提交，请稍后查看处理结果');
     await getDetail();
   } finally {
     hideLoading();
@@ -177,6 +186,7 @@ async function handleRefuse() {
   });
   try {
     await refuseAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -193,6 +203,7 @@ async function handleRefund() {
   });
   try {
     await refundAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -215,6 +226,7 @@ onMounted(() => {
 
 <template>
   <Page auto-content-height :title="afterSale.no" :loading="loading">
+    <ErpInventory v-if="afterSale.orderId" :order-id="afterSale.orderId" />
     <template #extra>
       <TableAction
         :actions="[
@@ -226,42 +238,47 @@ onMounted(() => {
           },
           {
             label: '同意售后',
+            auth: ['trade:after-sale:agree'],
             type: 'primary',
             onClick: handleAgree,
-            ifShow: afterSale.status === 10,
+            ifShow: afterSale.status === 10 && afterSale.processable === true,
           },
           {
             label: '拒绝售后',
+            auth: ['trade:after-sale:disagree'],
             type: 'primary',
             danger: true,
             onClick: handleDisagree,
-            ifShow: afterSale.status === 10,
+            ifShow: afterSale.status === 10 && afterSale.processable === true,
           },
           {
             label: '确认收货',
+            auth: ['trade:after-sale:receive'],
             type: 'primary',
             onClick: handleReceive,
-            ifShow: afterSale.status === 30,
+            ifShow: afterSale.status === 30 && afterSale.processable === true,
           },
           {
             label: '拒绝收货',
+            auth: ['trade:after-sale:receive'],
             type: 'primary',
             danger: true,
             onClick: handleRefuse,
-            ifShow: afterSale.status === 30,
+            ifShow: afterSale.status === 30 && afterSale.processable === true,
           },
           {
             label: '确认退款',
+            auth: ['trade:after-sale:refund'],
             type: 'primary',
             onClick: handleRefund,
-            ifShow: afterSale.status === 40,
+            ifShow: afterSale.status === 40 && afterSale.processable === true,
           },
         ]"
       />
     </template>
 
     <!-- 拒绝售后弹窗 -->
-    <DisagreeModal @success="getDetail" />
+    <DisagreeModal @success="handleAfterSaleChanged" />
 
     <!-- 订单信息 -->
     <div class="mb-4">

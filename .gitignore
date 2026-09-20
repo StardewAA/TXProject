@@ -74,6 +74,12 @@ _debug/
 # 前端依赖与构建产物
 node_modules/
 
+# 前端按需加载的图标集合（由 scripts/generate-offline-icons.mjs 生成，不入 git）
+/txgy-ui-admin-vben/apps/web-antd/public/iconify/
+# 本地构建验证产生的历史产物副本（dist/ 已忽略，这里是手工重命名留下的）
+/txgy-ui-admin-vben/apps/web-antd/dist.bak/
+/txgy-ui-admin-vben/apps/web-antd/dist.old/
+
 ######################################################################
 # 本地数据库整库备份
 sql/mysql/
@@ -106,6 +112,13 @@ txgy-ui-admin-vben/.exam-*.log
 
 # 培训资源中心运行时上传文件（视频/文档本体，属运行数据不入库）
 uploads/
+# 例外：云培训学院标准视频种子数据随项目分发，应用启动自动入库
+!deploy/uploads/
+!deploy/uploads/resource/
+!deploy/uploads/resource/video/
+!deploy/uploads/resource/video/seed/
+!deploy/uploads/resource/video/seed/*.mp4
+!deploy/uploads/resource/video/seed/*.mov
 
 ######################################################################
 # pnpm 本地内容寻址存储（仅本地缓存，禁止入库）

@@ -18,9 +18,11 @@ import cn.iocoder.txgy.module.erp.dal.redis.no.ErpNoRedisDAO;
 import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpSaleMesIntegrationService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpSaleWmsIntegrationService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
+import cn.iocoder.txgy.module.erp.util.ErpBpmProcessUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -71,6 +73,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private ErpApprovalNotificationService approvalNotificationService;
     @Resource
     private ErpSaleWmsIntegrationService saleWmsIntegrationService;
+    @Resource
+    private ErpSaleMesIntegrationService saleMesIntegrationService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -99,11 +103,12 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         // 2.1 插入订单
         ErpSaleOrderDO saleOrder = BeanUtils.toBean(createReqVO, ErpSaleOrderDO.class, in -> in
                 .setNo(no).setStatus(ErpAuditStatus.DRAFT.getStatus())
-                .setWarehouseStatus("NOT_SUBMITTED").setWmsEventVersion(0L));
+                .setWarehouseStatus("NOT_SUBMITTED").setWmsEventVersion(0L)
+                .setDeleted(false));
         calculateTotalPrice(saleOrder, saleOrderItems);
         saleOrderMapper.insert(saleOrder);
         // 2.2 插入订单项
-        saleOrderItems.forEach(o -> o.setOrderId(saleOrder.getId()));
+        saleOrderItems.forEach(o -> o.setOrderId(saleOrder.getId()).setDeleted(false));
         saleOrderItemMapper.insertBatch(saleOrderItems);
         return saleOrder.getId();
     }
@@ -155,34 +160,38 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updateSaleOrderStatus(Long id, Integer status) {
-        boolean approve = ErpAuditStatus.APPROVE.getStatus().equals(status);
+    public void reverseApproveSaleOrder(Long id, Long userId, String reason) {
         // 1.1 校验存在
         ErpSaleOrderDO saleOrder = validateSaleOrderExists(id);
-        // 1.2 校验状态
-        if (saleOrder.getStatus().equals(status)) {
-            throw exception(approve ? SALE_ORDER_APPROVE_FAIL : SALE_ORDER_PROCESS_FAIL);
+        // 1.2 只有审批中(10)、已审批(20) 才能反审批。销售订单走 BPM 审批，不允许手工直改“已审批”
+        Integer status = saleOrder.getStatus();
+        if (!ErpAuditStatus.PROCESS.getStatus().equals(status)
+                && !ErpAuditStatus.APPROVE.getStatus().equals(status)) {
+            throw exception(SALE_ORDER_REVERSE_APPROVE_FAIL_STATUS);
         }
-        // 1.3 存在销售出库单，无法反审核
-        if (!approve && saleOrder.getOutCount().compareTo(BigDecimal.ZERO) > 0) {
+        // 1.3 存在销售出库单，无法反审批
+        if (saleOrder.getOutCount().compareTo(BigDecimal.ZERO) > 0) {
             throw exception(SALE_ORDER_PROCESS_FAIL_EXISTS_OUT);
         }
-        // 1.4 存在销售退货单，无法反审核
-        if (!approve && saleOrder.getReturnCount().compareTo(BigDecimal.ZERO) > 0) {
+        // 1.4 存在销售退货单，无法反审批
+        if (saleOrder.getReturnCount().compareTo(BigDecimal.ZERO) > 0) {
             throw exception(SALE_ORDER_PROCESS_FAIL_EXISTS_RETURN);
         }
 
-        // 2. 更新状态
-        int updateCount = saleOrderMapper.updateByIdAndStatus(id, saleOrder.getStatus(),
-                new ErpSaleOrderDO().setStatus(status));
+        // 2. 乐观锁回退草稿，并清空 BPM 流程实例编号
+        String processInstanceId = saleOrder.getProcessInstanceId();
+        int updateCount = saleOrderMapper.reverseApproveByIdAndStatus(id, status, reason);
         if (updateCount == 0) {
-            throw exception(approve ? SALE_ORDER_APPROVE_FAIL : SALE_ORDER_PROCESS_FAIL);
+            throw exception(SALE_ORDER_REVERSE_APPROVE_FAIL_STATUS);
         }
-        if (approve) {
-            saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
-        } else if (saleOrder.getReservationNo() != null) {
+
+        // 3. 已生成 WMS 库存预留的，事务提交后释放预留
+        if (saleOrder.getReservationNo() != null) {
             saleWmsIntegrationService.prepareReservationReleaseAfterCommit(id, "ORDER_CHANGED", "销售订单反审批");
         }
+        // 4. 事务提交后联动作废在途 BPM 流程实例（已结束的实例自动跳过）
+        ErpBpmProcessUtils.cancelProcessInstanceAfterCommit(bpmProcessInstanceApi, userId,
+                processInstanceId, "销售订单(" + saleOrder.getNo() + ")反审批：" + reason);
     }
 
     @Override
@@ -220,6 +229,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         saleOrderMapper.updateById(new ErpSaleOrderDO().setId(id).setStatus(auditStatus));
         if (ErpAuditStatus.APPROVE.getStatus().equals(auditStatus)) {
             saleWmsIntegrationService.prepareInventoryDecisionAfterCommit(id);
+            saleMesIntegrationService.pushWorkOrdersAfterCommit(id);
         }
     }
 

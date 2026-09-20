@@ -50,7 +50,6 @@ import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMultiMap;
-import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.addTime;
 
 @Mapper
 public interface TradeOrderConvert {
@@ -112,7 +111,10 @@ public interface TradeOrderConvert {
         createReqDTO.setSubject(subject);
         createReqDTO.setBody(subject); // TODO 芋艿：临时写死
         // 订单相关字段
-        createReqDTO.setPrice(order.getPayPrice()).setExpireTime(addTime(orderProperties.getPayExpireTime()));
+        if (order.getPayExpireTime() == null) {
+            throw new IllegalStateException("支付截止时间尚未确定，不能创建支付单");
+        }
+        createReqDTO.setPrice(order.getPayPrice()).setExpireTime(order.getPayExpireTime());
         return createReqDTO;
     }
 
@@ -179,7 +181,6 @@ public interface TradeOrderConvert {
                                                 TradeOrderProperties tradeOrderProperties,
                                                 DeliveryExpressDO express) {
         AppTradeOrderDetailRespVO orderVO = convert3(order, orderItems);
-        orderVO.setPayExpireTime(order.getCreateTime().plus(tradeOrderProperties.getPayExpireTime()));
         if (StrUtil.isNotEmpty(order.getPayChannelCode())) {
             orderVO.setPayChannelName(DictFrameworkUtils.parseDictDataLabel(DictTypeConstants.CHANNEL_CODE, order.getPayChannelCode()));
         }

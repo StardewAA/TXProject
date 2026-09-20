@@ -55,6 +55,21 @@ public class TradePointOrderHandler implements TradeOrderHandler {
     }
 
     @Override
+    public void beforeCancelOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        if (!TradeOrderTypeEnum.isPoint(order.getType())) return;
+        Assert.isTrue(orderItems.size() == 1, "积分商城活动兑换商品兑换时，只允许选择一个商品");
+        filterOrderItemListByNoneAfterSale(orderItems).forEach(item -> beforeCancelOrderItem(order, item));
+    }
+
+    @Override
+    public void beforeCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
+        if (!TradeOrderTypeEnum.isPoint(order.getType())) return;
+        // 不使用下单校验：活动下架、售罄或过期都不应阻止合法返还；仅核对原活动商品和业务身份。
+        pointActivityApi.validatePointStockReturn(order.getPointActivityId(), orderItem.getSkuId(),
+                orderItem.getCount(), orderItem.getId()).checkError();
+    }
+
+    @Override
     public void afterCancelOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
         if (!TradeOrderTypeEnum.isPoint(order.getType())) {
             return;
@@ -75,9 +90,9 @@ public class TradePointOrderHandler implements TradeOrderHandler {
         if (!TradeOrderTypeEnum.isPoint(order.getType())) {
             return;
         }
-        // 恢复积分商城活动的库存
-        pointActivityApi.updatePointStockIncr(order.getPointActivityId(),
-                orderItem.getSkuId(), orderItem.getCount()).checkError();
+        // 同一订单项的整单取消/售后共用持久化返库标识，远程成功但交易回滚后的重试不得重复返库。
+        pointActivityApi.returnPointStock(order.getPointActivityId(),
+                orderItem.getSkuId(), orderItem.getCount(), orderItem.getId()).checkError();
     }
 
 }

@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * 用户收件地址 DO
@@ -46,6 +48,13 @@ public class MemberAddressDO extends BaseDO {
      * 收件详细地址
      */
     private String detailAddress;
+    /** Optional user-confirmed point, never a replacement for the written address. */
+    private BigDecimal longitude;
+    private BigDecimal latitude;
+    private String coordSystem;
+    private String locationSource;
+    private String locationPrecision;
+    private LocalDateTime locationConfirmedAt;
     /**
      * 是否默认
      *

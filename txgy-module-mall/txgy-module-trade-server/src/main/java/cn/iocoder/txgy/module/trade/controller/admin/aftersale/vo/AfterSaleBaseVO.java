@@ -16,6 +16,9 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 */
 @Data
 public class AfterSaleBaseVO {
+    private Boolean processable;
+    private String processBlockReason;
+    private String erpStatus;
 
     @Schema(description = "售后责任店铺编号；0 表示平台自营", example = "1")
     private Long shopId;

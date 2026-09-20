@@ -15,6 +15,11 @@ import java.util.List;
 @Mapper
 public interface PayOrderMapper extends BaseMapperX<PayOrderDO> {
 
+    /** 仅供短事务支付生命周期门闩使用；调用方不得持锁访问第三方渠道。 */
+    default PayOrderDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapper<PayOrderDO>().eq(PayOrderDO::getId, id).last("FOR UPDATE"));
+    }
+
     default PageResult<PayOrderDO> selectPage(PayOrderPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<PayOrderDO>()
                 .eqIfPresent(PayOrderDO::getAppId, reqVO.getAppId())

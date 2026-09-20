@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.performance.assessment;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -20,7 +20,7 @@ import java.math.BigDecimal;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class HrmPerformanceAssessmentQuotaScoreDO extends BaseDO {
+public class HrmPerformanceAssessmentQuotaScoreDO extends TenantBaseDO {
 
     /**
      * 考核指标评分编号

@@ -29,6 +29,13 @@ public interface ClassStudentMapper extends BaseMapperX<ClassStudentDO> {
                 .last("limit 1"));
     }
 
+    default List<ClassStudentDO> selectListByUserId(Long userId, Integer status) {
+        return selectList(new LambdaQueryWrapperX<ClassStudentDO>()
+                .eq(ClassStudentDO::getUserId, userId)
+                .eqIfPresent(ClassStudentDO::getStatus, status)
+                .orderByAsc(ClassStudentDO::getId));
+    }
+
     default PageResult<ClassStudentDO> selectPage(ClassStudentPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<ClassStudentDO>()
                 .eq(ClassStudentDO::getClassId, reqVO.getClassId())

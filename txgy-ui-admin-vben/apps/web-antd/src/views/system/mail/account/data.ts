@@ -40,9 +40,8 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '密码',
       component: 'InputPassword',
       componentProps: {
-        placeholder: '请输入密码',
+        placeholder: '新增时必填；编辑时留空表示不修改',
       },
-      rules: 'required',
     },
     {
       fieldName: 'host',

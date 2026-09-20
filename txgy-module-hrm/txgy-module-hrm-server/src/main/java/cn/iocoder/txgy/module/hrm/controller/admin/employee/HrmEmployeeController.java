@@ -96,11 +96,25 @@ public class HrmEmployeeController {
     private HrmInsuranceEmployeeInfoService insuranceEmployeeInfoService;
     @Resource
     private HrmEmployeeSalaryCardService employeeSalaryCardService;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employment.HrmEmploymentTypeService employmentTypeService;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeOnboardDocService employeeOnboardDocService;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeArchiveCheckService employeeArchiveCheckService;
 
     @Resource
     private AdminUserApi adminUserApi;
     @Resource
     private DeptApi deptApi;
+
+    @GetMapping("/archive-check/get")
+    @Operation(summary = "获得员工档案缺失项", description = "用于转正等关键动作前提示：缺劳动合同 / 缺档案附件 / 缺手机号")
+    @Parameter(name = "employeeId", description = "员工编号", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('hrm:employee:query')")
+    public CommonResult<List<String>> getEmployeeArchiveMissingItems(@RequestParam("employeeId") Long employeeId) {
+        return success(employeeArchiveCheckService.getMissingItems(employeeId));
+    }
 
     @PostMapping("/create")
     @Operation(summary = "创建员工档案")
@@ -176,6 +190,14 @@ public class HrmEmployeeController {
     public CommonResult<Boolean> confirmEmployeeEntry(@Valid @RequestBody HrmEmployeeConfirmEntryReqVO reqVO) {
         employeeService.confirmEmployeeEntry(reqVO);
         return success(true);
+    }
+
+    @PostMapping("/onboard-doc/generate")
+    @Operation(summary = "生成员工入职档案与培训协议文档（按模板生成专属档案并归档到员工档案资料）")
+    @Parameter(name = "employeeId", description = "员工编号", required = true, example = "130")
+    @PreAuthorize("@ss.hasPermission('hrm:employee:update')")
+    public CommonResult<List<String>> generateOnboardDocs(@RequestParam("employeeId") Long employeeId) {
+        return success(employeeOnboardDocService.generateOnboardDocs(employeeId));
     }
 
     @PostMapping("/rehire")
@@ -391,6 +413,12 @@ public class HrmEmployeeController {
                 employeeSalaryCardService.getSalaryCardMap(employeeIds);
         Map<Long, HrmInsuranceEmployeeInfoDO> insuranceEmployeeInfoMap =
                 insuranceEmployeeInfoService.getInsuranceEmployeeInfoMap(employeeIds);
+        // 1.6 用工形式信息
+        Map<Long, String> employmentTypeNameMap = employmentTypeService.getEmploymentTypeList().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        cn.iocoder.txgy.module.hrm.dal.dataobject.employment.HrmEmploymentTypeDO::getId,
+                        cn.iocoder.txgy.module.hrm.dal.dataobject.employment.HrmEmploymentTypeDO::getName,
+                        (a, b) -> a));
 
         // 2. 拼接响应
         LocalDate today = LocalDate.now();
@@ -410,6 +438,8 @@ public class HrmEmployeeController {
             MapUtils.findAndThen(insuranceEmployeeInfoMap, vo.getId(), socialSecurity -> vo
                     .setSocialSecurityNumber(socialSecurity.getSocialSecurityNumber())
                     .setAccumulationFundNumber(socialSecurity.getAccumulationFundNumber()));
+            MapUtils.findAndThen(employmentTypeNameMap, vo.getEmploymentTypeId(),
+                    name -> vo.setEmploymentTypeName(name));
             if (vo.getBirthday() != null) {
                 vo.setAge(getYearsBetween(vo.getBirthday().toLocalDate(), today));
             }

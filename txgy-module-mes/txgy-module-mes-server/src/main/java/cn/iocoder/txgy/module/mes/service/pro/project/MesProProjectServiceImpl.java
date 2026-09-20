@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -254,13 +255,15 @@ public class MesProProjectServiceImpl implements MesProProjectService {
     }
 
     /**
-     * 按工单进度自动流转项目状态
+     * 按工单进度自动流转项目状态，并回写生产进度百分比
      *
      * 规则：
-     * 1. 已暂停 / 已取消（人工状态）与已完成（终态）不参与自动流转
-     * 2. 挂接工单后：未开始 -> 进行中
-     * 3. 工单全部完工或取消：-> 已完成
-     * 4. 工单全部解绑：进行中 -> 未开始
+     * 1. 生产进度：SUM(工单已生产数量) / SUM(工单计划数量，不含已取消)，随工单数量变化实时回写
+     *    （人工状态与终态同样回写进度，但状态不参与自动流转）
+     * 2. 已暂停 / 已取消（人工状态）与已完成（终态）不参与状态自动流转
+     * 3. 挂接工单后：未开始 -> 进行中
+     * 4. 工单全部完工或取消：-> 已完成
+     * 5. 工单全部解绑：进行中 -> 未开始
      *
      * @param projectId 项目编号
      */
@@ -271,16 +274,24 @@ public class MesProProjectServiceImpl implements MesProProjectService {
         if (project == null) {
             return;
         }
-        // 1. 人工状态与终态不参与自动流转
-        if (MesProProjectStatusEnum.isClosed(project.getStatus())
-                || MesProProjectStatusEnum.isManual(project.getStatus())) {
-            return;
-        }
-        // 2. 统计项目下的工单
+        // 1. 统计项目下的工单（含进度百分比）
         List<MesProProjectStatisticsRespVO> statisticsList =
                 workOrderMapper.selectProjectStatistics(Collections.singleton(projectId));
         MesProProjectStatisticsRespVO statistics = CollUtil.isEmpty(statisticsList)
                 ? null : statisticsList.get(0);
+        // 2. 生产进度回写：有工单取统计值；工单全部解绑则归零
+        BigDecimal newProgress = statistics == null
+                ? BigDecimal.ZERO : statistics.getProgress();
+        if (newProgress != null && ObjUtil.notEqual(newProgress, project.getProgress())) {
+            projectMapper.update(null, new LambdaUpdateWrapper<MesProProjectDO>()
+                    .eq(MesProProjectDO::getId, projectId)
+                    .set(MesProProjectDO::getProgress, newProgress));
+        }
+        // 3. 人工状态与终态不参与状态自动流转（进度已回写）
+        if (MesProProjectStatusEnum.isClosed(project.getStatus())
+                || MesProProjectStatusEnum.isManual(project.getStatus())) {
+            return;
+        }
         Integer newStatus = null;
         if (statistics == null) {
             // 3. 无关联工单：进行中回退为未开始

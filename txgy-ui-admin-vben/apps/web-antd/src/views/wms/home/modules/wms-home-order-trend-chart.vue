@@ -57,25 +57,26 @@ defineExpose({ load });
 </script>
 
 <template>
-  <Card :body-style="{ padding: '12px 16px 16px' }">
-    <div class="mb-3 flex items-center justify-between">
+  <Card :body-style="{ padding: '8px 10px' }">
+    <div class="mb-2 flex items-center justify-between">
       <div>
-        <div class="font-semibold">单据趋势</div>
-        <div class="text-sm text-muted-foreground">
+        <div class="text-sm font-semibold">单据趋势</div>
+        <div class="text-xs text-muted-foreground">
           入库、出库、移库、盘库单据数量
         </div>
       </div>
       <Segmented
         :options="trendDayOptions"
         :value="trendDays"
+        size="small"
         @change="handleTrendDaysChange"
       />
     </div>
-    <div class="relative min-h-[330px]">
-      <EchartsUI ref="chartRef" height="330px" />
+    <div class="relative min-h-[170px]">
+      <EchartsUI ref="chartRef" height="170px" />
       <div
         v-if="loading"
-        class="absolute inset-0 flex items-center justify-center bg-card/70 text-sm text-muted-foreground"
+        class="absolute inset-0 flex items-center justify-center bg-card/70 text-xs text-muted-foreground"
       >
         加载中
       </div>

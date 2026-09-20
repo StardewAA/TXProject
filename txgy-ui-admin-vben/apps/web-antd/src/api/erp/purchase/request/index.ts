@@ -27,6 +27,7 @@ export namespace ErpPurchaseRequestApi {
     creatorName?: string;
     createTime?: string;
     items?: Item[];
+    reverseApproveReason?: string;
   }
 }
 const base = '/erp/purchase-request';
@@ -46,3 +47,9 @@ export const deletePurchaseRequest = (ids: number[]) =>
   requestClient.delete(`${base}/delete`, { params: { ids: ids.join(',') } });
 export const submitPurchaseRequest = (id: number) =>
   requestClient.put(`${base}/submit`, null, { params: { id } });
+/** 反审批采购申请（审批中 / 已审批 → 草稿），reason 为必填原因 */
+export function reverseApprovePurchaseRequest(id: number, reason: string) {
+  return requestClient.put(`${base}/reverse-approve`, null, {
+    params: { id, reason },
+  });
+}

@@ -140,13 +140,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'type' },
     },
     {
-      field: 'projectName',
-      title: '关联项目',
-      minWidth: 150,
-      showOverflow: true,
-      formatter: ({ cellValue }) => cellValue || '-',
-    },
-    {
       field: 'courseCount',
       title: '课程',
       width: 70,
@@ -238,6 +231,19 @@ export function buildTargetCondition(
     includeChildDept: raw.scopeIncludeChildDept !== false,
     postIds,
   });
+}
+
+/** 定岗（结业后岗位，targetPosts 为 JSON 数组字符串）展示文本 */
+export function formatTargetPosts(text?: string): string {
+  if (!text) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.join('、') : String(parsed);
+  } catch {
+    return text;
+  }
 }
 
 /** 参训对象筛选条件摘要（详情展示用） */

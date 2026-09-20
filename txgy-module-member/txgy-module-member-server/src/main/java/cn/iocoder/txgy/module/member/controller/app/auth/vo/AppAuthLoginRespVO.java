@@ -18,6 +18,9 @@ public class AppAuthLoginRespVO {
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long userId;
 
+    @Schema(description = "账号所属租户，由服务端确认", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Long tenantId;
+
     @Schema(description = "访问令牌", requiredMode = Schema.RequiredMode.REQUIRED, example = "happy")
     private String accessToken;
 

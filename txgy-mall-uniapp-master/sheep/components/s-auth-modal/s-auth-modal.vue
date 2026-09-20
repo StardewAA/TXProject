@@ -16,7 +16,7 @@
         @onConfirm="onConfirm"
       />
 
-      <!-- 3. 手机号注册 register -->
+      <!-- 3. 注册账号 register -->
       <register
         v-if="authType === 'register'"
         :agreeStatus="state.protocol"
@@ -238,6 +238,8 @@
 
 <style lang="scss" scoped>
   @import './index.scss';
+
+  .login-wrap { max-height: 86vh; overflow-y: auto; box-sizing: border-box; }
 
   .shake {
     animation: shake 0.05s linear 4 alternate;

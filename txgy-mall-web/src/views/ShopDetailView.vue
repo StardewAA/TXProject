@@ -76,23 +76,23 @@ void productApi.getCategories().then(value => { categories.value = value }).catc
 
 <template>
   <div class="container page-section">
-    <div class="shop-breadcrumb"><RouterLink to="/">首页</RouterLink> / <RouterLink to="/shops">企业店铺</RouterLink> / {{ shop?.name || '店铺详情' }}</div>
+    <div class="shop-breadcrumb"><MallLink to="/">首页</MallLink> / <MallLink to="/shops">企业店铺</MallLink> / {{ shop?.name || '店铺详情' }}</div>
     <div v-if="loading" class="loading-box panel"><el-skeleton :rows="8" animated /></div>
-    <EmptyState v-else-if="failed || !shop" title="店铺暂时无法访问" description="店铺可能已停用，请稍后重试或查看其他供应商。"><el-button @click="loadShop">重新加载</el-button><RouterLink to="/shops">返回企业店铺</RouterLink></EmptyState>
+    <EmptyState v-else-if="failed || !shop" title="店铺暂时无法访问" description="店铺可能已停用，请稍后重试或查看其他供应商。"><el-button @click="loadShop">重新加载</el-button><MallLink to="/shops">返回企业店铺</MallLink></EmptyState>
     <template v-else>
       <section class="shop-cover">
         <div class="shop-heading"><img v-if="shop.logoUrl && !logoFailed" :src="normalizeImage(shop.logoUrl)" alt="" @error="logoFailed = true" /><span v-else class="shop-logo">{{ shop.name.slice(0, 2) }}</span><div><small>INDUSTRIAL MATERIALS / 企业供应店铺</small><h1>{{ shop.name }}</h1></div></div>
         <p>{{ shop.introduction || '欢迎进入店铺，查看在售材料及规格信息。' }}</p>
         <div class="shop-cover-note">选好材料 · 对准规格 · 服务工程</div>
       </section>
-      <nav class="shop-tabs" aria-label="店铺导航"><button :class="{ active: tab === 'products' }" @click="tab = 'products'">供应商品</button><button :class="{ active: tab === 'company' }" @click="tab = 'company'">店铺信息</button><button :class="{ active: tab === 'contact' }" @click="tab = 'contact'">联系方式</button><RouterLink to="/shops">查看其他店铺 →</RouterLink></nav>
+      <nav class="shop-tabs" aria-label="店铺导航"><button :class="{ active: tab === 'products' }" @click="tab = 'products'">供应商品</button><button :class="{ active: tab === 'company' }" @click="tab = 'company'">店铺信息</button><button :class="{ active: tab === 'contact' }" @click="tab = 'contact'">联系方式</button><MallLink to="/shops">查看其他店铺 →</MallLink></nav>
       <div class="shop-columns">
         <aside>
-          <div class="panel shop-profile"><h3>店铺档案</h3><strong>{{ shop.name }}</strong><p>{{ shop.introduction || '店铺暂未填写简介' }}</p><RouterLink to="/member/customer-service">平台客服 →</RouterLink></div>
+          <div class="panel shop-profile"><h3>店铺档案</h3><strong>{{ shop.name }}</strong><p>{{ shop.introduction || '店铺暂未填写简介' }}</p><MallLink :to="`/member/customer-service/shop/${shop.id}`">店铺客服 →</MallLink></div>
           <div v-if="tab === 'products'" class="panel shop-category"><h3>按材料分类</h3><button :class="{ active: !category }" @click="category = ''">全部材料</button><button v-for="item in roots" :key="item.id" :class="{ active: category === String(item.id) }" @click="category = String(item.id)">{{ item.name }}</button></div>
         </aside>
         <section v-if="tab === 'products'" class="shop-products">
-          <form class="shop-search panel" @submit.prevent="search"><label for="within-shop">店内搜索</label><input id="within-shop" v-model="keyword" placeholder="输入商品名称" /><button type="submit">搜本店</button><RouterLink :to="{ path: '/goods', query: { q: keyword } }">搜全站</RouterLink></form>
+          <form class="shop-search panel" @submit.prevent="search"><label for="within-shop">店内搜索</label><input id="within-shop" v-model="keyword" placeholder="输入商品名称" /><button type="submit">搜本店</button><MallLink :to="{ path: '/goods', query: { q: keyword } }">搜全站</MallLink></form>
           <div class="shop-toolbar"><span>供应商品 / {{ total }} 件</span><select v-model="sort" aria-label="商品排序"><option value="default">综合排序</option><option value="asc">价格从低到高</option><option value="desc">价格从高到低</option></select></div>
           <div v-if="productsLoading" class="panel loading-box"><el-skeleton :rows="6" animated /></div>
           <EmptyState v-else-if="productFailed" title="商品加载失败"><el-button @click="loadProducts">重新加载</el-button></EmptyState>
@@ -101,7 +101,7 @@ void productApi.getCategories().then(value => { categories.value = value }).catc
           <div v-if="total > 12" class="shop-pagination"><el-pagination v-model:current-page="page" :total="total" :page-size="12" background layout="prev, pager, next" /></div>
         </section>
         <section v-else-if="tab === 'company'" class="panel shop-information"><h2>店铺信息</h2><h3>{{ shop.name }}</h3><p>{{ shop.introduction || '店铺暂未填写简介' }}</p></section>
-        <section v-else class="panel shop-information"><h2>联系方式</h2><p>联系人：{{ shop.contactName || '暂未公开' }}</p><p>联系电话：<a v-if="shop.contactMobile" :href="`tel:${shop.contactMobile}`">{{ shop.contactMobile }}</a><span v-else>暂未公开</span></p><RouterLink to="/member/customer-service">联系平台客服 →</RouterLink></section>
+        <section v-else class="panel shop-information"><h2>联系方式</h2><p>联系人：{{ shop.contactName || '暂未公开' }}</p><p>联系电话：<a v-if="shop.contactMobile" :href="`tel:${shop.contactMobile}`">{{ shop.contactMobile }}</a><span v-else>暂未公开</span></p><MallLink :to="`/member/customer-service/shop/${shop.id}`">联系店铺客服 →</MallLink></section>
       </div>
     </template>
   </div>

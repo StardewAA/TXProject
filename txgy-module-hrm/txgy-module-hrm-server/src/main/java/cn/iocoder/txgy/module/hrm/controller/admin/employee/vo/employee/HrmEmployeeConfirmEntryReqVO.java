@@ -13,6 +13,9 @@ import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.befo
 @EqualsAndHashCode(callSuper = true)
 public class HrmEmployeeConfirmEntryReqVO extends HrmEmployeeSaveReqVO {
 
+    @Schema(description = "应聘记录编号；招聘流程确认入职时使用", example = "1024")
+    private Long applicationId;
+
     @AssertTrue(message = "入职时间不能晚于当前时间")
     @JsonIgnore
     public boolean isEntryTimeValid() {

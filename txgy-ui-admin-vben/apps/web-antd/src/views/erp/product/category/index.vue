@@ -10,9 +10,11 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteProductCategory,
   exportProductCategory,
+  exportProductCategoryPdf,
   getProductCategoryList,
 } from '#/api/erp/product/category';
 import { $t } from '#/locales';
@@ -38,9 +40,15 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportProductCategory(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '产品分类.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportProductCategoryPdf(await gridApi.formApi.getValues())
+      : await exportProductCategory(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '产品分类.pdf' : '产品分类.xls',
+    source: data,
+  });
 }
 
 /** 创建分类 */
@@ -131,18 +139,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:product-category:export'],
-              onClick: handleExport,
-            },
-            {
               label: isExpanded ? '收缩' : '展开',
               type: 'primary',
               onClick: handleExpand,
             },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:product-category:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">

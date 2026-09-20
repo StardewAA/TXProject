@@ -2,8 +2,6 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { HrmSalarySlipSendRecordApi } from '#/api/hrm/salary/slip/send-record';
 
-import { formatDate } from '@vben/utils';
-
 export { formatHrmYearMonth } from '#/views/hrm/utils/format';
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
@@ -11,7 +9,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
       fieldName: 'month',
       label: '工资月份',
       component: 'DatePicker',
-      defaultValue: formatDate(new Date(), 'YYYY-MM'),
+      // 不预设默认月份：之前默认筛「当月」，导致上月的发放记录一条都看不到，
+      // 容易被误判成"发放记录丢了"。留空即查询全部，由使用者按需筛选。
       componentProps: {
         allowClear: true,
         class: 'w-full',

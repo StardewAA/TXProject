@@ -8,8 +8,10 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountPageReqVO;
+import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountRecordRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.account.ErpAccountSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountDO;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -89,7 +91,8 @@ public class ErpAccountController {
     public CommonResult<List<ErpAccountRespVO>> getWarehouseSimpleList() {
         List<ErpAccountDO> list = accountService.getAccountListByStatus(CommonStatusEnum.ENABLE.getStatus());
         return success(convertList(list, account -> new ErpAccountRespVO().setId(account.getId())
-                .setName(account.getName()).setDefaultStatus(account.getDefaultStatus())));
+                .setName(account.getName()).setNo(account.getNo())
+                .setDefaultStatus(account.getDefaultStatus())));
     }
 
     @GetMapping("/page")
@@ -98,6 +101,13 @@ public class ErpAccountController {
     public CommonResult<PageResult<ErpAccountRespVO>> getAccountPage(@Valid ErpAccountPageReqVO pageReqVO) {
         PageResult<ErpAccountDO> pageResult = accountService.getAccountPage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, ErpAccountRespVO.class));
+    }
+
+    @GetMapping("/record-list")
+    @Operation(summary = "获得结算账户资金流水")
+    @PreAuthorize("@ss.hasPermission('erp:account:query')")
+    public CommonResult<List<ErpAccountRecordRespVO>> getAccountRecordList(@RequestParam("accountId") Long accountId) {
+        return success(BeanUtils.toBean(accountService.getAccountRecordList(accountId), ErpAccountRecordRespVO.class));
     }
 
     @GetMapping("/export-excel")
@@ -111,6 +121,18 @@ public class ErpAccountController {
         // 导出 Excel
         ExcelUtils.write(response, "结算账户.xls", "数据", ErpAccountRespVO.class,
                         BeanUtils.toBean(list, ErpAccountRespVO.class));
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出结算账户 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:account:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportAccountPdf(@Valid ErpAccountPageReqVO pageReqVO,
+                                 HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpAccountDO> list = accountService.getAccountPage(pageReqVO).getList();
+        ErpPdfExportUtils.write(response, "结算账户.pdf", "结算账户列表",
+                ErpAccountRespVO.class, BeanUtils.toBean(list, ErpAccountRespVO.class));
     }
 
 }

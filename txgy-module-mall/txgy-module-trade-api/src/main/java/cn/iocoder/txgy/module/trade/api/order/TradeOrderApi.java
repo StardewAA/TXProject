@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.trade.api.order;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.trade.api.order.dto.TradeOrderRespDTO;
+import cn.iocoder.txgy.module.trade.api.order.dto.TradeOrderServiceCardRespDTO;
 import cn.iocoder.txgy.module.trade.enums.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -30,6 +31,11 @@ public interface TradeOrderApi {
     @Operation(summary = "获得订单")
     @Parameter(name = "id", description = "订单编号", required = true)
     CommonResult<TradeOrderRespDTO> getOrder(@RequestParam("id") Long id);
+
+    @GetMapping(PREFIX + "/service-card")
+    @Operation(summary = "本人订单的最小客服卡片投影（内部只读）")
+    CommonResult<TradeOrderServiceCardRespDTO> getServiceCard(@RequestParam("id") Long id,
+            @RequestParam("userId") Long userId, @RequestParam("tenantId") Long tenantId);
 
     @PutMapping(PREFIX + "/cancel-paid")
     @Parameters({

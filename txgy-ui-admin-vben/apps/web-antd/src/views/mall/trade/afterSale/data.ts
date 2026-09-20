@@ -1,11 +1,13 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeGridPropTypes } from '#/adapter/vxe-table';
 
+import { useAccess } from '@vben/access';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { fenToYuan } from '@vben/utils';
 
 import { z } from '#/adapter/form';
+import { getShopList } from '#/api/mall/product/shop';
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 售后接口的退款金额单位为分，列表只在这里转换一次为元。 */
@@ -39,7 +41,17 @@ export function useDisagreeFormSchema(): VbenFormSchema[] {
 }
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
+  const { hasAccessByCodes } = useAccess();
+  const shopOptionsAllowed = hasAccessByCodes(['product:shop:query']);
   return [
+    {
+      fieldName: 'shopId',
+      label: shopOptionsAllowed ? '所属店铺' : '店铺编号',
+      component: shopOptionsAllowed ? 'ApiSelect' : 'InputNumber',
+      componentProps: shopOptionsAllowed
+        ? { api: getShopList, labelField: 'name', valueField: 'id', allowClear: true, showSearch: true, optionFilterProp: 'label', placeholder: '全部授权店铺' }
+        : { min: 0, precision: 0, placeholder: '按店铺编号筛选' },
+    },
     {
       fieldName: 'spuName',
       label: '商品名称',
@@ -62,16 +74,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
       component: 'Input',
       componentProps: {
         placeholder: '请输入订单编号',
-      },
-    },
-    {
-      fieldName: 'status',
-      label: '售后状态',
-      component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.TRADE_AFTER_SALE_STATUS, 'number'),
-        placeholder: '请选择售后状态',
-        allowClear: true,
       },
     },
     {
@@ -113,6 +115,7 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
       title: '退款编号',
       fixed: 'left',
       minWidth: 200,
+      slots: { default: 'afterSaleNo' },
     },
     {
       field: 'orderNo',
@@ -178,6 +181,12 @@ export function useGridColumns(): VxeGridPropTypes.Columns {
           type: DICT_TYPE.TRADE_AFTER_SALE_WAY,
         },
       },
+    },
+    {
+      field: 'processBlockReason',
+      title: '处理进度',
+      minWidth: 180,
+      slots: { default: 'processing' },
     },
     {
       title: '操作',

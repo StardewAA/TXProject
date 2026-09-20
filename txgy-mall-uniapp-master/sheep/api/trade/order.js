@@ -2,6 +2,10 @@ import request from '@/sheep/request';
 import { isEmpty } from '@/sheep/helper/utils';
 
 const OrderApi = {
+  getLogistics: (id) => request({
+    url: '/trade/order/get-logistics', method: 'GET', params: { id },
+    custom: { auth: true, showLoading: false, showError: false },
+  }),
   // 计算订单信息
   settlementOrder: (data) => {
     const source = data && typeof data === 'object' ? data : {};

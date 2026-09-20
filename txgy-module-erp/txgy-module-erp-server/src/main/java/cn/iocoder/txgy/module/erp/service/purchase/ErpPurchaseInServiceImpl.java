@@ -53,6 +53,10 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
     @Value("${txgy.integration.wms.mode:mock}")
     private String wmsMode;
 
+    /** 审批通过时是否自动推送采购入库单到 WMS；默认 true 兼容老用户，企业改为 false 后只能走按钮触发。 */
+    @Value("${txgy.integration.wms.auto-push-on-approve:true}")
+    private boolean autoPushOnApprove;
+
     @Resource
     private ErpPurchaseInMapper purchaseInMapper;
     @Resource
@@ -94,7 +98,8 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
         // 2.1 插入入库
         ErpPurchaseInDO purchaseIn = BeanUtils.toBean(createReqVO, ErpPurchaseInDO.class, in -> in
                 .setNo(no).setStatus(ErpAuditStatus.PROCESS.getStatus()))
-                .setOrderNo(purchaseOrder.getNo()).setSupplierId(purchaseOrder.getSupplierId());
+                .setOrderNo(purchaseOrder.getNo()).setSupplierId(purchaseOrder.getSupplierId())
+                .setBusinessChainNo(resolveBusinessChainNo(purchaseOrder));
         calculateTotalPrice(purchaseIn, purchaseInItems);
         purchaseInMapper.insert(purchaseIn);
         // 2.2 插入入库项
@@ -104,6 +109,22 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
         // 3. 更新采购订单的入库数量
         updatePurchaseOrderInCount(createReqVO.getOrderId());
         return purchaseIn.getId();
+    }
+
+    /**
+     * 解析业务链号，保证「询价 → 定标 → 采购订单 → 采购入库」全链路可溯源。
+     *
+     * <p>优先继承采购订单的链号（由定标确认生成订单时写入 {@code INQUIRY-<询价单号>}）；
+     * 手工建单的订单没有链号，则以订单号生成 {@code PO-<订单号>}，
+     * 保证同一订单下的多张入库单链号一致。</p>
+     *
+     * <p>为什么必须在这里赋值：{@code ErpWmsBusinessDocumentService} 推送 WMS 时
+     * 会用单据自己的 {@code businessChainNo}，为空才会兜底成 {@code BC-<单号>}
+     * ——那正是原实现「订单→入库」断链的原因。</p>
+     */
+    private String resolveBusinessChainNo(ErpPurchaseOrderDO purchaseOrder) {
+        String chainNo = purchaseOrder.getBusinessChainNo();
+        return (chainNo != null && !chainNo.isBlank()) ? chainNo : "PO-" + purchaseOrder.getNo();
     }
 
     @Override
@@ -186,15 +207,18 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
         List<ErpPurchaseInItemDO> purchaseInItems = purchaseInItemMapper.selectListByInId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.PURCHASE_IN.getType()
                 : ErpStockRecordBizTypeEnum.PURCHASE_IN_CANCEL.getType();
-        if (!"remote".equalsIgnoreCase(wmsMode)) {
-            purchaseInItems.forEach(purchaseInItem -> {
-                BigDecimal count = approve ? purchaseInItem.getCount() : purchaseInItem.getCount().negate();
-                stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
-                        purchaseInItem.getProductId(), purchaseInItem.getWarehouseId(), count,
-                        bizType, purchaseInItem.getInId(), purchaseInItem.getId(), purchaseIn.getNo()));
-            });
-        }
-        if (approve) {
+        // 说明：ERP 业务账始终由 ERP 单据驱动，不随 WMS 集成模式变化。
+        // 原实现在 remote 模式下跳过本段，会让 ERP 业务账停止记录采购入库；
+        // 而 WMS 回调侧并不写 ERP 库存（integration 包内无 createStockRecord 调用），
+        // 故去掉守卫不会重复计数。实物账由 erp_stock_mirror 单独镜像 WMS。
+        purchaseInItems.forEach(purchaseInItem -> {
+            BigDecimal count = approve ? purchaseInItem.getCount() : purchaseInItem.getCount().negate();
+            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
+                    purchaseInItem.getProductId(), purchaseInItem.getWarehouseId(), count,
+                    bizType, purchaseInItem.getInId(), purchaseInItem.getId(), purchaseIn.getNo()));
+        });
+        // 自动推送 WMS 由开关控制（团队 master 引入）：未开启时仅登记 ERP 业务账，不触发 WMS 正向入库
+        if (approve && autoPushOnApprove) {
             wmsBusinessDocumentService.preparePurchaseReceiptAfterCommit(id);
         }
     }

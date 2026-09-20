@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,6 +13,8 @@ public class ErpPurchaseRequestRespVO {
     private String no;
     private Integer status;
     private String processInstanceId;
+    @Schema(description = "反审批原因")
+    private String reverseApproveReason;
     private LocalDateTime requestTime;
     private LocalDateTime requiredDate;
     private Long departmentId;

@@ -108,5 +108,14 @@ txgy:
     version: ${txgy.info.version}
   tenant: # 多租户相关配置项
     enable: true
+  report: # 报表取数相关配置项
+    datasource: # 报表只读数据源。url 留空则回退主库连接（会打 WARN，仅本地临时使用；生产必须配置只读账号）
+      url: ${REPORT_DB_URL:}
+      username: ${REPORT_DB_USERNAME:}
+      password: ${REPORT_DB_PASSWORD:}
+      initial-size: 1
+      max-active: 5
+      max-rows: ${REPORT_MAX_ROWS:5000} # 全局硬上限：任何数据集的行数上限都不得超过该值
+      timeout-seconds: ${REPORT_TIMEOUT_SECONDS:30} # 全局超时上限
 
 debug: false

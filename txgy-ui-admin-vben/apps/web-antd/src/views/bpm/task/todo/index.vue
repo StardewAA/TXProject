@@ -7,20 +7,26 @@ import { DocAlert, Page } from '@vben/common-ui';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getTaskTodoPage } from '#/api/bpm/task';
 import { router } from '#/router';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
 
 import { useGridColumns, useGridFormSchema } from './data';
 
 defineOptions({ name: 'BpmTodoTask' });
 
+const props = withDefaults(defineProps<{
+  detailRouteName?: string;
+  processDefinitionKeys?: string;
+}>(), {
+  detailRouteName: 'BpmProcessInstanceDetail',
+});
+
 /** 办理任务 */
 function handleAudit(row: BpmTaskApi.Task) {
-  router.push({
-    name: 'BpmProcessInstanceDetail',
-    query: {
-      id: row.processInstance!.id,
-      taskId: row.id,
-    },
-  });
+  router.push(buildApprovalDetailLocation(
+    props.detailRouteName,
+    row.processInstance!.id,
+    row.id,
+  ));
 }
 
 const [Grid] = useVbenVxeGrid({
@@ -37,6 +43,7 @@ const [Grid] = useVbenVxeGrid({
           return await getTaskTodoPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
+            processDefinitionKeys: props.processDefinitionKeys,
             ...formValues,
           });
         },
