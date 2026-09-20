@@ -114,6 +114,8 @@ services:
   gateway:
     <<: *txgy-service
     container_name: txgy-gateway
+    image: deploy-gateway:latest
+    pull_policy: never
     build:
       context: .
       dockerfile: Dockerfile.runtime
@@ -151,6 +153,8 @@ services:
   system:
     <<: *txgy-service
     container_name: txgy-system
+    image: deploy-system:latest
+    pull_policy: never
     build:
       context: .
       dockerfile: Dockerfile.runtime
@@ -174,6 +178,8 @@ services:
   infra:
     <<: *txgy-service
     container_name: txgy-infra
+    image: deploy-infra:latest
+    pull_policy: never
     build:
       context: .
       dockerfile: Dockerfile.runtime
@@ -319,6 +325,36 @@ services:
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
     mem_limit: 850m
+
+  product:
+    <<: *txgy-service
+    container_name: txgy-product
+    image: deploy-product:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/product.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms384m -Xmx768m -XX:+UseG1GC
+    mem_limit: 1050m
+
+  erp:
+    <<: *txgy-service
+    container_name: txgy-erp
+    image: deploy-erp:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        JAR_FILE: jars/erp.jar
+    environment:
+      <<: *txgy-env
+      JAVA_OPTS: -Xms384m -Xmx768m -XX:+UseG1GC
+    mem_limit: 1050m
 
   ai:
     <<: *txgy-service

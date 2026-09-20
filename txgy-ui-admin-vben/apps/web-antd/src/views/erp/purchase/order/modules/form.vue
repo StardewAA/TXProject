@@ -11,19 +11,24 @@ import { Button, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getAccountSimpleList } from '#/api/erp/finance/account';
+import { getProductSimpleList } from '#/api/erp/product/product';
 import {
   createPurchaseOrder,
   exportPurchaseOrderPdf,
   getPurchaseOrder,
   updatePurchaseOrder,
 } from '#/api/erp/purchase/order';
+import { getSupplierSimpleList } from '#/api/erp/purchase/supplier';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
 import PurchaseOrderItemForm from './item-form.vue';
 
 const emit = defineEmits(['success']);
-const formData = ref<ErpPurchaseOrderApi.PurchaseOrder>();
+const formData = ref<ErpPurchaseOrderApi.PurchaseOrder>({
+  discountPercent: 0,
+  items: [],
+});
 const formType = ref<FormType>('create'); // 表单类型：'create' | 'edit' | 'detail'
 const itemFormRef = ref<InstanceType<typeof PurchaseOrderItemForm>>();
 
@@ -58,8 +63,11 @@ const [Form, formApi] = useVbenForm({
 
 /** 更新采购订单项 */
 function handleUpdateItems(items: ErpPurchaseOrderApi.PurchaseOrderItem[]) {
-  formData.value = modalApi.getData<ErpPurchaseOrderApi.PurchaseOrder>();
-  formData.value.items = items;
+  // modalApi.getData() contains modal parameters, not the order form model.
+  formData.value = {
+    ...(formData.value ?? {}),
+    items,
+  };
   formApi.setValues({
     items,
   });
@@ -103,6 +111,10 @@ const [Modal, modalApi] = useVbenModal({
     const itemFormInstance = Array.isArray(itemFormRef.value)
       ? itemFormRef.value[0]
       : itemFormRef.value;
+    if (!itemFormInstance) {
+      message.error('采购订单明细尚未加载完成，请稍后重试');
+      return;
+    }
     try {
       itemFormInstance.validate();
     } catch (error: any) {
@@ -131,13 +143,23 @@ const [Modal, modalApi] = useVbenModal({
       await modalApi.close();
       emit('success');
       message.success($t('ui.actionMessage.operationSuccess'));
+    } catch (error: any) {
+      // requestClient may reject with either the response body or an Axios error.
+      // Always surface the backend business message instead of the generic 500 text.
+      const errorData = error?.response?.data ?? error?.data ?? error;
+      message.error(
+        errorData?.msg || errorData?.message || error?.message || '采购订单保存失败',
+      );
     } finally {
       modalApi.unlock();
     }
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
-      formData.value = undefined;
+      formData.value = {
+        discountPercent: 0,
+        items: [],
+      };
       return;
     }
     // 加载数据
@@ -146,11 +168,32 @@ const [Modal, modalApi] = useVbenModal({
     formApi.setDisabled(formType.value === 'detail');
     formApi.updateSchema(useFormSchema(formType.value));
     if (!data || !data.id) {
-      // 新增时，默认选中账户
-      const accountList = await getAccountSimpleList();
-      const defaultAccount = accountList.find((item) => item.defaultStatus);
-      if (defaultAccount) {
-        await formApi.setValues({ accountId: defaultAccount.id });
+      formData.value = {
+        discountPercent: 0,
+        items: [],
+      };
+      // 新增时检查基础资料，避免空下拉框最终只显示“系统异常”。
+      try {
+        const [accountList, supplierList, productList] = await Promise.all([
+          getAccountSimpleList(),
+          getSupplierSimpleList(),
+          getProductSimpleList(),
+        ]);
+        if (supplierList.length === 0 || productList.length === 0) {
+          message.warning('请先维护供应商和启用的产品，再新增采购订单');
+        }
+        const defaultAccount = accountList.find((item) => item.defaultStatus);
+        if (defaultAccount) {
+          await formApi.setValues({ accountId: defaultAccount.id });
+        }
+      } catch (error: any) {
+        const errorData = error?.response?.data ?? error?.data ?? error;
+        message.error(
+          errorData?.msg ||
+            errorData?.message ||
+            error?.message ||
+            '基础资料加载失败，请检查接口服务后重试',
+        );
       }
       return;
     }

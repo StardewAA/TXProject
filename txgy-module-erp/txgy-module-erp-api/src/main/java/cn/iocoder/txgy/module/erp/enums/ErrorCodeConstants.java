@@ -51,6 +51,10 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode RECOGNITION_TASK_STATE_INVALID = new ErrorCode(1_030_105_001, "当前图片识别任务状态({})不允许该操作");
     ErrorCode RECOGNITION_RESULT_VERSION_EXPIRED = new ErrorCode(1_030_105_002, "识别结果已更新，请刷新后重新操作");
     ErrorCode RECOGNITION_UNSUPPORTED_BIZ_TYPE = new ErrorCode(1_030_105_003, "暂不支持识别业务类型({})");
+    ErrorCode PURCHASE_ORDER_ITEM_NOT_EMPTY = new ErrorCode(1_030_101_014, "采购订单至少需要一条明细");
+    ErrorCode PURCHASE_ORDER_ITEM_COUNT_INVALID = new ErrorCode(1_030_101_015, "采购订单明细数量必须大于 0");
+    ErrorCode PURCHASE_ORDER_ITEM_PRICE_INVALID = new ErrorCode(1_030_101_016, "采购订单明细单价必须大于 0");
+    ErrorCode PURCHASE_ORDER_PRODUCT_UNIT_NOT_EXISTS = new ErrorCode(1_030_101_017, "采购订单产品未配置单位");
 
     // ========== ERP 采购入库（1-030-102-000） ==========
     ErrorCode PURCHASE_IN_NOT_EXISTS = new ErrorCode(1_030_102_000, "采购入库单不存在");

@@ -1,6 +1,10 @@
 package cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -51,6 +55,8 @@ public class ErpPurchaseOrderSaveReqVO {
     private String remark;
 
     @Schema(description = "订单清单列表")
+    @NotEmpty(message = "采购订单至少需要一条明细")
+    @Valid
     private List<Item> items;
 
     @Data
@@ -63,18 +69,22 @@ public class ErpPurchaseOrderSaveReqVO {
         @NotNull(message = "产品编号不能为空")
         private Long productId;
 
-        @Schema(description = "产品单位单位", requiredMode = Schema.RequiredMode.REQUIRED, example = "3113")
-        @NotNull(message = "产品单位单位不能为空")
+        @Schema(description = "产品单位编号。服务端根据产品主数据补齐", example = "3113")
         private Long productUnitId;
 
         @Schema(description = "产品单价", example = "100.00")
+        @NotNull(message = "产品单价不能为空")
+        @DecimalMin(value = "0.00", inclusive = false, message = "产品单价必须大于 0")
         private BigDecimal productPrice;
 
         @Schema(description = "产品数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "100.00")
         @NotNull(message = "产品数量不能为空")
+        @DecimalMin(value = "0.00", inclusive = false, message = "产品数量必须大于 0")
         private BigDecimal count;
 
         @Schema(description = "税率，百分比", example = "99.88")
+        @DecimalMin(value = "0.00", message = "税率不能小于 0")
+        @DecimalMax(value = "100.00", message = "税率不能大于 100")
         private BigDecimal taxPercent;
 
         @Schema(description = "备注", example = "随便")
