@@ -8,6 +8,10 @@ import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWmsExecutionCallbackReqDTO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDO;
 import cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderMapper;
 import cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderDetailMapper;
+import cn.iocoder.txgy.module.trade.api.wms.TradeWmsCallbackApi;
+import cn.iocoder.txgy.module.trade.api.wms.dto.TradeWmsExecutionCallbackItemDTO;
+import cn.iocoder.txgy.module.trade.api.wms.dto.TradeWmsExecutionCallbackReqDTO;
+import cn.iocoder.txgy.module.wms.dal.mysql.integration.WmsIntegrationRequestMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +27,8 @@ public class WmsShipmentExecutionService {
     @Resource private WmsShipmentOrderMapper orderMapper;
     @Resource private WmsShipmentOrderDetailMapper detailMapper;
     @Resource private ErpWmsCallbackApi erp;
+    @Resource private TradeWmsCallbackApi mall;
+    @Resource private WmsIntegrationRequestMapper requestMapper;
 
     public Map<String, Object> getExecution(Long id) {
         TenantContextHolder.getRequiredTenantId();
@@ -62,6 +68,25 @@ public class WmsShipmentExecutionService {
         order.setNotificationAttempts((order.getNotificationAttempts() == null ? 0 : order.getNotificationAttempts()) + 1);
         boolean delivered = false;
         try {
+            if ("MALL".equals(order.getSourceModule())) {
+                deliverMall(tenantId, id, order);
+            } else {
+                deliverErp(tenantId, id, order);
+            }
+            delivered = true;
+            order.setNotificationStatus("DELIVERED").setNotificationError("");
+        } catch (Exception failure) {
+            String error = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+            order.setNotificationStatus("FAILED").setNotificationError(error.substring(0, Math.min(error.length(), 1000)))
+                    .setNextNotificationTime(now.plusSeconds(60));
+        }
+        orderMapper.updateById(new WmsShipmentOrderDO().setId(id).setNotificationStatus(order.getNotificationStatus())
+                .setNotificationError(order.getNotificationError()).setNotificationAttempts(order.getNotificationAttempts())
+                .setNextNotificationTime(order.getNextNotificationTime()));
+        return delivered;
+    }
+
+    private void deliverErp(Long tenantId, Long id, WmsShipmentOrderDO order) {
             ErpWmsExecutionCallbackReqDTO request = new ErpWmsExecutionCallbackReqDTO();
             request.setRequestId("WMS-SHIPMENT-" + tenantId + "-" + id + "-1");
             request.setTenantId(tenantId);
@@ -86,17 +111,30 @@ public class WmsShipmentExecutionService {
             if (response == null) throw new IllegalStateException("ERP返回为空");
             response.checkError();
             if (!Boolean.TRUE.equals(response.getData())) throw new IllegalStateException("ERP未确认接收执行结果");
-            delivered = true;
-            order.setNotificationStatus("DELIVERED").setNotificationError("");
-        } catch (Exception failure) {
-            String error = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-            order.setNotificationStatus("FAILED").setNotificationError(error.substring(0, Math.min(error.length(), 1000)))
-                    .setNextNotificationTime(now.plusSeconds(60));
-        }
-        orderMapper.updateById(new WmsShipmentOrderDO().setId(id).setNotificationStatus(order.getNotificationStatus())
-                .setNotificationError(order.getNotificationError()).setNotificationAttempts(order.getNotificationAttempts())
-                .setNextNotificationTime(order.getNextNotificationTime()));
-        return delivered;
+    }
+
+    private void deliverMall(Long tenantId, Long id, WmsShipmentOrderDO order) {
+        var sourceRequest = requestMapper.selectSourceRequest("SALE_SHIPMENT_CREATE", order.getNo());
+        if (sourceRequest == null) throw new IllegalStateException("商城出库申请号不存在");
+        TradeWmsExecutionCallbackReqDTO request = new TradeWmsExecutionCallbackReqDTO()
+                .setRequestId(sourceRequest.getRequestId()).setTenantId(tenantId)
+                .setEventVersion(sourceRequest.getProcessedEventVersion())
+                .setOccurredAt(order.getExecutionTime() == null ? order.getOrderTime() : order.getExecutionTime())
+                .setBusinessChainNo(order.getBusinessChainNo()).setSourceOrderNo(order.getBizOrderNo())
+                .setWmsOrderNo(order.getNo()).setOrderType("SALE_SHIPMENT").setExecutionStatus("COMPLETED")
+                .setItems(detailMapper.selectListByOrderId(id).stream().map(line -> {
+                    if (line.getSourceSnapshotJson() == null) throw new IllegalStateException("出库明细缺少商城来源快照");
+                    var item = JsonUtils.parseObject(line.getSourceSnapshotJson(),
+                            cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO.class);
+                    if (item == null) throw new IllegalStateException("商城来源快照无效");
+                    return new TradeWmsExecutionCallbackItemDTO().setLineNo(item.getLineNo())
+                            .setSourceLineNo(line.getSourceLineNo()).setMaterialCode(item.getMaterialCode())
+                            .setSkuCode(item.getSkuCode()).setActualQuantity(line.getQuantity());
+                }).toList());
+        var response = mall.callbackExecutionResult(request);
+        if (response == null) throw new IllegalStateException("商城返回为空");
+        response.checkError();
+        if (!Boolean.TRUE.equals(response.getData())) throw new IllegalStateException("商城未确认接收执行结果");
     }
 
     public static String executionStatus(WmsShipmentOrderDO order) {
@@ -112,7 +150,7 @@ public class WmsShipmentExecutionService {
     public static String notificationStatus(WmsShipmentOrderDO order) {
         if (Boolean.TRUE.equals(order.getSimulation())) return "SIMULATED";
         if ("MES".equals(order.getSourceModule())) return "POLLING_ONLY";
-        if (!"ERP".equals(order.getSourceModule())) return "NOT_REQUIRED";
+        if (!"ERP".equals(order.getSourceModule()) && !"MALL".equals(order.getSourceModule())) return "NOT_REQUIRED";
         if (!Integer.valueOf(1).equals(order.getExecutionStatus())) return "WAITING_EXECUTION";
         return order.getNotificationStatus() == null || order.getNotificationStatus().isBlank() ? "PENDING" : order.getNotificationStatus();
     }

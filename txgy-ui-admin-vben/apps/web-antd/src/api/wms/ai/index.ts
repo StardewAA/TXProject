@@ -106,11 +106,12 @@ export namespace WmsAiApi {
   }
 }
 
-/** 语音/文字 + 图片识别 */
+/** 语音/文字 + 图片识别（LLM 解析较慢，超时放宽至 280s） */
 export function recognize(data: WmsAiApi.RecognizeReqVO) {
   return requestClient.post<WmsAiApi.RecognizeRespVO>(
     '/wms/ai/recognize',
     data,
+    { timeout: 280_000 },
   );
 }
 
@@ -119,6 +120,7 @@ export function recognizeFile(data: WmsAiApi.RecognizeReqVO) {
   return requestClient.post<WmsAiApi.RecognizeRespVO>(
     '/wms/ai/recognize-file',
     data,
+    { timeout: 280_000 },
   );
 }
 
@@ -127,5 +129,6 @@ export function createOrder(data: WmsAiApi.CreateOrderReqVO) {
   return requestClient.post<WmsAiApi.CreateOrderRespVO>(
     '/wms/ai/create-order',
     data,
+    { timeout: 280_000 },
   );
 }
