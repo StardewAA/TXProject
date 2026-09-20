@@ -45,6 +45,7 @@ public interface WmsInventoryHistoryMapper extends BaseMapperX<WmsInventoryHisto
                 .eqIfPresent(WmsInventoryHistoryDO::getWarehouseId, reqVO.getWarehouseId())
                 .eqIfPresent(WmsInventoryHistoryDO::getOrderNo, reqVO.getOrderNo())
                 .eqIfPresent(WmsInventoryHistoryDO::getOrderType, reqVO.getOrderType())
+                .eqIfPresent(WmsInventoryHistoryDO::getCreator, reqVO.getCreator())
                 .betweenIfPresent(WmsInventoryHistoryDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(WmsInventoryHistoryDO::getCreateTime)
                 .orderByDesc(WmsInventoryHistoryDO::getId);

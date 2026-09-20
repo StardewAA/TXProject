@@ -2,13 +2,18 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { WmsInventoryHistoryApi } from '#/api/wms/inventory/history';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getInventoryHistoryPage } from '#/api/wms/inventory/history';
+import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import {
+  exportInventoryHistory,
+  getInventoryHistoryPage,
+} from '#/api/wms/inventory/history';
 import { formatPrice, formatQuantity } from '#/views/wms/utils/format';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import Detail from './modules/detail.vue';
 
 defineOptions({ name: 'WmsInventoryHistory' });
 
@@ -16,7 +21,21 @@ function hasValue(value: unknown) {
   return value !== undefined && value !== null;
 }
 
-const [Grid] = useVbenVxeGrid({
+const [DetailModal, detailModalApi] = useVbenModal({
+  connectedComponent: Detail,
+  destroyOnClose: true,
+});
+
+function handleDetail(row: WmsInventoryHistoryApi.InventoryHistory) {
+  detailModalApi.setData(row).open();
+}
+
+async function handleExport() {
+  const data = await exportInventoryHistory(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({ fileName: '库存流水.xls', source: data });
+}
+
+const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
   },
@@ -57,7 +76,21 @@ const [Grid] = useVbenVxeGrid({
       />
     </template>
 
+    <DetailModal />
     <Grid table-title="库存流水">
+      <template #toolbar-tools>
+        <TableAction
+          :actions="[
+            {
+              label: '导出',
+              type: 'primary',
+              icon: ACTION_ICON.DOWNLOAD,
+              auth: ['wms:inventory-history:export'],
+              onClick: handleExport,
+            },
+          ]"
+        />
+      </template>
       <template #itemInfo="{ row }">
         <div class="flex flex-col gap-1 py-1 leading-5">
           <div class="text-sm">{{ row.itemName || '-' }}</div>
@@ -98,6 +131,9 @@ const [Grid] = useVbenVxeGrid({
             <span>{{ formatPrice(row.totalPrice) }}</span>
           </div>
         </div>
+      </template>
+      <template #actions="{ row }">
+        <a class="text-primary" @click="handleDetail(row)">查看详情</a>
       </template>
     </Grid>
   </Page>
