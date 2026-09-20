@@ -41,6 +41,9 @@ public class WmsInventoryHistoryPageReqVO extends PageParam {
     @Schema(description = "单据类型", example = "1")
     private Integer orderType;
 
+    @Schema(description = "操作人", example = "1")
+    private String creator;
+
     @Schema(description = "操作时间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime[] createTime;
