@@ -9,6 +9,8 @@ export namespace AuthApi {
     tenantId?: number | string;
     /** 登录入口类型，后端可据此区分企业/个人账号 */
     loginType?: 'enterprise' | 'personal';
+    /** 内部字段：true 时登录失败不弹全局错误提示（个人登录租户回退重试用），不会发送给后端 */
+    silentError?: boolean;
     password?: string;
     username?: string;
     captchaVerification?: string;
@@ -72,9 +74,11 @@ export namespace AuthApi {
 
 /** 登录 */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/system/auth/login', data, {
+  const { silentError, ...payload } = data;
+  return requestClient.post<AuthApi.LoginResult>('/system/auth/login', payload, {
     headers: {
       isEncrypt: false,
+      ...(silentError ? { 'x-skip-error-toast': 'true' } : {}),
     },
   });
 }
