@@ -29,4 +29,26 @@ public enum CrmAfterSaleWarrantyStatusEnum implements ArrayValuable<Integer> {
         return ARRAYS;
     }
 
+    /**
+     * 按状态值获得状态名称
+     *
+     * @param status 状态值
+     * @return 状态名称；未知状态返回 null
+     */
+    public static String getNameByStatus(Integer status) {
+        for (CrmAfterSaleWarrantyStatusEnum item : values()) {
+            if (item.status.equals(status)) {
+                return item.name;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 是否已到期终止
+     */
+    public static boolean isExpired(Integer status) {
+        return EXPIRED.status.equals(status);
+    }
+
 }

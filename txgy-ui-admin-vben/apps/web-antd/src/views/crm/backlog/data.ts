@@ -55,7 +55,10 @@ export const CONTRACT_EXPIRY_TYPE = [
 export const BACKLOG_SOURCE = {
   /** 售后质保：质保即将到期（质保状态=质保中，且质保到期日 ≤ 今天 + 提前提醒天数） */
   WARRANTY: 'warrantyExpiry',
-  /** 回访任务：回访任务临期（任务状态=待处理，且计划回访日 ≤ 今天 + 临期提醒提前天数） */
+  /**
+   * 回访任务：任务提醒（含临期与已逾期）
+   * 任务状态 ∈ {待处理, 已逾期}；其中待处理要求 计划回访日 ≤ 今天 + 临期提醒提前天数，已逾期无条件纳入
+   */
   VISIT: 'visitTaskRemind',
   /** 售后工单：工单超时预警（工单未闭环，且创建日期距今 ≥ 超时预警天数） */
   WORK_ORDER: 'ticketOverdue',
@@ -122,7 +125,7 @@ export const useLeftSides = (
       count: warrantyExpiryCount,
     },
     {
-      name: '回访任务临期',
+      name: '任务提醒',
       menu: BACKLOG_SOURCE.VISIT,
       count: visitTaskRemindCount,
     },

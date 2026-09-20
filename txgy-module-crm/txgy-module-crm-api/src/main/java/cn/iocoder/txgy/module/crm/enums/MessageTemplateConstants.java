@@ -13,6 +13,7 @@ public interface MessageTemplateConstants {
 
     String AFTER_SALE_VISIT_TASK_REMIND = "crm_after_sale_visit_task_remind"; // 回访任务临期/到期提醒
     String AFTER_SALE_WARRANTY_EXPIRE_REMIND = "crm_after_sale_warranty_expire_remind"; // 质保即将到期提醒
+    String AFTER_SALE_WARRANTY_EXPIRED = "crm_after_sale_warranty_expired"; // 质保已到期通知
     String AFTER_SALE_TICKET_ASSIGN = "crm_after_sale_ticket_assign"; // 问题工单指派通知
 
 }

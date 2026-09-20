@@ -48,15 +48,18 @@ export namespace CrmAfterSaleVisitTaskApi {
   /** 分页查询参数 */
   export interface PageReq extends PageParam, Partial<VisitTask> {
     taskDate?: string[];
-    /** 提醒类型：1=临期（待办「回访任务临期」，实时查询且限本人及下属负责） */
+    /** 提醒类型：1=任务提醒（待办「任务提醒」，含临期与已逾期，实时查询且限本人及下属负责） */
     remindType?: number;
   }
 }
 
-/** 提醒类型：1=临期（待办「回访任务临期」使用，与后端 REMIND_TYPE_APPROACHING 保持一致） */
+/** 提醒类型：1=任务提醒（待办「任务提醒」使用，与后端 REMIND_TYPE_APPROACHING 保持一致） */
 export const AFTER_SALE_VISIT_TASK_REMIND_TYPE_APPROACHING = 1;
 
-/** 获得「回访任务临期」待办数量（实时查询，不落库） */
+/** 回访任务状态：3=已逾期（与后端 CrmAfterSaleVisitTaskStatusEnum.OVERDUE 保持一致） */
+export const AFTER_SALE_VISIT_TASK_STATUS_OVERDUE = 3;
+
+/** 获得「任务提醒」待办数量（实时查询，不落库；含临期与已逾期） */
 export function getAfterSaleVisitTaskRemindCount() {
   return requestClient.get<number>('/crm/after-sale/visit-task/remind-count');
 }

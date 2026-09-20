@@ -68,8 +68,9 @@ public interface CrmAfterSaleVisitTaskService {
     /**
      * 获得回访任务分页
      *
-     * <p>当 pageReqVO.remindType = 临期（1）时，按「待办：回访任务临期」口径实时查询：
-     * 任务状态 = 待处理 + 处理人在（本人 + 下属）范围内 + 计划回访日在提前提醒天数内
+     * <p>当 pageReqVO.remindType = 待办提醒（1）时，按「待办：任务提醒」口径实时查询：
+     * 任务状态 ∈ {待处理, 已逾期} + 处理人在（本人 + 下属）范围内 +
+     * （待处理任务）计划回访日在提前提醒天数内；已逾期任务无条件纳入
      *
      * @param pageReqVO 分页查询
      * @param userId    当前登录用户编号（待办归属过滤使用）
@@ -78,7 +79,7 @@ public interface CrmAfterSaleVisitTaskService {
     PageResult<CrmAfterSaleVisitTaskDO> getVisitTaskPage(CrmAfterSaleVisitTaskPageReqVO pageReqVO, Long userId);
 
     /**
-     * 获得「回访任务临期」待办数量（实时查询，与分页查询同一口径，不落库）
+     * 获得「任务提醒」待办数量（实时查询，与分页查询同一口径，不落库；含临期与已逾期）
      *
      * @param userId 当前登录用户编号
      * @return 待办数量

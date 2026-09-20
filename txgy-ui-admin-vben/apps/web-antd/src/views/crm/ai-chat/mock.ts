@@ -6,8 +6,27 @@
  * 若千问不可用，则回退到本地关键词识别，但仍调用真实接口。
  */
 
-import { getCustomerPage } from '#/api/crm/customer';
+import {
+  getCustomerPage,
+  getPutPoolRemindCustomerPage,
+} from '#/api/crm/customer';
 import { getCustomerPoolConfig } from '#/api/crm/customer/poolConfig';
+// 查询条件解析（纯逻辑，可单测）：'./queryConditions.selftest.ts' 覆盖这些函数
+import {
+  dedupeById,
+  followConditionLabel,
+  isAuditStatusAsk,
+  isCurrentMonth,
+  isRuleQuestion,
+  isToday,
+  isUnsupportedTimeAsk,
+  onlyAlive,
+  pickAuditStatuses,
+  pickFollowUpStatus,
+  pickScopeSceneType,
+  pickTransformStatus,
+  transformConditionLabel,
+} from './queryConditions';
 import { getCluePage } from '#/api/crm/clue';
 import { getBusinessPage } from '#/api/crm/business';
 import { getContactPage } from '#/api/crm/contact';
@@ -98,20 +117,7 @@ function nowMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function isCurrentMonth(v: any): boolean {
-  if (!v) return false;
-  // 兼容毫秒时间戳：后端 LocalDateTime 以时间戳序列化（如 1789454512000），
-  // 直接 startsWith('2026-09') 永远匹配不上，会导致「本月」查询返回空
-  const n = Number(v);
-  if (Number.isFinite(n) && String(v).trim().length >= 12) {
-    const d = new Date(n);
-    if (!Number.isNaN(d.getTime())) {
-      const now = new Date();
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    }
-  }
-  return String(v).startsWith(nowMonth());
-}
+// isCurrentMonth（本月）与 isToday（今天）已移至 ./queryConditions.ts，便于回归自测
 
 function fmtMoney(n: number | null | undefined): string {
   if (n === null || n === undefined) return '-';
@@ -327,27 +333,13 @@ function filterByName<T>(
  * 越权访问仍由后端数据权限强制拦截，这里只负责把业务口径翻译成查询条件。
  */
 function resolveScope(q: string, _sceneType?: number): number | undefined {
-  const isSubordinate =
-    /下属|下级|手下|团队成员|下属负责/.test(q);
-  const isTeam = /团队|我们组|我们部门|本组/.test(q);
-  // ②「我的」：排除同时提到下属/团队的情况（如「我的下属」应走下属口径）
-  if (/我的|我负责|我名下|本人|自己/.test(q) && !isSubordinate && !isTeam) {
-    return 1;
-  }
-  // ④「我的下属 / 团队成员」→ 仅下属
-  if (isSubordinate) {
-    return 3;
-  }
-  // ①③「所有 / 全部 / 未指定」→ 我负责的 + 下属负责的（不限定归属）
-  return undefined;
+  // 归属口径判定已移至 ./queryConditions.ts（pickScopeSceneType，可单测）；
+  // 这里保留同名薄封装，避免大量调用点改动；第二个参数（模型给的 sceneType）故意忽略。
+  return pickScopeSceneType(q);
 }
 
-/** 归属范围的中文表述，用于回复与表格，保证文案与数据一致 */
-function scopeLabelOf(sceneType?: number): string {
-  if (sceneType === 1) return '我负责的';
-  if (sceneType === 3) return '下属负责的';
-  return '我负责的+下属负责的';
-}
+// 说明：不再提供「我负责的 / 下属负责的」口径文案 ——
+// 按输出规范，回答只给查询结果与筛选条件，不描述数据归属口径。
 
 async function replyCustomers(
   q: string,
@@ -364,18 +356,75 @@ async function replyCustomers(
   const typeLabel =
     typeFilter === 1 ? '下游客户' : typeFilter === 2 ? '上游供应商' : '';
 
-  // 跟进口径：「需要跟进 / 待跟进的客户」= 跟进状态为待跟进（followUpStatus=false）
-  const needFollow =
-    /待跟进|需要跟进|需跟进|要跟进|需要被跟进|未跟进|没跟进|没有跟进/.test(q);
+  // 跟进口径：「待跟进」→ false、「已跟进」→ true、两种都提到/没提到 → 不筛选
+  //   解析逻辑见 ./queryConditions.ts（pickFollowUpStatus，可单测）
+  const followStatus = pickFollowUpStatus(q);
+  const needFollow = followStatus === false;
+  const alreadyFollow = followStatus === true;
+
+  // 「长时间没跟进 / 很久没联系」= 满足公海回收条件（即将进入公海）的客户
+  //   ⚠️ 这是有明确条件的查询，绝不能因为「没识别出条件」就返回全部客户
+  const longNoFollow =
+    /(长时间|长期|很久|好久|久未|一直|始终).{0,3}(没|没有|未|不)?(跟进|联系)/.test(
+      q,
+    ) ||
+    /即将进(入)?公海|快(要)?进公海|将要回收|快被回收|要被回收|满足回收条件/.test(
+      q,
+    );
+  if (longNoFollow) {
+    const res = await getPutPoolRemindCustomerPage({
+      pageNo: 1,
+      pageSize: 100,
+    } as any);
+    let list: any[] = dedupeById(onlyAlive(res.list || []));
+    if (name) list = filterByName(list, name, [(c: any) => c.name]);
+    return {
+      text:
+        list.length === 0
+          ? '系统未查询到该数据：当前没有长时间未跟进、即将进入公海的客户。'
+          : '',
+      table: {
+        title: '即将进入公海客户',
+        source: 'CRM 客户公海提醒 · 实查数据',
+        bizType: 'customer',
+        columns: [
+          { title: '客户名称', dataIndex: 'name', key: 'name' },
+          { title: '手机', dataIndex: 'mobile', key: 'mobile' },
+          { title: '负责人', dataIndex: 'owner', key: 'owner' },
+          { title: '上次跟进', dataIndex: 'lastTime', key: 'lastTime' },
+          { title: '距回收天数', dataIndex: 'poolDay', key: 'poolDay' },
+        ],
+        rows: list.map((r: any) => ({
+          id: r.id,
+          name: r.name || '-',
+          mobile: r.mobile || '-',
+          owner: r.ownerUserName || '-',
+          lastTime: fmtDate(r.contactLastTime ?? r.ownerTime),
+          poolDay:
+            r.poolDay === null || r.poolDay === undefined
+              ? '-'
+              : `${r.poolDay} 天`,
+        })),
+      },
+    };
+  }
+
+  // 「今天 / 今日 + 跟进（联系）」本质是待办口径（今日需联系 + 待跟进），
+  // 统一交给待办处理器：软删除过滤、按客户去重，且绝不会丢掉「今天」这个条件
+  if (/今天|今日|当天|本日/.test(q) && /跟进|联系/.test(q)) {
+    return await replyTodos(q, sceneType);
+  }
+
   // 归属范围：所有/未指定 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
   const effectiveSceneType = resolveScope(q, sceneType);
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
   if (effectiveSceneType) params.sceneType = effectiveSceneType;
-  if (needFollow) params.followUpStatus = false;
+  // 跟进状态：true=已跟进 / false=待跟进；undefined=该维度不筛选
+  if (followStatus !== undefined) params.followUpStatus = followStatus;
   const res = await getCustomerPage(params);
   // 已逻辑删除的客户一律不展示
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
 
   // 按客户类别过滤：新数据直接用 customerType 字段；
   // 字段整体缺失时，回退到「下游客户行业 id 101-110」的旧字典约定
@@ -399,16 +448,18 @@ async function replyCustomers(
   // 按客户 ID 去重：同一客户只展示一次
   rows = dedupeById(rows);
   // 双保险：字段存在时再按同一规则兜一遍，杜绝条件未生效时返回全量
-  if (needFollow && rows.some((c: any) => typeof c.followUpStatus === 'boolean')) {
-    rows = rows.filter((c: any) => c.followUpStatus === false);
+  if (
+    followStatus !== undefined &&
+    rows.some((c: any) => typeof c.followUpStatus === 'boolean')
+  ) {
+    rows = rows.filter((c: any) => c.followUpStatus === followStatus);
   }
 
-  const scopeLabel = scopeLabelOf(effectiveSceneType);
-  // 有结果只出表格，不再输出「为您查询到 N 个…」这类描述；查不到才如实说明
+  // 有结果只出表格，不输出「为您查询到 N 个…」「这是你/下属负责的数据」这类描述；查不到才如实说明
   let text = '';
   if (rows.length === 0) {
     text = needFollow
-      ? `系统未查询到该数据：${scopeLabel}暂无待跟进的客户（可指定「我负责的」或「下属负责的」调整范围）。`
+      ? '系统未查询到该数据：没有待跟进的客户。'
       : typeLabel
         ? `系统未查询到该数据：没有${typeLabel}记录。`
         : name
@@ -433,6 +484,7 @@ async function replyCustomers(
         { title: '客户级别', dataIndex: 'level', key: 'level' },
         { title: '所属行业', dataIndex: 'industry', key: 'industry' },
         { title: '负责人', dataIndex: 'owner', key: 'owner' },
+        { title: '跟进状态', dataIndex: 'follow', key: 'follow' },
         { title: '成交状态', dataIndex: 'deal', key: 'deal' },
       ],
       rows: rows.map((r) => ({
@@ -448,29 +500,59 @@ async function replyCustomers(
         level: labelOf(maps, DICT_TYPES.LEVEL, r.level),
         industry: labelOf(maps, DICT_TYPES.INDUSTRY, r.industryId),
         owner: r.ownerUserName || r.ownerUserDeptName || '-',
+        follow:
+          typeof r.followUpStatus === 'boolean'
+            ? r.followUpStatus
+              ? '已跟进'
+              : '待跟进'
+            : '-',
         deal: r.dealStatus ? '已成交' : '未成交',
       })),
     },
   };
 }
 
-async function replyPool(): Promise<AiReply> {
+async function replyPool(q = ''): Promise<AiReply> {
   const maps = await loadDictMaps();
   const res = await getCustomerPage({ pageNo: 1, pageSize: 100, pool: true });
   // 已删除客户不展示 + 按客户 ID 去重
-  const rows: any[] = dedupeById(onlyAlive(res.list || []));
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
+
+  // 「今日流入客户公海的客户」= 今天才被回收进公海的客户
+  //   ⚠️ 绝不等于公海里的全部客户；只保留「流入时间 = 今天」的记录。
+  //   公海没有独立的「流入时间」字段，回收动作会刷新客户最近变动时间，
+  //   因此以最近变动时间（updateTime，缺省回退 ownerTime）判定当天流入。
+  const todayOnly = /今日|今天|本日|当天|当日/.test(q);
+  if (todayOnly) {
+    rows = rows.filter((r: any) => isToday(r.updateTime ?? r.ownerTime));
+  }
+  const wantCount = /多少|数量|几个|几家|统计|个数/.test(q);
+  const todayLabel = fmtDate(Date.now());
+
+  let text = '';
+  if (rows.length === 0) {
+    text = todayOnly
+      ? `系统未查询到该数据：今日（${todayLabel}）没有客户流入公海。`
+      : '系统未查询到该数据：客户公海没有待领取的客户。';
+  } else if (todayOnly && wantCount) {
+    text = `今日（${todayLabel}）流入客户公海共 ${rows.length} 个客户：`;
+  }
+
   return {
-    // 有结果只出表格；查不到才说明
-    text:
-      rows.length === 0 ? '系统未查询到该数据：客户公海没有待领取的客户。' : '',
+    text,
     table: {
-      title: '客户公海',
-      source: 'CRM 客户公海 · 实查数据',
+      title: todayOnly ? `客户公海 · 今日流入（${todayLabel}）` : '客户公海',
+      source: todayOnly
+        ? 'CRM 客户公海 · 实查数据 · 流入日期=今日'
+        : 'CRM 客户公海 · 实查数据',
       bizType: 'customer',
       columns: [
         { title: '客户名称', dataIndex: 'name', key: 'name' },
         { title: '手机', dataIndex: 'mobile', key: 'mobile' },
         { title: '所属行业', dataIndex: 'industry', key: 'industry' },
+        ...(todayOnly
+          ? [{ title: '流入日期', dataIndex: 'poolDate', key: 'poolDate' }]
+          : []),
         { title: '负责人', dataIndex: 'owner', key: 'owner' },
       ],
       rows: rows.map((r) => ({
@@ -478,6 +560,7 @@ async function replyPool(): Promise<AiReply> {
         name: r.name || '-',
         mobile: r.mobile || '-',
         industry: labelOf(maps, DICT_TYPES.INDUSTRY, r.industryId),
+        poolDate: fmtDate(r.updateTime ?? r.ownerTime),
         owner: '—',
       })),
     },
@@ -493,10 +576,14 @@ async function replyClues(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   // 业务规则：「需要被跟进的线索」= 跟进状态为待跟进（未跟进）+ 转化状态为未转化
-  const needFollow =
-    /待跟进|需要跟进|需跟进|要跟进|需要被跟进|未跟进|没跟进|没有跟进/.test(q);
-  const noTransform =
-    /未转化|没转化|没有转化|尚未转化|未成交|没成交/.test(q);
+  //   true=已跟进(已转化)、false=待跟进(未转化)、undefined=该维度不筛选
+  //   解析逻辑见 ./queryConditions.ts（可单测）
+  const followStatus = pickFollowUpStatus(q);
+  const transformStatus = pickTransformStatus(q);
+  const needFollow = followStatus === false;
+  const alreadyFollow = followStatus === true;
+  const noTransform = transformStatus === false;
+  const hasTransform = transformStatus === true;
   // 归属范围：所有/未指定 = 我负责的+下属负责的；我的 = 仅本人；下属 = 仅下属
   const effectiveSceneType = resolveScope(q, sceneType);
 
@@ -504,44 +591,47 @@ async function replyClues(
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
   if (effectiveSceneType) params.sceneType = effectiveSceneType;
-  if (needFollow) params.followUpStatus = false; // false = 待跟进（未跟进）
-  if (noTransform) params.transformStatus = false; // false = 未转化
+  if (followStatus !== undefined) params.followUpStatus = followStatus;
+  if (transformStatus !== undefined) params.transformStatus = transformStatus;
   const res = await getCluePage(params);
   // 已逻辑删除的线索一律不展示
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.name,
     (r: any) => r.customerName,
   ]);
   // 双保险：字段存在时再按同一规则兜一遍，杜绝「条件没生效就把全量返回」的情况
-  if (needFollow && rows.some((r: any) => typeof r.followUpStatus === 'boolean')) {
-    rows = rows.filter((r: any) => r.followUpStatus === false);
+  if (
+    followStatus !== undefined &&
+    rows.some((r: any) => typeof r.followUpStatus === 'boolean')
+  ) {
+    rows = rows.filter((r: any) => r.followUpStatus === followStatus);
   }
   if (
-    noTransform &&
+    transformStatus !== undefined &&
     rows.some((r: any) => typeof r.transformStatus === 'boolean')
   ) {
-    rows = rows.filter((r: any) => r.transformStatus === false);
+    rows = rows.filter((r: any) => r.transformStatus === transformStatus);
   }
   // 按线索 ID 去重：同一条线索只展示一次
   rows = dedupeById(rows);
 
   const byRule = needFollow && noTransform;
-  const scopeLabel = scopeLabelOf(effectiveSceneType);
-  const condLabel = [needFollow ? '待跟进' : '', noTransform ? '未转化' : '']
+  // 条件文案：正向口径优先（已跟进 / 已转化），其次是反向口径（待跟进 / 未转化）
+  const condLabel = [followConditionLabel(q), transformConditionLabel(q)]
     .filter(Boolean)
     .join('、');
   // 有结果只出表格（同名不同编号的线索已在明细里按「线索编号」区分）；
-  // 查不到才如实说明，并保留口径与条件，避免用户误以为系统里没有数据
+  // 查不到才如实说明并保留筛选条件，不描述数据归属口径
   let text = '';
   if (rows.length === 0) {
     text = byRule
-      ? `系统未查询到该数据：${scopeLabel}暂无待跟进未转化线索。`
+      ? '系统未查询到该数据：没有待跟进且未转化的线索。'
       : condLabel
-        ? `系统未查询到该数据：${scopeLabel}没有${condLabel}的线索（可指定「我负责的」或「下属负责的」调整范围）。`
+        ? `系统未查询到该数据：没有${condLabel}的线索。`
         : name
           ? `系统未查询到该数据：没有找到与「${name}」相关的线索。`
-          : `系统未查询到该数据：${scopeLabel}暂无线索记录。`;
+          : '系统未查询到该数据：暂无线索记录。';
   }
 
   return {
@@ -596,7 +686,7 @@ async function replyBusinesses(
   const scope = resolveScope(q, sceneType);
   if (scope) params.sceneType = scope;
   const res = await getBusinessPage(params);
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   if (month) {
     rows = rows.filter((b) => isCurrentMonth(b.dealTime || b.createTime));
   }
@@ -662,7 +752,10 @@ async function replyTodos(
   const ask = `${q} ${timeRange ?? ''}`;
   const wantToday = /今天|今日|当天|本日/.test(ask);
   const wantOverdue = /逾期|超期|过期/.test(ask);
-  const wantFollow = /待跟进|需要跟进|需跟进|要跟进/.test(ask);
+  const wantFollow =
+    /待跟进|需要跟进|需跟进|要跟进|等着跟进|等跟进|还没跟进|没人跟进|需要联系/.test(
+      ask,
+    );
   const scoped = wantToday || wantOverdue || wantFollow;
   const needToday = !scoped || wantToday;
   const needOverdue = !scoped || wantOverdue;
@@ -861,6 +954,18 @@ async function replyContracts(
   const maps = await loadDictMaps();
   const month = /本月|这个月|当月/.test(q);
   const name = pickName(hintName, q);
+  // 审批状态条件：如「审核通过的合同」只返回审核通过(20)，绝不混入未提交 / 审批中
+  const auditStatuses = pickAuditStatuses(q);
+  // 明显在问审批状态、但没解析出具体状态时：反问一句，
+  // 绝不静默把「带条件的查询」当成「查全部」返回
+  if (auditStatuses.length === 0 && isAuditStatusAsk(q)) {
+    return {
+      text:
+        '请问要查询哪种审批状态的合同？\n' +
+        '可选：未提交、审批中（待审核）、审核通过、审核不通过、已取消。\n' +
+        '例如「查询审批中的合同」「查询审核通过的合同」。',
+    };
+  }
   // 有名称时交给后端过滤，避免只在前 100 条里找
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
@@ -869,7 +974,7 @@ async function replyContracts(
   if (scope) params.sceneType = scope;
   const res = await getContractPage(params);
   // 已逻辑删除的合同一律不展示
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   if (month) {
     rows = rows.filter((c) => isCurrentMonth(c.createTime || c.startTime));
   }
@@ -880,17 +985,36 @@ async function replyContracts(
   ]);
   // 按合同 ID 去重：同一份合同只展示一次
   rows = dedupeById(rows);
+  // 按审批状态过滤（空值视为 0 未提交，与后端枚举一致）
+  if (auditStatuses.length > 0) {
+    rows = rows.filter((c: any) =>
+      auditStatuses.includes(Number(c.auditStatus ?? 0)),
+    );
+  }
+  const statusText = auditStatusText(maps, auditStatuses);
   return {
     // 有结果只出表格；查不到才说明（本月无数据时点明月份）
     text:
       rows.length === 0
         ? month
-          ? `系统未查询到该数据：本月（${nowMonth()}）没有合同记录。`
-          : noDataText(name)
+          ? `系统未查询到该数据：本月（${nowMonth()}）没有${
+              statusText ? `「${statusText}」的` : ''
+            }合同记录。`
+          : statusText
+            ? `系统未查询到该数据：没有「${statusText}」的合同${
+                name ? `（筛选条件：${name}）` : ''
+              }。`
+            : noDataText(name)
         : '',
     table: {
-      title: name ? `合同：${name}` : '合同列表',
-      source: 'CRM 合同管理 · 实查数据',
+      title: name
+        ? `合同：${name}${statusText ? `（${statusText}）` : ''}`
+        : statusText
+          ? `合同列表（${statusText}）`
+          : '合同列表',
+      source: `CRM 合同管理 · 实查数据${
+        statusText ? ` · 审批状态=${statusText}` : ''
+      }`,
       bizType: 'contract',
       columns: [
         { title: '合同编号', dataIndex: 'no', key: 'no' },
@@ -927,7 +1051,7 @@ async function replyReceivables(
   const scope = resolveScope(q, sceneType);
   if (scope) params.sceneType = scope;
   const res = await getReceivablePage(params);
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   if (month) {
     rows = rows.filter((r) => isCurrentMonth(r.returnTime));
   }
@@ -982,7 +1106,7 @@ async function replyReceivablePlans(
   const scope = resolveScope(q, sceneType);
   if (scope) params.sceneType = scope;
   const res = await getReceivablePlanPage(params);
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   if (month) {
     rows = rows.filter((r) => isCurrentMonth(r.returnTime));
   }
@@ -1020,7 +1144,7 @@ async function replyReceivablePlans(
 async function replyProducts(): Promise<AiReply> {
   const maps = await loadDictMaps();
   const res = await getProductPage({ pageNo: 1, pageSize: 100 });
-  const rows: any[] = onlyAlive(res.list || []);
+  const rows: any[] = dedupeById(onlyAlive(res.list || []));
   return {
     // 有结果只出表格；查不到才说明
     text: rows.length === 0 ? '系统未查询到该数据。' : '',
@@ -1056,85 +1180,17 @@ function noDataText(name?: string | null): string {
     : '系统未查询到该数据。';
 }
 
-/* ------------------- 结果清洗：逻辑删除防御 + 按业务 ID 去重 ------------------- */
+/* 逻辑删除过滤 onlyAlive() 与按业务 ID 去重 dedupeById() 已移至 ./queryConditions.ts（可单测） */
 
-/**
- * 判断一条记录是否已被逻辑删除
- *
- * 业务口径：只有「未打软删除标记」的记录才算系统当前有效存在的数据；
- * 软删除记录一律视为不存在，不参与检索、不返回结果。
- *
- * 两道防线：
- *   1) 后端：各分页/详情接口由 MyBatis-Plus 逻辑删除自动过滤 deleted=0（主防线）；
- *   2) 前端：本函数 + onlyAlive() 兜底 —— 若响应里带出任何删除标记
- *      （deleted / isDeleted / delFlag，值为 1/'1'/true/'true'/字节数组等），
- *      直接在 AI 层剔除，任何查询场景都不展示。
- */
-function isDeletedRow(r: any): boolean {
-  if (!r || typeof r !== 'object') {
-    return false;
-  }
-  const d = r.deleted ?? r.isDeleted ?? r.delFlag;
-  if (d === null || d === undefined || d === '' || d === false) {
-    return false;
-  }
-  if (d === 0 || d === '0') {
-    return false;
-  }
-  if (d === 1 || d === '1' || d === true || d === 'true') {
-    return true;
-  }
-  // 兼容 Buffer / {type:'Buffer', data:[1]} 这类序列化形式
-  if (typeof d === 'object') {
-    const bytes = Array.isArray((d as any).data)
-      ? (d as any).data
-      : Array.isArray(d)
-        ? d
-        : null;
-    if (bytes && bytes.length > 0) {
-      return Number(bytes[0]) !== 0;
-    }
-    return false;
-  }
-  // 其它形式：先按明确的「未删除」写法排除，再按数字/布尔语义兜底
-  const s = String(d).trim().toLowerCase();
-  if (['false', 'n', 'no'].includes(s)) {
-    return false;
-  }
-  if (['y', 'yes'].includes(s)) {
-    return true;
-  }
-  const n = Number(s);
-  return Number.isFinite(n) ? n !== 0 : false;
-}
+/* 审批状态解析（normalizeAuditWords / pickAuditStatuses / isAuditStatusAsk）
+   与「暂未支持的时间口径」判断（isUnsupportedTimeAsk）已移至 ./queryConditions.ts（可单测） */
 
-/** 剔除已逻辑删除的记录（软删除数据一律不展示） */
-function onlyAlive<T>(rows: T[]): T[] {
-  return (rows || []).filter((r) => !isDeletedRow(r));
-}
-
-/**
- * 按业务唯一 ID 去重：同一实体只保留一条
- * 没有 ID 的行无法判定唯一性，原样保留（不误删）
- */
-function dedupeById<T extends Record<string, any>>(
-  rows: T[],
-  idOf: (r: T) => any = (r: any) => r?.id,
-): T[] {
-  const seen = new Set<string>();
-  const out: T[] = [];
-  for (const r of rows || []) {
-    const raw = idOf(r);
-    if (raw === null || raw === undefined || raw === '') {
-      out.push(r);
-      continue;
-    }
-    const key = String(raw);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-  }
-  return out;
+/** 审批状态的可读文案（取字典标签，用于标题 / 副标题 / 无数据说明） */
+function auditStatusText(maps: any, statuses: number[]): string {
+  return statuses
+    .map((s) => labelOf(maps, DICT_TYPES.AUDIT_STATUS, s))
+    .filter((t) => t && t !== '-')
+    .join(' / ');
 }
 
 /** 今天（本地时区）YYYY-MM-DD，用于回访任务的今日/逾期筛选 */
@@ -1167,22 +1223,54 @@ async function replyQuotations(
 ): Promise<AiReply> {
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
+  // 审批状态条件：如「审核通过的报价单」只返回审核通过(20)
+  const auditStatuses = pickAuditStatuses(q);
+  // 明显在问审批状态、但没解析出具体状态时：反问，绝不静默返回全部报价单
+  if (auditStatuses.length === 0 && isAuditStatusAsk(q)) {
+    return {
+      text:
+        '请问要查询哪种审批状态的报价单？\n' +
+        '可选：未提交、审批中（待审核）、审核通过、审核不通过、已取消。\n' +
+        '例如「查询审批中的报价单」「查询审核通过的报价单」。',
+    };
+  }
   const params: any = { pageNo: 1, pageSize: 100 };
   if (name) params.name = name;
   if (sceneType) params.sceneType = sceneType;
   const res = await getQuotationPage(params);
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.name,
     (r: any) => r.no,
     (r: any) => r.customerName,
   ]);
+  rows = dedupeById(rows);
+  // 按审批状态过滤（空值视为 0 未提交）
+  if (auditStatuses.length > 0) {
+    rows = rows.filter((r: any) =>
+      auditStatuses.includes(Number(r.auditStatus ?? 0)),
+    );
+  }
+  const statusText = auditStatusText(maps, auditStatuses);
   return {
     // 有结果只出表格；查不到才说明
-    text: rows.length === 0 ? noDataText(name) : '',
+    text:
+      rows.length === 0
+        ? statusText
+          ? `系统未查询到该数据：没有「${statusText}」的报价单${
+              name ? `（筛选条件：${name}）` : ''
+            }。`
+          : noDataText(name)
+        : '',
     table: {
-      title: name ? `报价单：${name}` : '报价单列表',
-      source: 'CRM 报价管理 · 实查数据',
+      title: name
+        ? `报价单：${name}${statusText ? `（${statusText}）` : ''}`
+        : statusText
+          ? `报价单列表（${statusText}）`
+          : '报价单列表',
+      source: `CRM 报价管理 · 实查数据${
+        statusText ? ` · 审批状态=${statusText}` : ''
+      }`,
       bizType: 'quotation',
       columns: [
         { title: '报价单号', dataIndex: 'no', key: 'no' },
@@ -1215,7 +1303,7 @@ async function replyAfterSaleTickets(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   const res = await getAfterSaleTicketPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.no,
@@ -1271,7 +1359,7 @@ async function replyVisitPlans(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   const res = await getAfterSaleVisitPlanPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.name,
@@ -1319,7 +1407,7 @@ async function replyVisitTasks(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   const res = await getAfterSaleVisitTaskPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.projectName,
@@ -1387,7 +1475,7 @@ async function replyVisitRecords(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   const res = await getAfterSaleVisitRecordPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.projectName,
@@ -1436,7 +1524,7 @@ async function replyWarranties(
   const maps = await loadDictMaps();
   const name = pickName(hintName, q);
   const res = await getAfterSaleWarrantyPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.projectName,
@@ -1493,41 +1581,7 @@ async function replyWarranties(
 
 /* ---------------------- 业务规则知识库（问“规则”≠查“数据”） ---------------------- */
 
-/** 规则类问法：用户问的是“制度 / 口径 / 怎么算 / 区别”，不是在要数据列表 */
-const RULE_ASK_RE =
-  /规则|制度|机制|流程|政策|口径|标准|条件|怎么算|怎么计算|如何计算|怎么统计|如何统计|多久|多长时间|多少天|几天|判定|定义|含义|是什么意思|是什么|什么是|解释一下|说明一下|怎么回事|怎么样|怎么办|怎么回收|如何回收|怎么流转|如何流转|怎么转化|如何转化|怎么操作|如何操作|区别|不同|差异|能做什么|能干什么|有哪些功能|支持哪些|你会什么/;
-
-/** 强规则信号：即使句子里出现「列出/查看/有哪些」也仍按规则问答处理 */
-const STRONG_RULE_RE =
-  /规则|制度|机制|流程|口径|标准|怎么算|怎么计算|如何计算|多久|多长时间|多少天|什么条件|含义|是什么意思|定义|怎么回收|如何回收|怎么流转|如何流转|怎么转化|如何转化/;
-
-/** 明确的「要数据列表」问法 */
-const DATA_ASK_RE =
-  /^(列出|列一下|列举|列个|查看|查一下|查询|查下|看一下|看看|展示|显示|给我看看|给我看|找一下|帮我找|搜索|筛选)|有哪些/;
-
-/** CRM 业务域词：避免把无关闲聊判成业务规则问答 */
-const CRM_DOMAIN_RE =
-  /公海|回收|认领|客户|线索|联系人|商机|阶段|赢单|输单|合同|回款|逾期|账期|待办|提醒|跟进|下次联系|售后|回访|质保|工单|报价|产品|WMS|库存|CRM|能做什么|能干什么|有哪些功能|支持哪些|你会什么/;
-
-/**
- * 是否属于「业务规则 / 制度咨询」
- *
- * 判定依据：
- *   1. 必须落在 CRM 业务域内，且出现规则类问法；
- *   2. 若同时是明确的「列出 / 查看 / 有哪些」数据请求，且没有强规则信号
- *      （规则、制度、流程、怎么算、多久……），则仍按数据查询处理：
- *      例如「不同类型的客户有哪些」= 查数据；「客户公海回收的规则是什么」= 问规则。
- */
-function isRuleQuestion(q: string): boolean {
-  const s = (q || '').trim();
-  if (!s || !CRM_DOMAIN_RE.test(s) || !RULE_ASK_RE.test(s)) {
-    return false;
-  }
-  if (DATA_ASK_RE.test(s) && !STRONG_RULE_RE.test(s)) {
-    return false;
-  }
-  return true;
-}
+/* 「业务规则问答 vs 查询数据」的判定（isRuleQuestion）已移至 ./queryConditions.ts（可单测） */
 
 /** 公海回收规则的兜底文案（拿不到配置时使用，绝不编造具体天数） */
 const POOL_RULE_FALLBACK =
@@ -1740,7 +1794,7 @@ async function findReminderFollowups(
     bizType: 2, // 2 = 客户，待办提醒挂在客户名下
     bizId: customerId,
   } as any);
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = rows.filter((r: any) => r.nextTime);
   const kw = keyword.trim();
   if (kw) {
@@ -1875,7 +1929,7 @@ async function resolveWarranty(
     return { text: '请告诉我客户名称或质保编号，例如「给固邦建材新建回访计划」。' };
   }
   const res = await getAfterSaleWarrantyPage({ pageNo: 1, pageSize: 100 });
-  let rows: any[] = onlyAlive(res.list || []);
+  let rows: any[] = dedupeById(onlyAlive(res.list || []));
   rows = filterByName(rows, name, [
     (r: any) => r.customerName,
     (r: any) => r.no,
@@ -2589,7 +2643,7 @@ async function getLocalTable(
     case 'customer':
       return await replyCustomers(q, hintName, customerType, sceneType);
     case 'pool':
-      return await replyPool();
+      return await replyPool(q);
     case 'clue':
       return await replyClues(q, hintName, sceneType);
     case 'business':
@@ -2697,6 +2751,15 @@ export async function mockAiReply(
         return await replyRuleAnswer(q);
       }
 
+      // 【暂未支持的时间口径】：明确告知，绝不静默丢掉时间条件后按「全部」返回
+      if (isUnsupportedTimeAsk(q)) {
+        return {
+          text:
+            '暂不支持「上周 / 昨天 / 上月 / 去年 / 上季度」这类历史时间筛选。\n' +
+            '目前支持的时间口径：今天、本月。',
+        };
+      }
+
       // 0. 与 CRM 业务无关的问题（闲聊等）：礼貌说明即可，
       //    不能被模型误设的 needMoreInfo 带着去反问「你要什么代码」
       if (cls.intent === 'unknown') {
@@ -2752,28 +2815,28 @@ export async function mockAiReply(
         }
 
         // 4. 状态类条件（客户状态 / 商机阶段）：分页接口暂不支持，同样取回后再筛。
-        //    若一条都匹配不上，则保留原数据并如实说明，
-        //    避免让用户误以为「系统里没有数据」
+        //    ⚠️ 「待跟进 / 没跟进 / 需要联系」属于跟进口径（由待办、客户处理器负责），
+        //       不能当成「成交状态」去筛 —— 成交状态只有 已成交 / 未成交，那样必然筛不中。
         const statusKw = String(cls.customerStatus ?? '').trim();
         const stageKw = String(cls.businessStage ?? '').trim();
+        const isFollowupKw = /跟进|联系|待办/.test(statusKw);
         const kwField =
-          cls.intent === 'customer' && statusKw
+          cls.intent === 'customer' && statusKw && !isFollowupKw
             ? { field: 'deal', kw: statusKw }
             : cls.intent === 'business' && stageKw
               ? { field: 'stage', kw: stageKw }
               : null;
         if (kwField && local.table?.rows?.length) {
-          const before = local.table.rows.length;
           const rows = filterRowsByKeyword(
             local.table.rows,
             kwField.field,
             kwField.kw,
           );
+          // 命中才收窄结果；未命中时保留原有明细，且一律不输出解释性话术
+          //（按输出规范：只给查询结果，不出现「没有找到符合…的记录」这类说明）
           if (rows.length > 0) {
             local.table = { ...local.table, rows };
             text = '';
-          } else {
-            text = `没有找到符合「${kwField.kw}」的记录，以下为该范围内的全部 ${before} 条数据：`;
           }
         }
 
@@ -2883,7 +2946,7 @@ async function keywordMockReply(query: string): Promise<AiReply> {
   if (isRuleQuestion(q)) return await replyRuleAnswer(q);
 
   // 优先级：公海 > 待办 > 质保/回访/售后/报价 > 客户 > 线索 > 商机 > 联系人 > 合同 > 回款计划 > 回款 > 产品
-  if (/公海/.test(q)) return await replyPool();
+  if (/公海/.test(q)) return await replyPool(q);
   // 「待办」必须排在「客户」之前：像「今日待办要联系的客户」同时含两个词，应走待办明细
   if (/待办|todo|事项/.test(q)) return await replyTodos(q);
   // 报价 / 售后同样必须排在「客户」之前：「XX客户的报价单」应走报价明细

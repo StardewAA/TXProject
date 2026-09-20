@@ -2,6 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmAfterSaleWarrantyApi } from '#/api/crm/after-sale/warranty';
 
+import { onActivated, onDeactivated, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
@@ -17,6 +18,30 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+
+/**
+ * 自动刷新间隔（毫秒）
+ *
+ * 质保状态会随日期自动流转（到期 → 已到期终止），后端在每次读取前也会做一次懒同步，
+ * 这里再叠加定时刷新，用户无需手动点任何按钮即可看到最新状态。
+ */
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
+
+let autoRefreshTimer: ReturnType<typeof setInterval> | undefined;
+
+/** 启动自动刷新 */
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(handleRefresh, AUTO_REFRESH_INTERVAL_MS);
+}
+
+/** 停止自动刷新（离开页面 / 组件销毁时调用，避免后台空转） */
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = undefined;
+  }
+}
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -90,6 +115,26 @@ const [Grid, gridApi] = useVbenVxeGrid({
       search: true,
     },
   } as VxeTableGridOptions<CrmAfterSaleWarrantyApi.Warranty>,
+});
+
+// ========== 自动刷新：无需用户手动操作即可看到最新状态 ==========
+onMounted(() => {
+  handleRefresh();
+  startAutoRefresh();
+});
+
+/** 从详情页或其他页面返回时立即刷新一次 */
+onActivated(() => {
+  handleRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
+});
+
+/** keep-alive 缓存场景：离开页面时停止轮询 */
+onDeactivated(() => {
+  stopAutoRefresh();
 });
 </script>
 

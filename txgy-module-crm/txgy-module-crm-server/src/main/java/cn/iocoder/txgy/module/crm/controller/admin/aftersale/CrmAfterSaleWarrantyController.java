@@ -5,9 +5,12 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyContractStatusRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateRespVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
@@ -25,10 +28,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - CRM 售后质保档案")
@@ -52,11 +57,49 @@ public class CrmAfterSaleWarrantyController {
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新质保档案")
+    @Operation(summary = "更新质保档案",
+            description = "保存时若「完工验收日期 / 质保年限 / 质保到期日期」发生变化，"
+                    + "会按最新到期日自动重算质保状态（质保中 / 即将到期 / 已到期终止），"
+                    + "并把重算结果放在响应里供前端实时展示；到期日被延长时允许从「已到期终止」回退为有效状态。")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
-    public CommonResult<Boolean> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
-        warrantyService.updateWarranty(updateReqVO);
+    public CommonResult<CrmAfterSaleWarrantyUpdateRespVO> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
+        return success(warrantyService.updateWarranty(updateReqVO));
+    }
+
+    @PostMapping("/refresh-status")
+    @Operation(summary = "【手动干预】立即刷新质保状态",
+            description = "按到期日与售后设置「质保到期提前提醒天数」立即重算本租户全部质保档案状态，" +
+                    "无需等待每日 02:00 定时任务；同时执行到期关联同步（停用回访计划、取消超期未完成回访任务、发送到期通知）")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
+    public CommonResult<Integer> refreshWarrantyStatus() {
+        return success(warrantyService.syncWarrantyStatus());
+    }
+
+    @PutMapping("/update-status")
+    @Operation(summary = "【手动干预】手动修正质保状态",
+            description = "自动流转是单向的（已到期终止不会回退）。到期日被人工调整或需提前终止质保时，用本接口纠正状态，操作会记录日志")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
+    public CommonResult<Boolean> updateWarrantyStatus(@Valid @RequestBody CrmAfterSaleWarrantyUpdateStatusReqVO reqVO) {
+        warrantyService.updateWarrantyStatus(reqVO, getLoginUserId());
         return success(true);
+    }
+
+    @GetMapping("/contract-status")
+    @Operation(summary = "获得合同的质保档案状态",
+            description = "用于识别「该合同是否已创建质保档案」：warrantyId 为空表示尚未创建、可发起创建；" +
+                    "不为空表示不可重复创建（一个合同仅允许一份质保档案）")
+    @Parameter(name = "contractIds", description = "合同编号数组", required = true, example = "1,2,3")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:query')")
+    public CommonResult<List<CrmAfterSaleWarrantyContractStatusRespVO>> getWarrantyContractStatus(
+            @RequestParam("contractIds") Collection<Long> contractIds) {
+        List<CrmAfterSaleWarrantyDO> warranties = warrantyService.getWarrantyListByContractIds(contractIds);
+        return success(convertList(warranties, warranty -> new CrmAfterSaleWarrantyContractStatusRespVO()
+                .setContractId(warranty.getContractId())
+                .setWarrantyId(warranty.getId())
+                .setWarrantyNo(warranty.getNo())
+                .setProjectName(warranty.getProjectName())
+                .setStatus(warranty.getStatus())
+                .setWarrantyEndDate(warranty.getWarrantyEndDate())));
     }
 
     @DeleteMapping("/delete")
