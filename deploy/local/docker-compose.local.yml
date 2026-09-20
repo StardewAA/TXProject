@@ -200,9 +200,30 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: jars/hrm.jar
+    # jar 以只读卷挂载，不再依赖镜像里烘焙的副本：
+    # 更新 HRM 代码只需替换 deploy/local/jars/hrm.jar 再重启本容器即可。
+    # 原因：本机 Docker 构建上下文传输实测仅约 0.1MB/s，而 deploy/local 目录含约 1.2GB
+    # 的 jars，重建一次镜像需要数小时。镜像仅承担基础运行时（JRE + 启动脚本）职责。
+    volumes:
+      - ./jars/hrm.jar:/app/app.jar:ro
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx640m -XX:+UseG1GC
+      # 启用 XXL-JOB 执行器（application-local.yaml 默认 xxl.job.enabled=false，
+      # 此处用环境变量覆盖开启；调度中心地址指向同网络的 txgy-xxl-job-admin 容器，
+      # 容器内 127.0.0.1:9090 指向容器自身，不可用）。
+      XXL_JOB_ENABLED: "true"
+      XXL_JOB_ADMIN_ADDRESSES: http://txgy-xxl-job-admin:8080/xxl-job-admin
+      # HRM 招聘 Agent 模型配置：密钥从 deploy/.env 注入，不写入镜像或源码。
+      HRM_AGENT_MODEL_ENABLED: ${HRM_AGENT_MODEL_ENABLED:-false}
+      HRM_AGENT_MODEL_BASE_URL: ${HRM_AGENT_MODEL_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      HRM_AGENT_MODEL_NAME: ${HRM_AGENT_MODEL_NAME:-qwen-flash}
+      HRM_AGENT_MODEL_API_KEY: ${HRM_AGENT_MODEL_API_KEY:-}
+      HRM_AGENT_MODEL_TIMEOUT_MS: ${HRM_AGENT_MODEL_TIMEOUT_MS:-60000}
+      HRM_AGENT_MODEL_MAX_TOKENS: ${HRM_AGENT_MODEL_MAX_TOKENS:-4096}
+      HRM_AGENT_MODEL_TEMPERATURE: ${HRM_AGENT_MODEL_TEMPERATURE:-0.2}
+      HRM_AGENT_MODEL_JSON_MODE: ${HRM_AGENT_MODEL_JSON_MODE:-true}
+      HRM_AGENT_MODEL_EXTRA_BODY: ${HRM_AGENT_MODEL_EXTRA_BODY:-}
     mem_limit: 950m
 
   im:
@@ -315,6 +336,31 @@ services:
       - txgy-dev
     restart: unless-stopped
     mem_limit: 256m
+
+  # XXL-JOB 调度中心：承载 HRM 证件预警等定时任务的调度端。
+  # 独立第三方组件，不走 txgy-service 锚点（无构建、无 Nacos/动态数据源依赖）。
+  # 与 hrm 服务的环境变量 XXL_JOB_ADMIN_ADDRESSES（http://txgy-xxl-job-admin:8080/xxl-job-admin）
+  # 及 accessToken（default_token，见 txgy-module-hrm application.yaml）对应。
+  xxl-job-admin:
+    image: xuxueli/xxl-job-admin:2.4.0
+    container_name: txgy-xxl-job-admin
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      JAVA_OPTS: -Xms128m -Xmx384m
+      PARAMS: >-
+        --spring.datasource.url=jdbc:mysql://mysql:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+        --spring.datasource.username=root
+        --spring.datasource.password=${MYSQL_ROOT_PASSWORD}
+        --xxl.job.accessToken=default_token
+    ports:
+      - "127.0.0.1:${XXL_JOB_ADMIN_PORT:-9090}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 512m
 
 volumes:
   mysql-data:

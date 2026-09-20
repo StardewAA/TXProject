@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitOfferM
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitOfferApprovalStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeVersionService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitInterviewService;
 import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
@@ -49,6 +50,8 @@ class HrmRecruitOfferFlowAcceptanceTest extends BaseDbUnitTest {
     private HrmRecruitResumeService resumeService;
     @MockitoBean
     private HrmPersonalResumeService personalResumeService;
+    @MockitoBean
+    private HrmPersonalResumeVersionService personalResumeVersionService;
     @MockitoBean
     private HrmRecruitChatService chatService;
     @MockitoBean
