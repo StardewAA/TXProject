@@ -24,6 +24,11 @@ export const overridesPreferences = defineOverridesPreferences({
     accessMode: 'backend',
     name: '防腐保温智慧平台',
     enableRefreshToken: true,
+    /**
+     * 登录过期时弹窗提示并停留在当前页，而不是直接把页面跳回登录页。
+     * 默认值 page 会让用户感觉「网站自己退出了 / 闪退」，改成 modal 体验更好。
+     */
+    loginExpiredMode: 'modal',
   },
   tabbar: {
     /** 关闭顶部多标签页栏：页面切换靠左侧菜单，不再累积打开页签 */
