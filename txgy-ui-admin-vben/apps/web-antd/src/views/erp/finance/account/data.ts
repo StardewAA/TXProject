@@ -80,6 +80,22 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'balance',
+      label: '期初余额',
+      component: 'InputNumber',
+      componentProps: {
+        class: '!w-full',
+        min: 0,
+        precision: 2,
+        placeholder: '仅创建时填写，后续由收付款自动记账',
+      },
+      dependencies: {
+        triggerFields: ['id'],
+        show: (values) => !values.id,
+      },
+      defaultValue: 0,
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -141,6 +157,12 @@ export function useGridColumns(
       field: 'no',
       title: '编码',
       minWidth: 120,
+    },
+    {
+      field: 'balance',
+      title: '当前余额',
+      minWidth: 130,
+      formatter: 'formatAmount2',
     },
     {
       field: 'remark',

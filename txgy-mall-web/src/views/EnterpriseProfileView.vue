@@ -41,7 +41,7 @@ onMounted(load)
       <el-button v-if="editable" type="primary" :loading="busy" @click="submit">{{ form.status===2?'修改并重新提交':'提交后台审核' }}</el-button>
     </el-form>
     <nav><MallLink to="/purchase">采购中心</MallLink><MallLink v-if="auth.profile?.memberIdentity==='supplier'" to="/sales">销售中心</MallLink><MallLink to="/member">普通会员中心</MallLink></nav>
-    <p class="note">平台审核不代表外部工商认证；供应商还须关联店铺才能经营。真实 ERP 等系统对接暂未启用。</p>
+    <p class="note">平台审核不代表外部工商认证；供应商审核通过后还须关联店铺才能经营。</p>
   </div>
 </template>
 <style scoped>

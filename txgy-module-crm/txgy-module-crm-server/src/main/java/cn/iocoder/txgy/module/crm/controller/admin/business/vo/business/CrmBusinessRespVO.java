@@ -34,6 +34,10 @@ public class CrmBusinessRespVO {
     @ExcelProperty("跟进状态")
     private Boolean followUpStatus;
 
+    @Schema(description = "累计跟进次数（每写一次跟进 +1）", example = "3")
+    @ExcelProperty("累计跟进次数")
+    private Integer followUpCount;
+
     @Schema(description = "最后跟进时间")
     @ExcelProperty("最后跟进时间")
     private LocalDateTime contactLastTime;

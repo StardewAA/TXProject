@@ -7,6 +7,7 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 
 import { Modal as AntModal, message } from 'ant-design-vue';
 
+import { getTenantSimpleList } from '#/api/core/auth';
 import {
   acceptPortalRecruitOffer,
   getPortalRecruitApplicationPage,
@@ -247,9 +248,34 @@ function recruiterName(item: HrmPortalRecruitChatApi.Conversation) {
   return item.peerUserName || (item.hrSide ? '候选人' : '招聘人');
 }
 
+/**
+ * 会话列表要显示招聘企业名。岗位接口只回传 tenantId、不带 companyName，
+ * 所以按租户名兜底（与职位详情页 getCompanyName 的口径一致），
+ * 否则所有会话都会显示成占位文案。
+ */
+const tenantNames = ref<Record<number, string>>({});
+
+async function loadTenantNames() {
+  try {
+    const tenants = (await getTenantSimpleList()) as Array<{ id?: number; name?: string }>;
+    tenantNames.value = Object.fromEntries(
+      tenants
+        .filter((tenant) => tenant.id && tenant.name)
+        .map((tenant) => [tenant.id, tenant.name]),
+    );
+  } catch (error) {
+    console.warn('[PortalRecruitMessages] 加载企业名称失败', error);
+  }
+}
+
 function companyName(item: HrmPortalRecruitChatApi.Conversation) {
   const post = postDetails.value[item.postId];
-  return post?.companyShortName || post?.companyName || '招聘企业';
+  return (
+    post?.companyShortName ||
+    post?.companyName ||
+    (post?.tenantId ? tenantNames.value[post.tenantId] : undefined) ||
+    '招聘企业待确认'
+  );
 }
 
 function recruiterPosition(item: HrmPortalRecruitChatApi.Conversation) {
@@ -266,6 +292,17 @@ function showStamp(index: number) {
     Math.abs(new Date(current.sendTime).getTime() - new Date(prev.sendTime).getTime()) >
     5 * 60 * 1000
   );
+}
+
+/** 附件或可显示文本都没有的消息不渲染气泡，避免消息流出现空气泡 */
+function hasDisplayableContent(item: HrmPortalRecruitChatApi.ChatMessage) {
+  if (getHrmRecruitChatAttachment(item.content, item.contentType)) return true;
+  return Boolean(item.content && String(item.content).trim());
+}
+
+/** 窄屏下从会话详情返回会话列表 */
+function backToList() {
+  activeId.value = undefined;
 }
 
 function goLogin() {
@@ -882,6 +919,7 @@ watch(applyModalOpen, (open) => {
 });
 
 onMounted(async () => {
+  void loadTenantNames();
   await bootChat();
   applicationRefreshTimer = setInterval(refreshApplications, 10_000);
 });
@@ -918,7 +956,7 @@ onUnmounted(() => {
       </div>
     </main>
 
-    <main v-else class="message-shell">
+    <main v-else class="message-shell" :class="{ 'has-active-chat': activeConversation }">
       <aside class="contact-pane">
         <label class="contact-search">
           <input v-model="keyword" type="search" placeholder="搜索30天内的联系人" />
@@ -931,7 +969,7 @@ onUnmounted(() => {
             <i v-if="unreadTotal" class="tab-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</i>
           </button>
           <div class="more-filter">
-            <button type="button" :class="{ selected: moreFilterSelected }" @click.stop="toggleMoreFilter">更多⌄</button>
+            <button type="button" :class="{ selected: moreFilterSelected }" @click.stop="toggleMoreFilter">{{ moreFilterOpen ? '更多⌃' : '更多⌄' }}</button>
             <div v-if="moreFilterOpen" class="filter-menu" @click.stop>
               <button type="button" :class="{ active: tab === 'communication' }" @click="chooseTab('communication')">仅沟通</button>
               <button type="button" :class="{ active: tab === 'applied' }" @click="chooseTab('applied')">有投递</button>
@@ -961,7 +999,7 @@ onUnmounted(() => {
               <em>{{ recruiterPosition(item) }}</em>
             </span>
             <span class="contact-actions" @click.stop>
-              <button type="button" class="more-trigger" @click.stop="toggleConversationMenu(item.id)">更多⌄</button>
+              <button type="button" class="more-trigger" @click.stop="toggleConversationMenu(item.id)">{{ activeMenuId === item.id ? '更多⌃' : '更多⌄' }}</button>
               <span v-if="activeMenuId === item.id" class="conversation-menu" @click.stop>
                 <button type="button" @click="togglePinned(item)">{{ isPinned(item) ? '取消置顶' : '置顶' }}</button>
                 <button type="button" @click="editRemark(item)">备注</button>
@@ -976,6 +1014,9 @@ onUnmounted(() => {
 
       <section v-if="activeConversation" class="chat-pane">
         <div class="chat-head">
+          <button class="chat-back" type="button" aria-label="返回会话列表" @click="backToList">
+            <IconifyIcon icon="lucide:chevron-left" /> 返回
+          </button>
           <div>
             <b>{{ recruiterName(activeConversation) }}</b>
             <span>{{ activeConversation.postName }}</span>
@@ -1011,7 +1052,7 @@ onUnmounted(() => {
           <div v-if="!messages.length" class="chat-empty">还没有消息，打个招呼开始沟通吧</div>
           <template v-for="(item, index) in messages" :key="item.id">
             <div v-if="showStamp(index)" class="date">{{ formatTime(item.sendTime) }}</div>
-            <div class="bubble" :class="item.mine ? 'mine' : 'theirs'">
+            <div v-if="hasDisplayableContent(item)" class="bubble" :class="item.mine ? 'mine' : 'theirs'">
               <a
                 v-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'resume'"
                 class="resume-card"
@@ -1152,7 +1193,7 @@ onUnmounted(() => {
 }
 
 .message-page.embedded .message-shell {
-  height: calc(100vh - 120px);
+  height: min(760px, calc(100dvh - 166px));
   max-width: none;
   box-shadow: 0 8px 24px rgb(17 65 73 / 8%);
   border: 1px solid #e0eeee;
@@ -1313,6 +1354,8 @@ onUnmounted(() => {
 .contact {
   position: relative;
   width: 100%;
+  min-height: 90px;
+  box-sizing: border-box;
   display: flex;
   align-items: flex-start;
   gap: 16px;
@@ -1472,6 +1515,23 @@ onUnmounted(() => {
   padding: 22px 30px 14px;
 }
 
+.chat-back {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #0f8f8c;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.chat-back:hover {
+  color: #0b777c;
+}
+
 .chat-head b {
   font-size: 17px;
 }
@@ -1515,6 +1575,7 @@ onUnmounted(() => {
 
 .job-strip {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 15px;
@@ -1586,7 +1647,8 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 34px 30px;
+  margin-top: 12px;
+  padding: 22px 30px 34px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1607,6 +1669,7 @@ onUnmounted(() => {
 }
 
 .bubble {
+  width: fit-content;
   max-width: 58%;
   padding: 12px 14px;
   border-radius: 8px;
@@ -1673,13 +1736,20 @@ onUnmounted(() => {
 }
 
 .composer {
+  display: grid;
+  grid-template-areas:
+    'tools tools'
+    'input send';
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px 12px;
   border-top: 1px solid #e7eeee;
   padding: 12px 30px 18px;
-  position: relative;
   background: #fff;
 }
 
 .tools {
+  grid-area: tools;
   display: flex;
   gap: 20px;
   align-items: center;
@@ -1728,23 +1798,34 @@ onUnmounted(() => {
 }
 
 .composer textarea {
+  grid-area: input;
   width: 100%;
   height: 72px;
-  border: 0;
+  box-sizing: border-box;
+  border: 1px solid #d9e5e7;
+  border-radius: 8px;
   outline: none;
   resize: none;
-  margin-top: 8px;
-  padding-right: 88px;
+  margin: 0;
+  padding: 10px 12px;
   color: #26343d;
   font-size: 14px;
   line-height: 1.6;
-  background: transparent;
+  background: #f8fbfb;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.composer textarea:hover,
+.composer textarea:focus {
+  border-color: #74cbd2;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(15 143 140 / 10%);
 }
 
 .send {
-  position: absolute;
-  right: 30px;
-  bottom: 18px;
+  grid-area: send;
+  min-width: 72px;
+  height: 40px;
   border: 0;
   background: #f5f7f7;
   color: #c4cbcd;
@@ -1808,12 +1889,24 @@ onUnmounted(() => {
   .message-shell,
   .message-page.embedded .message-shell {
     grid-template-columns: 1fr;
-    height: calc(100vh - 56px);
+    height: calc(100dvh - 96px);
     border-radius: 0;
   }
 
   .contact-pane {
     display: none;
+  }
+
+  .message-shell:not(.has-active-chat) .contact-pane {
+    display: flex;
+  }
+
+  .message-shell:not(.has-active-chat) .chat-pane {
+    display: none;
+  }
+
+  .chat-back {
+    display: inline-flex;
   }
 
   .message-topbar {
@@ -1834,6 +1927,10 @@ onUnmounted(() => {
 
   .bubble {
     max-width: 85%;
+  }
+
+  .composer {
+    padding-inline: 16px;
   }
 }
 .message-page { color: #5d4636; background: #fffdfb; }

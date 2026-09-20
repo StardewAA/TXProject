@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import ErpInventoryStatus from '@/components/ErpInventoryStatus.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -70,7 +69,7 @@ async function processAfterSale(action:SalesAfterSaleAction){
   try{await ElMessageBox.confirm(message,'售后处理确认',{confirmButtonText:'确认处理',cancelButtonText:'取消'})}catch{return}
   if(!key||key!==workbench.key.value||version!==afterVersion||selectedAfter.value?.id!==id)return
   await supplierTradeApi.processAfterSale({shopId:shop,id,action,reason:memo})
-  ElMessage.success(action==='RECEIVE'?'退货入库请求已提交，请核对 ERP 确认结果':'售后处理成功');afterOpened.value=false;await load();await workbench.refresh()
+  ElMessage.success(action==='RECEIVE'?'退货入库请求已提交，请稍后查看处理结果':'售后处理成功');afterOpened.value=false;await load();await workbench.refresh()
  }finally{submitting.value=false}
 }
 async function deliver(){
@@ -78,10 +77,10 @@ async function deliver(){
  const key=workbench.key.value,shop=shopId.value,id=detail.value.order.id,version=detailVersion
  const selected=logisticsId.value,tracking=logisticsNo.value.trim()
  if(!selected||!/^[-A-Za-z0-9]{5,64}$/.test(tracking))return void ElMessage.warning('请选择快递公司并填写有效运单号（5至64位）')
- try{await ElMessageBox.confirm('将向 ERP 提交出库及物流信息，ERP 确认后才会更新买家的发货状态。是否提交？','提交发货请求',{confirmButtonText:'提交请求',cancelButtonText:'取消'})}catch{return}
+ try{await ElMessageBox.confirm('确认提交出库及物流信息？处理完成后将更新买家的发货状态。','提交发货请求',{confirmButtonText:'提交请求',cancelButtonText:'取消'})}catch{return}
  if(!key||key!==workbench.key.value||shop!==shopId.value||version!==detailVersion||detail.value?.order.id!==id)return
  submitting.value=true
- try{await supplierTradeApi.deliver({shopId:shop,id,logisticsId:selected,logisticsNo:tracking});if(key!==workbench.key.value)return;ElMessage.success('发货请求已提交，请核对 ERP 处理结果和订单状态');opened.value=false;await load();await workbench.refresh()}finally{submitting.value=false}
+ try{await supplierTradeApi.deliver({shopId:shop,id,logisticsId:selected,logisticsNo:tracking});if(key!==workbench.key.value)return;ElMessage.success('发货请求已提交，请稍后查看订单状态');opened.value=false;await load();await workbench.refresh()}finally{submitting.value=false}
 }
 function selectOrderStatus(value:string){
  const query={...route.query}
@@ -114,14 +113,14 @@ onBeforeUnmount(()=>{disposed=true;++requestVersion;++detailVersion;++afterVersi
    <p v-if="!after" class="count-scope">页签数量为当前店铺和订单号共同筛选的全部订单；待发货状态数不等同于可发货事项数。<span v-if="counts.error.value">数量暂无法更新，保留上次结果。</span></p>
    <div class="filters"><el-input v-model="no" placeholder="订单号" clearable @keyup.enter="search"/><el-select v-if="after" v-model="status" clearable placeholder="全部状态"><el-option v-for="s in statusOptions" :key="s.value" :value="s.value" :label="s.label"/></el-select><el-button :loading="busy" @click="search">查询</el-button></div>
    <el-alert v-if="error" type="error" title="加载失败，请重试" :closable="false"/>
-   <el-table v-if="!after" :data="orders" v-loading="busy" :empty-text="status===10?'暂无匹配的待发货订单':'暂无匹配的销售订单'"><el-table-column label="订单号" min-width="185"><template #default="{row}">{{row.no}} <b v-if="rowNotices(row.id).length" class="new-order">新待办</b></template></el-table-column><el-table-column label="下单时间" width="165"><template #default="{row}">{{formatDate(row.createTime)}}</template></el-table-column><el-table-column label="状态 / ERP 进度" min-width="170"><template #default="{row}">{{orderStates[row.status]||row.status}}<small v-if="row.erpStatus">ERP：{{row.erpStatus}}</small><small v-if="row.status===10&&!row.deliverable">{{row.deliveryBlockReason||'当前不可发货，请查看详情'}}</small></template></el-table-column><el-table-column label="实付金额"><template #default="{row}">¥{{formatMoney(row.payPrice)}}</template></el-table-column><el-table-column label="操作" width="125"><template #default="{row}"><el-button link @click="openOrder(row.id)">{{row.deliverable?'详情 / 发货':'查看详情'}}</el-button></template></el-table-column></el-table>
-   <el-table v-else :data="afterSales" v-loading="busy"><el-table-column label="售后编号" min-width="180"><template #default="{row}">{{row.no}} <b v-if="rowNotices(row.id).length" class="new-order">新待办</b></template></el-table-column><el-table-column prop="orderNo" label="订单号" min-width="180"/><el-table-column prop="spuName" label="商品"/><el-table-column label="退款金额"><template #default="{row}">¥{{formatMoney(row.refundPrice)}}</template></el-table-column><el-table-column label="进度" min-width="170"><template #default="{row}">{{afterStates[row.status]||row.status}}<small v-if="row.erpStatus">ERP：{{row.erpStatus}}</small><small v-if="row.processBlockReason">{{row.processBlockReason}}</small></template></el-table-column><el-table-column label="操作" width="80"><template #default="{row}"><el-button link @click="openAfter(row.id)">详情</el-button></template></el-table-column></el-table>
+   <el-table v-if="!after" :data="orders" v-loading="busy" :empty-text="status===10?'暂无匹配的待发货订单':'暂无匹配的销售订单'"><el-table-column label="订单号" min-width="185"><template #default="{row}">{{row.no}} <b v-if="rowNotices(row.id).length" class="new-order">新待办</b></template></el-table-column><el-table-column label="下单时间" width="165"><template #default="{row}">{{formatDate(row.createTime)}}</template></el-table-column><el-table-column label="订单状态" min-width="170"><template #default="{row}">{{orderStates[row.status]||row.status}}<small v-if="row.status===10&&!row.deliverable">{{row.deliveryBlockReason||'当前不可发货，请查看详情'}}</small></template></el-table-column><el-table-column label="实付金额"><template #default="{row}">¥{{formatMoney(row.payPrice)}}</template></el-table-column><el-table-column label="操作" width="125"><template #default="{row}"><el-button link @click="openOrder(row.id)">{{row.deliverable?'详情 / 发货':'查看详情'}}</el-button></template></el-table-column></el-table>
+   <el-table v-else :data="afterSales" v-loading="busy"><el-table-column label="售后编号" min-width="180"><template #default="{row}">{{row.no}} <b v-if="rowNotices(row.id).length" class="new-order">新待办</b></template></el-table-column><el-table-column prop="orderNo" label="订单号" min-width="180"/><el-table-column prop="spuName" label="商品"/><el-table-column label="退款金额"><template #default="{row}">¥{{formatMoney(row.refundPrice)}}</template></el-table-column><el-table-column label="进度" min-width="170"><template #default="{row}">{{afterStates[row.status]||row.status}}<small v-if="row.processBlockReason">{{row.processBlockReason}}</small></template></el-table-column><el-table-column label="操作" width="80"><template #default="{row}"><el-button link @click="openAfter(row.id)">详情</el-button></template></el-table-column></el-table>
    <el-pagination v-model:current-page="page" :page-size="15" :total="total" layout="prev,pager,next" @current-change="load"/>
   </main>
-  <el-dialog v-model="opened" title="销售订单详情" width="850px" :close-on-click-modal="!submitting" :show-close="!submitting"><div v-loading="detailBusy"><template v-if="detail"><ErpInventoryStatus :entries="detail.erpInventory" /><p>订单号：{{detail.order.no}} · {{orderStates[detail.order.status]}}</p><p>收货人：{{detail.receiverName}}　{{detail.receiverMobile}}</p><p>收货地址：{{detail.address}}</p><p>买家备注：{{detail.userRemark||'无'}}</p><el-table :data="detail.items"><el-table-column label="商品"><template #default="{row}"><div class="item"><img :src="normalizeImage(row.picUrl)" alt="商品"/><span>{{row.name}}<small>{{row.specification}}</small></span></div></template></el-table-column><el-table-column prop="count" label="数量" width="75"/><el-table-column label="金额" width="110"><template #default="{row}">¥{{formatMoney(row.payPrice)}}</template></el-table-column></el-table><p>订单实付 ¥{{formatMoney(detail.order.payPrice)}}　已退 ¥{{formatMoney(detail.order.refundPrice)}}</p><p v-if="detail.logisticsNo">运单号：{{detail.logisticsNo}}　发货时间：{{formatDate(detail.deliveryTime)}}</p>
+  <el-dialog v-model="opened" title="销售订单详情" width="850px" :close-on-click-modal="!submitting" :show-close="!submitting"><div v-loading="detailBusy"><template v-if="detail"><p>订单号：{{detail.order.no}} · {{orderStates[detail.order.status]}}</p><p>收货人：{{detail.receiverName}}　{{detail.receiverMobile}}</p><p>收货地址：{{detail.address}}</p><p>买家备注：{{detail.userRemark||'无'}}</p><el-table :data="detail.items"><el-table-column label="商品"><template #default="{row}"><div class="item"><img :src="normalizeImage(row.picUrl)" alt="商品"/><span>{{row.name}}<small>{{row.specification}}</small></span></div></template></el-table-column><el-table-column prop="count" label="数量" width="75"/><el-table-column label="金额" width="110"><template #default="{row}">¥{{formatMoney(row.payPrice)}}</template></el-table-column></el-table><p>订单实付 ¥{{formatMoney(detail.order.payPrice)}}　已退 ¥{{formatMoney(detail.order.refundPrice)}}</p><p v-if="detail.logisticsNo">运单号：{{detail.logisticsNo}}　发货时间：{{formatDate(detail.deliveryTime)}}</p>
    <div v-if="detail.deliverable" class="shipping"><h3>快递发货</h3><el-select v-model="logisticsId" filterable placeholder="请选择快递公司" :disabled="submitting"><el-option v-for="e in carriers" :key="e.id" :value="e.id" :label="e.name"/></el-select><el-input v-model="logisticsNo" placeholder="填写真实运单号" maxlength="64" :disabled="submitting"/><el-button type="primary" :loading="submitting" :disabled="detailBusy||!carriers.length" @click="deliver">确认发货</el-button></div><el-alert v-else :closable="false" title="当前订单不可发货：请核对订单状态、付款、配送方式及售后情况。"/></template><el-empty v-else-if="!detailBusy" description="未能读取订单，请关闭后重试"/></div></el-dialog>
   <el-dialog v-model="afterOpened" title="销售售后处理" width="700px" :close-on-click-modal="!submitting" :close-on-press-escape="!submitting" :show-close="!submitting">
-   <div v-loading="afterBusy"><template v-if="selectedAfter"><ErpInventoryStatus :entries="afterDetail?.erpInventory" />
+   <div v-loading="afterBusy"><template v-if="selectedAfter">
     <p>售后单：{{selectedAfter.no}}　订单：{{selectedAfter.orderNo}}</p><p>{{selectedAfter.spuName}} × {{selectedAfter.count}}</p>
     <p>类型：{{selectedAfter.way===20?'退货退款':'仅退款'}}　状态：{{afterStates[selectedAfter.status]}}　退款金额：¥{{formatMoney(selectedAfter.refundPrice)}}</p>
     <p>申请原因：{{selectedAfter.applyReason}}</p><p>申请说明：{{selectedAfter.applyDescription||'无'}}</p>
@@ -135,7 +134,7 @@ onBeforeUnmount(()=>{disposed=true;++requestVersion;++detailVersion;++afterVersi
      <el-button v-if="selectedAfter.status===30" type="primary" :disabled="submitting" @click="processAfterSale('RECEIVE')">提交退货入库确认</el-button>
      <el-button v-if="selectedAfter.status===30" type="danger" :disabled="submitting" @click="processAfterSale('REFUSE')">拒收退货</el-button>
     </template>
-    <el-alert v-else-if="selectedAfter.status===10||selectedAfter.status===30" :closable="false" :title="selectedAfter.processBlockReason||'当前事项不可重复处理，请核对 ERP 状态后刷新详情。'"/>
+    <el-alert v-else-if="selectedAfter.status===10||selectedAfter.status===30" :closable="false" :title="selectedAfter.processBlockReason||'当前事项不可重复处理，请稍后刷新详情。'"/>
    </template><el-empty v-else-if="!afterBusy" description="未能读取售后单，请关闭后重试"/></div>
   </el-dialog>
  </div>

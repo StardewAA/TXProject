@@ -23,8 +23,6 @@ public class HrmEmployeeCertificateSaveReqVO {
     @Schema(description = "员工编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "员工编号不能为空")
     private Long employeeId;
-    @Schema(description = "证照类型编号", example = "1")
-    private Long typeId;
 
     @Schema(description = "证书名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "高级工程师")
     @NotBlank(message = "证书名称不能为空")
@@ -49,8 +47,6 @@ public class HrmEmployeeCertificateSaveReqVO {
     @Schema(description = "有效结束日期")
     @DiffLogField(name = "有效结束日期")
     private LocalDateTime endTime;
-    @Schema(description = "复审日期")
-    private java.time.LocalDate reviewDate;
 
     @Schema(description = "发证机构", example = "人社局")
     @Size(max = 255, message = "发证机构长度不能超过 255 个字符")
@@ -60,8 +56,6 @@ public class HrmEmployeeCertificateSaveReqVO {
     @Schema(description = "发证日期")
     @DiffLogField(name = "发证日期")
     private LocalDateTime issuingTime;
-    @Schema(description = "证件扫描件/照片地址列表")
-    private java.util.List<String> fileUrls;
 
     @Schema(description = "备注", example = "专业技术资格证书")
     @Size(max = 500, message = "备注长度不能超过 500 个字符")

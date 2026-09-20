@@ -50,6 +50,14 @@ public interface ErpSupplierService {
     ErpSupplierDO getSupplier(Long id);
 
     /**
+     * 按绑定的登录用户编号反查供应商，用于识别供应商门户账号身份
+     *
+     * @param userId 登录用户编号
+     * @return 供应商；未绑定任何供应商时返回 null（表示调用方是内部用户）
+     */
+    ErpSupplierDO getSupplierByUserId(Long userId);
+
+    /**
      * 校验供应商
      *
      * @param id 编号

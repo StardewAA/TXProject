@@ -1,220 +1,220 @@
 <script lang="ts" setup>
-import type { HrmCertificateLedgerApi } from '#/api/hrm/certificate';
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { HrmCertificateLedgerApi } from '#/api/hrm/certificate/ledger';
 
-import { onMounted, ref, watch } from 'vue';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 
-import { Page } from '@vben/common-ui';
-import { downloadFileFromBlobPart, openWindow } from '@vben/utils';
+import { message, Tag } from 'ant-design-vue';
 
-import { Button, Card, message, Select, Space, Table, Tag } from 'ant-design-vue';
-
+import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
-  exportCertificateLedger,
-  getCertificateExpireWarning,
+  deleteCertificateLedger,
   getCertificateLedgerPage,
-  getCertificateTypeSimpleList,
-  HrmCertificateExpireStatus,
-  HrmCertificateExpireStatusOptions,
-  HrmCertificateVerifyStatus,
-  HrmCertificateVerifyStatusOptions,
-  verifyCertificate,
-} from '#/api/hrm/certificate';
+  updateCertificateLedgerStatus,
+} from '#/api/hrm/certificate/ledger';
+import { $t } from '#/locales';
+
+import { HrmCertificateStatus } from '../constants';
+import {
+  formatRemainDays,
+  getRemainDaysColor,
+  getStatusColor,
+  getStatusLabel,
+  useGridColumns,
+  useGridFormSchema,
+} from './data';
+import Form from './modules/form.vue';
+import RenewalForm from './modules/renewal-form.vue';
+import RenewalHistory from './modules/renewal-history.vue';
 
 defineOptions({ name: 'HrmCertificateLedger' });
 
-const loading = ref(false);
-const list = ref<HrmCertificateLedgerApi.Ledger[]>([]);
-const total = ref(0);
-const types = ref<any[]>([]);
-const warningMode = ref(false);
-
-const query = ref<HrmCertificateLedgerApi.LedgerPageParams>({
-  pageNo: 1,
-  pageSize: 20,
+const [FormModal, formModalApi] = useVbenModal({
+  connectedComponent: Form,
+  destroyOnClose: true,
+});
+const [RenewalModal, renewalModalApi] = useVbenModal({
+  connectedComponent: RenewalForm,
+  destroyOnClose: true,
+});
+const [HistoryModal, historyModalApi] = useVbenModal({
+  connectedComponent: RenewalHistory,
+  destroyOnClose: true,
 });
 
-async function loadTypes() {
-  types.value = await getCertificateTypeSimpleList();
+/** 刷新表格 */
+function handleRefresh() {
+  gridApi.query();
 }
 
-async function loadList() {
-  loading.value = true;
-  try {
-    if (warningMode.value) {
-      // 预警清单：临期（默认 90 天内）+ 已过期
-      list.value = await getCertificateExpireWarning(90);
-      total.value = list.value.length;
-      return;
-    }
-    const page = await getCertificateLedgerPage(query.value);
-    list.value = page.list;
-    total.value = page.total;
-  } finally {
-    loading.value = false;
-  }
+/** 新增 */
+function handleCreate() {
+  formModalApi.setData(null).open();
 }
 
-watch(
-  () => [
-    query.value.typeId,
-    query.value.expireStatus,
-    query.value.verifyStatus,
-    query.value.pageNo,
-    warningMode.value,
-  ],
-  () => loadList(),
-);
+/** 编辑 */
+function handleEdit(row: HrmCertificateLedgerApi.CertificateLedger) {
+  formModalApi.setData(row).open();
+}
 
-onMounted(async () => {
-  await loadTypes();
-  await loadList();
+/** 办理续证/复审 */
+function handleRenewal(row: HrmCertificateLedgerApi.CertificateLedger) {
+  renewalModalApi.setData(row).open();
+}
+
+/** 查看续证/复审历史 */
+function handleHistory(row: HrmCertificateLedgerApi.CertificateLedger) {
+  historyModalApi.setData(row).open();
+}
+
+/** 注销证件 */
+async function handleCancel(row: HrmCertificateLedgerApi.CertificateLedger) {
+  await confirm(
+    `确认注销证件“${row.name}”吗？注销后不再参与到期与复审预警，可在需要时恢复。`,
+  );
+  await updateCertificateLedgerStatus({
+    id: row.id!,
+    status: HrmCertificateStatus.CANCELLED,
+  });
+  message.success($t('ui.actionMessage.operationSuccess'));
+  handleRefresh();
+}
+
+/** 恢复证件为自动计算状态 */
+async function handleRestore(row: HrmCertificateLedgerApi.CertificateLedger) {
+  await confirm(`确认恢复证件“${row.name}”吗？状态将按有效期与提前期重新计算。`);
+  await updateCertificateLedgerStatus({
+    id: row.id!,
+    status: HrmCertificateStatus.VALID,
+  });
+  message.success($t('ui.actionMessage.operationSuccess'));
+  handleRefresh();
+}
+
+/** 删除 */
+async function handleDelete(row: HrmCertificateLedgerApi.CertificateLedger) {
+  await confirm(`确认删除证件“${row.name}”吗？`);
+  await deleteCertificateLedger(row.id!);
+  message.success($t('ui.actionMessage.operationSuccess'));
+  handleRefresh();
+}
+
+const [Grid, gridApi] = useVbenVxeGrid({
+  formOptions: {
+    schema: useGridFormSchema(),
+  },
+  gridOptions: {
+    columns: useGridColumns(),
+    height: 'auto',
+    keepSource: true,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          return await getCertificateLedgerPage({
+            pageNo: page.currentPage,
+            pageSize: page.pageSize,
+            ...formValues,
+          });
+        },
+      },
+    },
+    rowConfig: {
+      keyField: 'id',
+      isHover: true,
+    },
+    toolbarConfig: {
+      refresh: true,
+      search: true,
+    },
+  } as VxeTableGridOptions<HrmCertificateLedgerApi.CertificateLedger>,
 });
-
-/** 核验：通过 / 不通过 */
-async function handleVerify(
-  row: HrmCertificateLedgerApi.Ledger,
-  verifyStatus: number,
-) {
-  try {
-    await verifyCertificate(row.id!, verifyStatus);
-    message.success('核验结果已保存');
-    await loadList();
-  } catch {
-    // 拦截提示由后端返回（例如未上传扫描件不允许核验通过）
-  }
-}
-
-async function handleExport() {
-  const data = await exportCertificateLedger({ ...query.value, pageNo: 1 });
-  downloadFileFromBlobPart({ fileName: '证照台账.xls', source: data });
-  message.success('导出成功');
-}
-
-const expireTagColor = (status?: number) =>
-  status === HrmCertificateExpireStatus.EXPIRED
-    ? 'error'
-    : status === HrmCertificateExpireStatus.EXPIRING
-      ? 'warning'
-      : 'success';
-
-const verifyTagColor = (status?: number) =>
-  status === HrmCertificateVerifyStatus.VERIFIED
-    ? 'success'
-    : status === HrmCertificateVerifyStatus.REJECTED
-      ? 'error'
-      : 'default';
 </script>
 
 <template>
   <Page auto-content-height>
-    <Card :bordered="false">
-      <Space class="mb-3" wrap>
-        <Select
-          v-model:value="query.typeId"
-          :options="types.map((item) => ({ label: item.name, value: item.id }))"
-          allow-clear
-          class="min-w-[220px]"
-          placeholder="全部证照类型"
-          show-search
-          :filter-option="
-            (input: string, option: any) =>
-              String(option?.label ?? '')
-                .toLowerCase()
-                .includes(input.toLowerCase())
-          "
-        />
-        <Select
-          v-model:value="query.expireStatus"
-          :options="[...HrmCertificateExpireStatusOptions]"
-          allow-clear
-          class="min-w-[130px]"
-          placeholder="到期状态"
-        />
-        <Select
-          v-model:value="query.verifyStatus"
-          :options="[...HrmCertificateVerifyStatusOptions]"
-          allow-clear
-          class="min-w-[140px]"
-          placeholder="核验状态"
-        />
-        <Button
-          :type="warningMode ? 'primary' : 'default'"
-          @click="warningMode = !warningMode"
-        >
-          {{ warningMode ? '退出预警清单' : '只看到期预警（90 天内到期 + 已过期）' }}
-        </Button>
-        <Button @click="handleExport">导出台账</Button>
-      </Space>
+    <FormModal @success="handleRefresh" />
+    <RenewalModal @success="handleRefresh" />
+    <HistoryModal />
 
-      <Table
-        :columns="[
-          { title: '姓名', dataIndex: 'employeeName', width: 100 },
-          { title: '工号', dataIndex: 'jobNumber', width: 110 },
-          { title: '联系电话', dataIndex: 'mobile', width: 130 },
-          { title: '证照类型', dataIndex: 'typeName', width: 190 },
-          { title: '证件名称', dataIndex: 'name', width: 180 },
-          { title: '证号', dataIndex: 'no', width: 170 },
-          { title: '发证机关', dataIndex: 'issuingAuthority', width: 160 },
-          { title: '有效期止', dataIndex: 'endTime', width: 130 },
-          { title: '距到期', key: 'remainDays', width: 100 },
-          { title: '到期状态', key: 'expireStatus', width: 100 },
-          { title: '核验状态', key: 'verifyStatus', width: 110 },
-          { title: '操作', key: 'action', width: 220, fixed: 'right' },
-        ]"
-        :data-source="list"
-        :loading="loading"
-        :pagination="
-          warningMode
-            ? false
-            : {
-                current: query.pageNo,
-                pageSize: query.pageSize,
-                total,
-                onChange: (page: number) => (query.pageNo = page),
-              }
-        "
-        :row-key="(r: HrmCertificateLedgerApi.Ledger) => String(r.id)"
-        :scroll="{ x: 1800 }"
-        bordered
-        size="small"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'remainDays'">
-            <span v-if="record.remainDays !== null && record.remainDays !== undefined">
-              {{
-                record.remainDays < 0
-                  ? `已过期 ${Math.abs(record.remainDays)} 天`
-                  : `${record.remainDays} 天`
-              }}
-            </span>
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="column.key === 'expireStatus'">
-            <Tag v-if="record.expireStatus" :color="expireTagColor(record.expireStatus)">
-              {{ record.expireStatusName }}
-            </Tag>
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="column.key === 'verifyStatus'">
-            <Tag :color="verifyTagColor(record.verifyStatus)">
-              {{ record.verifyStatusName }}
-            </Tag>
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <Button
-              v-if="record.fileUrls?.length"
-              type="link"
-              @click="openWindow(record.fileUrls[0]!)"
-            >
-              看扫描件
-            </Button>
-            <Button type="link" @click="handleVerify(record, 1)">核验通过</Button>
-            <Button danger type="link" @click="handleVerify(record, 2)">
-              核验不通过
-            </Button>
-          </template>
-        </template>
-      </Table>
-    </Card>
+    <Grid>
+      <template #toolbar-tools>
+        <TableAction
+          :actions="[
+            {
+              label: '新增',
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              auth: ['hrm:certificate:create'],
+              onClick: handleCreate,
+            },
+          ]"
+        />
+      </template>
+      <template #remainDays="{ row }">
+        <Tag :color="getRemainDaysColor(row.remainDays)">
+          {{ formatRemainDays(row.remainDays) }}
+        </Tag>
+      </template>
+      <template #status="{ row }">
+        <Tag :color="getStatusColor(row.status)">
+          {{ getStatusLabel(row.status) }}
+        </Tag>
+      </template>
+      <template #pendingWarningCount="{ row }">
+        <span v-if="row.pendingWarningCount">
+          <Tag color="warning">{{ row.pendingWarningCount }}</Tag>
+        </span>
+        <span v-else>-</span>
+      </template>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: $t('common.edit'),
+              type: 'link',
+              icon: ACTION_ICON.EDIT,
+              auth: ['hrm:certificate:update'],
+              onClick: handleEdit.bind(null, row),
+            },
+            {
+              label: '续证/复审',
+              type: 'link',
+              auth: ['hrm:certificate:renewal'],
+              ifShow: row.status !== 4,
+              onClick: handleRenewal.bind(null, row),
+            },
+            {
+              label: '历史',
+              type: 'link',
+              auth: ['hrm:certificate:query'],
+              onClick: handleHistory.bind(null, row),
+            },
+            {
+              label: '注销',
+              type: 'link',
+              danger: true,
+              auth: ['hrm:certificate:update'],
+              ifShow: row.status !== 4,
+              onClick: handleCancel.bind(null, row),
+            },
+            {
+              label: '恢复',
+              type: 'link',
+              auth: ['hrm:certificate:update'],
+              ifShow: row.status === 4,
+              onClick: handleRestore.bind(null, row),
+            },
+            {
+              label: $t('common.delete'),
+              type: 'link',
+              danger: true,
+              icon: ACTION_ICON.DELETE,
+              auth: ['hrm:certificate:delete'],
+              onClick: handleDelete.bind(null, row),
+            },
+          ]"
+        />
+      </template>
+    </Grid>
   </Page>
 </template>

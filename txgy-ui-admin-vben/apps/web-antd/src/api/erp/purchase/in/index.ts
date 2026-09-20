@@ -22,6 +22,12 @@ export namespace ErpPurchaseInApi {
     totalProductPrice?: number; // 合计商品金额
     taxPrice?: number; // 合计税额
     items?: PurchaseInItem[]; // 采购入库明细
+    // ===== ERP↔WMS 协同字段 =====
+    businessChainNo?: string; // 业务链号
+    wmsStatus?: string; // WMS 推送状态：NOT_SUBMITTED / SUBMIT_PENDING / PROCESSING / COMPLETED / FAILED
+    wmsOrderNo?: string; // WMS 端订单号
+    wmsEventVersion?: number; // WMS 事件版本
+    wmsFailureReason?: string; // WMS 失败原因
   }
 
   /** 采购项信息 */
@@ -96,6 +102,13 @@ export function deletePurchaseIn(ids: number[]) {
 /** 导出采购入库 Excel */
 export function exportPurchaseIn(params: any) {
   return requestClient.download('/erp/purchase-in/export-excel', {
+    params,
+  });
+}
+
+/** 导出采购入库 PDF */
+export function exportPurchaseInPdf(params: any) {
+  return requestClient.download('/erp/purchase-in/export-pdf', {
     params,
   });
 }

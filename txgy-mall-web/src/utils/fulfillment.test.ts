@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Address, TradeOrder } from '@/types/mall'
 import type { OrderLogistics } from '@/types/fulfillment'
-import { addressLocationText, addressTextChanged, hasAddressLocation, logisticsPresentation, logisticsRetrySeconds, manualAddressPayload, mapAvailability, orderLocation } from './fulfillment'
+import { addressLocationText, addressTextChanged, hasAddressLocation, logisticsMapQueries, logisticsMapQuery, logisticsPresentation, logisticsRetrySeconds, manualAddressPayload, mapAvailability, orderLocation } from './fulfillment'
 
 const address: Address = { id: 1, name: '测试联系人', mobile: '13800000000', areaId: 110101, detailAddress: '隔离测试地址', defaultStatus: true }
 const located: Address = { ...address, longitude: 116.4, latitude: 39.9, coordSystem: 'GCJ02', locationSource: 'MAP_PICKER', locationPrecision: 'BUILDING', locationConfirmedAt: '2026-09-17T10:00:00' }
@@ -36,6 +36,16 @@ describe('truthful logistics presentation', () => {
     expect(logisticsPresentation(null).events).toEqual([])
   })
   it.each([[20.2, 21], [-2, 0], [Infinity, 0], [NaN, 0], ['300', 0], [999999999, 86400]])('normalizes retry budget %s', (value, expected) => expect(logisticsRetrySeconds(value)).toBe(expected))
+  it('extracts only provider-reported places and orders unique map nodes by time', () => {
+    expect(logisticsMapQuery('【上海市浦东新区】快件已发出')).toBe('上海市浦东新区')
+    expect(logisticsMapQuery('快件已到达西安市未央区分拨中心')).toBe('西安市')
+    expect(logisticsMapQuery('运输中，请耐心等待')).toBe('')
+    expect(logisticsMapQueries([
+      { time: '2026-09-18 12:00:00', content: '到达北京市转运中心' },
+      { time: '2026-09-18 10:00:00', content: '【西安市未央区】已揽收' },
+      { time: '2026-09-18 13:00:00', content: '离开北京市分拨中心' },
+    ]).map(item => item.query)).toEqual(['西安市未央区', '北京市'])
+  })
 })
 
 describe('manual address and optional map', () => {
@@ -52,6 +62,11 @@ describe('manual address and optional map', () => {
   it('does not reject legitimate zero coordinates', () => expect(hasAddressLocation({ ...located, latitude: 0, longitude: 0 })).toBe(true))
   it('does not send a saved coordinate or trusted timestamp back from the manual editor', () => {
     expect(manualAddressPayload(located, located)).toEqual(address)
+  })
+  it('sends a newly confirmed map point without trusting a client timestamp', () => {
+    const payload = manualAddressPayload({ ...located, id: 0, locationConfirmed: true } as Address & { locationConfirmed: boolean })
+    expect(payload).toMatchObject({ longitude: 116.4, latitude: 39.9, coordSystem: 'GCJ02', locationSource: 'MAP_PICKER', locationConfirmed: true })
+    expect(payload).not.toHaveProperty('locationConfirmedAt')
   })
   it.each([{ areaId: 110102 }, { detailAddress: '新街道门牌' }])('clears stale points when text changes %j', patch => {
     expect(manualAddressPayload({ ...located, ...patch }, located)).toHaveProperty('clearLocation', true)
@@ -72,7 +87,7 @@ describe('manual address and optional map', () => {
   it('map unavailable or uninstalled adapter always keeps the manual flow', () => {
     expect(mapAvailability(null).status).toBe('NOT_CONFIGURED')
     expect(mapAvailability(null, true).status).toBe('UNAVAILABLE')
-    expect(mapAvailability({ status: 'READY', provider: 'AMAP', coordinateSystem: 'GCJ02', enabled: true, manualInputEnabled: true }).status).toBe('ADAPTER_UNAVAILABLE')
+    expect(mapAvailability({ status: 'READY', provider: 'AMAP', coordinateSystem: 'GCJ02', enabled: true, manualInputEnabled: true }).status).toBe('READY')
   })
   it('reads coordinates from immutable order snapshot, not the editable address book', () => {
     const order = { id: 1, status: 20, payPrice: 1, receiverLongitude: 116.4, receiverLatitude: 39.9, receiverCoordSystem: 'GCJ02', receiverLocationSource: 'GEOCODER', receiverLocationPrecision: 'APPROXIMATE' } as TradeOrder

@@ -29,3 +29,8 @@ export function getStockRecordPage(params: PageParam) {
 export function exportStockRecord(params: any) {
   return requestClient.download('/erp/stock-record/export-excel', { params });
 }
+
+/** 导出产品库存明细 PDF */
+export function exportStockRecordPdf(params: any) {
+  return requestClient.download('/erp/stock-record/export-pdf', { params });
+}

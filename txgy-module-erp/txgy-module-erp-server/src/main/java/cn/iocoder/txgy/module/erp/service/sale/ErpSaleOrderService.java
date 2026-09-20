@@ -35,12 +35,13 @@ public interface ErpSaleOrderService {
     void updateSaleOrder(@Valid ErpSaleOrderSaveReqVO updateReqVO);
 
     /**
-     * 更新销售订单的状态
+     * 反审批销售订单（审批中 / 已审批 → 草稿），并联动取消 BPM 在途流程实例
      *
      * @param id 编号
-     * @param status 状态
+     * @param userId 操作人编号
+     * @param reason 反审批原因
      */
-    void updateSaleOrderStatus(Long id, Integer status);
+    void reverseApproveSaleOrder(Long id, Long userId, String reason);
 
     /** 提交销售订单审批 */
     void submitSaleOrder(Long id, Long userId);

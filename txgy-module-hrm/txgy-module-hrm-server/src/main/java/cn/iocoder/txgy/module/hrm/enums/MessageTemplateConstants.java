@@ -18,6 +18,7 @@ public interface MessageTemplateConstants {
     String PERFORMANCE_TASK_PENDING = "hrm_performance_task_pending"; // 绩效待办通知
     String PERFORMANCE_PROCESS_RESULT = "hrm_performance_process_result"; // 绩效处理结果通知
     String SALARY_SLIP_SENT = "hrm_salary_slip_sent"; // 工资条发放通知
+    String CERTIFICATE_WARNING = "hrm_certificate_warning"; // 证件到期/复审预警通知
 
     String CONTRACT_PENDING_SIGN = "hrm_contract_sign_notice"; // 劳务合同待签署通知
 

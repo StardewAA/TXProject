@@ -1,11 +1,16 @@
 package cn.iocoder.txgy.module.crm.dal.mysql.aftersale;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAfterSaleVisitTaskPageReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitTaskDO;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitTaskStatusEnum;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDate;
 import java.util.Collection;
@@ -30,10 +35,68 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
                 .orderByAsc(CrmAfterSaleVisitTaskDO::getTaskDate));
     }
 
+    // ========== 待办：回访任务临期（实时查询，不落库） ==========
+
+    /**
+     * 待办「回访任务临期」分页查询
+     *
+     * <p>实时判定条件：
+     * <ul>
+     *   <li>任务状态 = 待处理（完成 / 逾期 / 删除后条件不再命中，刷新即消失）；</li>
+     *   <li>处理人 ∈ 归属范围（当前登录人本人 + 其下属）；</li>
+     *   <li>计划回访日期 ∈ [今天, 今天 + 售后设置「任务临期提醒提前天数」]。</li>
+     * </ul>
+     * 按计划回访日期升序，最紧急的排在最前。
+     *
+     * @param reqVO           分页查询
+     * @param assigneeUserIds 归属范围（本人 + 下属负责的任务处理人）
+     * @param today           当前日期
+     * @param remindDays      售后设置「回访任务临期提醒提前天数」
+     */
+    default PageResult<CrmAfterSaleVisitTaskDO> selectPageByRemind(CrmAfterSaleVisitTaskPageReqVO reqVO,
+                                                                  Collection<Long> assigneeUserIds, LocalDate today, Integer remindDays) {
+        if (CollUtil.isEmpty(assigneeUserIds)) {
+            return PageResult.empty();
+        }
+        int days = remindDays == null || remindDays < 0 ? 0 : remindDays;
+        return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
+                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days))
+                .orderByAsc(CrmAfterSaleVisitTaskDO::getTaskDate));
+    }
+
+    /**
+     * 待办「回访任务临期」数量（与 {@link #selectPageByRemind} 同一口径）
+     */
+    default Long selectCountByRemind(Collection<Long> assigneeUserIds, LocalDate today, Integer remindDays) {
+        if (CollUtil.isEmpty(assigneeUserIds)) {
+            return 0L;
+        }
+        int days = remindDays == null || remindDays < 0 ? 0 : remindDays;
+        return selectCount(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
+                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days)));
+    }
+
     default List<CrmAfterSaleVisitTaskDO> selectListByStatusAndDateLe(Integer status, LocalDate date) {
         return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
                 .eq(CrmAfterSaleVisitTaskDO::getStatus, status)
                 .le(CrmAfterSaleVisitTaskDO::getTaskDate, date));
+    }
+
+    /**
+     * 查询指定状态、且计划回访日期早于指定日期的任务
+     *
+     * <p>逾期标记用法：窗口期截止日期 = 计划回访日期 + 逾期判定天数，
+     * 故传入「今天 - 逾期判定天数」作为阈值，即 task_date &lt; 阈值 等价于 已超出窗口期；
+     * 窗口期按当前售后配置实时计算，不由数据库快照（window_end_date）参与判定。
+     */
+    default List<CrmAfterSaleVisitTaskDO> selectListByStatusAndDateLt(Integer status, LocalDate date) {
+        return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getStatus, status)
+                .lt(CrmAfterSaleVisitTaskDO::getTaskDate, date));
     }
 
     /**
@@ -61,5 +124,56 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
         return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
                 .in(CrmAfterSaleVisitTaskDO::getWarrantyId, warrantyIds));
     }
+
+    /**
+     * 统计指定计划、指定周期的任务数量（用于幂等判断）
+     */
+    default long selectCountByPlanIdAndCycleKey(Long planId, String cycleKey) {
+        return selectCount(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getPlanId, planId)
+                .eq(CrmAfterSaleVisitTaskDO::getCycleKey, cycleKey));
+    }
+
+    /**
+     * 统计指定计划、指定计划日期的任务数量（历史数据无周期标识时兜底去重）
+     */
+    default long selectCountByPlanIdAndTaskDate(Long planId, LocalDate taskDate) {
+        return selectCount(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getPlanId, planId)
+                .eq(CrmAfterSaleVisitTaskDO::getTaskDate, taskDate));
+    }
+
+    /**
+     * 查询指定质保档案下已使用的最大业务编号
+     *
+     * <p>仅统计「未删除」的任务：编号在该质保档案范围内从 1 开始连续递增，
+     * 不同质保档案之间互相独立（编号可重复）；
+     * 任务删除后由 {@link #resequenceBizNoByWarrantyId} 重排补齐，不会跳号
+     */
+    @Select("SELECT COALESCE(MAX(biz_no), 0) FROM crm_after_sale_visit_task "
+            + "WHERE warranty_id = #{warrantyId} AND deleted = 0")
+    Integer selectMaxBizNoByWarrantyId(@Param("warrantyId") Long warrantyId);
+
+    /**
+     * 查询指定质保档案下的任务列表（按业务编号升序），供回访记录表单绑定任务使用
+     */
+    default List<CrmAfterSaleVisitTaskDO> selectListByWarrantyId(Long warrantyId) {
+        return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getWarrantyId, warrantyId)
+                .orderByAsc(CrmAfterSaleVisitTaskDO::getBizNo)
+                .orderByAsc(CrmAfterSaleVisitTaskDO::getId));
+    }
+
+    /**
+     * 重排指定质保档案下「未删除」任务的业务编号，使其从 1 开始严格连续递增（不跳号）
+     *
+     * <p>任务删除后调用：保证同一档案内编号始终为 1、2、3…，删除中间任务时后续编号前移
+     */
+    @Update("UPDATE crm_after_sale_visit_task t " +
+            "JOIN (SELECT id, ROW_NUMBER() OVER (PARTITION BY warranty_id ORDER BY biz_no, id) AS rn " +
+            "      FROM crm_after_sale_visit_task " +
+            "      WHERE warranty_id = #{warrantyId} AND deleted = 0) x ON x.id = t.id " +
+            "SET t.biz_no = x.rn")
+    int resequenceBizNoByWarrantyId(@Param("warrantyId") Long warrantyId);
 
 }

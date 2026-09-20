@@ -192,8 +192,8 @@ INSERT INTO promotion_kefu_agent(tenant_id,scope,shop_id,actor_type,actor_id,ena
 ON DUPLICATE KEY UPDATE enabled=1,version=GREATEST(version,1),update_time=NOW();
 INSERT INTO promotion_kefu_faq_config(tenant_id,scope,shop_id,version,draft_json,published_version,published_json,update_time)
 SELECT 2009,'SHOP',s.id,1,
- '[{"id":"delivery","question":"什么时候发货？","answer":"现货商品通常在付款后两个工作日内发出。"},{"id":"spec","question":"规格如何选择？","answer":"请发送商品卡片和使用工况，客服会协助核对规格。"}]',
- 1,'[{"id":"delivery","question":"什么时候发货？","answer":"现货商品通常在付款后两个工作日内发出。"},{"id":"spec","question":"规格如何选择？","answer":"请发送商品卡片和使用工况，客服会协助核对规格。"}]',NOW()
+ '[{"id":"delivery","question":"什么时候发货？","keywords":["发货时间","多久发货"],"answer":"现货商品通常在付款后两个工作日内发出。","enabled":true},{"id":"spec","question":"规格如何选择？","keywords":["规格选择","型号推荐"],"answer":"请发送商品卡片和使用工况，客服会协助核对规格。","enabled":true}]',
+ 1,'[{"id":"delivery","question":"什么时候发货？","keywords":["发货时间","多久发货"],"answer":"现货商品通常在付款后两个工作日内发出。","enabled":true},{"id":"spec","question":"规格如何选择？","keywords":["规格选择","型号推荐"],"answer":"请发送商品卡片和使用工况，客服会协助核对规格。","enabled":true}]',NOW()
 FROM product_shop s WHERE s.tenant_id=2009 AND s.id BETWEEN 940501 AND 940505
 ON DUPLICATE KEY UPDATE version=VALUES(version),draft_json=VALUES(draft_json),published_version=VALUES(published_version),published_json=VALUES(published_json),update_time=NOW();
 

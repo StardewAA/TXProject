@@ -2,6 +2,7 @@
 <template>
   <s-layout
     :bgStyle="{ color: '#f4f7fb' }"
+    tenantEntry
     tabbar="/pages/index/category"
     title="商品分类"
   >
@@ -18,7 +19,7 @@
         <!-- 分类菜单 -->
         <scroll-view class="category-sidebar" scroll-y :style="{ height: pageHeight + 'px' }">
           <view
-            v-for="(category, index) in mallCategories"
+            v-for="(category, index) in catalogCategories"
             :key="category.key"
             class="sidebar-item"
             :class="{ 'sidebar-item-active': index === state.activeMenu }"
@@ -103,23 +104,23 @@
   import { computed, reactive, ref } from 'vue';
   import { onLoad, onShow, onPullDownRefresh } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
-  import {
-    getMallCategory,
-    mallCategories,
-  } from '@/sheep/data/mall-catalog';
+  import { getMallCategory } from '@/sheep/data/mall-catalog';
   import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
 
   const state = reactive({
     activeMenu: 0,
   });
   const products = ref([]);
+  const catalogCategories = ref([]);
   const catalogSource = ref('loading');
 
   const safeArea = sheep.$platform.device?.safeArea || {
     height: typeof window === 'undefined' ? 667 : window.innerHeight,
   };
   const pageHeight = computed(() => Math.max(320, safeArea.height - 44 - 50));
-  const activeCategory = computed(() => mallCategories[state.activeMenu] || mallCategories[0]);
+  const activeCategory = computed(() =>
+    catalogCategories.value[state.activeMenu] || catalogCategories.value[0],
+  );
   const activeProducts = computed(() =>
     activeCategory.value && Array.isArray(products.value)
       ? products.value.filter((product) => product?.categoryKey === activeCategory.value.key)
@@ -130,7 +131,10 @@
     (Array.isArray(products.value) ? products.value : []).filter(
       (product) => product?.categoryKey === categoryKey,
     ).length;
-  const categoryColor = (categoryKey) => getMallCategory(categoryKey)?.color || '#0f766e';
+  const categoryColor = (categoryKey) =>
+    catalogCategories.value.find((category) => category.key === categoryKey)?.color ||
+    getMallCategory(categoryKey)?.color ||
+    '#0f766e';
   const categoryGradient = (item) => {
     const color = typeof item === 'string' ? categoryColor(item) : item?.color || '#0f766e';
     return `linear-gradient(135deg, ${color} 0%, #0f172a 100%)`;
@@ -161,7 +165,10 @@
       const result = await loadMallCatalog(force);
       if (Array.isArray(result?.products)) {
         products.value = result.products.filter(Boolean);
+        catalogCategories.value = Array.isArray(result?.categories) ? result.categories.filter(Boolean) : [];
+        if (state.activeMenu >= catalogCategories.value.length) state.activeMenu = 0;
         catalogSource.value = 'api';
+        applyCategoryParam();
       }
     } catch (error) {
       products.value = [];
@@ -176,24 +183,11 @@
     const appStore = sheep.$store('app');
     const tabbarParams = appStore?.paramsForTabbar || {};
     const params = { ...options, ...tabbarParams };
-    let index = mallCategories.findIndex((item) => item.key === params.categoryKey);
+    if (!catalogCategories.value.length) return;
+    let index = catalogCategories.value.findIndex((item) => item.key === params.categoryKey);
     const categoryId = Number(params.categoryId || params.id);
     if (index < 0 && Number.isFinite(categoryId) && categoryId > 0) {
-      const apiCategoryKeys = {
-        900002: 'primer',
-        900003: 'intermediate',
-        900004: 'finish',
-        900015: 'adhesive',
-        900005: 'fireproof',
-        900006: 'insulation',
-        900007: 'cold-insulation',
-        900008: 'moisture-proof',
-        900009: 'outer-protection',
-        900010: 'pipe-support',
-        900011: 'construction',
-        900012: 'safety-tools',
-      };
-      index = mallCategories.findIndex((item) => item.key === apiCategoryKeys[categoryId]);
+      index = catalogCategories.value.findIndex((item) => Number(item.apiId) === categoryId);
     }
     if (index >= 0) {
       state.activeMenu = index;

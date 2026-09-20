@@ -14,6 +14,8 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleWarrantyStatusEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum;
 import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.*;
 
 /**
@@ -55,6 +58,8 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
     private CrmContractService contractService;
     @Resource
     private CrmNoRedisDAO noRedisDAO;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -138,8 +143,47 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
     }
 
     @Override
-    public PageResult<CrmAfterSaleWarrantyDO> getWarrantyPage(CrmAfterSaleWarrantyPageReqVO pageReqVO) {
+    public PageResult<CrmAfterSaleWarrantyDO> getWarrantyPage(CrmAfterSaleWarrantyPageReqVO pageReqVO, Long userId) {
+        // 待办「质保即将到期」：实时按售后设置判定，不预生成任何待办数据
+        if (CrmAfterSaleWarrantyPageReqVO.EXPIRY_TYPE_ABOUT_TO_EXPIRE.equals(pageReqVO.getExpiryType())) {
+            return warrantyMapper.selectPageByExpiry(pageReqVO, resolveRemindServiceUserIds(userId),
+                    LocalDate.now(), resolveWarrantyWarnDays());
+        }
         return warrantyMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public Long getWarrantyRemindCount(Long userId) {
+        return warrantyMapper.selectCountByExpiry(resolveRemindServiceUserIds(userId),
+                LocalDate.now(), resolveWarrantyWarnDays());
+    }
+
+    /**
+     * 解析待办归属范围：本人 + 下属（与待办现有的「归属过滤」口径一致）
+     *
+     * <p>说明：售后质保档案不在 CRM 的 crm_permission 数据权限体系内，
+     * 因此沿用质保档案的「售后责任人」(serviceUserId) 作为归属人；
+     * 未设置售后责任人的档案没有明确归属人，不进入待办。
+     */
+    private Set<Long> resolveRemindServiceUserIds(Long userId) {
+        Set<Long> userIds = new HashSet<>();
+        if (userId == null) {
+            return userIds;
+        }
+        userIds.add(userId);
+        List<AdminUserRespDTO> subordinates = adminUserApi.getUserListBySubordinate(userId).getCheckedData();
+        if (CollUtil.isNotEmpty(subordinates)) {
+            userIds.addAll(convertSet(subordinates, AdminUserRespDTO::getId));
+        }
+        return userIds;
+    }
+
+    /**
+     * 读取售后设置中的「质保到期提前提醒天数」，未配置时按售后设置默认值 30 天兜底
+     */
+    private Integer resolveWarrantyWarnDays() {
+        Integer warnDays = configService.getConfig().getWarrantyWarnDays();
+        return warnDays == null || warnDays < 0 ? 30 : warnDays;
     }
 
     @Override

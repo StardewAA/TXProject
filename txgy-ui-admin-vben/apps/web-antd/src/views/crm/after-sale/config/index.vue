@@ -86,13 +86,22 @@ const schema: VbenFormSchema[] = [
   {
     component: 'InputNumber',
     fieldName: 'taskOverdueDays',
-    label: '任务逾期判定天数',
+    label: '任务逾期判定天数（窗口期天数）',
     rules: 'required',
     componentProps: {
       class: '!w-full',
-      min: 1,
+      min: 0,
       precision: 0,
-      placeholder: '请输入任务逾期判定天数',
+      placeholder: '窗口期截止日期 = 计划回访日期 + 本值，超出即判定逾期',
+    },
+  },
+  {
+    component: 'Switch',
+    fieldName: 'allowEarlyVisit',
+    label: '允许提前提交回访',
+    componentProps: {
+      checkedChildren: '允许',
+      unCheckedChildren: '不允许',
     },
   },
   {

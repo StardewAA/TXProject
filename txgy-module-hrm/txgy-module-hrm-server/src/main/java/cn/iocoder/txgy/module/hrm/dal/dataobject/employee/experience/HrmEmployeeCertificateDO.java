@@ -1,7 +1,9 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.experience;
 
+import cn.iocoder.txgy.module.hrm.dal.dataobject.certificate.HrmCertificateTypeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
-import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
+import cn.iocoder.txgy.module.hrm.enums.certificate.HrmCertificateStatusEnum;
+import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -19,7 +21,7 @@ import java.time.LocalDateTime;
  *
  * @author OPENLAB BS
  */
-@TableName(value = "hrm_employee_certificate", autoResultMap = true)
+@TableName("hrm_employee_certificate")
 @KeySequence("hrm_employee_certificate_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -27,7 +29,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmEmployeeCertificateDO extends TenantBaseDO {
+public class HrmEmployeeCertificateDO extends BaseDO {
 
     /**
      * 证书编号
@@ -41,7 +43,9 @@ public class HrmEmployeeCertificateDO extends TenantBaseDO {
      */
     private Long employeeId;
     /**
-     * 证照类型编号（hrm_certificate_type.id）
+     * 证件类型编号
+     *
+     * 关联 {@link HrmCertificateTypeDO#getId()}，为空表示未纳入资格证件域管理的普通证书履历
      */
     private Long typeId;
     /**
@@ -66,8 +70,10 @@ public class HrmEmployeeCertificateDO extends TenantBaseDO {
     private LocalDateTime endTime;
     /**
      * 复审日期
+     *
+     * 仅当证件类型需要复审时由续证/复审流程写入
      */
-    private java.time.LocalDate reviewDate;
+    private LocalDateTime reviewTime;
     /**
      * 发证机构
      */
@@ -77,25 +83,17 @@ public class HrmEmployeeCertificateDO extends TenantBaseDO {
      */
     private LocalDateTime issuingTime;
     /**
-     * 证件扫描件/照片（逗号分隔地址串）
-     */
-    @com.baomidou.mybatisplus.annotation.TableField(
-            typeHandler = cn.iocoder.txgy.framework.mybatis.core.type.StringListTypeHandler.class)
-    private java.util.List<String> fileUrls;
-    /**
-     * 核验状态：0 未核验，1 已核验，2 核验不通过
+     * 证件附件地址
      *
-     * 枚举 {@link cn.iocoder.txgy.module.hrm.enums.certificate.HrmCertificateVerifyStatusEnum}
+     * 关联统一文件服务的文件地址
      */
-    private Integer verifyStatus;
+    private String attachmentUrl;
     /**
-     * 核验人（后台用户编号）
+     * 证件状态
+     *
+     * 由每日定时任务计算，枚举 {@link HrmCertificateStatusEnum}
      */
-    private Long verifyUserId;
-    /**
-     * 核验时间
-     */
-    private LocalDateTime verifyTime;
+    private Integer status;
     /**
      * 备注
      */

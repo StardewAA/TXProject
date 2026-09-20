@@ -24,9 +24,12 @@ import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeVersionService;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeDO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.candidate.HrmRecruitCandidateSaveReqVO;
-import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSaveReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSnapshotReqVO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeVersionDO;
+import cn.iocoder.txgy.module.hrm.util.HrmResumeFingerprintUtils;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -57,6 +60,8 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
     private HrmRecruitResumeService resumeService;
     @Resource
     private HrmPersonalResumeService personalResumeService;
+    @Resource
+    private HrmPersonalResumeVersionService personalResumeVersionService;
     @Resource
     private HrmRecruitChatService chatService;
     @Resource
@@ -384,12 +389,13 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
         }
         AtomicReference<Long> applicationId = new AtomicReference<>();
         TenantUtils.execute(targetTenantId,
-                () -> applicationId.set(createPortalApplicationInTenant(applicantUserId, reqVO, targetTenantId)));
+                () -> applicationId.set(createPortalApplicationInTenant(applicantUserId, reqVO, post)));
         return applicationId.get();
     }
 
     private Long createPortalApplicationInTenant(Long applicantUserId, HrmPortalRecruitApplyReqVO reqVO,
-                                                 Long targetTenantId) {
+                                                 HrmRecruitPostDO post) {
+        Long targetTenantId = post.getTenantId();
         postService.validateRecruitPostPublished(reqVO.getPostId());
         if (!chatService.hasApplyQualification(applicantUserId, reqVO.getPostId())) {
             throw exception(RECRUIT_CHAT_APPLY_NOT_QUALIFIED);
@@ -419,21 +425,52 @@ public class HrmRecruitApplicationServiceImpl implements HrmRecruitApplicationSe
         if (processing != null) {
             throw exception(RECRUIT_APPLICATION_DUPLICATE);
         }
+        // 简历来源：优先使用本人已固化的版本，其次使用已保存的个人简历，最后兼容旧客户端直传附件。
         String resumeFileName = reqVO.getResumeFileName();
         String resumeFileUrl = reqVO.getResumeFileUrl();
         String resumeRemark = reqVO.getResumeRemark();
-        if (reqVO.getResumeId() != null) {
+        String resumeContent = null;
+        Long sourcePersonalVersionId = null;
+        if (reqVO.getResumeVersionId() != null) {
+            // 归属校验在服务内完成：非本人的版本编号会直接抛异常
+            HrmPersonalResumeVersionDO version = personalResumeVersionService
+                    .getVersion(applicantUserId, reqVO.getResumeVersionId());
+            resumeContent = version.getContent();
+            if (StrUtil.isBlank(resumeContent)) {
+                throw exception(PERSONAL_RESUME_VERSION_CONTENT_EMPTY);
+            }
+            sourcePersonalVersionId = version.getId();
+            resumeFileName = StrUtil.blankToDefault(resumeFileName, "在线简历 V" + version.getVersionNo());
+            resumeRemark = StrUtil.blankToDefault(resumeRemark, "在线简历版本 V" + version.getVersionNo());
+        } else if (reqVO.getResumeId() != null) {
             HrmPersonalResumeDO personalResume = personalResumeService.getResume(applicantUserId, reqVO.getResumeId());
-            if (personalResume == null || StrUtil.isBlank(personalResume.getFileUrl())) {
+            if (personalResume == null) {
                 throw exception(RECRUIT_RESUME_NOT_EXISTS);
             }
-            resumeFileName = StrUtil.blankToDefault(personalResume.getFileName(), personalResume.getTitle());
-            resumeFileUrl = personalResume.getFileUrl();
+            if (StrUtil.isNotBlank(personalResume.getFileUrl())) {
+                resumeFileName = StrUtil.blankToDefault(personalResume.getFileName(), personalResume.getTitle());
+                resumeFileUrl = personalResume.getFileUrl();
+            } else if (StrUtil.isNotBlank(personalResume.getContent())) {
+                // 在线简历草稿：按内容生成快照，不再要求附件地址
+                resumeContent = personalResume.getContent();
+                resumeFileName = StrUtil.blankToDefault(resumeFileName, personalResume.getTitle());
+            } else {
+                throw exception(RECRUIT_RESUME_NOT_EXISTS);
+            }
             resumeRemark = personalResume.getRemark();
         }
-        Long resumeId = resumeService.createRecruitResume(new HrmRecruitResumeSaveReqVO()
+        if (StrUtil.isBlank(resumeContent) && StrUtil.isBlank(resumeFileUrl)) {
+            throw exception(RECRUIT_APPLICATION_RESUME_REQUIRED);
+        }
+        // 快照在职位所属企业租户内生成，并由应聘记录固定关联；此后求职者修改或删除自己的简历都不影响这份历史快照。
+        Long resumeId = resumeService.createRecruitResumeSnapshot(new HrmRecruitResumeSnapshotReqVO()
                 .setCandidateId(candidate.getId()).setFileName(resumeFileName)
-                .setFileUrl(resumeFileUrl).setRemark(resumeRemark));
+                .setFileUrl(resumeFileUrl).setContent(resumeContent)
+                .setContentHash(HrmResumeFingerprintUtils.fingerprintResumeContent(resumeContent))
+                .setSourcePersonalVersionId(sourcePersonalVersionId)
+                .setPostId(post.getId())
+                .setPostFingerprint(HrmResumeFingerprintUtils.fingerprintPost(post))
+                .setRemark(resumeRemark));
         HrmRecruitApplicationDO application = new HrmRecruitApplicationDO()
                 .setApplicantUserId(applicantUserId).setCandidateId(candidate.getId())
                 .setPostId(reqVO.getPostId()).setResumeId(resumeId).setSourceRemark(reqVO.getSourceRemark())

@@ -380,6 +380,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       },
     },
     {
+      field: 'followUpCount',
+      title: '累计跟进次数',
+      minWidth: 110,
+      formatter: ({ cellValue }) => `${cellValue ?? 0} 次`,
+    },
+    {
       field: 'contactLastTime',
       title: '最后跟进时间',
       formatter: 'formatDateTime',

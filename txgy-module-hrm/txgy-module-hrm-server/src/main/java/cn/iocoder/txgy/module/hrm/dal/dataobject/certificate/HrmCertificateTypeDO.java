@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.certificate;
 
-import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -12,10 +13,10 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 /**
- * HRM 证照类型字典 DO
+ * HRM 证件类型 DO
  *
- * <p>防腐保温是强证照行业：高处作业、焊接与热切割、架子工、喷砂、探伤都是特种作业，
- * 证照类型上要标记「是否特种作业 / 是否必持 / 预警提前天数」，上岗卡控才有依据。</p>
+ * 证件类型是资格证件域的配置源，维护是否特种作业、是否需要复审、复审周期与默认提前预警天数，
+ * 证件台账与每日预警任务均读取本表配置。
  *
  * @author OPENLAB BS
  */
@@ -27,19 +28,19 @@ import lombok.ToString;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmCertificateTypeDO extends TenantBaseDO {
+public class HrmCertificateTypeDO extends BaseDO {
 
     /**
-     * 编号
+     * 证件类型编号
      */
     @TableId
     private Long id;
     /**
-     * 证照类型名称
+     * 证件类型名称
      */
     private String name;
     /**
-     * 编码
+     * 证件类型编码
      */
     private String code;
     /**
@@ -47,29 +48,35 @@ public class HrmCertificateTypeDO extends TenantBaseDO {
      */
     private Boolean specialOperation;
     /**
-     * 是否必持（缺证不得上岗）
-     */
-    private Boolean mandatory;
-    /**
      * 是否需要复审
      */
     private Boolean needReview;
     /**
-     * 到期预警提前天数
+     * 复审周期（月）
+     *
+     * 仅当 {@link #needReview} 为 true 时生效
      */
-    private Integer warnDays;
+    private Integer reviewCycleMonths;
     /**
-     * 发证机关
+     * 默认提前预警天数
+     *
+     * 为 null 时按 {@link cn.iocoder.txgy.module.hrm.service.certificate.HrmCertificateStatusCalculator#DEFAULT_ADVANCE_DAYS} 兜底
      */
-    private String issuingAuthority;
+    private Integer advanceDays;
+    /**
+     * 是否必须上传证件附件
+     */
+    private Boolean requireAttachment;
+    /**
+     * 状态
+     *
+     * 枚举 {@link CommonStatusEnum}
+     */
+    private Integer status;
     /**
      * 显示顺序
      */
     private Integer sort;
-    /**
-     * 状态：0 启用，1 停用
-     */
-    private Integer status;
     /**
      * 备注
      */

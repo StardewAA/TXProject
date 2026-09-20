@@ -126,6 +126,21 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
      * @param name   客户名称，精确匹配
      * @return 客户列表，最多 5 条
      */
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * 用 SQL 自增而不是「先查再写」，避免并发下相互覆盖导致次数丢失
+     *
+     * @param id    客户编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmCustomerDO>()
+                .eq(CrmCustomerDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
+
     default List<CrmCustomerDO> selectListByDuplicate(String mobile, String name) {
         LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
         if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {

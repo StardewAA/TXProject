@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
@@ -23,6 +23,11 @@ import { AreaCascader } from '#/components/area';
 
 import RecruitProfile from '../profile/recruit.vue';
 import CompanyDirectory from './components/company-directory.vue';
+import {
+  createResumeToolRequest,
+  type ResumeToolRequest,
+} from './components/resume-tools';
+import ResumeToolsMenu from './components/resume-tools-menu.vue';
 import Messages from './messages.vue';
 import OnlineResume from './online-resume.vue';
 import RecruitProfileSetup from './profile-setup.vue';
@@ -38,7 +43,8 @@ const tenantNames = ref<Record<number, string>>({});
 const selectedPost = ref<HrmPortalRecruitApi.Post>();
 const postPage = reactive<HrmPortalRecruitApi.PostPageParams>({
   pageNo: 1,
-  pageSize: 10,
+  // 职位页每页列出的岗位数量。
+  pageSize: 20,
   postName: '',
   postTypeId: undefined,
   jobNature: undefined,
@@ -59,9 +65,15 @@ const profileSetupOpen = ref(false);
 type ProfileAction = {
   favoritePostId?: number;
   postId?: string;
+  resumeAction?: 'ai' | 'edit' | 'upload' | 'version';
   section?: 'messages' | 'resume' | 'user';
 };
 const pendingProfileAction = ref<ProfileAction>();
+/**
+ * 进入在线简历页后要执行的动作（例如打开附件上传弹窗）。
+ * nonce 递增，简历页消费后回传 action-handled 清空，保证一次点击只触发一次。
+ */
+const pendingResumeAction = ref<ResumeToolRequest>();
 let profileCheckPromise: Promise<boolean> | undefined;
 const navUserName = computed(() => {
   const name =
@@ -171,6 +183,18 @@ const activeSection = computed(() => {
   if (!profileCompleted.value && isProfileActionSection(requestedSection.value)) return 'home';
   return requestedSection.value;
 });
+
+/**
+ * 首页、职位、公司三个板块共用同一套富页脚。
+ * 公共框架只在这三页之外才渲染它自己的页脚，这里给出同口径的开关：
+ * 富页脚显示时，用 CSS 把公共页脚隐藏掉，避免两个页脚上下叠加。
+ */
+const showRecruitFooter = computed(
+  () =>
+    activeSection.value === 'home' ||
+    activeSection.value === 'jobs' ||
+    activeSection.value === 'companies',
+);
 const previewPosts = computed(() => displayPosts.value.slice(0, 9));
 const homePreviewPosts = computed(() => {
   const result = displayPosts.value.filter((post) => {
@@ -359,6 +383,9 @@ function runPendingProfileAction() {
     return;
   }
   if (action.section) {
+    if (action.resumeAction) {
+      pendingResumeAction.value = createResumeToolRequest(action.resumeAction);
+    }
     void router.push({
       name: 'PortalRecruit',
       query: {
@@ -397,6 +424,41 @@ function openGatedSection(section: 'messages' | 'resume' | 'user', postId?: stri
   void requestProfileAction({ section, postId });
 }
 
+/** 右上角简历工具菜单：在线编辑，沿用原有资料门禁；已在简历页时定位到简历正文 */
+function openResumeEditor() {
+  void requestProfileAction({ section: 'resume', resumeAction: 'edit' });
+}
+
+/** 右上角简历工具菜单：附件管理，先过门禁，再进入简历页打开附件管理面板 */
+function openResumeUpload() {
+  void requestProfileAction({ section: 'resume', resumeAction: 'upload' });
+}
+
+/** 右上角简历工具菜单：简历版本，先过门禁，再进入简历页打开版本面板 */
+function openResumeVersions() {
+  void requestProfileAction({ section: 'resume', resumeAction: 'version' });
+}
+
+/** 右上角简历工具菜单：AI 简历助手，先过门禁，再进入简历页打开诊断面板 */
+function openResumeAi() {
+  void requestProfileAction({ section: 'resume', resumeAction: 'ai' });
+}
+
+function handleResumeActionHandled() {
+  pendingResumeAction.value = undefined;
+}
+
+/** 离开在线简历页时清掉未消费的动作，避免下次进入简历页时意外弹出上传弹窗 */
+watch(activeSection, (section, previous) => {
+  if (section !== 'resume') pendingResumeAction.value = undefined;
+  // 首页为了做预览一次取 100 条，职位页只取 postPage.pageSize 条。
+  // 两个板块共用同一份 posts，切换时必须按新板块重新取数，
+  // 否则从首页切回职位页会沿用那 100 条，职位页一次列出上百个岗位。
+  if (section !== previous && (section === 'home' || section === 'jobs')) {
+    void loadPosts();
+  }
+});
+
 function openChat(post: HrmPortalRecruitApi.Post) {
   openGatedSection('messages', String(post.id));
 }
@@ -432,8 +494,6 @@ function selectSection(section: 'companies' | 'home' | 'jobs') {
   void router.push({
     name: 'PortalRecruit',
     query: section === 'home' ? {} : { section },
-  }).then(() => {
-    if (section === 'home') void loadPosts();
   });
 }
 
@@ -529,7 +589,7 @@ function formatPostTotal(total: number) {
 }
 
 function getPostCompanyName(post: HrmPortalRecruitApi.Post) {
-  return post.companyShortName || post.companyName || (post.tenantId != null ? tenantNames.value[post.tenantId] : undefined) || '行业企业';
+  return post.companyShortName || post.companyName || (post.tenantId != null ? tenantNames.value[post.tenantId] : undefined) || '招聘企业待确认';
 }
 
 function showMorePosts() {
@@ -549,7 +609,6 @@ onMounted(async () => {
     if (Array.isArray(saved)) favoritePostIds.value = saved.filter((id): id is number => typeof id === 'number');
   } catch {}
   await Promise.all([
-    loadPosts(),
     loadTenantNames(),
     getPortalRecruitPostTypeList()
       .then((result) => {
@@ -560,6 +619,9 @@ onMounted(async () => {
       }),
     checkRecruitProfile(),
   ]);
+  // 岗位列表必须等资料检查完成后再取：activeSection 在 profileChecked 之前会回落到
+  // home，此时取数会按首页的 100 条去要，职位页就会一次渲染过多岗位。
+  await loadPosts();
   const requestedProfileSection = requestedSection.value;
   if (!profileCompleted.value && isProfileActionSection(requestedProfileSection) && !pendingProfileAction.value) {
     const postId = Array.isArray(route.query.postId) ? route.query.postId[0] : route.query.postId;
@@ -574,7 +636,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="portal-page recruit-page" :class="{ 'recruit-page--home': activeSection === 'home' }">
+  <div class="portal-page recruit-page" :class="{ 'recruit-page--home': activeSection === 'home', 'recruit-page--rich-footer': showRecruitFooter }">
     <nav :class="{ 'is-scrolled': subnavScrolled }" class="recruit-subnav" aria-label="我要找工作导航">
       <div class="recruit-nav-links">
       <button :class="{ active: activeSection === 'home' }" type="button" @click="selectSection('home')">首页</button>
@@ -583,7 +645,14 @@ onUnmounted(() => {
       </div>
       <div class="recruit-nav-account">
         <button type="button" @click="openGatedSection('messages')"><IconifyIcon icon="lucide:bell" /> 消息</button>
-        <button type="button" @click="openGatedSection('resume')">在线简历</button>
+        <ResumeToolsMenu
+          variant="dropdown"
+          trigger-label="简历"
+          @ai="openResumeAi"
+          @edit="openResumeEditor"
+          @upload="openResumeUpload"
+          @version="openResumeVersions"
+        />
         <button class="recruit-account-button" type="button" aria-label="打开我的应聘中心" @click="openGatedSection('user')">
           <span class="recruit-account-name">{{ navUserName }}</span>
         </button>
@@ -602,7 +671,11 @@ onUnmounted(() => {
     </a-modal>
 
     <Messages v-if="activeSection === 'messages'" embedded />
-    <OnlineResume v-else-if="activeSection === 'resume'" />
+    <OnlineResume
+      v-else-if="activeSection === 'resume'"
+      :pending-action="pendingResumeAction"
+      @action-handled="handleResumeActionHandled"
+    />
     <RecruitProfile v-else-if="activeSection === 'user'" section="user" embedded />
 
     <section v-if="activeSection === 'home'" class="recruit-hero">
@@ -817,7 +890,7 @@ onUnmounted(() => {
                 <IconifyIcon icon="lucide:building-2" />
                 <span>{{ getPostCompanyName(post) }}</span>
               </span>
-              <span class="company-meta-detail">{{ post.postTypeName || '行业企业' }}</span>
+              <span class="company-meta-detail">{{ post.postTypeName || '岗位类别待确认' }}</span>
             </div>
           </article>
         </div>
@@ -961,7 +1034,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <footer v-if="activeSection === 'home'" class="recruit-home-footer">
+    <footer v-if="showRecruitFooter" class="recruit-home-footer">
       <div class="recruit-footer-inner">
         <section class="recruit-footer-intro">
           <p class="recruit-footer-kicker">天信人才服务</p>
@@ -2074,6 +2147,14 @@ onUnmounted(() => {
   margin-left: calc((100% - 100vw) / 2);
   box-sizing: border-box;
 }
+
+/* 公司页与首页、职位页共用同一条 1180px 内容基线。 */
+.recruit-page > .company-directory {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
  .recruit-page > .recruit-tabs {
   padding-right: max(16px, calc((100vw - 1180px) / 2));
   padding-left: max(16px, calc((100vw - 1180px) / 2));
@@ -2218,6 +2299,16 @@ onUnmounted(() => {
 }
 :global(.portal-main--recruit-home) .recruit-page { min-height: 100%; margin-top: 0; padding-bottom: 0 !important; align-content: start; }
 :global(.portal-main--recruit-home) .recruit-home-footer { margin-top: auto; }
+/* 首页/职位/公司三个板块共用富页脚。公共框架只在「首页」板块隐藏它自己的页脚，
+   职位与公司页仍会渲染，会出现两个页脚叠加；这里在页面侧按同一口径覆盖掉。
+   不修改 layouts/portal.vue。
+
+   注意：整条选择器必须包在同一个 :global() 里。Vue 的 scoped 编译器解析不了
+   :global() 内部嵌套的 :has(...) 括号，会把选择器截断错位（实测会把 display:none
+   落到 .portal-shell 上，导致整个页面空白）。 */
+:global(.portal-shell:has(.recruit-page--rich-footer) .portal-footer) { display: none; }
+/* 深色富页脚要贴到页面最底部，去掉公共主容器下内边距，否则页脚下方会留一条浅色缝。 */
+:global(.portal-shell:has(.recruit-page--rich-footer) .portal-main) { padding-bottom: 0; }
 .recruit-footer-inner { display: grid; grid-template-columns: 1.45fr .8fr .8fr 1.2fr; gap: 44px; width: min(1180px, 100%); margin: 0 auto; }
 .recruit-footer-intro h2 { max-width: 270px; margin: 10px 0 12px; color: #fff; font-size: 23px; line-height: 1.35; }
 .recruit-footer-intro > p:not(.recruit-footer-kicker),
@@ -2239,6 +2330,18 @@ onUnmounted(() => {
 .recruit-footer-mark small { color: #79a4ad; font-size: 9px; font-weight: 500; letter-spacing: .14em; }
 
 @media (max-width: 900px) {
+  .recruit-page {
+    overflow-x: clip;
+  }
+
+  .recruit-page > .recruit-subnav,
+  .recruit-page > .recruit-tabs {
+    width: 100%;
+    max-width: 100%;
+    margin-right: 0;
+    margin-left: 0;
+  }
+
   .recruit-footer-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 24px; }
   .recruit-footer-intro { grid-column: 1 / -1; }
   .recruit-footer-contact { padding-left: 0; border-top: 1px solid rgb(126 225 229 / 24%); border-left: 0; padding-top: 24px; }
@@ -2249,5 +2352,61 @@ onUnmounted(() => {
   .recruit-footer-contact { grid-column: 1 / -1; }
   .recruit-footer-bottom { align-items: flex-start; flex-direction: column; gap: 8px; margin-top: 30px; }
   .recruit-footer-mark { align-self: flex-end; }
+}
+
+/* 仅收敛职位浏览页的窄屏布局，避免导航内边距和结果列制造横向溢出。 */
+@media (max-width: 900px) {
+  .recruit-page > .recruit-subnav,
+  .recruit-page > .recruit-tabs {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .recruit-page > .recruit-subnav {
+    overflow-x: auto;
+  }
+
+  .recruit-page > .recruit-tabs {
+    overflow-x: clip;
+  }
+}
+
+@media (min-width: 641px) {
+  .filter-toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 901px) {
+  .search-detail-card {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 96px);
+    overflow: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .search-detail-card {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+.filter-actions {
+  padding-top: 0;
+  border-top: 0;
+  justify-content: flex-start;
+}
+
+.home-job-card .post-card-company {
+  flex: 1 1 auto;
+}
+
+.company-post-count {
+  font-size: 14px;
+  font-weight: 600;
 }
 </style>

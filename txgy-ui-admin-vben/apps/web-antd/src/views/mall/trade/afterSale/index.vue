@@ -160,7 +160,7 @@ onMounted(() => {
       </template>
       <template #processing="{ row }">
         <div>{{ row.processBlockReason || (row.processable ? '可按授权处理' : '查看当前售后进度') }}</div>
-        <Tag v-if="row.erpStatus" class="mt-1">ERP {{ row.erpStatus }}</Tag>
+        <Tag v-if="row.erpStatus" class="mt-1">履约处理 {{ row.erpStatus }}</Tag>
       </template>
       <template #orderNo="{ row }">
         <Button type="link" @click="handleOpenOrderDetail(row)">

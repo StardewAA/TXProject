@@ -52,6 +52,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
       render: (val) => (val ? '已成交' : '未成交'),
     },
     {
+      field: 'followUpCount',
+      label: '累计跟进次数',
+      render: (val) => `${val ?? 0} 次`,
+    },
+    {
       field: 'ownerUserName',
       label: '负责人',
     },

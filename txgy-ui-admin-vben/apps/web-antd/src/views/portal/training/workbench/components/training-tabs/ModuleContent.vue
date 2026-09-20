@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { TRAINING_MODULES } from '../../../training-modules';
 import MyLearningOverview from './MyLearningOverview.vue';
 
 const props = defineProps<{ modulePath: string; subModule?: string }>();
-const router = useRouter();
 
 // 复用原云培训学院各模块页面及其数据请求；一级 Tab 不触发路由。
 const panels = {
@@ -40,7 +38,6 @@ const contentSummary = computed(() => currentCopy.value?.summary ?? currentModul
   <section class="module-content" :aria-label="contentTitle">
     <header class="module-content-header">
       <div><h2>{{ contentTitle }}</h2><p>{{ contentSummary }}</p></div>
-      <button type="button" @click="router.push(modulePath)">查看完整模块 ›</button>
     </header>
     <component :is="currentPanel" :key="`${modulePath}-${subModule || ''}`" v-bind="modulePath === '/portal/training/courses' ? { subModule: props.subModule } : {}" />
   </section>

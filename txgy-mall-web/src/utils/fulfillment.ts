@@ -1,5 +1,5 @@
 import type { Address, TradeOrder } from '@/types/mall'
-import type { AddressLocation, LocationCapability, OrderLogistics } from '@/types/fulfillment'
+import type { AddressLocation, LocationCapability, LogisticsEvent, OrderLogistics } from '@/types/fulfillment'
 
 const logisticsMessages: Record<string, string> = {
   ERP_PENDING: '发货正在等待 ERP 确认出库，暂不查询运输轨迹。',
@@ -29,6 +29,41 @@ export function logisticsRetrySeconds(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(86400, Math.ceil(value))) : 0
 }
 
+export interface LogisticsMapQuery {
+  label: string
+  query: string
+  time?: string | number | null
+}
+
+function logisticsEventTime(value: LogisticsEvent['time']): number {
+  if (typeof value !== 'string' && typeof value !== 'number') return 0
+  const parsed = new Date(typeof value === 'string' ? value.replace(' ', 'T') : value).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/** Extract only an administrative place from provider text; never invent a vehicle coordinate. */
+export function logisticsMapQuery(content: unknown): string {
+  if (typeof content !== 'string') return ''
+  const normalized = content.replace(/\s+/g, ' ').trim().slice(0, 500)
+  const bracketed = [...normalized.matchAll(/[【[(（]([^】\])）]{2,40})[】\])）]/g)]
+    .map(match => match[1]?.trim() || '')
+    .find(value => /(?:省|自治区|特别行政区|市|自治州|地区|盟|区|县|旗)/.test(value))
+  if (bracketed) return bracketed.replace(/(?:分拨|转运|营业|配送|快递|服务)?(?:中心|网点|站点|公司).*$/, '').trim()
+  const directed = normalized.match(/(?:到达|抵达|离开|发往|转运至|派送至|收寄于|揽收于|当前位置)[:：\s]*([\u4e00-\u9fa5]{2,20}?(?:省|自治区|特别行政区|市|自治州|地区|盟|区|县|旗))/)
+  if (directed?.[1]) return directed[1]
+  const city = normalized.match(/([\u4e00-\u9fa5]{2,10}(?:市|自治州|地区|盟))/)
+  return city?.[1] || ''
+}
+
+export function logisticsMapQueries(events: LogisticsEvent[], limit = 6): LogisticsMapQuery[] {
+  const seen = new Set<string>()
+  return [...events].sort((a, b) => logisticsEventTime(a.time) - logisticsEventTime(b.time))
+    .map(event => ({ event, query: logisticsMapQuery(event.content) }))
+    .filter(({ query }) => Boolean(query) && !seen.has(query) && Boolean(seen.add(query)))
+    .slice(-Math.max(1, Math.min(10, limit)))
+    .map(({ event, query }) => ({ label: query, query, time: event.time }))
+}
+
 export function hasAddressLocation(value?: AddressLocation | null): boolean {
   return Boolean(value && typeof value.longitude === 'number' && Number.isFinite(value.longitude)
     && value.longitude >= -180 && value.longitude <= 180
@@ -49,7 +84,10 @@ export function mapAvailability(capability?: LocationCapability | null, failed =
   if (!capability || !capability.enabled || capability.status === 'NOT_CONFIGURED') {
     return { status: 'NOT_CONFIGURED', message: '地图服务暂未配置，请手工填写收货地址。' }
   }
-  return { status: 'ADAPTER_UNAVAILABLE', message: '地图选点暂不可用，请手工填写地址。' }
+  if (capability.status === 'READY' && capability.provider === 'AMAP' && capability.coordinateSystem === 'GCJ02') {
+    return { status: 'READY', message: capability.message || '高德地图选点已启用。' }
+  }
+  return { status: 'ADAPTER_UNAVAILABLE', message: '地图配置不受支持，请手工填写地址。' }
 }
 
 export function orderLocation(order: TradeOrder): AddressLocation {
@@ -65,7 +103,15 @@ export function addressTextChanged(current: Address, original?: Address | null):
 
 /** Allowlist writes: timestamps and server-derived metadata are never echoed back as trusted proof. */
 export function manualAddressPayload(current: Address, original?: Address | null, clearLocation = false) {
+  const locationConfirmed = (current as Address & { locationConfirmed?: boolean }).locationConfirmed === true
+  const location = locationConfirmed && hasAddressLocation(current) && !clearLocation && !addressTextChanged(current, original)
+    ? { longitude: Number(current.longitude!.toFixed(6)), latitude: Number(current.latitude!.toFixed(6)),
+        coordSystem: 'GCJ02' as const, locationSource: current.locationSource || 'MAP_PICKER',
+        locationPrecision: current.locationPrecision || 'ADDRESS',
+        locationConfirmed: true }
+    : {}
   return { ...(current.id ? { id: current.id } : {}), name: current.name.trim(), mobile: current.mobile.trim(),
     areaId: current.areaId, detailAddress: current.detailAddress.trim(), defaultStatus: Boolean(current.defaultStatus),
+    ...location,
     ...(clearLocation || (hasAddressLocation(original) && addressTextChanged(current, original)) ? { clearLocation: true } : {}) }
 }
