@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visitplan.CrmAfterSaleVisitPlanPageReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitPlanDO;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleVisitPlanStatusEnum;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDate;
@@ -54,6 +55,23 @@ public interface CrmAfterSaleVisitPlanMapper extends BaseMapperX<CrmAfterSaleVis
                 .eq(CrmAfterSaleVisitPlanDO::getStatus, status)
                 .and(w -> w.isNull(CrmAfterSaleVisitPlanDO::getEndDate).or()
                         .ge(CrmAfterSaleVisitPlanDO::getEndDate, today)));
+    }
+
+    /**
+     * 停用指定质保档案关联的回访计划（质保自动流转为「已到期终止」时调用）
+     *
+     * <p>质保到期后不再需要回访，停用计划可避免继续生成新的回访任务；
+     * 「已完成」的计划保持原状（历史事实不回溯）。
+     *
+     * @param warrantyId 质保档案编号
+     * @return 更新的条数
+     */
+    default int disableByWarrantyId(Long warrantyId) {
+        CrmAfterSaleVisitPlanDO updateObj = new CrmAfterSaleVisitPlanDO();
+        updateObj.setStatus(CrmAfterSaleVisitPlanStatusEnum.DISABLE.getStatus());
+        return update(updateObj, new LambdaQueryWrapperX<CrmAfterSaleVisitPlanDO>()
+                .eq(CrmAfterSaleVisitPlanDO::getWarrantyId, warrantyId)
+                .eq(CrmAfterSaleVisitPlanDO::getStatus, CrmAfterSaleVisitPlanStatusEnum.ENABLE.getStatus()));
     }
 
 }

@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfte
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contract.CrmContractDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.customer.CrmCustomerDO;
@@ -59,6 +60,24 @@ public class CrmAfterSaleWarrantyController {
     @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
     public CommonResult<Boolean> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
         warrantyService.updateWarranty(updateReqVO);
+        return success(true);
+    }
+
+    @PostMapping("/refresh-status")
+    @Operation(summary = "【手动干预】立即刷新质保状态",
+            description = "按到期日与售后设置「质保到期提前提醒天数」立即重算本租户全部质保档案状态，" +
+                    "无需等待每日 02:00 定时任务；同时执行到期关联同步（停用回访计划、取消超期未完成回访任务、发送到期通知）")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
+    public CommonResult<Integer> refreshWarrantyStatus() {
+        return success(warrantyService.syncWarrantyStatus());
+    }
+
+    @PutMapping("/update-status")
+    @Operation(summary = "【手动干预】手动修正质保状态",
+            description = "自动流转是单向的（已到期终止不会回退）。到期日被人工调整或需提前终止质保时，用本接口纠正状态，操作会记录日志")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:update')")
+    public CommonResult<Boolean> updateWarrantyStatus(@Valid @RequestBody CrmAfterSaleWarrantyUpdateStatusReqVO reqVO) {
+        warrantyService.updateWarrantyStatus(reqVO, getLoginUserId());
         return success(true);
     }
 

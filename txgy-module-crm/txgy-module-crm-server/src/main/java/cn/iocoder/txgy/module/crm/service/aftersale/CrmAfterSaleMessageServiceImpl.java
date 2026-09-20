@@ -56,6 +56,16 @@ public class CrmAfterSaleMessageServiceImpl implements CrmAfterSaleMessageServic
     }
 
     @Override
+    public void sendWarrantyExpiredNotice(Long userId, CrmAfterSaleWarrantyDO warranty) {
+        Map<String, Object> params = new HashMap<>(4);
+        params.put("customerName", getCustomerName(warranty.getCustomerId()));
+        params.put("projectName", warranty.getProjectName() != null ? warranty.getProjectName() : "");
+        params.put("endDate", warranty.getWarrantyEndDate() != null
+                ? warranty.getWarrantyEndDate().format(DATE_FORMATTER) : "");
+        send(userId, MessageTemplateConstants.AFTER_SALE_WARRANTY_EXPIRED, params);
+    }
+
+    @Override
     public void sendTicketAssignNotify(Long assigneeUserId, CrmAfterSaleTicketDO ticket) {
         if (assigneeUserId == null || ticket == null) {
             return;

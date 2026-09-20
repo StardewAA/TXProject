@@ -5,8 +5,10 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleConfigDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitPlanMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleVisitTaskMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.aftersale.CrmAfterSaleWarrantyMapper;
 import cn.iocoder.txgy.module.crm.dal.redis.no.CrmNoRedisDAO;
@@ -17,6 +19,7 @@ import cn.iocoder.txgy.module.crm.service.contract.CrmContractService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -39,6 +42,7 @@ import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyService {
 
     /**
@@ -50,6 +54,8 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
     private CrmAfterSaleWarrantyMapper warrantyMapper;
     @Resource
     private CrmAfterSaleVisitTaskMapper visitTaskMapper;
+    @Resource
+    private CrmAfterSaleVisitPlanMapper visitPlanMapper;
     @Resource
     private CrmAfterSaleConfigService configService;
     @Resource
@@ -236,6 +242,35 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
         throw exception(AFTER_SALE_WARRANTY_NO_EXISTS);
     }
 
+    /**
+     * 质保状态自动流转（定时任务 + 手动刷新共用同一实现，保证两条链路口径完全一致）
+     *
+     * <p><b>变更规则</b>（today = 今天，warnDays = 售后设置「质保到期提前提醒天数」，默认 30）：
+     * <ol>
+     *   <li>到期日 &lt; 今天           → <b>已到期终止</b>（EXPIRED）</li>
+     *   <li>到期日 ≤ 今天 + warnDays  → <b>即将到期</b>（EXPIRING）</li>
+     *   <li>其余                      → <b>质保中</b>（IN_WARRANTY）</li>
+     * </ol>
+     * 注意：到期日当天仍算「有效」，次日起才判定为已到期。
+     *
+     * <p><b>触发条件</b>：每日 02:00 定时任务
+     * （{@code CrmAfterSaleScheduledJob#warrantyRemindJob}）；
+     * 或管理员调用 {@link #syncWarrantyStatus()} 立即触发。
+     *
+     * <p><b>异常处理</b>：
+     * <ul>
+     *   <li>单条档案处理失败只记录日志，不中断其余档案的流转；</li>
+     *   <li>到期日为空的历史数据跳过，不做流转；</li>
+     *   <li>「已到期终止」是单向终态，不在扫描范围内、不会被自动回退；
+     *       到期日被人工延长后，需通过 {@link #updateWarrantyStatus} 手动纠正。</li>
+     * </ul>
+     *
+     * <p><b>关联同步</b>：状态首次流转为「已到期终止」时，会一并完成
+     * ① 停用关联的回访计划；② 取消「计划回访日期晚于质保到期日」的未完成回访任务；
+     * ③ 向售后责任人与业务负责人发送「质保已到期」站内信。
+     *
+     * @return 本次状态变更的档案数量
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int autoUpdateWarrantyStatus() {
@@ -243,32 +278,114 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
         CrmAfterSaleConfigDO config = configService.getConfig();
         int warnDays = config.getWarrantyWarnDays() != null ? config.getWarrantyWarnDays() : 30;
         LocalDate today = LocalDate.now();
-        // 2. 遍历非终态（质保中/即将到期）的质保档案进行状态流转
+        // 2. 遍历非终态（质保中 / 即将到期）的质保档案进行状态流转
         List<CrmAfterSaleWarrantyDO> warranties = warrantyMapper.selectListByStatusIn(List.of(
                 CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus(),
                 CrmAfterSaleWarrantyStatusEnum.EXPIRING.getStatus()));
         int count = 0;
         for (CrmAfterSaleWarrantyDO warranty : warranties) {
-            if (warranty.getWarrantyEndDate() == null) {
-                continue;
-            }
-            Integer targetStatus;
-            if (warranty.getWarrantyEndDate().isBefore(today)) {
-                targetStatus = CrmAfterSaleWarrantyStatusEnum.EXPIRED.getStatus();
-            } else if (!warranty.getWarrantyEndDate().isAfter(today.plusDays(warnDays))) {
-                targetStatus = CrmAfterSaleWarrantyStatusEnum.EXPIRING.getStatus();
-            } else {
-                targetStatus = CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus();
-            }
-            if (!Objects.equals(warranty.getStatus(), targetStatus)) {
+            try {
+                Integer targetStatus = calculateTargetStatus(warranty, today, warnDays);
+                if (targetStatus == null || Objects.equals(warranty.getStatus(), targetStatus)) {
+                    continue; // 到期日为空，或状态无变化
+                }
                 CrmAfterSaleWarrantyDO updateObj = new CrmAfterSaleWarrantyDO();
                 updateObj.setId(warranty.getId());
                 updateObj.setStatus(targetStatus);
                 warrantyMapper.updateById(updateObj);
                 count++;
+                // 首次进入「已到期终止」：同步关联业务 + 发送到期通知
+                if (Objects.equals(targetStatus, CrmAfterSaleWarrantyStatusEnum.EXPIRED.getStatus())) {
+                    handleWarrantyExpired(warranty);
+                }
+            } catch (Exception ex) {
+                // 单条失败不影响其他档案的流转
+                log.error("[autoUpdateWarrantyStatus][质保({}) 状态流转失败]", warranty.getId(), ex);
             }
         }
         return count;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int syncWarrantyStatus() {
+        // 与定时任务同一实现：手动触发时同样执行「状态流转 + 关联同步 + 到期通知」
+        return autoUpdateWarrantyStatus();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateWarrantyStatus(CrmAfterSaleWarrantyUpdateStatusReqVO reqVO, Long userId) {
+        // 1.1 校验存在
+        CrmAfterSaleWarrantyDO warranty = validateWarranty(reqVO.getId());
+        // 1.2 校验目标状态合法
+        CrmAfterSaleWarrantyStatusEnum targetStatus = CollUtil.findOne(
+                CollUtil.newArrayList(CrmAfterSaleWarrantyStatusEnum.values()),
+                item -> Objects.equals(item.getStatus(), reqVO.getStatus()));
+        if (targetStatus == null) {
+            throw exception(AFTER_SALE_WARRANTY_STATUS_INVALID);
+        }
+        // 1.3 状态无变化时直接返回
+        if (Objects.equals(warranty.getStatus(), reqVO.getStatus())) {
+            return;
+        }
+
+        // 2. 更新状态
+        CrmAfterSaleWarrantyDO updateObj = new CrmAfterSaleWarrantyDO();
+        updateObj.setId(reqVO.getId());
+        updateObj.setStatus(reqVO.getStatus());
+        warrantyMapper.updateById(updateObj);
+        log.info("[updateWarrantyStatus][质保({}) 状态由 {} 手动调整为 {}，操作人({})，原因({})]",
+                warranty.getNo(), CrmAfterSaleWarrantyStatusEnum.getNameByStatus(warranty.getStatus()),
+                targetStatus.getName(), userId, reqVO.getReason());
+
+        // 3. 手动置为「已到期终止」时，同样执行关联同步（停用计划 / 取消超期未完成任务 / 到期通知）
+        if (Objects.equals(reqVO.getStatus(), CrmAfterSaleWarrantyStatusEnum.EXPIRED.getStatus())) {
+            handleWarrantyExpired(warranty);
+        }
+    }
+
+    /**
+     * 计算质保档案在指定日期应处于的状态；到期日为空时返回 null（不参与流转）
+     */
+    private static Integer calculateTargetStatus(CrmAfterSaleWarrantyDO warranty, LocalDate today, int warnDays) {
+        if (warranty.getWarrantyEndDate() == null) {
+            return null;
+        }
+        if (warranty.getWarrantyEndDate().isBefore(today)) {
+            return CrmAfterSaleWarrantyStatusEnum.EXPIRED.getStatus();
+        }
+        if (!warranty.getWarrantyEndDate().isAfter(today.plusDays(warnDays))) {
+            return CrmAfterSaleWarrantyStatusEnum.EXPIRING.getStatus();
+        }
+        return CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus();
+    }
+
+    /**
+     * 质保到期后的关联同步：停用回访计划 → 取消到期日之后的未完成回访任务 → 发送「质保已到期」通知
+     *
+     * <p>每一步都独立容错：通知失败（模板缺失 / 消息服务异常）不影响状态流转与业务数据。
+     *
+     * @param warranty 已流转为「已到期终止」的质保档案
+     */
+    private void handleWarrantyExpired(CrmAfterSaleWarrantyDO warranty) {
+        // 1. 停用关联的回访计划：质保已终止，不再需要回访，也避免继续生成新任务
+        int planCount = visitPlanMapper.disableByWarrantyId(warranty.getId());
+        // 2. 取消「计划回访日期晚于质保到期日」的未完成任务：这类回访已无业务意义，
+        //    取消后既不再出现在「任务提醒」待办中，也保留完整痕迹
+        int taskCount = warranty.getWarrantyEndDate() == null ? 0
+                : visitTaskMapper.cancelUnfinishedAfterDate(warranty.getId(), warranty.getWarrantyEndDate());
+        // 3. 通知售后责任人与业务负责人（去重）
+        Set<Long> userIds = new HashSet<>();
+        if (warranty.getServiceUserId() != null) {
+            userIds.add(warranty.getServiceUserId());
+        }
+        if (warranty.getOwnerUserId() != null) {
+            userIds.add(warranty.getOwnerUserId());
+        }
+        userIds.forEach(targetUserId -> messageService.sendWarrantyExpiredNotice(targetUserId, warranty));
+        log.info("[handleWarrantyExpired][质保({}) 到期同步完成：停用回访计划 {} 条，取消回访任务 {} 条，通知 {} 人]",
+                warranty.getNo(), planCount, taskCount, userIds.size());
     }
 
     @Override

@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.crm.service.aftersale;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyUpdateStatusReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
 import jakarta.validation.Valid;
 
@@ -113,6 +114,31 @@ public interface CrmAfterSaleWarrantyService {
      * @return 本次状态变更的数量
      */
     int autoUpdateWarrantyStatus();
+
+    /**
+     * 【手动干预】立即刷新当前租户的质保状态（与定时任务同一口径）
+     *
+     * <p>用途：不必等到每日 02:00 定时任务，管理员可随时手动触发一次全量重算；
+     * 典型场景：刚导入历史数据、刚调整过到期日、需要立即验证流转结果。
+     *
+     * @return 本次状态变更的数量
+     */
+    int syncWarrantyStatus();
+
+    /**
+     * 【手动干预】手动修正单条质保档案的状态
+     *
+     * <p>自动流转是单向的（已到期终止不会被回退），当出现下列情况时由管理员手动纠正：
+     * <ul>
+     *   <li>到期日被人工延长，需要把「已到期终止」改回「质保中 / 即将到期」；</li>
+     *   <li>业务上提前终止质保，需要直接置为「已到期终止」。</li>
+     * </ul>
+     * 操作会记录日志（操作人、原状态 → 新状态、原因）。
+     *
+     * @param reqVO  修正请求
+     * @param userId 操作人编号
+     */
+    void updateWarrantyStatus(@Valid CrmAfterSaleWarrantyUpdateStatusReqVO reqVO, Long userId);
 
     /**
      * 【定时任务】质保到期站内信提醒（按提醒天数提前、remind_sent_date 防重复）

@@ -132,6 +132,28 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
                 .le(CrmAfterSaleVisitTaskDO::getTaskDate, date));
     }
 
+    /**
+     * 取消指定质保档案下「计划回访日期晚于指定日期」的未完成任务（质保自动流转为「已到期终止」时调用）
+     *
+     * <p>质保到期后，到期日之后本不该再有回访任务（生成时已按质保到期日限制），
+     * 存量数据可能因「到期日被调整」「数据导入」而产生，这里统一收口为「已取消」：
+     * 取消后不再出现在「任务提醒」待办中，同时保留完整痕迹。
+     *
+     * @param warrantyId 质保档案编号
+     * @param afterDate  质保到期日（严格晚于该日期的未完成任务会被取消）
+     * @return 更新的条数
+     */
+    default int cancelUnfinishedAfterDate(Long warrantyId, LocalDate afterDate) {
+        CrmAfterSaleVisitTaskDO updateObj = new CrmAfterSaleVisitTaskDO();
+        updateObj.setStatus(CrmAfterSaleVisitTaskStatusEnum.CANCELED.getStatus());
+        return update(updateObj, new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getWarrantyId, warrantyId)
+                .in(CrmAfterSaleVisitTaskDO::getStatus,
+                        CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus(),
+                        CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
+                .gt(CrmAfterSaleVisitTaskDO::getTaskDate, afterDate));
+    }
+
     default List<CrmAfterSaleVisitTaskDO> selectListByPlanId(Long planId) {
         return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
                 .eq(CrmAfterSaleVisitTaskDO::getPlanId, planId));
