@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderBomServic
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsOrderRequestDTO;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -25,7 +26,13 @@ import java.util.Objects;
  * MES 工单 → WMS 集成请求报文构造器
  *
  * <p>将 MES 工单 / BOM 转换为 WMS {@link WmsOrderRequestDTO}，完成 MES 物料模型到 WMS 物料模型的字段映射。
- * 物料编码、单位编码取自 MES 主数据；materialType 按业务类型简化映射（领料=RAW 原料、入库=FG 成品）。</p>
+ * 物料编码、单位编码取自 MES 主数据；materialType 按 WMS 物料类型字典映射
+ * （领料=RAW_MATERIAL 原料、入库=FINISHED_GOODS 成品，与 WMS {@code WmsIntegrationApiImpl#validateOrder} 契约一致）；
+ * warehouseCode 取自配置（MES 侧无仓库模型，须在部署时指定 WMS 默认原料仓 / 成品仓编码）。</p>
+ *
+ * <p>领料报文带 {@code eventVersion} 版本号：requestId 与 WMS 出库单号均按其区分，
+ * 保证"同一工单多次领料"（含缺料恢复后的重新申请）不会因 requestId 内容不一致被 WMS 幂等拒绝，
+ * 也不会因出库单号重复触发唯一键冲突。</p>
  *
  * @author OPENLAB BS
  */
@@ -39,10 +46,20 @@ public class MesWmsIntegrationPayloadBuilder {
     @Resource
     private MesMdUnitMeasureService unitMeasureService;
 
+    /** 生产领料默认原料仓编码（WMS 仓库 code，须与 WMS 主数据一致） */
+    @Value("${mes.wms.warehouse.raw-material-code:}")
+    private String rawMaterialWarehouseCode;
+    /** 完工入库默认成品仓编码（WMS 仓库 code，须与 WMS 主数据一致） */
+    @Value("${mes.wms.warehouse.finished-goods-code:}")
+    private String finishedGoodsWarehouseCode;
+
     /**
      * 构造生产领料出库申请报文（PRODUCTION_SHIPMENT）：以工单 BOM 的每条原料为明细
+     *
+     * @param eventVersion 领料申请版本（每次申请递增），用于 requestId 与 WMS 出库单号去重
      */
-    public WmsOrderRequestDTO buildShipmentPayload(MesProWorkOrderDO workOrder, String businessChainNo) {
+    public WmsOrderRequestDTO buildShipmentPayload(MesProWorkOrderDO workOrder, String businessChainNo,
+                                                   long eventVersion) {
         List<MesProWorkOrderBomDO> bomList = workOrderBomService.getWorkOrderBomListByWorkOrderId(workOrder.getId());
         List<WmsIntegrationDocumentItemDTO> items = new ArrayList<>();
         if (CollUtil.isNotEmpty(bomList)) {
@@ -62,11 +79,11 @@ public class MesWmsIntegrationPayloadBuilder {
                     continue;
                 }
                 MesMdUnitMeasureDO unit = unitMap.get(item.getUnitMeasureId());
-                items.add(toItem(lineNo++, item, unit, bom.getQuantity(), "RAW"));
+                items.add(toItem(lineNo++, item, unit, bom.getQuantity(), "RAW_MATERIAL", rawMaterialWarehouseCode));
             }
         }
         return buildRequest(workOrder, businessChainNo,
-                MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT.getCode(), items);
+                MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT.getCode(), items, eventVersion);
     }
 
     /**
@@ -79,19 +96,20 @@ public class MesWmsIntegrationPayloadBuilder {
             MesMdUnitMeasureDO unit = product.getUnitMeasureId() == null ? null
                     : unitMeasureService.getUnitMeasureMap(List.of(product.getUnitMeasureId()))
                         .get(product.getUnitMeasureId());
-            items.add(toItem(1, product, unit, workOrder.getQuantity(), "FG"));
+            items.add(toItem(1, product, unit, workOrder.getQuantity(), "FINISHED_GOODS", finishedGoodsWarehouseCode));
         }
         return buildRequest(workOrder, businessChainNo,
-                MesWmsIntegrationOrderTypeEnum.PRODUCTION_RECEIPT.getCode(), items);
+                MesWmsIntegrationOrderTypeEnum.PRODUCTION_RECEIPT.getCode(), items, 1L);
     }
 
     private WmsIntegrationDocumentItemDTO toItem(int lineNo, MesMdItemDO item, MesMdUnitMeasureDO unit,
-                                                java.math.BigDecimal quantity, String materialType) {
+                                                java.math.BigDecimal quantity, String materialType, String warehouseCode) {
         WmsIntegrationDocumentItemDTO dto = new WmsIntegrationDocumentItemDTO();
         dto.setLineNo(lineNo);
         dto.setMaterialCode(item.getCode());
         dto.setSkuCode(item.getCode());
         dto.setMaterialType(materialType);
+        dto.setWarehouseCode(warehouseCode);
         dto.setMaterialNameSnapshot(item.getName());
         dto.setSpecificationSnapshot(item.getSpecification());
         dto.setUnitCode(unit == null ? null : unit.getCode());
@@ -101,16 +119,17 @@ public class MesWmsIntegrationPayloadBuilder {
     }
 
     private WmsOrderRequestDTO buildRequest(MesProWorkOrderDO workOrder, String businessChainNo,
-                                            String orderType, List<WmsIntegrationDocumentItemDTO> items) {
+                                            String orderType, List<WmsIntegrationDocumentItemDTO> items,
+                                            long eventVersion) {
         WmsOrderRequestDTO req = new WmsOrderRequestDTO();
-        req.setRequestId("MES-" + orderType + "-" + workOrder.getCode() + "-v1");
+        req.setRequestId("MES-" + orderType + "-" + workOrder.getCode() + "-v" + eventVersion);
         req.setTenantId(TenantContextHolder.getRequiredTenantId());
         req.setSourceModule("MES");
         req.setOccurredAt(LocalDateTime.now());
         req.setBusinessChainNo(businessChainNo);
         req.setSourceOrderNo(workOrder.getCode());
         req.setOrderType(orderType);
-        req.setEventVersion(1L);
+        req.setEventVersion(eventVersion);
         req.setItems(items);
         return req;
     }

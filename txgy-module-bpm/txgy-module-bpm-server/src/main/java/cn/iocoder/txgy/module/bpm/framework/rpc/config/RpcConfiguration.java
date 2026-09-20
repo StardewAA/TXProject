@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesFeedbackStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.MesWorkOrderStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
 import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
@@ -62,6 +63,12 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "mesFeedbackStatusListener")
     public MesFeedbackStatusListener mesFeedbackStatusListener() {
         return new MesFeedbackStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "mesWorkOrderStatusListener")
+    public MesWorkOrderStatusListener mesWorkOrderStatusListener() {
+        return new MesWorkOrderStatusListener();
     }
 
 }

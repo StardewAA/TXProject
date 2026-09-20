@@ -250,6 +250,10 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                     .setSourceSnapshotJson(cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString(item));
         }).toList();
         String no = "WMS-" + request.getSourceModule() + "-" + request.getSourceOrderNo();
+        // 同一来源单重复申请（如缺料恢复后重新领料）时按事件版本区分单号，避免出库单号唯一键冲突
+        if (request.getEventVersion() != null && request.getEventVersion() > 1) {
+            no = no + "-V" + request.getEventVersion();
+        }
         shipmentOrderService.createShipmentOrder(new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO()
                 .setNo(no).setType("MES".equals(request.getSourceModule())
                         ? cn.iocoder.txgy.module.wms.enums.order.WmsShipmentOrderTypeEnum.PRODUCTION.getType()

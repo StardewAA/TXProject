@@ -267,6 +267,13 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mes/txgy-module-mes-server
+    # 联调：开启 MES→WMS 集成，定时任务才会发送生产领料/完工入库请求（默认 false 时只落任务不发送）
+    environment:
+      <<: *backend-env
+      MES_WMS_INTEGRATION_ENABLED: "true"
+      # MES 无仓库模型，须指定 WMS 默认原料仓/成品仓编码（须与该租户 WMS 主数据一致）
+      MES_WMS_WAREHOUSE_RAW_MATERIAL_CODE: "SH"
+      MES_WMS_WAREHOUSE_FINISHED_GOODS_CODE: "FG"
 
   wms:
     <<: *backend-service
@@ -275,6 +282,10 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
+    # 联调：开启缺口事件自动上送，WmsShortageScheduler 才会把缺口事件发给 ERP（默认不启用）
+    environment:
+      <<: *backend-env
+      WMS_SHORTAGE_SENDER_ENABLED: "true"
 
   im:
     <<: *backend-service

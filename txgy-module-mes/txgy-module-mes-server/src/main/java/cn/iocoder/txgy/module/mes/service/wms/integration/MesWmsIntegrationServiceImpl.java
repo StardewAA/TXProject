@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.service.wms.integration;
 
 import cn.hutool.json.JSONUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.wms.api.integration.WmsIntegrationApi;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationAcceptedRespDTO;
@@ -97,13 +98,15 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
         if (!enabled) {
             return;
         }
-        // 1. 发送阶段
-        List<MesWmsIntegrationTaskDO> pendingList = taskMapper.selectPendingSendList(BATCH_LIMIT);
+        // 1. 发送阶段（定时线程无租户上下文，跨租户扫描必须忽略租户插件，否则查询抛 TenantContextHolder NPE）
+        List<MesWmsIntegrationTaskDO> pendingList = TenantUtils.executeIgnore(() ->
+                taskMapper.selectPendingSendList(BATCH_LIMIT));
         for (MesWmsIntegrationTaskDO task : pendingList) {
             processWithTenant(task, () -> sendTask(task));
         }
         // 2. 轮询阶段
-        List<MesWmsIntegrationTaskDO> acceptedList = taskMapper.selectAcceptedOrExecutingList(BATCH_LIMIT);
+        List<MesWmsIntegrationTaskDO> acceptedList = TenantUtils.executeIgnore(() ->
+                taskMapper.selectAcceptedOrExecutingList(BATCH_LIMIT));
         for (MesWmsIntegrationTaskDO task : acceptedList) {
             processWithTenant(task, () -> pollTask(task));
         }
@@ -127,11 +130,11 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
     @Override
     public void cancelTask(MesWmsIntegrationOrderTypeEnum orderType, Long sourceOrderId) {
         // 物理删除旧任务：createTask 以 requestId(=MES-MR-工单号-v1) 唯一键兜底，
-        // 仅置 CANCELLED 会因唯一键冲突无法重建，故恢复领料时需物理删除后重新建任务。
-        MesWmsIntegrationTaskDO task = taskMapper.selectBySourceOrder(orderType.getCode(), sourceOrderId);
-        if (task != null) {
-            taskMapper.deleteById(task.getId());
-        }
+        // 若仅逻辑删除（deleteById 会把记录置 deleted=1）或置 CANCELLED，唯一键仍被占用，
+        // 恢复领料重建任务时会 DuplicateKeyException，表现为"旧任务已删、新任务未建"的静默失败。
+        // 故这里用原生 DELETE 物理删除；也不按 deleted=0 预筛选，避免历史逻辑删除记录继续占键。
+        taskMapper.deleteBySourceOrderPhysically(orderType.getCode(), sourceOrderId,
+                TenantContextHolder.getRequiredTenantId());
     }
 
     // ==================== 发送阶段 ====================

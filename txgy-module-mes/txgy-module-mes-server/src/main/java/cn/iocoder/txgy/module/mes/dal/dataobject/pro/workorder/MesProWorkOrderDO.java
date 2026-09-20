@@ -154,6 +154,13 @@ public class MesProWorkOrderDO extends BaseDO {
      */
     private Integer wmsShipmentStatus;
     /**
+     * WMS 领料申请版本：每次向 WMS 申请领料递增（含缺料恢复后的重新申请）
+     *
+     * 用作集成报文 requestId / eventVersion 与 WMS 出库单号的去重依据，
+     * 避免"同一工单多次领料"因 requestId、出库单号固定而被 WMS 幂等校验或唯一键拒绝。
+     */
+    private Integer wmsShipmentVersion;
+    /**
      * WMS 完工入库单号（MES 完工后向 WMS 申请成品入库回填）
      */
     private String wmsReceiptOrderNo;
@@ -161,6 +168,11 @@ public class MesProWorkOrderDO extends BaseDO {
      * WMS 入库状态：0 未申请；1 申请中；2 已入库；3 入库失败；4 已取消
      */
     private Integer wmsReceiptStatus;
+
+    /**
+     * BPM 审批流程实例编号（提交审批后回填；审批通过是工单可下发的前置条件）
+     */
+    private String processInstanceId;
 
     /**
      * 备注
