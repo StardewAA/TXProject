@@ -42,11 +42,16 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_GROUP_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NON_MANUAL_MODIFY_FORBIDDEN;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NOT_ALLOWED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_NOT_EXISTS;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_PHOTO_REQUIRED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_POINT_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_POINT_OUT_OF_RANGE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_REST_DAY;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_TIME_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_CLOCK_WIFI_INVALID;
 
@@ -124,6 +129,10 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
         }
         // 1.2 按考勤组开关校验定位 / WiFi
         validateMobileClockLocationAndWifi(group, createReqVO);
+        // 1.3 手机端打卡必须有现场照片留痕（防腐保温工地实名+人脸留痕要求）
+        if (StrUtil.isBlank(createReqVO.getPhotoUrl())) {
+            throw exception(ATTENDANCE_CLOCK_PHOTO_REQUIRED);
+        }
 
         // 2. 写入手机端打卡
         HrmAttendanceClockDO clock = new HrmAttendanceClockDO()
@@ -131,7 +140,8 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
                 .setAttendanceTime(nextClock.getAttendanceTime()).setClockTime(now)
                 .setAddress(createReqVO.getAddress()).setLongitude(createReqVO.getLongitude())
                 .setLatitude(createReqVO.getLatitude())
-                .setSsid(createReqVO.getSsid()).setMac(createReqVO.getMac());
+                .setSsid(createReqVO.getSsid()).setMac(createReqVO.getMac())
+                .setPhotoUrl(createReqVO.getPhotoUrl());
         fillAttendanceClockDefaultValue(clock, HrmAttendanceClockSourceEnum.MOBILE);
         attendanceClockMapper.insert(clock);
         return clock.getId();
@@ -252,6 +262,32 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
         List<LocalDate> candidateDates = Arrays.asList(attendanceDate, attendanceDate.minusDays(1));
         if (candidateDates.stream().noneMatch(candidateDate ->
                 isAttendanceClockTimeValid(reqVO, candidateDate))) {
+            // 区分失败原因，避免员工/HR 只能看到「不在员工班次窗口内」而无法定位问题：
+            // 1）员工压根没匹配到考勤组（常见于新入职员工未加入考勤组，或员工没有部门）
+            if (attendanceGroupService.getMyAttendanceGroup(reqVO.getEmployeeId()) == null) {
+                throw exception(ATTENDANCE_CLOCK_GROUP_NOT_EXISTS);
+            }
+            // 2）考勤组匹配到了，但两个候选考勤日都取不到班次 → 休息日，或班次未配置上下班时间
+            boolean hasShift = candidateDates.stream().anyMatch(candidateDate ->
+                    attendanceGroupService.getEmployeeAttendanceShift(
+                            reqVO.getEmployeeId(), candidateDate.atStartOfDay()) != null);
+            if (!hasShift) {
+                throw exception(ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE);
+            }
+            if (candidateDates.stream().anyMatch(candidateDate -> {
+                HrmAttendanceGroupDO.Shift shift = attendanceGroupService.getEmployeeAttendanceShift(
+                        reqVO.getEmployeeId(), candidateDate.atStartOfDay());
+                return shift != null
+                        && (shift.getStartTime() == null || shift.getEndTime() == null);
+            })) {
+                throw exception(ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE);
+            }
+            // 3）考勤日期本身是休息日（班次落在前一日夜班时上面已放行），
+            //    明确告诉 HR「当天没班次」，而不是笼统地说「不在班次窗口内」
+            if (attendanceGroupService.getEmployeeAttendanceShift(
+                    reqVO.getEmployeeId(), attendanceDate.atStartOfDay()) == null) {
+                throw exception(ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST, attendanceDate);
+            }
             throw exception(ATTENDANCE_CLOCK_TIME_INVALID);
         }
     }
@@ -479,7 +515,7 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
                 .setType(type).setAttendanceTime(attendanceTime);
         if (clock != null) {
             return item.setClockTime(clock.getClockTime()).setStatus(clock.getStatus())
-                    .setMissCard(false).setAddress(clock.getAddress());
+                    .setMissCard(false).setAddress(clock.getAddress()).setPhotoUrl(clock.getPhotoUrl());
         }
         // 应打卡时间已过后仍无记录，展示缺卡
         boolean missCard = LocalDateTimeUtils.isAfterOrEqual(now, attendanceTime);
@@ -503,6 +539,18 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
                 || (openWifi && isWifiMatched(group.getWifis(), createReqVO))) {
             return;
         }
+        // 开启了定位且拿到了坐标时，直接告知"离最近打卡点多远、该点允许多远"，
+        // 让工地员工一眼知道该往哪走，而不是反复试探
+        if (openPoint && !ObjUtil.hasEmpty(group.getPoints(),
+                createReqVO.getLatitude(), createReqVO.getLongitude())) {
+            HrmAttendanceGroupDO.Point nearestPoint = findNearestPoint(group.getPoints(), createReqVO);
+            if (nearestPoint != null) {
+                throw exception(ATTENDANCE_CLOCK_POINT_OUT_OF_RANGE,
+                        Math.round(calculateDistanceMeter(nearestPoint,
+                                createReqVO.getLatitude(), createReqVO.getLongitude())),
+                        nearestPoint.getRadius());
+            }
+        }
         if (openPoint) {
             throw exception(ATTENDANCE_CLOCK_POINT_INVALID);
         }
@@ -514,14 +562,42 @@ public class HrmAttendanceClockServiceImpl implements HrmAttendanceClockService 
         if (ObjUtil.hasEmpty(points, createReqVO.getLatitude(), createReqVO.getLongitude())) {
             return false;
         }
-        double latitude = createReqVO.getLatitude().doubleValue();
-        double longitude = createReqVO.getLongitude().doubleValue();
         return CollUtil.anyMatch(points, point -> {
-            // NumberUtils.getDistance 返回千米，考勤半径配置为米
-            double distanceMeter = NumberUtils.getDistance(latitude, longitude,
-                    point.getLatitude().doubleValue(), point.getLongitude().doubleValue()) * 1000;
+            double distanceMeter = calculateDistanceMeter(point, createReqVO.getLatitude(),
+                    createReqVO.getLongitude());
             return distanceMeter <= point.getRadius();
         });
+    }
+
+    /**
+     * 计算打卡坐标与考勤点之间的距离（单位：米）
+     */
+    private double calculateDistanceMeter(HrmAttendanceGroupDO.Point point,
+                                          java.math.BigDecimal latitude, java.math.BigDecimal longitude) {
+        // NumberUtils.getDistance 返回千米，考勤半径配置为米
+        return NumberUtils.getDistance(latitude.doubleValue(), longitude.doubleValue(),
+                point.getLatitude().doubleValue(), point.getLongitude().doubleValue()) * 1000;
+    }
+
+    /**
+     * 找出距离打卡坐标最近的考勤点
+     */
+    private HrmAttendanceGroupDO.Point findNearestPoint(List<HrmAttendanceGroupDO.Point> points,
+                                                        HrmPortalAttendanceClockCreateReqVO createReqVO) {
+        HrmAttendanceGroupDO.Point nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (HrmAttendanceGroupDO.Point point : points) {
+            if (ObjUtil.hasEmpty(point.getLatitude(), point.getLongitude())) {
+                continue;
+            }
+            double distanceMeter = calculateDistanceMeter(point,
+                    createReqVO.getLatitude(), createReqVO.getLongitude());
+            if (distanceMeter < nearestDistance) {
+                nearestDistance = distanceMeter;
+                nearest = point;
+            }
+        }
+        return nearest;
     }
 
     private boolean isWifiMatched(List<HrmAttendanceGroupDO.Wifi> wifis,

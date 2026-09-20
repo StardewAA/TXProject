@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.hrm.controller.admin.salary.vo.option.HrmSalaryOpt
 import cn.iocoder.txgy.module.hrm.controller.admin.salary.vo.monthrecord.HrmSalaryMonthRecordCreateReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.salary.vo.monthrecord.HrmSalaryMonthRecordPageReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.salary.vo.monthrecord.HrmSalaryPayrollReadinessRespVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.salary.vo.performancedata.HrmSalaryPerformanceRespVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.employment.HrmEmployeeChangeRecordDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.monthrecord.HrmInsuranceMonthEmployeeRecordDO;
@@ -35,6 +36,7 @@ import cn.iocoder.txgy.module.hrm.service.employee.employment.HrmEmployeeChangeR
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.insurance.monthrecord.HrmInsuranceMonthEmployeeRecordService;
 import cn.iocoder.txgy.module.hrm.service.insurance.monthrecord.HrmInsuranceMonthRecordService;
+import cn.iocoder.txgy.module.hrm.service.salary.performancedata.HrmSalaryPerformanceService;
 import cn.iocoder.txgy.module.hrm.enums.salary.config.HrmSalarySocialSecurityMonthTypeEnum;
 import cn.iocoder.txgy.module.hrm.enums.salary.monthrecord.HrmSalaryMonthRecordStatusEnum;
 import com.mzt.logapi.context.LogRecordContext;
@@ -47,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -118,6 +121,8 @@ public class HrmSalaryMonthRecordServiceImpl implements HrmSalaryMonthRecordServ
     private HrmSalaryGroupService salaryGroupService;
     @Resource
     private HrmSalaryTaxRuleService salaryTaxRuleService;
+    @Resource
+    private HrmSalaryPerformanceService salaryPerformanceService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -244,6 +249,9 @@ public class HrmSalaryMonthRecordServiceImpl implements HrmSalaryMonthRecordServ
                 parseOptionImportData(additionalDeductionRows, getAdditionalDeductionImportColumns(), optionMap);
         Map<String, List<HrmSalaryOptionValueVO>> cumulativeTaxImportMap =
                 parseOptionImportData(cumulativeTaxRows, getCumulativeTaxImportColumns(), optionMap);
+        // 2.5 绩效结果（用于算绩效工资：绩效工资基数 × 绩效系数）
+        Map<Long, HrmSalaryPerformanceRespVO> performanceMap = salaryPerformanceService
+                .getLatestPerformanceMap(convertSet(payrollEmployees, HrmEmployeeDO::getId));
         Map<Long, HrmSalaryTaxRuleDO> taxRuleMap = salaryTaxRuleService.getSalaryTaxRuleMap(
                 convertSet(salaryGroupMap.values(), HrmSalaryGroupDO::getTaxRuleId));
         HrmSalaryTaxRuleDO defaultTaxRule = CollUtil.getFirst(salaryTaxRuleService.getSalaryTaxRuleList());
@@ -288,6 +296,8 @@ public class HrmSalaryMonthRecordServiceImpl implements HrmSalaryMonthRecordServ
                 values = mergeOptionValues(values, additionalDeductionImportMap.getOrDefault(jobNumber, Collections.emptyList()));
                 values = mergeOptionValues(values, cumulativeTaxImportMap.getOrDefault(jobNumber, Collections.emptyList()));
             }
+            // 3.2.5 绩效工资：绩效工资基数 × 绩效系数（无已完成考核时系数按 1）
+            values = applyPerformanceSalary(values, performanceMap.get(employee.getId()));
 
             // 3.3 构建员工月工资记录，并准备批量核算所需数据
             HrmSalaryGroupDO salaryGroup = salaryGroupMap.get(employee.getId());
@@ -549,6 +559,51 @@ public class HrmSalaryMonthRecordServiceImpl implements HrmSalaryMonthRecordServ
                         defaultIfNull(insurance.getCorporateInsuranceAmount(), BigDecimal.ZERO)),
                 importOptionValue(HrmSalaryOptionCodeEnum.CORPORATE_PROVIDENT_FUND.getCode(), optionMap,
                         defaultIfNull(insurance.getCorporateProvidentFundAmount(), BigDecimal.ZERO)));
+    }
+
+    /**
+     * 按绩效结果折算绩效工资
+     *
+     * <p>取「绩效工资」工资项在薪资档案里的金额作为基数，乘以员工最近一次已完成考核的绩效系数；
+     * 没有已完成考核（或考核未给系数）时系数按 1，即按基数发放；未配置该工资项时原样返回。</p>
+     *
+     * @param values      员工当前薪资项值（薪资档案 + 考勤 + 社保等已合并）
+     * @param performance 员工最近一次已完成的绩效结果，可为 null
+     * @return 折算后的薪资项值
+     */
+    private List<HrmSalaryOptionValueVO> applyPerformanceSalary(List<HrmSalaryOptionValueVO> values,
+                                                                HrmSalaryPerformanceRespVO performance) {
+        if (CollUtil.isEmpty(values)) {
+            return values;
+        }
+        // 1. 找绩效工资项，其薪资档案金额即绩效工资基数
+        BigDecimal performanceBase = null;
+        Integer performanceCode = HrmSalaryOptionCodeEnum.PERFORMANCE_SALARY.getCode();
+        for (HrmSalaryOptionValueVO value : values) {
+            if (ObjectUtil.equal(value.getCode(), performanceCode)) {
+                performanceBase = value.getValue();
+                break;
+            }
+        }
+        if (performanceBase == null) {
+            return values;
+        }
+        // 2. 绩效系数：无已完成考核按 1
+        BigDecimal coefficient = performance != null && performance.getCoefficient() != null
+                ? performance.getCoefficient() : BigDecimal.ONE;
+        BigDecimal performanceSalary = defaultIfNull(performanceBase, BigDecimal.ZERO)
+                .multiply(coefficient).setScale(2, RoundingMode.HALF_UP);
+        // 3. 用折算后的绩效工资替换原基数
+        List<HrmSalaryOptionValueVO> result = new ArrayList<>(values.size());
+        for (HrmSalaryOptionValueVO value : values) {
+            if (ObjectUtil.equal(value.getCode(), performanceCode)) {
+                result.add(new HrmSalaryOptionValueVO().setCode(value.getCode()).setName(value.getName())
+                        .setValue(performanceSalary));
+            } else {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private Map<String, AttendanceImportData> parseAttendanceImportData(List<Map<Integer, String>> rows,

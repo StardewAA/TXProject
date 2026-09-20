@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @KeySequence("hrm_recruit_offer_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class HrmRecruitOfferDO extends BaseDO {
+public class HrmRecruitOfferDO extends TenantBaseDO {
     @TableId private Long id;
     private Long applicationId;
     private String offerNo;

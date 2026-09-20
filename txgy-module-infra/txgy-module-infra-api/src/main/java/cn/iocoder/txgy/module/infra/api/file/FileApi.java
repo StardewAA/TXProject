@@ -69,11 +69,23 @@ public interface FileApi {
     @GetMapping(PREFIX + "/presigned-url")
     @Operation(summary = "生成文件预签名地址，用于读取")
     CommonResult<String> presignGetUrl(@NotEmpty(message = "URL 不能为空") @RequestParam("url") String url,
+                                       @RequestParam(value = "expirationSeconds", required = false)
                                        Integer expirationSeconds);
 
     @GetMapping(PREFIX + "/metadata-by-url")
     @Operation(summary = "按访问地址查询文件元数据")
     CommonResult<FileMetadataRespDTO> getMetadataByUrl(
+            @NotEmpty(message = "URL 不能为空") @RequestParam("url") String url);
+
+    /**
+     * 按访问地址读取文件内容，用于服务端二次加工（例如合同模板渲染）
+     *
+     * @param url 完整的文件访问地址
+     * @return 文件内容
+     */
+    @GetMapping(PREFIX + "/content-by-url")
+    @Operation(summary = "按访问地址读取文件内容")
+    CommonResult<byte[]> getFileContentByUrl(
             @NotEmpty(message = "URL 不能为空") @RequestParam("url") String url);
 
 }

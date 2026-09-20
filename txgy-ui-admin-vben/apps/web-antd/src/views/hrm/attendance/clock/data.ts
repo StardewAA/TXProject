@@ -173,6 +173,15 @@ export function useRecordGridColumns(): VxeTableGridOptions<HrmAttendanceClockAp
       },
     },
     { field: 'address', title: '打卡地点', width: 130, showOverflow: true },
+    {
+      field: 'photoUrl',
+      title: '现场照片',
+      width: 100,
+      cellRender: {
+        name: 'CellImage',
+        props: { width: 40, height: 40, preview: true },
+      },
+    },
     { field: 'remark', title: '备注', minWidth: 140, showOverflow: true },
     {
       title: '操作',
@@ -243,6 +252,14 @@ export function useClockFormSchema(): VbenFormSchema[] {
         format: 'HH:mm:ss',
         placeholder: '请选择打卡时间',
         valueFormat: 'x',
+      },
+    },
+    {
+      fieldName: 'photoUrl',
+      label: '现场照片',
+      component: 'Input',
+      componentProps: {
+        placeholder: '打卡现场照片（人脸/工地照）地址',
       },
     },
     {

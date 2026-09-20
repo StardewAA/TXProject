@@ -296,6 +296,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '员工数量',
       width: 100,
       align: 'center',
+    },
+    {
       field: 'status',
       title: '仓库状态',
       minWidth: 110,

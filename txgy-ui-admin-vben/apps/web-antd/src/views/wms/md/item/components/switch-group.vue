@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { QuestionCircleOutlined } from '@ant-design/icons-vue';
 import { Switch, Tooltip } from 'ant-design-vue';
+
+import { IconifyIcon } from '@vben/icons';
 
 /**
  * 多个开关横向排列的组件
@@ -72,7 +73,12 @@ function handleChange(field: string, checked: any) {
       />
       <!-- 保留原表单项的 help 提示（如批次管理的说明），避免合并后丢失 -->
       <Tooltip v-if="item.help" :title="item.help">
-        <QuestionCircleOutlined class="cursor-help text-gray-400" />
+        <!-- 说明：该页面原本引用 @ant-design/icons-vue，但仓库未声明该依赖、构建会失败；
+             这里改用仓库统一的 Iconify 图标（与其它页面一致），不额外引入依赖。 -->
+        <IconifyIcon
+          class="cursor-help text-gray-400"
+          icon="ant-design:question-circle-outlined"
+        />
       </Tooltip>
     </div>
   </div>

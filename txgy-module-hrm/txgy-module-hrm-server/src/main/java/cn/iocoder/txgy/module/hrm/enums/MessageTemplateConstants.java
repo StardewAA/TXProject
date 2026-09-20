@@ -10,6 +10,8 @@ public interface MessageTemplateConstants {
     // ======================= 站内信模板 =======================
 
     String RECRUIT_INTERVIEW_ARRANGED = "hrm_recruit_interview_arranged"; // 招聘面试安排通知
+    String RECRUIT_INTERVIEW_NOTICE = "hrm_interview_notice"; // 招聘面试通知邮件（发给候选人）
+    String RECRUIT_INTERVIEW_REMIND = "hrm_interview_reminder"; // 面试前 1 天提醒邮件（发给候选人）
     String EMPLOYEE_OPENED = "hrm_employee_opened"; // 员工端开通通知
     String EMPLOYEE_ARCHIVE_FILL = "hrm_employee_archive_fill"; // 填写员工档案通知
     String INSURANCE_MONTH_RECORD_CREATED = "hrm_insurance_month_record_created"; // 月度社保表生成通知
@@ -17,5 +19,11 @@ public interface MessageTemplateConstants {
     String PERFORMANCE_PROCESS_RESULT = "hrm_performance_process_result"; // 绩效处理结果通知
     String SALARY_SLIP_SENT = "hrm_salary_slip_sent"; // 工资条发放通知
     String CERTIFICATE_WARNING = "hrm_certificate_warning"; // 证件到期/复审预警通知
+
+    String CONTRACT_PENDING_SIGN = "hrm_contract_sign_notice"; // 劳务合同待签署通知
+
+    // ======================= 邮件模板 =======================
+
+    String OFFER_NOTICE = "hrm_offer_notice"; // 录用通知（Offer）邮件
 
 }

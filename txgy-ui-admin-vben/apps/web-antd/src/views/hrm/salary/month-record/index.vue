@@ -149,7 +149,10 @@ async function getEmployeeChangeCount(formValues?: Record<string, unknown>) {
     employeeChangeCount.value = {};
     return;
   }
-  const values = formValues || (await gridApi.formApi.getValues()) || {};
+  // 首次加载时表格子组件尚未挂载完成，gridApi.formApi 还是占位对象，
+  // 直接调用会抛 "formApi.getValues is not a function"；这里做安全兜底。
+  const values =
+    formValues || (await gridApi.formApi?.getValues?.()) || {};
   // 不传 employeeChangeType，保证各 Tab 数量基于同一筛选集合统计
   const raw = await getSalaryMonthEmployeeChangeCount({
     deptId: typeof values.deptId === 'number' ? values.deptId : undefined,
@@ -172,7 +175,8 @@ async function getSummary(formValues?: Record<string, unknown>) {
     summaryList.value = [];
     return;
   }
-  const values = formValues || (await gridApi.formApi.getValues()) || {};
+  const values =
+    formValues || (await gridApi.formApi?.getValues?.()) || {};
   summaryList.value = await getSalaryMonthOptionSummary({
     deptId: values.deptId,
     employeeChangeType: employeeChangeType.value,
@@ -240,7 +244,7 @@ async function handleDelete() {
 }
 
 async function openBatchEdit() {
-  const formValues = await gridApi.formApi.getValues();
+  const formValues = (await gridApi.formApi?.getValues?.()) ?? {};
   batchFormRef.value?.open(record.value, {
     deptId: formValues.deptId,
     employeeChangeType: employeeChangeType.value,
@@ -269,6 +273,10 @@ async function init() {
       columns: buildGridColumns(record.value.optionHeaders),
       footerMethod: buildFooterMethod(summaryMap.value),
     });
+    // 表格在 <template v-if="record.id"> 内，首次加载时刚拿到 record.id 还没渲染出来；
+    // 等一个 tick 让表格挂载完成，否则 gridApi.query() 会因内部实例未就绪而失败
+    // （控制台报 "e.grid.commitProxy is not a function"）。
+    await nextTick();
     await Promise.all([
       gridApi.query(),
       getEmployeeChangeCount(),

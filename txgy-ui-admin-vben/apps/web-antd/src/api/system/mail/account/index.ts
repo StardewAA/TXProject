@@ -8,7 +8,10 @@ export namespace SystemMailAccountApi {
     id: number;
     mail: string;
     username: string;
-    password: string;
+    /** 密码（授权码）。新增必填；修改时留空表示不修改（查询接口不返回密码） */
+    password?: string;
+    /** 是否已配置密码（授权码），由后端回传 */
+    passwordConfigured?: boolean;
     host: string;
     port: number;
     sslEnable: boolean;

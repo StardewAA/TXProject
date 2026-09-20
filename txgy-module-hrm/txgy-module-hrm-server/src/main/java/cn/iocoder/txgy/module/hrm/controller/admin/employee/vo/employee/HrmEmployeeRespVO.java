@@ -101,6 +101,10 @@ public class HrmEmployeeRespVO {
     @DictFormat(DictTypeConstants.HRM_EMPLOYEE_TYPE)
     @Schema(description = "聘用形式", example = "1")
     private Integer type;
+    @Schema(description = "用工形式编号", example = "3")
+    private Long employmentTypeId;
+    @Schema(description = "用工形式名称", example = "临时工")
+    private String employmentTypeName;
 
     @ExcelProperty(value = "入职时间", index = 11)
     @Schema(description = "入职时间")

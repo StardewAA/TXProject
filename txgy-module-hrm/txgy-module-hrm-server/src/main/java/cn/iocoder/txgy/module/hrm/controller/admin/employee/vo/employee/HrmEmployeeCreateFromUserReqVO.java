@@ -25,8 +25,7 @@ public class HrmEmployeeCreateFromUserReqVO {
     @NotNull(message = "后台用户编号不能为空")
     private Long userId;
 
-    @Schema(description = "工号", requiredMode = Schema.RequiredMode.REQUIRED, example = "HRM001")
-    @NotBlank(message = "工号不能为空")
+    @Schema(description = "工号；留空则按当前租户的工号规则自动生成", example = "QC000001")
     @Size(max = 64, message = "工号不能超过 64 个字符")
     private String jobNumber;
 

@@ -115,6 +115,7 @@ const [Modal, modalApi] = useVbenModal({
         type: values.type,
         attendanceTime: dayjs(attendanceTime).valueOf(),
         clockTime: clockTime.getTime(),
+        photoUrl: values.photoUrl,
         remark: values.remark,
       };
       if (formType.value === 'create') {
