@@ -89,4 +89,16 @@ public interface WmsIntegrationApi {
             @RequestParam("tenantId") Long tenantId,
             @RequestParam("sourceOrderNo") String sourceOrderNo);
 
+    @PostMapping(PREFIX + "/collaboration-order-g/confirm")
+    @Operation(summary = "MES 确认协作单 G，回写生产工单号（设计 6.3.5/6.3.6）")
+    CommonResult<Boolean> confirmCollaborationOrderG(@RequestParam("tenantId") Long tenantId,
+            @RequestParam("sourceOrderNo") String sourceOrderNo, @RequestParam("skuCode") String skuCode,
+            @RequestParam("mesWorkOrderNo") String mesWorkOrderNo);
+
+    @PostMapping(PREFIX + "/collaboration-order-g/reject")
+    @Operation(summary = "MES 驳回协作单 G，回写原因（设计 6.3.5）")
+    CommonResult<Boolean> rejectCollaborationOrderG(@RequestParam("tenantId") Long tenantId,
+            @RequestParam("sourceOrderNo") String sourceOrderNo, @RequestParam("skuCode") String skuCode,
+            @RequestParam("reason") String reason);
+
 }

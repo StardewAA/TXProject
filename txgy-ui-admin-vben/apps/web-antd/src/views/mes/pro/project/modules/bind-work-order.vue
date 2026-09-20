@@ -4,7 +4,9 @@ import type { MesProWorkOrderApi } from '#/api/mes/pro/workorder';
 
 import { nextTick, ref } from 'vue';
 
-import { Button, message, Modal } from 'ant-design-vue';
+import { useVbenModal } from '@vben/common-ui';
+
+import { message } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { bindWorkOrders } from '#/api/mes/pro/project';
@@ -18,7 +20,6 @@ defineOptions({ name: 'MesProProjectBindWorkOrder' });
 
 const emit = defineEmits<{ success: [] }>();
 
-const open = ref(false); // 弹窗是否打开
 const projectId = ref<number>(); // 项目编号
 const selectedRows = ref<MesProWorkOrderApi.WorkOrder[]>([]); // 已选工单
 
@@ -86,18 +87,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
 /** 打开挂接工单弹窗 */
 async function openModal(id: number) {
   projectId.value = id;
-  open.value = true;
+  await bindModalApi.open();
   await nextTick();
   await gridApi.grid.clearCheckboxRow();
   await gridApi.grid.clearCheckboxReserve();
   await gridApi.formApi.resetForm();
   await gridApi.query();
-}
-
-/** 关闭弹窗 */
-function closeModal() {
-  open.value = false;
-  selectedRows.value = [];
 }
 
 /** 确认挂接 */
@@ -116,31 +111,38 @@ async function handleConfirm() {
   try {
     await bindWorkOrders(projectId.value, ids);
     message.success(`已挂接 ${rows.length} 个生产工单`);
-    open.value = false;
+    await bindModalApi.close();
+    selectedRows.value = [];
     emit('success');
   } catch {
     // 异常提示由全局拦截器处理
   }
 }
 
+const [BindModal, bindModalApi] = useVbenModal({
+  destroyOnClose: true,
+  confirmText: '确定挂接',
+  showConfirmButton: true,
+  showCancelButton: true,
+  async onConfirm() {
+    await handleConfirm();
+  },
+  onOpenChange(isOpen: boolean) {
+    if (!isOpen) {
+      projectId.value = undefined;
+      selectedRows.value = [];
+    }
+  },
+});
+
 defineExpose({ open: openModal });
 </script>
 
 <template>
-  <Modal
-    v-model:open="open"
-    title="挂接生产工单"
-    width="70%"
-    :destroy-on-close="true"
-    @cancel="closeModal"
-  >
+  <BindModal title="挂接生产工单" class="w-[70%]">
     <div class="mb-2 text-orange-500">
       仅展示未挂接任何项目的生产工单，可跨页多选。
     </div>
     <Grid table-title="生产工单列表" />
-    <template #footer>
-      <Button @click="closeModal"> 取消 </Button>
-      <Button type="primary" @click="handleConfirm"> 确定挂接 </Button>
-    </template>
-  </Modal>
+  </BindModal>
 </template>

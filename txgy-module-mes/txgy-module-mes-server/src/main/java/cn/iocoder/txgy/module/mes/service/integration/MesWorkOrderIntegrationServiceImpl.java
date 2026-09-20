@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.mes.service.integration;
 
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesIntegrationAcceptedRespDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderCreateReqDTO;
+import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderResumeReqDTO;
+import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.client.MesMdClientDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.workorder.MesProWorkOrderDO;
@@ -37,6 +39,8 @@ public class MesWorkOrderIntegrationServiceImpl implements MesWorkOrderIntegrati
 
     public static final String BUSINESS_STATUS_CREATED = "CREATED";
     public static final String BUSINESS_STATUS_EXISTED = "EXISTED";
+    /** ERP 销售订单：工单交由「项目同步链」创建，本次只登记不建单 */
+    public static final String BUSINESS_STATUS_DELEGATED = "DELEGATED";
 
     private static final String AUTO_CODE_RULE_WORK_ORDER = "PRO_WORK_ORDER_CODE";
     private static final String STATUS_ENABLED_CODE = "ENABLED";
@@ -49,11 +53,45 @@ public class MesWorkOrderIntegrationServiceImpl implements MesWorkOrderIntegrati
     private MesMdClientMapper clientMapper;
     @Resource
     private MesMdAutoCodeRecordService autoCodeRecordService;
+    @Resource
+    private MesProWorkOrderService workOrderService;
 
     @Override
     public MesIntegrationAcceptedRespDTO createWorkOrder(MesWorkOrderCreateReqDTO reqDTO) {
+        return doCreate(reqDTO, MesProWorkOrderSourceTypeEnum.ERP);
+    }
+
+    @Override
+    public MesIntegrationAcceptedRespDTO createWorkOrderFromShortage(MesWorkOrderCreateReqDTO reqDTO) {
+        return doCreate(reqDTO, MesProWorkOrderSourceTypeEnum.WMS);
+    }
+
+    @Override
+    public MesIntegrationAcceptedRespDTO resumeWorkOrder(MesWorkOrderResumeReqDTO reqDTO) {
+        workOrderService.resumeWorkOrder(reqDTO.getWorkOrderCode());
+        return new MesIntegrationAcceptedRespDTO().setAccepted(true)
+                .setRequestId(reqDTO.getRequestId())
+                .setTargetCode(reqDTO.getWorkOrderCode())
+                .setBusinessStatus("RESUMED")
+                .setProcessedVersion(reqDTO.getDataVersion());
+    }
+
+    /**
+     * 幂等创建生产工单（ERP 推送 / WMS 缺货协作单共用）
+     *
+     * @param reqDTO     工单创建请求
+     * @param sourceType 工单来源类型（ERP 订单 / WMS 缺货）
+     */
+    private MesIntegrationAcceptedRespDTO doCreate(MesWorkOrderCreateReqDTO reqDTO, MesProWorkOrderSourceTypeEnum sourceType) {
         // 1. 校验推送内容
         validate(reqDTO);
+        // 1.1 ERP 销售订单的工单统一交给「项目同步链」创建：BPM 审批通过会同时通知 ERP 与 MES，
+        //     若此处也建单，会与项目同步链（MesProProjectSyncService）重复建单，故这里只登记不建单。
+        if (sourceType == MesProWorkOrderSourceTypeEnum.ERP) {
+            log.info("[doCreate][来源单({}) 为 ERP 销售订单，工单交由项目同步链创建，本次跳过建单]",
+                    reqDTO.getOrderSourceCode());
+            return buildResponse(reqDTO, null, BUSINESS_STATUS_DELEGATED);
+        }
         // 2. 解析 MES 物料（主数据须先行同步；缺失即报错，避免落出无产品的工单）
         MesMdItemDO item = itemMapper.selectByCode(reqDTO.getItemCode());
         if (item == null) {
@@ -63,7 +101,7 @@ public class MesWorkOrderIntegrationServiceImpl implements MesWorkOrderIntegrati
         MesProWorkOrderDO existed = workOrderMapper.selectBySourceAndProduct(
                 reqDTO.getOrderSourceCode(), item.getId());
         if (existed != null) {
-            log.info("[createWorkOrder][ERP 单({}) 物料({}) 已存在工单({})，跳过建单]",
+            log.info("[doCreate][来源单({}) 物料({}) 已存在工单({})，跳过建单]",
                     reqDTO.getOrderSourceCode(), reqDTO.getItemCode(), existed.getCode());
             return buildResponse(reqDTO, existed.getCode(), BUSINESS_STATUS_EXISTED);
         }
@@ -72,7 +110,7 @@ public class MesWorkOrderIntegrationServiceImpl implements MesWorkOrderIntegrati
                 .code(generateWorkOrderCode(reqDTO))
                 .name(buildWorkOrderName(reqDTO))
                 .type(MesProWorkOrderTypeEnum.SELF.getType())
-                .orderSourceType(MesProWorkOrderSourceTypeEnum.ERP.getType())
+                .orderSourceType(sourceType.getType())
                 .orderSourceCode(reqDTO.getOrderSourceCode())
                 .productId(item.getId())
                 .quantity(reqDTO.getQuantity())
@@ -85,8 +123,8 @@ public class MesWorkOrderIntegrationServiceImpl implements MesWorkOrderIntegrati
                 .remark(reqDTO.getRemark())
                 .build();
         workOrderMapper.insert(workOrder);
-        log.info("[createWorkOrder][ERP 单({}) 物料({}) 建单成功，工单编码({})]",
-                reqDTO.getOrderSourceCode(), reqDTO.getItemCode(), workOrder.getCode());
+        log.info("[doCreate][来源单({}) 物料({}) 建单成功，工单编码({})，来源类型({})]",
+                reqDTO.getOrderSourceCode(), reqDTO.getItemCode(), workOrder.getCode(), sourceType.getName());
         return buildResponse(reqDTO, workOrder.getCode(), BUSINESS_STATUS_CREATED);
     }
 

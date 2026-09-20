@@ -102,6 +102,11 @@ txgy:
   info:
     version: 1.0.0
     base-package: cn.iocoder.txgy.module.mes
+  pollution-ai: # 污染判定 AI 初筛(DeepSeek)：api-key 只放本地 application-local.yaml，勿提交仓库
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      model: deepseek-chat
   web:
     admin-ui:
       url: http://dashboard.txgy.iocoder.cn # Admin 管理后台 UI 的地址
@@ -123,5 +128,8 @@ debug: false
 mes:
   wms:
     base-url: http://wms:48080 # WMS 内部服务地址（联调/正式由部署环境提供）
+    warehouse: # MES 无仓库模型，向 WMS 申请领料/入库时须指定 WMS 仓库编码（须与该租户 WMS 主数据一致，由部署环境注入）
+      raw-material-code: # 生产领料原料仓编码，如 SH
+      finished-goods-code: # 完工入库成品仓编码
     integration:
       enabled: false # WMS 部署并完成配置后开启，开启前定时任务不发送任何请求

@@ -290,7 +290,9 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       injectAiChatMenu(menus, accessStore.accessCodes);
       return convertServerMenuToRouteRecordStringComponent(
         filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
+          filterHrmEmployeePortalRecruitMenus(
+            transformMesMenus(transformWmsMenus(menus)),
+          ),
         ),
       );
     },
@@ -339,6 +341,50 @@ function transformWmsMenus(
       menu.children = transformWmsMenus(menu.children, kind.scoped);
     }
     return [menu];
+  });
+}
+
+/**
+ * MES 菜单改造：
+ * 与 WMS（transformWmsMenus → 「智慧仓储系统 / 仓储首页」）保持同一套处理逻辑，
+ * 在路由层为 MES 的根菜单与首页改对外显示名：
+ *   - 根菜单 → 「智慧生产执行系统」；首页工作台 → 「生产工作台」；
+ *   - 仅改显示名（menu.name / meta.title），route.name 与权限标识保持不变；
+ *   - 不落库，避免改 system_menu 后还需清理 Redis 菜单缓存。
+ * 识别信号：根菜单看 path / id / 名称，首页看 path / component / 名称。
+ */
+function transformMesMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
+  const MES_ROOT_NAME = '智慧生产执行系统';
+  const MES_HOME_NAME = '生产工作台';
+  const MES_ROOT_MENU_ID = 5100;
+  const MES_ROOT_NAMES = ['MES系统', 'MES 系统'];
+  const MES_HOME_NAMES = ['MES 工作台', 'MES工作台', 'MES 首页', 'MES首页'];
+  return menus.map((original) => {
+    const path = normalizeMenuPath(original.path);
+    const component = normalizeMenuPath(original.component);
+    const id = (original as AppRouteRecordRaw & { id?: number }).id;
+    const name = String(original.name ?? '').trim();
+    const isMesRoot =
+      path === 'mes' ||
+      path === 'mes-system' ||
+      id === MES_ROOT_MENU_ID ||
+      MES_ROOT_NAMES.includes(name);
+    const isMesHome =
+      !isMesRoot &&
+      (path === 'mes/home' ||
+        component.includes('mes/home') ||
+        MES_HOME_NAMES.includes(name));
+
+    const menu = { ...original };
+    if (isMesRoot || isMesHome) {
+      menu.componentName = menu.componentName || menu.name;
+      menu.name = isMesRoot ? MES_ROOT_NAME : MES_HOME_NAME;
+      menu.meta = { ...menu.meta, title: menu.name };
+    }
+    if (Array.isArray(menu.children)) {
+      menu.children = transformMesMenus(menu.children);
+    }
+    return menu;
   });
 }
 
