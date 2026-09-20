@@ -180,6 +180,11 @@ function clearFilters() {
   loadCourses();
 }
 
+/** 跳转到「考试与证书」，把课程中心与考试系统串联起来 */
+function goExam() {
+  router.push('/portal/training/exam');
+}
+
 async function startLearning(item: TrainingLearnerApi.PortalCourse) {
   if (!item.id || enrollingId.value) return;
   enrollingId.value = item.id;
@@ -287,6 +292,7 @@ onMounted(async () => {
           <button type="button" :class="{ chosen: sortMode === 'latest' }" @click="selectSort('latest')">最新</button>
           <button type="button" :class="{ chosen: sortMode === 'hours' }" @click="selectSort('hours')">学时</button>
         </div>
+        <button type="button" class="goto-exam" @click="goExam">前往考试</button>
       </div>
     </section>
 
@@ -433,6 +439,22 @@ input:focus {
 .sort-tabs button.chosen {
   color: #245fec;
   font-weight: 600;
+}
+
+.goto-exam {
+  padding: 6px 16px;
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  background: linear-gradient(90deg, #007cb4 0%, #005c9f 100%);
+  border: 0;
+  border-radius: 16px;
+  transition: opacity 0.2s;
+}
+
+.goto-exam:hover {
+  opacity: 0.88;
 }
 
 .message {

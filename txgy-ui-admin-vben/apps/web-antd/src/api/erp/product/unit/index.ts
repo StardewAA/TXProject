@@ -52,3 +52,8 @@ export function deleteProductUnit(id: number) {
 export function exportProductUnit(params: any) {
   return requestClient.download('/erp/product-unit/export-excel', { params });
 }
+
+/** 导出产品单位 PDF */
+export function exportProductUnitPdf(params: any) {
+  return requestClient.download('/erp/product-unit/export-pdf', { params });
+}

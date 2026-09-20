@@ -1,6 +1,7 @@
 <template>
   <s-layout
     navbar="normal"
+    tenantEntry
     :leftWidth="0"
     :rightWidth="0"
     tools="search"

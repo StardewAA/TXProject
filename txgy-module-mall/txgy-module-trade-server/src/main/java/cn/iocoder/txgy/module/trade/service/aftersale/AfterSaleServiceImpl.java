@@ -51,7 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -131,6 +133,18 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         AfterSaleDO afterSale = tradeAfterSaleMapper.selectById(id);
         enrichShopName(afterSale);
         return afterSale;
+    }
+
+    @Override
+    public Map<Long, AfterSaleDO> getLatestAfterSales(Long userId, Collection<Long> orderItemIds) {
+        if (orderItemIds == null || orderItemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, AfterSaleDO> latest = new LinkedHashMap<>();
+        for (AfterSaleDO afterSale : tradeAfterSaleMapper.selectLatestByOrderItemIds(userId, orderItemIds)) {
+            latest.putIfAbsent(afterSale.getOrderItemId(), afterSale);
+        }
+        return latest;
     }
 
     /**

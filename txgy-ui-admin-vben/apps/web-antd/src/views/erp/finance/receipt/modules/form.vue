@@ -8,12 +8,13 @@ import { computed, ref } from 'vue';
 import { useVbenModal } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
-import { message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getAccountSimpleList } from '#/api/erp/finance/account';
 import {
   createFinanceReceipt,
+  exportFinanceReceiptPdf,
   getFinanceReceipt,
   updateFinanceReceipt,
 } from '#/api/erp/finance/receipt';
@@ -106,6 +107,20 @@ function handleUpdateReceiptPrice(receiptPrice: number) {
   formApi.setValues({
     receiptPrice: formData.value.receiptPrice,
   });
+}
+
+/** 一键导出当前单据 PDF（无需在列表中勾选） */
+async function handleExportPdf() {
+  const id = formData.value?.id;
+  if (!id) {
+    message.warning('单据未加载，无法导出');
+    return;
+  }
+  try {
+    await exportFinanceReceiptPdf({ ids: id });
+  } catch (error: any) {
+    message.error(error?.message || '导出 PDF 失败');
+  }
 }
 
 /** 创建或更新收款单 */
@@ -206,6 +221,9 @@ const [Modal, modalApi] = useVbenModal({
           @update:receipt-price="handleUpdateReceiptPrice"
           class="w-full"
         />
+      </template>
+      <template #exportPdf>
+        <Button type="primary" @click="handleExportPdf">导出PDF</Button>
       </template>
     </Form>
   </Modal>

@@ -22,12 +22,17 @@ public interface ErpPurchaseOrderMapper extends BaseMapperX<ErpPurchaseOrderDO> 
 
     default PageResult<ErpPurchaseOrderDO> selectPage(ErpPurchaseOrderPageReqVO reqVO) {
         MPJLambdaWrapperX<ErpPurchaseOrderDO> query = new MPJLambdaWrapperX<ErpPurchaseOrderDO>()
+                .inIfPresent(ErpPurchaseOrderDO::getId, reqVO.getIds())
                 .likeIfPresent(ErpPurchaseOrderDO::getNo, reqVO.getNo())
                 .eqIfPresent(ErpPurchaseOrderDO::getSupplierId, reqVO.getSupplierId())
                 .betweenIfPresent(ErpPurchaseOrderDO::getOrderTime, reqVO.getOrderTime())
                 .eqIfPresent(ErpPurchaseOrderDO::getStatus, reqVO.getStatus())
                 .likeIfPresent(ErpPurchaseOrderDO::getRemark, reqVO.getRemark())
                 .eqIfPresent(ErpPurchaseOrderDO::getCreator, reqVO.getCreator())
+                // 溯源过滤：按来源类型 / 来源单号 / 业务链号反查订单
+                .eqIfPresent(ErpPurchaseOrderDO::getSourceType, reqVO.getSourceType())
+                .eqIfPresent(ErpPurchaseOrderDO::getSourceNo, reqVO.getSourceNo())
+                .eqIfPresent(ErpPurchaseOrderDO::getBusinessChainNo, reqVO.getBusinessChainNo())
                 .orderByDesc(ErpPurchaseOrderDO::getId);
         // 入库状态。为什么需要 t. 的原因，是因为联表查询时，需要指定表名，不然会报 in_count 错误
         if (Objects.equals(reqVO.getInStatus(), ErpPurchaseOrderPageReqVO.IN_STATUS_NONE)) {
@@ -66,6 +71,17 @@ public interface ErpPurchaseOrderMapper extends BaseMapperX<ErpPurchaseOrderDO> 
     default int updateByIdAndStatus(Long id, Integer status, ErpPurchaseOrderDO updateObj) {
         return update(updateObj, new LambdaUpdateWrapper<ErpPurchaseOrderDO>()
                 .eq(ErpPurchaseOrderDO::getId, id).eq(ErpPurchaseOrderDO::getStatus, status));
+    }
+
+    /**
+     * 反审批：将指定状态的订单回退为草稿，并清空 BPM 流程实例编号
+     */
+    default int reverseApproveByIdAndStatus(Long id, Integer status, String reason) {
+        return update(new LambdaUpdateWrapper<ErpPurchaseOrderDO>()
+                .eq(ErpPurchaseOrderDO::getId, id).eq(ErpPurchaseOrderDO::getStatus, status)
+                .set(ErpPurchaseOrderDO::getStatus, ErpAuditStatus.DRAFT.getStatus())
+                .set(ErpPurchaseOrderDO::getProcessInstanceId, null)
+                .set(ErpPurchaseOrderDO::getReverseApproveReason, reason));
     }
 
     default ErpPurchaseOrderDO selectByNo(String no) {

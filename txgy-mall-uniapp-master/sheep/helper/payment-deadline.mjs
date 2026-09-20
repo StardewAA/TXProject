@@ -47,7 +47,7 @@ export function orderPaymentState(order, now = monotonicNow()) {
   if (waiting) {
     result.text = result.expired
       ? '库存确认等待已到期，正在核实订单状态，请勿付款'
-      : `待 ERP 确认库存，尚未开始支付计时${left !== null ? `；剩余等待 ${remainingText(left)}` : ''}`;
+      : `库存确认中，尚未开始支付计时${left !== null ? `；剩余等待 ${remainingText(left)}` : ''}`;
   } else if (result.expired) {
     result.text = '支付时限已到，正在核实支付与订单状态，请勿重复付款';
   } else if (reason === 'PAYMENT_UNCONFIRMED') {

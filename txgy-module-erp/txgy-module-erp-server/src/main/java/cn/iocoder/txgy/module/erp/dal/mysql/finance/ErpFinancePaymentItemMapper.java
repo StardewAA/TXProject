@@ -1,16 +1,14 @@
 package cn.iocoder.txgy.module.erp.dal.mysql.finance;
 
-import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.map.MapUtil;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinancePaymentItemDO;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 /**
  * ERP 付款单项 Mapper
@@ -28,17 +26,14 @@ public interface ErpFinancePaymentItemMapper extends BaseMapperX<ErpFinancePayme
         return selectList(ErpFinancePaymentItemDO::getPaymentId, paymentIds);
     }
 
-    default BigDecimal selectPaymentPriceSumByBizIdAndBizType(Long bizId, Integer bizType) {
-        // SQL sum 查询
-        List<Map<String, Object>> result = selectMaps(new QueryWrapper<ErpFinancePaymentItemDO>()
-                .select("SUM(payment_price) AS payment_price_sum")
-                .eq("biz_id", bizId)
-                .eq("biz_type", bizType));
-        // 获得数量
-        if (CollUtil.isEmpty(result)) {
-            return BigDecimal.ZERO;
-        }
-        return BigDecimal.valueOf(MapUtil.getDouble(result.get(0), "payment_price_sum", 0D));
-    }
+    @Select("""
+            SELECT COALESCE(SUM(i.payment_price), 0)
+            FROM erp_finance_payment_item i
+            INNER JOIN erp_finance_payment p ON p.id = i.payment_id AND p.deleted = 0
+            WHERE i.biz_id = #{bizId} AND i.biz_type = #{bizType}
+              AND i.deleted = 0 AND p.status = 20
+            """)
+    BigDecimal selectPaymentPriceSumByBizIdAndBizType(@Param("bizId") Long bizId,
+                                                      @Param("bizType") Integer bizType);
 
 }

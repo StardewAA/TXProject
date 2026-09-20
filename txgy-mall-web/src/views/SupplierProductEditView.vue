@@ -174,7 +174,7 @@ onBeforeUnmount(gate.invalidate)
         <p v-if="!editing&&form.specType&&form.skus.length===1" class="sku-help">至少保留一个规格；添加多行后可删除多余行。</p>
         <template v-if="!editing&&form.specType"><div class="columns"><el-form-item v-for="p in sku.properties||[]" :key="p.propertyId" :label="options.properties?.find(x=>x.id===p.propertyId)?.name" required><el-select v-model="p.valueId" filterable placeholder="请选择规格值"><el-option v-for="v in options.properties?.find(x=>x.id===p.propertyId)?.values||[]" :key="v.id" :label="v.name" :value="v.id"/></el-select></el-form-item></div></template>
         <el-form-item label="SKU独立图片（选填）"><SupplierSkuImage v-model="sku.picUrl" :disabled="!editable||busy||anyUploading" @busy="v=>uploadingSkuImages+=v?1:-1"/><p>每个SKU一张，PNG/JPG/WebP、2MB以内。点击“使用当前主图”会在保存时复制当前商品主图；未修改的原图保持不变。</p></el-form-item>
-        <p v-if="editing">库存缓存：{{sku.stock}} · {{sku.wmsManaged?'WMS管理（此处不修改）':'本地库存（此处不覆盖）'}}</p>
+        <p v-if="editing">当前库存：{{sku.stock}} · {{sku.wmsManaged?'系统管理（不可手工修改）':'可在库存管理中调整'}}</p>
         <div class="columns"><el-form-item label="售价（元）" required><el-input-number :model-value="sku.price/100" :min="0.01" :max="10000000" :precision="2" @update:model-value="v=>sku.price=Math.round((v||0)*100)"/></el-form-item>
           <el-form-item label="市场价（元）"><el-input-number :model-value="sku.marketPrice/100" :min="0" :max="10000000" :precision="2" @update:model-value="v=>sku.marketPrice=Math.round((v||0)*100)"/></el-form-item>
           <el-form-item v-if="!editing" label="本地初始库存"><el-input-number v-model="sku.initialStock" :min="0" :max="1000000" :precision="0"/></el-form-item></div>

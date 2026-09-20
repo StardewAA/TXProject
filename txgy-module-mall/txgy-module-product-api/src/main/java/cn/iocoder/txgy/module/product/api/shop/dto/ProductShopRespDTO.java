@@ -21,5 +21,8 @@ public class ProductShopRespDTO {
     /** 店铺负责人（后台系统用户编号） */
     private Long managerUserId;
 
+    /** 店铺登记的发货/退货地址；缺失时回退企业档案地址，仅供内部业务接口使用 */
+    private String dispatchAddress;
+
 }
 

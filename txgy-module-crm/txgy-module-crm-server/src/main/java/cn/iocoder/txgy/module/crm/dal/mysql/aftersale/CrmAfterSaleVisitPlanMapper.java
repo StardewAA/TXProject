@@ -35,6 +35,18 @@ public interface CrmAfterSaleVisitPlanMapper extends BaseMapperX<CrmAfterSaleVis
     }
 
     /**
+     * 查询质保档案对应的回访计划（一份质保档案至多绑定一条有效计划）
+     *
+     * @param warrantyId 质保档案编号
+     * @return 回访计划（不存在时返回 null）
+     */
+    default CrmAfterSaleVisitPlanDO selectByWarrantyId(Long warrantyId) {
+        return selectOne(new LambdaQueryWrapperX<CrmAfterSaleVisitPlanDO>()
+                .eq(CrmAfterSaleVisitPlanDO::getWarrantyId, warrantyId)
+                .last("LIMIT 1"));
+    }
+
+    /**
      * 查询启用中、且仍处于有效期内的回访计划（end_date 为空或 >= 今天）
      */
     default List<CrmAfterSaleVisitPlanDO> selectListByStatusEnabled(Integer status, LocalDate today) {

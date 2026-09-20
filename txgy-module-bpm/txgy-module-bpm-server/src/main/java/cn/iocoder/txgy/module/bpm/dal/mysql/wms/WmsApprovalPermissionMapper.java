@@ -27,8 +27,9 @@ public interface WmsApprovalPermissionMapper {
         SELECT DISTINCT u.id FROM system_users u
         JOIN system_user_role ur ON ur.user_id=u.id AND ur.tenant_id=u.tenant_id AND ur.deleted=0
         JOIN system_role r ON r.id=ur.role_id AND r.tenant_id=u.tenant_id AND r.status=0 AND r.deleted=0
-        JOIN system_role_menu rm ON rm.role_id=r.id AND rm.tenant_id=u.tenant_id AND rm.deleted=0
-        WHERE u.tenant_id=#{tenantId} AND u.status=0 AND u.deleted=0 AND rm.menu_id=#{menuId}
+        LEFT JOIN system_role_menu rm ON rm.role_id=r.id AND rm.tenant_id=u.tenant_id AND rm.deleted=0
+        WHERE u.tenant_id=#{tenantId} AND u.status=0 AND u.deleted=0
+          AND (rm.menu_id=#{menuId} OR r.code IN ('super_admin', 'tenant_admin'))
         ORDER BY u.id
         """)
     List<Long> selectUserIds(@Param("tenantId") Long tenantId, @Param("menuId") Long menuId);

@@ -143,3 +143,9 @@ txgy:
     mock-enable: true
   access-log: # 访问日志的配置项
     enable: false
+
+# 本地商城允许加载已由前端环境变量配置的高德地图；这里只公开能力状态，不保存或下发 Key。
+mall:
+  address-map:
+    enabled: ${MALL_ADDRESS_MAP_ENABLED:true}
+    provider: ${MALL_ADDRESS_MAP_PROVIDER:AMAP}

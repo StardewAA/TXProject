@@ -29,6 +29,7 @@ const categoryByApiId = new Map(
 );
 
 const categoryByName = new Map(mallCategories.map((category) => [category.name, category.key]));
+const categoryColors = ['#2563eb', '#0f766e', '#7c3aed', '#c2410c', '#dc2626', '#ca8a04', '#0284c7', '#475569'];
 
 function toYuan(value, fallback = 0) {
   const number = Number(value);
@@ -85,15 +86,37 @@ function normalizeProduct(spu, tenant, categories) {
   };
 }
 
-function normalizeApiCategories(categories = [], tenant) {
-  const apiNameById = new Map(categories.map((item) => [Number(item.id), item.name]));
-  return mallCategories.map((category) => ({
-    ...category,
-    apiId:
-      [...apiNameById.entries()].find(([, name]) => name === category.name)?.[0] ||
-      (tenant === '1' ? [...categoryByApiId.entries()].find(([, key]) => key === category.key)?.[0] : null) ||
-      null,
-  }));
+function normalizeApiCategories(categories = [], tenant, products = []) {
+  const apiById = new Map(categories.map((item) => [Number(item.id), item]));
+  const productCountByCategory = new Map();
+  products.forEach((product) => {
+    const categoryId = Number(product?.categoryId);
+    if (Number.isFinite(categoryId) && categoryId > 0) {
+      productCountByCategory.set(categoryId, (productCountByCategory.get(categoryId) || 0) + 1);
+    }
+  });
+
+  // 分类页只展示当前商城实际有商品的末级分类。不同租户可以维护完全不同的
+  // 分类名称和编号，不能再用平台旧分类名称做硬匹配。
+  return [...productCountByCategory.entries()].map(([apiId, count], index) => {
+    const apiCategory = apiById.get(apiId);
+    const legacyKey = tenant === '1' ? categoryByApiId.get(apiId) : '';
+    const exactKey = categoryByName.get(apiCategory?.name);
+    const key = legacyKey || exactKey || `category-${apiId}`;
+    const presentation = mallCategories.find((category) => category.key === key);
+    const name = apiCategory?.name || presentation?.name || '其他材料';
+    const parent = apiById.get(Number(apiCategory?.parentId));
+    return {
+      ...presentation,
+      key,
+      apiId,
+      name,
+      group: parent?.name || presentation?.group || '工程材料',
+      icon: presentation?.icon || name.slice(0, 2),
+      color: presentation?.color || categoryColors[index % categoryColors.length],
+      hint: presentation?.hint || `${count} 款在售商品`,
+    };
+  });
 }
 
 /**
@@ -125,7 +148,7 @@ export async function loadMallCatalog(force = false) {
 
       // 按接口顺序展示，便于后台新增商品后用户端立即可见；ERP 元数据只负责
       // 分类、单位和规格等展示补充，不覆盖接口价格、库存和图片。
-      const categories = normalizeApiCategories(apiCategories, tenant);
+      const categories = normalizeApiCategories(apiCategories, tenant, apiProducts);
       const catalog = {
         products: apiProducts.map(spu => normalizeProduct(spu, tenant, categories)),
         categories,

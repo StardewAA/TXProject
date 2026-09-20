@@ -103,12 +103,23 @@
       @cancel="state.showRegion = false"
       @confirm="onRegionConfirm"
     />
-    <su-popup :show="state.showMap" :showClose="true" round="10" @close="state.showMap = false">
+    <su-popup :show="state.showMap" :showClose="true" round="10" @close="closeMap">
       <view class="map-panel">
         <view class="map-title">地图选点</view>
         <view>{{ state.mapMessage }}</view>
+        <!-- #ifdef H5 -->
+        <view v-if="state.mapReady" class="map-search">
+          <input v-model="state.mapSearch" placeholder="输入城市、道路、园区或建筑名称" @confirm="searchMap" />
+          <button size="mini" :disabled="state.mapSearching" @tap="searchMap">{{ state.mapSearching ? '搜索中' : '搜索' }}</button>
+        </view>
+        <view v-if="state.mapReady" id="h5-amap-address-picker" class="amap-container"></view>
+        <view v-if="state.mapReady" class="map-selection" :class="{ 'map-selection-empty': !state.mapCandidate?.formattedAddress }">
+          {{ state.mapCandidate?.formattedAddress ? `已选：${state.mapCandidate.formattedAddress}` : '点击地图选择具体位置' }}
+        </view>
+        <!-- #endif -->
         <view class="map-detail">省市区、街道门牌和工地入口请在地址表单中填写。地图点位不能替代详细地址。</view>
-        <button @tap="state.showMap = false">继续手工填写</button>
+        <button v-if="state.mapReady" class="confirm-map" :disabled="!state.mapCandidate" @tap="confirmMap">确认此位置</button>
+        <button @tap="closeMap">继续手工填写</button>
       </view>
     </su-popup>
     </view>
@@ -116,7 +127,7 @@
 </template>
 
 <script setup>
-  import { ref, reactive, unref, computed, watch } from 'vue';
+  import { ref, reactive, unref, computed, watch, nextTick } from 'vue';
   import sheep from '@/sheep';
   import { onLoad, onHide, onShow } from '@dcloudio/uni-app';
   import { isEmpty } from 'lodash-es';
@@ -125,11 +136,12 @@
   import AddressApi from '@/sheep/api/member/address';
   import { useTenantTask } from '@/sheep/hooks/useTenantTask';
   import { manualMapMessage, normalizeLocationCapability, locationSummary, clearAddressLocation, createLatestTask } from '@/sheep/helper/fulfillment-view.mjs';
+  import { isAmapConfigured, loadAmap } from '@/sheep/helper/amap-loader.mjs';
 
   const addressFormRef = ref(null);
   const state = reactive({
     showRegion: false,
-    showMap: false, mapMessage: manualMapMessage, locationCleared: false,
+    showMap: false, mapMessage: manualMapMessage, mapReady: false, mapSearch: '', mapSearching: false, mapCandidate: null, locationCleared: false,
     addressId: '', loaded: false, loadError: '', loading: false, saving: false, expired: false,
     model: {
       name: '',
@@ -145,6 +157,7 @@
   });
   const addressLoads = createLatestTask(task.current);
   let originalLocationAddress = '';
+  let amap, map, marker, geocoder, mapSelection = 0;
   const locationAddress = model => `${model.areaId || ''}|${model.detailAddress || ''}`;
   const savedLocation = computed(() => locationSummary(state.model));
   function removeLocation() {
@@ -157,12 +170,71 @@
   async function openMap() {
     if (!task.current()) return;
     state.showMap = true;
+    state.mapReady = false; state.mapCandidate = null;
     const current = task.capture();
     try {
       const response = await AddressApi.getLocationCapability();
       if (response?.code !== 0) throw new Error('unavailable');
-      if (current()) state.mapMessage = normalizeLocationCapability(response.data).message;
+      const capability = normalizeLocationCapability(response.data);
+      if (!current()) return;
+      state.mapMessage = capability.message;
+      // #ifdef H5
+      if (capability.enabled && isAmapConfigured()) await initMap(current);
+      else if (capability.enabled) state.mapMessage = '本机尚未配置高德地图 Key，请继续手工填写地址。';
+      // #endif
     } catch { if (current()) state.mapMessage = '地图服务暂不可用，请继续手工填写地址，不影响保存和下单。'; }
+  }
+  function destroyMap() { mapSelection += 1; if (map) map.destroy(); map = undefined; marker = undefined; geocoder = undefined; amap = undefined; state.mapReady = false; }
+  function closeMap() { state.showMap = false; destroyMap(); }
+  function coordinates(position) { return [Number(position.getLng().toFixed(6)), Number(position.getLat().toFixed(6))]; }
+  function cityName(value) { return Array.isArray(value) ? value[0] || '' : value || ''; }
+  function chooseMapPoint(lng, lat, fallback = '', moveMap = false) {
+    if (!amap || !map || !geocoder) return;
+    const point = [lng, lat];
+    const selection = ++mapSelection;
+    if (!marker) { marker = new amap.Marker({ position: point }); map.add(marker); } else marker.setPosition(point);
+    // 直接点地图时保留用户当前视野；搜索定位才移动中心，避免每次点击后地图跳动。
+    if (moveMap) map.setCenter(point);
+    state.mapCandidate = { longitude: lng, latitude: lat, coordSystem: 'GCJ02', locationSource: 'MAP_PICKER', locationPrecision: 'ADDRESS', formattedAddress: fallback };
+    geocoder.getAddress(point, (status, result) => {
+      if (selection !== mapSelection || status !== 'complete' || !state.mapCandidate) return;
+      const component = result.regeocode?.addressComponent || {};
+      state.mapCandidate = { ...state.mapCandidate, formattedAddress: result.regeocode?.formattedAddress || fallback,
+        areaId: /^\d{6}$/.test(component.adcode || '') ? Number(component.adcode) : undefined,
+        areaName: [component.province, cityName(component.city), component.district].filter(Boolean).join(' ') };
+    });
+  }
+  async function initMap(current) {
+    amap = await loadAmap();
+    if (!current() || !state.showMap) return;
+    state.mapReady = true; await nextTick();
+    map = new amap.Map('h5-amap-address-picker', { zoom: savedLocation.value ? 16 : 11,
+      center: savedLocation.value ? [Number(state.model.longitude), Number(state.model.latitude)] : [108.93977, 34.341574], viewMode: '2D' });
+    geocoder = new amap.Geocoder({ radius: 1000 });
+    map.on('click', event => { const [lng, lat] = coordinates(event.lnglat); chooseMapPoint(lng, lat); });
+    if (savedLocation.value) chooseMapPoint(Number(state.model.longitude), Number(state.model.latitude));
+    state.mapSearch = [state.model.areaName, state.model.detailAddress].filter(Boolean).join(' ');
+  }
+  function searchMap() {
+    const keyword = state.mapSearch.trim();
+    if (!geocoder || !keyword || state.mapSearching) return;
+    state.mapSearching = true;
+    geocoder.getLocation(keyword, (status, result) => {
+      state.mapSearching = false;
+      const first = result.geocodes?.[0];
+      if (status !== 'complete' || !first?.location) { sheep.$helper.toast('没有找到该地址，请补充城市、道路或建筑名称'); return; }
+      const [lng, lat] = coordinates(first.location); chooseMapPoint(lng, lat, first.formattedAddress || keyword, true); map.setZoom(17);
+    });
+  }
+  function confirmMap() {
+    if (!state.mapCandidate) return;
+    const selected = state.mapCandidate;
+    state.model = { ...state.model, ...(selected.areaId ? { areaId: selected.areaId } : {}),
+      ...(selected.areaName ? { areaName: selected.areaName } : {}),
+      ...(selected.formattedAddress ? { detailAddress: selected.formattedAddress } : {}),
+      longitude: selected.longitude, latitude: selected.latitude, coordSystem: 'GCJ02',
+      locationSource: 'MAP_PICKER', locationPrecision: 'ADDRESS', locationConfirmed: true, clearLocation: false };
+    originalLocationAddress = locationAddress(state.model); state.locationCleared = false; closeMap();
   }
   async function loadAddress() {
     if (!task.current() || !state.addressId || state.loading) return;
@@ -176,7 +248,7 @@
     } catch { if (current()) state.loadError = '地址加载失败，请重试；未成功加载前不能保存。'; }
     finally { if (current()) state.loading = false; }
   }
-  onHide(() => { task.invalidate(); addressLoads.invalidate(); state.loading = false; state.showMap = false; state.showRegion = false; });
+  onHide(() => { task.invalidate(); addressLoads.invalidate(); state.loading = false; state.showMap = false; state.showRegion = false; destroyMap(); });
   onShow(() => { if (state.addressId && !state.loaded && !state.loading) loadAddress(); });
 
   const rules = {
@@ -364,6 +436,13 @@
   .map-title { font-size: 30rpx; color: #263c37; font-weight: bold; margin-bottom: 12rpx; }
   .map-detail { color: #666; margin: 14rpx 0; overflow-wrap: anywhere; }
   .map-panel { padding: 60rpx 30rpx 40rpx; line-height: 1.8; min-height: 280rpx; }
+  .map-search { display: flex; gap: 12rpx; margin: 18rpx 0; align-items: center; }
+  .map-search input { flex: 1; padding: 12rpx 18rpx; border: 1px solid #ddd; border-radius: 8rpx; }
+  .map-search button { width: 150rpx; }
+  .amap-container { width: 100%; height: 620rpx; border: 1px solid #ddd; border-radius: 8rpx; }
+  .map-selection { height: 76rpx; margin: 14rpx 0; color: #45625c; line-height: 38rpx; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .map-selection-empty { color: #999; }
+  .confirm-map { color: white; background: var(--ui-BG-Main); }
   .map-card button { margin: 14rpx 20rpx 0 0; }
   :deep() {
     .uni-forms-item__label .label-text {

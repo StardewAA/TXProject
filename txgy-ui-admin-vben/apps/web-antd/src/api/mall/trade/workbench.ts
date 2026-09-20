@@ -2,6 +2,11 @@ import type { PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
+export const WORKBENCH_CHANGED_EVENT = 'mall-trade-workbench:changed';
+export function notifyWorkbenchChanged() {
+  window.dispatchEvent(new Event(WORKBENCH_CHANGED_EVENT));
+}
+
 export type TodoAction = 'AFTER_AUDIT' | 'AFTER_RECEIVE' | 'BUYER_RETURN' | 'COMMENT' | 'DELIVERY' | 'ERP_EXCEPTION' | 'PAYMENT' | 'PLATFORM_REFUND' | 'RECEIVE';
 export interface TodoEntry {
   eventId: string;

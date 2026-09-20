@@ -13,9 +13,11 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteFinancePayment,
   exportFinancePayment,
+  exportFinancePaymentPdf,
   getFinancePaymentPage,
   updateFinancePaymentStatus,
 } from '#/api/erp/finance/payment';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -35,9 +37,29 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportFinancePayment(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '付款单.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const params = await gridApi.formApi.getValues();
+  // 勾选了行则只导出选中单据（后端按 ids 过滤）
+  if (checkedIds.value.length > 0) {
+    params.ids = checkedIds.value.join(',');
+  }
+  const data =
+    format === 'pdf'
+      ? await exportFinancePaymentPdf(params)
+      : await exportFinancePayment(params);
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '付款单.pdf' : '付款单.xls',
+    source: data,
+  });
+}
+
+/** 导出付款单 PDF */
+async function handleExportPdf(row: ErpFinancePaymentApi.FinancePayment) {
+  const data = await exportFinancePaymentPdf({ id: row.id });
+  downloadFileFromBlobPart({
+    fileName: `付款单-${row.no || row.id}.pdf`,
+    source: data,
+  });
 }
 
 /** 新增付款单 */
@@ -76,7 +98,9 @@ async function handleUpdateStatus(
   });
   try {
     await updateFinancePaymentStatus(row.id!, status);
-    message.success(`${status === 20 ? '审批' : '反审批'}成功`);
+    message.success(
+      status === 20 ? '审批成功，付款已自动出账' : '反审批成功，已生成冲销流水',
+    );
     handleRefresh();
   } finally {
     hideLoading();
@@ -154,13 +178,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:finance-payment:export'],
-              onClick: handleExport,
-            },
-            {
               label: '批量删除',
               type: 'primary',
               danger: true,
@@ -174,6 +191,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+        <ErpExportButton
+          :auth="['erp:finance-payment:export']"
+          :export-handler="handleExport"
+        />
       </template>
       <template #actions="{ row }">
         <TableAction
@@ -184,6 +205,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.VIEW,
               auth: ['erp:finance-payment:query'],
               onClick: handleDetail.bind(null, row),
+            },
+            {
+              label: '导出 PDF',
+              type: 'link',
+              icon: 'lucide:file-down',
+              auth: ['erp:finance-payment:export'],
+              onClick: handleExportPdf.bind(null, row),
             },
             {
               label: $t('common.edit'),
@@ -199,7 +227,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.AUDIT,
               auth: ['erp:finance-payment:update-status'],
               popConfirm: {
-                title: `确认${row.status === 10 ? '审批' : '反审批'}${row.no}吗？`,
+                title:
+                  row.status === 10
+                    ? `确认审批${row.no}吗？审批后将自动扣减账户余额。`
+                    : `确认反审批${row.no}吗？系统将自动冲销原付款。`,
                 confirm: handleUpdateStatus.bind(
                   null,
                   row,

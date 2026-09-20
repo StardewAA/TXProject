@@ -14,6 +14,7 @@ txgy-ui-admin-vben/dist
 txgy-ui-admin-vben/.turbo
 **/node_modules
 **/dist
+**/.env.local
 !txgy-ui-admin-vben/apps/
 !txgy-ui-admin-vben/apps/web-antd/
 !txgy-ui-admin-vben/apps/web-antd/dist/

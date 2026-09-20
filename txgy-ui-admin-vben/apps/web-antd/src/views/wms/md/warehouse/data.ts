@@ -9,6 +9,41 @@ import { getDictOptions } from '@vben/hooks';
 import { Button } from 'ant-design-vue';
 
 import { z } from '#/adapter/form';
+import { getSimpleRoleList } from '#/api/system/role';
+import { getSimpleUserList, getUserPage } from '#/api/system/user';
+
+const WAREHOUSE_MANAGER_ROLE_NAME = '仓库管理员';
+
+const toUserOption = (user: {
+  id?: number;
+  nickname?: string;
+  username?: string;
+}) => ({
+  ...user,
+  label:
+    user.id != null
+      ? `${user.id} · ${user.nickname || user.username || '未命名用户'}`
+      : user.nickname || user.username || '未命名用户',
+  value: user.id,
+});
+
+const getWarehouseManagerUsers = async () => {
+  const role = (await getSimpleRoleList()).find(
+    (item) => item.status === 0 && item.name === WAREHOUSE_MANAGER_ROLE_NAME,
+  );
+  if (!role?.id) {
+    return [];
+  }
+  const page = await getUserPage({ pageNo: 1, pageSize: 100, roleId: role.id });
+  return page.list.filter((user) => user.status === 0).map(toUserOption);
+};
+
+const getWarehouseLogisticsUsers = async () => {
+  const users = await getSimpleUserList();
+  return users
+    // /system/user/simple-list 已经只返回启用用户；UserSimpleRespVO 不含 status。
+    .map(toUserOption);
+};
 
 const warehouseTypes = [
   { label: '原材料仓', value: 'RAW_MATERIAL' },
@@ -123,6 +158,34 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
       rules: z.number().default(0),
     },
     {
+      fieldName: 'managerUserId',
+      label: '仓库负责人',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getWarehouseManagerUsers,
+        labelField: 'label',
+        valueField: 'value',
+        placeholder: '请选择仓库负责人',
+        showSearch: true,
+      },
+      rules: z.number({ message: '请选择仓库负责人' }),
+    },
+    {
+      fieldName: 'memberUserIds',
+      label: '仓库员工',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getWarehouseLogisticsUsers,
+        labelField: 'label',
+        valueField: 'value',
+        mode: 'multiple',
+        placeholder: '请选择仓库员工',
+        showSearch: true,
+        optionFilterProp: 'label',
+      },
+      rules: z.array(z.number()).default([]),
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',
@@ -220,13 +283,19 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'warehouseType',
       title: '仓库类型',
-    {
-      field: 'warehouseType',
-      title: '仓库类型',
       minWidth: 130,
       formatter: ({ cellValue }) => warehouseTypes.find(type => type.value === cellValue)?.label ?? '未分类',
     },
     {
+      field: 'managerName',
+      title: '负责人',
+      minWidth: 120,
+    },
+    {
+      field: 'memberCount',
+      title: '员工数量',
+      width: 100,
+      align: 'center',
       field: 'status',
       title: '仓库状态',
       minWidth: 110,

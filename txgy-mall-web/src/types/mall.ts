@@ -152,6 +152,7 @@ export interface Address extends AddressLocation {
 }
 
 export interface OrderItem {
+  shopId?: Identifier
   id: Identifier
   spuId?: Identifier
   skuId?: Identifier
@@ -163,6 +164,9 @@ export interface OrderItem {
   payPrice?: number
   commentStatus?: boolean
   afterSaleStatus?: number
+  latestAfterSaleId?: Identifier
+  latestAfterSaleStatus?: number
+  latestAfterSaleReason?: string
 }
 
 export interface TradeOrder extends PaymentDeadlineFields {
@@ -188,6 +192,7 @@ export interface TradeOrder extends PaymentDeadlineFields {
   receiverMobile?: string
   receiverAreaName?: string
   receiverDetailAddress?: string
+  dispatchOriginAddress?: string
 }
 
 export interface AfterSale {

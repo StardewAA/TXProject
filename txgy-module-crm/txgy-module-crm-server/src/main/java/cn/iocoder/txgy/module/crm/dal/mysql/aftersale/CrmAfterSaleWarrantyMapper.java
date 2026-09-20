@@ -1,10 +1,12 @@
 package cn.iocoder.txgy.module.crm.dal.mysql.aftersale;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleWarrantyDO;
+import cn.iocoder.txgy.module.crm.enums.aftersale.CrmAfterSaleWarrantyStatusEnum;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDate;
@@ -67,6 +69,51 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
 
     default List<CrmAfterSaleWarrantyDO> selectListByIds(Collection<Long> ids) {
         return selectBatchIds(ids);
+    }
+
+    // ========== 待办：质保即将到期（实时查询，不落库） ==========
+
+    /**
+     * 待办「质保即将到期」分页查询
+     *
+     * <p>实时判定条件：
+     * <ul>
+     *   <li>质保状态 = 质保中（作废 / 已到期终止后自然不再命中，刷新即消失）；</li>
+     *   <li>售后责任人 ∈ 归属范围（当前登录人本人 + 其下属）；</li>
+     *   <li>质保到期日 ∈ [今天, 今天 + 售后设置「质保到期提前提醒天数」]。</li>
+     * </ul>
+     * 按质保到期日升序，最紧急的排在最前。
+     *
+     * @param reqVO          分页查询
+     * @param serviceUserIds 归属范围（本人 + 下属负责的售后责任人）
+     * @param today          当前日期
+     * @param warnDays       售后设置「质保到期提前提醒天数」
+     */
+    default PageResult<CrmAfterSaleWarrantyDO> selectPageByExpiry(CrmAfterSaleWarrantyPageReqVO reqVO,
+                                                                 Collection<Long> serviceUserIds, LocalDate today, Integer warnDays) {
+        if (CollUtil.isEmpty(serviceUserIds)) {
+            return PageResult.empty();
+        }
+        int days = warnDays == null || warnDays < 0 ? 0 : warnDays;
+        return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
+                .eq(CrmAfterSaleWarrantyDO::getStatus, CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus())
+                .in(CrmAfterSaleWarrantyDO::getServiceUserId, serviceUserIds)
+                .between(CrmAfterSaleWarrantyDO::getWarrantyEndDate, today, today.plusDays(days))
+                .orderByAsc(CrmAfterSaleWarrantyDO::getWarrantyEndDate));
+    }
+
+    /**
+     * 待办「质保即将到期」数量（与 {@link #selectPageByExpiry} 同一口径）
+     */
+    default Long selectCountByExpiry(Collection<Long> serviceUserIds, LocalDate today, Integer warnDays) {
+        if (CollUtil.isEmpty(serviceUserIds)) {
+            return 0L;
+        }
+        int days = warnDays == null || warnDays < 0 ? 0 : warnDays;
+        return selectCount(new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
+                .eq(CrmAfterSaleWarrantyDO::getStatus, CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus())
+                .in(CrmAfterSaleWarrantyDO::getServiceUserId, serviceUserIds)
+                .between(CrmAfterSaleWarrantyDO::getWarrantyEndDate, today, today.plusDays(days)));
     }
 
 }

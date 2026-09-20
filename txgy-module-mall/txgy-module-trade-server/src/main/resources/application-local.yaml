@@ -146,5 +146,5 @@ txgy:
   security:
     mock-enable: true
   access-log: # 访问日志的配置项
-    enable: false
+    enable: true
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc

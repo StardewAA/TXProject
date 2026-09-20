@@ -40,6 +40,10 @@ public class CrmClueDO extends BaseDO {
      */
     private Boolean followUpStatus;
     /**
+     * 累计跟进次数（每写一次跟进 +1，删除一条跟进 -1）
+     */
+    private Integer followUpCount;
+    /**
      * 最后跟进时间
      */
     private LocalDateTime contactLastTime;

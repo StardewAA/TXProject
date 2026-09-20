@@ -60,3 +60,10 @@ export function exportProductCategory(params: any) {
     params,
   });
 }
+
+/** 导出产品分类 PDF */
+export function exportProductCategoryPdf(params: any) {
+  return requestClient.download('/erp/product-category/export-pdf', {
+    params,
+  });
+}

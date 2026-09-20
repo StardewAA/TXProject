@@ -180,6 +180,8 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
         // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
         businessMapper.updateById(new CrmBusinessDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
                 .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(business.getContactLastTime(), contactTime)));
+        // 累计跟进次数 +1（SQL 自增，避免并发下相互覆盖）
+        businessMapper.updateFollowUpCountById(id, 1);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("businessName", business.getName());

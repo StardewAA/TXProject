@@ -101,8 +101,10 @@ onMounted(() => {
 });
 onUnmounted(() => { if (bannerTimer) clearInterval(bannerTimer); });
 
-function goCourses(query?: Record<string, string>) {
-  router.push({ path: '/portal/training/courses', query });
+/** 首页内的「更多」与课程弹窗入口：不跳独立页面，内嵌切换到课程中心模块 */
+function goCourses(category = '') {
+  const categoryByTab: Record<string, string> = { 安全基础: 'A', 防腐涂装: 'B', 保温绝热: 'C' };
+  switchModule('/portal/training/courses', category || categoryByTab[activeTab.value] || '');
 }
 
 </script>
@@ -123,6 +125,7 @@ function goCourses(query?: Record<string, string>) {
           <h1 :key="activeBanner">{{ currentBanner.title }}</h1>
           <p>{{ currentBanner.subtitle }}</p>
           <button type="button" @click="switchModule(currentBanner.module, currentBanner.category)">{{ currentBanner.button }} <i>›</i></button>
+          <button type="button" class="hero-exam" @click="router.push('/portal/training/exam')">前往考试 <i>›</i></button>
         </div>
         <button class="banner-arrow banner-arrow--next" type="button" aria-label="下一张 Banner" @click="shiftBanner(1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
         <div class="dots" aria-label="切换运营专题"><button v-for="(_, index) in banners" :key="index" type="button" :class="{ active: activeBanner === index }" :aria-label="`切换到第 ${index + 1} 张专题`" @click="activeBanner = index"></button></div>
@@ -132,8 +135,7 @@ function goCourses(query?: Record<string, string>) {
         <h2>开启专属学习计划</h2>
         <p>按岗位匹配课程与成长路径</p>
         <div class="welcome-art"><span><small>01</small>学</span><span><small>02</small>练</span><span><small>03</small>考</span></div>
-        <button type="button" @click="switchModule('/portal/training/learning')">进入我的学习</button>
-        <button class="growth-link" type="button" @click="switchModule('/portal/training/exam')">进入考试与证书 ›</button>
+        <button type="button" @click="router.push('/portal/training/exam')">前往考试 ›</button>
       </aside>
     </section>
 
@@ -149,7 +151,7 @@ function goCourses(query?: Record<string, string>) {
           @click="switchModule(item.path)"
         >{{ item.label }}</button>
       </nav>
-      <div class="module-gateway-summary"><b>{{ previewModule.label }}</b><span>{{ previewModule.summary }}</span><button class="module-gateway-hint" type="button" @click="router.push(activeModulePath)">查看完整模块 ›</button></div>
+      <div class="module-gateway-summary"><b>{{ previewModule.label }}</b><span>{{ previewModule.summary }}</span></div>
     </section>
 
     <div ref="contentSectionRef" class="tab-content">
@@ -196,7 +198,7 @@ function goCourses(query?: Record<string, string>) {
         <small>{{ selectedCourse.code }} · {{ selectedCourse.categoryName }} / {{ selectedCourse.groupName }}</small>
         <h2>{{ selectedCourse.name }}</h2>
         <p>标准学时：{{ selectedCourse.stdHours ?? '待配置' }}<br />{{ selectedCourse.required ? '岗位必修课程' : '自主选学课程' }}</p>
-        <button class="dialog-cta" type="button" @click="goCourses({ category: selectedCourse.categoryCode, group: selectedCourse.groupName })">查看分类课程 ›</button>
+        <button class="dialog-cta" type="button" @click="goCourses(selectedCourse.categoryCode)">查看分类课程 ›</button>
       </section>
     </div>
   </div>
@@ -213,6 +215,8 @@ function goCourses(query?: Record<string, string>) {
 .hero-banner { position: relative; overflow: hidden; border: 0; color: #fff; background: linear-gradient(132deg, #073e72 0%, #096c82 48%, #159586 100%); }
 .hero-banner::before { position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 9%), transparent 60%), radial-gradient(circle at 78% 18%, rgb(255 255 255 / 18%), transparent 25%); content: ''; }
 .hero-copy { position: relative; z-index: 2; padding: 62px 0 0 48px; }.hero-copy > span { font-size: 14px; opacity: .88; }.hero-copy h1 { margin: 13px 0 10px; color: #fff; font-size: 38px; font-weight: 750; line-height: 1.25; letter-spacing: 1px; }.hero-copy p { margin: 0 0 32px; font-size: 15px; opacity: .88; }.hero-copy button { min-width: 165px; height: 40px; color: #fff; font-size: 16px; font-weight: 600; background: #f47a20; border: 0; border-radius: 20px; box-shadow: 0 6px 14px rgb(244 122 32 / 34%); cursor: pointer; }.hero-copy i { font-size: 20px; font-style: normal; }
+.hero-copy .hero-exam { margin-left: 12px; background: rgb(255 255 255 / 16%); border: 1px solid rgb(255 255 255 / 55%); box-shadow: none; }
+.hero-copy .hero-exam:hover { background: rgb(255 255 255 / 26%); }
 .hero-art { position: absolute; right: 10px; bottom: 0; width: 330px; height: 350px; }.ring { position: absolute; border: 2px solid rgb(255 255 255 / 18%); border-radius: 50%; }.ring-a { top: 55px; right: 8px; width: 265px; height: 265px; }.ring-b { top: 95px; right: 48px; width: 185px; height: 185px; }.worker { position: absolute; right: 76px; bottom: 0; width: 170px; height: 275px; }.helmet { position: absolute; z-index: 3; top: 7px; left: 34px; width: 102px; height: 43px; background: #ffd04a; border-radius: 52px 52px 12px 12px; }.head { position: absolute; z-index: 2; top: 34px; left: 48px; width: 76px; height: 82px; background: #f0b18e; border-radius: 38px; }.body { position: absolute; bottom: -28px; left: 5px; width: 164px; height: 205px; background: linear-gradient(90deg, #163c69, #2874a3); border: 12px solid #f3c330; border-bottom: 0; border-radius: 74px 74px 10px 10px; }.pipe { position: absolute; right: -30px; height: 26px; background: #b7d8df; border: 6px solid #77a7b5; border-radius: 15px; transform: rotate(-14deg); }.pipe-a { bottom: 54px; width: 185px; }.pipe-b { right: 5px; bottom: 28px; width: 110px; }.dots { position: absolute; z-index: 3; right: 24px; bottom: 17px; display: flex; gap: 7px; }.dots i { width: 20px; height: 3px; background: rgb(255 255 255 / 52%); border-radius: 3px; }.dots i.active { background: #fff; }
 .welcome-card { display: flex; flex-direction: column; align-items: center; padding: 30px 26px 22px; background: linear-gradient(160deg, #fff 60%, #fff8ef); text-align: center; }.welcome-card h2 { align-self: flex-start; margin: 0; font-size: 18px; font-weight: 500; }.welcome-card > p { align-self: flex-start; margin: 8px 0 20px; color: #999; font-size: 13px; }.welcome-art { display: flex; align-items: flex-end; justify-content: center; width: 190px; height: 155px; gap: 7px; }.welcome-art span { display: grid; place-items: center; width: 55px; height: 65px; color: #fff; font-size: 25px; font-weight: 700; background: #ff9b35; box-shadow: 0 8px 18px rgb(255 128 24 / 23%); transform: rotate(-7deg); }.welcome-art span:nth-child(2) { height: 90px; background: #ff6427; transform: rotate(4deg); }.welcome-art span:nth-child(3) { height: 72px; background: #f2ba38; transform: rotate(10deg); }.welcome-card > button { width: 198px; height: 38px; color: #fff; background: #ff811b; border: 0; border-radius: 19px; cursor: pointer; }.welcome-card a { margin-top: 10px; color: #ec741c; cursor: pointer; font-size: 13px; }
 .middle-grid { display: grid; grid-template-columns: minmax(0, 1076px) 292px; gap: 24px; margin-top: 48px; }.section-title { margin: 0 0 22px; color: #292929; font-size: 25px; line-height: 1; }.section-title em { color: #aaa; font-style: normal; font-weight: 400; }.quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 20px; }.quick-grid button { display: flex; align-items: center; height: 100px; padding: 16px; background: #fff; border: 1px solid #f0f0f0; border-radius: 9px; box-shadow: 0 6px 20px rgb(42 46 55 / 7%); cursor: pointer; text-align: left; }.quick-icon { display: grid; flex: 0 0 58px; place-items: center; width: 58px; height: 58px; margin-right: 16px; color: #fff; font-size: 25px; background: #5aa8ee; border-radius: 50%; }.quick-icon.tone-1 { background: #ffa33c; }.quick-icon.tone-2 { background: #70ca5b; }.quick-grid b { display: block; margin-bottom: 6px; color: #444; font-size: 16px; font-weight: 500; }.quick-grid small { display: block; overflow: hidden; color: #aaa; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.community { height: 214px; padding: 16px 20px; background: #fff; border: 1px solid #f0f0f0; border-radius: 9px; box-shadow: 0 6px 20px rgb(42 46 55 / 7%); }.community a { position: relative; display: -webkit-box; margin-bottom: 15px; padding-left: 17px; overflow: hidden; color: #595959; cursor: pointer; font-size: 13px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }.community a::before { position: absolute; top: 5px; left: 0; width: 8px; height: 8px; border: 1px solid #ff8a31; border-radius: 50%; content: ''; }

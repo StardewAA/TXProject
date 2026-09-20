@@ -22,6 +22,7 @@ import {
   refundAfterSale,
   refuseAfterSale,
 } from '#/api/mall/trade/afterSale';
+import { notifyWorkbenchChanged } from '#/api/mall/trade/workbench';
 import { useDescription } from '#/components/description';
 import { DictTag } from '#/components/dict-tag';
 import { TableAction } from '#/components/table-action';
@@ -141,6 +142,7 @@ async function handleAgree() {
   });
   try {
     await agreeAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -153,6 +155,11 @@ function handleDisagree() {
   disagreeModalApi.setData({ afterSale: afterSale.value }).open();
 }
 
+async function handleAfterSaleChanged() {
+  notifyWorkbenchChanged();
+  await getDetail();
+}
+
 /** 确认收货 */
 async function handleReceive() {
   await confirm('是否确认收货？');
@@ -162,7 +169,8 @@ async function handleReceive() {
   });
   try {
     await receiveAfterSale(afterSale.value.id!);
-    message.success('退货入库请求已提交，等待 ERP 确认');
+    notifyWorkbenchChanged();
+    message.success('退货入库请求已提交，请稍后查看处理结果');
     await getDetail();
   } finally {
     hideLoading();
@@ -178,6 +186,7 @@ async function handleRefuse() {
   });
   try {
     await refuseAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -194,6 +203,7 @@ async function handleRefund() {
   });
   try {
     await refundAfterSale(afterSale.value.id!);
+    notifyWorkbenchChanged();
     message.success($t('ui.actionMessage.operationSuccess'));
     await getDetail();
   } finally {
@@ -268,7 +278,7 @@ onMounted(() => {
     </template>
 
     <!-- 拒绝售后弹窗 -->
-    <DisagreeModal @success="getDetail" />
+    <DisagreeModal @success="handleAfterSaleChanged" />
 
     <!-- 订单信息 -->
     <div class="mb-4">

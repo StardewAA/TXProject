@@ -194,14 +194,17 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         List<ErpSaleReturnItemDO> saleReturnItems = saleReturnItemMapper.selectListByReturnId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.SALE_RETURN.getType()
                 : ErpStockRecordBizTypeEnum.SALE_RETURN_CANCEL.getType();
-        if (!"remote".equalsIgnoreCase(wmsMode)) {
-            saleReturnItems.forEach(saleReturnItem -> {
-                BigDecimal count = approve ? saleReturnItem.getCount() : saleReturnItem.getCount().negate();
-                stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
-                        saleReturnItem.getProductId(), saleReturnItem.getWarehouseId(), count,
-                        bizType, saleReturnItem.getReturnId(), saleReturnItem.getId(), saleReturn.getNo()));
-            });
-        }
+        // 说明：与销售出库保持一致 —— ERP 业务账始终由 ERP 单据驱动，不随 WMS 集成模式变化。
+        // 原实现只在非 remote 模式下记库存，导致 remote 模式下销售退货不入 ERP 业务账。
+        saleReturnItems.forEach(saleReturnItem -> {
+            BigDecimal count = approve ? saleReturnItem.getCount() : saleReturnItem.getCount().negate();
+            ErpStockRecordCreateReqBO stockRecordBO = new ErpStockRecordCreateReqBO(
+                    saleReturnItem.getProductId(), saleReturnItem.getWarehouseId(), count,
+                    bizType, saleReturnItem.getReturnId(), saleReturnItem.getId(), saleReturn.getNo());
+            // 归属：销售退货的责任人 = 单据上的销售员（绩效归因依据）
+            stockRecordBO.setSourceUserId(saleReturn.getSaleUserId());
+            stockRecordService.createStockRecord(stockRecordBO);
+        });
         if (approve) {
             wmsBusinessDocumentService.prepareCustomerReturnReceiptAfterCommit(id);
         }

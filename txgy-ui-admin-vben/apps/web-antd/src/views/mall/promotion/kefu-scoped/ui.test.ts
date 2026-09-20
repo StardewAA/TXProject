@@ -81,11 +81,23 @@ describe('scoped admin pages fail closed', () => {
   it('reads FAQ draft without implicitly saving or publishing', async () => { access.accessCodes = [FAQ_PERMISSION]; const host = mount(Faq); await flush(); expect(host.textContent).toContain('暂无草稿'); expect(api.getScopedFaq).toHaveBeenCalledTimes(1); expect(api.saveScopedFaq).not.toHaveBeenCalled(); expect(api.publishScopedFaq).not.toHaveBeenCalled(); });
   it('reads a scoped queue without going online or claiming automatically', async () => { access.accessCodes = [RECEIVE_PERMISSION]; const host = mount(Workbench); await flush(); expect(host.textContent).toContain('local-session'); expect(api.heartbeatAgent).not.toHaveBeenCalled(); expect(api.claimScopedSession).not.toHaveBeenCalled(); expect(api.getAgentMessages).not.toHaveBeenCalled(); });
   it('uses only selected session messages and does not mark read automatically', async () => { access.accessCodes = [RECEIVE_PERMISSION]; const host = mount(Workbench); await flush(); button(host, '查看会话'); await flush(); expect(api.getAgentMessages.mock.calls[0]?.[0]).toEqual({ sessionId: 'local-session', afterId: 0, limit: 50 }); expect(api.readAgentMessages).not.toHaveBeenCalled(); });
+  it('opens the conversation immediately after starting service', async () => {
+    access.accessCodes = [RECEIVE_PERMISSION];
+    const waiting = { ...thread, mode: 'WAITING_HUMAN', session: { ...session, state: 'WAITING', agentType: null, agentId: null } };
+    const claimed = { ...session, state: 'ACTIVE', agentType: 2, agentId: 71, version: 4 };
+    api.getScopedWorkbench.mockResolvedValue([waiting]); api.claimScopedSession.mockResolvedValue(claimed);
+    api.getAgentThread.mockResolvedValue({ ...waiting, mode: 'HUMAN', session: claimed });
+    const host = mount(Workbench); await flush(); button(host, '开始接待'); await flush();
+    expect(api.claimScopedSession.mock.calls[0]?.[0]).toEqual({ sessionId: 'local-session', version: 3 });
+    expect(api.getAgentMessages).toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="当前接待会话"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="客服回复"]')).not.toBeNull();
+  });
   it('does not allow sending as a same-id member assignee', async () => { access.accessCodes = [RECEIVE_PERMISSION]; api.getScopedWorkbench.mockResolvedValue([{ ...thread, session: { ...session, agentType: 1 } }]); const host = mount(Workbench); await flush(); const view = [...host.querySelectorAll('button')].find((element) => element.textContent === '查看会话'); expect(view?.disabled).toBe(true); expect(api.getAgentMessages).not.toHaveBeenCalled(); });
   it('never reads or claims self-service before the member requests human assistance', async () => {
     access.accessCodes = [RECEIVE_PERMISSION]; api.getScopedWorkbench.mockResolvedValue([{ ...thread, humanRequested: false, mode: 'SELF_SERVICE', session: { ...session, state: 'WAITING', agentType: null, agentId: null } }]);
     const host = mount(Workbench); await flush(); const view = [...host.querySelectorAll('button')].find((element) => element.textContent === '查看会话');
-    expect(view?.disabled).toBe(true); expect([...host.querySelectorAll('button')].some((element) => element.textContent === '领取')).toBe(false);
+    expect(view?.disabled).toBe(true); expect([...host.querySelectorAll('button')].some((element) => element.textContent === '开始接待')).toBe(false);
     expect(api.claimScopedSession).not.toHaveBeenCalled(); expect(api.getAgentMessages).not.toHaveBeenCalled();
   });
   it('requires an explicit confirmed reason before creating a zero-version grant', async () => {

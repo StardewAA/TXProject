@@ -41,6 +41,14 @@ public interface CrmAfterSaleVisitRecordMapper extends BaseMapperX<CrmAfterSaleV
         return list.isEmpty() ? null : list.get(0);
     }
 
+    /**
+     * 删除任务关联的回访记录（随任务删除，保持任务与记录联动一致）
+     */
+    default int deleteByTaskId(Long taskId) {
+        return delete(new LambdaQueryWrapperX<CrmAfterSaleVisitRecordDO>()
+                .eq(CrmAfterSaleVisitRecordDO::getTaskId, taskId));
+    }
+
     default List<CrmAfterSaleVisitRecordDO> selectListByTaskId(Long taskId) {
         return selectList(new LambdaQueryWrapperX<CrmAfterSaleVisitRecordDO>()
                 .eq(CrmAfterSaleVisitRecordDO::getTaskId, taskId));

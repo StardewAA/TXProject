@@ -93,3 +93,10 @@ export function exportFinancePayment(params: any) {
     params,
   });
 }
+
+/** 导出付款单 PDF */
+export function exportFinancePaymentPdf(params: any) {
+  return requestClient.download('/erp/finance-payment/export-pdf', {
+    params,
+  });
+}

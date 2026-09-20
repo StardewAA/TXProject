@@ -21,6 +21,7 @@ import cn.iocoder.txgy.module.wms.service.md.item.WmsItemSkuService;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -55,6 +56,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     private WmsShipmentOrderDetailService shipmentOrderDetailService;
     @Resource
     private WmsWarehouseService warehouseService;
+    @Resource
+    private WmsWarehousePersonnelService warehousePersonnelService;
     @Resource
     private WmsMerchantService merchantService;
     @Resource
@@ -150,6 +153,8 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     public String submitShipmentOrderApproval(Long userId, Long id) {
         WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
         validateApprovalEditable(order);
+        warehousePersonnelService.validateConfigured(order.getWarehouseId());
+        warehousePersonnelService.validateMember(order.getWarehouseId(), userId);
         List<WmsShipmentOrderDetailDO> details = shipmentOrderDetailService
                 .validateShipmentOrderDetailListExists(id);
         if (order.getSourceModule() != null && shortageService.check(id)) {
@@ -160,6 +165,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         variables.put("orderId", order.getId());
         variables.put("orderNo", order.getNo());
         variables.put("warehouseId", order.getWarehouseId());
+        variables.put("wmsWarehouseManagerUserId", warehousePersonnelService.getManagerUserId(order.getWarehouseId()));
         variables.put("merchantId", order.getMerchantId());
         variables.put("totalQuantity", order.getTotalQuantity());
         variables.put("totalPrice", order.getTotalPrice());

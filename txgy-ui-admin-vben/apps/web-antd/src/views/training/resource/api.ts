@@ -174,6 +174,28 @@ export namespace TrainingResourceApi {
     transcoded?: boolean;
     original?: boolean;
   }
+
+  /** AI 识别的试题项 */
+  export interface AiQuestionItem {
+    qtype?: number;
+    stem?: string;
+    options?: { key?: string; text?: string; isCorrect?: boolean }[];
+    answer?: string;
+    analysis?: string;
+    difficulty?: number;
+    confidence?: number;
+  }
+
+  /** AI 文档解析结果（预览） */
+  export interface AiQuestionParseResult {
+    items?: AiQuestionItem[];
+    aiEnabled?: boolean;
+    fallback?: boolean;
+    message?: string;
+    textLength?: number;
+    fileName?: string;
+    fileType?: string;
+  }
 }
 
 // ========== 资源分类 ==========
@@ -407,6 +429,43 @@ export function changeQuestionStatus(id: number, action: string) {
 /** 删除试题 */
 export function deleteQuestion(id: number) {
   return requestClient.delete<boolean>(`/training/question/delete?id=${id}`);
+}
+
+/** Excel 批量导入试题 */
+export function importQuestions(file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<{
+    successCount?: number;
+    errors?: { rowNo: number; error: string }[];
+  }>('/training/question/import', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+// ========== AI 智能导入（文档 → 试题）==========
+
+/** AI 解析文档试题（仅预览，不入库）；大模型解析耗时可达 1~2 分钟，显式放宽前端超时 */
+export function parseQuestionByAi(file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<TrainingResourceApi.AiQuestionParseResult>(
+    '/training/question/ai/parse',
+    data,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 },
+  );
+}
+
+/** AI 试题导入确认参数（整批统一分类与标签） */
+export interface AiQuestionImportReq {
+  items: TrainingResourceApi.AiQuestionItem[];
+  categoryId?: number;
+  tagIds?: number[];
+}
+
+/** 确认导入 AI 识别的试题（整批统一归入所选分类、打上所选标签） */
+export function importQuestionsByAi(data: AiQuestionImportReq) {
+  return requestClient.post<number>('/training/question/ai/import', data);
 }
 
 // ========== 视频清晰度 ==========

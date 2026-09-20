@@ -16,7 +16,7 @@ it('checks tenant, shop, session and buyer identity before showing a thread', ()
   for (const patch of [{ tenantId: 2 }, { shopId: 8 }, { memberId: 88 }, { scope: 'PLATFORM' }, { id: 'wrong' }, { version: -1 }]) expect(() => assertKefuThread({ ...thread, session: { ...thread.session, ...patch } } as KefuThread, { scope: 'SHOP', shopId: 7 }, '1', id, '77')).toThrow()
 })
 it('shows true human waiting or closed state instead of a fake online marker', () => {
-  expect(kefuModeLabel(thread)).toContain('固定问答')
+  expect(kefuModeLabel(thread)).toBe('在线咨询')
   expect(kefuModeLabel({ ...thread, mode: 'WAITING_HUMAN' })).toContain('暂无在线')
   expect(kefuModeLabel({ ...thread, mode: 'WAITING_HUMAN', onlineAgents: 1 })).toContain('不保证')
   expect(kefuModeLabel({ ...thread, mode: 'HUMAN' })).toBe('人工已接待')

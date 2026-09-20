@@ -258,8 +258,12 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+    entrypoint: ["sh", "-c", "exec java $$JAVA_OPTS -jar /app/app.jar"]
     environment:
       <<: *backend-env
+      # 本地演示环境启用按店铺隔离的固定 FAQ 与人工客服链路。
+      # 未显式配置时后端默认关闭，买家端和接待台都会显示“尚未开通”。
+      MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: "true"
       JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   statistics:

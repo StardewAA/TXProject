@@ -169,7 +169,7 @@ export function sendChatMessageStream(
   // 表现为「消息无法发送 / 流式连接建立失败」。
   // 租户编号逻辑与 src/api/request.ts 保持一致：优先登录解析的租户，回退默认租户。
   const tenantId =
-    accessStore.tenantId ||
+    accessStore.tenantId ??
     Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
   return postSseStream(
     `${apiURL}/ai/chat/message/send-stream`,

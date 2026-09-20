@@ -24,6 +24,10 @@ public class ErpPurchaseRequestDO extends BaseDO {
     private String no;
     private Integer status;
     private String processInstanceId;
+    /**
+     * 反审批原因
+     */
+    private String reverseApproveReason;
     private LocalDateTime requestTime;
     private LocalDateTime requiredDate;
     private Long departmentId;

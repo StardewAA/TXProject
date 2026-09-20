@@ -13,9 +13,11 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteFinanceReceipt,
   exportFinanceReceipt,
+  exportFinanceReceiptPdf,
   getFinanceReceiptPage,
   updateFinanceReceiptStatus,
 } from '#/api/erp/finance/receipt';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -35,9 +37,20 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportFinanceReceipt(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '收款单.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const params = await gridApi.formApi.getValues();
+  // 勾选了行则只导出选中单据（后端按 ids 过滤）
+  if (checkedIds.value.length > 0) {
+    params.ids = checkedIds.value.join(',');
+  }
+  const data =
+    format === 'pdf'
+      ? await exportFinanceReceiptPdf(params)
+      : await exportFinanceReceipt(params);
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '收款单.pdf' : '收款单.xls',
+    source: data,
+  });
 }
 
 /** 新增收款单 */
@@ -76,7 +89,9 @@ async function handleUpdateStatus(
   });
   try {
     await updateFinanceReceiptStatus(row.id!, status);
-    message.success(`${status === 20 ? '审批' : '反审批'}成功`);
+    message.success(
+      status === 20 ? '审批成功，收款已自动入账' : '反审批成功，已生成冲销流水',
+    );
     handleRefresh();
   } finally {
     hideLoading();
@@ -154,13 +169,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:finance-receipt:export'],
-              onClick: handleExport,
-            },
-            {
               label: '批量删除',
               type: 'primary',
               danger: true,
@@ -173,6 +181,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               },
             },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:finance-receipt:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">
@@ -199,7 +211,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.AUDIT,
               auth: ['erp:finance-receipt:update-status'],
               popConfirm: {
-                title: `确认${row.status === 10 ? '审批' : '反审批'}${row.no}吗？`,
+                title:
+                  row.status === 10
+                    ? `确认审批${row.no}吗？审批后将自动增加账户余额。`
+                    : `确认反审批${row.no}吗？系统将自动冲销原收款。`,
                 confirm: handleUpdateStatus.bind(
                   null,
                   row,

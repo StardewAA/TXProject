@@ -41,6 +41,18 @@ public class ErpSaleOrderSaveReqVO {
     @Schema(description = "备注", example = "你猜")
     private String remark;
 
+    @Schema(description = "全局业务链编号", example = "COST-ZJJG20260915000001")
+    private String businessChainNo;
+
+    @Schema(description = "来源类型（COST_RESULT = 由造价结果转换生成）", example = "COST_RESULT")
+    private String sourceType;
+
+    @Schema(description = "来源编号（造价结果编号）", example = "1")
+    private Long sourceId;
+
+    @Schema(description = "来源单号", example = "ZJJG20260915000001")
+    private String sourceNo;
+
     @Schema(description = "订单清单列表")
     private List<Item> items;
 

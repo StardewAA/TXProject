@@ -35,3 +35,15 @@ export function getInventoryHistoryPage(params: PageParam) {
     { params },
   );
 }
+
+/** 查询某个 SKU/仓库的库存变化，用于库存趋势图 */
+export function getInventoryHistoryTrend(params: {
+  skuId: number;
+  warehouseId?: number;
+}) {
+  return getInventoryHistoryPage({
+    pageNo: 1,
+    pageSize: 200,
+    ...params,
+  });
+}

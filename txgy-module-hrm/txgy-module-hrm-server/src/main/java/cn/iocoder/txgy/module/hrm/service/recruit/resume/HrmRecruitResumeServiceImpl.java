@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSaveReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSnapshotReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.resume.HrmRecruitResumeDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.resume.HrmRecruitResumeMapper;
@@ -39,15 +40,38 @@ public class HrmRecruitResumeServiceImpl implements HrmRecruitResumeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRecruitResume(HrmRecruitResumeSaveReqVO reqVO) {
-        // Lock the candidate row so concurrent uploads cannot allocate the same version.
+        return insertNewVersion(BeanUtils.toBean(reqVO, HrmRecruitResumeDO.class), reqVO.getCandidateId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createRecruitResumeSnapshot(HrmRecruitResumeSnapshotReqVO reqVO) {
+        // 投递快照：内容原样固化，不做任何后续同步，保证历史应聘不受求职者后续修改影响。
+        HrmRecruitResumeDO snapshot = new HrmRecruitResumeDO()
+                .setFileName(reqVO.getFileName())
+                .setFileUrl(reqVO.getFileUrl())
+                .setContent(reqVO.getContent())
+                .setContentHash(reqVO.getContentHash())
+                .setSourcePersonalVersionId(reqVO.getSourcePersonalVersionId())
+                .setPostId(reqVO.getPostId())
+                .setPostFingerprint(reqVO.getPostFingerprint())
+                .setRemark(reqVO.getRemark());
+        return insertNewVersion(snapshot, reqVO.getCandidateId());
+    }
+
+    /**
+     * 在候选人维度分配新版本号并写入一条简历记录。
+     *
+     * <p>锁候选人行，避免并发投递或上传分配到相同版本号。</p>
+     */
+    private Long insertNewVersion(HrmRecruitResumeDO resume, Long candidateId) {
         HrmRecruitCandidateDO candidate = recruitCandidateService
-                .validateRecruitCandidateExistsForUpdate(reqVO.getCandidateId());
-        List<HrmRecruitResumeDO> existing = recruitResumeMapper.selectListByCandidateId(reqVO.getCandidateId());
+                .validateRecruitCandidateExistsForUpdate(candidateId);
+        List<HrmRecruitResumeDO> existing = recruitResumeMapper.selectListByCandidateId(candidateId);
         int nextVersion = existing.stream().map(HrmRecruitResumeDO::getVersionNo)
                 .filter(java.util.Objects::nonNull).mapToInt(Integer::intValue).max().orElse(0) + 1;
-        recruitResumeMapper.markReplacedByCandidateId(reqVO.getCandidateId());
-        HrmRecruitResumeDO resume = BeanUtils.toBean(reqVO, HrmRecruitResumeDO.class)
-                .setVersionNo(nextVersion).setStatus(0);
+        recruitResumeMapper.markReplacedByCandidateId(candidateId);
+        resume.setVersionNo(nextVersion).setStatus(0);
         // 与候选人、应聘记录保持同一企业租户归属。
         Long candidateTenantId = candidate == null ? null : candidate.getTenantId();
         resume.setTenantId(candidateTenantId != null ? candidateTenantId : TenantContextHolder.getTenantId());
@@ -82,7 +106,11 @@ public class HrmRecruitResumeServiceImpl implements HrmRecruitResumeService {
         HrmRecruitCandidateDO candidate = recruitCandidateService
                 .validateRecruitCandidateExists(resume.getCandidateId());
         validateResumeTenant(resume, candidate);
-        if (StrUtil.isBlank(resume.getFileUrl())) throw exception(RECRUIT_RESUME_NOT_EXISTS);
+        // 在线结构化简历快照没有附件地址，此时直接返回内容，不做文件授权
+        if (StrUtil.isBlank(resume.getFileUrl())) {
+            if (StrUtil.isBlank(resume.getContent())) throw exception(RECRUIT_RESUME_NOT_EXISTS);
+            return resume;
+        }
         String authorizedUrl = fileApi.presignGetUrl(resume.getFileUrl(), FILE_URL_EXPIRATION_SECONDS)
                 .getCheckedData();
         return BeanUtils.toBean(resume, HrmRecruitResumeDO.class)

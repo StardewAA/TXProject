@@ -64,4 +64,13 @@ public class AppTradeOrderItemRespVO {
     @Schema(description = "售后状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Integer afterSaleStatus;
 
+    @Schema(description = "最近一次售后编号；包括已拒绝、已取消等已结束售后", example = "1024")
+    private Long latestAfterSaleId;
+
+    @Schema(description = "最近一次售后业务状态", example = "62")
+    private Integer latestAfterSaleStatus;
+
+    @Schema(description = "最近一次售后处理说明；拒绝时为商家填写的原因")
+    private String latestAfterSaleReason;
+
 }

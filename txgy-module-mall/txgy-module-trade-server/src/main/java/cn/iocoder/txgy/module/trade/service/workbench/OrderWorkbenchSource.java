@@ -65,6 +65,7 @@ class OrderWorkbenchSource {
                         && num(i,"after_sale_id")==aid && num(i,"after_sale_status")==10);
                 if(ast==20 && num(a,"way")==20) result.add(sale(Role.BUYER,num(a,"user_id"),ash,id,a,Action.BUYER_RETURN,"商家已同意，请寄回商品并填写退货物流"));
                 if(owned && ast==10 && (num(a,"way")==10 || num(a,"way")==20)) result.add(sale(Role.SUPPLIER,0,ash,id,a,Action.AFTER_AUDIT,"本店新售后申请待审核"));
+                if(ast==10 && (num(a,"way")==10 || num(a,"way")==20)) result.add(sale(Role.ADMIN,0,ash,id,a,Action.AFTER_AUDIT,"新售后退款申请待审核"));
                 if(owned && ast==30 && num(a,"way")==20 && !blocked(ers,"RETURN",String.valueOf(aid)))
                     result.add(sale(Role.SUPPLIER,0,ash,id,a,Action.AFTER_RECEIVE,"买家已寄回商品，待核实收货"));
                 if(ast==40 && num(a,"pay_refund_id")==0) result.add(sale(Role.ADMIN,0,ash,id,a,Action.PLATFORM_REFUND,"商家已完成售后处理，待平台确认退款"));

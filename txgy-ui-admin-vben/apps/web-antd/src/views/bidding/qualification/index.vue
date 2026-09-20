@@ -1025,10 +1025,18 @@ const alertColumns = [
   { title: '处理说明', dataIndex: 'handleNote', key: 'handleNote', width: 160, ellipsis: true },
   { title: '操作', key: 'operation', width: 110, fixed: 'right' },
 ];
+/* AttrFilter 的选项值只接受 string | number，而接口 handled 是 boolean，
+ * 故用一层计算属性做「文字选项(string) ↔ 查询入参(boolean)」的转换。 */
 const handledOptions = [
-  { label: '未处理', value: false },
-  { label: '已处理', value: true },
+  { label: '未处理', value: 'false' },
+  { label: '已处理', value: 'true' },
 ];
+const handledFilter = computed<string>({
+  get: () => (alertQuery.handled === undefined ? '' : String(alertQuery.handled)),
+  set: (v) => {
+    alertQuery.handled = v === '' ? undefined : v === 'true';
+  },
+});
 
 async function loadAlerts() {
   alertLoading.value = true;
@@ -1632,7 +1640,7 @@ function goReviewCenter(): void {
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter v-model="alertQuery.refType" label="来源类型" :options="QualificationApi.ALERT_REF_TYPE_OPTIONS" />
             <AttrFilter v-model="alertQuery.alertLevel" label="级别" :options="dictOptions('risk_level')" />
-            <AttrFilter v-model="alertQuery.handled" label="处理状态" :options="handledOptions" />
+            <AttrFilter v-model="handledFilter" label="处理状态" :options="handledOptions" />
             <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">
               执行一次扫描
             </a-button>

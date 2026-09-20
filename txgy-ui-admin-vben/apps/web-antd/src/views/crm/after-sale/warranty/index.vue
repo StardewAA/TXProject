@@ -2,6 +2,8 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmAfterSaleWarrantyApi } from '#/api/crm/after-sale/warranty';
 
+import { useRouter } from 'vue-router';
+
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
@@ -34,6 +36,13 @@ function handleCreate() {
 /** 编辑质保档案 */
 function handleEdit(row: CrmAfterSaleWarrantyApi.Warranty) {
   formModalApi.setData(row).open();
+}
+
+const { push } = useRouter();
+
+/** 查看质保档案详情（跳转详情页，待办「质保即将到期」等来源同样跳此处） */
+function handleDetail(row: CrmAfterSaleWarrantyApi.Warranty) {
+  push({ name: 'CrmAfterSaleWarrantyDetail', params: { id: row.id } });
 }
 
 /** 删除质保档案 */
@@ -104,6 +113,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '详情',
+              type: 'link',
+              auth: ['crm:after-sale-warranty:query'],
+              onClick: handleDetail.bind(null, row),
+            },
             {
               label: $t('common.edit'),
               type: 'link',

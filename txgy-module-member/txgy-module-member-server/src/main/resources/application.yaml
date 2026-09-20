@@ -126,6 +126,9 @@ txgy:
     ignore-tables:
 
 mall:
+  address-map:
+    enabled: ${MALL_ADDRESS_MAP_ENABLED:false}
+    provider: ${MALL_ADDRESS_MAP_PROVIDER:NONE}
   registration:
     platform-tenant-id: ${MALL_LEGACY_TENANT_ID:1}
     picture-enabled: ${MALL_REGISTRATION_PICTURE_ENABLED:false}
