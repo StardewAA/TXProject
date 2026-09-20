@@ -40,6 +40,22 @@ export namespace CrmAfterSaleWarrantyApi {
     /** 到期类型：1=即将到期（待办「质保即将到期」，实时查询且限本人及下属负责） */
     expiryType?: number;
   }
+
+  /** 合同的质保档案状态（用于「一个合同仅允许一份质保档案」的识别） */
+  export interface ContractWarrantyStatus {
+    /** 合同编号 */
+    contractId: number;
+    /** 质保档案编号；为空表示该合同尚未创建质保档案（可发起创建） */
+    warrantyId?: number;
+    /** 质保编号 */
+    warrantyNo?: string;
+    /** 工程项目名称 */
+    projectName?: string;
+    /** 质保状态：1质保中 2即将到期 3已到期终止 */
+    status?: number;
+    /** 质保到期日期 */
+    warrantyEndDate?: string;
+  }
 }
 
 /** 到期类型：1=即将到期（待办「质保即将到期」使用，与后端 EXPIRY_TYPE_ABOUT_TO_EXPIRE 保持一致） */
@@ -72,6 +88,24 @@ export function createAfterSaleWarranty(
   data: CrmAfterSaleWarrantyApi.Warranty,
 ) {
   return requestClient.post('/crm/after-sale/warranty/create', data);
+}
+
+/**
+ * 批量查询合同的质保档案状态
+ *
+ * 用于「一个合同仅允许创建一份质保档案」的识别：
+ * 返回结果中 warrantyId 有值，表示该合同已创建质保档案，创建入口应禁止选择。
+ */
+export async function getAfterSaleWarrantyContractStatus(
+  contractIds: number[],
+): Promise<CrmAfterSaleWarrantyApi.ContractWarrantyStatus[]> {
+  if (!contractIds || contractIds.length === 0) {
+    return [];
+  }
+  return requestClient.get<CrmAfterSaleWarrantyApi.ContractWarrantyStatus[]>(
+    '/crm/after-sale/warranty/contract-status',
+    { params: { contractIds: contractIds.join(',') } },
+  );
 }
 
 /** 修改质保档案 */

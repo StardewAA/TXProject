@@ -25,6 +25,41 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
         return selectOne(CrmAfterSaleWarrantyDO::getNo, no);
     }
 
+    /**
+     * 按合同编号查询质保档案
+     *
+     * <p>业务约束：一个合同仅允许一份有效质保档案（一对一）。
+     * 此处刻意使用 selectList 而不是 selectOne —— 历史数据若存在重复，
+     * selectOne 会直接抛 TooManyResultsException，导致「创建时给出友好提示」变成 500。
+     * 返回最早创建的一条（id 升序），与其他查询口径一致。
+     *
+     * @param contractId 合同编号
+     * @return 质保档案；不存在时返回 null
+     */
+    default CrmAfterSaleWarrantyDO selectByContractId(Long contractId) {
+        if (contractId == null) {
+            return null;
+        }
+        return CollUtil.getFirst(selectList(new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
+                .eq(CrmAfterSaleWarrantyDO::getContractId, contractId)
+                .orderByAsc(CrmAfterSaleWarrantyDO::getId)));
+    }
+
+    /**
+     * 按合同编号集合批量查询质保档案（用于「合同是否已创建质保档案」的状态展示 / 校验）
+     *
+     * @param contractIds 合同编号集合
+     * @return 质保档案列表
+     */
+    default List<CrmAfterSaleWarrantyDO> selectListByContractIds(Collection<Long> contractIds) {
+        if (CollUtil.isEmpty(contractIds)) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
+                .in(CrmAfterSaleWarrantyDO::getContractId, contractIds)
+                .orderByAsc(CrmAfterSaleWarrantyDO::getId));
+    }
+
     default PageResult<CrmAfterSaleWarrantyDO> selectPage(CrmAfterSaleWarrantyPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
                 .likeIfPresent(CrmAfterSaleWarrantyDO::getNo, reqVO.getNo())

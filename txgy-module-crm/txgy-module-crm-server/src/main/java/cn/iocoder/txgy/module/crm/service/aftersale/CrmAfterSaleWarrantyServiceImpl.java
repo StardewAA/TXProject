@@ -70,6 +70,14 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
         if (!Objects.equals(contract.getAuditStatus(), CrmAuditStatusEnum.APPROVE.getStatus())) {
             throw exception(AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_NOT_APPROVE);
         }
+        // 1.2 校验该合同是否已创建质保档案：一个合同仅允许一份质保档案（一对一关系）
+        //     业务规则说明：
+        //       1）质保档案为逻辑删除，档案被删除后此处自然放行，允许基于该合同重新创建；
+        //       2）质保档案到期终止（已到期）仍占用该合同，不允许重复创建；
+        //       3）合同审批状态被回退/取消不影响已创建的档案，但同样不允许重复创建。
+        if (warrantyMapper.selectByContractId(createReqVO.getContractId()) != null) {
+            throw exception(AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_EXISTS);
+        }
         if (createReqVO.getOwnerUserId() == null) {
             createReqVO.setOwnerUserId(contract.getOwnerUserId()); // 默认取合同业务负责人
         }
@@ -192,6 +200,11 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
             return List.of();
         }
         return warrantyMapper.selectListByIds(ids);
+    }
+
+    @Override
+    public List<CrmAfterSaleWarrantyDO> getWarrantyListByContractIds(Collection<Long> contractIds) {
+        return warrantyMapper.selectListByContractIds(contractIds);
     }
 
     private void validateWarrantyYears(Integer years) {

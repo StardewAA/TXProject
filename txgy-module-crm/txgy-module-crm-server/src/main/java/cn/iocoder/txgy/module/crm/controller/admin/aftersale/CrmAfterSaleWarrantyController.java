@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyContractStatusRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantyRespVO;
 import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.warranty.CrmAfterSaleWarrantySaveReqVO;
@@ -25,10 +26,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - CRM 售后质保档案")
@@ -57,6 +60,24 @@ public class CrmAfterSaleWarrantyController {
     public CommonResult<Boolean> updateWarranty(@Valid @RequestBody CrmAfterSaleWarrantySaveReqVO updateReqVO) {
         warrantyService.updateWarranty(updateReqVO);
         return success(true);
+    }
+
+    @GetMapping("/contract-status")
+    @Operation(summary = "获得合同的质保档案状态",
+            description = "用于识别「该合同是否已创建质保档案」：warrantyId 为空表示尚未创建、可发起创建；" +
+                    "不为空表示不可重复创建（一个合同仅允许一份质保档案）")
+    @Parameter(name = "contractIds", description = "合同编号数组", required = true, example = "1,2,3")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-warranty:query')")
+    public CommonResult<List<CrmAfterSaleWarrantyContractStatusRespVO>> getWarrantyContractStatus(
+            @RequestParam("contractIds") Collection<Long> contractIds) {
+        List<CrmAfterSaleWarrantyDO> warranties = warrantyService.getWarrantyListByContractIds(contractIds);
+        return success(convertList(warranties, warranty -> new CrmAfterSaleWarrantyContractStatusRespVO()
+                .setContractId(warranty.getContractId())
+                .setWarrantyId(warranty.getId())
+                .setWarrantyNo(warranty.getNo())
+                .setProjectName(warranty.getProjectName())
+                .setStatus(warranty.getStatus())
+                .setWarrantyEndDate(warranty.getWarrantyEndDate())));
     }
 
     @DeleteMapping("/delete")

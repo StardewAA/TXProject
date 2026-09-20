@@ -87,6 +87,16 @@ public interface CrmAfterSaleWarrantyService {
     List<CrmAfterSaleWarrantyDO> getWarrantyList(Collection<Long> ids);
 
     /**
+     * 按合同编号集合获得质保档案列表
+     *
+     * <p>用于「一个合同仅允许一份质保档案」的识别：返回的合同即为「已创建质保档案」的合同。
+     *
+     * @param contractIds 合同编号集合
+     * @return 质保档案列表
+     */
+    List<CrmAfterSaleWarrantyDO> getWarrantyListByContractIds(Collection<Long> contractIds);
+
+    /**
      * 获得质保档案 Map
      *
      * @param ids 编号

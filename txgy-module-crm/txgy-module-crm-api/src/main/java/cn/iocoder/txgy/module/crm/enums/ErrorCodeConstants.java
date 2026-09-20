@@ -158,6 +158,7 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_WARRANTY_YEARS_INVALID = new ErrorCode(1_020_014_003, "质保年限不正确，仅支持 1-5 年");
     ErrorCode AFTER_SALE_WARRANTY_END_DATE_INVALID = new ErrorCode(1_020_014_004, "质保到期日期不能早于项目完工验收日期");
     ErrorCode AFTER_SALE_WARRANTY_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_014_005, "删除质保档案失败，原因：已存在回访任务，不允许删除");
+    ErrorCode AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_EXISTS = new ErrorCode(1_020_014_006, "创建质保档案失败，原因：该合同已创建质保档案，不可重复创建");
 
     // ========== 售后设置 1_020_015_000 ==========
     ErrorCode AFTER_SALE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_015_000, "售后设置不存在");
