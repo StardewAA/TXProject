@@ -146,15 +146,33 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
     // ========== 待办：质保即将到期（实时查询，不落库） ==========
 
     /**
+     * 待办「质保即将到期」认可的「有效」质保状态
+     *
+     * <p>「质保中」与「即将到期」都表示质保仍然有效、且已进入需要提醒的阶段；
+     * 「已到期终止」才代表质保失效。懒同步会把临近到期的档案由前者流转为后者，
+     * 所以待办判定必须把两者一并纳入（详见 {@link #selectPageByExpiry}）。
+     */
+    List<Integer> EXPIRY_EFFECTIVE_STATUSES = List.of(
+            CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus(),
+            CrmAfterSaleWarrantyStatusEnum.EXPIRING.getStatus());
+
+    /**
      * 待办「质保即将到期」分页查询
      *
      * <p>实时判定条件：
      * <ul>
-     *   <li>质保状态 = 质保中（作废 / 已到期终止后自然不再命中，刷新即消失）；</li>
+     *   <li>质保状态 ∈ {质保中, 即将到期}（已到期终止后自然不再命中，刷新即消失）；</li>
      *   <li>售后责任人 ∈ 归属范围（当前登录人本人 + 其下属）；</li>
      *   <li>质保到期日 ∈ [今天, 今天 + 售后设置「质保到期提前提醒天数」]。</li>
      * </ul>
      * 按质保到期日升序，最紧急的排在最前。
+     *
+     * <p><b>为什么状态要取两个值</b>：读取前会先执行一次懒同步
+     * （{@code CrmAfterSaleWarrantyServiceImpl#autoSyncStatusIfNeeded}），
+     * 它会把「到期日 ≤ 今天 + 提前提醒天数」的档案由「质保中」自动流转为「即将到期」。
+     * 而本查询限定的时间窗口与懒同步的判定窗口完全相同，因此若这里只认「质保中」，
+     * 待办会在懒同步执行后立刻查不到任何数据（质保状态「即将到期」的档案被自己排除），
+     * 表现为「待办始终为 0 / 永远不会提醒」。两个状态都属于「有效且临近到期」，必须都纳入。
      *
      * @param reqVO          分页查询
      * @param serviceUserIds 归属范围（本人 + 下属负责的售后责任人）
@@ -168,7 +186,7 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
         }
         int days = warnDays == null || warnDays < 0 ? 0 : warnDays;
         return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
-                .eq(CrmAfterSaleWarrantyDO::getStatus, CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus())
+                .in(CrmAfterSaleWarrantyDO::getStatus, EXPIRY_EFFECTIVE_STATUSES)
                 .in(CrmAfterSaleWarrantyDO::getServiceUserId, serviceUserIds)
                 .between(CrmAfterSaleWarrantyDO::getWarrantyEndDate, today, today.plusDays(days))
                 .orderByAsc(CrmAfterSaleWarrantyDO::getWarrantyEndDate));
@@ -183,7 +201,7 @@ public interface CrmAfterSaleWarrantyMapper extends BaseMapperX<CrmAfterSaleWarr
         }
         int days = warnDays == null || warnDays < 0 ? 0 : warnDays;
         return selectCount(new LambdaQueryWrapperX<CrmAfterSaleWarrantyDO>()
-                .eq(CrmAfterSaleWarrantyDO::getStatus, CrmAfterSaleWarrantyStatusEnum.IN_WARRANTY.getStatus())
+                .in(CrmAfterSaleWarrantyDO::getStatus, EXPIRY_EFFECTIVE_STATUSES)
                 .in(CrmAfterSaleWarrantyDO::getServiceUserId, serviceUserIds)
                 .between(CrmAfterSaleWarrantyDO::getWarrantyEndDate, today, today.plusDays(days)));
     }
