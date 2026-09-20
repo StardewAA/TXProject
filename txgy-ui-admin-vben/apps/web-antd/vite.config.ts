@@ -46,7 +46,10 @@ export default defineConfig(async (configEnv) => {
           },
           '/training-exam': {
             changeOrigin: true,
-            target: 'http://127.0.0.1:8000', // 考试与认证（Docker 容器 training-exam，保留 /training-exam 前缀）
+            // 容器只注册了 /、/assets、/api/* 路由，不识别 /training-exam 前缀，
+            // 前端页面与 API 均带该前缀请求，故转发前剥掉（原由宿主 exam-proxy:5173 完成，其已下线）。
+            rewrite: (path) => path.replace(/^\/training-exam/, ''),
+            target: 'http://127.0.0.1:8000', // 考试与认证（Docker 容器 training-exam）
             ws: true,
           },
           '/admin-api/system': {

@@ -445,14 +445,14 @@ export function importQuestions(file: File) {
 
 // ========== AI 智能导入（文档 → 试题）==========
 
-/** AI 解析文档试题（仅预览，不入库） */
+/** AI 解析文档试题（仅预览，不入库）；大模型解析耗时可达 1~2 分钟，显式放宽前端超时 */
 export function parseQuestionByAi(file: File) {
   const data = new FormData();
   data.append('file', file);
   return requestClient.post<TrainingResourceApi.AiQuestionParseResult>(
     '/training/question/ai/parse',
     data,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 },
   );
 }
 
