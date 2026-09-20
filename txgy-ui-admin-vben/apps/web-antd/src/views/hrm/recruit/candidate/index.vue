@@ -242,11 +242,6 @@ function handleStatusTabChange(key: number | string) {
   handleRefresh();
 }
 
-/** 新增 */
-function handleCreate() {
-  formModalApi.setData(null).open();
-}
-
 /** 编辑 */
 function handleEdit(row: HrmRecruitCandidateApi.RecruitCandidate) {
   formModalApi.setData(row).open();
@@ -1094,13 +1089,6 @@ onMounted(async () => {
         <div class="flex shrink-0 flex-nowrap items-center gap-2">
           <TableAction
             :actions="[
-              {
-                label: '新增',
-                type: 'primary',
-                icon: ACTION_ICON.ADD,
-                auth: ['hrm:recruit:candidate:create'],
-                onClick: handleCreate,
-              },
               {
                 label: '一键清理',
                 type: 'primary',

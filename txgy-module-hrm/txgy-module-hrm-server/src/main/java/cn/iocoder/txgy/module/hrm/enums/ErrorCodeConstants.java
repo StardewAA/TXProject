@@ -184,6 +184,9 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_OFFER_NOT_EXISTS = new ErrorCode(1_050_200_024, "招聘 Offer 不存在");
     ErrorCode RECRUIT_OFFER_STATE_INVALID = new ErrorCode(1_050_200_025, "招聘 Offer 状态不允许该操作");
     ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_076, "该应聘已存在有效 Offer");
+    ErrorCode RECRUIT_CANDIDATE_CREATE_FORBIDDEN = new ErrorCode(1_050_200_077,
+            "候选人只能由求职者在招聘门户投递职位后自动产生，后台不支持手工新增；"
+                    + "如需补充简历，请在「招聘沟通」中把求职者转为候选人");
     ErrorCode RECRUIT_OFFER_POST_MISMATCH = new ErrorCode(1_050_200_032, "Offer 职位必须与应聘职位一致");
     ErrorCode RECRUIT_OFFER_DATA_INVALID = new ErrorCode(1_050_200_033, "Offer 薪资、有效期或入职日期不合法");
 
