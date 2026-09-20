@@ -295,7 +295,7 @@ onMounted(() => {
         </div>
       </template>
       <template #quantity="{ row }">
-        {{ formatQuantity(row.quantity) }}
+        {{ formatQuantity(row.quantity) }}{{ row.unit ? ` ${row.unit}` : '' }}
       </template>
       <template #inventoryStatus="{ row }">
         <Tag :color="Number(row.quantity || 0) > 0 ? 'success' : 'error'">
