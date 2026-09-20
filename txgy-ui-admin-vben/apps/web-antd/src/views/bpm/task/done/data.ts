@@ -75,15 +75,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 200,
     },
     {
-      field: 'processInstance.summary',
-      title: '摘要',
+      field: 'processInstance.orderNo',
+      title: '出入库单号',
       minWidth: 200,
       formatter: ({ cellValue }) => {
-        return cellValue && cellValue.length > 0
-          ? cellValue
-              .map((item: any) => `${item.key} : ${item.value}`)
-              .join('\n')
-          : '-';
+        return cellValue || '-';
       },
     },
     {

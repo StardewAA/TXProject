@@ -113,6 +113,9 @@ public class BpmTaskRespVO {
         @Schema(description = "流程摘要", example = "[]")
         private List<KeyValue<String, String>> summary; // 只有流程表单，才有摘要！
 
+        @Schema(description = "业务单号", example = "RK-20260920-001")
+        private String orderNo;
+
         /**
          * 发起人的用户信息
          */

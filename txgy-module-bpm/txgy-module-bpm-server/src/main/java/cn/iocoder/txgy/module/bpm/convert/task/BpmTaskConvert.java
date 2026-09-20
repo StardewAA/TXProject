@@ -55,6 +55,7 @@ public interface BpmTaskConvert {
             AdminUserRespDTO startUser = userMap.get(NumberUtils.parseLong(processInstance.getStartUserId()));
             taskVO.getProcessInstance().setStartUser(BeanUtils.toBean(startUser, UserSimpleBaseVO.class));
             taskVO.getProcessInstance().setCreateTime(DateUtils.of(processInstance.getStartTime()));
+            taskVO.getProcessInstance().setOrderNo(MapUtil.getStr(processInstance.getProcessVariables(), "orderNo"));
             // 摘要
             taskVO.getProcessInstance().setSummary(FlowableUtils.getSummary(processDefinitionInfoMap.get(processInstance.getProcessDefinitionId()),
                     processInstance.getProcessVariables()));
@@ -83,6 +84,7 @@ public interface BpmTaskConvert {
                 AdminUserRespDTO startUser = userMap.get(NumberUtils.parseLong(processInstance.getStartUserId()));
                 taskVO.setProcessInstance(BeanUtils.toBean(processInstance, BpmTaskRespVO.ProcessInstance.class));
                 taskVO.getProcessInstance().setStartUser(BeanUtils.toBean(startUser, UserSimpleBaseVO.class));
+                taskVO.getProcessInstance().setOrderNo(MapUtil.getStr(processInstance.getProcessVariables(), "orderNo"));
                 // 摘要
                 taskVO.getProcessInstance().setSummary(FlowableUtils.getSummary(processDefinitionInfoMap.get(processInstance.getProcessDefinitionId()),
                         processInstance.getProcessVariables()));
