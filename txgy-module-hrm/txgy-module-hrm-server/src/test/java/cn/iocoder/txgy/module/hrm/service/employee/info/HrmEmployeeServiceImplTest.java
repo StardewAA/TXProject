@@ -674,12 +674,16 @@ public class HrmEmployeeServiceImplTest extends BaseDbUnitTest {
     @Test
     public void testCreateEmployee_validateRelations() {
         // mock 数据
-        HrmEmployeeDO leaderEmployee = randomEmployeeDO();
+        // 注意：RandomUtils.randomMobile() 只会生成 "13800138" + 3 位数字，取值空间仅 1000 个。
+        // 本用例在同一事务内先后创建两个员工，若两次随机取号相同，会误报「手机号已绑定员工档案」而偶发失败。
+        // 因此这里固定手机号，保证用例稳定（本用例校验的是关联对象，与手机号取值无关）。
+        HrmEmployeeDO leaderEmployee = randomEmployeeDO(o -> o.setMobile("13800138001"));
         employeeMapper.insert(leaderEmployee);
         // 准备参数
         HrmEmployeeSaveReqVO reqVO = randomEmployeeSaveReqVO(o -> o.setUserId(randomLongId())
                 .setDeptId(randomLongId()).setLeaderEmployeeId(leaderEmployee.getId())
-                .setChannelId(randomLongId()).setCandidateId(randomLongId()));
+                .setChannelId(randomLongId()).setCandidateId(randomLongId())
+                .setMobile("13800138002"));
 
         // 调用
         employeeService.createEmployee(reqVO);

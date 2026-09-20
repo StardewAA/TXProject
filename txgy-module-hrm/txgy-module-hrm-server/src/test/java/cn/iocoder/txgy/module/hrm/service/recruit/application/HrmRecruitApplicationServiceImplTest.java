@@ -8,6 +8,9 @@ import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.HrmPortalRecruitApplyReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitApplicationCreateReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitApplicationStatusReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitResumeSnapshotReqVO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeVersionDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationLogDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
@@ -19,6 +22,7 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.candidate.HrmRecruitCandidat
 import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.recruit.post.HrmRecruitPostStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeVersionService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitInterviewService;
 import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
@@ -27,6 +31,7 @@ import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -43,6 +48,7 @@ import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.randomLongId;
 import static cn.iocoder.txgy.framework.test.core.util.RandomUtils.randomPojo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,6 +57,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_APPLICATION_DUPLICATE;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_APPLICATION_RESUME_REQUIRED;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.RECRUIT_CHAT_APPLY_NOT_QUALIFIED;
 
 @Import(HrmRecruitApplicationServiceImpl.class)
@@ -75,6 +82,8 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
     private HrmRecruitResumeService resumeService;
     @MockitoBean
     private HrmPersonalResumeService personalResumeService;
+    @MockitoBean
+    private HrmPersonalResumeVersionService personalResumeVersionService;
     @MockitoBean
     private HrmRecruitChatService chatService;
     @MockitoBean
@@ -113,14 +122,14 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
             item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
-                .setPostId(post.getId()).setResumeId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
+                .setPostId(post.getId()).setResumeId(null).setResumeVersionId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
         HrmRecruitCandidateDO candidate = randomPojo(HrmRecruitCandidateDO.class, item -> item
                 .setId(randomLongId()).setMobile(reqVO.getMobile()));
 
         when(postService.getPortalRecruitPostPublished(eq(post.getId()))).thenReturn(post);
         when(postService.validateRecruitPostPublished(eq(post.getId()))).thenReturn(post);
         when(candidateService.getRecruitCandidateByMobile(eq(reqVO.getMobile()))).thenReturn(candidate);
-        when(resumeService.createRecruitResume(any())).thenReturn(randomLongId());
+        when(resumeService.createRecruitResumeSnapshot(any())).thenReturn(randomLongId());
         when(chatService.hasApplyQualification(eq(applicantUserId), eq(post.getId()))).thenReturn(true);
 
         TenantContextHolder.setTenantId(999L);
@@ -150,6 +159,100 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testCreatePortalApplication_withResumeVersion_snapshotsContent() {
+        Long applicantUserId = randomLongId();
+        HrmRecruitPostDO post = randomPojo(HrmRecruitPostDO.class, item -> {
+            item.setTenantId(205L);
+            item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        Long versionId = randomLongId();
+        HrmPersonalResumeVersionDO version = new HrmPersonalResumeVersionDO()
+                .setId(versionId).setUserId(applicantUserId).setVersionNo(3)
+                .setContent("{\"name\":\"张三\",\"mobile\":\"13900000000\"}");
+        HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
+                .setPostId(post.getId()).setResumeId(null).setResumeVersionId(versionId)
+                .setResumeFileName(null).setResumeFileUrl(null));
+
+        when(postService.getPortalRecruitPostPublished(post.getId())).thenReturn(post);
+        when(postService.validateRecruitPostPublished(post.getId())).thenReturn(post);
+        when(personalResumeVersionService.getVersion(applicantUserId, versionId)).thenReturn(version);
+        when(candidateService.getRecruitCandidateByMobile(reqVO.getMobile())).thenReturn(
+                randomPojo(HrmRecruitCandidateDO.class, item -> item.setId(randomLongId())));
+        when(resumeService.createRecruitResumeSnapshot(any())).thenReturn(randomLongId());
+        when(chatService.hasApplyQualification(applicantUserId, post.getId())).thenReturn(true);
+
+        Long applicationId = applicationService.createPortalApplication(applicantUserId, reqVO);
+        assertNotNull(applicationId);
+
+        // 快照必须携带在线内容、来源版本与职位指纹，且没有附件地址
+        ArgumentCaptor<HrmRecruitResumeSnapshotReqVO> captor =
+                ArgumentCaptor.forClass(HrmRecruitResumeSnapshotReqVO.class);
+        verify(resumeService).createRecruitResumeSnapshot(captor.capture());
+        HrmRecruitResumeSnapshotReqVO snapshot = captor.getValue();
+        assertEquals(version.getContent(), snapshot.getContent());
+        assertNotNull(snapshot.getContentHash());
+        assertEquals(versionId, snapshot.getSourcePersonalVersionId());
+        assertEquals(post.getId(), snapshot.getPostId());
+        assertNotNull(snapshot.getPostFingerprint());
+        assertNull(snapshot.getFileUrl());
+    }
+
+    @Test
+    public void testCreatePortalApplication_withOnlineDraft_doesNotRequireFileUrl() {
+        Long applicantUserId = randomLongId();
+        HrmRecruitPostDO post = randomPojo(HrmRecruitPostDO.class, item -> {
+            item.setTenantId(206L);
+            item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        Long draftId = randomLongId();
+        HrmPersonalResumeDO draft = new HrmPersonalResumeDO().setId(draftId).setUserId(applicantUserId)
+                .setTitle("求职资料（系统）").setResumeType(2)
+                .setContent("{\"name\":\"李四\",\"mobile\":\"13900000001\"}");
+        HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
+                .setPostId(post.getId()).setResumeId(draftId).setResumeVersionId(null)
+                .setResumeFileName(null).setResumeFileUrl(null));
+
+        when(postService.getPortalRecruitPostPublished(post.getId())).thenReturn(post);
+        when(postService.validateRecruitPostPublished(post.getId())).thenReturn(post);
+        when(personalResumeService.getResume(applicantUserId, draftId)).thenReturn(draft);
+        when(candidateService.getRecruitCandidateByMobile(reqVO.getMobile())).thenReturn(
+                randomPojo(HrmRecruitCandidateDO.class, item -> item.setId(randomLongId())));
+        when(resumeService.createRecruitResumeSnapshot(any())).thenReturn(randomLongId());
+        when(chatService.hasApplyQualification(applicantUserId, post.getId())).thenReturn(true);
+
+        Long applicationId = applicationService.createPortalApplication(applicantUserId, reqVO);
+        assertNotNull(applicationId);
+
+        ArgumentCaptor<HrmRecruitResumeSnapshotReqVO> captor =
+                ArgumentCaptor.forClass(HrmRecruitResumeSnapshotReqVO.class);
+        verify(resumeService).createRecruitResumeSnapshot(captor.capture());
+        assertEquals(draft.getContent(), captor.getValue().getContent());
+        assertNull(captor.getValue().getFileUrl());
+    }
+
+    @Test
+    public void testCreatePortalApplication_withoutAnyResume_rejected() {
+        Long applicantUserId = randomLongId();
+        HrmRecruitPostDO post = randomPojo(HrmRecruitPostDO.class, item -> {
+            item.setTenantId(207L);
+            item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
+        });
+        HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
+                .setPostId(post.getId()).setResumeId(null).setResumeVersionId(null)
+                .setResumeFileName(null).setResumeFileUrl(null));
+
+        when(postService.getPortalRecruitPostPublished(post.getId())).thenReturn(post);
+        when(postService.validateRecruitPostPublished(post.getId())).thenReturn(post);
+        when(candidateService.getRecruitCandidateByMobile(reqVO.getMobile())).thenReturn(
+                randomPojo(HrmRecruitCandidateDO.class, item -> item.setId(randomLongId())));
+        when(chatService.hasApplyQualification(applicantUserId, post.getId())).thenReturn(true);
+
+        assertServiceException(() -> applicationService.createPortalApplication(applicantUserId, reqVO),
+                RECRUIT_APPLICATION_RESUME_REQUIRED);
+        verifyNoInteractions(resumeService);
+    }
+
+    @Test
     public void testCreatePortalApplication_withoutQualification_rejected() {
         Long applicantUserId = randomLongId();
         HrmRecruitPostDO post = randomPojo(HrmRecruitPostDO.class, item -> {
@@ -157,7 +260,7 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
             item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
-                .setPostId(post.getId()).setResumeId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
+                .setPostId(post.getId()).setResumeId(null).setResumeVersionId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
         when(postService.getPortalRecruitPostPublished(post.getId())).thenReturn(post);
         when(postService.validateRecruitPostPublished(post.getId())).thenReturn(post);
         when(chatService.hasApplyQualification(applicantUserId, post.getId())).thenReturn(false);
@@ -175,7 +278,7 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
             item.setStatus(HrmRecruitPostStatusEnum.PUBLISHED.getStatus());
         });
         HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
-                .setPostId(post.getId()).setResumeId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
+                .setPostId(post.getId()).setResumeId(null).setResumeVersionId(null).setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
         HrmRecruitCandidateDO candidate = randomPojo(HrmRecruitCandidateDO.class, item -> item
                 .setId(randomLongId()).setMobile(reqVO.getMobile()));
         HrmRecruitApplicationDO processing = randomPojo(HrmRecruitApplicationDO.class, item -> item
@@ -223,14 +326,14 @@ public class HrmRecruitApplicationServiceImplTest extends BaseDbUnitTest {
         });
         TenantUtils.execute(post.getTenantId(), () -> candidateMapper.insert(candidate));
         HrmPortalRecruitApplyReqVO reqVO = randomPojo(HrmPortalRecruitApplyReqVO.class, item -> item
-                .setPostId(post.getId()).setMobile(candidate.getMobile()).setResumeId(null)
+                .setPostId(post.getId()).setMobile(candidate.getMobile()).setResumeId(null).setResumeVersionId(null)
                 .setResumeFileName("resume.pdf").setResumeFileUrl("resume.pdf"));
 
         when(postService.getPortalRecruitPostPublished(post.getId())).thenReturn(post);
         when(postService.validateRecruitPostPublished(post.getId())).thenReturn(post);
         when(candidateService.getRecruitCandidateByMobile(candidate.getMobile())).thenReturn(candidate);
         when(chatService.hasApplyQualification(applicantUserId, post.getId())).thenReturn(true);
-        when(resumeService.createRecruitResume(any())).thenReturn(randomLongId());
+        when(resumeService.createRecruitResumeSnapshot(any())).thenReturn(randomLongId());
 
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
