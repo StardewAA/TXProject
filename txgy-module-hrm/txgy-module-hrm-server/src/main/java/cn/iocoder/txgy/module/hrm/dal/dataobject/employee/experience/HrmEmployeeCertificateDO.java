@@ -1,6 +1,8 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.experience;
 
+import cn.iocoder.txgy.module.hrm.dal.dataobject.certificate.HrmCertificateTypeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
+import cn.iocoder.txgy.module.hrm.enums.certificate.HrmCertificateStatusEnum;
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -41,6 +43,12 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      */
     private Long employeeId;
     /**
+     * 证件类型编号
+     *
+     * 关联 {@link HrmCertificateTypeDO#getId()}，为空表示未纳入资格证件域管理的普通证书履历
+     */
+    private Long typeId;
+    /**
      * 证书名称
      */
     private String name;
@@ -61,6 +69,12 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      */
     private LocalDateTime endTime;
     /**
+     * 复审日期
+     *
+     * 仅当证件类型需要复审时由续证/复审流程写入
+     */
+    private LocalDateTime reviewTime;
+    /**
      * 发证机构
      */
     private String issuingAuthority;
@@ -68,6 +82,18 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      * 发证日期
      */
     private LocalDateTime issuingTime;
+    /**
+     * 证件附件地址
+     *
+     * 关联统一文件服务的文件地址
+     */
+    private String attachmentUrl;
+    /**
+     * 证件状态
+     *
+     * 由每日定时任务计算，枚举 {@link HrmCertificateStatusEnum}
+     */
+    private Integer status;
     /**
      * 备注
      */

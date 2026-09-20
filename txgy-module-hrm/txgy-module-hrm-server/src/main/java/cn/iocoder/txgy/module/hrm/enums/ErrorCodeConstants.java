@@ -121,6 +121,38 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_025, "职位类型必须选择叶子节点");
     ErrorCode RECRUIT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_027, "招聘简历版本不存在");
 
+    // ========== 个人简历版本 1-050-200-034 ==========
+    ErrorCode PERSONAL_RESUME_VERSION_NOT_EXISTS = new ErrorCode(1_050_200_034, "个人简历版本不存在");
+    ErrorCode PERSONAL_RESUME_VERSION_CONTENT_EMPTY = new ErrorCode(1_050_200_035, "简历内容为空，无法保存版本");
+    ErrorCode PERSONAL_RESUME_VERSION_PARENT_INVALID = new ErrorCode(1_050_200_036, "父版本不存在或不属于当前用户");
+    ErrorCode PERSONAL_RESUME_VERSION_IDEMPOTENCY_CONFLICT =
+            new ErrorCode(1_050_200_037, "该请求已提交过，请勿重复提交");
+    ErrorCode RECRUIT_APPLICATION_RESUME_REQUIRED = new ErrorCode(1_050_200_038, "请选择用于投递的简历");
+
+    // ========== 招聘 Agent 1-050_200-039 ==========
+    ErrorCode AGENT_TASK_NOT_EXISTS = new ErrorCode(1_050_200_039, "Agent 任务不存在");
+    ErrorCode AGENT_TASK_STATUS_INVALID = new ErrorCode(1_050_200_040, "Agent 任务状态不允许该操作");
+    ErrorCode AGENT_TASK_IDEMPOTENCY_CONFLICT = new ErrorCode(1_050_200_041, "该请求已提交过，请勿重复提交");
+    ErrorCode AGENT_MODEL_NOT_CONFIGURED = new ErrorCode(1_050_200_042, "AI 模型尚未配置，请联系管理员");
+    ErrorCode AGENT_MODEL_CALL_FAILED = new ErrorCode(1_050_200_043, "AI 模型调用失败，请稍后重试");
+    ErrorCode AGENT_MODEL_OUTPUT_INVALID = new ErrorCode(1_050_200_044, "AI 返回内容格式不符合要求");
+    ErrorCode AGENT_SENSITIVE_MASK_FAILED = new ErrorCode(1_050_200_045, "敏感信息脱敏失败，已阻止本次模型调用");
+    ErrorCode AGENT_RESUME_CONTENT_EMPTY = new ErrorCode(1_050_200_046, "简历内容为空或不足，无法分析");
+    ErrorCode AGENT_POST_NOT_AVAILABLE = new ErrorCode(1_050_200_047, "目标职位不存在或已停止招聘");
+    ErrorCode AGENT_MODEL_QUOTA_EXHAUSTED =
+            new ErrorCode(1_050_200_048, "AI 模型额度不足或已用尽，请在模型平台充值或调整计费模式");
+
+    // ========== 简历优化确认 1-050-200-049 ==========
+    ErrorCode AGENT_OPTIMIZE_TASK_MISMATCH = new ErrorCode(1_050_200_049, "优化任务与简历版本不匹配");
+    ErrorCode AGENT_OPTIMIZE_DECISION_INVALID = new ErrorCode(1_050_200_050, "确认结果不合法");
+    ErrorCode AGENT_OPTIMIZE_ORIGINAL_NOT_FOUND = new ErrorCode(1_050_200_051, "原值在源简历版本中不存在");
+    ErrorCode AGENT_OPTIMIZE_CONTENT_INVALID = new ErrorCode(1_050_200_052, "确认后简历内容不合法");
+
+    // ========== 招聘 Agent 管理端 1-050-200-053 ==========
+    ErrorCode AGENT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_053, "应聘记录不存在或无权访问");
+    ErrorCode AGENT_APPLICATION_RESUME_UNAVAILABLE =
+            new ErrorCode(1_050_200_054, "该应聘记录关联的简历不是在线结构化简历，暂不支持 AI 分析");
+
     // ========== 招聘沟通 1-050-200-060 ==========
     ErrorCode RECRUIT_CHAT_CONVERSATION_NOT_EXISTS = new ErrorCode(1_050_200_060, "招聘沟通会话不存在");
     ErrorCode RECRUIT_CHAT_NOT_PARTICIPANT = new ErrorCode(1_050_200_061, "无权查看该招聘沟通会话");
@@ -321,6 +353,45 @@ public interface ErrorCodeConstants {
             new ErrorCode(1_050_600_020, "绩效目标确认人配置不合法");
     ErrorCode PERFORMANCE_TARGET_CONFIRM_NO_PERMISSION =
             new ErrorCode(1_050_600_021, "当前用户不是该绩效目标的确认人");
+
+    // ========== 证件类型 1-050-700-000 ==========
+    ErrorCode CERTIFICATE_TYPE_NOT_EXISTS = new ErrorCode(1_050_700_000, "证件类型不存在");
+    ErrorCode CERTIFICATE_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_700_001, "证件类型名称已存在");
+    ErrorCode CERTIFICATE_TYPE_USED = new ErrorCode(1_050_700_002, "证件类型已被证件台账使用，不能删除");
+    ErrorCode CERTIFICATE_TYPE_DISABLED = new ErrorCode(1_050_700_003, "证件类型【{}】已停用");
+    ErrorCode CERTIFICATE_TYPE_SPECIAL_OPERATION_REVIEW_REQUIRED =
+            new ErrorCode(1_050_700_004, "特种作业证件必须开启复审并配置复审周期");
+    ErrorCode CERTIFICATE_TYPE_CODE_DUPLICATE = new ErrorCode(1_050_700_005, "证件类型编码已存在");
+
+    // ========== 证件台账 1-050-700-010 ==========
+    ErrorCode CERTIFICATE_LEDGER_NOT_EXISTS = new ErrorCode(1_050_700_010, "证件台账记录不存在");
+    ErrorCode CERTIFICATE_LEDGER_END_TIME_INVALID =
+            new ErrorCode(1_050_700_011, "证件有效结束日期不能早于有效开始日期");
+    ErrorCode CERTIFICATE_LEDGER_ATTACHMENT_REQUIRED =
+            new ErrorCode(1_050_700_012, "证件类型【{}】要求上传证件附件");
+    ErrorCode CERTIFICATE_LEDGER_CANCELLED =
+            new ErrorCode(1_050_700_013, "证件已注销，不能办理续证或复审");
+    ErrorCode CERTIFICATE_LEDGER_RENEWAL_REQUIRED =
+            new ErrorCode(1_050_700_014, "证件类型【{}】需要复审，请先办理续证或复审");
+    ErrorCode CERTIFICATE_LEDGER_STATUS_INVALID =
+            new ErrorCode(1_050_700_015, "证件状态只能手工设置为注销或恢复为有效");
+
+    // ========== 证件续证/复审 1-050-700-020 ==========
+    ErrorCode CERTIFICATE_RENEWAL_NOT_EXISTS = new ErrorCode(1_050_700_020, "证件续证/复审记录不存在");
+    ErrorCode CERTIFICATE_RENEWAL_TIME_INVALID =
+            new ErrorCode(1_050_700_021, "续证/复审后的有效期不能早于原证件有效期");
+    ErrorCode CERTIFICATE_RENEWAL_REVIEW_TIME_REQUIRED =
+            new ErrorCode(1_050_700_022, "复审类型必须填写复审日期");
+    ErrorCode CERTIFICATE_RENEWAL_REVIEW_TIME_NOT_ALLOWED =
+            new ErrorCode(1_050_700_023, "续证类型不允许填写复审日期");
+    ErrorCode CERTIFICATE_RENEWAL_TYPE_INVALID = new ErrorCode(1_050_700_024, "续证/复审类型不合法");
+
+    // ========== 证件预警 1-050-700-030 ==========
+    ErrorCode CERTIFICATE_WARNING_NOT_EXISTS = new ErrorCode(1_050_700_030, "证件预警记录不存在");
+    ErrorCode CERTIFICATE_WARNING_STATUS_INVALID =
+            new ErrorCode(1_050_700_031, "当前预警状态不允许执行该操作");
+    ErrorCode CERTIFICATE_WARNING_ADVANCE_DAYS_INVALID =
+            new ErrorCode(1_050_700_032, "证件类型【{}】的提前预警天数不合法");
 
     // ========== HRM 配置 1-050-800-000 ==========
     ErrorCode HRM_CONFIG_NOT_EXISTS = new ErrorCode(1_050_800_000, "HRM 配置不存在");
