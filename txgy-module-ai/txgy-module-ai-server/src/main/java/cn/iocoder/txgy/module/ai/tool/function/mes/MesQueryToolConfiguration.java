@@ -138,19 +138,26 @@ public class MesQueryToolConfiguration {
                 Integer statusCode = mapStatus(status, "草稿:0,审批中:2,待检验:3,已完成:4");
                 List<Object> args = new ArrayList<>();
                 args.add(tenantId);
-                args.addAll(Arrays.asList(likeArgs(keyword, 2)));
+                args.addAll(Arrays.asList(likeArgs(keyword, 3)));
                 args.add(statusCode);
                 args.add(statusCode);
                 args.add(limit);
-                String sql = "SELECT f.code AS 报工单号, IFNULL(wo.code,'') AS 所属工单, IFNULL(it.name,'') AS 物料,"
+                String sql = "SELECT f.code AS 报工单号,"
+                        + " CASE f.type WHEN 1 THEN '自行报工' WHEN 2 THEN '委外报工' ELSE CONCAT('类型码', f.type) END AS 报工类型,"
+                        + " IFNULL(ws.name,'') AS 工作站, IFNULL(p.name,'') AS 工序,"
+                        + " IFNULL(wo.code,'') AS 生产工单编码,"
+                        + " IFNULL(it.code,'') AS 产品物料编码, IFNULL(it.name,'') AS 产品物料名称,"
+                        + " IFNULL(it.specification,'') AS 规格型号,"
                         + " f.feedback_quantity + 0 AS 报工数量, f.qualified_quantity + 0 AS 合格数量, f.unqualified_quantity + 0 AS 不合格数量,"
                         + " IFNULL(f.feedback_time,'') AS 报工时间,"
                         + " CASE f.status WHEN 0 THEN '草稿' WHEN 2 THEN '审批中' WHEN 3 THEN '待检验' WHEN 4 THEN '已完成' ELSE CONCAT('状态码', f.status) END AS 状态"
                         + " FROM mes_pro_feedback f"
                         + " LEFT JOIN mes_pro_work_order wo ON wo.id = f.work_order_id"
                         + " LEFT JOIN mes_md_item it ON it.id = f.item_id"
+                        + " LEFT JOIN mes_md_workstation ws ON ws.id = f.workstation_id"
+                        + " LEFT JOIN mes_pro_process p ON p.id = f.process_id"
                         + " WHERE f.tenant_id = ? AND f.deleted = 0"
-                        + keywordOrFilter("f.code", "it.name")
+                        + keywordOrFilter("f.code", "it.code", "it.name")
                         + " AND (? IS NULL OR f.status = ?)"
                         + " ORDER BY f.id DESC LIMIT ?";
                 return jdbcTemplate.queryForList(sql, args.toArray());

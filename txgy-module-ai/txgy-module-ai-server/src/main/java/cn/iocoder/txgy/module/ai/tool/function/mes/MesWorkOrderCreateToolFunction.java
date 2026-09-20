@@ -198,6 +198,22 @@ public class MesWorkOrderCreateToolFunction
         // 1. 解析产品（本租户物料档案内：编码精确 → 名称精确 → 名称模糊，避免解析到错误产品）
         Long productId = resolveSingleton(tenantId, "mes_md_item", productKeyword,
                 "产品", List.of("code", "name"));
+        // 1.5 内容指纹查重：【修复】编号自动生成时唯一键防不住重复添加——
+        // 同租户下「名称+产品+数量+交期」完全相同的未取消工单视为重复，拦截并提示已存在
+        List<Map<String, Object>> dupContent = jdbcTemplate.queryForList(
+                "SELECT code, name, status FROM mes_pro_work_order"
+                        + " WHERE tenant_id = ? AND deleted = 0 AND status != 3"
+                        + " AND name = ? AND product_id = ?"
+                        + " AND ABS(quantity + 0 - ?) < 0.001"
+                        + " AND DATE(request_date) = ? LIMIT 1",
+                tenantId, name, productId, quantity,
+                java.sql.Date.valueOf(requestDateTime.toLocalDate()));
+        if (!dupContent.isEmpty()) {
+            Map<String, Object> exist = dupContent.get(0);
+            throw new IllegalArgumentException("内容相同的工单已存在（编号：" + exist.get("code")
+                    + "，名称：" + exist.get("name") + "），请勿重复添加；如需查看可直接说\"查询工单 "
+                    + exist.get("code") + "\"；如确需新建，请修改工单名称以示区分");
+        }
         // 2. 解析客户（可选）
         Long clientId = null;
         if (clientKeyword != null) {

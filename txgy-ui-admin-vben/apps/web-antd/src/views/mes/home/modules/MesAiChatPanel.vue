@@ -368,9 +368,24 @@ function removePendingFile(index: number) {
   pendingFiles.value.splice(index, 1);
 }
 
-/** 快捷意图：点击后填入输入框，用户可修改后发送 */
+/** 输入框实例（快捷意图填入后聚焦用） */
+const intentInputRef = ref();
+
+/** 快捷意图：点击后填入输入框（自动聚焦、光标到末尾），用户可修改后发送 */
 function applyQuickIntent(text: string) {
   inputText.value = text;
+  nextTick(() => {
+    // antd TextArea 组件实例 → 取内部原生 textarea 聚焦并置光标于文末
+    const inst = intentInputRef.value;
+    const el =
+      inst?.resizableTextArea?.textArea ??
+      inst?.$el?.querySelector?.('textarea');
+    if (el) {
+      el.focus();
+      const len = inputText.value.length;
+      el.setSelectionRange(len, len);
+    }
+  });
 }
 
 /** 【新增：导入解析】处理粘贴的单据文本（在 handleSend 中调用） */
@@ -769,6 +784,10 @@ async function handleSend(attachmentUrls?: string[]) {
   // 带附件的请求统一交给后端处理（视觉识别/文本抽取 + 意图理解），
   // 不走前端的查询澄清/预填/引导等本地意图分支，避免附件请求被劫持
   const hasAttachments = (pendingUrls?.length ?? 0) > 0;
+  // 【引导问法】用户在问功能入口/位置（在哪里/怎么找/菜单）时，
+  // 不走前端本地意图分支（澄清反问/预填/模板等），直接交后端引导模式给菜单路径
+  const guideQuestion =
+    /(在哪里|在哪|哪儿|什么位置|怎么找|如何找|功能入口|菜单)/.test(content);
 
   // 【单据模板分支（已收窄）】仅当用户明确索要"模板/空白单"时才本地生成模板链接；
   // "添加/创建/录入 + 工单" 等带真实字段的请求一律放行到后端——
@@ -786,7 +805,7 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：模糊工单查询澄清】"我想查看工单"等无具体条件的查询 → 先反问，不直接倾倒全表
-  if (!hasAttachments && matchVagueWorkOrderQuery(content)) {
+  if (!hasAttachments && !guideQuestion && matchVagueWorkOrderQuery(content)) {
     messages.value.push({
       role: 'assistant',
       content:
@@ -800,7 +819,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D1】安灯异常上报：口述异常 → 草稿确认弹窗（提交走既有接口）
   const andonDraft = matchAndonReport(content);
-  if (!hasAttachments && andonDraft) {
+  if (!hasAttachments && !guideQuestion && andonDraft) {
     messages.value.push({
       role: 'assistant',
       content: '收到，我帮你起草了安灯呼叫单。请确认异常原因、等级与工位后提交：',
@@ -814,7 +833,7 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：任务包 D2】质检预填：命中"质检/检验预填 + 任务编号" → 过程检验单确认流程
   const qcCode = matchQcPrefill(content);
-  if (!hasAttachments && qcCode) {
+  if (!hasAttachments && !guideQuestion && qcCode) {
     messages.value.push({
       role: 'assistant',
       content: `✅ 已定位任务「${qcCode}」，即将为您预填过程检验单（检验数量默认为已生产数量，可修改）。确认无误后点击下方按钮：`,
@@ -827,14 +846,14 @@ async function handleSend(attachmentUrls?: string[]) {
   }
 
   // 【新增：任务包 D3】出入库操作引导（不影响纯数据查询）
-  if (!hasAttachments && matchWmsGuide(content)) {
+  if (!hasAttachments && !guideQuestion && matchWmsGuide(content)) {
     handleWmsGuide();
     return;
   }
 
   // 【新增：任务包 B】报工智能填单：命中"报工/填单/预填 + 任务编号" → 预填确认流程
   const prefillCode = matchFeedbackPrefill(content);
-  if (!hasAttachments && prefillCode) {
+  if (!hasAttachments && !guideQuestion && prefillCode) {
     handleFeedbackPrefillIntent(prefillCode);
     return;
   }
@@ -842,7 +861,7 @@ async function handleSend(attachmentUrls?: string[]) {
   // 【新增】只说了单据名词（如"生产工单"）：意图不明确，先反问澄清，
   // 不擅自猜测是要查询数据还是生成模板，避免答非所问
   const ambiguousNoun = matchAmbiguousDoc(content);
-  if (!hasAttachments && ambiguousNoun) {
+  if (!hasAttachments && !guideQuestion && ambiguousNoun) {
     messages.value.push({
       role: 'assistant',
       content: `您提到「${ambiguousNoun}」，想做什么呢？可点击下方选项快速操作，也可以直接补充说明，例如"查询已完成的生产工单"。`,
@@ -855,12 +874,19 @@ async function handleSend(attachmentUrls?: string[]) {
 
   // 【新增：导入解析】粘贴的单据文本（含"字段：值"多行/表格标题）→ 解析填充；
   // 疑问句不劫持，继续走后端问答
-  if (!hasAttachments && handlePastedDocText(content)) {
+  if (!hasAttachments && !guideQuestion && handlePastedDocText(content)) {
     scrollToBottom();
     return;
   }
 
-  const aiMsg = { role: 'assistant' as const, content: '', time: formatTime() };
+  const aiMsg = {
+    role: 'assistant' as const,
+    content: '',
+    time: formatTime(),
+    // 【识别场景标记】带附件且意图是识别/提取时，回答按纯文本展示，
+    // 不渲染成业务查询卡片（识别不是查询，要求是识别不是添加）
+    isRecognize: hasAttachments && /(识别|提取)/.test(content),
+  };
   messages.value.push(aiMsg); // AI 占位气泡（显示"正在思考"动画）
   streaming.value = true;
   abortController.value = new AbortController();
@@ -922,10 +948,9 @@ async function handleSend(attachmentUrls?: string[]) {
         }
         const stripped = stripThink(full);
         endStream(
-          stripped ||
-            (full
-              ? `${full.replace(/<\/?think>/g, '').trim()}\n\n（注：以上为模型思考内容，未生成正式回答，请重新提问）`
-              : '（无返回内容，请重新提问）'),
+          // 【思考过程不展示】即使模型只输出了思考内容（<think> 无正文），
+          // 也不展示思考过程本身，只提示重新提问
+          stripped || '（模型本次未生成正式回答，请重新提问）',
         );
       },
       pendingUrls, // 【附件】挂起附件上传后的 URL：图片走视觉识别、文档走文本抽取
@@ -1004,22 +1029,40 @@ function cleanAiText(raw: string): string {
 /** 业务字段别名表：把模型输出的各种叫法归一成标准标签（加粗展示） */
 const FIELD_ALIASES: Array<[RegExp, string]> = [
   [/^(工单编号|单号|工单号|编号)$/, '工单编号'],
+  [/^(检验单号|检验单编号|质检单号)$/, '检验单号'],
+  [/^(检验类型|质检类型)$/, '检验类型'],
+  [/^(所属工单|关联工单)$/, '所属工单'],
+  [/^(任务编号|生产任务编号|生产任务)$/, '任务编号'],
+  [/^(报工数量|汇报数量)$/, '报工数量'],
+  [/^(报工人|报工人员|汇报人)$/, '报工人'],
   [/^(产品名称|产品|物料名称)$/, '产品名称'],
+  [/^(物料)$/, '物料'],
   [/^(物料编码|编码)$/, '物料编码'],
   [/^(规格|规格型号)$/, '规格型号'],
-  [/^(计划数量|计划数)$/, '计划数量'],
-  [/^(已生产数量|已生产|完工数量)$/, '已生产数量'],
+  [/^(检验数量|质检数量)$/, '检验数量'],
   [/^(合格数量)$/, '合格数量'],
-  [/^(不合格数量)$/, '不合格数量'],
+  [/^(不合格数量|不良数量)$/, '不合格数量'],
+  [/^(检验结论|结论|判定结果|检验结果|检测结果)$/, '检验结论'],
   [/^(报工进度|进度)$/, '报工进度'],
   [/^(工单状态|状态)$/, '工单状态'],
   [/^(开工时间|开始时间)$/, '开工时间'],
   [/^(完工时间|结束时间)$/, '完工时间'],
   [/^(工艺|工艺信息|工序)$/, '工序'],
   [/^(客户|客户名称)$/, '客户'],
+  [/^(供应商|供应商名称)$/, '供应商'],
   [/^(车间|车间名称)$/, '车间'],
   [/^(工位|工位名称)$/, '工位'],
+  [/^(班组|班组名称)$/, '班组'],
+  [/^(仓库|仓位)$/, '仓库'],
+  [/^(库位)$/, '库位'],
+  [/^(库区)$/, '库区'],
+  [/^(设备|设备名称)$/, '设备'],
+  [/^(设备编码|设备编号)$/, '设备编码'],
+  [/^(安灯|安灯类型)$/, '安灯类型'],
   [/^(库存数量|库存数|现存量|在库数量)$/, '库存数量'],
+  [/^(面积)$/, '面积'],
+  [/^(要求交期|交期)$/, '要求交期'],
+  [/^(备注)$/, '备注'],
   [/^(单位)$/, '单位'],
 ];
 
@@ -1033,6 +1076,16 @@ function parseFieldLine(line: string): { label: string; value: string } | null {
   if (!value) return null;
   for (const [re, std] of FIELD_ALIASES) {
     if (re.test(rawLabel)) return { label: std, value };
+  }
+  // 【兜底】白名单外的业务字段（报工单号/工作站/报工时间等）原样保留，
+  // 保证任意业务类型的查询结果都完整展示，不再依赖白名单逐个枚举
+  if (
+    /^[\u4e00-\u9fa5A-Za-z0-9]{2,10}$/.test(rawLabel) &&
+    !/^(提示|注意|说明|警告|示例|例如|参考|第一步|第二步|第三步|第四步|第五步|第六步|第[一二三四五六七八九十\d]+步|操作路径|操作步骤|概念|快捷方式|代录|原因|回答|别名)$/.test(
+      rawLabel,
+    )
+  ) {
+    return { label: rawLabel, value };
   }
   return null;
 }
@@ -1104,8 +1157,20 @@ function parseBusinessData(
       if (f.label === '工单状态' && f.value) statusSet.add(f.value.trim());
     }),
   );
+  // 【修复】业务类型按解析出的字段集合判断（不再在原文里搜关键词——
+  // 任务名"待检验"/工位"质检工位"等词会误触发检验/工单标题）
+  const labelSet = new Set<string>();
+  validItems.forEach((item) => item.forEach((f) => labelSet.add(f.label)));
   let title = `📋 查询结果（共 ${validItems.length} 条）`;
-  if (/工单|单号|生产/.test(raw)) {
+  if (labelSet.has('检验单号') || labelSet.has('检验类型') || labelSet.has('检验结论')) {
+    title = `🔍 过程检验单（IPQC）（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('报工单号') || labelSet.has('报工数量')) {
+    title = `📝 生产报工记录（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('库存数量')) {
+    title = `📦 库存查询结果（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('任务编号') || labelSet.has('已生产数量')) {
+    title = `📑 生产任务（共 ${validItems.length} 条）`;
+  } else if (labelSet.has('工单编号')) {
     if (statusSet.size === 1 && statusSet.has('已完成')) {
       title = `✅ 已完成生产工单（共 ${validItems.length} 条）`;
     } else if (statusSet.size === 1 && statusSet.has('已取消')) {
@@ -1117,12 +1182,20 @@ function parseBusinessData(
     } else {
       title = `🏭 生产工单（共 ${validItems.length} 条）`;
     }
-  } else if (/库存|仓位|仓库/.test(raw)) {
-    title = `📦 库存查询结果（共 ${validItems.length} 条）`;
-  } else if (/物料/.test(raw)) {
+  } else if (labelSet.has('物料编码') || labelSet.has('产品名称')) {
     title = `📦 物料信息（共 ${validItems.length} 条）`;
-  } else if (/设备/.test(raw)) {
+  } else if (labelSet.has('设备编码') || labelSet.has('设备')) {
     title = `🔧 设备信息（共 ${validItems.length} 条）`;
+  }
+  // 【展示过滤】生产任务与 IPQC 检验单卡片不展示合格/不合格数量：
+  // 质量数字以报工/检验页面为准，任务与检验列表只看进度与结论
+  if (title.includes('生产任务') || title.includes('过程检验单')) {
+    const filtered = validItems
+      .map((item) =>
+        item.filter((f) => f.label !== '合格数量' && f.label !== '不合格数量'),
+      )
+      .filter((item) => item.length >= 2);
+    if (filtered.length > 0) validItems = filtered;
   }
   return { title, items: validItems };
 }
@@ -1228,7 +1301,7 @@ onBeforeUnmount(() => {
               <!-- AI 回复（关键格式化处理位置 3）：业务数据渲染成卡片，普通问答走清洗后的文本 -->
               <template v-if="msg.role === 'assistant' && msg.content">
                 <div
-                  v-if="parseBusinessData(msg.content)"
+                  v-if="!msg.isRecognize && parseBusinessData(msg.content)"
                   class="mes-ai-card"
                 >
                   <!-- 卡片标题 -->
@@ -1402,6 +1475,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <TextArea
+          ref="intentInputRef"
           v-model:value="inputText"
           :auto-size="{ minRows: 2, maxRows: 6 }"
           class="mes-ai-textarea"
