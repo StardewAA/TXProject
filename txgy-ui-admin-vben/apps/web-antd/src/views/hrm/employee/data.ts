@@ -13,7 +13,9 @@ import dayjs from 'dayjs';
 
 import { getInsuranceSchemeSimpleList } from '#/api/hrm/insurance/scheme';
 import { getEnabledEmploymentTypeList } from '#/api/hrm/employment-type';
-import { getCertificateTypeSimpleList } from '#/api/hrm/certificate';
+// 说明：2026-09-20 合并远程「资格证件域」后，本地自建的 api/hrm/certificate/index.ts
+// 已随本地证照中心一并移除，证照类型接口统一走远程的 api/hrm/certificate/type。
+import { getCertificateTypeList } from '#/api/hrm/certificate/type';
 import { getRecruitChannelSimpleList } from '#/api/hrm/recruit/channel';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { AreaCascader } from '#/components/area';
@@ -1157,10 +1159,10 @@ export function useCertificateFormSchema(): VbenFormSchema[] {
       label: '证照类型',
       component: 'ApiSelect',
       componentProps: {
-        api: getCertificateTypeSimpleList,
+        api: () => getCertificateTypeList(),
         labelField: 'name',
         valueField: 'id',
-        placeholder: '请选择证照类型（决定是否特种作业/必持/预警天数）',
+        placeholder: '请选择证件类型（决定是否特种作业/是否复审/提前预警天数）',
         allowClear: true,
         showSearch: true,
       },

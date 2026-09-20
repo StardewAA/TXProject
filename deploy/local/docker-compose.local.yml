@@ -156,6 +156,10 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: jars/system.jar
+    # jar 以只读卷挂载，更新代码只需替换 deploy/local/jars/system.jar 再重启容器；
+    # 否则每次重建镜像都要把 deploy/local 下近 1GB 的 jars 作为构建上下文传一遍（实测极慢）。
+    volumes:
+      - ./jars/system.jar:/app/app.jar:ro
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms384m -Xmx640m -XX:+UseG1GC
@@ -175,6 +179,9 @@ services:
       dockerfile: Dockerfile.runtime
       args:
         JAR_FILE: jars/infra.jar
+    # 同上：jar 走只读卷挂载，避免重建镜像时传大体积构建上下文
+    volumes:
+      - ./jars/infra.jar:/app/app.jar:ro
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
