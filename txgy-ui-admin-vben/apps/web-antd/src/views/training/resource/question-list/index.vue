@@ -333,7 +333,10 @@ loadCategories();
 
     <Grid table-title="考试题库（单选/多选/判断/实操问答/案例分析）">
       <template #toolbar-tools>
-        <Button class="mr-2" type="primary" ghost @click="handleAiImport">
+        <Button
+          class="mr-2 border-none bg-gradient-to-r from-violet-500 to-indigo-500 font-medium text-white shadow-md hover:from-violet-600 hover:to-indigo-600"
+          @click="handleAiImport"
+        >
           AI 智能导入
         </Button>
         <TableAction
