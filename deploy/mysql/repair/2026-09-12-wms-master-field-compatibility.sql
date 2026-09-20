@@ -61,3 +61,8 @@ SET @ddl=IF(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=D
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @ddl=IF(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='wms_merchant' AND column_name='supplier_source_version'),'SELECT 1','ALTER TABLE `wms_merchant` ADD COLUMN `supplier_source_version` bigint NOT NULL DEFAULT 0 COMMENT ''ERP 供应商主数据版本''');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+-- 税号：WmsMerchantDO 已定义但历史迁移遗漏。
+-- 缺列会导致采购入库校验供应商时（WmsMerchantMapper 全字段查询）报 Unknown column 'tax_no'，
+-- 表现为 ERP 提交采购入库申请被 WMS 以「系统异常」拒绝。
+SET @ddl=IF(EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='wms_merchant' AND column_name='tax_no'),'SELECT 1','ALTER TABLE `wms_merchant` ADD COLUMN `tax_no` varchar(50) NULL COMMENT ''税号''');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

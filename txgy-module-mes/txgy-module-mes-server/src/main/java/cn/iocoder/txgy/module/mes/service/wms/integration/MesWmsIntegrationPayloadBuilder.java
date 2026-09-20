@@ -107,7 +107,9 @@ public class MesWmsIntegrationPayloadBuilder {
         WmsIntegrationDocumentItemDTO dto = new WmsIntegrationDocumentItemDTO();
         dto.setLineNo(lineNo);
         dto.setMaterialCode(item.getCode());
-        dto.setSkuCode(item.getCode());
+        // WMS 侧 SKU 编码约定为「统一物料编码-DEFAULT」（见 WmsMaterialIntegrationService#defaultSkuCode），
+        // 且 WMS 以 skuCode 精确匹配 SKU（itemSkuMapper.selectByCode），故此处必须带默认后缀
+        dto.setSkuCode(item.getCode() + "-DEFAULT");
         dto.setMaterialType(materialType);
         dto.setWarehouseCode(warehouseCode);
         dto.setMaterialNameSnapshot(item.getName());

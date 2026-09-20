@@ -36,29 +36,30 @@ export default defineConfig(async (configEnv) => {
         // 监听所有网络接口，避免内嵌 WebView 的 ERR_CONNECTION_RESET
         host: true,
         proxy: {
-          // 优先直连本地服务端口，绕过 gateway 对 Nacos 注册中心（grayLb://）的依赖
+          // 说明：本地各微服务容器此前把 48081(system/infra)、48094(training)、8000(exam)
+          // 直接映射到宿主，故这里走直连绕过 gateway；现容器重建后这些宿主端口已不存在，
+          // 全部改回经本机 gateway（48080）转发，exam 走宿主上已暴露的 exam-proxy（5173）。
           '/admin-api/training': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48094/admin-api', // 云培训学院服务
+            target: 'http://127.0.0.1:48080', // 云培训学院服务（经网关）
             ws: true,
           },
           '/training-exam': {
             changeOrigin: true,
+            // 容器只注册了 /、/assets、/api/* 路由，不识别 /training-exam 前缀，
+            // 前端页面与 API 均带该前缀请求，故转发前剥掉（原由宿主 exam-proxy:5173 完成，其已下线）。
             rewrite: (path) => path.replace(/^\/training-exam/, ''),
-            target: 'http://127.0.0.1:8000', // 考试与认证微服务（本地容器）
+            target: 'http://127.0.0.1:8000', // 考试与认证（Docker 容器 training-exam）
             ws: true,
           },
           '/admin-api/system': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48080/admin-api', // 系统服务（登录/用户/权限/菜单），走本机网关
+            target: 'http://127.0.0.1:48080', // 系统服务（登录/用户/权限/菜单，经网关）
             ws: true,
           },
           '/admin-api/infra': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/admin-api/, ''),
-            target: 'http://127.0.0.1:48080/admin-api', // 基础设施服务（文件/配置等），走本机网关
+            target: 'http://127.0.0.1:48080', // 基础设施服务（文件/配置等），经网关
             ws: true,
           },
           '/admin-api': {

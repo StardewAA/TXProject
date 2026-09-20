@@ -29,6 +29,23 @@ INSERT INTO erp_product (material_code, material_type, quality_required, sync_ve
 SELECT 'ITEM20260916000016', 'FINISHED_GOODS', b'0', 1, '螺旋焊管720', 'ITEM20260916000016', 1, 5, 0, 'seed', NOW(), 'seed', NOW(), b'0', @tenant
 FROM DUAL WHERE @p IS NULL;
 
+-- 3PE防腐钢管（产品 135）BOM 物料：协作单B 明细校验需要，
+-- 缺任一项会导致 ErpWmsCollaborationBService.receive 抛「统一物料编码不存在」。
+SET @p := (SELECT id FROM erp_product WHERE material_code = 'ITEM20260916000024' AND tenant_id = @tenant AND deleted = b'0' LIMIT 1);
+INSERT INTO erp_product (material_code, material_type, quality_required, sync_version, name, bar_code, category_id, unit_id, status, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT 'ITEM20260916000024', 'RAW_MATERIAL', b'0', 1, '螺旋焊管820', 'ITEM20260916000024', 2, 5, 0, 'seed', NOW(), 'seed', NOW(), b'0', @tenant
+FROM DUAL WHERE @p IS NULL;
+
+SET @p := (SELECT id FROM erp_product WHERE material_code = 'ITEM20260916000008' AND tenant_id = @tenant AND deleted = b'0' LIMIT 1);
+INSERT INTO erp_product (material_code, material_type, quality_required, sync_version, name, bar_code, category_id, unit_id, status, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT 'ITEM20260916000008', 'RAW_MATERIAL', b'0', 1, '环氧粉末', 'ITEM20260916000008', 2, 5, 0, 'seed', NOW(), 'seed', NOW(), b'0', @tenant
+FROM DUAL WHERE @p IS NULL;
+
+SET @p := (SELECT id FROM erp_product WHERE material_code = 'ITEM20260916000010' AND tenant_id = @tenant AND deleted = b'0' LIMIT 1);
+INSERT INTO erp_product (material_code, material_type, quality_required, sync_version, name, bar_code, category_id, unit_id, status, creator, create_time, updater, update_time, deleted, tenant_id)
+SELECT 'ITEM20260916000010', 'RAW_MATERIAL', b'0', 1, 'PE料', 'ITEM20260916000010', 2, 5, 0, 'seed', NOW(), 'seed', NOW(), b'0', @tenant
+FROM DUAL WHERE @p IS NULL;
+
 -- 供应商（接受协作单B 生成采购订单草稿时需选择供应商）
 SET @s := (SELECT id FROM erp_supplier WHERE partner_code = 'SUP-2010-001' AND tenant_id = @tenant AND deleted = b'0' LIMIT 1);
 INSERT INTO erp_supplier (partner_code, sync_version, name, status, sort, creator, create_time, updater, update_time, deleted, tenant_id)
