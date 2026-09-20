@@ -5,6 +5,7 @@ import cn.iocoder.txgy.module.infra.api.file.dto.FileCreateReqDTO;
 import cn.iocoder.txgy.module.infra.api.file.dto.FileMetadataRespDTO;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.infra.service.file.FileService;
+import lombok.SneakyThrows;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,6 +34,12 @@ public class FileApiImpl implements FileApi {
     @Override
     public CommonResult<FileMetadataRespDTO> getMetadataByUrl(String url) {
         return success(BeanUtils.toBean(fileService.getFileByUrl(url), FileMetadataRespDTO.class));
+    }
+
+    @Override
+    @SneakyThrows
+    public CommonResult<byte[]> getFileContentByUrl(String url) {
+        return success(fileService.getFileContentByUrl(url));
     }
 
 }

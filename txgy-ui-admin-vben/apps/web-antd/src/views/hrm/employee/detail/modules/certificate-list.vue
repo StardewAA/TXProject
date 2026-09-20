@@ -6,7 +6,7 @@ import { onMounted, ref } from 'vue';
 import { useAccess } from '@vben/access';
 import { confirm } from '@vben/common-ui';
 
-import { Button, message, Table } from 'ant-design-vue';
+import { Button, message, Table, Tag } from 'ant-design-vue';
 
 import {
   deleteEmployeeCertificate,
@@ -63,6 +63,7 @@ defineExpose({ getList });
     </div>
     <Table
       :columns="[
+        { title: '证照类型', dataIndex: 'typeName', key: 'typeName', width: 170 },
         { title: '证书名称', dataIndex: 'name', key: 'name' },
         { title: '证书级别', dataIndex: 'level', key: 'level' },
         { title: '证书编号', dataIndex: 'no', key: 'no' },
@@ -93,6 +94,8 @@ defineExpose({ getList });
           customRender: ({ text }) => formatHrmDateTime(text),
         },
         { title: '备注', dataIndex: 'remark', key: 'remark' },
+        { title: '到期状态', key: 'expireStatus', width: 100 },
+        { title: '核验状态', key: 'verifyStatus', width: 100 },
         { title: '操作', key: 'action', width: 140, fixed: 'right' },
       ]"
       :data-source="list"
@@ -104,7 +107,35 @@ defineExpose({ getList });
       size="small"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'action'">
+        <template v-if="column.key === 'expireStatus'">
+          <Tag
+            v-if="record.expireStatus"
+            :color="
+              record.expireStatus === 3
+                ? 'error'
+                : record.expireStatus === 2
+                  ? 'warning'
+                  : 'success'
+            "
+          >
+            {{ record.expireStatusName }}
+          </Tag>
+          <span v-else>-</span>
+        </template>
+        <template v-else-if="column.key === 'verifyStatus'">
+          <Tag
+            :color="
+              record.verifyStatus === 1
+                ? 'success'
+                : record.verifyStatus === 2
+                  ? 'error'
+                  : 'default'
+            "
+          >
+            {{ record.verifyStatusName || '未核验' }}
+          </Tag>
+        </template>
+        <template v-else-if="column.key === 'action'">
           <Button
             v-if="hasAccessByCodes(['hrm:employee:update'])"
             type="link"

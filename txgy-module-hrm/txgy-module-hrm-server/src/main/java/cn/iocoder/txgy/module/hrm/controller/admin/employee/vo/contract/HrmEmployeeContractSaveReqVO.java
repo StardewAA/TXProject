@@ -81,6 +81,42 @@ public class HrmEmployeeContractSaveReqVO {
     @DiffLogField(name = "是否到期提醒")
     private Boolean expireRemind;
 
+    @Schema(description = "合同模板编号", example = "1")
+    private Long templateId;
+
+    @Schema(description = "工作内容")
+    @Size(max = 255, message = "工作内容不能超过 255 个字符")
+    private String workContent;
+
+    @Schema(description = "工作地点")
+    @Size(max = 255, message = "工作地点不能超过 255 个字符")
+    private String workLocation;
+
+    @Schema(description = "工作任务")
+    @Size(max = 255, message = "工作任务不能超过 255 个字符")
+    private String workTask;
+
+    @Schema(description = "计薪方式：1 月薪，2 日薪，3 计件", example = "1")
+    private Integer payMode;
+
+    @Schema(description = "计薪金额/单价", example = "8000.00")
+    private java.math.BigDecimal payAmount;
+
+    @Schema(description = "计薪单位", example = "元/月")
+    @Size(max = 16, message = "计薪单位不能超过 16 个字符")
+    private String payUnit;
+
+    @Schema(description = "每月发薪日", example = "15")
+    private Integer payDay;
+
+    @Schema(description = "商业保险说明")
+    @Size(max = 255, message = "商业保险说明不能超过 255 个字符")
+    private String commercialInsurance;
+
+    @Schema(description = "考勤方式")
+    @Size(max = 64, message = "考勤方式不能超过 64 个字符")
+    private String attendanceMode;
+
     @Schema(description = "附件地址数组", example = "[https://example.com/contract.pdf]")
     @DiffLogField(name = "附件")
     private List<String> fileUrls;

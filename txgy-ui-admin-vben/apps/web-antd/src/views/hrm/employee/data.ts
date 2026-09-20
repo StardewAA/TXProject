@@ -12,9 +12,12 @@ import { handleTree } from '@vben/utils';
 import dayjs from 'dayjs';
 
 import { getInsuranceSchemeSimpleList } from '#/api/hrm/insurance/scheme';
+import { getEnabledEmploymentTypeList } from '#/api/hrm/employment-type';
+import { getCertificateTypeSimpleList } from '#/api/hrm/certificate';
 import { getRecruitChannelSimpleList } from '#/api/hrm/recruit/channel';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { AreaCascader } from '#/components/area';
+import { FileUpload } from '#/components/upload';
 import { getRangePickerDefaultProps } from '#/utils';
 import {
   HRM_EMPLOYEE_CREATE_ENTRY_STATUSES,
@@ -153,7 +156,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
       fieldName: 'jobNumber',
       label: '工号',
       component: 'Input',
-      componentProps: { placeholder: '请输入工号', allowClear: true },
+      componentProps: { placeholder: '留空则自动生成（租户缩写+顺序号）', allowClear: true },
     },
     {
       fieldName: 'deptId',
@@ -894,7 +897,7 @@ export function useEmployeeEntryFormSchema(
       fieldName: 'jobNumber',
       label: '工号',
       component: 'Input',
-      componentProps: { maxlength: 64, allowClear: true },
+      componentProps: { maxlength: 64, allowClear: true, placeholder: '留空则自动生成（租户缩写+顺序号）' },
     },
     {
       fieldName: 'entryStatus',
@@ -949,6 +952,19 @@ export function useEmployeeEntryFormSchema(
         options: getDictOptions(DICT_TYPE.HRM_EMPLOYEE_TYPE, 'number'),
         placeholder: '请选择聘用形式',
         allowClear: true,
+      },
+    },
+    {
+      fieldName: 'employmentTypeId',
+      label: '用工形式',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getEnabledEmploymentTypeList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择用工形式（决定合同模板与计薪方式）',
+        allowClear: true,
+        showSearch: true,
       },
     },
     {
@@ -1137,6 +1153,19 @@ export function useContactFormSchema(): VbenFormSchema[] {
 export function useCertificateFormSchema(): VbenFormSchema[] {
   return [
     {
+      fieldName: 'typeId',
+      label: '证照类型',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getCertificateTypeSimpleList,
+        labelField: 'name',
+        valueField: 'id',
+        placeholder: '请选择证照类型（决定是否特种作业/必持/预警天数）',
+        allowClear: true,
+        showSearch: true,
+      },
+    },
+    {
       fieldName: 'name',
       label: '证书名称',
       component: 'Input',
@@ -1201,6 +1230,28 @@ export function useCertificateFormSchema(): VbenFormSchema[] {
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
         class: 'w-full',
+      },
+    },
+    {
+      fieldName: 'reviewDate',
+      label: '复审日期',
+      component: 'DatePicker',
+      componentProps: {
+        format: 'YYYY-MM-DD',
+        valueFormat: 'YYYY-MM-DD',
+        class: 'w-full',
+      },
+    },
+    {
+      fieldName: 'fileUrls',
+      label: '证件扫描件',
+      component: markRaw(FileUpload),
+      componentProps: {
+        maxNumber: 5,
+        maxSize: 20,
+        multiple: true,
+        directory: 'hrm/employee/certificate',
+        help: '未上传扫描件的证照不允许置为「已核验」',
       },
     },
     {

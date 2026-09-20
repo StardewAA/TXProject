@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.attendance.record;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmAttendanceLeaveDO extends BaseDO {
+public class HrmAttendanceLeaveDO extends TenantBaseDO {
 
     /**
      * 请假记录编号

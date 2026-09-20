@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.employment;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeChangeReasonEnum;
 import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeChangeTypeEnum;
 import cn.iocoder.txgy.module.system.api.dept.dto.DeptRespDTO;
@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmEmployeeChangeRecordDO extends BaseDO {
+public class HrmEmployeeChangeRecordDO extends TenantBaseDO {
 
     /**
      * 异动记录编号

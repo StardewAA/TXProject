@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.experience;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  *
  * @author OPENLAB BS
  */
-@TableName("hrm_employee_certificate")
+@TableName(value = "hrm_employee_certificate", autoResultMap = true)
 @KeySequence("hrm_employee_certificate_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmEmployeeCertificateDO extends BaseDO {
+public class HrmEmployeeCertificateDO extends TenantBaseDO {
 
     /**
      * 证书编号
@@ -40,6 +40,10 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      * 关联 {@link HrmEmployeeDO#getId()}
      */
     private Long employeeId;
+    /**
+     * 证照类型编号（hrm_certificate_type.id）
+     */
+    private Long typeId;
     /**
      * 证书名称
      */
@@ -61,6 +65,10 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      */
     private LocalDateTime endTime;
     /**
+     * 复审日期
+     */
+    private java.time.LocalDate reviewDate;
+    /**
      * 发证机构
      */
     private String issuingAuthority;
@@ -68,6 +76,26 @@ public class HrmEmployeeCertificateDO extends BaseDO {
      * 发证日期
      */
     private LocalDateTime issuingTime;
+    /**
+     * 证件扫描件/照片（逗号分隔地址串）
+     */
+    @com.baomidou.mybatisplus.annotation.TableField(
+            typeHandler = cn.iocoder.txgy.framework.mybatis.core.type.StringListTypeHandler.class)
+    private java.util.List<String> fileUrls;
+    /**
+     * 核验状态：0 未核验，1 已核验，2 核验不通过
+     *
+     * 枚举 {@link cn.iocoder.txgy.module.hrm.enums.certificate.HrmCertificateVerifyStatusEnum}
+     */
+    private Integer verifyStatus;
+    /**
+     * 核验人（后台用户编号）
+     */
+    private Long verifyUserId;
+    /**
+     * 核验时间
+     */
+    private LocalDateTime verifyTime;
     /**
      * 备注
      */

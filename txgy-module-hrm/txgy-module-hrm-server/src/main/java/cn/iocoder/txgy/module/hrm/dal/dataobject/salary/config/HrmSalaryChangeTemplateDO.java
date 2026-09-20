@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.salary.config;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -28,7 +28,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmSalaryChangeTemplateDO extends BaseDO {
+public class HrmSalaryChangeTemplateDO extends TenantBaseDO {
 
     /**
      * 调薪模板编号

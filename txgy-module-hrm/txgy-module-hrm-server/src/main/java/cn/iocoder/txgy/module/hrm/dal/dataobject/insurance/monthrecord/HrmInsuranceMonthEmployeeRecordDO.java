@@ -2,7 +2,7 @@ package cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.monthrecord;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.config.HrmInsuranceSchemeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.insurance.config.HrmInsuranceSchemeProjectDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.insurance.employee.HrmInsuranceEmployeeStatusEnum;
 import cn.iocoder.txgy.module.hrm.enums.insurance.config.HrmInsuranceProjectTypeEnum;
@@ -34,7 +34,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmInsuranceMonthEmployeeRecordDO extends BaseDO {
+public class HrmInsuranceMonthEmployeeRecordDO extends TenantBaseDO {
 
     /**
      * 编号

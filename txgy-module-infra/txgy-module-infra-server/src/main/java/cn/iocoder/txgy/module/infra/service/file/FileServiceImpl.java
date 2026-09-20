@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.infra.service.file;
 
 import cn.hutool.core.date.LocalDateTimeUtil;
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.RandomUtil;
@@ -20,9 +21,11 @@ import cn.iocoder.txgy.module.infra.framework.file.core.utils.FileTypeUtils;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Comparator;
 
 import static cn.hutool.core.date.DatePattern.PURE_DATE_PATTERN;
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -34,6 +37,7 @@ import static cn.iocoder.txgy.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXI
  * @author OPENLAB BS
  */
 @Service
+@Slf4j
 public class FileServiceImpl implements FileService {
 
     /**
@@ -162,7 +166,16 @@ public class FileServiceImpl implements FileService {
     @Override
     public String presignGetUrl(String url, Integer expirationSeconds) {
         FileClient fileClient = fileConfigService.getMasterFileClient();
-        return fileClient.presignGetUrl(url, expirationSeconds);
+        try {
+            String presignedUrl = fileClient.presignGetUrl(url, expirationSeconds);
+            return StrUtil.blankToDefault(presignedUrl, url);
+        } catch (UnsupportedOperationException ex) {
+            // 部分存储实现（例如数据库存储）不支持预签名，此时原地址本身即可直接访问，
+            // 直接降级返回原地址，避免简历预览/下载等只读场景整体失败。
+            log.warn("[presignGetUrl][存储({}) 不支持预签名，降级返回原地址({})]",
+                    fileClient.getClass().getSimpleName(), url);
+            return url;
+        }
     }
 
     @Override
@@ -186,7 +199,11 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public FileDO getFileByUrl(String url) {
-        return fileMapper.selectOne(FileDO::getUrl, HttpUtils.removeUrlQuery(url));
+        // 同一个 URL 可能因为重复上传而存在多条文件记录，此处取最新一条，
+        // 避免 selectOne 抛 TooManyResultsException 导致按 URL 查元数据整体失败。
+        List<FileDO> files = fileMapper.selectList(FileDO::getUrl, HttpUtils.removeUrlQuery(url));
+        return CollUtil.isEmpty(files) ? null
+                : files.stream().max(Comparator.comparing(FileDO::getId)).orElse(null);
     }
 
     @Override
@@ -246,6 +263,18 @@ public class FileServiceImpl implements FileService {
     @Override
     public FileDO getFileByConfigIdAndPath(Long configId, String path) {
         return fileMapper.selectLatestByConfigIdAndPath(configId, path);
+    }
+
+    @Override
+    @SneakyThrows
+    public byte[] getFileContentByUrl(String url) throws Exception {
+        // 1. 按访问地址获得文件元数据
+        FileDO file = getFileByUrl(url);
+        if (file == null) {
+            throw exception(FILE_NOT_EXISTS);
+        }
+        // 2. 读取文件内容
+        return getFileContent(file.getConfigId(), file.getPath());
     }
 
 }

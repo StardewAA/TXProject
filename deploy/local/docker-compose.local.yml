@@ -111,6 +111,35 @@ services:
     restart: unless-stopped
     mem_limit: 1200m
 
+  # ---------------------------------------------------------------------------
+  # XXL-Job 调度中心（定时任务）
+  # 业务侧的 @XxlJob 任务都靠它触发：HRM 的转正、合同到期预警、面试提醒、绩效申诉超时、
+  # 招聘沟通超时、调薪生效；system 的 token 清理；infra 的日志清理；im 的通话清理。
+  # 执行器在业务服务侧通过 XXL_JOB_* 环境变量开启（见各服务 environment）。
+  # 控制台：http://127.0.0.1:9090/xxl-job-admin   默认账号 admin / 123456
+  # 库：xxl_job（由 sql 建表脚本初始化，与业务库 ruoyi-vue-pro 同实例）
+  # ---------------------------------------------------------------------------
+  xxl-job-admin:
+    image: xuxueli/xxl-job-admin:2.4.0
+    container_name: txgy-xxl-job-admin
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      JAVA_OPTS: -Xms128m -Xmx384m
+      PARAMS: >-
+        --spring.datasource.url=jdbc:mysql://mysql:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+        --spring.datasource.username=root
+        --spring.datasource.password=${MYSQL_ROOT_PASSWORD}
+        --xxl.job.accessToken=default_token
+    ports:
+      - "127.0.0.1:${XXL_JOB_ADMIN_PORT:-9090}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+    mem_limit: 512m
+
   gateway:
     <<: *txgy-service
     container_name: txgy-gateway
@@ -159,6 +188,12 @@ services:
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms384m -Xmx640m -XX:+UseG1GC
+      # XXL-Job 执行器：token 清理、demo 任务
+      XXL_JOB_ENABLED: "true"
+      XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
+      XXL_JOB_EXECUTOR_APPNAME: system-server
+      XXL_JOB_EXECUTOR_PORT: "9999"
+      XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs
     mem_limit: 950m
 
   infra:
@@ -172,6 +207,12 @@ services:
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+      # XXL-Job 执行器：访问日志/错误日志清理
+      XXL_JOB_ENABLED: "true"
+      XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
+      XXL_JOB_EXECUTOR_APPNAME: infra-server
+      XXL_JOB_EXECUTOR_PORT: "9999"
+      XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs
     mem_limit: 800m
 
   bpm:
@@ -203,6 +244,16 @@ services:
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx640m -XX:+UseG1GC
+      # XXL-Job 执行器：接入调度中心，本模块 6 个 @XxlJob 任务由控制台按 cron 触发
+      XXL_JOB_ENABLED: "true"
+      XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
+      XXL_JOB_EXECUTOR_APPNAME: hrm-server
+      XXL_JOB_EXECUTOR_PORT: "9999"
+      XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs
+    volumes:
+      # Offer 录用通知书 PDF 需要中文字体（PDFBox 内嵌字体，否则汉字会空白）
+      # 字体文件放在 deploy/local/fonts/ 下（如 simhei.ttf），生产环境请换成开源字体（如 Noto Sans SC）
+      - ./fonts:/app/fonts:ro
     mem_limit: 950m
 
   im:
@@ -216,6 +267,12 @@ services:
     environment:
       <<: *txgy-env
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseG1GC
+      # XXL-Job 执行器：RTC 通话清理
+      XXL_JOB_ENABLED: "true"
+      XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
+      XXL_JOB_EXECUTOR_APPNAME: im-server
+      XXL_JOB_EXECUTOR_PORT: "9999"
+      XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs
     mem_limit: 800m
 
   member:

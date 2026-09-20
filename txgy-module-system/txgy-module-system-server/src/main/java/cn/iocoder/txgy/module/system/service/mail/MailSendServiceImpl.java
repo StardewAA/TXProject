@@ -23,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
 import java.io.File;
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -53,6 +54,51 @@ public class MailSendServiceImpl implements MailSendService {
     private MailLogService mailLogService;
     @Resource
     private MailProducer mailProducer;
+
+    @Resource
+    private cn.iocoder.txgy.module.infra.api.file.FileApi fileApi;
+
+    @Override
+    public Long sendSingleMailToAddresses(Collection<String> toMails, Collection<String> ccMails,
+                                          Collection<String> bccMails, String templateCode,
+                                          Map<String, Object> templateParams, List<String> attachmentUrls) {
+        // 1. 附件 URL -> 本地临时文件（跨服务只能传地址，这里按地址取回内容）
+        List<File> attachments = new java.util.ArrayList<>();
+        if (CollUtil.isNotEmpty(attachmentUrls)) {
+            for (String url : attachmentUrls) {
+                if (StrUtil.isBlank(url)) {
+                    continue;
+                }
+                try {
+                    byte[] content = fileApi.getFileContentByUrl(url).getCheckedData();
+                    if (content == null || content.length == 0) {
+                        log.warn("[sendSingleMailToAddresses][附件内容为空，跳过 url({})]", url);
+                        continue;
+                    }
+                    File tempFile = File.createTempFile("mail-attachment-", resolveAttachmentSuffix(url));
+                    cn.hutool.core.io.FileUtil.writeBytes(content, tempFile);
+                    // 邮件发送走本地事件，可能在方法返回后异步执行，故交给 JVM 退出时清理
+                    tempFile.deleteOnExit();
+                    attachments.add(tempFile);
+                } catch (Exception ex) {
+                    log.warn("[sendSingleMailToAddresses][附件下载失败，跳过 url({})]", url, ex);
+                }
+            }
+        }
+        // 2. 复用「指定邮箱」发送逻辑（不关联任何用户）
+        return sendSingleMail(toMails, ccMails, bccMails, null, null, templateCode, templateParams,
+                attachments.toArray(new File[0]));
+    }
+
+    /**
+     * 从附件地址里解析后缀，保证临时文件带上正确的扩展名（邮件客户端据此选择打开方式）
+     */
+    private String resolveAttachmentSuffix(String url) {
+        String path = StrUtil.subBefore(url, "?", false);
+        String name = cn.hutool.core.io.FileUtil.getName(path);
+        String ext = cn.hutool.core.io.FileUtil.extName(name);
+        return StrUtil.isBlank(ext) ? ".dat" : "." + ext;
+    }
 
     @Override
     public Long sendSingleMail(Collection<String> toMails, Collection<String> ccMails, Collection<String> bccMails,

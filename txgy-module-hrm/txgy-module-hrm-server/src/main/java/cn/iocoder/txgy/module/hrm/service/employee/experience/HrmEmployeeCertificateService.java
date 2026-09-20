@@ -51,4 +51,31 @@ public interface HrmEmployeeCertificateService {
      */
     List<HrmEmployeeCertificateDO> getCertificateListByEmployeeId(Long employeeId);
 
+    /**
+     * 证照台账分页（跨员工）
+     */
+    cn.iocoder.txgy.framework.common.pojo.PageResult<HrmEmployeeCertificateDO> getCertificateLedgerPage(
+            cn.iocoder.txgy.module.hrm.controller.admin.certificate.vo.HrmCertificateLedgerPageReqVO reqVO);
+
+    /**
+     * 证照台账列表（导出用）
+     */
+    List<HrmEmployeeCertificateDO> getCertificateLedgerList(
+            cn.iocoder.txgy.module.hrm.controller.admin.certificate.vo.HrmCertificateLedgerPageReqVO reqVO);
+
+    /**
+     * 到期预警清单（临期 + 已过期）
+     *
+     * @param warnDays 临期判定天数
+     */
+    List<HrmEmployeeCertificateDO> getExpireWarningList(Integer warnDays);
+
+    /**
+     * 证照核验（已核验必须已上传证件扫描件）
+     *
+     * @param id 证照编号
+     * @param verifyStatus 核验状态：1 已核验，2 核验不通过
+     */
+    void verifyCertificate(Long id, Integer verifyStatus);
+
 }

@@ -19,6 +19,7 @@ import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUt
 import static cn.iocoder.txgy.framework.common.util.date.LocalDateTimeUtils.getDayBeginTime;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_CERTIFICATE_NOT_EXISTS;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_RESOURCE_BELONG_INVALID;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.CERTIFICATE_VERIFY_FILE_REQUIRED;
 import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
 
 /**
@@ -102,6 +103,38 @@ public class HrmEmployeeCertificateServiceImpl implements HrmEmployeeCertificate
     @Override
     public List<HrmEmployeeCertificateDO> getCertificateListByEmployeeId(Long employeeId) {
         return certificateMapper.selectListByEmployeeId(employeeId);
+    }
+
+    @Override
+    public cn.iocoder.txgy.framework.common.pojo.PageResult<HrmEmployeeCertificateDO> getCertificateLedgerPage(
+            cn.iocoder.txgy.module.hrm.controller.admin.certificate.vo.HrmCertificateLedgerPageReqVO reqVO) {
+        return certificateMapper.selectLedgerPage(reqVO);
+    }
+
+    @Override
+    public List<HrmEmployeeCertificateDO> getCertificateLedgerList(
+            cn.iocoder.txgy.module.hrm.controller.admin.certificate.vo.HrmCertificateLedgerPageReqVO reqVO) {
+        return certificateMapper.selectLedgerList(reqVO);
+    }
+
+    @Override
+    public List<HrmEmployeeCertificateDO> getExpireWarningList(Integer warnDays) {
+        return certificateMapper.selectExpireWarningList(warnDays == null ? 90 : warnDays);
+    }
+
+    @Override
+    public void verifyCertificate(Long id, Integer verifyStatus) {
+        HrmEmployeeCertificateDO certificate = validateCertificateExists(id);
+        // 已核验必须已上传证件扫描件：没见过证件就核验，等于没核验
+        if (cn.iocoder.txgy.module.hrm.enums.certificate.HrmCertificateVerifyStatusEnum.VERIFIED.getStatus()
+                .equals(verifyStatus)
+                && (certificate.getFileUrls() == null || certificate.getFileUrls().isEmpty())) {
+            throw exception(CERTIFICATE_VERIFY_FILE_REQUIRED);
+        }
+        certificateMapper.updateById(new HrmEmployeeCertificateDO().setId(id)
+                .setVerifyStatus(verifyStatus)
+                .setVerifyUserId(cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId())
+                .setVerifyTime(java.time.LocalDateTime.now()));
     }
 
 }

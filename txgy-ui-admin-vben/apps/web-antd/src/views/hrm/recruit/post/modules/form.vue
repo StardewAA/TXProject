@@ -109,6 +109,7 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<HrmRecruitPostApi.RecruitPost>();
     if (!data?.id) {
       await formApi.setValues({
+        // 说明：后端新建职位会直接发布（忽略状态入参），见模板中的提示
         postName: '',
         jobNature: HrmRecruitJobNature.FULL_TIME,
         workTime: 0,
@@ -154,6 +155,14 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-[1040px]">
+    <a-alert
+      v-if="!formData?.id"
+      class="mx-4 mb-3"
+      type="info"
+      show-icon
+      message="保存后职位将直接发布到招聘门户"
+      description="如需暂停招聘，请在职位列表中将状态改为「已暂停」；已关闭的职位不可重新发布。"
+    />
     <Form class="mx-4" />
   </Modal>
 </template>

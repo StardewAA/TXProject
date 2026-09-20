@@ -150,6 +150,7 @@ public interface ErrorCodeConstants {
     // ========== 邮箱账号 1-002-023-000 ==========
     ErrorCode MAIL_ACCOUNT_NOT_EXISTS = new ErrorCode(1_002_023_000, "邮箱账号不存在");
     ErrorCode MAIL_ACCOUNT_RELATE_TEMPLATE_EXISTS = new ErrorCode(1_002_023_001, "无法删除，该邮箱账号还有邮件模板");
+    ErrorCode MAIL_ACCOUNT_PASSWORD_REQUIRED = new ErrorCode(1_002_023_002, "新增邮箱账号时，密码（授权码）不能为空");
 
     // ========== 邮件模版 1-002-024-000 ==========
     ErrorCode MAIL_TEMPLATE_NOT_EXISTS = new ErrorCode(1_002_024_000, "邮件模版不存在");

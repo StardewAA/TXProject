@@ -24,6 +24,8 @@ export namespace AuthApi {
     refreshToken: string;
     userId: number;
     expiresTime: number;
+    /** 账号实际所属租户编号（后端 AuthLoginRespVO.tenantId） */
+    tenantId?: number;
   }
 
   /** 租户信息返回值 */

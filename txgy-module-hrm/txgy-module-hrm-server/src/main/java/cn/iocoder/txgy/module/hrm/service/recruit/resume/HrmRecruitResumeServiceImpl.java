@@ -9,6 +9,7 @@ import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCan
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.resume.HrmRecruitResumeDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.resume.HrmRecruitResumeMapper;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
+import cn.iocoder.txgy.module.hrm.service.common.HrmResumeFileValidator;
 import cn.iocoder.txgy.module.infra.api.file.FileApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -35,10 +36,14 @@ public class HrmRecruitResumeServiceImpl implements HrmRecruitResumeService {
     private HrmRecruitCandidateService recruitCandidateService;
     @Resource
     private FileApi fileApi;
+    @Resource
+    private HrmResumeFileValidator resumeFileValidator;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRecruitResume(HrmRecruitResumeSaveReqVO reqVO) {
+        // 服务端兜底校验简历附件类型与大小，避免绕过前端直接上传可执行文件/超大文件
+        resumeFileValidator.validate(reqVO.getFileName(), reqVO.getFileUrl());
         // Lock the candidate row so concurrent uploads cannot allocate the same version.
         HrmRecruitCandidateDO candidate = recruitCandidateService
                 .validateRecruitCandidateExistsForUpdate(reqVO.getCandidateId());

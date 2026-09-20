@@ -66,6 +66,14 @@ public interface FileService {
     FileDO getFileByUrl(String url);
 
     /**
+     * 按访问地址获得文件内容
+     *
+     * @param url 完整的文件访问地址
+     * @return 文件内容
+     */
+    byte[] getFileContentByUrl(String url) throws Exception;
+
+    /**
      * 删除文件
      *
      * @param id 编号

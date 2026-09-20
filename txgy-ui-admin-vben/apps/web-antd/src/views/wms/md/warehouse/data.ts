@@ -283,9 +283,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'warehouseType',
       title: '仓库类型',
-    {
-      field: 'warehouseType',
-      title: '仓库类型',
       minWidth: 130,
       formatter: ({ cellValue }) => warehouseTypes.find(type => type.value === cellValue)?.label ?? '未分类',
     },
@@ -299,6 +296,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '员工数量',
       width: 100,
       align: 'center',
+    },
+    {
       field: 'status',
       title: '仓库状态',
       minWidth: 110,
