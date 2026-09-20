@@ -49,6 +49,10 @@ public interface WmsIntegrationApi {
     @Operation(summary = "ERP 销售出库申请，仅创建 WMS 草稿")
     CommonResult<WmsIntegrationAcceptedRespDTO> createSaleShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
 
+    @PostMapping(PREFIX + "/shipment/mall")
+    @Operation(summary = "商城销售出库申请，仅创建 WMS 草稿")
+    CommonResult<WmsIntegrationAcceptedRespDTO> createMallShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
+
     @PostMapping(PREFIX + "/shipment/production")
     @Operation(summary = "MES 生产领料出库申请，仅创建 WMS 草稿")
     CommonResult<WmsIntegrationAcceptedRespDTO> createProductionShipment(@Valid @RequestBody WmsOrderRequestDTO reqDTO);
@@ -78,5 +82,11 @@ public interface WmsIntegrationApi {
             @RequestParam("tenantId") Long tenantId,
             @RequestParam("sourceOrderNo") String sourceOrderNo,
             @RequestParam("orderType") String orderType);
+
+    @GetMapping(PREFIX + "/order/execution/mall")
+    @Operation(summary = "按商城订单号查询出库处理结果")
+    CommonResult<WmsIntegrationRequestRespDTO> getMallOrderExecution(
+            @RequestParam("tenantId") Long tenantId,
+            @RequestParam("sourceOrderNo") String sourceOrderNo);
 
 }
