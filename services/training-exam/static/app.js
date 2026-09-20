@@ -44,9 +44,6 @@ const pages={
  async certificates(){
    const rows=await api('/admin/certs');
    renderCerts(rows,'证书管理');
-   if(admin()){
-     $('#app').insertAdjacentHTML('beforeend',card('证书模板','配置结业 / 岗位能力两类证书的标题、正文与落款，学员考试合格后自动套用生成。',`<div class="toolbar">${button('编辑证书模板','cert-template-editor','')}</div><div class="meta">模板正文支持占位符：{learner} 学员 · {title} 考试 · {score} 成绩 · {cert_no} 证书编号 · {date} 签发日期。联合认证证书由外部机构签发，不套用平台模板。</div>`));
-   }
  },
  async mycerts(){const rows=await api('/my/certs');renderCerts(rows,'我的证书 · 个人考试档案')},
  async issuers(){const [issuers,logs]=await Promise.all([api('/admin/cert-issuers'),api('/admin/cert-sync-logs')]);Object.assign(state.data,{issuers,logs});$('#app').innerHTML=card('合作发证机构',button('＋ 配置机构','issuer-new','','btn'),`<div class="note">需要合作机构提供真实接口地址和密钥。平台考核合格证明不代表外部机构已认证；外部证书以成功回执为准。当前对接协议：HTTPS POST JSON，返回 ext_cert_no；其他协议需另行适配。</div>${table(['机构名称','接口地址','状态','操作'],issuers.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.api_url)}</td><td>${i.enabled?'已启用':'未启用'}</td><td>${button('编辑','issuer-edit',i.id)} ${button('测试连接','issuer-test',i.id)}</td></tr>`))}`)+card('联合认证同步记录','',table(['证书 ID','发证机构','状态','外部证书编号','最近同步','操作'],logs.map(l=>`<tr><td>${l.cert_id}</td><td>${esc(l.issuer)}</td><td>${badge(l.status)}</td><td>${esc(l.ext_cert_no||'尚未签发')}</td><td>${date(l.synced_at)}</td><td>${l.status!=='success'?button('同步 / 重试','issuer-retry',l.id):''}</td></tr>`)))},
@@ -55,7 +52,7 @@ const pages={
 };
 function renderQuestions(){const keyword=$('#q-keyword').value.trim().toLowerCase(),qt=$('#q-type').value,df=$('#q-difficulty').value,st=$('#q-status').value;const rows=state.data.questions.filter(q=>(!qt||q.q_type===qt)&&(!st||q.status===st)&&(!df||q.difficulty===df)&&(!keyword||(q.stem+JSON.stringify(q.tags)).toLowerCase().includes(keyword)));$('#question-table').innerHTML=table(['题型','题干 / 标签','难度','状态','操作'],rows.map(q=>`<tr><td>${types[q.q_type]}</td><td><div class="stem">${esc(q.stem)}</div><div class="meta">${esc(Object.values(q.tags||{}).flat().join(' · '))}</div></td><td>${{easy:'简单',medium:'中等',hard:'困难'}[q.difficulty]}</td><td>${badge(q.status)}</td><td><div class="actions">${button('详情','question-view',q.id)}${author()?button('编辑','question-edit',q.id):''}</div></td></tr>`))}
 function renderWrong(){const rows=state.data.wrong.filter(w=>(!$('#w-type').value||w.q_type===$('#w-type').value)&&(!$('#w-course').value||(w.course_name||'').includes($('#w-course').value)));$('#wrong-list').innerHTML=rows.map(w=>`<div class="question"><div class="cardhead"><span class="meta">${types[w.q_type]} · ${esc(w.course_name||'未关联课程')}</span>${button('标记已掌握','mastered',w.id)}</div><h3 style="margin-top:12px">${esc(w.stem)}</h3>${(w.options||[]).map(o=>`<div>${esc(o.key)}. ${esc(o.text)}</div>`).join('')}<div class="note"><b>正确答案 / 要点</b>：${answerText(w.correct_answer)}<br><b>解析</b>：${esc(w.analysis||'暂无解析')}</div></div>`).join('')||'<div class="empty">暂无符合条件的错题</div>'}
-function renderCerts(rows,title){$('#app').innerHTML=card(title,'',table(['证书名称','获得人','证书类型','证书编号','成绩 / 签发时间','操作'],rows.map(c=>`<tr><td>${esc(c.title)}</td><td>${esc(c.learner)}</td><td>${certTypes[c.cert_type]}${c.cert_type==='joint'?'<div class="meta">外部认证以机构回执为准</div>':''}</td><td>${esc(c.cert_no)}</td><td>${c.score} 分<br>${date(c.issued_at)}</td><td>${button('预览','cert-preview',c.id)} ${button('PDF','cert-pdf',c.id)} ${button('图片','cert-png',c.id)}</td></tr>`)))}
+function renderCerts(rows,title){$('#app').innerHTML=card(title,'',table(['证书名称','获得人','证书类型','证书编号','成绩 / 签发时间','操作'],rows.map(c=>`<tr><td>${esc(c.title)}</td><td>${esc(c.learner)}</td><td>${certTypes[c.cert_type]}${c.cert_type==='joint'?'<div class="meta">外部认证以机构回执为准</div>':''}</td><td>${esc(c.cert_no)}</td><td>${c.score} 分<br>${date(c.issued_at)}</td><td>${button('预览证书','cert-render',c.id,'btn small')} ${button('PDF','cert-pdf',c.id)}</td></tr>`)))}
 export const answerText=a=>esc(Array.isArray(a)?a.map(x=>typeof x==='boolean'?(x?'正确':'错误'):x).join('、'):typeof a==='object'&&a?a.points||JSON.stringify(a):a||'未作答');
 const parseUTC=s=>new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s)?s:s+'Z').getTime();
 let timer;
@@ -109,21 +106,14 @@ const actions={
   result,
   'cert-pdf':id=>download(id,'pdf'),
   'cert-png':id=>download(id,'png'),
-  'cert-preview':async id=>{
-    const c=await api(`/my/certs/${id}`);
-    const t=c.tpl||{};
-    modal('证书预览',`<div class="certificate"><h2>${esc(t.title||'考试合格证书')}</h2><h3>${esc(c.title)}</h3>${(t.body||`兹证明 ${esc(c.learner)} 已通过考核，成绩 ${c.score} 分。`).split('\n').map(l=>`<p>${esc(l)}</p>`).join('')}<p>${certTypes[c.cert_type]}</p><small>${esc(c.cert_no)}<br>${esc(t.org||'云培训学院')} · ${date(c.issued_at)}</small>${c.cert_type==='joint'?'<p class="meta">外部认证以合作机构发证回执为准。</p>':''}</div>`);
-  },
-  'cert-template-editor':async()=>{
-    const list=await api('/admin/cert-templates');
-    const box=(t)=>`<div class="field full"><label>${esc(t.tpl_name)}（${t.tpl_type}）${t.enabled?' · 已启用':' · 已停用'}</label><input id="ct-title-${t.id}" value="${esc(t.title)}" maxlength="200"><textarea id="ct-body-${t.id}" rows="3" maxlength="2000">${esc(t.body_text)}</textarea><input id="ct-org-${t.id}" value="${esc(t.org_name)}" maxlength="100"><label class="inline"><input type="checkbox" id="ct-enabled-${t.id}" ${t.enabled?'checked':''}> 启用该模板（停用后该类证书回退默认文案）</label></div>`;
-    const d=modal('证书模板',`<p class="meta">正文占位符：{learner} 学员 · {title} 考试 · {score} 成绩 · {cert_no} 证书编号 · {date} 签发日期</p>${list.map(box).join('')}`,'保存模板',async()=>{
-      for(const t of list){
-        await api(`/admin/cert-templates/${t.id}`,{method:'PUT',body:JSON.stringify({title:$(`#ct-title-${t.id}`,d).value.trim(),body_text:$(`#ct-body-${t.id}`,d).value.trim(),org_name:$(`#ct-org-${t.id}`,d).value.trim(),enabled:$(`#ct-enabled-${t.id}`,d).checked})});
-      }
-      toast('证书模板已保存');
-      await load();
-    });
+  'cert-render':async id=>{
+    // 企业 HTML 模板渲染：新窗口展示完整证书版式
+    const r=await fetch(`/training-exam/api/my/certs/${id}/render`,{headers:{Authorization:state.token,'tenant-id':String(state.tenant)}});
+    if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||'渲染失败');
+    const html=await r.text();
+    const w=window.open('','_blank');
+    if(!w)throw new Error('浏览器拦截了新窗口，请允许弹窗后重试');
+    w.document.write(html);w.document.close();
   },
   mastered:async id=>{await post(`/my/wrong-questions/${id}/mastered`);await load()},
 };

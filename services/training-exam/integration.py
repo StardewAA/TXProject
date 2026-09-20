@@ -1,11 +1,18 @@
 """Platform integration and validated extensions for the examination engine."""
 from __future__ import annotations
 import asyncio
+import base64
+import io
 import ipaddress
+import re
 import socket
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
+from fastapi import Request
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import Paragraph
 
 
 def install(ctx):
@@ -275,26 +282,111 @@ def install(ctx):
     def certs(db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer","viewer"))):
         return ok([cert_dict(c,db) for c in db.scalars(select(Certificate).order_by(Certificate.id.desc()))])
 
-    # ---------- 证书模板（graduate 结业 / competence 岗位能力；joint 由外部机构发证不走平台模板） ----------
-    class CertTemplateIn(BaseModel):
-        title:str=Field(min_length=2,max_length=200)
-        body_text:str=Field(min_length=2,max_length=2000)
-        org_name:str=Field(min_length=2,max_length=100)
-        enabled:bool=True
+    # ---------- 企业 HTML 证书模板渲染（课程结业 / 工种资格） ----------
+    TPL_DIR = ROOT / "static" / "templates"
 
-    globals()["CertTemplateIn"] = CertTemplateIn
+    def category_path_by_id(actor, cat_id):
+        """从平台课程分类树中找 categoryId 的完整路径（一/二/三级）"""
+        tree = platform_get("/training/course-category/list-tree", actor.token, actor.tenant_id) or []
+        def walk(nodes, chain):
+            for n in nodes:
+                cur = chain + [n.get("name")]
+                if n.get("id") == cat_id:
+                    return " / ".join([c for c in cur if c])
+                r = walk(n.get("children") or [], cur)
+                if r: return r
+            return None
+        return walk(tree, []) or ""
 
-    @app.get("/api/admin/cert-templates")
-    def cert_templates(db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer","viewer"))):
-        rows=db.scalars(select(CertificateTemplate).order_by(CertificateTemplate.id)).all()
-        return ok([{"id":t.id,"tpl_type":t.tpl_type,"tpl_name":CERT_TYPE_NAMES.get(t.tpl_type,t.tpl_type),"title":t.title,"body_text":t.body_text,"org_name":t.org_name,"enabled":t.enabled} for t in rows])
+    def fill_course_snapshot(actor, cert, db):
+        """结业证书的课程快照 lazy 补齐（发证时无平台 token，首次渲染/下载时补）。"""
+        if cert.course_category and cert.business_tag and cert.study_hours: return
+        if not cert.course_id: return
+        course = platform_get(f"/training/course/get?id={cert.course_id}", actor.token, actor.tenant_id) or {}
+        if not cert.course_name: cert.course_name = course.get("title") or ""
+        if not cert.business_tag:
+            raw = course.get("bizTags")
+            if raw:
+                try:
+                    tags = json.loads(raw)
+                    cert.business_tag = "、".join([t for t in tags if t]) if isinstance(tags, list) else str(raw)
+                except Exception:
+                    cert.business_tag = str(raw)
+        minutes = course.get("durationMinutes") or 0
+        if not cert.study_hours and minutes: cert.study_hours = f"{minutes/60:g} 学时"
+        if not cert.course_category:
+            cat = course.get("categoryId")
+            if cat: cert.course_category = category_path_by_id(actor, cat)
+        db.commit()
 
-    @app.put("/api/admin/cert-templates/{tid}")
-    def update_cert_template(tid:int,body:CertTemplateIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin"))):
-        t=db.get(CertificateTemplate,tid)
-        if not t:raise HTTPException(404,"证书模板不存在")
-        t.title=body.title.strip();t.body_text=body.body_text.strip();t.org_name=body.org_name.strip();t.enabled=body.enabled;t.updated_at=now()
-        db.commit();return ok(message="证书模板已保存，新签发证书将套用新模板")
+    def render_cert_html(cert_type, d, verify_url):
+        """用企业 HTML 模板渲染证书；返回 None 表示该类型无模板（回退）。"""
+        file = {"graduate": "cert_course.html", "worktype": "cert_worktype.html"}.get(cert_type)
+        if not file: return None
+        html = (TPL_DIR / file).read_text(encoding="utf-8")
+        rep = {
+            "certNo": d["cert_no"], "qualCertNo": d["cert_no"],
+            "userName": d["learner"],
+            "courseName": d.get("course_name") or d["title"],
+            "score": f"{d['score']:g}",
+            "courseCategory": d.get("course_category") or "—",
+            "businessTag": d.get("business_tag") or "—",
+            "studyHours": d.get("study_hours") or "—",
+            "issueDate": str(d["issued_at"])[:10],
+            "workTypeName": d.get("work_type_name") or "—",
+            "skillLevel": d.get("skill_level") or "—",
+            "relateCourseList": d.get("relate_courses") or "—",
+            "paperName": d.get("paper_name") or "—",
+            "verifyUrl": verify_url,
+        }
+        for k, v in rep.items():
+            html = html.replace("${%s}" % k, v)
+        # 模板中的静态二维码占位图 → 动态生成 verifyUrl 二维码
+        import qrcode as _qrcode
+        qr = _qrcode.make(verify_url)
+        qbuf = io.BytesIO(); qr.save(qbuf, format="PNG")
+        qr_uri = "data:image/png;base64," + base64.b64encode(qbuf.getvalue()).decode()
+        html = re.sub(r'src="data:image/png;base64,[^"]*" alt="核验二维码"', 'src="' + qr_uri + '" alt="核验二维码"', html)
+        return html
+
+    @app.get("/api/my/certs/{cid}/render", response_class=HTMLResponse)
+    def render_cert(cid:int, request:Request, db:Session=Depends(db_session), actor:Actor=Depends(current_user)):
+        c = db.get(Certificate, cid)
+        if not c or (actor.role not in {"admin","teacher","reviewer","viewer"} and c.user_id != actor.id): raise HTTPException(404, "证书不存在")
+        if c.cert_type in ("graduate", "competence"): fill_course_snapshot(actor, c, db)
+        d = cert_dict(c, db)
+        host = request.headers.get("host", "localhost")
+        verify = f"http://{host}/training-exam/v/{c.cert_no}"
+        html = render_cert_html(c.cert_type, d, verify)
+        if html is None: raise HTTPException(404, "该证书类型暂无企业模板")
+        return HTMLResponse(html)
+
+    @app.get("/v/{cert_no}", response_class=HTMLResponse)
+    def verify_page(cert_no:str):
+        """扫码核验页（免登录）：遍历租户库查发证记录。"""
+        found = None
+        for dbfile in DATA.glob("tenant-*.db"):
+            try:
+                eng = create_engine(f"sqlite:///{dbfile.as_posix()}", connect_args={"check_same_thread": False})
+                with Session(eng, expire_on_commit=False) as vdb:
+                    row = vdb.execute(text("select cert_no,cert_type,title,score,issued_at,status,user_id,course_name,work_type_name from certificates where cert_no=:no"), {"no": cert_no}).mappings().first()
+                    if row:
+                        found = dict(row)
+                        u = vdb.execute(text("select name from users where id=:i"), {"i": found["user_id"]}).first()
+                        found["learner"] = u[0] if u else "—"
+                        break
+            except Exception:
+                continue
+        ok_html = ""
+        if found and found.get("status") == "valid":
+            typ = CERT_TYPE_NAMES.get(found["cert_type"], found["cert_type"])
+            extra = ""
+            if found.get("course_name"): extra += f"<p>课程/试卷：{found['course_name']}</p>"
+            if found.get("work_type_name"): extra += f"<p>工种：{found['work_type_name']}　等级：{found.get('skill_level') or '—'}</p>"
+            ok_html = f"<h1 style='color:#1a7a3c'>✅ 证书真实有效</h1><p>证书编号：{found['cert_no']}</p><p>证书类型：{typ}</p><p>持证人：{found['learner']}</p><p>成绩：{found['score']:g} 分</p><p>签发日期：{str(found['issued_at'])[:10]}</p>{extra}"
+        else:
+            ok_html = "<h1 style='color:#b02020'>❌ 证书不存在或已作废</h1>"
+        return HTMLResponse(f"<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'><title>证书核验</title><style>body{{font-family:'Microsoft YaHei';background:#2b2f36;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}}div.box{{background:#fffdf5;border:3px solid #c8a24a;border-radius:8px;padding:36px 48px;max-width:520px;line-height:1.9;color:#333}}p{{margin:4px 0}}</style></head><body><div class='box'>{ok_html}</div></body></html>")
 
     @app.get("/api/my/certs/{cid}")
     def cert_data(cid:int,db:Session=Depends(db_session),actor:Actor=Depends(current_user)):
@@ -307,26 +399,97 @@ def install(ctx):
     app.router.routes[:]=[r for r in app.router.routes if getattr(r,"path",None) not in replaced]
 
     @app.get("/api/my/certs/{cid}/download")
-    def download(cid:int,db:Session=Depends(db_session),actor:Actor=Depends(current_user)):
+    def download(cid:int, request:Request, db:Session=Depends(db_session), actor:Actor=Depends(current_user)):
+        """企业版式 PDF：reportlab 按 HTML 模板视觉重绘（金框红框/水印/混排正文/meta框/二维码/电子签章）"""
         from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         c=db.get(Certificate,cid)
         if not c or (actor.role not in {"admin","teacher","reviewer","viewer"} and c.user_id!=actor.id):raise HTTPException(404,"证书不存在")
-        d=cert_dict(c,db);buf=io.BytesIO();pdf=canvas.Canvas(buf,pagesize=landscape(A4));w,h=landscape(A4)
-        tpl=d.get("tpl") or {}
-        head=tpl.get("title") or "考试合格证书"
-        org=tpl.get("org") or "云培训学院"
-        body=tpl.get("body") or f"兹证明 {d['learner']} 已通过考核，成绩 {d['score']:g} 分。"
-        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"));pdf.setStrokeColor(colors.HexColor("#173f5f"));pdf.setLineWidth(4);pdf.rect(24,24,w-48,h-48)
-        pdf.setFillColor(colors.HexColor("#173f5f"));pdf.setFont("STSong-Light",36);pdf.drawCentredString(w/2,h-105,head)
-        pdf.setFont("STSong-Light",20)
-        title=d["title"]
-        for i in range(0,len(title),28):pdf.drawCentredString(w/2,h-155-(i//28)*25,title[i:i+28])
-        pdf.setFont("STSong-Light",18);y=250
-        for para in body.split("\n"):
-            for k in range(0,len(para),34) or [0]:
-                pdf.drawCentredString(w/2,y,para[k:k+34]);y-=26
-        pdf.setFont("STSong-Light",13);pdf.drawCentredString(w/2,160,{"graduate":"结业证书","competence":"岗位能力认证证书","joint":"联合认证申请对应考核合格证明"}[c.cert_type])
-        pdf.drawCentredString(w/2,110,d["cert_no"]);pdf.drawCentredString(w/2,80,f"{org}    签发日期：{d['issued_at']:%Y-%m-%d}")
+        if c.cert_type in ("graduate","competence"): fill_course_snapshot(actor,c,db)
+        d=cert_dict(c,db)
+        host=request.headers.get("host","localhost")
+        verify=f"http://{host}/training-exam/v/{c.cert_no}"
+        w,h=landscape(A4);S=0.875  # 模板 960x680 → A4 横向缩放
+        buf=io.BytesIO();pdf=canvas.Canvas(buf,pagesize=(w,h))
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        G1,G2,RED=colors.HexColor("#c8a24a"),colors.HexColor("#b8892f"),colors.HexColor("#9c1c1c")
+        # 底色（米金渐变简化为纯色）+ 三重框
+        pdf.setFillColor(colors.HexColor("#fdf9f0"));pdf.rect(0,0,w,h,stroke=0,fill=1)
+        pdf.setStrokeColor(G1);pdf.setLineWidth(3.5);pdf.rect(12*S,12*S,w-24*S,h-24*S)
+        pdf.setLineWidth(0.8);pdf.rect(20*S,20*S,w-40*S,h-40*S)
+        pdf.setStrokeColor(RED);pdf.setLineWidth(1.8);pdf.rect(25*S,25*S,w-50*S,h-50*S)
+        # 四角饰（L 形金线 + 红圆点）
+        for cx,cy,dx,dy in ((25*S,h-25*S,1,-1),(w-25*S,h-25*S,-1,-1),(25*S,25*S,1,1),(w-25*S,25*S,-1,1)):
+            pdf.setStrokeColor(G2);pdf.setLineWidth(2)
+            pdf.line(cx,cy,cx+62*S*dx,cy);pdf.line(cx,cy,cx,cy+62*S*dy)
+            pdf.setFillColor(RED);pdf.circle(cx+5*S*dx,cy-5*S*dy,4*S,stroke=0,fill=1)
+        # 水印"证"
+        pdf.setFillColor(colors.Color(0.612,0.11,0.11,alpha=0.05));pdf.setFont("STSong-Light",190)
+        pdf.drawCentredString(w/2,h/2-60,"证")
+        # 顶部平台条
+        pdf.setFillColor(G2);pdf.setFont("STSong-Light",17)
+        pdf.drawCentredString(w/2,h-58*S,"天信之星 · 防腐保温智慧平台")
+        pdf.setFont("STSong-Light",9.5);pdf.setFillColor(colors.HexColor("#8a7a4a"))
+        pdf.drawCentredString(w/2,h-74*S,"云 培 训 学 院 · 考 试 与 认 证 中 心")
+        pdf.setStrokeColor(colors.Color(0.737,0.537,0.29,alpha=0.6));pdf.setLineWidth(0.7)
+        pdf.line(w/2-160,h-86*S,w/2+160,h-86*S)
+        # 主标题 + 英文 + 证书编号
+        head={"graduate":"培 训 结 业 证 书","worktype":"工 种 资 格 证 书"}.get(c.cert_type,"考试合格证书")
+        en={"graduate":"CERTIFICATE OF TRAINING COMPLETION","worktype":"CERTIFICATE OF OCCUPATIONAL QUALIFICATION"}.get(c.cert_type,"")
+        pdf.setFillColor(colors.HexColor("#b52626"));pdf.setFont("STSong-Light",34)
+        pdf.drawCentredString(w/2,h-160*S,head)
+        pdf.setFillColor(colors.HexColor("#b0954f"));pdf.setFont("STSong-Light",8.5)
+        pdf.drawCentredString(w/2,h-176*S,"—  "+en+"  —")
+        pdf.setStrokeColor(colors.Color(0.737,0.537,0.29,alpha=0.35));pdf.setLineWidth(0.7)
+        pdf.roundRect(w/2-95*S,h-206*S,190*S,17*S,8*S,stroke=1,fill=0)
+        pdf.setFillColor(colors.HexColor("#8a7a5a"));pdf.setFont("STSong-Light",9.5)
+        pdf.drawCentredString(w/2,h-201*S,f"证书编号 NO. {d['cert_no']}")
+        # 正文（Paragraph 混排：姓名/课程/成绩红色加粗）
+        is_grad=c.cert_type in ("graduate","competence")
+        if is_grad:
+            body_html=(f"　　兹证明 <font color='#9c1c1c'><b>{d['learner']}</b></font> 学员，已完成"
+                       f"《<font color='#9c1c1c'><b>{d.get('course_name') or d['title']}</b></font>》课程全部学习任务，并通过本课程结课考试，"
+                       f"考试成绩 <font color='#9c1c1c'><b>{d['score']:g}</b></font> 分，达到课程培训考核要求，特发此证，以资证明。")
+            meta_html=(f"<b>课程分类：</b><font color='#9c1c1c'>{d.get('course_category') or '—'}</font>　｜　"
+                       f"<b>业务标签：</b><font color='#9c1c1c'>{d.get('business_tag') or '—'}</font><br/>"
+                       f"<b>总培训学时：</b><font color='#9c1c1c'>{d.get('study_hours') or '—'}</font>　｜　"
+                       f"<b>发证日期：</b><font color='#9c1c1c'>{str(d['issued_at'])[:10]}</font>")
+        else:
+            body_html=(f"　　持证人 <font color='#9c1c1c'><b>{d['learner']}</b></font>，对应工种 "
+                       f"<font color='#9c1c1c'><b>{d.get('work_type_name') or '—'}</b></font>，技能成长等级 "
+                       f"<font color='#9c1c1c'><b>{d.get('skill_level') or '—'}</b></font>。该学员已完成对应工种配套系列课程学习，"
+                       f"通过工种资格认证综合考试，具备该工种对应岗位作业能力，特发本工种资格证书。")
+            meta_html=(f"<b>关联课程：</b><font color='#9c1c1c'>{d.get('relate_courses') or '—'}</font><br/>"
+                       f"<b>考核试卷：</b><font color='#9c1c1c'>{d.get('paper_name') or '—'}</font>　｜　"
+                       f"<b>发证日期：</b><font color='#9c1c1c'>{str(d['issued_at'])[:10]}</font>")
+        body_style=ParagraphStyle("body",fontName="STSong-Light",fontSize=14,leading=26,textColor=colors.HexColor("#2a2118"))
+        meta_style=ParagraphStyle("meta",fontName="STSong-Light",fontSize=10.5,leading=18,textColor=colors.HexColor("#4a4030"))
+        bp=Paragraph(body_html,body_style);bp.wrapOn(pdf,w-2*88*S,200*S);bp.drawOn(pdf,88*S,h-380*S)
+        pdf.setFillColor(colors.Color(0.784,0.635,0.29,alpha=0.10));pdf.rect(88*S,118*S,w-176*S,92*S,stroke=0,fill=1)
+        pdf.setFillColor(colors.Color(0.784,0.635,0.29,alpha=0.45));pdf.rect(88*S,118*S,w-176*S,92*S,stroke=1,fill=0)
+        pdf.setFillColor(G1);pdf.rect(88*S,118*S,3*S,92*S,stroke=0,fill=1)
+        mp=Paragraph(meta_html,meta_style);mp.wrapOn(pdf,w-2*88*S-24*S,80*S);mp.drawOn(pdf,88*S+14*S,126*S)
+        # 二维码（verifyUrl）
+        import qrcode
+        qr_img=qrcode.make(verify);qbuf=io.BytesIO();qr_img.save(qbuf,format="PNG");qbuf.seek(0)
+        pdf.drawImage(ImageReader(qbuf),80*S,42*S,width=52*S,height=52*S)
+        pdf.setFillColor(colors.HexColor("#a99a88"));pdf.setFont("STSong-Light",7)
+        pdf.drawCentredString(80*S+26*S,38*S,"扫码核验真伪")
+        # 签章（base64 PNG，与 HTML 模板同一枚）
+        import re as _re
+        m=_re.search(r'class="seal" src="data:image/png;base64,([^"]+)"',render_cert_html(c.cert_type,d,verify) or "")
+        if m:
+            seal_img=ImageReader(io.BytesIO(base64.b64decode(m.group(1))))
+            pdf.saveState();pdf.translate(w-110*S,66*S+66*S);pdf.rotate(-14)
+            pdf.drawImage(seal_img,0,0,width=115*S,height=115*S,mask="auto");pdf.restoreState()
+        # 页脚右下：机构 + 日期
+        pdf.setFillColor(RED);pdf.setFont("STSong-Light",12)
+        pdf.drawRightString(w-90*S,h-64*S,"天信管业科技集团有限公司")
+        pdf.setFillColor(colors.HexColor("#4a4030"));pdf.setFont("STSong-Light",9)
+        pdf.drawRightString(w-90*S,h-78*S,"云培训学院 考试与认证中心 颁发")
+        pdf.drawRightString(w-90*S,h-92*S,f"发证日期：{str(d['issued_at'])[:10]}")
+        # 底部备注
+        pdf.setFillColor(colors.HexColor("#b3a88f"));pdf.setFont("STSong-Light",6.8)
+        pdf.drawCentredString(w/2,26*S,f"本证书由天信之星防腐保温智慧平台·云培训学院考试与认证模块自动生成，可通过平台查验真伪。查验地址：{verify}")
         pdf.save();return Response(buf.getvalue(),media_type="application/pdf",headers={"Content-Disposition":f'attachment; filename="{c.cert_no}.pdf"'})
 
     def only_super(actor):
