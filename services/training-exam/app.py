@@ -226,6 +226,48 @@ class Certificate(Base):
     status: Mapped[str] = mapped_column(String(20), default="valid")
 
 
+class CertificateTemplate(Base):
+    """证书模板：按 cert_type 一类一套（graduate 结业 / competence 岗位能力）。
+    联合认证(joint)由外部合作机构发证，不套用平台模板。"""
+    __tablename__ = "cert_templates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tpl_type: Mapped[str] = mapped_column(String(20), unique=True)
+    title: Mapped[str] = mapped_column(String(200), default="考试合格证书")
+    body_text: Mapped[str] = mapped_column(Text, default="")
+    org_name: Mapped[str] = mapped_column(String(100), default="云培训学院")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
+DEFAULT_CERT_TEMPLATES = {
+    "graduate": {"title": "考试合格证书",
+                 "body_text": "兹证明 {learner} 已完成「{title}」培训考核，成绩 {score} 分，达到结业标准，特发此证。",
+                 "org_name": "云培训学院"},
+    "competence": {"title": "岗位能力认证证书",
+                   "body_text": "兹证明 {learner} 通过「{title}」岗位能力考核，成绩 {score} 分，具备相应岗位从业能力，特发此证。",
+                   "org_name": "云培训学院"},
+}
+
+CERT_TYPE_NAMES = {"graduate": "结业证书", "competence": "岗位能力认证证书", "joint": "联合认证"}
+
+def seed_cert_templates(eng):
+    """每租户库首次使用时补齐两类默认证书模板（幂等）。"""
+    with Session(eng, expire_on_commit=False) as db:
+        changed = False
+        for tpl_type, fields in DEFAULT_CERT_TEMPLATES.items():
+            if not db.scalar(select(CertificateTemplate).where(CertificateTemplate.tpl_type == tpl_type)):
+                db.add(CertificateTemplate(tpl_type=tpl_type, **fields)); changed = True
+        if changed: db.commit()
+
+def render_cert_text(text: str, d: dict) -> str:
+    """模板正文占位符渲染：{learner} {title} {score} {cert_no} {date}"""
+    return (text or "").replace("{learner}", str(d.get("learner", ""))) \
+        .replace("{title}", str(d.get("title", ""))) \
+        .replace("{score}", f"{d.get('score', 0):g}") \
+        .replace("{cert_no}", str(d.get("cert_no", ""))) \
+        .replace("{date}", str(d.get("issued_at", ""))[:10])
+
+
 class CertIssuer(Base):
     __tablename__ = "cert_issuers"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -328,6 +370,7 @@ def tenant_engine(tenant_id):
     Base.metadata.create_all(eng)
     ensure_columns(eng, "questions", {"platform_id": "platform_id INTEGER"})
     ensure_columns(eng, "papers", {"work_types": "work_types TEXT DEFAULT '[]'", "cert_names": "cert_names TEXT DEFAULT '[]'"})
+    seed_cert_templates(eng)
     return eng
 
 def db_session(actor: Actor = Depends(current_user)):
@@ -1039,7 +1082,12 @@ def master_wrong(wid:int,db:Session=Depends(db_session),actor:Actor=Depends(requ
 
 
 def cert_dict(c:Certificate,db:Session):
-    user=db.get(User,c.user_id); return {"id":c.id,"cert_no":c.cert_no,"title":c.title,"cert_type":c.cert_type,"learner":user.name,"score":c.score,"issued_at":c.issued_at,"status":c.status}
+    user=db.get(User,c.user_id)
+    d={"id":c.id,"cert_no":c.cert_no,"title":c.title,"cert_type":c.cert_type,"learner":user.name,"score":c.score,"issued_at":c.issued_at,"status":c.status}
+    tpl=db.scalar(select(CertificateTemplate).where(CertificateTemplate.tpl_type==c.cert_type,CertificateTemplate.enabled==True))
+    if tpl:
+        d["tpl"]={"title":tpl.title,"body":render_cert_text(tpl.body_text,d),"org":tpl.org_name}
+    return d
 
 
 @app.get("/api/my/certs")

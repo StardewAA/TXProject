@@ -275,6 +275,27 @@ def install(ctx):
     def certs(db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer","viewer"))):
         return ok([cert_dict(c,db) for c in db.scalars(select(Certificate).order_by(Certificate.id.desc()))])
 
+    # ---------- 证书模板（graduate 结业 / competence 岗位能力；joint 由外部机构发证不走平台模板） ----------
+    class CertTemplateIn(BaseModel):
+        title:str=Field(min_length=2,max_length=200)
+        body_text:str=Field(min_length=2,max_length=2000)
+        org_name:str=Field(min_length=2,max_length=100)
+        enabled:bool=True
+
+    globals()["CertTemplateIn"] = CertTemplateIn
+
+    @app.get("/api/admin/cert-templates")
+    def cert_templates(db:Session=Depends(db_session),actor:Actor=Depends(require("admin","teacher","reviewer","viewer"))):
+        rows=db.scalars(select(CertificateTemplate).order_by(CertificateTemplate.id)).all()
+        return ok([{"id":t.id,"tpl_type":t.tpl_type,"tpl_name":CERT_TYPE_NAMES.get(t.tpl_type,t.tpl_type),"title":t.title,"body_text":t.body_text,"org_name":t.org_name,"enabled":t.enabled} for t in rows])
+
+    @app.put("/api/admin/cert-templates/{tid}")
+    def update_cert_template(tid:int,body:CertTemplateIn,db:Session=Depends(db_session),actor:Actor=Depends(require("admin"))):
+        t=db.get(CertificateTemplate,tid)
+        if not t:raise HTTPException(404,"证书模板不存在")
+        t.title=body.title.strip();t.body_text=body.body_text.strip();t.org_name=body.org_name.strip();t.enabled=body.enabled;t.updated_at=now()
+        db.commit();return ok(message="证书模板已保存，新签发证书将套用新模板")
+
     @app.get("/api/my/certs/{cid}")
     def cert_data(cid:int,db:Session=Depends(db_session),actor:Actor=Depends(current_user)):
         c=db.get(Certificate,cid)
@@ -291,14 +312,21 @@ def install(ctx):
         c=db.get(Certificate,cid)
         if not c or (actor.role not in {"admin","teacher","reviewer","viewer"} and c.user_id!=actor.id):raise HTTPException(404,"证书不存在")
         d=cert_dict(c,db);buf=io.BytesIO();pdf=canvas.Canvas(buf,pagesize=landscape(A4));w,h=landscape(A4)
+        tpl=d.get("tpl") or {}
+        head=tpl.get("title") or "考试合格证书"
+        org=tpl.get("org") or "云培训学院"
+        body=tpl.get("body") or f"兹证明 {d['learner']} 已通过考核，成绩 {d['score']:g} 分。"
         pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"));pdf.setStrokeColor(colors.HexColor("#173f5f"));pdf.setLineWidth(4);pdf.rect(24,24,w-48,h-48)
-        pdf.setFillColor(colors.HexColor("#173f5f"));pdf.setFont("STSong-Light",36);pdf.drawCentredString(w/2,h-105,"考试合格证书")
+        pdf.setFillColor(colors.HexColor("#173f5f"));pdf.setFont("STSong-Light",36);pdf.drawCentredString(w/2,h-105,head)
         pdf.setFont("STSong-Light",20)
         title=d["title"]
         for i in range(0,len(title),28):pdf.drawCentredString(w/2,h-155-(i//28)*25,title[i:i+28])
-        pdf.setFont("STSong-Light",18);pdf.drawCentredString(w/2,250,f"兹证明 {d['learner']} 已通过考核，成绩 {d['score']:g} 分。")
+        pdf.setFont("STSong-Light",18);y=250
+        for para in body.split("\n"):
+            for k in range(0,len(para),34) or [0]:
+                pdf.drawCentredString(w/2,y,para[k:k+34]);y-=26
         pdf.setFont("STSong-Light",13);pdf.drawCentredString(w/2,160,{"graduate":"结业证书","competence":"岗位能力认证证书","joint":"联合认证申请对应考核合格证明"}[c.cert_type])
-        pdf.drawCentredString(w/2,110,d["cert_no"]);pdf.drawCentredString(w/2,80,f"云培训学院    签发日期：{d['issued_at']:%Y-%m-%d}")
+        pdf.drawCentredString(w/2,110,d["cert_no"]);pdf.drawCentredString(w/2,80,f"{org}    签发日期：{d['issued_at']:%Y-%m-%d}")
         pdf.save();return Response(buf.getvalue(),media_type="application/pdf",headers={"Content-Disposition":f'attachment; filename="{c.cert_no}.pdf"'})
 
     def only_super(actor):
