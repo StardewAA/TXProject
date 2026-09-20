@@ -48,11 +48,6 @@ function handleDetail(row: WmsWarehouseApi.Warehouse) {
   detailModalApi.setData({ id: row.id }).open();
 }
 
-/** 查看仓库详情（仅查询权限） */
-function handleDetail(row: WmsWarehouseApi.Warehouse) {
-  formModalApi.setData({ ...row, readonly: true }).open();
-}
-
 /** 删除仓库 */
 async function handleDelete(row: WmsWarehouseApi.Warehouse) {
   const hideLoading = message.loading({

@@ -2065,7 +2065,7 @@
     },
     {
       "key": "wms",
-      "name": "WMS 系统",
+      "name": "智慧仓储系统",
       "subGroups": [
         {
           "key": "overview",
@@ -2073,7 +2073,7 @@
           "menus": [
             {
               "key": "wmsHome",
-              "name": "WMS 首页",
+              "name": "仓储首页",
               "icon": "dashboard",
               "iconColor": "#1677ff",
               "url": "/pages-statistics/wms/home/index",

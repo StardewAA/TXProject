@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { QuestionCircleOutlined } from '@ant-design/icons-vue';
+import { IconifyIcon } from '@vben/icons';
 import { Switch, Tooltip } from 'ant-design-vue';
 
 /**
@@ -72,7 +72,7 @@ function handleChange(field: string, checked: any) {
       />
       <!-- 保留原表单项的 help 提示（如批次管理的说明），避免合并后丢失 -->
       <Tooltip v-if="item.help" :title="item.help">
-        <QuestionCircleOutlined class="cursor-help text-gray-400" />
+        <IconifyIcon icon="ant-design:question-circle-outlined" class="cursor-help text-gray-400" />
       </Tooltip>
     </div>
   </div>

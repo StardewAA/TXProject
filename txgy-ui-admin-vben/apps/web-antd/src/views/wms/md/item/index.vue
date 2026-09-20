@@ -25,7 +25,18 @@ import { WmsItemCategoryTree } from '#/views/wms/md/item/category/components';
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
-type ItemSkuRow = WmsItemSkuApi.ItemSku;
+type ItemSkuRow = WmsItemSkuApi.ItemSku &
+  Pick<
+    WmsItemApi.Item,
+    | 'batchManage'
+    | 'dangerousGoods'
+    | 'shelfLifeManage'
+    | 'shelfLifeMonths'
+    | 'storageCondition'
+    | 'temperatureRequirement'
+  > & {
+    status?: number;
+  };
 
 defineOptions({ name: 'WmsItem' });
 

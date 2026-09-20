@@ -292,10 +292,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 120,
     },
     {
-      field: 'memberCount',
-      title: '员工数量',
-      width: 100,
-      align: 'center',
       field: 'status',
       title: '仓库状态',
       minWidth: 110,
