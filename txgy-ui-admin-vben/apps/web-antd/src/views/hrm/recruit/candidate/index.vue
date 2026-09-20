@@ -242,11 +242,6 @@ function handleStatusTabChange(key: number | string) {
   handleRefresh();
 }
 
-/** 新增 */
-function handleCreate() {
-  formModalApi.setData(null).open();
-}
-
 /** 编辑 */
 function handleEdit(row: HrmRecruitCandidateApi.RecruitCandidate) {
   formModalApi.setData(row).open();
@@ -598,7 +593,12 @@ function getPrimaryAction(
 
 /** 获得候选人的更多操作 */
 function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
-  const actions: Array<{ command: string; label: string }> = [];
+  const actions: Array<{
+    command: string;
+    label: string;
+    disabled?: boolean;
+    tooltip?: string;
+  }> = [];
   if (candidate.applicationId) {
     if (
       hasAccessByCodes(['hrm:recruit:application:eliminate']) &&
@@ -697,7 +697,21 @@ function getMoreActions(candidate: HrmRecruitCandidateApi.RecruitCandidate) {
       candidate.status === HrmRecruitCandidateStatus.INTERVIEW_PASS &&
       hasAccessByCodes(['hrm:recruit:offer:create'])
     ) {
-      actions.push({ command: 'offer', label: '发 Offer' });
+      // 发 Offer 必须挂在一条应聘记录上（Offer 的薪资、职位、入职日期都取自应聘记录）。
+      // 后台手工新增的候选人不经过门户投递，没有 applicationId，点击必报
+      // 「应聘编号不能为空」，因此这里直接置灰并说明原因，避免无效点击。
+      if (candidate.applicationId) {
+        actions.push({ command: 'offer', label: '发 Offer' });
+      } else {
+        actions.push({
+          command: 'offer',
+          // 菜单项被禁用时 antd 不会触发 hover，tooltip 看不到，因此把原因写进文案
+          label: '发 Offer（该候选人无应聘记录）',
+          disabled: true,
+          tooltip:
+            '该候选人没有应聘记录，无法发 Offer。请让其在招聘门户投递职位，或在「招聘沟通」中把求职者转为候选人后再操作。',
+        });
+      }
     }
     if (candidate.status === HrmRecruitCandidateStatus.ELIMINATED) {
       actions.push({ command: 'restore', label: '恢复为新候选人' });
@@ -897,6 +911,10 @@ function getRowDropDownActions(row: HrmRecruitCandidateApi.RecruitCandidate) {
     label: action.label,
     auth: [] as string[],
     danger: action.command === 'delete',
+    // 透传禁用态与说明：例如「发 Offer」在候选人没有应聘记录时必须置灰并给出原因，
+    // 否则用户点下去只会拿到后端「应聘编号不能为空」的报错。
+    disabled: action.disabled,
+    tooltip: action.tooltip,
     ...(action.command === 'delete'
       ? {
           popConfirm: {
@@ -1071,13 +1089,6 @@ onMounted(async () => {
         <div class="flex shrink-0 flex-nowrap items-center gap-2">
           <TableAction
             :actions="[
-              {
-                label: '新增',
-                type: 'primary',
-                icon: ACTION_ICON.ADD,
-                auth: ['hrm:recruit:candidate:create'],
-                onClick: handleCreate,
-              },
               {
                 label: '一键清理',
                 type: 'primary',

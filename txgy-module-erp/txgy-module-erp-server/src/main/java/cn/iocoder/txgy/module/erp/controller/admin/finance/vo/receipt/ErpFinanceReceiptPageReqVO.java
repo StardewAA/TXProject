@@ -45,4 +45,7 @@ public class ErpFinanceReceiptPageReqVO extends PageParam {
     @Schema(description = "业务编号", example = "123")
     private String bizNo;
 
+    @Schema(description = "编号数组（导出选中记录时使用）", example = "1,2,3")
+    private Long[] ids;
+
 }

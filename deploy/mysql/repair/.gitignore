@@ -1,0 +1,3 @@
+# Python runtime caches are not migration source files.
+__pycache__/
+*.py[cod]

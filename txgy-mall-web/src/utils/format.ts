@@ -1,3 +1,5 @@
+import { entryTenantId, legacyTenantId } from './tenant-context'
+
 export function formatMoney(value?: number | string): string {
   const cents = Number(value || 0)
   return (cents / 100).toFixed(2)
@@ -25,7 +27,27 @@ export function normalizeImage(url?: string): string {
 /** ERP 导入商品使用随前端发布的图片，避免第三方图床防盗链或失效。 */
 export function productImage(productId?: string | number, fallback?: string): string {
   const id = Number(productId)
-  if (id >= 910001 && id <= 910030) return `/product-images/${id}.jpg`
+  if (id === 940215) return '/product-images/940215-chlorinated-rubber-topcoat.png'
+  const kedunRealImages: Record<number, string> = {
+    940201: 'coating.png', 940202: 'coating.png', 940203: 'coating.png',
+    940204: 'fireproof-coating.png', 940205: 'mineral-wool.png',
+    940206: 'elastomeric-rubber.png', 940207: 'preinsulated-pipe.png',
+    940208: '3pe-pipe.png', 940209: 'ceramic-fiber.png',
+    940210: 'ceramic-fiber.png', 940211: 'coating.png',
+    940212: 'coating.png', 940213: 'coating.png', 940214: 'coating.png',
+    940216: 'coating.png', 940217: 'coating.png',
+    940218: 'fireproof-coating.png', 940219: 'fireproof-coating.png',
+    940220: 'coating.png', 940221: 'mineral-wool.png',
+    940222: 'mineral-wool.png', 940223: 'ceramic-fiber.png',
+    940224: 'elastomeric-rubber.png', 940225: 'rigid-foam-board.png',
+    940226: 'rigid-foam-board.png', 940227: 'metal-cladding.png',
+    940228: 'metal-cladding.png', 940229: 'mastic-adhesive.png',
+    940230: 'fiberglass-cloth.png', 940231: 'preinsulated-pipe.png',
+    940232: 'preinsulated-pipe.png', 940233: '3pe-pipe.png',
+    940234: 'pipe-support.png', 940235: 'mastic-adhesive.png',
+  }
+  if (kedunRealImages[id]) return `/product-images/kedun-real/${kedunRealImages[id]}`
+  if (entryTenantId === legacyTenantId && id >= 910001 && id <= 910030) return `/product-images/${id}.jpg`
   return normalizeImage(fallback)
 }
 

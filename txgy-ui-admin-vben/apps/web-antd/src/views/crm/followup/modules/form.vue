@@ -66,7 +66,12 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       // 设置到 values
-      await formApi.setValues(data);
+      // 实际跟进时间默认「当前时间」：它是「多久没跟进 / 掉入公海」的计时起点，
+      // 显式带出来避免漏填；补录历史跟进时，由用户改成实际联系的日期即可
+      await formApi.setValues({
+        ...data,
+        followUpTime: data.followUpTime ?? Date.now(),
+      });
     } finally {
       modalApi.unlock();
     }

@@ -110,6 +110,8 @@ txgy:
       base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       api-key: ${DASHSCOPE_API_KEY:}
       model: ${DASHSCOPE_MODEL:qwen-plus}
+      vision-model: ${DASHSCOPE_VISION_MODEL:qwen-vl-plus}
+      extract-timeout: ${CRM_AI_EXTRACT_TIMEOUT:60000}
   # CRM 产品管理对接 WMS（进仓产品）的同步配置
   # mode=remote：调用 WMS 的 GET /admin-api/wms/crm/products/page（正式对接方式）
   # mode=mock：直接读取同库 WMS 表，供本地联调使用（application-local.yaml 已开启）

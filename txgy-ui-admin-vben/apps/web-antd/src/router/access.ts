@@ -289,7 +289,9 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
       injectAiChatMenu(menus, accessStore.accessCodes);
       return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(filterHrmEmployeePortalRecruitMenus(menus)),
+        filterMallPromotionMenus(
+          filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
+        ),
       );
     },
     // 可以指定没有权限跳转403页面
@@ -297,6 +299,46 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     // 如果 route.meta.menuVisibleWithForbidden = true
     layoutMap,
     pageMap,
+  });
+}
+
+/**
+ * WMS 菜单改造：
+ * 将历史菜单中的 WMS 首页入口统一指向 AI 首页，避免旧数据库菜单导致入口消失。
+ */
+function transformWmsMenus(
+  menus: AppRouteRecordRaw[],
+  inWms = false,
+): AppRouteRecordRaw[] {
+  const classify = (menu: AppRouteRecordRaw) => {
+    const path = normalizeMenuPath(menu.path);
+    const component = normalizeMenuPath(menu.component);
+    const root = path === 'wms';
+    const scoped = inWms || root || path.startsWith('wms/') || component.startsWith('views/wms/');
+    const labels = [menu.name, menu.meta?.title];
+    const ai = scoped && (path === 'wms/ai-center' || (inWms && path === 'ai-center') || component === 'views/wms/ai/index.vue' || labels.includes('AI 智能助手'));
+    const old = scoped && !root && (path === 'wms/home' || (inWms && path === 'home') || component === 'views/wms/home/index.vue' || labels.some((label) => ['WMS 首页', '仓储首页', '分析页'].includes(String(label))));
+    return { root, scoped, home: ai || old, ai };
+  };
+  // Prefer an existing AI entry so its id, permission metadata and componentName survive.
+  const preferredHome = menus.find((menu) => classify(menu).ai) ?? menus.find((menu) => classify(menu).home);
+  return menus.flatMap((original) => {
+    const kind = classify(original);
+    if (kind.home && original !== preferredHome) return [];
+    let menu = { ...original };
+    if (kind.root || kind.home) {
+      menu.componentName = menu.componentName || menu.name;
+      menu.name = kind.root ? '智慧仓储系统' : '仓储首页';
+      menu.meta = { ...menu.meta, title: menu.name };
+    }
+    if (kind.home) {
+      menu.path = inWms ? 'ai-center' : '/wms/ai-center';
+      menu.component = 'views/wms/ai/index.vue';
+    }
+    if (Array.isArray(menu.children)) {
+      menu.children = transformWmsMenus(menu.children, kind.scoped);
+    }
+    return [menu];
   });
 }
 
@@ -322,7 +364,7 @@ function injectAiChatMenu(
     componentName: 'CrmAiChat',
     path: 'ai-chat',
     component: 'views/crm/ai-chat/index.vue',
-    icon: 'tabler:robot',
+    icon: 'crmai:avatar',
     meta: {},
     visible: true,
     // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）

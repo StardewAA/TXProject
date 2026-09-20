@@ -38,4 +38,16 @@ public class PointActivityApiImpl implements PointActivityApi {
         return success(true);
     }
 
+    @Override
+    public CommonResult<Boolean> validatePointStockReturn(Long activityId, Long skuId, Integer count, Long orderItemId) {
+        pointActivityService.validatePointStockReturn(activityId, skuId, count, orderItemId);
+        return success(true);
+    }
+
+    @Override
+    public CommonResult<Boolean> returnPointStock(Long activityId, Long skuId, Integer count, Long orderItemId) {
+        pointActivityService.returnPointStock(activityId, skuId, count, orderItemId);
+        return success(true);
+    }
+
 }

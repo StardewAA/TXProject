@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitCandidateDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.config.HrmRecruitChannelDO;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
@@ -37,7 +37,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmEmployeeDO extends BaseDO {
+public class HrmEmployeeDO extends TenantBaseDO {
 
     /**
      * 员工编号
@@ -147,6 +147,12 @@ public class HrmEmployeeDO extends BaseDO {
      * 字典 {@link DictTypeConstants#HRM_EMPLOYEE_TYPE}
      */
     private Integer type;
+    /**
+     * 用工形式编号（hrm_employment_type.id）
+     *
+     * <p>决定该员工签哪份合同、按什么方式计薪、是否记工日、是否参与自动转正。</p>
+     */
+    private Long employmentTypeId;
     /**
      * 入职时间
      */

@@ -17,6 +17,15 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @ToString(callSuper = true)
 public class CrmAfterSaleVisitTaskPageReqVO extends PageParam {
 
+    /**
+     * 提醒类型 - 待办提醒（待办「任务提醒」使用）
+     *
+     * <p>实时查询口径：任务状态 ∈ {待处理, 已逾期}；
+     * 其中「待处理」还要求 计划回访日期 ≤ 今天 + 售后设置「任务临期提醒提前天数」，
+     * 「已逾期」无条件纳入（逾期任务的任务日期必然早于今天）
+     */
+    public static final Integer REMIND_TYPE_APPROACHING = 1;
+
     @Schema(description = "来源计划编号", example = "1")
     private Long planId;
 
@@ -35,5 +44,8 @@ public class CrmAfterSaleVisitTaskPageReqVO extends PageParam {
     @Schema(description = "计划执行日期区间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY)
     private LocalDate[] taskDate;
+
+    @Schema(description = "提醒类型：1=临期（待处理，且计划回访日在提前提醒天数内）；为空表示全部", example = "1")
+    private Integer remindType;
 
 }

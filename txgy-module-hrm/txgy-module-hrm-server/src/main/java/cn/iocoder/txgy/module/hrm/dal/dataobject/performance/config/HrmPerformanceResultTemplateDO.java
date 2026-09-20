@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.performance.config;
 
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -30,7 +30,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmPerformanceResultTemplateDO extends BaseDO {
+public class HrmPerformanceResultTemplateDO extends TenantBaseDO {
 
     /**
      * 绩效结果模板编号

@@ -4,6 +4,8 @@
     :title="!isReconnecting ? '连接客服成功' : '会话重连中'"
     navbar="inner"
   >
+    <view v-if="chat.expired" class="ss-p-30">账号已变化，原会话已关闭，请重新进入客服。</view>
+    <template v-else>
     <!--  覆盖头部导航栏背景颜色  -->
     <view class="page-bg" :style="{ height: sys_navBar + 'px' }"></view>
     <!--  聊天区域  -->
@@ -44,6 +46,7 @@
       @select="onSelect"
       @close="chat.showSelect = false"
     />
+    </template>
   </s-layout>
 </template>
 
@@ -62,6 +65,8 @@
   import KeFuApi from '@/sheep/api/promotion/kefu';
   import { useWebSocket } from './util/useWebSocket';
   import { jsonParse } from '@/sheep/helper/utils';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  import { onHide } from '@dcloudio/uni-app';
 
   const sys_navBar = sheep.$platform.navbar;
 
@@ -72,17 +77,22 @@
     toolsMode: '',
     showSelect: false,
     selectMode: '',
+    expired: false,
   });
+  const task = useTenantTask(() => { chat.expired=true;chat.msg='';chat.showTools=false;chat.showSelect=false; });
+  onHide(task.invalidate);
 
   // 发送消息
   async function onSendMessage() {
-    if (!chat.msg) return;
+    const current = task.capture();
+    if (!current() || !chat.msg) return;
     try {
       const data = {
         contentType: KeFuMessageContentTypeEnum.TEXT,
         content: JSON.stringify({ text: chat.msg }),
       };
       await KeFuApi.sendKefuMessage(data);
+      if (!current()) return;
       chat.msg = '';
       // 文本消息接口只返回发送结果，不会返回可直接渲染的消息对象。
       // 发送成功后重新拉取列表，确保消息立即出现在当前会话中。
@@ -107,6 +117,8 @@
 
   // 点击工具栏开关
   function onTools(mode) {
+    const current = task.capture();
+    if (!current()) return;
     if (isReconnecting.value) {
       sheep.$helper.toast('您已掉线！请返回重试');
       return;
@@ -124,6 +136,7 @@
     }
     // 延迟打开等一下过度效果
     setTimeout(() => {
+      if (!current()) return;
       chat.toolsMode = mode;
       chat.showTools = true;
     }, 200);
@@ -136,10 +149,14 @@
   }
 
   async function onSelect({ type, data }) {
+    const current = task.capture();
+    if (!current()) return;
+    try {
     let msg;
     switch (type) {
       case 'image':
-        const res = await FileApi.uploadFile(data.tempFiles[0].path);
+        const res = await FileApi.uploadFile(data.tempFiles[0].path, '', undefined, current);
+        if (!current()) return;
         msg = {
           contentType: KeFuMessageContentTypeEnum.IMAGE,
           content: JSON.stringify({ picUrl: res.data }),
@@ -162,11 +179,13 @@
       // 发送消息
       // scrollBottom();
       await KeFuApi.sendKefuMessage(msg);
+      if (!current()) return;
       await messageListRef.value.refreshMessageList();
       chat.showTools = false;
       chat.showSelect = false;
       chat.selectMode = '';
     }
+    } catch (error) { if (current()) sheep.$helper.toast(error.message || '发送失败，请重试'); }
   }
 
   //======================= 聊天工具相关 end =======================

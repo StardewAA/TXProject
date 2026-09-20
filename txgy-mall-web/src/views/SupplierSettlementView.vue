@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useAccountMessageBox } from '@/composables/useAccountOperation'
+const ElMessageBox = useAccountMessageBox()
 import { settlementApi, settlementStatus, type SettlementBill, type SettlementDetail } from '@/api/settlement'
 import { formatMoney, formatDate } from '@/utils/format'
 const route=useRoute(), shopId=computed(()=>Number(route.params.shopId))
@@ -13,7 +15,7 @@ async function confirm(){if(!detail.value||busy.value)return;const b=detail.valu
 async function viewProof(){if(detail.value)proof.value=await settlementApi.proof(shopId.value,detail.value.bill.id)}
 watch(shopId,()=>{page.value=1;opened.value=false;detail.value=undefined;void load()},{immediate:true})
 </script>
-<template><div class="container page-section"><RouterLink to="/sales">← 销售中心</RouterLink><h1>店铺结算</h1><p>平台审核后由您核对确认；线下付款由平台登记，未接自动打款。金额单位：元。</p><el-button :disabled="busy" @click="load">刷新账单</el-button><el-alert v-if="error" title="账单加载失败，请确认店铺授权后重试" type="error" :closable="false"/>
+<template><div class="container page-section"><MallLink to="/sales">← 销售中心</MallLink><h1>店铺结算</h1><p>平台审核后由您核对确认；线下付款由平台登记，未接自动打款。金额单位：元。</p><el-button :disabled="busy" @click="load">刷新账单</el-button><el-alert v-if="error" title="账单加载失败，请确认店铺授权后重试" type="error" :closable="false"/>
 <el-table :data="rows" v-loading="busy"><el-table-column prop="no" label="结算单号" min-width="190"/><el-table-column prop="billMonth" label="月份"/><el-table-column prop="orderCount" label="订单数"/><el-table-column label="应结金额"><template #default="{row}">{{formatMoney(row.settlementAmount)}}</template></el-table-column><el-table-column label="状态" min-width="170"><template #default="{row}">{{settlementStatus[row.status]}}</template></el-table-column><el-table-column label="操作"><template #default="{row}"><el-button :disabled="busy" @click="show(row)">查看账单</el-button></template></el-table-column></el-table>
 <el-pagination v-model:current-page="page" :page-size="10" :total="total" :disabled="busy" layout="prev,pager,next,total" @current-change="load"/>
 <el-dialog v-model="opened" title="店铺结算账单" width="90%" :close-on-click-modal="false"><template v-if="detail"><h2>{{detail.bill.shopName}} · {{detail.bill.billMonth}} · 第{{detail.bill.version}}版</h2><p>{{settlementStatus[detail.bill.status]}} / {{detail.bill.no}}</p>

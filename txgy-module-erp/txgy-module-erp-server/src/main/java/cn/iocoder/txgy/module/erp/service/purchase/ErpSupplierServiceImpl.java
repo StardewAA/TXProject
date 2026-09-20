@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.purchase;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -44,6 +46,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSupplier(ErpSupplierSaveReqVO createReqVO) {
+        validateUserIdUnique(null, createReqVO.getUserId());
         ErpSupplierDO supplier = BeanUtils.toBean(createReqVO, ErpSupplierDO.class);
         // 统一编码由服务端生成，保证跨模块同源（MES/WMS 均消费该编码）
         supplier.setPartnerCode(generatePartnerCode());
@@ -79,6 +82,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
                 && !Objects.equals(oldSupplier.getPartnerCode(), updateReqVO.getPartnerCode())) {
             throw exception(SUPPLIER_PARTNER_CODE_IMMUTABLE);
         }
+        validateUserIdUnique(updateReqVO.getId(), updateReqVO.getUserId());
         // 更新
         ErpSupplierDO updateObj = BeanUtils.toBean(updateReqVO, ErpSupplierDO.class);
         updateObj.setPartnerCode(oldSupplier.getPartnerCode());
@@ -109,9 +113,31 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         return supplier;
     }
 
+    /**
+     * 一个登录账号只能绑定一家供应商，否则「按登录账号反查供应商」结果不确定，
+     * 供应商数据隔离会失效。
+     */
+    private void validateUserIdUnique(Long id, Long userId) {
+        if (userId == null) {
+            return;
+        }
+        ErpSupplierDO bound = supplierMapper.selectByUserId(userId);
+        if (bound != null && !Objects.equals(bound.getId(), id)) {
+            throw exception(SUPPLIER_USER_DUPLICATE, bound.getName());
+        }
+    }
+
     @Override
     public ErpSupplierDO getSupplier(Long id) {
         return supplierMapper.selectById(id);
+    }
+
+    @Override
+    public ErpSupplierDO getSupplierByUserId(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        return supplierMapper.selectByUserId(userId);
     }
 
     @Override
@@ -128,6 +154,9 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
 
     @Override
     public List<ErpSupplierDO> getSupplierList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
         return supplierMapper.selectByIds(ids);
     }
 

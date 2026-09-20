@@ -12,7 +12,8 @@ export namespace CrmFollowUpApi {
     content: string; // 跟进内容
     picUrls: string[]; // 图片
     fileUrls: string[]; // 附件
-    nextTime: Date; // 下次联系时间
+    nextTime: Date; // 下次联系时间（计划时间，仅用于待办提醒）
+    followUpTime?: Date; // 实际跟进时间（本次实际联系对方的时间，公海回收计时起点）
     businessIds: number[]; // 关联的商机编号数组
     businesses: Business[]; // 关联的商机数组
     contactIds: number[]; // 关联的联系人编号数组

@@ -48,6 +48,10 @@ public class MemberUserDO extends TenantBaseDO {
      * 手机
      */
     private String mobile;
+    /** Normalized tenant-local account name; NULL for legacy accounts. */
+    private String loginName;
+    /** Unverified contact only. Never used for authentication or password recovery. */
+    private String contactMobile;
     /**
      * 邮箱
      */

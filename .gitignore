@@ -11,6 +11,11 @@ target/
 .flattened-pom.xml
 
 ######################################################################
+# 本地数据（体积大，不纳入版本管理）
+backup/
+.workbuddy/
+
+######################################################################
 # IDE
 
 ### STS ###
@@ -69,6 +74,12 @@ _debug/
 # 前端依赖与构建产物
 node_modules/
 
+# 前端按需加载的图标集合（由 scripts/generate-offline-icons.mjs 生成，不入 git）
+/txgy-ui-admin-vben/apps/web-antd/public/iconify/
+# 本地构建验证产生的历史产物副本（dist/ 已忽略，这里是手工重命名留下的）
+/txgy-ui-admin-vben/apps/web-antd/dist.bak/
+/txgy-ui-admin-vben/apps/web-antd/dist.old/
+
 ######################################################################
 # 本地数据库整库备份
 sql/mysql/
@@ -125,3 +136,8 @@ deploy/backend/erp-app.jar
 deploy/backend/bpm-app.jar
 deploy/backend/wms-app.jar
 /deploy/jars/**/app.jar
+
+# 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）
+.docker-local/
+# 独立编排初始化用的整库 dump（本地生成，不入库）
+deploy/mysql/standalone/001-*.sql

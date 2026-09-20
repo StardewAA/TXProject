@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAccountOperation } from '@/composables/useAccountOperation'
+const operation = useAccountOperation()
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { supplierApi } from '@/api/supplier'
@@ -18,11 +20,13 @@ async function upload(event:Event){
   const local=URL.createObjectURL(file)
   try{
    await new Promise<void>((resolve,reject)=>{const image=new Image();image.onload=()=>image.naturalWidth*image.naturalHeight<=25000000?resolve():reject(Error('图片像素过大'));image.onerror=()=>reject(Error('图片无法读取'));image.src=local})
-   const url=await supplierApi.uploadImage(file)
+  if(!operation.current())return
+  const url=await supplierApi.uploadImage(file)
+  if(!operation.current())return
    if(!/^https?:\/\//i.test(url)||url.length>512)throw Error('图片存储地址无效')
    if(!props.modelValue.includes(url))emit('update:modelValue',[...props.modelValue,url])
-  }catch(e){ElMessage.error(`${file.name}：${e instanceof Error?e.message:'上传失败'}`)}finally{URL.revokeObjectURL(local)}
- }}finally{uploading.value=false;emit('busy',false)}
+  }catch(e){if(operation.current())ElMessage.error(`${file.name}：${e instanceof Error?e.message:'上传失败'}`)}finally{URL.revokeObjectURL(local)}
+ }}finally{uploading.value=false;if(operation.current())emit('busy',false)}
 }
 </script>
 <template>

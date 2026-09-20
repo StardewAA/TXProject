@@ -1,6 +1,8 @@
 <!-- 用户信息 -->
 <template>
   <s-layout title="用户信息" class="set-userinfo-wrap">
+    <view v-if="state.expired" class="ss-p-30">账号已变化，请返回个人中心重新进入。</view>
+    <template v-else>
     <uni-forms
       :model="state.model"
       :rules="state.rules"
@@ -177,6 +179,7 @@
         <button class="ss-rest-button logout-btn ui-Shadow-Main" @tap="onSubmit">保存</button>
       </view>
     </su-fixed>
+    </template>
   </s-layout>
 </template>
 
@@ -186,6 +189,8 @@
   import { clone } from 'lodash-es';
   import { showAuthModal } from '@/sheep/hooks/useModal';
   import UserApi from '@/sheep/api/member/user';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  import { onHide } from '@dcloudio/uni-app';
   import {
     chooseAndUploadFile,
     uploadFilesFromPath,
@@ -196,7 +201,11 @@
     rules: {},
     thirdInfo: {}, // 社交用户的信息
     submitting: false,
+    uploading: false,
+    expired: false,
   });
+  const task = useTenantTask(() => { state.expired=true; state.model = {}; state.thirdInfo = {}; sheep.$helper.toast('账号已变化，请返回个人中心重新进入'); });
+  onHide(task.invalidate);
 
   const placeholderStyle = 'color:#BBBBBB;font-size:28rpx;line-height:normal';
 
@@ -227,18 +236,20 @@
   async function onChooseAvatar(e) {
     const tempUrl = e.detail.avatarUrl || '';
     if (!tempUrl) return;
-    const files = await uploadFilesFromPath(tempUrl);
-    if (files.length > 0) {
-      state.model.avatar = files[0].url;
-    }
+    await uploadAvatar(current => uploadFilesFromPath(tempUrl, '', current));
   }
 
   // 手动选择头像，进行上传
   async function onChangeAvatar() {
-    const files = await chooseAndUploadFile({ type: 'image' });
-    if (files.length > 0) {
-      state.model.avatar = files[0].url;
-    }
+    await uploadAvatar(current => chooseAndUploadFile({ type: 'image', count: 1, isCurrent: current }));
+  }
+  async function uploadAvatar(upload) {
+    const current = task.capture();
+    if (!current() || state.uploading) return;
+    state.uploading = true;
+    try { const files = await upload(current); if (current() && files.length) state.model.avatar = files[0].url; }
+    catch (error) { if (current() && !String(error?.errMsg || '').includes('cancel')) sheep.$helper.toast(error.message || '头像上传失败，请重试'); }
+    finally { state.uploading = false; }
   }
 
   // 修改密码
@@ -256,13 +267,15 @@
 
   // 解绑第三方账号
   function unBindThirdOauth() {
+    const current = task.capture();
+    if (!current()) return;
     uni.showModal({
       title: '解绑提醒',
       content: '解绑后您将无法通过微信登录此账号',
       cancelText: '再想想',
       confirmText: '确定',
       success: async function (res) {
-        if (!res.confirm) {
+        if (!res.confirm || !current()) {
           return;
         }
         const result = await sheep.$platform.useProvider('wechat').unbind(state.thirdInfo.openid);
@@ -275,7 +288,8 @@
 
   // 保存信息
   async function onSubmit() {
-    if (state.submitting) return;
+    const current = task.capture();
+    if (!current() || state.submitting || state.uploading) return;
     state.submitting = true;
     try {
       const response = await UserApi.updateUser({
@@ -283,7 +297,7 @@
         nickname: state.model.nickname,
         sex: state.model.sex,
       });
-      if (response?.code === 0) {
+      if (current() && response?.code === 0) {
         await getUserInfo();
       }
     } catch (error) {
@@ -293,10 +307,12 @@
 
   // 获得用户信息
   const getUserInfo = async () => {
+    const current = task.capture();
+    if (!current()) return;
     // 个人信息
     try {
       const userInfo = await sheep.$store('user').getInfo();
-      if (!userInfo) {
+      if (!userInfo || !current()) {
         return;
       }
       state.model = clone(userInfo);
@@ -304,6 +320,7 @@
       // 获得社交用户的信息
       if (sheep.$platform.name !== 'H5') {
         const result = await sheep.$platform.useProvider('wechat').getInfo();
+        if (!current()) return;
         state.thirdInfo = result || {};
       }
     } catch (error) {

@@ -4,6 +4,7 @@ import type { WmsWarehouseApi } from '#/api/wms/md/warehouse';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { CommonStatusEnum } from '@vben/constants';
 
 import { ElMessage } from 'element-plus';
 
@@ -69,7 +70,11 @@ const [Modal, modalApi] = useVbenModal({
     formApi.setState({ schema: useFormSchema(formApi) });
     const data = modalApi.getData<WmsWarehouseApi.Warehouse>();
     if (!data || !data.id) {
-      await formApi.setValues({ sort: 0 });
+      await formApi.setValues({
+        sort: 0,
+        status: CommonStatusEnum.ENABLE,
+        warehouseType: 'RAW_MATERIAL',
+      });
       return;
     }
     // 加载数据

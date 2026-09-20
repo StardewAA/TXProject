@@ -43,6 +43,7 @@ public enum AiPlatformEnum implements ArrayValuable<String> {
     SUNO("Suno", "Suno"), // Suno AI
     GROK("Grok", "Grok"), // Grok
 
+    LOCAL("Local", "本地模型"), // 本地内置模型（如本地哈希向量模型，无需外部 API）
     ;
 
     /**

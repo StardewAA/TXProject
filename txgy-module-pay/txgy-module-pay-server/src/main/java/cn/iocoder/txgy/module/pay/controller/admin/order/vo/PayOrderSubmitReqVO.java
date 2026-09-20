@@ -6,6 +6,7 @@ import org.hibernate.validator.constraints.URL;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.util.Map;
 
 @Schema(description = "管理后台 - 支付订单提交 Request VO")
@@ -14,6 +15,7 @@ public class PayOrderSubmitReqVO {
 
     @Schema(description = "支付单编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     @NotNull(message = "支付单编号不能为空")
+    @Positive(message = "支付单编号必须大于零")
     private Long id;
 
     @Schema(description = "支付渠道", requiredMode = Schema.RequiredMode.REQUIRED, example = "wx_pub")

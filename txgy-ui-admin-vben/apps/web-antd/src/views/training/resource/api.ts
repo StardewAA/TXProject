@@ -88,8 +88,8 @@ export namespace TrainingResourceApi {
 
   /** 试题 */
   export interface Question {
-    id?: number;
-    /** 题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 */
+    id?: number | string;
+    /** 题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 6 填空 7 简答 */
     qtype?: number;
     stem?: string;
     optionsJson?: string;
@@ -265,9 +265,9 @@ export function getDocumentPage(params: PageParam & Record<string, any>) {
   );
 }
 
-/** 上传文档（multipart，file + 元数据） */
-export function uploadDocument(data: FormData) {
-  return requestClient.post<number>('/training/document/upload', data, {
+/** 上传 / 批量上传文档（multipart，files[] + 元数据），返回新文档 ID 列表 */
+export function uploadDocuments(data: FormData) {
+  return requestClient.post<number[]>('/training/document/upload', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 }
@@ -403,7 +403,7 @@ export function getQuestionPage(params: PageParam & Record<string, any>) {
 }
 
 /** 试题详情 */
-export function getQuestion(id: number) {
+export function getQuestion(id: number | string) {
   return requestClient.get<TrainingResourceApi.Question>(
     `/training/question/get?id=${id}`,
   );
@@ -445,14 +445,14 @@ export function importQuestions(file: File) {
 
 // ========== AI 智能导入（文档 → 试题）==========
 
-/** AI 解析文档试题（仅预览，不入库） */
+/** AI 解析文档试题（仅预览，不入库）；大模型解析耗时可达 1~2 分钟，显式放宽前端超时 */
 export function parseQuestionByAi(file: File) {
   const data = new FormData();
   data.append('file', file);
   return requestClient.post<TrainingResourceApi.AiQuestionParseResult>(
     '/training/question/ai/parse',
     data,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 },
   );
 }
 
@@ -484,5 +484,12 @@ export function getOperationLogPage(params: PageParam & Record<string, any>) {
   return requestClient.get<PageResult<TrainingResourceApi.OperationLog>>(
     '/training/resource-log/page',
     { params },
+  );
+}
+
+/** 资源中心统计（文档/视频/试题规模与关键状态） */
+export function getResourceCenterStats() {
+  return requestClient.get<Record<string, number>>(
+    '/training/resource-center/stats',
   );
 }

@@ -1,16 +1,15 @@
 /**
  * 商城商品档案运行时适配。
  *
- * mall-catalog.js 保存 ERP 展示元数据；本模块从商城 APP 接口读取租户 1
- * 的真实 SPU，并将接口字段合并到 ERP 元数据上。接口暂不可用时返回本地
- * 档案，保证首页和分类页仍可打开，待接口恢复后可通过 force 刷新。
+ * 按受控商城入口缓存真实接口结果。空商城保持空态，失败不回填旧租户商品。
  */
 import CategoryApi from '@/sheep/api/product/category';
 import SpuApi from '@/sheep/api/product/spu';
 import { mallCategories, mallProducts } from './mall-catalog';
+import { ensureTenantReady, getControlledTenantId } from '@/sheep/helper/tenant-runtime';
 
-let catalogCache = null;
-let catalogPromise = null;
+const catalogCaches = new Map();
+const catalogPromises = new Map();
 
 const categoryByApiId = new Map(
   [
@@ -30,6 +29,7 @@ const categoryByApiId = new Map(
 );
 
 const categoryByName = new Map(mallCategories.map((category) => [category.name, category.key]));
+const categoryColors = ['#2563eb', '#0f766e', '#7c3aed', '#c2410c', '#dc2626', '#ca8a04', '#0284c7', '#475569'];
 
 function toYuan(value, fallback = 0) {
   const number = Number(value);
@@ -60,9 +60,11 @@ function resolveCategoryKey(spu, localProduct) {
   return categoryByApiId.get(Number(spu?.categoryId)) || '';
 }
 
-function normalizeProduct(spu) {
-  const localProduct = findLocalProduct(spu) || {};
-  const categoryKey = resolveCategoryKey(spu, localProduct);
+function normalizeProduct(spu, tenant, categories) {
+  // The bundled ERP metadata belongs to the historical tenant 1 only.
+  const localProduct = tenant === '1' ? findLocalProduct(spu) || {} : {};
+  const categoryKey = categories.find(c => Number(c.apiId) === Number(spu.categoryId))?.key
+    || (tenant === '1' ? resolveCategoryKey(spu, localProduct) : '');
   return {
     ...localProduct,
     id: spu.id,
@@ -84,46 +86,59 @@ function normalizeProduct(spu) {
   };
 }
 
-function normalizeFallbackProducts() {
-  return mallProducts.map((product) => ({
-    ...product,
-    id: product.id || 0,
-    stock: Number(product.stock ?? 0),
-    source: 'local',
-  }));
-}
+function normalizeApiCategories(categories = [], tenant, products = []) {
+  const apiById = new Map(categories.map((item) => [Number(item.id), item]));
+  const productCountByCategory = new Map();
+  products.forEach((product) => {
+    const categoryId = Number(product?.categoryId);
+    if (Number.isFinite(categoryId) && categoryId > 0) {
+      productCountByCategory.set(categoryId, (productCountByCategory.get(categoryId) || 0) + 1);
+    }
+  });
 
-function normalizeApiCategories(categories = []) {
-  const apiNameById = new Map(categories.map((item) => [Number(item.id), item.name]));
-  return mallCategories.map((category) => ({
-    ...category,
-    apiId:
-      [...categoryByApiId.entries()].find(([, key]) => key === category.key)?.[0] ||
-      [...apiNameById.entries()].find(([, name]) => name === category.name)?.[0] ||
-      null,
-  }));
+  // 分类页只展示当前商城实际有商品的末级分类。不同租户可以维护完全不同的
+  // 分类名称和编号，不能再用平台旧分类名称做硬匹配。
+  return [...productCountByCategory.entries()].map(([apiId, count], index) => {
+    const apiCategory = apiById.get(apiId);
+    const legacyKey = tenant === '1' ? categoryByApiId.get(apiId) : '';
+    const exactKey = categoryByName.get(apiCategory?.name);
+    const key = legacyKey || exactKey || `category-${apiId}`;
+    const presentation = mallCategories.find((category) => category.key === key);
+    const name = apiCategory?.name || presentation?.name || '其他材料';
+    const parent = apiById.get(Number(apiCategory?.parentId));
+    return {
+      ...presentation,
+      key,
+      apiId,
+      name,
+      group: parent?.name || presentation?.group || '工程材料',
+      icon: presentation?.icon || name.slice(0, 2),
+      color: presentation?.color || categoryColors[index % categoryColors.length],
+      hint: presentation?.hint || `${count} 款在售商品`,
+    };
+  });
 }
 
 /**
  * 加载商城用户端商品档案。
  * @param {boolean} force 是否忽略缓存重新请求
- * @returns {Promise<{products: Array, categories: Array, source: 'api'|'local'}>}
+ * @returns {Promise<{products: Array, categories: Array, source: 'api'}>}
  */
 export async function loadMallCatalog(force = false) {
-  if (catalogCache && !force) {
-    return catalogCache;
-  }
-  if (catalogPromise && !force) {
-    return catalogPromise;
-  }
+  await ensureTenantReady();
+  const tenant = getControlledTenantId();
+  if (catalogCaches.has(tenant) && !force) return catalogCaches.get(tenant);
+  if (catalogPromises.has(tenant) && !force) return catalogPromises.get(tenant);
 
-  catalogPromise = Promise.allSettled([
+  const pending = Promise.allSettled([
     SpuApi.getSpuPage({ pageNo: 1, pageSize: 100 }),
     CategoryApi.getCategoryList(),
   ])
     .then(([spuResult, categoryResult]) => {
       const spuResponse = spuResult.status === 'fulfilled' ? spuResult.value : null;
       const categoryResponse = categoryResult.status === 'fulfilled' ? categoryResult.value : null;
+      if (getControlledTenantId() !== tenant) throw new Error('商城已变化，请刷新商品');
+      if (spuResponse?.code !== 0 || !Array.isArray(spuResponse.data?.list)) throw new Error('商品暂无法加载');
       const apiProducts = spuResponse?.code === 0 && Array.isArray(spuResponse.data?.list)
         ? spuResponse.data.list.filter((item) => item?.id)
         : [];
@@ -131,37 +146,23 @@ export async function loadMallCatalog(force = false) {
         ? categoryResponse.data
         : [];
 
-      if (apiProducts.length === 0) {
-        catalogCache = {
-          products: normalizeFallbackProducts(),
-          categories: normalizeApiCategories(apiCategories),
-          source: 'local',
-        };
-        return catalogCache;
-      }
-
       // 按接口顺序展示，便于后台新增商品后用户端立即可见；ERP 元数据只负责
       // 分类、单位和规格等展示补充，不覆盖接口价格、库存和图片。
-      catalogCache = {
-        products: apiProducts.map(normalizeProduct),
-        categories: normalizeApiCategories(apiCategories),
+      const categories = normalizeApiCategories(apiCategories, tenant, apiProducts);
+      const catalog = {
+        products: apiProducts.map(spu => normalizeProduct(spu, tenant, categories)),
+        categories,
         source: 'api',
       };
-      return catalogCache;
-    })
-    .catch(() => {
-      catalogCache = {
-        products: normalizeFallbackProducts(),
-        categories: normalizeApiCategories(),
-        source: 'local',
-      };
-      return catalogCache;
+      if (catalogPromises.get(tenant) === pending) catalogCaches.set(tenant, catalog);
+      return catalog;
     })
     .finally(() => {
-      catalogPromise = null;
+      if (catalogPromises.get(tenant) === pending) catalogPromises.delete(tenant);
     });
 
-  return catalogPromise;
+  catalogPromises.set(tenant, pending);
+  return pending;
 }
 
 export function getCatalogCategoryKeyByName(name) {

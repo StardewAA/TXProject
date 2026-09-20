@@ -17,6 +17,7 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+import Detail from './modules/detail.vue';
 
 defineOptions({ name: 'WmsWarehouse' });
 
@@ -24,6 +25,7 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+const [DetailModal, detailModalApi] = useVbenModal({ connectedComponent: Detail, destroyOnClose: true });
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -38,6 +40,9 @@ function handleCreate() {
 /** 编辑仓库 */
 function handleEdit(row: WmsWarehouseApi.Warehouse) {
   formModalApi.setData(row).open();
+}
+function handleDetail(row: WmsWarehouseApi.Warehouse) {
+  detailModalApi.setData({ id: row.id }).open();
 }
 
 /** 删除仓库 */
@@ -102,6 +107,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <DetailModal />
     <Grid table-title="仓库列表">
       <template #toolbar-tools>
         <TableAction
@@ -126,6 +132,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '查看详情',
+              type: 'link',
+              onClick: handleDetail.bind(null, row),
+            },
             {
               label: $t('common.edit'),
               type: 'link',

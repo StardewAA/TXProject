@@ -11,8 +11,8 @@ import { useVbenForm } from '#/adapter/form';
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   createBusinessStatus,
-  DEFAULT_STATUSES,
   getBusinessStatus,
+  STANDARD_STAGES,
   updateBusinessStatus,
 } from '#/api/crm/business/status';
 import { $t } from '#/locales';
@@ -51,10 +51,10 @@ const [Modal, modalApi] = useVbenModal({
     const data =
       (await formApi.getValues()) as CrmBusinessStatusApi.BusinessStatus;
     try {
-      if (formData.value?.statuses && formData.value.statuses.length > 0) {
-        data.statuses = formData.value.statuses;
-        data.statuses.splice(-3, 3);
-      }
+      // 仅提交普通阶段：赢单/输单已不再作为商机阶段（改由「赢单」「输单」按钮驱动）
+      data.statuses = (formData.value?.statuses || []).filter(
+        (item) => !item.endStatus,
+      );
       await (formData.value?.id
         ? updateBusinessStatus(data)
         : createBusinessStatus(data));
@@ -79,35 +79,27 @@ const [Modal, modalApi] = useVbenModal({
           id: undefined,
           name: '',
           deptIds: [],
-          statuses: [],
+          // 新建时预置标准 5 阶段，与商机管理保持一致
+          statuses: STANDARD_STAGES.map((item) => ({ ...item })),
         };
-        await handleAddStatus();
       } else {
         formData.value = await getBusinessStatus(data.id);
-        if (
-          !formData.value?.statuses?.length ||
-          formData.value?.statuses?.length === 0
-        ) {
-          await handleAddStatus();
+        if (!formData.value?.statuses?.length) {
+          formData.value.statuses = STANDARD_STAGES.map((item) => ({ ...item }));
         }
       }
       // 设置到 values
       await formApi.setValues(formData.value as any);
-      await gridApi.grid.reloadData(
-        (formData.value!.statuses = [
-          ...formData.value.statuses,
-          ...DEFAULT_STATUSES,
-        ]) as any,
-      );
+      await gridApi.grid.reloadData(formData.value!.statuses as any);
     } finally {
       modalApi.unlock();
     }
   },
 });
 
-/** 添加状态 */
+/** 添加阶段 */
 async function handleAddStatus() {
-  formData.value!.statuses!.splice(-3, 0, {
+  formData.value!.statuses!.push({
     name: '',
     percent: undefined,
   });
@@ -154,6 +146,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Modal :title="getTitle" class="w-1/2">
     <Form class="mx-4">
+      <div class="mb-2 rounded bg-gray-50 p-2 text-xs text-gray-500">
+        商机阶段已标准化为 5 个固定阶段：商机待评估(5%) / 初步接洽(10%) /
+        需求确认(40%) / 方案评估(60%) /
+        商务谈判(70%)。「赢单」「输单」不再作为阶段，请使用商机列表的「赢单」「输单」按钮，此配置仅用于历史数据兼容与统计口径。
+      </div>
       <template #statuses>
         <Grid class="w-full">
           <template #endStatus="{ row, rowIndex }">

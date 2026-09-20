@@ -30,8 +30,10 @@ import { useDescription } from '#/components/description';
 import { DictTag } from '#/components/dict-tag';
 import { TableAction } from '#/components/table-action';
 
+import { canDeliver } from '../../components/workbench-model';
 import AddressForm from '../modules/address-form.vue';
 import DeliveryForm from '../modules/delivery-form.vue';
+import ErpInventory from '../modules/erp-inventory.vue';
 import PriceForm from '../modules/price-form.vue';
 import RemarkForm from '../modules/remark-form.vue';
 import {
@@ -224,7 +226,7 @@ const handlePickUp = async () => {
   });
   try {
     await pickUpOrder(order.value.id!);
-    message.success('核销成功');
+    message.success('核销请求已提交，出库确认后订单将自动更新');
     await getDetail();
   } finally {
     hideLoading();
@@ -246,6 +248,7 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height :title="order.no" :loading="loading">
+    <ErpInventory v-if="orderId" :order-id="orderId" />
     <template #extra>
       <TableAction
         :actions="[
@@ -257,25 +260,27 @@ onMounted(async () => {
           },
           {
             label: '调整价格',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleUpdatePrice,
             ifShow: order.status === TradeOrderStatusEnum.UNPAID.status,
           },
           {
             label: '备注',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleRemark,
           },
           {
             label: '发货',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleDelivery,
-            ifShow:
-              order.status === TradeOrderStatusEnum.UNDELIVERED.status &&
-              order.deliveryType === DeliveryTypeEnum.EXPRESS.type,
+            ifShow: canDeliver(order),
           },
           {
             label: '修改地址',
+            auth: ['trade:order:update'],
             type: 'primary',
             onClick: handleUpdateAddress,
             ifShow:
@@ -284,10 +289,12 @@ onMounted(async () => {
           },
           {
             label: '核销',
+            auth: ['trade:order:pick-up'],
             type: 'primary',
             onClick: handlePickUp,
             ifShow:
               order.status === TradeOrderStatusEnum.UNDELIVERED.status &&
+              order.pickupable === true &&
               order.deliveryType === DeliveryTypeEnum.PICK_UP.type,
           },
         ]"

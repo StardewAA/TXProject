@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.NumberUtils;
 import cn.iocoder.txgy.module.bpm.controller.admin.task.vo.task.*;
+import cn.iocoder.txgy.module.bpm.framework.flowable.core.candidate.WmsApprovalCandidates;
 import cn.iocoder.txgy.module.bpm.convert.task.BpmTaskConvert;
 import cn.iocoder.txgy.module.bpm.dal.dataobject.definition.BpmFormDO;
 import cn.iocoder.txgy.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
@@ -51,6 +52,8 @@ public class BpmTaskController {
 
     @Resource
     private BpmTaskService taskService;
+    @Resource
+    private WmsApprovalCandidates wmsApprovalCandidates;
     @Resource
     private BpmProcessInstanceService processInstanceService;
     @Resource
@@ -193,6 +196,23 @@ public class BpmTaskController {
     public CommonResult<Boolean> delegateTask(@Valid @RequestBody BpmTaskDelegateReqVO reqVO) {
         taskService.delegateTask(getLoginUserId(), reqVO);
         return success(true);
+    }
+
+    @GetMapping("/delegate-candidates")
+    @Operation(summary = "获取当前 WMS 审批任务可抄送、转办、委派或加签的审批人编号")
+    @PreAuthorize("@ss.hasPermission('bpm:task:query')")
+    public CommonResult<Set<Long>> getDelegateCandidates(@RequestParam("taskId") String taskId) {
+        Task task = taskService.getTask(taskId);
+        if (task == null || !String.valueOf(getLoginUserId()).equals(task.getAssignee())) {
+            return success(Set.of());
+        }
+        String processKey = processDefinitionService.getProcessDefinition(task.getProcessDefinitionId()).getKey();
+        if (!"wms_receipt_approval".equals(processKey) && !"wms_shipment_approval".equals(processKey)) {
+            return success(Set.of());
+        }
+        Set<Long> users = wmsApprovalCandidates.resolveDelegateUsers(task);
+        users.remove(getLoginUserId());
+        return success(users);
     }
 
     @PutMapping("/transfer")

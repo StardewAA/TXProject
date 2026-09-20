@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS `pay_order_extension` (
     `channel_code`       varchar(32)   NOT NULL,
     `user_ip`            varchar(50)   NULL     DEFAULT NULL,
     `status`             tinyint(4)    NOT NULL,
+    `submit_state`       tinyint       NULL     DEFAULT NULL,
     `channel_extras`     varchar(1024) NULL     DEFAULT NULL,
     `channel_error_code`  varchar(64)  NULL,
     `channel_error_msg` varchar(64)    NULL,

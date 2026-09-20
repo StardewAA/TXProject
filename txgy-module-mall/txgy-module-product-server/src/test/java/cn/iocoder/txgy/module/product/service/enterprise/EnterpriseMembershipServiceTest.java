@@ -32,6 +32,13 @@ class EnterpriseMembershipServiceTest {
   assertThrows(ServiceException.class,()->service.requireBuyer(7L));
   verifyNoInteractions(enterpriseMapper,shopService);
  }
+ @Test void customerWithoutApprovedApplicationCannotPurchaseOrSell() {
+  // Customer ownership is intentionally not a dependency of enterprise permission evaluation.
+  when(mapper.selectOne(any(Wrapper.class))).thenReturn(null);
+  assertThrows(ServiceException.class,()->service.requireBuyer(7L));
+  assertThrows(ServiceException.class,()->service.requireShop(7L,3L));
+  verifyNoInteractions(enterpriseMapper,shopService);
+ }
  @Test void buyerCannotSellEvenIfEnterpriseHasShops() {
   approved("buyer"); assertTrue(service.salesShops(7L).isEmpty());verifyNoInteractions(shopService);
  }

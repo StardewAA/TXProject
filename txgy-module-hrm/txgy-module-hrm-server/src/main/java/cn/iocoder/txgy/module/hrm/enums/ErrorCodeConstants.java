@@ -113,13 +113,47 @@ public interface ErrorCodeConstants {
     // ========== 招聘职位类型 1-050-200-004 ==========
     ErrorCode RECRUIT_POST_TYPE_NOT_EXISTS = new ErrorCode(1_050_200_004, "招聘职位类型不存在");
     ErrorCode RECRUIT_POST_TYPE_PARENT_ERROR = new ErrorCode(1_050_200_019, "父职位类型不能是自身或下属节点");
-    ErrorCode RECRUIT_POST_TYPE_PARENT_NOT_EXISTS = new ErrorCode(1_050_200_020, "父职位类型不存在");
-    ErrorCode RECRUIT_POST_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_200_021, "同级职位类型名称已存在");
-    ErrorCode RECRUIT_POST_TYPE_HAS_CHILDREN = new ErrorCode(1_050_200_022, "职位类型存在子类型，不能删除");
-    ErrorCode RECRUIT_POST_TYPE_USED = new ErrorCode(1_050_200_023, "职位类型已被职位使用，不能删除");
-    ErrorCode RECRUIT_POST_TYPE_DISABLED = new ErrorCode(1_050_200_024, "职位类型已停用");
-    ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_025, "职位类型必须选择叶子节点");
+    // 注意：职位类型早前占用了 020~025，与「应聘记录 / 招聘 Offer」段冲突导致报错文案串台，
+    // 现整体迁移到 070~075 的独立号段；变更仅影响文案映射，不涉及业务语义。
+    ErrorCode RECRUIT_POST_TYPE_PARENT_NOT_EXISTS = new ErrorCode(1_050_200_070, "父职位类型不存在");
+    ErrorCode RECRUIT_POST_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_200_071, "同级职位类型名称已存在");
+    ErrorCode RECRUIT_POST_TYPE_HAS_CHILDREN = new ErrorCode(1_050_200_072, "职位类型存在子类型，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_USED = new ErrorCode(1_050_200_073, "职位类型已被职位使用，不能删除");
+    ErrorCode RECRUIT_POST_TYPE_DISABLED = new ErrorCode(1_050_200_074, "职位类型已停用");
+    ErrorCode RECRUIT_POST_TYPE_NOT_LEAF = new ErrorCode(1_050_200_075, "职位类型必须选择叶子节点");
     ErrorCode RECRUIT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_027, "招聘简历版本不存在");
+
+    // ========== 个人简历版本 1-050-200-034 ==========
+    ErrorCode PERSONAL_RESUME_VERSION_NOT_EXISTS = new ErrorCode(1_050_200_034, "个人简历版本不存在");
+    ErrorCode PERSONAL_RESUME_VERSION_CONTENT_EMPTY = new ErrorCode(1_050_200_035, "简历内容为空，无法保存版本");
+    ErrorCode PERSONAL_RESUME_VERSION_PARENT_INVALID = new ErrorCode(1_050_200_036, "父版本不存在或不属于当前用户");
+    ErrorCode PERSONAL_RESUME_VERSION_IDEMPOTENCY_CONFLICT =
+            new ErrorCode(1_050_200_037, "该请求已提交过，请勿重复提交");
+    ErrorCode RECRUIT_APPLICATION_RESUME_REQUIRED = new ErrorCode(1_050_200_038, "请选择用于投递的简历");
+
+    // ========== 招聘 Agent 1-050_200-039 ==========
+    ErrorCode AGENT_TASK_NOT_EXISTS = new ErrorCode(1_050_200_039, "Agent 任务不存在");
+    ErrorCode AGENT_TASK_STATUS_INVALID = new ErrorCode(1_050_200_040, "Agent 任务状态不允许该操作");
+    ErrorCode AGENT_TASK_IDEMPOTENCY_CONFLICT = new ErrorCode(1_050_200_041, "该请求已提交过，请勿重复提交");
+    ErrorCode AGENT_MODEL_NOT_CONFIGURED = new ErrorCode(1_050_200_042, "AI 模型尚未配置，请联系管理员");
+    ErrorCode AGENT_MODEL_CALL_FAILED = new ErrorCode(1_050_200_043, "AI 模型调用失败，请稍后重试");
+    ErrorCode AGENT_MODEL_OUTPUT_INVALID = new ErrorCode(1_050_200_044, "AI 返回内容格式不符合要求");
+    ErrorCode AGENT_SENSITIVE_MASK_FAILED = new ErrorCode(1_050_200_045, "敏感信息脱敏失败，已阻止本次模型调用");
+    ErrorCode AGENT_RESUME_CONTENT_EMPTY = new ErrorCode(1_050_200_046, "简历内容为空或不足，无法分析");
+    ErrorCode AGENT_POST_NOT_AVAILABLE = new ErrorCode(1_050_200_047, "目标职位不存在或已停止招聘");
+    ErrorCode AGENT_MODEL_QUOTA_EXHAUSTED =
+            new ErrorCode(1_050_200_048, "AI 模型额度不足或已用尽，请在模型平台充值或调整计费模式");
+
+    // ========== 简历优化确认 1-050-200-049 ==========
+    ErrorCode AGENT_OPTIMIZE_TASK_MISMATCH = new ErrorCode(1_050_200_049, "优化任务与简历版本不匹配");
+    ErrorCode AGENT_OPTIMIZE_DECISION_INVALID = new ErrorCode(1_050_200_050, "确认结果不合法");
+    ErrorCode AGENT_OPTIMIZE_ORIGINAL_NOT_FOUND = new ErrorCode(1_050_200_051, "原值在源简历版本中不存在");
+    ErrorCode AGENT_OPTIMIZE_CONTENT_INVALID = new ErrorCode(1_050_200_052, "确认后简历内容不合法");
+
+    // ========== 招聘 Agent 管理端 1-050-200-053 ==========
+    ErrorCode AGENT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_053, "应聘记录不存在或无权访问");
+    ErrorCode AGENT_APPLICATION_RESUME_UNAVAILABLE =
+            new ErrorCode(1_050_200_054, "该应聘记录关联的简历不是在线结构化简历，暂不支持 AI 分析");
 
     // ========== 招聘沟通 1-050-200-060 ==========
     ErrorCode RECRUIT_CHAT_CONVERSATION_NOT_EXISTS = new ErrorCode(1_050_200_060, "招聘沟通会话不存在");
@@ -133,6 +167,13 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_CHAT_RESUME_NOT_EXISTS = new ErrorCode(1_050_200_068, "请先等待求职者发送简历");
     ErrorCode RECRUIT_CHAT_CANDIDATE_PROFILE_INCOMPLETE =
             new ErrorCode(1_050_200_069, "求职者资料不完整，暂时无法转为候选人");
+    ErrorCode HRM_POLICY_NOT_EXISTS = new ErrorCode(1_050_200_080, "政策不存在");
+    ErrorCode HRM_POLICY_DATE_INVALID = new ErrorCode(1_050_200_081, "生效日期不能晚于失效日期");
+    // ========== 简历附件校验 1-050-200-082 ==========
+    ErrorCode HRM_RESUME_FILE_TYPE_INVALID =
+            new ErrorCode(1_050_200_082, "简历附件仅支持 PDF、DOC、DOCX 格式");
+    ErrorCode HRM_RESUME_FILE_SIZE_EXCEEDED =
+            new ErrorCode(1_050_200_083, "简历附件大小不能超过 10MB");
 
     // ========== 招聘应聘流程 1-050-200-020 ==========
     ErrorCode RECRUIT_APPLICATION_NOT_EXISTS = new ErrorCode(1_050_200_020, "招聘应聘记录不存在");
@@ -142,7 +183,10 @@ public interface ErrorCodeConstants {
     ErrorCode RECRUIT_APPLICATION_REASON_REQUIRED = new ErrorCode(1_050_200_023, "该操作必须填写原因");
     ErrorCode RECRUIT_OFFER_NOT_EXISTS = new ErrorCode(1_050_200_024, "招聘 Offer 不存在");
     ErrorCode RECRUIT_OFFER_STATE_INVALID = new ErrorCode(1_050_200_025, "招聘 Offer 状态不允许该操作");
-    ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_026, "该应聘已存在有效 Offer");
+    ErrorCode RECRUIT_OFFER_DUPLICATE = new ErrorCode(1_050_200_076, "该应聘已存在有效 Offer");
+    ErrorCode RECRUIT_CANDIDATE_CREATE_FORBIDDEN = new ErrorCode(1_050_200_077,
+            "候选人只能由求职者在招聘门户投递职位后自动产生，后台不支持手工新增；"
+                    + "如需补充简历，请在「招聘沟通」中把求职者转为候选人");
     ErrorCode RECRUIT_OFFER_POST_MISMATCH = new ErrorCode(1_050_200_032, "Offer 职位必须与应聘职位一致");
     ErrorCode RECRUIT_OFFER_DATA_INVALID = new ErrorCode(1_050_200_033, "Offer 薪资、有效期或入职日期不合法");
 
@@ -160,6 +204,16 @@ public interface ErrorCodeConstants {
     ErrorCode ATTENDANCE_CLOCK_REST_DAY = new ErrorCode(1_050_300_034, "今日休息，无需打卡");
     ErrorCode ATTENDANCE_CLOCK_NOT_ALLOWED = new ErrorCode(1_050_300_035, "当前不在可打卡时间");
     ErrorCode ATTENDANCE_CLOCK_POINT_INVALID = new ErrorCode(1_050_300_036, "不在考勤打卡范围内");
+    ErrorCode ATTENDANCE_CLOCK_POINT_OUT_OF_RANGE = new ErrorCode(1_050_300_039,
+            "当前定位距最近打卡点 {} 米，超出该点有效打卡半径 {} 米");
+    ErrorCode ATTENDANCE_CLOCK_PHOTO_REQUIRED = new ErrorCode(1_050_300_040, "打卡必须上传现场照片");
+    ErrorCode ATTENDANCE_CLOCK_SHIFT_NOT_AVAILABLE = new ErrorCode(1_050_300_044,
+            "该日期没有可用班次（休息日或班次时间未配置），无法打卡/补录");
+    ErrorCode ATTENDANCE_CLOCK_SHIFT_CONFIG_INCOMPLETE = new ErrorCode(1_050_300_045,
+            "考勤组班次未配置上下班时间，请在「考勤组设置」中补全班次");
+    ErrorCode ATTENDANCE_CLOCK_ATTENDANCE_DATE_REST = new ErrorCode(1_050_300_046,
+            "考勤日期 {} 无班次（休息日），无法补录；如需按前一日夜班补录，请确认应打卡时间与"
+                    + "实际打卡时间都落在该夜班窗口内");
     ErrorCode ATTENDANCE_CLOCK_WIFI_INVALID = new ErrorCode(1_050_300_037, "未连接指定的考勤 WiFi");
     ErrorCode ATTENDANCE_CLOCK_GROUP_NOT_EXISTS = new ErrorCode(1_050_300_038, "未匹配到考勤组，无法打卡");
 
@@ -171,6 +225,12 @@ public interface ErrorCodeConstants {
     ErrorCode ATTENDANCE_LEAVE_NOT_EXISTS = new ErrorCode(1_050_300_030, "请假申请不存在");
     ErrorCode ATTENDANCE_LEAVE_TIME_CONFLICT = new ErrorCode(1_050_300_031, "请假时间与已有申请重叠");
     ErrorCode ATTENDANCE_LEAVE_STATUS_INVALID = new ErrorCode(1_050_300_032, "只有审批中的请假申请可以取消");
+    ErrorCode ATTENDANCE_LEAVE_APPROVE_STATUS_INVALID = new ErrorCode(1_050_300_041,
+            "只有审批中的请假申请可以审批");
+    ErrorCode ATTENDANCE_LEAVE_APPROVAL_REASON_REQUIRED = new ErrorCode(1_050_300_042,
+            "驳回请假申请时必须填写驳回原因");
+    ErrorCode ATTENDANCE_LEAVE_WORKFLOW_APPROVAL = new ErrorCode(1_050_300_043,
+            "该请假申请走的是工作流审批，请在「审批进度」中处理");
 
     // ========== 薪资配置 1-050-400-000 ==========
     ErrorCode SALARY_CONFIG_NOT_EXISTS = new ErrorCode(1_050_400_000, "薪资配置不存在");
@@ -188,7 +248,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALARY_OPTION_CODE_OCCUPIED = new ErrorCode(1_050_400_029,
             "薪资项编码 {} 已被历史或自定义数据占用，请先完成数据迁移");
     ErrorCode SALARY_OPTION_STANDARD_CANNOT_MODIFY =
-            new ErrorCode(1_050_400_029, "标准薪资项不允许修改或删除");
+            new ErrorCode(1_050_400_032, "标准薪资项不允许修改或删除");
 
     // ========== 薪资计税规则 1-050-400-005 ==========
     ErrorCode SALARY_TAX_RULE_NOT_EXISTS = new ErrorCode(1_050_400_005, "计税规则不存在");
@@ -205,7 +265,7 @@ public interface ErrorCodeConstants {
     ErrorCode SALARY_PENDING_CHANGE_RECORD_EXISTS = new ErrorCode(1_050_400_016, "员工存在待生效的定薪调薪记录");
     ErrorCode SALARY_CHANGE_RECORD_STATUS_INVALID = new ErrorCode(1_050_400_017, "当前定薪调薪记录状态不允许执行该操作");
     ErrorCode SALARY_CHANGE_EFFECT_DATE_INVALID =
-            new ErrorCode(1_050_400_030, "调薪生效日期不能为空，且不能早于最近工资月份");
+            new ErrorCode(1_050_400_033, "调薪生效日期不能为空，且不能早于最近工资月份");
 
     // ========== 月度工资表 1-050-400-008 ==========
     ErrorCode SALARY_MONTH_RECORD_NOT_EXISTS = new ErrorCode(1_050_400_008, "月度工资表不存在");
@@ -322,6 +382,45 @@ public interface ErrorCodeConstants {
     ErrorCode PERFORMANCE_TARGET_CONFIRM_NO_PERMISSION =
             new ErrorCode(1_050_600_021, "当前用户不是该绩效目标的确认人");
 
+    // ========== 证件类型 1-050-700-000 ==========
+    ErrorCode CERTIFICATE_TYPE_NOT_EXISTS = new ErrorCode(1_050_700_000, "证件类型不存在");
+    ErrorCode CERTIFICATE_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_700_001, "证件类型名称已存在");
+    ErrorCode CERTIFICATE_TYPE_USED = new ErrorCode(1_050_700_002, "证件类型已被证件台账使用，不能删除");
+    ErrorCode CERTIFICATE_TYPE_DISABLED = new ErrorCode(1_050_700_003, "证件类型【{}】已停用");
+    ErrorCode CERTIFICATE_TYPE_SPECIAL_OPERATION_REVIEW_REQUIRED =
+            new ErrorCode(1_050_700_004, "特种作业证件必须开启复审并配置复审周期");
+    ErrorCode CERTIFICATE_TYPE_CODE_DUPLICATE = new ErrorCode(1_050_700_005, "证件类型编码已存在");
+
+    // ========== 证件台账 1-050-700-010 ==========
+    ErrorCode CERTIFICATE_LEDGER_NOT_EXISTS = new ErrorCode(1_050_700_010, "证件台账记录不存在");
+    ErrorCode CERTIFICATE_LEDGER_END_TIME_INVALID =
+            new ErrorCode(1_050_700_011, "证件有效结束日期不能早于有效开始日期");
+    ErrorCode CERTIFICATE_LEDGER_ATTACHMENT_REQUIRED =
+            new ErrorCode(1_050_700_012, "证件类型【{}】要求上传证件附件");
+    ErrorCode CERTIFICATE_LEDGER_CANCELLED =
+            new ErrorCode(1_050_700_013, "证件已注销，不能办理续证或复审");
+    ErrorCode CERTIFICATE_LEDGER_RENEWAL_REQUIRED =
+            new ErrorCode(1_050_700_014, "证件类型【{}】需要复审，请先办理续证或复审");
+    ErrorCode CERTIFICATE_LEDGER_STATUS_INVALID =
+            new ErrorCode(1_050_700_015, "证件状态只能手工设置为注销或恢复为有效");
+
+    // ========== 证件续证/复审 1-050-700-020 ==========
+    ErrorCode CERTIFICATE_RENEWAL_NOT_EXISTS = new ErrorCode(1_050_700_020, "证件续证/复审记录不存在");
+    ErrorCode CERTIFICATE_RENEWAL_TIME_INVALID =
+            new ErrorCode(1_050_700_021, "续证/复审后的有效期不能早于原证件有效期");
+    ErrorCode CERTIFICATE_RENEWAL_REVIEW_TIME_REQUIRED =
+            new ErrorCode(1_050_700_022, "复审类型必须填写复审日期");
+    ErrorCode CERTIFICATE_RENEWAL_REVIEW_TIME_NOT_ALLOWED =
+            new ErrorCode(1_050_700_023, "续证类型不允许填写复审日期");
+    ErrorCode CERTIFICATE_RENEWAL_TYPE_INVALID = new ErrorCode(1_050_700_024, "续证/复审类型不合法");
+
+    // ========== 证件预警 1-050-700-030 ==========
+    ErrorCode CERTIFICATE_WARNING_NOT_EXISTS = new ErrorCode(1_050_700_030, "证件预警记录不存在");
+    ErrorCode CERTIFICATE_WARNING_STATUS_INVALID =
+            new ErrorCode(1_050_700_031, "当前预警状态不允许执行该操作");
+    ErrorCode CERTIFICATE_WARNING_ADVANCE_DAYS_INVALID =
+            new ErrorCode(1_050_700_032, "证件类型【{}】的提前预警天数不合法");
+
     // ========== HRM 配置 1-050-800-000 ==========
     ErrorCode HRM_CONFIG_NOT_EXISTS = new ErrorCode(1_050_800_000, "HRM 配置不存在");
 
@@ -334,5 +433,86 @@ public interface ErrorCodeConstants {
 
     // ========== HRM 首页 1-050-900-001 ==========
     ErrorCode HOME_CALENDAR_DATE_RANGE_ILLEGAL = new ErrorCode(1_050_900_001, "HRM 首页日期范围不合法");
+
+    // ========== 工号规则 1-050-950-001 ==========
+    ErrorCode EMPLOYEE_NO_RULE_NOT_EXISTS = new ErrorCode(1_050_950_001, "当前租户未配置工号生成规则，请先在工号规则中配置租户缩写");
+
+    // ========== 公司信息（用工主体）1-050-950-002 ==========
+    ErrorCode COMPANY_PROFILE_NOT_EXISTS = new ErrorCode(1_050_950_002, "公司信息（用工主体）不存在");
+
+    // ========== 合同模板与渲染 1-050-950-003 ==========
+    ErrorCode CONTRACT_TEMPLATE_NOT_EXISTS = new ErrorCode(1_050_950_003, "未找到可用的合同模板，请先上传并启用模板");
+    ErrorCode CONTRACT_TEMPLATE_FILE_NOT_EXISTS = new ErrorCode(1_050_950_004, "合同模板文件不存在或已损坏，无法渲染");
+    ErrorCode CONTRACT_RENDER_COMPANY_REQUIRED = new ErrorCode(1_050_950_005, "未配置用工主体（公司信息），无法生成合同");
+    ErrorCode CONTRACT_RENDER_DATA_REQUIRED = new ErrorCode(1_050_950_006, "员工档案信息不完整，无法生成合同");
+    ErrorCode EMPLOYEE_NO_GENERATE_FAILED = new ErrorCode(1_050_950_007, "工号生成失败：连续 {} 个序号均已被占用，请检查工号规则与序号配置");
+    ErrorCode RECRUIT_OFFER_CANDIDATE_MOBILE_INVALID =
+            new ErrorCode(1_050_950_008, "候选人手机号为空或格式不正确，请先在候选人资料中补全手机号后再转员工");
+
+    // ========== 合同签署记录 1-050-950-009 ==========
+    ErrorCode CONTRACT_SIGN_RECORD_NOT_EXISTS = new ErrorCode(1_050_950_009, "合同签署记录不存在");
+    ErrorCode CONTRACT_SIGN_RECORD_PENDING_EXISTS =
+            new ErrorCode(1_050_950_010, "该合同已存在待签署记录，请直接在原记录上登记签署结果");
+    ErrorCode CONTRACT_SIGN_FILE_REQUIRED =
+            new ErrorCode(1_050_950_011, "签署状态为「已签」时必须上传签署件");
+    ErrorCode CONTRACT_SIGN_EMPLOYEE_REQUIRED =
+            new ErrorCode(1_050_950_012, "该合同尚未绑定员工（Offer 未转员工），无法创建签署记录");
+    ErrorCode CONTRACT_SIGN_RECORD_SIGNED_CANNOT_DELETE =
+            new ErrorCode(1_050_950_013, "已签署的合同记录不允许删除，请改为作废");
+
+    // ========== 用工形式 1-050-950-014 ==========
+    ErrorCode EMPLOYMENT_TYPE_NOT_EXISTS = new ErrorCode(1_050_950_014, "用工形式不存在");
+    ErrorCode EMPLOYMENT_TYPE_NAME_DUPLICATE = new ErrorCode(1_050_950_015, "用工形式名称已存在");
+    ErrorCode EMPLOYMENT_TYPE_CODE_DUPLICATE = new ErrorCode(1_050_950_016, "用工形式编码已存在");
+    ErrorCode EMPLOYMENT_TYPE_DISABLED = new ErrorCode(1_050_950_017, "用工形式「{}」已停用，不能再用于新入职");
+    ErrorCode EMPLOYMENT_TYPE_TEMPLATE_REQUIRED =
+            new ErrorCode(1_050_950_018, "用工形式「{}」尚未绑定默认合同模板，请先到「员工管理 → 用工形式」补齐模板后再转员工");
+    ErrorCode RECRUIT_OFFER_EMPLOYMENT_TYPE_REQUIRED = new ErrorCode(1_050_950_019, "转员工时必须选择用工形式");
+
+    // ========== Offer 通知 PDF 1-050-950-020 ==========
+    ErrorCode OFFER_PDF_FONT_MISSING = new ErrorCode(1_050_950_020,
+            "未找到可用的中文字体，无法生成 Offer 通知 PDF：请把中文字体（如 simhei.ttf）放入挂载目录 /app/fonts，或配置 hrm.offer.pdf.font-path");
+    ErrorCode OFFER_PDF_RENDER_FAILED = new ErrorCode(1_050_950_021, "Offer 通知 PDF 生成失败，请检查字体配置与 Offer 数据");
+
+    // ========== 安全合规（三级安全教育 / 体检） 1-050-950-044 ==========
+    ErrorCode SAFETY_EDUCATION_NOT_EXISTS = new ErrorCode(1_050_950_044, "安全教育记录不存在");
+    ErrorCode SAFETY_EDUCATION_INCOMPLETE =
+            new ErrorCode(1_050_950_045, "上岗卡控：三级安全教育未完成（缺 {}），完成并合格后才允许进场");
+    ErrorCode HEALTH_CHECK_NOT_EXISTS = new ErrorCode(1_050_950_046, "体检记录不存在");
+    ErrorCode HEALTH_CHECK_REQUIRED =
+            new ErrorCode(1_050_950_047, "上岗卡控：没有在有效期内的合格体检记录（{}），不允许进场");
+
+    // ========== 用工需求单 1-050-950-070 ==========
+    ErrorCode RECRUIT_DEMAND_NOT_EXISTS = new ErrorCode(1_050_950_070, "用工需求单不存在");
+    ErrorCode RECRUIT_DEMAND_STATUS_INVALID = new ErrorCode(1_050_950_071, "用工需求单状态不合法");
+    ErrorCode RECRUIT_DEMAND_FINISHED_CANNOT_UPDATE =
+            new ErrorCode(1_050_950_072, "需求单「{}」已招聘完成，如需继续招聘请新增需求单");
+    ErrorCode RECRUIT_DEMAND_HEADCOUNT_REACHED =
+            new ErrorCode(1_050_950_073, "需求单「{}」到岗人数已满（{} 人），请勿继续录用");
+
+    // ========== 员工黑名单 1-050-950-080 ==========
+    ErrorCode EMPLOYEE_BLACKLIST_NOT_EXISTS = new ErrorCode(1_050_950_080, "黑名单记录不存在");
+    ErrorCode EMPLOYEE_BLACKLIST_HIT =
+            new ErrorCode(1_050_950_081, "该员工在黑名单中：{}，不允许录用/再入职");
+
+    // ========== 部门编制 1-050-950-090 ==========
+    ErrorCode DEPT_HEADCOUNT_NOT_EXISTS = new ErrorCode(1_050_950_090, "部门编制记录不存在");
+    ErrorCode DEPT_HEADCOUNT_DUPLICATE = new ErrorCode(1_050_950_091, "该部门已配置编制，请勿重复新增");
+    ErrorCode DEPT_HEADCOUNT_FULL =
+            new ErrorCode(1_050_950_092, "部门「{}」在册人数（{}）已达编制上限（{}），如需超编请先调整编制");
+
+    // ========== 员工档案完整性 1-050-950-100 ==========
+    ErrorCode EMPLOYEE_ARCHIVE_INCOMPLETE =
+            new ErrorCode(1_050_950_100, "员工档案信息不完整，不允许办理「{}」：缺少 {}");
+
+    // ========== 考勤计薪规则 1-050-950-110 ==========
+    ErrorCode ATTENDANCE_RULE_NOT_EXISTS = new ErrorCode(1_050_950_110, "考勤计薪规则不存在");
+
+    // ========== 员工异动审批 1-050-950-120 ==========
+    ErrorCode EMPLOYEE_APPROVAL_TYPE_INVALID = new ErrorCode(1_050_950_120, "异动审批类型不合法");
+    ErrorCode EMPLOYEE_APPROVAL_STARTER_REQUIRED =
+            new ErrorCode(1_050_950_121, "无法确定发起人：请先给该员工开通后台账号，或由已登录用户发起");
+    ErrorCode EMPLOYEE_APPROVAL_NOT_EXISTS = new ErrorCode(1_050_950_122, "异动审批申请不存在");
+    ErrorCode EMPLOYEE_APPROVAL_STATUS_INVALID = new ErrorCode(1_050_950_123, "该申请已审批完成，不能重复审批");
 
 }

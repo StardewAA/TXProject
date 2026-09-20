@@ -27,7 +27,7 @@
    *
    */
 
-  import { reactive, computed } from 'vue';
+  import { reactive, computed, watch } from 'vue';
   import sheep from '@/sheep';
 
   // 组件数据
@@ -79,6 +79,9 @@
   });
 
   const emits = defineEmits(['load', 'error']);
+
+  // A previously broken avatar must not suppress a successfully uploaded replacement.
+  watch(() => props.src, () => { state.isError = false; });
 
   const customStyle = computed(() => {
     return {

@@ -59,6 +59,28 @@ function formatLocation(current: HrmPortalRecruitApi.Post) {
   );
 }
 
+function formatSalary(current: HrmPortalRecruitApi.Post) {
+  if (current.salaryUnit === -1 || (current.minSalary ?? 0) < 0) return '面议';
+  const min = current.minSalary;
+  const max = current.maxSalary;
+  if (min == null && max == null) return '薪资面议';
+  const format = (value?: number) => (value == null ? '' : `${value / 1000}K`);
+  if (min != null && max != null) return `${format(min)}-${format(max)}`;
+  return min != null ? `${format(min)}起` : `${format(max)}以内`;
+}
+
+/**
+ * 最晚入职时间。后端 LocalDateTime 序列化后是毫秒时间戳（数字），
+ * 不能直接当字符串处理，否则 .slice 会抛 TypeError 导致整页渲染失败。
+ */
+function formatLatestEntryTime(value?: number | string) {
+  if (value === null || value === undefined || value === '') return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function getCompanyName(current: HrmPortalRecruitApi.Post) {
   return (
     current.companyName ||
@@ -189,14 +211,17 @@ onMounted(async () => {
           <p class="detail-eyebrow">职位机会</p>
           <h1>{{ post.postName }}</h1>
           <div class="detail-meta">
-            <span>
-              {{ formatLocation(post) }}
-            </span>
+            <span>{{ formatSalary(post) }}</span>
+            <span>{{ formatLocation(post) }}</span>
+            <span>{{ getCompanyName(post) }}</span>
             <span v-if="post.postTypeName">{{ post.postTypeName }}</span>
           </div>
         </div>
         <div class="detail-actions">
           <a-button class="detail-chat-button" @click="openChat">立即沟通</a-button>
+          <p class="detail-flow-hint">
+            投递流程：先与 HR 沟通 → HR 回复后发送简历 → 即可完成投递
+          </p>
         </div>
       </header>
 
@@ -223,6 +248,22 @@ onMounted(async () => {
           <div class="aside-label">岗位信息</div>
           <dl>
             <div>
+              <dt>薪资待遇</dt>
+              <dd class="detail-highlight">{{ formatSalary(post) }}</dd>
+            </div>
+            <div>
+              <dt>工作性质</dt>
+              <dd>{{ formatJobNature(post.jobNature) }}</dd>
+            </div>
+            <div>
+              <dt>经验要求</dt>
+              <dd>{{ formatWorkTime(post.workTime) }}</dd>
+            </div>
+            <div>
+              <dt>学历要求</dt>
+              <dd>{{ formatEducation(post.educationRequire) }}</dd>
+            </div>
+            <div>
               <dt>发布企业</dt>
               <dd>{{ getCompanyName(post) }}</dd>
             </div>
@@ -237,6 +278,10 @@ onMounted(async () => {
             <div v-if="post.deptName">
               <dt>招聘部门</dt>
               <dd>{{ post.deptName }}</dd>
+            </div>
+            <div v-if="post.latestEntryTime">
+              <dt>最晚入职</dt>
+              <dd>{{ formatLatestEntryTime(post.latestEntryTime) }}</dd>
             </div>
           </dl>
         </aside>
@@ -338,8 +383,16 @@ onMounted(async () => {
 
 .detail-actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   align-items: center;
+}
+
+.detail-flow-hint {
+  margin: 0;
+  color: var(--el-text-color-secondary, #8a969f);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .detail-chat-button {
@@ -425,6 +478,9 @@ onMounted(async () => {
 }
 
 .detail-aside {
+  /* 岗位信息远短于左侧描述区，不粘性定位时右栏下方会留出大片空白。 */
+  position: sticky;
+  top: 20px;
   padding: 24px;
 }
 
@@ -456,6 +512,12 @@ onMounted(async () => {
   margin: 0;
   color: #2f5d73;
   font-size: 14px;
+}
+
+.detail-aside .detail-highlight {
+  color: #dc3545;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {

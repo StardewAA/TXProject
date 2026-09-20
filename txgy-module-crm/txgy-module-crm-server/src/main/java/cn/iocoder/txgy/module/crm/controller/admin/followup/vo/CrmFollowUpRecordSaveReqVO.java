@@ -35,6 +35,13 @@ public class CrmFollowUpRecordSaveReqVO {
     @NotNull(message = "下次联系时间不能为空")
     private LocalDateTime nextTime;
 
+    /**
+     * 实际跟进时间：本次实际联系客户的时间，是「多久没跟进 / 公海回收」计时的起点。
+     * 非必填，不填时取当前时间；允许补录历史跟进（填过去的日期）
+     */
+    @Schema(description = "实际跟进时间", example = "2026-09-01 10:00:00")
+    private LocalDateTime followUpTime;
+
     @Schema(description = "关联的商机编号数组")
     private List<Long> businessIds;
     @Schema(description = "关联的联系人编号数组")

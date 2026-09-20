@@ -62,7 +62,7 @@ onMounted(load)
       <div>
         <h2>采购优惠</h2>
         <p>后台配置的限时折扣会按商品和规格自动匹配。进入确认订单后，系统直接计算活动价，无需单独领取。</p>
-        <RouterLink to="/goods">选购商品 →</RouterLink>
+        <MallLink to="/goods">选购商品 →</MallLink>
       </div>
     </section>
     <section id="reward" class="benefit-card">
@@ -70,7 +70,7 @@ onMounted(load)
       <div>
         <h2>采购满额优惠</h2>
         <p>达到活动要求的采购金额或件数后，自动享受减免、包邮或积分奖励；最终规则会在结算明细中体现。</p>
-        <RouterLink to="/cart">前往购物车 →</RouterLink>
+        <MallLink to="/cart">前往购物车 →</MallLink>
       </div>
     </section>
     <section id="coupon" class="coupon-section">

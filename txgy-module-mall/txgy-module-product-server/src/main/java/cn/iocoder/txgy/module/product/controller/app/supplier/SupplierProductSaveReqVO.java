@@ -9,6 +9,7 @@ import java.util.List;
 @Data
 public class SupplierProductSaveReqVO {
     private Long id;
+    private Long expectedVersion;
     private Boolean specType;
     @NotNull private Long shopId;
     @NotBlank @Size(max=100) private String name;

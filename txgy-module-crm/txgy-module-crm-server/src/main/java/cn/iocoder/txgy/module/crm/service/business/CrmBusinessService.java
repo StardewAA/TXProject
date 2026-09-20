@@ -1,10 +1,13 @@
 package cn.iocoder.txgy.module.crm.service.business;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessLoseReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessTransferReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessUpdateStateReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessUpdateStatusReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessWinReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsFunnelReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessProductDO;
@@ -48,10 +51,11 @@ public interface CrmBusinessService {
      * 更新商机相关跟进信息
      *
      * @param id                 编号
+     * @param contactTime        实际跟进时间（本次实际联系客户的时间）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateBusinessFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateBusinessFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 更新商机的下次联系时间
@@ -64,9 +68,51 @@ public interface CrmBusinessService {
     /**
      * 更新商机的状态
      *
+     * <p>标准化后仅用于兼容历史调用：按旧状态名称映射为新的「商机阶段」；
+     * 赢单/输单必须使用 {@link #winBusiness} / {@link #loseBusiness}。
+     *
      * @param reqVO 更新请求
      */
     void updateBusinessStatus(CrmBusinessUpdateStatusReqVO reqVO);
+
+    /**
+     * 推进商机阶段（同步派生「商机状态组」与「预估赢单率」）
+     *
+     * @param id    商机编号
+     * @param stage 商机阶段：1商机待评估 2初步接洽 3需求确认 4方案评估 5商务谈判
+     */
+    void updateBusinessStage(Long id, Integer stage);
+
+    /**
+     * 商机赢单
+     *
+     * <p>签约日期、签约金额必填；成功后状态组=已赢单、预估赢单率=100，关键字段只读。
+     *
+     * @param reqVO  赢单请求
+     * @param userId 操作用户编号
+     */
+    void winBusiness(@Valid CrmBusinessWinReqVO reqVO, Long userId);
+
+    /**
+     * 商机输单
+     *
+     * <p>丢单原因必填、丢单备注选填；成功后状态组=已丢单、预估赢单率=0，关键字段只读。
+     *
+     * @param reqVO  输单请求
+     * @param userId 操作用户编号
+     */
+    void loseBusiness(@Valid CrmBusinessLoseReqVO reqVO, Long userId);
+
+    /**
+     * 调整商机状态组（仅管理员）
+     *
+     * <p>商机状态组为只读派生字段，普通销售无权修改。本接口仅支持「重新开启」
+     * （已赢单/已丢单 → 未开始/进行中）或纠正开启中的状态组，关闭必须走赢单/输单按钮。
+     *
+     * @param reqVO  调整请求
+     * @param userId 操作用户编号
+     */
+    void updateBusinessState(@Valid CrmBusinessUpdateStateReqVO reqVO, Long userId);
 
     /**
      * 删除商机
@@ -181,9 +227,14 @@ public interface CrmBusinessService {
      */
     default String getBusinessStatusName(Integer endStatus, CrmBusinessStatusDO status) {
         if (endStatus != null) {
-            return CrmBusinessEndStatusEnum.fromStatus(endStatus).getName();
+            // 注意：endStatus 可能为 0 等历史/非法值（枚举只定义 1/2/3），此处需兜底，
+            // 否则 fromStatus(...) 返回 null 会抛空指针，导致商机列表整体 500
+            CrmBusinessEndStatusEnum endStatusEnum = CrmBusinessEndStatusEnum.fromStatus(endStatus);
+            if (endStatusEnum != null) {
+                return endStatusEnum.getName();
+            }
         }
-        return status.getName();
+        return status == null ? null : status.getName();
     }
 
     /**

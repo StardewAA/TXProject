@@ -102,6 +102,19 @@
             <artifactId>txgy-spring-boot-starter-excel</artifactId>
         </dependency>
 
+        <!-- Word 文档生成相关：合同模板渲染与导出（Apache POI） -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.4.1</version>
+        </dependency>
+        <!-- Offer 通知 PDF 生成（Apache-2.0，与 bidding/training/cms 模块同款依赖） -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+        </dependency>
+
         <!-- 监控相关 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

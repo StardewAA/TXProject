@@ -10,7 +10,7 @@ import {
   erpPriceMultiply,
 } from '@vben/utils';
 
-import { Input, InputNumber, Select } from 'ant-design-vue';
+import { Input, InputNumber, Select, message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getProductSimpleList } from '#/api/erp/product/product';
@@ -38,6 +38,14 @@ const emit = defineEmits([
 
 const tableData = ref<ErpPurchaseOrderApi.PurchaseOrderItem[]>([]); // 表格数据
 const productOptions = ref<ErpProductApi.Product[]>([]); // 产品下拉选项
+let nextRowSeq = 1;
+
+/** 为前端新行生成稳定标识，避免多行新增时全部被视为同一行。 */
+function ensureRowSeq(row: ErpPurchaseOrderApi.PurchaseOrderItem) {
+  if (row.seq === undefined || row.seq === null) {
+    row.seq = row.id ?? -nextRowSeq++;
+  }
+}
 
 /** 获取表格合计数据 */
 const summaries = computed(() => {
@@ -86,7 +94,10 @@ watch(
     if (!items) {
       return;
     }
-    items.forEach((item) => initRow(item));
+    items.forEach((item) => {
+      ensureRowSeq(item);
+      initRow(item);
+    });
     tableData.value = [...items];
     await nextTick(); // 特殊：保证 gridApi 已经初始化
     await gridApi.grid.reloadData(tableData.value);
@@ -123,7 +134,9 @@ watch(
 function handleAdd() {
   const newRow = {
     id: undefined,
+    seq: -nextRowSeq++,
     productId: undefined,
+    productUnitId: undefined,
     productUnitName: undefined, // 产品单位
     productBarCode: undefined, // 产品条码
     productPrice: undefined,
@@ -191,11 +204,17 @@ function initRow(row: ErpPurchaseOrderApi.PurchaseOrderItem) {
 
 /** 表单校验 */
 function validate() {
+  if (tableData.value.length === 0) {
+    throw new Error('采购订单至少需要一条明细');
+  }
   for (let i = 0; i < tableData.value.length; i++) {
     const item = tableData.value[i];
     if (item) {
       if (!item.productId) {
         throw new Error(`第 ${i + 1} 行：产品不能为空`);
+      }
+      if (!item.productUnitId) {
+        throw new Error(`第 ${i + 1} 行：产品未配置单位，请先维护产品资料`);
       }
       if (!item.count || item.count <= 0) {
         throw new Error(`第 ${i + 1} 行：产品数量不能为空`);
@@ -213,7 +232,18 @@ defineExpose({
 
 /** 初始化 */
 onMounted(async () => {
-  productOptions.value = await getProductSimpleList();
+  try {
+    productOptions.value = await getProductSimpleList();
+  } catch (error: any) {
+    productOptions.value = [];
+    const errorData = error?.response?.data ?? error?.data ?? error;
+    message.error(
+      errorData?.msg ||
+        errorData?.message ||
+        error?.message ||
+        '产品加载失败，请检查接口服务后重试',
+    );
+  }
   // 目的：新增时，默认添加一行
   if (tableData.value.length === 0) {
     handleAdd();

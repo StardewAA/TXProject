@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.hrm.service.employee.info;
 
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.module.hrm.controller.admin.employee.vo.file.HrmEmployeeFileSaveReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeFileDO;
@@ -69,6 +70,29 @@ public class HrmEmployeeFileServiceImpl implements HrmEmployeeFileService {
     @Override
     public List<HrmEmployeeFileDO> getEmployeeFileList(Long employeeId) {
         return employeeFileMapper.selectListByEmployeeId(employeeId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> appendEmployeeFiles(Long employeeId, Integer type, List<String> fileUrls) {
+        if (CollUtil.isEmpty(fileUrls)) {
+            return java.util.Collections.emptyList();
+        }
+        // 1. 过滤掉已存在的地址（同一份文档重复生成时不重复归档）
+        Set<String> exists = new java.util.HashSet<>(convertList(
+                employeeFileMapper.selectListByEmployeeIdAndType(employeeId, type), HrmEmployeeFileDO::getUrl));
+        List<HrmEmployeeFileDO> newFiles = fileUrls.stream()
+                .filter(StrUtil::isNotBlank)
+                .filter(url -> !exists.contains(url))
+                .distinct()
+                .map(url -> new HrmEmployeeFileDO().setEmployeeId(employeeId).setType(type).setUrl(url))
+                .collect(java.util.stream.Collectors.toList());
+        if (CollUtil.isEmpty(newFiles)) {
+            return java.util.Collections.emptyList();
+        }
+        // 2. 批量新增
+        employeeFileMapper.insertBatch(newFiles);
+        return convertList(newFiles, HrmEmployeeFileDO::getUrl);
     }
 
 }

@@ -44,7 +44,7 @@
                   :value="item.value"
                   color="var(--ui-BG-Main)"
                   style="transform: scale(0.8)"
-                  :disabled="item.disabled"
+                  :disabled="item.disabled || !paymentAllowed || state.paying"
                   :checked="state.payment === item.value"
                 />
               </view>
@@ -59,18 +59,19 @@
           检测支付环境中
         </button>
         <button v-else-if="state.payStatus === -1" class="ss-reset-button past-due-btn" disabled>
-          支付已过期
+          支付单已关闭
         </button>
         <button
           v-else
           class="ss-reset-button save-btn"
           @tap="onPay"
-          :disabled="state.payStatus !== 1"
-          :class="{ 'disabled-btn': state.payStatus !== 1 }"
+          :disabled="!paymentAllowed || state.paying"
+          :class="{ 'disabled-btn': !paymentAllowed || state.paying }"
         >
           立即支付
         </button>
       </view>
+      <view class="ss-m-b-30 ss-flex ss-row-center"><button class="ss-reset-button" :disabled="syncing || state.paying" @tap="refresh">刷新支付状态</button></view>
     </view>
   </s-layout>
 </template>
@@ -78,10 +79,13 @@
   import { computed, reactive } from 'vue';
   import { onLoad } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
-  import { fen2yuan, useDurationTime } from '@/sheep/hooks/useGoods';
+  import { fen2yuan } from '@/sheep/hooks/useGoods';
   import PayOrderApi from '@/sheep/api/pay/order';
   import PayChannelApi from '@/sheep/api/pay/channel';
   import { getPayMethods, goPayResult } from '@/sheep/platform/pay';
+  import OrderApi from '@/sheep/api/trade/order';
+  import { usePaymentDeadline } from '@/sheep/hooks/usePaymentDeadline';
+  import { cashierPaymentState, monotonicNow, stampPaymentClock } from '@/sheep/helper/payment-deadline.mjs';
 
   const userWallet = computed(() => sheep.$store('user').userWallet);
 
@@ -92,29 +96,51 @@
     payStatus: 0, // 0=检测支付环境, -2=未查询到支付单信息， -1=支付已过期， 1=待支付，2=订单已支付
     payMethods: [], // 可选的支付方式
     payment: '', // 选中的支付方式
+    payOrderId: null,
+    tradeOrder: null,
+    paying: false,
   });
+  let channelAppId;
+  let successNotified = false;
+  const { now, active, syncing, confirmed, refresh } = usePaymentDeadline(
+    (time) => [cashierPaymentState(state.orderInfo, state.tradeOrder, state.orderType, time)],
+    () => state.payOrderId ? setOrder(state.payOrderId) : false,
+  );
+  const paymentState = computed(() => cashierPaymentState(state.orderInfo, state.tradeOrder, state.orderType, now.value));
+  const paymentAllowed = computed(() => active.value && !syncing.value && confirmed.value
+    && state.payStatus === 1 && paymentState.value.canPay);
 
-  const onPay = () => {
-    if (!state.orderInfo?.id) {
-      sheep.$helper.toast('支付单信息不可用，请返回重试');
+  const onPay = async () => {
+    if (state.paying) return;
+    if (!paymentAllowed.value) {
+      sheep.$helper.toast(payDescText.value || '支付单信息不可用，请刷新重试');
       return;
     }
-    if (state.payment === '') {
+    const method = state.payMethods.find((item) => item.value === state.payment && !item.disabled);
+    if (!method) {
       sheep.$helper.toast('请选择支付方式');
       return;
     }
-    if (state.payment === 'wallet') {
-      uni.showModal({
-        title: '提示',
-        content: '确定要支付吗?',
-        success: function (res) {
-          if (res.confirm) {
-            sheep.$platform.pay(state.payment, state.orderType, state.orderInfo.id);
-          }
-        },
-      });
-    } else {
-      sheep.$platform.pay(state.payment, state.orderType, state.orderInfo.id);
+    state.paying = true;
+    try {
+      if (method.value === 'wallet') {
+        const confirmed = await new Promise((resolve) => uni.showModal({
+          title: '提示', content: '确定要支付吗?',
+          success: (result) => resolve(result.confirm), fail: () => resolve(false),
+        }));
+        if (!confirmed) return;
+      }
+      // The wallet confirmation may remain open past the deadline. Recheck after it closes.
+      if (!(await refresh()) || !paymentAllowed.value) {
+        sheep.$helper.toast(payDescText.value || '暂不可支付，请刷新订单');
+        return;
+      }
+      if (!state.payMethods.some((item) => item.value === method.value && !item.disabled)) return;
+      const payment = sheep.$platform.pay(method.value, state.orderType, state.orderInfo.id);
+      await payment?.pending;
+      if (active.value) await refresh();
+    } finally {
+      state.paying = false;
     }
   };
 
@@ -124,16 +150,13 @@
       return '该订单已支付';
     }
     if (state.payStatus === 1) {
-      const time = useDurationTime(state.orderInfo.expireTime);
-      if (time.ms <= 0) {
-        state.payStatus = -1;
-        return '';
-      }
-      return `剩余支付时间 ${time.h}:${time.m}:${time.s} `;
+      return paymentState.value.text;
     }
     if (state.payStatus === -2) {
-      return '未查询到支付单信息';
+      return '支付状态未确认，请刷新后重试';
     }
+    if (state.payStatus === -1) return '支付单已关闭，请返回订单查看最新记录';
+    if (state.payStatus === 3) return '该支付单已退款，请返回查看记录';
     return '';
   });
 
@@ -144,10 +167,13 @@
       state.payStatus = -2;
       return;
     }
-    if (status === 10 || status === 20) {
+    if (status === 20) { state.payStatus = 3; return; }
+    if (status === 10) {
       // 支付成功
       state.payStatus = 2;
       // 跳转回支付成功页
+      if (successNotified) return;
+      successNotified = true;
       uni.showModal({
         title: '提示',
         content: '订单已支付',
@@ -168,8 +194,9 @@
 
   // 切换支付方式
   function onTapPay(e) {
+    if (state.paying || !paymentAllowed.value) return;
     const value = e?.detail?.value;
-    if (value) {
+    if (state.payMethods.some((item) => item.value === value && !item.disabled)) {
       state.payment = value;
     }
   }
@@ -178,10 +205,11 @@
   async function setOrder(id) {
     if (!id) {
       state.payStatus = -2;
-      return;
+      return false;
     }
 
     try {
+      const requestedAt = monotonicNow();
       // 获得支付订单信息。request 在网络异常时可能返回 false，不能直接解构。
       const response = await PayOrderApi.getOrder(id, true);
       const data = response?.data;
@@ -196,16 +224,33 @@
         data.status === null
       ) {
         state.payStatus = -2;
-        return;
+        return false;
       }
-      state.orderInfo = data;
+      state.orderInfo = stampPaymentClock(data, monotonicNow(), requestedAt);
+      state.tradeOrder = null;
+      if (state.orderType !== 'recharge' && Number(data.status) === 0) {
+        if (!data.merchantOrderId) { state.payStatus = -2; return false; }
+        const tradeRequestedAt = monotonicNow();
+        const tradeResponse = await OrderApi.getOrderDetail(data.merchantOrderId, true);
+        if (tradeResponse?.code !== 0 || !tradeResponse.data
+          || String(tradeResponse.data.payOrderId) !== String(data.id)
+          || String(tradeResponse.data.id) !== String(data.merchantOrderId)) {
+          state.payStatus = -2;
+          return false;
+        }
+        state.tradeOrder = stampPaymentClock(tradeResponse.data, monotonicNow(), tradeRequestedAt);
+      }
       // 设置支付状态
       checkPayStatus();
       // 获得支付方式
-      await setPayMethods();
+      if (Number(data.status) === 0 && (channelAppId !== data.appId || !state.payMethods.length)) {
+        await setPayMethods();
+      }
+      return true;
     } catch (error) {
       state.payStatus = -2;
       state.payMethods = [];
+      return false;
     }
   }
 
@@ -221,12 +266,10 @@
       state.payMethods = (getPayMethods(data) || []).filter(
         (item) => item && typeof item === 'object' && item.value,
       );
-      state.payMethods.find((item) => {
-        if (item.value && !item.disabled) {
-          state.payment = item.value;
-          return true;
-        }
-      });
+      channelAppId = state.orderInfo.appId;
+      if (!state.payMethods.some((item) => item.value === state.payment && !item.disabled)) {
+        state.payment = state.payMethods.find((item) => !item.disabled)?.value || '';
+      }
     } catch (error) {
       state.payMethods = [];
       state.payment = '';
@@ -243,11 +286,11 @@
       return;
     }
     // 获得支付订单信息
-    let id = options?.id;
+    state.payOrderId = options?.id;
     if (options?.orderType) {
       state.orderType = options.orderType;
     }
-    setOrder(id);
+    void refresh();
     // 刷新钱包的缓存
     sheep.$store('user').getWallet();
   });

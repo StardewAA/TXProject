@@ -27,4 +27,7 @@ public class AuthLoginRespVO {
     @Schema(description = "过期时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime expiresTime;
 
+    @Schema(description = "账号实际所属租户编号；前端据此纠正登录租户，避免所选租户与账号所属租户不一致", example = "2020")
+    private Long tenantId;
+
 }

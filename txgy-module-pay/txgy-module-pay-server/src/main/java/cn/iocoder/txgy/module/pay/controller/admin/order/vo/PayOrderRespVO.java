@@ -19,4 +19,10 @@ public class PayOrderRespVO extends PayOrderBaseVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;
 
+    @Schema(description = "服务端当前时间，毫秒时间戳；收银台用于校准倒计时")
+    private Long serverTime;
+
+    @Schema(description = "实际支付截止时间，毫秒时间戳")
+    private Long expireTimestamp;
+
 }

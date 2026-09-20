@@ -203,7 +203,7 @@ const coreRoutes: RouteRecordRaw[] = [
             path: 'exam',
             component: () =>
               import('#/views/portal/training/exam/index.vue'),
-            meta: { title: '考试与证书', hideInMenu: true },
+            meta: { title: '云培训学院考试系统', hideInMenu: true },
           },
           {
             name: 'PortalTrainingLive',
@@ -343,6 +343,15 @@ const coreRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    // 兼容历史菜单/旧链接直接跳转 /training/exam/index。
+    // 该路径不在系统菜单表中，独立注册无菜单冲突（勿在此处注册与
+    // system_menu 重复的培训路由，否则侧边栏菜单会匹配失败而空白）。
+    name: 'TrainingExamLegacyIndex',
+    path: '/training/exam/index',
+    redirect: '/training/exam/overview',
+    meta: { title: '考试与认证', hideInMenu: true },
+  },
+  {
     component: BasicLayout,
     meta: {
       title: '培训管理',
@@ -351,85 +360,6 @@ const coreRoutes: RouteRecordRaw[] = [
     path: '/training',
     redirect: '/training/exam/overview',
     children: [
-      {
-        name: 'TrainingExam',
-        path: 'exam',
-        component: () => import('#/views/training/exam/index.vue'),
-        redirect: '/training/exam/overview',
-        meta: { title: '考试与认证', hideInMenu: true },
-        children: [
-          {
-            path: 'overview',
-            name: 'TrainingExamOverview',
-            component: () =>
-              import('#/views/training/exam/overview/index.vue'),
-            meta: { title: '总览', icon: 'lucide:layout-dashboard' },
-          },
-          {
-            path: 'questions',
-            name: 'TrainingExamQuestions',
-            component: () =>
-              import('#/views/training/exam/questions/index.vue'),
-            meta: { title: '题库与审核', icon: 'lucide:list-checks' },
-          },
-          {
-            path: 'papers',
-            name: 'TrainingExamPapers',
-            component: () =>
-              import('#/views/training/exam/papers/index.vue'),
-            meta: { title: '试卷管理', icon: 'lucide:file-text' },
-          },
-          {
-            path: 'schedules',
-            name: 'TrainingExamSchedules',
-            component: () =>
-              import('#/views/training/exam/schedules/index.vue'),
-            meta: { title: '考试安排', icon: 'lucide:calendar' },
-          },
-          {
-            path: 'grading',
-            name: 'TrainingExamGrading',
-            component: () =>
-              import('#/views/training/exam/grading/index.vue'),
-            meta: { title: '阅卷与成绩', icon: 'lucide:check-square' },
-          },
-          {
-            path: 'certificates',
-            name: 'TrainingExamCertificates',
-            component: () =>
-              import('#/views/training/exam/certificates/index.vue'),
-            meta: { title: '证书管理', icon: 'lucide:award' },
-          },
-          {
-            path: 'myexams',
-            name: 'TrainingExamMyExams',
-            component: () =>
-              import('#/views/training/exam/myexams/index.vue'),
-            meta: { title: '我的考试', icon: 'lucide:clipboard-list' },
-          },
-          {
-            path: 'mycerts',
-            name: 'TrainingExamMyCerts',
-            component: () =>
-              import('#/views/training/exam/mycerts/index.vue'),
-            meta: { title: '我的证书', icon: 'lucide:badge-check' },
-          },
-          {
-            path: 'wrong',
-            name: 'TrainingExamWrong',
-            component: () =>
-              import('#/views/training/exam/wrong/index.vue'),
-            meta: { title: '错题复盘', icon: 'lucide:rotate-ccw' },
-          },
-          {
-            path: 'issuers',
-            name: 'TrainingExamIssuers',
-            component: () =>
-              import('#/views/training/exam/issuers/index.vue'),
-            meta: { title: '联合认证', icon: 'lucide:handshake' },
-          },
-        ],
-      },
       {
         path: 'resource/doc-list',
         name: 'TrainingResourceDocList',

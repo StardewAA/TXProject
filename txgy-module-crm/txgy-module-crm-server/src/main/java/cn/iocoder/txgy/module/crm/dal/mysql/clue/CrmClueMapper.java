@@ -10,6 +10,7 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.clue.CrmClueDO;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmSceneTypeEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collections;
@@ -22,6 +23,19 @@ import java.util.List;
  */
 @Mapper
 public interface CrmClueMapper extends BaseMapperX<CrmClueDO> {
+
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * @param id    线索编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmClueDO>()
+                .eq(CrmClueDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
 
     default PageResult<CrmClueDO> selectPage(CrmCluePageReqVO pageReqVO, Long userId) {
         MPJLambdaWrapperX<CrmClueDO> query = new MPJLambdaWrapperX<>();

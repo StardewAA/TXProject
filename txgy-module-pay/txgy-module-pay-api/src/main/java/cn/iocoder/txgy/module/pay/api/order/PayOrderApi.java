@@ -30,6 +30,18 @@ public interface PayOrderApi {
     @PermitAll
     CommonResult<PayOrderRespDTO> getOrder(@RequestParam("id") Long id);
 
+    @PutMapping(PREFIX + "/expire")
+    @Operation(summary = "核实并关闭指定已到期支付单（内部业务调用）")
+    CommonResult<Boolean> expireOrder(@RequestParam("id") Long id,
+                                      @RequestParam("appKey") String appKey,
+                                      @RequestParam("merchantOrderId") String merchantOrderId);
+
+    @PutMapping(PREFIX + "/close")
+    @Operation(summary = "核实并关闭业务取消的支付单（内部调用，不强关第三方渠道）")
+    CommonResult<Boolean> closeOrder(@RequestParam("id") Long id,
+                                     @RequestParam("appKey") String appKey,
+                                     @RequestParam("merchantOrderId") String merchantOrderId);
+
     @PutMapping(PREFIX + "/update-price")
     @Operation(summary = "更新支付订单价格")
     @Parameters({

@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { useVbenModal } from '@vben/common-ui';
+
 import { message } from 'ant-design-vue';
 
 import {
@@ -18,13 +20,15 @@ import { getSimpleUserList } from '#/api/system/user';
 
 import {
   parseClue,
-  parseContact,
+  parseClues,
+  parseContacts,
   parseContract,
   parseBusiness,
   parseReceivable,
   parseProduct,
   parseReceivablePlan,
 } from '#/utils/crm/clue-parse';
+import MultiParseModal from '#/views/crm/components/MultiParseModal.vue';
 import {
   getAiClueConfig,
   saveAiClueConfig,
@@ -40,6 +44,8 @@ import {
 
 const emit = defineEmits<{
   apply: [payload: { fields: any }];
+  /** 多人批量新增完成（由「多人识别」弹窗触发） */
+  batchSuccess: [];
 }>();
 
 // mode: clue=线索/通用；contact=联系人（姓名取人名，公司名放 customerName）；
@@ -54,8 +60,14 @@ const props = withDefaults(
       | 'receivable'
       | 'product'
       | 'plan';
+    /**
+     * clue 模式下的批量新增目标：
+     * 线索管理与客户管理共用 clue 模式的识别规则，但写入的表不同，
+     * 因此由父级显式指定（线索管理传 clue、客户管理传 customer）。
+     */
+    batchTarget?: 'clue' | 'customer';
   }>(),
-  { mode: 'clue' },
+  { mode: 'clue', batchTarget: 'clue' },
 );
 
 type ActiveTab = 'file' | 'image' | 'text' | 'web';
@@ -68,6 +80,12 @@ const isWebTabVisible = computed(() => props.mode === 'clue');
 const MAX_OCR_IMAGES = 6;
 
 const router = useRouter();
+
+/** 「多人识别」结果确认弹窗（勾选 / 改字段 / 逐条查重 / 批量新增） */
+const [MultiModal, multiModalApi] = useVbenModal({
+  connectedComponent: MultiParseModal,
+  destroyOnClose: true,
+});
 
 const collapsed = ref(false);
 const activeTab = ref<ActiveTab>('text');
@@ -503,20 +521,66 @@ async function handleRecognize() {
       isImageMode || isWebMode || (isFileMode && imageDataUrls.length > 0);
     const isContract = props.mode === 'contract';
     // 按当前模块选用专属解析 schema
-    const parsed: any =
-      isContract
+    let parsed: any;
+    if (props.mode === 'contact') {
+      // 联系人：走「多人识别」入口，保证文本 / 图片里的全部联系人都被识别出来
+      const multi = await parseContacts(text, imageDataUrls);
+      if (multi.contacts.length >= 2 || !multi.splittable) {
+        // 多条（或无法可靠拆分）→ 交给多人确认弹窗：勾选、改字段、逐条查重、批量新增
+        multiModalApi
+          .setData({
+            target: 'contact',
+            items: multi.contacts,
+            splittable: multi.splittable,
+            splitHint: multi.splitHint,
+            rawText: text,
+          })
+          .open();
+        if (multi.aiError) {
+          message.warning(
+            `AI 识别未生效（${multi.aiError}），已按文本结构自动拆分，请核对`,
+          );
+        }
+        return;
+      }
+      // 只有 1 人：保持原有「回填表单」体验
+      parsed = { fields: multi.contacts[0] ?? {}, aiError: multi.aiError };
+    } else if (props.mode === 'clue') {
+      // 线索 / 客户（共用 clue 模式）：同样支持「多人识别」，
+      // 批量新增目标由父级 batchTarget 决定（线索管理=clue、客户管理=customer）
+      const multi = await parseClues(text, imageDataUrls);
+      if (multi.items.length >= 2 || !multi.splittable) {
+        multiModalApi
+          .setData({
+            target: props.batchTarget,
+            items: multi.items,
+            splittable: multi.splittable,
+            splitHint: multi.splitHint,
+            rawText: text,
+          })
+          .open();
+        if (multi.aiError) {
+          message.warning(
+            `AI 识别未生效（${multi.aiError}），已按文本结构自动拆分，请核对`,
+          );
+        }
+        return;
+      }
+      // 只有 1 条：保持原有「回填表单」体验
+      parsed = { fields: multi.items[0] ?? {}, aiError: multi.aiError };
+    } else {
+      parsed = isContract
         ? await parseContract(text, imageDataUrls)
-        : props.mode === 'contact'
-          ? await parseContact(text, imageDataUrls)
-          : props.mode === 'business'
-            ? await parseBusiness(text, imageDataUrls)
-            : props.mode === 'receivable'
-              ? await parseReceivable(text, imageDataUrls)
-              : props.mode === 'product'
-                ? await parseProduct(text, imageDataUrls)
-                : props.mode === 'plan'
-                  ? await parseReceivablePlan(text, imageDataUrls)
-                  : await parseClue(text, imageDataUrls);
+        : props.mode === 'business'
+          ? await parseBusiness(text, imageDataUrls)
+          : props.mode === 'receivable'
+            ? await parseReceivable(text, imageDataUrls)
+            : props.mode === 'product'
+              ? await parseProduct(text, imageDataUrls)
+              : props.mode === 'plan'
+                ? await parseReceivablePlan(text, imageDataUrls)
+                : await parseClue(text, imageDataUrls);
+    }
     const fields: any = parsed.fields ?? {};
     // parseClue / parseContact 用 aiError 命名，其余解析函数用 error，这里统一兼容
     const aiError = parsed.aiError ?? parsed.error;
@@ -1073,5 +1137,8 @@ function openDuplicate(item: CrmCustomerApi.DuplicateCheckItem) {
         <a-button type="primary" @click="mergeDuplicate">合并信息</a-button>
       </div>
     </a-modal>
+
+    <!-- 联系人多人识别结果弹窗：勾选 / 改字段 / 逐条查重 / 批量新增 -->
+    <MultiModal @success="emit('batchSuccess')" />
   </div>
 </template>

@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.system.api.permission;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.txgy.module.system.service.permission.PermissionService;
+import cn.iocoder.txgy.module.system.service.permission.RoleService;
+import cn.iocoder.txgy.module.system.dal.dataobject.permission.RoleDO;
 import org.springframework.context.annotation.Primary;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +22,8 @@ public class PermissionApiImpl implements PermissionApi {
 
     @Resource
     private PermissionService permissionService;
+    @Resource
+    private RoleService roleService;
 
     @Override
     public CommonResult<Set<Long>> getUserRoleIdListByRoleIds(Collection<Long> roleIds) {
@@ -39,6 +43,17 @@ public class PermissionApiImpl implements PermissionApi {
     @Override
     public CommonResult<DeptDataPermissionRespDTO> getDeptDataPermission(Long userId) {
         return success(permissionService.getDeptDataPermission(userId));
+    }
+
+    @Override
+    public CommonResult<Boolean> assignRoleByCode(Long userId, String roleCode) {
+        // 角色不存在（例如该租户还没建「员工」角色）时静默跳过，不影响主流程
+        RoleDO role = roleService.getRoleByCode(roleCode);
+        if (role == null || role.getId() == null) {
+            return success(false);
+        }
+        permissionService.assignUserRole(userId, Set.of(role.getId()));
+        return success(true);
     }
 
 }

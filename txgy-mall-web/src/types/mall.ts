@@ -1,3 +1,6 @@
+import type { PaymentDeadlineFields } from '@/utils/payment-deadline'
+import type { AddressLocation } from './fulfillment'
+
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -6,6 +9,7 @@ export interface PageResult<T> {
 export type Identifier = string | number
 
 export interface TokenResult {
+  tenantId?: Identifier
   userId: Identifier
   accessToken: string
   refreshToken: string
@@ -13,10 +17,13 @@ export interface TokenResult {
 }
 
 export interface UserProfile {
+  tenantId?: Identifier
   memberIdentity?: 'buyer' | 'supplier'
   id?: Identifier
   nickname?: string
   mobile?: string
+  loginName?: string
+  contactMobile?: string
   avatar?: string
   gender?: number
   point?: number
@@ -83,6 +90,22 @@ export interface Product {
   favorite?: boolean
 }
 
+/** 收藏/足迹是关系记录，id不是商品编号；失效商品不返回价格等经营内容。 */
+export interface ProductCollectionItem {
+  id: Identifier
+  spuId?: Identifier
+  spuName?: string
+  name?: string
+  picUrl?: string
+  price?: number | null
+  stock?: number | null
+  salesCount?: number | null
+  introduction?: string
+  shopName?: string
+  saleable?: boolean | null
+  unavailableReason?: string | null
+}
+
 export interface Shop {
   id: Identifier
   name: string
@@ -118,7 +141,7 @@ export interface CartItem {
   sku: ProductSku & { spuId?: Identifier; name?: string }
 }
 
-export interface Address {
+export interface Address extends AddressLocation {
   id: Identifier
   name: string
   mobile: string
@@ -129,6 +152,7 @@ export interface Address {
 }
 
 export interface OrderItem {
+  shopId?: Identifier
   id: Identifier
   spuId?: Identifier
   skuId?: Identifier
@@ -138,10 +162,23 @@ export interface OrderItem {
   count: number
   price: number
   payPrice?: number
+  commentStatus?: boolean
   afterSaleStatus?: number
+  latestAfterSaleId?: Identifier
+  latestAfterSaleStatus?: number
+  latestAfterSaleReason?: string
 }
 
-export interface TradeOrder {
+export interface TradeOrder extends PaymentDeadlineFields {
+  shopId?: Identifier
+  receiverLongitude?: AddressLocation['longitude']
+  receiverLatitude?: AddressLocation['latitude']
+  receiverCoordSystem?: AddressLocation['coordSystem']
+  receiverLocationSource?: AddressLocation['locationSource']
+  receiverLocationPrecision?: AddressLocation['locationPrecision']
+  receiverLocationConfirmedAt?: AddressLocation['locationConfirmedAt']
+  commentStatus?: boolean
+  erpInventory?: import('@/components/ErpInventoryStatus.vue').ErpEntry[]
   id: Identifier
   no?: string
   status: number
@@ -155,9 +192,12 @@ export interface TradeOrder {
   receiverMobile?: string
   receiverAreaName?: string
   receiverDetailAddress?: string
+  dispatchOriginAddress?: string
 }
 
 export interface AfterSale {
+  shopId?: Identifier
+  orderId?: Identifier
   returnReceiverName?: string
   returnReceiverMobile?: string
   returnAddress?: string

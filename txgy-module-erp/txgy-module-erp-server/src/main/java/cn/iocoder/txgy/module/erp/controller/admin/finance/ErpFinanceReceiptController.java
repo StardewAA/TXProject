@@ -12,11 +12,13 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.receipt.ErpFinanceReceiptPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.receipt.ErpFinanceReceiptRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.finance.vo.receipt.ErpFinanceReceiptSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpAccountDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinanceReceiptDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.finance.ErpFinanceReceiptItemDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
+import cn.iocoder.txgy.module.erp.service.finance.ErpFinanceReceiptPdfExporter;
 import cn.iocoder.txgy.module.erp.service.finance.ErpFinanceReceiptService;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -123,6 +125,19 @@ public class ErpFinanceReceiptController {
         ExcelUtils.write(response, "收款单.xls", "数据", ErpFinanceReceiptRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出收款单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:finance-receipt:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportFinanceReceiptPdf(@Valid ErpFinanceReceiptPageReqVO pageReqVO,
+                                        HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpFinanceReceiptRespVO> list = buildFinanceReceiptVOPageResult(
+                financeReceiptService.getFinanceReceiptPage(pageReqVO)).getList();
+        // 与前端勾选的编号（pageReqVO.ids）联用：选中则只导选中单据，未选中则导出筛选结果
+        ErpFinanceReceiptPdfExporter.write(response, list);
+    }
+
     private PageResult<ErpFinanceReceiptRespVO> buildFinanceReceiptVOPageResult(PageResult<ErpFinanceReceiptDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -138,7 +153,7 @@ public class ErpFinanceReceiptController {
         Map<Long, ErpAccountDO> accountMap = accountService.getAccountMap(
                 convertSet(pageResult.getList(), ErpFinanceReceiptDO::getAccountId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertListByFlatMap(pageResult.getList(),
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(convertListByFlatMap(pageResult.getList(),
                 contact -> Stream.of(NumberUtils.parseLong(contact.getCreator()), contact.getFinanceUserId())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpFinanceReceiptRespVO.class, receipt -> {

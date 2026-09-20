@@ -36,6 +36,7 @@ public class Kd100ExpressQueryRespDTO {
      * 快递单当前状态
      */
     private String state;
+    private String status;
 
     /**
      * 查询结果

@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.system.service.auth;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.common.util.monitor.TracerUtils;
@@ -19,6 +20,7 @@ import cn.iocoder.txgy.module.system.api.social.dto.SocialUserRespDTO;
 import cn.iocoder.txgy.module.system.controller.admin.auth.vo.*;
 import cn.iocoder.txgy.module.system.convert.auth.AuthConvert;
 import cn.iocoder.txgy.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
+import cn.iocoder.txgy.module.system.dal.dataobject.tenant.TenantDO;
 import cn.iocoder.txgy.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.txgy.module.system.enums.logger.LoginLogTypeEnum;
 import cn.iocoder.txgy.module.system.enums.logger.LoginResultEnum;
@@ -28,7 +30,9 @@ import cn.iocoder.txgy.module.system.service.logger.LoginLogService;
 import cn.iocoder.txgy.module.system.service.member.MemberService;
 import cn.iocoder.txgy.module.system.service.oauth2.OAuth2TokenService;
 import cn.iocoder.txgy.module.system.service.social.SocialUserService;
+import cn.iocoder.txgy.module.system.service.tenant.TenantService;
 import cn.iocoder.txgy.module.system.service.user.AdminUserService;
+import cn.iocoder.txgy.module.hrm.api.employee.HrmEmployeeApi;
 import com.anji.captcha.model.common.ResponseModel;
 import com.anji.captcha.model.vo.CaptchaVO;
 import com.anji.captcha.service.CaptchaService;
@@ -79,6 +83,10 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private SmsCodeApi smsCodeApi;
     @Resource
     private TenantFrameworkService tenantFrameworkService;
+    @Resource
+    private TenantService tenantService;
+    @Resource
+    private HrmEmployeeApi hrmEmployeeApi;
 
     /**
      * 验证码的开关，默认为 true
@@ -92,6 +100,13 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         final LoginLogTypeEnum logTypeEnum = LoginLogTypeEnum.LOGIN_USERNAME;
         // 校验账号是否存在
         AdminUserDO user = userService.getUserByUsername(username);
+        // 用户名不存在时，尝试按「工号」登录：工号 → 员工档案 → 绑定的后台用户
+        if (user == null) {
+            Long jobNumberUserId = getUserIdByJobNumber(username);
+            if (jobNumberUserId != null) {
+                user = userService.getUser(jobNumberUserId);
+            }
+        }
         if (user == null) {
             createLoginLog(null, username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
             throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
@@ -103,6 +118,22 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 校验是否禁用
         validateUserStatus(user, username, logTypeEnum);
         return user;
+    }
+
+    /**
+     * 按工号解析员工绑定的后台用户编号
+     *
+     * <p>工号登录是增强能力：HRM 模块不可用时静默降级为按用户名登录，不影响原有登录。</p>
+     */
+    private Long getUserIdByJobNumber(String jobNumber) {
+        if (StrUtil.isBlank(jobNumber)) {
+            return null;
+        }
+        try {
+            return hrmEmployeeApi.getUserIdByJobNumber(jobNumber).getCheckedData();
+        } catch (Throwable ex) {
+            return null;
+        }
     }
 
     @Override
@@ -126,7 +157,11 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 认证 URL 对缺少租户的请求已放行，这里补回租户有效性校验，避免禁用/过期租户绕过过滤器。
         tenantFrameworkService.validTenant(tenantId);
 
-        return doLogin(reqVO);
+        // 登录 Controller 使用了 @TenantIgnore，以便个人账号和企业账号共用入口。
+        // 企业认证时必须显式恢复所选租户上下文，否则用户名查询会跨租户命中同名账号。
+        final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+        TenantUtils.execute(tenantId, () -> result[0] = doLogin(reqVO));
+        return result[0];
     }
 
     private AuthLoginRespVO doLogin(AuthLoginReqVO reqVO) {
@@ -134,10 +169,38 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 使用账号密码，进行登录
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword());
 
+        // 企业登录：账号所属租户必须与登录时选择的租户一致，否则直接拒绝。
+        // 背景：认证接口在免租户白名单内（允许不带租户编号），若不校验，会出现
+        // 「登录时选了租户 A、账号实际属于租户 B」的会话，进入系统后所有带权限校验的
+        // 接口都会返回 403「没有该操作权限」，而业务数据却仍能看到，极难排查。
+        Long loginTenantId = TenantContextHolder.getTenantId();
+        if (loginTenantId != null && user.getTenantId() != null
+                && !user.getTenantId().equals(loginTenantId)) {
+            String tenantName = "";
+            try {
+                TenantDO tenant = tenantService.getTenant(user.getTenantId());
+                tenantName = tenant != null ? tenant.getName() : "";
+            } catch (Throwable ignored) {
+                // 查询租户名称失败不影响拦截
+            }
+            throw exception0(BAD_REQUEST.getCode(), StrUtil.format(
+                    "该账号不属于所选租户，请重新选择租户后登录（账号所属租户：{}）",
+                    StrUtil.blankToDefault(tenantName, "租户 " + user.getTenantId())));
+        }
+
         // 如果 socialType 非空，说明需要绑定社交用户
         if (reqVO.getSocialType() != null) {
             socialUserService.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
                     reqVO.getSocialType(), reqVO.getSocialCode(), reqVO.getSocialState()));
+        }
+        // 会话统一绑定到「账号实际所属租户」：认证接口对缺少租户的请求放行，
+        // 若登录时选错租户（例如选了平台租户 1、账号却属于租户 2020），
+        // 直接按请求租户签发令牌会导致会话租户与账号租户不一致，后续所有请求都会被判越权。
+        if (user.getTenantId() != null && !user.getTenantId().equals(TenantContextHolder.getTenantId())) {
+            final AuthLoginRespVO[] result = new AuthLoginRespVO[1];
+            TenantUtils.execute(user.getTenantId(), () -> result[0] = createTokenAfterLoginSuccess(
+                    user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME));
+            return result[0];
         }
         // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
@@ -246,8 +309,11 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         // 创建访问令牌
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(user.getId(), getUserType().getValue(),
                 OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
-        // 构建返回结果
-        return BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        // 构建返回结果，并回传账号实际所属租户，供前端纠正登录租户
+        // 背景：认证接口对缺少租户的请求放行，可能出现"登录租户与账号所属租户不一致"的会话错配
+        AuthLoginRespVO respVO = BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        respVO.setTenantId(user.getTenantId());
+        return respVO;
     }
 
     private void validateUserStatus(AdminUserDO user, String username, LoginLogTypeEnum logType) {

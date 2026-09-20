@@ -14,6 +14,7 @@ import cn.iocoder.txgy.framework.common.biz.infra.logger.dto.ApiAccessLogCreateR
 import cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
+import cn.iocoder.txgy.framework.common.util.audit.WorkTrace;
 import cn.iocoder.txgy.framework.common.util.monitor.TracerUtils;
 import cn.iocoder.txgy.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.txgy.framework.web.config.WebProperties;
@@ -70,7 +71,7 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         // 提前获得参数，避免 XssFilter 过滤处理
         Map<String, String> queryString = ServletUtils.getParamMap(request);
         String requestBody = ServletUtils.getBody(request);
-
+        WorkTrace.begin();
         try {
             // 继续过滤器
             filterChain.doFilter(request, response);
@@ -80,6 +81,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             // 异常执行，记录日志
             createApiAccessLog(request, beginTime, queryString, requestBody, ex);
             throw ex;
+        } finally {
+            WorkTrace.clear();
         }
     }
 
@@ -93,7 +96,7 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             }
             apiAccessLogApi.createApiAccessLogAsync(accessLog);
         } catch (Throwable th) {
-            log.error("[createApiAccessLog][url({}) log({}) 发生异常]", request.getRequestURI(), toJsonString(accessLog), th);
+            log.error("[createApiAccessLog][url({}) trace({}) 发生异常]", request.getRequestURI(), accessLog.getTraceId(), th);
         }
     }
 
@@ -112,6 +115,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         // 处理用户信息
         accessLog.setUserId(WebFrameworkUtils.getLoginUserId(request))
                 .setUserType(WebFrameworkUtils.getLoginUserType(request));
+        accessLog.setUserName((String) request.getAttribute("work_trace_user_name"));
+        accessLog.setAuditTenantId((Long) request.getAttribute("work_trace_tenant_id"));
         // 设置访问结果
         CommonResult<?> result = WebFrameworkUtils.getCommonResult(request);
         if (result != null) {
@@ -122,6 +127,10 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         } else {
             accessLog.setResultCode(GlobalErrorCodeConstants.SUCCESS.getCode()).setResultMsg("");
         }
+        if (!Integer.valueOf(0).equals(accessLog.getResultCode())) {
+            WorkTrace.warning("本次请求未成功，变更明细仅用于核查尝试过程；请以事务状态和原单据为准");
+        }
+        accessLog.setChanges(WorkTrace.snapshot());
         // 设置请求字段
         accessLog.setTraceId(TracerUtils.getTraceId()).setApplicationName(applicationName)
                 .setRequestUrl(request.getRequestURI()).setRequestMethod(request.getMethod())
@@ -132,11 +141,11 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             Map<String, Object> requestParams = MapUtil.<String, Object>builder()
                     .put("query", sanitizeMap(queryString, sanitizeKeys))
                     .put("body", sanitizeJson(requestBody, sanitizeKeys)).build();
-            accessLog.setRequestParams(toJsonString(requestParams));
+            accessLog.setRequestParams(WorkTrace.sanitizeJson(toJsonString(requestParams)));
         }
         Boolean responseEnable = accessLogAnnotation != null ? accessLogAnnotation.responseEnable() : Boolean.FALSE;
         if (BooleanUtil.isTrue(responseEnable)) { // 默认不记录，默认强制要求 true
-            accessLog.setResponseBody(sanitizeJson(result, sanitizeKeys));
+            accessLog.setResponseBody(WorkTrace.sanitizeJson(sanitizeJson(result, sanitizeKeys)));
         }
         // 持续时间
         accessLog.setBeginTime(beginTime).setEndTime(LocalDateTime.now())
@@ -198,13 +207,13 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             return null;
         }
         try {
-            JsonNode rootNode = JsonUtils.parseTree(jsonString);
+            JsonNode rootNode = JsonUtils.getObjectMapper().readTree(jsonString);
             sanitizeJson(rootNode, sanitizeKeys);
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
             // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            log.warn("[sanitizeJson][无法解析请求内容，已隐藏]");
+            return "\"[无法解析的内容已隐藏]\"";
         }
     }
 
@@ -214,13 +223,13 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         }
         String jsonString = toJsonString(commonResult);
         try {
-            JsonNode rootNode = JsonUtils.parseTree(jsonString);
+            JsonNode rootNode = JsonUtils.getObjectMapper().readTree(jsonString);
             sanitizeJson(rootNode.get("data"), sanitizeKeys); // 只处理 data 字段，不处理 code、msg 字段，避免错误被脱敏掉
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
             // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            log.warn("[sanitizeJson][无法解析响应内容，已隐藏]");
+            return "\"[无法解析的内容已隐藏]\"";
         }
     }
 

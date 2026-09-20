@@ -49,12 +49,13 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
     },
     {
       label: '客户',
-      fieldName: 'customerId',
-      component: 'ApiSelect',
+      fieldName: formType === 'detail' ? 'customerName' : 'customerId',
+      component: formType === 'detail' ? 'Input' : 'ApiSelect',
       componentProps: {
-        placeholder: '请选择客户',
+        placeholder: formType === 'detail' ? '' : '请选择客户',
         allowClear: true,
         showSearch: true,
+        disabled: formType === 'detail',
         api: getCustomerSimpleList,
         labelField: 'name',
         valueField: 'id',
@@ -84,6 +85,62 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
         disabled: formType === 'detail',
       },
       formItemClass: 'col-span-2',
+    },
+    {
+      // 占位项：与「备注」同排的第 3 列（正好在「客户」正下方），详情态显示一键导出按钮
+      fieldName: 'exportPdf',
+      label: ' ',
+      component: 'Input',
+      formItemClass: 'col-span-1',
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
+    },
+    {
+      // 溯源：由造价结果转换生成时才有值
+      fieldName: 'sourceNo',
+      label: '来源单号',
+      component: 'Input',
+      componentProps: {
+        disabled: true,
+        placeholder: '手工创建，无上游来源',
+      },
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
+    },
+    {
+      fieldName: 'businessChainNo',
+      label: '业务链号',
+      component: 'Input',
+      componentProps: { disabled: true, placeholder: '用于串联全链路单据' },
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
+    },
+    {
+      // WMS 履约：由 WMS 回调回写
+      fieldName: 'warehouseStatus',
+      label: 'WMS 履约状态',
+      component: 'Input',
+      componentProps: { disabled: true, placeholder: 'NOT_SUBMITTED' },
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
+    },
+    {
+      fieldName: 'wmsShipmentOrderNo',
+      label: 'WMS 出库单号',
+      component: 'Input',
+      componentProps: { disabled: true },
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
     },
     {
       fieldName: 'fileUrl',
@@ -208,6 +265,12 @@ export function useFormItemColumns(
       minWidth: 80,
     },
     {
+      field: 'warehouseCode',
+      title: '仓库编码',
+      minWidth: 120,
+      slots: { default: 'warehouseCode' },
+    },
+    {
       field: 'remark',
       title: '备注',
       minWidth: 150,
@@ -219,6 +282,13 @@ export function useFormItemColumns(
       minWidth: 120,
       fixed: 'right',
       slots: { default: 'count' },
+    },
+    {
+      field: 'outCount',
+      title: '已出库',
+      minWidth: 90,
+      fixed: 'right',
+      formatter: 'formatAmount3',
     },
     {
       field: 'productPrice',

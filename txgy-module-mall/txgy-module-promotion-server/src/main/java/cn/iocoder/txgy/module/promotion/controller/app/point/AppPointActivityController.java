@@ -15,6 +15,7 @@ import cn.iocoder.txgy.module.promotion.controller.app.point.vo.AppPointActivity
 import cn.iocoder.txgy.module.promotion.dal.dataobject.point.PointActivityDO;
 import cn.iocoder.txgy.module.promotion.dal.dataobject.point.PointProductDO;
 import cn.iocoder.txgy.module.promotion.service.point.PointActivityService;
+import cn.iocoder.txgy.module.promotion.service.price.PublicProductVisibility;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,21 +45,25 @@ public class AppPointActivityController {
     private PointActivityService pointActivityService;
 
     @Resource
-    private ProductSpuApi productSpuApi;
+    private PublicProductVisibility visibility;
 
     @GetMapping("/page")
     @Operation(summary = "获得积分商城活动分页")
     @PermitAll
     public CommonResult<PageResult<AppPointActivityRespVO>> getPointActivityPage(AppPointActivityPageReqVO pageReqVO) {
         // 1. 查询满足当前阶段的活动
-        PageResult<PointActivityDO> pageResult = pointActivityService.getPointActivityPage(
-                BeanUtils.toBean(pageReqVO, PointActivityPageReqVO.class));
+        var visible = visibility.page(pageReqVO, page -> {
+            PointActivityPageReqVO query = BeanUtils.toBean(page, PointActivityPageReqVO.class);
+            query.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            return pointActivityService.getPointActivityPage(query);
+        }, PointActivityDO::getSpuId);
+        PageResult<PointActivityDO> pageResult = visible.page();
         if (CollUtil.isEmpty(pageResult.getList())) {
             return success(PageResult.empty(pageResult.getTotal()));
         }
 
         // 2. 拼接数据
-        List<AppPointActivityRespVO> resultList = buildAppPointActivityRespVOList(pageResult.getList());
+        List<AppPointActivityRespVO> resultList = buildAppPointActivityRespVOList(pageResult.getList(), visible.spus());
         return success(new PageResult<>(resultList, pageResult.getTotal()));
     }
 
@@ -70,14 +75,15 @@ public class AppPointActivityController {
         // 1. 获取活动
         PointActivityDO activity = pointActivityService.getPointActivity(id);
         if (activity == null
-                || ObjUtil.equal(activity.getStatus(), CommonStatusEnum.DISABLE.getStatus())) {
+                || ObjUtil.equal(activity.getStatus(), CommonStatusEnum.DISABLE.getStatus())
+                || !visibility.isSaleable(activity.getSpuId())) {
             return success(null);
         }
 
         // 2. 拼接数据
         List<PointProductDO> products = pointActivityService.getPointProductListByActivityIds(Collections.singletonList(id));
         PointProductDO minProduct = getMinObject(products, PointProductDO::getPoint);
-        assert minProduct != null;
+        if (minProduct == null) return success(null);
         AppPointActivityDetailRespVO respVO = BeanUtils.toBean(activity, AppPointActivityDetailRespVO.class)
                 .setProducts(BeanUtils.toBean(products, AppPointActivityDetailRespVO.Product.class))
                 .setPoint(minProduct.getPoint()).setPrice(minProduct.getPrice());
@@ -96,21 +102,26 @@ public class AppPointActivityController {
             return success(Collections.emptyList());
         }
         // 2. 拼接返回
-        List<AppPointActivityRespVO> result = buildAppPointActivityRespVOList(activityList);
+        var visible = visibility.filter(activityList, PointActivityDO::getSpuId);
+        List<AppPointActivityRespVO> result = buildAppPointActivityRespVOList(visible.list(), visible.spus());
         return success(result);
     }
 
-    private List<AppPointActivityRespVO> buildAppPointActivityRespVOList(List<PointActivityDO> activityList) {
+    private List<AppPointActivityRespVO> buildAppPointActivityRespVOList(List<PointActivityDO> activityList,
+                                                                 List<ProductSpuRespDTO> spus) {
+        if (activityList.isEmpty()) return List.of();
         List<PointProductDO> products = pointActivityService.getPointProductListByActivityIds(
                 convertSet(activityList, PointActivityDO::getId));
         Map<Long, List<PointProductDO>> productsMap = convertMultiMap(products, PointProductDO::getActivityId);
-        Map<Long, ProductSpuRespDTO> spuMap = productSpuApi.getSpuMap(
-                convertSet(activityList, PointActivityDO::getSpuId));
+        Map<Long, ProductSpuRespDTO> spuMap = convertMap(spus, ProductSpuRespDTO::getId);
         List<AppPointActivityRespVO> result = BeanUtils.toBean(activityList, AppPointActivityRespVO.class);
         result.forEach(activity -> {
             // 设置 product 信息
             PointProductDO minProduct = getMinObject(productsMap.get(activity.getId()), PointProductDO::getPoint);
-            assert minProduct != null;
+            if (minProduct == null) {
+                throw new cn.iocoder.txgy.framework.common.exception.ServiceException(503,
+                        "积分活动商品配置不完整，请稍后重试");
+            }
             activity.setPoint(minProduct.getPoint()).setPrice(minProduct.getPrice());
             findAndThen(spuMap, activity.getSpuId(),
                     spu -> activity.setSpuName(spu.getName()).setPicUrl(spu.getPicUrl()).setMarketPrice(spu.getMarketPrice()));

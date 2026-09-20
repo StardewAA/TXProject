@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.attendance.config;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
 import cn.iocoder.txgy.module.hrm.enums.attendance.config.HrmAttendanceHolidayTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -28,7 +28,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmAttendanceHolidayDO extends BaseDO {
+public class HrmAttendanceHolidayDO extends TenantBaseDO {
 
     /**
      * 节假日编号

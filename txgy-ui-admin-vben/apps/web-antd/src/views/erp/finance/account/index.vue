@@ -2,22 +2,52 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ErpAccountApi } from '#/api/erp/finance/account';
 
+import { computed, ref } from 'vue';
+
 import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { message } from 'ant-design-vue';
+import { message, Modal, Table } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteAccount,
   exportAccount,
+  exportAccountPdf,
   getAccountPage,
+  getAccountRecordList,
   updateAccountDefaultStatus,
 } from '#/api/erp/finance/account';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+
+const recordVisible = ref(false);
+const recordLoading = ref(false);
+const currentAccount = ref<ErpAccountApi.Account>();
+const accountRecords = ref<ErpAccountApi.AccountRecord[]>([]);
+const recordColumns = computed(() => [
+  { title: '时间', dataIndex: 'createTime', width: 180 },
+  { title: '业务单号', dataIndex: 'bizNo', width: 190 },
+  { title: '业务类型', dataIndex: 'bizType', width: 130 },
+  { title: '变动金额', dataIndex: 'changeAmount', width: 120 },
+  { title: '变动前', dataIndex: 'beforeBalance', width: 120 },
+  { title: '变动后', dataIndex: 'afterBalance', width: 120 },
+  { title: '说明', dataIndex: 'remark', minWidth: 180 },
+]);
+
+async function handleRecords(row: ErpAccountApi.Account) {
+  currentAccount.value = row;
+  recordVisible.value = true;
+  recordLoading.value = true;
+  try {
+    accountRecords.value = await getAccountRecordList(row.id!);
+  } finally {
+    recordLoading.value = false;
+  }
+}
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -30,9 +60,15 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportAccount(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '结算账户信息.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportAccountPdf(await gridApi.formApi.getValues())
+      : await exportAccount(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '结算账户信息.pdf' : '结算账户信息.xls',
+    source: data,
+  });
 }
 
 /** 创建结算账户 */
@@ -120,10 +156,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <Modal
+      v-model:open="recordVisible"
+      :footer="null"
+      :title="`${currentAccount?.name ?? ''} - 资金流水`"
+      width="960px"
+    >
+      <Table
+        :columns="recordColumns"
+        :data-source="accountRecords"
+        :loading="recordLoading"
+        :pagination="false"
+        row-key="id"
+        size="small"
+      />
+    </Modal>
     <Grid table-title="结算账户列表">
       <template #toolbar-tools>
         <TableAction
           :actions="[
+            {
+              label: '资金流水',
+              type: 'link',
+              auth: ['erp:account:query'],
+              onClick: handleRecords.bind(null, row),
+            },
             {
               label: $t('ui.actionTitle.create', ['结算账户']),
               type: 'primary',
@@ -131,14 +188,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['erp:account:create'],
               onClick: handleCreate,
             },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:account:export'],
-              onClick: handleExport,
-            },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:account:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">

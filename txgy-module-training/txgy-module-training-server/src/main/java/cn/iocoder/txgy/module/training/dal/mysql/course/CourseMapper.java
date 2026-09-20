@@ -7,21 +7,41 @@ import cn.iocoder.txgy.module.training.controller.admin.course.vo.CoursePageReqV
 import cn.iocoder.txgy.module.training.dal.dataobject.course.CourseDO;
 import org.apache.ibatis.annotations.Mapper;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
+
 @Mapper
 public interface CourseMapper extends BaseMapperX<CourseDO> {
 
     default PageResult<CourseDO> selectPage(CoursePageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<CourseDO>()
+        LambdaQueryWrapperX<CourseDO> query = new LambdaQueryWrapperX<CourseDO>()
                 .likeIfPresent(CourseDO::getTitle, reqVO.getTitle())
                 .likeIfPresent(CourseDO::getCode, reqVO.getCode())
-                .eqIfPresent(CourseDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(CourseDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(CourseDO::getLecturer, reqVO.getLecturer())
                 .eqIfPresent(CourseDO::getCourseLevel, reqVO.getCourseLevel())
                 .eqIfPresent(CourseDO::getIsRequired, reqVO.getIsRequired())
                 .eqIfPresent(CourseDO::getIsComposite, reqVO.getIsComposite())
-                .eqIfPresent(CourseDO::getIsCurrent, reqVO.getIsCurrent())
-                .orderByDesc(CourseDO::getId));
+                .eqIfPresent(CourseDO::getIsCurrent, reqVO.getIsCurrent());
+        if (CollUtil.isNotEmpty(reqVO.getCategoryIds())) {
+            query.in(CourseDO::getCategoryId, reqVO.getCategoryIds());
+        } else {
+            query.eqIfPresent(CourseDO::getCategoryId, reqVO.getCategoryId());
+        }
+        if (StrUtil.isNotBlank(reqVO.getKeyword())) {
+            query.and(item -> item.like(CourseDO::getTitle, reqVO.getKeyword())
+                    .or().like(CourseDO::getCode, reqVO.getKeyword())
+                    .or().like(CourseDO::getLecturer, reqVO.getKeyword()));
+        }
+        boolean ascending = "asc".equalsIgnoreCase(reqVO.getSortOrder());
+        if ("latest".equals(reqVO.getSortField())) {
+            query.orderBy(true, ascending, CourseDO::getCreateTime);
+        } else if ("credit".equals(reqVO.getSortField())) {
+            query.orderBy(true, ascending, CourseDO::getCredit);
+        } else {
+            query.orderByDesc(CourseDO::getId);
+        }
+        return selectPage(reqVO, query);
     }
 
     /**

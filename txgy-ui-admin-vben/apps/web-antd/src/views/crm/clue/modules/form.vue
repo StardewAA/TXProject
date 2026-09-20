@@ -55,6 +55,15 @@ async function onQuickParse(payload: { fields: ParsedClue }) {
   await formApi.setValues(apply);
 }
 
+/**
+ * 多人识别弹窗已批量新增完成：
+ * 关闭当前新增弹窗并刷新列表（这些线索已直接入库，无需再走表单保存）
+ */
+function onBatchSuccess() {
+  modalApi.close();
+  emit('success');
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     try {
@@ -124,8 +133,14 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal :title="getTitle" class="w-2/5">
-    <ClueQuickParse :key="modalKey" class="mx-4" @apply="onQuickParse" />
-    <Form class="mx-4" />
+  <!-- 宽度由弹窗主题统一兜底（不足 760px 自动放宽），此处声明舒适宽度 -->
+  <Modal :title="getTitle" class="w-[min(960px,94vw)]">
+    <ClueQuickParse
+      :key="modalKey"
+      batch-target="clue"
+      @apply="onQuickParse"
+      @batch-success="onBatchSuccess"
+    />
+    <Form />
   </Modal>
 </template>

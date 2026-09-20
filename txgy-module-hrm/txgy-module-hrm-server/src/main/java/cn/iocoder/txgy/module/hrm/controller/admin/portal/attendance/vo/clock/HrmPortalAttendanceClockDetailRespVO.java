@@ -142,6 +142,9 @@ public class HrmPortalAttendanceClockDetailRespVO {
         @Schema(description = "打卡地址")
         private String address;
 
+        @Schema(description = "打卡现场照片（人脸/工地照）地址")
+        private String photoUrl;
+
     }
 
 }

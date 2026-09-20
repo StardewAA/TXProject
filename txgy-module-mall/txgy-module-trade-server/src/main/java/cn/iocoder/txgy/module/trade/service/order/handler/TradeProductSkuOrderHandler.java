@@ -1,8 +1,8 @@
 package cn.iocoder.txgy.module.trade.service.order.handler;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
-import cn.iocoder.txgy.module.trade.convert.order.TradeOrderConvert;
+import cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService;
+import cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import org.springframework.stereotype.Component;
@@ -21,11 +21,11 @@ import static java.util.Collections.singletonList;
 public class TradeProductSkuOrderHandler implements TradeOrderHandler {
 
     @Resource
-    private ProductSkuApi productSkuApi;
+    private TradeErpInventoryService erpInventory;
 
     @Override
-    public void beforeOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convertNegative(orderItems));
+    public void afterOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        erpInventory.request(order, Operation.RESERVE, "ORDER", orderItems, null, null);
     }
 
     @Override
@@ -35,12 +35,16 @@ public class TradeProductSkuOrderHandler implements TradeOrderHandler {
         if (CollUtil.isEmpty(orderItems)) {
             return;
         }
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(orderItems));
+        erpInventory.request(order, Operation.RELEASE, "CANCEL", orderItems, null, null);
     }
 
     @Override
     public void afterCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
-        productSkuApi.updateSkuStock(TradeOrderConvert.INSTANCE.convert(singletonList(orderItem)));
+        // 退款不是退货入库；仅未发货订单释放预占。入库在 ERP 确认实际收货后处理。
+        if (order.getDeliveryTime() == null && (order.getStatus() == 0 || order.getStatus() == 10)) {
+            erpInventory.request(order, Operation.RELEASE, "ITEM-" + orderItem.getId(),
+                    singletonList(orderItem), null, null);
+        }
     }
 
 }

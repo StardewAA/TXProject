@@ -44,11 +44,29 @@ public class CrmQuotationDO extends BaseDO {
      */
     private String no;
     /**
+     * 报价类型
+     *
+     * 枚举 {@link cn.iocoder.txgy.module.crm.enums.quotation.CrmQuotationTypeEnum}
+     */
+    private Integer quotationType;
+    /**
      * 客户编号
      *
      * 关联 {@link CrmCustomerDO#getId()}
      */
     private Long customerId;
+    /**
+     * 供应商联系人（仅采购报价使用，随所选供应商自动带出）
+     */
+    private String supplierContact;
+    /**
+     * 供应商联系电话（仅采购报价使用）
+     */
+    private String supplierPhone;
+    /**
+     * 供应商地址（仅采购报价使用）
+     */
+    private String supplierAddress;
     /**
      * 商机编号，非必须
      *

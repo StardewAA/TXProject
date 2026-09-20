@@ -33,47 +33,30 @@ import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 @RestController
 @RequestMapping("/product/erp/shortage")
 @Validated
+@org.springframework.security.access.prepost.PreAuthorize("@ss.hasPermission('product:spu:query')")
 public class ProductErpShortageController {
 
-    private final Map<String, ShortageDemandRespVO> demands = new ConcurrentHashMap<>();
+    // 旧内存模拟已停用，不再返回虚假的 ERP 已接收或库存已就绪。
 
     @PostMapping("/submit")
     @Operation(summary = "提交缺货采购需求")
     public CommonResult<ShortageDemandRespVO> submit(@Valid @RequestBody ShortageDemandReqVO req) {
-        ShortageDemandRespVO existing = demands.get(req.getRequestId());
-        if (existing != null) {
-            return success(existing); // 相同 requestId 重试不重复创建
-        }
-        ShortageDemandRespVO result = new ShortageDemandRespVO();
-        result.setRequestId(req.getRequestId());
-        result.setMallDemandNo(req.getMallDemandNo());
-        result.setOrderNo(req.getOrderNo());
-        result.setSkuId(req.getSkuId());
-        result.setShortageQuantity(req.getShortageQuantity());
-        result.setAccepted(true);
-        result.setErpRequestNo("ERP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
-        result.setStatus("ACCEPTED");
-        result.setMessage("ERP 已接收，商城进入备货中");
-        result.setCreatedTime(LocalDateTime.now());
-        demands.put(req.getRequestId(), result);
-        return success(result);
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧ERP内存模拟已停用；库存履约请查看订单详情中的ERP请求，缺货采购等待ERP正式对接");
     }
 
     @GetMapping("/{requestId}")
     @Operation(summary = "查询缺货采购状态")
     public CommonResult<ShortageDemandRespVO> get(@PathVariable String requestId) {
-        return success(demands.get(requestId));
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧ERP内存模拟已停用；库存履约请查看订单详情中的ERP请求，缺货采购等待ERP正式对接");
     }
 
     @PutMapping("/{requestId}/ready")
     @Operation(summary = "模拟 ERP/WMS 库存就绪")
     public CommonResult<ShortageDemandRespVO> ready(@PathVariable String requestId) {
-        ShortageDemandRespVO result = demands.get(requestId);
-        if (result != null) {
-            result.setStatus("INVENTORY_READY");
-            result.setMessage("库存已就绪，可进入发货流程");
-        }
-        return success(result);
+        throw new cn.iocoder.txgy.framework.common.exception.ServiceException(400,
+                "旧ERP内存模拟已停用；库存履约请查看订单详情中的ERP请求，缺货采购等待ERP正式对接");
     }
 
     @Data

@@ -4,6 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { getSimpleUserList } from '#/api/system/user';
 import { getWarehouseSimpleList } from '#/api/wms/md/warehouse';
 import { getRangePickerDefaultProps } from '#/utils';
 
@@ -79,6 +80,19 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'creator',
+      label: '操作人',
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: getSimpleUserList,
+        labelField: 'nickname',
+        placeholder: '请选择操作人',
+        showSearch: true,
+        valueField: 'id',
+      },
+    },
+    {
       fieldName: 'createTime',
       label: '操作时间',
       component: 'RangePicker',
@@ -148,12 +162,31 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'quantityPrice' },
     },
     {
-      field: 'createTime',
-      title: '操作时间',
-      width: 180,
+      field: 'unit',
+      title: '计量单位',
+      width: 100,
+      align: 'center',
+    },
+    {
+      field: 'creatorName',
+      title: '操作人',
+      width: 120,
+      align: 'center',
+      formatter: ({ cellValue, row }) => cellValue || row.creator || '-',
+    },
+    {
+      field: 'remark',
+      title: '备注',
+      minWidth: 180,
+      showOverflow: true,
+    },
+    {
+      field: 'actions',
+      title: '操作',
+      width: 100,
       fixed: 'right',
       align: 'center',
-      formatter: 'formatDateTime',
+      slots: { default: 'actions' },
     },
   ];
 }

@@ -33,6 +33,8 @@ const QTYPE_TEXT: Record<number, string> = {
   3: '判断',
   4: '实操问答',
   5: '案例分析',
+  6: '填空',
+  7: '简答',
 };
 const DIFFICULTY_TEXT: Record<number, string> = { 1: '易', 2: '中', 3: '难' };
 

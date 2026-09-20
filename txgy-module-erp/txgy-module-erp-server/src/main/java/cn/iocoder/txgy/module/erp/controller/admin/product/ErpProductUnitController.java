@@ -10,6 +10,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.unit.ErpProductUnitPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.unit.ErpProductUnitRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.unit.ErpProductUnitSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductUnitDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductUnitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,6 +98,18 @@ public class ErpProductUnitController {
         // 导出 Excel
         ExcelUtils.write(response, "产品单位.xls", "数据", ErpProductUnitRespVO.class,
                         BeanUtils.toBean(list, ErpProductUnitRespVO.class));
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出产品单位 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:product-unit:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportProductUnitPdf(@Valid ErpProductUnitPageReqVO pageReqVO,
+                                     HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpProductUnitDO> list = productUnitService.getProductUnitPage(pageReqVO).getList();
+        ErpPdfExportUtils.write(response, "产品单位.pdf", "产品单位列表",
+                ErpProductUnitRespVO.class, BeanUtils.toBean(list, ErpProductUnitRespVO.class));
     }
 
 }

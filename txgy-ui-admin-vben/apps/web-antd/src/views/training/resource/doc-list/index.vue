@@ -97,8 +97,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         formatter: ({ cellValue }) =>
           cellValue === null || cellValue === undefined ? '-' : cellValue,
       },
-      { field: 'estMinutes', title: '预估(分)', width: 90, align: 'center' },
-      { field: 'viewCount', title: '预览数', width: 80, align: 'center' },
+      {
+        field: 'estMinutes',
+        title: '预估阅读时长（分钟）',
+        width: 160,
+        align: 'center',
+        formatter: ({ cellValue }) =>
+          cellValue === null || cellValue === undefined ? '-' : cellValue,
+      },
       {
         field: 'status',
         title: '状态',
@@ -114,7 +120,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 240,
+        width: 310,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -192,7 +198,10 @@ async function renderOfficePreview() {
     el.innerHTML = '';
     // docx → HTML 前端渲染（mammoth）
     const result = await mammoth.convertToHtml({ arrayBuffer });
-    el.innerHTML = result.value || '<p style="color:#999">文档内容为空</p>';
+    // 用 A4 纸张容器承载正文（mammoth 只输出裸 HTML，缺少页面排版，需外层补纸张样式）
+    el.innerHTML = `<div class="docx-doc-page">${
+      result.value || '<p class="docx-empty">文档内容为空</p>'
+    }</div>`;
   } catch {
     previewState.value.error =
       '该文档格式暂不支持在线预览（老版 .doc / .wps 需下载后查看）';
@@ -328,7 +337,7 @@ loadCategories();
       <div
         v-show="previewState.office && !previewState.loading && !previewState.error"
         ref="docxContainer"
-        class="docx-preview-box h-[72vh] overflow-auto rounded bg-white p-6"
+        class="docx-preview-box h-[72vh] overflow-auto rounded"
       />
     </Modal>
 
@@ -348,7 +357,7 @@ loadCategories();
     </div>
 
     <Grid
-      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，上传即上线，自动识别页数）"
+      table-title="文档资源库（PDF/Word/WPS/图片 ≤50MB，支持一次上传多个，上传即上线，自动识别页数）"
     >
       <template #toolbar-tools>
         <TableAction
@@ -379,19 +388,88 @@ loadCategories();
 </template>
 
 <style scoped>
+/* 预览容器：灰色底 + 居中 A4 白纸，还原 Word 阅读观感 */
 .docx-preview-box {
-  color: #333 !important;
+  background-color: #f5f5f5;
+  padding: 16px;
 }
-.docx-preview-box :deep(*) {
-  color: #333 !important;
-  background-color: transparent !important;
+.docx-preview-box :deep(.docx-doc-page) {
+  box-sizing: border-box;
+  max-width: 794px; /* A4 210mm @96dpi ≈ 794px */
+  margin: 0 auto;
+  padding: 48px 56px;
+  background-color: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  color: #333;
+  font-family:
+    'Microsoft YaHei', 'PingFang SC', SimSun, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
-.docx-preview-box :deep(table) {
+.docx-preview-box :deep(.docx-doc-page img) {
+  max-width: 100%;
+  height: auto;
+}
+.docx-preview-box :deep(.docx-doc-page p) {
+  margin: 0 0 0.6em;
+  text-align: justify;
+}
+.docx-preview-box :deep(.docx-doc-page h1),
+.docx-preview-box :deep(.docx-doc-page h2),
+.docx-preview-box :deep(.docx-doc-page h3),
+.docx-preview-box :deep(.docx-doc-page h4),
+.docx-preview-box :deep(.docx-doc-page h5),
+.docx-preview-box :deep(.docx-doc-page h6) {
+  margin: 1.2em 0 0.6em;
+  color: #222;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.docx-preview-box :deep(.docx-doc-page h1) {
+  font-size: 24px;
+}
+.docx-preview-box :deep(.docx-doc-page h2) {
+  font-size: 20px;
+}
+.docx-preview-box :deep(.docx-doc-page h3) {
+  font-size: 17px;
+}
+.docx-preview-box :deep(.docx-doc-page h4),
+.docx-preview-box :deep(.docx-doc-page h5),
+.docx-preview-box :deep(.docx-doc-page h6) {
+  font-size: 15px;
+}
+.docx-preview-box :deep(.docx-doc-page ul),
+.docx-preview-box :deep(.docx-doc-page ol) {
+  margin: 0.6em 0;
+  padding-left: 1.8em;
+}
+.docx-preview-box :deep(.docx-doc-page li) {
+  margin: 0.2em 0;
+}
+.docx-preview-box :deep(.docx-doc-page table) {
+  width: 100%;
+  margin: 0.8em 0;
+  table-layout: fixed;
   border-collapse: collapse;
 }
-.docx-preview-box :deep(td),
-.docx-preview-box :deep(th) {
+.docx-preview-box :deep(.docx-doc-page td),
+.docx-preview-box :deep(.docx-doc-page th) {
+  padding: 6px 8px;
   border: 1px solid #ccc;
-  padding: 4px 8px;
+  word-break: break-all;
+  line-height: 1.6;
+}
+.docx-preview-box :deep(.docx-doc-page th) {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+.docx-preview-box :deep(.docx-doc-page a) {
+  color: #1677ff;
+}
+.docx-preview-box :deep(.docx-empty) {
+  color: #999;
 }
 </style>

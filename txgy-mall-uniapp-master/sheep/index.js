@@ -27,7 +27,7 @@ const sheep = {
 // 加载Shopro底层依赖
 export async function ShoproInit() {
   // 应用初始化
-  await $store('app').init();
+  if (await $store('app').init() === false) return;
 
   // 平台初始化加载(各平台provider提供不同的加载流程)
   $platform.load();

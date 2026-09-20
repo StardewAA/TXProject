@@ -95,11 +95,15 @@ public class CrmBusinessStatusController {
         }
         // 2. 拼接数据
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(pageResult.getList(), statusType -> Long.parseLong(statusType.getCreator())));
+                convertSet(pageResult.getList(), statusType -> NumberUtils.parseLong(statusType.getCreator())));
         Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
                 convertSetByFlatMap(pageResult.getList(), CrmBusinessStatusTypeDO::getDeptIds, Collection::stream));
         return success(BeanUtils.toBean(pageResult, CrmBusinessStatusRespVO.class, statusTypeVO -> {
-            statusTypeVO.setCreator(userMap.get(NumberUtils.parseLong(statusTypeVO.getCreator())).getNickname());
+            // 注意：creator 可能解析不到用户（例如数据由 SQL 脚本写入、creator='1'，
+            // 而当前租户下并不存在 id=1 的用户；本项目多租户下用户 id 从 8xxxx 起）。
+            // 这里必须判空，否则整页 500（NullPointerException: Map.get(...) is null）。
+            AdminUserRespDTO creator = userMap.get(NumberUtils.parseLong(statusTypeVO.getCreator()));
+            statusTypeVO.setCreator(creator != null ? creator.getNickname() : null);
             statusTypeVO.setDeptNames(convertList(statusTypeVO.getDeptIds(),
                     deptId -> deptMap.containsKey(deptId) ? deptMap.get(deptId).getName() : null));
         }));

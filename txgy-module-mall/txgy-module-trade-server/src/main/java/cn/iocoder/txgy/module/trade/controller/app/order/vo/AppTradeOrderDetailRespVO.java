@@ -3,13 +3,17 @@ package cn.iocoder.txgy.module.trade.controller.app.order.vo;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemRespVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Schema(description = "用户 App - 订单交易的明细 Response VO")
 @Data
-public class AppTradeOrderDetailRespVO {
+@EqualsAndHashCode(callSuper = true)
+public class AppTradeOrderDetailRespVO extends AppTradeOrderPaymentRespVO {
+    private java.util.List<cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Entry> erpInventory;
 
     // ========== 订单基本信息 ==========
 
@@ -62,9 +66,6 @@ public class AppTradeOrderDetailRespVO {
 
     @Schema(description = "付款时间")
     private LocalDateTime payTime;
-
-    @Schema(description = "付款超时时间", requiredMode = Schema.RequiredMode.REQUIRED)
-    private LocalDateTime payExpireTime;
 
     @Schema(description = "支付渠道", example = "wx_lite_pay")
     private String payChannelCode;
@@ -120,6 +121,16 @@ public class AppTradeOrderDetailRespVO {
 
     @Schema(description = "收件人详细地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "中关村大街 1 号")
     private String receiverDetailAddress;
+    @Schema(description = "下单时收货点位快照；仅本人详情可见，不用于公开地图链接")
+    private BigDecimal receiverLongitude;
+    private BigDecimal receiverLatitude;
+    private String receiverCoordSystem;
+    private String receiverLocationSource;
+    private String receiverLocationPrecision;
+    private LocalDateTime receiverLocationConfirmedAt;
+
+    @Schema(description = "订单店铺登记的发货地址，仅用于本人订单预计物流路线")
+    private String dispatchOriginAddress;
 
     @Schema(description = "自提门店编号", example = "1088")
     private Long pickUpStoreId;

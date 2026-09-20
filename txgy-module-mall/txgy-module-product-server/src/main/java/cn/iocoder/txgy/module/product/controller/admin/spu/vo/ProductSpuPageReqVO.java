@@ -53,6 +53,8 @@ public class ProductSpuPageReqVO extends PageParam {
 
     @Schema(description = "所属企业店铺编号；为空表示全部店铺", example = "1")
     private Long shopId;
+    /** -1 表示历史待补审；其余为 0/10/20/30。 */
+    private Integer reviewStatus;
 
     @Schema(description = "创建时间", example = "[2022-07-01 00:00:00, 2022-07-01 23:59:59]")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)

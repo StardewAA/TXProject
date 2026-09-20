@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSimulationRequest, getSimulationBusinessTypes, getShipmentWarehouses, buildShipmentSelection } from './simulation';
+import { buildSimulationRequest, getSimulationBusinessTypes, getShipmentWarehouses, buildShipmentSelection, getWarehouseMismatchMessage } from './simulation';
 import { getRequiredMaterialType, buildReceiptSelection } from './simulation';
 import { materialTypeLabel } from '../../utils/material-type';
 
@@ -56,6 +56,11 @@ describe('WMS simulation entry direction', () => {
 });
 
 describe('shipment warehouse selection', () => {
+  it('explains an incompatible receipt or shipment warehouse in Chinese', () => {
+    expect(getWarehouseMismatchMessage('PURCHASE_RECEIPT', 'FINISHED_GOODS')).toContain('原材料仓');
+    expect(getWarehouseMismatchMessage('SALE_SHIPMENT', 'RAW_MATERIAL')).toContain('成品仓');
+    expect(getWarehouseMismatchMessage('PRODUCTION_RECEIPT', 'FINISHED_GOODS')).toBeUndefined();
+  });
   const warehouses = [
     { id: 106, name: '原料仓', warehouseType: 'RAW_MATERIAL' as const },
     { id: 107, name: '成品仓', warehouseType: 'FINISHED_GOODS' as const },

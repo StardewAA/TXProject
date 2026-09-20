@@ -19,6 +19,10 @@ import java.util.List;
  */
 public interface MemberUserService {
 
+    /** Called only after consuming a server-side image registration challenge. */
+    MemberUserDO registerAccountUser(String loginName, String password, String nickname,
+                                    String contactMobile, String memberIdentity, String registerIp, Integer terminal);
+
     /**
      * 通过手机查询用户
      *

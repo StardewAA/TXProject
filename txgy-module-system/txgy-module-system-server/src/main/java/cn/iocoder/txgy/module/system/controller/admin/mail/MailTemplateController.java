@@ -93,7 +93,10 @@ public class MailTemplateController {
     @Operation(summary = "发送短信")
     @PreAuthorize("@ss.hasPermission('system:mail-template:send-mail')")
     public CommonResult<Long> sendMail(@Valid @RequestBody MailTemplateSendReqVO sendReqVO) {
-        return success(mailSendService.sendSingleMailToAdmin(getLoginUserId(),
+        // 测试发送只发给「显式填写的收件人」。
+        // 原先传 getLoginUserId() 会把当前登录管理员的邮箱自动追加进收件人，
+        // 导致「只填了候选人邮箱，自己也收到一封」，与页面语义不符。
+        return success(mailSendService.sendSingleMailToAddresses(
                 sendReqVO.getToMails(), sendReqVO.getCcMails(), sendReqVO.getBccMails(),
                 sendReqVO.getTemplateCode(), sendReqVO.getTemplateParams()));
     }

@@ -145,6 +145,22 @@ public class MemberUserServiceImpl implements MemberUserService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MemberUserDO registerAccountUser(String loginName, String password, String nickname,
+                                           String contactMobile, String memberIdentity, String registerIp, Integer terminal) {
+        String normalized = cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy.normalize(loginName);
+        MemberUserDO user = new MemberUserDO().setLoginName(normalized)
+                .setContactMobile(StrUtil.isBlank(contactMobile) ? null : contactMobile)
+                .setMemberIdentity(memberIdentity).setMobile(null)
+                .setPassword(encodePassword(password)).setStatus(CommonStatusEnum.ENABLE.getStatus())
+                .setNickname(StrUtil.isBlank(nickname) ? normalized : nickname).setAvatar("")
+                .setRegisterIp(registerIp).setRegisterTerminal(terminal);
+        memberUserMapper.insert(user); // Tenant + login_name unique index also protects concurrent registration.
+        registerUserCreateMessage(user);
+        return user;
+    }
+
+    @Override
     public void updateUserLogin(Long id, String loginIp) {
         memberUserMapper.updateById(new MemberUserDO().setId(id)
                 .setLoginIp(loginIp).setLoginDate(LocalDateTime.now()));
@@ -264,7 +280,13 @@ public class MemberUserServiceImpl implements MemberUserService {
     @Transactional(rollbackFor = Exception.class)
     public void updateUser(MemberUserUpdateReqVO updateReqVO) {
         // 校验存在
-        validateUserExists(updateReqVO.getId());
+        MemberUserDO existing = validateUserExists(updateReqVO.getId());
+        // Account-name users bind an identity phone only via a verified binding flow, not profile editing.
+        if (existing.getLoginName() != null && StrUtil.isNotBlank(updateReqVO.getMobile())
+                && !java.util.Objects.equals(existing.getMobile(), updateReqVO.getMobile())) {
+            throw exception(new cn.iocoder.txgy.framework.common.exception.ErrorCode(1_004_008_194, "身份手机号须由会员验证绑定，不可通过资料编辑设置"));
+        }
+        if (StrUtil.isBlank(updateReqVO.getMobile())) updateReqVO.setMobile(null);
         // 校验手机唯一
         validateMobileUnique(updateReqVO.getId(), updateReqVO.getMobile());
         // 校验邮箱唯一

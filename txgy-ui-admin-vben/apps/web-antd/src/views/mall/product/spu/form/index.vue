@@ -5,17 +5,20 @@ import type {
   RuleConfig,
 } from '#/views/mall/product/spu/components';
 
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { useAccess } from '@vben/access';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { useTabs } from '@vben/hooks';
 import { convertToInteger, formatToFraction } from '@vben/utils';
 
-import { Button, Card, message } from 'ant-design-vue';
+import { Alert, Button, Card, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
-import { createSpu, getSpu, updateSpu } from '#/api/mall/product/spu';
+import { createSpu, getSpu, getSpuReviewPolicy, updateSpu } from '#/api/mall/product/spu';
+
+import { canAdminMaintain, reviewStatusText } from '../review-model';
 import { getPropertyList, SkuList } from '#/views/mall/product/spu/components';
 
 import {
@@ -36,7 +39,15 @@ const activeTabName = ref('info');
 const formLoading = ref(false); // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 // 防止保存请求尚未完成时重复点击，造成重复创建商品
 const submitting = ref(false);
-const isDetail = ref(name === 'ProductSpuDetail'); // 是否查看详情
+const { hasAccessByCodes } = useAccess();
+const policy = ref<MallSpuApi.ReviewPolicy>();
+const policyError = ref(false);
+const originalShopId = ref<number>();
+const policyLoading = ref(true);
+const isDetail = computed(() => name === 'ProductSpuDetail' || policyLoading.value
+  || !canAdminMaintain(policy.value, originalShopId.value)
+  || (spuId.value ? !hasAccessByCodes(['product:spu:update']) : !hasAccessByCodes(['product:spu:create']))
+  || formData.value.reviewStatus === 10);
 const initializingForm = ref(false); // 详情回填时不触发 SKU 重置逻辑
 const skuListRef = ref(); // 商品属性列表 Ref
 
@@ -117,7 +128,7 @@ const [SkuForm, skuFormApi] = useVbenForm({
   schema: useSkuFormSchema(propertyList.value, isDetail.value),
   showDefaultActions: false,
   handleValuesChange: (values, fieldsChanged) => {
-    if (initializingForm.value) {
+    if (initializingForm.value || isDetail.value) {
       return;
     }
     if (
@@ -188,7 +199,7 @@ function handleTabChange(key: string) {
 
 /** 提交表单 */
 async function handleSubmit() {
-  if (submitting.value) {
+  if (submitting.value || isDetail.value) {
     return;
   }
   submitting.value = true;
@@ -200,6 +211,20 @@ async function handleSubmit() {
       .merge(descriptionFormApi)
       .merge(otherFormApi)
       .submitAllForm(true);
+    // 源店与目标店双重校验；试点店铺不能通过旧链接或更换所属店铺绕过只读策略。
+    if (!canAdminMaintain(policy.value, originalShopId.value)
+      || !canAdminMaintain(policy.value, values.shopId)
+      || !values.shopId) {
+      message.warning('该店铺仅允许销售中心维护，请使用有权经营的账号。');
+      return;
+    }
+    if (spuId.value) {
+      if (!Number.isSafeInteger(formData.value.contentVersion)) {
+        message.error('缺少商品版本，请刷新详情后重试，不能使用旧页面保存。');
+        return;
+      }
+      values.expectedVersion = formData.value.contentVersion;
+    }
     // 校验商品名称不能为空（用于 SKU name）
     if (!values.name || values.name.trim() === '') {
       message.error('商品名称不能为空');
@@ -235,7 +260,7 @@ async function handleSubmit() {
     // 提交数据；成功后关闭当前页，避免用户误以为未提交而再次创建
     await (spuId.value ? updateSpu(values) : createSpu(values));
     submitted = true;
-    message.success(spuId.value ? '商品更新成功' : '商品创建成功');
+    message.success('已保存为草稿，需提交审核；通过后由有权限的经营人员主动上架。');
     await closeCurrentTab();
     await router.push('/mall/product/spu');
   } finally {
@@ -248,19 +273,13 @@ async function handleSubmit() {
 
 /** 获得详情 */
 async function getDetail() {
-  if (isDetail.value) {
-    isDetail.value = true;
-    infoFormApi.setDisabled(true);
-    skuFormApi.setDisabled(true);
-    deliveryFormApi.setDisabled(true);
-    descriptionFormApi.setDisabled(true);
-    otherFormApi.setDisabled(true);
-  }
+  setFormsReadonly();
   // 将 SKU 的属性，整理成 PropertyAndValues 数组
   propertyList.value = getPropertyList(formData.value);
   formLoading.value = true;
   try {
     const res = await getSpu(spuId.value!);
+    originalShopId.value = res.shopId;
     // 金额转换：分转元
     res.skus = res.skus?.map((item) => ({
       ...item,
@@ -294,16 +313,17 @@ async function getDetail() {
 
 /** 打开属性添加表单 */
 function openPropertyAddForm() {
-  productPropertyAddFormApi.open();
+  if (!isDetail.value) productPropertyAddFormApi.open();
 }
 
 /** 调用 SkuList generateTableData 方法*/
 function generateSkus(propertyList: PropertyAndValues[]) {
-  skuListRef.value.generateTableData(propertyList);
+  if (!isDetail.value) skuListRef.value.generateTableData(propertyList);
 }
 
 /** 分销类型 */
 function handleChangeSubCommissionType() {
+  if (isDetail.value) return;
   // 默认为零，类型切换后也要重置为零
   for (const item of formData.value.skus!) {
     item.firstBrokeragePrice = 0;
@@ -313,6 +333,7 @@ function handleChangeSubCommissionType() {
 
 /** 选择规格 */
 function handleChangeSpec() {
+  if (isDetail.value) return;
   // 重置商品属性列表
   propertyList.value = [];
   // 重置 sku 列表
@@ -344,21 +365,41 @@ watch(
   { deep: true },
 );
 
-/** 初始化 */
+function setFormsReadonly() {
+  for (const api of [infoFormApi, skuFormApi, deliveryFormApi, descriptionFormApi, otherFormApi]) api.setDisabled(isDetail.value);
+  skuFormApi.updateSchema(useSkuFormSchema(propertyList.value, isDetail.value));
+}
+watch(isDetail, () => setFormsReadonly());
+setFormsReadonly();
+
+/** 初始化：策略加载失败继续只读；非试点才临时保留维护。 */
 onMounted(async () => {
-  spuId.value = params.id as unknown as number;
-  if (!spuId.value) {
-    return;
+  spuId.value = params.id ? Number(params.id) : undefined;
+  try {
+    policy.value = await getSpuReviewPolicy();
+    infoFormApi.updateSchema(useInfoFormSchema(policy.value.adminWriteLockedShopIds ?? []));
+  } catch {
+    policyError.value = true;
   }
-  await getDetail();
+  try {
+    if (spuId.value) await getDetail();
+  } finally {
+    policyLoading.value = false;
+    setFormsReadonly();
+  }
 });
 </script>
 
 <template>
   <div>
-    <ProductPropertyAddFormModal :property-list="propertyList" />
+    <ProductPropertyAddFormModal v-if="!isDetail" :property-list="propertyList" />
 
     <Page auto-content-height>
+      <Alert class="mb-3" show-icon type="info"
+        :message="isDetail ? '当前商品仅供查看。试点店铺经营资料交由销售中心维护，待审内容须撤回后修改。' : '当前非试点店铺临时保留后台维护；保存后成为草稿并下架，必须送审，通过后才能重新上架。'"
+        description="审核状态与销售状态相互独立。平台经营账号与审核账号应分离，提交人员不能审核自己的提交。" />
+      <Alert v-if="policyError" class="mb-3" show-icon type="warning" message="策略加载失败，已保持只读，请刷新后重试。" />
+      <div class="mb-3">{{ reviewStatusText(formData.reviewStatus) }} · 内容版本 {{ formData.contentVersion ?? '历史' }}</div>
       <Card
         class="h-full w-full"
         :loading="formLoading"
@@ -384,7 +425,7 @@ onMounted(async () => {
             tab: '其它设置',
           },
         ]"
-        :active-key="activeTabName"
+        :active-tab-key="activeTabName"
         @tab-change="handleTabChange"
       >
         <template #tabBarExtraContent>
@@ -395,7 +436,7 @@ onMounted(async () => {
             :disabled="submitting"
             @click="handleSubmit"
           >
-            保存
+            保存草稿并重新审核
           </Button>
           <Button type="default" v-else @click="() => closeCurrentTab()">
             返回列表
@@ -408,6 +449,7 @@ onMounted(async () => {
             <SkuList
               ref="skuListRef"
               class="w-full"
+              :readonly-stock="true"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"
@@ -416,7 +458,7 @@ onMounted(async () => {
           </template>
           <template #productAttributes>
             <div>
-              <Button class="mb-10px mr-15px" @click="openPropertyAddForm">
+              <Button v-if="!isDetail" class="mb-10px mr-15px" @click="openPropertyAddForm">
                 添加属性
               </Button>
               <ProductAttributes
@@ -429,6 +471,7 @@ onMounted(async () => {
           <template #batchSkuList>
             <SkuList
               :is-batch="true"
+              :readonly-stock="true"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"
@@ -437,6 +480,7 @@ onMounted(async () => {
           <template #multiSkuList>
             <SkuList
               ref="skuListRef"
+              :readonly-stock="true"
               :is-detail="isDetail"
               :prop-form-data="formData"
               :property-list="propertyList"

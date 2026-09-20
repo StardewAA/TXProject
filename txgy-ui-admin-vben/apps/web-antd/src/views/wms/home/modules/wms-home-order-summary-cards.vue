@@ -137,19 +137,19 @@ defineExpose({ load });
 </script>
 
 <template>
-  <div class="grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-sm:grid-cols-1">
+  <div class="grid grid-cols-4 gap-2 max-xl:grid-cols-2 max-sm:grid-cols-1">
     <Card
       v-for="item in summaryList"
       :key="item.type"
-      :body-style="{ padding: '12px 16px 16px' }"
+      :body-style="{ padding: '8px 10px' }"
       class="h-full shadow-sm"
       :loading="loading"
       :style="{ borderTop: `3px solid ${item.color}` }"
     >
-      <div class="mb-3 flex items-center justify-between">
-        <div class="flex items-center gap-2 font-semibold">
+      <div class="mb-1 flex items-center justify-between">
+        <div class="flex items-center gap-1 text-sm font-semibold">
           <span
-            class="h-2 w-2 rounded-full"
+            class="h-1.5 w-1.5 rounded-full"
             :style="{ backgroundColor: item.color }"
           ></span>
           {{ item.title }}
@@ -157,19 +157,20 @@ defineExpose({ load });
         <Button
           size="small"
           type="link"
+          class="!px-0"
           @click="handleNavigate(item.routeName)"
         >
           查看
         </Button>
       </div>
-      <div class="mb-1 flex items-baseline gap-2">
-        <span class="text-muted-foreground">合计</span>
-        <span class="text-3xl font-bold leading-9">
+      <div class="flex items-baseline gap-1">
+        <span class="text-xs text-muted-foreground">合计</span>
+        <span class="text-xl font-bold leading-6">
           {{ item.total?.toLocaleString() ?? 0 }}
         </span>
-        <span class="text-muted-foreground">单</span>
+        <span class="text-xs text-muted-foreground">单</span>
       </div>
-      <div class="my-3 flex h-2 overflow-hidden rounded-full bg-muted">
+      <div class="my-2 flex h-1.5 overflow-hidden rounded-full bg-muted">
         <span
           v-for="status in statusList"
           :key="status.value"
@@ -180,7 +181,7 @@ defineExpose({ load });
           }"
         ></span>
       </div>
-      <div class="grid grid-cols-3 gap-2 text-sm">
+      <div class="grid grid-cols-3 gap-1 text-xs">
         <div v-for="status in statusList" :key="status.value">
           <div class="truncate text-muted-foreground">{{ status.label }}</div>
           <div class="font-semibold" :style="{ color: status.color }">

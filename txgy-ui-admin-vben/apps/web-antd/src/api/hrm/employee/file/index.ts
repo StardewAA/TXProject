@@ -29,3 +29,10 @@ export function getEmployeeFileList(employeeId: number) {
 export function saveEmployeeFiles(data: HrmEmployeeFileApi.SaveReq) {
   return requestClient.put<boolean>('/hrm/employee/file/save', data);
 }
+
+/** 按模板生成员工入职档案与培训协议文档（返回本次新增归档的文档地址） */
+export function generateOnboardDocs(employeeId: number) {
+  return requestClient.post<string[]>('/hrm/employee/onboard-doc/generate', null, {
+    params: { employeeId },
+  });
+}

@@ -102,6 +102,16 @@
             <artifactId>txgy-spring-boot-starter-excel</artifactId>
         </dependency>
 
+        <!-- PDF 导出 -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+
         <!-- 监控相关 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

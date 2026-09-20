@@ -4,35 +4,28 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
 import cn.iocoder.txgy.module.member.api.user.dto.MemberUserRespDTO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderPageReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderSummaryRespVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPageReqVO;
-import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderItemMapper;
 import cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper;
-import cn.iocoder.txgy.module.trade.dal.redis.RedisKeyConstants;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderRefundStatusEnum;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderTypeEnum;
-import cn.iocoder.txgy.module.trade.framework.delivery.core.client.ExpressClientFactory;
-import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackRespDTO;
-import cn.iocoder.txgy.module.trade.service.delivery.DeliveryExpressService;
+import cn.iocoder.txgy.module.trade.service.delivery.TradeOrderLogisticsService;
 import jakarta.annotation.Resource;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
-import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.EXPRESS_NOT_EXISTS;
 import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.ORDER_NOT_FOUND;
 
 /**
@@ -44,15 +37,12 @@ import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.ORDER_NOT_FO
 public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
 
     @Resource
-    private ExpressClientFactory expressClientFactory;
+    private TradeOrderLogisticsService logistics;
 
     @Resource
     private TradeOrderMapper tradeOrderMapper;
     @Resource
     private TradeOrderItemMapper tradeOrderItemMapper;
-
-    @Resource
-    private DeliveryExpressService deliveryExpressService;
 
     @Resource
     private MemberUserApi memberUserApi;
@@ -194,33 +184,9 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
      * @return 物流轨迹
      */
     private List<ExpressTrackRespDTO> getExpressTrackList(TradeOrderDO order) {
-        if (order.getLogisticsId() == null) {
-            return Collections.emptyList();
-        }
-        // 查询物流公司
-        DeliveryExpressDO express = deliveryExpressService.getDeliveryExpress(order.getLogisticsId());
-        if (express == null) {
-            throw exception(EXPRESS_NOT_EXISTS);
-        }
-        // 查询物流轨迹
-        return getSelf().getExpressTrackList(express.getCode(), order.getLogisticsNo(), order.getReceiverMobile());
-    }
-
-    /**
-     * 查询物流轨迹
-     * <p>
-     * 缓存的目的：考虑及时性要求不高，但是每次调用需要钱
-     *
-     * @param code           快递公司编码
-     * @param logisticsNo    发货快递单号
-     * @param receiverMobile 收、寄件人的电话号码
-     * @return 物流轨迹
-     */
-    @Cacheable(cacheNames = RedisKeyConstants.EXPRESS_TRACK, key = "#code + '-' + #logisticsNo + '-' + #receiverMobile",
-            unless = "#result == null")
-    public List<ExpressTrackRespDTO> getExpressTrackList(String code, String logisticsNo, String receiverMobile) {
-        return expressClientFactory.getDefaultExpressClient().getExpressTrackList(new ExpressTrackQueryReqDTO()
-                .setExpressCode(code).setLogisticsNo(logisticsNo).setPhone(receiverMobile));
+        // Legacy response shape, same authorization/ERP/config/quota gates as the new endpoint.
+        return logistics.getForAuthorizedOrder(order).getEvents().stream()
+                .map(event -> new ExpressTrackRespDTO().setTime(event.getTime()).setContent(event.getContent())).toList();
     }
 
     // =================== Order Item ===================
@@ -246,15 +212,6 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
             return Collections.emptyList();
         }
         return tradeOrderItemMapper.selectListByOrderId(orderIds);
-    }
-
-    /**
-     * 获得自身的代理对象，解决 AOP 生效问题
-     *
-     * @return 自己
-     */
-    private TradeOrderQueryServiceImpl getSelf() {
-        return SpringUtil.getBean(getClass());
     }
 
 }

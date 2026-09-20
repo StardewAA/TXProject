@@ -44,6 +44,9 @@ public class ErpWarehouseRespVO {
     @ExcelProperty("负责人")
     private String principal;
 
+    @Schema(description = "负责人用户编号", example = "1")
+    private Long principalUserId;
+
     @Schema(description = "仓储费，单位：元", example = "13973")
     @ExcelProperty("仓储费，单位：元")
     private BigDecimal warehousePrice;

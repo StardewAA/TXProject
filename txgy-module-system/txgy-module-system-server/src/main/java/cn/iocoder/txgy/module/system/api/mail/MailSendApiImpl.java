@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.system.api.mail;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.system.api.mail.dto.MailSendSingleToUserReqDTO;
+import cn.iocoder.txgy.module.system.api.mail.dto.MailSendToAddressesReqDTO;
 import cn.iocoder.txgy.module.system.service.mail.MailSendService;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -28,6 +29,13 @@ public class MailSendApiImpl implements MailSendApi {
         return success(mailSendService.sendSingleMailToMember(reqDTO.getUserId(),
                 reqDTO.getToMails(), reqDTO.getCcMails(), reqDTO.getBccMails(),
                 reqDTO.getTemplateCode(), reqDTO.getTemplateParams(), reqDTO.getAttachments()));
+    }
+
+    @Override
+    public CommonResult<Long> sendSingleMailToAddresses(MailSendToAddressesReqDTO reqDTO) {
+        return success(mailSendService.sendSingleMailToAddresses(reqDTO.getToMails(),
+                reqDTO.getCcMails(), reqDTO.getBccMails(), reqDTO.getTemplateCode(),
+                reqDTO.getTemplateParams(), reqDTO.getAttachmentUrls()));
     }
 
 }

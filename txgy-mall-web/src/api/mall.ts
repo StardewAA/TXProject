@@ -6,6 +6,7 @@ import type {
   Category,
   PageResult,
   Product,
+  ProductCollectionItem,
   Shop,
   TokenResult,
   TradeOrder,
@@ -19,11 +20,11 @@ import type {
 
 export const authApi = {
   login: (data: { mobile: string; password: string }) =>
-    request<TokenResult>({ url: '/member/auth/login', method: 'POST', data }),
+    request<TokenResult>({ url: '/member/auth/login', method: 'POST', data, scope: 'auth' }),
   register: (data: { mobile: string; password: string; code: string; nickname: string; agree: true; memberIdentity: 'buyer' | 'supplier' }) =>
-    request<TokenResult>({ url: '/member/auth/register', method: 'POST', data }),
+    request<TokenResult>({ url: '/member/auth/register', method: 'POST', data, scope: 'auth' }),
   sendSmsCode: (mobile: string, scene: number) =>
-    request<boolean>({ url: '/member/auth/send-sms-code', method: 'POST', data: { mobile, scene } }),
+    request<boolean>({ url: '/member/auth/send-sms-code', method: 'POST', data: { mobile, scene }, scope: 'auth' }),
   logout: () => request<boolean>({ url: '/member/auth/logout', method: 'POST' }),
 }
 
@@ -32,7 +33,7 @@ export const memberApi = {
   updateProfile: (data: Partial<UserProfile>) =>
     request<boolean>({ url: '/member/user/update', method: 'PUT', data }),
   resetPassword: (data: { mobile: string; code: string; password: string }) =>
-    request<boolean>({ url: '/member/user/reset-password', method: 'PUT', data }),
+    request<boolean>({ url: '/member/user/reset-password', method: 'PUT', data, scope: 'auth' }),
   getAddresses: () => request<Address[]>({ url: '/member/address/list' }),
   getDefaultAddress: () => request<Address | null>({ url: '/member/address/get-default' }),
   createAddress: (data: Omit<Address, 'id'>) =>
@@ -64,32 +65,33 @@ export interface AreaNode {
 }
 
 export const systemApi = {
-  getAreaTree: () => request<AreaNode[]>({ url: '/system/area/tree' }),
+  getAreaTree: () => request<AreaNode[]>({ url: '/system/area/tree', scope: 'browse' }),
 }
 
 export const productApi = {
-  getShops: () => request<Shop[]>({ url: '/product/shop/list' }),
-  getCategories: () => request<Category[]>({ url: '/product/category/list' }),
+  getShops: () => request<Shop[]>({ url: '/product/shop/list', scope: 'browse' }),
+  getCategories: () => request<Category[]>({ url: '/product/category/list', scope: 'browse' }),
   getPage: (params: Record<string, unknown>) =>
-    request<PageResult<Product>>({ url: '/product/spu/page', params }),
-  getDetail: (id: Identifier) => request<Product>({ url: '/product/spu/get-detail', params: { id } }),
-  getShop: (id: Identifier) => request<Shop>({ url: '/product/shop/get', params: { id } }),
+    request<PageResult<Product>>({ url: '/product/spu/page', params, scope: 'browse' }),
+  getDetail: (id: Identifier) => request<Product>({ url: '/product/spu/get-detail', params: { id }, scope: 'browse' }),
+  getShop: (id: Identifier) => request<Shop>({ url: '/product/shop/get', params: { id }, scope: 'browse' }),
   getComments: (params: Record<string, unknown>) =>
-    request<PageResult<Record<string, unknown>>>({ url: '/product/comment/page', params }),
+    request<PageResult<Record<string, unknown>>>({ url: '/product/comment/page', params, scope: 'browse' }),
   getFavorites: (params: Record<string, unknown>) =>
-    request<PageResult<Product>>({ url: '/product/favorite/page', params }),
+    request<PageResult<ProductCollectionItem>>({ url: '/product/favorite/page', params }),
   addFavorite: (spuId: Identifier) =>
     request<Identifier>({ url: '/product/favorite/create', method: 'POST', data: { spuId } }),
   deleteFavorite: (spuId: Identifier) =>
     request<boolean>({ url: '/product/favorite/delete', method: 'DELETE', data: { spuId } }),
   getHistory: (params: Record<string, unknown>) =>
-    request<PageResult<Product>>({ url: '/product/browse-history/page', params }),
+    request<PageResult<ProductCollectionItem>>({ url: '/product/browse-history/page', params }),
+  deleteHistory: (spuIds: Identifier[]) => request<boolean>({ url: '/product/browse-history/delete', method: 'DELETE', data: { spuIds } }),
   clearHistory: () => request<boolean>({ url: '/product/browse-history/clean', method: 'DELETE' }),
 }
 
 export const promotionApi = {
   getCouponTemplates: () =>
-    request<CouponTemplate[]>({ url: '/promotion/coupon-template/list', params: { count: 50 } }),
+    request<CouponTemplate[]>({ url: '/promotion/coupon-template/list', params: { count: 50 }, scope: 'browse' }),
   takeCoupon: (templateId: Identifier) =>
     request<boolean>({ url: '/promotion/coupon/take', method: 'POST', data: { templateId } }),
 }

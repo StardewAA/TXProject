@@ -84,6 +84,33 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/crm/contact/detail/index.vue'),
       },
       {
+        path: 'after-sale/warranty/detail/:id',
+        name: 'CrmAfterSaleWarrantyDetail',
+        meta: {
+          title: '质保档案详情',
+          activePath: '/crm/after-sale/warranty',
+        },
+        component: () => import('#/views/crm/after-sale/warranty/detail/index.vue'),
+      },
+      {
+        path: 'after-sale/visit-task/detail/:id',
+        name: 'CrmAfterSaleVisitTaskDetail',
+        meta: {
+          title: '回访任务详情',
+          activePath: '/crm/after-sale/visit-task',
+        },
+        component: () => import('#/views/crm/after-sale/task/detail/index.vue'),
+      },
+      {
+        path: 'after-sale/ticket/detail/:id',
+        name: 'CrmAfterSaleTicketDetail',
+        meta: {
+          title: '问题工单详情',
+          activePath: '/crm/after-sale/ticket',
+        },
+        component: () => import('#/views/crm/after-sale/ticket/detail/index.vue'),
+      },
+      {
         path: 'product/detail/:id',
         name: 'CrmProductDetail',
         meta: {

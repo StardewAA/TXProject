@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 商城现货库存适配接口。
+ * 已停用的旧 WMS 库存履约契约，仅保留兼容错误提示。
  *
- * <p>当前实现读取同库 WMS 表；未来 WMS 独立后，只替换该接口实现，商品与交易流程无需修改。</p>
+ * <p>库存变更统一由商城 ERP 适配层处理；WMS 只提供只读摘要，不能据此推算可承诺库存。</p>
  */
 public interface ProductWmsInventoryAdapter {
 

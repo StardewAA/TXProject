@@ -127,9 +127,9 @@
         </button>
         <button
           class="ss-reset-button contcat-btn btn"
-          @tap="sheep.$router.go('/pages/chat/index')"
+          @tap="sheep.$router.go('/pages/chat/service', chatEntry(state.info.shopId, 'ORDER', state.info.orderId))"
         >
-          联系客服
+          {{ state.info.shopId > 0 ? '联系店铺客服' : '联系平台客服' }}
         </button>
       </view>
     </su-fixed>
@@ -138,6 +138,7 @@
 
 <script setup>
   import sheep from '@/sheep';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
   import { onLoad } from '@dcloudio/uni-app';
   import { reactive } from 'vue';
   import { isEmpty } from 'lodash-es';
