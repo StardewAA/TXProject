@@ -126,7 +126,6 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             throw exception(SUPPLIER_USER_DUPLICATE, bound.getName());
         }
     }
-    }
 
     @Override
     public ErpSupplierDO getSupplier(Long id) {
