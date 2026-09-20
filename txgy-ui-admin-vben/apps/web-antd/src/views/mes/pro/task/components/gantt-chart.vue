@@ -157,6 +157,15 @@ function initGantt() {
   ganttInited.value = true;
 }
 
+/** 是否为有效时间值 */
+function isValidDate(value: any): value is string | number | Date {
+  if (value === null || value === undefined || value === '') {
+    return false;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
 /** 加载数据到甘特图 */
 function loadData(tasks: any[]) {
   if (!ganttInited.value) {
@@ -169,12 +178,14 @@ function loadData(tasks: any[]) {
     [BarcodeBizTypeEnum.TASK]: 'task',
   };
   gantt.parse({
-    data: tasks.map((item: any) => ({
-      ...item,
-      type: typeMap[item.type] || item.type,
-      start_date: item.startDate ? new Date(item.startDate) : undefined,
-      end_date: item.endDate ? new Date(item.endDate) : undefined,
-    })),
+    data: tasks
+      .filter((item: any) => isValidDate(item.startDate) && isValidDate(item.endDate))
+      .map((item: any) => ({
+        ...item,
+        type: typeMap[item.type] || item.type,
+        start_date: new Date(item.startDate),
+        end_date: new Date(item.endDate),
+      })),
     links: [],
   });
 }

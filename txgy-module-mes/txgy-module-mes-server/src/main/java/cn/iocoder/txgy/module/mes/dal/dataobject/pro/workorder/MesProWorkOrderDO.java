@@ -146,6 +146,23 @@ public class MesProWorkOrderDO extends BaseDO {
      */
     private LocalDateTime issueTime;
     /**
+     * WMS 领料出库单号（MES 向 WMS 申请生产领料后回填）
+     */
+    private String wmsShipmentOrderNo;
+    /**
+     * WMS 领料状态：0 未申请；1 申请中；2 已出库；3 出库失败；4 已取消
+     */
+    private Integer wmsShipmentStatus;
+    /**
+     * WMS 完工入库单号（MES 完工后向 WMS 申请成品入库回填）
+     */
+    private String wmsReceiptOrderNo;
+    /**
+     * WMS 入库状态：0 未申请；1 申请中；2 已入库；3 入库失败；4 已取消
+     */
+    private Integer wmsReceiptStatus;
+
+    /**
      * 备注
      */
     private String remark;

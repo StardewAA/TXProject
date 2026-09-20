@@ -1,7 +1,12 @@
 package cn.iocoder.txgy.module.mes.service.wms.integration;
 
 import cn.hutool.json.JSONUtil;
+import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.txgy.module.wms.api.integration.WmsIntegrationApi;
+import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationAcceptedRespDTO;
+import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationRequestRespDTO;
+import cn.iocoder.txgy.module.wms.api.integration.dto.WmsOrderRequestDTO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wms.integration.MesWmsIntegrationTaskDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.wms.integration.MesWmsIntegrationTaskMapper;
 import cn.iocoder.txgy.module.mes.enums.wms.MesWmsIntegrationOrderTypeEnum;
@@ -40,17 +45,17 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
     private static final int BATCH_LIMIT = 50;
 
     private final MesWmsIntegrationTaskMapper taskMapper;
-    private final WmsServerHttpClient wmsClient;
+    private final WmsIntegrationApi wmsApi;
     private final List<MesWmsIntegrationResultHandler> resultHandlers;
     private final boolean enabled;
 
     public MesWmsIntegrationServiceImpl(
             MesWmsIntegrationTaskMapper taskMapper,
-            WmsServerHttpClient wmsClient,
+            WmsIntegrationApi wmsApi,
             List<MesWmsIntegrationResultHandler> resultHandlers,
             @Value("${mes.wms.integration.enabled:false}") boolean enabled) {
         this.taskMapper = taskMapper;
-        this.wmsClient = wmsClient;
+        this.wmsApi = wmsApi;
         this.resultHandlers = resultHandlers == null ? List.of() : resultHandlers;
         this.enabled = enabled;
     }
@@ -119,24 +124,40 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
         return taskMapper.selectBySourceOrder(orderType.getCode(), sourceOrderId);
     }
 
+    @Override
+    public void cancelTask(MesWmsIntegrationOrderTypeEnum orderType, Long sourceOrderId) {
+        // 物理删除旧任务：createTask 以 requestId(=MES-MR-工单号-v1) 唯一键兜底，
+        // 仅置 CANCELLED 会因唯一键冲突无法重建，故恢复领料时需物理删除后重新建任务。
+        MesWmsIntegrationTaskDO task = taskMapper.selectBySourceOrder(orderType.getCode(), sourceOrderId);
+        if (task != null) {
+            taskMapper.deleteById(task.getId());
+        }
+    }
+
     // ==================== 发送阶段 ====================
 
     private void sendTask(MesWmsIntegrationTaskDO task) {
         MesWmsIntegrationOrderTypeEnum orderType = MesWmsIntegrationOrderTypeEnum.valueOf(task.getOrderType());
-        Map<String, Object> payload = JSONUtil.toBean(task.getRequestPayload(), Map.class);
-        Map<String, Object> resp;
+        WmsOrderRequestDTO payload;
+        try {
+            payload = JSONUtil.toBean(task.getRequestPayload(), WmsOrderRequestDTO.class);
+        } catch (Exception ex) {
+            failTask(task, "请求报文解析失败: " + ex.getMessage());
+            return;
+        }
+        CommonResult<WmsIntegrationAcceptedRespDTO> resp;
         try {
             resp = orderType == MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT
-                    ? wmsClient.post("/rpc-api/wms/integration/shipment/production", task.getTenantId(), payload)
-                    : wmsClient.post("/rpc-api/wms/integration/receipt/production", task.getTenantId(), payload);
+                    ? wmsApi.createProductionShipment(payload)
+                    : wmsApi.createProductionReceipt(payload);
         } catch (Exception ex) {
             scheduleRetry(task, "网络异常: " + ex.getMessage());
             return;
         }
         // 1. 校验业务码：code!=0 视为失败，不只看 HTTP 200
-        if (resp == null || !Objects.equals(toInt(resp.get("code")), 0)) {
-            String msg = resp == null ? "无响应" : String.valueOf(resp.get("msg"));
-            int httpLikeCode = resp == null ? 500 : toInt(resp.get("code"));
+        if (resp == null || !Objects.equals(resp.getCode(), 0)) {
+            String msg = resp == null ? "无响应" : resp.getMsg();
+            int httpLikeCode = resp == null ? 500 : resp.getCode();
             // 不可重试类错误（参数/冲突/租户不匹配/功能未启用）直接置失败
             if (isNonRetryableBusinessCode(httpLikeCode)) {
                 failTask(task, "WMS 受理失败: " + msg);
@@ -146,8 +167,8 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
             return;
         }
         // 2. 受理成功：记录 WMS 单号，进入轮询阶段
-        Map<String, Object> data = (Map<String, Object>) resp.get("data");
-        boolean accepted = data != null && Boolean.TRUE.equals(data.get("accepted"));
+        WmsIntegrationAcceptedRespDTO data = resp.getData();
+        boolean accepted = data != null && Boolean.TRUE.equals(data.getAccepted());
         if (!accepted) {
             scheduleRetry(task, "WMS 未受理该申请");
             return;
@@ -155,37 +176,35 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
         taskMapper.update(null, new LambdaUpdateWrapper<MesWmsIntegrationTaskDO>()
                 .eq(MesWmsIntegrationTaskDO::getId, task.getId())
                 .set(MesWmsIntegrationTaskDO::getStatus, MesWmsIntegrationTaskStatusEnum.ACCEPTED.getStatus())
-                .set(MesWmsIntegrationTaskDO::getWmsOrderNo, data.get("targetOrderNo"))
+                .set(MesWmsIntegrationTaskDO::getWmsOrderNo, data.getTargetOrderNo())
                 .set(MesWmsIntegrationTaskDO::getResultPayload, JSONUtil.toJsonStr(data)));
-        log.info("[sendTask][任务({}) 单号({}) 已受理，WMS 单号({})]", task.getId(), task.getSourceOrderNo(), data.get("targetOrderNo"));
+        log.info("[sendTask][任务({}) 单号({}) 已受理，WMS 单号({})]", task.getId(), task.getSourceOrderNo(), data.getTargetOrderNo());
     }
 
     // ==================== 轮询阶段 ====================
 
     private void pollTask(MesWmsIntegrationTaskDO task) {
-        Map<String, Object> resp;
+        CommonResult<WmsIntegrationRequestRespDTO> resp;
         try {
-            resp = wmsClient.get("/rpc-api/wms/integration/order/execution/by-source?tenantId=" + task.getTenantId()
-                    + "&sourceOrderNo=" + task.getSourceOrderNo() + "&orderType=" + task.getOrderType(),
-                    task.getTenantId());
+            resp = wmsApi.getOrderExecution(task.getTenantId(), task.getSourceOrderNo(), task.getOrderType());
         } catch (Exception ex) {
             scheduleRetry(task, "查询执行结果网络异常: " + ex.getMessage());
             return;
         }
-        if (resp == null || !Objects.equals(toInt(resp.get("code")), 0)) {
-            scheduleRetry(task, "查询执行结果失败: " + (resp == null ? "无响应" : String.valueOf(resp.get("msg"))));
+        if (resp == null || !Objects.equals(resp.getCode(), 0)) {
+            scheduleRetry(task, "查询执行结果失败: " + (resp == null ? "无响应" : resp.getMsg()));
             return;
         }
-        Map<String, Object> data = (Map<String, Object>) resp.get("data");
+        WmsIntegrationRequestRespDTO data = resp.getData();
         if (data == null) {
             scheduleRetry(task, "WMS 尚无该来源单的执行记录");
             return;
         }
-        String processingStatus = (String) data.get("processingStatus");
+        String processingStatus = data.getProcessingStatus();
         // 1. 非终态：维持执行中，等待下次轮询
         if (processingStatus == null || processingStatus.startsWith("DRAFT")
                 || processingStatus.equals("WAITING_APPROVAL") || processingStatus.equals("WAITING_EXECUTION")) {
-            setExecuting(task, data, processingStatus);
+            setExecuting(task, data);
             return;
         }
         // 2. 终态映射
@@ -208,7 +227,7 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
                 return;
         }
         // 3. 终态落库
-        Map<String, Object> resultData = (Map<String, Object>) data.get("resultData");
+        Map<String, Object> resultData = data.getResultData();
         Integer executionStatus = resultData == null ? null : toInt(resultData.get("executionStatus"));
         BigDecimal completed = null;
         if (resultData != null && resultData.get("completedQuantity") != null) {
@@ -278,9 +297,9 @@ public class MesWmsIntegrationServiceImpl implements MesWmsIntegrationService {
         log.error("[failTask][任务({}) 置为失败，单号({})，原因({})]", task.getId(), task.getSourceOrderNo(), error);
     }
 
-    private void setExecuting(MesWmsIntegrationTaskDO task, Map<String, Object> data, String processingStatus) {
+    private void setExecuting(MesWmsIntegrationTaskDO task, WmsIntegrationRequestRespDTO data) {
         Integer executionStatus = null;
-        Map<String, Object> resultData = (Map<String, Object>) data.get("resultData");
+        Map<String, Object> resultData = data.getResultData();
         if (resultData != null && resultData.get("executionStatus") != null) {
             executionStatus = toInt(resultData.get("executionStatus"));
         }

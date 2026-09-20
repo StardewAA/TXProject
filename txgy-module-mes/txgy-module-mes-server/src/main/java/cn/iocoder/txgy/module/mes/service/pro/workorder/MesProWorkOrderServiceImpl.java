@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.mes.service.pro.workorder;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.json.JSONUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
@@ -21,7 +22,12 @@ import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProductService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
+import cn.iocoder.txgy.module.mes.enums.pro.MesProWorkOrderWmsStatusEnum;
+import cn.iocoder.txgy.module.mes.enums.wms.MesWmsIntegrationOrderTypeEnum;
 import cn.iocoder.txgy.module.mes.service.wm.barcode.MesWmBarcodeService;
+import cn.iocoder.txgy.module.mes.service.wms.integration.MesWmsIntegrationPayloadBuilder;
+import cn.iocoder.txgy.module.mes.service.wms.integration.MesWmsIntegrationService;
+import cn.iocoder.txgy.module.wms.api.integration.dto.WmsOrderRequestDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +75,10 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     private MesProFeedbackMapper feedbackMapper;
     @Resource
     private MesErpProductionProgressService erpProductionProgressService;
+    @Resource
+    private MesWmsIntegrationService mesWmsIntegrationService;
+    @Resource
+    private MesWmsIntegrationPayloadBuilder wmsPayloadBuilder;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -211,6 +221,9 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
                 .setStatus(MesProWorkOrderStatusEnum.ISSUED.getStatus())
                 .setIssueBy(SecurityFrameworkUtils.getLoginUserId())
                 .setIssueTime(LocalDateTime.now()));
+
+        // 3. 向 WMS 申请生产领料（MES↔WMS 集成：异步发送，开关未开则仅落任务不发送）
+        applyWmsShipment(workOrder);
     }
 
     @Override
@@ -250,6 +263,9 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
 
         // 5. ERP 来源工单：回传完工进度到 ERP 销售订单行（事务提交后执行，失败不影响完工）
         erpProductionProgressService.reportProgressAfterCommit(id);
+
+        // 6. 向 WMS 申请成品入库（MES↔WMS 集成：异步发送，开关未开则仅落任务不发送）
+        applyWmsReceipt(workOrder);
     }
 
     @Override
@@ -328,6 +344,60 @@ public class MesProWorkOrderServiceImpl implements MesProWorkOrderService {
     @Override
     public Long getWorkOrderCountByVendorId(Long vendorId) {
         return workOrderMapper.selectCountByVendorId(vendorId);
+    }
+
+    @Override
+    public void updateWmsShipmentResult(Long id, String wmsShipmentOrderNo, Integer wmsShipmentStatus) {
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setWmsShipmentOrderNo(wmsShipmentOrderNo).setWmsShipmentStatus(wmsShipmentStatus));
+    }
+
+    @Override
+    public void updateWmsReceiptResult(Long id, String wmsReceiptOrderNo, Integer wmsReceiptStatus) {
+        workOrderMapper.updateById(new MesProWorkOrderDO().setId(id)
+                .setWmsReceiptOrderNo(wmsReceiptOrderNo).setWmsReceiptStatus(wmsReceiptStatus));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resumeWorkOrder(String code) {
+        MesProWorkOrderDO workOrder = getWorkOrder(code);
+        if (workOrder == null) {
+            throw exception(PRO_WORK_ORDER_NOT_EXISTS);
+        }
+        // 仅已下发/生产中的工单可恢复（缺料挂起态），其余状态不允许
+        if (!MesProWorkOrderStatusEnum.ISSUED.getStatus().equals(workOrder.getStatus())
+                && !MesProWorkOrderStatusEnum.IN_PRODUCTION.getStatus().equals(workOrder.getStatus())) {
+            throw exception(PRO_WORK_ORDER_RESUME_NOT_ALLOWED);
+        }
+        // 取消旧的生产领料集成任务后，重新向 WMS 申请领料（设计 7.2）
+        mesWmsIntegrationService.cancelTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT, workOrder.getId());
+        applyWmsShipment(workOrder);
+    }
+
+    /**
+     * 向 WMS 申请生产领料（MES↔WMS 集成）
+     * <p>createTask 内部已做幂等（同工单 + 同业务类型不重复建任务），重复下发工单不会重复申请。</p>
+     */
+    private void applyWmsShipment(MesProWorkOrderDO workOrder) {
+        String businessChainNo = "BC-MES-" + workOrder.getCode();
+        WmsOrderRequestDTO payload = wmsPayloadBuilder.buildShipmentPayload(workOrder, businessChainNo);
+        mesWmsIntegrationService.createTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_SHIPMENT,
+                workOrder.getId(), workOrder.getCode(), businessChainNo, null, JSONUtil.toJsonStr(payload));
+        // 标记工单领料申请中（终态由 MesWmsProductionShipmentResultHandler 回写）
+        updateWmsShipmentResult(workOrder.getId(), null, MesProWorkOrderWmsStatusEnum.APPLYING.getStatus());
+    }
+
+    /**
+     * 向 WMS 申请成品入库（MES↔WMS 集成）
+     */
+    private void applyWmsReceipt(MesProWorkOrderDO workOrder) {
+        String businessChainNo = "BC-MES-" + workOrder.getCode();
+        WmsOrderRequestDTO payload = wmsPayloadBuilder.buildReceiptPayload(workOrder, businessChainNo);
+        mesWmsIntegrationService.createTask(MesWmsIntegrationOrderTypeEnum.PRODUCTION_RECEIPT,
+                workOrder.getId(), workOrder.getCode(), businessChainNo, null, JSONUtil.toJsonStr(payload));
+        // 标记工单入库申请中（终态由 MesWmsProductionReceiptResultHandler 回写）
+        updateWmsReceiptResult(workOrder.getId(), null, MesProWorkOrderWmsStatusEnum.APPLYING.getStatus());
     }
 
 }

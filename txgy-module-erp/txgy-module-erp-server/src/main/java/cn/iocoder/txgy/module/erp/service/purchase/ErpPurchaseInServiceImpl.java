@@ -18,6 +18,7 @@ import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.enums.stock.ErpStockRecordBizTypeEnum;
 import cn.iocoder.txgy.module.erp.service.finance.ErpAccountService;
 import cn.iocoder.txgy.module.erp.service.integration.ErpWmsBusinessDocumentService;
+import cn.iocoder.txgy.module.erp.service.integration.ErpWmsCollaborationBService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockRecordService;
 import cn.iocoder.txgy.module.erp.service.stock.bo.ErpStockRecordCreateReqBO;
@@ -72,6 +73,8 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
     private ErpStockRecordService stockRecordService;
     @Resource
     private ErpWmsBusinessDocumentService wmsBusinessDocumentService;
+    @Resource
+    private ErpWmsCollaborationBService collaborationBService;
 
     @Resource
     private AdminUserApi adminUserApi;
@@ -196,6 +199,8 @@ public class ErpPurchaseInServiceImpl implements ErpPurchaseInService {
         }
         if (approve) {
             wmsBusinessDocumentService.preparePurchaseReceiptAfterCommit(id);
+            // 缺料工单恢复（设计 7.2）：采购入库后通知 MES 重新领料
+            collaborationBService.recoverWorkOrderAfterCommit(purchaseIn.getOrderId());
         }
     }
 
