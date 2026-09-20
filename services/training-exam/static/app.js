@@ -107,13 +107,13 @@ const actions={
   'cert-pdf':id=>download(id,'pdf'),
   'cert-png':id=>download(id,'png'),
   'cert-render':async id=>{
-    // 企业 HTML 模板渲染：新窗口展示完整证书版式
+    // 企业 HTML 模板渲染：弹窗内嵌 iframe（新窗口会被浏览器弹窗拦截策略阻止）
     const r=await fetch(`/training-exam/api/my/certs/${id}/render`,{headers:{Authorization:state.token,'tenant-id':String(state.tenant)}});
     if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||'渲染失败');
     const html=await r.text();
-    const w=window.open('','_blank');
-    if(!w)throw new Error('浏览器拦截了新窗口，请允许弹窗后重试');
-    w.document.write(html);w.document.close();
+    const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+    modal('证书预览',`<iframe src="${url}" style="width:100%;height:72vh;border:1px solid #e5e0d0;border-radius:6px;background:#2b2f36"></iframe><p class="meta">如需存档，请点击列表中的「PDF」按钮下载正式文件。</p>`);
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
   },
   mastered:async id=>{await post(`/my/wrong-questions/${id}/mastered`);await load()},
 };

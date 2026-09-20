@@ -347,7 +347,15 @@ def install(ctx):
         qbuf = io.BytesIO(); qr.save(qbuf, format="PNG")
         qr_uri = "data:image/png;base64," + base64.b64encode(qbuf.getvalue()).decode()
         html = re.sub(r'src="data:image/png;base64,[^"]*" alt="核验二维码"', 'src="' + qr_uri + '" alt="核验二维码"', html)
-        return html
+        # 自适应缩放：证书固定 960x680，在窄视口/弹窗 iframe 内整体等比缩小
+        fit_script = (
+            "<script>(function(){var c=document.querySelector('.cert');if(!c)return;"
+            "function f(){var s=Math.min(1,(window.innerWidth-32)/960,(window.innerHeight-32)/680);"
+            "c.style.transform='scale('+s+')';c.style.transformOrigin='top center';"
+            "document.body.style.height=Math.max(680*s,window.innerHeight)+'px';}"
+            "f();window.addEventListener('resize',f);})();</script>"
+        )
+        return html.replace("</body>", fit_script + "</body>")
 
     @app.get("/api/my/certs/{cid}/render", response_class=HTMLResponse)
     def render_cert(cid:int, request:Request, db:Session=Depends(db_session), actor:Actor=Depends(current_user)):
