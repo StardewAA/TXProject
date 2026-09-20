@@ -62,8 +62,8 @@ const userStore = useUserStore();
 const welcomeTitle = computed(() => {
   const name = userStore.userInfo?.nickname || userStore.userInfo?.username;
   return name
-    ? `欢迎 ${name}，我是 WMS AI 智能助手`
-    : '你好，我是 WMS AI 智能助手';
+    ? `欢迎 ${name}，我是仓库智能助手`
+    : '你好，我是仓库智能助手';
 });
 
 /** 输入框下方的能力提示条 */
