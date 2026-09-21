@@ -177,6 +177,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
     static {
         TYPE_PERMISSIONS.put("item", "wms:item:query");
         TYPE_PERMISSIONS.put("category", "wms:item-category:query");
+        TYPE_PERMISSIONS.put("subcategory", "wms:item-category:query");
         TYPE_PERMISSIONS.put("category-items", "wms:item:query");
         TYPE_PERMISSIONS.put("brand", "wms:item-brand:query");
         TYPE_PERMISSIONS.put("merchant", "wms:merchant:query");
@@ -269,6 +270,15 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 return guardReply;
             }
         }
+        // 3.05 「二级分类 / 子分类」问句纠正：模型通常仍归为 category，
+        //      回答与「有哪些分类」一模一样，用户会以为没听懂。这里按关键词纠正意图。
+        if (wantsSubcategory(raw) && ("category".equals(type) || "".equals(type) || "other".equals(type))) {
+            type = "subcategory";
+            if (intent == null) {
+                intent = new JSONObject(true);
+            }
+            intent.set("type", "subcategory");
+        }
         // 3.1 制度类问句拦截：模型常把「出入库遵循什么原则」这类问规定的问句
         //     误判成建单/建档指令，导致回一段"还差商品明细"。这里统一改交知识库，
         //     命中资料则按资料回答，未命中则继续走原有逻辑，不影响正常指令。
@@ -306,6 +316,9 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                     break;
                 case "category":
                     reply = buildCategoryReply(names, limit);
+                    break;
+                case "subcategory":
+                    reply = buildSubcategoryReply(names, limit);
                     break;
                 case "category-items":
                     reply = buildCategoryItemsReply(names, limit);
@@ -410,14 +423,21 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         Map<Long, String> categoryNames = loadCategoryNames();
         Map<Long, String> brandNames = loadBrandNames();
 
-        List<WmsItemDO> matched = filterByNames(items, names, i -> i.getName() + " " + StrUtil.nullToEmpty(i.getCode()),
-                limit, false);
+        // 先取全部命中用于给出**真实总数**，再按上限截断用于展示。
+        // 若直接取截断后列表的 size，会把「找到 N 个」说成条数上限
+        //（例：实际 25 个商品却说「找到 20 个相关商品」），用户会以为商品少了。
+        List<WmsItemDO> allMatched = filterByNames(items, names,
+                i -> i.getName() + " " + StrUtil.nullToEmpty(i.getCode()), Integer.MAX_VALUE, false);
+        List<WmsItemDO> matched = allMatched.size() > limit
+                ? new ArrayList<>(allMatched.subList(0, limit)) : allMatched;
         if (matched.isEmpty()) {
             return names.isEmpty() ? "商品管理中暂时还没有商品档案。"
                     : "【商品管理】中未找到与「" + String.join("、", names) + "」相关的商品。可换个说法，或告诉我你想做入库/出库，我先帮你建档再操作。";
         }
         List<String> lines = new ArrayList<>();
-        lines.add("在【商品管理】中找到 " + matched.size() + " 个相关商品：");
+        lines.add("在【商品管理】中找到 " + allMatched.size() + " 个相关商品"
+                + (allMatched.size() > matched.size()
+                        ? "，下面只列出前 " + matched.size() + " 个：" : "："));
         int index = 0;
         for (WmsItemDO item : matched) {
             index++;
@@ -464,6 +484,85 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         return String.join("\n", lines);
     }
 
+    /**
+     * 是否在问「二级分类 / 子分类」。
+     *
+     * <p>只用于把这类问句从 category 里区分出来，不影响 create-category 等指令。
+     */
+    private boolean wantsSubcategory(String text) {
+        return containsAny(StrUtil.nullToEmpty(text), Arrays.asList(
+                "二级分类", "二级类目", "子分类", "子类", "下级分类", "下一级分类", "下级类目"));
+    }
+
+    /**
+     * 列出一级分类下面的二级分类。
+     *
+     * <p>用户问「二级分类呢」「有哪些子分类」时，模型通常仍归为 category，
+     * 回答与「有哪些分类」一模一样，看起来像没听懂。这里单独按父分类分组列出子分类。
+     *
+     * @param names 一级分类关键词；为空表示列出全部一级分类下的子分类
+     */
+    private String buildSubcategoryReply(List<String> names, int limit) {
+        List<WmsItemCategoryDO> cats = loadCategories();
+        if (cats.isEmpty()) {
+            return "商品分类还没有建立任何分类。";
+        }
+        Map<Long, List<WmsItemCategoryDO>> byParent = cats.stream()
+                .collect(Collectors.groupingBy(c -> c.getParentId() == null ? 0L : c.getParentId()));
+        List<WmsItemCategoryDO> roots = byParent.getOrDefault(0L, Collections.emptyList());
+
+        // 指定了分类名：只列该分类下的子分类
+        if (!names.isEmpty()) {
+            List<WmsItemCategoryDO> matched = roots.stream()
+                    .filter(c -> containsAny(c.getName(), names))
+                    .collect(Collectors.toList());
+            if (matched.isEmpty()) {
+                return "没有找到叫「" + String.join("、", names) + "」的一级分类。"
+                        + "可以先问「商品分类有哪些」看看有哪些一级分类。";
+            }
+            List<String> lines = new ArrayList<>();
+            int index = 0;
+            for (WmsItemCategoryDO parent : matched) {
+                if (index++ >= limit) {
+                    break;
+                }
+                List<WmsItemCategoryDO> subs = byParent.getOrDefault(parent.getId(), Collections.emptyList());
+                if (subs.isEmpty()) {
+                    lines.add("• " + parent.getName() + " 下面还没有子分类，它下面的商品是直接挂在这个分类上的。");
+                    continue;
+                }
+                lines.add("• " + parent.getName() + " 下有 " + subs.size() + " 个子分类："
+                        + subs.stream().map(WmsItemCategoryDO::getName).collect(Collectors.joining("、")));
+            }
+            return String.join("\n", lines);
+        }
+
+        // 未指定：把所有二级分类按一级分类分组列出来
+        if (roots.isEmpty()) {
+            return "商品分类还没有建立任何一级分类。";
+        }
+        int totalSub = cats.size() - roots.size();
+        if (totalSub <= 0) {
+            return "目前商品分类都只有一级，还没有建立二级分类。";
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("目前共有 " + roots.size() + " 个一级分类、" + totalSub + " 个二级分类，二级分类如下：");
+        int index = 0;
+        for (WmsItemCategoryDO parent : roots) {
+            List<WmsItemCategoryDO> subs = byParent.getOrDefault(parent.getId(), Collections.emptyList());
+            if (subs.isEmpty()) {
+                continue;
+            }
+            if (index++ >= limit) {
+                lines.add("…还有更多一级分类未展开，可以说「XX 下有哪些子分类」单独查看。");
+                break;
+            }
+            lines.add("• " + parent.getName() + "：" + subs.stream()
+                    .map(WmsItemCategoryDO::getName).collect(Collectors.joining("、")));
+        }
+        return String.join("\n", lines);
+    }
+
     private String buildCategoryReply(List<String> names, int limit) {
         List<WmsItemCategoryDO> cats = loadCategories();
         Map<Long, List<WmsItemCategoryDO>> byParent = cats.stream()
@@ -482,7 +581,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 return "商品分类还没有建立任何一级分类。";
             }
             List<String> lines = new ArrayList<>();
-            lines.add("商品分类目前共有 " + cats.size() + " 个，一级分类如下：");
+            lines.add("商品分类一共有 " + cats.size() + " 个，其中一级分类 " + roots.size() + " 个：");
             int index = 0;
             for (WmsItemCategoryDO c : roots) {
                 if (index++ >= limit) {
@@ -490,8 +589,8 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 }
                 Long sub = childCount.getOrDefault(c.getId(), 0L);
                 Long cnt = itemCountByCat.getOrDefault(c.getId(), 0L);
-                lines.add("• " + c.getName() + (sub > 0 ? "（含 " + sub + " 个子类）" : "")
-                        + (cnt > 0 ? "｜直接挂靠商品 " + cnt + " 个" : ""));
+                lines.add("• " + c.getName() + (sub > 0 ? "（下面还有 " + sub + " 个子分类）" : "")
+                        + (cnt > 0 ? "，本类下直接有商品 " + cnt + " 个" : ""));
             }
             return String.join("\n", lines);
         }
@@ -730,7 +829,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                     + num(threshold) + " 的规格，库存都还充足。";
         }
         if (!lowMode && shown == 0) {
-            return "「" + String.join("、", names) + "」在" + scopeText + "当前均无在库（0 库存）。";
+            return "「" + String.join("、", names) + "」在" + scopeText + "目前都没有库存。";
         }
         return String.join("\n", lines);
     }
@@ -746,7 +845,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 .sorted(Comparator.comparing(WmsInventoryDO::getQuantity))
                 .collect(Collectors.toList());
         if (low.isEmpty()) {
-            return "目前" + scope + "没有库存 ≤ " + num(threshold) + " 的在库记录，库存都还充足。";
+            return "目前" + scope + "没有库存低于 " + num(threshold) + " 的商品，库存都还充足。";
         }
         List<WmsItemDO> items = loadItems();
         Map<Long, WmsItemDO> itemMap = items.stream()
@@ -785,12 +884,12 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 .eq(WmsInventoryDO::getWarehouseId, wh.getId())
                 .orderByDesc(WmsInventoryDO::getQuantity));
         if (CollUtil.isEmpty(rows)) {
-            return "「" + wh.getName() + "」当前没有任何在库库存。";
+            return "「" + wh.getName() + "」目前没有库存。";
         }
         rows = rows.stream().filter(r -> r.getQuantity() != null && r.getQuantity().compareTo(BigDecimal.ZERO) > 0)
                 .collect(Collectors.toList());
         if (rows.isEmpty()) {
-            return "「" + wh.getName() + "」当前没有任何在库库存。";
+            return "「" + wh.getName() + "」目前没有库存。";
         }
 
         // SKU 表以 itemId 关联商品，先把全部商品+SKU 载入，再按 skuId 建索引
@@ -806,7 +905,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         List<String> lines = new ArrayList<>();
-        lines.add("「" + wh.getName() + "」共有 " + rows.size() + " 条在库记录，数量合计 " + num(totalQty) + "：");
+        lines.add("「" + wh.getName() + "」里共有 " + rows.size() + " 项库存，数量加起来 " + num(totalQty) + "：");
         int shown = 0;
         for (WmsInventoryDO row : rows) {
             if (shown >= limit) {
@@ -888,12 +987,13 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         if (all.isEmpty()) {
             return "当前系统没有任何库存数据（仓库都还是空的）。";
         }
-        // 按仓库汇总行数
+        // 按仓库汇总
         Map<Long, List<WmsInventoryDO>> byWh = all.stream()
                 .collect(Collectors.groupingBy(WmsInventoryDO::getWarehouseId));
         List<String> lines = new ArrayList<>();
-        lines.add("系统共 " + all.size() + " 条在库记录（SKU×仓库），分布在 "
-                + byWh.size() + " 个仓库：");
+        // 用「种商品」而不是「SKU 条数」：仓储同事不一定熟悉 SKU 这个词
+        lines.add("系统里目前有库存的商品共 " + all.size() + " 项（同一商品在不同仓库分开算），"
+                + "分布在 " + byWh.size() + " 个仓库：");
         List<Map.Entry<Long, List<WmsInventoryDO>>> sorted = new ArrayList<>(byWh.entrySet());
         sorted.sort((a, b) -> Long.compare(b.getValue().size(), a.getValue().size()));
         for (Map.Entry<Long, List<WmsInventoryDO>> e : sorted) {
@@ -902,7 +1002,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             lines.add("• " + whNames.getOrDefault(e.getKey(), "仓" + e.getKey())
-                    + "：在库 SKU " + e.getValue().size() + " 个，数量合计 " + num(sum));
+                    + "：有 " + e.getValue().size() + " 项库存，数量加起来 " + num(sum));
         }
         // 数量排行 TOP 商品
         Map<Long, BigDecimal> qtyBySku = all.stream().filter(r -> r.getQuantity() != null)
@@ -911,14 +1011,14 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         List<Map.Entry<Long, BigDecimal>> top = new ArrayList<>(qtyBySku.entrySet());
         top.sort((a, b) -> b.getValue().compareTo(a.getValue()));
         if (!top.isEmpty()) {
-            lines.add("数量最多的 SKU TOP" + Math.min(top.size(), 5) + "：");
+            lines.add("库存数量最多的前 " + Math.min(top.size(), 5) + " 个商品：");
             List<WmsItemSkuDO> skus = loadSkusByItemIds(loadItems().stream()
                     .map(WmsItemDO::getId).collect(Collectors.toList()));
             Map<Long, String> skuNameMap = skus.stream()
                     .collect(Collectors.toMap(WmsItemSkuDO::getId, s -> s.getName(), (a, b) -> a));
             for (int i = 0; i < Math.min(top.size(), 5); i++) {
                 Map.Entry<Long, BigDecimal> e = top.get(i);
-                lines.add("• " + skuNameMap.getOrDefault(e.getKey(), "SKU#" + e.getKey()) + "：" + num(e.getValue()));
+                lines.add("• " + skuNameMap.getOrDefault(e.getKey(), "商品#" + e.getKey()) + "：" + num(e.getValue()));
             }
         }
         return String.join("\n", lines);
@@ -962,6 +1062,8 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         prompt.append("【查询类】type 取值：\n");
         prompt.append("- item：问商品档案（有哪些商品/有没有XX/规格/条码/编码）。names 填商品关键词；问“有哪些商品/全部”时 names=[]。\n");
         prompt.append("- category：问商品分类/类别/类目。names 填分类关键词；问“有哪些分类”时 names=[]。\n");
+        prompt.append("- subcategory：问二级分类/子分类/下级分类。names 填一级分类关键词（问全部子分类时 names=[]）。"
+                + "注意：用户说“二级分类呢”“有哪些子分类”时用这个，不要再用 category。\n");
         prompt.append("- brand：问商品品牌。names 填品牌关键词。\n");
         prompt.append("- merchant：问往来企业/供应商/客户。kind 填 supplier=供应商、customer=客户、all=不明确；names 填企业名称关键词。\n");
         prompt.append("- warehouse：问仓库有哪些/仓库信息。names 填仓库关键词。\n");
