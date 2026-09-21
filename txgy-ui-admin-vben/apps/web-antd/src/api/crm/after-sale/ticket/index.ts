@@ -21,7 +21,13 @@ export namespace CrmAfterSaleTicketApi {
     assigneeUserId?: number;
     status?: number;
     handleResult?: string;
-    startTime?: string;
+    /**
+     * 开始处理时间。
+     * 后端 LocalDateTime 走「毫秒时间戳」反序列化（传日期字符串会被解析成 epoch 0），
+     * 因此详情返回毫秒数字、提交时也应传毫秒数字；
+     * 表单内部用 'YYYY-MM-DD HH:mm:ss' 字符串，提交前由 form.vue 统一转换。
+     */
+    startTime?: number | string;
     finishTime?: string;
     closeTime?: string;
     isChargeable?: boolean;

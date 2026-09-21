@@ -203,6 +203,7 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_TICKET_DELETE_DENIED = new ErrorCode(1_020_019_005, "删除工单失败，原因：工单已处理，不允许删除");
     ErrorCode AFTER_SALE_TICKET_CREATE_FAIL_CUSTOMER_NOT_EXISTS = new ErrorCode(1_020_019_006, "创建工单失败，原因：客户不存在");
     ErrorCode AFTER_SALE_TICKET_UPDATE_FAIL_FINISH = new ErrorCode(1_020_019_007, "更新工单失败，原因：工单已完成或已关闭，不允许编辑");
+    ErrorCode AFTER_SALE_TICKET_FINISH_NEED_RECORD = new ErrorCode(1_020_019_008, "完成工单失败，原因：请先填写工单记录（处理结果）");
 
     // ========== 售后转商机关联 1_020_020_000 ==========
     ErrorCode AFTER_SALE_BUSINESS_REL_NOT_EXISTS = new ErrorCode(1_020_020_000, "售后转商机关联不存在");

@@ -18,6 +18,7 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import AssignForm from './modules/assign.vue';
+import FinishForm from './modules/finish.vue';
 import Form from './modules/form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
@@ -27,6 +28,11 @@ const [FormModal, formModalApi] = useVbenModal({
 
 const [AssignModal, assignModalApi] = useVbenModal({
   connectedComponent: AssignForm,
+  destroyOnClose: true,
+});
+
+const [FinishModal, finishModalApi] = useVbenModal({
+  connectedComponent: FinishForm,
   destroyOnClose: true,
 });
 
@@ -55,6 +61,11 @@ function handleEdit(row: CrmAfterSaleTicketApi.Ticket) {
 /** 指派处理人 */
 function handleAssign(row: CrmAfterSaleTicketApi.Ticket) {
   assignModalApi.setData(row).open();
+}
+
+/** 完成工单（弹窗填写工单记录，未填写不允许完成） */
+function handleFinish(row: CrmAfterSaleTicketApi.Ticket) {
+  finishModalApi.setData(row).open();
 }
 
 /** 删除问题工单 */
@@ -122,6 +133,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <AssignModal @success="handleRefresh" />
+    <FinishModal @success="handleRefresh" />
     <Grid table-title="售后问题工单列表">
       <template #toolbar-tools>
         <TableAction
@@ -163,7 +175,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               auth: ['crm:after-sale-ticket:update'],
               ifShow: row.status !== 3 && row.status !== 4,
-              onClick: handleStatus.bind(null, row, 3),
+              onClick: handleFinish.bind(null, row),
             },
             {
               label: '关闭',
