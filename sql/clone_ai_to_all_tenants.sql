@@ -55,6 +55,10 @@ BEGIN
     SET id = id + off_,
         tenant_id = tid,
         user_id = NULL,
+        -- 必须同时置为「公开角色」：源角色是创建人的私有角色（public_status=0），
+        -- 克隆后 user_id 已置 NULL 会变成「标称私有、却无归属人」的矛盾数据，
+        -- 导致按 user_id 查询永远命中不到（AI 面板报「聊天角色不存在」）
+        public_status = 1,
         model_id = model_id + off_;
     UPDATE tmp_role
     SET tool_ids = (SELECT GROUP_CONCAT(CONVERT(id + off_, CHAR) ORDER BY id) FROM ai_tool WHERE tenant_id = 2010 AND deleted = 0 AND FIND_IN_SET(id, tmp_role.tool_ids)),
