@@ -909,9 +909,6 @@ importers:
       vuedraggable:
         specifier: 'catalog:'
         version: 4.1.0(vue@3.5.39(typescript@6.0.3))
-      wangeditor:
-        specifier: 4.7.15
-        version: 4.7.15
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
@@ -919,6 +916,9 @@ importers:
       '@types/file-saver':
         specifier: ^2.0.7
         version: 2.0.7
+      wangeditor:
+        specifier: 4.7.15
+        version: 4.7.15
 
   apps/web-antdv-next:
     dependencies:

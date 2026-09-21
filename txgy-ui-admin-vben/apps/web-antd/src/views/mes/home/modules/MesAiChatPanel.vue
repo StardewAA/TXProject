@@ -4,7 +4,7 @@
  *
  * 1. fixed 固定定位（右 16px / 下 20px）；面板固定白色背景 + 黑色文字，不随主题变化
  * 2. 宽 380px（最大化 560px），高 min(720px, 视口-32px)；消息区内部滚动
- * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认展开
+ * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认收起（进入页面不自动弹出，点击悬浮球才展开）
  * 4. 对接现有 AI 流式接口：权限拦截在后端，越权返回拒绝话术直接渲染
  * 5. Enter 发送 / Shift+Enter 换行；会话仅当前页面缓存，刷新清空
  */
@@ -64,8 +64,8 @@ const props = withDefaults(
   },
 );
 
-/** 面板状态：展开（默认）/ 收起为悬浮球；最大化切换 */
-const expanded = ref(true);
+/** 面板状态：默认收起为悬浮球（进入页面不自动弹出，点击悬浮球才展开）；最大化切换 */
+const expanded = ref(false);
 const maximized = ref(false);
 /** 会话就绪标记（创建成功后才能发送） */
 const conversationReady = ref(false);
@@ -614,12 +614,18 @@ async function scrollToBottom() {
   }
 }
 
+/** 同步页面主体避让 class：pushBody 为 false 时始终不挤压页面（面板悬浮覆盖在内容之上） */
+function syncBodyAvoid(open: boolean) {
+  document.body.classList.toggle(
+    'mes-ai-panel-open',
+    props.pushBody !== false && open,
+  );
+}
+
 /** 展开/收起切换：同步管理 body 避让 class */
 function setExpanded(v: boolean) {
   expanded.value = v;
-  if (props.pushBody !== false) {
-    document.body.classList.toggle('mes-ai-panel-open', v);
-  }
+  syncBodyAvoid(v);
   if (v) scrollToBottom();
 }
 
@@ -678,6 +684,35 @@ function describeRequestError(e: any, fallback: string): string {
   return rawMsg || fallback;
 }
 
+/**
+ * 解析当前租户下的 AI 角色编号。
+ * 角色 id 是按租户分配的（例：「MES 生产助手」在租户 2010 为 20、租户 1 为 1000020），
+ * 硬编码的 fallbackRoleId 只在个别租户成立，故改为按名称动态查找：
+ *   1) 先查公开角色（publicStatus: true）——「MES 生产助手」是全租户共用的公开角色；
+ *   2) 再查当前用户的私有角色（publicStatus: false）；
+ *   3) 都未命中时退回 props.fallbackRoleId，兼容历史数据。
+ */
+async function resolveChatRoleId(): Promise<number> {
+  for (const publicStatus of [true, false]) {
+    try {
+      const page = await getMyPage({
+        name: props.roleName,
+        pageNo: 1,
+        pageSize: 10,
+        publicStatus,
+      });
+      const list = page?.list || [];
+      const hit =
+        list.find((item: any) => item.name === props.roleName) || list[0];
+      if (hit?.id) return hit.id;
+    } catch {
+      // 单次查询失败不阻断：继续尝试下一种查询范围
+    }
+  }
+  if (props.fallbackRoleId) return props.fallbackRoleId;
+  throw new Error('未找到 AI 角色配置');
+}
+
 /** 创建会话：查找「MES 生产助手」角色（带回退逻辑），失败给出分类提示可重试 */
 async function initConversation() {
   // 防重入：上一次初始化未完成时跳过。
@@ -701,17 +736,7 @@ async function initConversation() {
     }
   }
   try {
-    let roleId = props.fallbackRoleId;
-    const page = await getMyPage({
-      name: props.roleName,
-      pageNo: 1,
-      pageSize: 10,
-      publicStatus: false,
-    });
-    const list = page?.list || [];
-    const hit = list.find((item: any) => item.name === props.roleName) || list[0];
-    if (hit) roleId = hit.id;
-    if (!roleId) throw new Error('未找到 AI 角色配置');
+    const roleId = await resolveChatRoleId();
     const conv = await createChatConversationMy({ roleId } as any);
     conversationId.value = String(conv ?? '');
     conversationReady.value = true;
@@ -1208,13 +1233,13 @@ function handleWindowResize() {
 watch(
   () => [expanded.value],
   () => {
-    document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+    syncBodyAvoid(expanded.value);
     if (expanded.value) scrollToBottom();
   },
 );
 
 onMounted(() => {
-  document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+  syncBodyAvoid(expanded.value);
   initConversation();
   window.addEventListener('resize', handleWindowResize);
   // 视口尺寸变化时把悬浮球/面板拉回可视范围
