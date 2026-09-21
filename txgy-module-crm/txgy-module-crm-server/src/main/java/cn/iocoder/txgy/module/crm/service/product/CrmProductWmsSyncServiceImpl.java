@@ -91,7 +91,7 @@ public class CrmProductWmsSyncServiceImpl implements CrmProductWmsSyncService {
         Long categoryId = resolveCategoryId();
         int pageSize = resolvePageSize();
         for (int pageNo = 1; pageNo <= MAX_PAGE_COUNT; pageNo++) {
-            PageResult<CrmWmsProductSkuDTO> page = crmWmsProductReadAdapter.getProductPage(pageNo, pageSize);
+                        PageResult<CrmWmsProductSkuDTO> page = crmWmsProductReadAdapter.getProductPage(pageNo, pageSize, null);
             List<CrmWmsProductSkuDTO> skuList = page.getList();
             if (CollUtil.isEmpty(skuList)) {
                 break;
