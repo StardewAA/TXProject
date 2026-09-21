@@ -18,6 +18,7 @@ import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.service.approval.ErpApprovalNotificationService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.util.ErpAuditStatusUtils;
+import cn.iocoder.txgy.module.erp.util.ErpBpmProcessUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,6 +99,25 @@ public class ErpPurchaseRequestServiceImpl implements ErpPurchaseRequestService 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void reverseApprovePurchaseRequest(Long id, Long userId, String reason) {
+        ErpPurchaseRequestDO request = validatePurchaseRequest(id);
+        Integer status = request.getStatus();
+        // 只有审批中(10)、已审批(20) 才能反审批
+        if (!ObjectUtil.equal(status, ErpAuditStatus.PROCESS.getStatus())
+                && !ObjectUtil.equal(status, ErpAuditStatus.APPROVE.getStatus())) {
+            throw exception(PURCHASE_REQUEST_REVERSE_APPROVE_FAIL_STATUS);
+        }
+        String processInstanceId = request.getProcessInstanceId();
+        int updateCount = requestMapper.reverseApproveByIdAndStatus(id, status, reason);
+        if (updateCount == 0) {
+            throw exception(PURCHASE_REQUEST_REVERSE_APPROVE_FAIL_STATUS);
+        }
+        ErpBpmProcessUtils.cancelProcessInstanceAfterCommit(bpmProcessInstanceApi, userId,
+                processInstanceId, "采购申请(" + request.getNo() + ")反审批：" + reason);
+    }
+
+    @Override
     public void updatePurchaseRequestAuditStatus(Long id, Integer bpmStatus) {
         ErpPurchaseRequestDO request = validatePurchaseRequest(id);
         if (ObjectUtil.equal(request.getStatus(), ErpAuditStatus.PROCESS.getStatus())) {
@@ -137,5 +157,17 @@ public class ErpPurchaseRequestServiceImpl implements ErpPurchaseRequestService 
     @Override public List<ErpPurchaseRequestItemDO> getItemListByRequestId(Long requestId) { return itemMapper.selectListByRequestId(requestId); }
     @Override public List<ErpPurchaseRequestItemDO> getItemListByRequestIds(Collection<Long> requestIds) {
         return CollUtil.isEmpty(requestIds) ? Collections.emptyList() : itemMapper.selectListByRequestIds(requestIds);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int accumulateConvertedCount(Long requestId) {
+        List<ErpPurchaseRequestItemDO> items = itemMapper.selectListByRequestId(requestId);
+        for (ErpPurchaseRequestItemDO item : items) {
+            BigDecimal converted = item.getConvertedCount() == null ? BigDecimal.ZERO : item.getConvertedCount();
+            itemMapper.updateById(new ErpPurchaseRequestItemDO().setId(item.getId())
+                    .setConvertedCount(converted.add(item.getCount())));
+        }
+        return items.size();
     }
 }

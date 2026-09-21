@@ -4,10 +4,12 @@ import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWarehouseUpsertCallbackReqDTO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehouseSaveReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehousePageReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.stock.ErpWarehouseMapper;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +35,12 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     @Resource
     private ErpWarehouseMapper warehouseMapper;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Override
     public Long createWarehouse(ErpWarehouseSaveReqVO createReqVO) {
+        fillPrincipal(createReqVO);
         createReqVO.setWmsWarehouseCode(normalizeWmsWarehouseCode(createReqVO.getWmsWarehouseCode()));
         validateWmsWarehouseCodeUnique(null, createReqVO.getWmsWarehouseCode());
         // 插入
@@ -51,9 +56,18 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         // 校验存在
         validateWarehouseExists(updateReqVO.getId());
         validateWmsWarehouseCodeUnique(updateReqVO.getId(), updateReqVO.getWmsWarehouseCode());
+        fillPrincipal(updateReqVO);
         // 更新
         ErpWarehouseDO updateObj = BeanUtils.toBean(updateReqVO, ErpWarehouseDO.class);
         warehouseMapper.updateById(updateObj);
+    }
+
+    private void fillPrincipal(ErpWarehouseSaveReqVO reqVO) {
+        if (reqVO.getPrincipalUserId() == null) {
+            return;
+        }
+        adminUserApi.validateUser(reqVO.getPrincipalUserId());
+        reqVO.setPrincipal(adminUserApi.getUser(reqVO.getPrincipalUserId()).getCheckedData().getNickname());
     }
 
     @Override
@@ -132,12 +146,54 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     @Override
     public List<ErpWarehouseDO> getWarehouseList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
         return warehouseMapper.selectByIds(ids);
     }
 
     @Override
     public PageResult<ErpWarehouseDO> getWarehousePage(ErpWarehousePageReqVO pageReqVO) {
         return warehouseMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void upsertFromWms(ErpWarehouseUpsertCallbackReqDTO req) {
+        // 1. 校验入参
+        if (req.getWarehouseCode() == null || req.getWarehouseCode().isBlank()) {
+            throw exception(WAREHOUSE_WMS_CODE_NOT_CONFIGURED, "空");
+        }
+        Integer status = mapWmsStatus(req.getStatus());
+        String trimmedCode = req.getWarehouseCode().trim();
+
+        // 2. 按 wmsWarehouseCode 查现有仓库
+        ErpWarehouseDO existing = warehouseMapper.selectByWmsWarehouseCode(trimmedCode);
+        if (existing == null) {
+            // 2.1 新建：仅写 WMS 推送的字段，不动 defaultStatus / principalUserId
+            validateWmsWarehouseCodeUnique(null, trimmedCode);
+            ErpWarehouseDO warehouse = ErpWarehouseDO.builder()
+                    .wmsWarehouseCode(trimmedCode)
+                    .name(req.getName())
+                    .address(req.getAddress())
+                    .principal(req.getPrincipal())
+                    .status(status)
+                    .build();
+            warehouseMapper.insert(warehouse);
+            return;
+        }
+        // 2.2 更新：仅更新可变字段，不动 wmsWarehouseCode、principalUserId、defaultStatus
+        warehouseMapper.updateById(new ErpWarehouseDO().setId(existing.getId())
+                .setName(req.getName())
+                .setAddress(req.getAddress())
+                .setPrincipal(req.getPrincipal())
+                .setStatus(status));
+    }
+
+    private Integer mapWmsStatus(String status) {
+        if ("ENABLED".equalsIgnoreCase(status)) return CommonStatusEnum.ENABLE.getStatus();
+        if ("DISABLED".equalsIgnoreCase(status)) return CommonStatusEnum.DISABLE.getStatus();
+        throw exception(WAREHOUSE_NOT_ENABLE, status);
     }
 
 }

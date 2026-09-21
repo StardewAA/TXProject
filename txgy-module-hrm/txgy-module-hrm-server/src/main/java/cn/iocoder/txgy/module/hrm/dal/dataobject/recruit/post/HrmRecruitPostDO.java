@@ -173,5 +173,12 @@ public class HrmRecruitPostDO extends TenantBaseDO {
      * 停止原因
      */
     private String stopReason;
+    /**
+     * 关联用工需求单编号
+     *
+     * 关联 {@link cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.demand.HrmRecruitDemandDO#getId()}
+     * 用于"录用后回写到岗人数、到齐自动完成需求"
+     */
+    private Long demandId;
 
 }

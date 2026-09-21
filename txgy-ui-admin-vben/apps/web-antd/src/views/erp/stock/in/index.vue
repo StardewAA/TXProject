@@ -10,9 +10,11 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteStockIn,
   exportStockIn,
+  exportStockInPdf,
   getStockInPage,
   updateStockInStatus,
 } from '#/api/erp/stock/in';
@@ -35,9 +37,15 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportStockIn(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '其它入库单.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportStockInPdf(await gridApi.formApi.getValues())
+      : await exportStockIn(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '其它入库单.pdf' : '其它入库单.xls',
+    source: data,
+  });
 }
 
 /** 新增其它入库单 */
@@ -151,13 +159,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:stock-in:export'],
-              onClick: handleExport,
-            },
-            {
               label: '批量删除',
               type: 'primary',
               danger: true,
@@ -170,6 +171,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               },
             },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:stock-in:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">

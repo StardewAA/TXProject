@@ -43,6 +43,15 @@ public class HrmRecruitOfferController {
         offerService.submit(id); return success(true);
     }
 
+    @PutMapping("/approve")
+    @Operation(summary = "Offer 人工审批（通过 / 驳回）")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
+    public CommonResult<Boolean> approve(@RequestParam("id") Long id,
+                                          @RequestParam("approved") Boolean approved,
+                                          @RequestParam(value = "reason", required = false) String reason) {
+        offerService.approve(id, approved, reason); return success(true);
+    }
+
     @PutMapping("/approval-callback")
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:approve')")
     public CommonResult<Boolean> approvalCallback(@RequestParam("id") Long id,
@@ -87,5 +96,21 @@ public class HrmRecruitOfferController {
     @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:onboard')")
     public CommonResult<Long> onboard(@Valid @RequestBody HrmRecruitOfferOnboardReqVO reqVO) {
         return success(offerService.onboard(reqVO));
+    }
+
+    @PutMapping("/resend-contract-notice")
+    @Operation(summary = "重新生成劳务合同文件并再次发送待签署通知")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:onboard')")
+    public CommonResult<Boolean> resendContractNotice(@RequestParam("offerId") Long offerId) {
+        offerService.resendContractNotice(offerId);
+        return success(true);
+    }
+
+    @PutMapping("/resend-offer-notice")
+    @Operation(summary = "重新发送 Offer 录用通知邮件（带录用通知书 PDF 附件）")
+    @PreAuthorize("@ss.hasPermission('hrm:recruit:offer:send')")
+    public CommonResult<Boolean> resendOfferNotice(@RequestParam("offerId") Long offerId) {
+        offerService.resendOfferNotice(offerId);
+        return success(true);
     }
 }

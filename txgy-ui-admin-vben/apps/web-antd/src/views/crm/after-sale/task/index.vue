@@ -140,7 +140,7 @@ function handleRefresh() {
 
 const { push } = useRouter();
 
-/** 查看回访任务详情（跳转详情页，待办「回访任务临期」等来源同样跳此处） */
+/** 查看回访任务详情（跳转详情页，待办「任务提醒」等来源同样跳此处） */
 function handleDetail(row: CrmAfterSaleVisitTaskApi.VisitTask) {
   push({ name: 'CrmAfterSaleVisitTaskDetail', params: { id: row.id } });
 }

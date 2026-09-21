@@ -22,10 +22,13 @@ import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicat
 import cn.iocoder.txgy.module.hrm.service.recruit.chat.HrmRecruitChatService;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
+import cn.iocoder.txgy.module.system.api.mail.MailSendApi;
+import cn.iocoder.txgy.module.system.api.mail.dto.MailSendToAddressesReqDTO;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +67,7 @@ import static cn.iocoder.txgy.module.hrm.enums.LogRecordConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewService {
 
     private static final DateTimeFormatter INTERVIEW_TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
@@ -81,6 +85,8 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
     private HrmRecruitChatService recruitChatService;
     @Resource
     private NotifyMessageSendApi notifyMessageSendApi;
+    @Resource
+    private MailSendApi mailSendApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -153,6 +159,7 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
 
         // 4. 通知面试官
         sendRecruitInterviewArrangedMessage(recruitCandidate, recruitInterview);
+        sendInterviewNoticeMail(recruitCandidate, recruitInterview);
         recruitChatService.sendInterviewArrangedNotification(recruitInterview.getApplicationId(), recruitInterview);
 
         // 5. 记录操作日志上下文
@@ -196,6 +203,7 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
 
         // 3. 通知面试官
         sendRecruitInterviewArrangedMessage(recruitCandidate, updateObj);
+        sendInterviewNoticeMail(recruitCandidate, updateObj);
         recruitChatService.sendInterviewArrangedNotification(recruitInterview.getApplicationId(), updateObj);
 
         // 4. 记录操作日志上下文
@@ -497,6 +505,62 @@ public class HrmRecruitInterviewServiceImpl implements HrmRecruitInterviewServic
         employeeIds.add(reqVO.getInterviewEmployeeId());
         employeeService.validateEmployeeListByEntryStatus(
                 employeeIds, HrmEmployeeEntryStatusEnum.ACTIVE.getStatus());
+    }
+
+    /**
+     * 给候选人发送面试安排邮件
+     *
+     * <p>候选人是外部人员、没有后台账号，站内信收不到，所以面试安排必须走邮件；
+     * 未填写邮箱、邮箱格式不对、发送失败都只记日志，不阻断面试安排。</p>
+     */
+    private void sendInterviewNoticeMail(HrmRecruitCandidateDO candidate, HrmRecruitInterviewDO interview) {
+        if (candidate == null || StrUtil.isBlank(candidate.getEmail())) {
+            log.info("[sendInterviewNoticeMail][候选人({})未填写邮箱，跳过面试通知邮件]",
+                    candidate == null ? null : candidate.getId());
+            return;
+        }
+        try {
+            Map<String, Object> params = new HashMap<>(8);
+            params.put("candidateName", StrUtil.blankToDefault(candidate.getName(), "候选人"));
+            params.put("interviewTime", interview.getInterviewTime() == null ? "待定"
+                    : interview.getInterviewTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
+            params.put("interviewAddress", StrUtil.blankToDefault(interview.getAddress(), "另行通知"));
+            params.put("interviewer", resolveInterviewerName(interview));
+            params.put("roundNo", String.valueOf(interview.getRoundNo() == null ? 1 : interview.getRoundNo()));
+            Long mailLogId = mailSendApi.sendSingleMailToAddresses(new MailSendToAddressesReqDTO()
+                    .setToMails(Collections.singletonList(candidate.getEmail()))
+                    .setTemplateCode(MessageTemplateConstants.RECRUIT_INTERVIEW_NOTICE)
+                    .setTemplateParams(params)).getCheckedData();
+            log.info("[sendInterviewNoticeMail][候选人({}) 已发送面试通知邮件，mailLogId({})]",
+                    candidate.getId(), mailLogId);
+        } catch (Throwable ex) {
+            log.warn("[sendInterviewNoticeMail][候选人({}) 发送面试通知邮件失败]", candidate.getId(), ex);
+        }
+    }
+
+    /**
+     * 解析面试官姓名（主面试官 + 其他面试官，用、连接）
+     */
+    private String resolveInterviewerName(HrmRecruitInterviewDO interview) {
+        Set<Long> employeeIds = new LinkedHashSet<>();
+        if (interview.getInterviewEmployeeId() != null) {
+            employeeIds.add(interview.getInterviewEmployeeId());
+        }
+        if (CollUtil.isNotEmpty(interview.getOtherInterviewEmployeeIds())) {
+            employeeIds.addAll(interview.getOtherInterviewEmployeeIds());
+        }
+        if (CollUtil.isEmpty(employeeIds)) {
+            return "HR 另行告知";
+        }
+        Map<Long, HrmEmployeeDO> employeeMap = employeeService.getEmployeeMap(employeeIds);
+        if (CollUtil.isEmpty(employeeMap)) {
+            return "HR 另行告知";
+        }
+        return employeeMap.values().stream()
+                .map(HrmEmployeeDO::getName)
+                .filter(StrUtil::isNotBlank)
+                .reduce((a, b) -> a + "、" + b)
+                .orElse("HR 另行告知");
     }
 
     private void sendRecruitInterviewArrangedMessage(HrmRecruitCandidateDO recruitCandidate,

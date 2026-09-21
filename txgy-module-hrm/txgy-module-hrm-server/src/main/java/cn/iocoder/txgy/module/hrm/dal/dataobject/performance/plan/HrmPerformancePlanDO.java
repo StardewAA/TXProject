@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.performance.plan;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.performance.config.HrmPerformanceAssessmentTemplateDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.performance.config.HrmPerformanceResultTemplateDO.Level;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeStatusEnum;
@@ -47,7 +47,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmPerformancePlanDO extends BaseDO {
+public class HrmPerformancePlanDO extends TenantBaseDO {
 
     /**
      * 计划编号

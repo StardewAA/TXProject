@@ -35,18 +35,27 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
                 .orderByAsc(CrmAfterSaleVisitTaskDO::getTaskDate));
     }
 
-    // ========== 待办：回访任务临期（实时查询，不落库） ==========
+    // ========== 待办：任务提醒（回访任务；含临期与已逾期，实时查询，不落库） ==========
 
     /**
-     * 待办「回访任务临期」分页查询
+     * 待办「任务提醒」分页查询
      *
      * <p>实时判定条件：
      * <ul>
-     *   <li>任务状态 = 待处理（完成 / 逾期 / 删除后条件不再命中，刷新即消失）；</li>
+     *   <li>任务状态 ∈ {待处理, 已逾期}（已完成 / 删除后条件不再命中，刷新即消失）——
+     *       既覆盖「快到点还没做」的临期任务，也覆盖「已经逾期仍未完成」的任务，
+     *       保证逾期任务不会被漏掉、必须被持续提醒直到完成；</li>
      *   <li>处理人 ∈ 归属范围（当前登录人本人 + 其下属）；</li>
-     *   <li>计划回访日期 ∈ [今天, 今天 + 售后设置「任务临期提醒提前天数」]。</li>
+     *   <li>计划回访日期 ≤ 今天 + 售后设置「任务临期提醒提前天数」
+     *       （提醒触发点 = 计划回访日期 - 提前提醒天数，到点即进入待办）
+     *       —— ⚠️ 该上限仅约束「待处理」任务；已逾期任务刻意不再受此约束
+     *       （逾期任务的任务日期必然早于今天，若仍加上限条件会再次被漏掉）。</li>
      * </ul>
-     * 按计划回访日期升序，最紧急的排在最前。
+     * 按计划回访日期升序，最紧急的（含已逾期）排在最前。
+     *
+     * <p>⚠️ 用 {@code le} 而不是 {@code between(今天, 今天+天数)}：
+     * 「计划回访日期已过、但仍在窗口期内」的待处理任务同样需要提醒（越拖越接近逾期），
+     * 用 between 会把它们排除在待办之外，导致这类任务一路拖到窗口期结束被标记逾期。
      *
      * @param reqVO           分页查询
      * @param assigneeUserIds 归属范围（本人 + 下属负责的任务处理人）
@@ -60,14 +69,22 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
         }
         int days = remindDays == null || remindDays < 0 ? 0 : remindDays;
         return selectPage(reqVO, new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
-                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                // 未完成的都要提醒：待处理（临期 / 已过计划日期）+ 已逾期
+                .in(CrmAfterSaleVisitTaskDO::getStatus,
+                        CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus(),
+                        CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
                 .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
-                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days))
+                // 已逾期：无条件纳入；待处理：计划回访日期 ≤ 今天 + 提前提醒天数
+                .and(wrapper -> wrapper
+                        .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
+                        .or(sub -> sub
+                                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                                .le(CrmAfterSaleVisitTaskDO::getTaskDate, today.plusDays(days))))
                 .orderByAsc(CrmAfterSaleVisitTaskDO::getTaskDate));
     }
 
     /**
-     * 待办「回访任务临期」数量（与 {@link #selectPageByRemind} 同一口径）
+     * 待办「任务提醒」数量（与 {@link #selectPageByRemind} 同一口径；含临期与已逾期）
      */
     default Long selectCountByRemind(Collection<Long> assigneeUserIds, LocalDate today, Integer remindDays) {
         if (CollUtil.isEmpty(assigneeUserIds)) {
@@ -75,9 +92,15 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
         }
         int days = remindDays == null || remindDays < 0 ? 0 : remindDays;
         return selectCount(new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
-                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                .in(CrmAfterSaleVisitTaskDO::getStatus,
+                        CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus(),
+                        CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
                 .in(CrmAfterSaleVisitTaskDO::getAssigneeUserId, assigneeUserIds)
-                .between(CrmAfterSaleVisitTaskDO::getTaskDate, today, today.plusDays(days)));
+                .and(wrapper -> wrapper
+                        .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
+                        .or(sub -> sub
+                                .eq(CrmAfterSaleVisitTaskDO::getStatus, CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus())
+                                .le(CrmAfterSaleVisitTaskDO::getTaskDate, today.plusDays(days)))));
     }
 
     default List<CrmAfterSaleVisitTaskDO> selectListByStatusAndDateLe(Integer status, LocalDate date) {
@@ -107,6 +130,28 @@ public interface CrmAfterSaleVisitTaskMapper extends BaseMapperX<CrmAfterSaleVis
                 .eq(CrmAfterSaleVisitTaskDO::getStatus, status)
                 .isNull(CrmAfterSaleVisitTaskDO::getOverdueSentDate)
                 .le(CrmAfterSaleVisitTaskDO::getTaskDate, date));
+    }
+
+    /**
+     * 取消指定质保档案下「计划回访日期晚于指定日期」的未完成任务（质保自动流转为「已到期终止」时调用）
+     *
+     * <p>质保到期后，到期日之后本不该再有回访任务（生成时已按质保到期日限制），
+     * 存量数据可能因「到期日被调整」「数据导入」而产生，这里统一收口为「已取消」：
+     * 取消后不再出现在「任务提醒」待办中，同时保留完整痕迹。
+     *
+     * @param warrantyId 质保档案编号
+     * @param afterDate  质保到期日（严格晚于该日期的未完成任务会被取消）
+     * @return 更新的条数
+     */
+    default int cancelUnfinishedAfterDate(Long warrantyId, LocalDate afterDate) {
+        CrmAfterSaleVisitTaskDO updateObj = new CrmAfterSaleVisitTaskDO();
+        updateObj.setStatus(CrmAfterSaleVisitTaskStatusEnum.CANCELED.getStatus());
+        return update(updateObj, new LambdaQueryWrapperX<CrmAfterSaleVisitTaskDO>()
+                .eq(CrmAfterSaleVisitTaskDO::getWarrantyId, warrantyId)
+                .in(CrmAfterSaleVisitTaskDO::getStatus,
+                        CrmAfterSaleVisitTaskStatusEnum.PENDING.getStatus(),
+                        CrmAfterSaleVisitTaskStatusEnum.OVERDUE.getStatus())
+                .gt(CrmAfterSaleVisitTaskDO::getTaskDate, afterDate));
     }
 
     default List<CrmAfterSaleVisitTaskDO> selectListByPlanId(Long planId) {

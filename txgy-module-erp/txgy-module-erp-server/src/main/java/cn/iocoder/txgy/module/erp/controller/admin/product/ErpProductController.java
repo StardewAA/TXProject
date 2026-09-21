@@ -10,6 +10,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProductPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProductRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ProductSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -84,6 +85,7 @@ public class ErpProductController {
         List<ErpProductRespVO> list = productService.getProductVOListByStatus(CommonStatusEnum.ENABLE.getStatus());
         return success(convertList(list, product -> new ErpProductRespVO().setId(product.getId())
                 .setName(product.getName()).setBarCode(product.getBarCode())
+                .setMaterialCode(product.getMaterialCode()).setMaterialType(product.getMaterialType())
                 .setCategoryId(product.getCategoryId()).setCategoryName(product.getCategoryName())
                 .setUnitId(product.getUnitId()).setUnitName(product.getUnitName())
                 .setPurchasePrice(product.getPurchasePrice()).setSalePrice(product.getSalePrice()).setMinPrice(product.getMinPrice())));
@@ -100,6 +102,18 @@ public class ErpProductController {
         // 导出 Excel
         ExcelUtils.write(response, "产品.xls", "数据", ErpProductRespVO.class,
                 pageResult.getList());
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出产品 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:product:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportProductPdf(@Valid ErpProductPageReqVO pageReqVO,
+                                 HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        PageResult<ErpProductRespVO> pageResult = productService.getProductVOPage(pageReqVO);
+        ErpPdfExportUtils.write(response, "产品.pdf", "产品列表",
+                ErpProductRespVO.class, pageResult.getList());
     }
 
 }

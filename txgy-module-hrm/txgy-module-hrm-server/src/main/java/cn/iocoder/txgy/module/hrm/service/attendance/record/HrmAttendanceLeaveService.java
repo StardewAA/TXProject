@@ -93,6 +93,15 @@ public interface HrmAttendanceLeaveService {
             Collection<Long> employeeIds, LocalDateTime[] leaveTimes);
 
     /**
+     * 人工审批（通过 / 驳回）举手办理的请假申请
+     *
+     * @param id 请假记录编号
+     * @param approved 是否通过
+     * @param reason 审批意见（驳回时必填）
+     */
+    void approveLeave(Long id, Boolean approved, String reason);
+
+    /**
      * 更新请假审批状态
      *
      * @param id 请假记录编号

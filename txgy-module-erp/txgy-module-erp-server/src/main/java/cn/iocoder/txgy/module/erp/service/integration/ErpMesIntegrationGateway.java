@@ -4,6 +4,7 @@ import cn.iocoder.txgy.module.mes.api.integration.dto.MesIntegrationAcceptedResp
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesMaterialUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesPartnerUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderCreateReqDTO;
+import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderResumeReqDTO;
 
 /**
  * ERP → MES 推送网关
@@ -26,5 +27,10 @@ public interface ErpMesIntegrationGateway {
      * 推送生产工单创建请求（MES 幂等建单）
      */
     MesIntegrationAcceptedRespDTO createWorkOrder(MesWorkOrderCreateReqDTO reqDTO);
+
+    /**
+     * 通知 MES 恢复缺料生产工单（重新向 WMS 申请领料）
+     */
+    MesIntegrationAcceptedRespDTO resumeWorkOrder(MesWorkOrderResumeReqDTO reqDTO);
 
 }

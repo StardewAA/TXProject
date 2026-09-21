@@ -122,7 +122,28 @@ public interface MesProWorkOrderService {
     void cancelWorkOrder(Long id);
 
     /**
-     * 下发工单（已确认 → 已下发）
+     * 提交工单审批（已确认 → 审批中），并发起 BPM 审批流程
+     *
+     * @param id 编号
+     */
+    void submitWorkOrder(Long id);
+
+    /**
+     * 工单审批通过（审批中 → 已批准），由 BPM 审批结果回调驱动；仅已批准工单可下发
+     *
+     * @param id 编号
+     */
+    void approveWorkOrder(Long id);
+
+    /**
+     * 工单审批驳回（审批中 → 已确认），由 BPM 审批结果回调驱动
+     *
+     * @param id 编号
+     */
+    void rejectWorkOrder(Long id);
+
+    /**
+     * 下发工单（已批准 → 已下发）
      *
      * @param id 编号
      */
@@ -150,5 +171,30 @@ public interface MesProWorkOrderService {
      * @return 数量
      */
     Long getWorkOrderCountByVendorId(Long vendorId);
+
+    /**
+     * 回写 WMS 领料出库集成结果（供 MES↔WMS 集成结果处理器调用）
+     *
+     * @param id                  工单编号
+     * @param wmsShipmentOrderNo  WMS 领料出库单号（可能为 null）
+     * @param wmsShipmentStatus   WMS 领料状态
+     */
+    void updateWmsShipmentResult(Long id, String wmsShipmentOrderNo, Integer wmsShipmentStatus);
+
+    /**
+     * 回写 WMS 完工入库集成结果（供 MES↔WMS 集成结果处理器调用）
+     *
+     * @param id                 工单编号
+     * @param wmsReceiptOrderNo  WMS 完工入库单号（可能为 null）
+     * @param wmsReceiptStatus   WMS 入库状态
+     */
+    void updateWmsReceiptResult(Long id, String wmsReceiptOrderNo, Integer wmsReceiptStatus);
+
+    /**
+     * 缺料采购入库后恢复生产工单：取消旧领料集成任务并重新向 WMS 申请领料（设计 7.2）
+     *
+     * @param code 工单编码
+     */
+    void resumeWorkOrder(String code);
 
 }

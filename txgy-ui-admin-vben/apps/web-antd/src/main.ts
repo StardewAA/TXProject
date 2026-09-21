@@ -1,9 +1,13 @@
 import './offline-icons';
 import './bid-indust.css';
-import { initPreferences } from '@vben/preferences';
+import { initPreferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
-import { overridesPreferences, preferencesExtension } from './preferences';
+import {
+  APP_HOME_PATH,
+  overridesPreferences,
+  preferencesExtension,
+} from './preferences';
 
 /**
  * 应用初始化完成之后再进行页面加载渲染
@@ -24,6 +28,10 @@ async function initApplication() {
     namespace,
     overrides: overridesPreferences,
   });
+
+  // 登录后落地页以代码为准：偏好设置会被浏览器缓存，而缓存的优先级高于代码默认值，
+  // 老浏览器里可能残留 /wms/ai-center（该路由并不存在），登录后会直接落到 404 页。
+  updatePreferences({ app: { defaultHomePath: APP_HOME_PATH } });
 
   // 启动应用并挂载
   // vue应用主要逻辑及视图

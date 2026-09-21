@@ -19,6 +19,7 @@ export namespace ErpPurchaseOrderApi {
     accountId?: number; // 结算账户编号
     status?: number; // 状态
     processInstanceId?: string; // BPM 流程实例编号
+    reverseApproveReason?: string; // 反审批原因
     sourceType?: string;
     sourceId?: number;
     sourceNo?: string;
@@ -56,6 +57,52 @@ export namespace ErpPurchaseOrderApi {
     remark?: string; // 备注
     stockCount?: number; // 库存数量（显示字段）
   }
+
+  /** 采购订单溯源 */
+  export interface OrderTrace {
+    traceable?: boolean; // 是否已建立溯源
+    traceHint?: string; // 不可溯源时的原因说明
+    order?: {
+      id?: number;
+      no?: string;
+      businessChainNo?: string;
+      sourceType?: string;
+      sourceNo?: string;
+      supplierName?: string;
+      orderTime?: string;
+      totalProductPrice?: number;
+      totalPrice?: number;
+      status?: number;
+      inCount?: number;
+      returnCount?: number;
+    };
+    inquiry?: {
+      id?: number;
+      no?: string;
+      title?: string;
+      status?: number;
+      awardStatus?: number;
+      quoteCount?: number;
+      purchaseOrderIds?: string;
+    };
+    awardItems?: {
+      productCode?: string;
+      productName?: string;
+      supplierName?: string;
+      awardCount?: number;
+      productPrice?: number;
+      awardReason?: string;
+    }[];
+    inDocs?: {
+      id?: number;
+      no?: string;
+      inTime?: string;
+      totalPrice?: number;
+      status?: number;
+      businessChainNo?: string;
+      wmsStatus?: string;
+    }[];
+  }
 }
 
 /** 查询采购订单分页 */
@@ -83,10 +130,10 @@ export function updatePurchaseOrder(data: ErpPurchaseOrderApi.PurchaseOrder) {
   return requestClient.put('/erp/purchase-order/update', data);
 }
 
-/** 更新采购订单的状态 */
-export function updatePurchaseOrderStatus(id: number, status: number) {
-  return requestClient.put('/erp/purchase-order/update-status', null, {
-    params: { id, status },
+/** 反审批采购订单（审批中 / 已审批 → 草稿），reason 为必填原因 */
+export function reverseApprovePurchaseOrder(id: number, reason: string) {
+  return requestClient.put('/erp/purchase-order/reverse-approve', null, {
+    params: { id, reason },
   });
 }
 
@@ -107,4 +154,16 @@ export function deletePurchaseOrder(ids: number[]) {
 /** 导出采购订单 Excel */
 export function exportPurchaseOrder(params: any) {
   return requestClient.download('/erp/purchase-order/export-excel', { params });
+}
+
+/** 导出采购订单 PDF */
+export function exportPurchaseOrderPdf(params: any) {
+  return requestClient.download('/erp/purchase-order/export-pdf', { params });
+}
+
+/** 查询采购订单溯源（询价单 → 中标明细 → 订单 → 入库单） */
+export function getPurchaseOrderTrace(id: number) {
+  return requestClient.get<ErpPurchaseOrderApi.OrderTrace>(
+    `/erp/purchase-order/trace?id=${id}`,
+  );
 }

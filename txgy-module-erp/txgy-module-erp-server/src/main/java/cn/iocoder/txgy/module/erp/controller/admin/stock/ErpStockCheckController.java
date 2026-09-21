@@ -9,12 +9,15 @@ import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProductRespVO;
+import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.check.ErpStockCheckComparisonRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.check.ErpStockCheckPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.check.ErpStockCheckRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.check.ErpStockCheckSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockCheckDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockCheckItemDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
+import cn.iocoder.txgy.module.erp.service.stock.ErpStockCheckComparisonService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockCheckService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
@@ -45,6 +48,8 @@ public class ErpStockCheckController {
 
     @Resource
     private ErpStockCheckService stockCheckService;
+    @Resource
+    private ErpStockCheckComparisonService stockCheckComparisonService;
     @Resource
     private ErpProductService productService;
 
@@ -110,6 +115,16 @@ public class ErpStockCheckController {
         return success(buildStockCheckVOPageResult(pageResult));
     }
 
+    @GetMapping("/comparison")
+    @Operation(summary = "获得盘点单三方比对",
+            description = "把 ERP 账面、ERP 实盘、WMS 实物（erp_stock_mirror）三方并列，"
+                    + "并给出盘点盈亏、盘点期间账面变动与「WMS 需调整量」；无镜像数据时该方标记为空而非 0")
+    @Parameter(name = "checkId", description = "盘点单编号", required = true, example = "16")
+    @PreAuthorize("@ss.hasPermission('erp:stock-check:query')")
+    public CommonResult<ErpStockCheckComparisonRespVO> getComparison(@RequestParam("checkId") Long checkId) {
+        return success(stockCheckComparisonService.getComparison(checkId));
+    }
+
     @GetMapping("/export-excel")
     @Operation(summary = "导出库存调拨单 Excel")
     @PreAuthorize("@ss.hasPermission('erp:stock-check:export')")
@@ -120,6 +135,19 @@ public class ErpStockCheckController {
         List<ErpStockCheckRespVO> list = buildStockCheckVOPageResult(stockCheckService.getStockCheckPage(pageReqVO)).getList();
         // 导出 Excel
         ExcelUtils.write(response, "库存调拨单.xls", "数据", ErpStockCheckRespVO.class, list);
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出库存盘点单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:stock-check:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportStockCheckPdf(@Valid ErpStockCheckPageReqVO pageReqVO,
+                                    HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpStockCheckRespVO> list = buildStockCheckVOPageResult(
+                stockCheckService.getStockCheckPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "库存盘点单.pdf", "库存盘点单列表",
+                ErpStockCheckRespVO.class, list);
     }
 
     private PageResult<ErpStockCheckRespVO> buildStockCheckVOPageResult(PageResult<ErpStockCheckDO> pageResult) {
@@ -134,7 +162,7 @@ public class ErpStockCheckController {
         Map<Long, ErpProductRespVO> productMap = productService.getProductVOMap(
                 convertSet(stockCheckItemList, ErpStockCheckItemDO::getProductId));
         // 1.3 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), stockCheck -> Long.parseLong(stockCheck.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpStockCheckRespVO.class, stockCheck -> {

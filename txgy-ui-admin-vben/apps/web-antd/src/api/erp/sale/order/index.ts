@@ -14,6 +14,7 @@ export namespace ErpSaleOrderApi {
     totalPrice: number; // 合计金额，单位：元
     status: number; // 状态
     processInstanceId?: string; // BPM 流程实例编号
+    reverseApproveReason?: string; // 反审批原因
     customerName?: string; // 客户名称
     productNames?: string; // 产品名称列表
     creatorName?: string; // 创建人名称
@@ -27,6 +28,18 @@ export namespace ErpSaleOrderApi {
     discountPercent?: number; // 优惠率，百分比
     discountPrice?: number; // 优惠金额，单位：元
     depositPrice?: number; // 定金金额，单位：元
+    // ===== 溯源 =====
+    sourceType?: string; // 来源类型（COST_RESULT=造价转换生成）
+    sourceId?: number; // 来源编号（造价结果编号）
+    sourceNo?: string; // 来源单号
+    businessChainNo?: string; // 全局业务链编号
+    // ===== WMS 履约 =====
+    warehouseStatus?: string; // WMS 仓储履约状态
+    inventoryDecisionNo?: string; // WMS 库存判断编号
+    reservationNo?: string; // WMS 库存预留编号
+    wmsShipmentOrderNo?: string; // WMS 销售出库单号
+    wmsEventVersion?: number; // 最后处理的 WMS 事件版本
+    wmsFailureReason?: string; // WMS 失败原因
     items?: SaleOrderItem[]; // 销售订单产品明细列表
   }
 
@@ -49,6 +62,10 @@ export namespace ErpSaleOrderApi {
     totalTaxPrice?: number; // 含税总价，单位：元
     remark?: string; // 备注
     stockCount?: number; // 库存数量（显示字段）
+    warehouseCode?: string; // WMS 统一仓库编码
+    outCount?: number; // 已出库数量（WMS 实发回传）
+    reservedCount?: number; // WMS 预留数量
+    shortageCount?: number; // WMS 缺口数量
   }
 }
 
@@ -84,10 +101,10 @@ export function updateSaleOrder(data: ErpSaleOrderApi.SaleOrder) {
   return requestClient.put('/erp/sale-order/update', data);
 }
 
-/** 更新销售订单的状态 */
-export function updateSaleOrderStatus(id: number, status: number) {
-  return requestClient.put('/erp/sale-order/update-status', null, {
-    params: { id, status },
+/** 反审批销售订单（审批中 / 已审批 → 草稿），reason 为必填原因 */
+export function reverseApproveSaleOrder(id: number, reason: string) {
+  return requestClient.put('/erp/sale-order/reverse-approve', null, {
+    params: { id, reason },
   });
 }
 
@@ -108,4 +125,9 @@ export function deleteSaleOrder(ids: number[]) {
 /** 导出销售订单 Excel */
 export function exportSaleOrder(params: any) {
   return requestClient.download('/erp/sale-order/export-excel', { params });
+}
+
+/** 导出销售订单 PDF */
+export function exportSaleOrderPdf(params: any) {
+  return requestClient.download('/erp/sale-order/export-pdf', { params });
 }

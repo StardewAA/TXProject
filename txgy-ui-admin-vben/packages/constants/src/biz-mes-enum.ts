@@ -136,6 +136,7 @@ export const MesAutoCodeRuleCode = {
   PRO_CARD_CODE: 'PRO_CARD_CODE',
   PRO_FEEDBACK_CODE: 'PRO_FEEDBACK_CODE',
   PRO_PROCESS_CODE: 'PRO_PROCESS_CODE',
+  PRO_PROJECT_CODE: 'PRO_PROJECT_CODE',
   PRO_ROUTE_CODE: 'PRO_ROUTE_CODE',
   PRO_TASK_CODE: 'PRO_TASK_CODE',
   PRO_WORK_ORDER_CODE: 'PRO_WORK_ORDER_CODE',
@@ -215,6 +216,8 @@ export const MesWmStockTakingParamTypeEnum = {
 export const MesProWorkOrderStatusEnum = {
   PREPARE: 0, // 草稿
   CONFIRMED: 1, // 已确认
+  APPROVING: 12, // 审批中
+  APPROVED: 13, // 已批准（审批通过，此状态才允许下发）
   ISSUED: 10, // 已下发
   IN_PRODUCTION: 11, // 生产中
   FINISHED: 2, // 已完成

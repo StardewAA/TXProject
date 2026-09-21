@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.experimental.Accessors;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
  * 排产、报工、完工等后续动作仍在 MES 内完成。
  */
 @Data
+@Accessors(chain = true)
 @EqualsAndHashCode(callSuper = true)
 public class MesWorkOrderCreateReqDTO extends MesIntegrationBaseReqDTO {
 
@@ -52,5 +54,11 @@ public class MesWorkOrderCreateReqDTO extends MesIntegrationBaseReqDTO {
     private String customerCode;
 
     private String remark;
+
+    /**
+     * 数据版本号（幂等与乐观锁依据，ERP 侧使用销售订单行项编号）
+     */
+    @NotNull(message = "dataVersion 不能为空")
+    private Long dataVersion;
 
 }

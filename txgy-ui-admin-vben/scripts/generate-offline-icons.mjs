@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { subsetIconCollection } from '../apps/web-antd/src/utils/iconify-subset.mjs';
 
 const APP_ROOT = fileURLToPath(new URL('../apps/web-antd', import.meta.url));
 const MONOREPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -343,25 +344,12 @@ function main() {
   for (const prefix of COLLECTIONS) {
     const names = [...(used.get(prefix) ?? [])].sort();
     const raw = JSON.parse(fs.readFileSync(resolveCollectionJson(prefix), 'utf8'));
-    const icons = {};
-    let missing = 0;
-    for (const name of names) {
-      if (raw.icons?.[name]) {
-        icons[name] = raw.icons[name];
-      } else if (raw.aliases?.[name]) {
-        // 别名图标依赖父图标，需一并保留，否则渲染时找不到图形
-        const alias = raw.aliases[name];
-        icons[name] = alias;
-        if (alias?.parent && raw.icons[alias.parent]) {
-          icons[alias.parent] = raw.icons[alias.parent];
-        }
-      } else {
-        missing += 1;
-      }
-    }
+    const { icons, aliases } = subsetIconCollection(raw, names);
+    const missing = names.filter((name) => !icons[name] && !aliases[name]).length;
     collections.push({
       prefix,
       icons,
+      aliases,
       lastModified: raw.lastModified ?? 0,
       height: raw.height ?? 24,
       width: raw.width ?? 24,

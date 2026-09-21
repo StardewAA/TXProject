@@ -78,5 +78,27 @@ public class ErpStockRecordDO extends BaseDO {
      * 例如说：{@link ErpStockInDO#getNo()}
      */
     private String bizNo;
+    /**
+     * 来源系统
+     *
+     * 取值：ERP / MALL / MES / MANUAL
+     *
+     * 用于区分库存变动的归属方 —— 只有 sourceSystem = "ERP" 且 bizType = 50(SALE_OUT)
+     * 才是 ERP 的销售出库；商城发货、MES 领料、WMS 手工调整都不计入 ERP 销售统计
+     */
+    private String sourceSystem;
+    /**
+     * 来源业务语义
+     *
+     * WMS 同步时携带来源系统自身的业务类型描述；ERP 内部写入可空（bizType 已足够表达）
+     */
+    private String sourceType;
+    /**
+     * 责任人用户编号
+     *
+     * 销售出库 / 销售退货取销售员；其余业务取操作人。
+     * 该字段是**发生时刻的快照**，用于销售绩效归因 —— 订单销售员后续变更不影响历史归属
+     */
+    private Long sourceUserId;
 
 }

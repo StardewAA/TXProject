@@ -191,6 +191,11 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    public RoleDO getRoleByCode(String code) {
+        return roleMapper.selectByCode(code);
+    }
+
+    @Override
     @Cacheable(value = RedisKeyConstants.ROLE, key = "#id",
             unless = "#result == null")
     @TenantIgnore // 权限校验按角色编号查询角色，必须与请求租户无关；否则在“非用户所属租户”上下文下会查不到角色，

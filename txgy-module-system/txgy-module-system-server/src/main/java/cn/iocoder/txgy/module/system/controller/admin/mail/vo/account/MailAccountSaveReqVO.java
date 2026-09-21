@@ -21,8 +21,10 @@ public class MailAccountSaveReqVO {
     @NotNull(message = "用户名不能为空")
     private String username;
 
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")
-    @NotNull(message = "密码必填")
+    /**
+     * 新增时必填（由 Service 校验）；修改时留空表示沿用原密码，避免前端因为拿不到密码而把它清掉。
+     */
+    @Schema(description = "密码（授权码）。新增必填；修改时留空表示不修改", example = "123456")
     private String password;
 
     @Schema(description = "SMTP 服务器域名", requiredMode = Schema.RequiredMode.REQUIRED, example = "www.iocoder.cn")

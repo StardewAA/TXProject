@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.attendance.record;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.DictTypeConstants;
 import cn.iocoder.txgy.module.hrm.enums.attendance.record.HrmAttendanceClockSourceEnum;
@@ -33,7 +33,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmAttendanceClockDO extends BaseDO {
+public class HrmAttendanceClockDO extends TenantBaseDO {
 
     /**
      * 打卡记录编号
@@ -101,6 +101,12 @@ public class HrmAttendanceClockDO extends BaseDO {
      * WiFi MAC 地址
      */
     private String mac;
+    /**
+     * 打卡现场照片（人脸/工地照）地址
+     *
+     * 防腐保温工地为室外作业，照片用于留痕，作为"本人 + 现场 + 时间 + 坐标"的证据
+     */
+    private String photoUrl;
     /**
      * 备注
      */

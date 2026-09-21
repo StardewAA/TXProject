@@ -120,6 +120,18 @@ function resolveRedirectPath() {
 
   const userInfo = userStore.userInfo;
 
+  // 会话过期（token 失效）后重新登录：忽略 redirect，统一回默认页面，
+  // 避免被带回失效前的当前页面。标记由 api/request.ts 的 doReAuthenticate 写入。
+  let sessionExpired = false;
+  try {
+    sessionExpired = sessionStorage.getItem('txgy-session-expired') === '1';
+    if (sessionExpired) {
+      sessionStorage.removeItem('txgy-session-expired');
+    }
+  } catch {
+    sessionExpired = false;
+  }
+
   if (
     hasBackendAccess({
       loginType: loginType.value,
@@ -129,9 +141,6 @@ function resolveRedirectPath() {
       permissions: accessStore.accessCodes,
     })
   ) {
-    const backendRedirect =
-      redirect && !redirect.startsWith('/portal/') ? redirect : '';
-
     const configuredHomePath = userInfo?.homePath;
     // 旧的 WMS 首页已下线，若后端仍返回该路径则回退到默认首页（WMS AI 首页）
     const isLegacyWmsHome =
@@ -144,9 +153,21 @@ function resolveRedirectPath() {
         ? configuredHomePath
         : '';
 
+    if (sessionExpired) {
+      return enterpriseHomePath || preferences.app.defaultHomePath;
+    }
+
+    const backendRedirect =
+      redirect && !redirect.startsWith('/portal/') ? redirect : '';
+
     return (
       backendRedirect || enterpriseHomePath || preferences.app.defaultHomePath
     );
+  }
+
+  // 个人用户：会话过期后回到门户默认页；普通未登录直达链接仍保留回跳能力
+  if (sessionExpired) {
+    return '/portal/home';
   }
 
   return redirect.startsWith('/portal/') ? redirect : '/portal/home';
@@ -247,14 +268,14 @@ const formSchema = computed((): VbenFormSchema[] => {
     {
       component: 'VbenInput',
       componentProps: {
-        placeholder: $t('authentication.usernameTip'),
+        placeholder: '请输入用户名或工号',
       },
       fieldName: 'username',
-      label: $t('authentication.username'),
+      label: '用户名/工号',
       rules: z
         .string()
         .min(1, {
-          message: $t('authentication.usernameTip'),
+          message: '请输入用户名或工号',
         })
         .default(import.meta.env.VITE_APP_DEFAULT_USERNAME),
     },

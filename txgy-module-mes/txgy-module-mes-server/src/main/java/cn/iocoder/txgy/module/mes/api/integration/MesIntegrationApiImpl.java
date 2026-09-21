@@ -5,6 +5,7 @@ import cn.iocoder.txgy.module.mes.api.integration.dto.MesIntegrationAcceptedResp
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesMaterialUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesPartnerUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderCreateReqDTO;
+import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderResumeReqDTO;
 import cn.iocoder.txgy.module.mes.service.integration.MesMaterialIntegrationService;
 import cn.iocoder.txgy.module.mes.service.integration.MesPartnerIntegrationService;
 import cn.iocoder.txgy.module.mes.service.integration.MesWorkOrderIntegrationService;
@@ -43,6 +44,11 @@ public class MesIntegrationApiImpl implements MesIntegrationApi {
     @Override
     public CommonResult<MesIntegrationAcceptedRespDTO> createWorkOrder(MesWorkOrderCreateReqDTO reqDTO) {
         return success(workOrderIntegrationService.createWorkOrder(reqDTO));
+    }
+
+    @Override
+    public CommonResult<MesIntegrationAcceptedRespDTO> resumeWorkOrder(MesWorkOrderResumeReqDTO reqDTO) {
+        return success(workOrderIntegrationService.resumeWorkOrder(reqDTO));
     }
 
 }

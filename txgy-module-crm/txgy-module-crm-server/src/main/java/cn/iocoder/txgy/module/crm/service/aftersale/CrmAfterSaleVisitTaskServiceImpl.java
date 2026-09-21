@@ -192,7 +192,7 @@ public class CrmAfterSaleVisitTaskServiceImpl implements CrmAfterSaleVisitTaskSe
 
     @Override
     public PageResult<CrmAfterSaleVisitTaskDO> getVisitTaskPage(CrmAfterSaleVisitTaskPageReqVO pageReqVO, Long userId) {
-        // 待办「回访任务临期」：实时按售后设置判定，不预生成任何待办数据
+        // 待办「任务提醒」：实时按售后设置判定，不预生成任何待办数据（含临期与已逾期）
         if (CrmAfterSaleVisitTaskPageReqVO.REMIND_TYPE_APPROACHING.equals(pageReqVO.getRemindType())) {
             return visitTaskMapper.selectPageByRemind(pageReqVO, resolveRemindAssigneeUserIds(userId),
                     LocalDate.now(), resolveTaskRemindDays());

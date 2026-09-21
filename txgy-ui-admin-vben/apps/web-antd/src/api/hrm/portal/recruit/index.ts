@@ -34,11 +34,13 @@ export namespace HrmPortalRecruitApi {
     salaryUnit?: number;
     minAge?: number;
     maxAge?: number;
-    latestEntryTime?: string;
+    /** 最晚入职时间。后端为 LocalDateTime，JSON 里是毫秒时间戳（数字）。 */
+    latestEntryTime?: number | string;
     description?: string;
     emergencyLevel?: number;
     status?: number;
-    createTime?: string;
+    /** 创建时间，同样是毫秒时间戳（数字）。 */
+    createTime?: number | string;
   }
 
   /** 员工端岗位分页查询参数。后端会强制过滤为已发布状态。 */
@@ -114,9 +116,14 @@ export namespace HrmPortalRecruitApi {
     education: number;
     graduateSchool?: string;
     latestWorkPlace?: string;
-    resumeFileName: string;
-    resumeFileUrl: string;
+    /** 附件简历文件名；使用在线简历版本投递时可不传 */
+    resumeFileName?: string;
+    /** 附件简历地址；使用在线简历版本投递时可不传 */
+    resumeFileUrl?: string;
+    /** 已保存的个人简历编号（附件简历或在线简历草稿） */
     resumeId?: number;
+    /** 已固化的个人简历版本编号，优先于 resumeId */
+    resumeVersionId?: number;
     resumeRemark?: string;
     sourceRemark?: string;
   }

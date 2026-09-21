@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.wms.dal.dataobject.md.item;
 
 import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -40,12 +41,18 @@ public class WmsItemBrandDO extends BaseDO {
      * 关联 {@link WmsItemCategoryDO#getId()}
      */
     private Long categoryId;
+    /** 关联商品分类名称（查询展示字段，不落库） */
+    @TableField(exist = false)
+    private String categoryName;
     /**
      * 主要供应商编号
      *
      * 关联 {@link cn.iocoder.txgy.module.wms.dal.dataobject.md.merchant.WmsMerchantDO#getId()}
      */
     private Long supplierId;
+    /** 主要供应商名称（查询展示字段，不落库） */
+    @TableField(exist = false)
+    private String supplierName;
     /**
      * 品牌说明
      */

@@ -24,6 +24,9 @@ public class ErpSupplierRespVO {
     @ExcelProperty("供应商名称")
     private String name;
 
+    @Schema(description = "绑定的登录用户编号（供应商门户账号）", example = "80000")
+    private Long userId;
+
     @Schema(description = "联系人", example = "芋艿")
     @ExcelProperty("联系人")
     private String contact;
@@ -80,5 +83,17 @@ public class ErpSupplierRespVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
+
+    @Schema(description = "认证状态")
+    private String authStatus;
+
+    @Schema(description = "资质状态")
+    private String qualificationStatus;
+
+    @Schema(description = "风险等级")
+    private String riskLevel;
+
+    @Schema(description = "采购限制状态")
+    private String purchaseLimitStatus;
 
 }

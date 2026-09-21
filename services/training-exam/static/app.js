@@ -41,7 +41,10 @@ const pages={
  async papers(){state.data.papers=await api('/papers');$('#app').innerHTML=card('试卷管理',author()?button('手动组卷','paper-new')+' '+button('随机组卷','paper-auto','','btn'):'',`<div class="note">已发布试卷锁定参数。整份试卷总分统一为 100 分，选题与分值合计不可超过 100 分。随机组卷按每种题型的数量、分值和工种范围抽取资源中心考试题库中的试题。</div>${table(['试卷名称','考试类型','题量 / 总分','及格分','时长 / 重考','状态','操作'],state.data.papers.map(p=>`<tr><td>${esc(p.name)}<div class="meta">${esc(p.course_name||'未关联课程')}${(p.work_types||[]).length?' · 工种：'+esc((p.work_types||[]).join('、')):''}${(p.cert_names||[]).length?' · 发放资格证：'+esc((p.cert_names||[]).join('、')):''}</div></td><td>${exams[p.exam_type]}</td><td>${p.question_count} 题 / ${p.total_score} 分</td><td>${p.pass_score}</td><td>${p.duration_min} 分钟 / ${p.retry_limit} 次</td><td>${badge(p.status)}</td><td><div class="actions">${author()&&p.status==='draft'?button('编辑参数','paper-edit',p.id)+button('选题与分值','paper-questions',p.id)+button('发布','paper-publish',p.id):state.session.role!=='viewer'?button('查看题目','paper-view',p.id):''}</div></td></tr>`))}`)},
  async schedules(){const [rows,papers,members,classes,courseExams]=await Promise.all([api('/admin/exam-schedules'),api('/papers'),api('/admin/members'),api('/admin/classes'),api('/course-exams').catch(()=>[])]);Object.assign(state.data,{schedules:rows,papers,members,classes,courseExams});$('#app').innerHTML=card('考试安排',button('维护培训班','class-new')+' '+button('＋ 新建考试计划','schedule-new','','btn'),`<div class="note">发布后为指定人员生成任务；学员从个人门户的「考试与证书」进入答题。时间按当前设备时区显示。</div>${table(['考试计划','开考 / 结束时间','参考范围','完成情况','状态','操作'],rows.map(s=>`<tr><td>${esc(s.name)}</td><td>${date(s.start_at)}<br>${date(s.end_at)}</td><td>${s.scope_type==='class'?'培训班':'指定人员'}</td><td>${s.finished} / ${s.participants} 人</td><td>${badge(s.status)}</td><td>${s.status==='draft'?button('发布计划','schedule-publish',s.id):'已生成学员任务'}</td></tr>`))}${courseExamsSection(courseExams,papers)}`)},
  async grading(){const [pending,results]=await Promise.all([author()?api('/admin/grading'):Promise.resolve([]),api('/admin/results')]);state.data.results=results;$('#app').innerHTML=card('主观题待阅卷',button('刷新','reload'),table(['考试名称','学员','客观题得分','交卷时间','操作'],pending.map(a=>`<tr><td>${esc(a.exam)}</td><td>${esc(a.learner)}</td><td>${a.objective_score}</td><td>${date(a.submitted_at)}</td><td>${button('开始阅卷','grade',a.id)}</td></tr>`)))+card('考试成绩','',table(['考试名称','学员','状态','总分','结果','切屏次数'],results.map(a=>`<tr><td>${esc(a.exam)}</td><td>${esc(a.learner)}</td><td>${badge(a.status)}</td><td>${a.score??'—'}</td><td>${a.is_pass===true?'合格':a.is_pass===false?'未合格':'待评定'}</td><td>${a.switch_count}</td></tr>`)))},
- async certificates(){const rows=await api('/admin/certs');renderCerts(rows,'证书管理')},
+ async certificates(){
+   const rows=await api('/admin/certs');
+   renderCerts(rows,'证书管理');
+ },
  async mycerts(){const rows=await api('/my/certs');renderCerts(rows,'我的证书 · 个人考试档案')},
  async issuers(){const [issuers,logs]=await Promise.all([api('/admin/cert-issuers'),api('/admin/cert-sync-logs')]);Object.assign(state.data,{issuers,logs});$('#app').innerHTML=card('合作发证机构',button('＋ 配置机构','issuer-new','','btn'),`<div class="note">需要合作机构提供真实接口地址和密钥。平台考核合格证明不代表外部机构已认证；外部证书以成功回执为准。当前对接协议：HTTPS POST JSON，返回 ext_cert_no；其他协议需另行适配。</div>${table(['机构名称','接口地址','状态','操作'],issuers.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.api_url)}</td><td>${i.enabled?'已启用':'未启用'}</td><td>${button('编辑','issuer-edit',i.id)} ${button('测试连接','issuer-test',i.id)}</td></tr>`))}`)+card('联合认证同步记录','',table(['证书 ID','发证机构','状态','外部证书编号','最近同步','操作'],logs.map(l=>`<tr><td>${l.cert_id}</td><td>${esc(l.issuer)}</td><td>${badge(l.status)}</td><td>${esc(l.ext_cert_no||'尚未签发')}</td><td>${date(l.synced_at)}</td><td>${l.status!=='success'?button('同步 / 重试','issuer-retry',l.id):''}</td></tr>`)))},
  async myexams(){state.data.tasks=await api('/my/exams');$('#app').innerHTML=`<div class="cardhead" style="margin-bottom:20px"><h2>我的考试</h2>${button('刷新任务','reload')}</div><div class="examcards">${state.data.tasks.map(t=>{const open=Date.now()>=parseUTC(t.start_at)&&Date.now()<parseUTC(t.end_at);const can=t.result_status!=='submitted'&&open&&(t.result_status==='in_progress'||t.attempt_used<=t.retry_limit);return `<article class="examcard">${badge(t.status)}<h3>${esc(t.name)}</h3><div class="meta">${esc(t.paper)}<br>开始：${date(t.start_at)}<br>结束：${date(t.end_at)}<br>时长 ${t.duration_min} 分钟 · 已用 ${t.attempt_used} / ${t.retry_limit+1} 次</div><p>${t.score===null?'成绩：尚未出分':'成绩：'+t.score+' 分'}</p><div class="actions">${t.attempt_id?button('查看结果','result',t.attempt_id):''}${can?button(t.result_status==='in_progress'?'继续答题':t.attempt_used?'再次考试':'开始考试','start',t.id,'btn'):''}</div></article>`}).join('')||'<div class="card empty"><strong>暂无考试任务</strong>管理员发布考试计划后，可在这里查看并参加。</div>'}</div>`},
@@ -49,7 +52,7 @@ const pages={
 };
 function renderQuestions(){const keyword=$('#q-keyword').value.trim().toLowerCase(),qt=$('#q-type').value,df=$('#q-difficulty').value,st=$('#q-status').value;const rows=state.data.questions.filter(q=>(!qt||q.q_type===qt)&&(!st||q.status===st)&&(!df||q.difficulty===df)&&(!keyword||(q.stem+JSON.stringify(q.tags)).toLowerCase().includes(keyword)));$('#question-table').innerHTML=table(['题型','题干 / 标签','难度','状态','操作'],rows.map(q=>`<tr><td>${types[q.q_type]}</td><td><div class="stem">${esc(q.stem)}</div><div class="meta">${esc(Object.values(q.tags||{}).flat().join(' · '))}</div></td><td>${{easy:'简单',medium:'中等',hard:'困难'}[q.difficulty]}</td><td>${badge(q.status)}</td><td><div class="actions">${button('详情','question-view',q.id)}${author()?button('编辑','question-edit',q.id):''}</div></td></tr>`))}
 function renderWrong(){const rows=state.data.wrong.filter(w=>(!$('#w-type').value||w.q_type===$('#w-type').value)&&(!$('#w-course').value||(w.course_name||'').includes($('#w-course').value)));$('#wrong-list').innerHTML=rows.map(w=>`<div class="question"><div class="cardhead"><span class="meta">${types[w.q_type]} · ${esc(w.course_name||'未关联课程')}</span>${button('标记已掌握','mastered',w.id)}</div><h3 style="margin-top:12px">${esc(w.stem)}</h3>${(w.options||[]).map(o=>`<div>${esc(o.key)}. ${esc(o.text)}</div>`).join('')}<div class="note"><b>正确答案 / 要点</b>：${answerText(w.correct_answer)}<br><b>解析</b>：${esc(w.analysis||'暂无解析')}</div></div>`).join('')||'<div class="empty">暂无符合条件的错题</div>'}
-function renderCerts(rows,title){$('#app').innerHTML=card(title,'',table(['证书名称','获得人','证书类型','证书编号','成绩 / 签发时间','操作'],rows.map(c=>`<tr><td>${esc(c.title)}</td><td>${esc(c.learner)}</td><td>${certTypes[c.cert_type]}${c.cert_type==='joint'?'<div class="meta">外部认证以机构回执为准</div>':''}</td><td>${esc(c.cert_no)}</td><td>${c.score} 分<br>${date(c.issued_at)}</td><td>${button('预览','cert-preview',c.id)} ${button('PDF','cert-pdf',c.id)} ${button('图片','cert-png',c.id)}</td></tr>`)))}
+function renderCerts(rows,title){$('#app').innerHTML=card(title,'',table(['证书名称','获得人','证书类型','证书编号','成绩 / 签发时间','操作'],rows.map(c=>`<tr><td>${esc(c.title)}</td><td>${esc(c.learner)}</td><td>${certTypes[c.cert_type]}${c.cert_type==='joint'?'<div class="meta">外部认证以机构回执为准</div>':''}</td><td>${esc(c.cert_no)}</td><td>${c.score} 分<br>${date(c.issued_at)}</td><td>${button('预览证书','cert-render',c.id,'btn small')} ${button('PDF','cert-pdf',c.id)}</td></tr>`)))}
 export const answerText=a=>esc(Array.isArray(a)?a.map(x=>typeof x==='boolean'?(x?'正确':'错误'):x).join('、'):typeof a==='object'&&a?a.points||JSON.stringify(a):a||'未作答');
 const parseUTC=s=>new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s)?s:s+'Z').getTime();
 let timer;
@@ -62,9 +65,58 @@ function save(el){const a=state.attempt;if(!a)return;const id=Number(el.dataset.
 let submitting=false;
 async function submit(auto=false){if(!state.attempt||submitting)return;if(!auto&&!confirm('确定提交答卷吗？提交后本次答案无法修改。'))return;submitting=true;try{await Promise.allSettled([...state.pending]);if(!auto&&Object.keys(state.errors).length){for(const [id,value]of Object.entries(state.errors))await post(`/my/exams/attempts/${state.attempt.attempt_id}/answers`,{question_id:Number(id),user_answer:value});state.errors={}}const id=state.attempt.attempt_id;await post(`/my/exams/attempts/${id}/submit`);clearInterval(timer);state.attempt=null;parent.postMessage({type:'training-exam:attempt',active:false},location.origin);$('#nav').hidden=false;await load('myexams');await result(id)}catch(e){toast(e.message);if(auto)setTimeout(()=>submit(true),5000)}finally{submitting=false}}
 async function result(id){const r=await api(`/my/exams/attempts/${id}/result`);modal('考试结果',`<div style="text-align:center"><div>${badge(r.status)}</div><div class="score">${r.status==='graded'?r.total_score+' 分':'待阅卷'}</div><p>${r.status==='graded'?(r.is_pass?'恭喜，考试合格。证书可在「我的证书」查看。':'本次未达到及格线，可在错题本中复习。'):'客观题得分 '+r.objective_score+'，主观题等待管理员批阅。'}</p><p class="meta">切屏记录：${r.switch_count} 次</p></div>`) }
-async function download(id,format){if(format==='pdf'){const r=await fetch(`/training-exam/api/my/certs/${id}/download`,{headers:{Authorization:state.token,'tenant-id':String(state.tenant)}});if(!r.ok)throw new Error('证书下载失败');saveBlob(await r.blob(),'certificate.pdf');return}const c=await api(`/my/certs/${id}`);const canvas=document.createElement('canvas');canvas.width=1400;canvas.height=950;const g=canvas.getContext('2d');g.fillStyle='#fffdf5';g.fillRect(0,0,1400,950);g.strokeStyle='#19364e';g.lineWidth=9;g.strokeRect(35,35,1330,880);g.lineWidth=2;g.strokeRect(53,53,1294,844);g.fillStyle='#19364e';g.textAlign='center';g.font='bold 64px Microsoft YaHei';g.fillText('考试合格证书',700,210);g.font='32px Microsoft YaHei';const lines=c.title.match(/.{1,30}/g)||[];lines.forEach((l,i)=>g.fillText(l,700,305+i*44));g.fillText(`兹证明 ${c.learner} 已通过考核，成绩 ${c.score} 分。`,700,480);g.font='25px Microsoft YaHei';g.fillText(certTypes[c.cert_type],700,600);if(c.cert_type==='joint')g.fillText('外部认证以合作机构签发回执为准',700,650);g.fillText(c.cert_no,700,755);g.fillText('云培训学院 · '+date(c.issued_at).split(' ')[0],700,820);canvas.toBlob(blob=>saveBlob(blob,c.cert_no+'.png'),'image/png')}
+async function download(id,format){
+  if(format==='pdf'){
+    const r=await fetch(`/training-exam/api/my/certs/${id}/download`,{headers:{Authorization:state.token,'tenant-id':String(state.tenant)}});
+    if(!r.ok)throw new Error('证书下载失败');
+    saveBlob(await r.blob(),'certificate.pdf');
+    return;
+  }
+  const c=await api(`/my/certs/${id}`);
+  const t=c.tpl||{};
+  const canvas=document.createElement('canvas');
+  canvas.width=1400;canvas.height=950;
+  const g=canvas.getContext('2d');
+  g.fillStyle='#fffdf5';g.fillRect(0,0,1400,950);
+  g.strokeStyle='#19364e';g.lineWidth=9;g.strokeRect(35,35,1330,880);
+  g.lineWidth=2;g.strokeRect(53,53,1294,844);
+  g.fillStyle='#19364e';g.textAlign='center';
+  g.font='bold 64px Microsoft YaHei';g.fillText(t.title||'考试合格证书',700,210);
+  g.font='32px Microsoft YaHei';
+  const lines=c.title.match(/.{1,30}/g)||[];
+  lines.forEach((l,i)=>g.fillText(l,700,305+i*44));
+  g.font='28px Microsoft YaHei';
+  const bodyLines=(t.body||`兹证明 ${c.learner} 已通过考核，成绩 ${c.score} 分。`).split('\n');
+  let y=480;
+  bodyLines.forEach(para=>{(para.match(/.{1,40}/g)||['']).forEach(seg=>{g.fillText(seg,700,y);y+=42})});
+  g.font='25px Microsoft YaHei';
+  g.fillText(certTypes[c.cert_type],700,600);
+  if(c.cert_type==='joint')g.fillText('外部认证以合作机构签发回执为准',700,650);
+  g.fillText(c.cert_no,700,755);
+  g.fillText((t.org||'云培训学院')+' · '+date(c.issued_at).split(' ')[0],700,820);
+  canvas.toBlob(blob=>saveBlob(blob,c.cert_no+'.png'),'image/png');
+}
 function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-const actions={...editorActions,navigate:load,reload:()=>load(),start,submit:()=>submit(false),result,'cert-pdf':id=>download(id,'pdf'),'cert-png':id=>download(id,'png'),'cert-preview':async id=>{const c=await api(`/my/certs/${id}`);modal('证书预览',`<div class="certificate"><h2>考试合格证书</h2><h3>${esc(c.title)}</h3><p>兹证明 ${esc(c.learner)} 已通过考核，成绩 ${c.score} 分。</p><p>${certTypes[c.cert_type]}</p><small>${esc(c.cert_no)}<br>${date(c.issued_at)}</small>${c.cert_type==='joint'?'<p class="meta">外部认证以合作机构发证回执为准。</p>':''}</div>`)},mastered:async id=>{await post(`/my/wrong-questions/${id}/mastered`);await load()}};
+const actions={
+  ...editorActions,
+  navigate:load,
+  reload:()=>load(),
+  start,
+  submit:()=>submit(false),
+  result,
+  'cert-pdf':id=>download(id,'pdf'),
+  'cert-png':id=>download(id,'png'),
+  'cert-render':async id=>{
+    // 企业 HTML 模板渲染：弹窗内嵌 iframe（新窗口会被浏览器弹窗拦截策略阻止）
+    const r=await fetch(`/training-exam/api/my/certs/${id}/render`,{headers:{Authorization:state.token,'tenant-id':String(state.tenant)}});
+    if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||'渲染失败');
+    const html=await r.text();
+    const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+    modal('证书预览',`<iframe src="${url}" style="width:100%;height:72vh;border:1px solid #e5e0d0;border-radius:6px;background:#2b2f36"></iframe><p class="meta">如需存档，请点击列表中的「PDF」按钮下载正式文件。</p>`);
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+  },
+  mastered:async id=>{await post(`/my/wrong-questions/${id}/mastered`);await load()},
+};
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-action]');if(!b)return;const fn=actions[b.dataset.action];if(!fn)return;b.disabled=true;try{await fn(b.dataset.id)}catch(e){toast(e.message)}finally{b.disabled=false}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.attempt?.anti_switch)post(`/my/exams/attempts/${state.attempt.attempt_id}/switch`).catch(()=>{})});
 window.addEventListener('beforeunload',e=>{if(state.attempt){e.preventDefault();e.returnValue='考试进行中，请先交卷'}});

@@ -126,3 +126,20 @@ export const withdrawTask = async (taskId: string) => {
     params: { taskId },
   });
 };
+
+/**
+ * ERP 审批页「认领任务」。
+ *
+ * 说明（2026-09-20 合并远程 master 时补）：
+ * 远程 master 的 views/erp/approval/index.vue 引用了本导出，但 api 文件里从未实现，
+ * 后端 BpmTaskController 也没有提供任何 claim / 认领接口，导致整个前端构建报
+ * `MISSING_EXPORT: "claimErpApprovalTask" is not exported by src/api/bpm/task/index.ts` 而失败。
+ * 该导出在 origin 的所有分支（含 ERP 分支）里同样不存在，属远程自身的构建缺陷。
+ *
+ * 这里按后端实际能力实现：yudao 的 BPM 待办任务没有「先认领再办理」这一步，
+ * 待办列表拿到的任务直接可审批；ERP 审批页在该调用之后也是直接打开流程详情页办理，
+ * 因此这里不发起任何无对应后端的请求，仅保留调用点与返回结构。
+ */
+export async function claimErpApprovalTask(taskId: string | number) {
+  return Promise.resolve({ taskId });
+}

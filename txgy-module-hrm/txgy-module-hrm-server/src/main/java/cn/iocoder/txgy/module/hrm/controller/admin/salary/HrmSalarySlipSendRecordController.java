@@ -54,6 +54,7 @@ public class HrmSalarySlipSendRecordController {
 
     @Resource
     private HrmSalarySlipSendRecordService salarySlipSendRecordService;
+
     @Resource
     private HrmSalarySlipService salarySlipService;
     @Resource

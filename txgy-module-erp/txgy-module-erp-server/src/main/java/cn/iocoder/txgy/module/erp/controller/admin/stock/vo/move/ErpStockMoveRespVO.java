@@ -43,6 +43,19 @@ public class ErpStockMoveRespVO {
     @DictFormat(AUDIT_STATUS)
     private Integer status;
 
+    @Schema(description = "调出仓库负责人确认账号")
+    private Long sourceConfirmedBy;
+    @Schema(description = "调出仓库负责人确认人名称")
+    private String sourceConfirmedByName;
+    @Schema(description = "调出仓库负责人确认时间")
+    private LocalDateTime sourceConfirmedAt;
+    @Schema(description = "调入仓库负责人确认账号")
+    private Long targetConfirmedBy;
+    @Schema(description = "调入仓库负责人确认人名称")
+    private String targetConfirmedByName;
+    @Schema(description = "调入仓库负责人确认时间；完成后库存才实际变更")
+    private LocalDateTime targetConfirmedAt;
+
     @Schema(description = "备注", example = "随便")
     @ExcelProperty("备注")
     private String remark;

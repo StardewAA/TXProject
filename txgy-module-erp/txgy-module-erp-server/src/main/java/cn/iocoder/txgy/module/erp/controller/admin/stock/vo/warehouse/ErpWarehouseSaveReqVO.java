@@ -36,6 +36,9 @@ public class ErpWarehouseSaveReqVO {
     @Schema(description = "负责人", example = "芋头")
     private String principal;
 
+    @Schema(description = "负责人用户编号；调拨确认和库存变动通知将发送给该账号", example = "1")
+    private Long principalUserId;
+
     @Schema(description = "仓储费，单位：元", example = "13973")
     private BigDecimal warehousePrice;
 

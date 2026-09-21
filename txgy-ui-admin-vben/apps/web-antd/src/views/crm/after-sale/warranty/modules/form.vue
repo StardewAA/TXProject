@@ -44,15 +44,34 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    const data =
-      (await formApi.getValues()) as CrmAfterSaleWarrantyApi.Warranty;
+    const data = (await formApi.getValues()) as CrmAfterSaleWarrantyApi.Warranty & {
+      /** 纯界面预览字段（见 data.ts），不提交给后端 */
+      statusPreview?: string;
+    };
+    delete data.statusPreview;
     try {
-      await (formData.value?.id
-        ? updateAfterSaleWarranty(data)
-        : createAfterSaleWarranty(data));
+      let result: CrmAfterSaleWarrantyApi.UpdateResp | undefined;
+      if (formData.value?.id) {
+        // 编辑：后端会按最新「到期日」重算质保状态，并返回变更详情
+        result = await updateAfterSaleWarranty(data);
+      } else {
+        await createAfterSaleWarranty(data);
+      }
       await modalApi.close();
       emit('success');
-      message.success($t('ui.actionMessage.operationSuccess'));
+      // 如实反馈状态是否被自动更新，避免用户觉得「状态在界面上悄悄变了」
+      if (result?.statusChanged) {
+        message.success(result.message ?? $t('ui.actionMessage.operationSuccess'));
+        if (result.needManualConfirm) {
+          message.warning(
+            '质保状态已从「已到期终止」恢复为有效状态，但此前因到期被停用的回访计划不会自动恢复，请到「回访计划」中确认是否需要重新启用',
+          );
+        }
+      } else {
+        message.success(
+          result?.message ?? $t('ui.actionMessage.operationSuccess'),
+        );
+      }
     } finally {
       modalApi.unlock();
     }

@@ -24,6 +24,7 @@ if ($rootPw) { $env:MYSQL_ROOT_PASSWORD = $rootPw }
 $localDir  = $PSScriptRoot
 $deployDir = Split-Path -Parent $localDir
 $rootDir   = Split-Path -Parent $deployDir
+$sqlDir    = Join-Path $rootDir 'sql'
 
 $initDir = Join-Path $deployDir 'mysql\init'
 $fullDump = Get-ChildItem -LiteralPath $initDir -Filter '*all-databases*.sql.sql' -ErrorAction SilentlyContinue |
@@ -127,4 +128,25 @@ if (Test-Path -LiteralPath $resourceEnhanceSql) {
 
 # verify
 $count = docker exec $MysqlContainer mysql -uroot -p"$env:MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$Database'" 2>$null
+
+# Apply project-owned idempotent migrations after the base database is restored.
+# These files are intentionally kept outside the upstream SQL dump so feature
+# menus and permissions are not lost when the local database is recreated.
+$projectMigrationNames = @(
+    'mall-migrated-wms-shared-warehouse-2026-09-11.sql',
+    'mall-migrated-erp-approval-2026-09-20.sql'
+)
+$projectMigrations = foreach ($migrationName in $projectMigrationNames) {
+    Get-ChildItem -LiteralPath $sqlDir -Recurse -File -Filter $migrationName |
+        Select-Object -First 1 |
+        ForEach-Object FullName
+}
+foreach ($migration in $projectMigrations) {
+    if (Test-Path -LiteralPath $migration) {
+        Write-Host "Applying project migration: $([IO.Path]::GetFileName($migration)) ..." -ForegroundColor Cyan
+        Invoke-Mysql -SqlFile $migration
+        Write-Host "[OK]   $([IO.Path]::GetFileName($migration))" -ForegroundColor Green
+    }
+}
+
 Write-Host "Tables in ${Database}: $count" -ForegroundColor Green

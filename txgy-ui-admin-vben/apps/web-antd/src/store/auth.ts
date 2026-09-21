@@ -43,6 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
   ) {
     // 异步处理用户登录操作并获取 accessToken
     let userInfo: null | UserInfo = null;
+    // 个人登录实际认证成功的租户：null 表示走了个人注册保留租户 0
+    let personalEffectiveTenantId: null | number = null;
     try {
       let loginResult: AuthApi.LoginResult;
       loginLoading.value = true;
@@ -51,7 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
       accessStore.clearVisitTenantId();
       accessStore.setIsAccessChecked(false);
       userStore.$reset();
-      if (type === 'register' || params.loginType === 'personal') {
+      if (type === 'register') {
         accessStore.setTenantId(0);
       } else if (type === 'username' && params.tenantId != null) {
         accessStore.setTenantId(Number(params.tenantId));
@@ -70,21 +72,42 @@ export const useAuthStore = defineStore('auth', () => {
           break;
         }
         default: {
-          loginResult = await loginApi(params);
+          const isPersonalLogin =
+            type === 'username' && params.loginType === 'personal';
+          if (isPersonalLogin && params.tenantId == null) {
+            // 个人登录兼容两代账号体系：旧个人账号在默认企业租户下（历史行为），
+            // 新个人注册账号落在保留租户 0。先按默认租户认证，失败静默回退租户 0 重试。
+            const defaultTenantId = Number(
+              import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1,
+            );
+            accessStore.setTenantId(defaultTenantId);
+            personalEffectiveTenantId = defaultTenantId;
+          }
+          try {
+            loginResult = await loginApi(params);
+          } catch (error) {
+            if (isPersonalLogin) {
+              accessStore.setTenantId(0);
+              personalEffectiveTenantId = null;
+              loginResult = await loginApi({ ...params, silentError: true });
+            } else {
+              throw error;
+            }
+          }
         }
       }
       const { accessToken, refreshToken } = loginResult;
 
       // 如果成功获取到 accessToken
       if (accessToken) {
-        // 个人登录和个人注册固定属于后端保留的 tenant_id=0。
-        // 认证页可能仍保留上一位企业用户的租户选择；在请求权限信息前
-        // 先覆盖该状态，避免新个人账号带着旧 tenant-id 被后端判为越权。
+        // 个人登录和个人注册归属个人租户体系：新个人注册账号固定在后端保留的 tenant_id=0；
+        // 个人登录则按实际认证成功的租户回填（旧个人账号在默认租户下，新账号在租户 0），
+        // 避免请求权限信息时 tenant-id 与账号实际租户错配被后端判为越权。
         const isPersonalAuthentication =
           (type === 'register' && params.registerType === 'personal') ||
           (type === 'username' && params.loginType === 'personal');
         if (isPersonalAuthentication) {
-          accessStore.setTenantId(0);
+          accessStore.setTenantId(personalEffectiveTenantId ?? 0);
           accessStore.clearVisitTenantId();
         } else {
           // 企业登录：把「访问租户」初始化为本次登录租户，
@@ -98,6 +121,15 @@ export const useAuthStore = defineStore('auth', () => {
           ) {
             accessStore.setVisitTenantId(loginTenantId);
           }
+        }
+        // 企业登录：以后端返回的「账号实际所属租户」为准，自动纠正登录时选错的租户，
+        // 避免出现"选了租户 A、账号却属于租户 B"导致的权限 403
+        if (
+          !isPersonalAuthentication &&
+          loginResult.tenantId !== null &&
+          loginResult.tenantId !== undefined
+        ) {
+          accessStore.setTenantId(Number(loginResult.tenantId));
         }
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
@@ -114,6 +146,17 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
+          // 会话过期后重新登录（弹窗模式）：统一回到默认页面，
+          // 而不是停留在令牌失效前的当前页面。
+          const isPersonal =
+            params.loginType === 'personal' ||
+            (type === 'register' && params.registerType === 'personal');
+          const expiredHomePath = isPersonal
+            ? '/portal/home'
+            : userInfo.homePath && !userInfo.homePath.startsWith('/portal/')
+              ? userInfo.homePath
+              : preferences.app.defaultHomePath;
+          await router.replace(expiredHomePath);
         } else {
           // oxlint-disable-next-line no-unused-expressions
           onSuccess

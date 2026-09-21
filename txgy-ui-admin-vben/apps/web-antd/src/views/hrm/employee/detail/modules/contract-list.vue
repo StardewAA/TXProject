@@ -8,10 +8,11 @@ import { confirm } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getFileNameFromUrl, openWindow } from '@vben/utils';
 
-import { Button, message, Table } from 'ant-design-vue';
+import { Button, message, Table, Tag } from 'ant-design-vue';
 
 import {
   deleteEmployeeContract,
+  exportEmployeeContract,
   getEmployeeContractList,
 } from '#/api/hrm/employee/contract';
 import { DictTag } from '#/components/dict-tag';
@@ -47,6 +48,16 @@ async function handleDelete(id?: number) {
     message.success($t('ui.actionMessage.deleteSuccess'));
     await getList();
   } catch {}
+}
+
+async function handleExport(id?: number) {
+  if (!id) return;
+  try {
+    await exportEmployeeContract(id);
+    message.success('合同文件已生成，请查看浏览器下载');
+  } catch {
+    message.error('合同导出失败，请先检查是否已配置用工主体信息与合同模板');
+  }
 }
 
 onMounted(getList);
@@ -98,6 +109,11 @@ onMounted(getList);
           key: 'status',
           width: 110,
         },
+        {
+          title: '签署状态',
+          key: 'signStatus',
+          width: 100,
+        },
         { title: '签约公司', dataIndex: 'signCompany', width: 150 },
         {
           title: '签订日期',
@@ -122,6 +138,21 @@ onMounted(getList);
         <template v-else-if="column.key === 'status'">
           {{ formatHrmEmployeeContractStatus(record.status) }}
         </template>
+        <template v-else-if="column.key === 'signStatus'">
+          <Tag
+            v-if="record.signStatus !== null && record.signStatus !== undefined"
+            :color="
+              record.signStatus === 1
+                ? 'success'
+                : record.signStatus === 0
+                  ? 'processing'
+                  : 'default'
+            "
+          >
+            {{ record.signStatusName || '-' }}
+          </Tag>
+          <span v-else>-</span>
+        </template>
         <template v-else-if="column.key === 'expireRemind'">
           <DictTag
             v-if="record.expireRemind != null"
@@ -145,6 +176,13 @@ onMounted(getList);
           <span v-else>-</span>
         </template>
         <template v-else-if="column.key === 'action'">
+          <Button
+            v-if="hasAccessByCodes(['hrm:employee:query'])"
+            type="link"
+            @click="handleExport(record.id)"
+          >
+            导出合同
+          </Button>
           <Button
             v-if="hasAccessByCodes(['hrm:employee:update'])"
             type="link"
