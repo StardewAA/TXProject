@@ -114,7 +114,7 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
     private String createCategory(JSONObject fields) {
         String name = trim(fields.getStr("name"));
         if (StrUtil.isBlank(name)) {
-            return "新建商品分类需要名称，请告诉我分类叫什么，例如「新建分类 休闲食品」。";
+            return "新建商品分类需要名称，请告诉我分类叫什么，例如「新建分类 保温材料」。";
         }
         // 支持子分类：有 parentName 时挂到父分类下，并做同级查重
         String parentName = trim(fields.getStr("parentName"));
@@ -154,7 +154,7 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
     private String createBrand(JSONObject fields) {
         String name = trim(fields.getStr("name"));
         if (StrUtil.isBlank(name)) {
-            return "新建品牌需要名称，请告诉我品牌叫什么，例如「新增品牌 双汇」。";
+            return "新建品牌需要名称，请告诉我品牌叫什么，例如「新增品牌 华美」。";
         }
         WmsItemBrandDO exist = itemBrandMapper.selectByName(name);
         if (exist != null) {
@@ -172,7 +172,7 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
     private String createMerchant(JSONObject fields) {
         String name = trim(fields.getStr("name"));
         if (StrUtil.isBlank(name)) {
-            return "新建往来企业需要名称，请告诉我企业叫什么，例如「新增供应商 双汇食品有限公司」。";
+            return "新建往来企业需要名称，请告诉我企业叫什么，例如「新增供应商 河北华美保温材料有限公司」。";
         }
         String kind = trim(fields.getStr("kind"));
         Integer type;
@@ -247,6 +247,16 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
         if (StrUtil.isBlank(name)) {
             return "新建商品需要名称，请告诉我商品叫什么。";
         }
+        // 最终防线：拒绝把「说明性文字」落成商品档案。
+        // 触发场景：缺品建档反问后用户回复「分类=保温材料」，系统把该回复拼回原文重新识别，
+        // 大模型会把「（用户补充：补充建档信息：分类=保温材料）」整串当成商品名再建一次，
+        // 从而生成「补充建档信息：分类=保温材料」这种垃圾档案。
+        if (looksLikeInstructionText(name)) {
+            log.warn("[ai-create] 拒绝创建疑似说明性文字的商品：{}", name);
+            return "没识别到有效的商品名称（「" + name + "」看起来是补充说明而不是商品名）。"
+                    + "请直接告诉我商品名，例如「新建商品 岩棉板」；若要同时指定分类/单位，"
+                    + "请写成「新建商品 岩棉板 分类=保温材料 单位=立方米」。";
+        }
         WmsItemDO exist = itemMapper.selectByName(name);
         if (exist != null) {
             return "商品「" + name + "」在【商品管理】中已存在，无需重复新建。若需要我可以帮你查它的库存或直接开入库单。";
@@ -258,12 +268,12 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
             List<String> roots = listRootCategoryNames();
             if (roots.isEmpty()) {
                 return "新建商品「" + name + "」还需要指定「商品分类」——系统还没有任何分类，请先回复分类名"
-                        + "（例如：分类=休闲食品），我会一并创建分类和商品。";
+                        + "（例如：分类=保温材料），我会一并创建分类和商品。";
             }
             return "新建商品「" + name + "」还需要 2 项信息：\n"
                     + "1) 商品分类（现有分类：" + String.join("、", roots) + "，或直接给我一个新分类名，我会自动创建）\n"
                     + "2) 单位（如 箱 / 袋 / kg / 件）\n"
-                    + "请补充，例如：分类=休闲食品，单位=箱。";
+                    + "请补充，例如：分类=保温材料，单位=箱。";
         } else {
             WmsItemCategoryDO cat = findCategoryByName(categoryName);
             if (cat == null) {
@@ -344,6 +354,45 @@ public class WmsAiMasterDataCreateServiceImpl implements WmsAiMasterDataCreateSe
     }
 
     // ==================== 工具 ====================
+
+    /**
+     * 判断候选名是否其实是「补充说明文字」而不是商品名。
+     *
+     * <p>典型脏数据：「补充建档信息：分类=保温材料」「（用户补充：…）」——
+     * 商品名里不会出现等号形式的字段表达式或这些标记词。
+     */
+    private boolean looksLikeInstructionText(String name) {
+        if (StrUtil.isBlank(name)) {
+            return true;
+        }
+        String s = name.trim();
+        // 1. 元信息标记词
+        if (s.contains("用户补充") || s.contains("补充建档信息") || s.contains("补充信息")
+                || s.contains("自动建档") || s.contains("清单里") || s.contains("建档前")
+                || s.contains("待新建") || s.contains("未建档")) {
+            return true;
+        }
+        // 2. 去掉「补充/说明/备注」前缀后，若以「字段=值」开头，说明整串是字段说明
+        String core = s.replaceAll("^(补充|说明|备注|注明|追加)[^=：:]{0,8}[：:]?", "");
+        String[] keys = {"分类", "单位", "品牌", "价格", "单价", "重量", "规格", "条码", "类目"};
+        for (String k : keys) {
+            if (core.startsWith(k + "=") || core.startsWith(k + "：") || core.startsWith(k + ":")) {
+                return true;
+            }
+        }
+        // 3. 命中 2 个以上「字段=值」，基本是参数说明
+        int kv = 0;
+        for (String k : keys) {
+            if (core.contains(k + "=") || core.contains(k + "：")) {
+                kv++;
+            }
+        }
+        if (kv >= 2) {
+            return true;
+        }
+        // 4. 长度异常 / 以句号结尾 / 含换行 —— 都是整句说明而非名称
+        return s.length() > 30 || s.endsWith("。") || s.contains("\n");
+    }
 
     private String trim(String s) {
         return StrUtil.isBlank(s) ? "" : s.trim();

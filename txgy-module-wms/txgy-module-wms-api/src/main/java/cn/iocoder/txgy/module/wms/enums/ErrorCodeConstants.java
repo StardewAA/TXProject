@@ -114,6 +114,9 @@ public interface ErrorCodeConstants {
     ErrorCode INVENTORY_QUANTITY_NOT_ENOUGH = new ErrorCode(1_060_300_000,
             "库存不足，商品：{}，商品规格：{}，仓库：{}，当前库存：{}，变更数量：{}");
 
+    // ========== WMS AI 客服 1-060-400-000 ==========
+    ErrorCode AI_MODEL_CONFIG_INVALID = new ErrorCode(1_060_400_000, "{}");
+
     // ========== ERP/WMS 跨模块集成 1-060-900-000 ==========
     ErrorCode INTEGRATION_REQUEST_DUPLICATE_CONFLICT = new ErrorCode(1_060_900_000,
             "相同 requestId 的请求内容不一致");

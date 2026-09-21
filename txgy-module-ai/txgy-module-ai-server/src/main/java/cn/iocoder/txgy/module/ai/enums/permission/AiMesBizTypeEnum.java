@@ -88,6 +88,48 @@ public enum AiMesBizTypeEnum {
             new String[]{"客户", "供应商", "厂商", "往来单位"},
             // 客户与供应商信息本身即敏感，需要单独授权
             new String[]{"联系方式", "电话", "手机", "地址", "联系人"}),
+
+    // ==================== WMS 仓储域（txgy-module-wms）====================
+    // 说明：本枚举是 AI 权限体系的唯一数据源（意图识别 / 工具过滤 / 控制台清单），
+    // WMS 业务域同样在此登记，即可被权限配置页面识别并授权。
+    //
+    // 【已知局限：与 MES 的关键词天然冲突，无法靠"精选关键词"规避】
+    // extractBizTypes 用子串匹配，AiPermissionGuard 的策略是「命中的业务域必须全部有权限，
+    // 任一未授权即整体拒绝」。MES 的 WM_STOCK / MD_ITEM / MD_PARTNER 已占用
+    // 「库存、在库、仓库、入库、出库、盘点、现存量、可用量、客户、供应商、联系人、地址」
+    // 等基础词，任何中文 WMS 关键词都会连带命中 MES 域。
+    //
+    // 因此配套要求（部署时必须满足）：
+    //   给使用 WMS AI 的角色同时授予 MES 的 WM_STOCK / MD_ITEM / MD_PARTNER 查询权限，
+    //   否则含上述基础词的提问会被 Guard 以「越权访问 MES 业务域」拒绝。
+
+    WMS_STOCK("WMS_STOCK", "WMS 库存余额", "wms_stock_query",
+            new String[]{"wms库存", "仓库库存", "库存余额", "在库数量", "各仓库存",
+                    "哪个仓有", "仓库还有多少", "仓库库存分布"},
+            new String[]{"wms库存金额", "wms存货成本"}),
+
+    WMS_STOCK_ALERT("WMS_STOCK_ALERT", "WMS 库存预警", "wms_stock_alert_query",
+            new String[]{"wms库存预警", "wms低库存", "低库存", "wms缺货预警", "wms补货提醒"},
+            new String[]{}),
+
+    WMS_ITEM("WMS_ITEM", "WMS 商品档案", "wms_item_query",
+            new String[]{"wms商品", "商品档案", "商品资料", "商品明细", "有没有这个商品",
+                    "商品规格", "商品条码", "商品分类", "商品品牌"},
+            new String[]{"wms采购价", "wms成本价"}),
+
+    WMS_WAREHOUSE("WMS_WAREHOUSE", "WMS 仓库信息", "wms_warehouse_query",
+            new String[]{"wms仓库", "仓库列表", "有哪些仓库", "仓库信息", "仓库负责",
+                    "仓库地址", "仓库所属组织"},
+            new String[]{}),
+
+    WMS_MERCHANT("WMS_MERCHANT", "WMS 往来企业", "wms_merchant_query",
+            new String[]{"wms往来", "wms企业", "往来企业", "企业档案", "供货单位", "收货单位"},
+            new String[]{"wms联系人", "wms联系电话", "wms税号"}),
+
+    WMS_ORDER("WMS_ORDER", "WMS 出入库单据", "wms_order_query",
+            new String[]{"wms单据", "wms入库单", "wms出库单", "单据查询", "出入库记录",
+                    "单据状态", "wms审批状态", "待审批单据"},
+            new String[]{"wms单据金额", "wms单据总价"}),
     ;
 
     /**
