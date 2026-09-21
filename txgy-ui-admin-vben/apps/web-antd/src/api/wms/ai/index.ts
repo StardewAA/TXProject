@@ -160,9 +160,9 @@ export namespace WmsAiApi {
  * request-client 默认超时是 30 秒，但 AI 识别需要调用大模型：
  * 简单问候约 8 秒，带数据查询约 50 秒，识别失败兜底时可能到 140 秒以上。
  * 后端 WmsAiServiceImpl/WmsAiChatServiceImpl 的 HttpClient 超时是 240 秒，
- * 这里保持一致，否则前端会先超时报「识别出错了：timeout of 30000ms exceeded」。
+ * 前端取 280 秒（略大于后端，避免请求还在处理就被前端切断），否则前端会先超时报「识别出错了：timeout of 30000ms exceeded」。
  */
-const AI_TIMEOUT = 240_000;
+const AI_TIMEOUT = 280_000;
 
 /** 语音/文字 + 图片识别 */
 export function recognize(data: WmsAiApi.RecognizeReqVO) {

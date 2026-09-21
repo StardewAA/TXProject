@@ -36,7 +36,6 @@ import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
 import cn.iocoder.txgy.module.crm.service.receivable.CrmReceivableService;
-import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mzt.logapi.context.LogRecordContext;
@@ -510,14 +509,12 @@ public class CrmContractServiceImpl implements CrmContractService {
     @LogRecord(type = CRM_CONTRACT_TYPE, subType = CRM_CONTRACT_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_CONTRACT_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_CONTRACT, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateContractFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
-                                       String contactLastContent) {
+    public void updateContractFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
         // 1. 校验存在
         CrmContractDO contract = validateContractExists(id);
 
-        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
-        contractMapper.updateById(new CrmContractDO().setId(id)
-                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(contract.getContactLastTime(), contactTime)));
+        // 2. 更新联系人的跟进信息
+        contractMapper.updateById(new CrmContractDO().setId(id).setContactLastTime(LocalDateTime.now()));
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("contractName", contract.getName());

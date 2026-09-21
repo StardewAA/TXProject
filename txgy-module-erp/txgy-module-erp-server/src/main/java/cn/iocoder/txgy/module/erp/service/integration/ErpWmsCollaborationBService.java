@@ -37,6 +37,14 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderResumeReqDTO;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.COLLABORATION_B_ALREADY_CONFIRMED;
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.COLLABORATION_B_CONFIRM_ITEM_INVALID;
@@ -45,6 +53,7 @@ import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.COLLABORATION_
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.COLLABORATION_B_TYPE_INVALID;
 import static cn.iocoder.txgy.module.erp.enums.ErrorCodeConstants.WMS_CALLBACK_STATE_STALE;
 
+@Slf4j
 @Service
 public class ErpWmsCollaborationBService {
 
@@ -79,6 +88,8 @@ public class ErpWmsCollaborationBService {
     private ErpPurchaseOrderService purchaseOrderService;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private ErpMesIntegrationGateway mesGateway;
 
     /**
      * 技术接收供应链协同单：校验幂等、事件版本、时间窗口与物料映射，落库后等待业务确认。
@@ -137,6 +148,51 @@ public class ErpWmsCollaborationBService {
         recordService.createInboundSuccess(request.getRequestId(), "COLLABORATION_B",
                 request.getCollaborationNo(), request.getEventVersion(), request);
         return buildResponse(request, collaboration);
+    }
+
+    /**
+     * 缺料采购入库完成后恢复对应的生产工单（设计 7.2）。
+     * 反查协作单 B（按采购订单号）取得来源生产工单号，事务提交后异步通知 MES 重新领料。
+     * 幂等：requestId = REC-{协作单号}，MES 侧按幂等键去重。
+     */
+    public void recoverWorkOrderAfterCommit(Long purchaseOrderId) {
+        if (purchaseOrderId == null) return;
+        List<ErpWmsCollaborationBDO> list = collaborationMapper.selectList(new LambdaQueryWrapperX<ErpWmsCollaborationBDO>()
+                .eq(ErpWmsCollaborationBDO::getPurchaseOrderId, purchaseOrderId)
+                .eq(ErpWmsCollaborationBDO::getCollaborationType, DEFAULT_TYPE));
+        if (list.isEmpty()) return;
+        ErpWmsCollaborationBDO cb = list.get(0);
+        if (!STATUS_ACCEPTED.equals(cb.getBusinessStatus())) return;
+        String workOrderCode = cb.getSourceProductionOrderNo();
+        if (workOrderCode == null || workOrderCode.isBlank()) return;
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        String requestId = "REC-" + cb.getCollaborationNo();
+        Long version = cb.getEventVersion() == null ? 1L : cb.getEventVersion() + 1;
+        Runnable runner = () -> TenantUtils.execute(tenantId, () -> {
+            try {
+                MesWorkOrderResumeReqDTO resumeReq = new MesWorkOrderResumeReqDTO();
+                resumeReq.setRequestId(requestId);
+                resumeReq.setWorkOrderCode(workOrderCode);
+                resumeReq.setTenantId(tenantId);
+                resumeReq.setSourceModule("ERP");
+                resumeReq.setOccurredAt(LocalDateTime.now());
+                resumeReq.setDataVersion(version);
+                resumeReq.setRemark("缺料采购入库完成，恢复生产工单领料");
+                mesGateway.resumeWorkOrder(resumeReq);
+            } catch (Exception ex) {
+                log.warn("[recoverWorkOrderAfterCommit][协作单B({}) 恢复工单({})失败]", cb.getCollaborationNo(), workOrderCode, ex);
+            }
+        });
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runner.run();
+                }
+            });
+        } else {
+            runner.run();
+        }
     }
 
     /**

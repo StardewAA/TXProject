@@ -6,11 +6,13 @@ import cn.iocoder.txgy.module.erp.api.wms.ErpWmsCallbackApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
+import cn.iocoder.txgy.module.trade.api.wms.TradeWmsCallbackApi;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(value = "wmsRpcConfiguration", proxyBeanMethods = false)
 @EnableFeignClients(clients = {AdminUserApi.class, DeptApi.class, PermissionApi.class,
-        BpmProcessInstanceApi.class, ErpWmsCallbackApi.class, AiChatModelApi.class})
+        BpmProcessInstanceApi.class, ErpWmsCallbackApi.class,
+        AiChatModelApi.class, TradeWmsCallbackApi.class})
 public class RpcConfiguration {
 }

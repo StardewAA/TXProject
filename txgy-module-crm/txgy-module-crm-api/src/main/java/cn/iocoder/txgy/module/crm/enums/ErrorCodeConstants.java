@@ -113,7 +113,6 @@ public interface ErrorCodeConstants {
     // ========== 跟进记录 1_020_013_000 ==========
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
-    ErrorCode FOLLOW_UP_RECORD_TIME_FUTURE = new ErrorCode(1_020_013_002, "实际跟进时间不能晚于当前时间");
 
     // ========== 报价 1_020_014_000 ==========
     ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");
@@ -203,6 +202,7 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_TICKET_DELETE_DENIED = new ErrorCode(1_020_019_005, "删除工单失败，原因：工单已处理，不允许删除");
     ErrorCode AFTER_SALE_TICKET_CREATE_FAIL_CUSTOMER_NOT_EXISTS = new ErrorCode(1_020_019_006, "创建工单失败，原因：客户不存在");
     ErrorCode AFTER_SALE_TICKET_UPDATE_FAIL_FINISH = new ErrorCode(1_020_019_007, "更新工单失败，原因：工单已完成或已关闭，不允许编辑");
+    ErrorCode AFTER_SALE_TICKET_FINISH_NEED_RECORD = new ErrorCode(1_020_019_008, "完成工单失败，原因：请先填写工单记录（处理结果）");
 
     // ========== 售后转商机关联 1_020_020_000 ==========
     ErrorCode AFTER_SALE_BUSINESS_REL_NOT_EXISTS = new ErrorCode(1_020_020_000, "售后转商机关联不存在");

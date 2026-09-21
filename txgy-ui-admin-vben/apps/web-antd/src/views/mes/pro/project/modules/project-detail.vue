@@ -15,12 +15,12 @@ import { DICT_TYPE } from '@vben/constants';
 
 import {
   Button,
+  DatePicker,
   Descriptions,
   Form,
   FormItem,
   Input,
   message,
-  Modal,
   Progress,
   Select,
   Space,
@@ -68,7 +68,6 @@ defineOptions({ name: 'MesProProjectDetail' });
 
 const emit = defineEmits<{ success: [] }>();
 
-const open = ref(false); // 弹窗是否打开
 const projectId = ref<number>(); // 项目编号
 const project = ref<MesProProjectApi.Project>(); // 项目信息
 const statistics = ref<MesProProjectApi.ProjectStatistics>(); // 进度统计
@@ -242,38 +241,34 @@ async function loadMembers() {
 }
 
 /** 添加成员弹窗 */
-const memberModalOpen = ref(false);
 const memberForm = ref<MesProProjectMemberApi.ProjectMember>({
   userName: '',
   role: undefined,
   remark: '',
 });
 
-function openMemberModal() {
-  memberForm.value = { userName: '', role: undefined, remark: '' };
-  memberModalOpen.value = true;
-}
-
-function closeMemberModal() {
-  memberModalOpen.value = false;
-}
-
-/** 提交新增成员 */
-async function submitMember() {
-  if (!memberForm.value.userName) {
-    message.warning('请输入成员姓名');
-    return;
-  }
-  await createProjectMember({
-    projectId: projectId.value,
-    userName: memberForm.value.userName,
-    role: memberForm.value.role,
-    remark: memberForm.value.remark,
-  });
-  message.success('成员已添加');
-  closeMemberModal();
-  await loadMembers();
-}
+const [MemberModal, memberModalApi] = useVbenModal({
+  onOpenChange(isOpen: boolean) {
+    if (isOpen) {
+      memberForm.value = { userName: '', role: undefined, remark: '' };
+    }
+  },
+  async onConfirm() {
+    if (!memberForm.value.userName) {
+      message.warning('请输入成员姓名');
+      return;
+    }
+    await createProjectMember({
+      projectId: projectId.value,
+      userName: memberForm.value.userName,
+      role: memberForm.value.role,
+      remark: memberForm.value.remark,
+    });
+    message.success('成员已添加');
+    await memberModalApi.close();
+    await loadMembers();
+  },
+});
 
 /** 移除成员 */
 async function handleDeleteMember(row: MesProProjectMemberApi.ProjectMember) {
@@ -320,7 +315,6 @@ async function loadMilestones() {
 }
 
 /** 添加里程碑弹窗 */
-const milestoneModalOpen = ref(false);
 const milestoneForm = ref<MesProProjectMilestoneApi.Milestone>({
   name: '',
   planDate: undefined,
@@ -328,37 +322,34 @@ const milestoneForm = ref<MesProProjectMilestoneApi.Milestone>({
   remark: '',
 });
 
-function openMilestoneModal() {
-  milestoneForm.value = {
-    name: '',
-    planDate: undefined,
-    sort: undefined,
-    remark: '',
-  };
-  milestoneModalOpen.value = true;
-}
-
-function closeMilestoneModal() {
-  milestoneModalOpen.value = false;
-}
-
-/** 提交新增里程碑 */
-async function submitMilestone() {
-  if (!milestoneForm.value.name) {
-    message.warning('请输入里程碑名称');
-    return;
-  }
-  await createMilestone({
-    projectId: projectId.value,
-    name: milestoneForm.value.name,
-    planDate: milestoneForm.value.planDate,
-    sort: milestoneForm.value.sort,
-    remark: milestoneForm.value.remark,
-  });
-  message.success('里程碑已添加');
-  closeMilestoneModal();
-  await loadMilestones();
-}
+const [MilestoneModal, milestoneModalApi] = useVbenModal({
+  onOpenChange(isOpen: boolean) {
+    if (isOpen) {
+      milestoneForm.value = {
+        name: '',
+        planDate: undefined,
+        sort: undefined,
+        remark: '',
+      };
+    }
+  },
+  async onConfirm() {
+    if (!milestoneForm.value.name) {
+      message.warning('请输入里程碑名称');
+      return;
+    }
+    await createMilestone({
+      projectId: projectId.value,
+      name: milestoneForm.value.name,
+      planDate: milestoneForm.value.planDate,
+      sort: milestoneForm.value.sort,
+      remark: milestoneForm.value.remark,
+    });
+    message.success('里程碑已添加');
+    await milestoneModalApi.close();
+    await loadMilestones();
+  },
+});
 
 /** 标记里程碑完成 */
 async function handleFinishMilestone(
@@ -476,15 +467,10 @@ async function handleDeleteFile(row: MesProProjectApi.ProjectFile) {
 /** 打开项目详情弹窗 */
 async function openModal(row: MesProProjectApi.Project) {
   projectId.value = row.id;
-  open.value = true;
+  await detailModalApi.open();
   await nextTick();
   await loadData();
   await gridApi.query();
-}
-
-/** 关闭项目详情弹窗 */
-function closeModal() {
-  open.value = false;
 }
 
 /** 刷新弹窗内数据（工单列表 + 统计） */
@@ -525,17 +511,29 @@ function handleWorkOrderSuccess() {
   reloadAll();
 }
 
+/** 主弹窗：项目详情 */
+const [DetailModal, detailModalApi] = useVbenModal({
+  destroyOnClose: true,
+  onOpenChange(isOpen: boolean) {
+    if (!isOpen) {
+      // 关闭时清理数据
+      projectId.value = undefined;
+      project.value = undefined;
+      statistics.value = undefined;
+      statisticsDetail.value = undefined;
+      ganttTasks.value = [];
+      members.value = [];
+      milestones.value = [];
+      files.value = [];
+    }
+  },
+});
+
 defineExpose({ open: openModal });
 </script>
 
 <template>
-  <Modal
-    v-model:open="open"
-    title="项目管理-详情"
-    width="80%"
-    :footer="null"
-    @cancel="closeModal"
-  >
+  <DetailModal title="项目管理-详情" class="w-[80%]" :footer="false">
     <template v-if="project">
       <!-- 项目基本信息 -->
       <Descriptions :column="4" bordered size="small" class="mb-3">
@@ -677,7 +675,7 @@ defineExpose({ open: openModal });
             v-if="memberEditable"
             size="small"
             type="primary"
-            @click="openMemberModal"
+            @click="memberModalApi.open()"
           >
             添加成员
           </Button>
@@ -715,7 +713,7 @@ defineExpose({ open: openModal });
             v-if="milestoneEditable"
             size="small"
             type="primary"
-            @click="openMilestoneModal"
+            @click="milestoneModalApi.open()"
           >
             添加里程碑
           </Button>
@@ -845,7 +843,7 @@ defineExpose({ open: openModal });
         />
       </template>
     </Grid>
-  </Modal>
+  </DetailModal>
 
   <!-- 挂接已有工单弹窗 -->
   <BindWorkOrder ref="bindWorkOrderRef" @success="handleWorkOrderSuccess" />
@@ -853,12 +851,7 @@ defineExpose({ open: openModal });
   <OrderFormModal @success="handleWorkOrderSuccess" />
 
   <!-- 添加项目成员弹窗 -->
-  <Modal
-    v-model:open="memberModalOpen"
-    title="添加项目成员"
-    @cancel="closeMemberModal"
-    @ok="submitMember"
-  >
+  <MemberModal title="添加项目成员" class="w-[500px]">
     <Form :label-col="{ span: 5 }" :wrapper-col="{ span: 16 }">
       <FormItem label="成员姓名">
         <Input
@@ -881,15 +874,10 @@ defineExpose({ open: openModal });
         />
       </FormItem>
     </Form>
-  </Modal>
+  </MemberModal>
 
   <!-- 添加项目里程碑弹窗 -->
-  <Modal
-    v-model:open="milestoneModalOpen"
-    title="添加项目里程碑"
-    @cancel="closeMilestoneModal"
-    @ok="submitMilestone"
-  >
+  <MilestoneModal title="添加项目里程碑" class="w-[500px]">
     <Form :label-col="{ span: 5 }" :wrapper-col="{ span: 16 }">
       <FormItem label="里程碑名称">
         <Input
@@ -898,9 +886,13 @@ defineExpose({ open: openModal });
         />
       </FormItem>
       <FormItem label="计划完成日期">
-        <Input
+        <DatePicker
           v-model:value="milestoneForm.planDate"
-          placeholder="如 2026-10-01 00:00:00"
+          class="w-full"
+          showTime
+          format="YYYY-MM-DD HH:mm:ss"
+          valueFormat="YYYY-MM-DD HH:mm:ss"
+          placeholder="请选择计划完成日期"
         />
       </FormItem>
       <FormItem label="排序">
@@ -916,5 +908,5 @@ defineExpose({ open: openModal });
         />
       </FormItem>
     </Form>
-  </Modal>
+  </MilestoneModal>
 </template>

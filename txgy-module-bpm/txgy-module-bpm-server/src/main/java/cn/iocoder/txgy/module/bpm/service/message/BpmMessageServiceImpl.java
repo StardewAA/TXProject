@@ -117,7 +117,8 @@ public class BpmMessageServiceImpl implements BpmMessageService {
             // 因此凡是"审批结果由各自 Listener 回写业务单据"的流程，一律降级为 best-effort。
             if (!"wms_receipt_approval".equals(processKey)
                     && !"wms_shipment_approval".equals(processKey)
-                    && !"mes-feedback-approval".equals(processKey)) {
+                    && !"mes-feedback-approval".equals(processKey)
+                    && !"mes-work-order-approval".equals(processKey)) {
                 throw ex;
             }
             log.error("[sendProcessResultSms][结果短信失败，已降级为 best-effort，processKey={}, instanceId={}, templateCode={}]",

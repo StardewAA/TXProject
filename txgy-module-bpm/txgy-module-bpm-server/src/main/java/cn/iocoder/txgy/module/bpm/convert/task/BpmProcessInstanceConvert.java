@@ -126,7 +126,7 @@ public interface BpmProcessInstanceConvert {
 
     default BpmProcessInstanceStatusEvent buildProcessInstanceStatusEvent(Object source, ProcessInstance instance,
                                                                           Integer status, String reason) {
-        return new BpmProcessInstanceStatusEvent(source).setId(instance.getId()).setStatus(status).setReason(reason)
+        return new BpmProcessInstanceStatusEvent().setId(instance.getId()).setStatus(status).setReason(reason)
                 .setProcessDefinitionKey(instance.getProcessDefinitionKey()).setBusinessKey(instance.getBusinessKey());
     }
 

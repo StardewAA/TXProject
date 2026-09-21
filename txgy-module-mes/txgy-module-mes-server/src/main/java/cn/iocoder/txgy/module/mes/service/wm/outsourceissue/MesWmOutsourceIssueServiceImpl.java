@@ -8,9 +8,6 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
-import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
-import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.outsourceissue.vo.MesWmOutsourceIssuePageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.outsourceissue.vo.MesWmOutsourceIssueSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.outsourceissue.MesWmOutsourceIssueDetailDO;
@@ -51,17 +48,8 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesWmOutsourceIssueServiceImpl implements MesWmOutsourceIssueService {
 
-    /**
-     * BPM 流程定义 Key：委外发料单审批
-     *
-     * 与 bpm-server 的 OutsourceIssueStatusListener.getProcessDefinitionKey 保持一致
-     */
-    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-wm-outsource-issue-approval";
-
     @Resource
     private MesWmOutsourceIssueMapper outsourceIssueMapper;
-    @Resource
-    private BpmProcessInstanceApi bpmProcessInstanceApi;
 
     @Resource
     private MesWmOutsourceIssueLineService outsourceIssueLineService;
@@ -131,53 +119,16 @@ public class MesWmOutsourceIssueServiceImpl implements MesWmOutsourceIssueServic
     @Transactional(rollbackFor = Exception.class)
     public void submitOutsourceIssue(Long id) {
         // 1.1 校验存在 + 草稿状态
-        MesWmOutsourceIssueDO issue = validateOutsourceIssueExistsAndDraft(id);
+        validateOutsourceIssueExistsAndDraft(id);
         // 1.2 检查是否有发料行
         List<MesWmOutsourceIssueLineDO> lines = outsourceIssueLineService.getOutsourceIssueLineListByIssueId(id);
         if (CollUtil.isEmpty(lines)) {
             throw exception(WM_OUTSOURCE_ISSUE_NO_LINE);
         }
 
-        // 2. 提交 → BPM审批中，发起工作流。审批结果由 bpm-server 的 OutsourceIssueStatusListener
-        //    转发回 MES，经 mes_wm_outsource_issue_approval_task 异步消费：
-        //    通过 → approveOutsourceIssue 进入"待拣货"；驳回 → rejectOutsourceIssue 退回草稿
-        outsourceIssueMapper.updateById(new MesWmOutsourceIssueDO()
-                .setId(id).setStatus(MesWmOutsourceIssueStatusEnum.BPM_APPROVING.getStatus()));
-
-        Map<String, Object> variables = Map.of(
-                "issueId", String.valueOf(id),
-                "issueCode", issue.getCode() != null ? issue.getCode() : "",
-                "workOrderId", issue.getWorkOrderId() != null ? String.valueOf(issue.getWorkOrderId()) : "");
-        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
-                        SecurityFrameworkUtils.getLoginUserId(),
-                        new BpmProcessInstanceCreateReqDTO()
-                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
-                                .setBusinessKey(String.valueOf(id))
-                                .setVariables(variables)).getCheckedData();
-        outsourceIssueMapper.updateById(new MesWmOutsourceIssueDO()
-                .setId(id).setProcessInstanceId(processInstanceId));
-    }
-
-    @Override
-    public void approveOutsourceIssue(Long id) {
-        // 审批通过（BPM审批中 → 待拣货），后续拣货/出库流程不变
-        MesWmOutsourceIssueDO issue = validateOutsourceIssueExists(id);
-        if (ObjUtil.notEqual(MesWmOutsourceIssueStatusEnum.BPM_APPROVING.getStatus(), issue.getStatus())) {
-            throw exception(WM_OUTSOURCE_ISSUE_STATUS_NOT_APPROVING);
-        }
+        // 2. 更新单据状态为待拣货
         outsourceIssueMapper.updateById(new MesWmOutsourceIssueDO()
                 .setId(id).setStatus(MesWmOutsourceIssueStatusEnum.APPROVING.getStatus()));
-    }
-
-    @Override
-    public void rejectOutsourceIssue(Long id) {
-        // 审批驳回（BPM审批中 → 草稿），可修改后重新提交（重新发起新流程实例）
-        MesWmOutsourceIssueDO issue = validateOutsourceIssueExists(id);
-        if (ObjUtil.notEqual(MesWmOutsourceIssueStatusEnum.BPM_APPROVING.getStatus(), issue.getStatus())) {
-            throw exception(WM_OUTSOURCE_ISSUE_STATUS_NOT_APPROVING);
-        }
-        outsourceIssueMapper.updateById(new MesWmOutsourceIssueDO()
-                .setId(id).setStatus(MesWmOutsourceIssueStatusEnum.PREPARE.getStatus()));
     }
 
     @Override

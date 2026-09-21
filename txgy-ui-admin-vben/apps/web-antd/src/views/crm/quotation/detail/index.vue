@@ -137,14 +137,7 @@ function handleProcessDetail() {
 
 /** 加载数据 */
 onMounted(() => {
-  // 路由参数兜底：非法 id（如 /crm/quotation/detail/id）会得到 NaN，提示并退回列表
-  const id = Number(props.id || route.params.id);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    message.warning('参数错误，报价不能为空！');
-    handleBack();
-    return;
-  }
-  quotationId.value = id;
+  quotationId.value = Number(props.id || route.params.id);
   loadQuotationDetail();
 });
 </script>

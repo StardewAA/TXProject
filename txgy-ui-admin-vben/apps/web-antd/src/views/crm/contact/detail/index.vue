@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { useTabs } from '@vben/hooks';
 
-import { Card, message, Tabs } from 'ant-design-vue';
+import { Card, Tabs } from 'ant-design-vue';
 
 import { getContact } from '#/api/crm/contact';
 import { getOperateLogPage } from '#/api/crm/operateLog';
@@ -85,14 +85,7 @@ function handleTransfer() {
 
 /** 加载数据 */
 onMounted(() => {
-  // 路由参数兜底：非法 id（如 /crm/contact/detail/id）会得到 NaN，提示并退回列表
-  const id = Number(route.params.id);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    message.warning('参数错误，联系人不能为空！');
-    handleBack();
-    return;
-  }
-  contactId.value = id;
+  contactId.value = Number(route.params.id);
   getContactDetail();
 });
 </script>

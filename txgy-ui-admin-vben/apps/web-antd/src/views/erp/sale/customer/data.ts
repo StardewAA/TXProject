@@ -18,16 +18,6 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'partnerCode',
-      label: '统一编码',
-      component: 'Input',
-      // 由 ERP 服务端统一生成（CLI + 日期 + 流水），创建后不可修改
-      componentProps: {
-        disabled: true,
-        placeholder: '保存后由系统自动生成',
-      },
-    },
-    {
       component: 'Input',
       fieldName: 'name',
       label: '客户名称',
@@ -190,11 +180,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
-    {
-      field: 'partnerCode',
-      title: '统一编码',
-      minWidth: 130,
-    },
     {
       field: 'name',
       title: '客户名称',

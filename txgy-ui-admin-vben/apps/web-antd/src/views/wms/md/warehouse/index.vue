@@ -16,8 +16,8 @@ import {
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
-import Form from './modules/form.vue';
 import Detail from './modules/detail.vue';
+import Form from './modules/form.vue';
 
 defineOptions({ name: 'WmsWarehouse' });
 
@@ -44,6 +44,8 @@ function handleCreate() {
 function handleEdit(row: WmsWarehouseApi.Warehouse) {
   formModalApi.setData(row).open();
 }
+
+/** 查看仓库详情 */
 function handleDetail(row: WmsWarehouseApi.Warehouse) {
   detailModalApi.setData({ id: row.id }).open();
 }
@@ -133,7 +135,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
       <template #actions="{ row }">
-        <TableAction class="whitespace-nowrap"
+        <TableAction
+          class="whitespace-nowrap"
           :actions="[
             {
               label: '详情',

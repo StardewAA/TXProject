@@ -173,15 +173,20 @@ public class AiKnowledgeDocumentServiceImpl implements AiKnowledgeDocumentServic
     @Override
     public String readUrl(String url) {
         // 下载文件
+        // 附件 URL 面向浏览器生成（宿主机回环地址），AI 容器内需改写为 Compose 网络内的网关地址，
+        // 否则下载到的是网关 401 JSON（被 Tika 当作文档文本，模型看到「账号未登录」误判附件损坏）
+        String downloadUrl = url
+                .replace("127.0.0.1:48080", "txgy-slim-gateway-1:48080")
+                .replace("localhost:48080", "txgy-slim-gateway-1:48080");
         ByteArrayResource resource;
         try {
-            byte[] bytes = HttpUtil.downloadBytes(url);
+            byte[] bytes = HttpUtil.downloadBytes(downloadUrl);
             if (bytes.length == 0) {
                 throw exception(KNOWLEDGE_DOCUMENT_FILE_EMPTY);
             }
             resource = new ByteArrayResource(bytes);
         } catch (Exception e) {
-            log.error("[readUrl][url({}) 读取失败]", url, e);
+            log.error("[readUrl][url({}) 读取失败]", downloadUrl, e);
             throw exception(KNOWLEDGE_DOCUMENT_FILE_DOWNLOAD_FAIL);
         }
 

@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.crm.job.aftersale;
 import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.tenant.core.service.TenantFrameworkService;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleTicketService;
 import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleVisitPlanService;
 import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleVisitTaskService;
 import cn.iocoder.txgy.module.crm.service.aftersale.CrmAfterSaleWarrantyService;
@@ -36,6 +37,8 @@ public class CrmAfterSaleScheduledJob {
     @Resource
     private CrmAfterSaleVisitTaskService visitTaskService;
     @Resource
+    private CrmAfterSaleTicketService ticketService;
+    @Resource
     private TenantFrameworkService tenantFrameworkService;
 
     /**
@@ -51,6 +54,22 @@ public class CrmAfterSaleScheduledJob {
         executeForEachTenant("markOverdueVisitTasks", tenantId -> {
             int count = visitTaskService.autoMarkOverdueVisitTasks();
             log.info("[markOverdueVisitTasks][租户({}) 自动标记逾期回访任务 {} 个]", tenantId, count);
+        });
+    }
+
+    /**
+     * 工单超时自动标记：每日 02:30 扫描一次
+     *
+     * <p>扫描所有未闭环（待处理 / 处理中）的工单，若「开始处理时间（未开始则以创建时间兜底）
+     * + 售后设置『工单超时预警天数』」已早于当前时间，则自动把状态变更为「已超时」。
+     * 被标记的工单会出现在 CRM 待办事项的「工单超时预警」中，直到完成或关闭。
+     * 读取侧另有懒同步兜底（30 秒限流），最长延迟约 24 小时。
+     */
+    @Scheduled(cron = "0 30 2 * * ?")
+    public void markOverdueTickets() {
+        executeForEachTenant("markOverdueTickets", tenantId -> {
+            int count = ticketService.autoMarkOverdueTickets();
+            log.info("[markOverdueTickets][租户({}) 自动标记超时工单 {} 个]", tenantId, count);
         });
     }
 
