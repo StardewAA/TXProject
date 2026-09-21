@@ -58,11 +58,25 @@ public interface MesWmReturnVendorService {
     MesWmReturnVendorDO validateReturnVendorExists(Long id);
 
     /**
-     * 提交供应商退货单（草稿 -> 待拣货）
+     * 提交供应商退货单（草稿 → BPM审批中，发起工作流；审批通过自动进入"待拣货"，驳回退回草稿）
      *
      * @param id 编号
      */
     void submitReturnVendor(Long id);
+
+    /**
+     * 审批通过回写（BPM审批中 → 待拣货），由审批结果任务异步消费调用
+     *
+     * @param id 编号
+     */
+    void approveReturnVendor(Long id);
+
+    /**
+     * 审批驳回回写（BPM审批中 → 草稿），由审批结果任务异步消费调用
+     *
+     * @param id 编号
+     */
+    void rejectReturnVendor(Long id);
 
     /**
      * 执行拣货（待拣货 -> 待执行退货）

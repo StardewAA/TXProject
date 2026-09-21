@@ -91,6 +91,8 @@ public interface ErrorCodeConstants {
     ErrorCode PRODUCT_NOT_EXISTS = new ErrorCode(1_020_008_000, "产品不存在");
     ErrorCode PRODUCT_NO_EXISTS = new ErrorCode(1_020_008_001, "产品编号已存在");
     ErrorCode PRODUCT_NOT_ENABLE = new ErrorCode(1_020_008_002, "产品【{}】已禁用");
+    ErrorCode PRODUCT_WMS_READ_ONLY = new ErrorCode(1_020_008_003,
+            "产品数据全部实时取自 WMS 仓库库存，不支持手动新增、修改、删除，请在 WMS 中维护");
 
     // ========== 产品分类 1_020_009_000 ==========
     ErrorCode PRODUCT_CATEGORY_NOT_EXISTS = new ErrorCode(1_020_009_000, "产品分类不存在");
@@ -113,6 +115,7 @@ public interface ErrorCodeConstants {
     // ========== 跟进记录 1_020_013_000 ==========
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
+    ErrorCode FOLLOW_UP_RECORD_TIME_FUTURE = new ErrorCode(1_020_013_002, "实际跟进时间不能晚于当前时间");
 
     // ========== 报价 1_020_014_000 ==========
     ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");

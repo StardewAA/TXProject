@@ -47,7 +47,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- mes-ai-avoid：面板展开时该容器自动右移避让（见 MesAiChatPanel 组件内的全局样式） -->
+  <!-- mes-ai-avoid：避让标记（见 MesAiChatPanel 组件内的非 scoped 样式）。
+       当前 AI 面板以 push-body=false 悬浮覆盖，不再挤压/推挤本容器。 -->
   <Page content-class="mes-ai-avoid">
     <template #doc>
       <DocAlert

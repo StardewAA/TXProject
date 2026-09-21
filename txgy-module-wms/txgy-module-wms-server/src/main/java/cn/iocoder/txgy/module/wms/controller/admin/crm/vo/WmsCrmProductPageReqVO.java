@@ -15,4 +15,6 @@ public class WmsCrmProductPageReqVO extends PageParam {
     private String materialName;
     @Schema(description = "SKU 编码，精确匹配")
     private String skuCode;
+    @Schema(description = "SKU 编号，精确匹配")
+    private Long skuId;
 }
