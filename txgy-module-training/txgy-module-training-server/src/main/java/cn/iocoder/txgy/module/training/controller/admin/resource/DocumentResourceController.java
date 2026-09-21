@@ -27,6 +27,8 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 
@@ -41,16 +43,36 @@ public class DocumentResourceController {
     @Resource
     private ResourceFileStorageService fileStorage;
 
+    // ========== 上传（支持一次选择多个文件） ==========
+
     @PostMapping("/upload")
-    @Operation(summary = "上传文档（PDF/JPG/PNG ≤50MB，成功即上线）")
+    @Operation(summary = "上传文档（支持一次性上传多个文件，PDF/Word/WPS/图片 ≤50MB/个，成功即上线）")
     @PreAuthorize("@ss.hasPermission('training:resource-doc:create')")
-    public CommonResult<Long> uploadDocument(@RequestParam("file") MultipartFile file,
-                                             @RequestParam("title") String title,
-                                             @RequestParam(value = "categoryId", required = false) Long categoryId,
-                                             @RequestParam(value = "bizCategory", required = false) String bizCategory,
-                                             @RequestParam(value = "tags", required = false) String tags,
-                                             @RequestParam(value = "estMinutes", required = false) Integer estMinutes) {
-        return success(documentService.uploadDocument(file, title, categoryId, bizCategory, tags, estMinutes));
+    public CommonResult<List<Long>> uploadDocuments(@RequestParam(value = "files", required = false) List<MultipartFile> files,
+                                                    @RequestParam(value = "file", required = false) MultipartFile file,
+                                                    @RequestParam("title") String title,
+                                                    @RequestParam(value = "categoryId", required = false) Long categoryId,
+                                                    @RequestParam(value = "bizCategory", required = false) String bizCategory,
+                                                    @RequestParam(value = "estMinutes", required = false) Integer estMinutes) {
+        return success(documentService.uploadDocuments(collectFiles(file, files), title, categoryId, bizCategory, estMinutes));
+    }
+
+    /**
+     * 合并 files（多文件）与 file（单文件兼容）参数，过滤空文件
+     */
+    private List<MultipartFile> collectFiles(MultipartFile file, List<MultipartFile> files) {
+        List<MultipartFile> target = new ArrayList<>();
+        if (file != null && !file.isEmpty()) {
+            target.add(file);
+        }
+        if (files != null) {
+            for (MultipartFile item : files) {
+                if (item != null && !item.isEmpty()) {
+                    target.add(item);
+                }
+            }
+        }
+        return target;
     }
 
     @PostMapping("/page-count")
@@ -82,9 +104,8 @@ public class DocumentResourceController {
                                                 @RequestParam("title") String title,
                                                 @RequestParam(value = "categoryId", required = false) Long categoryId,
                                                 @RequestParam(value = "bizCategory", required = false) String bizCategory,
-                                                @RequestParam(value = "tags", required = false) String tags,
                                                 @RequestParam(value = "estMinutes", required = false) Integer estMinutes) {
-        documentService.updateDocument(id, title, categoryId, bizCategory, tags, estMinutes);
+        documentService.updateDocument(id, title, categoryId, bizCategory, estMinutes);
         return success(true);
     }
 

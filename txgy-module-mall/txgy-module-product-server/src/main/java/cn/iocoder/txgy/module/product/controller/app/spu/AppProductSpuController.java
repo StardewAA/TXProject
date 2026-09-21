@@ -51,13 +51,14 @@ public class AppProductSpuController {
     private ProductBrowseHistoryService productBrowseHistoryService;
     @Resource
     private ProductShopService productShopService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @GetMapping("/list-by-ids")
     @Operation(summary = "获得商品 SPU 列表")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PermitAll
     public CommonResult<List<AppProductSpuRespVO>> getSpuList(@RequestParam("ids") Set<Long> ids) {
-        List<ProductSpuDO> list = productSpuService.getSpuList(ids);
+        List<ProductSpuDO> list = productSpuService.getSpuList(ids).stream().filter(reviewService::saleable).toList();
         if (CollUtil.isEmpty(list)) {
             return success(Collections.emptyList());
         }
@@ -95,8 +96,8 @@ public class AppProductSpuController {
         if (spu == null) {
             throw exception(SPU_NOT_EXISTS);
         }
-        if (!ProductSpuStatusEnum.isEnable(spu.getStatus())) {
-            throw exception(SPU_NOT_ENABLE, spu.getName());
+        if (!reviewService.saleable(spu)) {
+            throw exception(SPU_NOT_ENABLE, "编号 " + spu.getId());
         }
         // 获得商品 SKU
         List<ProductSkuDO> skus = productSkuService.getSkuListBySpuId(spu.getId());

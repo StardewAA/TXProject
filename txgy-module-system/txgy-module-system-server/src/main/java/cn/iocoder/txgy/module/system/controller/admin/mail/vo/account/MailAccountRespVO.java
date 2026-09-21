@@ -18,8 +18,13 @@ public class MailAccountRespVO {
     @Schema(description = "用户名", requiredMode = Schema.RequiredMode.REQUIRED, example = "txgy")
     private String username;
 
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")
-    private String password;
+    /**
+     * 注意：刻意不返回密码（授权码）。
+     * 历史实现直接把明文密码放进响应体，等于任何能查到账号的人都能拿到发件授权码，
+     * 这里只回传"是否已配置"，前端编辑时密码留空即表示不修改。
+     */
+    @Schema(description = "是否已配置密码（授权码）", example = "true")
+    private Boolean passwordConfigured;
 
     @Schema(description = "SMTP 服务器域名", requiredMode = Schema.RequiredMode.REQUIRED, example = "www.iocoder.cn")
     private String host;

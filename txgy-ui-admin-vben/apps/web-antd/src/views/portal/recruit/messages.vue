@@ -7,12 +7,13 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 
 import { Modal as AntModal, message } from 'ant-design-vue';
 
+import { getTenantSimpleList } from '#/api/core/auth';
 import {
   acceptPortalRecruitOffer,
   getPortalRecruitApplicationPage,
   getPortalRecruitPost,
-  rejectPortalRecruitOffer,
   type HrmPortalRecruitApi,
+  rejectPortalRecruitOffer,
 } from '#/api/hrm/portal/recruit';
 import {
   getRecruitChatConversationList,
@@ -65,13 +66,13 @@ const moreFilterOpen = ref(false);
 const activeMenuId = ref<number>();
 const imageInput = ref<HTMLInputElement>();
 const postDetails = ref<Record<number, HrmPortalRecruitApi.Post>>({});
-const interviewPostIds = ref<number[]>([]);
+const interviewApplicationIds = ref<number[]>([]);
 const pinnedConversationIds = ref<number[]>([]);
 const ignoredConversationIds = ref<number[]>([]);
 const removedConversationIds = ref<number[]>([]);
 const conversationRemarks = ref<Record<number, string>>({});
 const interviewFilterLoaded = ref(false);
-const offersByPostId = ref<Record<number, HrmPortalRecruitApi.Offer & { applicationId: number }>>({});
+const offersByApplicationId = ref<Record<number, HrmPortalRecruitApi.Offer>>({});
 const conversationPane = ref<HTMLElement>();
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let selectionRequestId = 0;
@@ -116,7 +117,7 @@ const filteredConversations = computed(() => {
       return false;
     }
     if (tab.value === 'applied' && item.applicationStatus !== 'SUBMITTED') return false;
-    if (tab.value === 'interview' && !interviewPostIds.value.includes(item.postId)) return false;
+    if (tab.value === 'interview' && !interviewApplicationIds.value.includes(item.applicationId || 0)) return false;
     if (!q) return true;
     return [item.peerUserName, companyName(item), recruiterPosition(item), item.lastContent]
       .filter(Boolean)
@@ -164,18 +165,38 @@ function applicationStatusLabel(item?: HrmPortalRecruitChatApi.Conversation) {
   return '';
 }
 
+function offerStatusLabel(status?: string) {
+  return {
+    APPROVED: '审批通过，待发送',
+    APPROVING: '招聘方审批中',
+    CANDIDATE_REJECTED: '求职者已拒绝',
+    CONFIRMED: '已接受，待入职',
+    DRAFT: '待提交审批',
+    EXPIRED: '已过期',
+    REJECTED: '审批未通过',
+    SENT: '待确认',
+    WITHDRAWN: '已撤回',
+  }[status || ''] || '处理中';
+}
+
 function offerForConversation(item?: HrmPortalRecruitChatApi.Conversation) {
-  return item?.postId ? offersByPostId.value[item.postId] : undefined;
+  return item?.applicationId
+    ? offersByApplicationId.value[item.applicationId]
+    : undefined;
 }
 
 async function acceptOffer(item: HrmPortalRecruitChatApi.Conversation) {
   const offer = offerForConversation(item);
   if (!offer) return;
-  await acceptPortalRecruitOffer(offer.id);
-  message.success('Offer 已接受，已进入待入职');
-  await loadConversations(item.id);
-  interviewFilterLoaded.value = false;
-  await loadInterviewPostIds();
+  try {
+    await acceptPortalRecruitOffer(offer.id);
+    message.success('Offer 已接受，已进入待入职');
+    await loadConversations(item.id);
+    interviewFilterLoaded.value = false;
+    await loadInterviewPostIds();
+  } catch (error: any) {
+    message.error(error?.message || '接受 Offer 失败，请刷新后重试');
+  }
 }
 
 function rejectOffer(item: HrmPortalRecruitChatApi.Conversation) {
@@ -187,11 +208,15 @@ function rejectOffer(item: HrmPortalRecruitChatApi.Conversation) {
     okText: '确认拒绝',
     cancelText: '取消',
     onOk: async () => {
-      await rejectPortalRecruitOffer(offer.id, '求职者拒绝 Offer');
-      message.success('Offer 已拒绝');
-      await loadConversations(item.id);
-      interviewFilterLoaded.value = false;
-      await loadInterviewPostIds();
+      try {
+        await rejectPortalRecruitOffer(offer.id, '求职者拒绝 Offer');
+        message.success('Offer 已拒绝');
+        await loadConversations(item.id);
+        interviewFilterLoaded.value = false;
+        await loadInterviewPostIds();
+      } catch (error: any) {
+        message.error(error?.message || '拒绝 Offer 失败，请刷新后重试');
+      }
     },
   });
 }
@@ -223,9 +248,34 @@ function recruiterName(item: HrmPortalRecruitChatApi.Conversation) {
   return item.peerUserName || (item.hrSide ? '候选人' : '招聘人');
 }
 
+/**
+ * 会话列表要显示招聘企业名。岗位接口只回传 tenantId、不带 companyName，
+ * 所以按租户名兜底（与职位详情页 getCompanyName 的口径一致），
+ * 否则所有会话都会显示成占位文案。
+ */
+const tenantNames = ref<Record<number, string>>({});
+
+async function loadTenantNames() {
+  try {
+    const tenants = (await getTenantSimpleList()) as Array<{ id?: number; name?: string }>;
+    tenantNames.value = Object.fromEntries(
+      tenants
+        .filter((tenant) => tenant.id && tenant.name)
+        .map((tenant) => [tenant.id, tenant.name]),
+    );
+  } catch (error) {
+    console.warn('[PortalRecruitMessages] 加载企业名称失败', error);
+  }
+}
+
 function companyName(item: HrmPortalRecruitChatApi.Conversation) {
   const post = postDetails.value[item.postId];
-  return post?.companyShortName || post?.companyName || '招聘企业';
+  return (
+    post?.companyShortName ||
+    post?.companyName ||
+    (post?.tenantId ? tenantNames.value[post.tenantId] : undefined) ||
+    '招聘企业待确认'
+  );
 }
 
 function recruiterPosition(item: HrmPortalRecruitChatApi.Conversation) {
@@ -242,6 +292,17 @@ function showStamp(index: number) {
     Math.abs(new Date(current.sendTime).getTime() - new Date(prev.sendTime).getTime()) >
     5 * 60 * 1000
   );
+}
+
+/** 附件或可显示文本都没有的消息不渲染气泡，避免消息流出现空气泡 */
+function hasDisplayableContent(item: HrmPortalRecruitChatApi.ChatMessage) {
+  if (getHrmRecruitChatAttachment(item.content, item.contentType)) return true;
+  return Boolean(item.content && String(item.content).trim());
+}
+
+/** 窄屏下从会话详情返回会话列表 */
+function backToList() {
+  activeId.value = undefined;
 }
 
 function goLogin() {
@@ -416,19 +477,19 @@ async function loadInterviewPostIds() {
   if (interviewFilterLoaded.value) return;
   try {
     const result = await getPortalRecruitApplicationPage({ pageNo: 1, pageSize: 100 });
-    interviewPostIds.value = (result.list || [])
+    interviewApplicationIds.value = (result.list || [])
       .filter((item) => item.interviews?.length)
-      .map((item) => item.postId);
-    const offers: Record<number, HrmPortalRecruitApi.Offer & { applicationId: number }> = {};
+      .map((item) => item.id);
+    const offers: Record<number, HrmPortalRecruitApi.Offer> = {};
     (result.list || []).forEach((item) => {
-      if (item.offer && item.postId) {
-        offers[item.postId] = { ...item.offer, applicationId: item.id };
+      if (item.offer) {
+        offers[item.id] = item.offer;
       }
     });
-    offersByPostId.value = offers;
+    offersByApplicationId.value = offers;
     interviewFilterLoaded.value = true;
   } catch {
-    interviewPostIds.value = [];
+    interviewApplicationIds.value = [];
   }
 }
 
@@ -716,7 +777,7 @@ async function sendResume() {
       return;
     }
     if (await sendResumeMessage(data, conversationId)) {
-      message.success('简历已发送，等待招聘方处理');
+      message.success('简历已发送，等待 HR 手动转为候选人');
     }
   } catch (error: any) {
     message.error(error?.message || '投递失败');
@@ -763,7 +824,7 @@ async function sendResumeMessage(
     }
     return true;
   } catch (error: any) {
-    message.warning(error?.message || '简历发送失败');
+    message.warning(error?.message || '简历已投递，但沟通消息发送失败');
     return false;
   }
 }
@@ -830,6 +891,14 @@ async function bootChat() {
   if (!pollTimer) pollTimer = setInterval(() => void poll(), 2500);
 }
 
+let applicationRefreshTimer: ReturnType<typeof setInterval> | undefined;
+
+function refreshApplications() {
+  if (document.hidden || !loggedIn.value) return;
+  interviewFilterLoaded.value = false;
+  void loadInterviewPostIds();
+}
+
 watch(
   () => route.query.postId,
   async (postId) => {
@@ -850,11 +919,14 @@ watch(applyModalOpen, (open) => {
 });
 
 onMounted(async () => {
+  void loadTenantNames();
   await bootChat();
+  applicationRefreshTimer = setInterval(refreshApplications, 10_000);
 });
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);
+  if (applicationRefreshTimer) clearInterval(applicationRefreshTimer);
 });
 </script>
 
@@ -884,7 +956,7 @@ onUnmounted(() => {
       </div>
     </main>
 
-    <main v-else class="message-shell">
+    <main v-else class="message-shell" :class="{ 'has-active-chat': activeConversation }">
       <aside class="contact-pane">
         <label class="contact-search">
           <input v-model="keyword" type="search" placeholder="搜索30天内的联系人" />
@@ -897,7 +969,7 @@ onUnmounted(() => {
             <i v-if="unreadTotal" class="tab-badge">{{ unreadTotal > 99 ? '99+' : unreadTotal }}</i>
           </button>
           <div class="more-filter">
-            <button type="button" :class="{ selected: moreFilterSelected }" @click.stop="toggleMoreFilter">更多⌄</button>
+            <button type="button" :class="{ selected: moreFilterSelected }" @click.stop="toggleMoreFilter">{{ moreFilterOpen ? '更多⌃' : '更多⌄' }}</button>
             <div v-if="moreFilterOpen" class="filter-menu" @click.stop>
               <button type="button" :class="{ active: tab === 'communication' }" @click="chooseTab('communication')">仅沟通</button>
               <button type="button" :class="{ active: tab === 'applied' }" @click="chooseTab('applied')">有投递</button>
@@ -927,7 +999,7 @@ onUnmounted(() => {
               <em>{{ recruiterPosition(item) }}</em>
             </span>
             <span class="contact-actions" @click.stop>
-              <button type="button" class="more-trigger" @click.stop="toggleConversationMenu(item.id)">更多⌄</button>
+              <button type="button" class="more-trigger" @click.stop="toggleConversationMenu(item.id)">{{ activeMenuId === item.id ? '更多⌃' : '更多⌄' }}</button>
               <span v-if="activeMenuId === item.id" class="conversation-menu" @click.stop>
                 <button type="button" @click="togglePinned(item)">{{ isPinned(item) ? '取消置顶' : '置顶' }}</button>
                 <button type="button" @click="editRemark(item)">备注</button>
@@ -942,6 +1014,9 @@ onUnmounted(() => {
 
       <section v-if="activeConversation" class="chat-pane">
         <div class="chat-head">
+          <button class="chat-back" type="button" aria-label="返回会话列表" @click="backToList">
+            <IconifyIcon icon="lucide:chevron-left" /> 返回
+          </button>
           <div>
             <b>{{ recruiterName(activeConversation) }}</b>
             <span>{{ activeConversation.postName }}</span>
@@ -960,12 +1035,12 @@ onUnmounted(() => {
             <strong>招聘 Offer</strong>
             <span>{{ offerForConversation(activeConversation)?.offerNo || '待确认' }}</span>
           </div>
-          <small>请在有效期内确认 Offer，接受后进入待入职。</small>
+          <small>{{ offerForConversation(activeConversation)?.approvalStatus === 'SENT' ? '请在有效期内确认 Offer，接受后进入待入职。' : offerStatusLabel(offerForConversation(activeConversation)?.approvalStatus) }}</small>
           <div v-if="offerForConversation(activeConversation)?.approvalStatus === 'SENT'" class="offer-actions">
             <button type="button" @click="acceptOffer(activeConversation)">接受 Offer</button>
             <button type="button" class="reject" @click="rejectOffer(activeConversation)">拒绝 Offer</button>
           </div>
-          <span v-else class="offer-state">已处理</span>
+          <span v-else class="offer-state">{{ offerStatusLabel(offerForConversation(activeConversation)?.approvalStatus) }}</span>
         </div>
         <div v-if="activeConversation.status === 0" class="chat-hint">
           {{ activeConversation.hrSide ? '等待求职者主动发起沟通。' : '请先发送消息，主动发起沟通。' }}
@@ -977,7 +1052,7 @@ onUnmounted(() => {
           <div v-if="!messages.length" class="chat-empty">还没有消息，打个招呼开始沟通吧</div>
           <template v-for="(item, index) in messages" :key="item.id">
             <div v-if="showStamp(index)" class="date">{{ formatTime(item.sendTime) }}</div>
-            <div class="bubble" :class="item.mine ? 'mine' : 'theirs'">
+            <div v-if="hasDisplayableContent(item)" class="bubble" :class="item.mine ? 'mine' : 'theirs'">
               <a
                 v-if="getHrmRecruitChatAttachment(item.content, item.contentType)?.type === 'resume'"
                 class="resume-card"
@@ -999,7 +1074,6 @@ onUnmounted(() => {
                   rel="noreferrer"
                 >
                   <img :src="getHrmRecruitChatAttachment(item.content, item.contentType)?.previewUrl" :alt="getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName" />
-                  <span>{{ getHrmRecruitChatAttachment(item.content, item.contentType)?.fileName }}</span>
                 </a>
               </template>
               <template v-else>{{ item.content }}</template>
@@ -1045,8 +1119,8 @@ onUnmounted(() => {
     </main>
     <RecruitApplyModal
       v-model:open="applyModalOpen"
-      :post="applicationPost"
       :chat-only="true"
+      :post="applicationPost"
       @submitted="handleApplicationSubmitted"
     />
   </div>
@@ -1119,7 +1193,7 @@ onUnmounted(() => {
 }
 
 .message-page.embedded .message-shell {
-  height: calc(100vh - 120px);
+  height: min(760px, calc(100dvh - 166px));
   max-width: none;
   box-shadow: 0 8px 24px rgb(17 65 73 / 8%);
   border: 1px solid #e0eeee;
@@ -1280,6 +1354,8 @@ onUnmounted(() => {
 .contact {
   position: relative;
   width: 100%;
+  min-height: 90px;
+  box-sizing: border-box;
   display: flex;
   align-items: flex-start;
   gap: 16px;
@@ -1439,6 +1515,23 @@ onUnmounted(() => {
   padding: 22px 30px 14px;
 }
 
+.chat-back {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #0f8f8c;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.chat-back:hover {
+  color: #0b777c;
+}
+
 .chat-head b {
   font-size: 17px;
 }
@@ -1482,6 +1575,7 @@ onUnmounted(() => {
 
 .job-strip {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 15px;
@@ -1553,7 +1647,8 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 34px 30px;
+  margin-top: 12px;
+  padding: 22px 30px 34px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1574,6 +1669,7 @@ onUnmounted(() => {
 }
 
 .bubble {
+  width: fit-content;
   max-width: 58%;
   padding: 12px 14px;
   border-radius: 8px;
@@ -1639,19 +1735,21 @@ onUnmounted(() => {
   object-fit: contain;
 }
 
-.image-card span {
-  color: #65747a;
-  font-size: 12px;
-}
-
 .composer {
+  display: grid;
+  grid-template-areas:
+    'tools tools'
+    'input send';
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px 12px;
   border-top: 1px solid #e7eeee;
   padding: 12px 30px 18px;
-  position: relative;
   background: #fff;
 }
 
 .tools {
+  grid-area: tools;
   display: flex;
   gap: 20px;
   align-items: center;
@@ -1700,23 +1798,34 @@ onUnmounted(() => {
 }
 
 .composer textarea {
+  grid-area: input;
   width: 100%;
   height: 72px;
-  border: 0;
+  box-sizing: border-box;
+  border: 1px solid #d9e5e7;
+  border-radius: 8px;
   outline: none;
   resize: none;
-  margin-top: 8px;
-  padding-right: 88px;
+  margin: 0;
+  padding: 10px 12px;
   color: #26343d;
   font-size: 14px;
   line-height: 1.6;
-  background: transparent;
+  background: #f8fbfb;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.composer textarea:hover,
+.composer textarea:focus {
+  border-color: #74cbd2;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(15 143 140 / 10%);
 }
 
 .send {
-  position: absolute;
-  right: 30px;
-  bottom: 18px;
+  grid-area: send;
+  min-width: 72px;
+  height: 40px;
   border: 0;
   background: #f5f7f7;
   color: #c4cbcd;
@@ -1780,12 +1889,24 @@ onUnmounted(() => {
   .message-shell,
   .message-page.embedded .message-shell {
     grid-template-columns: 1fr;
-    height: calc(100vh - 56px);
+    height: calc(100dvh - 96px);
     border-radius: 0;
   }
 
   .contact-pane {
     display: none;
+  }
+
+  .message-shell:not(.has-active-chat) .contact-pane {
+    display: flex;
+  }
+
+  .message-shell:not(.has-active-chat) .chat-pane {
+    display: none;
+  }
+
+  .chat-back {
+    display: inline-flex;
   }
 
   .message-topbar {
@@ -1807,10 +1928,47 @@ onUnmounted(() => {
   .bubble {
     max-width: 85%;
   }
+
+  .composer {
+    padding-inline: 16px;
+  }
 }
 .message-page { color: #5d4636; background: #fffdfb; }
 .message-page .message-shell, .message-page .conversation, .message-page .conversation-list { border-color: #f4e5d7; background: #fff; }
 .message-page .conversation-item.active, .message-page .message-composer { background: #fff7ed; }
 .message-page .send-button, .message-page .message-send, .message-page :deep(.ant-btn-primary) { border-color: #efc89f; background: linear-gradient(135deg, #f8d8b2, #efb77d); color: #8a4a21; }
 .message-page .send-button:hover, .message-page .message-send:hover, .message-page :deep(.ant-btn-primary:hover) { background: linear-gradient(135deg, #efb77d, #e99d5b); }
+
+.message-page { color: #123f49; background: #f5fbfc; }
+.message-topbar { background: linear-gradient(110deg, #123f49, #0f8f8c); }
+.top-actions .active { color: #8de0ef; }
+.filter-menu button:hover,
+.filter-menu button.active,
+.conversation-menu button:hover,
+.tabs .selected { color: #0f777d; background: #e8f7f8; }
+.tab-badge,
+.unread { background: #2f80ed; }
+.more-trigger:hover { border-color: #8bd6dc; color: #0f8f8c; }
+.contact-status.pending,
+.conversation-status.pending { color: #2368b5; background: #eaf3ff; }
+.chat-head a { color: #0f8f8c; }
+.job-strip strong { color: #dc3545; }
+.chat-hint,
+.job-strip { background: #eaf6ff; color: #2368b5; }
+.chat-hint.ok { background: #e8f7f8; color: #0f777d; }
+.chat-hint.fail { background: #eaf3ff; color: #2368b5; }
+.offer-card { border-color: #9bdce1; background: linear-gradient(135deg, #e8f7f8, #eaf3ff); color: #123f49; }
+.offer-actions button { border-color: #0f8f8c; background: #0f8f8c; }
+.offer-actions button.reject { border-color: #b9dfe5; color: #2368b5; }
+.mine { background: #dbeafe; }
+.theirs { background: #eef8fa; }
+.send.ready,
+.empty-action { background: linear-gradient(135deg, #0f9f9b, #2f80ed); }
+.message-page .send-button,
+.message-page .message-send,
+.message-page :deep(.ant-btn-primary) { border-color: #0f8f8c; background: linear-gradient(135deg, #0f9f9b, #2f80ed); color: #fff; }
+.message-page .send-button:hover,
+.message-page .message-send:hover,
+.message-page :deep(.ant-btn-primary:hover) { background: linear-gradient(135deg, #0b8587, #2563c7); }
+.empty-action.ghost { color: #2368b5; background: #eaf3ff; }
 </style>

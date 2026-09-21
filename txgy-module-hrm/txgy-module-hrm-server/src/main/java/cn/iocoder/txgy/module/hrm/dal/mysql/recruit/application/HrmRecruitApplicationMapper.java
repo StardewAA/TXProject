@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.application.HrmRecruitApplicationPageReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
+import cn.iocoder.txgy.module.hrm.enums.recruit.application.HrmRecruitApplicationStatusEnum;
 import org.apache.ibatis.annotations.Mapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 
@@ -29,7 +30,7 @@ public interface HrmRecruitApplicationMapper extends BaseMapperX<HrmRecruitAppli
 
     default HrmRecruitApplicationDO selectProcessingByCandidateAndPost(Long candidateId, Long postId,
                                                                          Collection<String> statuses) {
-        return selectOne(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+        return selectOneForUpdate(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
                 .eq(HrmRecruitApplicationDO::getCandidateId, candidateId)
                 .eq(HrmRecruitApplicationDO::getPostId, postId)
                 .in(HrmRecruitApplicationDO::getStatus, statuses));
@@ -37,10 +38,17 @@ public interface HrmRecruitApplicationMapper extends BaseMapperX<HrmRecruitAppli
 
     default HrmRecruitApplicationDO selectProcessingByApplicantAndPost(Long applicantUserId, Long postId,
                                                                           Collection<String> statuses) {
-        return selectOne(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+        return selectOneForUpdate(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
                 .eq(HrmRecruitApplicationDO::getApplicantUserId, applicantUserId)
                 .eq(HrmRecruitApplicationDO::getPostId, postId)
                 .in(HrmRecruitApplicationDO::getStatus, statuses));
+    }
+
+    default List<HrmRecruitApplicationDO> selectListByApplicantUserId(Long applicantUserId) {
+        return selectList(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .eq(HrmRecruitApplicationDO::getApplicantUserId, applicantUserId)
+                .orderByDesc(HrmRecruitApplicationDO::getCreateTime)
+                .orderByDesc(HrmRecruitApplicationDO::getId));
     }
 
     default HrmRecruitApplicationDO selectLatestByCandidateAndPost(Long candidateId, Long postId) {
@@ -50,6 +58,26 @@ public interface HrmRecruitApplicationMapper extends BaseMapperX<HrmRecruitAppli
                 .orderByDesc(HrmRecruitApplicationDO::getCreateTime)
                 .orderByDesc(HrmRecruitApplicationDO::getId)
                 .last("LIMIT 1"));
+    }
+
+    default List<HrmRecruitApplicationDO> selectListByCandidateIds(Collection<Long> candidateIds) {
+        if (candidateIds == null || candidateIds.isEmpty()) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapperX<HrmRecruitApplicationDO>()
+                .in(HrmRecruitApplicationDO::getCandidateId, candidateIds)
+                .orderByAsc(HrmRecruitApplicationDO::getCandidateId)
+                .orderByDesc(HrmRecruitApplicationDO::getStatusUpdateTime)
+                .orderByDesc(HrmRecruitApplicationDO::getId));
+    }
+
+    default HrmRecruitApplicationDO selectCurrentByCandidateId(Long candidateId) {
+        List<HrmRecruitApplicationDO> applications = selectListByCandidateIds(List.of(candidateId));
+        return applications.stream()
+                .filter(application -> HrmRecruitApplicationStatusEnum.PROCESSING_STATUSES
+                        .contains(application.getStatus()))
+                .findFirst()
+                .orElse(applications.stream().findFirst().orElse(null));
     }
 
     /** 查询候选人当前各岗位的应聘记录，结果按最新投递时间倒序。 */

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import OrderWorkbenchBadge from '@/components/OrderWorkbenchBadge.vue'
 const auth = useAuthStore()
 const route = useRoute()
 const links = [
@@ -22,9 +23,9 @@ function active(link: typeof links[number]) {
     <aside class="purchase-sidebar">
       <small>PURCHASING CENTER</small><h2>采购中心</h2>
       <nav aria-label="采购中心导航">
-        <RouterLink v-for="link in links" :key="link.to" :to="link.to" :class="{ current: active(link) }" :aria-current="active(link) ? 'page' : undefined">{{ link.label }}</RouterLink>
+        <MallLink v-for="link in links" :key="link.to" :to="link.to" :class="{ current: active(link) }" :aria-current="active(link) ? 'page' : undefined">{{ link.label }}<OrderWorkbenchBadge v-if="link.to==='/purchase/orders'" /></MallLink>
       </nav>
-      <div class="switch-links"><RouterLink to="/goods">前往商城选购 →</RouterLink><RouterLink to="/cart">采购清单 / 购物车 →</RouterLink><RouterLink v-if="auth.profile?.memberIdentity === 'supplier'" to="/sales">切换到销售中心 →</RouterLink><RouterLink to="/member">切换到会员中心 →</RouterLink></div>
+      <div class="switch-links"><MallLink to="/goods">前往商城选购 →</MallLink><MallLink to="/cart">采购清单 / 购物车 →</MallLink><MallLink v-if="auth.profile?.memberIdentity === 'supplier'" to="/sales">切换到销售中心 →</MallLink><MallLink to="/member">切换到会员中心 →</MallLink></div>
     </aside>
     <div class="purchase-body"><p class="scope-note">采购中心 · 订单、售后及地址沿用当前账号数据</p><slot /></div>
   </div>

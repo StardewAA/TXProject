@@ -1,14 +1,43 @@
 import DiyApi from '@/sheep/api/promotion/diy';
-import { getTenantId } from '@/sheep/request';
+import { ensureTenantReady, getTenantBootstrapStatus } from '@/sheep/helper/tenant-runtime';
 import { defineStore } from 'pinia';
 import $platform from '@/sheep/platform';
 import $router from '@/sheep/router';
 import user from './user';
 import sys from './sys';
-import { baseUrl, h5Url, tenantId } from '@/sheep/config';
+import { baseUrl, h5Url } from '@/sheep/config';
+
+const createDefaultTabbar = () => ({
+  mode: 1,
+  style: {
+    bgType: 'color',
+    bgColor: '#ffffff',
+    color: '#7c8795',
+    activeColor: '#0f766e',
+  },
+  badgeStyle: { backgroundColor: '#e74d2a', color: '#ffffff' },
+  items: [
+    { text: '首页', url: '/pages/index/index', iconUrl: '/static/icons/mall/home.svg', activeIconUrl: '/static/icons/mall/home.svg' },
+    { text: '分类', url: '/pages/index/category', iconUrl: '/static/icons/mall/grid.svg', activeIconUrl: '/static/icons/mall/grid.svg' },
+    { text: '采购清单', url: '/pages/index/cart', iconUrl: '/static/icons/mall/cart.svg', activeIconUrl: '/static/icons/mall/cart.svg' },
+    { text: '我的', url: '/pages/index/user', iconUrl: '/static/icons/mall/user.svg', activeIconUrl: '/static/icons/mall/user.svg' },
+  ],
+});
+
+const usableTabbar = (value) => {
+  const fallback = createDefaultTabbar();
+  if (!value || !Array.isArray(value.items) || value.items.length === 0) return fallback;
+  return {
+    ...fallback,
+    ...value,
+    style: { ...fallback.style, ...(value.style || {}) },
+    badgeStyle: { ...fallback.badgeStyle, ...(value.badgeStyle || {}) },
+  };
+};
 
 const app = defineStore('app', {
   state: () => ({
+    tenantBootstrap: { status: 'loading', confirmed: false },
     paramsForTabbar: {}, // 为全局tabbar跳转传参用。原因是 tabbar 无法传参，只能通过全局状态传递
     info: {
       // 应用信息
@@ -32,7 +61,8 @@ const app = defineStore('app', {
     },
     template: {
       // 店铺装修模板
-      basic: {}, // 基本信息
+      // 商城未配置装修模板时仍要保留四个核心导航入口。
+      basic: { tabbar: createDefaultTabbar() }, // 基本信息
       home: {
         // 首页模板
         style: {},
@@ -62,7 +92,11 @@ const app = defineStore('app', {
       }
 
       // 加载租户
-      await adaptTenant();
+      if (!await adaptTenant()) return false;
+      this.tenantBootstrap = getTenantBootstrapStatus();
+      if (this.tenantBootstrap.status === 'unavailable') {
+        uni.showToast({ title: '商城配置暂无法核验，当前仅提供原商城入口', icon: 'none' });
+      }
 
       // 加载装修配置
       await adaptTemplate(this.template, templateId);
@@ -120,54 +154,17 @@ const app = defineStore('app', {
       this.paramsForTabbar = {};
     },
   },
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        key: 'app-store',
-      },
-    ],
-  },
+  // Templates and share metadata must be loaded for this entry, never hydrated from another tenant.
 });
 
 /** 初始化租户编号 */
 const adaptTenant = async () => {
-  // 1. 获取当前租户 ID
-  const oldTenantId = getTenantId();
-  let newTenantId = null;
-
   try {
-    // 2.1 情况一：H5：默认使用商城平台公共租户，仅允许显式 URL 参数切换。
-    // 不再按 localhost/域名解析企业租户，避免普通注册用户被归入企业租户。
-    // #ifdef H5
-    // H5 环境下的处理逻辑
-    if (window?.location) {
-      // 优先从 URL 查询参数获取 tenantId
-      const urlParams = new URLSearchParams(window.location.search);
-      newTenantId = urlParams.get('tenantId');
-
-      newTenantId = newTenantId || tenantId;
-    }
-    // #endif
-
-    // 2.2 情况二：微信小程序：默认使用商城平台公共租户。
-    // #ifdef MP
-    newTenantId = tenantId;
-    // #endif
-
-    // 3. 如果是新租户（不相等），则进行切换
-    // noinspection EqualityComparisonWithCoercionJS
-    if (newTenantId && newTenantId != oldTenantId) {
-      // 清理掉登录用户的 token
-      const userStore = user();
-      userStore.setToken();
-
-      // 设置新的 tenantId 到本地存储
-      uni.setStorageSync('tenant-id', newTenantId);
-      console.log('租户 ID 已更新:', `${oldTenantId} -> ${newTenantId}`);
-    }
+    await ensureTenantReady();
+    return true;
   } catch (error) {
-    console.error('adaptTenant 执行失败:', error);
+    uni.showModal({ title: '商城入口暂不可用', content: error.message, showCancel: false });
+    return false;
   }
 };
 
@@ -187,14 +184,15 @@ const adaptTemplate = async (appTemplate, templateId) => {
   // 模板不存在或接口暂不可用时，使用空模板，避免首页直接跳转错误页。
   if (!diyTemplate) {
     console.warn('未找到已启用的商城装修模板');
+    appTemplate.basic.tabbar = createDefaultTabbar();
     appTemplate.home = { style: {}, data: [], components: [] };
     appTemplate.user = { style: {}, data: [], components: [] };
     return false;
   }
 
-  const tabBar = diyTemplate?.property?.tabBar;
-  if (tabBar) {
-    appTemplate.basic.tabbar = tabBar;
+  const tabBar = usableTabbar(diyTemplate?.property?.tabBar);
+  appTemplate.basic.tabbar = tabBar;
+  if (diyTemplate?.property?.tabBar) {
     // TODO 商城装修没有对 tabBar 进行角标配置，测试角标需打开以下注释
     // appTemplate.basic.tabbar.items.forEach((tabBar) => {
     //   tabBar.dot = false

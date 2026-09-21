@@ -1,5 +1,6 @@
 'use strict';
 import FileApi from '@/sheep/api/infra/file';
+import { prepareTenantUpload, isTenantRequestCurrent, captureTenantOperation, isTenantOperationCurrent } from '@/sheep/helper/tenant-runtime';
 
 const ERR_MSG_OK = 'chooseAndUploadFile:ok';
 const ERR_MSG_FAIL = 'chooseAndUploadFile:fail';
@@ -126,7 +127,9 @@ async function readFile(uniFile) {
   return uniFile.arrayBuffer();
 }
 
-function uploadCloudFiles(files, max = 5, onUploadProgress) {
+function uploadCloudFiles(files, max = 5, onUploadProgress, pageCurrent = () => true) {
+  const operation = captureTenantOperation();
+  const current = () => pageCurrent() && isTenantOperationCurrent(operation);
   files = JSON.parse(JSON.stringify(files));
   const len = files.length;
   let count = 0;
@@ -138,6 +141,7 @@ function uploadCloudFiles(files, max = 5, onUploadProgress) {
 
     function next() {
       let cur = count++;
+      if (!current()) { resolve([]); return; }
       if (cur >= len) {
         !files.find((item) => !item.url && !item.errMsg) && resolve(files);
         return;
@@ -153,11 +157,13 @@ function uploadCloudFiles(files, max = 5, onUploadProgress) {
           cloudPath: fileItem.cloudPath,
           fileType: fileItem.fileType,
           onUploadProgress: (res) => {
+            if (!current()) return;
             res.index = index;
             onUploadProgress && onUploadProgress(res);
           },
         })
         .then((res) => {
+          if (!current()) { resolve([]); return; }
           fileItem.url = res.fileID;
           fileItem.index = index;
           if (cur < len) {
@@ -165,6 +171,7 @@ function uploadCloudFiles(files, max = 5, onUploadProgress) {
           }
         })
         .catch((res) => {
+          if (!current()) { resolve([]); return; }
           fileItem.errMsg = res.errMsg || res.message;
           fileItem.index = index;
           if (cur < len) {
@@ -175,7 +182,7 @@ function uploadCloudFiles(files, max = 5, onUploadProgress) {
   });
 }
 
-function uploadFilesFromPath(path, directory = '') {
+function uploadFilesFromPath(path, directory = '', isCurrent = () => true) {
   // 目的：用于微信小程序，选择图片时，只有 path
   return uploadFiles(
     Promise.resolve({
@@ -189,19 +196,28 @@ function uploadFilesFromPath(path, directory = '') {
     }),
     {
       directory,
+      isCurrent,
     },
   );
 }
 
-async function uploadFiles(choosePromise, { onChooseFile, onUploadProgress, directory }) {
+async function uploadFiles(choosePromise, { onChooseFile, onUploadProgress, directory, isCurrent = () => true }) {
+  const operation = captureTenantOperation();
+  const check = (snapshot) => {
+    if (!isCurrent() || !isTenantOperationCurrent(operation) || (snapshot && !isTenantRequestCurrent(snapshot))) throw new Error('登录状态或页面已变化，请重新选择文件');
+  };
   // 获取选择的文件
   const res = await choosePromise;
+  check();
+  const { snapshot } = await prepareTenantUpload();
+  check(snapshot);
   // 处理文件选择回调
   let files = res.tempFiles || [];
   if (onChooseFile) {
     const customChooseRes = onChooseFile(res);
     if (typeof customChooseRes !== 'undefined') {
       files = await Promise.resolve(customChooseRes);
+      check(snapshot);
       if (typeof files === 'undefined') {
         files = res.tempFiles || []; // Fallback
       }
@@ -209,14 +225,18 @@ async function uploadFiles(choosePromise, { onChooseFile, onUploadProgress, dire
   }
 
   // 如果是前端直连上传
+  check(snapshot);
   if (UPLOAD_TYPE.CLIENT === import.meta.env.SHOPRO_UPLOAD_TYPE) {
     // 为上传创建一组 Promise
     const uploadPromises = files.map(async (file) => {
       try {
         // 1.1 获取文件预签名地址
-        const { data: presignedInfo } = await FileApi.getFilePresignedUrl(file.name, directory);
+        const { data: presignedInfo } = await FileApi.getFilePresignedUrl(file.name, directory, snapshot);
+        check(snapshot);
+        if (!presignedInfo?.uploadUrl || !presignedInfo.url) throw new Error('文件上传地址无效');
         // 1.2 获取二进制文件对象
         const fileBuffer = await readFile(file);
+        check(snapshot);
 
         // 返回上传的 Promise
         return new Promise((resolve, reject) => {
@@ -224,13 +244,17 @@ async function uploadFiles(choosePromise, { onChooseFile, onUploadProgress, dire
           uni.request({
             url: presignedInfo.uploadUrl,
             method: 'PUT',
+            timeout: 60000,
             header: {
               'Content-Type': file.type,
             },
             data: fileBuffer,
-            success: (res) => {
+            success: async (res) => {
+              try { check(snapshot); } catch (error) { reject(error); return; }
+              if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error('文件上传失败'));
               // 1.4. 记录文件信息到后端（异步）
-              createFile(presignedInfo, file);
+              try { await createFile(presignedInfo, file, snapshot); check(snapshot); }
+              catch (error) { reject(error); return; }
               // 1.5. 重新赋值
               file.url = presignedInfo.url;
               resolve(file);
@@ -251,7 +275,9 @@ async function uploadFiles(choosePromise, { onChooseFile, onUploadProgress, dire
   } else {
     // 后端上传
     for (let file of files) {
-      const { data } = await FileApi.uploadFile(file.path, directory);
+      check(snapshot);
+      const { data } = await FileApi.uploadFile(file.path, directory, snapshot, isCurrent);
+      check(snapshot);
       file.url = data;
     }
 
@@ -278,7 +304,7 @@ function chooseAndUploadFile(
  * @param vo 文件预签名信息
  * @param file 文件
  */
-function createFile(vo, file) {
+async function createFile(vo, file, snapshot) {
   const fileVo = {
     configId: vo.configId,
     url: vo.url,
@@ -287,7 +313,8 @@ function createFile(vo, file) {
     type: file.fileType,
     size: file.size,
   };
-  FileApi.createFile(fileVo);
+  const response = await FileApi.createFile(fileVo, snapshot);
+  if (response?.code !== 0 || !isTenantRequestCurrent(snapshot)) throw new Error('文件登记失败，请重新上传');
   return fileVo;
 }
 

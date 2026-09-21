@@ -84,7 +84,7 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
         }
         // 组装销售员姓名
         if (saleOrder.getSaleUserId() != null) {
-            AdminUserRespDTO user = adminUserApi.getUser(saleOrder.getSaleUserId()).getCheckedData();
+            AdminUserRespDTO user = adminUserApi.getUserIgnoreTenant(saleOrder.getSaleUserId()).getData();
             if (user != null) {
                 dto.setSaleUserName(user.getNickname());
             }
@@ -110,38 +110,6 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
             dto.setItems(itemDTOList);
         }
         return dto;
-    }
-
-    private List<ErpSaleOrderItemRespDTO> buildSaleOrderItems(Long orderId) {
-        List<ErpSaleOrderItemDO> items = saleOrderItemMapper.selectList(
-                ErpSaleOrderItemDO::getOrderId, orderId);
-        if (items.isEmpty()) {
-            return List.of();
-        }
-        // 批量组装产品名称与单位名称
-        Map<Long, ErpProductDO> productMap = productMapper.selectByIds(
-                        items.stream().map(ErpSaleOrderItemDO::getProductId)
-                                .filter(Objects::nonNull).distinct().toList())
-                .stream().collect(Collectors.toMap(ErpProductDO::getId, Function.identity()));
-        Map<Long, ErpProductUnitDO> unitMap = productUnitMapper.selectByIds(
-                        items.stream().map(ErpSaleOrderItemDO::getProductUnitId)
-                                .filter(Objects::nonNull).distinct().toList())
-                .stream().collect(Collectors.toMap(ErpProductUnitDO::getId, Function.identity()));
-        return items.stream().map(item -> {
-            ErpSaleOrderItemRespDTO itemDto = new ErpSaleOrderItemRespDTO();
-            itemDto.setProductId(item.getProductId());
-            itemDto.setCount(item.getCount());
-            itemDto.setTotalPrice(item.getTotalPrice());
-            ErpProductDO product = productMap.get(item.getProductId());
-            if (product != null) {
-                itemDto.setProductName(product.getName());
-            }
-            ErpProductUnitDO unit = unitMap.get(item.getProductUnitId());
-            if (unit != null) {
-                itemDto.setProductUnitName(unit.getName());
-            }
-            return itemDto;
-        }).collect(Collectors.toList());
     }
 
 }

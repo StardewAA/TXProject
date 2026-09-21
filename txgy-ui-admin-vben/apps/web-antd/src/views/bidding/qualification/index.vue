@@ -18,6 +18,7 @@
  * 时间口径：LocalDate（issueDate/validTo/submitDate/dueDate/newValidTo）为 'yyyy-MM-dd' 字符串；
  *   仅 latestReview.reviewedAt 是 LocalDateTime（epoch 毫秒）→ 过 fmtDateTime。 */
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { useAccessStore } from '@vben/stores';
@@ -54,6 +55,7 @@ import {
   submitQualificationRenew,
 } from '#/api/bidding/qualification';
 import { APPLY_STATUS_OPTIONS, APPLY_TYPE_OPTIONS } from '#/api/bidding/qualification';
+import { fetchSubjectProfile } from '#/api/bidding/subject';
 
 import { fmtDate, fmtDateTime } from '../certificate/format';
 import { useCertMeta } from '../certificate/useCertMeta';
@@ -113,8 +115,15 @@ async function load() {
     loading.value = false;
   }
 }
+/** 切换企业主体 → 回第 1 页重查，并同步材料完备性页签的主体（主体是所有资质查询的必填入参） */
+function onSubjectChange(): void {
+  query.pageNo = 1;
+  completenessQuery.entId = query.entId;
+  void load();
+  void loadApplies();
+}
 function resetQuery() {
-  query.entId = undefined;
+  // 企业主体由「主体档案」自动带出，是查询必填上下文；重置筛选项时不清空它
   query.qualSerial = undefined;
   query.qualStatus = undefined;
   query.keyword = undefined;
@@ -362,7 +371,7 @@ const itemColumns = [
 async function loadCompleteness(silent = false) {
   const entId = completenessQuery.entId ?? query.entId;
   if (!entId) {
-    if (!silent) message.warning('请先在顶部填写企业主体 id（entId）');
+    if (!silent) message.warning('未取到企业主体：请先在「主体档案」完善企业档案（统一社会信用代码），系统会自动带出');
     return;
   }
   completenessLoading.value = true;
@@ -388,6 +397,31 @@ const formOpen = ref(false);
 const saving = ref(false);
 const formRef = ref();
 const createdId = ref<null | number>(null);
+/* ===== 录入方式：本期仅「手工录入」可用，其余方式留位 =====
+   用户口径：后续可能有其他录入方式，需要把位置空出来；
+   契约请求 §4：source_channel 由后端注册预留值，本期后端固定 MANUAL、前端不传值。
+   后端就绪后：把对应 code 从"暂未开放"移出即可启用本项，无需改结构。 */
+const RESERVED_ENTRY_CHANNELS = ['API', 'IMPORT', 'OFFICIAL_SYNC'];
+const entryChannel = ref('MANUAL');
+const entryChannelOptions = computed(() => {
+  const options: { disabled?: boolean; label: string; value: string }[] = [
+    { label: '手工录入', value: 'MANUAL' },
+  ];
+  const dict = dictOptions('source_channel') as { label?: unknown; value?: unknown }[];
+  for (const item of dict) {
+    const value = String(item.value ?? '');
+    if (!value || value === 'MANUAL' || options.some((o) => o.value === value)) continue;
+    options.push({ disabled: true, label: String(item.label ?? value) + '（暂未开放）', value });
+  }
+  // 字典尚未注册预留值时，用占位项保证"位置"可见（不自造中文枚举，仅提示待后端注册）
+  if (dict.length === 0) {
+    for (const code of RESERVED_ENTRY_CHANNELS) {
+      options.push({ disabled: true, label: code + '（暂未开放，待后端注册字典）', value: code });
+    }
+  }
+  return options;
+});
+
 const form = reactive<QualificationApi.SaveReq>({
   entId: undefined as unknown as number,
   qualSerial: 'CONSTRUCTION',
@@ -991,10 +1025,18 @@ const alertColumns = [
   { title: '处理说明', dataIndex: 'handleNote', key: 'handleNote', width: 160, ellipsis: true },
   { title: '操作', key: 'operation', width: 110, fixed: 'right' },
 ];
+/* AttrFilter 的选项值只接受 string | number，而接口 handled 是 boolean，
+ * 故用一层计算属性做「文字选项(string) ↔ 查询入参(boolean)」的转换。 */
 const handledOptions = [
-  { label: '未处理', value: false },
-  { label: '已处理', value: true },
+  { label: '未处理', value: 'false' },
+  { label: '已处理', value: 'true' },
 ];
+const handledFilter = computed<string>({
+  get: () => (alertQuery.handled === undefined ? '' : String(alertQuery.handled)),
+  set: (v) => {
+    alertQuery.handled = v === '' ? undefined : v === 'true';
+  },
+});
 
 async function loadAlerts() {
   alertLoading.value = true;
@@ -1087,10 +1129,56 @@ watch(
   },
 );
 
+/* ===== 企业主体：不让用户手填 id =====
+   口径依据：07-主体域前端交付-业务口径说明（企业主体=法人/其他组织，uscc 是唯一键）；
+   主体档案 GET /bidding/subject/profile/get 返回本租户该角色档案（含 id/subjectName/uscc），
+   故前端用接口值自动带出，不再提供"企业主体 id"输入框。
+   缺口 B：后端若提供 GET /bidding/subject/profile/list（多主体选项），只需改本函数 —— 见
+   docs/电子证照前前端契约/后端变更请求-平台企业资质审查与录入方式扩展-2026-09-20.md §3 */
+const subjectLoading = ref(false);
+const subjectOptions = ref<{ label: string; value: number }[]>([]);
+
+/** 本租户企业主体候选：投标人 / 招标人 两套档案各取一次，取到才作为选项（取不到不显示，不自造） */
+async function loadSubjectOptions(): Promise<void> {
+  subjectLoading.value = true;
+  try {
+    const list: { label: string; value: number }[] = [];
+    for (const subjectType of ['BIDDER', 'TENDERER']) {
+      const profile = await fetchSubjectProfile(subjectType).catch(() => null);
+      if (profile?.id !== undefined && profile?.id !== null && profile.subjectName) {
+        list.push({
+          label: profile.uscc ? profile.subjectName + '（' + profile.uscc + '）' : profile.subjectName,
+          value: Number(profile.id),
+        });
+      }
+    }
+    subjectOptions.value = list;
+    // 台账筛选 / 材料完备性 / 新建表单统一用同一主体，避免用户手填 id（多主体默认首个，仍可切换）
+    const first = list[0];
+    if (first && !query.entId) {
+      query.entId = first.value;
+      completenessQuery.entId = first.value;
+    }
+  } finally {
+    subjectLoading.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
   void loadApplies();
+  void loadSubjectOptions();
 });
+
+/* ================= 平台审查中心入口 =================
+   审查模型（2026-09-20 重构）：企业录入证照/资质后自动触发审查任务，由超管公司在
+   「平台审查中心」（/certificate/review-center，菜单 60005600）统一筛选与审查；
+   租户在共享界面只读查看本企业任务与结果。本页不再提供逐条审查队列。
+   契约：docs/电子证照前前端契约/后端变更请求-平台审查任务中心-2026-09-20.md */
+const router = useRouter();
+function goReviewCenter(): void {
+  void router.push('/certificate/review-center');
+}
 </script>
 
 <template>
@@ -1109,7 +1197,19 @@ onMounted(() => {
         <div class="ct-sub">资质台账 · 延续申报审批 · 标准与要素台账 · 安许证与预警 · 完备性自查</div>
       </div>
       <div class="ct-actions">
-        <a-input-number v-model:value="query.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" />
+        <a-select
+          v-if="subjectOptions.length > 1"
+          v-model:value="query.entId"
+          :loading="subjectLoading"
+          :options="subjectOptions"
+          allow-clear
+          placeholder="自动带出，可切换"
+          style="width: 260px"
+          @change="onSubjectChange"
+        />
+        <a-button v-if="can('bidding:review:approve') || can('bidding:review:reject')" @click="goReviewCenter">
+          平台审查中心
+        </a-button>
         <a-button v-if="can('bidding:qualification:material:query')" :loading="completenessLoading" @click="loadCompleteness()">
           材料完备性自查
         </a-button>
@@ -1177,7 +1277,7 @@ onMounted(() => {
               临近到期 {{ completeness.expiringItems?.length ?? 0 }} 项
             </a-tag>
           </a-space>
-          <div v-else class="ct-empty">填入企业主体 id 后点「自查」：返回身份类 / 资质类 / 实力类三档结论</div>
+          <div v-else class="ct-empty">企业主体由「主体档案」自动带出；点「自查」返回身份类 / 资质类 / 实力类三档结论</div>
         </a-spin>
       </div>
     </div>
@@ -1262,7 +1362,7 @@ onMounted(() => {
                   </a-space>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无资质记录：填企业主体 id 查询，或点右上「资质建档」</div></template>
+              <template #emptyText><div class="ct-empty">暂无资质记录：先在页首确认/选择企业主体（由主体档案自动带出），或点右上「资质建档」录入</div></template>
             </a-table>
           </div>
         </div>
@@ -1461,7 +1561,7 @@ onMounted(() => {
                   </a-tag>
                 </template>
               </template>
-              <template #emptyText><div class="ct-empty">暂无核查记录</div></template>
+              <template #emptyText><div class="ct-empty">暂无核查记录：在「① 台账」行点「达标核查」后产生留痕</div></template>
             </a-table>
           </div>
         </div>
@@ -1540,7 +1640,7 @@ onMounted(() => {
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
             <AttrFilter v-model="alertQuery.refType" label="来源类型" :options="QualificationApi.ALERT_REF_TYPE_OPTIONS" />
             <AttrFilter v-model="alertQuery.alertLevel" label="级别" :options="dictOptions('risk_level')" />
-            <AttrFilter v-model="alertQuery.handled" label="处理状态" :options="handledOptions" />
+            <AttrFilter v-model="handledFilter" label="处理状态" :options="handledOptions" />
             <a-button v-if="can('bidding:qualification:alert-run')" :loading="scanning" @click="doScan">
               执行一次扫描
             </a-button>
@@ -1608,7 +1708,7 @@ onMounted(() => {
       <a-tab-pane key="material" tab="⑤ 完备性明细与扫描">
         <div class="ct-panel">
           <div class="mb-3 rounded-md border border-border bg-card px-3.5 pt-1.5 pb-2.5">
-            <AttrFilter label="企业主体"><a-input-number v-model:value="completenessQuery.entId" :min="1" placeholder="企业主体 id（entId）" style="width: 200px" /></AttrFilter>
+            <AttrFilter label="企业主体"><a-select v-model:value="completenessQuery.entId" :loading="subjectLoading" :options="subjectOptions" allow-clear placeholder="自动带出，可切换" style="width: 260px" /></AttrFilter>
             <AttrFilter label="核验基准日（可空=今天）">
 <a-date-picker
               v-model:value="completenessQuery.asOf"
@@ -1688,10 +1788,10 @@ onMounted(() => {
                     </template>
                     <template v-else-if="column.key === 'validTo'">{{ record.validTo || '长期' }}</template>
                   </template>
-                  <template #emptyText><div class="ct-empty">无逐项明细</div></template>
+                  <template #emptyText><div class="ct-empty">无逐项明细：自查未返回逐项结果，可重新执行「自查」</div></template>
                 </a-table>
               </template>
-              <div v-else class="ct-empty">输入企业主体 id 后点「自查」，返回身份类 / 资质类 / 实力类三档结论</div>
+              <div v-else class="ct-empty">企业主体由「主体档案」自动带出：点「自查」返回身份类 / 资质类 / 实力类三档结论</div>
             </a-spin>
           </div>
         </div>
@@ -1713,6 +1813,8 @@ onMounted(() => {
         </div>
       </a-tab-pane>
     </a-tabs>
+
+    >
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="detailOpen" class="bid-ind" :width="820" title="资质详情" destroy-on-close>
@@ -1866,7 +1968,20 @@ onMounted(() => {
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="企业主体" name="entId">
-              <a-input-number v-model:value="form.entId" :min="1" style="width: 100%" />
+              <a-select
+                v-model:value="form.entId"
+                :loading="subjectLoading"
+                :options="subjectOptions"
+                placeholder="自动带出（取自主体档案），可切换"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item
+              label="录入方式"
+              extra="本期仅支持「手工录入」；其他录入方式已留位，后端就绪后启用（见 后端变更请求 §4）"
+            >
+              <a-select v-model:value="entryChannel" :options="entryChannelOptions" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="8">

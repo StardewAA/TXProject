@@ -18,6 +18,7 @@ export namespace HrmAttendanceClockApi {
     latitude?: number; // 纬度
     ssid?: string; // WiFi 名称
     mac?: string; // WiFi MAC 地址
+    photoUrl?: string; // 打卡现场照片（人脸/工地照）地址
     remark?: string; // 备注
     employeeName?: string; // 员工姓名
     jobNumber?: string; // 工号

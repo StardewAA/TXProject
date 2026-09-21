@@ -8,6 +8,7 @@ import cn.iocoder.txgy.module.trade.framework.delivery.config.TradeExpressProper
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.ExpressClient;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackRespDTO;
+import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressSnapshotRespDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.kd100.Kd100ExpressQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.kd100.Kd100ExpressQueryRespDTO;
 import lombok.AllArgsConstructor;
@@ -20,10 +21,11 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.Locale;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.EXPRESS_API_QUERY_ERROR;
-import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.EXPRESS_API_QUERY_FAILED;
 import static cn.iocoder.txgy.module.trade.framework.delivery.core.client.convert.ExpressQueryConvert.INSTANCE;
 
 /**
@@ -50,20 +52,33 @@ public class Kd100ExpressClient implements ExpressClient {
      */
     @Override
     public List<ExpressTrackRespDTO> getExpressTrackList(ExpressTrackQueryReqDTO reqDTO) {
+        return getSnapshot(reqDTO).getEvents();
+    }
+
+    @Override
+    public ExpressSnapshotRespDTO getSnapshot(ExpressTrackQueryReqDTO reqDTO) {
         // 发起请求
         Kd100ExpressQueryReqDTO requestDTO = INSTANCE.convert2(reqDTO)
-                .setExpressCode(reqDTO.getExpressCode().toLowerCase());
+                .setExpressCode(reqDTO.getExpressCode().toLowerCase(Locale.ROOT));
+        // Optional recipient contact is not sent for carriers (including the planned Deppon pilot) that do not require it.
+        if (!Set.of("shunfeng", "shunfengkuaiyun", "zhongtong").contains(requestDTO.getExpressCode())) {
+            requestDTO.setPhone(null);
+        }
         Kd100ExpressQueryRespDTO respDTO = httpRequest(REAL_TIME_QUERY_URL, requestDTO,
                 Kd100ExpressQueryRespDTO.class);
 
         // 处理结果
-        if (Objects.equals("false", respDTO.getResult())) {
-            throw exception(EXPRESS_API_QUERY_FAILED, respDTO.getMessage());
+        if (respDTO != null && "500".equals(respDTO.getStatus())) {
+            return new ExpressSnapshotRespDTO(); // Official "query has no result", not a transport or API failure.
         }
-        if (CollUtil.isEmpty(respDTO.getTracks())) {
-            return Collections.emptyList();
+        if (respDTO == null || Objects.equals("false", respDTO.getResult())
+                || !Objects.equals("200", respDTO.getStatus())
+                || !Objects.equals(reqDTO.getLogisticsNo(), respDTO.getLogisticsNo())
+                || !reqDTO.getExpressCode().equalsIgnoreCase(respDTO.getExpressCompanyCode())) {
+            throw exception(EXPRESS_API_QUERY_ERROR);
         }
-        return INSTANCE.convertList2(respDTO.getTracks());
+        return new ExpressSnapshotRespDTO().setRawStatus(respDTO.getState()).setEvents(
+                CollUtil.isEmpty(respDTO.getTracks()) ? Collections.emptyList() : INSTANCE.convertList2(respDTO.getTracks()));
     }
 
     /**
@@ -86,17 +101,16 @@ public class Kd100ExpressClient implements ExpressClient {
         requestBody.add("customer", config.getCustomer());
         requestBody.add("sign", sign);
         requestBody.add("param", param);
-        log.debug("[httpRequest][请求参数({})]", requestBody);
 
         // 发送请求
         HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
         ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
-        log.debug("[httpRequest][的响应结果({})]", responseEntity);
         // 处理响应
-        if (!responseEntity.getStatusCode().is2xxSuccessful()) {
+        if (!responseEntity.getStatusCode().is2xxSuccessful() || responseEntity.getBody() == null
+                || responseEntity.getBody().length() > 1_000_000) {
             throw exception(EXPRESS_API_QUERY_ERROR);
         }
-        return JsonUtils.parseObject(responseEntity.getBody(), respClass);
+        return JsonUtils.parseObjectQuietly(responseEntity.getBody(), respClass);
     }
 
     private String generateReqSign(String param, String key, String customer) {

@@ -137,10 +137,14 @@ logging:
 
 # OPENLAB BS配置项，设置当前项目所有自定义的配置
 txgy:
+  trade:
+    erp-inventory:
+      mode: ${MALL_ERP_INVENTORY_MODE:mock}
+      mock-enabled: ${MALL_ERP_MOCK_ENABLED:true}
   env: # 多环境的配置项
     tag: ${HOSTNAME}
   security:
     mock-enable: true
   access-log: # 访问日志的配置项
-    enable: false
+    enable: true
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc

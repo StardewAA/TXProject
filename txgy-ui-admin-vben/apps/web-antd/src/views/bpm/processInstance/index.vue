@@ -22,10 +22,19 @@ import {
 import { DictTag } from '#/components/dict-tag';
 import { $t } from '#/locales';
 import { router } from '#/router';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
+import { getUniqueTaskUsers } from './detail/modules/time-line-users';
 
 import { useGridColumns, useGridFormSchema } from './data';
 
 defineOptions({ name: 'BpmProcessInstanceMy' });
+
+const props = withDefaults(defineProps<{
+  detailRouteName?: string;
+  processDefinitionKeys?: string;
+}>(), {
+  detailRouteName: 'BpmProcessInstanceDetail',
+});
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -34,10 +43,11 @@ function handleRefresh() {
 
 /** 查看流程实例 */
 function handleDetail(row: BpmProcessInstanceApi.ProcessInstance) {
-  router.push({
-    name: 'BpmProcessInstanceDetail',
-    query: { id: row.id },
-  });
+  router.push(buildApprovalDetailLocation(props.detailRouteName, row.id));
+}
+
+function currentTaskUsers(row: BpmProcessInstanceApi.ProcessInstance) {
+  return getUniqueTaskUsers(row.tasks ?? []);
 }
 
 /** 重新发起流程 */
@@ -46,6 +56,19 @@ async function handleCreate(row?: BpmProcessInstanceApi.ProcessInstance) {
     const processDefinitionDetail = await getProcessDefinition(
       row.processDefinitionId,
     );
+    const wmsRoute = processDefinitionDetail?.key === 'wms_receipt_approval'
+      ? '/wms/receipt'
+      : processDefinitionDetail?.key === 'wms_shipment_approval'
+        ? '/wms/shipment'
+        : undefined;
+    if (wmsRoute) {
+      if (!row.businessKey || !/^\d+$/.test(row.businessKey)) {
+        message.error('关联的 WMS 单据编号无效，无法重新发起');
+        return;
+      }
+      await router.push({ path: wmsRoute, query: { restartId: row.businessKey } });
+      return;
+    }
     if (processDefinitionDetail?.formType === BpmModelFormType.CUSTOM) {
       if (!processDefinitionDetail.formCustomCreatePath) {
         message.error('未配置业务表单的提交路由，无法重新发起');
@@ -108,6 +131,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           return await getProcessInstanceMyPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
+            processDefinitionKeys: props.processDefinitionKeys,
             ...formValues,
           });
         },
@@ -152,14 +176,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <template
           v-if="
             row.status === BpmProcessInstanceStatus.RUNNING &&
-            row.tasks?.length! > 0
+            currentTaskUsers(row).length > 0
           "
         >
           <!-- 单人审批 -->
-          <template v-if="row.tasks!.length === 1">
+          <template v-if="currentTaskUsers(row).length === 1">
             <span>
               <Button type="link" @click="handleDetail(row)">
-                {{ row.tasks![0]!.assigneeUser?.nickname }}
+                {{ currentTaskUsers(row)[0]?.nickname }}
               </Button>
               ({{ row.tasks![0]!.name }}) 审批中
             </span>
@@ -168,9 +192,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <template v-else>
             <span>
               <Button type="link" @click="handleDetail(row)">
-                {{ row.tasks![0]!.assigneeUser?.nickname }}
+                {{ currentTaskUsers(row)[0]?.nickname }}
               </Button>
-              等 {{ row.tasks!.length }} 人 ({{ row.tasks![0]!.name }})审批中
+              等 {{ currentTaskUsers(row).length }} 人 ({{ row.tasks![0]!.name }})审批中
             </span>
           </template>
         </template>

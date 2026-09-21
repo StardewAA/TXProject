@@ -24,6 +24,8 @@ export namespace WmsInventoryHistoryApi {
     orderId?: number;
     orderNo?: string;
     orderType?: number;
+    creator?: string;
+    creatorName?: string;
     createTime?: Date;
   }
 }
@@ -34,4 +36,21 @@ export function getInventoryHistoryPage(params: PageParam) {
     '/wms/inventory-history/page',
     { params },
   );
+}
+
+/** 导出库存流水 */
+export function exportInventoryHistory(params: any) {
+  return requestClient.download('/wms/inventory-history/export-excel', { params });
+}
+
+/** 查询某个 SKU/仓库的库存变化，用于库存趋势图 */
+export function getInventoryHistoryTrend(params: {
+  skuId: number;
+  warehouseId?: number;
+}) {
+  return getInventoryHistoryPage({
+    pageNo: 1,
+    pageSize: 200,
+    ...params,
+  });
 }

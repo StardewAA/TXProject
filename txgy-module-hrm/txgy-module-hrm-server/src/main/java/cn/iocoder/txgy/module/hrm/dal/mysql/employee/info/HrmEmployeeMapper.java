@@ -370,4 +370,19 @@ public interface HrmEmployeeMapper extends BaseMapperX<HrmEmployeeDO> {
         return query;
     }
 
+    /**
+     * 统计某部门当前在册（在职类）人数，用于部门编制对比
+     *
+     * @param deptId 部门编号
+     * @return 在册人数
+     */
+    default Long selectActiveCountByDeptId(Long deptId) {
+        if (deptId == null) {
+            return 0L;
+        }
+        return selectCount(new LambdaQueryWrapperX<HrmEmployeeDO>()
+                .eq(HrmEmployeeDO::getDeptId, deptId)
+                .in(HrmEmployeeDO::getEntryStatus, HrmEmployeeEntryStatusEnum.ACTIVE_STATUSES));
+    }
+
 }

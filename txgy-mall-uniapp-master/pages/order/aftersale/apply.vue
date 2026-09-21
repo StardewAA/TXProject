@@ -1,6 +1,7 @@
 <!-- 售后申请 -->
 <template>
   <s-layout title="申请售后">
+    <view v-if="state.expired" class="account-expired" role="alert">登录账号已变化，旧订单及售后草稿已清除，请从当前账号的订单重新进入。</view>
     <!-- 售后商品 -->
     <view class="goods-box" v-if="state.item.id">
       <s-goods-item
@@ -30,6 +31,7 @@
               :key="index"
             >
               <radio
+                :disabled="state.submitting"
                 :checked="formData.way === item.value"
                 color="var(--ui-BG-Main)"
                 style="transform: scale(0.8)"
@@ -61,7 +63,8 @@
       <view class="refund-item">
         <view class="item-title ss-m-b-20">相关描述</view>
         <view class="describe-box">
-          <uni-easyinput
+            <uni-easyinput
+              :disabled="state.submitting"
             :inputBorder="false"
             class="describe-content"
             type="textarea"
@@ -72,6 +75,7 @@
           />
           <view class="upload-img">
             <s-uploader
+              v-if="!state.submitting"
               v-model:url="formData.applyPicUrls"
               fileMediatype="image"
               limit="9"
@@ -87,8 +91,8 @@
     <su-fixed bottom placeholder v-if="state.item.id">
       <view class="foot-wrap">
         <view class="foot_box ss-flex ss-col-center ss-row-between ss-p-x-30">
-          <button class="ss-reset-button contcat-btn" @tap="sheep.$router.go('/pages/chat/index')">
-            联系客服
+          <button class="ss-reset-button contcat-btn" @tap="openCustomerService">
+            {{ state.order.shopId > 0 ? '联系店铺客服' : '联系平台客服' }}
           </button>
           <button
             class="ss-reset-button ui-BG-Main-Gradient sub-btn"
@@ -119,6 +123,7 @@
             <label class="radio ss-flex ss-col-center" v-for="item in state.reasonList" :key="item">
               <view class="ss-flex-1 ss-p-20">{{ item }}</view>
               <radio
+                :disabled="state.submitting"
                 :value="item"
                 color="var(--ui-BG-Main)"
                 :checked="item === state.currentValue"
@@ -138,12 +143,14 @@
 
 <script setup>
   import sheep from '@/sheep';
+  import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
   import { onLoad } from '@dcloudio/uni-app';
   import { reactive, ref } from 'vue';
   import OrderApi from '@/sheep/api/trade/order';
   import TradeConfigApi from '@/sheep/api/trade/config';
   import { fen2yuan } from '@/sheep/hooks/useGoods';
   import AfterSaleApi from '@/sheep/api/trade/afterSale';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
 
   const form = ref(null);
   const state = reactive({
@@ -154,6 +161,7 @@
     config: {}, // 交易配置
     loaded: false, // 是否完成订单数据加载
     submitting: false, // 是否正在提交申请
+    expired: false,
 
     // 售后类型
     wayList: [
@@ -178,10 +186,20 @@
   });
   const rules = reactive({});
   const defaultReasons = ['其他'];
+  const task = useTenantTask(() => {
+    Object.assign(state, { expired: true, loaded: true, submitting: false, orderId: 0, itemId: 0,
+      order: {}, item: {}, config: {}, wayList: [], reasonList: [], showModal: false, currentValue: '' });
+    Object.assign(formData, { way: '', applyReason: '', applyDescription: '', applyPicUrls: [] });
+  });
+
+  function openCustomerService() {
+    if (!task.current() || !state.orderId || !state.item.id) return;
+    sheep.$router.go('/pages/chat/service', chatEntry(state.order.shopId, 'ORDER', state.orderId));
+  }
 
   // 提交表单
   async function submit() {
-    if (state.submitting) {
+    if (!task.current() || state.submitting) {
       return;
     }
     if (!state.item.id) {
@@ -207,11 +225,12 @@
       way: Number(formData.way),
       applyReason: String(formData.applyReason).trim(),
       applyDescription: formData.applyDescription || '',
-      applyPicUrls: Array.isArray(formData.applyPicUrls) ? formData.applyPicUrls : [],
+      applyPicUrls: Array.isArray(formData.applyPicUrls) ? [...formData.applyPicUrls] : [],
     };
     state.submitting = true;
     try {
       const response = await AfterSaleApi.createAfterSale(data);
+      if (!task.current()) return;
       if (response?.code === 0) {
         uni.showToast({
           title: '申请成功',
@@ -219,15 +238,17 @@
         sheep.$router.redirect('/pages/order/aftersale/list');
       }
     } catch (error) {
+      if (!task.current()) return;
       console.warn('提交售后申请失败', error);
       sheep.$helper.toast('提交售后申请失败');
     } finally {
-      state.submitting = false;
+      if (task.current()) state.submitting = false;
     }
   }
 
   // 选择售后类型
   function onRefundChange(e) {
+    if (!task.current() || state.submitting) return;
     const way = Number(e?.detail?.value);
     formData.way = Number.isFinite(way) ? way : '';
     // 清理理由
@@ -242,11 +263,13 @@
 
   // 选择申请原因
   function onChange(e) {
+    if (!task.current() || state.submitting) return;
     state.currentValue = e?.detail?.value || '';
   }
 
   // 确定
   function onReason() {
+    if (!task.current() || state.submitting) return;
     if (!state.currentValue) {
       sheep.$helper.toast('请选择申请原因');
       return;
@@ -256,6 +279,7 @@
   }
 
   onLoad(async (options = {}) => {
+    if (!task.current()) return;
     // 解析参数
     const itemId = String(options.itemId || '').trim();
     if (!options.orderId || !/^\d+$/.test(itemId) || /^0+$/.test(itemId)) {
@@ -276,6 +300,7 @@
     try {
       // 读取订单信息
       const response = await OrderApi.getOrderDetail(state.orderId);
+      if (!task.current()) return;
       if (response?.code !== 0 || !response.data) {
         sheep.$helper.toast('订单信息不存在');
         return;
@@ -300,6 +325,7 @@
       // 读取配置；配置为空时使用“其他”，保证申请表单仍可提交
       try {
         const configResponse = await TradeConfigApi.getTradeConfig();
+        if (!task.current()) return;
         if (configResponse?.code === 0 && configResponse.data) {
           state.config = configResponse.data;
         }
@@ -307,15 +333,17 @@
         // 配置读取失败时使用默认原因，不阻断售后申请
       }
     } catch (error) {
+      if (!task.current()) return;
       console.warn('加载售后订单信息失败', error);
       sheep.$helper.toast('加载订单信息失败');
     } finally {
-      state.loaded = true;
+      if (task.current()) state.loaded = true;
     }
   });
 </script>
 
 <style lang="scss" scoped>
+  .account-expired { padding: 28rpx; background: #fff7e6; color: #7a4b00; line-height: 1.7; }
   .item-title {
     font-size: 30rpx;
     font-weight: bold;

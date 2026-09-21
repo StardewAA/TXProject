@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.returns.ErpPurchaseReturnPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.returns.ErpPurchaseReturnRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.returns.ErpPurchaseReturnSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseReturnDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseReturnItemDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO;
@@ -134,6 +135,19 @@ public class ErpPurchaseReturnController {
         ExcelUtils.write(response, "采购退货.xls", "数据", ErpPurchaseReturnRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出采购退货 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:purchase-return:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportPurchaseReturnPdf(@Valid ErpPurchaseReturnPageReqVO pageReqVO,
+                                        HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpPurchaseReturnRespVO> list = buildPurchaseReturnVOPageResult(
+                purchaseReturnService.getPurchaseReturnPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "采购退货.pdf", "采购退货列表",
+                ErpPurchaseReturnRespVO.class, list);
+    }
+
     private PageResult<ErpPurchaseReturnRespVO> buildPurchaseReturnVOPageResult(PageResult<ErpPurchaseReturnDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -149,7 +163,7 @@ public class ErpPurchaseReturnController {
         Map<Long, ErpSupplierDO> supplierMap = supplierService.getSupplierMap(
                 convertSet(pageResult.getList(), ErpPurchaseReturnDO::getSupplierId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), purchaseReturn -> Long.parseLong(purchaseReturn.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpPurchaseReturnRespVO.class, purchaseReturn -> {

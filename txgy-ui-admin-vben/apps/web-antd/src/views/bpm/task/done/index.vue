@@ -9,20 +9,29 @@ import { message } from 'ant-design-vue';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getTaskDonePage, withdrawTask } from '#/api/bpm/task';
 import { router } from '#/router';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import { canShowWithdrawTask } from './withdraw';
 
 defineOptions({ name: 'BpmDoneTask' });
 
+const props = withDefaults(defineProps<{
+  detailRouteName?: string;
+  processDefinitionKeys?: string;
+  withdrawEnabled?: boolean;
+}>(), {
+  detailRouteName: 'BpmProcessInstanceDetail',
+  withdrawEnabled: true,
+});
+
 /** 查看历史 */
 function handleHistory(row: BpmTaskApi.Task) {
-  router.push({
-    name: 'BpmProcessInstanceDetail',
-    query: {
-      id: row.processInstance.id,
-      taskId: row.id,
-    },
-  });
+  router.push(buildApprovalDetailLocation(
+    props.detailRouteName,
+    row.processInstance.id,
+    row.id,
+  ));
 }
 
 /** 撤回任务 */
@@ -54,6 +63,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           return await getTaskDonePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
+            processDefinitionKeys: props.processDefinitionKeys,
             ...formValues,
           });
         },
@@ -95,6 +105,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               danger: true,
               icon: ACTION_ICON.DELETE,
+              ifShow: canShowWithdrawTask(row, props.withdrawEnabled),
               popConfirm: {
                 title: '确定要撤回该任务吗？',
                 confirm: handleWithdraw.bind(null, row),

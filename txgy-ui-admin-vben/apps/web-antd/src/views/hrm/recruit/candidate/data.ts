@@ -382,6 +382,12 @@ export function useGridColumns(): VxeTableGridOptions<HrmRecruitCandidateApi.Rec
       title: '应聘流程状态',
       width: 150,
     },
+    {
+      field: 'offerApprovalStatus',
+      title: 'Offer 状态',
+      width: 140,
+      slots: { default: 'offerStatus' },
+    },
     { field: 'mobile', title: '手机号码', width: 130 },
     {
       field: 'sex',

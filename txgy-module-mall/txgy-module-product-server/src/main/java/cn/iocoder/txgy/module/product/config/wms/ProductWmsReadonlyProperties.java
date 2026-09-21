@@ -23,6 +23,7 @@ public class ProductWmsReadonlyProperties {
      *
      * <p>示例：Bearer xxx</p>
      */
+    @lombok.ToString.Exclude
     private String authorization;
 
 }

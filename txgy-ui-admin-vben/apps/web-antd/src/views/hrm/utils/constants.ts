@@ -107,9 +107,12 @@ export const HrmRecruitApplicationStatus = {
   OFFER_APPROVING: 'OFFER_APPROVING',
   OFFER_SENT: 'OFFER_SENT',
   OFFER_REJECTED: 'OFFER_REJECTED',
+  OFFER_WITHDRAWN: 'OFFER_WITHDRAWN',
   OFFER_EXPIRED: 'OFFER_EXPIRED',
+  OFFER_CANDIDATE_REJECTED: 'OFFER_CANDIDATE_REJECTED',
   PENDING_ONBOARD: 'PENDING_ONBOARD',
   ONBOARDED: 'ONBOARDED',
+  PASSED: 'PASSED',
   ELIMINATED: 'ELIMINATED',
   WITHDRAWN: 'WITHDRAWN',
 } as const;
@@ -156,6 +159,8 @@ export const HrmRecruitInterviewResult = {
   CANCELED: 4, // 取消
   ABSENT: 5, // 缺席
 } as const;
+
+export const HRM_RECRUIT_MAX_INTERVIEW_ROUNDS = 3;
 
 /** 员工入职状态枚举（对齐后端 HrmEmployeeEntryStatusEnum） */
 export const HrmEmployeeEntryStatus = {
@@ -581,6 +586,7 @@ export const HrmEmployeeFileType = {
   PREVIOUS_LEAVE_CERTIFICATE: 25,
   REGULAR_APPLICATION: 26,
   ARCHIVE_OTHER: 27,
+  TRAINING_AGREEMENT: 28,
   LEAVE_APPROVAL: 31,
   LEAVE_CERTIFICATE: 32,
   LEAVE_OTHER: 33,
@@ -730,6 +736,7 @@ export const HrmEmployeeFileGroups = [
         value: HrmEmployeeFileType.PREVIOUS_LEAVE_CERTIFICATE,
       },
       { label: '转正申请表', value: HrmEmployeeFileType.REGULAR_APPLICATION },
+      { label: '培训协议', value: HrmEmployeeFileType.TRAINING_AGREEMENT },
       { label: '其他', value: HrmEmployeeFileType.ARCHIVE_OTHER },
     ],
   },

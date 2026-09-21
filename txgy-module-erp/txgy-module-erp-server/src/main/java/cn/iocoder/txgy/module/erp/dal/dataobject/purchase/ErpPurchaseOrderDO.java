@@ -53,11 +53,27 @@ public class ErpPurchaseOrderDO extends BaseDO {
     /** 全局业务链号 */
     private String businessChainNo;
     /**
+     * 反审批原因
+     */
+    private String reverseApproveReason;
+    /** 来源类型，例如 AWARD_RESULT */
+    /** 来源业务编号 */
+    /** 来源单号 */
+    /** 全局业务链号 */
+    /**
      * 供应商编号
      *
      * 关联 {@link ErpSupplierDO#getId()}
      */
     private Long supplierId;
+    /**
+     * 创建订单时保存的供应商资信快照。
+     */
+    private Long supplierCreditSnapshotVersion;
+    private String supplierCreditAuthStatus;
+    private String supplierCreditQualificationStatus;
+    private String supplierCreditRiskLevel;
+    private String supplierCreditPurchaseLimitStatus;
     /**
      * 结算账户编号
      *

@@ -1,20 +1,27 @@
 package cn.iocoder.txgy.module.erp.service.integration;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.erp.api.wms.dto.ErpInventoryDecisionCallbackReqDTO;
 import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWmsDocumentItemDTO;
 import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWmsExecutionCallbackReqDTO;
+import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.out.ErpSaleOutSaveReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductUnitDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOrderItemDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOutDO;
+import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderItemMapper;
 import cn.iocoder.txgy.module.erp.dal.mysql.sale.ErpSaleOrderMapper;
+import cn.iocoder.txgy.module.erp.dal.mysql.stock.ErpWarehouseMapper;
+import cn.iocoder.txgy.module.erp.enums.ErpAuditStatus;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductUnitService;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
+import cn.iocoder.txgy.module.erp.service.sale.ErpSaleOutService;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationDocumentItemDTO;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsIntegrationAcceptedRespDTO;
 import cn.iocoder.txgy.module.wms.api.integration.dto.WmsInventoryDecisionReqDTO;
@@ -29,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -63,6 +71,12 @@ public class ErpSaleWmsIntegrationService {
     private ErpCustomerService customerService;
     @Resource
     private ErpWmsIntegrationGateway integrationGateway;
+    /** 销售出库单：WMS 发货回传后据此落单，避免绕过 erp_sale_out */
+    @Resource
+    private ErpSaleOutService saleOutService;
+    /** 用 WMS 仓库编码反查 ERP 仓库编号（出库明细必须落 ERP 仓库） */
+    @Resource
+    private ErpWarehouseMapper warehouseMapper;
     @Autowired
     @Qualifier("erpWmsIntegrationRecordService")
     private ErpWmsIntegrationRecordService recordService;
@@ -274,8 +288,86 @@ public class ErpSaleWmsIntegrationService {
             update.setOutCount(totalOut);
         }
         saleOrderMapper.updateById(update);
+        // 落销售出库单：原实现只把实发数量写进订单 out_count，
+        // 既不落 erp_sale_out 也不扣 ERP 业务账库存，导致销售数据无法统计。
+        if ("COMPLETED".equals(request.getExecutionStatus())) {
+            createSaleOutFromExecution(order, orderItems, resultMap, request);
+        }
         recordService.createInboundSuccess(request.getRequestId(), "SALE_SHIPMENT",
                 request.getSourceOrderNo(), request.getEventVersion(), request);
+    }
+
+    /**
+     * 由 WMS 发货回传生成并审批销售出库单。
+     *
+     * <p>为什么必须落单：销售数量/金额的统计口径是<b>销售出库单据</b>，而非库存差。
+     * 原实现只把实发数量写进销售订单的 out_count，导致 {@code erp_sale_out} 长期为空、
+     * 销售数据无法统计（第 4 批绩效报表的取数前提）。</p>
+     *
+     * <p>复用既有 Service（createSaleOut + updateSaleOutStatus），因此库存扣减、
+     * 订单出库数量回算等逻辑完全一致，不产生第二套口径。</p>
+     */
+    private void createSaleOutFromExecution(ErpSaleOrderDO order, List<ErpSaleOrderItemDO> orderItems,
+                                            Map<Integer, ErpWmsDocumentItemDTO> resultMap,
+                                            ErpWmsExecutionCallbackReqDTO request) {
+        // 幂等保护：该订单已有出库单则不再自动生成，避免重复计数
+        List<ErpSaleOutDO> existing = saleOutService.getSaleOutListByOrderId(order.getId());
+        if (CollUtil.isNotEmpty(existing)) {
+            log.warn("[createSaleOutFromExecution][订单 {} 已存在 {} 张出库单，跳过自动生成]",
+                    order.getNo(), existing.size());
+            return;
+        }
+        List<ErpSaleOutSaveReqVO.Item> items = new ArrayList<>();
+        for (int index = 0; index < orderItems.size(); index++) {
+            ErpSaleOrderItemDO orderItem = orderItems.get(index);
+            ErpWmsDocumentItemDTO result = resultMap.get(index + 1);
+            if (result == null || result.getActualQuantity() == null
+                    || result.getActualQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                continue; // 未实发的行不落出库明细
+            }
+            Long warehouseId = resolveWarehouseId(result.getWarehouseCode(), orderItem.getWarehouseCode());
+            if (warehouseId == null) {
+                log.warn("[createSaleOutFromExecution][订单 {} 第 {} 行仓库编码 {} 无法映射到 ERP 仓库，跳过该行]",
+                        order.getNo(), index + 1, result.getWarehouseCode());
+                continue;
+            }
+            items.add(new ErpSaleOutSaveReqVO.Item()
+                    .setOrderItemId(orderItem.getId())
+                    .setProductId(orderItem.getProductId())
+                    .setProductUnitId(orderItem.getProductUnitId())
+                    .setWarehouseId(warehouseId)
+                    .setCount(result.getActualQuantity())
+                    .setProductPrice(orderItem.getProductPrice())
+                    .setTaxPercent(orderItem.getTaxPercent()));
+        }
+        if (items.isEmpty()) {
+            log.warn("[createSaleOutFromExecution][订单 {} 无可用实发明细，跳过自动生成]", order.getNo());
+            return;
+        }
+        Long saleOutId = saleOutService.createSaleOut(new ErpSaleOutSaveReqVO()
+                .setOrderId(order.getId())
+                .setOutTime(LocalDateTime.now())
+                .setSaleUserId(order.getSaleUserId())
+                .setAccountId(order.getAccountId())
+                // discountPercent 是优惠率：0 = 不打折
+                .setDiscountPercent(BigDecimal.ZERO)
+                // otherPrice 必须显式传 0：calculateTotalPrice 对其直接做加法，为 null 会 NPE
+                .setOtherPrice(BigDecimal.ZERO)
+                .setRemark("WMS 发货回传自动生成：" + request.getWmsOrderNo())
+                .setItems(items));
+        saleOutService.updateSaleOutStatus(saleOutId, ErpAuditStatus.APPROVE.getStatus());
+        log.info("[createSaleOutFromExecution][订单 {} 自动生成并审批出库单 {}（{} 行）]",
+                order.getNo(), saleOutId, items.size());
+    }
+
+    /** 用 WMS 仓库编码反查 ERP 仓库编号；WMS 未给出编码时退回订单行上的编码 */
+    private Long resolveWarehouseId(String wmsCode, String fallbackCode) {
+        String code = wmsCode != null && !wmsCode.isBlank() ? wmsCode : fallbackCode;
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        ErpWarehouseDO warehouse = warehouseMapper.selectByWmsWarehouseCode(code.trim());
+        return warehouse != null ? warehouse.getId() : null;
     }
 
     private String mapExecutionStatus(String status) {

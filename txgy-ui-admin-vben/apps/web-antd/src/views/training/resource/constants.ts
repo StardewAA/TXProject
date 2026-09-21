@@ -23,6 +23,8 @@ export const QUESTION_TYPE_OPTIONS = [
   { label: '判断', value: 3 },
   { label: '实操问答', value: 4 },
   { label: '案例分析', value: 5 },
+  { label: '填空', value: 6 },
+  { label: '简答', value: 7 },
 ] as const;
 
 export const QUESTION_TYPE_TEXT: Record<number, string> = {
@@ -31,6 +33,8 @@ export const QUESTION_TYPE_TEXT: Record<number, string> = {
   3: '判断',
   4: '实操问答',
   5: '案例分析',
+  6: '填空',
+  7: '简答',
 };
 
 export const QUESTION_TYPE_COLOR: Record<number, string> = {
@@ -39,6 +43,8 @@ export const QUESTION_TYPE_COLOR: Record<number, string> = {
   3: 'green',
   4: 'orange',
   5: 'volcano',
+  6: 'purple',
+  7: 'magenta',
 };
 
 /** 难度 */
@@ -70,11 +76,47 @@ export function transcodeColor(status?: number) {
   return TRANSCODE_STATUS_OPTIONS.find((item) => item.value === status)?.color;
 }
 
+/** 转码任务状态（0待转码 1转码中 2成功 3失败 4跳过） */
+export const TRANSCODE_TASK_STATUS_OPTIONS = [
+  { label: '待转码', value: 0, color: 'default' },
+  { label: '转码中', value: 1, color: 'processing' },
+  { label: '成功', value: 2, color: 'success' },
+  { label: '失败', value: 3, color: 'error' },
+  { label: '跳过', value: 4, color: 'warning' },
+] as const;
+
+export function transcodeTaskText(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.label;
+}
+
+export function transcodeTaskColor(status?: number) {
+  return TRANSCODE_TASK_STATUS_OPTIONS.find((item) => item.value === status)
+    ?.color;
+}
+
 /** 标签维度 */
 export const TAG_DIMENSION_OPTIONS = [
   { label: '工种', value: 'work_type' },
   { label: '课程', value: 'course' },
 ] as const;
+
+/** 文档业务分类（新增文档时下拉可选，覆盖培训/工艺/安全/管理等场景） */
+export const DOC_BIZ_CATEGORY_OPTIONS = [
+  '行业新规政策',
+  '国标规范解读',
+  '防腐工艺教程',
+  '保温施工工法',
+  '材料选型知识',
+  '生产操作规范',
+  '质检检验教程',
+  '安全环保实操',
+  '高危作业培训',
+  '招投标合规',
+  '项目管理',
+  '职业素养',
+  '持证上岗专项课程',
+].map((item) => ({ label: item, value: item }));
 
 /** 资源分类类型 */
 export const CATEGORY_TYPE_OPTIONS = [

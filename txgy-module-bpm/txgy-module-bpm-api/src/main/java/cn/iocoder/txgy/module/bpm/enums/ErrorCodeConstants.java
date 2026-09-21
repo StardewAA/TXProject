@@ -53,6 +53,11 @@ public interface ErrorCodeConstants {
     ErrorCode TASK_RETURN_FAIL_SOURCE_TARGET_ERROR = new ErrorCode(1_009_005_006, "退回任务失败，目标节点是在并行网关上或非同一路线上，不可跳转");
     ErrorCode TASK_DELEGATE_FAIL_USER_REPEAT = new ErrorCode(1_009_005_007, "任务委派失败，委派人和当前审批人为同一人");
     ErrorCode TASK_DELEGATE_FAIL_USER_NOT_EXISTS = new ErrorCode(1_009_005_008, "任务委派失败，被委派人不存在");
+    ErrorCode TASK_DELEGATE_FAIL_USER_NO_APPROVAL_PERMISSION = new ErrorCode(1_009_005_021, "任务委派失败，被委派人没有当前 WMS 流程的审批权限");
+    ErrorCode TASK_TRANSFER_FAIL_USER_NO_APPROVAL_PERMISSION = new ErrorCode(1_009_005_022, "任务转办失败，新审批人没有当前 WMS 流程的审批权限");
+    ErrorCode TASK_SIGN_CREATE_USER_NO_APPROVAL_PERMISSION = new ErrorCode(1_009_005_023, "任务加签失败，加签处理人没有当前 WMS 流程的审批权限");
+    ErrorCode TASK_COPY_USER_NO_APPROVAL_PERMISSION = new ErrorCode(1_009_005_024, "任务抄送失败，抄送人没有当前 WMS 流程的审批权限");
+    ErrorCode TASK_TRANSFER_WMS_DISABLED = new ErrorCode(1_009_005_025, "WMS 审批不支持转办");
     ErrorCode TASK_SIGN_CREATE_USER_NOT_EXIST = new ErrorCode(1_009_005_009, "任务加签：选择的用户不存在");
     ErrorCode TASK_SIGN_CREATE_TYPE_ERROR = new ErrorCode(1_009_005_010, "任务加签：当前任务已经{}，不能{}");
     ErrorCode TASK_SIGN_CREATE_USER_REPEAT = new ErrorCode(1_009_005_011, "任务加签失败，加签人与现有审批人[{}]重复");

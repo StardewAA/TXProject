@@ -54,6 +54,11 @@ public interface ErrorCodeConstants {
     ErrorCode POINT_ACTIVITY_JOIN_ACTIVITY_SINGLE_LIMIT_COUNT_EXCEED = new ErrorCode(1_013_007_006, "积分商品兑换失败，原因：单次限购超出");
     ErrorCode POINT_ACTIVITY_JOIN_ACTIVITY_PRODUCT_NOT_EXISTS = new ErrorCode(1_013_007_007, "积分商品兑换失败，原因：商品不存在");
     ErrorCode POINT_ACTIVITY_UPDATE_STOCK_FAIL = new ErrorCode(1_013_007_008, "积分商品兑换失败，原因：积分商品库存不足");
+    ErrorCode POINT_ACTIVITY_RETURN_PRODUCT_NOT_EXISTS = new ErrorCode(1_013_007_009, "积分活动返库失败：订单商品不属于该积分活动，请核对历史订单和活动商品");
+    ErrorCode POINT_ACTIVITY_RETURN_STOCK_FAIL = new ErrorCode(1_013_007_010, "积分活动返库失败：活动或商品库存记录异常，请核对后重试");
+    ErrorCode POINT_ACTIVITY_RETURN_INVALID_REQUEST = new ErrorCode(1_013_007_011, "积分活动返库失败：活动、商品、订单项编号和正整数数量不能为空");
+    ErrorCode POINT_ACTIVITY_RETURN_REQUEST_CONFLICT = new ErrorCode(1_013_007_012, "积分活动返库失败：该订单项已按不同的活动、商品或数量返库");
+    ErrorCode POINT_ACTIVITY_RETURN_ORDER_ITEM_REQUIRED = new ErrorCode(1_013_007_013, "积分活动返库需要订单项编号，请使用支持幂等的返库接口");
 
     // ========== 秒杀活动 1-013-008-000 ==========
     ErrorCode SECKILL_ACTIVITY_NOT_EXISTS = new ErrorCode(1_013_008_000, "秒杀活动不存在");

@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceCancelReqVO;
 import cn.iocoder.txgy.module.bpm.service.task.BpmProcessInstanceService;
+import org.flowable.engine.runtime.ProcessInstance;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,6 +38,22 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
         cancelReqVO.setId(processInstanceId);
         cancelReqVO.setReason(reason);
         processInstanceService.cancelProcessInstanceByStartUser(userId, cancelReqVO);
+        return success(true);
+    }
+
+    @Override
+    public CommonResult<Boolean> cancelProcessInstanceByAdminIfRunning(
+            Long userId, String processInstanceId, String reason) {
+        // 已结束（审批通过/驳回/取消）的流程实例运行时数据已清除，查询返回 null，无需也无法取消
+        ProcessInstance instance = processInstanceService.getProcessInstance(processInstanceId);
+        if (instance == null) {
+            return success(false);
+        }
+        BpmProcessInstanceCancelReqVO cancelReqVO = new BpmProcessInstanceCancelReqVO();
+        cancelReqVO.setId(processInstanceId);
+        cancelReqVO.setReason(reason);
+        // 管理员身份取消：不校验发起人、不校验流程定义的“允许撤销”配置
+        processInstanceService.cancelProcessInstanceByAdmin(userId, cancelReqVO);
         return success(true);
     }
 

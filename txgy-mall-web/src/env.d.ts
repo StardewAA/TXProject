@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_TENANT_ID: string
   readonly VITE_STATIC_BASE_URL: string
   readonly VITE_PAYMENT_PREVIEW?: string
+  readonly VITE_AMAP_KEY?: string
+  readonly VITE_AMAP_SECURITY_CODE?: string
 }
 
 interface ImportMeta {

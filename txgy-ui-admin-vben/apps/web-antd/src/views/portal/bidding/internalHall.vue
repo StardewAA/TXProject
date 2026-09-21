@@ -12,6 +12,8 @@ import { fetchInternalNotices } from './api';
 import { biddingConfig } from './config';
 import { fmtDate } from './format';
 
+import ModuleNav from './components/ModuleNav.vue';
+
 const router = useRouter();
 const loading = ref(false);
 const errorMsg = ref('');
@@ -48,9 +50,6 @@ const TYPE_FILTERS: Array<{ label: string; value: string }> = [
   { label: '中标结果公示', value: 'WIN_RESULT_PUBLICITY' },
 ];
 
-function goNav(path: string): void {
-  router.push(path).catch(() => {});
-}
 /** 请求序号守卫：仅最后一次 load() 的结果生效，避免翻页/切筛选时的竞态覆盖 */
 let loadSeq = 0;
 
@@ -141,33 +140,8 @@ onMounted(() => void load());
 -->
 
   <div class="bidding-page bid-ind">
-    <div class="main-nav">
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding')" @keydown.enter="goNav('/portal/bidding')">
-        <span class="ic">≡</span>
-        <div class="n-name">公告大厅</div>
-        <div class="n-sub">外部平台公告 · 查询 · 详情</div>
-      </div>
-      <div class="nav-item on kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/internal-hall')" @keydown.enter="goNav('/portal/bidding/internal-hall')">
-        <span class="ic">◈</span>
-        <div class="n-name">本平台发布</div>
-        <div class="n-sub">招标人公告 · 大厅公开</div>
-      </div>
-      <div class="nav-item pub kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/publish')" @keydown.enter="goNav('/portal/bidding/publish')">
-        <span class="ic">✎</span>
-        <div class="n-name">发布公告</div>
-        <div class="n-sub">起草 · 四类公告 · 发布/撤下</div>
-      </div>
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/subscription')" @keydown.enter="goNav('/portal/bidding/subscription')">
-        <span class="ic">✦</span>
-        <div class="n-name">我的关注</div>
-        <div class="n-sub">关注的公告/项目 · 动态提醒</div>
-      </div>
-      <div class="nav-item kbd-btn" role="button" tabindex="0" @click="goNav('/portal/bidding/profile')" @keydown.enter="goNav('/portal/bidding/profile')">
-        <span class="flag">二期</span><span class="ic">◎</span>
-        <div class="n-name">个人中心</div>
-        <div class="n-sub">自身信息 · 实名认证</div>
-      </div>
-    </div>
+    <!-- 招投标前台四大模块导航（本平台发布已从入口撤下，晚点移管理端） -->
+    <ModuleNav />
 
     <div class="panel">
       <div class="panel-head">
@@ -262,18 +236,6 @@ onMounted(() => void load());
 .bidding-page { max-width: 1080px; margin: 0 auto; padding: 18px 16px 40px; }
 /* 键盘可达性：可点击 span/div 聚焦时的可见焦点环（与主大厅 index.vue 同规格） */
 .kbd-btn:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
-.main-nav { display: flex; gap: 12px; margin-bottom: 14px; }
-.nav-item { flex: 1; border: 1px solid hsl(var(--border)); border-radius: 4px; padding: 12px 14px; cursor: pointer; background: hsl(var(--card)); text-align: center; }
-.nav-item:hover { border-color: hsl(var(--primary)); }
-.nav-item .ic { display: block; font-size: 20px; }
-.nav-item .n-name { font-weight: 600; margin-top: 4px; }
-.nav-item .n-sub { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
-.nav-item.on { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 8%); }
-.nav-item.pub { border-color: var(--ind-warn); background: hsl(var(--warning) / 10%); }
-.nav-item.pub:hover { border-color: var(--ind-warn); }
-.nav-item.pub .ic { color: var(--ind-warn); }
-.nav-item.pub .n-name { color: var(--ind-warn); }
-.flag { position: absolute; }
 .panel { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 10px; padding: 16px 18px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
 .pt { font-size: 18px; font-weight: 700; margin-right: 8px; }

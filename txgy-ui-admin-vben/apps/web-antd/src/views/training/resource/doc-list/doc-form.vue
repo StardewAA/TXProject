@@ -10,6 +10,7 @@ import {
   Input,
   InputNumber,
   message,
+  Select,
   Tag,
   TreeSelect,
   Upload,
@@ -21,8 +22,9 @@ import {
   countDocumentPages,
   getResourceCategoryTree,
   updateDocument,
-  uploadDocument,
+  uploadDocuments,
 } from '../api';
+import { DOC_BIZ_CATEGORY_OPTIONS } from '../constants';
 
 defineOptions({ name: 'TrainingResourceDocForm' });
 
@@ -33,9 +35,9 @@ const editingId = ref<number>();
 const title = ref('');
 const categoryId = ref<number | undefined>();
 const bizCategory = ref('');
-const tags = ref('');
 const estMinutes = ref<number | undefined>();
-const selectedFile = ref<File | null>(null);
+/** 支持一次性选择多个文件，逐个上传 */
+const selectedFiles = ref<File[]>([]);
 const uploading = ref(false);
 /** 自动识别的文档总页数 */
 const pageCount = ref<number | undefined>();
@@ -98,23 +100,63 @@ async function detectPageCount(file: File) {
   }
 }
 
-function pickFile(file: File) {
-  if (file.size > 50 * 1024 * 1024) {
-    message.error('文档大小不能超过 50MB');
+/**
+ * 选择文件（支持多选）：before-upload 的每个 file 都会带上本次批量选择的 fileList，
+ * 取整个 fileList 累加去重，返回 false 阻止自动上传，由用户点击确定后统一提交。
+ */
+function pickFiles(file: File, fileList: File[]) {
+  const list = fileList?.length ? fileList : [file];
+  const oversize = list.filter((item) => item.size > 50 * 1024 * 1024);
+  if (oversize.length) {
+    message.error(`「${oversize[0]!.name}」超过 50MB，单个文档大小不能超过 50MB`);
+  }
+  const validList = list.filter((item) => item.size <= 50 * 1024 * 1024);
+  if (!validList.length) {
     return false;
   }
-  selectedFile.value = file;
-  pageCount.value = undefined;
-  estMinutes.value = undefined;
-  detectPageCount(file);
-  return false; // 阻止自动上传，由用户点击确认后统一提交
-}
-
-function clearFile() {
-  selectedFile.value = null;
+  // 去重后合并到已选列表
+  const merged = [...selectedFiles.value];
+  validList.forEach((item) => {
+    if (!merged.some((exist) => exist.name === item.name && exist.size === item.size)) {
+      merged.push(item);
+    }
+  });
+  selectedFiles.value = merged;
   pageCount.value = undefined;
   pageCountPrecise.value = true;
   estMinutes.value = undefined;
+  // 仅单个文件时即时识别页数，多文件由后端按每个文档分别计算
+  if (selectedFiles.value.length === 1) {
+    detectPageCount(selectedFiles.value[0]!);
+  }
+  return false;
+}
+
+function removeFile(index: number) {
+  selectedFiles.value = selectedFiles.value.filter((_, i) => i !== index);
+  pageCount.value = undefined;
+  pageCountPrecise.value = true;
+  estMinutes.value = undefined;
+  if (selectedFiles.value.length === 1) {
+    detectPageCount(selectedFiles.value[0]!);
+  }
+}
+
+function clearFile() {
+  selectedFiles.value = [];
+  pageCount.value = undefined;
+  pageCountPrecise.value = true;
+  estMinutes.value = undefined;
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
 async function handleConfirm() {
@@ -122,8 +164,10 @@ async function handleConfirm() {
     message.warning('请填写文档标题');
     return;
   }
-  if (!editing.value && !selectedFile.value) {
-    message.warning('请选择要上传的文档（pdf / doc / docx / wps / jpg / png）');
+  if (!editing.value && !selectedFiles.value.length) {
+    message.warning(
+      '请选择要上传的文档（pdf / doc / docx / wps / jpg / png），支持一次选择多个',
+    );
     return;
   }
   uploading.value = true;
@@ -132,7 +176,6 @@ async function handleConfirm() {
       title: title.value.trim(),
       categoryId: categoryId.value,
       bizCategory: bizCategory.value.trim() || undefined,
-      tags: tags.value.trim() || undefined,
       estMinutes: estMinutes.value,
     };
     if (editing.value) {
@@ -140,14 +183,20 @@ async function handleConfirm() {
       message.success($t('ui.actionMessage.operationSuccess'));
     } else {
       const data = new FormData();
-      data.append('file', selectedFile.value!);
+      selectedFiles.value.forEach((item) => {
+        data.append('files', item);
+      });
       Object.entries(base).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           data.append(key, String(value));
         }
       });
-      await uploadDocument(data);
-      message.success('文档上传成功，已上线');
+      const ids = (await uploadDocuments(data)) ?? [];
+      message.success(
+        selectedFiles.value.length > 1
+          ? `${ids.length} 个文档上传成功，已上线（标题自动追加序号区分）`
+          : '文档上传成功，已上线',
+      );
     }
     modalApi.close();
     emit('success');
@@ -167,9 +216,8 @@ const [Modal, modalApi] = useVbenModal({
       title.value = '';
       categoryId.value = undefined;
       bizCategory.value = '';
-      tags.value = '';
       estMinutes.value = undefined;
-      selectedFile.value = null;
+      selectedFiles.value = [];
       pageCount.value = undefined;
       pageCountPrecise.value = true;
       counting.value = false;
@@ -183,7 +231,6 @@ const [Modal, modalApi] = useVbenModal({
       title.value = data.title || '';
       categoryId.value = data.categoryId;
       bizCategory.value = data.bizCategory || '';
-      tags.value = data.tags || '';
       estMinutes.value = data.estMinutes;
       pageCount.value = data.pageCount;
       pageCountPrecise.value = true;
@@ -210,23 +257,41 @@ const [Modal, modalApi] = useVbenModal({
 
       <div v-if="!editing">
         <div class="mb-1 text-sm text-gray-600">
-          上传文件（PDF / Word(doc,docx) / WPS(wps) / 图片 ≤50MB）
+          上传文件（支持一次选择多个，PDF / Word(doc,docx) / WPS(wps) / 图片
+          单个 ≤50MB）
         </div>
         <Upload
           accept=".pdf,.doc,.docx,.wps,.jpg,.jpeg,.png"
+          :multiple="true"
           :show-upload-list="false"
-          :before-upload="pickFile"
+          :before-upload="pickFiles"
         >
           <Button type="primary" ghost>
-            {{ selectedFile ? '重新选择文件' : '选择文件' }}
+            {{ selectedFiles.length ? '继续添加文件' : '选择文件' }}
           </Button>
         </Upload>
-        <div v-if="selectedFile" class="mt-2 flex items-center gap-2">
-          <Tag color="blue">{{ selectedFile.name }}</Tag>
-          <span class="text-xs text-gray-400">
-            {{ (selectedFile.size / 1024).toFixed(1) }} KB
-          </span>
-          <Button size="small" type="text" danger @click="clearFile">移除</Button>
+        <div v-if="selectedFiles.length" class="mt-2 flex flex-col gap-2">
+          <div
+            v-for="(item, index) in selectedFiles"
+            :key="`${item.name}-${item.size}`"
+            class="flex items-center gap-2"
+          >
+            <Tag color="blue">{{ item.name }}</Tag>
+            <span class="text-xs text-gray-400">
+              {{ formatSize(item.size) }}
+            </span>
+            <Button size="small" type="text" danger @click="removeFile(index)">
+              移除
+            </Button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500">
+              已选择 {{ selectedFiles.length }} 个文件
+            </span>
+            <Button size="small" type="text" danger @click="clearFile">
+              清空
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -243,20 +308,13 @@ const [Modal, modalApi] = useVbenModal({
       </div>
 
       <div>
-        <div class="mb-1 text-sm text-gray-600">业务分类（行业新规/国标解读/防腐工艺…）</div>
-        <Input
+        <div class="mb-1 text-sm text-gray-600">业务分类</div>
+        <Select
           v-model:value="bizCategory"
-          :maxlength="50"
-          placeholder="选填，如：国标解读"
-        />
-      </div>
-
-      <div>
-        <div class="mb-1 text-sm text-gray-600">标签</div>
-        <Input
-          v-model:value="tags"
-          :maxlength="200"
-          placeholder="多个标签用逗号分隔，如：高处作业,安全规程"
+          class="w-full"
+          :allow-clear="true"
+          :options="DOC_BIZ_CATEGORY_OPTIONS"
+          placeholder="请选择业务分类"
         />
       </div>
 
@@ -283,7 +341,11 @@ const [Modal, modalApi] = useVbenModal({
           {{ pageCount * 10 }} 分钟
         </div>
         <div v-else-if="!editing" class="mt-1 text-xs text-gray-400">
-          选择文件后将自动识别页数并计算阅读时长
+          {{
+            selectedFiles.length > 1
+              ? '多文件上传：每个文档的阅读时长由系统按各自页数自动计算'
+              : '选择文件后将自动识别页数并计算阅读时长'
+          }}
         </div>
       </div>
     </div>

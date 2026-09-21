@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7faf9"/><stop offset="1" stop-color="#dfe8e5"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#94a3b8"/><stop offset=".45" stop-color="#f8fafc"/><stop offset="1" stop-color="#64748b"/></linearGradient>
+  <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M0 0h34v34H0z" fill="#f8fafc"/><path d="M0 0l34 34M34 0L0 34" stroke="#eab308" stroke-width="3"/></pattern>
+  <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-opacity=".18"/></filter>
+</defs>
+<rect width="1000" height="1000" rx="54" fill="url(#bg)"/>
+<path d="M0 0h1000v24H0z" fill="#eab308"/>
+<g filter="url(#shadow)"><path d="M265 290h370v380H265z" fill="#f4e7b2" stroke="#7c6f4b" stroke-width="16"/><path d="M635 290c150 0 150 380 0 380-112 0-112-380 0-380z" fill="#eab308" opacity=".65" stroke="#615d55" stroke-width="16"/><ellipse cx="635" cy="480" rx="55" ry="150" fill="#faf7ed" stroke="#615d55" stroke-width="14"/><path d="M310 350l270 260M310 470l150 140M430 320l150 145" stroke="#fff" stroke-width="10" opacity=".75"/></g>
+<rect x="70" y="770" width="860" height="165" rx="24" fill="#fff" opacity=".96"/>
+<text x="105" y="838" fill="#172126" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="44" font-weight="700">离心玻璃棉卷毡</text>
+<text x="105" y="895" fill="#eab308" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="600">规格：50mm</text>
+<text x="895" y="895" text-anchor="end" fill="#64748b" font-family="Arial, sans-serif" font-size="22">SKU 940222</text>
+</svg>

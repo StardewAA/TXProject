@@ -59,6 +59,28 @@ function formatLocation(current: HrmPortalRecruitApi.Post) {
   );
 }
 
+function formatSalary(current: HrmPortalRecruitApi.Post) {
+  if (current.salaryUnit === -1 || (current.minSalary ?? 0) < 0) return '面议';
+  const min = current.minSalary;
+  const max = current.maxSalary;
+  if (min == null && max == null) return '薪资面议';
+  const format = (value?: number) => (value == null ? '' : `${value / 1000}K`);
+  if (min != null && max != null) return `${format(min)}-${format(max)}`;
+  return min != null ? `${format(min)}起` : `${format(max)}以内`;
+}
+
+/**
+ * 最晚入职时间。后端 LocalDateTime 序列化后是毫秒时间戳（数字），
+ * 不能直接当字符串处理，否则 .slice 会抛 TypeError 导致整页渲染失败。
+ */
+function formatLatestEntryTime(value?: number | string) {
+  if (value === null || value === undefined || value === '') return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function getCompanyName(current: HrmPortalRecruitApi.Post) {
   return (
     current.companyName ||
@@ -189,14 +211,17 @@ onMounted(async () => {
           <p class="detail-eyebrow">职位机会</p>
           <h1>{{ post.postName }}</h1>
           <div class="detail-meta">
-            <span>
-              {{ formatLocation(post) }}
-            </span>
+            <span>{{ formatSalary(post) }}</span>
+            <span>{{ formatLocation(post) }}</span>
+            <span>{{ getCompanyName(post) }}</span>
             <span v-if="post.postTypeName">{{ post.postTypeName }}</span>
           </div>
         </div>
         <div class="detail-actions">
-          <a-button @click="openChat">立即沟通</a-button>
+          <a-button class="detail-chat-button" @click="openChat">立即沟通</a-button>
+          <p class="detail-flow-hint">
+            投递流程：先与 HR 沟通 → HR 回复后发送简历 → 即可完成投递
+          </p>
         </div>
       </header>
 
@@ -223,6 +248,22 @@ onMounted(async () => {
           <div class="aside-label">岗位信息</div>
           <dl>
             <div>
+              <dt>薪资待遇</dt>
+              <dd class="detail-highlight">{{ formatSalary(post) }}</dd>
+            </div>
+            <div>
+              <dt>工作性质</dt>
+              <dd>{{ formatJobNature(post.jobNature) }}</dd>
+            </div>
+            <div>
+              <dt>经验要求</dt>
+              <dd>{{ formatWorkTime(post.workTime) }}</dd>
+            </div>
+            <div>
+              <dt>学历要求</dt>
+              <dd>{{ formatEducation(post.educationRequire) }}</dd>
+            </div>
+            <div>
               <dt>发布企业</dt>
               <dd>{{ getCompanyName(post) }}</dd>
             </div>
@@ -238,6 +279,10 @@ onMounted(async () => {
               <dt>招聘部门</dt>
               <dd>{{ post.deptName }}</dd>
             </div>
+            <div v-if="post.latestEntryTime">
+              <dt>最晚入职</dt>
+              <dd>{{ formatLatestEntryTime(post.latestEntryTime) }}</dd>
+            </div>
           </dl>
         </aside>
       </main>
@@ -251,6 +296,17 @@ onMounted(async () => {
 .portal-page {
   display: grid;
   gap: 20px;
+}
+
+.recruit-detail-page {
+  --detail-blue: #2f80ed;
+  --detail-ink: #123b52;
+  --detail-line: #d4e7ef;
+  --detail-line-soft: #e7f1f5;
+  --detail-muted: #7593a0;
+  --detail-teal: #0f8f8c;
+  --detail-text: #496b7a;
+  color: var(--detail-text);
 }
 
 .back-link {
@@ -269,14 +325,14 @@ onMounted(async () => {
 
 .back-link:hover,
 .back-link:focus-visible {
-  color: #d86616;
+  color: var(--detail-teal);
   outline: none;
 }
 
 .detail-loading,
 .detail-empty {
   padding: 56px 32px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--detail-line);
   background: #fff;
 }
 
@@ -286,13 +342,13 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 32px;
   padding: 34px 38px;
-  border: 1px solid #dbe3ee;
-  background: #fff;
+  border: 1px solid var(--detail-line);
+  background: linear-gradient(120deg, #fff 0%, #fafdff 70%, #eef9fb 100%);
 }
 
 .detail-eyebrow {
   margin: 0 0 8px;
-  color: #d86616;
+  color: var(--detail-teal);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -301,7 +357,7 @@ onMounted(async () => {
 
 .detail-hero h1 {
   margin: 0;
-  color: #0f172a;
+  color: var(--detail-ink);
   font-size: 30px;
   line-height: 1.3;
 }
@@ -311,7 +367,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 16px;
   margin-top: 14px;
-  color: #64748b;
+  color: var(--detail-muted);
   font-size: 14px;
 }
 
@@ -322,13 +378,35 @@ onMounted(async () => {
 }
 
 .detail-meta :deep(svg) {
-  color: #2563eb;
+  color: var(--detail-blue);
 }
 
 .detail-actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   align-items: center;
+}
+
+.detail-flow-hint {
+  margin: 0;
+  color: var(--el-text-color-secondary, #8a969f);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-chat-button {
+  border-color: #b9e2da !important;
+  background: #eaf3ff !important;
+  color: #2368b5 !important;
+  box-shadow: 0 6px 14px rgb(47 128 237 / 12%);
+}
+
+.detail-chat-button:hover,
+.detail-chat-button:focus-visible {
+  border-color: #7dd3d0 !important;
+  background: #dcf6f5 !important;
+  color: #0f777d !important;
 }
 
 .detail-content {
@@ -340,7 +418,7 @@ onMounted(async () => {
 
 .detail-main,
 .detail-aside {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--detail-line);
   background: #fff;
 }
 
@@ -351,7 +429,7 @@ onMounted(async () => {
 .detail-section + .detail-section {
   margin-top: 36px;
   padding-top: 30px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--detail-line-soft);
 }
 
 .detail-section h2 {
@@ -359,7 +437,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   margin: 0 0 18px;
-  color: #0f172a;
+  color: var(--detail-ink);
   font-size: 20px;
 }
 
@@ -367,12 +445,12 @@ onMounted(async () => {
   width: 4px;
   height: 22px;
   border-radius: 2px;
-  background: #e87522;
+  background: var(--detail-teal);
   content: '';
 }
 
 .detail-copy {
-  color: #475569;
+  color: var(--detail-text);
   font-size: 15px;
   line-height: 1.9;
 }
@@ -390,23 +468,26 @@ onMounted(async () => {
   gap: 12px;
   margin: 0;
   padding-left: 22px;
-  color: #475569;
+  color: var(--detail-text);
   font-size: 15px;
   line-height: 1.7;
 }
 
 .requirement-list li::marker {
-  color: #d86616;
+  color: var(--detail-teal);
 }
 
 .detail-aside {
+  /* 岗位信息远短于左侧描述区，不粘性定位时右栏下方会留出大片空白。 */
+  position: sticky;
+  top: 20px;
   padding: 24px;
 }
 
 .aside-label {
   padding-bottom: 14px;
-  border-bottom: 1px solid #eef2f7;
-  color: #0f172a;
+  border-bottom: 1px solid var(--detail-line-soft);
+  color: var(--detail-ink);
   font-size: 16px;
   font-weight: 650;
 }
@@ -423,14 +504,20 @@ onMounted(async () => {
 }
 
 .detail-aside dt {
-  color: #94a3b8;
+  color: var(--detail-muted);
   font-size: 12px;
 }
 
 .detail-aside dd {
   margin: 0;
-  color: #334155;
+  color: #2f5d73;
   font-size: 14px;
+}
+
+.detail-aside .detail-highlight {
+  color: #dc3545;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
@@ -458,7 +545,4 @@ onMounted(async () => {
     padding: 24px 20px;
   }
 }
-.recruit-detail-page { color: #5d4636; }
-.recruit-detail-page .detail-hero, .recruit-detail-page .detail-main, .recruit-detail-page .detail-section { border-color: #f4e5d7; background: #fff; }
-.recruit-detail-page .detail-section h2, .recruit-detail-page .detail-section h3 { color: #5d341d; }
 </style>

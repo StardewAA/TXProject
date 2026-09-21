@@ -10,12 +10,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collection;
+import java.util.List;
 
 @Mapper
 public interface AfterSaleMapper extends BaseMapperX<AfterSaleDO> {
 
     default PageResult<AfterSaleDO> selectPage(AfterSalePageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<AfterSaleDO>()
+                .eqIfPresent(AfterSaleDO::getShopId, reqVO.getShopId())
                 .eqIfPresent(AfterSaleDO::getUserId, reqVO.getUserId())
                 .likeIfPresent(AfterSaleDO::getNo, reqVO.getNo())
                 .eqIfPresent(AfterSaleDO::getStatus, reqVO.getStatus())
@@ -48,6 +50,13 @@ public interface AfterSaleMapper extends BaseMapperX<AfterSaleDO> {
         return selectCount(new LambdaQueryWrapperX<AfterSaleDO>()
                 .eq(AfterSaleDO::getUserId, userId)
                 .in(AfterSaleDO::getStatus, statuses));
+    }
+
+    default List<AfterSaleDO> selectLatestByOrderItemIds(Long userId, Collection<Long> orderItemIds) {
+        return selectList(new LambdaQueryWrapperX<AfterSaleDO>()
+                .eq(AfterSaleDO::getUserId, userId)
+                .in(AfterSaleDO::getOrderItemId, orderItemIds)
+                .orderByDesc(AfterSaleDO::getId));
     }
 
 }

@@ -9,6 +9,9 @@ import cn.iocoder.txgy.module.trade.controller.app.aftersale.vo.AppAfterSaleDeli
 import cn.iocoder.txgy.module.trade.controller.app.aftersale.vo.AppAfterSalePageReqVO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.aftersale.AfterSaleDO;
 
+import java.util.Collection;
+import java.util.Map;
+
 /**
  * 售后订单 Service 接口
  *
@@ -49,6 +52,9 @@ public interface AfterSaleService {
      * @return 售后订单
      */
     AfterSaleDO getAfterSale(Long id);
+
+    /** 查询会员订单项最近一次售后，用于订单页展示已结束售后的真实处理结果。 */
+    Map<Long, AfterSaleDO> getLatestAfterSales(Long userId, Collection<Long> orderItemIds);
 
     /**
      * 【会员】创建售后订单

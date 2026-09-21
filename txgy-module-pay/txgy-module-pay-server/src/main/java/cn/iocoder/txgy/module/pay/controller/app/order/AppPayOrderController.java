@@ -3,6 +3,9 @@ package cn.iocoder.txgy.module.pay.controller.app.order;
 import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
+import cn.iocoder.txgy.framework.security.core.LoginUser;
+import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.pay.controller.admin.order.vo.PayOrderRespVO;
 import cn.iocoder.txgy.module.pay.controller.admin.order.vo.PayOrderSubmitRespVO;
@@ -21,16 +24,19 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Objects;
+import java.time.ZoneId;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.servlet.ServletUtils.getClientIP;
-import static cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils.getLoginUserId;
-import static cn.iocoder.txgy.framework.web.core.util.WebFrameworkUtils.getLoginUserType;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.exception.enums.GlobalErrorCodeConstants.*;
+import static cn.iocoder.txgy.module.pay.enums.ErrorCodeConstants.PAY_ORDER_NOT_FOUND;
 
 @Tag(name = "用户 APP - 支付订单")
 @RestController
@@ -54,6 +60,10 @@ public class AppPayOrderController {
     public CommonResult<PayOrderRespVO> getOrder(@RequestParam(value = "id", required = false) Long id,
                                                  @RequestParam(value = "no", required = false) String no,
                                                  @RequestParam(value = "sync", required = false) Boolean sync) {
+        LoginUser member = requireMember();
+        if ((id != null && id <= 0) || (id == null && CharSequenceUtil.isBlank(no))) {
+            throw exception(BAD_REQUEST);
+        }
         PayOrderDO order = null;
         if (CharSequenceUtil.isNotEmpty(no)) {
             order = payOrderService.getOrder(no);
@@ -61,12 +71,8 @@ public class AppPayOrderController {
         if (ObjUtil.isNull(order) && ObjUtil.isNotNull(id)) {
             order = payOrderService.getOrder(id);
         }
-        if (order == null) {
-            return success(null);
-        }
-        // 重要：校验订单是否是当前用户，避免越权
-        if (order.getUserId() != null // 特殊：早期订单未存储 userId，所以忽略
-                && ObjUtil.notEqual(order.getUserId(), getLoginUserId())) {
+        // 历史缺少归属的记录也不能公开，不能仅凭不同账号体系中相同的数字 ID 放行。
+        if (!belongsToMember(order, member)) {
             return success(null);
         }
 
@@ -75,25 +81,48 @@ public class AppPayOrderController {
             payOrderService.syncOrderQuietly(order.getId());
             // 重新查询，因为同步后，可能会有变化
             order = payOrderService.getOrder(order.getId());
+            if (!belongsToMember(order, member)) return success(null);
         }
-        return success(BeanUtils.toBean(order, PayOrderRespVO.class));
+        PayOrderRespVO result = BeanUtils.toBean(order, PayOrderRespVO.class);
+        result.setServerTime(System.currentTimeMillis());
+        if (order.getExpireTime() != null) {
+            result.setExpireTimestamp(order.getExpireTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        }
+        return success(result);
     }
 
     @PostMapping("/submit")
     @Operation(summary = "提交支付订单")
-    public CommonResult<AppPayOrderSubmitRespVO> submitPayOrder(@RequestBody AppPayOrderSubmitReqVO reqVO) {
+    public CommonResult<AppPayOrderSubmitRespVO> submitPayOrder(@Valid @RequestBody AppPayOrderSubmitReqVO reqVO) {
+        LoginUser member = requireMember();
+        if (reqVO == null || reqVO.getId() == null || reqVO.getId() <= 0) throw exception(BAD_REQUEST);
+        if (!belongsToMember(payOrderService.getOrder(reqVO.getId()), member)) throw exception(PAY_ORDER_NOT_FOUND);
         // 1. 钱包支付事，需要额外传 user_id 和 user_type
         if (Objects.equals(reqVO.getChannelCode(), PayChannelEnum.WALLET.getCode())) {
             if (reqVO.getChannelExtras() == null) {
                 reqVO.setChannelExtras(Maps.newHashMapWithExpectedSize(1));
             }
-            PayWalletDO wallet = payWalletService.getOrCreateWallet(getLoginUserId(), getLoginUserType());
+            PayWalletDO wallet = payWalletService.getOrCreateWallet(member.getId(), member.getUserType());
             reqVO.getChannelExtras().put(WalletPayClient.WALLET_ID_KEY, String.valueOf(wallet.getId()));
         }
 
         // 2. 提交支付
         PayOrderSubmitRespVO respVO = payOrderService.submitOrder(reqVO, getClientIP());
         return success(BeanUtils.toBean(respVO, AppPayOrderSubmitRespVO.class));
+    }
+
+    private LoginUser requireMember() {
+        var authentication = SecurityFrameworkUtils.getAuthentication();
+        LoginUser user = SecurityFrameworkUtils.getLoginUser();
+        if (authentication == null || !authentication.isAuthenticated() || user == null
+                || user.getId() == null || user.getId() <= 0) throw exception(UNAUTHORIZED);
+        if (!Objects.equals(user.getUserType(), UserTypeEnum.MEMBER.getValue())) throw exception(FORBIDDEN);
+        return user;
+    }
+
+    private boolean belongsToMember(PayOrderDO order, LoginUser member) {
+        return order != null && Objects.equals(order.getUserId(), member.getId())
+                && Objects.equals(order.getUserType(), UserTypeEnum.MEMBER.getValue());
     }
 
 }

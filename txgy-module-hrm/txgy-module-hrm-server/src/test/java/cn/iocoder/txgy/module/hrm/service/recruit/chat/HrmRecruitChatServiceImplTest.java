@@ -9,12 +9,14 @@ import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.resume.HrmRecruitR
 import cn.iocoder.txgy.module.hrm.dal.dataobject.personal.resume.HrmPersonalResumeDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatMessageDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.chat.HrmRecruitChatConversationDO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.post.HrmRecruitPostDO;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatConversationMapper;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatMessageMapper;
 import cn.iocoder.txgy.module.hrm.enums.recruit.chat.HrmRecruitChatStatusEnum;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.service.personal.resume.HrmPersonalResumeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicationService;
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @Import(HrmRecruitChatServiceImpl.class)
 public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
@@ -62,6 +65,8 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
     private HrmRecruitCandidateService candidateService;
     @MockitoBean
     private HrmRecruitResumeService recruitResumeService;
+    @MockitoBean
+    private HrmRecruitApplicationService applicationService;
     @MockitoBean
     private AdminUserApi adminUserApi;
 
@@ -154,11 +159,16 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
         when(candidateService.getRecruitCandidateByMobile(candidateUser.getMobile())).thenReturn(null);
         when(candidateService.createRecruitCandidate(org.mockito.ArgumentMatchers.any())).thenReturn(7001L);
         when(recruitResumeService.createRecruitResume(org.mockito.ArgumentMatchers.any())).thenReturn(8001L);
+        when(applicationService.createApplicationFromRecruitChat(candidateUserId, 7001L, postId, 8001L))
+                .thenReturn(9001L);
 
         Long candidateId = chatService.convertConversationToCandidate(hrUserId, conversation.getId());
 
         assertEquals(7001L, candidateId);
-        assertEquals(7001L, conversationMapper.selectById(conversation.getId()).getCandidateId());
+        HrmRecruitChatConversationDO converted = conversationMapper.selectById(conversation.getId());
+        assertEquals(7001L, converted.getCandidateId());
+        assertEquals(9001L, converted.getApplicationId());
+        assertEquals("SUBMITTED", converted.getApplicationStatus());
         ArgumentCaptor<HrmRecruitCandidateSaveReqVO> candidateCaptor =
                 ArgumentCaptor.forClass(HrmRecruitCandidateSaveReqVO.class);
         verify(candidateService).createRecruitCandidate(candidateCaptor.capture());
@@ -174,6 +184,7 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
         assertEquals(7001L, chatService.convertConversationToCandidate(hrUserId, conversation.getId()));
         verify(candidateService).createRecruitCandidate(org.mockito.ArgumentMatchers.any());
         verify(recruitResumeService).createRecruitResume(org.mockito.ArgumentMatchers.any());
+        verify(applicationService).createApplicationFromRecruitChat(candidateUserId, 7001L, postId, 8001L);
     }
 
     @Test
@@ -210,6 +221,60 @@ public class HrmRecruitChatServiceImplTest extends BaseDbUnitTest {
         assertNotNull(updated.getHrReplyTime());
         assertEquals(1, updated.getCandidateUnread());
         assertEquals(true, chatService.hasApplyQualification(candidateUserId, conversation.getPostId()));
+    }
+
+    @Test
+    public void testSendMessage_resumeDoesNotAutoConvertCandidate() {
+        Long candidateUserId = randomLongId();
+        HrmRecruitChatConversationDO conversation = new HrmRecruitChatConversationDO()
+                .setPostId(randomLongId())
+                .setCandidateUserId(candidateUserId)
+                .setHrUserId(randomLongId())
+                .setStatus(HrmRecruitChatStatusEnum.QUALIFIED.getStatus())
+                .setHrReplyTime(java.time.LocalDateTime.now().minusMinutes(5))
+                .setCandidateUnread(0)
+                .setHrUnread(0);
+        conversationMapper.insert(conversation);
+
+        chatService.sendMessage(candidateUserId, new HrmPortalRecruitChatSendReqVO()
+                .setConversationId(conversation.getId()).setContentType(2)
+                .setContent("项目经理简历|project-manager.pdf|https://files.example.com/project-manager.pdf"));
+
+        HrmRecruitChatConversationDO updated = conversationMapper.selectById(conversation.getId());
+        assertNull(updated.getCandidateId());
+        assertEquals(1L, messageMapper.selectListByConversation(conversation.getId(), null, 20).stream()
+                .filter(item -> item.getContentType() == 2).count());
+        verifyNoInteractions(candidateService, recruitResumeService);
+    }
+
+    @Test
+    public void testSendInterviewArrangedNotification_writesCandidateMessage() {
+        Long candidateUserId = randomLongId();
+        Long hrUserId = randomLongId();
+        Long applicationId = randomLongId();
+        HrmRecruitChatConversationDO conversation = new HrmRecruitChatConversationDO()
+                .setPostId(randomLongId())
+                .setHrUserId(hrUserId)
+                .setCandidateUserId(candidateUserId)
+                .setApplicationId(applicationId)
+                .setStatus(HrmRecruitChatStatusEnum.QUALIFIED.getStatus())
+                .setLastTime(java.time.LocalDateTime.now().minusMinutes(5))
+                .setHrReplyTime(java.time.LocalDateTime.now().minusMinutes(4))
+                .setCandidateUnread(0)
+                .setHrUnread(0);
+        conversationMapper.insert(conversation);
+
+        chatService.sendInterviewArrangedNotification(applicationId, new HrmRecruitInterviewDO()
+                .setStageNumber(1)
+                .setInterviewTime(java.time.LocalDateTime.of(2026, 9, 18, 14, 30))
+                .setAddress("线上会议室")
+                .setRemark("请提前十分钟进入会议"));
+
+        HrmRecruitChatConversationDO updated = conversationMapper.selectById(conversation.getId());
+        assertEquals(1, updated.getCandidateUnread());
+        assertEquals(1, messageMapper.selectListByConversation(conversation.getId(), null, 20).size());
+        assertEquals("面试安排通知：第 1 轮，时间：2026-09-18 14:30，地点：线上会议室，备注：请提前十分钟进入会议",
+                messageMapper.selectListByConversation(conversation.getId(), null, 20).get(0).getContent());
     }
 
     @Test

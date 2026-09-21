@@ -1,12 +1,12 @@
 package cn.iocoder.txgy.module.hrm.service.attendance.record;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
-import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.txgy.module.hrm.controller.admin.attendance.vo.leave.HrmAttendanceLeaveCancelReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.attendance.vo.leave.HrmAttendanceLeaveCreateReqVO;
@@ -25,15 +25,16 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_APPROVAL_REASON_REQUIRED;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_APPROVE_STATUS_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_NOT_EXISTS;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_STATUS_INVALID;
 import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_TIME_CONFLICT;
+import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEAVE_WORKFLOW_APPROVAL;
 
 /**
  * HRM 考勤请假 Service 实现类
@@ -45,6 +46,14 @@ import static cn.iocoder.txgy.module.hrm.enums.ErrorCodeConstants.ATTENDANCE_LEA
 public class HrmAttendanceLeaveServiceImpl implements HrmAttendanceLeaveService {
 
     public static final String LEAVE_PROCESS_KEY = "hrm_attendance_leave";
+
+    /**
+     * 人工审批标记前缀
+     *
+     * <p>请假申请统一走人工审批，processInstanceId 写入 {@code MANUAL-<请假单编号>}，
+     * 用于把「人工审批」与历史上「工作流审批」的申请区分开。</p>
+     */
+    public static final String MANUAL_PROCESS_INSTANCE_PREFIX = "MANUAL-";
 
     @Resource
     private HrmAttendanceLeaveMapper attendanceLeaveMapper;
@@ -74,24 +83,16 @@ public class HrmAttendanceLeaveServiceImpl implements HrmAttendanceLeaveService 
                 .setEmployeeId(employee.getId()).setApprovalStatus(BpmProcessInstanceStatusEnum.RUNNING.getStatus());
         attendanceLeaveMapper.insert(attendanceLeave);
 
-        // 3. 构建流程变量并发起审批流程
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("employeeDeptId", employee.getDeptId());
-        variables.put("employeeId", employee.getId());
-        variables.put("employeeName", employee.getName());
-        variables.put("leaveType", reqVO.getType());
-        variables.put("startTime", reqVO.getStartTime().toString());
-        variables.put("endTime", reqVO.getEndTime().toString());
-        variables.put("day", reqVO.getDay());
-        variables.put("reason", reqVO.getReason());
-        BpmProcessInstanceCreateReqDTO processInstanceCreateReqDTO = new BpmProcessInstanceCreateReqDTO();
-        processInstanceCreateReqDTO.setProcessDefinitionKey(LEAVE_PROCESS_KEY);
-        processInstanceCreateReqDTO.setBusinessKey(String.valueOf(attendanceLeave.getId()));
-        processInstanceCreateReqDTO.setVariables(variables);
-        String processInstanceId = processInstanceApi.createProcessInstance(userId, processInstanceCreateReqDTO)
-                .getCheckedData();
+        // 3. 发起审批
+        // HRM 的业务流程统一采用「手动审批」：请假申请创建后直接进入审批中，
+        // 由 HR 在「考勤管理 → 请假记录」里人工点「通过 / 驳回」。
+        // 这里不再依赖 Flowable 流程定义，避免尚未发布 hrm_attendance_leave 流程时
+        // 员工端发起请假直接报「流程定义不存在」而无法提交。
+        // 仍写入 processInstanceId，便于区分来源：MANUAL- 前缀表示人工审批。
+        // 取值必须唯一（hrm_attendance_leave.process_instance_id 有唯一索引），
+        // 因此带上请假单编号，否则同一员工第二次请假会撞唯一键。
         attendanceLeaveMapper.updateById(new HrmAttendanceLeaveDO().setId(attendanceLeave.getId())
-                .setProcessInstanceId(processInstanceId));
+                .setProcessInstanceId(MANUAL_PROCESS_INSTANCE_PREFIX + attendanceLeave.getId()));
         return attendanceLeave.getId();
     }
 
@@ -109,11 +110,45 @@ public class HrmAttendanceLeaveServiceImpl implements HrmAttendanceLeaveService 
             throw exception(ATTENDANCE_LEAVE_STATUS_INVALID);
         }
 
-        // 2. 取消审批流程并更新请假审批状态
-        processInstanceApi.cancelProcessInstanceByStartUser(
-                userId, attendanceLeave.getProcessInstanceId(), reqVO.getReason()).checkError();
+        // 2.1 人工审批的申请直接落终态；工作流审批的申请仍需先取消流程
+        if (!isManualApproval(attendanceLeave.getProcessInstanceId())) {
+            processInstanceApi.cancelProcessInstanceByStartUser(
+                    userId, attendanceLeave.getProcessInstanceId(), reqVO.getReason()).checkError();
+        }
+        // 2.2 更新请假审批状态
         updateLeaveApprovalStatus(attendanceLeave.getId(), attendanceLeave.getProcessInstanceId(),
                 BpmProcessInstanceStatusEnum.CANCEL.getStatus(), reqVO.getReason());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void approveLeave(Long id, Boolean approved, String reason) {
+        // 1. 校验请假申请处于审批中
+        HrmAttendanceLeaveDO attendanceLeave = validateAttendanceLeaveExists(id);
+        if (ObjUtil.notEqual(attendanceLeave.getApprovalStatus(),
+                BpmProcessInstanceStatusEnum.RUNNING.getStatus())) {
+            throw exception(ATTENDANCE_LEAVE_APPROVE_STATUS_INVALID);
+        }
+        // 2. 工作流审批的申请不允许在此处人工终审，避免流程实例与业务状态不一致
+        if (!isManualApproval(attendanceLeave.getProcessInstanceId())) {
+            throw exception(ATTENDANCE_LEAVE_WORKFLOW_APPROVAL);
+        }
+        boolean pass = BooleanUtil.isTrue(approved);
+        if (!pass && StrUtil.isBlank(reason)) {
+            throw exception(ATTENDANCE_LEAVE_APPROVAL_REASON_REQUIRED);
+        }
+
+        // 3. 写入审批结果
+        attendanceLeaveMapper.updateById(new HrmAttendanceLeaveDO().setId(id)
+                .setApprovalStatus(pass ? BpmProcessInstanceStatusEnum.APPROVE.getStatus()
+                        : BpmProcessInstanceStatusEnum.REJECT.getStatus())
+                .setApprovalTime(LocalDateTime.now())
+                .setApprovalReason(StrUtil.blankToDefault(reason, "人工审批通过")));
+    }
+
+    /** 是否为人工审批（非工作流）产生的请假申请 */
+    private boolean isManualApproval(String processInstanceId) {
+        return StrUtil.startWith(processInstanceId, MANUAL_PROCESS_INSTANCE_PREFIX);
     }
 
     @Override

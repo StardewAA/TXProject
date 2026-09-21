@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.erp.service.stock;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.erp.api.wms.dto.ErpWarehouseUpsertCallbackReqDTO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehouseSaveReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.warehouse.ErpWarehousePageReqVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
@@ -98,5 +99,16 @@ public interface ErpWarehouseService {
      * @return 仓库分页
      */
     PageResult<ErpWarehouseDO> getWarehousePage(ErpWarehousePageReqVO pageReqVO);
+
+    /**
+     * 基于 WMS 推送的主数据 upsert ERP 仓库。
+     *
+     * <p>由 WMS 端在仓库增删改时通过 RPC 调用。ERP 端按 {@code wmsWarehouseCode}
+     * 匹配现有仓库：不存在则新建（不设置 defaultStatus，不动 principalUserId），
+     * 已存在则更新 name/address/principal/status，不动 wmsWarehouseCode、principalUserId、defaultStatus。</p>
+     *
+     * @param req WMS 推送仓库主数据
+     */
+    void upsertFromWms(@Valid ErpWarehouseUpsertCallbackReqDTO req);
 
 }

@@ -90,6 +90,13 @@ public class ErpSaleOrderItemDO extends BaseDO {
      */
     private BigDecimal outCount;
 
+    /**
+     * MES 累计完工合格数量
+     *
+     * 由 MES 工单完工时回传，覆盖式写入（非增量）；与出库数量语义不同。
+     */
+    private BigDecimal producedCount;
+
     // ========== 销售退货（入库）） ==========
     /**
      * 销售退货数量

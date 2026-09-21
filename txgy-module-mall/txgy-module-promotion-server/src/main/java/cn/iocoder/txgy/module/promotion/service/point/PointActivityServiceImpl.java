@@ -14,8 +14,10 @@ import cn.iocoder.txgy.module.promotion.controller.admin.point.vo.activity.Point
 import cn.iocoder.txgy.module.promotion.controller.admin.point.vo.product.PointProductSaveReqVO;
 import cn.iocoder.txgy.module.promotion.dal.dataobject.point.PointActivityDO;
 import cn.iocoder.txgy.module.promotion.dal.dataobject.point.PointProductDO;
+import cn.iocoder.txgy.module.promotion.dal.dataobject.point.PointStockReturnDO;
 import cn.iocoder.txgy.module.promotion.dal.mysql.point.PointActivityMapper;
 import cn.iocoder.txgy.module.promotion.dal.mysql.point.PointProductMapper;
+import cn.iocoder.txgy.module.promotion.dal.mysql.point.PointStockReturnMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,8 @@ import org.springframework.validation.annotation.Validated;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.time.LocalDateTime;
 
 import static cn.hutool.core.collection.CollUtil.intersectionDistinct;
 import static cn.hutool.core.collection.CollUtil.isNotEmpty;
@@ -34,6 +38,7 @@ import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SKU_NOT_EX
 import static cn.iocoder.txgy.module.product.enums.ErrorCodeConstants.SPU_NOT_EXISTS;
 import static cn.iocoder.txgy.module.promotion.enums.ErrorCodeConstants.*;
 import static java.util.Collections.singletonList;
+import static cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.getRequiredTenantId;
 
 /**
  * 积分商城活动 Service 实现类
@@ -48,6 +53,8 @@ public class PointActivityServiceImpl implements PointActivityService {
     private PointActivityMapper pointActivityMapper;
     @Resource
     private PointProductMapper pointProductMapper;
+    @Resource
+    private PointStockReturnMapper pointStockReturnMapper;
 
     @Resource
     private ProductSpuApi productSpuApi;
@@ -106,14 +113,21 @@ public class PointActivityServiceImpl implements PointActivityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updatePointStockDecr(Long id, Long skuId, Integer count) {
-        // 1.1 校验活动库存是否充足
-        PointActivityDO activity = validatePointActivityExists(id);
-        if (count > activity.getStock()) {
+        if (id == null || id <= 0 || skuId == null || skuId <= 0 || count == null || count <= 0) {
+            throw exception(POINT_ACTIVITY_UPDATE_STOCK_FAIL);
+        }
+        // 1.1 与返库、活动编辑/关闭/删除保持一致：必须先锁活动，再修改活动商品。
+        // 不能先锁商品再等活动，否则会与返库形成交叉等待。
+        PointActivityDO activity = pointActivityMapper.selectByIdForUpdate(id);
+        if (activity == null) {
+            throw exception(POINT_ACTIVITY_NOT_EXISTS);
+        }
+        if (activity.getStock() == null || count > activity.getStock()) {
             throw exception(POINT_ACTIVITY_UPDATE_STOCK_FAIL);
         }
         // 1.2 校验商品库存是否充足
         PointProductDO product = pointProductMapper.selectListByActivityIdAndSkuId(id, skuId);
-        if (product == null || count > product.getStock()) {
+        if (product == null || product.getStock() == null || count > product.getStock()) {
             throw exception(POINT_ACTIVITY_UPDATE_STOCK_FAIL);
         }
 
@@ -133,11 +147,72 @@ public class PointActivityServiceImpl implements PointActivityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updatePointStockIncr(Long id, Long skuId, Integer count) {
-        PointProductDO product = pointProductMapper.selectListByActivityIdAndSkuId(id, skuId);
-        // 更新活动商品库存
-        pointProductMapper.updateStockIncr(product.getId(), count);
-        // 更新活动库存
-        pointActivityMapper.updateStockIncr(id, count);
+        // 旧接口无业务唯一键，不能区分合法返还与网络重试，必须拒绝修改。
+        throw exception(POINT_ACTIVITY_RETURN_ORDER_ITEM_REQUIRED);
+    }
+
+    @Override
+    public void validatePointStockReturn(Long activityId, Long skuId, Integer count, Long orderItemId) {
+        validateStockReturnRequest(activityId, skuId, count, orderItemId);
+        PointStockReturnDO returned = pointStockReturnMapper.selectByOrderItemId(getRequiredTenantId(), orderItemId);
+        if (returned != null) {
+            validateSameStockReturn(returned, activityId, skuId, count);
+            return;
+        }
+        validateStockReturnProduct(validatePointActivityExists(activityId), skuId, count);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void returnPointStock(Long activityId, Long skuId, Integer count, Long orderItemId) {
+        validateStockReturnRequest(activityId, skuId, count, orderItemId);
+        Long tenantId = getRequiredTenantId();
+        // 同一活动串行返还，随后使用当前读识别已经成功提交的网络重试。
+        PointActivityDO activity = pointActivityMapper.selectByIdForUpdate(activityId);
+        PointStockReturnDO returned = pointStockReturnMapper.selectByOrderItemIdForUpdate(tenantId, orderItemId);
+        if (returned != null) {
+            validateSameStockReturn(returned, activityId, skuId, count);
+            return;
+        }
+        if (activity == null) {
+            throw exception(POINT_ACTIVITY_NOT_EXISTS);
+        }
+        PointProductDO product = validateStockReturnProduct(activity, skuId, count);
+        // 流水与两张库存表同事务提交；失败会一起回滚，绝不能只记成功或只返一张表。
+        PointStockReturnDO record = new PointStockReturnDO().setTenantId(tenantId).setOrderItemId(orderItemId)
+                .setActivityId(activityId).setSkuId(skuId).setReturnCount(count).setCreateTime(LocalDateTime.now());
+        if (pointStockReturnMapper.insert(record) != 1
+                || pointProductMapper.updateStockIncr(product.getId(), count) != 1
+                || pointActivityMapper.updateStockIncr(activityId, count) != 1) {
+            throw exception(POINT_ACTIVITY_RETURN_STOCK_FAIL);
+        }
+    }
+
+    private void validateStockReturnRequest(Long activityId, Long skuId, Integer count, Long orderItemId) {
+        if (activityId == null || activityId <= 0 || skuId == null || skuId <= 0
+                || orderItemId == null || orderItemId <= 0 || count == null || count <= 0) {
+            throw exception(POINT_ACTIVITY_RETURN_INVALID_REQUEST);
+        }
+    }
+
+    private void validateSameStockReturn(PointStockReturnDO returned, Long activityId, Long skuId, Integer count) {
+        if (!Objects.equals(returned.getActivityId(), activityId) || !Objects.equals(returned.getSkuId(), skuId)
+                || !Objects.equals(returned.getReturnCount(), count)) {
+            throw exception(POINT_ACTIVITY_RETURN_REQUEST_CONFLICT);
+        }
+    }
+
+    private PointProductDO validateStockReturnProduct(PointActivityDO activity, Long skuId, Integer count) {
+        PointProductDO product = pointProductMapper.selectListByActivityIdAndSkuId(activity.getId(), skuId);
+        if (product == null) {
+            throw exception(POINT_ACTIVITY_RETURN_PRODUCT_NOT_EXISTS);
+        }
+        // 关闭活动、当前库存为零都允许返还，但损坏或溢出的库存必须人工核对。
+        if (activity.getStock() == null || activity.getStock() < 0 || activity.getStock() > Integer.MAX_VALUE - count
+                || product.getStock() == null || product.getStock() < 0 || product.getStock() > Integer.MAX_VALUE - count) {
+            throw exception(POINT_ACTIVITY_RETURN_STOCK_FAIL);
+        }
+        return product;
     }
 
     @Override

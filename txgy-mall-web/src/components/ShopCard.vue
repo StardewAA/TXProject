@@ -9,20 +9,20 @@ const logoFailed = ref(false)
 <template>
   <article class="supplier-card">
     <div class="supplier-card__heading">
-      <RouterLink :to="`/shops/${shop.id}`" class="supplier-identity">
+      <MallLink :to="`/shops/${shop.id}`" class="supplier-identity">
         <img v-if="shop.logoUrl && !logoFailed" :src="normalizeImage(shop.logoUrl)" alt="" @error="logoFailed = true" />
         <span v-else class="supplier-monogram" aria-hidden="true">{{ shop.name.slice(0, 2) }}</span>
         <div><small>企业店铺</small><h3>{{ shop.name }}</h3></div>
-      </RouterLink>
-      <RouterLink class="supplier-entry" :to="`/shops/${shop.id}`">进入店铺 ↗</RouterLink>
+      </MallLink>
+      <MallLink class="supplier-entry" :to="`/shops/${shop.id}`">进入店铺 ↗</MallLink>
     </div>
     <p class="supplier-description">{{ shop.introduction || '了解店铺供应材料，按规格选购工程所需。' }}</p>
     <div class="supplier-count">{{ total === undefined ? '查看店内供应商品' : `${total} 件在售商品` }}</div>
     <div v-if="products?.length" class="supplier-products">
-      <RouterLink v-for="product in products.slice(0, 3)" :key="product.id" :to="`/goods/${product.id}`">
+      <MallLink v-for="product in products.slice(0, 3)" :key="product.id" :to="`/goods/${product.id}`">
         <img :src="productImage(product.id, product.picUrl)" :alt="product.name" loading="lazy" />
         <span>{{ product.name }}</span><strong>¥{{ formatMoney(product.price) }}</strong>
-      </RouterLink>
+      </MallLink>
     </div>
     <p v-else class="supplier-empty">{{ failed ? '商品暂时加载失败，请进入店铺重试' : '店铺正在准备供应商品' }}</p>
   </article>

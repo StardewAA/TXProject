@@ -22,9 +22,12 @@ public enum HrmSalaryOptionCodeEnum implements ArrayValuable<Integer> {
 
     BASIC_SALARY(10101, "基本工资"),
     POST_SALARY(10102, "岗位工资"),
+    PERFORMANCE_SALARY(30101, "绩效工资"),
     MEAL_ALLOWANCE(20104, "餐补"),
 
     OVERTIME_PAY(180101, "加班工资"),
+    FULL_ATTENDANCE_BONUS(40102, "全勤奖"),
+    PIECEWORK_SALARY(60101, "计件工资"),
     LATE_DEDUCTION(190101, "迟到扣款"),
     EARLY_DEDUCTION(190102, "早退扣款"),
     ABSENTEEISM_DEDUCTION(190103, "旷工扣款"),

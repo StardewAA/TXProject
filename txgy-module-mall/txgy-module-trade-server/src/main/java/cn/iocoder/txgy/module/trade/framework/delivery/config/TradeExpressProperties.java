@@ -28,6 +28,11 @@ public class TradeExpressProperties {
      */
     private ExpressClientEnum client = ExpressClientEnum.NOT_PROVIDE;
 
+    /** Explicit outbound permission; credentials alone do not activate paid queries. */
+    private boolean queryEnabled = false;
+    /** Shared across tenants/instances of this provider; default modest quota. */
+    private int maxQueriesPerMinute = 30;
+
     /**
      * 快递鸟配置
      */

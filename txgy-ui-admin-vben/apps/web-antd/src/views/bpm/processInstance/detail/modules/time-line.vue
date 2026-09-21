@@ -2,7 +2,7 @@
 <script lang="ts" setup>
 import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useVbenModal } from '@vben/common-ui';
@@ -17,8 +17,10 @@ import { formatDateTime, isEmpty } from '@vben/utils';
 import { Avatar, Button, Timeline, Tooltip } from 'ant-design-vue';
 
 import { UserSelectModal } from '#/views/system/user/components';
+import { getWarehouseSimpleList } from '#/api/wms/md/warehouse';
 
 import TaskEvidence from './task-evidence.vue';
+import { getVisibleCandidateUsers, shouldShowTaskUser } from './time-line-users';
 
 defineOptions({ name: 'BpmProcessInstanceTimeline' });
 
@@ -100,6 +102,42 @@ const nodeTypeSvgMap = {
   },
 } as Record<BpmNodeTypeEnum, { color: string; icon: string }>; // 节点类型图标映射
 const onlyStatusIconShow = [-1, 0, 1]; // 只有状态是 -1、0、1 才展示头像右小角状态小 icon
+
+const warehouseNamesByUserId = ref<Record<string, string[]>>({});
+
+/** 获取用户所属仓库，用于审批时间线中的人员提示 */
+onMounted(async () => {
+  try {
+    const warehouses = await getWarehouseSimpleList();
+    const result: Record<string, string[]> = {};
+    for (const warehouse of warehouses ?? []) {
+      const userIds = [
+        warehouse.managerUserId,
+        ...(warehouse.memberUserIds ?? []),
+      ].filter((id): id is number => id !== undefined && id !== null);
+      for (const userId of new Set(userIds)) {
+        const names = result[String(userId)] ?? [];
+        if (warehouse.name && !names.includes(warehouse.name)) {
+          names.push(warehouse.name);
+        }
+        result[String(userId)] = names;
+      }
+    }
+    warehouseNamesByUserId.value = result;
+  } catch {
+    // 仓库关系查询失败时保留原审批人姓名，不影响审批详情展示。
+  }
+});
+
+function getUserDisplayName(user?: { id?: number; nickname?: string }) {
+  const nickname = user?.nickname ?? '';
+  const warehouses = user?.id
+    ? warehouseNamesByUserId.value[String(user.id)]
+    : undefined;
+  return warehouses?.length
+    ? `${nickname}（${warehouses.join('、')}）`
+    : nickname;
+}
 
 /** 获取审批节点类型图标 */
 function getApprovalNodeTypeIcon(nodeType: BpmNodeTypeEnum) {
@@ -373,7 +411,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
             >
               <div
                 class="relative flex flex-wrap gap-2"
-                v-if="task.assigneeUser || task.ownerUser"
+                v-if="(task.assigneeUser || task.ownerUser) && shouldShowTaskUser(activity.tasks, idx)"
               >
                 <!-- 信息：头像昵称 -->
                 <div class="relative flex h-8 items-center rounded-3xl pr-2">
@@ -391,7 +429,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                     <Avatar class="!m-1" :size="28" v-else>
                       {{ task.assigneeUser?.nickname.substring(0, 1) }}
                     </Avatar>
-                    {{ task.assigneeUser?.nickname }}
+                    {{ getUserDisplayName(task.assigneeUser) }}
                   </template>
                   <template
                     v-else-if="
@@ -407,7 +445,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                     <Avatar class="!m-1" :size="28" v-else>
                       {{ task.ownerUser?.nickname.substring(0, 1) }}
                     </Avatar>
-                    {{ task.ownerUser?.nickname }}
+                    {{ getUserDisplayName(task.ownerUser) }}
                   </template>
 
                   <!-- 信息：任务状态图标 -->
@@ -443,7 +481,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
 
             <!-- 情况二：遍历每个审批节点下的【候选的】task 任务 -->
             <div
-              v-for="(user, userIndex) in activity.candidateUsers"
+              v-for="(user, userIndex) in getVisibleCandidateUsers(activity.tasks ?? [], activity.candidateUsers)"
               :key="userIndex"
               class="relative flex h-8 items-center rounded-3xl pr-2"
             >
@@ -457,7 +495,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                 {{ user.nickname.substring(0, 1) }}
               </Avatar>
               <span class="text-sm">
-                {{ user.nickname }}
+                {{ getUserDisplayName(user) }}
               </span>
 
               <!-- 候选任务状态图标 -->

@@ -43,6 +43,13 @@ export function exportStock(params: any) {
   });
 }
 
+/** 导出产品库存 PDF */
+export function exportStockPdf(params: any) {
+  return requestClient.download('/erp/stock/export-pdf', {
+    params,
+  });
+}
+
 /** 获取库存数量 */
 export function getWarehouseStockCount(params: ErpStockApi.StockQueryReqVO) {
   return requestClient.get<number>('/erp/stock/get-count', {

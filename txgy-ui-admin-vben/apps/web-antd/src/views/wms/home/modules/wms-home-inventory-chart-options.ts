@@ -27,14 +27,14 @@ export function buildInventoryChartItemList(
     .filter((item) => item.value > 0);
 }
 
-/** 格式化货物占比图例，补充当前商品库存占比 */
+/** 格式化货物占比图例：百分比前置，名称过长被截断时仍能看到占比 */
 function formatGoodsLegend(name: string, goodsShareList: InventoryChartItem[]) {
   const total = goodsShareList.reduce((sum, item) => sum + item.value, 0);
   const item = goodsShareList.find((goods) => goods.name === name);
   if (!total || !item) {
     return name;
   }
-  return `${name}  ${((item.value / total) * 100).toFixed(1)}%`;
+  return `${((item.value / total) * 100).toFixed(1)}%  ${name}`;
 }
 
 /** 货物占比图表配置 */
@@ -45,22 +45,24 @@ export function getGoodsShareChartOptions(
     color: ['#2f7df6', '#18a058', '#f59e0b', '#7c3aed', '#14b8a6'],
     legend: {
       formatter: (name: string) => formatGoodsLegend(name, goodsShareList),
+      itemGap: 8,
       itemHeight: 10,
       itemWidth: 10,
       orient: 'vertical',
-      right: 10,
+      right: 6,
+      textStyle: { fontSize: 11, overflow: 'truncate', width: 118 },
       top: 'middle',
       type: 'scroll',
     },
     series: [
       {
         avoidLabelOverlap: true,
-        center: ['34%', '52%'],
+        center: ['30%', '52%'],
         data: goodsShareList,
         label: { show: false },
         labelLine: { show: false },
         name: '货物占比',
-        radius: ['48%', '70%'],
+        radius: ['46%', '68%'],
         type: 'pie',
       },
     ],

@@ -5,156 +5,113 @@ import type { MallSpuApi } from '#/api/mall/product/spu';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { confirm, DocAlert, Page } from '@vben/common-ui';
-import { ProductSpuStatusEnum } from '@vben/constants';
+import { confirm, Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { message, Tabs } from 'ant-design-vue';
+import { Alert, Button, message, Tabs } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import {
-  deleteSpu,
-  exportSpu,
-  getSpuPage,
-  getTabsCount,
-  updateStatus,
-} from '#/api/mall/product/spu';
-import { $t } from '#/locales';
+import { exportSpu, getSpuPage, getSpuReviewPolicy, getTabsCount, submitSpuReview, updateStatus, withdrawSpuReview } from '#/api/mall/product/spu';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import { canAdminMaintain } from './review-model';
 
 const { push } = useRouter();
 const route = useRoute();
-const tabType = ref(0);
+const tabType = ref<number | undefined>();
+const policy = ref<MallSpuApi.ReviewPolicy>();
+const policyError = ref(false);
+const countError = ref(false);
+const busyId = ref<number>();
 const tabsData = ref([
-  {
-    name: '出售中',
-    type: 0,
-    count: 0,
-  },
-  {
-    name: '仓库中',
-    type: 1,
-    count: 0,
-  },
-  {
-    name: '已售罄',
-    type: 2,
-    count: 0,
-  },
-  {
-    name: '警戒库存',
-    type: 3,
-    count: 0,
-  },
-  {
-    name: '回收站',
-    type: 4,
-    count: 0,
-  },
+  { name: '出售中', type: 0, count: undefined as number | undefined },
+  { name: '仓库中', type: 1, count: undefined as number | undefined },
+  { name: '已售罄', type: 2, count: undefined as number | undefined },
+  { name: '警戒库存', type: 3, count: undefined as number | undefined },
+  { name: '回收站', type: 4, count: undefined as number | undefined },
 ]);
 
-/** 刷新表格 */
-async function handleRefresh() {
-  await gridApi.query();
-  await getTabCount();
+async function loadPolicy() {
+  policy.value = undefined;
+  policyError.value = false;
+  try {
+    policy.value = await getSpuReviewPolicy();
+  } catch {
+    policyError.value = true;
+  }
 }
 
-/** 导出表格 */
 async function handleExport() {
-  const data = await exportSpu(await gridApi.formApi.getValues());
+  const data = await exportSpu({ ...(await gridApi.formApi.getValues()), tabType: tabType.value });
   downloadFileFromBlobPart({ fileName: '商品.xls', source: data });
 }
 
-/** 获得每个 Tab 的数量 */
-async function getTabCount(params?: Record<string, any>) {
-  const res = await getTabsCount(params ?? (await gridApi.formApi.getValues()));
-  for (const objName in res) {
-    const index = Number(objName);
-    if (tabsData.value[index]) {
-      tabsData.value[index].count = res[objName]!;
-    }
-  }
-}
-
-/** 创建商品 */
-function handleCreate() {
-  push({ name: 'ProductSpuAdd' });
-}
-
-/** 编辑商品 */
-function handleEdit(row: MallSpuApi.Spu) {
-  push({ name: 'ProductSpuEdit', params: { id: row.id } });
-}
-
-/** 删除商品 */
-async function handleDelete(row: MallSpuApi.Spu) {
-  const hideLoading = message.loading({
-    content: $t('ui.actionMessage.deleting', [row.name]),
-    duration: 0,
-  });
+let countRequest = 0;
+async function getTabCount(params?: Record<string, unknown>) {
+  const request = ++countRequest;
   try {
-    await deleteSpu(row.id!);
-    message.success($t('ui.actionMessage.deleteSuccess', [row.name]));
-    await handleRefresh();
-  } finally {
-    hideLoading();
-  }
-}
-
-/** 更新状态 */
-async function handleStatusChange(
-  newStatus: number,
-  row: MallSpuApi.Spu,
-): Promise<boolean | undefined> {
-  // 二次确认
-  const text = newStatus ? '上架' : '下架';
-  try {
-    await confirm(`确认要${text + row.name}吗?`);
+    const res = await getTabsCount(params ?? await gridApi.formApi.getValues());
+    if (request !== countRequest) return;
+    for (const tab of tabsData.value) tab.count = res[String(tab.type)];
+    countError.value = false;
   } catch {
-    return false;
-  }
-  // 更新状态
-  await updateStatus({
-    id: row.id!,
-    status: newStatus,
-  });
-  // 提示并返回成功
-  message.success(`${text}成功`);
-  return true;
-}
-
-/** 添加到仓库 / 回收站的状态 */
-async function handleStatus02Change(row: MallSpuApi.Spu, newStatus: number) {
-  const text =
-    newStatus === ProductSpuStatusEnum.RECYCLE.status
-      ? '加入到回收站'
-      : '恢复到仓库';
-  await confirm(`确认要"${row.name}"${text}吗？`);
-  const hideLoading = message.loading({
-    content: `正在${text}中...`,
-    duration: 0,
-  });
-  try {
-    await updateStatus({ id: row.id!, status: newStatus });
-    message.success(`${text}成功`);
-    await handleRefresh();
-  } finally {
-    hideLoading();
+    if (request === countRequest) countError.value = true;
   }
 }
 
-/** 查看商品详情 */
 function handleDetail(row: MallSpuApi.Spu) {
-  push({ name: 'ProductSpuDetail', params: { id: row.id } });
+  void push({ name: 'ProductSpuDetail', params: { id: row.id } });
+}
+
+function handleReview(row: MallSpuApi.Spu) {
+  void push({ name: 'ProductSpuReview', params: { id: row.id } });
+}
+
+function canMaintain(row: MallSpuApi.Spu) {
+  return canAdminMaintain(policy.value, row.shopId);
+}
+
+function canPublish(row: MallSpuApi.Spu) {
+  return canMaintain(row) && row.status === 0 && row.reviewStatus === 20
+    && row.contentVersion === row.approvedVersion;
+}
+
+async function runMaintenance(row: MallSpuApi.Spu, operation: 'submit' | 'withdraw' | number) {
+  if (busyId.value !== undefined || !canMaintain(row) || !row.id) return;
+  if (!Number.isSafeInteger(row.contentVersion)) {
+    message.warning('商品版本缺失，请刷新列表，不能使用旧页面执行操作。');
+    return;
+  }
+  const label = operation === 'submit' ? '提交审核'
+    : operation === 'withdraw' ? '撤回审核'
+      : operation === 1 ? '上架' : operation === -1 ? '回收' : row.status === -1 ? '恢复为草稿' : '下架';
+  busyId.value = row.id;
+  try {
+    try {
+      await confirm(`确认将“${row.name}”${label}？${operation === 'submit' ? '审核通过后仍下架，提交人员不能审核自己的提交。' : ''}`);
+    } catch {
+      return;
+    }
+    const expectedVersion = row.contentVersion!;
+    if (operation === 'submit') await submitSpuReview({ id: row.id, expectedVersion });
+    else if (operation === 'withdraw') {
+      if (!row.submissionId) { message.warning('提交编号缺失，请刷新后重试。'); return; }
+      await withdrawSpuReview({ id: row.id, expectedVersion, submissionId: row.submissionId });
+    } else await updateStatus({ id: row.id, status: operation, expectedVersion });
+    message.success(`${label}成功`);
+    await gridApi.query();
+  } catch {
+    message.warning('操作未能确认成功，请刷新核对最新状态；不能使用旧版本继续操作。');
+    await gridApi.query();
+  } finally {
+    busyId.value = undefined;
+  }
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
-  formOptions: {
-    schema: useGridFormSchema(),
-  },
+  formOptions: { schema: useGridFormSchema() },
   gridOptions: {
-    columns: useGridColumns(handleStatusChange),
+    columns: useGridColumns(),
     height: 'auto',
     keepSource: true,
     proxyConfig: {
@@ -163,133 +120,71 @@ const [Grid, gridApi] = useVbenVxeGrid({
           const result = await getSpuPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            tabType: tabType.value,
             ...formValues,
+            tabType: tabType.value,
           });
-          void getTabCount(formValues); // 跟随筛选刷新 tab 数量
+          void getTabCount(formValues);
           return result;
         },
       },
     },
-    rowConfig: {
-      keyField: 'id',
-      isHover: true,
-    },
-    toolbarConfig: {
-      refresh: true,
-      search: true,
-    },
+    rowConfig: { keyField: 'id', isHover: true },
+    toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions<MallSpuApi.Spu>,
 });
 
-function onChangeTab(key: any) {
-  tabType.value = Number(key);
-  gridApi.query();
+function onChangeTab(key: number | string) {
+  tabType.value = key === 'all' ? undefined : Number(key);
+  void gridApi.query();
+}
+
+async function showPendingQueue() {
+  tabType.value = undefined;
+  await gridApi.formApi.setValues({ reviewStatus: 10 });
+  await gridApi.query();
 }
 
 onMounted(async () => {
-  // 解析路由的 categoryId
+  void loadPolicy();
   if (route.query.categoryId) {
-    await gridApi.formApi.setValues({
-      categoryId: Number(route.query.categoryId),
-    });
+    await gridApi.formApi.setValues({ categoryId: Number(route.query.categoryId) });
   }
-  // 获得每个 Tab 的数量
   await getTabCount();
 });
 </script>
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【商品】商品 SPU 与 SKU"
-        url="https://doc.iocoder.cn/mall/product-spu-sku/"
-      />
-    </template>
-
+    <Alert class="mb-3" type="info" show-icon message="华能店试点：后台只查看与审核，经营资料交由销售中心维护。" description="其他店铺补齐经营账号前临时保留后台维护，但新增、修改、复制、恢复后均须审核，提交人员不可自审。未修改的存量在售商品按历史过渡保留，通过审核不自动上架。" />
+    <Alert v-if="policyError" class="mb-3" type="warning" show-icon message="暂无法加载审核策略，页面保持只读，审核入口暂不可用。">
+      <template #action><Button size="small" @click="loadPolicy">重试</Button></template>
+    </Alert>
     <Grid>
       <template #toolbar-actions>
-        <Tabs @change="onChangeTab" class="w-full">
-          <Tabs.TabPane
-            v-for="item in tabsData"
-            :key="item.type"
-            :tab="`${item.name} (${item.count})`"
-          />
+        <Tabs :active-key="tabType ?? 'all'" @change="onChangeTab" class="w-full">
+          <Tabs.TabPane key="all" tab="全部商品" />
+          <Tabs.TabPane v-for="item in tabsData" :key="item.type" :tab="`${item.name} (${countError ? '暂不可用' : item.count ?? '…'})`" />
         </Tabs>
       </template>
       <template #toolbar-tools>
-        <TableAction
-          :actions="[
-            {
-              label: $t('ui.actionTitle.create', ['商品']),
-              type: 'primary',
-              icon: ACTION_ICON.ADD,
-              auth: ['product:spu:create'],
-              onClick: handleCreate,
-            },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['product:spu:export'],
-              onClick: handleExport,
-            },
-          ]"
-        />
+        <Button class="mr-2" @click="showPendingQueue">待审队列</Button>
+        <TableAction :actions="[
+          { label: '新增非试点商品', icon: ACTION_ICON.ADD, auth: ['product:spu:create'], ifShow: () => canAdminMaintain(policy), onClick: () => push({ name: 'ProductSpuAdd' }) },
+          { label: '导出', icon: ACTION_ICON.DOWNLOAD, auth: ['product:spu:export'], onClick: handleExport },
+        ]" />
       </template>
       <template #actions="{ row }">
-        <TableAction
-          :actions="[
-            {
-              label: $t('common.edit'),
-              type: 'link',
-              icon: ACTION_ICON.EDIT,
-              auth: ['product:spu:update'],
-              onClick: handleEdit.bind(null, row),
-            },
-            {
-              label: $t('common.detail'),
-              type: 'link',
-              icon: ACTION_ICON.VIEW,
-              onClick: handleDetail.bind(null, row),
-            },
-            {
-              label: $t('common.delete'),
-              type: 'link',
-              danger: true,
-              icon: ACTION_ICON.DELETE,
-              auth: ['product:spu:delete'],
-              ifShow: () => tabType === 4,
-              popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', [row.name]),
-                confirm: handleDelete.bind(null, row),
-              },
-            },
-            {
-              label: '恢复',
-              type: 'link',
-              icon: ACTION_ICON.EDIT,
-              auth: ['product:spu:update'],
-              onClick: handleStatus02Change.bind(
-                null,
-                row,
-                ProductSpuStatusEnum.DISABLE.status,
-              ),
-            },
-            {
-              label: '回收',
-              type: 'link',
-              icon: ACTION_ICON.EDIT,
-              auth: ['product:spu:update'],
-              onClick: handleStatus02Change.bind(
-                null,
-                row,
-                ProductSpuStatusEnum.RECYCLE.status,
-              ),
-            },
-          ]"
-        />
+        <TableAction :actions="[
+          { label: '详情', type: 'link', icon: ACTION_ICON.VIEW, auth: ['product:spu:query'], onClick: handleDetail.bind(null, row) },
+          { label: row.reviewStatus === 10 ? '审核详情' : '审核记录', type: 'link', auth: ['product:spu:query'], ifShow: () => policy?.reviewEnabled === true, onClick: handleReview.bind(null, row) },
+          { label: '编辑草稿', type: 'link', auth: ['product:spu:update'], ifShow: () => canMaintain(row) && row.reviewStatus !== 10 && row.status !== -1, onClick: () => push({ name: 'ProductSpuEdit', params: { id: row.id } }) },
+          { label: '送审', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canMaintain(row) && row.status !== -1 && (row.reviewStatus == null || row.reviewStatus === 0 || row.reviewStatus === 30), onClick: () => runMaintenance(row, 'submit') },
+          { label: '撤回', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canMaintain(row) && row.reviewStatus === 10, onClick: () => runMaintenance(row, 'withdraw') },
+          { label: '上架', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canPublish(row), onClick: () => runMaintenance(row, 1) },
+          { label: '下架', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canMaintain(row) && row.status === 1, onClick: () => runMaintenance(row, 0) },
+          { label: '回收', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canMaintain(row) && row.status === 0 && row.reviewStatus !== 10, onClick: () => runMaintenance(row, -1) },
+          { label: '恢复为草稿', type: 'link', auth: ['product:spu:update'], disabled: busyId !== undefined, ifShow: () => canMaintain(row) && row.status === -1, onClick: () => runMaintenance(row, 0) },
+        ]" />
       </template>
     </Grid>
   </Page>

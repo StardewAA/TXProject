@@ -49,7 +49,8 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
                 log.info("[preHandle][开始请求 URL({}) 无参数]", request.getRequestURI());
             } else {
                 log.info("[preHandle][开始请求 URL({}) 参数({})]", request.getRequestURI(),
-                        StrUtil.blankToDefault(requestBody, queryString.toString()));
+                        cn.iocoder.txgy.framework.common.util.audit.WorkTrace.sanitizeJson(
+                                StrUtil.blankToDefault(requestBody, cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString(queryString))));
             }
             // 计时
             StopWatch stopWatch = new StopWatch();

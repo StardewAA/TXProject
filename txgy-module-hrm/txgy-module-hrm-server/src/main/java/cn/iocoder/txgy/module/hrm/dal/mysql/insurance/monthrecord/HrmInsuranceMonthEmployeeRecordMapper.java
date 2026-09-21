@@ -18,6 +18,30 @@ import java.util.Map;
 @Mapper
 public interface HrmInsuranceMonthEmployeeRecordMapper extends BaseMapperX<HrmInsuranceMonthEmployeeRecordDO> {
 
+    /**
+     * 按员工 + 年月查询月度社保记录（社保代扣取数用）
+     */
+    default HrmInsuranceMonthEmployeeRecordDO selectByEmployeeIdAndYearMonth(Long employeeId,
+                                                                            Integer year, Integer month) {
+        return selectOne(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<
+                HrmInsuranceMonthEmployeeRecordDO>()
+                .eq(HrmInsuranceMonthEmployeeRecordDO::getEmployeeId, employeeId)
+                .eq(HrmInsuranceMonthEmployeeRecordDO::getYear, year)
+                .eq(HrmInsuranceMonthEmployeeRecordDO::getMonth, month)
+                .orderByDesc(HrmInsuranceMonthEmployeeRecordDO::getId)
+                .last("LIMIT 1"));
+    }
+
+    /**
+     * 按年月查询全部员工月度社保记录（月度工资表批量取数用）
+     */
+    default java.util.List<HrmInsuranceMonthEmployeeRecordDO> selectListByYearMonth(Integer year, Integer month) {
+        return selectList(new cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX<
+                HrmInsuranceMonthEmployeeRecordDO>()
+                .eq(HrmInsuranceMonthEmployeeRecordDO::getYear, year)
+                .eq(HrmInsuranceMonthEmployeeRecordDO::getMonth, month));
+    }
+
     default HrmInsuranceMonthEmployeeRecordDO selectByMonthRecordIdAndEmployeeId(Long monthRecordId, Long employeeId) {
         return selectLastOne(new LambdaQueryWrapperX<HrmInsuranceMonthEmployeeRecordDO>()
                 .eq(HrmInsuranceMonthEmployeeRecordDO::getMonthRecordId, monthRecordId)

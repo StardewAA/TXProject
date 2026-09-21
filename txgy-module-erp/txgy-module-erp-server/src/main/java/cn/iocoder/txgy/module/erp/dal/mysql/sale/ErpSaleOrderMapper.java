@@ -23,6 +23,7 @@ public interface ErpSaleOrderMapper extends BaseMapperX<ErpSaleOrderDO> {
 
     default PageResult<ErpSaleOrderDO> selectPage(ErpSaleOrderPageReqVO reqVO) {
         MPJLambdaWrapperX<ErpSaleOrderDO> query = new MPJLambdaWrapperX<ErpSaleOrderDO>()
+                .inIfPresent(ErpSaleOrderDO::getId, reqVO.getIds())
                 .likeIfPresent(ErpSaleOrderDO::getNo, reqVO.getNo())
                 .eqIfPresent(ErpSaleOrderDO::getCustomerId, reqVO.getCustomerId())
                 .betweenIfPresent(ErpSaleOrderDO::getOrderTime, reqVO.getOrderTime())
@@ -67,6 +68,17 @@ public interface ErpSaleOrderMapper extends BaseMapperX<ErpSaleOrderDO> {
     default int updateByIdAndStatus(Long id, Integer status, ErpSaleOrderDO updateObj) {
         return update(updateObj, new LambdaUpdateWrapper<ErpSaleOrderDO>()
                 .eq(ErpSaleOrderDO::getId, id).eq(ErpSaleOrderDO::getStatus, status));
+    }
+
+    /**
+     * 反审批：将指定状态的订单回退为草稿，并清空 BPM 流程实例编号
+     */
+    default int reverseApproveByIdAndStatus(Long id, Integer status, String reason) {
+        return update(new LambdaUpdateWrapper<ErpSaleOrderDO>()
+                .eq(ErpSaleOrderDO::getId, id).eq(ErpSaleOrderDO::getStatus, status)
+                .set(ErpSaleOrderDO::getStatus, ErpAuditStatus.DRAFT.getStatus())
+                .set(ErpSaleOrderDO::getProcessInstanceId, null)
+                .set(ErpSaleOrderDO::getReverseApproveReason, reason));
     }
 
     default ErpSaleOrderDO selectByNo(String no) {

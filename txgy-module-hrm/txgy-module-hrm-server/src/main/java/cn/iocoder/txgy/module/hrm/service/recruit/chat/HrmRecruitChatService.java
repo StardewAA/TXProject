@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.hrm.service.recruit.chat;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.HrmPortalRecruitChatConversationRespVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.HrmPortalRecruitChatMessageRespVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.HrmPortalRecruitChatSendReqVO;
+import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.candidate.HrmRecruitInterviewDO;
 
 import java.util.List;
 
@@ -32,6 +33,9 @@ public interface HrmRecruitChatService {
 
     /** 将招聘沟通中的求职者手动转为候选人。 */
     Long convertConversationToCandidate(Long hrUserId, Long conversationId);
+
+    /** 将面试安排通知写入对应招聘会话，供求职者端实时接收。 */
+    void sendInterviewArrangedNotification(Long applicationId, HrmRecruitInterviewDO interview);
 
     /** 将超过默认等待时限且尚未获得招聘方回复的会话置为沟通失败。 */
     int expireWaitingConversations(java.time.LocalDateTime now);

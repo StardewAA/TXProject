@@ -27,7 +27,6 @@ import {
 } from './data';
 import ClassDetailContent from './modules/class-detail.vue';
 import FormModalContent from './modules/form.vue';
-import ImportAllocateContent from './modules/import-allocate.vue';
 
 defineOptions({ name: 'TrainingPlan' });
 
@@ -95,16 +94,6 @@ const [DetailModal, detailModal] = useVbenModal({
 
 function handleView(row: TrainingPlanApi.Class) {
   detailModal.setData(row).open();
-}
-
-// ========== 批量导入学员并手动指定培训班 ==========
-const [ImportAllocateModal, importAllocateModal] = useVbenModal({
-  connectedComponent: ImportAllocateContent,
-  destroyOnClose: true,
-});
-
-function handleImportAllocate() {
-  importAllocateModal.open();
 }
 
 // ========== 子模块跳转（3-2 ~ 3-5 由独立菜单承载） ==========
@@ -241,7 +230,6 @@ function buildActions(row: TrainingPlanApi.Class) {
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <DetailModal />
-    <ImportAllocateModal @success="handleRefresh" />
 
     <Grid table-title="培训班管理（模块三 · 3-1 培训班创建）">
       <template #toolbar-tools>
@@ -252,10 +240,6 @@ function buildActions(row: TrainingPlanApi.Class) {
               type: 'primary',
               icon: ACTION_ICON.ADD,
               onClick: handleCreate,
-            },
-            {
-              label: '批量导入学员并指定培训班',
-              onClick: handleImportAllocate,
             },
           ]"
         />

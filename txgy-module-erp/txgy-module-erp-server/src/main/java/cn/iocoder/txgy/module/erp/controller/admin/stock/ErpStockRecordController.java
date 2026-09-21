@@ -11,6 +11,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProductRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.record.ErpStockRecordPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.record.ErpStockRecordRespVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockRecordDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
@@ -84,6 +85,19 @@ public class ErpStockRecordController {
         ExcelUtils.write(response, "产品库存明细.xls", "数据", ErpStockRecordRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出产品库存明细 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:stock-record:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportStockRecordPdf(@Valid ErpStockRecordPageReqVO pageReqVO,
+                                     HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpStockRecordRespVO> list = buildStockRecrodVOPageResult(
+                stockRecordService.getStockRecordPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "产品库存明细.pdf", "产品库存明细列表",
+                ErpStockRecordRespVO.class, list);
+    }
+
     private PageResult<ErpStockRecordRespVO> buildStockRecrodVOPageResult(PageResult<ErpStockRecordDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -92,7 +106,7 @@ public class ErpStockRecordController {
                 convertSet(pageResult.getList(), ErpStockRecordDO::getProductId));
         Map<Long, ErpWarehouseDO> warehouseMap = warehouseService.getWarehouseMap(
                 convertSet(pageResult.getList(), ErpStockRecordDO::getWarehouseId));
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), record -> Long.parseLong(record.getCreator())));
         return BeanUtils.toBean(pageResult, ErpStockRecordRespVO.class, stock -> {
             MapUtils.findAndThen(productMap, stock.getProductId(), product -> stock.setProductName(product.getName())

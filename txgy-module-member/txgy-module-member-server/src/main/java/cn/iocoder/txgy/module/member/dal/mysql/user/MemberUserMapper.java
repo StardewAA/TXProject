@@ -10,6 +10,10 @@ import cn.iocoder.txgy.module.member.controller.admin.user.vo.MemberUserPageReqV
 import cn.iocoder.txgy.module.member.dal.dataobject.user.MemberUserDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,6 +26,23 @@ import java.util.stream.IntStream;
  */
 @Mapper
 public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
+
+    default MemberUserDO selectByLoginName(String loginName) {
+        return selectOne(MemberUserDO::getLoginName, loginName);
+    }
+
+    /** 必须在积分流水所在事务中调用；按会员行串行化积分变更，不能使用快照读替代。 */
+    @Select("SELECT id, tenant_id, point FROM member_user "
+            + "WHERE id = #{userId} AND tenant_id = #{tenantId} AND deleted = FALSE FOR UPDATE")
+    @Options(useCache = false, flushCache = Options.FlushCachePolicy.TRUE)
+    MemberUserDO selectPointUserForUpdate(@Param("tenantId") Long tenantId, @Param("userId") Long userId);
+
+    /** 行锁内仍保留租户、余额下限/上限条件，更新失败必须让整个积分事务回滚。 */
+    @Update("UPDATE member_user SET point = COALESCE(point, 0) + #{point} "
+            + "WHERE id = #{userId} AND tenant_id = #{tenantId} AND deleted = FALSE "
+            + "AND COALESCE(point, 0) + #{point} BETWEEN 0 AND 2147483647")
+    int updatePointForTenant(@Param("tenantId") Long tenantId, @Param("userId") Long userId,
+                             @Param("point") Integer point);
 
     default MemberUserDO selectByMobile(String mobile) {
         return selectOne(MemberUserDO::getMobile, mobile);

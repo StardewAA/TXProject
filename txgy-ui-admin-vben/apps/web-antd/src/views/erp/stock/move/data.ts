@@ -1,9 +1,6 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { DICT_TYPE } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
-
 import { getProductSimpleList } from '#/api/erp/product/product';
 import { getWarehouseSimpleList } from '#/api/erp/stock/warehouse';
 import { getSimpleUserList } from '#/api/system/user';
@@ -242,7 +239,11 @@ export function useGridFormSchema(): VbenFormSchema[] {
       label: '状态',
       component: 'Select',
       componentProps: {
-        options: getDictOptions(DICT_TYPE.ERP_AUDIT_STATUS, 'number'),
+        options: [
+          { label: '待调出确认', value: 10 },
+          { label: '待调入确认', value: 15 },
+          { label: '调拨完成', value: 20 },
+        ],
         placeholder: '请选择状态',
         allowClear: true,
       },
@@ -304,12 +305,27 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       field: 'status',
-      title: '状态',
-      minWidth: 120,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.ERP_AUDIT_STATUS },
-      },
+      title: '双确认状态',
+      minWidth: 140,
+      slots: { default: 'status' },
+    },
+    {
+      field: 'sourceConfirmedByName',
+      title: '调出确认',
+      minWidth: 170,
+      formatter: ({ row }) =>
+        row.sourceConfirmedByName
+          ? `${row.sourceConfirmedByName} / ${row.sourceConfirmedAt ?? ''}`
+          : '待确认',
+    },
+    {
+      field: 'targetConfirmedByName',
+      title: '调入确认',
+      minWidth: 170,
+      formatter: ({ row }) =>
+        row.targetConfirmedByName
+          ? `${row.targetConfirmedByName} / ${row.targetConfirmedAt ?? ''}`
+          : '待确认',
     },
     {
       title: '操作',

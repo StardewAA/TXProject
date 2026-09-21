@@ -20,7 +20,7 @@ onUnmounted(() => clearInterval(timer))
   <section class="industry-carousel" aria-label="工程材料主题轮播" aria-roledescription="轮播" @mouseenter="paused = true" @mouseleave="paused = false" @focusin="paused = true" @focusout="paused = false">
     <article v-for="(slide, index) in slides" v-show="active === index" :key="slide.image" class="industry-slide">
       <img :src="['/banners/industry-hero-v2.png', '/banners/industry-insulation-v2.png', '/banners/industry-pipes-v2.png'][index]" alt="" class="industry-art" :fetchpriority="index === 0 ? 'high' : 'auto'" />
-      <div class="industry-copy"><span>{{ slide.tag }}</span><h1>{{ slide.title }}</h1><p>{{ slide.subtitle }}</p><RouterLink :to="{ path: '/goods', query: { keyword: slide.keyword } }">选购{{ slide.keyword === '管' ? '管材' : slide.keyword }}材料 ↗</RouterLink></div>
+      <div class="industry-copy"><span>{{ slide.tag }}</span><h1>{{ slide.title }}</h1><p>{{ slide.subtitle }}</p><MallLink :to="{ path: '/goods', query: { keyword: slide.keyword } }">选购{{ slide.keyword === '管' ? '管材' : slide.keyword }}材料 ↗</MallLink></div>
     </article>
     <div class="carousel-controls"><button aria-label="上一张" @click="move(-1)">←</button><button v-for="(slide, index) in slides" :key="slide.image" :aria-label="'切换到第' + (index + 1) + '张'" :aria-pressed="active === index" :class="{ selected: active === index }" @click="active = index">{{ index + 1 }}</button><button aria-label="下一张" @click="move(1)">→</button></div>
   </section>

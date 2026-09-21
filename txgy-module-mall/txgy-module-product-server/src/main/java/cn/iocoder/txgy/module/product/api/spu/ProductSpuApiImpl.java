@@ -27,23 +27,28 @@ public class ProductSpuApiImpl implements ProductSpuApi {
 
     @Resource
     private ProductSpuService spuService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
 
     @Override
     public CommonResult<List<ProductSpuRespDTO>> getSpuList(Collection<Long> ids) {
         List<ProductSpuDO> spus = spuService.getSpuList(ids);
-        return success(BeanUtils.toBean(spus, ProductSpuRespDTO.class));
+        return success(spus.stream().filter(java.util.Objects::nonNull).map(this::convert).toList());
     }
 
     @Override
     public CommonResult<List<ProductSpuRespDTO>> validateSpuList(Collection<Long> ids) {
         List<ProductSpuDO> spus = spuService.validateSpuList(ids);
-        return success(BeanUtils.toBean(spus, ProductSpuRespDTO.class));
+        return success(spus.stream().map(this::convert).toList());
     }
 
     @Override
     public CommonResult<ProductSpuRespDTO> getSpu(Long id) {
         ProductSpuDO spu = spuService.getSpu(id);
-        return success(BeanUtils.toBean(spu, ProductSpuRespDTO.class));
+        return success(spu == null ? null : convert(spu));
+    }
+
+    private ProductSpuRespDTO convert(ProductSpuDO p) {
+        return BeanUtils.toBean(p, ProductSpuRespDTO.class).setSaleable(reviewService.saleable(p));
     }
 
 }

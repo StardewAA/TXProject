@@ -1,6 +1,10 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import {
+  getManageFilterOptions,
+  type ManageFilterOptions,
+} from '#/api/bidding/noticeExternal';
 import { fmtDateTime } from '#/utils/datetime';
 
 /* ===== 外部公告管理端 · 枚举 → 展示文案/颜色（01 §2 / 02 §2，label 与门户口径一致） =====
@@ -65,6 +69,18 @@ export const BODY_MAP: Record<string, { color: string; text: string; }> = {
 const tagOpts = (map: Record<string, { color: string; text: string; }>) =>
   Object.entries(map).map(([value, c]) => ({ label: c.text, value }));
 
+/** 筛选选项缓存：来源站/公告类型两个 ApiSelect 共用一次后端请求，避免重复拉取；失败后允许重试 */
+let filterOptionsPromise: null | Promise<ManageFilterOptions> = null;
+function loadFilterOptions(): Promise<ManageFilterOptions> {
+  if (!filterOptionsPromise) {
+    filterOptionsPromise = getManageFilterOptions().catch((e: unknown) => {
+      filterOptionsPromise = null;
+      throw e;
+    });
+  }
+  return filterOptionsPromise;
+}
+
 /** 列表搜索表单（manage/page 结构化过滤：状态/审核/形态/行业/来源/类型/项目编号） */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
@@ -110,15 +126,30 @@ export function useGridFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'sourceCode',
-      label: '来源站 code',
-      component: 'Input',
-      componentProps: { placeholder: '如 EBIDDING', allowClear: true },
+      label: '来源站',
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => (await loadFilterOptions()).sources ?? [],
+        labelField: 'name',
+        valueField: 'code',
+        placeholder: '全部',
+        allowClear: true,
+        showSearch: true,
+      },
     },
     {
       fieldName: 'noticeTypeRaw',
       label: '公告类型',
-      component: 'Input',
-      componentProps: { placeholder: '如 招标公告', allowClear: true },
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => {
+          const res = await loadFilterOptions();
+          return (res.noticeTypes ?? []).map((t) => ({ label: t, value: t }));
+        },
+        placeholder: '全部',
+        allowClear: true,
+        showSearch: true,
+      },
     },
     {
       fieldName: 'projectCode',
