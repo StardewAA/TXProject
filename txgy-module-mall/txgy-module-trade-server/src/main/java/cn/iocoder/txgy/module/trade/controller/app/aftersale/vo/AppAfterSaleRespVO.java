@@ -10,6 +10,9 @@ import java.util.List;
 @Schema(description = "用户 App - 交易售后 Response VO")
 @Data
 public class AppAfterSaleRespVO {
+    @Schema(description = "是否由当前登录会员实际下单；企业采购售后的变更操作仅限实际下单人")
+    private Boolean createdByCurrentMember;
+
     private String returnReceiverName;
     private String returnReceiverMobile;
     private String returnAddress;

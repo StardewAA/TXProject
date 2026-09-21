@@ -13,6 +13,9 @@ const route = useRoute(), router = useRouter(), shopId = computed(() => Number(r
 const shop = ref<Shop>(), rows = ref<SupplierProduct[]>([])
 const busy = ref(false), mutating = ref(false), error = ref(false), actionError = ref('')
 const page = ref(1), total = ref(0), name = ref(''), status = ref<number>(), reviewStatus = ref<number>()
+const pageOnline = computed(() => rows.value.filter(row => row.status === 1).length)
+const pagePending = computed(() => rows.value.filter(row => row.reviewStatus === 10).length)
+const pageApproved = computed(() => rows.value.filter(row => row.reviewStatus === 20).length)
 const gate = createProductReviewRequestGate()
 let mutationGeneration = 0
 function search() { if (mutating.value) return; page.value = 1; void load() }
@@ -61,17 +64,52 @@ onBeforeUnmount(() => { gate.invalidate(); mutationGeneration++ })
 </script>
 <template>
   <section class="container panel supplier-products">
-    <header><div><MallLink to="/sales">← 销售中心</MallLink><h1>{{ shop?.name || '授权店铺' }} · 商品管理</h1></div><MallLink v-if="shop" class="publish" :to="`/sales/shops/${shopId}/products/new`">新增商品草稿</MallLink></header>
-    <el-alert title="保存草稿 → 提交后台审核 → 审核通过 → 主动上架。经营资料有修改须重新审核；待审核内容冻结，先撤回才能修改。" :closable="false" />
+    <header class="page-hero">
+      <div>
+        <MallLink class="breadcrumb" to="/sales">销售中心 / 店铺运营</MallLink>
+        <p class="eyebrow">PRODUCT OPERATIONS</p>
+        <h1>{{ shop?.name || '授权店铺' }} · 商品管理</h1>
+        <p class="hero-description">集中管理商品资料、审核版本与上下架状态，保障店铺销售内容准确一致。</p>
+      </div>
+      <MallLink v-if="shop" class="publish" :to="`/sales/shops/${shopId}/products/new`">新增商品草稿</MallLink>
+    </header>
+
+    <div class="summary-grid">
+      <article><span>商品总数</span><strong>{{ total }}</strong><small>当前筛选结果</small></article>
+      <article><span>本页上架</span><strong>{{ pageOnline }}</strong><small>正在前台销售</small></article>
+      <article><span>待审核</span><strong>{{ pagePending }}</strong><small>内容暂不可修改</small></article>
+      <article><span>本页已通过</span><strong>{{ pageApproved }}</strong><small>可按版本上架</small></article>
+    </div>
+
+    <div class="workflow" aria-label="商品发布流程">
+      <div><b>01</b><span><strong>保存草稿</strong><small>完善商品信息</small></span></div>
+      <div><b>02</b><span><strong>提交审核</strong><small>冻结当前版本</small></span></div>
+      <div><b>03</b><span><strong>审核通过</strong><small>获得销售资格</small></span></div>
+      <div><b>04</b><span><strong>主动上架</strong><small>在商城前台展示</small></span></div>
+    </div>
     <p class="hint">历史未修改商品可按原状态销售，未有审核记录不代表已批准；历史商品下架后重新上架需补审。商品审核不会修改库存。</p>
-    <div class="filters"><el-input v-model="name" placeholder="商品名称" clearable :disabled="mutating" @keyup.enter="search" /><el-select v-model="status" placeholder="全部销售状态" clearable :disabled="mutating"><el-option :value="1" label="上架"/><el-option :value="0" label="下架"/></el-select><el-select v-model="reviewStatus" placeholder="全部审核状态" clearable :disabled="mutating"><el-option :value="-1" label="历史过渡 · 待补审"/><el-option v-for="option in productReviewOptions" :key="option.value" :value="option.value" :label="option.label"/></el-select><el-button :loading="busy" :disabled="mutating" @click="search">查询 / 刷新</el-button></div>
+    <div class="filter-panel">
+      <div class="filter-heading"><strong>商品筛选</strong><span>按名称、销售状态或审核进度快速定位商品</span></div>
+      <div class="filters"><el-input v-model="name" placeholder="输入商品名称" clearable :disabled="mutating" @keyup.enter="search" /><el-select v-model="status" placeholder="全部销售状态" clearable :disabled="mutating"><el-option :value="1" label="上架"/><el-option :value="0" label="下架"/></el-select><el-select v-model="reviewStatus" placeholder="全部审核状态" clearable :disabled="mutating"><el-option :value="-1" label="历史过渡 · 待补审"/><el-option v-for="option in productReviewOptions" :key="option.value" :value="option.value" :label="option.label"/></el-select><el-button type="primary" :loading="busy" :disabled="mutating" @click="search">查询 / 刷新</el-button></div>
+    </div>
     <el-alert v-if="error" title="加载失败，请重试；不会展示其他店铺商品" type="error" :closable="false"/><el-alert v-if="actionError" :title="actionError" type="warning" :closable="false"/>
-    <el-table :data="rows" v-loading="busy"><el-table-column prop="id" label="编号" width="100"/><el-table-column label="商品" min-width="230"><template #default="{row}"><div class="product"><img :src="row.picUrl" alt="商品图"/><span>{{row.name}}</span></div></template></el-table-column><el-table-column label="售价" width="110"><template #default="{row}">¥{{((row.price||0)/100).toFixed(2)}}</template></el-table-column><el-table-column prop="stock" label="库存缓存" width="100"/><el-table-column label="销售状态" width="100"><template #default="{row}">{{row.status===1?'上架':'下架'}}</template></el-table-column>
+    <div class="table-shell">
+    <el-table :data="rows" v-loading="busy"><el-table-column prop="id" label="编号" width="100"/><el-table-column label="商品" min-width="250"><template #default="{row}"><div class="product"><img :src="row.picUrl" alt="商品图"/><span>{{row.name}}</span></div></template></el-table-column><el-table-column label="售价" width="120"><template #default="{row}"><strong class="price">¥{{((row.price||0)/100).toFixed(2)}}</strong></template></el-table-column><el-table-column prop="stock" label="库存缓存" width="110"/><el-table-column label="销售状态" width="110"><template #default="{row}"><el-tag :type="row.status===1?'success':'info'" effect="plain">{{row.status===1?'上架':'下架'}}</el-tag></template></el-table-column>
       <el-table-column label="审核 / 版本" min-width="180"><template #default="{row}"><el-tag :type="row.reviewStatus===20?'success':row.reviewStatus===30?'danger':'info'">{{ productReviewLabel(row.reviewStatus) }}</el-tag><p class="version">当前 v{{ row.contentVersion ?? '待读取' }}<span v-if="row.approvedVersion"> · 批准 v{{ row.approvedVersion }}</span></p><p v-if="row.reviewRemark" class="remark">{{ row.reviewRemark }}</p></template></el-table-column>
-      <el-table-column label="操作" min-width="300"><template #default="{row}"><MallLink :to="`/sales/shops/${shopId}/products/${row.id}`">{{ productReviewActions(row).edit ? '编辑' : '查看' }}</MallLink><el-button v-if="productReviewActions(row).submit" link :disabled="busy||mutating" @click="act(row.id,'submit')">提交审核</el-button><el-button v-if="productReviewActions(row).withdraw" link :disabled="busy||mutating" @click="act(row.id,'withdraw')">撤回审核</el-button><el-button v-if="productReviewActions(row).publish" link type="primary" :disabled="busy||mutating" @click="act(row.id,'publish')">上架</el-button><el-button v-if="productReviewActions(row).unpublish" link :disabled="busy||mutating" @click="act(row.id,'unpublish')">下架</el-button><ProductReviewHistory :shop-id="shopId" :product-id="row.id" :refresh-key="row.submissionId" :disabled="busy||mutating"/></template></el-table-column>
-    </el-table><el-pagination v-model:current-page="page" :disabled="mutating" :page-size="15" :total="total" layout="total, prev, pager, next" @current-change="load"/>
+      <el-table-column label="操作" min-width="300"><template #default="{row}"><div class="operations"><MallLink :to="`/sales/shops/${shopId}/products/${row.id}`">{{ productReviewActions(row).edit ? '编辑' : '查看' }}</MallLink><el-button v-if="productReviewActions(row).submit" link :disabled="busy||mutating" @click="act(row.id,'submit')">提交审核</el-button><el-button v-if="productReviewActions(row).withdraw" link :disabled="busy||mutating" @click="act(row.id,'withdraw')">撤回审核</el-button><el-button v-if="productReviewActions(row).publish" link type="primary" :disabled="busy||mutating" @click="act(row.id,'publish')">上架</el-button><el-button v-if="productReviewActions(row).unpublish" link :disabled="busy||mutating" @click="act(row.id,'unpublish')">下架</el-button><ProductReviewHistory :shop-id="shopId" :product-id="row.id" :refresh-key="row.submissionId" :disabled="busy||mutating"/></div></template></el-table-column>
+    </el-table>
+    </div>
+    <el-pagination v-model:current-page="page" :disabled="mutating" :page-size="15" :total="total" layout="total, prev, pager, next" @current-change="load"/>
   </section>
 </template>
 <style scoped>
-.supplier-products{padding:32px;margin:32px auto;min-height:560px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}h1{margin:16px 0}.publish{padding:12px 22px;background:#167664;color:white;border-radius:6px;white-space:nowrap}.filters{display:flex;gap:16px;margin:24px 0;flex-wrap:wrap}.filters .el-input{max-width:320px}.filters .el-select{width:160px}.product{display:flex;align-items:center;gap:16px}.product img{width:56px;height:56px;object-fit:contain}a{color:#167664}.el-pagination{margin-top:24px}.hint,.version{font-size:13px;color:#64748b;margin:10px 0}.remark{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.el-alert+.el-alert{margin-top:12px}
+.supplier-products{padding:0 0 32px;margin:28px auto;min-height:620px;overflow:hidden;border:1px solid #dbe5e7;border-radius:22px;background:#fff;box-shadow:0 18px 45px rgba(15,42,51,.09)}
+.page-hero{display:flex;justify-content:space-between;align-items:center;gap:28px;padding:34px 38px;background:linear-gradient(118deg,#102e38 0%,#164953 58%,#126c62 100%);color:#fff;position:relative;overflow:hidden}
+.page-hero::after{content:"";position:absolute;width:320px;height:320px;border:1px solid rgba(255,255,255,.11);border-radius:50%;right:12%;top:-220px;box-shadow:0 0 0 42px rgba(255,255,255,.035)}
+.breadcrumb{display:inline-flex;color:#99e3d4!important;font-size:14px;font-weight:700;position:relative;z-index:1}.eyebrow{margin:18px 0 7px;color:#7ed5c4;font-size:12px;font-weight:800;letter-spacing:.22em}.page-hero h1{margin:0;font-size:30px;line-height:1.25;letter-spacing:.01em;position:relative;z-index:1}.hero-description{margin:10px 0 0;max-width:720px;color:#c9dcdf;font-size:14px;line-height:1.7;position:relative;z-index:1}.publish{padding:13px 22px;background:#fff;color:#116d61!important;border-radius:10px;font-weight:800;white-space:nowrap;box-shadow:0 10px 24px rgba(0,0,0,.16);position:relative;z-index:1;transition:.2s ease}.publish:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(0,0,0,.2)}
+.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:24px 38px 0}.summary-grid article{position:relative;padding:18px 20px;border:1px solid #dfe8ea;border-radius:14px;background:linear-gradient(145deg,#fff,#f7faf9);overflow:hidden}.summary-grid article::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#148574}.summary-grid span{display:block;color:#556a72;font-size:13px;font-weight:700}.summary-grid strong{display:block;margin:7px 0 2px;color:#15313b;font-size:26px;line-height:1}.summary-grid small{color:#8a9aa0;font-size:12px}
+.workflow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:20px 38px 0;border:1px solid #dbe6e7;border-radius:14px;background:#f5f9f8;overflow:hidden}.workflow>div{display:flex;align-items:center;gap:12px;padding:15px 18px;position:relative}.workflow>div:not(:last-child){border-right:1px solid #dbe6e7}.workflow b{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#dcefeb;color:#13796b;font-size:12px}.workflow span{display:flex;flex-direction:column;gap:2px}.workflow strong{color:#29434b;font-size:13px}.workflow small{color:#85959a;font-size:11px}.hint{margin:14px 38px 0;padding:11px 14px;border-left:3px solid #d9a23a;background:#fff9ed;color:#7a6848;font-size:13px;line-height:1.65}
+.filter-panel{margin:22px 38px 18px;padding:18px 20px;border:1px solid #dce6e8;border-radius:15px;background:#fbfcfc}.filter-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}.filter-heading strong{color:#1c3942;font-size:15px}.filter-heading span{color:#87979d;font-size:12px}.filters{display:flex;gap:12px;flex-wrap:wrap}.filters .el-input{width:min(320px,100%)}.filters .el-select{width:180px}.filters :deep(.el-input__wrapper){min-height:40px;border-radius:9px;box-shadow:0 0 0 1px #d7e2e5 inset}.filters :deep(.el-button){min-height:40px;padding:0 24px;border-radius:9px;background:#137f70;border-color:#137f70;font-weight:700}.supplier-products>:deep(.el-alert){margin:0 38px 12px;width:auto;border-radius:10px}
+.table-shell{margin:0 38px;border:1px solid #dce5e8;border-radius:15px;overflow:hidden}.table-shell :deep(.el-table__header th){height:52px;background:#f0f5f5!important;color:#3d5961;font-weight:800}.table-shell :deep(.el-table__row td){padding:13px 0}.table-shell :deep(.el-table__row:hover>td){background:#f6fbfa!important}.product{display:flex;align-items:center;gap:14px;color:#273f47;font-weight:700}.product img{width:60px;height:60px;padding:5px;object-fit:contain;border:1px solid #e0e8ea;border-radius:10px;background:#fff}.price{color:#d96332;font-size:15px}.operations{display:flex;align-items:center;gap:2px;flex-wrap:wrap}.operations>a{margin-right:5px;padding:5px 8px;border-radius:6px;background:#e9f5f2;color:#127668!important;font-weight:700}.operations :deep(.el-button){margin-left:0}.el-pagination{justify-content:flex-end;margin:22px 38px 0}a{color:#167664}.version{font-size:12px;color:#6f838a;margin:8px 0}.remark{font-size:12px;line-height:1.55;color:#596e76;white-space:pre-wrap;overflow-wrap:anywhere}.el-alert+.el-alert{margin-top:12px}
+@media(max-width:900px){.supplier-products{margin:16px}.page-hero{padding:26px;align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:repeat(2,1fr);padding:20px 22px 0}.workflow{grid-template-columns:repeat(2,1fr);margin:18px 22px}.workflow>div:nth-child(2){border-right:0}.workflow>div:nth-child(-n+2){border-bottom:1px solid #dbe6e7}.hint,.filter-panel,.table-shell{margin-left:22px;margin-right:22px}.el-pagination{margin-right:22px}.filter-heading{align-items:flex-start;flex-direction:column}.filters .el-input,.filters .el-select{width:100%}}
 </style>

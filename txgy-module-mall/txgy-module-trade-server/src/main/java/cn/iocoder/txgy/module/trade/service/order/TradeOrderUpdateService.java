@@ -4,9 +4,11 @@ import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderDelivery
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderRemarkReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderUpdateAddressReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderUpdatePriceReqVO;
+import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeInquiryOrderCreateReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderCreateReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderSettlementReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderSettlementRespVO;
+import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderUpdateAddressReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemCommentCreateReqVO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import jakarta.validation.constraints.NotNull;
@@ -20,9 +22,6 @@ import java.util.List;
  * @since 2022-08-26
  */
 public interface TradeOrderUpdateService {
-    /** ERP 预占确认后补建支付单，重复确认不会重复创建。 */
-    void continueAfterErpReservation(Long id);
-
     // =================== Order ===================
 
     /**
@@ -42,6 +41,15 @@ public interface TradeOrderUpdateService {
      * @return 交易订单的
      */
     TradeOrderDO createOrder(Long userId, AppTradeOrderCreateReqVO createReqVO);
+
+    /** 获得当前用户已采纳报价的专用结算结果。 */
+    AppTradeOrderSettlementRespVO settlementInquiryOrder(Long userId, Long quoteId, Long addressId);
+
+    /** 将当前用户已采纳的报价幂等转换为标准商城订单。 */
+    TradeOrderDO createInquiryOrder(Long userId, AppTradeInquiryOrderCreateReqVO createReqVO);
+
+    /** 查询当前用户由指定报价生成的商城订单。 */
+    TradeOrderDO getInquiryOrder(Long userId, Long quoteId);
 
     /**
      * 更新交易订单已支付
@@ -91,6 +99,13 @@ public interface TradeOrderUpdateService {
      * @param id     订单编号
      */
     void cancelOrderByMember(Long userId, Long id);
+
+    /** 【会员】修改本人待支付快递订单的收货地址，并重新计算运费。 */
+    void updateOrderAddressByMember(Long userId, AppTradeOrderUpdateAddressReqVO reqVO);
+
+    /** 【企业采购成员】修改本企业询价成交订单的待支付快递地址。 */
+    void updateInquiryOrderAddressByEnterprise(Long memberId, Long buyerEnterpriseId,
+                                                AppTradeOrderUpdateAddressReqVO reqVO);
 
     /**
      * 【系统】自动取消订单

@@ -2,7 +2,7 @@ import type { MallSpuApi } from '#/api/mall/product/spu';
 
 import { describe, expect, it } from 'vitest';
 
-import { canAdminMaintain, canDecideReview, currentSubmission, parseReviewSnapshot, reviewStatusText, snapshotChanges } from './review-model';
+import { canAdminMaintain, canDecideReview, canOperateProduct, currentSubmission, parseReviewSnapshot, reviewStatusText, snapshotChanges } from './review-model';
 
 const policy: MallSpuApi.ReviewPolicy = { adminWriteEnabled: false, legacyStrategy: 'KEEP_EXISTING_UNMODIFIED', reviewEnabled: true };
 const product: MallSpuApi.Spu = { id: 8, reviewStatus: 10, contentVersion: 2, submissionId: 'submission-2' };
@@ -12,13 +12,18 @@ const submission: MallSpuApi.ReviewRecord = {
 };
 
 describe('后台商品审核安全模型', () => {
-  it('后台试点按策略锁店，未知策略禁止维护，不硬编码其他店铺名单', () => {
+  it('后台经营按策略锁店，未知策略禁止维护，不硬编码其他店铺名单', () => {
     const trialPolicy = { ...policy, adminWriteEnabled: true, adminWriteLockedShopIds: [1] };
     expect(canAdminMaintain(undefined, 2)).toBe(false);
     expect(canAdminMaintain({ ...policy, adminWriteEnabled: true }, 2)).toBe(false);
     expect(canAdminMaintain(trialPolicy, 1)).toBe(false);
     expect(canAdminMaintain(trialPolicy, 2)).toBe(true);
     expect(canAdminMaintain({ ...trialPolicy, adminWriteEnabled: false }, 2)).toBe(false);
+  });
+  it('审核账号即使误配经营权限也保持只读', () => {
+    const writable = { ...policy, adminWriteEnabled: true, adminWriteLockedShopIds: [] };
+    expect(canOperateProduct(writable, 2, true)).toBe(false);
+    expect(canOperateProduct(writable, 2, false)).toBe(true);
   });
   it('审核字段为空时显示历史过渡，绝不显示已通过', () => {
     expect(reviewStatusText(null)).toBe('历史过渡（未补审）');

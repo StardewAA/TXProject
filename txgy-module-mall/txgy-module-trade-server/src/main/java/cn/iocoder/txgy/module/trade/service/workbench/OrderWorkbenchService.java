@@ -50,7 +50,6 @@ public class OrderWorkbenchService {
             if(queryOrders) actions.add(Action.DELIVERY);
             if(queryAfterSales) actions.add(Action.AFTER_AUDIT);
             if(queryAfterSales && security.hasPermission("trade:after-sale:refund")) actions.add(Action.PLATFORM_REFUND);
-            if(queryOrders && security.hasPermission("trade:order:update")) actions.add(Action.ERP_EXCEPTION);
         }
         return new Scope(tenant,user.getUserType(),user.getId(),role,role==Role.SUPPLIER?shop:0,actions);
     }
@@ -116,7 +115,7 @@ public class OrderWorkbenchService {
         if(positions.isEmpty()) {
             ids=jdbc.queryForList("SELECT o.id FROM trade_order o WHERE o.tenant_id=? AND o.deleted=0 AND "+ownership
                     +" AND (o.status IN (0,10,20,30) OR EXISTS(SELECT 1 FROM trade_after_sale a WHERE a.tenant_id=o.tenant_id AND a.order_id=o.id AND a.deleted=0 AND a.status IN(10,20,30,40))"
-                    +" OR EXISTS(SELECT 1 FROM trade_erp_inventory_request er WHERE er.tenant_id=o.tenant_id AND er.order_id=o.id AND (er.status='REJECTED' OR er.message LIKE 'ERP结果未能应用到商城%')))"
+                    +")"
                     +" ORDER BY o.id LIMIT "+(RECOVERY_LIMIT+1),Long.class,scope.tenant());
         } else {
             ids=jdbc.queryForList("SELECT DISTINCT c.order_id FROM trade_order_workbench_change c JOIN trade_order o ON o.id=c.order_id AND o.tenant_id=c.tenant_id"

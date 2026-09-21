@@ -8,6 +8,8 @@ import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderPageReqV
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPageReqVO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderTypeEnum;
+import cn.iocoder.txgy.module.trade.enums.delivery.DeliveryTypeEnum;
+import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -27,6 +29,37 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .set(TradeOrderDO::getReceiverLocationPrecision, null).set(TradeOrderDO::getReceiverLocationConfirmedAt, null));
     }
 
+    default int updateUnpaidAddressAndPrice(TradeOrderDO update, Long userId) {
+        return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, update.getId()).eq(TradeOrderDO::getUserId, userId)
+                .eq(TradeOrderDO::getStatus, TradeOrderStatusEnum.UNPAID.getStatus())
+                .eq(TradeOrderDO::getPayStatus, false)
+                .eq(TradeOrderDO::getDeliveryType, DeliveryTypeEnum.EXPRESS.getType())
+                .set(TradeOrderDO::getReceiverLongitude, update.getReceiverLongitude())
+                .set(TradeOrderDO::getReceiverLatitude, update.getReceiverLatitude())
+                .set(TradeOrderDO::getReceiverCoordSystem, update.getReceiverCoordSystem())
+                .set(TradeOrderDO::getReceiverLocationSource, update.getReceiverLocationSource())
+                .set(TradeOrderDO::getReceiverLocationPrecision, update.getReceiverLocationPrecision())
+                .set(TradeOrderDO::getReceiverLocationConfirmedAt, update.getReceiverLocationConfirmedAt()));
+    }
+
+    /** 企业采购协作修改地址。调用方已校验当前会员资格，这里仍以企业、来源和订单状态做原子约束。 */
+    default int updateEnterpriseInquiryUnpaidAddressAndPrice(TradeOrderDO update, Long buyerEnterpriseId) {
+        return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, update.getId())
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eq(TradeOrderDO::getStatus, TradeOrderStatusEnum.UNPAID.getStatus())
+                .eq(TradeOrderDO::getPayStatus, false)
+                .eq(TradeOrderDO::getDeliveryType, DeliveryTypeEnum.EXPRESS.getType())
+                .set(TradeOrderDO::getReceiverLongitude, update.getReceiverLongitude())
+                .set(TradeOrderDO::getReceiverLatitude, update.getReceiverLatitude())
+                .set(TradeOrderDO::getReceiverCoordSystem, update.getReceiverCoordSystem())
+                .set(TradeOrderDO::getReceiverLocationSource, update.getReceiverLocationSource())
+                .set(TradeOrderDO::getReceiverLocationPrecision, update.getReceiverLocationPrecision())
+                .set(TradeOrderDO::getReceiverLocationConfirmedAt, update.getReceiverLocationConfirmedAt()));
+    }
+
     default TradeOrderDO selectByIdForUpdate(Long id) {
         return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getId, id).last("FOR UPDATE"));
@@ -39,6 +72,17 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
     default TradeOrderDO selectByIdAndUserId(Long id, Long userId) {
         return selectOne(TradeOrderDO::getId, id, TradeOrderDO::getUserId, userId);
+    }
+
+    default TradeOrderDO selectByInquiryQuoteId(Long inquiryQuoteId) {
+        return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getInquiryQuoteId, inquiryQuoteId));
+    }
+
+    default TradeOrderDO selectByInquiryQuoteIdForUpdate(Long inquiryQuoteId) {
+        return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getInquiryQuoteId, inquiryQuoteId)
+                .last("FOR UPDATE"));
     }
 
     default PageResult<TradeOrderDO> selectPage(TradeOrderPageReqVO reqVO, Set<Long> userIds) {
@@ -89,6 +133,24 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .orderByDesc(TradeOrderDO::getId)); // TODO 芋艿：未来不同的 status，不同的排序
     }
 
+    default PageResult<TradeOrderDO> selectEnterpriseInquiryPage(AppTradeOrderPageReqVO reqVO,
+                                                                  Long buyerEnterpriseId) {
+        return selectPage(reqVO, new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eqIfPresent(TradeOrderDO::getStatus, reqVO.getStatus())
+                .eqIfPresent(TradeOrderDO::getCommentStatus, reqVO.getCommentStatus())
+                .orderByDesc(TradeOrderDO::getId));
+    }
+
+    default Long selectEnterpriseInquiryCount(Long buyerEnterpriseId, Integer status, Boolean commentStatus) {
+        return selectCount(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getSourceType, TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                .eq(TradeOrderDO::getBuyerEnterpriseId, buyerEnterpriseId)
+                .eqIfPresent(TradeOrderDO::getStatus, status)
+                .eqIfPresent(TradeOrderDO::getCommentStatus, commentStatus));
+    }
+
     default Long selectCountByUserIdAndStatus(Long userId, Integer status, Boolean commentStatus) {
         return selectCount(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getUserId, userId)
@@ -108,7 +170,7 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
                 .lt(TradeOrderDO::getCreateTime, createTime));
     }
 
-    /** 新单按持久化的两个截止时间筛选；旧未付单需再核实支付单实际期限，不能套用当前配置。 */
+    /** 新单按持久化支付截止时间筛选；旧 ERP 等待字段只用于兼容扫描历史未付单。 */
     default List<TradeOrderDO> selectPaymentTimeoutCandidates(LocalDateTime now, Long afterId, int limit) {
         return selectList(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getStatus, 0)

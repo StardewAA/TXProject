@@ -1,17 +1,24 @@
 import axios, { AxiosError, AxiosHeaders, type AxiosRequestConfig, type RawAxiosHeaders } from 'axios'
 import { ElMessage } from 'element-plus'
-import { acceptTenantCatalog, assertResponseTenant, confirmAccountContext, entryTenantId, invalidEntryHint, legacyTenantId, getAccountRequestTenant, getTenantContext, invalidateAccountContext, isCurrentTenantEpoch, type MallTenantConfig } from '@/utils/tenant-context'
-import { scopedTokenKey } from '@/utils/tenant-entry.mjs'
+import { acceptTenantCatalog, assertResponseTenant, assertVerifiedAccountTenant, clearAccountContext, confirmAccountContext, confirmPlatformAccountContext, entryTenantId, invalidEntryHint, legacyTenantId, getAccountRequestTenant, getAccountSessionCandidate, getTenantContext, invalidateAccountContext, isCurrentTenantEpoch, type AccountSessionKind, type MallTenantConfig } from '@/utils/tenant-context'
+import { ENTRY_KEY, scopedTokenKey } from '@/utils/tenant-entry.mjs'
 import { createTenantAuthClient, SessionRestoreError } from '@/utils/tenant-auth-client.mjs'
 
 interface ApiEnvelope<T> { code: number; data: T; msg?: string }
-export type RequestScope = 'account' | 'browse' | 'auth' | 'entry'
+export type RequestScope = 'account' | 'browse' | 'auth' | 'entry' | 'platform'
 export interface MallRequestConfig extends AxiosRequestConfig { scope?: RequestScope }
 export class ApiError extends Error {
   constructor(message: string, public status?: number, public code?: number) { super(message) }
 }
 export class StaleSessionError extends Error {
   constructor() { super('账号上下文已变化，请重新操作') }
+}
+function transportErrorMessage(reason: AxiosError) {
+  if (reason.response?.status === 413) return '提交内容超过服务限制，请压缩图片后重试；营业执照须为 1MB 以内的 PNG 或 JPEG 图片'
+  if (reason.code === 'ECONNABORTED') return '请求超时，请检查商城服务是否已启动'
+  const data = reason.response?.data
+  return (typeof data === 'object' && data !== null && 'msg' in data && typeof data.msg === 'string' ? data.msg : undefined)
+    || reason.message || '网络请求失败'
 }
 const ACCESS_TOKEN_KEY = scopedTokenKey('mall-pc-access-token', entryTenantId, legacyTenantId)
 const REFRESH_TOKEN_KEY = scopedTokenKey('mall-pc-refresh-token', entryTenantId, legacyTenantId)
@@ -30,11 +37,19 @@ export const tokenStorage = {
     writeTokens(accessToken, refreshToken)
   },
   clear() {
-    invalidateAccountContext()
+    clearAccountContext()
     localStorage.removeItem(ACCESS_TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
     emitToken()
   },
+}
+
+/** Stages a verified cross-tenant registration session for the first page load in that tenant. */
+export function stageTenantEntrySession(tenantId: string, accessToken: string, refreshToken: string) {
+  if (!accessToken || !refreshToken) throw new Error('注册成功，但服务端未返回完整登录凭证')
+  localStorage.setItem(scopedTokenKey('mall-pc-access-token', tenantId, legacyTenantId), accessToken)
+  localStorage.setItem(scopedTokenKey('mall-pc-refresh-token', tenantId, legacyTenantId), refreshToken)
+  sessionStorage.setItem(ENTRY_KEY, tenantId)
 }
 window.addEventListener('storage', (event: StorageEvent) => {
   if (event.key === null || event.key === ACCESS_TOKEN_KEY || event.key === REFRESH_TOKEN_KEY) {
@@ -43,20 +58,27 @@ window.addEventListener('storage', (event: StorageEvent) => {
   }
 })
 
-interface RequestContext { tenant: string; userId: string | null; epoch: number; accessToken: string; refreshToken: string; scope: RequestScope }
+interface RequestContext { tenant: string; userId: string | null; epoch: number; accessToken: string; refreshToken: string; scope: RequestScope; sessionKind: AccountSessionKind | null }
 function capture(scope: RequestScope): RequestContext {
   const context = getTenantContext()
-  const tenant = scope === 'account' ? getAccountRequestTenant() : context.browseTenantId
-  const mayAuthenticate = scope === 'account' || (scope === 'browse' && tenant === context.accountTenantId)
+  const tenant = scope === 'account' || scope === 'platform' ? getAccountRequestTenant() : context.browseTenantId
+  const mayAuthenticate = scope === 'account' || scope === 'platform'
+    || (scope === 'browse' && tenant === context.accountTenantId)
   return { tenant, userId: context.accountUserId, epoch: context.epoch, scope, accessToken: mayAuthenticate ? tokenStorage.getAccess() : '',
-    refreshToken: mayAuthenticate ? tokenStorage.getRefresh() : '' }
+    refreshToken: mayAuthenticate ? tokenStorage.getRefresh() : '', sessionKind: context.accountSessionKind }
 }
 function assertCurrent(context: RequestContext) {
-  if (!isCurrentTenantEpoch(context.epoch) || (context.scope === 'account' && context.tenant !== getAccountRequestTenant())) throw new StaleSessionError()
+  if (!isCurrentTenantEpoch(context.epoch)
+    || ((context.scope === 'account' || context.scope === 'platform')
+      && context.tenant !== getAccountRequestTenant())) throw new StaleSessionError()
 }
 function ownsTokens(context: RequestContext) {
   return isCurrentTenantEpoch(context.epoch) && context.accessToken === tokenStorage.getAccess()
     && context.refreshToken === tokenStorage.getRefresh() && context.tenant === getAccountRequestTenant()
+}
+function ownsCandidateTokens(context: RequestContext) {
+  return isCurrentTenantEpoch(context.epoch) && context.accessToken === tokenStorage.getAccess()
+    && context.refreshToken === tokenStorage.getRefresh()
 }
 const authorizationValue = (token: string) => token.startsWith('Bearer ') ? token : `Bearer ${token}`
 const refreshing = new Map<string, Promise<string>>()
@@ -69,17 +91,21 @@ async function refreshAccessToken(context: RequestContext): Promise<string> {
   const key = JSON.stringify([context.tenant, context.epoch, context.accessToken, context.refreshToken])
   const pending = refreshing.get(key)
   if (pending) return pending
-  const promise = axios.post<ApiEnvelope<{ accessToken: string; refreshToken: string; tenantId?: string | number }>>(
+  const promise = axios.post<ApiEnvelope<{ accessToken: string; refreshToken: string; tenantId?: string | number; userId?: string | number }>>(
     `${API_BASE}/member/auth/refresh-token`, undefined,
     { params: { refreshToken: context.refreshToken }, headers: { 'tenant-id': context.tenant, terminal: '20' }, timeout: 12000 },
   ).then(async ({ data }) => {
     if (!ownsTokens(context)) throw new StaleSessionError()
     if (data.code !== 0 || !data.data?.accessToken || !data.data.refreshToken) throw new ApiError(data.msg || '登录状态已失效', undefined, data.code)
-    assertResponseTenant(data.data.tenantId, context.tenant)
+    if (context.sessionKind === 'platform') assertVerifiedAccountTenant(data.data.tenantId, context.tenant)
+    else assertResponseTenant(data.data.tenantId, context.tenant)
     if (context.userId) {
       const verifier = createTenantAuthClient(async ({ path, headers, ...config }) =>
         (await client.request({ ...config, url: path, headers: new AxiosHeaders(headers) })).data)
-      await verifier.verifySession(data.data, context.tenant, () => ownsTokens(context), context.userId)
+      if (context.sessionKind === 'platform') {
+        await verifier.verifyPlatformSession({ ...data.data, tenantId: data.data.tenantId ?? context.tenant,
+          userId: data.data.userId ?? context.userId }, () => ownsTokens(context))
+      } else await verifier.verifySession(data.data, context.tenant, () => ownsTokens(context), context.userId)
     }
     if (!ownsTokens(context)) throw new StaleSessionError()
     writeTokens(data.data.accessToken, data.data.refreshToken)
@@ -90,7 +116,8 @@ async function refreshAccessToken(context: RequestContext): Promise<string> {
 }
 
 function clearOwnedSession(context: RequestContext) {
-  if (!ownsTokens(context)) return
+  const owns = getTenantContext().accountTenantId ? ownsTokens(context) : ownsCandidateTokens(context)
+  if (!owns) return
   tokenStorage.clear()
   window.dispatchEvent(new Event('mall:unauthorized'))
 }
@@ -119,25 +146,31 @@ export async function ensureEntryReady(forceRefresh = false): Promise<void> {
 
 let restoring: { key: string; promise: Promise<void> } | undefined
 export async function ensureAccountSession(): Promise<void> {
-  const context = capture('account')
+  const initial = capture('account')
   if (invalidEntryHint || entryTenantId !== legacyTenantId) await ensureEntryReady()
-  assertCurrent(context)
-  if (!context.accessToken || getTenantContext().accountTenantId) return
-  const key = JSON.stringify([context.epoch, context.accessToken, context.refreshToken])
+  if (!isCurrentTenantEpoch(initial.epoch)) throw new StaleSessionError()
+  if (!initial.accessToken || getTenantContext().accountTenantId) return
+  const reload = getAccountSessionCandidate()
+  const context = { ...initial, tenant: reload.tenantId, sessionKind: reload.kind }
+  const key = JSON.stringify([context.epoch, context.accessToken, context.refreshToken, context.tenant, context.sessionKind])
   if (restoring?.key === key) return restoring.promise
   const promise = (async () => {
     const verifier = createTenantAuthClient(async ({ path, headers, ...config }) =>
       (await client.request({ ...config, url: path, headers: new AxiosHeaders(headers) })).data, legacyTenantId)
     try {
-      const identity = await verifier.restoreSession({ tenantId: context.tenant,
-        accessToken: context.accessToken, refreshToken: context.refreshToken }, () => ownsTokens(context))
-      if (!ownsTokens(context)) throw new StaleSessionError()
-      confirmAccountContext(identity, context.epoch)
+      const identity = context.sessionKind === 'platform'
+        ? await verifier.restorePlatformSession({ tenantId: context.tenant,
+          accessToken: context.accessToken, refreshToken: context.refreshToken }, () => ownsCandidateTokens(context))
+        : await verifier.restoreSession({ tenantId: context.tenant,
+          accessToken: context.accessToken, refreshToken: context.refreshToken }, () => ownsCandidateTokens(context))
+      if (!ownsCandidateTokens(context)) throw new StaleSessionError()
+      if (context.sessionKind === 'platform') confirmPlatformAccountContext(identity, context.epoch)
+      else confirmAccountContext(identity, context.epoch)
       if (identity.accessToken !== context.accessToken || identity.refreshToken !== context.refreshToken) {
         writeTokens(identity.accessToken, identity.refreshToken)
       }
     } catch (error) {
-      if (!ownsTokens(context) || (error instanceof SessionRestoreError && error.kind === 'stale')) throw new StaleSessionError()
+      if (!ownsCandidateTokens(context) || (error instanceof SessionRestoreError && error.kind === 'stale')) throw new StaleSessionError()
       if (error instanceof SessionRestoreError && error.kind === 'invalid') clearOwnedSession(context)
       throw error
     }
@@ -153,12 +186,13 @@ async function execute<T>(config: MallRequestConfig, context: RequestContext, re
   const headers = new AxiosHeaders(config.headers as RawAxiosHeaders)
   headers.delete('Authorization')
   headers.delete('tenant-id')
-  if (context.scope !== 'entry') headers.set('tenant-id', context.tenant)
+  if (context.scope !== 'entry' && context.scope !== 'platform') headers.set('tenant-id', context.tenant)
   headers.set('terminal', '20')
   if (context.accessToken) headers.set('Authorization', authorizationValue(context.accessToken))
   let envelope: ApiEnvelope<T>
   try {
-    if (context.scope !== 'entry' && (invalidEntryHint || entryTenantId !== legacyTenantId)) {
+    if (context.scope !== 'entry' && context.scope !== 'platform'
+      && (invalidEntryHint || entryTenantId !== legacyTenantId)) {
       const method = String(config.method || 'GET').toUpperCase()
       await ensureEntryReady(context.scope === 'account' && !['GET', 'HEAD', 'OPTIONS'].includes(method))
       assertCurrent(context)
@@ -174,12 +208,13 @@ async function execute<T>(config: MallRequestConfig, context: RequestContext, re
     assertCurrent(context)
     if (reason instanceof AxiosError) {
       if (reason.response?.status === 401) envelope = { code: 401, data: undefined as T, msg: '登录状态已失效' }
-      else throw new ApiError(reason.code === 'ECONNABORTED' ? '请求超时，请检查商城服务是否已启动' : reason.response?.data?.msg || reason.message || '网络请求失败', reason.response?.status)
+      else throw new ApiError(transportErrorMessage(reason), reason.response?.status)
     } else throw reason
   }
   if (!envelope || typeof envelope !== 'object' || typeof envelope.code !== 'number') throw new Error('服务器返回了无法识别的数据')
   if (envelope.code === 0) return envelope.data
-  if (envelope.code === 401 && context.accessToken && !retried && context.scope !== 'auth' && context.scope !== 'entry') {
+  if (envelope.code === 401 && context.accessToken && !retried
+    && context.scope !== 'auth' && context.scope !== 'entry') {
     let accessToken: string
     try { accessToken = await refreshAccessToken(context) }
     catch (reason) { clearOwnedSession(context); throw reason }
@@ -193,9 +228,10 @@ export async function request<T>(config: MallRequestConfig): Promise<T> {
   // Capture before the first await, including authentication/anonymous requests.
   let context = capture(config.scope ?? 'account')
   try {
-    if (context.scope === 'account' && context.accessToken && !getTenantContext().accountTenantId) {
+    if ((context.scope === 'account' || context.scope === 'platform')
+      && context.accessToken && !getTenantContext().accountTenantId) {
       await ensureAccountSession()
-      assertCurrent(context)
+      if (!isCurrentTenantEpoch(context.epoch)) throw new StaleSessionError()
       context = capture(context.scope)
     }
     return await execute<T>(config, context)

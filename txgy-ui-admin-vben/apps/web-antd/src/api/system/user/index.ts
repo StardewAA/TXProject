@@ -50,7 +50,7 @@ export function getUserList(ids: number[]) {
 
 /** 新增用户 */
 export function createUser(data: SystemUserApi.User) {
-  return requestClient.post('/system/user/create', data);
+  return requestClient.post<number>('/system/user/create', data);
 }
 
 /** 修改用户 */

@@ -130,7 +130,7 @@ spring:
       api-key: ${DEEPSEEK_API_KEY:sk-xxxx}
       chat:
         options:
-          model: deepseek-v4-flash
+          model: deepseek-chat
     google:
       genai: # 谷歌 Gemini
         api-key: ${GEMINI_API_KEY:sk-xxxx}

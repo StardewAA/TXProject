@@ -10,14 +10,21 @@ const source = readFileSync(new URL('../sheep/request/index.js', import.meta.url
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const settle = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 
-function harness({ ready, proof = { code: 0, data: { tenantId: 1, userId: 7 } }, unconfirmed = false, sessionError } = {}) {
-  const context = createTenantContext('1'); if (!unconfirmed) context.setAccount(1, 7);
-  const storage = { token: 'A', 'refresh-token': 'RA', 'tenant-id': '999' };
-  const requests = [], refreshCalls = [], proofCalls = []; let logoutCount = 0;
+function harness({ ready, proof = { code: 0, data: { tenantId: 1, userId: 7 } }, unconfirmed = false, sessionError,
+  platformCarrier = '', platformMember = 7, verifiedPlatform, browseTenant = '1', accountTenant = 1 } = {}) {
+  const context = createTenantContext('1', browseTenant); if (!unconfirmed) context.setAccount(accountTenant, 7);
+  const storage = { token: 'A', 'refresh-token': 'RA', 'tenant-id': '999',
+    ...(platformCarrier ? { 'platform-source-tenant': String(platformCarrier), 'platform-member-id': String(platformMember) } : {}) };
+  const requests = [], refreshCalls = [], proofCalls = [], platformProofCalls = []; let logoutCount = 0;
   const pending = deferred();
   const user = { isLogin: true,
     setToken(token, refreshToken, identity) { storage.token = token; storage['refresh-token'] = refreshToken;
       context.invalidateAccount(); if (identity?.tenantId) context.setAccount(identity.tenantId, identity.userId); },
+    setPlatformToken(token, refreshToken, identity) { storage.token = token; storage['refresh-token'] = refreshToken;
+      storage['platform-source-tenant'] = String(identity.sourceTenantId ?? identity.tenantId);
+      storage['platform-member-id'] = String(identity.canonicalMemberId ?? identity.userId);
+      context.invalidateAccount(); context.setAccount(identity.sourceTenantId ?? identity.tenantId,
+        identity.canonicalMemberId ?? identity.userId); },
     logout() { logoutCount++; storage.token = ''; storage['refresh-token'] = ''; this.isLogin = false; context.invalidateAccount(); },
   };
   class Request {
@@ -35,23 +42,109 @@ function harness({ ready, proof = { code: 0, data: { tenantId: 1, userId: 7 } },
     }, ensureAccountSession: async () => { if (sessionError) throw sessionError; },
     captureTenantOperation: () => ({ token: storage.token, sessionEpoch: context.state().sessionEpoch }),
     isTenantOperationCurrent: operation => operation.token === storage.token && operation.sessionEpoch === context.state().sessionEpoch,
-    captureTenantRequest: () => context.capture(storage.token, storage['refresh-token']),
+    captureTenantRequest: () => Object.freeze({ ...context.capture(storage.token, storage['refresh-token']),
+      platformCarrierTenantId: storage['platform-source-tenant'] || '',
+      platformMemberId: storage['platform-member-id'] || '' }),
     isTenantRequestCurrent: snapshot => context.current(snapshot, storage.token),
     getControlledTenantId: () => context.state().browseTenantId, getAccountTenantId: () => context.state().accountTenantId,
     tenantTransport: (path, config) => {
       if (path === '/member/mall-tenant/session') { proofCalls.push({ path, config }); return Promise.resolve(proof); }
       refreshCalls.push({ path, config }); return pending.promise;
     },
+    verifyPlatformSession: async (identity, current) => {
+      platformProofCalls.push(identity);
+      if (!current()) throw new Error('登录状态已变化');
+      return verifiedPlatform || { ...identity, sourceTenantId: String(identity.tenantId),
+        canonicalMemberId: String(identity.userId), legacyMemberId: String(identity.userId),
+        platformAccountId: '88', platformNo: 'PM0088', memberships: [] };
+    },
     uni: { getStorageSync: key => storage[key], showLoading() {}, hideLoading() {}, showToast() {} },
   };
   const api = new Function(...Object.keys(deps), `${source}\nreturn {request, getTenantId};`)(...Object.values(deps));
-  return { ...api, storage, context, user, requests, refreshCalls, proofCalls, pending, logoutCount: () => logoutCount };
+  return { ...api, storage, context, user, requests, refreshCalls, proofCalls, platformProofCalls, pending,
+    logoutCount: () => logoutCount };
 }
 
 test('actual request implementation pins headers to controlled legacy entry, ignoring tenant-id storage', async () => {
   const h = harness(); h.storage.token = 'B';
   await h.request({ url: '/trade/cart/list' });
   assert.equal(h.requests[0].header['tenant-id'], '1'); assert.equal(h.getTenantId(), '1');
+});
+
+test('platform scope keeps a present member token but never sends or waits for a tenant context', async () => {
+  const gate = deferred();
+  const h = harness({ ready: gate.promise, unconfirmed: true, sessionError: new Error('旧租户会话不可用') });
+  h.storage.token = 'B';
+  const result = h.request({ url: '/mall/portal/products', custom: { scope: 'platform' } });
+  await settle();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.requests[0].header.Authorization, 'B');
+  assert.equal(h.requests[0].header['tenant-id'], undefined);
+  assert.equal((await result).code, 0);
+});
+
+test('platform-account scope uses only the verified platform carrier for the legacy address read', async () => {
+  const gate = deferred();
+  const h = harness({ ready: gate.promise, platformCarrier: 1 });
+  h.storage.token = 'B';
+  const result = h.request({ url: '/member/address/list', custom: { scope: 'platform-account', auth: true } });
+  await settle();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.requests[0].header.Authorization, 'B');
+  assert.equal(h.requests[0].header['tenant-id'], '1');
+  assert.equal((await result).code, 0);
+});
+
+test('default account requests use the verified account tenant instead of the browsing tenant', async () => {
+  const h = harness({ browseTenant: '9001', accountTenant: 2009, platformCarrier: 2009 });
+  h.storage.token = 'B';
+  const result = await h.request({ url: '/member/user/get' });
+  assert.equal(result.code, 0);
+  assert.equal(h.requests[0].header['tenant-id'], '2009');
+  assert.equal(h.requests[0].header.Authorization, 'B');
+});
+
+test('public browse requests use the selected tenant anonymously when platform account differs', async () => {
+  const h = harness({ browseTenant: '9001', accountTenant: 2009, platformCarrier: 2009 });
+  h.storage.token = 'B';
+  const result = await h.request({ url: '/product/spu/page', custom: { scope: 'browse' } });
+  assert.equal(result.code, 0);
+  assert.equal(h.requests[0].header['tenant-id'], '9001');
+  assert.equal(h.requests[0].header.Authorization, undefined);
+});
+
+test('default account refresh keeps the verified platform carrier while browsing another tenant', async () => {
+  const h = harness({ browseTenant: '9001', accountTenant: 2009, platformCarrier: 2009 });
+  const response = h.request({ url: '/trade/order/page' });
+  await settle();
+  assert.equal(h.requests[0].header['tenant-id'], '2009');
+  assert.equal(h.refreshCalls[0].config.header['tenant-id'], '2009');
+  h.pending.resolve({ code: 0, data: { accessToken: 'A2', refreshToken: 'RA2', tenantId: 2009, userId: 7 } });
+  assert.equal((await response).code, 0);
+  assert.equal(h.requests.at(-1).header['tenant-id'], '2009');
+  assert.equal(h.platformProofCalls.length, 1);
+});
+
+test('private platform refresh uses the trusted source carrier, re-proves identity and replays without tenant header', async () => {
+  const h = harness({ unconfirmed: true, platformCarrier: 2009, platformMember: 316 });
+  const response = h.request({ url: '/trade/platform-cart/list', custom: { scope: 'platform', auth: true } });
+  await settle();
+  assert.equal(h.requests.length, 1); assert.equal(h.requests[0].header['tenant-id'], undefined);
+  assert.equal(h.refreshCalls.length, 1); assert.equal(h.refreshCalls[0].config.header['tenant-id'], '2009');
+  h.pending.resolve({ code: 0, data: { accessToken: 'A2', refreshToken: 'RA2', tenantId: 2009, userId: 316 } });
+  assert.equal((await response).code, 0);
+  assert.equal(h.platformProofCalls.length, 1); assert.equal(h.platformProofCalls[0].tenantId, 2009);
+  assert.equal(h.requests.length, 2); assert.equal(h.requests[1].header.Authorization, 'A2');
+  assert.equal(h.requests[1].header['tenant-id'], undefined);
+  assert.equal(h.storage['platform-source-tenant'], '2009'); assert.equal(h.storage['platform-member-id'], '316');
+});
+
+test('private platform refresh without a persisted carrier logs out instead of borrowing the browse tenant', async () => {
+  const h = harness({ unconfirmed: true });
+  const response = h.request({ url: '/trade/platform-cart/list', custom: { scope: 'platform', auth: true } });
+  await assert.rejects(response);
+  assert.equal(h.refreshCalls.length, 0); assert.equal(h.platformProofCalls.length, 0);
+  assert.equal(h.logoutCount(), 1); assert.equal(h.storage.token, '');
 });
 
 test('concurrent 401 responses share one refresh and replay with the new identity', async () => {

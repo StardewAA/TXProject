@@ -62,7 +62,7 @@ watch(context.ready, (ready) => { if (ready) void load(); });
 </script>
 
 <template>
-  <Page title="店铺范围客服 · 固定 FAQ" description="草稿保存与对外发布分开；首版仅使用人工维护的固定问答，不生成 AI 回答。">
+  <Page title="店铺范围客服 · 固定 FAQ" description="草稿保存与对外发布分开；已发布 FAQ 优先回答，未命中时由 AI 客服补充回答。">
     <section class="scoped-panel bg-card">
       <Alert type="info" show-icon message="只对所选平台/店铺范围发布。不要在问答中放入账号、订单隐私、密钥或未经核实的价格与配送承诺。" />
       <div class="scoped-toolbar">

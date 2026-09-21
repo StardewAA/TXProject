@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.product.controller.admin.shop.vo.ProductShopSaveRe
 import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpriseDO;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
 import cn.iocoder.txgy.module.product.service.enterprise.ProductEnterpriseService;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
 import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,7 +22,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
-import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 产业链企业店铺")
 @RestController
@@ -33,11 +33,14 @@ public class ProductShopController {
     private ProductShopService shopService;
     @Resource
     private ProductEnterpriseService enterpriseService;
+    @Resource
+    private ProductAdminBusinessScopeService businessScopeService;
 
     @PostMapping("/create")
     @Operation(summary = "创建企业店铺")
     @PreAuthorize("@ss.hasPermission('product:shop:create')")
     public CommonResult<Long> createShop(@Valid @RequestBody ProductShopSaveReqVO reqVO) {
+        businessScopeService.requireTenantManager(businessScopeService.currentAdminUserId());
         return success(shopService.createShop(BeanUtils.toBean(reqVO, ProductShopDO.class)));
     }
 
@@ -45,6 +48,7 @@ public class ProductShopController {
     @Operation(summary = "更新企业店铺")
     @PreAuthorize("@ss.hasPermission('product:shop:update')")
     public CommonResult<Boolean> updateShop(@Valid @RequestBody ProductShopSaveReqVO reqVO) {
+        businessScopeService.requireCurrentShopResource(reqVO.getId());
         shopService.updateShop(BeanUtils.toBean(reqVO, ProductShopDO.class));
         return success(true);
     }
@@ -54,6 +58,7 @@ public class ProductShopController {
     @Parameter(name = "id", description = "店铺编号", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('product:shop:delete')")
     public CommonResult<Boolean> deleteShop(@RequestParam Long id) {
+        businessScopeService.requireTenantManager(businessScopeService.currentAdminUserId());
         shopService.deleteShop(id);
         return success(true);
     }
@@ -63,6 +68,7 @@ public class ProductShopController {
     @Parameter(name = "id", description = "店铺编号", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('product:shop:query')")
     public CommonResult<ProductShopRespVO> getShop(@RequestParam Long id) {
+        businessScopeService.requireCurrentShopResource(id);
         return success(toRespVO(shopService.getShop(id)));
     }
 
@@ -70,14 +76,18 @@ public class ProductShopController {
     @Operation(summary = "获得企业店铺列表")
     @PreAuthorize("@ss.hasPermission('product:shop:query')")
     public CommonResult<List<ProductShopRespVO>> getShopList() {
-        return success(shopService.getShopList().stream().map(this::toRespVO).collect(Collectors.toList()));
+        ProductAdminBusinessScopeService.Scope scope = businessScopeService.currentScope();
+        List<ProductShopDO> shops = scope.unrestricted() ? shopService.getShopList()
+                : businessScopeService.authorizedShops(scope.adminUserId());
+        return success(shops.stream().map(this::toRespVO).collect(Collectors.toList()));
     }
 
     @GetMapping("/my")
     @Operation(summary = "获得当前后台账号负责的企业店铺")
     @PreAuthorize("@ss.hasPermission('product:spu:query')")
     public CommonResult<ProductShopRespVO> getMyManagedShop() {
-        return success(toRespVO(shopService.getShopByManagerUserId(getLoginUserId())));
+        List<ProductShopDO> shops = businessScopeService.authorizedShops(businessScopeService.currentAdminUserId());
+        return success(shops.isEmpty() ? null : toRespVO(shops.getFirst()));
     }
 
     private ProductShopRespVO toRespVO(ProductShopDO shop) {

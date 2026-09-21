@@ -3,6 +3,8 @@ package cn.iocoder.txgy.module.product.service.property;
 import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.controller.admin.property.vo.property.ProductPropertyPageReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.property.vo.property.ProductPropertySaveReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.property.ProductPropertyDO;
@@ -42,6 +44,7 @@ public class ProductPropertyServiceImpl implements ProductPropertyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createProperty(ProductPropertySaveReqVO createReqVO) {
+        requireWritableTenant();
         // 如果已经添加过该属性项，直接返回
         ProductPropertyDO dbProperty = productPropertyMapper.selectByName(createReqVO.getName());
         if (dbProperty != null) {
@@ -58,6 +61,7 @@ public class ProductPropertyServiceImpl implements ProductPropertyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProperty(ProductPropertySaveReqVO updateReqVO) {
+        requireWritableTenant();
         validatePropertyExists(updateReqVO.getId());
         // 校验名字重复
         ProductPropertyDO property = productPropertyMapper.selectByName(updateReqVO.getName());
@@ -75,6 +79,7 @@ public class ProductPropertyServiceImpl implements ProductPropertyService {
 
     @Override
     public void deleteProperty(Long id) {
+        requireWritableTenant();
         // 校验存在
         validatePropertyExists(id);
         // 校验其下是否有规格值
@@ -112,6 +117,10 @@ public class ProductPropertyServiceImpl implements ProductPropertyService {
     @Override
     public List<ProductPropertyDO> getPropertyList() {
         return productPropertyMapper.selectList();
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

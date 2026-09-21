@@ -23,17 +23,19 @@ test('an obsolete cart failure or success cannot erase or replace the next accou
 
 function userHarness({ bindMobile = false } = {}) {
   let generation = 1, derivedCalls = 0, clears = 0; const storage = { token: 'A' };
-  const modals = [];
+  const modals = [], platformSessions = [];
   const user = instantiate('../sheep/store/user.js', {
     clone: value => ({ ...value }), cloneDeep: structuredClone, cart: () => ({ emptyList() { clears++; }, getList() { derivedCalls++; } }),
     app: () => ({ platform: { bind_mobile: bindMobile } }), showAuthModal: type => modals.push(type), UserApi: {}, PayWalletApi: {}, OrderApi: {}, CouponApi: {},
     $share: { getShareInfo() { derivedCalls++; }, bindBrokerageUser() { derivedCalls++; } },
     captureTenantOperation: () => generation, isTenantOperationCurrent: captured => captured === generation,
-    recordTenantSession() { generation++; }, ensureAccountSession: async () => {}, assertAccountProfile() {},
+    recordTenantSession() { generation++; },
+    recordPlatformSession(token, identity, refreshing) { platformSessions.push({ token, identity, refreshing }); generation++; },
+    ensureAccountSession: async () => {}, assertAccountProfile() {},
     readTenantToken: key => storage[key], writeTenantToken: (key, value) => { if (value) storage[key] = value; else delete storage[key]; },
     uni: { getStorageSync: key => storage[key], setStorageSync: (key, value) => { storage[key] = value; }, removeStorageSync: key => { delete storage[key]; } },
   });
-  return { user, storage, modals, change: () => { generation++; }, derivedCalls: () => derivedCalls, clears: () => clears };
+  return { user, storage, modals, platformSessions, change: () => { generation++; }, derivedCalls: () => derivedCalls, clears: () => clears };
 }
 
 test('login-name accounts keep optional contact without interrupting enterprise completion to bind a phone', async () => {
@@ -50,6 +52,15 @@ test('new login clears former account assets and the five-second throttle before
   assert.equal(h.user.userInfo.id, undefined); assert.equal(h.user.userWallet.balance, 0);
   assert.equal(h.user.numData.orderCount.allCount, 0); assert.equal(h.user.lastUpdateTime, 0); assert.equal(h.clears(), 1);
   h.user.lastUpdateTime = 42; h.user.resetUserData(); assert.equal(h.user.lastUpdateTime, 0);
+});
+test('platform login stores the proven carrier token without starting tenant-owned profile or cart reads', () => {
+  const h = userHarness(); h.user.userInfo = { id: 7 }; h.user.userWallet = { balance: 9900 };
+  const identity = { tenantId: 2009, userId: 316, sourceTenantId: '2009', canonicalMemberId: '316' };
+  assert.equal(h.user.setPlatformToken('P', 'RP', identity), true);
+  assert.equal(h.storage.token, 'P'); assert.equal(h.storage['refresh-token'], 'RP');
+  assert.deepEqual(h.platformSessions, [{ token: 'P', identity, refreshing: false }]);
+  assert.equal(h.user.userInfo.id, undefined); assert.equal(h.user.userWallet.balance, 0);
+  assert.equal(h.derivedCalls(), 0); assert.equal(h.clears(), 1);
 });
 test('old loginAfter cannot launch cart, share or referral actions in the next account', async () => {
   const h = userHarness(), pending = deferred(); h.user.updateUserData = () => pending.promise;

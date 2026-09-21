@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useAccountOperation } from '@/composables/useAccountOperation'
 const operation = useAccountOperation()
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { infraApi, memberApi } from '@/api/mall'
+import { enterpriseApi, type EnterpriseApplication } from '@/api/enterprise'
 import MemberPage from '@/components/MemberPage.vue'
 import OrderWorkbench from '@/components/OrderWorkbench.vue'
 import CustomerAffiliation from '@/components/CustomerAffiliation.vue'
@@ -16,15 +17,26 @@ const editing = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const enterpriseApplication = ref<EnterpriseApplication | null>(null)
 const form = reactive({ nickname: authStore.profile?.nickname || '', avatar: authStore.profile?.avatar || '' })
+const memberTitle = computed(() => {
+  if (enterpriseApplication.value?.status !== 1) return '普通用户'
+  return enterpriseApplication.value.identity === 'supplier' ? '供应商' : '采购商'
+})
 const shortcuts = [
   { path: 'orders', title: '订单中心', text: '跟进采购订单与物流状态', icon: 'M5 3h14v18H5z M9 7h6 M9 12h6 M9 17h4', tone: 'green' },
+  { path: 'platform-checkouts', title: '平台结算记录', text: '查看跨租户拆单规划与后续状态', icon: 'M4 5h16v14H4z M8 9h8 M8 13h5', tone: 'gold' },
   { path: 'addresses', title: '收货地址', text: '管理项目现场与常用收货地', icon: 'M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0z M14 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0', tone: 'blue' },
   { path: 'favorites', title: '商品收藏', text: '保存选中的材料，下次快速采购', icon: 'm12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1z', tone: 'gold' },
   { path: 'after-sales', title: '退款售后', text: '查看申请与售后处理进度', icon: 'M7 3 3 7l4 4 M3 7h12a7 7 0 0 1 0 14h-3', tone: 'blue' },
   { path: 'wallet', title: '我的钱包', text: '查看余额、充值与资金流水', icon: 'M3 5h18v15H3z M3 9h18 M16 13h5v4h-5z', tone: 'green' },
-  { path: 'customer-service', title: '在线客服', text: '咨询规格、订单及售后问题', icon: 'M4 4h16v13H9l-5 4z M8 8h8 M8 12h5', tone: 'gold' },
+  { path: 'customer-service/scoped', title: '在线客服', text: '咨询规格、订单及售后问题', icon: 'M4 4h16v13H9l-5 4z M8 8h8 M8 12h5', tone: 'gold' },
 ]
+
+onMounted(async () => {
+  try { enterpriseApplication.value = await enterpriseApi.mine() }
+  catch { enterpriseApplication.value = null }
+})
 
 function openEditor() {
   form.nickname = authStore.profile?.nickname || ''
@@ -66,7 +78,7 @@ async function save() {
     <OrderWorkbench :navigation-blocked="editing" />
     <div class="profile-card">
       <el-avatar :size="88" :src="authStore.profile?.avatar">{{ (authStore.profile?.nickname || '用户').slice(0, 1) }}</el-avatar>
-      <div class="profile-info"><small>WELCOME BACK / 欢迎回来</small><h2>{{ authStore.profile?.nickname || '商城用户' }}</h2><p>手机号：{{ authStore.profile?.mobile || '-' }} <span>会员编号：{{ authStore.profile?.id || '-' }}</span></p><div class="profile-tag">工程材料采购 · PC / 移动端账户互通</div></div>
+      <div class="profile-info"><small>WELCOME BACK / 欢迎回来</small><h2>{{ authStore.profile?.nickname || '商城用户' }}<span class="member-title">{{ memberTitle }}</span></h2><p>手机号：{{ authStore.profile?.mobile || '-' }} <span>会员编号：{{ authStore.profile?.id || '-' }}</span></p><div class="profile-tag">工程材料采购 · PC / 移动端账户互通</div></div>
       <el-button @click="openEditor">编辑资料</el-button>
     </div>
     <div class="workbench-heading"><h3>我的采购服务</h3><MallLink to="/goods">继续选购材料 ↗</MallLink></div>
@@ -97,4 +109,5 @@ async function save() {
 </style>
 <style scoped lang="scss">
 .profile-card{position:relative;overflow:hidden;min-height:190px;padding:30px;background:radial-gradient(circle at 90% 10%,#378b7c55,transparent 40%),linear-gradient(115deg,#142f3c,#205b56);color:white;border-radius:14px}.profile-card::after{content:'';position:absolute;width:260px;height:260px;right:-100px;top:-150px;border:35px solid #ffffff08;border-radius:50%;pointer-events:none}.profile-card h2{margin:12px 0;font-size:26px}.profile-card p{color:#c1d5d8;font-size:13px}.profile-info small{letter-spacing:2px;color:#9bd1c6;font-size:11px}.profile-info p span{margin-left:18px}.profile-tag{display:inline-block;margin-top:12px;padding:6px 10px;background:#ffffff0d;border:1px solid #ffffff20;border-radius:5px;font-size:11px;color:#cfe6df}.profile-card :deep(.el-avatar){border:4px solid #ffffff25;box-shadow:0 5px 25px #071f3440}.profile-card :deep(.el-button){background:#ffffff12;color:white;border-color:#ffffff50}.workbench-heading{display:flex;justify-content:space-between;align-items:center;margin:26px 0 16px}.workbench-heading h3{margin:0;font-size:18px}.workbench-heading a{font-size:13px;color:#147d6b}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0}.quick-grid a{padding:22px;min-height:155px;border-radius:12px;background:linear-gradient(140deg,#fff,#f6faf8);transition:transform .2s,box-shadow .2s}.quick-grid a:hover{background:#f1f8f5;transform:translateY(-3px);box-shadow:0 8px 22px #214a4010}.shortcut-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.shortcut-top svg{width:42px;height:42px;padding:9px;box-sizing:border-box;background:#e0f1eb;color:#147d6b;border-radius:12px}.shortcut-top i{font-style:normal;color:#9aafb1}.blue .shortcut-top svg{color:#337799;background:#e5f0f6}.gold .shortcut-top svg{color:#a37d37;background:#f6efdF}.quick-grid span{font-size:12px;line-height:1.7;margin-top:7px}.purchase-guide{display:grid;grid-template-columns:1fr 1.2fr;gap:24px;margin-top:24px;padding:26px;border-radius:12px;background:#edf4f2}.purchase-guide small{font-size:10px;letter-spacing:2px;color:#599283}.purchase-guide h3{margin:12px 0;font-size:20px}.purchase-guide p{font-size:12px;color:#758a89;margin:6px 0;line-height:1.7}.purchase-guide a{display:inline-block;margin-top:16px;color:#147d6b;font-size:13px}.purchase-guide ol{padding:0;margin:0;list-style:none;display:grid;gap:14px}.purchase-guide li{display:flex;gap:14px;align-items:center}.purchase-guide li>b{color:#80aaa0;font-size:22px;font-weight:400}.purchase-guide strong{font-size:13px}@media(max-width:1150px){.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.profile-info p span{display:block;margin:6px 0 0}}
+.member-title{display:inline-flex;align-items:center;margin-left:12px;padding:4px 9px;border:1px solid #ffffff35;border-radius:999px;background:#ffffff16;color:#d8eee8;font-size:12px;font-weight:500;vertical-align:middle}
 </style>

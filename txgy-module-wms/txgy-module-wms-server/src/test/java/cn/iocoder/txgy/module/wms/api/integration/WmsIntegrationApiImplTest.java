@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
@@ -46,6 +47,7 @@ class WmsIntegrationApiImplTest {
     @Mock private WmsItemMapper itemMapper;
     @Mock private WmsMerchantMapper merchantMapper;
     @Mock private WmsWarehouseMapper warehouseMapper;
+    @Mock private cn.iocoder.txgy.module.wms.service.order.shipment.WmsShipmentOrderService shipmentOrderService;
     @Mock private cn.iocoder.txgy.module.wms.dal.mysql.order.receipt.WmsReceiptOrderDetailMapper receiptDetailMapper;
     @Mock private cn.iocoder.txgy.module.wms.dal.mysql.order.shipment.WmsShipmentOrderDetailMapper shipmentDetailMapper;
 
@@ -109,8 +111,10 @@ class WmsIntegrationApiImplTest {
 
     @Test
     void deferredEndpointsReturnDedicatedError() {
-        assertServiceException(() -> api.createInventoryDecision(null), INTEGRATION_FEATURE_NOT_ENABLED);
-        assertServiceException(() -> api.releaseReservation(null), INTEGRATION_FEATURE_NOT_ENABLED);
+        assertServiceException(() -> api.createInventoryDecision(null), INTEGRATION_RECEIPT_REQUEST_INVALID,
+                "请求不能为空");
+        assertServiceException(() -> api.releaseReservation(null), INTEGRATION_RECEIPT_REQUEST_INVALID,
+                "请求不能为空");
         WmsOrderRequestDTO request = base(new WmsOrderRequestDTO(), "purchase-receipt-1")
                 .setBusinessChainNo("BC-1").setSourceOrderNo("RK-ERP-1").setOrderType("PURCHASE_RECEIPT")
                 .setEventVersion(1L).setItems(java.util.List.of(new WmsIntegrationDocumentItemDTO()
@@ -141,6 +145,7 @@ class WmsIntegrationApiImplTest {
     @Test
     void rejectsMallOrderNumberThatWouldOverflowGeneratedWmsNumber() {
         WmsOrderRequestDTO request = base(new WmsOrderRequestDTO(), "mall-request-1")
+                .setShopId(12L)
                 .setBusinessChainNo("MALL-CHAIN-1").setSourceOrderNo("M".repeat(56))
                 .setOrderType("SALE_SHIPMENT").setEventVersion(1L)
                 .setItems(java.util.List.of(new WmsIntegrationDocumentItemDTO().setLineNo(1)
@@ -152,6 +157,54 @@ class WmsIntegrationApiImplTest {
         assertServiceException(() -> api.createMallShipment(request), INTEGRATION_RECEIPT_REQUEST_INVALID,
                 "来源单号不能为空且不能超过 55 字符");
         verifyNoInteractions(requestService);
+    }
+
+    @Test
+    void rejectsMallShipmentWithoutPositiveShopBeforeLedgerOrOrderWrite() {
+        WmsOrderRequestDTO request = mallShipmentRequest();
+        request.setShopId(null);
+
+        assertServiceException(() -> api.createMallShipment(request), INTEGRATION_RECEIPT_REQUEST_INVALID,
+                "商城出库申请必须提供有效店铺编号");
+
+        verifyNoInteractions(requestService, shipmentOrderService);
+    }
+
+    @Test
+    void mallShipmentPersistsAndVerifiesShopAndSingleWarehouseOwnership() {
+        WmsOrderRequestDTO request = mallShipmentRequest();
+        doAnswer(invocation -> ((Supplier<WmsIntegrationRequestRespDTO>) invocation.getArgument(2)).get())
+                .when(requestService).execute(anyString(), same(request), any());
+        doAnswer(invocation -> ((Supplier<WmsIntegrationRequestRespDTO>) invocation.getArgument(1)).get())
+                .when(requestService).executeOrderBusiness(same(request), any());
+        when(warehouseMapper.selectByCode("FG-WH"))
+                .thenReturn(new WmsWarehouseDO().setId(77L).setWarehouseType("FINISHED_GOODS"));
+        when(itemSkuMapper.selectByCode("FG-1-STD"))
+                .thenReturn(new WmsItemSkuDO().setId(66L).setItemId(55L));
+        when(itemMapper.selectById(55L)).thenReturn(new WmsItemDO().setId(55L).setCode("FG-1")
+                .setMaterialType("FINISHED_GOODS").setUnit("件"));
+        when(shipmentOrderService.createShipmentOrder(any())).thenReturn(88L);
+        when(shipmentOrderService.getShipmentOrder(88L)).thenReturn(
+                new cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDO()
+                        .setId(88L).setShopId(12L).setWarehouseId(77L));
+
+        assertEquals("WMS-MALL-MALL-ORDER-1", api.createMallShipment(request).getData().getTargetOrderNo());
+
+        verify(shipmentOrderService).createShipmentOrder(argThat(vo -> Objects.equals(vo.getShopId(), 12L)
+                && Objects.equals(vo.getWarehouseId(), 77L) && vo.getDetails().size() == 1));
+        verify(shipmentOrderService).getShipmentOrder(88L);
+    }
+
+    private static WmsOrderRequestDTO mallShipmentRequest() {
+        WmsOrderRequestDTO request = base(new WmsOrderRequestDTO(), "mall-request-1")
+                .setShopId(12L).setBusinessChainNo("MALL-CHAIN-1").setSourceOrderNo("MALL-ORDER-1")
+                .setOrderType("SALE_SHIPMENT").setEventVersion(1L)
+                .setItems(java.util.List.of(new WmsIntegrationDocumentItemDTO().setLineNo(1)
+                        .setMaterialCode("FG-1").setSkuCode("FG-1-STD").setMaterialType("FINISHED_GOODS")
+                        .setMaterialNameSnapshot("成品").setUnitCode("PC").setUnitNameSnapshot("件")
+                        .setWarehouseCode("FG-WH").setRequiredQuantity(java.math.BigDecimal.ONE)));
+        request.setSourceModule("MALL");
+        return request;
     }
 
     private static <T extends WmsIntegrationBaseReqDTO> T base(T request, String requestId) {

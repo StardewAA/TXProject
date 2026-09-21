@@ -10,6 +10,7 @@ import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderPageReqVO;
+import cn.iocoder.txgy.module.trade.service.wms.TradeWmsOutboundService;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.*;
 import org.springframework.core.io.FileSystemResource;
@@ -41,6 +42,36 @@ class OrderWorkbenchServiceTest {
         jdbc.execute("CREATE TABLE trade_order_item(id BIGINT PRIMARY KEY,tenant_id BIGINT,deleted INT DEFAULT 0,order_id BIGINT,shop_id BIGINT,after_sale_status INT DEFAULT 0,after_sale_id BIGINT)");
         jdbc.execute("CREATE TABLE trade_after_sale(id BIGINT PRIMARY KEY,tenant_id BIGINT,deleted INT DEFAULT 0,no VARCHAR(64),order_id BIGINT,order_item_id BIGINT,user_id BIGINT,shop_id BIGINT,status INT,way INT,pay_refund_id BIGINT)");
         jdbc.execute("CREATE TABLE trade_erp_inventory_request(id VARCHAR(64) PRIMARY KEY,tenant_id BIGINT,order_id BIGINT,operation VARCHAR(20),business_key VARCHAR(64),status VARCHAR(20),message VARCHAR(200))");
+        jdbc.execute("""
+                CREATE TABLE trade_wms_shipment(
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    tenant_id BIGINT NOT NULL,
+                    order_id BIGINT NOT NULL,
+                    order_no VARCHAR(64) NOT NULL,
+                    shop_id BIGINT NOT NULL DEFAULT 0,
+                    warehouse_id BIGINT NOT NULL,
+                    warehouse_code VARCHAR(20),
+                    source_order_no VARCHAR(56) NOT NULL,
+                    request_id VARCHAR(64) NOT NULL,
+                    target_order_no VARCHAR(64),
+                    status VARCHAR(32) NOT NULL,
+                    event_version BIGINT NOT NULL DEFAULT 1,
+                    retry_count INT NOT NULL DEFAULT 0,
+                    last_error VARCHAR(1000),
+                    request_json LONGTEXT,
+                    requested_at DATETIME,
+                    accepted_at DATETIME,
+                    last_synced_at DATETIME,
+                    creator VARCHAR(64) DEFAULT '',
+                    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updater VARCHAR(64) DEFAULT '',
+                    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    deleted BIT NOT NULL DEFAULT FALSE,
+                    UNIQUE(tenant_id,order_id,shop_id,warehouse_id),
+                    UNIQUE(tenant_id,source_order_no),
+                    UNIQUE(tenant_id,request_id)
+                )
+                """);
         journal=new OrderWorkbenchJournal(jdbc);suppliers=mock(ProductSupplierApi.class);security=mock(SecurityFrameworkService.class);pay=mock(PayOrderApi.class);
         when(suppliers.validateShop(anyLong(),eq(1L))).thenReturn(CommonResult.success(true));when(suppliers.validateShop(anyLong(),eq(2L))).thenReturn(CommonResult.success(false));
         when(security.hasPermission(anyString())).thenReturn(true);
@@ -57,17 +88,19 @@ class OrderWorkbenchServiceTest {
     void change(long id,String update){tx.executeWithoutResult(s->{jdbc.update(update);journal.changed(id);});}
     void sale(long id,long order,int status){jdbc.update("INSERT INTO trade_after_sale(id,tenant_id,no,order_id,order_item_id,user_id,shop_id,status,way) VALUES(?,1,?,?,?,7,1,?,20)",id,"AS-"+id,order,order,status);
         jdbc.update("UPDATE trade_order_item SET after_sale_status=10,after_sale_id=? WHERE id=?",id,order);}
+    void shipment(long id,long order,long shop,String status){jdbc.update("INSERT INTO trade_wms_shipment(id,tenant_id,order_id,order_no,shop_id,warehouse_id,source_order_no,request_id,status) VALUES(?,1,?,?,?,?,'MALL-SOURCE-'||?,'MALL-REQUEST-'||?,?)",
+            id,order,"ORDER-"+order,shop,id,id,id,status);}
     @Test void firstLoadCountsEntireScopeAndDoesNotBroadcastHistory(){for(long id=1;id<=27;id++)order(id,7,1,20);var s=summary(Role.BUYER,null);assertEquals(27,s.pendingCount());assertEquals(27,s.unreadCount());assertEquals(20,s.entries().size());assertTrue(s.hasMore());assertTrue(s.resetRequired());assertEquals(0,s.newCount());assertEquals(27,s.orderStatusCounts().deliveredCount());}
     @Test void readIsPersistentBetweenClientsButDoesNotProcessBusiness(){order(1,7,1,20);var s=summary(Role.BUYER,null);service.read(new Read(Role.BUYER,null,List.of(s.entries().getFirst().eventId())),false);
         var next=summary(Role.BUYER,s.cursor());assertEquals(1,next.pendingCount());assertEquals(0,next.unreadCount());assertEquals(20,jdbc.queryForObject("SELECT status FROM trade_order WHERE id=1",Integer.class));assertTrue(next.rowEntries().isEmpty());}
-    @Test void differentSupplierReadDoesNotClearOtherPerson(){order(1,7,1,10);login(1,316,1);var first=summary(Role.SUPPLIER,null);service.read(new Read(Role.SUPPLIER,1L,List.of(first.entries().getFirst().eventId())),false);
+    @Test void differentSupplierReadDoesNotClearOtherPerson(){order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.COMPLETED);login(1,316,1);var first=summary(Role.SUPPLIER,null);service.read(new Read(Role.SUPPLIER,1L,List.of(first.entries().getFirst().eventId())),false);
         login(1,317,1);assertEquals(1,summary(Role.SUPPLIER,null).unreadCount());login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).unreadCount());}
-    @Test void updateByOtherWorkerRemovesPendingEvenIfUnread(){order(1,7,1,10);login(1,316,1);var first=summary(Role.SUPPLIER,null);change(1,"UPDATE trade_order SET status=20 WHERE id=1");assertEquals(0,summary(Role.SUPPLIER,first.cursor()).pendingCount());}
+    @Test void updateByOtherWorkerRemovesPendingEvenIfUnread(){order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.COMPLETED);login(1,316,1);var first=summary(Role.SUPPLIER,null);change(1,"UPDATE trade_order SET status=20 WHERE id=1");assertEquals(0,summary(Role.SUPPLIER,first.cursor()).pendingCount());}
     @Test void unpaidAndErpWaitingNeverTellSupplierToDeliver(){order(1,7,1,0);login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());jdbc.update("UPDATE trade_order SET pay_expire_time=NULL WHERE id=1");login(1,7,1);assertEquals(0,summary(Role.BUYER,null).pendingCount());}
-    @Test void outboundPendingBlocksRepeatedDeliveryReminder(){order(1,7,1,10);jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('out1',1,1,'OUTBOUND','DELIVERY','PENDING','待ERP')");login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());}
-    @Test void paidOrderCreatesDeliveryReminderForAuthorizedPlatform(){order(1,7,1,10);login(1,1,2);
+    @Test void wmsPendingBlocksRepeatedDeliveryReminder(){order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.PENDING);login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());}
+    @Test void wmsCompletedOrderCreatesDeliveryReminderForAuthorizedPlatform(){order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.COMPLETED);login(1,1,2);
         var result=summary(Role.ADMIN,null);assertEquals(1,result.pendingCount());assertEquals(1,result.unreadCount());
-        assertEquals(1,result.todoCounts().get(Action.DELIVERY));assertEquals("新付款订单待发货",result.entries().getFirst().reason());
+        assertEquals(1,result.todoCounts().get(Action.DELIVERY));assertEquals("WMS 出库已完成，待登记物流并确认发货",result.entries().getFirst().reason());
         when(security.hasPermission("trade:order:query")).thenReturn(false);assertEquals(0,summary(Role.ADMIN,null).todoCounts().get(Action.DELIVERY));}
     @Test void refundBelongsToAuthorizedPlatformNotSupplier(){order(1,7,1,20);sale(11,1,40);login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());login(1,1,2);assertEquals(1,summary(Role.ADMIN,null).todoCounts().get(Action.PLATFORM_REFUND));
         when(security.hasPermission("trade:after-sale:refund")).thenReturn(false);assertEquals(0,summary(Role.ADMIN,null).pendingCount());}
@@ -82,10 +115,10 @@ class OrderWorkbenchServiceTest {
         service.read(new Read(Role.ADMIN,null,List.of(s.entries().getFirst().eventId())),true);assertEquals(0,summary(Role.ADMIN,null).unreadCount());
         when(security.hasPermission("trade:after-sale:query")).thenReturn(false);assertThrows(ServiceException.class,()->summary(Role.ADMIN,null));
     }
-    @Test void buyerReturnAndSupplierReceiveAreDifferentStages(){order(1,7,1,20);sale(11,1,20);assertEquals(1,summary(Role.BUYER,null).todoCounts().get(Action.BUYER_RETURN));change(1,"UPDATE trade_after_sale SET status=30 WHERE id=11");login(1,316,1);assertEquals(1,summary(Role.SUPPLIER,null).todoCounts().get(Action.AFTER_RECEIVE));
+    @Test void buyerReturnRemainsVisibleButSupplierReceiveWaitsForWmsReturnIntegration(){order(1,7,1,20);sale(11,1,20);assertEquals(1,summary(Role.BUYER,null).todoCounts().get(Action.BUYER_RETURN));change(1,"UPDATE trade_after_sale SET status=30 WHERE id=11");login(1,316,1);assertEquals(0,summary(Role.SUPPLIER,null).todoCounts().get(Action.AFTER_RECEIVE));
         tx.executeWithoutResult(s->{jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('ret1',1,1,'RETURN','11','PENDING','待ERP')");journal.changed(1L);});assertEquals(0,summary(Role.SUPPLIER,null).pendingCount());}
     @Test void duplicatePollingAndBusinessCallbackDoNotCreateDuplicateEvents(){order(1,7,1,20);var first=summary(Role.BUYER,null);change(1,"UPDATE trade_order SET status=20 WHERE id=1");var next=summary(Role.BUYER,first.cursor());assertEquals(1,next.pendingCount());assertEquals(0,next.newCount());assertEquals(first.entries().getFirst().eventId(),next.entries().getFirst().eventId());}
-    @Test void sameActionReentryBetweenPollsCreatesNewEvent(){order(1,7,1,10);login(1,316,1);var first=summary(Role.SUPPLIER,null);service.read(new Read(Role.SUPPLIER,1L,List.of(first.entries().getFirst().eventId())),false);
+    @Test void sameActionReentryBetweenPollsCreatesNewEvent(){order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.COMPLETED);login(1,316,1);var first=summary(Role.SUPPLIER,null);service.read(new Read(Role.SUPPLIER,1L,List.of(first.entries().getFirst().eventId())),false);
         tx.executeWithoutResult(s->{sale(11,1,10);journal.changed(1L,Action.DELIVERY);});
         tx.executeWithoutResult(s->{jdbc.update("UPDATE trade_after_sale SET status=61 WHERE id=11");jdbc.update("UPDATE trade_order_item SET after_sale_status=0 WHERE order_id=1");journal.changed(1L);});
         var next=summary(Role.SUPPLIER,first.cursor());assertEquals(1,next.newCount());assertEquals(1,next.unreadCount());assertNotEquals(first.entries().getFirst().eventId(),next.entries().getFirst().eventId());}
@@ -114,11 +147,11 @@ class OrderWorkbenchServiceTest {
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM trade_order_workbench_event",Integer.class));
         assertEquals(1,summary(Role.BUYER,null).todoCounts().get(Action.PAYMENT));
     }
-    @Test void cancelledReservationRejectionNoLongerActionableButReleaseFailureRemainsVisible(){order(1,7,1,40);jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('r1',1,1,'RESERVE','ORDER','REJECTED','库存不足')");login(1,1,2);assertEquals(0,summary(Role.ADMIN,null).pendingCount());
-        tx.executeWithoutResult(s->{jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('rel1',1,1,'RELEASE','CANCEL','REJECTED','释放失败')");journal.changed(1L);});assertEquals(1,summary(Role.ADMIN,null).todoCounts().get(Action.ERP_EXCEPTION));}
+    @Test void legacyErpFailuresDoNotCreateWorkbenchTodosInWmsDirectFlow(){order(1,7,1,40);jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('r1',1,1,'RESERVE','ORDER','REJECTED','库存不足')");login(1,1,2);assertEquals(0,summary(Role.ADMIN,null).pendingCount());
+        tx.executeWithoutResult(s->{jdbc.update("INSERT INTO trade_erp_inventory_request VALUES('rel1',1,1,'RELEASE','CANCEL','REJECTED','释放失败')");journal.changed(1L);});assertEquals(0,summary(Role.ADMIN,null).todoCounts().get(Action.ERP_EXCEPTION));}
     @Test void journalCoalescesSameOrderPerTransaction(){order(1,7,1,20);tx.executeWithoutResult(s->{journal.changed(1L);journal.changed(1L);journal.changed(1L,Action.DELIVERY);});assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM trade_order_workbench_change",Integer.class));}
-    @Test void sourceAndRealSupplierDeliveryGateAgreeAcrossStatusMatrix(){
-        order(1,7,1,10);var source=new OrderWorkbenchSource(jdbc,pay);
+    @Test void sourceAndRealSupplierDeliveryGateAgreeAfterWmsCompletionAcrossStatusMatrix(){
+        order(1,7,1,10);shipment(101,1,1,TradeWmsOutboundService.COMPLETED);var source=new OrderWorkbenchSource(jdbc,pay);
         for(int status:List.of(0,10,20,30,40))for(boolean paid:List.of(false,true))for(int delivery:List.of(1,2))for(int refund:List.of(0,1))for(int after:List.of(0,10)) {
             jdbc.update("UPDATE trade_order SET status=?,pay_status=?,delivery_type=?,refund_status=? WHERE id=1",status,paid,delivery,refund);
             jdbc.update("UPDATE trade_order_item SET after_sale_status=? WHERE id=1",after);

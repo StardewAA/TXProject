@@ -1,4 +1,4 @@
-// Presentation only. The server owns ERP/shipping state, permissions and provider status.
+// Presentation only. Legacy status keys are retained for old orders; the server owns fulfillment and provider facts.
 export const logisticsMessages = Object.freeze({
   ERP_PENDING: '发货申请处理中，尚未确认出库',
   ERP_REJECTED: '本次发货未确认，请联系店铺核实',

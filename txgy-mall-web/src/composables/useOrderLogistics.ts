@@ -5,7 +5,7 @@ import type { Identifier } from '@/types/mall'
 import type { OrderLogistics } from '@/types/fulfillment'
 import { logisticsRetrySeconds } from '@/utils/fulfillment'
 
-export function useOrderLogistics(orderId: () => Identifier) {
+export function useOrderLogistics(orderId: () => Identifier, enterprise = () => false) {
   const operation = useAccountOperation()
   const data = ref<OrderLogistics | null>(null)
   const loading = ref(false)
@@ -24,7 +24,7 @@ export function useOrderLogistics(orderId: () => Identifier) {
     failed.value = false
     const isCurrent = () => operation.current() && current === generation && String(id) === String(orderId())
     try {
-      const result = await fulfillmentApi.getLogistics(id)
+      const result = await (enterprise() ? fulfillmentApi.getPurchaseLogistics(id) : fulfillmentApi.getLogistics(id))
       if (!isCurrent()) return
       if (String(result?.orderId) !== String(id)) throw new Error('Order identity mismatch')
       data.value = result
@@ -40,7 +40,7 @@ export function useOrderLogistics(orderId: () => Identifier) {
     } finally { if (isCurrent()) loading.value = false }
   }
 
-  watch(orderId, () => {
+  watch([orderId, enterprise], () => {
     generation += 1
     data.value = null
     failed.value = false

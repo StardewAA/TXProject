@@ -3,15 +3,22 @@ package cn.iocoder.txgy.module.product.service.enterprise;
 import cn.iocoder.txgy.framework.common.enums.UserTypeEnum;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.*;
+import cn.iocoder.txgy.framework.common.biz.system.permission.PermissionCommonApi;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
 import cn.iocoder.txgy.module.product.controller.app.enterprise.EnterpriseApplyReqVO;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.*;
 import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopDO;
+import cn.iocoder.txgy.module.product.dal.dataobject.shop.ProductShopAdminAuthorizationDO;
 import cn.iocoder.txgy.module.product.dal.mysql.enterprise.*;
+import cn.iocoder.txgy.module.product.dal.mysql.shop.ProductShopAdminAuthorizationMapper;
+import cn.iocoder.txgy.module.product.service.audit.ProductBusinessOperationAuditService;
 import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
+import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +33,11 @@ public class EnterpriseMembershipService {
     @Resource private ProductEnterpriseMapper enterpriseMapper;
     @Resource private MemberUserApi memberApi;
     @Resource private ProductShopService shopService;
+    @Resource private AdminUserApi adminUserApi;
+    @Resource private PermissionCommonApi permissionApi;
+    @Resource private ProductEnterpriseAdminMemberMapper enterpriseAdminMemberMapper;
+    @Resource private ProductShopAdminAuthorizationMapper shopAdminAuthorizationMapper;
+    @Resource private ProductBusinessOperationAuditService operationAuditService;
 
     public static ServiceException invalid(String message) { return new ServiceException(400, message); }
     public static Long memberId() {
@@ -44,18 +56,76 @@ public class EnterpriseMembershipService {
         if (row == null) throw invalid("申请不存在");
         return row;
     }
-    public EnterpriseApplicationDO requireBuyer(Long memberId) {
-        var row = mine(memberId);
-        if (row == null || !Integer.valueOf(1).equals(row.getStatus()) || row.getEnterpriseId() == null)
-            throw new ServiceException(403, "请先完善企业资料并等待后台审核通过");
+    private EnterpriseApplicationDO requireApprovedMember(Long memberId) {
+        var row = requireApprovedMemberHistory(memberId);
         var company = enterpriseMapper.selectById(row.getEnterpriseId());
         if (company == null || !Integer.valueOf(1).equals(company.getAuditStatus()))
             throw new ServiceException(403, "企业认证已失效，请联系平台");
         return row;
     }
+
+    /**
+     * 历史业务读取只验证账号及已审核成员关系，不要求企业仍处于可经营状态。
+     * 企业停用会阻断后续写操作，但不能让原成员已经参与的报价历史消失。
+     */
+    private EnterpriseApplicationDO requireApprovedMemberHistory(Long memberId) {
+        var member = memberApi.getUser(memberId).getCheckedData();
+        if (member == null || !Integer.valueOf(0).equals(member.getStatus())) {
+            throw new ServiceException(403, "商城会员账号不存在或已停用");
+        }
+        var row = mine(memberId);
+        if (row == null || !Integer.valueOf(1).equals(row.getStatus()) || row.getEnterpriseId() == null)
+            throw new ServiceException(403, "请先完善企业资料并等待后台审核通过");
+        if (!Objects.equals(member.getMemberIdentity(), row.getIdentity())) {
+            throw new ServiceException(403, "会员身份与企业成员关系不一致，请联系平台核验");
+        }
+        return row;
+    }
+    public EnterpriseApplicationDO requireBuyer(Long memberId) {
+        var row = requireApprovedMember(memberId);
+        if (!"buyer".equals(row.getIdentity())) {
+            throw new ServiceException(403, "当前账号不是企业采购成员");
+        }
+        return row;
+    }
+    /** 旧用户端销售入口迁移期兼容使用；新供应经营统一使用后台 system_user。 */
+    public EnterpriseApplicationDO requireSupplier(Long memberId) {
+        var row = requireApprovedMember(memberId);
+        if (!"supplier".equals(row.getIdentity())) {
+            throw new ServiceException(403, "当前账号不是供应企业经营成员");
+        }
+        return row;
+    }
+
+    public EnterpriseApplicationDO requireBuyerHistory(Long memberId) {
+        var row = requireApprovedMemberHistory(memberId);
+        if (!"buyer".equals(row.getIdentity())) {
+            throw new ServiceException(403, "当前账号不是企业采购成员");
+        }
+        return row;
+    }
+
+    public EnterpriseApplicationDO requireSupplierHistory(Long memberId) {
+        var row = requireApprovedMemberHistory(memberId);
+        if (!"supplier".equals(row.getIdentity())) {
+            throw new ServiceException(403, "当前账号不是供应企业经营成员");
+        }
+        return row;
+    }
+
+    /** 历史读取按审核时固化的企业、店铺关系授权，不要求店铺当前仍启用。 */
+    public EnterpriseApplicationDO requireSupplierShopHistory(Long memberId, Long enterpriseId, Long shopId) {
+        var row = requireSupplierHistory(memberId);
+        if (enterpriseId == null || shopId == null
+                || !Objects.equals(row.getEnterpriseId(), enterpriseId)
+                || !Objects.equals(row.getShopId(), shopId)) {
+            throw new ServiceException(403, "报价不属于当前供应企业或店铺");
+        }
+        return row;
+    }
     public List<ProductShopDO> salesShops(Long memberId) {
-        var row = requireBuyer(memberId);
-        if (!"supplier".equals(row.getIdentity()) || row.getShopId() == null) return List.of();
+        var row = requireSupplier(memberId);
+        if (row.getShopId() == null) return List.of();
         return shopService.getShopList().stream()
                 .filter(s -> Objects.equals(s.getId(), row.getShopId())
                         && Objects.equals(s.getEnterpriseId(), row.getEnterpriseId())
@@ -67,9 +137,9 @@ public class EnterpriseMembershipService {
     }
     @Transactional(rollbackFor=Exception.class)
     public void bindShop(Long applicationId, Long shopId) {
+        requireWritableTenant();
         var row = locked(applicationId);
-        requireBuyer(row.getMemberId());
-        if (!"supplier".equals(row.getIdentity())) throw invalid("采购商不能分配销售店铺");
+        requireSupplier(row.getMemberId());
         var shop = shopService.getShop(shopId);
         if (shop == null || !Objects.equals(shop.getEnterpriseId(), row.getEnterpriseId())
                 || !Integer.valueOf(0).equals(shop.getStatus()))
@@ -79,6 +149,7 @@ public class EnterpriseMembershipService {
     }
     @Transactional(rollbackFor=Exception.class)
     public Long apply(Long memberId, EnterpriseApplyReqVO req) {
+        requireWritableTenant();
         var user = memberApi.getUser(memberId).getCheckedData();
         if (user == null || !Set.of("buyer", "supplier").contains(
                 Objects.toString(user.getMemberIdentity(), "")))
@@ -128,7 +199,9 @@ public class EnterpriseMembershipService {
     public EnterpriseApplicationDO get(Long id) { return mapper.selectById(id); }
 
     @Transactional(rollbackFor=Exception.class)
-    public void audit(Long id, Integer status, String remark, Long existingEnterpriseId, Long auditor) {
+    public void audit(Long id, Integer status, String remark, Long existingEnterpriseId,
+                      Long adminUserId, Long auditor) {
+        requireWritableTenant();
         if (!Set.of(1, 2).contains(status)) throw invalid("审核结果不正确");
         if (remark == null || remark.isBlank() || remark.length() > 500) throw invalid("请填写500字以内审核意见");
         var row = locked(id);
@@ -153,8 +226,94 @@ public class EnterpriseMembershipService {
                 enterpriseMapper.insert(company);
             }
             row.setEnterpriseId(company.getId());
+            if ("supplier".equals(row.getIdentity())) {
+                if (adminUserId == null) {
+                    throw invalid("供应企业审核通过时必须选择当前租户内的后台企业管理员账号");
+                }
+                validateAdminUser(adminUserId);
+                ProductShopDO shop = shopService.getShopByEnterpriseId(company.getId());
+                if (shop == null) {
+                    shop = new ProductShopDO();
+                    shop.setEnterpriseId(company.getId());
+                    shop.setName(defaultShopName(company.getName()));
+                    shop.setContactName(row.getContactName());
+                    shop.setContactMobile(row.getContactMobile());
+                    shop.setIntroduction(row.getIntroduction());
+                    shop.setStatus(0);
+                    row.setShopId(shopService.createShop(shop));
+                } else {
+                    if (!Integer.valueOf(0).equals(shop.getStatus())) {
+                        throw invalid("该企业店铺已停用，请先在企业店铺中启用后再通过申请");
+                    }
+                    row.setShopId(shop.getId());
+                }
+                bindEnterpriseAdmin(adminUserId, company.getId(), row.getShopId());
+                row.setAdminUserId(adminUserId);
+            }
         }
         row.setStatus(status); row.setAuditRemark(remark); row.setAuditorId(auditor);
         row.setAuditTime(LocalDateTime.now()); mapper.updateById(row);
+        operationAuditService.success(row.getEnterpriseId(), row.getShopId(), "ADMIN", auditor,
+                status == 1 ? "ENTERPRISE_APPLICATION_APPROVE" : "ENTERPRISE_APPLICATION_REJECT",
+                "ENTERPRISE_APPLICATION", row.getId(),
+                "identity=" + Objects.toString(row.getIdentity(), "")
+                        + ",adminUserId=" + Objects.toString(row.getAdminUserId(), ""));
+    }
+
+    private void validateAdminUser(Long adminUserId) {
+        // AdminUserApi.getUser 受当前租户拦截器约束，跨租户编号不会返回可用账号。
+        var admin = adminUserApi.getUser(adminUserId).getCheckedData();
+        if (admin == null || !Integer.valueOf(0).equals(admin.getStatus())) {
+            throw invalid("所选后台账号不存在、已停用或不属于当前租户");
+        }
+        if (!Boolean.TRUE.equals(permissionApi.hasAnyRoles(adminUserId, "mall_enterprise_admin")
+                .getCheckedData())) {
+            throw invalid("所选后台账号尚未分配商城企业管理员角色");
+        }
+    }
+
+    private void bindEnterpriseAdmin(Long adminUserId, Long enterpriseId, Long shopId) {
+        ProductEnterpriseAdminMemberDO other = enterpriseAdminMemberMapper.selectOne(
+                new LambdaQueryWrapperX<ProductEnterpriseAdminMemberDO>()
+                        .eq(ProductEnterpriseAdminMemberDO::getAdminUserId, adminUserId)
+                        .eq(ProductEnterpriseAdminMemberDO::getStatus, 0)
+                        .ne(ProductEnterpriseAdminMemberDO::getEnterpriseId, enterpriseId)
+                        .last("LIMIT 1"));
+        if (other != null) throw invalid("该后台账号已关联其他企业，不能跨企业复用");
+
+        ProductEnterpriseAdminMemberDO membership = enterpriseAdminMemberMapper.selectOne(
+                new LambdaQueryWrapperX<ProductEnterpriseAdminMemberDO>()
+                        .eq(ProductEnterpriseAdminMemberDO::getAdminUserId, adminUserId)
+                        .eq(ProductEnterpriseAdminMemberDO::getEnterpriseId, enterpriseId));
+        if (membership == null) {
+            membership = new ProductEnterpriseAdminMemberDO();
+            membership.setAdminUserId(adminUserId); membership.setEnterpriseId(enterpriseId);
+            membership.setScopeType(ProductEnterpriseAdminMemberDO.SCOPE_ENTERPRISE); membership.setStatus(0);
+            enterpriseAdminMemberMapper.insert(membership);
+        } else {
+            membership.setScopeType(ProductEnterpriseAdminMemberDO.SCOPE_ENTERPRISE); membership.setStatus(0);
+            enterpriseAdminMemberMapper.updateById(membership);
+        }
+
+        ProductShopAdminAuthorizationDO grant = shopAdminAuthorizationMapper.selectOne(
+                new LambdaQueryWrapperX<ProductShopAdminAuthorizationDO>()
+                        .eq(ProductShopAdminAuthorizationDO::getAdminUserId, adminUserId)
+                        .eq(ProductShopAdminAuthorizationDO::getShopId, shopId));
+        if (grant == null) {
+            grant = new ProductShopAdminAuthorizationDO();
+            grant.setAdminUserId(adminUserId); grant.setEnterpriseId(enterpriseId);
+            grant.setShopId(shopId); grant.setStatus(0); shopAdminAuthorizationMapper.insert(grant);
+        } else {
+            grant.setEnterpriseId(enterpriseId); grant.setStatus(0); shopAdminAuthorizationMapper.updateById(grant);
+        }
+    }
+
+    private String defaultShopName(String enterpriseName) {
+        String name = Objects.toString(enterpriseName, "企业").trim() + "官方店";
+        return name.length() <= 64 ? name : name.substring(0, 64);
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 }

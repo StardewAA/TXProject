@@ -93,6 +93,10 @@ class AppMallImageAuthControllerTest {
         rejectedSafely("account-login", "{\"account\":\"buyer_1\",\"password\":\"" + SECRET + "\"}");
     }
 
+    @Test void platformLoginRejectsClientTenantAndNeverLogsCredentials() throws Exception {
+        rejectedSafely("platform-login", "{\"tenantId\":9001,\"account\":\"buyer_1\",\"password\":\"1234\"}");
+    }
+
     @Test void brokenJsonWithPasswordDoesNotEnterRawBodyErrorAudit() throws Exception {
         rejectedSafely("account-login", "{\"account\":\"buyer_1\",\"password\":\"" + SECRET + "\",");
     }
@@ -120,7 +124,7 @@ class AppMallImageAuthControllerTest {
             var accessLog = method.getAnnotation(ApiAccessLog.class);
             assertNotNull(accessLog); assertFalse(accessLog.requestEnable()); assertFalse(accessLog.responseEnable());
         }
-        assertEquals(3, endpoints);
+        assertEquals(4, endpoints);
         var mapping = AppMallImageAuthController.class.getMethod("invalidCredentialRequest").getAnnotation(ExceptionHandler.class);
         assertNotNull(mapping);
         assertTrue(List.of(mapping.value()).containsAll(List.of(BindException.class, HttpMessageNotReadableException.class,

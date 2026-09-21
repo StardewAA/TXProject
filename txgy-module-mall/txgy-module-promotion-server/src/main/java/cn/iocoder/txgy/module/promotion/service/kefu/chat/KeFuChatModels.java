@@ -7,6 +7,9 @@ import java.util.List;
 
 public final class KeFuChatModels {
     private KeFuChatModels() {}
+    public record ChatOpenRequest(@NotNull @Pattern(regexp="PLATFORM|SHOP") String scope,
+                                  @NotNull @Min(0) Long shopId,
+                                  @Min(1) Long productSkuId) {}
     public record Capability(boolean enabled, String version, String mode, boolean attachmentsEnabled, String message) {}
     public record Question(String id, String question) {}
     public record Thread(Session session, String mode, boolean humanRequested, long onlineAgents,

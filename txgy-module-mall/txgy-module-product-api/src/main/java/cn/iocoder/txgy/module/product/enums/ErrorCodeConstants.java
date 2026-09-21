@@ -9,6 +9,10 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
  */
 public interface ErrorCodeConstants {
 
+    // ========== 商城租户边界 1-008-000-000 ============
+    ErrorCode RETIRED_MALL_TENANT_WRITE_FORBIDDEN = new ErrorCode(1_008_000_001,
+            "原公共商城租户已退役，仅保留历史查询，禁止新增或修改业务数据");
+
     // ========== 商品分类相关 1-008-001-000 ============
     ErrorCode CATEGORY_NOT_EXISTS = new ErrorCode(1_008_001_000, "商品分类不存在");
     ErrorCode CATEGORY_PARENT_NOT_EXISTS = new ErrorCode(1_008_001_001, "父分类不存在");

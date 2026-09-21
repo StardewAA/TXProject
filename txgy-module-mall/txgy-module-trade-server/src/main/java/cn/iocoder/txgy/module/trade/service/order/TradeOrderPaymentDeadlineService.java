@@ -19,7 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
- * 交易支付计时的唯一规则入口。新单记录下单时的时限，ERP 等待与支付窗口独立。
+ * 交易支付计时的唯一规则入口。WMS 当前只做实时库存核验，不等待预占回调。
  * 旧单没有时限快照时只读取已有支付单事实，不在查询期间回填或续期。
  */
 @Service
@@ -32,8 +32,7 @@ public class TradeOrderPaymentDeadlineService {
 
     public void initialize(TradeOrderDO order, LocalDateTime now) {
         order.setPayExpireSeconds(seconds(properties.getPayExpireTime(), "支付"));
-        order.setErpWaitExpireTime(now.plusSeconds(seconds(properties.getErpWaitExpireTime(), "ERP 等待"))
-                .truncatedTo(ChronoUnit.SECONDS));
+        order.setErpWaitExpireTime(null);
     }
 
     private long seconds(Duration duration, String label) {
@@ -47,15 +46,9 @@ public class TradeOrderPaymentDeadlineService {
         return order.getPayExpireSeconds() != null;
     }
 
-    public boolean isErpWaitExpired(TradeOrderDO order, LocalDateTime now) {
-        return isNewRule(order) && order.getPayExpireTime() == null
-                && order.getErpWaitExpireTime() != null && !now.isBefore(order.getErpWaitExpireTime());
-    }
-
     /** 只允许在订单行锁内首次调用，重复调用不续期。存量无支付单时保持原下单计时规则。 */
     public LocalDateTime startPayment(TradeOrderDO order, LocalDateTime now) {
         if (order.getPayExpireTime() != null) return order.getPayExpireTime();
-        if (isErpWaitExpired(order, now)) throw new ServiceException(400, "ERP 库存确认等待已超时");
         LocalDateTime deadline;
         if (isNewRule(order)) {
             if (order.getPayExpireSeconds() <= 0) throw new ServiceException(400, "订单支付时限快照无效");
@@ -102,8 +95,6 @@ public class TradeOrderPaymentDeadlineService {
 
         if (!TradeOrderStatusEnum.isUnpaid(order.getStatus()) || Boolean.TRUE.equals(order.getPayStatus())) {
             reason = "ORDER_NOT_UNPAID";
-        } else if (isNewRule(order) && deadline == null) {
-            reason = isErpWaitExpired(order, now) ? "ERP_WAIT_EXPIRED" : "ERP_WAITING";
         } else if (order.getPayOrderId() == null) {
             // 旧单没有支付单只保留历史关闭规则，不以页面访问时间构造可支付期限。
             reason = "PAY_ORDER_MISSING";

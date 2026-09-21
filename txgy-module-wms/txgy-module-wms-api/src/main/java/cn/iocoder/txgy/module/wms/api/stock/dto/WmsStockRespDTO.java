@@ -6,6 +6,9 @@ import java.math.BigDecimal;
 @Data
 public class WmsStockRespDTO {
     private Long id;
+    private Long itemId;
+    private Long skuId;
+    private Long warehouseId;
     private String materialCode;
     private String materialName;
     private String skuCode;

@@ -6,6 +6,7 @@ import cn.iocoder.txgy.module.product.api.spu.dto.ProductSpuRespDTO;
 import cn.iocoder.txgy.module.product.convert.spu.ProductSpuConvert;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.txgy.module.product.service.spu.ProductSpuService;
+import cn.iocoder.txgy.module.product.controller.app.spu.vo.AppProductSpuPageReqVO;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,6 +46,18 @@ public class ProductSpuApiImpl implements ProductSpuApi {
     public CommonResult<ProductSpuRespDTO> getSpu(Long id) {
         ProductSpuDO spu = spuService.getSpu(id);
         return success(spu == null ? null : convert(spu));
+    }
+
+    @Override
+    public CommonResult<List<ProductSpuRespDTO>> getRecommendSpuList(Long shopId, Integer limit) {
+        AppProductSpuPageReqVO request = new AppProductSpuPageReqVO();
+        request.setPageNo(1);
+        request.setPageSize(limit);
+        request.setShopId(shopId != null && shopId > 0 ? shopId : null);
+        return success(spuService.getSpuPage(request).getList().stream()
+                .map(this::convert)
+                .filter(item -> Boolean.TRUE.equals(item.getSaleable()))
+                .toList());
     }
 
     private ProductSpuRespDTO convert(ProductSpuDO p) {

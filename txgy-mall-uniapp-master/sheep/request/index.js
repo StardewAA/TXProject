@@ -10,10 +10,11 @@ import $platform from '@/sheep/platform';
 import { showAuthModal } from '@/sheep/hooks/useModal';
 import { getTerminal } from '@/sheep/helper/const';
 import { createTenantAuthClient } from '@/sheep/helper/tenant-auth-client.mjs';
+import { publicApiMessage } from '@/sheep/helper/public-message.mjs';
 import { readTenantToken } from '@/sheep/helper/tenant-runtime';
 import { tenantContext, ensureTenantReady, ensureAccountSession, captureTenantRequest,
   isTenantRequestCurrent, captureTenantOperation, isTenantOperationCurrent,
-  getControlledTenantId, getAccountTenantId, tenantTransport } from '@/sheep/helper/tenant-runtime';
+  getControlledTenantId, getAccountTenantId, tenantTransport, verifyPlatformSession } from '@/sheep/helper/tenant-runtime';
 
 const options = {
   // 显示操作成功消息 默认不显示
@@ -33,6 +34,17 @@ const options = {
   // 是否传递 token
   isToken: true,
 };
+
+// Platform APIs are an explicit trust boundary: they may keep the signed-in
+// member token, but they must never inherit the browser's tenant header.
+const isPlatformScope = (config) => config?.custom?.scope === 'platform';
+const isPlatformAccountScope = (config) => config?.custom?.scope === 'platform-account';
+const isBrowseScope = (config) => config?.custom?.scope === 'browse';
+const usesPlatformSession = (config) => isPlatformScope(config) || isPlatformAccountScope(config);
+const hasVerifiedPlatformSession = (snapshot) => Boolean(snapshot?.token
+  && snapshot.accountTenantId && snapshot.userId
+  && snapshot.accountTenantId === String(snapshot.platformCarrierTenantId || '')
+  && String(snapshot.userId) === String(snapshot.platformMemberId || ''));
 
 // Loading全局实例
 let LoadingInstance = {
@@ -83,7 +95,23 @@ http.interceptors.request.use(
 
     const snapshot = config.custom.tenantSnapshot;
     if (!isTenantRequestCurrent(snapshot)) return Promise.reject(new Error('登录状态已变化'));
-    const scopedHeaders = tenantContext.headers(snapshot, config.custom.isToken);
+    const platformScope = isPlatformScope(config);
+    const platformAccountScope = isPlatformAccountScope(config);
+    const browseScope = isBrowseScope(config);
+    let scopedHeaders;
+    if (platformScope) {
+      scopedHeaders = config.custom.isToken && snapshot.token ? { Authorization: snapshot.token } : {};
+    } else if (platformAccountScope) {
+      const carrier = String(snapshot.platformCarrierTenantId || '');
+      if (!snapshot.token || !snapshot.accountTenantId || snapshot.accountTenantId !== carrier) {
+        throw new Error('平台账号来源商城尚未核验，请重新登录');
+      }
+      scopedHeaders = { 'tenant-id': carrier, Authorization: snapshot.token };
+    } else if (browseScope) {
+      scopedHeaders = tenantContext.headers(snapshot, config.custom.isToken);
+    } else {
+      scopedHeaders = tenantContext.accountHeaders(snapshot, config.custom.isToken);
+    }
 
     // 自定义处理【loading 加载中】：如果需要显示 loading，则显示 loading
     if (config.custom.showLoading) {
@@ -104,7 +132,8 @@ http.interceptors.request.use(
     config.header['terminal'] = getTerminal();
 
     config.header['Accept'] = '*/*';
-    config.header['tenant-id'] = scopedHeaders['tenant-id'];
+    if (platformScope) delete config.header['tenant-id'];
+    else config.header['tenant-id'] = scopedHeaders['tenant-id'];
     return config;
   },
   (error) => {
@@ -127,6 +156,8 @@ http.interceptors.response.use(
       response?.data && typeof response.data === 'object'
         ? response.data
         : { code: -1, msg: '服务器返回数据为空' };
+    // 不向移动端消费者暴露 ERP 接入状态等内部实施信息。
+    if (Object.hasOwn(responseData, 'msg')) responseData.msg = publicApiMessage(responseData.msg, '');
     // 约定：如果是 /auth/ 下的 URL 地址，并且返回了 accessToken 说明是登录相关的接口，则自动设置登陆令牌
     if (responseData.code === 0 && !response.config.custom.deferAuthToken && response.config.url.indexOf('/member/auth/') >= 0 && responseData.data?.accessToken) {
       const identity = responseData.data;
@@ -228,7 +259,7 @@ http.interceptors.response.use(
     if (error && error.config) {
       if (error.config.custom.showError) {
         uni.showToast({
-          title: error.data?.msg || errorMessage,
+          title: publicApiMessage(error.data?.msg, errorMessage),
           icon: 'none',
           mask: true,
         });
@@ -244,20 +275,41 @@ http.interceptors.response.use(
 const refreshes = new Map();
 const refreshToken = async (config) => {
   const snapshot = config.custom.tenantSnapshot;
+  const platformScope = usesPlatformSession(config) || hasVerifiedPlatformSession(snapshot);
   if (!isTenantRequestCurrent(snapshot)) throw new Error('登录状态已变化');
   if (config.custom.tenantRetried || !config.custom.isToken || !snapshot.refreshToken
       || config.url.includes('/member/auth/')) return handleAuthorized(snapshot);
-  const key = `${snapshot.browseTenantId}:${snapshot.epoch}:${snapshot.token}:${snapshot.refreshToken}`;
+  const key = `${platformScope ? 'platform:' + (snapshot.platformCarrierTenantId || '') : snapshot.browseTenantId}:${snapshot.epoch}:${snapshot.token}:${snapshot.refreshToken}`;
   if (!refreshes.has(key)) {
     const pending = (async () => {
       try {
+        if (platformScope) {
+          const carrier = String(snapshot.platformCarrierTenantId || '');
+          const memberId = String(snapshot.platformMemberId || '');
+          if (!/^[1-9]\d*$/.test(carrier) || !/^[1-9]\d*$/.test(memberId)) {
+            throw new Error('平台登录缺少可信凭据，请重新登录');
+          }
+          const result = await tenantTransport('/member/auth/refresh-token?refreshToken=' + encodeURIComponent(snapshot.refreshToken), {
+            method: 'POST', header: { 'tenant-id': carrier, terminal: '20', Accept: 'application/json' },
+          });
+          if (!isTenantRequestCurrent(snapshot)) throw new Error('登录状态已变化');
+          const identity = result?.code === 0 ? result.data : null;
+          if (!identity?.accessToken || !identity?.refreshToken
+              || String(identity.tenantId) !== carrier || String(identity.userId) !== memberId) {
+            throw new Error('平台登录刷新失败');
+          }
+          const verified = await verifyPlatformSession(identity, () => isTenantRequestCurrent(snapshot));
+          if (!isTenantRequestCurrent(snapshot)) throw new Error('登录状态已变化');
+          $store('user').setPlatformToken(verified.accessToken, verified.refreshToken, verified, true);
+          return captureTenantRequest();
+        }
         const result = await tenantTransport('/member/auth/refresh-token?refreshToken=' + encodeURIComponent(snapshot.refreshToken), {
-          method: 'POST', header: tenantContext.headers(snapshot),
+          method: 'POST', header: tenantContext.accountHeaders(snapshot),
         });
         if (!isTenantRequestCurrent(snapshot)) throw new Error('登录状态已变化');
         if (result?.code !== 0 || !result.data?.accessToken || !result.data?.refreshToken) throw new Error('刷新令牌失败');
         const identity = result.data;
-        if (identity.tenantId && String(identity.tenantId) !== snapshot.browseTenantId) throw new Error('账号商城不一致');
+        if (identity.tenantId && String(identity.tenantId) !== String(snapshot.accountTenantId || snapshot.browseTenantId)) throw new Error('账号商城不一致');
         if (identity.userId && snapshot.userId && String(identity.userId) !== String(snapshot.userId)) throw new Error('刷新账号不一致');
         if (snapshot.accountTenantId && snapshot.userId) {
           const verifier = createTenantAuthClient(({ path, method, headers, data }) =>
@@ -316,11 +368,16 @@ export { getAccountTenantId };
 
 const request = async (config) => {
   const operation = captureTenantOperation();
-  try { await ensureTenantReady(); }
-  catch (error) {
-    // App displays the blocked-entry modal. A settled API failure also protects callers without catch handlers.
-    if (tenantContext.state().blocked) return { code: 403, data: null, msg: error.message };
-    throw error;
+  const platformScope = isPlatformScope(config);
+  const browseScope = isBrowseScope(config);
+  const explicitPlatformSession = usesPlatformSession(config);
+  if (!explicitPlatformSession) {
+    try { await ensureTenantReady(); }
+    catch (error) {
+      // App displays the blocked-entry modal. A settled API failure also protects callers without catch handlers.
+      if (tenantContext.state().blocked) return { code: 403, data: null, msg: error.message };
+      throw error;
+    }
   }
   if (!isTenantOperationCurrent(operation)) throw new Error('登录状态已变化');
   const authEntry = /^\/member\/auth\/(login|register|sms-login|social-auth-redirect|social-login|weixin-mini-app-login)$/.test(config.url)
@@ -331,10 +388,17 @@ const request = async (config) => {
   const publicRead = (!config.method || config.method.toUpperCase() === 'GET') && [
     '/promotion/diy-template/used', '/promotion/diy-template/get', '/promotion/diy-page/get',
     '/product/category/list', '/product/category/list-by-ids', '/product/spu/page',
-    '/product/spu/list-by-ids', '/product/spu/get-detail',
+    '/product/spu/list-by-ids', '/product/spu/get-detail', '/product/shop/list',
+    '/product/shop/get', '/product/comment/page',
   ].includes(config.url);
-  const anonymous = authEntry || config.custom?.isToken === false || (publicRead && !getAccountTenantId());
-  if (!anonymous) {
+  const browseAnonymous = browseScope && publicRead
+    && getAccountTenantId() !== getControlledTenantId();
+  const anonymous = authEntry || config.custom?.isToken === false || browseAnonymous
+    || (!explicitPlatformSession && publicRead && !getAccountTenantId());
+  // Public platform reads keep a present token but do not make their availability
+  // depend on the legacy tenant-session verifier. Private platform APIs opt in with auth:true.
+  const verifyAccount = !anonymous && (!explicitPlatformSession || config.custom?.auth === true);
+  if (verifyAccount) {
     try { await ensureAccountSession(); }
     catch (error) {
       if (isTenantOperationCurrent(operation) && config.custom?.showError !== false) {
@@ -346,7 +410,8 @@ const request = async (config) => {
   if (!isTenantOperationCurrent(operation)) throw new Error('登录状态已变化');
   const snapshot = config.custom?.tenantSnapshot || captureTenantRequest();
   if (!isTenantRequestCurrent(snapshot)) throw new Error('商城或登录状态已变化，请重试');
-  return http.middleware({ ...config, custom: { ...config.custom, ...(anonymous ? { isToken: false } : {}), authEntry, tenantSnapshot: snapshot } });
+  return http.middleware({ ...config, custom: { ...config.custom,
+    ...(anonymous && !platformScope ? { isToken: false } : {}), authEntry, tenantSnapshot: snapshot } });
 };
 
 export default request;

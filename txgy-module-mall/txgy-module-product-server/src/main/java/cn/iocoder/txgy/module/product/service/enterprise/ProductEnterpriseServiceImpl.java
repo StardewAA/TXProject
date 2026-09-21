@@ -4,6 +4,8 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.product.controller.admin.enterprise.vo.ProductEnterprisePageReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpriseDO;
 import cn.iocoder.txgy.module.product.dal.mysql.enterprise.ProductEnterpriseMapper;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -18,6 +20,7 @@ public class ProductEnterpriseServiceImpl implements ProductEnterpriseService {
     private ProductEnterpriseMapper mapper;
 
     public Long create(ProductEnterpriseDO d) {
+        requireWritableTenant();
         if (mapper.selectByCreditCode(d.getCreditCode()) != null)
             throw exception(ENTERPRISE_CREDIT_CODE_EXISTS);
         if (d.getAuditStatus() == null)
@@ -27,6 +30,7 @@ public class ProductEnterpriseServiceImpl implements ProductEnterpriseService {
     }
 
     public void update(ProductEnterpriseDO d) {
+        requireWritableTenant();
         if (mapper.selectById(d.getId()) == null)
             throw exception(ENTERPRISE_NOT_EXISTS);
         ProductEnterpriseDO same = mapper.selectByCreditCode(d.getCreditCode());
@@ -36,6 +40,7 @@ public class ProductEnterpriseServiceImpl implements ProductEnterpriseService {
     }
 
     public void delete(Long id) {
+        requireWritableTenant();
         if (mapper.selectById(id) == null)
             throw exception(ENTERPRISE_NOT_EXISTS);
         mapper.deleteById(id);
@@ -54,6 +59,7 @@ public class ProductEnterpriseServiceImpl implements ProductEnterpriseService {
     }
 
     public void audit(Long id, Integer status, String remark) {
+        requireWritableTenant();
         ProductEnterpriseDO d = mapper.selectById(id);
         if (d == null)
             throw exception(ENTERPRISE_NOT_EXISTS);
@@ -69,5 +75,9 @@ public class ProductEnterpriseServiceImpl implements ProductEnterpriseService {
         if (!Integer.valueOf(1).equals(d.getAuditStatus()))
             throw exception(ENTERPRISE_NOT_APPROVED);
         return d;
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 }
