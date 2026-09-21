@@ -28,6 +28,18 @@ public enum MesProWorkOrderStatusEnum implements ArrayValuable<Integer> {
      */
     CONFIRMED(1, "已确认"),
     /**
+     * 审批中
+     *
+     * 对应 MesProWorkOrderService#submitWorkOrder 方法
+     */
+    APPROVING(12, "审批中"),
+    /**
+     * 已批准
+     *
+     * 对应 MesProWorkOrderService#approveWorkOrder 方法（BPM 审批通过后置位，仅已批准工单可下发）
+     */
+    APPROVED(13, "已批准"),
+    /**
      * 已完成
      *
      * 对应 MesProWorkOrderService#finishWorkOrder 方法

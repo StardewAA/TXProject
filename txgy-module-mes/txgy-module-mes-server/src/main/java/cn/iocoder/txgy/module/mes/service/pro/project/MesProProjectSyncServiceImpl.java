@@ -105,12 +105,6 @@ public class MesProProjectSyncServiceImpl implements MesProProjectSyncService {
     @Resource
     private ErpSaleOrderApi erpSaleOrderApi;
     @Resource
-    @Lazy
-    private MesProWorkOrderService workOrderService;
-    @Resource
-    @Lazy
-    private MesProTaskService taskService;
-    @Resource
     private MesMdAutoCodeRecordService autoCodeRecordService;
 
     @Override

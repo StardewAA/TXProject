@@ -1,0 +1,13 @@
+# MES service runtime image (thin image).
+# Reuses the local Maven build output staged at deploy/jars/mes/app.jar.
+# Based on the existing deploy-mes image so the runtime environment (temurin-25-jre + curl healthcheck)
+# stays identical to the one already in use.
+#
+# Usage:
+#   1) mvn install -pl :txgy-module-mes-server -am -Dmaven.test.skip=true
+#   2) copy target/*.jar to deploy/jars/mes/app.jar
+#   3) docker build -f Dockerfile.runtime -t deploy-mes:latest .
+#   4) docker compose up -d mes
+FROM deploy-mes:latest
+
+COPY app.jar /app/app.jar

@@ -1,17 +1,25 @@
-import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormApi, VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MesProProjectApi } from '#/api/mes/pro/project';
 
-import { DICT_TYPE } from '@vben/constants';
+import { h } from 'vue';
+
+import { DICT_TYPE, MesAutoCodeRuleCode } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
+import { Button } from 'ant-design-vue';
+
+import { generateAutoCode } from '#/api/mes/md/autocode/record';
 import { getSimpleUserList } from '#/api/system/user';
 
 /** 表单类型 */
 export type FormType = 'create' | 'detail' | 'update';
 
 /** 新增/修改的表单 */
-export function useFormSchema(formType: FormType): VbenFormSchema[] {
+export function useFormSchema(
+  formType: FormType,
+  formApi?: VbenFormApi,
+): VbenFormSchema[] {
   const headerReadonly = formType === 'detail';
   return [
     {
@@ -31,6 +39,23 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
         placeholder: '请输入项目编码',
       },
       rules: 'required',
+      suffix:
+        headerReadonly
+          ? undefined
+          : () =>
+              h(
+                Button,
+                {
+                  type: 'default',
+                  onClick: async () => {
+                    const code = await generateAutoCode(
+                      MesAutoCodeRuleCode.PRO_PROJECT_CODE,
+                    );
+                    await formApi?.setFieldValue('code', code);
+                  },
+                },
+                { default: () => '自动生成' },
+              ),
     },
     {
       fieldName: 'name',

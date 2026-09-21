@@ -7,6 +7,10 @@
 -- 本脚本补齐 DO 中已声明、库中缺失的列与表；全部判断 information_schema 后再执行，
 -- 可在任意已初始化过的库上重复执行。
 
+-- 入库/出库补列语句超过 MySQL 默认的 1024 字节，避免 GROUP_CONCAT 截断 DDL。
+SET @wms_previous_group_concat_max_len := @@SESSION.group_concat_max_len;
+SET SESSION group_concat_max_len = 16384;
+
 -- ===================== 1. wms_item：物料类型 / 质检 / ERP 版本 / 启用状态 =====================
 SET @ddl := (
     SELECT CONCAT('ALTER TABLE `wms_item` ',
@@ -61,8 +65,11 @@ SET @ddl := (
     SELECT CONCAT('ALTER TABLE `wms_warehouse` ',
                   GROUP_CONCAT(CONCAT('ADD COLUMN ', column_def) SEPARATOR ', '))
     FROM (SELECT '`warehouse_type` varchar(32) NULL COMMENT ''仓库类型：RAW_MATERIAL 原料仓，FINISHED_GOODS 成品仓''' AS column_def, 'warehouse_type' AS column_name
+          UNION ALL SELECT '`organization_name` varchar(128) NULL COMMENT ''所属组织/部门''', 'organization_name'
+          UNION ALL SELECT '`city` varchar(64) NULL COMMENT ''所在城市''', 'city'
           UNION ALL SELECT '`address` varchar(255) NULL COMMENT ''仓库地址''', 'address'
           UNION ALL SELECT '`principal` varchar(64) NULL COMMENT ''负责人''', 'principal'
+          UNION ALL SELECT '`principal_phone` varchar(32) NULL COMMENT ''负责人联系电话''', 'principal_phone'
           UNION ALL SELECT '`status` tinyint NOT NULL DEFAULT 0 COMMENT ''状态：0 启用，1 停用''', 'status'
           UNION ALL SELECT '`data_version` bigint NOT NULL DEFAULT 0 COMMENT ''乐观锁主数据版本''', 'data_version') defs
     WHERE NOT EXISTS (SELECT 1
@@ -76,14 +83,68 @@ PREPARE wms_warehouse_stmt FROM @ddl;
 EXECUTE wms_warehouse_stmt;
 DEALLOCATE PREPARE wms_warehouse_stmt;
 
--- ===================== 4. wms_shipment_order：BPM 审批字段 =====================
+-- ===================== 4. wms_receipt_order：集成、审批与执行字段 =====================
+SET @ddl := (
+    SELECT CONCAT('ALTER TABLE `wms_receipt_order` ',
+                  GROUP_CONCAT(CONCAT('ADD COLUMN ', column_def) SEPARATOR ', '))
+    FROM (SELECT '`simulation` bit(1) NULL DEFAULT b''0'' COMMENT ''是否模拟数据''' AS column_def, 'simulation' AS column_name
+          UNION ALL SELECT '`notification_status` varchar(32) NULL COMMENT ''外部通知状态''', 'notification_status'
+          UNION ALL SELECT '`notification_error` varchar(1024) NULL COMMENT ''外部通知失败原因''', 'notification_error'
+          UNION ALL SELECT '`notification_attempts` int NOT NULL DEFAULT 0 COMMENT ''外部通知尝试次数''', 'notification_attempts'
+          UNION ALL SELECT '`next_notification_time` datetime NULL COMMENT ''下次外部通知时间''', 'next_notification_time'
+          UNION ALL SELECT '`approval_status` int NOT NULL DEFAULT -1 COMMENT ''BPM 审批状态：-1 未提交，1 审批中，2 已通过，3 已拒绝，4 已取消''', 'approval_status'
+          UNION ALL SELECT '`process_instance_id` varchar(64) NULL COMMENT ''BPM 流程实例编号''', 'process_instance_id'
+          UNION ALL SELECT '`approval_time` datetime NULL COMMENT ''审批完成时间''', 'approval_time'
+          UNION ALL SELECT '`approval_reason` varchar(512) NULL COMMENT ''审批结果原因''', 'approval_reason'
+          UNION ALL SELECT '`execution_status` int NOT NULL DEFAULT 0 COMMENT ''执行状态''', 'execution_status'
+          UNION ALL SELECT '`execution_time` datetime NULL COMMENT ''执行完成时间''', 'execution_time'
+          UNION ALL SELECT '`execution_error` varchar(1024) NULL COMMENT ''执行失败原因''', 'execution_error'
+          UNION ALL SELECT '`source_module` varchar(32) NULL COMMENT ''集成来源模块''', 'source_module'
+          UNION ALL SELECT '`business_chain_no` varchar(64) NULL COMMENT ''跨模块业务链编号''', 'business_chain_no') defs
+    WHERE NOT EXISTS (SELECT 1
+                      FROM information_schema.COLUMNS c
+                      WHERE c.TABLE_SCHEMA = DATABASE()
+                        AND c.TABLE_NAME = 'wms_receipt_order'
+                        AND c.COLUMN_NAME = defs.column_name)
+);
+SET @ddl := IFNULL(@ddl, 'SELECT 1');
+PREPARE wms_receipt_order_stmt FROM @ddl;
+EXECUTE wms_receipt_order_stmt;
+DEALLOCATE PREPARE wms_receipt_order_stmt;
+
+-- ===================== 5. wms_movement_order：库区字段 =====================
+SET @ddl := (
+    SELECT CONCAT('ALTER TABLE `wms_movement_order` ',
+                  GROUP_CONCAT(CONCAT('ADD COLUMN ', column_def) SEPARATOR ', '))
+    FROM (SELECT '`source_area_id` bigint NOT NULL DEFAULT 0 COMMENT ''来源库区编号''' AS column_def, 'source_area_id' AS column_name
+          UNION ALL SELECT '`target_area_id` bigint NOT NULL DEFAULT 0 COMMENT ''目标库区编号''', 'target_area_id') defs
+    WHERE NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS c
+                      WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = 'wms_movement_order'
+                        AND c.COLUMN_NAME = defs.column_name)
+);
+SET @ddl := IFNULL(@ddl, 'SELECT 1');
+PREPARE wms_movement_order_stmt FROM @ddl;
+EXECUTE wms_movement_order_stmt;
+DEALLOCATE PREPARE wms_movement_order_stmt;
+
+-- ===================== 6. wms_shipment_order：集成、审批与执行字段 =====================
 SET @ddl := (
     SELECT CONCAT('ALTER TABLE `wms_shipment_order` ',
                   GROUP_CONCAT(CONCAT('ADD COLUMN ', column_def) SEPARATOR ', '))
-    FROM (SELECT '`approval_status` int NOT NULL DEFAULT -1 COMMENT ''BPM 审批状态：-1 未提交，1 审批中，2 已通过，3 已拒绝，4 已取消''' AS column_def, 'approval_status' AS column_name
+    FROM (SELECT '`simulation` bit(1) NULL DEFAULT b''0'' COMMENT ''是否模拟数据''' AS column_def, 'simulation' AS column_name
+          UNION ALL SELECT '`notification_status` varchar(32) NULL COMMENT ''外部通知状态''', 'notification_status'
+          UNION ALL SELECT '`notification_error` varchar(1024) NULL COMMENT ''外部通知失败原因''', 'notification_error'
+          UNION ALL SELECT '`notification_attempts` int NOT NULL DEFAULT 0 COMMENT ''外部通知尝试次数''', 'notification_attempts'
+          UNION ALL SELECT '`next_notification_time` datetime NULL COMMENT ''下次外部通知时间''', 'next_notification_time'
+          UNION ALL SELECT '`approval_status` int NOT NULL DEFAULT -1 COMMENT ''BPM 审批状态：-1 未提交，1 审批中，2 已通过，3 已拒绝，4 已取消''' AS column_def, 'approval_status' AS column_name
           UNION ALL SELECT '`process_instance_id` varchar(64) NULL COMMENT ''BPM 流程实例编号''', 'process_instance_id'
           UNION ALL SELECT '`approval_time` datetime NULL COMMENT ''审批完成时间''', 'approval_time'
-          UNION ALL SELECT '`approval_reason` varchar(512) NULL COMMENT ''审批结果原因''', 'approval_reason') defs
+          UNION ALL SELECT '`approval_reason` varchar(512) NULL COMMENT ''审批结果原因''', 'approval_reason'
+          UNION ALL SELECT '`execution_status` int NOT NULL DEFAULT 0 COMMENT ''执行状态''', 'execution_status'
+          UNION ALL SELECT '`execution_time` datetime NULL COMMENT ''执行完成时间''', 'execution_time'
+          UNION ALL SELECT '`execution_error` varchar(1024) NULL COMMENT ''执行失败原因''', 'execution_error'
+          UNION ALL SELECT '`source_module` varchar(32) NULL COMMENT ''集成来源模块''', 'source_module'
+          UNION ALL SELECT '`business_chain_no` varchar(64) NULL COMMENT ''跨模块业务链编号''', 'business_chain_no') defs
     WHERE NOT EXISTS (SELECT 1
                       FROM information_schema.COLUMNS c
                       WHERE c.TABLE_SCHEMA = DATABASE()
@@ -142,3 +203,5 @@ CREATE TABLE IF NOT EXISTS `wms_integration_request`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci COMMENT ='WMS 外部集成请求';
+
+SET SESSION group_concat_max_len = @wms_previous_group_concat_max_len;

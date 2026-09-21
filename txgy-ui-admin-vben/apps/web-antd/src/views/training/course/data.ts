@@ -99,26 +99,25 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'isRequired',
+      label: '必修/选修',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        placeholder: '全部',
+        options: [
+          { label: '必修', value: true },
+          { label: '选修', value: false },
+        ],
+      },
+    },
+    {
       fieldName: 'code',
       label: '课程编码',
       component: 'Input',
       componentProps: {
         allowClear: true,
         placeholder: '请输入课程编码',
-      },
-    },
-    {
-      fieldName: 'versionScope',
-      label: '版本范围',
-      component: 'Select',
-      componentProps: {
-        allowClear: true,
-        placeholder: '默认仅当前版本',
-        options: [
-          { label: '仅当前版本（默认）', value: 'current' },
-          { label: '全部版本（含历史）', value: 'all' },
-          { label: '仅历史版本', value: 'history' },
-        ],
       },
     },
   ];
@@ -153,6 +152,30 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'level' },
     },
     {
+      field: 'isRequired',
+      title: '必修',
+      width: 70,
+      align: 'center',
+      slots: { default: 'isRequired' },
+    },
+    {
+      field: 'isComposite',
+      title: '复合',
+      width: 70,
+      align: 'center',
+      slots: { default: 'isComposite' },
+    },
+    {
+      field: 'credit',
+      title: '学分',
+      width: 80,
+    },
+    {
+      field: 'lecturer',
+      title: '主讲教师',
+      width: 100,
+    },
+    {
       field: 'status',
       title: '状态',
       width: 100,
@@ -167,9 +190,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'version',
       title: '版本',
-      width: 120,
+      width: 70,
       align: 'center',
-      slots: { default: 'version' },
     },
     {
       field: 'mediaCount',

@@ -19,6 +19,10 @@ public class ErpCustomerRespVO {
     @ExcelProperty("客户编号")
     private Long id;
 
+    @Schema(description = "跨模块统一客户编码", example = "CLI20260918000001")
+    @ExcelProperty("统一编码")
+    private String partnerCode;
+
     @Schema(description = "客户名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "张三")
     @ExcelProperty("客户名称")
     private String name;

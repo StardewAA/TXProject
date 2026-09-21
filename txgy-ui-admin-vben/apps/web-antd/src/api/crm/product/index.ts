@@ -51,8 +51,6 @@ export namespace CrmProductApi {
     updated: number;
     /** 无变化产品数 */
     unchanged: number;
-    /** 因 WMS 中已删除/停用而被置为「下架」的产品数 */
-    offlined: number;
     /** 因产品编码被占用而跳过的数量 */
     conflict: number;
     /** 同步失败数量 */

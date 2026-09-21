@@ -224,6 +224,18 @@ class Certificate(Base):
     score: Mapped[float] = mapped_column(Float)
     issued_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     status: Mapped[str] = mapped_column(String(20), default="valid")
+    # 企业模板快照字段（老库由 ensure_columns 补列）
+    course_name: Mapped[str] = mapped_column(String(200), default="")
+    course_category: Mapped[str] = mapped_column(String(200), default="")
+    business_tag: Mapped[str] = mapped_column(String(200), default="")
+    study_hours: Mapped[str] = mapped_column(String(50), default="")
+    work_type_name: Mapped[str] = mapped_column(String(100), default="")
+    skill_level: Mapped[str] = mapped_column(String(50), default="")
+    relate_courses: Mapped[str] = mapped_column(String(500), default="")
+    paper_name: Mapped[str] = mapped_column(String(200), default="")
+
+
+CERT_TYPE_NAMES = {"graduate": "结业证书", "competence": "岗位能力认证证书", "joint": "联合认证", "worktype": "工种资格证书"}
 
 
 class CertIssuer(Base):
@@ -328,6 +340,17 @@ def tenant_engine(tenant_id):
     Base.metadata.create_all(eng)
     ensure_columns(eng, "questions", {"platform_id": "platform_id INTEGER"})
     ensure_columns(eng, "papers", {"work_types": "work_types TEXT DEFAULT '[]'", "cert_names": "cert_names TEXT DEFAULT '[]'"})
+    # 证书企业模板快照字段（发证时存快照，课程改名后老证书保持原样）
+    ensure_columns(eng, "certificates", {
+        "course_name": "course_name VARCHAR(200) DEFAULT ''",
+        "course_category": "course_category VARCHAR(200) DEFAULT ''",
+        "business_tag": "business_tag VARCHAR(200) DEFAULT ''",
+        "study_hours": "study_hours VARCHAR(50) DEFAULT ''",
+        "work_type_name": "work_type_name VARCHAR(100) DEFAULT ''",
+        "skill_level": "skill_level VARCHAR(50) DEFAULT ''",
+        "relate_courses": "relate_courses VARCHAR(500) DEFAULT ''",
+        "paper_name": "paper_name VARCHAR(200) DEFAULT ''",
+    })
     return eng
 
 def db_session(actor: Actor = Depends(current_user)):
@@ -1006,10 +1029,20 @@ def complete_attempt(db: Session, a: ExamAttempt):
 def issue_certificate(db: Session,a: ExamAttempt,p: Paper):
     if db.scalar(select(Certificate).where(Certificate.attempt_id==a.id)): return
     cert_type=p.cert_type
-    code={"graduate":"GRAD","competence":"COMP","joint":"JOINT"}[cert_type]
-    prefix=f"CERT-{code}-{now():%Y%m}-"
+    code={"graduate":"CT","competence":"COMP","joint":"JOINT","worktype":"QL"}[cert_type]
+    prefix=f"{code}-{now():%Y%m%d%H%M%S}-{a.user_id}-"
     latest=db.scalar(select(func.count()).select_from(Certificate).where(Certificate.cert_no.like(prefix+"%"))) or 0
-    cert=Certificate(cert_no=f"{prefix}{secrets.token_hex(8).upper()}",user_id=a.user_id,attempt_id=a.id,cert_type=cert_type,title=p.name.replace("考试","认证证书"),course_id=p.course_id,score=a.total_score)
+    cert=Certificate(cert_no=f"{prefix}{secrets.token_hex(4).upper()}",user_id=a.user_id,attempt_id=a.id,cert_type=cert_type,title=p.name.replace("考试","认证证书"),course_id=p.course_id,score=a.total_score)
+    # 企业模板快照：结业证书存课程信息；工种资格证书存工种/试卷信息（细节数据渲染时按需从平台补齐）
+    if hasattr(cert,"course_name"):
+        if cert_type in ("graduate","competence"):
+            cert.course_name=p.course_name or (str(p.course_id) if p.course_id else "")
+            cert.paper_name=p.name
+        elif cert_type=="worktype":
+            wt=parse(p.work_types,[])
+            cert.work_type_name=", ".join(wt) if wt else ""
+            cert.paper_name=p.name
+            cert.relate_courses=p.course_name or ""
     db.add(cert); db.flush()
     if cert_type=="joint":
         for issuer in db.scalars(select(CertIssuer).where(CertIssuer.enabled==True,CertIssuer.issue_on_pass==True)):
@@ -1039,7 +1072,10 @@ def master_wrong(wid:int,db:Session=Depends(db_session),actor:Actor=Depends(requ
 
 
 def cert_dict(c:Certificate,db:Session):
-    user=db.get(User,c.user_id); return {"id":c.id,"cert_no":c.cert_no,"title":c.title,"cert_type":c.cert_type,"learner":user.name,"score":c.score,"issued_at":c.issued_at,"status":c.status}
+    user=db.get(User,c.user_id)
+    return {"id":c.id,"cert_no":c.cert_no,"title":c.title,"cert_type":c.cert_type,"learner":user.name,"score":c.score,"issued_at":c.issued_at,"status":c.status,
+            "course_name":c.course_name,"course_category":c.course_category,"business_tag":c.business_tag,"study_hours":c.study_hours,
+            "work_type_name":c.work_type_name,"skill_level":c.skill_level,"relate_courses":c.relate_courses,"paper_name":c.paper_name}
 
 
 @app.get("/api/my/certs")

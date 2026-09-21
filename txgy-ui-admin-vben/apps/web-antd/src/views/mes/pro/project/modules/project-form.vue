@@ -2,7 +2,7 @@
 import type { FormType } from '../data';
 import type { MesProProjectApi } from '#/api/mes/pro/project';
 
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -24,6 +24,7 @@ defineOptions({ name: 'MesProProjectForm' });
 const emit = defineEmits(['success']);
 const formType = ref<FormType>('create');
 const formData = ref<MesProProjectApi.Project>();
+const prevOwnerUserId = ref<number | undefined>(); // 上一次负责人编号，用于防抖
 
 const isEditable = computed(() =>
   ['create', 'update'].includes(formType.value),
@@ -54,23 +55,25 @@ const [Form, formApi] = useVbenForm({
   schema: [],
   showDefaultActions: false,
   wrapperClass: 'grid-cols-3',
-});
-
-/** 监听负责人变化，自动带出责任部门 */
-watch(
-  () => formApi.values?.ownerUserId,
-  async (val) => {
-    if (!val) {
+  /** 监听表单值变化，负责人变更时自动带出责任部门 */
+  async handleValuesChange(values) {
+    const ownerUserId = values?.ownerUserId as number | undefined;
+    if (ownerUserId === prevOwnerUserId.value) {
       return;
     }
-    const user = await getSimpleUser(val as number);
+    prevOwnerUserId.value = ownerUserId;
+    if (!ownerUserId) {
+      await formApi.setFieldValue('dept', '');
+      return;
+    }
+    const user = await getSimpleUser(ownerUserId);
     await formApi.setFieldValue('dept', user?.deptName ?? '');
   },
-);
+});
 
 /** 重新挂载 schema 并按表单态控制底部确认按钮 */
 function applySchema() {
-  formApi.setState({ schema: useFormSchema(formType.value) });
+  formApi.setState({ schema: useFormSchema(formType.value, formApi) });
   modalApi.setState({
     confirmText: '保存',
     showConfirmButton: isEditable.value,

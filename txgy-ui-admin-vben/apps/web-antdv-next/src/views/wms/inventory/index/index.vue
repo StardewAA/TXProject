@@ -183,7 +183,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </div>
       </template>
       <template #quantity="{ row }">
-        {{ formatQuantity(row.quantity) }}
+        {{ formatQuantity(row.quantity) }}{{ row.unit ? ` ${row.unit}` : '' }}
       </template>
     </Grid>
   </Page>

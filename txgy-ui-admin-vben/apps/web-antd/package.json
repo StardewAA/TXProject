@@ -19,7 +19,7 @@
     "build": "pnpm gen:icons && pnpm vite build --mode production",
     "build:analyze": "pnpm vite build --mode analyze",
     "gen:icons": "node ../../scripts/generate-offline-icons.mjs",
-    "dev": "pnpm vite --mode development",
+    "dev": "pnpm gen:icons && pnpm vite --mode development",
     "preview": "vite preview",
     "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vue-tsc --noEmit --skipLibCheck"
   },
@@ -82,10 +82,10 @@
     "vue3-print-nb": "catalog:",
     "vue3-signature": "catalog:",
     "vuedraggable": "catalog:",
-    "wangeditor": "4.7.15",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/file-saver": "^2.0.7"
+    "@types/file-saver": "^2.0.7",
+    "wangeditor": "4.7.15"
   }
 }

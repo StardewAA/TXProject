@@ -110,8 +110,9 @@ public abstract class MesBaseQueryToolFunction
         if (tenantId == null) {
             return Response.error("无法识别当前用户所属租户，拒绝查询");
         }
-        // 2. 参数规整
-        int limit = request.getLimit() == null ? 10 : Math.min(Math.max(request.getLimit(), 1), 20);
+        // 2. 参数规整（【修复】默认 50 / 上限 100：默认 10 会导致数据多于 10 条时
+        // 查询结果被截断，用户误以为数据缺失，如设备台账 11 台只显示 10 台）
+        int limit = request.getLimit() == null ? 50 : Math.min(Math.max(request.getLimit(), 1), 100);
         String keyword = normalizeKeyword(request.getKeyword());
         String status = blankToNull(request.getStatus());
         // 3. 请求参数日志（便于排查工具调用问题）

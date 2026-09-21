@@ -22,6 +22,7 @@ export namespace BpmProcessInstanceApi {
     formVariables: Record<string, any>;
     id: number;
     name: string;
+    orderNo?: string;
     processDefinition?: BpmModelApi.ProcessDefinition;
     processDefinitionId: string;
     remark: string;
