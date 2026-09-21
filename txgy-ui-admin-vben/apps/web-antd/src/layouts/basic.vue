@@ -4,6 +4,7 @@ import type { NotificationItem } from '@vben/layouts';
 import type { SystemTenantApi } from '#/api/system/tenant';
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
@@ -42,11 +43,16 @@ import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 import FmsAccountSetSwitch from '#/views/fms/components/account-set/account-set-switch.vue';
-// 【MES AI 助手】挂在全局布局层：路由切换不销毁（仅浏览器刷新/重新登录时重建），
-// 面板为 fixed 定位悬浮球/悬浮窗，不影响各页面布局
+// 【MES AI 助手】面板为 fixed 定位悬浮球/悬浮窗，不影响页面布局。
+// 只在 MES 模块页面挂载：它是 MES 生产助手，其它模块页面（含登录后的 AI首页）
+// 不应出现；在 MES 内部切换菜单时组件不销毁，会话状态得以保留。
 import MesAiChatPanel from '#/views/mes/home/modules/MesAiChatPanel.vue';
 
+const route = useRoute();
 const userStore = useUserStore();
+
+/** MES AI 助手只在 MES 模块页面显示（/mes、/mes/...） */
+const isMesRoute = computed(() => route.path === '/mes' || route.path.startsWith('/mes/'));
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { hasAccessByCodes } = useAccess();
@@ -343,6 +349,6 @@ watch(
     </template>
   </BasicLayout>
   <HelpModal />
-  <!-- 【MES AI 助手】全局悬浮面板（fixed 定位，路由切换保持状态） -->
-  <MesAiChatPanel />
+  <!-- 【MES AI 助手】MES 模块页面专属悬浮面板（进 MES 才挂载，离开即卸载） -->
+  <MesAiChatPanel v-if="isMesRoute" />
 </template>
