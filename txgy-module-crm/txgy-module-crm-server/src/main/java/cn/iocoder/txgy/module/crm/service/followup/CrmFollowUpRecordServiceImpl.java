@@ -26,12 +26,14 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.FOLLOW_UP_RECORD_DELETE_DENIED;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.FOLLOW_UP_RECORD_NOT_EXISTS;
+import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.FOLLOW_UP_RECORD_TIME_FUTURE;
 
 /**
  * 跟进记录 Service 实现类
@@ -74,28 +76,46 @@ public class CrmFollowUpRecordServiceImpl implements CrmFollowUpRecordService {
     @Override
     @CrmPermission(bizTypeValue = "#createReqVO.bizType", bizId = "#createReqVO.bizId", level = CrmPermissionLevelEnum.WRITE)
     public Long createFollowUpRecord(CrmFollowUpRecordSaveReqVO createReqVO) {
-        // 1. 创建更进记录
-        CrmFollowUpRecordDO record = BeanUtils.toBean(createReqVO, CrmFollowUpRecordDO.class);
+        // 1. 计算「实际跟进时间」：未填写时取当前时间（兼容不传该字段的老版本前端），不允许晚于当前时间。
+        //    注意它与另外两个时间的区别：
+        //      - createTime    ：这条跟进笔记录入系统的时间（写笔记的那一刻），由框架自动生成；
+        //      - nextTime      ：下次联系时间，业务计划时间，仅用于【待办】的今天需联系/已逾期提醒；
+        //      - followUpTime  ：实际和对方发生跟进的时间，是「多久没跟进 → 客户掉入公海」的计时起点，
+        //                        允许补录历史（填过去的日期），例如 9/16 补录 9/1 的拜访。
+        LocalDateTime followUpTime = createReqVO.getFollowUpTime() != null ? createReqVO.getFollowUpTime()
+                : LocalDateTime.now();
+        if (followUpTime.isAfter(LocalDateTime.now())) {
+            throw exception(FOLLOW_UP_RECORD_TIME_FUTURE);
+        }
+
+        // 2. 创建更进记录
+        CrmFollowUpRecordDO record = BeanUtils.toBean(createReqVO, CrmFollowUpRecordDO.class)
+                .setFollowUpTime(followUpTime);
         crmFollowUpRecordMapper.insert(record);
 
-        // 2. 更新 bizId 对应的记录
+        // 3. 更新 bizId 对应的记录（透传「实际跟进时间」，避免下游各自取当前时间把公海计时错误重置）
         if (ObjUtil.equal(CrmBizTypeEnum.CRM_CUSTOMER.getType(), record.getBizType())) { // 更新客户跟进信息
-            customerService.updateCustomerFollowUp(record.getBizId(), record.getNextTime(), record.getContent());
+            customerService.updateCustomerFollowUp(record.getBizId(), record.getFollowUpTime(), record.getNextTime(),
+                    record.getContent());
         }
         if (ObjUtil.equal(CrmBizTypeEnum.CRM_BUSINESS.getType(), record.getBizType())) { // 更新商机跟进信息
-            businessService.updateBusinessFollowUp(record.getBizId(), record.getNextTime(), record.getContent());
+            businessService.updateBusinessFollowUp(record.getBizId(), record.getFollowUpTime(), record.getNextTime(),
+                    record.getContent());
         }
         if (ObjUtil.equal(CrmBizTypeEnum.CRM_CLUE.getType(), record.getBizType())) { // 更新线索跟进信息
-            clueService.updateClueFollowUp(record.getBizId(), record.getNextTime(), record.getContent());
+            clueService.updateClueFollowUp(record.getBizId(), record.getFollowUpTime(), record.getNextTime(),
+                    record.getContent());
         }
         if (ObjUtil.equal(CrmBizTypeEnum.CRM_CONTACT.getType(), record.getBizType())) { // 更新联系人跟进信息
-            contactService.updateContactFollowUp(record.getBizId(), record.getNextTime(), record.getContent());
+            contactService.updateContactFollowUp(record.getBizId(), record.getFollowUpTime(), record.getNextTime(),
+                    record.getContent());
         }
         if (ObjUtil.equal(CrmBizTypeEnum.CRM_CONTRACT.getType(), record.getBizType())) { // 更新合同跟进信息
-            contractService.updateContractFollowUp(record.getBizId(), record.getNextTime(), record.getContent());
+            contractService.updateContractFollowUp(record.getBizId(), record.getFollowUpTime(), record.getNextTime(),
+                    record.getContent());
         }
 
-        // 3.1 更新 contactIds 对应的记录，只更新 nextTime
+        // 4.1 更新 contactIds 对应的记录，只更新 nextTime
         if (CollUtil.isNotEmpty(createReqVO.getContactIds())) {
             contactService.updateContactContactNextTime(createReqVO.getContactIds(), createReqVO.getNextTime());
         }

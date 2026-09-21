@@ -71,6 +71,12 @@ public class MesWmReturnVendorDO extends BaseDO {
      */
     private Integer status;
     /**
+     * BPM 流程实例编号
+     *
+     * 提交审批后回填，用于审批中心查看与状态回写
+     */
+    private String processInstanceId;
+    /**
      * 备注
      */
     private String remark;
