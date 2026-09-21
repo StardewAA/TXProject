@@ -254,7 +254,7 @@ onMounted(() => {
         <textarea
           v-model="prompt"
           class="box-border h-20 w-full resize-none overflow-auto rounded-md bg-transparent p-2 focus:outline-none"
-          placeholder="用一句话描述出入库，例如：采购入库 红富士苹果 20 件 到 北京仓（Enter 发送，Shift+Enter 换行）"
+          placeholder="用一句话描述出入库，例如：采购入库 岩棉板 20 件 到 金岩原辅材料库（Enter 发送，Shift+Enter 换行）"
           @focus="handlePromptFocus"
           @keydown="onKeydown"
         ></textarea>
@@ -345,7 +345,7 @@ onMounted(() => {
             用自然语言描述你要做的事，我会自动识别并生成单据
           </div>
           <div class="mt-2 text-xs text-gray-400">
-            例：采购入库 苹果 20 件 到 北京仓 · 查询北京仓库存余额
+            例：采购入库 岩棉板 20 件 到 金岩原辅材料库 · 查询金岩原辅材料库库存余额
           </div>
         </div>
 

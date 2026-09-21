@@ -33,7 +33,9 @@ import WmsHomeOrderSummaryCards from '../home/modules/wms-home-order-summary-car
 import WmsHomeOrderTrendChart from '../home/modules/wms-home-order-trend-chart.vue';
 import {
   createConversation,
+  currentConversationStorageKey,
   deriveTitle,
+  hasResolvedUser,
   loadConversations,
   newSessionId,
   saveConversations,
@@ -66,12 +68,12 @@ const welcomeTitle = computed(() => {
     : '你好，我是 WMS AI 智能助手';
 });
 
-/** 输入框下方的能力提示条 */
+/** 输入框下方的能力提示条（示例用公司主业的防腐保温材料，避免出现无关品类） */
 const QUICK_TIPS = [
-  '采购入库 苹果 20 件 到 北京仓',
-  '查询北京仓库存余额',
-  '新建商品：苹果，单位件，规格 80#',
-  '出库发货 苹果 5 件 从北京仓',
+  '采购入库 岩棉板 20 件 到 金岩原辅材料库',
+  '查询金岩原辅材料库库存余额',
+  '新建商品：岩棉板，单位立方米，规格 1200×600×50',
+  '出库发货 岩棉板 5 件 从金岩成品库',
 ];
 
 const messages = ref<AiChatMessage[]>([]);
@@ -143,6 +145,30 @@ function isPermissionDenied(text?: string): boolean {
   return /您没有.*权限|需要权限|无权访问|越权|无权限|权限不足/.test(text);
 }
 
+/**
+ * 把后端 AiItem 归一化成确认卡片/建单需要的扁平结构。
+ *
+ * 后端 AiItem 的形状是 { sku: {id, name, itemName, skuName, unit, candidates…}, quantity, price }，
+ * 而确认卡片与 /wms/ai/create-order 读的是扁平字段（name/spec/unit/itemId/skuId/candidates）。
+ * 不做这次转换，建单时会因 skuId 为空而报「未匹配到系统商品」。
+ */
+function normalizeItems(items?: WmsAiApi.ItemVO[]): WmsAiApi.ItemVO[] {
+  return (items || []).map((raw: any) => {
+    const sku = raw?.sku || {};
+    return {
+      ...raw,
+      candidates: sku.candidates || raw.candidates || [],
+      itemId: sku.itemId ?? raw.itemId,
+      name: sku.name || sku.itemName || raw.name || '',
+      price: raw.price ?? sku.price ?? undefined,
+      resolved: sku.resolved ?? raw.resolved ?? false,
+      skuId: sku.id ?? raw.skuId,
+      spec: sku.skuName || raw.spec,
+      unit: sku.unit || raw.unit,
+    } as WmsAiApi.ItemVO;
+  });
+}
+
 /** 当前会话的 sessionId（保证多轮上下文延续） */
 function sid() {
   return activeConversation.value?.sessionId || '';
@@ -158,6 +184,26 @@ function scrollToBottom() {
 function push(msg: AiChatMessage) {
   messages.value.push(msg);
   void nextTick(scrollToBottom);
+}
+
+/**
+ * 拼接 reply 与 tips，并去掉重复内容。
+ *
+ * 后端曾经把同一段说明同时写进 reply 和 tips，两个字段又都会被展示，
+ * 结果同一段话出现两遍。这里按「规范化后的文本」去重，保证只显示一次。
+ */
+function dedupeReplyAndTips(reply?: string, tips?: string[]) {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of [reply, ...(tips || [])]) {
+    if (!part) continue;
+    const key = norm(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+  return out.join('\n');
 }
 
 /** 把当前消息写回会话并持久化 */
@@ -370,20 +416,28 @@ async function send() {
       resp = await apiRecognize(payload);
     }
 
-    const aiText = [resp.reply, ...(resp.tips || [])].filter(Boolean).join('\n');
+    // reply 与 tips 依次拼接展示。
+    // 后端历史实现里存在「同一段文字既放 reply 又放 tips」的情况（会导致整段显示两遍），
+    // 这里做一次去重兜底：丢掉与 reply 完全相同、或与前一条 tip 重复的项。
+    const aiText = dedupeReplyAndTips(resp.reply, resp.tips);
     push({
       action: resp.action,
       buildable: resp.buildable,
       id: uid(),
-      items: resp.items,
-      merchant: resp.merchant,
-      merchantId: resp.merchantId,
+      items: normalizeItems(resp.items),
+      merchant: resp.merchant?.name,
+      merchantId: resp.merchant?.id,
       permission: isPermissionDenied(aiText),
       role: 'ai',
       text: aiText,
       type: resp.type,
-      warehouse: resp.warehouse,
-      warehouseId: resp.warehouseId,
+      // 后端 warehouse/sourceWarehouse/targetWarehouse 都是 { id, name, resolved } 对象，
+      // 这里摊平成确认卡片使用的「名称 + 编号」，否则 id 会丢，卡片只能让用户手选。
+      warehouse: resp.warehouse?.name || resp.sourceWarehouse?.name,
+      warehouseId: resp.warehouse?.id ?? resp.sourceWarehouse?.id,
+      // 移库专用：移入仓库（其余动作后端不返回）
+      targetWarehouse: resp.targetWarehouse?.name,
+      targetWarehouseId: resp.targetWarehouse?.id,
     });
     persist();
   } catch (error: any) {
@@ -408,7 +462,9 @@ function onKeydown(e: KeyboardEvent) {
 
 // ==================== 初始化 ====================
 
-onMounted(() => {
+/** 把某个用户的会话列表装载进来（已装载过相同 key 则不重复处理） */
+let loadedKey = '';
+function applyLoadedConversations() {
   const list = loadConversations();
   if (list.length > 0) {
     conversations.value = list;
@@ -419,8 +475,14 @@ onMounted(() => {
   } else {
     handleCreate();
   }
-  // 初次进入空会话引导态：加载首页可视化图表
   if (showHero.value) void nextTick(loadCharts);
+}
+
+onMounted(() => {
+  // watch 的 immediate 在 setup 阶段可能已经按用户 key 装载过一次，这里避免重复装载
+  if (!loadedKey) {
+    applyLoadedConversations();
+  }
   // 拉取仓库/往来企业精简列表，供待确认单据卡片选择（失败静默，不影响主流程）
   getWarehouseSimpleList()
     .then((data) => {
@@ -433,6 +495,28 @@ onMounted(() => {
     })
     .catch(() => {});
 });
+
+/**
+ * 会话按「租户 + 用户」隔离（见 useConversations.storageKey）。
+ *
+ * 刷新页面时 userInfo 只在内存、要等 /auth/get-permission-info 回来才有值；
+ * 若挂载阶段拿不到用户身份，会话会落到全局旧 key 上，切换账号后就会看到别人的历史。
+ * 因此监听存储 key：一旦能确定真实身份（或换成另一个账号），重新加载该用户自己的会话。
+ */
+watch(
+  () => currentConversationStorageKey(),
+  (key) => {
+    if (!hasResolvedUser()) {
+      return;
+    }
+    if (key === loadedKey) {
+      return;
+    }
+    loadedKey = key;
+    applyLoadedConversations();
+  },
+  { immediate: true },
+);
 
 defineExpose({ handleCreate, newSessionId });
 </script>
@@ -547,7 +631,7 @@ defineExpose({ handleCreate, newSessionId });
                   v-model="input"
                   :disabled="sending"
                   class="max-h-56 min-h-[120px] w-full resize-none rounded-t-xl border-0 px-4 py-3 text-sm outline-none"
-                  placeholder="请输入你想咨询的内容，例如：采购入库 苹果 20 件 到 北京仓"
+                  placeholder="请输入你想咨询的内容，例如：采购入库 岩棉板 20 件 到 金岩原辅材料库"
                   rows="3"
                   @blur="handleHeroBlur"
                   @focus="handleHeroFocus"
@@ -758,7 +842,7 @@ defineExpose({ handleCreate, newSessionId });
               v-model="input"
               :disabled="sending"
               class="max-h-40 min-h-[76px] w-full resize-none rounded-t-xl border-0 px-4 py-3 text-sm outline-none"
-              placeholder="请输入你想咨询的内容，例如：采购入库 苹果 20 件 到 北京仓"
+              placeholder="请输入你想咨询的内容，例如：采购入库 岩棉板 20 件 到 金岩原辅材料库"
               rows="2"
               @keydown="onKeydown"
             ></textarea>

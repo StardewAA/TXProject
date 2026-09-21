@@ -68,7 +68,7 @@ public class WmsAiMasterDataDeleteServiceImpl implements WmsAiMasterDataDeleteSe
     public WmsAiDeleteResult tryDelete(String domain, JSONObject intent) {
         String name = extractName(intent);
         if (StrUtil.isBlank(name)) {
-            return WmsAiDeleteResult.fail("请告诉我要删除的名称，例如：删除分类 休闲食品。");
+            return WmsAiDeleteResult.fail("请告诉我要删除的名称，例如：删除分类 保温材料。");
         }
         switch (StrUtil.nullToEmpty(domain).trim()) {
             case "category":
@@ -228,9 +228,24 @@ public class WmsAiMasterDataDeleteServiceImpl implements WmsAiMasterDataDeleteSe
     }
 
     private String deleteItem(String name) {
+        // 先精确匹配；找不到再按关键词模糊匹配——列表里商品名往往带规格（如「岩棉板 1200×600×50」），
+        // 用户通常只说「岩棉板」，若只允许精确匹配就会一直提示「没有找到」。
         WmsItemDO item = itemMapper.selectByName(name);
         if (item == null) {
-            return "没有找到商品「" + name + "」，请确认名称是否正确。你也可以问「有哪些商品」查看现有商品。";
+            List<WmsItemDO> candidates = itemMapper.selectList(
+                    new LambdaQueryWrapperX<WmsItemDO>()
+                            .and(w -> w.like(WmsItemDO::getName, name).or().like(WmsItemDO::getCode, name))
+                            .last("LIMIT 6"));
+            if (CollUtil.isEmpty(candidates)) {
+                return "没有找到商品「" + name + "」，请确认名称是否正确。你也可以问「有哪些商品」查看现有商品。";
+            }
+            if (candidates.size() > 1) {
+                String options = candidates.stream()
+                        .map(c -> "「" + c.getName() + "（编码 " + c.getCode() + "）」")
+                        .collect(Collectors.joining("、"));
+                return "「" + name + "」匹配到多个商品：" + options + "。请把完整名称发我，我再删除。";
+            }
+            item = candidates.get(0);
         }
         try {
             itemService.deleteItem(item.getId());
@@ -268,7 +283,7 @@ public class WmsAiMasterDataDeleteServiceImpl implements WmsAiMasterDataDeleteSe
     public String forceDelete(String domain, JSONObject intent) {
         String name = extractName(intent);
         if (StrUtil.isBlank(name)) {
-            return "请告诉我要删除的名称，例如：删除分类 休闲食品。";
+            return "请告诉我要删除的名称，例如：删除分类 保温材料。";
         }
         switch (StrUtil.nullToEmpty(domain).trim()) {
             case "category":
