@@ -20,8 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.hwpf.extractor.WordExtractor;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -53,22 +51,8 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
     private static final Pattern STEM_PATTERN = Pattern.compile("^\\s*(\\d{1,3})[.、．](.+)$");
     /** 本地兜底：选项行（A. xxx / A、xxx） */
     private static final Pattern OPTION_PATTERN = Pattern.compile("^\\s*([A-D])[.、．：:]\\s*(.+)$");
-    /** 本地兜底：答案行（选项答案 A-D） */
-    private static final Pattern ANSWER_PATTERN = Pattern.compile("^\\s*(?:答案|参考答案|正确答案)\\s*[:：]?\\s*([A-D]{1,4})\\s*$");
-    /** 本地兜底：判断题答案（对/错/正确/错误/√/×） */
-    private static final Pattern JUDGE_ANSWER_PATTERN = Pattern.compile("^\\s*(?:答案|参考答案|正确答案)?\\s*[:：]?\\s*(对|错|正确|错误|√|×|T|F|true|false)\\s*$", Pattern.CASE_INSENSITIVE);
-    /** 本地兜底：填空题下划线（___ 或 ____） */
-    private static final Pattern FILL_BLANK_PATTERN = Pattern.compile("_{2,}");
-    /** 本地兜底：填空题空括号（（ ）或 ( )） */
-    private static final Pattern FILL_BLANK_PAREN_PATTERN = Pattern.compile("[（(]\\s*[）)]");
-    /** 本地兜底：文本答案行（答案：xxx，非纯 A-D） */
-    private static final Pattern TEXT_ANSWER_PATTERN = Pattern.compile("^\\s*(?:答案|参考答案|正确答案)\\s*[:：]?\\s*(.+)$");
-    /** 本地兜底：简答题答案行（答：xxx） */
-    private static final Pattern SHORT_ANSWER_LINE_PATTERN = Pattern.compile("^答\\s*[:：]?\\s*(.+)$");
-    /** 本地兜底：章节标题行（一、填空题 / 二、简答题） */
-    private static final Pattern CHAPTER_PATTERN = Pattern.compile("^\\s*[一二三四五六七八九十]+[、.．]\\s*(.+)$");
-    /** 本地兜底：文档中红色加粗标记的答案（【答案：xxx】） */
-    private static final Pattern ANSWER_MARK_PATTERN = Pattern.compile("【答案：([^】]+)】");
+    /** 本地兜底：答案行 */
+    private static final Pattern ANSWER_PATTERN = Pattern.compile("(?:答案|参考答案|正确答案)\\s*[:：]?\\s*([A-D]{1,4})");
 
     @Resource
     private AiModelProperties aiProperties;
@@ -170,40 +154,15 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         if ("docx".equals(ext) || "wps".equals(ext)) {
             try (InputStream in = new ByteArrayInputStream(bytes);
                  XWPFDocument doc = new XWPFDocument(in)) {
-                return extractDocxTextWithColor(doc);
+                try (XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
+                    return extractor.getText();
+                }
             } catch (Exception ignored) {
                 // 老版 .wps 为 OLE2 结构，回退 HWPF 解析
                 return extractDocText(bytes);
             }
         }
         return extractDocText(bytes);
-    }
-
-    /** 提取 docx 文本，红色加粗部分标记为答案（【答案：xxx】） */
-    private String extractDocxTextWithColor(XWPFDocument doc) {
-        StringBuilder sb = new StringBuilder();
-        for (XWPFParagraph paragraph : doc.getParagraphs()) {
-            StringBuilder paraSb = new StringBuilder();
-            for (XWPFRun run : paragraph.getRuns()) {
-                String text = run.text();
-                if (text == null || text.isEmpty()) {
-                    continue;
-                }
-                // 红色加粗 → 答案部分
-                String color = run.getColor();
-                boolean isAnswer = "C00000".equalsIgnoreCase(color) && run.isBold();
-                if (isAnswer) {
-                    paraSb.append("【答案：").append(text).append("】");
-                } else {
-                    paraSb.append(text);
-                }
-            }
-            String paraText = paraSb.toString().trim();
-            if (!paraText.isEmpty()) {
-                sb.append(paraText).append("\n");
-            }
-        }
-        return sb.toString();
     }
 
     private String extractDocText(byte[] bytes) throws Exception {
@@ -331,12 +290,7 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         String[] lines = text.split("\\r?\\n");
         AiQuestionItemVO current = null;
         StringBuilder stemBuffer = new StringBuilder();
-        StringBuilder answerBuffer = new StringBuilder(); // 收集多行答案（含表格形式）
         List<AiQuestionItemVO.OptionItem> options = new ArrayList<>();
-        boolean hasTextAnswer = false;
-        boolean hasJudgeAnswer = false;
-        boolean answerStarted = false; // 是否已开始收集答案（遇到"答："后为true）
-        int chapterQtype = 0; // 当前章节题型（0=未设置，按题干特征判断）
         for (String raw : lines) {
             String line = raw.trim();
             if (line.isEmpty()) {
@@ -345,81 +299,11 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
             Matcher stemMatcher = STEM_PATTERN.matcher(line);
             Matcher optionMatcher = OPTION_PATTERN.matcher(line);
             Matcher answerMatcher = ANSWER_PATTERN.matcher(line);
-            Matcher judgeAnswerMatcher = JUDGE_ANSWER_PATTERN.matcher(line);
-            Matcher textAnswerMatcher = TEXT_ANSWER_PATTERN.matcher(line);
-            Matcher shortAnswerMatcher = SHORT_ANSWER_LINE_PATTERN.matcher(line);
-            Matcher chapterMatcher = CHAPTER_PATTERN.matcher(line);
-            // 0. 章节标题行（一、填空题 / 二、简答题），优先识别
-            if (chapterMatcher.matches()) {
-                // 先将收集的答案设置到当前题目
-                if (current != null && answerBuffer.length() > 0) {
-                    current.setAnswer(answerBuffer.toString().trim());
-                    hasTextAnswer = true;
-                }
-                // 先 flush 当前题目（使用旧的 chapterQtype），避免章节切换时上一题被误判
-                flushQuestion(items, current, stemBuffer, options, hasTextAnswer, hasJudgeAnswer, chapterQtype);
-                current = null;
-                stemBuffer = new StringBuilder();
-                answerBuffer = new StringBuilder();
-                options = new ArrayList<>();
-                hasTextAnswer = false;
-                hasJudgeAnswer = false;
-                answerStarted = false;
-                // 再更新章节题型
-                String title = chapterMatcher.group(1);
-                if (title.contains("填空")) {
-                    chapterQtype = 6;
-                } else if (title.contains("案例")) {
-                    chapterQtype = 5;
-                } else if (title.contains("实操") || title.contains("问答")) {
-                    chapterQtype = 4;
-                } else if (title.contains("简答")) {
-                    chapterQtype = 7;
-                } else if (title.contains("多选")) {
-                    chapterQtype = 2;
-                } else if (title.contains("单选")) {
-                    chapterQtype = 1;
-                } else if (title.contains("判断")) {
-                    chapterQtype = 3;
-                } else {
-                    chapterQtype = 0;
-                }
-                continue;
-            }
-            // 1. 选项答案行（答案：A / AB）
-            if (answerMatcher.matches() && current != null) {
+            if (answerMatcher.find() && current != null) {
                 current.setAnswer(answerMatcher.group(1));
                 markCorrect(options, current.getAnswer());
                 continue;
             }
-            // 2. 判断题答案行（答案：对 / 错 / √ / ×）
-            if (judgeAnswerMatcher.matches() && current != null && options.isEmpty()) {
-                String ans = normalizeJudgeAnswer(judgeAnswerMatcher.group(1));
-                current.setAnswer(ans);
-                hasJudgeAnswer = true;
-                continue;
-            }
-            // 3. 简答题答案行（答：xxx），支持答案为空后接多行/表格形式
-            if (shortAnswerMatcher.matches() && current != null && options.isEmpty()) {
-                String ans = shortAnswerMatcher.group(1).trim();
-                answerStarted = true;
-                if (StrUtil.isNotBlank(ans)) {
-                    answerBuffer.append(ans);
-                    current.setAnswer(ans);
-                    hasTextAnswer = true;
-                }
-                continue;
-            }
-            // 4. 文本答案行（答案：xxx，非纯 A-D）
-            if (textAnswerMatcher.matches() && current != null) {
-                String ans = textAnswerMatcher.group(1).trim();
-                if (StrUtil.isNotBlank(ans) && !ans.matches("^[A-D]{1,4}$")) {
-                    current.setAnswer(ans);
-                    hasTextAnswer = true;
-                }
-                continue;
-            }
-            // 5. 选项行（A. xxx）
             if (optionMatcher.matches()) {
                 AiQuestionItemVO.OptionItem option = new AiQuestionItemVO.OptionItem();
                 option.setKey(optionMatcher.group(1));
@@ -428,52 +312,27 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
                 options.add(option);
                 continue;
             }
-            // 6. 题干行（1. xxx）
             if (stemMatcher.matches()) {
-                // 先将收集的多行答案设置到当前题目
-                if (current != null && answerBuffer.length() > 0) {
-                    current.setAnswer(answerBuffer.toString().trim());
-                    hasTextAnswer = true;
-                }
-                flushQuestion(items, current, stemBuffer, options, hasTextAnswer, hasJudgeAnswer, chapterQtype);
+                // 结算上一题
+                flushQuestion(items, current, stemBuffer, options);
                 current = new AiQuestionItemVO();
                 current.setQtype(1);
                 current.setDifficulty(2);
                 stemBuffer = new StringBuilder(stemMatcher.group(2).trim());
-                answerBuffer = new StringBuilder();
                 options = new ArrayList<>();
-                hasTextAnswer = false;
-                hasJudgeAnswer = false;
-                answerStarted = false;
                 continue;
             }
-            // 7. 续行：答案收集模式下追加到答案，否则追加到题干
-            if (current != null && options.isEmpty() && !hasJudgeAnswer) {
-                if (answerStarted) {
-                    // 已开始收集答案（遇到过"答："），后续行追加到答案
-                    if (answerBuffer.length() > 0) {
-                        answerBuffer.append("\n");
-                    }
-                    answerBuffer.append(line);
-                    hasTextAnswer = true;
-                } else if (!hasTextAnswer) {
-                    // 未开始收集答案且无文本答案，追加到题干
-                    stemBuffer.append(line);
-                }
+            // 题干续行
+            if (current != null && options.isEmpty()) {
+                stemBuffer.append(line);
             }
         }
-        // 最后一题：将收集的多行答案设置到当前题目
-        if (current != null && answerBuffer.length() > 0) {
-            current.setAnswer(answerBuffer.toString().trim());
-            hasTextAnswer = true;
-        }
-        flushQuestion(items, current, stemBuffer, options, hasTextAnswer, hasJudgeAnswer, chapterQtype);
+        flushQuestion(items, current, stemBuffer, options);
         return items;
     }
 
     private void flushQuestion(List<AiQuestionItemVO> items, AiQuestionItemVO current,
-                               StringBuilder stemBuffer, List<AiQuestionItemVO.OptionItem> options,
-                               boolean hasTextAnswer, boolean hasJudgeAnswer, int chapterQtype) {
+                               StringBuilder stemBuffer, List<AiQuestionItemVO.OptionItem> options) {
         if (current == null) {
             return;
         }
@@ -481,90 +340,16 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         if (StrUtil.isBlank(stem)) {
             return;
         }
-        // 处理文档中红色加粗标记的答案（【答案：xxx】）
-        Matcher answerMarkMatcher = ANSWER_MARK_PATTERN.matcher(stem);
-        List<String> markedAnswers = new ArrayList<>();
-        while (answerMarkMatcher.find()) {
-            markedAnswers.add(answerMarkMatcher.group(1).trim());
-        }
-        if (!markedAnswers.isEmpty()) {
-            // 将题干中的【答案：xxx】替换为下划线
-            stem = ANSWER_MARK_PATTERN.matcher(stem).replaceAll("____");
-            // 如果当前答案为空，用标记的答案填充（多个空用|分隔）
-            if (StrUtil.isBlank(current.getAnswer())) {
-                current.setAnswer(String.join("|", markedAnswers));
-            }
-        }
         current.setStem(stem);
         if (!options.isEmpty()) {
-            // 有选项 → 单选或多选（优先级最高，不受章节影响）
             current.setOptions(options);
+            // 未识别到答案时默认第一个选项，交由人工核对
             if (StrUtil.isBlank(current.getAnswer())) {
                 current.setAnswer(options.get(0).getKey());
                 markCorrect(options, current.getAnswer());
             }
-            // 答案含多个字母 → 多选题
-            if (current.getAnswer() != null && current.getAnswer().length() > 1
-                    && current.getAnswer().matches("^[A-D]{2,4}$")) {
-                current.setQtype(2);
-            } else {
-                current.setQtype(1);
-            }
-        } else if (chapterQtype > 0) {
-            // 有章节题型 → 优先按章节判断（支持无填空标记的填空题、无答案前缀的简答题）
-            current.setQtype(chapterQtype);
-            if (chapterQtype == 6 || chapterQtype == 7) {
-                current.setAnswer(cleanTextAnswer(current.getAnswer()));
-            } else if (chapterQtype == 3) {
-                current.setAnswer(normalizeJudgeAnswer(current.getAnswer()));
-            }
-        } else if (hasJudgeAnswer) {
-            // 判断题答案 → 判断题
-            current.setQtype(3);
-            current.setAnswer(normalizeJudgeAnswer(current.getAnswer()));
-        } else if (FILL_BLANK_PATTERN.matcher(stem).find() || FILL_BLANK_PAREN_PATTERN.matcher(stem).find()) {
-            // 题干含下划线或空括号 → 填空题
-            current.setQtype(6);
-            current.setAnswer(cleanTextAnswer(current.getAnswer()));
-        } else if (hasTextAnswer || StrUtil.isNotBlank(current.getAnswer())) {
-            // 有文本答案 → 简答题
-            current.setQtype(7);
-            current.setAnswer(cleanTextAnswer(current.getAnswer()));
-        } else {
-            // 无选项无答案，默认单选（交由人工核对）
-            current.setQtype(1);
-        }
-        // 填空题答案为空时，用题干作为答案（兼容完整陈述句形式的填空题）
-        if (current.getQtype() != null && current.getQtype() == 6 && StrUtil.isBlank(current.getAnswer())) {
-            current.setAnswer(stem);
         }
         items.add(current);
-    }
-
-    /** 归一化判断题答案：统一为「对」或「错」 */
-    private String normalizeJudgeAnswer(String answer) {
-        if (StrUtil.isBlank(answer)) {
-            return "对";
-        }
-        String a = answer.trim();
-        if ("对".equals(a) || "正确".equals(a) || "√".equals(a) || "T".equalsIgnoreCase(a) || "true".equalsIgnoreCase(a)) {
-            return "对";
-        }
-        return "错";
-    }
-
-    /** 清理文本答案：去掉「答案：」「案：」「答：」等前缀（兼容docx解析时拆行的情况） */
-    private String cleanTextAnswer(String answer) {
-        if (StrUtil.isBlank(answer)) {
-            return answer;
-        }
-        String result = answer.trim();
-        // 按长度从长到短依次去掉前缀
-        result = result.replaceAll("^(参考答案|正确答案)\\s*[:：]?\\s*", "");
-        result = result.replaceAll("^答案\\s*[:：]?\\s*", "");
-        result = result.replaceAll("^案\\s*[:：]\\s*", "");
-        result = result.replaceAll("^答\\s*[:：]\\s*", "");
-        return result.trim();
     }
 
     private void markCorrect(List<AiQuestionItemVO.OptionItem> options, String answer) {

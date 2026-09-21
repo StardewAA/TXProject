@@ -375,14 +375,6 @@ public class CrmCustomerController {
         return success(true);
     }
 
-    @PostMapping("/auto-put-pool")
-    @Operation(summary = "触发一次客户自动掉入公海",
-            description = "按公海规则（未成交天数 / 未跟进天数）把符合条件的客户放入公海；与定时任务同一套逻辑，便于立即执行与验收")
-    @PreAuthorize("@ss.hasPermission('crm:customer:update')")
-    public CommonResult<Integer> autoPutCustomerPool() {
-        return success(customerService.autoPutCustomerPool());
-    }
-
     @PutMapping("/receive")
     @Operation(summary = "领取公海客户")
     @Parameter(name = "ids", description = "编号数组", required = true, example = "1,2,3")

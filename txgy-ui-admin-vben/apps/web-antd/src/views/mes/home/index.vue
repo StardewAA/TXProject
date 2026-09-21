@@ -20,8 +20,7 @@ import FeedbackUserAnalysis from './modules/feedback-user-analysis.vue';
 import KpiCards from './modules/kpi-cards.vue';
 // 【合并 20260915】远程新增设备状态分布报表
 import MachineryStatusChart from './modules/machinery-status-chart.vue';
-// 【AI 智能助手】带业务意图/录入工具/图片识别的面板（替代远程基础版 ai-assistant.vue）
-import MesAiChatPanel from './modules/MesAiChatPanel.vue';
+// 【AI 智能助手】面板已上移到全局布局（layouts/basic.vue）：路由切换不再销毁重建
 import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
@@ -120,7 +119,6 @@ onMounted(() => {
       </Col>
     </Row>
 
-    <!-- 右侧固定悬浮 AI 对话面板（权限拦截在后端完成） -->
-    <MesAiChatPanel />
+    <!-- AI 智能助手面板已上移到全局布局（layouts/basic.vue），此处不再重复挂载 -->
   </Page>
 </template>

@@ -60,12 +60,6 @@
             <artifactId>txgy-spring-boot-starter-mybatis</artifactId>
         </dependency>
 
-        <!-- Excel 导出（报表中心一键导出） -->
-        <dependency>
-            <groupId>cn.iocoder.cloud</groupId>
-            <artifactId>txgy-spring-boot-starter-excel</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-redis</artifactId>

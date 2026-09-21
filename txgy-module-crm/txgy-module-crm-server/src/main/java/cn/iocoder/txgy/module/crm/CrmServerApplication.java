@@ -2,7 +2,6 @@ package cn.iocoder.txgy.module.crm;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 项目的启动类
@@ -14,7 +13,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @author OPENLAB BS
  */
 @SpringBootApplication
-@EnableScheduling // 客户公海自动流入等内部定时任务需要（详见 CrmCustomerAutoPutPoolScheduler）
 public class CrmServerApplication {
 
     public static void main(String[] args) {

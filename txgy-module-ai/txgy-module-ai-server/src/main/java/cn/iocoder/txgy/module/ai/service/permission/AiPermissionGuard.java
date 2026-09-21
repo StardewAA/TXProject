@@ -335,9 +335,24 @@ public class AiPermissionGuard {
         if (allowedTools.contains("mes_qc_query")) {
             allowedTools.add("mes_qc_ipqc_create");
         }
+        // 基础档案（物料/客户/供应商/仓储库区）：持有任一 MES 业务域查询权限即放行，
+        // 基础档案不区分业务域（物料同时被工单/报工/质检引用，无法归属单一域）
+        if (!allowedTools.isEmpty()) {
+            allowedTools.add("mes_material_create");
+            allowedTools.add("mes_client_create");
+            allowedTools.add("mes_vendor_create");
+            allowedTools.add("mes_storage_area_create");
+            allowedTools.add("mes_workshop_create");
+            allowedTools.add("mes_process_create");
+            allowedTools.add("mes_team_create");
+            allowedTools.add("mes_workstation_create");
+            allowedTools.add("mes_unit_measure_create");
+            allowedTools.add("mes_item_type_create");
+            allowedTools.add("mes_machinery_create");
+            allowedTools.add("mes_machinery_type_create");
+        }
         // 智能分配：任务域或排班域已授权即可使用（负载查询为只读，分配需先看推荐）
-        if (allowedTools.contains("mes_task_query") || allowedTools.contains("mes_team_query")) {
-            allowedTools.add("mes_team_load_query");
+        if (allowedTools.contains("mes_task_query") || allowedTools.contains("mes_team_query")) {            allowedTools.add("mes_team_load_query");
             allowedTools.add("mes_task_assign");
         }
         // 【新增查询域】远程新增的 RPC 查询工具，跟随语义最近的业务域授权放行

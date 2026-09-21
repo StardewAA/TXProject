@@ -59,11 +59,10 @@ public interface CrmContractService {
      * 更新合同相关的更进信息
      *
      * @param id                 合同编号
-     * @param contactTime        实际跟进时间（本次实际联系客户的时间）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateContractFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
+    void updateContractFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 发起合同审批流程

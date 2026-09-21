@@ -105,8 +105,4 @@ public interface DictTypeConstants {
     // ========== 工具管理 (TM) ==========
     String MES_TM_TOOL_STATUS = "mes_tm_tool_status"; // MES 工具状态
     String MES_TM_MAINTEN_TYPE = "mes_tm_mainten_type"; // MES 保养维护类型
-    String MES_TM_TOOL_ISSUE_STATUS = "mes_tm_tool_issue_status"; // MES 工具领用单状态
-    String MES_TM_TOOL_RETURN_STATUS = "mes_tm_tool_return_status"; // MES 工具归还单状态
-    String MES_TM_TOOL_REPAIR_STATUS = "mes_tm_tool_repair_status"; // MES 工具维修单状态
-    String MES_TM_TOOL_SCRAP_STATUS = "mes_tm_tool_scrap_status"; // MES 工具报废单状态
 }

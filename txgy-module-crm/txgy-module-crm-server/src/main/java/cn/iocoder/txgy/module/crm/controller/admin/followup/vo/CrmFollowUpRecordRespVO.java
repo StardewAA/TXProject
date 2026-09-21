@@ -36,9 +36,6 @@ public class CrmFollowUpRecordRespVO {
     @Schema(description = "下次联系时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime nextTime;
 
-    @Schema(description = "实际跟进时间（本次实际联系客户的时间）", requiredMode = Schema.RequiredMode.REQUIRED)
-    private LocalDateTime followUpTime;
-
     @Schema(description = "关联的商机编号数组")
     private List<Long> businessIds;
     @Schema(description = "关联的商机数组")

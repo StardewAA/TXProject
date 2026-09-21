@@ -17,6 +17,9 @@ public class BpmTaskPageReqVO extends PageParam {
     @Schema(description = "流程任务名", example = "OPENLAB BS")
     private String name;
 
+    @Schema(description = "业务任务单号", example = "RK-20260920-001")
+    private String orderNo;
+
     @Schema(description = "流程分类", example = "1")
     private String category;
 

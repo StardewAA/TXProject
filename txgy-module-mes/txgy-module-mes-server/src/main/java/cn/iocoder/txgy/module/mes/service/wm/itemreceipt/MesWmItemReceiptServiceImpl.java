@@ -6,9 +6,6 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.common.util.object.ObjectUtils;
-import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.txgy.module.bpm.api.task.BpmProcessInstanceApi;
-import cn.iocoder.txgy.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.itemreceipt.vo.MesWmItemReceiptPageReqVO;
 import cn.iocoder.txgy.module.mes.controller.admin.wm.itemreceipt.vo.MesWmItemReceiptSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.arrivalnotice.MesWmArrivalNoticeDO;
@@ -34,7 +31,6 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -47,17 +43,8 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
 @Validated
 public class MesWmItemReceiptServiceImpl implements MesWmItemReceiptService {
 
-    /**
-     * BPM 流程定义 Key：采购入库单审批
-     *
-     * 与 bpm-server 的 WmItemReceiptStatusListener.getProcessDefinitionKey 保持一致
-     */
-    public static final String BPM_PROCESS_DEFINITION_KEY = "mes-wm-item-receipt-approval";
-
     @Resource
     private MesWmItemReceiptMapper itemReceiptMapper;
-    @Resource
-    private BpmProcessInstanceApi bpmProcessInstanceApi;
 
     @Resource
     private MesWmItemReceiptLineService itemReceiptLineService;
@@ -147,54 +134,16 @@ public class MesWmItemReceiptServiceImpl implements MesWmItemReceiptService {
     @Transactional(rollbackFor = Exception.class)
     public void submitItemReceipt(Long id) {
         // 校验存在 + 草稿状态
-        MesWmItemReceiptDO receipt = validateItemReceiptExistsAndDraft(id);
+        validateItemReceiptExistsAndDraft(id);
         // 校验至少有一条行
         List<MesWmItemReceiptLineDO> lines = itemReceiptLineService.getItemReceiptLineListByReceiptId(id);
         if (CollUtil.isEmpty(lines)) {
             throw exception(WM_ITEM_RECEIPT_NO_LINE);
         }
 
-        // 提交（草稿 → BPM审批中），审批结果由 bpm-server 的 WmItemReceiptStatusListener
-        // 转发回 MES，经 mes_wm_receipt_approval_task 异步消费：
-        // 通过 → approveItemReceipt 进入"待上架"；驳回 → rejectItemReceipt 退回草稿
-        itemReceiptMapper.updateById(new MesWmItemReceiptDO()
-                .setId(id).setStatus(MesWmItemReceiptStatusEnum.BPM_APPROVING.getStatus()));
-
-        // 发起 BPM 审批流程（参照报工审核 MesProFeedbackServiceImpl#submitFeedback 模板）
-        Map<String, Object> variables = Map.of(
-                "receiptId", String.valueOf(id),
-                "receiptCode", receipt.getCode() != null ? receipt.getCode() : "",
-                "purchaseOrderCode", receipt.getPurchaseOrderCode() != null ? receipt.getPurchaseOrderCode() : "");
-        String processInstanceId = bpmProcessInstanceApi.createProcessInstance(
-                        SecurityFrameworkUtils.getLoginUserId(),
-                        new BpmProcessInstanceCreateReqDTO()
-                                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
-                                .setBusinessKey(String.valueOf(id))
-                                .setVariables(variables)).getCheckedData();
-        itemReceiptMapper.updateById(new MesWmItemReceiptDO()
-                .setId(id).setProcessInstanceId(processInstanceId));
-    }
-
-    @Override
-    public void approveItemReceipt(Long id) {
-        // 审批通过（BPM审批中 → 待上架），后续上架/入库流程不变
-        MesWmItemReceiptDO receipt = validateItemReceiptExists(id);
-        if (ObjUtil.notEqual(MesWmItemReceiptStatusEnum.BPM_APPROVING.getStatus(), receipt.getStatus())) {
-            throw exception(WM_ITEM_RECEIPT_STATUS_ERROR);
-        }
+        // 提交（草稿 → 待上架）
         itemReceiptMapper.updateById(new MesWmItemReceiptDO()
                 .setId(id).setStatus(MesWmItemReceiptStatusEnum.APPROVING.getStatus()));
-    }
-
-    @Override
-    public void rejectItemReceipt(Long id) {
-        // 审批驳回（BPM审批中 → 草稿），可修改后重新提交（重新发起新流程实例）
-        MesWmItemReceiptDO receipt = validateItemReceiptExists(id);
-        if (ObjUtil.notEqual(MesWmItemReceiptStatusEnum.BPM_APPROVING.getStatus(), receipt.getStatus())) {
-            throw exception(WM_ITEM_RECEIPT_STATUS_ERROR);
-        }
-        itemReceiptMapper.updateById(new MesWmItemReceiptDO()
-                .setId(id).setStatus(MesWmItemReceiptStatusEnum.PREPARE.getStatus()));
     }
 
     @Override

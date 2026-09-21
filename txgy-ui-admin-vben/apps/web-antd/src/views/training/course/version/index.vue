@@ -13,21 +13,6 @@ defineOptions({ name: 'TrainingCourseVersion' });
 const statusText = (status?: number) =>
   COURSE_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? '-';
 
-/** 后端日期字段为毫秒时间戳，统一格式化展示（兼容字符串） */
-function formatDateTime(value?: null | number | string) {
-  if (value === null || value === undefined || value === '') {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
 const courseOptions = ref<{ label: string; value: number }[]>([]);
 const selectedCourseId = ref<number | undefined>();
 
@@ -104,7 +89,7 @@ onMounted(loadCourseOptions);
         { title: '课程编码', dataIndex: 'code', key: 'code', width: 150 },
         { title: '状态', key: 'status', width: 110, align: 'center' },
         { title: '是否当前版本', key: 'isCurrent', width: 130, align: 'center' },
-        { title: '更新时间', key: 'updateTime', width: 180 },
+        { title: '更新时间', dataIndex: 'updateTime', key: 'updateTime', width: 180 },
       ]"
     >
       <template #bodyCell="{ column, record }">
@@ -118,18 +103,12 @@ onMounted(loadCourseOptions);
             {{ record.isCurrent ? '当前版本' : '历史版本' }}
           </Tag>
         </template>
-        <template v-else-if="column.key === 'updateTime'">
-          {{ formatDateTime(record.updateTime) }}
-        </template>
       </template>
     </Table>
 
     <div class="mt-2 text-xs text-gray-400">
       按方案文档 25：课程更新生成新版本记录，旧版本保留，历史学员学习记录继续关联旧版本，
-      新版本用于后续新的培训班选用。<br />
-      版本联动：新版本生成后为草稿状态，需在「课程管理」列表提交审核、经「审核管理」通过并上架；
-      课程列表默认展示当前版本（可切换「全部版本 / 仅历史版本」查看新旧版本），
-      审核管理的待审核队列同样显示课程版本号。
+      新版本用于后续新的培训班选用。
     </div>
   </div>
 </template>

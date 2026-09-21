@@ -9,7 +9,6 @@ export const defaultSummary: MesHomeApi.Summary = {
   machineryProducing: 0,
   machineryStop: 0,
   machineryTotal: 0,
-  milestoneAlertCount: 0,
   repairActiveCount: 0,
   todayOutput: 0,
   todayQualifiedQuantity: 0,

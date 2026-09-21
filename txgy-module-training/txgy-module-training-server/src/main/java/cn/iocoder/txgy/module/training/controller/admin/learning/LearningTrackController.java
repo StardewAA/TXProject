@@ -41,12 +41,10 @@ public class LearningTrackController {
     }
 
     @GetMapping("/stats")
-    @Operation(summary = "获得学习数据统计（按课程汇总；与培训管理班级学习进度打通）")
-    @Parameter(name = "classId", description = "培训班 ID（可选，为空时统计全部在班学员的任务）", example = "1")
+    @Operation(summary = "获得学习数据统计（按课程汇总）")
     @PreAuthorize("@ss.hasPermission('training:learning-track:query')")
-    public CommonResult<List<LearningStatRespVO>> getLearnStats(
-            @RequestParam(value = "classId", required = false) Long classId) {
-        return success(adminLearningService.getLearnStats(classId));
+    public CommonResult<List<LearningStatRespVO>> getLearnStats() {
+        return success(adminLearningService.getLearnStats());
     }
 
 }

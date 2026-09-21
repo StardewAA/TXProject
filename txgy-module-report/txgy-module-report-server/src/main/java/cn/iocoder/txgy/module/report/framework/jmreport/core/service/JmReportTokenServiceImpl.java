@@ -57,14 +57,6 @@ public class JmReportTokenServiceImpl implements JmReportTokenServiceI {
         // 设置到 txgy 系统的 token
         HttpHeaders headers = new HttpHeaders();
         headers.add(securityProperties.getTokenHeader(), String.format(AUTHORIZATION_FORMAT, token));
-
-        // 【补充】一并透传租户头。
-        // 原因：平台租户上下文由 tenant-id Header 决定；积木发起 API 数据集调用时若不带该头，
-        // 被调用的取数接口拿不到租户，超管也会查不到业务数据（或跨租户风险）。
-        LoginUser loginUser = SecurityFrameworkUtils.getLoginUser();
-        if (loginUser != null && loginUser.getTenantId() != null) {
-            headers.add(WebFrameworkUtils.HEADER_TENANT_ID, String.valueOf(loginUser.getTenantId()));
-        }
         return headers;
     }
 

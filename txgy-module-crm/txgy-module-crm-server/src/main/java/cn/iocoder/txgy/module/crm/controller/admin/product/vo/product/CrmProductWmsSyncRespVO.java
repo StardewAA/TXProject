@@ -34,9 +34,6 @@ public class CrmProductWmsSyncRespVO {
     @Schema(description = "同步失败数量", example = "0")
     private Integer failed = 0;
 
-    @Schema(description = "因 WMS 中已删除/停用而被置为「下架」的产品数", example = "2")
-    private Integer offlined = 0;
-
     @Schema(description = "明细信息，最多 20 条")
     private List<String> messages;
 

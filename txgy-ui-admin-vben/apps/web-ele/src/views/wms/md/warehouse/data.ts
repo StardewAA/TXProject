@@ -3,8 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { h } from 'vue';
 
-import { CommonStatusEnum, DICT_TYPE, generateWmsCode } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
+import { generateWmsCode } from '@vben/constants';
 
 import { ElButton } from 'element-plus';
 
@@ -52,47 +51,6 @@ export function useFormSchema(formApi?: VbenFormApi): VbenFormSchema[] {
           { default: () => '生成' },
         );
       },
-    },
-    {
-      fieldName: 'warehouseType',
-      label: '仓库类型',
-      component: 'Select',
-      componentProps: {
-        options: [
-          { label: '原料仓', value: 'RAW_MATERIAL' },
-          { label: '成品仓', value: 'FINISHED_GOODS' },
-        ],
-        placeholder: '请选择仓库类型',
-      },
-      rules: z.string().default('RAW_MATERIAL'),
-    },
-    {
-      fieldName: 'status',
-      label: '仓库状态',
-      component: 'Select',
-      componentProps: {
-        options: getDictOptions(DICT_TYPE.COMMON_STATUS, 'number'),
-        placeholder: '请选择仓库状态',
-      },
-      rules: z.number().default(CommonStatusEnum.ENABLE),
-    },
-    {
-      fieldName: 'organizationName',
-      label: '所属组织/部门',
-      component: 'Input',
-      componentProps: { maxLength: 100, placeholder: '请输入所属组织/部门' },
-    },
-    {
-      fieldName: 'city',
-      label: '所在城市',
-      component: 'Input',
-      componentProps: { maxLength: 50, placeholder: '请输入所在城市' },
-    },
-    {
-      fieldName: 'address',
-      label: '仓库地址',
-      component: 'Input',
-      componentProps: { maxLength: 255, placeholder: '请输入仓库地址' },
     },
     {
       fieldName: 'sort',
@@ -154,35 +112,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'code',
       title: '仓库编号',
       minWidth: 140,
-    },
-    {
-      field: 'warehouseType',
-      title: '仓库类型',
-      minWidth: 110,
-      formatter: ({ cellValue }) =>
-        cellValue === 'FINISHED_GOODS' ? '成品仓' : cellValue === 'RAW_MATERIAL' ? '原料仓' : cellValue || '-',
-    },
-    {
-      field: 'status',
-      title: '仓库状态',
-      minWidth: 110,
-      cellRender: { name: 'CellDict', props: { type: DICT_TYPE.COMMON_STATUS } },
-    },
-    {
-      field: 'organizationName',
-      title: '所属组织/部门',
-      minWidth: 150,
-    },
-    {
-      field: 'city',
-      title: '所在城市',
-      minWidth: 110,
-    },
-    {
-      field: 'address',
-      title: '仓库地址',
-      minWidth: 220,
-      showOverflow: 'tooltip',
     },
     {
       field: 'remark',
