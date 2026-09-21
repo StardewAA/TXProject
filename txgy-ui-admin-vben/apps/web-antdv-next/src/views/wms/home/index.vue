@@ -53,7 +53,7 @@ onMounted(() => {
       <Card :styles="{ body: { padding: '16px' } }">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div class="text-xl font-semibold">WMS 首页</div>
+            <div class="text-xl font-semibold">仓储首页</div>
             <div class="text-sm text-muted-foreground">
               单据工作台 / 库存概览
             </div>

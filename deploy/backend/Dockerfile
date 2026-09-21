@@ -11,13 +11,8 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 
 ARG MODULE_PATH
 
-RUN set -eux; \
-    MAIN_JAR=$(find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1); \
-    echo "picked jar: ${MAIN_JAR}"; \
-    ls -l "${MAIN_JAR}"; \
-    cp "${MAIN_JAR}" /app.jar; \
-    ls -l /app.jar; \
-    test -s /app.jar
+RUN find "${MODULE_PATH}/target" -maxdepth 1 -type f -name '*.jar' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
+    && test -f /app.jar
 
 FROM eclipse-temurin:25-jre
 

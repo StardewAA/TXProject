@@ -26,7 +26,7 @@ public class WmsAiMasterDataStatusServiceImpl implements WmsAiMasterDataStatusSe
         String name = trim(intent == null ? null : intent.getStr("name"));
         if (StrUtil.isBlank(name)) {
             return "请告诉我要" + (enable ? "启用" : "停用") + "的分类名称，例如："
-                    + (enable ? "启用分类 休闲食品" : "停用分类 休闲食品") + "。";
+                    + (enable ? "启用分类 保温材料" : "停用分类 保温材料") + "。";
         }
         WmsItemCategoryDO category = itemCategoryMapper.selectOne(
                 new LambdaQueryWrapper<WmsItemCategoryDO>()

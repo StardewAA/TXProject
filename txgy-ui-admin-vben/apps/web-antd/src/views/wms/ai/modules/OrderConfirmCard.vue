@@ -46,9 +46,27 @@ const SHIPMENT_TYPE_OPTIONS = [
   { value: 202, label: '生产出库' },
 ];
 
+/** 动作 → 中文名（IN 入库 / OUT 出库 / MOVE 移库 / CHECK 盘库） */
 const actionText = computed(
   () =>
-    ({ IN: '入库', MOVE: '移库', OUT: '出库' })[props.msg.action || ''] || '',
+    ({ CHECK: '盘库', IN: '入库', MOVE: '移库', OUT: '出库' })[
+      props.msg.action || ''
+    ] || '单据',
+);
+
+/** 是否为「可移出/移入」的移库：需要两个仓库 */
+const isMove = computed(() => props.msg.action === 'MOVE');
+
+/** 入库/出库才有单据子类型下拉 */
+const showTypeSelect = computed(
+  () => props.msg.action === 'IN' || props.msg.action === 'OUT',
+);
+
+/** 仓库标题：按动作区分语义，避免用户填错方向 */
+const warehouseLabel = computed(() =>
+  ({ CHECK: '盘库仓库', IN: '目标仓库', OUT: '来源仓库' })[
+    props.msg.action || ''
+  ] || '仓库',
 );
 
 const typeOptions = computed(() =>
@@ -115,7 +133,17 @@ const totalAmount = computed(() =>
 /** 还缺什么才能建单 */
 const missingList = computed(() => {
   const list: string[] = [];
-  if (!props.msg.warehouseId) list.push('仓库');
+  if (!props.msg.warehouseId) {
+    list.push(warehouseLabel.value);
+  }
+  // 移库必须同时指定移出仓与移入仓，且不能相同
+  if (isMove.value) {
+    if (!props.msg.targetWarehouseId) {
+      list.push('移入仓库');
+    } else if (props.msg.targetWarehouseId === props.msg.warehouseId) {
+      list.push('移入仓库不能与移出仓库相同');
+    }
+  }
   for (const it of props.msg.items || []) {
     if (!it.resolved && (it.candidates?.length || 0) > 0) {
       list.push(`「${it.name}」待选规格`);
@@ -155,6 +183,8 @@ async function handleConfirm() {
       sessionId: props.sessionId,
       type: props.msg.type,
       warehouseId: props.msg.warehouseId,
+      // 移库专用：移入仓库（其余动作后端忽略）
+      targetWarehouseId: isMove.value ? props.msg.targetWarehouseId : undefined,
     });
     props.msg.orderNo = resp.orderNo;
     props.msg.orderId = resp.orderId;
@@ -174,7 +204,7 @@ async function handleConfirm() {
     <div class="mb-3 flex flex-wrap items-center gap-2">
       <Tag color="blue" class="!mb-0">待确认{{ actionText }}单</Tag>
       <Select
-        v-if="msg.action === 'IN' || msg.action === 'OUT'"
+        v-if="showTypeSelect"
         v-model:value="msg.type"
         :options="typeOptions"
         placeholder="单据类型"
@@ -186,15 +216,31 @@ async function handleConfirm() {
       </span>
     </div>
 
-    <!-- 仓库 -->
+    <!-- 仓库：移库需要「移出仓 + 移入仓」两个；其余动作一个 -->
     <div class="mb-2 flex items-center gap-2">
       <span class="w-20 flex-none text-xs text-gray-500">
-        {{ msg.action === 'MOVE' ? '仓库' : '目标仓库' }}
+        {{ isMove ? '移出仓库' : warehouseLabel }}
       </span>
       <Select
         v-model:value="msg.warehouseId"
         :options="warehouseOptions"
         :placeholder="msg.warehouse ? `识别到：${msg.warehouse}，请确认` : '请选择仓库'"
+        show-search
+        option-filter-prop="label"
+        size="small"
+        style="flex: 1"
+      />
+    </div>
+    <div v-if="isMove" class="mb-2 flex items-center gap-2">
+      <span class="w-20 flex-none text-xs text-gray-500">移入仓库</span>
+      <Select
+        v-model:value="msg.targetWarehouseId"
+        :options="warehouseOptions"
+        :placeholder="
+          msg.targetWarehouse
+            ? `识别到：${msg.targetWarehouse}，请确认`
+            : '请选择移入仓库'
+        "
         show-search
         option-filter-prop="label"
         size="small"

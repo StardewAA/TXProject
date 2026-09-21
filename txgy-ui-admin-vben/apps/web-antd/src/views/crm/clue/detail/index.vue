@@ -97,15 +97,7 @@ async function handleTransform(): Promise<boolean | undefined> {
 
 /** 加载数据 */
 onMounted(() => {
-  // 路由参数兜底：手改地址、旧书签或标签页残留时会出现 /crm/clue/detail/id 这类非法值，
-  // Number(...) 得到 NaN 后会把 ?id=NaN 直接发给后端（报「请求参数类型错误」），这里提示并退回列表
-  const id = Number(route.params.id);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    message.warning('参数错误，线索不能为空！');
-    handleBack();
-    return;
-  }
-  clueId.value = id;
+  clueId.value = Number(route.params.id);
   getClueDetail();
 });
 </script>

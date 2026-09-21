@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { subsetIconCollection } from '../apps/web-antd/src/utils/iconify-subset.mjs';
 
 const APP_ROOT = fileURLToPath(new URL('../apps/web-antd', import.meta.url));
 const MONOREPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -45,6 +46,242 @@ const COLLECTIONS = [
   'simple-icons',
   'tabler',
 ];
+
+// 后端 system_menu 动态下发的常用图标不会出现在前端源码中，必须显式纳入首屏离线集合。
+// 否则首次渲染依赖运行时兜底请求，离线或请求竞态时会出现菜单无图标。
+const BACKEND_MENU_ICONS = {
+  "ep": [
+    "add-location",
+    "aim",
+    "alarm-clock",
+    "apple",
+    "avatar",
+    "baseball",
+    "basketball",
+    "bell",
+    "bicycle",
+    "bottom",
+    "bowl",
+    "box",
+    "burger",
+    "calendar",
+    "caret-right",
+    "cellphone",
+    "chat-dot-round",
+    "chat-dot-square",
+    "chat-line-round",
+    "chat-round",
+    "chat-square",
+    "check",
+    "checked",
+    "chicken",
+    "circle-check-filled",
+    "clock",
+    "coffee",
+    "coffee-cup",
+    "cold-drink",
+    "collection",
+    "collection-tag",
+    "comment",
+    "compass",
+    "connection",
+    "coordinate",
+    "copy-document",
+    "cpu",
+    "credit-card",
+    "data-analysis",
+    "data-board",
+    "data-line",
+    "discount",
+    "dish-dot",
+    "document",
+    "document-checked",
+    "document-copy",
+    "download",
+    "edit",
+    "edit-pen",
+    "eleme",
+    "expand",
+    "files",
+    "finished",
+    "folder",
+    "folder-remove",
+    "goblet-square-full",
+    "goods",
+    "grape",
+    "guide",
+    "home-filled",
+    "house",
+    "key",
+    "list",
+    "magic-stick",
+    "management",
+    "memo",
+    "menu",
+    "message",
+    "message-box",
+    "minus",
+    "money",
+    "monitor",
+    "mute-notification",
+    "notebook",
+    "office-building",
+    "operation",
+    "opportunity",
+    "phone",
+    "picture",
+    "picture-rounded",
+    "pie-chart",
+    "place",
+    "position",
+    "postcard",
+    "present",
+    "price-tag",
+    "promotion",
+    "refresh-left",
+    "refrigerator",
+    "scale-to-original",
+    "scissor",
+    "sell",
+    "set-up",
+    "setting",
+    "shop",
+    "shopping-cart",
+    "sold-out",
+    "sort",
+    "sunny",
+    "takeaway-box",
+    "timer",
+    "tools",
+    "trend-charts",
+    "upload",
+    "upload-filled",
+    "user",
+    "user-filled",
+    "wallet",
+    "warning",
+    "warning-filled",
+    "zoom-in",
+    "zoom-out"
+  ],
+  "fa-solid": [
+    "abacus",
+    "apple-alt",
+    "blog",
+    "bone",
+    "book",
+    "book-reader",
+    "border-all",
+    "box",
+    "charging-station",
+    "credit-card",
+    "disease",
+    "dragon",
+    "file-signature",
+    "gopuram",
+    "grin-stars",
+    "house-user",
+    "mail-bulk",
+    "notes-medical",
+    "project-diagram",
+    "republican",
+    "swimming-pool",
+    "tasks",
+    "tools",
+    "truck",
+    "user-alt",
+    "user-tie",
+    "window-restore"
+  ],
+  "fa": [
+    "address-book-o",
+    "address-card",
+    "apple",
+    "archive",
+    "area-chart",
+    "assistive-listening-systems",
+    "asterisk",
+    "bandcamp",
+    "barcode",
+    "bars",
+    "battery-3",
+    "bookmark-o",
+    "bus",
+    "buysellads",
+    "cc-paypal",
+    "certificate",
+    "connectdevelop",
+    "credit-card",
+    "dashcube",
+    "dedent",
+    "delicious",
+    "edit",
+    "eye",
+    "fighter-jet",
+    "file-image-o",
+    "first-order",
+    "group",
+    "hand-grab-o",
+    "hdd-o",
+    "key",
+    "leaf",
+    "leanpub",
+    "level-up",
+    "map",
+    "map-marker",
+    "medium",
+    "money",
+    "music",
+    "object-ungroup",
+    "pagelines",
+    "paypal",
+    "power-off",
+    "product-hunt",
+    "qrcode",
+    "reddit-square",
+    "registered",
+    "road",
+    "rocket",
+    "sellsy",
+    "sitemap",
+    "slack",
+    "square",
+    "stack-exchange",
+    "superpowers",
+    "tag",
+    "tasks",
+    "transgender-alt",
+    "tree",
+    "universal-access",
+    "user",
+    "user-secret",
+    "window-restore",
+    "wpexplorer",
+    "wpforms",
+    "y-combinator"
+  ],
+  "fa6-solid": [
+    "brush"
+  ],
+  "foundation": [
+    "page-edit"
+  ],
+  "lucide": [
+    "badge-check",
+    "clipboard-check",
+    "copy-check",
+    "file-user",
+    "history",
+    "list-todo"
+  ],
+  "simple-icons": [
+    "civicrm",
+    "erpnext"
+  ],
+  "tabler": [
+    "ai"
+  ]
+};
 
 const SCAN_EXT = new Set(['.vue', '.ts', '.tsx', '.js', '.jsx']);
 
@@ -96,31 +333,23 @@ function collectUsedIcons(files) {
 function main() {
   const files = SCAN_DIRS.flatMap((dir) => walk(dir));
   const used = collectUsedIcons(files);
+  for (const [prefix, names] of Object.entries(BACKEND_MENU_ICONS)) {
+    for (const name of names) {
+      used.get(prefix)?.add(name);
+    }
+  }
 
   const collections = [];
   const stats = [];
   for (const prefix of COLLECTIONS) {
     const names = [...(used.get(prefix) ?? [])].sort();
     const raw = JSON.parse(fs.readFileSync(resolveCollectionJson(prefix), 'utf8'));
-    const icons = {};
-    let missing = 0;
-    for (const name of names) {
-      if (raw.icons?.[name]) {
-        icons[name] = raw.icons[name];
-      } else if (raw.aliases?.[name]) {
-        // 别名图标依赖父图标，需一并保留，否则渲染时找不到图形
-        const alias = raw.aliases[name];
-        icons[name] = alias;
-        if (alias?.parent && raw.icons[alias.parent]) {
-          icons[alias.parent] = raw.icons[alias.parent];
-        }
-      } else {
-        missing += 1;
-      }
-    }
+    const { icons, aliases } = subsetIconCollection(raw, names);
+    const missing = names.filter((name) => !icons[name] && !aliases[name]).length;
     collections.push({
       prefix,
       icons,
+      aliases,
       lastModified: raw.lastModified ?? 0,
       height: raw.height ?? 24,
       width: raw.width ?? 24,

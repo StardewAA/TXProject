@@ -16,8 +16,43 @@
 
 import type { WmsAiApi } from '#/api/wms/ai';
 
-const STORAGE_KEY = 'wmsAiConversations';
+import { useAccessStore, useUserStore } from '@vben/stores';
+
+/** 旧版全局 key（未按用户隔离）；仅用于把老数据迁移到当前用户名下 */
+const LEGACY_STORAGE_KEY = 'wmsAiConversations';
+const STORAGE_KEY_PREFIX = 'wmsAiConversations';
 const MAX_CONVERSATIONS = 100;
+
+/**
+ * 当前用户的存储 key。
+ *
+ * 同一浏览器可能被多个账号登录过，若共用一个 key，切换用户后会看到别人的历史对话
+ * （既是隐私问题，也会串上下文）。因此按「租户 + 用户」隔离：
+ *   wmsAiConversations:t{tenantId}:u{userId}
+ * 取不到用户信息时回落到旧 key，保证未登录/信息未就绪时不至于读写失败。
+ */
+function storageKey(): string {
+  try {
+    const userStore = useUserStore();
+    // 后端 /system/auth/get-permission-info 返回的用户主键字段是 id；
+    // 这里同时兼容 userId，避免不同版本字段名不一致时退化成全局共享。
+    const info = userStore.userInfo as Record<string, any> | undefined;
+    const userId = info?.id ?? info?.userId;
+    if (userId === undefined || userId === null || userId === '') {
+      return LEGACY_STORAGE_KEY;
+    }
+    // 租户号存在 accessStore（登录时写入），userInfo 里没有；取不到就留空。
+    let tenantId: number | string = '';
+    try {
+      tenantId = useAccessStore().tenantId ?? '';
+    } catch {
+      tenantId = '';
+    }
+    return `${STORAGE_KEY_PREFIX}:t${tenantId}:u${userId}`;
+  } catch {
+    return LEGACY_STORAGE_KEY;
+  }
+}
 
 export interface AiAttachment {
   name: string;
@@ -34,10 +69,14 @@ export interface AiChatMessage {
   action?: string;
   /** 单据子类型：100 生产入库/101 采购入库/102 退货入库/103 归还入库；200 退货出库/201 销售出库/202 生产出库 */
   type?: number;
-  /** 识别到的仓库名称 */
+  /** 识别到的仓库（入库=目标仓、出库=来源仓、移库=移出仓、盘库=盘库仓） */
   warehouse?: string;
-  /** 目标仓库 id（待确认卡片里可修改） */
+  /** 仓库 id（待确认卡片里可修改） */
   warehouseId?: number;
+  /** 移库识别到的「移入仓库」名称（仅 MOVE） */
+  targetWarehouse?: string;
+  /** 移库「移入仓库」id（待确认卡片里可修改，仅 MOVE） */
+  targetWarehouseId?: number;
   /** 识别到的供应商/客户名称 */
   merchant?: string;
   /** 供应商/客户 id（待确认卡片里可修改） */
@@ -81,7 +120,38 @@ function safeParse(raw: null | string): AiConversation[] {
 }
 
 export function loadConversations(): AiConversation[] {
-  return safeParse(localStorage.getItem(STORAGE_KEY));
+  const key = storageKey();
+  const current = localStorage.getItem(key);
+  if (current !== null) {
+    return safeParse(current);
+  }
+  // 首次按用户隔离后，若该用户还没有自己的记录，而旧版全局 key 里有数据，
+  // 则把旧数据迁移到当前用户名下（只迁移一次，随后删除旧 key，避免下一个用户又看到）。
+  if (key !== LEGACY_STORAGE_KEY) {
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy !== null) {
+      localStorage.setItem(key, legacy);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      return safeParse(legacy);
+    }
+  }
+  return [];
+}
+
+/**
+ * 当前登录用户的会话存储 key（响应式调用）。
+ *
+ * 页面刷新后 userInfo 只在内存、需要等 /auth/get-permission-info 回来才有值，
+ * 期间 storageKey() 会回落到全局旧 key。调用方可 watch 本函数的返回值，
+ * 等用户身份就绪（或切换账号）后重新加载会话，避免读到别人的历史。
+ */
+export function currentConversationStorageKey(): string {
+  return storageKey();
+}
+
+/** 是否已能确定当前用户身份（取不到时期读写的是全局 key，不应据此判定归属） */
+export function hasResolvedUser(): boolean {
+  return storageKey() !== LEGACY_STORAGE_KEY;
 }
 
 export function saveConversations(list: AiConversation[]) {
@@ -101,10 +171,11 @@ export function saveConversations(list: AiConversation[]) {
 
   // 写入失败（典型为 QuotaExceededError 超配额）时，按「砍半会话数」逐级降级重试，
   // 优先保住最新的会话，而不是整体放弃导致最新记录静默丢失
+  const key = storageKey();
   let keep = Math.min(list.length, MAX_CONVERSATIONS);
   while (keep >= 0) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(slim(keep)));
+      localStorage.setItem(key, JSON.stringify(slim(keep)));
       return;
     } catch (error) {
       console.warn(`[wms-ai] 保存历史对话失败（本次尝试保留 ${keep} 条）`, error);

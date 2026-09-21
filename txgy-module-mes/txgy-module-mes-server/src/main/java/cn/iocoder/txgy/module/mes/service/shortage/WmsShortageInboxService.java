@@ -49,7 +49,7 @@ public class WmsShortageInboxService {
     private void persist(long tenant,String event,long version,String identity,String payload,String status) {
         var rows=jdbc.queryForList("SELECT event_version,identity_key FROM mes_wms_shortage_inbox WHERE tenant_id=? AND event_id=? FOR UPDATE",tenant,event);
         if(rows.isEmpty()) {
-            jdbc.update("INSERT INTO mes_wms_shortage_inbox(tenant_id,event_id,event_version,identity_key,payload,shortage_status,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",tenant,event,version,identity,payload,status);
+            jdbc.update("INSERT INTO mes_wms_shortage_inbox(tenant_id,event_id,event_version,identity_key,payload,shortage_status,confirm_status,updated_at) VALUES(?,?,?,?,?,?,'AWAITING_CONFIRM',CURRENT_TIMESTAMP)",tenant,event,version,identity,payload,status);
         } else {
             var current=rows.getFirst();
             if(!identity.equals(current.get("identity_key"))) conflict("eventId reused for another business identity");
@@ -86,6 +86,24 @@ public class WmsShortageInboxService {
             int count=jdbc.update("UPDATE mes_wms_shortage_read SET event_version=CASE WHEN event_version<? THEN ? ELSE event_version END WHERE tenant_id=? AND event_id=? AND user_id=?",version,version,tenant,event,user);
             if(count==0) jdbc.update("INSERT INTO mes_wms_shortage_read(tenant_id,event_id,user_id,event_version) VALUES(?,?,?,?)",tenant,event,user,version);
         });
+    }
+    /** 取收件箱原始报文（确认时用于建生产工单） */
+    public Map<String,Object> getPayload(long tenant, String event) {
+        var rows=jdbc.queryForList("SELECT payload FROM mes_wms_shortage_inbox WHERE tenant_id=? AND event_id=? FOR UPDATE",tenant,event);
+        if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"message not found");
+        return JSONUtil.parseObj((String)rows.getFirst().get("payload"));
+    }
+    /** MES 确认协作单 G：记录生产工单号（设计 6.3.5/6.3.6） */
+    public void confirm(long tenant, String event, long version, String workOrderNo) {
+        int n=jdbc.update("UPDATE mes_wms_shortage_inbox SET confirm_status='CONFIRMED',mes_work_order_no=?,updated_at=CURRENT_TIMESTAMP "
+                + "WHERE tenant_id=? AND event_id=? AND event_version=?",workOrderNo,tenant,event,version);
+        if(n==0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"message not found or version mismatch");
+    }
+    /** MES 驳回协作单 G：记录原因（设计 6.3.5，驳回必须填原因） */
+    public void reject(long tenant, String event, long version, String reason) {
+        int n=jdbc.update("UPDATE mes_wms_shortage_inbox SET confirm_status='REJECTED',reject_reason=?,updated_at=CURRENT_TIMESTAMP "
+                + "WHERE tenant_id=? AND event_id=? AND event_version=?",reason,tenant,event,version);
+        if(n==0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"message not found or version mismatch");
     }
     private static Map<String,Object> validate(Map<String,Object> input) {
         if(input==null) {bad("payload required");}

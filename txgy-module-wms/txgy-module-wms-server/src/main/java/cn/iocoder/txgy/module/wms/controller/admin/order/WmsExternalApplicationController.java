@@ -25,6 +25,11 @@ public class WmsExternalApplicationController {
     public CommonResult<WmsIntegrationAcceptedRespDTO> erpShipment(@Valid @RequestBody WmsOrderRequestDTO q) {
         return api.createSaleShipment(q);
     }
+    @PostMapping("/mall/shipment")
+    @PreAuthorize("@ss.hasPermission('wms:shipment-order:create')")
+    public CommonResult<WmsIntegrationAcceptedRespDTO> mallShipment(@Valid @RequestBody WmsOrderRequestDTO q) {
+        return api.createMallShipment(q);
+    }
     @PostMapping("/mes/receipt")
     @PreAuthorize("@ss.hasPermission('wms:receipt-order:create')")
     public CommonResult<WmsIntegrationAcceptedRespDTO> mesReceipt(@Valid @RequestBody WmsOrderRequestDTO q) {
@@ -40,5 +45,10 @@ public class WmsExternalApplicationController {
     public CommonResult<WmsIntegrationRequestRespDTO> execution(@RequestParam String sourceOrderNo,
                                                               @RequestParam String orderType) {
         return api.getOrderExecution(TenantContextHolder.getRequiredTenantId(), sourceOrderNo, orderType);
+    }
+    @GetMapping("/mall/execution")
+    @PreAuthorize("@ss.hasPermission('wms:shipment-order:query')")
+    public CommonResult<WmsIntegrationRequestRespDTO> mallExecution(@RequestParam String sourceOrderNo) {
+        return api.getMallOrderExecution(TenantContextHolder.getRequiredTenantId(), sourceOrderNo);
     }
 }

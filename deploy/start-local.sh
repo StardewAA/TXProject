@@ -42,3 +42,15 @@ echo "    管理后台： http://localhost:5173"
 echo "    后端接口： http://localhost:48081/doc.html"
 echo ""
 echo "提示：MySQL 首次启动会从 deploy/mysql/standalone 初始化，约需 1-2 分钟；可观察 txgy-server 日志确认就绪。"
+
+# 确保 WMS AI 助手就绪：新库 init 会自动装好；已有库补跑一次（脚本幂等，无副作用）
+echo ""
+echo "==> 检查 WMS AI 助手配置..."
+ENABLE_SCRIPT="$(cd "$(dirname "$0")" && pwd)/scripts/enable-wms-ai.js"
+if command -v node >/dev/null 2>&1 && [ -f "$ENABLE_SCRIPT" ]; then
+  node "$ENABLE_SCRIPT" --wait 180 || \
+    echo "WARN: WMS AI 配置检查失败，详见 docs/wms-ai-deployment.md"
+else
+  echo "WARN: 未找到 Node.js 或脚本，已跳过。可稍后手动执行："
+  echo "      node deploy/scripts/enable-wms-ai.js"
+fi

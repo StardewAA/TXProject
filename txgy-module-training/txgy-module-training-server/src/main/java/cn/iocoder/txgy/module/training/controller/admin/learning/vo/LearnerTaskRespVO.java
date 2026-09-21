@@ -12,12 +12,6 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(callSuper = true)
 public class LearnerTaskRespVO extends LearnerTaskDO {
 
-    @Schema(description = "学员姓名", example = "张三")
-    private String userName;
-
-    @Schema(description = "学员所属部门", example = "防腐涂装车间")
-    private String deptName;
-
     @Schema(description = "课程标题", example = "管道防腐保温")
     private String courseTitle;
 

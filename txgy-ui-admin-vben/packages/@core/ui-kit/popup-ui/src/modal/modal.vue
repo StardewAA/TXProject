@@ -241,7 +241,7 @@ function handleClosed() {
       :append-to="getAppendTo"
       :class="
         cn(
-          'vben-modal inset-x-0 top-[10vh] mx-auto flex w-130 flex-col p-0',
+          'inset-x-0 top-[10vh] mx-auto flex w-130 flex-col p-0',
           shouldFullscreen ? 'rounded-none' : 'rounded-(--radius)',
           {
             'border border-border': bordered,
@@ -279,7 +279,7 @@ function handleClosed() {
         ref="headerRef"
         :class="
           cn(
-            'vben-modal-header px-5 py-4',
+            'px-5 py-4',
             {
               'border-b': bordered,
               hidden: !header,
@@ -313,7 +313,7 @@ function handleClosed() {
       <div
         ref="wrapperRef"
         :class="
-          cn('vben-modal-body relative min-h-40 flex-1 overflow-y-auto p-3', contentClass, {
+          cn('relative min-h-40 flex-1 overflow-y-auto p-3', contentClass, {
             'pointer-events-none': showLoading || submitting,
           })
         "
@@ -335,7 +335,7 @@ function handleClosed() {
         v-if="showFooter"
         :class="
           cn(
-            'vben-modal-footer flex-row items-center justify-end p-2',
+            'flex-row items-center justify-end p-2',
             {
               'border-t': bordered,
             },

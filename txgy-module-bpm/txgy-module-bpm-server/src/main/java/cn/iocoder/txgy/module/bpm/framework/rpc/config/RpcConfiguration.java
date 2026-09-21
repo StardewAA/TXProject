@@ -7,9 +7,10 @@ import cn.iocoder.txgy.module.bpm.api.event.ErpPurchaseOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ErpSaleOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesFeedbackStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.MesSaleOrderStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.MesWorkOrderStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.OutsourceIssueStatusListener;
-import cn.iocoder.txgy.module.bpm.api.event.ReturnVendorStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.ProductSalesStatusListener;
+import cn.iocoder.txgy.module.bpm.api.event.ReturnVendorStatusListener;
 import cn.iocoder.txgy.module.bpm.api.event.WmItemReceiptStatusListener;
 import cn.iocoder.txgy.module.system.api.dept.DeptApi;
 import cn.iocoder.txgy.module.system.api.dept.PostApi;
@@ -17,7 +18,6 @@ import cn.iocoder.txgy.module.system.api.dict.DictDataApi;
 import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
 import cn.iocoder.txgy.module.system.api.permission.RoleApi;
-import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsSendApi;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.wms.api.warehouse.WmsWarehousePersonnelApi;
@@ -91,6 +91,22 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "mesFeedbackStatusListener")
     public MesFeedbackStatusListener mesFeedbackStatusListener() {
         return new MesFeedbackStatusListener();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "mesWorkOrderStatusListener")
+    public MesWorkOrderStatusListener mesWorkOrderStatusListener() {
+        return new MesWorkOrderStatusListener();
+    }
+
+    /**
+     * 采购订单审批结果转发：缺失该 Bean 会导致「流程审批通过后采购订单状态仍停留在审批中」。
+     * 该 Listener 既无 @Component，此前也未在此注册，属于遗漏。
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "erpPurchaseOrderStatusListener")
+    public ErpPurchaseOrderStatusListener erpPurchaseOrderStatusListener() {
+        return new ErpPurchaseOrderStatusListener();
     }
 
 }

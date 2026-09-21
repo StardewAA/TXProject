@@ -20,7 +20,7 @@ public class WmsShipmentNotificationScheduler {
     public void deliverPending() {
         // This read-only global scan obtains only routing keys. All business reads and writes below are tenant-scoped.
         var pending = jdbcTemplate.query("SELECT tenant_id, id FROM wms_shipment_order WHERE deleted = 0 "
-                        + "AND source_module = 'ERP' AND execution_status = 1 AND (simulation = 0 OR simulation IS NULL) "
+                        + "AND source_module IN ('ERP','MALL') AND execution_status = 1 AND (simulation = 0 OR simulation IS NULL) "
                         + "AND (notification_status IS NULL OR notification_status = '' OR notification_status IN ('PENDING','FAILED')) "
                         + "AND (next_notification_time IS NULL OR next_notification_time <= CURRENT_TIMESTAMP)",
                 (rs, index) -> new Long[]{rs.getLong("tenant_id"), rs.getLong("id")});
