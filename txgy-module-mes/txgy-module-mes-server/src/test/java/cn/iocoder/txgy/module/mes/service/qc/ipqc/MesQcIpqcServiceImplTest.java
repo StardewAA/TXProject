@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.mes.service.qc.ipqc;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.txgy.module.mes.controller.admin.qc.ipqc.vo.MesQcIpqcSaveReqVO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.md.workstation.MesMdWorkstationDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.feedback.MesProFeedbackDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.pro.route.MesProRouteProcessDO;
@@ -14,8 +15,10 @@ import cn.iocoder.txgy.module.mes.dal.dataobject.qc.template.MesQcTemplateItemDO
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productproduce.MesWmProductProduceLineDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.qc.ipqc.MesQcIpqcMapper;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
+import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
 import cn.iocoder.txgy.module.mes.service.pro.feedback.MesProFeedbackService;
@@ -81,6 +84,90 @@ public class MesQcIpqcServiceImplTest extends BaseDbUnitTest {
     private MesQcIndicatorResultService indicatorResultService;
     @MockitoBean
     private MesWmProductProduceLineService productProduceLineService;
+    @MockitoBean
+    private MesMdAutoCodeRecordService autoCodeRecordService;
+
+    @Test
+    public void testGenerateIpqcDraft_success() {
+        // 准备数据：报工单 + 待检产出行
+        MesProFeedbackDO feedback = MesProFeedbackDO.builder()
+                .id(randomLongId()).code("FB-001").workOrderId(randomLongId())
+                .taskId(randomLongId()).workstationId(randomLongId()).processId(randomLongId())
+                .build();
+        MesWmProductProduceLineDO line = MesWmProductProduceLineDO.builder()
+                .id(randomLongId()).itemId(randomLongId()).quantity(BigDecimal.valueOf(50))
+                .qualityStatus(MesWmQualityStatusEnum.PENDING.getStatus())
+                .build();
+        // mock：工单、模板、物料、自动编码
+        Long templateId = randomLongId();
+        Long productId = randomLongId();
+        when(workOrderService.getWorkOrder(feedback.getWorkOrderId()))
+                .thenReturn(MesProWorkOrderDO.builder().id(feedback.getWorkOrderId()).productId(productId).build());
+        when(templateItemService.getRequiredTemplateByItemIdAndType(eq(productId), anyInt()))
+                .thenReturn(MesQcTemplateItemDO.builder().templateId(templateId).build());
+        when(itemService.getItem(productId)).thenReturn(MesMdItemDO.builder().name("预制保温管-08").build());
+        when(autoCodeRecordService.generateAutoCode(MesMdAutoCodeRuleCodeEnum.QC_IPQC_CODE.getCode()))
+                .thenReturn("IPQC-AUTO-001");
+
+        // 调用
+        Long ipqcId = ipqcService.generateIpqcDraft(feedback, line);
+
+        // 断言 1：生成成功且字段正确
+        assertNotNull(ipqcId);
+        MesQcIpqcDO ipqc = ipqcMapper.selectById(ipqcId);
+        assertEquals(MesQcStatusEnum.DRAFT.getStatus(), ipqc.getStatus());
+        assertEquals(templateId, ipqc.getTemplateId());
+        assertEquals("预制保温管-08 过程检验", ipqc.getName());
+        assertEquals(feedback.getWorkOrderId(), ipqc.getWorkOrderId());
+        assertEquals(0, BigDecimal.valueOf(50).compareTo(ipqc.getCheckQuantity()));
+        // 断言 2：检验行按模板自动生成
+        verify(ipqcLineService).createLinesFromTemplate(eq(ipqcId), eq(templateId));
+    }
+
+    @Test
+    public void testGenerateIpqcDraft_idempotent() {
+        // 准备数据：同一来源产出行已存在 IPQC
+        Long sourceDocId = randomLongId();
+        Long sourceLineId = randomLongId();
+        MesQcIpqcDO existing = randomPojo(MesQcIpqcDO.class, o -> {
+            o.setStatus(MesQcStatusEnum.DRAFT.getStatus());
+            o.setSourceDocType(MesBizTypeConstants.PRO_FEEDBACK);
+            o.setSourceDocId(sourceDocId);
+            o.setSourceLineId(sourceLineId);
+        });
+        ipqcMapper.insert(existing);
+        MesProFeedbackDO feedback = MesProFeedbackDO.builder().id(sourceDocId).build();
+        MesWmProductProduceLineDO line = MesWmProductProduceLineDO.builder()
+                .id(sourceLineId).quantity(BigDecimal.TEN).build();
+
+        // 调用：再次自动生成
+        Long ipqcId = ipqcService.generateIpqcDraft(feedback, line);
+
+        // 断言：返回已有编号，不重复创建
+        assertEquals(existing.getId(), ipqcId);
+        verify(ipqcLineService, never()).createLinesFromTemplate(anyLong(), anyLong());
+    }
+
+    @Test
+    public void testGenerateIpqcDraft_noTemplate() {
+        // 准备数据：报工单 + 产出行，产品未配置 IPQC 模板
+        Long workOrderId = randomLongId();
+        Long productId = randomLongId();
+        MesProFeedbackDO feedback = MesProFeedbackDO.builder()
+                .id(randomLongId()).code("FB-002").workOrderId(workOrderId).build();
+        MesWmProductProduceLineDO line = MesWmProductProduceLineDO.builder()
+                .id(randomLongId()).quantity(BigDecimal.TEN).build();
+        when(workOrderService.getWorkOrder(workOrderId))
+                .thenReturn(MesProWorkOrderDO.builder().id(workOrderId).productId(productId).build());
+        when(templateItemService.getRequiredTemplateByItemIdAndType(eq(productId), anyInt()))
+                .thenThrow(new ServiceException(cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.QC_IPQC_NO_TEMPLATE));
+
+        // 调用：返回 null，不抛异常
+        Long ipqcId = ipqcService.generateIpqcDraft(feedback, line);
+
+        assertNull(ipqcId);
+        verify(ipqcLineService, never()).createLinesFromTemplate(anyLong(), anyLong());
+    }
 
     @Test
     public void testFinishIpqc_writeBack_feedback() {

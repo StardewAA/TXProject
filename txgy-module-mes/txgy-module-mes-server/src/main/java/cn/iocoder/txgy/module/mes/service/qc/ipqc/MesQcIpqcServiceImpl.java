@@ -2,7 +2,9 @@ package cn.iocoder.txgy.module.mes.service.qc.ipqc;
 
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productproduce.MesWmProductProduceLineDO;
 import cn.iocoder.txgy.module.mes.enums.wm.MesWmQualityStatusEnum;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -21,6 +23,8 @@ import cn.iocoder.txgy.module.mes.enums.qc.MesQcDefectLevelEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcTypeEnum;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
+import cn.iocoder.txgy.module.mes.enums.md.autocode.MesMdAutoCodeRuleCodeEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.workstation.MesMdWorkstationService;
 import cn.iocoder.txgy.module.mes.service.pro.feedback.MesProFeedbackService;
@@ -34,8 +38,10 @@ import cn.iocoder.txgy.module.mes.service.qc.template.MesQcTemplateItemService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceLineService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -54,14 +60,21 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class MesQcIpqcServiceImpl implements MesQcIpqcService {
 
+    /**
+     * IPQC 检验类型：自制工序检验（字典 mes_ipqc_type）
+     */
+    private static final Integer IPQC_TYPE_SELF_PROCESS = 1;
 
     @Resource
     private MesQcIpqcMapper ipqcMapper;
 
     @Resource
     private MesQcTemplateItemService templateItemService;
+    @Resource
+    private MesMdAutoCodeRecordService autoCodeRecordService;
     @Resource
     private MesQcIpqcLineService ipqcLineService;
     @Resource
@@ -105,11 +118,19 @@ public class MesQcIpqcServiceImpl implements MesQcIpqcService {
         MesMdWorkstationDO workstation = validateIpqcSaveData(createReqVO);
         // 1.2 校验工单存在
         MesProWorkOrderDO workOrder = workOrderService.validateWorkOrderExists(createReqVO.getWorkOrderId());
-        // 1.3 根据产品 + 检验类型自动匹配模板
+        // 1.3 幂等校验：同一来源产出行已存在草稿检验单时，禁止重复创建
+        if (createReqVO.getSourceDocType() != null) {
+            MesQcIpqcDO existing = ipqcMapper.selectFirstDraftBySourceDoc(
+                    createReqVO.getSourceDocType(), createReqVO.getSourceDocId(), createReqVO.getSourceLineId());
+            if (existing != null) {
+                throw exception(QC_IPQC_DRAFT_EXISTS);
+            }
+        }
+        // 1.4 根据产品 + 检验类型自动匹配模板
         MesQcTemplateItemDO templateItem = templateItemService.getRequiredTemplateByItemIdAndType(
                 workOrder.getProductId(), MesQcTypeEnum.IPQC.getType());
         Long templateId = templateItem.getTemplateId();
-        // 1.4 获取来源单据编号
+        // 1.5 获取来源单据编号
         String sourceDocCode = validateAndGetSourceDocCode(
                 createReqVO.getSourceDocType(), createReqVO.getSourceDocId(), createReqVO.getSourceLineId());
 
@@ -124,6 +145,61 @@ public class MesQcIpqcServiceImpl implements MesQcIpqcService {
 
         // 3. 从模板指标自动生成检验行
         ipqcLineService.createLinesFromTemplate(ipqc.getId(), templateId);
+        return ipqc.getId();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public Long generateIpqcDraft(MesProFeedbackDO feedback, MesWmProductProduceLineDO line) {
+        // 1. 幂等：同一来源产出行已存在 IPQC 时，直接返回已有编号
+        MesQcIpqcDO existing = ipqcMapper.selectFirstBySourceDoc(
+                MesBizTypeConstants.PRO_FEEDBACK, feedback.getId(), line.getId());
+        if (existing != null) {
+            return existing.getId();
+        }
+        // 2. 工单 → 产品 → 匹配 IPQC 检验模板：未配置时跳过自动建单（不阻断报工审批流程）
+        MesProWorkOrderDO workOrder = workOrderService.getWorkOrder(feedback.getWorkOrderId());
+        if (workOrder == null) {
+            log.warn("[generateIpqcDraft][报工单({}) 关联的工单({}) 不存在，跳过自动建单]",
+                    feedback.getId(), feedback.getWorkOrderId());
+            return null;
+        }
+        MesQcTemplateItemDO templateItem;
+        try {
+            templateItem = templateItemService.getRequiredTemplateByItemIdAndType(
+                    workOrder.getProductId(), MesQcTypeEnum.IPQC.getType());
+        } catch (ServiceException e) {
+            log.warn("[generateIpqcDraft][产品({}) 未配置 IPQC 检验模板，跳过自动建单，报工单({})]",
+                    workOrder.getProductId(), feedback.getId(), e);
+            return null;
+        }
+        // 3. 物料名称（用于检验单名称，查不到时降级为报工单编号）
+        MesMdItemDO item = itemService.getItem(workOrder.getProductId());
+        String name = (item != null && item.getName() != null ? item.getName() : feedback.getCode()) + " 过程检验";
+        // 4. 生成检验单编号
+        String code = autoCodeRecordService.generateAutoCode(MesMdAutoCodeRuleCodeEnum.QC_IPQC_CODE.getCode());
+        // 5. 插入草稿单：数量先按"全部合格"占位，完成前由检验员据实修改
+        MesQcIpqcDO ipqc = MesQcIpqcDO.builder()
+                .code(code).name(name)
+                .type(IPQC_TYPE_SELF_PROCESS)
+                .templateId(templateItem.getTemplateId())
+                .sourceDocType(MesBizTypeConstants.PRO_FEEDBACK)
+                .sourceDocId(feedback.getId()).sourceLineId(line.getId())
+                .sourceDocCode(feedback.getCode())
+                .workOrderId(feedback.getWorkOrderId()).taskId(feedback.getTaskId())
+                .workstationId(feedback.getWorkstationId()).processId(feedback.getProcessId())
+                .itemId(workOrder.getProductId())
+                .checkQuantity(line.getQuantity())
+                .qualifiedQuantity(line.getQuantity()).unqualifiedQuantity(BigDecimal.ZERO)
+                .laborScrapQuantity(BigDecimal.ZERO).materialScrapQuantity(BigDecimal.ZERO)
+                .otherScrapQuantity(BigDecimal.ZERO)
+                .status(MesQcStatusEnum.DRAFT.getStatus())
+                .build();
+        ipqcMapper.insert(ipqc);
+        // 6. 从模板指标自动生成检验行
+        ipqcLineService.createLinesFromTemplate(ipqc.getId(), templateItem.getTemplateId());
+        log.info("[generateIpqcDraft][报工单({}) 产出行({}) 自动生成过程检验单({})]",
+                feedback.getId(), line.getId(), ipqc.getId());
         return ipqc.getId();
     }
 

@@ -24,6 +24,9 @@ public class MesQcPendingInspectRespVO {
     @Schema(description = "检验类型（MesQcTypeEnum）", example = "1")
     private Integer qcType;
 
+    @Schema(description = "已存在的草稿检验单 ID（非空时可直接\"去检验\"）", example = "300")
+    private Long qcId;
+
     // ========== 物料 ==========
 
     @Schema(description = "物料 ID", example = "10")

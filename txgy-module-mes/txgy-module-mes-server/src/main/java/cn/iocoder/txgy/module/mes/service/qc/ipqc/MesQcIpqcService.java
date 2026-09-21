@@ -5,6 +5,8 @@ import cn.iocoder.txgy.module.mes.controller.admin.qc.ipqc.vo.MesQcIpqcPageReqVO
 import cn.iocoder.txgy.module.mes.controller.admin.qc.ipqc.vo.MesQcIpqcSaveReqVO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.defectrecord.MesQcDefectRecordDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.ipqc.MesQcIpqcDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.pro.feedback.MesProFeedbackDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.wm.productproduce.MesWmProductProduceLineDO;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -23,6 +25,19 @@ public interface MesQcIpqcService {
      * @return 编号
      */
     Long createIpqc(@Valid MesQcIpqcSaveReqVO createReqVO);
+
+    /**
+     * 根据报工单的待检产出行，自动生成过程检验单草稿
+     *
+     * <p>幂等：同一产出行已存在 IPQC 时直接返回已有编号，不重复创建；
+     * 产品未配置 IPQC 检验模板时跳过（返回 null），不阻断报工审批流程。
+     * 使用独立事务（REQUIRES_NEW），生成失败不影响报工审批。
+     *
+     * @param feedback 报工单
+     * @param line     待检产出行（qualityStatus = 待检验）
+     * @return 检验单编号；产品未配置模板等场景返回 null
+     */
+    Long generateIpqcDraft(MesProFeedbackDO feedback, MesWmProductProduceLineDO line);
 
     /**
      * 更新过程检验单
