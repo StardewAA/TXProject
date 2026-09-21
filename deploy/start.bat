@@ -115,6 +115,24 @@ exit /b 1
 :healthy
 echo       Gateway is healthy.
 echo.
+
+REM ---------- [6/6] Ensure WMS AI assistant is ready ----------
+REM 新库首次启动会自动执行 deploy/mysql/init/0080-wms-ai-service.sql；
+REM 但「已有库」不会再跑 init 目录，这里补跑一次（脚本幂等，无副作用），
+REM 让拉完代码 + 配置 API 即可使用 AI 助手。
+echo [6/6] Checking WMS AI assistant setup...
+where node >nul 2>nul
+if %errorlevel% equ 0 (
+    node "%~dp0scripts\enable-wms-ai.js" --wait 180
+    if %errorlevel% neq 0 (
+        echo WARN: WMS AI setup check failed. See docs\wms-ai-deployment.md
+    )
+) else (
+    echo WARN: Node.js not found, skipped WMS AI setup.
+    echo       Install Node.js, then run: node deploy\scripts\enable-wms-ai.js
+)
+echo.
+
 echo ============================================
 echo   All services started successfully!
 echo.

@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.crm.service.wms;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import jakarta.annotation.Resource;
@@ -8,12 +10,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * 本地 WMS 商品只读查询实现：直接读取同库 WMS 表，作为 WMS 远程接口不可用前的联调方式。
+ * 本地 WMS 商品（仓库库存）只读查询实现：直接读取同库 WMS 表，作为 WMS 远程接口不可用前的联调方式。
  *
- * <p>查询条件与 WMS 接口保持一致：仅返回启用（status=0）、未删除的商品与规格，缺少租户上下文时拒绝查询。</p>
+ * <p>查询条件与 WMS 接口保持一致：仅返回启用（status=0）、未删除的商品与规格，缺少租户上下文时拒绝查询。
+ * 库存数量按 SKU 汇总当前租户下所有仓库的 {@code wms_inventory} 记录。</p>
  */
 @Service
 @ConditionalOnProperty(prefix = "txgy.integration.wms.crm-product", name = "mode", havingValue = "mock",
@@ -34,40 +40,101 @@ public class CrmWmsProductReadDatabaseAdapter implements CrmWmsProductReadAdapte
               AND item.status = 0
             """;
 
+    private static final String COUNT_CLAUSE = "SELECT COUNT(1) " + FROM_CLAUSE;
+
+    /**
+     * 库存按 SKU 汇总；tenant_id 为第一个占位符，必须排在主表条件之前
+     */
+    private static final String STOCK_JOIN = """
+            LEFT JOIN (SELECT sku_id, SUM(quantity) quantity
+                       FROM wms_inventory
+                       WHERE deleted = 0 AND tenant_id = ?
+                       GROUP BY sku_id) inv ON inv.sku_id = sku.id
+            """;
+
+    private static final String NAME_FILTER = " AND item.name LIKE CONCAT('%', ? ,'%')";
+
+    private static final String SELECT_CLAUSE = """
+            SELECT item.id            AS item_id,
+                   item.code          AS material_code,
+                   item.name          AS material_name,
+                   item.unit          AS unit_name,
+                   sku.id             AS sku_id,
+                   sku.code           AS sku_code,
+                   sku.name           AS sku_name,
+                   sku.selling_price  AS selling_price,
+                   COALESCE(inv.quantity, 0) AS quantity
+            """ + FROM_CLAUSE.replace("WHERE", STOCK_JOIN + "WHERE");
+
     @Resource
     private JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional(readOnly = true)
-    public PageResult<CrmWmsProductSkuDTO> getProductPage(Integer pageNo, Integer pageSize) {
+    public PageResult<CrmWmsProductSkuDTO> getProductPage(Integer pageNo, Integer pageSize, String name) {
         Long tenantId = TenantContextHolder.getRequiredTenantId();
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(1) " + FROM_CLAUSE, Long.class, tenantId);
+        boolean filterName = StrUtil.isNotBlank(name);
+        String nameClause = filterName ? NAME_FILTER : "";
+        Long total = filterName
+                ? jdbcTemplate.queryForObject(COUNT_CLAUSE + nameClause, Long.class, tenantId, name)
+                : jdbcTemplate.queryForObject(COUNT_CLAUSE, Long.class, tenantId);
         if (total == null || total == 0) {
             return PageResult.empty(0L);
         }
         // 每个 SKU 一行，按商品编号、规格编号稳定排序
-        String sql = """
-                SELECT item.id   AS item_id,
-                       item.code AS material_code,
-                       item.name AS material_name,
-                       item.unit AS unit_name,
-                       sku.id    AS sku_id,
-                       sku.code  AS sku_code,
-                       sku.name  AS sku_name
-                """ + FROM_CLAUSE + " ORDER BY item.id, sku.id LIMIT ? OFFSET ?";
+        String sql = SELECT_CLAUSE + nameClause + " ORDER BY item.id, sku.id LIMIT ? OFFSET ?";
         int offset = Math.max(pageNo - 1, 0) * pageSize;
-        List<CrmWmsProductSkuDTO> list = jdbcTemplate.query(sql, (rs, rowNum) -> {
-            CrmWmsProductSkuDTO dto = new CrmWmsProductSkuDTO();
-            dto.setItemId(rs.getLong("item_id"));
-            dto.setMaterialCode(rs.getString("material_code"));
-            dto.setMaterialName(rs.getString("material_name"));
-            dto.setUnitName(rs.getString("unit_name"));
-            dto.setSkuId(rs.getLong("sku_id"));
-            dto.setSkuCode(rs.getString("sku_code"));
-            dto.setSkuName(rs.getString("sku_name"));
-            return dto;
-        }, tenantId, pageSize, offset);
+        List<CrmWmsProductSkuDTO> list = filterName
+                ? jdbcTemplate.query(sql, (rs, rowNum) -> toDto(rs), tenantId, tenantId, name, pageSize, offset)
+                : jdbcTemplate.query(sql, (rs, rowNum) -> toDto(rs), tenantId, tenantId, pageSize, offset);
         return new PageResult<>(list, total);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CrmWmsProductSkuDTO getBySkuId(Long skuId) {
+        if (skuId == null) {
+            return null;
+        }
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        String sql = SELECT_CLAUSE + " AND sku.id = ?";
+        List<CrmWmsProductSkuDTO> list = jdbcTemplate.query(sql, (rs, rowNum) -> toDto(rs),
+                tenantId, tenantId, skuId);
+        return CollUtil.getFirst(list);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CrmWmsProductSkuDTO> getBySkuIds(Collection<Long> skuIds) {
+        if (CollUtil.isEmpty(skuIds)) {
+            return Collections.emptyList();
+        }
+        Long tenantId = TenantContextHolder.getRequiredTenantId();
+        String placeholders = String.join(",", Collections.nCopies(skuIds.size(), "?"));
+        String sql = SELECT_CLAUSE + " AND sku.id IN (" + placeholders + ")";
+        Object[] args = new Object[skuIds.size() + 2];
+        args[0] = tenantId;
+        args[1] = tenantId;
+        int index = 2;
+        for (Long skuId : skuIds) {
+            args[index++] = skuId;
+        }
+        return jdbcTemplate.query(sql, (rs, rowNum) -> toDto(rs), args);
+    }
+
+    private static CrmWmsProductSkuDTO toDto(java.sql.ResultSet rs) throws java.sql.SQLException {
+        CrmWmsProductSkuDTO dto = new CrmWmsProductSkuDTO();
+        dto.setItemId(rs.getLong("item_id"));
+        dto.setMaterialCode(rs.getString("material_code"));
+        dto.setMaterialName(rs.getString("material_name"));
+        dto.setUnitName(rs.getString("unit_name"));
+        dto.setSkuId(rs.getLong("sku_id"));
+        dto.setSkuCode(rs.getString("sku_code"));
+        dto.setSkuName(rs.getString("sku_name"));
+        BigDecimal sellingPrice = rs.getBigDecimal("selling_price");
+        dto.setSellingPrice(sellingPrice);
+        dto.setQuantity(rs.getBigDecimal("quantity"));
+        return dto;
     }
 
 }

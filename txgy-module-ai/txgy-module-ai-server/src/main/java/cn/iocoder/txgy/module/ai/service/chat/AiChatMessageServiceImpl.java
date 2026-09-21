@@ -711,10 +711,12 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
             chatMessages.add(new UserMessage(String.format(KNOWLEDGE_USER_MESSAGE_TEMPLATE, reference)));
         } else if (!bizQuestion && !isMesGuideIntent(sendReqVO.getContent())
         && hasKnowledge(conversation.getRoleId())) {
-            // 角色绑定了知识库，但本次未检索到相关内容：明确告知 AI 数据来源口径
+            // 角色绑定了知识库，但本次未检索到相关内容：仅约束不编造，
+            // 不再强制机械声明「知识库未检索到」，问候/闲聊等场景无需向用户提及检索细节
             chatMessages.add(new UserMessage("本次对话未从平台知识库中检索到与问题相关的内容。回答要求：\n" +
-                    "- 如果基于联网搜索或通用知识回答，必须明确告知用户：「该问题在平台知识库中未检索到数据，本回答为联网搜索/通用知识，非平台库内数据」。\n" +
-                    "- 不要编造平台知识库中不存在的业务数据。"));
+                    "- 正常回答用户问题：问候、闲聊、通用知识均可直接友好回答。\n" +
+                    "- 不要编造平台知识库中不存在的业务数据；涉及 MES 业务数据时遵守「MES 业务数据查询强制规则」。\n" +
+                    "- 无需向用户提及知识库检索过程或「未检索到数据」等内部细节。"));
         }
 
         // 1.5 联网搜索，通过 UserMessage 实现

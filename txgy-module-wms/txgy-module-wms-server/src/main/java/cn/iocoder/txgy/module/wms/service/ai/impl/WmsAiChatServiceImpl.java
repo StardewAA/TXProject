@@ -33,10 +33,12 @@ import cn.iocoder.txgy.module.wms.enums.order.WmsOrderTypeConstants;
 import cn.iocoder.txgy.module.wms.service.ai.ChatContext;
 import cn.iocoder.txgy.module.wms.service.ai.PendingConfirm;
 import cn.iocoder.txgy.module.wms.service.ai.WmsAiChatService;
+import cn.iocoder.txgy.module.wms.service.ai.WmsAiConfigService;
 import cn.iocoder.txgy.module.wms.service.ai.WmsAiDeleteResult;
 import cn.iocoder.txgy.module.wms.service.ai.WmsAiMasterDataCreateService;
 import cn.iocoder.txgy.module.wms.service.ai.WmsAiMasterDataDeleteService;
 import cn.iocoder.txgy.module.wms.service.ai.WmsAiMasterDataStatusService;
+import cn.iocoder.txgy.module.wms.service.ai.WmsAiRuntimeConfig;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -81,8 +83,8 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
     @Value("${txgy.ai.siliconflow.model:deepseek-ai/DeepSeek-V4-Flash}")
     private String model;
 
-    private static final int LIST_DEFAULT_LIMIT = 10; // 列表类默认展示条数
-    private static final int LIST_MAX_LIMIT = 30;     // 列表类展示上限
+    private static final int LIST_DEFAULT_LIMIT = 20; // 列表类默认展示条数（用户没指定时）
+    private static final int LIST_MAX_LIMIT = 200;    // 列表类展示上限（「全部/所有」时的天花板）
 
     /** 供应商类型 */
     private static final List<Integer> SUPPLIER_TYPES = Arrays.asList(
@@ -130,6 +132,16 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
     private WmsAiMasterDataDeleteService masterDataDeleteService;
     @Resource
     private WmsAiMasterDataStatusService masterDataStatusService;
+
+    /**
+     * AI 模型运行时配置（界面配置优先、环境变量兜底）。
+     *
+     * <p>必须走这里而不是直接读 {@code txgy.ai.siliconflow.*} 环境变量：界面上切换模型后，
+     * 只有识别抽取链路（WmsAiServiceImpl）读了数据库配置，意图路由仍死读环境变量，
+     * 就会出现「界面选了 DeepSeek，路由却还在用火山方舟的过期 Key → 403」这种不一致。
+     */
+    @Resource
+    private WmsAiConfigService aiConfigService;
 
     /** 权限校验服务（等价于 @PreAuthorize 中的 @ss），用于 AI 问答的数据域权限校验 */
     @Resource
@@ -200,8 +212,8 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         if (StrUtil.isBlank(raw)) {
             return capabilityIntro();
         }
-        if (StrUtil.isBlank(apiKey)) {
-            return "系统尚未配置大模型 API Key（txgy.ai.siliconflow.api-key），请联系管理员配置后再使用。";
+        if (StrUtil.isBlank(resolveEffectiveApiKey())) {
+            return "系统尚未配置大模型 API Key，请到「WMS AI 配置」页选择可用模型，或配置 txgy.ai.siliconflow.api-key。";
         }
         // 1. 删除待确认处理：上一步要求确认删除时，优先识别用户是否确认/取消
         String sessionKey = resolveSessionKey(sessionId);
@@ -261,7 +273,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         List<String> names = extractNames(intent);
         String warehouseWord = intent == null ? "" : StrUtil.nullToEmpty(intent.getStr("warehouse")).trim();
         BigDecimal threshold = parseDecimal(intent == null ? null : intent.get("threshold"));
-        int limit = parseLimit(intent == null ? null : intent.get("limit"));
+        int limit = resolveLimit(intent, raw);
 
         try {
             String reply;
@@ -304,9 +316,24 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 case "create-merchant":
                 case "create-warehouse":
                 case "create-item":
+                    if (intent == null) {
+                        intent = new JSONObject(true);
+                    }
+                    // 子分类补全：大模型常只抽到 name 而漏掉 parentName，
+                    // 会让「新建A的子类B」变成根分类 B。这里用本地规则兜一层。
+                    if ("create-category".equals(type) && StrUtil.isBlank(intent.getStr("parentName"))) {
+                        JSONObject fb = createCategoryRouteFallback(raw);
+                        if (fb != null && StrUtil.isNotBlank(fb.getStr("parentName"))) {
+                            intent.set("parentName", fb.getStr("parentName"));
+                            if (StrUtil.isBlank(intent.getStr("name"))) {
+                                intent.set("name", fb.getStr("name"));
+                            }
+                            log.info("[chat] create-category 补全 parentName={}", fb.getStr("parentName"));
+                        }
+                    }
                     reply = masterDataCreateService.create(
                             type.substring("create-".length()),
-                            intent == null ? new JSONObject() : intent);
+                            intent);
                     break;
                 case "delete-category":
                 case "delete-brand":
@@ -866,12 +893,14 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
 
     private String capabilityIntro() {
         return "你好，我是【天信管业 WMS】智能助手。我可以帮你查系统里的数据，例如：\n"
-                + "• 商品档案：查某类商品/规格/条码，如「有没有鸡爪这个商品」\n"
+                + "• 商品档案：查某类商品/规格/条码，如「有没有岩棉板这个商品」「把所有商品列给我」\n"
                 + "• 分类 / 品牌：如「商品分类有哪些」「XX 品牌下有什么商品」\n"
                 + "• 往来企业：如「供应商有哪些」「查一下 XX 公司的电话」\n"
-                + "• 仓库与库存：如「鸡爪库存还有多少」「低于 20 的库存预警」「金岩库都有什么」\n"
-                + "• 出入库流水：如「鸡爪最近进过货吗」\n"
-                + "也可以直接把「入库 / 出库 / 移库」的清单（文字或图片）发我建单。";
+                + "• 仓库与库存：如「岩棉板库存还有多少」「低于 20 的库存预警」「金岩原辅材料库都有什么」\n"
+                + "• 出入库流水：如「岩棉板最近进过货吗」\n"
+                + "• 建档与删除：如「新建分类 保温材料」「删除商品 岩棉板」，删除前我会先请你确认\n"
+                + "也可以直接把「入库 / 出库 / 移库 / 盘库」的清单（文字或图片）发我建单。\n"
+                + "想一次看全某类数据时，说「全部」或「所有」即可（最多 200 条）。";
     }
 
     // ==================== 意图解析（大模型） ====================
@@ -893,7 +922,7 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         StringBuilder prompt = new StringBuilder();
         prompt.append("你是【天信管业 WMS 仓储系统】的智能路由。用户可能询问 WMS 数据，也可能要求新增/建立主数据档案（建档）。");
         prompt.append("请把用户意图归类并抽取参数，仅输出一个 JSON 对象，不要任何解释：\n");
-        prompt.append("{\"type\":\"...\",\"names\":[\"...\"],\"name\":\"\",\"kind\":\"\",\"warehouse\":\"\",\"threshold\":null,\"limit\":null,"
+        prompt.append("{\"type\":\"...\",\"names\":[\"...\"],\"name\":\"\",\"parentName\":\"\",\"kind\":\"\",\"warehouse\":\"\",\"threshold\":null,\"limit\":null,"
                 + "\"categoryName\":\"\",\"brandName\":\"\",\"unit\":\"\",\"specs\":[],\"barCode\":\"\",\"contact\":\"\",\"mobile\":\"\","
                 + "\"telephone\":\"\",\"address\":\"\",\"email\":\"\",\"remark\":\"\"}\n");
         prompt.append("type 取值分两大类：\n");
@@ -911,10 +940,20 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         prompt.append("- knowledge：问这个助手能做什么/系统说明。\n");
         prompt.append("【建档类】仅当用户是明确的“新增/建档/建立/添加/录入”命令式请求时使用，注意区分“查询有没有XX”与“帮我新建XX”是两回事：\n");
         prompt.append("- create-item：新建商品档案。必须抽取 name=商品名（填到 name 字段，不要只放到 names 数组）；categoryName=用户说的分类名（没说留空）；unit=单位；brandName=品牌；specs=规格名数组（如 [\"DN200\",\"DN400\"]，用户给了才填，否则 []）；barCode/remark 若有则填。\n");
-        prompt.append("- create-category：新建商品分类。抽取 name=分类名。\n");
+        prompt.append("- create-category：新建商品分类。抽取 name=要新建的分类名；parentName=父分类名（用户说“作为XX的子类”“在XX下面建”“XX的下级/子分类”时填写，没说则填空串）。"
+                + "注意：「新建A的子类B」里 A 是 parentName、B 是 name，绝不能把 A 当成 name 或忽略父分类。\n");
         prompt.append("- create-brand：新建品牌。抽取 name=品牌名。\n");
         prompt.append("- create-warehouse：新建仓库。抽取 name=仓库名。\n");
         prompt.append("- create-merchant：新建往来企业。抽取 name=企业名；kind=supplier/customer/both；contact=联系人；mobile=手机；telephone=电话；address=地址；email/remark 若有则填。\n");
+        prompt.append("【删除类】仅当用户是明确的“删除/删掉/移除”命令式请求时使用：\n");
+        prompt.append("- delete-category：删除商品分类。抽取 name=分类名。\n");
+        prompt.append("- delete-brand：删除品牌。抽取 name=品牌名。\n");
+        prompt.append("- delete-item：删除商品。抽取 name=商品名。\n");
+        prompt.append("- delete-warehouse：删除仓库。抽取 name=仓库名。\n");
+        prompt.append("- delete-merchant：删除往来企业。抽取 name=企业名。\n");
+        prompt.append("【状态类】仅当用户明确要“启用/停用（禁用）”商品分类时使用：\n");
+        prompt.append("- enable-category：启用商品分类。抽取 name=分类名。\n");
+        prompt.append("- disable-category：停用商品分类。抽取 name=分类名。\n");
         prompt.append("其余情况 type=greet（寒暄）或 other（与 WMS 无关或无法归类）。\n");
         prompt.append("【多轮上下文】如果对话历史里已经聊过某个商品/分类/仓库，而本轮用户用了“它/这个/那个/还有呢/哪几个”等指代，"
                 + "请结合历史把对应名称补进 names，不要反问用户。\n");
@@ -922,6 +961,11 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 + "绝不可归为 create-item。只有明确的命令式（新建/建档/添加/录入）才是建档。\n");
         prompt.append("规则：字段只能从用户原话或上下文抽取，没提到的字段一律留空字符串或 null，严禁编造。"
                 + "names 保留用户原文中的实质名称词，不加量词。查询与建档都不得编造系统数据。\n");
+        // limit 必须显式说明，否则大模型不会填，「全部/所有/都列出来」这类请求会一直用默认条数
+        prompt.append("【limit 字段】仅查询类使用，表示用户希望的返回条数，填数字：\n"
+                + "- 用户明确说了数量（如「列 20 个」「前 50 条」「给我 100 个」）→ 填该数字。\n"
+                + "- 用户说「全部/所有/都列出来/一个不漏/完整列表」→ 填 200（表示尽可能多）。\n"
+                + "- 用户没说 → 填 null（用系统默认条数）。\n");
         return prompt.toString();
     }
 
@@ -939,11 +983,32 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         if (createItem != null) {
             return createItem;
         }
+        // 1.05 子分类建档兜底：「新建A的子类B」「在A下面建B」这类句式，
+        //      大模型常只抽到 name 而漏掉 parentName，导致子分类被建成根分类。
+        JSONObject createCategory = createCategoryRouteFallback(t);
+        if (createCategory != null) {
+            return createCategory;
+        }
+        // 1.1 删除/启停兜底：switch 里有 delete-*/enable-*/disable-* 分支，
+        //     但大模型经常把「删除分类 X」误判为寒暄或建档，导致这些分支永远走不到，
+        //     因此这里用本地规则兜底，保证删除与启停命令能真正执行（删除仍会二次确认）。
+        JSONObject deleteOrStatus = deleteOrStatusRouteFallback(t);
+        if (deleteOrStatus != null) {
+            return deleteOrStatus;
+        }
         // 2. 质检问句兜底：「哪些商品没有质检单」「质检情况」→ quality
         if (t.contains("质检")) {
             JSONObject q = new JSONObject(true);
             q.set("type", "quality");
             return q;
+        }
+        // 2.5 基础实体查询兜底：分类/品牌/仓库/往来企业/商品。
+        //     这个兜底原本只覆盖库存与流水，换用路由能力较弱的模型（如 DeepSeek）后，
+        //     「商品分类有哪些」「有哪些仓库」这类最基础的问句会被判成寒暄而落到能力介绍，
+        //     因此在这里按关键词补齐，顺序上先判更具体的词，避免互相抢。
+        JSONObject entity = entityQueryRouteFallback(t);
+        if (entity != null) {
+            return entity;
         }
         boolean stockWord = t.contains("库存") || t.contains("现货") || t.contains("还有多少")
                 || t.contains("剩余") || t.contains("缺货") || t.contains("预警");
@@ -1023,6 +1088,86 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
      * 本地商品建档路由兜底：识别"建档/新建/新增/创建商品"等关键词，
      * 并从用户原话中抽取名称、分类、单位、品牌等字段。
      */
+    /**
+     * 基础实体查询的本地兜底（分类 / 品牌 / 仓库 / 往来企业 / 商品）。
+     *
+     * <p>背景：本地兜底原本只处理质检、库存、流水三类，当所用大模型路由能力偏弱
+     * （实测 DeepSeek 会把「商品分类有哪些」「有哪些仓库」判成寒暄）时，这些最基础的
+     * 问句就会落到能力介绍。这里按关键词补齐，判定顺序从具体到宽泛。
+     *
+     * <p>只做“归类”，不编造数据；真正的查询仍由既有 build*Reply 完成。
+     */
+    private JSONObject entityQueryRouteFallback(String text) {
+        String t = StrUtil.trim(StrUtil.nullToEmpty(text));
+        if (StrUtil.isBlank(t)) {
+            return null;
+        }
+        // 只在“问句”语境下接管，避免把命令句（新建/删除）抢走
+        boolean asking = containsAny(t, Arrays.asList("哪些", "哪个", "有哪些", "有没有", "多少",
+                "什么", "列出", "查看", "查询", "查一下", "看看", "是啥", "是什么", "吗"));
+        if (!asking) {
+            return null;
+        }
+
+        JSONObject fb = new JSONObject(true);
+        // 分类下有哪些商品：比“分类”更具体，先判
+        if (containsAny(t, Arrays.asList("分类下", "类目下")) && containsAny(t, Arrays.asList("商品", "产品"))) {
+            fb.set("type", "category-items");
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        if (containsAny(t, Arrays.asList("分类", "类目", "类别"))) {
+            fb.set("type", "category");
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        if (containsAny(t, Arrays.asList("品牌"))) {
+            fb.set("type", "brand");
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        if (containsAny(t, Arrays.asList("往来企业", "供应商", "客户", "厂商", "往来单位", "企业"))) {
+            fb.set("type", "merchant");
+            fb.set("kind", t.contains("客户") && !t.contains("供应商") ? "customer"
+                    : (t.contains("供应商") && !t.contains("客户") ? "supplier" : "all"));
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        if (containsAny(t, Arrays.asList("仓库", "库房"))) {
+            fb.set("type", "warehouse");
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        if (containsAny(t, Arrays.asList("商品", "产品", "物料", "货品"))) {
+            fb.set("type", "item");
+            fb.set("names", (StrUtil.isBlank(extractEntityKeyword(t)) ? new JSONArray() : new JSONArray(Collections.singletonList(extractEntityKeyword(t)))));
+            return fb;
+        }
+        return null;
+    }
+
+    /**
+     * 从问句里粗略抽一个实体关键词（用于「有没有XX这个分类」这类带具体名字的问法）。
+     * 抽不到（如「商品分类有哪些」）时返回空串，交给既有逻辑列全部。
+     */
+    private String extractEntityKeyword(String text) {
+        String t = StrUtil.trim(StrUtil.nullToEmpty(text));
+        if (StrUtil.isBlank(t)) {
+            return "";
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:有没有|查一下|查询|查看|看看|有)([\\u4e00-\\u9fa5A-Za-z0-9\\-]{2,20}?)(?:这个|的)?"
+                        + "(?:分类|类目|品牌|仓库|商品|产品|供应商|客户|企业)")
+                .matcher(t);
+        if (m.find()) {
+            String kw = m.group(1);
+            if (!containsAny(kw, Arrays.asList("哪些", "哪个", "什么", "所有", "全部", "几个", "多少"))) {
+                return kw;
+            }
+        }
+        return "";
+    }
+
     private JSONObject createItemRouteFallback(String text) {
         List<String> createWords = Arrays.asList("建档商品", "新建商品", "新增商品", "创建商品", "建商品", "加商品");
         if (!containsAny(text, createWords)) {
@@ -1035,6 +1180,171 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         fb.set("unit", extractFieldAfterKey(text, "单位"));
         fb.set("brandName", extractFieldAfterKey(text, "品牌"));
         fb.set("specs", new JSONArray());
+        fb.set("names", new JSONArray());
+        return fb;
+    }
+
+    /**
+     * 删除 / 启停的本地兜底路由。
+     *
+     * <p>switch 中已有 delete-category / delete-brand / delete-item / delete-warehouse /
+     * delete-merchant / enable-category / disable-category 七个分支，但大模型经常把
+     * 「删除分类 X」误判为寒暄、甚至误判成 create-*，导致这些分支永远走不到。
+     * 这里按关键词在本地判定 domain 与名称，保证删除与启停命令能真正落到业务实现上。
+     *
+     * <p>只负责「识别 + 传参」，删除是否真正执行仍由 WmsAiMasterDataDeleteServiceImpl
+     * 决定（跨层级删除会先要求「确认删除」）。
+     */
+    private JSONObject deleteOrStatusRouteFallback(String text) {
+        String t = StrUtil.trim(StrUtil.nullToEmpty(text));
+        if (StrUtil.isBlank(t)) {
+            return null;
+        }
+        boolean isDelete = containsAny(t, Arrays.asList("删除", "删掉", "移除", "删了", "清理掉"));
+        boolean isDisable = containsAny(t, Arrays.asList("停用", "禁用", "关闭分类"));
+        boolean isEnable = containsAny(t, Arrays.asList("启用", "开启分类"));
+        if (!isDelete && !isDisable && !isEnable) {
+            return null;
+        }
+
+        // 1. 判定 domain（先匹配更具体的词，避免「商品分类」被「商品」抢走）
+        String domain = null;
+        if (containsAny(t, Arrays.asList("分类", "类目", "类别"))) {
+            domain = "category";
+        } else if (containsAny(t, Arrays.asList("品牌"))) {
+            domain = "brand";
+        } else if (containsAny(t, Arrays.asList("仓库"))) {
+            domain = "warehouse";
+        } else if (containsAny(t, Arrays.asList("往来企业", "供应商", "客户", "厂商", "往来单位"))) {
+            domain = "merchant";
+        } else if (containsAny(t, Arrays.asList("商品", "物料", "货品"))) {
+            domain = "item";
+        }
+        if (domain == null) {
+            return null;
+        }
+        // 启停目前只支持分类，其他域不接管（交回大模型/常规回复）
+        if ((isEnable || isDisable) && !"category".equals(domain)) {
+            return null;
+        }
+
+        // 2. 抽取要操作的主体名
+        String name = extractDeleteTargetName(t);
+        if (StrUtil.isBlank(name)) {
+            return null;
+        }
+
+        JSONObject fb = new JSONObject(true);
+        String prefix = isDelete ? "delete-" : (isEnable ? "enable-" : "disable-");
+        fb.set("type", prefix + domain);
+        fb.set("name", name);
+        fb.set("names", new JSONArray());
+        return fb;
+    }
+
+    /**
+     * 从「删除分类 XX」「把 XX 这个分类删了」这类句子里抽出主体名。
+     *
+     * <p>先按 `key=值` / `key：值` 取，再退化到按首尾关键词截取；
+     * 去掉「这个/该/的/吧/。 」等修饰，避免把「这个分类」整体当成名字。
+     */
+    private String extractDeleteTargetName(String text) {
+        for (String key : new String[]{"分类", "类目", "类别", "品牌", "仓库", "往来企业", "供应商", "客户", "商品", "物料"}) {
+            String v = extractFieldAfterKey(text, key);
+            if (StrUtil.isNotBlank(v)) {
+                return cleanTargetName(v);
+            }
+        }
+        String s = text;
+        s = s.replaceAll("^(请|帮我|麻烦|把|将)+", "");
+        String head = null;
+        for (String w : new String[]{"删除", "删掉", "移除", "清理掉", "停用", "禁用", "启用"}) {
+            int i = s.indexOf(w);
+            if (i >= 0 && (head == null || i < head.length())) {
+                head = s.substring(i + w.length());
+            }
+        }
+        if (head == null) {
+            return "";
+        }
+        // 去掉主体类型词本身（delete 的 domain 已单独判定）
+        head = head.replaceAll("(分类|类目|类别|品牌|仓库|往来企业|供应商|客户|商品|物料|档案|记录|这个|该|这条|这条记录)+", " ");
+        return cleanTargetName(head);
+    }
+
+    private String cleanTargetName(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return "";
+        }
+        String s = raw.trim();
+        s = s.replaceAll("^[的了，,。.、:：\\s]+", "");
+        s = s.replaceAll("[的了，,。.、;；!！?？\\s]+$", "");
+        s = s.replaceAll("(这个|该|这条|这条记录|档案|记录)$", "");
+        return s.trim();
+    }
+
+    /**
+     * 子分类建档的本地兜底路由。
+     *
+     * <p>覆盖这些说法（大模型经常只抽 name、漏掉 parentName，从而把子分类建成根分类）：
+     * <ul>
+     *   <li>新建{父}的子类{子} / 新增{父}的子分类{子}</li>
+     *   <li>在{父}下面/下新建/新增{子}</li>
+     *   <li>{父}的下级/子分类叫{子} / 名字是{子}</li>
+     * </ul>
+     *
+     * @return 命中则返回带 parentName 的 create-category 意图；否则 null（交回大模型）
+     */
+    private JSONObject createCategoryRouteFallback(String text) {
+        String t = StrUtil.trim(StrUtil.nullToEmpty(text));
+        if (StrUtil.isBlank(t)) {
+            return null;
+        }
+        boolean createWord = containsAny(t, Arrays.asList("新建", "新增", "创建", "添加", "建一个", "建个"));
+        boolean categoryWord = containsAny(t, Arrays.asList("分类", "类目", "类别", "子类"));
+        if (!createWord || !categoryWord) {
+            return null;
+        }
+
+        String parent = null;
+        String child = null;
+
+        // 句式 A：「{父}的(子类|子分类|下级|下一级)(名字是|叫|为|：|:)? {子}」
+        java.util.regex.Matcher mA = java.util.regex.Pattern
+                .compile("([\\u4e00-\\u9fa5A-Za-z0-9]+?)的(?:子类|子分类|下级|下一级|下一层)"
+                        + "(?:名字是|名叫|叫|为|是|：|:)?([\\u4e00-\\u9fa5A-Za-z0-9]+)")
+                .matcher(t);
+        if (mA.find()) {
+            parent = mA.group(1);
+            child = mA.group(2);
+        }
+
+        // 句式 B：「在{父}(下面|下|里|中)(新建|新增|创建|添加|建)?(一个|个)?(分类|子分类|子类)?(名字是|叫|为|：|:)? {子}」
+        if (parent == null) {
+            java.util.regex.Matcher mB = java.util.regex.Pattern
+                    .compile("在([\\u4e00-\\u9fa5A-Za-z0-9]+?)(?:下面|下|里|中)"
+                            + "(?:新建|新增|创建|添加|建)?(?:一个|个)?(?:分类|子分类|子类)?"
+                            + "(?:名字是|名叫|叫|为|：|:)?([\\u4e00-\\u9fa5A-Za-z0-9]+)")
+                    .matcher(t);
+            if (mB.find()) {
+                parent = mB.group(1);
+                child = mB.group(2);
+            }
+        }
+
+        if (StrUtil.isBlank(parent) || StrUtil.isBlank(child)) {
+            return null;
+        }
+        parent = cleanTargetName(parent);
+        child = cleanTargetName(child);
+        if (StrUtil.isBlank(parent) || StrUtil.isBlank(child)) {
+            return null;
+        }
+        log.info("[chat] 子分类建档本地兜底：parent={} name={}", parent, child);
+        JSONObject fb = new JSONObject(true);
+        fb.set("type", "create-category");
+        fb.set("name", child);
+        fb.set("parentName", parent);
         fb.set("names", new JSONArray());
         return fb;
     }
@@ -1272,6 +1582,30 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
         return n;
     }
 
+    /** 「全部/所有/都列出来」这类表述：即使大模型没吐 limit，也按最大条数返回 */
+    private static final java.util.regex.Pattern ALL_LIMIT_HINT = java.util.regex.Pattern.compile(
+            "全部|所有|都列出|都给我|列完|一个不漏|完整列表|还有哪些|其余|剩下的");
+
+    /**
+     * 结合用户原话决定条数：大模型给的 limit 优先，其次识别「全部/所有」表述，最后用默认值。
+     */
+    private int resolveLimit(JSONObject intent, String rawText) {
+        Integer fromIntent = null;
+        if (intent != null) {
+            BigDecimal d = parseDecimal(intent.get("limit"));
+            if (d != null) {
+                fromIntent = Math.max(1, Math.min(d.intValue(), LIST_MAX_LIMIT));
+            }
+        }
+        if (fromIntent != null) {
+            return fromIntent;
+        }
+        if (StrUtil.isNotBlank(rawText) && ALL_LIMIT_HINT.matcher(rawText).find()) {
+            return LIST_MAX_LIMIT;
+        }
+        return LIST_DEFAULT_LIMIT;
+    }
+
     private BigDecimal parseDecimal(Object v) {
         if (v == null) {
             return null;
@@ -1468,8 +1802,8 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
             return buildQualityReply(new ArrayList<>(), LIST_DEFAULT_LIMIT);
         }
         return "这看起来是一个查询问题，而不是建档命令。你可以这样问我：\n"
-                + "• 「商品分类有哪些」「有没有鸡爪这个商品」\n"
-                + "• 「鸡爪库存还有多少」「低于 20 的库存预警」\n"
+                + "• 「商品分类有哪些」「有没有岩棉板这个商品」\n"
+                + "• 「岩棉板库存还有多少」「低于 20 的库存预警」\n"
                 + "如果你确实要新建档案，请用「新建XX：名称」的句式告诉我。";
     }
 
@@ -1593,13 +1927,44 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
                 + "• 查询结果全部来自数据库实时读取，不会凭空编造；\n"
                 + "• 我也能帮你建档（商品/分类/品牌/仓库/往来企业）和删除主数据，删除会先请你二次确认；\n"
                 + "• 直接发「入库/出库/移库」清单（文字或图片）给我，可以生成建单草稿。\n"
-                + "想查什么直接说，例如「鸡爪库存还有多少」。";
+                + "想查什么直接说，例如「岩棉板库存还有多少」。";
     }
 
     // ==================== 大模型调用 ====================
 
     private String callModel(String systemPrompt, String userContent) {
         return callModel(systemPrompt, userContent, (List<JSONObject>) null);
+    }
+
+    /**
+     * 取当前生效的模型配置：**界面配置优先**，未配置才回落到环境变量。
+     *
+     * <p>这是本类所有模型调用的唯一入口。历史实现直接读 {@code txgy.ai.siliconflow.*}
+     * 环境变量，导致「界面上把模型切成 DeepSeek，意图路由却仍在用火山方舟的旧 Key（403 欠费）」
+     * 这类不一致；统一走这里即可与识别抽取链路（WmsAiServiceImpl）保持同一份配置。
+     */
+    private WmsAiRuntimeConfig resolveEffectiveRuntime() {
+        try {
+            WmsAiRuntimeConfig runtime = aiConfigService.resolveRuntimeConfig();
+            if (runtime != null && runtime.usable()) {
+                return runtime;
+            }
+        } catch (Exception ex) {
+            log.warn("[chat] 解析运行时模型配置失败，回落环境变量：{}", ex.getMessage());
+        }
+        WmsAiRuntimeConfig fallback = new WmsAiRuntimeConfig();
+        fallback.setSource(StrUtil.isBlank(apiKey) ? WmsAiRuntimeConfig.Source.NONE
+                : WmsAiRuntimeConfig.Source.ENV);
+        fallback.setBaseUrl(baseUrl);
+        fallback.setApiKey(apiKey);
+        fallback.setModel(model);
+        fallback.setVisionModel(model);
+        return fallback;
+    }
+
+    /** 取当前生效的 API Key（用于调用前的可用性判断） */
+    private String resolveEffectiveApiKey() {
+        return resolveEffectiveRuntime().getApiKey();
     }
 
     /**
@@ -1611,8 +1976,13 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
      */
     private String callModel(String systemPrompt, String userContent, List<JSONObject> historyMessages) {
         try {
+            // 解析生效的模型配置：界面配置优先，未配置才回落到环境变量（与识别链路保持同一份配置）
+            WmsAiRuntimeConfig runtime = resolveEffectiveRuntime();
+            String effBaseUrl = runtime.getBaseUrl();
+            String effApiKey = runtime.getApiKey();
+            String effModel = runtime.getModel();
             JSONObject body = new JSONObject(true);
-            body.set("model", model);
+            body.set("model", effModel);
             body.set("temperature", 0.0);
             body.set("max_tokens", 2000);
             JSONArray messages = new JSONArray();
@@ -1635,10 +2005,10 @@ public class WmsAiChatServiceImpl implements WmsAiChatService {
             body.set("messages", messages);
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl))
+                    .uri(URI.create(effBaseUrl))
                     .timeout(Duration.ofSeconds(240))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + effApiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString(), java.nio.charset.StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
