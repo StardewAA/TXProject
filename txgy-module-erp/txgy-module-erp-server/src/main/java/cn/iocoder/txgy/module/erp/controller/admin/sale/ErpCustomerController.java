@@ -10,6 +10,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.customer.ErpCustomerPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.customer.ErpCustomerRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.customer.ErpCustomerSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.service.sale.ErpCustomerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,6 +98,18 @@ public class ErpCustomerController {
         // 导出 Excel
         ExcelUtils.write(response, "客户.xls", "数据", ErpCustomerRespVO.class,
                         BeanUtils.toBean(list, ErpCustomerRespVO.class));
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出客户 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:customer:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportCustomerPdf(@Valid ErpCustomerPageReqVO pageReqVO,
+                                  HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpCustomerDO> list = customerService.getCustomerPage(pageReqVO).getList();
+        ErpPdfExportUtils.write(response, "客户.pdf", "客户列表",
+                ErpCustomerRespVO.class, BeanUtils.toBean(list, ErpCustomerRespVO.class));
     }
 
 }

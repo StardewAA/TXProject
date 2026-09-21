@@ -17,6 +17,12 @@ export namespace WmsItemApi {
     brandId?: number;
     brandName?: string;
     materialType?: string;
+    batchManage?: boolean;
+    shelfLifeManage?: boolean;
+    shelfLifeMonths?: number;
+    dangerousGoods?: boolean;
+    temperatureRequirement?: string;
+    storageCondition?: string;
     remark?: string;
     status?: number;
     skus?: WmsItemSkuApi.ItemSku[];

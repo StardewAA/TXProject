@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.product;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.unit.ErpProductUnitPageReqVO;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -120,7 +122,10 @@ public class ErpProductUnitServiceImpl implements ErpProductUnitService {
 
     @Override
     public List<ErpProductUnitDO> getProductUnitList(Collection<Long> ids) {
-         return productUnitMapper.selectByIds(ids);
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
+        return productUnitMapper.selectByIds(ids);
     }
 
 }

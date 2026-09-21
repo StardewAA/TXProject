@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.wms.service.inventory;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryRiskSummaryRespVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryChangeReqDTO;
 import cn.iocoder.txgy.module.wms.service.inventory.dto.WmsInventoryCheckReqDTO;
@@ -23,6 +24,8 @@ public interface WmsInventoryService {
      * @return 库存统计分页
      */
     PageResult<WmsInventoryDO> getInventoryPage(WmsInventoryPageReqVO pageReqVO);
+
+    WmsInventoryRiskSummaryRespVO getRiskSummary();
 
     /**
      * 获得库存余额列表

@@ -10,15 +10,18 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteStockCheck,
   exportStockCheck,
+  exportStockCheckPdf,
   getStockCheckPage,
   updateStockCheckStatus,
 } from '#/api/erp/stock/check';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import Comparison from './modules/comparison.vue';
 import Form from './modules/form.vue';
 
 /** ERP 库存盘点单列表 */
@@ -29,15 +32,32 @@ const [FormModal, formModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
+/** 三方比对弹窗（ERP 账面 / ERP 实盘 / WMS 实物） */
+const [ComparisonModal, comparisonModalApi] = useVbenModal({
+  connectedComponent: Comparison,
+  destroyOnClose: true,
+});
+
+/** 打开三方比对 */
+function handleComparison(row: ErpStockCheckApi.StockCheck) {
+  comparisonModalApi.setData({ id: row.id }).open();
+}
+
 /** 刷新表格 */
 function handleRefresh() {
   gridApi.query();
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportStockCheck(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '库存盘点单.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportStockCheckPdf(await gridApi.formApi.getValues())
+      : await exportStockCheck(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '库存盘点单.pdf' : '库存盘点单.xls',
+    source: data,
+  });
 }
 
 /** 新增库存盘点单 */
@@ -142,6 +162,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </template>
 
     <FormModal @success="handleRefresh" />
+    <ComparisonModal />
     <Grid table-title="库存盘点单列表">
       <template #toolbar-tools>
         <TableAction
@@ -152,13 +173,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['erp:stock-check:create'],
               onClick: handleCreate,
-            },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:stock-check:export'],
-              onClick: handleExport,
             },
             {
               label: '批量删除',
@@ -174,6 +188,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+        <ErpExportButton
+          :auth="['erp:stock-check:export']"
+          :export-handler="handleExport"
+        />
       </template>
       <template #actions="{ row }">
         <TableAction
@@ -184,6 +202,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.VIEW,
               auth: ['erp:stock-check:query'],
               onClick: handleDetail.bind(null, row),
+            },
+            {
+              label: '三方比对',
+              type: 'link',
+              auth: ['erp:stock-check:query'],
+              onClick: handleComparison.bind(null, row),
             },
             {
               label: $t('common.edit'),

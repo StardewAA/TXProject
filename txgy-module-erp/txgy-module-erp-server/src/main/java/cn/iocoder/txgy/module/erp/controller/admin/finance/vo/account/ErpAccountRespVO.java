@@ -7,6 +7,7 @@ import cn.idev.excel.annotation.ExcelProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Schema(description = "管理后台 - ERP 结算账户 Response VO")
@@ -42,6 +43,10 @@ public class ErpAccountRespVO {
     @Schema(description = "是否默认", example = "1")
     @ExcelProperty("是否默认")
     private Boolean defaultStatus;
+
+    @Schema(description = "当前余额")
+    @ExcelProperty("当前余额")
+    private BigDecimal balance;
 
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")

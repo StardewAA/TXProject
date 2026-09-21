@@ -117,7 +117,7 @@ public class CrmAfterSaleVisitTaskController {
     @Operation(summary = "获得回访任务分页")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
     public CommonResult<PageResult<CrmAfterSaleVisitTaskRespVO>> getVisitTaskPage(@Valid CrmAfterSaleVisitTaskPageReqVO pageReqVO) {
-        // remindType = 临期 时用于待办「回访任务临期」，归属范围按当前登录人（本人 + 下属）过滤
+        // remindType = 待办提醒 时用于待办「任务提醒」（含临期与已逾期），归属范围按当前登录人（本人 + 下属）过滤
         PageResult<CrmAfterSaleVisitTaskDO> pageResult = visitTaskService.getVisitTaskPage(pageReqVO, getLoginUserId());
         PageResult<CrmAfterSaleVisitTaskRespVO> respPage = BeanUtils.toBean(pageResult, CrmAfterSaleVisitTaskRespVO.class);
         if (CollUtil.isEmpty(respPage.getList())) {
@@ -129,7 +129,7 @@ public class CrmAfterSaleVisitTaskController {
     }
 
     @GetMapping("/remind-count")
-    @Operation(summary = "获得「回访任务临期」待办数量（实时查询，不落库）")
+    @Operation(summary = "获得「任务提醒」待办数量（实时查询，不落库；含临期与已逾期）")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-visit-task:query')")
     public CommonResult<Long> getVisitTaskRemindCount() {
         return success(visitTaskService.getVisitTaskRemindCount(getLoginUserId()));

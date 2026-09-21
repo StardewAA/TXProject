@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.performance.assessment;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.performance.plan.HrmPerformanceQuotaScoreTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -27,7 +27,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmPerformanceAssessmentQuotaDO extends BaseDO {
+public class HrmPerformanceAssessmentQuotaDO extends TenantBaseDO {
 
     /**
      * 考核指标编号

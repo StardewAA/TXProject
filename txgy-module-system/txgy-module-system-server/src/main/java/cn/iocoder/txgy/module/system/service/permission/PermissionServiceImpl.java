@@ -196,7 +196,11 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
-    @Cacheable(value = RedisKeyConstants.MENU_ROLE_ID_LIST, key = "#menuId")
+    // 查询结果受当前租户上下文影响（system_role_menu 带 tenant_id），因此：
+    // 1）@TenantIgnore 让查询与请求租户无关（治本，远程方案）；
+    // 2）unless 让“空结果”不写入缓存（双保险，本地方案）。
+    @Cacheable(value = RedisKeyConstants.MENU_ROLE_ID_LIST, key = "#menuId",
+            unless = "#result == null || #result.isEmpty()")
     @TenantIgnore // 权限校验按菜单编号查询角色集合，必须与请求租户无关；否则在“非用户所属租户”上下文下会查到空，
                   // 导致权限校验被判定为无权限，并经本地缓存污染后续请求。
     public Set<Long> getMenuRoleIdListByMenuIdFromCache(Long menuId) {
@@ -245,7 +249,9 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
-    @Cacheable(value = RedisKeyConstants.USER_ROLE_ID_LIST, key = "#userId")
+    // 同上：用户拥有的角色同样受租户上下文影响，空结果不缓存，避免出现“用户没有角色”的假象。
+    @Cacheable(value = RedisKeyConstants.USER_ROLE_ID_LIST, key = "#userId",
+            unless = "#result == null || #result.isEmpty()")
     public Set<Long> getUserRoleIdListByUserIdFromCache(Long userId) {
         return getSelf().getUserRoleIdListByUserId(userId);
     }

@@ -3,6 +3,7 @@ package cn.iocoder.txgy.module.wms.dal.mysql.inventory;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
+import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.history.WmsInventoryHistoryPageReqVO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryHistoryDO;
 import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemDO;
@@ -21,6 +22,16 @@ public interface WmsInventoryHistoryMapper extends BaseMapperX<WmsInventoryHisto
         return selectCount(WmsInventoryHistoryDO::getSkuId, skuId);
     }
 
+    default WmsInventoryHistoryDO selectLatestOutbound(Long skuId, Long warehouseId) {
+        return selectOne(new LambdaQueryWrapperX<WmsInventoryHistoryDO>()
+                .eq(WmsInventoryHistoryDO::getSkuId, skuId)
+                .eq(WmsInventoryHistoryDO::getWarehouseId, warehouseId)
+                .lt(WmsInventoryHistoryDO::getQuantity, java.math.BigDecimal.ZERO)
+                .orderByDesc(WmsInventoryHistoryDO::getCreateTime)
+                .orderByDesc(WmsInventoryHistoryDO::getId)
+                .last("LIMIT 1"));
+    }
+
     default PageResult<WmsInventoryHistoryDO> selectPage(WmsInventoryHistoryPageReqVO reqVO) {
         MPJLambdaWrapperX<WmsInventoryHistoryDO> query = new MPJLambdaWrapperX<WmsInventoryHistoryDO>()
                 .selectAll(WmsInventoryHistoryDO.class)
@@ -34,6 +45,7 @@ public interface WmsInventoryHistoryMapper extends BaseMapperX<WmsInventoryHisto
                 .eqIfPresent(WmsInventoryHistoryDO::getWarehouseId, reqVO.getWarehouseId())
                 .eqIfPresent(WmsInventoryHistoryDO::getOrderNo, reqVO.getOrderNo())
                 .eqIfPresent(WmsInventoryHistoryDO::getOrderType, reqVO.getOrderType())
+                .eqIfPresent(WmsInventoryHistoryDO::getCreator, reqVO.getCreator())
                 .betweenIfPresent(WmsInventoryHistoryDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(WmsInventoryHistoryDO::getCreateTime)
                 .orderByDesc(WmsInventoryHistoryDO::getId);

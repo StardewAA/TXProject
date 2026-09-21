@@ -32,6 +32,7 @@ public enum HrmEmployeeFileTypeEnum implements ArrayValuable<Integer> {
     PREVIOUS_LEAVE_CERTIFICATE(25, "上家公司离职证明"),
     REGULAR_APPLICATION(26, "转正申请表"),
     ARCHIVE_OTHER(27, "其他档案资料"),
+    TRAINING_AGREEMENT(28, "培训协议"),
     LEAVE_APPROVAL(31, "离职审批"),
     LEAVE_CERTIFICATE(32, "离职证明"),
     LEAVE_OTHER(33, "其他离职资料");

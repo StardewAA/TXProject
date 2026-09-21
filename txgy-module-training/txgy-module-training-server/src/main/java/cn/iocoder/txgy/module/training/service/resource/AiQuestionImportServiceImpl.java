@@ -238,6 +238,8 @@ public class AiQuestionImportServiceImpl implements AiQuestionImportService {
         Map<String, Object> body = new HashMap<>();
         body.put("model", aiProperties.getModel());
         body.put("temperature", 0.2);
+        // 关闭深度思考：试题提取是结构化任务，无需推理链；关闭后解析从 ~90s 降至 ~10s
+        body.put("thinking", Map.of("type", "disabled"));
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", buildSystemPrompt()));
         messages.add(Map.of("role", "user", "content", "请从以下资料中提取试题：\n" + content));

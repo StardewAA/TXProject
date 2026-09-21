@@ -478,9 +478,9 @@ onUnmounted(() => {
 
     <section class="profile-summary">
       <div class="profile-avatar"><img v-if="profileAvatarUrl" :src="profileAvatarUrl" alt="个人头像" /><IconifyIcon v-else icon="lucide:user-round" /></div>
-      <div class="profile-identity"><p class="section-eyebrow">我的职业资料</p><h1>{{ profileName }}</h1><p>{{ profileMeta }}</p><span>{{ careerProfile.employmentStatus || '求职状态待确认' }}</span></div>
+      <div class="profile-identity"><p class="section-eyebrow">职业资料</p><h1>{{ profileName }}</h1><p>{{ profileMeta }}</p><span>{{ careerProfile.employmentStatus || '求职状态待确认' }}</span></div>
       <div class="profile-expectation"><small>期望职位</small><strong>{{ careerProfile.postTypeName || '暂未设置' }}</strong><p>{{ careerProfile.city || '工作城市待确认' }}</p></div>
-       <a-button class="profile-online-resume-button" @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历</a-button>
+      <div class="profile-summary-actions"><a-button class="profile-online-resume-button" @click="router.push({ name: 'PortalRecruit', query: { section: 'resume' } })">在线简历</a-button></div>
     </section>
 
     <section class="recruit-workspace-hero">
@@ -540,7 +540,7 @@ onUnmounted(() => {
 </section>
 
     <section v-if="showApplicationPanel" class="recruit-panel application-panel">
-      <div class="section-heading"><div><p class="section-eyebrow">应聘记录</p><h2>我的应聘记录</h2><p>点击查看详情，了解面试安排与录用进度。</p></div><span class="history-total">共 {{ applicationTotal }} 条记录</span></div>
+      <div class="section-heading"><div><p class="section-eyebrow">投递进度</p><h2>我的应聘记录</h2><p>点击查看详情，了解面试安排与录用进度。</p></div><span class="history-total">共 {{ applicationTotal }} 条记录</span></div>
       <div v-if="applicationLoading" class="loading-list"><a-skeleton v-for="item in 3" :key="item" active :paragraph="{ rows: 2 }" /></div>
       <div v-else-if="!applications.length" class="empty-state"><IconifyIcon icon="lucide:clipboard-list" /><strong>暂无应聘记录</strong><p>去岗位机会中挑选一份适合你的工作吧</p><a-button type="link" @click="router.push('/portal/recruit')">去浏览岗位</a-button></div>
       <div v-else class="application-list">
@@ -551,11 +551,11 @@ onUnmounted(() => {
               <div class="application-title"><strong>{{ application.postName || '招聘职位' }}</strong><a-tag :color="getApplicationTagColor(application)">{{ getApplicationStatusLabel(application) }}</a-tag></div>
               <p>投递于 {{ formatDate(application.createTime) }}</p>
             </div>
-            <div class="application-actions"><a-button type="link" @click="showApplication(application)">查看详情</a-button><a-button v-if="['SUBMITTED', 'SCREENING', 'INTERVIEWING'].includes(application.status)" type="link" danger @click="withdrawApplication(application)">撤回应聘</a-button></div>
+            <div class="application-actions"><a-button v-if="['SUBMITTED', 'SCREENING', 'INTERVIEWING'].includes(application.status)" type="link" danger @click="withdrawApplication(application)">撤回应聘</a-button><a-button type="link" @click="showApplication(application)">查看详情</a-button></div>
           </div>
         </article>
       </div>
-      <Pagination v-if="applicationTotal" :current="applicationPage.pageNo" :page-size="applicationPage.pageSize" :total="applicationTotal" class="application-pagination" @change="handleApplicationPageChange" />
+      <Pagination v-if="applicationTotal > applicationPage.pageSize" :current="applicationPage.pageNo" :page-size="applicationPage.pageSize" :total="applicationTotal" class="application-pagination" @change="handleApplicationPageChange" />
     </section>
 
     <a-modal v-model:open="applicationModalOpen" :centered="true" :footer="null" :title="null" width="780px" wrap-class-name="recruit-application-modal">
@@ -832,14 +832,15 @@ onUnmounted(() => {
 .application-progress-step div { display: grid; gap: 3px; }
  .application-progress-step strong { color: inherit; font-size: 14px; }
  .application-progress-step small { color: inherit; font-size: 13px; }
- .application-actions { display: flex; gap: 3px; }
+ .application-actions { display: grid; grid-template-columns: repeat(2, 76px); justify-content: end; gap: 3px; }
+ .application-actions > :only-child { grid-column: 2; }
  .application-actions :deep(.ant-btn) { font-size: 14px; }
  :global(.recruit-application-modal .ant-descriptions-item-label), :global(.recruit-application-modal .ant-descriptions-item-content), :global(.recruit-application-modal .ant-timeline-item-content) { font-size: 14px; }
 .application-pagination { margin-top: 18px; text-align: center; }
 .timeline { margin-top: 22px; }
 @media (max-width: 900px) { .recruit-content-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .recruit-workspace-hero { align-items: flex-start; flex-direction: column; padding: 24px 20px; } .upload-form-row { grid-template-columns: 1fr; } .recruit-panel { padding: 20px 16px; } .resume-item { grid-template-columns: 34px minmax(0, 1fr); } .resume-side { grid-column: 2; display: flex; justify-content: space-between; text-align: left; } .application-card-header { flex-direction: column; } .application-actions { width: 100%; justify-content: flex-end; } .application-progress { grid-template-columns: repeat(4, minmax(104px, 1fr)); overflow-x: auto; padding-bottom: 4px; } .application-dialog-header { flex-direction: column; gap: 13px; padding: 24px 50px 22px 20px; } .application-dialog-title h2 { font-size: 22px; } .application-dialog-body { padding: 18px 16px 22px; } .application-dialog-summary { grid-template-columns: 1fr; } .application-dialog-process { grid-template-columns: 1fr; gap: 0; padding: 18px 0 15px; } .application-dialog-process::before { top: 33px; right: auto; bottom: 33px; left: 15px; width: 3px; height: auto; } .application-dialog-process-step { grid-template-columns: 31px minmax(0, 1fr); grid-template-rows: auto; align-items: start; min-height: 58px; padding: 0; text-align: left; } .application-dialog-process-step::after { top: 31px; right: auto; bottom: 0; left: 14px; width: 3px; height: auto; } .application-dialog-process-step:last-child { min-height: 31px; } .application-dialog-process-step:last-child::after { display: none; } .application-dialog-process-step > div { padding-top: 6px; } .application-interview-card { grid-template-columns: 1fr; gap: 12px; } .application-interview-card p { grid-column: 1; } .interview-info { grid-template-columns: 1fr; } .application-offer-actions { align-items: flex-start; flex-direction: column; } .application-dialog-footer { padding: 12px 16px; } }
-@media(max-width:700px){.profile-summary{grid-template-columns:auto 1fr}.profile-expectation{grid-column:1/-1;padding:14px 0 0;border-top:1px solid #e7ecef;border-left:0}}
+@media(max-width:700px){.profile-summary{grid-template-columns:auto minmax(0,1fr)}.profile-expectation{grid-column:1/-1;padding:14px 0 0;border-top:1px solid #e7ecef;border-left:0}.profile-summary-actions{grid-column:1/-1;justify-content:flex-start}}
 .recruit-workspace-page { color: #5d4636; }
 .recruit-workspace-page .profile-summary, .recruit-workspace-page .recruit-panel, .recruit-workspace-page .application-card, .recruit-workspace-page .resume-item { border-color: #f4e5d7; background: #fff; box-shadow: 0 8px 22px rgb(183 92 24 / 4%); }
 .recruit-workspace-page .recruit-workspace-hero { background: linear-gradient(120deg, #fff 0%, #fffdfb 72%, #fff4e6 100%); }
@@ -912,6 +913,12 @@ onUnmounted(() => {
 .application-pagination :deep(.ant-pagination-item-active:hover a) {
   color: #0f777d !important;
 }
+.profile-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 104px;
+}
+
 .profile-online-resume-button {
   border-color: #b9dfe5 !important;
   background: linear-gradient(135deg, #eaf3ff, #e8f7f8) !important;

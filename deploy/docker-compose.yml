@@ -1,5 +1,3 @@
-
-
 # 后端服务公共环境变量单独一个锚点。
 # 【重要】compose 里 `environment` 是整体替换、不是深合并：服务块只要自己写了
 # environment，就完全丢掉锚点里的环境（DB/Nacos/Redis 地址全没了，容器会退回连
@@ -38,14 +36,9 @@ x-backend-service: &backend-service
     SERVER_PORT: 48080
     SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR: nacos:8848
     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_USERNAME: root
     SPRING_DATASOURCE_DYNAMIC_DATASOURCE_MASTER_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    # 本地配置中保留了 lazy slave 数据源；Docker 内首次触发读库时也必须指向 mysql，
-    # 否则会连接容器自身的 127.0.0.1 并占满请求线程，表现为订单、购物车和后台栏目超时。
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_USERNAME: root
-    SPRING_DATASOURCE_DYNAMIC_DATASOURCE_SLAVE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     SPRING_DATA_REDIS_HOST: redis
     # 资源中心本地文件上传根目录（training 服务使用，绝对路径落于卷 /app/uploads）
     RESOURCE_UPLOAD_DIR: /app/uploads
@@ -206,17 +199,13 @@ services:
   report:
     <<: *backend-service
     build:
-      context: ..
-      dockerfile: deploy/backend/Dockerfile
+      context: ./jars/report
+      dockerfile: Dockerfile.runtime
       args:
-        MODULE_PATH: txgy-module-report/txgy-module-report-server
+        JAR_FILE: app.jar
     environment:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx384m -XX:MaxMetaspaceSize=288m -XX:+UseG1GC -XX:MaxRAMPercentage=38
-      # 报表只读数据源：仅 SELECT 权限的独立账号，避免报表大查询与写入风险
-      REPORT_DB_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
-      REPORT_DB_USERNAME: ${REPORT_DB_USERNAME:-report_ro}
-      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD}
 
   mp:
     <<: *backend-service
@@ -258,12 +247,8 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
-    entrypoint: ["sh", "-c", "exec java $$JAVA_OPTS -jar /app/app.jar"]
     environment:
       <<: *backend-env
-      # 本地演示环境启用按店铺隔离的固定 FAQ 与人工客服链路。
-      # 未显式配置时后端默认关闭，买家端和接待台都会显示“尚未开通”。
-      MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: "true"
       JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   statistics:
@@ -295,8 +280,12 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-erp/txgy-module-erp-server
+    # 联调：关闭 ERP 侧集成 Mock 网关，走真实 WMS/MES 调用
+    # （默认 mock 时采购入库、工单恢复等只返回模拟结果，不真正通信）
     environment:
       <<: *backend-env
+      TXGY_INTEGRATION_WMS_MODE: "remote"
+      TXGY_INTEGRATION_MES_MODE: "remote"
       JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   iot:
@@ -321,10 +310,6 @@ services:
       <<: *backend-env
       JAVA_OPTS: -Xms96m -Xmx320m -XX:MaxMetaspaceSize=224m -XX:+UseG1GC -XX:MaxRAMPercentage=32
 
-  # mes-server：注册服务名由 jar 内 application.yaml 的 spring.application.name=mes-server 决定
-  # （网关路由 lb://mes-server，必须严格一致）；继承 x-backend-service 的 depends_on（mysql/redis/nacos
-  # 均须 service_healthy 后才启动），因此 Nacos 未就绪时 mes 不会被拉起，避免历史报错
-  # "Unable to resolve host nacos / Unable to find instance for mes-server" 复现。
   mes:
     <<: *backend-service
     build:
@@ -332,7 +317,13 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mes/txgy-module-mes-server
-    mem_limit: 2048m # 与 slim 覆盖的 JAVA_OPTS -Xmx1024m 配套，单容器限高，防止拖垮整个 Docker VM
+    # 联调：开启 MES→WMS 集成，定时任务才会发送生产领料/完工入库请求（默认 false 时只落任务不发送）
+    environment:
+      <<: *backend-env
+      MES_WMS_INTEGRATION_ENABLED: "true"
+      # MES 无仓库模型，须指定 WMS 默认原料仓/成品仓编码（须与该租户 WMS 主数据一致）
+      MES_WMS_WAREHOUSE_RAW_MATERIAL_CODE: "SH"
+      MES_WMS_WAREHOUSE_FINISHED_GOODS_CODE: "FG"
 
   wms:
     <<: *backend-service
@@ -341,9 +332,10 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
+    # 联调：开启缺口事件自动上送，WmsShortageScheduler 才会把缺口事件发给 ERP（默认不启用）
     environment:
       <<: *backend-env
-      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
+      WMS_SHORTAGE_SENDER_ENABLED: "true"
 
   im:
     <<: *backend-service

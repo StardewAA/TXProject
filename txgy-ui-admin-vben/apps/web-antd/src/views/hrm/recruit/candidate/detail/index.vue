@@ -23,6 +23,7 @@ import Header from './modules/header.vue';
 import Info from './modules/info.vue';
 import InterviewList from './modules/interview-list.vue';
 import ResumeVersions from './modules/resume-versions.vue';
+import AiAssistant from './modules/ai-assistant.vue';
 import ApplicationList from './modules/application-list.vue';
 import RecruitChat from './modules/recruit-chat.vue';
 
@@ -129,6 +130,9 @@ onMounted(() => {
         </Tabs.TabPane>
         <Tabs.TabPane key="application" tab="应聘记录" :force-render="false">
           <ApplicationList :candidate-id="candidateId" />
+        </Tabs.TabPane>
+        <Tabs.TabPane key="ai" tab="AI 辅助" :force-render="false">
+          <AiAssistant :candidate-id="candidateId" />
         </Tabs.TabPane>
         <Tabs.TabPane key="chat" tab="招聘沟通" :force-render="false">
           <RecruitChat :candidate-id="candidateId" />

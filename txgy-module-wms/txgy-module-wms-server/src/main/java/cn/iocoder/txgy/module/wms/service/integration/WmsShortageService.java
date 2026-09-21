@@ -16,6 +16,7 @@ import java.util.*;
 public class WmsShortageService {
     @Resource private JdbcTemplate jdbc;
     @Resource private Environment environment;
+    @Resource private WmsCollaborationOrderGService collaborationOrderGService;
     static final String LATEST = " AND NOT EXISTS (SELECT 1 FROM wms_shortage_event newer"
             + " WHERE newer.tenant_id=e.tenant_id AND newer.event_id=e.event_id AND newer.event_version>e.event_version)";
 
@@ -55,6 +56,8 @@ public class WmsShortageService {
                     + " AND line_id=? ORDER BY event_version DESC LIMIT 1 FOR UPDATE", tenant, orderId, line.get("id"));
             if (gap.signum() == 0 && previous.isEmpty()) continue;
             Map<String, Object> payload = payload(order, line, tenant, mes, current, requested, gap);
+            // 销售出库缺口（非 MES 生产领料缺口）按缺口生成协作单 G 草稿，待 WMS 审批后发送（设计 6.3.3/9.1）
+            if (!mes) collaborationOrderGService.upsertDraft(tenant, order, line, payload);
             append(order, line, payload, previous.isEmpty() ? null : previous.getFirst());
         }
         return shortage;
@@ -123,7 +126,9 @@ public class WmsShortageService {
         String target = (String) payload.get("targetSystem");
         long tenant = TenantContextHolder.getRequiredTenantId();
         boolean simulation = Boolean.TRUE.equals(order.get("simulation")) || Objects.equals(order.get("simulation"), 1);
-        String state = simulation ? "SIMULATED" : configured(tenant,target) ? "PENDING" : "WAITING_INTEGRATION";
+        // ERP target 走 Feign 专用接口，无需 url/token 配置即视为就绪（设计 7.2）
+        boolean ready = "ERP".equals(target) || configured(tenant,target);
+        String state = simulation ? "SIMULATED" : ready ? "PENDING" : "WAITING_INTEGRATION";
         jdbc.update("INSERT INTO wms_shortage_event(tenant_id,event_id,event_version,order_id,line_id,target_system,"
                         + "shortage_status,payload,notification_status,next_attempt_time) VALUES(?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
                 tenant,eventId,version,order.get("id"),line.get("id"),target,payload.get("shortageStatus"),
@@ -161,6 +166,25 @@ public class WmsShortageService {
         p.put("reservedQuantity",BigDecimal.ZERO); p.put("reservationSupported",false);
         p.put("availableQuantity",current); p.put("shortageQuantity",gap);
         p.put("shortageStatus",gap.signum()>0 ? "OPEN" : "RESOLVED");
+        if (mes) {
+            // 补充 ERP 统一物料编码/类型/单位编码，供缺料协作单 B 发送（设计 7.2）
+            var itemInfo = jdbc.queryForList("SELECT i.code AS materialCode, i.material_type AS materialType,"
+                    + " i.name AS materialName, i.unit AS unit FROM wms_item_sku s"
+                    + " JOIN wms_item i ON i.id=s.item_id AND i.tenant_id=s.tenant_id"
+                    + " WHERE s.id=? AND s.tenant_id=?", line.get("sku_id"), tenant);
+            if (itemInfo.isEmpty()) {
+                p.put("materialCode",""); p.put("materialType",""); p.put("unitCode","");
+            } else {
+                var it = itemInfo.getFirst();
+                p.put("materialCode", Objects.toString(it.get("materialCode"),""));
+                p.put("materialType", Objects.toString(it.get("materialType"),""));
+                p.put("unitCode", Objects.toString(it.get("unit"),""));
+                String name = Objects.toString(it.get("materialName"),"");
+                p.put("materialNameSnapshot", name.isEmpty() ? p.get("skuName") : name);
+            }
+            // MES 调 WMS 领料时 sourceOrderNo 即生产工单号，作为协作单 B 的来源生产工单号
+            p.put("sourceProductionOrderNo", order.get("biz_order_no"));
+        }
         return p;
     }
 

@@ -13,6 +13,14 @@ public interface WmsIntegrationRequestMapper extends BaseMapperX<WmsIntegrationR
                 .eq(WmsIntegrationRequestDO::getRequestId, requestId));
     }
 
+    default WmsIntegrationRequestDO selectSourceRequest(String operationType, String aggregateNo) {
+        return selectOne(new LambdaQueryWrapperX<WmsIntegrationRequestDO>()
+                .eq(WmsIntegrationRequestDO::getOperationType, operationType)
+                .eq(WmsIntegrationRequestDO::getAggregateNo, aggregateNo)
+                .orderByAsc(WmsIntegrationRequestDO::getId)
+                .last("LIMIT 1"));
+    }
+
     /** 重复插入等待另一事务提交后，使用当前读，避免 MySQL REPEATABLE READ 的旧快照。 */
     default WmsIntegrationRequestDO selectByRequestIdCurrent(String requestId) {
         com.baomidou.mybatisplus.annotation.DbType type =

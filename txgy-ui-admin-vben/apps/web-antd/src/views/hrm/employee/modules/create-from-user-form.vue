@@ -65,10 +65,7 @@ const [Modal, modalApi] = useVbenModal({
         message.warning('请填写手机号');
         return;
       }
-      if (!row.jobNumber?.trim()) {
-        message.warning('请填写工号');
-        return;
-      }
+      // 工号允许留空：留空时由服务端按租户工号规则自动生成
       if (!row.entryTime) {
         message.warning('请选择入职时间');
         return;
@@ -147,6 +144,13 @@ defineExpose({ open });
 
 <template>
   <Modal class="w-[96%]" :loading="loading">
+    <a-alert
+      class="mb-3"
+      type="info"
+      show-icon
+      message="这里为已有的后台账号建立员工档案"
+      description="若下拉列表为空，说明本租户暂无可绑定的后台账号。后台账号需要在「系统管理 → 用户管理」中创建（需要系统用户权限），创建后再回到本页面选择建档。"
+    />
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <span class="whitespace-nowrap">选择未建档用户</span>
       <UserSelect
@@ -192,7 +196,7 @@ defineExpose({ open });
           <DeptTreeSelect v-model="record.deptId" class="w-full" />
         </template>
         <template v-else-if="column.key === 'jobNumber'">
-          <Input v-model:value="record.jobNumber" placeholder="请输入工号" />
+          <Input v-model:value="record.jobNumber" placeholder="留空自动生成" />
         </template>
         <template v-else-if="column.key === 'leaderEmployeeId'">
           <EmployeeSelect v-model="record.leaderEmployeeId" />

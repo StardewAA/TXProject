@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.bpm.api.event;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.context.ApplicationEvent;
@@ -11,6 +12,7 @@ import org.springframework.context.ApplicationEvent;
  */
 @SuppressWarnings("ALL")
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BpmProcessInstanceStatusEvent extends ApplicationEvent {
 
     /**
@@ -42,10 +44,6 @@ public class BpmProcessInstanceStatusEvent extends ApplicationEvent {
     public BpmProcessInstanceStatusEvent() {
         // new Object() 保证非空
         super(new Object());
-    }
-
-    public BpmProcessInstanceStatusEvent(Object source) {
-        super(source);
     }
 
 }

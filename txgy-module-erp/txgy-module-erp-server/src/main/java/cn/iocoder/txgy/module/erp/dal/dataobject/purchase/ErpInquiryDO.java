@@ -25,9 +25,17 @@ public class ErpInquiryDO extends BaseDO {
     private Long purchaseRequestId;
     private Integer status;
     private String processInstanceId;
+    /**
+     * 询价反审批原因
+     */
+    private String reverseApproveReason;
     private Integer businessStatus;
     private Integer awardStatus;
     private String awardProcessInstanceId;
+    /**
+     * 定标反审批原因
+     */
+    private String awardReverseApproveReason;
     private String title;
     private Integer inquiryMode;
     private LocalDateTime deadline;

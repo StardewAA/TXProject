@@ -1,5 +1,8 @@
 package cn.iocoder.txgy.module.wms.controller.admin.md.warehouse;
 
+import cn.hutool.core.util.NumberUtil;
+import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.txgy.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
@@ -40,9 +43,6 @@ public class WmsWarehouseController {
     private WmsWarehouseService warehouseService;
     @Resource
     private WmsWarehousePersonnelService warehousePersonnelService;
-    @Resource
-    private AdminUserApi adminUserApi;
-
     @Resource
     private AdminUserApi adminUserApi;
 

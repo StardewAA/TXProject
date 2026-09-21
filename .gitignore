@@ -11,6 +11,11 @@ target/
 .flattened-pom.xml
 
 ######################################################################
+# 本地数据（体积大，不纳入版本管理）
+backup/
+.workbuddy/
+
+######################################################################
 # IDE
 
 ### STS ###
@@ -129,6 +134,7 @@ deploy/backend/erp-app.jar
 # 本地法规原文、OCR 中间文件与导入记录（不提交附件及抓取内容）
 /data/cms-import/
 deploy/backend/bpm-app.jar
+deploy/backend/wms-app.jar
 /deploy/jars/**/app.jar
 
 # 本地构建与运行时产物（独立编排的 jar / 前端产物 / 补丁 / 备份，不入库）

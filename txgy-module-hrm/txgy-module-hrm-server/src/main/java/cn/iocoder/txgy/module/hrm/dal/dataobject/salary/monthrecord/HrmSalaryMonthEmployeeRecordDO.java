@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.salary.monthrecord;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.salary.config.HrmSalaryOptionDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -31,7 +31,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmSalaryMonthEmployeeRecordDO extends BaseDO {
+public class HrmSalaryMonthEmployeeRecordDO extends TenantBaseDO {
 
     /**
      * 编号

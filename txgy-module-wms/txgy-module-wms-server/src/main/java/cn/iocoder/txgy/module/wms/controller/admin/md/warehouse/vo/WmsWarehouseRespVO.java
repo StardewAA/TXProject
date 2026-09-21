@@ -64,6 +64,18 @@ public class WmsWarehouseRespVO {
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
 
+    @Schema(description = "创建者用户编号")
+    private String creator;
+
+    @Schema(description = "创建者姓名")
+    private String creatorName;
+
+    @Schema(description = "更新者用户编号")
+    private String updater;
+
+    @Schema(description = "更新者姓名")
+    private String updaterName;
+
     @Schema(description = "仓库负责人用户编号")
     private Long managerUserId;
 

@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.util.collection.MapUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.hrm.controller.admin.attendance.vo.leave.HrmAttendanceLeavePageReqVO;
+import cn.iocoder.txgy.module.hrm.controller.admin.attendance.vo.leave.HrmAttendanceLeaveApproveReqVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.attendance.vo.leave.HrmAttendanceLeaveRespVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.attendance.record.HrmAttendanceLeaveDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
@@ -21,9 +22,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -80,6 +84,17 @@ public class HrmAttendanceLeaveController {
         List<HrmAttendanceLeaveRespVO> list = buildAttendanceLeaveRespVOList(
                 attendanceLeaveService.getAttendanceLeaveList(exportReqVO));
         ExcelUtils.write(response, "请假记录.xls", "数据", HrmAttendanceLeaveRespVO.class, list);
+    }
+
+    @PutMapping("/approve")
+    @Operation(summary = "人工审批请假申请（通过 / 驳回）",
+            description = "员工端发起的请假申请统一走人工审批，由 HR 在此处终审")
+    @PreAuthorize("@ss.hasPermission('hrm:attendance:leave:update')")
+    @ApiAccessLog(operateType = OperateTypeEnum.UPDATE)
+    public CommonResult<Boolean> approveAttendanceLeave(
+            @Valid @RequestBody HrmAttendanceLeaveApproveReqVO reqVO) {
+        attendanceLeaveService.approveLeave(reqVO.getId(), reqVO.getApproved(), reqVO.getReason());
+        return success(true);
     }
 
     // ==================== 拼接 VO ====================

@@ -10,9 +10,11 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deletePurchaseReturn,
   exportPurchaseReturn,
+  exportPurchaseReturnPdf,
   getPurchaseReturnPage,
   updatePurchaseReturnStatus,
 } from '#/api/erp/purchase/return';
@@ -92,9 +94,15 @@ async function handleUpdateStatus(
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportPurchaseReturn(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '采购退货.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportPurchaseReturnPdf(await gridApi.formApi.getValues())
+      : await exportPurchaseReturn(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '采购退货.pdf' : '采购退货.xls',
+    source: data,
+  });
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -154,13 +162,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleCreate,
             },
             {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:purchase-return:export'],
-              onClick: handleExport,
-            },
-            {
               label: '批量删除',
               type: 'primary',
               danger: true,
@@ -173,6 +174,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               },
             },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:purchase-return:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">

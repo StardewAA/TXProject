@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryListReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryPageReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventoryRiskSummaryRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.inventory.vo.WmsInventorySkuSummaryRespVO;
 import cn.iocoder.txgy.module.wms.service.inventory.WmsInventoryReadService;
 import cn.iocoder.txgy.module.wms.dal.dataobject.inventory.WmsInventoryDO;
@@ -63,6 +64,13 @@ public class WmsInventoryController {
     private WmsItemSkuService itemSkuService;
     @Resource
     private WmsWarehouseService warehouseService;
+
+    @GetMapping("/risk-summary")
+    @Operation(summary = "获得库存预警与积压风险汇总")
+    @PreAuthorize("@ss.hasPermission('wms:inventory:query')")
+    public CommonResult<WmsInventoryRiskSummaryRespVO> getRiskSummary() {
+        return success(inventoryService.getRiskSummary());
+    }
 
     @GetMapping("/page")
     @Operation(summary = "获得库存统计分页")

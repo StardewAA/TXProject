@@ -130,11 +130,28 @@ const warehouseDimensionColumns: VxeTableGridOptions['columns'] = [
     slots: { default: 'skuInfo' },
   },
   {
+    field: 'unit',
+    title: '计量单位',
+    width: 100,
+  },
+  {
     field: 'quantity',
     title: '库存',
     align: 'right',
     minWidth: 130,
     slots: { default: 'quantity' },
+  },
+  {
+    field: 'inventoryStatus',
+    title: '库存状态',
+    width: 110,
+    slots: { default: 'inventoryStatus' },
+  },
+  {
+    title: '操作',
+    width: 110,
+    fixed: 'right',
+    slots: { default: 'actions' },
   },
 ];
 
@@ -158,11 +175,28 @@ const itemDimensionColumns: VxeTableGridOptions['columns'] = [
     slots: { default: 'warehouseName' },
   },
   {
+    field: 'unit',
+    title: '计量单位',
+    width: 100,
+  },
+  {
     field: 'quantity',
     title: '库存',
     align: 'right',
     minWidth: 130,
     slots: { default: 'quantity' },
+  },
+  {
+    field: 'inventoryStatus',
+    title: '库存状态',
+    width: 110,
+    slots: { default: 'inventoryStatus' },
+  },
+  {
+    title: '操作',
+    width: 110,
+    fixed: 'right',
+    slots: { default: 'actions' },
   },
 ];
 

@@ -93,3 +93,10 @@ export function exportFinanceReceipt(params: any) {
     params,
   });
 }
+
+/** 导出收款单 PDF */
+export function exportFinanceReceiptPdf(params: any) {
+  return requestClient.download('/erp/finance-receipt/export-pdf', {
+    params,
+  });
+}
