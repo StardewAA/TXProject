@@ -339,38 +339,74 @@ function humanSize(n?: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** 在浏览器里打开附件（图片放大 / 文件预览） */
-function openAttachment(url?: string) {
+/** 能在浏览器里直接显示的类型；其余类型（Excel/CSV 等）浏览器只会下载 */
+const INLINE_VIEWABLE = /^(image\/|application\/pdf|text\/|video\/|audio\/)/i;
+
+/**
+ * 打开附件（图片放大 / 文件预览 / 不可预览的类型则下载）。
+ *
+ * 分三种情况处理，直接 window.open 原地址是不行的：
+ * 1. 本地选取的附件是 FileReader 产生的 data: URL —— 浏览器**禁止顶层打开 data: URL**，
+ *    会直接拦掉，表现为「点了没反应」；
+ * 2. 后端文件地址是相对路径 —— 直接打开会被前端 SPA 路由接管，表现为「跳到系统首页」；
+ * 3. 后端下载接口 /infra/file/{id}/get/** 用的是 attachment（强制下载），
+ *    应换成 /infra/file/{id}/preview/**（inline，内联预览）。
+ *
+ * @param filename 原始文件名：浏览器无法在线预览的类型（如 xlsx）会转为下载，
+ *                 必须带上原名，否则会下到一个没有名字、没有后缀的文件。
+ */
+async function openAttachment(url?: string, filename?: string) {
   if (!url) return;
-  window.open(url, '_blank');
+
+  // 1. 后端文件地址：改用 preview 接口内联打开
+  if (!url.startsWith('data:') && url.includes('/infra/file/')) {
+    triggerLink(url.replace(/\/(get|preview)\//, '/preview/'), undefined, true);
+    return;
+  }
+
+  // 2. data: 或其它相对地址：取成 Blob 后按类型决定预览还是下载
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) throw new Error(`附件读取失败 ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    if (INLINE_VIEWABLE.test(blob.type)) {
+      triggerLink(objectUrl, undefined, true);
+    } else {
+      triggerLink(objectUrl, filename || '附件', false);
+      message.info('该类型无法在线预览，已开始下载');
+    }
+    // Blob 地址用完释放（延迟释放，确保新标签页/下载已开始）
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch {
+    message.error('附件打开失败，请重试');
+  }
 }
 
 /** 触发文件下载；对相对路径会 Blob 拉取后再下载，避免被 Vue Router 拦截 */
 async function downloadFile(url?: string, filename?: string) {
   if (!url) return;
-
-  // data: 或绝对 http(s) 链接直接用 <a download> 触发
-  if (url.startsWith('data:') || /^https?:\/\//i.test(url)) {
-    triggerLink(url, filename);
-    return;
-  }
-
-  // 相对路径：先fetch成blob再生成object URL，避免SPA路由拦截
   try {
     const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error(`下载失败 ${res.status}`);
-    const blob = await res.blob();
-    triggerLink(URL.createObjectURL(blob), filename);
+    if (!res.ok) throw new Error(`附件读取失败 ${res.status}`);
+    const objectUrl = URL.createObjectURL(await res.blob());
+    triggerLink(objectUrl, filename || '附件', false);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   } catch {
-    message.error('文件打开失败，请重试');
+    message.error('文件下载失败，请重试');
   }
 }
 
-function triggerLink(url: string, filename?: string) {
+/** 用临时 <a> 触发打开或下载；open=true 时在新标签页打开，否则走下载 */
+function triggerLink(url: string, filename?: string, open = false) {
   const a = document.createElement('a');
   a.href = url;
-  if (filename) a.download = filename;
-  a.target = '_blank';
+  if (open) {
+    a.target = '_blank';
+    a.rel = 'noopener';
+  } else if (filename) {
+    a.download = filename;
+  }
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
@@ -568,10 +604,15 @@ defineExpose({ handleCreate, newSessionId });
         <!-- 空会话：欢迎语 + WMS 首页可视化图表 -->
         <div
           v-if="showHero"
-          class="mx-auto flex h-full max-w-6xl flex-col transition-all duration-500"
+          class="mx-auto flex min-h-full max-w-6xl flex-col transition-all duration-500"
         >
+          <!--
+            注意别用 flex-1：仪表盘比可视区高时，flex-1 的基准是 0，
+            会被压缩到 0 高度，表现为欢迎语消失、输入框顶到页面最上方。
+            这里用 grow + shrink-0 + basis-auto：有富余空间时撑开居中，空间不够时保持内容高度、由外层滚动。
+          -->
           <div
-            class="flex flex-1 flex-col justify-center transition-all duration-500"
+            class="flex shrink-0 grow basis-auto flex-col justify-center py-6 transition-all duration-500"
           >
             <div class="mx-auto w-full max-w-2xl text-center">
               <div
@@ -597,12 +638,15 @@ defineExpose({ handleCreate, newSessionId });
                 <div
                   v-for="(img, i) in images"
                   :key="`i${i}`"
-                  class="group relative h-14 w-14 overflow-hidden rounded border border-gray-200 bg-white"
+                  class="group relative h-14 w-14 cursor-pointer overflow-hidden rounded border border-gray-200 bg-white"
+                  title="点击查看大图"
+                  @click="openAttachment(img.url)"
                 >
                   <img :src="img.url" class="h-full w-full object-cover" />
                   <span
                     class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-xs text-white group-hover:block"
-                    @click="images.splice(i, 1)"
+                    title="移除"
+                    @click.stop="images.splice(i, 1)"
                   >
                     ×
                   </span>
@@ -610,13 +654,16 @@ defineExpose({ handleCreate, newSessionId });
                 <div
                   v-for="(doc, i) in docs"
                   :key="`d${i}`"
-                  class="group relative flex h-14 items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+                  class="group relative flex h-14 cursor-pointer items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+                  title="点击查看文件"
+                  @click="openAttachment(doc.url, doc.name)"
                 >
                   <IconifyIcon class="size-4" icon="lucide:file-text" />
                   <span class="max-w-24 truncate">{{ doc.name }}</span>
                   <span
                     class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-white group-hover:block"
-                    @click="docs.splice(i, 1)"
+                    title="移除"
+                    @click.stop="docs.splice(i, 1)"
                   >
                     ×
                   </span>
@@ -759,8 +806,8 @@ defineExpose({ handleCreate, newSessionId });
                   :key="i"
                   href="#"
                   class="flex cursor-pointer items-center gap-1 rounded bg-black/5 px-2 py-1 text-xs transition hover:bg-black/10"
-                  title="点击打开/下载文件"
-                  @click.prevent.stop="downloadFile(doc.url, doc.name)"
+                  title="点击查看文件"
+                  @click.prevent.stop="openAttachment(doc.url, doc.name)"
                 >
                   <IconifyIcon class="size-3.5" icon="lucide:file-text" />
                   <span class="max-w-40 truncate">{{ doc.name }}</span>
@@ -808,12 +855,15 @@ defineExpose({ handleCreate, newSessionId });
             <div
               v-for="(img, i) in images"
               :key="`i${i}`"
-              class="group relative h-14 w-14 overflow-hidden rounded border border-gray-200 bg-white"
+              class="group relative h-14 w-14 cursor-pointer overflow-hidden rounded border border-gray-200 bg-white"
+              title="点击查看大图"
+              @click="openAttachment(img.url)"
             >
               <img :src="img.url" class="h-full w-full object-cover" />
               <span
                 class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-xs text-white group-hover:block"
-                @click="images.splice(i, 1)"
+                title="移除"
+                @click.stop="images.splice(i, 1)"
               >
                 ×
               </span>
@@ -821,13 +871,16 @@ defineExpose({ handleCreate, newSessionId });
             <div
               v-for="(doc, i) in docs"
               :key="`d${i}`"
-              class="group relative flex h-14 items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+              class="group relative flex h-14 cursor-pointer items-center gap-1 rounded border border-gray-200 bg-white px-2 text-xs"
+              title="点击查看文件"
+              @click="openAttachment(doc.url, doc.name)"
             >
               <IconifyIcon class="size-4" icon="lucide:file-text" />
               <span class="max-w-24 truncate">{{ doc.name }}</span>
               <span
                 class="absolute right-0 top-0 hidden cursor-pointer bg-black/50 px-1 text-white group-hover:block"
-                @click="docs.splice(i, 1)"
+                title="移除"
+                @click.stop="docs.splice(i, 1)"
               >
                 ×
               </span>
