@@ -59,6 +59,10 @@ public class CrmAfterSaleTicketSaveReqVO {
     @Schema(description = "处理人（售后工程师/外协）；为空可稍后指派", example = "1")
     private Long assigneeUserId;
 
+    @Schema(description = "开始处理时间；为空表示尚未开始处理（待办「工单超时预警」将以创建时间兜底起算）",
+            example = "2026-09-20 10:30:00")
+    private java.time.LocalDateTime startTime;
+
     @Schema(description = "备注", example = "客户比较着急，请优先处理")
     @Size(max = 500, message = "备注长度不能超过 500 个字符")
     private String remark;
