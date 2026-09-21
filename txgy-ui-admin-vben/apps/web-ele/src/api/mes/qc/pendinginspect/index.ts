@@ -10,6 +10,7 @@ export namespace MesQcPendingInspectApi {
     sourceLineId?: number; // 来源单据行 ID
     sourceDocCode?: string; // 来源单据编号
     qcType?: number; // 检验类型（MesQcTypeEnum）
+    qcId?: number; // 已存在的草稿检验单 ID（非空时可直接"去检验"）
     itemId?: number; // 物料 ID
     itemCode?: string; // 物料编码
     itemName?: string; // 物料名称
