@@ -49,9 +49,6 @@ public interface WmsWarehouseService {
      */
     WmsWarehouseDO validateWarehouseExists(Long id);
 
-    /** 校验仓库存在且处于启用状态。 */
-    WmsWarehouseDO validateWarehouseEnabled(Long id);
-
     /**
      * 获得仓库
      *

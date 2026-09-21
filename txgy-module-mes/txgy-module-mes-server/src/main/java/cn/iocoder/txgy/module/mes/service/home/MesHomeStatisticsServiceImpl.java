@@ -60,8 +60,6 @@ public class MesHomeStatisticsServiceImpl implements MesHomeStatisticsService {
 
     @Resource
     private MesProProjectMilestoneMapper projectMilestoneMapper;
-
-    @Resource
     private AdminUserApi adminUserApi;
 
     @Override

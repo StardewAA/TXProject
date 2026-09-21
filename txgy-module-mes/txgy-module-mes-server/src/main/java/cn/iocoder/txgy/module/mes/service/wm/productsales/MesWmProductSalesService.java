@@ -55,32 +55,15 @@ public interface MesWmProductSalesService {
     PageResult<MesWmProductSalesDO> getProductSalesPage(MesWmProductSalesPageReqVO pageReqVO);
 
     /**
-     * 提交销售出库单（草稿 → BPM审批中，发起工作流）
-     * <p>
-     * 审批通过后按 OQC 标志分流：
+     * 提交销售出库单
      * <ul>
-     *     <li>有 OQC 检验行：待检测</li>
-     *     <li>无 OQC 检验行：待拣货</li>
+     *     <li>有 OQC 检验行：草稿 → 待检测</li>
+     *     <li>无 OQC 检验行：草稿 → 待拣货</li>
      * </ul>
-     * 驳回退回草稿
      *
      * @param id 编号
      */
     void submitProductSales(Long id);
-
-    /**
-     * 审批通过回写（BPM审批中 → 按 OQC 标志分流），由审批结果任务异步消费调用
-     *
-     * @param id 编号
-     */
-    void approveProductSales(Long id);
-
-    /**
-     * 审批驳回回写（BPM审批中 → 草稿），由审批结果任务异步消费调用
-     *
-     * @param id 编号
-     */
-    void rejectProductSales(Long id);
 
     /**
      * 校验销售出库单数量是否匹配

@@ -57,12 +57,6 @@ public class MesWmProductSalesDO extends BaseDO {
      */
     private Long noticeId;
     /**
-     * BPM 流程实例编号
-     *
-     * 提交审批后回填，用于审批中心查看与状态回写
-     */
-    private String processInstanceId;
-    /**
      * 出库日期
      */
     private LocalDateTime salesDate;

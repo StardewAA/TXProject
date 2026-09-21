@@ -37,11 +37,4 @@ public final class MesOrderStatusConstants {
      */
     public static final int CANCELLED = 5;
 
-    /**
-     * BPM 审批中（单据已提交工作流，等待审批结果回调）
-     *
-     * 仅接入 BPM 审批的单据使用，避免与本地"审批中/待处理"语义冲突
-     */
-    public static final int BPM_APPROVING = 10;
-
 }

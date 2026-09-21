@@ -229,38 +229,6 @@ public interface ErrorCodeConstants {
         ErrorCode TM_TOOL_NOT_EXISTS = new ErrorCode(1_040_401_000, "工具不存在");
         ErrorCode TM_TOOL_CODE_DUPLICATE = new ErrorCode(1_040_401_001, "工具编码已存在");
         ErrorCode TM_TOOL_HAS_BATCH = new ErrorCode(1_040_401_002, "该工具已被批次引用，无法删除");
-        ErrorCode TM_TOOL_AVAILABLE_QUANTITY_INSUFFICIENT = new ErrorCode(1_040_401_003, "工具可用数量不足");
-        ErrorCode TM_TOOL_STATUS_INVALID = new ErrorCode(1_040_401_004, "工具状态不正确，无法执行该操作");
-
-        // ========== MES 工具管理-工具领用单（1-040-402-000） ==========
-        ErrorCode TM_TOOL_ISSUE_NOT_EXISTS = new ErrorCode(1_040_402_000, "工具领用单不存在");
-        ErrorCode TM_TOOL_ISSUE_NOT_PREPARE = new ErrorCode(1_040_402_001, "只有草稿状态的领用单才可操作");
-        ErrorCode TM_TOOL_ISSUE_NO_LINE = new ErrorCode(1_040_402_002, "领用单至少需要一条行数据");
-        ErrorCode TM_TOOL_ISSUE_LINE_NOT_EXISTS = new ErrorCode(1_040_402_100, "工具领用单行不存在");
-        ErrorCode TM_TOOL_ISSUE_LINE_QUANTITY_EXCEED = new ErrorCode(1_040_402_101, "领用数量不能超过工具可用数量");
-        ErrorCode TM_TOOL_ISSUE_CODE_DUPLICATE = new ErrorCode(1_040_402_102, "领用单编码已存在");
-
-        // ========== MES 工具管理-工具归还单（1-040-403-000） ==========
-        ErrorCode TM_TOOL_RETURN_NOT_EXISTS = new ErrorCode(1_040_403_000, "工具归还单不存在");
-        ErrorCode TM_TOOL_RETURN_NOT_PREPARE = new ErrorCode(1_040_403_001, "只有草稿状态的归还单才可操作");
-        ErrorCode TM_TOOL_RETURN_NO_LINE = new ErrorCode(1_040_403_002, "归还单至少需要一条行数据");
-        ErrorCode TM_TOOL_RETURN_LINE_NOT_EXISTS = new ErrorCode(1_040_403_100, "工具归还单行不存在");
-        ErrorCode TM_TOOL_RETURN_LINE_QUANTITY_EXCEED = new ErrorCode(1_040_403_101, "归还数量不能超过领用中数量");
-        ErrorCode TM_TOOL_RETURN_CODE_DUPLICATE = new ErrorCode(1_040_403_102, "归还单编码已存在");
-
-        // ========== MES 工具管理-工具维修单（1-040-404-000） ==========
-        ErrorCode TM_TOOL_REPAIR_NOT_EXISTS = new ErrorCode(1_040_404_000, "工具维修单不存在");
-        ErrorCode TM_TOOL_REPAIR_NOT_PREPARE = new ErrorCode(1_040_404_001, "只有草稿状态的维修单才可操作");
-        ErrorCode TM_TOOL_REPAIR_NO_LINE = new ErrorCode(1_040_404_002, "维修单至少需要一条行数据");
-        ErrorCode TM_TOOL_REPAIR_LINE_NOT_EXISTS = new ErrorCode(1_040_404_100, "工具维修单行不存在");
-        ErrorCode TM_TOOL_REPAIR_CODE_DUPLICATE = new ErrorCode(1_040_404_101, "维修单编码已存在");
-
-        // ========== MES 工具管理-工具报废单（1-040-405-000） ==========
-        ErrorCode TM_TOOL_SCRAP_NOT_EXISTS = new ErrorCode(1_040_405_000, "工具报废单不存在");
-        ErrorCode TM_TOOL_SCRAP_NOT_PREPARE = new ErrorCode(1_040_405_001, "只有草稿状态的报废单才可操作");
-        ErrorCode TM_TOOL_SCRAP_NO_LINE = new ErrorCode(1_040_405_002, "报废单至少需要一条行数据");
-        ErrorCode TM_TOOL_SCRAP_LINE_NOT_EXISTS = new ErrorCode(1_040_405_100, "工具报废单行不存在");
-        ErrorCode TM_TOOL_SCRAP_CODE_DUPLICATE = new ErrorCode(1_040_405_101, "报废单编码已存在");
 
         // ========== MES 生产管理-工序（1-040-500-000） ==========
         ErrorCode PRO_PROCESS_NOT_EXISTS = new ErrorCode(1_040_500_000, "工序不存在");
@@ -793,21 +761,5 @@ public interface ErrorCodeConstants {
         ErrorCode MES_POLLUTION_OUTBOUND_BLOCKED = new ErrorCode(1_040_819_001, "批次 {} 存在有污染/标记环保判定（去向：{}），禁止出库");
         ErrorCode SET_POLLUTION_LEDGER_NOT_EXISTS = new ErrorCode(1_040_819_002, "污染/危废暂存台账记录不存在");
         ErrorCode SET_POLLUTION_LEDGER_STATUS_INVALID = new ErrorCode(1_040_819_003, "台账状态不合法（支持：处置中/已回用/已排放/已处置）");
-
-        // ========== MES 集成-ERP 主数据对接（1-040-900-000） ==========
-        ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_040_900_000, "集成请求的租户编号与当前上下文不一致");
-        ErrorCode INTEGRATION_SOURCE_MODULE_INVALID = new ErrorCode(1_040_900_001, "集成请求的来源模块不合法");
-        ErrorCode INTEGRATION_PARTNER_TYPE_INVALID = new ErrorCode(1_040_900_002, "往来企业类型不合法（支持：CUSTOMER/SUPPLIER）");
-        ErrorCode INTEGRATION_MATERIAL_TYPE_INVALID = new ErrorCode(1_040_900_003, "物料类型不合法（支持：RAW_MATERIAL/FINISHED_GOODS）");
-        ErrorCode INTEGRATION_MATERIAL_CODE_INVALID = new ErrorCode(1_040_900_004, "物料编码不能为空且不能超过 64 字符");
-        ErrorCode INTEGRATION_PARTNER_CODE_INVALID = new ErrorCode(1_040_900_005, "往来企业编码不能为空且不能超过 64 字符");
-        ErrorCode INTEGRATION_NAME_INVALID = new ErrorCode(1_040_900_006, "名称不能为空且不能超过 255 字符");
-        ErrorCode INTEGRATION_DATA_VERSION_INVALID = new ErrorCode(1_040_900_007, "数据版本必须为正整数");
-        ErrorCode INTEGRATION_REQUEST_ID_INVALID = new ErrorCode(1_040_900_008, "幂等请求编号不能为空且不能超过 64 字符");
-        ErrorCode INTEGRATION_STATUS_INVALID = new ErrorCode(1_040_900_009, "状态取值不合法（支持：ENABLED/DISABLED）");
-        ErrorCode INTEGRATION_WORK_ORDER_SOURCE_CODE_INVALID = new ErrorCode(1_040_900_010, "工单来源单据编号不能为空且不能超过 64 字符");
-        ErrorCode INTEGRATION_WORK_ORDER_ITEM_NOT_FOUND = new ErrorCode(1_040_900_011, "工单产品物料（{}）在 MES 不存在，请先完成物料主数据同步");
-        ErrorCode INTEGRATION_WORK_ORDER_QUANTITY_INVALID = new ErrorCode(1_040_900_012, "工单生产数量必须大于 0");
-        ErrorCode INTEGRATION_WORK_ORDER_REQUEST_DATE_INVALID = new ErrorCode(1_040_900_013, "工单需求日期不能为空");
 
 }
