@@ -44,6 +44,17 @@
             <artifactId>txgy-module-erp-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!-- WMS AI 客服按模型编号取「地址 + Key + 模型名」，模型仍在 AI 模块统一维护 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-ai-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-trade-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- 业务组件 -->
         <dependency>

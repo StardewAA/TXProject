@@ -115,31 +115,6 @@ export namespace TrainingLearningApi {
     endReason?: string;
     creditEarned?: number;
   }
-
-  /** 培训班在班学员（学习中心「筛选学员 / 课程指派」候选，与培训管理同步） */
-  export interface ClassStudentOption {
-    userId?: number;
-    userName?: string;
-    deptName?: string;
-    className?: string;
-    classCount?: number;
-    joinTime?: string;
-  }
-
-  /** 学员整体学习进度（与培训管理班级学习进度打通） */
-  export interface LearnerProgress {
-    userId?: number;
-    userName?: string;
-    deptName?: string;
-    className?: string;
-    totalTasks?: number;
-    todoCount?: number;
-    learningCount?: number;
-    completedCount?: number;
-    progressPercent?: number;
-    creditTotal?: number;
-    creditEarned?: number;
-  }
 }
 
 /** 学习任务分页 */
@@ -163,21 +138,6 @@ export function assignCourse(data: {
 export function getAssignCandidates() {
   return requestClient.get<TrainingLearningApi.AssignCandidate>(
     '/training/learning/task/assign-candidates',
-  );
-}
-
-/** 培训班在班学员（学习中心「筛选学员 / 课程指派」候选，来自培训管理） */
-export function getLearningClassStudents() {
-  return requestClient.get<TrainingLearningApi.ClassStudentOption[]>(
-    '/training/learning/task/class-students',
-  );
-}
-
-/** 学员整体学习进度（与培训管理班级学习进度打通，可按培训班筛选） */
-export function getLearnerProgressList(classId?: number) {
-  return requestClient.get<TrainingLearningApi.LearnerProgress[]>(
-    '/training/learning/task/student-progress',
-    { params: { classId } },
   );
 }
 
@@ -213,11 +173,10 @@ export function deleteLiveRoom(id: number) {
   );
 }
 
-/** 学习数据统计（可按培训班筛选，与培训管理班级学习进度打通） */
-export function getLearningStats(classId?: number) {
+/** 学习数据统计 */
+export function getLearningStats() {
   return requestClient.get<TrainingLearningApi.LearningStat[]>(
     '/training/learning/track/stats',
-    { params: { classId } },
   );
 }
 

@@ -3,10 +3,8 @@ package cn.iocoder.txgy.module.training.service.learning;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.AdminCourseTrackRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.AssignCandidateRespVO;
-import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearnerProgressRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearnerTaskRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearningAssignReqVO;
-import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearningClassStudentRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearningStatRespVO;
 import cn.iocoder.txgy.module.training.controller.admin.learning.vo.LearningTaskPageReqVO;
 
@@ -45,27 +43,11 @@ public interface AdminLearningService {
     PageResult<LearnerTaskRespVO> getTaskPage(LearningTaskPageReqVO reqVO);
 
     /**
-     * 获得培训班学员列表（在班学员去重，供学习中心「筛选学员 / 课程指派」使用）
+     * 获得学习数据统计（按课程汇总）
      *
-     * @return 学员列表（含姓名 / 部门 / 所在培训班）
-     */
-    List<LearningClassStudentRespVO> listClassStudents();
-
-    /**
-     * 获得学员整体学习进度（培训班学习任务 + 学习任务 合并统计，按学员聚合）
-     *
-     * @param classId 培训班 ID（可选，为空时统计全部培训班学员）
-     * @return 学员进度列表
-     */
-    List<LearnerProgressRespVO> getLearnerProgress(Long classId);
-
-    /**
-     * 获得学习数据统计（按课程汇总；与培训班学习任务打通）
-     *
-     * @param classId 培训班 ID（可选，为空时统计全部培训班的课程任务）
      * @return 统计列表
      */
-    List<LearningStatRespVO> getLearnStats(Long classId);
+    List<LearningStatRespVO> getLearnStats();
 
     /**
      * 获得某学员某课程的完整学习轨迹（按媒资/会话明细）

@@ -1,7 +1,11 @@
 package cn.iocoder.txgy.module.wms.controller.admin.ai;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiChatReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeFileReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeRespVO;
@@ -11,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,6 +58,24 @@ public class WmsAiController {
                     + "先由大模型路由意图，再由后端查询真实数据库拼装回复，数据不臆造。")
     public CommonResult<String> chat(@RequestBody @Valid WmsAiChatReqVO reqVO) {
         return success(aiChatService.chat(reqVO.getText(), reqVO.getSessionId()));
+    }
+
+    @PostMapping("/create-order")
+    @Operation(summary = "AI 确认建单：把确认卡片上核对过的草稿落库为入库/出库单",
+            description = "复用既有单据 Service 落库，单据编号规则、状态机、审批联动与手工建单完全一致。"
+                    + "明细必须已匹配到系统商品（否则拒绝落库，避免大模型幻觉数据进入业务表）。")
+    @PreAuthorize("@ss.hasPermission('wms:receipt-order:create') or @ss.hasPermission('wms:shipment-order:create')")
+    public CommonResult<WmsAiCreateOrderRespVO> createOrder(@RequestBody @Valid WmsAiCreateOrderReqVO reqVO) {
+        return success(aiService.createOrder(reqVO));
+    }
+
+    @PostMapping("/approval-advice")
+    @Operation(summary = "AI 辅助审批：给出单据摘要、风险点与审批建议",
+            description = "供审批人参考，只读取单据与库存做分析，不改变单据状态、不代替人工审批。"
+                    + "库存、验收数量等事实由后端按真实数据计算后再交给模型归纳。")
+    @PreAuthorize("@ss.hasPermission('wms:receipt-order:query') or @ss.hasPermission('wms:shipment-order:query')")
+    public CommonResult<WmsAiApprovalAdviceRespVO> approvalAdvice(@RequestBody @Valid WmsAiApprovalAdviceReqVO reqVO) {
+        return success(aiService.approvalAdvice(reqVO));
     }
 
 }

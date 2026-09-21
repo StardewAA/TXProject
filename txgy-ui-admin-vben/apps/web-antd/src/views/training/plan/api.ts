@@ -125,14 +125,6 @@ export namespace TrainingPlanApi {
     createTime?: string;
   }
 
-  /** 按参与对象（部门 / 岗位）筛选命中的学员 */
-  export interface ScopePreviewUser {
-    userId?: number;
-    nickname?: string;
-    deptName?: string;
-    /** 是否已在班 */
-    inClass?: boolean;
-  }
   /** Excel 批量导入学员结果 */
   export interface ImportStudentResult {
     successCount?: number;
@@ -145,27 +137,86 @@ export namespace TrainingPlanApi {
     }[];
   }
 
-  /** 圈选预览结果 */
-  export interface ScopePreviewResult {
+  /** 参与对象筛选条件（部门 + 岗位，保存于培训班 targetCondition） */
+  export interface ClassStudentScope {
+    classId?: number;
+    deptIds?: number[];
+    postIds?: number[];
+    includeChildDept?: boolean;
+  }
+
+  /** 参与对象筛选命中人员 */
+  export interface ClassStudentScopePreview {
     deptIds?: number[];
     postIds?: number[];
     includeChildDept?: boolean;
     matchedDeptIds?: number[];
-    users?: ScopePreviewUser[];
-    /** 命中人数 */
     matchedCount?: number;
-    /** 其中已在班人数 */
     inClassCount?: number;
-    /** 可新增人数 */
     addableCount?: number;
-    /** 当前在班人数 */
+    /** 培训班当前在班人数 */
     inClassTotal?: number;
-    /** 班级学员上限 */
+    /** 在班学员上限 */
     maxSize?: number;
-    /** 剩余名额 */
+    /** 剩余可收录名额 */
     remaining?: number;
+    users?: {
+      deptName?: string;
+      inClass?: boolean;
+      nickname?: string;
+      userId?: number;
+    }[];
   }
 
+  /** 导入名单解析出的学员（供人工指定培训班） */
+  export interface ImportParseUser {
+    rowNumber?: number;
+    userId?: number;
+    userName?: string;
+    mobile?: string;
+    deptName?: string;
+  }
+
+  /** 导入名单解析结果（不落库） */
+  export interface ImportParseResult {
+    matchedCount?: number;
+    users?: ImportParseUser[];
+    failRows?: {
+      mobile?: string;
+      reason?: string;
+      rowNumber?: number;
+    }[];
+  }
+
+  /** 入班明细（一名学员 + 一个目标培训班） */
+  export interface ImportAllocateItem {
+    userId?: number;
+    classId?: number;
+  }
+
+  /** 入班学员（结果展示） */
+  export interface AllocateUser {
+    userId?: number;
+    userName?: string;
+    deptName?: string;
+  }
+
+  /** 手动指定培训班入班结果 */
+  export interface ImportAllocateResult {
+    /** 实际入班人次（已在班自动跳过） */
+    successCount?: number;
+    /** 单班在班学员上限 */
+    maxSize?: number;
+    classResults?: {
+      addedCount?: number;
+      afterCount?: number;
+      beforeCount?: number;
+      classId?: number;
+      className?: string;
+      remaining?: number;
+      users?: AllocateUser[];
+    }[];
+  }
 }
 
 /** 培训班分页 */
@@ -226,24 +277,6 @@ export function addClassStudents(classId: number, userIds: number[]) {
     classId,
     userIds,
   });
-}
-
-/**
- * 按部门 / 岗位圈选命中的学员（不落库）
- *
- * 用于「从劳务部门等具体部门选择参训人员」场景：先预览命中名单与名额情况，
- * 由用户勾选后再调用 addClassStudents 正式入班，避免一次性整批导入超出班级名额。
- */
-export function previewScopeStudents(params: {
-  classId: number;
-  deptIds?: number[];
-  includeChildDept?: boolean;
-  postIds?: number[];
-}) {
-  return requestClient.post<TrainingPlanApi.ScopePreviewResult>(
-    '/training/plan/class/student/scope-preview',
-    params,
-  );
 }
 
 /** 移出学员 */
@@ -332,8 +365,8 @@ export function getRemindRecordPage(params: PageParam & Record<string, any>) {
 
 /** 上岗资格核查 */
 export function checkQualification(data: {
-  mobile: string;
   userName: string;
+  mobile: string;
 }) {
   return requestClient.post<TrainingPlanApi.QualificationResult>(
     '/training/plan/class/qualification/check',
@@ -343,10 +376,10 @@ export function checkQualification(data: {
 
 /** 上岗资格核查历史记录（分页） */
 export function getQualificationRecordPage(params: {
-  mobile?: string;
   pageNo: number;
   pageSize: number;
   userName?: string;
+  mobile?: string;
 }) {
   return requestClient.get<
     PageResult<TrainingPlanApi.QualificationRecord>
@@ -391,7 +424,43 @@ export function importClassStudents(
   );
 }
 
-/** 培训班全量（班级下拉使用，由前端按状态筛选可入班班级） */
+/** 参与对象筛选：预览命中人员（不落库，用于加入前确认） */
+export function previewClassScope(data: TrainingPlanApi.ClassStudentScope) {
+  return requestClient.post<TrainingPlanApi.ClassStudentScopePreview>(
+    '/training/plan/class/student/scope-preview',
+    data,
+  );
+}
+
+/** 按参与对象筛选条件批量加入学员（自动生成学习任务，已在班自动跳过） */
+export function addClassStudentsByScope(
+  data: TrainingPlanApi.ClassStudentScope,
+) {
+  return requestClient.post<number>(
+    '/training/plan/class/student/add-by-scope',
+    data,
+  );
+}
+
+/** 培训班全量（批量导入指定班级下拉使用，由前端按状态筛选可入班班级） */
 export function getAllClasses() {
   return fetchAllPages<TrainingPlanApi.Class>(getClassPage, {});
+}
+
+/** 解析 Excel 学员名单（按手机号匹配系统账号，不落库；供人工指定培训班） */
+export function parseClassStudentsImport(file: File) {
+  return requestClient.upload<TrainingPlanApi.ImportParseResult>(
+    '/training/plan/class/student/import-parse',
+    { file },
+  );
+}
+
+/** 按人工指定的「学员 → 培训班」明细批量入班 */
+export function allocateClassStudents(
+  items: TrainingPlanApi.ImportAllocateItem[],
+) {
+  return requestClient.post<TrainingPlanApi.ImportAllocateResult>(
+    '/training/plan/class/student/import-allocate',
+    { items },
+  );
 }

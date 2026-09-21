@@ -2,7 +2,8 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmAfterSaleTicketApi } from '#/api/crm/after-sale/ticket';
 
-import { useRouter } from 'vue-router';
+import { onActivated, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -18,6 +19,7 @@ import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import AssignForm from './modules/assign.vue';
+import FinishForm from './modules/finish.vue';
 import Form from './modules/form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
@@ -27,6 +29,11 @@ const [FormModal, formModalApi] = useVbenModal({
 
 const [AssignModal, assignModalApi] = useVbenModal({
   connectedComponent: AssignForm,
+  destroyOnClose: true,
+});
+
+const [FinishModal, finishModalApi] = useVbenModal({
+  connectedComponent: FinishForm,
   destroyOnClose: true,
 });
 
@@ -47,6 +54,36 @@ function handleCreate() {
   formModalApi.setData(null).open();
 }
 
+/**
+ * 支持从 CRM 首页快捷入口跳转过来时自动打开「新建」弹窗（?action=create）
+ *
+ * 首页的「新建工单」不再自己弹表单，而是进入售后工单模块并自动打开本页的新建弹窗，
+ * 用户能同时获得工单列表的上下文。
+ *
+ * 用 onMounted + onActivated 而非 watch：列表页被 keep-alive 缓存，
+ * 二次进入时组件不会重新 setup，只有在 onActivated 里检查才生效。
+ * 打开后立即清掉 query，避免刷新 / 返回时反复弹出。
+ */
+const route = useRoute();
+
+function checkCreateAction() {
+  if (route.query.action !== 'create') {
+    return;
+  }
+  // 清掉 URL 上的标记：用原生 history 改写地址栏，**不能**用 router.replace ——
+  // 那会触发一次路由导航，把紧接着要打开的弹窗重置掉。
+  const url = new URL(window.location.href);
+  url.searchParams.delete('action');
+  window.history.replaceState(window.history.state, '', url.toString());
+  // 弹窗容器需在本页挂载完成后才能渲染，稍等一拍再打开
+  setTimeout(() => {
+    handleCreate();
+  }, 300);
+}
+
+onMounted(checkCreateAction);
+onActivated(checkCreateAction);
+
 /** 编辑问题工单 */
 function handleEdit(row: CrmAfterSaleTicketApi.Ticket) {
   formModalApi.setData(row).open();
@@ -55,6 +92,11 @@ function handleEdit(row: CrmAfterSaleTicketApi.Ticket) {
 /** 指派处理人 */
 function handleAssign(row: CrmAfterSaleTicketApi.Ticket) {
   assignModalApi.setData(row).open();
+}
+
+/** 完成工单（弹窗填写工单记录，未填写不允许完成） */
+function handleFinish(row: CrmAfterSaleTicketApi.Ticket) {
+  finishModalApi.setData(row).open();
 }
 
 /** 删除问题工单 */
@@ -122,6 +164,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <AssignModal @success="handleRefresh" />
+    <FinishModal @success="handleRefresh" />
     <Grid table-title="售后问题工单列表">
       <template #toolbar-tools>
         <TableAction
@@ -163,7 +206,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               auth: ['crm:after-sale-ticket:update'],
               ifShow: row.status !== 3 && row.status !== 4,
-              onClick: handleStatus.bind(null, row, 3),
+              onClick: handleFinish.bind(null, row),
             },
             {
               label: '关闭',

@@ -1522,7 +1522,7 @@
     },
     {
       "key": "mes",
-      "name": "MES 系统",
+      "name": "智慧生产执行系统",
       "subGroups": [
         {
           "key": "md",
@@ -1530,7 +1530,7 @@
           "menus": [
             {
               "key": "mesHome",
-              "name": "MES 工作台",
+              "name": "生产工作台",
               "icon": "dashboard",
               "iconColor": "#1677ff",
               "url": "/pages-statistics/mes/home/index"

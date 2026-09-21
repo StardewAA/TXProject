@@ -14,7 +14,7 @@ public class QuestionSaveReqVO {
     @Schema(description = "试题ID（修改时必传）")
     private Long id;
 
-    @Schema(description = "题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析 6 填空 7 简答", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "题型：1 单选 2 多选 3 判断 4 实操问答 5 案例分析", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "题型不能为空")
     private Integer qtype;
 

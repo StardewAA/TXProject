@@ -1,6 +1,11 @@
 import type { VbenFormSchema } from '#/adapter/form';
 
+import { handleTree } from '@vben/utils';
+
+import { getSimpleDeptList } from '#/api/system/dept';
+
 import { CLASS_TYPE_OPTIONS } from '../data';
+import { loadPostOptions } from '../post-options';
 
 /** 常用岗位（定岗-四定之一，也可手工输入）
  *  数据来源：云培训学院-岗位工种表.xlsx（56 项，按序列 OP/TC/QC/MG/SP 排序）
@@ -99,6 +104,24 @@ export function useFormSchema(
       },
     },
     {
+      fieldName: 'projectId',
+      label: '工程项目编号',
+      component: 'Input',
+      componentProps: {
+        placeholder: '关联项目编号（岗前/复工培训用于上岗资格核查）',
+        maxlength: 64,
+      },
+    },
+    {
+      fieldName: 'projectName',
+      label: '工程项目名称',
+      component: 'Input',
+      componentProps: {
+        placeholder: '关联项目名称，可空',
+        maxlength: 200,
+      },
+    },
+    {
       fieldName: 'courseIds',
       label: '绑定课程(定课)',
       component: 'Select',
@@ -140,6 +163,56 @@ export function useFormSchema(
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
         placeholder: '选择培训截止时间（开班必须设置）',
+      },
+    },
+    {
+      fieldName: 'scopeDeptIds',
+      label: '参训部门',
+      component: 'ApiTreeSelect',
+      componentProps: {
+        allowClear: true,
+        api: async () => handleTree(await getSimpleDeptList()),
+        labelField: 'name',
+        valueField: 'id',
+        childrenField: 'children',
+        multiple: true,
+        treeCheckable: true,
+        showCheckedStrategy: 'SHOW_PARENT',
+        treeDefaultExpandAll: true,
+        placeholder: '按部门圈选参训人员（可多选）',
+      },
+    },
+    {
+      fieldName: 'scopeIncludeChildDept',
+      label: '含下级部门',
+      component: 'Switch',
+      defaultValue: true,
+      componentProps: {
+        checkedChildren: '是',
+        unCheckedChildren: '否',
+      },
+    },
+    {
+      fieldName: 'scopePostIds',
+      label: '参训岗位',
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        // 培训业务岗位工种（已同步为系统岗位）+ 其他系统岗位，支持名称/编码搜索
+        api: loadPostOptions,
+        mode: 'multiple',
+        optionFilterProp: 'label',
+        placeholder: '按岗位圈选参训人员（可多选，支持岗位名称/编码搜索）',
+      },
+    },
+    {
+      fieldName: 'remark',
+      label: '备注',
+      component: 'InputTextArea',
+      componentProps: {
+        placeholder: '备注，可空',
+        maxlength: 500,
+        rows: 2,
       },
     },
   ];

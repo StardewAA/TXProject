@@ -5,7 +5,6 @@
     <sql id="ProductStatisticsWhere">
         contract.deleted = 0
         AND contract_product.deleted = 0
-        AND product.deleted = 0
         AND contract.audit_status = ${@cn.iocoder.txgy.module.crm.enums.common.CrmAuditStatusEnum@APPROVE.status}
         AND contract.owner_user_id IN
             <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
@@ -19,7 +18,7 @@
             </foreach>
         </if>
         <if test="productId != null">
-            AND product.id = #{productId}
+            AND contract_product.product_id = #{productId}
         </if>
     </sql>
 
@@ -27,8 +26,8 @@
             resultType="cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.product.CrmStatisticsProductSalesRespVO">
         SELECT category.id AS category_id,
                IFNULL(category.name, '未分类') AS category_name,
-               product.id AS product_id,
-               product.name AS product_name,
+               contract_product.product_id AS product_id,
+               IFNULL(product.name, CONCAT('WMS产品-', contract_product.product_id)) AS product_name,
                contract.id AS contract_id,
                contract.no AS contract_no,
                contract.name AS contract_name,
@@ -41,7 +40,7 @@
                contract_product.total_price AS product_total_price
           FROM crm_contract_product AS contract_product
                 INNER JOIN crm_contract AS contract ON contract_product.contract_id = contract.id
-                INNER JOIN crm_product AS product ON contract_product.product_id = product.id
+                LEFT JOIN crm_product AS product ON contract_product.product_id = product.id AND product.deleted = 0
                 LEFT JOIN crm_product_category AS category ON product.category_id = category.id AND category.deleted = 0
                 LEFT JOIN crm_customer AS customer ON contract.customer_id = customer.id AND customer.deleted = 0
                 LEFT JOIN system_users AS owner ON contract.owner_user_id = owner.id AND owner.deleted = 0
@@ -58,7 +57,7 @@
                IFNULL(SUM(contract_product.total_price), 0) AS product_total_price
           FROM crm_contract_product AS contract_product
                 INNER JOIN crm_contract AS contract ON contract_product.contract_id = contract.id
-                INNER JOIN crm_product AS product ON contract_product.product_id = product.id
+                LEFT JOIN crm_product AS product ON contract_product.product_id = product.id AND product.deleted = 0
                 LEFT JOIN crm_product_category AS category ON product.category_id = category.id AND category.deleted = 0
          WHERE <include refid="ProductStatisticsWhere"/>
          GROUP BY category.id, category.name

@@ -5,6 +5,7 @@ import cn.iocoder.txgy.module.mes.api.integration.dto.MesIntegrationAcceptedResp
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesMaterialUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesPartnerUpsertReqDTO;
 import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderCreateReqDTO;
+import cn.iocoder.txgy.module.mes.api.integration.dto.MesWorkOrderResumeReqDTO;
 import cn.iocoder.txgy.module.mes.enums.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,5 +37,9 @@ public interface MesIntegrationApi {
     @PostMapping(PREFIX + "/work-order/create")
     @Operation(summary = "按 ERP 销售订单行项幂等创建生产工单")
     CommonResult<MesIntegrationAcceptedRespDTO> createWorkOrder(@Valid @RequestBody MesWorkOrderCreateReqDTO reqDTO);
+
+    @PostMapping(PREFIX + "/work-order/resume")
+    @Operation(summary = "缺料采购入库后恢复生产工单（重新向 WMS 申请领料）")
+    CommonResult<MesIntegrationAcceptedRespDTO> resumeWorkOrder(@Valid @RequestBody MesWorkOrderResumeReqDTO reqDTO);
 
 }

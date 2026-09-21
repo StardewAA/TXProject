@@ -74,39 +74,39 @@ defineExpose({ load });
 </script>
 
 <template>
-  <div class="grid grid-cols-2 gap-2 max-lg:grid-cols-1">
-    <Card :body-style="{ padding: '8px 10px' }">
-      <div class="mb-2">
-        <div class="text-sm font-semibold">货物占比</div>
-        <div class="text-xs text-muted-foreground">
+  <div class="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+    <Card :body-style="{ padding: '12px 16px 16px' }">
+      <div class="mb-3">
+        <div class="font-semibold">货物占比</div>
+        <div class="text-sm text-muted-foreground">
           按商品库存数量汇总 Top 5
         </div>
       </div>
-      <div class="relative min-h-[170px]">
-        <EchartsUI ref="goodsShareChartRef" height="170px" />
+      <div class="relative min-h-[300px]">
+        <EchartsUI ref="goodsShareChartRef" height="300px" />
         <div
           v-if="loading"
-          class="absolute inset-0 flex items-center justify-center bg-card/70 text-xs text-muted-foreground"
+          class="absolute inset-0 flex items-center justify-center bg-card/70 text-sm text-muted-foreground"
         >
           加载中
         </div>
       </div>
     </Card>
-    <Card :body-style="{ padding: '8px 10px' }">
-      <div class="mb-2 flex justify-between">
+    <Card :body-style="{ padding: '12px 16px 16px' }">
+      <div class="mb-3 flex justify-between">
         <div>
-          <div class="text-sm font-semibold">库存分布</div>
-          <div class="text-xs text-muted-foreground">按仓库库存数量汇总</div>
+          <div class="font-semibold">库存分布</div>
+          <div class="text-sm text-muted-foreground">按仓库库存数量汇总</div>
         </div>
-        <span class="text-sm font-semibold">
+        <span class="font-semibold">
           总库存 {{ formatQuantityText(totalQuantity) }}
         </span>
       </div>
-      <div class="relative min-h-[170px]">
-        <EchartsUI ref="warehouseDistributionChartRef" height="170px" />
+      <div class="relative min-h-[300px]">
+        <EchartsUI ref="warehouseDistributionChartRef" height="300px" />
         <div
           v-if="loading"
-          class="absolute inset-0 flex items-center justify-center bg-card/70 text-xs text-muted-foreground"
+          class="absolute inset-0 flex items-center justify-center bg-card/70 text-sm text-muted-foreground"
         >
           加载中
         </div>

@@ -5,6 +5,8 @@ import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
+import dayjs from 'dayjs';
+
 import { message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
@@ -45,6 +47,10 @@ const [Modal, modalApi] = useVbenModal({
     }
     modalApi.lock();
     const data = (await formApi.getValues()) as CrmAfterSaleTicketApi.Ticket;
+    // 后端 LocalDateTime 只认毫秒时间戳：提交前把表单里的日期字符串转成毫秒
+    if (data.startTime) {
+      data.startTime = dayjs(data.startTime).valueOf();
+    }
     try {
       await (formData.value?.id
         ? updateAfterSaleTicket(data)
@@ -68,7 +74,15 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       formData.value = await getAfterSaleTicket(data.id);
-      await formApi.setValues(formData.value);
+      // 详情返回的 startTime 是毫秒时间戳：转成 DatePicker 可解析的日期字符串再回填
+      await formApi.setValues({
+        ...formData.value,
+        startTime: formData.value.startTime
+          ? dayjs(Number(formData.value.startTime)).format(
+              'YYYY-MM-DD HH:mm:ss',
+            )
+          : undefined,
+      });
     } finally {
       modalApi.unlock();
     }

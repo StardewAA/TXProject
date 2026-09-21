@@ -21,6 +21,7 @@ import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -121,7 +122,18 @@ public class CrmAfterSaleWarrantyServiceImpl implements CrmAfterSaleWarrantyServ
         CrmAfterSaleWarrantyDO warranty = BeanUtils.toBean(createReqVO, CrmAfterSaleWarrantyDO.class);
         warranty.setCustomerId(contract.getCustomerId()); // 从合同带出客户编号
         warranty.setNo(generateWarrantyNo());
-        warrantyMapper.insert(warranty);
+        try {
+            warrantyMapper.insert(warranty);
+        } catch (DuplicateKeyException ex) {
+            // 兜底：唯一索引 uk_contract_id（未删除时 = contract_id）拒绝了插入，
+            // 说明该合同在库里已存在一份未删除的质保档案 —— 只是前面的 selectByContractId
+            // 没能查到它（常见原因：该档案的 tenant_id 与当前租户不一致，
+            // 又或者两个请求并发创建同一合同）。
+            // 此时若直接抛出，用户只会看到 500「系统错误」；这里转换成明确的业务提示。
+            log.warn("[createWarranty][合同({}) 已存在未删除的质保档案，插入被唯一约束拒绝]",
+                    createReqVO.getContractId(), ex);
+            throw exception(AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_EXISTS);
+        }
         return warranty.getId();
     }
 

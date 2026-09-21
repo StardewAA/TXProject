@@ -95,7 +95,7 @@ public class CrmProductWmsSyncServiceImpl implements CrmProductWmsSyncService {
         // 本次 WMS 返回的全部规格，用于识别「WMS 中已不存在」的历史同步产品
         Set<Long> presentSkuIds = new HashSet<>();
         for (int pageNo = 1; pageNo <= MAX_PAGE_COUNT; pageNo++) {
-            PageResult<CrmWmsProductSkuDTO> page = crmWmsProductReadAdapter.getProductPage(pageNo, pageSize);
+                        PageResult<CrmWmsProductSkuDTO> page = crmWmsProductReadAdapter.getProductPage(pageNo, pageSize, null);
             List<CrmWmsProductSkuDTO> skuList = page.getList();
             if (CollUtil.isEmpty(skuList)) {
                 break;

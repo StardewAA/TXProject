@@ -70,17 +70,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          const { versionScope, ...rest } = formValues ?? {};
-          // 版本范围：默认仅当前版本；「全部版本」不传 isCurrent；「仅历史版本」传 false
-          const versionParams =
-            versionScope === 'all'
-              ? {}
-              : { isCurrent: versionScope === 'history' ? false : true };
           return await getCoursePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            ...versionParams,
-            ...rest,
+            isCurrent: true,
+            ...formValues,
           });
         },
       },
@@ -223,6 +217,7 @@ const detailState = ref<{
   mediaList: TrainingCourseApi.CourseMedia[];
   categoryPath: string;
   examName: string;
+  examTimeText: string;
   postList: string[];
   bizTagList: string[];
 }>({
@@ -232,6 +227,7 @@ const detailState = ref<{
   mediaList: [],
   categoryPath: '',
   examName: '',
+  examTimeText: '',
   postList: [],
   bizTagList: [],
 });
@@ -275,6 +271,7 @@ async function handleShowDetail(row: TrainingCourseApi.Course) {
     mediaList: [],
     categoryPath: '',
     examName: '',
+    examTimeText: '',
     postList: [],
     bizTagList: [],
   };
@@ -291,6 +288,10 @@ async function handleShowDetail(row: TrainingCourseApi.Course) {
     detailState.value.examName =
       examOptions.find((item) => item.id === detail.examId)?.name ||
       (detail.examId ? `试卷 #${detail.examId}` : '');
+    detailState.value.examTimeText =
+      detail.examStartTime && detail.examEndTime
+        ? `${detail.examStartTime} ~ ${detail.examEndTime}`
+        : '';
     detailState.value.postList = parseArrayField(detail.applicablePosts);
     detailState.value.bizTagList = parseArrayField(detail.bizTags);
   } finally {
@@ -537,6 +538,12 @@ function buildActions(row: TrainingCourseApi.Course) {
               )?.label || '-'
             }}
           </DescriptionsItem>
+          <DescriptionsItem label="课程学分">
+            {{ detailState.course?.credit ?? '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="总时长(分钟)">
+            {{ detailState.course?.durationMinutes ?? '-' }}
+          </DescriptionsItem>
           <DescriptionsItem label="适用岗位/工种">
             <template v-if="detailState.postList.length > 0">
               <Tag
@@ -553,6 +560,9 @@ function buildActions(row: TrainingCourseApi.Course) {
           <DescriptionsItem label="学习域/课程组">
             {{ detailState.course?.learnDomainCodes || '-' }}
           </DescriptionsItem>
+          <DescriptionsItem label="资源归属">
+            {{ detailState.course?.ownerFlag || '-' }}
+          </DescriptionsItem>
           <DescriptionsItem label="业务标签">
             <template v-if="detailState.bizTagList.length > 0">
               <Tag
@@ -566,11 +576,31 @@ function buildActions(row: TrainingCourseApi.Course) {
             </template>
             <span v-else class="text-gray-400">-</span>
           </DescriptionsItem>
+          <DescriptionsItem label="是否必修">
+            <Tag v-if="detailState.course?.isRequired" color="orange">必修</Tag>
+            <span v-else class="text-gray-400">选修</span>
+          </DescriptionsItem>
+          <DescriptionsItem label="复合课程">
+            <Tag v-if="detailState.course?.isComposite" color="purple">复合</Tag>
+            <span v-else class="text-gray-400">-</span>
+          </DescriptionsItem>
+          <DescriptionsItem label="复合子模块标签">
+            {{ detailState.course?.compositeTags || '-' }}
+          </DescriptionsItem>
           <DescriptionsItem label="结课考试试卷">
             {{ detailState.examName || '未设置' }}
           </DescriptionsItem>
+          <DescriptionsItem label="结课考试时间" :span="2">
+            {{ detailState.examTimeText || '未设置' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="主讲教师">
+            {{ detailState.course?.lecturer || '-' }}
+          </DescriptionsItem>
           <DescriptionsItem label="排序">
             {{ detailState.course?.sort ?? '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="讲师简介" :span="2">
+            {{ detailState.course?.lecturerBrief || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="课程简介" :span="2">
             {{ detailState.course?.summary || '-' }}
@@ -625,13 +655,6 @@ function buildActions(row: TrainingCourseApi.Course) {
         </a>
       </template>
 
-      <template #version="{ row }">
-        <Tag color="blue">v{{ row.version ?? 1 }}</Tag>
-        <Tag :color="row.isCurrent ? 'success' : 'default'">
-          {{ row.isCurrent ? '当前' : '历史' }}
-        </Tag>
-      </template>
-
       <template #level="{ row }">
         <span>
           {{ row.level != null ? (COURSE_LEVEL_TEXT[row.level] || '-') : '-' }}
@@ -641,6 +664,14 @@ function buildActions(row: TrainingCourseApi.Course) {
         <Tag v-if="row.courseLevel" color="processing">
           {{ GROWTH_LEVEL_TEXT[row.courseLevel] || row.courseLevel }}
         </Tag>
+        <span v-else class="text-gray-400">-</span>
+      </template>
+      <template #isRequired="{ row }">
+        <Tag v-if="row.isRequired" color="orange">必修</Tag>
+        <span v-else class="text-gray-400">选修</span>
+      </template>
+      <template #isComposite="{ row }">
+        <Tag v-if="row.isComposite" color="purple">复合</Tag>
         <span v-else class="text-gray-400">-</span>
       </template>
       <template #status="{ row }">

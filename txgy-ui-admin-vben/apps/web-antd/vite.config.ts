@@ -59,7 +59,7 @@ export default defineConfig(async (configEnv) => {
           },
           '/admin-api/infra': {
             changeOrigin: true,
-            target: 'http://127.0.0.1:48080', // 基础设施服务（文件/配置等，经网关）
+            target: 'http://127.0.0.1:48080', // 基础设施服务（文件/配置等），经网关
             ws: true,
           },
           '/admin-api': {

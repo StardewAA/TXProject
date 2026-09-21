@@ -1,5 +1,9 @@
 package cn.iocoder.txgy.module.wms.service.ai;
 
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiApprovalAdviceRespVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderReqVO;
+import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiCreateOrderRespVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeFileReqVO;
 import cn.iocoder.txgy.module.wms.controller.admin.ai.vo.WmsAiRecognizeRespVO;
 
@@ -40,5 +44,27 @@ public interface WmsAiService {
      * @return 待确认单据草稿
      */
     WmsAiRecognizeRespVO recognizeFile(String text, List<WmsAiRecognizeFileReqVO.FileDoc> files, String sessionId);
+
+    /**
+     * 确认建单：把用户在确认卡片上核对过的草稿落库为真实单据
+     *
+     * <p>权限与手工建单完全一致——调用方仍需具备对应 create 权限，AI 不绕过权限校验。
+     *
+     * @param reqVO 已确认的建单请求（动作、单据类型、仓库、往来企业、明细）
+     * @return 单据编号与主键
+     */
+    WmsAiCreateOrderRespVO createOrder(WmsAiCreateOrderReqVO reqVO);
+
+    /**
+     * AI 辅助审批：为审批人给出单据摘要、风险点与建议结论
+     *
+     * <p>只读取单据与库存做分析，<b>不改变单据状态、不代替人工审批</b>。
+     * 库存、验收数量、价格偏差等由后端按真实数据先算成事实，再交给大模型归纳，
+     * 避免模型凭空推断。
+     *
+     * @param reqVO 单据编号与类型（RECEIPT 入库 / SHIPMENT 出库）
+     * @return 建议结论、风险列表与理由
+     */
+    WmsAiApprovalAdviceRespVO approvalAdvice(WmsAiApprovalAdviceReqVO reqVO);
 
 }

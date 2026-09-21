@@ -3,7 +3,9 @@ package cn.iocoder.txgy.module.mes.dal.mysql.wms.integration;
 import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.mes.dal.dataobject.wms.integration.MesWmsIntegrationTaskDO;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,5 +46,19 @@ public interface MesWmsIntegrationTaskMapper extends BaseMapperX<MesWmsIntegrati
                 .orderByDesc(MesWmsIntegrationTaskDO::getId)
                 .last("LIMIT 1"));
     }
+
+    /**
+     * 物理删除指定业务单据的集成任务（绕过逻辑删除，供"取消后重建"使用）。
+     *
+     * <p>恢复领料时需先删旧任务、再按同一 requestId 重建。若走 {@link BaseMapperX#deleteById}，
+     * 框架的逻辑删除会把它变成 UPDATE deleted=1，记录仍占用 request_id 唯一键，
+     * 导致重建时 DuplicateKeyException，表现为"旧任务被删、新任务未建"的静默失败。
+     * 故此处使用原生 DELETE 做物理删除，且不按 deleted=0 预筛选，避免历史逻辑删除记录残留。</p>
+     */
+    @Delete("DELETE FROM mes_wms_integration_task WHERE order_type = #{orderType} "
+            + "AND source_order_id = #{sourceOrderId} AND tenant_id = #{tenantId}")
+    int deleteBySourceOrderPhysically(@Param("orderType") String orderType,
+                                      @Param("sourceOrderId") Long sourceOrderId,
+                                      @Param("tenantId") Long tenantId);
 
 }
