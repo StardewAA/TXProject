@@ -123,6 +123,28 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      component: 'DatePicker',
+      fieldName: 'startTime',
+      label: '开始处理时间',
+      // 编辑规则（最终由后端保证）：工单已完成/已关闭后锁定不可改，
+      // 待处理/处理中阶段允许修正（处理人补录实际开始处理时间的场景）。
+      // 该时间同时是待办「工单超时预警」的起算时间：为空时以创建时间兜底。
+      dependencies: {
+        triggerFields: ['status'],
+        componentProps(values) {
+          const closed = values?.status === 3 || values?.status === 4;
+          return {
+            showTime: true,
+            valueFormat: 'YYYY-MM-DD HH:mm:ss',
+            format: 'YYYY-MM-DD HH:mm:ss',
+            placeholder: closed
+              ? '工单已闭环，开始处理时间已锁定'
+              : '留空表示尚未开始处理；进入「处理中」时自动记录',
+          };
+        },
+      },
+    },
+    {
       component: 'Textarea',
       fieldName: 'description',
       label: '问题描述',
@@ -162,6 +184,31 @@ export function useAssignFormSchema(): VbenFormSchema[] {
         placeholder: '请选择处理人',
         allowClear: true,
       },
+    },
+  ];
+}
+
+/**
+ * 完成工单的表单
+ *
+ * 「工单记录」（处理结果）必填：它是工单闭环的依据，
+ * 也是超时预警消除与售后追溯的凭证 —— 未填写不允许完成工单。
+ * 提交后写入工单的 handleResult 字段，并作为流转留痕展示。
+ */
+export function useFinishFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      component: 'Textarea',
+      fieldName: 'content',
+      label: '工单记录',
+      rules: 'required',
+      componentProps: {
+        placeholder:
+          '请填写工单记录（处理结果、处理措施、遗留问题等），未填写无法完成工单',
+        rows: 4,
+        maxLength: 500,
+      },
+      formItemClass: 'col-span-2',
     },
   ];
 }
@@ -270,6 +317,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'assigneeNickname',
       title: '处理人',
       minWidth: 120,
+    },
+    {
+      field: 'startTime',
+      title: '开始处理时间',
+      formatter: 'formatDateTime',
+      minWidth: 180,
     },
     {
       field: 'creatorNickname',

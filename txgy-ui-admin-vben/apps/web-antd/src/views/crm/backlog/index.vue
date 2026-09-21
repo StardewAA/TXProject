@@ -1,5 +1,14 @@
 <script lang="ts" setup>
-import { computed, onActivated, onMounted, ref } from 'vue';
+import type { Ref } from 'vue';
+
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  ref,
+} from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -84,19 +93,96 @@ function sideClick(item: { menu: string }) {
   leftMenu.value = item.menu;
 }
 
-/** 获取数量 */
+/**
+ * 单个待办项取数（失败隔离）
+ *
+ * 修复前的问题：getCount() 是「串行 await 且没有任何 try/catch」，
+ * 只要其中任意一个接口报错，排在它后面的待办就全部不会执行，
+ * 而界面不会给出任何提示，最终表现为「某个待办数量一直是 0」，且极难排查
+ * （例如「质保即将到期」排在第 9 位，前面任何一个接口抖动都会把它连累）。
+ *
+ * 现在改成：每项独立请求、独立捕获 —— 互不影响；失败时保留上一次的值，
+ * 只在控制台留下日志，便于定位到底是哪个接口出了问题。
+ */
+async function loadCount(
+  target: Ref<number>,
+  loader: () => Promise<number | undefined>,
+  label: string,
+) {
+  try {
+    target.value = (await loader()) ?? 0;
+  } catch (error) {
+    console.error(
+      `[backlog] 待办「${label}」数量获取失败，保持上一次的值`,
+      error,
+    );
+  }
+}
+
+/** 获取数量：各项并行、互不影响 */
 async function getCount() {
-  customerTodayContactCount.value = await getTodayContactCustomerCount();
-  customerPutPoolRemindCount.value = await getPutPoolRemindCustomerCount();
-  customerFollowCount.value = await getFollowCustomerCount();
-  clueFollowCount.value = await getFollowClueCount();
-  contractAuditCount.value = await getAuditContractCount();
-  contractRemindCount.value = await getRemindContractCount();
-  receivableAuditCount.value = await getAuditReceivableCount();
-  receivablePlanRemindCount.value = await getReceivablePlanRemindCount();
-  warrantyExpiryCount.value = await getAfterSaleWarrantyRemindCount();
-  visitTaskRemindCount.value = await getAfterSaleVisitTaskRemindCount();
-  ticketOverdueCount.value = await getAfterSaleTicketOverdueCount();
+  await Promise.all([
+    loadCount(
+      customerTodayContactCount,
+      getTodayContactCustomerCount,
+      '今日需联系客户',
+    ),
+    loadCount(
+      customerPutPoolRemindCount,
+      getPutPoolRemindCustomerCount,
+      '待进入公海的客户',
+    ),
+    loadCount(customerFollowCount, getFollowCustomerCount, '分配给我的客户'),
+    loadCount(clueFollowCount, getFollowClueCount, '分配给我的线索'),
+    loadCount(contractAuditCount, getAuditContractCount, '待审核合同'),
+    loadCount(contractRemindCount, getRemindContractCount, '即将到期的合同'),
+    loadCount(receivableAuditCount, getAuditReceivableCount, '待审核回款'),
+    loadCount(
+      receivablePlanRemindCount,
+      getReceivablePlanRemindCount,
+      '待回款提醒',
+    ),
+    loadCount(
+      warrantyExpiryCount,
+      getAfterSaleWarrantyRemindCount,
+      '质保即将到期',
+    ),
+    loadCount(
+      visitTaskRemindCount,
+      getAfterSaleVisitTaskRemindCount,
+      '任务提醒',
+    ),
+    loadCount(
+      ticketOverdueCount,
+      getAfterSaleTicketOverdueCount,
+      '工单超时预警',
+    ),
+  ]);
+}
+
+/**
+ * 自动刷新间隔（毫秒）
+ *
+ * 各待办来源都是「实时查询」口径（不落库、不预生成），数量会随日期与状态流转而变化。
+ * 修复前只在进入页面时取一次，用户停留期间一直不变 —— 比如质保档案当天刚变成
+ * 「即将到期」，页面却仍显示 0，必须手动刷新才能看到。
+ */
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
+
+let autoRefreshTimer: ReturnType<typeof setInterval> | undefined;
+
+/** 启动自动刷新 */
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(getCount, AUTO_REFRESH_INTERVAL_MS);
+}
+
+/** 停止自动刷新（离开页面 / 组件销毁时调用，避免后台空转） */
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = undefined;
+  }
 }
 
 /** 激活时 */
@@ -107,6 +193,16 @@ onActivated(() => {
 /** 初始化 */
 onMounted(() => {
   getCount();
+  startAutoRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
+});
+
+/** keep-alive 缓存场景：离开页面时停止轮询 */
+onDeactivated(() => {
+  stopAutoRefresh();
 });
 </script>
 <template>

@@ -22,6 +22,36 @@ function handleTicketDetail(row: CrmAfterSaleTicketApi.Ticket) {
   push({ name: 'CrmAfterSaleTicketDetail', params: { id: row.id } });
 }
 
+/**
+ * 超时起算时间：开始处理时间，尚未开始处理时以创建时间兜底
+ *
+ * 与后端判定口径（COALESCE(start_time, create_time)）保持一致。
+ */
+function getStartTime(row: CrmAfterSaleTicketApi.Ticket) {
+  return row.startTime ?? row.createTime;
+}
+
+/**
+ * 已超时天数：起算日期距今的日历天数
+ *
+ * 与后端判定（起算日期 + 超时预警天数 ≤ 今天）同一口径，命中的条目该值 ≥ 预警天数。
+ */
+function getOverdueDays(row: CrmAfterSaleTicketApi.Ticket) {
+  const start = getStartTime(row);
+  if (!start) {
+    return undefined;
+  }
+  const time = new Date(start.replace(' ', 'T')).getTime();
+  if (Number.isNaN(time)) {
+    return undefined;
+  }
+  const startDay = new Date(time);
+  startDay.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - startDay.getTime()) / 86_400_000);
+}
+
 const columns: VxeTableGridOptions<CrmAfterSaleTicketApi.Ticket>['columns'] = [
   {
     field: 'todoContent',
@@ -68,6 +98,18 @@ const columns: VxeTableGridOptions<CrmAfterSaleTicketApi.Ticket>['columns'] = [
       name: 'CellDict',
       props: { type: DICT_TYPE.CRM_AFTER_SALE_TICKET_STATUS },
     },
+  },
+  {
+    field: 'startTime',
+    title: '开始处理时间',
+    minWidth: 170,
+    formatter: 'formatDateTime',
+  },
+  {
+    field: 'overdueDays',
+    title: '已超时天数',
+    minWidth: 110,
+    slots: { default: 'overdueDays' },
   },
   {
     field: 'assigneeNickname',
@@ -122,13 +164,20 @@ const [Grid] = useVbenVxeGrid({
   <Grid>
     <template #todoContent="{ row }">
       <span class="text-gray-700 dark:text-gray-200">
-        【工单超时预警】客户{{ row.customerName ?? '-' }}工单长时间未处理，请跟进
+        【工单超时预警】客户{{ row.customerName ?? '-' }}的工单已持续
+        {{ getOverdueDays(row) ?? '-' }} 天未闭环（自
+        {{ getStartTime(row) ?? '-' }} 起算），请尽快跟进
       </span>
     </template>
     <template #no="{ row }">
       <Button type="link" @click="handleTicketDetail(row)">
         {{ row.no }}
       </Button>
+    </template>
+    <template #overdueDays="{ row }">
+      <span class="font-semibold text-red-500">
+        {{ getOverdueDays(row) ?? '-' }}
+      </span>
     </template>
     <template #actions="{ row }">
       <TableAction
