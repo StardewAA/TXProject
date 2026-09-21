@@ -405,46 +405,63 @@ function injectCrmMenus(
 /**
  * CRM 侧边栏二级分组配置
  *
- * 只描述「哪些菜单归到哪个分组」，不涉及任何路由数据。
+ * 只描述「哪些菜单归到哪个分组、组内按什么顺序展示」，不涉及任何路由数据。
  * 分组的落地放在路由转换之后（见 {@link groupCrmSideMenus}），
  * 因此子菜单的 path 保持绝对路径原值，页面地址与改造前完全一致。
+ *
+ * 说明：「售后管理」自身是目录（下含质保档案 / 回访计划 / 任务 / 记录 / 问题工单 / 售后设置），
+ * 按需求作为独立一级项展示，不并入分组。
  */
 const CRM_SIDE_GROUPS: Array<{
   icon: string;
   key: string;
-  paths: string[];
+  members: Array<{ order: number; path: string }>;
   title: string;
 }> = [
   {
-    key: 'business',
-    title: 'CRM业务管理',
+    key: 'customer-resource',
+    title: '客户资源管理',
+    icon: 'lucide:users',
+    members: [
+      { path: '/crm/clue', order: 10 },
+      { path: '/crm/customer', order: 20 },
+      { path: '/crm/contact', order: 30 },
+      { path: '/crm/customer/pool', order: 40 },
+    ],
+  },
+  {
+    key: 'sales-business',
+    title: '销售业务管理',
     icon: 'lucide:briefcase',
-    paths: [
-      '/crm/clue',
-      '/crm/customer',
-      '/crm/contact',
-      '/crm/customer/pool',
-      '/crm/business',
+    members: [
+      { path: '/crm/product', order: 10 },
+      { path: '/crm/business', order: 20 },
+      { path: '/crm/quotation', order: 30 },
+      { path: '/crm/contract', order: 40 },
+      { path: '/crm/receivable', order: 50 },
+      { path: '/crm/receivable-plan', order: 60 },
     ],
-  },
-  {
-    key: 'contract-receivable',
-    title: '合同与回款',
-    icon: 'lucide:file-text',
-    paths: [
-      '/crm/contract',
-      '/crm/receivable',
-      '/crm/receivable-plan',
-      '/crm/quotation',
-    ],
-  },
-  {
-    key: 'product-after-sale',
-    title: '产品与售后',
-    icon: 'lucide:package',
-    paths: ['/crm/product', '/crm/after-sale'],
   },
 ];
+
+/**
+ * CRM 一级菜单重命名（只改菜单展示名，路由名与页面地址都不变）
+ */
+const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
+  '/crm/backlog': '待办中心',
+};
+
+/**
+ * CRM 一级菜单展示顺序覆盖
+ *
+ * 目的：按需求顺序排列（CRM 首页 → 待办中心 → 客户资源管理 → 销售业务管理 → 售后管理 → …）。
+ * - 待办中心：后端 sort=0，但 0 在渲染链路里会被当成"未设置"而落到最后，改为 1；
+ * - 售后管理：后端 sort=90，会排到两个分组（100/101）之前，改为 102。
+ */
+const CRM_MENU_ORDER_OVERRIDES: Record<string, number> = {
+  '/crm/backlog': 1,
+  '/crm/after-sale': 102,
+};
 
 /**
  * 把 CRM 下扁平的子菜单重组为「分组（可展开/折叠）+ 子菜单」两层结构
@@ -465,23 +482,44 @@ function groupCrmSideMenus(menus: any[]): any[] {
     return menus;
   }
 
+  // 1. 菜单重命名 / 展示顺序覆盖（只动 meta，不动 path 与 name，路由与跳转不受影响）
+  for (const child of children) {
+    const path = String(child?.path ?? '');
+    const title = CRM_MENU_TITLE_OVERRIDES[path];
+    if (title) {
+      child.meta = { ...(child.meta ?? {}), title };
+    }
+    const order = CRM_MENU_ORDER_OVERRIDES[path];
+    if (order !== undefined) {
+      child.meta = { ...(child.meta ?? {}), order };
+    }
+  }
+
+  // 2. 分组：按配置把成员挂到分组容器下，并按需求顺序重排组内菜单
   const groupedPaths = new Set<string>();
   const groups = CRM_SIDE_GROUPS.map((group, index) => {
-    const members = children.filter((child) => {
-      const path = String(child?.path ?? '');
-      if (!group.paths.includes(path)) {
-        return false;
-      }
-      groupedPaths.add(path);
-      return true;
-    });
+    const members = group.members
+      .map((member) => {
+        const child = children.find(
+          (c) => String(c?.path ?? '') === member.path,
+        );
+        if (!child) {
+          return undefined;
+        }
+        groupedPaths.add(member.path);
+        // 组内顺序以配置为准（覆盖后端 sort），仅影响菜单展示顺序
+        child.meta = { ...(child.meta ?? {}), order: member.order };
+        return child;
+      })
+      .filter((child) => child !== undefined);
+
     return {
       // 目录型节点：无组件，仅承载子菜单
       component: '',
       meta: {
         hideInMenu: false,
         icon: group.icon,
-        // 排在「CRM 首页(-2) / 待办事项(0)」之后，按配置顺序递增
+        // 排在「CRM 首页(-2) / 待办中心(0)」之后，按配置顺序递增
         order: 100 + index,
         title: group.title,
       },
@@ -495,7 +533,7 @@ function groupCrmSideMenus(menus: any[]): any[] {
     return menus;
   }
 
-  // 未纳入分组的菜单保持原有层级与顺序（含 CRM 首页、待办事项等独立一级项）
+  // 未纳入分组的菜单保持原有层级与顺序（含 CRM 首页、待办中心、售后管理、数据统计等独立一级项）
   const rest = children.filter(
     (child) => !groupedPaths.has(String(child?.path ?? '')),
   );
