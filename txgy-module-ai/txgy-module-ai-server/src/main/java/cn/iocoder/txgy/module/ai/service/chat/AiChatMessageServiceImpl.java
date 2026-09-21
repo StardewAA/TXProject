@@ -383,7 +383,14 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
         //     （否则会把业务名当查询词注入「共 0 条」，带偏模型不去调用录入工具而口头编造结果）
         //     [多轮补字段延续] 用户补齐缺失字段的轮次往往不含业务名词（如"合格数量48，录入吧"），
         //     检查最近几轮历史：若出现过录入意图则本轮延续录入模式
-        boolean createIntent = isMesCreateIntent(sendReqVO.getContent())
+        // 【附件录入意图】带附件且消息含写动词（录入/添加/创建/导入）时视为录入意图：
+        // 此前「根据文档内容提取字段并录入」这类不含业务名词的附件请求不命中分流，
+        // 模型未收到强制工具落库约束，出现 toolRounds=0 口头编造创建成功的缺陷
+        boolean attachmentWriteIntent = CollUtil.isNotEmpty(sendReqVO.getAttachmentUrls())
+                && sendReqVO.getContent() != null
+                && sendReqVO.getContent().matches("(?s).*(录入|添加|创建|导入|登记|建档).*");
+        boolean createIntent = attachmentWriteIntent
+                || isMesCreateIntent(sendReqVO.getContent())
                 || hasRecentCreateIntent(historyMessages);
         // [引导意图分流] 用户问概念/操作流程（如"库区是什么""怎么建仓库"）时跳过预查询：
         // 这类问题要的是操作引导而非数据罗列，预注入查询数据反而会带偏回答
