@@ -2,32 +2,28 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmProductApi } from '#/api/crm/product';
 
+import { h, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Page, useVbenModal } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { ElButton, ElLoading, ElMessage } from 'element-plus';
+import { ElButton, ElMessage, ElNotification } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
-  deleteProduct,
   exportProduct,
   getProductPage,
+  syncProductFromWms,
 } from '#/api/crm/product';
+
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
-import Form from './modules/form.vue';
 
 const { push } = useRouter();
 
-const [FormModal, formModalApi] = useVbenModal({
-  connectedComponent: Form,
-  destroyOnClose: true,
-});
-
-/** 刷新表格 */
+/** 刷新表格（实时拉取 WMS 最新数据） */
 function handleRefresh() {
   gridApi.query();
 }
@@ -38,33 +34,37 @@ async function handleExport() {
   downloadFileFromBlobPart({ fileName: '产品.xls', source: data });
 }
 
+/** 从 WMS 同步产品（运维补数：把 WMS 商品补写到 CRM 产品表） */
+async function handleSyncFromWms() {
+  const result = await syncProductFromWms();
+  if (result.skipped) {
+    ElMessage.warning(result.message ?? '本次同步已跳过');
+    return;
+  }
+  ElMessage.success(
+    `同步完成：拉取 ${result.total} 个规格，新增 ${result.created}，更新 ${result.updated}，` +
+      `无变化 ${result.unchanged}，下架 ${result.offlined ?? 0}，编码冲突 ${result.conflict}，失败 ${result.failed}`,
+  );
+  // 编码冲突、失败等明细
+  if (result.messages && result.messages.length > 0) {
+    ElNotification.warning({
+      title: 'WMS 同步明细',
+      duration: 8000,
+      message: () =>
+        h(
+          'div',
+          result.messages!.map((item) =>
+            h('div', { style: 'margin-bottom: 4px' }, item),
+          ),
+        ),
+    });
+  }
+  handleRefresh();
+}
+
 /** 打开详情 */
 function handleDetail(row: CrmProductApi.Product) {
   push({ name: 'CrmProductDetail', params: { id: row.id } });
-}
-
-/** 创建产品 */
-function handleCreate() {
-  formModalApi.setData(null).open();
-}
-
-/** 编辑产品 */
-function handleEdit(row: CrmProductApi.Product) {
-  formModalApi.setData(row).open();
-}
-
-/** 删除产品 */
-async function handleDelete(row: CrmProductApi.Product) {
-  const loadingInstance = ElLoading.service({
-    text: $t('ui.actionMessage.deleting', [row.name]),
-  });
-  try {
-    await deleteProduct(row.id!);
-    ElMessage.success($t('ui.actionMessage.deleteSuccess', [row.name]));
-    handleRefresh();
-  } finally {
-    loadingInstance.close();
-  }
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -96,21 +96,58 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
   } as VxeTableGridOptions<CrmProductApi.Product>,
 });
+
+/** 自动刷新间隔：页面可见时每 60 秒实时拉取 WMS 最新数据 */
+const AUTO_REFRESH_INTERVAL = 60_000;
+let refreshTimer: ReturnType<typeof setInterval> | undefined;
+
+/** 页面重新可见时立即同步 WMS 变动 */
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    handleRefresh();
+  }
+}
+
+onMounted(() => {
+  refreshTimer = setInterval(() => {
+    if (!document.hidden) {
+      handleRefresh();
+    }
+  }, AUTO_REFRESH_INTERVAL);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+});
 </script>
 
 <template>
   <Page auto-content-height>
-    <FormModal @success="handleRefresh" />
-    <Grid table-title="产品列表">
+    <Grid table-title="产品列表（实时取自 WMS 仓库库存，不支持新增/修改/删除）">
       <template #toolbar-tools>
         <TableAction
           :actions="[
             {
-              label: $t('ui.actionTitle.create', ['产品']),
+              label: '刷新',
               type: 'primary',
-              icon: ACTION_ICON.ADD,
-              auth: ['crm:product:create'],
-              onClick: handleCreate,
+              icon: ACTION_ICON.REFRESH,
+              auth: ['crm:product:query'],
+              onClick: handleRefresh,
+            },
+            {
+              label: 'WMS 数据同步（运维）',
+              type: 'primary',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['crm:product:sync'],
+              popConfirm: {
+                title:
+                  '将从 WMS 读取商品并补写 CRM 产品表（不会修改 WMS 数据），是否继续？',
+                confirm: handleSyncFromWms,
+              },
             },
             {
               label: $t('ui.actionTitle.export'),
@@ -126,31 +163,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <ElButton type="primary" link @click="handleDetail(row)">
           {{ row.name }}
         </ElButton>
-      </template>
-      <template #actions="{ row }">
-        <TableAction
-          :actions="[
-            {
-              label: $t('common.edit'),
-              type: 'primary',
-              link: true,
-              icon: ACTION_ICON.EDIT,
-              auth: ['crm:product:update'],
-              onClick: handleEdit.bind(null, row),
-            },
-            {
-              label: $t('common.delete'),
-              type: 'danger',
-              link: true,
-              icon: ACTION_ICON.DELETE,
-              auth: ['crm:product:delete'],
-              popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', [row.name]),
-                confirm: handleDelete.bind(null, row),
-              },
-            },
-          ]"
-        />
       </template>
     </Grid>
   </Page>
