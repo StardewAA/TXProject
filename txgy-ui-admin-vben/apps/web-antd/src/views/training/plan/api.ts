@@ -125,6 +125,14 @@ export namespace TrainingPlanApi {
     createTime?: string;
   }
 
+  /** 按参与对象（部门 / 岗位）筛选命中的学员 */
+  export interface ScopePreviewUser {
+    userId?: number;
+    nickname?: string;
+    deptName?: string;
+    /** 是否已在班 */
+    inClass?: boolean;
+  }
   /** Excel 批量导入学员结果 */
   export interface ImportStudentResult {
     successCount?: number;
@@ -135,6 +143,27 @@ export namespace TrainingPlanApi {
       reason?: string;
       rowNumber?: number;
     }[];
+  }
+
+  /** 圈选预览结果 */
+  export interface ScopePreviewResult {
+    deptIds?: number[];
+    postIds?: number[];
+    includeChildDept?: boolean;
+    matchedDeptIds?: number[];
+    users?: ScopePreviewUser[];
+    /** 命中人数 */
+    matchedCount?: number;
+    /** 其中已在班人数 */
+    inClassCount?: number;
+    /** 可新增人数 */
+    addableCount?: number;
+    /** 当前在班人数 */
+    inClassTotal?: number;
+    /** 班级学员上限 */
+    maxSize?: number;
+    /** 剩余名额 */
+    remaining?: number;
   }
 
 }
@@ -197,6 +226,24 @@ export function addClassStudents(classId: number, userIds: number[]) {
     classId,
     userIds,
   });
+}
+
+/**
+ * 按部门 / 岗位圈选命中的学员（不落库）
+ *
+ * 用于「从劳务部门等具体部门选择参训人员」场景：先预览命中名单与名额情况，
+ * 由用户勾选后再调用 addClassStudents 正式入班，避免一次性整批导入超出班级名额。
+ */
+export function previewScopeStudents(params: {
+  classId: number;
+  deptIds?: number[];
+  includeChildDept?: boolean;
+  postIds?: number[];
+}) {
+  return requestClient.post<TrainingPlanApi.ScopePreviewResult>(
+    '/training/plan/class/student/scope-preview',
+    params,
+  );
 }
 
 /** 移出学员 */
@@ -285,8 +332,8 @@ export function getRemindRecordPage(params: PageParam & Record<string, any>) {
 
 /** 上岗资格核查 */
 export function checkQualification(data: {
-  userName: string;
   mobile: string;
+  userName: string;
 }) {
   return requestClient.post<TrainingPlanApi.QualificationResult>(
     '/training/plan/class/qualification/check',
@@ -296,10 +343,10 @@ export function checkQualification(data: {
 
 /** 上岗资格核查历史记录（分页） */
 export function getQualificationRecordPage(params: {
+  mobile?: string;
   pageNo: number;
   pageSize: number;
   userName?: string;
-  mobile?: string;
 }) {
   return requestClient.get<
     PageResult<TrainingPlanApi.QualificationRecord>

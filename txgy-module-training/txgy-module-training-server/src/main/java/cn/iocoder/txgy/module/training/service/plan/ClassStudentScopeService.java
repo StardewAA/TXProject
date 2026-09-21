@@ -91,9 +91,12 @@ public class ClassStudentScopeService {
         respVO.setInClassCount(inClassCount);
         respVO.setAddableCount(users.size() - inClassCount);
         // 3. 附带在班人数与上限，便于前端提示「已 X/50 人、剩余 Y 个名额」
+        // MAX_STUDENT_SIZE <= 0 表示不限制人数，此时剩余名额 = 可新增人数
         respVO.setInClassTotal(inClassUserIds.size());
         respVO.setMaxSize(ClassStudentServiceImpl.MAX_STUDENT_SIZE);
-        respVO.setRemaining(Math.max(0, ClassStudentServiceImpl.MAX_STUDENT_SIZE - inClassUserIds.size()));
+        respVO.setRemaining(ClassStudentServiceImpl.MAX_STUDENT_SIZE > 0
+                ? Math.max(0, ClassStudentServiceImpl.MAX_STUDENT_SIZE - inClassUserIds.size())
+                : respVO.getAddableCount());
         return respVO;
     }
 

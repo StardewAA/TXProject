@@ -1,10 +1,14 @@
 <script lang="ts" setup>
+import type { Key } from 'ant-design-vue/es/_util/type';
+
 import type { TrainingPlanApi } from './api';
+
+import type { SystemUserApi } from '#/api/system/user';
 
 import { computed, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
-import { downloadFileFromBlobPart } from '@vben/utils';
+import { downloadFileFromBlobPart, handleTree } from '@vben/utils';
 
 import {
   Button,
@@ -17,10 +21,13 @@ import {
   Space,
   Table,
   Tag,
+  TreeSelect,
   Upload,
 } from 'ant-design-vue';
 
-import { getSimpleUserList } from '#/api/system/user';
+import { getSimpleDeptList } from '#/api/system/dept';
+import { getSimplePostList } from '#/api/system/post';
+import UserSelectDialog from '#/views/system/user/components/select-dialog.vue';
 
 import {
   addClassStudents,
@@ -28,6 +35,7 @@ import {
   getClassStudentPage,
   getStudentImportTemplate,
   importClassStudents,
+  previewScopeStudents,
   removeClassStudent,
 } from './api';
 import ClassBar from './class-bar.vue';
@@ -118,48 +126,154 @@ function handleTableChange(pagination: any) {
   loadStudents();
 }
 
-// ========== 添加学员（勾选批量加入，自动生成学习任务） ==========
-const userOptions = ref<{ label: string; value: number }[]>([]);
-const addVisible = ref(false);
-const addUserIds = ref<number[]>([]);
+// ========== 挑选学员入班：逐个勾选 / 按部门岗位批量 ==========
 const addLoading = ref(false);
+const userSelectRef = ref<InstanceType<typeof UserSelectDialog>>();
 
-async function openAddModal() {
-  addUserIds.value = [];
-  if (userOptions.value.length === 0) {
-    try {
-      const users = await getSimpleUserList();
-      userOptions.value = (users ?? [])
-        .filter((item) => item.status === 0 && item.id != null)
-        .map((item) => ({ label: item.nickname, value: item.id! }));
-    } catch {
-      userOptions.value = [];
-    }
-  }
-  addVisible.value = true;
+/** 逐个挑选：复用系统「人员选择」（部门树 + 分页勾选），可从劳务部门逐级筛选 */
+function openUserPicker() {
+  userSelectRef.value?.open([], { multiple: true });
 }
 
-const addableOptions = computed(() =>
-  userOptions.value.filter((item) => !activeUserIds.value.has(item.value)),
-);
+/** 人员选择弹窗回调 */
+async function handleUserPicked(rows: SystemUserApi.User[]) {
+  await joinClass(
+    rows.map((item) => item.id).filter((id): id is number => id != null),
+  );
+}
 
-async function handleAddStudents() {
-  if (!currentClass.value?.id || addUserIds.value.length === 0) {
-    message.warning('请先勾选要添加的学员');
+/**
+ * 统一入班入口：剔除已在班人员 → 按班级剩余名额裁剪 → 调用入班接口
+ * @param userIds 候选学员的用户编号
+ */
+async function joinClass(userIds: number[]) {
+  if (!currentClass.value?.id) {
     return;
   }
+  const uniqueIds = [...new Set(userIds)];
+  const candidates = uniqueIds.filter((id) => !activeUserIds.value.has(id));
+  const skipped = uniqueIds.length - candidates.length;
+  if (candidates.length === 0) {
+    message.warning(
+      skipped > 0 ? `所选 ${skipped} 人已在班中，无需重复添加` : '请先勾选学员',
+    );
+    return;
+  }
+  if (studentLimited.value && remainingQuota.value === 0) {
+    message.warning(`班级学员已达上限 ${CLASS_MAX_STUDENT} 人，无法继续添加`);
+    return;
+  }
+  const overflow = studentLimited.value
+    ? Math.max(0, candidates.length - remainingQuota.value)
+    : 0;
+  const accepted = studentLimited.value
+    ? candidates.slice(0, remainingQuota.value)
+    : candidates;
   addLoading.value = true;
   try {
-    const added = await addClassStudents(
-      currentClass.value.id,
-      addUserIds.value,
+    const added = await addClassStudents(currentClass.value.id, accepted);
+    message.success(
+      `已添加 ${added} 名学员` +
+        (skipped ? `，${skipped} 人已在班自动跳过` : '') +
+        (overflow ? `，另有 ${overflow} 人因名额不足未加入` : ''),
     );
-    message.success(`已添加 ${added} 名学员（已在班自动跳过）`);
-    addVisible.value = false;
+    scopeVisible.value = false;
+    importVisible.value = false;
     await Promise.all([loadStudents(), loadActiveIds()]);
+  } catch (error) {
+    message.error((error as Error)?.message || '添加学员失败，请稍后重试');
   } finally {
     addLoading.value = false;
   }
+}
+
+// ========== 按部门 / 岗位批量导入（如整批导入劳务部门学员） ==========
+const scopeVisible = ref(false);
+const scopeLoading = ref(false);
+const deptTree = ref<Record<string, any>[]>([]);
+const postOptions = ref<{ label: string; value: number }[]>([]);
+const scopeDeptIds = ref<number[]>([]);
+const scopePostIds = ref<number[]>([]);
+const scopeIncludeChild = ref(true);
+const scopePreview = ref<TrainingPlanApi.ScopePreviewResult>();
+const scopeSelectedIds = ref<number[]>([]);
+
+const scopeUserColumns = [
+  { title: '学员姓名', dataIndex: 'nickname', key: 'nickname' },
+  { title: '部门/班组', dataIndex: 'deptName', key: 'deptName' },
+  { title: '入班情况', key: 'inClass', width: 120 },
+];
+
+async function openScopeModal() {
+  scopeDeptIds.value = [];
+  scopePostIds.value = [];
+  scopeIncludeChild.value = true;
+  scopePreview.value = undefined;
+  scopeSelectedIds.value = [];
+  scopeVisible.value = true;
+  if (deptTree.value.length === 0) {
+    try {
+      deptTree.value = handleTree(await getSimpleDeptList());
+    } catch {
+      deptTree.value = [];
+    }
+  }
+  if (postOptions.value.length === 0) {
+    try {
+      postOptions.value = (await getSimplePostList())
+        ?.filter((item) => item.status === 0 && item.id != null)
+        .map((item) => ({ label: item.name, value: item.id! }));
+    } catch {
+      postOptions.value = [];
+    }
+  }
+}
+
+/** 预览命中名单：命中人数、已在班人数、可新增人数与剩余名额 */
+async function handleScopePreview() {
+  if (!currentClass.value?.id) {
+    return;
+  }
+  if (scopeDeptIds.value.length === 0 && scopePostIds.value.length === 0) {
+    message.warning('请至少选择一个部门或岗位');
+    return;
+  }
+  scopeLoading.value = true;
+  try {
+    const data = await previewScopeStudents({
+      classId: currentClass.value.id,
+      deptIds: scopeDeptIds.value,
+      postIds: scopePostIds.value,
+      includeChildDept: scopeIncludeChild.value,
+    });
+    scopePreview.value = data;
+    // 默认勾选未在班人员，且不超过班级剩余名额
+    const addable = (data?.users ?? []).filter((item) => !item.inClass);
+    const limit = Math.min(data?.remaining ?? 0, addable.length);
+    scopeSelectedIds.value = addable
+      .slice(0, limit)
+      .map((item) => item.userId)
+      .filter((id): id is number => id != null);
+  } finally {
+    scopeLoading.value = false;
+  }
+}
+
+async function handleScopeAdd() {
+  if (scopeSelectedIds.value.length === 0) {
+    message.warning('请先勾选要加入的学员');
+    return;
+  }
+  await joinClass(scopeSelectedIds.value);
+}
+
+/** 已在班人员不可重复勾选 */
+function scopeRowDisabled(record: TrainingPlanApi.ScopePreviewUser) {
+  return { disabled: Boolean(record.inClass) };
+}
+
+function handleScopeSelectionChange(keys: Key[]) {
+  scopeSelectedIds.value = keys.map((key) => Number(key));
 }
 
 async function handleRemoveStudent(row: TrainingPlanApi.ClassStudent) {
@@ -226,15 +340,25 @@ async function handleImport() {
 }
 
 // ========== 在班人数与名额（工具栏展示） ==========
-/** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
-const CLASS_MAX_STUDENT = 50;
+/**
+ * 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致
+ * 0 表示不限制人数（已取消培训班 50 人上限）；如需恢复限制，改为具体数值即可
+ */
+const CLASS_MAX_STUDENT = 0;
+/** 是否限制班级人数 */
+const studentLimited = computed(() => CLASS_MAX_STUDENT > 0);
 
-/** 当前在班人数（用于展示「在班 X/50」与剩余名额） */
+/** 当前在班人数（用于展示「在班 X」与剩余名额） */
 const inClassTotalCount = computed(() => activeUserIds.value.size);
-/** 剩余可加入名额 */
+/** 剩余可加入名额（不限制时为 Infinity） */
 const remainingQuota = computed(() =>
-  Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value),
+  studentLimited.value
+    ? Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value)
+    : Number.POSITIVE_INFINITY,
 );
+
+/** 「按部门/岗位导入」入口开关：需求调整，暂时隐藏该组件 */
+const SCOPE_IMPORT_ENABLED = false;
 
 // ========== 表格列 ==========
 const columns = [
@@ -254,14 +378,21 @@ const columns = [
     <template v-if="currentClass">
       <!-- 工具栏 -->
       <Space class="mb-3" wrap>
-        <Button type="primary" :disabled="!writable" @click="openAddModal">
+        <Button type="primary" :disabled="!writable" @click="openUserPicker">
           添加学员
+        </Button>
+        <Button
+          v-if="SCOPE_IMPORT_ENABLED"
+          :disabled="!writable"
+          @click="openScopeModal"
+        >
+          按部门/岗位导入
         </Button>
         <Button :disabled="!writable" @click="importVisible = true">
           批量导入学员
         </Button>
-        <Tag :color="remainingQuota === 0 ? 'red' : 'blue'">
-          在班 {{ inClassTotalCount }}/{{ CLASS_MAX_STUDENT }}
+        <Tag :color="studentLimited && remainingQuota === 0 ? 'red' : 'blue'">
+          在班 {{ inClassTotalCount }}<template v-if="studentLimited">/{{ CLASS_MAX_STUDENT }}</template>
         </Tag>
         <Input
           v-model:value="query.userName"
@@ -321,33 +452,93 @@ const columns = [
       请先在上方选择培训班（暂无班级请先到培训班管理创建并开班）
     </div>
 
-    <!-- 添加学员弹窗 -->
+    <!-- 逐个挑选学员：系统人员选择（部门树 + 分页勾选） -->
+    <UserSelectDialog ref="userSelectRef" @selected="handleUserPicked" />
+
+    <!-- 按部门 / 岗位整批导入（SCOPE_IMPORT_ENABLED=false 时隐藏） -->
     <Modal
-      v-model:open="addVisible"
-      title="添加学员"
+      v-if="SCOPE_IMPORT_ENABLED"
+      v-model:open="scopeVisible"
+      title="按部门/岗位导入学员"
       :footer="null"
-      width="620px"
+      width="860px"
     >
-      <p class="mb-2 text-xs text-gray-500">
-        勾选人员后批量加入班级，系统将自动生成「课程 × 学员」学习任务。
+      <p class="mb-3 rounded bg-gray-50 p-2 text-xs text-gray-500">
+        按部门（可含下级）与岗位圈选参训人员：选择<strong>劳务部门</strong>及其「一线劳务人员」岗位即可批量带出该部门人员，
+        确认勾选后批量入班并自动生成「课程 × 学员」学习任务。
       </p>
-      <Space class="mb-3 w-full">
-        <Select
-          v-model:value="addUserIds"
-          mode="multiple"
+      <Space class="mb-3 w-full" wrap>
+        <TreeSelect
+          v-model:value="scopeDeptIds"
           allow-clear
+          multiple
+          show-search
+          tree-checkable
+          tree-default-expand-all
+          tree-node-filter-prop="name"
+          :max-tag-count="3"
+          :field-names="{ label: 'name', value: 'id', children: 'children' }"
+          :tree-data="deptTree"
+          placeholder="选择部门（如劳务部门，可多选）"
+          style="min-width: 320px"
+        />
+        <Select
+          v-model:value="scopePostIds"
+          allow-clear
+          mode="multiple"
           show-search
           option-filter-prop="label"
-          placeholder="选择学员（可多选）"
-          style="width: 100%"
-          :options="addableOptions"
+          :options="postOptions"
+          placeholder="选择岗位（如一线劳务人员，可多选）"
+          style="min-width: 240px"
         />
+        <Checkbox v-model:checked="scopeIncludeChild">含下级部门</Checkbox>
+        <Button :loading="scopeLoading" @click="handleScopePreview">
+          预览名单
+        </Button>
       </Space>
-      <div class="text-right">
+
+      <template v-if="scopePreview">
+        <p class="mb-2 text-xs text-gray-600">
+          命中 {{ scopePreview.matchedCount ?? 0 }} 人，其中已在班
+          {{ scopePreview.inClassCount ?? 0 }} 人，可新增
+          {{ scopePreview.addableCount ?? 0 }} 人；当前在班
+          {{ scopePreview.inClassTotal ?? 0 }}/{{
+            scopePreview.maxSize ?? CLASS_MAX_STUDENT
+          }}
+          人，剩余名额 {{ scopePreview.remaining ?? 0 }} 个。
+        </p>
+        <Table
+          row-key="userId"
+          size="small"
+          :columns="scopeUserColumns"
+          :data-source="scopePreview.users ?? []"
+          :pagination="{ pageSize: 8, showSizeChanger: false }"
+          :row-selection="{
+            selectedRowKeys: scopeSelectedIds,
+            getCheckboxProps: scopeRowDisabled,
+            onChange: handleScopeSelectionChange,
+          }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'inClass'">
+              <Tag v-if="record.inClass" color="default">已在班</Tag>
+              <Tag v-else color="blue">可加入</Tag>
+            </template>
+          </template>
+        </Table>
+      </template>
+
+      <div class="mt-3 text-right">
         <Space>
-          <Button @click="addVisible = false">取消</Button>
-          <Button type="primary" :loading="addLoading" @click="handleAddStudents">
-            确认添加
+          <Button @click="scopeVisible = false">取消</Button>
+          <Button
+            type="primary"
+            :loading="addLoading"
+            :disabled="scopeSelectedIds.length === 0"
+            @click="handleScopeAdd"
+          >
+            确认导入（{{ scopeSelectedIds.length }} 人）
           </Button>
         </Space>
       </div>
@@ -420,6 +611,5 @@ const columns = [
         size="small"
       />
     </Modal>
-
-  </Page>
+</Page>
 </template>
