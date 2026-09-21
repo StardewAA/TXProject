@@ -4,6 +4,7 @@ import type { NotificationItem } from '@vben/layouts';
 import type { SystemTenantApi } from '#/api/system/tenant';
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
@@ -42,9 +43,13 @@ import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 import FmsAccountSetSwitch from '#/views/fms/components/account-set/account-set-switch.vue';
-// 【MES AI 助手】挂在全局布局层：路由切换不销毁（仅浏览器刷新/重新登录时重建），
-// 面板为 fixed 定位悬浮球/悬浮窗，不影响各页面布局
+// 【全局 AI 助手】挂在基础布局上，仅在 MES 系统板块（/mes 下所有页面）显示，
+// 切换到 CRM/ERP/培训等其他板块时隐藏；板块内切换页面对话记录保持不丢失
 import MesAiChatPanel from '#/views/mes/home/modules/MesAiChatPanel.vue';
+
+const route = useRoute();
+/** 当前是否处于 MES 系统板块（菜单根路径 /mes 下所有页面，含 MES 首页） */
+const isMesRoute = computed(() => route.path.startsWith('/mes'));
 
 const userStore = useUserStore();
 const authStore = useAuthStore();
@@ -182,6 +187,11 @@ const tenantEnable = computed(
 async function handleGetTenantList() {
   if (tenantEnable.value) {
     tenants.value = await getSimpleTenantList();
+    // 兜底：历史会话（或登录流程未写入）可能没有「访问租户」，
+    // 用登录租户补齐，避免下拉长期停留在「请选择租户」占位符。
+    if (!accessStore.visitTenantId && accessStore.tenantId) {
+      accessStore.setVisitTenantId(accessStore.tenantId);
+    }
   }
 }
 
@@ -343,6 +353,6 @@ watch(
     </template>
   </BasicLayout>
   <HelpModal />
-  <!-- 【MES AI 助手】全局悬浮面板（fixed 定位，路由切换保持状态） -->
-  <MesAiChatPanel />
+  <!-- 【全局 AI 助手】悬浮球/对话面板，仅 MES 系统板块内显示 -->
+  <MesAiChatPanel v-if="isMesRoute" />
 </template>
