@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7faf9"/><stop offset="1" stop-color="#dfe8e5"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#94a3b8"/><stop offset=".45" stop-color="#f8fafc"/><stop offset="1" stop-color="#64748b"/></linearGradient>
+  <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M0 0h34v34H0z" fill="#f8fafc"/><path d="M0 0l34 34M34 0L0 34" stroke="#78716c" stroke-width="3"/></pattern>
+  <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-opacity=".18"/></filter>
+</defs>
+<rect width="1000" height="1000" rx="54" fill="url(#bg)"/>
+<path d="M0 0h1000v24H0z" fill="#78716c"/>
+<g filter="url(#shadow)"><path d="M250 315h205v160H250z" fill="#78716c" opacity="0.4" stroke="#57534e" stroke-width="14"/><path d="M270 345h165" stroke="#fff" stroke-width="12" opacity=".7"/><path d="M485 315h205v160H485z" fill="#78716c" opacity="0.52" stroke="#57534e" stroke-width="14"/><path d="M505 345h165" stroke="#fff" stroke-width="12" opacity=".7"/><path d="M250 505h205v160H250z" fill="#78716c" opacity="0.64" stroke="#57534e" stroke-width="14"/><path d="M270 535h165" stroke="#fff" stroke-width="12" opacity=".7"/><path d="M485 505h205v160H485z" fill="#78716c" opacity="0.76" stroke="#57534e" stroke-width="14"/><path d="M505 535h165" stroke="#fff" stroke-width="12" opacity=".7"/></g>
+<rect x="70" y="770" width="860" height="165" rx="24" fill="#fff" opacity=".96"/>
+<text x="105" y="838" fill="#172126" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="44" font-weight="700">耐火纤维模块</text>
+<text x="105" y="895" fill="#78716c" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="600">规格：300mm</text>
+<text x="895" y="895" text-anchor="end" fill="#64748b" font-family="Arial, sans-serif" font-size="22">SKU 940210</text>
+</svg>

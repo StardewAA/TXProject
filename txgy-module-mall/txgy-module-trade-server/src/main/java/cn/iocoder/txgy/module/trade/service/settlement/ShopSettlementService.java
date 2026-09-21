@@ -10,6 +10,7 @@ import jakarta.annotation.Resource;
 import org.springframework.jdbc.core.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import java.time.*;
 import java.util.*;
 import java.io.ByteArrayInputStream;
@@ -69,7 +70,7 @@ public class ShopSettlementService {
     }
     public String proof(Long id,Long shop,boolean supplier){detail(id,shop,supplier);return jdbc.queryForObject("SELECT payment_proof FROM trade_shop_settlement_bill WHERE tenant_id=? AND id=?",String.class,tenant(),id);}
 
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public Bill generate(Generate req){
         admin();var month=SettlementMath.month(req.month());long carry=lock(req.shopId());
         var shop=shops.getShop(req.shopId()).getCheckedData();if(shop==null)throw invalid("店铺不存在");
@@ -123,10 +124,13 @@ public class ShopSettlementService {
     }
     private static long n(Map<String,Object> map,String key){Object v=map.get(key);return v==null?0:((Number)v).longValue();}
     private boolean eligible(long order,Long shop){
-        // Current reads are required here too: an after-sale may have committed while the caller
-        // waited for the order lock. After-sale creation uses the same order lock before insertion.
+        // The parent order remains locked, including while these checks run. Every after-sale
+        // creation takes that parent lock before insertion, so no new application can slip in.
         var lines=jdbc.queryForList("SELECT shop_id FROM trade_order_item WHERE tenant_id=? AND order_id=? AND deleted=0 FOR UPDATE",tenant(),order);
-        var active=jdbc.queryForList("SELECT id FROM trade_after_sale WHERE tenant_id=? AND order_id=? AND deleted=0 AND status NOT IN(50,61,62,63) FOR UPDATE",tenant(),order);
+        // Do not lock after-sales: refund completion already holds an after-sale lock before
+        // requesting the order lock. At READ_COMMITTED an uncommitted closure is still active
+        // (fail closed); a creation committed while waiting for the order lock is visible.
+        var active=jdbc.queryForList("SELECT id FROM trade_after_sale WHERE tenant_id=? AND order_id=? AND deleted=0 AND status NOT IN(50,61,62,63)",tenant(),order);
         return !lines.isEmpty() && lines.stream().allMatch(line->line.get("shop_id") instanceof Number owner && owner.longValue()==shop) && active.isEmpty();
     }
     private void add(Long bill,long order,String no,int kind,Long original,Long originalBill,long pay,long delivery,long before,long refund,int rate,long commission,long amount,Object finish){
@@ -141,7 +145,7 @@ public class ShopSettlementService {
                 || (i.getKind()==1 && n(order.getFirst(),"status")!=30) || !eligible(i.getOrderId(),b.getShopId()))throw invalid("原订单退款或售后状态已变化，请平台退回并重新核算账单");
         }
     }
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public void audit(Audit req){
         admin();Bill b=locked(req.id(),req.version());
         if(req.approved()){SettlementMath.transition(b.getStatus(),10);verify(b);}
@@ -149,7 +153,7 @@ public class ShopSettlementService {
         jdbc.update("UPDATE trade_shop_settlement_bill SET status=?,audit_remark=?,update_time=NOW() WHERE tenant_id=? AND id=?",req.approved()?20:50,req.remark().trim(),tenant(),b.getId());
         log(b,req.approved()?"AUDIT":"REJECT",req.remark().trim());
     }
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public void confirm(Confirm req){
         member(req.shopId());Bill b=locked(req.id(),req.version());if(!Objects.equals(req.shopId(),b.getShopId()))throw invalid("无该账单权限");
         if(b.getStatus()==30)return;SettlementMath.transition(b.getStatus(),20);verify(b);
@@ -165,7 +169,7 @@ public class ShopSettlementService {
             }
         }catch(Exception e){throw invalid("付款凭证不是有效的受支持图片");}
     }
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public void pay(Pay req){
         admin();Bill b=locked(req.id(),req.version());
         if(b.getStatus()==40 && Objects.equals(b.getPaymentReference(),req.reference().trim()) && Objects.equals(b.getSettlementAmount(),req.amount()))return;
@@ -178,7 +182,7 @@ public class ShopSettlementService {
         jdbc.update("UPDATE trade_shop_settlement_bill SET status=40,payment_reference=?,payment_time=?,payment_proof=?,update_time=NOW() WHERE tenant_id=? AND id=?",req.reference().trim(),req.paidAt(),req.proof(),tenant(),b.getId());
         jdbc.update("UPDATE trade_shop_settlement_lock SET credit_amount=0 WHERE tenant_id=? AND shop_id=?",tenant(),b.getShopId());log(b,"OFFLINE_PAID","登记线下付款；流水:"+req.reference().trim()+"；金额(分):"+req.amount());
     }
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public void carry(Long id,int version){
         admin();Bill b=locked(id,version);if(b.getStatus()==60)return;SettlementMath.transition(b.getStatus(),30);verify(b);
         if(b.getSettlementAmount()>0)throw invalid("正数账单须登记实际线下付款");

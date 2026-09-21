@@ -39,6 +39,12 @@ public interface TradeOrderHandler {
      */
     default void afterPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {}
 
+    /** 取消副作用前只读预检，所有处理器预检通过后才开始远程补偿。 */
+    default void beforeCancelOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {}
+
+    /** 单项退款补偿前只读预检，不能在这里改变积分或库存。 */
+    default void beforeCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {}
+
     /**
      * 订单取消后
      *

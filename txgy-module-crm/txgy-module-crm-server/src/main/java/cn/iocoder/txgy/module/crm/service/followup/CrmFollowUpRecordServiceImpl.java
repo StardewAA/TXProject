@@ -7,6 +7,9 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.module.crm.controller.admin.followup.vo.CrmFollowUpRecordPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.followup.vo.CrmFollowUpRecordSaveReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.followup.CrmFollowUpRecordDO;
+import cn.iocoder.txgy.module.crm.dal.mysql.business.CrmBusinessMapper;
+import cn.iocoder.txgy.module.crm.dal.mysql.clue.CrmClueMapper;
+import cn.iocoder.txgy.module.crm.dal.mysql.customer.CrmCustomerMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.followup.CrmFollowUpRecordMapper;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
@@ -60,6 +63,13 @@ public class CrmFollowUpRecordServiceImpl implements CrmFollowUpRecordService {
     @Resource
     @Lazy
     private CrmCustomerService customerService;
+
+    @Resource
+    private CrmCustomerMapper customerMapper;
+    @Resource
+    private CrmBusinessMapper businessMapper;
+    @Resource
+    private CrmClueMapper clueMapper;
 
     @Override
     @CrmPermission(bizTypeValue = "#createReqVO.bizType", bizId = "#createReqVO.bizId", level = CrmPermissionLevelEnum.WRITE)
@@ -115,6 +125,25 @@ public class CrmFollowUpRecordServiceImpl implements CrmFollowUpRecordService {
 
         // 删除
         crmFollowUpRecordMapper.deleteById(id);
+        // 同步扣减业务对象的累计跟进次数，保证「次数」与跟进记录条数一致
+        updateBizFollowUpCount(followUpRecord.getBizType(), followUpRecord.getBizId(), -1);
+    }
+
+    /**
+     * 变更业务对象的累计跟进次数（客户 / 线索 / 商机）
+     *
+     * @param bizType 业务类型 {@link CrmBizTypeEnum}
+     * @param bizId   业务编号
+     * @param delta   变更量：新增跟进 +1，删除跟进 -1
+     */
+    private void updateBizFollowUpCount(Integer bizType, Long bizId, int delta) {
+        if (ObjUtil.equal(CrmBizTypeEnum.CRM_CUSTOMER.getType(), bizType)) {
+            customerMapper.updateFollowUpCountById(bizId, delta);
+        } else if (ObjUtil.equal(CrmBizTypeEnum.CRM_BUSINESS.getType(), bizType)) {
+            businessMapper.updateFollowUpCountById(bizId, delta);
+        } else if (ObjUtil.equal(CrmBizTypeEnum.CRM_CLUE.getType(), bizType)) {
+            clueMapper.updateFollowUpCountById(bizId, delta);
+        }
     }
 
     @Override

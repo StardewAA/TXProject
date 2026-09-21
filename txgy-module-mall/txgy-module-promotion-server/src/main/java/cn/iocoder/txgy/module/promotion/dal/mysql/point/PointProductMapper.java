@@ -61,6 +61,8 @@ public interface PointProductMapper extends BaseMapperX<PointProductDO> {
         Assert.isTrue(count > 0);
         return update(null, new LambdaUpdateWrapper<PointProductDO>()
                 .eq(PointProductDO::getId, id)
+                .ge(PointProductDO::getStock, 0)
+                .le(PointProductDO::getStock, Integer.MAX_VALUE - count)
                 .setSql("stock = stock + " + count));
     }
 }

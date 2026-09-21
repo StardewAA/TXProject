@@ -27,6 +27,9 @@ public class ErpSupplierSaveReqVO {
     @NotEmpty(message = "供应商名称不能为空")
     private String name;
 
+    @Schema(description = "绑定的登录用户编号（供应商门户账号）", example = "80000")
+    private Long userId;
+
     @Schema(description = "联系人", example = "芋艿")
     private String contact;
 

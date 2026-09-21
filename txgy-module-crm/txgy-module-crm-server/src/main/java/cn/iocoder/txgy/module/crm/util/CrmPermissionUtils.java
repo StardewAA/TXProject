@@ -82,16 +82,18 @@ public class CrmPermissionUtils {
         if (CrmSceneTypeEnum.isOwner(sceneType)) {
             query.eq(ownerUserIdField, userId);
         }
-        // 场景二：我参与的数据（我有读或写权限，并且不是负责人）
+        // 场景二：我参与的数据（我负责的 + 我有读或写权限的，即「我负责的」必然包含在「我参与的」内）
         if (CrmSceneTypeEnum.isInvolved(sceneType)) {
             if (CrmPermissionUtils.isCrmAdmin()) { // 特殊逻辑：如果是超管，直接查询所有，不过滤数据权限
                 return;
             }
-            query.innerJoin(CrmPermissionDO.class, on -> on.eq(CrmPermissionDO::getBizType, bizType)
+            query.leftJoin(CrmPermissionDO.class, on -> on.eq(CrmPermissionDO::getBizType, bizType)
                     .eq(CrmPermissionDO::getBizId, bizId)
                     .in(CrmPermissionDO::getLevel, CrmPermissionLevelEnum.READ.getLevel(), CrmPermissionLevelEnum.WRITE.getLevel())
                     .eq(CrmPermissionDO::getUserId,userId));
-            query.ne(ownerUserIdField, userId);
+            // 我负责的（owner_user_id = 我）或者我是团队成员（存在我的读/写权限行）
+            query.and(wrapper -> wrapper.eq(ownerUserIdField, userId)
+                    .or().isNotNull(CrmPermissionDO::getId));
         }
         // 场景三：下属负责的数据（下属是负责人）
         if (CrmSceneTypeEnum.isSubordinate(sceneType)) {

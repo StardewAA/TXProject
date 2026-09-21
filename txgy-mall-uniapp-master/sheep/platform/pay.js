@@ -33,65 +33,66 @@ export default class SheepPay {
     this.payment = payment;
     this.id = id;
     this.orderType = orderType;
-    this.payAction();
+    // Expose the existing async initiation so the cashier can suppress duplicate submissions.
+    this.pending = this.payAction();
   }
 
   payAction() {
     const payAction = {
       WechatOfficialAccount: {
         wechat: () => {
-          this.wechatOfficialAccountPay();
+          return this.wechatOfficialAccountPay();
         },
         alipay: () => {
-          this.redirectPay(); // 现在公众号可以直接跳转支付宝页面
+          return this.redirectPay(); // 现在公众号可以直接跳转支付宝页面
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       WechatMiniProgram: {
         wechat: () => {
-          this.wechatMiniProgramPay();
+          return this.wechatMiniProgramPay();
         },
         alipay: () => {
-          this.copyPayLink();
+          return this.copyPayLink();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       App: {
         wechat: () => {
-          this.wechatAppPay();
+          return this.wechatAppPay();
         },
         alipay: () => {
-          this.alipay();
+          return this.alipay();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
       H5: {
         wechat: () => {
-          this.wechatWapPay();
+          return this.wechatWapPay();
         },
         alipay: () => {
-          this.redirectPay();
+          return this.redirectPay();
         },
         wallet: () => {
-          this.walletPay();
+          return this.walletPay();
         },
         mock: () => {
-          this.mockPay();
+          return this.mockPay();
         },
       },
     };

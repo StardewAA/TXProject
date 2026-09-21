@@ -20,6 +20,8 @@ import java.util.List;
  * @since 2022-08-26
  */
 public interface TradeOrderUpdateService {
+    /** ERP 预占确认后补建支付单，重复确认不会重复创建。 */
+    void continueAfterErpReservation(Long id);
 
     // =================== Order ===================
 

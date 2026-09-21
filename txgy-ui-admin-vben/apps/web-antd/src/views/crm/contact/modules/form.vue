@@ -80,6 +80,15 @@ async function onQuickParse(payload: { fields: ParsedClue }) {
   }
 }
 
+/**
+ * 多人识别弹窗已批量新增完成：
+ * 关闭当前新增联系人弹窗并刷新列表（这些联系人已直接入库，无需再走表单保存）
+ */
+function onBatchSuccess() {
+  modalApi.close();
+  emit('success');
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     const { valid } = await formApi.validate();
@@ -123,7 +132,12 @@ const [Modal, modalApi] = useVbenModal({
 
 <template>
   <Modal :title="getTitle" class="w-2/5">
-    <ClueQuickParse mode="contact" class="mx-4" @apply="onQuickParse" />
+    <ClueQuickParse
+      mode="contact"
+      class="mx-4"
+      @apply="onQuickParse"
+      @batch-success="onBatchSuccess"
+    />
     <Form class="mx-4" />
   </Modal>
 </template>

@@ -2,14 +2,18 @@ package cn.iocoder.txgy.module.crm.service.business;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.ListUtil;
+import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.number.MoneyUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessLoseReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessSaveReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessTransferReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessUpdateStateReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessUpdateStatusReqVO;
+import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessWinReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.contact.vo.CrmContactBusinessReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsFunnelReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
@@ -19,6 +23,10 @@ import cn.iocoder.txgy.module.crm.dal.dataobject.contact.CrmContactBusinessDO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.contact.CrmContactDO;
 import cn.iocoder.txgy.module.crm.dal.mysql.business.CrmBusinessMapper;
 import cn.iocoder.txgy.module.crm.dal.mysql.business.CrmBusinessProductMapper;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessEndStatusEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessLostReasonEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStageEnum;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.enums.permission.CrmPermissionLevelEnum;
 import cn.iocoder.txgy.module.crm.framework.permission.core.annotations.CrmPermission;
@@ -31,7 +39,9 @@ import cn.iocoder.txgy.module.crm.service.permission.CrmPermissionService;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionCreateReqBO;
 import cn.iocoder.txgy.module.crm.service.permission.bo.CrmPermissionTransferReqBO;
 import cn.iocoder.txgy.module.crm.service.product.CrmProductService;
+import cn.iocoder.txgy.module.crm.util.CrmFollowUpTimeUtils;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.impl.DiffParseFunction;
 import com.mzt.logapi.starter.annotation.LogRecord;
@@ -101,7 +111,8 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
 
         // 2.1 插入商机
         CrmBusinessDO business = BeanUtils.toBean(createReqVO, CrmBusinessDO.class);
-        business.setStatusId(businessStatusService.getBusinessStatusListByTypeId(createReqVO.getStatusTypeId()).get(0).getId()); // 默认状态
+        // 商机阶段：不传默认「商机待评估」（线索转商机的默认值），并据此派生状态组与预估赢单率
+        applyStage(business, createReqVO.getStage() == null ? CrmBusinessStageEnum.getDefaultStage() : createReqVO.getStage());
         calculateTotalPrice(business, businessProducts);
         businessMapper.insert(business);
         // 2.2 插入商机关联商品
@@ -135,13 +146,17 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
         updateReqVO.setOwnerUserId(null).setStatusTypeId(null); // 不允许更新的字段
         // 1.1 校验存在
         CrmBusinessDO oldBusiness = validateBusinessExists(updateReqVO.getId());
-        // 1.2 校验产品项的有效性
+        // 1.2 校验商机未关闭（关闭后关键字段只读）
+        validateBusinessNotClosed(oldBusiness);
+        // 1.3 校验产品项的有效性
         List<CrmBusinessProductDO> businessProducts = validateBusinessProducts(updateReqVO.getProducts());
-        // 1.3 校验关联字段
+        // 1.4 校验关联字段
         validateRelationDataExists(updateReqVO);
 
         // 2.1 更新商机
         CrmBusinessDO updateObj = BeanUtils.toBean(updateReqVO, CrmBusinessDO.class);
+        // 阶段变更时同步派生「状态组」与「预估赢单率」；未传阶段则沿用原阶段
+        applyStage(updateObj, updateReqVO.getStage() == null ? oldBusiness.getStage() : updateReqVO.getStage());
         calculateTotalPrice(updateObj, businessProducts);
         businessMapper.updateById(updateObj);
         // 2.2 更新商机关联商品
@@ -157,13 +172,16 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_FOLLOW_UP_SUB_TYPE, bizNo = "{{#id}}",
             success = CRM_BUSINESS_FOLLOW_UP_SUCCESS)
     @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
-    public void updateBusinessFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent) {
+    public void updateBusinessFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime,
+                                       String contactLastContent) {
         // 1. 校验存在
         CrmBusinessDO business = validateBusinessExists(id);
 
-        // 2. 更新联系人的跟进信息
+        // 2. 更新联系人的跟进信息（最后跟进时间取「实际跟进时间」，且不早于已有值，详见 CrmFollowUpTimeUtils）
         businessMapper.updateById(new CrmBusinessDO().setId(id).setFollowUpStatus(true).setContactNextTime(contactNextTime)
-                .setContactLastTime(LocalDateTime.now()));
+                .setContactLastTime(CrmFollowUpTimeUtils.calculateContactLastTime(business.getContactLastTime(), contactTime)));
+        // 累计跟进次数 +1（SQL 自增，避免并发下相互覆盖）
+        businessMapper.updateFollowUpCountById(id, 1);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("businessName", business.getName());
@@ -230,6 +248,66 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
         business.setTotalPrice(business.getTotalProductPrice().subtract(discountPrice));
     }
 
+    /**
+     * 设置商机阶段，并派生出「商机状态组」与「预估赢单率」
+     *
+     * <p>状态组与预估赢单率都是只读派生字段，不接受外部直接传值，统一由阶段推导：
+     * 商机待评估 → 未开始；其余阶段 → 进行中；赢单率取该阶段配置的 5/10/40/60/70。
+     *
+     * @param business 商机（写入 stage / businessState / winRate）
+     * @param stage    商机阶段
+     */
+    private void applyStage(CrmBusinessDO business, Integer stage) {
+        if (CrmBusinessStageEnum.getByStage(stage) == null) {
+            throw exception(BUSINESS_STAGE_INVALID);
+        }
+        business.setStage(stage);
+        business.setBusinessState(CrmBusinessStateEnum.getStateByStage(stage));
+        business.setWinRate(CrmBusinessStageEnum.getPercentByStage(stage));
+    }
+
+    /**
+     * 校验商机未关闭
+     *
+     * <p>已赢单 / 已丢单后，名称、客户、阶段、预计成交日期、产品清单、金额、负责人、备注等关键字段只读；
+     * 跟进记录与下次联系时间仍可写。
+     *
+     * @param business 商机
+     */
+    private void validateBusinessNotClosed(CrmBusinessDO business) {
+        if (CrmBusinessStateEnum.isClosed(business.getBusinessState())) {
+            throw exception(BUSINESS_UPDATE_FAIL_CLOSED);
+        }
+    }
+
+    /**
+     * 兼容历史调用：把旧「商机状态 / 阶段」名称映射为标准化后的商机阶段
+     *
+     * @param statusName 旧状态名称
+     * @return 商机阶段；无法映射时返回 null
+     */
+    private static Integer matchBusinessStageByName(String statusName) {
+        if (statusName == null) {
+            return null;
+        }
+        for (CrmBusinessStageEnum item : CrmBusinessStageEnum.values()) {
+            if (statusName.contains(item.getName())) {
+                return item.getStage();
+            }
+        }
+        // 旧数据里的同义阶段名称：需求沟通 → 需求确认；方案报价 → 方案评估
+        if (statusName.contains("需求")) {
+            return CrmBusinessStageEnum.DEMAND.getStage();
+        }
+        if (statusName.contains("方案")) {
+            return CrmBusinessStageEnum.SCHEME.getStage();
+        }
+        if (statusName.contains("谈判") || statusName.contains("赢单") || statusName.contains("输单")) {
+            return CrmBusinessStageEnum.NEGOTIATION.getStage();
+        }
+        return null;
+    }
+
     @Override
     @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_UPDATE_STATUS_SUB_TYPE, bizNo = "{{#reqVO.id}}",
             success = CRM_BUSINESS_UPDATE_STATUS_SUCCESS)
@@ -237,30 +315,150 @@ public class CrmBusinessServiceImpl implements CrmBusinessService {
     public void updateBusinessStatus(CrmBusinessUpdateStatusReqVO reqVO) {
         // 1.1 校验存在
         CrmBusinessDO business = validateBusinessExists(reqVO.getId());
-        // 1.2 校验商机未结束
-        if (business.getEndStatus() != null) {
-            throw exception(BUSINESS_UPDATE_STATUS_FAIL_END_STATUS);
+        // 1.2 标准化后：赢单/输单必须走「赢单」「输单」按钮，保证签约信息 / 丢单原因完整
+        if (reqVO.getEndStatus() != null) {
+            throw exception(BUSINESS_UPDATE_STATUS_FAIL_USE_BUTTON);
         }
-        // 1.3 校验商机状态
-        CrmBusinessStatusDO status = null;
-        if (reqVO.getStatusId() != null) {
-            status = businessStatusService.validateBusinessStatus(business.getStatusTypeId(), reqVO.getStatusId());
+        // 1.3 兼容历史调用：旧 statusId 按其名称映射为新的「商机阶段」
+        CrmBusinessStatusDO status = reqVO.getStatusId() == null ? null
+                : businessStatusService.getBusinessStatus(reqVO.getStatusId());
+        Integer stage = matchBusinessStageByName(status == null ? null : status.getName());
+        if (stage == null) {
+            throw exception(BUSINESS_STAGE_INVALID);
         }
-        // 1.4 校验是不是状态没变更
-        if ((reqVO.getStatusId() != null && reqVO.getStatusId().equals(business.getStatusId()))
-                || (reqVO.getEndStatus() != null && reqVO.getEndStatus().equals(business.getEndStatus()))) {
-            throw exception(BUSINESS_UPDATE_STATUS_FAIL_STATUS_EQUALS);
-        }
+        // 1.4 校验商机未关闭
+        validateBusinessNotClosed(business);
 
-        // 2. 更新商机状态
-        businessMapper.updateById(new CrmBusinessDO().setId(reqVO.getId()).setStatusId(reqVO.getStatusId())
-                .setEndStatus(reqVO.getEndStatus()));
+        // 2. 更新商机阶段（同步派生状态组与预估赢单率）
+        CrmBusinessDO updateObj = new CrmBusinessDO().setId(reqVO.getId());
+        applyStage(updateObj, stage);
+        businessMapper.updateById(updateObj);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("businessName", business.getName());
-        LogRecordContext.putVariable("oldStatusName", getBusinessStatusName(business.getEndStatus(),
-                businessStatusService.getBusinessStatus(business.getStatusId())));
-        LogRecordContext.putVariable("newStatusName", getBusinessStatusName(reqVO.getEndStatus(), status));
+        LogRecordContext.putVariable("oldStatusName", CrmBusinessStageEnum.getNameByStage(business.getStage()));
+        LogRecordContext.putVariable("newStatusName", CrmBusinessStageEnum.getNameByStage(stage));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_UPDATE_STAGE_SUB_TYPE, bizNo = "{{#id}}",
+            success = CRM_BUSINESS_UPDATE_STAGE_SUCCESS)
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#id", level = CrmPermissionLevelEnum.WRITE)
+    public void updateBusinessStage(Long id, Integer stage) {
+        // 1.1 校验存在
+        CrmBusinessDO business = validateBusinessExists(id);
+        // 1.2 校验商机未关闭（已赢单/已丢单后阶段只读）
+        validateBusinessNotClosed(business);
+        // 1.3 校验阶段合法性
+        if (CrmBusinessStageEnum.getByStage(stage) == null) {
+            throw exception(BUSINESS_STAGE_INVALID);
+        }
+        if (ObjUtil.equal(business.getStage(), stage)) {
+            return;
+        }
+
+        // 2. 更新阶段，并同步派生「状态组」与「预估赢单率」
+        CrmBusinessDO updateObj = new CrmBusinessDO().setId(id);
+        applyStage(updateObj, stage);
+        businessMapper.updateById(updateObj);
+
+        // 3. 记录操作日志上下文
+        LogRecordContext.putVariable("businessName", business.getName());
+        LogRecordContext.putVariable("oldStageName", CrmBusinessStageEnum.getNameByStage(business.getStage()));
+        LogRecordContext.putVariable("newStageName", CrmBusinessStageEnum.getNameByStage(stage));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_WIN_SUB_TYPE, bizNo = "{{#reqVO.id}}",
+            success = CRM_BUSINESS_WIN_SUCCESS)
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#reqVO.id", level = CrmPermissionLevelEnum.WRITE)
+    public void winBusiness(CrmBusinessWinReqVO reqVO, Long userId) {
+        // 1.1 校验存在
+        CrmBusinessDO business = validateBusinessExists(reqVO.getId());
+        // 1.2 校验商机未关闭
+        if (CrmBusinessStateEnum.isClosed(business.getBusinessState())) {
+            throw exception(BUSINESS_WIN_FAIL_CLOSED, CrmBusinessStateEnum.getNameByState(business.getBusinessState()));
+        }
+
+        // 2. 标记赢单：状态组=已赢单、预估赢单率=100、结束状态=赢单，并记录签约与关闭信息
+        businessMapper.updateById(new CrmBusinessDO().setId(reqVO.getId())
+                .setBusinessState(CrmBusinessStateEnum.WON.getState())
+                .setWinRate(100)
+                .setEndStatus(CrmBusinessEndStatusEnum.WIN.getStatus())
+                .setSignDate(reqVO.getSignDate()).setSignAmount(reqVO.getSignAmount())
+                .setEndRemark(reqVO.getRemark())
+                .setClosedAt(LocalDateTime.now()).setClosedBy(userId));
+
+        // 3. 记录操作日志上下文
+        LogRecordContext.putVariable("businessName", business.getName());
+        LogRecordContext.putVariable("signDate", LocalDateTimeUtil.formatNormal(reqVO.getSignDate()));
+        LogRecordContext.putVariable("signAmount", reqVO.getSignAmount());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_LOSE_SUB_TYPE, bizNo = "{{#reqVO.id}}",
+            success = CRM_BUSINESS_LOSE_SUCCESS)
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#reqVO.id", level = CrmPermissionLevelEnum.WRITE)
+    public void loseBusiness(CrmBusinessLoseReqVO reqVO, Long userId) {
+        // 1.1 校验存在
+        CrmBusinessDO business = validateBusinessExists(reqVO.getId());
+        // 1.2 校验商机未关闭
+        if (CrmBusinessStateEnum.isClosed(business.getBusinessState())) {
+            throw exception(BUSINESS_LOSE_FAIL_CLOSED, CrmBusinessStateEnum.getNameByState(business.getBusinessState()));
+        }
+
+        // 2. 标记丢单：状态组=已丢单、预估赢单率=0、结束状态=输单，并记录丢单原因与关闭信息
+        businessMapper.updateById(new CrmBusinessDO().setId(reqVO.getId())
+                .setBusinessState(CrmBusinessStateEnum.LOST.getState())
+                .setWinRate(0)
+                .setEndStatus(CrmBusinessEndStatusEnum.LOSE.getStatus())
+                .setLostReason(reqVO.getLostReason()).setLostRemark(reqVO.getLostRemark())
+                .setClosedAt(LocalDateTime.now()).setClosedBy(userId));
+
+        // 3. 记录操作日志上下文
+        LogRecordContext.putVariable("businessName", business.getName());
+        LogRecordContext.putVariable("lostReasonName", CrmBusinessLostReasonEnum.getNameByReason(reqVO.getLostReason()));
+        LogRecordContext.putVariable("lostRemark", reqVO.getLostRemark());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = CRM_BUSINESS_TYPE, subType = CRM_BUSINESS_UPDATE_STATE_SUB_TYPE, bizNo = "{{#reqVO.id}}",
+            success = CRM_BUSINESS_UPDATE_STATE_SUCCESS)
+    @CrmPermission(bizType = CrmBizTypeEnum.CRM_BUSINESS, bizId = "#reqVO.id", level = CrmPermissionLevelEnum.OWNER)
+    public void updateBusinessState(CrmBusinessUpdateStateReqVO reqVO, Long userId) {
+        // 1.1 校验存在
+        CrmBusinessDO business = validateBusinessExists(reqVO.getId());
+        // 1.2 只允许重新开启 / 纠正为「未开始」「进行中」；关闭必须走赢单/输单按钮，保证信息完整
+        if (CrmBusinessStateEnum.isClosed(reqVO.getBusinessState())) {
+            throw exception(BUSINESS_UPDATE_STATE_FAIL_NOT_SUPPORT);
+        }
+        if (ObjUtil.equal(business.getBusinessState(), reqVO.getBusinessState())) {
+            throw exception(BUSINESS_UPDATE_STATE_FAIL_SAME);
+        }
+
+        // 2. 覆写状态组：清空关闭相关信息（签约信息、丢单原因、关闭时间等），赢单率按当前阶段重算
+        businessMapper.update(null, new LambdaUpdateWrapper<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getId, reqVO.getId())
+                .set(CrmBusinessDO::getBusinessState, reqVO.getBusinessState())
+                .set(CrmBusinessDO::getWinRate, CrmBusinessStageEnum.getPercentByStage(business.getStage()))
+                .set(CrmBusinessDO::getEndStatus, null)
+                .set(CrmBusinessDO::getEndRemark, null)
+                .set(CrmBusinessDO::getSignDate, null)
+                .set(CrmBusinessDO::getSignAmount, null)
+                .set(CrmBusinessDO::getLostReason, null)
+                .set(CrmBusinessDO::getLostRemark, null)
+                .set(CrmBusinessDO::getClosedAt, null)
+                .set(CrmBusinessDO::getClosedBy, null));
+
+        // 3. 记录操作日志上下文
+        LogRecordContext.putVariable("businessName", business.getName());
+        LogRecordContext.putVariable("oldStateName", CrmBusinessStateEnum.getNameByState(business.getBusinessState()));
+        LogRecordContext.putVariable("newStateName", CrmBusinessStateEnum.getNameByState(reqVO.getBusinessState()));
+        LogRecordContext.putVariable("reason", reqVO.getReason());
     }
 
     @Override

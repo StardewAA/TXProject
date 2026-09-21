@@ -35,6 +35,15 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'contactName',
+      label: '联系人',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入联系人',
+        allowClear: true,
+      },
+    },
+    {
       fieldName: 'source',
       label: '客户来源',
       component: 'Select',
@@ -369,6 +378,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
         name: 'CellDict',
         props: { type: DICT_TYPE.INFRA_BOOLEAN_STRING },
       },
+    },
+    {
+      field: 'followUpCount',
+      title: '累计跟进次数',
+      minWidth: 110,
+      formatter: ({ cellValue }) => `${cellValue ?? 0} 次`,
     },
     {
       field: 'contactLastTime',

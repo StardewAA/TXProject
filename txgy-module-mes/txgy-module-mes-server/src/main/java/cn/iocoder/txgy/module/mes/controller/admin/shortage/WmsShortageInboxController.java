@@ -3,7 +3,10 @@ package cn.iocoder.txgy.module.mes.controller.admin.shortage;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.mes.service.shortage.MesWmsShortageWorkOrderAutoService;
 import cn.iocoder.txgy.module.mes.service.shortage.WmsShortageInboxService;
+import cn.iocoder.txgy.module.wms.api.integration.WmsIntegrationApi;
+import jakarta.annotation.Resource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -32,7 +35,12 @@ public class WmsShortageInboxController {
         .build();
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(WmsShortageInboxController.class);
     private final WmsShortageInboxService service;
-    public WmsShortageInboxController(WmsShortageInboxService service){this.service=service;}
+    private final MesWmsShortageWorkOrderAutoService workOrderAutoService;
+    @Resource
+    private WmsIntegrationApi wmsIntegrationApi;
+    public WmsShortageInboxController(WmsShortageInboxService service, MesWmsShortageWorkOrderAutoService workOrderAutoService){
+        this.service=service; this.workOrderAutoService=workOrderAutoService;
+    }
     private long[] identity() {
         var user=SecurityFrameworkUtils.getLoginUser(); var tenant=TenantContextHolder.getTenantId();
         if(user==null || user.getId()==null || tenant==null || !tenant.equals(user.getTenantId()))
@@ -46,7 +54,9 @@ public class WmsShortageInboxController {
         final Map<String,Object> payload;
         try { payload=PAYLOAD_MAPPER.readValue(rawPayload,new TypeReference<Map<String,Object>>() {}); }
         catch(JacksonException ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"invalid JSON object"); }
-        service.receive(payload,who[0],who[1],SecurityFrameworkUtils.getLoginUser().getTenantId()); return success(true);
+        service.receive(payload,who[0],who[1],SecurityFrameworkUtils.getLoginUser().getTenantId());
+        // 收件箱落库即进入待确认；生产工单在 MES 确认协作单 G 时才创建（设计 6.3.5/6.3.6）
+        return success(true);
     }
     @GetMapping("/page")
     @PreAuthorize("@ss.hasPermission('mes:wms-shortage:query')")
@@ -60,6 +70,37 @@ public class WmsShortageInboxController {
     @PreAuthorize("@ss.hasPermission('mes:wms-shortage:query')")
     public CommonResult<Boolean> read(@RequestParam String eventId,@RequestParam long eventVersion){
         var who=identity(); service.markRead(who[0],who[1],eventId,eventVersion); return success(true);
+    }
+
+    // MES 确认协作单 G：创建正式生产工单并回写 WMS（设计 6.3.5/6.3.6）
+    @PostMapping("/confirm")
+    @PreAuthorize("@ss.hasPermission('mes:wms-shortage:confirm')")
+    public CommonResult<Boolean> confirm(@RequestParam String eventId,@RequestParam long eventVersion){
+        var who=identity();
+        Map<String,Object> payload=service.getPayload(who[0],eventId);
+        String workOrderNo=workOrderAutoService.tryCreateWorkOrder(payload,who[0]);
+        service.confirm(who[0],eventId,eventVersion,workOrderNo);
+        // 回写 WMS 协作单 G 为已确认（best-effort，失败仅记录，不阻断确认）
+        try {
+            wmsIntegrationApi.confirmCollaborationOrderG(who[0],(String)payload.get("sourceOrderNo"),
+                    (String)payload.get("skuCode"),workOrderNo);
+        } catch(RuntimeException ex) { LOG.warn("回写 WMS 协作单 G 确认失败 event={}",eventId,ex); }
+        return success(true);
+    }
+
+    // MES 驳回协作单 G：记录原因并回写 WMS（设计 6.3.5，驳回必须填原因）
+    @PostMapping("/reject")
+    @PreAuthorize("@ss.hasPermission('mes:wms-shortage:confirm')")
+    public CommonResult<Boolean> reject(@RequestParam String eventId,@RequestParam long eventVersion,@RequestParam String reason){
+        var who=identity();
+        if(reason==null || reason.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"驳回必须填写原因");
+        Map<String,Object> payload=service.getPayload(who[0],eventId);
+        service.reject(who[0],eventId,eventVersion,reason);
+        try {
+            wmsIntegrationApi.rejectCollaborationOrderG(who[0],(String)payload.get("sourceOrderNo"),
+                    (String)payload.get("skuCode"),reason);
+        } catch(RuntimeException ex) { LOG.warn("回写 WMS 协作单 G 驳回失败 event={}",eventId,ex); }
+        return success(true);
     }
 
     // Controller-local handlers run before GlobalExceptionHandler, which otherwise turns errors into HTTP 200.

@@ -4,6 +4,8 @@ import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.*;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
 
+import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsBusinessSummaryRespVO;
+
 import java.util.List;
 
 /**
@@ -36,6 +38,30 @@ public interface CrmStatisticsFunnelService {
      * @return 商机阶段统计
      */
     List<CrmStatisticsBusinessSummaryByStatusRespVO> getBusinessSummaryByStatus(CrmStatisticsFunnelReqVO reqVO);
+
+    /**
+     * 获得商机阶段统计（标准化后的商机阶段；仅统计未开始 / 进行中的商机）
+     *
+     * @param reqVO 请求
+     * @return 商机阶段统计
+     */
+    List<CrmStatisticsBusinessSummaryRespVO> getBusinessSummaryByStage(CrmStatisticsFunnelReqVO reqVO);
+
+    /**
+     * 获得商机状态组统计（未开始 / 进行中 / 已赢单 / 已丢单）
+     *
+     * @param reqVO 请求
+     * @return 商机状态组统计
+     */
+    List<CrmStatisticsBusinessSummaryRespVO> getBusinessSummaryByState(CrmStatisticsFunnelReqVO reqVO);
+
+    /**
+     * 获得丢单原因统计（仅统计已丢单的商机，用于丢单复盘）
+     *
+     * @param reqVO 请求
+     * @return 丢单原因统计
+     */
+    List<CrmStatisticsBusinessSummaryRespVO> getBusinessLostReasonSummary(CrmStatisticsFunnelReqVO reqVO);
 
     /**
      * 获取新增商机分析(按日期)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAccountOperation } from '@/composables/useAccountOperation'
+const operation = useAccountOperation()
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { enterpriseApi, type EnterpriseApplication } from '@/api/enterprise'
@@ -12,7 +14,7 @@ async function license(event: Event) {
   const file=(event.target as HTMLInputElement).files?.[0]
   if(!file) return
   if(!['image/png','image/jpeg'].includes(file.type) || file.size>1048576) return void ElMessage.warning('请选择1MB以内PNG或JPEG营业执照')
-  const reader=new FileReader(); reader.onload=()=>{form.licenseData=String(reader.result)}; reader.readAsDataURL(file)
+  const reader=new FileReader(); reader.onload=()=>{if(operation.current())form.licenseData=String(reader.result)}; reader.readAsDataURL(file)
 }
 async function submit() {
   if(!editable.value || busy.value) return
@@ -38,8 +40,8 @@ onMounted(load)
       <el-form-item label="企业地址" required><el-input v-model="form.address" maxlength="255" /></el-form-item><el-form-item label="企业介绍"><el-input v-model="form.introduction" type="textarea" maxlength="1024" :rows="4" /></el-form-item>
       <el-button v-if="editable" type="primary" :loading="busy" @click="submit">{{ form.status===2?'修改并重新提交':'提交后台审核' }}</el-button>
     </el-form>
-    <nav><RouterLink to="/purchase">采购中心</RouterLink><RouterLink v-if="auth.profile?.memberIdentity==='supplier'" to="/sales">销售中心</RouterLink><RouterLink to="/member">普通会员中心</RouterLink></nav>
-    <p class="note">平台审核不代表外部工商认证；供应商还须关联店铺才能经营。真实 ERP 等系统对接暂未启用。</p>
+    <nav><MallLink to="/purchase">采购中心</MallLink><MallLink v-if="auth.profile?.memberIdentity==='supplier'" to="/sales">销售中心</MallLink><MallLink to="/member">普通会员中心</MallLink></nav>
+    <p class="note">平台审核不代表外部工商认证；供应商审核通过后还须关联店铺才能经营。</p>
   </div>
 </template>
 <style scoped>

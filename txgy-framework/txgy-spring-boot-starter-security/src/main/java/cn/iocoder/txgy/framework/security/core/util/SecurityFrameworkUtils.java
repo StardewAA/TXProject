@@ -131,6 +131,7 @@ public class SecurityFrameworkUtils {
         if (request != null) {
             WebFrameworkUtils.setLoginUserId(request, loginUser.getId());
             WebFrameworkUtils.setLoginUserType(request, loginUser.getUserType());
+            request.setAttribute("work_trace_user_name", MapUtil.getStr(loginUser.getInfo(), LoginUser.INFO_KEY_NICKNAME));
         }
     }
 

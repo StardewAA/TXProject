@@ -52,6 +52,9 @@ public class PayOrderRespDTO {
      */
     private LocalDateTime successTime;
 
+    /** 已持久化的支付截止时间，调用方不得重新按当前配置计算。 */
+    private LocalDateTime expireTime;
+
     // ========== 渠道相关字段 ==========
 
     /**

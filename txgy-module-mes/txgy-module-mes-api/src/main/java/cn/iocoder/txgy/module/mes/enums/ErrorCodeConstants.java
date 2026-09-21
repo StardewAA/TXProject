@@ -270,6 +270,9 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_WORK_ORDER_ROUTE_REQUIRED = new ErrorCode(1_040_502_008, "该产品未绑定工艺路线，无法下发工单");
     ErrorCode PRO_WORK_ORDER_HAS_FEEDBACK = new ErrorCode(1_040_502_009, "工单已存在报工记录，无法取消");
     ErrorCode PRO_WORK_ORDER_NOT_ISSUED = new ErrorCode(1_040_502_010, "只有已下发/生产中状态的工单才能报工");
+    ErrorCode PRO_WORK_ORDER_NOT_APPROVING = new ErrorCode(1_040_502_011, "只有审批中状态的工单才能执行此操作");
+    ErrorCode PRO_WORK_ORDER_NOT_APPROVED = new ErrorCode(1_040_502_012, "工单未通过审批，无法下发");
+    ErrorCode PRO_WORK_ORDER_RESUME_NOT_ALLOWED = new ErrorCode(1_040_502_011, "只有已下发/生产中的工单才能恢复领料");
         ErrorCode PRO_WORK_ORDER_BOM_NOT_EXISTS = new ErrorCode(1_040_502_100, "生产工单BOM不存在");
 
         // ========== MES 生产管理-生产任务（1-040-503-000） ==========

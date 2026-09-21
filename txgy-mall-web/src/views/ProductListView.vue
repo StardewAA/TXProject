@@ -44,14 +44,15 @@ onMounted(async () => {
 
 <template>
   <div class="container page-section">
-    <div class="breadcrumbs"><RouterLink to="/">首页</RouterLink><span>›</span><span>商品列表</span></div>
+    <div class="breadcrumbs"><MallLink to="/">首页</MallLink><span>›</span><span>商品列表</span></div>
     <div class="filter-panel panel">
-      <div><b>商品分类</b><RouterLink :to="{ path: '/goods', query: { q: route.query.q } }">全部</RouterLink><RouterLink v-for="item in categories.slice(0, 14)" :key="item.id" :to="{ path: '/goods', query: { ...route.query, categoryId: item.id } }">{{ item.name }}</RouterLink></div>
+      <div><b>商品分类</b><MallLink :to="{ path: '/goods', query: { q: route.query.q } }">全部</MallLink><MallLink v-for="item in categories.slice(0, 14)" :key="item.id" :to="{ path: '/goods', query: { ...route.query, categoryId: item.id } }">{{ item.name }}</MallLink></div>
     </div>
     <div class="list-toolbar panel">
       <div class="toolbar"><button :class="{ active: sort === 'default' }" @click="sort = 'default'">综合</button><button :class="{ active: sort === 'sales' }" @click="sort = 'sales'">销量</button><button :class="{ active: sort === 'priceAsc' }" @click="sort = 'priceAsc'">价格升序</button><button :class="{ active: sort === 'priceDesc' }" @click="sort = 'priceDesc'">价格降序</button></div>
       <span>共 {{ total }} 件商品</span>
     </div>
+    <p class="compare-tip">跨店比较请先进入商品详情，选择具体规格后“加入对比”。<MallLink to="/compare">打开对比清单 →</MallLink></p>
     <div v-if="loading" class="loading-box"><el-skeleton :rows="8" animated /></div>
     <EmptyState v-else-if="!products.length" title="没有找到匹配商品" description="请更换关键词或分类后重试" />
     <div v-else class="product-grid"><ProductCard v-for="product in products" :key="product.id" :product="product" /></div>

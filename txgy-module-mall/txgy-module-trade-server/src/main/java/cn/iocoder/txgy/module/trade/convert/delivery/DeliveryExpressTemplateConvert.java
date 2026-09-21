@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.trade.convert.delivery;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.framework.ip.core.enums.AreaTypeEnum;
+import cn.iocoder.txgy.framework.ip.core.utils.AreaUtils;
 import cn.iocoder.txgy.module.trade.controller.admin.delivery.vo.expresstemplate.*;
 import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressTemplateChargeDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressTemplateDO;
@@ -13,6 +15,7 @@ import org.mapstruct.factory.Mappers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertMultiMap;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.findFirst;
@@ -83,13 +86,41 @@ public interface DeliveryExpressTemplateConvert {
         templateList.forEach(template -> {
             DeliveryExpressTemplateRespBO bo = new DeliveryExpressTemplateRespBO()
                     .setChargeMode(template.getChargeMode())
-                    .setCharge(convertTemplateCharge(findFirst(templateIdChargeMap.get(template.getId()), charge -> charge.getAreaIds().contains(areaId))))
-                    .setFree(convertTemplateFree(findFirst(templateIdFreeMap.get(template.getId()), free -> free.getAreaIds().contains(areaId))));
+                    .setCharge(convertTemplateCharge(findAreaConfig(templateIdChargeMap.get(template.getId()),
+                            DeliveryExpressTemplateChargeDO::getAreaIds, areaId)))
+                    .setFree(convertTemplateFree(findAreaConfig(templateIdFreeMap.get(template.getId()),
+                            DeliveryExpressTemplateFreeDO::getAreaIds, areaId)));
             if (bo.getCharge() != null || bo.getFree() != null) {
                 result.put(template.getId(), bo);
             }
         });
         return result;
+    }
+
+    /**
+     * 运费模板通常按省或市配置，而会员地址保存到区县。按“区县、城市、省份、国家”
+     * 由具体到宽泛逐级匹配，避免区县编号与模板区域编号不完全相等时无法结算。
+     */
+    default <T> T findAreaConfig(List<T> configs, Function<T, List<Integer>> areaIdsGetter, Integer areaId) {
+        if (configs == null) {
+            return null;
+        }
+        Integer[] candidateAreaIds = {
+                areaId,
+                AreaUtils.getParentIdByType(areaId, AreaTypeEnum.CITY),
+                AreaUtils.getParentIdByType(areaId, AreaTypeEnum.PROVINCE),
+                AreaUtils.getParentIdByType(areaId, AreaTypeEnum.COUNTRY)
+        };
+        for (Integer candidateAreaId : candidateAreaIds) {
+            if (candidateAreaId == null) {
+                continue;
+            }
+            T config = findFirst(configs, item -> areaIdsGetter.apply(item).contains(candidateAreaId));
+            if (config != null) {
+                return config;
+            }
+        }
+        return null;
     }
 
 }

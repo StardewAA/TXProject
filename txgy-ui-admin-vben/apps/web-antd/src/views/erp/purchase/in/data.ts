@@ -16,6 +16,34 @@ import { getRangePickerDefaultProps } from '#/utils';
 /** 表单类型 */
 export type FormType = 'create' | 'detail' | 'edit';
 
+// ===== ERP↔WMS 协同状态 =====
+export interface WmsStatusOption {
+  value: string;
+  label: string;
+  color: string;
+}
+
+/** WMS 推送状态选项 */
+export const WMS_STATUS_OPTIONS: WmsStatusOption[] = [
+  { value: 'NOT_SUBMITTED', label: '未推送', color: 'default' },
+  { value: 'SUBMIT_PENDING', label: '推送中', color: 'processing' },
+  { value: 'PROCESSING', label: '处理中', color: 'processing' },
+  { value: 'COMPLETED', label: '已完成', color: 'success' },
+  { value: 'FAILED', label: '推送失败', color: 'error' },
+];
+
+/** 获取 WMS 推送状态文本 */
+export function getWmsStatusText(status?: string | null): string {
+  if (!status) return '未推送';
+  return WMS_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+}
+
+/** 获取 WMS 推送状态颜色（用于 Tag） */
+export function getWmsStatusColor(status?: string | null): string {
+  if (!status) return 'default';
+  return WMS_STATUS_OPTIONS.find((o) => o.value === status)?.color ?? 'default';
+}
+
 /** 表单的配置项 */
 export function useFormSchema(formType: FormType): VbenFormSchema[] {
   return [
@@ -510,6 +538,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
         name: 'CellDict',
         props: { type: DICT_TYPE.ERP_AUDIT_STATUS },
       },
+    },
+    {
+      field: 'wmsStatus',
+      title: 'WMS 推送状态',
+      minWidth: 130,
+      formatter: ({ row }) => getWmsStatusText(row.wmsStatus) || '未推送',
     },
     {
       title: '操作',

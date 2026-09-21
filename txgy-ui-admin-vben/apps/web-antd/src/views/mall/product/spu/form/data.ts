@@ -10,7 +10,7 @@ import { getShopList } from '#/api/mall/product/shop';
 import { getSimpleTemplateList } from '#/api/mall/trade/delivery/expressTemplate';
 
 /** 基础设置的表单 */
-export function useInfoFormSchema(): VbenFormSchema[] {
+export function useInfoFormSchema(lockedShopIds: number[] = []): VbenFormSchema[] {
   return [
     {
       fieldName: 'id',
@@ -49,11 +49,14 @@ export function useInfoFormSchema(): VbenFormSchema[] {
       label: '所属店铺',
       component: 'ApiSelect',
       componentProps: {
-        api: getShopList,
+        api: async () => (await getShopList()).map((shop) => ({
+          ...shop,
+          disabled: lockedShopIds.includes(shop.id ?? 0),
+        })),
         labelField: 'name',
         valueField: 'id',
         allowClear: true,
-        placeholder: '不选择则为平台自营商品',
+        placeholder: '请选择非试点店铺；试点店铺请使用销售中心',
       },
     },
     {

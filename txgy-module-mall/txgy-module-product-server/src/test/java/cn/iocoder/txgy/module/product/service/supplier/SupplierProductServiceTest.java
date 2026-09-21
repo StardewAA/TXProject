@@ -40,6 +40,7 @@ class SupplierProductServiceTest {
         ReflectionTestUtils.setField(service, "spuMapper", spus);
         ReflectionTestUtils.setField(service, "skuMapper", skus);
         ReflectionTestUtils.setField(service, "spuService", spuService);
+        ReflectionTestUtils.setField(service, "reviewService", mock(cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.class));
         ReflectionTestUtils.setField(service, "categoryService", categories);
         ReflectionTestUtils.setField(service, "brandService", mock(ProductBrandService.class));
         ReflectionTestUtils.setField(service, "deliveryApi", delivery);
@@ -61,7 +62,7 @@ class SupplierProductServiceTest {
     }
     @Test void deniedShopStopsBeforeDataRead() {
         doThrow(new ServiceException(403, "无权")).when(membership).requireShop(1L,10L);
-        assertThrows(ServiceException.class, () -> service.page(1L,10L,new PageParam(),null,null));
+        assertThrows(ServiceException.class, () -> service.page(1L,10L,new PageParam(),null,null,null));
         verifyNoInteractions(spus);
     }
     @Test void foreignProductCannotBeRead() {
@@ -146,7 +147,7 @@ class SupplierProductServiceTest {
         assertThrows(ServiceException.class, () -> service.save(1L,req));
     }
     @Test void unsupportedStateAndUnsafeImageRejected() {
-        assertThrows(ServiceException.class, () -> service.status(1L,10L,20L,-1));
+        assertThrows(ServiceException.class, () -> service.status(1L,10L,20L,-1,0L));
         assertThrows(ServiceException.class, () -> SupplierProductService.validateImageUrl("javascript:alert(1)"));
         assertThrows(ServiceException.class, () -> SupplierProductService.validateImageUrl("data:image/svg+xml,x"));
     }

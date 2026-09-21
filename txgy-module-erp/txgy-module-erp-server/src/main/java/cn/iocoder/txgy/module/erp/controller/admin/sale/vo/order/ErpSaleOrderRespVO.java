@@ -30,8 +30,17 @@ public class ErpSaleOrderRespVO {
     @Schema(description = "BPM 流程实例编号")
     private String processInstanceId;
 
+    @Schema(description = "反审批原因")
+    private String reverseApproveReason;
+
     @Schema(description = "全局业务链编号")
     private String businessChainNo;
+    @Schema(description = "来源类型（COST_RESULT = 由造价结果转换生成）")
+    private String sourceType;
+    @Schema(description = "来源编号（造价结果编号）")
+    private Long sourceId;
+    @Schema(description = "来源单号")
+    private String sourceNo;
     @Schema(description = "WMS 仓储履约状态")
     private String warehouseStatus;
     @Schema(description = "WMS 库存判断编号")

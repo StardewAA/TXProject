@@ -41,6 +41,13 @@ public class ProductSpuDO extends BaseDO {
      */
     private Long shopId;
 
+    /** null 表示历史未纳管，不表示审核通过。 */
+    private Integer reviewStatus;
+    private Long contentVersion;
+    private Long approvedVersion;
+    private String submissionId;
+    private String reviewRemark;
+
     // ========== 基本信息 =========
 
     /**

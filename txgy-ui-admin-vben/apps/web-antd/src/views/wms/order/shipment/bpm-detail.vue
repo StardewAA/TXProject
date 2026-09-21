@@ -7,13 +7,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { Alert, Button, message } from 'ant-design-vue';
 import { getShipmentOrder, getShipmentExecution } from '#/api/wms/order/shipment';
 import { getInventoryList } from '#/api/wms/inventory';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
 const props = defineProps<{ id?: number | string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const router = useRouter();
 const route = useRoute();
-const onCurrentApproval = computed(() => route.path === '/bpm/process-instance/detail' && route.query.id === order.value.processInstanceId);
+const onCurrentApproval = computed(() => route.name === 'WmsApprovalDetail' && route.query.id === order.value.processInstanceId);
 async function viewApproval() {
-  await router.push({ path: '/bpm/process-instance/detail', query: { id: order.value.processInstanceId } });
+  await router.push(buildApprovalDetailLocation('WmsApprovalDetail', order.value.processInstanceId!));
   emit('navigate');
 }
 const order = ref<WmsShipmentOrderApi.ShipmentOrder>({});

@@ -8,6 +8,8 @@ export namespace ErpProductApi {
     id?: number; // 产品编号
     name: string; // 产品名称
     barCode: string; // 产品条码
+    materialCode?: string; // 物料编码
+    materialType?: string; // 物料类型：RAW_MATERIAL 原材料，FINISHED_GOODS 成品
     categoryId: number; // 产品类型编号
     unitId: number; // 单位编号
     unitName?: string; // 单位名字
@@ -58,4 +60,9 @@ export function deleteProduct(id: number) {
 /** 导出产品 Excel */
 export function exportProduct(params: any) {
   return requestClient.download('/erp/product/export-excel', { params });
+}
+
+/** 导出产品 PDF */
+export function exportProductPdf(params: any) {
+  return requestClient.download('/erp/product/export-pdf', { params });
 }

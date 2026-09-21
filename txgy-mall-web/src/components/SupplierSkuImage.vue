@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAccountOperation } from '@/composables/useAccountOperation'
+const operation = useAccountOperation()
 import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { supplierApi } from '@/api/supplier'
@@ -14,10 +16,12 @@ async function upload(event:Event){
  uploading.value=true;emit('busy',true);const local=URL.createObjectURL(file)
  try{
   await new Promise<void>((resolve,reject)=>{const image=new Image();image.onload=()=>image.naturalWidth*image.naturalHeight<=25000000?resolve():reject(Error('图片像素过大'));image.onerror=()=>reject(Error('图片无法读取'));image.src=local})
+  if(!operation.current())return
   const url=await supplierApi.uploadImage(file)
+  if(!operation.current())return
   if(!/^https?:\/\//i.test(url)||url.length>512)throw Error('返回图片地址无效')
   if(alive){emit('update:modelValue',url);ElMessage.success('规格图片已上传，请保存商品')}
- }catch(e){if(alive)ElMessage.error(e instanceof Error?e.message:'图片上传失败，原图已保留')}
+ }catch(e){if(alive&&operation.current())ElMessage.error(e instanceof Error?e.message:'图片上传失败，原图已保留')}
  finally{URL.revokeObjectURL(local);uploading.value=false;if(alive)emit('busy',false)}
 }
 </script>

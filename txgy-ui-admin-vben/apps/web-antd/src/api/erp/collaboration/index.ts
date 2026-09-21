@@ -84,6 +84,32 @@ export namespace ErpCollaborationApi {
 
 const BASE_URL = '/erp/wms-collaboration-b';
 
+/** WMS 集成申请受理结果 */
+export interface WmsIntegrationAcceptedResp {
+  accepted: boolean;
+  requestId: string;
+  businessStatus: string;
+  processedVersion?: number;
+  targetOrderNo?: string;
+}
+
+/**
+ * 手动申请入库到 WMS（基于已审批的 ERP 采购入库单）
+ *
+ * 后端端点 POST /erp/wms-collaboration-b/apply-inbound，按钮触发，
+ * 入库单必须 status=20(已审批) 且 wmsStatus ∈ {null, NOT_SUBMITTED, FAILED}。
+ */
+export function applyInboundToWms(data: {
+  purchaseInId: number;
+  targetErpWarehouseId: number;
+  remark?: string;
+}) {
+  return requestClient.post<WmsIntegrationAcceptedResp>(
+    `${BASE_URL}/apply-inbound`,
+    data,
+  );
+}
+
 /** 查询供应链协同单分页 */
 export function getCollaborationPage(params: PageParam) {
   return requestClient.get<PageResult<ErpCollaborationApi.CollaborationOrder>>(

@@ -22,9 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
+import cn.iocoder.txgy.module.trade.service.workbench.OrderActionPolicy;
+import cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Entry;
 
 @Service
 public class SupplierTradeService {
+    @Resource private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
     @Resource private ProductSupplierApi authorization;
     @Resource private TradeOrderMapper orders;
     @Resource private TradeOrderItemMapper items;
@@ -44,33 +47,42 @@ public class SupplierTradeService {
             throw new ServiceException(403, "未获得该店铺销售权限");
     }
     public record OrderRow(Long id, String no, Integer status, Boolean payStatus, Integer payPrice,
-                           Integer refundPrice, Integer deliveryType, LocalDateTime createTime) {}
+                           Integer refundPrice, Integer deliveryType, LocalDateTime createTime,
+                           boolean deliverable,String deliveryBlockReason,String erpStatus) {}
     public record Item(Long id, String name, String picUrl, String specification, Integer count,
                        Integer price, Integer payPrice, Integer afterSaleStatus) {}
     public record OrderDetail(OrderRow order, String receiverName, String receiverMobile, String address,
                               String userRemark, Long logisticsId, String logisticsNo, LocalDateTime deliveryTime,
-                              boolean deliverable, List<Item> items) {}
+                              boolean deliverable, List<Item> items,
+                              List<cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Entry> erpInventory) {}
     public record Express(Long id, String name) {}
     public enum AfterSaleAction { AGREE, REJECT, RECEIVE, REFUSE }
     public record AfterSaleDetail(AfterSaleRow row, List<String> pictures, String receiveReason,
-                                  String returnReceiverName, String returnReceiverMobile, String returnAddress) {}
+                                  String returnReceiverName, String returnReceiverMobile, String returnAddress,
+                                  List<cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Entry> erpInventory) {}
     public record AfterSaleRow(Long id, String no, Long orderId, String orderNo, String spuName, Integer count,
                                Integer status, Integer way, Integer refundPrice, String applyReason,
                                String applyDescription, String auditReason, Long logisticsId, String logisticsNo,
-                               LocalDateTime createTime) {}
-    private OrderRow row(TradeOrderDO o) {
+                               LocalDateTime createTime,boolean processable,String processBlockReason,String erpStatus) {}
+    private OrderRow row(TradeOrderDO o,List<TradeOrderItemDO> list,List<Entry> erp) {
+        String block=OrderActionPolicy.deliveryBlock(o,list,erp);
         return new OrderRow(o.getId(), o.getNo(), o.getStatus(), o.getPayStatus(), o.getPayPrice(),
-                o.getRefundPrice(), o.getDeliveryType(), o.getCreateTime());
+                o.getRefundPrice(), o.getDeliveryType(), o.getCreateTime(),block==null,block,OrderActionPolicy.erpStatus(erp));
     }
     public PageResult<OrderRow> page(Long member, Long shop, PageParam page, String no, Integer status) {
         authorize(member, shop);
         var q = new LambdaQueryWrapperX<TradeOrderDO>().eq(TradeOrderDO::getShopId, shop)
                 .likeIfPresent(TradeOrderDO::getNo, no).eqIfPresent(TradeOrderDO::getStatus, status)
                 // 历史混店/无店铺快照订单交平台处理，不能向供应商暴露其他店铺数据。
-                .apply("NOT EXISTS (SELECT 1 FROM trade_order_item i WHERE i.order_id = trade_order.id AND i.deleted = 0 AND (i.shop_id IS NULL OR i.shop_id <> {0}))", shop)
+                .apply("EXISTS (SELECT 1 FROM trade_order_item i WHERE i.order_id = trade_order.id AND i.tenant_id=trade_order.tenant_id AND i.deleted = 0)")
+                .apply("NOT EXISTS (SELECT 1 FROM trade_order_item i WHERE i.order_id = trade_order.id AND i.tenant_id=trade_order.tenant_id AND i.deleted = 0 AND (i.shop_id IS NULL OR i.shop_id <> {0}))", shop)
                 .orderByDesc(TradeOrderDO::getId);
         var result = orders.selectPage(page, q);
-        return new PageResult<>(result.getList().stream().map(this::row).toList(), result.getTotal());
+        var ids=result.getList().stream().map(TradeOrderDO::getId).toList();
+        var allItems=ids.isEmpty()?List.<TradeOrderItemDO>of():items.selectListByOrderId(ids);
+        var erps=erpInventory.listByOrderIds(ids);
+        return new PageResult<>(result.getList().stream().map(o->row(o,allItems.stream().filter(i->Objects.equals(i.getOrderId(),o.getId())).toList(),
+                erps.getOrDefault(o.getId(),List.of()))).toList(), result.getTotal());
     }
     private TradeOrderDO owned(Long member, Long shop, Long id, boolean lock) {
         authorize(member, shop);
@@ -94,12 +106,13 @@ public class SupplierTradeService {
     public OrderDetail detail(Long member, Long shop, Long id) {
         var o = owned(member, shop, id, false);
         var list = ownItems(shop, id);
-        return new OrderDetail(row(o), o.getReceiverName(), o.getReceiverMobile(),
+        var erp=erpInventory.list(id);var row=row(o,list,erp);
+        return new OrderDetail(row, o.getReceiverName(), o.getReceiverMobile(),
                 Objects.toString(AreaUtils.format(o.getReceiverAreaId()), "") + Objects.toString(o.getReceiverDetailAddress(), ""),
-                o.getUserRemark(), o.getLogisticsId(), o.getLogisticsNo(), o.getDeliveryTime(), deliverable(o, list),
+                o.getUserRemark(), o.getLogisticsId(), o.getLogisticsNo(), o.getDeliveryTime(), row.deliverable(),
                 list.stream().map(i -> new Item(i.getId(), i.getSpuName(), i.getPicUrl(), i.getProperties() == null ? "" :
                         String.join(" / ", i.getProperties().stream().map(p -> p.getPropertyName()+":"+p.getValueName()).toList()),
-                        i.getCount(), i.getPrice(), i.getPayPrice(), i.getAfterSaleStatus())).toList());
+                        i.getCount(), i.getPrice(), i.getPayPrice(), i.getAfterSaleStatus())).toList(), erp);
     }
     public List<Express> express(Long member, Long shop) {
         authorize(member, shop);
@@ -113,7 +126,8 @@ public class SupplierTradeService {
             throw invalid("请选择快递公司并填写5至64位字母、数字或短横线运单号");
         if (Integer.valueOf(20).equals(order.getStatus()) && Objects.equals(order.getLogisticsId(), logisticsId)
                 && Objects.equals(order.getLogisticsNo(), logisticsNo)) return; // 相同发货请求幂等
-        if (!deliverable(order, list)) throw invalid("仅已付款、无退款售后的待发货快递订单可发货");
+        String blocked=OrderActionPolicy.deliveryBlock(order,list,erpInventory.list(id));
+        if (blocked!=null) throw invalid(blocked);
         expressService.validateDeliveryExpress(logisticsId);
         // 复用真实订单状态流转、库存处理和日志；不调用后台HTTP接口、不更换登录身份。
         orderUpdate.deliveryOrder(new TradeOrderDeliveryReqVO().setId(id).setLogisticsId(logisticsId).setLogisticsNo(logisticsNo));
@@ -122,15 +136,18 @@ public class SupplierTradeService {
         authorize(member, shop);
         var q = new LambdaQueryWrapperX<AfterSaleDO>().eq(AfterSaleDO::getShopId, shop)
                 .likeIfPresent(AfterSaleDO::getOrderNo, no).eqIfPresent(AfterSaleDO::getStatus, status)
-                .apply("EXISTS (SELECT 1 FROM trade_order_item i WHERE i.id = trade_after_sale.order_item_id AND i.order_id = trade_after_sale.order_id AND i.shop_id = {0} AND i.deleted = 0)", shop)
+                .apply("EXISTS (SELECT 1 FROM trade_order_item i WHERE i.id = trade_after_sale.order_item_id AND i.order_id = trade_after_sale.order_id AND i.tenant_id=trade_after_sale.tenant_id AND i.shop_id = {0} AND i.deleted = 0)", shop)
                 .orderByDesc(AfterSaleDO::getId);
         var result = afterSales.selectPage(page, q);
-        return new PageResult<>(result.getList().stream().map(this::afterSaleRow).toList(), result.getTotal());
+        var erps=erpInventory.listByOrderIds(result.getList().stream().map(AfterSaleDO::getOrderId).distinct().toList());
+        return new PageResult<>(result.getList().stream().map(a->afterSaleRow(a,erps.getOrDefault(a.getOrderId(),List.of()))).toList(), result.getTotal());
     }
-    private AfterSaleRow afterSaleRow(AfterSaleDO a) {
+    private AfterSaleRow afterSaleRow(AfterSaleDO a,List<Entry> erp) {
+        String blocked=OrderActionPolicy.afterSaleBlock(a,erp);
         return new AfterSaleRow(a.getId(), a.getNo(), a.getOrderId(),
                 a.getOrderNo(), a.getSpuName(), a.getCount(), a.getStatus(), a.getWay(), a.getRefundPrice(),
-                a.getApplyReason(), a.getApplyDescription(), a.getAuditReason(), a.getLogisticsId(), a.getLogisticsNo(), a.getCreateTime());
+                a.getApplyReason(), a.getApplyDescription(), a.getAuditReason(), a.getLogisticsId(), a.getLogisticsNo(), a.getCreateTime(),
+                blocked==null,blocked,OrderActionPolicy.erpStatus(erp));
     }
     private AfterSaleDO ownedAfterSale(Long member, Long shop, Long id, boolean lock) {
         authorize(member, shop);
@@ -147,12 +164,15 @@ public class SupplierTradeService {
     }
     public AfterSaleDetail afterSaleDetail(Long member, Long shop, Long id) {
         var sale = ownedAfterSale(member, shop, id, false);
-        return new AfterSaleDetail(afterSaleRow(sale), sale.getApplyPicUrls(), sale.getReceiveReason(),
-                sale.getReturnReceiverName(),sale.getReturnReceiverMobile(),sale.getReturnAddress());
+        var erp=erpInventory.list(sale.getOrderId());
+        return new AfterSaleDetail(afterSaleRow(sale,erp), sale.getApplyPicUrls(), sale.getReceiveReason(),
+                sale.getReturnReceiverName(),sale.getReturnReceiverMobile(),sale.getReturnAddress(), erp);
     }
     @Transactional(rollbackFor = Exception.class)
     public void processAfterSale(Long member, Long shop, Long id, AfterSaleAction action, String reason) {
         var sale = ownedAfterSale(member, shop, id, true);
+        String blocked=OrderActionPolicy.afterSaleBlock(sale,erpInventory.list(sale.getOrderId()));
+        if(blocked!=null)throw invalid(blocked);
         if (action == null) throw invalid("请选择售后操作");
         boolean audit = action == AfterSaleAction.AGREE || action == AfterSaleAction.REJECT;
         if (!Integer.valueOf(audit ? 10 : 30).equals(sale.getStatus())

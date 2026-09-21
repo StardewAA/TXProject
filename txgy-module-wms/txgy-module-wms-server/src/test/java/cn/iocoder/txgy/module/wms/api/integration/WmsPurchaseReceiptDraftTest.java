@@ -47,6 +47,7 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
     }
     @Resource private WmsIntegrationApiImpl api;
     @Resource private DataSource dataSource;
+    @Resource private cn.iocoder.txgy.module.wms.dal.mysql.integration.WmsIntegrationRequestMapper integrationRequestMapper;
     @Resource private cn.iocoder.txgy.module.wms.controller.admin.order.receipt.WmsReceiptOrderDetailController detailController;
     @Resource private cn.iocoder.txgy.module.wms.controller.admin.order.receipt.WmsReceiptOrderController orderController;
     @MockitoBean private cn.iocoder.txgy.module.system.api.user.AdminUserApi adminUserApi;
@@ -54,6 +55,7 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
     @MockitoBean private WmsPartnerIntegrationService partnerService;
     @MockitoBean private WmsWarehouseIntegrationService warehouseIntegrationService;
     @MockitoBean private WmsWarehouseService warehouseService;
+    @MockitoBean private cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService warehousePersonnelService;
     @MockitoBean private WmsMerchantService merchantService;
     @MockitoBean private WmsItemSkuService itemSkuService;
     @MockitoBean private WmsItemService itemService;
@@ -105,6 +107,31 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM wms_shipment_order_detail WHERE price IS NULL OR total_price IS NULL", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM wms_receipt_order_detail WHERE price IS NULL OR total_price IS NULL", Integer.class));
         assertEquals(0, count("wms_inventory"));
+        assertEquals(0, count("wms_inventory_history"));
+        verifyNoInteractions(inventoryService, processInstanceApi);
+    }
+
+    @Test
+    void createsMallShipmentAsAnIsolatedIdempotentDraft() {
+        jdbc.update("UPDATE wms_item SET material_type='FINISHED_GOODS' WHERE id=55");
+        jdbc.update("UPDATE wms_warehouse SET warehouse_type='FINISHED_GOODS' WHERE id=77");
+        WmsOrderRequestDTO request = request("mall-outbound-request-1");
+        request.setSourceModule("MALL");
+        request.setSourceOrderNo("MALL-ORDER-1");
+        request.setOrderType("SALE_SHIPMENT");
+        request.getItems().getFirst().setMaterialType("FINISHED_GOODS");
+
+        var accepted = api.createMallShipment(request).getCheckedData();
+        assertEquals("WMS-MALL-MALL-ORDER-1", accepted.getTargetOrderNo());
+        assertEquals("DRAFT", api.getMallOrderExecution(2005L, "MALL-ORDER-1")
+                .getCheckedData().getProcessingStatus());
+
+        request.setRequestId("mall-outbound-request-2");
+        api.createMallShipment(request);
+        assertEquals(1, count("wms_shipment_order"));
+        assertEquals("mall-outbound-request-1", integrationRequestMapper.selectSourceRequest(
+                "SALE_SHIPMENT_CREATE", accepted.getTargetOrderNo()).getRequestId());
+        assertEquals("MALL", jdbc.queryForObject("SELECT source_module FROM wms_shipment_order", String.class));
         assertEquals(0, count("wms_inventory_history"));
         verifyNoInteractions(inventoryService, processInstanceApi);
     }

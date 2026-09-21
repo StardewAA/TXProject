@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.controller.admin.sale.vo.cost;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -15,6 +16,8 @@ public class ErpCostResultRespVO {
     private Integer costVersion;
     private Integer status;
     private String processInstanceId;
+    @Schema(description = "反审批原因")
+    private String reverseApproveReason;
     private Integer businessStatus;
     private Integer sourceType;
     private String currency;

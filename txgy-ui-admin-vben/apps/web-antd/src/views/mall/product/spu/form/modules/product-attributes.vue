@@ -82,6 +82,7 @@ watch(
 
 /** 删除属性值 */
 function handleCloseValue(index: number, value: PropertyAndValues) {
+  if (props.isDetail) return;
   if (attributeList.value[index]?.values) {
     attributeList.value[index].values = attributeList.value[
       index
@@ -91,6 +92,7 @@ function handleCloseValue(index: number, value: PropertyAndValues) {
 
 /** 删除属性 */
 function handleCloseProperty(item: PropertyAndValues) {
+  if (props.isDetail) return;
   attributeList.value = attributeList.value.filter(
     (attribute) => attribute.id !== item.id,
   );
@@ -99,6 +101,7 @@ function handleCloseProperty(item: PropertyAndValues) {
 
 /** 显示输入框并获取焦点 */
 async function showInput(index: number) {
+  if (props.isDetail) return;
   attributeIndex.value = index;
   inputRef.value?.[index]?.focus();
   // 获取属性下拉选项
@@ -108,6 +111,7 @@ async function showInput(index: number) {
 
 /** 定义 success 事件，用于操作成功后的回调 */
 async function handleInputConfirm(index: number, propertyId: number) {
+  if (props.isDetail) return;
   // 从数组中取最后一个输入的值（tags 模式下 inputValue 是数组）
   const currentValue = inputValue.value?.[inputValue.value.length - 1]?.trim();
 
@@ -191,6 +195,7 @@ async function getAttributeOptions(propertyId: number) {
         {{ value?.name }}
       </Tag>
       <Select
+        v-if="!isDetail"
         v-show="inputVisible(index)"
         :id="`input${index}`"
         :ref="setInputRef"
@@ -214,6 +219,7 @@ async function getAttributeOptions(propertyId: number) {
         </Select.Option>
       </Select>
       <Tag
+        v-if="!isDetail"
         v-show="!inputVisible(index)"
         @click="showInput(index)"
         class="mx-1 border-dashed bg-gray-100"

@@ -28,6 +28,7 @@ import java.util.function.Supplier;
 import static cn.iocoder.txgy.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_FEATURE_NOT_ENABLED;
 import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_TENANT_MISMATCH;
+import static cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_RECEIPT_REQUEST_INVALID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -135,6 +136,22 @@ class WmsIntegrationApiImplTest {
         assertServiceException(() -> api.getInventoryDecision(2005L, "SO-1"), INTEGRATION_FEATURE_NOT_ENABLED);
         assertServiceException(() -> api.getOrderExecution(2005L, "PO-1", "PURCHASE"),
                 INTEGRATION_FEATURE_NOT_ENABLED);
+    }
+
+    @Test
+    void rejectsMallOrderNumberThatWouldOverflowGeneratedWmsNumber() {
+        WmsOrderRequestDTO request = base(new WmsOrderRequestDTO(), "mall-request-1")
+                .setBusinessChainNo("MALL-CHAIN-1").setSourceOrderNo("M".repeat(56))
+                .setOrderType("SALE_SHIPMENT").setEventVersion(1L)
+                .setItems(java.util.List.of(new WmsIntegrationDocumentItemDTO().setLineNo(1)
+                        .setMaterialCode("FG-1").setSkuCode("FG-1-STD").setMaterialType("FINISHED_GOODS")
+                        .setMaterialNameSnapshot("成品").setUnitCode("PC").setUnitNameSnapshot("件")
+                        .setWarehouseCode("FG-WH").setRequiredQuantity(java.math.BigDecimal.ONE)));
+        request.setSourceModule("MALL");
+
+        assertServiceException(() -> api.createMallShipment(request), INTEGRATION_RECEIPT_REQUEST_INVALID,
+                "来源单号不能为空且不能超过 55 字符");
+        verifyNoInteractions(requestService);
     }
 
     private static <T extends WmsIntegrationBaseReqDTO> T base(T request, String requestId) {

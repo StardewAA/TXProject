@@ -25,6 +25,12 @@ public class ProductSpuRespVO {
     @ExcelProperty("所属店铺编号")
     private Long shopId;
 
+    private Integer reviewStatus;
+    private Long contentVersion;
+    private Long approvedVersion;
+    private String submissionId;
+    private String reviewRemark;
+
     @Schema(description = "商品名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "清凉小短袖")
     @ExcelProperty("商品名称")
     private String name;

@@ -8,9 +8,11 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteCustomer,
   exportCustomer,
+  exportCustomerPdf,
   getCustomerPage,
 } from '#/api/erp/sale/customer';
 import { $t } from '#/locales';
@@ -29,9 +31,15 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportCustomer(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '客户信息.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportCustomerPdf(await gridApi.formApi.getValues())
+      : await exportCustomer(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '客户信息.pdf' : '客户信息.xls',
+    source: data,
+  });
 }
 
 /** 创建客户 */
@@ -110,14 +118,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['erp:customer:create'],
               onClick: handleCreate,
             },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:customer:export'],
-              onClick: handleExport,
-            },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:customer:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">

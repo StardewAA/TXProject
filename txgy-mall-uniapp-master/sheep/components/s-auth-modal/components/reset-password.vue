@@ -4,7 +4,9 @@
     <!-- 标题栏 -->
     <view class="head-box ss-m-b-60">
       <view class="head-title ss-m-b-20">重置密码</view>
-      <view class="head-subtitle">为了您的账号安全，设置密码前请先进行安全验证</view>
+      <view class="head-subtitle">仅已验证并绑定的手机号可使用短信重置。新注册填写的联系号码不能用于找回；无法验证时请联系平台申请人工核验。</view>
+      <view v-if="authError" @tap="retryAuth">{{ authError }}</view>
+      <view v-else-if="!authAvailable">认证服务准备中或暂未开放</view>
     </view>
 
     <!-- 表单项 -->
@@ -26,11 +28,11 @@
           <template v-slot:right>
             <button
               class="ss-reset-button code-btn code-btn-start"
-              :disabled="state.isMobileEnd"
+              :disabled="!authAvailable || sending || countdown > 0"
               :class="{ 'code-btn-end': state.isMobileEnd }"
-              @tap="getSmsCode('resetPassword', state.model.mobile)"
+              @tap="sendAuthCode"
             >
-              {{ getSmsTimer('resetPassword') }}
+              {{ codeText }}
             </button>
           </template>
         </uni-easyinput>
@@ -41,7 +43,7 @@
           placeholder="请输入验证码"
           v-model="state.model.code"
           type="number"
-          maxlength="4"
+          maxlength="6"
           :inputBorder="false"
         />
       </uni-forms-item>
@@ -54,7 +56,7 @@
           :inputBorder="false"
         >
           <template v-slot:right>
-            <button class="ss-reset-button login-btn-start" @tap="resetPasswordSubmit">
+            <button class="ss-reset-button login-btn-start" :disabled="!authAvailable || submitting" @tap="resetPasswordSubmit">
               确认
             </button>
           </template>
@@ -71,9 +73,9 @@
 <script setup>
   import { computed, ref, reactive, unref } from 'vue';
   import sheep from '@/sheep';
-  import { code, mobile, password } from '@/sheep/validate/form';
-  import { showAuthModal, closeAuthModal, getSmsCode, getSmsTimer } from '@/sheep/hooks/useModal';
-  import UserApi from '@/sheep/api/member/user';
+  import { code, mobile } from '@/sheep/validate/form';
+  import { showAuthModal } from '@/sheep/hooks/useModal';
+  import { useMallAuthForm, mallAuthPassword as password } from '@/sheep/hooks/useMallAuthForm';
 
   const resetPasswordRef = ref(null);
   const isLogin = computed(() => sheep.$store('user').isLogin);
@@ -93,20 +95,21 @@
     },
   });
 
+  const { error: authError, available: authAvailable, codeText, countdown, sending, submitting,
+    refresh: retryAuth, send: sendAuthCode, submit: submitAuth } = useMallAuthForm(state.model, 'RESET_PASSWORD');
+
   // 重置密码
   const resetPasswordSubmit = async () => {
     // 参数校验
     const validate = await unref(resetPasswordRef)
       .validate()
-      .catch((error) => {
-        console.log('error: ', error);
-      });
+      .catch(() => null);
     if (!validate) {
       return;
     }
     // 发起请求
-    const { code } = await UserApi.resetUserPassword(state.model);
-    if (code !== 0) {
+    const result = await submitAuth('reset-password', { ...state.model });
+    if (result?.code !== 0) {
       return;
     }
     // 成功后，用户重新登录

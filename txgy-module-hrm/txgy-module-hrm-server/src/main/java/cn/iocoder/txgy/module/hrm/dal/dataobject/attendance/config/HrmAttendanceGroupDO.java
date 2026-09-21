@@ -1,6 +1,6 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.attendance.config;
 
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.framework.mybatis.core.type.LongListTypeHandler;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
 import cn.iocoder.txgy.module.hrm.enums.attendance.config.HrmAttendanceAbsenteeismDeductMethodEnum;
@@ -39,7 +39,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmAttendanceGroupDO extends BaseDO {
+public class HrmAttendanceGroupDO extends TenantBaseDO {
 
     /**
      * 考勤组编号

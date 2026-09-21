@@ -6,6 +6,7 @@ import { Button, Empty, Progress, Tag } from 'ant-design-vue';
 
 import { getMyCourses } from '../learning/api';
 import { TRAINING_LEVELS, useTrainingDirection } from '../use-training-direction';
+import AcademyHome from './academy-home.vue';
 
 defineOptions({ name: 'PortalTrainingWorkbench' });
 
@@ -71,7 +72,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="workbench">
+  <AcademyHome />
+  <div v-if="false" class="workbench">
     <section class="stats">
       <div class="stat stat--blue">
         <div class="stat-icon">
@@ -131,31 +133,32 @@ onMounted(() => {
         <h2>继续学习</h2>
         <Button type="link" size="small" @click="goLearning">全部课程</Button>
       </div>
-      <div v-if="continueList.length" class="course-list">
-        <div v-for="item in continueList" :key="item.courseId" class="course-item">
-          <div class="course-icon">
+      <div v-if="continueList.length" class="course-grid">
+        <div v-for="item in continueList" :key="item.courseId" class="course-card">
+          <div class="course-cover">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M8 5.5v13l10-6.5z" />
             </svg>
+            <em>{{ item.credit ?? 0 }} 学时</em>
           </div>
-          <div class="course-main">
-            <div class="course-title">
-              <strong>{{ item.title }}</strong>
-              <Tag :color="statusColor(item.status)">{{ statusText(item.status) }}</Tag>
-            </div>
-            <div class="course-meta">
-              {{ item.lecturer || '—' }} · {{ item.credit ?? 0 }} 学时 · 已完成
+          <div class="course-body">
+            <h3>{{ item.title }}</h3>
+            <p>
+              {{ item.lecturer || '讲师待配置' }} · 已完成
               {{ item.doneCount ?? 0 }}/{{ item.totalCount ?? 0 }} 项
-            </div>
+            </p>
             <Progress
               class="course-progress"
               :percent="Number(item.progressPercent ?? 0)"
               size="small"
             />
+            <footer>
+              <Tag :color="statusColor(item.status)">{{ statusText(item.status) }}</Tag>
+              <Button size="small" type="primary" @click="goLearning">
+                {{ item.status === 1 ? '继续学习' : '开始学习' }}
+              </Button>
+            </footer>
           </div>
-          <Button type="primary" size="small" @click="goLearning">
-            {{ item.status === 1 ? '继续学习' : '开始学习' }}
-          </Button>
         </div>
       </div>
       <Empty v-else description="暂无进行中的课程，去课程中心挑一门吧">
@@ -231,7 +234,7 @@ onMounted(() => {
   place-items: center;
   width: 44px;
   height: 44px;
-  color: var(--c-icon, #2f6bff);
+  color: var(--c-icon, #005c9f);
   background: var(--c-icon-bg, #eef3ff);
   border-radius: 12px;
 }
@@ -267,7 +270,7 @@ onMounted(() => {
 }
 
 .stat--blue {
-  --c-icon: #2f6bff;
+  --c-icon: #005c9f;
   --c-icon-bg: #eef3ff;
 }
 
@@ -308,7 +311,7 @@ onMounted(() => {
 .block-head h2::before {
   width: 4px;
   height: 16px;
-  background: #2f6bff;
+  background: #005c9f;
   border-radius: 2px;
   content: '';
 }
@@ -318,68 +321,90 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.course-list {
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(282px, 1fr));
+  gap: 24px;
+}
+
+.course-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.course-item {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px;
-  background: #fff;
-  border: 1px solid #eaeef5;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.course-item:hover {
-  border-color: #d3e0f7;
-  box-shadow: 0 8px 22px rgb(16 24 40 / 8%);
-}
-
-.course-icon {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  color: #2f6bff;
-  background: #eef3ff;
-  border-radius: 12px;
-}
-
-.course-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.course-main {
   min-width: 0;
-  flex: 1;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgb(16 24 40 / 8%);
+  transition: transform 0.18s, box-shadow 0.18s;
 }
 
-.course-title {
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 26px rgb(31 72 135 / 18%);
+}
+
+.course-cover {
+  position: relative;
+  display: grid;
+  height: 158px;
+  place-items: center;
+  color: #b6c4d6;
+  background: #f9f9f9;
+}
+
+.course-cover svg {
+  width: 42px;
+  height: 42px;
+}
+
+.course-cover em {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 2px 8px;
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  background: rgb(0 0 0 / 45%);
+  border-radius: 4px;
+}
+
+.course-body {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  color: #1b2437;
-  font-size: 14px;
+  flex: 1;
+  flex-direction: column;
+  padding: 16px;
 }
 
-.course-meta {
-  margin-top: 4px;
-  color: #8892a6;
+.course-body h3 {
+  display: -webkit-box;
+  min-height: 48px;
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.course-body p {
+  margin: 10px 0 0;
+  color: #98a2b3;
   font-size: 12px;
 }
 
+.course-body footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
 .course-progress {
-  max-width: 360px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .growth {
@@ -445,24 +470,24 @@ onMounted(() => {
 
 .ladder li.passed .dot {
   color: #fff;
-  background: #2f6bff;
-  border-color: #2f6bff;
+  background: #005c9f;
+  border-color: #005c9f;
 }
 
 .ladder li.now {
-  color: #245fec;
+  color: #005c9f;
   font-weight: 700;
 }
 
 .ladder li.now .dot {
   color: #fff;
-  background: #2f6bff;
+  background: #005c9f;
   border-color: #bcd2ff;
-  box-shadow: 0 0 0 4px rgb(47 107 255 / 15%);
+  box-shadow: 0 0 0 4px rgb(0 92 159 / 15%);
 }
 
 .ladder li em {
-  color: #2f6bff;
+  color: #005c9f;
   font-size: 11px;
   font-style: normal;
 }

@@ -73,6 +73,17 @@ export function useFormSchema(formType: FormType): VbenFormSchema[] {
       formItemClass: 'col-span-2',
     },
     {
+      // 占位项：与「备注」同排的第 3 列（正好在「供应商」正下方），详情态显示一键导出按钮
+      fieldName: 'exportPdf',
+      label: ' ',
+      component: 'Input',
+      formItemClass: 'col-span-1',
+      dependencies: {
+        triggerFields: [''],
+        show: () => formType === 'detail',
+      },
+    },
+    {
       fieldName: 'fileUrl',
       label: '附件',
       component: 'FileUpload',

@@ -12,6 +12,20 @@ export namespace ErpAccountApi {
     sort: number; // 排序
     defaultStatus: boolean; // 是否默认
     name: string; // 账户名称
+    balance: number; // 当前余额
+  }
+
+  export interface AccountRecord {
+    id: number;
+    accountId: number;
+    bizType: string;
+    bizId: number;
+    bizNo: string;
+    changeAmount: number;
+    beforeBalance: number;
+    afterBalance: number;
+    remark?: string;
+    createTime: string;
   }
 }
 
@@ -31,6 +45,12 @@ export function getAccountSimpleList() {
 /** 查询结算账户详情 */
 export function getAccount(id: number) {
   return requestClient.get<ErpAccountApi.Account>(`/erp/account/get?id=${id}`);
+}
+
+export function getAccountRecordList(accountId: number) {
+  return requestClient.get<ErpAccountApi.AccountRecord[]>(
+    `/erp/account/record-list?accountId=${accountId}`,
+  );
 }
 
 /** 新增结算账户 */
@@ -58,4 +78,9 @@ export function deleteAccount(id: number) {
 /** 导出结算账户 Excel */
 export function exportAccount(params: any) {
   return requestClient.download('/erp/account/export-excel', { params });
+}
+
+/** 导出结算账户 PDF */
+export function exportAccountPdf(params: any) {
+  return requestClient.download('/erp/account/export-pdf', { params });
 }

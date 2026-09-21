@@ -1,5 +1,7 @@
 package cn.iocoder.txgy.module.crm.service.aftersale;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -24,10 +26,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.txgy.module.crm.enums.ErrorCodeConstants.*;
 
 /**
@@ -57,6 +64,8 @@ public class CrmAfterSaleTicketServiceImpl implements CrmAfterSaleTicketService 
     private CrmNoRedisDAO noRedisDAO;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private CrmAfterSaleConfigService configService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -264,8 +273,48 @@ public class CrmAfterSaleTicketServiceImpl implements CrmAfterSaleTicketService 
     }
 
     @Override
-    public PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO) {
+    public PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO, Long userId) {
+        // 待办「工单超时预警」：实时按售后设置判定，不预生成任何待办数据
+        if (CrmAfterSaleTicketPageReqVO.REMIND_TYPE_OVERDUE.equals(pageReqVO.getRemindType())) {
+            return ticketMapper.selectPageByOverdue(pageReqVO, resolveRemindAssigneeUserIds(userId),
+                    resolveOverdueDeadline());
+        }
         return ticketMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public Long getTicketOverdueCount(Long userId) {
+        return ticketMapper.selectCountByOverdue(resolveRemindAssigneeUserIds(userId), resolveOverdueDeadline());
+    }
+
+    /**
+     * 解析待办归属范围：本人 + 下属（与待办现有的「归属过滤」口径一致）
+     *
+     * <p>说明：售后工单不在 CRM 的 crm_permission 数据权限体系内，
+     * 因此沿用工单的「处理人」(assigneeUserId) 作为归属人。
+     */
+    private Set<Long> resolveRemindAssigneeUserIds(Long userId) {
+        Set<Long> userIds = new HashSet<>();
+        if (userId == null) {
+            return userIds;
+        }
+        userIds.add(userId);
+        List<AdminUserRespDTO> subordinates = adminUserApi.getUserListBySubordinate(userId).getCheckedData();
+        if (CollUtil.isNotEmpty(subordinates)) {
+            userIds.addAll(convertSet(subordinates, AdminUserRespDTO::getId));
+        }
+        return userIds;
+    }
+
+    /**
+     * 计算超时截止时间：今天 - 售后设置「工单超时预警天数」的日终
+     *
+     * <p>即「当前日期 - 工单创建日期 ≥ 超时预警天数」；未配置时按售后设置默认值 7 天兜底。
+     */
+    private LocalDateTime resolveOverdueDeadline() {
+        Integer overdueDays = configService.getConfig().getTicketOverdueDays();
+        int days = overdueDays == null || overdueDays < 0 ? 7 : overdueDays;
+        return LocalDateTimeUtil.endOfDay(LocalDate.now().minusDays(days));
     }
 
     // ========== 私有方法 ==========

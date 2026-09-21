@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { formatDate } from '@/utils/format'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useAccountMessageBox } from '@/composables/useAccountOperation'
+const ElMessageBox = useAccountMessageBox()
 import { supplierApi, type SupplierSku } from '@/api/supplier'
 import { supplierStockApi, type StockAdjust, type StockEntry } from '@/api/supplier-stock'
 const props=defineProps<{shopId:number;spuId:number;disabled?:boolean}>()
@@ -23,7 +25,7 @@ async function submit(){
   const sku=skus.value.find(s=>s.id===selected.value)
   if(!sku?.id||sku.wmsManaged||sku.stock===undefined||!Number.isInteger(delta.value)||!delta.value||Math.abs(delta.value)>1000000||!reason.value.trim())return void ElMessage.warning('请选择本地SKU，填写非零整数数量及原因')
   if(sku.stock+delta.value<0)return void ElMessage.warning('调整后库存不能小于零')
-  try{await ElMessageBox.confirm(`将可售库存从 ${sku.stock} 调整为 ${sku.stock+delta.value}，确认数量和原因无误？此操作不代表WMS入库。`,'确认库存调整',{confirmButtonText:'确认调整',cancelButtonText:'取消',type:'warning'})}catch{return}
+  try{await ElMessageBox.confirm(`将可售库存从 ${sku.stock} 调整为 ${sku.stock+delta.value}，确认数量和原因无误？`,'确认库存调整',{confirmButtonText:'确认调整',cancelButtonText:'取消',type:'warning'})}catch{return}
   pending.value={shopId:props.shopId,spuId:props.spuId,skuId:sku.id,expectedStock:sku.stock,delta:delta.value,reason:reason.value.trim(),requestKey:crypto.randomUUID()}
  }
  busy.value=true
@@ -42,10 +44,10 @@ async function discard(){
 <template>
  <el-button :disabled="disabled" @click="show">本地库存调整与记录</el-button>
  <el-dialog v-model="open" title="本地可售库存调整" width="850px" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy">
-  <el-alert title="仅调整本地可售库存，不改变销量，不代表采购入库。WMS管理SKU禁止调整；每笔操作保留会员和原因。" :closable="false"/>
+  <el-alert title="仅调整可售库存，不改变销量，也不代表采购入库。系统管理的 SKU 不可手工调整；每笔操作会保留操作人和原因。" :closable="false"/>
   <el-alert v-if="failed" type="error" title="库存或记录读取失败，请重试" :closable="false"/>
   <div class="stock-fields">
-   <label>选择SKU<el-select v-model="selected" :disabled="!!pending||busy||loading"><el-option v-for="s in skus" :key="s.id" :value="s.id!" :label="`${s.specification||'默认规格'} · 库存 ${s.stock}${s.wmsManaged?'（WMS管理）':''}`" :disabled="s.wmsManaged"/></el-select></label>
+   <label>选择SKU<el-select v-model="selected" :disabled="!!pending||busy||loading"><el-option v-for="s in skus" :key="s.id" :value="s.id!" :label="`${s.specification||'默认规格'} · 库存 ${s.stock}${s.wmsManaged?'（系统管理）':''}`" :disabled="s.wmsManaged"/></el-select></label>
    <label>增减数量（正数补货，负数调减）<input v-model.number="delta" class="stock-quantity" type="number" step="1" min="-1000000" max="1000000" :disabled="!!pending||busy||loading"/></label>
    <label>调整原因<el-input v-model="reason" maxlength="200" type="textarea" :disabled="!!pending||busy||loading" placeholder="例如：核对本地可售数量后补货20件"/></label>
   </div>

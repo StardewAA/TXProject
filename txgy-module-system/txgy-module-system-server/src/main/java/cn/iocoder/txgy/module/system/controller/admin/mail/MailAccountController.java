@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.system.controller.admin.mail;
 
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -69,7 +70,7 @@ public class MailAccountController {
     @PreAuthorize("@ss.hasPermission('system:mail-account:query')")
     public CommonResult<MailAccountRespVO> getMailAccount(@RequestParam("id") Long id) {
         MailAccountDO account = mailAccountService.getMailAccount(id);
-        return success(BeanUtils.toBean(account, MailAccountRespVO.class));
+        return success(buildRespVO(account));
     }
 
     @GetMapping("/page")
@@ -77,7 +78,17 @@ public class MailAccountController {
     @PreAuthorize("@ss.hasPermission('system:mail-account:query')")
     public CommonResult<PageResult<MailAccountRespVO>> getMailAccountPage(@Valid MailAccountPageReqVO pageReqVO) {
         PageResult<MailAccountDO> pageResult = mailAccountService.getMailAccountPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, MailAccountRespVO.class));
+        List<MailAccountRespVO> list = pageResult.getList().stream().map(this::buildRespVO).toList();
+        return success(new PageResult<>(list, pageResult.getTotal()));
+    }
+
+    /**
+     * 转换为出参：密码不返回给前端，只回传「是否已配置」。
+     */
+    private MailAccountRespVO buildRespVO(MailAccountDO account) {
+        MailAccountRespVO respVO = BeanUtils.toBean(account, MailAccountRespVO.class);
+        respVO.setPasswordConfigured(account != null && StrUtil.isNotBlank(account.getPassword()));
+        return respVO;
     }
 
     @GetMapping({"/list-all-simple", "simple-list"})

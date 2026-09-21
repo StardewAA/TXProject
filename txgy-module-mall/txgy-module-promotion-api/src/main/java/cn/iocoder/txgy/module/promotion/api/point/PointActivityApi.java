@@ -51,4 +51,18 @@ public interface PointActivityApi {
                                                @RequestParam("skuId") Long skuId,
                                                @RequestParam("count")Integer count);
 
+    @GetMapping(PREFIX + "/validate-stock-return")
+    @Operation(summary = "【取消订单前】只读校验积分活动返库条件，不限制活动上下架状态")
+    CommonResult<Boolean> validatePointStockReturn(@RequestParam("activityId") Long activityId,
+                                                  @RequestParam("skuId") Long skuId,
+                                                  @RequestParam("count") Integer count,
+                                                  @RequestParam("orderItemId") Long orderItemId);
+
+    @PutMapping(PREFIX + "/return-stock")
+    @Operation(summary = "按订单项幂等返还积分活动库存，取消订单与售后共用同一订单项编号")
+    CommonResult<Boolean> returnPointStock(@RequestParam("activityId") Long activityId,
+                                          @RequestParam("skuId") Long skuId,
+                                          @RequestParam("count") Integer count,
+                                          @RequestParam("orderItemId") Long orderItemId);
+
 }

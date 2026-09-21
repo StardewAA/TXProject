@@ -12,11 +12,14 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderSaveReqVO;
+import cn.iocoder.txgy.module.erp.controller.admin.purchase.vo.order.ErpPurchaseOrderTraceRespVO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseOrderDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpPurchaseOrderItemDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
+import cn.iocoder.txgy.module.erp.service.purchase.ErpPurchaseOrderPdfExporter;
 import cn.iocoder.txgy.module.erp.service.purchase.ErpPurchaseOrderService;
+import cn.iocoder.txgy.module.erp.service.purchase.ErpPurchaseOrderTraceService;
 import cn.iocoder.txgy.module.erp.service.purchase.ErpSupplierService;
 import cn.iocoder.txgy.module.erp.service.stock.ErpStockService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
@@ -27,6 +30,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -60,6 +65,18 @@ public class ErpPurchaseOrderController {
     @Resource
     private AdminUserApi adminUserApi;
 
+    @Resource
+    private ErpPurchaseOrderTraceService purchaseOrderTraceService;
+
+    @GetMapping("/trace")
+    @Operation(summary = "获得采购订单溯源",
+            description = "一次返回：来源询价单 → 中标明细 → 采购订单 → 采购入库单，用于订单详情页溯源展示")
+    @Parameter(name = "id", description = "采购订单编号", required = true, example = "30")
+    @PreAuthorize("@ss.hasPermission('erp:purchase-order:query')")
+    public CommonResult<ErpPurchaseOrderTraceRespVO> getTrace(@RequestParam("id") Long id) {
+        return success(purchaseOrderTraceService.getTrace(id));
+    }
+
     @PostMapping("/create")
     @Operation(summary = "创建采购订单")
     @PreAuthorize("@ss.hasPermission('erp:purchase-order:create')")
@@ -75,12 +92,15 @@ public class ErpPurchaseOrderController {
         return success(true);
     }
 
-    @PutMapping("/update-status")
-    @Operation(summary = "更新采购订单的状态")
-    @PreAuthorize("@ss.hasPermission('erp:purchase-order:update-status')")
-    public CommonResult<Boolean> updatePurchaseOrderStatus(@RequestParam("id") Long id,
-                                                           @RequestParam("status") Integer status) {
-        purchaseOrderService.updatePurchaseOrderStatus(id, status);
+    @PutMapping("/reverse-approve")
+    @Operation(summary = "反审批采购订单")
+    @PreAuthorize("@ss.hasPermission('erp:purchase-order:reverse-approve')")
+    @Parameter(name = "id", description = "采购订单编号", required = true)
+    @Parameter(name = "reason", description = "反审批原因", required = true)
+    public CommonResult<Boolean> reverseApprovePurchaseOrder(@RequestParam("id") Long id,
+                                                             @RequestParam("reason") @NotBlank(message = "反审批原因不能为空")
+                                                             @Size(max = 200, message = "反审批原因不能超过 200 个字符") String reason) {
+        purchaseOrderService.reverseApprovePurchaseOrder(id, getLoginUserId(), reason);
         return success(true);
     }
 
@@ -139,7 +159,19 @@ public class ErpPurchaseOrderController {
         pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
         List<ErpPurchaseOrderRespVO> list = buildPurchaseOrderVOPageResult(purchaseOrderService.getPurchaseOrderPage(pageReqVO)).getList();
         // 导出 Excel
-        ExcelUtils.write(response, "采购订单.xls", "数据", ErpPurchaseOrderRespVO.class, list);
+        ExcelUtils.write(response, "采购订单.xlsx", "数据", ErpPurchaseOrderRespVO.class, list);
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出采购订单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:purchase-order:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportPurchaseOrderPdf(@Valid ErpPurchaseOrderPageReqVO pageReqVO,
+                                       HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpPurchaseOrderRespVO> list = buildPurchaseOrderVOPageResult(
+                purchaseOrderService.getPurchaseOrderPage(pageReqVO)).getList();
+        ErpPurchaseOrderPdfExporter.write(response, list);
     }
 
     private PageResult<ErpPurchaseOrderRespVO> buildPurchaseOrderVOPageResult(PageResult<ErpPurchaseOrderDO> pageResult) {
@@ -157,7 +189,7 @@ public class ErpPurchaseOrderController {
         Map<Long, ErpSupplierDO> supplierMap = supplierService.getSupplierMap(
                 convertSet(pageResult.getList(), ErpPurchaseOrderDO::getSupplierId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), purchaseOrder -> Long.parseLong(purchaseOrder.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpPurchaseOrderRespVO.class, purchaseOrder -> {

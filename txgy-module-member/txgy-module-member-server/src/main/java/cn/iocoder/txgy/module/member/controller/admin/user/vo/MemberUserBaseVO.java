@@ -21,7 +21,6 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 public class MemberUserBaseVO {
 
     @Schema(description = "手机号", requiredMode = Schema.RequiredMode.REQUIRED, example = "15601691300")
-    @NotNull(message = "手机号不能为空")
     private String mobile;
 
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "2")

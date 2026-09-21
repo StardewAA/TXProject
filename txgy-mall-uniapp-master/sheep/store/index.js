@@ -13,6 +13,12 @@ export const setupPinia = (app) => {
   pinia.use(piniaPersist);
 
   app.use(pinia);
+  // Remove obsolete display caches, not tokens or any server-side business data.
+  uni.removeStorageSync('user-store');
+  uni.removeStorageSync('cart-store');
+  uni.removeStorageSync('app-store');
+  uni.$on('mall:session-changed', () => modules.user().clearAccountData());
+  uni.$on('mall:session-status', message => { modules.user().sessionError = message; });
 };
 
 export default (name) => {

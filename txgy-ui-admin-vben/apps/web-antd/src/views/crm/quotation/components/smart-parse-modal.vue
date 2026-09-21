@@ -25,16 +25,22 @@ import { recognize } from 'tesseract.js';
 import { getSimpleBusinessList } from '#/api/crm/business';
 import { getCustomerSimpleList } from '#/api/crm/customer';
 import { getProductSimpleList } from '#/api/crm/product';
+import { extractPdfContent } from '#/utils/crm/contract-file';
 
 const emit = defineEmits<{
   success: [values: Partial<CrmQuotationApi.Quotation>];
 }>();
 
-const activeKey = ref<'text' | 'ocr'>('text');
+const activeKey = ref<'file' | 'ocr' | 'text'>('text');
 const text = ref('');
 const loading = ref(false);
 const ocrLoading = ref(false);
 const ocrProgress = ref('');
+/** Word/PDF 导入：解析中状态与进度文案 */
+const fileLoading = ref(false);
+const fileProgress = ref('');
+/** 单个导入文件大小上限：20MB（与合同文件识别保持一致） */
+const MAX_IMPORT_SIZE = 20 * 1024 * 1024;
 
 const customers = ref<CrmCustomerApi.Customer[]>([]);
 const businesses = ref<CrmBusinessApi.Business[]>([]);
@@ -51,6 +57,8 @@ const [Modal, modalApi] = useVbenModal({
     if (!isOpen) {
       text.value = '';
       activeKey.value = 'text';
+      fileProgress.value = '';
+      fileLoading.value = false;
     }
   },
 });
@@ -354,6 +362,116 @@ async function handleOcr(file: File) {
   return false;
 }
 
+/** 判断导入文件的解析方式：docx=Word、pdf=PDF，其余不支持 */
+function detectImportKind(file: File): 'docx' | 'pdf' | 'unsupported' {
+  const name = (file.name || '').toLowerCase();
+  const mime = (file.type || '').toLowerCase();
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) {
+    return 'pdf';
+  }
+  if (
+    name.endsWith('.docx') ||
+    mime ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    return 'docx';
+  }
+  return 'unsupported';
+}
+
+let mammothPromise: null | Promise<any> = null;
+
+/** 懒加载 mammoth（仅 Word 导入时用到），避免影响弹窗首开体积 */
+function loadMammoth(): Promise<any> {
+  mammothPromise ??= import('mammoth/mammoth.browser');
+  return mammothPromise;
+}
+
+/** Word(.docx) → 纯文本（按段落保留换行，便于逐行解析产品明细） */
+async function extractDocxText(file: File): Promise<string> {
+  const mammoth: any = await loadMammoth();
+  const arrayBuffer = await file.arrayBuffer();
+  const result: any = await mammoth.extractRawText({ arrayBuffer });
+  return String(result?.value ?? '').trim();
+}
+
+/** 扫描件 PDF：把渲染出的页面图片交给本地 tesseract 逐页识别 */
+async function ocrPdfPages(images: string[]): Promise<string> {
+  const pages: string[] = [];
+  for (let i = 0; i < images.length; i++) {
+    fileProgress.value = `OCR 识别第 ${i + 1}/${images.length} 页...`;
+    const result = await recognize(images[i]!, 'chi_sim+eng');
+    pages.push(result.data.text);
+  }
+  return pages.join('\n');
+}
+
+/**
+ * Word/PDF 一键导入：抽出文件文字后，复用「智能解析并填充」。
+ * - Word(.docx)：mammoth 提取正文；
+ * - PDF：优先取文字层（复用 contract-file 工具），扫描件则用本地 OCR 识别渲染出的页面图片。
+ */
+async function handleImportFile(file: File) {
+  const kind = detectImportKind(file);
+  const name = file.name || '未命名文件';
+  if (!file.size) {
+    message.error(`「${name}」是空文件，请重新选择`);
+    return false;
+  }
+  if (file.size > MAX_IMPORT_SIZE) {
+    message.error(`「${name}」超过 20MB 上限，请压缩后再导入`);
+    return false;
+  }
+  if (kind === 'unsupported') {
+    message.error(
+      '仅支持 Word（.docx）与 PDF（.pdf）；旧版 .doc 请先用 Word 另存为 .docx',
+    );
+    return false;
+  }
+
+  fileLoading.value = true;
+  fileProgress.value = `正在解析「${name}」...`;
+  try {
+    let content = '';
+    if (kind === 'docx') {
+      content = await extractDocxText(file);
+    } else {
+      const result = await extractPdfContent(file, (msg) => {
+        fileProgress.value = `「${name}」${msg}`;
+      });
+      if (result.mode === 'text') {
+        content = result.text;
+      } else {
+        message.info('该 PDF 未检测到文字层（疑似扫描件），已转为 OCR 识别');
+        content = await ocrPdfPages(result.images);
+      }
+      if (result.truncated) {
+        message.warning(
+          `「${name}」共 ${result.pageCount} 页，已解析前 ${result.usedPages} 页`,
+        );
+      }
+    }
+
+    if (!content.trim()) {
+      message.error('未能从文件中读取到文字，请确认文件内容后重试');
+      return false;
+    }
+    text.value = content;
+    activeKey.value = 'text';
+    message.success('文件解析完成，已自动解析填充');
+    // 复用原有的文本解析 + 表单回填逻辑
+    await handleParse();
+  } catch (error: any) {
+    message.error(`文件解析失败：${error?.message ?? '未知错误'}`);
+    // eslint-disable-next-line no-console
+    console.error(error);
+  } finally {
+    fileLoading.value = false;
+    fileProgress.value = '';
+  }
+  return false;
+}
+
 function handleClear() {
   text.value = '';
 }
@@ -367,8 +485,8 @@ function handleClear() {
     :fullscreen-button="false"
   >
     <div class="mb-4 text-sm text-gray-500">
-      粘贴微信聊天/名片/邮件文本可自动填入（最准确）；拖入报价单/名片图片做
-      OCR 识别时，请使用清晰、正对拍摄的真实图片，截图效果最佳
+      粘贴微信聊天/名片/邮件文本可自动填入（最准确）；可导入 Word（.docx）/ PDF
+      报价单自动抽取文字；拖入报价单/名片图片做 OCR 识别时，请使用清晰、正对拍摄的真实图片，截图效果最佳
     </div>
     <Tabs v-model:active-key="activeKey">
       <Tabs.TabPane key="text" tab="粘贴文本">
@@ -396,6 +514,30 @@ function handleClear() {
             </p>
             <p class="ant-upload-text">点击或拖拽名片/报价单图片到此处</p>
             <p class="ant-upload-hint">支持 jpg、png、gif 等常见图片格式</p>
+          </Upload.Dragger>
+        </Spin>
+      </Tabs.TabPane>
+      <Tabs.TabPane key="file" tab="Word/PDF 导入">
+        <Spin :spinning="fileLoading" :tip="fileProgress || '正在解析文件...'">
+          <Upload.Dragger
+            name="file"
+            accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            :multiple="false"
+            :show-upload-list="false"
+            :before-upload="handleImportFile"
+          >
+            <p class="ant-upload-drag-icon">
+              <IconifyIcon
+                icon="ant-design:file-word-outlined"
+                :width="48"
+                :height="48"
+                class="mx-auto text-gray-400"
+              />
+            </p>
+            <p class="ant-upload-text">点击或拖拽 Word / PDF 报价单到此处</p>
+            <p class="ant-upload-hint">
+              支持 .docx 与 .pdf（单文件 ≤ 20MB）；导入后自动抽取文字并解析填充
+            </p>
           </Upload.Dragger>
         </Spin>
       </Tabs.TabPane>

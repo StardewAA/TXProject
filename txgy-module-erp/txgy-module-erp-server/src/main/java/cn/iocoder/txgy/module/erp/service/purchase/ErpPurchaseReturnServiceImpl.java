@@ -182,14 +182,13 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         List<ErpPurchaseReturnItemDO> purchaseReturnItems = purchaseReturnItemMapper.selectListByReturnId(id);
         Integer bizType = approve ? ErpStockRecordBizTypeEnum.PURCHASE_RETURN.getType()
                 : ErpStockRecordBizTypeEnum.PURCHASE_RETURN_CANCEL.getType();
-        if (!"remote".equalsIgnoreCase(wmsMode)) {
-            purchaseReturnItems.forEach(purchaseReturnItem -> {
-                BigDecimal count = approve ? purchaseReturnItem.getCount().negate() : purchaseReturnItem.getCount();
-                stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
-                        purchaseReturnItem.getProductId(), purchaseReturnItem.getWarehouseId(), count,
-                        bizType, purchaseReturnItem.getReturnId(), purchaseReturnItem.getId(), purchaseReturn.getNo()));
-            });
-        }
+        // 说明：同采购入库 —— ERP 业务账不随 WMS 集成模式变化，去掉 remote 守卫
+        purchaseReturnItems.forEach(purchaseReturnItem -> {
+            BigDecimal count = approve ? purchaseReturnItem.getCount().negate() : purchaseReturnItem.getCount();
+            stockRecordService.createStockRecord(new ErpStockRecordCreateReqBO(
+                    purchaseReturnItem.getProductId(), purchaseReturnItem.getWarehouseId(), count,
+                    bizType, purchaseReturnItem.getReturnId(), purchaseReturnItem.getId(), purchaseReturn.getNo()));
+        });
         if (approve) {
             wmsBusinessDocumentService.preparePurchaseReturnShipmentAfterCommit(id);
         }

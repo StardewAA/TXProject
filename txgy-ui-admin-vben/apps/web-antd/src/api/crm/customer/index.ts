@@ -9,7 +9,9 @@ export namespace CrmCustomerApi {
   export interface Customer {
     id: number; // 编号
     name: string; // 客户名称
+    contactName?: string; // 联系人
     followUpStatus: boolean; // 跟进状态
+    followUpCount?: number; // 累计跟进次数（每写一次跟进 +1，删除跟进 -1）
     contactLastTime: Date; // 最后跟进时间
     contactLastContent: string; // 最后跟进内容
     contactNextTime: Date; // 下次联系时间
@@ -46,6 +48,27 @@ export namespace CrmCustomerApi {
     updateSupport: boolean;
   }
 
+  /** 供应商 Word 导入明细条目 */
+  export interface SupplierImportItem {
+    rowNo: number; // 行号
+    name?: string; // 供应商名称
+    rawContent?: string; // 原始行内容
+    reason?: string; // 原因
+  }
+
+  /** 供应商 Word 导入结果 */
+  export interface SupplierImportResult {
+    totalCount: number; // 识别到的条目总数
+    successCount: number; // 新增成功
+    updateCount: number; // 更新成功
+    duplicateCount: number; // 已存在（未更新）
+    failCount: number; // 解析失败
+    successNames?: string[];
+    updateNames?: string[];
+    duplicates?: SupplierImportItem[];
+    failures?: SupplierImportItem[];
+  }
+
   /** 查重命中项 */
   export interface DuplicateCheckItem {
     bizType: 'clue' | 'contact' | 'customer'; // 业务类型
@@ -80,10 +103,17 @@ export function getCustomerPage(params: PageParam) {
   );
 }
 
-/** 查询客户详情 */
-export function getCustomer(id: number) {
+/**
+ * 查询客户详情
+ *
+ * @param id 客户编号
+ * @param silent 为 true 时不弹全局错误提示。用于「客户信息速览」这类可选增强，
+ *               避免客户无数据权限时（CRM_PERMISSION_DENIED）弹出误导性报错。
+ */
+export function getCustomer(id: number, silent = false) {
   return requestClient.get<CrmCustomerApi.Customer>(
     `/crm/customer/get?id=${id}`,
+    silent ? { headers: { 'X-Silent-Error': 'true' } } : {},
   );
 }
 
@@ -121,6 +151,42 @@ export function importCustomer(data: CrmCustomerApi.CustomerImportReqVO) {
 export function getCustomerSimpleList() {
   return requestClient.get<CrmCustomerApi.Customer[]>(
     '/crm/customer/simple-list',
+  );
+}
+
+/**
+ * 获取客户精简信息列表（可按客户类别过滤）
+ *
+ * @param customerType 客户类别：1=下游客户 2=上游供应商；不传则不过滤
+ */
+export function getCustomerSimpleListByType(customerType?: number) {
+  return requestClient.get<CrmCustomerApi.Customer[]>(
+    '/crm/customer/simple-list',
+    { params: { customerType } },
+  );
+}
+
+/**
+ * 获得供应商基础库（客户类别=上游供应商）精简列表
+ *
+ * 供应商属于租户级共享主数据，后端不做数据权限过滤，含联系人/电话/地址
+ */
+export function getSupplierSimpleList() {
+  return requestClient.get<CrmCustomerApi.Customer[]>(
+    '/crm/customer/supplier-simple-list',
+  );
+}
+
+/**
+ * 从 Word（.docx）导入供应商
+ *
+ * @param file 文档
+ * @param updateExisting 是否更新已存在的供应商（false=只新增，重复的跳过）
+ */
+export function importSupplierWord(file: File, updateExisting = false) {
+  return requestClient.upload<CrmCustomerApi.SupplierImportResult>(
+    '/crm/customer/import-supplier-word',
+    { file, updateExisting },
   );
 }
 

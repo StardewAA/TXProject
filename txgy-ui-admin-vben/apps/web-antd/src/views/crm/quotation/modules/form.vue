@@ -17,7 +17,13 @@ import {
 import { $t } from '#/locales';
 import { ProductEditTable } from '#/views/crm/product/components';
 
-import { cacheCustomerNameId, getWonCustomerId, useFormSchema } from '../data';
+import {
+  cacheCustomerNameId,
+  getWonCustomerId,
+  QUOTATION_TYPE_PURCHASE,
+  setKnownSupplierId,
+  useFormSchema,
+} from '../data';
 import SmartParseModal from '../components/smart-parse-modal.vue';
 
 const emit = defineEmits(['success']);
@@ -95,15 +101,28 @@ const [Modal, modalApi] = useVbenModal({
     // 提交表单
     const data = (await formApi.getValues()) as CrmQuotationApi.Quotation;
     data.products = formData.value?.products;
-    // 客户处理：匹配到赢单客户则关联编号；否则作为新客户名称，交由后端自动创建客户
-    const customerName = (data.customerName ?? '').toString().trim();
-    const matchedCustomerId = getWonCustomerId(customerName);
-    if (matchedCustomerId) {
-      data.customerId = matchedCustomerId;
+    if (Number(data.quotationType) === QUOTATION_TYPE_PURCHASE) {
+      // 采购报价：往来单位即所选「上游供应商」，且不关联商机
+      data.customerId = data.supplierId as number;
       data.customerName = undefined;
+      data.businessId = undefined;
     } else {
-      data.customerId = undefined as any;
+      // 购销报价：匹配到赢单客户则关联编号；否则作为新客户名称，交由后端自动创建客户
+      const customerName = (data.customerName ?? '').toString().trim();
+      const matchedCustomerId = getWonCustomerId(customerName);
+      if (matchedCustomerId) {
+        data.customerId = matchedCustomerId;
+        data.customerName = undefined;
+      } else {
+        data.customerId = undefined as any;
+      }
+      // 购销报价不使用供应商信息
+      data.supplierContact = undefined;
+      data.supplierPhone = undefined;
+      data.supplierAddress = undefined;
     }
+    // supplierId 仅为表单交互字段，不提交给后端
+    delete (data as any).supplierId;
     try {
       await (formData.value?.id
         ? updateQuotation(data)
@@ -131,8 +150,15 @@ const [Modal, modalApi] = useVbenModal({
       formData.value = await getQuotation(data.id);
       // 缓存当前客户，避免编辑时把已有关联客户误判为新客户
       cacheCustomerNameId(formData.value.customerName, formData.value.customerId);
+      // 采购报价：往来单位存于 customerId，回填到「供应商」表单项
+      const editValues: Record<string, any> = { ...formData.value };
+      if (Number(editValues.quotationType) === QUOTATION_TYPE_PURCHASE) {
+        editValues.supplierId = formData.value.customerId;
+      }
+      // 先标记已知供应商，避免回显时用供应商档案覆盖报价单上已保存的联系人/电话/地址
+      setKnownSupplierId(editValues.supplierId);
       // 设置到 values
-      await formApi.setValues(formData.value);
+      await formApi.setValues(editValues);
     } finally {
       modalApi.unlock();
     }

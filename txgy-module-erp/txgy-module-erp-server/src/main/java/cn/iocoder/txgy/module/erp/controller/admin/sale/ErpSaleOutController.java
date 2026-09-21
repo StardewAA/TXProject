@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.out.ErpSaleOutPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.out.ErpSaleOutRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.sale.vo.out.ErpSaleOutSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpCustomerDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOutDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.sale.ErpSaleOutItemDO;
@@ -134,6 +135,19 @@ public class ErpSaleOutController {
         ExcelUtils.write(response, "销售出库.xls", "数据", ErpSaleOutRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出销售出库 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:sale-out:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportSaleOutPdf(@Valid ErpSaleOutPageReqVO pageReqVO,
+                                 HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpSaleOutRespVO> list = buildSaleOutVOPageResult(
+                saleOutService.getSaleOutPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "销售出库.pdf", "销售出库列表",
+                ErpSaleOutRespVO.class, list);
+    }
+
     private PageResult<ErpSaleOutRespVO> buildSaleOutVOPageResult(PageResult<ErpSaleOutDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -149,7 +163,7 @@ public class ErpSaleOutController {
         Map<Long, ErpCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(pageResult.getList(), ErpSaleOutDO::getCustomerId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), stockOut -> Long.parseLong(stockOut.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpSaleOutRespVO.class, saleOut -> {

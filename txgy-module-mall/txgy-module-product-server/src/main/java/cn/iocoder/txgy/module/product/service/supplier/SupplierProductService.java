@@ -30,16 +30,20 @@ public class SupplierProductService {
     @Resource private ProductSpuService spuService;
     @Resource private ProductCategoryService categoryService;
     @Resource private ProductBrandService brandService;
+    @Resource private cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService reviewService;
     @Resource private DeliveryTemplateApi deliveryApi;
     @Resource private cn.iocoder.txgy.module.product.service.property.ProductPropertyService propertyService;
     @Resource private cn.iocoder.txgy.module.product.service.property.ProductPropertyValueService valueService;
 
-    public record Summary(Long id, String name, String picUrl, Integer status, Integer price, Integer stock) {}
+    public record Summary(Long id, String name, String picUrl, Integer status, Integer price, Integer stock,
+                          Integer reviewStatus, Long contentVersion, Long approvedVersion, String submissionId, String reviewRemark) {}
     public record SkuView(Long id, Integer price, Integer marketPrice, Integer stock,
                           String barCode, Double weight, Double volume, String specification, boolean wmsManaged, String picUrl) {}
     public record Detail(Long id, Long shopId, String name, String keyword, String introduction,
                          Long categoryId, Long brandId, String picUrl, Long deliveryTemplateId,
-                         Integer status, List<SkuView> skus, List<String> sliderPicUrls) {}
+                         Integer status, List<SkuView> skus, List<String> sliderPicUrls,
+                         Integer reviewStatus, Long contentVersion, Long approvedVersion, String submissionId, String reviewRemark,
+                         String description, Boolean specType) {}
     public record Option(Long id, String name) {}
 
     public Map<String, Object> options(Long member, Long shop) {
@@ -84,14 +88,17 @@ public class SupplierProductService {
         }
         return result;
     }
-    public PageResult<Summary> page(Long member, Long shop, PageParam page, String name, Integer status) {
+    public PageResult<Summary> page(Long member, Long shop, PageParam page, String name, Integer status, Integer reviewStatus) {
         membership.requireShop(member, shop);
         var q = new LambdaQueryWrapperX<ProductSpuDO>().eq(ProductSpuDO::getShopId, shop)
                 .likeIfPresent(ProductSpuDO::getName, name).in(ProductSpuDO::getStatus, List.of(0, 1))
                 .eqIfPresent(ProductSpuDO::getStatus, status).orderByDesc(ProductSpuDO::getId);
+        ProductSpuMapper.appendReviewQuery(reviewStatus, q);
         var result = spuMapper.selectPage(page, q);
         return new PageResult<>(result.getList().stream().map(p -> new Summary(p.getId(), p.getName(),
-                p.getPicUrl(), p.getStatus(), p.getPrice(), p.getStock())).toList(), result.getTotal());
+                p.getPicUrl(), p.getStatus(), p.getPrice(), p.getStock(), p.getReviewStatus(),
+                cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.version(p), p.getApprovedVersion(),
+                p.getSubmissionId(), p.getReviewRemark())).toList(), result.getTotal());
     }
     private ProductSpuDO owned(Long member, Long shop, Long id, boolean lock) {
         membership.requireShop(member, shop);
@@ -110,7 +117,9 @@ public class SupplierProductService {
                         .map(v -> v.getPropertyName() + ":" + v.getValueName()).toList()),
                 s.getWmsSkuId() != null || s.getWmsWarehouseId() != null,s.getPicUrl())).toList();
         return new Detail(p.getId(), p.getShopId(), p.getName(), p.getKeyword(), p.getIntroduction(),
-                p.getCategoryId(), p.getBrandId(), p.getPicUrl(), p.getDeliveryTemplateId(), p.getStatus(), skus,p.getSliderPicUrls());
+                p.getCategoryId(), p.getBrandId(), p.getPicUrl(), p.getDeliveryTemplateId(), p.getStatus(), skus,p.getSliderPicUrls(),
+                p.getReviewStatus(), cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.version(p),
+                p.getApprovedVersion(), p.getSubmissionId(), p.getReviewRemark(), p.getDescription(), p.getSpecType());
     }
     private void validateMetadata(SupplierProductSaveReqVO req) {
         categoryService.validateCategory(req.getCategoryId());
@@ -146,6 +155,7 @@ public class SupplierProductService {
         membership.requireShop(member, req.getShopId());
         // 编辑时先锁定并校验归属，不能在后续保存中更换店铺。
         var existing = req.getId() == null ? null : owned(member, req.getShopId(), req.getId(), true);
+        String oldSnapshot = existing == null ? null : reviewService.beforeEdit(existing, req.getExpectedVersion());
         validateMetadata(req);
         if (existing == null) {
             if (req.getDescriptionText() == null || req.getDescriptionText().isBlank()) throw invalid("请填写商品详情");
@@ -187,13 +197,16 @@ public class SupplierProductService {
             patch.setDescription(HtmlUtils.htmlEscape(req.getDescriptionText()).replace("\n", "<br/>"));
         if(req.getSliderPicUrls()!=null)patch.setSliderPicUrls(req.getSliderPicUrls());
         spuMapper.updateById(patch);
+        reviewService.finishEdit(existing, oldSnapshot);
         return existing.getId();
     }
     @Transactional(rollbackFor = Exception.class)
-    public void status(Long member, Long shop, Long id, Integer status) {
+    public void status(Long member, Long shop, Long id, Integer status, Long expectedVersion) {
         if (status == null || !Set.of(0, 1).contains(status)) throw invalid("仅支持上架或下架");
         var p = owned(member, shop, id, true);
+        cn.iocoder.txgy.module.product.service.review.ProductSpuReviewService.expect(p, expectedVersion);
         if (status == 1) {
+            reviewService.requireApprovedForListing(p);
             categoryService.validateCategory(p.getCategoryId());
             brandService.validateProductBrand(p.getBrandId());
             if (p.getDeliveryTypes() == null || !p.getDeliveryTypes().contains(1)

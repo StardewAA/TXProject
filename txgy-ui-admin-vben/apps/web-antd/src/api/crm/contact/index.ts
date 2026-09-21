@@ -106,11 +106,20 @@ export function getSimpleContactList() {
   );
 }
 
-/** 获得联系人列表，基于指定客户 */
-export function getContactListByCustomer(customerId: number) {
+/**
+ * 获得联系人列表，基于指定客户
+ *
+ * @param customerId 客户编号
+ * @param silent 为 true 时不弹全局错误提示。用于「选中客户后自动带出联系人」这类可选增强，
+ *               避免客户无数据权限时（CRM_PERMISSION_DENIED）弹出误导性报错。
+ */
+export function getContactListByCustomer(customerId: number, silent = false) {
   return requestClient.get<CrmContactApi.Contact[]>(
     '/crm/contact/list-by-customer',
-    { params: { customerId } },
+    {
+      params: { customerId },
+      ...(silent ? { headers: { 'X-Silent-Error': 'true' } } : {}),
+    },
   );
 }
 

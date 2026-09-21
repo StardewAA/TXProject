@@ -30,6 +30,8 @@ class SupplierTradeServiceTest {
     AfterSaleDO sale;
     @BeforeEach void setup() {
         service=new SupplierTradeService();auth=mock(ProductSupplierApi.class);orders=mock(TradeOrderMapper.class);
+        ReflectionTestUtils.setField(service,"erpInventory",
+                mock(cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService.class));
         items=mock(TradeOrderItemMapper.class);updates=mock(TradeOrderUpdateService.class);
         ReflectionTestUtils.setField(service,"authorization",auth);ReflectionTestUtils.setField(service,"orders",orders);
         ReflectionTestUtils.setField(service,"items",items);ReflectionTestUtils.setField(service,"orderUpdate",updates);

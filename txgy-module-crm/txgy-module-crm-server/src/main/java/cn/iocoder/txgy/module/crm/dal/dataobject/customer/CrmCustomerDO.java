@@ -33,11 +33,19 @@ public class CrmCustomerDO extends BaseDO {
      * 客户名称
      */
     private String name;
+    /**
+     * 联系人
+     */
+    private String contactName;
 
     /**
      * 跟进状态
      */
     private Boolean followUpStatus;
+    /**
+     * 累计跟进次数（每写一次跟进 +1，删除一条跟进 -1）
+     */
+    private Integer followUpCount;
     /**
      * 最后跟进时间
      */

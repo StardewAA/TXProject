@@ -82,6 +82,7 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
                 .eqIfPresent(CrmCustomerDO::getIndustryId, pageReqVO.getIndustryId())
                 .eqIfPresent(CrmCustomerDO::getLevel, pageReqVO.getLevel())
                 .eqIfPresent(CrmCustomerDO::getSource, pageReqVO.getSource())
+                .eqIfPresent(CrmCustomerDO::getCustomerType, pageReqVO.getCustomerType())
                 .eqIfPresent(CrmCustomerDO::getFollowUpStatus, pageReqVO.getFollowUpStatus());
 
         // backlog 查询
@@ -107,12 +108,39 @@ public interface CrmCustomerMapper extends BaseMapperX<CrmCustomerDO> {
     }
 
     /**
+     * 按客户类别查询客户列表（供应商基础库下拉使用）
+     *
+     * @param customerType 客户类别：1=下游客户 2=上游供应商
+     * @return 客户列表（按名称升序）
+     */
+    default List<CrmCustomerDO> selectListByCustomerType(Integer customerType) {
+        return selectList(new LambdaQueryWrapperX<CrmCustomerDO>()
+                .eqIfPresent(CrmCustomerDO::getCustomerType, customerType)
+                .orderByAsc(CrmCustomerDO::getName));
+    }
+
+    /**
      * 查重：根据手机号、客户名称查询匹配的客户（包含公海客户）
      *
      * @param mobile 手机号，精确匹配
      * @param name   客户名称，精确匹配
      * @return 客户列表，最多 5 条
      */
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * 用 SQL 自增而不是「先查再写」，避免并发下相互覆盖导致次数丢失
+     *
+     * @param id    客户编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmCustomerDO>()
+                .eq(CrmCustomerDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
+    }
+
     default List<CrmCustomerDO> selectListByDuplicate(String mobile, String name) {
         LambdaQueryWrapperX<CrmCustomerDO> query = new LambdaQueryWrapperX<>();
         if (StrUtil.isNotBlank(mobile) && StrUtil.isNotBlank(name)) {

@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ErpCollaborationApi } from '#/api/erp/collaboration';
 
-import { Tag } from 'ant-design-vue';
+import { Button, Tag } from 'ant-design-vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -14,6 +14,7 @@ import {
 } from '#/api/erp/collaboration';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import ApplyInboundToWms from './modules/apply-inbound-to-wms.vue';
 import ConfirmForm from './modules/confirm-form.vue';
 import Detail from './modules/detail.vue';
 
@@ -27,6 +28,11 @@ const [DetailModal, detailModalApi] = useVbenModal({
 
 const [ConfirmModal, confirmModalApi] = useVbenModal({
   connectedComponent: ConfirmForm,
+  destroyOnClose: true,
+});
+
+const [ApplyInboundModal, applyInboundModalApi] = useVbenModal({
+  connectedComponent: ApplyInboundToWms,
   destroyOnClose: true,
 });
 
@@ -46,6 +52,11 @@ function handleConfirm(
   action: 'ACCEPTED' | 'REJECTED' | 'NEED_SUPPLEMENT',
 ) {
   confirmModalApi.setData({ id: row.id, action }).open();
+}
+
+/** 推送入库到 WMS（真实链路，不再是模拟） */
+function handlePushInboundToWms() {
+  applyInboundModalApi.open();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -83,7 +94,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <DetailModal @success="handleRefresh" />
     <ConfirmModal @success="handleRefresh" />
+    <ApplyInboundModal @success="handleRefresh" />
     <Grid table-title="供应链协同单（一站式接单工作台）">
+      <template #toolbar-tools>
+        <Button
+          type="primary"
+          ghost
+          class="mr-2"
+          @click="handlePushInboundToWms"
+        >
+          推送入库到 WMS
+        </Button>
+      </template>
       <template #businessStatus="{ row }">
         <Tag :color="getBusinessStatusColor(row.businessStatus)">
           {{ getBusinessStatusText(row.businessStatus) }}

@@ -2,7 +2,8 @@
 import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 import type { SystemUserApi } from '#/api/system/user';
 
-import { nextTick, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import {
@@ -42,11 +43,24 @@ import ProcessInstanceTimeline from './modules/time-line.vue';
 
 defineOptions({ name: 'BpmProcessInstanceDetail' });
 
+const route = useRoute();
+
 const props = defineProps<{
   activityId?: string; // 流程活动编号，用于抄送查看
   id: string; // 流程实例的编号
   taskId?: string; // 任务编号
 }>();
+
+// 后端菜单模式下路由不传 props，统一从 URL query 兜底读取参数
+const instanceId = computed(
+  () => props.id || (route.query.id as string) || '',
+);
+const instanceTaskId = computed(
+  () => props.taskId || (route.query.taskId as string) || '',
+);
+const instanceActivityId = computed(
+  () => props.activityId || (route.query.activityId as string) || '',
+);
 
 const processInstanceLoading = ref(false); // 流程实例的加载中
 const processInstance = ref<BpmProcessInstanceApi.ProcessInstance>(); // 流程实例
@@ -97,9 +111,9 @@ async function getApprovalDetail() {
   processInstanceLoading.value = true;
   try {
     const param = {
-      processInstanceId: props.id,
-      activityId: props.activityId,
-      taskId: props.taskId,
+      processInstanceId: instanceId.value,
+      activityId: instanceActivityId.value,
+      taskId: instanceTaskId.value,
     };
     const data = await getApprovalDetailApi(param);
     if (!data) {
@@ -166,7 +180,7 @@ async function getProcessModelView() {
       bpmnXml: '',
     };
   }
-  const data = await getProcessInstanceBpmnModelView(props.id);
+  const data = await getProcessInstanceBpmnModelView(instanceId.value);
   if (data) {
     processModelView.value = data;
   }
@@ -202,7 +216,7 @@ const [PrintModal, printModalApi] = useVbenModal({
 
 /** 打开打印对话框 */
 function handlePrint() {
-  printModalApi.setData({ processInstanceId: props.id }).open();
+  printModalApi.setData({ processInstanceId: instanceId.value }).open();
 }
 
 /** 监听 Tab 切换，当切换到 "record" 标签时刷新任务列表 */

@@ -6,6 +6,9 @@ import cn.iocoder.txgy.module.crm.controller.admin.aftersale.vo.visittask.CrmAft
 import cn.iocoder.txgy.module.crm.dal.dataobject.aftersale.CrmAfterSaleVisitTaskDO;
 import jakarta.validation.Valid;
 
+import java.time.LocalDate;
+import java.util.List;
+
 /**
  * 售后回访任务 Service 接口
  *
@@ -65,13 +68,58 @@ public interface CrmAfterSaleVisitTaskService {
     /**
      * 获得回访任务分页
      *
+     * <p>当 pageReqVO.remindType = 待办提醒（1）时，按「待办：任务提醒」口径实时查询：
+     * 任务状态 ∈ {待处理, 已逾期} + 处理人在（本人 + 下属）范围内 +
+     * （待处理任务）计划回访日在提前提醒天数内；已逾期任务无条件纳入
+     *
      * @param pageReqVO 分页查询
+     * @param userId    当前登录用户编号（待办归属过滤使用）
      * @return 回访任务分页
      */
-    PageResult<CrmAfterSaleVisitTaskDO> getVisitTaskPage(CrmAfterSaleVisitTaskPageReqVO pageReqVO);
+    PageResult<CrmAfterSaleVisitTaskDO> getVisitTaskPage(CrmAfterSaleVisitTaskPageReqVO pageReqVO, Long userId);
 
     /**
-     * 【定时任务】自动标记逾期：超过「逾期判定天数」仍未完成的待处理任务标记为已逾期
+     * 获得「任务提醒」待办数量（实时查询，与分页查询同一口径，不落库；含临期与已逾期）
+     *
+     * @param userId 当前登录用户编号
+     * @return 待办数量
+     */
+    Long getVisitTaskRemindCount(Long userId);
+
+    /**
+     * 获得指定质保档案下的回访任务列表（按业务编号升序）
+     *
+     * <p>供回访记录表单的「关联任务编号」下拉选择使用
+     *
+     * @param warrantyId 质保档案编号
+     * @return 回访任务列表
+     */
+    List<CrmAfterSaleVisitTaskDO> getVisitTaskListByWarrantyId(Long warrantyId);
+
+    /**
+     * 按当前售后设置实时计算窗口期截止日期
+     *
+     * <p>窗口期截止日期 = 计划回访日期 + 售后设置「回访任务逾期判定天数」；
+     * 实时计算（不读任务上的 window_end_date 快照），保证售后设置改动后对存量任务立即生效。
+     *
+     * @param taskDate 计划回访日期
+     * @return 窗口期截止日期；计划回访日期为空时返回 null
+     */
+    LocalDate calcWindowEndDate(LocalDate taskDate);
+
+    /**
+     * 硬时间锁校验：未到计划回访日期时禁止提交回访记录
+     *
+     * <p>售后设置开启「允许提前提交回访记录」(allow_early_visit) 时放行；
+     * 窗口期内、已逾期的任务均放行（逾期由前端弹窗二次确认）。
+     * 由回访记录入口与任务完成入口共用，保证判定口径唯一。
+     *
+     * @param task 回访任务（为空或计划回访日期为空时不校验）
+     */
+    void validateTaskArrived(CrmAfterSaleVisitTaskDO task);
+
+    /**
+     * 【定时任务】自动标记逾期：超过「窗口期截止日期」仍未完成的待处理任务标记为已逾期
      *
      * @return 本次标记为逾期的任务数量
      */

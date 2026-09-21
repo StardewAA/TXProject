@@ -8,21 +8,27 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getProcessInstanceCopyPage } from '#/api/bpm/processInstance';
 import { $t } from '#/locales';
 import { router } from '#/router';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
 
 import { useGridColumns, useGridFormSchema } from './data';
 
 defineOptions({ name: 'BpmCopyTask' });
 
+const props = withDefaults(defineProps<{
+  detailRouteName?: string;
+  processDefinitionKeys?: string;
+}>(), {
+  detailRouteName: 'BpmProcessInstanceDetail',
+});
+
 /** 任务详情 */
 function handleDetail(row: BpmProcessInstanceApi.ProcessInstanceCopyRespVO) {
-  const query = {
-    id: row.processInstanceId,
-    ...(row.activityId && { activityId: row.activityId }),
-  };
-  router.push({
-    name: 'BpmProcessInstanceDetail',
-    query,
-  });
+  router.push(buildApprovalDetailLocation(
+    props.detailRouteName,
+    row.processInstanceId,
+    undefined,
+    row.activityId,
+  ));
 }
 
 const [Grid] = useVbenVxeGrid({
@@ -39,6 +45,7 @@ const [Grid] = useVbenVxeGrid({
           return await getProcessInstanceCopyPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
+            processDefinitionKeys: props.processDefinitionKeys,
             ...formValues,
           });
         },

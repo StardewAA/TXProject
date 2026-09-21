@@ -52,6 +52,27 @@ public class CrmStatisticsFunnelController {
         return success(funnelService.getBusinessSummaryByStatus(reqVO));
     }
 
+    @GetMapping("/get-business-summary-by-stage")
+    @Operation(summary = "获取商机阶段统计（标准化阶段）", description = "用于【销售漏斗】与【销售看板】；仅统计未开始/进行中的商机")
+    @PreAuthorize("@ss.hasPermission('crm:statistics-funnel:query')")
+    public CommonResult<List<CrmStatisticsBusinessSummaryRespVO>> getBusinessSummaryByStage(@Valid CrmStatisticsFunnelReqVO reqVO) {
+        return success(funnelService.getBusinessSummaryByStage(reqVO));
+    }
+
+    @GetMapping("/get-business-summary-by-state")
+    @Operation(summary = "获取商机状态组统计", description = "用于【汇总报表】；维度为未开始/进行中/已赢单/已丢单")
+    @PreAuthorize("@ss.hasPermission('crm:statistics-funnel:query')")
+    public CommonResult<List<CrmStatisticsBusinessSummaryRespVO>> getBusinessSummaryByState(@Valid CrmStatisticsFunnelReqVO reqVO) {
+        return success(funnelService.getBusinessSummaryByState(reqVO));
+    }
+
+    @GetMapping("/get-business-lost-reason-summary")
+    @Operation(summary = "获取丢单原因统计", description = "用于【汇总报表】的丢单原因饼图（丢单复盘）；仅统计已丢单商机")
+    @PreAuthorize("@ss.hasPermission('crm:statistics-funnel:query')")
+    public CommonResult<List<CrmStatisticsBusinessSummaryRespVO>> getBusinessLostReasonSummary(@Valid CrmStatisticsFunnelReqVO reqVO) {
+        return success(funnelService.getBusinessLostReasonSummary(reqVO));
+    }
+
     @GetMapping("/get-business-summary-by-date")
     @Operation(summary = "获取新增商机分析(按日期)", description = "用于【销售漏斗】页面")
     @PreAuthorize("@ss.hasPermission('crm:statistics-funnel:query')")

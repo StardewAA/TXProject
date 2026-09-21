@@ -3,7 +3,7 @@
  */
 import type { RequestClientOptions } from '@vben/request';
 
-import { isTenantEnable, useAppConfig } from '@vben/hooks';
+import { useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
@@ -15,13 +15,13 @@ import { useAccessStore } from '@vben/stores';
 import { createApiEncrypt } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
+import { formatWmsErrorMessage } from '#/api/wms/error-message';
 
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-const tenantEnable = isTenantEnable();
 const apiEncrypt = createApiEncrypt(import.meta.env);
 const TENANT_ACCESS_DENIED_MESSAGE = '您无权访问该租户的数据';
 
@@ -37,18 +37,29 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
+    if (reAuthing) return;
+    reAuthing = true;
     console.warn('Access token or refresh token is invalid or expired. ');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
-    accessStore.setAccessToken(null);
-    if (
-      preferences.app.loginExpiredMode === 'modal' &&
-      accessStore.isAccessChecked
-    ) {
-      accessStore.setLoginExpired(true);
-    } else {
-      await authStore.logout();
-    }
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+      // 标记“本次为会话过期”，登录页据此忽略 redirect 参数，
+      // 避免令牌失效后又被带回失效前的页面，而是回到默认页面。
+      try {
+        sessionStorage.setItem('txgy-session-expired', '1');
+      } catch {
+        // 隐私模式等场景下 sessionStorage 不可用，忽略
+      }
+      if (
+        preferences.app.loginExpiredMode === 'modal' &&
+        accessStore.isAccessChecked
+      ) {
+        accessStore.setLoginExpired(true);
+      } else {
+        try { await authStore.logout(); } catch { /* token 已失效，忽略退出请求错误 */ }
+        window.location.replace('/#/auth/login');
+      }
   }
 
   /**
@@ -93,20 +104,61 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     return token ? `Bearer ${token}` : null;
   }
 
+  function getRequestPath(url?: string) {
+    return (url || '').split('?')[0] ?? '';
+  }
+
+  /**
+   * 是否为登录 / 注册这类公开认证入口。
+   *
+   * <p>认证入口必须忽略旧会话：既不携带旧 Authorization（避免旧令牌的租户上下文干扰新登录），
+   * 也不携带 visit-tenant-id（该头只在已持有令牌时有意义）。</p>
+   *
+   * <p>注：该保护在远程合并中丢失（提交 193894ac 引入的旧版本覆盖），此处按 HEAD 版本补回。</p>
+   */
+  function isAuthenticationEntry(url?: string) {
+    const path = getRequestPath(url);
+    return (
+      path.endsWith('/system/auth/login') ||
+      path.endsWith('/system/auth/register')
+    );
+  }
+
+  /**
+   * 是否为个人注册请求：个人注册固定落在后端保留的 tenant_id=0，
+   * 不允许携带企业租户（tenant-id）或访问租户（visit-tenant-id）。
+   * 注：该函数定义在合并中丢失（调用方为 !148 引入），此处按注册接口路径补回。
+   */
+  function isPersonalRegister(config: { url?: string }) {
+    const url = (config?.url || '').toLowerCase();
+    return url.includes('/system/auth/register');
+  }
+
   // 请求头处理
   client.addRequestInterceptor({
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
 
-      config.headers.Authorization = formatToken(accessStore.accessToken);
+      // 登录 / 注册是公开认证入口，忽略旧会话令牌，避免旧租户上下文干扰新认证。
+      config.headers.Authorization = isAuthenticationEntry(config.url)
+        ? undefined
+        : formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       // 租户编号：登录时由登录页根据手动输入的租户名解析并写入 accessStore；
       // 未设置时回退到 .env 的默认租户（VITE_APP_DEFAULT_TENANT_ID），保证多租户头不缺失
       const tenantId =
-        accessStore.tenantId ||
+        accessStore.tenantId ??
         Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
       config.headers['tenant-id'] = String(tenantId);
-      config.headers['visit-tenant-id'] = String(tenantId);
+      // visit-tenant-id 只在已登录（持有令牌）且非认证入口时下发
+      config.headers['visit-tenant-id'] = isAuthenticationEntry(config.url)
+        ? undefined
+        : String(tenantId);
+      if (isPersonalRegister(config)) {
+        // 个人注册固定落在后端保留的 tenant_id=0，不允许携带企业租户或访问租户。
+        config.headers['tenant-id'] = undefined;
+        config.headers['visit-tenant-id'] = undefined;
+      }
 
       // 是否 API 加密
       if ((config.headers || {}).isEncrypt) {
@@ -232,6 +284,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
       const responseData = error?.response?.data ?? {};
+      // 请求可携带 x-skip-error-toast 头静默失败（如个人登录的租户回退重试：第一次失败属预期，由调用方自行处理）
+      if (error?.config?.headers?.['x-skip-error-toast'] === 'true') {
+        return;
+      }
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
@@ -247,7 +303,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示
-      message.error(errorMessage || msg);
+      const displayMessage = formatWmsErrorMessage(errorMessage || msg);
+      if (displayMessage.includes('请选择匹配的业务仓库')) {
+        message.error({ content: displayMessage, key: 'wms-warehouse-type-mismatch' });
+      } else {
+        message.error(displayMessage);
+      }
     }),
   );
 
@@ -264,7 +325,7 @@ baseRequestClient.addRequestInterceptor({
     const accessStore = useAccessStore();
     // 租户编号：优先取登录页解析后的租户，未设置时回退默认租户，避免多租户头缺失
     const tenantId =
-      accessStore.tenantId ||
+      accessStore.tenantId ??
       Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 1);
     config.headers['tenant-id'] = String(tenantId);
     config.headers['visit-tenant-id'] = String(tenantId);

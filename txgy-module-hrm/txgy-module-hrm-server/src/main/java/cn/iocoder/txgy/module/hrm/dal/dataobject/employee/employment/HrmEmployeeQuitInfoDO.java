@@ -1,7 +1,7 @@
 package cn.iocoder.txgy.module.hrm.dal.dataobject.employee.employment;
 
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
-import cn.iocoder.txgy.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.txgy.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeQuitReasonEnum;
 import cn.iocoder.txgy.module.hrm.enums.employee.employment.HrmEmployeeQuitTypeEnum;
 import cn.iocoder.txgy.module.hrm.enums.employee.info.HrmEmployeeStatusEnum;
@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HrmEmployeeQuitInfoDO extends BaseDO {
+public class HrmEmployeeQuitInfoDO extends TenantBaseDO {
 
     /**
      * 离职信息编号

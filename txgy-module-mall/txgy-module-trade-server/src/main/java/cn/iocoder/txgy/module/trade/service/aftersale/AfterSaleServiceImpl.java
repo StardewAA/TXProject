@@ -51,7 +51,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,6 +70,15 @@ import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.*;
 @Service
 @Validated
 public class AfterSaleServiceImpl implements AfterSaleService {
+
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchJournal workbenchJournal;
+
+    private void workbenchChanged(Long orderId) {
+        if (workbenchJournal != null) workbenchJournal.changed(orderId);
+    }
+    @Resource
+    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
 
     @Resource
     private cn.iocoder.txgy.module.trade.dal.mysql.order.TradeOrderMapper settlementOrderLock;
@@ -122,6 +133,18 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         AfterSaleDO afterSale = tradeAfterSaleMapper.selectById(id);
         enrichShopName(afterSale);
         return afterSale;
+    }
+
+    @Override
+    public Map<Long, AfterSaleDO> getLatestAfterSales(Long userId, Collection<Long> orderItemIds) {
+        if (orderItemIds == null || orderItemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, AfterSaleDO> latest = new LinkedHashMap<>();
+        for (AfterSaleDO afterSale : tradeAfterSaleMapper.selectLatestByOrderItemIds(userId, orderItemIds)) {
+            latest.putIfAbsent(afterSale.getOrderItemId(), afterSale);
+        }
+        return latest;
     }
 
     /**
@@ -262,6 +285,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 更新交易订单项的售后状态
         tradeOrderUpdateService.updateOrderItemWhenAfterSaleCreate(orderItem.getId(), afterSale.getId());
+        if(workbenchJournal!=null)workbenchJournal.changed(afterSale.getOrderId(),cn.iocoder.txgy.module.trade.service.workbench.OrderWorkbenchModels.Action.DELIVERY);
 
         // 记录售后日志
         AfterSaleLogUtils.setAfterSaleInfo(afterSale.getId(), null,
@@ -330,6 +354,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         if (updateCount == 0) {
             throw exception(AFTER_SALE_UPDATE_STATUS_FAIL);
         }
+        if (workbenchJournal != null) workbenchChanged(tradeAfterSaleMapper.selectById(id).getOrderId());
     }
 
     @Override
@@ -365,6 +390,14 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     public void receiveAfterSale(Long userId, Long id) {
         // 校验售后单存在，并状态为已退货
         AfterSaleDO afterSale = validateAfterSaleReceivable(id);
+
+        var erpOrder = tradeOrderQueryService.getOrder(afterSale.getOrderId());
+        var erpItem = new cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO()
+                .setSkuId(afterSale.getSkuId()).setCount(afterSale.getCount());
+        var erpRequest = erpInventory.request(erpOrder,
+                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.RETURN,
+                String.valueOf(id), java.util.List.of(erpItem), null, null);
+        if (!erpRequest.confirmed()) return;
 
         // 更新售后单的状态
         updateAfterSaleStatus(afterSale.getId(), AfterSaleStatusEnum.BUYER_DELIVERY.getStatus(), new AfterSaleDO()
@@ -461,6 +494,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
 
         // 更新售后单的退款单号
         tradeAfterSaleMapper.updateById(new AfterSaleDO().setId(afterSale.getId()).setPayRefundId(payRefundId));
+        workbenchChanged(afterSale.getOrderId());
         return payRefundId;
     }
 

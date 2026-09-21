@@ -1,6 +1,11 @@
 <!-- 评价  -->
 <template>
   <s-layout title="评价">
+    <view v-if="state.error" class="comment-notice">{{ state.error }}</view>
+    <button class="refresh-comments" :disabled="state.loading || state.submitting || state.expired" @tap="flow?.load()">刷新核验待评价项目</button>
+    <s-service-entry v-if="state.orderInfo.id && !state.expired && !state.loading && !state.needsRefresh" resource-type="ORDER" :resource-id="state.orderInfo.id" :disabled="state.submitting" />
+    <view v-if="state.loading" class="comment-notice">正在读取待评价商品…</view>
+    <view v-else-if="!state.commentList.length && !state.needsRefresh" class="comment-notice">{{ state.expired ? '登录账号已变化，请重新进入订单评价' : '当前没有可评价的商品，请从已收货订单进入' }}</view>
     <view>
       <view v-for="(item, index) in state.orderInfo.items" :key="item.id">
         <view>
@@ -19,11 +24,11 @@
             <!-- 评分 -->
             <view class="star-box ss-flex ss-col-center">
               <view class="star-title ss-m-r-40">商品质量</view>
-              <uni-rate v-model="state.commentList[index].descriptionScores" />
+              <uni-rate v-model="state.commentList[index].descriptionScores" :disabled="state.submitting || state.needsRefresh" />
             </view>
             <view class="star-box ss-flex ss-col-center">
               <view class="star-title ss-m-r-40">服务态度</view>
-              <uni-rate v-model="state.commentList[index].benefitScores" />
+              <uni-rate v-model="state.commentList[index].benefitScores" :disabled="state.submitting || state.needsRefresh" />
             </view>
             <!-- 评价 -->
             <view class="area-box">
@@ -33,10 +38,11 @@
                 maxlength="120"
                 autoHeight
                 v-model="state.commentList[index].content"
+                :disabled="state.submitting || state.needsRefresh"
                 placeholder="宝贝满足你的期待吗？说说你的使用心得，分享给想买的他们吧~"
               />
               <view class="img-box">
-                <s-uploader
+                <s-uploader v-if="!state.submitting && !state.needsRefresh"
                   v-model:url="state.commentList[index].picUrls"
                   fileMediatype="image"
                   limit="9"
@@ -48,7 +54,7 @@
             <view class="checkbox-container">
               <checkbox-group @change="(event) => toggleAnonymous(index, event)">
                 <label>
-                  <checkbox value="anonymousChecked" />
+                  <checkbox value="anonymousChecked" :disabled="state.submitting || state.needsRefresh" />
                   匿名评论
                 </label>
               </checkbox-group>
@@ -57,10 +63,10 @@
         </view>
       </view>
     </view>
-    <su-fixed bottom placeholder>
+    <su-fixed v-if="state.commentList.length" bottom placeholder>
       <view class="foot_box ss-flex ss-row-center ss-col-center">
-        <button class="ss-reset-button post-btn ui-BG-Main-Gradient ui-Shadow-Main" :disabled="state.submitting" @tap="onSubmit">
-          发布
+        <button class="ss-reset-button post-btn ui-BG-Main-Gradient ui-Shadow-Main" :disabled="state.submitting || state.loading || state.needsRefresh || state.expired" @tap="onSubmit">
+          发布剩余评价（{{ state.commentList.length }}）
         </button>
       </view>
     </su-fixed>
@@ -69,9 +75,11 @@
 
 <script setup>
   import sheep from '@/sheep';
-  import { onLoad } from '@dcloudio/uni-app';
+  import { onLoad, onUnload } from '@dcloudio/uni-app';
   import { reactive } from 'vue';
   import OrderApi from '@/sheep/api/trade/order';
+  import { captureTenantOperation, isTenantOperationCurrent } from '@/sheep/helper/tenant-runtime';
+  import { createOrderCommentFlow } from '@/sheep/helper/order-comment-flow.mjs';
 
   const state = reactive({
     orderInfo: { items: [] },
@@ -79,7 +87,12 @@
     id: null,
     loading: false,
     submitting: false,
+    error: '', needsRefresh: false, expired: false,
   });
+  let flow, operation;
+  function sessionChanged() { if (operation && !isTenantOperationCurrent(operation)) { state.expired = true; flow?.dispose(); } }
+  uni.$on('mall:session-changed', sessionChanged);
+  onUnload(() => { flow?.dispose(); uni.$off('mall:session-changed', sessionChanged); });
 
   /**
    * 切换是否匿名
@@ -97,18 +110,7 @@
    * @returns {Promise<void>}
    */
   async function onSubmit() {
-    if (state.submitting || state.commentList.length === 0) return;
-    state.submitting = true;
-    // 顺序提交评论
-    try {
-      for (const comment of state.commentList) {
-        const res = await OrderApi.createOrderItemComment(comment);
-        if (!res || res.code !== 0) return;
-      }
-      sheep.$router.back();
-    } finally {
-      state.submitting = false;
-    }
+    if (await flow?.submit() && !state.expired && isTenantOperationCurrent(operation)) sheep.$router.back();
   }
 
   onLoad(async (options) => {
@@ -117,34 +119,19 @@
       return;
     }
     state.id = String(options.id);
-    if (state.loading) return;
-    state.loading = true;
-    try {
-      const res = await OrderApi.getOrderDetail(state.id);
-      const data = res?.data;
-      if (!res || res.code !== 0 || !data) {
-        sheep.$helper.toast('无待评价订单');
-        return;
-      }
-      // 处理评论
-      (Array.isArray(data.items) ? data.items : []).forEach((item) => {
-        state.commentList.push({
-          anonymous: false,
-          orderItemId: String(item.id),
-          descriptionScores: 5,
-          benefitScores: 5,
-          content: '',
-          picUrls: [],
-        });
-      });
-      state.orderInfo = { ...data, items: Array.isArray(data.items) ? data.items : [] };
-    } finally {
-      state.loading = false;
-    }
+    operation = captureTenantOperation();
+    flow = createOrderCommentFlow(state, {
+      isCurrent: () => !state.expired && isTenantOperationCurrent(operation),
+      readOrder: async id => { const response = await OrderApi.getOrderDetail(id); if (response?.code !== 0 || !response.data) throw new Error(response?.msg || '订单读取失败'); return response.data; },
+      sendComment: async data => { const response = await OrderApi.createOrderItemComment(data); if (response?.code !== 0) throw new Error(response?.msg || '评价提交结果未确认'); },
+    });
+    await flow.load();
   });
 </script>
 
 <style lang="scss" scoped>
+  .comment-notice { padding: 24rpx; color: #8e5428; background: #fff7ee; line-height: 1.7; }
+  .refresh-comments { font-size: 26rpx; margin: 20rpx; }
   // 评价商品
   .goods-card {
     margin: 10rpx 0;

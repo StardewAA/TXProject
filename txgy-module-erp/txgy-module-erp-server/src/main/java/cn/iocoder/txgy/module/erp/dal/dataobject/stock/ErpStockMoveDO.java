@@ -51,6 +51,14 @@ public class ErpStockMoveDO extends BaseDO {
      * 枚举 {@link cn.iocoder.txgy.module.erp.enums.ErpAuditStatus}
      */
     private Integer status;
+    /** 调出仓库负责人确认账号 */
+    private Long sourceConfirmedBy;
+    /** 调出仓库负责人确认时间 */
+    private LocalDateTime sourceConfirmedAt;
+    /** 调入仓库负责人确认账号 */
+    private Long targetConfirmedBy;
+    /** 调入仓库负责人确认时间；完成后才实际变更库存 */
+    private LocalDateTime targetConfirmedAt;
     /**
      * 备注
      */

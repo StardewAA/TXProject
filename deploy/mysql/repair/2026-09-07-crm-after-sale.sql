@@ -44,6 +44,7 @@ CREATE TABLE `crm_after_sale_warranty` (
   KEY `idx_contract_id` (`contract_id`) USING BTREE,
   KEY `idx_customer_id` (`customer_id`) USING BTREE,
   KEY `idx_status_end` (`status`,`warranty_end_date`) USING BTREE,
+  KEY `idx_warranty_end_date` (`warranty_end_date`) USING BTREE,
   KEY `idx_owner_user_id` (`owner_user_id`) USING BTREE,
   KEY `idx_no` (`no`) USING BTREE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='CRM 售后质保档案表';
@@ -59,7 +60,8 @@ CREATE TABLE `crm_after_sale_config` (
   `auto_visit_cycle_type` tinyint NOT NULL DEFAULT '1' COMMENT '自动回访周期类型：1=每季度 2=每半年 3=每年 4=质保到期前重点回访',
   `auto_visit_cycle_value` int NOT NULL DEFAULT '0' COMMENT '自动回访周期倍数/到期前天数（配合 auto_visit_cycle_type）',
   `task_remind_days` int NOT NULL DEFAULT '3' COMMENT '回访任务临期提醒提前天数',
-  `task_overdue_days` int NOT NULL DEFAULT '3' COMMENT '回访任务逾期判定天数',
+  `task_overdue_days` int NOT NULL DEFAULT '3' COMMENT '回访任务逾期判定天数（窗口期天数：窗口期截止日期 = 计划回访日期 + 本值）',
+  `allow_early_visit` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否允许提前提交回访记录：0=不允许（未到计划回访日期禁止提交）1=允许',
   `ticket_overdue_days` int NOT NULL DEFAULT '7' COMMENT '工单超时未处理预警天数',
   `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -116,7 +118,8 @@ CREATE TABLE `crm_after_sale_visit_task` (
   `customer_id` bigint NOT NULL COMMENT '客户编号（冗余）',
   `contract_id` bigint NOT NULL COMMENT '合同编号（冗余）',
   `assignee_user_id` bigint NOT NULL COMMENT '处理人（售后人员或业务员）',
-  `task_date` date NOT NULL COMMENT '计划执行日期',
+  `task_date` date NOT NULL COMMENT '计划执行日期（计划回访日期）',
+  `window_end_date` date DEFAULT NULL COMMENT '窗口期截止日期 = 计划执行日期 + 回访任务逾期判定天数；当前日期超过该日期判定为已逾期',
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '任务状态：1=待处理 2=已完成 3=已逾期',
   `finish_time` datetime DEFAULT NULL COMMENT '实际完成时间',
   `overdue_sent_date` date DEFAULT NULL COMMENT '临期提醒发送日期（防重复）',
@@ -205,6 +208,7 @@ CREATE TABLE `crm_after_sale_ticket` (
   KEY `idx_status_assignee` (`status`,`assignee_user_id`) USING BTREE,
   KEY `idx_customer_id` (`customer_id`) USING BTREE,
   KEY `idx_warranty_id` (`warranty_id`) USING BTREE,
+  KEY `idx_create_time` (`create_time`) USING BTREE,
   KEY `idx_no` (`no`) USING BTREE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='CRM 售后问题工单表';
 

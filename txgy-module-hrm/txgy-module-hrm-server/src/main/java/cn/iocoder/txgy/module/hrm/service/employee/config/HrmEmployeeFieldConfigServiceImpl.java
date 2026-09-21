@@ -116,6 +116,17 @@ public class HrmEmployeeFieldConfigServiceImpl implements HrmEmployeeFieldConfig
     }
 
     @Override
+    public void clearInvisibleCreateFields(HrmEmployeeSaveReqVO reqVO, Integer entryStatus) {
+        for (HrmEmployeeFieldConfigRespVO field : getEmployeeCreateFieldConfigList(entryStatus)) {
+            if (Boolean.TRUE.equals(field.getVisible())
+                    || HrmEmployeeCreateFieldEnum.CANDIDATE_ID.getName().equals(field.getName())) {
+                continue;
+            }
+            BeanUtil.setFieldValue(reqVO, field.getName(), null);
+        }
+    }
+
+    @Override
     @SuppressWarnings("DuplicatedCode")
     public List<HrmEmployeeFieldConfigRespVO> getEmployeeArchiveFieldConfigList() {
         Map<String, HrmEmployeeFieldConfigValueVO> configMap = getFieldConfigMap(

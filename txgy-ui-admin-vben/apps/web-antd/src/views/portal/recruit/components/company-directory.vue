@@ -316,7 +316,7 @@ onMounted(loadCompanies);
         <div class="company-detail-toolbar">
           <div>
             <span class="company-detail-kicker">职位机会</span>
-            <p class="company-detail-caption">{{ activeFilters ? '符合当前筛选条件的职位' : '这家企业正在寻找这样的伙伴' }} · {{ selectedCompany?.posts.length || 0 }} 个</p>
+            <p class="company-detail-caption">{{ activeFilters ? `符合当前筛选条件的职位 · ${selectedCompany?.posts.length || 0} 个职位` : '这家企业正在寻找这样的伙伴' }}</p>
           </div>
           <span class="company-detail-tip">点击岗位查看详情 <IconifyIcon icon="lucide:arrow-down-right" /></span>
         </div>
@@ -379,8 +379,12 @@ onMounted(loadCompanies);
 .filter-options button:hover { background: #fff7ef; color: var(--company-accent); }
 .clear-filters { margin-left: auto; padding: 0; flex-shrink: 0; border: 0; background: none; color: var(--company-muted); cursor: pointer; font: inherit; line-height: 28px; }
 .clear-filters:hover { color: var(--company-accent); }
-.company-results { min-height: 400px; padding: 27px 24px 31px; border: 1px solid #f4e5d7; border-radius: 0 0 22px 22px; background: linear-gradient(180deg, #fff5e8 0%, #fffaf4 80%); }
-.company-results-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 24px; }
+/* 结果区不再做左右内缩：公司卡片要与首页、职位页的卡片落在同一条内容基线
+   （首页 .home-job-card / 职位页 .search-post-card 都紧贴容器边），
+   否则整块会比另外两页右移 25px（24px padding + 1px border）。 */
+.company-results { min-height: 400px; padding: 27px 0 31px; border: 1px solid #f4e5d7; border-radius: 0 0 22px 22px; background: linear-gradient(180deg, #fff5e8 0%, #fffaf4 80%); }
+/* 工具栏与卡片同一条左基线，但保留 16px 内衬，避免文字贴住面板边框。 */
+.company-results-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 24px; padding: 0 16px; }
 .company-sort { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid #f1dfcf; border-radius: 10px; background: #ffffffc9; box-shadow: 0 5px 16px rgb(172 95 28 / 4%); }
 .company-sort-label { display: inline-flex; align-items: center; gap: 9px; padding: 0 12px 0 3px; font-size: 15px; }
 .company-sort-label :deep(svg) { padding: 5px; border-radius: 7px; background: var(--company-accent); color: #fff; width: 29px; height: 29px; }
@@ -481,7 +485,8 @@ onMounted(loadCompanies);
   .company-filter-row { font-size: 12px; }
   .filter-label { width: 72px; font-size: 13px; }
   .filter-options { gap: 3px 14px; }
-  .company-results { padding: 18px 12px 24px; }
+  .company-results { padding: 18px 0 24px; }
+  .company-results-toolbar { padding: 0 10px; }
   .company-sort { gap: 2px; }
   .company-sort-label { padding-right: 4px; font-size: 13px; }
   .company-sort button { padding: 6px 8px; font-size: 12px; }

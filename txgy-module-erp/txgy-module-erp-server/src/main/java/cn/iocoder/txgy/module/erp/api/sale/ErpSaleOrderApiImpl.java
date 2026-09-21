@@ -84,7 +84,7 @@ public class ErpSaleOrderApiImpl implements ErpSaleOrderApi {
         }
         // 组装销售员姓名
         if (saleOrder.getSaleUserId() != null) {
-            AdminUserRespDTO user = adminUserApi.getUser(saleOrder.getSaleUserId()).getCheckedData();
+            AdminUserRespDTO user = adminUserApi.getUserIgnoreTenant(saleOrder.getSaleUserId()).getData();
             if (user != null) {
                 dto.setSaleUserName(user.getNickname());
             }

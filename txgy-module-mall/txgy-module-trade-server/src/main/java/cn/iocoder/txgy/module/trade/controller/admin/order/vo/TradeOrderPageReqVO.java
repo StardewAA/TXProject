@@ -18,6 +18,9 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @Data
 public class TradeOrderPageReqVO extends PageParam {
 
+    @Schema(description = "店铺编号")
+    private Long shopId;
+
     @Schema(description = "订单号", example = "88888888")
     private String no;
 

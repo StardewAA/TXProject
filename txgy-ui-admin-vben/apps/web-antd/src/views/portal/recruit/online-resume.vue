@@ -1,5 +1,13 @@
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
@@ -24,6 +32,29 @@ import { getAreaTree, type SystemAreaApi } from '#/api/system/area';
 import { AreaCascader } from '#/components/area';
 
 import MonthPicker from './components/month-picker.vue';
+import ResumeAiPanel from './components/resume-ai-panel.vue';
+import {
+  buildResumeVersionIdempotencyKey,
+  createPortalResumeVersion,
+  getPortalResumeVersionList,
+  type HrmPortalResumeVersionApi,
+} from '#/api/hrm/portal/resume-version';
+import {
+  isUnhandledResumeToolRequest,
+  type ResumeToolRequest,
+} from './components/resume-tools';
+
+/**
+ * 父级（index.vue 右上角简历工具菜单）传入的动作请求。
+ * 由 nonce 保证同一次点击只被消费一次，属性残留不会反复打开弹窗。
+ */
+const props = defineProps<{
+  pendingAction?: ResumeToolRequest;
+}>();
+
+const emit = defineEmits<{
+  actionHandled: [];
+}>();
 
 type Identity = 'student' | 'worker';
 
@@ -146,14 +177,19 @@ const skillSuggestions = ['办公软件', '工程制图', '项目管理', '施�
 const MAX_RESUME_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_RESUME_EXTENSIONS = ['pdf', 'doc', 'docx'];
 
+type ResumeSectionId = (typeof sectionItems)[number]['id'];
+
 const loading = ref(true);
 const submitting = ref(false);
 const uploadSubmitting = ref(false);
-const activeSection = ref<(typeof sectionItems)[number]['id']>('personal');
+const activeSection = ref<ResumeSectionId>('personal');
 const lastSavedAt = ref('');
+let sectionSyncFrame: number | undefined;
 const postTypes = ref<HrmPortalRecruitApi.PostType[]>([]);
 const attachments = ref<HrmPortalResumeApi.Resume[]>([]);
 const uploadModalOpen = ref(false);
+/** 附件管理面板已从在线简历页移到「简历」下拉入口，按需弹出 */
+const attachmentsModalOpen = ref(false);
 const uploadInput = ref<HTMLInputElement>();
 const selectedUploadFile = ref<File>();
 const uploadForm = reactive({ title: '', remark: '' });
@@ -441,6 +477,12 @@ async function loadResume() {
       console.warn('[OnlineResume] 加载户籍地区失败', error);
     }
     attachments.value = (resumes || []).filter((resume) => resume.resumeType === 1);
+    // 记录在线简历草稿编号，固化版本时作为来源
+    onlineDraftId.value = (resumes || []).find(
+      (resume) =>
+        resume.resumeType === 2 &&
+        [RECRUIT_PROFILE_TITLE, '在线简历'].includes(resume.title),
+    )?.id;
     const profile = readOnlineProfile(resumes || []);
     if (profile) Object.assign(form, normalizeProfile(profile));
     const profileAreaId = profile && typeof profile.domicileAreaId === 'number' ? profile.domicileAreaId : undefined;
@@ -541,6 +583,108 @@ function openUploadModal() {
   uploadModalOpen.value = true;
 }
 
+/** 「简历」下拉里的「附件管理」入口：打开附件管理面板 */
+function openAttachmentsModal() {
+  attachmentsModalOpen.value = true;
+}
+
+/* ===== 个人简历版本 ===== */
+
+/** 当前在线简历草稿编号，作为固化版本的来源 */
+const onlineDraftId = ref<number>();
+const versionPanelOpen = ref(false);
+const versionLoading = ref(false);
+const versionSaving = ref(false);
+const resumeVersions = ref<HrmPortalResumeVersionApi.Version[]>([]);
+
+async function loadResumeVersions() {
+  versionLoading.value = true;
+  try {
+    resumeVersions.value =
+      (await getPortalResumeVersionList(onlineDraftId.value)) || [];
+  } catch (error) {
+    console.warn('[OnlineResume] 加载简历版本失败', error);
+    resumeVersions.value = [];
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+async function openVersionPanel() {
+  versionPanelOpen.value = true;
+  await loadResumeVersions();
+}
+
+function formatVersionTime(value?: string) {
+  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
+}
+
+/**
+ * 把当前在线简历固化为新版本。
+ *
+ * 服务端按幂等键去重，因此重复点击不会生成多份版本；
+ * 固化只读取当前草稿内容，不会改动草稿本身。
+ */
+async function saveResumeVersion() {
+  if (versionSaving.value) return;
+  const content = JSON.stringify(serializeProfile());
+  if (!content || content === '{}') {
+    message.warning('请先完善在线简历后再保存版本');
+    return;
+  }
+  versionSaving.value = true;
+  try {
+    await createPortalResumeVersion({
+      sourceResumeId: onlineDraftId.value,
+      createType: 1,
+      changeSummary: `手动固化 ${new Date().toLocaleString('zh-CN')}`,
+      idempotencyKey: buildResumeVersionIdempotencyKey('manual'),
+    });
+    message.success('已保存为新的简历版本');
+    await loadResumeVersions();
+  } catch (error: any) {
+    message.error(error?.message || '保存简历版本失败');
+  } finally {
+    versionSaving.value = false;
+  }
+}
+
+/* ===== AI 简历助手 ===== */
+
+const aiPanelOpen = ref(false);
+
+function openAiPanel() {
+  aiPanelOpen.value = true;
+}
+
+/** AI 面板里点击「简历版本」链接：先关掉 AI 面板再打开版本面板，重新打开时版本列表会刷新 */
+function handleOpenVersionsFromAi() {
+  aiPanelOpen.value = false;
+  void openVersionPanel();
+}
+
+/** 已消费的动作请求 nonce，避免同一次请求被反复执行 */
+const handledResumeActionNonce = ref(0);
+
+function runPendingResumeAction() {
+  const request = props.pendingAction;
+  if (!isUnhandledResumeToolRequest(request, handledResumeActionNonce.value)) return;
+  handledResumeActionNonce.value = request.nonce;
+  if (request.action === 'upload') openAttachmentsModal();
+  if (request.action === 'edit') void focusResumeEditor();
+  if (request.action === 'version') void openVersionPanel();
+  if (request.action === 'ai') openAiPanel();
+  emit('actionHandled');
+}
+
+watch(() => props.pendingAction, runPendingResumeAction, { immediate: true });
+
+/** 简历页工具条里的「在线编辑」：等正文渲染完成后定位到第一段简历内容 */
+async function focusResumeEditor() {
+  await nextTick();
+  selectSection('personal');
+}
+
 function validateResumeFile(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (!extension || !ACCEPTED_RESUME_EXTENSIONS.includes(extension)) {
@@ -613,9 +757,51 @@ async function handleUploadResume() {
   }
 }
 
-function selectSection(id: (typeof sectionItems)[number]['id']) {
+/**
+ * 二级导航是 sticky 的，模块顶部必须停靠在它下方，否则会被导航盖住一部分。
+ * 高度随断点变化（窄屏会换行变高），所以运行时量取，不写死。
+ */
+function getSectionScrollOffset() {
+  const bar = document.querySelector('.recruit-subnav');
+  const height = bar ? bar.getBoundingClientRect().height : 0;
+  return height + 16;
+}
+
+function selectSection(id: ResumeSectionId) {
   activeSection.value = id;
-  document.getElementById(`resume-section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const target = document.getElementById(`resume-section-${id}`);
+  if (!target) return;
+  // 不用 scrollIntoView：它的落点由 CSS scroll-margin-top 决定，无法跟随
+  // 吸顶导航的实际高度，导致模块顶部被遮挡。
+  const top = target.getBoundingClientRect().top + window.scrollY - getSectionScrollOffset();
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
+
+/**
+ * 根据右侧模块在页面中的位置同步左侧目录，避免只在点击目录时更新高亮。
+ * 判定锚点必须与 selectSection 的落点一致（同一个吸顶偏移量），否则高亮
+ * 会和实际可见的模块错位。
+ */
+function syncActiveSectionFromScroll() {
+  if (sectionSyncFrame !== undefined) return;
+  sectionSyncFrame = window.requestAnimationFrame(() => {
+    sectionSyncFrame = undefined;
+    const anchor = getSectionScrollOffset() + 1;
+    let current: ResumeSectionId = sectionItems[0].id;
+    for (const item of sectionItems) {
+      const section = document.getElementById(`resume-section-${item.id}`);
+      if (section && section.getBoundingClientRect().top <= anchor) current = item.id;
+    }
+    // 最后一个模块在页面滚到底时也到不了锚点位置，会导致它永远高亮不到，
+    // 因此额外判断「已滚到底」直接选中最后一项（页面本身可滚动时才生效，
+    // 避免内容不足一屏时误判）。
+    const doc = document.documentElement;
+    const scrollable = doc.scrollHeight - window.innerHeight > 4;
+    if (scrollable && window.scrollY + window.innerHeight >= doc.scrollHeight - 4) {
+      current = sectionItems[sectionItems.length - 1]!.id;
+    }
+    if (activeSection.value !== current) activeSection.value = current;
+  });
 }
 
 function setIdentity(identity: Identity) {
@@ -740,7 +926,19 @@ async function saveResume() {
   }
 }
 
-onMounted(loadResume);
+onMounted(async () => {
+  await loadResume();
+  await nextTick();
+  window.addEventListener('scroll', syncActiveSectionFromScroll, { passive: true });
+  window.addEventListener('resize', syncActiveSectionFromScroll, { passive: true });
+  syncActiveSectionFromScroll();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', syncActiveSectionFromScroll);
+  window.removeEventListener('resize', syncActiveSectionFromScroll);
+  if (sectionSyncFrame !== undefined) window.cancelAnimationFrame(sectionSyncFrame);
+});
 </script>
 
 <template>
@@ -768,61 +966,6 @@ onMounted(loadResume);
         <div><h1>把你的职业故事，写给下一个机会</h1><p class="resume-subtitle">完善在线简历，投递岗位时无需重复填写资料。</p></div>
         <div class="header-save-area"><span :class="['save-state', { saved: lastSavedAt }] "><i></i>{{ profileStatusLabel }}</span><a-button type="primary" :loading="submitting" @click="saveResume">保存简历</a-button></div>
       </header>
-
-      <aside class="resume-attachments-panel" aria-label="附件管理">
-        <div class="attachments-header">
-          <div>
-            <p>简历附件</p>
-            <h2>附件管理</h2>
-          </div>
-          <a-button class="attachments-add" type="text" aria-label="上传简历附件" @click="openUploadModal">
-            <IconifyIcon icon="lucide:plus" />
-          </a-button>
-        </div>
-
-        <div class="attachments-summary">
-          <span>简历附件</span>
-          <strong>{{ visibleAttachments.length }}</strong>
-          <small>支持常见文档格式 · 单个不超过 10 兆</small>
-        </div>
-
-        <div v-if="loading" class="attachments-loading">
-          <a-skeleton v-for="item in 2" :key="item" active :paragraph="{ rows: 2 }" />
-        </div>
-        <div v-else-if="!visibleAttachments.length" class="attachments-empty">
-          <span><IconifyIcon icon="lucide:file-plus-2" /></span>
-          <strong>还没有附件简历</strong>
-          <p>上传文档或扫描件简历，投递时即可直接使用。</p>
-          <a-button type="primary" ghost @click="openUploadModal">上传第一份简历</a-button>
-        </div>
-        <div v-else class="attachments-list">
-          <article v-for="resume in visibleAttachments" :key="resume.id" class="attachment-item">
-            <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-text" /></span>
-            <div class="attachment-copy">
-              <strong :title="resume.title">{{ resume.title }}</strong>
-              <small :title="resume.fileName || resume.title">{{ resume.fileName || '附件简历' }}</small>
-              <small>{{ formatAttachmentDate(resume.createTime) }}</small>
-            </div>
-            <a-dropdown overlay-class-name="resume-attachment-actions" placement="bottomRight" trigger="['click']">
-              <a-button class="attachment-preview" type="text" aria-label="附件操作">
-                <IconifyIcon icon="lucide:ellipsis-vertical" />
-              </a-button>
-              <template #overlay>
-                <a-menu @click="handleAttachmentMenuClick($event, resume)">
-                  <a-menu-item key="preview" :disabled="!resume.fileUrl">在线查看</a-menu-item>
-                  <a-menu-item key="delete" danger>删除</a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </article>
-        </div>
-
-        <button class="attachment-upload-cta" type="button" @click="openUploadModal">
-          <span class="attachment-upload-cta-icon"><IconifyIcon icon="lucide:upload-cloud" /></span>
-          <span><strong>添加附件简历</strong><small>让招聘方更快了解你</small></span>
-          <IconifyIcon class="attachment-upload-cta-arrow" icon="lucide:arrow-up-right" />
-        </button>
-      </aside>
 
       <div v-if="loading" class="resume-loading"><a-skeleton active :paragraph="{ rows: 4 }" /><a-skeleton active :paragraph="{ rows: 5 }" /></div>
 
@@ -916,6 +1059,111 @@ onMounted(loadResume);
       </div>
     </a-modal>
 
+    <!-- 附件管理：原先固定挂在在线简历页右侧，现改为由「简历」下拉的入口按需弹出。
+         内容与样式沿用原来那块面板（已上传统计 / 附件列表 / 添加入口）。
+         标题行不再放「+」：它与下方的「添加附件简历」入口重复。 -->
+    <a-modal
+      v-model:open="attachmentsModalOpen"
+      title="附件管理"
+      :footer="null"
+      width="640px"
+      wrap-class-name="resume-attachments-modal"
+    >
+      <div class="attachments-modal-body">
+        <div class="attachments-summary">
+          <span>已上传</span>
+          <strong>{{ visibleAttachments.length }}</strong>
+          <small>支持常见文档格式 · 单个不超过 10 兆</small>
+        </div>
+
+        <div v-if="loading" class="attachments-loading">
+          <a-skeleton v-for="item in 2" :key="item" active :paragraph="{ rows: 2 }" />
+        </div>
+        <div v-else-if="!visibleAttachments.length" class="attachments-empty">
+          <span><IconifyIcon icon="lucide:file-plus-2" /></span>
+          <strong>还没有附件简历</strong>
+          <p>上传文档或扫描件简历，投递时即可直接使用。</p>
+          <a-button type="primary" ghost @click="openUploadModal">上传第一份简历</a-button>
+        </div>
+        <div v-else class="attachments-list">
+          <article v-for="resume in visibleAttachments" :key="resume.id" class="attachment-item">
+            <span :class="['attachment-file-icon', `is-${getAttachmentExtension(resume)}`]"><IconifyIcon icon="lucide:file-text" /></span>
+            <div class="attachment-copy">
+              <strong :title="resume.title">{{ resume.title }}</strong>
+              <small :title="resume.fileName || resume.title">{{ resume.fileName || '附件简历' }}</small>
+              <small>{{ formatAttachmentDate(resume.createTime) }}</small>
+            </div>
+            <a-dropdown overlay-class-name="resume-attachment-actions" placement="bottomRight" trigger="['click']">
+              <a-button class="attachment-preview" type="text" aria-label="附件操作">
+                <IconifyIcon icon="lucide:ellipsis-vertical" />
+              </a-button>
+              <template #overlay>
+                <a-menu @click="handleAttachmentMenuClick($event, resume)">
+                  <a-menu-item key="preview" :disabled="!resume.fileUrl">在线查看</a-menu-item>
+                  <a-menu-item key="delete" danger>删除</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </article>
+        </div>
+
+        <button class="attachment-upload-cta" type="button" @click="openUploadModal">
+          <span class="attachment-upload-cta-icon"><IconifyIcon icon="lucide:upload-cloud" /></span>
+          <span><strong>添加附件简历</strong><small>让招聘方更快了解你</small></span>
+          <IconifyIcon class="attachment-upload-cta-arrow" icon="lucide:arrow-up-right" />
+        </button>
+      </div>
+    </a-modal>
+
+    <ResumeAiPanel v-model:open="aiPanelOpen" @open-versions="handleOpenVersionsFromAi" />
+
+    <a-modal
+      v-model:open="versionPanelOpen"
+      title="简历版本"
+      :footer="null"
+      width="640px"
+      wrap-class-name="resume-version-modal"
+    >
+      <div class="version-panel">
+        <p class="version-panel-help">
+          版本是当前在线简历的固化副本，投递时可直接选用。保存版本不会改动你的在线简历，
+          之后继续编辑简历也不会影响已经保存的版本。
+        </p>
+
+        <div class="version-panel-actions">
+          <a-button
+            type="primary"
+            :loading="versionSaving"
+            @click="saveResumeVersion"
+          >
+            把当前简历保存为新版本
+          </a-button>
+          <a-button :loading="versionLoading" @click="loadResumeVersions">
+            刷新
+          </a-button>
+        </div>
+
+        <div v-if="versionLoading" class="version-panel-empty">正在加载版本…</div>
+        <div v-else-if="!resumeVersions.length" class="version-panel-empty">
+          还没有保存过版本。完善在线简历后点击上方按钮即可生成第一个版本。
+        </div>
+        <ul v-else class="version-list">
+          <li v-for="version in resumeVersions" :key="version.id" class="version-item">
+            <div class="version-item-main">
+              <strong>V{{ version.versionNo }}</strong>
+              <span class="version-item-summary">
+                {{ version.changeSummary || '未填写修改摘要' }}
+              </span>
+            </div>
+            <div class="version-item-meta">
+              <span>{{ formatVersionTime(version.createTime) }}</span>
+              <span v-if="version.status !== 0" class="version-item-invalid">已失效</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </a-modal>
+
     <a-modal v-model:open="experienceModalOpen" :title="experienceIndex >= 0 ? '编辑工作 / 实习经历' : '添加工作 / 实习经历'" width="720px" @ok="saveExperience">
       <div class="modal-fields"><label class="field required"><span>公司名称</span><a-input v-model:value="editingExperience.company" placeholder="例如：北京华品博睿网络技术有限公司" /></label><label class="field"><span>所属行业</span><a-select v-model:value="editingExperience.industry" popup-class-name="resume-select-dropdown" show-search placeholder="选择所属行业"><a-select-option v-for="item in industryOptions" :key="item" :value="item">{{ item }}</a-select-option></a-select></label><label class="field"><span>所属部门 <small>选填</small></span><a-input v-model:value="editingExperience.department" placeholder="例如：产品部" /></label><label class="field required"><span>职位名称</span><a-input v-model:value="editingExperience.position" placeholder="例如：项目经理" /></label><label class="field field-full"><span>在职时间</span><div class="date-range"><MonthPicker v-model="editingExperience.start" placeholder="请选择入职时间" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /><span>至</span><MonthPicker v-model="editingExperience.end" placeholder="至今可留空" :min-year="now.getFullYear() - 59" :max-year="now.getFullYear()" /></div></label><label class="field field-full"><span>工作内容</span><a-textarea v-model:value="editingExperience.description" :maxlength="3000" :rows="4" show-count placeholder="描述主要负责的工作内容、使用的方法和承担的职责。" /></label><label class="field field-full"><span>工作业绩 <small>选填</small></span><a-textarea v-model:value="editingExperience.achievements" :maxlength="1000" :rows="3" show-count placeholder="例如：优化施工流程，项目交付周期缩短 20%。" /></label></div>
     </a-modal>
@@ -971,7 +1219,7 @@ onMounted(loadResume);
 .resume-notice :deep(svg) { color: var(--resume-orange); font-size: 16px; }
 .resume-notice em { color: var(--resume-orange-deep); font-style: normal; }
 .resume-loading { display: grid; gap: 16px; padding: 24px; border: 1px solid var(--resume-line); border-radius: 12px; background: #fff; }
-.resume-section { scroll-margin-top: 24px; padding: 22px 24px 25px; border: 1px solid var(--resume-line); border-radius: 13px; background: #fff; box-shadow: 0 4px 15px rgb(180 104 54 / 3%); }
+.resume-section { scroll-margin-top: 76px; padding: 22px 24px 25px; border: 1px solid var(--resume-line); border-radius: 13px; background: #fff; box-shadow: 0 4px 15px rgb(180 104 54 / 3%); }
 .section-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .section-title { display: flex; align-items: flex-start; gap: 12px; }
 .section-icon { display: grid; width: 35px; height: 35px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--resume-soft); color: var(--resume-orange); font-size: 17px; }
@@ -1044,10 +1292,9 @@ onMounted(loadResume);
   .resume-bottom-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 4px 14px; color: #111827; font-size: 14px; }
  .resume-bottom-actions > span { display: inline-flex; align-items: center; gap: 5px; }
  .resume-bottom-actions :deep(svg) { color: #75a184; font-size: 14px; }
- .resume-attachments-panel { position: static; display: grid; gap: 16px; min-width: 0; padding: 20px 16px 16px; border: 1px solid var(--resume-line); border-radius: 16px; background: #fff; box-shadow: 0 12px 32px rgb(180 104 54 / 6%); }
+ .attachments-modal-body { display: grid; gap: 16px; min-width: 0; }
  .attachments-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 0 4px 14px; border-bottom: 1px solid #f5eae2; }
-   .attachments-header p { margin: 0 0 5px; color: #111827; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
-   .attachments-header h2 { margin: 0; color: #111827; font-size: 22px; }
+  .attachments-header h2 { margin: 0; color: #111827; font-size: 22px; }
  .attachments-add { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border-radius: 8px; color: var(--resume-orange-deep); }
  .attachments-add:hover { background: var(--resume-soft); color: var(--resume-orange); }
  .attachments-add :deep(svg) { font-size: 20px; }
@@ -1117,8 +1364,10 @@ onMounted(loadResume);
 .attachments-summary,
 .empty-icon { background: #e8f7f8; }
 .completion-track { background: #e6f1f3; }
-.resume-index-nav button:hover,
-.resume-index-nav button.active { background: #eaf3ff; }
+/* 悬停态与选中态必须能区分：之前两者同色，用户分不清「鼠标划过」和「当前所在模块」，
+   容易误判成目录没跟随。选中额外加一条左侧强调条。 */
+.resume-index-nav button:hover { background: #f2f8fa; }
+.resume-index-nav button.active { background: #eaf3ff; box-shadow: inset 3px 0 0 #0f8f8c; }
 .resume-index-nav button.active .nav-number,
 .nav-done { color: #0f8f8c; }
 .resume-editor-header h1,
@@ -1151,14 +1400,50 @@ onMounted(loadResume);
 .attachment-file-picker:hover,
 .attachment-file-picker.has-file { border-color: #0f8f8c; background: #e8f7f8; }
 .online-resume-page .resume-index-nav > p,
-.online-resume-page .section-title p,
-.online-resume-page .attachments-header p { color: #111827; }
+.online-resume-page .section-title p { color: #111827; }
 .online-resume-page .section-status { color: #111827; background: #f5fbfc; }
 .online-resume-page .section-status.done { color: #0f777d; background: #e8f7f8; }
 .online-resume-page .save-state,
 .online-resume-page .entry-card-top small { color: #111827; }
 .online-resume-page .empty-module strong,
 .online-resume-page .attachments-empty strong { color: #123f49; }
+
+/* 附件管理弹窗被 teleport 到 body，脱离门户的浅色主题，需要显式指定浅色，
+   与同页的简历上传弹窗保持同一套观感。 */
+:global(.resume-attachments-modal .ant-modal-content) {
+  overflow: hidden;
+  border: 1px solid #c8e7eb;
+  border-radius: 16px;
+  background: #fff !important;
+  box-shadow: 0 20px 56px rgb(18 63 73 / 18%);
+}
+
+:global(.resume-attachments-modal .ant-modal-header) {
+  margin-bottom: 0;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #e6f1f3;
+  background: #fff !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-title) {
+  color: #123f49 !important;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+:global(.resume-attachments-modal .ant-modal-close) {
+  color: #5f7f87 !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-close:hover) {
+  color: #0f8f8c !important;
+  background: #e8f7f8 !important;
+}
+
+:global(.resume-attachments-modal .ant-modal-body) {
+  padding: 18px 24px 24px;
+  background: #fff !important;
+}
 
 :global(.resume-upload-modal .ant-modal-content) {
   overflow: hidden;
@@ -1364,5 +1649,91 @@ onMounted(loadResume);
 :global(.recruit-filter-dropdown .ant-cascader-menu-item-active) {
   color: #1d4ed8 !important;
   background: #eff6ff !important;
+}
+
+/* ===== 简历版本面板 ===== */
+
+.version-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.version-panel-help {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #475569;
+  background: #f4fbf9;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.version-panel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.version-panel-empty {
+  padding: 26px 12px;
+  border: 1px dashed #d8e6e5;
+  border-radius: 10px;
+  color: #7d9299;
+  background: #fbfdfd;
+  font-size: 13px;
+  text-align: center;
+}
+
+.version-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e2edec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.version-item-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.version-item-main strong {
+  color: #0f766e;
+  font-size: 15px;
+}
+
+.version-item-summary {
+  overflow: hidden;
+  color: #475569;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-item-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  color: #8497a3;
+  font-size: 12px;
+}
+
+.version-item-invalid {
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: #b45309;
+  background: #fef3c7;
 }
 </style>

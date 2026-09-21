@@ -12,6 +12,7 @@ import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProduct
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.in.ErpStockInPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.in.ErpStockInRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.in.ErpStockInSaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.purchase.ErpSupplierDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockInDO;
@@ -134,6 +135,19 @@ public class ErpStockInController {
         ExcelUtils.write(response, "其它入库单.xls", "数据", ErpStockInRespVO.class, list);
     }
 
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出其它入库单 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:stock-in:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportStockInPdf(@Valid ErpStockInPageReqVO pageReqVO,
+                                 HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpStockInRespVO> list = buildStockInVOPageResult(
+                stockInService.getStockInPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "其它入库单.pdf", "其它入库单列表",
+                ErpStockInRespVO.class, list);
+    }
+
     private PageResult<ErpStockInRespVO> buildStockInVOPageResult(PageResult<ErpStockInDO> pageResult) {
         if (CollUtil.isEmpty(pageResult.getList())) {
             return PageResult.empty(pageResult.getTotal());
@@ -149,7 +163,7 @@ public class ErpStockInController {
         Map<Long, ErpSupplierDO> supplierMap = supplierService.getSupplierMap(
                 convertSet(pageResult.getList(), ErpStockInDO::getSupplierId));
         // 1.4 管理员信息
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMapIgnoreTenant(
                 convertSet(pageResult.getList(), stockIn -> Long.parseLong(stockIn.getCreator())));
         // 2. 开始拼接
         return BeanUtils.toBean(pageResult, ErpStockInRespVO.class, stockIn -> {

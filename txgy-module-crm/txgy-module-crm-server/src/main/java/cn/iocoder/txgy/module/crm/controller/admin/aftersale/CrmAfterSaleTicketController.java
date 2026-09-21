@@ -102,20 +102,44 @@ public class CrmAfterSaleTicketController {
     @Parameter(name = "id", description = "编号", required = true, example = "1")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-ticket:query')")
     public CommonResult<CrmAfterSaleTicketRespVO> getTicket(@RequestParam("id") Long id) {
-        return success(BeanUtils.toBean(ticketService.getTicket(id), CrmAfterSaleTicketRespVO.class));
+        CrmAfterSaleTicketRespVO ticket = BeanUtils.toBean(ticketService.getTicket(id),
+                CrmAfterSaleTicketRespVO.class);
+        // 与分页接口保持一致：带出客户名称、合同/质保编号与人员昵称，供详情页展示
+        fillTicketExtraInfo(List.of(ticket));
+        return success(ticket);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得问题工单分页")
     @PreAuthorize("@ss.hasPermission('crm:after-sale-ticket:query')")
     public CommonResult<PageResult<CrmAfterSaleTicketRespVO>> getTicketPage(@Valid CrmAfterSaleTicketPageReqVO pageReqVO) {
-        PageResult<CrmAfterSaleTicketDO> pageResult = ticketService.getTicketPage(pageReqVO);
+        // remindType = 工单超时预警 时用于待办，归属范围按当前登录人（本人 + 下属）过滤
+        PageResult<CrmAfterSaleTicketDO> pageResult = ticketService.getTicketPage(pageReqVO, getLoginUserId());
         PageResult<CrmAfterSaleTicketRespVO> respPage = BeanUtils.toBean(pageResult, CrmAfterSaleTicketRespVO.class);
         if (CollUtil.isEmpty(respPage.getList())) {
             return success(respPage);
         }
-        List<CrmAfterSaleTicketRespVO> list = respPage.getList();
         // 拼接客户、合同、质保与人员昵称
+        fillTicketExtraInfo(respPage.getList());
+        return success(respPage);
+    }
+
+    @GetMapping("/remind-count")
+    @Operation(summary = "获得「工单超时预警」待办数量（实时查询，不落库）")
+    @PreAuthorize("@ss.hasPermission('crm:after-sale-ticket:query')")
+    public CommonResult<Long> getTicketOverdueCount() {
+        return success(ticketService.getTicketOverdueCount(getLoginUserId()));
+    }
+
+    /**
+     * 填充工单的扩展展示字段：客户名称、合同编号、质保编号、处理人与创建人昵称
+     *
+     * <p>分页与详情（/get）接口共用，保证各入口展示口径一致
+     */
+    private void fillTicketExtraInfo(List<CrmAfterSaleTicketRespVO> list) {
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
         Map<Long, CrmCustomerDO> customerMap = customerService.getCustomerMap(
                 convertSet(list, CrmAfterSaleTicketRespVO::getCustomerId));
         Map<Long, CrmContractDO> contractMap = contractService.getContractMap(
@@ -145,7 +169,6 @@ public class CrmAfterSaleTicketController {
                         user -> ticket.setCreatorNickname(user.getNickname()));
             }
         });
-        return success(respPage);
     }
 
 }

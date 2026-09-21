@@ -1,5 +1,6 @@
 package cn.iocoder.txgy.module.erp.service.sale;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -111,6 +113,9 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
 
     @Override
     public List<ErpCustomerDO> getCustomerList(Collection<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
         return customerMapper.selectByIds(ids);
     }
 

@@ -23,9 +23,11 @@ import cn.iocoder.txgy.module.bpm.dal.dataobject.definition.BpmProcessDefinition
 import cn.iocoder.txgy.module.bpm.enums.definition.*;
 import cn.iocoder.txgy.module.bpm.enums.task.*;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.enums.BpmTaskCandidateStrategyEnum;
+import cn.iocoder.txgy.module.bpm.framework.flowable.core.candidate.WmsApprovalCandidates;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.enums.BpmnVariableConstants;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.BpmHttpRequestUtils;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.BpmnModelUtils;
+import cn.iocoder.txgy.module.bpm.util.BpmProcessDefinitionKeyUtils;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.iocoder.txgy.module.bpm.service.comment.BpmCommentService;
 import cn.iocoder.txgy.module.bpm.service.definition.BpmFormService;
@@ -112,6 +114,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
     @Resource
     private AdminUserApi adminUserApi;
     @Resource
+    private WmsApprovalCandidates wmsApprovalCandidates;
+    @Resource
     private DeptApi deptApi;
 
     // ========== Query 查询相关方法 ==========
@@ -132,6 +136,10 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         }
         if (StrUtil.isNotEmpty(pageVO.getProcessDefinitionKey())) {
             taskQuery.processDefinitionKey(pageVO.getProcessDefinitionKey());
+        }
+        List<String> processDefinitionKeys = BpmProcessDefinitionKeyUtils.parseKeys(pageVO.getProcessDefinitionKeys());
+        if (CollUtil.isNotEmpty(processDefinitionKeys)) {
+            taskQuery.processDefinitionKeyIn(processDefinitionKeys);
         }
         if (ArrayUtil.isNotEmpty(pageVO.getCreateTime())) {
             taskQuery.taskCreatedAfter(DateUtils.of(pageVO.getCreateTime()[0]));
@@ -236,6 +244,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         if (StrUtil.isNotBlank(pageVO.getName())) {
             taskQuery.taskNameLike("%" + pageVO.getName() + "%");
         }
+        List<String> processDefinitionKeys = BpmProcessDefinitionKeyUtils.parseKeys(pageVO.getProcessDefinitionKeys());
+        if (CollUtil.isNotEmpty(processDefinitionKeys)) {
+            taskQuery.processDefinitionKeyIn(processDefinitionKeys);
+        }
+        if (BpmTaskStatusEnum.CANCEL.getStatus().equals(pageVO.getStatus())) {
+            return PageResult.empty();
+        }
         if (pageVO.getStatus() != null) {
             taskQuery.taskVariableValueEquals(BpmnVariableConstants.TASK_VARIABLE_STATUS, pageVO.getStatus());
         }
@@ -243,23 +258,27 @@ public class BpmTaskServiceImpl implements BpmTaskService {
 //            taskQuery.taskCreatedAfter(DateUtils.of(pageVO.getCreateTime()[0]));
 //            taskQuery.taskCreatedBefore(DateUtils.of(pageVO.getCreateTime()[1]));
 //        }
-        // 执行查询
-        long count = taskQuery.count();
-        if (count == 0) {
-            return PageResult.empty();
-        }
-        List<HistoricTaskInstance> tasks = taskQuery.listPage(PageUtils.getStart(pageVO), pageVO.getPageSize());
-
-        // 特殊：强制移除自动完成的“发起人”节点
-        // 补充说明：由于 taskQuery 无法方面的过滤，所以暂时通过内存过滤
-        tasks.removeIf(task -> task.getTaskDefinitionKey().equals(START_USER_NODE_ID));
+        // Flowable 对历史任务局部变量的 not-equals 查询会漏掉正常通过的任务，因此在内存中按真实状态过滤，
+        // 再分页，确保列表和总数一致。
+        List<HistoricTaskInstance> tasks = taskQuery.list();
+        tasks.removeIf(task -> task.getTaskDefinitionKey().equals(START_USER_NODE_ID)
+                || BpmTaskStatusEnum.isCancelStatus(FlowableUtils.getTaskStatus(task)));
         // TODO @芋艿：https://t.zsxq.com/MNzqp 【flowable bug】：taskCreatedAfter、taskCreatedBefore 拼接的是 OR
         if (ArrayUtil.isNotEmpty(pageVO.getCreateTime())) {
             tasks.removeIf(task -> task.getCreateTime() == null
                     || task.getCreateTime().before(DateUtils.of(pageVO.getCreateTime()[0]))
                     || task.getCreateTime().after(DateUtils.of(pageVO.getCreateTime()[1])));
         }
-        return new PageResult<>(tasks, count);
+        if (CollUtil.isEmpty(tasks)) {
+            return PageResult.empty();
+        }
+        long count = tasks.size();
+        int start = PageUtils.getStart(pageVO);
+        if (start >= count) {
+            return new PageResult<>(Collections.emptyList(), count);
+        }
+        int end = Math.min(start + pageVO.getPageSize(), tasks.size());
+        return new PageResult<>(tasks.subList(start, end), count);
     }
 
     @Override
@@ -1086,6 +1105,11 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         if (delegateUser == null) {
             throw exception(TASK_DELEGATE_FAIL_USER_NOT_EXISTS);
         }
+        String processKey = bpmProcessDefinitionService.getProcessDefinition(task.getProcessDefinitionId()).getKey();
+        if (("wms_receipt_approval".equals(processKey) || "wms_shipment_approval".equals(processKey))
+                && !wmsApprovalCandidates.resolveDelegateUsers(task).contains(reqVO.getDelegateUserId())) {
+            throw exception(TASK_DELEGATE_FAIL_USER_NO_APPROVAL_PERMISSION);
+        }
 
         // 2. 添加委托意见
         AdminUserRespDTO currentUser = adminUserApi.getUser(userId).getCheckedData();
@@ -1116,6 +1140,14 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         AdminUserRespDTO assigneeUser = adminUserApi.getUser(reqVO.getAssigneeUserId()).getCheckedData();
         if (assigneeUser == null) {
             throw exception(TASK_TRANSFER_FAIL_USER_NOT_EXISTS);
+        }
+        String processKey = bpmProcessDefinitionService.getProcessDefinition(task.getProcessDefinitionId()).getKey();
+        if ("wms_receipt_approval".equals(processKey) || "wms_shipment_approval".equals(processKey)) {
+            throw exception(TASK_TRANSFER_WMS_DISABLED);
+        }
+        if (("wms_receipt_approval".equals(processKey) || "wms_shipment_approval".equals(processKey))
+                && !wmsApprovalCandidates.resolveDelegateUsers(task).contains(reqVO.getAssigneeUserId())) {
+            throw exception(TASK_TRANSFER_FAIL_USER_NO_APPROVAL_PERMISSION);
         }
 
         // 2. 添加委托意见
@@ -1181,6 +1213,11 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         List<AdminUserRespDTO> userList = adminUserApi.getUserList(reqVO.getUserIds()).getCheckedData();
         if (CollUtil.isEmpty(userList)) {
             throw exception(TASK_SIGN_CREATE_USER_NOT_EXIST);
+        }
+        String processKey = bpmProcessDefinitionService.getProcessDefinition(taskEntity.getProcessDefinitionId()).getKey();
+        if (("wms_receipt_approval".equals(processKey) || "wms_shipment_approval".equals(processKey))
+                && !wmsApprovalCandidates.resolveDelegateUsers(taskEntity).containsAll(reqVO.getUserIds())) {
+            throw exception(TASK_SIGN_CREATE_USER_NO_APPROVAL_PERMISSION);
         }
 
         // 2. 处理当前任务
@@ -1325,6 +1362,12 @@ public class BpmTaskServiceImpl implements BpmTaskService {
 
     @Override
     public void copyTask(Long userId, BpmTaskCopyReqVO reqVO) {
+        Task task = validateTask(userId, reqVO.getId());
+        String processKey = bpmProcessDefinitionService.getProcessDefinition(task.getProcessDefinitionId()).getKey();
+        if (("wms_receipt_approval".equals(processKey) || "wms_shipment_approval".equals(processKey))
+                && !wmsApprovalCandidates.resolveDelegateUsers(task).containsAll(reqVO.getCopyUserIds())) {
+            throw exception(TASK_COPY_USER_NO_APPROVAL_PERMISSION);
+        }
         processInstanceCopyService.createProcessInstanceCopy(reqVO.getCopyUserIds(), reqVO.getReason(), reqVO.getId());
     }
 
