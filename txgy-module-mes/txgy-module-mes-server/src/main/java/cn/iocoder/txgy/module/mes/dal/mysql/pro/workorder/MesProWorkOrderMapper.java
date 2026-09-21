@@ -45,6 +45,19 @@ public interface MesProWorkOrderMapper extends BaseMapperX<MesProWorkOrderDO> {
         return selectOne(MesProWorkOrderDO::getCode, code);
     }
 
+    /**
+     * 按来源单号 + 产品物料查询工单，用于 ERP 推送建单的幂等判重
+     *
+     * @param orderSourceCode 来源单据编号（ERP 销售订单号）
+     * @param productId       产品物料编号
+     * @return 工单，不存在时返回 null
+     */
+    default MesProWorkOrderDO selectBySourceAndProduct(String orderSourceCode, Long productId) {
+        return selectOne(new LambdaQueryWrapperX<MesProWorkOrderDO>()
+                .eq(MesProWorkOrderDO::getOrderSourceCode, orderSourceCode)
+                .eq(MesProWorkOrderDO::getProductId, productId));
+    }
+
     default void updateProducedQuantity(Long id, BigDecimal incrQuantityProduced) {
         update(null, new LambdaUpdateWrapper<MesProWorkOrderDO>()
                 .eq(MesProWorkOrderDO::getId, id)
