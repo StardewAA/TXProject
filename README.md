@@ -58,7 +58,7 @@ txgy-cloud-master-jdk25
 ├── txgy-module-*/                    # 业务模块（api + server）
 ├── txgy-ui-admin-vben/               # 管理后台前端（Vue3 + vben）
 ├── txgy-ui-admin-uniapp-master/      # 移动端前端（uni-app）
-├── txgy-ui-go-view-master/           # 数据大屏前端（go-view）
+├── txgy-ui-go-view/                  # 数据大屏前端（go-view）
 ├── txgy-ui/                          # 其他前端工程说明（vue2/vue3/uniapp/mall）
 ├── sql/                              # 各模块数据库脚本（00-sql文件）
 ├── deploy/                           # Docker Compose 部署（backend/frontend/mysql）
