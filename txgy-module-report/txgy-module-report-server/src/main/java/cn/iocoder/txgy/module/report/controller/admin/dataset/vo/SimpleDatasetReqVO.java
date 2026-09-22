@@ -23,6 +23,9 @@ public class SimpleDatasetReqVO {
     @Schema(description = "category", example = "MES")
     private String category;
 
+    @Schema(description = "business groups (multi-select, may create new); blank -> default", example = "[\"shengChan\"]")
+    private java.util.List<String> bizGroups;
+
     @Schema(description = "whitelisted table", requiredMode = Schema.RequiredMode.REQUIRED, example = "mes_pro_feedback")
     private String tableName;
 

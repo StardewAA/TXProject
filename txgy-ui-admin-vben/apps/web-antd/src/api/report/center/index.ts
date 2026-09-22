@@ -18,6 +18,20 @@ export namespace ReportCenterApi {
     queryCount: number; // 近 30 天查询次数（「常用」排序用）
   }
 
+  /**
+   * 报表中心概览统计
+   *
+   * 全部由服务端聚合，前端不做二次计算：
+   *  - reportTotal / frequentCount：来自报表清单
+   *  - todayQueryCount / lastUpdateTime：由报表执行日志 create_time 聚合得出
+   */
+  export interface Overview {
+    reportTotal: number; // 可查看的报表总数
+    frequentCount: number; // 常用报表数量（近 30 天被查询过）
+    todayQueryCount: number; // 今日查询次数（当日零点起的成功查询）
+    lastUpdateTime: string; // 最近更新时间（yyyy-MM-dd HH:mm:ss），无记录时为空
+  }
+
   /** 报表数据 */
   export interface ReportData {
     headers: string[]; // 中文表头
@@ -30,6 +44,11 @@ export namespace ReportCenterApi {
 /** 获得报表清单 */
 export function getReportCenterList() {
   return requestClient.get<ReportCenterApi.Report[]>('/report/center/list');
+}
+
+/** 获得报表中心概览统计 */
+export function getReportCenterOverview() {
+  return requestClient.get<ReportCenterApi.Overview>('/report/center/overview');
 }
 
 /** 查询报表数据 */
