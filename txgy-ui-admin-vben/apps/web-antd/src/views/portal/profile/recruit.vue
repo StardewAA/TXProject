@@ -899,6 +899,25 @@ onUnmounted(() => {
 .recruit-workspace-page .recruit-workspace-hero p:last-child { color: #5f7f87; }
 .recruit-workspace-page .profile-expectation strong { color: #123f49; }
 .recruit-workspace-page :deep(.ant-btn-dangerous) { color: #2368b5 !important; }
+
+/* 智联招聘蓝色主题覆盖，统一应聘记录与简历工作区的旧青绿色/橙色。 */
+.recruit-workspace-page { --recruit-accent: #2d8cf0; color: #333; }
+.recruit-workspace-page .recruit-subnav { border-color: #e9eaec; background: #fff; box-shadow: 0 2px 8px rgb(45 140 240 / 8%); }
+.recruit-workspace-page .recruit-subnav button:hover,
+.recruit-workspace-page .recruit-subnav button.active,
+.recruit-workspace-page .section-eyebrow,
+.recruit-workspace-page .recruit-hero-stats strong { color: #2d8cf0; }
+.recruit-workspace-page .profile-avatar,
+.recruit-workspace-page .upload-title > span { color: #2d8cf0; background: #f1f8ff; }
+.recruit-workspace-page .profile-identity > span { color: #1479e1; background: #f1f8ff; }
+.recruit-workspace-page .recruit-workspace-hero { border-color: #b8dafa; background: linear-gradient(115deg, #f1f8ff, #fff); }
+.recruit-workspace-page .file-dropzone { border-color: #57a3f3; color: #2d8cf0; background: #f1f8ff; }
+.recruit-workspace-page .file-dropzone:hover,
+.recruit-workspace-page .file-dropzone.has-file { border-color: #2d8cf0; background: #eaf4ff; }
+.recruit-workspace-page .application-progress-step.reached { color: #2d8cf0; }
+.recruit-workspace-page .application-progress-step.reached .application-progress-marker { border-color: #2d8cf0; background: #f1f8ff; color: #1479e1; }
+.recruit-workspace-page :deep(.ant-btn-primary) { border-color: #2d8cf0; background: #2d8cf0; }
+.recruit-workspace-page :deep(.ant-btn-primary:hover) { border-color: #1479e1; background: #1479e1; }
 .application-pagination :deep(.ant-pagination-item-active) {
   border-color: #93c5fd !important;
   background: #eaf3ff !important;
@@ -931,4 +950,8 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #dbeafe, #dcf6f5) !important;
   color: #0b777c !important;
 }
+
+/* Final theme tokens for styles declared above. */
+.profile-online-resume-button { border-color: #b8dafa !important; background: #f1f8ff !important; color: #1479e1 !important; box-shadow: 0 7px 16px rgb(45 140 240 / 12%); }
+.profile-online-resume-button:hover, .profile-online-resume-button:focus-visible { border-color: #57a3f3 !important; background: #eaf4ff !important; color: #2d8cf0 !important; }
 </style>

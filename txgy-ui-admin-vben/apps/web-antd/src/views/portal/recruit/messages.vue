@@ -1971,4 +1971,33 @@ onUnmounted(() => {
 .message-page .message-send:hover,
 .message-page :deep(.ant-btn-primary:hover) { background: linear-gradient(135deg, #0b8587, #2563c7); }
 .empty-action.ghost { color: #2368b5; background: #eaf3ff; }
+
+.message-page { color: #333; background: #f3f4f9; }
+.message-topbar { background: linear-gradient(110deg, #1479e1, #2d8cf0); }
+.filter-menu button:hover, .filter-menu button.active, .conversation-menu button:hover, .tabs .selected { color: #2d8cf0; background: #f1f8ff; }
+.more-trigger:hover, .chat-head a { border-color: #57a3f3; color: #2d8cf0; }
+.chat-hint.ok { background: #f1f8ff; color: #1479e1; }
+.offer-card { border-color: #b8dafa; background: linear-gradient(135deg, #f1f8ff, #fff); color: #333; }
+.offer-actions button, .message-page .send-button, .message-page .message-send, .message-page :deep(.ant-btn-primary) { border-color: #2d8cf0; background: #2d8cf0; }
+.send.ready, .empty-action { background: linear-gradient(135deg, #2d8cf0, #1479e1); }
+
+/* Final blue theme override for the embedded recruitment inbox. */
+.message-page.embedded { color: #333 !important; background: #f3f4f9 !important; }
+.message-page .contact.chosen { border-color: #b8dafa !important; background: #f1f8ff !important; }
+.message-page .contact:hover { background: #f7fbff !important; }
+.message-page .tabs .selected,
+.message-page .filter-menu button.active,
+.message-page .conversation-menu button.active { color: #2d8cf0 !important; background: #f1f8ff !important; }
+.message-page .more-trigger:hover,
+.message-page .chat-head a { border-color: #57a3f3 !important; color: #2d8cf0 !important; }
+.message-page .job-strip,
+.message-page .chat-hint { border-color: #b8dafa !important; background: #f1f8ff !important; color: #1479e1 !important; }
+.message-page .chat-hint.ok { background: #f1f8ff !important; color: #1479e1 !important; }
+.message-page .offer-card { border-color: #b8dafa !important; background: linear-gradient(135deg, #f1f8ff, #fff) !important; color: #333 !important; }
+.message-page .offer-actions button,
+.message-page .send.ready,
+.message-page .send-button,
+.message-page .message-send { border-color: #2d8cf0 !important; background: #2d8cf0 !important; }
+.message-page .mine { background: #eaf4ff !important; }
+.message-page .theirs { background: #f7fbff !important; }
 </style>

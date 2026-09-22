@@ -1348,10 +1348,10 @@ onUnmounted(() => {
 .online-resume-page {
   --resume-ink: #111827;
   --resume-muted: #374151;
-  --resume-line: #d7e9ed;
-  --resume-soft: #e8f7f8;
-  --resume-orange: #0f8f8c;
-  --resume-orange-deep: #0f777d;
+  --resume-line: #e9eaec;
+  --resume-soft: #f1f8ff;
+  --resume-orange: #2d8cf0;
+  --resume-orange-deep: #1479e1;
   color: var(--resume-ink);
 }
 
@@ -1407,6 +1407,16 @@ onUnmounted(() => {
 .online-resume-page .entry-card-top small { color: #111827; }
 .online-resume-page .empty-module strong,
 .online-resume-page .attachments-empty strong { color: #123f49; }
+
+.online-resume-page .brand-mark { background: #2d8cf0; }
+.online-resume-page .resume-index-nav button.active { background: #f1f8ff; box-shadow: inset 3px 0 0 #2d8cf0; }
+.online-resume-page .resume-editor :deep(.ant-btn-primary),
+.online-resume-page .resume-editor :deep(.ant-btn-background-ghost) { border-color: #2d8cf0; background: #2d8cf0; }
+.online-resume-page .resume-editor :deep(.ant-btn-primary:hover) { border-color: #1479e1; background: #1479e1; }
+.online-resume-page .resume-editor :deep(.ant-input:hover),
+.online-resume-page .resume-editor :deep(.ant-input:focus),
+.online-resume-page .resume-editor :deep(.ant-select-selector:hover),
+.online-resume-page .resume-editor :deep(.ant-select-focused .ant-select-selector) { border-color: #57a3f3 !important; }
 
 /* 附件管理弹窗被 teleport 到 body，脱离门户的浅色主题，需要显式指定浅色，
    与同页的简历上传弹窗保持同一套观感。 */

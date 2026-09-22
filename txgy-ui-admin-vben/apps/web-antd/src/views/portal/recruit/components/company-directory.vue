@@ -605,4 +605,25 @@ onMounted(loadCompanies);
 .company-directory .company-no-post { color: #5f7f87; }
 .company-directory .hot-salary,
 .company-directory .company-detail-post-reward b { color: #123f49; }
+
+/* 智联招聘蓝色主题覆盖公司目录的旧青绿色。 */
+.company-directory { --company-accent: #2d8cf0; --company-ink: #333; --company-muted: #666; --company-soft: #f1f8ff; --company-line: #e9eaec; color: #333; }
+.company-directory-intro { background: linear-gradient(120deg, #f1f8ff 0%, #fff 62%, #f7fbff 100%); }
+.company-directory-stats, .company-sort, .company-card { border-color: #e9eaec; }
+.company-search { border-color: #2d8cf0; }
+.search-scope select, .filter-options button.active, .filter-options button:hover, .hot-name { color: #2d8cf0; }
+.company-sort button.active, .company-directory .search-submit { background: linear-gradient(135deg, #2d8cf0, #1479e1); }
+.filter-options button.active { background: #f1f8ff; }
+.filter-options button:hover { background: #f7fbff; }
+.company-results { background: linear-gradient(180deg, #f3f4f9 0%, #fff 80%); }
+.company-card:hover { border-color: #b8dafa; box-shadow: 0 8px 22px rgb(45 140 240 / 12%); }
+.company-card:hover::before { background: linear-gradient(90deg, #2d8cf0, #57a3f3); }
+.company-monogram, .company-tags .hiring-tag { border-color: #b8dafa; color: #1479e1; background: #f1f8ff; }
+.company-hot-post, .company-no-post { background: linear-gradient(90deg, #f7fbff, #fff); }
+.company-pagination :deep(.ant-pagination-item-active) { border-color: #2d8cf0; background: #2d8cf0; }
+.company-detail-header { background: linear-gradient(118deg, #f1f8ff 0%, #f7fbff 60%, #fff 100%); }
+.company-detail-monogram { border-color: #b8dafa; color: #1479e1; background: #f1f8ff; }
+.company-detail-meta > span:first-child i { background: #2d8cf0; box-shadow: 0 0 0 3px #eaf4ff; }
+.company-directory .company-monogram, .company-directory .company-tags .hiring-tag { border-color: #b8dafa; color: #1479e1; background: #f1f8ff; }
+:global(.company-detail-modal .ant-modal-close:hover) { color: #2d8cf0; background: #f1f8ff; }
 </style>

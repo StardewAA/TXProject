@@ -111,6 +111,41 @@ const homeIndustries: Array<{ key: HomeIndustryKey; label: string; keywords: str
 ];
 const selectedHomeIndustry = ref<HomeIndustryKey | 'all'>('all');
 const currentYear = new Date().getFullYear();
+const cityOpportunities = [
+  { name: '北京', english: 'Beijing', image: '/hrm/city/beijing.jpg' }, { name: '上海', english: 'Shanghai', image: '/hrm/city/shanghai.jpg' },
+  { name: '天津', english: 'Tianjin', image: '/hrm/city/tianjin.jpg' }, { name: '西安', english: 'Xi’an', image: '/hrm/city/xian.jpg' },
+  { name: '苏州', english: 'Suzhou', image: '/hrm/city/suzhou.jpg' }, { name: '武汉', english: 'Wuhan', image: '/hrm/city/wuhan.jpg' },
+  { name: '广州', english: 'Guangzhou', image: '/hrm/city/guangzhou.jpg' }, { name: '深圳', english: 'Shenzhen', image: '/hrm/city/shenzhen.jpg' },
+  { name: '合肥', english: 'Hefei', image: '/hrm/city/hefei.jpg' }, { name: '重庆', english: 'Chongqing', image: '/hrm/city/chongqing.jpg' },
+  { name: '济南', english: 'Jinan', image: '/hrm/city/jinan.jpg' }, { name: '佛山', english: 'Foshan', image: '/hrm/city/foshan.jpg' },
+  { name: '南京', english: 'Nanjing', image: '/hrm/city/nanjing.jpg' }, { name: '郑州', english: 'Zhengzhou', image: '/hrm/city/zhengzhou.jpg' },
+  { name: '青岛', english: 'Qingdao', image: '/hrm/city/qingdao.jpg' }, { name: '杭州', english: 'Hangzhou', image: '/hrm/city/hangzhou.jpg' },
+  { name: '厦门', english: 'Xiamen', image: '/hrm/city/xiamen.jpg' }, { name: '长沙', english: 'Changsha', image: '/hrm/city/changsha.jpg' },
+  { name: '东莞', english: 'Dongguan', image: '/hrm/city/dongguan.jpg' }, { name: '昆明', english: 'Kunming', image: '/hrm/city/kunming.jpg' },
+  { name: '南昌', english: 'Nanchang', image: '/hrm/city/nanchang.jpg' }, { name: '石家庄', english: 'Shijiazhuang', image: '/hrm/city/shijiazhuang.jpg' },
+  { name: '宁波', english: 'Ningbo', image: '/hrm/city/ningbo.jpg' }, { name: '福州', english: 'Fuzhou', image: '/hrm/city/fuzhou.jpg' },
+];
+const cityOpportunityPage = ref(0);
+const visibleCityOpportunities = computed(() => cityOpportunities.slice(cityOpportunityPage.value * 12, cityOpportunityPage.value * 12 + 12));
+const hoveredJobCategory = ref<string>();
+const jobCategoryHovering = ref(false);
+const recruitAdIndex = ref(0);
+let recruitAdTimer: number | undefined;
+const recruitAdImages = ['/hrm/ads/recruit-1.png', '/hrm/ads/recruit-2.png', '/hrm/ads/recruit-3.png', '/hrm/ads/recruit-4.png', '/hrm/ads/recruit-5.jpg'];
+const jobCategoryDefinitions = [
+  { name: '一线施工技工', keywords: ['防腐工', '保温工', '喷砂工', '油漆工', '管工', '铆工', '焊工', '架子工', '电工', '瓦工', '钢筋工', '木工', '缝纫工', '普工/力工'] },
+  { name: '项目技术与管理人员', keywords: ['项目经理', '项目副经理', '技术负责人/工程师', '施工员', '施工队长/工长', '预算员/造价员', '安全员'] },
+  { name: '后勤与质量保障岗', keywords: ['质检员', '试验/检测员', '资料员', '材料员/库管', '设备维修工', '机械设备管理员'] },
+  { name: '市场与行政岗', keywords: ['市场业务经理', '投标专员', '采购员', '财务会计', '行政人事专员'] },
+  { name: '其他', keywords: ['防腐保温管理（校招管培方向）'] },
+];
+const jobCategoryGroups = computed(() => jobCategoryDefinitions.map((category) => ({
+  ...category,
+  posts: displayPosts.value.filter((post) => category.keywords.some((keyword) => `${post.postName || ''}${post.postTypeName || ''}`.includes(keyword))).slice(0, 18),
+})));
+const visibleJobCategory = computed(() => hoveredJobCategory.value);
+const activeJobCategoryGroup = computed(() => jobCategoryGroups.value.find((category) => category.name === visibleJobCategory.value));
+const showJobCategoryDetail = computed(() => Boolean(jobCategoryHovering.value && visibleJobCategory.value));
 
 const hotCompanies = computed(() => {
   const companyMap = new Map<
@@ -273,6 +308,24 @@ function formatLocation(post: HrmPortalRecruitApi.Post) {
   return (
     post.areaName || (post.areaId ? `地区 ${post.areaId}` : '工作地点待确认')
   );
+}
+
+function selectCityOpportunity(city: string) {
+  keyword.value = city;
+  selectSection('jobs');
+}
+
+function shiftCityOpportunities(direction: number) {
+  const pageCount = Math.ceil(cityOpportunities.length / 12);
+  cityOpportunityPage.value = (cityOpportunityPage.value + direction + pageCount) % pageCount;
+}
+
+function setJobCategory(category?: string) {
+  hoveredJobCategory.value = category;
+}
+
+function openCategoryPost(post: HrmPortalRecruitApi.Post) {
+  router.push({ name: 'PortalRecruitDetail', query: { id: post.id } });
 }
 
 function formatProvinceLocation(post?: HrmPortalRecruitApi.Post) {
@@ -604,6 +657,11 @@ onMounted(async () => {
   syncSubnavScrollState();
   syncPostTypeFromRoute();
   window.addEventListener('scroll', syncSubnavScrollState, { passive: true });
+  recruitAdTimer = window.setInterval(() => {
+    if (!jobCategoryHovering.value) {
+      recruitAdIndex.value = (recruitAdIndex.value + 1) % recruitAdImages.length;
+    }
+  }, 5000);
   try {
     const saved = JSON.parse(localStorage.getItem('portal-recruit-favorites') || '[]');
     if (Array.isArray(saved)) favoritePostIds.value = saved.filter((id): id is number => typeof id === 'number');
@@ -632,30 +690,28 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', syncSubnavScrollState);
+  if (recruitAdTimer) window.clearInterval(recruitAdTimer);
 });
 </script>
 
 <template>
   <div class="portal-page recruit-page" :class="{ 'recruit-page--home': activeSection === 'home', 'recruit-page--rich-footer': showRecruitFooter }">
-    <nav :class="{ 'is-scrolled': subnavScrolled }" class="recruit-subnav" aria-label="我要找工作导航">
+    <nav :class="{ 'is-scrolled': subnavScrolled }" class="recruit-subnav" aria-label="招聘导航">
+      <button class="recruit-brand" type="button" @click="selectSection('home')">
+        <span class="recruit-brand-mark">TX</span>
+        <span class="recruit-brand-copy"><strong>天信招聘</strong><small>TIANXIN CAREERS</small></span>
+      </button>
       <div class="recruit-nav-links">
-      <button :class="{ active: activeSection === 'home' }" type="button" @click="selectSection('home')">首页</button>
-      <button :class="{ active: activeSection === 'jobs' }" type="button" @click="selectSection('jobs')">职位</button>
-      <button :class="{ active: activeSection === 'companies' }" type="button" @click="selectSection('companies')">公司</button>
+        <button :class="{ active: activeSection === 'home' }" type="button" @click="selectSection('home')"><IconifyIcon icon="lucide:house" />招聘首页</button>
+        <button :class="{ active: activeSection === 'jobs' }" type="button" @click="selectSection('jobs')"><IconifyIcon icon="lucide:briefcase-business" />职位机会</button>
+        <button :class="{ active: activeSection === 'companies' }" type="button" @click="selectSection('companies')"><IconifyIcon icon="lucide:building-2" />招聘企业</button>
+        <button :class="{ active: activeSection === 'resume' }" type="button" @click="openGatedSection('resume')"><IconifyIcon icon="lucide:file-text" />求职资料</button>
+        <button :class="{ active: activeSection === 'messages' }" type="button" @click="openGatedSection('messages')"><IconifyIcon icon="lucide:messages-square" />招聘沟通</button>
+        <button :class="{ active: activeSection === 'user' }" type="button" @click="openGatedSection('user')"><IconifyIcon icon="lucide:clipboard-list" />应聘记录</button>
       </div>
       <div class="recruit-nav-account">
-        <button type="button" @click="openGatedSection('messages')"><IconifyIcon icon="lucide:bell" /> 消息</button>
-        <ResumeToolsMenu
-          variant="dropdown"
-          trigger-label="简历"
-          @ai="openResumeAi"
-          @edit="openResumeEditor"
-          @upload="openResumeUpload"
-          @version="openResumeVersions"
-        />
-        <button class="recruit-account-button" type="button" aria-label="打开我的应聘中心" @click="openGatedSection('user')">
-          <span class="recruit-account-name">{{ navUserName }}</span>
-        </button>
+        <ResumeToolsMenu variant="dropdown" trigger-label="简历" @ai="openResumeAi" @edit="openResumeEditor" @upload="openResumeUpload" @version="openResumeVersions" />
+        <button class="recruit-account-button" type="button" aria-label="打开我的应聘中心" @click="openGatedSection('user')"><span class="recruit-account-name">{{ navUserName }}</span><IconifyIcon icon="lucide:chevron-down" /></button>
       </div>
     </nav>
 
@@ -679,6 +735,15 @@ onUnmounted(() => {
     <RecruitProfile v-else-if="activeSection === 'user'" section="user" embedded />
 
     <section v-if="activeSection === 'home'" class="recruit-hero">
+      <div class="hero-topline">
+        <button class="hero-brand-wordmark" type="button" @click="selectSection('home')" aria-label="天信招聘首页">
+          <span class="hero-brand-star">✦</span><span>天信招聘</span>
+        </button>
+        <div class="hero-tools" aria-label="招聘服务入口">
+          <span class="hero-tool-icon wechat-icon"><IconifyIcon icon="lucide:message-circle" /></span>
+          <span class="hero-tool-icon app-icon"><IconifyIcon icon="lucide:smartphone" /></span>
+        </div>
+      </div>
       <div class="hero-copy">
         <p class="eyebrow">人才服务 · 职业机会</p>
         <h1>发现适合你的下一份工作</h1>
@@ -693,12 +758,12 @@ onUnmounted(() => {
         </div>
         <div class="hero-role-card"><span>匹配职位</span><b>项目管理 · </b></div>
       </div>
-      <div class="hero-search">
+      <div class="hero-search hero-search-zhaopin">
         <a-input
           v-model:value="keyword"
           size="large"
           allow-clear
-          placeholder="搜索职位名称、关键字..."
+          placeholder="搜索职位、公司"
           @press-enter="handleSearch"
         >
           <template #prefix>
@@ -720,6 +785,36 @@ onUnmounted(() => {
           {{ type.name }}
         </button>
         <span v-if="!postTypes.length" class="quick-searches-muted">工程管理 · 采购 · 资料员 · 行政人事</span>
+      </div>
+    </section>
+
+    <section v-if="activeSection === 'home'" class="recruit-category-showcase" aria-label="职位分类与招聘广告">
+      <aside class="recruit-category-sidebar" @mouseenter="jobCategoryHovering = true" @mouseleave="jobCategoryHovering = false; hoveredJobCategory = undefined">
+        <button
+          v-for="category in jobCategoryGroups"
+          :key="category.name"
+          type="button"
+          :class="{ active: hoveredJobCategory === category.name }"
+          @mouseenter="setJobCategory(category.name)"
+          @click="setJobCategory(category.name)"
+        >
+          <span>{{ category.name }}</span><IconifyIcon icon="lucide:chevron-right" />
+        </button>
+      </aside>
+      <div class="recruit-category-content">
+        <template v-if="showJobCategoryDetail && activeJobCategoryGroup">
+          <div class="category-detail-head"><strong>{{ activeJobCategoryGroup.name }}</strong></div>
+          <div class="category-post-grid">
+            <button v-for="post in activeJobCategoryGroup.posts" :key="post.id" type="button" @click="openCategoryPost(post)">
+              <strong>{{ post.postName }}</strong><span>{{ formatLocation(post) }}</span>
+            </button>
+            <p v-if="!activeJobCategoryGroup.posts.length" class="category-empty">暂无该分类职位，试试其他分类。</p>
+          </div>
+        </template>
+        <div v-else class="recruit-ad-carousel">
+          <img :src="recruitAdImages[recruitAdIndex]" alt="天信招聘行业招聘广告" />
+          <div class="recruit-ad-dots"><button v-for="(_, index) in recruitAdImages" :key="index" type="button" :class="{ active: recruitAdIndex === index }" @click="recruitAdIndex = index"></button></div>
+        </div>
       </div>
     </section>
 
@@ -1025,12 +1120,29 @@ onUnmounted(() => {
 
     <CompanyDirectory v-else-if="activeSection === 'companies'" />
 
-    <section v-if="activeSection === 'home'" class="service-section">
-      <div class="service-heading"><div><span class="section-kicker">行业服务</span><h2>一站式职业发展支持</h2></div><span>从求职到成长，天信人才服务陪伴每一步</span></div>
-      <div class="service-grid">
-        <article><span class="service-icon">⌕</span><h3>行业岗位库</h3><p>汇聚防腐、保温、工程管理等细分岗位，持续更新真实机会。</p><a @click="selectSection('jobs')">探索岗位 →</a></article>
-        <article><span class="service-icon">◎</span><h3>企业招聘顾问</h3><p>为企业提供职位发布、人才筛选、招聘流程等专业服务。</p><a @click="selectSection('companies')">了解企业服务 →</a></article>
-        <article><span class="service-icon">↗</span><h3>职业成长社区</h3><p>连接行业专家与同行，分享经验，发现更多发展可能。</p><a>加入行业社区 →</a></article>
+    <section v-if="activeSection === 'home'" class="city-opportunities-section" aria-labelledby="city-opportunities-title">
+      <div class="city-opportunities-heading">
+        <h2 id="city-opportunities-title">城市热招</h2>
+      </div>
+      <div class="city-opportunities-viewport">
+        <div class="city-opportunities-grid">
+          <button
+            v-for="city in visibleCityOpportunities"
+            :key="city.name"
+            class="city-opportunity-card"
+            type="button"
+            :style="{ backgroundImage: `linear-gradient(180deg, rgb(7 30 49 / 4%), rgb(7 25 42 / 76%)), url(${city.image})` }"
+            @click="selectCityOpportunity(city.name)"
+          >
+            <span class="city-opportunity-arrow" aria-hidden="true">↗</span>
+            <span class="city-opportunity-copy">
+              <strong>{{ city.name }}</strong>
+              <small>{{ city.english }}</small>
+            </span>
+          </button>
+        </div>
+        <button class="city-opportunities-next city-opportunities-prev" type="button" aria-label="上一组城市" @click="shiftCityOpportunities(-1)">‹</button>
+        <button class="city-opportunities-next" type="button" aria-label="下一组城市" @click="shiftCityOpportunities(1)">›</button>
       </div>
     </section>
 
@@ -1828,6 +1940,15 @@ onUnmounted(() => {
 @media (max-width: 560px) {
   .service-grid { grid-template-columns:1fr; }
 }
+
+@media (max-width: 900px) {
+  .recruit-category-showcase { grid-template-columns: 138px minmax(0, 1fr); min-height: 270px; }
+  .recruit-category-sidebar { max-height: 270px; }
+  .recruit-category-sidebar button { min-height: 46px; padding: 0 13px; font-size: 13px; }
+  .recruit-ad-carousel { height: 270px; }
+  .category-post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 16px 16px; }
+  .category-detail-head { padding: 16px 16px 10px; font-size: 18px; }
+}
 @media (min-width: 641px) and (max-width: 900px) {
   .hero-visual { opacity: .38; right: 14px; }
 
@@ -2129,6 +2250,21 @@ onUnmounted(() => {
 .service-grid h3 { color: var(--recruit-ink); }
 .service-grid a { color: var(--recruit-accent); font-weight: 650; }
 
+.city-opportunities-section { position: relative; padding: 58px 0 42px; }
+.city-opportunities-heading { margin-bottom: 26px; text-align: center; }
+.city-opportunities-heading h2 { margin: 0; color: #111827; font-size: 32px; font-weight: 800; letter-spacing: -.04em; }
+.city-opportunities-viewport { position: relative; }
+.city-opportunities-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.city-opportunity-card { position: relative; display: flex; min-width: 0; aspect-ratio: 1.85 / 1; align-items: flex-end; overflow: hidden; padding: 20px 24px; border: 0; border-radius: 11px; background-position: center; background-size: cover; color: #fff; cursor: pointer; text-align: left; transition: transform 180ms ease, box-shadow 180ms ease; }
+.city-opportunity-card:hover, .city-opportunity-card:focus-visible { z-index: 1; outline: 0; box-shadow: 0 12px 24px rgb(15 42 67 / 24%); transform: translateY(-3px); }
+.city-opportunity-arrow { position: absolute; top: 14px; right: 17px; color: rgb(255 255 255 / 78%); font-size: 26px; font-weight: 300; line-height: 1; }
+.city-opportunity-copy { display: grid; gap: 3px; text-shadow: 0 2px 7px rgb(0 0 0 / 38%); }
+.city-opportunity-copy strong { font-size: 24px; line-height: 1.1; }
+.city-opportunity-copy small { font-size: 14px; }
+.city-opportunities-next { position: absolute; top: 50%; right: -28px; display: grid; width: 44px; height: 84px; place-items: center; transform: translateY(-50%); border: 0; border-radius: 22px; background: #fff; box-shadow: 0 5px 20px rgb(24 52 78 / 10%); color: #8490a2; cursor: pointer; font-size: 36px; line-height: 1; }
+.city-opportunities-next:hover { color: #2f5eff; box-shadow: 0 8px 22px rgb(24 52 78 / 16%); }
+.city-opportunities-prev { right: auto; left: -28px; }
+
 .filter-panel,
 .search-result-list,
 .search-detail-card { border-color: var(--recruit-line); border-radius: 16px; box-shadow: 0 8px 22px rgb(23 52 61 / 6%); }
@@ -2167,7 +2303,7 @@ onUnmounted(() => {
   padding-left: 0;
 }
 .recruit-page > .recruit-hero {
-  width: min(1180px, calc(100vw - 32px));
+  width: min(1200px, calc(100vw - 32px));
   margin-right: auto;
   margin-left: auto;
 }
@@ -2329,10 +2465,168 @@ onUnmounted(() => {
 .recruit-footer-mark { display: inline-flex; align-items: baseline; gap: 8px; color: #e6fbfc; font-size: 18px; font-weight: 800; letter-spacing: .08em; }
 .recruit-footer-mark small { color: #79a4ad; font-size: 9px; font-weight: 500; letter-spacing: .14em; }
 
+/* Boss 首页视觉对齐：保留现有 HRM 数据与交互，仅统一首页内容层级和视觉节奏。 */
+.recruit-page { background: #f5f6f7; color: #1f2937; gap: 0; }
+.recruit-page > .recruit-hero { width: 100vw; max-width: none; margin-right: calc((100% - 100vw) / 2); margin-left: calc((100% - 100vw) / 2); border-radius: 0; box-shadow: none; }
+.recruit-hero { min-height: 286px; padding: 44px max(24px, calc((100vw - 1180px) / 2)) 30px; background: #fff; background-image: none; }
+.hero-copy { max-width: 1180px; margin: 0 auto; }
+.hero-copy h1 { color: #111827; font-size: clamp(32px, 4vw, 46px); letter-spacing: -.04em; }
+.eyebrow { color: #ff6a00; font-size: 14px; letter-spacing: .08em; }
+.hero-visual { display: none; }
+.hero-search { width: min(760px, 100%); margin: 30px auto 0; }
+.hero-search .ant-input-affix-wrapper { height: 50px; border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: none; }
+.hero-search .ant-btn { height: 50px; border-color: #ff6a00; border-radius: 4px; background: #ff6a00; box-shadow: none; }
+.quick-searches { width: min(760px, 100%); margin: 14px auto 0; color: #6b7280; }
+.quick-searches button { border-radius: 2px; color: #6b7280; background: transparent; }
+.quick-searches button:hover, .quick-searches button:focus-visible { color: #ff6a00; background: transparent; }
+.recruit-page > .recruit-tabs { width: min(1180px, calc(100vw - 32px)); margin: 28px auto 0; }
+.recruit-page .recruit-tabs :deep(.ant-tabs-content-holder) { box-shadow: none; background: transparent; }
+.home-jobs-heading { padding: 0 0 18px; border-bottom: 1px solid #e5e7eb; }
+.home-jobs-heading h2 { margin: 0 0 18px; color: #111827; font-size: 24px; text-align: left; }
+.home-job-categories { justify-content: flex-start; gap: 26px; }
+.home-job-categories button { padding: 0 0 10px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #6b7280; background: transparent; }
+.home-job-categories button:hover, .home-job-categories button.active { border-bottom-color: #ff6a00; color: #ff6a00; background: transparent; }
+.home-job-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.home-job-grid .post-card { min-height: 174px; border: 1px solid #e5e7eb; border-radius: 4px; background: #fff; box-shadow: none; }
+.home-job-grid .post-card:hover { border-color: #ffcfad; box-shadow: 0 8px 18px rgb(31 41 55 / 8%); transform: translateY(-2px); }
+.home-job-grid .post-title { color: #111827; font-size: 16px; }
+.home-job-grid .post-salary-top { color: #ff6a00; font-size: 16px; }
+.home-job-grid .post-tags span { border: 0; border-radius: 2px; color: #6b7280; background: #f5f6f7; }
+.home-job-card .post-card-actions { border-top-color: #f0f1f2; background: #fff; }
+.home-companies-section, .service-section, .city-opportunities-section { width: min(1180px, calc(100vw - 32px)); margin-right: auto; margin-left: auto; }
+.home-companies-section { margin-top: 34px; }
+.service-section { margin-top: 18px; }
+.city-opportunities-section { margin-top: 12px; padding-bottom: 44px; }
+.city-opportunities-heading h2 { font-size: 28px; }
+.recruit-home-footer { margin-right: calc((100% - 100vw) / 2); margin-left: calc((100% - 100vw) / 2); }
+/* 智联招聘风格配色：蓝色主色、冷灰背景、橙红仅用于薪资强调。 */
+.recruit-page { --recruit-ink: #333; --recruit-muted: #666; --recruit-line: #e9eaec; --recruit-accent: #2d8cf0; --recruit-accent-soft: #f1f8ff; background: #f3f4f9; }
+.recruit-subnav { border-color: #e9eaec; background: #fff; box-shadow: 0 2px 8px rgb(45 140 240 / 8%); }
+.recruit-brand-mark { background: #2d8cf0; }
+.recruit-brand-copy small { color: #999; }
+.recruit-nav-links button.active, .recruit-nav-links button.active :deep(svg) { color: #2d8cf0; }
+.recruit-nav-links button.active::after { background: #2d8cf0; }
+.eyebrow { color: #2d8cf0; }
+.hero-search .ant-btn { border-color: #2d8cf0; background: #2d8cf0; }
+.hero-search .ant-btn:hover { border-color: #1787fb; background: #1787fb; }
+.quick-searches button:hover, .quick-searches button:focus-visible { color: #2d8cf0; }
+.home-job-categories button:hover, .home-job-categories button.active { border-bottom-color: #2d8cf0; color: #2d8cf0; background: transparent; }
+.home-job-grid .post-card:hover { border-color: #b8dafa; box-shadow: 0 8px 18px rgb(45 140 240 / 10%); }
+.home-job-grid .post-salary-top, .home-job-grid .post-salary { color: #ed3f14; }
+.home-job-grid .post-tags span { color: #666; background: #f1f8ff; }
+.city-opportunities-heading h2 { color: #222; }
+.city-opportunities-next:hover { color: #2d8cf0; }
+.recruit-brand { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; height: 60px; padding: 0 26px 0 0 !important; border-right: 1px solid #edf0f4 !important; color: #17233c !important; }
+.recruit-brand:hover { color: #17233c !important; }
+.recruit-brand-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 8px; color: #fff; background: #2d61f5; font-size: 19px; font-weight: 800; letter-spacing: -.06em; }
+.recruit-brand-copy { display: grid; gap: 1px; text-align: left; }
+.recruit-brand-copy strong { font-size: 19px; line-height: 1.1; }
+.recruit-brand-copy small { color: #7f8ba0; font-size: 8px; letter-spacing: .08em; }
+.recruit-nav-links { gap: 28px; }
+.recruit-nav-links button { display: inline-flex; align-items: center; gap: 7px; color: #42516a; font-size: 14px; }
+.recruit-nav-links button :deep(svg) { color: #51617b; font-size: 15px; }
+.recruit-nav-links button.active { color: #2d61f5; }
+.recruit-nav-links button.active :deep(svg) { color: #2d61f5; }
+.recruit-nav-links button.active::after { right: -7px; left: -7px; height: 2px; background: #2d61f5; }
+.recruit-nav-account { gap: 18px; }
+.recruit-nav-account button { color: #42516a; font-size: 13px; }
+:global(.portal-shell--recruit .portal-header) { display: none; }
+:global(.portal-shell--recruit .portal-main) { padding-top: 0; }
+/* 内嵌简历/应聘中心没有自己的导航，需要为首页招聘头部预留内容间距。 */
+.recruit-page { margin-top: 0; }
+.recruit-page > .recruit-workspace-page,
+.recruit-page > .online-resume-page { padding-top: 28px; }
+/* 首屏参考智联招聘：品牌字标、胶囊搜索和服务图标入口。 */
+.hero-topline { display: flex; width: min(1180px, 100%); align-items: center; justify-content: space-between; margin: 0 auto; }
+.hero-brand-wordmark { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; color: #1556df; background: transparent; cursor: pointer; font-family: 'Microsoft YaHei', sans-serif; font-size: 30px; font-weight: 900; letter-spacing: -.08em; }
+.hero-brand-star { color: #ffbf21; font-size: 25px; transform: rotate(-12deg); }
+.hero-tools { display: flex; align-items: center; gap: 18px; }
+.hero-tool-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 50%; background: #fff; box-shadow: 0 4px 12px rgb(45 140 240 / 10%); font-size: 21px; }
+.wechat-icon { color: #18b65b; }
+.app-icon { color: #ff9b18; }
+.hero-copy { text-align: center; }
+.hero-copy h1 { font-weight: 750; }
+.hero-search-zhaopin { width: min(990px, 100%); }
+.hero-search-zhaopin .ant-input-affix-wrapper { height: 56px; border: 2px solid #5b7ff2; border-radius: 29px 0 0 29px; box-shadow: none; }
+.hero-search-zhaopin .ant-btn { min-width: 148px; height: 56px; border: 0; border-radius: 0 29px 29px 0; background: #5275ed; font-size: 18px; }
+.hero-search-zhaopin .ant-btn:hover { background: #426eff; }
+.recruit-category-showcase { display: grid; grid-template-columns: 250px minmax(0, 1fr); width: min(1180px, calc(100vw - 32px)); min-height: 330px; margin: 22px auto 0; overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgb(31 57 97 / 8%); }
+.recruit-category-sidebar { max-height: 330px; overflow-y: auto; background: #5f687b; scrollbar-width: thin; }
+.recruit-category-sidebar button { display: flex; width: 100%; min-height: 55px; align-items: center; justify-content: space-between; padding: 0 24px; border: 0; color: #fff; background: transparent; cursor: pointer; font-size: 16px; text-align: left; }
+.recruit-category-sidebar button:hover, .recruit-category-sidebar button.active { background: #525c70; }
+.recruit-category-sidebar button :deep(svg) { color: #dce3ee; font-size: 16px; }
+.recruit-category-content { min-width: 0; background: #fff; }
+.recruit-ad-carousel { position: relative; display: grid; height: 330px; place-items: center; overflow: hidden; background: #dcecff; }
+.recruit-ad-carousel img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.recruit-ad-dots { position: absolute; right: 0; bottom: 13px; left: 0; display: flex; justify-content: center; gap: 7px; }
+.recruit-ad-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 65%); cursor: pointer; }
+.recruit-ad-dots button.active { width: 22px; border-radius: 4px; background: #fff; }
+.category-detail-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px 12px; color: #17233c; font-size: 22px; }
+.category-detail-head button { padding: 5px 12px; border: 1px solid #c9daf6; border-radius: 5px; color: #2d8cf0; background: #f1f8ff; cursor: pointer; font-size: 13px; }
+.category-post-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 18px; max-height: 280px; overflow: auto; padding: 0 28px 22px; }
+.category-post-grid button { display: grid; gap: 5px; min-width: 0; padding: 12px 0; border: 0; border-bottom: 1px solid #edf0f4; color: #1f3555; background: transparent; cursor: pointer; text-align: left; }
+.category-post-grid button:hover strong { color: #2d8cf0; }
+.category-post-grid button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.category-post-grid button span { overflow: hidden; color: #8995a8; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.category-empty { grid-column: 1 / -1; color: #8995a8; }
+/* 横向智联招聘式首屏栏，品牌、搜索和服务入口在同一水平线上。 */
+.recruit-hero { display: grid; grid-template-columns: 180px minmax(420px, 1fr) 180px; align-items: center; gap: 26px; min-height: 110px; padding: 24px max(28px, calc((100vw - 1180px) / 2)); background: #eaf3ff; background-image: linear-gradient(120deg, #edf5ff 0%, #dbeaff 100%); }
+.hero-topline { display: contents; width: auto; }
+.hero-brand-wordmark { grid-column: 1; grid-row: 1; font-size: 30px; }
+.hero-tools { grid-column: 3; grid-row: 1; justify-content: flex-end; }
+.hero-copy, .hero-visual, .quick-searches { display: none; }
+.hero-search-zhaopin { grid-column: 2; grid-row: 1; width: 100%; margin: 0; }
+.hero-search-zhaopin .ant-input-affix-wrapper { height: 68px; border-width: 3px; border-color: #5b7ff2; border-radius: 35px 0 0 35px; background: #fff; }
+.hero-search-zhaopin .ant-btn { height: 68px; min-width: 150px; border-radius: 0 35px 35px 0; }
+ :global(.portal-shell--recruit .online-resume-page) { --resume-line: #e9eaec !important; --resume-soft: #f1f8ff !important; --resume-orange: #2d8cf0 !important; --resume-orange-deep: #1479e1 !important; --resume-ink: #333 !important; --resume-muted: #666 !important; }
+:global(.portal-shell--recruit .online-resume-page .completion-card),
+:global(.portal-shell--recruit .online-resume-page .section-icon),
+:global(.portal-shell--recruit .online-resume-page .attachments-summary),
+:global(.portal-shell--recruit .online-resume-page .empty-icon) { background: #f1f8ff !important; }
+:global(.portal-shell--recruit .online-resume-page .resume-index-nav button.active) { background: #f1f8ff !important; box-shadow: inset 3px 0 0 #2d8cf0 !important; }
+:global(.portal-shell--recruit .online-resume-page .brand-mark) { background: #2d8cf0 !important; }
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-btn-primary),
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-btn-background-ghost) { border-color: #2d8cf0 !important; background: #2d8cf0 !important; }
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-input:hover),
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-input:focus),
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-select-selector:hover),
+:global(.portal-shell--recruit .online-resume-page .resume-editor .ant-select-focused .ant-select-selector) { border-color: #57a3f3 !important; }
+
+@media (max-width: 900px) {
+  .home-job-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .recruit-hero { padding: 34px 20px 26px; }
+  .recruit-page > .recruit-tabs, .home-companies-section, .service-section, .city-opportunities-section { width: calc(100vw - 32px); }
+  .home-job-grid { grid-template-columns: 1fr; }
+  .home-job-categories { flex-wrap: wrap; gap: 12px 20px; }
+  .recruit-brand { width: 100%; height: 58px; border-right: 0 !important; border-bottom: 1px solid #edf0f4 !important; }
+  .recruit-nav-links { width: 100%; gap: 18px; overflow-x: auto; }
+  .recruit-nav-links button { flex: 0 0 auto; }
+  .recruit-page { margin-top: 0; }
+  .recruit-page > .recruit-workspace-page,
+  .recruit-page > .online-resume-page { padding-top: 28px; }
+  .hero-topline { align-items: flex-start; }
+  .hero-brand-wordmark { font-size: 24px; }
+  .hero-tool-icon { width: 36px; height: 36px; font-size: 18px; }
+  .hero-search-zhaopin .ant-input-affix-wrapper { border-radius: 8px; }
+  .hero-search-zhaopin .ant-btn { border-radius: 8px; }
+  .recruit-hero { display: flex; min-height: 0; flex-wrap: wrap; gap: 14px; padding: 18px 20px; }
+  .hero-topline { display: flex; width: 100%; }
+  .hero-brand-wordmark { flex: 1; }
+  .hero-tools { margin-left: auto; }
+  .hero-search-zhaopin { flex: 1 1 100%; order: 3; }
+  .hero-search-zhaopin .ant-input-affix-wrapper, .hero-search-zhaopin .ant-btn { height: 50px; }
+}
+
 @media (max-width: 900px) {
   .recruit-page {
     overflow-x: clip;
   }
+
+  .city-opportunities-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .city-opportunities-next { right: -12px; }
+  .city-opportunities-prev { right: auto; left: -12px; }
 
   .recruit-page > .recruit-subnav,
   .recruit-page > .recruit-tabs {
@@ -2347,6 +2641,13 @@ onUnmounted(() => {
   .recruit-footer-contact { padding-left: 0; border-top: 1px solid rgb(126 225 229 / 24%); border-left: 0; padding-top: 24px; }
 }
 @media (max-width: 560px) {
+  .city-opportunities-section { padding: 42px 0 28px; }
+  .city-opportunities-heading { text-align: left; }
+  .city-opportunities-heading h2 { font-size: 28px; }
+  .city-opportunities-grid { display: flex; gap: 9px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .city-opportunities-grid::-webkit-scrollbar { display: none; }
+  .city-opportunity-card { flex: 0 0 72%; aspect-ratio: 1.65 / 1; scroll-snap-align: start; }
+  .city-opportunities-next { display: none; }
   .recruit-home-footer { padding: 34px 20px 16px; }
   .recruit-footer-inner { grid-template-columns: 1fr 1fr; gap: 28px 16px; }
   .recruit-footer-contact { grid-column: 1 / -1; }
@@ -2408,5 +2709,14 @@ onUnmounted(() => {
 .company-post-count {
   font-size: 14px;
   font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .recruit-category-showcase { grid-template-columns: 138px minmax(0, 1fr); min-height: 270px; }
+  .recruit-category-sidebar { max-height: 270px; }
+  .recruit-category-sidebar button { min-height: 46px; padding: 0 13px; font-size: 13px; }
+  .recruit-ad-carousel { height: 270px; }
+  .category-post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 16px 16px; }
+  .category-detail-head { padding: 16px 16px 10px; font-size: 18px; }
 }
 </style>
