@@ -291,11 +291,13 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
 
       // 2) 转换与过滤：MES / WMS 变换 → 菜单过滤 → 路由记录转换 → CRM 分组
       //    注意分组必须在 convert 之后：否则子菜单路径会被拼成 /crm/<分组>/xxx，地址就变了
-      return groupCrmSideMenus(
-        convertServerMenuToRouteRecordStringComponent(
-          filterMallPromotionMenus(
-            filterHrmEmployeePortalRecruitMenus(
-              transformMesMenus(transformWmsMenus(menus)),
+      return renameTopMenus(
+        groupCrmSideMenus(
+          convertServerMenuToRouteRecordStringComponent(
+            filterMallPromotionMenus(
+              filterHrmEmployeePortalRecruitMenus(
+                transformMesMenus(transformWmsMenus(menus)),
+              ),
             ),
           ),
         ),
@@ -494,6 +496,17 @@ const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
 };
 
 /**
+ * 顶级菜单重命名（只覆盖菜单展示名 meta.title，不动 path / name，路由名与地址不变）
+ *
+ * 与 {@link transformWmsMenus} 中「AI 智能助手 → WMS 首页」的改名保持同一套做法：
+ * 菜单文案属于后端 system_menu 数据，这里只按前端展示需要做覆盖，
+ * 不改数据库、不影响其他应用与权限。
+ */
+const TOP_MENU_TITLE_OVERRIDES: Record<string, string> = {
+  '/crm': '客户关系管理系统',
+};
+
+/**
  * CRM 一级菜单展示顺序覆盖
  *
  * 目的：按需求顺序排列（CRM 首页 → 待办中心 → 客户资源管理 → 销售业务管理 → 售后管理 → …）。
@@ -627,6 +640,23 @@ function injectAiChatMenu(
     // 兜底：作为顶级菜单，并包裹 BasicLayout
     menus.push({ ...item, component: 'BasicLayout', children: [{ ...item }] });
   }
+}
+
+/**
+ * 顶级菜单重命名（按 {@link TOP_MENU_TITLE_OVERRIDES} 覆盖展示名）
+ *
+ * 在路由转换完成之后执行，只改 meta.title：
+ * 菜单标题取自 meta.title，路由名取自 name / componentName，
+ * 因此改名不会影响已有的路由跳转（例如按路由名 push）。
+ */
+function renameTopMenus(menus: any[]): any[] {
+  for (const menu of menus) {
+    const title = TOP_MENU_TITLE_OVERRIDES[String(menu?.path ?? '')];
+    if (title) {
+      menu.meta = { ...(menu.meta ?? {}), title };
+    }
+  }
+  return menus;
 }
 
 function findMenu(
