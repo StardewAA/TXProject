@@ -295,11 +295,13 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
 
       // 2) 转换与过滤：MES / WMS 变换 → 菜单过滤 → 路由记录转换 → CRM 分组
       //    注意分组必须在 convert 之后：否则子菜单路径会被拼成 /crm/<分组>/xxx，地址就变了
-      return groupCrmSideMenus(
-        convertServerMenuToRouteRecordStringComponent(
-          filterMallPromotionMenus(
-            filterHrmEmployeePortalRecruitMenus(
-              transformMesMenus(transformWmsMenus(menus)),
+      return renameTopMenus(
+        groupCrmSideMenus(
+          convertServerMenuToRouteRecordStringComponent(
+            filterMallPromotionMenus(
+              filterHrmEmployeePortalRecruitMenus(
+                transformMesMenus(transformWmsMenus(menus)),
+              ),
             ),
           ),
         ),
@@ -407,19 +409,6 @@ function transformMesMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
  * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
  * 若未找到则挂载为顶级菜单，保证功能可见。
  */
-/**
- * 注入「AI对话助手」菜单项（安全兜底占位实现）。
- * 说明：原始实现在远端 revert 合并事故中丢失（只剩调用点），
- * 当前以空实现兜底——保证登录/菜单流程不崩溃；AI 助手菜单暂不额外注入。
- * 待 AI 助手小组补回真实实现后，替换本函数即可。
- */
-function injectAiChatMenu(
-  _menus: AppRouteRecordRaw[],
-  _accessCodes: string[] | null | undefined,
-): void {
-  // intentionally empty — see doc above
-}
-
 function injectCrmMenus(
   menus: AppRouteRecordRaw[],
   permissions: unknown[] | null | undefined,
@@ -508,6 +497,18 @@ const CRM_SIDE_GROUPS: Array<{
  */
 const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
   '/crm/backlog': '待办中心',
+  '/crm/home': '首页',
+};
+
+/**
+ * 顶级菜单重命名（只覆盖菜单展示名 meta.title，不动 path / name，路由名与地址不变）
+ *
+ * 与 {@link transformWmsMenus} 中「AI 智能助手 → WMS 首页」的改名保持同一套做法：
+ * 菜单文案属于后端 system_menu 数据，这里只按前端展示需要做覆盖，
+ * 不改数据库、不影响其他应用与权限。
+ */
+const TOP_MENU_TITLE_OVERRIDES: Record<string, string> = {
+  '/crm': '客户关系管理系统',
 };
 
 /**
@@ -644,6 +645,23 @@ function injectAiChatMenu(
     // 兜底：作为顶级菜单，并包裹 BasicLayout
     menus.push({ ...item, component: 'BasicLayout', children: [{ ...item }] });
   }
+}
+
+/**
+ * 顶级菜单重命名（按 {@link TOP_MENU_TITLE_OVERRIDES} 覆盖展示名）
+ *
+ * 在路由转换完成之后执行，只改 meta.title：
+ * 菜单标题取自 meta.title，路由名取自 name / componentName，
+ * 因此改名不会影响已有的路由跳转（例如按路由名 push）。
+ */
+function renameTopMenus(menus: any[]): any[] {
+  for (const menu of menus) {
+    const title = TOP_MENU_TITLE_OVERRIDES[String(menu?.path ?? '')];
+    if (title) {
+      menu.meta = { ...(menu.meta ?? {}), title };
+    }
+  }
+  return menus;
 }
 
 function findMenu(

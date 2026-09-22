@@ -18,7 +18,7 @@ txgy-ui-admin-vben/.turbo
 **/.env.local
 
 txgy-ui-admin-uniapp-master
-txgy-ui-go-view-master
+txgy-ui-go-view
 
 # Java / Maven
 **/target

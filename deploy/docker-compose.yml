@@ -344,6 +344,8 @@ services:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
     environment:
       <<: *backend-env
+      # 联调：开启缺口事件自动上送，WmsShortageSender 才会把缺口事件发给 ERP（默认不启用）
+      WMS_SHORTAGE_SENDER_ENABLED: "true"
       JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   im:
@@ -413,6 +415,25 @@ services:
       - txgy-dev
     restart: unless-stopped
 
+  # GoView 大屏设计器（独立前端工程 txgy-ui-go-view）：容器内 Nginx 托管 dist，
+  # /admin-api 反代 gateway:48080，与 vben 管理后台（frontend）共用同一套后端。
+  goview:
+    build:
+      context: ..
+      dockerfile: deploy/goview/Dockerfile
+    depends_on:
+      gateway:
+        condition: service_started
+    ports:
+      - "5273:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
 volumes:
   mysql-data:
   redis-data:
