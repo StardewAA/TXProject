@@ -17,6 +17,9 @@ import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_M
 @ToString(callSuper = true)
 public class ErpFinancePaymentPageReqVO extends PageParam {
 
+    @Schema(description = "付款单编号", example = "1024")
+    private Long id;
+
     @Schema(description = "付款单编号", example = "XS001")
     private String no;
 
@@ -44,5 +47,8 @@ public class ErpFinancePaymentPageReqVO extends PageParam {
 
     @Schema(description = "业务编号", example = "123")
     private String bizNo;
+
+    @Schema(description = "编号数组（导出选中记录时使用）", example = "1,2,3")
+    private Long[] ids;
 
 }

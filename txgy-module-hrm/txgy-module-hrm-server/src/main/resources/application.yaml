@@ -114,3 +114,24 @@ txgy:
     ignore-urls:
 
 debug: false
+
+--- #################### 招聘 Agent 模型配置 ####################
+# 密钥只从环境变量读取，不写入配置文件，避免误提交。
+# 启用方式：设置 HRM_AGENT_MODEL_ENABLED=true 与 HRM_AGENT_MODEL_API_KEY，然后重启服务。
+hrm:
+  agent:
+    model:
+      enabled: ${HRM_AGENT_MODEL_ENABLED:false} # 默认关闭，未启用时接口会明确提示「模型尚未配置」
+      base-url: ${HRM_AGENT_MODEL_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${HRM_AGENT_MODEL_API_KEY:}
+      model: ${HRM_AGENT_MODEL_NAME:qwen-flash}
+      timeout-ms: ${HRM_AGENT_MODEL_TIMEOUT_MS:60000}
+      # 思考型模型（如 GLM-4.5 系列）的推理过程会占用输出额度，额度不足会导致 JSON 被截断
+      max-tokens: ${HRM_AGENT_MODEL_MAX_TOKENS:4096}
+      temperature: ${HRM_AGENT_MODEL_TEMPERATURE:0.2}
+      # 所有场景都要求模型返回 JSON，开启 JSON 模式可显著降低语法错误
+      json-mode: ${HRM_AGENT_MODEL_JSON_MODE:true}
+      # 按平台追加额外参数，关闭思考模式可显著降低耗时与截断风险：
+      #   智谱 GLM：{"thinking":{"type":"disabled"}}
+      #   通义千问：{"enable_thinking":false}
+      extra-body-json: ${HRM_AGENT_MODEL_EXTRA_BODY:}

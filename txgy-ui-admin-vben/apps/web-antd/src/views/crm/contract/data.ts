@@ -76,7 +76,8 @@ export function useFormSchema(): VbenFormSchema[] {
             return;
           }
           try {
-            const contacts = await getContactListByCustomer(customerId);
+            // 可选增强：客户无数据权限时静默降级，不弹全局错误提示
+            const contacts = await getContactListByCustomer(customerId, true);
             const mainContact =
               contacts?.find((item) => item.master) ?? contacts?.[0];
             if (mainContact) {
@@ -834,7 +835,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '操作',
       field: 'actions',
       fixed: 'right',
-      minWidth: 130,
+      // 需要容纳「编辑 / 生成合同 / 提交审核 / 查看审批 / 删除」多个按钮，宽度过窄会被裁切
+      minWidth: 260,
       slots: { default: 'actions' },
     },
   ];

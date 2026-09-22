@@ -6,6 +6,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
@@ -190,8 +191,15 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    public RoleDO getRoleByCode(String code) {
+        return roleMapper.selectByCode(code);
+    }
+
+    @Override
     @Cacheable(value = RedisKeyConstants.ROLE, key = "#id",
             unless = "#result == null")
+    @TenantIgnore // 权限校验按角色编号查询角色，必须与请求租户无关；否则在“非用户所属租户”上下文下会查不到角色，
+                  // 导致 SecurityFrameworkService 的本地权限缓存（key 不含租户）被写入 false，污染该用户后续请求。
     public RoleDO getRoleFromCache(Long id) {
         return roleMapper.selectById(id);
     }

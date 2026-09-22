@@ -42,10 +42,12 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
         LambdaQueryWrapperX<ProductSpuDO> queryWrapper = new LambdaQueryWrapperX<ProductSpuDO>()
                 .likeIfPresent(ProductSpuDO::getName, reqVO.getName())
                 .eqIfPresent(ProductSpuDO::getCategoryId, reqVO.getCategoryId())
+                .eqIfPresent(ProductSpuDO::getShopId, reqVO.getShopId())
                 .betweenIfPresent(ProductSpuDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(ProductSpuDO::getSort)
                 .orderByDesc(ProductSpuDO::getId);
         appendTabQuery(tabType, queryWrapper);
+        appendReviewQuery(reqVO.getReviewStatus(), queryWrapper);
         return selectPage(reqVO, queryWrapper);
     }
 
@@ -66,8 +68,11 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
     /**
      * 获得商品 SPU 分页，提供给用户 App 使用
      */
-    default PageResult<ProductSpuDO> selectPage(AppProductSpuPageReqVO pageReqVO, Set<Long> categoryIds) {
+    default PageResult<ProductSpuDO> selectPage(AppProductSpuPageReqVO pageReqVO, Set<Long> categoryIds,
+            java.util.function.Consumer<LambdaQueryWrapperX<ProductSpuDO>> saleableScope) {
         LambdaQueryWrapperX<ProductSpuDO> query = new LambdaQueryWrapperX<ProductSpuDO>()
+                // 指定商品集合仍与租户、店铺和可售条件取交集，不能退化为整个商城列表。
+                .inIfPresent(ProductSpuDO::getId, pageReqVO.getIds())
                 // 关键字匹配，目前只匹配商品名
                 .likeIfPresent(ProductSpuDO::getName, pageReqVO.getKeyword())
                 // 企业店铺
@@ -76,6 +81,7 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
                 .inIfPresent(ProductSpuDO::getCategoryId, categoryIds);
         // 上架状态 且有库存
         query.eq(ProductSpuDO::getStatus, ProductSpuStatusEnum.ENABLE.getStatus());
+        saleableScope.accept(query);
 
         // 排序逻辑
         if (Objects.equals(pageReqVO.getSortField(), AppProductSpuPageReqVO.SORT_FIELD_SALES_COUNT)) {
@@ -165,9 +171,17 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
         LambdaQueryWrapperX<ProductSpuDO> queryWrapper = new LambdaQueryWrapperX<ProductSpuDO>()
                 .likeIfPresent(ProductSpuDO::getName, reqVO.getName())
                 .eqIfPresent(ProductSpuDO::getCategoryId, reqVO.getCategoryId())
+                .eqIfPresent(ProductSpuDO::getShopId, reqVO.getShopId())
                 .betweenIfPresent(ProductSpuDO::getCreateTime, reqVO.getCreateTime());
         appendTabQuery(tabType, queryWrapper);
+        appendReviewQuery(reqVO.getReviewStatus(), queryWrapper);
         return selectCount(queryWrapper);
+    }
+
+    static void appendReviewQuery(Integer status, LambdaQueryWrapperX<ProductSpuDO> query) {
+        if (status == null) return;
+        if (status == -1) query.isNull(ProductSpuDO::getReviewStatus);
+        else query.eq(ProductSpuDO::getReviewStatus, status);
     }
 
     /**

@@ -12,6 +12,8 @@ import {
 import { getInventoryList } from '#/api/wms/inventory';
 import { useDescription } from '#/components/description';
 import { useDetailSchema } from './data';
+import { buildApprovalDetailLocation } from '#/views/bpm/approval-route';
+import AiApprovalAdvice from '../shared/ai-approval-advice.vue';
 const props = defineProps<{ id?: number | string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const router = useRouter();
@@ -22,14 +24,11 @@ const loading = ref(false);
 const inventory = ref<Record<number, number>>();
 const inventoryLoading = ref(false);
 const onCurrentApproval = computed(() =>
-  route.path === '/bpm/process-instance/detail' &&
+  route.name === 'WmsApprovalDetail' &&
   route.query.id === order.value.processInstanceId
 );
 async function viewApproval() {
-  await router.push({
-    path: '/bpm/process-instance/detail',
-    query: { id: order.value.processInstanceId },
-  });
+  await router.push(buildApprovalDetailLocation('WmsApprovalDetail', order.value.processInstanceId!));
   emit('navigate');
 }
 async function queryInventory() {
@@ -112,6 +111,8 @@ watch(() => props.id, refresh, { immediate: true });
       <span v-if="onCurrentApproval" class="text-gray-500">当前已在本单 BPM 审批页</span>
     </div>
     <Button :loading="inventoryLoading" @click="queryInventory">查询收货仓库当前库存</Button>
+    <!-- AI 辅助审批建议：供审批人参考，不影响单据状态 -->
+    <AiApprovalAdvice :order-id="props.id" order-type="RECEIPT" />
     <Alert v-if="inventory" type="info" show-icon message="收货仓库当前库存（本单商品）">
       <template #description>
         <div v-for="(row, index) in order.details" :key="row.id ?? index">

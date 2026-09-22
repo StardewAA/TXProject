@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.category.ErpProductCategoryListReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.category.ErpProductCategoryRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.category.ErpProductCategorySaveReqVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.product.ErpProductCategoryDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -96,6 +97,17 @@ public class ErpProductCategoryController {
         // 导出 Excel
         ExcelUtils.write(response, "产品分类.xls", "数据", ErpProductCategoryRespVO.class,
                         BeanUtils.toBean(list, ErpProductCategoryRespVO.class));
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出产品分类 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:product-category:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportProductCategoryPdf(@Valid ErpProductCategoryListReqVO listReqVO,
+                                         HttpServletResponse response) throws IOException {
+        List<ErpProductCategoryDO> list = productCategoryService.getProductCategoryList(listReqVO);
+        ErpPdfExportUtils.write(response, "产品分类.pdf", "产品分类列表",
+                ErpProductCategoryRespVO.class, BeanUtils.toBean(list, ErpProductCategoryRespVO.class));
     }
 
 }

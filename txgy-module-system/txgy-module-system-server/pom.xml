@@ -35,6 +35,12 @@
             <artifactId>txgy-module-infra-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!-- 工号登录：按工号反查 HRM 员工绑定的后台用户 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-hrm-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- 业务组件 -->
         <dependency>

@@ -19,6 +19,14 @@ import java.util.Set;
 @Mapper
 public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
+    default int updateAddressAndClearLocation(TradeOrderDO update, Integer expectedStatus) {
+        return update(update, new LambdaUpdateWrapper<TradeOrderDO>()
+                .eq(TradeOrderDO::getId, update.getId()).eq(TradeOrderDO::getStatus, expectedStatus)
+                .set(TradeOrderDO::getReceiverLongitude, null).set(TradeOrderDO::getReceiverLatitude, null)
+                .set(TradeOrderDO::getReceiverCoordSystem, null).set(TradeOrderDO::getReceiverLocationSource, null)
+                .set(TradeOrderDO::getReceiverLocationPrecision, null).set(TradeOrderDO::getReceiverLocationConfirmedAt, null));
+    }
+
     default TradeOrderDO selectByIdForUpdate(Long id) {
         return selectOne(new LambdaQueryWrapperX<TradeOrderDO>()
                 .eq(TradeOrderDO::getId, id).last("FOR UPDATE"));
@@ -35,6 +43,7 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
 
     default PageResult<TradeOrderDO> selectPage(TradeOrderPageReqVO reqVO, Set<Long> userIds) {
         return selectPage(reqVO, new LambdaQueryWrapperX<TradeOrderDO>()
+                .eqIfPresent(TradeOrderDO::getShopId, reqVO.getShopId())
                 .likeIfPresent(TradeOrderDO::getNo, reqVO.getNo())
                 .eqIfPresent(TradeOrderDO::getUserId, reqVO.getUserId())
                 .eqIfPresent(TradeOrderDO::getDeliveryType, reqVO.getDeliveryType())
@@ -53,6 +62,7 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
     // TODO @疯狂：如果用 map 返回，要不这里直接用 TradeOrderSummaryRespVO 返回？也算合理，就当  sql 查询出这么个玩意~~
     default List<Map<String, Object>> selectOrderSummaryGroupByRefundStatus(TradeOrderPageReqVO reqVO, Set<Long> userIds) {
         return selectMaps(new MPJLambdaWrapperX<TradeOrderDO>()
+                .eqIfPresent(TradeOrderDO::getShopId, reqVO.getShopId())
                 .selectAs(TradeOrderDO::getRefundStatus, TradeOrderDO::getRefundStatus)  // 售后状态
                 .selectCount(TradeOrderDO::getId, "count") // 售后状态对应的数量
                 .selectSum(TradeOrderDO::getPayPrice, "price")  // 售后状态对应的支付金额
@@ -96,6 +106,19 @@ public interface TradeOrderMapper extends BaseMapperX<TradeOrderDO> {
         return selectList(new LambdaUpdateWrapper<TradeOrderDO>()
                 .eq(TradeOrderDO::getStatus, status)
                 .lt(TradeOrderDO::getCreateTime, createTime));
+    }
+
+    /** 新单按持久化的两个截止时间筛选；旧未付单需再核实支付单实际期限，不能套用当前配置。 */
+    default List<TradeOrderDO> selectPaymentTimeoutCandidates(LocalDateTime now, Long afterId, int limit) {
+        return selectList(new LambdaQueryWrapperX<TradeOrderDO>()
+                .eq(TradeOrderDO::getStatus, 0)
+                .gt(TradeOrderDO::getId, afterId)
+                .and(w -> w.isNull(TradeOrderDO::getPayExpireSeconds)
+                        .or(x -> x.le(TradeOrderDO::getPayExpireTime, now))
+                        .or(x -> x.isNull(TradeOrderDO::getPayExpireTime)
+                                .le(TradeOrderDO::getErpWaitExpireTime, now)))
+                .orderByAsc(TradeOrderDO::getId)
+                .last("LIMIT " + limit));
     }
 
     default List<TradeOrderDO> selectListByStatusAndDeliveryTimeLt(Integer status, LocalDateTime deliveryTime) {

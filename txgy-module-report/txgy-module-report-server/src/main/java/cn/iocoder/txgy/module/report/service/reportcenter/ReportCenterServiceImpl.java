@@ -101,6 +101,7 @@ public class ReportCenterServiceImpl implements ReportCenterService {
             // 分组以数据集登记的业务分组为准（页面可维护）；未迁移时回退枚举默认值
             respVO.setGroups(CollUtil.isEmpty(dataset.getBizGroups())
                     ? definition.getGroups() : dataset.getBizGroups());
+            respVO.setGroups(definition.getGroups());
             respVO.setColumnLabels(definition.getColumns().stream()
                     .map(MesReportDefinition.ColumnDef::label)
                     .collect(Collectors.toList()));
@@ -121,6 +122,7 @@ public class ReportCenterServiceImpl implements ReportCenterService {
                     .collect(Collectors.toList()));
             generic.setGroups(CollUtil.isEmpty(vo.getBizGroups())
                     ? List.of(GROUP_CUSTOM) : vo.getBizGroups());
+            generic.setGroups(List.of(GROUP_CUSTOM));
             generic.setColumnLabels(vo.getColumnLabelList().stream()
                     .map(ReportDatasetColumnLabelVO::getLabel)
                     .filter(StrUtil::isNotBlank)

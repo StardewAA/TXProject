@@ -21,6 +21,7 @@ import {
   exportWorkOrder,
   getWorkOrderPage,
   issueWorkOrder,
+  submitWorkOrder,
 } from '#/api/mes/pro/workorder';
 
 import { $t } from '#/locales';
@@ -85,6 +86,13 @@ async function handleDelete(row: MesProWorkOrderApi.WorkOrder) {
 async function handleCancel(row: MesProWorkOrderApi.WorkOrder) {
   await cancelWorkOrder(row.id!);
   message.success('工单已取消');
+  handleRefresh();
+}
+
+/** 提交工单审批 */
+async function handleSubmit(row: MesProWorkOrderApi.WorkOrder) {
+  await submitWorkOrder(row.id!);
+  message.success('工单已提交审批，审批通过后方可下发');
   handleRefresh();
 }
 
@@ -243,10 +251,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleAddChild.bind(null, row),
             },
             {
-              label: '下发',
+              label: '提交审批',
               type: 'link',
               auth: ['mes:pro-work-order:update'],
               ifShow: row.status === MesProWorkOrderStatusEnum.CONFIRMED,
+              popConfirm: {
+                title: '确认提交该工单审批？审批通过后才可下发。',
+                confirm: handleSubmit.bind(null, row),
+              },
+            },
+            {
+              label: '下发',
+              type: 'link',
+              auth: ['mes:pro-work-order:update'],
+              ifShow: row.status === MesProWorkOrderStatusEnum.APPROVED,
               popConfirm: {
                 title: '确认下发该工单？下发后将按工艺路线进行任务排产。',
                 confirm: handleIssue.bind(null, row),

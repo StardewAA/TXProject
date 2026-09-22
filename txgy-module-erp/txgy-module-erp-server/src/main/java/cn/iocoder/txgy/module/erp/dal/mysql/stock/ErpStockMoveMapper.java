@@ -39,6 +39,16 @@ public interface ErpStockMoveMapper extends BaseMapperX<ErpStockMoveDO> {
                 .eq(ErpStockMoveDO::getId, id).eq(ErpStockMoveDO::getStatus, status));
     }
 
+    default int resetConfirmationByIdAndStatus(Long id, Integer status, Integer targetStatus) {
+        return update(null, new LambdaUpdateWrapper<ErpStockMoveDO>()
+                .eq(ErpStockMoveDO::getId, id).eq(ErpStockMoveDO::getStatus, status)
+                .set(ErpStockMoveDO::getStatus, targetStatus)
+                .set(ErpStockMoveDO::getSourceConfirmedBy, null)
+                .set(ErpStockMoveDO::getSourceConfirmedAt, null)
+                .set(ErpStockMoveDO::getTargetConfirmedBy, null)
+                .set(ErpStockMoveDO::getTargetConfirmedAt, null));
+    }
+
     default ErpStockMoveDO selectByNo(String no) {
         return selectOne(ErpStockMoveDO::getNo, no);
     }

@@ -10,6 +10,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * CRM 产品管理的只读数据源：WMS 仓库库存。
+ *
+ * <p>一个 SKU 一行，实时读取，不落 CRM 本地表；WMS 删除的商品与规格不会出现在查询结果中。</p>
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -25,4 +34,25 @@ public class WmsCrmProductQueryService {
                 TenantContextHolder.getRequiredTenantId(), q);
         return new PageResult<>(page.getRecords(), page.getTotal());
     }
+
+    /**
+     * 按 SKU 编号查询单个产品；WMS 不存在时返回 null
+     */
+    public WmsCrmProductRespVO getBySkuId(Long skuId) {
+        if (skuId == null) {
+            return null;
+        }
+        return mapper.selectBySkuId(TenantContextHolder.getRequiredTenantId(), skuId);
+    }
+
+    /**
+     * 按 SKU 编号批量查询；WMS 已删除的规格不会返回，调用方据此判断产品是否仍然有效
+     */
+    public List<WmsCrmProductRespVO> getBySkuIds(Collection<Long> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return mapper.selectBySkuIds(TenantContextHolder.getRequiredTenantId(), skuIds);
+    }
+
 }

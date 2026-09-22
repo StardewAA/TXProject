@@ -96,3 +96,10 @@ export function exportSaleReturn(params: any) {
     params,
   });
 }
+
+/** 导出销售退货 PDF */
+export function exportSaleReturnPdf(params: any) {
+  return requestClient.download('/erp/sale-return/export-pdf', {
+    params,
+  });
+}

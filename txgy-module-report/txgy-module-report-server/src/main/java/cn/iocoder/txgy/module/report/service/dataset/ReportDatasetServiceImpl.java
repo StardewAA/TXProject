@@ -379,6 +379,9 @@ public class ReportDatasetServiceImpl implements ReportDatasetService {
                 .collect(Collectors.toList());
     }
 
+        return respVO;
+    }
+
     private List<ReportDatasetParamVO> parseParams(String paramDefinitions) {
         if (StrUtil.isBlank(paramDefinitions)) {
             return Collections.emptyList();

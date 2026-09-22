@@ -11,6 +11,7 @@ import { formatDate, handleTree } from '@vben/utils';
 
 import { getSimpleDeptList } from '#/api/system/dept';
 import { getRecruitChannelSimpleList } from '#/api/hrm/recruit/channel';
+import { getRecruitingDemandSimpleList } from '#/api/hrm/recruit/demand';
 import { getRecruitPostTypeList } from '#/api/hrm/recruit/post/type';
 import { AreaCascader } from '#/components/area';
 import { DictTag } from '#/components/dict-tag';
@@ -281,6 +282,20 @@ export function useFormSchema(): VbenFormSchema[] {
         placeholder: '请选择发布渠道',
         allowClear: true,
       },
+    },
+    {
+      fieldName: 'demandId',
+      label: '关联用工需求',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getRecruitingDemandSimpleList,
+        labelField: 'demandName',
+        valueField: 'id',
+        placeholder: '选择用工需求单（录用后自动回写到岗人数）',
+        allowClear: true,
+        showSearch: true,
+      },
+      help: '关联后：候选人转员工时自动把需求单的「已到岗人数」+1，到齐自动标记需求完成',
     },
     {
       fieldName: 'areaId',

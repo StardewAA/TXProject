@@ -63,6 +63,9 @@ import cn.iocoder.txgy.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.txgy.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
+import cn.iocoder.txgy.module.system.api.user.dto.AdminUserCreateReqDTO;
+import cn.iocoder.txgy.module.system.api.permission.PermissionApi;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import com.mzt.logapi.context.LogRecordContext;
 import com.mzt.logapi.service.ILogRecordService;
 import com.mzt.logapi.service.impl.DiffParseFunction;
@@ -163,9 +166,13 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
 
     @Resource
     private HrmEmployeeMapper employeeMapper;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employment.HrmEmploymentTypeService employmentTypeService;
 
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private PermissionApi permissionApi;
     @Resource
     private DeptApi deptApi;
     @Resource
@@ -178,6 +185,12 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
     private HrmRecruitChannelService recruitChannelService;
     @Resource
     private HrmEmployeeFieldConfigService employeeFieldConfigService;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employee.employment.HrmEmployeeNoService employeeNoService;
+    @Resource
+    private cn.iocoder.txgy.module.hrm.service.employee.blacklist.HrmEmployeeBlacklistService employeeBlacklistService;
+    @Resource
+    private HrmEmployeeArchiveCheckService employeeArchiveCheckService;
     @Resource
     private HrmEmployeeChangeRecordService employeeChangeRecordService;
     @Resource
@@ -243,6 +256,8 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
         if (ObjUtil.notEqual(HrmEmployeeEntryStatusEnum.LEFT.getStatus(), employee.getEntryStatus())) {
             throw exception(EMPLOYEE_REHIRE_STATUS_INVALID);
         }
+        // 1.1 黑名单拦截：已在黑名单中的员工不允许再入职
+        employeeBlacklistService.validateNotBlacklisted(reqVO.getName(), reqVO.getMobile(), null);
         reqVO.setEntryStatus(HrmEmployeeEntryStatusEnum.ACTIVE.getStatus());
         ValidationUtils.validate(reqVO);
         employeeFieldConfigService.validateEmployeeCreateFields(
@@ -298,6 +313,9 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
     public void regularEmployee(HrmEmployeeRegularReqVO reqVO) {
         // 1. 校验员工
         HrmEmployeeDO employee = validateEmployeeExists(reqVO.getEmployeeId());
+        // 1.1 档案完整性卡控：缺劳动合同 / 缺档案附件 / 缺手机号时不允许转正
+        employeeArchiveCheckService.validateArchiveComplete(employee.getId(),
+                HrmEmployeeChangeTypeEnum.REGULAR.getName());
         validateEmployeeInService(employee, HrmEmployeeChangeTypeEnum.REGULAR);
         if (ObjUtil.notEqual(HrmEmployeeStatusEnum.PROBATION.getStatus(), employee.getStatus())) {
             throw exception(EMPLOYEE_CHANGE_STATUS_INVALID, HrmEmployeeChangeTypeEnum.REGULAR.getName());
@@ -494,7 +512,20 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
 
     @Override
     public List<HrmEmployeeDO> getDueRegularEmployeeList(LocalDateTime deadlineTime) {
-        return employeeMapper.selectListByRegularTimeBeforeOrEqual(deadlineTime);
+        List<HrmEmployeeDO> employees = employeeMapper.selectListByRegularTimeBeforeOrEqual(deadlineTime);
+        if (cn.hutool.core.collection.CollUtil.isEmpty(employees)) {
+            return employees;
+        }
+        // 用工形式为「不参与转正」的（临时工 / 日结工 / 计件工 / 劳务 / 派遣 / 兼职 / 实习 / 返聘）直接跳过，
+        // 避免项目制短工被自动转成正式员工
+        Map<Long, Boolean> joinRegularMap = employmentTypeService.getEmploymentTypeList().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        cn.iocoder.txgy.module.hrm.dal.dataobject.employment.HrmEmploymentTypeDO::getId,
+                        item -> !Boolean.FALSE.equals(item.getJoinRegular()), (a, b) -> a));
+        return employees.stream()
+                .filter(employee -> employee.getEmploymentTypeId() == null
+                        || !Boolean.FALSE.equals(joinRegularMap.get(employee.getEmploymentTypeId())))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override
@@ -609,6 +640,14 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
     public Long createEmployee(HrmEmployeeSaveReqVO createReqVO) {
         // 1. 校验员工档案及其关联数据
         employeeFieldConfigService.validateEmployeeCreateFields(createReqVO, createReqVO.getEntryStatus());
+        // 1.1 工号为空时，按当前租户的工号规则自动生成（格式：租户缩写 + 顺序号）
+        // 注意：需放在字段显隐校验之后，避免"未显示字段不允许提交"的校验冲突
+        if (StrUtil.isBlank(createReqVO.getJobNumber())) {
+            createReqVO.setJobNumber(employeeNoService.generateJobNumber());
+        }
+        // 1.2 未绑定后台用户时，自动绑定或开通员工账号（用户名 = 工号），
+        // 这样招聘转员工建档后即可用「工号 / 用户名」登录后台
+        bindEmployeeUserAccount(createReqVO);
         validateEmployeeForCreateOrUpdate(null, createReqVO);
 
         // 2. 插入员工档案
@@ -648,6 +687,9 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
             HrmEmployeeSaveReqVO saveReqVO = BeanUtils.toBean(employeeReqVO, HrmEmployeeSaveReqVO.class);
             employeeFieldConfigService.validateEmployeeCreateFields(
                     saveReqVO, HrmEmployeeEntryStatusEnum.ACTIVE.getStatus());
+            if (StrUtil.isBlank(saveReqVO.getJobNumber())) {
+                saveReqVO.setJobNumber(employeeNoService.generateJobNumber());
+            }
             saveReqVO.setName(user.getNickname()).setEmail(user.getEmail()).setSex(user.getSex())
                     .setEntryStatus(HrmEmployeeEntryStatusEnum.ACTIVE.getStatus())
                     .setCompanyAgeStartTime(employeeReqVO.getEntryTime());
@@ -777,7 +819,10 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
         if (userId == null) {
             return null;
         }
-        return employeeMapper.selectByUserId(userId);
+        // 用户编号全局唯一：员工端（含个人账号）按 userId 查询本人档案时需要忽略租户过滤，
+        // 否则个人账号（保留租户 0）无法读取所属企业的员工档案
+        return cn.iocoder.txgy.framework.tenant.core.util.TenantUtils.executeIgnore(
+                () -> employeeMapper.selectByUserId(userId));
     }
 
     @Override
@@ -1198,6 +1243,64 @@ public class HrmEmployeeServiceImpl implements HrmEmployeeService {
                 throw exception(EMPLOYEE_LEADER_INVALID);
             }
             currentLeaderEmployeeId = validateEmployeeExists(currentLeaderEmployeeId).getLeaderEmployeeId();
+        }
+    }
+
+    /**
+     * 员工未绑定后台用户时，自动绑定或开通员工账号（用户名 = 工号）
+     *
+     * <p>规则：</p>
+     * <ol>
+     *     <li>已有同手机号的后台用户 → 直接绑定，避免重复开户；</li>
+     *     <li>否则新建账号，用户名 = 工号，密码留空时沿用系统「初始密码」配置；</li>
+     *     <li>开户失败（账号名/手机号冲突、系统模块不可用等）只记日志，不阻断员工建档。</li>
+     * </ol>
+     */
+    private void bindEmployeeUserAccount(HrmEmployeeSaveReqVO reqVO) {
+        if (reqVO.getUserId() != null || StrUtil.isBlank(reqVO.getJobNumber())) {
+            return;
+        }
+        // 1. 优先复用：同手机号已存在的后台用户（例如员工此前已注册/被导入过）
+        if (StrUtil.isNotBlank(reqVO.getMobile())) {
+            try {
+                AdminUserRespDTO existUser = adminUserApi.getUserByMobile(reqVO.getMobile()).getCheckedData();
+                if (existUser != null && existUser.getId() != null) {
+                    reqVO.setUserId(existUser.getId());
+                    return;
+                }
+            } catch (Throwable ex) {
+                log.warn("[bindEmployeeUserAccount][按手机号({})查询后台用户失败]", reqVO.getMobile(), ex);
+            }
+        }
+        // 2. 自动开户：用户名 = 工号
+        try {
+            Long userId = adminUserApi.createUser(new AdminUserCreateReqDTO()
+                    .setUsername(reqVO.getJobNumber())
+                    .setNickname(StrUtil.blankToDefault(reqVO.getName(), reqVO.getJobNumber()))
+                    .setMobile(reqVO.getMobile())
+                    .setEmail(reqVO.getEmail())
+                    .setSex(reqVO.getSex())
+                    .setDeptId(reqVO.getDeptId())).getCheckedData();
+            reqVO.setUserId(userId);
+            // 自动开户后默认分配当前租户的「员工」角色，员工登录即有员工端菜单
+            assignDefaultEmployeeRole(userId);
+        } catch (Throwable ex) {
+            log.warn("[bindEmployeeUserAccount][工号({})自动开通员工账号失败，可在用户管理手工开通后重新绑定]",
+                    reqVO.getJobNumber(), ex);
+        }
+    }
+
+    /**
+     * 给自动开户的员工账号分配当前租户的「员工」角色（角色标识：employee_role_租户编号）
+     *
+     * <p>角色不存在、或系统模块调用失败时只记日志，不阻断建档；HR 仍可在用户管理手工分配。</p>
+     */
+    private void assignDefaultEmployeeRole(Long userId) {
+        try {
+            Long tenantId = TenantContextHolder.getRequiredTenantId();
+            permissionApi.assignRoleByCode(userId, "employee_role_" + tenantId);
+        } catch (Throwable ex) {
+            log.warn("[assignDefaultEmployeeRole][用户({})分配「员工」角色失败，可在用户管理手工分配]", userId, ex);
         }
     }
 

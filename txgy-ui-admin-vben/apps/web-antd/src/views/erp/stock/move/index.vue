@@ -7,12 +7,16 @@ import { ref } from 'vue';
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-import { message } from 'ant-design-vue';
+import { message, Tag } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
+  confirmStockMoveSource,
+  confirmStockMoveTarget,
   deleteStockMove,
   exportStockMove,
+  exportStockMovePdf,
   getStockMovePage,
   updateStockMoveStatus,
 } from '#/api/erp/stock/move';
@@ -35,9 +39,15 @@ function handleRefresh() {
 }
 
 /** 导出表格 */
-async function handleExport() {
-  const data = await exportStockMove(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '库存调拨单.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportStockMovePdf(await gridApi.formApi.getValues())
+      : await exportStockMove(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '库存调拨单.pdf' : '库存调拨单.xls',
+    source: data,
+  });
 }
 
 /** 新增库存调拨单 */
@@ -65,7 +75,13 @@ async function handleDelete(ids: number[]) {
   }
 }
 
-/** 审批/反审批操作 */
+const moveStatusMeta: Record<number, { color: string; text: string }> = {
+  10: { color: 'orange', text: '待调出确认' },
+  15: { color: 'blue', text: '待调入确认' },
+  20: { color: 'green', text: '调拨完成' },
+};
+
+/** 双确认/反确认操作 */
 async function handleUpdateStatus(
   row: ErpStockMoveApi.StockMove,
   status: number,
@@ -77,6 +93,26 @@ async function handleUpdateStatus(
   try {
     await updateStockMoveStatus(row.id!, status);
     message.success(`${status === 20 ? '审批' : '反审批'}成功`);
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleConfirm(row: ErpStockMoveApi.StockMove, side: 'source' | 'target') {
+  const hideLoading = message.loading({
+    content: side === 'source' ? '正在确认调出仓库...' : '正在确认调入仓库并变更库存...',
+    duration: 0,
+  });
+  try {
+    await (side === 'source'
+      ? confirmStockMoveSource(row.id!)
+      : confirmStockMoveTarget(row.id!));
+    message.success(
+      side === 'source'
+        ? '调出仓库确认成功，库存尚未变动，等待调入仓库确认'
+        : '双方确认完成，库存已完成调出和调入变更',
+    );
     handleRefresh();
   } finally {
     hideLoading();
@@ -143,6 +179,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="库存调拨单列表">
+      <template #status="{ row }">
+        <Tag :color="moveStatusMeta[row.status]?.color || 'default'">
+          {{ moveStatusMeta[row.status]?.text || `未知状态(${row.status})` }}
+        </Tag>
+      </template>
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -152,13 +193,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['erp:stock-move:create'],
               onClick: handleCreate,
-            },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:stock-move:export'],
-              onClick: handleExport,
             },
             {
               label: '批量删除',
@@ -173,6 +207,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
               },
             },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:stock-move:export']"
+          :export-handler="handleExport"
         />
       </template>
       <template #actions="{ row }">
@@ -190,21 +228,40 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               icon: ACTION_ICON.EDIT,
               auth: ['erp:stock-move:update'],
-              ifShow: () => row.status !== 20,
+              ifShow: () => row.status === 10,
               onClick: handleEdit.bind(null, row),
             },
             {
-              label: row.status === 10 ? '审批' : '反审批',
+              label: '确认调出',
               type: 'link',
               icon: ACTION_ICON.AUDIT,
               auth: ['erp:stock-move:update-status'],
+              ifShow: () => row.status === 10,
               popConfirm: {
-                title: `确认${row.status === 10 ? '审批' : '反审批'}${row.no}吗？`,
-                confirm: handleUpdateStatus.bind(
-                  null,
-                  row,
-                  row.status === 10 ? 20 : 10,
-                ),
+                title: `确认调出${row.no}吗？此时库存暂不变动。`,
+                confirm: handleConfirm.bind(null, row, 'source'),
+              },
+            },
+            {
+              label: '确认调入',
+              type: 'link',
+              icon: ACTION_ICON.AUDIT,
+              auth: ['erp:stock-move:update-status'],
+              ifShow: () => row.status === 15,
+              popConfirm: {
+                title: `确认收到${row.no}吗？确认后将同时变更调出、调入库存。`,
+                confirm: handleConfirm.bind(null, row, 'target'),
+              },
+            },
+            {
+              label: '反确认',
+              type: 'link',
+              icon: ACTION_ICON.AUDIT,
+              auth: ['erp:stock-move:update-status'],
+              ifShow: () => row.status === 20,
+              popConfirm: {
+                title: `确认反确认${row.no}吗？系统将冲销本次库存变动。`,
+                confirm: handleUpdateStatus.bind(null, row, 10),
               },
             },
             {
@@ -213,6 +270,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               danger: true,
               icon: ACTION_ICON.DELETE,
               auth: ['erp:stock-move:delete'],
+              ifShow: () => row.status === 10,
               popConfirm: {
                 title: $t('ui.actionMessage.deleteConfirm', [row.no]),
                 confirm: handleDelete.bind(null, [row.id!]),

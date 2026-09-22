@@ -31,6 +31,14 @@ const [Descriptions] = useDescription({
       label: '昵称',
     },
     {
+      field: 'loginName',
+      label: '登录名',
+    },
+    {
+      field: 'contactMobile',
+      label: '联系手机（未验证）',
+    },
+    {
       field: 'mobile',
       label: '手机号',
     },

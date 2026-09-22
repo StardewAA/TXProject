@@ -71,6 +71,12 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_FETCH_WEB_PAGE_FAIL = new ErrorCode(1_020_006_016, "网页抓取失败：{}");
     ErrorCode CRM_AI_CLASSIFY_FAIL = new ErrorCode(1_020_006_017, "AI 意图识别失败：{}");
 
+    // ========== CRM AI 文件（图片 / 文档）识别 1-020-006-021 ==========
+    ErrorCode CRM_AI_EXTRACT_FAIL = new ErrorCode(1_020_006_021, "文件识别失败：{}");
+    ErrorCode SUPPLIER_IMPORT_FILE_EMPTY = new ErrorCode(1_020_006_018, "供应商导入失败，原因：上传文件为空");
+    ErrorCode SUPPLIER_IMPORT_PARSE_FAIL = new ErrorCode(1_020_006_019, "供应商导入失败，原因：文档解析失败（{}），请确认为 .docx 格式的 Word 文档");
+    ErrorCode SUPPLIER_IMPORT_NO_DATA = new ErrorCode(1_020_006_020, "供应商导入失败，原因：文档中未识别到供应商数据，请确认表格表头包含「供应商名称」列");
+
     // ========== 权限管理 1_020_007_000 ==========
     ErrorCode CRM_PERMISSION_NOT_EXISTS = new ErrorCode(1_020_007_000, "数据权限不存在");
     ErrorCode CRM_PERMISSION_DENIED = new ErrorCode(1_020_007_001, "{}操作失败，原因：没有权限");
@@ -85,6 +91,8 @@ public interface ErrorCodeConstants {
     ErrorCode PRODUCT_NOT_EXISTS = new ErrorCode(1_020_008_000, "产品不存在");
     ErrorCode PRODUCT_NO_EXISTS = new ErrorCode(1_020_008_001, "产品编号已存在");
     ErrorCode PRODUCT_NOT_ENABLE = new ErrorCode(1_020_008_002, "产品【{}】已禁用");
+    ErrorCode PRODUCT_WMS_READ_ONLY = new ErrorCode(1_020_008_003,
+            "产品数据全部实时取自 WMS 仓库库存，不支持手动新增、修改、删除，请在 WMS 中维护");
 
     // ========== 产品分类 1_020_009_000 ==========
     ErrorCode PRODUCT_CATEGORY_NOT_EXISTS = new ErrorCode(1_020_009_000, "产品分类不存在");
@@ -107,6 +115,7 @@ public interface ErrorCodeConstants {
     // ========== 跟进记录 1_020_013_000 ==========
     ErrorCode FOLLOW_UP_RECORD_NOT_EXISTS = new ErrorCode(1_020_013_000, "跟进记录不存在");
     ErrorCode FOLLOW_UP_RECORD_DELETE_DENIED = new ErrorCode(1_020_013_001, "删除跟进记录失败，原因：没有权限");
+    ErrorCode FOLLOW_UP_RECORD_TIME_FUTURE = new ErrorCode(1_020_013_002, "实际跟进时间不能晚于当前时间");
 
     // ========== 报价 1_020_014_000 ==========
     ErrorCode QUOTATION_NOT_EXISTS = new ErrorCode(1_020_014_000, "报价不存在");
@@ -117,9 +126,27 @@ public interface ErrorCodeConstants {
     ErrorCode QUOTATION_DELETE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_005, "删除报价失败，原因：报价已生成合同，不能删除");
     ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_NOT_APPROVE = new ErrorCode(1_020_014_006, "转为合同失败，原因：报价不是审批通过状态");
     ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_EXISTS = new ErrorCode(1_020_014_007, "转为合同失败，原因：报价已生成合同");
+    ErrorCode QUOTATION_TYPE_INVALID = new ErrorCode(1_020_014_008, "保存报价失败，原因：报价类型不正确");
+    ErrorCode QUOTATION_PURCHASE_SUPPLIER_REQUIRED = new ErrorCode(1_020_014_009, "保存报价失败，原因：采购报价必须选择上游供应商");
+    ErrorCode QUOTATION_PURCHASE_SUPPLIER_INVALID = new ErrorCode(1_020_014_010, "保存报价失败，原因：所选单位不是「上游供应商」，采购报价仅可选择上游供应商");
+    ErrorCode QUOTATION_PURCHASE_BUSINESS_NOT_ALLOWED = new ErrorCode(1_020_014_011, "保存报价失败，原因：采购报价不允许关联商机");
+    ErrorCode QUOTATION_SALES_CUSTOMER_REQUIRED = new ErrorCode(1_020_014_012, "保存报价失败，原因：购销报价必须选择客户");
+    ErrorCode QUOTATION_SALES_CUSTOMER_INVALID = new ErrorCode(1_020_014_013, "保存报价失败，原因：所选单位是「上游供应商」，购销报价请选择下游客户");
+    ErrorCode QUOTATION_CREATE_CONTRACT_FAIL_RELATION_INVALID = new ErrorCode(1_020_014_014, "转为合同失败，原因：报价类型与往来单位不匹配");
+    ErrorCode QUOTATION_TYPE_UPDATE_FAIL_HAS_CONTRACT = new ErrorCode(1_020_014_015, "更新报价失败，原因：报价已生成合同，不能修改报价类型");
 
     // ========== 商机管理 1_020_002_000 报价关联校验 ==========
     ErrorCode BUSINESS_DELETE_FAIL_QUOTATION_EXISTS = new ErrorCode(1_020_002_005, "商机已关联报价，不能删除");
+
+    // ========== 商机管理 1_020_002_000 标准化阶段（阶段/状态组/赢单/输单） ==========
+    ErrorCode BUSINESS_UPDATE_FAIL_CLOSED = new ErrorCode(1_020_002_006, "更新商机失败，原因：商机已关闭（已赢单/已丢单），关键字段不可修改");
+    ErrorCode BUSINESS_STAGE_INVALID = new ErrorCode(1_020_002_007, "保存商机失败，原因：商机阶段不正确");
+    ErrorCode BUSINESS_WIN_FAIL_CLOSED = new ErrorCode(1_020_002_008, "赢单失败，原因：商机已关闭（当前状态：{}）");
+    ErrorCode BUSINESS_LOSE_FAIL_CLOSED = new ErrorCode(1_020_002_009, "输单失败，原因：商机已关闭（当前状态：{}）");
+    ErrorCode BUSINESS_STATE_INVALID = new ErrorCode(1_020_002_010, "更新商机状态组失败，原因：状态组不正确");
+    ErrorCode BUSINESS_UPDATE_STATE_FAIL_SAME = new ErrorCode(1_020_002_011, "更新商机状态组失败，原因：已经是该状态组");
+    ErrorCode BUSINESS_UPDATE_STATE_FAIL_NOT_SUPPORT = new ErrorCode(1_020_002_012, "更新商机状态组失败，原因：不允许直接设置为已赢单/已丢单，请使用「赢单」「输单」按钮");
+    ErrorCode BUSINESS_UPDATE_STATUS_FAIL_USE_BUTTON = new ErrorCode(1_020_002_013, "更新商机状态失败，原因：赢单/输单请使用「赢单」「输单」按钮操作");
 
     // ========== 业绩目标配置 1_020_011_000 ==========
     ErrorCode PERFORMANCE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_011_000, "业绩目标配置不存在");
@@ -133,6 +160,10 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_WARRANTY_YEARS_INVALID = new ErrorCode(1_020_014_003, "质保年限不正确，仅支持 1-5 年");
     ErrorCode AFTER_SALE_WARRANTY_END_DATE_INVALID = new ErrorCode(1_020_014_004, "质保到期日期不能早于项目完工验收日期");
     ErrorCode AFTER_SALE_WARRANTY_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_014_005, "删除质保档案失败，原因：已存在回访任务，不允许删除");
+    ErrorCode AFTER_SALE_WARRANTY_CREATE_FAIL_CONTRACT_EXISTS = new ErrorCode(1_020_014_006, "创建质保档案失败，原因：该合同已创建质保档案，不可重复创建");
+    ErrorCode AFTER_SALE_WARRANTY_STATUS_INVALID = new ErrorCode(1_020_014_007, "修正质保状态失败，原因：质保状态不正确");
+    ErrorCode AFTER_SALE_WARRANTY_UPDATE_CONFLICT = new ErrorCode(1_020_014_008, "保存失败，原因：该质保档案刚被他人修改过，请刷新页面后重试");
+    ErrorCode AFTER_SALE_WARRANTY_END_DATE_REQUIRED = new ErrorCode(1_020_014_009, "保存失败，原因：无法确定质保到期日期（请检查完工验收日期与质保年限）");
 
     // ========== 售后设置 1_020_015_000 ==========
     ErrorCode AFTER_SALE_CONFIG_NOT_EXISTS = new ErrorCode(1_020_015_000, "售后设置不存在");
@@ -144,6 +175,8 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_VISIT_PLAN_UPDATE_FAIL_NOT_ENABLE = new ErrorCode(1_020_016_003, "更新回访计划失败，原因：计划已生成回访任务，不可编辑周期配置");
     ErrorCode AFTER_SALE_VISIT_PLAN_DELETE_FAIL_EXISTS_TASK = new ErrorCode(1_020_016_004, "删除回访计划失败，原因：计划已生成回访任务，不允许删除");
     ErrorCode AFTER_SALE_VISIT_PLAN_DATE_RANGE_INVALID = new ErrorCode(1_020_016_005, "回访计划的生效结束日期不能早于生效开始日期");
+    ErrorCode AFTER_SALE_VISIT_PLAN_WARRANTY_EXISTS = new ErrorCode(1_020_016_006, "该质保档案已绑定回访计划，不能重复创建");
+    ErrorCode AFTER_SALE_VISIT_PLAN_START_DATE_BEFORE_ACCEPT_DATE = new ErrorCode(1_020_016_007, "回访计划开始日期不能早于关联质保档案的完工日期");
 
     // ========== 售后回访任务 1_020_017_000 ==========
     ErrorCode AFTER_SALE_VISIT_TASK_NOT_EXISTS = new ErrorCode(1_020_017_000, "回访任务不存在");
@@ -152,11 +185,16 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_VISIT_TASK_WARRANTY_NOT_EXISTS = new ErrorCode(1_020_017_003, "回访任务关联的质保档案不存在");
     ErrorCode AFTER_SALE_VISIT_TASK_DELETE_FAIL_FINISH = new ErrorCode(1_020_017_004, "删除回访任务失败，原因：任务已完成，不允许删除");
     ErrorCode AFTER_SALE_VISIT_TASK_UPDATE_FAIL_FINISH = new ErrorCode(1_020_017_005, "更新回访任务失败，原因：任务已完成，不允许编辑");
+    ErrorCode AFTER_SALE_VISIT_TASK_FINISH_FAIL_RECORD_NOT_FILLED = new ErrorCode(1_020_017_006, "完成回访任务失败，原因：关联的回访记录尚未填写完成");
+    ErrorCode AFTER_SALE_VISIT_TASK_NOT_ARRIVED = new ErrorCode(1_020_017_007, "提交回访记录失败，原因：未到计划回访日期（{}），暂不允许提交回访");
 
     // ========== 售后回访记录 1_020_018_000 ==========
     ErrorCode AFTER_SALE_VISIT_RECORD_NOT_EXISTS = new ErrorCode(1_020_018_000, "回访记录不存在");
     ErrorCode AFTER_SALE_VISIT_RECORD_DELETE_DENIED = new ErrorCode(1_020_018_001, "删除回访记录失败，原因：没有权限");
     ErrorCode AFTER_SALE_VISIT_RECORD_OPERATE_DENIED = new ErrorCode(1_020_018_002, "回访记录操作失败，原因：不是登记人本人，且没有管理员权限");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TIME_FUTURE = new ErrorCode(1_020_018_003, "回访时间不能晚于今天");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TIME_BEFORE_ACCEPT = new ErrorCode(1_020_018_004, "回访时间不能早于项目完工验收日期");
+    ErrorCode AFTER_SALE_VISIT_RECORD_TASK_EXISTS = new ErrorCode(1_020_018_005, "该回访任务已存在回访记录，请直接编辑原记录");
 
     // ========== 售后问题工单 1_020_019_000 ==========
     ErrorCode AFTER_SALE_TICKET_NOT_EXISTS = new ErrorCode(1_020_019_000, "问题工单不存在");
@@ -167,6 +205,7 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_TICKET_DELETE_DENIED = new ErrorCode(1_020_019_005, "删除工单失败，原因：工单已处理，不允许删除");
     ErrorCode AFTER_SALE_TICKET_CREATE_FAIL_CUSTOMER_NOT_EXISTS = new ErrorCode(1_020_019_006, "创建工单失败，原因：客户不存在");
     ErrorCode AFTER_SALE_TICKET_UPDATE_FAIL_FINISH = new ErrorCode(1_020_019_007, "更新工单失败，原因：工单已完成或已关闭，不允许编辑");
+    ErrorCode AFTER_SALE_TICKET_FINISH_NEED_RECORD = new ErrorCode(1_020_019_008, "完成工单失败，原因：请先填写工单记录（处理结果）");
 
     // ========== 售后转商机关联 1_020_020_000 ==========
     ErrorCode AFTER_SALE_BUSINESS_REL_NOT_EXISTS = new ErrorCode(1_020_020_000, "售后转商机关联不存在");

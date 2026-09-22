@@ -46,9 +46,10 @@ watch(
     }
     loading.value = true;
     try {
+      // 速览属可选增强：客户无数据权限时静默降级，不弹全局错误提示
       const [detail, contactList] = await Promise.all([
-        getCustomer(id),
-        getContactListByCustomer(id).catch(() => []),
+        getCustomer(id, true),
+        getContactListByCustomer(id, true).catch(() => []),
       ]);
       customer.value = detail;
       contacts.value = Array.isArray(contactList) ? contactList : [];

@@ -20,6 +20,12 @@ import { DEFAULT_BIZ_GROUPS, useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<ReportDatasetApi.Dataset>();
+import { useFormSchema } from '../data';
+import ParamEditor from './param-editor.vue';
+
+const emit = defineEmits(['success']);
+const formData = ref<ReportDatasetApi.Dataset>();
+const params = ref<ReportDatasetApi.Param[]>([]);
 const isPlatformDataset = computed(() => formData.value?.tenantId === 0);
 const getTitle = computed(() => {
   return formData.value?.id
@@ -82,6 +88,14 @@ const [Modal, modalApi] = useVbenModal({
         data.timeoutSeconds = formData.value.timeoutSeconds;
         data.params = formData.value.params ?? [];
       }
+    if (params.value.some((item) => !item.name)) {
+      message.warning('参数名不能为空');
+      return;
+    }
+    modalApi.lock();
+    try {
+      const data = (await formApi.getValues()) as ReportDatasetApi.Dataset;
+      data.params = params.value;
       await (formData.value?.id
         ? updateDataset(data)
         : createDataset(data));
@@ -100,11 +114,18 @@ const [Modal, modalApi] = useVbenModal({
     void loadBizGroupOptions();
     const data = modalApi.getData<ReportDatasetApi.Dataset>();
     if (!data || !data.id) {
+      params.value = [];
+      return;
+    }
+    const data = modalApi.getData<ReportDatasetApi.Dataset>();
+    if (!data || !data.id) {
+      params.value = [];
       return;
     }
     modalApi.lock();
     try {
       formData.value = await getDataset(data.id);
+      params.value = formData.value.params ?? [];
       await formApi.setValues(formData.value);
     } finally {
       modalApi.unlock();
@@ -123,5 +144,8 @@ const [Modal, modalApi] = useVbenModal({
       type="warning"
     />
     <Form class="mx-4" />
+    <div class="mx-4 mt-4">
+      <ParamEditor v-model="params" />
+    </div>
   </Modal>
 </template>

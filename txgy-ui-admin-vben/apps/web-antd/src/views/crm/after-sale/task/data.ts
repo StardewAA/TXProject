@@ -125,6 +125,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       fixed: 'left',
     },
     {
+      field: 'bizNo',
+      title: '业务编号',
+      width: 90,
+    },
+    {
       field: 'projectName',
       title: '工程项目名称',
       minWidth: 200,
@@ -136,7 +141,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       field: 'taskDate',
-      title: '计划执行日期',
+      title: '计划回访日期',
+      minWidth: 140,
+    },
+    {
+      field: 'windowEndDate',
+      title: '窗口期截止日期',
       minWidth: 140,
     },
     {
@@ -148,10 +158,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'status',
       title: '任务状态',
       minWidth: 110,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.CRM_AFTER_SALE_VISIT_TASK_STATUS },
-      },
+      slots: { default: 'status' },
     },
     {
       field: 'finishTime',
@@ -178,7 +185,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 220,
+      width: 280,
       fixed: 'right',
       slots: { default: 'actions' },
     },

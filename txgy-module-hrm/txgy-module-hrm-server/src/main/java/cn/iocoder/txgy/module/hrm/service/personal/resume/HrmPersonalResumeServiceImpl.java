@@ -13,6 +13,7 @@ import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.application.HrmRecruitApplic
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.candidate.HrmRecruitCandidateMapper;
 import cn.iocoder.txgy.module.hrm.dal.mysql.recruit.chat.HrmRecruitChatConversationMapper;
 import cn.iocoder.txgy.module.hrm.dal.mysql.personal.resume.HrmPersonalResumeMapper;
+import cn.iocoder.txgy.module.hrm.service.common.HrmResumeFileValidator;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,9 +43,13 @@ public class HrmPersonalResumeServiceImpl implements HrmPersonalResumeService {
     private HrmRecruitCandidateMapper candidateMapper;
     @Resource
     private HrmRecruitChatConversationMapper chatConversationMapper;
+    @Resource
+    private HrmResumeFileValidator resumeFileValidator;
 
     @Override
     public Long createUploadResume(Long userId, HrmPortalResumeUploadReqVO reqVO) {
+        // 服务端兜底校验简历附件类型与大小
+        resumeFileValidator.validate(reqVO.getFileName(), reqVO.getFileUrl());
         HrmPersonalResumeDO resume = BeanUtils.toBean(reqVO, HrmPersonalResumeDO.class)
                 .setUserId(userId).setResumeType(UPLOAD_RESUME_TYPE);
         return insertInCurrentTenant(resume);

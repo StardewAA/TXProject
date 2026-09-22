@@ -17,11 +17,17 @@ public class BpmTaskPageReqVO extends PageParam {
     @Schema(description = "流程任务名", example = "OPENLAB BS")
     private String name;
 
+    @Schema(description = "业务任务单号", example = "RK-20260920-001")
+    private String orderNo;
+
     @Schema(description = "流程分类", example = "1")
     private String category;
 
     @Schema(description = "流程定义的标识", example = "2048")
     private String processDefinitionKey; // 精准匹配
+
+    @Schema(description = "流程定义标识集合，逗号分隔", example = "wms_receipt_approval,wms_shipment_approval")
+    private String processDefinitionKeys;
 
     @Schema(description = "审批状态", example = "1")
     @InEnum(BpmTaskStatusEnum.class)

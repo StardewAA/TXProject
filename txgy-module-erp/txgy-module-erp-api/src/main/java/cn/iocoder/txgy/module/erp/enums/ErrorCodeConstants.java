@@ -14,6 +14,13 @@ public interface ErrorCodeConstants {
     ErrorCode SUPPLIER_NOT_ENABLE = new ErrorCode(1_030_100_001, "供应商({})未启用");
     ErrorCode SUPPLIER_PARTNER_CODE_DUPLICATE = new ErrorCode(1_030_100_002, "供应商统一编码({})已存在");
     ErrorCode SUPPLIER_PARTNER_CODE_IMMUTABLE = new ErrorCode(1_030_100_003, "供应商统一编码创建后不可修改");
+    ErrorCode SUPPLIER_CREDIT_NOT_EXISTS = new ErrorCode(1_030_100_004, "供应商资信档案不存在");
+    ErrorCode SUPPLIER_CREDIT_BLOCKED = new ErrorCode(1_030_100_005, "供应商({})当前不具备采购资格：{}");
+    ErrorCode SUPPLIER_CREDIT_CATEGORY_NOT_ADMITTED = new ErrorCode(1_030_100_006, "供应商({})未准入当前采购品类：{}");
+    ErrorCode SUPPLIER_CREDIT_QUALIFICATION_EXPIRED = new ErrorCode(1_030_100_007, "供应商({})存在已过期资质：{}");
+    ErrorCode SUPPLIER_CREDIT_VERSION_CONFLICT = new ErrorCode(1_030_100_008, "供应商资信数据版本过旧，当前版本为{}");
+    ErrorCode SUPPLIER_CREDIT_STATUS_INVALID = new ErrorCode(1_030_100_009, "供应商资信状态不合法：{}");
+    ErrorCode SUPPLIER_USER_DUPLICATE = new ErrorCode(1_030_100_010, "登录账号已绑定供应商({})，一个账号只能绑定一家供应商");
 
     // ========== ERP 采购订单（1-030-101-000） ==========
     ErrorCode PURCHASE_ORDER_NOT_EXISTS = new ErrorCode(1_030_101_000, "采购订单不存在");
@@ -37,6 +44,17 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode MALL_PURCHASE_DEMAND_RESULT_REASON_REQUIRED = new ErrorCode(1_030_104_005, "商城缺货采购需求状态({})必须填写原因说明");
     ErrorCode PURCHASE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_101_011, "采购订单({})当前状态无法提交审批");
     ErrorCode PURCHASE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_030_101_012, "采购订单({})正在审批，无法修改");
+    ErrorCode PURCHASE_ORDER_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_030_101_013, "反审批失败，只有审批中或已审批的采购订单才能反审批");
+
+    // ========== ERP 图片识别（1-030-105-000） ==========
+    ErrorCode RECOGNITION_TASK_NOT_EXISTS = new ErrorCode(1_030_105_000, "图片识别任务不存在");
+    ErrorCode RECOGNITION_TASK_STATE_INVALID = new ErrorCode(1_030_105_001, "当前图片识别任务状态({})不允许该操作");
+    ErrorCode RECOGNITION_RESULT_VERSION_EXPIRED = new ErrorCode(1_030_105_002, "识别结果已更新，请刷新后重新操作");
+    ErrorCode RECOGNITION_UNSUPPORTED_BIZ_TYPE = new ErrorCode(1_030_105_003, "暂不支持识别业务类型({})");
+    ErrorCode PURCHASE_ORDER_ITEM_NOT_EMPTY = new ErrorCode(1_030_101_014, "采购订单至少需要一条明细");
+    ErrorCode PURCHASE_ORDER_ITEM_COUNT_INVALID = new ErrorCode(1_030_101_015, "采购订单明细数量必须大于 0");
+    ErrorCode PURCHASE_ORDER_ITEM_PRICE_INVALID = new ErrorCode(1_030_101_016, "采购订单明细单价必须大于 0");
+    ErrorCode PURCHASE_ORDER_PRODUCT_UNIT_NOT_EXISTS = new ErrorCode(1_030_101_017, "采购订单产品未配置单位");
 
     // ========== ERP 采购入库（1-030-102-000） ==========
     ErrorCode PURCHASE_IN_NOT_EXISTS = new ErrorCode(1_030_102_000, "采购入库单不存在");
@@ -48,6 +66,8 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode PURCHASE_IN_NOT_APPROVE = new ErrorCode(1_030_102_006, "采购入库单未审核，无法操作");
     ErrorCode PURCHASE_IN_FAIL_PAYMENT_PRICE_EXCEED = new ErrorCode(1_030_102_007, "付款金额({})超过采购入库单总金额({})");
     ErrorCode PURCHASE_IN_PROCESS_FAIL_EXISTS_PAYMENT = new ErrorCode(1_030_102_008, "反审核失败，已存在对应的付款单");
+    ErrorCode PURCHASE_IN_WMS_ALREADY_SUBMITTED = new ErrorCode(1_030_102_009, "采购入库单({})已提交 WMS，请勿重复申请");
+    ErrorCode PURCHASE_IN_MATERIAL_NOT_RAW = new ErrorCode(1_030_102_010, "采购入库单({})明细存在非原材料物料，无法申请入库到 WMS");
 
     // ========== ERP 采购退货（1-030-103-000） ==========
     ErrorCode PURCHASE_RETURN_NOT_EXISTS = new ErrorCode(1_030_103_000, "采购退货单不存在");
@@ -80,6 +100,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode SALE_ORDER_PROCESS_FAIL_EXISTS_RETURN = new ErrorCode(1_020_201_010, "反审核失败，已存在对应的销售退货单");
     ErrorCode SALE_ORDER_SUBMIT_FAIL_STATUS = new ErrorCode(1_020_201_011, "销售订单({})当前状态无法提交审批");
     ErrorCode SALE_ORDER_UPDATE_FAIL_PROCESS = new ErrorCode(1_020_201_012, "销售订单({})正在审批，无法修改");
+    ErrorCode SALE_ORDER_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_020_201_013, "反审批失败，只有审批中或已审批的销售订单才能反审批");
 
     // ========== ERP 销售出库（1-030-202-000） ==========
     ErrorCode SALE_OUT_NOT_EXISTS = new ErrorCode(1_020_202_000, "销售出库单不存在");
@@ -107,6 +128,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode WAREHOUSE_NOT_EXISTS = new ErrorCode(1_030_400_000, "仓库不存在");
     ErrorCode WAREHOUSE_NOT_ENABLE = new ErrorCode(1_030_400_001, "仓库({})未启用");
     ErrorCode WAREHOUSE_WMS_CODE_DUPLICATE = new ErrorCode(1_030_400_002, "WMS 仓库编码({})已绑定其它 ERP 仓库");
+    ErrorCode WAREHOUSE_WMS_CODE_NOT_CONFIGURED = new ErrorCode(1_030_400_003, "仓库({})未配置 WMS 仓库编码，无法申请入库到 WMS");
 
     // ========== ERP 其它入库单 1-030-401-000 ==========
     ErrorCode STOCK_IN_NOT_EXISTS = new ErrorCode(1_030_401_000, "其它入库单不存在");
@@ -131,6 +153,9 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode STOCK_MOVE_APPROVE_FAIL = new ErrorCode(1_030_402_003, "审核失败，只有未审核的调拨单才能审核");
     ErrorCode STOCK_MOVE_NO_EXISTS = new ErrorCode(1_030_402_004, "生成调拨号失败，请重新提交");
     ErrorCode STOCK_MOVE_UPDATE_FAIL_APPROVE = new ErrorCode(1_030_402_005, "库存调拨单({})已审核，无法修改");
+    ErrorCode STOCK_MOVE_CONFIRM_STATUS_INVALID = new ErrorCode(1_030_402_006, "调拨单当前状态不允许确认");
+    ErrorCode STOCK_MOVE_CONFIRM_USER_INVALID = new ErrorCode(1_030_402_007, "只有对应仓库负责人才能确认调拨");
+    ErrorCode STOCK_MOVE_WAREHOUSE_MANAGER_MISSING = new ErrorCode(1_030_402_008, "调拨仓库未配置负责人，无法发起确认");
 
     // ========== ERP 库存盘点单 1-030-403-000 ==========
     ErrorCode STOCK_CHECK_NOT_EXISTS = new ErrorCode(1_030_403_000, "库存盘点单不存在");
@@ -169,6 +194,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     // ========== ERP 结算账户 1-030-600-000 ==========
     ErrorCode ACCOUNT_NOT_EXISTS = new ErrorCode(1_030_600_000, "结算账户不存在");
     ErrorCode ACCOUNT_NOT_ENABLE = new ErrorCode(1_030_600_001, "结算账户({})未启用");
+    ErrorCode ACCOUNT_HAS_RECORDS = new ErrorCode(1_030_600_002, "结算账户下存在账务记录，无法删除");
 
     // ========== ERP 付款单 1-030-601-000 ==========
     ErrorCode FINANCE_PAYMENT_NOT_EXISTS = new ErrorCode(1_030_601_000, "付款单不存在");
@@ -177,6 +203,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode FINANCE_PAYMENT_APPROVE_FAIL = new ErrorCode(1_030_601_003, "审核失败，只有未审核的付款单才能审核");
     ErrorCode FINANCE_PAYMENT_NO_EXISTS = new ErrorCode(1_030_601_004, "生成付款单号失败，请重新提交");
     ErrorCode FINANCE_PAYMENT_UPDATE_FAIL_APPROVE = new ErrorCode(1_030_601_005, "付款单({})已审核，无法修改");
+    ErrorCode FINANCE_PAYMENT_AMOUNT_INVALID = new ErrorCode(1_030_601_006, "付款金额非法，明细重复或付款金额超出可付/预付范围");
 
     // ========== ERP 收款单 1-030-602-000 ==========
     ErrorCode FINANCE_RECEIPT_NOT_EXISTS = new ErrorCode(1_030_602_000, "收款单不存在");
@@ -185,6 +212,21 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode FINANCE_RECEIPT_APPROVE_FAIL = new ErrorCode(1_030_602_003, "审核失败，只有未审核的收款单才能审核");
     ErrorCode FINANCE_RECEIPT_NO_EXISTS = new ErrorCode(1_030_602_004, "生成收款单号失败，请重新提交");
     ErrorCode FINANCE_RECEIPT_UPDATE_FAIL_APPROVE = new ErrorCode(1_030_602_005, "收款单({})已审核，无法修改");
+    ErrorCode FINANCE_RECEIPT_AMOUNT_INVALID = new ErrorCode(1_030_602_006, "收款金额非法，明细重复或收款金额超出可收/预收范围");
+
+    // ========== ERP 物流（1-030-800-000） ==========
+    ErrorCode LOGISTICS_EXCEPTION_NOT_EXISTS = new ErrorCode(1_030_800_000, "物流异常单不存在");
+    ErrorCode LOGISTICS_EVENT_NOT_PENDING_COMPENSATION = new ErrorCode(1_030_800_001, "物流事件不处于待补偿状态");
+    ErrorCode LOGISTICS_ATTACHMENT_INVALID = new ErrorCode(1_030_800_002, "物流附件无效");
+    ErrorCode LOGISTICS_NODE_INVALID = new ErrorCode(1_030_800_003, "物流节点无效");
+    ErrorCode LOGISTICS_RECEIPT_INVALID = new ErrorCode(1_030_800_004, "物流回执无效");
+    ErrorCode LOGISTICS_RELATION_NOT_EXISTS = new ErrorCode(1_030_800_005, "物流关联关系不存在");
+    ErrorCode LOGISTICS_REQUEST_CONFLICT = new ErrorCode(1_030_800_006, "物流请求冲突，请勿重复提交");
+    ErrorCode LOGISTICS_SOURCE_ORDER_NOT_EXISTS = new ErrorCode(1_030_800_007, "物流来源单据不存在");
+    ErrorCode LOGISTICS_SOURCE_ORDER_NOT_APPROVED = new ErrorCode(1_030_800_008, "物流来源单据未审批通过");
+    ErrorCode LOGISTICS_SOURCE_ORDER_TYPE_INVALID = new ErrorCode(1_030_800_009, "物流来源单据类型无效");
+    ErrorCode LOGISTICS_TASK_CONFLICT = new ErrorCode(1_030_800_010, "物流任务状态冲突");
+    ErrorCode LOGISTICS_TENANT_MISMATCH = new ErrorCode(1_030_800_011, "物流租户不匹配");
 
     // ========== ERP/WMS 跨模块集成 1-030-900-000 ==========
     ErrorCode COLLABORATION_B_DUPLICATE = new ErrorCode(1_030_900_000, "协作单 B 已接收");
@@ -197,13 +239,6 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode COLLABORATION_B_CONFIRM_ITEM_INVALID = new ErrorCode(1_030_900_007, "协作单 B 确认明细与接收明细不一致");
     ErrorCode COLLABORATION_B_TYPE_INVALID = new ErrorCode(1_030_900_008, "协同单类型不支持");
 
-    // ========== ERP/MES 跨模块集成 1-030-910-000 ==========
-    ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_030_910_000, "集成请求的租户编号与当前上下文不一致");
-    ErrorCode PRODUCTION_PROGRESS_SOURCE_INVALID = new ErrorCode(1_030_910_001, "生产进度回传的来源模块不合法（仅支持 MES）");
-    ErrorCode PRODUCTION_PROGRESS_QUANTITY_INVALID = new ErrorCode(1_030_910_002, "完工数量不能为空且不能为负数");
-    ErrorCode PRODUCTION_PROGRESS_MATERIAL_NOT_FOUND = new ErrorCode(1_030_910_003, "物料编码({})在 ERP 不存在，无法回写生产进度");
-    ErrorCode PRODUCTION_PROGRESS_ORDER_ITEM_NOT_FOUND = new ErrorCode(1_030_910_004, "销售订单中不存在物料({})的订单行，无法回写生产进度");
-
     // ========== ERP 采购申请（1-030-700-000） ==========
     ErrorCode PURCHASE_REQUEST_NOT_EXISTS = new ErrorCode(1_030_700_000, "采购申请不存在");
     ErrorCode PURCHASE_REQUEST_NO_EXISTS = new ErrorCode(1_030_700_001, "生成采购申请编号失败，请重新提交");
@@ -212,6 +247,7 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode PURCHASE_REQUEST_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_700_004, "采购申请({})当前状态无法提交审批");
     ErrorCode PURCHASE_REQUEST_CONVERT_FAIL_STATUS = new ErrorCode(1_030_700_005, "采购申请({})未审批通过，无法转询价");
     ErrorCode PURCHASE_REQUEST_ITEM_COUNT_INVALID = new ErrorCode(1_030_700_006, "采购申请明细数量必须大于零");
+    ErrorCode PURCHASE_REQUEST_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_030_700_007, "反审批失败，只有审批中或已审批的采购申请才能反审批");
 
     // ========== ERP 询价与定标（1-030-710-000） ==========
     ErrorCode INQUIRY_NOT_EXISTS = new ErrorCode(1_030_710_000, "询价单不存在");
@@ -228,6 +264,16 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode AWARD_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_710_011, "询价单({})当前状态无法提交定标审批");
     ErrorCode AWARD_CONFIRM_FAIL_STATUS = new ErrorCode(1_030_710_012, "询价单({})定标尚未审批通过");
     ErrorCode AWARD_ALREADY_CONFIRMED = new ErrorCode(1_030_710_013, "询价单({})已经生成采购订单");
+    ErrorCode INQUIRY_QUOTE_DEADLINE_PASSED = new ErrorCode(1_030_710_014, "询价单({})已超过报价截止时间");
+    ErrorCode INQUIRY_QUOTE_ITEMS_INCOMPLETE = new ErrorCode(1_030_710_015, "报价明细必须完整覆盖询价明细，且数量不能超过询价数量");
+    ErrorCode AWARD_COUNT_MISMATCH = new ErrorCode(1_030_710_016, "定标数量必须等于对应询价数量");
+    // 反审批（团队 master 引入，占用 017/018）
+    ErrorCode INQUIRY_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_030_710_017, "反审批失败，只有审批中或已审批且未发布的询价单才能反审批");
+    ErrorCode AWARD_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_030_710_018, "反审批失败，只有审批中或已定标（未生成采购订单）的询价单才能反审批");
+    // 供应商数据隔离（合并时让出 017/018，顺延至 019~021，避免与上面的反审批编号冲突）
+    ErrorCode INQUIRY_SUPPLIER_NOT_INVITED = new ErrorCode(1_030_710_019, "供应商({})未被邀请参与该询价单");
+    ErrorCode INQUIRY_QUOTE_SUPPLIER_MISMATCH = new ErrorCode(1_030_710_020, "报价供应商与当前账号所属供应商({})不一致");
+    ErrorCode INQUIRY_NOT_VISIBLE_FOR_SUPPLIER = new ErrorCode(1_030_710_021, "无权查看该询价单");
 
     // ========== ERP 造价结果（1-030-720-000） ==========
     ErrorCode COST_RESULT_NOT_EXISTS = new ErrorCode(1_030_720_000, "造价结果不存在");
@@ -237,5 +283,25 @@ ErrorCode PURCHASE_ORDER_ITEM_RETURN_FAIL_IN_EXCEED = new ErrorCode(1_030_101_00
     ErrorCode COST_RESULT_SUBMIT_FAIL_STATUS = new ErrorCode(1_030_720_004, "造价结果({})当前状态无法提交审批");
     ErrorCode COST_RESULT_MAPPING_INCOMPLETE = new ErrorCode(1_030_720_005, "造价结果仍有未完成映射的材料");
     ErrorCode COST_RESULT_CONVERT_FAIL_STATUS = new ErrorCode(1_030_720_006, "造价结果({})未审批通过，无法转换");
+    // 反审批（团队 master 引入，占用 007）
+    ErrorCode COST_RESULT_REVERSE_APPROVE_FAIL_STATUS = new ErrorCode(1_030_720_007, "反审批失败，只有审批中或已审批且未转换的造价结果才能反审批");
+    // 造价转销售订单（合并时让出 007，顺延至 008/009，避免与上面的反审批编号冲突）
+    ErrorCode COST_RESULT_CONVERT_CUSTOMER_REQUIRED = new ErrorCode(1_030_720_008, "造价结果转销售订单时必须指定客户");
+    ErrorCode COST_RESULT_CONVERT_NO_MAPPED_ITEM = new ErrorCode(1_030_720_009, "造价结果没有已完成物料映射的明细，无法转销售订单");
+
+    // ========== ERP/WMS 跨模块集成 1-030-900-000 ==========
+
+    // ========== ERP/MES 跨模块集成 1-030-910-000 ==========
+    ErrorCode INTEGRATION_TENANT_MISMATCH = new ErrorCode(1_030_910_000, "集成请求的租户编号与当前上下文不一致");
+    ErrorCode PRODUCTION_PROGRESS_SOURCE_INVALID = new ErrorCode(1_030_910_001, "生产进度回传的来源模块不合法（仅支持 MES）");
+    ErrorCode PRODUCTION_PROGRESS_QUANTITY_INVALID = new ErrorCode(1_030_910_002, "完工数量不能为空且不能为负数");
+    ErrorCode PRODUCTION_PROGRESS_MATERIAL_NOT_FOUND = new ErrorCode(1_030_910_003, "物料编码({})在 ERP 不存在，无法回写生产进度");
+    ErrorCode PRODUCTION_PROGRESS_ORDER_ITEM_NOT_FOUND = new ErrorCode(1_030_910_004, "销售订单中不存在物料({})的订单行，无法回写生产进度");
+
+    // ========== ERP 采购申请（1-030-700-000） ==========
+
+    // ========== ERP 询价与定标（1-030-710-000） ==========
+
+    // ========== ERP 造价结果（1-030-720-000） ==========
 
 }

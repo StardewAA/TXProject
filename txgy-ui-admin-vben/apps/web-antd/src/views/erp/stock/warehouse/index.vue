@@ -8,9 +8,11 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import ErpExportButton from '#/components/erp-export-button/index.vue';
 import {
   deleteWarehouse,
   exportWarehouse,
+  exportWarehousePdf,
   getWarehousePage,
   updateWarehouseDefaultStatus,
 } from '#/api/erp/stock/warehouse';
@@ -28,9 +30,15 @@ function handleRefresh() {
 }
 
 /** 导出仓库 */
-async function handleExport() {
-  const data = await exportWarehouse(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '仓库.xls', source: data });
+async function handleExport(format: 'excel' | 'pdf') {
+  const data =
+    format === 'pdf'
+      ? await exportWarehousePdf(await gridApi.formApi.getValues())
+      : await exportWarehouse(await gridApi.formApi.getValues());
+  downloadFileFromBlobPart({
+    fileName: format === 'pdf' ? '仓库.pdf' : '仓库.xls',
+    source: data,
+  });
 }
 
 /** 创建仓库 */
@@ -134,14 +142,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['erp:warehouse:create'],
               onClick: handleCreate,
             },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['erp:warehouse:export'],
-              onClick: handleExport,
-            },
           ]"
+        />
+        <ErpExportButton
+          :auth="['erp:warehouse:export']"
+          :export-handler="handleExport"
         />
       </template>
 

@@ -112,6 +112,8 @@ public class HrmEmployeeSaveReqVO {
     @NotNull(message = "聘用形式不能为空")
     @InEnum(value = HrmEmployeeTypeEnum.class, message = "聘用形式必须是 {value}")
     private Integer type;
+    @Schema(description = "用工形式编号", example = "3")
+    private Long employmentTypeId;
 
     @Schema(description = "入职时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "入职时间不能为空")
@@ -184,11 +186,13 @@ public class HrmEmployeeSaveReqVO {
         return ObjUtil.notEqual(HrmEmployeeTypeEnum.INFORMAL.getType(), type) || status != null;
     }
 
-    @AssertTrue(message = "在职员工工号不能为空")
+    /**
+     * 工号允许留空：留空时由服务端按当前租户的工号规则自动生成（格式：租户缩写 + 顺序号）
+     */
+    @AssertTrue(message = "工号长度不能超过 64 个字符")
     @JsonIgnore
     public boolean isJobNumberValid() {
-        return ObjUtil.notEqual(HrmEmployeeEntryStatusEnum.ACTIVE.getStatus(), entryStatus)
-                || StrUtil.isNotBlank(jobNumber);
+        return jobNumber == null || jobNumber.length() <= 64;
     }
 
     @AssertTrue(message = "正式员工试用期不能为空")

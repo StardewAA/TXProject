@@ -26,12 +26,14 @@ import cn.iocoder.txgy.module.mes.service.pro.route.MesProRouteProcessService;
 import cn.iocoder.txgy.module.mes.service.pro.project.MesProProjectService;
 import cn.iocoder.txgy.module.mes.service.pro.task.MesProTaskService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
+import cn.iocoder.txgy.module.mes.service.qc.ipqc.MesQcIpqcService;
 import cn.iocoder.txgy.module.mes.service.wm.itemconsume.MesWmItemConsumeService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceLineService;
 import cn.iocoder.txgy.module.mes.service.wm.productproduce.MesWmProductProduceService;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import cn.iocoder.txgy.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class MesProFeedbackServiceImpl implements MesProFeedbackService {
 
     /**
@@ -86,6 +89,9 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
     @Resource
     @Lazy // 避免循环依赖
     private MesProProjectService projectService;
+    @Resource
+    @Lazy // 避免循环依赖（IPQC Service 完成检验后会回调本 Service 回写报工）
+    private MesQcIpqcService ipqcService;
 
     @Override
     public Long createFeedback(MesProFeedbackSaveReqVO createReqVO) {
@@ -214,9 +220,23 @@ public class MesProFeedbackServiceImpl implements MesProFeedbackService {
             // 4.1 需要检验：生成产出单（质量状态=待检验），更新报工状态为待检验，等质检完成回调后再入库
             if (checkFlag) {
                 // 完成时回调见：MesQcIpqcServiceImpl#finishIpqc → splitPendingAndFinishProduce + completeFeedbackFromIpqc
-                productProduceService.generateProductProduce(feedback, true);
+                MesWmProductProduceDO produce = productProduceService.generateProductProduce(feedback, true);
                 feedbackMapper.updateById(new MesProFeedbackDO().setId(id)
                         .setStatus(MesProFeedbackStatusEnum.UNCHECK.getStatus()));
+                // R1 自动建单：为待检产出行自动生成 IPQC 草稿（幂等；失败不阻断审批流程）
+                List<MesWmProductProduceLineDO> produceLines =
+                        produceLineService.getProductProduceLineListByProduceId(produce.getId());
+                for (MesWmProductProduceLineDO line : produceLines) {
+                    if (!MesWmQualityStatusEnum.PENDING.getStatus().equals(line.getQualityStatus())) {
+                        continue;
+                    }
+                    try {
+                        ipqcService.generateIpqcDraft(feedback, line);
+                    } catch (Exception e) {
+                        log.warn("[approveFeedback][报工单({}) 产出行({}) 自动生成 IPQC 失败，跳过]",
+                                id, line.getId(), e);
+                    }
+                }
                 return false;
             }
             // 4.2 无需检验：生成产出单（按合格/不合格拆行），直接完成入库，并更新任务/工单的已生产数量

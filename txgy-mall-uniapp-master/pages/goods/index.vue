@@ -156,6 +156,7 @@
           </view>
 
           <!-- 规格库存 -->
+          <s-comparison-bar />
           <view class="detail-card sku-stock-card ss-p-y-20 ss-p-x-20" v-if="skuStockList.length">
             <view class="stock-title ss-m-b-16">规格库存</view>
             <view class="sku-stock-list">
@@ -168,6 +169,7 @@
                 <view class="sku-stock-meta">
                   <view class="sku-stock-price">￥{{ fen2yuan(sku.promotionPrice || sku.price || 0) }}</view>
                   <view class="sku-stock-count">库存 {{ sku.stock ?? 0 }}</view>
+                  <button size="mini" :disabled="compareBusy" @tap="onCompareSku(sku)">加入对比</button>
                 </view>
               </view>
             </view>
@@ -240,7 +242,7 @@
 </template>
 
 <script setup>
-  import { reactive, computed } from 'vue';
+  import { reactive, computed, ref } from 'vue';
   import { onLoad, onPageScroll } from '@dcloudio/uni-app';
   import sheep from '@/sheep';
   import CouponApi from '@/sheep/api/promotion/coupon';
@@ -270,6 +272,19 @@
   import OrderApi from '@/sheep/api/trade/order';
   import { SharePageEnum } from '@/sheep/helper/const';
   import { isSimpleMarketingEnabled } from '@/sheep/helper/simplified-marketing';
+  import { comparison } from '@/sheep/helper/comparison-runtime';
+  import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  const compareBusy = ref(false);
+  const compareTask = useTenantTask(() => { compareBusy.value = false; });
+  async function onCompareSku(sku) {
+    if (!compareTask.current() || compareBusy.value || !skuStockList.value.some(item => item.id === sku?.id)) return;
+    const current = compareTask.capture(); compareBusy.value = true;
+    try {
+      const added = await comparison.add(sku.id);
+      if (current()) sheep.$helper.toast(added ? '已加入对比，请点击查看对比' : '清单未保存，请进入对比页刷新重试');
+    } catch (error) { if (current()) sheep.$helper.toast(error?.message || '加入对比失败'); }
+    finally { if (current()) compareBusy.value = false; }
+  }
 
   const bgColor = {
     bgColor: '#E93323',

@@ -23,15 +23,6 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'Workspace',
-        path: 'workspace',
-        component: () => import('#/views/dashboard/workspace/index.vue'),
-        meta: {
-          icon: 'carbon:workspace',
-          title: $t('page.dashboard.workspace'),
-        },
-      },
-      {
         name: 'AiHome',
         path: 'ai-home',
         component: () => import('#/views/dashboard/ai-home/index.vue'),

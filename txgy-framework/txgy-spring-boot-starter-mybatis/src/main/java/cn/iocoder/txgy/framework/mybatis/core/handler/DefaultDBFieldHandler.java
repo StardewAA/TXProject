@@ -17,6 +17,15 @@ import java.util.Objects;
  */
 public class DefaultDBFieldHandler implements MetaObjectHandler {
 
+    /**
+     * 系统操作者标识：当写入动作没有登录上下文时（例如 WMS / MES 等外部系统通过 RPC
+     * 机器回调写入 ERP 数据），使用该值填充 creator / updater。
+     *
+     * 部分表的 creator / updater 为 NOT NULL，若不回退会直接抛
+     * SQLIntegrityConstraintViolationException，使机器回调整体失败。
+     */
+    public static final String SYSTEM_OPERATOR = "0";
+
     @Override
     @SuppressWarnings("PatternVariableCanBeUsed")
     public void insertFill(MetaObject metaObject) {
@@ -34,13 +43,15 @@ public class DefaultDBFieldHandler implements MetaObjectHandler {
             }
 
             Long userId = SecurityFrameworkUtils.getLoginUserId();
-            // 当前登录用户不为空，创建人为空，则当前登录用户为创建人
-            if (Objects.nonNull(userId) && Objects.isNull(baseDO.getCreator())) {
-                baseDO.setCreator(userId.toString());
+            // 有登录上下文时以登录用户作为操作者，没有登录上下文（机器回调）时回退为系统操作者
+            String operator = Objects.nonNull(userId) ? userId.toString() : SYSTEM_OPERATOR;
+            // 创建人为空，则填充操作者
+            if (Objects.isNull(baseDO.getCreator())) {
+                baseDO.setCreator(operator);
             }
-            // 当前登录用户不为空，更新人为空，则当前登录用户为更新人
-            if (Objects.nonNull(userId) && Objects.isNull(baseDO.getUpdater())) {
-                baseDO.setUpdater(userId.toString());
+            // 更新人为空，则填充操作者
+            if (Objects.isNull(baseDO.getUpdater())) {
+                baseDO.setUpdater(operator);
             }
         }
     }
@@ -53,11 +64,12 @@ public class DefaultDBFieldHandler implements MetaObjectHandler {
             setFieldValByName("updateTime", LocalDateTime.now(), metaObject);
         }
 
-        // 当前登录用户不为空，更新人为空，则当前登录用户为更新人
+        // 更新人为空，则填充操作者（无登录上下文时回退为系统操作者）
         Object modifier = getFieldValByName("updater", metaObject);
-        Long userId = SecurityFrameworkUtils.getLoginUserId();
-        if (Objects.nonNull(userId) && Objects.isNull(modifier)) {
-            setFieldValByName("updater", userId.toString(), metaObject);
+        if (Objects.isNull(modifier)) {
+            Long userId = SecurityFrameworkUtils.getLoginUserId();
+            setFieldValByName("updater",
+                    Objects.nonNull(userId) ? userId.toString() : SYSTEM_OPERATOR, metaObject);
         }
     }
 }

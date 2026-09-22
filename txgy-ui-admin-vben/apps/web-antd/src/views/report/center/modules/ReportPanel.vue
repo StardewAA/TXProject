@@ -64,6 +64,7 @@ function handleDateChange(field: 'endDate' | 'startDate', dateString: string) {
 
 <template>
   <section class="rc-panel" :class="{ 'rc-panel-embedded': embedded }">
+  <section class="rc-panel">
     <template v-if="report">
       <div class="rc-panel-head">
         <div class="rc-panel-title-wrap">

@@ -7,6 +7,7 @@ import cn.iocoder.txgy.framework.mybatis.core.query.MPJLambdaWrapperX;
 import cn.iocoder.txgy.module.crm.controller.admin.business.vo.business.CrmBusinessPageReqVO;
 import cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsFunnelReqVO;
 import cn.iocoder.txgy.module.crm.dal.dataobject.business.CrmBusinessDO;
+import cn.iocoder.txgy.module.crm.enums.business.CrmBusinessStateEnum;
 import cn.iocoder.txgy.module.crm.enums.common.CrmBizTypeEnum;
 import cn.iocoder.txgy.module.crm.util.CrmPermissionUtils;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -27,6 +28,19 @@ public interface CrmBusinessMapper extends BaseMapperX<CrmBusinessDO> {
         return update(new LambdaUpdateWrapper<CrmBusinessDO>()
                 .eq(CrmBusinessDO::getId, id)
                 .set(CrmBusinessDO::getOwnerUserId, ownerUserId));
+    }
+
+    /**
+     * 变更累计跟进次数（delta 为 +1 表示新增一次跟进，-1 表示删除一条跟进；结果不会小于 0）
+     *
+     * @param id    商机编号
+     * @param delta 变更量
+     * @return 影响行数
+     */
+    default int updateFollowUpCountById(Long id, int delta) {
+        return update(null, new LambdaUpdateWrapper<CrmBusinessDO>()
+                .eq(CrmBusinessDO::getId, id)
+                .setSql("follow_up_count = GREATEST(follow_up_count + (" + delta + "), 0)"));
     }
 
     default PageResult<CrmBusinessDO> selectPageByCustomerId(CrmBusinessPageReqVO pageReqVO) {
@@ -51,7 +65,19 @@ public interface CrmBusinessMapper extends BaseMapperX<CrmBusinessDO> {
         // 拼接自身的查询条件
         query.selectAll(CrmBusinessDO.class)
                 .likeIfPresent(CrmBusinessDO::getName, pageReqVO.getName())
-                .orderByDesc(CrmBusinessDO::getId);
+                .eqIfPresent(CrmBusinessDO::getStage, pageReqVO.getStage())
+                .eqIfPresent(CrmBusinessDO::getBusinessState, pageReqVO.getBusinessState());
+        // 销售看板：仅未开始 / 进行中
+        if (Boolean.TRUE.equals(pageReqVO.getOpenOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.NOT_STARTED.getState(),
+                    CrmBusinessStateEnum.IN_PROGRESS.getState());
+        }
+        // 归档视图：仅已赢单 / 已丢单
+        if (Boolean.TRUE.equals(pageReqVO.getClosedOnly())) {
+            query.in(CrmBusinessDO::getBusinessState, CrmBusinessStateEnum.WON.getState(),
+                    CrmBusinessStateEnum.LOST.getState());
+        }
+        query.orderByDesc(CrmBusinessDO::getId);
         return selectJoinPage(pageReqVO, CrmBusinessDO.class, query);
     }
 

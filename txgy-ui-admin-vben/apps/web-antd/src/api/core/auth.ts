@@ -9,6 +9,8 @@ export namespace AuthApi {
     tenantId?: number | string;
     /** 登录入口类型，后端可据此区分企业/个人账号 */
     loginType?: 'enterprise' | 'personal';
+    /** 内部字段：true 时登录失败不弹全局错误提示（个人登录租户回退重试用），不会发送给后端 */
+    silentError?: boolean;
     password?: string;
     username?: string;
     captchaVerification?: string;
@@ -24,6 +26,8 @@ export namespace AuthApi {
     refreshToken: string;
     userId: number;
     expiresTime: number;
+    /** 账号实际所属租户编号（后端 AuthLoginRespVO.tenantId） */
+    tenantId?: number;
   }
 
   /** 租户信息返回值 */
@@ -70,9 +74,11 @@ export namespace AuthApi {
 
 /** 登录 */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/system/auth/login', data, {
+  const { silentError, ...payload } = data;
+  return requestClient.post<AuthApi.LoginResult>('/system/auth/login', payload, {
     headers: {
       isEncrypt: false,
+      ...(silentError ? { 'x-skip-error-toast': 'true' } : {}),
     },
   });
 }
@@ -118,6 +124,13 @@ export async function getTenantByWebsite(website: string) {
     data?: null | AuthApi.TenantResult;
   }>(`/system/tenant/get-by-website?website=${website}`);
   return response?.data?.data ?? response?.data ?? null;
+}
+
+/** 使用租户名，获得租户编号（登录页手动输入租户名时使用） */
+export async function getTenantIdByName(name: string) {
+  return requestClient.get<null | number>(
+    `/system/tenant/get-id-by-name?name=${encodeURIComponent(name)}`,
+  );
 }
 
 /** 获取验证码 */

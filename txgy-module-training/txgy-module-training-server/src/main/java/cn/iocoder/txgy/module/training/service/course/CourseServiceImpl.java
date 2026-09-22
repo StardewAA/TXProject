@@ -36,6 +36,8 @@ public class CourseServiceImpl implements CourseService {
     @Resource
     private CourseMapper courseMapper;
     @Resource
+    private CourseCategoryMapper courseCategoryMapper;
+    @Resource
     private CourseMediaMapper courseMediaMapper;
     @Resource
     private CourseAuditLogMapper courseAuditLogMapper;
@@ -103,6 +105,21 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     public PageResult<CourseDO> getCoursePage(CoursePageReqVO pageReqVO) {
+        if (pageReqVO.getCategoryId() != null) {
+            List<CourseCategoryDO> categories = courseCategoryMapper.selectList();
+            Set<Long> ids = new HashSet<>();
+            ids.add(pageReqVO.getCategoryId());
+            boolean changed;
+            do {
+                changed = false;
+                for (CourseCategoryDO item : categories) {
+                    if (ids.contains(item.getParentId()) && ids.add(item.getId())) {
+                        changed = true;
+                    }
+                }
+            } while (changed);
+            pageReqVO.setCategoryIds(List.copyOf(ids));
+        }
         return courseMapper.selectPage(pageReqVO);
     }
 

@@ -3,76 +3,84 @@
  *
  * 背景：@iconify/vue 运行时会按需请求外部图标 API（api.iconify.design /
  * api.simplesvg.com / api.unisvg.com），当前网络不可达导致控制台大量
- * ERR_CONNECTION_TIMED_OUT。本模块在应用启动前把常用图标集合注册为本地数据，
- * 图标渲染不再发起网络请求。
+ * ERR_CONNECTION_TIMED_OUT。本模块把图标数据本地化，图标渲染不再请求外网。
+ *
+ * 体积优化（首屏入口包 22MB → 约 100KB）：
+ * 1) 首屏只注册源码中实际使用到的图标，数据来自 src/offline-icons.generated.ts
+ *    （由 scripts/generate-offline-icons.mjs 从完整集合中裁剪生成）；
+ * 2) 后端菜单等动态图标通过 setCustomIconsLoader 按需拉取本地完整集合
+ *    /iconify/{prefix}.json（构建产物，nginx 已配置 gzip + 强缓存），
+ *    既不进首屏包，也不会因外网不可达而报错。
  */
-import { addCollection } from '@iconify/vue';
-import { getIconData } from '@iconify/utils';
+import { addCollection, setCustomIconsLoader } from '@iconify/vue';
 import type { IconifyJSON } from '@iconify/types';
+import { subsetIconCollection } from './utils/iconify-subset.mjs';
 
-import antDesign from '@iconify/json/json/ant-design.json';
-import ep from '@iconify/json/json/ep.json';
-import fa from '@iconify/json/json/fa.json';
-import fa6Solid from '@iconify/json/json/fa6-solid.json';
-import fluentMdl2 from '@iconify/json/json/fluent-mdl2.json';
-import foundation from '@iconify/json/json/foundation.json';
-import lucide from '@iconify/json/json/lucide.json';
-import materialSymbols from '@iconify/json/json/material-symbols.json';
-import mdi from '@iconify/json/json/mdi.json';
-import ri from '@iconify/json/json/ri.json';
-import simpleIcons from '@iconify/json/json/simple-icons.json';
-import tabler from '@iconify/json/json/tabler.json';
+import { CRM_AI_AVATAR_BODY } from '#/assets/icons/crm-ai-avatar';
+import {
+  offlineIconCollections,
+  offlineIconPrefixes,
+} from '#/offline-icons.generated';
 
-// 1) 菜单/业务图标大量使用的集合，整体注册（ep/fa 等）
-const fullCollections = [
-  ep,
-  fa,
-  fa6Solid,
-  foundation,
-  fluentMdl2,
-  lucide,
-  simpleIcons,
-] as unknown as IconifyJSON[];
-fullCollections.forEach((collection) => addCollection(collection));
+// 1) 首屏：注册项目实际使用到的图标（精简数据）
+offlineIconCollections.forEach((collection) => addCollection(collection));
 
-// 2) 大集合只按需提取项目实际用到的图标，避免打包整个集合
-function registerPartial(collection: IconifyJSON, names: string[]) {
-  const icons: Record<string, unknown> = {};
-  names.forEach((name) => {
-    const icon = getIconData(collection, name);
-    if (icon) {
-      icons[name] = icon;
-    }
-  });
-  if (Object.keys(icons).length > 0) {
-    addCollection({
-      prefix: collection.prefix,
-      icons,
-      width: collection.width,
-      height: collection.height,
-    } as IconifyJSON);
+// 2) 项目自有图标：CRM AI 助手（蓝绿渐变圆形机器人头像）
+//    侧边栏菜单「AI对话助手」使用 crmai:avatar，避免运行时请求外部图标 API
+//    注意：该图标不在 @iconify/json 中，生成脚本无法裁剪，需在此手动注册
+addCollection({
+  prefix: 'crmai',
+  icons: {
+    avatar: { body: CRM_AI_AVATAR_BODY },
+  },
+  width: 96,
+  height: 96,
+} as unknown as IconifyJSON);
+
+// 3) 按需兜底：命中未预置的图标（如后端菜单下发的图标）时，加载本地完整集合
+/** 已加载的完整集合 */
+const loaded = new Map<string, IconifyJSON>();
+/** 正在加载的请求，避免并发重复拉取 */
+const inflight = new Map<string, Promise<IconifyJSON | null>>();
+
+async function fetchCollection(prefix: string): Promise<IconifyJSON | null> {
+  const cached = loaded.get(prefix);
+  if (cached) {
+    return cached;
   }
+  const pending = inflight.get(prefix);
+  if (pending) {
+    return pending;
+  }
+  const task = fetch(`${import.meta.env.BASE_URL}iconify/${prefix}.json`)
+    .then((res) => (res.ok ? (res.json() as Promise<IconifyJSON>) : null))
+    .then((data) => {
+      if (data) {
+        loaded.set(prefix, data);
+      }
+      return data;
+    })
+    .catch(() => null)
+    .finally(() => {
+      // 无论成功失败都允许下次重新尝试（失败场景：网络抖动）
+      inflight.delete(prefix);
+    });
+  inflight.set(prefix, task);
+  return task;
 }
 
-registerPartial(mdi as unknown as IconifyJSON, [
-  'github',
-  'google',
-  'keyboard-esc',
-  'qqchat',
-  'wechat',
-]);
-registerPartial(antDesign as unknown as IconifyJSON, [
-  'api-outlined',
-  'eye-outlined',
-  'menu-outlined',
-  'plus-outlined',
-  'redo-outlined',
-  'reload-outlined',
-  'select-outlined',
-  'undo-outlined',
-  'warning-outlined',
-  'zoom-in-outlined',
-]);
-registerPartial(materialSymbols as unknown as IconifyJSON, ['refresh-rounded']);
-registerPartial(ri as unknown as IconifyJSON, ['dingding-fill']);
-registerPartial(tabler as unknown as IconifyJSON, ['arrows-minimize']);
+/** 从完整集合中裁剪出本次需要的图标（含别名依赖的父图标） */
+function pickIcons(data: IconifyJSON, names: string[]): IconifyJSON | null {
+  const subset = subsetIconCollection(data, names);
+  return Object.keys(subset.icons).length ? subset : null;
+}
+
+offlineIconPrefixes.forEach((prefix) => {
+  setCustomIconsLoader(async (names: string[]) => {
+    const data = await fetchCollection(prefix);
+    if (!data) {
+      return null;
+    }
+    return pickIcons(data, names);
+  }, prefix);
+});

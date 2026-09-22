@@ -5,6 +5,7 @@ import type { HrmRecruitPostTypeApi } from '#/api/hrm/recruit/post/type';
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictLabel } from '@vben/hooks';
+import { handleTree } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 
@@ -44,8 +45,26 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: useGridColumns(handleStatusChange),
     height: 'auto',
     keepSource: true,
-    treeConfig: { transform: true, rowField: 'id', parentField: 'parentId' },
-    proxyConfig: { ajax: { query: async () => getRecruitPostTypeList() } },
+    // 该接口返回的是完整数组（非分页结构），必须关掉分页器；
+    // 否则 vxe 的 proxy 拿不到 list/total，会判定为 0 条并渲染空表格。
+    pagerConfig: {
+      enabled: false,
+    },
+    treeConfig: {
+      expandAll: true,
+      parentField: 'parentId',
+      reserve: true,
+      rowField: 'id',
+      transform: true,
+    },
+    proxyConfig: {
+      ajax: {
+        query: async () => {
+          // 与「组织管理」页一致：先把扁平列表构造成树再交给表格。
+          return handleTree(await getRecruitPostTypeList());
+        },
+      },
+    },
     rowConfig: { keyField: 'id', isHover: true },
     toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions<HrmRecruitPostTypeApi.RecruitPostType>,

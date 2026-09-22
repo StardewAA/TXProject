@@ -6,7 +6,6 @@ export namespace ErpCustomerApi {
   /** 客户信息 */
   export interface Customer {
     id?: number; // 客户编号
-    partnerCode: string; // 跨模块统一客户编码
     name: string; // 客户名称
     contact: string; // 联系人
     mobile: string; // 手机号码
@@ -64,4 +63,9 @@ export function deleteCustomer(id: number) {
 /** 导出客户 Excel */
 export function exportCustomer(params: any) {
   return requestClient.download('/erp/customer/export-excel', { params });
+}
+
+/** 导出客户 PDF */
+export function exportCustomerPdf(params: any) {
+  return requestClient.download('/erp/customer/export-pdf', { params });
 }

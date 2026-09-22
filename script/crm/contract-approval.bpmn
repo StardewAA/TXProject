@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="CRM">
+  <process id="crm-contract-audit" name="CRM 合同审批" isExecutable="true">
+    <startEvent id="start" name="提交合同审批"/>
+    <sequenceFlow id="toApproval" sourceRef="start" targetRef="contractApproval"/>
+    <userTask id="contractApproval" name="合同审批">
+      <extensionElements>
+        <flowable:candidateStrategy>30</flowable:candidateStrategy>
+        <flowable:candidateParam>__APPROVER_USER_ID__</flowable:candidateParam>
+        <flowable:approveType>1</flowable:approveType>
+        <flowable:assignStartUserHandlerType>1</flowable:assignStartUserHandlerType>
+        <flowable:rejectHandlerType>1</flowable:rejectHandlerType>
+      </extensionElements>
+    </userTask>
+    <sequenceFlow id="toEnd" sourceRef="contractApproval" targetRef="end"/>
+    <endEvent id="end" name="审批结束"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="crm-contract-audit">
+      <bpmndi:BPMNShape id="startShape" bpmnElement="start"><dc:Bounds x="100" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="approvalShape" bpmnElement="contractApproval"><dc:Bounds x="210" y="98" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endShape" bpmnElement="end"><dc:Bounds x="410" y="120" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="approvalEdge" bpmnElement="toApproval"><di:waypoint x="136" y="138"/><di:waypoint x="210" y="138"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="endEdge" bpmnElement="toEnd"><di:waypoint x="330" y="138"/><di:waypoint x="410" y="138"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

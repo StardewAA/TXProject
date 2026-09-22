@@ -23,9 +23,12 @@ import cn.iocoder.txgy.module.mes.enums.wm.MesWmTransactionTypeEnum;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService;
 import cn.iocoder.txgy.module.mes.service.pro.workorder.MesProWorkOrderService;
+import cn.iocoder.txgy.module.mes.service.qc.iqc.MesQcIqcService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.MesWmTransactionService;
 import cn.iocoder.txgy.module.mes.service.wm.transaction.dto.MesWmTransactionSaveReqDTO;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -44,10 +47,15 @@ import static cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class MesWmOutsourceReceiptServiceImpl implements MesWmOutsourceReceiptService {
 
     @Resource
     private MesWmOutsourceReceiptMapper outsourceReceiptMapper;
+
+    @Resource
+    @Lazy // 避免循环依赖（IQC Service 会引用外协入库 Service 回写检验结果）
+    private MesQcIqcService iqcService;
 
     @Resource
     private MesWmOutsourceReceiptLineService outsourceReceiptLineService;
@@ -136,6 +144,24 @@ public class MesWmOutsourceReceiptServiceImpl implements MesWmOutsourceReceiptSe
                 : MesWmOutsourceReceiptStatusEnum.APPROVING.getStatus();
         outsourceReceiptMapper.updateById(new MesWmOutsourceReceiptDO()
                 .setId(id).setStatus(targetStatus));
+
+        // R1 自动建单：进入待检验状态时，为需检行自动生成 IQC 草稿（幂等；失败不阻断提交流程）
+        if (hasPendingQc) {
+            MesWmOutsourceReceiptDO receipt = getOutsourceReceipt(id);
+            for (MesWmOutsourceReceiptLineDO line : lines) {
+                if (!Boolean.TRUE.equals(line.getIqcCheckFlag()) || line.getIqcId() != null) {
+                    continue;
+                }
+                try {
+                    iqcService.generateIqcDraft(MesBizTypeConstants.WM_OUTSOURCE_RECPT, receipt.getId(), line.getId(),
+                            receipt.getCode(), receipt.getVendorId(), line.getItemId(), line.getQuantity(),
+                            receipt.getReceiptDate());
+                } catch (Exception e) {
+                    log.warn("[submitOutsourceReceipt][外协入库单({}) 行({}) 自动生成 IQC 失败，跳过]",
+                            id, line.getId(), e);
+                }
+            }
+        }
     }
 
     @Override

@@ -1,5 +1,3 @@
-
-
 # 后端服务公共环境变量单独一个锚点。
 # 【重要】compose 里 `environment` 是整体替换、不是深合并：服务块只要自己写了
 # environment，就完全丢掉锚点里的环境（DB/Nacos/Redis 地址全没了，容器会退回连
@@ -54,6 +52,12 @@ x-backend-service: &backend-service
   networks:
     - txgy-dev
   restart: unless-stopped
+  # 容器日志轮转：docker logs 仅保留最近 3×50MB，防止 dev-web-antd.log 这类文件无限增长
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "3"
 
 services:
   mysql:
@@ -115,6 +119,12 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+    mem_limit: 3072m # 内存上限，防止 Nacos 被宿主机 OOM 误杀（历史上被 SIGKILL 137 反复杀掉）
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - txgy-dev
 
@@ -160,6 +170,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-member/txgy-module-member-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   bpm:
     <<: *backend-service
@@ -168,6 +181,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-bpm/txgy-module-bpm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   pay:
     <<: *backend-service
@@ -176,6 +192,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-pay/txgy-module-pay-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   report:
     <<: *backend-service
@@ -195,6 +214,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mp/txgy-module-mp-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   product:
     <<: *backend-service
@@ -203,6 +225,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-product-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   trade:
     <<: *backend-service
@@ -211,6 +236,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-trade-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   promotion:
     <<: *backend-service
@@ -219,6 +247,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-promotion-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   statistics:
     <<: *backend-service
@@ -227,6 +258,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mall/txgy-module-statistics-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   crm:
     <<: *backend-service
@@ -235,6 +269,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-crm/txgy-module-crm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   erp:
     <<: *backend-service
@@ -243,6 +280,13 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-erp/txgy-module-erp-server
+    # 联调：关闭 ERP 侧集成 Mock 网关，走真实 WMS/MES 调用
+    # （默认 mock 时采购入库、工单恢复等只返回模拟结果，不真正通信）
+    environment:
+      <<: *backend-env
+      TXGY_INTEGRATION_WMS_MODE: "remote"
+      TXGY_INTEGRATION_MES_MODE: "remote"
+      JAVA_OPTS: -Xms96m -Xmx512m -XX:MaxMetaspaceSize=384m -XX:+UseG1GC -XX:MaxRAMPercentage=51
 
   iot:
     <<: *backend-service
@@ -251,6 +295,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-iot/txgy-module-iot-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   iot-gateway:
     <<: *backend-service
@@ -259,6 +306,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-iot/txgy-module-iot-gateway
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx320m -XX:MaxMetaspaceSize=224m -XX:+UseG1GC -XX:MaxRAMPercentage=32
 
   mes:
     <<: *backend-service
@@ -267,6 +317,13 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-mes/txgy-module-mes-server
+    # 联调：开启 MES→WMS 集成，定时任务才会发送生产领料/完工入库请求（默认 false 时只落任务不发送）
+    environment:
+      <<: *backend-env
+      MES_WMS_INTEGRATION_ENABLED: "true"
+      # MES 无仓库模型，须指定 WMS 默认原料仓/成品仓编码（须与该租户 WMS 主数据一致）
+      MES_WMS_WAREHOUSE_RAW_MATERIAL_CODE: "SH"
+      MES_WMS_WAREHOUSE_FINISHED_GOODS_CODE: "FG"
 
   wms:
     <<: *backend-service
@@ -275,6 +332,10 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-wms/txgy-module-wms-server
+    # 联调：开启缺口事件自动上送，WmsShortageScheduler 才会把缺口事件发给 ERP（默认不启用）
+    environment:
+      <<: *backend-env
+      WMS_SHORTAGE_SENDER_ENABLED: "true"
 
   im:
     <<: *backend-service
@@ -306,6 +367,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-hrm/txgy-module-hrm-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   fms:
     <<: *backend-service
@@ -314,6 +378,9 @@ services:
       dockerfile: deploy/backend/Dockerfile
       args:
         MODULE_PATH: txgy-module-fms/txgy-module-fms-server
+    environment:
+      <<: *backend-env
+      JAVA_OPTS: -Xms96m -Xmx448m -XX:MaxMetaspaceSize=320m -XX:+UseG1GC -XX:MaxRAMPercentage=45
 
   frontend:
     build:

@@ -216,6 +216,8 @@ export const MesWmStockTakingParamTypeEnum = {
 export const MesProWorkOrderStatusEnum = {
   PREPARE: 0, // 草稿
   CONFIRMED: 1, // 已确认
+  APPROVING: 12, // 审批中
+  APPROVED: 13, // 已批准（审批通过，此状态才允许下发）
   ISSUED: 10, // 已下发
   IN_PRODUCTION: 11, // 生产中
   FINISHED: 2, // 已完成

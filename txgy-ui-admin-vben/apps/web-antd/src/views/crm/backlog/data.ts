@@ -46,6 +46,24 @@ export const CONTRACT_EXPIRY_TYPE = [
   { label: '已过期', value: 2 },
 ];
 
+/**
+ * 待办来源枚举
+ *
+ * 说明：现有待办的各来源分别对应各业务模块的**实时查询口径**（不落库、不预生成待办记录）；
+ * 本次新增 WARRANTY = 售后质保「质保即将到期」。
+ */
+export const BACKLOG_SOURCE = {
+  /** 售后质保：质保即将到期（质保状态=质保中，且质保到期日 ≤ 今天 + 提前提醒天数） */
+  WARRANTY: 'warrantyExpiry',
+  /**
+   * 回访任务：任务提醒（含临期与已逾期）
+   * 任务状态 ∈ {待处理, 已逾期}；其中待处理要求 计划回访日 ≤ 今天 + 临期提醒提前天数，已逾期无条件纳入
+   */
+  VISIT: 'visitTaskRemind',
+  /** 售后工单：工单超时预警（工单未闭环，且创建日期距今 ≥ 超时预警天数） */
+  WORK_ORDER: 'ticketOverdue',
+} as const;
+
 /** 左侧菜单 */
 export const useLeftSides = (
   customerTodayContactCount: Ref<number>,
@@ -56,6 +74,9 @@ export const useLeftSides = (
   contractRemindCount: Ref<number>,
   receivableAuditCount: Ref<number>,
   receivablePlanRemindCount: Ref<number>,
+  warrantyExpiryCount: Ref<number>,
+  visitTaskRemindCount: Ref<number>,
+  ticketOverdueCount: Ref<number>,
 ): LeftSideItem[] => {
   return [
     {
@@ -97,6 +118,21 @@ export const useLeftSides = (
       name: '即将到期的合同',
       menu: 'contractRemind',
       count: contractRemindCount,
+    },
+    {
+      name: '质保即将到期',
+      menu: BACKLOG_SOURCE.WARRANTY,
+      count: warrantyExpiryCount,
+    },
+    {
+      name: '任务提醒',
+      menu: BACKLOG_SOURCE.VISIT,
+      count: visitTaskRemindCount,
+    },
+    {
+      name: '工单超时预警',
+      menu: BACKLOG_SOURCE.WORK_ORDER,
+      count: ticketOverdueCount,
     },
   ];
 };

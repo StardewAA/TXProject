@@ -11,6 +11,7 @@ import cn.iocoder.txgy.module.trade.framework.delivery.config.TradeExpressProper
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.ExpressClient;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressTrackRespDTO;
+import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.ExpressSnapshotRespDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.kdniao.KdNiaoExpressQueryReqDTO;
 import cn.iocoder.txgy.module.trade.framework.delivery.core.client.dto.kdniao.KdNiaoExpressQueryRespDTO;
 import lombok.AllArgsConstructor;
@@ -24,7 +25,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.EXPRESS_API_QUERY_FAILED;
 import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.EXPRESS_API_QUERY_ERROR;
 import static cn.iocoder.txgy.module.trade.framework.delivery.core.client.convert.ExpressQueryConvert.INSTANCE;
 
@@ -54,6 +54,11 @@ public class KdNiaoExpressClient implements ExpressClient {
      */
     @Override
     public List<ExpressTrackRespDTO> getExpressTrackList(ExpressTrackQueryReqDTO reqDTO) {
+        return getSnapshot(reqDTO).getEvents();
+    }
+
+    @Override
+    public ExpressSnapshotRespDTO getSnapshot(ExpressTrackQueryReqDTO reqDTO) {
         // 发起请求
         KdNiaoExpressQueryReqDTO requestDTO = INSTANCE.convert(reqDTO)
                 .setExpressCode(reqDTO.getExpressCode().toUpperCase());
@@ -66,13 +71,13 @@ public class KdNiaoExpressClient implements ExpressClient {
                 requestDTO, KdNiaoExpressQueryRespDTO.class);
 
         // 处理结果
-        if (respDTO == null || !respDTO.getSuccess()) {
-            throw exception(EXPRESS_API_QUERY_FAILED, respDTO == null ? "" : respDTO.getReason());
+        if (respDTO == null || !Boolean.TRUE.equals(respDTO.getSuccess())
+                || !java.util.Objects.equals(reqDTO.getLogisticsNo(), respDTO.getLogisticsNo())
+                || !reqDTO.getExpressCode().equalsIgnoreCase(respDTO.getShipperCode())) {
+            throw exception(EXPRESS_API_QUERY_ERROR);
         }
-        if (CollUtil.isEmpty(respDTO.getTracks())) {
-            return Collections.emptyList();
-        }
-        return INSTANCE.convertList(respDTO.getTracks());
+        return new ExpressSnapshotRespDTO().setRawStatus(String.valueOf(respDTO.getState())).setEvents(
+                CollUtil.isEmpty(respDTO.getTracks()) ? Collections.emptyList() : INSTANCE.convertList(respDTO.getTracks()));
     }
 
     /**
@@ -98,17 +103,16 @@ public class KdNiaoExpressClient implements ExpressClient {
         requestBody.add("EBusinessID", config.getBusinessId());
         requestBody.add("DataSign", dataSign);
         requestBody.add("RequestType", requestType);
-        log.debug("[httpRequest][RequestType({}) 的请求参数({})]", requestType, requestBody);
 
         // 发送请求
         HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
         ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
-        log.debug("[httpRequest][RequestType({}) 的响应结果({})", requestType, responseEntity);
         // 处理响应
-        if (!responseEntity.getStatusCode().is2xxSuccessful()) {
+        if (!responseEntity.getStatusCode().is2xxSuccessful() || responseEntity.getBody() == null
+                || responseEntity.getBody().length() > 1_000_000) {
             throw exception(EXPRESS_API_QUERY_ERROR);
         }
-        return JsonUtils.parseObject(responseEntity.getBody(), respClass);
+        return JsonUtils.parseObjectQuietly(responseEntity.getBody(), respClass);
     }
 
     /**

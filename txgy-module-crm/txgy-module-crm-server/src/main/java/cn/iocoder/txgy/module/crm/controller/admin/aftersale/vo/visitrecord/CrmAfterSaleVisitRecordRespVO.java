@@ -27,4 +27,10 @@ public class CrmAfterSaleVisitRecordRespVO extends CrmAfterSaleVisitRecordDO {
     @Schema(description = "回访人昵称", example = "张三")
     private String creatorNickname;
 
+    @Schema(description = "关联任务的业务编号（在当前质保档案范围内从 1 开始独立编号，仅用于展示）", example = "1")
+    private Integer taskBizNo;
+
+    @Schema(description = "关联任务的状态：1=待处理 2=已完成 3=已逾期", example = "1")
+    private Integer taskStatus;
+
 }

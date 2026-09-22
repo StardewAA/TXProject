@@ -38,8 +38,18 @@ public class CrmAiProperties {
     private String model = "qwen-plus";
 
     /**
-     * 调用超时时间（毫秒）
+     * 图片识别（多模态 OCR）模型名
+     */
+    private String visionModel = "qwen-vl-plus";
+
+    /**
+     * 意图识别调用超时时间（毫秒）
      */
     private Integer timeout = 15000;
+
+    /**
+     * 图片识别调用超时时间（毫秒），多模态识别较慢，单独放宽
+     */
+    private Integer extractTimeout = 60000;
 
 }

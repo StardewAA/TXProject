@@ -4,13 +4,19 @@ import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
 import { useRoute, useRouter } from 'vue-router'
 
-import { payApi } from '@/api/mall'
+import { payApi, tradeApi } from '@/api/mall'
+import PaymentDeadlineNotice from '@/components/PaymentDeadlineNotice.vue'
+import { usePaymentClock } from '@/composables/usePaymentClock'
+import type { TradeOrder } from '@/types/mall'
 import { formatMoney } from '@/utils/format'
 import { getPaymentOptions, type PaymentOption } from '@/utils/payment'
+import { cashierPaymentState, isWalletCashierEntry, paymentTimestamp } from '@/utils/payment-deadline'
+import { createRefreshQueue } from '@/utils/refresh-queue'
 
 const route = useRoute()
 const router = useRouter()
 const order = ref<Record<string, unknown> | null>(null)
+const tradeOrder = ref<TradeOrder | null>(null)
 const previewMode = import.meta.env.VITE_PAYMENT_PREVIEW === 'true'
 const channels = ref<PaymentOption[]>([])
 const selected = ref('')
@@ -25,25 +31,73 @@ const previewOption = ref<PaymentOption | null>(null)
 const paymentStatus = computed(() => Number(order.value?.status))
 const selectedOption = computed(() => channels.value.find((option) => option.code === selected.value))
 let pollTimer = 0
+let channelsKey = ''
+let disposed = false
+let lastPoll = 0
 const returnPath = computed(() => {
   const redirect = route.query.redirect
   return typeof redirect === 'string' && /^\/(?!\/)/.test(redirect)
     ? redirect : route.query.orderId ? `/member/orders/${route.query.orderId}` : '/member/orders'
 })
 const amount = computed(() => Number(order.value?.price ?? order.value?.amount ?? 0))
+const walletEntry = computed(() => isWalletCashierEntry(route.query))
+const requiresTradeOrder = computed(() => !walletEntry.value)
+const routeKey = computed(() => `${route.params.orderId}|${route.query.orderId || ''}|${returnPath.value}`)
+const clock = usePaymentClock(() => load())
+const deadlineState = computed(() => cashierPaymentState(order.value, clock.now.value, tradeOrder.value, requiresTradeOrder.value))
 
-async function load() {
-  loading.value = true
-  try {
-    order.value = await payApi.getOrder({ id: String(route.params.orderId), sync: true })
-    const appId = Number(order.value?.appId || 0)
-    channels.value = appId ? getPaymentOptions(await payApi.getChannels(appId), previewMode, returnPath.value === '/member/wallet') : []
-    if (!channels.value.some((option) => option.code === selected.value)) selected.value = channels.value[0]?.code || ''
-  } finally { loading.value = false }
+function closePayment() {
+  paymentVisible.value = false
+  previewVisible.value = false
+  qrImage.value = ''
+  paymentForm.value = ''
 }
 
+const refreshQueue = createRefreshQueue(async (isCurrent) => {
+  const requestGeneration = clock.capture()
+  loading.value = !order.value
+  try {
+    const id = String(route.params.orderId)
+    const tradeId = route.query.orderId
+    const needsTrade = requiresTradeOrder.value
+    const wallet = walletEntry.value
+    const result = await payApi.getOrder({ id, sync: true })
+    const payReceivedAt = performance.now()
+    if (!isCurrent() || !clock.isCurrent(requestGeneration)) return
+    if (!result || String(result.id) !== id) throw new Error('支付订单关联异常，请返回订单重新进入')
+    let relatedOrder: TradeOrder | null = null
+    if (needsTrade) {
+      if (typeof tradeId === 'string' && /^\d+$/.test(tradeId)) {
+        relatedOrder = await tradeApi.getOrder(tradeId, true)
+        if (!isCurrent() || !clock.isCurrent(requestGeneration)) return
+      }
+    }
+    order.value = result
+    tradeOrder.value = relatedOrder
+    const payServerTime = paymentTimestamp(result.serverTime)
+    clock.sync(payServerTime === undefined ? relatedOrder?.serverTime : payServerTime + performance.now() - payReceivedAt, requestGeneration)
+    const appId = Number(result.appId || 0)
+    const nextKey = `${appId}|${wallet}`
+    if (nextKey !== channelsKey) {
+      const enabled = appId ? await payApi.getChannels(appId) : []
+      if (!isCurrent() || !clock.isCurrent(requestGeneration)) return
+      channels.value = getPaymentOptions(enabled, previewMode, wallet)
+      channelsKey = nextKey
+      if (!channels.value.some((option) => option.code === selected.value)) selected.value = channels.value[0]?.code || ''
+    }
+  } catch (error) {
+    if (isCurrent() && clock.isCurrent(requestGeneration)) {
+      clock.invalidate()
+      closePayment()
+      if (error instanceof Error && /关联异常|编号无效/.test(error.message)) ElMessage.error(error.message)
+    }
+  } finally { if (isCurrent()) loading.value = false }
+})
+function load() { return refreshQueue.refresh() }
+
 function beginPayment() {
-  if (paying.value || loading.value || paymentStatus.value !== 0 || !selectedOption.value) return
+  clock.sample()
+  if (paying.value || loading.value || !deadlineState.value.canPay || !selectedOption.value) return
   if (selectedOption.value.preview) {
     previewOption.value = selectedOption.value
     previewVisible.value = true
@@ -51,22 +105,35 @@ function beginPayment() {
 }
 
 async function submit(option: PaymentOption) {
-  if (option.preview || paying.value || paymentStatus.value !== 0 || !channels.value.some((item) => item.code === option.code)) return
+  if (option.preview || paying.value || !deadlineState.value.canPay || !channels.value.some((item) => item.code === option.code)) return
+  const paymentRoute = routeKey.value
   paying.value = true
   qrImage.value = ''
   paymentForm.value = ''
   try {
+    // Recheck immediately before submission; an old QR/page does not preserve payment eligibility.
+    await load()
+    clock.sample()
+    if (disposed || paymentRoute !== routeKey.value || !deadlineState.value.canPay) return
     const result = await payApi.submit({ id: String(route.params.orderId), channelCode: option.channelCode, channelExtras: {} })
+    if (disposed || paymentRoute !== routeKey.value) return
     if (Number(result.status) === 10) {
       await checkPayment()
       return
     }
+    clock.sample()
+    if (!deadlineState.value.canPay) { closePayment(); await checkPayment(true); return }
     const content = typeof result.displayContent === 'string' ? result.displayContent : ''
     if (result.displayMode === 'url' && /^https?:\/\//i.test(content)) {
       window.location.assign(content)
       return
     }
-    if (result.displayMode === 'qr_code' && content) qrImage.value = await QRCode.toDataURL(content, { width: 280, margin: 2 })
+    if (result.displayMode === 'qr_code' && content) {
+      const image = await QRCode.toDataURL(content, { width: 280, margin: 2 })
+      clock.sample()
+      if (disposed || paymentRoute !== routeKey.value || !deadlineState.value.canPay) return
+      qrImage.value = image
+    }
     else if (result.displayMode === 'qr_code_url' && /^https?:\/\//i.test(content)) qrImage.value = content
     else if (result.displayMode === 'form' && content) paymentForm.value = content
     else {
@@ -81,28 +148,44 @@ async function submit(option: PaymentOption) {
 
 async function checkPayment(silent = false) {
   if (checking.value) return
+  const paymentRoute = routeKey.value
   checking.value = true
   try {
-    order.value = await payApi.getOrder({ id: String(route.params.orderId), sync: true })
+    await load()
+    if (disposed || paymentRoute !== routeKey.value) return
     if (Number(order.value?.status) === 10) {
-      paymentVisible.value = false
-      previewVisible.value = false
+      closePayment()
       ElMessage.success('支付成功')
       await router.replace(returnPath.value)
     } else if (Number(order.value?.status) === 30) {
-      paymentVisible.value = false
-      ElMessage.warning('支付订单已关闭，请重新下单')
-    } else if (!silent) ElMessage.info('暂未收到支付成功结果，请完成支付后再次查询')
+      closePayment()
+      if (!silent) ElMessage.warning('支付订单已关闭，请查看订单或钱包记录')
+    } else if (!silent) ElMessage.info(deadlineState.value.canPay ? '暂未收到支付成功结果，请完成支付后再次查询' : deadlineState.value.message || '请查看最新支付记录')
   } catch { /* 请求层已提示失败，保留当前收银台供重试。 */ }
   finally { checking.value = false }
 }
 
-watch(paymentVisible, (visible) => {
-  window.clearInterval(pollTimer)
-  if (visible) pollTimer = window.setInterval(() => void checkPayment(true), 5000)
+watch(() => deadlineState.value.canPay, (canPay) => { if (!canPay) closePayment() })
+watch(() => deadlineState.value.expired, (expired, before) => { if (expired && !before) void checkPayment(true) })
+watch(routeKey, () => {
+  closePayment()
+  order.value = null
+  tradeOrder.value = null
+  channels.value = []
+  channelsKey = ''
+  clock.invalidate()
+  void load()
+}, { immediate: true })
+onMounted(() => {
+  pollTimer = window.setInterval(() => {
+    const interval = paymentVisible.value || deadlineState.value.expired ? 5000 : 30000
+    if (!document.hidden && paymentStatus.value === 0 && performance.now() - lastPoll >= interval) {
+      lastPoll = performance.now()
+      void checkPayment(true)
+    }
+  }, 1000)
 })
-onBeforeUnmount(() => window.clearInterval(pollTimer))
-onMounted(load)
+onBeforeUnmount(() => { disposed = true; refreshQueue.dispose(); window.clearInterval(pollTimer) })
 </script>
 
 <template>
@@ -116,13 +199,14 @@ onMounted(load)
         </el-result>
         <el-result v-else-if="paymentStatus === 20 || paymentStatus === 30" icon="info" :title="paymentStatus === 20 ? '订单已发生退款' : '支付订单已关闭'" sub-title="请进入订单或钱包查看最新记录。"><template #extra><el-button type="primary" @click="router.push(returnPath)">查看记录</el-button></template></el-result>
         <template v-else>
+          <PaymentDeadlineNotice :state="deadlineState" />
           <div v-if="previewMode" class="preview-notice"><b>第三方支付暂未开通</b><span>可查看支付宝、微信的扫码收银台；当前无法扫码付款，订单将保持待付款状态。</span></div>
           <h2>选择支付方式</h2>
           <div v-if="channels.length" class="channels">
-            <button v-for="channel in channels" :key="channel.code" :class="{ active: selected === channel.code }" :disabled="paying" :aria-pressed="selected === channel.code" @click="selected = channel.code"><i :class="channel.tone">{{ channel.icon }}</i><span><b>{{ channel.label }}</b><small>{{ channel.description }}</small></span></button>
+            <button v-for="channel in channels" :key="channel.code" :class="{ active: selected === channel.code }" :disabled="paying || !deadlineState.canPay" :aria-pressed="selected === channel.code" @click="selected = channel.code"><i :class="channel.tone">{{ channel.icon }}</i><span><b>{{ channel.label }}</b><small>{{ channel.description }}</small></span></button>
           </div>
           <div v-else class="channel-empty">当前没有可用的电脑网页支付方式，请联系客服。</div>
-          <div class="pay-actions"><el-button @click="router.push(returnPath)">稍后支付</el-button><el-button :loading="checking" @click="checkPayment(false)">查询支付结果</el-button><el-button type="primary" size="large" :disabled="!selectedOption || paymentStatus !== 0" :loading="paying" @click="beginPayment">{{ selectedOption?.preview ? '进入扫码收银台' : selectedOption?.channelCode === 'mock' ? '模拟付款' : '确认支付' }} ¥{{ formatMoney(amount) }}</el-button></div>
+          <div class="pay-actions"><el-button @click="router.push(returnPath)">返回订单或钱包</el-button><el-button :loading="checking" @click="checkPayment(false)">查询支付结果</el-button><el-button type="primary" size="large" :disabled="!selectedOption || !deadlineState.canPay || loading" :loading="paying" @click="beginPayment">{{ selectedOption?.preview ? '进入扫码收银台' : selectedOption?.channelCode === 'mock' ? '模拟付款' : '确认支付' }} ¥{{ formatMoney(amount) }}</el-button></div>
         </template>
       </template>
       <el-empty v-else-if="!loading" description="支付订单加载失败"><el-button @click="load">重新加载</el-button></el-empty>

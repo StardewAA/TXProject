@@ -62,37 +62,37 @@ onMounted(() => { void load(); void loadShops() })
   <div class="industry-home">
     <section class="home-hero"><div class="container home-hero__inner">
       <aside class="material-directory"><div class="material-directory__title"><strong>材料采购目录</strong><small>MATERIAL DIRECTORY</small></div>
-        <RouterLink v-for="category in roots.slice(0, 9)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><span>{{ category.name }}</span><span>›</span></RouterLink>
-        <RouterLink to="/categories" class="all-materials">查看全部分类 ↗</RouterLink>
+        <MallLink v-for="category in roots.slice(0, 9)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><span>{{ category.name }}</span><span>›</span></MallLink>
+        <MallLink to="/categories" class="all-materials">查看全部分类 ↗</MallLink>
       </aside>
       <IndustryCarousel />
     </div></section>
     <div class="home-benefits"><div class="container"><div><span>01</span><p><b>按工况选材</b><small>分类清晰，规格可查</small></p></div><div><span>02</span><p><b>企业店铺直达</b><small>集中查看供应材料</small></p></div><div><span>03</span><p><b>采购流程贯通</b><small>购物车、订单与物流</small></p></div><div><span>04</span><p><b>售后进度可查</b><small>收货、评价与售后</small></p></div></div></div>
     <section class="container home-section">
-      <div class="home-title"><div><small>MATERIAL SELECTION</small><h2>从一份材料，开始工程采购</h2></div><RouterLink to="/categories">全部材料分类 ↗</RouterLink></div>
-      <div class="material-shortcuts"><RouterLink v-for="category in roots.slice(0, 8)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><div class="material-thumb"><img v-if="categoryImage(category)" :src="categoryImage(category)" :alt="category.name" loading="lazy" /><span v-else aria-hidden="true">▱</span></div><strong>{{ category.name }}</strong><small>查看供应商品 →</small></RouterLink></div>
+      <div class="home-title"><div><small>MATERIAL SELECTION</small><h2>从一份材料，开始工程采购</h2></div><MallLink to="/categories">全部材料分类 ↗</MallLink></div>
+      <div class="material-shortcuts"><MallLink v-for="category in roots.slice(0, 8)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><div class="material-thumb"><img v-if="categoryImage(category)" :src="categoryImage(category)" :alt="category.name" loading="lazy" /><span v-else aria-hidden="true">▱</span></div><strong>{{ category.name }}</strong><small>查看供应商品 →</small></MallLink></div>
       <div v-if="failed" class="panel"><EmptyState title="材料目录暂时加载失败"><el-button @click="load">重新加载</el-button></EmptyState></div>
     </section>
     <section class="container home-section">
       <div class="home-title"><div><small>APPLICATION SCENARIOS</small><h2>为不同工程，找到合适的材料</h2></div><span>先确认工况，再选择规格</span></div>
-      <div class="scene-grid"><RouterLink v-for="scene in scenes" :key="scene.number" :to="{ path: '/goods', query: { keyword: scene.keyword } }"><span class="scene-index">{{ scene.number }}</span><h3>{{ scene.name }}</h3><p>{{ scene.text }}</p><b>探索材料 →</b><div class="scene-lines" aria-hidden="true"></div></RouterLink></div>
+      <div class="scene-grid"><MallLink v-for="scene in scenes" :key="scene.number" :to="{ path: '/goods', query: { keyword: scene.keyword } }"><span class="scene-index">{{ scene.number }}</span><h3>{{ scene.name }}</h3><p>{{ scene.text }}</p><b>探索材料 →</b><div class="scene-lines" aria-hidden="true"></div></MallLink></div>
     </section>
     <section class="home-suppliers home-section"><div class="container">
-      <div class="home-title"><div><small>ENTERPRISE STORES</small><h2>好材料，从了解供应商开始</h2><p>走进企业店铺，查看主营材料与在售商品</p></div><RouterLink to="/shops">查看全部企业店铺 ↗</RouterLink></div>
+      <div class="home-title"><div><small>ENTERPRISE STORES</small><h2>好材料，从了解供应商开始</h2><p>走进企业店铺，查看主营材料与在售商品</p></div><MallLink to="/shops">查看全部企业店铺 ↗</MallLink></div>
       <div v-if="featured.length" class="home-shop-grid"><ShopCard v-for="item in featured" :key="item.shop.id" :shop="item.shop" :products="item.products" :total="item.total" /></div>
       <EmptyState v-else-if="shopsFailed" title="企业店铺暂时加载失败"><el-button @click="loadShops">重新加载</el-button></EmptyState>
-      <EmptyState v-else title="企业材料供应目录"><RouterLink to="/shops">进入店铺目录 →</RouterLink></EmptyState>
+      <EmptyState v-else title="企业材料供应目录"><MallLink to="/shops">进入店铺目录 →</MallLink></EmptyState>
     </div></section>
     <div v-if="loading" class="container home-section loading-box"><el-skeleton :rows="6" animated /></div>
     <section v-for="(floor, index) in floors" :key="floor.category.id" class="container home-section material-floor">
-      <div class="home-title"><div class="floor-title"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><small>ENGINEERING MATERIALS</small><h2>{{ floor.category.name }}专区</h2></div></div><RouterLink :to="{ path: '/goods', query: { categoryId: floor.category.id } }">更多{{ floor.category.name }} ↗</RouterLink></div>
+      <div class="home-title"><div class="floor-title"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><small>ENGINEERING MATERIALS</small><h2>{{ floor.category.name }}专区</h2></div></div><MallLink :to="{ path: '/goods', query: { categoryId: floor.category.id } }">更多{{ floor.category.name }} ↗</MallLink></div>
       <div v-if="floor.products.length" :class="['floor-content', { 'is-compact': floor.products.length < 3 }]">
-        <RouterLink v-if="floor.products.length < 3" class="floor-guide" :to="{ path: '/goods', query: { categoryId: floor.category.id } }"><small>MATERIAL GUIDE / 选材指引</small><h3>{{ floor.category.name }}</h3><p>核对材质、规格与使用工况，<br />为项目选择合适的配套材料。</p><span>进入材料专区 →</span></RouterLink>
+        <MallLink v-if="floor.products.length < 3" class="floor-guide" :to="{ path: '/goods', query: { categoryId: floor.category.id } }"><small>MATERIAL GUIDE / 选材指引</small><h3>{{ floor.category.name }}</h3><p>核对材质、规格与使用工况，<br />为项目选择合适的配套材料。</p><span>进入材料专区 →</span></MallLink>
         <div class="product-grid"><ProductCard v-for="product in floor.products" :key="product.id" :product="product" /></div>
       </div>
-      <EmptyState v-else title="该分类暂无上架商品"><RouterLink to="/goods">浏览其他材料</RouterLink></EmptyState>
+      <EmptyState v-else title="该分类暂无上架商品"><MallLink to="/goods">浏览其他材料</MallLink></EmptyState>
     </section>
-    <section class="container home-section procurement-guide"><div><small>PROCUREMENT SERVICES</small><h2>选材之后，让采购更省心</h2><p>查看平台优惠，按订单结算结果完成采购。</p></div><RouterLink to="/marketing#coupon"><b>领取采购优惠券</b><span>查看可领取优惠 →</span></RouterLink><RouterLink to="/member/customer-service"><b>采购与售后咨询</b><span>联系平台客服 →</span></RouterLink></section>
+    <section class="container home-section procurement-guide"><div><small>PROCUREMENT SERVICES</small><h2>选材之后，让采购更省心</h2><p>查看平台优惠，按订单结算结果完成采购。</p></div><MallLink to="/marketing#coupon"><b>领取采购优惠券</b><span>查看可领取优惠 →</span></MallLink><MallLink to="/member/customer-service"><b>采购与售后咨询</b><span>联系平台客服 →</span></MallLink></section>
   </div>
 </template>
 

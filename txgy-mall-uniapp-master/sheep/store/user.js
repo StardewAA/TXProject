@@ -8,6 +8,8 @@ import UserApi from '@/sheep/api/member/user';
 import PayWalletApi from '@/sheep/api/pay/wallet';
 import OrderApi from '@/sheep/api/trade/order';
 import CouponApi from '@/sheep/api/promotion/coupon';
+import { recordTenantSession, captureTenantOperation, isTenantOperationCurrent, ensureAccountSession, assertAccountProfile } from '@/sheep/helper/tenant-runtime';
+import { readTenantToken, writeTenantToken } from '@/sheep/helper/tenant-runtime';
 
 // 默认用户信息
 const defaultUserInfo = {
@@ -40,19 +42,45 @@ const user = defineStore('user', {
   state: () => ({
     userInfo: clone(defaultUserInfo), // 用户信息
     userWallet: clone(defaultUserWallet), // 用户钱包信息
-    isLogin: !!uni.getStorageSync('token'), // 登录状态
+    isLogin: !!readTenantToken('token'), // 登录状态
     numData: cloneDeep(defaultNumData), // 用户其他数据
     lastUpdateTime: 0, // 上次更新时间
+    sessionError: '',
   }),
 
   actions: {
+    // Tokens remain in their dedicated storage; cached private data never establishes identity.
+    clearAccountData() {
+      this.sessionError = '';
+      this.isLogin = !!readTenantToken('token');
+      this.userInfo = clone(defaultUserInfo);
+      this.userWallet = clone(defaultUserWallet);
+      this.numData = cloneDeep(defaultNumData);
+      this.lastUpdateTime = 0;
+      cart().emptyList();
+    },
+    async retrySession() {
+      const operation = captureTenantOperation();
+      try {
+        await ensureAccountSession();
+        if (!isTenantOperationCurrent(operation)) return;
+        this.sessionError = '';
+        this.lastUpdateTime = 0;
+        await this.loginAfter();
+      } catch (error) {
+        if (isTenantOperationCurrent(operation)) this.sessionError = error.message || '登录状态暂无法核验，请重试';
+      }
+    },
     // 获取用户信息
     async getInfo() {
+      const operation = captureTenantOperation();
       try {
         const response = await UserApi.getUserInfo();
         if (response?.code !== 0 || !response.data) {
           return;
         }
+        if (!isTenantOperationCurrent(operation)) return;
+        assertAccountProfile(response.data);
         this.userInfo = response.data;
         return Promise.resolve(response.data);
       } catch (error) {
@@ -62,12 +90,13 @@ const user = defineStore('user', {
 
     // 获得用户钱包
     async getWallet() {
+      const operation = captureTenantOperation();
       try {
         const response = await PayWalletApi.getPayWallet();
         if (response?.code !== 0 || !response.data) {
           return;
         }
-        this.userWallet = response.data;
+        if (isTenantOperationCurrent(operation)) this.userWallet = response.data;
       } catch (error) {
         return;
       }
@@ -75,35 +104,46 @@ const user = defineStore('user', {
 
     // 获取订单、优惠券等其他资产信息
     getNumData() {
+      const operation = captureTenantOperation();
       OrderApi.getOrderCount().then((res) => {
-        if (res?.code === 0 && res.data) {
+        if (isTenantOperationCurrent(operation) && res?.code === 0 && res.data) {
           this.numData.orderCount = res.data;
         }
       }).catch(() => {});
       CouponApi.getUnusedCouponCount().then((res) => {
-        if (res?.code === 0) {
+        if (isTenantOperationCurrent(operation) && res?.code === 0) {
           this.numData.unusedCouponCount = res.data;
         }
       }).catch(() => {});
     },
 
     // 设置 token
-    setToken(token = '', refreshToken = '') {
+    setToken(token = '', refreshToken = '', identity, refreshing = false) {
+      this.sessionError = '';
+      if (token && !refreshing) {
+        this.userInfo = clone(defaultUserInfo);
+        this.userWallet = clone(defaultUserWallet);
+        this.numData = cloneDeep(defaultNumData);
+        this.lastUpdateTime = 0;
+        cart().emptyList();
+      }
+      recordTenantSession(token, identity, refreshing);
       if (token === '') {
         this.isLogin = false;
-        uni.removeStorageSync('token');
-        uni.removeStorageSync('refresh-token');
+        writeTenantToken('token', '');
+        writeTenantToken('refresh-token', '');
       } else {
         this.isLogin = true;
-        uni.setStorageSync('token', token);
-        uni.setStorageSync('refresh-token', refreshToken);
-        this.loginAfter();
+        writeTenantToken('token', token);
+        writeTenantToken('refresh-token', refreshToken);
+        if (!refreshing) this.loginAfter();
       }
       return this.isLogin;
     },
 
     // 更新用户相关信息 (手动限流，5 秒之内不刷新)
     async updateUserData() {
+      const operation = captureTenantOperation();
       if (!this.isLogin) {
         this.resetUserData();
         return;
@@ -116,7 +156,9 @@ const user = defineStore('user', {
       this.lastUpdateTime = nowTime;
 
       // 获取最新信息
-      await this.getInfo();
+      const info = await this.getInfo();
+      if (!isTenantOperationCurrent(operation)) return;
+      if (!info) { this.lastUpdateTime = 0; return; }
       this.getWallet();
       this.getNumData();
       return this.userInfo;
@@ -130,13 +172,17 @@ const user = defineStore('user', {
       this.userInfo = clone(defaultUserInfo);
       this.userWallet = clone(defaultUserWallet);
       this.numData = cloneDeep(defaultNumData);
+      this.lastUpdateTime = 0;
       // 清空购物车的缓存
       cart().emptyList();
     },
 
     // 登录后，加载各种信息
     async loginAfter() {
-      await this.updateUserData();
+      const operation = captureTenantOperation();
+      const info = await this.updateUserData();
+      if (!isTenantOperationCurrent(operation)) return;
+      if (!info) return;
 
       // 加载购物车
       cart().getList();
@@ -144,7 +190,7 @@ const user = defineStore('user', {
       $share.getShareInfo();
 
       // 提醒绑定手机号
-      if (app().platform.bind_mobile && !this.userInfo.mobile) {
+      if (app().platform.bind_mobile && !this.userInfo.mobile && !this.userInfo.loginName) {
         showAuthModal('changeMobile');
       }
 
@@ -158,14 +204,7 @@ const user = defineStore('user', {
       return !this.isLogin;
     },
   },
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        key: 'user-store',
-      },
-    ],
-  },
+  // Profile/wallet/counters are server-derived private data: never rehydrate them before proof.
 });
 
 export default user;

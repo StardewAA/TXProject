@@ -36,6 +36,11 @@ import java.util.concurrent.TimeUnit;
         lazyInitialization = "${mybatis.lazy-initialization:false}") // Mapper 懒加载，目前仅用于单元测试
 public class TxgyMybatisAutoConfiguration {
 
+    @Bean
+    public cn.iocoder.txgy.framework.mybatis.core.interceptor.WorkTraceInterceptor workTraceInterceptor() {
+        return new cn.iocoder.txgy.framework.mybatis.core.interceptor.WorkTraceInterceptor();
+    }
+
     static {
         // 动态 SQL 智能优化支持本地缓存加速解析，更完善的租户复杂 XML 动态 SQL 支持，静态注入缓存
         JsqlParserGlobal.setJsqlParseCache(new JdkSerialCaffeineJsqlParseCache(
@@ -89,6 +94,10 @@ public class TxgyMybatisAutoConfiguration {
             objectMapper = JsonUtils.getObjectMapper();
         }
         Jackson3TypeHandler.setObjectMapper(objectMapper);
+        // 特殊：同时设置 Jackson 2 版 JacksonTypeHandler 的 ObjectMapper！
+        // 原因：部分模块的 DO 仍使用 Jackson 2 版 JacksonTypeHandler，例如 HRM 考勤组的班次（含 LocalTime）。
+        // 默认 ObjectMapper 未注册 Java 8 时间模块，读写这类 JSON 字段会直接抛 InvalidDefinitionException。
+        Jackson2TypeHandlerObjectMapper.init();
         return new Jackson3TypeHandler(Object.class);
     }
 

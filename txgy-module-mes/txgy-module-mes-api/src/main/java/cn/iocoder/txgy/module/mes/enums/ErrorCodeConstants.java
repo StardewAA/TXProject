@@ -302,6 +302,8 @@ public interface ErrorCodeConstants {
     ErrorCode PRO_WORK_ORDER_ROUTE_REQUIRED = new ErrorCode(1_040_502_008, "该产品未绑定工艺路线，无法下发工单");
     ErrorCode PRO_WORK_ORDER_HAS_FEEDBACK = new ErrorCode(1_040_502_009, "工单已存在报工记录，无法取消");
     ErrorCode PRO_WORK_ORDER_NOT_ISSUED = new ErrorCode(1_040_502_010, "只有已下发/生产中状态的工单才能报工");
+    ErrorCode PRO_WORK_ORDER_NOT_APPROVING = new ErrorCode(1_040_502_011, "只有审批中状态的工单才能执行此操作");
+    ErrorCode PRO_WORK_ORDER_NOT_APPROVED = new ErrorCode(1_040_502_012, "工单未通过审批，无法下发");
     ErrorCode PRO_WORK_ORDER_RESUME_NOT_ALLOWED = new ErrorCode(1_040_502_011, "只有已下发/生产中的工单才能恢复领料");
         ErrorCode PRO_WORK_ORDER_BOM_NOT_EXISTS = new ErrorCode(1_040_502_100, "生产工单BOM不存在");
 
@@ -404,6 +406,7 @@ public interface ErrorCodeConstants {
         ErrorCode QC_IQC_NOT_PREPARE = new ErrorCode(1_040_603_002, "只有草稿状态的检验单才可操作");
         ErrorCode QC_IQC_QUANTITY_MISMATCH = new ErrorCode(1_040_603_004, "合格品与不合格品数量之和须等于检测数量");
         ErrorCode QC_NO_TEMPLATE = new ErrorCode(1_040_603_005, "当前产品未配置检测模板");
+        ErrorCode QC_IQC_DRAFT_EXISTS = new ErrorCode(1_040_603_006, "该来源行已存在待检验的来料检验单，请直接编辑完成");
         ErrorCode QC_IQC_SOURCE_DOC_PARAMS_MISSING = new ErrorCode(1_040_603_006, "来源单据类型非空时，来源单据 ID 和来源单据行 ID 不能为空");
         ErrorCode QC_IQC_CHECK_RESULT_EMPTY = new ErrorCode(1_040_603_007, "完成检验单前，检测结果必须填写");
         // ========== MES 质量管理-来料检验行（1-040-603-100） ==========
@@ -421,6 +424,7 @@ public interface ErrorCodeConstants {
         ErrorCode QC_IPQC_SOURCE_LINE_NOT_BELONG = new ErrorCode(1_040_604_009, "来源单据行不属于该报工单");
         ErrorCode QC_IPQC_SOURCE_LINE_REQUIRED = new ErrorCode(1_040_604_010, "来源单据类型为报工时，来源产出行 ID 不能为空");
         ErrorCode QC_IPQC_SOURCE_LINE_NOT_PENDING = new ErrorCode(1_040_604_011, "来源产出行不是待检验状态");
+        ErrorCode QC_IPQC_DRAFT_EXISTS = new ErrorCode(1_040_604_012, "该产出行已存在待检验的过程检验单，请直接编辑完成");
         // ========== MES 质量管理-过程检验行（1-040-604-100） ==========
         ErrorCode QC_IPQC_LINE_NOT_EXISTS = new ErrorCode(1_040_604_100, "过程检验行不存在");
 

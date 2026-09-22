@@ -13,6 +13,8 @@ const FALLBACK_GROUP = '自定义';
 
 /** 内置分组顺序；用户新建的分组按名称排在其后 */
 const FIXED_GROUP_ORDER = ['生产', '品质', '设备', '库存'];
+/** 分组展示顺序（未列出的分组追加在末尾） */
+const GROUP_ORDER = ['常用', '生产', '品质', '设备', '库存', '自定义'];
 
 /** 「常用」分组最多展示张数 */
 const FREQUENT_LIMIT = 5;
@@ -30,6 +32,8 @@ const emit = defineEmits<{
 const keyword = ref('');
 /** 折叠状态：默认展开，「常用」默认收起（其内容与其他分组重复，展开易显得繁杂） */
 const collapsed = ref<Record<string, boolean>>({ [FREQUENT_GROUP]: true });
+/** 折叠状态，默认全部展开 */
+const collapsed = ref<Record<string, boolean>>({});
 
 /** 命中的报表 */
 interface MatchedReport {
@@ -111,6 +115,7 @@ const groupTree = computed<GroupNode[]>(() => {
     .sort((a, b) => (b.report.queryCount ?? 0) - (a.report.queryCount ?? 0))
     .slice(0, FREQUENT_LIMIT)
     .forEach((item) => push(FREQUENT_GROUP, item));
+    .forEach((item) => push('常用', item));
 
   // 2. 业务分组
   for (const item of matchedReports.value) {
@@ -124,6 +129,14 @@ const groupTree = computed<GroupNode[]>(() => {
     const rankA = groupRank(a);
     const rankB = groupRank(b);
     return rankA === rankB ? a.localeCompare(b, 'zh-CN') : rankA - rankB;
+  // 3. 按预定义顺序输出，未列出的分组排末尾
+  const names = [...buckets.keys()].sort((a, b) => {
+    const indexA = GROUP_ORDER.indexOf(a);
+    const indexB = GROUP_ORDER.indexOf(b);
+    return (
+      (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA) -
+      (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB)
+    );
   });
   return names.map((name) => ({ name, reports: buckets.get(name)! }));
 });
@@ -167,6 +180,11 @@ function handleSelect(code: string) {
           </a-button>
         </a-tooltip>
       </div>
+      <a-input-search
+        v-model:value="keyword"
+        allow-clear
+        placeholder="搜索报表名称或用途"
+      />
       <div v-if="keyword.trim()" class="rc-sidebar-tip">
         共 {{ matchedCount }} 张匹配
       </div>

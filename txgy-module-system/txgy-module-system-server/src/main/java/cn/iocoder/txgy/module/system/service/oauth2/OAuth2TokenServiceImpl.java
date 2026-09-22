@@ -186,8 +186,17 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         // 优先从 refreshToken 获取租户编号，避免 ThreadLocal 被污染时导致 tenantId 为 null
         // 可能关联的 issue：https://t.zsxq.com/JIi5G
         Long tenantId = refreshTokenDO.getTenantId();
-        if (tenantId == null) {
-            tenantId = TenantContextHolder.getTenantId();
+        // 【修复】0 同样视为「未记录租户」：历史刷新令牌存在 tenant_id=0 的脏数据
+        // （见 createOAuth2RefreshToken 未显式写入租户时的表现）。
+        // 若直接沿用 0，刷新出来的访问令牌会挂到「租户 0」上，
+        // 而前端后续所有请求都会带 tenant-id 请求头，导致按租户查不到该令牌 →
+        // 立刻 401「登录已失效」→ 表现为用户每到一个访问令牌有效期（默认 30 分钟）
+        // 就被自动登出一次。
+        // 兜底顺序：刷新令牌所属用户的实际租户 → 当前上下文租户（来自 tenant-id 请求头）。
+        if (tenantId == null || tenantId == 0L) {
+            AdminUserDO user = adminUserService.getUser(refreshTokenDO.getUserId());
+            tenantId = user != null && user.getTenantId() != null && user.getTenantId() != 0L
+                    ? user.getTenantId() : TenantContextHolder.getTenantId();
         }
         accessTokenDO.setTenantId(tenantId);
         oauth2AccessTokenMapper.insert(accessTokenDO);
@@ -201,6 +210,11 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
                 .setUserId(userId).setUserType(userType)
                 .setClientId(clientDO.getClientId()).setScopes(scopes)
                 .setExpiresTime(LocalDateTime.now().plusSeconds(clientDO.getRefreshTokenValiditySeconds()));
+        // 【修复】显式写入当前租户：本表插入时若不带租户，会被写成 0（列默认值），
+        // 后续 refreshAccessToken 会沿用这个 0 去创建访问令牌，
+        // 导致刷新后的令牌在「带 tenant-id 请求头」的后续请求中查不到 → 用户被自动登出。
+        // 注意：setTenantId 继承自 TenantBaseDO，不能参与上面的链式调用（返回父类类型）。
+        refreshToken.setTenantId(TenantContextHolder.getTenantId());
         oauth2RefreshTokenMapper.insert(refreshToken);
         return refreshToken;
     }

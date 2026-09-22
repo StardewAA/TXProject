@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.ReUtil;
 import cn.hutool.core.util.StrUtil;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.regex.Pattern;
  *
  * @author OPENLAB BS
  */
+@Slf4j
 public class NumberUtils {
 
     private static final Pattern FIRST_BIG_DECIMAL_PATTERN = Pattern.compile("-?\\d+(?:\\.\\d+)?");
@@ -23,12 +25,44 @@ public class NumberUtils {
      */
     public static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
+    /**
+     * 解析字符串为 Long
+     *
+     * 解析失败时返回 {@code null}，而不是抛出 NumberFormatException。
+     * 用途：数据库里的 creator / updater 等字段历史数据可能存了非数字值（例如 "admin"），
+     * 若直接抛异常会导致接口整体 500，这里做兜底容错。
+     *
+     * @param str 字符串
+     * @return 数字；解析失败或为空时返回 null
+     */
     public static Long parseLong(String str) {
-        return StrUtil.isNotEmpty(str) ? Long.valueOf(str) : null;
+        if (StrUtil.isEmpty(str)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(str.trim());
+        } catch (NumberFormatException e) {
+            log.warn("[parseLong][字符串({}) 不是合法数字，返回 null]", str);
+            return null;
+        }
     }
 
+    /**
+     * 解析字符串为 Integer，解析失败时返回 {@code null}
+     *
+     * @param str 字符串
+     * @return 数字；解析失败或为空时返回 null
+     */
     public static Integer parseInt(String str) {
-        return StrUtil.isNotEmpty(str) ? Integer.valueOf(str) : null;
+        if (StrUtil.isEmpty(str)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(str.trim());
+        } catch (NumberFormatException e) {
+            log.warn("[parseInt][字符串({}) 不是合法数字，返回 null]", str);
+            return null;
+        }
     }
 
     /**

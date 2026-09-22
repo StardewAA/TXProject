@@ -55,11 +55,25 @@ public interface MesWmItemReceiptService {
     PageResult<MesWmItemReceiptDO> getItemReceiptPage(MesWmItemReceiptPageReqVO pageReqVO);
 
     /**
-     * 提交采购入库单（草稿 → 待上架）
+     * 提交采购入库单（草稿 → BPM审批中，发起工作流；审批通过自动进入"待上架"，驳回退回草稿）
      *
      * @param id 编号
      */
     void submitItemReceipt(Long id);
+
+    /**
+     * 审批通过回写（BPM 审批中 → 待上架），由审批结果任务异步消费调用
+     *
+     * @param id 编号
+     */
+    void approveItemReceipt(Long id);
+
+    /**
+     * 审批驳回回写（BPM 审批中 → 草稿），由审批结果任务异步消费调用
+     *
+     * @param id 编号
+     */
+    void rejectItemReceipt(Long id);
 
     /**
      * 执行上架（待上架 → 待入库）

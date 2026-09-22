@@ -20,6 +20,7 @@ import {
 } from '#/api/crm/quotation';
 import { $t } from '#/locales';
 
+import SupplierImportModal from './components/supplier-import-modal.vue';
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
@@ -30,6 +31,11 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+/** 供应商 Word 导入弹窗 */
+const supplierImportRef = ref<InstanceType<typeof SupplierImportModal> | null>(
+  null,
+);
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -168,6 +174,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
+    <SupplierImportModal ref="supplierImportRef" @success="handleRefresh" />
     <Grid>
       <template #toolbar-actions>
         <Tabs class="w-full" @change="handleChangeSceneType">
@@ -192,6 +199,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.DOWNLOAD,
               auth: ['crm:quotation:export'],
               onClick: handleExport,
+            },
+            {
+              label: '导入供应商',
+              type: 'primary',
+              auth: ['crm:customer:create'],
+              onClick: () => supplierImportRef.value?.open(),
             },
           ]"
         />

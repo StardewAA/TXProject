@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { TrainingPlanApi } from '../api';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -11,6 +11,7 @@ import { getClassCourseList } from '../api';
 import {
   CLASS_STATUS_OPTIONS,
   CLASS_TYPE_TEXT,
+  formatTargetPosts,
   targetConditionSummary,
 } from '../data';
 
@@ -29,6 +30,11 @@ CLASS_STATUS_OPTIONS.forEach((item) => {
 async function loadDetail(classId: number) {
   courseList.value = await getClassCourseList(classId);
 }
+
+/** 定岗（结业后岗位） */
+const targetPostNames = computed(() =>
+  formatTargetPosts(currentClass.value?.targetPosts),
+);
 
 const [ModalWrap, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -118,8 +124,8 @@ const courseColumns = [
         <Descriptions.Item label="参训对象筛选条件" :span="2">
           {{ targetConditionSummary(currentClass.targetCondition) }}
         </Descriptions.Item>
-        <Descriptions.Item label="参训岗位" :span="2">
-          {{ currentClass.targetPosts || '-' }}
+        <Descriptions.Item label="定岗（结业后岗位）" :span="2">
+          {{ targetPostNames || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="备注" :span="2">
           {{ currentClass.remark || '-' }}

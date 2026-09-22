@@ -11,7 +11,6 @@ import { Col, Row } from 'ant-design-vue';
 import { getHomeSummary } from '#/api/mes/home';
 
 import { defaultSummary } from './data';
-import AiAssistant from './modules/ai-assistant.vue';
 import AlertPanel from './modules/alert-panel.vue';
 import AndonAnalysis from './modules/andon-analysis.vue';
 import CheckMaintenAnalysis from './modules/check-mainten-analysis.vue';
@@ -19,7 +18,9 @@ import DefectAnalysis from './modules/defect-analysis.vue';
 import DeliveryAnalysis from './modules/delivery-analysis.vue';
 import FeedbackUserAnalysis from './modules/feedback-user-analysis.vue';
 import KpiCards from './modules/kpi-cards.vue';
+// 【合并 20260915】远程新增设备状态分布报表
 import MachineryStatusChart from './modules/machinery-status-chart.vue';
+// 【AI 智能助手】面板已上移到全局布局（layouts/basic.vue）：路由切换不再销毁重建
 import ProductionTrend from './modules/production-trend.vue';
 import QcPassRateChart from './modules/qc-pass-rate-chart.vue';
 import RepairAnalysis from './modules/repair-analysis.vue';
@@ -46,7 +47,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page>
+  <!-- mes-ai-avoid：避让标记（见 MesAiChatPanel 组件内的非 scoped 样式）。
+       当前 AI 面板以 push-body=false 悬浮覆盖，不再挤压/推挤本容器。 -->
+  <Page content-class="mes-ai-avoid">
     <template #doc>
       <DocAlert
         title="MES 手册（功能开启）"
@@ -56,16 +59,6 @@ onMounted(() => {
 
     <!-- 第一行：核心 KPI 汇总卡片 -->
     <KpiCards :summary="summary" class="mb-4" @navigate="handleNavigate" />
-
-    <!-- AI 智能助手：右下角悬浮窗（组件内部自带悬浮球/面板定位，不占页面布局） -->
-    <AiAssistant />
-
-    <!-- 我的待办任务：报工等单据审批统一在「工作流程-待办任务」处理，首页直达 -->
-    <Row :gutter="16" class="mb-4">
-      <Col :lg="24" :md="24" :sm="24" :xl="24" :xs="24" class="mb-4">
-        <TodoPanel @navigate="handleNavigate" />
-      </Col>
-    </Row>
 
     <!-- 第三行：生产趋势 + 待办异常 -->
     <Row :gutter="16" class="mb-4">
@@ -126,5 +119,7 @@ onMounted(() => {
         <FeedbackUserAnalysis />
       </Col>
     </Row>
+
+    <!-- AI 智能助手面板已上移到全局布局（layouts/basic.vue），此处不再重复挂载 -->
   </Page>
 </template>

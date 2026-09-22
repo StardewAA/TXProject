@@ -30,6 +30,13 @@ public class ErpSupplierDO extends BaseDO {
     private Long id;
     /** 跨模块统一往来企业编码 */
     private String partnerCode;
+    /**
+     * 绑定的登录用户编号（供应商门户账号）
+     *
+     * <p>为空表示该供应商还没有门户账号。登录用户据此反查供应商身份，
+     * 用于询价单与报价的供应商数据隔离。</p>
+     */
+    private Long userId;
     /** ERP 权威主数据版本 */
     private Long syncVersion;
     /**

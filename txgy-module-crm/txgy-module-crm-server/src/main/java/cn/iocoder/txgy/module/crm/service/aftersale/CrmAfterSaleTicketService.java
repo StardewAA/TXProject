@@ -76,9 +76,34 @@ public interface CrmAfterSaleTicketService {
     /**
      * 获得问题工单分页
      *
+     * <p>当 pageReqVO.remindType = 工单超时预警（1）时，按「待办：工单超时预警」口径实时查询：
+     * 工单状态 = 已超时（由超时检查任务/懒同步自动标记）+ 处理人在（本人 + 下属）范围内
+     *
      * @param pageReqVO 分页查询
+     * @param userId    当前登录用户编号（待办归属过滤使用）
      * @return 问题工单分页
      */
-    PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO);
+    PageResult<CrmAfterSaleTicketDO> getTicketPage(CrmAfterSaleTicketPageReqVO pageReqVO, Long userId);
+
+    /**
+     * 获得「工单超时预警」待办数量（实时查询，与分页查询同一口径，不落库）
+     *
+     * @param userId 当前登录用户编号
+     * @return 待办数量
+     */
+    Long getTicketOverdueCount(Long userId);
+
+    /**
+     * 【定时任务 / 懒同步】工单超时自动标记
+     *
+     * <p>扫描所有未关闭（待处理 / 处理中 / 已完成）的工单，若「开始处理时间（未开始则以创建时间兜底）
+     * + 售后设置『工单超时预警天数』」已早于当前时间，则把工单状态自动变更为「已超时」，
+     * 并写入流转留痕。已超时的工单会出现在 CRM 待办事项的「工单超时预警」中。
+     *
+     * <p>异常处理：单条工单标记失败只记录日志，不中断其余工单的处理。
+     *
+     * @return 本次标记为「已超时」的工单数量
+     */
+    int autoMarkOverdueTickets();
 
 }

@@ -9,7 +9,7 @@ const routes: RouteRecordRaw[] = [
     path: '/mes',
     name: 'MesCenter',
     meta: {
-      title: 'MES 制造执行',
+      title: '智慧生产执行系统',
       icon: 'lucide:factory',
       keepAlive: true,
       hideInMenu: true,

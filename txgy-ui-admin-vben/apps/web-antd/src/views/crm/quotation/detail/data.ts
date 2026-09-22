@@ -52,6 +52,15 @@ export function useDetailBaseSchema(): DescriptionItemSchema[] {
       label: '报价单号',
     },
     {
+      field: 'quotationType',
+      label: '报价类型',
+      render: (val) =>
+        h(DictTag, {
+          type: DICT_TYPE.CRM_QUOTATION_TYPE,
+          value: val,
+        }),
+    },
+    {
       field: 'name',
       label: '报价名称',
     },

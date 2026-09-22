@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.member.api.address.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Schema(description = "RPC 服务 - 用户收件地址 Response DTO")
 @Data
@@ -24,6 +26,12 @@ public class MemberAddressRespDTO {
 
     @Schema(description = "收件详细地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "OPENLAB BS 88 小区 106 号")
     private String detailAddress;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
+    private String coordSystem;
+    private String locationSource;
+    private String locationPrecision;
+    private LocalDateTime locationConfirmedAt;
 
     @Schema(description = "是否默认", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
     private Boolean defaultStatus;

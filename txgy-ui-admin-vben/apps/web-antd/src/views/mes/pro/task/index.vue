@@ -38,7 +38,8 @@ function handleRefresh() {
 /** 加载甘特图预览数据 */
 async function loadGanttPreview() {
   ganttTasks.value = await getGanttTaskList({
-    status: MesProWorkOrderStatusEnum.CONFIRMED,
+    // v2.2 状态机：审批通过 → 下发 → 排产，排产对象应为「已下发」工单
+    status: MesProWorkOrderStatusEnum.ISSUED,
     type: MesProWorkOrderTypeEnum.SELF,
   });
 }
@@ -71,7 +72,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
           return await getWorkOrderPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            status: MesProWorkOrderStatusEnum.CONFIRMED,
+            // v2.2 状态机：工单到「已下发」才进入排产环节
+            // （原来筛「已确认」，导致下发后工单变「已下发」从列表消失）
+            status: MesProWorkOrderStatusEnum.ISSUED,
             type: MesProWorkOrderTypeEnum.SELF,
             ...formValues,
           });
@@ -140,7 +143,7 @@ onMounted(loadGanttPreview);
               label: '排产',
               type: 'link',
               auth: ['mes:pro-task:create'],
-              ifShow: row.status === MesProWorkOrderStatusEnum.CONFIRMED,
+              ifShow: row.status === MesProWorkOrderStatusEnum.ISSUED,
               onClick: handleSchedule.bind(null, row),
             },
           ]"

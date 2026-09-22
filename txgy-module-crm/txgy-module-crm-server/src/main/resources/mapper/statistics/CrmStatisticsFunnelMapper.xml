@@ -123,4 +123,65 @@
         GROUP BY time
     </select>
 
+    <!-- 按「商机阶段」汇总：只统计未开始(business_state=1) / 进行中(business_state=2) 的商机 -->
+    <select id="selectBusinessSummaryGroupByStage"
+            resultType="cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsBusinessSummaryRespVO">
+        SELECT
+            stage AS `key`,
+            COUNT(*) AS `count`,
+            IFNULL(SUM(total_price), 0) AS totalPrice
+        FROM crm_business
+        WHERE deleted = 0
+          AND stage IS NOT NULL
+          AND business_state IN (1, 2)
+        AND owner_user_id IN
+        <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+            #{userId}
+        </foreach>
+        AND create_time BETWEEN #{times[0],javaType=java.time.LocalDateTime} AND
+        #{times[1],javaType=java.time.LocalDateTime}
+        GROUP BY stage
+        ORDER BY stage ASC
+    </select>
+
+    <!-- 按「商机状态组」汇总 -->
+    <select id="selectBusinessSummaryGroupByState"
+            resultType="cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsBusinessSummaryRespVO">
+        SELECT
+            business_state AS `key`,
+            COUNT(*) AS `count`,
+            IFNULL(SUM(total_price), 0) AS totalPrice
+        FROM crm_business
+        WHERE deleted = 0
+          AND business_state IS NOT NULL
+        AND owner_user_id IN
+        <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+            #{userId}
+        </foreach>
+        AND create_time BETWEEN #{times[0],javaType=java.time.LocalDateTime} AND
+        #{times[1],javaType=java.time.LocalDateTime}
+        GROUP BY business_state
+        ORDER BY business_state ASC
+    </select>
+
+    <!-- 按「丢单原因」汇总：只统计已丢单(business_state=4) 的商机 -->
+    <select id="selectBusinessLostReasonSummary"
+            resultType="cn.iocoder.txgy.module.crm.controller.admin.statistics.vo.funnel.CrmStatisticsBusinessSummaryRespVO">
+        SELECT
+            lost_reason AS `key`,
+            COUNT(*) AS `count`,
+            IFNULL(SUM(total_price), 0) AS totalPrice
+        FROM crm_business
+        WHERE deleted = 0
+          AND business_state = 4
+        AND owner_user_id IN
+        <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+            #{userId}
+        </foreach>
+        AND create_time BETWEEN #{times[0],javaType=java.time.LocalDateTime} AND
+        #{times[1],javaType=java.time.LocalDateTime}
+        GROUP BY lost_reason
+        ORDER BY lost_reason ASC
+    </select>
+
 </mapper>

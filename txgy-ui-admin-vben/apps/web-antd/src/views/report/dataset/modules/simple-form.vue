@@ -16,6 +16,9 @@ import {
 import { CATEGORY_OPTIONS, buildDatasetCode } from '../code';
 import { DEFAULT_BIZ_GROUPS } from '../data';
 
+  getSimpleCatalog,
+} from '#/api/report/dataset';
+
 const emit = defineEmits(['success']);
 
 /** 白名单目录 */
@@ -79,6 +82,7 @@ async function loadCatalog() {
 
 const [Modal, modalApi] = useVbenModal({
   title: '新建报表数据集',
+  title: '简单模式新建数据集（无需写 SQL）',
   class: 'w-[720px]',
   async onConfirm() {
     if (!name.value.trim()) {
@@ -102,6 +106,7 @@ const [Modal, modalApi] = useVbenModal({
       await createSimpleDataset({
         code,
         category: category.value,
+      await createSimpleDataset({
         name: name.value.trim(),
         tableName: tableName.value,
         fields: fields.value,
@@ -231,6 +236,7 @@ const [Modal, modalApi] = useVbenModal({
         <a-alert
           class="mb-2"
           message="提交后将自动创建报表数据集，可在「报表中心」查看"
+          message="提交后由服务端自动生成 SQL，并自动带上租户隔离、行数上限与只读校验"
           show-icon
           type="info"
         />

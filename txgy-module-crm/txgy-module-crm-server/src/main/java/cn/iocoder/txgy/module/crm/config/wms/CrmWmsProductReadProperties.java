@@ -9,10 +9,10 @@ import java.math.BigDecimal;
  * CRM 读取 WMS 商品（进仓产品）并同步导入 CRM 产品管理的配置。
  *
  * <p>mode=mock：本地直接读取同库 WMS 表，便于本地联调；
- * mode=remote：调用 WMS 交付文档中的 {@code GET /admin-api/wms/crm/products/page} 只读接口。</p>
+ * mode=remote：调用 WMS 交付文档中的 {@code GET /admin-api/wms/crm/products/page}、{@code /get}、{@code /list} 只读接口。</p>
  *
- * <p>WMS 接口只返回商品编码、名称、规格、单位，不返回价格，也不包含库存承诺。
- * 因此同步写入 CRM 产品时，价格、分类、负责人、状态使用本配置的默认值，不覆盖已有人工维护的数据。</p>
+ * <p>CRM 产品管理实时读取，不在本地落库：WMS 存在的产品才展示，WMS 删除后不再展示。
+ * WMS 接口返回商品编码、名称、规格、单位、销售单价与仓库库存数量，其中销售单价缺失时使用本配置的默认价格。</p>
  */
 @Data
 @ConfigurationProperties(prefix = "txgy.integration.wms.crm-product")

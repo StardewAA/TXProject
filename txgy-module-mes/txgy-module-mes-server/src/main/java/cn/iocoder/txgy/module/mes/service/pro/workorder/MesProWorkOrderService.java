@@ -122,7 +122,28 @@ public interface MesProWorkOrderService {
     void cancelWorkOrder(Long id);
 
     /**
-     * 下发工单（已确认 → 已下发）
+     * 提交工单审批（已确认 → 审批中），并发起 BPM 审批流程
+     *
+     * @param id 编号
+     */
+    void submitWorkOrder(Long id);
+
+    /**
+     * 工单审批通过（审批中 → 已批准），由 BPM 审批结果回调驱动；仅已批准工单可下发
+     *
+     * @param id 编号
+     */
+    void approveWorkOrder(Long id);
+
+    /**
+     * 工单审批驳回（审批中 → 已确认），由 BPM 审批结果回调驱动
+     *
+     * @param id 编号
+     */
+    void rejectWorkOrder(Long id);
+
+    /**
+     * 下发工单（已批准 → 已下发）
      *
      * @param id 编号
      */

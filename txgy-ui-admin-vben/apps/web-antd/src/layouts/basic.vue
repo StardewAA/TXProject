@@ -4,6 +4,7 @@ import type { NotificationItem } from '@vben/layouts';
 import type { SystemTenantApi } from '#/api/system/tenant';
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
@@ -42,13 +43,30 @@ import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 import FmsAccountSetSwitch from '#/views/fms/components/account-set/account-set-switch.vue';
+// 【MES AI 助手】仅「智慧生产执行系统 → 生产工作台」显示（见 showMesAiAssistant），
+// 面板为 fixed 定位悬浮球/悬浮窗，不影响页面布局
+// 【MES AI 助手】面板为 fixed 定位悬浮球/悬浮窗，不影响页面布局。
+// 只在 MES 模块页面挂载：它是 MES 生产助手，其它模块页面（含登录后的 AI首页）
+// 不应出现；在 MES 内部切换菜单时组件不销毁，会话状态得以保留。
+import MesAiChatPanel from '#/views/mes/home/modules/MesAiChatPanel.vue';
 
+const route = useRoute();
 const userStore = useUserStore();
+
+/** MES AI 助手只在 MES 模块页面显示（/mes、/mes/...） */
+const isMesRoute = computed(() => route.path === '/mes' || route.path.startsWith('/mes/'));
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
+
+/** 当前路由是否为「MES 生产工作台」（该菜单 path / component 均为 mes/home/index），
+ *  MES AI 助手只在生产工作台出现，避免在其它业务页面以悬浮球形式干扰操作。 */
+const route = useRoute();
+const showMesAiAssistant = computed(() =>
+  String(route.path ?? '').includes('mes/home'),
+);
 
 const notifications = ref<NotificationItem[]>([]);
 const unreadCount = ref(0);
@@ -340,4 +358,7 @@ watch(
     </template>
   </BasicLayout>
   <HelpModal />
+  <!-- 【MES AI 助手】仅「智慧生产执行系统 → 生产工作台」显示（fixed 定位悬浮面板）
+       push-body=false：展开时悬浮覆盖页面，不挤压/推挤原有内容 -->
+  <MesAiChatPanel v-if="showMesAiAssistant" :push-body="false" />
 </template>

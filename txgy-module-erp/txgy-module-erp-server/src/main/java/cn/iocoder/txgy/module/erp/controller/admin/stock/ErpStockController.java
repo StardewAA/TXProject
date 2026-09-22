@@ -11,6 +11,7 @@ import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.erp.controller.admin.product.vo.product.ErpProductRespVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.stock.ErpStockPageReqVO;
 import cn.iocoder.txgy.module.erp.controller.admin.stock.vo.stock.ErpStockRespVO;
+import cn.iocoder.txgy.module.erp.service.export.ErpPdfExportUtils;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpStockDO;
 import cn.iocoder.txgy.module.erp.dal.dataobject.stock.ErpWarehouseDO;
 import cn.iocoder.txgy.module.erp.service.product.ErpProductService;
@@ -92,6 +93,19 @@ public class ErpStockController {
         List<ErpStockRespVO> list = buildStockVOPageResult(stockService.getStockPage(pageReqVO)).getList();
         // 导出 Excel
         ExcelUtils.write(response, "产品库存.xls", "数据", ErpStockRespVO.class, list);
+    }
+
+    @GetMapping("/export-pdf")
+    @Operation(summary = "导出产品库存 PDF")
+    @PreAuthorize("@ss.hasPermission('erp:stock:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportStockPdf(@Valid ErpStockPageReqVO pageReqVO,
+                               HttpServletResponse response) throws IOException {
+        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<ErpStockRespVO> list = buildStockVOPageResult(
+                stockService.getStockPage(pageReqVO)).getList();
+        ErpPdfExportUtils.write(response, "产品库存.pdf", "产品库存列表",
+                ErpStockRespVO.class, list);
     }
 
     private PageResult<ErpStockRespVO> buildStockVOPageResult(PageResult<ErpStockDO> pageResult) {

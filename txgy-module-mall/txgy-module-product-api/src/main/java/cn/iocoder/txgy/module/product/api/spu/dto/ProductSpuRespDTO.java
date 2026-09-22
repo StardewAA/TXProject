@@ -47,6 +47,9 @@ public class ProductSpuRespDTO {
      */
     private Integer status;
 
+    /** 服务端统一可售判定；内部历史查询仍返回商品，不把下架误判为删除。 */
+    private Boolean saleable = false;
+
     // ========== SKU 相关字段 =========
 
     /**

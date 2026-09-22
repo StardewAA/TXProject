@@ -1,6 +1,7 @@
 <!-- 售后列表 -->
 <template>
   <s-layout title="售后列表">
+    <s-order-workbench :workbench="workbench" />
     <!-- tab -->
     <su-sticky bgColor="#fff">
       <su-tabs
@@ -21,10 +22,10 @@
         class="list-box ss-m-y-20"
         v-for="order in state.pagination.list"
         :key="order.id"
-        @tap="sheep.$router.go('/pages/order/aftersale/detail', { id: order.id })"
+        @tap="openAfterSale(order.id)"
       >
         <view class="order-head ss-flex ss-col-center ss-row-between">
-          <text class="no">服务单号：{{ order.no }}</text>
+          <text class="no"><text v-if="unreadForOrder(workbench.state.summary, order.id, true).length" class="notice-new">新 · </text>服务单号：{{ order.no }}</text>
           <text class="state">{{ formatAfterSaleStatus(order) }}</text>
         </view>
         <view class="shop-name">店铺：{{ order.shopName }}</view>
@@ -80,6 +81,8 @@
   } from '@/sheep/hooks/useGoods';
   import AfterSaleApi from '@/sheep/api/trade/afterSale';
   import { resetPagination } from '@/sheep/helper/utils';
+  import { useOrderWorkbench } from '@/sheep/hooks/useOrderWorkbench';
+  import { unreadForOrder } from '@/sheep/helper/order-workbench.mjs';
 
   const state = reactive({
     currentTab: 0,
@@ -95,6 +98,12 @@
     loading: false,
     cancellingId: null,
   });
+
+  const workbench = useOrderWorkbench(() => ({ afterSaleIds: state.pagination.list.map(item => item.id).slice(0, 100).join(',') || undefined }));
+  async function openAfterSale(id) {
+    if (!await workbench.readOrder(id, true)) return;
+    sheep.$router.go('/pages/order/aftersale/detail', { id });
+  }
 
   const tabMaps = [
     {
@@ -262,6 +271,11 @@
 </script>
 
 <style lang="scss" scoped>
+  .notice-new {
+    color: #b54708;
+    font-weight: 700;
+  }
+
   .list-box {
     background-color: #fff;
 

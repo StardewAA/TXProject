@@ -6,6 +6,8 @@ import cn.iocoder.txgy.module.training.controller.admin.resource.vo.DocumentPage
 import cn.iocoder.txgy.module.training.dal.dataobject.resource.DocumentResourceDO;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 文档资源 Service
  *
@@ -23,18 +25,19 @@ public interface DocumentResourceService {
     DocumentPageCountRespVO countDocumentPages(MultipartFile file);
 
     /**
-     * 上传文档（PDF/Word/WPS/图片 ≤50MB），成功即上线，返回资源 ID
+     * 批量上传文档（PDF/Word/WPS/图片 ≤50MB/个），成功即上线，返回资源 ID 列表
      *
-     * <p>上传时自动识别总页数；未显式传入 estMinutes 时按 页数 × 10 分钟 自动设置</p>
+     * <p>支持一次性上传多个文件：每个文件独立识别页数与预估阅读时长；
+     * 多文件时标题自动追加序号后缀（如《作业规程》(1)、《作业规程》(2)）</p>
      */
-    Long uploadDocument(MultipartFile file, String title, Long categoryId,
-                        String bizCategory, String tags, Integer estMinutes);
+    List<Long> uploadDocuments(List<MultipartFile> files, String title, Long categoryId,
+                               String bizCategory, Integer estMinutes);
 
     /**
-     * 更新文档元数据（标题/分类/业务分类/标签/预估阅读）
+     * 更新文档元数据（标题/分类/业务分类/预估阅读）
      */
     void updateDocument(Long id, String title, Long categoryId,
-                        String bizCategory, String tags, Integer estMinutes);
+                        String bizCategory, Integer estMinutes);
 
     /**
      * 状态流转：DRAFT 草稿 / ONLINE 上线 / OFFLINE 下架 / ARCHIVED 归档

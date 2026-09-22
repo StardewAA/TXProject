@@ -1,49 +1,22 @@
-import { baseUrl, apiPath, tenantId } from '@/sheep/config';
-import request, { getAccessToken } from '@/sheep/request';
+import { baseUrl, apiPath } from '@/sheep/config';
+import request from '@/sheep/request';
+import { prepareTenantUpload, isTenantRequestCurrent } from '@/sheep/helper/tenant-runtime';
+import { createTenantUploader } from '@/sheep/helper/tenant-upload.mjs';
+
+const uploadFile = createTenantUploader({
+  prepare: prepareTenantUpload, isCurrent: isTenantRequestCurrent,
+  upload: options => uni.uploadFile({ ...options, url: baseUrl + apiPath + '/infra/file/upload' }),
+  showLoading: () => uni.showLoading({ title: '上传中' }),
+  hideLoading: () => uni.hideLoading(),
+  subscribe: listener => { uni.$on('mall:session-changed', listener); return () => uni.$off('mall:session-changed', listener); },
+});
 
 const FileApi = {
   // 上传文件
-  uploadFile: (file, directory = '') => {
-    uni.showLoading({
-      title: '上传中',
-    });
-    return new Promise((resolve, reject) => {
-      uni.uploadFile({
-        url: baseUrl + apiPath + '/infra/file/upload',
-        filePath: file,
-        name: 'file',
-        header: {
-          Accept: '*/*',
-          'tenant-id': tenantId,
-          Authorization: 'Bearer ' + getAccessToken(),
-        },
-        formData: {
-          directory,
-        },
-        success: (uploadFileRes) => {
-          let result = JSON.parse(uploadFileRes.data);
-          if (result.error === 1) {
-            uni.showToast({
-              icon: 'none',
-              title: result.msg,
-            });
-          } else {
-            return resolve(result);
-          }
-        },
-        fail: (error) => {
-          console.log('上传失败：', error);
-          return resolve(false);
-        },
-        complete: () => {
-          uni.hideLoading();
-        },
-      });
-    });
-  },
+  uploadFile,
 
   // 获取文件预签名地址
-  getFilePresignedUrl: (name, directory) => {
+  getFilePresignedUrl: (name, directory, tenantSnapshot) => {
     return request({
       url: '/infra/file/presigned-url',
       method: 'GET',
@@ -51,15 +24,17 @@ const FileApi = {
         name,
         directory,
       },
+      custom: { auth: true, tenantSnapshot },
     });
   },
 
   // 创建文件
-  createFile: (data) => {
+  createFile: (data, tenantSnapshot) => {
     return request({
       url: '/infra/file/create', // 请求的 URL
       method: 'POST', // 请求方法
       data: data, // 要发送的数据
+      custom: { auth: true, tenantSnapshot },
     });
   },
 };

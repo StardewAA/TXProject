@@ -12,11 +12,11 @@ import { getRangePickerDefaultProps } from '#/utils';
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
-      fieldName: 'name',
-      label: '任务名称',
+      fieldName: 'orderNo',
+      label: '任务单号',
       component: 'Input',
       componentProps: {
-        placeholder: '请输入任务名称',
+        placeholder: '请输入入库单号、出库单号等',
         allowClear: true,
       },
     },
@@ -78,15 +78,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 200,
     },
     {
-      field: 'processInstance.summary',
-      title: '摘要',
+      field: 'processInstance.orderNo',
+      title: '出入库单号',
       minWidth: 200,
       formatter: ({ cellValue }) => {
-        return cellValue && cellValue.length > 0
-          ? cellValue
-              .map((item: any) => `${item.key} : ${item.value}`)
-              .join('\n')
-          : '-';
+        return cellValue || '-';
       },
     },
     {

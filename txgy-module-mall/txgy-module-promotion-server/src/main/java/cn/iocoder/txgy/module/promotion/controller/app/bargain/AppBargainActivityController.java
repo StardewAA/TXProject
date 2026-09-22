@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.promotion.controller.app.bargain;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageParam;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
@@ -13,8 +14,7 @@ import cn.iocoder.txgy.module.promotion.dal.dataobject.bargain.BargainActivityDO
 import cn.iocoder.txgy.module.promotion.enums.bargain.BargainRecordStatusEnum;
 import cn.iocoder.txgy.module.promotion.service.bargain.BargainActivityService;
 import cn.iocoder.txgy.module.promotion.service.bargain.BargainRecordService;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
+import cn.iocoder.txgy.module.promotion.service.price.PublicProductVisibility;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,12 +26,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
-import static cn.iocoder.txgy.framework.common.util.cache.CacheUtils.buildAsyncReloadingCache;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
 
 @Tag(name = "用户 App - 砍价活动")
@@ -39,19 +37,6 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 @RequestMapping("/promotion/bargain-activity")
 @Validated
 public class AppBargainActivityController {
-
-    /**
-     * {@link AppBargainActivityRespVO} 缓存，通过它异步刷新 {@link #getBargainActivityList0(Integer)} 所要的首页数据
-     */
-    private final LoadingCache<Integer, List<AppBargainActivityRespVO>> bargainActivityListCache = buildAsyncReloadingCache(Duration.ofSeconds(10L),
-            new CacheLoader<Integer, List<AppBargainActivityRespVO>>() {
-
-                @Override
-                public List<AppBargainActivityRespVO> load(Integer count) {
-                    return getBargainActivityList0(count);
-                }
-
-            });
 
     @Resource
     private BargainActivityService bargainActivityService;
@@ -61,35 +46,31 @@ public class AppBargainActivityController {
     @Resource
     private ProductSpuApi spuApi;
 
+    @Resource
+    private PublicProductVisibility visibility;
+
     @GetMapping("/list")
     @Operation(summary = "获得砍价活动列表", description = "用于小程序首页")
     @Parameter(name = "count", description = "需要展示的数量", example = "6")
     @PermitAll
     public CommonResult<List<AppBargainActivityRespVO>> getBargainActivityList(
             @RequestParam(name = "count", defaultValue = "6") Integer count) {
-        return success(bargainActivityListCache.getUnchecked(count));
-    }
-
-    private List<AppBargainActivityRespVO>getBargainActivityList0(Integer count) {
-        List<BargainActivityDO> list = bargainActivityService.getBargainActivityListByCount(count);
-        if (CollUtil.isEmpty(list)) {
-            return Collections.emptyList();
-        }
-        // 拼接数据
-        List<ProductSpuRespDTO> spuList = spuApi.getSpuList(convertList(list, BargainActivityDO::getSpuId)).getCheckedData();
-        return BargainActivityConvert.INSTANCE.convertAppList(list, spuList);
+        var visible = visibility.first(count,
+                bargainActivityService::getBargainActivityPage, BargainActivityDO::getSpuId);
+        return success(BargainActivityConvert.INSTANCE.convertAppList(visible.list(), visible.spus()));
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得砍价活动分页")
     @PermitAll
     public CommonResult<PageResult<AppBargainActivityRespVO>> getBargainActivityPage(PageParam pageReqVO) {
-        PageResult<BargainActivityDO> result = bargainActivityService.getBargainActivityPage(pageReqVO);
+        var visible = visibility.page(pageReqVO, bargainActivityService::getBargainActivityPage, BargainActivityDO::getSpuId);
+        PageResult<BargainActivityDO> result = visible.page();
         if (CollUtil.isEmpty(result.getList())) {
             return success(PageResult.empty(result.getTotal()));
         }
         // 拼接数据
-        List<ProductSpuRespDTO> spuList = spuApi.getSpuList(convertList(result.getList(), BargainActivityDO::getSpuId)).getCheckedData();
+        List<ProductSpuRespDTO> spuList = visible.spus();
         return success(BargainActivityConvert.INSTANCE.convertAppPage(result, spuList));
     }
 
@@ -99,12 +80,14 @@ public class AppBargainActivityController {
     @PermitAll
     public CommonResult<AppBargainActivityDetailRespVO> getBargainActivityDetail(@RequestParam("id") Long id) {
         BargainActivityDO activity = bargainActivityService.getBargainActivity(id);
-        if (activity == null) {
+        if (activity == null || CommonStatusEnum.isDisable(activity.getStatus())
+                || !visibility.isSaleable(activity.getSpuId())) {
             return success(null);
         }
         // 拼接数据
         Integer successUserCount = bargainRecordService.getBargainRecordUserCount(id, BargainRecordStatusEnum.SUCCESS.getStatus());
         ProductSpuRespDTO spu = spuApi.getSpu(activity.getSpuId()).getCheckedData();
+        if (spu == null || !Boolean.TRUE.equals(spu.getSaleable())) return success(null);
         return success(BargainActivityConvert.INSTANCE.convert(activity, successUserCount, spu));
     }
 

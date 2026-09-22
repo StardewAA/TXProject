@@ -32,4 +32,13 @@ public interface BpmProcessInstanceApi {
             @RequestParam("processInstanceId") String processInstanceId,
             @RequestParam("reason") String reason);
 
+    @PostMapping(PREFIX + "/cancel-by-admin-if-running")
+    @Operation(summary = "取消运行中的流程实例（提供给内部，管理员身份，不校验发起人）")
+    @Parameter(name = "processInstanceId", description = "流程实例编号", required = true)
+    @Parameter(name = "reason", description = "取消原因", required = true)
+    CommonResult<Boolean> cancelProcessInstanceByAdminIfRunning(
+            @RequestParam("userId") Long userId,
+            @RequestParam("processInstanceId") String processInstanceId,
+            @RequestParam("reason") String reason);
+
 }

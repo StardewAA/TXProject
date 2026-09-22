@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router';
 import { Button } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getCustomerPage } from '#/api/crm/customer';
+import { getPutPoolRemindCustomerPage } from '#/api/crm/customer';
 import { useGridColumns } from '#/views/crm/customer/data';
 
 import { SCENE_TYPES } from '../data';
@@ -48,10 +48,11 @@ const [Grid] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          return await getCustomerPage({
+          // 注意：必须使用「待进入公海」专用接口，与侧边栏数字（put-pool-remind-count）同口径；
+          // 此前误用 pool: true（查的是「已在公海」的客户），导致列表与数字对不上
+          return await getPutPoolRemindCustomerPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
-            pool: true, // 固定 公海参数为 true
             ...formValues,
           });
         },

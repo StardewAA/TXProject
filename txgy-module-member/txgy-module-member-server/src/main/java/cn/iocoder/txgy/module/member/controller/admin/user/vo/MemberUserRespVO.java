@@ -14,6 +14,11 @@ import java.util.List;
 @ToString(callSuper = true)
 public class MemberUserRespVO extends MemberUserBaseVO {
 
+    @Schema(description = "登录名（只读）")
+    private String loginName;
+    @Schema(description = "未验证联系手机号（非登录凭证）")
+    private String contactMobile;
+
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "23788")
     private Long id;
 

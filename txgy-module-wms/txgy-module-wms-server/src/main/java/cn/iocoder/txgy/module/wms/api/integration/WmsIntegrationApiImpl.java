@@ -218,6 +218,12 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
     }
 
     @Override
+    public CommonResult<WmsIntegrationAcceptedRespDTO> createMallShipment(WmsOrderRequestDTO request) {
+        validateOrder(request, "MALL", "SALE_SHIPMENT", "FINISHED_GOODS");
+        return createExternalShipment(request);
+    }
+
+    @Override
     public CommonResult<WmsIntegrationAcceptedRespDTO> createProductionShipment(WmsOrderRequestDTO request) {
         validateOrder(request, "MES", "PRODUCTION_SHIPMENT", "RAW_MATERIAL");
         return createExternalShipment(request);
@@ -233,7 +239,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         String materialType = "MES".equals(request.getSourceModule()) ? "RAW_MATERIAL" : "FINISHED_GOODS";
         var warehouse = warehouseMapper.selectByCode(request.getItems().getFirst().getWarehouseCode());
         if (warehouse == null) throw exception(WAREHOUSE_NOT_EXISTS);
-        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "仓库类型必须为 " + materialType);
+        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "当前业务需要" + warehouseTypeLabel(materialType) + "，请选择匹配的业务仓库");
         var merchant = request.getPartnerCode() == null || request.getPartnerCode().isBlank()
                 ? null : merchantMapper.selectByCode(request.getPartnerCode());
         if (validText(request.getPartnerCode(), 64) && merchant == null) throw exception(MERCHANT_NOT_EXISTS);
@@ -250,6 +256,10 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                     .setSourceSnapshotJson(cn.iocoder.txgy.framework.common.util.json.JsonUtils.toJsonString(item));
         }).toList();
         String no = "WMS-" + request.getSourceModule() + "-" + request.getSourceOrderNo();
+        // 同一来源单重复申请（如缺料恢复后重新领料）时按事件版本区分单号，避免出库单号唯一键冲突
+        if (request.getEventVersion() != null && request.getEventVersion() > 1) {
+            no = no + "-V" + request.getEventVersion();
+        }
         shipmentOrderService.createShipmentOrder(new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderSaveReqVO()
                 .setNo(no).setType("MES".equals(request.getSourceModule())
                         ? cn.iocoder.txgy.module.wms.enums.order.WmsShipmentOrderTypeEnum.PRODUCTION.getType()
@@ -267,7 +277,9 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         requireReceipt(source.equals(request.getSourceModule()) && type.equals(request.getOrderType()),
                 "此接口只接受 " + source + " " + type);
         requireReceipt(validText(request.getRequestId(), 64) && !request.getRequestId().startsWith("B:"), "requestId 无效");
-        requireReceipt(validText(request.getSourceOrderNo(), 56), "来源单号不能为空且不能超过 56 字符");
+        int sourceOrderNoMaxLength = 64 - ("WMS-" + source + "-").length();
+        requireReceipt(validText(request.getSourceOrderNo(), sourceOrderNoMaxLength),
+                "来源单号不能为空且不能超过 " + sourceOrderNoMaxLength + " 字符");
         requireReceipt(validText(request.getBusinessChainNo(), 64), "业务链编号不能为空且不能超过 64 字符");
         requireReceipt(request.getOccurredAt() != null && request.getEventVersion() != null && request.getEventVersion() > 0,
                 "业务时间及正整数事件版本不能为空");
@@ -285,7 +297,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
             if (warehouse == null) warehouse = item.getWarehouseCode();
             requireReceipt(Objects.equals(warehouse, item.getWarehouseCode()), "同一申请只能包含一个仓库");
             requireReceipt(validText(item.getMaterialCode(), 20) && validText(item.getSkuCode(), 64), "物料和 SKU 编码不能为空");
-            requireReceipt(materialType.equals(item.getMaterialType()), "物料类型必须为 " + materialType);
+            requireReceipt(materialType.equals(item.getMaterialType()), "当前业务需要" + warehouseTypeLabel(materialType) + "对应的物料");
             requireReceipt(validText(item.getMaterialNameSnapshot(), 255) && validText(item.getUnitCode(), 64)
                     && validText(item.getUnitNameSnapshot(), 64), "物料名称和单位快照不能为空");
             java.math.BigDecimal quantity = item.getRequiredQuantity();
@@ -317,6 +329,10 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         return value != null && !value.isBlank() && value.length() <= max;
     }
 
+    private static String warehouseTypeLabel(String materialType) {
+        return "RAW_MATERIAL".equals(materialType) ? "原材料仓" : "成品仓";
+    }
+
     private static void requireReceipt(boolean condition, String reason) {
         if (!condition) throw exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.INTEGRATION_RECEIPT_REQUEST_INVALID, reason);
     }
@@ -329,7 +345,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
             throw exception(WAREHOUSE_NOT_EXISTS);
         }
         String materialType = "PURCHASE_RECEIPT".equals(request.getOrderType()) ? "RAW_MATERIAL" : "FINISHED_GOODS";
-        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "仓库类型必须为 " + materialType);
+        requireReceipt(materialType.equals(warehouse.getWarehouseType()), "当前业务需要" + warehouseTypeLabel(materialType) + "，请选择匹配的业务仓库");
         WmsMerchantDO merchant = request.getPartnerCode() == null || request.getPartnerCode().isBlank()
                 ? null : merchantMapper.selectByCode(request.getPartnerCode());
         if (request.getPartnerCode() != null && !request.getPartnerCode().isBlank() && merchant == null) {
@@ -425,12 +441,22 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                 .setResultCode(0).setResultData(data).setUpdatedAt(order.getUpdateTime()));
     }
 
+    @Override
+    public CommonResult<WmsIntegrationRequestRespDTO> getMallOrderExecution(Long tenantId, String sourceOrderNo) {
+        validateTenant(tenantId);
+        return shipmentExecution(sourceOrderNo, "SALE_SHIPMENT", "MALL");
+    }
+
     private CommonResult<WmsIntegrationRequestRespDTO> shipmentExecution(String sourceNo, String type) {
+        String source = "SALE_SHIPMENT".equals(type) ? "ERP" : "MES";
+        return shipmentExecution(sourceNo, type, source);
+    }
+
+    private CommonResult<WmsIntegrationRequestRespDTO> shipmentExecution(String sourceNo, String type, String source) {
         requireReceipt(validText(sourceNo, 56), "来源单号不能为空且不能超过 56 字符");
         var q = new cn.iocoder.txgy.module.wms.controller.admin.order.shipment.vo.order.WmsShipmentOrderPageReqVO();
         q.setBizOrderNo(sourceNo);
         q.setPageSize(cn.iocoder.txgy.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
-        String source = "SALE_SHIPMENT".equals(type) ? "ERP" : "MES";
         var order = shipmentOrderService.getShipmentOrderPage(q).getList().stream()
                 .filter(row -> sourceNo.equals(row.getBizOrderNo()) && source.equals(row.getSourceModule()))
                 .findFirst().orElseThrow(() -> exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.SHIPMENT_ORDER_NOT_EXISTS));

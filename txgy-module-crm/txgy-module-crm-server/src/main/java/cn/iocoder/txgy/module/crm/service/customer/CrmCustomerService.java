@@ -48,10 +48,11 @@ public interface CrmCustomerService {
      * 更新客户相关的跟进信息
      *
      * @param id                 编号
+     * @param contactTime        实际跟进时间（本次实际联系客户的时间，公海回收计时以此为准）
      * @param contactNextTime    下次联系时间
      * @param contactLastContent 最后联系内容
      */
-    void updateCustomerFollowUp(Long id, LocalDateTime contactNextTime, String contactLastContent);
+    void updateCustomerFollowUp(Long id, LocalDateTime contactTime, LocalDateTime contactNextTime, String contactLastContent);
 
     /**
      * 删除客户
@@ -85,6 +86,15 @@ public interface CrmCustomerService {
      * @return 相似客户列表
      */
     List<CrmCustomerDO> getSimilarCustomerList(Long customerId, Integer limit);
+
+    /**
+     * 获得供应商基础库（客户类别=上游供应商）列表
+     *
+     * <p>供应商属于租户级共享主数据，供报价单等下拉选择，因此不做数据权限过滤。
+     *
+     * @return 供应商列表（按名称升序）
+     */
+    List<CrmCustomerDO> getSupplierSimpleList();
 
     /**
      * 获得客户 Map

@@ -21,7 +21,13 @@ export namespace CrmAfterSaleTicketApi {
     assigneeUserId?: number;
     status?: number;
     handleResult?: string;
-    startTime?: string;
+    /**
+     * 开始处理时间。
+     * 后端 LocalDateTime 走「毫秒时间戳」反序列化（传日期字符串会被解析成 epoch 0），
+     * 因此详情返回毫秒数字、提交时也应传毫秒数字；
+     * 表单内部用 'YYYY-MM-DD HH:mm:ss' 字符串，提交前由 form.vue 统一转换。
+     */
+    startTime?: number | string;
     finishTime?: string;
     closeTime?: string;
     isChargeable?: boolean;
@@ -42,7 +48,17 @@ export namespace CrmAfterSaleTicketApi {
   /** 分页查询参数 */
   export interface PageReq extends PageParam, Partial<Ticket> {
     createTime?: string[];
+    /** 提醒类型：1=工单超时预警（待办使用，实时查询且限本人及下属负责） */
+    remindType?: number;
   }
+}
+
+/** 提醒类型：1=工单超时预警（待办「工单超时预警」使用，与后端 REMIND_TYPE_OVERDUE 保持一致） */
+export const AFTER_SALE_TICKET_REMIND_TYPE_OVERDUE = 1;
+
+/** 获得「工单超时预警」待办数量（实时查询，不落库） */
+export function getAfterSaleTicketOverdueCount() {
+  return requestClient.get<number>('/crm/after-sale/ticket/remind-count');
 }
 
 /** 查询问题工单分页 */

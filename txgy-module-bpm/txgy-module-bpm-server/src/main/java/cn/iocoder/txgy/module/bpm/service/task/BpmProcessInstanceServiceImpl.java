@@ -35,6 +35,7 @@ import cn.iocoder.txgy.module.bpm.framework.flowable.core.enums.BpmnVariableCons
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.event.BpmProcessInstanceEventPublisher;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.BpmHttpRequestUtils;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.BpmnModelUtils;
+import cn.iocoder.txgy.module.bpm.util.BpmProcessDefinitionKeyUtils;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.iocoder.txgy.module.bpm.framework.flowable.core.util.SimpleModelUtils;
 import cn.iocoder.txgy.module.bpm.service.definition.BpmProcessDefinitionService;
@@ -323,6 +324,10 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         }
         if (StrUtil.isNotEmpty(pageReqVO.getProcessDefinitionKey())) {
             processInstanceQuery.processDefinitionKey(pageReqVO.getProcessDefinitionKey());
+        }
+        List<String> processDefinitionKeys = BpmProcessDefinitionKeyUtils.parseKeys(pageReqVO.getProcessDefinitionKeys());
+        if (CollUtil.isNotEmpty(processDefinitionKeys)) {
+            processInstanceQuery.processDefinitionKeyIn(processDefinitionKeys);
         }
         if (StrUtil.isNotEmpty(pageReqVO.getCategory())) {
             processInstanceQuery.processDefinitionCategory(pageReqVO.getCategory());
