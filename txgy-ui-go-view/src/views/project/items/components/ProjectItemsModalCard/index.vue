@@ -27,9 +27,18 @@
         <!-- 中间 -->
         <div class="list-content-img">
           <img
-            :src="cardData?.image"
+            v-if="previewSrc"
+            :src="previewSrc"
             :alt="cardData?.title"
+            @error="previewError = true"
           />
+          <n-text v-else depth="3" class="list-content-empty">
+            <n-icon :size="42">
+              <component :is="ImageIcon"></component>
+            </n-icon>
+            <span>{{ $t('project.no_preview') }}</span>
+            <span class="tip">{{ $t('project.no_preview_tip') }}</span>
+          </n-text>
         </div>
       </div>
       <template #action>
@@ -74,13 +83,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, PropType, watch } from 'vue'
+import { computed, ref, reactive, PropType, watch } from 'vue'
 import { renderIcon, renderLang } from '@/utils'
 import { icon } from '@/plugins'
 import { MacOsControlBtn } from '@/components/Tips/MacOsControlBtn'
 import { Chartype } from '../../index.d'
 
-const { HammerIcon } = icon.ionicons5
+const { HammerIcon, ImageIcon } = icon.ionicons5
 const showRef = ref(false)
 const emit = defineEmits(['close', 'edit'])
 
@@ -102,6 +111,22 @@ watch(
   },
   {
     immediate: true
+  }
+)
+
+// 缩略图地址：为空（项目还没保存过）或图片加载失败时返回空串，由模板展示占位，避免出现破图
+const previewTime = Date.now()
+const previewError = ref(false)
+const previewSrc = computed(() => {
+  if (previewError.value) return ''
+  const url = String((props.cardData as Chartype)?.image || '').trim()
+  return url ? `${url}?time=${previewTime}` : ''
+})
+
+watch(
+  () => (props.cardData as Chartype)?.image,
+  () => {
+    previewError.value = false
   }
 )
 
@@ -168,6 +193,18 @@ $contentWidth: calc(82vw);
         min-height: 200px;
         max-width: 100%;
         @extend .go-border-radius;
+      }
+      .list-content-empty {
+        @extend .go-flex-center;
+        min-height: 200px;
+        flex-direction: column;
+        gap: 10px;
+        span {
+          font-size: 13px;
+        }
+        .tip {
+          opacity: 0.7;
+        }
       }
     }
   }

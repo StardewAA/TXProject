@@ -301,9 +301,13 @@ export const useSync = () => {
 
         // 上传预览图
         let uploadParams = new FormData()
+        // 文件名只能是纯文件名，目录要单独用 directory 字段传：
+        // 写成 `go-view/xxx.png` 会被后端的路径校验拦掉（文件路径不正确），
+        // 缩略图上传静默失败后 picUrl 一直是空，卡片上就永远没有预览图。
         uploadParams.append('file',
           base64toFile(canvasImage.toDataURL(),
-            `go-view/${fetchRouteParamsLocation()}_index_preview.png`)) // 名字使用 go-view 作为前缀
+            `${fetchRouteParamsLocation()}_index_preview.png`))
+        uploadParams.append('directory', 'go-view')
         const uploadRes = await uploadFile(uploadParams)
         // 保存预览图
         if(uploadRes && uploadRes.code === ResultEnum.SUCCESS) {
