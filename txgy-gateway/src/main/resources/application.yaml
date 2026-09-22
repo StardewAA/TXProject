@@ -45,6 +45,12 @@ spring:
               filters:
                   - RewritePath=/app-api/system/v3/api-docs, /v3/api-docs
             ## training-server 服务（云培训学院）
+            - id: training-portal-api # 门户请求对外复用 /admin-api，转发时去掉该公共前缀
+              uri: grayLb://training-server
+              predicates:
+                - Path=/admin-api/training/portal/**
+              filters:
+                - RewritePath=/admin-api/(?<segment>.*), /$\{segment}
             - id: training-admin-api # 路由的编号
               uri: grayLb://training-server
               predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
