@@ -796,7 +796,7 @@ def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Acto
     seen = set()
     for section in body.sections:
         qt=section.get("q_type")
-        if qt not in {"single","multi","judge","essay","case","blank","short"} or qt in seen or int(section.get("count",0))<=0 or not math.isfinite(float(section.get("score_each",0))) or float(section.get("score_each",0))<=0: raise HTTPException(422,"抽题规则不合法：题型不可重复，数量和分值必须大于零")
+        if qt not in QTYPE_TO_PLATFORM or qt in seen or int(section.get("count",0))<=0 or not math.isfinite(float(section.get("score_each",0))) or float(section.get("score_each",0))<=0: raise HTTPException(422,"抽题规则不合法：题型不可重复，数量和分值必须大于零")
         seen.add(qt)
         if qt not in pool_by_type:
             pool_by_type[qt] = platform_question_page(actor, qtype=QTYPE_TO_PLATFORM[qt])
