@@ -75,6 +75,21 @@
 			}
 		},
 		{
+			"path": "pages/platform/cart",
+			"style": { "navigationBarTitleText": "平台购物车" },
+			"meta": { "auth": true, "sync": true, "title": "平台购物车", "group": "商城" }
+		},
+		{
+			"path": "pages/platform/checkout",
+			"style": { "navigationBarTitleText": "跨租户结算" },
+			"meta": { "auth": true, "sync": true, "title": "跨租户结算", "group": "商城" }
+		},
+		{
+			"path": "pages/platform/history",
+			"style": { "navigationBarTitleText": "平台结算记录", "enablePullDownRefresh": true },
+			"meta": { "auth": true, "sync": true, "title": "平台结算记录", "group": "订单中心" }
+		},
+		{
 			"path": "pages/index/search",
 			"style": {
 				"navigationBarTitleText": "搜索"
@@ -99,6 +114,17 @@
 		}
 	],
 	"subPackages": [{
+			"root": "pages/inquiry",
+			"pages": [{
+					"path": "index",
+					"style": { "navigationBarTitleText": "询价专栏", "enablePullDownRefresh": true },
+					"meta": { "auth": false, "sync": true, "title": "询价专栏", "group": "商城" }
+				}, {
+					"path": "detail",
+					"style": { "navigationBarTitleText": "询价详情", "enablePullDownRefresh": true },
+					"meta": { "auth": false, "sync": true, "title": "询价详情", "group": "商城" }
+				}]
+		}, {
 			"root": "pages/goods",
 			"pages": [{
 					"path": "compare",

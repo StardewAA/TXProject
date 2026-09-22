@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     environment:
       PLATFORM_URL: http://gateway:48080/admin-api
+    ports:
+      - '8000:8000'
     volumes:
       - training-exam-data:/app/data
     networks:

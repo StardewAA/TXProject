@@ -8,6 +8,7 @@ import lombok.ToString;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 
 import static cn.iocoder.txgy.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND;
 
@@ -53,6 +54,10 @@ public class ProductSpuPageReqVO extends PageParam {
 
     @Schema(description = "所属企业店铺编号；为空表示全部店铺", example = "1")
     private Long shopId;
+
+    /** 服务端注入的经营店铺范围；控制器必须覆盖客户端绑定值。 */
+    @Schema(hidden = true)
+    private Collection<Long> shopIds;
     /** -1 表示历史待补审；其余为 0/10/20/30。 */
     private Integer reviewStatus;
 

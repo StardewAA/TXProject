@@ -29,6 +29,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -89,6 +91,31 @@ public class AppTradeOrderController {
     public CommonResult<AppTradeOrderCreateRespVO> createOrder(@Valid @RequestBody AppTradeOrderCreateReqVO createReqVO) {
         TradeOrderDO order = tradeOrderUpdateService.createOrder(getLoginUserId(), createReqVO);
         return success(new AppTradeOrderCreateRespVO().setId(order.getId()).setPayOrderId(order.getPayOrderId()));
+    }
+
+    @GetMapping("/inquiry-settlement")
+    @Operation(summary = "获得已采纳询价报价的结算信息")
+    public CommonResult<AppTradeOrderSettlementRespVO> settlementInquiryOrder(
+            @RequestParam("quoteId") @NotNull @Positive Long quoteId,
+            @RequestParam("addressId") @NotNull @Positive Long addressId) {
+        return success(tradeOrderUpdateService.settlementInquiryOrder(getLoginUserId(), quoteId, addressId));
+    }
+
+    @PostMapping("/inquiry-create")
+    @Operation(summary = "将已采纳询价报价转换为商城订单")
+    public CommonResult<AppTradeOrderCreateRespVO> createInquiryOrder(
+            @Valid @RequestBody AppTradeInquiryOrderCreateReqVO createReqVO) {
+        TradeOrderDO order = tradeOrderUpdateService.createInquiryOrder(getLoginUserId(), createReqVO);
+        return success(new AppTradeOrderCreateRespVO().setId(order.getId()).setPayOrderId(order.getPayOrderId()));
+    }
+
+    @GetMapping("/inquiry-order")
+    @Operation(summary = "查询已采纳询价报价对应的商城订单")
+    public CommonResult<AppTradeOrderCreateRespVO> getInquiryOrder(
+            @RequestParam("quoteId") @NotNull @Positive Long quoteId) {
+        TradeOrderDO order = tradeOrderUpdateService.getInquiryOrder(getLoginUserId(), quoteId);
+        return success(order == null ? null
+                : new AppTradeOrderCreateRespVO().setId(order.getId()).setPayOrderId(order.getPayOrderId()));
     }
 
     @PostMapping("/update-paid")
@@ -237,6 +264,13 @@ public class AppTradeOrderController {
     @Parameter(name = "id", description = "交易订单编号")
     public CommonResult<Boolean> cancelOrder(@RequestParam("id") Long id) {
         tradeOrderUpdateService.cancelOrderByMember(getLoginUserId(), id);
+        return success(true);
+    }
+
+    @PutMapping("/update-address")
+    @Operation(summary = "修改本人待支付快递订单的收货地址")
+    public CommonResult<Boolean> updateOrderAddress(@Valid @RequestBody AppTradeOrderUpdateAddressReqVO reqVO) {
+        tradeOrderUpdateService.updateOrderAddressByMember(getLoginUserId(), reqVO);
         return success(true);
     }
 

@@ -71,6 +71,8 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     private cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy accountPolicy;
     @Resource
     private cn.iocoder.txgy.module.member.service.tenant.MallImageChallengeService imageChallenges;
+    @Resource
+    private cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService platformAccounts;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -79,6 +81,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         MemberUserDO user = userService.registerAccountUser(body.getLoginName(), body.getPassword(), body.getNickname(),
                 body.getContactMobile(), body.getMemberIdentity(), getClientIP(), getTerminal());
         customerAffiliations.bindRegistration(user.getId());
+        platformAccounts.createForRegistration(user, TenantContextHolder.getRequiredTenantId());
         return createTokenAfterLoginSuccess(user, user.getLoginName(), LoginLogTypeEnum.LOGIN_MOBILE, null);
     }
 
@@ -93,6 +96,30 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         MemberUserDO user = memberUserMapper.selectByLoginName(normalized);
         if (user == null || !userService.isPasswordMatch(password, user.getPassword())) {
             createLoginLog(user == null ? null : user.getId(), normalized, LoginLogTypeEnum.LOGIN_MOBILE, LoginResultEnum.BAD_CREDENTIALS);
+            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+        return createTokenAfterLoginSuccess(user, normalized, LoginLogTypeEnum.LOGIN_MOBILE, null);
+    }
+
+    @Override
+    public AppAuthLoginRespVO loginWithPlatformAccount(Long expectedMemberId, String account, String password) {
+        if (expectedMemberId == null || expectedMemberId <= 0 || account == null) {
+            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+        String normalized = account.trim().toLowerCase(java.util.Locale.ROOT);
+        MemberUserDO user;
+        if (normalized.matches("1[3-9][0-9]{9}")) {
+            user = userService.getUserByMobile(normalized);
+        } else {
+            if (!normalized.matches("[a-z][a-z0-9_]{5,19}")) {
+                throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            }
+            user = memberUserMapper.selectByLoginName(normalized);
+        }
+        if (user == null || !Objects.equals(user.getId(), expectedMemberId)
+                || !userService.isPasswordMatch(password, user.getPassword())) {
+            createLoginLog(user != null && Objects.equals(user.getId(), expectedMemberId) ? user.getId() : null,
+                    normalized, LoginLogTypeEnum.LOGIN_MOBILE, LoginResultEnum.BAD_CREDENTIALS);
             throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         }
         return createTokenAfterLoginSuccess(user, normalized, LoginLogTypeEnum.LOGIN_MOBILE, null);
@@ -144,6 +171,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
                     .setMemberIdentity(reqVO.getMemberIdentity()));
         }
         customerAffiliations.bindRegistration(user.getId());
+        platformAccounts.createForRegistration(user, TenantContextHolder.getRequiredTenantId());
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, null);
     }
 

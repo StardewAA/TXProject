@@ -6,6 +6,7 @@ import { parseAuthEntry, assertAuthAvailable, createChallengeState } from '../sh
 import { parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice } from '../sheep/helper/registration-choice.mjs';
 import { createTenantAuthClient } from '../sheep/helper/tenant-auth-client.mjs';
 import { createImageRegistrationState, createCaptchaSession, normalizeLoginName } from '../sheep/helper/image-registration.mjs';
+import { isPlatformPortalAddress } from '../sheep/helper/tenant-navigation.mjs';
 
 const source = readFileSync(new URL('../sheep/hooks/useMallAuthForm.js', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace(/export (function|const) /g, '$1 ');
@@ -17,7 +18,7 @@ const challenge = { tenantId: 1, challengeId: 'a'.repeat(32), expiresIn: 300, re
 const imageConfig = { ...config, protocol: 'legacy', registrationMethod: 'image-v1', loginNameEnabled: true };
 const imageChallenge = { tenantId: 1, challengeId: 'b'.repeat(32), imageDataUrl: 'data:image/png;base64,aGVsbG8=', expiresIn: 300, retryAfter: 2 };
 const ok = data => ({ code: 0, data });
-function harness({ purpose = 'PASSWORD_LOGIN', entry = ok(config), options = ok({enabled:false,tenants:[],crossTenantReady:false}), answer, legacyAnswer } = {}) {
+function harness({ purpose = 'PASSWORD_LOGIN', platform = false, entry = ok(config), options = ok({enabled:false,tenants:[],crossTenantReady:false}), answer, legacyAnswer, platformProof } = {}) {
   const calls = [], writes = [], toasts = [], cleanup = [], timers = new Set(); let epoch = 0;
   const model = reactive({ mobile: '19900000000', account: '19900000000', password: 'Password123', confirmPassword: 'Password123', code: '', nickname: '测试会员', memberIdentity: 'buyer', loginName: 'Buyer_01', contactMobile: '', imageCode: '' });
   const dependencies = { ref, computed, watch, onMounted() {}, onBeforeUnmount: fn => cleanup.push(fn),
@@ -26,7 +27,18 @@ function harness({ purpose = 'PASSWORD_LOGIN', entry = ok(config), options = ok(
     parseRegistrationOptions, resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice,
     ensureTenantReady: async () => {}, getControlledTenantId: () => '1',
     captureTenantOperation: () => epoch, isTenantOperationCurrent: value => value === epoch,
-    $store: () => ({ setToken(...args) { writes.push(args); epoch++; }, logout() { writes.push('logout'); epoch++; } }),
+    isPlatformPortalAddress,
+    window: { location: { href: platform ? 'https://mall/pages/index/index' : 'https://mall/pages/index/user?tenantId=1', search: platform ? '' : '?tenantId=1' } },
+    verifyPlatformSession: async (candidate, current) => {
+      calls.push({ type: 'platform-proof', candidate });
+      if (!current()) throw new Error('登录状态已变化');
+      if (platformProof instanceof Error) throw platformProof;
+      return platformProof || { ...candidate, sourceTenantId: String(candidate.tenantId), canonicalMemberId: String(candidate.userId),
+        legacyMemberId: String(candidate.userId), platformAccountId: '88', platformNo: 'PM0088', memberships: [] };
+    },
+    $store: () => ({ setToken(...args) { writes.push(args); epoch++; },
+      setPlatformToken(...args) { writes.push({ platform: true, args }); epoch++; },
+      logout() { writes.push('logout'); epoch++; } }),
     uni: { showToast: value => toasts.push(value.title) },
     setInterval: fn => { timers.add(fn); return fn; }, clearInterval: fn => timers.delete(fn),
     tenantTransport: async (path, transportOptions) => {
@@ -45,6 +57,36 @@ function harness({ purpose = 'PASSWORD_LOGIN', entry = ok(config), options = ok(
   const dispose = () => { cleanup.forEach(fn => fn()); scope.stop(); };
   return { form, model, calls, writes, toasts, timers, dispose, changeSession() { epoch++; } };
 }
+
+test('platform portal login sends no tenant choice and stores only a server-proven carrier identity', async () => {
+  const platformIdentity = { accessToken: 'platform-access', refreshToken: 'platform-refresh', tenantId: 2009, userId: 316 };
+  const h = harness({ platform: true, answer: path => ok(path.endsWith('/platform-login') ? platformIdentity : null) });
+  try {
+    await h.form.refresh(); assert.equal(h.form.platformLogin, true); assert.equal(h.form.available.value, true);
+    h.model.account = ' Comency '; h.model.password = 'p123';
+    assert.equal((await h.form.submit('login', { ...h.model }))?.code, 0);
+    const login = h.calls.find(call => call.path === '/member/mall-auth/platform-login');
+    assert.deepEqual(login.options.data, { account: 'comency', password: 'p123' });
+    assert.equal(login.options.header['tenant-id'], undefined);
+    assert.equal(h.calls.some(call => call.path?.endsWith('/config')), false);
+    assert.equal(h.calls.filter(call => call.type === 'platform-proof').length, 1);
+    assert.equal(h.writes.length, 1); assert.equal(h.writes[0].platform, true);
+    assert.equal(h.writes[0].args[2].sourceTenantId, '2009');
+  } finally { h.dispose(); }
+});
+
+test('platform portal rejects an unproven login and never falls back to a tenant account endpoint', async () => {
+  const h = harness({ platform: true, platformProof: new Error('平台登录已失效'),
+    answer: path => ok(path.endsWith('/platform-login')
+      ? { accessToken: 'platform-access', refreshToken: 'platform-refresh', tenantId: 2009, userId: 316 }
+      : null) });
+  try {
+    await h.form.refresh(); assert.equal(await h.form.submit('login', { ...h.model }), null);
+    assert.equal(h.writes.length, 0);
+    assert.equal(h.calls.some(call => call.path === '/member/mall-auth/account-login'), false);
+    assert.equal(h.calls.some(call => call.type === 'legacy'), false);
+  } finally { h.dispose(); }
+});
 
 test('new login uses anonymous tenant-bound route and commits only verified identity', async () => {
   const h = harness(); try {
@@ -197,10 +239,10 @@ test('validation completing after popup disposal cannot initiate any auth reques
   assert.equal(h.calls.length, 1); assert.equal(h.writes.length, 0);
 });
 
-const registrationDirectory = ok({enabled:true,publicTenantId:9001,tenants:[{tenantId:9001,name:'公共商城'},{tenantId:1,name:'当前商城'}],crossTenantReady:false});
-test('public default cannot issue an unusable foreign-tenant account', async () => {
+const registrationDirectory = ok({enabled:true,publicTenantId:null,tenants:[{tenantId:9001,name:'其他企业商城'},{tenantId:1,name:'当前商城'}],crossTenantReady:false,selectionRequired:true});
+test('missing explicit tenant cannot issue an account', async () => {
   const h=harness({purpose:'REGISTER',options:registrationDirectory});try {
-    await h.form.refresh();assert.equal(h.form.registrationChoice.value.tenantId,'9001');assert.equal(h.form.available.value,false);
+    await h.form.refresh();assert.match(h.form.choiceError.value,/请选择/);assert.equal(h.form.registrationTarget.value,'');assert.equal(h.form.available.value,false);
     await h.form.send();h.model.code='123456';await h.form.submit('register',{...h.model,agree:true});
     assert.equal(h.calls.filter(c=>c.options?.method==='POST').length,0);assert.equal(h.writes.length,0);
   }finally{h.dispose();}

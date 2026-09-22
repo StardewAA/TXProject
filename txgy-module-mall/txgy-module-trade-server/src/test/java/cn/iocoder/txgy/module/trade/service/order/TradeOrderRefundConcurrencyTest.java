@@ -15,8 +15,6 @@ import cn.iocoder.txgy.module.trade.service.order.handler.TradeOrderHandler;
 import cn.iocoder.txgy.module.trade.service.order.handler.TradeMemberPointOrderHandler;
 import cn.iocoder.txgy.module.trade.service.order.handler.TradeProductSkuOrderHandler;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
-import cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService;
-import cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation;
 import org.junit.jupiter.api.*;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -195,7 +193,6 @@ class TradeOrderRefundConcurrencyTest {
         MemberPointApi points = mock(MemberPointApi.class);
         MemberLevelApi levels = mock(MemberLevelApi.class);
         AfterSaleService afterSales = mock(AfterSaleService.class);
-        TradeErpInventoryService erp = mock(TradeErpInventoryService.class);
         when(points.addPoint(anyLong(),anyInt(),anyInt(),anyString())).thenReturn(CommonResult.success(true));
         when(points.reducePoint(anyLong(),anyInt(),anyInt(),anyString())).thenReturn(CommonResult.success(true));
         when(levels.reduceExperience(anyLong(),anyInt(),anyInt(),anyString())).thenReturn(CommonResult.success(true));
@@ -207,7 +204,6 @@ class TradeOrderRefundConcurrencyTest {
         ReflectionTestUtils.setField(pointHandler,"memberLevelApi",levels);
         ReflectionTestUtils.setField(pointHandler,"afterSaleService",afterSales);
         var inventoryHandler = new TradeProductSkuOrderHandler();
-        ReflectionTestUtils.setField(inventoryHandler,"erpInventory",erp);
         ReflectionTestUtils.setField(target,"tradeOrderHandlers",List.of(handler,pointHandler,inventoryHandler));
 
         CountDownLatch originalSnapshot = new CountDownLatch(1), otherRefundCommitted = new CountDownLatch(1);
@@ -236,9 +232,7 @@ class TradeOrderRefundConcurrencyTest {
         verify(points).addPoint(100L,6,MemberPointBizTypeEnum.ORDER_USE_CANCEL_ITEM.getType(),"12");
         verify(points,never()).addPoint(anyLong(),anyInt(),eq(MemberPointBizTypeEnum.ORDER_USE_CANCEL.getType()),anyString());
         verify(points,times(2)).addPoint(anyLong(),anyInt(),anyInt(),anyString());
-        verify(erp).request(any(),eq(Operation.RELEASE),eq("ITEM-11"),anyList(),isNull(),isNull());
-        verify(erp).request(any(),eq(Operation.RELEASE),eq("ITEM-12"),anyList(),isNull(),isNull());
-        verify(erp,never()).request(any(),eq(Operation.RELEASE),eq("CANCEL"),anyList(),isNull(),isNull());
+        // WMS 尚未提供预占，逐项退款和整单取消都不能发送库存释放请求。
         verify(levels,never()).addExperience(anyLong(),anyInt(),anyInt(),anyString());
         verify(handler).afterCancelOrder(argThat(value -> value.getRefundPrice()==10000
                 && value.getRefundPoint()==10 && value.getRefundStatus()==20),

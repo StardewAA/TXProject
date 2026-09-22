@@ -64,8 +64,10 @@ it('protocol discovery is anonymous without tenant or token', async () => {
 it('registration directory never sends old session or tenant headers', async () => {
   const { tokenStorage } = await import('./http'); tokenStorage.set('previous', 'previous-refresh')
   const { getRegistrationOptions } = await import('./mall-auth')
-  mocks.transport.mockResolvedValue(ok({ enabled: true, publicTenantId: 9001, tenants: [{ tenantId: 9001, name: '公共商城' }], crossTenantReady: false }))
-  expect((await getRegistrationOptions()).publicTenantId).toBe('9001')
+  mocks.transport.mockResolvedValue(ok({ enabled: true, publicTenantId: null, tenants: [{ tenantId: 9001, name: '企业商城' }], crossTenantReady: false, selectionRequired: true }))
+  const options = await getRegistrationOptions()
+  expect(options.publicTenantId).toBeNull()
+  expect(options.selectionRequired).toBe(true)
   const call = mocks.transport.mock.calls[0]![0]
   expect(call.url).toBe('/member/mall-auth/registration-options')
   expect(call.headers.get('Authorization')).toBeUndefined(); expect(call.headers.get('tenant-id')).toBeUndefined()
@@ -105,6 +107,12 @@ it('new registration sends challenge and never calls old registration', async ()
   const call = mocks.transport.mock.calls[0]![0]
   expect(call.url).toBe('/member/mall-auth/register'); expect(call.data.challengeId).toBe('a'.repeat(32))
   expect(mocks.transport.mock.calls.some(([input]) => input.url === '/member/auth/register')).toBe(false)
+})
+it('legacy registration compatibility fails closed without sending credentials', async () => {
+  const { useAuthStore } = await import('@/stores/auth')
+  await expect(useAuthStore().register({ mobile: '19900000000', password: 'Password123', code: '123456', nickname: '会员', agree: true,
+    memberIdentity: 'buyer' }, false)).rejects.toThrow('旧版注册入口已关闭')
+  expect(mocks.transport).not.toHaveBeenCalled()
 })
 it.each([undefined, 88])('challenge response with tenant %s cannot write a session', async tenantId => {
   const { useAuthStore } = await import('@/stores/auth'); const { tokenStorage } = await import('./http')
@@ -148,6 +156,42 @@ it.each(['buyer_1', '19900000000'])('account login preserves password authentica
   expect(call.url).toBe('/member/mall-auth/account-login')
   expect(call.data).toEqual({ tenantId: '1', account, password: '1234' })
   expect(call.headers.get('Authorization')).toBeUndefined()
+})
+it('platform login derives its source tenant on the server and never sends a tenant hint', async () => {
+  const platformIdentity = { ...identity, tenantId: 2009, userId: 77 }
+  const { useAuthStore } = await import('@/stores/auth')
+  const { tokenStorage } = await import('./http')
+  mocks.transport.mockImplementation(async input => {
+    if (input.url.endsWith('/platform-login')) return ok(platformIdentity)
+    if (input.url.endsWith('/platform-account/session')) return ok({
+      platformAccountId: 31, platformNo: 'PA-31', canonicalMemberId: 77, legacyMemberId: 77,
+      sourceTenantId: 2009, memberships: [],
+    })
+    if (input.url.endsWith('/member/user/get')) return ok({ id: 77, tenantId: 2009, nickname: '平台会员' })
+    throw new Error(`unexpected request: ${input.url}`)
+  })
+  await useAuthStore().platformLogin({ account: 'BUYER_1', password: '1234' })
+  const login = mocks.transport.mock.calls[0]![0]
+  expect(login.url).toBe('/member/mall-auth/platform-login')
+  expect(login.data).toEqual({ account: 'buyer_1', password: '1234' })
+  expect(login.data).not.toHaveProperty('tenantId')
+  expect(login.headers.get('tenant-id')).toBeUndefined()
+  const proof = mocks.transport.mock.calls[1]![0]
+  expect(proof.url).toBe('/member/platform-account/session')
+  expect(proof.headers.get('tenant-id')).toBeUndefined()
+  expect(proof.headers.get('Authorization')).toBe('Bearer new-access')
+  expect(tokenStorage.getAccess()).toBe('new-access')
+})
+it('platform login rejects a mismatched platform session before replacing the old token', async () => {
+  const { useAuthStore } = await import('@/stores/auth')
+  const { tokenStorage } = await import('./http')
+  tokenStorage.set('old', 'old-refresh')
+  mocks.transport.mockImplementation(async input => input.url.endsWith('/platform-login')
+    ? ok({ ...identity, tenantId: 2009, userId: 77 })
+    : ok({ platformAccountId: 31, canonicalMemberId: 88, sourceTenantId: 2009 }))
+  await expect(useAuthStore().platformLogin({ account: 'buyer_1', password: '1234' })).rejects.toThrow('平台账号会话')
+  expect(tokenStorage.getAccess()).toBe('old')
+  expect(mocks.transport).toHaveBeenCalledTimes(2)
 })
 it('new operation failures cannot fall back to SMS or legacy registration', async () => {
   const { useAuthStore } = await import('@/stores/auth')

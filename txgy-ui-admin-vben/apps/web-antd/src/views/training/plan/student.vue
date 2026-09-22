@@ -4,7 +4,7 @@ import type { TrainingPlanApi } from './api';
 import { computed, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
-import { downloadFileFromBlobPart, handleTree } from '@vben/utils';
+import { downloadFileFromBlobPart } from '@vben/utils';
 
 import {
   Button,
@@ -13,31 +13,25 @@ import {
   message,
   Modal,
   Popconfirm,
-  Select,
   Space,
-  Switch,
   Table,
   Tag,
-  TreeSelect,
   Upload,
 } from 'ant-design-vue';
 
-import { getSimpleDeptList } from '#/api/system/dept';
-import { getSimpleUserList } from '#/api/system/user';
+import type { SystemUserApi } from '#/api/system/user';
+
+import { UserSelectDialog } from '#/views/system/user/components';
 
 import {
   addClassStudents,
-  addClassStudentsByScope,
   getAllClassStudents,
   getClassStudentPage,
   getStudentImportTemplate,
   importClassStudents,
-  previewClassScope,
   removeClassStudent,
 } from './api';
 import ClassBar from './class-bar.vue';
-import { parseTargetCondition } from './data';
-import { loadPostOptions } from './post-options';
 
 defineOptions({ name: 'TrainingPlanStudent' });
 
@@ -116,34 +110,55 @@ function handleTableChange(pagination: any) {
   loadStudents();
 }
 
-// ========== 添加学员（勾选批量加入，自动生成学习任务） ==========
-const userOptions = ref<{ label: string; value: number }[]>([]);
+// ========== 添加学员（从「系统管理 → 用户管理」人员中选择，批量入班并自动生成学习任务） ==========
+const userSelectRef = ref<InstanceType<typeof UserSelectDialog>>();
 const addVisible = ref(false);
-const addUserIds = ref<number[]>([]);
 const addLoading = ref(false);
+/** 已选待入班人员（已在班的在选择时即过滤） */
+const pendingUsers = ref<SystemUserApi.User[]>([]);
+const addUserIds = computed(() =>
+  pendingUsers.value.map((item) => item.id!).filter((id) => id != null),
+);
+const addColumns = [
+  { title: '姓名', dataIndex: 'nickname', key: 'nickname', width: 120 },
+  { title: '登录账号', dataIndex: 'username', key: 'username', width: 140 },
+  { title: '手机号', dataIndex: 'mobile', key: 'mobile', width: 130 },
+  { title: '部门', dataIndex: 'deptName', key: 'deptName' },
+  { title: '操作', key: 'action', width: 80 },
+];
 
-async function openAddModal() {
-  addUserIds.value = [];
-  if (userOptions.value.length === 0) {
-    try {
-      const users = await getSimpleUserList();
-      userOptions.value = (users ?? [])
-        .filter((item) => item.status === 0 && item.id != null)
-        .map((item) => ({ label: item.nickname, value: item.id! }));
-    } catch {
-      userOptions.value = [];
-    }
+/** 打开「人员选择」弹窗（来源：系统管理 - 用户管理的人员列表，支持按部门/姓名/手机号检索、多选） */
+function openUserSelect() {
+  userSelectRef.value?.open([], { multiple: true });
+}
+
+/** 人员选择确认：过滤已在班人员后进入入班确认弹窗 */
+function handleUsersSelected(rows: SystemUserApi.User[]) {
+  const inClassCount = rows.filter((item) =>
+    activeUserIds.value.has(item.id!),
+  ).length;
+  pendingUsers.value = rows.filter(
+    (item) => item.id != null && !activeUserIds.value.has(item.id),
+  );
+  if (pendingUsers.value.length === 0) {
+    message.warning('所选人员均已在班，无需重复加入');
+    return;
+  }
+  if (inClassCount > 0) {
+    message.info(`${inClassCount} 名人员已在班，已自动跳过`);
   }
   addVisible.value = true;
 }
 
-const addableOptions = computed(() =>
-  userOptions.value.filter((item) => !activeUserIds.value.has(item.value)),
-);
+function removePendingUser(userId?: number) {
+  pendingUsers.value = pendingUsers.value.filter(
+    (item) => item.id !== userId,
+  );
+}
 
 async function handleAddStudents() {
   if (!currentClass.value?.id || addUserIds.value.length === 0) {
-    message.warning('请先勾选要添加的学员');
+    message.warning('请先选择要添加的学员');
     return;
   }
   addLoading.value = true;
@@ -223,106 +238,22 @@ async function handleImport() {
   }
 }
 
-// ========== 按参与对象筛选加入（部门 / 岗位，与培训班配置联动） ==========
-const scopeVisible = ref(false);
-const scopeDeptIds = ref<number[]>([]);
-const scopePostIds = ref<number[]>([]);
-const scopeIncludeChildDept = ref(true);
-const scopePreview = ref<TrainingPlanApi.ClassStudentScopePreview>();
-const scopePreviewLoading = ref(false);
-const scopeAddLoading = ref(false);
-const deptTree = ref<any[]>([]);
-const postOptions = ref<{ label: string; value: number }[]>([]);
-const scopeColumns = [
-  { title: '学员姓名', dataIndex: 'nickname', key: 'nickname', width: 140 },
-  { title: '部门/班组', dataIndex: 'deptName', key: 'deptName' },
-  { title: '状态', key: 'inClass', width: 100 },
-];
-
-/** 加载部门树、岗位下拉（首次打开弹窗时按需加载） */
-async function loadScopeOptions() {
-  if (deptTree.value.length === 0) {
-    try {
-      deptTree.value = handleTree(await getSimpleDeptList());
-    } catch {
-      deptTree.value = [];
-    }
-  }
-  if (postOptions.value.length === 0) {
-    try {
-      // 与培训班「参训岗位」保持同一数据源：培训业务岗位工种 + 其他系统岗位
-      postOptions.value = await loadPostOptions();
-    } catch {
-      postOptions.value = [];
-    }
-  }
-}
-
-/** 打开弹窗：默认回显培训班已配置的参训部门 / 参训岗位 */
-async function openScopeModal() {
-  const scope = parseTargetCondition(currentClass.value?.targetCondition);
-  scopeDeptIds.value = scope.deptIds;
-  scopePostIds.value = scope.postIds;
-  scopeIncludeChildDept.value = scope.includeChildDept;
-  scopePreview.value = undefined;
-  scopeVisible.value = true;
-  await loadScopeOptions();
-}
-
-function buildScopeParams() {
-  return {
-    classId: currentClass.value!.id!,
-    deptIds: scopeDeptIds.value,
-    includeChildDept: scopeIncludeChildDept.value,
-    postIds: scopePostIds.value,
-  };
-}
-
-/** 预览命中人员（不落库），确认名单后再批量入班 */
-async function handlePreviewScope() {
-  if (!currentClass.value?.id) {
-    return;
-  }
-  if (scopeDeptIds.value.length === 0 && scopePostIds.value.length === 0) {
-    message.warning('请先选择参训部门或参训岗位');
-    return;
-  }
-  scopePreviewLoading.value = true;
-  try {
-    scopePreview.value = await previewClassScope(buildScopeParams());
-  } finally {
-    scopePreviewLoading.value = false;
-  }
-}
-
-async function handleAddByScope() {
-  if (!currentClass.value?.id) {
-    return;
-  }
-  scopeAddLoading.value = true;
-  try {
-    const added = await addClassStudentsByScope(buildScopeParams());
-    message.success(
-      added > 0
-        ? `已按参与对象筛选加入 ${added} 名学员（已在班自动跳过）`
-        : '命中人员均已在班，无需重复加入',
-    );
-    scopeVisible.value = false;
-    await Promise.all([loadStudents(), loadActiveIds()]);
-  } finally {
-    scopeAddLoading.value = false;
-  }
-}
-
 // ========== 在班人数与名额（工具栏展示；「批量导入学员并指定培训班」入口在培训班管理列表页） ==========
-/** 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致 */
-const CLASS_MAX_STUDENT = 50;
+/**
+ * 单个培训班在班学员上限，与后端 ClassStudentServiceImpl.MAX_STUDENT_SIZE 保持一致
+ * 0 表示不限制人数（已取消培训班 50 人上限）；如需恢复限制，改为具体数值即可
+ */
+const CLASS_MAX_STUDENT = 0;
+/** 是否限制班级人数（上限为 0 时表示不限制） */
+const studentLimited = computed(() => CLASS_MAX_STUDENT > 0);
 
 /** 当前在班人数（用于展示「在班 X/50」与剩余名额） */
 const inClassTotalCount = computed(() => activeUserIds.value.size);
-/** 剩余可加入名额 */
+/** 剩余可加入名额（不限制人数时为 Infinity） */
 const remainingQuota = computed(() =>
-  Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value),
+  studentLimited.value
+    ? Math.max(0, CLASS_MAX_STUDENT - inClassTotalCount.value)
+    : Number.POSITIVE_INFINITY,
 );
 
 // ========== 表格列 ==========
@@ -343,17 +274,15 @@ const columns = [
     <template v-if="currentClass">
       <!-- 工具栏 -->
       <Space class="mb-3" wrap>
-        <Button type="primary" :disabled="!writable" @click="openAddModal">
+        <Button type="primary" :disabled="!writable" @click="openUserSelect">
           添加学员
         </Button>
         <Button :disabled="!writable" @click="importVisible = true">
           批量导入学员
         </Button>
-        <Button :disabled="!writable" @click="openScopeModal">
-          按参与对象筛选加入
-        </Button>
-        <Tag :color="remainingQuota === 0 ? 'red' : 'blue'">
-          在班 {{ inClassTotalCount }}/{{ CLASS_MAX_STUDENT }}
+        <Tag :color="studentLimited && remainingQuota === 0 ? 'red' : 'blue'">
+          在班 {{ inClassTotalCount
+          }}<template v-if="studentLimited">/{{ CLASS_MAX_STUDENT }}</template>
         </Tag>
         <Input
           v-model:value="query.userName"
@@ -414,37 +343,49 @@ const columns = [
       请先在上方选择培训班（暂无班级请先到培训班管理创建并开班）
     </div>
 
-    <!-- 添加学员弹窗 -->
+    <!-- 添加学员弹窗（人员来自「系统管理 → 用户管理」） -->
     <Modal
       v-model:open="addVisible"
       title="添加学员"
       :footer="null"
-      width="620px"
+      width="760px"
     >
       <p class="mb-2 text-xs text-gray-500">
-        勾选人员后批量加入班级，系统将自动生成「课程 × 学员」学习任务。
+        确认以下人员加入班级，系统将自动生成「课程 × 学员」学习任务。
       </p>
-      <Space class="mb-3 w-full">
-        <Select
-          v-model:value="addUserIds"
-          mode="multiple"
-          allow-clear
-          show-search
-          option-filter-prop="label"
-          placeholder="选择学员（可多选）"
-          style="width: 100%"
-          :options="addableOptions"
-        />
-      </Space>
-      <div class="text-right">
+      <Table
+        :columns="addColumns"
+        :data-source="pendingUsers"
+        :pagination="false"
+        :scroll="{ y: 260 }"
+        row-key="id"
+        size="small"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <Button type="link" danger size="small" @click="removePendingUser(record.id)">
+              移除
+            </Button>
+          </template>
+        </template>
+      </Table>
+      <div class="mt-3 text-right">
         <Space>
           <Button @click="addVisible = false">取消</Button>
-          <Button type="primary" :loading="addLoading" @click="handleAddStudents">
-            确认添加
+          <Button
+            type="primary"
+            :disabled="addUserIds.length === 0"
+            :loading="addLoading"
+            @click="handleAddStudents"
+          >
+            确认添加（{{ addUserIds.length }} 人）
           </Button>
         </Space>
       </div>
     </Modal>
+
+    <!-- 人员选择弹窗（系统管理 - 用户管理人员列表） -->
+    <UserSelectDialog ref="userSelectRef" @selected="handleUsersSelected" />
 
     <!-- 批量导入弹窗 -->
     <Modal
@@ -514,92 +455,5 @@ const columns = [
       />
     </Modal>
 
-    <!-- 按参与对象筛选加入弹窗 -->
-    <Modal
-      v-model:open="scopeVisible"
-      title="按参与对象筛选加入学员"
-      :footer="null"
-      width="760px"
-    >
-      <div class="mb-3 rounded bg-gray-50 p-2 text-xs text-gray-500">
-        <p>
-          1. 按<strong>部门</strong> /
-          <strong>岗位</strong>圈选参训人员，默认取「培训班管理」中配置的参训部门、参训岗位，可在此临时调整。
-        </p>
-        <p>
-          2. 先点击「预览命中人员」确认名单，再点击「确认加入」批量入班并自动生成学习任务。
-        </p>
-      </div>
-      <Space class="mb-3" wrap>
-        <TreeSelect
-          v-model:value="scopeDeptIds"
-          :tree-data="deptTree"
-          :field-names="{ label: 'name', value: 'id', children: 'children' }"
-          :max-tag-count="2"
-          allow-clear
-          multiple
-          placeholder="按部门圈选（可多选）"
-          style="min-width: 260px"
-          tree-checkable
-        />
-        <span class="text-xs text-gray-600">包含下级部门</span>
-        <Switch v-model:checked="scopeIncludeChildDept" size="small" />
-        <Select
-          v-model:value="scopePostIds"
-          :max-tag-count="2"
-          :options="postOptions"
-          allow-clear
-          mode="multiple"
-          option-filter-prop="label"
-          placeholder="按岗位圈选（可多选）"
-          show-search
-          style="min-width: 220px"
-        />
-        <Button
-          :loading="scopePreviewLoading"
-          type="primary"
-          @click="handlePreviewScope"
-        >
-          预览命中人员
-        </Button>
-      </Space>
-      <div v-if="scopePreview" class="mb-2 text-xs text-gray-600">
-        命中 {{ scopePreview.matchedCount ?? 0 }} 人，其中已在班
-        {{ scopePreview.inClassCount ?? 0 }} 人，可加入
-        {{ scopePreview.addableCount ?? 0 }} 人；培训班在班
-        {{ scopePreview.inClassTotal ?? 0 }}/{{
-          scopePreview.maxSize ?? CLASS_MAX_STUDENT
-        }}
-        人，剩余名额 {{ scopePreview.remaining ?? 0 }} 人
-      </div>
-      <Table
-        :columns="scopeColumns"
-        :data-source="scopePreview?.users ?? []"
-        :pagination="false"
-        :scroll="{ y: 260 }"
-        row-key="userId"
-        size="small"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'inClass'">
-            <Tag v-if="record.inClass" color="default">已在班</Tag>
-            <Tag v-else color="processing">可加入</Tag>
-          </template>
-        </template>
-      </Table>
-      <div class="mt-3 text-right">
-        <Space>
-          <Button @click="scopeVisible = false">取消</Button>
-          <Button
-            :disabled="!scopePreview || (scopePreview.addableCount ?? 0) === 0"
-            :loading="scopeAddLoading"
-            type="primary"
-            @click="handleAddByScope"
-          >
-            确认加入
-          </Button>
-        </Space>
-      </div>
-    </Modal>
   </Page>
 </template>

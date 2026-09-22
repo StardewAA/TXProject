@@ -1,11 +1,11 @@
 import { request } from './http'
 import type { Identifier } from '@/types/mall'
-import type { KefuCapability, KefuHeartbeat, KefuMessages, KefuScope, KefuSend, KefuSendResult, KefuSession, KefuThread } from '@/types/kefu-chat'
+import type { KefuCapability, KefuHeartbeat, KefuMessages, KefuOpenRequest, KefuScope, KefuSend, KefuSendResult, KefuSession, KefuThread } from '@/types/kefu-chat'
 const base = '/promotion/kefu-chat', headers = { 'x-silent-error': true }
 const path = (agent: boolean, value: string) => `${base}/${agent ? 'agent/' : ''}${value}`
 export const kefuChatApi = {
   capability: () => request<KefuCapability>({ url: `${base}/capability`, scope: 'browse', headers }),
-  open: (data: KefuScope) => request<KefuThread>({ url: `${base}/open`, method: 'POST', data, headers }),
+  open: (data: KefuOpenRequest) => request<KefuThread>({ url: `${base}/open`, method: 'POST', data, headers }),
   thread: (sessionId: string, agent = false) => request<KefuThread>({ url: path(agent, 'thread'), params: { sessionId }, headers }),
   messages: (sessionId: string, afterId: Identifier, agent = false) => request<KefuMessages>({ url: path(agent, 'messages'), params: { sessionId, afterId, limit: 50 }, headers }),
   send: (data: KefuSend, agent = false) => request<KefuSendResult>({ url: path(agent, 'send'), method: 'POST', data, headers }),

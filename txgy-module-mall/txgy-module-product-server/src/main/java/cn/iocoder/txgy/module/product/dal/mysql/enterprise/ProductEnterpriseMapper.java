@@ -7,7 +7,7 @@ import cn.iocoder.txgy.module.product.dal.dataobject.enterprise.ProductEnterpris
 import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 @Mapper public interface ProductEnterpriseMapper extends BaseMapperX<ProductEnterpriseDO> {
- default PageResult<ProductEnterpriseDO> selectPage(ProductEnterprisePageReqVO req) { return selectPage(req, new LambdaQueryWrapperX<ProductEnterpriseDO>().likeIfPresent(ProductEnterpriseDO::getName, req.getName()).likeIfPresent(ProductEnterpriseDO::getCreditCode, req.getCreditCode()).eqIfPresent(ProductEnterpriseDO::getAuditStatus, req.getAuditStatus()).orderByDesc(ProductEnterpriseDO::getId)); }
+ default PageResult<ProductEnterpriseDO> selectPage(ProductEnterprisePageReqVO req) { return selectPage(req, new LambdaQueryWrapperX<ProductEnterpriseDO>().likeIfPresent(ProductEnterpriseDO::getName, req.getName()).likeIfPresent(ProductEnterpriseDO::getCreditCode, req.getCreditCode()).eqIfPresent(ProductEnterpriseDO::getAuditStatus, req.getAuditStatus()).inIfPresent(ProductEnterpriseDO::getId, req.getEnterpriseIds()).orderByDesc(ProductEnterpriseDO::getId)); }
  default ProductEnterpriseDO selectByCreditCode(String code) { return selectOne(ProductEnterpriseDO::getCreditCode, code); }
  default List<ProductEnterpriseDO> selectApproved() { return selectList(ProductEnterpriseDO::getAuditStatus, 1); }
 }

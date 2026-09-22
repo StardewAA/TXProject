@@ -646,6 +646,19 @@ class GradeIn(BaseModel):
 
 app = FastAPI(title="模块五 · 考试与认证", version="1.0.0")
 
+import logging as _logging
+_logger = _logging.getLogger("uvicorn.error")
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """兜底：把任何未处理异常（含请求体）打进容器日志，便于定位前端提交问题。"""
+    _logger.error("[unhandled] %s %s  body=%s", request.method, request.url.path, getattr(exc, "body", None) or "<see traceback>")
+    import traceback as _tb
+    _logger.error("".join(_tb.format_exception(exc)))
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=500, content={"detail": "服务内部错误，请稍后重试"})
+
 
 def question_view(q: Question, include_answer=False):
     data = {"id": q.id, "platform_id": q.platform_id, "q_type": q.q_type, "stem": q.stem, "options": parse(q.options), "tags": parse(q.tags, {}), "difficulty": q.difficulty, "status": q.status, "creator_id": q.creator_id, "analysis": q.analysis, "source": "platform" if q.platform_id else "local"}
@@ -783,7 +796,7 @@ def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Acto
     seen = set()
     for section in body.sections:
         qt=section.get("q_type")
-        if qt not in {"single","multi","judge","essay","case"} or qt in seen or int(section.get("count",0))<=0 or not math.isfinite(float(section.get("score_each",0))) or float(section.get("score_each",0))<=0: raise HTTPException(422,"抽题规则不合法：题型不可重复，数量和分值必须大于零")
+        if qt not in QTYPE_TO_PLATFORM or qt in seen or int(section.get("count",0))<=0 or not math.isfinite(float(section.get("score_each",0))) or float(section.get("score_each",0))<=0: raise HTTPException(422,"抽题规则不合法：题型不可重复，数量和分值必须大于零")
         seen.add(qt)
         if qt not in pool_by_type:
             pool_by_type[qt] = platform_question_page(actor, qtype=QTYPE_TO_PLATFORM[qt])
@@ -794,7 +807,15 @@ def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Acto
         count = int(section["count"])
         if len(pool) < count: shortages.append({"q_type": qt, "need": count, "available": len(pool), "short": count-len(pool)})
         else: selected.extend((row, float(section["score_each"])) for row in random.sample(pool, count))
-    if shortages: raise HTTPException(422, detail={"message": "题库数量不足", "shortages": shortages})
+    if shortages:
+        type_names = {"single": "单选题", "multi": "多选题", "judge": "判断题", "essay": "实操问答", "case": "案例分析题", "blank": "填空题", "short": "简答题"}
+        scope = f"工种「{'、'.join(wanted)}」范围内" if wanted else ""
+        detail_txt = "；".join(
+            f"{type_names.get(s['q_type'], s['q_type'])}需 {s['need']} 题、可用 {s['available']} 题"
+            for s in shortages)
+        hint = ("所选工种下暂无已打该工种标签的试题——请先在资源中心「题库管理」为试题打上对应工种标签，或清除工种范围后重试。"
+                if wanted else "请调低各题型数量，或先在资源中心补充题库。")
+        raise HTTPException(422, detail={"message": f"随机组卷失败：{scope}题库数量不足（{detail_txt}）。{hint}", "shortages": shortages})
     total = round(sum(score for _, score in selected), 2)
     if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前规则合计 {total:g} 分")
     if body.pass_score > total: raise HTTPException(422, "及格分不能高于总分")

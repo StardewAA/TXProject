@@ -7,6 +7,8 @@ import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
 import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
 import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
+import cn.iocoder.txgy.module.trade.service.supplier.AdminShopScopeService;
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +37,7 @@ class ShopSettlementRegressionTest {
     private JdbcTemplate jdbc;
     private TransactionTemplate tx;
     private ShopSettlementService service;
+    private AdminShopScopeService adminShopScope;
     private MockedStatic<SecurityFrameworkUtils> security;
     private final LocalDateTime received = LocalDateTime.of(2020, 1, 15, 12, 0);
 
@@ -71,6 +74,10 @@ class ShopSettlementRegressionTest {
         ReflectionTestUtils.setField(service, "jdbc", jdbc);
         ReflectionTestUtils.setField(service, "shops", shops);
         ReflectionTestUtils.setField(service, "authorization", authorization);
+        adminShopScope = mock(AdminShopScopeService.class);
+        when(adminShopScope.requireShop(10L)).thenReturn(
+                new AdminShopScopeService.Scope(101L, false, java.util.Set.of(10L)));
+        ReflectionTestUtils.setField(service, "adminShopScope", adminShopScope);
         TenantContextHolder.setTenantId(1L);
         security = mockStatic(SecurityFrameworkUtils.class);
         login(false);
@@ -193,5 +200,26 @@ class ShopSettlementRegressionTest {
         jdbc.update("UPDATE trade_order SET tenant_id=1,shop_id=99 WHERE id=1");
         assertThrows(RuntimeException.class, () -> generate("2020-02"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM trade_shop_settlement_bill", Integer.class));
+    }
+
+    @Test
+    void authorizedBackendShopAccountCanConfirmButCannotBypassScope() {
+        order(1, received, null);
+        Bill bill = generate("2020-01");
+        tx.executeWithoutResult(status -> service.audit(new Audit(
+                bill.getId(), bill.getVersion(), true, "平台审核通过")));
+
+        tx.executeWithoutResult(status -> service.adminSupplierConfirm(
+                new Confirm(10L, bill.getId(), bill.getVersion())));
+        assertEquals(30, jdbc.queryForObject(
+                "SELECT status FROM trade_shop_settlement_bill WHERE id=?", Integer.class, bill.getId()));
+        verify(adminShopScope).requireShop(10L);
+
+        jdbc.update("UPDATE trade_shop_settlement_bill SET status=20 WHERE id=?", bill.getId());
+        when(adminShopScope.requireShop(10L)).thenThrow(new ServiceException(403, "未获得该店铺经营权限"));
+        assertThrows(ServiceException.class, () -> tx.executeWithoutResult(status ->
+                service.adminSupplierConfirm(new Confirm(10L, bill.getId(), bill.getVersion()))));
+        assertEquals(20, jdbc.queryForObject(
+                "SELECT status FROM trade_shop_settlement_bill WHERE id=?", Integer.class, bill.getId()));
     }
 }

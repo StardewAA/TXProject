@@ -1,9 +1,9 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { scopeLocalPath, safeReturnPath, tenantShareLink } from './tenant-navigation.mjs';
+import { isPlatformPath, scopeLocalPath, scopePlatformPath, safeReturnPath, tenantShareLink } from './tenant-navigation.mjs';
 import { entryHint } from './tenant-entry.mjs';
 for (const tenant of ['1', '9001']) {
-  for (const path of ['/goods/7','/shops/7','/member/orders/7','/purchase/inquiries/7','/sales/shops/7/orders','/pages/goods/index?id=7','/pages/order/detail?id=7']) {
+  for (const path of ['/goods/7','/shops/7','/pages/goods/index?id=7','/pages/order/detail?id=7']) {
     test(tenant + ' link preserves resource and survives fresh tab: ' + path, () => {
       const link = scopeLocalPath(path, tenant), original = new URL(path, 'https://mall');
       const result = new URL(link, 'https://mall');
@@ -34,12 +34,29 @@ test('conflicting aliases, duplicate hints, malformed hints and hash hints fail 
 test('external, protocol-relative, control-character and backslash paths never become local links', () => {
   for (const path of ['https://other/goods/7','//other/goods/7','/\\other/x','/x\n?tenantId=9001','javascript:alert(1)',null,{}]) {
     assert.throws(()=>scopeLocalPath(path,'9001'));
-    assert.equal(safeReturnPath(path,'9001'),'/member?tenantId=9001');
+    assert.equal(safeReturnPath(path,'9001'),'/member');
   }
 });
-test('post-login return retains current-tenant order only; foreign redirect is not rewritten', () => {
-  assert.equal(safeReturnPath('/member/orders/7?tenantId=9001','9001'),'/member/orders/7?tenantId=9001');
-  assert.equal(safeReturnPath('/member/orders/7?tenantId=1','9001'),'/member?tenantId=9001');
+test('post-login account return never carries a browsing tenant', () => {
+  assert.equal(safeReturnPath('/member/orders/7?tenantId=9001','9001'),'/member/orders/7');
+  assert.equal(safeReturnPath('/member/orders/7?tenantId=1','9001'),'/member/orders/7');
+  assert.equal(safeReturnPath('/cart?tenantId=1','9001'),'/cart');
+  assert.equal(safeReturnPath('/tenants/kedun/products/7','9001'),'/tenants/kedun/products/7');
+});
+test('platform routes are stable and never retain tenant aliases', () => {
+  for (const path of ['/', '/tenants/kedun', '/portal/products?q=保温', '/markets?tenantId=3000', '/cart?tenantId=1', '/checkout?tenant_id=2009', '/platform-login?tenantId=2009', '/member/orders?tenantId=2009', '/purchase/addresses?tenant_id=2009', '/enterprise/profile?tenant-id=2009', '/sales/orders?tenantId=2009', '/pay/7?tenantId=2009']) {
+    assert.equal(isPlatformPath(path), true);
+    const scoped = scopePlatformPath(path);
+    const url = new URL(scoped, 'https://mall');
+    for (const alias of ['tenantId', 'tenant-id', 'tenant_id']) assert.equal(url.searchParams.has(alias), false);
+    assert.equal(scopePlatformPath(scoped), scoped);
+  }
+});
+test('platform scoping rejects tenant business and unsafe routes', () => {
+  for (const path of ['/goods/7', '/shops/7', '//other/tenants/kedun', 'https://other/']) {
+    assert.equal(isPlatformPath(path), false);
+    assert.throws(() => scopePlatformPath(path));
+  }
 });
 for (const address of ['', '/pages/index/index?campaign=x', 'https://mall/#/pages/index/index?campaign=x',
   'https://mall/pages/index/index?token=SECRET&code=CODE&redirect=/member/orders/7']) {

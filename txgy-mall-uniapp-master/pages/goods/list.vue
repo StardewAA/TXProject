@@ -1,13 +1,24 @@
 <template>
   <s-layout
     navbar="normal"
-    tenantEntry
     :leftWidth="0"
     :rightWidth="0"
     tools="search"
     :defaultSearch="state.keyword"
     @search="onSearch"
   >
+    <view v-if="state.portal" class="portal-banner">
+      <view class="portal-breadcrumb" @tap="openPlatformHome">← 返回平台首页</view>
+      <view v-if="state.tenantLoading" class="shop-tip">正在加载租户商城…</view>
+      <view v-else-if="state.tenantError" class="shop-tip portal-error">租户商城不存在、未开放或暂时无法访问</view>
+      <template v-else>
+        <view class="shop-title">{{ state.portalTenant?.tenantName || '平台全部商品' }}</view>
+        <view class="shop-description">
+          {{ state.portalTenant?.mainCategories || '汇总所有已开放租户的合规在售商品' }}
+        </view>
+        <view class="shop-tip">{{ state.tenantSlug ? '当前浏览：租户商城' : '平台跨租户公开目录' }} · 共 {{ state.pagination.total }} 款</view>
+      </template>
+    </view>
     <view v-if="state.shopId" class="shop-banner">
       <view v-if="state.shopLoading">正在加载店铺…</view>
       <view v-else-if="state.shopError">店铺不存在、已停用或暂时无法访问</view>
@@ -16,9 +27,9 @@
       <button v-if="state.shop && !state.shopError && !state.shopLoading" size="mini" @tap="sheep.$router.go('/pages/chat/service', { scope: 'SHOP', shopId: state.shopId })">联系本店客服</button>
     </view>
     <view v-if="state.shopError && !state.invalidShopId" class="shop-retry" @tap="loadShop">重新加载店铺</view>
-    <s-comparison-bar />
+    <s-comparison-bar v-if="!state.portal" />
     <!-- 筛选 -->
-    <su-sticky bgColor="#fff">
+    <su-sticky v-if="!state.portal" bgColor="#fff">
       <view class="ss-flex">
         <view class="ss-flex-1">
           <su-tabs
@@ -65,6 +76,11 @@
         v-for="item in state.pagination.list"
         :key="item.id"
       >
+        <view v-if="state.portal" class="portal-owner">
+          <text>{{ item.tenantName }}</text>
+          <text>{{ item.enterpriseName }}</text>
+          <text>{{ item.shopName }}</text>
+        </view>
         <s-goods-column
           class=""
           size="lg"
@@ -72,9 +88,9 @@
           :show-shop-name="true"
           :topRadius="10"
           :bottomRadius="10"
-          @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
+          @click="openProduct(item)"
         />
-        <button size="mini" @tap="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格加入对比</button>
+        <button size="mini" @tap="openProduct(item)">{{ state.portal ? '查看公开规格' : '选规格加入对比' }}</button>
       </view>
     </view>
     <!-- 情况二：双列布局 -->
@@ -84,6 +100,11 @@
     >
       <view class="goods-list-box">
         <view class="left-list" v-for="item in state.leftGoodsList" :key="item.id">
+          <view v-if="state.portal" class="portal-owner compact">
+            <text>{{ item.tenantName }}</text>
+            <text>{{ item.enterpriseName }}</text>
+            <text>{{ item.shopName }}</text>
+          </view>
           <s-goods-column
             class="goods-md-box"
             size="md"
@@ -91,17 +112,22 @@
             :show-shop-name="true"
             :topRadius="10"
             :bottomRadius="10"
-            @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
+            @click="openProduct(item)"
             @getHeight="mountMasonry($event, 'left')"
           >
             <template v-slot:cart>
-              <button size="mini" @tap.stop="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格对比</button>
+              <button size="mini" @tap.stop="openProduct(item)">{{ state.portal ? '查看规格' : '选规格对比' }}</button>
             </template>
           </s-goods-column>
         </view>
       </view>
       <view class="goods-list-box">
         <view class="right-list" v-for="item in state.rightGoodsList" :key="item.id">
+          <view v-if="state.portal" class="portal-owner compact">
+            <text>{{ item.tenantName }}</text>
+            <text>{{ item.enterpriseName }}</text>
+            <text>{{ item.shopName }}</text>
+          </view>
           <s-goods-column
             class="goods-md-box"
             size="md"
@@ -109,11 +135,11 @@
             :bottomRadius="10"
             :data="item"
             :show-shop-name="true"
-            @click="sheep.$router.go('/pages/goods/index', { id: item.id })"
+            @click="openProduct(item)"
             @getHeight="mountMasonry($event, 'right')"
           >
             <template v-slot:cart>
-              <button size="mini" @tap.stop="sheep.$router.go('/pages/goods/index', { id: item.id })">选规格对比</button>
+              <button size="mini" @tap.stop="openProduct(item)">{{ state.portal ? '查看规格' : '选规格对比' }}</button>
             </template>
           </s-goods-column>
         </view>
@@ -129,7 +155,7 @@
     />
     <view v-if="state.loadStatus === 'loading' && !state.pagination.total" class="shop-retry">正在加载商品…</view>
     <view v-else-if="state.listError" class="shop-retry" @tap="getList">商品加载失败，点击重试</view>
-    <s-empty v-else-if="state.pagination.total === 0 && !state.shopLoading && !state.shopError" icon="/static/soldout-empty.png" :text="state.shopId ? (state.keyword ? '本店没有匹配的商品' : '本店暂无在售商品') : '暂无商品'" />
+    <s-empty v-else-if="state.pagination.total === 0 && !state.shopLoading && !state.shopError && !state.tenantLoading" icon="/static/soldout-empty.png" :text="state.portal ? (state.keyword ? '平台没有匹配的公开商品' : '平台暂无可售商品') : state.shopId ? (state.keyword ? '本店没有匹配的商品' : '本店暂无在售商品') : '暂无商品'" />
   </s-layout>
 </template>
 
@@ -141,8 +167,16 @@
   import { concat } from 'lodash-es';
   import { resetPagination } from '@/sheep/helper/utils';
   import SpuApi from '@/sheep/api/product/spu';
+  import PortalApi from '@/sheep/api/product/portal';
   import OrderApi from '@/sheep/api/trade/order';
   import { appendSettlementProduct } from '@/sheep/hooks/useGoods';
+  import {
+    normalizePortalPage,
+    normalizePortalTenant,
+    normalizePortalTenantSlug,
+    portalProductDetailPath,
+    portalProductListPath,
+  } from '@/sheep/helper/platform-portal.mjs';
 
   const sys_navBar = sheep.$platform.navbar;
   const userStore = sheep.$store('user');
@@ -162,6 +196,11 @@
     iconStatus: false, // true - 单列布局；false - 双列布局
     keyword: '',
     categoryId: 0,
+    portal: false,
+    tenantSlug: '',
+    portalTenant: null,
+    tenantLoading: false,
+    tenantError: false,
     shopId: 0,
     shop: null,
     shopLoading: false,
@@ -292,20 +331,27 @@
   };
 
   async function getList() {
-    if (state.shopLoading || state.shopError) return;
+    if (state.shopLoading || state.shopError || state.tenantError) return;
     const currentRequest = ++requestId;
     state.listError = false;
     state.loadStatus = 'loading';
     try {
-      const response = await SpuApi.getSpuPage({
+      const params = {
         pageNo: state.pagination.pageNo,
         pageSize: state.pagination.pageSize,
-        sortField: state.currentSort,
-        sortAsc: state.currentOrder,
         categoryId: state.categoryId,
         keyword: state.keyword,
-        shopId: state.shopId || undefined,
-      });
+      };
+      const response = state.portal
+        ? state.tenantSlug
+          ? await PortalApi.getTenantProducts(state.tenantSlug, params)
+          : await PortalApi.getProducts(params)
+        : await SpuApi.getSpuPage({
+            ...params,
+            sortField: state.currentSort,
+            sortAsc: state.currentOrder,
+            shopId: state.shopId || undefined,
+          });
       if (currentRequest !== requestId) return;
       // request 在网络异常时会返回 false，不能直接解构，否则会导致页面白屏。
       if (!response || response.code !== 0) {
@@ -313,12 +359,12 @@
         state.loadStatus = state.pagination.list.length ? 'more' : 'noMore';
         return;
       }
-      const pageData = response.data || {};
+      const pageData = state.portal ? normalizePortalPage(response.data) : (response.data || {});
       const pageList = Array.isArray(pageData.list) ? pageData.list.filter((item) => item?.id) : [];
 
       // 营销结算信息仅对已登录用户请求。匿名接口在部分旧服务中会触发用户信息调用，
       // 商品列表本身不应因该附加请求失败而中断。
-      if (userStore.isLogin && pageList.length) {
+      if (!state.portal && userStore.isLogin && pageList.length) {
         try {
           const settlement = await OrderApi.getSettlementProduct(
             pageList.map((item) => item.id).join(','),
@@ -372,10 +418,59 @@
     if (!state.shopError) await getList();
   }
 
+  async function loadPortalTenant() {
+    if (!state.tenantSlug) return;
+    state.tenantLoading = true;
+    state.tenantError = false;
+    try {
+      const result = await PortalApi.getTenant(state.tenantSlug);
+      const tenant = result?.code === 0 ? normalizePortalTenant(result.data) : null;
+      if (!tenant || tenant.tenantSlug !== state.tenantSlug) throw new Error('租户商城不可用');
+      state.portalTenant = tenant;
+    } catch {
+      state.portalTenant = null;
+      state.tenantError = true;
+    } finally {
+      state.tenantLoading = false;
+    }
+  }
+
+  function openPlatformHome() {
+    sheep.$router.go('/pages/index/index');
+  }
+
+  function openTenant(tenantSlug) {
+    sheep.$router.go(portalProductListPath({ tenantSlug }));
+  }
+
+  function openProduct(item) {
+    if (!state.portal) {
+      sheep.$router.go('/pages/goods/index', { id: item.id });
+      return;
+    }
+    sheep.$router.go(portalProductDetailPath({
+      tenantSlug: item.tenantSlug,
+      spuId: item.spuId,
+    }));
+  }
+
   onLoad((options = {}) => {
     const categoryId = Number(options.categoryId);
     state.categoryId = Number.isFinite(categoryId) && categoryId > 0 ? categoryId : 0;
     state.keyword = options.keyword || '';
+    state.portal = options.portal === '1' || Boolean(options.tenantSlug);
+    if (state.portal) {
+      try {
+        state.tenantSlug = options.tenantSlug ? normalizePortalTenantSlug(options.tenantSlug) : '';
+      } catch {
+        state.tenantError = true;
+        state.listError = true;
+        return;
+      }
+      if (state.tenantSlug) loadPortalTenant();
+      getList();
+      return;
+    }
     if (options.shopId !== undefined) {
       const shopId = Number(options.shopId);
       state.shopId = Number.isSafeInteger(shopId) && shopId > 0 ? shopId : -1;
@@ -393,6 +488,12 @@
 </script>
 
 <style lang="scss" scoped>
+  .portal-banner { margin: 20rpx; padding: 30rpx; border-radius: 18rpx; background: linear-gradient(120deg, #102f40, #167564); color: white; font-size: 26rpx; }
+  .portal-breadcrumb { margin-bottom: 18rpx; color: #c9eee0; font-size: 23rpx; }
+  .portal-error { color: #ffd8d2; }
+  .portal-owner { margin: 0 20rpx; padding: 14rpx 18rpx; display: flex; flex-wrap: wrap; gap: 8rpx 14rpx; border-radius: 14rpx 14rpx 0 0; color: #41645b; font-size: 21rpx; background: #edf7f3; }
+  .portal-owner text:first-child { color: #0f766e; font-weight: 700; }
+  .portal-owner.compact { margin: 0; min-height: 76rpx; align-content: center; border-radius: 14rpx 14rpx 0 0; }
   .shop-banner { margin: 20rpx; padding: 30rpx; border-radius: 18rpx; background: linear-gradient(120deg, #153f44, #147d6b); color: white; font-size: 26rpx; }
   .shop-title { font-size: 34rpx; font-weight: 600; }.shop-description { margin-top: 16rpx; line-height: 1.7; color: #d2e5dc; font-size: 24rpx; }.shop-tip { margin-top: 20rpx; color: #c0ded0; font-size: 23rpx; }.shop-directory-link { margin-top: 20rpx; font-size: 24rpx; }.shop-retry { padding: 30rpx; text-align: center; color: #147d6b; font-size: 26rpx; }
   .goods-list-box {

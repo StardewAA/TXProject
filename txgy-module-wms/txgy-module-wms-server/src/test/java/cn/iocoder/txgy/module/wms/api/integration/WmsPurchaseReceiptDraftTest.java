@@ -54,6 +54,8 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
     @MockitoBean private WmsMaterialIntegrationService materialService;
     @MockitoBean private WmsPartnerIntegrationService partnerService;
     @MockitoBean private WmsWarehouseIntegrationService warehouseIntegrationService;
+    @MockitoBean private WmsCollaborationOrderGService collaborationOrderGService;
+    @MockitoBean private WmsShortageSender wmsShortageSender;
     @MockitoBean private WmsWarehouseService warehouseService;
     @MockitoBean private cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService warehousePersonnelService;
     @MockitoBean private WmsMerchantService merchantService;
@@ -71,7 +73,7 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
         TenantContextHolder.setTenantId(2005L);
         jdbc = new JdbcTemplate(dataSource);
         jdbc.update("INSERT INTO wms_warehouse (id,code,name,tenant_id) VALUES (77,'WH-1','原料仓',2005)");
-        jdbc.update("INSERT INTO wms_item (id,code,name,category_id,material_type,tenant_id) VALUES (55,'MAT-1','钢管',1,'RAW_MATERIAL',2005)");
+        jdbc.update("INSERT INTO wms_item (id,code,name,unit,category_id,material_type,tenant_id) VALUES (55,'MAT-1','钢管','件',1,'RAW_MATERIAL',2005)");
         jdbc.update("INSERT INTO wms_item_sku (id,item_id,code,name,tenant_id) VALUES (66,55,'MAT-1-DEFAULT','标准',2005)");
     }
 
@@ -117,13 +119,14 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
         jdbc.update("UPDATE wms_warehouse SET warehouse_type='FINISHED_GOODS' WHERE id=77");
         WmsOrderRequestDTO request = request("mall-outbound-request-1");
         request.setSourceModule("MALL");
+        request.setShopId(12L);
         request.setSourceOrderNo("MALL-ORDER-1");
         request.setOrderType("SALE_SHIPMENT");
         request.getItems().getFirst().setMaterialType("FINISHED_GOODS");
 
         var accepted = api.createMallShipment(request).getCheckedData();
         assertEquals("WMS-MALL-MALL-ORDER-1", accepted.getTargetOrderNo());
-        assertEquals("DRAFT", api.getMallOrderExecution(2005L, "MALL-ORDER-1")
+        assertEquals("DRAFT", api.getMallOrderExecution(2005L, 12L, "MALL-ORDER-1")
                 .getCheckedData().getProcessingStatus());
 
         request.setRequestId("mall-outbound-request-2");
@@ -132,6 +135,7 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
         assertEquals("mall-outbound-request-1", integrationRequestMapper.selectSourceRequest(
                 "SALE_SHIPMENT_CREATE", accepted.getTargetOrderNo()).getRequestId());
         assertEquals("MALL", jdbc.queryForObject("SELECT source_module FROM wms_shipment_order", String.class));
+        assertEquals(12L, jdbc.queryForObject("SELECT shop_id FROM wms_shipment_order", Long.class));
         assertEquals(0, count("wms_inventory_history"));
         verifyNoInteractions(inventoryService, processInstanceApi);
     }
@@ -290,7 +294,7 @@ class WmsPurchaseReceiptDraftTest extends BaseDbUnitTest {
     void sameRequestIdAndSourceAreIndependentAcrossTenants() {
         api.createPurchaseReceipt(request("same-request"));
         jdbc.update("INSERT INTO wms_warehouse (id,code,name,tenant_id) VALUES (78,'WH-1','原料仓2',2006)");
-        jdbc.update("INSERT INTO wms_item (id,code,name,category_id,material_type,tenant_id) VALUES (56,'MAT-1','钢管2',1,'RAW_MATERIAL',2006)");
+        jdbc.update("INSERT INTO wms_item (id,code,name,unit,category_id,material_type,tenant_id) VALUES (56,'MAT-1','钢管2','件',1,'RAW_MATERIAL',2006)");
         jdbc.update("INSERT INTO wms_item_sku (id,item_id,code,name,tenant_id) VALUES (67,56,'MAT-1-DEFAULT','标准2',2006)");
         TenantContextHolder.setTenantId(2006L);
         WmsOrderRequestDTO request = request("same-request");

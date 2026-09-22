@@ -137,10 +137,6 @@ logging:
 
 # OPENLAB BS配置项，设置当前项目所有自定义的配置
 txgy:
-  trade:
-    erp-inventory:
-      mode: ${MALL_ERP_INVENTORY_MODE:mock}
-      mock-enabled: ${MALL_ERP_MOCK_ENABLED:true}
   env: # 多环境的配置项
     tag: ${HOSTNAME}
   security:

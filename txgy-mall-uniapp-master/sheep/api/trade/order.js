@@ -104,6 +104,13 @@ const OrderApi = {
       },
     });
   },
+  // 待支付快递订单修改本人地址簿中的收货地址
+  updateOrderAddress: (data) => request({
+    url: '/trade/order/update-address',
+    method: 'PUT',
+    data,
+    custom: { auth: true },
+  }),
   // 订单列表
   getOrderPage: (params) => {
     return request({

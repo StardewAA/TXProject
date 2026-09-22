@@ -41,9 +41,8 @@ const actionOptions = computed(() => [
   ...(hasAccessByCodes(['trade:order:query']) ? [{ label: '待发货订单', value: 'DELIVERY' }] : []),
   ...(hasAccessByCodes(['trade:after-sale:query']) ? [{ label: '新售后申请', value: 'AFTER_AUDIT' }] : []),
   ...(hasAccessByCodes(['trade:after-sale:refund']) ? [{ label: '待平台退款', value: 'PLATFORM_REFUND' }] : []),
-  ...(hasAccessByCodes(['trade:order:update']) ? [{ label: '库存履约异常', value: 'ERP_EXCEPTION' }] : []),
 ]);
-const names: Partial<Record<TodoAction, string>> = { DELIVERY: '待发货订单', AFTER_AUDIT: '新售后申请', PLATFORM_REFUND: '待平台退款', ERP_EXCEPTION: '库存履约异常' };
+const names: Partial<Record<TodoAction, string>> = { DELIVERY: '待发货订单', AFTER_AUDIT: '新售后申请', PLATFORM_REFUND: '待平台退款' };
 
 function stop() {
   active = false;
@@ -190,7 +189,6 @@ defineExpose({ refresh, rowEvents, markRead });
       <Button v-access:code="['trade:order:query']" @click="openTodos('DELIVERY')">待发货提醒 {{ countText(summary?.todoCounts?.DELIVERY, failed) }}</Button>
       <Button v-access:code="['trade:after-sale:query']" @click="openTodos('AFTER_AUDIT')">新售后申请 {{ countText(summary?.todoCounts?.AFTER_AUDIT, failed) }}</Button>
       <Button v-access:code="['trade:after-sale:refund']" @click="openTodos('PLATFORM_REFUND')">待平台退款 {{ countText(summary?.todoCounts?.PLATFORM_REFUND, failed) }}</Button>
-      <Button v-access:code="['trade:order:update']" @click="openTodos('ERP_EXCEPTION')">库存履约异常 {{ countText(summary?.todoCounts?.ERP_EXCEPTION, failed) }}</Button>
       <span class="trade-todo-hint">上次更新 {{ lastUpdate || '尚未获取' }} · 默认无声音</span>
     </div>
     <Alert v-if="newestCount > 0 && !failed" type="info" show-icon class="mt-3" :message="`刚刚新增 ${newestCount} 条待处理事项`">

@@ -2,6 +2,21 @@ import { entryId } from './tenant-entry.mjs';
 
 const aliases = ['tenantId', 'tenant-id', 'tenant_id'];
 const base = 'https://mall.invalid';
+export function isPlatformPath(path) {
+  if (typeof path !== 'string') return false;
+  try {
+    const url = new URL(path, base);
+    return url.origin === base && (url.pathname === '/' || /^\/(?:tenants|portal|markets|cart|checkout|platform-login|member|purchase|enterprise|sales|pay)(?:\/|$)/.test(url.pathname));
+  } catch { return false; }
+}
+export function scopePlatformPath(path) {
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')
+      || /[\\\u0000-\u0020\u007f]/.test(path)) throw new Error('平台链接无效');
+  const url = new URL(path, base);
+  if (url.origin !== base || !isPlatformPath(url.pathname)) throw new Error('平台链接无效');
+  for (const key of aliases) url.searchParams.delete(key);
+  return url.pathname + url.search + url.hash;
+}
 function validateQuery(query, tenant) {
   for (const key of aliases) for (const value of query.getAll(key)) {
     if (entryId(value) !== tenant) throw new Error('链接属于其他商城，请先通过商城入口切换');
@@ -22,7 +37,8 @@ export function scopeLocalPath(path, tenant) {
   return url.pathname + url.search + url.hash;
 }
 export function safeReturnPath(path, tenant, fallback = '/member') {
-  try { return scopeLocalPath(path, tenant); } catch { return scopeLocalPath(fallback, tenant); }
+  try { return isPlatformPath(path) ? scopePlatformPath(path) : scopeLocalPath(path, tenant); }
+  catch { return isPlatformPath(fallback) ? scopePlatformPath(fallback) : scopeLocalPath(fallback, tenant); }
 }
 // Public share URLs are rebuilt from public routing data, never from the current
 // page's token, login code, order ID, address or arbitrary redirect parameters.

@@ -6,6 +6,7 @@ beforeEach(() => request.mockReset())
 it('only capability uses public browse scope and never silently falls back to legacy chat', async () => {
   await kefuChatApi.capability(); expect(request).toHaveBeenLastCalledWith({ url: '/promotion/kefu-chat/capability', scope: 'browse', headers: { 'x-silent-error': true } })
   await kefuChatApi.open({ scope: 'SHOP', shopId: 7 }); expect(request.mock.calls.at(-1)?.[0]).toMatchObject({ url: '/promotion/kefu-chat/open', method: 'POST', data: { scope: 'SHOP', shopId: 7 } }); expect(request.mock.calls.at(-1)?.[0]).not.toHaveProperty('scope')
+  await kefuChatApi.open({ scope: 'SHOP', shopId: 7, productSkuId: 71 }); expect(request.mock.calls.at(-1)?.[0]).toMatchObject({ data: { scope: 'SHOP', shopId: 7, productSkuId: 71 } })
 })
 it('text sends only current session version and client id to explicit buyer or agent endpoint', async () => {
   const data = { sessionId: 'test', version: 2, clientMessageId: 'uuid', text: '咨询' }

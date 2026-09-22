@@ -27,40 +27,38 @@ export function buildInventoryChartItemList(
     .filter((item) => item.value > 0);
 }
 
-/** 格式化货物占比图例，补充当前商品库存占比 */
-function formatGoodsLegend(name: string, goodsShareList: InventoryChartItem[]) {
-  const total = goodsShareList.reduce((sum, item) => sum + item.value, 0);
-  const item = goodsShareList.find((goods) => goods.name === name);
-  if (!total || !item) {
-    return name;
-  }
-  return `${name}  ${((item.value / total) * 100).toFixed(1)}%`;
-}
+/** 货物占比配色（图例在组件里用 HTML 渲染，需与此保持一致） */
+export const GOODS_SHARE_COLORS = [
+  '#2f7df6',
+  '#18a058',
+  '#f59e0b',
+  '#7c3aed',
+  '#14b8a6',
+];
 
-/** 货物占比图表配置 */
+/**
+ * 图例不使用 ECharts 内置 legend，改由组件用 HTML 渲染。
+ *
+ * 原因：首页这张卡片在 AI 首页里只占约 3/10 宽（约 360px），
+ * 而 ECharts 图例不会自动换行与截断文本，只限制图例盒宽度挡不住文字溢出，
+ * 文字会一直向左压到圆环上。改用 HTML + CSS（truncate）后，
+ * 截断、换行、与圆环的间距都由布局控制，不会再有重叠。
+ */
 export function getGoodsShareChartOptions(
   goodsShareList: InventoryChartItem[],
 ): EChartsOption {
   return {
-    color: ['#2f7df6', '#18a058', '#f59e0b', '#7c3aed', '#14b8a6'],
-    legend: {
-      formatter: (name: string) => formatGoodsLegend(name, goodsShareList),
-      itemHeight: 10,
-      itemWidth: 10,
-      orient: 'vertical',
-      right: 10,
-      top: 'middle',
-      type: 'scroll',
-    },
+    color: GOODS_SHARE_COLORS,
+    legend: { show: false },
     series: [
       {
         avoidLabelOverlap: true,
-        center: ['34%', '52%'],
+        center: ['50%', '52%'],
         data: goodsShareList,
         label: { show: false },
         labelLine: { show: false },
         name: '货物占比',
-        radius: ['48%', '70%'],
+        radius: ['46%', '68%'],
         type: 'pie',
       },
     ],

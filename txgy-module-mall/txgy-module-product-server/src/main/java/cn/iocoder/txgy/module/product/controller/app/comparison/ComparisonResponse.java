@@ -32,8 +32,8 @@ public class ComparisonResponse {
         private List<Property> properties = List.of();
         private String standardStatus = "UNKNOWN";
         private String standardMessage = "缺少经核验的标准规格、计量单位和包装换算，暂不能认定同款或推荐替代";
-        private String stockStatus = "PENDING_ERP";
-        private String stockMessage = "库存与交期以下单时ERP履约确认为准，比价不预占库存";
+        private String stockStatus = "WMS_LIVE_CHECK";
+        private String stockMessage = "结算、下单及支付前均会重新核验 WMS 库存，比价不预占库存";
         private List<String> unknowns = List.of();
         private List<String> matchedRequirements = List.of();
         private List<String> differences = List.of();

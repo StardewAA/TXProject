@@ -206,6 +206,61 @@ const coreRoutes: RouteRecordRaw[] = [
             meta: { title: '云培训学院考试系统', hideInMenu: true },
           },
           {
+            name: 'PortalTrainingExamWorkspace',
+            path: 'exam/workspace',
+            component: () =>
+              import('#/views/portal/training/exam/workspace.vue'),
+            meta: { title: '进入考试系统', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamRoadmap',
+            path: 'exam/roadmap',
+            component: () =>
+              import('#/views/portal/training/exam/roadmap.vue'),
+            meta: { title: '职业认证进阶路径', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamCertDetail',
+            path: 'exam/cert-detail',
+            component: () =>
+              import('#/views/portal/training/exam/cert-detail.vue'),
+            meta: { title: '认证详情', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamBooking',
+            path: 'exam/booking',
+            component: () =>
+              import('#/views/portal/training/exam/booking.vue'),
+            meta: { title: '预约考试', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamRecert',
+            path: 'exam/recert',
+            component: () =>
+              import('#/views/portal/training/exam/recert.vue'),
+            meta: { title: '重认证规则', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamTraining',
+            path: 'exam/training',
+            component: () =>
+              import('#/views/portal/training/exam/training.vue'),
+            meta: { title: '查找培训', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamBooks',
+            path: 'exam/books',
+            component: () =>
+              import('#/views/portal/training/exam/books.vue'),
+            meta: { title: '参考书籍', hideInMenu: true },
+          },
+          {
+            name: 'PortalTrainingExamDoc',
+            path: 'exam/doc',
+            component: () => import('#/views/portal/training/exam/doc.vue'),
+            meta: { title: '公告文档', hideInMenu: true },
+          },
+          {
             name: 'PortalTrainingLive',
             path: 'live',
             component: () =>

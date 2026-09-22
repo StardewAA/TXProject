@@ -3,11 +3,16 @@ import type { SystemUserApi } from '#/api/system/user';
 
 import { computed, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
+import {
+  assignUserRole,
+  getUserRoleList,
+} from '#/api/system/permission';
 import { createUser, getUser, updateUser } from '#/api/system/user';
 import { $t } from '#/locales';
 
@@ -15,6 +20,10 @@ import { useFormSchema } from '../data';
 
 const emit = defineEmits(['success']);
 const formData = ref<SystemUserApi.User>();
+const { hasAccessByCodes } = useAccess();
+const canAssignRole = hasAccessByCodes([
+  'system:permission:assign-user-role',
+]);
 const getTitle = computed(() => {
   return formData.value?.id
     ? $t('ui.actionTitle.edit', ['用户'])
@@ -30,7 +39,7 @@ const [Form, formApi] = useVbenForm({
     labelWidth: 80,
   },
   layout: 'horizontal',
-  schema: useFormSchema(),
+  schema: useFormSchema(canAssignRole),
   showDefaultActions: false,
 });
 
@@ -42,9 +51,23 @@ const [Modal, modalApi] = useVbenModal({
     }
     modalApi.lock();
     // 提交表单
-    const data = (await formApi.getValues()) as SystemUserApi.User;
+    const values = await formApi.getValues();
+    const { roleIds, ...data } = values;
     try {
-      await (formData.value?.id ? updateUser(data) : createUser(data));
+      if (formData.value?.id) {
+        await updateUser(data as SystemUserApi.User);
+        if (canAssignRole) {
+          await assignUserRole({
+            userId: formData.value.id,
+            roleIds: roleIds ?? [],
+          });
+        }
+      } else {
+        const userId = await createUser(data as SystemUserApi.User);
+        if (canAssignRole && roleIds?.length) {
+          await assignUserRole({ userId, roleIds });
+        }
+      }
       // 关闭并提示
       await modalApi.close();
       emit('success');
@@ -65,9 +88,16 @@ const [Modal, modalApi] = useVbenModal({
     }
     modalApi.lock();
     try {
-      formData.value = await getUser(data.id);
+      const [user, roleIds] = await Promise.all([
+        getUser(data.id),
+        canAssignRole ? getUserRoleList(data.id) : Promise.resolve(undefined),
+      ]);
+      formData.value = user;
       // 设置到 values
-      await formApi.setValues(formData.value);
+      await formApi.setValues({
+        ...user,
+        ...(canAssignRole ? { roleIds } : {}),
+      });
     } finally {
       modalApi.unlock();
     }

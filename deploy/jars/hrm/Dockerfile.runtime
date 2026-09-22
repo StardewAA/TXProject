@@ -1,0 +1,17 @@
+# 薄镜像运行时：由宿主机上已打包好的 app.jar 直接构建，不在容器内跑 Maven。
+# 构建上下文 = 本目录（deploy/jars/<service>），app.jar 由 script/docker/stage-jars.sh 暂存。
+# 用途：配合 deploy/docker-compose.hostjar.yml（把 22 个后端服务统一改成 jar 进 / 镜像出）。
+FROM eclipse-temurin:25-jre
+
+# docker-compose.yml 中 x-backend-service 的 healthcheck 依赖 curl 探测 /actuator/health
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY app.jar /app/app.jar
+
+ENV JAVA_OPTS=""
+
+EXPOSE 48080
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

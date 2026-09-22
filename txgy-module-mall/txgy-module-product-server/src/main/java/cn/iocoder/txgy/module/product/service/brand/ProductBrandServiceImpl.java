@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.product.service.brand;
 
 import cn.iocoder.txgy.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.controller.admin.brand.vo.ProductBrandCreateReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.brand.vo.ProductBrandListReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.brand.vo.ProductBrandPageReqVO;
@@ -34,6 +36,7 @@ public class ProductBrandServiceImpl implements ProductBrandService {
 
     @Override
     public Long createBrand(ProductBrandCreateReqVO createReqVO) {
+        requireWritableTenant();
         // 校验
         validateBrandNameUnique(null, createReqVO.getName());
 
@@ -46,6 +49,7 @@ public class ProductBrandServiceImpl implements ProductBrandService {
 
     @Override
     public void updateBrand(ProductBrandUpdateReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验存在
         validateBrandExists(updateReqVO.getId());
         validateBrandNameUnique(updateReqVO.getId(), updateReqVO.getName());
@@ -56,6 +60,7 @@ public class ProductBrandServiceImpl implements ProductBrandService {
 
     @Override
     public void deleteBrand(Long id) {
+        requireWritableTenant();
         // 校验存在
         validateBrandExists(id);
         // 删除
@@ -117,6 +122,10 @@ public class ProductBrandServiceImpl implements ProductBrandService {
     @Override
     public List<ProductBrandDO> getBrandListByStatus(Integer status) {
         return brandMapper.selectListByStatus(status);
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

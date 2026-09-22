@@ -108,7 +108,7 @@ public class ProductComparisonService {
         if (sku.getProperties() != null) item.setProperties(sku.getProperties().stream().filter(Objects::nonNull)
                 .map(p -> new ComparisonResponse.Property(Objects.toString(p.getPropertyName(), "待补充"),
                         Objects.toString(p.getValueName(), "待补充"))).toList());
-        item.setUnknowns(List.of("核验过的标准商品及硬性规格", "计量单位、包装换算与起订量", "配送费用及优惠", "ERP可履约库存与交期"));
+        item.setUnknowns(List.of("核验过的标准商品及硬性规格", "计量单位、包装换算与起订量", "配送费用及优惠", "WMS实时库存与交期"));
         return item;
     }
 

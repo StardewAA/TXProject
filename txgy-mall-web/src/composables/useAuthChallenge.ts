@@ -1,52 +1,49 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { authApi } from '@/api/mall'
-import { challengeRequest, getAuthEntry, getRegistrationOptions } from '@/api/mall-auth'
-import { resolveRegistrationChoice, assertRegistrationContext, registrationChoiceNotice, type RegistrationOptions } from '@/utils/registration-choice.mjs'
+import { challengeRequest, getAuthEntry } from '@/api/mall-auth'
 import { createChallengeState, assertAuthAvailable, type AuthEntry, type AuthPurpose } from '@/utils/auth-challenge.mjs'
 import { entryTenantId } from '@/utils/tenant-context'
 
-export function useAuthChallenge(mobile: Ref<string>, purpose: Ref<AuthPurpose>, clearCode: () => void) {
+export function useAuthChallenge(mobile: Ref<string>, purpose: Ref<AuthPurpose>, clearCode: () => void,
+  active?: Ref<boolean>, targetTenant?: Ref<string | undefined>) {
   const entry = ref<Readonly<AuthEntry> | null>(null)
   const entryError = ref('')
   const sending = ref(false)
   const now = ref(Date.now())
   const state = createChallengeState()
-  const registrationOptions = ref<RegistrationOptions | null>(null)
-  const selectedTenant = ref<string | undefined>(new URLSearchParams(window.location?.search || '').get('registrationTenant') || undefined)
-  const registrationChoice = computed(() => resolveRegistrationChoice(registrationOptions.value, selectedTenant.value, entry.value?.tenantId || entryTenantId))
-  const choiceNotice = computed(() => {
-    try { return registrationChoiceNotice(registrationChoice.value) } catch (error) { return error instanceof Error ? error.message : '请重新选择商城' }
-  })
-  const choiceError = computed(() => {
-    if (purpose.value !== 'REGISTER' || !registrationOptions.value?.enabled) return ''
-    try { assertRegistrationContext(registrationChoice.value, entryTenantId); return '' }
-    catch (error) { return error instanceof Error ? error.message : '当前商城尚未开放' }
-  })
-  const registrationTarget = computed(() => { try { return registrationChoice.value.tenantId } catch { return undefined } })
+  // 注册账号固定归属于当前商城入口。公共商城入口由服务端解析为公共租户，
+  // 租户商城入口仍归属于自己的租户，用户不再手工选择或覆盖租户。
+  const registrationTarget = computed(() => entry.value?.tenantId)
   let alive = true, revision = 0
-  const binding = () => ({ tenantId: purpose.value === 'REGISTER' ? registrationChoice.value.tenantId : entry.value?.tenantId || entryTenantId, mobile: mobile.value,
+  const binding = () => ({ tenantId: entry.value?.tenantId || targetTenant?.value || entryTenantId, mobile: mobile.value,
     purpose: purpose.value, protocol: entry.value?.protocol || 'legacy' as const })
   const countdown = computed(() => { void now.value; return state.remaining(mobile.value) })
   const newProtocol = computed(() => entry.value?.protocol === 'challenge-v1')
-  const available = computed(() => Boolean(!entryError.value && !choiceError.value && entry.value?.available && (purpose.value !== 'REGISTER' || entry.value.registrationAvailable)))
+  const available = computed(() => Boolean(!entryError.value && entry.value?.available && (purpose.value !== 'REGISTER' || entry.value.registrationAvailable)))
   const refresh = async () => {
-    const rev = ++revision; entry.value = null; registrationOptions.value = null; entryError.value = ''
+    if (active?.value === false) { revision++; entry.value = null; entryError.value = ''; return }
+    const rev = ++revision; entry.value = null; entryError.value = ''
     try {
-      const value = await getAuthEntry()
-      const options = purpose.value === 'REGISTER' && value.protocol === 'challenge-v1' ? await getRegistrationOptions() : null
-      if (alive && rev === revision) { registrationOptions.value = options; entry.value = value }
+      const value = await getAuthEntry(targetTenant?.value || entryTenantId)
+      if (alive && rev === revision) entry.value = value
     }
     catch { if (alive && rev === revision) entryError.value = '认证配置加载失败，请重试；不会自动切换旧登录接口' }
   }
-  watch([mobile, purpose, entry, selectedTenant, registrationOptions], () => { state.invalidate(); clearCode(); sending.value = false }, { flush: 'sync' })
-  watch(purpose, refresh, { flush: 'sync' })
+  watch([mobile, purpose, entry], () => { state.invalidate(); clearCode(); sending.value = false }, { flush: 'sync' })
+  watch(purpose, () => { if (active?.value !== false) void refresh() }, { flush: 'sync' })
+  if (active && targetTenant) watch([active, targetTenant], ([enabled]) => {
+    if (enabled) void refresh(); else { revision++; entry.value = null; entryError.value = '' }
+  }, { flush: 'sync' })
+  else if (active) watch(active, enabled => {
+    if (enabled) void refresh(); else { revision++; entry.value = null; entryError.value = '' }
+  }, { flush: 'sync' })
+  else if (targetTenant) watch(targetTenant, () => { void refresh() }, { flush: 'sync' })
   const timer = window.setInterval(() => { now.value = Date.now() }, 1000)
-  onMounted(refresh)
+  onMounted(() => { if (active?.value !== false) void refresh() })
   onBeforeUnmount(() => { alive = false; revision++; state.invalidate(); window.clearInterval(timer) })
   function requireEntry() {
     if (entryError.value) throw new Error(entryError.value)
     assertAuthAvailable(entry.value, purpose.value)
-    if (purpose.value === 'REGISTER') assertRegistrationContext(registrationChoice.value, entryTenantId)
     return entry.value!
   }
   async function send() {
@@ -62,5 +59,5 @@ export function useAuthChallenge(mobile: Ref<string>, purpose: Ref<AuthPurpose>,
   }
   function payload(code: string) { requireEntry(); return state.payload(binding(), code) }
   return { entry, entryError, sending, countdown, newProtocol, available, refresh, send, payload, requireEntry,
-    registrationOptions, selectedTenant, registrationChoice, registrationTarget, choiceNotice, choiceError }
+    registrationTarget }
 }

@@ -148,7 +148,35 @@ SELECT '父菜单' AS item, CAST(id AS CHAR) AS value FROM `ruoyi-vue-pro`.syste
 | 助手回复「调用失败（HTTP 403）… AccountOverdue」 | 厂商账号欠费 | 去厂商控制台充值，或改用其他厂商 |
 | 回复为空 | 模型返回非 JSON 且无本地兜底命中 | 看 `docker logs txgy-wms` 中 `[chat] 大模型调用失败` 一行 |
 | 切换厂商后仍报旧厂商的错 | 旧版本意图路由只读环境变量 | 确认代码已更新到含 `resolveEffectiveRuntime()` 的版本 |
+| **知识库问答突然答不出（不报错，直接回能力介绍）** | 向量缓存丢失，检索返回 0 结果 | 见 §5.1 |
 | 图片识别不可用 | 所选模型不支持视觉（如 DeepSeek 系列） | 换支持多模态的模型（如豆包），或只用文字交互 |
+
+### §5.1 知识库向量缓存（重要）
+
+知识库检索依赖「向量」——即把每段资料转成的一串数字。AI 模块默认用
+`SimpleVectorStore`，它把向量写成容器内的一个 JSON 文件：
+
+```
+/root/vector_store/simple_<向量化模型名>.json
+```
+
+**原始文字不会丢**（在 `ai_knowledge_segment` 表里），丢的只是这份算好的向量。
+丢了不会报错，只表现为「知识库检索返回 0 条 → 助手回退到能力介绍」，比较隐蔽。
+
+各场景下向量是否保留：
+
+| 操作 | 向量 | 说明 |
+|---|---|---|
+| `docker restart txgy-ai` | ✅ 保留 | 容器文件系统不变 |
+| `docker rm` + `docker run` | ✅ 保留 | **已挂命名卷 `txgy-vector-store`** |
+| 换机器 / 重建整个环境 | ❌ 丢失 | 卷不会跟着走 |
+
+**恢复办法（任何情况下都可用）**：到「AI 客服管理 → 知识库」点「重建向量索引」
+（接口 `PUT /admin-api/ai/knowledge/segment/reindex`），会把库里的原文重新算一遍向量。
+
+**已做的加固**：`deploy/local/docker-compose.local.yml` 与 `deploy/deploy-ai.ps1`
+都给 AI 容器挂了命名卷 `txgy-vector-store:/root/vector_store`，
+因此升级部署（删容器重建）不会再丢向量。
 
 **查看日志**：
 

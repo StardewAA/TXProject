@@ -82,9 +82,17 @@ class AppMallAuthEntryControllerTest {
         var controller = new AppMallAuthEntryController(new MallTenantAuthProperties().setEnabled(true), policy, 1L);
         assertThrows(IllegalStateException.class, () -> controller.config(9001L));
     }
-    @Test void disabledKeepsLegacyWithoutAccessingTenantRpc() {
+    @Test void disabledKeepsLegacyLoginButDoesNotAdvertiseFixedTenantRegistrationByDefault() {
         var policy = mock(MallAuthPolicy.class);
         var data = new AppMallAuthEntryController(new MallTenantAuthProperties(), policy, 1L).config().getCheckedData();
+        assertEquals("legacy", data.protocol()); assertTrue(data.available()); assertFalse(data.registrationAvailable());
+        assertFalse(data.tenantSelection()); verifyNoInteractions(policy);
+    }
+    @Test void explicitEmergencyFlagCanAdvertiseLegacyRegistrationCompatibility() {
+        var policy = mock(MallAuthPolicy.class);
+        var controller = new AppMallAuthEntryController(new MallTenantAuthProperties(), policy, 1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "legacyRegistrationEnabled", true);
+        var data = controller.config().getCheckedData();
         assertEquals("legacy", data.protocol()); assertTrue(data.available()); assertTrue(data.registrationAvailable());
         assertFalse(data.tenantSelection()); verifyNoInteractions(policy);
     }
