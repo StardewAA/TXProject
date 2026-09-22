@@ -24,6 +24,12 @@ const routes: RouteRecordRaw[] = [
         path: 'recruit/chat', name: 'HrmRecruitChat', meta: { title: '招聘沟通', activePath: '/hrm/recruit/chat' }, component: () => import('#/views/hrm/recruit/chat/index.vue'),
       },
       {
+        path: 'recruit/company',
+        name: 'HrmRecruitCompany',
+        meta: { title: '企业信息', activePath: '/hrm/recruit/company' },
+        component: () => import('#/views/hrm/recruit/company/index.vue'),
+      },
+      {
         path: 'recruit/post-type',
         name: 'HrmRecruitPostType',
         meta: { title: '职位类型', activePath: '/hrm/recruit/post-type' },

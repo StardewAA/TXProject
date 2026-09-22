@@ -8,6 +8,7 @@ import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
 import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.hrm.controller.admin.portal.recruit.vo.*;
+import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.company.HrmRecruitCompanyProfileVO;
 import cn.iocoder.txgy.module.hrm.controller.admin.recruit.vo.post.HrmRecruitPostPageReqVO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitApplicationDO;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.recruit.application.HrmRecruitOfferDO;
@@ -22,6 +23,7 @@ import cn.iocoder.txgy.module.hrm.service.recruit.application.HrmRecruitApplicat
 import cn.iocoder.txgy.module.hrm.service.recruit.candidate.HrmRecruitCandidateService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostService;
 import cn.iocoder.txgy.module.hrm.service.recruit.post.HrmRecruitPostTypeService;
+import cn.iocoder.txgy.module.hrm.service.recruit.company.HrmRecruitCompanyProfileService;
 import cn.iocoder.txgy.module.hrm.service.recruit.resume.HrmRecruitResumeService;
 import cn.iocoder.txgy.module.hrm.service.employee.info.HrmEmployeeService;
 import cn.iocoder.txgy.module.hrm.dal.dataobject.employee.info.HrmEmployeeDO;
@@ -51,6 +53,7 @@ import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.c
 public class HrmPortalRecruitController {
     @Resource private HrmRecruitPostService postService;
     @Resource private HrmRecruitPostTypeService postTypeService;
+    @Resource private HrmRecruitCompanyProfileService companyProfileService;
     @Resource private HrmRecruitApplicationService applicationService;
     @Resource private HrmRecruitCandidateService candidateService;
     @Resource private HrmRecruitResumeService resumeService;
@@ -84,6 +87,14 @@ public class HrmPortalRecruitController {
     @TenantIgnore
     public CommonResult<HrmPortalRecruitPostRespVO> postGet(@RequestParam("id") Long id) {
         return success(buildPost(postService.getPortalRecruitPostPublished(id)));
+    }
+
+    @GetMapping("/company-profile/get")
+    @Operation(summary = "查询公开招聘企业档案")
+    @PermitAll
+    @TenantIgnore
+    public CommonResult<HrmRecruitCompanyProfileVO> companyProfileGet(@RequestParam("tenantId") Long tenantId) {
+        return success(TenantUtils.execute(tenantId, companyProfileService::getProfile));
     }
 
     @PostMapping("/application/create")

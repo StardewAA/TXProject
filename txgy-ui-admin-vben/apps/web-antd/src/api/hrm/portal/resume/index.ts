@@ -67,3 +67,14 @@ export function getRecruitProfileName() {
     parseRecruitProfileName(resume?.content),
   );
 }
+
+export function isRecruitProfileComplete(resume?: HrmPortalResumeApi.Resume) {
+  if (!resume?.content) return false;
+  try {
+    const parsed = JSON.parse(resume.content) as { name?: unknown; mobile?: unknown };
+    return typeof parsed.name === 'string' && parsed.name.trim().length > 0
+      && typeof parsed.mobile === 'string' && parsed.mobile.trim().length > 0;
+  } catch {
+    return false;
+  }
+}

@@ -51,6 +51,19 @@ function openMap() {
   mapDialogRef.value?.open(longitude, latitude);
 }
 
+function openMapPage() {
+  const query = formData.value.address?.trim()
+    || (formData.value.longitude !== undefined && formData.value.latitude !== undefined
+      ? `${formData.value.longitude},${formData.value.latitude}`
+      : '');
+  if (!query) return;
+  window.open(
+    `https://map.baidu.com/search/${encodeURIComponent(query)}`,
+    '_blank',
+    'noopener,noreferrer',
+  );
+}
+
 function handleMapConfirm(data: {
   address: string;
   latitude: string;
@@ -138,6 +151,15 @@ defineExpose({
             />
           </Form.Item>
           <Button type="primary" @click="openMap">地图选点</Button>
+          <Button
+            :disabled="
+              !formData.address &&
+              (formData.longitude === undefined || formData.latitude === undefined)
+            "
+            @click="openMapPage"
+          >
+            网页地图
+          </Button>
         </div>
       </Form.Item>
       <Form.Item label="打卡范围" name="radius">

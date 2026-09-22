@@ -7,10 +7,13 @@ import { IconifyIcon } from '@vben/icons';
 import { Modal, Pagination } from 'ant-design-vue';
 
 import {
+  getPortalRecruitCompanyProfile,
   getPortalRecruitCompanyList,
   getPortalRecruitPostPage,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
+import type { HrmRecruitCompanyApi } from '#/api/hrm/recruit/company';
+import { formatRecruitLocation } from '../utils';
 
 interface CompanyEntry extends HrmPortalRecruitApi.Company {
   posts: HrmPortalRecruitApi.Post[];
@@ -31,6 +34,7 @@ const sort = ref('hiring');
 const page = ref(1);
 const pageSize = 12;
 const selectedCompany = ref<CompanyEntry>();
+const selectedProfile = ref<Record<string, string | undefined> & HrmRecruitCompanyApi.Profile>({});
 const detailOpen = ref(false);
 const detailPage = ref(1);
 const detailPageSize = 6;
@@ -54,7 +58,7 @@ const countOptions = [
 ];
 
 function getCity(post: HrmPortalRecruitApi.Post) {
-  const parts = post.areaName?.trim().split(/\s+/) || [];
+  const parts = formatRecruitLocation(post).trim().split(/\s+/) || [];
   return parts[1] || parts[0] || '';
 }
 
@@ -132,7 +136,20 @@ function openCompany(company: CompanyEntry) {
   selectedCompany.value = company;
   detailPage.value = 1;
   detailOpen.value = true;
+  selectedProfile.value = {};
+  void getPortalRecruitCompanyProfile(company.id).then((profile) => {
+    selectedProfile.value = profile || {};
+  }).catch(() => {
+    selectedProfile.value = {};
+  });
 }
+
+function openCompanyById(id: number) {
+  const company = companies.value.find((item) => item.id === id);
+  if (company) openCompany(company);
+}
+
+defineExpose({ openCompanyById });
 
 function formatSalary(post: HrmPortalRecruitApi.Post) {
   if (post.salaryUnit === -1 || (post.minSalary ?? 0) < 0 || (post.maxSalary ?? 0) < 0) return '面议';
@@ -314,6 +331,26 @@ onMounted(loadCompanies);
           <span class="company-detail-mark" aria-hidden="true">TX<span>HR</span></span>
         </header>
 
+        <section class="company-profile-readonly">
+          <div class="company-profile-title">工商信息</div>
+          <div v-if="Object.values(selectedProfile).some(Boolean)" class="company-profile-grid">
+            <div v-for="item in [
+              ['企业名称', selectedProfile.companyName || selectedCompany?.name],
+              ['企业类型', selectedProfile.companyType],
+              ['法定代表人', selectedProfile.legalRepresentative],
+              ['成立日期', selectedProfile.establishDate],
+              ['经营状态', selectedProfile.businessStatus],
+              ['注册资本', selectedProfile.registeredCapital],
+              ['注册地址', selectedProfile.registeredAddress],
+              ['所属行业', selectedProfile.industry],
+            ].filter(([, value]) => value)" :key="item[0]">
+              <small>{{ item[0] }}</small><strong>{{ item[1] }}</strong>
+            </div>
+          </div>
+          <p v-if="selectedProfile.introduction" class="company-profile-intro">{{ selectedProfile.introduction }}</p>
+          <div v-if="!Object.values(selectedProfile).some(Boolean)" class="company-profile-empty">企业档案尚未维护</div>
+        </section>
+
         <div class="company-detail-toolbar">
           <div>
             <span class="company-detail-kicker">职位机会</span>
@@ -352,6 +389,15 @@ onMounted(loadCompanies);
 }
 
 .company-directory-intro { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; overflow: hidden; padding: 42px 34px 32px; border: 1px solid #f4e5d7; border-bottom: 0; border-radius: 22px 22px 0 0; background: linear-gradient(120deg, #fffaf4 0%, #fffdfb 62%, #fff3e1 100%); }
+.company-profile-readonly { margin: 20px 0 22px; padding: 22px 24px; border: 1px solid var(--company-line); border-radius: 12px; background: #fffaf5; }
+.company-profile-title { margin-bottom: 18px; color: var(--company-ink); font-size: 18px; font-weight: 700; }
+.company-profile-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; }
+.company-profile-grid div { display: grid; gap: 5px; min-width: 0; }
+.company-profile-grid small { color: var(--company-muted); font-size: 12px; }
+.company-profile-grid strong { overflow-wrap: anywhere; color: var(--company-ink); font-size: 14px; font-weight: 500; }
+.company-profile-intro { margin: 18px 0 0; color: var(--company-muted); line-height: 1.7; white-space: pre-wrap; }
+.company-profile-empty { color: var(--company-muted); font-size: 13px; }
+@media (max-width: 720px) { .company-profile-grid { grid-template-columns: 1fr; } }
 .company-directory-intro::after { position: absolute; right: 7%; bottom: -90px; width: 260px; height: 260px; border: 1px solid #f1c58f; border-radius: 50%; box-shadow: 0 0 0 22px #f8dfc255, 0 0 0 44px #f8dfc222; content: ''; }
 .company-intro-copy { position: relative; z-index: 1; }
 .company-intro-label { display: inline-flex; align-items: center; gap: 8px; color: #c85e18; font-size: 11px; font-weight: 700; letter-spacing: .16em; }

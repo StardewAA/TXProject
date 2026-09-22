@@ -1,16 +1,18 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { IconifyIcon } from '@vben/icons';
 
 import { getTenantSimpleList } from '#/api/core/auth';
+import { loadBaiduMapSdk } from '#/components/map';
 import {
   getPortalRecruitPost,
   type HrmPortalRecruitApi,
 } from '#/api/hrm/portal/recruit';
 
 import RecruitApplyModal from './components/apply-modal.vue';
+import { formatRecruitLocation, openRecruitLocationMap, UNKNOWN_LOCATION, resolveRecruitCompanyName } from './utils';
 
 const route = useRoute();
 const router = useRouter();
@@ -18,6 +20,10 @@ const loading = ref(true);
 const post = ref<HrmPortalRecruitApi.Post>();
 const loadError = ref(false);
 const applyModalOpen = ref(false);
+const locationMapRef = ref<HTMLElement>();
+const locationMapLoading = ref(false);
+const locationMapError = ref('');
+let locationMap: any = null;
 
 function openChat() {
   if (!post.value?.id) return;
@@ -53,19 +59,64 @@ function splitContent(value?: string) {
 }
 
 function formatLocation(current: HrmPortalRecruitApi.Post) {
-  return (
-    current.areaName ||
-    (current.areaId ? `地区 ${current.areaId}` : '工作地点待确认')
-  );
+  return formatRecruitLocation(current);
+}
+
+function openLocationMap(current: HrmPortalRecruitApi.Post) {
+  openRecruitLocationMap(formatLocation(current));
+}
+
+function openCompanyProfile() {
+  if (!post.value?.tenantId) return;
+  void router.push({
+    name: 'PortalRecruitCompany',
+    query: { tenantId: String(post.value.tenantId) },
+  });
+}
+
+async function initLocationMap() {
+  const location = post.value ? formatLocation(post.value) : '';
+  if (!location || location === UNKNOWN_LOCATION || !locationMapRef.value) return;
+
+  locationMapLoading.value = true;
+  locationMapError.value = '';
+  try {
+    await loadBaiduMapSdk();
+    if (!locationMapRef.value || !window.BMapGL) return;
+
+    locationMap?.destroy?.();
+    locationMap = new window.BMapGL.Map(locationMapRef.value);
+    const fallbackPoint = new window.BMapGL.Point(116.404, 39.915);
+    locationMap.centerAndZoom(fallbackPoint, 11);
+    locationMap.enableScrollWheelZoom();
+    locationMap.addControl(new window.BMapGL.NavigationControl());
+    locationMap.addControl(new window.BMapGL.ZoomControl());
+
+    const localSearch = new window.BMapGL.LocalSearch(locationMap, {
+      pageCapacity: 1,
+      onSearchComplete: (results: any) => {
+        const point = results?._pois?.[0]?.point;
+        if (!point) {
+          locationMapError.value = '未找到该工作地点，请点击地址打开地图搜索';
+          return;
+        }
+        const target = new window.BMapGL.Point(point.lng, point.lat);
+        locationMap.clearOverlays();
+        locationMap.addOverlay(new window.BMapGL.Marker(target));
+        locationMap.centerAndZoom(target, 16);
+      },
+    });
+    localSearch.search(location);
+  } catch (error) {
+    locationMapError.value =
+      error instanceof Error ? error.message : '地图加载失败，请点击地址打开地图搜索';
+  } finally {
+    locationMapLoading.value = false;
+  }
 }
 
 function getCompanyName(current: HrmPortalRecruitApi.Post) {
-  return (
-    current.companyName ||
-    current.companyShortName ||
-    (current.tenantId ? tenantNames.value[current.tenantId] : undefined) ||
-    '招聘企业待确认'
-  );
+  return resolveRecruitCompanyName(current, tenantNames.value);
 }
 
 async function loadTenantNames() {
@@ -156,9 +207,16 @@ function backToRecruit() {
 onMounted(async () => {
   void loadTenantNames();
   await loadPost();
+  await nextTick();
+  void initLocationMap();
   if (route.query.apply === '1' && post.value) {
     applyModalOpen.value = true;
   }
+});
+
+onUnmounted(() => {
+  locationMap?.destroy?.();
+  locationMap = null;
 });
 </script>
 
@@ -224,11 +282,25 @@ onMounted(async () => {
           <dl>
             <div>
               <dt>发布企业</dt>
-              <dd>{{ getCompanyName(post) }}</dd>
+              <dd>
+                <button class="company-profile-link" type="button" @click="openCompanyProfile">
+                  {{ getCompanyName(post) }}
+                </button>
+              </dd>
             </div>
             <div>
               <dt>工作地点</dt>
-              <dd>{{ formatLocation(post) }}</dd>
+              <dd class="detail-location">
+                <span>{{ formatLocation(post) }}</span>
+                <a-button
+                  v-if="formatLocation(post) !== '工作地点待确认'"
+                  type="link"
+                  size="small"
+                  @click="openLocationMap(post)"
+                >
+                  在地图中查看
+                </a-button>
+              </dd>
             </div>
             <div>
               <dt>招聘人数</dt>
@@ -241,6 +313,20 @@ onMounted(async () => {
           </dl>
         </aside>
       </main>
+      <section class="location-map-section" aria-labelledby="location-map-title">
+        <div class="location-map-heading">
+          <h2 id="location-map-title">工作地址地图</h2>
+          <button class="location-map-link" type="button" @click="openLocationMap(post)">
+            <IconifyIcon icon="lucide:external-link" />
+            打开地图
+          </button>
+        </div>
+        <div class="location-map-card">
+          <div ref="locationMapRef" class="location-map-canvas"></div>
+          <div v-if="locationMapLoading" class="location-map-state">地图加载中...</div>
+          <div v-else-if="locationMapError" class="location-map-state error">{{ locationMapError }}</div>
+        </div>
+      </section>
     </template>
 
     <RecruitApplyModal v-model:open="applyModalOpen" :post="post" />
@@ -278,6 +364,129 @@ onMounted(async () => {
   padding: 56px 32px;
   border: 1px solid #e5e7eb;
   background: #fff;
+}
+
+.location-map-section {
+  padding: 0 32px 32px;
+  border: 1px solid var(--detail-line);
+  background: #fff;
+}
+
+.company-profile-link {
+  padding: 0;
+  border: 0;
+  color: var(--detail-blue);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.company-profile-link:hover { text-decoration: underline; }
+
+.location-map-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 0 16px;
+}
+
+.location-map-heading h2 {
+  margin: 0;
+  color: var(--detail-ink);
+  font-size: 22px;
+}
+
+.location-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: var(--detail-teal);
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.location-map-link:hover {
+  text-decoration: underline;
+}
+
+.location-map-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 300px;
+  border: 1px solid var(--detail-line-soft);
+  border-radius: 14px;
+  background: #f5f8fa;
+}
+
+.location-map-canvas {
+  height: 360px;
+  width: 100%;
+}
+
+.location-map-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--detail-muted);
+  background: rgb(245 248 250 / 82%);
+  font-size: 14px;
+}
+
+.location-map-state.error {
+  color: #b45309;
+}
+
+.detail-aside .location-map-section {
+  margin-top: 24px;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--detail-line-soft);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+.detail-aside .location-map-heading {
+  padding: 0 0 12px;
+}
+
+.detail-aside .location-map-heading h2 {
+  font-size: 17px;
+}
+
+.detail-aside .location-map-card {
+  min-height: 220px;
+  border-radius: 10px;
+}
+
+.detail-aside .location-map-canvas {
+  height: 220px;
+}
+
+@media (max-width: 720px) {
+  .location-map-section {
+    padding: 0 18px 20px;
+  }
+
+  .location-map-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .location-map-canvas {
+    height: 280px;
+  }
+
+  .detail-aside .location-map-canvas {
+    height: 220px;
+  }
 }
 
 .detail-hero {

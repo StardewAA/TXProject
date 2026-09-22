@@ -1,6 +1,7 @@
 import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
+export { getPortalRecruitCompanyProfile } from '#/api/hrm/recruit/company';
 
 export namespace HrmPortalRecruitApi {
   export interface Company {
