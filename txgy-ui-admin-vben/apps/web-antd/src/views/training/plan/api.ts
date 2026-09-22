@@ -137,37 +137,6 @@ export namespace TrainingPlanApi {
     }[];
   }
 
-  /** 参与对象筛选条件（部门 + 岗位，保存于培训班 targetCondition） */
-  export interface ClassStudentScope {
-    classId?: number;
-    deptIds?: number[];
-    postIds?: number[];
-    includeChildDept?: boolean;
-  }
-
-  /** 参与对象筛选命中人员 */
-  export interface ClassStudentScopePreview {
-    deptIds?: number[];
-    postIds?: number[];
-    includeChildDept?: boolean;
-    matchedDeptIds?: number[];
-    matchedCount?: number;
-    inClassCount?: number;
-    addableCount?: number;
-    /** 培训班当前在班人数 */
-    inClassTotal?: number;
-    /** 在班学员上限 */
-    maxSize?: number;
-    /** 剩余可收录名额 */
-    remaining?: number;
-    users?: {
-      deptName?: string;
-      inClass?: boolean;
-      nickname?: string;
-      userId?: number;
-    }[];
-  }
-
   /** 导入名单解析出的学员（供人工指定培训班） */
   export interface ImportParseUser {
     rowNumber?: number;
@@ -421,24 +390,6 @@ export function importClassStudents(
   return requestClient.upload<TrainingPlanApi.ImportStudentResult>(
     `/training/plan/class/student/import?classId=${classId}&autoCreateUser=${autoCreateUser}`,
     { file },
-  );
-}
-
-/** 参与对象筛选：预览命中人员（不落库，用于加入前确认） */
-export function previewClassScope(data: TrainingPlanApi.ClassStudentScope) {
-  return requestClient.post<TrainingPlanApi.ClassStudentScopePreview>(
-    '/training/plan/class/student/scope-preview',
-    data,
-  );
-}
-
-/** 按参与对象筛选条件批量加入学员（自动生成学习任务，已在班自动跳过） */
-export function addClassStudentsByScope(
-  data: TrainingPlanApi.ClassStudentScope,
-) {
-  return requestClient.post<number>(
-    '/training/plan/class/student/add-by-scope',
-    data,
   );
 }
 
