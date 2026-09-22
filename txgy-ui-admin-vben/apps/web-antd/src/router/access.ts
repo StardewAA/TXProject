@@ -409,19 +409,6 @@ function transformMesMenus(menus: AppRouteRecordRaw[]): AppRouteRecordRaw[] {
  * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
  * 若未找到则挂载为顶级菜单，保证功能可见。
  */
-/**
- * 注入「AI对话助手」菜单项（安全兜底占位实现）。
- * 说明：原始实现在远端 revert 合并事故中丢失（只剩调用点），
- * 当前以空实现兜底——保证登录/菜单流程不崩溃；AI 助手菜单暂不额外注入。
- * 待 AI 助手小组补回真实实现后，替换本函数即可。
- */
-function injectAiChatMenu(
-  _menus: AppRouteRecordRaw[],
-  _accessCodes: string[] | null | undefined,
-): void {
-  // intentionally empty — see doc above
-}
-
 function injectCrmMenus(
   menus: AppRouteRecordRaw[],
   permissions: unknown[] | null | undefined,
