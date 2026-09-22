@@ -41,6 +41,13 @@ public class ReportDatasetDO extends TenantBaseDO {
      */
     private String category;
     /**
+     * 业务分组，逗号分隔（支持多归属，如「生产,库存」）
+     *
+     * 与 category（技术域）不同，这里存业务人员视角的分组（生产/品质/设备/库存等），
+     * 供报表中心左侧目录使用，由页面自由维护，新增分组无需改代码。
+     */
+    private String bizGroups;
+    /**
      * SQL 语句
      *
      * 必须 SELECT / WITH 开头；参数使用 ${name} 占位，执行时转为 PreparedStatement 参数

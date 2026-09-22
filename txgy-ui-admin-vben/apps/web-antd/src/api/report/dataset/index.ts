@@ -12,12 +12,22 @@ export namespace ReportDatasetApi {
     defaultValue?: string; // 默认值
   }
 
+  /** 列标签（字段中文表头） */
+  export interface ColumnLabel {
+    field: string; // 字段名
+    label: string; // 中文表头
+  }
+
   /** 报表数据集 */
   export interface Dataset {
     id?: number; // 编号
     code?: string; // 数据集编码
     name?: string; // 数据集名称
     category?: string; // 分类（域）
+    bizGroups?: string[]; // 业务分组（支持多归属，留空归入「自定义」）
+    sqlText?: string; // SQL 语句
+    params?: Param[]; // 参数定义
+    columnLabelList?: ColumnLabel[]; // 列标签（简单模式自动生成的中文表头）
     sqlText?: string; // SQL 语句
     params?: Param[]; // 参数定义
     tenantColumn?: string; // 租户过滤列名（必填）
@@ -65,6 +75,7 @@ export namespace ReportDatasetApi {
     code?: string; // 数据集编码（留空自动生成）
     name: string; // 数据集名称
     category?: string; // 分类（域），默认 MES
+    bizGroups?: string[]; // 业务分组（可多选、可新建；留空归入「自定义」）
     tableName: string; // 白名单表名
     fields: string[]; // 勾选的字段
     dateField?: string; // 日期筛选列（可选）

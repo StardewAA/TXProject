@@ -35,6 +35,10 @@ overrides:
   clsx: 'catalog:'
   pinia: 'catalog:'
   vue: 'catalog:'
+  # sass 1.100+ 改用 findFileUrl importer，与 vite 8.x 的 canonicalize/load importer 不兼容，
+  # 全局锁定 1.99.0（含 vite 的 sass-embedded peer 依赖）
+  sass: 'catalog:'
+  sass-embedded: 'catalog:'
 catalog:
   '@ast-grep/napi': ^0.43.0
   '@changesets/changelog-github': ^0.7.0
@@ -192,8 +196,10 @@ catalog:
   resolve.exports: ^2.0.3
   rimraf: ^6.1.3
   rollup-plugin-visualizer: ^7.0.1
-  sass: ^1.101.0
-  sass-embedded: ^1.100.0
+  # sass 1.100+ 的 FileImporter 改用 findFileUrl，与 vite 8.x 的 canonicalize/load importer 不兼容，
+  # 会导致构建报 importer.findFileUrl is not a function；降级到 1.99.0 保持构建可用
+  sass: 1.99.0
+  sass-embedded: 1.99.0
   secure-ls: ^2.0.0
   sortablejs: ^1.15.7
   steady-xml: ^0.1.0
@@ -221,7 +227,7 @@ catalog:
   unplugin-vue: ^7.2.0
   vee-validate: ^4.15.1
   video.js: ^7.21.7
-  vite: 8.0.10
+  vite: 8.1.0
   vite-plugin-compression: ^0.5.1
   vite-plugin-lazy-import: ^1.0.7
   vite-plugin-pwa: ^1.3.0
