@@ -493,6 +493,7 @@ const CRM_SIDE_GROUPS: Array<{
  */
 const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
   '/crm/backlog': '待办中心',
+  '/crm/home': '首页',
 };
 
 /**
