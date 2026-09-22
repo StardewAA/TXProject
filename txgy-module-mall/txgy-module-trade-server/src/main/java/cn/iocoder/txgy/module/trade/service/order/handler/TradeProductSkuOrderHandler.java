@@ -1,16 +1,12 @@
 package cn.iocoder.txgy.module.trade.service.order.handler;
 
-import cn.hutool.core.collection.CollUtil;
-import cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService;
-import cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.iocoder.txgy.module.trade.service.wms.TradeWmsOutboundService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.Resource;
 import java.util.List;
-
-import static java.util.Collections.singletonList;
 
 /**
  * 商品 SKU 库存的 {@link TradeOrderHandler} 实现类
@@ -20,31 +16,38 @@ import static java.util.Collections.singletonList;
 @Component
 public class TradeProductSkuOrderHandler implements TradeOrderHandler {
 
-    @Resource
-    private TradeErpInventoryService erpInventory;
+    private TradeWmsOutboundService outboundService;
+
+    /** 仅供不触发支付回调的旧单元测试直接构造。 */
+    public TradeProductSkuOrderHandler() {
+    }
+
+    @Autowired
+    public TradeProductSkuOrderHandler(TradeWmsOutboundService outboundService) {
+        this.outboundService = outboundService;
+    }
 
     @Override
     public void afterOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        erpInventory.request(order, Operation.RESERVE, "ORDER", orderItems, null, null);
+        // 下单服务已在写入订单前重新读取 WMS；此处不重复查询，也不执行预占。
+    }
+
+    @Override
+    public void afterPayOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
+        if (outboundService == null) {
+            throw new IllegalStateException("WMS 出库申请服务未注入");
+        }
+        outboundService.createForPaidOrder(order, orderItems);
     }
 
     @Override
     public void afterCancelOrder(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
-        // 售后的订单项，已经在 afterCancelOrderItem 回滚库存，所以这里不需要重复回滚
-        orderItems = filterOrderItemListByNoneAfterSale(orderItems);
-        if (CollUtil.isEmpty(orderItems)) {
-            return;
-        }
-        erpInventory.request(order, Operation.RELEASE, "CANCEL", orderItems, null, null);
+        // WMS 尚未提供预占，因此取消订单时没有可释放的 WMS 库存。
     }
 
     @Override
     public void afterCancelOrderItem(TradeOrderDO order, TradeOrderItemDO orderItem) {
-        // 退款不是退货入库；仅未发货订单释放预占。入库在 ERP 确认实际收货后处理。
-        if (order.getDeliveryTime() == null && (order.getStatus() == 0 || order.getStatus() == 10)) {
-            erpInventory.request(order, Operation.RELEASE, "ITEM-" + orderItem.getId(),
-                    singletonList(orderItem), null, null);
-        }
+        // WMS 尚未提供预占，因此退款时不发送虚假的释放请求。
     }
 
 }

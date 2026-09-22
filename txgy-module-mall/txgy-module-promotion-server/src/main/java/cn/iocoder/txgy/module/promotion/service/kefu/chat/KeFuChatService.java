@@ -1,22 +1,30 @@
 package cn.iocoder.txgy.module.promotion.service.kefu.chat;
 
 import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
+import cn.iocoder.txgy.framework.security.core.LoginUser;
 import cn.iocoder.txgy.module.promotion.dal.mysql.kefu.KeFuChatRepository;
 import cn.iocoder.txgy.module.promotion.dal.mysql.kefu.KeFuScopeRepository;
 import cn.iocoder.txgy.module.promotion.service.kefu.scope.KeFuScopeModels.*;
 import cn.iocoder.txgy.module.promotion.service.kefu.scope.KeFuScopeService;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.sku.ProductPublicSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductPublicSkuRespDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
 import java.time.Clock;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.function.Supplier;
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.promotion.service.kefu.scope.KeFuScopeService.*;
 import static cn.iocoder.txgy.module.promotion.service.kefu.chat.KeFuChatModels.*;
 
-/** Persisted text + published FAQ + scoped human reception. No AI calls, attachments, or legacy broadcasts. */
+/** Persisted text + published FAQ + scoped AI/human reception. No attachments or legacy broadcasts. */
 @Service
 @RequiredArgsConstructor
 // Per-conversation writes remain serialized by an explicit session row lock. READ COMMITTED
@@ -28,6 +36,8 @@ public class KeFuChatService {
     private final KeFuScopeRepository sessions;
     private final KeFuChatRepository repository;
     private final KeFuChatCardService cards;
+    private final KeFuAiReplyService aiReplies;
+    private final ProductPublicSkuApi publicSkus;
     private Clock clock = Clock.systemUTC();
     private static final Actor SELF_SERVICE = new Actor(0,0);
     private static final long MAX_CURSOR = 9_007_199_254_740_991L;
@@ -40,6 +50,27 @@ public class KeFuChatService {
         repository.ensureMeta(session);
         // A new/reopened WAITING session with no assigned agent may retain human intent from an earlier batch.
         // This is deliberate: do not silently switch the customer back to automatic replies.
+        return view(session,member,false);
+    }
+    /** Opens a target-shop thread only after product service resolves SKU ownership. */
+    public KeFuChatModels.Thread openProduct(Actor member,String scope,Long claimedShop,Long productSkuId) {
+        if(!"SHOP".equals(scope) || claimedShop==null || claimedShop<=0 || productSkuId==null || productSkuId<=0)
+            throw exception(INVALID);
+        ProductPublicSkuRespDTO ownership;
+        try {
+            List<ProductPublicSkuRespDTO> rows=publicSkus.getOwnershipList(List.of(productSkuId));
+            ownership=rows!=null&&rows.size()==1?rows.getFirst():null;
+        } catch (RuntimeException ignored) {
+            // Public ownership resolution is the trust boundary. Never fall back to client tenant/shop.
+            throw exception(FORBIDDEN);
+        }
+        if(ownership==null || !Objects.equals(ownership.getSkuId(),productSkuId)
+                || ownership.getTenantId()==null || ownership.getTenantId()<=0
+                || ownership.getShopId()==null || ownership.getShopId()<=0
+                || !Objects.equals(ownership.getShopId(),claimedShop)
+                || !Boolean.TRUE.equals(ownership.getSaleable())) throw exception(FORBIDDEN);
+        Session session=scopes.openPlatform(member,ownership.getTenantId(),ownership.getShopId(),productSkuId);
+        repository.ensureMeta(session);
         return view(session,member,false);
     }
     public KeFuChatModels.Thread thread(Actor actor,String id,boolean agent) {
@@ -74,13 +105,18 @@ public class KeFuChatService {
             List<Message> retried=new ArrayList<>();retried.add(retry);
             Message automatic=agent?null:repository.retry(session,SELF_SERVICE,"faq_"+request.clientMessageId());
             if(automatic!=null)retried.add(automatic);
+            if(!agent)for(int index=0;index<3;index++) {
+                Message recommendation=repository.retry(session,SELF_SERVICE,recommendationKey(request.clientMessageId(),index));
+                if(recommendation!=null)retried.add(recommendation);
+            }
             return new SendResult(List.copyOf(retried),view(session,actor,agent));
         }
         if(session.version()!=request.version() || "CLOSED".equals(session.state()))throw exception(CONFLICT);
         if(agent && (!"ACTIVE".equals(session.state()) || !assigned(session,actor)))throw exception(FORBIDDEN);
         if(repository.recentCount(session,actor,clock.millis()-60_000)>=60)
             throw new cn.iocoder.txgy.framework.common.exception.ServiceException(429,"发送过于频繁，请稍后再试");
-        KeFuChatCardService.Card card=request.resourceType()==null?null:cards.build(session,actor,request.resourceType(),request.resourceId());
+        KeFuChatCardService.Card card=request.resourceType()==null?null:inTenant(session.tenantId(),
+                ()->cards.build(session,actor,request.resourceType(),request.resourceId()));
         // Resource cards are self-explanatory. Keeping their snapshot disclaimer in text_body
         // rendered the same sentence once as a chat bubble and again inside the card.
         String text=card==null?request.text().trim():"";
@@ -92,9 +128,29 @@ public class KeFuChatService {
                     resourceAcknowledgement(card.type()),null,null,null,clock.millis(),null));
         } else if(!agent && "WAITING".equals(session.state()) && !repository.human(session)) {
             FaqMatch match=match(session,text);
-            sent.add(repository.insert(session,SELF_SERVICE,match==null?"SYSTEM":"FAQ","faq_"+request.clientMessageId(),
-                    match==null?"暂未找到匹配的常见问题。您可以转人工；无人值守时可留言，处理状态以本会话为准。":match.entry().answer(),
+            // Bound provider spend per conversation even when a client stays below the general message limit.
+            boolean aiRateLimited=match==null&&repository.recentRoleCount(session,"AI",clock.millis()-60_000)>=10;
+            KeFuAiReplyService.Answer aiReply=match==null&&!aiRateLimited?inTenant(session.tenantId(),
+                    ()->aiReplies.reply(session.scope(),session.shopId(),session.memberId(),session.id(),
+                            text,aiContext(session))):null;
+            String role=match!=null?"FAQ":aiReply!=null?"AI":"SYSTEM";
+            String answer=match!=null?match.entry().answer():aiReply!=null?aiReply.text()
+                    :"暂未找到匹配的常见问题。您可以转人工；无人值守时可留言，处理状态以本会话为准。";
+            sent.add(repository.insert(session,SELF_SERVICE,role,"faq_"+request.clientMessageId(),answer,
                     match==null?null:match.entry().id(),match==null?null:match.version(),match==null?null:match.scope(),clock.millis(),null));
+            if(aiReply!=null) {
+                int index=0;
+                for(Long productId:aiReply.productIds()) {
+                    try {
+                        KeFuChatCardService.Card recommended=inTenant(session.tenantId(),
+                                ()->cards.build(session,actor,"PRODUCT",productId));
+                        sent.add(repository.insert(session,SELF_SERVICE,"AI",recommendationKey(request.clientMessageId(),index++),"",
+                                null,null,null,clock.millis(),recommended));
+                    } catch (RuntimeException ignored) {
+                        // The catalog may change between candidate selection and card creation; omit stale products.
+                    }
+                }
+            }
         }
         return new SendResult(List.copyOf(sent),view(session,actor,agent));
     }
@@ -207,6 +263,22 @@ public class KeFuChatService {
         }
         return null;
     }
+    private static String recommendationKey(String requestId,int index) { return "recommend_"+index+"_"+requestId; }
+    private String aiContext(Session session) {
+        StringBuilder context=new StringBuilder();
+        for(FaqMatch item:published(session)) {
+            if(context.length()>1400)break;
+            context.append("FAQ：").append(item.entry().question()).append("；答复：")
+                    .append(item.entry().answer()).append('\n');
+        }
+        KeFuChatCardService.Card card=repository.latestCard(session);
+        if(card!=null) {
+            context.append("最近咨询对象：").append(card.type()).append("，标题：").append(card.title());
+            if(card.amount()!=null)context.append("，页面金额（分）：").append(card.amount());
+            if(card.status()!=null)context.append("，页面状态码：").append(card.status());
+        }
+        return context.toString();
+    }
     private static String normalize(String value) { return value.strip().toLowerCase(Locale.ROOT); }
     private static boolean samePayload(Message message,SendRequest request) {
         if(request.resourceType()!=null)return message.card()!=null && Objects.equals(message.card().type(),request.resourceType())
@@ -231,6 +303,33 @@ public class KeFuChatService {
                     || entry.question().indexOf('\0')>=0 || entry.answer().indexOf('\0')>=0
                     || entry.keywords()==null || entry.keywords().size()>8)throw exception(INVALID);
             for(String keyword:entry.keywords())if(keyword==null || keyword.strip().length()<2 || keyword.length()>30 || keyword.indexOf('\0')>=0)throw exception(INVALID);
+        }
+    }
+
+    private <T>T inTenant(long tenant,Supplier<T> action) {
+        Long previousTenant=TenantContextHolder.getTenantId();
+        Boolean previousIgnore=TenantContextHolder.isIgnore();
+        SecurityContext previousSecurity=SecurityContextHolder.getContext();
+        Object principal=previousSecurity.getAuthentication()==null?null:previousSecurity.getAuthentication().getPrincipal();
+        try {
+            TenantContextHolder.setTenantId(tenant);
+            TenantContextHolder.setIgnore(false);
+            // The session/shop tenant is resolved and authorized by the server. Internal RPCs still
+            // require an authenticated LoginUser, so forward a short-lived copy aligned to that
+            // verified tenant, without leaking the caller's mutable request context.
+            SecurityContext scopedSecurity=SecurityContextHolder.createEmptyContext();
+            if(principal instanceof LoginUser login) {
+                LoginUser scopedLogin=new LoginUser().setId(login.getId()).setUserType(login.getUserType())
+                        .setInfo(login.getInfo()).setTenantId(tenant).setScopes(login.getScopes())
+                        .setExpiresTime(login.getExpiresTime()).setVisitTenantId(null);
+                scopedSecurity.setAuthentication(new UsernamePasswordAuthenticationToken(scopedLogin,null,List.of()));
+            }
+            SecurityContextHolder.setContext(scopedSecurity);
+            return action.get();
+        } finally {
+            TenantContextHolder.setTenantId(previousTenant);
+            TenantContextHolder.setIgnore(previousIgnore);
+            SecurityContextHolder.setContext(previousSecurity);
         }
     }
 }

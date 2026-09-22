@@ -69,7 +69,7 @@ export function chatPage(value, sessionId, afterId, target) {
       !positive(item.id) ||
       item.id <= previous ||
       item.sessionId !== sessionId ||
-      !['MEMBER', 'AGENT', 'FAQ', 'SYSTEM'].includes(item.senderRole) ||
+      !['MEMBER', 'AGENT', 'FAQ', 'AI', 'SYSTEM'].includes(item.senderRole) ||
       typeof item.text !== 'string'
     )
       throw new Error('消息范围或顺序不正确');

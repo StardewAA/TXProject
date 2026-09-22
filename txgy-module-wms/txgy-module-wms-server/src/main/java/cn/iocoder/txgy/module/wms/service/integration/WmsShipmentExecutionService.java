@@ -114,6 +114,9 @@ public class WmsShipmentExecutionService {
     }
 
     private void deliverMall(Long tenantId, Long id, WmsShipmentOrderDO order) {
+        if (order.getShopId() == null || order.getShopId() <= 0) {
+            throw new IllegalStateException("历史商城出库单缺少有效店铺归属，须转人工异常处理");
+        }
         var sourceRequest = requestMapper.selectSourceRequest("SALE_SHIPMENT_CREATE", order.getNo());
         if (sourceRequest == null) throw new IllegalStateException("商城出库申请号不存在");
         TradeWmsExecutionCallbackReqDTO request = new TradeWmsExecutionCallbackReqDTO()

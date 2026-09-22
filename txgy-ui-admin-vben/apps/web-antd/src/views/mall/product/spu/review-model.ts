@@ -8,7 +8,7 @@ export const reviewStatusOptions = [
   { label: '审核驳回', value: 30 },
 ];
 
-/** 策略未知或试点锁定时 fail closed；店铺迁移不能用于绕过源店限制。 */
+/** 策略未知或店铺被锁定时 fail closed；变更所属店铺不能绕过源店限制。 */
 export function canAdminMaintain(
   policy: MallSpuApi.ReviewPolicy | undefined,
   shopId?: number | null,
@@ -16,6 +16,15 @@ export function canAdminMaintain(
   return policy?.adminWriteEnabled === true
     && Array.isArray(policy.adminWriteLockedShopIds)
     && !policy.adminWriteLockedShopIds.includes(shopId ?? 0);
+}
+
+/** 审核职责与企业经营职责互斥；角色误配时前端保持只读。 */
+export function canOperateProduct(
+  policy: MallSpuApi.ReviewPolicy | undefined,
+  shopId: number | null | undefined,
+  hasReviewPermission: boolean,
+) {
+  return !hasReviewPermission && canAdminMaintain(policy, shopId);
 }
 
 export function reviewStatusText(value?: number | null) {

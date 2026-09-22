@@ -15,6 +15,7 @@ import cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy;
 import cn.iocoder.txgy.module.member.service.tenant.MallCustomerAffiliationService;
 import cn.iocoder.txgy.module.member.service.tenant.MallImageChallengeService;
 import cn.iocoder.txgy.module.member.service.user.MemberUserService;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
 import cn.iocoder.txgy.module.system.api.logger.LoginLogApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
@@ -50,6 +51,7 @@ class MemberImageAccountTest {
     @Mock private MallCustomerAffiliationService customerAffiliations;
     @Mock private MallAccountPolicy accountPolicy;
     @Mock private MallImageChallengeService imageChallenges;
+    @Mock private MemberPlatformAccountService platformAccounts;
     @InjectMocks private MemberAuthServiceImpl service;
 
     @BeforeEach void setup() {
@@ -75,10 +77,11 @@ class MemberImageAccountTest {
         assertEquals("supplier", member.getMemberIdentity());
         assertEquals("13900009991", member.getContactMobile());
         assertNull(member.getMobile());
-        var order = inOrder(userService, customerAffiliations, oauth2TokenApi);
+        var order = inOrder(userService, customerAffiliations, platformAccounts, oauth2TokenApi);
         order.verify(userService).registerAccountUser(eq("buyer_1"), eq("Test1234"), eq("图片会员"),
                 eq("13900009991"), eq("supplier"), anyString(), any());
         order.verify(customerAffiliations).bindRegistration(81L);
+        order.verify(platformAccounts).createForRegistration(member, 9001L);
         order.verify(oauth2TokenApi).createAccessToken(argThat(token -> token.getUserId().equals(81L)
                 && token.getUserType().equals(UserTypeEnum.MEMBER.getValue())));
         verifyNoInteractions(smsCodeApi, socialUserApi, memberUserMapper);
@@ -109,13 +112,26 @@ class MemberImageAccountTest {
         verifyNoInteractions(oauth2TokenApi, loginLogApi, smsCodeApi);
     }
 
+    @Test void failedPlatformMappingCannotIssueTokenAfterCreatingMember() {
+        MemberUserDO member = member(9001L);
+        stubRegistration(member);
+        doThrow(new IllegalStateException("platform mapping failed")).when(platformAccounts)
+                .createForRegistration(member, 9001L);
+
+        assertThrows(IllegalStateException.class, () -> service.registerWithVerifiedImage(registration()));
+
+        verify(customerAffiliations).bindRegistration(81L);
+        verify(platformAccounts).createForRegistration(member, 9001L);
+        verifyNoInteractions(oauth2TokenApi, loginLogApi);
+    }
+
     @Test void pictureFeatureOffCannotCreateAccountsOrUseAccountPasswordEndpoint() {
         when(accountPolicy.isEnabled()).thenReturn(false);
         assertEquals(MALL_TENANT_UNAVAILABLE.getCode(), assertThrows(ServiceException.class,
                 () -> service.registerWithVerifiedImage(registration())).getCode());
         assertEquals(MALL_TENANT_UNAVAILABLE.getCode(), assertThrows(ServiceException.class,
                 () -> service.loginWithAccountPassword("buyer_1", "1234")).getCode());
-        verifyNoInteractions(userService, memberUserMapper, customerAffiliations, oauth2TokenApi, smsCodeApi);
+        verifyNoInteractions(userService, memberUserMapper, customerAffiliations, platformAccounts, oauth2TokenApi, smsCodeApi);
     }
 
     @Test void loginNameUsesCanonicalLookupAndExistingPasswordHash() {
@@ -189,6 +205,18 @@ class MemberImageAccountTest {
         verify(userService, never()).updateUserLogin(anyLong(), anyString());
     }
 
+    @Test void platformLoginRequiresTheMappedCanonicalMemberBeforePasswordAndToken() {
+        configureAccount(member(9001L)); configureTokens();
+
+        assertIdentity(service.loginWithPlatformAccount(81L, "buyer_1", "1234"));
+        assertEquals(AUTH_LOGIN_BAD_CREDENTIALS.getCode(), assertThrows(ServiceException.class,
+                () -> service.loginWithPlatformAccount(82L, "buyer_1", "1234")).getCode());
+
+        verify(memberUserMapper, times(2)).selectByLoginName("buyer_1");
+        verify(userService, times(1)).isPasswordMatch("1234", "existing-hash");
+        verify(oauth2TokenApi, times(1)).createAccessToken(any());
+    }
+
     @Test void disabledAccountCannotObtainTokensEvenWithCorrectPassword() {
         configureAccount(member(9001L).setStatus(CommonStatusEnum.DISABLE.getStatus()));
         assertEquals(AUTH_LOGIN_USER_DISABLED.getCode(), assertThrows(ServiceException.class,
@@ -226,7 +254,7 @@ class MemberImageAccountTest {
                 .setPassword("Test1234").setNickname("legacy").setCode("123456").setAgree(true);
         assertEquals(MallAccountPolicy.IMAGE_REQUIRED.getCode(), assertThrows(ServiceException.class, () -> service.register(request)).getCode());
         assertEquals(MallAccountPolicy.IMAGE_REQUIRED.getCode(), assertThrows(ServiceException.class, () -> service.registerWithVerifiedMobile(request)).getCode());
-        verifyNoInteractions(userService, memberUserMapper, smsCodeApi, customerAffiliations, oauth2TokenApi);
+        verifyNoInteractions(userService, memberUserMapper, smsCodeApi, customerAffiliations, platformAccounts, oauth2TokenApi);
     }
 
     @Test void smsLoginMayAuthenticateExistingPhoneButCannotAutomaticallyOpenAnAccount() {

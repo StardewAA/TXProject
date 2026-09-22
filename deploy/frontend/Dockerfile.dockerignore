@@ -1,0 +1,24 @@
+# 仅本 Dockerfile 生效的上下文裁剪（BuildKit 优先读 <Dockerfile>.dockerignore）。
+# 仓库根 .dockerignore 未排除 .docker-local 等大目录，直接构建会把数 GB 上下文传给 daemon。
+**
+!deploy/
+!deploy/frontend/
+!deploy/frontend/Dockerfile
+!deploy/frontend/nginx.conf
+!txgy-ui-admin-vben/
+!txgy-ui-admin-vben/**
+txgy-ui-admin-vben/node_modules
+txgy-ui-admin-vben/node_modules/**
+txgy-ui-admin-vben/**/node_modules
+txgy-ui-admin-vben/**/node_modules/**
+txgy-ui-admin-vben/.pnpm-store
+txgy-ui-admin-vben/.pnpm-store/**
+txgy-ui-admin-vben/**/.pnpm-store
+txgy-ui-admin-vben/**/.pnpm-store/**
+txgy-ui-admin-vben/.turbo
+txgy-ui-admin-vben/.turbo/**
+txgy-ui-admin-vben/.git
+txgy-ui-admin-vben/.git/**
+txgy-ui-admin-vben/**/dist
+txgy-ui-admin-vben/**/dist/**
+txgy-ui-admin-vben/apps/web-antd/.env.local

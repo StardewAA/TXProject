@@ -14,7 +14,7 @@
       <button class="tenant-entry__primary" size="mini" :disabled="busy || (!target && selectedCurrent)" @tap="enter">
         {{ busy ? '切换中' : target ? '前往注册' : selectedCurrent ? '当前商城' : '进入' }}
       </button>
-      <button v-if="foreign" class="tenant-entry__plain" size="mini" @tap="original">公共商城</button>
+      <button v-if="foreign" class="tenant-entry__plain" size="mini" @tap="original">平台首页</button>
     </view>
     <view v-if="error" class="tenant-entry__error" role="alert">{{ error }}</view>
   </view>
@@ -30,7 +30,7 @@ const props = defineProps({ target: String, purpose: { type: String, default: 'h
 const directory = ref({ enabled: false, tenants: [] }), busy = ref(false), error = ref(''), index = ref(0);
 const current = getControlledTenantId(), foreign = current !== String(tenantId);
 const entries = computed(() => directory.value.tenants.some(t => t.tenantId === String(tenantId)) ? directory.value.tenants
-  : [{ tenantId: String(tenantId), name: '公共商城' }, ...directory.value.tenants]);
+  : [{ tenantId: String(tenantId), name: '平台入口' }, ...directory.value.tenants]);
 const names = computed(() => entries.value.map(t => t.name));
 const currentName = computed(() => entries.value.find(t => t.tenantId === current)?.name || '当前商城');
 const selectedCurrent = computed(() => entries.value[index.value]?.tenantId === current);

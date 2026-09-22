@@ -64,4 +64,11 @@ class AppProductComparisonQuoteControllerTest {
         assertEquals(403, assertThrows(ServiceException.class, () -> controller.quote(request, response)).getCode());
         verifyNoInteractions(quotes);
     }
+
+    @Test
+    void defaultDisclaimerDescribesWmsRecheckWithoutLegacyErpPendingPrompt() {
+        List<String> warnings = new AppProductComparisonQuoteRespVO().getWarnings();
+        assertTrue(warnings.stream().anyMatch(message -> message.contains("WMS") && message.contains("重新复核")));
+        assertTrue(warnings.stream().noneMatch(message -> message.contains("ERP")));
+    }
 }

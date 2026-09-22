@@ -8,13 +8,24 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const loaded = ref(false), busy = ref(false)
 const form = reactive<EnterpriseApplication>({name:'',creditCode:'',licenseData:'',contactName:'',contactMobile:'',address:'',introduction:''})
+const MAX_LICENSE_FILE_BYTES = 1024 * 1024
+const MAX_LICENSE_DATA_CHARS = 1_500_000
 const editable = computed(() => loaded.value && (form.status === undefined || form.status === 2) && !!auth.profile?.memberIdentity)
 async function load() { loaded.value=false; try { await auth.loadProfile(); const row=await enterpriseApi.mine(); Object.assign(form,{id:undefined,status:undefined,enterpriseId:undefined,auditRemark:undefined,name:'',creditCode:'',licenseData:'',contactName:'',contactMobile:'',address:'',introduction:''}); if(row) Object.assign(form,row); loaded.value=true } catch { /* 请求层显示错误；不放行提交 */ } }
 async function license(event: Event) {
-  const file=(event.target as HTMLInputElement).files?.[0]
+  const input=event.target as HTMLInputElement
+  const file=input.files?.[0]
   if(!file) return
-  if(!['image/png','image/jpeg'].includes(file.type) || file.size>1048576) return void ElMessage.warning('请选择1MB以内PNG或JPEG营业执照')
-  const reader=new FileReader(); reader.onload=()=>{if(operation.current())form.licenseData=String(reader.result)}; reader.readAsDataURL(file)
+  if(!['image/png','image/jpeg'].includes(file.type) || file.size>MAX_LICENSE_FILE_BYTES) { input.value=''; return void ElMessage.warning('请选择1MB以内PNG或JPEG营业执照') }
+  const reader=new FileReader()
+  reader.onerror=()=>{input.value='';if(operation.current())ElMessage.error('营业执照图片读取失败，请重新选择')}
+  reader.onload=()=>{
+    if(!operation.current())return
+    const data=String(reader.result)
+    if(data.length>MAX_LICENSE_DATA_CHARS){input.value='';form.licenseData='';return void ElMessage.warning('图片编码后超过提交上限，请压缩后重新选择')}
+    form.licenseData=data
+  }
+  reader.readAsDataURL(file)
 }
 async function submit() {
   if(!editable.value || busy.value) return
@@ -40,8 +51,8 @@ onMounted(load)
       <el-form-item label="企业地址" required><el-input v-model="form.address" maxlength="255" /></el-form-item><el-form-item label="企业介绍"><el-input v-model="form.introduction" type="textarea" maxlength="1024" :rows="4" /></el-form-item>
       <el-button v-if="editable" type="primary" :loading="busy" @click="submit">{{ form.status===2?'修改并重新提交':'提交后台审核' }}</el-button>
     </el-form>
-    <nav><MallLink to="/purchase">采购中心</MallLink><MallLink v-if="auth.profile?.memberIdentity==='supplier'" to="/sales">销售中心</MallLink><MallLink to="/member">普通会员中心</MallLink></nav>
-    <p class="note">平台审核不代表外部工商认证；供应商审核通过后还须关联店铺才能经营。</p>
+    <nav><MallLink to="/purchase">采购中心</MallLink><MallLink to="/member">普通会员中心</MallLink></nav>
+    <p class="note">平台审核不代表外部工商认证；供应企业的店铺经营、商品、报价和销售订单统一在后台管理端办理，并由平台单独配置后台账号及授权范围。</p>
   </div>
 </template>
 <style scoped>

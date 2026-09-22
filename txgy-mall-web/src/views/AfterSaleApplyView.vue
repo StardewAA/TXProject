@@ -14,6 +14,7 @@ import { useAccountOperation } from '@/composables/useAccountOperation'
 
 const route = useRoute()
 const router = useRouter()
+const enterpriseMode = computed(() => route.path.startsWith('/purchase/after-sales'))
 const order = ref<TradeOrder | null>(null)
 const item = ref<OrderItem | null>(null)
 const loading = ref(true)
@@ -36,7 +37,7 @@ async function submit() {
   if (refundPrice.value <= 0) return ElMessage.warning('退款金额无效')
   submitting.value = true
   try {
-    await tradeApi.createAfterSale({
+    await (enterpriseMode.value ? tradeApi.createPurchaseAfterSale : tradeApi.createAfterSale)({
       orderItemId: item.value.id,
       way: form.way,
       refundPrice: refundPrice.value,
@@ -58,7 +59,10 @@ async function load() {
   const itemId = String(route.query.itemId || '')
   if (!orderId || !itemId) { loading.value = false; return }
   try {
-    const [orderData, configData] = await Promise.all([tradeApi.getOrder(orderId), tradeApi.getConfig()])
+    const [orderData, configData] = await Promise.all([
+      enterpriseMode.value ? tradeApi.getPurchaseOrder(orderId) : tradeApi.getOrder(orderId),
+      tradeApi.getConfig(),
+    ])
     if (!accountOperation.current()) return
     order.value = orderData
     item.value = orderData.items?.find((entry) => String(entry.id) === itemId) || null
@@ -72,10 +76,11 @@ onMounted(load)
 </script>
 
 <template>
-  <MemberPage title="申请售后" description="提交后可在 PC 与移动端查看处理进度">
+  <MemberPage title="申请售后" :description="enterpriseMode ? '企业售后资金操作仅限实际下单人，处理进度对同企业采购成员可见' : '提交后可在 PC 与移动端查看处理进度'">
     <div v-if="loading" class="loading-box"><el-skeleton :rows="8" animated /></div>
     <el-result v-else-if="loadError" icon="warning" title="暂时无法申请售后" :sub-title="loadError"><template #extra><el-button @click="load">重新加载</el-button></template></el-result>
     <el-result v-else-if="!item" icon="warning" title="订单商品不存在" sub-title="请从订单详情重新进入"><template #extra><el-button @click="router.push(buyerTo('/member/orders'))">返回订单</el-button></template></el-result>
+    <el-result v-else-if="enterpriseMode && order?.createdByCurrentMember === false" icon="info" title="仅实际下单人可申请售后" sub-title="您可以在企业采购售后页面查看该订单的处理记录，但不能代替付款会员发起退款。"><template #extra><el-button @click="router.push('/purchase/after-sales')">查看企业采购售后</el-button></template></el-result>
     <template v-else>
       <div class="apply-product"><div><img v-if="item.picUrl" :src="normalizeImage(item.picUrl)" alt="商品" /></div><section><strong>{{ item.spuName || '商品' }}</strong><p>{{ propertyText(item.properties) }}</p><span>购买数量：{{ item.count }}</span></section><b>可申请金额 ¥{{ formatMoney(refundPrice) }}</b></div>
       <el-form class="apply-form" label-position="top"><el-form-item label="售后方式"><el-radio-group v-model="form.way"><el-radio-button v-for="option in wayOptions" :key="option.value" :value="option.value">{{ option.label }}</el-radio-button></el-radio-group></el-form-item><el-form-item label="申请原因"><el-select v-model="form.applyReason" placeholder="请选择原因"><el-option v-for="reason in reasons" :key="reason" :label="reason" :value="reason" /></el-select></el-form-item><el-form-item label="补充说明"><el-input v-model="form.applyDescription" type="textarea" :rows="5" maxlength="500" show-word-limit /></el-form-item><el-form-item label="凭证图片地址"><el-input v-model="form.applyPicUrlsText" type="textarea" :rows="3" placeholder="可选；多个已上传图片地址使用逗号或换行分隔" /></el-form-item><el-button type="primary" size="large" :loading="submitting" @click="submit">提交售后申请</el-button></el-form>

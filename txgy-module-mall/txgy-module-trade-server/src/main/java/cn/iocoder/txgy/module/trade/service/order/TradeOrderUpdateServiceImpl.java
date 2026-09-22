@@ -26,8 +26,16 @@ import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.pay.enums.refund.PayRefundStatusEnum;
 import cn.iocoder.txgy.module.product.api.comment.ProductCommentApi;
 import cn.iocoder.txgy.module.product.api.comment.dto.ProductCommentCreateReqDTO;
+import cn.iocoder.txgy.module.product.api.inquiry.ProductInquiryApi;
+import cn.iocoder.txgy.module.product.api.inquiry.dto.InquiryAcceptedQuoteRespDTO;
+import cn.iocoder.txgy.module.product.api.sku.ProductSkuApi;
+import cn.iocoder.txgy.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
 import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
+import cn.iocoder.txgy.module.product.api.spu.ProductSpuApi;
+import cn.iocoder.txgy.module.product.api.spu.dto.ProductSpuRespDTO;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.promotion.api.combination.CombinationRecordApi;
 import cn.iocoder.txgy.module.promotion.api.combination.dto.CombinationRecordRespDTO;
 import cn.iocoder.txgy.module.promotion.enums.combination.CombinationRecordStatusEnum;
@@ -37,9 +45,11 @@ import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderDelivery
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderRemarkReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderUpdateAddressReqVO;
 import cn.iocoder.txgy.module.trade.controller.admin.order.vo.TradeOrderUpdatePriceReqVO;
+import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeInquiryOrderCreateReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderCreateReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderSettlementReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderSettlementRespVO;
+import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderUpdateAddressReqVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.item.AppTradeOrderItemCommentCreateReqVO;
 import cn.iocoder.txgy.module.trade.convert.order.TradeOrderConvert;
 import cn.iocoder.txgy.module.trade.dal.dataobject.cart.CartDO;
@@ -65,10 +75,14 @@ import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateReqBO;
 import cn.iocoder.txgy.module.trade.service.price.bo.TradePriceCalculateRespBO;
 import cn.iocoder.txgy.module.trade.service.price.calculator.TradePriceCalculatorHelper;
+import cn.iocoder.txgy.module.trade.service.price.calculator.TradeDeliveryPriceCalculator;
+import cn.iocoder.txgy.module.trade.service.wms.TradeWmsStockService;
+import cn.iocoder.txgy.module.trade.service.wms.TradeWmsOutboundService;
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,6 +90,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -106,9 +121,6 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         if (workbenchJournal != null) workbenchJournal.changed(orderId);
     }
     @Resource
-    private cn.iocoder.txgy.module.trade.service.erp.TradeErpInventoryService erpInventory;
-
-    @Resource
     private TradeOrderMapper tradeOrderMapper;
     @Resource
     private TradeOrderItemMapper tradeOrderItemMapper;
@@ -138,6 +150,14 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Resource
     private ProductShopApi productShopApi;
     @Resource
+    private ProductSkuApi productSkuApi;
+    @Resource
+    private ProductSpuApi productSpuApi;
+    @Resource
+    private ProductInquiryApi productInquiryApi;
+    @Resource
+    private TradeDeliveryPriceCalculator deliveryPriceCalculator;
+    @Resource
     public SocialClientApi socialClientApi;
     @Resource
     public PayRefundApi payRefundApi;
@@ -148,6 +168,10 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     private TradeOrderProperties tradeOrderProperties;
     @Resource
     private TradeOrderPaymentDeadlineService paymentDeadline;
+    @Resource
+    private TradeWmsStockService wmsStockService;
+    @Resource
+    private TradeWmsOutboundService wmsOutboundService;
 
     // =================== Order ===================
 
@@ -161,6 +185,10 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
         // 2. 计算价格
         TradePriceCalculateRespBO calculateRespBO = calculatePrice(userId, settlementReqVO);
+        requireSingleShop(calculateRespBO);
+        wmsStockService.validateSkuCounts(calculateRespBO.getItems().stream().collect(
+                java.util.stream.Collectors.toMap(TradePriceCalculateRespBO.OrderItem::getSkuId,
+                        TradePriceCalculateRespBO.OrderItem::getCount, Math::addExact, LinkedHashMap::new)));
 
         // 3. 拼接返回
         return TradeOrderConvert.INSTANCE.convert(calculateRespBO, address);
@@ -203,17 +231,92 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Transactional(rollbackFor = Exception.class)
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_CREATE)
     public TradeOrderDO createOrder(Long userId, AppTradeOrderCreateReqVO createReqVO) {
+        requireWritableTenant();
         // 1.1 价格计算
         TradePriceCalculateRespBO calculateRespBO = calculatePrice(userId, createReqVO);
+        return createCalculatedOrder(userId, createReqVO, calculateRespBO, null);
+    }
+
+    @Override
+    public AppTradeOrderSettlementRespVO settlementInquiryOrder(Long userId, Long quoteId, Long addressId) {
+        InquiryAcceptedQuoteRespDTO quote = getAcceptedInquiryQuote(userId, quoteId);
+        MemberAddressRespDTO address = getAddress(userId, addressId);
+        Assert.notNull(address, "地址({}) 不能为空", addressId);
+        AppTradeOrderCreateReqVO createReqVO = buildInquiryOrderRequest(quote, address.getId(), null);
+        TradePriceCalculateRespBO calculateRespBO = calculateInquiryPrice(userId, quote, createReqVO);
+        requireSingleShop(calculateRespBO);
+        wmsStockService.validateSkuCounts(calculateRespBO.getItems().stream().collect(
+                java.util.stream.Collectors.toMap(TradePriceCalculateRespBO.OrderItem::getSkuId,
+                        TradePriceCalculateRespBO.OrderItem::getCount, Math::addExact, LinkedHashMap::new)));
+        return TradeOrderConvert.INSTANCE.convert(calculateRespBO, address);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_CREATE)
+    public TradeOrderDO createInquiryOrder(Long userId, AppTradeInquiryOrderCreateReqVO createReqVO) {
+        requireWritableTenant();
+        // 先由商品服务验证当前会员属于采购企业，再按报价做企业级幂等查询。
+        // 不能按 userId 查询，否则同企业另一名采购员会撞上数据库唯一键却取不到原订单。
+        InquiryAcceptedQuoteRespDTO quote = getAcceptedInquiryQuote(userId, createReqVO.getQuoteId());
+        TradeOrderDO existing = tradeOrderMapper.selectByInquiryQuoteId(createReqVO.getQuoteId());
+        if (existing != null) {
+            validateInquiryOrderEnterprise(existing, quote);
+            log.info("[createInquiryOrder][quoteId({}) requestKey({}) 已生成订单({})，直接返回]",
+                    createReqVO.getQuoteId(), createReqVO.getRequestKey(), existing.getId());
+            return existing;
+        }
+        AppTradeOrderCreateReqVO standardReqVO = buildInquiryOrderRequest(
+                quote, createReqVO.getAddressId(), createReqVO.getRemark());
+        TradePriceCalculateRespBO calculateRespBO = calculateInquiryPrice(userId, quote, standardReqVO);
+        try {
+            return createCalculatedOrder(userId, standardReqVO, calculateRespBO, quote);
+        } catch (DuplicateKeyException duplicate) {
+            // 数据库唯一键是跨实例并发下的最终防线。
+            existing = tradeOrderMapper.selectByInquiryQuoteIdForUpdate(createReqVO.getQuoteId());
+            if (existing != null) {
+                validateInquiryOrderEnterprise(existing, quote);
+                return existing;
+            }
+            throw duplicate;
+        }
+    }
+
+    @Override
+    public TradeOrderDO getInquiryOrder(Long userId, Long quoteId) {
+        InquiryAcceptedQuoteRespDTO quote = getAcceptedInquiryQuote(userId, quoteId);
+        TradeOrderDO order = tradeOrderMapper.selectByInquiryQuoteId(quoteId);
+        if (order != null) {
+            validateInquiryOrderEnterprise(order, quote);
+        }
+        return order;
+    }
+
+    private TradeOrderDO createCalculatedOrder(Long userId, AppTradeOrderCreateReqVO createReqVO,
+                                               TradePriceCalculateRespBO calculateRespBO,
+                                               InquiryAcceptedQuoteRespDTO inquiryQuote) {
+        // 店铺归属只信任商品服务价格计算结果，不能使用客户端参数。现有订单状态和物流字段属于父单，
+        // 因此首版必须按店分别下单；平台自营 0 与企业店铺混合也属于跨店。
+        Long orderShopId = requireSingleShop(calculateRespBO);
         // 1.2 构建订单
         TradeOrderDO order = buildTradeOrder(userId, createReqVO, calculateRespBO);
+        if (inquiryQuote != null) {
+            order.setSourceType(TradeOrderDO.SOURCE_TYPE_INQUIRY)
+                    .setInquiryId(inquiryQuote.getInquiryId())
+                    .setInquiryQuoteId(inquiryQuote.getQuoteId())
+                    .setInquiryQuoteVersion(inquiryQuote.getVersion())
+                    .setBuyerEnterpriseId(inquiryQuote.getBuyerEnterpriseId());
+        }
         List<TradeOrderItemDO> orderItems = buildTradeOrderItems(order, calculateRespBO);
+        // 创建订单前再次读取 WMS，防止结算页停留期间继续沿用旧库存摘要。
+        wmsStockService.validateAvailable(orderItems);
         // 平台自营也参与分组，避免自营和商家混合订单被错误归为单店铺订单。
         orderItems.forEach(item -> item.setShopId(item.getShopId() == null ? 0L : item.getShopId()));
         Set<Long> orderShopIds = convertSet(orderItems, TradeOrderItemDO::getShopId);
-        if (orderShopIds.size() == 1) {
-            order.setShopId(orderShopIds.iterator().next());
+        if (orderShopIds.size() != 1 || !orderShopIds.contains(orderShopId)) {
+            throw exception(ORDER_CREATE_FAIL_MULTI_SHOP);
         }
+        order.setShopId(orderShopId);
         // 订单和订单项都保存店铺快照。后续店铺名称变更或列表跨服务查询时，
         // 仍能稳定显示下单时的归属；查询失败时使用可识别的降级名称，不阻断下单。
         fillShopSnapshots(order, orderItems);
@@ -231,10 +334,165 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         return order;
     }
 
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
+    }
+
+    static Long requireSingleShop(TradePriceCalculateRespBO calculateRespBO) {
+        if (calculateRespBO == null || CollUtil.isEmpty(calculateRespBO.getItems())) {
+            throw exception(ORDER_CREATE_FAIL_MULTI_SHOP);
+        }
+        Set<Long> shopIds = calculateRespBO.getItems().stream()
+                .map(item -> item.getShopId() == null ? 0L : item.getShopId())
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (shopIds.size() != 1) {
+            throw exception(ORDER_CREATE_FAIL_MULTI_SHOP);
+        }
+        return shopIds.iterator().next();
+    }
+
+    private InquiryAcceptedQuoteRespDTO getAcceptedInquiryQuote(Long userId, Long quoteId) {
+        CommonResult<InquiryAcceptedQuoteRespDTO> result = productInquiryApi.getAcceptedQuote(userId, quoteId);
+        InquiryAcceptedQuoteRespDTO quote = result == null ? null : result.getCheckedData();
+        if (quote == null) {
+            throw exception(ORDER_INQUIRY_QUOTE_NOT_AVAILABLE);
+        }
+        validateAcceptedInquiryQuote(userId, quoteId, quote);
+        return quote;
+    }
+
+    private AppTradeOrderCreateReqVO buildInquiryOrderRequest(InquiryAcceptedQuoteRespDTO quote,
+                                                              Long addressId, String remark) {
+        AppTradeOrderCreateReqVO reqVO = new AppTradeOrderCreateReqVO();
+        reqVO.setAddressId(addressId);
+        reqVO.setDeliveryType(DeliveryTypeEnum.EXPRESS.getType());
+        reqVO.setPointStatus(false);
+        reqVO.setRemark(remark);
+        List<AppTradeOrderSettlementReqVO.Item> items = new ArrayList<>(quote.getItems().size());
+        for (InquiryAcceptedQuoteRespDTO.Item quoteItem : quote.getItems()) {
+            AppTradeOrderSettlementReqVO.Item item = new AppTradeOrderSettlementReqVO.Item();
+            item.setSkuId(quoteItem.getSkuId());
+            item.setCount(quoteItem.getCount());
+            items.add(item);
+        }
+        reqVO.setItems(items);
+        return reqVO;
+    }
+
+    private TradePriceCalculateRespBO calculateInquiryPrice(Long userId, InquiryAcceptedQuoteRespDTO quote,
+                                                            AppTradeOrderCreateReqVO createReqVO) {
+        // 先走标准价格链路，取得经过上下架、库存、配送方式校验的可信商品元数据。
+        TradePriceCalculateRespBO calculateRespBO = calculatePrice(userId, createReqVO);
+        // 成交价只能来自商品服务返回的已采纳不可变快照，不能接受客户端价格。
+        applyAcceptedInquiryQuotePrice(userId, quote, calculateRespBO);
+
+        // 报价成交不参与活动包邮；在成交价基础上重新执行普通全局/模板运费规则。
+        TradePriceCalculateReqBO deliveryReqBO = new TradePriceCalculateReqBO();
+        deliveryReqBO.setUserId(userId);
+        deliveryReqBO.setPointStatus(false);
+        deliveryReqBO.setDeliveryType(DeliveryTypeEnum.EXPRESS.getType());
+        deliveryReqBO.setAddressId(createReqVO.getAddressId());
+        deliveryPriceCalculator.calculate(deliveryReqBO, calculateRespBO);
+        if (calculateRespBO.getPrice().getPayPrice() == null || calculateRespBO.getPrice().getPayPrice() <= 0) {
+            throw exception(ORDER_INQUIRY_QUOTE_INVALID, "成交金额必须大于 0");
+        }
+        return calculateRespBO;
+    }
+
+    static void validateAcceptedInquiryQuote(Long userId, Long requestedQuoteId,
+                                             InquiryAcceptedQuoteRespDTO quote) {
+        if (quote.getQuoteId() == null || quote.getInquiryId() == null || quote.getBuyerEnterpriseId() == null
+                || quote.getBuyerMemberId() == null
+                || quote.getShopId() == null || quote.getVersion() == null
+                || quote.getQuoteId() <= 0 || quote.getInquiryId() <= 0 || quote.getBuyerEnterpriseId() <= 0
+                || quote.getShopId() <= 0
+                || quote.getVersion() <= 0) {
+            throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价主信息缺失");
+        }
+        if (!Objects.equals(requestedQuoteId, quote.getQuoteId())) {
+            throw exception(ORDER_INQUIRY_QUOTE_INVALID, "返回的报价编号不一致");
+        }
+        if (!Objects.equals(userId, quote.getBuyerMemberId())) {
+            throw exception(ORDER_INQUIRY_QUOTE_BUYER_MISMATCH);
+        }
+        if (CollUtil.isEmpty(quote.getItems())) {
+            throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价商品不能为空");
+        }
+        Set<Long> inquiryItemIds = new java.util.HashSet<>();
+        Set<Long> skuIds = new java.util.HashSet<>();
+        for (InquiryAcceptedQuoteRespDTO.Item item : quote.getItems()) {
+            if (item == null || item.getInquiryItemId() == null || item.getSkuId() == null
+                    || item.getCount() == null || item.getUnitPrice() == null
+                    || item.getInquiryItemId() <= 0 || item.getSkuId() <= 0
+                    || item.getCount() <= 0 || item.getUnitPrice() <= 0) {
+                throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价商品编号、数量或单价不合法");
+            }
+            if (!inquiryItemIds.add(item.getInquiryItemId()) || !skuIds.add(item.getSkuId())) {
+                throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价商品存在重复行");
+            }
+        }
+    }
+
+    private static void validateInquiryOrderEnterprise(TradeOrderDO order,
+                                                       InquiryAcceptedQuoteRespDTO quote) {
+        if (!Objects.equals(order.getBuyerEnterpriseId(), quote.getBuyerEnterpriseId())) {
+            throw exception(ORDER_INQUIRY_ORDER_ENTERPRISE_MISMATCH);
+        }
+    }
+
+    static void applyAcceptedInquiryQuotePrice(Long userId, InquiryAcceptedQuoteRespDTO quote,
+                                               TradePriceCalculateRespBO calculateRespBO) {
+        validateAcceptedInquiryQuote(userId, quote.getQuoteId(), quote);
+        if (calculateRespBO == null || calculateRespBO.getPrice() == null
+                || calculateRespBO.getItems() == null
+                || calculateRespBO.getItems().size() != quote.getItems().size()) {
+            throw exception(ORDER_INQUIRY_QUOTE_INVALID, "商城商品与报价商品不一致");
+        }
+        Map<Long, InquiryAcceptedQuoteRespDTO.Item> quoteItemMap = new LinkedHashMap<>();
+        quote.getItems().forEach(item -> quoteItemMap.put(item.getSkuId(), item));
+        long quotedTotal = 0L;
+        for (TradePriceCalculateRespBO.OrderItem orderItem : calculateRespBO.getItems()) {
+            InquiryAcceptedQuoteRespDTO.Item quoteItem = quoteItemMap.get(orderItem.getSkuId());
+            if (quoteItem == null || !Objects.equals(quoteItem.getCount(), orderItem.getCount())) {
+                throw exception(ORDER_INQUIRY_QUOTE_INVALID, "商城商品规格或数量与报价不一致");
+            }
+            long itemTotal;
+            try {
+                itemTotal = Math.multiplyExact((long) quoteItem.getUnitPrice(), quoteItem.getCount());
+                quotedTotal = Math.addExact(quotedTotal, itemTotal);
+            } catch (ArithmeticException overflow) {
+                throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价金额超出订单金额范围");
+            }
+            if (itemTotal > Integer.MAX_VALUE || quotedTotal > Integer.MAX_VALUE) {
+                throw exception(ORDER_INQUIRY_QUOTE_INVALID, "报价金额超出订单金额范围");
+            }
+            long itemShopId = orderItem.getShopId() == null ? 0L : orderItem.getShopId();
+            if (itemShopId != quote.getShopId()) {
+                throw exception(ORDER_INQUIRY_QUOTE_SHOP_MISMATCH);
+            }
+            orderItem.setPrice(quoteItem.getUnitPrice())
+                    .setDiscountPrice(0).setDeliveryPrice(0).setCouponPrice(0)
+                    .setPointPrice(0).setUsePoint(0).setGivePoint(0).setVipPrice(0)
+                    .setPayPrice((int) itemTotal);
+        }
+        calculateRespBO.setType(TradeOrderTypeEnum.NORMAL.getType());
+        calculateRespBO.setCouponId(null);
+        calculateRespBO.setCoupons(new ArrayList<>());
+        calculateRespBO.setPromotions(new ArrayList<>());
+        calculateRespBO.setUsePoint(0);
+        calculateRespBO.setTotalPoint(0);
+        calculateRespBO.setGivePoint(0);
+        calculateRespBO.setBargainActivityId(null);
+        calculateRespBO.setFreeDelivery(false);
+        calculateRespBO.setGiveCouponTemplateCounts(new LinkedHashMap<>());
+        TradePriceCalculatorHelper.recountAllPrice(calculateRespBO);
+    }
+
     private TradeOrderDO buildTradeOrder(Long userId, AppTradeOrderCreateReqVO createReqVO,
                                          TradePriceCalculateRespBO calculateRespBO) {
         TradeOrderDO order = TradeOrderConvert.INSTANCE.convert(userId, createReqVO, calculateRespBO);
         order.setType(calculateRespBO.getType());
+        order.setSourceType(TradeOrderDO.SOURCE_TYPE_NORMAL);
         order.setNo(tradeNoRedisDAO.generate(TradeNoRedisDAO.TRADE_ORDER_NO_PREFIX));
         order.setStatus(TradeOrderStatusEnum.UNPAID.getStatus());
         order.setRefundStatus(TradeOrderRefundStatusEnum.NONE.getStatus());
@@ -334,7 +592,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
         // 3. 生成预支付
         // 特殊情况：积分兑换时，可能支付金额为零
-        if (order.getPayPrice() > 0 && erpInventory.paymentReady(order.getId())) {
+        if (order.getPayPrice() > 0) {
             createPayOrder(order, orderItems);
         }
 
@@ -362,33 +620,6 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         order.setPayExpireTime(payOrder.getExpireTime());
         tradeOrderMapper.updateById(new TradeOrderDO().setId(order.getId()).setPayOrderId(payOrderId)
                 .setPayExpireTime(order.getPayExpireTime()));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void continueAfterErpReservation(Long id) {
-        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(id);
-        if (order == null || !TradeOrderStatusEnum.isUnpaid(order.getStatus())
-                || Boolean.TRUE.equals(order.getPayStatus())) return;
-        LocalDateTime now = LocalDateTime.now();
-        if (paymentDeadline.isErpWaitExpired(order, now)) {
-            // 不一致数据已有支付编号但缺少支付期限时，不能跳过资金核实直接取消。
-            if (order.getPayOrderId() != null) return;
-            // 即使扫描尚未执行，迟到的 ERP 确认也不能复活支付窗口；取消后沿用 ERP 释放。
-            cancelOrder0(order, TradeOrderCancelTypeEnum.ERP_WAIT_TIMEOUT);
-            return;
-        }
-        if (!erpInventory.paymentReady(id)) return;
-        if (order.getPayOrderId() == null && order.getPayPrice() > 0) {
-            if (!paymentDeadline.isNewRule(order)) {
-                LocalDateTime legacyDeadline = paymentDeadline.legacyDeadlineWithoutPayOrder(order);
-                if (legacyDeadline == null || !now.isBefore(legacyDeadline)) {
-                    cancelOrder0(order, TradeOrderCancelTypeEnum.PAY_TIMEOUT);
-                    return;
-                }
-            }
-            createPayOrder(order, tradeOrderItemMapper.selectListByOrderId(id));
-        }
     }
 
     @Override
@@ -508,12 +739,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             // 2.2 无需发货
             updateOrderObj.setLogisticsId(0L).setLogisticsNo("");
         }
-        // 提交并持久化 ERP 出库请求；待确认时正常返回，订单仍为待发货。
-        var erpRequest = erpInventory.request(order,
-                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.OUTBOUND, "DELIVERY",
-                tradeOrderItemMapper.selectListByOrderId(order.getId()),
-                updateOrderObj.getLogisticsId(), updateOrderObj.getLogisticsNo());
-        if (!erpRequest.confirmed()) return;
+        // 方案二可能拆成多张 WMS 申请；必须全部执行完成，商城主订单才能确认发货。
+        wmsOutboundService.validateCompleted(order.getId());
         // 执行更新
         updateOrderObj.setStatus(TradeOrderStatusEnum.DELIVERED.getStatus()).setDeliveryTime(LocalDateTime.now());
         int updateCount = tradeOrderMapper.updateByIdAndStatus(order.getId(), order.getStatus(), updateOrderObj);
@@ -750,12 +977,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         if (order == null || !TradeOrderStatusEnum.isUnpaid(order.getStatus())
                 || Boolean.TRUE.equals(order.getPayStatus())) return false;
         LocalDateTime now = LocalDateTime.now();
-        if (paymentDeadline.isErpWaitExpired(order, now) && order.getPayOrderId() == null) {
-            cancelOrder0(order, TradeOrderCancelTypeEnum.ERP_WAIT_TIMEOUT);
-            return true;
-        }
         if (order.getPayOrderId() == null) {
-            if (paymentDeadline.isNewRule(order)) return false;
             LocalDateTime legacyDeadline = paymentDeadline.legacyDeadlineWithoutPayOrder(order);
             if (legacyDeadline == null || now.isBefore(legacyDeadline)) return false;
         } else {
@@ -834,6 +1056,11 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         if (order == null) {
             throw exception(ORDER_NOT_FOUND);
         }
+        // 已采纳报价永久只能转换一张订单。保留取消订单记录，避免通过逻辑删除
+        // 绕过 inquiry_quote_id 幂等边界，同时保留报价、订单与后续对账的追溯链。
+        if (TradeOrderDO.SOURCE_TYPE_INQUIRY.equals(order.getSourceType())) {
+            throw exception(ORDER_INQUIRY_ORDER_DELETE_FORBIDDEN);
+        }
         // 1.2 校验状态
         if (ObjectUtil.notEqual(order.getStatus(), TradeOrderStatusEnum.CANCELED.getStatus())) {
             throw exception(ORDER_DELETE_FAIL_STATUS_NOT_CANCEL);
@@ -861,6 +1088,10 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     public void updateOrderPrice(TradeOrderUpdatePriceReqVO reqVO) {
         // 1.1 校验交易订单
         TradeOrderDO order = validateOrderExists(reqVO.getId());
+        // 询价成交价是采购方采纳的报价快照，不允许通用后台调价绕过报价版本和采纳流程。
+        if (TradeOrderDO.SOURCE_TYPE_INQUIRY.equals(order.getSourceType())) {
+            throw exception(ORDER_INQUIRY_ORDER_PRICE_CHANGE_FORBIDDEN);
+        }
         if (order.getPayStatus()) {
             throw exception(ORDER_UPDATE_PRICE_FAIL_PAID);
         }
@@ -920,6 +1151,120 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_UPDATE_ADDRESS)
+    public void updateOrderAddressByMember(Long userId, AppTradeOrderUpdateAddressReqVO reqVO) {
+        updateOrderAddressByBuyer(userId, null, reqVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.MEMBER_UPDATE_ADDRESS)
+    public void updateInquiryOrderAddressByEnterprise(Long memberId, Long buyerEnterpriseId,
+                                                       AppTradeOrderUpdateAddressReqVO reqVO) {
+        updateOrderAddressByBuyer(memberId, buyerEnterpriseId, reqVO);
+    }
+
+    private void updateOrderAddressByBuyer(Long actorMemberId, Long buyerEnterpriseId,
+                                           AppTradeOrderUpdateAddressReqVO reqVO) {
+        TradeOrderDO order = tradeOrderMapper.selectByIdForUpdate(reqVO.getId());
+        boolean personalOrder = buyerEnterpriseId == null && order != null
+                && Objects.equals(order.getUserId(), actorMemberId);
+        boolean enterpriseInquiryOrder = buyerEnterpriseId != null && order != null
+                && TradeOrderDO.SOURCE_TYPE_INQUIRY.equals(order.getSourceType())
+                && Objects.equals(order.getBuyerEnterpriseId(), buyerEnterpriseId);
+        if (!personalOrder && !enterpriseInquiryOrder) {
+            throw exception(ORDER_NOT_FOUND);
+        }
+        if (!TradeOrderStatusEnum.isUnpaid(order.getStatus()) || Boolean.TRUE.equals(order.getPayStatus())) {
+            throw exception(ORDER_UPDATE_ADDRESS_FAIL_STATUS_NOT_UNPAID);
+        }
+        if (!DeliveryTypeEnum.EXPRESS.getType().equals(order.getDeliveryType())) {
+            throw exception(ORDER_UPDATE_ADDRESS_FAIL_NOT_EXPRESS);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (order.getPayOrderId() == null || order.getPayExpireTime() == null
+                || !now.isBefore(order.getPayExpireTime())) {
+            throw exception(ORDER_UPDATE_ADDRESS_FAIL_PAYMENT_UNAVAILABLE);
+        }
+
+        MemberAddressRespDTO address = addressApi.getAddress(reqVO.getAddressId(), actorMemberId).getCheckedData();
+        if (address == null) {
+            throw exception(ORDER_UPDATE_ADDRESS_FAIL_PAYMENT_UNAVAILABLE);
+        }
+        List<TradeOrderItemDO> orderItems = tradeOrderItemMapper.selectListByOrderId(order.getId());
+        TradePriceCalculateRespBO delivery = calculateExistingOrderDelivery(actorMemberId, address.getId(), orderItems);
+        int oldDeliveryPrice = ObjectUtil.defaultIfNull(order.getDeliveryPrice(), 0);
+        int newDeliveryPrice = delivery.getPrice().getDeliveryPrice();
+        int newPayPrice = order.getPayPrice() - oldDeliveryPrice + newDeliveryPrice;
+        if (newPayPrice <= 0) {
+            throw exception(ORDER_UPDATE_PRICE_FAIL_PRICE_ERROR);
+        }
+
+        // 支付模块在行锁下确认仍为待付款且没有任何支付尝试；金额不变也必须执行此校验。
+        payOrderApi.updatePayOrderPrice(order.getPayOrderId(), newPayPrice).checkError();
+
+        TradeOrderDO update = new TradeOrderDO().setId(order.getId())
+                .setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
+                .setReceiverAreaId(address.getAreaId()).setReceiverDetailAddress(address.getDetailAddress())
+                .setDeliveryPrice(newDeliveryPrice).setPayPrice(newPayPrice);
+        TradeOrderAddressSnapshot.copy(address, update);
+        int changed = buyerEnterpriseId == null
+                ? tradeOrderMapper.updateUnpaidAddressAndPrice(update, actorMemberId)
+                : tradeOrderMapper.updateEnterpriseInquiryUnpaidAddressAndPrice(update, buyerEnterpriseId);
+        if (changed != 1) {
+            throw exception(ORDER_UPDATE_ADDRESS_FAIL_STATUS_NOT_UNPAID);
+        }
+
+        List<TradeOrderItemDO> itemUpdates = new ArrayList<>(orderItems.size());
+        for (int i = 0; i < orderItems.size(); i++) {
+            TradeOrderItemDO item = orderItems.get(i);
+            int oldItemDelivery = ObjectUtil.defaultIfNull(item.getDeliveryPrice(), 0);
+            int newItemDelivery = delivery.getItems().get(i).getDeliveryPrice();
+            itemUpdates.add(new TradeOrderItemDO().setId(item.getId())
+                    .setDeliveryPrice(newItemDelivery)
+                    .setPayPrice(item.getPayPrice() - oldItemDelivery + newItemDelivery));
+        }
+        tradeOrderItemMapper.updateBatch(itemUpdates);
+        workbenchChanged(order.getId());
+        TradeOrderLogUtils.setOrderInfo(order.getId(), order.getStatus(), order.getStatus(),
+                MapUtil.<String, Object>builder()
+                        .put("oldPayPrice", MoneyUtils.fenToYuanStr(order.getPayPrice()))
+                        .put("newPayPrice", MoneyUtils.fenToYuanStr(newPayPrice)).build());
+    }
+
+    /** 保留已锁定的商品、优惠和积分分摊，仅按新地址及当前运费模板重新计算运费。 */
+    private TradePriceCalculateRespBO calculateExistingOrderDelivery(Long userId, Long addressId,
+                                                                      List<TradeOrderItemDO> orderItems) {
+        Map<Long, ProductSkuRespDTO> skuMap = productSkuApi.getSkuMap(convertSet(orderItems, TradeOrderItemDO::getSkuId));
+        Map<Long, ProductSpuRespDTO> spuMap = productSpuApi.getSpuMap(convertSet(orderItems, TradeOrderItemDO::getSpuId));
+        List<TradePriceCalculateRespBO.OrderItem> items = new ArrayList<>(orderItems.size());
+        for (TradeOrderItemDO source : orderItems) {
+            ProductSkuRespDTO sku = skuMap.get(source.getSkuId());
+            ProductSpuRespDTO spu = spuMap.get(source.getSpuId());
+            if (sku == null || spu == null) {
+                throw exception(ORDER_ITEM_NOT_FOUND);
+            }
+            int oldDelivery = ObjectUtil.defaultIfNull(source.getDeliveryPrice(), 0);
+            items.add(new TradePriceCalculateRespBO.OrderItem()
+                    .setSpuId(source.getSpuId()).setSkuId(source.getSkuId()).setCount(source.getCount()).setSelected(true)
+                    .setPrice(source.getPrice()).setDiscountPrice(ObjectUtil.defaultIfNull(source.getDiscountPrice(), 0))
+                    .setDeliveryPrice(0).setCouponPrice(ObjectUtil.defaultIfNull(source.getCouponPrice(), 0))
+                    .setPointPrice(ObjectUtil.defaultIfNull(source.getPointPrice(), 0))
+                    .setVipPrice(ObjectUtil.defaultIfNull(source.getVipPrice(), 0))
+                    .setPayPrice(source.getPayPrice() - oldDelivery)
+                    .setDeliveryTypes(spu.getDeliveryTypes()).setDeliveryTemplateId(spu.getDeliveryTemplateId())
+                    .setWeight(sku.getWeight()).setVolume(sku.getVolume()));
+        }
+        TradePriceCalculateRespBO result = new TradePriceCalculateRespBO()
+                .setItems(items).setPrice(new TradePriceCalculateRespBO.Price()).setFreeDelivery(false);
+        TradePriceCalculatorHelper.recountAllPrice(result);
+        deliveryPriceCalculator.calculate(new TradePriceCalculateReqBO().setUserId(userId)
+                .setAddressId(addressId).setDeliveryType(DeliveryTypeEnum.EXPRESS.getType()), result);
+        return result;
+    }
+
+    @Override
     @TradeOrderLog(operateType = TradeOrderOperateTypeEnum.ADMIN_PICK_UP_RECEIVE)
     public void pickUpOrderByAdmin(Long userId, Long id) {
         getSelf().pickUpOrder(userId, tradeOrderMapper.selectById(id));
@@ -961,10 +1306,7 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
             throw exception(ORDER_PICK_UP_FAIL_NOT_VERIFY_USER);
         }
 
-        var erpRequest = erpInventory.request(order,
-                cn.iocoder.txgy.module.trade.service.erp.ErpInventoryModels.Operation.OUTBOUND, "PICKUP",
-                tradeOrderItemMapper.selectListByOrderId(order.getId()), null, null);
-        if (!erpRequest.confirmed()) return;
+        wmsOutboundService.validateCompleted(order.getId());
         receiveOrder0(order);
     }
 

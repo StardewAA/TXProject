@@ -39,7 +39,7 @@ export namespace MallSpuApi {
     approvedVersion?: number | null;
     submissionId?: string | null;
     reviewRemark?: string;
-    expectedVersion?: number; // 暂保留后台维护的非试点店铺保存必须携带版本
+    expectedVersion?: number; // 后台保存时用于乐观锁校验
   }
 
   /** 商品 SKU */
@@ -121,7 +121,7 @@ export function decideSpuReview(data: MallSpuApi.ReviewDecision) {
   return requestClient.post<boolean>('/product/spu-review/decision', data);
 }
 
-/** 非试点店铺临时后台经营入口，试点店铺由服务端拒绝。 */
+/** 后台经营账号提交商品审核；企业、店铺范围由服务端校验。 */
 export function submitSpuReview(data: { id: number; expectedVersion: number }) {
   return requestClient.post<boolean>('/product/spu-review/submit', data);
 }

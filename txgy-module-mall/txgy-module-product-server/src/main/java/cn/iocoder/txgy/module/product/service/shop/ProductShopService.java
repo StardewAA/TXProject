@@ -15,6 +15,8 @@ public interface ProductShopService {
 
     ProductShopDO getShop(Long id);
 
+    ProductShopDO getShopByEnterpriseId(Long enterpriseId);
+
     ProductShopDO getShopByManagerUserId(Long managerUserId);
 
     List<ProductShopDO> getShopList();

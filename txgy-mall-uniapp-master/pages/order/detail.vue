@@ -54,10 +54,11 @@
     </view>
     <!-- 收货地址 -->
     <view v-if="state.orderInfo.erpInventory?.length" style="margin:24rpx;padding:24rpx;background:#fff8e8;border-radius:12rpx">
-      <view style="font-weight:bold">ERP 库存处理（WMS 仅供查询）</view>
+      <view style="font-weight:bold">历史履约记录</view>
+      <view style="margin-top:8rpx;color:#8a7350">以下是切换为 WMS 直连前的记录，仅供查询。</view>
       <view v-for="entry in state.orderInfo.erpInventory" :key="entry.id" style="margin-top:16rpx">
-        <text>{{ entry.mode === 'mock' ? '【模拟测试】' : '【ERP处理】' }}{{ ({RESERVE:'库存预占',RELEASE:'释放预占',OUTBOUND:'出库',RETURN:'退货入库'})[entry.operation] }}：
-          {{ ({PENDING:'待 ERP 确认',CONFIRMED:'已确认',REJECTED:'处理失败'})[entry.status] }}</text>
+        <text>{{ ({RESERVE:'库存预占',RELEASE:'释放预占',OUTBOUND:'出库',RETURN:'退货入库'})[entry.operation] }}：
+          {{ ({PENDING:'历史待处理',CONFIRMED:'历史已确认',REJECTED:'历史处理失败'})[entry.status] }}</text>
         <view>{{ entry.message }}</view>
       </view>
     </view>
@@ -72,6 +73,9 @@
         {{ state.orderInfo.receiverAreaName }} {{ state.orderInfo.receiverDetailAddress }}
       </view>
       <view v-if="receiverLocation" class="address-detail">{{ receiverLocation }}</view>
+      <button v-if="canUpdateAddress" class="ss-reset-button update-address-btn" @tap="selectNewAddress">
+        修改收货地址
+      </button>
     </view>
 
     <view
@@ -282,7 +286,7 @@
 <script setup>
   import sheep from '@/sheep';
   import { chatEntry } from '@/sheep/helper/kefu-chat.mjs';
-  import { onLoad } from '@dcloudio/uni-app';
+  import { onLoad, onUnload } from '@dcloudio/uni-app';
   import { computed, reactive, ref, watch } from 'vue';
   import { locationSummary } from '@/sheep/helper/fulfillment-view.mjs';
   import { isEmpty } from 'lodash-es';
@@ -313,6 +317,32 @@
   const receiverLocation = computed(() => locationSummary(state.orderInfo, 'receiver'));
   const contactService = () => sheep.$router.go('/pages/chat/service', chatEntry(state.orderInfo.shopId, 'ORDER', state.orderInfo.id));
   const canPay = computed(() => active.value && !syncing.value && confirmed.value && paymentState.value.canPay);
+  const canUpdateAddress = computed(() => canPay.value && state.orderInfo.status === 0
+    && state.orderInfo.deliveryType === 1 && Boolean(state.orderInfo.payOrderId));
+
+  function selectNewAddress() {
+    if (!canUpdateAddress.value) return sheep.$helper.toast('当前订单不能修改收货地址');
+    sheep.$router.go('/pages/user/address/list', { type: 'select' });
+  }
+
+  async function onAddressSelected(event = {}) {
+    const addressId = event.addressInfo?.id;
+    if (!addressId || !state.orderInfo.id || !canUpdateAddress.value) return;
+    const modal = await uni.showModal({
+      title: '修改收货地址',
+      content: '修改后将按新地址重新计算运费和待支付金额，是否继续？',
+      confirmText: '确认修改',
+    });
+    if (!modal.confirm) return;
+    try {
+      const response = await OrderApi.updateOrderAddress({ id: state.orderInfo.id, addressId });
+      if (response?.code !== 0) return;
+      sheep.$helper.toast('收货地址已更新，请核对支付金额');
+      await getOrderDetail(state.orderInfo.id);
+    } catch (error) {
+      console.warn('修改收货地址失败', error);
+    }
+  }
 
   // 订单详情接口在网络异常或历史数据不完整时可能返回空字段。先归一化数组和金额，
   // 确保详情页模板不会因 properties/items/buttons 缺失而中断渲染。
@@ -555,6 +585,7 @@
   }
 
   onLoad(async (options = {}) => {
+    uni.$on('SELECT_ADDRESS', onAddressSelected);
     let id = 0;
     if (options.id) {
       id = options.id;
@@ -581,6 +612,7 @@
       sheep.$helper.toast('订单不存在');
     }
   });
+  onUnload(() => uni.$off('SELECT_ADDRESS', onAddressSelected));
 </script>
 
 <style lang="scss" scoped>
@@ -634,6 +666,13 @@
       font-weight: 500;
       color: rgba(153, 153, 153, 1);
       margin-top: 20rpx;
+    }
+
+    .update-address-btn {
+      margin-top: 22rpx;
+      color: var(--ui-BG-Main);
+      font-size: 26rpx;
+      text-align: left;
     }
   }
 

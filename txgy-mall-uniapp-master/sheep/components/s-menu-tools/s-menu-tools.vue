@@ -25,12 +25,19 @@
   import { reactive, computed } from 'vue';
   import sheep from '@/sheep';
   import { showMenuTools, closeMenuTools } from '@/sheep/hooks/useModal';
+  import { platformNavigationTarget } from '@/sheep/helper/tenant-navigation.mjs';
 
   const show = computed(() => sheep.$store('modal').menu);
 
   function onClick(item) {
     closeMenuTools();
-    if (item.url) sheep.$router.go(item.url);
+    if (!item.url) return;
+    // #ifdef H5
+    sheep.$router.go(platformNavigationTarget(item.url, window.location.href));
+    // #endif
+    // #ifndef H5
+    sheep.$router.go(item.url);
+    // #endif
   }
 
   const list = [

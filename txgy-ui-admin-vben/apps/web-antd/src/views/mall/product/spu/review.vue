@@ -11,7 +11,7 @@ import { useUserStore } from '@vben/stores';
 
 import { Alert, Button, Card, Descriptions, Empty, Image, Input, Spin, Table, Tag } from 'ant-design-vue';
 
-import { getShopList } from '#/api/mall/product/shop';
+import { getBusinessScopeShopList } from '#/api/mall/product/shop';
 import { decideSpuReview, getSpu, getSpuReviewHistory, getSpuReviewPolicy } from '#/api/mall/product/spu';
 import { getPropertyList, SkuList } from '#/views/mall/product/spu/components';
 
@@ -150,7 +150,7 @@ watch(() => route.params.id, () => {
   shops.value = [];
   void loadReview();
   const id = route.params.id;
-  void getShopList().then((data) => { if (route.params.id === id) shops.value = data; }).catch(() => {});
+  void getBusinessScopeShopList().then((data) => { if (route.params.id === id) shops.value = data; }).catch(() => {});
 }, { immediate: true });
 onBeforeUnmount(() => { ++requestNumber; });
 onBeforeRouteLeave(() => !busy.value);
@@ -166,7 +166,7 @@ onBeforeRouteUpdate(() => !busy.value);
         <Button :disabled="busy" @click="router.push('/mall/product/spu')">返回商品列表</Button>
       </div>
     </div>
-    <Alert class="mb-3" show-icon type="info" message="审核对象是商家提交时的固定内容快照，不会用当前库存或最新商品详情替换。" description="通过审核不自动上架；后台不可修改经营资料。商家撤回或重新提交后，本页旧版本不能继续审批。" />
+    <Alert class="mb-3" show-icon type="info" message="审核对象是商家提交时的固定内容快照，不会用当前库存或最新商品详情替换。" description="通过审核不自动上架；审核人员不可代替企业修改经营资料。商家撤回或重新提交后，本页旧版本不能继续审批。" />
     <Alert v-if="error" class="mb-3" type="error" show-icon :message="error" />
     <Alert v-if="decisionMessage" class="mb-3" :type="mustRefresh ? 'warning' : 'info'" show-icon :message="decisionMessage" />
     <Spin :spinning="loading">

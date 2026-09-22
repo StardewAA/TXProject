@@ -4,12 +4,12 @@
     <!-- 标题栏 -->
     <view class="head-box ss-m-b-60 ss-flex-col">
       <view class="ss-flex ss-m-b-20">
-        <view class="head-title-active head-title-line" @tap="showAuthModal('smsLogin')">
+        <view v-if="!platformLogin" class="head-title-active head-title-line" @tap="showAuthModal('smsLogin')">
           短信登录
         </view>
         <view class="head-title ss-m-r-40 head-title-animation">账号登录</view>
       </view>
-      <view class="head-subtitle">{{ loginNameEnabled ? '使用登录名或已绑定的原手机号登录' : '使用原手机号和密码登录' }}</view>
+      <view class="head-subtitle">{{ platformLogin ? '平台统一账号登录，进入后可浏览已开放租户商城' : loginNameEnabled ? '使用登录名或已绑定的原手机号登录' : '使用原手机号和密码登录' }}</view>
       <view class="register-link" @tap="showAuthModal('register')">没有账号？立即注册</view>
       <view v-if="authError" @tap="retryAuth">{{ authError }}</view>
       <view v-else-if="!authAvailable">认证服务准备中或暂未开放</view>
@@ -27,7 +27,7 @@
       <uni-forms-item name="account" label="账号">
         <uni-easyinput :placeholder="loginNameEnabled ? '登录名 / 原手机号' : '请输入原手机号'" v-model="state.model.account" maxlength="20" :inputBorder="false">
           <template v-slot:right>
-            <button class="ss-reset-button forgot-btn" @tap="showAuthModal('resetPassword')">
+            <button v-if="!platformLogin" class="ss-reset-button forgot-btn" @tap="showAuthModal('resetPassword')">
               忘记密码
             </button>
           </template>
@@ -86,7 +86,7 @@
     },
   });
 
-  const { error: authError, available: authAvailable, loginNameEnabled, submitting, refresh: retryAuth,
+  const { error: authError, available: authAvailable, loginNameEnabled, platformLogin, submitting, refresh: retryAuth,
     submit: submitAuth } = useMallAuthForm(state.model, 'PASSWORD_LOGIN');
 
   // 账号登录

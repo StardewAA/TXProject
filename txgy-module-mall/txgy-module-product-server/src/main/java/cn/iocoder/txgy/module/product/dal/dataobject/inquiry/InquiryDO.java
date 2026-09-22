@@ -13,11 +13,16 @@ public class InquiryDO extends TenantBaseDO {
  private String title;
  private String contactName;
  private String contactMobile;
+ private Integer deliveryAreaId;
+ private Integer deliveryCityId;
+ private Integer deliveryProvinceId;
  private String address;
  private String remark;
  private Long deadline;
  private Long expectedDate;
+ private String visibility;
  private Integer status;
+ private Long selectedQuoteId;
  private String erpStatus;
  private String erpNo;
 }

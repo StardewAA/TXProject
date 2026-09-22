@@ -36,10 +36,6 @@ public class TradeOrderProperties {
     @NotNull(message = "支付超时时间不能为空")
     private Duration payExpireTime;
 
-    /** ERP 确认可付款前的独立等待时限，不能占用确认后的支付时限。 */
-    @NotNull(message = "ERP 等待超时时间不能为空")
-    private Duration erpWaitExpireTime = Duration.ofHours(2);
-
     /**
      * 收货超时时间
      */

@@ -127,10 +127,10 @@ spring:
     dashscope: # 通义千问
       api-key: ${DASHSCOPE_API_KEY:sk-xxxx}
     deepseek: # DeepSeek
-      api-key: ${DEEPSEEK_API_KEY:sk-xxxx}
+      api-key: ${DEEPSEEK_API_KEY:}
       chat:
         options:
-          model: deepseek-v4-flash
+          model: deepseek-chat
     google:
       genai: # 谷歌 Gemini
         api-key: ${GEMINI_API_KEY:sk-xxxx}
@@ -158,6 +158,9 @@ spring:
 
 txgy:
   ai:
+    provider:
+      connect-timeout-ms: ${AI_PROVIDER_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${AI_PROVIDER_READ_TIMEOUT_MS:15000}
     doubao: # 字节豆包
       enable: true
       api-key: ${DOUBAO_API_KEY:sk-xxxx}

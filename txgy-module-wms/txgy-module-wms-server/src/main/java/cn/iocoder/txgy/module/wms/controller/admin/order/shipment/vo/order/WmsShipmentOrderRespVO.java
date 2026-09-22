@@ -60,6 +60,7 @@ public class WmsShipmentOrderRespVO {
     private String bizOrderNo;
     private String sourceModule;
     private String businessChainNo;
+    private Long shopId;
 
     @Schema(description = "客户编号", example = "1024")
     private Long merchantId;

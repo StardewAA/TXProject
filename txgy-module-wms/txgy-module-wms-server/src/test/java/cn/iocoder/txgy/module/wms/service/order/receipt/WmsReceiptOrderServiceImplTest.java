@@ -23,6 +23,7 @@ import cn.iocoder.txgy.module.wms.dal.dataobject.md.item.WmsItemQualityReportDO;
 import cn.iocoder.txgy.module.wms.enums.md.WmsItemQualityStatusEnum;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +62,8 @@ public class WmsReceiptOrderServiceImplTest extends BaseDbUnitTest {
 
     @MockitoBean
     private WmsWarehouseService warehouseService;
+    @MockitoBean
+    private WmsWarehousePersonnelService warehousePersonnelService;
     @MockitoBean
     private WmsMerchantService merchantService;
     @MockitoBean

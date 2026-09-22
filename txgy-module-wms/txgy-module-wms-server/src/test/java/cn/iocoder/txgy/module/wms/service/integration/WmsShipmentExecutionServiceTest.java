@@ -68,7 +68,7 @@ class WmsShipmentExecutionServiceTest {
     @Test void mallShipmentUsesMallCallbackWithOriginalRequestId() {
         var order = new WmsShipmentOrderDO().setId(2L).setNo("WMS-MALL-MALL-ORDER-1")
                 .setBizOrderNo("MALL-ORDER-1").setBusinessChainNo("MALL-CHAIN-1")
-                .setSourceModule("MALL").setExecutionStatus(1)
+                .setSourceModule("MALL").setShopId(12L).setExecutionStatus(1)
                 .setExecutionTime(java.time.LocalDateTime.of(2026, 9, 20, 10, 0));
         org.mockito.Mockito.when(orders.selectByIdForUpdate(2L)).thenReturn(order);
         org.mockito.Mockito.when(requests.selectSourceRequest("SALE_SHIPMENT_CREATE", order.getNo()))

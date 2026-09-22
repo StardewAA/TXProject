@@ -22,4 +22,8 @@ describe('供应商审核API请求契约', () => {
     await supplierApi.reviewHistory(7, 42)
     expect(requestMock).toHaveBeenCalledWith({ url: '/product/supplier-product/review-history', params: { shopId: 7, id: 42 } })
   })
+  it('询价报价一次读取当前店铺全部可报价 SKU', async () => {
+    await supplierApi.quoteSkus(7)
+    expect(requestMock).toHaveBeenCalledWith({ url: '/product/supplier-product/quote-skus', params: { shopId: 7 } })
+  })
 })

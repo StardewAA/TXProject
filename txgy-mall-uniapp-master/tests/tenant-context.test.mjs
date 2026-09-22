@@ -28,6 +28,7 @@ test('account identity is independent, and mismatched upload/private headers are
   assert.equal(context.state().browseTenantId, '1');
   assert.throws(() => context.headers(snapshot), /账号不属于/);
   assert.deepEqual(context.headers(snapshot, false), { 'tenant-id': '1' });
+  assert.deepEqual(context.accountHeaders(snapshot), { 'tenant-id': '2', Authorization: 'token-B' });
 });
 
 test('both successful and failed work from an old epoch are stale even if token text is reused', () => {

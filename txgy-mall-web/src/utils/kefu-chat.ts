@@ -9,9 +9,9 @@ export function kefuScope(shopId?: unknown): KefuScope {
   if (!/^[1-9]\d*$/.test(String(shopId))) throw new Error('店铺客服入口无效')
   return { scope: 'SHOP', shopId: String(shopId) }
 }
-export function assertKefuThread(value: KefuThread, expected: KefuScope, tenantId: string, sessionId?: string, memberId?: string | null) {
+export function assertKefuThread(value: KefuThread, expected: KefuScope, tenantId: string | undefined, sessionId?: string, memberId?: string | null) {
   const session = value?.session
-  if (!session || session.scope !== expected.scope || String(session.shopId) !== String(expected.shopId) || String(session.tenantId) !== tenantId
+  if (!session || session.scope !== expected.scope || String(session.shopId) !== String(expected.shopId) || (tenantId !== undefined && String(session.tenantId) !== tenantId)
     || (sessionId && session.id !== sessionId) || !/^[0-9a-f-]{36}$/i.test(session.id)
     || (memberId && String(session.memberId) !== memberId)
     || !Number.isSafeInteger(session.version) || session.version < 0 || !['WAITING', 'ACTIVE', 'CLOSED'].includes(session.state)
@@ -29,7 +29,7 @@ export function mergeKefuMessages(existing: KefuMessage[], incoming: KefuMessage
   for (const message of incoming) {
     const id = messageCursor(message.id)
     if (id === '0' || message.sessionId !== sessionId || (typeof message.text !== 'string' && !message.card)
-      || !['MEMBER', 'AGENT', 'FAQ', 'SYSTEM'].includes(message.senderRole)) throw new Error('消息归属或格式无效')
+      || !['MEMBER', 'AGENT', 'FAQ', 'AI', 'SYSTEM'].includes(message.senderRole)) throw new Error('消息归属或格式无效')
     if (message.card && (!['PRODUCT', 'ORDER'].includes(message.card.type) || typeof message.card.title !== 'string' || typeof message.card.text !== 'string')) throw new Error('卡片格式无效')
     if (message.card && shopId !== undefined && String(message.card.shopId) !== String(shopId)) throw new Error('卡片店铺归属不一致')
     map.set(id, message)

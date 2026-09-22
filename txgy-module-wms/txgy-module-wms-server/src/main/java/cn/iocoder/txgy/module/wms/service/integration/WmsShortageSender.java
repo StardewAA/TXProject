@@ -72,7 +72,8 @@ public class WmsShortageSender {
         }
         LocalDateTime now = LocalDateTime.now();
         int attempts = ((Number)row.get("attempts")).intValue();
-        if (!manual && !"WAITING_INTEGRATION".equals(row.get("notification_status"))) {
+        if (!manual && !"WAITING_INTEGRATION".equals(row.get("notification_status"))
+                && !"PENDING".equals(row.get("notification_status"))) {
             java.sql.Timestamp due = (java.sql.Timestamp)row.get("next_attempt_time");
             if (attempts>=5 || due==null || due.toLocalDateTime().isAfter(now)) return false;
         }
@@ -124,7 +125,8 @@ public class WmsShortageSender {
     private boolean sendCollaborationB(long tenant, Map<String,Object> row, int version, int attempts, boolean manual) {
         LocalDateTime now = LocalDateTime.now();
         int maxAttempts = 5;
-        if (!manual && !"WAITING_INTEGRATION".equals(row.get("notification_status"))) {
+        if (!manual && !"WAITING_INTEGRATION".equals(row.get("notification_status"))
+                && !"PENDING".equals(row.get("notification_status"))) {
             java.sql.Timestamp due = (java.sql.Timestamp)row.get("next_attempt_time");
             if (attempts>=maxAttempts || due==null || due.toLocalDateTime().isAfter(now)) return false;
         }

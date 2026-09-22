@@ -153,7 +153,7 @@ import { chatTarget, chatEnabled, createChatController } from '@/sheep/helper/ke
     tenantId: tenantContext.state().accountTenantId,
     memberId: tenantContext.state().userId,
   }));
-  const roles = { MEMBER: '我', AGENT: '人工客服', FAQ: '客服助手', SYSTEM: '服务通知' };
+  const roles = { MEMBER: '我', AGENT: '人工客服', FAQ: '客服助手', AI: 'AI 客服', SYSTEM: '服务通知' };
   const modeText = computed(
     () =>
       ({

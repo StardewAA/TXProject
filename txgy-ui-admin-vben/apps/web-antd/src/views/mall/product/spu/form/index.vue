@@ -18,7 +18,7 @@ import { Alert, Button, Card, message } from 'ant-design-vue';
 import { useVbenForm } from '#/adapter/form';
 import { createSpu, getSpu, getSpuReviewPolicy, updateSpu } from '#/api/mall/product/spu';
 
-import { canAdminMaintain, reviewStatusText } from '../review-model';
+import { canOperateProduct, reviewStatusText } from '../review-model';
 import { getPropertyList, SkuList } from '#/views/mall/product/spu/components';
 
 import {
@@ -45,7 +45,11 @@ const policyError = ref(false);
 const originalShopId = ref<number>();
 const policyLoading = ref(true);
 const isDetail = computed(() => name === 'ProductSpuDetail' || policyLoading.value
-  || !canAdminMaintain(policy.value, originalShopId.value)
+  || !canOperateProduct(
+    policy.value,
+    originalShopId.value,
+    hasAccessByCodes(['product:spu:review']),
+  )
   || (spuId.value ? !hasAccessByCodes(['product:spu:update']) : !hasAccessByCodes(['product:spu:create']))
   || formData.value.reviewStatus === 10);
 const initializingForm = ref(false); // 详情回填时不触发 SKU 重置逻辑
@@ -212,10 +216,18 @@ async function handleSubmit() {
       .merge(otherFormApi)
       .submitAllForm(true);
     // 源店与目标店双重校验；试点店铺不能通过旧链接或更换所属店铺绕过只读策略。
-    if (!canAdminMaintain(policy.value, originalShopId.value)
-      || !canAdminMaintain(policy.value, values.shopId)
+    if (!canOperateProduct(
+      policy.value,
+      originalShopId.value,
+      hasAccessByCodes(['product:spu:review']),
+    )
+      || !canOperateProduct(
+        policy.value,
+        values.shopId,
+        hasAccessByCodes(['product:spu:review']),
+      )
       || !values.shopId) {
-      message.warning('该店铺仅允许销售中心维护，请使用有权经营的账号。');
+      message.warning('当前后台账号没有该店铺经营权限，请核对企业、店铺授权和角色权限。');
       return;
     }
     if (spuId.value) {
@@ -372,7 +384,7 @@ function setFormsReadonly() {
 watch(isDetail, () => setFormsReadonly());
 setFormsReadonly();
 
-/** 初始化：策略加载失败继续只读；非试点才临时保留维护。 */
+/** 初始化：策略加载失败继续只读，经营范围以服务端返回为准。 */
 onMounted(async () => {
   spuId.value = params.id ? Number(params.id) : undefined;
   try {
@@ -396,7 +408,7 @@ onMounted(async () => {
 
     <Page auto-content-height>
       <Alert class="mb-3" show-icon type="info"
-        :message="isDetail ? '当前商品仅供查看。试点店铺经营资料交由销售中心维护，待审内容须撤回后修改。' : '当前非试点店铺临时保留后台维护；保存后成为草稿并下架，必须送审，通过后才能重新上架。'"
+        :message="isDetail ? '当前商品仅供查看。商品经营范围由后台企业与店铺授权决定，待审内容须撤回后修改。' : '当前账号可在获授权店铺维护商品；保存后成为草稿并下架，必须送审，通过后才能重新上架。'"
         description="审核状态与销售状态相互独立。平台经营账号与审核账号应分离，提交人员不能审核自己的提交。" />
       <Alert v-if="policyError" class="mb-3" show-icon type="warning" message="策略加载失败，已保持只读，请刷新后重试。" />
       <div class="mb-3">{{ reviewStatusText(formData.reviewStatus) }} · 内容版本 {{ formData.contentVersion ?? '历史' }}</div>

@@ -144,6 +144,7 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
     }
 
     private void completeApprovedShipmentOrder(WmsShipmentOrderDO order) {
+        validateMallShopOwnership(order);
         executeShipmentInventory(order);
     }
 
@@ -287,9 +288,10 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         if (!java.util.Objects.equals(current.getNo(), req.getNo())
                 || !java.util.Objects.equals(current.getType(), req.getType())
                 || !java.util.Objects.equals(current.getWarehouseId(), req.getWarehouseId())
+                || !java.util.Objects.equals(current.getShopId(), req.getShopId())
                 || !java.util.Objects.equals(current.getBizOrderNo(), req.getBizOrderNo())
                 || !java.util.Objects.equals(current.getMerchantId(), req.getMerchantId())) {
-            throw new IllegalArgumentException("来源出库单不得修改单号、类型、仓库及来源关联");
+            throw new IllegalArgumentException("来源出库单不得修改单号、类型、店铺、仓库及来源关联");
         }
         var old = shipmentOrderDetailService.getShipmentOrderDetailList(current.getId());
         if (req.getDetails() == null || old.size() != req.getDetails().size())
@@ -308,6 +310,13 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
 
     private static boolean sameAmount(BigDecimal left, BigDecimal right) {
         return left == null ? right == null : right != null && left.compareTo(right) == 0;
+    }
+
+    private static void validateMallShopOwnership(WmsShipmentOrderDO order) {
+        if ("MALL".equals(order.getSourceModule()) && (order.getShopId() == null || order.getShopId() <= 0)) {
+            throw exception(INTEGRATION_RECEIPT_REQUEST_INVALID,
+                    "历史商城出库单缺少有效店铺归属，禁止正式出库，须转人工异常处理");
+        }
     }
 
     private void validateShipmentOrderNoUnique(Long id, String no) {
