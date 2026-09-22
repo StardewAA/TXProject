@@ -18,6 +18,11 @@
     </description>
 
     <dependencies>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-wms-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <!-- Spring Cloud 基础 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
@@ -35,6 +40,11 @@
             <artifactId>txgy-module-member-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-module-system-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- 业务组件 -->
         <dependency>
@@ -45,6 +55,10 @@
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>txgy-spring-boot-starter-biz-tenant</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>txgy-spring-boot-starter-biz-ip</artifactId>
         </dependency>
 
         <!-- Web 相关 -->

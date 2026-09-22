@@ -41,8 +41,8 @@ public class MallTenantCatalogService {
 
         List<MallTenantProperties.Entry> entries = properties.getEntries();
         Long publicTenantId = properties.getPublicTenantId();
-        if (publicTenantId == null || publicTenantId <= 0
-                || Objects.equals(publicTenantId, legacyTenantId) || entries == null) {
+        if (entries == null || (publicTenantId != null
+                && (publicTenantId <= 0 || Objects.equals(publicTenantId, legacyTenantId)))) {
             throw exception(MALL_TENANT_UNAVAILABLE);
         }
         Set<Long> ids = new HashSet<>();
@@ -52,12 +52,12 @@ public class MallTenantCatalogService {
                     || !StringUtils.hasText(entry.getName()) || !ids.add(entry.getTenantId())) {
                 throw exception(MALL_TENANT_UNAVAILABLE);
             }
-            if (Objects.equals(entry.getTenantId(), publicTenantId) && entry.isPublicVisible()) {
+            if (publicTenantId != null && Objects.equals(entry.getTenantId(), publicTenantId) && entry.isPublicVisible()) {
                 publicEntry = entry;
             }
         }
-        // 公共租户无有效配置时整体失败，绝不回落到兼容租户。
-        if (publicEntry == null || !isAvailable(publicTenantId)) {
+        // 第 22 节取消了公共注册租户；仍兼容显式配置浏览落地项，但绝不回落到租户 1。
+        if (publicTenantId != null && (publicEntry == null || !isAvailable(publicTenantId))) {
             throw exception(MALL_TENANT_UNAVAILABLE);
         }
 
@@ -76,8 +76,8 @@ public class MallTenantCatalogService {
         result.getCapabilities().setBrowsePreview(properties.isBrowsePreviewEnabled());
         result.getCapabilities().setScopedEntry(properties.isScopedEntryEnabled());
         result.getCapabilities().setBrowseSwitch(properties.isScopedEntryEnabled() && tenants.size() > 1);
-        result.getCapabilities().setRegistrationSelection(tenants.stream()
-                .anyMatch(AppMallTenantConfigRespVO.Tenant::isRegistrationEnabled));
+        // 注册固定归属于当前入口租户；目录只用于浏览切换，不向用户开放注册租户选择。
+        result.getCapabilities().setRegistrationSelection(false);
         return result.setPublicTenantId(publicTenantId).setTenants(tenants);
     }
 

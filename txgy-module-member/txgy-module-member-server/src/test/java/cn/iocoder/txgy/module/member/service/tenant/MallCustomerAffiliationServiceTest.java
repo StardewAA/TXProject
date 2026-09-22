@@ -36,9 +36,9 @@ class MallCustomerAffiliationServiceTest {
         TenantContextHolder.setTenantId(9002L); service.bindRegistration(71L);
         verifyNoInteractions(api, mapper);
     }
-    @Test void directoryDisabledAndMissingPublicConfigFailClosed() {
+    @Test void directoryDisabledFailsClosedButMissingRetiredPublicTenantSkipsAffiliation() {
         tenants.setEnabled(false); assertThrows(ServiceException.class, () -> service.bindRegistration(71L));
-        tenants.setEnabled(true).setPublicTenantId(null); assertThrows(ServiceException.class, () -> service.bindRegistration(71L));
+        tenants.setEnabled(true).setPublicTenantId(null); assertDoesNotThrow(() -> service.bindRegistration(71L));
         verifyNoInteractions(api, mapper);
     }
     @Test void missingEnterpriseCannotFallBackToAnyExistingEnterprise() {

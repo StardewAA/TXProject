@@ -43,6 +43,7 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
                 .likeIfPresent(ProductSpuDO::getName, reqVO.getName())
                 .eqIfPresent(ProductSpuDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ProductSpuDO::getShopId, reqVO.getShopId())
+                .inIfPresent(ProductSpuDO::getShopId, reqVO.getShopIds())
                 .betweenIfPresent(ProductSpuDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(ProductSpuDO::getSort)
                 .orderByDesc(ProductSpuDO::getId);
@@ -172,6 +173,7 @@ public interface ProductSpuMapper extends BaseMapperX<ProductSpuDO> {
                 .likeIfPresent(ProductSpuDO::getName, reqVO.getName())
                 .eqIfPresent(ProductSpuDO::getCategoryId, reqVO.getCategoryId())
                 .eqIfPresent(ProductSpuDO::getShopId, reqVO.getShopId())
+                .inIfPresent(ProductSpuDO::getShopId, reqVO.getShopIds())
                 .betweenIfPresent(ProductSpuDO::getCreateTime, reqVO.getCreateTime());
         appendTabQuery(tabType, queryWrapper);
         appendReviewQuery(reqVO.getReviewStatus(), queryWrapper);

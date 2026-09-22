@@ -58,6 +58,15 @@ public class ClassStudentServiceImpl {
     public static final Integer MAX_STUDENT_SIZE = 0;
 
     /**
+     * 是否限制单个培训班的学员人数（{@link #MAX_STUDENT_SIZE} <= 0 表示不限制）
+     *
+     * @return true 表示按 {@link #MAX_STUDENT_SIZE} 限制人数；false 表示不限制
+     */
+    public static boolean isLimitEnabled() {
+        return MAX_STUDENT_SIZE != null && MAX_STUDENT_SIZE > 0;
+    }
+
+    /**
      * 学员加入来源：1 手动添加 2 Excel 批量导入 3 按参与对象筛选 5 导入并指定班级
      */
     private static final Integer SOURCE_MANUAL = 1;
@@ -346,7 +355,8 @@ public class ClassStudentServiceImpl {
                     .map(ClassStudentDO::getUserId).collect(Collectors.toCollection(LinkedHashSet::new));
             int beforeCount = inClassUserIds.size();
             long addableCount = userIds.stream().filter(userId -> !inClassUserIds.contains(userId)).count();
-            if (beforeCount + addableCount > MAX_STUDENT_SIZE) {
+            // MAX_STUDENT_SIZE <= 0 表示不限制人数
+            if (isLimitEnabled() && beforeCount + addableCount > MAX_STUDENT_SIZE) {
                 throw exception(PLAN_STUDENT_IMPORT_ALLOC_LIMIT_EXCEEDED, classDO.getName(), MAX_STUDENT_SIZE,
                         beforeCount, Math.max(0, MAX_STUDENT_SIZE - beforeCount));
             }
@@ -363,7 +373,9 @@ public class ClassStudentServiceImpl {
             classResult.setBeforeCount(beforeCount);
             classResult.setAddedCount(added);
             classResult.setAfterCount(beforeCount + added);
-            classResult.setRemaining(Math.max(0, MAX_STUDENT_SIZE - beforeCount - added));
+            // 不限制人数时剩余名额无意义，统一返回 0（前端同样不展示剩余名额）
+            classResult.setRemaining(isLimitEnabled()
+                    ? Math.max(0, MAX_STUDENT_SIZE - beforeCount - added) : 0);
             classResult.setUsers(userIds.stream()
                     .map(userId -> buildAllocateUser(userId, userMap, deptNameMap)).collect(Collectors.toList()));
             classResults.add(classResult);

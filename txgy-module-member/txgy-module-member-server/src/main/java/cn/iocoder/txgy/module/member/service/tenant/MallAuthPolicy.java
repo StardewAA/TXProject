@@ -23,6 +23,9 @@ public class MallAuthPolicy {
 
     public long resolve(Long requestedTenant, boolean registration) {
         requireConfigured();
+        if (registration && requestedTenant == null) {
+            throw exception(MALL_TENANT_UNAVAILABLE);
+        }
         // Revalidate status/expiry on send AND consume; never fall back to the legacy tenant.
         var directory = catalog.getConfig();
         Long target = requestedTenant == null ? directory.getPublicTenantId() : requestedTenant;

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS promotion_kefu_chat_message (
     PRIMARY KEY (id),
     UNIQUE KEY uk_kefu_chat_message_retry (tenant_id,session_id,sender_type,sender_id,client_message_id),
     KEY idx_kefu_chat_message_cursor (tenant_id,session_id,id),
-    CONSTRAINT ck_kefu_chat_role CHECK (sender_role IN ('MEMBER','AGENT','FAQ','SYSTEM'))
+    CONSTRAINT ck_kefu_chat_role CHECK (sender_role IN ('MEMBER','AGENT','FAQ','AI','SYSTEM'))
 );
 CREATE TABLE IF NOT EXISTS promotion_kefu_chat_read (
     tenant_id BIGINT NOT NULL,

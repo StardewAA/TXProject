@@ -5,6 +5,8 @@ import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjectUtil;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.collection.CollectionUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.trade.controller.admin.delivery.vo.expresstemplate.*;
 import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressTemplateChargeDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.delivery.DeliveryExpressTemplateDO;
@@ -45,6 +47,7 @@ public class DeliveryExpressTemplateServiceImpl implements DeliveryExpressTempla
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createDeliveryExpressTemplate(DeliveryExpressTemplateCreateReqVO createReqVO) {
+        requireWritableTenant();
         // 校验模板名是否唯一
         validateTemplateNameUnique(createReqVO.getName(), null);
 
@@ -69,6 +72,7 @@ public class DeliveryExpressTemplateServiceImpl implements DeliveryExpressTempla
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateDeliveryExpressTemplate(DeliveryExpressTemplateUpdateReqVO updateReqVO) {
+        requireWritableTenant();
         // 校验存在
         validateDeliveryExpressTemplateExists(updateReqVO.getId());
         // 校验模板名是否唯一
@@ -129,6 +133,7 @@ public class DeliveryExpressTemplateServiceImpl implements DeliveryExpressTempla
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteDeliveryExpressTemplate(Long id) {
+        requireWritableTenant();
         // 校验存在
         validateDeliveryExpressTemplateExists(id);
 
@@ -213,6 +218,10 @@ public class DeliveryExpressTemplateServiceImpl implements DeliveryExpressTempla
 
         // 组合运费模板配置 RespBO
         return INSTANCE.convertMap(areaId, templateList, chargeList, freeList);
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

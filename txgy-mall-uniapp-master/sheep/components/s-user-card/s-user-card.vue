@@ -14,6 +14,7 @@
         <view>
           <view class="nickname-box ss-flex ss-col-center">
             <view class="nick-name ss-m-r-20" @tap="handleLogin">{{ userInfo?.nickname || nickname }}</view>
+            <text v-if="isLogin" class="identity-title">{{ identityTitle }}</text>
           </view>
         </view>
       </view>
@@ -85,6 +86,10 @@
     nickname: {
       type: String,
       default: '请先登录',
+    },
+    identityTitle: {
+      type: String,
+      default: '普通用户',
     },
     vip: {
       type: [String, Number],
@@ -173,6 +178,18 @@
       font-weight: 600;
       color: #ffffff;
       line-height: normal;
+    }
+
+    .identity-title {
+      flex: 0 0 auto;
+      padding: 7rpx 15rpx;
+      border: 1rpx solid rgba(255, 255, 255, 0.22);
+      border-radius: 999rpx;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 21rpx;
+      font-weight: 500;
+      line-height: 1;
     }
 
     .vip-img {

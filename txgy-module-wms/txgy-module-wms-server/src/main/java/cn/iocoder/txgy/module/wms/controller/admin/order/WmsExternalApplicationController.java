@@ -48,7 +48,8 @@ public class WmsExternalApplicationController {
     }
     @GetMapping("/mall/execution")
     @PreAuthorize("@ss.hasPermission('wms:shipment-order:query')")
-    public CommonResult<WmsIntegrationRequestRespDTO> mallExecution(@RequestParam String sourceOrderNo) {
-        return api.getMallOrderExecution(TenantContextHolder.getRequiredTenantId(), sourceOrderNo);
+    public CommonResult<WmsIntegrationRequestRespDTO> mallExecution(@RequestParam Long shopId,
+                                                                    @RequestParam String sourceOrderNo) {
+        return api.getMallOrderExecution(TenantContextHolder.getRequiredTenantId(), shopId, sourceOrderNo);
     }
 }

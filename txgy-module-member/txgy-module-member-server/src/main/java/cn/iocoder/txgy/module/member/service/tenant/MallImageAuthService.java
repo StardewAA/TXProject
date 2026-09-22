@@ -5,6 +5,7 @@ import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.member.controller.app.auth.vo.AppAuthLoginRespVO;
 import cn.iocoder.txgy.module.member.controller.app.tenant.vo.AppMallImageAuthReqVO;
 import cn.iocoder.txgy.module.member.service.auth.MemberAuthService;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ public class MallImageAuthService {
     private final MallAccountPolicy policy;
     private final MallImageChallengeService challenges;
     private final MemberAuthService auth;
+    private final MemberPlatformAccountService platformAccounts;
 
     public MallImageChallengeService.Challenge issue(AppMallImageAuthReqVO.Image body, String peer) {
         long tenant = policy.resolve(body.getTenantId(), true);
@@ -40,6 +42,13 @@ public class MallImageAuthService {
         String account = body.getAccount().trim().toLowerCase(java.util.Locale.ROOT);
         challenges.limitPasswordAttempts(account, peer);
         return inTenant(tenant, () -> auth.loginWithAccountPassword(account, body.getPassword()));
+    }
+    public AppAuthLoginRespVO platformLogin(AppMallImageAuthReqVO.PlatformLogin body, String peer) {
+        String account = body.getAccount().trim().toLowerCase(java.util.Locale.ROOT);
+        challenges.limitPasswordAttempts(account, peer);
+        var candidate = platformAccounts.resolveLoginRequired(account);
+        return inTenant(candidate.getSourceTenantId(), () -> auth.loginWithPlatformAccount(
+                candidate.getCanonicalMemberId(), candidate.getCredentialIdentifier(), body.getPassword()));
     }
     private static <T> T inTenant(long tenant, Supplier<T> task) {
         AtomicReference<T> value = new AtomicReference<>();

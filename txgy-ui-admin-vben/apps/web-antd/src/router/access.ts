@@ -286,12 +286,15 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       const menus = JSON.parse(
         JSON.stringify(accessMenus),
       ) as AppRouteRecordRaw[];
-      // 注入 CRM 前端菜单项（CRM 首页，无需后端配置）
+      // 1) 注入 CRM 首页菜单项（无需后端配置）
       injectCrmMenus(menus, accessStore.accessCodes);
       // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组：
       // 分组必须发生在转换之后，否则子菜单路径会被拼接成 /crm/<分组>/xxx，导致地址变化。
       // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
       injectAiChatMenu(menus, accessStore.accessCodes);
+
+      // 2) 转换与过滤：MES / WMS 变换 → 菜单过滤 → 路由记录转换 → CRM 分组
+      //    注意分组必须在 convert 之后：否则子菜单路径会被拼成 /crm/<分组>/xxx，地址就变了
       return groupCrmSideMenus(
         convertServerMenuToRouteRecordStringComponent(
           filterMallPromotionMenus(
@@ -595,6 +598,52 @@ function groupCrmSideMenus(menus: any[]): any[] {
   );
   crm.children = [...rest, ...groups];
   return menus;
+}
+
+/**
+ * 在后端菜单中注入「AI对话助手」菜单项（前端演示用）。
+ * 找到 CRM 中心（path 为 /crm 的节点），作为其子项挂载；
+ * 若未找到则挂载为顶级菜单，保证功能可见。
+ */
+function injectAiChatMenu(
+  menus: AppRouteRecordRaw[],
+  permissions: unknown[] | null | undefined,
+) {
+  const crmParent = findMenu(menus, (m) => m?.path === '/crm');
+  const hasCrmPermission = (permissions ?? []).some((permission) =>
+    String(permission ?? '').startsWith('crm:'),
+  );
+  if (!hasCrmPermission) {
+    return;
+  }
+  const item = {
+    id: 990_001,
+    name: 'AI对话助手',
+    componentName: 'CrmAiChat',
+    path: 'ai-chat',
+    component: 'views/crm/ai-chat/index.vue',
+    icon: 'crmai:avatar',
+    meta: {},
+    visible: true,
+    // 排序值设为 -1，保证排在 CRM 所有菜单最前面（第一个是「待办事项」sort=0）
+    sort: -1,
+    keepAlive: true,
+    parentId: crmParent ? crmParent.id : 0,
+  };
+  if (crmParent) {
+    crmParent.children = crmParent.children ?? [];
+    if (
+      !crmParent.children.some(
+        (c) => (c.componentName || c.name) === 'CrmAiChat',
+      )
+    ) {
+      // 同时插入数组首位，兼容不按 sort 排序的渲染场景
+      crmParent.children.unshift(item);
+    }
+  } else {
+    // 兜底：作为顶级菜单，并包裹 BasicLayout
+    menus.push({ ...item, component: 'BasicLayout', children: [{ ...item }] });
+  }
 }
 
 function findMenu(

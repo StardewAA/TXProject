@@ -36,7 +36,7 @@ async function save(){
 watch(()=>route.params.shopId,load,{immediate:true})
 </script>
 <template>
- <div class="container shop-settings"><MallLink to="/sales">← 返回销售中心</MallLink><h1>店铺资料与退货地址</h1>
+ <div class="container shop-settings"><header><MallLink to="/sales">销售中心 / 店铺设置</MallLink><small>STORE PROFILE</small><h1>店铺资料与退货地址</h1><p>统一维护前台展示资料和仅用于售后履约的私有退货信息。</p></header>
   <el-alert title="公开资料会展示在商城店铺；退货资料仅用于售后，不会公开展示。同意退货时保存地址快照，之后修改不会影响已有快照。" :closable="false"/>
   <div v-loading="busy"><el-form v-if="data" label-position="top" :disabled="saving">
    <h2>公开店铺资料</h2><el-form-item label="店铺名称（必填）"><el-input v-model="data.name" maxlength="64"/></el-form-item>
@@ -57,4 +57,6 @@ watch(()=>route.params.shopId,load,{immediate:true})
   </el-form><el-empty v-else-if="!busy" description="无权访问或加载失败"><el-button @click="load">重试</el-button></el-empty></div>
  </div>
 </template>
-<style scoped>.shop-settings{max-width:880px;margin:32px auto;background:white;padding:32px}h1{margin:24px 0}h2{font-size:19px;margin:24px 0}.el-form{margin-top:24px}.logo-upload{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.logo-preview{width:96px;height:96px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px}.logo-upload small{flex-basis:100%;color:#64748b}</style>
+<style scoped>
+.shop-settings{max-width:980px;margin:28px auto;padding:0 34px 34px;border:1px solid #dce5e8;border-radius:20px;background:white;overflow:hidden;box-shadow:0 16px 38px rgba(20,48,58,.08)}.shop-settings>header{margin:0 -34px 24px;padding:30px 36px;background:linear-gradient(118deg,#102f3a,#17685f);color:#fff}.shop-settings>header a{color:#95e1d3;font-size:13px;font-weight:700}.shop-settings>header small{display:block;margin:15px 0 6px;color:#77cbbb;font-size:11px;font-weight:800;letter-spacing:.2em}.shop-settings>header h1{margin:0;font-size:29px}.shop-settings>header p{margin:8px 0 0;color:#c8dcde}.shop-settings>:deep(.el-alert){border-radius:10px}.el-form{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;margin-top:24px}.el-form h2{grid-column:1/-1;margin:16px 0;padding:12px 15px;border-left:4px solid #168173;border-radius:0 9px 9px 0;background:#f1f7f6;color:#1d3a43;font-size:18px}.el-form>.el-form-item:nth-of-type(2),.el-form>.el-form-item:nth-of-type(5),.el-form>.el-form-item:last-of-type{grid-column:1/-1}.el-form>:deep(.el-button--primary){grid-column:1/-1;justify-self:start;min-width:150px;min-height:42px;border-radius:9px;background:#167f71;border-color:#167f71;font-weight:700}.logo-upload{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.logo-preview{width:104px;height:104px;padding:5px;object-fit:contain;border:1px solid #dce6e8;border-radius:12px;background:#fff}.logo-upload small{flex-basis:100%;color:#647b82}.shop-settings :deep(.el-input__wrapper),.shop-settings :deep(.el-textarea__inner){border-radius:9px;box-shadow:0 0 0 1px #d8e3e5 inset}@media(max-width:720px){.shop-settings{margin:16px;padding:0 18px 24px}.shop-settings>header{margin:0 -18px 20px}.el-form{grid-template-columns:1fr}}
+</style>

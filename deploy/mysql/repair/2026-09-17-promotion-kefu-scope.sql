@@ -39,6 +39,23 @@ CREATE TABLE IF NOT EXISTS promotion_kefu_session (
             AND agent_type IS NOT NULL AND agent_id IS NOT NULL))
 );
 
+-- Platform members keep their login/account tenant while a shop conversation is stored in the
+-- shop's owning tenant.  This link is intentionally separate from promotion_kefu_session so old
+-- tenant-local conversations keep their original isolation semantics.  A server-resolved public
+-- SKU is required before a row can be inserted; clients cannot nominate a target tenant directly.
+CREATE TABLE IF NOT EXISTS promotion_kefu_platform_session (
+    session_id VARCHAR(36) NOT NULL,
+    session_tenant_id BIGINT NOT NULL,
+    member_tenant_id BIGINT NOT NULL,
+    member_id BIGINT NOT NULL,
+    product_sku_id BIGINT NOT NULL,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id),
+    KEY idx_kefu_platform_session_owner (member_tenant_id, member_id, session_id),
+    CONSTRAINT ck_kefu_platform_session_ids CHECK (
+        session_tenant_id > 0 AND member_tenant_id > 0 AND member_id > 0 AND product_sku_id > 0)
+);
+
 CREATE TABLE IF NOT EXISTS promotion_kefu_scope_audit (
     id VARCHAR(36) NOT NULL,
     tenant_id BIGINT NOT NULL,

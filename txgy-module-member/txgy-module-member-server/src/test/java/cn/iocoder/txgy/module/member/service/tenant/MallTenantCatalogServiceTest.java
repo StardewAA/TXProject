@@ -60,10 +60,12 @@ class MallTenantCatalogServiceTest {
     }
 
     @Test
-    void enabledWithoutPublicTenantFailsClosedWithoutLegacyFallback() {
-        properties.setEnabled(true).setEntries(List.of(entry(1L, "旧商城", true)));
-        assertUnavailable();
-        verifyNoInteractions(tenantApi);
+    void enabledWithoutPublicTenantStillReturnsOnlyValidatedRealTenants() {
+        properties.setEnabled(true).setEntries(List.of(entry(9001L, "企业商城", true)));
+        when(tenantApi.validTenant(9001L)).thenReturn(CommonResult.success(true));
+        var result = service.getConfig();
+        assertNull(result.getPublicTenantId());
+        assertEquals(List.of(9001L), result.getTenants().stream().map(AppMallTenantConfigRespVO.Tenant::getTenantId).toList());
     }
 
     @Test
@@ -108,13 +110,13 @@ class MallTenantCatalogServiceTest {
     }
 
     @Test
-    void explicitRegistrationConfigurationIsPublishedWithoutBypassingServerValidation() {
+    void registrationAvailabilityIsPublishedWithoutTenantSelectionCapability() {
         enablePublicEntry();
         properties.getEntries().getFirst().setRegistrationEnabled(true);
         when(tenantApi.validTenant(9001L)).thenReturn(CommonResult.success(true));
         AppMallTenantConfigRespVO result = service.getConfig();
         assertTrue(result.isEnabled());
-        assertTrue(result.getCapabilities().isRegistrationSelection());
+        assertFalse(result.getCapabilities().isRegistrationSelection());
         assertTrue(result.getTenants().getFirst().isRegistrationEnabled());
         assertFalse(result.getCapabilities().isBrowseSwitch());
     }

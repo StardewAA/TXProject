@@ -132,19 +132,114 @@ mall:
   registration:
     platform-tenant-id: ${MALL_LEGACY_TENANT_ID:1}
     picture-enabled: ${MALL_REGISTRATION_PICTURE_ENABLED:false}
+    # 第 22 节平台账号注册必须走 /member/mall-auth 下的目标租户正式链路。
+    # 旧 /member/auth/register 仅作紧急回滚兼容，默认关闭，禁止静默写入租户 1。
+    legacy-endpoint-enabled: ${MALL_LEGACY_REGISTRATION_ENABLED:false}
   tenant:
     enabled: ${MALL_TENANT_DIRECTORY_ENABLED:false}
     browse-preview-enabled: ${MALL_TENANT_BROWSE_PREVIEW_ENABLED:false}
     scoped-entry-enabled: ${MALL_TENANT_SCOPED_ENTRY_ENABLED:false}
-    public-tenant-id: ${MALL_PUBLIC_TENANT_ID:3000}
+    # 第 22 节不再配置公共注册租户；平台浏览由 portal 接口承载。
     platform-enterprise-id: ${MALL_PLATFORM_ENTERPRISE_ID:940400}
     entries:
       - tenant-id: 3000
         name: 商城平台公共用户
+        public-visible: false
+        registration-enabled: false
+      - tenant-id: 2001
+        name: 西北恒泰新材料有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2002
+        name: 锦程树脂化工科技有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2003
+        name: 蓝盾涂料原料集团
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2004
+        name: 隆达橡塑材料股份有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2005
+        name: 金岩矿物棉实业有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2006
+        name: 汇泰玻纤科技有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2007
+        name: 宇昂化学助剂有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2008
+        name: 陕安防腐保温制品有限公司
         public-visible: true
         registration-enabled: true
       - tenant-id: 2009
         name: 科盾防护科技股份有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2010
+        name: 华瀚节能建材有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2011
+        name: 锐捷管道防护设备有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2012
+        name: 固邦防腐材料制造有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2013
+        name: 卓远耐火保温实业公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2014
+        name: 盛安工业防腐安装工程有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2015
+        name: 鑫源节能建设工程有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2016
+        name: 恒信防护工程技术有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2017
+        name: 拓远工业维保安装公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2018
+        name: 安科防腐工程有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2019
+        name: 延河热力集团有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2020
+        name: 秦川化工产业园发展有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2021
+        name: 陇原能源发电有限责任公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2022
+        name: 西北城投基建发展集团
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2023
+        name: 瀚海石化实业有限公司
+        public-visible: true
+        registration-enabled: true
+      - tenant-id: 2024
+        name: 陕北工矿集团有限责任公司
         public-visible: true
         registration-enabled: true
     auth:

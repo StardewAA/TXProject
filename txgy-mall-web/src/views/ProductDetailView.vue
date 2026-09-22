@@ -4,8 +4,6 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import { productApi } from '@/api/mall'
-import { ensureAccountSession } from '@/api/http'
-import { checkoutDraft } from '@/utils/checkout-draft'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useComparisonStore } from '@/stores/comparison'
@@ -13,6 +11,7 @@ import { getTenantContext } from '@/utils/tenant-context'
 import { skuImage } from '@/utils/sku-image'
 import type { Product, ProductSku, Shop } from '@/types/mall'
 import { formatMoney, normalizeImage, productImage, propertyText, sanitizeRichHtml } from '@/utils/format'
+import { platformCheckoutDraft } from '@/utils/platform-checkout-draft'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,12 +86,12 @@ async function addToCart(goCheckout = false) {
   if (!authStore.isLoggedIn) return router.push({ name: 'login', query: { redirect: route.fullPath } })
   adding.value = true
   try {
+    const cartId = await cartStore.add(selectedSku.value.id, quantity.value)
     if (goCheckout) {
-      await ensureAccountSession()
-      checkoutDraft.save([{ skuId: selectedSku.value.id, count: quantity.value }])
+      if (!cartId) throw new Error('购物车未返回有效商品编号')
+      platformCheckoutDraft.save([cartId])
       await router.push('/checkout')
     } else {
-      await cartStore.add(selectedSku.value.id, quantity.value)
       ElMessage.success('已加入购物车')
     }
   } finally { adding.value = false }

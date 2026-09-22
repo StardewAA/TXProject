@@ -22,11 +22,12 @@ const statusNames: Record<number, string> = {
 }
 const list = ref<AfterSale[]>([])
 const route = useRoute(), router = useRouter()
+const enterpriseMode = computed(() => route.path.startsWith('/purchase/after-sales'))
 const page = ref(1), total = ref(0), status = ref<number>(), failed = ref('')
 const selectedId = computed(() => { const value=Number(route.query.openAfter); return Number.isSafeInteger(value)&&value>0 ? value : undefined })
 const workbench = useOrderWorkbench()
-const notices = useOrderWorkbenchRows(workbench, computed(()=>({afterSaleIds:list.value.map(row=>row.id).join(',')})))
-function rowNotices(id:Identifier){return workbenchRowEntries(notices.snapshot.value?.rowEntries||[],id,true)}
+const notices = useOrderWorkbenchRows(workbench, computed(()=> enterpriseMode.value ? {} : ({afterSaleIds:list.value.map(row=>row.id).join(',')})))
+function rowNotices(id:Identifier){return enterpriseMode.value ? [] : workbenchRowEntries(notices.snapshot.value?.rowEntries||[],id,true)}
 const loading = ref(true)
 const submitting = ref(false)
 const deliveryVisible = ref(false)
@@ -42,11 +43,13 @@ async function load() {
   failed.value = ''
   try {
     if(selectedId.value){
-      const row=await tradeApi.getAfterSale(selectedId.value)
+      const row=await (enterpriseMode.value ? tradeApi.getPurchaseAfterSale(selectedId.value) : tradeApi.getAfterSale(selectedId.value))
       if(version!==requestVersion)return
       list.value=row?[row]:[];total.value=list.value.length
     }else{
-      const result=await tradeApi.getAfterSales({pageNo:page.value,pageSize:20,status:status.value})
+      const result=await (enterpriseMode.value
+        ? tradeApi.getPurchaseAfterSales({pageNo:page.value,pageSize:20,statuses:status.value})
+        : tradeApi.getAfterSales({pageNo:page.value,pageSize:20,statuses:status.value}))
       if(version!==requestVersion)return
       list.value=result.list||[];total.value=result.total
     }
@@ -78,7 +81,7 @@ async function submitDelivery() {
   const key=workbench.key.value
   try {
     if(!key)return
-    await tradeApi.deliverAfterSale({
+    await (enterpriseMode.value ? tradeApi.deliverPurchaseAfterSale : tradeApi.deliverAfterSale)({
       id: deliveryForm.id,
       logisticsId: deliveryForm.logisticsId,
       logisticsNo: deliveryForm.logisticsNo.trim(),
@@ -95,7 +98,7 @@ async function cancel(item: AfterSale) {
   const key=workbench.key.value,id=item.id
   try { await ElMessageBox.confirm('确定取消这次售后申请吗？', '取消售后', { type: 'warning', confirmButtonText: '确定取消', cancelButtonText: '返回' }) } catch { return }
   if(!key||key!==workbench.key.value)return
-  await tradeApi.cancelAfterSale(id)
+  await (enterpriseMode.value ? tradeApi.cancelPurchaseAfterSale(id) : tradeApi.cancelAfterSale(id))
   if(key!==workbench.key.value)return
   ElMessage.success('售后申请已取消')
   await load()
@@ -105,7 +108,7 @@ async function cancel(item: AfterSale) {
 function refreshWhenFocused() {
   if(!deliveryVisible.value&&!submitting.value)void load()
 }
-watch([selectedId,page,status],()=>{if(!deliveryVisible.value)void load()},{immediate:true})
+watch([selectedId,page,status,enterpriseMode],()=>{if(!deliveryVisible.value)void load()},{immediate:true})
 watch(selectedId,()=>{list.value=[];total.value=0},{flush:'sync'})
 watch(()=>workbench.state.value.updatedAt,()=>{if(!deliveryVisible.value&&!submitting.value&&!loading.value)void load()})
 watch(workbench.key,(key)=>{++requestVersion;loading.value=false;list.value=[];total.value=0;deliveryVisible.value=false;deliveryForm.id='';deliveryForm.logisticsId='';deliveryForm.logisticsNo='';expresses.value=[];if(key)void load()},{flush:'sync'})
@@ -117,8 +120,9 @@ onUnmounted(() => {requestVersion+=1;window.removeEventListener('focus', refresh
 </script>
 
 <template>
-  <MemberPage title="退款售后" description="查看 PC 与移动端共同提交的售后记录">
-    <OrderWorkbench :navigation-blocked="deliveryVisible||submitting" />
+  <MemberPage :title="enterpriseMode ? '企业采购售后' : '退款售后'" :description="enterpriseMode ? '同企业采购成员可查看询价成交订单的售后进度' : '查看 PC 与移动端共同提交的售后记录'">
+    <OrderWorkbench v-if="!enterpriseMode" :navigation-blocked="deliveryVisible||submitting" />
+    <el-alert v-else class="enterprise-after-tip" type="info" :closable="false" title="售后记录对当前企业采购成员共享；申请、取消和填写退货物流仅由实际下单人操作，退款仍退回原支付账户。" />
     <div class="after-filters"><template v-if="selectedId"><span>正在查看提醒关联的售后单 #{{selectedId}}</span><el-button @click="clearSelection">返回全部售后</el-button></template><template v-else><el-select v-model="status" clearable placeholder="全部售后状态" @change="page=1"><el-option v-for="(name,value) in statusNames" :key="value" :value="Number(value)" :label="name"/></el-select><el-button @click="load">刷新列表</el-button></template></div>
     <el-alert v-if="failed" :title="failed" type="error" :closable="false" />
     <div v-if="loading" class="loading-box"><el-skeleton :rows="8" animated /></div>
@@ -131,6 +135,7 @@ onUnmounted(() => {requestVersion+=1;window.removeEventListener('focus', refresh
           <b v-if="rowNotices(item.id).length" class="new-order">新待办</b>
           <p>{{ item.applyReason || item.reason || '售后申请' }}</p>
           <small>售后单：{{ item.no || item.id }}　{{ formatDate(item.createTime) }}</small>
+          <small v-if="enterpriseMode && item.createdByCurrentMember === false">由本企业其他采购员下单；当前仅可查看处理进度</small>
           <small v-if="item.logisticsNo">退货物流单号：{{ item.logisticsNo }}</small>
           <p v-if="item.returnAddress">退货收件人：{{ item.returnReceiverName }}　{{ item.returnReceiverMobile }}<br />退货地址：{{ item.returnAddress }}</p>
           <p v-else-if="item.status === 20">此历史/平台审核售后未记录退货地址，请先联系商家确认后再寄出。</p>
@@ -139,11 +144,12 @@ onUnmounted(() => {requestVersion+=1;window.removeEventListener('focus', refresh
         </div>
         <div class="after-actions">
           <b>{{ item.statusName || statusNames[item.status] || `状态 ${item.status}` }}</b>
+          <small v-if="[62, 63].includes(item.status)">售后记录已保留，原订单继续履约</small>
           <span>退款金额 ¥{{ formatMoney(item.refundPrice) }}</span>
           <template v-if="[62, 63].includes(item.status)"><MallLink v-if="item.shopId && item.orderId" :to="{ path: `/member/customer-service/shop/${item.shopId}`, query: { resourceType: 'ORDER', resourceId: item.orderId } }">联系店铺协商</MallLink><MallLink v-if="item.orderId" :to="{ path: '/member/customer-service/scoped', query: { resourceType: 'ORDER', resourceId: item.orderId } }">联系平台客服</MallLink></template><MallLink v-else-if="item.shopId && item.orderId" :to="{ path: `/member/customer-service/shop/${item.shopId}`, query: { resourceType: 'ORDER', resourceId: item.orderId } }">售后沟通（关联本人订单）</MallLink><MallLink v-else :to="buyerTo('/member/orders')">从关联订单联系商家</MallLink>
           <el-button v-if="rowNotices(item.id).length" @click="workbench.read(rowNotices(item.id)).catch(()=>{})">此提醒标为已读</el-button>
-          <el-button v-if="item.status === 20" type="primary" @click="openDelivery(item)">填写退货物流</el-button>
-          <el-button v-if="[10, 20].includes(item.status)" @click="cancel(item)">取消售后</el-button>
+          <el-button v-if="item.createdByCurrentMember !== false && item.status === 20" type="primary" @click="openDelivery(item)">填写退货物流</el-button>
+          <el-button v-if="item.createdByCurrentMember !== false && [10, 20].includes(item.status)" @click="cancel(item)">取消售后</el-button>
         </div>
       </article>
     </div>
@@ -166,13 +172,15 @@ onUnmounted(() => {requestVersion+=1;window.removeEventListener('focus', refresh
 
 <style scoped lang="scss">
 .after-filters{display:flex;gap:12px;align-items:center;margin-bottom:18px}.after-filters .el-select{width:240px}.new-order{font-size:12px;color:#a74410;border:1px solid #a74410;padding:1px 5px;margin-left:8px}.el-pagination{margin-top:20px}
+.enterprise-after-tip{margin-bottom:18px}
 .after-list article { display: grid; grid-template-columns: 84px 1fr 210px; gap: 16px; align-items: center; padding: 18px; border-bottom: 1px solid var(--line); }
 .after-image { width: 76px; height: 76px; background: #f5f5f5; }
 .after-image img { width: 100%; height: 100%; object-fit: cover; }
 .after-list p, .after-list small { display: block; color: var(--muted); }
 .after-actions { text-align: right; }
-.after-actions b, .after-actions span { display: block; }
+.after-actions b, .after-actions span, .after-actions small { display: block; }
 .after-actions b { color: var(--brand); }
+.after-actions small { margin-top: 6px; color: #b45309; }
 .after-actions span { margin: 10px 0; color: #59666f; }
 .after-actions .el-button { margin-top: 6px; }
 </style>

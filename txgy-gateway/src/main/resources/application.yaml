@@ -136,6 +136,10 @@ spring:
                 - Path=/app-api/product/**
               filters:
                 - RewritePath=/app-api/product/v3/api-docs, /v3/api-docs
+            - id: mall-portal-app-api # 跨租户商城门户公开接口
+              uri: grayLb://product-server
+              predicates:
+                - Path=/app-api/mall/**
             ## promotion-server 服务
             - id: promotion-admin-api # 路由的编号
               uri: grayLb://promotion-server

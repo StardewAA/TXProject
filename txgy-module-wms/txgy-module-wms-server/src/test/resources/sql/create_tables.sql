@@ -449,6 +449,7 @@ ALTER TABLE "wms_item_sku" ADD COLUMN IF NOT EXISTS "pallet_spec" varchar(255);
 ALTER TABLE "wms_item_sku" ADD COLUMN IF NOT EXISTS "min_package_unit" varchar(255);
 ALTER TABLE wms_shipment_order ADD COLUMN IF NOT EXISTS source_module varchar(16);
 ALTER TABLE wms_shipment_order ADD COLUMN IF NOT EXISTS business_chain_no varchar(64);
+ALTER TABLE wms_shipment_order ADD COLUMN IF NOT EXISTS shop_id bigint;
 ALTER TABLE wms_shipment_order ADD COLUMN IF NOT EXISTS simulation bit DEFAULT 0;
 ALTER TABLE wms_shipment_order_detail ADD COLUMN IF NOT EXISTS source_line_no integer;
 ALTER TABLE wms_shipment_order_detail ADD COLUMN IF NOT EXISTS source_snapshot_json text;

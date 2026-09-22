@@ -87,6 +87,7 @@ public interface WmsIntegrationApi {
     @Operation(summary = "按商城订单号查询出库处理结果")
     CommonResult<WmsIntegrationRequestRespDTO> getMallOrderExecution(
             @RequestParam("tenantId") Long tenantId,
+            @RequestParam("shopId") Long shopId,
             @RequestParam("sourceOrderNo") String sourceOrderNo);
 
     @PostMapping(PREFIX + "/collaboration-order-g/confirm")

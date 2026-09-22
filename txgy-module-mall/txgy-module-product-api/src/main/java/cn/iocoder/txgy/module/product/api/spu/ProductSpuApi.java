@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 import java.util.Collection;
 import java.util.List;
@@ -46,5 +48,11 @@ public interface ProductSpuApi {
     @Schema(description = "获得 SPU")
     @Parameter(name = "id", description = "SPU 编号", required = true, example = "1")
     CommonResult<ProductSpuRespDTO> getSpu(@RequestParam("id") Long id);
+
+    /** 查询当前租户内可售商品候选，供客服推荐使用。shopId=0 表示当前租户全部店铺。 */
+    @GetMapping(PREFIX + "/recommend-list")
+    CommonResult<List<ProductSpuRespDTO>> getRecommendSpuList(
+            @RequestParam("shopId") @Min(0) Long shopId,
+            @RequestParam("limit") @Min(1) @Max(50) Integer limit);
 
 }

@@ -4,7 +4,7 @@ export const MANAGE_PERMISSION = 'promotion:kefu-agent:manage';
 export const RECEIVE_PERMISSION = 'promotion:kefu-agent:receive';
 export const FAQ_PERMISSION = 'promotion:kefu-faq:manage';
 export const stateNames = { WAITING: '待接待', ACTIVE: '接待中', CLOSED: '已结束' };
-export const roleNames = { MEMBER: '顾客', AGENT: '人工坐席', FAQ: '常见问题', SYSTEM: '系统' };
+export const roleNames = { MEMBER: '顾客', AGENT: '人工坐席', FAQ: '常见问题', AI: 'AI 客服', SYSTEM: '系统' };
 export const actorName = (type: number) => type === 1 ? '商城会员 MEMBER' : type === 2 ? '后台管理员 ADMIN' : '未知身份';
 export const positiveId = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 export const validVersion = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

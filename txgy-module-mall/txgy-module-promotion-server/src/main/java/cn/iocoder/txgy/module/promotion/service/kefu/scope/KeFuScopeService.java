@@ -8,11 +8,14 @@ import cn.iocoder.txgy.module.promotion.dal.mysql.kefu.KeFuScopeRepository;
 import cn.iocoder.txgy.module.system.api.user.AdminUserApi;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.module.promotion.service.kefu.scope.KeFuScopeModels.*;
@@ -40,6 +43,33 @@ public class KeFuScopeService {
         scope(scope, shop);
         activeActor(member);
         activeShop(scope, shop);
+        return openAtTenant(tenant, member, scope, shop);
+    }
+
+    /**
+     * Opens a shop conversation whose target tenant was resolved from a public SKU by the server.
+     * The current tenant remains the member's account tenant; shop data, queue and grants stay in
+     * the target tenant.  No request-provided tenant id is accepted.
+     */
+    public Session openPlatform(Actor member, long targetTenant, long shop, long productSkuId) {
+        long memberTenant = context(member);
+        if (member.type() != 1 || targetTenant <= 0 || shop <= 0 || productSkuId <= 0) {
+            throw exception(INVALID);
+        }
+        activeActor(member);
+        return inTenant(targetTenant, () -> {
+            activeShop("SHOP", shop);
+            Session session = openAtTenant(targetTenant, member, "SHOP", shop);
+            if (!repository.bindPlatformOwner(session, memberTenant, member.id(), productSkuId)) {
+                // A numerically colliding legacy member from another account tenant must never
+                // inherit an existing platform session.
+                throw exception(FORBIDDEN);
+            }
+            return session;
+        });
+    }
+
+    private Session openAtTenant(long tenant, Actor member, String scope, long shop) {
         Session session = repository.open(tenant, scope, shop, member.id());
         if ("CLOSED".equals(session.state())) {
             repository.transition(session, "WAITING", null);
@@ -143,17 +173,34 @@ public class KeFuScopeService {
     /** Scope grant is locked before a session, in the same transaction as chat reads/writes. */
     public Session chatAccess(Actor actor, String id, boolean asAgent, boolean write) {
         long tenant = context(actor);
-        Session hint = required(tenant, id, false);
-        if (asAgent) authorize(tenant, hint.scope(), hint.shopId(), actor);
-        else {
-            if (actor.type() != 1 || hint.memberId() != actor.id()) throw exception(FORBIDDEN);
-            activeActor(actor);
-            if (write) activeShop(hint.scope(), hint.shopId());
+        if (asAgent) {
+            Session hint = required(tenant, id, false);
+            authorize(tenant, hint.scope(), hint.shopId(), actor);
+            // Agent reads must keep assignment stable until the private projection is fetched.
+            // Otherwise another agent can claim WAITING after authorization, and an RC message
+            // query can expose that new owner's later reply. Preserve grant -> session order.
+            return required(tenant, id, write || asAgent);
         }
-        // Agent reads must keep assignment stable until the private projection is fetched.
-        // Otherwise another agent can claim WAITING after authorization, and an RC message
-        // query can expose that new owner's later reply. Preserve grant -> session order.
-        return required(tenant, id, write || asAgent);
+        if (actor.type() != 1) throw exception(FORBIDDEN);
+        validSessionId(id);
+        activeActor(actor);
+        Session platformSession = repository.getPlatformOwned(tenant, actor.id(), id, write);
+        if (platformSession != null) {
+            if (platformSession.memberId() != actor.id()) throw exception(FORBIDDEN);
+            if (write) inTenant(platformSession.tenantId(), () -> {
+                activeShop(platformSession.scope(), platformSession.shopId());
+                return null;
+            });
+            return platformSession;
+        }
+        Session session = repository.get(tenant, id, write);
+        // A target-tenant account with a colliding numeric member id cannot claim a platform
+        // member's conversation through the legacy tenant-local path.
+        if (session == null || repository.hasPlatformOwner(id) || session.memberId() != actor.id()) {
+            throw exception(FORBIDDEN);
+        }
+        if (write) activeShop(session.scope(), session.shopId());
+        return session;
     }
 
     public long chatScope(Actor actor, String scope, Long shop) {
@@ -213,10 +260,33 @@ public class KeFuScopeService {
     }
 
     private Session required(long tenant, String id, boolean lock) {
-        if (id == null || id.isBlank() || id.length() > 36) throw exception(INVALID);
+        validSessionId(id);
         Session session = repository.get(tenant, id, lock);
         if (session == null) throw exception(FORBIDDEN);
         return session;
+    }
+
+    private void validSessionId(String id) {
+        if (id == null || id.isBlank() || id.length() > 36) throw exception(INVALID);
+    }
+
+    private <T> T inTenant(long tenant, Supplier<T> action) {
+        Long previousTenant = TenantContextHolder.getTenantId();
+        Boolean previousIgnore = TenantContextHolder.isIgnore();
+        SecurityContext previousSecurity = SecurityContextHolder.getContext();
+        try {
+            TenantContextHolder.setTenantId(tenant);
+            TenantContextHolder.setIgnore(false);
+            // RPC tenant headers must never be paired with the member's account-tenant principal.
+            // Internal /rpc-api endpoints are service-trusted; send only the server-resolved target
+            // tenant and restore the caller identity immediately after the bounded RPC operation.
+            SecurityContextHolder.clearContext();
+            return action.get();
+        } finally {
+            TenantContextHolder.setTenantId(previousTenant);
+            TenantContextHolder.setIgnore(previousIgnore);
+            SecurityContextHolder.setContext(previousSecurity);
+        }
     }
 
     private int offset(int page, int size) {

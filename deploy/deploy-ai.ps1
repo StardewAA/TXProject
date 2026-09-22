@@ -49,6 +49,10 @@ docker rm -f $ctr 2>&1 | Out-Null
 $runArgs = @(
   'run','-d','--name',$ctr,'--network',$network,'--restart','unless-stopped',
   '--memory','1073741824',
+  # 知识库向量缓存：SimpleVectorStore 把向量写成 /root/vector_store/*.json。
+  # 不挂卷时下面这行 docker rm -f 会把向量一起删掉（表现为「知识库突然答不出东西」且不报错），
+  # 挂到命名卷后可跨重建保留。
+  '-v','txgy-vector-store:/root/vector_store',
   '-e','TZ=Asia/Shanghai',
   '-e','LANG=en_US.UTF-8',
   '-e','LC_ALL=en_US.UTF-8',
