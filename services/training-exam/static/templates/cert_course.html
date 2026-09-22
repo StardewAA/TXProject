@@ -6,6 +6,7 @@ body { background:#2b2f36; font-family:"SimSun","宋体",serif;
        padding:40px; display:flex; justify-content:center; }
 .cert {
   width:960px; height:680px; position:relative; overflow:hidden;
+  display:flex; flex-direction:column; padding:42px 88px 14px;
   background:
     /* 安全底纹：细密同心圆 + 斜网纹，防伪纸质感 */
     repeating-radial-gradient(circle at 50% 42%, rgba(156,28,28,.028) 0 1px, transparent 1px 9px),
@@ -48,8 +49,7 @@ body { background:#2b2f36; font-family:"SimSun","宋体",serif;
              font-family:"KaiTi","楷体",serif; font-size:250px; font-weight:bold;
              color:#9c1c1c; opacity:.04; letter-spacing:30px; }
 /* 顶部平台标识条 */
-.platform { position:absolute; top:44px; left:0; right:0; text-align:center;
-            z-index:6; }
+.platform { text-align:center; position:relative; z-index:6; }
 .platform .p-main { font-family:"Microsoft YaHei","微软雅黑"; font-size:21px;
             font-weight:bold; letter-spacing:3px;
             background:linear-gradient(180deg,#b8892f 0%,#9c6e1e 100%);
@@ -71,59 +71,59 @@ body { background:#2b2f36; font-family:"SimSun","宋体",serif;
             width:9px; height:9px; background:#c0392b;
             box-shadow:0 0 0 2px #c8a24a; }
 /* 主标题 + 绶带 */
-.title-wrap { position:absolute; top:150px; left:0; right:0; text-align:center;
-              z-index:6; }
-.title { font-family:"KaiTi","楷体","STKaiti",serif; font-size:58px;
-         letter-spacing:22px; font-weight:bold; position:relative;
-         display:inline-block; padding:0 4px 0 26px;
+.title-wrap { text-align:center; margin-top:18px; position:relative; z-index:6; }
+.title { font-family:"KaiTi","楷体","STKaiti",serif; font-size:44px;
+         letter-spacing:14px; font-weight:bold; position:relative;
+         display:inline-block; white-space:nowrap;
+         padding:0 4px 0 18px;
          background:linear-gradient(180deg,#b52626 0%,#8a1414 100%);
          -webkit-background-clip:text; background-clip:text;
          -webkit-text-fill-color:transparent;
          filter:drop-shadow(1px 2px 1px rgba(138,20,20,.25)); }
-.title-en { font-family:"Microsoft YaHei"; font-size:11.5px; color:#b0954f;
-            letter-spacing:7px; margin-top:10px; text-transform:uppercase; }
+.title-en { font-family:"Microsoft YaHei"; font-size:11px; color:#b0954f;
+            letter-spacing:6px; margin-top:8px; text-transform:uppercase; }
 .title-en::before, .title-en::after { content:"— "; color:#c8a24a; }
 .title-en::after { content:" —"; }
-.certno { font-family:"Microsoft YaHei"; font-size:13px; color:#8a7a5a;
-          margin-top:16px; letter-spacing:1px;
+.certno { font-family:"Microsoft YaHei"; font-size:12.5px; color:#8a7a5a;
+          margin-top:12px; letter-spacing:1px; white-space:nowrap;
           display:inline-block; padding:3px 20px;
           border:1px solid rgba(184,137,47,.35); border-radius:14px;
           background:rgba(200,162,74,.06); }
 /* 正文 */
-.body { position:absolute; top:308px; left:88px; right:88px; z-index:6;
-        font-size:19px; line-height:2.15; color:#2a2118;
+.body { margin-top:18px; flex:1 1 auto; min-height:0; position:relative; z-index:6;
+        font-size:18px; line-height:1.95; color:#2a2118;
         font-family:"SimSun","宋体",serif; }
-.body .name { font-weight:bold; font-size:22px; color:#9c1c1c;
+.body .name { font-weight:bold; font-size:20px; color:#9c1c1c;
               border-bottom:2px solid #c8a24a; padding:0 12px; }
 .body .em { color:#9c1c1c; font-weight:bold; }
-.meta { margin-top:24px; font-family:"Microsoft YaHei"; font-size:15px;
-        color:#4a4030; line-height:2.05;
+.meta { margin-top:14px; font-family:"Microsoft YaHei"; font-size:14px;
+        color:#4a4030; line-height:1.9;
         background:linear-gradient(180deg,rgba(200,162,74,.12),rgba(200,162,74,.05));
         border:1px solid rgba(184,137,47,.28);
         border-left:4px solid #c8a24a; border-radius:3px;
-        padding:14px 20px; box-shadow:inset 0 1px 0 rgba(255,255,255,.5); }
+        padding:10px 18px; box-shadow:inset 0 1px 0 rgba(255,255,255,.5); }
 .meta b { color:#9c1c1c; font-weight:normal; }
 .meta em { color:#9c1c1c; font-style:normal; font-weight:bold; }
 /* 页脚 */
-.footer { position:absolute; left:88px; right:88px; bottom:48px; z-index:6;
+.footer { position:relative; z-index:6; margin-top:8px;
           display:flex; justify-content:space-between; align-items:flex-end;
           font-family:"Microsoft YaHei"; }
 .qr-wrap { text-align:center; }
-.qr-wrap img { width:64px; height:64px; padding:4px; background:#fff;
+.qr-wrap img { width:58px; height:58px; padding:4px; background:#fff;
                border:1px solid rgba(184,137,47,.4);
                box-shadow:0 2px 8px rgba(0,0,0,.18); }
 .qr-wrap p { margin-top:4px; color:#a99; font-size:10px; letter-spacing:1px; }
-.issue { text-align:right; font-size:14px; color:#4a4030; line-height:1.95; }
-.issue .org { font-size:17px; color:#9c1c1c; font-weight:bold;
+.issue { text-align:right; font-size:13px; color:#4a4030; line-height:1.85; }
+.issue .org { font-size:16px; color:#9c1c1c; font-weight:bold;
               letter-spacing:1px; }
 .issue .small { font-size:12px; color:#998; }
 /* 电子签章 */
-.seal { position:absolute; z-index:7; width:132px; height:132px;
-        right:110px; bottom:66px; opacity:.9;
+.seal { position:absolute; z-index:7; width:120px; height:120px;
+        right:96px; bottom:58px; opacity:.9;
         transform:rotate(-14deg); pointer-events:none;
         mix-blend-mode:multiply;
         filter:drop-shadow(0 1px 2px rgba(0,0,0,.12)); }
-.remark { position:absolute; left:88px; right:88px; bottom:34px; z-index:6;
+.remark { position:relative; z-index:6; margin-top:6px;
           font-family:"Microsoft YaHei"; font-size:10px; color:#b3a88f;
           line-height:1.6; text-align:center; }
 </style></head><body>

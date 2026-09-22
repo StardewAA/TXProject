@@ -817,6 +817,12 @@ def auto_paper(body: AutoPaperIn, db: Session = Depends(db_session), actor: Acto
                 if wanted else "请调低各题型数量，或先在资源中心补充题库。")
         raise HTTPException(422, detail={"message": f"随机组卷失败：{scope}题库数量不足（{detail_txt}）。{hint}", "shortages": shortages})
     total = round(sum(score for _, score in selected), 2)
+    # 分值整数化：每题 = floor(100/N)，余数分摊到前几题，保证总分恰为 100 且无小数分
+    n = len(selected)
+    if n:
+        base, rem = divmod(100, n)
+        selected = [(row, base + (1 if i < rem else 0)) for i, (row, _) in enumerate(selected)]
+        total = 100.0
     if total > PAPER_TOTAL_LIMIT: raise HTTPException(422, f"试卷总分不能超过 {PAPER_TOTAL_LIMIT} 分，当前规则合计 {total:g} 分")
     if body.pass_score > total: raise HTTPException(422, "及格分不能高于总分")
     data = body.model_dump(exclude={"sections", "tags", "difficulty"})
