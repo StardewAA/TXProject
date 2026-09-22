@@ -293,13 +293,9 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       return groupCrmSideMenus(
         convertServerMenuToRouteRecordStringComponent(
           filterMallPromotionMenus(
-            filterHrmEmployeePortalRecruitMenus(transformWmsMenus(menus)),
-      // 注入「AI对话助手」菜单项（前端演示用，无需后端配置）
-      injectAiChatMenu(menus, accessStore.accessCodes);
-      return convertServerMenuToRouteRecordStringComponent(
-        filterMallPromotionMenus(
-          filterHrmEmployeePortalRecruitMenus(
-            transformMesMenus(transformWmsMenus(menus)),
+            filterHrmEmployeePortalRecruitMenus(
+              transformMesMenus(transformWmsMenus(menus)),
+            ),
           ),
         ),
       );
