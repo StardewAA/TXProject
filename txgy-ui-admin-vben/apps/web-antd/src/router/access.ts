@@ -288,6 +288,8 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
       ) as AppRouteRecordRaw[];
       // 1) 注入 CRM 首页菜单项（无需后端配置）
       injectCrmMenus(menus, accessStore.accessCodes);
+      // 先完成「后端菜单 → 路由记录」转换，再把 CRM 的扁平子菜单重组为分组：
+      // 分组必须发生在转换之后，否则子菜单路径会被拼接成 /crm/<分组>/xxx，导致地址变化。
       // 2) 注入「AI对话助手」菜单项（前端演示用，无需后端配置；仅对拥有 crm:* 权限的账号生效）
       injectAiChatMenu(menus, accessStore.accessCodes);
 
@@ -495,6 +497,7 @@ const CRM_SIDE_GROUPS: Array<{
  */
 const CRM_MENU_TITLE_OVERRIDES: Record<string, string> = {
   '/crm/backlog': '待办中心',
+  '/crm/home': '首页',
 };
 
 /**
