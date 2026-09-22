@@ -749,8 +749,8 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll));
   }
 
   .banner-inner {
-    align-items: flex-end;
-    padding: 0 10% 12% 6%;
+    align-items: center;
+    padding: 0 10% 3% 6%;
   }
 
   .banner-title {
