@@ -6,8 +6,12 @@ import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderDetailRespVO;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPageItemRespVO;
 import cn.iocoder.txgy.module.trade.convert.order.TradeOrderConvert;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutDO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutMapper;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutOrderMapper;
 import cn.iocoder.txgy.module.trade.framework.order.config.TradeOrderProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,8 @@ import static org.mockito.Mockito.*;
 class TradeOrderPaymentDeadlineTest {
     TradeOrderProperties properties;
     PayOrderApi payApi;
+    PlatformCheckoutMapper platformCheckoutMapper;
+    PlatformCheckoutOrderMapper platformCheckoutOrderMapper;
     TradeOrderPaymentDeadlineService deadlines;
     TradeOrderDO order;
     LocalDateTime now;
@@ -32,7 +38,9 @@ class TradeOrderPaymentDeadlineTest {
         properties = new TradeOrderProperties();
         properties.setPayExpireTime(Duration.ofHours(2));
         payApi = mock(PayOrderApi.class);
-        deadlines = new TradeOrderPaymentDeadlineService(properties, payApi);
+        platformCheckoutMapper = mock(PlatformCheckoutMapper.class);
+        platformCheckoutOrderMapper = mock(PlatformCheckoutOrderMapper.class);
+        deadlines = new TradeOrderPaymentDeadlineService(properties, payApi, platformCheckoutMapper, platformCheckoutOrderMapper);
         now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
         order = new TradeOrderDO().setId(1L).setUserId(9L).setPayStatus(false).setStatus(0)
                 .setPayPrice(100);
@@ -128,6 +136,24 @@ class TradeOrderPaymentDeadlineTest {
         assertThrows(RuntimeException.class, () -> deadlines.getVerifiedPayOrder(order));
         when(payApi.getOrder(2L)).thenReturn(CommonResult.success(pay(now.plusMinutes(1), 0).setPrice(101)));
         assertThrows(RuntimeException.class, () -> deadlines.getVerifiedPayOrder(order));
+    }
+
+    @Test
+    void platformCheckoutChildTrustsAggregatePaymentRelation() {
+        order.setPayOrderId(2L);
+        PayOrderRespDTO aggregatePay = pay(now.plusMinutes(10), 0)
+                .setMerchantOrderId("-10").setPrice(170);
+        when(payApi.getOrder(2L)).thenReturn(CommonResult.success(aggregatePay));
+        when(platformCheckoutOrderMapper.selectByOrder(1L)).thenReturn(new PlatformCheckoutOrderDO()
+                .setCheckoutId(10L).setOrderId(1L).setTenantId(2024L).setPayAmount(100L));
+        when(platformCheckoutMapper.selectById(10L)).thenReturn(new PlatformCheckoutDO()
+                .setId(10L).setPlatformPayOrderId(2L).setPayAmount(170L));
+
+        assertSame(aggregatePay, deadlines.getVerifiedPayOrder(order));
+        var response = new AppTradeOrderDetailRespVO();
+        deadlines.fill(order, response, true);
+        assertTrue(response.getCanPay());
+        assertNull(response.getPaymentBlockReason());
     }
 
     @Test

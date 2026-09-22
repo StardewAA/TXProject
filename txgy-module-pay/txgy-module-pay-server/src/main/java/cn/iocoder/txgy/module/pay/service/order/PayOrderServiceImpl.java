@@ -83,6 +83,11 @@ public class PayOrderServiceImpl implements PayOrderService {
     }
 
     @Override
+    public Long getOrderTenantId(Long id) {
+        return orderMapper.selectTenantIdById(id);
+    }
+
+    @Override
     public PayOrderDO getOrder(String no) {
         return orderMapper.selectByNo(no);
     }

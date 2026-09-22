@@ -165,7 +165,7 @@ class WmsIntegrationApiImplTest {
         request.setShopId(null);
 
         assertServiceException(() -> api.createMallShipment(request), INTEGRATION_RECEIPT_REQUEST_INVALID,
-                "商城出库申请必须提供有效店铺编号");
+                "商城业务申请必须提供有效店铺编号");
 
         verifyNoInteractions(requestService, shipmentOrderService);
     }
@@ -188,11 +188,45 @@ class WmsIntegrationApiImplTest {
                 new cn.iocoder.txgy.module.wms.dal.dataobject.order.shipment.WmsShipmentOrderDO()
                         .setId(88L).setShopId(12L).setWarehouseId(77L));
 
-        assertEquals("WMS-MALL-MALL-ORDER-1", api.createMallShipment(request).getData().getTargetOrderNo());
+        var accepted = api.createMallShipment(request).getData();
+        assertEquals("WMS-MALL-MALL-ORDER-1", accepted.getTargetOrderNo());
+        assertEquals("COMPLETED", accepted.getBusinessStatus());
 
         verify(shipmentOrderService).createShipmentOrder(argThat(vo -> Objects.equals(vo.getShopId(), 12L)
                 && Objects.equals(vo.getWarehouseId(), 77L) && vo.getDetails().size() == 1));
         verify(shipmentOrderService).getShipmentOrder(88L);
+        verify(shipmentOrderService).autoCompleteMallShipment(88L);
+    }
+
+    @Test
+    void mallOpeningReceiptCreatesFinishedGoodsDraft() {
+        WmsOrderRequestDTO request = base(new WmsOrderRequestDTO(), "mall-opening-1")
+                .setShopId(12L).setBusinessChainNo("MALL-PRODUCT-12-99")
+                .setSourceOrderNo("OPENING-99-V1").setOrderType("MALL_OPENING_RECEIPT")
+                .setEventVersion(1L).setItems(java.util.List.of(new WmsIntegrationDocumentItemDTO()
+                        .setLineNo(1).setMaterialCode("MALL-SKU-101").setSkuCode("MALL-SKU-101-DEFAULT")
+                        .setMaterialType("FINISHED_GOODS").setMaterialNameSnapshot("新商品")
+                        .setUnitCode("PC").setUnitNameSnapshot("件").setWarehouseCode("FG-WH")
+                        .setRequiredQuantity(new java.math.BigDecimal("12"))));
+        request.setSourceModule("MALL");
+        doAnswer(invocation -> ((Supplier<WmsIntegrationRequestRespDTO>) invocation.getArgument(2)).get())
+                .when(requestService).execute(anyString(), same(request), any());
+        doAnswer(invocation -> ((Supplier<WmsIntegrationRequestRespDTO>) invocation.getArgument(1)).get())
+                .when(requestService).executeOrderBusiness(same(request), any());
+        when(warehouseMapper.selectByCode("FG-WH"))
+                .thenReturn(new WmsWarehouseDO().setId(77L).setWarehouseType("FINISHED_GOODS"));
+        when(itemSkuMapper.selectByCode("MALL-SKU-101-DEFAULT"))
+                .thenReturn(new WmsItemSkuDO().setId(66L).setItemId(55L));
+        when(itemMapper.selectById(55L)).thenReturn(new WmsItemDO().setId(55L).setCode("MALL-SKU-101")
+                .setMaterialType("FINISHED_GOODS").setUnit("件"));
+        when(receiptOrderService.createReceiptOrder(any())).thenReturn(88L);
+
+        var accepted = api.createMallOpeningReceipt(request).getCheckedData();
+
+        assertEquals("WMS-MALL-OPENING-99-V1", accepted.getTargetOrderNo());
+        verify(receiptOrderService).createReceiptOrder(argThat(vo -> Objects.equals(vo.getWarehouseId(), 77L)
+                && Objects.equals(vo.getSourceModule(), "MALL") && Objects.equals(vo.getBizOrderNo(), "OPENING-99-V1")
+                && vo.getDetails().getFirst().getQuantity().compareTo(new java.math.BigDecimal("12")) == 0));
     }
 
     private static WmsOrderRequestDTO mallShipmentRequest() {

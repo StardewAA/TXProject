@@ -22,12 +22,13 @@ const FavoriteApi = {
     });
   },
   // 添加商品收藏
-  createFavorite: (spuId) => {
+  createFavorite: (spuId, tenantSlug) => {
     return request({
       url: '/product/favorite/create',
       method: 'POST',
       data: {
         spuId,
+        tenantSlug,
       },
       custom: {
         auth: true,

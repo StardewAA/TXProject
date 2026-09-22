@@ -40,7 +40,7 @@ const returnPath = computed(() => {
   return typeof redirect === 'string' && /^\/(?!\/)/.test(redirect)
     ? redirect
     : platformCheckoutEntry.value
-      ? '/member/platform-checkouts'
+      ? '/member/orders'
       : route.query.orderId ? `/member/orders/${route.query.orderId}` : '/member/orders'
 })
 const amount = computed(() => Number(order.value?.price ?? order.value?.amount ?? 0))
@@ -198,6 +198,13 @@ onBeforeUnmount(() => { disposed = true; refreshQueue.dispose(); window.clearInt
     <section class="panel pay-card" v-loading="loading">
       <template v-if="order">
         <div class="pay-order"><div><span>支付订单</span><strong>{{ order.no || route.params.orderId }}</strong></div><div><span>{{ paymentStatus === 10 ? '已付金额' : '应付金额' }}</span><b>¥{{ formatMoney(amount) }}</b></div></div>
+        <div v-if="tradeOrder?.items?.length" class="pay-products">
+          <div v-for="item in tradeOrder.items" :key="item.id" class="pay-product">
+            <img :src="item.picUrl" :alt="item.spuName" />
+            <div><strong>{{ item.spuName }}</strong><small>{{ item.properties?.map(property => property.valueName).filter(Boolean).join(' / ') || '商品规格以订单为准' }}</small></div>
+            <span>× {{ item.count }}</span>
+          </div>
+        </div>
         <el-result v-if="paymentStatus === 10" icon="success" :title="order.channelCode === 'mock' ? '模拟付款成功' : '支付成功'" :sub-title="order.channelCode === 'mock' ? '测试付款已完成，没有扣除支付宝或微信资金。可进入订单查看最新进度。' : '付款已确认，可查看订单或账户余额。'">
           <template #extra><el-button @click="router.push('/goods')">继续采购</el-button><el-button type="primary" @click="router.push(returnPath)">{{ returnPath === '/member/wallet' ? '查看钱包' : '查看订单' }}</el-button></template>
         </el-result>
@@ -238,4 +245,5 @@ onBeforeUnmount(() => { disposed = true; refreshQueue.dispose(); window.clearInt
 .preview-cashier { text-align: center; padding: 8px 12px; }.provider-heading { display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; }.provider-badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: white; background: var(--brand); font-size: 24px; font-weight: 700; }.preview-cashier p { margin-top: 18px; color: var(--muted); }.preview-cashier strong { display: block; margin: 10px 0 20px; font-size: 36px; color: #24323b; }.scan-placeholder { width: 210px; height: 210px; margin: 0 auto 22px; border: 1px solid #e4e9ee; border-radius: 12px; background: #f7f9fb; display: grid; place-items: center; }.scan-corners { width: 155px; height: 155px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; border: 2px dashed #b8c5d0; border-radius: 6px; color: #6a7986; }.scan-corners .provider-badge { opacity: .45; }.preview-explanation { padding: 16px; border-radius: 8px; background: #fff8e8; color: #865721; line-height: 1.8; }.preview-explanation b, .preview-explanation span { display: block; }.preview-explanation span { margin-top: 6px; font-size: 13px; }.pending-tip { font-size: 12px; }.channels i.alipay, .provider-badge.alipay { background: #1677ff; }.channels i.wechat, .provider-badge.wechat { background: #16a45c; }
 .payment-code { text-align: center; }.payment-code img { width: 280px; height: 280px; }.payment-frame { width: 100%; height: 420px; border: 0; }
 .pay-page { max-width: 1000px; }.pay-card { min-height: 400px; padding: 34px; }.pay-order { display: flex; justify-content: space-between; align-items: center; padding: 24px; background: #f7f8f9; }.pay-order span, .pay-order strong, .pay-order b { display: block; }.pay-order strong { margin-top: 8px; }.pay-order b { margin-top: 8px; color: #df421f; font-size: 30px; }.pay-card h2 { margin: 30px 0 18px; font-size: 18px; }.channels { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }.channels button { min-height: 82px; display: flex; align-items: center; gap: 14px; padding: 12px 20px; border: 1px solid var(--line); background: white; text-align: left; }.channels button.active { border: 2px solid var(--brand); background: #fff8f4; }.channels i { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--brand); color: white; font-style: normal; }.channels span b, .channels span small { display: block; }.channels span small { margin-top: 5px; color: var(--muted); }.channel-empty { padding: 30px; background: #fff8e8; color: #8a6d31; }.pay-actions { margin-top: 40px; text-align: right; }
+.pay-products { border: 1px solid var(--line); border-top: 0; }.pay-product { display: flex; align-items: center; gap: 14px; padding: 14px 20px; }.pay-product + .pay-product { border-top: 1px solid var(--line); }.pay-product img { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; background: #f4f6f8; }.pay-product div { min-width: 0; flex: 1; }.pay-product strong, .pay-product small { display: block; }.pay-product strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.pay-product small { margin-top: 7px; color: var(--muted); }.pay-product > span { color: var(--muted); }
 </style>

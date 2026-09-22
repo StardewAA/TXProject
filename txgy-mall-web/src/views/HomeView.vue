@@ -75,7 +75,7 @@ onMounted(() => { void load(); void loadShops() })
   <div class="industry-home">
     <section class="home-hero"><div class="container home-hero__inner">
       <aside class="material-directory"><div class="material-directory__title"><span class="directory-menu"><IndustrialIcon name="menu" /></span><div><strong>全部商品分类</strong><small>MATERIAL DIRECTORY</small></div></div>
-        <MallLink v-for="category in roots.slice(0, 8)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><span><i aria-hidden="true"><IndustrialIcon :name="categoryIcon(category.name)" /></i>{{ category.name }}</span><b>›</b></MallLink>
+        <MallLink v-for="category in roots.slice(0, 8)" :key="category.id" :to="{ path: '/goods', query: { categoryName: category.name } }"><span><i aria-hidden="true"><IndustrialIcon :name="categoryIcon(category.name)" /></i>{{ category.name }}</span><b>›</b></MallLink>
         <MallLink to="/categories" class="all-materials">查看全部材料分类 <b>↗</b></MallLink>
       </aside>
       <IndustryCarousel />
@@ -91,7 +91,7 @@ onMounted(() => { void load(); void loadShops() })
     <div class="home-benefits"><div class="container"><div><span><IndustrialIcon name="shield" /></span><p><b>品类齐全</b><small>防腐保温材料集中采购</small></p></div><div><span><IndustrialIcon name="warehouse" /></span><p><b>库存核验</b><small>以下单结算结果为准</small></p></div><div><span><IndustrialIcon name="clipboard" /></span><p><b>规范交易</b><small>订单全流程线上留痕</small></p></div><div><span><IndustrialIcon name="headset" /></span><p><b>售后保障</b><small>专业售后进度可追踪</small></p></div></div></div>
     <section class="container home-section">
       <div class="home-title"><div><small>MATERIAL SELECTION</small><h2>从一份材料，开始工程采购</h2></div><MallLink to="/categories">全部材料分类 ↗</MallLink></div>
-      <div class="material-shortcuts"><MallLink v-for="category in roots.slice(0, 6)" :key="category.id" :to="{ path: '/goods', query: { categoryId: category.id } }"><div class="material-thumb"><img v-if="categoryImage(category)" :src="categoryImage(category)" :alt="category.name" loading="lazy" /><span v-else aria-hidden="true"><IndustrialIcon :name="categoryIcon(category.name)" /></span></div><div><strong>{{ category.name }}</strong><small>查看供应商品</small></div><b>›</b></MallLink></div>
+      <div class="material-shortcuts"><MallLink v-for="category in roots.slice(0, 6)" :key="category.id" :to="{ path: '/goods', query: { categoryName: category.name } }"><div class="material-thumb"><img v-if="categoryImage(category)" :src="categoryImage(category)" :alt="category.name" loading="lazy" /><span v-else aria-hidden="true"><IndustrialIcon :name="categoryIcon(category.name)" /></span></div><div><strong>{{ category.name }}</strong><small>查看供应商品</small></div><b>›</b></MallLink></div>
       <div v-if="failed" class="panel"><EmptyState title="材料目录暂时加载失败"><el-button @click="load">重新加载</el-button></EmptyState></div>
     </section>
     <section class="container home-section">
@@ -106,9 +106,9 @@ onMounted(() => { void load(); void loadShops() })
     </div></section>
     <div v-if="loading" class="container home-section loading-box"><el-skeleton :rows="6" animated /></div>
     <section v-for="(floor, index) in floors" :key="floor.category.id" class="container home-section material-floor">
-      <div class="home-title"><div class="floor-title"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><small>ENGINEERING MATERIALS</small><h2>{{ floor.category.name }}专区</h2></div></div><MallLink :to="{ path: '/goods', query: { categoryId: floor.category.id } }">更多{{ floor.category.name }} ↗</MallLink></div>
+      <div class="home-title"><div class="floor-title"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><small>ENGINEERING MATERIALS</small><h2>{{ floor.category.name }}专区</h2></div></div><MallLink :to="{ path: '/goods', query: { categoryName: floor.category.name } }">更多{{ floor.category.name }} ↗</MallLink></div>
       <div v-if="floor.products.length" :class="['floor-content', { 'is-compact': floor.products.length < 3 }]">
-        <MallLink v-if="floor.products.length < 3" class="floor-guide" :to="{ path: '/goods', query: { categoryId: floor.category.id } }"><small>MATERIAL GUIDE / 选材指引</small><h3>{{ floor.category.name }}</h3><p>核对材质、规格与使用工况，<br />为项目选择合适的配套材料。</p><span>进入材料专区 →</span></MallLink>
+        <MallLink v-if="floor.products.length < 3" class="floor-guide" :to="{ path: '/goods', query: { categoryName: floor.category.name } }"><small>MATERIAL GUIDE / 选材指引</small><h3>{{ floor.category.name }}</h3><p>核对材质、规格与使用工况，<br />为项目选择合适的配套材料。</p><span>进入材料专区 →</span></MallLink>
         <div class="product-grid"><ProductCard v-for="product in floor.products" :key="product.id" :product="product" /></div>
       </div>
       <EmptyState v-else title="该分类暂无上架商品"><MallLink to="/goods">浏览其他材料</MallLink></EmptyState>

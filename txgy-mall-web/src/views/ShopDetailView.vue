@@ -1,112 +1,70 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { productApi } from '@/api/mall'
-import ProductCard from '@/components/ProductCard.vue'
+import { portalApi, type PortalProduct, type PortalShop } from '@/api/portal'
+import PortalProductCard from '@/components/PortalProductCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import type { Category, Product, Shop } from '@/types/mall'
 import { normalizeImage } from '@/utils/format'
-import { rootCategories } from '@/utils/catalog'
 
 const route = useRoute()
-const shop = ref<Shop | null>(null)
-const categories = ref<Category[]>([])
-const products = ref<Product[]>([])
+const shop = ref<PortalShop | null>(null)
+const products = ref<PortalProduct[]>([])
 const total = ref(0)
 const loading = ref(true)
+const productsLoading = ref(false)
 const failed = ref(false)
 const productFailed = ref(false)
-const productsLoading = ref(false)
 const keyword = ref('')
 const appliedKeyword = ref('')
-const category = ref('')
 const page = ref(1)
 const sort = ref('default')
-const tab = ref('products')
-const logoFailed = ref(false)
-const roots = computed(() => rootCategories(categories.value))
-let requestId = 0
-let shopRequestId = 0
+let generation = 0
+
 async function loadProducts() {
-  const current = ++requestId
-  productsLoading.value = true
-  productFailed.value = false
-  const params: Record<string, unknown> = { shopId: route.params.id, pageNo: page.value, pageSize: 12 }
-  if (appliedKeyword.value) params.keyword = appliedKeyword.value
-  if (category.value) params.categoryId = category.value
-  if (sort.value !== 'default') { params.sortField = 'price'; params.sortAsc = sort.value === 'asc' }
+  if (!shop.value) return
+  const current = ++generation
+  productsLoading.value = true; productFailed.value = false
   try {
-    const result = await productApi.getPage(params)
-    if (current !== requestId) return
-    products.value = result.list || []
-    total.value = result.total || 0
-  } catch { if (current === requestId) { productFailed.value = true; products.value = []; total.value = 0 } }
-  finally { if (current === requestId) productsLoading.value = false }
+    const result = await portalApi.getTenantProducts(shop.value.tenantSlug, {
+      shopId: shop.value.shopId, pageNo: page.value, pageSize: 12,
+      keyword: appliedKeyword.value || undefined,
+      sortField: sort.value === 'default' ? undefined : 'price',
+      sortAsc: sort.value === 'asc' ? true : sort.value === 'desc' ? false : undefined,
+    })
+    if (current !== generation) return
+    products.value = result.list || []; total.value = Number(result.total || 0)
+  } catch { if (current === generation) { productFailed.value = true; products.value = []; total.value = 0 } }
+  finally { if (current === generation) productsLoading.value = false }
 }
-function search() {
-  appliedKeyword.value = keyword.value.trim()
-  if (page.value !== 1) page.value = 1
-  else void loadProducts()
-}
-watch([category, sort], () => { if (page.value !== 1) page.value = 1; else void loadProducts() })
-watch(page, loadProducts)
 async function loadShop() {
-  const current = ++shopRequestId
-  ++requestId
-  loading.value = true
-  failed.value = false
-  shop.value = null
-  products.value = []
-  keyword.value = appliedKeyword.value = category.value = ''
-  page.value = 1
-  sort.value = 'default'
-  tab.value = 'products'
-  logoFailed.value = false
-  try {
-    const result = await productApi.getShop(String(route.params.id))
-    if (current !== shopRequestId) return
-    shop.value = result
-    await loadProducts()
-  } catch { if (current === shopRequestId) failed.value = true }
-  finally { if (current === shopRequestId) loading.value = false }
+  ++generation; loading.value = true; failed.value = false; shop.value = null; products.value = []
+  try { shop.value = await portalApi.getShop(String(route.params.id)); await loadProducts() }
+  catch { failed.value = true }
+  finally { loading.value = false }
 }
+function search() { appliedKeyword.value = keyword.value.trim(); if (page.value !== 1) page.value = 1; else void loadProducts() }
 watch(() => route.params.id, loadShop, { immediate: true })
-void productApi.getCategories().then(value => { categories.value = value }).catch(() => {})
+watch(page, loadProducts)
+watch(sort, () => { if (page.value !== 1) page.value = 1; else void loadProducts() })
 </script>
 
 <template>
   <div class="container page-section">
-    <div class="shop-breadcrumb"><MallLink to="/">首页</MallLink> / <MallLink to="/shops">企业店铺</MallLink> / {{ shop?.name || '店铺详情' }}</div>
-    <div v-if="loading" class="loading-box panel"><el-skeleton :rows="8" animated /></div>
-    <EmptyState v-else-if="failed || !shop" title="店铺暂时无法访问" description="店铺可能已停用，请稍后重试或查看其他供应商。"><el-button @click="loadShop">重新加载</el-button><MallLink to="/shops">返回企业店铺</MallLink></EmptyState>
+    <div class="breadcrumb"><MallLink to="/">首页</MallLink> / <MallLink to="/shops">企业店铺</MallLink> / {{ shop?.shopName || '店铺详情' }}</div>
+    <div v-if="loading" class="panel loading-box"><el-skeleton :rows="8" animated /></div>
+    <EmptyState v-else-if="failed || !shop" title="店铺暂时无法访问" description="店铺可能已停用或没有公开在售商品。"><el-button @click="loadShop">重新加载</el-button><MallLink to="/shops">返回企业店铺</MallLink></EmptyState>
     <template v-else>
-      <section class="shop-cover">
-        <div class="shop-heading"><img v-if="shop.logoUrl && !logoFailed" :src="normalizeImage(shop.logoUrl)" alt="" @error="logoFailed = true" /><span v-else class="shop-logo">{{ shop.name.slice(0, 2) }}</span><div><small>INDUSTRIAL MATERIALS / 企业供应店铺</small><h1>{{ shop.name }}</h1></div></div>
-        <p>{{ shop.introduction || '欢迎进入店铺，查看在售材料及规格信息。' }}</p>
-        <div class="shop-cover-note">选好材料 · 对准规格 · 服务工程</div>
-      </section>
-      <nav class="shop-tabs" aria-label="店铺导航"><button :class="{ active: tab === 'products' }" @click="tab = 'products'">供应商品</button><button :class="{ active: tab === 'company' }" @click="tab = 'company'">店铺信息</button><button :class="{ active: tab === 'contact' }" @click="tab = 'contact'">联系方式</button><MallLink to="/shops">查看其他店铺 →</MallLink></nav>
-      <div class="shop-columns">
-        <aside>
-          <div class="panel shop-profile"><h3>店铺档案</h3><strong>{{ shop.name }}</strong><p>{{ shop.introduction || '店铺暂未填写简介' }}</p><MallLink :to="`/member/customer-service/shop/${shop.id}`">店铺客服 →</MallLink></div>
-          <div v-if="tab === 'products'" class="panel shop-category"><h3>按材料分类</h3><button :class="{ active: !category }" @click="category = ''">全部材料</button><button v-for="item in roots" :key="item.id" :class="{ active: category === String(item.id) }" @click="category = String(item.id)">{{ item.name }}</button></div>
-        </aside>
-        <section v-if="tab === 'products'" class="shop-products">
-          <form class="shop-search panel" @submit.prevent="search"><label for="within-shop">店内搜索</label><input id="within-shop" v-model="keyword" placeholder="输入商品名称" /><button type="submit">搜本店</button><MallLink :to="{ path: '/goods', query: { q: keyword } }">搜全站</MallLink></form>
-          <div class="shop-toolbar"><span>供应商品 / {{ total }} 件</span><select v-model="sort" aria-label="商品排序"><option value="default">综合排序</option><option value="asc">价格从低到高</option><option value="desc">价格从高到低</option></select></div>
-          <div v-if="productsLoading" class="panel loading-box"><el-skeleton :rows="6" animated /></div>
-          <EmptyState v-else-if="productFailed" title="商品加载失败"><el-button @click="loadProducts">重新加载</el-button></EmptyState>
-          <EmptyState v-else-if="!products.length" title="暂无符合条件的商品" description="可尝试其他分类或清空搜索词。" />
-          <div v-else class="shop-product-grid"><ProductCard v-for="product in products" :key="product.id" :product="product" /></div>
-          <div v-if="total > 12" class="shop-pagination"><el-pagination v-model:current-page="page" :total="total" :page-size="12" background layout="prev, pager, next" /></div>
+      <section class="shop-cover"><div class="heading"><img v-if="shop.logoUrl" :src="normalizeImage(shop.logoUrl)" alt="" /><span v-else>{{ shop.shopName.slice(0, 2) }}</span><div><small>{{ shop.tenantName }} / {{ shop.enterpriseName }}</small><h1>{{ shop.shopName }}</h1></div></div><p>{{ shop.introduction || '欢迎进入店铺，查看公开在售材料及规格信息。' }}</p><RouterLink :to="{ path: `/member/customer-service/shop/${shop.shopId}` }">联系店铺客服 →</RouterLink></section>
+      <div class="shop-main"><aside class="panel"><h3>店铺档案</h3><dl><dt>所属商城</dt><dd>{{ shop.tenantName }}</dd><dt>经营企业</dt><dd>{{ shop.enterpriseName }}</dd><dt>公开商品</dt><dd>{{ shop.productCount }} 件</dd></dl><RouterLink :to="{ name: 'tenant-mall', params: { tenantSlug: shop.tenantSlug } }">进入企业商城 →</RouterLink></aside>
+        <section><form class="shop-search panel" @submit.prevent="search"><label for="within-shop">店内搜索</label><input id="within-shop" v-model="keyword" placeholder="输入商品名称" /><button type="submit">搜本店</button></form><div class="toolbar"><span>供应商品 / {{ total }} 件</span><select v-model="sort"><option value="default">综合排序</option><option value="asc">价格从低到高</option><option value="desc">价格从高到低</option></select></div>
+          <div v-if="productsLoading" class="panel loading-box"><el-skeleton :rows="6" animated /></div><EmptyState v-else-if="productFailed" title="商品加载失败"><el-button @click="loadProducts">重新加载</el-button></EmptyState><EmptyState v-else-if="!products.length" title="暂无符合条件的商品" />
+          <div v-else class="product-grid"><PortalProductCard v-for="product in products" :key="String(product.spuId)" :product="product" /></div><div v-if="total > 12" class="pagination"><el-pagination v-model:current-page="page" :total="total" :page-size="12" background layout="prev, pager, next" /></div>
         </section>
-        <section v-else-if="tab === 'company'" class="panel shop-information"><h2>店铺信息</h2><h3>{{ shop.name }}</h3><p>{{ shop.introduction || '店铺暂未填写简介' }}</p></section>
-        <section v-else class="panel shop-information"><h2>联系方式</h2><p>联系人：{{ shop.contactName || '暂未公开' }}</p><p>联系电话：<a v-if="shop.contactMobile" :href="`tel:${shop.contactMobile}`">{{ shop.contactMobile }}</a><span v-else>暂未公开</span></p><MallLink :to="`/member/customer-service/shop/${shop.id}`">联系店铺客服 →</MallLink></section>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.shop-breadcrumb{color:#75817e;font-size:13px;margin-bottom:20px}.shop-cover{position:relative;overflow:hidden;padding:40px;background:linear-gradient(115deg,#103440,#235e59);border-radius:8px 8px 0 0;color:white}.shop-cover::after{content:'';position:absolute;right:-60px;top:-130px;width:360px;height:360px;border:50px solid #ffffff07;border-radius:50%;pointer-events:none}.shop-heading{display:flex;align-items:center;gap:20px}.shop-heading img,.shop-logo{width:72px;height:72px;object-fit:contain;background:#ffffffec;border-radius:8px;flex-shrink:0}.shop-logo{display:grid;place-items:center;color:#1d645b;font-size:24px;font-weight:bold}.shop-heading small{letter-spacing:2px;color:#a4c7bf;font-size:11px}.shop-heading h1{font-size:28px;margin:10px 0}.shop-cover p{max-width:800px;color:#d8e6e1;line-height:1.9}.shop-cover-note{color:#8abbb0;font-size:12px;letter-spacing:3px;margin-top:24px}.shop-tabs{background:white;display:flex;border:1px solid var(--line);margin-bottom:24px;align-items:center}.shop-tabs button{border:0;padding:18px 28px;background:white;color:#566860}.shop-tabs button.active{background:var(--brand);color:white}.shop-tabs a{margin-left:auto;padding:0 24px;font-size:13px;color:var(--brand)}.shop-columns{display:grid;grid-template-columns:230px minmax(0,1fr);gap:24px}.shop-profile{padding:24px;margin-bottom:20px}.shop-profile h3,.shop-category h3{font-size:16px;margin:0 0 22px}.shop-profile strong{font-size:14px}.shop-profile p{font-size:13px;line-height:1.9;color:#77827e}.shop-profile a{font-size:13px;color:var(--brand)}.shop-category{padding:24px 0}.shop-category h3{padding:0 24px}.shop-category button{display:block;width:100%;text-align:left;border:0;background:white;padding:12px 24px;color:#56675f}.shop-category button.active{background:#edf5f1;color:var(--brand);border-left:3px solid var(--brand)}.shop-search{display:flex;gap:14px;padding:20px;align-items:center}.shop-search input{flex:1;min-width:0;padding:10px;border:1px solid #d8e1dc}.shop-search button{background:var(--brand);color:white;padding:11px 22px;border:0}.shop-search a{font-size:13px;color:var(--brand)}.shop-toolbar{display:flex;justify-content:space-between;align-items:center;margin:24px 0;font-size:13px;color:#718078}.shop-toolbar select{padding:8px;border:1px solid #d8e1dc;background:white}.shop-product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.shop-pagination{display:flex;justify-content:center;margin:30px}.shop-information{padding:32px;min-height:380px}.shop-information p{line-height:2;color:#64756a}.shop-information a{color:var(--brand)}@media(max-width:1180px){.shop-columns{grid-template-columns:200px minmax(0,1fr)}.shop-product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.breadcrumb{margin-bottom:18px;color:#74847f}.shop-cover{position:relative;padding:34px;border-radius:10px;background:linear-gradient(120deg,#123842,#1b6e64);color:#fff}.heading{display:flex;align-items:center;gap:16px}.heading>img,.heading>span{display:grid;width:64px;height:64px;border-radius:8px;background:#e9f4f0;object-fit:contain;place-items:center;color:#117867;font-weight:700}.heading small{color:#acd0c8}.heading h1{margin:7px 0}.shop-cover>p{max-width:720px;color:#d2e3df}.shop-cover>a{position:absolute;right:30px;bottom:30px;padding:10px 16px;border:1px solid #ffffff66;border-radius:6px;color:#fff}.shop-main{display:grid;grid-template-columns:250px 1fr;gap:22px;margin-top:22px}.shop-main aside{height:max-content;padding:24px}.shop-main dl{display:grid;grid-template-columns:72px 1fr;gap:12px;font-size:13px}.shop-main dt{color:#788985}.shop-main dd{margin:0}.shop-main aside>a{color:var(--brand)}.shop-search{display:flex;align-items:center;gap:14px;padding:18px}.shop-search input{min-width:0;flex:1;padding:11px;border:1px solid #d5e0dd}.shop-search button{padding:11px 18px;border:0;background:var(--brand);color:#fff}.toolbar{display:flex;justify-content:space-between;padding:20px 2px}.toolbar select{padding:8px}.product-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.pagination{display:flex;justify-content:center;margin:28px}@media(max-width:900px){.shop-main{grid-template-columns:1fr}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shop-cover>a{position:static;display:inline-block;margin-top:12px}}
 </style>

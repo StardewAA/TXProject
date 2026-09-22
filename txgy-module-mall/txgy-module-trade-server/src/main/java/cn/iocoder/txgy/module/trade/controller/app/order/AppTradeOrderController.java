@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.trade.controller.app.order;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.txgy.module.pay.api.notify.dto.PayOrderNotifyReqDTO;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
 import cn.iocoder.txgy.module.product.api.shop.dto.ProductShopRespDTO;
@@ -21,6 +23,7 @@ import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
 import cn.iocoder.txgy.module.trade.service.checkout.PlatformCheckoutOrderService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderPaymentDeadlineService;
+import cn.iocoder.txgy.module.trade.service.order.PlatformBuyerOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.price.TradePriceService;
 import com.google.common.collect.Maps;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,7 +45,9 @@ import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import static cn.iocoder.txgy.module.trade.enums.ErrorCodeConstants.ORDER_NOT_FOUND;
 
 @Tag(name = "用户 App - 交易订单")
 @RestController
@@ -59,6 +64,8 @@ public class AppTradeOrderController {
     private PlatformCheckoutOrderService platformCheckoutOrderService;
     @Resource
     private TradeOrderQueryService tradeOrderQueryService;
+    @Resource
+    private PlatformBuyerOrderQueryService platformBuyerOrders;
     @Resource
     private DeliveryExpressService deliveryExpressService;
     @Resource
@@ -143,7 +150,7 @@ public class AppTradeOrderController {
     public CommonResult<AppTradeOrderDetailRespVO> getOrderDetail(@RequestParam("id") Long id,
                                                                   @RequestParam(value = "sync", required = false) Boolean sync) {
         // 1.1 查询订单
-        TradeOrderDO order = tradeOrderQueryService.getOrder(getLoginUserId(), id);
+        TradeOrderDO order = platformBuyerOrders.get(id, getLoginUserId(), TenantContextHolder.getRequiredTenantId());
         if (order == null) {
             return success(null);
         }
@@ -152,11 +159,11 @@ public class AppTradeOrderController {
                 && TradeOrderStatusEnum.isUnpaid(order.getStatus()) && !order.getPayStatus() && order.getPayOrderId() != null) {
             tradeOrderUpdateService.syncOrderPayStatusQuietly(order.getId(), order.getPayOrderId());
             // 重新查询，因为同步后，可能会有变化
-            order = tradeOrderQueryService.getOrder(id);
+            order = platformBuyerOrders.get(id, getLoginUserId(), TenantContextHolder.getRequiredTenantId());
         }
 
         // 2.1 查询订单项
-        List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(order.getId());
+        List<TradeOrderItemDO> orderItems = platformBuyerOrders.items(List.of(order.getId()));
         // 2.2 查询物流公司
         DeliveryExpressDO express = order.getLogisticsId() != null && order.getLogisticsId() > 0 ?
                 deliveryExpressService.getDeliveryExpress(order.getLogisticsId()) : null;
@@ -180,16 +187,26 @@ public class AppTradeOrderController {
     @GetMapping("/get-logistics")
     @Operation(summary = "获得本人订单只读物流摘要")
     public CommonResult<AppTradeOrderLogisticsRespVO> getLogistics(@RequestParam("id") Long id) {
-        return success(logistics.getForBuyer(id, getLoginUserId()));
+        PlatformBuyerOrderQueryService.AuthorizedOrder authorizedOrder = platformBuyerOrders.getAuthorized(
+                id, getLoginUserId(), TenantContextHolder.getRequiredTenantId());
+        if (authorizedOrder == null) {
+            throw exception(ORDER_NOT_FOUND);
+        }
+        AppTradeOrderLogisticsRespVO[] response = new AppTradeOrderLogisticsRespVO[1];
+        // 平台买家可查看其他租户下的子订单；物流、快递公司与 ERP 数据仍需在卖家租户下读取。
+        TenantUtils.execute(authorizedOrder.tenantId(),
+                () -> response[0] = logistics.getForAuthorizedOrder(authorizedOrder.order()));
+        return success(response[0]);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得交易订单分页")
     public CommonResult<PageResult<AppTradeOrderPageItemRespVO>> getOrderPage(AppTradeOrderPageReqVO reqVO) {
         // 查询订单
-        PageResult<TradeOrderDO> pageResult = tradeOrderQueryService.getOrderPage(getLoginUserId(), reqVO);
+        PageResult<TradeOrderDO> pageResult = platformBuyerOrders.page(
+                getLoginUserId(), TenantContextHolder.getRequiredTenantId(), reqVO);
         // 查询订单项
-        List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(
+        List<TradeOrderItemDO> orderItems = platformBuyerOrders.items(
                 convertSet(pageResult.getList(), TradeOrderDO::getId));
         // 最终组合
         var response = TradeOrderConvert.INSTANCE.convertPage02(pageResult, orderItems);
@@ -262,7 +279,14 @@ public class AppTradeOrderController {
     @Operation(summary = "确认交易订单收货")
     @Parameter(name = "id", description = "交易订单编号")
     public CommonResult<Boolean> receiveOrder(@RequestParam("id") Long id) {
-        tradeOrderUpdateService.receiveOrderByMember(getLoginUserId(), id);
+        PlatformBuyerOrderQueryService.AuthorizedOrder authorizedOrder = platformBuyerOrders.getAuthorized(
+                id, getLoginUserId(), TenantContextHolder.getRequiredTenantId());
+        if (authorizedOrder == null) {
+            throw exception(ORDER_NOT_FOUND);
+        }
+        // 跨租户平台订单需在卖家租户中更新，同时仍由上面的平台账号归属关系授权。
+        TenantUtils.execute(authorizedOrder.tenantId(), () -> tradeOrderUpdateService.receiveOrderByMember(
+                authorizedOrder.order().getUserId(), authorizedOrder.order().getId()));
         return success(true);
     }
 

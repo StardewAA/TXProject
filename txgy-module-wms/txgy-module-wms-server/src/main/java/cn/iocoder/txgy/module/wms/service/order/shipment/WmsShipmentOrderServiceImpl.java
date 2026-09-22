@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.txgy.framework.common.util.collection.CollectionUtils.convertList;
@@ -141,6 +142,29 @@ public class WmsShipmentOrderServiceImpl implements WmsShipmentOrderService {
         }
         shipmentOrderDetailService.validateShipmentOrderDetailListExists(id);
         completeApprovedShipmentOrder(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void autoCompleteMallShipment(Long id) {
+        WmsShipmentOrderDO order = validateShipmentOrderPrepare(id);
+        if (!"MALL".equals(order.getSourceModule())) {
+            throw new IllegalArgumentException("自动出库仅适用于商城销售订单");
+        }
+        if (ObjectUtil.notEqual(order.getApprovalStatus(), BpmProcessInstanceStatusEnum.NOT_START.getStatus())) {
+            throw new IllegalArgumentException("商城自动出库单已进入人工审批或已处理，不能重复执行");
+        }
+        shipmentOrderDetailService.validateShipmentOrderDetailListExists(id);
+        shipmentOrderMapper.updateById(new WmsShipmentOrderDO().setId(id)
+                .setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus())
+                .setApprovalTime(LocalDateTime.now()).setApprovalReason("商城销售订单自动出库"));
+        order.setApprovalStatus(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
+        completeApprovedShipmentOrder(order);
+        WmsShipmentOrderDO completed = validateShipmentOrderExists(id);
+        if (!Integer.valueOf(1).equals(completed.getExecutionStatus())) {
+            throw new IllegalStateException("商城订单自动出库失败："
+                    + Objects.toString(completed.getExecutionError(), "WMS 库存执行失败"));
+        }
     }
 
     private void completeApprovedShipmentOrder(WmsShipmentOrderDO order) {

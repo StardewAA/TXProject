@@ -311,6 +311,24 @@ public class PayRefundServiceTest extends BaseDbAndRedisUnitTest {
     }
 
     @Test
+    public void testCreateRefund_idempotentRetryReturnsExistingRefund() {
+        PayRefundCreateReqDTO reqDTO = new PayRefundCreateReqDTO()
+                .setAppKey("demo").setMerchantOrderId("100").setMerchantRefundId("200")
+                .setPrice(9).setUserId(300L).setUserType(1).setReason("测试退款");
+        PayAppDO app = randomPojo(PayAppDO.class, o -> o.setId(1L));
+        when(appService.validPayApp("demo")).thenReturn(app);
+        PayRefundDO existing = randomPojo(PayRefundDO.class, o -> o.setAppId(1L)
+                .setMerchantOrderId("100").setMerchantRefundId("200")
+                .setRefundPrice(9).setUserId(300L).setUserType(1));
+        refundMapper.insert(existing);
+
+        Long refundId = refundService.createRefund(reqDTO);
+
+        assertEquals(existing.getId(), refundId);
+        verifyNoInteractions(orderService, channelService);
+    }
+
+    @Test
     public void testCreateRefund_refundExists() {
         // 准备参数
         PayRefundCreateReqDTO reqDTO = randomPojo(PayRefundCreateReqDTO.class,

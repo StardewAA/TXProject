@@ -11,6 +11,7 @@ function portalRoute(url) {
 }
 function isPlatformRoute(route) {
   return route.pathname === '/' || route.pathname === '/pages/index/index'
+    || ['/pages/index/category', '/pages/index/search'].includes(route.pathname)
     || ['/pages/platform/cart', '/pages/platform/checkout'].includes(route.pathname)
     || (['/pages/goods/list', '/pages/goods/index'].includes(route.pathname)
       && (route.query.get('portal') === '1' || route.query.has('tenantSlug')));
@@ -41,7 +42,6 @@ export function platformNavigationTarget(path, address) {
   } catch { platformShell = false; }
   if (!platformShell) return path;
   if (path === '/pages/index/cart') return '/pages/platform/cart';
-  if (path === '/pages/index/category' || path === '/pages/index/search') return '/pages/goods/list?portal=1';
   return path;
 }
 export function stripPlatformTenantHints(address) {

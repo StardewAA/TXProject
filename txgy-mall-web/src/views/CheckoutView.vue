@@ -280,7 +280,7 @@ onMounted(async () => {
     <ServiceEntry label="平台结算咨询（不代表任一店铺）" :disabled="submitting || loading" />
 
     <el-result v-if="inquiryCheckout && (submitted || needsVerification)" class="panel" :icon="submitted ? 'success' : 'warning'" :title="submitted ? '订单已创建' : '订单提交结果需要核实'" :sub-title="`${recoveryError} 请先到订单列表核实结果，不要重复提交；有意新增采购请重新发起。`"><template #extra><el-button type="primary" @click="router.push('/purchase/orders')">查看我的订单</el-button></template></el-result>
-    <el-result v-else-if="!inquiryCheckout && platformResult" class="panel" icon="success" title="结算信息已提交" :sub-title="`结算单号 ${platformResult.checkoutNo}`"><template #extra><el-button type="primary" @click="router.push('/member/platform-checkouts')">查看结算记录</el-button><el-button @click="router.push('/cart')">返回购物车</el-button></template></el-result>
+    <el-result v-else-if="!inquiryCheckout && platformResult" class="panel" icon="success" title="结算信息已提交" :sub-title="`结算单号 ${platformResult.checkoutNo}`"><template #extra><el-button type="primary" @click="router.push('/member/orders')">查看我的订单</el-button><el-button @click="router.push('/member/platform-checkouts')">查看结算记录</el-button><el-button @click="router.push('/cart')">返回购物车</el-button></template></el-result>
     <EmptyState v-else-if="!inquiryCheckout && !cartItemIds.length" class="panel" title="没有可结算的商品" description="请返回购物车重新选择"><el-button type="primary" @click="router.push('/cart')">返回购物车</el-button></EmptyState>
 
     <template v-else>

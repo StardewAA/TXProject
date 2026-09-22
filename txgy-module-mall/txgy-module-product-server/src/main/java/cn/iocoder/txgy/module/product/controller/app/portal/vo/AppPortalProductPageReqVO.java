@@ -21,6 +21,14 @@ public class AppPortalProductPageReqVO extends PageParam {
     @Positive(message = "商品分类编号必须大于 0")
     private Long categoryId;
 
+    @Schema(description = "跨租户分类名称；同时匹配商品分类及其一级分类", example = "防腐材料")
+    @Size(max = 50, message = "商品分类名称不能超过 50 个字符")
+    private String categoryName;
+
+    @Schema(description = "平台公开店铺编号", example = "401")
+    @Positive(message = "店铺编号必须大于 0")
+    private Long shopId;
+
     @Schema(description = "排序字段：price 或 sales", example = "price")
     @Pattern(regexp = "price|sales", message = "商品排序字段无效")
     private String sortField;

@@ -380,7 +380,7 @@ class PurchaseInquiryMarketServiceTest {
     }
 
     @Test
-    void saveQuoteCoversEveryItemAndCalculatesMoneyOnServer() {
+    void saveQuoteAllowsPartialItemsAndCalculatesMoneyOnServer() {
         long future = System.currentTimeMillis() + 86_400_000L;
         EnterpriseApplicationDO application = new EnterpriseApplicationDO();
         application.setEnterpriseId(200L);
@@ -395,7 +395,9 @@ class PurchaseInquiryMarketServiceTest {
 
         InquiryItemDO requested = new InquiryItemDO();
         requested.setId(11L); requested.setInquiryId(10L); requested.setQuantity(new BigDecimal("2.000"));
-        when(inquiryItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(requested));
+        InquiryItemDO unavailable = new InquiryItemDO();
+        unavailable.setId(12L); unavailable.setInquiryId(10L); unavailable.setQuantity(BigDecimal.ONE);
+        when(inquiryItemMapper.selectList(any(Wrapper.class))).thenReturn(List.of(requested, unavailable));
         ProductSkuDO sku = new ProductSkuDO(); sku.setId(31L); sku.setSpuId(41L);
         sku.setProperties(List.of(new ProductSkuDO.Property(1L, "直径", 2L, "20mm")));
         when(skuMapper.selectById(31L)).thenReturn(sku);

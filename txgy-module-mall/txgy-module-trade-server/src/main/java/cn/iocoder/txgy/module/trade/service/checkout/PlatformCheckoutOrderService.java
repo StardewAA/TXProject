@@ -145,7 +145,7 @@ public class PlatformCheckoutOrderService {
         checkout.setPayStatus(PAY_STATUS_UNPAID).setAggregateStatus("ALL_UNPAID").setFailureReason(null)
                 .setPlatformPayOrderId(payOrderId).setPlatformPayOrderNo(String.valueOf(payOrderId));
         checkoutMapper.updateById(checkout);
-        int deleted = cartMapper.deleteByIdsAndMember(items.stream()
+        int deleted = cartMapper.hardDeleteByIdsAndMember(items.stream()
                 .map(PlatformCheckoutPlanItemDO::getCartItemId).toList(), checkout.getPlatformMemberId());
         if (deleted != items.size()) throw new ServiceException(409, "购物车状态已变化，请重新结算");
         return checkout;

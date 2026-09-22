@@ -116,7 +116,7 @@ class PlatformCartServiceTest {
         assertFalse(invalidItem.getValid());
         assertEquals("所属租户未开放或商品不存在", invalidItem.getInvalidReason());
         verify(mapper).updateInvalidReason(2L, 9001L, "所属租户未开放或商品不存在");
-        verify(mapper, never()).deleteByIdsAndMember(any(), anyLong());
+        verify(mapper, never()).hardDeleteByIdsAndMember(any(), anyLong());
     }
 
     @Test

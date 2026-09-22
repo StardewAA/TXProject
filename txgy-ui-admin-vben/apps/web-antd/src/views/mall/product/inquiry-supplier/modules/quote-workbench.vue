@@ -50,11 +50,13 @@ import {
   money,
   quoteActions,
   quoteStatus,
+  relatedQuoteSkus,
   validateQuoteSave,
   yuanToCents,
 } from '../model';
 
 interface EditorLine {
+  code?: string;
   count: number;
   inquiryItemId: number;
   name: string;
@@ -97,6 +99,7 @@ const messagesError = ref(false);
 const pendingMessage = ref<{ clientMessageId: string; content: string; quoteId: number }>();
 const draftMessage = ref('');
 const requestKey = ref(makeRequestKey('quote-save'));
+const expandedSkuLines = reactive<Record<number, boolean>>({});
 let generation = 0;
 
 const editor = reactive({
@@ -128,6 +131,10 @@ const total = computed(() => editor.lines.reduce(
   (sum, row) => sum + displayCents(row.unitPriceYuan) * Math.max(0, Number(row.count) || 0),
   displayCents(editor.freightYuan),
 ));
+const matchedSkus = (line: EditorLine) => relatedQuoteSkus(line, skus.value);
+const displayedSkus = (line: EditorLine) => expandedSkuLines[line.inquiryItemId]
+  ? skus.value
+  : matchedSkus(line);
 
 function close() {
   generation += 1;
@@ -146,6 +153,7 @@ function resetEditor(current: null | SupplierInquiryApi.Quote | undefined) {
     return {
       count: value?.count ?? (Number.isInteger(item.quantity) ? item.quantity : 1),
       inquiryItemId: item.id,
+      code: item.code,
       name: item.name,
       quantity: item.quantity,
       skuId: value?.skuId,
@@ -186,6 +194,7 @@ async function load() {
   detail.value = undefined;
   quote.value = undefined;
   skus.value = [];
+  Object.keys(expandedSkuLines).forEach((key) => delete expandedSkuLines[Number(key)]);
   messages.value = [];
   error.value = '';
   if (!props.open) return;
@@ -233,7 +242,7 @@ function buildSaveRequest() {
     deliveryDate: editor.deliveryDate?.valueOf() ?? 0,
     freightPrice: yuanToCents(editor.freightYuan, '运费'),
     inquiryId: detail.value.order.id,
-    items: editor.lines.map((row) => ({
+    items: editor.lines.filter((row) => row.skuId != null).map((row) => ({
       count: row.count,
       inquiryItemId: row.inquiryItemId,
       skuId: row.skuId ?? 0,
@@ -348,7 +357,7 @@ watch(() => [props.open, props.inquiryId, props.quoteId, props.shopId], () => {
           class="mb-4"
           show-icon
           type="info"
-          message="报价只允许使用当前后台账号获授权店铺的已审核 SKU；采购方公开信息不包含私人联系方式。"
+          message="可只报价本店铺能够供应的物料；未选择 SKU 的需求不会进入本次报价。报价商品须为当前账号获授权店铺的已审核 SKU。"
         />
         <Descriptions bordered :column="3" size="small">
           <DescriptionsItem label="询价单号">{{ detail.order.no || detail.order.id }}</DescriptionsItem>
@@ -372,16 +381,24 @@ watch(() => [props.open, props.inquiryId, props.quoteId, props.shopId], () => {
                 <strong>{{ line.name }}</strong>
                 <p>{{ line.specification || '规格待沟通' }} · {{ line.quantity }} {{ line.unit }}</p>
               </div>
-              <Select v-model:value="line.skuId" show-search option-filter-prop="label" :disabled="!editable" placeholder="选择已审核 SKU">
-                <SelectOption
-                  v-for="sku in skus"
-                  :key="sku.id"
-                  :value="sku.id"
-                  :label="`${sku.productName} ${sku.specification || sku.barCode || ''}`"
-                >
-                  {{ sku.productName }} · {{ sku.specification || sku.barCode || `SKU ${sku.id}` }} · ¥{{ fenToYuan(sku.price) }}
-                </SelectOption>
-              </Select>
+              <div class="sku-picker">
+                <Select v-model:value="line.skuId" show-search allow-clear option-filter-prop="label" :disabled="!editable" :placeholder="expandedSkuLines[line.inquiryItemId] ? '选择已审核 SKU' : '选择相关 SKU'" :not-found-content="expandedSkuLines[line.inquiryItemId] ? '本店铺暂无有效 SKU' : '未找到名称或编码相关的 SKU'">
+                  <SelectOption
+                    v-for="sku in displayedSkus(line)"
+                    :key="sku.id"
+                    :value="sku.id"
+                    :label="`${sku.productName} ${sku.specification || sku.barCode || ''}`"
+                  >
+                    {{ sku.productName }} · {{ sku.specification || sku.barCode || `SKU ${sku.id}` }} · ¥{{ fenToYuan(sku.price) }}
+                  </SelectOption>
+                </Select>
+                <small v-if="editable">
+                  {{ expandedSkuLines[line.inquiryItemId] ? `已显示全部 ${skus.length} 个有效 SKU` : `已筛选出 ${matchedSkus(line).length} 个相关 SKU` }}
+                  <Button type="link" size="small" @click="expandedSkuLines[line.inquiryItemId] = !expandedSkuLines[line.inquiryItemId]">
+                    {{ expandedSkuLines[line.inquiryItemId] ? '只看相关 SKU' : '显示全部 SKU' }}
+                  </Button>
+                </small>
+              </div>
               <InputNumber v-model:value="line.count" :disabled="!editable" :min="1" :precision="0" />
               <InputNumber v-model:value="line.unitPriceYuan" :disabled="!editable" :min="0.01" :precision="2" />
             </div>
@@ -431,9 +448,16 @@ watch(() => [props.open, props.inquiryId, props.quoteId, props.shopId], () => {
 
 <style scoped>
 .quote-table { border: 1px solid var(--ant-color-border, #d9d9d9); border-radius: 6px; overflow: hidden; }
-.quote-row { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(280px, 1.5fr) 130px 150px; gap: 12px; align-items: center; padding: 12px; border-top: 1px solid #f0f0f0; }
+.quote-row { display: grid; grid-template-columns: minmax(200px, 1.05fr) minmax(0, 1.55fr) 110px 130px; gap: 12px; align-items: center; padding: 12px; border-top: 1px solid #f0f0f0; }
+.quote-row > * { min-width: 0; }
 .quote-row:first-child { border-top: 0; }
 .quote-row p { margin: 4px 0 0; color: #64748b; font-size: 12px; }
+.sku-picker { display: grid; gap: 2px; min-width: 0; }
+.sku-picker small { display: flex; align-items: center; color: #64748b; }
+.sku-picker :deep(.ant-btn) { height: auto; padding: 0 5px; }
+.sku-picker :deep(.ant-select), .quote-row > :deep(.ant-input-number) { width: 100%; min-width: 0; }
+.sku-picker :deep(.ant-select-selector) { min-width: 0; overflow: hidden; }
+.sku-picker :deep(.ant-select-selection-item) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quote-head { background: #fafafa; color: #475569; font-weight: 600; }
 .quote-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 18px; border: 1px solid #f0f0f0; border-radius: 6px; }
 .quote-form label { display: grid; gap: 6px; color: #475569; }

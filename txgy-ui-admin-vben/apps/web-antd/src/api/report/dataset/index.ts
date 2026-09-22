@@ -28,8 +28,6 @@ export namespace ReportDatasetApi {
     sqlText?: string; // SQL 语句
     params?: Param[]; // 参数定义
     columnLabelList?: ColumnLabel[]; // 列标签（简单模式自动生成的中文表头）
-    sqlText?: string; // SQL 语句
-    params?: Param[]; // 参数定义
     tenantColumn?: string; // 租户过滤列名（必填）
     maxRows?: number; // 最大返回行数
     timeoutSeconds?: number; // 查询超时（秒）

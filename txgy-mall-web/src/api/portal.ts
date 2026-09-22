@@ -43,14 +43,32 @@ export interface PortalHotTenant extends PortalTenant {
   validQuantity: number
 }
 
+export interface PortalShop {
+  tenantId: Identifier
+  tenantSlug: string
+  tenantName: string
+  tenantLogo?: string
+  enterpriseId: Identifier
+  enterpriseName: string
+  shopId: Identifier
+  shopName: string
+  logoUrl?: string
+  introduction?: string
+  productCount: number
+}
+
 export const portalApi = {
-  getProducts: (params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
+  getProducts: (params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; categoryName?: string; shopId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
     request<PageResult<PortalProduct>>({ url: '/mall/portal/products', params, scope: 'entry' }),
   getHotTenants: (window: '7d' | '30d', limit = 12) =>
     request<PortalHotTenant[]>({ url: '/mall/portal/tenants/hot', params: { window, limit }, scope: 'entry' }),
+  getShops: (keyword?: string) =>
+    request<PortalShop[]>({ url: '/mall/portal/shops', params: keyword ? { keyword } : undefined, scope: 'entry' }),
+  getShop: (shopId: Identifier) =>
+    request<PortalShop>({ url: `/mall/portal/shops/${encodeURIComponent(String(shopId))}`, scope: 'entry' }),
   getTenant: (tenantSlug: string) =>
     request<PortalTenant>({ url: `/mall/tenants/${encodeURIComponent(tenantSlug)}`, scope: 'entry' }),
-  getTenantProducts: (tenantSlug: string, params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
+  getTenantProducts: (tenantSlug: string, params: { pageNo: number; pageSize: number; keyword?: string; categoryId?: Identifier; categoryName?: string; shopId?: Identifier; sortField?: 'price' | 'sales'; sortAsc?: boolean }) =>
     request<PageResult<PortalProduct>>({ url: `/mall/tenants/${encodeURIComponent(tenantSlug)}/products`, params, scope: 'entry' }),
   getProduct: (spuId: Identifier) =>
     request<PortalProduct>({ url: `/mall/portal/products/${encodeURIComponent(String(spuId))}`, scope: 'entry' }),

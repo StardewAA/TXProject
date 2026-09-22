@@ -5,7 +5,11 @@ import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.pay.enums.order.PayOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.controller.app.order.vo.AppTradeOrderPaymentRespVO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutDO;
+import cn.iocoder.txgy.module.trade.dal.dataobject.checkout.PlatformCheckoutOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutMapper;
+import cn.iocoder.txgy.module.trade.dal.mysql.checkout.PlatformCheckoutOrderMapper;
 import cn.iocoder.txgy.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.iocoder.txgy.module.trade.framework.order.config.TradeOrderProperties;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +33,8 @@ public class TradeOrderPaymentDeadlineService {
 
     private final TradeOrderProperties properties;
     private final PayOrderApi payOrderApi;
+    private final PlatformCheckoutMapper platformCheckoutMapper;
+    private final PlatformCheckoutOrderMapper platformCheckoutOrderMapper;
 
     public void initialize(TradeOrderDO order, LocalDateTime now) {
         order.setPayExpireSeconds(seconds(properties.getPayExpireTime(), "支付"));
@@ -72,12 +78,39 @@ public class TradeOrderPaymentDeadlineService {
         if (order.getPayOrderId() == null) throw new ServiceException(400, "订单尚未生成支付单");
         var result = payOrderApi.getOrder(order.getPayOrderId());
         PayOrderRespDTO pay = result == null ? null : result.getCheckedData();
-        if (pay == null || !Objects.equals(pay.getId(), order.getPayOrderId())
-                || !Objects.equals(pay.getMerchantOrderId(), String.valueOf(order.getId()))
-                || !Objects.equals(pay.getPrice(), order.getPayPrice()) || pay.getExpireTime() == null) {
+        if (pay == null || !Objects.equals(pay.getId(), order.getPayOrderId()) || pay.getExpireTime() == null
+                || !isVerifiedMerchantOrder(order, pay)) {
             throw new ServiceException(400, "支付信息尚未核实，请稍后重试");
         }
         return pay;
+    }
+
+    private boolean isVerifiedMerchantOrder(TradeOrderDO order, PayOrderRespDTO pay) {
+        if (Objects.equals(pay.getMerchantOrderId(), String.valueOf(order.getId()))) {
+            return Objects.equals(pay.getPrice(), order.getPayPrice());
+        }
+        Long checkoutId = negativeMerchantId(pay.getMerchantOrderId());
+        if (checkoutId == null) return false;
+        PlatformCheckoutOrderDO relation = platformCheckoutOrderMapper.selectByOrder(order.getId());
+        if (relation == null || !Objects.equals(relation.getCheckoutId(), checkoutId)
+                || !Objects.equals(relation.getPayAmount(), Long.valueOf(order.getPayPrice()))) return false;
+        PlatformCheckoutDO checkout = platformCheckoutMapper.selectById(checkoutId);
+        if (checkout == null || checkout.getPayAmount() == null) return false;
+        try {
+            return Objects.equals(checkout.getPlatformPayOrderId(), pay.getId())
+                    && Objects.equals(pay.getPrice(), Math.toIntExact(checkout.getPayAmount()));
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
+    }
+
+    private static Long negativeMerchantId(String merchantOrderId) {
+        try {
+            long value = Long.parseLong(merchantOrderId);
+            return value < 0 && value != Long.MIN_VALUE ? -value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     /**

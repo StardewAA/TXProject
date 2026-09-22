@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalHotTenantRespVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalProductPageReqVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalProductRespVO;
+import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalShopRespVO;
 import cn.iocoder.txgy.module.product.controller.app.portal.vo.AppPortalTenantRespVO;
 import cn.iocoder.txgy.module.product.dal.mysql.portal.MallPortalCatalogMapper;
 import lombok.RequiredArgsConstructor;
@@ -87,16 +88,30 @@ public class MallPortalCatalogService {
         return result;
     }
 
+    @TenantIgnore
+    public List<AppPortalShopRespVO> getShops(String keyword) {
+        return mapper.selectShops(normalizeKeyword(keyword)).stream().map(MallPortalCatalogService::toShop).toList();
+    }
+
+    @TenantIgnore
+    public AppPortalShopRespVO getShop(Long shopId) {
+        if (shopId == null || shopId <= 0) throw new ServiceException(404, "店铺不存在或未开放");
+        MallPortalCatalogMapper.PortalShopRow row = mapper.selectShopById(shopId);
+        if (row == null) throw new ServiceException(404, "店铺不存在或未开放");
+        return toShop(row);
+    }
+
     private PageResult<AppPortalProductRespVO> getProducts(String tenantSlug,
                                                             AppPortalProductPageReqVO request) {
         String keyword = normalizeKeyword(request.getKeyword());
-        long total = mapper.countProducts(tenantSlug, keyword, request.getCategoryId());
+        String categoryName = normalizeKeyword(request.getCategoryName());
+        long total = mapper.countProducts(tenantSlug, keyword, request.getCategoryId(), categoryName, request.getShopId());
         if (total == 0) {
             return PageResult.empty();
         }
         long offset = Math.multiplyExact((long) request.getPageNo() - 1L, request.getPageSize().longValue());
         List<MallPortalCatalogMapper.PortalProductRow> rows = mapper.selectProducts(tenantSlug, keyword,
-                request.getCategoryId(), request.getSortField(), request.getSortAsc(), offset, request.getPageSize());
+                request.getCategoryId(), categoryName, request.getShopId(), request.getSortField(), request.getSortAsc(), offset, request.getPageSize());
         if (rows.isEmpty()) {
             return PageResult.empty(total);
         }
@@ -221,5 +236,13 @@ public class MallPortalCatalogService {
                 .setTenantName(row.getTenantName())
                 .setTenantLogo(row.getTenantLogo())
                 .setMainCategories(row.getMainCategories());
+    }
+
+    private static AppPortalShopRespVO toShop(MallPortalCatalogMapper.PortalShopRow row) {
+        return new AppPortalShopRespVO().setTenantId(row.getTenantId()).setTenantSlug(row.getTenantSlug())
+                .setTenantName(row.getTenantName()).setTenantLogo(row.getTenantLogo())
+                .setEnterpriseId(row.getEnterpriseId()).setEnterpriseName(row.getEnterpriseName())
+                .setShopId(row.getShopId()).setShopName(row.getShopName()).setLogoUrl(row.getLogoUrl())
+                .setIntroduction(row.getIntroduction()).setProductCount(row.getProductCount());
     }
 }

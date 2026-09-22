@@ -2,8 +2,6 @@ import type { ReportCenterApi } from '#/api/report/center';
 
 /**
  * 报表中心（生产执行报表）- 共享类型
-/**
- * 报表中心 - 共享类型
  */
 
 /** 每张报表独立的查询状态（切走再切回不丢失） */

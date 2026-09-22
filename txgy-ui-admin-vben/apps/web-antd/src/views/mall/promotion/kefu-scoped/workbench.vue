@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ChatMessage, ChatSend, ChatThread, KefuState } from '#/api/mall/promotion/kefu-scoped';
+import type { ChatMessage, ChatSend, ChatThread, KefuState, ScopedAgent } from '#/api/mall/promotion/kefu-scoped';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Page } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
-import { Alert, Badge, Button, Input, InputNumber, Popconfirm, Select, Tag } from 'ant-design-vue';
+import { Alert, Badge, Button, Input, Popconfirm, Select, Tag } from 'ant-design-vue';
 import { claimScopedSession, closeScopedSession, getAgentMessages, getAgentThread, getScopedWorkbench,
-  heartbeatAgent, readAgentMessages, sendAgentMessage } from '#/api/mall/promotion/kefu-scoped';
+  getMyScopedScopes, heartbeatAgent, readAgentMessages, sendAgentMessage } from '#/api/mall/promotion/kefu-scoped';
 import { actorName, canClaim, canReadSession, kefuError, kefuErrorCode, mergeMessages, ownsActive, RECEIVE_PERMISSION, roleNames, sameScope, stateNames } from './model';
 import { useScopedView } from './use-scoped-view';
 
@@ -28,12 +28,54 @@ function clear() {
   error.value = ''; wantOnline.value = false; expiresAt.value = 0; heartbeatBusy.value = false; clearDetail();
 }
 const context = useScopedView(RECEIVE_PERMISSION, clear);
+context.scope.value = 'SHOP';
+context.shopId.value = undefined;
 const listFence = context.fence(), detailFence = context.fence(), actionFence = context.fence(), sendFence = context.fence(), heartbeatFence = context.fence();
 const online = computed(() => wantOnline.value && expiresAt.value > now.value);
 const canSend = computed(() => context.ready.value && selected.value?.humanRequested === true && ownsActive(selected.value.session, adminId.value));
-const scopeOptions = [{ label: '平台客服（仅本租户）', value: 'PLATFORM' }, { label: '店铺客服', value: 'SHOP' }];
+const ownScopes = ref<ScopedAgent[]>([]), scopeLoading = ref(false), scopeError = ref('');
+const scopeOptions = computed(() => ownScopes.value.map((item) => ({
+  label: item.scope === 'PLATFORM' ? '平台客服（本租户）' : `店铺客服 · 店铺 #${item.shopId}`,
+  value: `${item.scope}:${item.shopId}`,
+})));
+const selectedScope = computed({
+  get: () => context.ready.value ? `${context.scope.value}:${context.shopId.value ?? 0}` : undefined,
+  set: (value?: string) => {
+    const [scope, rawShop] = String(value || '').split(':');
+    if (scope !== 'PLATFORM' && scope !== 'SHOP') return;
+    const shopId = Number(rawShop);
+    context.scope.value = scope;
+    context.shopId.value = scope === 'PLATFORM' ? 0 : Number.isSafeInteger(shopId) && shopId > 0 ? shopId : undefined;
+  },
+});
 const stateOptions = Object.entries(stateNames).map(([value, label]) => ({ value, label }));
 const pageSize = 20;
+let scopeGeneration = 0, scopeAbort: AbortController | undefined;
+
+async function loadOwnScopes() {
+  if (!context.active.value || !context.authorized.value) return;
+  scopeAbort?.abort(); scopeAbort = new AbortController();
+  const generation = ++scopeGeneration, signal = scopeAbort.signal;
+  const current = () => generation === scopeGeneration && !signal.aborted && context.active.value && context.authorized.value;
+  scopeLoading.value = true; scopeError.value = '';
+  try {
+    const data = await getMyScopedScopes(signal);
+    if (!current()) return;
+    ownScopes.value = Array.isArray(data) ? data.filter((item) => item.enabled === true) : [];
+    const currentKey = `${context.scope.value}:${context.shopId.value ?? 0}`;
+    const selected = ownScopes.value.find((item) => `${item.scope}:${item.shopId}` === currentKey) || ownScopes.value[0];
+    if (selected) {
+      context.scope.value = selected.scope;
+      context.shopId.value = selected.shopId;
+    } else {
+      context.scope.value = 'SHOP';
+      context.shopId.value = undefined;
+      scopeError.value = '当前账号没有已启用的客服范围授权，请联系管理员配置后重试。';
+    }
+  } catch (cause) {
+    if (current()) scopeError.value = kefuError(cause);
+  } finally { if (current()) scopeLoading.value = false; }
+}
 
 function safeThread(thread: ChatThread, id?: string) {
   return thread.humanRequested === true && context.query.value && sameScope(thread.session, context.query.value) && (!id || thread.session.id === id)
@@ -164,8 +206,11 @@ function discardPending() { if (!busy.value) { pending.value = undefined; draft.
 watch(context.ready, (ready) => { if (ready) { void load(); void tick(); } });
 watch(state, () => { page.value = 1; rows.value = []; loaded.value = false; void load(); });
 watch(adminId, () => { detailFence.invalidate(); sendFence.invalidate(); clearDetail(); });
+watch([context.active, context.authorized, adminId], ([active, authorized]) => {
+  if (active && authorized) void loadOwnScopes();
+}, { immediate: true });
 onMounted(() => document.addEventListener('visibilitychange', visibility));
-onUnmounted(() => { stopTimer(); document.removeEventListener('visibilitychange', visibility); });
+onUnmounted(() => { scopeGeneration++; scopeAbort?.abort(); stopTimer(); document.removeEventListener('visibilitychange', visibility); });
 </script>
 
 <template>
@@ -174,10 +219,11 @@ onUnmounted(() => { stopTimer(); document.removeEventListener('visibilitychange'
       <Alert type="info" show-icon message="待接待不代表有人在线；上线状态由服务器 90 秒租约决定。页面隐藏后停止在线续约；离开或断网后最迟随租约到期下线。附件暂不开放。" />
       <div class="scoped-toolbar">
         <strong>{{ context.label.value }}</strong>
-        <Select v-model:value="context.scope.value" :options="scopeOptions" :disabled="busy" style="width: 220px" aria-label="客服范围" />
-        <InputNumber v-if="context.scope.value === 'SHOP'" v-model:value="context.shopId.value" :min="1" :precision="0" :disabled="busy" placeholder="店铺编号" aria-label="店铺编号" />
+        <Select v-model:value="selectedScope" :options="scopeOptions" :loading="scopeLoading" :disabled="busy || scopeLoading" style="width: 280px" placeholder="选择已授权客服范围" aria-label="客服范围" />
+        <Button :loading="scopeLoading" :disabled="busy" @click="loadOwnScopes">刷新授权范围</Button>
         <Button :loading="context.capabilityLoading.value" @click="context.refreshCapability">核实开通状态</Button>
       </div>
+      <Alert v-if="scopeError" type="warning" show-icon :message="scopeError" />
       <Alert v-if="context.blocked.value" type="warning" show-icon :message="context.blocked.value" />
       <template v-if="context.ready.value">
         <div class="scoped-toolbar">

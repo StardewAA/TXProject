@@ -57,6 +57,8 @@ declare module 'vue' {
     OrderWorkbench: typeof import('./components/OrderWorkbench.vue')['default']
     OrderWorkbenchBadge: typeof import('./components/OrderWorkbenchBadge.vue')['default']
     PaymentDeadlineNotice: typeof import('./components/PaymentDeadlineNotice.vue')['default']
+    PortalProductCard: typeof import('./components/PortalProductCard.vue')['default']
+    PortalShopCard: typeof import('./components/PortalShopCard.vue')['default']
     ProductCard: typeof import('./components/ProductCard.vue')['default']
     ProductImages: typeof import('./components/ProductImages.vue')['default']
     ProductReviewHistory: typeof import('./components/ProductReviewHistory.vue')['default']

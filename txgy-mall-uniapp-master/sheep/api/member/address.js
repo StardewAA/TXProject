@@ -3,7 +3,8 @@ import request from '@/sheep/request';
 const AddressApi = {
   getLocationCapability: () => request({
     url: '/member/address/location-capability', method: 'GET',
-    custom: { auth: true, showLoading: false, showError: false },
+    // 只读取全局能力状态，不包含地图密钥，也不应被失效登录态或当前租户阻断。
+    custom: { scope: 'platform', isToken: false, showLoading: false, showError: false },
   }),
   // 获得用户收件地址列表
   getAddressList: () => {

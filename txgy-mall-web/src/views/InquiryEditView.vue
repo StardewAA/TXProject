@@ -15,7 +15,7 @@ import InquiryImportPreview from '@/components/InquiryImportPreview.vue'
 import { inquiryDraftSnapshot } from '@/utils/inquiry-draft'
 import { hasInquiryInput } from '@/utils/inquiry-import'
 const route=useRoute(),router=useRouter(),busy=ref(false),loaded=ref(false),preview=ref<ImportRow[]>([]),previewOpen=ref(false)
-const freshForm=():Inquiry=>({id:undefined,no:undefined,expectedDate:undefined,deliveryAreaId:undefined,requestKey:crypto.randomUUID(),title:'',contactName:'',contactMobile:'',address:'',remark:'',deadline:Date.now()+86400000,status:0,visibility:'TENANT_PUBLIC',invitedShopIds:[],invitedScopes:[]})
+const freshForm=():Inquiry=>({id:undefined,no:undefined,expectedDate:undefined,deliveryAreaId:undefined,requestKey:crypto.randomUUID(),title:'',contactName:'',contactMobile:'',address:'',remark:'',deadline:Date.now()+86400000,status:0,visibility:'PLATFORM_PUBLIC',invitedShopIds:[],invitedScopes:[]})
 const form=reactive<Inquiry>(freshForm()),loadVersion=ref(0),loadFailed=ref(false)
 const items=ref<InquiryItem[]>([])
 const supplierShops=ref<InquirySupplierShopOption[]>([]),supplierShopsLoading=ref(false),supplierShopsFailed=ref(false)

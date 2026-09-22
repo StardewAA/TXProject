@@ -4,6 +4,7 @@ import cn.iocoder.txgy.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.module.trade.dal.dataobject.cart.PlatformCartDO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
@@ -65,10 +66,18 @@ public interface PlatformCartMapper extends BaseMapperX<PlatformCartDO> {
     int updateInvalidReason(@Param("id") Long id, @Param("platformMemberId") Long platformMemberId,
                             @Param("invalidReason") String invalidReason);
 
-    default int deleteByIdsAndMember(Collection<Long> ids, Long platformMemberId) {
-        return delete(new LambdaQueryWrapperX<PlatformCartDO>()
-                .in(PlatformCartDO::getId, ids)
-                .eq(PlatformCartDO::getPlatformMemberId, platformMemberId));
-    }
+    /**
+     * 购物车是临时数据，移除时必须物理删除。
+     *
+     * <p>表上的唯一键包含 {@code deleted}。如果使用 MyBatis-Plus 逻辑删除，用户第二次购买同一 SKU 时，
+     * 会因已有一条 {@code deleted=1} 的历史记录而触发唯一键冲突，进而回滚整个结算事务。</p>
+     */
+    @Delete({"<script>",
+            "DELETE FROM trade_platform_cart",
+            "WHERE platform_member_id=#{platformMemberId} AND deleted=b'0' AND id IN",
+            "(<foreach collection='ids' item='id' separator=','>#{id}</foreach>)",
+            "</script>"})
+    int hardDeleteByIdsAndMember(@Param("ids") Collection<Long> ids,
+                                 @Param("platformMemberId") Long platformMemberId);
 
 }

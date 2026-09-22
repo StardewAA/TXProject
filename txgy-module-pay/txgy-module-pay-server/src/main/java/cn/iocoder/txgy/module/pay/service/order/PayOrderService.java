@@ -31,6 +31,9 @@ public interface PayOrderService {
      */
     PayOrderDO getOrder(Long id);
 
+    /** Returns the tenant that owns a globally unique payment order id. */
+    Long getOrderTenantId(Long id);
+
     /**
      * 获得支付订单
      *

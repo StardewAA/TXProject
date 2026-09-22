@@ -121,11 +121,12 @@
                 :src="sheep.$url.cdn(product.picUrl)"
                 mode="aspectFill"
               />
-              <text class="product-code">{{ product.tenantName }}</text>
-              <text class="product-unit">{{ product.skus.length }} 个规格</text>
-              <text class="product-mark">{{ product.shopName }}</text>
             </view>
             <view class="product-body">
+              <view class="product-meta-row">
+                <text class="product-tenant">{{ product.tenantName }}</text>
+                <text class="product-count">{{ product.skus.length }} 个规格</text>
+              </view>
               <text class="product-name">{{ product.spuName }}</text>
               <text class="product-spec">{{ product.enterpriseName }} · {{ product.shopName }}</text>
               <view class="product-price-row">
@@ -167,6 +168,7 @@
     normalizePortalTenant,
     portalProductDetailPath,
     portalProductListPath,
+    selectFeaturedPortalProducts,
   } from '@/sheep/helper/platform-portal.mjs';
 
   // 隐藏原生 tabBar，使用商城自定义 tabBar。
@@ -182,9 +184,7 @@
   const hotExpanded = ref(false);
   const rankingWindow = ref('7d');
   const visibleHotTenants = computed(() => hotExpanded.value ? hotTenants.value : hotTenants.value.slice(0, 5));
-  const featuredProducts = computed(() =>
-    (Array.isArray(products.value) ? products.value : []).filter(Boolean).slice(0, 6),
-  );
+  const featuredProducts = computed(() => selectFeaturedPortalProducts(products.value, 6));
 
   const formatPrice = (price) => {
     const value = Number(price);
@@ -207,15 +207,24 @@
   };
 
   const openSearch = () => {
-    openPortalProducts();
+    sheep.$router.go('/pages/index/search');
   };
 
   async function loadPortalProducts() {
     catalogSource.value = 'loading';
     try {
-      const response = await PortalApi.getProducts({ pageNo: 1, pageSize: 6 });
-      if (response?.code !== 0) throw new Error('平台商品暂不可用');
-      products.value = normalizePortalPage(response.data).list;
+      // 商品按租户模板成组排序，读取两个候选页后再做图片/品类/租户去重，
+      // 避免首页前六项恰好全是同一种材料。
+      const responses = await Promise.allSettled([
+        PortalApi.getProducts({ pageNo: 1, pageSize: 60 }),
+        PortalApi.getProducts({ pageNo: 2, pageSize: 60 }),
+      ]);
+      const candidates = responses.flatMap((result) => {
+        if (result.status !== 'fulfilled' || result.value?.code !== 0) return [];
+        return normalizePortalPage(result.value.data).list;
+      });
+      if (!candidates.length) throw new Error('平台商品暂不可用');
+      products.value = candidates;
       catalogSource.value = 'api';
     } catch (error) {
       products.value = [];
@@ -677,56 +686,33 @@
     opacity: 1;
   }
 
-  .product-code,
-  .product-unit,
-  .product-mark {
-    position: relative;
-    z-index: 1;
-  }
-
-  .product-code {
-    position: absolute;
-    top: 14rpx;
-    left: 14rpx;
-    max-width: calc(100% - 110rpx);
-    padding: 5rpx 9rpx;
-    overflow: hidden;
-    border-radius: 7rpx;
-    background: rgba(15, 23, 42, 0.72);
-    color: #fff;
-    font-size: 20rpx;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .product-unit {
-    position: absolute;
-    top: 14rpx;
-    right: 14rpx;
-    padding: 6rpx 12rpx;
-    border-radius: 999rpx;
-    background: rgba(15, 23, 42, 0.72);
-    color: #fff;
-    font-size: 19rpx;
-  }
-
-  .product-mark {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    padding: 10rpx 14rpx;
-    overflow: hidden;
-    background: rgba(15, 23, 42, 0.72);
-    color: #fff;
-    font-size: 22rpx;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .product-body {
     padding: 18rpx 18rpx 20rpx;
+  }
+
+  .product-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10rpx;
+    margin-bottom: 10rpx;
+    color: #64748b;
+    font-size: 18rpx;
+  }
+
+  .product-tenant {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .product-count {
+    flex-shrink: 0;
+    padding: 3rpx 8rpx;
+    border-radius: 999rpx;
+    color: #0f766e;
+    background: #e9f5f1;
   }
 
   .product-name,

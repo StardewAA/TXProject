@@ -112,7 +112,18 @@ test('entry has explicit platform scope when shop missing, never guesses shop', 
     resourceType: 'PRODUCT',
     resourceId: 9,
     productSkuId: 901,
-    tenantId: 2024,
+    serviceTenantId: 2024,
+  });
+});
+test('service tenant route key does not impersonate a mall switch', () => {
+  assert.deepEqual(chatTarget({ ...target, resourceType: 'PRODUCT', resourceId: 9,
+    productSkuId: 901, serviceTenantId: '2024' }), {
+    ...target, resourceType: 'PRODUCT', resourceId: 9, productSkuId: 901, tenantId: 2024,
+  });
+});
+test('router tenant id is ignored for platform customer service', () => {
+  assert.deepEqual(chatTarget({ scope: 'PLATFORM', shopId: '0', tenantId: '2009' }), {
+    scope: 'PLATFORM', shopId: 0,
   });
 });
 test('thread rejects cross-shop and foreign session responses', () => {

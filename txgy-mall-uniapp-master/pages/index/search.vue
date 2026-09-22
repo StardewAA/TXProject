@@ -34,6 +34,7 @@
   import { reactive } from 'vue';
   import sheep from '@/sheep';
   import { tenantTokenKey } from '@/sheep/helper/tenant-runtime';
+  import { portalProductListPath } from '@/sheep/helper/platform-portal.mjs';
   import { onLoad } from '@dcloudio/uni-app';
 
   const state = reactive({
@@ -47,7 +48,7 @@
     }
     saveSearchHistory(keyword);
     // 前往商品列表（带搜索条件）
-    sheep.$router.go('/pages/goods/list', { keyword });
+    sheep.$router.go(portalProductListPath({ keyword: String(keyword).trim() }));
   }
 
   // 保存搜索历史

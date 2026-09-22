@@ -12,7 +12,7 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { Alert, Button, message, Tabs } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { exportSpu, getSpuPage, getSpuReviewPolicy, getTabsCount, submitSpuReview, updateStatus, withdrawSpuReview } from '#/api/mall/product/spu';
+import { exportSpu, getSpuPage, getSpuReviewPolicy, getTabsCount, submitSpuReview, syncWmsStockCache, updateStatus, withdrawSpuReview } from '#/api/mall/product/spu';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import { canOperateProduct } from './review-model';
@@ -25,6 +25,7 @@ const policy = ref<MallSpuApi.ReviewPolicy>();
 const policyError = ref(false);
 const countError = ref(false);
 const busyId = ref<number>();
+const syncingStock = ref(false);
 const tabsData = ref([
   { name: '出售中', type: 0, count: undefined as number | undefined },
   { name: '仓库中', type: 1, count: undefined as number | undefined },
@@ -46,6 +47,23 @@ async function loadPolicy() {
 async function handleExport() {
   const data = await exportSpu({ ...(await gridApi.formApi.getValues()), tabType: tabType.value });
   downloadFileFromBlobPart({ fileName: '商品.xls', source: data });
+}
+
+async function handleSyncWmsStock() {
+  if (syncingStock.value) return;
+  try {
+    await confirm('确认从 WMS 同步当前租户的商品库存？WMS 已完成入库的库存会更新到商城。');
+  } catch {
+    return;
+  }
+  syncingStock.value = true;
+  try {
+    const count = await syncWmsStockCache();
+    message.success(`WMS 库存同步完成，已更新 ${count} 个 SKU`);
+    await gridApi.query();
+  } finally {
+    syncingStock.value = false;
+  }
 }
 
 let countRequest = 0;
@@ -181,6 +199,14 @@ onMounted(async () => {
         </Tabs>
       </template>
       <template #toolbar-tools>
+        <Button
+          v-access:code="['product:spu:update']"
+          class="mr-2"
+          :loading="syncingStock"
+          @click="handleSyncWmsStock"
+        >
+          同步 WMS 库存
+        </Button>
         <Button class="mr-2" @click="showPendingQueue">待审队列</Button>
         <TableAction :actions="[
           { label: '新增商品草稿', icon: ACTION_ICON.ADD, auth: ['product:spu:create'], ifShow: canCreate, onClick: () => push({ name: 'ProductSpuAdd' }) },

@@ -20,7 +20,8 @@ async function load(reset = false) {
     const params: Record<string, unknown> = { pageNo: pageNo.value, pageSize }
     const keyword = String(route.query.q || route.query.keyword || '').trim()
     if (keyword) params.keyword = keyword
-    if (route.query.categoryId) params.categoryId = Number(route.query.categoryId)
+    if (route.query.categoryName) params.categoryName = String(route.query.categoryName).trim()
+    else if (route.query.categoryId) params.categoryId = Number(route.query.categoryId)
     if (sort.value === 'priceAsc') { params.sortField = 'price'; params.sortAsc = true }
     if (sort.value === 'priceDesc') { params.sortField = 'price'; params.sortAsc = false }
     if (sort.value === 'sales') { params.sortField = 'sales'; params.sortAsc = false }

@@ -18,8 +18,11 @@ export function chatTarget(input = {}) {
       throw new Error('咨询商品规格不正确');
   }
   let tenantId;
-  if (input.tenantId != null) {
-    tenantId = Number(input.tenantId);
+  // `tenantId` is appended by the mobile router to account-scoped pages. It is not the
+  // product owner. Only the namespaced value created by chatEntry may select a service tenant.
+  const serviceTenantId = input.serviceTenantId;
+  if (serviceTenantId != null) {
+    tenantId = Number(serviceTenantId);
     if (!positive(tenantId) || !productSkuId)
       throw new Error('咨询商品所属商城不正确');
   }
@@ -38,7 +41,9 @@ export function chatEntry(shopId, resourceType, resourceId, productSkuId, tenant
     Object.assign(target, { resourceType, resourceId: Number(resourceId) });
   if (resourceType === 'PRODUCT' && target.scope === 'SHOP' && positive(Number(productSkuId)))
     target.productSkuId = Number(productSkuId);
-  if (target.productSkuId && positive(Number(tenantId))) target.tenantId = Number(tenantId);
+  // `tenantId` is reserved by the mobile router for switching the signed-in mall.  Customer
+  // service only needs it to validate the server-resolved product owner, so keep it namespaced.
+  if (target.productSkuId && positive(Number(tenantId))) target.serviceTenantId = Number(tenantId);
   return target;
 }
 export function chatData(response) {

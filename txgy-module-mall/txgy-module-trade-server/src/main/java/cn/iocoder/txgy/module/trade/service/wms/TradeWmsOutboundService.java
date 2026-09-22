@@ -207,7 +207,8 @@ public class TradeWmsOutboundService {
         record.setRequestedAt(LocalDateTime.now()).setRetryCount(value(record.getRetryCount()) + 1).setLastError(null);
         var accepted = wmsIntegrationApi.createMallShipment(request).getCheckedData();
         require(accepted != null && Boolean.TRUE.equals(accepted.getAccepted()), "WMS 未受理商城出库申请");
-        record.setTargetOrderNo(accepted.getTargetOrderNo()).setStatus(PENDING)
+        record.setTargetOrderNo(accepted.getTargetOrderNo())
+                .setStatus("COMPLETED".equals(accepted.getBusinessStatus()) ? COMPLETED : PENDING)
                 .setAcceptedAt(LocalDateTime.now()).setLastSyncedAt(LocalDateTime.now());
         shipmentMapper.updateById(record);
     }

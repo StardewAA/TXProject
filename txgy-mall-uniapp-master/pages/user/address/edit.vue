@@ -89,7 +89,7 @@
     <su-fixed bottom :opacity="false" bg="" placeholder :noFixed="false" :index="10">
       <view class="footer-box ss-flex-col ss-row-between ss-p-20">
         <view class="ss-m-b-20">
-          <button class="ss-reset-button save-btn ui-Shadow-Main" :disabled="state.saving || (state.addressId && !state.loaded)" @tap="onSave">{{ state.saving ? '正在保存…' : '保存' }}</button>
+          <button class="ss-reset-button save-btn ui-Shadow-Main" :disabled="!state.sessionReady || state.saving || (Boolean(state.addressId) && !state.loaded)" @tap="onSave">{{ !state.sessionReady ? '正在确认账号…' : state.saving ? '正在保存…' : '保存' }}</button>
         </view>
         <button v-if="state.model.id" :disabled="state.saving" class="ss-reset-button cancel-btn" @tap="onDelete">
           删除
@@ -108,6 +108,7 @@
         <view class="map-title">地图选点</view>
         <view>{{ state.mapMessage }}</view>
         <!-- #ifdef H5 -->
+        <view v-if="state.mapLoading" class="map-loading">地图正在加载，请稍候…</view>
         <view v-if="state.mapReady" class="map-search">
           <input v-model="state.mapSearch" placeholder="输入城市、道路、园区或建筑名称" @confirm="searchMap" />
           <button size="mini" :disabled="state.mapSearching" @tap="searchMap">{{ state.mapSearching ? '搜索中' : '搜索' }}</button>
@@ -135,14 +136,16 @@
   import AreaApi from '@/sheep/api/system/area';
   import AddressApi from '@/sheep/api/member/address';
   import { useTenantTask } from '@/sheep/hooks/useTenantTask';
+  import { ensureAccountSession, tenantContext } from '@/sheep/helper/tenant-runtime';
   import { manualMapMessage, normalizeLocationCapability, locationSummary, clearAddressLocation, createLatestTask } from '@/sheep/helper/fulfillment-view.mjs';
   import { isAmapConfigured, loadAmap } from '@/sheep/helper/amap-loader.mjs';
 
   const addressFormRef = ref(null);
   const state = reactive({
     showRegion: false,
-    showMap: false, mapMessage: manualMapMessage, mapReady: false, mapSearch: '', mapSearching: false, mapCandidate: null, locationCleared: false,
-    addressId: '', loaded: false, loadError: '', loading: false, saving: false, expired: false,
+    showMap: false, mapMessage: manualMapMessage, mapReady: false, mapLoading: false, mapSearch: '', mapSearching: false, mapCandidate: null, locationCleared: false,
+    addressId: '', loaded: false, loadError: '', loading: false, saving: false, sessionReady: false, expired: false,
+    accountTenantId: '', accountUserId: '',
     model: {
       name: '',
       mobile: '',
@@ -170,7 +173,7 @@
   async function openMap() {
     if (!task.current()) return;
     state.showMap = true;
-    state.mapReady = false; state.mapCandidate = null;
+    state.mapReady = false; state.mapLoading = true; state.mapCandidate = null;
     const current = task.capture();
     try {
       const response = await AddressApi.getLocationCapability();
@@ -179,13 +182,17 @@
       if (!current()) return;
       state.mapMessage = capability.message;
       // #ifdef H5
-      if (capability.enabled && isAmapConfigured()) await initMap(current);
-      else if (capability.enabled) state.mapMessage = '本机尚未配置高德地图 Key，请继续手工填写地址。';
+      if (capability.enabled && isAmapConfigured()) {
+        state.mapMessage = '地图正在加载，请稍候…';
+        await initMap(current);
+        if (current() && state.mapReady) state.mapMessage = '点击地图或搜索地址选择收货点位。';
+      } else if (capability.enabled) state.mapMessage = '本机尚未配置高德地图 Key，请继续手工填写地址。';
       // #endif
-    } catch { if (current()) state.mapMessage = '地图服务暂不可用，请继续手工填写地址，不影响保存和下单。'; }
+    } catch { if (current()) { state.mapReady = false; state.mapMessage = '地图加载失败，请稍后重试；也可继续手工填写地址。'; } }
+    finally { if (current()) state.mapLoading = false; }
   }
   function destroyMap() { mapSelection += 1; if (map) map.destroy(); map = undefined; marker = undefined; geocoder = undefined; amap = undefined; state.mapReady = false; }
-  function closeMap() { state.showMap = false; destroyMap(); }
+  function closeMap() { state.showMap = false; state.mapLoading = false; destroyMap(); }
   function coordinates(position) { return [Number(position.getLng().toFixed(6)), Number(position.getLat().toFixed(6))]; }
   function cityName(value) { return Array.isArray(value) ? value[0] || '' : value || ''; }
   function chooseMapPoint(lng, lat, fallback = '', moveMap = false) {
@@ -302,21 +309,47 @@
 
   // 保存收货地址
   const onSave = async () => {
-    if (!task.current() || state.saving || (state.addressId && !state.loaded)) return;
-    const current = task.capture();
+    if (!state.sessionReady || state.saving || (state.addressId && !state.loaded)) return;
     state.saving = true;
-    // 参数校验
-    const validate = await unref(addressFormRef)
-      .validate()
-      .catch(() => null);
-    if (!validate || !current()) {
+    // Global profile/cart requests can finish a same-account bootstrap after this page
+    // was mounted and advance the session epoch. Verify the account identity at the
+    // moment of writing, then rebase the page task. Never rebase across real accounts.
+    try { await ensureAccountSession(); }
+    catch (error) { state.saving = false; sheep.$helper.toast(error?.message || '登录状态暂无法确认'); return; }
+    const identity = tenantContext.state();
+    if (String(identity.accountTenantId || '') !== state.accountTenantId
+      || String(identity.userId || '') !== state.accountUserId) {
+      state.saving = false; state.expired = true; return;
+    }
+    if (!task.rebase()) { state.saving = false; return; }
+    const current = task.capture();
+    // uni-forms 在 H5 的 disabled 地区输入框上偶尔不会同步内部 formData，
+    // 会把界面上已经填写完整的地址静默判为失败。提交前以真实 model 做一次明确校验，
+    // 同时给用户可见提示，避免点击保存看起来没有反应。
+    const name = String(state.model.name || '').trim();
+    const mobileText = String(state.model.mobile || '').trim();
+    const detailAddress = String(state.model.detailAddress || '').trim();
+    const validationMessage = !name ? '请输入收货人姓名'
+      : !/^1[3-9]\d{9}$/.test(mobileText) ? '请输入正确的手机号'
+        : (!state.model.areaId || !String(state.model.areaName || '').trim()) ? '请选择省市区'
+          : !detailAddress ? '请输入详细地址' : '';
+    if (validationMessage || !current()) {
+      if (validationMessage && current()) sheep.$helper.toast(validationMessage);
       if (task.current()) state.saving = false;
       return;
     }
 
+    // 仍触发组件校验以清理旧错误样式；model 已通过上面的确定性校验，
+    // 组件内部缓存不同步时不能再次静默阻止提交。
+    await unref(addressFormRef)?.validate().catch(() => null);
+    if (!current()) { if (task.current()) state.saving = false; return; }
+
     // 提交请求
     const formData = {
       ...state.model,
+      name,
+      mobile: mobileText,
+      detailAddress,
     };
     delete formData.locationConfirmedAt;
     state.saving = true;
@@ -357,6 +390,17 @@
   };
 
   onLoad(async (options = {}) => {
+    try {
+      await ensureAccountSession();
+      if (!task.rebase()) return;
+      const identity = tenantContext.state();
+      state.accountTenantId = String(identity.accountTenantId || '');
+      state.accountUserId = String(identity.userId || '');
+      state.sessionReady = true;
+    } catch (error) {
+      state.loadError = error?.message || '登录状态暂无法确认，请返回后重试。';
+      return;
+    }
     const current = task.capture();
     // 获得地区数据
     getAreaData();
@@ -437,6 +481,7 @@
   .map-detail { color: #666; margin: 14rpx 0; overflow-wrap: anywhere; }
   .map-panel { padding: 60rpx 30rpx 40rpx; line-height: 1.8; min-height: 280rpx; }
   .map-search { display: flex; gap: 12rpx; margin: 18rpx 0; align-items: center; }
+  .map-loading { margin: 22rpx 0; padding: 28rpx; border-radius: 12rpx; text-align: center; color: #45625c; background: #eef7f4; }
   .map-search input { flex: 1; padding: 12rpx 18rpx; border: 1px solid #ddd; border-radius: 8rpx; }
   .map-search button { width: 150rpx; }
   .amap-container { width: 100%; height: 620rpx; border: 1px solid #ddd; border-radius: 8rpx; }

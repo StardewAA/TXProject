@@ -8,6 +8,7 @@ import {
   normalizePortalTenantSlug,
   portalProductDetailPath,
   portalProductListPath,
+  selectFeaturedPortalProducts,
 } from '../sheep/helper/platform-portal.mjs';
 
 const validProduct = (overrides = {}) => ({
@@ -82,4 +83,19 @@ test('tenant slug routes are stable and do not carry a tenant id', () => {
   for (const invalid of ['', '../1', '科盾', 'a_1', '3000?tenantId=1']) {
     assert.throws(() => normalizePortalTenantSlug(invalid));
   }
+});
+
+test('home featured products diversify visuals, product families and tenants', () => {
+  const candidates = [
+    validProduct({ tenantId: 2024, spuId: 1, tenantName: '甲公司', spuName: '甲公司 高温粘结剂', picUrl: '/adhesive.jpg' }),
+    validProduct({ tenantId: 2023, spuId: 2, tenantName: '乙公司', spuName: '乙公司 高温粘结剂', picUrl: '/adhesive.jpg' }),
+    validProduct({ tenantId: 2024, spuId: 3, tenantName: '甲公司', spuName: '甲公司 保冷管托', picUrl: '/support.jpg' }),
+    validProduct({ tenantId: 2023, spuId: 4, tenantName: '乙公司', spuName: '乙公司 保冷管托', picUrl: '/support.jpg' }),
+    validProduct({ tenantId: 2022, spuId: 5, tenantName: '丙公司', spuName: '丙公司 岩棉板', picUrl: '/rock-wool.jpg' }),
+    validProduct({ tenantId: 2021, spuId: 6, tenantName: '丁公司', spuName: '丁公司 防腐弯头', picUrl: '/elbow.jpg' }),
+  ];
+  const featured = selectFeaturedPortalProducts(candidates, 4);
+  assert.deepEqual(featured.map((item) => item.spuId), [1, 4, 5, 6]);
+  assert.equal(new Set(featured.map((item) => item.picUrl)).size, 4);
+  assert.equal(new Set(featured.map((item) => item.tenantId)).size, 4);
 });

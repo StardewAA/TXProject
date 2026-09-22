@@ -42,14 +42,14 @@ onMounted(load)
     <EmptyState v-else-if="!visibleRoots.length" title="没有匹配的分类"><el-button @click="search = ''">清空搜索</el-button></EmptyState>
     <div v-else class="category-groups">
       <section v-for="root in visibleRoots" :key="root.id" class="category-group panel">
-        <MallLink class="category-group__title" :to="{ path: '/goods', query: { categoryId: root.id } }">
+        <MallLink class="category-group__title" :to="{ path: '/goods', query: { categoryName: root.name } }">
           <img :src="'/banners/' + presentation(root.name).image + '.svg'" alt="" /><small>{{ presentation(root.name).tag }}</small><strong>{{ root.name }}</strong><span class="category-arrow">↗</span>
         </MallLink>
         <p class="category-tip">{{ presentation(root.name).tip }}</p>
         <div class="category-group__children">
-          <MallLink v-for="child in root.children" :key="child.id" :to="{ path: '/goods', query: { categoryId: child.id } }">{{ child.name }}</MallLink>
+          <MallLink v-for="child in root.children" :key="child.id" :to="{ path: '/goods', query: { categoryName: child.name } }">{{ child.name }}</MallLink>
         </div>
-        <MallLink class="category-all" :to="{ path: '/goods', query: { categoryId: root.id } }">浏览{{ root.name }} <span>→</span></MallLink>
+        <MallLink class="category-all" :to="{ path: '/goods', query: { categoryName: root.name } }">浏览{{ root.name }} <span>→</span></MallLink>
       </section>
     </div>
   </div>

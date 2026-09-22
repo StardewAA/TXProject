@@ -7,13 +7,20 @@ import cn.iocoder.txgy.module.pay.controller.admin.order.vo.PayOrderExportReqVO;
 import cn.iocoder.txgy.module.pay.controller.admin.order.vo.PayOrderPageReqVO;
 import cn.iocoder.txgy.module.pay.dal.dataobject.order.PayOrderDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
 public interface PayOrderMapper extends BaseMapperX<PayOrderDO> {
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("SELECT tenant_id FROM pay_order WHERE id=#{id} AND deleted=0 LIMIT 1")
+    Long selectTenantIdById(@Param("id") Long id);
 
     /** 仅供短事务支付生命周期门闩使用；调用方不得持锁访问第三方渠道。 */
     default PayOrderDO selectByIdForUpdate(Long id) {

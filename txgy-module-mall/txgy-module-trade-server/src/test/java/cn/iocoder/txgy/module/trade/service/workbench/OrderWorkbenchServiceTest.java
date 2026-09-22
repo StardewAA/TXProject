@@ -6,6 +6,8 @@ import cn.iocoder.txgy.framework.security.core.LoginUser;
 import cn.iocoder.txgy.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.member.api.user.MemberUserApi;
+import cn.iocoder.txgy.module.member.api.platform.MemberPlatformAccountApi;
+import cn.iocoder.txgy.module.member.api.platform.dto.MemberPlatformAccountRespDTO;
 import cn.iocoder.txgy.module.pay.api.order.PayOrderApi;
 import cn.iocoder.txgy.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
@@ -30,7 +32,7 @@ import static org.mockito.Mockito.*;
 
 class OrderWorkbenchServiceTest {
     JdbcTemplate jdbc;TransactionTemplate tx;OrderWorkbenchJournal journal;OrderWorkbenchService service;
-    ProductSupplierApi suppliers;SecurityFrameworkService security;PayOrderApi pay;
+    ProductSupplierApi suppliers;SecurityFrameworkService security;PayOrderApi pay;MemberPlatformAccountApi platformAccounts;
     Path ddl;
     @BeforeEach void setup(){
         var ds=new JdbcDataSource();ds.setURL("jdbc:h2:mem:workbench-"+UUID.randomUUID()+";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000");
@@ -41,6 +43,8 @@ class OrderWorkbenchServiceTest {
         jdbc.execute("CREATE TABLE trade_order(id BIGINT PRIMARY KEY,tenant_id BIGINT,deleted INT DEFAULT 0,no VARCHAR(64),user_id BIGINT,shop_id BIGINT,status INT,pay_status BIT,pay_order_id BIGINT,pay_expire_time DATETIME,pay_expire_seconds BIGINT,pay_price INT,delivery_type INT,refund_status INT,comment_status BIT,user_remark VARCHAR(200),type INT,pay_channel_code VARCHAR(30),terminal INT,logistics_id BIGINT,pick_up_store_id BIGINT,pick_up_verify_code VARCHAR(50),create_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
         jdbc.execute("CREATE TABLE trade_order_item(id BIGINT PRIMARY KEY,tenant_id BIGINT,deleted INT DEFAULT 0,order_id BIGINT,shop_id BIGINT,after_sale_status INT DEFAULT 0,after_sale_id BIGINT)");
         jdbc.execute("CREATE TABLE trade_after_sale(id BIGINT PRIMARY KEY,tenant_id BIGINT,deleted INT DEFAULT 0,no VARCHAR(64),order_id BIGINT,order_item_id BIGINT,user_id BIGINT,shop_id BIGINT,status INT,way INT,pay_refund_id BIGINT)");
+        jdbc.execute("CREATE TABLE trade_platform_checkout(id BIGINT PRIMARY KEY,platform_member_id BIGINT,deleted INT DEFAULT 0)");
+        jdbc.execute("CREATE TABLE trade_platform_checkout_order(id BIGINT PRIMARY KEY,checkout_id BIGINT,order_id BIGINT,tenant_id BIGINT,deleted INT DEFAULT 0)");
         jdbc.execute("CREATE TABLE trade_erp_inventory_request(id VARCHAR(64) PRIMARY KEY,tenant_id BIGINT,order_id BIGINT,operation VARCHAR(20),business_key VARCHAR(64),status VARCHAR(20),message VARCHAR(200))");
         jdbc.execute("""
                 CREATE TABLE trade_wms_shipment(
@@ -72,12 +76,13 @@ class OrderWorkbenchServiceTest {
                     UNIQUE(tenant_id,request_id)
                 )
                 """);
-        journal=new OrderWorkbenchJournal(jdbc);suppliers=mock(ProductSupplierApi.class);security=mock(SecurityFrameworkService.class);pay=mock(PayOrderApi.class);
+        journal=new OrderWorkbenchJournal(jdbc);suppliers=mock(ProductSupplierApi.class);security=mock(SecurityFrameworkService.class);pay=mock(PayOrderApi.class);platformAccounts=mock(MemberPlatformAccountApi.class);
         when(suppliers.validateShop(anyLong(),eq(1L))).thenReturn(CommonResult.success(true));when(suppliers.validateShop(anyLong(),eq(2L))).thenReturn(CommonResult.success(false));
         when(security.hasPermission(anyString())).thenReturn(true);
+        when(platformAccounts.resolve(7L,1L)).thenReturn(CommonResult.success(new MemberPlatformAccountRespDTO().setPlatformAccountId(9001L)));
         when(pay.getOrder(anyLong())).thenAnswer(inv->{long id=inv.getArgument(0);assertFalse(TransactionSynchronizationManager.isActualTransactionActive(),"支付RPC必须在事务/时钟锁之前");
             return CommonResult.success(new PayOrderRespDTO().setId(id).setMerchantOrderId(String.valueOf(id-1000)).setPrice(100).setStatus(0).setExpireTime(LocalDateTime.now().plusMinutes(20)));});
-        service=new OrderWorkbenchService(jdbc,journal,new OrderWorkbenchSource(jdbc,pay),new OrderWorkbenchCountService(jdbc,mock(MemberUserApi.class)),suppliers,security,manager);
+        service=new OrderWorkbenchService(jdbc,journal,new OrderWorkbenchSource(jdbc,pay),new OrderWorkbenchCountService(jdbc,mock(MemberUserApi.class),platformAccounts),suppliers,security,manager);
         login(1,7,1);
     }
     @AfterEach void cleanup(){TenantContextHolder.clear();SecurityContextHolder.clearContext();jdbc.execute("DROP ALL OBJECTS");}
@@ -128,6 +133,13 @@ class OrderWorkbenchServiceTest {
         login(1,7,1);assertThrows(ServiceException.class,()->service.summary(Role.SUPPLIER,2L,null,List.of(),List.of(),null,null,false));assertThrows(ServiceException.class,()->summary(Role.ADMIN,null));login(1,1,2);assertThrows(ServiceException.class,()->summary(Role.BUYER,null));}
     @Test void stateTabsKeepSearchButGlobalTodosIgnoreIt(){order(1,7,1,20);order(2,7,1,30);var filters=new TradeOrderPageReqVO();filters.setNo("ORDER-1");filters.setStatus(40);
         var s=service.summary(Role.BUYER,null,null,List.of(),List.of(),filters,null,false);assertEquals(2,s.pendingCount());assertEquals(1,s.orderStatusCounts().allCount());assertEquals(1,s.orderStatusCounts().deliveredCount());assertEquals(0,s.orderStatusCounts().canceledCount());}
+    @Test void buyerStatusCountsIncludeAuthorizedPlatformOrdersFromOtherTenants(){
+        jdbc.update("INSERT INTO trade_order(id,tenant_id,no,user_id,shop_id,status,pay_status,comment_status) VALUES(99,2,'CROSS-99',7002,22,0,0,0)");
+        jdbc.update("INSERT INTO trade_platform_checkout(id,platform_member_id) VALUES(50,9001)");
+        jdbc.update("INSERT INTO trade_platform_checkout_order(id,checkout_id,order_id,tenant_id) VALUES(51,50,99,2)");
+        var counts=summary(Role.BUYER,null).orderStatusCounts();
+        assertEquals(1,counts.allCount());assertEquals(1,counts.unpaidCount());
+    }
     @Test void pageCountsBeyondCurrentPageAndFiltersActualActions(){for(long id=1;id<=21;id++)order(id,7,1,20);order(22,7,1,30);var result=service.page(Role.BUYER,null,2,20,Action.RECEIVE,false,false);assertEquals(21,result.getTotal());assertEquals(1,result.getList().size());}
     @Test void corruptCursorAndOversizedIdsDoNotClearReadProgress(){assertThrows(ServiceException.class,()->summary(Role.BUYER,"bad"));assertThrows(ServiceException.class,()->service.read(new Read(Role.BUYER,null,List.of("-1")),false));assertTrue(summary(Role.BUYER,"99999999").resetRequired());}
     @Test void oldPaymentClosedOrPaidIsNeverShownAsPayable(){order(1,7,1,0);jdbc.update("UPDATE trade_order SET pay_expire_time=NULL,pay_expire_seconds=NULL WHERE id=1");

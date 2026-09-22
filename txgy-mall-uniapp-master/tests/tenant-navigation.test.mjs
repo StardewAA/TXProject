@@ -58,8 +58,8 @@ test('platform cart and checkout routes never inherit a tenant id', () => {
   assert.equal(isPlatformPortalAddress('https://mall/#/pages/platform/checkout?cartItemIds=11%2C12'), true);
   assert.equal(platformNavigationTarget('/pages/index/cart', 'https://mall/#/pages/index/index'), '/pages/platform/cart');
   assert.equal(platformNavigationTarget('/pages/index/cart', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/platform/cart');
-  assert.equal(platformNavigationTarget('/pages/index/category', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/goods/list?portal=1');
-  assert.equal(platformNavigationTarget('/pages/index/search', 'https://mall/#/pages/index/index'), '/pages/goods/list?portal=1');
+  assert.equal(platformNavigationTarget('/pages/index/category', 'https://mall/#/pages/index/user?tenantId=1'), '/pages/index/category');
+  assert.equal(platformNavigationTarget('/pages/index/search', 'https://mall/#/pages/index/index'), '/pages/index/search');
 });
 test('conflicting aliases, duplicate hints, malformed hints and hash hints fail closed', () => {
   for (const path of ['/goods/7?tenantId=1','/goods/7?tenant_id=bad','/goods/7?tenantId=9001&tenantId=1',

@@ -170,8 +170,23 @@ public class PlatformCheckoutService {
                                                                PageParam pageParam) {
         Long platformAccountId = resolvePlatformAccountId(legacyMemberId, sourceTenantId);
         PageResult<PlatformCheckoutDO> page = checkoutMapper.selectPageByMember(pageParam, platformAccountId);
-        return new PageResult<>(page.getList().stream().map(PlatformCheckoutService::toPageItem).toList(),
+        return new PageResult<>(page.getList().stream().map(checkout -> toPageItem(checkout,
+                        deriveAggregateStatus(checkout))).toList(),
                 page.getTotal());
+    }
+
+    private String deriveAggregateStatus(PlatformCheckoutDO checkout) {
+        return deriveAggregateStatus(checkout,
+                checkoutOrderMapper.selectListByCheckout(checkout.getId(), checkout.getCheckoutNo()));
+    }
+
+    private String deriveAggregateStatus(PlatformCheckoutDO checkout,
+                                         List<PlatformCheckoutOrderDO> orders) {
+        try {
+            return PlatformCheckoutAggregateStatusResolver.resolve(checkout, orders);
+        } catch (IllegalArgumentException invalidState) {
+            throw exception(PLATFORM_CHECKOUT_DATA_INVALID, invalidState.getMessage());
+        }
     }
 
     private AppPlatformCheckoutPreviewRespVO buildPreview(Long platformAccountId,
@@ -546,12 +561,7 @@ public class PlatformCheckoutService {
                                                          List<PlatformCheckoutPlanItemDO> planItems) {
         validateCheckoutHeader(checkout);
         validateCheckoutRelations(checkout, orders, allocations, plans, planItems);
-        String derivedAggregateStatus;
-        try {
-            derivedAggregateStatus = PlatformCheckoutAggregateStatusResolver.resolve(checkout, orders);
-        } catch (IllegalArgumentException invalidState) {
-            throw exception(PLATFORM_CHECKOUT_DATA_INVALID, invalidState.getMessage());
-        }
+        String derivedAggregateStatus = deriveAggregateStatus(checkout, orders);
         Map<Long, List<PlatformCheckoutPlanItemDO>> itemsByPlan = new LinkedHashMap<>();
         for (PlatformCheckoutPlanItemDO item : planItems) {
             itemsByPlan.computeIfAbsent(item.getPlanId(), ignored -> new ArrayList<>()).add(item);
@@ -859,8 +869,9 @@ public class PlatformCheckoutService {
                 .setAfterSaleStatus(order.getAfterSaleStatus());
     }
 
-    private static AppPlatformCheckoutPageItemRespVO toPageItem(PlatformCheckoutDO checkout) {
-        boolean planningOnly = Objects.equals(DRAFT_AGGREGATE_STATUS, checkout.getAggregateStatus());
+    private static AppPlatformCheckoutPageItemRespVO toPageItem(PlatformCheckoutDO checkout,
+                                                                 String aggregateStatus) {
+        boolean planningOnly = Objects.equals(DRAFT_AGGREGATE_STATUS, aggregateStatus);
         boolean payable = !planningOnly && !Objects.equals(DRAFT_PAY_STATUS, checkout.getPayStatus())
                 && checkout.getPlatformPayOrderId() != null && checkout.getPlatformPayOrderId() > 0;
         return new AppPlatformCheckoutPageItemRespVO()
@@ -868,7 +879,7 @@ public class PlatformCheckoutService {
                 .setGoodsAmount(checkout.getGoodsAmount()).setFreightAmount(checkout.getFreightAmount())
                 .setDiscountAmount(checkout.getDiscountAmount()).setPayAmount(checkout.getPayAmount())
                 .setPaidAmount(checkout.getPaidAmount()).setRefundedAmount(checkout.getRefundedAmount())
-                .setPayStatus(checkout.getPayStatus()).setAggregateStatus(checkout.getAggregateStatus())
+                .setPayStatus(checkout.getPayStatus()).setAggregateStatus(aggregateStatus)
                 .setFailureReason(checkout.getFailureReason()).setPayable(payable)
                 .setPlanningOnly(planningOnly).setCreateTime(checkout.getCreateTime());
     }

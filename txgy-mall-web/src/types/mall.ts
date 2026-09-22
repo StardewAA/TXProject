@@ -74,6 +74,7 @@ export interface ProductSku {
 
 export interface Product {
   id: Identifier
+  tenantSlug?: string
   name: string
   introduction?: string
   description?: string
@@ -104,6 +105,7 @@ export interface ProductCollectionItem {
   shopName?: string
   saleable?: boolean | null
   unavailableReason?: string | null
+  tenantSlug?: string
 }
 
 export interface Shop {

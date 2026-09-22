@@ -1,6 +1,7 @@
 package cn.iocoder.txgy.module.member.controller.app.address;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressCreateReqVO;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressRespVO;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressUpdateReqVO;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -37,6 +39,8 @@ public class AppAddressController {
     private String addressMapProvider;
 
     @GetMapping("/location-capability")
+    @PermitAll
+    @TenantIgnore
     @Operation(summary = "地址地图能力；未配置时使用手工地址")
     public CommonResult<AppAddressLocationCapabilityRespVO> getLocationCapability() {
         return success(new AppAddressLocationCapabilityRespVO(addressMapEnabled, addressMapProvider));

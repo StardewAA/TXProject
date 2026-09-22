@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
+import { productApi } from '@/api/mall'
 import { portalApi, type PortalProduct, type PortalSku } from '@/api/portal'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -22,6 +23,8 @@ const quantity = ref(1)
 const loading = ref(false)
 const adding = ref(false)
 const comparing = ref(false)
+const favorite = ref(false)
+const favoriteChanging = ref(false)
 const error = ref('')
 let generation = 0
 let alive = true
@@ -43,6 +46,7 @@ async function load() {
   product.value = null
   selectedSku.value = null
   compareSkuChosen.value = false
+  favorite.value = false
   error.value = ''
   if (!slug || !/^[1-9]\d*$/.test(id)) { error.value = '商品链接无效'; return }
   loading.value = true
@@ -53,9 +57,29 @@ async function load() {
     product.value = result
     selectedSku.value = result.skus?.[0] || null
     compareSkuChosen.value = result.skus?.length === 1
+    if (authStore.isLoggedIn) {
+      try { favorite.value = await productApi.isFavorite(result.spuId) } catch { favorite.value = false }
+    } else favorite.value = false
   } catch (reason) {
     if (alive && current === generation) error.value = reason instanceof Error ? reason.message : '商品详情加载失败'
   } finally { if (alive && current === generation) loading.value = false }
+}
+
+async function toggleFavorite() {
+  if (!product.value || favoriteChanging.value) return
+  if (!authStore.isLoggedIn) return router.push({ name: 'platform-login', query: { redirect: route.fullPath } })
+  const expectedSpuId = String(product.value.spuId)
+  favoriteChanging.value = true
+  try {
+    if (favorite.value) await productApi.deleteFavorite(product.value.spuId)
+    else await productApi.addFavorite(product.value.spuId, tenantSlug.value)
+    if (product.value && String(product.value.spuId) === expectedSpuId) {
+      favorite.value = !favorite.value
+      ElMessage.success(favorite.value ? '收藏成功' : '已取消收藏')
+    }
+  } catch (reason) {
+    ElMessage.warning(reason instanceof Error ? reason.message : '收藏操作失败')
+  } finally { favoriteChanging.value = false }
 }
 
 function selectSku(sku: PortalSku) {
@@ -109,7 +133,7 @@ onBeforeUnmount(() => { alive = false; generation += 1 })
     <template v-else>
       <section class="container panel detail-main">
         <div class="gallery"><div class="gallery-main"><img v-if="gallery[0]" :src="gallery[0]" :alt="product.spuName" /><span v-else>暂无图片</span></div><div class="gallery-list"><img v-for="image in gallery" :key="image" :src="image" :alt="product.spuName" /></div></div>
-        <div class="detail-body"><small>{{ product.tenantName }} / {{ product.enterpriseName }}</small><h1>{{ product.spuName }}</h1><p>{{ product.introduction || '防腐保温工程适用材料' }}</p><div class="price"><span>平台公开价</span><strong>¥{{ formatMoney(displayPrice) }}</strong></div><dl><dt>所属店铺</dt><dd>{{ product.shopName }}</dd><dt>经营租户</dt><dd>{{ product.tenantName }}</dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd></dl><div class="shop-service"><div><b>店铺客服</b><span>咨询商品规格、价格、库存与配送</span></div><MallLink v-if="selectedSku" :to="{ path: `/member/customer-service/shop/${product.shopId}`, query: { resourceType: 'PRODUCT', resourceId: String(product.spuId), productSkuId: String(selectedSku.skuId) } }">联系店铺客服 →</MallLink><span v-else>暂无可咨询规格</span></div><div class="skus"><label>规格选择</label><button v-for="sku in product.skus || []" :key="String(sku.skuId)" :class="{ active: selectedSku?.skuId === sku.skuId }" @click="selectSku(sku)">{{ propertyText(sku.properties) || sku.skuName || `SKU ${sku.skuId}` }}</button></div><div class="actions"><el-input-number v-model="quantity" :min="1" :max="99999" /><el-button :loading="adding" :disabled="!selectedSku" @click="add(false)">加入平台购物车</el-button><el-button type="primary" :loading="adding" :disabled="!selectedSku" @click="add(true)">立即采购</el-button></div><div class="compare-actions"><el-button :loading="comparing" :disabled="!selectedSku || comparison.saving || comparison.loading" @click="addToComparison">加入对比</el-button><MallLink to="/compare">查看对比（{{ comparison.count }} / 4）</MallLink><small v-if="!compareSkuChosen">请先点击选择上方实际规格</small></div><p class="ownership-note">购物车与结算不会信任页面中的租户参数，服务端将依据 SKU 重新核验租户、企业、店铺、审核状态、价格与库存。</p></div>
+        <div class="detail-body"><small>{{ product.tenantName }} / {{ product.enterpriseName }}</small><h1>{{ product.spuName }}</h1><p>{{ product.introduction || '防腐保温工程适用材料' }}</p><div class="price"><span>平台公开价</span><strong>¥{{ formatMoney(displayPrice) }}</strong></div><dl><dt>所属店铺</dt><dd>{{ product.shopName }}</dd><dt>经营租户</dt><dd>{{ product.tenantName }}</dd><dt>累计销量</dt><dd>{{ product.salesCount || 0 }}</dd></dl><div class="shop-service"><div><b>店铺客服</b><span>咨询商品规格、价格、库存与配送</span></div><MallLink v-if="selectedSku" :to="{ path: `/member/customer-service/shop/${product.shopId}`, query: { resourceType: 'PRODUCT', resourceId: String(product.spuId), productSkuId: String(selectedSku.skuId) } }">联系店铺客服 →</MallLink><span v-else>暂无可咨询规格</span></div><div class="skus"><label>规格选择</label><button v-for="sku in product.skus || []" :key="String(sku.skuId)" :class="{ active: selectedSku?.skuId === sku.skuId }" @click="selectSku(sku)">{{ propertyText(sku.properties) || sku.skuName || `SKU ${sku.skuId}` }}</button></div><div class="actions"><el-input-number v-model="quantity" :min="1" :max="99999" /><el-button :loading="adding" :disabled="!selectedSku" @click="add(false)">加入平台购物车</el-button><el-button type="primary" :loading="adding" :disabled="!selectedSku" @click="add(true)">立即采购</el-button><el-button class="favorite-button" :loading="favoriteChanging" @click="toggleFavorite">{{ favorite ? "★ 已收藏" : "☆ 收藏商品" }}</el-button></div><div class="compare-actions"><el-button :loading="comparing" :disabled="!selectedSku || comparison.saving || comparison.loading" @click="addToComparison">加入对比</el-button><MallLink to="/compare">查看对比（{{ comparison.count }} / 4）</MallLink><small v-if="!compareSkuChosen">请先点击选择上方实际规格</small></div><p class="ownership-note">购物车与结算不会信任页面中的租户参数，服务端将依据 SKU 重新核验租户、企业、店铺、审核状态、价格与库存。</p></div>
       </section>
       <section class="container panel description"><h2>商品详情</h2><div v-if="safeDescription" class="rich" v-html="safeDescription"></div><div v-else class="empty">暂无详细介绍</div></section>
     </template>

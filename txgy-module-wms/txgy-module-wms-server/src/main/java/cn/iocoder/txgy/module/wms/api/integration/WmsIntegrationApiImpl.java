@@ -214,6 +214,14 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
     }
 
     @Override
+    public CommonResult<WmsIntegrationAcceptedRespDTO> createMallOpeningReceipt(WmsOrderRequestDTO request) {
+        validateOrder(request, "MALL", "MALL_OPENING_RECEIPT", "FINISHED_GOODS");
+        return execute("MALL_OPENING_RECEIPT_CREATE", "RECEIPT", request,
+                () -> toAcceptedResponse(requestService.executeOrderBusiness(request,
+                        () -> toLedgerResponse("RECEIPT", createPurchaseReceiptOrder(request)))));
+    }
+
+    @Override
     public CommonResult<WmsIntegrationAcceptedRespDTO> createSaleShipment(WmsOrderRequestDTO request) {
         validateOrder(request, "ERP", "SALE_SHIPMENT", "FINISHED_GOODS");
         return createExternalShipment(request);
@@ -278,9 +286,11 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
             requireReceipt(persisted != null && Objects.equals(request.getShopId(), persisted.getShopId())
                             && Objects.equals(warehouse.getId(), persisted.getWarehouseId()),
                     "商城出库申请与 WMS 出库单的店铺或仓库归属不一致");
+            shipmentOrderService.autoCompleteMallShipment(shipmentOrderId);
         }
         return new WmsIntegrationAcceptedRespDTO().setAccepted(true).setRequestId(request.getRequestId())
-                .setTargetOrderNo(no).setBusinessStatus("RECEIVED").setProcessedVersion(request.getEventVersion());
+                .setTargetOrderNo(no).setBusinessStatus("MALL".equals(request.getSourceModule())
+                        ? "COMPLETED" : "RECEIVED").setProcessedVersion(request.getEventVersion());
     }
 
     private void validateOrder(WmsOrderRequestDTO request, String source, String type, String materialType) {
@@ -290,7 +300,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                 "此接口只接受 " + source + " " + type);
         if ("MALL".equals(source)) {
             requireReceipt(request.getShopId() != null && request.getShopId() > 0,
-                    "商城出库申请必须提供有效店铺编号");
+                    "商城业务申请必须提供有效店铺编号");
         }
         requireReceipt(validText(request.getRequestId(), 64) && !request.getRequestId().startsWith("B:"), "requestId 无效");
         int sourceOrderNoMaxLength = 64 - ("WMS-" + source + "-").length();
@@ -428,7 +438,8 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         if ("SALE_SHIPMENT".equals(orderType) || "PRODUCTION_SHIPMENT".equals(orderType)) {
             return shipmentExecution(sourceOrderNo, orderType);
         }
-        if (!"PURCHASE_RECEIPT".equals(orderType) && !"PRODUCTION_RECEIPT".equals(orderType))
+        if (!"PURCHASE_RECEIPT".equals(orderType) && !"PRODUCTION_RECEIPT".equals(orderType)
+                && !"MALL_OPENING_RECEIPT".equals(orderType))
             throw exception(INTEGRATION_FEATURE_NOT_ENABLED);
         requireReceipt(sourceOrderNo != null && !sourceOrderNo.isBlank(), "来源单号不能为空");
         var query = new cn.iocoder.txgy.module.wms.controller.admin.order.receipt.vo.order.WmsReceiptOrderPageReqVO();
@@ -436,7 +447,7 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
         query.setPageSize(cn.iocoder.txgy.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
         var order = receiptOrderService.getReceiptOrderPage(query).getList().stream()
                 .filter(row -> sourceOrderNo.equals(row.getBizOrderNo())
-                        && ("PURCHASE_RECEIPT".equals(orderType) ? "ERP" : "MES").equals(row.getSourceModule()))
+                        && receiptSource(orderType).equals(row.getSourceModule()))
                 .findFirst().orElseThrow(() -> exception(cn.iocoder.txgy.module.wms.enums.ErrorCodeConstants.RECEIPT_ORDER_NOT_EXISTS));
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("executionStatus", order.getExecutionStatus());
@@ -461,6 +472,12 @@ public class WmsIntegrationApiImpl implements WmsIntegrationApi {
                 .setProcessingStatus(cn.iocoder.txgy.module.wms.service.integration.WmsReceiptExecutionService.executionStatus(order))
                 .setProcessedEventVersion(Integer.valueOf(1).equals(order.getExecutionStatus()) ? 1L : 0L)
                 .setResultCode(0).setResultData(data).setUpdatedAt(order.getUpdateTime()));
+    }
+
+    private static String receiptSource(String orderType) {
+        if ("PURCHASE_RECEIPT".equals(orderType)) return "ERP";
+        if ("MALL_OPENING_RECEIPT".equals(orderType)) return "MALL";
+        return "MES";
     }
 
     @Override

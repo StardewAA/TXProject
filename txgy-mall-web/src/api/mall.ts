@@ -81,10 +81,12 @@ export const productApi = {
     request<PageResult<Record<string, unknown>>>({ url: '/product/comment/page', params, scope: 'browse' }),
   getFavorites: (params: Record<string, unknown>) =>
     request<PageResult<ProductCollectionItem>>({ url: '/product/favorite/page', params }),
-  addFavorite: (spuId: Identifier) =>
-    request<Identifier>({ url: '/product/favorite/create', method: 'POST', data: { spuId } }),
+  addFavorite: (spuId: Identifier, tenantSlug?: string) =>
+    request<Identifier>({ url: '/product/favorite/create', method: 'POST', data: { spuId, tenantSlug } }),
   deleteFavorite: (spuId: Identifier) =>
     request<boolean>({ url: '/product/favorite/delete', method: 'DELETE', data: { spuId } }),
+  isFavorite: (spuId: Identifier) =>
+    request<boolean>({ url: '/product/favorite/exits', params: { spuId } }),
   getHistory: (params: Record<string, unknown>) =>
     request<PageResult<ProductCollectionItem>>({ url: '/product/browse-history/page', params }),
   deleteHistory: (spuIds: Identifier[]) => request<boolean>({ url: '/product/browse-history/delete', method: 'DELETE', data: { spuIds } }),

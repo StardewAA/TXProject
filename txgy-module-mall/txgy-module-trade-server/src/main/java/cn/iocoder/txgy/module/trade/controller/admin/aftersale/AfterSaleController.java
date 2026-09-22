@@ -15,6 +15,7 @@ import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.iocoder.txgy.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleLogService;
 import cn.iocoder.txgy.module.trade.service.aftersale.AfterSaleService;
+import cn.iocoder.txgy.module.trade.service.aftersale.PlatformAfterSaleRefundCallbackService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderQueryService;
 import cn.iocoder.txgy.module.trade.service.order.TradeOrderUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +52,8 @@ public class AfterSaleController {
 
     @Resource
     private AfterSaleService afterSaleService;
+    @Resource
+    private PlatformAfterSaleRefundCallbackService platformRefundCallbacks;
     @Resource
     private TradeOrderQueryService tradeOrderQueryService;
     @Resource
@@ -157,7 +160,7 @@ public class AfterSaleController {
             Long orderId = Long.parseLong(StrUtil.subAfter(notifyReqDTO.getMerchantRefundId(), "order-", true));
             tradeOrderUpdateService.updatePaidOrderRefunded(orderId, notifyReqDTO.getPayRefundId());
         } else {
-            afterSaleService.updateAfterSaleRefunded(
+            platformRefundCallbacks.updateRefunded(
                     Long.parseLong(notifyReqDTO.getMerchantRefundId()),
                     Long.parseLong(notifyReqDTO.getMerchantOrderId()),
                     notifyReqDTO.getPayRefundId());

@@ -204,6 +204,22 @@ class PlatformCheckoutServiceTest {
     }
 
     @Test
+    void pageDerivesPartiallyDeliveredFromCurrentChildOrderStatuses() {
+        PlatformCheckoutDO checkout = completedCheckout(0L).setAggregateStatus("ALL_UNDELIVERED");
+        PageParam pageParam = new PageParam().setPageNo(1).setPageSize(10);
+        when(checkoutMapper.selectPageByMember(pageParam, 9001L))
+                .thenReturn(new PageResult<>(List.of(checkout), 1L));
+        when(checkoutOrderMapper.selectListByCheckout(checkout.getId(), checkout.getCheckoutNo()))
+                .thenReturn(List.of(
+                        childOrder(11L, 21L, 2001L, 401L, 1000L, 0L).setOrderStatus(20),
+                        childOrder(12L, 22L, 2002L, 402L, 2000L, 0L).setOrderStatus(10)));
+
+        var result = service.page(316L, 2009L, pageParam);
+
+        assertEquals("PARTIALLY_DELIVERED", result.getList().getFirst().getAggregateStatus());
+    }
+
+    @Test
     void previewRejectsPublicTenantAndChangedOwnershipWithoutTrustingCartSnapshot() {
         PlatformCartDO publicTenant = cart(1L, 3000L, 301L, 401L, 501L, 601L, 1, true);
         PlatformCartDO changed = cart(2L, 2001L, 302L, 402L, 502L, 602L, 1, true);
@@ -290,7 +306,7 @@ class PlatformCheckoutServiceTest {
         verify(planItemMapper, times(1)).insert(any(PlatformCheckoutPlanItemDO.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test
@@ -313,7 +329,7 @@ class PlatformCheckoutServiceTest {
         verify(planItemMapper, never()).insert(any(PlatformCheckoutPlanItemDO.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test
@@ -349,7 +365,7 @@ class PlatformCheckoutServiceTest {
         assertTrue(List.of(transactional.rollbackFor()).contains(Exception.class));
         verify(checkoutOrderMapper, never()).insert(any(PlatformCheckoutOrderDO.class));
         verify(allocationMapper, never()).insert(any(PlatformFundAllocationDO.class));
-        verify(cartMapper, never()).deleteByIdsAndMember(any(), any());
+        verify(cartMapper, never()).hardDeleteByIdsAndMember(any(), any());
     }
 
     @Test

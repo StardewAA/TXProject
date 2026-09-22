@@ -170,6 +170,13 @@ public class KeFuScopeService {
         return repository.agents(tenant, scope, shop, size, offset(page, size));
     }
 
+    /** Returns only the signed-in agent's enabled grants, for safe workbench scope selection. */
+    public List<Agent> myScopes(Actor actor) {
+        long tenant = context(actor);
+        activeActor(actor);
+        return repository.enabledScopes(tenant, actor);
+    }
+
     /** Scope grant is locked before a session, in the same transaction as chat reads/writes. */
     public Session chatAccess(Actor actor, String id, boolean asAgent, boolean write) {
         long tenant = context(actor);

@@ -313,7 +313,7 @@ onBeforeUnmount(() => { alive = false; generation += 1 })
 
       <aside v-if="!isTenantMall" class="market-aside">
         <section class="aside-panel tenant-panel">
-          <div class="aside-heading"><div><small>FEATURED COMPANIES</small><h2>推荐企业</h2></div><MallLink to="/shops">全部 →</MallLink></div>
+          <div class="aside-heading"><div><small>FEATURED COMPANIES</small><h2>推荐企业</h2></div><MallLink to="/companies">全部 →</MallLink></div>
           <p v-if="state.hotLoading && !featuredTenants.length" class="aside-state">正在整理企业数据…</p>
           <div v-else class="featured-tenants">
             <RouterLink v-for="(tenant, index) in featuredTenants" :key="String(tenant.tenantId)" :to="{ name: 'tenant-mall', params: { tenantSlug: tenant.tenantSlug } }">

@@ -59,6 +59,8 @@ public interface MallPortalCatalogMapper {
             " OR ps.name LIKE CONCAT('%', #{keyword}, '%')",
             " OR pe.name LIKE CONCAT('%', #{keyword}, '%'))</if>",
             "<if test='categoryId != null'> AND spu.category_id = #{categoryId}</if>",
+            "<if test='categoryName != null'> AND (pc.name = #{categoryName} OR ppc.name = #{categoryName})</if>",
+            "<if test='shopId != null'> AND ps.id = #{shopId}</if>",
             "<choose>",
             "<when test=\"sortField == 'price' and sortAsc == true\"> ORDER BY spu.price ASC, spu.id DESC</when>",
             "<when test=\"sortField == 'price'\"> ORDER BY spu.price DESC, spu.id DESC</when>",
@@ -71,6 +73,8 @@ public interface MallPortalCatalogMapper {
     List<PortalProductRow> selectProducts(@Param("tenantSlug") String tenantSlug,
                                           @Param("keyword") String keyword,
                                           @Param("categoryId") Long categoryId,
+                                          @Param("categoryName") String categoryName,
+                                          @Param("shopId") Long shopId,
                                           @Param("sortField") String sortField,
                                           @Param("sortAsc") Boolean sortAsc,
                                           @Param("offset") long offset,
@@ -100,10 +104,55 @@ public interface MallPortalCatalogMapper {
             " OR ps.name LIKE CONCAT('%', #{keyword}, '%')",
             " OR pe.name LIKE CONCAT('%', #{keyword}, '%'))</if>",
             "<if test='categoryId != null'> AND spu.category_id = #{categoryId}</if>",
+            "<if test='categoryName != null'> AND (pc.name = #{categoryName} OR ppc.name = #{categoryName})</if>",
+            "<if test='shopId != null'> AND ps.id = #{shopId}</if>",
             "</script>"})
     long countProducts(@Param("tenantSlug") String tenantSlug,
                        @Param("keyword") String keyword,
-                       @Param("categoryId") Long categoryId);
+                       @Param("categoryId") Long categoryId,
+                       @Param("categoryName") String categoryName,
+                       @Param("shopId") Long shopId);
+
+    String PUBLIC_SHOP_FROM = " FROM mall_portal_tenant pt"
+            + " JOIN system_tenant st ON st.id = pt.tenant_id"
+            + " JOIN product_shop ps ON ps.tenant_id = pt.tenant_id"
+            + " JOIN product_enterprise pe ON pe.id = ps.enterprise_id AND pe.tenant_id = ps.tenant_id";
+
+    String PUBLIC_SHOP_WHERE = " WHERE pt.deleted = 0 AND pt.open_status = 0 AND pt.tenant_id &lt;&gt; 3000"
+            + " AND st.deleted = 0 AND st.status = 0 AND (st.expire_time IS NULL OR st.expire_time &gt; NOW())"
+            + " AND pe.deleted = 0 AND pe.audit_status = 1 AND ps.deleted = 0 AND ps.status = 0"
+            + " AND EXISTS (SELECT 1 FROM product_spu spu JOIN product_sku sku"
+            + " ON sku.spu_id = spu.id AND sku.tenant_id = spu.tenant_id"
+            + " WHERE spu.shop_id = ps.id AND spu.tenant_id = ps.tenant_id"
+            + " AND spu.deleted = 0 AND spu.status = 1 AND spu.review_status = 20"
+            + " AND spu.approved_version IS NOT NULL AND spu.approved_version = spu.content_version"
+            + " AND sku.deleted = 0 AND sku.stock &gt; 0 AND sku.price &gt; 0)";
+
+    @Select({"<script>", "SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,",
+            " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo, pe.id AS enterpriseId,",
+            " pe.name AS enterpriseName, ps.id AS shopId, ps.name AS shopName, ps.logo_url AS logoUrl,",
+            " ps.introduction AS introduction, (SELECT COUNT(1) FROM product_spu cspu WHERE cspu.shop_id = ps.id",
+            " AND cspu.tenant_id = ps.tenant_id AND cspu.deleted = 0 AND cspu.status = 1",
+            " AND cspu.review_status = 20 AND cspu.approved_version IS NOT NULL",
+            " AND cspu.approved_version = cspu.content_version AND EXISTS (SELECT 1 FROM product_sku csku",
+            " WHERE csku.spu_id = cspu.id AND csku.tenant_id = cspu.tenant_id AND csku.deleted = 0",
+            " AND csku.stock &gt; 0 AND csku.price &gt; 0)) AS productCount", PUBLIC_SHOP_FROM, PUBLIC_SHOP_WHERE,
+            "<if test='keyword != null'> AND (ps.name LIKE CONCAT('%', #{keyword}, '%')",
+            " OR pe.name LIKE CONCAT('%', #{keyword}, '%') OR pt.tenant_name LIKE CONCAT('%', #{keyword}, '%'))</if>",
+            " ORDER BY pt.tenant_id ASC, pe.id ASC, ps.id ASC", "</script>"})
+    List<PortalShopRow> selectShops(@Param("keyword") String keyword);
+
+    @Select({"<script>", "SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,",
+            " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo, pe.id AS enterpriseId,",
+            " pe.name AS enterpriseName, ps.id AS shopId, ps.name AS shopName, ps.logo_url AS logoUrl,",
+            " ps.introduction AS introduction, (SELECT COUNT(1) FROM product_spu cspu WHERE cspu.shop_id = ps.id",
+            " AND cspu.tenant_id = ps.tenant_id AND cspu.deleted = 0 AND cspu.status = 1",
+            " AND cspu.review_status = 20 AND cspu.approved_version IS NOT NULL",
+            " AND cspu.approved_version = cspu.content_version AND EXISTS (SELECT 1 FROM product_sku csku",
+            " WHERE csku.spu_id = cspu.id AND csku.tenant_id = cspu.tenant_id AND csku.deleted = 0",
+            " AND csku.stock &gt; 0 AND csku.price &gt; 0)) AS productCount", PUBLIC_SHOP_FROM, PUBLIC_SHOP_WHERE,
+            " AND ps.id = #{shopId} LIMIT 1", "</script>"})
+    PortalShopRow selectShopById(@Param("shopId") Long shopId);
 
     @Select("SELECT pt.tenant_id AS tenantId, pt.tenant_slug AS tenantSlug,"
             + " pt.tenant_name AS tenantName, pt.tenant_logo AS tenantLogo,"
@@ -218,5 +267,20 @@ public interface MallPortalCatalogMapper {
     @Data
     class PortalHotTenantRow extends PortalTenantRow {
         private Long validQuantity;
+    }
+
+    @Data
+    class PortalShopRow {
+        private Long tenantId;
+        private String tenantSlug;
+        private String tenantName;
+        private String tenantLogo;
+        private Long enterpriseId;
+        private String enterpriseName;
+        private Long shopId;
+        private String shopName;
+        private String logoUrl;
+        private String introduction;
+        private Long productCount;
     }
 }

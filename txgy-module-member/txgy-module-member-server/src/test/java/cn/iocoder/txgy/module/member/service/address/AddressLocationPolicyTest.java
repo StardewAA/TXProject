@@ -3,8 +3,11 @@ package cn.iocoder.txgy.module.member.service.address;
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressCreateReqVO;
 import cn.iocoder.txgy.module.member.controller.app.address.vo.AppAddressLocationCapabilityRespVO;
+import cn.iocoder.txgy.module.member.controller.app.address.AppAddressController;
+import cn.iocoder.txgy.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.txgy.module.member.dal.dataobject.address.MemberAddressDO;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.security.PermitAll;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
@@ -91,5 +94,10 @@ class AddressLocationPolicyTest {
         String json=new ObjectMapper().writeValueAsString(new AppAddressLocationCapabilityRespVO(true,"AMAP"));
         assertTrue(json.contains("READY"));assertTrue(json.contains("\"provider\":\"AMAP\""));
         assertTrue(json.contains("\"enabled\":true"));assertFalse(json.toLowerCase().contains("key"));
+    }
+    @Test void capabilityDiscoveryIsPublicAndTenantIndependent() throws Exception {
+        var method = AppAddressController.class.getMethod("getLocationCapability");
+        assertNotNull(method.getAnnotation(PermitAll.class));
+        assertNotNull(method.getAnnotation(TenantIgnore.class));
     }
 }
