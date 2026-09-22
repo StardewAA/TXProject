@@ -22,6 +22,14 @@ class WmsIntegrationContractTest extends BaseDbUnitTest {
     @Resource private WmsIntegrationApiImpl api;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private cn.iocoder.txgy.module.wms.service.order.receipt.WmsReceiptOrderService receiptOrderService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private WmsCollaborationOrderGService collaborationOrderGService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private WmsShortageService wmsShortageService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private WmsShortageSender wmsShortageSender;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Test
     void publicApiSupportsMasterDataLifecycleAndRequestLookup() {

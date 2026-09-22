@@ -65,9 +65,10 @@ class MallAccountPolicyTest {
         assertThrows(ServiceException.class, () -> policy.resolve(null, false));
         verifyNoInteractions(customers);
     }
-    @Test void onlyExplicitPublicDirectoryDefaultCanReplaceOmittedTenant() {
+    @Test void enabledDirectoryRequiresExplicitRegistrationTenant() {
         enableDirectory();
-        assertEquals(9001L, policy.resolve(null, true));
+        assertThrows(ServiceException.class, () -> policy.resolve(null, true));
+        assertEquals(9001L, policy.resolve(9001L, true));
         verify(customers).validateRegistration(9001L);
         verify(tenantApi, never()).validTenant(1L);
     }

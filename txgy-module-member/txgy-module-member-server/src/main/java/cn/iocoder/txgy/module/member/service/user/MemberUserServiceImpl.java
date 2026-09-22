@@ -17,6 +17,7 @@ import cn.iocoder.txgy.module.member.convert.user.MemberUserConvert;
 import cn.iocoder.txgy.module.member.dal.dataobject.user.MemberUserDO;
 import cn.iocoder.txgy.module.member.dal.mysql.user.MemberUserMapper;
 import cn.iocoder.txgy.module.member.mq.producer.user.MemberUserProducer;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
 import cn.iocoder.txgy.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import cn.iocoder.txgy.module.system.api.social.SocialClientApi;
@@ -65,6 +66,9 @@ public class MemberUserServiceImpl implements MemberUserService {
 
     @Resource
     private MemberUserProducer memberUserProducer;
+
+    @Resource
+    private MemberPlatformAccountService platformAccountService;
 
     @Override
     public MemberUserDO getUserByMobile(String mobile) {
@@ -211,19 +215,23 @@ public class MemberUserServiceImpl implements MemberUserService {
 
         // 3. 更新用户手机
         memberUserMapper.updateById(MemberUserDO.builder().id(userId).mobile(reqVO.getMobile()).build());
+        platformAccountService.synchronizeMobileAlias(user, reqVO.getMobile());
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateUserMobileByWeixin(Long userId, AppMemberUserUpdateMobileByWeixinReqVO reqVO) {
         // 1.1 获得对应的手机号信息
         SocialWxPhoneNumberInfoRespDTO phoneNumberInfo = socialClientApi.getWxMaPhoneNumberInfo(
                 UserTypeEnum.MEMBER.getValue(), reqVO.getCode()).getCheckedData();
         Assert.notNull(phoneNumberInfo, "获得手机信息失败，结果为空");
         // 1.2 校验新手机是否已经被绑定
+        MemberUserDO user = validateUserExists(userId);
         validateMobileUnique(userId, phoneNumberInfo.getPhoneNumber());
 
         // 2. 更新用户手机
         memberUserMapper.updateById(MemberUserDO.builder().id(userId).mobile(phoneNumberInfo.getPhoneNumber()).build());
+        platformAccountService.synchronizeMobileAlias(user, phoneNumberInfo.getPhoneNumber());
     }
 
     @Override
@@ -295,6 +303,12 @@ public class MemberUserServiceImpl implements MemberUserService {
         // 更新
         MemberUserDO updateObj = MemberUserConvert.INSTANCE.convert(updateReqVO);
         memberUserMapper.updateById(updateObj);
+        // 平台账号的身份手机号与会员手机号必须在同一事务内保持一致。
+        // 即使后台传入空值也必须进入同步边界：已关联平台账号会明确拒绝清空，
+        // 避免 member_user 已更新而平台登录别名仍残留，导致账号永久无法换绑。
+        if (!java.util.Objects.equals(existing.getMobile(), updateReqVO.getMobile())) {
+            platformAccountService.synchronizeMobileAlias(existing, updateReqVO.getMobile());
+        }
 
         // 如果是禁用用户，则删除其 Token 信息
         if (CommonStatusEnum.isDisable(updateObj.getStatus())) {

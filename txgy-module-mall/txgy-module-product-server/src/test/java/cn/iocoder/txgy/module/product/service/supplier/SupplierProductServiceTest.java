@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.product.service.supplier;
 
 import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.common.pojo.*;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.controller.app.supplier.SupplierProductSaveReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.spu.vo.ProductSpuSaveReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.sku.ProductSkuDO;
@@ -32,6 +33,7 @@ class SupplierProductServiceTest {
     cn.iocoder.txgy.module.product.service.property.ProductPropertyService properties;
     cn.iocoder.txgy.module.product.service.property.ProductPropertyValueService values;
     @BeforeEach void setup() {
+        TenantContextHolder.setTenantId(1L);
         service = new SupplierProductService();
         membership = mock(EnterpriseMembershipService.class); spus = mock(ProductSpuMapper.class);
         skus = mock(ProductSkuMapper.class); spuService = mock(ProductSpuService.class);
@@ -49,6 +51,9 @@ class SupplierProductServiceTest {
         ReflectionTestUtils.setField(service,"propertyService",properties);ReflectionTestUtils.setField(service,"valueService",values);
         when(categories.getCategoryLevel(anyLong())).thenReturn(3);
         when(delivery.list()).thenReturn(CommonResult.success(List.of(new DeliveryTemplateApi.Template(1L, "按件", 1))));
+    }
+    @AfterEach void clearTenantContext() {
+        TenantContextHolder.clear();
     }
     SupplierProductSaveReqVO request() {
         return new SupplierProductSaveReqVO().setShopId(10L).setName("商品").setKeyword("材料")
@@ -68,6 +73,28 @@ class SupplierProductServiceTest {
     @Test void foreignProductCannotBeRead() {
         assertThrows(ServiceException.class, () -> service.detail(1L,10L,999L));
         verifyNoInteractions(skus);
+    }
+    @Test void quoteSkuOptionsExposeAllEligibleSkuSpecificationsWithoutSpuDetailFanOut() {
+        ProductSpuDO product = new ProductSpuDO().setId(20L).setShopId(10L).setName("耐高温保温板")
+                .setPicUrl("https://example.com/product.png").setStatus(1).setReviewStatus(20)
+                .setContentVersion(3L).setApprovedVersion(3L);
+        ProductSkuDO first = new ProductSkuDO().setId(31L).setSpuId(20L).setPrice(8800)
+                .setBarCode("SKU-31").setProperties(List.of(
+                        new ProductSkuDO.Property(5L, "厚度", 6L, "50mm")));
+        ProductSkuDO second = new ProductSkuDO().setId(32L).setSpuId(20L).setPrice(12800)
+                .setBarCode("SKU-32").setPicUrl("https://example.com/sku-32.png");
+        when(spus.selectList(any())).thenReturn(List.of(product));
+        when(skus.selectListBySpuId(anyCollection())).thenReturn(List.of(first, second));
+
+        var result = service.quoteSkuOptions(1L, 10L);
+
+        verify(membership).requireShop(1L, 10L);
+        assertEquals(2, result.size());
+        assertEquals("耐高温保温板", result.getFirst().productName());
+        assertEquals("厚度：50mm", result.getFirst().specification());
+        assertEquals("默认规格", result.get(1).specification());
+        assertEquals("https://example.com/sku-32.png", result.get(1).picUrl());
+        verify(skus).selectListBySpuId(anyCollection());
     }
     @Test void unknownSkuCannotBeWritten() {
         owned(); var req=request().setId(20L); req.getSkus().getFirst().setId(999L);

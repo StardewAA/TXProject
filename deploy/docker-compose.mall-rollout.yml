@@ -1,18 +1,82 @@
 services:
-  member:
-    image: mall-member:tenant-catalog-20260917-3
+  gateway:
+    image: mall-gateway:section22-20260921-1
     pull_policy: never
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
+  frontend:
+    image: mall-admin:section22-20260921-1
+    pull_policy: never
+  member:
+    image: mall-member:section22-20260921-2
+    pull_policy: never
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
     environment:
+      # 只公开地图能力状态；高德 Key/安全密钥仍仅在 PC/H5 前端构建时注入。
+      MALL_ADDRESS_MAP_ENABLED: "true"
+      MALL_ADDRESS_MAP_PROVIDER: "AMAP"
       MALL_REGISTRATION_PICTURE_ENABLED: "true"
       MALL_TENANT_DIRECTORY_ENABLED: "true"
       MALL_TENANT_BROWSE_PREVIEW_ENABLED: "true"
       MALL_TENANT_SCOPED_ENTRY_ENABLED: "true"
-      MALL_PUBLIC_TENANT_ID: "3000"
       MALL_PLATFORM_ENTERPRISE_ID: "940400"
       MALL_TENANT_AUTH_ENABLED: "true"
       # 仅作为本地联调 HMAC；生产环境必须通过部署密钥覆盖。
       MALL_TENANT_AUTH_HMAC_SECRET: "local-mall-auth-20260917-change-before-production"
       MALL_TENANT_SMS_TEMPLATE_CODE: "local-picture-registration"
-  promotion:
+  product:
+    image: mall-product:section22-20260922-1
+    pull_policy: never
     environment:
-      MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: "true"
+      MALL_LEGACY_MEMBER_SALES_ENABLED: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
+  trade:
+    image: mall-trade:section22-20260921-1
+    pull_policy: never
+    environment:
+      TXGY_TRADE_COMPATIBILITY_MEMBER_SUPPLIER_WRITE_ENABLED: "false"
+      # 当前联调编排没有部署 XXL-JOB 调度中心，由 trade 本地定时任务刷新 7/30 天热门租户汇总。
+      # 正式环境接入 XXL-JOB 后应改回 false，避免双重调度。
+      TXGY_TRADE_PORTAL_SALES_FALLBACK_ENABLED: "true"
+  wms:
+    image: mall-wms:section22-20260921-1
+    pull_policy: never
+  mall-pc:
+    image: mall-pc:section22-20260922-4
+    pull_policy: never
+    container_name: txgy-mall-web-integration
+    ports:
+      - "15175:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+  mall-h5:
+    image: mall-h5:section22-20260921-1
+    pull_policy: never
+    container_name: deploy-mall-h5-1
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - txgy-dev
+    restart: unless-stopped
+  promotion:
+    image: mall-promotion:section22-20260922-4
+    pull_policy: never
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/$${SERVER_PORT:-48080}' || exit 1"]
+    environment:
+      MALL_CUSTOMER_SERVICE_SCOPED_ENABLED: ${MALL_CUSTOMER_SERVICE_SCOPED_ENABLED:-true}
+      MALL_CUSTOMER_SERVICE_AI_ENABLED: ${MALL_CUSTOMER_SERVICE_AI_ENABLED:-false}

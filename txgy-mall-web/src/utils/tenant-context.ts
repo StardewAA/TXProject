@@ -1,4 +1,5 @@
-import { entryHint, requireEntry } from './tenant-entry.mjs'
+import { entryDestination, entryHint, requireEntry } from './tenant-entry.mjs'
+import { isPlatformPath, scopePlatformPath } from './tenant-navigation.mjs'
 /** Entry changes require a validated directory and a full reload, not an in-place setter. */
 export interface MallTenant { tenantId: string | number; name: string; registrationEnabled: boolean }
 export interface MallTenantConfig {
@@ -9,6 +10,7 @@ export interface MallTenantConfig {
   capabilities: { browseSwitch: boolean; registrationSelection: boolean; scopedEntry?: boolean }
 }
 export interface AccountContext { tenantId: string | number; userId: string | number }
+export type AccountSessionKind = 'tenant' | 'platform'
 export const TENANT_CONTEXT_KEY = 'mall-pc-tenant-context'
 export class AccountContextError extends Error {}
 function tenantId(value: unknown): string {
@@ -17,39 +19,102 @@ function tenantId(value: unknown): string {
   return text
 }
 export const legacyTenantId = tenantId(import.meta.env.VITE_TENANT_ID || '1')
-const hint = entryHint(typeof sessionStorage === 'undefined' ? undefined : sessionStorage, legacyTenantId, typeof window === 'undefined' ? '' : window.location?.href)
+function currentInternalPath() {
+  if (typeof window === 'undefined' || !window.location?.href) return ''
+  try {
+    const url = new URL(window.location.href)
+    return url.pathname + url.search + url.hash
+  } catch { return '' }
+}
+const initialPath = currentInternalPath()
+const platformEntry = initialPath !== '' && isPlatformPath(initialPath)
+// Account/platform pages belong to the platform session. A stale browsing tenant
+// in the URL or sessionStorage must not select another token namespace on reload.
+const hint = entryHint(platformEntry || typeof sessionStorage === 'undefined' ? undefined : sessionStorage,
+  legacyTenantId, platformEntry ? scopePlatformPath(initialPath) : (typeof window === 'undefined' ? '' : window.location?.href))
 export const entryTenantId = hint.tenantId
 export const invalidEntryHint = hint.invalid
 let epoch = 0
-let account: { tenantId: string; userId: string } | null = null
+function storedAccountCandidate(): { tenantId: string; kind: AccountSessionKind } | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const value = JSON.parse(localStorage.getItem(TENANT_CONTEXT_KEY) || 'null')
+    if (value?.accountSessionKind !== 'platform' && value?.accountSessionKind !== 'tenant') return null
+    const candidate = tenantId(value.accountTenantId)
+    // Older tenant-entry sessions were deliberately restricted to their entry.
+    if (value.accountSessionKind === 'tenant' && candidate !== entryTenantId) return null
+    return { tenantId: candidate, kind: value.accountSessionKind }
+  } catch { return null }
+}
+let candidate = storedAccountCandidate()
+let account: { tenantId: string; userId: string; kind: AccountSessionKind } | null = null
 let catalog: Readonly<MallTenantConfig> | null = null
 let catalogStatus: 'pending' | 'ready' | 'legacy' | 'unavailable' = 'pending'
 function notify() {
   // Stored hints are never read as authority; verify old tokens on every boot.
   if (typeof localStorage !== 'undefined') localStorage.setItem(TENANT_CONTEXT_KEY, JSON.stringify({
-    browseTenantId: entryTenantId, accountTenantId: account?.tenantId ?? null,
+    browseTenantId: entryTenantId, accountTenantId: account?.tenantId ?? candidate?.tenantId ?? null,
+    accountSessionKind: account?.kind ?? candidate?.kind ?? null,
   }))
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('mall:tenant-context-updated'))
 }
 export function getTenantContext() {
   return Object.freeze({ browseTenantId: entryTenantId, accountTenantId: account?.tenantId ?? null,
-    accountUserId: account?.userId ?? null, epoch, catalogStatus, catalog,
+    accountUserId: account?.userId ?? null, accountSessionKind: account?.kind ?? null, epoch, catalogStatus, catalog,
     canSwitchBrowse: false, canSelectRegistrationTenant: false })
 }
+export function getRegistrationEntryTenant() {
+  if (entryTenantId !== legacyTenantId || catalogStatus !== 'ready' || catalog?.publicTenantId === null || catalog?.publicTenantId === undefined) {
+    return entryTenantId
+  }
+  const target = tenantId(catalog.publicTenantId)
+  return catalog.tenants.some(item => String(item.tenantId) === target && item.registrationEnabled) ? target : entryTenantId
+}
+export function getRegistrationEntryPath() {
+  const target = getRegistrationEntryTenant()
+  // The platform root has no implicit registration tenant. A plain /register
+  // loads the anonymous directory first; scoped tenant pages keep their target.
+  if (entryTenantId === legacyTenantId && target === legacyTenantId
+    && (catalogStatus === 'pending' || catalog?.publicTenantId == null)) return '/register'
+  return entryDestination('pc', 'register', target)
+}
 export function getAccountRequestTenant() { return account?.tenantId ?? entryTenantId }
+/** Untrusted reload hint. Callers must prove it with the matching session endpoint before use. */
+export function getAccountSessionCandidate() {
+  return Object.freeze(candidate ?? { tenantId: entryTenantId, kind: 'tenant' as AccountSessionKind })
+}
 export function isCurrentTenantEpoch(expected: number) { return epoch === expected }
-export function invalidateAccountContext() { epoch += 1; account = null; notify(); return epoch }
+export function invalidateAccountContext() {
+  if (account) candidate = { tenantId: account.tenantId, kind: account.kind }
+  epoch += 1; account = null; notify(); return epoch
+}
+export function clearAccountContext() { epoch += 1; account = null; candidate = null; notify(); return epoch }
 export function assertResponseTenant(value: unknown, expected = entryTenantId) {
   // An absent field is accepted only for the unchanged legacy backend contract.
   if (value === undefined && expected === legacyTenantId) return
   if (String(value) !== expected || expected !== entryTenantId) throw new AccountContextError('账号租户与当前商城不一致，请重新登录')
+}
+export function assertVerifiedAccountTenant(value: unknown, expected: unknown) {
+  const target = tenantId(expected)
+  if (String(value ?? '') !== target) throw new AccountContextError('账号租户与登录会话不一致，请重新登录')
 }
 export function confirmAccountContext(value: AccountContext, expectedEpoch: number) {
   if (!isCurrentTenantEpoch(expectedEpoch)) return false
   assertResponseTenant(value.tenantId)
   const userId = String(value.userId ?? '')
   if (!/^[1-9]\d*$/.test(userId)) throw new AccountContextError('服务器未返回有效会员身份')
-  account = { tenantId: tenantId(value.tenantId), userId }
+  account = { tenantId: tenantId(value.tenantId), userId, kind: 'tenant' }
+  candidate = { tenantId: account.tenantId, kind: account.kind }
+  notify()
+  return true
+}
+/** Accept only after /member/platform-account/session proved this token identity. */
+export function confirmPlatformAccountContext(value: AccountContext, expectedEpoch: number) {
+  if (!isCurrentTenantEpoch(expectedEpoch)) return false
+  const userId = String(value.userId ?? '')
+  if (!/^[1-9]\d*$/.test(userId)) throw new AccountContextError('服务器未返回有效会员身份')
+  account = { tenantId: tenantId(value.tenantId), userId, kind: 'platform' }
+  candidate = { tenantId: account.tenantId, kind: account.kind }
   notify()
   return true
 }

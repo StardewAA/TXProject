@@ -18,6 +18,7 @@ import cn.iocoder.txgy.module.member.framework.tenant.config.MallTenantPropertie
 import cn.iocoder.txgy.module.member.mq.producer.user.MemberUserProducer;
 import cn.iocoder.txgy.module.member.service.auth.MemberAuthServiceImpl;
 import cn.iocoder.txgy.module.member.service.user.MemberUserServiceImpl;
+import cn.iocoder.txgy.module.member.service.platform.MemberPlatformAccountService;
 import cn.iocoder.txgy.module.product.api.enterprise.ProductEnterpriseCustomerApi;
 import cn.iocoder.txgy.module.system.api.logger.LoginLogApi;
 import cn.iocoder.txgy.module.system.api.sms.SmsCodeApi;
@@ -341,8 +342,10 @@ class MallImageRegistrationTransactionTest {
         @Bean SocialClientApi socialClient() { return mock(SocialClientApi.class); }
         @Bean MallAccountPolicy policy() { return mock(MallAccountPolicy.class); }
         @Bean MallImageChallengeService challenges() { return mock(MallImageChallengeService.class); }
-        @Bean MallImageAuthService service(MallAccountPolicy policy, MallImageChallengeService challenges, MemberAuthServiceImpl auth) {
-            return new MallImageAuthService(policy, challenges, auth);
+        @Bean MemberPlatformAccountService platformAccounts() { return mock(MemberPlatformAccountService.class); }
+        @Bean MallImageAuthService service(MallAccountPolicy policy, MallImageChallengeService challenges,
+                MemberAuthServiceImpl auth, MemberPlatformAccountService platformAccounts) {
+            return new MallImageAuthService(policy, challenges, auth, platformAccounts);
         }
     }
 }

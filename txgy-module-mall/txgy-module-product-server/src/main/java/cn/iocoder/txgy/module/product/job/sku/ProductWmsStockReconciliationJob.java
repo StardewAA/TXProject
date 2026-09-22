@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 public class ProductWmsStockReconciliationJob {
     @TenantJob
     public String execute() {
-        return "旧WMS可售库存对账已停用：WMS仅供现存库存查询，库存履约请查看ERP请求记录";
+        return "商城本地库存对账已停用：商品库存以 WMS 租户隔离实时查询结果为准";
     }
 }
 

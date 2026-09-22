@@ -234,6 +234,18 @@ public class WmsAiServiceImpl implements WmsAiService {
         // 5. 动作与单据类型：图片无动作信息时，默认按采购入库处理并提示可改
         String action = normalizeAction(json.getStr("action", ""), raw);
         String hint = json.getStr("orderTypeHint", "");
+
+        // 4.9 制度类问句不是建单指令：模型看到「入库/出库」字样容易误判成一张单据，
+        //     例如「出入库遵循什么原则」会被识别成入库单并要求补商品明细。
+        //     这类问句应转交问答链路（其中包含知识库检索）。
+        //     判据刻意收窄：只认制度类词，且文本里没有数字（有数字基本就是带数量的真实建单）。
+        if (!hasImages && isPolicyQuestion(raw)) {
+            String policyReply = aiChatService.chat(raw, sessionId);
+            if (StrUtil.isNotBlank(policyReply)) {
+                log.info("[recognize] 判定为制度类问句，转交问答链路：{}", raw);
+                return buildEmptyResp(policyReply);
+            }
+        }
         if ("UNKNOWN".equals(action) || StrUtil.isBlank(action)) {
             // 5.0 图片也可能只是「商品清单」而不是单据：明细一行数量都没有，构不成出入库单。
             //     此时若直接默认采购入库，用户就没法用图片做「添加商品」了。故先走建档闭环。
@@ -625,6 +637,28 @@ public class WmsAiServiceImpl implements WmsAiService {
         } catch (Exception e) {
             throw new IllegalStateException("PDF 解析失败：" + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 是否为「问制度/规定」类问句（用于把制度问答从建单指令里摘出来）。
+     *
+     * <p>判据刻意收窄：
+     * 1. 只认制度类词，不含「怎么/如何」等泛疑问词，避免把「怎么新建商品」这类真指令挡掉；
+     * 2. 要求文本里没有数字——真实建单几乎都会带数量（如「岩棉板 20 件」），
+     *    而制度问句通常没有。两条同时满足才判定，尽量不误伤建单。
+     */
+    private boolean isPolicyQuestion(String text) {
+        String t = StrUtil.nullToEmpty(text);
+        if (t.matches(".*\\d.*")) {
+            return false;
+        }
+        for (String kw : new String[]{"要求", "规定", "标准", "制度", "流程", "规范",
+                "规则", "编号", "原则", "遵循", "依据", "条件", "禁止", "必须", "应当"}) {
+            if (t.contains(kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private WmsAiRecognizeRespVO buildEmptyResp(String reply) {

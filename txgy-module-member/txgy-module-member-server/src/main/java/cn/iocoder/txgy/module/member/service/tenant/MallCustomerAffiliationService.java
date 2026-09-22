@@ -57,8 +57,12 @@ public class MallCustomerAffiliationService {
     /** Called before sending/consuming a registration code; no DB writes. */
     public Long validateRegistration(long tenant) {
         if (!auth.isEnabled()) return null; // No new DB/RPC dependency for the unchanged legacy entry.
-        if (!tenants.isEnabled() || tenants.getPublicTenantId() == null || tenants.getPublicTenantId() <= 0) fail();
-        if (!Objects.equals(tenants.getPublicTenantId(), tenant)) return null;
+        if (!tenants.isEnabled()) fail();
+        Long publicTenantId = tenants.getPublicTenantId();
+        // 第 22 节已取消公共注册租户；普通真实租户不做平台自营企业绑定。
+        if (publicTenantId == null) return null;
+        if (publicTenantId <= 0) fail();
+        if (!Objects.equals(publicTenantId, tenant)) return null;
         Long enterprise = tenants.getPlatformEnterpriseId();
         if (enterprise == null || enterprise <= 0) fail();
         TenantUtils.execute(tenant, () -> { requireOwner(tenant, enterprise); });

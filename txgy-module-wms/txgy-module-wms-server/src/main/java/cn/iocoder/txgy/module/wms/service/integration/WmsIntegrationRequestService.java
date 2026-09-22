@@ -43,8 +43,9 @@ public class WmsIntegrationRequestService {
         WmsOrderRequestDTO business = JsonUtils.parseObject(JsonUtils.toJsonString(request), WmsOrderRequestDTO.class);
         // 业务幂等键带上事件版本：同一来源单在缺料恢复后重新申请（eventVersion 递增）时，
         // 应作为新的业务请求受理，而不是与上一版内容比对后报"业务内容或业务链不一致"。
-        String identity = JsonUtils.toJsonString(java.util.List.of(request.getTenantId(), request.getSourceModule(),
-                request.getOrderType(), request.getSourceOrderNo(), request.getEventVersion()));
+        String identity = JsonUtils.toJsonString(java.util.Arrays.asList(request.getTenantId(), request.getShopId(),
+                request.getSourceModule(), request.getOrderType(), request.getSourceOrderNo(),
+                request.getEventVersion()));
         business.setRequestId("B:" + DigestUtil.sha256Hex(identity).substring(0, 62));
         business.setOccurredAt(null);
         business.setItems(business.getItems().stream()

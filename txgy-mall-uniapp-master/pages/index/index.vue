@@ -3,13 +3,11 @@
   <s-layout
     title="防腐保温商城"
     navbar="normal"
-    tenantEntry
     tabbar="/pages/index/index"
     :bgStyle="{ color: '#f4f7fb' }"
     onShareAppMessage
   >
     <view class="mall-home">
-      <s-public-market-entry />
       <view class="home-hero">
         <view class="hero-brand">
           <image class="brand-mark" src="/static/mall-logo.png" mode="aspectFit" />
@@ -24,7 +22,7 @@
           <text>保温保冷</text>
           <text>施工辅材</text>
         </view>
-        <button class="industry-primary hero-purchase" @tap="openCategory()">开始选购材料 <text>→</text></button>
+        <button class="industry-primary hero-purchase" @tap="openPortalProducts()">开始选购材料 <text>→</text></button>
       </view>
 
       <view class="search-bar" @tap="openSearch">
@@ -34,31 +32,32 @@
       </view>
 
       <view class="quick-actions">
-        <button @tap="openCategory()"><text class="quick-symbol">▦</text><text>材料分类</text><text class="quick-caption">按用途找材料</text></button>
-        <button @tap="sheep.$router.go('/pages/index/cart')"><text class="quick-symbol">＋</text><text>采购清单</text><text class="quick-caption">查看购物车</text></button>
+        <button @tap="openPortalProducts()"><text class="quick-symbol">▦</text><text>全部商品</text><text class="quick-caption">跨租户找材料</text></button>
+        <button @tap="sheep.$router.go('/pages/platform/cart')"><text class="quick-symbol">＋</text><text>采购清单</text><text class="quick-caption">跨租户购物车</text></button>
         <button @tap="sheep.$router.go('/pages/order/list')"><text class="quick-symbol">≡</text><text>我的订单</text><text class="quick-caption">跟进采购进度</text></button>
+        <button @tap="sheep.$router.go('/pages/inquiry/index')"><text class="quick-symbol">询</text><text>询价专栏</text><text class="quick-caption">全平台公开需求</text></button>
       </view>
 
       <view class="service-strip">
-        <view class="service-item" @tap="sheep.$router.go('/pages/shop/list')">
+        <view class="service-item" @tap="openPortalProducts()">
           <text class="service-icon">厂</text>
           <view>
-            <text class="service-title">企业店铺</text>
-            <text class="service-desc">查看供货方信息</text>
+            <text class="service-title">平台供应商</text>
+            <text class="service-desc">查看开放租户商品</text>
           </view>
         </view>
-        <view class="service-item">
-          <text class="service-icon">溯</text>
+        <view class="service-item" @tap="sheep.$router.go('/pages/order/aftersale/list')">
+          <text class="service-icon">售</text>
           <view>
-            <text class="service-title">规格选型</text>
-            <text class="service-desc">核对材质与尺寸</text>
+            <text class="service-title">售后服务</text>
+            <text class="service-desc">查看本人售后进度</text>
           </view>
         </view>
-        <view class="service-item">
-          <text class="service-icon">价</text>
+        <view class="service-item" @tap="sheep.$router.go('/pages/chat/service', { scope: 'PLATFORM', shopId: 0 })">
+          <text class="service-icon">客</text>
           <view>
-            <text class="service-title">采购优惠</text>
-            <text class="service-desc">以活动规则为准</text>
+            <text class="service-title">在线客服</text>
+            <text class="service-desc">咨询商品、订单与售后</text>
           </view>
         </view>
       </view>
@@ -66,46 +65,49 @@
       <view class="section-block">
         <view class="section-heading">
           <view>
-            <text class="section-title">按分类选购</text>
-            <text class="section-subtitle">覆盖防腐保温施工全场景</text>
+            <text class="section-title">热门租户</text>
+            <text class="section-subtitle">按有效销量查看材料供应商</text>
           </view>
-          <text class="section-more" @tap="openCategory()">全部分类 ›</text>
+          <view class="ranking-windows">
+            <text :class="{ active: rankingWindow === '7d' }" @tap="changeRankingWindow('7d')">近 7 天</text>
+            <text :class="{ active: rankingWindow === '30d' }" @tap="changeRankingWindow('30d')">近 30 天</text>
+          </view>
         </view>
-        <scroll-view class="category-scroll" scroll-x show-scrollbar="false">
-          <view class="category-row">
+        <view v-if="hotLoading" class="portal-state">正在加载热门租户…</view>
+        <view v-else-if="hotError" class="portal-state portal-retry" @tap="loadHotTenants">榜单暂时无法加载，点击重试</view>
+        <scroll-view v-else-if="hotTenants.length" class="category-scroll" scroll-x show-scrollbar="false">
+          <view class="category-row tenant-ranking-row">
             <view
-              v-for="category in popularCategories"
-              :key="category.key"
-              class="category-tile"
-              @tap="openCategory(category.key)"
+              v-for="tenant in hotTenants"
+              :key="tenant.tenantSlug"
+              class="category-tile tenant-ranking-card"
+              @tap="openTenant(tenant.tenantSlug)"
             >
-              <view class="category-icon" :style="{ backgroundColor: category.color }">
-                {{ category.icon }}
+              <view class="category-icon tenant-rank">
+                {{ tenant.rank || '·' }}
               </view>
-              <text class="category-name">{{ category.name }}</text>
-              <text class="category-count">{{ categoryProductCount(category.key) }} 款</text>
+              <text class="category-name">{{ tenant.tenantName }}</text>
+              <text class="category-count">{{ tenant.mainCategories || '防腐保温材料' }}</text>
             </view>
           </view>
         </scroll-view>
-      </view>
-
-      <view class="section-block shop-section">
-        <view class="section-heading"><view><text class="section-title">按店铺选购</text><text class="section-subtitle">走进供应企业，查看主营材料</text></view><text class="section-more" @tap="sheep.$router.go('/pages/shop/list')">全部店铺 ›</text></view>
-        <s-shop-showcase ref="shopShowcase" :limit="3" />
+        <view v-else class="portal-state">暂无销量榜单，可继续浏览平台商品</view>
       </view>
 
       <view class="section-block product-section">
         <view class="section-heading">
           <view>
-            <text class="section-title">工程常用材料</text>
-            <text class="section-subtitle">按规格选型，为工程备好材料</text>
+            <text class="section-title">平台精选商品</text>
+            <text class="section-subtitle">汇总所有已开放租户的合规在售商品</text>
           </view>
-          <text class="section-more" @tap="openCategory()">查看全部 ›</text>
+          <text class="section-more" @tap="openPortalProducts()">查看全部 ›</text>
         </view>
+        <view v-if="catalogSource === 'loading'" class="portal-state">正在加载平台商品…</view>
+        <view v-else-if="catalogSource === 'error'" class="portal-state portal-retry" @tap="loadPortalProducts">商品暂时无法加载，点击重试</view>
         <view class="product-grid">
           <view
             v-for="product in featuredProducts"
-            :key="product.id || product.code"
+            :key="`${product.tenantId}-${product.spuId}`"
             class="product-card"
             @tap="openProduct(product)"
           >
@@ -116,21 +118,19 @@
                 :src="sheep.$url.cdn(product.picUrl)"
                 mode="aspectFill"
               />
-              <text class="product-code">{{ product.code }}</text>
-              <text class="product-unit">{{ product.unit }}</text>
-              <text class="product-mark">工程材料</text>
+              <text class="product-code">{{ product.tenantName }}</text>
+              <text class="product-unit">{{ product.skus.length }} 个规格</text>
+              <text class="product-mark">{{ product.shopName }}</text>
             </view>
             <view class="product-body">
-              <text class="product-name">{{ product.name }}</text>
-              <text class="product-spec">{{ product.spec }}</text>
+              <text class="product-name">{{ product.spuName }}</text>
+              <text class="product-spec">{{ product.enterpriseName }} · {{ product.shopName }}</text>
               <view class="product-price-row">
                 <text class="product-price">¥{{ formatPrice(product.price) }}</text>
-                <text class="product-unit-label">/{{ product.unit }}</text>
+                <text class="product-unit-label">起</text>
               </view>
-              <text class="product-stock" :class="{ 'product-stock-empty': product.stock <= 0 }">
-                {{ product.stock > 0 ? `库存 ${product.stock}` : '暂时缺货' }}
-              </text>
-              <button class="material-select" :disabled="product.stock <= 0" @tap.stop="openProduct(product)"><text>{{ product.stock > 0 ? '选规格 · 去采购' : '暂时缺货' }}</text><text aria-hidden="true">＋</text></button>
+              <text class="product-stock">已售 {{ product.salesCount }} · 商品当前可售</text>
+              <button class="material-select" @tap.stop="openTenant(product.tenantSlug)"><text>进入租户商城</text><text aria-hidden="true">→</text></button>
             </view>
           </view>
         </view>
@@ -142,11 +142,11 @@
         <view class="guide-row"><text>01</text><view><text>明确使用工况</text><text>室内或室外、使用温度、腐蚀环境</text></view></view>
         <view class="guide-row"><text>02</text><view><text>核对规格与单位</text><text>材质、口径、厚度，及每件对应的计量单位</text></view></view>
         <view class="guide-row"><text>03</text><view><text>确认数量与收货信息</text><text>下单前核对库存、收货地址与订单金额</text></view></view>
-        <button class="guide-action" @tap="openCategory()">按分类查看材料 →</button>
+        <button class="guide-action" @tap="openPortalProducts()">查看平台全部材料 →</button>
       </view>
 
       <view class="catalog-note">
-        <text>{{ catalogSource === 'api' ? (products.length ? '库存与价格来自商城实时商品接口' : '当前商城暂无可售商品') : catalogSource === 'loading' ? '正在加载商城商品' : '商品暂无法加载，请刷新重试' }}</text>
+        <text>{{ catalogSource === 'api' ? (products.length ? '展示所有开放租户的已审核、已上架商品' : '平台暂无可售商品') : catalogSource === 'loading' ? '正在加载平台商品' : '商品暂无法加载，请刷新重试' }}</text>
         <text>选购前请核对规格与单位，成交金额以结算页为准</text>
       </view>
     </view>
@@ -158,70 +158,95 @@
   import { computed, ref } from 'vue';
   import sheep from '@/sheep';
   import $share from '@/sheep/platform/share';
-  import { getMallCategory } from '@/sheep/data/mall-catalog';
-  import { loadMallCatalog } from '@/sheep/data/mall-catalog-runtime';
+  import PortalApi from '@/sheep/api/product/portal';
+  import {
+    normalizePortalPage,
+    normalizePortalTenant,
+    portalProductDetailPath,
+    portalProductListPath,
+  } from '@/sheep/helper/platform-portal.mjs';
 
   // 隐藏原生 tabBar，使用商城自定义 tabBar。
   uni.hideTabBar({
     fail: () => {},
   });
 
-  const shopShowcase = ref();
   const products = ref([]);
-  const catalogCategories = ref([]);
   const catalogSource = ref('loading');
-  const popularCategories = computed(() => catalogCategories.value.slice(0, 8));
+  const hotTenants = ref([]);
+  const hotLoading = ref(true);
+  const hotError = ref(false);
+  const rankingWindow = ref('7d');
   const featuredProducts = computed(() =>
     (Array.isArray(products.value) ? products.value : []).filter(Boolean).slice(0, 6),
   );
 
-  const categoryProductCount = (categoryKey) =>
-    (Array.isArray(products.value) ? products.value : []).filter(
-      (product) => product?.categoryKey === categoryKey,
-    ).length;
-  const categoryColor = (categoryKey) =>
-    catalogCategories.value.find((category) => category.key === categoryKey)?.color ||
-    getMallCategory(categoryKey)?.color ||
-    '#0f766e';
-  const productGradient = (product) =>
-    `linear-gradient(135deg, ${categoryColor(product?.categoryKey)} 0%, #0f172a 100%)`;
+  const productGradient = (product) => {
+    const palettes = ['#0f766e', '#155e75', '#1d4ed8', '#4d7c0f', '#7c3aed'];
+    const color = palettes[Math.abs(Number(product?.tenantId) || 0) % palettes.length];
+    return `linear-gradient(135deg, ${color} 0%, #0f172a 100%)`;
+  };
   const formatPrice = (price) => {
     const value = Number(price);
-    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+    return Number.isSafeInteger(value) && value >= 0 ? (value / 100).toFixed(2) : '0.00';
   };
 
-  const openCategory = (categoryKey = '') => {
-    sheep.$router.go('/pages/index/category', categoryKey ? { categoryKey } : {});
+  const openPortalProducts = (params = {}) => {
+    sheep.$router.go(portalProductListPath(params));
+  };
+
+  const openTenant = (tenantSlug) => {
+    openPortalProducts({ tenantSlug });
   };
 
   const openProduct = (product) => {
-    if (product?.id) {
-      sheep.$router.go('/pages/goods/index', { id: product.id });
-      return;
-    }
-    openCategory(product?.categoryKey || '');
+    sheep.$router.go(portalProductDetailPath({
+      tenantSlug: product.tenantSlug,
+      spuId: product.spuId,
+    }));
   };
 
   const openSearch = () => {
-    sheep.$router.go('/pages/index/search');
+    openPortalProducts();
   };
 
-  async function loadCatalog(force = false) {
+  async function loadPortalProducts() {
+    catalogSource.value = 'loading';
     try {
-      const result = await loadMallCatalog(force);
-      if (Array.isArray(result?.products)) {
-        products.value = result.products.filter(Boolean);
-        catalogCategories.value = Array.isArray(result?.categories) ? result.categories.filter(Boolean) : [];
-        catalogSource.value = 'api';
-      }
+      const response = await PortalApi.getProducts({ pageNo: 1, pageSize: 6 });
+      if (response?.code !== 0) throw new Error('平台商品暂不可用');
+      products.value = normalizePortalPage(response.data).list;
+      catalogSource.value = 'api';
     } catch (error) {
       products.value = [];
       catalogSource.value = 'error';
     }
   }
 
+  async function loadHotTenants() {
+    hotLoading.value = true;
+    hotError.value = false;
+    try {
+      const response = await PortalApi.getHotTenants(rankingWindow.value, 10);
+      if (response?.code !== 0 || !Array.isArray(response.data)) throw new Error('热门租户暂不可用');
+      hotTenants.value = response.data.map(normalizePortalTenant).filter(Boolean);
+    } catch (error) {
+      hotTenants.value = [];
+      hotError.value = true;
+    } finally {
+      hotLoading.value = false;
+    }
+  }
+
+  const changeRankingWindow = (value) => {
+    if (value === rankingWindow.value || !['7d', '30d'].includes(value)) return;
+    rankingWindow.value = value;
+    loadHotTenants();
+  };
+
   onLoad((options = {}) => {
-    loadCatalog();
+    loadPortalProducts();
+    loadHotTenants();
     // 小程序识别二维码
     // #ifdef MP
     if (options?.scene) {
@@ -255,7 +280,7 @@
   onPullDownRefresh(async () => {
     try {
       // 管理后台新增/修改商品后，允许用户端通过下拉刷新立即同步。
-      await Promise.allSettled([loadCatalog(true), shopShowcase.value?.refresh()]);
+      await Promise.allSettled([loadPortalProducts(), loadHotTenants()]);
     } finally {
       uni.stopPullDownRefresh();
     }
@@ -452,6 +477,38 @@
     font-size: 22rpx;
   }
 
+  .ranking-windows {
+    display: flex;
+    padding: 5rpx;
+    border-radius: 999rpx;
+    background: #e2ebe8;
+  }
+
+  .ranking-windows text {
+    padding: 7rpx 14rpx;
+    border-radius: 999rpx;
+    color: #64748b;
+    font-size: 20rpx;
+  }
+
+  .ranking-windows .active {
+    color: #fff;
+    background: #0f766e;
+  }
+
+  .portal-state {
+    padding: 34rpx 22rpx;
+    border-radius: 18rpx;
+    color: #64748b;
+    font-size: 23rpx;
+    text-align: center;
+    background: #fff;
+  }
+
+  .portal-retry {
+    color: #0f766e;
+  }
+
   .category-scroll {
     width: 100%;
     white-space: nowrap;
@@ -472,6 +529,24 @@
     flex-direction: column;
     background: #fff;
     box-shadow: 0 8rpx 22rpx rgba(15, 23, 42, 0.05);
+  }
+
+  .tenant-ranking-card {
+    width: 210rpx;
+    min-height: 166rpx;
+    justify-content: flex-start;
+  }
+
+  .tenant-rank {
+    background: linear-gradient(145deg, #0f766e, #155e75);
+  }
+
+  .tenant-ranking-card .category-count {
+    width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .category-icon {
@@ -639,7 +714,7 @@
   .industry-primary { min-height: 84rpx; display: flex; align-items: center; justify-content: space-between; border-radius: 14rpx; font-size: 26rpx; font-weight: 600; }
   .hero-purchase { margin: 30rpx 0 0; width: 300rpx; padding: 0 24rpx; color: #123e35; background: #c9eee0; }
   .hero-purchase::after, .quick-actions button::after, .material-select::after, .guide-action::after { border: none; }
-  .quick-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin: 26rpx 0; }
+  .quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14rpx; margin: 26rpx 0; }
   .quick-actions button { margin: 0; padding: 22rpx 8rpx; border-radius: 18rpx; background: #fff; border: 1rpx solid #dfebe7; line-height: 1.6; color: #183b42; font-size: 25rpx; font-weight: 600; }
   .quick-actions text { display: block; }
   .quick-actions .quick-symbol { margin: 0 auto 8rpx; background: #e9f5ef; border-radius: 12rpx; width: 58rpx; height: 58rpx; font-size: 36rpx; color: #177660; }

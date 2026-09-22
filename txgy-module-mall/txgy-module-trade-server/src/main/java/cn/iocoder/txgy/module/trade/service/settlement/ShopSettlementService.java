@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.api.shop.ProductShopApi;
 import cn.iocoder.txgy.module.product.api.supplier.ProductSupplierApi;
+import cn.iocoder.txgy.module.trade.service.supplier.AdminShopScopeService;
 import jakarta.annotation.Resource;
 import org.springframework.jdbc.core.*;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class ShopSettlementService {
     @Resource private JdbcTemplate jdbc;
     @Resource private ProductSupplierApi authorization;
     @Resource private ProductShopApi shops;
+    @Resource private AdminShopScopeService adminShopScope;
     private static final BeanPropertyRowMapper<Bill> BILLS=new BeanPropertyRowMapper<>(Bill.class);
     private static final BeanPropertyRowMapper<Item> ITEMS=new BeanPropertyRowMapper<>(Item.class);
     private long tenant(){return TenantContextHolder.getRequiredTenantId();}
@@ -58,6 +60,13 @@ public class ShopSettlementService {
     }
     public PageResult<Bill> page(Long shop,PageParam page,Integer status,boolean supplier){
         if(supplier)member(shop);else admin();
+        return pageScoped(shop,page,status);
+    }
+    public PageResult<Bill> adminSupplierPage(Long shop,PageParam page,Integer status){
+        adminShopScope.requireShop(shop);
+        return pageScoped(shop,page,status);
+    }
+    private PageResult<Bill> pageScoped(Long shop,PageParam page,Integer status){
         String where=" WHERE tenant_id=?";var args=new ArrayList<Object>();args.add(tenant());
         if(shop!=null){where+=" AND shop_id=?";args.add(shop);}if(status!=null){where+=" AND status=?";args.add(status);}
         long total=Objects.requireNonNull(jdbc.queryForObject("SELECT COUNT(*) FROM trade_shop_settlement_bill"+where,Long.class,args.toArray()));
@@ -65,10 +74,19 @@ public class ShopSettlementService {
         return new PageResult<>(jdbc.query("SELECT * FROM trade_shop_settlement_bill"+where+" ORDER BY id DESC LIMIT ? OFFSET ?",BILLS,args.toArray()),total);
     }
     public Map<String,Object> detail(Long id,Long shop,boolean supplier){
-        if(supplier)member(shop);else admin();var b=bill(id);if(supplier && !Objects.equals(shop,b.getShopId()))throw invalid("无该账单权限");
+        if(supplier)member(shop);else admin();
+        return detailScoped(id,shop,supplier);
+    }
+    public Map<String,Object> adminSupplierDetail(Long id,Long shop){
+        adminShopScope.requireShop(shop);
+        return detailScoped(id,shop,true);
+    }
+    private Map<String,Object> detailScoped(Long id,Long shop,boolean scoped){
+        var b=bill(id);if(scoped && !Objects.equals(shop,b.getShopId()))throw invalid("无该账单权限");
         return Map.of("bill",b,"items",items(id),"logs",jdbc.queryForList("SELECT version,action,actor_id AS actorId,actor_type AS actorType,remark,create_time AS createTime FROM trade_shop_settlement_log WHERE tenant_id=? AND bill_id=? ORDER BY id",tenant(),id));
     }
     public String proof(Long id,Long shop,boolean supplier){detail(id,shop,supplier);return jdbc.queryForObject("SELECT payment_proof FROM trade_shop_settlement_bill WHERE tenant_id=? AND id=?",String.class,tenant(),id);}
+    public String adminSupplierProof(Long id,Long shop){adminSupplierDetail(id,shop);return jdbc.queryForObject("SELECT payment_proof FROM trade_shop_settlement_bill WHERE tenant_id=? AND id=?",String.class,tenant(),id);}
 
     @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public Bill generate(Generate req){
@@ -155,7 +173,14 @@ public class ShopSettlementService {
     }
     @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
     public void confirm(Confirm req){
-        member(req.shopId());Bill b=locked(req.id(),req.version());if(!Objects.equals(req.shopId(),b.getShopId()))throw invalid("无该账单权限");
+        member(req.shopId());confirmScoped(req);
+    }
+    @Transactional(rollbackFor=Exception.class, isolation=Isolation.READ_COMMITTED)
+    public void adminSupplierConfirm(Confirm req){
+        adminShopScope.requireShop(req.shopId());confirmScoped(req);
+    }
+    private void confirmScoped(Confirm req){
+        Bill b=locked(req.id(),req.version());if(!Objects.equals(req.shopId(),b.getShopId()))throw invalid("无该账单权限");
         if(b.getStatus()==30)return;SettlementMath.transition(b.getStatus(),20);verify(b);
         jdbc.update("UPDATE trade_shop_settlement_bill SET status=30,update_time=NOW() WHERE tenant_id=? AND id=?",tenant(),b.getId());log(b,"SHOP_CONFIRM","店铺确认账单，非付款操作");
     }

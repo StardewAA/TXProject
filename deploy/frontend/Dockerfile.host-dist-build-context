@@ -1,0 +1,10 @@
+FROM m.daocloud.io/docker.io/library/nginx:1.27-alpine
+
+# webdist 由 buildx 的独立构建上下文提供，避免把整个前端源码和 node_modules
+# 重新送入 Docker；适用于已在宿主机完成生产构建的低内存打包流程。
+COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=webdist / /usr/share/nginx/html/
+
+EXPOSE 80
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=10 CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1

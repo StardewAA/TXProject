@@ -17,6 +17,13 @@
       />
       <block v-else-if="state.goodsInfo && state.goodsInfo.id">
         <view class="detail-swiper-selector">
+          <view v-if="state.portal" class="portal-owner-card detail-card">
+            <view class="portal-owner-kicker">平台公开商品</view>
+            <view class="portal-owner-name">{{ state.goodsInfo.tenantName }}</view>
+            <view class="portal-owner-meta">
+              {{ state.goodsInfo.enterpriseName }} · {{ state.goodsInfo.shopName }}
+            </view>
+          </view>
           <!-- 商品轮播图  -->
           <su-swiper
             class="ss-m-b-14"
@@ -31,6 +38,7 @@
           <view
             class="discount"
             v-if="
+              !state.portal &&
               state.settlementSku && state.settlementSku.id && state.settlementSku.promotionPrice
             "
           >
@@ -95,7 +103,7 @@
                 {{ formatSales('exact', state.goodsInfo.salesCount) }}
               </view>
             </view>
-            <view class="discounts-box ss-flex ss-row-between ss-m-b-28">
+            <view v-if="!state.portal" class="discounts-box ss-flex ss-row-between ss-m-b-28">
               <!-- 查看优惠劵的描述 -->
               <view
                 class="tag ss-m-r-10"
@@ -142,13 +150,14 @@
           <!-- 功能卡片 -->
           <view class="detail-cell-card detail-card ss-flex-col">
             <detail-cell
-              :clickable="!!state.goodsInfo.shopId"
-              :show-arrow="!!state.goodsInfo.shopId"
+              :clickable="state.portal ? !!state.tenantSlug : !!state.goodsInfo.shopId"
+              :show-arrow="state.portal ? !!state.tenantSlug : !!state.goodsInfo.shopId"
               label="店铺"
               :value="state.goodsInfo.shopName || '店铺信息暂未提供'"
-              @click="sheep.$router.go('/pages/goods/list', { shopId: state.goodsInfo.shopId })"
+              @click="openProductShop"
             />
             <detail-cell-sku
+              v-if="!state.portal"
               v-model="state.selectedSku.goods_sku_text"
               :sku="state.selectedSku"
               @tap="state.showSelectSku = true"
@@ -156,8 +165,8 @@
           </view>
 
           <!-- 规格库存 -->
-          <s-comparison-bar />
-          <view class="detail-card sku-stock-card ss-p-y-20 ss-p-x-20" v-if="skuStockList.length">
+          <s-comparison-bar v-if="!state.portal" />
+          <view class="detail-card sku-stock-card ss-p-y-20 ss-p-x-20" v-if="!state.portal && skuStockList.length">
             <view class="stock-title ss-m-b-16">规格库存</view>
             <view class="sku-stock-list">
               <view
@@ -175,9 +184,39 @@
             </view>
           </view>
 
+          <view class="detail-card public-sku-card ss-p-y-20 ss-p-x-20" v-if="state.portal && skuStockList.length">
+            <view class="stock-title ss-m-b-16">公开可售规格</view>
+            <view class="public-sku-tip ss-m-b-16">规格与价格来自当前租户商城公开目录，最终以结算校验为准</view>
+            <view class="sku-stock-list">
+              <view
+                class="sku-stock-item ss-flex ss-row-between ss-col-start"
+                :class="{ 'public-sku-selected': state.selectedSku?.id === sku.id }"
+                v-for="sku in skuStockList"
+                :key="sku.id"
+                @tap="selectPortalSku(sku)"
+              >
+                <view class="sku-stock-name ss-line-2">
+                  <radio :checked="state.selectedSku?.id === sku.id" color="#137962" @tap.stop="selectPortalSku(sku)" />
+                  {{ formatPublicSkuText(sku) }}
+                </view>
+                <view class="sku-stock-meta">
+                  <view class="sku-stock-price">￥{{ fen2yuan(sku.price || 0) }}</view>
+                  <view class="public-saleable">公开可售</view>
+                </view>
+              </view>
+              <view class="portal-quantity ss-flex ss-row-between ss-col-center">
+                <view>
+                  <view class="portal-quantity-title">采购数量</view>
+                  <view class="public-sku-tip">加入平台购物车后仍会重新校验商品归属与可售状态</view>
+                </view>
+                <su-number-box v-model="state.portalQuantity" :min="1" :max="99999" :disabled="state.portalCartBusy" />
+              </view>
+            </view>
+          </view>
+
           <!-- 规格与数量弹框 -->
           <s-select-sku
-            v-if="Array.isArray(state.goodsInfo?.skus) && state.goodsInfo.skus.length"
+            v-if="!state.portal && Array.isArray(state.goodsInfo?.skus) && state.goodsInfo.skus.length"
             :goodsInfo="state.goodsInfo"
             :show="state.showSelectSku"
             @addCart="onAddCart"
@@ -188,7 +227,11 @@
         </view>
 
         <!-- 评价 -->
-        <detail-comment-card class="detail-comment-selector" :goodsId="state.goodsId" />
+        <detail-comment-card v-if="!state.portal" class="detail-comment-selector" :goodsId="state.goodsId" />
+        <view v-else class="detail-comment-selector portal-note detail-card">
+          <view class="portal-note-title">公开目录说明</view>
+          <view>当前页面不读取其他租户会话中的收藏、优惠券和营销数据，避免跨租户串数据。</view>
+        </view>
         <!-- 详情 -->
         <detail-content-card
           class="detail-content-selector"
@@ -197,12 +240,12 @@
 
         <!-- 活动跳转：拼团/秒杀/砍价活动（企业采购简化模式下不展示） -->
         <detail-activity-tip
-          v-if="!isSimpleMarketingEnabled() && state.activityList.length > 0"
+          v-if="!state.portal && !isSimpleMarketingEnabled() && state.activityList.length > 0"
           :activity-list="state.activityList"
         />
 
         <!-- 详情 tabbar -->
-        <detail-tabbar v-model="state.goodsInfo">
+        <detail-tabbar v-if="!state.portal" v-model="state.goodsInfo">
           <view class="buy-box ss-flex ss-col-center ss-p-r-20" v-if="state.goodsInfo.stock > 0">
             <button
               class="ss-reset-button add-btn ui-Shadow-Main"
@@ -221,6 +264,15 @@
             <button class="ss-reset-button disabled-btn" disabled> 已售罄 </button>
           </view>
         </detail-tabbar>
+        <su-fixed v-else bottom placeholder bg="bg-white">
+          <view class="portal-action-bar ss-flex ss-col-center">
+            <button class="ss-reset-button portal-back-button" @tap="openPlatformProducts">平台商品</button>
+            <button class="ss-reset-button portal-cart-button" @tap="openPlatformCart">购物车</button>
+            <button class="ss-reset-button portal-shop-button" :disabled="state.portalCartBusy" @tap="addPortalCart">
+              {{ state.portalCartBusy ? '正在加入' : '加入平台购物车' }}
+            </button>
+          </view>
+        </su-fixed>
 
         <!-- 满减送/限时折扣活动弹窗 -->
         <s-activity-pop
@@ -267,6 +319,16 @@
   import detailActivityTip from './components/detail/detail-activity-tip.vue';
   import { isEmpty } from 'lodash-es';
   import SpuApi from '@/sheep/api/product/spu';
+  import PortalApi from '@/sheep/api/product/portal';
+  import PlatformCartApi from '@/sheep/api/trade/platformCart';
+  import { showAuthModal } from '@/sheep/hooks/useModal';
+  import {
+    normalizePortalProduct,
+    normalizePortalSpuId,
+    normalizePortalTenantSlug,
+    portalProductListPath,
+  } from '@/sheep/helper/platform-portal.mjs';
+  import { platformCartPath } from '@/sheep/helper/platform-commerce.mjs';
 
   onPageScroll(() => {});
   import OrderApi from '@/sheep/api/trade/order';
@@ -296,6 +358,10 @@
   const isLogin = computed(() => sheep.$store('user').isLogin);
   let state = reactive({
     goodsId: 0,
+    portal: false,
+    tenantSlug: '',
+    portalQuantity: 1,
+    portalCartBusy: false,
     skeletonLoading: true, // SPU 加载中
     goodsInfo: {}, // SPU 信息
     showSelectSku: false, // 是否展示 SKU 选择弹窗
@@ -325,6 +391,64 @@
       .map((item) => `${item.propertyName || ''}:${item.valueName || ''}`)
       .filter((item) => item !== ':')
       .join(' / ') || '默认规格';
+  }
+
+  function formatPublicSkuText(sku) {
+    const propertyText = formatSkuText(sku);
+    return propertyText === '默认规格' ? (sku?.skuName || propertyText) : propertyText;
+  }
+
+  function selectPortalSku(sku) {
+    if (!state.portal || state.portalCartBusy || !skuStockList.value.some((item) => item.id === sku?.id)) return;
+    state.selectedSku = sku;
+    state.settlementSku = sku;
+  }
+
+  function openPlatformCart() {
+    sheep.$router.go(platformCartPath());
+  }
+
+  async function addPortalCart() {
+    if (state.portalCartBusy) return;
+    if (!isLogin.value) {
+      showAuthModal('accountLogin');
+      return;
+    }
+    const skuId = Number(state.selectedSku?.id);
+    const quantity = Number(state.portalQuantity);
+    if (!Number.isSafeInteger(skuId) || skuId <= 0) {
+      sheep.$helper.toast('请先选择商品规格');
+      return;
+    }
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99999) {
+      sheep.$helper.toast('采购数量须为 1 至 99999 的整数');
+      return;
+    }
+    state.portalCartBusy = true;
+    try {
+      const response = await PlatformCartApi.add(skuId, quantity);
+      if (response?.code !== 0 || !response.data) throw new Error(response?.msg || '加入平台购物车失败');
+    } catch (error) {
+      sheep.$helper.toast(error?.message || '加入平台购物车失败，请稍后重试');
+    } finally {
+      state.portalCartBusy = false;
+    }
+  }
+
+  function openPlatformProducts() {
+    sheep.$router.go(portalProductListPath());
+  }
+
+  function openProductShop() {
+    if (state.portal) {
+      if (state.tenantSlug) {
+        sheep.$router.go(portalProductListPath({ tenantSlug: state.tenantSlug }));
+      }
+      return;
+    }
+    if (state.goodsInfo?.shopId) {
+      sheep.$router.go('/pages/goods/list', { shopId: state.goodsInfo.shopId });
+    }
   }
 
   // 添加购物车
@@ -386,6 +510,9 @@
 
   const shareInfo = computed(() => {
     if (isEmpty(state.goodsInfo)) return {};
+    // 旧分享协议只能携带 tenantId，无法表达稳定的 tenantSlug。平台详情不生成
+    // 旧式分享链接，避免分享后错误进入账号所属租户的同号商品。
+    if (state.portal) return {};
     return sheep.$platform.share.getShareInfo(
       {
         title: state.goodsInfo.name,
@@ -486,6 +613,28 @@
     }
   }
 
+  async function loadPortalProduct() {
+    try {
+      const response = state.tenantSlug
+        ? await PortalApi.getTenantProduct(state.tenantSlug, state.goodsId)
+        : await PortalApi.getProduct(state.goodsId);
+      const product = response?.code === 0 ? normalizePortalProduct(response.data) : null;
+      if (!product || product.spuId !== state.goodsId
+          || (state.tenantSlug && product.tenantSlug !== state.tenantSlug)) {
+        throw new Error('公开商品不可用');
+      }
+      state.goodsInfo = product;
+      state.tenantSlug = product.tenantSlug;
+      state.selectedSku = product.skus[0] || {};
+      state.settlementSku = state.selectedSku;
+      state.portalQuantity = 1;
+    } catch (error) {
+      state.goodsInfo = null;
+    } finally {
+      state.skeletonLoading = false;
+    }
+  }
+
   onLoad((options = {}) => {
     // 非法参数
     if (!options?.id) {
@@ -493,7 +642,19 @@
       state.skeletonLoading = false;
       return;
     }
-    state.goodsId = options.id;
+    try {
+      state.goodsId = Number(normalizePortalSpuId(options.id));
+      state.portal = options.portal === '1' || Boolean(options.tenantSlug);
+      state.tenantSlug = options.tenantSlug ? normalizePortalTenantSlug(options.tenantSlug) : '';
+    } catch {
+      state.goodsInfo = null;
+      state.skeletonLoading = false;
+      return;
+    }
+    if (state.portal) {
+      loadPortalProduct();
+      return;
+    }
     // 1. 加载商品信息
     SpuApi.getSpuDetail(state.goodsId).then((res) => {
       if (res?.code !== 0 || !res?.data) {
@@ -780,7 +941,8 @@
     justify-content: flex-end;
   }
 
-  .sku-stock-card {
+  .sku-stock-card,
+  .public-sku-card {
     .stock-title {
       font-size: 28rpx;
       font-weight: 600;
@@ -819,6 +981,104 @@
 
     .sku-stock-count {
       margin-top: 6rpx;
+    }
+
+    .public-sku-selected {
+      margin: 0 -12rpx;
+      padding-right: 12rpx;
+      padding-left: 12rpx;
+      border-radius: 10rpx;
+      background: #eef9f6;
+    }
+  }
+
+  .portal-owner-card {
+    padding: 24rpx 26rpx;
+    color: #e7fff7;
+    background: linear-gradient(120deg, #102f40, #167564);
+
+    .portal-owner-kicker {
+      font-size: 21rpx;
+      letter-spacing: 4rpx;
+      opacity: 0.78;
+    }
+
+    .portal-owner-name {
+      margin-top: 10rpx;
+      font-size: 32rpx;
+      font-weight: 700;
+    }
+
+    .portal-owner-meta {
+      margin-top: 8rpx;
+      font-size: 23rpx;
+      opacity: 0.88;
+    }
+  }
+
+  .public-sku-tip,
+  .public-saleable,
+  .portal-note {
+    color: #64748b;
+    font-size: 23rpx;
+    line-height: 36rpx;
+  }
+
+  .public-saleable {
+    margin-top: 6rpx;
+    color: #137962;
+  }
+
+  .portal-quantity {
+    margin-top: 12rpx;
+    padding-top: 20rpx;
+    border-top: 1rpx solid #edf2f1;
+  }
+
+  .portal-quantity-title {
+    color: #263d42;
+    font-size: 26rpx;
+    font-weight: 600;
+  }
+
+  .portal-note {
+    padding: 26rpx;
+
+    .portal-note-title {
+      margin-bottom: 10rpx;
+      color: #0f172a;
+      font-size: 27rpx;
+      font-weight: 700;
+    }
+  }
+
+  .portal-action-bar {
+    gap: 16rpx;
+    padding: 14rpx 20rpx calc(14rpx + env(safe-area-inset-bottom));
+
+    button {
+      height: 76rpx;
+      border-radius: 38rpx;
+      font-size: 27rpx;
+    }
+
+    .portal-back-button {
+      width: 150rpx;
+      color: #156b52;
+      background: #e2f3eb;
+    }
+
+    .portal-cart-button {
+      width: 150rpx;
+      color: #156b52;
+      border: 1rpx solid #99c5b9;
+      background: #fff;
+    }
+
+    .portal-shop-button {
+      flex: 1;
+      color: #fff;
+      background: linear-gradient(110deg, #137962, #105849);
     }
   }
 </style>

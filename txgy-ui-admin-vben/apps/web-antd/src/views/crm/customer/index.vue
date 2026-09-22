@@ -2,8 +2,8 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CrmCustomerApi } from '#/api/crm/customer';
 
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { onActivated, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
@@ -65,6 +65,36 @@ async function handleExport() {
 function handleCreate() {
   formModalApi.setData(null).open();
 }
+
+/**
+ * 支持从 CRM 首页快捷入口跳转过来时自动打开「新建」弹窗（?action=create）
+ *
+ * 首页的「新增客户」不再自己弹表单，而是进入客户模块并自动打开本页的新建弹窗，
+ * 用户能同时获得客户列表的上下文。
+ *
+ * 用 onMounted + onActivated 而非 watch：列表页被 keep-alive 缓存，
+ * 二次进入时组件不会重新 setup，只有在 onActivated 里检查才生效。
+ * 打开后立即清掉 query，避免刷新 / 返回时反复弹出。
+ */
+const route = useRoute();
+
+function checkCreateAction() {
+  if (route.query.action !== 'create') {
+    return;
+  }
+  // 清掉 URL 上的标记：用原生 history 改写地址栏，**不能**用 router.replace ——
+  // 那会触发一次路由导航，把紧接着要打开的弹窗重置掉。
+  const url = new URL(window.location.href);
+  url.searchParams.delete('action');
+  window.history.replaceState(window.history.state, '', url.toString());
+  // 弹窗容器需在本页挂载完成后才能渲染，稍等一拍再打开
+  setTimeout(() => {
+    handleCreate();
+  }, 300);
+}
+
+onMounted(checkCreateAction);
+onActivated(checkCreateAction);
 
 /** 编辑客户 */
 function handleEdit(row: CrmCustomerApi.Customer) {

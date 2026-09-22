@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Mall promotion/customer-service build: compile only the service and reactor dependencies.
+FROM maven:3.9-eclipse-temurin-25 AS builder
+
+WORKDIR /workspace
+
+COPY . .
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn -pl txgy-module-mall/txgy-module-promotion-server -am \
+        -Dmaven.test.skip=true -Dmaven.artifact.threads=1 package
+
+RUN find "txgy-module-mall/txgy-module-promotion-server/target" -maxdepth 1 -type f -name '*.jar' ! -name '*.original' ! -name 'original-*.jar' -exec cp '{}' /app.jar \; -quit \
+    && test -s /app.jar
+
+FROM eclipse-temurin:25-jre
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app.jar /app/app.jar
+
+ENV JAVA_OPTS=""
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

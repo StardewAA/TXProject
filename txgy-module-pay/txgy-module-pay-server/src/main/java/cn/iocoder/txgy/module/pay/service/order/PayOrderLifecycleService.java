@@ -96,8 +96,8 @@ public class PayOrderLifecycleService {
         PayOrderDO current = orderMapper.selectByIdForUpdate(id);
         if (current == null) throw exception(PAY_ORDER_NOT_FOUND);
         if (!PayOrderStatusEnum.isWaiting(current.getStatus())) throw exception(PAY_ORDER_STATUS_IS_NOT_WAITING);
-        if (Objects.equals(current.getPrice(), payPrice)) return;
         if (!orderExtensionMapper.selectListByOrderId(id).isEmpty()) throw exception(PAY_ORDER_PRICE_CHANGE_NOT_ALLOWED);
+        if (Objects.equals(current.getPrice(), payPrice)) return;
         if (orderMapper.updateByIdAndStatus(id, PayOrderStatusEnum.WAITING.getStatus(),
                 new PayOrderDO().setPrice(payPrice)) != 1) throw exception(PAY_ORDER_STATUS_IS_NOT_WAITING);
     }

@@ -8,7 +8,7 @@ import UserApi from '@/sheep/api/member/user';
 import PayWalletApi from '@/sheep/api/pay/wallet';
 import OrderApi from '@/sheep/api/trade/order';
 import CouponApi from '@/sheep/api/promotion/coupon';
-import { recordTenantSession, captureTenantOperation, isTenantOperationCurrent, ensureAccountSession, assertAccountProfile } from '@/sheep/helper/tenant-runtime';
+import { recordTenantSession, recordPlatformSession, captureTenantOperation, isTenantOperationCurrent, ensureAccountSession, assertAccountProfile } from '@/sheep/helper/tenant-runtime';
 import { readTenantToken, writeTenantToken } from '@/sheep/helper/tenant-runtime';
 
 // 默认用户信息
@@ -139,6 +139,25 @@ const user = defineStore('user', {
         if (!refreshing) this.loginAfter();
       }
       return this.isLogin;
+    },
+
+    // Platform tokens are still legacy member JWTs, but their tenant is only the
+    // trusted auth carrier. Do not start tenant-owned profile/cart reads here.
+    setPlatformToken(token = '', refreshToken = '', identity, refreshing = false) {
+      this.sessionError = '';
+      if (!token) return this.setToken();
+      if (!refreshing) {
+        this.userInfo = clone(defaultUserInfo);
+        this.userWallet = clone(defaultUserWallet);
+        this.numData = cloneDeep(defaultNumData);
+        this.lastUpdateTime = 0;
+        cart().emptyList();
+      }
+      recordPlatformSession(token, identity, refreshing);
+      writeTenantToken('token', token);
+      writeTenantToken('refresh-token', refreshToken);
+      this.isLogin = true;
+      return true;
     },
 
     // 更新用户相关信息 (手动限流，5 秒之内不刷新)

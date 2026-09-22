@@ -7,6 +7,7 @@ import cn.iocoder.txgy.module.wms.service.inventory.*;
 import cn.iocoder.txgy.module.wms.service.md.item.*;
 import cn.iocoder.txgy.module.wms.service.md.merchant.WmsMerchantService;
 import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehouseService;
+import cn.iocoder.txgy.module.wms.service.md.warehouse.WmsWarehousePersonnelService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.*;
 import org.springframework.context.annotation.Import;
@@ -30,6 +31,8 @@ class WmsShipmentInventoryTransactionTest extends BaseDbUnitTest {
     @MockitoBean WmsItemSkuService skuService;
     @MockitoBean WmsItemService itemService;
     @MockitoBean WmsWarehouseService warehouseService;
+    @MockitoBean WmsWarehousePersonnelService warehousePersonnelService;
+    @MockitoBean cn.iocoder.txgy.module.wms.service.integration.WmsCollaborationOrderGService collaborationOrderGService;
     @MockitoBean WmsMerchantService merchantService;
     @MockitoBean BpmProcessInstanceApi bpm;
     JdbcTemplate jdbc;
@@ -84,7 +87,7 @@ class WmsShipmentInventoryTransactionTest extends BaseDbUnitTest {
             assertEquals(0, balance(2).compareTo(BigDecimal.ONE));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM wms_shortage_event", Integer.class));
             assertEquals("ERP", jdbc.queryForObject("SELECT target_system FROM wms_shortage_event", String.class));
-            assertEquals("WAITING_INTEGRATION", jdbc.queryForObject("SELECT notification_status FROM wms_shortage_event", String.class));
+            assertEquals("PENDING", jdbc.queryForObject("SELECT notification_status FROM wms_shortage_event", String.class));
         } finally {
             cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder.clear();
         }

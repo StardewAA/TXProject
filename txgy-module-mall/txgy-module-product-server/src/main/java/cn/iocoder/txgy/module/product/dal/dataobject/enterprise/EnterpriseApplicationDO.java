@@ -22,6 +22,8 @@ public class EnterpriseApplicationDO extends TenantBaseDO {
     private Long auditorId;
     private LocalDateTime auditTime;
     private Long enterpriseId;
-    /** 后台明确授权的店铺，审核通过不自动分配。 */
+    /** 供应商审核通过后自动创建或绑定的企业店铺。 */
     private Long shopId;
+    /** 供应商审核时显式关联的后台企业管理员账号。 */
+    private Long adminUserId;
 }

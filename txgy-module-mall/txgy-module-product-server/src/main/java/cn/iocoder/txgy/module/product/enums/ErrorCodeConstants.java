@@ -9,11 +9,16 @@ import cn.iocoder.txgy.framework.common.exception.ErrorCode;
  */
 public interface ErrorCodeConstants {
 
+    // ========== 商城租户边界 1-008-000-000 ============
+    ErrorCode RETIRED_MALL_TENANT_WRITE_FORBIDDEN = new ErrorCode(1_008_000_001,
+            "原公共商城租户已退役，仅保留历史查询，禁止新增或修改业务数据");
+
     // ========== 产业链店铺 1-008-009-000 ============
     ErrorCode SHOP_NOT_EXISTS = new ErrorCode(1_008_009_000, "店铺不存在");
     ErrorCode SHOP_ENTERPRISE_EXISTS = new ErrorCode(1_008_009_001, "该企业已开通店铺");
     ErrorCode SHOP_DISABLED = new ErrorCode(1_008_009_002, "店铺已停用");
     ErrorCode SHOP_MANAGER_USER_EXISTS = new ErrorCode(1_008_009_003, "该后台账号已绑定其他店铺");
+    ErrorCode SHOP_ENTERPRISE_IMMUTABLE = new ErrorCode(1_008_009_004, "店铺创建后不可变更所属企业");
 
     // ========== WMS 只读查询 1-008-011-000 ==========
     ErrorCode WMS_ITEM_NOT_EXISTS = new ErrorCode(1_008_011_000, "WMS 商品不存在");

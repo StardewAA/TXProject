@@ -2,6 +2,8 @@ package cn.iocoder.txgy.module.product.service.property;
 
 import cn.iocoder.txgy.framework.common.pojo.PageResult;
 import cn.iocoder.txgy.framework.common.util.object.BeanUtils;
+import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.controller.admin.property.vo.value.ProductPropertyValuePageReqVO;
 import cn.iocoder.txgy.module.product.controller.admin.property.vo.value.ProductPropertyValueSaveReqVO;
 import cn.iocoder.txgy.module.product.dal.dataobject.property.ProductPropertyValueDO;
@@ -37,6 +39,7 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
 
     @Override
     public Long createPropertyValue(ProductPropertyValueSaveReqVO createReqVO) {
+        requireWritableTenant();
         // 如果已经添加过该属性值，直接返回
         ProductPropertyValueDO dbValue = productPropertyValueMapper.selectByName(
                 createReqVO.getPropertyId(), createReqVO.getName());
@@ -53,6 +56,7 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
     @Override
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public void updatePropertyValue(ProductPropertyValueSaveReqVO updateReqVO) {
+        requireWritableTenant();
         validatePropertyValueExists(updateReqVO.getId());
         // 校验名字唯一
         ProductPropertyValueDO value = productPropertyValueMapper.selectByName
@@ -69,6 +73,7 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
 
     @Override
     public void deletePropertyValue(Long id) {
+        requireWritableTenant();
         validatePropertyValueExists(id);
         productPropertyValueMapper.deleteById(id);
     }
@@ -101,7 +106,12 @@ public class ProductPropertyValueServiceImpl implements ProductPropertyValueServ
 
     @Override
     public void deletePropertyValueByPropertyId(Long propertyId) {
+        requireWritableTenant();
         productPropertyValueMapper.deleteByPropertyId(propertyId);
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 
 }

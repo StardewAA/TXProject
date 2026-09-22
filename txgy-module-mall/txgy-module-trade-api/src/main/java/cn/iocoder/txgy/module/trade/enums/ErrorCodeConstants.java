@@ -45,6 +45,18 @@ public interface ErrorCodeConstants {
     ErrorCode ORDER_CREATE_FAIL_MULTI_SHOP = new ErrorCode(1_011_000_040, "不同店铺商品请分别结算");
     ErrorCode ORDER_CREATE_FAIL_MULTI_SHOP_DISCOUNT = new ErrorCode(1_011_000_041, "多店铺订单暂不支持统一使用优惠券或积分抵扣，请按店铺分别结算");
     ErrorCode ORDER_CANCEL_PAYMENT_UNCONFIRMED = new ErrorCode(1_011_000_042, "暂未确认支付已关闭，订单尚未取消，请稍后重试；已付款请勿重复支付");
+    ErrorCode ORDER_UPDATE_ADDRESS_FAIL_STATUS_NOT_UNPAID = new ErrorCode(1_011_000_043, "修改收货地址失败，订单不是【待支付】状态");
+    ErrorCode ORDER_UPDATE_ADDRESS_FAIL_NOT_EXPRESS = new ErrorCode(1_011_000_044, "修改收货地址失败，订单不是快递配送");
+    ErrorCode ORDER_UPDATE_ADDRESS_FAIL_PAYMENT_UNAVAILABLE = new ErrorCode(1_011_000_045, "修改收货地址失败，支付窗口尚未就绪或已经到期");
+    ErrorCode ORDER_INQUIRY_QUOTE_NOT_AVAILABLE = new ErrorCode(1_011_000_046, "询价报价不存在、未采纳或已经失效");
+    ErrorCode ORDER_INQUIRY_QUOTE_BUYER_MISMATCH = new ErrorCode(1_011_000_047, "该询价报价不属于当前采购用户");
+    ErrorCode ORDER_INQUIRY_QUOTE_INVALID = new ErrorCode(1_011_000_048, "询价报价数据不完整，原因：{}");
+    ErrorCode ORDER_INQUIRY_QUOTE_SHOP_MISMATCH = new ErrorCode(1_011_000_049, "询价报价商品必须全部属于报价店铺");
+    ErrorCode ORDER_INQUIRY_ORDER_DELETE_FORBIDDEN = new ErrorCode(1_011_000_050, "询价成交订单需保留追溯记录，不能删除");
+    ErrorCode ORDER_INQUIRY_ORDER_PRICE_CHANGE_FORBIDDEN = new ErrorCode(1_011_000_051, "询价成交价只能来自已采纳报价，不能后台调价");
+    ErrorCode ORDER_INQUIRY_ORDER_ENTERPRISE_MISMATCH = new ErrorCode(1_011_000_052, "询价成交订单不属于当前采购企业");
+    ErrorCode MEMBER_SUPPLIER_WRITE_DISABLED = new ErrorCode(1_011_000_053,
+            "旧会员端销售写入口已关闭，请使用后台企业经营端处理");
 
     // ========== After Sale 模块 1-011-000-100 ==========
     ErrorCode AFTER_SALE_NOT_FOUND = new ErrorCode(1_011_000_100, "售后单不存在");
@@ -65,9 +77,26 @@ public interface ErrorCodeConstants {
     ErrorCode AFTER_SALE_CANCEL_FAIL_STATUS_NOT_APPLY_OR_AGREE_OR_BUYER_DELIVERY =
             new ErrorCode(1_011_000_115, "取消售后单失败，售后单状态不是【待审核】或【卖家同意】或【商家待收货】");
     ErrorCode AFTER_SALE_CREATE_FAIL_ORDER_STATUS_COMBINATION_IN_PROGRESS = new ErrorCode(1_011_000_116, "订单拼团中，无法申请售后");
+    ErrorCode AFTER_SALE_ENTERPRISE_ACTION_REQUIRES_ORDER_CREATOR = new ErrorCode(1_011_000_117,
+            "企业采购售后的资金及退货操作仅限实际下单人执行");
 
     // ========== Cart 模块 1-011-002-000 ==========
     ErrorCode CARD_ITEM_NOT_FOUND = new ErrorCode(1_011_002_000, "购物车项不存在");
+    ErrorCode PLATFORM_CART_ITEM_NOT_FOUND = new ErrorCode(1_011_002_001, "平台购物车项不存在或无权操作");
+    ErrorCode PLATFORM_CART_SKU_UNAVAILABLE = new ErrorCode(1_011_002_002, "商品暂不可加入平台购物车：{}");
+
+    // ========== Platform Checkout 模块 1-011-010-000 ==========
+    ErrorCode PLATFORM_CHECKOUT_CART_EMPTY = new ErrorCode(1_011_010_000, "请选择需要结算的平台购物车商品");
+    ErrorCode PLATFORM_CHECKOUT_CART_INVALID = new ErrorCode(1_011_010_001, "平台购物车暂不能结算：{}");
+    ErrorCode PLATFORM_CHECKOUT_NOT_FOUND = new ErrorCode(1_011_010_002, "平台结算单不存在或无权访问");
+    ErrorCode PLATFORM_CHECKOUT_DATA_INVALID = new ErrorCode(1_011_010_003, "平台结算单数据校验失败：{}");
+    ErrorCode PLATFORM_CHECKOUT_SUBMIT_BLOCKED = new ErrorCode(1_011_010_004,
+            "跨租户聚合支付与平台地址快照尚未接通，本次提交已安全拒绝且未创建订单");
+    ErrorCode PLATFORM_CHECKOUT_ACCOUNT_INVALID = new ErrorCode(1_011_010_005, "当前会员未建立有效的平台账号映射");
+    ErrorCode PLATFORM_CHECKOUT_IDEMPOTENCY_CONFLICT = new ErrorCode(1_011_010_006,
+            "幂等键已用于不同的结算请求，请勿重复使用");
+    ErrorCode PLATFORM_CHECKOUT_ADDRESS_INVALID = new ErrorCode(1_011_010_007,
+            "收货地址不存在、不完整或不属于当前平台账号");
 
     // ========== Price 相关 1-011-003-000 ============
     ErrorCode PRICE_CALCULATE_PAY_PRICE_ILLEGAL = new ErrorCode(1_011_003_000, "支付价格计算异常，原因：价格小于等于 0");

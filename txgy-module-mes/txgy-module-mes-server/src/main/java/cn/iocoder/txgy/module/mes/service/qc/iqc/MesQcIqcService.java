@@ -7,6 +7,8 @@ import cn.iocoder.txgy.module.mes.dal.dataobject.qc.defectrecord.MesQcDefectReco
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.iqc.MesQcIqcDO;
 import jakarta.validation.Valid;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,26 @@ public interface MesQcIqcService {
      * @return 编号
      */
     Long createIqc(@Valid MesQcIqcSaveReqVO createReqVO);
+
+    /**
+     * 自动生成来料检验单草稿（来源单据触发）
+     *
+     * <p>幂等：同一来源行已存在检验单时直接返回已有编号，不重复创建；
+     * 物料未配置 IQC 检验模板时跳过（返回 null），不阻断来源单流程。
+     * 使用独立事务（REQUIRES_NEW），生成失败不影响来源单提交。
+     *
+     * @param sourceDocType 来源单据类型（MesBizTypeConstants）
+     * @param sourceDocId   来源单据 ID
+     * @param sourceLineId  来源单据行 ID
+     * @param sourceDocCode 来源单据编号（冗余）
+     * @param vendorId      供应商 ID
+     * @param itemId        物料 ID
+     * @param quantity      本次接收数量
+     * @param receiveDate   来料日期
+     * @return 检验单编号；物料未配置模板等场景返回 null
+     */
+    Long generateIqcDraft(Integer sourceDocType, Long sourceDocId, Long sourceLineId, String sourceDocCode,
+                          Long vendorId, Long itemId, BigDecimal quantity, LocalDateTime receiveDate);
 
     /**
      * 更新来料检验单

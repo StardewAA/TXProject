@@ -5,11 +5,14 @@ import cn.iocoder.txgy.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.txgy.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.txgy.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.txgy.module.product.dal.dataobject.review.ProductSpuReviewRecordDO;
+import cn.iocoder.txgy.module.product.api.tenant.MallTenantWriteGuard;
 import cn.iocoder.txgy.module.product.dal.dataobject.spu.ProductSpuDO;
 import cn.iocoder.txgy.module.product.dal.mysql.review.ProductSpuReviewRecordMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.sku.ProductSkuMapper;
 import cn.iocoder.txgy.module.product.dal.mysql.spu.ProductSpuMapper;
 import cn.iocoder.txgy.module.product.service.enterprise.EnterpriseMembershipService;
+import cn.iocoder.txgy.module.product.service.enterprise.ProductAdminBusinessScopeService;
+import cn.iocoder.txgy.module.product.service.audit.ProductBusinessOperationAuditService;
 import cn.iocoder.txgy.module.product.service.shop.ProductShopService;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.annotation.Resource;
@@ -28,18 +31,21 @@ public class ProductSpuReviewService {
     @Resource private ProductSpuReviewRecordMapper recordMapper;
     @Resource private ProductShopService shopService;
     @Resource private EnterpriseMembershipService membership;
+    @Resource private ProductAdminBusinessScopeService businessScopeService;
     @Resource private ProductReviewProperties properties;
     @Resource private cn.iocoder.txgy.module.product.dal.mysql.enterprise.ProductEnterpriseMapper enterpriseMapper;
     @Resource private cn.iocoder.txgy.module.product.service.category.ProductCategoryService categoryService;
     @Resource private cn.iocoder.txgy.module.product.service.brand.ProductBrandService brandService;
     @Resource private cn.iocoder.txgy.module.trade.api.delivery.DeliveryTemplateApi deliveryApi;
+    @Resource private ProductBusinessOperationAuditService operationAuditService;
+    @Resource private ProductWmsListingValidator wmsListingValidator;
 
     public record Policy(boolean adminWriteEnabled, String legacyStrategy, boolean reviewEnabled, List<Long> adminWriteLockedShopIds) {}
     public Policy policy() { return new Policy(properties.isAdminWriteEnabled(), properties.getLegacyStrategy(), properties.isReviewEnabled(),
             properties.getAdminWriteLockedShopIds()); }
     public void requireAdminWrite(Long shopId) {
         if (!properties.isAdminWriteEnabled() || properties.getAdminWriteLockedShopIds().contains(shopId))
-            throw invalid("该店商品经营资料请由销售中心维护，后台仅提供查看和审核");
+            throw invalid("该店商品经营权限尚未切换到后台，请联系租户管理员完成账号与店铺授权");
     }
     public boolean keepLegacy() { return properties.isReviewEnabled() && "KEEP_EXISTING_UNMODIFIED".equals(properties.getLegacyStrategy()); }
     public void applySaleableQuery(LambdaQueryWrapperX<ProductSpuDO> query) {
@@ -110,6 +116,7 @@ public class ProductSpuReviewService {
                 .findFirst().orElseThrow(() -> invalid("请配置有效快递运费模板"));
         var skus = skuMapper.selectListBySpuId(p.getId());
         if (skus.isEmpty()) throw invalid("商品缺少有效规格");
+        wmsListingValidator.validate(skus);
         for (var sku : skus) {
             if (sku.getPrice() == null || sku.getPrice() <= 0) throw invalid("商品SKU价格必须大于0");
             if (template.chargeMode() == 2 && (sku.getWeight() == null || !Double.isFinite(sku.getWeight()) || sku.getWeight() <= 0))
@@ -148,6 +155,7 @@ public class ProductSpuReviewService {
     }
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long member, Long shop, Long id, Long expected) {
+        requireWritableTenant();
         var p = owned(member, shop, id);
         submitLocked(p, expected);
     }
@@ -168,6 +176,7 @@ public class ProductSpuReviewService {
     }
     @Transactional(rollbackFor = Exception.class)
     public void withdraw(Long member, Long shop, Long id, Long expected, String submission) {
+        requireWritableTenant();
         var p = owned(member, shop, id);
         withdrawLocked(p, expected, submission);
     }
@@ -181,11 +190,13 @@ public class ProductSpuReviewService {
     }
     @Transactional(rollbackFor = Exception.class)
     public void adminSubmit(Long id, Long expected) {
+        requireWritableTenant();
         var p = adminOwned(id); requireAdminWrite(p.getShopId());
         submitLocked(p, expected);
     }
     @Transactional(rollbackFor = Exception.class)
     public void adminWithdraw(Long id, Long expected, String submission) {
+        requireWritableTenant();
         var p = adminOwned(id); requireAdminWrite(p.getShopId());
         withdrawLocked(p, expected, submission);
     }
@@ -193,22 +204,24 @@ public class ProductSpuReviewService {
         var p = lock(id);
         var user = SecurityFrameworkUtils.getLoginUser();
         if (user == null || !Objects.equals(user.getUserType(), UserTypeEnum.ADMIN.getValue())) throw invalid("请使用后台账号");
-        var managed = shopService.getShopByManagerUserId(user.getId());
-        if (managed != null && !Objects.equals(managed.getId(), p.getShopId())) throw invalid("无权维护其他店铺商品");
         if (p.getShopId() == null || !Set.of(0, 1).contains(p.getStatus())) throw invalid("请先配置有效店铺，回收商品须先恢复为草稿");
-        shopService.validateEnabledShop(p.getShopId());
+        businessScopeService.requireMerchantShop(user.getId(), p.getShopId());
         return p;
     }
     @Transactional(rollbackFor = Exception.class)
     public void decide(Long id, Long expected, String submission, boolean approved, String reason) {
+        requireWritableTenant();
         var p = lock(id); expect(p, expected);
         if (submission == null || !Objects.equals(submission, p.getSubmissionId())) throw invalid("审核批次已变化，请刷新");
         var user = SecurityFrameworkUtils.getLoginUser();
         if (user == null || !Objects.equals(user.getUserType(), UserTypeEnum.ADMIN.getValue())) throw invalid("请使用后台审核账号");
-        var managed = shopService.getShopByManagerUserId(user.getId());
-        if (managed != null && !Objects.equals(managed.getId(), p.getShopId())) throw invalid("无权审核其他店铺商品");
+        // 商品经营账号即使误配了 review 权限，也不能借此跨越“经营与审核分离”边界。
+        businessScopeService.requireTenantManager(user.getId());
         var shop = p.getShopId() == null ? null : shopService.getShop(p.getShopId());
         if (shop == null || Objects.equals(shop.getManagerUserId(), user.getId())) throw invalid("经营关联账号不能审核本店商品，请由独立审核人员处理");
+        if (businessScopeService.isEnterpriseBusinessMember(user.getId(), shop.getEnterpriseId())) {
+            throw invalid("企业经营成员不能审核本企业商品，请由独立审核人员处理");
+        }
         var submitted = history(id).stream().filter(r -> "SUBMIT".equals(r.getAction()) && submission.equals(r.getSubmissionId())).findFirst()
                 .orElseThrow(() -> invalid("审核提交快照不存在"));
         if (Objects.equals(submitted.getActorType(), user.getUserType()) && Objects.equals(submitted.getActorId(), user.getId()))
@@ -237,5 +250,15 @@ public class ProductSpuReviewService {
         r.setActorType(user == null ? 0 : user.getUserType()); r.setActorId(user == null ? 0L : user.getId());
         r.setRemark(remark); r.setSnapshot(snapshot); r.setCreateTime(LocalDateTime.now());
         if (recordMapper.insert(r) != 1) throw invalid("审核记录保存失败");
+        var shop = p.getShopId() == null ? null : shopService.getShop(p.getShopId());
+        String actorType = user == null ? "SYSTEM"
+                : Objects.equals(user.getUserType(), UserTypeEnum.ADMIN.getValue()) ? "ADMIN" : "MEMBER";
+        operationAuditService.success(shop == null ? null : shop.getEnterpriseId(), p.getShopId(), actorType,
+                user == null ? null : user.getId(), "PRODUCT_" + action, "PRODUCT_SPU", p.getId(),
+                "contentVersion=" + version(p) + ",submissionId=" + Objects.toString(submission, ""));
+    }
+
+    private static void requireWritableTenant() {
+        MallTenantWriteGuard.requireWritable(TenantContextHolder.getRequiredTenantId());
     }
 }

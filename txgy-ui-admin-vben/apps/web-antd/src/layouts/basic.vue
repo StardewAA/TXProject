@@ -43,21 +43,24 @@ import { router } from '#/router';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 import FmsAccountSetSwitch from '#/views/fms/components/account-set/account-set-switch.vue';
-// 【MES AI 助手】面板为 fixed 定位悬浮球/悬浮窗，不影响页面布局。
-// 只在 MES 模块页面挂载：它是 MES 生产助手，其它模块页面（含登录后的 AI首页）
-// 不应出现；在 MES 内部切换菜单时组件不销毁，会话状态得以保留。
+// 【全局 AI 助手】挂在基础布局上，仅在 MES 系统板块（/mes 下所有页面）显示，
+// 切换到 CRM/ERP/培训等其他板块时隐藏；板块内切换页面对话记录保持不丢失
 import MesAiChatPanel from '#/views/mes/home/modules/MesAiChatPanel.vue';
 
 const route = useRoute();
+/** 当前是否处于 MES 系统板块（菜单根路径 /mes 下所有页面，含 MES 首页） */
+const isMesRoute = computed(() => route.path.startsWith('/mes'));
+
 const userStore = useUserStore();
 
-/** MES AI 助手只在 MES 模块页面显示（/mes、/mes/...） */
-const isMesRoute = computed(() => route.path === '/mes' || route.path.startsWith('/mes/'));
+
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
+
+
 
 const notifications = ref<NotificationItem[]>([]);
 const unreadCount = ref(0);
@@ -188,6 +191,11 @@ const tenantEnable = computed(
 async function handleGetTenantList() {
   if (tenantEnable.value) {
     tenants.value = await getSimpleTenantList();
+    // 兜底：历史会话（或登录流程未写入）可能没有「访问租户」，
+    // 用登录租户补齐，避免下拉长期停留在「请选择租户」占位符。
+    if (!accessStore.visitTenantId && accessStore.tenantId) {
+      accessStore.setVisitTenantId(accessStore.tenantId);
+    }
   }
 }
 
@@ -349,6 +357,6 @@ watch(
     </template>
   </BasicLayout>
   <HelpModal />
-  <!-- 【MES AI 助手】MES 模块页面专属悬浮面板（进 MES 才挂载，离开即卸载） -->
+  <!-- 【全局 AI 助手】悬浮球/对话面板，仅 MES 系统板块内显示 -->
   <MesAiChatPanel v-if="isMesRoute" />
 </template>

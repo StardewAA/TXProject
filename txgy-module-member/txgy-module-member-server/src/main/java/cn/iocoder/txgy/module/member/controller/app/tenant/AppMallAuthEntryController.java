@@ -26,6 +26,8 @@ public class AppMallAuthEntryController {
     private cn.iocoder.txgy.module.member.service.tenant.MallAccountPolicy accountPolicy;
     @Value("${mall.registration.picture-enabled:false}")
     private boolean pictureEnabled;
+    @Value("${mall.registration.legacy-endpoint-enabled:false}")
+    private boolean legacyRegistrationEnabled;
 
     public AppMallAuthEntryController(MallTenantAuthProperties properties, MallAuthPolicy policy,
             @Value("${mall.registration.platform-tenant-id:1}") Long legacyTenantId) {
@@ -53,7 +55,8 @@ public class AppMallAuthEntryController {
         if (!properties.isEnabled()) {
             // Foreign discovery must never advertise the fixed legacy registration endpoint.
             boolean legacy = target.equals(legacyTenantId);
-            return CommonResult.success(new Entry(legacy ? "legacy" : "challenge-v1", target, legacy, legacy, false, "sms", false));
+            return CommonResult.success(new Entry(legacy ? "legacy" : "challenge-v1", target, legacy,
+                    legacy && legacyRegistrationEnabled, false, "sms", false));
         }
         // If activation/configuration is incomplete, clients MUST NOT fall back to legacy auth.
         boolean available = allowed(target, false);

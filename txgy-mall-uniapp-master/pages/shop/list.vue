@@ -1,5 +1,5 @@
 <template>
-  <s-layout title="企业店铺" navbar="normal" tenantEntry>
+  <s-layout title="企业店铺" navbar="normal">
     <view class="shop-directory">
       <view class="directory-heading"><text>按店铺找材料</text><view>了解供应企业，集中查看店铺商品</view></view>
       <view class="shop-search"><input v-model="keyword" placeholder="搜索店铺名称或主营材料" confirm-type="search" /><text v-if="keyword" @tap="keyword = ''">清除</text></view>

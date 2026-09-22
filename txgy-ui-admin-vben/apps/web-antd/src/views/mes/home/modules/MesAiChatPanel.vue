@@ -4,7 +4,7 @@
  *
  * 1. fixed 固定定位（右 16px / 下 20px）；面板固定白色背景 + 黑色文字，不随主题变化
  * 2. 宽 380px（最大化 560px），高 min(720px, 视口-32px)；消息区内部滚动
- * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认展开
+ * 3. 最小化收起为右下角悬浮球（悬停"MES 智能助手"）；支持最大化切换；默认收起（进入页面不自动弹出，点击悬浮球才展开）
  * 4. 对接现有 AI 流式接口：权限拦截在后端，越权返回拒绝话术直接渲染
  * 5. Enter 发送 / Shift+Enter 换行；会话仅当前页面缓存，刷新清空
  */
@@ -19,8 +19,12 @@ import { Button, Input, Tooltip, message } from 'ant-design-vue';
 import {
   createChatConversationMy,
   deleteChatConversationMy,
+  getChatConversationMyList,
 } from '#/api/ai/chat/conversation';
-import { sendChatMessageStream } from '#/api/ai/chat/message';
+import {
+  getChatMessageListByConversationId,
+  sendChatMessageStream,
+} from '#/api/ai/chat/message';
 import { getMyPage } from '#/api/ai/model/chatRole';
 import { uploadFile } from '#/api/infra/file';
 import { MarkdownView } from '#/components/markdown-view';
@@ -64,8 +68,8 @@ const props = withDefaults(
   },
 );
 
-/** 面板状态：展开（默认）/ 收起为悬浮球；最大化切换 */
-const expanded = ref(true);
+/** 面板状态：默认收起为悬浮球（进入页面不自动弹出，点击悬浮球才展开）；最大化切换 */
+const expanded = ref(false);
 const maximized = ref(false);
 /** 会话就绪标记（创建成功后才能发送） */
 const conversationReady = ref(false);
@@ -614,12 +618,18 @@ async function scrollToBottom() {
   }
 }
 
+/** 同步页面主体避让 class：pushBody 为 false 时始终不挤压页面（面板悬浮覆盖在内容之上） */
+function syncBodyAvoid(open: boolean) {
+  document.body.classList.toggle(
+    'mes-ai-panel-open',
+    props.pushBody !== false && open,
+  );
+}
+
 /** 展开/收起切换：同步管理 body 避让 class */
 function setExpanded(v: boolean) {
   expanded.value = v;
-  if (props.pushBody !== false) {
-    document.body.classList.toggle('mes-ai-panel-open', v);
-  }
+  syncBodyAvoid(v);
   if (v) scrollToBottom();
 }
 
@@ -678,6 +688,35 @@ function describeRequestError(e: any, fallback: string): string {
   return rawMsg || fallback;
 }
 
+/**
+ * 解析当前租户下的 AI 角色编号。
+ * 角色 id 是按租户分配的（例：「MES 生产助手」在租户 2010 为 20、租户 1 为 1000020），
+ * 硬编码的 fallbackRoleId 只在个别租户成立，故改为按名称动态查找：
+ *   1) 先查公开角色（publicStatus: true）——「MES 生产助手」是全租户共用的公开角色；
+ *   2) 再查当前用户的私有角色（publicStatus: false）；
+ *   3) 都未命中时退回 props.fallbackRoleId，兼容历史数据。
+ */
+async function resolveChatRoleId(): Promise<number> {
+  for (const publicStatus of [true, false]) {
+    try {
+      const page = await getMyPage({
+        name: props.roleName,
+        pageNo: 1,
+        pageSize: 10,
+        publicStatus,
+      });
+      const list = page?.list || [];
+      const hit =
+        list.find((item: any) => item.name === props.roleName) || list[0];
+      if (hit?.id) return hit.id;
+    } catch {
+      // 单次查询失败不阻断：继续尝试下一种查询范围
+    }
+  }
+  if (props.fallbackRoleId) return props.fallbackRoleId;
+  throw new Error('未找到 AI 角色配置');
+}
+
 /** 创建会话：查找「MES 生产助手」角色（带回退逻辑），失败给出分类提示可重试 */
 async function initConversation() {
   // 防重入：上一次初始化未完成时跳过。
@@ -701,17 +740,7 @@ async function initConversation() {
     }
   }
   try {
-    let roleId = props.fallbackRoleId;
-    const page = await getMyPage({
-      name: props.roleName,
-      pageNo: 1,
-      pageSize: 10,
-      publicStatus: false,
-    });
-    const list = page?.list || [];
-    const hit = list.find((item: any) => item.name === props.roleName) || list[0];
-    if (hit) roleId = hit.id;
-    if (!roleId) throw new Error('未找到 AI 角色配置');
+    const roleId = await resolveChatRoleId();
     const conv = await createChatConversationMy({ roleId } as any);
     conversationId.value = String(conv ?? '');
     conversationReady.value = true;
@@ -738,6 +767,75 @@ async function initConversation() {
 
 /** 会话编号（后端返回字符串形式的 Long，保持字符串避免精度丢失） */
 const conversationId = ref<string>('');
+
+// ==================== 【历史会话记录】 ====================
+const historyOpen = ref(false); // 历史列表展开状态（覆盖消息区显示）
+const historyLoading = ref(false);
+const historyList = ref<any[]>([]);
+
+/** 打开/关闭历史会话列表（打开时拉取本角色全部历史会话） */
+async function toggleHistory() {
+  historyOpen.value = !historyOpen.value;
+  if (!historyOpen.value) return;
+  historyLoading.value = true;
+  try {
+    const list = await getChatConversationMyList();
+    // 仅展示本助手角色的会话，按更新时间倒序
+    historyList.value = (list || [])
+      .filter((c: any) => c.roleId && c.id)
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.updateTime || b.createTime).getTime() -
+          new Date(a.updateTime || a.createTime).getTime(),
+      );
+  } catch {
+    message.error('历史会话加载失败，请稍后重试');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+/** 切换到历史会话：中断旧流 → 加载该会话全部消息 → 回显 */
+async function switchConversation(item: any) {
+  if (streaming.value) {
+    abortController.value?.abort();
+    abortController.value = undefined;
+    streaming.value = false;
+  }
+  historyOpen.value = false;
+  historyLoading.value = true;
+  try {
+    const list = await getChatMessageListByConversationId(item.id);
+    const mapped = (list || []).map((m: any) => ({
+      role: m.type === 'user' ? 'user' : 'assistant',
+      content: m.content || '',
+      time: m.createTime ? String(m.createTime).slice(0, 16) : formatTime(),
+    }));
+    messages.value = mapped;
+    conversationId.value = String(item.id);
+    conversationReady.value = true;
+    scrollToBottom();
+  } catch {
+    message.error('历史消息加载失败，请稍后重试');
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+/** 删除历史会话；若删除的是当前会话则重新初始化 */
+async function removeHistory(item: any) {
+  try {
+    await deleteChatConversationMy(Number(item.id));
+    historyList.value = historyList.value.filter((c) => c.id !== item.id);
+    if (String(item.id) === conversationId.value) {
+      await initConversation();
+      historyOpen.value = false;
+    }
+    message.success('会话已删除');
+  } catch {
+    message.error('删除失败，请稍后重试');
+  }
+}
 
 /** 发送消息：流式接收；权限拦截在后端，越权返回拒绝话术直接渲染 */
 async function handleSend(attachmentUrls?: string[]) {
@@ -1208,13 +1306,13 @@ function handleWindowResize() {
 watch(
   () => [expanded.value],
   () => {
-    document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+    syncBodyAvoid(expanded.value);
     if (expanded.value) scrollToBottom();
   },
 );
 
 onMounted(() => {
-  document.body.classList.toggle('mes-ai-panel-open', expanded.value);
+  syncBodyAvoid(expanded.value);
   initConversation();
   window.addEventListener('resize', handleWindowResize);
   // 视口尺寸变化时把悬浮球/面板拉回可视范围
@@ -1271,6 +1369,15 @@ onBeforeUnmount(() => {
               />
             </span>
           </Tooltip>
+          <Tooltip title="历史会话" placement="top">
+            <span
+              class="mes-ai-icon-btn"
+              :class="{ 'mes-ai-icon-btn--active': historyOpen }"
+              @click="toggleHistory"
+            >
+              <IconifyIcon icon="lucide:history" :size="14" />
+            </span>
+          </Tooltip>
           <Tooltip title="重新开始会话" placement="top">
             <span class="mes-ai-icon-btn" @click="initConversation">
               <IconifyIcon icon="lucide:rotate-ccw" :size="14" />
@@ -1284,8 +1391,42 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <!-- 【历史会话列表】覆盖消息区显示，选择/删除历史对话 -->
+      <div v-if="historyOpen" class="mes-ai-history">
+        <div v-if="historyLoading" class="mes-ai-history__loading">
+          加载中...
+        </div>
+        <div v-else-if="historyList.length === 0" class="mes-ai-history__empty">
+          暂无历史会话
+        </div>
+        <div
+          v-for="item in historyList"
+          v-else
+          :key="item.id"
+          class="mes-ai-history__item"
+          :class="{ 'is-current': String(item.id) === conversationId }"
+          @click="switchConversation(item)"
+        >
+          <div class="mes-ai-history__main">
+            <div class="mes-ai-history__title">
+              {{ item.title || '未命名会话' }}
+            </div>
+            <div class="mes-ai-history__time">
+              {{ item.updateTime || item.createTime || '' }}
+            </div>
+          </div>
+          <span
+            class="mes-ai-history__del"
+            title="删除会话"
+            @click.stop="removeHistory(item)"
+          >
+            <IconifyIcon icon="lucide:trash-2" :size="13" />
+          </span>
+        </div>
+      </div>
+
       <!-- 消息区：占面板剩余高度，内部滚动，不带动整页滚动 -->
-      <div ref="messageListRef" class="mes-ai-messages">
+      <div v-show="!historyOpen" ref="messageListRef" class="mes-ai-messages">
         <div
           v-for="(msg, index) in messages"
           :key="index"
@@ -2227,6 +2368,78 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+/* ========== 历史会话列表 ========== */
+.mes-ai-history {
+  position: absolute;
+  inset: 48px 0 0; /* 覆盖消息区（头部以下） */
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.mes-ai-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.mes-ai-history__item:hover {
+  border-color: #1677ff;
+}
+
+.mes-ai-history__item.is-current {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.mes-ai-history__title {
+  max-width: 240px;
+  overflow: hidden;
+  font-size: 13px;
+  color: #1f2937;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mes-ai-history__time {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.mes-ai-history__del {
+  flex-shrink: 0;
+  padding: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.mes-ai-history__del:hover {
+  color: #ef4444;
+}
+
+.mes-ai-history__loading,
+.mes-ai-history__empty {
+  padding: 24px 0;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.mes-ai-icon-btn--active {
+  color: #1677ff;
+}
+
 /* ========== 小屏适配 ========== */
 @media (max-width: 1100px) {
   .mes-ai-panel {
@@ -2236,16 +2449,26 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-/* ========== 非 scoped：页面主体避让样式（作用于 body 与 MES 首页 Page 容器） ========== */
+/* ========== 非 scoped：全局避让样式（作用于 body 与页面主体容器） ========== */
 
-/* 面板展开时，标记了 mes-ai-avoid 的页面主体容器向左避让，不被面板遮挡 */
+/* 面板展开时：整个页面主体右移留出面板空间，不遮挡任何板块内容 */
+body.mes-ai-panel-open {
+  padding-right: 388px; /* 380 面板宽 + 8 缓冲 */
+  transition: padding-right 0.3s ease;
+}
+
+/* MES 首页 Page 容器沿用原有避让（配合 body 右移的叠加微调） */
 body.mes-ai-panel-open .mes-ai-avoid {
-  padding-right: 404px; /* 380 面板宽 + 16 右侧间距 + 8 缓冲 */
+  padding-right: 16px;
   transition: padding-right 0.3s ease;
 }
 
 /* 小屏不避让，面板悬浮覆盖 */
 @media (max-width: 1100px) {
+  body.mes-ai-panel-open {
+    padding-right: 0;
+  }
+
   body.mes-ai-panel-open .mes-ai-avoid {
     padding-right: 16px;
   }

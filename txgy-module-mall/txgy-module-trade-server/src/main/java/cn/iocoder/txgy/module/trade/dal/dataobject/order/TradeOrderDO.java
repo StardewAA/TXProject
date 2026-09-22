@@ -42,6 +42,8 @@ public class TradeOrderDO extends BaseDO {
      * 发货物流公司编号 - 空（无需发货）
      */
     public static final Long LOGISTICS_ID_NULL = 0L;
+    public static final String SOURCE_TYPE_NORMAL = "NORMAL";
+    public static final String SOURCE_TYPE_INQUIRY = "INQUIRY";
 
     // ========== 订单基本信息 ==========
     /**
@@ -65,6 +67,16 @@ public class TradeOrderDO extends BaseDO {
      * 枚举 {@link TradeOrderTypeEnum}
      */
     private Integer type;
+    /** 订单业务来源：NORMAL 普通下单，INQUIRY 已采纳报价成交。 */
+    private String sourceType;
+    /** 询价单编号，仅询价成交订单有值。 */
+    private Long inquiryId;
+    /** 已采纳报价编号，仅询价成交订单有值。 */
+    private Long inquiryQuoteId;
+    /** 成交时报价快照版本，仅询价成交订单有值。 */
+    private Long inquiryQuoteVersion;
+    /** 采购企业编号，仅询价成交订单有值；userId 仍记录实际下单会员。 */
+    private Long buyerEnterpriseId;
     /**
      * 订单来源
      *

@@ -37,11 +37,14 @@ class MallAuthPolicyTest {
     @Test void directoryDisabledCannotBeOverriddenByAuthFlag() {
         tenants.setEnabled(false); assertThrows(ServiceException.class, () -> policy.resolve(9001L, false)); verifyNoInteractions(api);
     }
-    @Test void missingTenantDefaultsOnlyToExplicitPublicTenant() { assertEquals(9001L, policy.resolve(null, true)); }
+    @Test void registrationRequiresAnExplicitTenantEvenWhenCatalogHasABrowseDefault() {
+        assertThrows(ServiceException.class, () -> policy.resolve(null, true));
+        assertEquals(9001L, policy.resolve(9001L, true));
+    }
     @Test void registrationPreflightChecksCustomerOwnerAndPropagatesUnavailability() {
         when(customers.validateRegistration(9001L)).thenThrow(cn.iocoder.txgy.framework.common.exception.util.ServiceExceptionUtil.exception(
                 cn.iocoder.txgy.module.member.enums.ErrorCodeConstants.MALL_TENANT_UNAVAILABLE));
-        assertThrows(ServiceException.class, () -> policy.resolve(null, true));
+        assertThrows(ServiceException.class, () -> policy.resolve(9001L, true));
         verify(customers).validateRegistration(9001L);
     }
     @Test void loginDoesNotDependOnCustomerOwnerAvailability() {

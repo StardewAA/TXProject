@@ -1,10 +1,14 @@
 package cn.iocoder.txgy.module.mes.service.qc.iqc;
 
+import cn.iocoder.txgy.framework.common.exception.ServiceException;
 import cn.iocoder.txgy.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.txgy.module.mes.dal.dataobject.md.item.MesMdItemDO;
 import cn.iocoder.txgy.module.mes.dal.dataobject.qc.iqc.MesQcIqcDO;
+import cn.iocoder.txgy.module.mes.dal.dataobject.qc.template.MesQcTemplateItemDO;
 import cn.iocoder.txgy.module.mes.dal.mysql.qc.iqc.MesQcIqcMapper;
 import cn.iocoder.txgy.module.mes.enums.MesBizTypeConstants;
 import cn.iocoder.txgy.module.mes.enums.qc.MesQcStatusEnum;
+import cn.iocoder.txgy.module.mes.service.md.autocode.MesMdAutoCodeRecordService;
 import cn.iocoder.txgy.module.mes.service.md.item.MesMdItemService;
 import cn.iocoder.txgy.module.mes.service.md.vendor.MesMdVendorService;
 import cn.iocoder.txgy.module.mes.service.qc.defectrecord.MesQcDefectRecordService;
@@ -58,6 +62,73 @@ public class MesQcIqcServiceImplTest extends BaseDbUnitTest {
     private AdminUserApi adminUserApi;
     @MockitoBean
     private MesQcIndicatorResultService indicatorResultService;
+    @MockitoBean
+    private MesMdAutoCodeRecordService autoCodeRecordService;
+
+    @Test
+    public void testGenerateIqcDraft_success() {
+        // mock：模板匹配、物料名称、自动编码
+        Long templateId = randomLongId();
+        MesQcTemplateItemDO templateItem = MesQcTemplateItemDO.builder().templateId(templateId).build();
+        when(templateItemService.getRequiredTemplateByItemIdAndType(anyLong(), anyInt())).thenReturn(templateItem);
+        MesMdItemDO item = MesMdItemDO.builder().name("钢管-01").build();
+        when(itemService.getItem(anyLong())).thenReturn(item);
+        when(autoCodeRecordService.generateAutoCode(anyString())).thenReturn("IQC-AUTO-001");
+
+        Long sourceDocId = randomLongId();
+        Long sourceLineId = randomLongId();
+
+        // 调用
+        Long iqcId = iqcService.generateIqcDraft(MesBizTypeConstants.WM_ARRIVAL_NOTICE, sourceDocId, sourceLineId,
+                "AN-001", 10L, 20L, BigDecimal.valueOf(100), null);
+
+        // 断言 1：生成成功且字段正确
+        assertNotNull(iqcId);
+        MesQcIqcDO iqc = iqcMapper.selectById(iqcId);
+        assertEquals(MesQcStatusEnum.DRAFT.getStatus(), iqc.getStatus());
+        assertEquals(templateId, iqc.getTemplateId());
+        assertEquals("钢管-01 来料检验", iqc.getName());
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(iqc.getReceivedQuantity()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(iqc.getUnqualifiedQuantity()));
+        // 断言 2：检验行按模板自动生成
+        verify(iqcLineService).createLinesFromTemplate(eq(iqcId), eq(templateId));
+    }
+
+    @Test
+    public void testGenerateIqcDraft_idempotent() {
+        // 准备数据：同一来源行已存在检验单
+        Long sourceDocId = randomLongId();
+        Long sourceLineId = randomLongId();
+        MesQcIqcDO existing = randomPojo(MesQcIqcDO.class, o -> {
+            o.setStatus(MesQcStatusEnum.DRAFT.getStatus());
+            o.setSourceDocType(MesBizTypeConstants.WM_ARRIVAL_NOTICE);
+            o.setSourceDocId(sourceDocId);
+            o.setSourceLineId(sourceLineId);
+        });
+        iqcMapper.insert(existing);
+
+        // 调用：再次自动生成
+        Long iqcId = iqcService.generateIqcDraft(MesBizTypeConstants.WM_ARRIVAL_NOTICE, sourceDocId, sourceLineId,
+                "AN-001", 10L, 20L, BigDecimal.valueOf(100), null);
+
+        // 断言：返回已有编号，不重复创建
+        assertEquals(existing.getId(), iqcId);
+        verify(iqcLineService, never()).createLinesFromTemplate(anyLong(), anyLong());
+    }
+
+    @Test
+    public void testGenerateIqcDraft_noTemplate() {
+        // mock：物料未配置 IQC 检验模板
+        when(templateItemService.getRequiredTemplateByItemIdAndType(anyLong(), anyInt()))
+                .thenThrow(new ServiceException(cn.iocoder.txgy.module.mes.enums.ErrorCodeConstants.QC_NO_TEMPLATE));
+
+        // 调用：返回 null，不抛异常
+        Long iqcId = iqcService.generateIqcDraft(MesBizTypeConstants.WM_ARRIVAL_NOTICE,
+                randomLongId(), randomLongId(), "AN-001", 10L, 20L, BigDecimal.valueOf(100), null);
+
+        assertNull(iqcId);
+        verify(iqcLineService, never()).createLinesFromTemplate(anyLong(), anyLong());
+    }
 
     @Test
     public void testFinishIqc_writeBack_arrivalNotice() {

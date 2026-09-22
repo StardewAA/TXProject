@@ -27,7 +27,7 @@ export function comparisonRows(items: ComparisonItem[]) {
     { label: 'SKU 原标价 / 销售份', values: items.map(item => item.available ? comparisonMoney(item.price) : '不可用') },
     ...names.map(name => ({ label: name, values: items.map(item => (item.properties || []).filter(property => property.name === name).map(property => property.value).join('、') || '待补充') })),
     { label: '同款与单位标准', values: items.map(item => item.standardMessage || '资料不足，暂不判定同款') },
-    { label: '库存说明', values: items.map(item => item.stockMessage || '以下单和 ERP 确认为准') },
+    { label: '库存说明', values: items.map(item => item.stockMessage || '结算、下单和支付前均会重新核验 WMS 库存') },
     { label: '服务端差异说明', values: items.map(item => item.differences?.join('；') || '尚无可信差异结论') },
     { label: '未知项', values: items.map(item => item.unknowns?.join('；') || '待确认') },
   ]
