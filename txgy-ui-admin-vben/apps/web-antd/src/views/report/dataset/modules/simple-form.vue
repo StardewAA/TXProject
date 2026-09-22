@@ -13,6 +13,7 @@ import {
   getSimpleCatalog,
 } from '#/api/report/dataset';
 
+import { CATEGORY_OPTIONS, buildDatasetCode } from '../code';
 import { DEFAULT_BIZ_GROUPS } from '../data';
 
 const emit = defineEmits(['success']);
@@ -22,6 +23,8 @@ const catalog = ref<ReportDatasetApi.CatalogTable[]>([]);
 const catalogLoading = ref(false);
 /** 表单状态 */
 const saving = ref(false);
+/** 分类（域），用于生成数据集编码 */
+const category = ref('MES');
 const name = ref('');
 const tableName = ref('');
 const fields = ref<string[]>([]);
@@ -75,7 +78,7 @@ async function loadCatalog() {
 }
 
 const [Modal, modalApi] = useVbenModal({
-  title: '简单模式新建数据集（无需写 SQL）',
+  title: '新建报表数据集',
   class: 'w-[720px]',
   async onConfirm() {
     if (!name.value.trim()) {
@@ -93,7 +96,12 @@ const [Modal, modalApi] = useVbenModal({
     saving.value = true;
     modalApi.lock();
     try {
+      // 自动生成数据集编码：RPT-[域]-[主题]-[序号]，不再让用户手填
+      const existing = await getEnabledDatasetList();
+      const code = buildDatasetCode(category.value, bizGroups.value, existing);
       await createSimpleDataset({
+        code,
+        category: category.value,
         name: name.value.trim(),
         tableName: tableName.value,
         fields: fields.value,
@@ -112,6 +120,7 @@ const [Modal, modalApi] = useVbenModal({
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
+      category.value = 'MES';
       name.value = '';
       tableName.value = '';
       fields.value = [];
@@ -139,6 +148,14 @@ const [Modal, modalApi] = useVbenModal({
             :maxlength="50"
             placeholder="例如：生产报工台账"
             show-count
+          />
+        </a-form-item>
+
+        <a-form-item required label="分类（域）">
+          <a-select
+            v-model:value="category"
+            :options="CATEGORY_OPTIONS.map((item) => ({ label: item, value: item }))"
+            placeholder="请选择业务域"
           />
         </a-form-item>
 
@@ -213,7 +230,7 @@ const [Modal, modalApi] = useVbenModal({
 
         <a-alert
           class="mb-2"
-          message="提交后由服务端自动生成 SQL，并自动带上租户隔离、行数上限与只读校验"
+          message="提交后将自动创建报表数据集，可在「报表中心」查看"
           show-icon
           type="info"
         />

@@ -2,6 +2,7 @@ package cn.iocoder.txgy.module.report.controller.admin.center;
 
 import cn.iocoder.txgy.framework.common.pojo.CommonResult;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterDataRespVO;
+import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterOverviewRespVO;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterQueryReqVO;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterReportRespVO;
 import cn.iocoder.txgy.module.report.service.reportcenter.ReportCenterService;
@@ -44,6 +45,15 @@ public class ReportCenterController {
     @PreAuthorize("@ss.hasPermission('report:center:query')")
     public CommonResult<List<ReportCenterReportRespVO>> getReportList() {
         return success(reportCenterService.getReportList());
+    }
+
+    @GetMapping("/overview")
+    @Operation(summary = "获得报表中心概览统计",
+            description = "报表总数、常用报表、今日查询次数、最近更新时间；" +
+                    "后两项由报表执行日志已有的 create_time 聚合得出，不新增数据库字段")
+    @PreAuthorize("@ss.hasPermission('report:center:query')")
+    public CommonResult<ReportCenterOverviewRespVO> getOverview() {
+        return success(reportCenterService.getOverview());
     }
 
     @PostMapping("/data")

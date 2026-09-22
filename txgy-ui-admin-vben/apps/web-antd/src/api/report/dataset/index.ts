@@ -12,6 +12,12 @@ export namespace ReportDatasetApi {
     defaultValue?: string; // 默认值
   }
 
+  /** 列标签（字段中文表头） */
+  export interface ColumnLabel {
+    field: string; // 字段名
+    label: string; // 中文表头
+  }
+
   /** 报表数据集 */
   export interface Dataset {
     id?: number; // 编号
@@ -21,6 +27,7 @@ export namespace ReportDatasetApi {
     bizGroups?: string[]; // 业务分组（支持多归属，留空归入「自定义」）
     sqlText?: string; // SQL 语句
     params?: Param[]; // 参数定义
+    columnLabelList?: ColumnLabel[]; // 列标签（简单模式自动生成的中文表头）
     tenantColumn?: string; // 租户过滤列名（必填）
     maxRows?: number; // 最大返回行数
     timeoutSeconds?: number; // 查询超时（秒）

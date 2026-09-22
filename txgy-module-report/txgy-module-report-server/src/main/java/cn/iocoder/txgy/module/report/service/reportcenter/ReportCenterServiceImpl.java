@@ -6,6 +6,7 @@ import cn.iocoder.txgy.framework.common.util.json.JsonUtils;
 import cn.iocoder.txgy.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterDataRespVO;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterQueryReqVO;
+import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterOverviewRespVO;
 import cn.iocoder.txgy.module.report.controller.admin.center.vo.ReportCenterReportRespVO;
 import cn.iocoder.txgy.module.report.controller.admin.dataset.vo.ReportDatasetColumnLabelVO;
 import cn.iocoder.txgy.module.report.dal.dataobject.dataset.ReportDatasetDO;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -43,6 +45,15 @@ import static cn.iocoder.txgy.module.report.enums.ErrorCodeConstants.REPORT_CENT
 public class ReportCenterServiceImpl implements ReportCenterService {
 
     private static final DateTimeFormatter FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm");
+
+    /**
+     * 最近更新时间的输出格式
+     *
+     * 由服务端统一格式化为字符串返回，避免 LocalDateTime 经 Jackson
+     * 序列化后在前端出现数组 / ISO-8601 等多种形态。
+     */
+    private static final DateTimeFormatter LAST_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * 「常用」统计窗口（天）
@@ -147,6 +158,93 @@ public class ReportCenterServiceImpl implements ReportCenterService {
             log.warn("[loadQueryCounts][常用报表统计失败，按 0 处理]", ex);
             return Collections.emptyMap();
         }
+    }
+
+    @Override
+    public ReportCenterOverviewRespVO getOverview() {
+        // 报表清单口径与「全部报表」页面完全一致
+        List<ReportCenterReportRespVO> list = getReportList();
+        int frequentCount = 0;
+        for (ReportCenterReportRespVO item : list) {
+            Integer queryCount = item.getQueryCount();
+            if (queryCount != null && queryCount > 0) {
+                frequentCount++;
+            }
+        }
+        ReportCenterOverviewRespVO respVO = new ReportCenterOverviewRespVO();
+        respVO.setReportTotal(list.size());
+        respVO.setFrequentCount(frequentCount);
+        respVO.setTodayQueryCount(loadTodayQueryCount());
+        respVO.setLastUpdateTime(loadLastUpdateTime());
+        return respVO;
+    }
+
+    /**
+     * 今日查询次数：当日零点起的成功查询次数
+     *
+     * 复用执行日志已有的 create_time 做范围统计，不新增任何表字段；
+     * 统计失败不影响概览返回，按 0 处理。
+     */
+    private int loadTodayQueryCount() {
+        try {
+            QueryWrapper<ReportDatasetExecuteLogDO> wrapper = new QueryWrapper<>();
+            wrapper.eq("source", "dataset")
+                    .eq("success", true)
+                    .ge("create_time", LocalDate.now().atStartOfDay());
+            return Math.toIntExact(executeLogMapper.selectCount(wrapper));
+        } catch (Exception ex) {
+            log.warn("[loadTodayQueryCount][今日查询次数统计失败，按 0 处理]", ex);
+            return 0;
+        }
+    }
+
+    /**
+     * 最近更新时间：最近一次成功查询的时间
+     *
+     * 取执行日志 create_time 的最大值；无查询记录时返回空，
+     * 由前端统一展示「暂无数据」。
+     */
+    private String loadLastUpdateTime() {
+        try {
+            QueryWrapper<ReportDatasetExecuteLogDO> wrapper = new QueryWrapper<>();
+            wrapper.select("MAX(create_time) AS last_time")
+                    .eq("source", "dataset")
+                    .eq("success", true);
+            List<Map<String, Object>> rows = executeLogMapper.selectMaps(wrapper);
+            if (CollUtil.isEmpty(rows) || rows.get(0) == null) {
+                return null;
+            }
+            LocalDateTime last = extractTime(rows.get(0), "last_time");
+            return last == null ? null : last.format(LAST_TIME_FORMATTER);
+        } catch (Exception ex) {
+            log.warn("[loadLastUpdateTime][最近更新时间统计失败，返回空]", ex);
+            return null;
+        }
+    }
+
+    /**
+     * 从 selectMaps 结果中取时间（兼容不同驱动的列名大小写与返回类型）
+     */
+    private LocalDateTime extractTime(Map<String, Object> row, String key) {
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (!entry.getKey().equalsIgnoreCase(key) || entry.getValue() == null) {
+                continue;
+            }
+            Object value = entry.getValue();
+            if (value instanceof LocalDateTime) {
+                return (LocalDateTime) value;
+            }
+            if (value instanceof java.sql.Timestamp) {
+                return ((java.sql.Timestamp) value).toLocalDateTime();
+            }
+            if (value instanceof java.util.Date) {
+                return LocalDateTime.ofInstant(((java.util.Date) value).toInstant(),
+                        java.time.ZoneId.systemDefault());
+            }
+            log.warn("[extractTime][未知的时间类型：{}]", value.getClass());
+            return null;
+        }
+        return null;
     }
 
     /**
